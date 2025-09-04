@@ -64,3 +64,33 @@ export const insertImage = async (
     DrawTransforms.insertImage(board, imageItem, startPoint);
   }
 };
+
+export const insertImageFromUrl = async (
+  board: PlaitBoard,
+  imageUrl: string,
+  startPoint?: Point,
+  isDrop?: boolean
+) => {
+  const selectedElement =
+    getSelectedElements(board)[0] || getElementOfFocusedImage(board);
+  const defaultImageWidth = selectedElement ? 240 : 400;
+  
+  // 直接使用URL加载图片
+  const image = await loadHTMLImageElement(imageUrl);
+  const imageItem = buildImage(image, imageUrl, defaultImageWidth);
+  
+  const element = startPoint && getHitElementByPoint(board, startPoint);
+  if (isDrop && element && MindElement.isMindElement(board, element)) {
+    MindTransforms.setImage(board, element as MindElement, imageItem);
+    return;
+  }
+  if (
+    selectedElement &&
+    MindElement.isMindElement(board, selectedElement) &&
+    !isDrop
+  ) {
+    MindTransforms.setImage(board, selectedElement as MindElement, imageItem);
+  } else {
+    DrawTransforms.insertImage(board, imageItem, startPoint);
+  }
+};

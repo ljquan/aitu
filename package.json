@@ -34,6 +34,8 @@
     "slate-dom": "^0.116.0",
     "slate-history": "^0.115.0",
     "slate-react": "^0.116.0",
+    "tdesign-icons-react": "^0.5.1",
+    "tdesign-react": "^1.14.5",
     "tslib": "^2.3.0"
   },
   "devDependencies": {

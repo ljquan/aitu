@@ -370,30 +370,28 @@ export async function generateImageWithGemini(
     size?: string;
   } = {}
 ): Promise<any> {
-  // 验证配置
-  if (!config.apiKey || !config.baseUrl) {
-    throw new Error('API Key 和 Base URL 是必需的');
-  }
+  // 验证并确保配置有效
+  const validatedConfig = await validateAndEnsureConfig(config);
 
   const headers = {
-    'Authorization': `Bearer ${config.apiKey}`,
+    'Authorization': `Bearer ${validatedConfig.apiKey}`,
     'Content-Type': 'application/json',
   };
 
   const data = {
-    model: config.modelName || DEFAULT_CONFIG.modelName,
+    model: validatedConfig.modelName || DEFAULT_CONFIG.modelName,
     prompt,
     n: options.n || 1,
     size: options.size || '1024x1024',
   };
 
-  const url = `${config.baseUrl}/images/generations`;
+  const url = `${validatedConfig.baseUrl}/images/generations`;
 
   const response = await fetch(url, {
     method: 'POST',
     headers,
     body: JSON.stringify(data),
-    signal: AbortSignal.timeout(config.timeout || DEFAULT_CONFIG.timeout!),
+    signal: AbortSignal.timeout(validatedConfig.timeout || DEFAULT_CONFIG.timeout!),
   });
 
   if (!response.ok) {
@@ -418,10 +416,8 @@ export async function chatWithGemini(
   response: GeminiResponse;
   processedContent: ProcessedContent;
 }> {
-  // 验证配置
-  if (!config.apiKey || !config.baseUrl) {
-    throw new Error('API Key 和 Base URL 是必需的');
-  }
+  // 验证并确保配置有效
+  const validatedConfig = await validateAndEnsureConfig(config);
 
   // 准备图片数据
   const imageContents = [];
@@ -460,10 +456,10 @@ export async function chatWithGemini(
   let response: GeminiResponse;
   if (images.length > 0) {
     console.log('检测到图片输入，使用流式调用');
-    response = await callApiStreamRaw(config, messages);
+    response = await callApiStreamRaw(validatedConfig, messages);
   } else {
     // 纯文本可以使用非流式调用
-    response = await callApiWithRetry(config, messages);
+    response = await callApiWithRetry(validatedConfig, messages);
   }
 
   // 处理响应内容
@@ -545,6 +541,151 @@ function saveApiKeyToStorage(apiKey: string): void {
   if (typeof window === 'undefined') return;
   
   localStorage.setItem('gemini_api_key', apiKey);
+}
+
+/**
+ * DOM弹窗获取API Key
+ */
+function promptForApiKey(): Promise<string | null> {
+  if (typeof window === 'undefined') return Promise.resolve(null);
+  
+  return new Promise((resolve) => {
+    // 创建弹窗遮罩
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    `;
+
+    // 创建弹窗内容
+    const dialog = document.createElement('div');
+    dialog.style.cssText = `
+      background: white;
+      padding: 24px;
+      border-radius: 8px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+      width: 400px;
+      max-width: 90vw;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    `;
+
+    dialog.innerHTML = `
+      <h3 style="margin: 0 0 16px 0; color: #333; font-size: 18px;">配置 Gemini API Key</h3>
+      <p style="margin: 0 0 16px 0; color: #666; line-height: 1.5;">
+        请输入您的 Gemini API Key，输入后将自动保存到本地存储中。
+      </p>
+      <p style="margin: 0 0 16px 0; color: #666; line-height: 1.5;">
+        您可以从以下地址获取 API Key:
+        <a href="https://api.tu-zi.com/" target="_blank" rel="noopener noreferrer" 
+           style="color: #0052d9; text-decoration: none;">
+          https://api.tu-zi.com/
+        </a>
+      </p>
+      <input type="text" id="apiKeyInput" placeholder="请输入 API Key" 
+             style="width: 100%; padding: 8px 12px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 14px; box-sizing: border-box; margin-bottom: 16px;" />
+      <div style="display: flex; gap: 8px; justify-content: flex-end;">
+        <button id="cancelBtn" 
+                style="padding: 8px 16px; border: 1px solid #d9d9d9; border-radius: 4px; background: white; color: #333; cursor: pointer; font-size: 14px;">
+          取消
+        </button>
+        <button id="confirmBtn" 
+                style="padding: 8px 16px; border: 1px solid #0052d9; border-radius: 4px; background: #0052d9; color: white; cursor: pointer; font-size: 14px;">
+          确认
+        </button>
+      </div>
+    `;
+
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+
+    // 获取元素
+    const input = dialog.querySelector('#apiKeyInput') as HTMLInputElement;
+    const cancelBtn = dialog.querySelector('#cancelBtn') as HTMLButtonElement;
+    const confirmBtn = dialog.querySelector('#confirmBtn') as HTMLButtonElement;
+
+    // 自动聚焦到输入框
+    setTimeout(() => input.focus(), 100);
+
+    // 清理函数
+    const cleanup = () => {
+      document.body.removeChild(overlay);
+    };
+
+    // 确认按钮点击
+    confirmBtn.addEventListener('click', () => {
+      const apiKey = input.value.trim();
+      if (apiKey) {
+        saveApiKeyToStorage(apiKey);
+        cleanup();
+        resolve(apiKey);
+      } else {
+        input.style.borderColor = '#ff4d4f';
+        input.focus();
+      }
+    });
+
+    // 取消按钮点击
+    cancelBtn.addEventListener('click', () => {
+      cleanup();
+      resolve(null);
+    });
+
+    // 回车键确认
+    input.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        confirmBtn.click();
+      }
+    });
+
+    // 点击遮罩关闭
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        cleanup();
+        resolve(null);
+      }
+    });
+  });
+}
+
+/**
+ * 验证并确保配置有效，如果缺少 API Key 则弹窗获取
+ */
+async function validateAndEnsureConfig(config: GeminiConfig): Promise<GeminiConfig> {
+  // 检查 baseUrl
+  if (!config.baseUrl) {
+    throw new Error('Base URL 是必需的');
+  }
+  
+  // 检查 apiKey，优先从localStorage获取
+  if (!config.apiKey) {
+    // 首先尝试从localStorage获取
+    const storedApiKey = getApiKeyFromStorage();
+    if (storedApiKey) {
+      // 更新原始config对象
+      config.apiKey = storedApiKey;
+      return config;
+    }
+    
+    // 如果localStorage中也没有，则弹窗获取
+    const newApiKey = await promptForApiKey();
+    if (!newApiKey) {
+      throw new Error('API Key 是必需的，操作已取消');
+    }
+    
+    // 更新原始config对象
+    config.apiKey = newApiKey;
+    return config;
+  }
+  
+  return config;
 }
 
 /**
