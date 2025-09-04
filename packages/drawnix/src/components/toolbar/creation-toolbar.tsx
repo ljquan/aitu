@@ -12,6 +12,7 @@ import {
   StraightArrowLineIcon,
   FeltTipPenIcon,
   ImageIcon,
+  AIImageIcon,
   ExtraToolsIcon,
 } from '../icons';
 import { useBoard } from '@plait-board/react-board';
@@ -37,6 +38,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '../popover/popover';
 import { FreehandShape } from '../../plugins/freehand/type';
 import {
   DrawnixPointerType,
+  DialogType,
   useDrawnix,
   useSetPointer,
 } from '../../hooks/use-drawnix';
@@ -51,11 +53,11 @@ export enum PopupKey {
 }
 
 type AppToolButtonProps = {
-  titleKey?: keyof typeof import('../../i18n').Translations;
+  titleKey?: string;
   name?: string;
   icon: React.ReactNode;
   pointer?: DrawnixPointerType;
-  key?: PopupKey | 'image' | 'extra-tools';
+  key?: PopupKey | 'image' | 'ai-image' | 'extra-tools';
 };
 
 const isBasicPointer = (pointer: string) => {
@@ -109,6 +111,11 @@ export const BUTTONS: AppToolButtonProps[] = [
     key: 'image',
   },
   {
+    icon: AIImageIcon,
+    titleKey: 'toolbar.aiImage',
+    key: 'ai-image',
+  },
+  {
     icon: ExtraToolsIcon,
     titleKey: 'toolbar.extraTools',
     key: 'extra-tools',
@@ -129,7 +136,7 @@ export const isShapePointer = (board: PlaitBoard) => {
 
 export const CreationToolbar = () => {
   const board = useBoard();
-  const { appState } = useDrawnix();
+  const { appState, openDialog } = useDrawnix();
   const { t } = useI18n();
   const setPointer = useSetPointer();
   const container = PlaitBoard.getBoardContainer(board);
@@ -316,6 +323,9 @@ export const CreationToolbar = () => {
                 }
                 if (button.key === 'image') {
                   addImage(board);
+                }
+                if (button.key === 'ai-image') {
+                  openDialog(DialogType.aiImageGeneration);
                 }
               }}
             />

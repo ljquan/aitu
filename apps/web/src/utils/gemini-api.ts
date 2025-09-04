@@ -1,0 +1,589 @@
+/**
+ * Gemini API 前端调用工具
+ * 基于原始 Python 版本改写为 TypeScript
+ * 支持图片上传、AI 图像生成和混合内容处理
+ */
+
+// ====================================
+// 类型定义
+// ====================================
+
+export interface GeminiConfig {
+  apiKey: string;
+  baseUrl: string;
+  modelName?: string;
+  maxRetries?: number;
+  retryDelay?: number;
+  timeout?: number;
+}
+
+export interface ImageInput {
+  file?: File;
+  base64?: string;
+  url?: string;
+}
+
+export interface GeminiMessage {
+  role: 'user' | 'assistant';
+  content: Array<{
+    type: 'text' | 'image_url';
+    text?: string;
+    image_url?: {
+      url: string;
+    };
+  }>;
+}
+
+export interface GeminiResponse {
+  choices: Array<{
+    message: {
+      role: string;
+      content: string;
+    };
+  }>;
+}
+
+export interface ProcessedContent {
+  textContent: string;
+  images: Array<{
+    type: 'base64' | 'url';
+    data: string;
+    index: number;
+  }>;
+  originalContent: string;
+}
+
+// ====================================
+// 默认配置
+// ====================================
+
+const DEFAULT_CONFIG: Partial<GeminiConfig> = {
+  modelName: 'gemini-2.5-flash-image',
+  maxRetries: 10,
+  retryDelay: 0,
+  timeout: 120000, // 120秒
+};
+
+// ====================================
+// 工具函数
+// ====================================
+
+/**
+ * 将文件转换为 base64 格式
+ */
+export async function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      resolve(result);
+    };
+    reader.onerror = () => reject(new Error('文件读取失败'));
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * 准备图片数据，转换为 API 所需格式
+ */
+export async function prepareImageData(image: ImageInput): Promise<string> {
+  if (image.file) {
+    return await fileToBase64(image.file);
+  } else if (image.base64) {
+    // 确保 base64 数据包含正确的前缀
+    if (image.base64.startsWith('data:')) {
+      return image.base64;
+    } else {
+      return `data:image/png;base64,${image.base64}`;
+    }
+  } else if (image.url) {
+    // 对于 URL，直接返回（API 可能支持 URL 格式）
+    return image.url;
+  } else {
+    throw new Error('无效的图片输入：必须提供 file、base64 或 url');
+  }
+}
+
+/**
+ * 检查是否为配额超出错误
+ */
+function isQuotaExceededError(errorMessage: string): boolean {
+  const quotaKeywords = [
+    'exceeded your current quota',
+    'quota exceeded',
+    'billing details',
+    'plan and billing'
+  ];
+  const errorStr = errorMessage.toLowerCase();
+  return quotaKeywords.some(keyword => errorStr.includes(keyword));
+}
+
+/**
+ * 检查是否为超时错误
+ */
+function isTimeoutError(errorMessage: string): boolean {
+  const errorStr = errorMessage.toLowerCase();
+  return errorStr.includes('timeout') || errorStr.includes('timed out');
+}
+
+/**
+ * 使用原始 fetch 调用 API
+ */
+async function callApiRaw(
+  config: GeminiConfig,
+  messages: GeminiMessage[],
+): Promise<GeminiResponse> {
+  const headers = {
+    'Authorization': `Bearer ${config.apiKey}`,
+    'Content-Type': 'application/json',
+  };
+
+  const data = {
+    model: config.modelName || DEFAULT_CONFIG.modelName,
+    messages,
+    stream: false,
+  };
+
+  const url = `${config.baseUrl}/images/generations`;
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(data),
+    signal: AbortSignal.timeout(config.timeout || DEFAULT_CONFIG.timeout!),
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+  }
+
+  // 处理非流式响应
+  return await response.json();
+}
+
+// 新增流式API调用函数
+async function callApiStreamRaw(
+  config: GeminiConfig,
+  messages: GeminiMessage[],
+): Promise<GeminiResponse> {
+  const headers = {
+    'Authorization': `Bearer ${config.apiKey}`,
+    'Content-Type': 'application/json',
+  };
+
+  const data = {
+    model: config.modelName || DEFAULT_CONFIG.modelName,
+    messages,
+    stream: true,
+  };
+
+  const url = `${config.baseUrl}/chat/completions`;
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(data),
+    signal: AbortSignal.timeout(config.timeout || DEFAULT_CONFIG.timeout!),
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+  }
+
+  // 处理流式响应
+  const reader = response.body?.getReader();
+  if (!reader) {
+    throw new Error('无法获取响应流');
+  }
+
+  const decoder = new TextDecoder();
+  let fullContent = '';
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const chunk = decoder.decode(value, { stream: true });
+      const lines = chunk.split('\n');
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6).trim();
+          if (data === '[DONE]') {
+            break;
+          }
+
+          try {
+            const parsed = JSON.parse(data);
+            const content = parsed.choices?.[0]?.delta?.content;
+            if (content) {
+              fullContent += content;
+            }
+          } catch (e) {
+            // 忽略解析错误的数据块
+            console.warn('解析流式数据块失败:', e);
+          }
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  // 返回标准格式的响应
+  return {
+    choices: [{
+      message: {
+        role: 'assistant',
+        content: fullContent
+      }
+    }]
+  };
+}
+
+/**
+ * 带重试功能的 API 调用
+ */
+async function callApiWithRetry(
+  config: GeminiConfig,
+  messages: GeminiMessage[],
+): Promise<GeminiResponse> {
+  const maxRetries = config.maxRetries || DEFAULT_CONFIG.maxRetries!;
+  const retryDelay = config.retryDelay || DEFAULT_CONFIG.retryDelay!;
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      console.log(`第 ${attempt + 1} 次尝试调用 Gemini API...`);
+      const response = await callApiRaw(config, messages);
+      console.log('API 调用成功！');
+      return response;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error(`API 调用失败: ${errorMessage}`);
+
+      // 检查是否为配额超出错误或超时错误
+      if (isQuotaExceededError(errorMessage) || isTimeoutError(errorMessage)) {
+        if (attempt < maxRetries - 1) {
+          if (retryDelay > 0) {
+            console.log(`将在 ${retryDelay}ms 后进行第 ${attempt + 2} 次重试...`);
+            await new Promise(resolve => setTimeout(resolve, retryDelay));
+          } else {
+            console.log(`立即进行第 ${attempt + 2} 次重试...`);
+          }
+          continue;
+        } else {
+          throw new Error(`经过 ${maxRetries} 次重试后仍然失败: ${errorMessage}`);
+        }
+      } else {
+        // 非配额/超时错误，直接抛出
+        throw error;
+      }
+    }
+  }
+
+  throw new Error(`经过 ${maxRetries} 次重试后仍然失败`);
+}
+
+/**
+ * 处理混合内容（文字、base64图片、URL图片）
+ */
+export function processMixedContent(content: string): ProcessedContent {
+  // 查找 base64 图片
+  const base64Pattern = /data:image\/[^;]+;base64,([A-Za-z0-9+/=]+)/g;
+  const base64Matches = Array.from(content.matchAll(base64Pattern));
+
+  // 查找 URL 链接
+  const urlPattern = /https?:\/\/[^\s<>"]+\.(png|jpg|jpeg|gif)/gi;
+  const urlMatches = Array.from(content.matchAll(urlPattern));
+
+  let textContent = content;
+  const images: ProcessedContent['images'] = [];
+  let imageIndex = 1;
+
+  // 处理 base64 图片
+  for (const match of base64Matches) {
+    const fullMatch = match[0];
+    const base64Data = match[1];
+
+    images.push({
+      type: 'base64',
+      data: base64Data,
+      index: imageIndex,
+    });
+
+    textContent = textContent.replace(fullMatch, `[图片 ${imageIndex}]`);
+    imageIndex++;
+  }
+
+  // 处理 URL 图片
+  for (const match of urlMatches) {
+    const url = match[0];
+
+    images.push({
+      type: 'url',
+      data: url,
+      index: imageIndex,
+    });
+
+    textContent = textContent.replace(url, `[图片 ${imageIndex}]`);
+    imageIndex++;
+  }
+
+  return {
+    textContent,
+    images,
+    originalContent: content,
+  };
+}
+
+/**
+ * 将 base64 数据转换为 Blob URL
+ */
+export function base64ToBlobUrl(base64Data: string, mimeType: string = 'image/png'): string {
+  const byteCharacters = atob(base64Data);
+  const byteNumbers = new Array(byteCharacters.length);
+  for (let i = 0; i < byteCharacters.length; i++) {
+    byteNumbers[i] = byteCharacters.charCodeAt(i);
+  }
+  const byteArray = new Uint8Array(byteNumbers);
+  const blob = new Blob([byteArray], { type: mimeType });
+  return URL.createObjectURL(blob);
+}
+
+// ====================================
+// 主要 API 函数
+// ====================================
+
+/**
+ * 调用 Gemini API 进行图像生成
+ * @param config API 配置
+ * @param prompt 提示词
+ * @param options 生成选项
+ * @returns API 响应结果
+ */
+export async function generateImageWithGemini(
+  config: GeminiConfig,
+  prompt: string,
+  options: {
+    n?: number;
+    size?: string;
+  } = {}
+): Promise<any> {
+  // 验证配置
+  if (!config.apiKey || !config.baseUrl) {
+    throw new Error('API Key 和 Base URL 是必需的');
+  }
+
+  const headers = {
+    'Authorization': `Bearer ${config.apiKey}`,
+    'Content-Type': 'application/json',
+  };
+
+  const data = {
+    model: config.modelName || DEFAULT_CONFIG.modelName,
+    prompt,
+    n: options.n || 1,
+    size: options.size || '1024x1024',
+  };
+
+  const url = `${config.baseUrl}/images/generations`;
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(data),
+    signal: AbortSignal.timeout(config.timeout || DEFAULT_CONFIG.timeout!),
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+  }
+
+  return await response.json();
+}
+
+/**
+ * 调用 Gemini API 进行聊天对话（支持图片输入）
+ * @param config API 配置
+ * @param prompt 提示词
+ * @param images 输入图片数组
+ * @returns API 响应结果
+ */
+export async function chatWithGemini(
+  config: GeminiConfig,
+  prompt: string,
+  images: ImageInput[] = []
+): Promise<{
+  response: GeminiResponse;
+  processedContent: ProcessedContent;
+}> {
+  // 验证配置
+  if (!config.apiKey || !config.baseUrl) {
+    throw new Error('API Key 和 Base URL 是必需的');
+  }
+
+  // 准备图片数据
+  const imageContents = [];
+  for (let i = 0; i < images.length; i++) {
+    try {
+      console.log(`处理第 ${i + 1} 张图片...`);
+      const imageData = await prepareImageData(images[i]);
+      imageContents.push({
+        type: 'image_url' as const,
+        image_url: {
+          url: imageData,
+        },
+      });
+    } catch (error) {
+      console.error(`处理第 ${i + 1} 张图片时出错:`, error);
+      throw error;
+    }
+  }
+
+  // 构建消息内容
+  const contentList = [
+    { type: 'text' as const, text: prompt },
+    ...imageContents,
+  ];
+
+  const messages: GeminiMessage[] = [
+    {
+      role: 'user',
+      content: contentList,
+    },
+  ];
+
+  console.log(`共发送 ${imageContents.length} 张图片到 Gemini API`);
+
+  // 图文混合必须使用流式调用
+  let response: GeminiResponse;
+  if (images.length > 0) {
+    console.log('检测到图片输入，使用流式调用');
+    response = await callApiStreamRaw(config, messages);
+  } else {
+    // 纯文本可以使用非流式调用
+    response = await callApiWithRetry(config, messages);
+  }
+
+  // 处理响应内容
+  const responseContent = response.choices[0]?.message?.content || '';
+  const processedContent = processMixedContent(responseContent);
+
+  return {
+    response,
+    processedContent,
+  };
+}
+
+/**
+ * 创建 Gemini API 客户端
+ */
+export class GeminiClient {
+  private config: GeminiConfig;
+
+  constructor(config: GeminiConfig) {
+    this.config = { ...DEFAULT_CONFIG, ...config };
+  }
+
+  /**
+   * 更新配置
+   */
+  updateConfig(newConfig: Partial<GeminiConfig>) {
+    this.config = { ...this.config, ...newConfig };
+  }
+
+  /**
+   * 生成图像
+   */
+  async generateImage(prompt: string, options: { n?: number; size?: string; } = {}) {
+    return generateImageWithGemini(this.config, prompt, options);
+  }
+
+  /**
+   * 聊天对话（支持图片输入）
+   */
+  async chat(prompt: string, images: ImageInput[] = []) {
+    return chatWithGemini(this.config, prompt, images);
+  }
+
+  /**
+   * 获取当前配置
+   */
+  getConfig(): GeminiConfig {
+    return { ...this.config };
+  }
+}
+
+// ====================================
+// 导出默认实例（可选）
+// ====================================
+
+/**
+ * 从URL参数中获取apiKey
+ */
+function getApiKeyFromUrl(): string | null {
+  if (typeof window === 'undefined') return null;
+  
+  const urlParams = new URLSearchParams(window.location.search);
+  return urlParams.get('apiKey');
+}
+
+/**
+ * 从本地存储获取apiKey
+ */
+function getApiKeyFromStorage(): string | null {
+  if (typeof window === 'undefined') return null;
+  
+  return localStorage.getItem('gemini_api_key');
+}
+
+/**
+ * 保存apiKey到本地存储
+ */
+function saveApiKeyToStorage(apiKey: string): void {
+  if (typeof window === 'undefined') return;
+  
+  localStorage.setItem('gemini_api_key', apiKey);
+}
+
+/**
+ * 从URL中移除apiKey参数
+ */
+function removeApiKeyFromUrl(): void {
+  if (typeof window === 'undefined') return;
+  
+  const url = new URL(window.location.href);
+  if (url.searchParams.has('apiKey')) {
+    url.searchParams.delete('apiKey');
+    window.history.replaceState({}, document.title, url.toString());
+  }
+}
+
+/**
+ * 初始化apiKey：从URL获取并缓存，然后清除URL参数
+ */
+function initializeApiKey(): string {
+  // 首先尝试从URL获取
+  const urlApiKey = getApiKeyFromUrl();
+  if (urlApiKey) {
+    // 保存到本地存储
+    saveApiKeyToStorage(urlApiKey);
+    // 从URL中移除
+    removeApiKeyFromUrl();
+    return urlApiKey;
+  }
+  
+  // 如果URL中没有，从本地存储获取
+  const storageApiKey = getApiKeyFromStorage();
+  return storageApiKey || '';
+}
+
+/**
+ * 创建默认的 Gemini 客户端实例
+ * 自动从URL参数或本地存储获取API Key
+ */
+export const defaultGeminiClient = new GeminiClient({
+  apiKey: initializeApiKey(),
+  baseUrl: 'https://api.tu-zi.com/v1',
+});

@@ -13,6 +13,7 @@ import { LinkElement } from '@plait/common';
 export enum DialogType {
   mermaidToDrawnix = 'mermaidToDrawnix',
   markdownToDrawnix = 'markdownToDrawnix',
+  aiImageGeneration = 'aiImageGeneration',
 }
 
 export type DrawnixPointerType =
@@ -51,6 +52,7 @@ export const DrawnixContext = createContext<{
 export const useDrawnix = (): {
   appState: DrawnixState;
   setAppState: (appState: DrawnixState) => void;
+  openDialog: (dialogType: DialogType) => void;
 } => {
   const context = useContext(DrawnixContext);
 
@@ -60,7 +62,11 @@ export const useDrawnix = (): {
     );
   }
 
-  return context;
+  const openDialog = (dialogType: DialogType) => {
+    context.setAppState({ ...context.appState, openDialogType: dialogType });
+  };
+
+  return { ...context, openDialog };
 };
 
 export const useSetPointer = () => {
