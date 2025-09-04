@@ -22,10 +22,35 @@ const AIImageGeneration = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [useImageAPI, setUseImageAPI] = useState(true); // true: images/generations, false: chat/completions
+  const [uploadedImages, setUploadedImages] = useState<File[]>([]);
 
   const { appState, setAppState } = useDrawnix();
   const { language } = useI18n();
   const board = useBoard();
+
+  // 处理图片上传
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (files) {
+      const newImages = Array.from(files).filter(file => 
+        file.type.startsWith('image/') && file.size <= 10 * 1024 * 1024 // 限制10MB
+      );
+      setUploadedImages(prev => [...prev, ...newImages]);
+    }
+    // 清空input值，允许重复选择同一文件
+    event.target.value = '';
+  };
+
+  // 删除上传的图片
+  const removeUploadedImage = (index: number) => {
+    setUploadedImages(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // 清空所有上传的图片
+  const clearUploadedImages = () => {
+    setUploadedImages([]);
+  };
 
   const presetPrompts = language === 'zh' ? [
     '一只可爱的小猫坐在窗台上，阳光透过窗户洒在它的毛发上',
@@ -57,24 +82,76 @@ const AIImageGeneration = () => {
     setError(null);
 
     try {
-      // 使用 Gemini API 生成图片
       const finalWidth = typeof width === 'string' ? (parseInt(width) || 1024) : width;
       const finalHeight = typeof height === 'string' ? (parseInt(height) || 1024) : height;
-      const result = await defaultGeminiClient.generateImage(prompt, {
-        n: 1,
-        size: `${finalWidth}x${finalHeight}`
-      });
       
-      // 处理新的API返回格式: { data: [{ url: "..." }], created: timestamp }
-      if (result.data && result.data.length > 0) {
-        const imageUrl = result.data[0].url;
-        setGeneratedImage(imageUrl);
+      if (useImageAPI) {
+        // 使用专用图像生成API (images/generations)
+        console.log('Using Images API for generation...');
+        const result = await defaultGeminiClient.generateImage(prompt, {
+          n: 1,
+          size: `${finalWidth}x${finalHeight}`
+        });
+        
+        // 处理图像生成API的响应格式: { data: [{ url: "..." }], created: timestamp }
+        if (result.data && result.data.length > 0) {
+          const imageUrl = result.data[0].url;
+          console.log('Generated image URL:', imageUrl);
+          setGeneratedImage(imageUrl);
+        } else {
+          setError(
+            language === 'zh' 
+              ? '图像生成失败，API未返回图像数据' 
+              : 'Image generation failed, API returned no image data'
+          );
+        }
       } else {
-        setError(
-          language === 'zh' 
-            ? '图像生成失败，请检查网络连接或稍后重试' 
-            : 'Image generation failed, please check network connection or try again later'
-        );
+        // 使用聊天API (chat/completions)
+        console.log('Using Chat API for generation...');
+        const imagePrompt = `Generate an image based on this description: "${prompt}"
+
+Requirements:
+- Dimensions: ${finalWidth} × ${finalHeight} pixels
+- High quality and detailed
+- Return only the direct image URL in your response
+
+Description: ${prompt}`;
+
+        // 将上传的图片转换为ImageInput格式
+        const imageInputs = uploadedImages.map(file => ({ file }));
+        
+        const result = await defaultGeminiClient.chat(imagePrompt, imageInputs);
+        
+        // 从聊天响应中提取内容
+        const responseContent = result.response.choices[0]?.message?.content || '';
+        console.log('Chat API response:', responseContent);
+        
+        // 先检查是否有处理过的内容（可能包含图片）
+        if (result.processedContent && result.processedContent.images && result.processedContent.images.length > 0) {
+          // 如果响应中包含图片，使用第一张图片
+          const firstImage = result.processedContent.images[0];
+          if (firstImage.type === 'url') {
+            setGeneratedImage(firstImage.data);
+          } else if (firstImage.type === 'base64') {
+            // 将base64转换为data URL
+            const dataUrl = `data:image/png;base64,${firstImage.data}`;
+            setGeneratedImage(dataUrl);
+          }
+        } else {
+          // 尝试从文本响应中提取图片URL
+          const urlMatch = responseContent.match(/https?:\/\/[^\s<>"'\n]+/);
+          if (urlMatch) {
+            const imageUrl = urlMatch[0].replace(/[.,;!?]*$/, ''); // 移除末尾的标点符号
+            console.log('Extracted URL:', imageUrl);
+            setGeneratedImage(imageUrl);
+          } else {
+            setError(
+              language === 'zh' 
+                ? `聊天API无法生成图像。响应: ${responseContent.substring(0, 100)}...` 
+                : `Chat API unable to generate image. Response: ${responseContent.substring(0, 100)}...`
+            );
+          }
+        }
       }
     } catch (err) {
       console.error('AI image generation error:', err);
@@ -143,6 +220,101 @@ const AIImageGeneration = () => {
           {language === 'zh' ? 'AI 图像生成' : 'AI Image Generation'}
         </h3>
         <div className="ai-image-generation-form">
+          
+          {/* 图片上传 */}
+          {!useImageAPI && (
+            <div className="form-field">
+              <div className="form-label-with-icon">
+                <label className="form-label">
+                  {language === 'zh' ? '参考图片 (可选)' : 'Reference Images (Optional)'}
+                </label>
+                {uploadedImages.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={clearUploadedImages}
+                    className="clear-images-btn"
+                    disabled={isGenerating}
+                  >
+                    {language === 'zh' ? '清空' : 'Clear All'}
+                  </button>
+                )}
+              </div>
+              <div className="unified-image-area">
+                {uploadedImages.length === 0 ? (
+                  /* 没有图片时显示完整上传区域 */
+                  <div className="upload-area">
+                    <input
+                      type="file"
+                      id="image-upload"
+                      multiple
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      className="upload-input"
+                      disabled={isGenerating}
+                    />
+                    <label htmlFor="image-upload" className="upload-label">
+                      <div className="upload-icon">📷</div>
+                      <div className="upload-text">
+                        {language === 'zh' 
+                          ? '点击或拖拽上传图片' 
+                          : 'Click or drag to upload images'}
+                      </div>
+                      <div className="upload-hint">
+                        {language === 'zh' 
+                          ? '支持 JPG, PNG, WebP, 最大 10MB' 
+                          : 'Support JPG, PNG, WebP, Max 10MB'}
+                      </div>
+                    </label>
+                  </div>
+                ) : (
+                  /* 有图片时显示图片网格和小的添加按钮 */
+                  <div className="images-grid">
+                    {uploadedImages.map((file, index) => (
+                      <div key={index} className="uploaded-image-item">
+                        <img
+                          src={URL.createObjectURL(file)}
+                          alt={`Upload ${index + 1}`}
+                          className="uploaded-image-preview"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeUploadedImage(index)}
+                          className="remove-image-btn"
+                          disabled={isGenerating}
+                        >
+                          ×
+                        </button>
+                        <div className="image-info">
+                          <span className="image-name">{file.name}</span>
+                          <span className="image-size">
+                            {(file.size / 1024 / 1024).toFixed(1)}MB
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                    {/* 小的添加按钮 */}
+                    <div className="add-more-item">
+                      <input
+                        type="file"
+                        id="image-upload-more"
+                        multiple
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                        className="upload-input"
+                        disabled={isGenerating}
+                      />
+                      <label htmlFor="image-upload-more" className="add-more-label">
+                        <div className="add-more-icon">+</div>
+                        <div className="add-more-text">
+                          {language === 'zh' ? '添加' : 'Add'}
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
           
           {/* 提示词输入 */}
           <div className="form-field">
@@ -318,6 +490,45 @@ const AIImageGeneration = () => {
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+          
+          {/* API 模式选择 */}
+          <div className="form-field">
+            <label className="form-label">
+              {language === 'zh' ? 'API 模式' : 'API Mode'}
+            </label>
+            <div className="api-mode-selector">
+              <label className="api-mode-option">
+                <input
+                  type="radio"
+                  name="api-mode"
+                  checked={useImageAPI}
+                  onChange={() => setUseImageAPI(true)}
+                  disabled={isGenerating}
+                />
+                <span className="api-mode-label">
+                  {language === 'zh' ? '图像生成API' : 'Image Generation API'}
+                </span>
+                <span className="api-mode-desc">
+                  {language === 'zh' ? '(images/generations)' : '(images/generations)'}
+                </span>
+              </label>
+              <label className="api-mode-option">
+                <input
+                  type="radio"
+                  name="api-mode"
+                  checked={!useImageAPI}
+                  onChange={() => setUseImageAPI(false)}
+                  disabled={isGenerating}
+                />
+                <span className="api-mode-label">
+                  {language === 'zh' ? '聊天API' : 'Chat API'}
+                </span>
+                <span className="api-mode-desc">
+                  {language === 'zh' ? '(chat/completions)' : '(chat/completions)'}
+                </span>
+              </label>
             </div>
           </div>
           

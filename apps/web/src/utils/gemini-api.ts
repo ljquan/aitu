@@ -127,7 +127,7 @@ function isTimeoutError(errorMessage: string): boolean {
 }
 
 /**
- * 使用原始 fetch 调用 API
+ * 使用原始 fetch 调用聊天 API
  */
 async function callApiRaw(
   config: GeminiConfig,
@@ -144,7 +144,7 @@ async function callApiRaw(
     stream: false,
   };
 
-  const url = `${config.baseUrl}/images/generations`;
+  const url = `${config.baseUrl}/chat/completions`;
 
   const response = await fetch(url, {
     method: 'POST',
@@ -174,6 +174,9 @@ async function callApiStreamRaw(
   const data = {
     model: config.modelName || DEFAULT_CONFIG.modelName,
     messages,
+    presence_penalty: 0,
+    temperature: 0.5,
+    top_p: 1,
     stream: true,
   };
 
