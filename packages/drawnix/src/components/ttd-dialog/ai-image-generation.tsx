@@ -7,6 +7,7 @@ import { useBoard } from '@plait-board/react-board';
 // 临时注释掉 Gemini API 导入，稍后修复
 import { defaultGeminiClient } from '../../../../../apps/web/src/utils/gemini-api';
 import { insertImageFromUrl } from '../../data/image';
+import { extractSelectedContent } from '../../utils/selection-utils';
 
 const getPromptExample = (language: 'zh' | 'en') => {
   if (language === 'zh') {
@@ -22,8 +23,9 @@ const AIImageGeneration = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [useImageAPI, setUseImageAPI] = useState(true); // true: images/generations, false: chat/completions
-  const [uploadedImages, setUploadedImages] = useState<File[]>([]);
+  const [useImageAPI, setUseImageAPI] = useState(false); // true: images/generations, false: chat/completions
+  // 支持文件和URL两种类型的图片
+  const [uploadedImages, setUploadedImages] = useState<(File | { url: string; name: string })[]>([]);
 
   const { appState, setAppState } = useDrawnix();
   const { language } = useI18n();
@@ -118,7 +120,14 @@ Requirements:
 Description: ${prompt}`;
 
         // 将上传的图片转换为ImageInput格式
-        const imageInputs = uploadedImages.map(file => ({ file }));
+        const imageInputs = uploadedImages.map(item => {
+          if (item instanceof File) {
+            return { file: item };
+          } else {
+            // 对于URL类型的图片，直接传递URL
+            return { url: item.url };
+          }
+        });
         
         const result = await defaultGeminiClient.chat(imagePrompt, imageInputs);
         
@@ -209,6 +218,30 @@ Description: ${prompt}`;
     };
   }, [isGenerating, prompt, handleGenerate]);
 
+  // 自动填充选中的内容
+  useEffect(() => {
+    const populateFromSelection = async () => {
+      const selectedContent = extractSelectedContent(board);
+      
+      // 填充文本描述
+      if (selectedContent.text && !prompt) {
+        setPrompt(selectedContent.text);
+      }
+      
+      // 填充图片（仅在聊天API模式下）
+      if (selectedContent.images.length > 0 && !useImageAPI && uploadedImages.length === 0) {
+        const imageItems = selectedContent.images.map(image => ({
+          url: image.url,
+          name: image.name || `selected-image-${Date.now()}.png`
+        }));
+        
+        setUploadedImages(imageItems);
+      }
+    };
+
+    populateFromSelection();
+  }, []); // 只在组件挂载时运行一次
+
 
 
   return (
@@ -269,29 +302,36 @@ Description: ${prompt}`;
                 ) : (
                   /* 有图片时显示图片网格和小的添加按钮 */
                   <div className="images-grid">
-                    {uploadedImages.map((file, index) => (
-                      <div key={index} className="uploaded-image-item">
-                        <img
-                          src={URL.createObjectURL(file)}
-                          alt={`Upload ${index + 1}`}
-                          className="uploaded-image-preview"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => removeUploadedImage(index)}
-                          className="remove-image-btn"
-                          disabled={isGenerating}
-                        >
-                          ×
-                        </button>
-                        <div className="image-info">
-                          <span className="image-name">{file.name}</span>
-                          <span className="image-size">
-                            {(file.size / 1024 / 1024).toFixed(1)}MB
-                          </span>
+                    {uploadedImages.map((item, index) => {
+                      const isFile = item instanceof File;
+                      const src = isFile ? URL.createObjectURL(item) : item.url;
+                      const name = isFile ? item.name : item.name;
+                      const size = isFile ? `${(item.size / 1024 / 1024).toFixed(1)}MB` : 'URL';
+                      
+                      return (
+                        <div key={index} className="uploaded-image-item">
+                          <img
+                            src={src}
+                            alt={`Upload ${index + 1}`}
+                            className="uploaded-image-preview"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeUploadedImage(index)}
+                            className="remove-image-btn"
+                            disabled={isGenerating}
+                          >
+                            ×
+                          </button>
+                          <div className="image-info">
+                            <span className="image-name">{name}</span>
+                            <span className="image-size">
+                              {size}
+                            </span>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                     {/* 小的添加按钮 */}
                     <div className="add-more-item">
                       <input
@@ -361,7 +401,7 @@ Description: ${prompt}`;
           </div>
           
           {/* 图片尺寸选择 */}
-          <div className="form-field">
+          {/* <div className="form-field">
             <label className="form-label">
               {language === 'zh' ? '图片尺寸' : 'Image Size'}
             </label>
@@ -491,10 +531,10 @@ Description: ${prompt}`;
                 </div>
               </div>
             </div>
-          </div>
+          </div> */}
           
           {/* API 模式选择 */}
-          <div className="form-field">
+          {/* <div className="form-field">
             <label className="form-label">
               {language === 'zh' ? 'API 模式' : 'API Mode'}
             </label>
@@ -530,7 +570,7 @@ Description: ${prompt}`;
                 </span>
               </label>
             </div>
-          </div>
+          </div> */}
           
           {/* 错误信息 */}
           {error && (
