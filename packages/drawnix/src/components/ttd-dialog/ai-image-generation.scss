@@ -4,6 +4,40 @@
   flex-direction: column;
   max-height: 80vh;
   overflow-y: auto;
+  position: relative;
+}
+
+// Dialog close button
+.dialog-close-button {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: var(--color-bg-container, #fff);
+  color: var(--color-text-secondary, #666);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 20px;
+  font-weight: normal;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  z-index: 10;
+
+  &:hover {
+    background: var(--color-error-light, #fff2f0);
+    color: var(--color-error, #ff4d4f);
+    transform: scale(1.05);
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
 }
 
 .main-content {
@@ -1021,5 +1055,15 @@
   .keyboard-shortcut {
     background: #f5f5f5 !important;
     color: #666 !important;
+  }
+
+  .dialog-close-button {
+    background: #fff !important;
+    color: #666 !important;
+    
+    &:hover {
+      background: #fff2f0 !important;
+      color: #ff4d4f !important;
+    }
   }
 }

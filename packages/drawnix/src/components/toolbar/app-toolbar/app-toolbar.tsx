@@ -2,6 +2,7 @@ import { useBoard } from '@plait-board/react-board';
 import Stack from '../../stack';
 import { ToolButton } from '../../tool-button';
 import {
+  AIImageIcon,
   DuplicateIcon,
   MenuIcon,
   RedoIcon,
@@ -24,10 +25,12 @@ import { LanguageSwitcherMenu } from './language-switcher-menu';
 import Menu from '../../menu/menu';
 import MenuSeparator from '../../menu/menu-separator';
 import { useI18n } from '../../../i18n';
+import { useDrawnix, DialogType } from '../../../hooks/use-drawnix';
 
 export const AppToolbar = () => {
   const board = useBoard();
-  const { t } = useI18n();
+  const { t, language } = useI18n();
+  const { openDialog } = useDrawnix();
   const container = PlaitBoard.getBoardContainer(board);
   const selectedElements = getSelectedElements(board);
   const [appMenuOpen, setAppMenuOpen] = useState(false);
@@ -126,6 +129,20 @@ export const AppToolbar = () => {
             aria-label={t('general.delete')}
             onPointerUp={() => {
               deleteFragment(board);
+            }}
+          />
+        )}
+        {selectedElements.length > 0 && (
+          <ToolButton
+            className="ai-image"
+            key={5}
+            type="icon"
+            icon={AIImageIcon}
+            visible={true}
+            title={language === 'zh' ? 'AI图像生成' : 'AI Image Generation'}
+            aria-label={language === 'zh' ? 'AI图像生成' : 'AI Image Generation'}
+            onPointerUp={() => {
+              openDialog(DialogType.aiImageGeneration);
             }}
           />
         )}

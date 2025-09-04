@@ -37,13 +37,15 @@ export const TTDDialog = ({ container }: { container: HTMLElement | null }) => {
       <Dialog
         open={appState.openDialogType === DialogType.aiImageGeneration}
         onOpenChange={(open) => {
+          // 禁用点击外围关闭，只能通过关闭按钮关闭
+          if (!open) return;
           setAppState({
             ...appState,
             openDialogType: open ? DialogType.aiImageGeneration : null,
           });
         }}
       >
-        <DialogContent className="Dialog ttd-dialog" container={container}>
+        <DialogContent className="Dialog ttd-dialog" container={container} onInteractOutside={(e) => e.preventDefault()}>
           <AIImageGeneration></AIImageGeneration>
         </DialogContent>
       </Dialog>

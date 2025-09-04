@@ -4,8 +4,7 @@ import './ai-image-generation.scss';
 import { useDrawnix } from '../../hooks/use-drawnix';
 import { useI18n } from '../../i18n';
 import { useBoard } from '@plait-board/react-board';
-// 临时注释掉 Gemini API 导入，稍后修复
-import { defaultGeminiClient } from '../../../../../apps/web/src/utils/gemini-api';
+import { defaultGeminiClient } from '../../utils/gemini-api';
 import { insertImageFromUrl } from '../../data/image';
 import { extractSelectedContent } from '../../utils/selection-utils';
 
@@ -22,6 +21,7 @@ const AIImageGeneration = () => {
   const [height, setHeight] = useState<number | string>(1024);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
+  const [imageLoading, setImageLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [useImageAPI, setUseImageAPI] = useState(false); // true: images/generations, false: chat/completions
   // 支持文件和URL两种类型的图片
@@ -52,6 +52,45 @@ const AIImageGeneration = () => {
   // 清空所有上传的图片
   const clearUploadedImages = () => {
     setUploadedImages([]);
+  };
+
+  // 预加载图片并优化缓存
+  const preloadImage = (url: string): Promise<HTMLImageElement> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      
+      // 添加缓存策略
+      img.crossOrigin = 'anonymous';
+      img.referrerPolicy = 'no-referrer';
+      
+      img.onload = () => {
+        resolve(img);
+      };
+      
+      img.onerror = (error) => {
+        console.warn('Image preload failed:', url, error);
+        reject(error);
+      };
+      
+      // 设置src触发加载
+      img.src = url;
+    });
+  };
+
+  // 设置生成图片并预加载
+  const setGeneratedImageWithPreload = async (imageUrl: string) => {
+    setImageLoading(true);
+    try {
+      // 预加载图片
+      await preloadImage(imageUrl);
+      setGeneratedImage(imageUrl);
+    } catch (error) {
+      console.warn('Failed to preload image, setting anyway:', error);
+      // 即使预加载失败，也设置图片URL，让浏览器正常加载
+      setGeneratedImage(imageUrl);
+    } finally {
+      setImageLoading(false);
+    }
   };
 
   const presetPrompts = language === 'zh' ? [
@@ -99,7 +138,7 @@ const AIImageGeneration = () => {
         if (result.data && result.data.length > 0) {
           const imageUrl = result.data[0].url;
           console.log('Generated image URL:', imageUrl);
-          setGeneratedImage(imageUrl);
+          await setGeneratedImageWithPreload(imageUrl);
         } else {
           setError(
             language === 'zh' 
@@ -140,11 +179,11 @@ Description: ${prompt}`;
           // 如果响应中包含图片，使用第一张图片
           const firstImage = result.processedContent.images[0];
           if (firstImage.type === 'url') {
-            setGeneratedImage(firstImage.data);
+            await setGeneratedImageWithPreload(firstImage.data);
           } else if (firstImage.type === 'base64') {
             // 将base64转换为data URL
             const dataUrl = `data:image/png;base64,${firstImage.data}`;
-            setGeneratedImage(dataUrl);
+            await setGeneratedImageWithPreload(dataUrl);
           }
         } else {
           // 尝试从文本响应中提取图片URL
@@ -152,7 +191,7 @@ Description: ${prompt}`;
           if (urlMatch) {
             const imageUrl = urlMatch[0].replace(/[.,;!?]*$/, ''); // 移除末尾的标点符号
             console.log('Extracted URL:', imageUrl);
-            setGeneratedImage(imageUrl);
+            await setGeneratedImageWithPreload(imageUrl);
           } else {
             setError(
               language === 'zh' 
@@ -244,8 +283,24 @@ Description: ${prompt}`;
 
 
 
+  // 关闭对话框
+  const handleClose = () => {
+    setAppState({ ...appState, openDialogType: null });
+  };
+
   return (
     <div className="ai-image-generation-container">
+      {/* 关闭按钮 */}
+      <button
+        className="dialog-close-button"
+        onClick={handleClose}
+        type="button"
+        aria-label={language === 'zh' ? '关闭' : 'Close'}
+        title={language === 'zh' ? '关闭' : 'Close'}
+      >
+        ×
+      </button>
+      
       <div className="main-content">
         {/* AI 图像生成表单 */}
         <div className="ai-image-generation-section">
@@ -595,9 +650,9 @@ Description: ${prompt}`;
             }
           </button>
           
-          <div className="keyboard-shortcut">
+          {/* <div className="keyboard-shortcut">
             <span>Cmd+Enter</span>
-          </div>
+          </div> */}
         </div>
       </div>
       
@@ -614,12 +669,26 @@ Description: ${prompt}`;
                 {language === 'zh' ? '正在生成图像...' : 'Generating image...'}
               </div>
             </div>
+          ) : imageLoading ? (
+            <div className="preview-loading">
+              <div className="loading-spinner"></div>
+              <div className="loading-text">
+                {language === 'zh' ? '正在加载图像...' : 'Loading image...'}
+              </div>
+            </div>
           ) : generatedImage ? (
             <div className="preview-image-wrapper">
               <img 
                 src={generatedImage} 
                 alt="Generated" 
                 className="preview-image"
+                loading="eager"
+                decoding="async"
+                onLoad={() => console.log('Preview image loaded successfully')}
+                onError={(e) => {
+                  console.warn('Preview image failed to load:', generatedImage);
+                  // 保持图片URL，让用户可以右键新窗口打开
+                }}
               />
             </div>
           ) : (
@@ -637,10 +706,14 @@ Description: ${prompt}`;
           <div className="section-actions">
             <button
               onClick={handleInsert}
-              disabled={isGenerating}
+              disabled={isGenerating || imageLoading}
               className="action-button secondary"
+              title={imageLoading ? (language === 'zh' ? '图像加载中...' : 'Image loading...') : undefined}
             >
-              {language === 'zh' ? '插入' : 'Insert'}
+              {imageLoading 
+                ? (language === 'zh' ? '加载中...' : 'Loading...')
+                : (language === 'zh' ? '插入' : 'Insert')
+              }
             </button>
           </div>
         )}
