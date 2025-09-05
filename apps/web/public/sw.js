@@ -1,14 +1,72 @@
-// Service Worker for handling CORS issues with external images
-const CACHE_NAME = 'drawnix-images-v1';
+// Service Worker for PWA functionality and handling CORS issues with external images
+// Version will be replaced during build process
+const APP_VERSION = '0.0.2';
+const CACHE_NAME = `drawnix-v${APP_VERSION}`;
+const IMAGE_CACHE_NAME = `drawnix-images-v${APP_VERSION}`;
+const STATIC_CACHE_NAME = `drawnix-static-v${APP_VERSION}`;
+
+// Detect development mode
+const isDevelopment = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+
+// Files to cache for offline functionality (only in production)
+const STATIC_FILES = [
+  '/',
+  '/index.html',
+  '/manifest.json',
+  '/favicon.ico'
+];
 
 self.addEventListener('install', event => {
   console.log('Service Worker installed');
+  
+  // Only pre-cache static files in production
+  if (!isDevelopment) {
+    event.waitUntil(
+      caches.open(STATIC_CACHE_NAME)
+        .then(cache => {
+          console.log('Caching static files');
+          return cache.addAll(STATIC_FILES);
+        })
+        .catch(err => console.log('Cache pre-loading failed:', err))
+    );
+  }
+  
   self.skipWaiting();
 });
 
 self.addEventListener('activate', event => {
   console.log('Service Worker activated');
-  event.waitUntil(self.clients.claim());
+  
+  // Clean up old caches - delete all caches that don't match current version
+  event.waitUntil(
+    caches.keys().then(cacheNames => {
+      return Promise.all(
+        cacheNames.map(cacheName => {
+          // Keep current version caches, delete all others
+          if (cacheName !== CACHE_NAME && cacheName !== IMAGE_CACHE_NAME && cacheName !== STATIC_CACHE_NAME) {
+            console.log('Deleting old cache:', cacheName);
+            return caches.delete(cacheName);
+          }
+        })
+      );
+    }).then(() => {
+      console.log(`Service Worker v${APP_VERSION} activated`);
+      return self.clients.claim();
+    })
+  );
+});
+
+// Handle messages from main thread
+self.addEventListener('message', event => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+    // Notify clients that SW has been updated
+    self.clients.matchAll().then(clients => {
+      clients.forEach(client => {
+        client.postMessage({ type: 'SW_UPDATED' });
+      });
+    });
+  }
 });
 
 self.addEventListener('fetch', event => {
@@ -17,15 +75,65 @@ self.addEventListener('fetch', event => {
   // 拦截对 google.datas.systems 图片的请求
   if (url.hostname === 'google.datas.systems' && url.pathname.includes('response_images')) {
     event.respondWith(handleImageRequest(event.request));
+    return;
+  }
+  
+  // Handle static file requests with cache-first strategy
+  if (event.request.method === 'GET') {
+    event.respondWith(handleStaticRequest(event.request));
   }
 });
+
+async function handleStaticRequest(request) {
+  try {
+    // In development mode, always fetch from network first
+    if (isDevelopment) {
+      console.log('Development mode: fetching from network', request.url);
+      return await fetch(request);
+    }
+    
+    // Production mode: try cache first for static files
+    const cachedResponse = await caches.match(request);
+    if (cachedResponse) {
+      return cachedResponse;
+    }
+    
+    // Fetch from network and cache for future use
+    const response = await fetch(request);
+    
+    // Cache successful responses (only in production)
+    if (response && response.status === 200 && !isDevelopment) {
+      const cache = await caches.open(STATIC_CACHE_NAME);
+      cache.put(request, response.clone());
+    }
+    
+    return response;
+  } catch (error) {
+    console.error('Static request failed:', error);
+    
+    // Try to return a cached version if available (only in production)
+    if (!isDevelopment) {
+      const cachedResponse = await caches.match(request);
+      if (cachedResponse) {
+        return cachedResponse;
+      }
+      
+      // Return a basic offline page for navigation requests
+      if (request.mode === 'navigate') {
+        return caches.match('/index.html');
+      }
+    }
+    
+    throw error;
+  }
+}
 
 async function handleImageRequest(request) {
   try {
     console.log('Service Worker intercepting image request:', request.url);
     
     // 首先尝试从缓存获取
-    const cache = await caches.open(CACHE_NAME);
+    const cache = await caches.open(IMAGE_CACHE_NAME);
     const cachedResponse = await cache.match(request);
     
     if (cachedResponse) {

@@ -38,6 +38,7 @@ import { CleanConfirm } from './components/clean-confirm/clean-confirm';
 import { buildTextLinkPlugin } from './plugins/with-text-link';
 import { LinkPopup } from './components/popup/link-popup/link-popup';
 import { useI18n, I18nProvider } from './i18n';
+import { VersionUpdate } from './components/version-update';
 
 export type DrawnixProps = {
   value: PlaitElement[];
@@ -147,6 +148,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
             <TTDDialog container={containerRef.current}></TTDDialog>
             <CleanConfirm container={containerRef.current}></CleanConfirm>
           </Wrapper>
+          <VersionUpdate />
         </div>
       </DrawnixContext.Provider>
     </I18nProvider>

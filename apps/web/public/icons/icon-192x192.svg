@@ -1,0 +1,23 @@
+<svg width="192" height="192" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1ea9ef;stop-opacity:1" />
+      <stop offset="27%" style="stop-color:#6852f2;stop-opacity:1" />
+      <stop offset="54%" style="stop-color:#ab56d9;stop-opacity:1" />
+      <stop offset="78%" style="stop-color:#f160b5;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#ef8861;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- 白色背景 -->
+  <rect width="192" height="192" rx="28.799999999999997" fill="white"/>
+  
+  <!-- 渐变背景 -->
+  <rect x="19.200000000000003" y="19.200000000000003" width="153.60000000000002" height="153.60000000000002" 
+        rx="23.04" fill="url(#grad)"/>
+  
+  <!-- 白色字母 D -->
+  <text x="96" y="96" font-family="Arial, sans-serif" 
+        font-size="76.80000000000001" font-weight="bold" fill="white" 
+        text-anchor="middle" dominant-baseline="central">D</text>
+</svg>

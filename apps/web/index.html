@@ -2,6 +2,8 @@
 <html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
+    <!-- 权限策略：禁止 unload 事件警告 -->
+    <meta http-equiv="Permissions-Policy" content="unload=()">
     <!-- 基本 SEO Meta 标签 (中文) -->
     <title>Drawnix - 开源白板工具</title>
     <meta name="description" content="Drawnix 是一款强大的开源白板工具（https://github.com/plait-board/drawnix），集成思维导图、流程图等功能。基于 Plait 框架开发，支持插件扩展，提供自动保存、无限画布等特性。Draw Beyond, Rise Above.">
@@ -60,7 +62,28 @@
     </script>
     <base href="/" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="app-version" content="0.0.2" />
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json?v=0.0.2" />
+    
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#ffffff" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Drawnix" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="msapplication-TileColor" content="#ffffff" />
+    <meta name="msapplication-tap-highlight" content="no" />
+    
+    <!-- Apple Touch Icons -->
+    <link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192x192.svg" />
+    
+    <!-- Windows Tiles -->
+    <meta name="msapplication-TileImage" content="/icons/icon-192x192.svg" />
+    <meta name="msapplication-square310x310logo" content="/icons/icon-512x512.svg" />
+    
     <link rel="stylesheet" href="/src/styles.scss" />
     <script defer src="https://cloud.umami.is/script.js" data-website-id="7083aa92-85b1-4a67-a6d4-03d52819ba3d"></script>
   </head>
