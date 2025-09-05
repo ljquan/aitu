@@ -1,4 +1,4 @@
-import { getSelectedElements, PlaitBoard, PlaitElement, getRectangleByElements, RectangleClient, toImage } from '@plait/core';
+import { getSelectedElements, PlaitBoard, PlaitElement, getRectangleByElements, RectangleClient, toImage, Point } from '@plait/core';
 import { MindElement } from '@plait/mind';
 import { PlaitDrawElement } from '@plait/draw';
 import { Node } from 'slate';
@@ -466,4 +466,44 @@ export const urlToFile = async (url: string, filename: string): Promise<File | n
     console.warn('Error converting URL to file:', error);
     return null;
   }
+};
+
+/**
+ * Calculate insertion point for new elements when there are selected elements
+ * Returns the geometric center position at the bottom of all selected elements + 20px
+ */
+export const getInsertionPointForSelectedElements = (board: PlaitBoard): Point | null => {
+  const selectedElements = getSelectedElements(board);
+  
+  if (selectedElements.length === 0) {
+    return null;
+  }
+  
+  try {
+    // Get the bounding rectangle of all selected elements
+    const boundingRect = getRectangleByElements(board, selectedElements, false);
+    
+    // Calculate the geometric center X coordinate
+    const centerX = boundingRect.x + boundingRect.width / 2;
+    
+    // Calculate the bottom Y coordinate + 20px offset
+    const insertionY = boundingRect.y + boundingRect.height + 20;
+    
+    console.log('Insertion point calculated:', { centerX, insertionY, boundingRect });
+    
+    return [centerX, insertionY] as Point;
+  } catch (error) {
+    console.warn('Error calculating insertion point for selected elements:', error);
+    return null;
+  }
+};
+
+/**
+ * Get the appropriate insertion point, considering selected elements
+ * If elements are selected, return the calculated insertion point
+ * Otherwise, return the provided default point
+ */
+export const getSmartInsertionPoint = (board: PlaitBoard, defaultPoint?: Point): Point | undefined => {
+  const calculatedPoint = getInsertionPointForSelectedElements(board);
+  return calculatedPoint || defaultPoint;
 };

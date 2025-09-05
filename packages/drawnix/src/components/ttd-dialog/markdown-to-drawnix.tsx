@@ -13,9 +13,11 @@ import {
   getViewportOrigination,
   PlaitBoard,
   PlaitElement,
+  Point,
   WritableClipboardOperationType,
 } from '@plait/core';
 import { MindElement } from '@plait/mind';
+import { getSmartInsertionPoint } from '../../utils/selection-utils';
 
 export interface MarkdownToDrawnixLibProps {
   loaded: boolean;
@@ -139,22 +141,33 @@ const MarkdownToDrawnix = () => {
     if (!value.length) {
       return;
     }
-    const boardContainerRect =
-      PlaitBoard.getBoardContainer(board).getBoundingClientRect();
-    const focusPoint = [
-      boardContainerRect.width / 4,
-      boardContainerRect.height / 2 - 20,
-    ];
-    const zoom = board.viewport.zoom;
-    const origination = getViewportOrigination(board);
-    const focusX = origination![0] + focusPoint[0] / zoom;
-    const focusY = origination![1] + focusPoint[1] / zoom;
+    // Calculate insertion point - use selected elements position if available, otherwise default position
+    let insertionPoint;
+    const smartPoint = getSmartInsertionPoint(board);
+    
+    if (smartPoint) {
+      insertionPoint = smartPoint;
+    } else {
+      // Default behavior when no elements are selected
+      const boardContainerRect =
+        PlaitBoard.getBoardContainer(board).getBoundingClientRect();
+      const focusPoint = [
+        boardContainerRect.width / 4,
+        boardContainerRect.height / 2 - 20,
+      ];
+      const zoom = board.viewport.zoom;
+      const origination = getViewportOrigination(board);
+      const focusX = origination![0] + focusPoint[0] / zoom;
+      const focusY = origination![1] + focusPoint[1] / zoom;
+      insertionPoint = [focusX, focusY] as Point;
+    }
+    
     const elements = value;
     board.insertFragment(
       {
         elements: JSON.parse(JSON.stringify(elements)),
       },
-      [focusX, focusY],
+      insertionPoint,
       WritableClipboardOperationType.paste
     );
     setAppState({ ...appState, openDialogType: null });

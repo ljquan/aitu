@@ -9,6 +9,7 @@ import { getDataURL } from './blob';
 import { MindElement, MindTransforms } from '@plait/mind';
 import { DrawTransforms } from '@plait/draw';
 import { getElementOfFocusedImage } from '@plait/common';
+import { getInsertionPointForSelectedElements } from '../utils/selection-utils';
 
 // 辅助函数：将字符串转换为DataURL类型（用于外部URL）
 const createDataURL = (url: string): DataURL => url as DataURL;
@@ -56,10 +57,12 @@ export const insertImage = async (
   const image = await loadHTMLImageElement(dataURL);
   const imageItem = buildImage(image, dataURL, defaultImageWidth);
   const element = startPoint && getHitElementByPoint(board, startPoint);
+  
   if (isDrop && element && MindElement.isMindElement(board, element)) {
     MindTransforms.setImage(board, element as MindElement, imageItem);
     return;
   }
+  
   if (
     selectedElement &&
     MindElement.isMindElement(board, selectedElement) &&
@@ -67,7 +70,16 @@ export const insertImage = async (
   ) {
     MindTransforms.setImage(board, selectedElement as MindElement, imageItem);
   } else {
-    DrawTransforms.insertImage(board, imageItem, startPoint);
+    // If no startPoint is provided and we have selected elements, use the calculated insertion point
+    let insertionPoint = startPoint;
+    if (!startPoint && !isDrop) {
+      const calculatedPoint = getInsertionPointForSelectedElements(board);
+      if (calculatedPoint) {
+        insertionPoint = calculatedPoint;
+      }
+    }
+    
+    DrawTransforms.insertImage(board, imageItem, insertionPoint);
   }
 };
 
@@ -91,6 +103,7 @@ export const insertImageFromUrl = async (
     MindTransforms.setImage(board, element as MindElement, imageItem);
     return;
   }
+  
   if (
     selectedElement &&
     MindElement.isMindElement(board, selectedElement) &&
@@ -98,6 +111,15 @@ export const insertImageFromUrl = async (
   ) {
     MindTransforms.setImage(board, selectedElement as MindElement, imageItem);
   } else {
-    DrawTransforms.insertImage(board, imageItem, startPoint);
+    // If no startPoint is provided and we have selected elements, use the calculated insertion point
+    let insertionPoint = startPoint;
+    if (!startPoint && !isDrop) {
+      const calculatedPoint = getInsertionPointForSelectedElements(board);
+      if (calculatedPoint) {
+        insertionPoint = calculatedPoint;
+      }
+    }
+    
+    DrawTransforms.insertImage(board, imageItem, insertionPoint);
   }
 };

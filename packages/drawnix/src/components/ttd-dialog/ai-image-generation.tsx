@@ -9,11 +9,23 @@ import { insertImageFromUrl } from '../../data/image';
 
 // 预览图缓存key
 const PREVIEW_CACHE_KEY = 'ai_image_generation_preview_cache';
+// 历史图片缓存key
+const HISTORY_CACHE_KEY = 'ai_image_generation_history';
 
 // 缓存数据接口
 interface PreviewCache {
   prompt: string;
   generatedImage: string | null;
+  timestamp: number;
+  width: number | string;
+  height: number | string;
+}
+
+// 历史图片接口
+interface HistoryItem {
+  id: string;
+  prompt: string;
+  imageUrl: string;
   timestamp: number;
   width: number | string;
   height: number | string;
@@ -45,6 +57,43 @@ const loadPreviewCache = (): PreviewCache | null => {
     console.warn('Failed to load preview cache:', error);
   }
   return null;
+};
+
+// 保存历史记录
+const saveToHistory = (item: HistoryItem) => {
+  try {
+    const existing = loadHistory();
+    // 添加新项目到开头，并限制最多保存50个
+    const updated = [item, ...existing.filter(h => h.id !== item.id)].slice(0, 50);
+    localStorage.setItem(HISTORY_CACHE_KEY, JSON.stringify(updated));
+  } catch (error) {
+    console.warn('Failed to save history:', error);
+  }
+};
+
+// 加载历史记录
+const loadHistory = (): HistoryItem[] => {
+  try {
+    const cached = localStorage.getItem(HISTORY_CACHE_KEY);
+    if (cached) {
+      const data = JSON.parse(cached) as HistoryItem[];
+      // 过滤掉超过7天的记录
+      const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      return data.filter(item => item.timestamp > weekAgo);
+    }
+  } catch (error) {
+    console.warn('Failed to load history:', error);
+  }
+  return [];
+};
+
+// 清除历史记录
+const clearHistory = () => {
+  try {
+    localStorage.removeItem(HISTORY_CACHE_KEY);
+  } catch (error) {
+    console.warn('Failed to clear history:', error);
+  }
 };
 
 
@@ -89,6 +138,9 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [] }: AIImageGe
   const [useImageAPI] = useState(false); // true: images/generations, false: chat/completions
   // 支持文件和URL两种类型的图片
   const [uploadedImages, setUploadedImages] = useState<(File | { url: string; name: string })[]>(initialImages);
+  // 历史相关状态
+  const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
+  const [showHistoryPopover, setShowHistoryPopover] = useState(false);
 
   const { appState, setAppState } = useDrawnix();
   const { language } = useI18n();
@@ -113,6 +165,12 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [] }: AIImageGe
       setHeight(cachedData.height);
       setGeneratedImage(cachedData.generatedImage);
     }
+  }, []);
+
+  // 加载历史记录
+  useEffect(() => {
+    const history = loadHistory();
+    setHistoryItems(history);
   }, []);
 
   // 处理图片上传
@@ -189,6 +247,20 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [] }: AIImageGe
         height
       };
       savePreviewCache(cacheData);
+
+      // 保存到历史记录
+      const historyItem: HistoryItem = {
+        id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        prompt,
+        imageUrl,
+        timestamp: Date.now(),
+        width,
+        height
+      };
+      saveToHistory(historyItem);
+      
+      // 更新历史列表状态
+      setHistoryItems(prev => [historyItem, ...prev.filter(h => h.id !== historyItem.id)].slice(0, 50));
     } catch (error) {
       console.warn('Failed to preload image, setting anyway:', error);
       // 即使预加载失败，也设置图片URL，让浏览器正常加载
@@ -203,9 +275,42 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [] }: AIImageGe
         height
       };
       savePreviewCache(cacheData);
+
+      // 保存到历史记录
+      const historyItem: HistoryItem = {
+        id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        prompt,
+        imageUrl,
+        timestamp: Date.now(),
+        width,
+        height
+      };
+      saveToHistory(historyItem);
+      
+      // 更新历史列表状态
+      setHistoryItems(prev => [historyItem, ...prev.filter(h => h.id !== historyItem.id)].slice(0, 50));
     } finally {
       updateImageLoading(false);
     }
+  };
+
+  // 从历史记录选择图片
+  const selectFromHistory = (historyItem: HistoryItem) => {
+    setPrompt(historyItem.prompt);
+    setWidth(historyItem.width);
+    setHeight(historyItem.height);
+    setGeneratedImage(historyItem.imageUrl);
+    setShowHistoryPopover(false);
+    
+    // 更新预览缓存
+    const cacheData: PreviewCache = {
+      prompt: historyItem.prompt,
+      generatedImage: historyItem.imageUrl,
+      timestamp: Date.now(),
+      width: historyItem.width,
+      height: historyItem.height
+    };
+    savePreviewCache(cacheData);
   };
 
   const presetPrompts = language === 'zh' ? [
@@ -791,6 +896,71 @@ Description: ${prompt}`;
               <div className="placeholder-text">
                 {language === 'zh' ? '图像将在这里显示' : 'Image will be displayed here'}
               </div>
+              {/* 历史记录图标 - 右下角 */}
+              {historyItems.length > 0 && (
+                <div className="history-icon-container">
+                  <button
+                    className="history-icon-button"
+                    onClick={() => setShowHistoryPopover(!showHistoryPopover)}
+                    onMouseEnter={() => setShowHistoryPopover(true)}
+                    title={language === 'zh' ? '查看生成历史' : 'View generation history'}
+                  >
+                    📚
+                  </button>
+                  {showHistoryPopover && (
+                    <div
+                      className="history-popover"
+                      onMouseLeave={() => setShowHistoryPopover(false)}
+                    >
+                      <div className="history-popover-header">
+                        <span className="history-title">
+                          {language === 'zh' ? '生成历史' : 'Generation History'}
+                        </span>
+                        <button
+                          className="history-close-button"
+                          onClick={() => setShowHistoryPopover(false)}
+                        >
+                          ×
+                        </button>
+                      </div>
+                      <div className="history-list">
+                        {historyItems.slice(0, 10).map((item) => (
+                          <div
+                            key={item.id}
+                            className="history-item"
+                            onClick={() => selectFromHistory(item)}
+                          >
+                            <img
+                              src={item.imageUrl}
+                              alt="History item"
+                              className="history-item-image"
+                              loading="lazy"
+                            />
+                            <div className="history-item-info">
+                              <div className="history-item-prompt" title={item.prompt}>
+                                {item.prompt.length > 30 
+                                  ? `${item.prompt.slice(0, 30)}...` 
+                                  : item.prompt}
+                              </div>
+                              <div className="history-item-time">
+                                {new Date(item.timestamp).toLocaleDateString()}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      {historyItems.length > 10 && (
+                        <div className="history-more-info">
+                          {language === 'zh' 
+                            ? `还有 ${historyItems.length - 10} 张图片...`
+                            : `${historyItems.length - 10} more images...`
+                          }
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>

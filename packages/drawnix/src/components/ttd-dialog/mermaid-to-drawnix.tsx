@@ -20,6 +20,7 @@ import {
 } from '@plait/core';
 import type { MermaidConfig } from '@plait-board/mermaid-to-drawnix/dist';
 import type { MermaidToDrawnixResult } from '@plait-board/mermaid-to-drawnix/dist/interfaces';
+import { getSmartInsertionPoint } from '../../utils/selection-utils';
 
 export interface MermaidToDrawnixLibProps {
   loaded: boolean;
@@ -92,31 +93,42 @@ const MermaidToDrawnix = () => {
     if (!value.length) {
       return;
     }
-    const boardContainerRect =
-      PlaitBoard.getBoardContainer(board).getBoundingClientRect();
-    const focusPoint = [
-      boardContainerRect.width / 2,
-      boardContainerRect.height / 2,
-    ];
-    const zoom = board.viewport.zoom;
-    const origination = getViewportOrigination(board);
-    const centerX = origination![0] + focusPoint[0] / zoom;
-    const centerY = origination![1] + focusPoint[1] / zoom;
-    const elements = value;
-    const elementRectangle = RectangleClient.getBoundingRectangle(
-      elements
-        .filter((ele) => !PlaitGroupElement.isGroup(ele))
-        .map((ele) =>
-          RectangleClient.getRectangleByPoints(ele.points as Point[])
-        )
-    );
-    const startPoint = [
-      centerX - elementRectangle.width / 2,
-      centerY - elementRectangle.height / 2,
-    ] as Point;
+    // Calculate insertion point - use selected elements position if available, otherwise default position
+    let startPoint;
+    const smartPoint = getSmartInsertionPoint(board);
+    
+    if (smartPoint) {
+      // When elements are selected, insert at the calculated position
+      startPoint = smartPoint;
+    } else {
+      // Default behavior when no elements are selected - center the new elements
+      const boardContainerRect =
+        PlaitBoard.getBoardContainer(board).getBoundingClientRect();
+      const focusPoint = [
+        boardContainerRect.width / 2,
+        boardContainerRect.height / 2,
+      ];
+      const zoom = board.viewport.zoom;
+      const origination = getViewportOrigination(board);
+      const centerX = origination![0] + focusPoint[0] / zoom;
+      const centerY = origination![1] + focusPoint[1] / zoom;
+      const elements = value;
+      const elementRectangle = RectangleClient.getBoundingRectangle(
+        elements
+          .filter((ele) => !PlaitGroupElement.isGroup(ele))
+          .map((ele) =>
+            RectangleClient.getRectangleByPoints(ele.points as Point[])
+          )
+      );
+      startPoint = [
+        centerX - elementRectangle.width / 2,
+        centerY - elementRectangle.height / 2,
+      ] as Point;
+    }
+    
     board.insertFragment(
       {
-        elements: JSON.parse(JSON.stringify(elements)),
+        elements: JSON.parse(JSON.stringify(value)),
       },
       startPoint,
       WritableClipboardOperationType.paste
