@@ -22,6 +22,7 @@ Type check: `nx typecheck <project-name>`
 - `packages/drawnix/` - Core whiteboard library with UI components and plugins
 - `packages/react-board/` - React wrapper for Plait board functionality  
 - `packages/react-text/` - Text rendering and editing components
+- `docs/` - 开发文档
 
 ### Core Components
 - **Drawnix Component** (`packages/drawnix/src/drawnix.tsx`) - Main application wrapper with state management and plugin composition
@@ -52,3 +53,6 @@ Uses React context (`DrawnixContext`) for application state including:
 - Mobile detection and responsive behavior
 - Dialog and modal states
 - Pencil mode toggling
+
+### Rules
+- UI使用用TDesign

@@ -102,11 +102,20 @@ drawnix/
 
 ## 开发
 
-```
+```bash
 npm install
 
 npm run start
 ```
+
+### 📚 开发文档
+
+详细的开发文档 [`docs/`](./docs/) 目录：
+
+- **[版本控制](./docs/VERSION_CONTROL.md)** - 版本管理和发布流程
+- **[部署指南](./docs/CFPAGE-DEPLOY.md)** - Cloudflare Pages 部署
+- **[PWA 配置](./docs/PWA_ICONS.md)** - PWA 图标生成指南
+
 
 ## Docker
 
