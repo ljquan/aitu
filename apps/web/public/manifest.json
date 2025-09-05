@@ -1,7 +1,7 @@
 {
-  "name": "Drawnix - 开源白板工具",
+  "name": "AI图片视频创作",
   "short_name": "Drawnix",
-  "description": "Drawnix 是一款强大的开源白板工具，集成思维导图、流程图等功能。基于 Plait 框架开发，支持插件扩展，提供自动保存、无限画布等特性。",
+  "description": "Drawnix 是一款强大的AI图片视频创作，集成思维导图、流程图等功能。基于 Plait 框架开发，支持插件扩展，提供自动保存、无限画布等特性。",
   "start_url": "/",
   "display": "standalone",
   "orientation": "any",
@@ -11,15 +11,15 @@
   "categories": ["productivity", "utilities", "graphics"],
   "icons": [
     {
-      "src": "/icons/icon-192x192.svg",
+      "src": "/icons/android-chrome-192x192.png",
       "sizes": "192x192",
-      "type": "image/svg+xml",
+      "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/icons/icon-512x512.svg",
+      "src": "/icons/android-chrome-512x512.png",
       "sizes": "512x512", 
-      "type": "image/svg+xml",
+      "type": "image/png",
       "purpose": "any maskable"
     }
   ],

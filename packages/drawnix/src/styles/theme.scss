@@ -32,12 +32,25 @@
 
   --color-icon-white: #{$oc-white};
 
-  --color-primary: #6698ff;
-  --color-primary-darker: #4a7ee6;    // 降低亮度和饱和度
-  --color-primary-darkest: #3366cc;   // 进一步降低亮度
-  --color-primary-light: #e6f0ff;     // 提高亮度，降低饱和度
-  --color-primary-light-darker: #cce0ff;  // light 的稍暗版本
-  --color-primary-hover: #80acff;     // 略微提高亮度的互动状态
+  /* aitu 品牌色彩 - 主品牌色 橙金色系 */
+  --brand-primary: #F39C12;
+  --brand-primary-dark: #E67E22;
+  --brand-primary-darker: #D35400;
+  
+  /* 辅助品牌色 - 蓝紫色系 */
+  --brand-secondary: #5A4FCF;
+  --brand-secondary-light: #7B68EE;
+  
+  /* 创作激活色 - 玫红色系 */
+  --accent-create: #E91E63;
+  --accent-create-light: #F06292;
+  
+  --color-primary: var(--brand-primary);
+  --color-primary-darker: var(--brand-primary-dark);
+  --color-primary-darkest: var(--brand-primary-darker);
+  --color-primary-light: #FEF5E7;
+  --color-primary-light-darker: #FDE68A;
+  --color-primary-hover: var(--brand-primary-dark);
 
   --button-hover-bg: var(--color-surface-high);
   --button-active-bg: var(--color-surface-high);
@@ -70,10 +83,10 @@
   --color-surface-low: hsl(220 25% 94%);
   --color-surface-lowest: #ffffff;
   --color-on-surface: #666666;
-  --color-brand-hover: #6698ff;
-  --color-on-primary-container: #6698ff;
-  --color-surface-primary-container: rgba(102, 152, 255, .1);
-  --color-brand-active: #6698ff;
+  --color-brand-hover: var(--brand-primary-dark);
+  --color-on-primary-container: var(--brand-primary);
+  --color-surface-primary-container: rgba(243, 156, 18, .1);
+  --color-brand-active: var(--brand-primary);
   --color-border-outline: #767680;
   --color-border-outline-variant: #c5c5d0;
 

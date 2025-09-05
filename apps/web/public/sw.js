@@ -13,7 +13,8 @@ const STATIC_FILES = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/favicon.ico'
+  '/favicon.ico',
+  '/favicon-new.svg'
 ];
 
 self.addEventListener('install', event => {
