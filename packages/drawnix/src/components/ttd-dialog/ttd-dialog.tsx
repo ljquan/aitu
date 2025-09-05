@@ -45,7 +45,7 @@ export const TTDDialog = ({ container }: { container: HTMLElement | null }) => {
           });
         }}
       >
-        <DialogContent className="Dialog ttd-dialog" container={container} onInteractOutside={(e) => e.preventDefault()}>
+        <DialogContent className="Dialog ttd-dialog" container={container}>
           <AIImageGeneration></AIImageGeneration>
         </DialogContent>
       </Dialog>

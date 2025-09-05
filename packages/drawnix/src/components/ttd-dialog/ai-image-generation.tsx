@@ -4,9 +4,58 @@ import './ai-image-generation.scss';
 import { useDrawnix } from '../../hooks/use-drawnix';
 import { useI18n } from '../../i18n';
 import { useBoard } from '@plait-board/react-board';
-import { defaultGeminiClient } from '../../utils/gemini-api';
+import { defaultGeminiClient, promptForApiKey } from '../../utils/gemini-api';
 import { insertImageFromUrl } from '../../data/image';
 import { extractSelectedContent } from '../../utils/selection-utils';
+
+// 预览图缓存key
+const PREVIEW_CACHE_KEY = 'ai_image_generation_preview_cache';
+
+// 缓存数据接口
+interface PreviewCache {
+  prompt: string;
+  generatedImage: string | null;
+  timestamp: number;
+  width: number | string;
+  height: number | string;
+}
+
+// 保存预览缓存
+const savePreviewCache = (data: PreviewCache) => {
+  try {
+    localStorage.setItem(PREVIEW_CACHE_KEY, JSON.stringify(data));
+  } catch (error) {
+    console.warn('Failed to save preview cache:', error);
+  }
+};
+
+// 加载预览缓存
+const loadPreviewCache = (): PreviewCache | null => {
+  try {
+    const cached = localStorage.getItem(PREVIEW_CACHE_KEY);
+    if (cached) {
+      const data = JSON.parse(cached) as PreviewCache;
+      // 检查缓存是否过期（24小时）
+      const now = Date.now();
+      const cacheAge = now - data.timestamp;
+      if (cacheAge < 24 * 60 * 60 * 1000) {
+        return data;
+      }
+    }
+  } catch (error) {
+    console.warn('Failed to load preview cache:', error);
+  }
+  return null;
+};
+
+// 清除预览缓存
+const clearPreviewCache = () => {
+  try {
+    localStorage.removeItem(PREVIEW_CACHE_KEY);
+  } catch (error) {
+    console.warn('Failed to clear preview cache:', error);
+  }
+};
 
 const getPromptExample = (language: 'zh' | 'en') => {
   if (language === 'zh') {
@@ -30,6 +79,26 @@ const AIImageGeneration = () => {
   const { appState, setAppState } = useDrawnix();
   const { language } = useI18n();
   const board = useBoard();
+
+  // 检查是否为Invalid Token错误
+  const isInvalidTokenError = (errorMessage: string): boolean => {
+    const message = errorMessage.toLowerCase();
+    return message.includes('invalid token') || 
+           message.includes('invalid api key') ||
+           message.includes('unauthorized') ||
+           message.includes('api_error') && message.includes('invalid');
+  };
+
+  // 组件初始化时加载缓存
+  useEffect(() => {
+    const cachedData = loadPreviewCache();
+    if (cachedData) {
+      setPrompt(cachedData.prompt);
+      setWidth(cachedData.width);
+      setHeight(cachedData.height);
+      setGeneratedImage(cachedData.generatedImage);
+    }
+  }, []);
 
   // 处理图片上传
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -84,10 +153,30 @@ const AIImageGeneration = () => {
       // 预加载图片
       await preloadImage(imageUrl);
       setGeneratedImage(imageUrl);
+      
+      // 保存到缓存
+      const cacheData: PreviewCache = {
+        prompt,
+        generatedImage: imageUrl,
+        timestamp: Date.now(),
+        width,
+        height
+      };
+      savePreviewCache(cacheData);
     } catch (error) {
       console.warn('Failed to preload image, setting anyway:', error);
       // 即使预加载失败，也设置图片URL，让浏览器正常加载
       setGeneratedImage(imageUrl);
+      
+      // 保存到缓存
+      const cacheData: PreviewCache = {
+        prompt,
+        generatedImage: imageUrl,
+        timestamp: Date.now(),
+        width,
+        height
+      };
+      savePreviewCache(cacheData);
     } finally {
       setImageLoading(false);
     }
@@ -203,11 +292,42 @@ Description: ${prompt}`;
       }
     } catch (err) {
       console.error('AI image generation error:', err);
-      setError(
-        language === 'zh' 
-          ? '图像生成失败，请检查网络连接或稍后重试' 
-          : 'Image generation failed, please check network connection or try again later'
-      );
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      
+      // 检查是否为Invalid Token错误
+      if (isInvalidTokenError(errorMessage)) {
+        // 调用API Key设置弹窗
+        try {
+          const newApiKey = await promptForApiKey();
+          if (newApiKey) {
+            // 用户输入了新的API Key，更新客户端配置
+            defaultGeminiClient.updateConfig({ apiKey: newApiKey });
+            setError(null); // 清除错误信息
+            // 可以选择自动重新生成图片
+            // handleGenerate();
+          } else {
+            // 用户取消了API Key输入
+            setError(
+              language === 'zh' 
+                ? '需要有效的API Key才能生成图像' 
+                : 'Valid API Key is required to generate images'
+            );
+          }
+        } catch (apiKeyError) {
+          console.error('API Key setup error:', apiKeyError);
+          setError(
+            language === 'zh' 
+              ? 'API Key设置失败，请稍后重试' 
+              : 'API Key setup failed, please try again later'
+          );
+        }
+      } else {
+        setError(
+          language === 'zh' 
+            ? '图像生成失败，请检查网络连接或稍后重试' 
+            : 'Image generation failed, please check network connection or try again later'
+        );
+      }
     } finally {
       setIsGenerating(false);
     }
@@ -222,6 +342,9 @@ Description: ${prompt}`;
         await insertImageFromUrl(board, generatedImage);
         
         console.log('Image inserted successfully!');
+        
+        // 清除缓存，因为图片已经插入
+        clearPreviewCache();
         
         // 关闭对话框
         setAppState({ ...appState, openDialogType: null });
@@ -285,6 +408,18 @@ Description: ${prompt}`;
 
   // 关闭对话框
   const handleClose = () => {
+    // 如果有预览图，在关闭时保存缓存
+    if (generatedImage && prompt.trim()) {
+      const cacheData: PreviewCache = {
+        prompt,
+        generatedImage,
+        timestamp: Date.now(),
+        width,
+        height
+      };
+      savePreviewCache(cacheData);
+    }
+    
     setAppState({ ...appState, openDialogType: null });
   };
 
@@ -685,7 +820,7 @@ Description: ${prompt}`;
                 loading="eager"
                 decoding="async"
                 onLoad={() => console.log('Preview image loaded successfully')}
-                onError={(e) => {
+                onError={() => {
                   console.warn('Preview image failed to load:', generatedImage);
                   // 保持图片URL，让用户可以右键新窗口打开
                 }}
@@ -714,6 +849,17 @@ Description: ${prompt}`;
                 ? (language === 'zh' ? '加载中...' : 'Loading...')
                 : (language === 'zh' ? '插入' : 'Insert')
               }
+            </button>
+            <button
+              onClick={() => {
+                setGeneratedImage(null);
+                clearPreviewCache();
+              }}
+              disabled={isGenerating || imageLoading}
+              className="action-button tertiary"
+              title={language === 'zh' ? '清除预览图' : 'Clear preview'}
+            >
+              {language === 'zh' ? '清除' : 'Clear'}
             </button>
           </div>
         )}

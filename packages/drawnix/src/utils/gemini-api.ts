@@ -549,7 +549,7 @@ function saveApiKeyToStorage(apiKey: string): void {
 /**
  * DOM弹窗获取API Key
  */
-function promptForApiKey(): Promise<string | null> {
+export function promptForApiKey(): Promise<string | null> {
   if (typeof window === 'undefined') return Promise.resolve(null);
   
   return new Promise((resolve) => {
