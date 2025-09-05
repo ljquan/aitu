@@ -10,9 +10,15 @@ import { MindElement, MindTransforms } from '@plait/mind';
 import { DrawTransforms } from '@plait/draw';
 import { getElementOfFocusedImage } from '@plait/common';
 
-export const loadHTMLImageElement = (dataURL: DataURL) => {
+// 辅助函数：将字符串转换为DataURL类型（用于外部URL）
+const createDataURL = (url: string): DataURL => url as DataURL;
+
+export const loadHTMLImageElement = (dataURL: DataURL, crossOrigin = false) => {
   return new Promise<HTMLImageElement>((resolve, reject) => {
     const image = new Image();
+    if (crossOrigin) {
+      image.crossOrigin = 'anonymous';
+    }
     image.onload = () => {
       resolve(image);
     };
@@ -75,9 +81,10 @@ export const insertImageFromUrl = async (
     getSelectedElements(board)[0] || getElementOfFocusedImage(board);
   const defaultImageWidth = selectedElement ? 240 : 400;
   
-  // 直接使用URL加载图片
-  const image = await loadHTMLImageElement(imageUrl);
-  const imageItem = buildImage(image, imageUrl, defaultImageWidth);
+  // Service Worker会处理CORS问题，直接使用URL即可
+  const dataURL = createDataURL(imageUrl);
+  const image = await loadHTMLImageElement(dataURL, true); // 设置crossOrigin以防万一
+  const imageItem = buildImage(image, dataURL, defaultImageWidth);
   
   const element = startPoint && getHitElementByPoint(board, startPoint);
   if (isDrop && element && MindElement.isMindElement(board, element)) {
