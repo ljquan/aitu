@@ -1,18 +1,19 @@
 {
   "name": "@drawnix/source",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "license": "MIT",
   "scripts": {
     "start": "nx serve web --host=0.0.0.0",
     "build": "node scripts/update-version.js && nx run-many -t=build",
     "build:web": "node scripts/update-version.js && nx build web",
+    "package": "node scripts/create-release-package.js",
     "test": "nx run-many -t=test",
     "version:patch": "node scripts/safe-version-bump.js patch",
     "version:minor": "node scripts/safe-version-bump.js minor",
     "version:major": "node scripts/safe-version-bump.js major",
-    "release": "npm run version:patch && npm run build",
-    "release:minor": "npm run version:minor && npm run build",
-    "release:major": "npm run version:major && npm run build",
+    "release": "npm run version:patch && npm run build && npm run package",
+    "release:minor": "npm run version:minor && npm run build && npm run package",
+    "release:major": "npm run version:major && npm run build && npm run package",
     "pub": "npm run build && node scripts/publish.js"
   },
   "private": true,
