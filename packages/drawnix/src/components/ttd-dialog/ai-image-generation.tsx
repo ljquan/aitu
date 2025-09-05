@@ -6,7 +6,6 @@ import { useI18n } from '../../i18n';
 import { useBoard } from '@plait-board/react-board';
 import { defaultGeminiClient, promptForApiKey } from '../../utils/gemini-api';
 import { insertImageFromUrl } from '../../data/image';
-import { extractSelectedContent } from '../../utils/selection-utils';
 
 // 预览图缓存key
 const PREVIEW_CACHE_KEY = 'ai_image_generation_preview_cache';
@@ -56,8 +55,13 @@ const getPromptExample = (language: 'zh' | 'en') => {
   return `A cute kitten sitting on a windowsill, with sunlight streaming through the window onto its fur, with a cozy home environment in the background`;
 };
 
-const AIImageGeneration = () => {
-  const [prompt, setPrompt] = useState('');
+interface AIImageGenerationProps {
+  initialPrompt?: string;
+  initialImages?: (File | { url: string; name: string })[];
+}
+
+const AIImageGeneration = ({ initialPrompt = '', initialImages = [] }: AIImageGenerationProps = {}) => {
+  const [prompt, setPrompt] = useState(initialPrompt);
   const [width, setWidth] = useState<number | string>(1024);
   const [height, setHeight] = useState<number | string>(1024);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -84,11 +88,12 @@ const AIImageGeneration = () => {
   const [error, setError] = useState<string | null>(null);
   const [useImageAPI] = useState(false); // true: images/generations, false: chat/completions
   // 支持文件和URL两种类型的图片
-  const [uploadedImages, setUploadedImages] = useState<(File | { url: string; name: string })[]>([]);
+  const [uploadedImages, setUploadedImages] = useState<(File | { url: string; name: string })[]>(initialImages);
 
   const { appState, setAppState } = useDrawnix();
   const { language } = useI18n();
   const board = useBoard();
+
 
   // 检查是否为Invalid Token错误
   const isInvalidTokenError = (errorMessage: string): boolean => {
@@ -372,29 +377,6 @@ Description: ${prompt}`;
     };
   }, [isGenerating, prompt, handleGenerate]);
 
-  // 自动填充选中的内容
-  useEffect(() => {
-    const populateFromSelection = async () => {
-      const selectedContent = extractSelectedContent(board);
-      
-      // 填充文本描述
-      if (selectedContent.text && !prompt) {
-        setPrompt(selectedContent.text);
-      }
-      
-      // 填充图片（仅在聊天API模式下）
-      if (selectedContent.images.length > 0 && !useImageAPI && uploadedImages.length === 0) {
-        const imageItems = selectedContent.images.map(image => ({
-          url: image.url,
-          name: image.name || `selected-image-${Date.now()}.png`
-        }));
-        
-        setUploadedImages(imageItems);
-      }
-    };
-
-    populateFromSelection();
-  }, []); // 只在组件挂载时运行一次
 
 
 
