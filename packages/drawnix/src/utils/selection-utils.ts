@@ -111,16 +111,18 @@ export const isImageElement = (board: PlaitBoard, element: PlaitElement): boolea
 
 /**
  * Classify element as text-containing
+ * In Plait, PlaitText extends PlaitGeometry, but we want to treat pure text elements separately
  */
 export const isTextElement = (board: PlaitBoard, element: PlaitElement): boolean => {
   // Mind elements always contain text
   if (MindElement.isMindElement(board, element)) {
+    console.log('Element classified as mind element (text)');
     return true;
   }
   
-  // Draw text elements
+  // PlaitText elements (these are text-specific geometry elements)
   if (PlaitDrawElement.isText && PlaitDrawElement.isText(element)) {
-    console.log('Element classified as draw text element');
+    console.log('Element classified as PlaitText element');
     return true;
   }
   
@@ -130,7 +132,7 @@ export const isTextElement = (board: PlaitBoard, element: PlaitElement): boolean
     return true;
   }
   
-  console.log('Element not classified as text element');
+  console.log('Element not classified as text element, type:', element.type);
   return false;
 };
 
@@ -140,6 +142,7 @@ export const isTextElement = (board: PlaitBoard, element: PlaitElement): boolean
 export const isGraphicsElement = (board: PlaitBoard, element: PlaitElement): boolean => {
   // First, explicitly check if it's a text or image element - if so, it's NOT graphics
   if (isImageElement(board, element) || isTextElement(board, element)) {
+    console.log('Element excluded from graphics (is text or image)');
     return false;
   }
   
@@ -149,8 +152,13 @@ export const isGraphicsElement = (board: PlaitBoard, element: PlaitElement): boo
     return true;
   }
   
-  // Geometric shapes
+  // Geometric shapes (but exclude text elements which also match geometry)
   if (PlaitDrawElement.isGeometry && PlaitDrawElement.isGeometry(element)) {
+    // Double-check it's not a text element, since PlaitText extends PlaitGeometry
+    if (PlaitDrawElement.isText && PlaitDrawElement.isText(element)) {
+      console.log('Element is geometry but also text, excluding from graphics');
+      return false;
+    }
     console.log('Element classified as geometry graphics');
     return true;
   }
@@ -194,9 +202,16 @@ export const detectElementOverlap = (board: PlaitBoard, element1: PlaitElement, 
     const rect1 = getRectangleByElements(board, [element1], false);
     const rect2 = getRectangleByElements(board, [element2], false);
     
-    return RectangleClient.isHit(rect1, rect2);
+    console.log(`Overlap check: ${element1.id} (${element1.type}) vs ${element2.id} (${element2.type})`);
+    console.log('  Rect1:', rect1);
+    console.log('  Rect2:', rect2);
+    
+    const overlaps = RectangleClient.isHit(rect1, rect2);
+    console.log('  Overlaps:', overlaps);
+    
+    return overlaps;
   } catch (error) {
-    console.warn('Error detecting element overlap:', error);
+    console.warn('Error detecting element overlap:', error, 'Elements:', element1.id, element2.id);
     return false;
   }
 };
@@ -208,19 +223,43 @@ export const findElementsOverlappingWithGraphics = (board: PlaitBoard, elements:
   graphicsElements: PlaitElement[];
   overlappingElements: PlaitElement[];
 } => {
-  const graphicsElements = elements.filter(el => isGraphicsElement(board, el));
-  const nonGraphicsElements = elements.filter(el => !isGraphicsElement(board, el));
+  console.log('findElementsOverlappingWithGraphics: Processing', elements.length, 'elements');
+  
+  const graphicsElements = elements.filter(el => {
+    const isGraphics = isGraphicsElement(board, el);
+    if (isGraphics) {
+      console.log('Found graphics element:', el.id, 'type:', el.type);
+    }
+    return isGraphics;
+  });
+  
+  const nonGraphicsElements = elements.filter(el => {
+    const isGraphics = isGraphicsElement(board, el);
+    if (!isGraphics) {
+      const isImage = isImageElement(board, el);
+      const isText = isTextElement(board, el);
+      console.log('Found non-graphics element:', el.id, 'type:', el.type, 'isImage:', isImage, 'isText:', isText);
+    }
+    return !isGraphics;
+  });
+  
+  console.log('Graphics elements:', graphicsElements.length, 'Non-graphics elements:', nonGraphicsElements.length);
   
   const overlappingElements: PlaitElement[] = [];
   
   for (const graphicsEl of graphicsElements) {
+    console.log('Checking overlaps for graphics element:', graphicsEl.id);
     for (const otherEl of nonGraphicsElements) {
-      if (detectElementOverlap(board, graphicsEl, otherEl) && !overlappingElements.includes(otherEl)) {
+      const overlaps = detectElementOverlap(board, graphicsEl, otherEl);
+      console.log('  Overlap check with', otherEl.id, ':', overlaps);
+      if (overlaps && !overlappingElements.includes(otherEl)) {
         overlappingElements.push(otherEl);
+        console.log('  Added overlapping element:', otherEl.id);
       }
     }
   }
   
+  console.log('Final result - Graphics:', graphicsElements.length, 'Overlapping:', overlappingElements.length);
   return { graphicsElements, overlappingElements };
 };
 
@@ -292,8 +331,24 @@ export const convertElementsToImage = async (board: PlaitBoard, elements: PlaitE
     // Add background
     svgElements.push(`<rect width="${canvasWidth}" height="${canvasHeight}" fill="#ffffff" stroke="none"/>`);
     
+    // Sort elements by rendering order: images first (background), then graphics (foreground)
+    // This ensures the correct layering in the generated SVG
+    const sortedElements = elements.slice().sort((a, b) => {
+      const aIsImage = isImageElement(board, a);
+      const bIsImage = isImageElement(board, b);
+      
+      // Images should come first (render as background)
+      if (aIsImage && !bIsImage) return -1;
+      if (!aIsImage && bIsImage) return 1;
+      
+      // For same type elements, maintain original order
+      return 0;
+    });
+    
+    console.log('Element rendering order:', sortedElements.map(el => ({ id: el.id, type: el.type })));
+    
     // Process each element and create a visual representation
-    elements.forEach((element) => {
+    sortedElements.forEach((element) => {
       const elementRect = getRectangleByElements(board, [element], false);
       if (!elementRect) return;
       
@@ -377,13 +432,48 @@ export const convertElementsToImage = async (board: PlaitBoard, elements: PlaitE
           );
         }
       } else if (isImageElement(board, element)) {
-        // Image elements: render as image placeholder with better visual
-        svgElements.push(
-          `<rect x="${relativeX}" y="${relativeY}" width="${width}" height="${height}" 
-           fill="#FFF3E0" stroke="#FF9800" stroke-width="2" rx="4"/>
-           <text x="${relativeX + width/2}" y="${relativeY + height/2}" 
-           text-anchor="middle" dy=".3em" font-family="Arial" font-size="${Math.min(16, width/4)}" fill="#E65100">📷</text>`
-        );
+        // Image elements: render the actual image if possible
+        const imageElement = element as any;
+        let imageUrl = '';
+        
+        console.log('Image element properties:', Object.keys(imageElement));
+        console.log('Image element sample:', {
+          url: imageElement.url,
+          image: imageElement.image,
+          src: imageElement.src,
+          source: imageElement.source,
+          path: imageElement.path
+        });
+        
+        // Try to get the image URL from various possible properties
+        if (imageElement.url) {
+          imageUrl = imageElement.url;
+        } else if (imageElement.image && imageElement.image.url) {
+          imageUrl = imageElement.image.url;
+        } else if (imageElement.src) {
+          imageUrl = imageElement.src;
+        } else if (imageElement.source) {
+          imageUrl = imageElement.source;
+        } else if (imageElement.path) {
+          imageUrl = imageElement.path;
+        }
+        
+        if (imageUrl) {
+          console.log('Adding actual image to SVG:', imageUrl.substring(0, 100) + '...');
+          svgElements.push(
+            `<image x="${relativeX}" y="${relativeY}" width="${width}" height="${height}" 
+             href="${imageUrl}" preserveAspectRatio="xMidYMid slice"/>`
+          );
+        } else {
+          console.log('No image URL found, using placeholder for element:', imageElement);
+          // Fallback to placeholder if no image URL found
+          svgElements.push(
+            `<rect x="${relativeX}" y="${relativeY}" width="${width}" height="${height}" 
+             fill="#FFF3E0" stroke="#FF9800" stroke-width="2" rx="4"/>
+             <text x="${relativeX + width/2}" y="${relativeY + height/2}" 
+             text-anchor="middle" dy=".3em" font-family="Arial" font-size="${Math.min(16, width/4)}" fill="#E65100">📷</text>`
+          );
+        }
       } else if (isTextElement(board, element)) {
         // Text elements: render the actual text content
         const textContent = extractTextFromElement(element, board);
@@ -421,8 +511,9 @@ export const convertElementsToImage = async (board: PlaitBoard, elements: PlaitE
       </svg>
     `;
 
-    // Convert to data URL
-    const dataURL = 'data:image/svg+xml;base64,' + window.btoa(svgContent);
+    // Convert to data URL using URL encoding to avoid btoa() encoding issues
+    const encodedSvgContent = encodeURIComponent(svgContent);
+    const dataURL = 'data:image/svg+xml;charset=utf-8,' + encodedSvgContent;
     
     console.log(`Converted ${elements.length} elements to synthetic image (${canvasWidth}x${canvasHeight})`);
     return dataURL;
@@ -504,6 +595,18 @@ export const processSelectedContentForAI = async (board: PlaitBoard): Promise<Pr
   const selectedElements = getSelectedElements(board);
   console.log('processSelectedContentForAI: Selected elements count:', selectedElements.length);
   
+  // Debug: Log each selected element's details
+  selectedElements.forEach((el, index) => {
+    console.log(`Element ${index}:`, {
+      id: el.id,
+      type: el.type,
+      isImage: isImageElement(board, el),
+      isText: isTextElement(board, el),
+      isGraphics: isGraphicsElement(board, el),
+      element: el
+    });
+  });
+  
   // Step 1: Find graphics elements and their overlapping elements
   const { graphicsElements, overlappingElements } = findElementsOverlappingWithGraphics(board, selectedElements);
   console.log('Graphics elements:', graphicsElements.length, 'Overlapping elements:', overlappingElements.length);
@@ -520,14 +623,18 @@ export const processSelectedContentForAI = async (board: PlaitBoard): Promise<Pr
   // Step 4: Generate image from graphics-related elements
   let graphicsImage: string | undefined;
   if (allGraphicsRelatedElements.length > 0) {
+    console.log('Converting graphics-related elements to image, count:', allGraphicsRelatedElements.length);
     try {
       const imageUrl = await convertElementsToImage(board, allGraphicsRelatedElements);
+      console.log('convertElementsToImage returned:', imageUrl ? 'success' : 'null');
       if (imageUrl) {
         graphicsImage = imageUrl;
       }
     } catch (error) {
       console.warn('Failed to convert graphics elements to image:', error);
     }
+  } else {
+    console.log('No graphics-related elements to convert to image');
   }
   
   // Step 5: Extract images and text from remaining elements
