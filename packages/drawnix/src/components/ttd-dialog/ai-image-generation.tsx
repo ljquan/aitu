@@ -48,14 +48,6 @@ const loadPreviewCache = (): PreviewCache | null => {
   return null;
 };
 
-// 清除预览缓存
-const clearPreviewCache = () => {
-  try {
-    localStorage.removeItem(PREVIEW_CACHE_KEY);
-  } catch (error) {
-    console.warn('Failed to clear preview cache:', error);
-  }
-};
 
 const getPromptExample = (language: 'zh' | 'en') => {
   if (language === 'zh') {
@@ -69,10 +61,28 @@ const AIImageGeneration = () => {
   const [width, setWidth] = useState<number | string>(1024);
   const [height, setHeight] = useState<number | string>(1024);
   const [isGenerating, setIsGenerating] = useState(false);
+  
+  // 通知Footer组件生成状态变化
+  const notifyGenerationStateChange = (generating: boolean, loading: boolean) => {
+    window.dispatchEvent(new CustomEvent('ai-generation-state-change', {
+      detail: { isGenerating: generating, imageLoading: loading }
+    }));
+  };
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [imageLoading, setImageLoading] = useState(false);
+  
+  // 包装setIsGenerating和setImageLoading以发送事件
+  const updateIsGenerating = (value: boolean) => {
+    setIsGenerating(value);
+    notifyGenerationStateChange(value, imageLoading);
+  };
+  
+  const updateImageLoading = (value: boolean) => {
+    setImageLoading(value);
+    notifyGenerationStateChange(isGenerating, value);
+  };
   const [error, setError] = useState<string | null>(null);
-  const [useImageAPI, setUseImageAPI] = useState(false); // true: images/generations, false: chat/completions
+  const [useImageAPI] = useState(false); // true: images/generations, false: chat/completions
   // 支持文件和URL两种类型的图片
   const [uploadedImages, setUploadedImages] = useState<(File | { url: string; name: string })[]>([]);
 
@@ -118,9 +128,20 @@ const AIImageGeneration = () => {
     setUploadedImages(prev => prev.filter((_, i) => i !== index));
   };
 
-  // 清空所有上传的图片
-  const clearUploadedImages = () => {
+  // 重置所有状态
+  const handleReset = () => {
+    setPrompt('');
     setUploadedImages([]);
+    setGeneratedImage(null);
+    setError(null);
+    // 清除缓存
+    try {
+      localStorage.removeItem(PREVIEW_CACHE_KEY);
+    } catch (error) {
+      console.warn('Failed to clear cache:', error);
+    }
+    // 触发Footer组件更新
+    window.dispatchEvent(new CustomEvent('ai-image-clear'));
   };
 
   // 预加载图片并优化缓存
@@ -148,7 +169,7 @@ const AIImageGeneration = () => {
 
   // 设置生成图片并预加载
   const setGeneratedImageWithPreload = async (imageUrl: string) => {
-    setImageLoading(true);
+    updateImageLoading(true);
     try {
       // 预加载图片
       await preloadImage(imageUrl);
@@ -178,7 +199,7 @@ const AIImageGeneration = () => {
       };
       savePreviewCache(cacheData);
     } finally {
-      setImageLoading(false);
+      updateImageLoading(false);
     }
   };
 
@@ -208,7 +229,7 @@ const AIImageGeneration = () => {
       return;
     }
 
-    setIsGenerating(true);
+    updateIsGenerating(true);
     setError(null);
 
     try {
@@ -329,39 +350,10 @@ Description: ${prompt}`;
         );
       }
     } finally {
-      setIsGenerating(false);
+      updateIsGenerating(false);
     }
   };
 
-  const handleInsert = async () => {
-    if (generatedImage) {
-      try {
-        console.log('Starting image insertion with URL...', generatedImage);
-        
-        // 直接使用URL插入图片，不需要转换为File
-        await insertImageFromUrl(board, generatedImage);
-        
-        console.log('Image inserted successfully!');
-        
-        // 清除缓存，因为图片已经插入
-        clearPreviewCache();
-        
-        // 关闭对话框
-        setAppState({ ...appState, openDialogType: null });
-        
-        // 清除错误状态
-        setError(null);
-        
-      } catch (err) {
-        console.error('Insert image error:', err);
-        setError(
-          language === 'zh' 
-            ? `插入图片失败: ${err instanceof Error ? err.message : '未知错误'}` 
-            : `Failed to insert image: ${err instanceof Error ? err.message : 'Unknown error'}`
-        );
-      }
-    }
-  };
 
   // 键盘快捷键支持
   useEffect(() => {
@@ -406,62 +398,21 @@ Description: ${prompt}`;
 
 
 
-  // 关闭对话框
-  const handleClose = () => {
-    // 如果有预览图，在关闭时保存缓存
-    if (generatedImage && prompt.trim()) {
-      const cacheData: PreviewCache = {
-        prompt,
-        generatedImage,
-        timestamp: Date.now(),
-        width,
-        height
-      };
-      savePreviewCache(cacheData);
-    }
-    
-    setAppState({ ...appState, openDialogType: null });
-  };
+
 
   return (
     <div className="ai-image-generation-container">
-      {/* 关闭按钮 */}
-      <button
-        className="dialog-close-button"
-        onClick={handleClose}
-        type="button"
-        aria-label={language === 'zh' ? '关闭' : 'Close'}
-        title={language === 'zh' ? '关闭' : 'Close'}
-      >
-        ×
-      </button>
-      
       <div className="main-content">
         {/* AI 图像生成表单 */}
         <div className="ai-image-generation-section">
-        <h3 className="section-title">
-          {language === 'zh' ? 'AI 图像生成' : 'AI Image Generation'}
-        </h3>
         <div className="ai-image-generation-form">
           
           {/* 图片上传 */}
           {!useImageAPI && (
             <div className="form-field">
-              <div className="form-label-with-icon">
-                <label className="form-label">
-                  {language === 'zh' ? '参考图片 (可选)' : 'Reference Images (Optional)'}
-                </label>
-                {uploadedImages.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={clearUploadedImages}
-                    className="clear-images-btn"
-                    disabled={isGenerating}
-                  >
-                    {language === 'zh' ? '清空' : 'Clear All'}
-                  </button>
-                )}
-              </div>
+              <label className="form-label">
+                {language === 'zh' ? '参考图片 (可选)' : 'Reference Images (Optional)'}
+              </label>
               <div className="unified-image-area">
                 {uploadedImages.length === 0 ? (
                   /* 没有图片时显示完整上传区域 */
@@ -770,7 +721,7 @@ Description: ${prompt}`;
           )}
         </div>
         
-        {/* 生成按钮区域 */}
+        {/* 生成和重置按钮区域 */}
         <div className="section-actions">
           <button
             onClick={handleGenerate}
@@ -785,17 +736,19 @@ Description: ${prompt}`;
             }
           </button>
           
-          {/* <div className="keyboard-shortcut">
-            <span>Cmd+Enter</span>
-          </div> */}
+          <button
+            onClick={handleReset}
+            disabled={isGenerating}
+            className="action-button secondary"
+          >
+            {language === 'zh' ? '重置' : 'Reset'}
+          </button>
         </div>
+        
       </div>
       
       {/* 预览区域 */}
       <div className="preview-section">
-        <h3 className="section-title">
-          {language === 'zh' ? '预览' : 'Preview'}
-        </h3>
         <div className="image-preview-container">
           {isGenerating ? (
             <div className="preview-loading">
@@ -836,33 +789,64 @@ Description: ${prompt}`;
           )}
         </div>
         
-        {/* 插入按钮区域 */}
+        {/* 插入和清除按钮区域 */}
         {generatedImage && (
           <div className="section-actions">
             <button
-              onClick={handleInsert}
+              onClick={() => {
+                setGeneratedImage(null);
+                try {
+                  localStorage.removeItem(PREVIEW_CACHE_KEY);
+                } catch (error) {
+                  console.warn('Failed to clear cache:', error);
+                }
+              }}
+              disabled={isGenerating || imageLoading}
+              className="action-button tertiary"
+            >
+              {language === 'zh' ? '清除' : 'Clear'}
+            </button>
+            <button
+              onClick={async () => {
+                if (generatedImage) {
+                  try {
+                    console.log('Starting image insertion with URL...', generatedImage);
+                    
+                    await insertImageFromUrl(board, generatedImage);
+                    
+                    console.log('Image inserted successfully!');
+                    
+                    // 清除缓存
+                    try {
+                      localStorage.removeItem(PREVIEW_CACHE_KEY);
+                    } catch (error) {
+                      console.warn('Failed to clear cache:', error);
+                    }
+                    
+                    // 关闭对话框
+                    setAppState({ ...appState, openDialogType: null });
+                    
+                  } catch (err) {
+                    console.error('Insert image error:', err);
+                    setError(
+                      language === 'zh' 
+                        ? `插入图片失败: ${err instanceof Error ? err.message : '未知错误'}` 
+                        : `Failed to insert image: ${err instanceof Error ? err.message : 'Unknown error'}`
+                    );
+                  }
+                }
+              }}
               disabled={isGenerating || imageLoading}
               className="action-button secondary"
-              title={imageLoading ? (language === 'zh' ? '图像加载中...' : 'Image loading...') : undefined}
             >
               {imageLoading 
                 ? (language === 'zh' ? '加载中...' : 'Loading...')
                 : (language === 'zh' ? '插入' : 'Insert')
               }
             </button>
-            <button
-              onClick={() => {
-                setGeneratedImage(null);
-                clearPreviewCache();
-              }}
-              disabled={isGenerating || imageLoading}
-              className="action-button tertiary"
-              title={language === 'zh' ? '清除预览图' : 'Clear preview'}
-            >
-              {language === 'zh' ? '清除' : 'Clear'}
-            </button>
           </div>
         )}
+        
       </div>
       </div>
       
