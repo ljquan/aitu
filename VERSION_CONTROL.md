@@ -11,17 +11,22 @@
 
 ### 2. 发布命令
 ```bash
-# 补丁版本 (0.0.2 -> 0.0.3)
+# 补丁版本 (0.0.7 -> 0.0.8)
 npm run release
 
-# 次版本 (0.0.2 -> 0.1.0)  
+# 次版本 (0.0.7 -> 0.1.0)  
 npm run release:minor
 
-# 主版本 (0.0.2 -> 1.0.0)
+# 主版本 (0.0.7 -> 1.0.0)
 npm run release:major
 
 # 仅构建（不更新版本号）
 npm run build
+
+# 单独的版本升级命令
+npm run version:patch    # 仅升级版本号
+npm run version:minor    # 仅升级版本号  
+npm run version:major    # 仅升级版本号
 ```
 
 ## 🔧 缓存管理机制
@@ -46,6 +51,7 @@ npm run build
 
 ### 版本控制文件
 - `package.json` - 版本号定义
+- `scripts/safe-version-bump.js` - 智能版本升级脚本
 - `scripts/update-version.js` - 版本更新脚本
 - `apps/web/public/version.json` - 运行时版本信息
 

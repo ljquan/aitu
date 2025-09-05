@@ -46,12 +46,21 @@ function updateHtmlWithVersion(version) {
     `href="/manifest.json?v=${version}"`
   );
   
-  // 添加版本信息到 meta 标签
-  const versionMeta = `    <meta name="app-version" content="${version}" />`;
-  htmlContent = htmlContent.replace(
-    '    <meta name="viewport" content="width=device-width, initial-scale=1" />',
-    `    <meta name="viewport" content="width=device-width, initial-scale=1" />\n${versionMeta}`
-  );
+  // 更新或添加版本信息到 meta 标签
+  if (htmlContent.includes('name="app-version"')) {
+    // 更新现有的版本标签
+    htmlContent = htmlContent.replace(
+      /<meta name="app-version" content="[^"]*" \/>/g,
+      `<meta name="app-version" content="${version}" />`
+    );
+  } else {
+    // 添加新的版本标签
+    const versionMeta = `    <meta name="app-version" content="${version}" />`;
+    htmlContent = htmlContent.replace(
+      '    <meta name="viewport" content="width=device-width, initial-scale=1" />',
+      `    <meta name="viewport" content="width=device-width, initial-scale=1" />\n${versionMeta}`
+    );
+  }
   
   fs.writeFileSync(htmlPath, htmlContent);
   console.log(`✅ HTML updated with version ${version}`);
