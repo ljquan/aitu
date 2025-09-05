@@ -432,12 +432,36 @@ Description: ${prompt}`;
                       const size = isFile ? `${(item.size / 1024 / 1024).toFixed(1)}MB` : 'URL';
                       
                       return (
-                        <div key={index} className="uploaded-image-item">
-                          <img
-                            src={src}
-                            alt={`Upload ${index + 1}`}
-                            className="uploaded-image-preview"
-                          />
+                        <div key={index} className="uploaded-image-item" data-tooltip={src}>
+                          <div 
+                            className="uploaded-image-preview-container"
+                            onMouseEnter={(e) => {
+                              const tooltip = e.currentTarget.querySelector('.image-hover-tooltip') as HTMLElement;
+                              if (tooltip) {
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                tooltip.style.left = rect.left + rect.width / 2 + 'px';
+                                tooltip.style.top = rect.top - 10 + 'px';
+                                tooltip.style.opacity = '1';
+                                tooltip.style.visibility = 'visible';
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              const tooltip = e.currentTarget.querySelector('.image-hover-tooltip') as HTMLElement;
+                              if (tooltip) {
+                                tooltip.style.opacity = '0';
+                                tooltip.style.visibility = 'hidden';
+                              }
+                            }}
+                          >
+                            <img
+                              src={src}
+                              alt={`Upload ${index + 1}`}
+                              className="uploaded-image-preview"
+                            />
+                            <div className="image-hover-tooltip">
+                              <img src={src} alt="Large preview" />
+                            </div>
+                          </div>
                           <button
                             type="button"
                             onClick={() => removeUploadedImage(index)}

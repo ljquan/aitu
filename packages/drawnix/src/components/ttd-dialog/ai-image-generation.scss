@@ -694,14 +694,70 @@
     .uploaded-image-item {
       position: relative;
       border-radius: 6px;
-      overflow: hidden;
+      overflow: visible; // 改为visible以显示悬停提示
       border: 1px solid var(--color-border, #d9d9d9);
 
-      .uploaded-image-preview {
-        width: 100%;
-        height: 80px;
-        object-fit: cover;
+      .uploaded-image-preview-container {
+        position: relative;
         display: block;
+        border-radius: 6px;
+        overflow: hidden;
+        height: 80px; // 固定容器高度
+        
+        .uploaded-image-preview {
+          width: 100%;
+          max-height: 80px; // 使用max-height而不是height
+          object-fit: contain; // 改为contain以保持完整显示
+          display: block;
+          background: var(--color-bg-layout, #f5f5f5);
+        }
+
+        // 悬停大图提示
+        .image-hover-tooltip {
+          position: fixed; // 改为fixed确保显示在最顶层
+          bottom: auto;
+          top: auto;
+          left: auto;
+          right: auto;
+          transform: translate(-50%, -100%);
+          background: var(--color-bg-container, #fff);
+          border: 2px solid var(--color-primary, #1890ff);
+          border-radius: 8px;
+          padding: 8px;
+          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+          opacity: 0;
+          visibility: hidden;
+          transition: all 0.2s ease;
+          z-index: 9999; // 提高z-index
+          pointer-events: none;
+          margin-bottom: 8px;
+          max-width: 300px;
+          max-height: 300px;
+
+          img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            display: block;
+          }
+
+          // 小箭头指向原图
+          &::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 6px solid transparent;
+            border-top-color: var(--color-primary, #1890ff);
+          }
+        }
+
+        // 悬停时显示大图
+        &:hover .image-hover-tooltip {
+          opacity: 1;
+          visibility: visible;
+        }
       }
 
       .remove-image-btn {
