@@ -183,11 +183,12 @@ export const isGraphicsElement = (board: PlaitBoard, element: PlaitElement): boo
   // Only classify as graphics if it's a draw element but NOT an image or text
   if (PlaitDrawElement.isDrawElement && PlaitDrawElement.isDrawElement(element)) {
     // Double-check to make sure it's not an image or text element
-    if (!PlaitDrawElement.isImage || !PlaitDrawElement.isImage(element)) {
-      if (!PlaitDrawElement.isText || !PlaitDrawElement.isText(element)) {
-        console.log('Element classified as other draw graphics');
-        return true;
-      }
+    const isImageElement = PlaitDrawElement.isImage && PlaitDrawElement.isImage(element);
+    const isTextElement = PlaitDrawElement.isText && PlaitDrawElement.isText(element);
+    
+    if (!isImageElement && !isTextElement) {
+      console.log('Element classified as other draw graphics');
+      return true;
     }
   }
   
