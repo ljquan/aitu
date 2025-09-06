@@ -103,6 +103,10 @@ export const insertVideoFromUrl = async (
         // 调整X坐标，让视频以计算点为中心左右居中显示
         insertionPoint = [calculatedPoint[0] - dimensions.width / 2, calculatedPoint[1]] as Point;
       }
+    } else if (startPoint) {
+      // 如果传入了具体的插入点，需要判断这个点是否已经是期望的左上角位置
+      // 从AI视频生成对话框传入的点是中心点，需要调整为左上角位置
+      insertionPoint = [startPoint[0] - dimensions.width / 2, startPoint[1]] as Point;
     }
 
     // 如果没有计算出插入位置，使用默认位置
