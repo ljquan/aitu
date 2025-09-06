@@ -20,7 +20,8 @@ import {
   getCurrentStrokeColor,
   isClosedElement,
 } from '../utils/property';
-import { TextTransforms } from '@plait/text-plugins';
+import { TextTransforms, FontSizes } from '@plait/text-plugins';
+import { getTextEditors } from '@plait/common';
 
 export const setFillColorOpacity = (board: PlaitBoard, fillOpacity: number) => {
   PropertyTransforms.setFillColor(board, null, {
@@ -140,4 +141,27 @@ export const setTextColorOpacity = (
     ? currentFontColorValue
     : applyOpacityToHex(currentFontColorValue, opacity);
   TextTransforms.setTextColor(board, newFontColor);
+};
+
+export const setTextFontSize = (
+  board: PlaitBoard,
+  fontSize: FontSizes
+) => {
+  // 尝试使用TextTransforms.setFontSize
+  try {
+    TextTransforms.setFontSize(board, fontSize, 16);
+  } catch (error) {
+    // 如果失败，尝试直接操作编辑器
+    const textEditors = getTextEditors(board);
+    if (textEditors && textEditors.length > 0) {
+      textEditors.forEach((editor) => {
+        try {
+          // 直接使用编辑器的addMark方法
+          (editor as any).addMark('font-size', fontSize);
+        } catch (markError) {
+          console.error('Failed to set font size mark:', markError);
+        }
+      });
+    }
+  }
 };

@@ -33,6 +33,7 @@ import {
 import { CustomText } from '@plait/common';
 import { getTextMarksByElement } from '@plait/text-plugins';
 import { PopupFontColorButton } from './font-color-button';
+import { PopupFontSizeButton } from './font-size-button';
 import { PopupStrokeButton } from './stroke-button';
 import { PopupFillButton } from './fill-button';
 import { isWhite, removeHexAlpha } from '../../../utils/color';
@@ -60,7 +61,9 @@ export const PopupToolbar = () => {
     hasFill?: boolean;
     hasText?: boolean;
     fontColor?: string;
+    fontSize?: string;
     hasFontColor?: boolean;
+    hasFontSize?: boolean;
     hasStroke?: boolean;
     hasStrokeStyle?: boolean;
     marks?: Omit<CustomText, 'text'>;
@@ -84,6 +87,7 @@ export const PopupToolbar = () => {
       ...getElementState(board),
       hasFill,
       hasFontColor: hasText,
+      hasFontSize: hasText,
       hasStroke,
       hasStrokeStyle,
       hasText,
@@ -178,10 +182,18 @@ export const PopupToolbar = () => {
                 }
               ></PopupFontColorButton>
             )}
+            {state.hasFontSize && (
+              <PopupFontSizeButton
+                board={board}
+                key={1}
+                currentFontSize={state.fontSize}
+                title={`Font Size`}
+              ></PopupFontSizeButton>
+            )}
             {state.hasStroke && (
               <PopupStrokeButton
                 board={board}
-                key={1}
+                key={2}
                 currentColor={state.strokeColor}
                 title={`Stroke`}
                 hasStrokeStyle={state.hasStrokeStyle || false}
@@ -195,7 +207,7 @@ export const PopupToolbar = () => {
             {state.hasFill && (
               <PopupFillButton
                 board={board}
-                key={2}
+                key={3}
                 currentColor={state.fill}
                 title={`Fill Color`}
               >
@@ -211,7 +223,7 @@ export const PopupToolbar = () => {
             {state.hasText && (
               <PopupLinkButton
                 board={board}
-                key={3}
+                key={4}
                 title={`Link`}
               ></PopupLinkButton>
             )}
@@ -230,6 +242,7 @@ export const getMindElementState = (
   return {
     fill: element.fill,
     strokeColor: getStrokeColorByMindElement(board, element),
+    fontSize: marks['font-size'],
     marks,
   };
 };
@@ -242,6 +255,7 @@ export const getDrawElementState = (
   return {
     fill: element.fill,
     strokeColor: getStrokeColorByDrawElement(board, element),
+    fontSize: marks['font-size'],
     marks,
   };
 };

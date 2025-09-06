@@ -23,6 +23,8 @@ Type check: `nx typecheck <project-name>`
 - `packages/react-board/` - React wrapper for Plait board functionality  
 - `packages/react-text/` - Text rendering and editing components
 - `docs/` - 开发文档
+- `packages/drawnix/src/components/toolbar/creation-toolbar.tsx` - creation-toolbar 创作工具
+- popup-toolbar
 
 ### Core Components
 - **Drawnix Component** (`packages/drawnix/src/drawnix.tsx`) - Main application wrapper with state management and plugin composition
