@@ -34,6 +34,14 @@ export interface GeminiMessage {
   }>;
 }
 
+export interface VideoGenerationOptions {
+  max_tokens?: number;
+  temperature?: number;
+  top_p?: number;
+  presence_penalty?: number;
+  frequency_penalty?: number;
+}
+
 export interface GeminiResponse {
   choices: Array<{
     message: {
@@ -62,6 +70,14 @@ const DEFAULT_CONFIG: Partial<GeminiConfig> = {
   maxRetries: 10,
   retryDelay: 0,
   timeout: 120000, // 120秒
+};
+
+// 视频生成专用配置
+const VIDEO_DEFAULT_CONFIG: Partial<GeminiConfig> = {
+  modelName: 'veo3', // 视频生成模型
+  maxRetries: 10,
+  retryDelay: 0,
+  timeout: 300000, // 5分钟，视频生成需要更长时间
 };
 
 // ====================================
@@ -187,6 +203,102 @@ async function callApiStreamRaw(
     headers,
     body: JSON.stringify(data),
     signal: AbortSignal.timeout(config.timeout || DEFAULT_CONFIG.timeout!),
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+  }
+
+  // 处理流式响应
+  const reader = response.body?.getReader();
+  if (!reader) {
+    throw new Error('无法获取响应流');
+  }
+
+  const decoder = new TextDecoder();
+  let fullContent = '';
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const chunk = decoder.decode(value, { stream: true });
+      const lines = chunk.split('\n');
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6).trim();
+          if (data === '[DONE]') {
+            break;
+          }
+
+          try {
+            const parsed = JSON.parse(data);
+            const content = parsed.choices?.[0]?.delta?.content;
+            if (content) {
+              fullContent += content;
+            }
+          } catch (e) {
+            // 忽略解析错误的数据块
+            console.warn('解析流式数据块失败:', e);
+          }
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  // 返回标准格式的响应
+  return {
+    choices: [{
+      message: {
+        role: 'assistant',
+        content: fullContent
+      }
+    }]
+  };
+}
+
+// 视频生成专用的流式API调用函数
+async function callVideoApiStreamRaw(
+  config: GeminiConfig,
+  messages: GeminiMessage[],
+  options: VideoGenerationOptions = {}
+): Promise<GeminiResponse> {
+  const headers = {
+    'Authorization': `Bearer ${config.apiKey}`,
+    'Content-Type': 'application/json',
+  };
+
+  // 添加系统消息，参考你提供的接口参数
+  const systemMessage: GeminiMessage = {
+    role: 'user',
+    content: [{
+      type: 'text',
+      text: `You are Video Creator.\nCurrent model: ${config.modelName || VIDEO_DEFAULT_CONFIG.modelName}\nCurrent time: ${new Date().toLocaleString()}\nLatex inline: $x^2$\nLatex block: $e=mc^2$`
+    }]
+  };
+
+  const data = {
+    max_tokens: options.max_tokens || 1024,
+    model: config.modelName || VIDEO_DEFAULT_CONFIG.modelName,
+    temperature: options.temperature || 0.5,
+    top_p: options.top_p || 1,
+    presence_penalty: options.presence_penalty || 0,
+    frequency_penalty: options.frequency_penalty || 0,
+    messages: [systemMessage, ...messages],
+    stream: true,
+  };
+
+  const url = `${config.baseUrl}/chat/completions`;
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(data),
+    signal: AbortSignal.timeout(config.timeout || VIDEO_DEFAULT_CONFIG.timeout!),
   });
 
   if (!response.ok) {
@@ -405,6 +517,84 @@ export async function generateImageWithGemini(
 }
 
 /**
+ * 调用 Gemini API 进行视频生成
+ * @param config API 配置
+ * @param prompt 提示词
+ * @param image 输入图片
+ * @param options 生成选项
+ * @returns API 响应结果
+ */
+export async function generateVideoWithGemini(
+  config: GeminiConfig,
+  prompt: string,
+  image: ImageInput,
+  options: VideoGenerationOptions = {}
+): Promise<{
+  response: GeminiResponse;
+  processedContent: ProcessedContent;
+}> {
+  // 验证并确保配置有效，使用视频生成专用配置
+  const validatedConfig = await validateAndEnsureConfig({
+    ...VIDEO_DEFAULT_CONFIG,
+    ...config
+  });
+
+  // 准备图片数据
+  let imageContent;
+  try {
+    console.log('处理视频生成源图片...');
+    const imageData = await prepareImageData(image);
+    imageContent = {
+      type: 'image_url' as const,
+      image_url: {
+        url: imageData,
+      },
+    };
+  } catch (error) {
+    console.error('处理源图片时出错:', error);
+    throw error;
+  }
+
+  // 构建视频生成专用的提示词
+  const videoPrompt = `Generate a video based on this image and description: "${prompt}"
+
+Requirements:
+- Create a short video (3-5 seconds) based on the provided image
+- Follow the description to animate the image naturally
+- Maintain the original image quality and style
+- Return only the direct video URL in your response
+
+Description: ${prompt}`;
+
+  // 构建消息内容
+  const contentList = [
+    { type: 'text' as const, text: videoPrompt },
+    imageContent,
+  ];
+
+  const messages: GeminiMessage[] = [
+    {
+      role: 'user',
+      content: contentList,
+    },
+  ];
+
+  console.log('开始调用视频生成API...');
+
+  // 使用专用的视频生成流式调用
+  const response = await callVideoApiStreamRaw(validatedConfig, messages, options);
+
+  // 处理响应内容
+  const responseContent = response.choices[0]?.message?.content || '';
+  const processedContent = processMixedContent(responseContent);
+
+  return {
+    response,
+    processedContent,
+  };
+}
+
+/**
  * 调用 Gemini API 进行聊天对话（支持图片输入）
  * @param config API 配置
  * @param prompt 提示词
@@ -497,6 +687,13 @@ export class GeminiClient {
    */
   async generateImage(prompt: string, options: { n?: number; size?: string; } = {}) {
     return generateImageWithGemini(this.config, prompt, options);
+  }
+
+  /**
+   * 生成视频
+   */
+  async generateVideo(prompt: string, image: ImageInput, options: VideoGenerationOptions = {}) {
+    return generateVideoWithGemini(this.config, prompt, image, options);
   }
 
   /**

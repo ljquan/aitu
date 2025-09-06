@@ -162,7 +162,14 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
   useEffect(() => {
     setPrompt(initialPrompt);
     setUploadedImage(initialImage || null);
+    // 清除之前的错误状态
+    setError(null);
   }, [initialPrompt, initialImage]);
+
+  // 组件挂载时清除错误状态
+  useEffect(() => {
+    setError(null);
+  }, []);
 
   // 处理图片上传（只支持单张图片）
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -171,6 +178,8 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
       const file = files[0];
       if (file.type.startsWith('image/') && file.size <= 10 * 1024 * 1024) {
         setUploadedImage(file);
+        // 成功上传图片时清除错误状态
+        setError(null);
       } else {
         setError(
           language === 'zh' 
@@ -247,6 +256,8 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
       setUploadedImage({ url: historyItem.sourceImage, name: 'History Image' });
     }
     setShowHistoryPopover(false);
+    // 选择历史记录时清除错误状态
+    setError(null);
     
     // 更新预览缓存
     const cacheData: PreviewCache = {
@@ -314,16 +325,7 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
     setError(null);
 
     try {
-      console.log('Using Chat API for video generation...');
-      const videoPrompt = `Generate a video based on this image and description: "${prompt}"
-
-Requirements:
-- Create a short video (3-5 seconds) based on the provided image
-- Follow the description to animate the image naturally
-- Maintain the original image quality and style
-- Return only the direct video URL in your response
-
-Description: ${prompt}`;
+      console.log('Using new Video Generation API...');
 
       // 处理上传的图片
       let imageInput;
@@ -355,11 +357,12 @@ Description: ${prompt}`;
         imageInput = { url: uploadedImage.url };
       }
       
-      const result = await defaultGeminiClient.chat(videoPrompt, [imageInput]);
+      // 调用新的视频生成API
+      const result = await defaultGeminiClient.generateVideo(prompt, imageInput);
       
-      // 从聊天响应中提取内容
+      // 从响应中提取内容
       const responseContent = result.response.choices[0]?.message?.content || '';
-      console.log('Chat API response:', responseContent);
+      console.log('Video Generation API response:', responseContent);
       
       // 先检查是否有处理过的内容（可能包含视频）
       if (result.processedContent && (result.processedContent as any).videos && (result.processedContent as any).videos.length > 0) {
@@ -378,8 +381,8 @@ Description: ${prompt}`;
         } else {
           setError(
             language === 'zh' 
-              ? `聊天API无法生成视频。响应: ${responseContent.substring(0, 100)}...` 
-              : `Chat API unable to generate video. Response: ${responseContent.substring(0, 100)}...`
+              ? `视频生成API无法生成视频。响应: ${responseContent.substring(0, 100)}...` 
+              : `Video Generation API unable to generate video. Response: ${responseContent.substring(0, 100)}...`
           );
         }
       }
@@ -572,7 +575,11 @@ Description: ${prompt}`;
                           key={index}
                           type="button"
                           className="preset-item"
-                          onClick={() => setPrompt(preset)}
+                          onClick={() => {
+                            setPrompt(preset);
+                            // 选择预设提示词时清除错误状态
+                            if (error) setError(null);
+                          }}
                           disabled={isGenerating}
                         >
                           {preset}
@@ -585,7 +592,11 @@ Description: ${prompt}`;
               <textarea
                 className="form-textarea"
                 value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
+                onChange={(e) => {
+                  setPrompt(e.target.value);
+                  // 用户开始输入新内容时清除错误状态
+                  if (error) setError(null);
+                }}
                 placeholder={getPromptExample(language)}
                 rows={4}
                 disabled={isGenerating}
