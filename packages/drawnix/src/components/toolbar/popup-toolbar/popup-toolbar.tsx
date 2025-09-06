@@ -40,16 +40,21 @@ import { isWhite, removeHexAlpha } from '../../../utils/color';
 import { NO_COLOR } from '../../../constants/color';
 import { Freehand } from '../../../plugins/freehand/type';
 import { PopupLinkButton } from './link-button';
+import { AIImageIcon } from '../../icons';
+import { useDrawnix, DialogType } from '../../../hooks/use-drawnix';
+import { useI18n } from '../../../i18n';
+import { ToolButton } from '../../tool-button';
 
 export const PopupToolbar = () => {
   const board = useBoard();
   const selectedElements = getSelectedElements(board);
+  const { openDialog } = useDrawnix();
+  const { language } = useI18n();
   const [movingOrDragging, setMovingOrDragging] = useState(false);
   const movingOrDraggingRef = useRef(movingOrDragging);
   const open =
     selectedElements.length > 0 &&
-    !isSelectionMoving(board) &&
-    !selectedElements.some(PlaitDrawElement.isImage);
+    !isSelectionMoving(board);
   const { viewport, selection, children } = board;
   const { refs, floatingStyles } = useFloating({
     placement: 'right-start',
@@ -227,6 +232,18 @@ export const PopupToolbar = () => {
                 title={`Link`}
               ></PopupLinkButton>
             )}
+            <ToolButton
+              className="ai-image"
+              key={5}
+              type="icon"
+              icon={AIImageIcon}
+              visible={true}
+              title={language === 'zh' ? 'AI图像生成' : 'AI Image Generation'}
+              aria-label={language === 'zh' ? 'AI图像生成' : 'AI Image Generation'}
+              onPointerUp={() => {
+                openDialog(DialogType.aiImageGeneration);
+              }}
+            />
           </Stack.Row>
         </Island>
       )}
