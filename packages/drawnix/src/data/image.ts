@@ -33,10 +33,22 @@ export const loadHTMLImageElement = (dataURL: DataURL, crossOrigin = false) => {
 export const buildImage = (
   image: HTMLImageElement,
   dataURL: DataURL,
-  maxWidth: number
+  maxWidth?: number,
+  useOriginalSize = false
 ) => {
-  const width = image.width > maxWidth ? maxWidth : image.width;
-  const height = (width / image.width) * image.height;
+  let width, height;
+  
+  if (useOriginalSize) {
+    // 使用图片原始尺寸
+    width = image.width;
+    height = image.height;
+  } else {
+    // 使用限制最大宽度的逻辑（保持向后兼容）
+    const effectiveMaxWidth = maxWidth || 400;
+    width = image.width > effectiveMaxWidth ? effectiveMaxWidth : image.width;
+    height = (width / image.width) * image.height;
+  }
+  
   return {
     url: dataURL,
     width,
@@ -75,7 +87,9 @@ export const insertImage = async (
     if (!startPoint && !isDrop) {
       const calculatedPoint = getInsertionPointForSelectedElements(board);
       if (calculatedPoint) {
-        insertionPoint = calculatedPoint;
+        // 调整X坐标，让图片以计算点为中心左右居中显示
+        // 将X坐标向左偏移图片宽度的一半
+        insertionPoint = [calculatedPoint[0] - imageItem.width / 2, calculatedPoint[1]] as Point;
       }
     }
     
@@ -96,7 +110,7 @@ export const insertImageFromUrl = async (
   // Service Worker会处理CORS问题，直接使用URL即可
   const dataURL = createDataURL(imageUrl);
   const image = await loadHTMLImageElement(dataURL, true); // 设置crossOrigin以防万一
-  const imageItem = buildImage(image, dataURL, defaultImageWidth);
+  const imageItem = buildImage(image, dataURL, defaultImageWidth, true); // 使用原始尺寸
   
   const element = startPoint && getHitElementByPoint(board, startPoint);
   if (isDrop && element && MindElement.isMindElement(board, element)) {
@@ -116,7 +130,9 @@ export const insertImageFromUrl = async (
     if (!startPoint && !isDrop) {
       const calculatedPoint = getInsertionPointForSelectedElements(board);
       if (calculatedPoint) {
-        insertionPoint = calculatedPoint;
+        // 调整X坐标，让图片以计算点为中心左右居中显示
+        // 将X坐标向左偏移图片宽度的一半
+        insertionPoint = [calculatedPoint[0] - imageItem.width / 2, calculatedPoint[1]] as Point;
       }
     }
     

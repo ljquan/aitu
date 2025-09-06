@@ -560,7 +560,7 @@ export const getInsertionPointForSelectedElements = (board: PlaitBoard): Point |
     const centerX = boundingRect.x + boundingRect.width / 2;
     
     // Calculate the bottom Y coordinate + 20px offset
-    const insertionY = boundingRect.y + boundingRect.height + 20;
+    const insertionY = boundingRect.y + boundingRect.height + 50;
     
     console.log('Insertion point calculated:', { centerX, insertionY, boundingRect });
     

@@ -7,6 +7,7 @@ import { useBoard } from '@plait-board/react-board';
 import { defaultGeminiClient, promptForApiKey } from '../../utils/gemini-api';
 import { insertImageFromUrl } from '../../data/image';
 import { compressImageUrl } from '../../utils/selection-utils';
+import { HistoryIcon } from 'tdesign-icons-react';
 
 // 预览图缓存key
 const PREVIEW_CACHE_KEY = 'ai_image_generation_preview_cache';
@@ -919,7 +920,7 @@ Description: ${prompt}`;
                     onMouseEnter={() => setShowHistoryPopover(true)}
                     title={language === 'zh' ? '查看生成历史' : 'View generation history'}
                   >
-                    📚
+                    <HistoryIcon />
                   </button>
                   {showHistoryPopover && (
                     <div

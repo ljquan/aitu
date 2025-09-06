@@ -8,6 +8,7 @@ import { useI18n } from '../../i18n';
 import { useBoard } from '@plait-board/react-board';
 import { useState, useEffect } from 'react';
 import { processSelectedContentForAI, extractSelectedContent } from '../../utils/selection-utils';
+import { ATTACHED_ELEMENT_CLASS_NAME } from '@plait/core';
 
 export const TTDDialog = ({ container }: { container: HTMLElement | null }) => {
   const { appState, setAppState } = useDrawnix();
@@ -121,6 +122,9 @@ export const TTDDialog = ({ container }: { container: HTMLElement | null }) => {
             }
           }
           
+          console.log('Dialog closing - selection should be preserved via ATTACHED_ELEMENT_CLASS_NAME');
+          
+          // 关闭对话框 - 选择状态应该会被保持，因为对话框有ATTACHED_ELEMENT_CLASS_NAME类
           setAppState({
             ...appState,
             openDialogType: null,
@@ -130,7 +134,7 @@ export const TTDDialog = ({ container }: { container: HTMLElement | null }) => {
         header={language === 'zh' ? 'AI 图像生成' : 'AI Image Generation'}
         footer={false}
         width="80%"
-        className="ttd-dialog"
+        className={`ttd-dialog ${ATTACHED_ELEMENT_CLASS_NAME}`}
         closeOnOverlayClick={false}
         showOverlay={true}
         mode="modal"
