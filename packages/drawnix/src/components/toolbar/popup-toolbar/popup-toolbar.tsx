@@ -99,11 +99,13 @@ export const PopupToolbar = () => {
     const hasStrokeStyle =
       selectedElements.some((value) => hasStrokeStyleProperty(board, value)) &&
       !PlaitBoard.hasBeenTextEditing(board);
-    // 检查是否只选中了一个图片元素
+    // 检查是否选中了包含图片的元素（单个或多个）
     const hasAIVideo = 
-      selectedElements.length === 1 &&
-      PlaitDrawElement.isDrawElement(selectedElements[0]) &&
-      PlaitDrawElement.isImage(selectedElements[0]) &&
+      selectedElements.length > 0 &&
+      selectedElements.some(element => 
+        PlaitDrawElement.isDrawElement(element) &&
+        PlaitDrawElement.isImage(element)
+      ) &&
       !PlaitBoard.hasBeenTextEditing(board);
     state = {
       ...getElementState(board),
