@@ -167,6 +167,12 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [] }: AIImageGe
     setHistoryItems(history);
   }, []);
 
+  // 处理 props 变化，更新内部状态
+  useEffect(() => {
+    setPrompt(initialPrompt);
+    setUploadedImages(initialImages);
+  }, [initialPrompt, initialImages]);
+
   // 处理图片上传
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -613,9 +619,9 @@ Description: ${prompt}`;
                           </button>
                           <div className="image-info">
                             <span className="image-name">{name}</span>
-                            <span className="image-size">
+                            {/* <span className="image-size">
                               {size}
-                            </span>
+                            </span> */}
                           </div>
                         </div>
                       );

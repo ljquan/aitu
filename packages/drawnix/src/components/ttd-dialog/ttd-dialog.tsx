@@ -144,7 +144,6 @@ export const TTDDialog = ({ container }: { container: HTMLElement | null }) => {
         <AIImageGeneration 
           initialPrompt={aiImageData.initialPrompt}
           initialImages={aiImageData.initialImages}
-          key={`${JSON.stringify(aiImageData)}`}
         />
       </TDialog>
     </>

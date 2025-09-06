@@ -852,6 +852,7 @@
   align-items: center;
   justify-content: center;
   min-height: 350px;
+  height: calc(100% - 100px);
   padding: 16px;
   border: 1px dashed var(--color-border, #d9d9d9);
   border-radius: 8px;
