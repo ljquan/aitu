@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import './ttd-dialog.scss';
 import './ai-image-generation.scss';
 import { useDrawnix } from '../../hooks/use-drawnix';
@@ -307,25 +307,46 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [] }: AIImageGe
     savePreviewCache(cacheData);
   };
 
-  const presetPrompts = language === 'zh' ? [
-    '一只可爱的小猫坐在窗台上，阳光透过窗户洒在它的毛发上',
-    '美丽的山水风景，青山绿水，云雾缭绕',
-    '现代简约风格的室内设计，明亮宽敞',
-    '夜晚的城市天际线，霓虹灯闪烁',
-    '春天的樱花盛开，粉色花瓣飘落',
-    '科幻风格的太空站，星空背景',
-    '温馨的咖啡厅，暖色调灯光',
-    '抽象艺术风格，色彩丰富的几何图形'
-  ] : [
-    'A cute kitten sitting on a windowsill with sunlight streaming through',
-    'Beautiful mountain landscape with green hills and misty clouds',
-    'Modern minimalist interior design, bright and spacious',
-    'City skyline at night with neon lights glowing',
-    'Cherry blossoms in spring with pink petals falling',
-    'Sci-fi space station with starry background',
-    'Cozy coffee shop with warm ambient lighting',
-    'Abstract art with colorful geometric shapes'
-  ];
+  // 获取合并的预设提示词（用户历史 + 默认预设）
+  const getMergedPresetPrompts = () => {
+    // 默认预设提示词
+    const defaultPrompts = language === 'zh' ? [
+      '一只可爱的小猫坐在窗台上，阳光透过窗户洒在它的毛发上',
+      '美丽的山水风景，青山绿水，云雾缭绕',
+      '现代简约风格的室内设计，明亮宽敞',
+      '夜晚的城市天际线，霓虹灯闪烁',
+      '春天的樱花盛开，粉色花瓣飘落',
+      '科幻风格的太空站，星空背景',
+      '温馨的咖啡厅，暖色调灯光',
+      '抽象艺术风格，色彩丰富的几何图形'
+    ] : [
+      'A cute kitten sitting on a windowsill with sunlight streaming through',
+      'Beautiful mountain landscape with green hills and misty clouds',
+      'Modern minimalist interior design, bright and spacious',
+      'City skyline at night with neon lights glowing',
+      'Cherry blossoms in spring with pink petals falling',
+      'Sci-fi space station with starry background',
+      'Cozy coffee shop with warm ambient lighting',
+      'Abstract art with colorful geometric shapes'
+    ];
+
+    // 从历史记录中提取用户使用过的提示词（去重，最新的在前）
+    const userPrompts = historyItems
+      .map(item => item.prompt.trim())
+      .filter(prompt => prompt.length > 0)
+      .filter((prompt, index, arr) => arr.indexOf(prompt) === index) // 去重
+      .slice(0, 8); // 最多取8个用户历史提示词
+
+    // 合并：用户历史提示词在前，默认预设在后，总数不超过12个
+    const merged = [...userPrompts, ...defaultPrompts]
+      .filter((prompt, index, arr) => arr.indexOf(prompt) === index) // 再次去重，避免用户历史与默认重复
+      .slice(0, 12); // 限制总数
+
+    return merged;
+  };
+
+  // 使用useMemo优化性能，当historyItems或language变化时重新计算
+  const presetPrompts = React.useMemo(() => getMergedPresetPrompts(), [historyItems, language]);
 
   const handleGenerate = async () => {
     if (!prompt.trim()) {

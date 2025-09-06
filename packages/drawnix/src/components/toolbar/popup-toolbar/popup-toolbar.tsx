@@ -15,7 +15,7 @@ import {
 } from '@plait/core';
 import { useEffect, useRef, useState } from 'react';
 import { useBoard } from '@plait-board/react-board';
-import { flip, offset, useFloating } from '@floating-ui/react';
+import { flip, offset, shift, useFloating, autoPlacement } from '@floating-ui/react';
 import { Island } from '../../island';
 import classNames from 'classnames';
 import {
@@ -52,13 +52,20 @@ export const PopupToolbar = () => {
   const { language } = useI18n();
   const [movingOrDragging, setMovingOrDragging] = useState(false);
   const movingOrDraggingRef = useRef(movingOrDragging);
+  const [isInitialPositioning, setIsInitialPositioning] = useState(true);
+  const isInitialPositioningRef = useRef(isInitialPositioning);
+  const [mousePosition, setMousePosition] = useState<{x: number, y: number} | null>(null);
   const open =
     selectedElements.length > 0 &&
     !isSelectionMoving(board);
   const { viewport, selection, children } = board;
   const { refs, floatingStyles } = useFloating({
-    placement: 'right-start',
-    middleware: [offset(32), flip()],
+    placement: 'top',
+    middleware: [
+      offset(12), // Close to reference point
+      shift({ padding: 16 }), // Ensure it stays within screen bounds
+      flip({ fallbackPlacements: ['bottom', 'right', 'left'] }), // Smart fallback positioning
+    ],
   });
   let state: {
     fill: string | undefined;
@@ -102,34 +109,67 @@ export const PopupToolbar = () => {
     if (open) {
       const hasSelected = selectedElements.length > 0;
       if (!movingOrDragging && hasSelected) {
-        const elements = getSelectedElements(board);
-        const rectangle = getRectangleByElements(board, elements, false);
-        const [start, end] = RectangleClient.getPoints(rectangle);
-        const screenStart = toScreenPointFromHostPoint(
-          board,
-          toHostPointFromViewBoxPoint(board, start)
-        );
-        const screenEnd = toScreenPointFromHostPoint(
-          board,
-          toHostPointFromViewBoxPoint(board, end)
-        );
-        const width = screenEnd[0] - screenStart[0];
-        const height = screenEnd[1] - screenStart[1];
+        let referenceX, referenceY;
+        
+        if (isInitialPositioning) {
+          // First time positioning - try to use mouse position if available
+          if (mousePosition) {
+            referenceX = mousePosition.x;
+            referenceY = mousePosition.y;
+          } else {
+            // Fallback to selection center if no mouse position
+            const elements = getSelectedElements(board);
+            const rectangle = getRectangleByElements(board, elements, false);
+            const [start, end] = RectangleClient.getPoints(rectangle);
+            const screenStart = toScreenPointFromHostPoint(
+              board,
+              toHostPointFromViewBoxPoint(board, start)
+            );
+            const screenEnd = toScreenPointFromHostPoint(
+              board,
+              toHostPointFromViewBoxPoint(board, end)
+            );
+            referenceX = screenStart[0] + (screenEnd[0] - screenStart[0]) / 2;
+            referenceY = screenStart[1] + (screenEnd[1] - screenStart[1]) / 2;
+          }
+          setIsInitialPositioning(false);
+        } else {
+          // Subsequent positioning - keep toolbar stable relative to selection
+          const elements = getSelectedElements(board);
+          const rectangle = getRectangleByElements(board, elements, false);
+          const [start, end] = RectangleClient.getPoints(rectangle);
+          const screenStart = toScreenPointFromHostPoint(
+            board,
+            toHostPointFromViewBoxPoint(board, start)
+          );
+          const screenEnd = toScreenPointFromHostPoint(
+            board,
+            toHostPointFromViewBoxPoint(board, end)
+          );
+          referenceX = screenStart[0] + (screenEnd[0] - screenStart[0]) / 2;
+          referenceY = screenStart[1] + (screenEnd[1] - screenStart[1]) / 2;
+        }
+        
         refs.setPositionReference({
           getBoundingClientRect() {
             return {
-              width,
-              height,
-              x: screenStart[0],
-              y: screenStart[1],
-              top: screenStart[1],
-              left: screenStart[0],
-              right: screenStart[0] + width,
-              bottom: screenStart[1] + height,
+              width: 1,
+              height: 1,
+              x: referenceX,
+              y: referenceY,
+              top: referenceY,
+              left: referenceX,
+              right: referenceX + 1,
+              bottom: referenceY + 1,
             };
           },
         });
       }
+    } else {
+      // Reset positioning state when toolbar is closed
+      setIsInitialPositioning(true);
+      isInitialPositioningRef.current = true;
+      setMousePosition(null);
     }
   }, [viewport, selection, children, movingOrDragging]);
 
@@ -138,9 +178,21 @@ export const PopupToolbar = () => {
   }, [movingOrDragging]);
 
   useEffect(() => {
+    isInitialPositioningRef.current = isInitialPositioning;
+  }, [isInitialPositioning]);
+
+  useEffect(() => {
     const { pointerUp, pointerMove } = board;
 
     board.pointerMove = (event: PointerEvent) => {
+      // Update mouse position for toolbar positioning
+      if (isInitialPositioningRef.current) {
+        setMousePosition({
+          x: event.clientX,
+          y: event.clientY
+        });
+      }
+      
       if (
         (isMovingElements(board) || isDragging(board)) &&
         !movingOrDraggingRef.current
@@ -151,13 +203,24 @@ export const PopupToolbar = () => {
     };
 
     board.pointerUp = (event: PointerEvent) => {
+      // Update mouse position for toolbar positioning
+      if (isInitialPositioningRef.current) {
+        setMousePosition({
+          x: event.clientX,
+          y: event.clientY
+        });
+      }
+      
+      // Call original pointerUp first to ensure selection state is updated
+      pointerUp(event);
+      
+      // Then handle our state updates
       if (
         movingOrDraggingRef.current &&
         (isMovingElements(board) || isDragging(board))
       ) {
         setMovingOrDragging(false);
       }
-      pointerUp(event);
     };
 
     return () => {
