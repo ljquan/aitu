@@ -538,12 +538,54 @@ function getApiKeyFromStorage(): string | null {
 }
 
 /**
+ * 从本地存储获取baseUrl
+ */
+function getBaseUrlFromStorage(): string | null {
+  if (typeof window === 'undefined') return null;
+  
+  return localStorage.getItem('gemini_base_url');
+}
+
+/**
  * 保存apiKey到本地存储
  */
 function saveApiKeyToStorage(apiKey: string): void {
   if (typeof window === 'undefined') return;
   
   localStorage.setItem('gemini_api_key', apiKey);
+}
+
+/**
+ * 保存baseUrl到本地存储
+ */
+function saveBaseUrlToStorage(baseUrl: string): void {
+  if (typeof window === 'undefined') return;
+  
+  localStorage.setItem('gemini_base_url', baseUrl);
+}
+
+/**
+ * 从URL参数中获取settings配置
+ */
+function getSettingsFromUrl(): { apiKey?: string; baseUrl?: string } | null {
+  if (typeof window === 'undefined') return null;
+  
+  const urlParams = new URLSearchParams(window.location.search);
+  const settingsParam = urlParams.get('settings');
+  
+  if (!settingsParam) return null;
+  
+  try {
+    const decoded = decodeURIComponent(settingsParam);
+    const settings = JSON.parse(decoded);
+    return {
+      apiKey: settings.key,
+      baseUrl: settings.url
+    };
+  } catch (error) {
+    console.warn('Failed to parse settings parameter:', error);
+    return null;
+  }
 }
 
 /**
@@ -698,29 +740,104 @@ function removeApiKeyFromUrl(): void {
   if (typeof window === 'undefined') return;
   
   const url = new URL(window.location.href);
+  let hasChanges = false;
+  
   if (url.searchParams.has('apiKey')) {
     url.searchParams.delete('apiKey');
+    hasChanges = true;
+  }
+  
+  if (url.searchParams.has('settings')) {
+    url.searchParams.delete('settings');
+    hasChanges = true;
+  }
+  
+  if (hasChanges) {
     window.history.replaceState({}, document.title, url.toString());
   }
 }
 
 /**
- * 初始化apiKey：从URL获取并缓存，然后清除URL参数
+ * 初始化配置：从URL获取并缓存，然后清除URL参数
  */
-function initializeApiKey(): string {
-  // 首先尝试从URL获取
+function initializeConfig(): { apiKey: string; baseUrl: string } {
+  let apiKey = '';
+  let baseUrl = 'https://api.tu-zi.com/v1';
+  
+  // 首先尝试从URL的settings参数获取
+  const settingsFromUrl = getSettingsFromUrl();
+  if (settingsFromUrl) {
+    if (settingsFromUrl.apiKey) {
+      apiKey = settingsFromUrl.apiKey;
+      saveApiKeyToStorage(apiKey);
+    }
+    if (settingsFromUrl.baseUrl) {
+      baseUrl = settingsFromUrl.baseUrl;
+      saveBaseUrlToStorage(baseUrl);
+    }
+  }
+  
+  // 然后尝试从URL的apiKey参数获取（优先级更高）
   const urlApiKey = getApiKeyFromUrl();
   if (urlApiKey) {
-    // 保存到本地存储
-    saveApiKeyToStorage(urlApiKey);
-    // 从URL中移除
+    apiKey = urlApiKey;
+    saveApiKeyToStorage(apiKey);
+  }
+  
+  // 如果URL中有参数，清除它们
+  if (settingsFromUrl || urlApiKey) {
     removeApiKeyFromUrl();
-    return urlApiKey;
   }
   
   // 如果URL中没有，从本地存储获取
-  const storageApiKey = getApiKeyFromStorage();
-  return storageApiKey || '';
+  if (!apiKey) {
+    apiKey = getApiKeyFromStorage() || '';
+  }
+  if (!settingsFromUrl?.baseUrl) {
+    baseUrl = getBaseUrlFromStorage() || 'https://api.tu-zi.com/v1';
+  }
+  
+  return { apiKey, baseUrl };
+}
+
+/**
+ * 初始化apiKey：保持向后兼容
+ */
+function initializeApiKey(): string {
+  return initializeConfig().apiKey;
+}
+
+/**
+ * 初始化设置：从URL获取settings参数并处理
+ */
+export function initializeSettings(): void {
+  const settings = getSettingsFromUrl();
+  if (settings?.apiKey) {
+    saveApiKeyToStorage(settings.apiKey);
+  }
+  if (settings?.baseUrl) {
+    saveBaseUrlToStorage(settings.baseUrl);
+  }
+  if (settings?.apiKey || settings?.baseUrl) {
+    // Remove settings from URL after processing
+    const url = new URL(window.location.href);
+    url.searchParams.delete('settings');
+    window.history.replaceState({}, '', url.toString());
+  }
+}
+
+// Initialize settings from URL if present
+if (typeof window !== 'undefined') {
+  const settings = getSettingsFromUrl();
+  if (settings?.apiKey) {
+    saveApiKeyToStorage(settings.apiKey);
+  }
+  if (settings?.baseUrl) {
+    saveBaseUrlToStorage(settings.baseUrl);
+  }
+  if (settings?.apiKey || settings?.baseUrl) {
+    removeApiKeyFromUrl();
+  }
 }
 
 /**
@@ -729,5 +846,5 @@ function initializeApiKey(): string {
  */
 export const defaultGeminiClient = new GeminiClient({
   apiKey: initializeApiKey(),
-  baseUrl: 'https://api.tu-zi.com/v1',
+  baseUrl: getBaseUrlFromStorage() || 'https://api.tu-zi.com/v1',
 });

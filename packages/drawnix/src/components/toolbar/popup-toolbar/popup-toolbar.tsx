@@ -40,7 +40,7 @@ import { isWhite, removeHexAlpha } from '../../../utils/color';
 import { NO_COLOR } from '../../../constants/color';
 import { Freehand } from '../../../plugins/freehand/type';
 import { PopupLinkButton } from './link-button';
-import { AIImageIcon } from '../../icons';
+import { AIImageIcon, AIVideoIcon } from '../../icons';
 import { useDrawnix, DialogType } from '../../../hooks/use-drawnix';
 import { useI18n } from '../../../i18n';
 import { ToolButton } from '../../tool-button';
@@ -82,6 +82,7 @@ export const PopupToolbar = () => {
     hasStroke?: boolean;
     hasStrokeStyle?: boolean;
     marks?: Omit<CustomText, 'text'>;
+    hasAIVideo?: boolean; // 是否显示AI视频生成按钮
   } = {
     fill: 'red',
   };
@@ -98,6 +99,12 @@ export const PopupToolbar = () => {
     const hasStrokeStyle =
       selectedElements.some((value) => hasStrokeStyleProperty(board, value)) &&
       !PlaitBoard.hasBeenTextEditing(board);
+    // 检查是否只选中了一个图片元素
+    const hasAIVideo = 
+      selectedElements.length === 1 &&
+      PlaitDrawElement.isDrawElement(selectedElements[0]) &&
+      PlaitDrawElement.isImage(selectedElements[0]) &&
+      !PlaitBoard.hasBeenTextEditing(board);
     state = {
       ...getElementState(board),
       hasFill,
@@ -106,6 +113,7 @@ export const PopupToolbar = () => {
       hasStroke,
       hasStrokeStyle,
       hasText,
+      hasAIVideo,
     };
   }
   useEffect(() => {
@@ -291,6 +299,20 @@ export const PopupToolbar = () => {
                 openDialog(DialogType.aiImageGeneration);
               }}
             />
+            {state.hasAIVideo && (
+              <ToolButton
+                className="ai-video"
+                key={6}
+                type="icon"
+                icon={AIVideoIcon}
+                visible={true}
+                title={language === 'zh' ? 'AI视频生成' : 'AI Video Generation'}
+                aria-label={language === 'zh' ? 'AI视频生成' : 'AI Video Generation'}
+                onPointerUp={() => {
+                  openDialog(DialogType.aiVideoGeneration);
+                }}
+              />
+            )}
           </Stack.Row>
         </Island>
       )}

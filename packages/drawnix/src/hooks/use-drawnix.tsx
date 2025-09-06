@@ -14,6 +14,7 @@ export enum DialogType {
   mermaidToDrawnix = 'mermaidToDrawnix',
   markdownToDrawnix = 'markdownToDrawnix',
   aiImageGeneration = 'aiImageGeneration',
+  aiVideoGeneration = 'aiVideoGeneration',
 }
 
 export type DrawnixPointerType =
@@ -41,6 +42,7 @@ export type DrawnixState = {
   isPencilMode: boolean;
   openDialogType: DialogType | null;
   openCleanConfirm: boolean;
+  openSettings: boolean;
   linkState?: LinkState | null;
 };
 

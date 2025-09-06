@@ -4,6 +4,7 @@ import MermaidToDrawnix from './mermaid-to-drawnix';
 import { DialogType, useDrawnix } from '../../hooks/use-drawnix';
 import MarkdownToDrawnix from './markdown-to-drawnix';
 import AIImageGeneration from './ai-image-generation';
+import AIVideoGeneration from './ai-video-generation';
 import { useI18n } from '../../i18n';
 import { useBoard } from '@plait-board/react-board';
 import { useState, useEffect } from 'react';
@@ -24,6 +25,15 @@ export const TTDDialog = ({ container }: { container: HTMLElement | null }) => {
     initialPrompt: '',
     initialImages: [],
     selectedElementIds: []
+  });
+
+  // AI 视频生成的初始数据
+  const [aiVideoData, setAiVideoData] = useState<{
+    initialPrompt: string;
+    initialImage: File | { url: string; name: string } | undefined;
+  }>({
+    initialPrompt: '',
+    initialImage: undefined
   });
 
   // 当 AI 图像生成对话框打开时，处理选中内容
@@ -85,6 +95,60 @@ export const TTDDialog = ({ container }: { container: HTMLElement | null }) => {
       };
 
       processSelection();
+    }
+
+    // 处理 AI 视频生成的选中内容
+    if (appState.openDialogType === DialogType.aiVideoGeneration) {
+      const processVideoSelection = async () => {
+        try {
+          // 使用新的处理逻辑来处理选中的内容
+          const processedContent = await processSelectedContentForAI(board);
+          
+          // 对于视频生成，只使用第一张图片
+          let firstImage: File | { url: string; name: string } | undefined = undefined;
+          
+          if (processedContent.remainingImages.length > 0) {
+            const image = processedContent.remainingImages[0];
+            firstImage = {
+              url: image.url,
+              name: image.name || `selected-image-${Date.now()}.png`
+            };
+          } else if (processedContent.graphicsImage) {
+            firstImage = {
+              url: processedContent.graphicsImage,
+              name: `graphics-combined-${Date.now()}.png`
+            };
+          }
+
+          // 设置 AI 视频生成的初始数据
+          setAiVideoData({
+            initialPrompt: processedContent.remainingText || '',
+            initialImage: firstImage
+          });
+          
+        } catch (error) {
+          console.warn('Error processing selected content for AI video:', error);
+          
+          // 如果新的处理逻辑失败，回退到原来的逻辑
+          const selectedContent = extractSelectedContent(board);
+          
+          let firstImage: File | { url: string; name: string } | undefined = undefined;
+          if (selectedContent.images.length > 0) {
+            const image = selectedContent.images[0];
+            firstImage = {
+              url: image.url,
+              name: image.name || `selected-image-${Date.now()}.png`
+            };
+          }
+          
+          setAiVideoData({
+            initialPrompt: selectedContent.text || '',
+            initialImage: firstImage
+          });
+        }
+      };
+
+      processVideoSelection();
     }
   }, [appState.openDialogType, board]);
   return (
@@ -154,6 +218,46 @@ export const TTDDialog = ({ container }: { container: HTMLElement | null }) => {
           initialPrompt={aiImageData.initialPrompt}
           initialImages={aiImageData.initialImages}
           selectedElementIds={aiImageData.selectedElementIds}
+        />
+      </TDialog>
+      <TDialog
+        visible={appState.openDialogType === DialogType.aiVideoGeneration}
+        onClose={() => {
+          // 在关闭前保存AI视频生成的缓存
+          const cached = localStorage.getItem('ai_video_generation_preview_cache');
+          if (cached) {
+            try {
+              const data = JSON.parse(cached);
+              // 更新时间戳以保持缓存有效
+              data.timestamp = Date.now();
+              localStorage.setItem('ai_video_generation_preview_cache', JSON.stringify(data));
+            } catch (error) {
+              console.warn('Failed to update cache timestamp:', error);
+            }
+          }
+          
+          console.log('Video dialog closing - selection should be preserved via ATTACHED_ELEMENT_CLASS_NAME');
+          
+          // 关闭对话框 - 选择状态应该会被保持，因为对话框有ATTACHED_ELEMENT_CLASS_NAME类
+          setAppState({
+            ...appState,
+            openDialogType: null,
+          });
+        }}
+        attach={container ? () => container : undefined}
+        header={language === 'zh' ? 'AI 视频生成' : 'AI Video Generation'}
+        footer={false}
+        width="80%"
+        className={`ttd-dialog ${ATTACHED_ELEMENT_CLASS_NAME}`}
+        closeOnOverlayClick={false}
+        showOverlay={true}
+        mode="modal"
+        preventScrollThrough={true}
+        closeBtn={true}
+      >
+        <AIVideoGeneration 
+          initialPrompt={aiVideoData.initialPrompt}
+          initialImage={aiVideoData.initialImage}
         />
       </TDialog>
     </>

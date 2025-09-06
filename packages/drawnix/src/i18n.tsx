@@ -52,6 +52,7 @@ export interface Translations {
   'menu.exportImage.jpg': string;
   'menu.cleanBoard': string;
   'menu.github': string;
+  'menu.settings': string;
   
   // Dialog translations
   'dialog.mermaid.title': string;
@@ -80,6 +81,14 @@ export interface Translations {
   'cleanConfirm.description': string;
   'cleanConfirm.cancel': string;
   'cleanConfirm.ok': string;
+
+  // Settings dialog
+  'settings.title': string;
+  'settings.apiKey': string;
+  'settings.apiKeyPlaceholder': string;
+  'settings.baseUrl': string;
+  'settings.cancel': string;
+  'settings.save': string;
 }
 
 // Translation data
@@ -132,6 +141,7 @@ const translations: Record<Language, Translations> = {
     'menu.exportImage.jpg': 'JPG',
     'menu.cleanBoard': '清除画布',
     'menu.github': 'GitHub',
+    'menu.settings': '设置',
     
     // Dialog translations
     'dialog.mermaid.title': 'Mermaid 转 Drawnix',
@@ -160,6 +170,14 @@ const translations: Record<Language, Translations> = {
     'cleanConfirm.description': '这将会清除整个画布。你是否要继续?',
     'cleanConfirm.cancel': '取消',
     'cleanConfirm.ok': '确认',
+
+    // Settings dialog
+    'settings.title': '设置',
+    'settings.apiKey': 'API Key',
+    'settings.apiKeyPlaceholder': '请输入您的 API Key',
+    'settings.baseUrl': 'Base URL',
+    'settings.cancel': '取消',
+    'settings.save': '保存',
   },
   en: {
     // Toolbar items
@@ -209,6 +227,7 @@ const translations: Record<Language, Translations> = {
     'menu.exportImage.jpg': 'JPG',
     'menu.cleanBoard': 'Clear Board',
     'menu.github': 'GitHub',
+    'menu.settings': 'Settings',
     
     // Dialog translations
     'dialog.mermaid.title': 'Mermaid to Drawnix',
@@ -237,6 +256,14 @@ const translations: Record<Language, Translations> = {
     'cleanConfirm.description': 'This will clear the entire board. Do you want to continue?',
     'cleanConfirm.cancel': 'Cancel',
     'cleanConfirm.ok': 'OK',
+
+    // Settings dialog
+    'settings.title': 'Settings',
+    'settings.apiKey': 'API Key',
+    'settings.apiKeyPlaceholder': 'Please enter your API Key',
+    'settings.baseUrl': 'Base URL',
+    'settings.cancel': 'Cancel',
+    'settings.save': 'Save',
   },
 };
 

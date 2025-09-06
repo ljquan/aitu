@@ -1,0 +1,84 @@
+/* AI Video Generation Container - reuse AI Image Generation styles */
+.ai-video-generation-container {
+  display: flex;
+  flex-direction: row;
+  max-height: 80vh;
+  overflow-y: auto;
+  position: relative;
+  gap: 16px;
+
+  .main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    min-height: 400px;
+  }
+
+  .ai-image-generation-section,
+  .preview-section {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .section-actions {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 12px;
+    margin-top: auto;
+  }
+
+  /* Video-specific adjustments when shown in preview */
+  .preview-image {
+    flex:1;
+    &[src$=".mp4"],
+    &[src*="video"] {
+      border-radius: 6px;
+      background: #000;
+    }
+  }
+
+  /* Ensure video controls are properly styled */
+  video.preview-image {
+    &::-webkit-media-controls {
+      border-radius: 6px;
+    }
+    
+    &::-webkit-media-controls-panel {
+      background-color: rgba(0, 0, 0, 0.8);
+    }
+  }
+
+  /* Video placeholder icon animation */
+  .preview-placeholder .placeholder-icon {
+    animation: pulse 2s ease-in-out infinite;
+    
+    @keyframes pulse {
+      0% { opacity: 0.5; }
+      50% { opacity: 0.8; }
+      100% { opacity: 0.5; }
+    }
+  }
+
+  /* Responsive adjustments */
+  @media (max-width: 1024px) {
+    .main-content {
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .preview-section {
+      min-width: unset;
+      min-height: 300px;
+    }
+  }
+
+  @media (max-width: 768px) {
+    .image-preview-container {
+      min-height: 250px;
+    }
+  }
+}

@@ -1,6 +1,6 @@
 import {
   ExportImageIcon,
-  GithubIcon,
+  SettingsIcon,
   OpenFileIcon,
   SaveFileIcon,
   TrashIcon,
@@ -144,15 +144,22 @@ export const CleanBoard = () => {
 };
 CleanBoard.displayName = 'CleanBoard';
 
-export const Socials = () => {
+export const Settings = () => {
+  const { appState, setAppState } = useDrawnix();
+  const { t } = useI18n();
   return (
-    <MenuItemLink
-      icon={GithubIcon}
-      href="https://github.com/plait-board/drawnix"
-      aria-label="GitHub"
+    <MenuItem
+      icon={SettingsIcon}
+      onSelect={() => {
+        setAppState({
+          ...appState,
+          openSettings: true,
+        });
+      }}
+      aria-label={t('menu.settings')}
     >
-      GitHub
-    </MenuItemLink>
+      {t('menu.settings')}
+    </MenuItem>
   );
 };
-Socials.displayName = 'Socials';
+Settings.displayName = 'Settings';
