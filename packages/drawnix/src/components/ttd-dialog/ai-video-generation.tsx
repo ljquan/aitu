@@ -15,10 +15,16 @@ const PREVIEW_CACHE_KEY = 'ai_video_generation_preview_cache';
 // 历史视频缓存key
 const HISTORY_CACHE_KEY = 'ai_video_generation_history';
 
+// 视频URL接口
+interface VideoUrls {
+  previewUrl: string;
+  downloadUrl: string;
+}
+
 // 缓存数据接口
 interface PreviewCache {
   prompt: string;
-  generatedVideo: string | null;
+  generatedVideo: VideoUrls | null;
   timestamp: number;
   sourceImage?: string;
 }
@@ -27,7 +33,7 @@ interface PreviewCache {
 interface HistoryItem {
   id: string;
   prompt: string;
-  videoUrl: string;
+  videoUrls: VideoUrls;
   thumbnail?: string; // 视频缩略图（从第一帧提取）
   timestamp: number;
   sourceImage?: string; // 生成视频的源图片
@@ -183,7 +189,10 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
     }));
   };
   
-  const [generatedVideo, setGeneratedVideo] = useState<string | null>(null);
+  const [generatedVideo, setGeneratedVideo] = useState<{
+    previewUrl: string;
+    downloadUrl: string;
+  } | null>(null);
   const [videoLoading, setVideoLoading] = useState(false);
   
   // 包装setIsGenerating和setVideoLoading以发送事件
@@ -325,28 +334,28 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
   };
 
   // 设置生成视频并预加载
-  const setGeneratedVideoWithPreload = async (videoUrl: string) => {
+  const setGeneratedVideoWithPreload = async (videoUrls: VideoUrls) => {
     updateVideoLoading(true);
     try {
-      setGeneratedVideo(videoUrl);
+      setGeneratedVideo(videoUrls);
       
       // 保存到缓存
       const cacheData: PreviewCache = {
         prompt,
-        generatedVideo: videoUrl,
+        generatedVideo: videoUrls,
         timestamp: Date.now(),
         sourceImage: uploadedImage instanceof File ? URL.createObjectURL(uploadedImage) : uploadedImage?.url
       };
       savePreviewCache(cacheData);
 
-      // 异步生成视频缩略图
-      const thumbnailPromise = generateVideoThumbnail(videoUrl);
+      // 异步生成视频缩略图（使用预览URL）
+      const thumbnailPromise = generateVideoThumbnail(videoUrls.previewUrl);
 
       // 保存到历史记录（先保存基本信息）
       const historyItem: HistoryItem = {
         id: `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
         prompt,
-        videoUrl,
+        videoUrls,
         timestamp: Date.now(),
         sourceImage: uploadedImage instanceof File ? URL.createObjectURL(uploadedImage) : uploadedImage?.url
       };
@@ -367,7 +376,7 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
       setHistoryItems(prev => [historyItem, ...prev.filter(h => h.id !== historyItem.id)].slice(0, 20));
     } catch (error) {
       console.warn('Failed to set generated video:', error);
-      setGeneratedVideo(videoUrl);
+      setGeneratedVideo(videoUrls);
     } finally {
       updateVideoLoading(false);
     }
@@ -376,7 +385,7 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
   // 从历史记录选择视频
   const selectFromHistory = (historyItem: HistoryItem) => {
     setPrompt(historyItem.prompt);
-    setGeneratedVideo(historyItem.videoUrl);
+    setGeneratedVideo(historyItem.videoUrls);
     if (historyItem.sourceImage) {
       setUploadedImage({ url: historyItem.sourceImage, name: 'History Image' });
     }
@@ -387,7 +396,7 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
     // 更新预览缓存
     const cacheData: PreviewCache = {
       prompt: historyItem.prompt,
-      generatedVideo: historyItem.videoUrl,
+      generatedVideo: historyItem.videoUrls,
       timestamp: Date.now(),
       sourceImage: historyItem.sourceImage
     };
@@ -491,36 +500,47 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
       
       // 优先检查处理过的内容中是否包含视频
       if (result.processedContent && (result.processedContent as any).videos && (result.processedContent as any).videos.length > 0) {
-        // 如果响应中包含视频，使用第一个视频
-        const firstVideo = (result.processedContent as any).videos[0];
-        if (firstVideo.type === 'url') {
-          console.log('Found video in processed content:', firstVideo.data);
-          await setGeneratedVideoWithPreload(firstVideo.data);
+        // 如果响应中包含多个视频链接，尝试区分预览和下载链接
+        const videos = (result.processedContent as any).videos;
+        if (videos.length >= 2) {
+          // 假设第一个是预览链接，第二个是下载链接
+          const previewUrl = videos[0].data;
+          const downloadUrl = videos[1].data;
+          console.log('Found multiple videos in processed content:', { previewUrl, downloadUrl });
+          await setGeneratedVideoWithPreload({ previewUrl, downloadUrl });
+        } else {
+          // 只有一个视频链接，同时用作预览和下载
+          const videoUrl = videos[0].data;
+          console.log('Found single video in processed content:', videoUrl);
+          await setGeneratedVideoWithPreload({ previewUrl: videoUrl, downloadUrl: videoUrl });
         }
       } else {
         // 如果处理过的内容中没有视频，尝试其他方法提取
         console.log('No videos found in processed content, trying alternative extraction...');
         
-        // 方法1: 尝试提取markdown格式的视频链接
-        const markdownVideoMatch = responseContent.match(/\[(?:▶️\s*在线观看|⏬\s*下载视频|.*?观看.*?)\]\(([^)]+)\)/i);
-        if (markdownVideoMatch && markdownVideoMatch[1]) {
-          const videoUrl = markdownVideoMatch[1].replace(/[.,;!?]*$/, '');
-          console.log('Extracted video URL from markdown:', videoUrl);
-          await setGeneratedVideoWithPreload(videoUrl);
+        // 方法1: 尝试提取markdown格式的两个视频链接
+        const previewMatch = responseContent.match(/\[(?:▶️\s*在线观看|.*?观看.*?)\]\(([^)]+)\)/i);
+        const downloadMatch = responseContent.match(/\[(?:⏬\s*下载视频|.*?下载.*?)\]\(([^)]+)\)/i);
+        
+        if (previewMatch && downloadMatch) {
+          const previewUrl = previewMatch[1].replace(/[.,;!?]*$/, '');
+          const downloadUrl = downloadMatch[1].replace(/[.,;!?]*$/, '');
+          console.log('Extracted preview URL:', previewUrl, 'download URL:', downloadUrl);
+          await setGeneratedVideoWithPreload({ previewUrl, downloadUrl });
         } else {
-          // 方法2: 尝试提取任何视频格式的URL
+          // 方法2: 尝试提取任何视频格式的URL（兜底方案，同时用作预览和下载）
           const videoUrlMatch = responseContent.match(/https?:\/\/[^\s<>"'\n]+\.(?:mp4|avi|mov|wmv|flv|webm|mkv)(?:\?[^\s<>"'\n]*)?/i);
           if (videoUrlMatch) {
             const videoUrl = videoUrlMatch[0].replace(/[.,;!?]*$/, '');
-            console.log('Extracted video URL by extension:', videoUrl);
-            await setGeneratedVideoWithPreload(videoUrl);
+            console.log('Extracted single video URL:', videoUrl);
+            await setGeneratedVideoWithPreload({ previewUrl: videoUrl, downloadUrl: videoUrl });
           } else {
             // 方法3: 尝试提取filesystem.site的链接
             const filesystemMatch = responseContent.match(/https?:\/\/filesystem\.site\/[^\s<>"'\n)]+/i);
             if (filesystemMatch) {
               const videoUrl = filesystemMatch[0].replace(/[.,;!?]*$/, '');
               console.log('Extracted filesystem.site URL:', videoUrl);
-              await setGeneratedVideoWithPreload(videoUrl);
+              await setGeneratedVideoWithPreload({ previewUrl: videoUrl, downloadUrl: videoUrl });
             } else {
               // 方法4: 通用URL提取（作为最后的尝试）
               const generalUrlMatch = responseContent.match(/https?:\/\/[^\s<>"'\n)]+/);
@@ -529,7 +549,7 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
                 // 检查URL是否可能是视频链接
                 if (potentialUrl.includes('filesystem.site') || potentialUrl.includes('cdn') || potentialUrl.match(/\.(mp4|avi|mov|wmv|flv|webm|mkv)/i)) {
                   console.log('Extracted potential video URL:', potentialUrl);
-                  await setGeneratedVideoWithPreload(potentialUrl);
+                  await setGeneratedVideoWithPreload({ previewUrl: potentialUrl, downloadUrl: potentialUrl });
                 } else {
                   console.log('No suitable video URL found in response');
                   setError(
@@ -823,7 +843,7 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
           ) : generatedVideo ? (
             <div className="preview-image-wrapper">
               <video 
-                src={generatedVideo} 
+                src={generatedVideo.previewUrl} 
                 controls
                 loop
                 muted
@@ -831,7 +851,7 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
                 style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                 onLoadedData={() => console.log('Preview video loaded successfully')}
                 onError={() => {
-                  console.warn('Preview video failed to load:', generatedVideo);
+                  console.warn('Preview video failed to load:', generatedVideo.previewUrl);
                   // 保持视频URL，让用户可以右键新窗口打开
                 }}
               />
@@ -945,7 +965,7 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
               onClick={async () => {
                 if (generatedVideo) {
                   try {
-                    console.log('Starting video insertion with URL...', generatedVideo);
+                    console.log('Starting video insertion with URL...', generatedVideo.previewUrl);
                     
                     // 调试：检查当前选中状态
                     const currentSelectedElements = board ? getSelectedElements(board) : [];
@@ -956,7 +976,7 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
                     const insertionPoint = calculateInsertionPoint();
                     console.log('Calculated insertion point:', insertionPoint);
                     
-                    await insertVideoFromUrl(board, generatedVideo, insertionPoint);
+                    await insertVideoFromUrl(board, generatedVideo.previewUrl, insertionPoint);
                     
                     console.log('Video inserted successfully!');
                     
@@ -991,13 +1011,8 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
             <button
               onClick={() => {
                 if (generatedVideo) {
-                  // 创建一个临时链接来下载视频
-                  const link = document.createElement('a');
-                  link.href = generatedVideo;
-                  link.download = `generated-video-${Date.now()}.mp4`;
-                  document.body.appendChild(link);
-                  link.click();
-                  document.body.removeChild(link);
+                  // 在新页面打开下载链接
+                  window.open(generatedVideo.downloadUrl, '_blank');
                 }
               }}
               disabled={isGenerating || videoLoading}
