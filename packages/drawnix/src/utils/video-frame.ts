@@ -30,11 +30,24 @@ export const insertVideoFrame = async (
     
     console.log('Inserting video frame at position:', insertionPoint, 'timestamp:', timestamp);
     
-    // 将data URL转换为对象，准备插入
+    // 获取帧图片的原始尺寸
+    const img = new Image();
+    const originalDimensions = await new Promise<{width: number, height: number}>((resolve) => {
+      img.onload = () => {
+        resolve({ width: img.naturalWidth, height: img.naturalHeight });
+      };
+      img.onerror = () => {
+        // 如果无法获取原始尺寸，使用视频尺寸
+        resolve({ width: videoRect.width, height: videoRect.height });
+      };
+      img.src = frameImageDataUrl;
+    });
+
+    // 将data URL转换为对象，准备插入，保持原尺寸和画质
     const frameImageElement = {
       url: frameImageDataUrl,
-      width: Math.min(videoRect.width, 400), // 限制最大宽度为400或视频宽度
-      height: Math.min(videoRect.width * 0.5625, 225), // 保持16:9比例，限制最大高度
+      width: originalDimensions.width, // 保持原始宽度
+      height: originalDimensions.height, // 保持原始高度
       // 添加自定义属性标识这是视频帧
       isVideoFrame: true,
       videoTimestamp: timestamp,
