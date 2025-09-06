@@ -194,6 +194,7 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
     downloadUrl: string;
   } | null>(null);
   const [videoLoading, setVideoLoading] = useState(false);
+  const [isInserting, setIsInserting] = useState(false);
   
   // 包装setIsGenerating和setVideoLoading以发送事件
   const updateIsGenerating = (value: boolean) => {
@@ -848,7 +849,100 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
       
       {/* 预览区域 */}
       <div className="preview-section">
-        <div className="image-preview-container">
+        <div className="image-preview-container" style={{ position: 'relative' }}>
+          {/* 历史记录图标 - 固定在右下角 */}
+          {historyItems.length > 0 && (
+            <div 
+              className="history-icon-container" 
+              style={{
+                position: 'absolute',
+                bottom: '8px',
+                right: '8px',
+                zIndex: 10
+              }}
+            >
+              <button
+                className="history-icon-button"
+                onClick={() => setShowHistoryPopover(!showHistoryPopover)}
+                onMouseEnter={() => setShowHistoryPopover(true)}
+                title={language === 'zh' ? '查看生成历史' : 'View generation history'}
+              >
+                <HistoryIcon />
+              </button>
+              {showHistoryPopover && (
+                <div
+                  className="history-popover"
+                  onMouseLeave={() => setShowHistoryPopover(false)}
+                  style={{ 
+                    position: 'absolute',
+                    bottom: '100%',
+                    right: '0',
+                    marginBottom: '8px'
+                  }}
+                >
+                  <div className="history-popover-header">
+                    <span className="history-title">
+                      {language === 'zh' ? '生成历史' : 'Generation History'}
+                    </span>
+                    <button
+                      className="history-close-button"
+                      onClick={() => setShowHistoryPopover(false)}
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <div className="history-list">
+                    {historyItems.slice(0, 10).map((item) => (
+                      <div
+                        key={item.id}
+                        className="history-item"
+                        onClick={() => selectFromHistory(item)}
+                      >
+                        <div className="history-item-media">
+                          {item.thumbnail ? (
+                            <div className="history-video-thumbnail">
+                              <img
+                                src={item.thumbnail}
+                                alt="Video thumbnail"
+                                className="history-item-image"
+                                loading="lazy"
+                              />
+                              <div className="video-play-overlay">
+                                <div className="play-icon">▶</div>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="history-item-image history-video-placeholder">
+                              <div className="placeholder-icon">🎬</div>
+                            </div>
+                          )}
+                        </div>
+                        <div className="history-item-info">
+                          <div className="history-item-prompt" title={item.prompt}>
+                            {item.prompt.length > 25 
+                              ? `${item.prompt.slice(0, 25)}...` 
+                              : item.prompt}
+                          </div>
+                          <div className="history-item-time">
+                            {new Date(item.timestamp).toLocaleDateString()}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {historyItems.length > 10 && (
+                    <div className="history-more-info">
+                      {language === 'zh' 
+                        ? `还有 ${historyItems.length - 10} 个视频...`
+                        : `${historyItems.length - 10} more videos...`
+                      }
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+          
           {isGenerating ? (
             <div className="preview-loading">
               <div className="loading-spinner"></div>
@@ -886,84 +980,6 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
               <div className="placeholder-text">
                 {language === 'zh' ? '视频将在这里显示' : 'Video will be displayed here'}
               </div>
-              {/* 历史记录图标 - 右下角 */}
-              {historyItems.length > 0 && (
-                <div className="history-icon-container">
-                  <button
-                    className="history-icon-button"
-                    onClick={() => setShowHistoryPopover(!showHistoryPopover)}
-                    onMouseEnter={() => setShowHistoryPopover(true)}
-                    title={language === 'zh' ? '查看生成历史' : 'View generation history'}
-                  >
-                    <HistoryIcon />
-                  </button>
-                  {showHistoryPopover && (
-                    <div
-                      className="history-popover"
-                      onMouseLeave={() => setShowHistoryPopover(false)}
-                    >
-                      <div className="history-popover-header">
-                        <span className="history-title">
-                          {language === 'zh' ? '生成历史' : 'Generation History'}
-                        </span>
-                        <button
-                          className="history-close-button"
-                          onClick={() => setShowHistoryPopover(false)}
-                        >
-                          ×
-                        </button>
-                      </div>
-                      <div className="history-list">
-                        {historyItems.slice(0, 10).map((item) => (
-                          <div
-                            key={item.id}
-                            className="history-item"
-                            onClick={() => selectFromHistory(item)}
-                          >
-                            <div className="history-item-media">
-                              {item.thumbnail ? (
-                                <div className="history-video-thumbnail">
-                                  <img
-                                    src={item.thumbnail}
-                                    alt="Video thumbnail"
-                                    className="history-item-image"
-                                    loading="lazy"
-                                  />
-                                  <div className="video-play-overlay">
-                                    <div className="play-icon">▶</div>
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="history-item-image history-video-placeholder">
-                                  <div className="placeholder-icon">🎬</div>
-                                </div>
-                              )}
-                            </div>
-                            <div className="history-item-info">
-                              <div className="history-item-prompt" title={item.prompt}>
-                                {item.prompt.length > 25 
-                                  ? `${item.prompt.slice(0, 25)}...` 
-                                  : item.prompt}
-                              </div>
-                              <div className="history-item-time">
-                                {new Date(item.timestamp).toLocaleDateString()}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                      {historyItems.length > 10 && (
-                        <div className="history-more-info">
-                          {language === 'zh' 
-                            ? `还有 ${historyItems.length - 10} 个视频...`
-                            : `${historyItems.length - 10} more videos...`
-                          }
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
           )}
         </div>
@@ -996,6 +1012,7 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
               onClick={async () => {
                 if (generatedVideo) {
                   try {
+                    setIsInserting(true);
                     console.log('Starting video insertion with URL...', generatedVideo.previewUrl);
                     
                     // 调试：检查当前选中状态
@@ -1028,13 +1045,17 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
                         ? '视频插入失败，请稍后重试' 
                         : 'Video insertion failed, please try again later'
                     );
+                  } finally {
+                    setIsInserting(false);
                   }
                 }
               }}
-              disabled={isGenerating || videoLoading}
+              disabled={isGenerating || videoLoading || isInserting}
               className="action-button primary"
             >
-              {videoLoading 
+              {isInserting
+                ? (language === 'zh' ? '插入中...' : 'Inserting...')
+                : videoLoading 
                 ? (language === 'zh' ? '加载中...' : 'Loading...')
                 : (language === 'zh' ? '插入视频' : 'Insert Video')
               }
@@ -1046,7 +1067,7 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
                   window.open(generatedVideo.downloadUrl, '_blank');
                 }
               }}
-              disabled={isGenerating || videoLoading}
+              disabled={isGenerating || videoLoading || isInserting}
               className="action-button secondary"
             >
               {videoLoading 
