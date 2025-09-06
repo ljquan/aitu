@@ -60,16 +60,34 @@ export const VideoFrameSelector: React.FC<VideoFrameSelectorProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     
-    // 设置画布尺寸匹配视频
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    
-    // 绘制当前帧
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    
-    // 转换为 data URL
-    const imageDataUrl = canvas.toDataURL('image/png');
-    setFrameImage(imageDataUrl);
+    try {
+      // 设置画布尺寸匹配视频
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      
+      // 绘制当前帧
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      
+      // 转换为 data URL
+      const imageDataUrl = canvas.toDataURL('image/png');
+      setFrameImage(imageDataUrl);
+    } catch (error) {
+      console.warn('Failed to generate frame image (likely due to CORS):', error);
+      // 如果CORS失败，使用一个空白画布作为占位符
+      try {
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#fff';
+        ctx.font = '16px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('视频帧预览不可用', canvas.width / 2, canvas.height / 2);
+        const placeholderDataUrl = canvas.toDataURL('image/png');
+        setFrameImage(placeholderDataUrl);
+      } catch (fallbackError) {
+        console.error('Failed to create placeholder image:', fallbackError);
+        setFrameImage('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==');
+      }
+    }
   };
   
   // 拖拽进度条
@@ -117,10 +135,7 @@ export const VideoFrameSelector: React.FC<VideoFrameSelectorProps> = ({
       header={language === 'zh' ? '选择视频帧' : 'Select Video Frame'}
       width={600}
       destroyOnClose
-      style={{ 
-        backgroundColor: '#ffffff',
-        color: '#333333'
-      } as React.CSSProperties}
+      footer={false}
     >
       <div className="video-frame-selector">
         {/* 隐藏的视频元素用于帧提取 */}
@@ -130,6 +145,7 @@ export const VideoFrameSelector: React.FC<VideoFrameSelectorProps> = ({
           style={{ display: 'none' }}
           muted
           playsInline
+          crossOrigin="anonymous"
           onLoadedData={handleVideoLoaded}
           onSeeked={handleTimeUpdate}
           onTimeUpdate={handleTimeUpdate}

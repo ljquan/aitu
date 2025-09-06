@@ -2,44 +2,29 @@
   display: flex;
   flex-direction: column;
   gap: 20px;
-  padding: 20px;
-  
-  // Force light theme - override dark mode styles
-  background-color: #ffffff !important;
-  color: #333333 !important;
-  
-  // Force light theme for all child elements
-  * {
-    color: #333333 !important;
-  }
-  
-  input, textarea, button {
-    background-color: #ffffff !important;
-    color: #333333 !important;
-    border-color: #d1d5db !important;
-  }
+  padding: 0 5px;
   
   .frame-preview {
     display: flex;
     justify-content: center;
     align-items: center;
     min-height: 300px;
-    border: 2px dashed #ddd;
+    border: 2px dashed var(--color-border, #ddd);
     border-radius: 8px;
-    background-color: #f9f9f9;
+    background-color: var(--color-bg-container, #f9f9f9);
     
     .loading-placeholder {
       display: flex;
       flex-direction: column;
       align-items: center;
       gap: 12px;
-      color: #666;
+      color: var(--color-text-secondary, #666);
       
       .loading-spinner {
         width: 32px;
         height: 32px;
-        border: 3px solid #f3f3f3;
-        border-top: 3px solid #1890ff;
+        border: 3px solid var(--color-fill-quaternary, #f3f3f3);
+        border-top: 3px solid var(--brand-primary, #F39C12);
         border-radius: 50%;
         animation: spin 1s linear infinite;
       }
@@ -78,15 +63,15 @@
       font-weight: 500;
       
       .current-time {
-        color: #1890ff;
+        color: var(--brand-primary, #F39C12);
       }
       
       .separator {
-        color: #666;
+        color: var(--color-text-secondary, #666);
       }
       
       .total-time {
-        color: #666;
+        color: var(--color-text-secondary, #666);
       }
     }
     
@@ -96,7 +81,7 @@
       .progress-slider {
         width: 100%;
         height: 6px;
-        background: #ddd;
+        background: var(--color-border, #ddd);
         border-radius: 3px;
         outline: none;
         -webkit-appearance: none;
@@ -107,27 +92,27 @@
           appearance: none;
           width: 18px;
           height: 18px;
-          background: #1890ff;
+          background: var(--brand-primary, #F39C12);
           border-radius: 50%;
           cursor: pointer;
           box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
           
           &:hover {
-            background: #40a9ff;
+            background: var(--brand-primary-dark, #E67E22);
           }
         }
         
         &::-moz-range-thumb {
           width: 18px;
           height: 18px;
-          background: #1890ff;
+          background: var(--brand-primary, #F39C12);
           border-radius: 50%;
           cursor: pointer;
           border: none;
           box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
           
           &:hover {
-            background: #40a9ff;
+            background: var(--brand-primary-dark, #E67E22);
           }
         }
         
@@ -154,25 +139,27 @@
       
       .time-input-label {
         font-size: 14px;
-        color: #666;
+        color: var(--color-text-secondary, #666);
       }
       
       .time-input {
         width: 100px;
         padding: 6px 8px;
-        border: 1px solid #ddd;
+        border: 1px solid var(--color-border, #ddd);
         border-radius: 4px;
         text-align: center;
         font-size: 14px;
+        background-color: var(--color-bg-container, #ffffff);
+        color: var(--color-text, #000000);
         
         &:focus {
           outline: none;
-          border-color: #1890ff;
-          box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
+          border-color: var(--brand-primary, #F39C12);
+          box-shadow: 0 0 0 2px rgba(243, 156, 18, 0.2);
         }
         
         &:disabled {
-          background-color: #f5f5f5;
+          background-color: var(--color-fill-quaternary, #f5f5f5);
           cursor: not-allowed;
         }
       }
@@ -184,7 +171,7 @@
     justify-content: flex-end;
     gap: 12px;
     padding-top: 16px;
-    border-top: 1px solid #f0f0f0;
+    border-top: 1px solid var(--color-border-secondary, #f0f0f0);
     
     .action-button {
       padding: 8px 16px;
@@ -196,24 +183,24 @@
       transition: all 0.2s ease;
       
       &.secondary {
-        background-color: #f5f5f5;
-        color: #666;
+        background-color: var(--color-fill-quaternary, #f5f5f5);
+        color: var(--color-text-secondary, #666);
         
         &:hover {
-          background-color: #e6e6e6;
+          background-color: var(--color-fill-tertiary, #e6e6e6);
         }
       }
       
       &.primary {
-        background-color: #1890ff;
-        color: white;
+        background-color: var(--brand-primary, #F39C12);
+        color: var(--color-white, white);
         
         &:hover:not(:disabled) {
-          background-color: #40a9ff;
+          background-color: var(--brand-primary-dark, #E67E22);
         }
         
         &:disabled {
-          background-color: #d9d9d9;
+          background-color: var(--color-fill-quaternary, #d9d9d9);
           cursor: not-allowed;
         }
       }
