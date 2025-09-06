@@ -4,6 +4,69 @@ import { PlaitDrawElement } from '@plait/draw';
 import { Node } from 'slate';
 import { Freehand } from '../plugins/freehand/type';
 
+/**
+ * 压缩图像URL（用于生成的图像）
+ */
+export const compressImageUrl = (imageUrl: string, maxWidth: number = 512, maxHeight: number = 512, quality: number = 0.8): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const img = new Image();
+    
+    img.crossOrigin = 'anonymous';
+    img.referrerPolicy = 'no-referrer';
+    
+    img.onload = () => {
+      // 计算缩放比例
+      let { width, height } = img;
+      const aspectRatio = width / height;
+      
+      if (width > maxWidth || height > maxHeight) {
+        if (width > height) {
+          width = Math.min(width, maxWidth);
+          height = width / aspectRatio;
+          
+          if (height > maxHeight) {
+            height = maxHeight;
+            width = height * aspectRatio;
+          }
+        } else {
+          height = Math.min(height, maxHeight);
+          width = height * aspectRatio;
+          
+          if (width > maxWidth) {
+            width = maxWidth;
+            height = width / aspectRatio;
+          }
+        }
+      }
+      
+      // 设置画布尺寸
+      canvas.width = width;
+      canvas.height = height;
+      
+      if (!ctx) {
+        reject(new Error('Canvas context not available'));
+        return;
+      }
+      
+      // 绘制图像
+      ctx.drawImage(img, 0, 0, width, height);
+      
+      // 转换为data URL
+      const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+      resolve(compressedDataUrl);
+    };
+    
+    img.onerror = () => {
+      // 如果压缩失败，返回原始URL
+      resolve(imageUrl);
+    };
+    
+    img.src = imageUrl;
+  });
+};
+
 export interface ExtractedContent {
   text: string;
   images: { url: string; name?: string }[];
@@ -272,6 +335,7 @@ export const findElementsOverlappingWithGraphics = (board: PlaitBoard, elements:
 /**
  * Convert elements to image using Plait's native toImage function
  * This preserves all styling, colors, and rendering exactly as they appear
+ * The resulting image is compressed to maximum 512x512px for AI image generation
  */
 export const convertElementsToImage = async (board: PlaitBoard, elements: PlaitElement[]): Promise<string | null> => {
   try {
@@ -293,7 +357,16 @@ export const convertElementsToImage = async (board: PlaitBoard, elements: PlaitE
 
     if (imageDataUrl) {
       console.log(`Successfully converted elements to image using native Plait rendering`);
-      return imageDataUrl;
+      
+      // Compress the image to max 512x512px for AI image generation
+      try {
+        const compressedImageUrl = await compressImageUrl(imageDataUrl, 512, 512, 0.8);
+        console.log('Image compressed successfully for AI image generation');
+        return compressedImageUrl;
+      } catch (compressError) {
+        console.warn('Failed to compress converted image, using original:', compressError);
+        return imageDataUrl;
+      }
     } else {
       console.warn('Plait toImage returned null');
       return null;

@@ -6,6 +6,7 @@ import { useI18n } from '../../i18n';
 import { useBoard } from '@plait-board/react-board';
 import { defaultGeminiClient, promptForApiKey } from '../../utils/gemini-api';
 import { insertImageFromUrl } from '../../data/image';
+import { compressImageUrl } from '../../utils/selection-utils';
 
 // 预览图缓存key
 const PREVIEW_CACHE_KEY = 'ai_image_generation_preview_cache';
@@ -87,14 +88,6 @@ const loadHistory = (): HistoryItem[] => {
   return [];
 };
 
-// 清除历史记录
-const clearHistory = () => {
-  try {
-    localStorage.removeItem(HISTORY_CACHE_KEY);
-  } catch (error) {
-    console.warn('Failed to clear history:', error);
-  }
-};
 
 
 const getPromptExample = (language: 'zh' | 'en') => {
@@ -378,15 +371,36 @@ Requirements:
 
 Description: ${prompt}`;
 
-        // 将上传的图片转换为ImageInput格式
-        const imageInputs = uploadedImages.map(item => {
+        // 将上传的图片转换为ImageInput格式，对File类型的图片进行压缩
+        const imageInputs = await Promise.all(uploadedImages.map(async (item) => {
           if (item instanceof File) {
-            return { file: item };
+            try {
+              // 将File转换为data URL
+              const fileDataUrl = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result as string);
+                reader.onerror = reject;
+                reader.readAsDataURL(item);
+              });
+              
+              // 对base64图片进行压缩处理
+              const compressedDataUrl = await compressImageUrl(fileDataUrl);
+              
+              // 将压缩后的data URL转换回File对象
+              const response = await fetch(compressedDataUrl);
+              const blob = await response.blob();
+              const compressedFile = new File([blob], item.name, { type: blob.type || item.type });
+              
+              return { file: compressedFile };
+            } catch (compressionError) {
+              console.warn('Failed to compress uploaded image, using original:', compressionError);
+              return { file: item };
+            }
           } else {
             // 对于URL类型的图片，直接传递URL
             return { url: item.url };
           }
-        });
+        }));
         
         const result = await defaultGeminiClient.chat(imagePrompt, imageInputs);
         
