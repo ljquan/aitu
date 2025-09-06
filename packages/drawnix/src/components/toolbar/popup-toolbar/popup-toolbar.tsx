@@ -40,11 +40,14 @@ import { isWhite, removeHexAlpha } from '../../../utils/color';
 import { NO_COLOR } from '../../../constants/color';
 import { Freehand } from '../../../plugins/freehand/type';
 import { PopupLinkButton } from './link-button';
-import { AIImageIcon, AIVideoIcon } from '../../icons';
+import { AIImageIcon, AIVideoIcon, VideoFrameIcon } from '../../icons';
 import { useDrawnix, DialogType } from '../../../hooks/use-drawnix';
 import { useI18n } from '../../../i18n';
 import { ToolButton } from '../../tool-button';
 import { useGlobalMousePosition, getCurrentMousePosition } from '../../../hooks/use-global-mouse-position';
+import { isVideoElement } from '../../../plugins/with-video';
+import { VideoFrameSelector } from '../../video-frame-selector/video-frame-selector';
+import { insertVideoFrame } from '../../../utils/video-frame';
 
 export const PopupToolbar = () => {
   const board = useBoard();
@@ -55,6 +58,10 @@ export const PopupToolbar = () => {
   const movingOrDraggingRef = useRef(movingOrDragging);
   const [isInitialPositioning, setIsInitialPositioning] = useState(true);
   const isInitialPositioningRef = useRef(isInitialPositioning);
+  
+  // 视频帧选择弹窗状态
+  const [showVideoFrameSelector, setShowVideoFrameSelector] = useState(false);
+  const [selectedVideoElement, setSelectedVideoElement] = useState<PlaitElement | null>(null);
   
   // 初始化全局鼠标位置跟踪
   useGlobalMousePosition();
@@ -83,6 +90,7 @@ export const PopupToolbar = () => {
     hasStrokeStyle?: boolean;
     marks?: Omit<CustomText, 'text'>;
     hasAIVideo?: boolean; // 是否显示AI视频生成按钮
+    hasVideoFrame?: boolean; // 是否显示视频帧选择按钮
   } = {
     fill: 'red',
   };
@@ -107,6 +115,11 @@ export const PopupToolbar = () => {
         PlaitDrawElement.isImage(element)
       ) &&
       !PlaitBoard.hasBeenTextEditing(board);
+    // 检查是否只选中了一个视频元素
+    const hasVideoFrame = 
+      selectedElements.length === 1 &&
+      isVideoElement(selectedElements[0]) &&
+      !PlaitBoard.hasBeenTextEditing(board);
     state = {
       ...getElementState(board),
       hasFill,
@@ -116,6 +129,7 @@ export const PopupToolbar = () => {
       hasStrokeStyle,
       hasText,
       hasAIVideo,
+      hasVideoFrame,
     };
   }
   useEffect(() => {
@@ -315,8 +329,49 @@ export const PopupToolbar = () => {
                 }}
               />
             )}
+            {state.hasVideoFrame && (
+              <ToolButton
+                className="video-frame"
+                key={7}
+                type="icon"
+                icon={VideoFrameIcon}
+                visible={true}
+                title={language === 'zh' ? '视频帧选择' : 'Video Frame Selection'}
+                aria-label={language === 'zh' ? '视频帧选择' : 'Video Frame Selection'}
+                onPointerUp={() => {
+                  // 找到选中的视频元素
+                  const videoElement = selectedElements.find(element => isVideoElement(element));
+                  if (videoElement) {
+                    setSelectedVideoElement(videoElement);
+                    setShowVideoFrameSelector(true);
+                  }
+                }}
+              />
+            )}
           </Stack.Row>
         </Island>
+      )}
+      
+      {/* 视频帧选择弹窗 */}
+      {showVideoFrameSelector && selectedVideoElement && (
+        <VideoFrameSelector
+          visible={showVideoFrameSelector}
+          videoUrl={(selectedVideoElement as any).url || ''}
+          onClose={() => {
+            setShowVideoFrameSelector(false);
+            setSelectedVideoElement(null);
+          }}
+          onConfirm={async (frameImageDataUrl: string, timestamp: number) => {
+            try {
+              if (selectedVideoElement) {
+                await insertVideoFrame(board, selectedVideoElement, frameImageDataUrl, timestamp);
+              }
+            } catch (error) {
+              console.error('Failed to insert video frame:', error);
+              // 可以在这里添加错误提示
+            }
+          }}
+        />
       )}
     </>
   );

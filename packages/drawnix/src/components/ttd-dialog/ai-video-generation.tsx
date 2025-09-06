@@ -8,12 +8,18 @@ import { getSelectedElements, PlaitElement, getRectangleByElements, Point } from
 import { defaultGeminiClient, videoGeminiClient, promptForApiKey } from '../../utils/gemini-api';
 import { compressImageUrl, getInsertionPointForSelectedElements } from '../../utils/selection-utils';
 import { insertVideoFromUrl } from '../../data/video';
-import { HistoryIcon } from 'tdesign-icons-react';
+import { 
+  GenerationHistory, 
+  VideoHistoryItem, 
+  ImageHistoryItem,
+  saveVideoToHistory, 
+  loadVideoHistory, 
+  generateHistoryId,
+  extractUserPromptsFromHistory 
+} from '../generation-history';
 
 // 预览视频缓存key
 const PREVIEW_CACHE_KEY = 'ai_video_generation_preview_cache';
-// 历史视频缓存key
-const HISTORY_CACHE_KEY = 'ai_video_generation_history';
 
 // 视频URL接口
 interface VideoUrls {
@@ -27,16 +33,6 @@ interface PreviewCache {
   generatedVideo: VideoUrls | null;
   timestamp: number;
   sourceImage?: string;
-}
-
-// 历史视频接口
-interface HistoryItem {
-  id: string;
-  prompt: string;
-  videoUrls: VideoUrls;
-  thumbnail?: string; // 视频缩略图（从第一帧提取）
-  timestamp: number;
-  sourceImage?: string; // 生成视频的源图片
 }
 
 // 保存预览缓存
@@ -65,34 +61,6 @@ const loadPreviewCache = (): PreviewCache | null => {
     console.warn('Failed to load preview cache:', error);
   }
   return null;
-};
-
-// 保存历史记录
-const saveToHistory = (item: HistoryItem) => {
-  try {
-    const existing = loadHistory();
-    // 添加新项目到开头，并限制最多保存20个
-    const updated = [item, ...existing.filter(h => h.id !== item.id)].slice(0, 20);
-    localStorage.setItem(HISTORY_CACHE_KEY, JSON.stringify(updated));
-  } catch (error) {
-    console.warn('Failed to save history:', error);
-  }
-};
-
-// 加载历史记录
-const loadHistory = (): HistoryItem[] => {
-  try {
-    const cached = localStorage.getItem(HISTORY_CACHE_KEY);
-    if (cached) {
-      const data = JSON.parse(cached) as HistoryItem[];
-      // 过滤掉超过7天的记录
-      const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-      return data.filter(item => item.timestamp > weekAgo);
-    }
-  } catch (error) {
-    console.warn('Failed to load history:', error);
-  }
-  return [];
 };
 
 // 从视频生成缩略图（第一帧）
@@ -211,8 +179,7 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
   // 只支持单张图片上传
   const [uploadedImage, setUploadedImage] = useState<File | { url: string; name: string } | null>(initialImage || null);
   // 历史相关状态
-  const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
-  const [showHistoryPopover, setShowHistoryPopover] = useState(false);
+  const [historyItems, setHistoryItems] = useState<VideoHistoryItem[]>([]);
 
   const { appState, setAppState } = useDrawnix();
   const { language } = useI18n();
@@ -279,7 +246,7 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
 
   // 加载历史记录
   useEffect(() => {
-    const history = loadHistory();
+    const history = loadVideoHistory();
     setHistoryItems(history);
   }, []);
 
@@ -364,28 +331,37 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
       const thumbnailPromise = generateVideoThumbnail(videoUrls.previewUrl);
 
       // 保存到历史记录（先保存基本信息）
-      const historyItem: HistoryItem = {
-        id: `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+      const historyItem: Omit<VideoHistoryItem, 'type'> = {
+        id: generateHistoryId(),
         prompt,
-        videoUrls,
-        timestamp: Date.now(),
-        sourceImage: uploadedImage instanceof File ? URL.createObjectURL(uploadedImage) : uploadedImage?.url
+        imageUrl: '', // 先置空，等待缩略图生成
+        width: 400,   // 默认尺寸
+        height: 225,  // 默认尺寸
+        previewUrl: videoUrls.previewUrl,
+        downloadUrl: videoUrls.downloadUrl,
+        timestamp: Date.now()
       };
 
       // 等待缩略图生成完成，然后更新历史记录
       try {
         const thumbnail = await thumbnailPromise;
         if (thumbnail) {
-          historyItem.thumbnail = thumbnail;
+          historyItem.imageUrl = thumbnail; // 使用缩略图作为 imageUrl
+        } else {
+          // 如果缩略图生成失败，使用预览URL
+          historyItem.imageUrl = videoUrls.previewUrl;
         }
       } catch (error) {
         console.warn('Failed to generate video thumbnail:', error);
+        // 如果缩略图生成失败，使用预览URL
+        historyItem.imageUrl = videoUrls.previewUrl;
       }
 
-      saveToHistory(historyItem);
+      saveVideoToHistory(historyItem);
       
       // 更新历史列表状态
-      setHistoryItems(prev => [historyItem, ...prev.filter(h => h.id !== historyItem.id)].slice(0, 20));
+      const newHistoryItem: VideoHistoryItem = { ...historyItem, type: 'video' };
+      setHistoryItems(prev => [newHistoryItem, ...prev.filter(h => h.id !== historyItem.id)].slice(0, 50));
     } catch (error) {
       console.warn('Failed to set generated video:', error);
       setGeneratedVideo(videoUrls);
@@ -395,24 +371,33 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
   };
 
   // 从历史记录选择视频
-  const selectFromHistory = (historyItem: HistoryItem) => {
+  const selectFromHistory = (historyItem: VideoHistoryItem) => {
     setPrompt(historyItem.prompt);
-    setGeneratedVideo(historyItem.videoUrls);
-    if (historyItem.sourceImage) {
-      setUploadedImage({ url: historyItem.sourceImage, name: 'History Image' });
-    }
-    setShowHistoryPopover(false);
+    setGeneratedVideo({
+      previewUrl: historyItem.previewUrl,
+      downloadUrl: historyItem.downloadUrl || historyItem.previewUrl
+    });
     // 选择历史记录时清除错误状态
     setError(null);
     
     // 更新预览缓存
     const cacheData: PreviewCache = {
       prompt: historyItem.prompt,
-      generatedVideo: historyItem.videoUrls,
-      timestamp: Date.now(),
-      sourceImage: historyItem.sourceImage
+      generatedVideo: {
+        previewUrl: historyItem.previewUrl,
+        downloadUrl: historyItem.downloadUrl || historyItem.previewUrl
+      },
+      timestamp: Date.now()
     };
     savePreviewCache(cacheData);
+  };
+
+  // 通用历史选择处理器（兼容各种类型）
+  const handleSelectFromHistory = (item: VideoHistoryItem | ImageHistoryItem) => {
+    if (item.type === 'video') {
+      selectFromHistory(item as VideoHistoryItem);
+    }
+    // 视频生成组件不处理图片类型
   };
 
   // 获取合并的预设提示词（用户历史 + 默认预设）
@@ -438,12 +423,8 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
       'Create subtle depth of field changes in the scene'
     ];
 
-    // 从历史记录中提取用户使用过的提示词（去重，最新的在前）
-    const userPrompts = historyItems
-      .map(item => item.prompt.trim())
-      .filter(prompt => prompt.length > 0)
-      .filter((prompt, index, arr) => arr.indexOf(prompt) === index) // 去重
-      .slice(0, 8); // 最多取8个用户历史提示词
+    // 使用工具函数提取用户历史提示词
+    const userPrompts = extractUserPromptsFromHistory(historyItems).slice(0, 8);
 
     // 合并：用户历史提示词在前，默认预设在后，总数不超过12个
     const merged = [...userPrompts, ...defaultPrompts]
@@ -849,99 +830,7 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
       
       {/* 预览区域 */}
       <div className="preview-section">
-        <div className="image-preview-container" style={{ position: 'relative' }}>
-          {/* 历史记录图标 - 固定在右下角 */}
-          {historyItems.length > 0 && (
-            <div 
-              className="history-icon-container" 
-              style={{
-                position: 'absolute',
-                bottom: '8px',
-                right: '8px',
-                zIndex: 10
-              }}
-            >
-              <button
-                className="history-icon-button"
-                onClick={() => setShowHistoryPopover(!showHistoryPopover)}
-                onMouseEnter={() => setShowHistoryPopover(true)}
-                title={language === 'zh' ? '查看生成历史' : 'View generation history'}
-              >
-                <HistoryIcon />
-              </button>
-              {showHistoryPopover && (
-                <div
-                  className="history-popover"
-                  onMouseLeave={() => setShowHistoryPopover(false)}
-                  style={{ 
-                    position: 'absolute',
-                    bottom: '100%',
-                    right: '0',
-                    marginBottom: '8px'
-                  }}
-                >
-                  <div className="history-popover-header">
-                    <span className="history-title">
-                      {language === 'zh' ? '生成历史' : 'Generation History'}
-                    </span>
-                    <button
-                      className="history-close-button"
-                      onClick={() => setShowHistoryPopover(false)}
-                    >
-                      ×
-                    </button>
-                  </div>
-                  <div className="history-list">
-                    {historyItems.slice(0, 10).map((item) => (
-                      <div
-                        key={item.id}
-                        className="history-item"
-                        onClick={() => selectFromHistory(item)}
-                      >
-                        <div className="history-item-media">
-                          {item.thumbnail ? (
-                            <div className="history-video-thumbnail">
-                              <img
-                                src={item.thumbnail}
-                                alt="Video thumbnail"
-                                className="history-item-image"
-                                loading="lazy"
-                              />
-                              <div className="video-play-overlay">
-                                <div className="play-icon">▶</div>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="history-item-image history-video-placeholder">
-                              <div className="placeholder-icon">🎬</div>
-                            </div>
-                          )}
-                        </div>
-                        <div className="history-item-info">
-                          <div className="history-item-prompt" title={item.prompt}>
-                            {item.prompt.length > 25 
-                              ? `${item.prompt.slice(0, 25)}...` 
-                              : item.prompt}
-                          </div>
-                          <div className="history-item-time">
-                            {new Date(item.timestamp).toLocaleDateString()}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  {historyItems.length > 10 && (
-                    <div className="history-more-info">
-                      {language === 'zh' 
-                        ? `还有 ${historyItems.length - 10} 个视频...`
-                        : `${historyItems.length - 10} more videos...`
-                      }
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
+        <div className="image-preview-container" >
           
           {isGenerating ? (
             <div className="preview-loading">
@@ -984,6 +873,12 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
           )}
         </div>
         
+          {/* 统一历史记录组件 */}
+          <GenerationHistory
+            historyItems={historyItems}
+            onSelectFromHistory={handleSelectFromHistory}
+            position={{ bottom: '60px', right: '8px' }}
+          />
         {/* 插入、下载和清除按钮区域 */}
         {generatedVideo && (
           <div className="section-actions">

@@ -27,7 +27,16 @@
   --aitu-gradient-primary: linear-gradient(135deg, #F39C12 0%, #E67E22 30%, #5A4FCF 70%, #E91E63 100%);
   --aitu-gradient-brush: linear-gradient(135deg, #5A4FCF 0%, #7B68EE 50%, #E91E63 100%);
 }
-
+/* 在全局样式中设置 */
+:root {
+  color-scheme: light; /* 只支持浅色模式 */
+  --td-bg-color-page: #ffffff !important;
+  --td-bg-color-container: #f5f5f5 !important;
+  --td-text-color-primary: #333333 !important;
+  --td-text-color-secondary: #666666 !important;
+  --td-border-level-1-color: #e0e0e0 !important;
+  --td-border-level-2-color: #eeeeee !important;
+}
 body {
     margin: 0;
     padding: 0;

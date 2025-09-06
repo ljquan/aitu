@@ -20,8 +20,16 @@ export interface VideoDimensions {
  * @param videoUrl 视频URL
  * @returns Promise<VideoDimensions> 视频的宽度和高度
  */
+// 防止重复调用的缓存
+const dimensionsCache = new Map<string, Promise<VideoDimensions>>();
+
 export const getVideoDimensions = (videoUrl: string): Promise<VideoDimensions> => {
-  return new Promise((resolve, reject) => {
+  // 检查缓存
+  if (dimensionsCache.has(videoUrl)) {
+    return dimensionsCache.get(videoUrl)!;
+  }
+  
+  const promise = new Promise<VideoDimensions>((resolve, reject) => {
     const video = document.createElement('video');
     video.crossOrigin = 'anonymous';
     video.muted = true;
@@ -29,8 +37,17 @@ export const getVideoDimensions = (videoUrl: string): Promise<VideoDimensions> =
     
     // 设置超时时间，防止长时间等待
     const timeout = setTimeout(() => {
+      console.warn('Video dimensions loading timeout for:', videoUrl);
       video.src = '';
-      reject(new Error('Video dimensions loading timeout'));
+      
+      // 从缓存中移除超时的URL
+      dimensionsCache.delete(videoUrl);
+      
+      // 超时时返回默认尺寸而不是抛出错误
+      resolve({
+        width: 400,
+        height: 225
+      });
     }, 10000); // 10秒超时
     
     video.onloadedmetadata = () => {
@@ -51,6 +68,10 @@ export const getVideoDimensions = (videoUrl: string): Promise<VideoDimensions> =
       } catch (error) {
         clearTimeout(timeout);
         video.src = '';
+        
+        // 从缓存中移除失败的URL
+        dimensionsCache.delete(videoUrl);
+        
         reject(error);
       }
     };
@@ -59,6 +80,9 @@ export const getVideoDimensions = (videoUrl: string): Promise<VideoDimensions> =
       clearTimeout(timeout);
       console.warn('Failed to load video metadata for dimensions:', error);
       video.src = '';
+      
+      // 从缓存中移除失败的URL
+      dimensionsCache.delete(videoUrl);
       
       // 如果视频加载失败，返回默认尺寸而不是抛出错误
       resolve({
@@ -70,6 +94,10 @@ export const getVideoDimensions = (videoUrl: string): Promise<VideoDimensions> =
     // 开始加载视频元数据
     video.src = videoUrl;
   });
+  
+  // 将Promise添加到缓存
+  dimensionsCache.set(videoUrl, promise);
+  return promise;
 };
 
 /**

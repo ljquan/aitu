@@ -536,3 +536,16 @@ export const SettingsIcon = createIcon(
     </g>
   </svg>
 );
+
+export const VideoFrameIcon = createIcon(
+  <svg viewBox="0 0 16 16" version="1.1" xmlns="http://www.w3.org/2000/svg">
+    <g id="video-frame" stroke="none" fill="currentColor">
+      <rect x="1" y="3" width="14" height="10" rx="1" fill="none" stroke="currentColor" strokeWidth="1.2"/>
+      <rect x="3" y="5" width="10" height="6" rx="0.5" fill="currentColor" opacity="0.6"/>
+      <circle cx="12" cy="6" r="0.8" fill="currentColor"/>
+      <path d="M2 14L5 11L7 13L11 9L14 12" stroke="currentColor" strokeWidth="1" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+      <rect x="1" y="14.5" width="14" height="1" rx="0.5" fill="currentColor"/>
+      <circle cx="4" cy="15" r="0.8" fill="white" stroke="currentColor" strokeWidth="0.5"/>
+    </g>
+  </svg>
+);

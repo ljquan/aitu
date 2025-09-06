@@ -213,6 +213,10 @@ export const TTDDialog = ({ container }: { container: HTMLElement | null }) => {
         mode="modal"
         preventScrollThrough={true}
         closeBtn={true}
+        style={{ 
+          backgroundColor: '#ffffff',
+          color: '#333333'
+        } as React.CSSProperties}
       >
         <AIImageGeneration 
           initialPrompt={aiImageData.initialPrompt}
@@ -254,6 +258,10 @@ export const TTDDialog = ({ container }: { container: HTMLElement | null }) => {
         mode="modal"
         preventScrollThrough={true}
         closeBtn={true}
+        style={{ 
+          backgroundColor: '#ffffff',
+          color: '#333333'
+        } as React.CSSProperties}
       >
         <AIVideoGeneration 
           initialPrompt={aiVideoData.initialPrompt}
