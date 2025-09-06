@@ -465,8 +465,9 @@ export const processSelectedContentForAI = async (board: PlaitBoard): Promise<Pr
   const { graphicsElements, overlappingElements } = findElementsOverlappingWithGraphics(board, selectedElements);
   console.log('Graphics elements:', graphicsElements.length, 'Overlapping elements:', overlappingElements.length);
   
-  // Step 2: Combine graphics elements with overlapping elements
-  const allGraphicsRelatedElements = [...graphicsElements, ...overlappingElements];
+  // Step 2: Combine graphics elements with overlapping elements, preserving original order
+  const allGraphicsRelatedElementsSet = new Set([...graphicsElements, ...overlappingElements]);
+  const allGraphicsRelatedElements = selectedElements.filter(el => allGraphicsRelatedElementsSet.has(el));
   
   // Step 3: Identify remaining elements (not graphics-related)
   const remainingElements = selectedElements.filter(
