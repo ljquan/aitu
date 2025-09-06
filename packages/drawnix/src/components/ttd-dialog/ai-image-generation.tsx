@@ -4,6 +4,7 @@ import './ai-image-generation.scss';
 import { useDrawnix } from '../../hooks/use-drawnix';
 import { useI18n } from '../../i18n';
 import { useBoard } from '@plait-board/react-board';
+import { getSelectedElements, PlaitElement, getRectangleByElements, Point } from '@plait/core';
 import { defaultGeminiClient, promptForApiKey } from '../../utils/gemini-api';
 import { insertImageFromUrl } from '../../data/image';
 import { compressImageUrl } from '../../utils/selection-utils';
@@ -101,9 +102,10 @@ const getPromptExample = (language: 'zh' | 'en') => {
 interface AIImageGenerationProps {
   initialPrompt?: string;
   initialImages?: (File | { url: string; name: string })[];
+  selectedElementIds?: string[];
 }
 
-const AIImageGeneration = ({ initialPrompt = '', initialImages = [] }: AIImageGenerationProps = {}) => {
+const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedElementIds = [] }: AIImageGenerationProps = {}) => {
   const [prompt, setPrompt] = useState(initialPrompt);
   const [width, setWidth] = useState<number | string>(1024);
   const [height, setHeight] = useState<number | string>(1024);
@@ -139,6 +141,45 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [] }: AIImageGe
   const { appState, setAppState } = useDrawnix();
   const { language } = useI18n();
   const board = useBoard();
+
+  // 根据保存的选中元素IDs计算插入位置
+  const calculateInsertionPoint = (): Point | undefined => {
+    if (!board || selectedElementIds.length === 0) {
+      return undefined;
+    }
+
+    // 查找对应的元素
+    const elements: PlaitElement[] = [];
+    for (const id of selectedElementIds) {
+      const element = board.children.find((el: PlaitElement) => el.id === id);
+      if (element) {
+        elements.push(element);
+      }
+    }
+
+    if (elements.length === 0) {
+      console.warn('No elements found for saved selected element IDs:', selectedElementIds);
+      return undefined;
+    }
+
+    try {
+      // 计算边界矩形
+      const boundingRect = getRectangleByElements(board, elements, false);
+      
+      // 计算几何中心X坐标
+      const centerX = boundingRect.x + boundingRect.width / 2;
+      
+      // 计算底部Y坐标 + 50px偏移
+      const insertionY = boundingRect.y + boundingRect.height + 50;
+      
+      console.log('Calculated insertion point from saved selection:', { centerX, insertionY, boundingRect });
+      
+      return [centerX, insertionY] as Point;
+    } catch (error) {
+      console.warn('Error calculating insertion point from saved selection:', error);
+      return undefined;
+    }
+  };
 
 
   // 检查是否为Invalid Token错误
@@ -1030,7 +1071,16 @@ Description: ${prompt}`;
                   try {
                     console.log('Starting image insertion with URL...', generatedImage);
                     
-                    await insertImageFromUrl(board, generatedImage);
+                    // 调试：检查当前选中状态
+                    const currentSelectedElements = board ? getSelectedElements(board) : [];
+                    console.log('Current selected elements:', currentSelectedElements.length, currentSelectedElements);
+                    console.log('Saved selected element IDs:', selectedElementIds);
+                    
+                    // 计算插入位置
+                    const insertionPoint = calculateInsertionPoint();
+                    console.log('Calculated insertion point:', insertionPoint);
+                    
+                    await insertImageFromUrl(board, generatedImage, insertionPoint);
                     
                     console.log('Image inserted successfully!');
                     

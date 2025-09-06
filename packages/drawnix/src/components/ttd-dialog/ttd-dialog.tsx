@@ -8,7 +8,7 @@ import { useI18n } from '../../i18n';
 import { useBoard } from '@plait-board/react-board';
 import { useState, useEffect } from 'react';
 import { processSelectedContentForAI, extractSelectedContent } from '../../utils/selection-utils';
-import { ATTACHED_ELEMENT_CLASS_NAME } from '@plait/core';
+import { ATTACHED_ELEMENT_CLASS_NAME, getSelectedElements } from '@plait/core';
 
 export const TTDDialog = ({ container }: { container: HTMLElement | null }) => {
   const { appState, setAppState } = useDrawnix();
@@ -19,9 +19,11 @@ export const TTDDialog = ({ container }: { container: HTMLElement | null }) => {
   const [aiImageData, setAiImageData] = useState<{
     initialPrompt: string;
     initialImages: (File | { url: string; name: string })[];
+    selectedElementIds: string[]; // 保存选中元素的IDs
   }>({
     initialPrompt: '',
-    initialImages: []
+    initialImages: [],
+    selectedElementIds: []
   });
 
   // 当 AI 图像生成对话框打开时，处理选中内容
@@ -29,6 +31,11 @@ export const TTDDialog = ({ container }: { container: HTMLElement | null }) => {
     if (appState.openDialogType === DialogType.aiImageGeneration) {
       const processSelection = async () => {
         try {
+          // 保存当前选中的元素IDs
+          const selectedElements = getSelectedElements(board);
+          const selectedElementIds = selectedElements.map(el => el.id);
+          console.log('Saving selected element IDs for AI image generation:', selectedElementIds);
+          
           // 使用新的处理逻辑来处理选中的内容
           const processedContent = await processSelectedContentForAI(board);
           
@@ -54,7 +61,8 @@ export const TTDDialog = ({ container }: { container: HTMLElement | null }) => {
           // 设置 AI 图像生成的初始数据
           setAiImageData({
             initialPrompt: processedContent.remainingText || '',
-            initialImages: imageItems
+            initialImages: imageItems,
+            selectedElementIds: selectedElementIds
           });
           
         } catch (error) {
@@ -70,7 +78,8 @@ export const TTDDialog = ({ container }: { container: HTMLElement | null }) => {
           
           setAiImageData({
             initialPrompt: selectedContent.text || '',
-            initialImages: imageItems
+            initialImages: imageItems,
+            selectedElementIds: [] // 回退情况下没有选中元素信息
           });
         }
       };
@@ -144,6 +153,7 @@ export const TTDDialog = ({ container }: { container: HTMLElement | null }) => {
         <AIImageGeneration 
           initialPrompt={aiImageData.initialPrompt}
           initialImages={aiImageData.initialImages}
+          selectedElementIds={aiImageData.selectedElementIds}
         />
       </TDialog>
     </>
