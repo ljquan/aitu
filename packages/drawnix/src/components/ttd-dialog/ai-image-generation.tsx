@@ -6,6 +6,7 @@ import { useI18n } from '../../i18n';
 import { useBoard } from '@plait-board/react-board';
 import { getSelectedElements, PlaitElement, getRectangleByElements, Point } from '@plait/core';
 import { defaultGeminiClient, promptForApiKey } from '../../utils/gemini-api';
+import { geminiSettings } from '../../utils/settings-manager';
 import { insertImageFromUrl } from '../../data/image';
 import { compressImageUrl } from '../../utils/selection-utils';
 import { 
@@ -255,20 +256,43 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
       };
       savePreviewCache(cacheData);
 
-      // 保存到历史记录
-      const historyItem: Omit<ImageHistoryItem, 'type'> = {
-        id: generateHistoryId(),
-        prompt,
-        imageUrl,
-        timestamp: Date.now(),
-        width: typeof width === 'string' ? parseInt(width) || 400 : width,
-        height: typeof height === 'string' ? parseInt(height) || 400 : height
-      };
-      saveImageToHistory(historyItem);
+      // 更新已有的提示词记录，添加生成的图片信息
+      const existingHistory = loadImageHistory();
+      const existingIndex = existingHistory.findIndex(item => item.prompt.trim() === prompt.trim());
       
-      // 更新历史列表状态
-      const newHistoryItem: ImageHistoryItem = { ...historyItem, type: 'image' };
-      setHistoryItems(prev => [newHistoryItem, ...prev.filter(h => h.id !== historyItem.id)].slice(0, 50));
+      if (existingIndex >= 0) {
+        // 如果找到了相同提示词的记录，更新它的图片信息
+        const updatedItem = {
+          ...existingHistory[existingIndex],
+          imageUrl,
+          timestamp: Date.now(), // 更新时间戳
+          width: typeof width === 'string' ? parseInt(width) || 400 : width,
+          height: typeof height === 'string' ? parseInt(height) || 400 : height
+        };
+        
+        // 更新历史记录
+        existingHistory[existingIndex] = updatedItem;
+        localStorage.setItem('image_generation_history', JSON.stringify(existingHistory));
+        
+        // 更新历史列表状态
+        const updatedHistoryItem: ImageHistoryItem = { ...updatedItem, type: 'image' };
+        setHistoryItems(prev => [updatedHistoryItem, ...prev.filter(h => h.id !== updatedItem.id)].slice(0, 50));
+      } else {
+        // 如果没有找到，创建新记录（理论上不应该到这里，因为已在handleGenerate中保存了）
+        const historyItem: Omit<ImageHistoryItem, 'type'> = {
+          id: generateHistoryId(),
+          prompt,
+          imageUrl,
+          timestamp: Date.now(),
+          width: typeof width === 'string' ? parseInt(width) || 400 : width,
+          height: typeof height === 'string' ? parseInt(height) || 400 : height
+        };
+        saveImageToHistory(historyItem);
+        
+        // 更新历史列表状态
+        const newHistoryItem: ImageHistoryItem = { ...historyItem, type: 'image' };
+        setHistoryItems(prev => [newHistoryItem, ...prev.filter(h => h.id !== historyItem.id)].slice(0, 50));
+      }
     } catch (error) {
       console.warn('Failed to preload image, setting anyway:', error);
       // 即使预加载失败，也设置图片URL，让浏览器正常加载
@@ -284,20 +308,43 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
       };
       savePreviewCache(cacheData);
 
-      // 保存到历史记录
-      const historyItem: Omit<ImageHistoryItem, 'type'> = {
-        id: generateHistoryId(),
-        prompt,
-        imageUrl,
-        timestamp: Date.now(),
-        width: typeof width === 'string' ? parseInt(width) || 400 : width,
-        height: typeof height === 'string' ? parseInt(height) || 400 : height
-      };
-      saveImageToHistory(historyItem);
+      // 更新已有的提示词记录，添加生成的图片信息
+      const existingHistory = loadImageHistory();
+      const existingIndex = existingHistory.findIndex(item => item.prompt.trim() === prompt.trim());
       
-      // 更新历史列表状态
-      const newHistoryItem: ImageHistoryItem = { ...historyItem, type: 'image' };
-      setHistoryItems(prev => [newHistoryItem, ...prev.filter(h => h.id !== historyItem.id)].slice(0, 50));
+      if (existingIndex >= 0) {
+        // 如果找到了相同提示词的记录，更新它的图片信息
+        const updatedItem = {
+          ...existingHistory[existingIndex],
+          imageUrl,
+          timestamp: Date.now(), // 更新时间戳
+          width: typeof width === 'string' ? parseInt(width) || 400 : width,
+          height: typeof height === 'string' ? parseInt(height) || 400 : height
+        };
+        
+        // 更新历史记录
+        existingHistory[existingIndex] = updatedItem;
+        localStorage.setItem('image_generation_history', JSON.stringify(existingHistory));
+        
+        // 更新历史列表状态
+        const updatedHistoryItem: ImageHistoryItem = { ...updatedItem, type: 'image' };
+        setHistoryItems(prev => [updatedHistoryItem, ...prev.filter(h => h.id !== updatedItem.id)].slice(0, 50));
+      } else {
+        // 如果没有找到，创建新记录（理论上不应该到这里，因为已在handleGenerate中保存了）
+        const historyItem: Omit<ImageHistoryItem, 'type'> = {
+          id: generateHistoryId(),
+          prompt,
+          imageUrl,
+          timestamp: Date.now(),
+          width: typeof width === 'string' ? parseInt(width) || 400 : width,
+          height: typeof height === 'string' ? parseInt(height) || 400 : height
+        };
+        saveImageToHistory(historyItem);
+        
+        // 更新历史列表状态
+        const newHistoryItem: ImageHistoryItem = { ...historyItem, type: 'image' };
+        setHistoryItems(prev => [newHistoryItem, ...prev.filter(h => h.id !== historyItem.id)].slice(0, 50));
+      }
     } finally {
       updateImageLoading(false);
     }
@@ -366,11 +413,42 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
   // 使用useMemo优化性能，当historyItems或language变化时重新计算
   const presetPrompts = React.useMemo(() => getMergedPresetPrompts(), [historyItems, language]);
 
+  // 保存提示词到历史记录（去重）
+  const savePromptToHistory = (promptText: string) => {
+    if (!promptText.trim()) return;
+
+    // 获取现有的历史记录
+    const existingHistory = loadImageHistory();
+    
+    // 检查是否已存在相同的提示词
+    const isDuplicate = existingHistory.some(item => item.prompt.trim() === promptText.trim());
+    
+    if (!isDuplicate) {
+      // 创建一个临时的历史项目，只用于保存提示词
+      const promptHistoryItem: Omit<ImageHistoryItem, 'type'> = {
+        id: generateHistoryId(),
+        prompt: promptText.trim(),
+        imageUrl: '', // 暂时为空
+        timestamp: Date.now(),
+        width: typeof width === 'string' ? parseInt(width) || 1024 : width,
+        height: typeof height === 'string' ? parseInt(height) || 1024 : height
+      };
+      
+      console.log('Saving prompt to history:', promptText);
+      saveImageToHistory(promptHistoryItem);
+    } else {
+      console.log('Prompt already exists in history, skipping:', promptText);
+    }
+  };
+
   const handleGenerate = async () => {
     if (!prompt.trim()) {
       setError(language === 'zh' ? '请输入图像描述' : 'Please enter image description');
       return;
     }
+
+    // 在生成开始时保存提示词（不管是否生成成功）
+    savePromptToHistory(prompt);
 
     updateIsGenerating(true);
     setError(null);
@@ -485,8 +563,8 @@ Description: ${prompt}`;
         try {
           const newApiKey = await promptForApiKey();
           if (newApiKey) {
-            // 用户输入了新的API Key，更新客户端配置
-            defaultGeminiClient.updateConfig({ apiKey: newApiKey });
+            // 用户输入了新的API Key，更新全局设置
+            geminiSettings.update({ apiKey: newApiKey });
             setError(null); // 清除错误信息
             // 可以选择自动重新生成图片
             // handleGenerate();

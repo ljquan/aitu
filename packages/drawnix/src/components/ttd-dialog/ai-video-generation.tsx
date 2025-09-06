@@ -6,6 +6,7 @@ import { useI18n } from '../../i18n';
 import { useBoard } from '@plait-board/react-board';
 import { getSelectedElements, PlaitElement, getRectangleByElements, Point } from '@plait/core';
 import { defaultGeminiClient, videoGeminiClient, promptForApiKey } from '../../utils/gemini-api';
+import { geminiSettings } from '../../utils/settings-manager';
 import { compressImageUrl, getInsertionPointForSelectedElements } from '../../utils/selection-utils';
 import { insertVideoFromUrl } from '../../data/video';
 import { 
@@ -330,38 +331,75 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
       // 异步生成视频缩略图（使用预览URL）
       const thumbnailPromise = generateVideoThumbnail(videoUrls.previewUrl);
 
-      // 保存到历史记录（先保存基本信息）
-      const historyItem: Omit<VideoHistoryItem, 'type'> = {
-        id: generateHistoryId(),
-        prompt,
-        imageUrl: '', // 先置空，等待缩略图生成
-        width: 400,   // 默认尺寸
-        height: 225,  // 默认尺寸
-        previewUrl: videoUrls.previewUrl,
-        downloadUrl: videoUrls.downloadUrl,
-        timestamp: Date.now()
-      };
+      // 更新已有的提示词记录，添加生成的视频信息
+      const existingHistory = loadVideoHistory();
+      const existingIndex = existingHistory.findIndex(item => item.prompt.trim() === prompt.trim());
+      
+      if (existingIndex >= 0) {
+        // 如果找到了相同提示词的记录，更新它的视频信息
+        const updatedItem = {
+          ...existingHistory[existingIndex],
+          previewUrl: videoUrls.previewUrl,
+          downloadUrl: videoUrls.downloadUrl,
+          timestamp: Date.now(), // 更新时间戳
+        };
+        
+        // 等待缩略图生成完成，然后更新imageUrl
+        try {
+          const thumbnail = await thumbnailPromise;
+          if (thumbnail) {
+            updatedItem.imageUrl = thumbnail; // 使用缩略图作为 imageUrl
+          } else {
+            // 如果缩略图生成失败，使用预览URL
+            updatedItem.imageUrl = videoUrls.previewUrl;
+          }
+        } catch (error) {
+          console.warn('Failed to generate video thumbnail:', error);
+          // 如果缩略图生成失败，使用预览URL
+          updatedItem.imageUrl = videoUrls.previewUrl;
+        }
+        
+        // 更新历史记录
+        existingHistory[existingIndex] = updatedItem;
+        localStorage.setItem('video_generation_history', JSON.stringify(existingHistory));
+        
+        // 更新历史列表状态
+        const updatedHistoryItem: VideoHistoryItem = { ...updatedItem, type: 'video' };
+        setHistoryItems(prev => [updatedHistoryItem, ...prev.filter(h => h.id !== updatedItem.id)].slice(0, 50));
+      } else {
+        // 如果没有找到，创建新记录（理论上不应该到这里，因为已在handleGenerate中保存了）
+        const historyItem: Omit<VideoHistoryItem, 'type'> = {
+          id: generateHistoryId(),
+          prompt,
+          imageUrl: '', // 先置空，等待缩略图生成
+          width: 400,   // 默认尺寸
+          height: 225,  // 默认尺寸
+          previewUrl: videoUrls.previewUrl,
+          downloadUrl: videoUrls.downloadUrl,
+          timestamp: Date.now()
+        };
 
-      // 等待缩略图生成完成，然后更新历史记录
-      try {
-        const thumbnail = await thumbnailPromise;
-        if (thumbnail) {
-          historyItem.imageUrl = thumbnail; // 使用缩略图作为 imageUrl
-        } else {
+        // 等待缩略图生成完成，然后更新历史记录
+        try {
+          const thumbnail = await thumbnailPromise;
+          if (thumbnail) {
+            historyItem.imageUrl = thumbnail; // 使用缩略图作为 imageUrl
+          } else {
+            // 如果缩略图生成失败，使用预览URL
+            historyItem.imageUrl = videoUrls.previewUrl;
+          }
+        } catch (error) {
+          console.warn('Failed to generate video thumbnail:', error);
           // 如果缩略图生成失败，使用预览URL
           historyItem.imageUrl = videoUrls.previewUrl;
         }
-      } catch (error) {
-        console.warn('Failed to generate video thumbnail:', error);
-        // 如果缩略图生成失败，使用预览URL
-        historyItem.imageUrl = videoUrls.previewUrl;
-      }
 
-      saveVideoToHistory(historyItem);
-      
-      // 更新历史列表状态
-      const newHistoryItem: VideoHistoryItem = { ...historyItem, type: 'video' };
-      setHistoryItems(prev => [newHistoryItem, ...prev.filter(h => h.id !== historyItem.id)].slice(0, 50));
+        saveVideoToHistory(historyItem);
+        
+        // 更新历史列表状态
+        const newHistoryItem: VideoHistoryItem = { ...historyItem, type: 'video' };
+        setHistoryItems(prev => [newHistoryItem, ...prev.filter(h => h.id !== historyItem.id)].slice(0, 50));
+      }
     } catch (error) {
       console.warn('Failed to set generated video:', error);
       setGeneratedVideo(videoUrls);
@@ -437,6 +475,36 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
   // 使用useMemo优化性能，当historyItems或language变化时重新计算
   const presetPrompts = React.useMemo(() => getMergedPresetPrompts(), [historyItems, language]);
 
+  // 保存提示词到历史记录（去重）
+  const savePromptToHistory = (promptText: string) => {
+    if (!promptText.trim()) return;
+
+    // 获取现有的历史记录
+    const existingHistory = loadVideoHistory();
+    
+    // 检查是否已存在相同的提示词
+    const isDuplicate = existingHistory.some(item => item.prompt.trim() === promptText.trim());
+    
+    if (!isDuplicate) {
+      // 创建一个临时的历史项目，只用于保存提示词
+      const promptHistoryItem: Omit<VideoHistoryItem, 'type'> = {
+        id: generateHistoryId(),
+        prompt: promptText.trim(),
+        imageUrl: '', // 暂时为空
+        timestamp: Date.now(),
+        width: 400,   // 默认视频尺寸
+        height: 225,  // 默认视频尺寸
+        previewUrl: '',
+        downloadUrl: ''
+      };
+      
+      console.log('Saving prompt to history:', promptText);
+      saveVideoToHistory(promptHistoryItem);
+    } else {
+      console.log('Prompt already exists in history, skipping:', promptText);
+    }
+  };
+
   const handleGenerate = async () => {
     if (!prompt.trim()) {
       setError(language === 'zh' ? '请输入视频描述' : 'Please enter video description');
@@ -447,6 +515,9 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
       setError(language === 'zh' ? '请上传一张图片作为视频生成的源素材' : 'Please upload an image as source material for video generation');
       return;
     }
+
+    // 在生成开始时保存提示词（不管是否生成成功）
+    savePromptToHistory(prompt);
 
     updateIsGenerating(true);
     setError(null);
@@ -573,10 +644,8 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
         try {
           const newApiKey = await promptForApiKey();
           if (newApiKey) {
-            // 用户输入了新的API Key，更新视频客户端配置
-            videoGeminiClient.updateConfig({ apiKey: newApiKey });
-            // 同时也更新默认客户端配置，保持一致性
-            defaultGeminiClient.updateConfig({ apiKey: newApiKey });
+            // 用户输入了新的API Key，更新全局设置
+            geminiSettings.update({ apiKey: newApiKey });
             setError(null); // 清除错误信息
           } else {
             // 用户取消了API Key输入

@@ -517,6 +517,9 @@ export function base64ToBlobUrl(base64Data: string, mimeType: string = 'image/pn
   return URL.createObjectURL(blob);
 }
 
+// 导入通用设置管理器
+import { geminiSettings } from './settings-manager';
+
 // ====================================
 // 主要 API 函数
 // ====================================
@@ -719,45 +722,57 @@ export async function chatWithGemini(
  * 创建 Gemini API 客户端
  */
 export class GeminiClient {
-  private config: GeminiConfig;
+  private configOverrides: Partial<GeminiConfig>;
 
-  constructor(config: GeminiConfig) {
-    this.config = { ...DEFAULT_CONFIG, ...config };
+  constructor(configOverrides: Partial<GeminiConfig> = {}) {
+    this.configOverrides = configOverrides;
   }
 
   /**
-   * 更新配置
+   * 获取当前有效配置（全局设置 + 覆盖设置）
+   */
+  private getEffectiveConfig(): GeminiConfig {
+    const globalSettings = geminiSettings.get();
+    return {
+      ...DEFAULT_CONFIG,
+      ...globalSettings,
+      ...this.configOverrides,
+    };
+  }
+
+  /**
+   * 更新配置覆盖
    */
   updateConfig(newConfig: Partial<GeminiConfig>) {
-    this.config = { ...this.config, ...newConfig };
+    this.configOverrides = { ...this.configOverrides, ...newConfig };
   }
 
   /**
    * 生成图像
    */
   async generateImage(prompt: string, options: { n?: number; size?: string; } = {}) {
-    return generateImageWithGemini(this.config, prompt, options);
+    return generateImageWithGemini(this.getEffectiveConfig(), prompt, options);
   }
 
   /**
    * 生成视频
    */
   async generateVideo(prompt: string, image: ImageInput, options: VideoGenerationOptions = {}) {
-    return generateVideoWithGemini(this.config, prompt, image, options);
+    return generateVideoWithGemini(this.getEffectiveConfig(), prompt, image, options);
   }
 
   /**
    * 聊天对话（支持图片输入）
    */
   async chat(prompt: string, images: ImageInput[] = []) {
-    return chatWithGemini(this.config, prompt, images);
+    return chatWithGemini(this.getEffectiveConfig(), prompt, images);
   }
 
   /**
    * 获取当前配置
    */
   getConfig(): GeminiConfig {
-    return { ...this.config };
+    return this.getEffectiveConfig();
   }
 }
 
@@ -1047,12 +1062,6 @@ function initializeConfig(): { apiKey: string; baseUrl: string } {
   return { apiKey, baseUrl };
 }
 
-/**
- * 初始化apiKey：保持向后兼容
- */
-function initializeApiKey(): string {
-  return initializeConfig().apiKey;
-}
 
 /**
  * 初始化设置：从URL获取settings参数并处理
@@ -1089,20 +1098,11 @@ if (typeof window !== 'undefined') {
 
 /**
  * 创建默认的 Gemini 客户端实例（用于图片生成和聊天）
- * 自动从URL参数或本地存储获取API Key
  */
-export const defaultGeminiClient = new GeminiClient({
-  ...DEFAULT_CONFIG,
-  apiKey: initializeApiKey(),
-  baseUrl: getBaseUrlFromStorage() || 'https://api.tu-zi.com/v1',
-});
+export const defaultGeminiClient = new GeminiClient();
 
 /**
  * 创建视频生成专用的 Gemini 客户端实例
  * 使用veo3模型和更长的超时时间
  */
-export const videoGeminiClient = new GeminiClient({
-  ...VIDEO_DEFAULT_CONFIG,
-  apiKey: initializeApiKey(),
-  baseUrl: getBaseUrlFromStorage() || 'https://api.tu-zi.com/v1',
-});
+export const videoGeminiClient = new GeminiClient(VIDEO_DEFAULT_CONFIG);

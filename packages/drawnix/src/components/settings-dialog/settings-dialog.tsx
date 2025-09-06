@@ -3,7 +3,7 @@ import { useDrawnix } from '../../hooks/use-drawnix';
 import './settings-dialog.scss';
 import { useI18n } from '../../i18n';
 import { useState, useEffect } from 'react';
-import { defaultGeminiClient } from '../../utils/gemini-api';
+import { geminiSettings } from '../../utils/settings-manager';
 import { Tooltip } from 'tdesign-react';
 import { InfoCircleIcon } from 'tdesign-icons-react';
 
@@ -20,24 +20,18 @@ export const SettingsDialog = ({
   // 加载当前配置
   useEffect(() => {
     if (appState.openSettings) {
-      const config = defaultGeminiClient.getConfig();
+      const config = geminiSettings.get();
       setApiKey(config.apiKey || '');
       setBaseUrl(config.baseUrl || 'https://api.tu-zi.com/v1');
     }
   }, [appState.openSettings]);
 
   const handleSave = () => {
-    // 更新 GeminiClient 配置
-    defaultGeminiClient.updateConfig({
+    // 使用全局设置管理器更新配置
+    geminiSettings.update({
       apiKey: apiKey.trim(),
       baseUrl: baseUrl.trim() || 'https://api.tu-zi.com/v1',
     });
-
-    // 保存到本地存储
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('gemini_api_key', apiKey.trim());
-      localStorage.setItem('gemini_base_url', baseUrl.trim() || 'https://api.tu-zi.com/v1');
-    }
 
     // 关闭弹窗
     setAppState({ ...appState, openSettings: false });
