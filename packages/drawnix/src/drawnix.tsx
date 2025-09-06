@@ -40,6 +40,7 @@ import { buildTextLinkPlugin } from './plugins/with-text-link';
 import { LinkPopup } from './components/popup/link-popup/link-popup';
 import { useI18n, I18nProvider } from './i18n';
 import { VersionUpdate } from './components/version-update';
+import { withVideo } from './plugins/with-video';
 
 export type DrawnixProps = {
   value: PlaitElement[];
@@ -107,6 +108,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
     withFreehand,
     buildPencilPlugin(updateAppState),
     buildTextLinkPlugin(updateAppState),
+    withVideo,
   ];
 
   const containerRef = useRef<HTMLDivElement>(null);

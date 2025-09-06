@@ -220,7 +220,7 @@ export const TTDDialog = ({ container }: { container: HTMLElement | null }) => {
           selectedElementIds={aiImageData.selectedElementIds}
         />
       </TDialog>
-      <TDialog
+      {appState.openDialogType === DialogType.aiVideoGeneration &&       <TDialog
         visible={appState.openDialogType === DialogType.aiVideoGeneration}
         onClose={() => {
           // 在关闭前保存AI视频生成的缓存
@@ -259,7 +259,7 @@ export const TTDDialog = ({ container }: { container: HTMLElement | null }) => {
           initialPrompt={aiVideoData.initialPrompt}
           initialImage={aiVideoData.initialImage}
         />
-      </TDialog>
+      </TDialog>}
     </>
   );
 };

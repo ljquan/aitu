@@ -31,6 +31,7 @@
     margin-top: auto;
   }
 
+
   /* Video-specific adjustments when shown in preview */
   .preview-image {
     flex:1;
@@ -41,8 +42,20 @@
     }
   }
 
-  /* Ensure video controls are properly styled */
-  video.preview-image {
+  /* Canvas video component styles */
+  .video-origin {
+    border-radius: 6px;
+    background: #000;
+    
+    &--focus {
+      outline: 2px solid var(--td-brand-color, #0052d9);
+      outline-offset: 2px;
+    }
+    
+    &--selected {
+      box-shadow: 0 0 0 2px var(--td-brand-color, #0052d9);
+    }
+    
     &::-webkit-media-controls {
       border-radius: 6px;
     }

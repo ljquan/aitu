@@ -583,7 +583,6 @@ export async function generateVideoWithGemini(
   response: GeminiResponse;
   processedContent: ProcessedContent;
 }> {
-  debugger
   // 验证并确保配置有效，使用视频生成专用配置
   const validatedConfig = await validateAndEnsureConfig({
     ...VIDEO_DEFAULT_CONFIG,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import './ttd-dialog.scss';
 import './ai-video-generation.scss';
 import { useDrawnix } from '../../hooks/use-drawnix';
@@ -219,6 +219,9 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
 
   // 保存选中元素的ID，用于计算插入位置
   const [selectedElementIds, setSelectedElementIds] = useState<string[]>([]);
+  
+  // 视频元素引用，用于控制播放状态
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   // 检查是否为Invalid Token错误
   const isInvalidTokenError = (errorMessage: string): boolean => {
@@ -237,14 +240,14 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
     }
 
     // 优先使用保存的选中元素ID
-    if (selectedElementIds.length > 0) {
+    if (selectedElementIds.length > 0 && board.children && Array.isArray(board.children)) {
       const allElements = board.children as PlaitElement[];
       const savedSelectedElements = allElements.filter(el => 
         selectedElementIds.includes((el as any).id || '')
       );
       
       if (savedSelectedElements.length > 0) {
-        const rectangle = getRectangleByElements(savedSelectedElements);
+        const rectangle = getRectangleByElements(board, savedSelectedElements, false);
         const centerX = rectangle.x + rectangle.width / 2;
         const bottomY = rectangle.y + rectangle.height + 20; // 在底部留20px间距
         return [centerX, bottomY] as Point;
@@ -252,7 +255,8 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
     }
 
     // 使用工具函数获取当前选中元素的插入位置
-    return getInsertionPointForSelectedElements(board);
+    const calculatedPoint = getInsertionPointForSelectedElements(board);
+    return calculatedPoint || undefined;
   };
 
   // 组件初始化时加载缓存和保存选中元素
@@ -319,6 +323,13 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
 
   // 重置所有状态
   const handleReset = () => {
+    // 暂停并清理视频
+    if (videoRef.current) {
+      videoRef.current.pause();
+      videoRef.current.src = '';
+      videoRef.current.load();
+    }
+    
     setPrompt('');
     setUploadedImage(null);
     setGeneratedVideo(null);
@@ -630,6 +641,18 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
     };
   }, [isGenerating, prompt, uploadedImage, handleGenerate]);
 
+  // 组件卸载时清理视频播放
+  useEffect(() => {
+    return () => {
+      // 暂停视频播放
+      if (videoRef.current) {
+        videoRef.current.pause();
+        videoRef.current.src = '';
+        videoRef.current.load();
+      }
+    };
+  }, []);
+
   return (
     <div className="ai-video-generation-container">
       <div className="main-content">
@@ -843,6 +866,7 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
           ) : generatedVideo ? (
             <div className="preview-image-wrapper">
               <video 
+                ref={videoRef}
                 src={generatedVideo.previewUrl} 
                 controls
                 loop
@@ -949,6 +973,13 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
           <div className="section-actions">
             <button
               onClick={() => {
+                // 暂停并清理视频
+                if (videoRef.current) {
+                  videoRef.current.pause();
+                  videoRef.current.src = '';
+                  videoRef.current.load();
+                }
+                
                 setGeneratedVideo(null);
                 try {
                   localStorage.removeItem(PREVIEW_CACHE_KEY);
