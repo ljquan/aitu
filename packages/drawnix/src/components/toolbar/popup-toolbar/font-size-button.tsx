@@ -53,53 +53,34 @@ export const PopupFontSizeButton: React.FC<PopupFontSizeButtonProps> = ({
   title,
 }) => {
   const [isFontSizePropertyOpen, setIsFontSizePropertyOpen] = useState(false);
-  const [showCustomInput, setShowCustomInput] = useState(false);
-  const [customValue, setCustomValue] = useState('');
+  const [inputValue, setInputValue] = useState('');
   const container = PlaitBoard.getBoardContainer(board);
 
-  const handleSelectChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-    const value = event.target.value;
-    
-    if (value === 'custom') {
-      setShowCustomInput(true);
-      setCustomValue(currentFontSize || '16');
-      return;
-    }
-    
-    if (isValidFontSize(value)) {
-      const fontSize = getFontSizeFromString(value);
+  const handlePresetSizeClick = (size: string) => {
+    if (isValidFontSize(size)) {
+      const fontSize = getFontSizeFromString(size);
       setTextFontSize(board, fontSize);
     }
     setIsFontSizePropertyOpen(false);
   };
 
-  const handleCustomInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setCustomValue(event.target.value);
+  const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setInputValue(event.target.value);
   };
 
-  const handleCustomInputSubmit = (event: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleInputSubmit = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'Enter') {
-      const value = customValue.trim();
+      const value = inputValue.trim();
       if (isValidFontSize(value)) {
         const fontSize = getFontSizeFromString(value);
         setTextFontSize(board, fontSize);
-        setShowCustomInput(false);
+        setInputValue('');
         setIsFontSizePropertyOpen(false);
       }
     } else if (event.key === 'Escape') {
-      setShowCustomInput(false);
-      setCustomValue('');
+      setInputValue('');
+      setIsFontSizePropertyOpen(false);
     }
-  };
-
-  const handleCustomInputBlur = () => {
-    const value = customValue.trim();
-    if (isValidFontSize(value)) {
-      const fontSize = getFontSizeFromString(value);
-      setTextFontSize(board, fontSize);
-    }
-    setShowCustomInput(false);
-    setIsFontSizePropertyOpen(false);
   };
 
   const displaySize = currentFontSize || '16';
@@ -111,7 +92,7 @@ export const PopupFontSizeButton: React.FC<PopupFontSizeButtonProps> = ({
       onOpenChange={(open) => {
         setIsFontSizePropertyOpen(open);
       }}
-      placement={'top'}
+      placement={'bottom'}
     >
       <PopoverTrigger asChild>
         <ToolButton
@@ -135,71 +116,66 @@ export const PopupFontSizeButton: React.FC<PopupFontSizeButtonProps> = ({
           padding={4}
           className={classNames(`${ATTACHED_ELEMENT_CLASS_NAME}`)}
         >
-          <Stack.Col gap={2}>
-            <div style={{ fontSize: '12px', color: '#666' }}>字体大小</div>
-            {showCustomInput ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <input
-                  type="number"
-                  value={customValue}
-                  onChange={handleCustomInputChange}
-                  onKeyDown={handleCustomInputSubmit}
-                  onBlur={handleCustomInputBlur}
-                  placeholder="输入大小"
-                  min="8"
-                  max="100"
+          <Stack.Col gap={1} style={{ minWidth: '140px' }}>
+            <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>字体大小</div>
+            
+            {/* 自定义输入框 */}
+            <div style={{ 
+              padding: '6px 8px', 
+              borderBottom: '1px solid #f0f0f0',
+              backgroundColor: '#fafafa'
+            }}>
+              <input
+                type="number"
+                value={inputValue}
+                onChange={handleInputChange}
+                onKeyDown={handleInputSubmit}
+                placeholder="输入自定义大小"
+                min="8"
+                max="100"
+                style={{
+                  width: '100%',
+                  padding: '3px 6px',
+                  border: '1px solid #dcdcdc',
+                  borderRadius: '3px',
+                  fontSize: '12px',
+                  backgroundColor: '#fff',
+                  outline: 'none',
+                  boxSizing: 'border-box'
+                }}
+              />
+            </div>
+            
+            {/* 预设选项列表 */}
+            <div style={{ maxHeight: '150px', overflowY: 'auto' }}>
+              {fontSizeOptions.map((option) => (
+                <div
+                  key={option.value}
+                  onClick={() => handlePresetSizeClick(option.value)}
                   style={{
-                    width: '80px',
-                    padding: '4px 8px',
-                    border: '1px solid #0052d9',
-                    borderRadius: '4px',
+                    padding: '6px 8px',
                     fontSize: '12px',
-                    backgroundColor: '#fff',
-                    outline: 'none'
+                    cursor: 'pointer',
+                    backgroundColor: currentFontSize === option.value ? '#f0f7ff' : 'transparent',
+                    color: currentFontSize === option.value ? '#0052d9' : '#333',
+                    borderLeft: currentFontSize === option.value ? '3px solid #0052d9' : '3px solid transparent',
+                    transition: 'all 0.2s'
                   }}
-                  autoFocus
-                />
-                <button
-                  onClick={() => {
-                    setShowCustomInput(false);
-                    setCustomValue('');
+                  onMouseEnter={(e) => {
+                    if (currentFontSize !== option.value) {
+                      (e.target as HTMLElement).style.backgroundColor = '#f5f5f5';
+                    }
                   }}
-                  style={{
-                    padding: '2px 6px',
-                    border: '1px solid #dcdcdc',
-                    borderRadius: '3px',
-                    fontSize: '10px',
-                    backgroundColor: '#f5f5f5',
-                    cursor: 'pointer'
+                  onMouseLeave={(e) => {
+                    if (currentFontSize !== option.value) {
+                      (e.target as HTMLElement).style.backgroundColor = 'transparent';
+                    }
                   }}
                 >
-                  取消
-                </button>
-              </div>
-            ) : (
-              <select
-                value=""
-                onChange={handleSelectChange}
-                style={{ 
-                  width: '120px', 
-                  padding: '4px 8px',
-                  border: '1px solid #dcdcdc',
-                  borderRadius: '4px',
-                  fontSize: '12px',
-                  backgroundColor: '#fff'
-                }}
-              >
-                <option value="" disabled>
-                  {currentFontSize ? `${currentFontSize}px` : '选择大小'}
-                </option>
-                {fontSizeOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}px
-                  </option>
-                ))}
-                <option value="custom">其他...</option>
-              </select>
-            )}
+                  {option.label}px
+                </div>
+              ))}
+            </div>
           </Stack.Col>
         </Island>
       </PopoverContent>
