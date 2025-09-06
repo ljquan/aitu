@@ -63,6 +63,99 @@
     }
   }
 
+  /* Video-specific history styles */
+  .history-item-media {
+    flex-shrink: 0;
+    
+    .history-video-thumbnail {
+      position: relative;
+      display: inline-block;
+      
+      .video-play-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.3);
+        border-radius: 4px;
+        opacity: 0;
+        transition: opacity 0.2s ease;
+        pointer-events: none;
+        
+        .play-icon {
+          color: white;
+          font-size: 14px;
+          filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
+        }
+      }
+      
+      &:hover .video-play-overlay {
+        opacity: 1;
+      }
+    }
+    
+    .history-video-placeholder {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 40px;
+      height: 40px;
+      background: var(--td-bg-color-component);
+      border-radius: 4px;
+      
+      .placeholder-icon {
+        font-size: 18px;
+        opacity: 0.6;
+      }
+    }
+  }
+
+  .history-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    
+    &:hover {
+      background: var(--td-bg-color-container-hover);
+    }
+    
+    .history-item-image {
+      width: 40px;
+      height: 40px;
+      object-fit: cover;
+      border-radius: 4px;
+      flex-shrink: 0;
+    }
+    
+    .history-item-info {
+      flex: 1;
+      min-width: 0;
+      
+      .history-item-prompt {
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--td-text-color-primary);
+        margin-bottom: 2px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      
+      .history-item-time {
+        font-size: 11px;
+        color: var(--td-text-color-placeholder);
+      }
+    }
+  }
+
   /* Responsive adjustments */
   @media (max-width: 1024px) {
     .main-content {

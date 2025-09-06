@@ -66,7 +66,7 @@ export interface ProcessedContent {
 // ====================================
 
 const DEFAULT_CONFIG: Partial<GeminiConfig> = {
-  modelName: 'gemini-2.5-flash-image',
+  modelName: 'gemini-2.5-flash-image', // 图片生成和聊天的默认模型
   maxRetries: 10,
   retryDelay: 0,
   timeout: 120000, // 120秒
@@ -155,7 +155,7 @@ async function callApiRaw(
   };
 
   const data = {
-    model: config.modelName || DEFAULT_CONFIG.modelName,
+    model: config.modelName || 'gemini-2.5-flash-image',
     messages,
     stream: false,
   };
@@ -186,9 +186,8 @@ async function callApiStreamRaw(
     'Authorization': `Bearer ${config.apiKey}`,
     'Content-Type': 'application/json',
   };
-
   const data = {
-    model: config.modelName || DEFAULT_CONFIG.modelName,
+    model: config.modelName || 'gemini-2.5-flash-image',
     messages,
     presence_penalty: 0,
     temperature: 0.5,
@@ -401,20 +400,38 @@ async function callApiWithRetry(
 }
 
 /**
- * 处理混合内容（文字、base64图片、URL图片）
+ * 处理混合内容（文字、base64图片、URL图片、视频链接）
  */
-export function processMixedContent(content: string): ProcessedContent {
+export function processMixedContent(content: string): ProcessedContent & {
+  videos?: Array<{
+    type: 'url';
+    data: string;
+    index: number;
+  }>;
+} {
   // 查找 base64 图片
   const base64Pattern = /data:image\/[^;]+;base64,([A-Za-z0-9+/=]+)/g;
   const base64Matches = Array.from(content.matchAll(base64Pattern));
 
-  // 查找 URL 链接
-  const urlPattern = /https?:\/\/[^\s<>"]+\.(png|jpg|jpeg|gif)/gi;
-  const urlMatches = Array.from(content.matchAll(urlPattern));
+  // 查找图片 URL 链接
+  const imageUrlPattern = /https?:\/\/[^\s<>"'\]]+\.(png|jpg|jpeg|gif|webp)/gi;
+  const imageUrlMatches = Array.from(content.matchAll(imageUrlPattern));
+
+  // 查找视频 URL 链接（包括markdown格式）
+  const videoUrlPatterns = [
+    // 匹配markdown链接中的视频URL：[▶️ 在线观看](url) 或 [⏬ 下载视频](url)
+    /\[(?:▶️\s*在线观看|⏬\s*下载视频|.*?观看.*?|.*?下载.*?)\]\(([^)]+\.(?:mp4|avi|mov|wmv|flv|webm|mkv)(?:\?[^)]*)?)\)/gi,
+    // 直接的视频URL
+    /https?:\/\/[^\s<>"'\]]+\.(?:mp4|avi|mov|wmv|flv|webm|mkv)(?:\?[^\s<>"'\]]*)?/gi,
+    // 特定域名的视频链接（如filesystem.site）
+    /https?:\/\/filesystem\.site\/[^\s<>"'\]]+/gi
+  ];
 
   let textContent = content;
   const images: ProcessedContent['images'] = [];
+  const videos: Array<{ type: 'url'; data: string; index: number }> = [];
   let imageIndex = 1;
+  let videoIndex = 1;
 
   // 处理 base64 图片
   for (const match of base64Matches) {
@@ -431,8 +448,8 @@ export function processMixedContent(content: string): ProcessedContent {
     imageIndex++;
   }
 
-  // 处理 URL 图片
-  for (const match of urlMatches) {
+  // 处理图片 URL
+  for (const match of imageUrlMatches) {
     const url = match[0];
 
     images.push({
@@ -445,9 +462,43 @@ export function processMixedContent(content: string): ProcessedContent {
     imageIndex++;
   }
 
+  // 处理视频 URL（按优先级顺序）
+  for (const pattern of videoUrlPatterns) {
+    const matches = Array.from(content.matchAll(pattern));
+    for (const match of matches) {
+      let videoUrl: string;
+      
+      if (match.length > 1 && match[1]) {
+        // markdown链接格式，提取括号内的URL
+        videoUrl = match[1];
+      } else {
+        // 直接的URL
+        videoUrl = match[0];
+      }
+
+      // 清理URL末尾可能的标点符号
+      videoUrl = videoUrl.replace(/[.,;!?]*$/, '');
+      
+      // 检查是否已经添加过这个视频URL
+      const alreadyExists = videos.some(v => v.data === videoUrl);
+      if (!alreadyExists) {
+        videos.push({
+          type: 'url',
+          data: videoUrl,
+          index: videoIndex,
+        });
+
+        // 替换原文中的内容
+        textContent = textContent.replace(match[0], `[视频 ${videoIndex}]`);
+        videoIndex++;
+      }
+    }
+  }
+
   return {
     textContent,
     images,
+    videos: videos.length > 0 ? videos : undefined,
     originalContent: content,
   };
 }
@@ -487,14 +538,13 @@ export async function generateImageWithGemini(
 ): Promise<any> {
   // 验证并确保配置有效
   const validatedConfig = await validateAndEnsureConfig(config);
-
   const headers = {
     'Authorization': `Bearer ${validatedConfig.apiKey}`,
     'Content-Type': 'application/json',
   };
 
   const data = {
-    model: validatedConfig.modelName || DEFAULT_CONFIG.modelName,
+    model: validatedConfig.modelName || 'gemini-2.5-flash-image',
     prompt,
     n: options.n || 1,
     size: options.size || '1024x1024',
@@ -533,6 +583,7 @@ export async function generateVideoWithGemini(
   response: GeminiResponse;
   processedContent: ProcessedContent;
 }> {
+  debugger
   // 验证并确保配置有效，使用视频生成专用配置
   const validatedConfig = await validateAndEnsureConfig({
     ...VIDEO_DEFAULT_CONFIG,
@@ -1038,10 +1089,21 @@ if (typeof window !== 'undefined') {
 }
 
 /**
- * 创建默认的 Gemini 客户端实例
+ * 创建默认的 Gemini 客户端实例（用于图片生成和聊天）
  * 自动从URL参数或本地存储获取API Key
  */
 export const defaultGeminiClient = new GeminiClient({
+  ...DEFAULT_CONFIG,
+  apiKey: initializeApiKey(),
+  baseUrl: getBaseUrlFromStorage() || 'https://api.tu-zi.com/v1',
+});
+
+/**
+ * 创建视频生成专用的 Gemini 客户端实例
+ * 使用veo3模型和更长的超时时间
+ */
+export const videoGeminiClient = new GeminiClient({
+  ...VIDEO_DEFAULT_CONFIG,
   apiKey: initializeApiKey(),
   baseUrl: getBaseUrlFromStorage() || 'https://api.tu-zi.com/v1',
 });

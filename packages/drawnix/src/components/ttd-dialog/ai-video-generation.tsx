@@ -4,8 +4,10 @@ import './ai-video-generation.scss';
 import { useDrawnix } from '../../hooks/use-drawnix';
 import { useI18n } from '../../i18n';
 import { useBoard } from '@plait-board/react-board';
-import { defaultGeminiClient, promptForApiKey } from '../../utils/gemini-api';
-import { compressImageUrl } from '../../utils/selection-utils';
+import { getSelectedElements, PlaitElement, getRectangleByElements, Point } from '@plait/core';
+import { defaultGeminiClient, videoGeminiClient, promptForApiKey } from '../../utils/gemini-api';
+import { compressImageUrl, getInsertionPointForSelectedElements } from '../../utils/selection-utils';
+import { insertVideoFromUrl } from '../../data/video';
 import { HistoryIcon } from 'tdesign-icons-react';
 
 // 预览视频缓存key
@@ -26,9 +28,9 @@ interface HistoryItem {
   id: string;
   prompt: string;
   videoUrl: string;
-  thumbnail?: string;
+  thumbnail?: string; // 视频缩略图（从第一帧提取）
   timestamp: number;
-  sourceImage?: string;
+  sourceImage?: string; // 生成视频的源图片
 }
 
 // 保存预览缓存
@@ -87,6 +89,77 @@ const loadHistory = (): HistoryItem[] => {
   return [];
 };
 
+// 从视频生成缩略图（第一帧）
+const generateVideoThumbnail = async (videoUrl: string): Promise<string | undefined> => {
+  return new Promise((resolve) => {
+    try {
+      const video = document.createElement('video');
+      video.crossOrigin = 'anonymous';
+      video.muted = true;
+      video.playsInline = true;
+      
+      video.onloadeddata = () => {
+        try {
+          // 设置为第一帧（0.1秒处，避免完全黑屏）
+          video.currentTime = 0.1;
+          
+          video.onseeked = () => {
+            try {
+              const canvas = document.createElement('canvas');
+              const ctx = canvas.getContext('2d');
+              
+              if (!ctx) {
+                resolve(undefined);
+                return;
+              }
+              
+              // 设置缩略图尺寸（保持比例）
+              const maxWidth = 80;
+              const maxHeight = 60;
+              const aspectRatio = video.videoWidth / video.videoHeight;
+              
+              let width = maxWidth;
+              let height = maxHeight;
+              
+              if (aspectRatio > maxWidth / maxHeight) {
+                height = maxWidth / aspectRatio;
+              } else {
+                width = maxHeight * aspectRatio;
+              }
+              
+              canvas.width = width;
+              canvas.height = height;
+              
+              // 绘制视频帧
+              ctx.drawImage(video, 0, 0, width, height);
+              
+              // 转换为 base64
+              const thumbnail = canvas.toDataURL('image/jpeg', 0.8);
+              resolve(thumbnail);
+            } catch (error) {
+              console.warn('Failed to generate thumbnail from frame:', error);
+              resolve(undefined);
+            }
+          };
+        } catch (error) {
+          console.warn('Failed to seek video for thumbnail:', error);
+          resolve(undefined);
+        }
+      };
+      
+      video.onerror = () => {
+        console.warn('Failed to load video for thumbnail');
+        resolve(undefined);
+      };
+      
+      video.src = videoUrl;
+    } catch (error) {
+      console.warn('Failed to create video element for thumbnail:', error);
+      resolve(undefined);
+    }
+  });
+};
+
 const getPromptExample = (language: 'zh' | 'en') => {
   if (language === 'zh') {
     return `让图片中的小猫缓缓转头看向镜头，眼睛慢慢眨动，尾巴轻轻摆动`;
@@ -133,6 +206,10 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
 
   const { appState, setAppState } = useDrawnix();
   const { language } = useI18n();
+  const board = useBoard();
+
+  // 保存选中元素的ID，用于计算插入位置
+  const [selectedElementIds, setSelectedElementIds] = useState<string[]>([]);
 
   // 检查是否为Invalid Token错误
   const isInvalidTokenError = (errorMessage: string): boolean => {
@@ -143,14 +220,48 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
            message.includes('api_error') && message.includes('invalid');
   };
 
-  // 组件初始化时加载缓存
+  // 计算视频插入位置
+  const calculateInsertionPoint = (): Point | undefined => {
+    if (!board) {
+      console.warn('Board is not available');
+      return undefined;
+    }
+
+    // 优先使用保存的选中元素ID
+    if (selectedElementIds.length > 0) {
+      const allElements = board.children as PlaitElement[];
+      const savedSelectedElements = allElements.filter(el => 
+        selectedElementIds.includes((el as any).id || '')
+      );
+      
+      if (savedSelectedElements.length > 0) {
+        const rectangle = getRectangleByElements(savedSelectedElements);
+        const centerX = rectangle.x + rectangle.width / 2;
+        const bottomY = rectangle.y + rectangle.height + 20; // 在底部留20px间距
+        return [centerX, bottomY] as Point;
+      }
+    }
+
+    // 使用工具函数获取当前选中元素的插入位置
+    return getInsertionPointForSelectedElements(board);
+  };
+
+  // 组件初始化时加载缓存和保存选中元素
   useEffect(() => {
     const cachedData = loadPreviewCache();
     if (cachedData) {
       setPrompt(cachedData.prompt);
       setGeneratedVideo(cachedData.generatedVideo);
     }
-  }, []);
+
+    // 保存当前选中的元素ID，用于后续插入位置计算
+    if (board) {
+      const currentSelectedElements = getSelectedElements(board);
+      const elementIds = currentSelectedElements.map(el => (el as any).id || '').filter(Boolean);
+      setSelectedElementIds(elementIds);
+      console.log('Saved selected element IDs for video insertion:', elementIds);
+    }
+  }, [board]);
 
   // 加载历史记录
   useEffect(() => {
@@ -228,7 +339,10 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
       };
       savePreviewCache(cacheData);
 
-      // 保存到历史记录
+      // 异步生成视频缩略图
+      const thumbnailPromise = generateVideoThumbnail(videoUrl);
+
+      // 保存到历史记录（先保存基本信息）
       const historyItem: HistoryItem = {
         id: `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
         prompt,
@@ -236,6 +350,17 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
         timestamp: Date.now(),
         sourceImage: uploadedImage instanceof File ? URL.createObjectURL(uploadedImage) : uploadedImage?.url
       };
+
+      // 等待缩略图生成完成，然后更新历史记录
+      try {
+        const thumbnail = await thumbnailPromise;
+        if (thumbnail) {
+          historyItem.thumbnail = thumbnail;
+        }
+      } catch (error) {
+        console.warn('Failed to generate video thumbnail:', error);
+      }
+
       saveToHistory(historyItem);
       
       // 更新历史列表状态
@@ -357,33 +482,72 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
         imageInput = { url: uploadedImage.url };
       }
       
-      // 调用新的视频生成API
-      const result = await defaultGeminiClient.generateVideo(prompt, imageInput);
+      // 调用新的视频生成API（使用专用的视频客户端）
+      const result = await videoGeminiClient.generateVideo(prompt, imageInput);
       
       // 从响应中提取内容
       const responseContent = result.response.choices[0]?.message?.content || '';
       console.log('Video Generation API response:', responseContent);
       
-      // 先检查是否有处理过的内容（可能包含视频）
+      // 优先检查处理过的内容中是否包含视频
       if (result.processedContent && (result.processedContent as any).videos && (result.processedContent as any).videos.length > 0) {
         // 如果响应中包含视频，使用第一个视频
         const firstVideo = (result.processedContent as any).videos[0];
         if (firstVideo.type === 'url') {
+          console.log('Found video in processed content:', firstVideo.data);
           await setGeneratedVideoWithPreload(firstVideo.data);
         }
       } else {
-        // 尝试从文本响应中提取视频URL
-        const urlMatch = responseContent.match(/https?:\/\/[^\s<>"'\n]+/);
-        if (urlMatch) {
-          const videoUrl = urlMatch[0].replace(/[.,;!?]*$/, ''); // 移除末尾的标点符号
-          console.log('Extracted video URL:', videoUrl);
+        // 如果处理过的内容中没有视频，尝试其他方法提取
+        console.log('No videos found in processed content, trying alternative extraction...');
+        
+        // 方法1: 尝试提取markdown格式的视频链接
+        const markdownVideoMatch = responseContent.match(/\[(?:▶️\s*在线观看|⏬\s*下载视频|.*?观看.*?)\]\(([^)]+)\)/i);
+        if (markdownVideoMatch && markdownVideoMatch[1]) {
+          const videoUrl = markdownVideoMatch[1].replace(/[.,;!?]*$/, '');
+          console.log('Extracted video URL from markdown:', videoUrl);
           await setGeneratedVideoWithPreload(videoUrl);
         } else {
-          setError(
-            language === 'zh' 
-              ? `视频生成API无法生成视频。响应: ${responseContent.substring(0, 100)}...` 
-              : `Video Generation API unable to generate video. Response: ${responseContent.substring(0, 100)}...`
-          );
+          // 方法2: 尝试提取任何视频格式的URL
+          const videoUrlMatch = responseContent.match(/https?:\/\/[^\s<>"'\n]+\.(?:mp4|avi|mov|wmv|flv|webm|mkv)(?:\?[^\s<>"'\n]*)?/i);
+          if (videoUrlMatch) {
+            const videoUrl = videoUrlMatch[0].replace(/[.,;!?]*$/, '');
+            console.log('Extracted video URL by extension:', videoUrl);
+            await setGeneratedVideoWithPreload(videoUrl);
+          } else {
+            // 方法3: 尝试提取filesystem.site的链接
+            const filesystemMatch = responseContent.match(/https?:\/\/filesystem\.site\/[^\s<>"'\n)]+/i);
+            if (filesystemMatch) {
+              const videoUrl = filesystemMatch[0].replace(/[.,;!?]*$/, '');
+              console.log('Extracted filesystem.site URL:', videoUrl);
+              await setGeneratedVideoWithPreload(videoUrl);
+            } else {
+              // 方法4: 通用URL提取（作为最后的尝试）
+              const generalUrlMatch = responseContent.match(/https?:\/\/[^\s<>"'\n)]+/);
+              if (generalUrlMatch) {
+                const potentialUrl = generalUrlMatch[0].replace(/[.,;!?]*$/, '');
+                // 检查URL是否可能是视频链接
+                if (potentialUrl.includes('filesystem.site') || potentialUrl.includes('cdn') || potentialUrl.match(/\.(mp4|avi|mov|wmv|flv|webm|mkv)/i)) {
+                  console.log('Extracted potential video URL:', potentialUrl);
+                  await setGeneratedVideoWithPreload(potentialUrl);
+                } else {
+                  console.log('No suitable video URL found in response');
+                  setError(
+                    language === 'zh' 
+                      ? `视频生成API无法生成视频。响应: ${responseContent.substring(0, 200)}...` 
+                      : `Video Generation API unable to generate video. Response: ${responseContent.substring(0, 200)}...`
+                  );
+                }
+              } else {
+                console.log('No URLs found in response');
+                setError(
+                  language === 'zh' 
+                    ? `视频生成API无法生成视频。响应: ${responseContent.substring(0, 200)}...` 
+                    : `Video Generation API unable to generate video. Response: ${responseContent.substring(0, 200)}...`
+                );
+              }
+            }
+          }
         }
       }
     } catch (err) {
@@ -396,7 +560,9 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
         try {
           const newApiKey = await promptForApiKey();
           if (newApiKey) {
-            // 用户输入了新的API Key，更新客户端配置
+            // 用户输入了新的API Key，更新视频客户端配置
+            videoGeminiClient.updateConfig({ apiKey: newApiKey });
+            // 同时也更新默认客户端配置，保持一致性
             defaultGeminiClient.updateConfig({ apiKey: newApiKey });
             setError(null); // 清除错误信息
           } else {
@@ -710,29 +876,29 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
                             className="history-item"
                             onClick={() => selectFromHistory(item)}
                           >
-                            {item.thumbnail ? (
-                              <img
-                                src={item.thumbnail}
-                                alt="Video thumbnail"
-                                className="history-item-image"
-                                loading="lazy"
-                              />
-                            ) : (
-                              <div className="history-item-image" style={{ 
-                                display: 'flex', 
-                                alignItems: 'center', 
-                                justifyContent: 'center',
-                                width: '40px',
-                                height: '40px',
-                                background: 'var(--td-bg-color-component)',
-                                borderRadius: '4px',
-                                fontSize: '18px'
-                              }}>🎬</div>
-                            )}
+                            <div className="history-item-media">
+                              {item.thumbnail ? (
+                                <div className="history-video-thumbnail">
+                                  <img
+                                    src={item.thumbnail}
+                                    alt="Video thumbnail"
+                                    className="history-item-image"
+                                    loading="lazy"
+                                  />
+                                  <div className="video-play-overlay">
+                                    <div className="play-icon">▶</div>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="history-item-image history-video-placeholder">
+                                  <div className="placeholder-icon">🎬</div>
+                                </div>
+                              )}
+                            </div>
                             <div className="history-item-info">
                               <div className="history-item-prompt" title={item.prompt}>
-                                {item.prompt.length > 30 
-                                  ? `${item.prompt.slice(0, 30)}...` 
+                                {item.prompt.length > 25 
+                                  ? `${item.prompt.slice(0, 25)}...` 
                                   : item.prompt}
                               </div>
                               <div className="history-item-time">
@@ -758,7 +924,7 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
           )}
         </div>
         
-        {/* 插入和清除按钮区域 */}
+        {/* 插入、下载和清除按钮区域 */}
         {generatedVideo && (
           <div className="section-actions">
             <button
@@ -776,6 +942,53 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
               {language === 'zh' ? '清除' : 'Clear'}
             </button>
             <button
+              onClick={async () => {
+                if (generatedVideo) {
+                  try {
+                    console.log('Starting video insertion with URL...', generatedVideo);
+                    
+                    // 调试：检查当前选中状态
+                    const currentSelectedElements = board ? getSelectedElements(board) : [];
+                    console.log('Current selected elements:', currentSelectedElements.length, currentSelectedElements);
+                    console.log('Saved selected element IDs:', selectedElementIds);
+                    
+                    // 计算插入位置
+                    const insertionPoint = calculateInsertionPoint();
+                    console.log('Calculated insertion point:', insertionPoint);
+                    
+                    await insertVideoFromUrl(board, generatedVideo, insertionPoint);
+                    
+                    console.log('Video inserted successfully!');
+                    
+                    // 清除缓存
+                    try {
+                      localStorage.removeItem(PREVIEW_CACHE_KEY);
+                    } catch (error) {
+                      console.warn('Failed to clear cache:', error);
+                    }
+                    
+                    // 关闭对话框
+                    setAppState({ ...appState, openDialogType: null });
+                    
+                  } catch (err) {
+                    console.error('Insert video error:', err);
+                    setError(
+                      language === 'zh' 
+                        ? '视频插入失败，请稍后重试' 
+                        : 'Video insertion failed, please try again later'
+                    );
+                  }
+                }
+              }}
+              disabled={isGenerating || videoLoading}
+              className="action-button primary"
+            >
+              {videoLoading 
+                ? (language === 'zh' ? '加载中...' : 'Loading...')
+                : (language === 'zh' ? '插入视频' : 'Insert Video')
+              }
+            </button>
+            <button
               onClick={() => {
                 if (generatedVideo) {
                   // 创建一个临时链接来下载视频
@@ -785,9 +998,6 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
                   document.body.appendChild(link);
                   link.click();
                   document.body.removeChild(link);
-                  
-                  // 关闭对话框
-                  setAppState({ ...appState, openDialogType: null });
                 }
               }}
               disabled={isGenerating || videoLoading}
