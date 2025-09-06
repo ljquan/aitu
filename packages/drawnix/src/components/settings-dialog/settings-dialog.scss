@@ -31,6 +31,28 @@
     color: #333;
   }
 
+  &__label-with-tooltip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+
+    .settings-dialog__label {
+      margin-bottom: 0;
+    }
+  }
+
+  &__tooltip-icon {
+    font-size: 14px;
+    cursor: pointer;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+
+    &:hover {
+      opacity: 1;
+    }
+  }
+
   &__input {
     width: 100%;
     padding: 8px 12px;
