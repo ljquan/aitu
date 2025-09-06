@@ -15,7 +15,7 @@ import {
 } from '@plait/core';
 import { useEffect, useRef, useState } from 'react';
 import { useBoard } from '@plait-board/react-board';
-import { flip, offset, shift, useFloating, autoPlacement } from '@floating-ui/react';
+import { flip, offset, shift, useFloating } from '@floating-ui/react';
 import { Island } from '../../island';
 import classNames from 'classnames';
 import {
@@ -44,6 +44,7 @@ import { AIImageIcon } from '../../icons';
 import { useDrawnix, DialogType } from '../../../hooks/use-drawnix';
 import { useI18n } from '../../../i18n';
 import { ToolButton } from '../../tool-button';
+import { useGlobalMousePosition, getCurrentMousePosition } from '../../../hooks/use-global-mouse-position';
 
 export const PopupToolbar = () => {
   const board = useBoard();
@@ -54,7 +55,9 @@ export const PopupToolbar = () => {
   const movingOrDraggingRef = useRef(movingOrDragging);
   const [isInitialPositioning, setIsInitialPositioning] = useState(true);
   const isInitialPositioningRef = useRef(isInitialPositioning);
-  const [mousePosition, setMousePosition] = useState<{x: number, y: number} | null>(null);
+  
+  // 初始化全局鼠标位置跟踪
+  useGlobalMousePosition();
   const open =
     selectedElements.length > 0 &&
     !isSelectionMoving(board);
@@ -112,12 +115,13 @@ export const PopupToolbar = () => {
         let referenceX, referenceY;
         
         if (isInitialPositioning) {
-          // First time positioning - try to use mouse position if available
-          if (mousePosition) {
-            referenceX = mousePosition.x;
-            referenceY = mousePosition.y;
+          // First time positioning - use current global mouse position
+          const currentMousePos = getCurrentMousePosition();
+          if (currentMousePos.x > 0 && currentMousePos.y > 0) {
+            referenceX = currentMousePos.x;
+            referenceY = currentMousePos.y;
           } else {
-            // Fallback to selection center if no mouse position
+            // Fallback to selection center if no valid mouse position
             const elements = getSelectedElements(board);
             const rectangle = getRectangleByElements(board, elements, false);
             const [start, end] = RectangleClient.getPoints(rectangle);
@@ -169,7 +173,6 @@ export const PopupToolbar = () => {
       // Reset positioning state when toolbar is closed
       setIsInitialPositioning(true);
       isInitialPositioningRef.current = true;
-      setMousePosition(null);
     }
   }, [viewport, selection, children, movingOrDragging]);
 
@@ -185,14 +188,6 @@ export const PopupToolbar = () => {
     const { pointerUp, pointerMove } = board;
 
     board.pointerMove = (event: PointerEvent) => {
-      // Update mouse position for toolbar positioning
-      if (isInitialPositioningRef.current) {
-        setMousePosition({
-          x: event.clientX,
-          y: event.clientY
-        });
-      }
-      
       if (
         (isMovingElements(board) || isDragging(board)) &&
         !movingOrDraggingRef.current
@@ -203,24 +198,13 @@ export const PopupToolbar = () => {
     };
 
     board.pointerUp = (event: PointerEvent) => {
-      // Update mouse position for toolbar positioning
-      if (isInitialPositioningRef.current) {
-        setMousePosition({
-          x: event.clientX,
-          y: event.clientY
-        });
-      }
-      
-      // Call original pointerUp first to ensure selection state is updated
-      pointerUp(event);
-      
-      // Then handle our state updates
       if (
         movingOrDraggingRef.current &&
         (isMovingElements(board) || isDragging(board))
       ) {
         setMovingOrDragging(false);
       }
+      pointerUp(event);
     };
 
     return () => {
