@@ -1,10 +1,7 @@
 import {
-  getHitElementByPoint,
-  getSelectedElements,
   PlaitBoard,
   Point,
 } from '@plait/core';
-import { DrawTransforms } from '@plait/draw';
 import { getInsertionPointForSelectedElements } from '../utils/selection-utils';
 
 /**
@@ -29,7 +26,7 @@ export const getVideoDimensions = (videoUrl: string): Promise<VideoDimensions> =
     return dimensionsCache.get(videoUrl)!;
   }
   
-  const promise = new Promise<VideoDimensions>((resolve, reject) => {
+  const promise = new Promise<VideoDimensions>((resolve) => {
     const video = document.createElement('video');
     video.crossOrigin = 'anonymous';
     video.muted = true;
@@ -69,17 +66,21 @@ export const getVideoDimensions = (videoUrl: string): Promise<VideoDimensions> =
         clearTimeout(timeout);
         video.src = '';
         
+        console.warn('Failed to get video dimensions, using defaults:', error);
         // 从缓存中移除失败的URL
         dimensionsCache.delete(videoUrl);
         
-        reject(error);
+        // 使用默认尺寸而不是抛出错误
+        resolve({
+          width: 400,
+          height: 225
+        });
       }
     };
     
     video.onerror = (error) => {
       clearTimeout(timeout);
       console.warn('Failed to load video metadata for dimensions:', error);
-      video.src = '';
       
       // 从缓存中移除失败的URL
       dimensionsCache.delete(videoUrl);
@@ -142,20 +143,22 @@ export const insertVideoFromUrl = async (
       insertionPoint = [100, 100] as Point;
     }
     
-    console.log('Inserting video as image element with real dimensions:', dimensions, 'at point:', insertionPoint);
+    console.log('Inserting video element with real dimensions:', dimensions, 'at point:', insertionPoint);
     
-    // 使用图片插入但添加视频标识属性，使用真实尺寸
+    // 使用图片元素，通过URL后缀识别为视频
     const videoAsImageElement = {
       url: videoUrl,
       width: dimensions.width,
       height: dimensions.height,
-      // 添加自定义属性来标识这是视频
-      videoType: 'video/mp4',
-      isVideo: true,
+      // 不需要额外的标识属性，通过URL后缀就能识别
     };
     
+    console.log('Creating video as image element:', videoAsImageElement);
+    
+    // 使用DrawTransforms插入，但保留视频标识
+    const { DrawTransforms } = await import('@plait/draw');
     DrawTransforms.insertImage(board, videoAsImageElement, insertionPoint);
-    console.log('Video inserted successfully as image element with real dimensions:', dimensions);
+    console.log('Video inserted successfully as video element with real dimensions:', dimensions);
     
   } catch (error) {
     console.error('Failed to insert video:', error);

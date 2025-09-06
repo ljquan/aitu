@@ -3,9 +3,9 @@ import { PlaitVideo, createPlaitVideo } from '../interfaces/video';
 
 export const VideoTransforms = {
   /**
-   * 插入视频到画板
+   * 插入视频到画板 - 现在使用图片+标识的方式
    */
-  insertVideo: (
+  insertVideo: async (
     board: PlaitBoard,
     videoUrl: string,
     startPoint: Point,
@@ -13,11 +13,9 @@ export const VideoTransforms = {
     height: number = 225,
     options?: Partial<PlaitVideo>
   ) => {
-    const videoElement = createPlaitVideo(videoUrl, startPoint, width, height, options);
-    
-    Transforms.insertNode(board, videoElement, [board.children.length]);
-    
-    return videoElement;
+    // 使用新的插入方式，避免创建真正的video类型元素
+    const { insertVideoFromUrl } = await import('../data/video');
+    return insertVideoFromUrl(board, videoUrl, startPoint);
   },
 
   /**

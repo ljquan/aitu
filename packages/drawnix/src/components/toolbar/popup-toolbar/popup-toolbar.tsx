@@ -89,6 +89,7 @@ export const PopupToolbar = () => {
     hasStroke?: boolean;
     hasStrokeStyle?: boolean;
     marks?: Omit<CustomText, 'text'>;
+    hasAIImage?: boolean; // 是否显示AI图像生成按钮
     hasAIVideo?: boolean; // 是否显示AI视频生成按钮
     hasVideoFrame?: boolean; // 是否显示视频帧选择按钮
   } = {
@@ -107,19 +108,28 @@ export const PopupToolbar = () => {
     const hasStrokeStyle =
       selectedElements.some((value) => hasStrokeStyleProperty(board, value)) &&
       !PlaitBoard.hasBeenTextEditing(board);
-    // 检查是否选中了包含图片的元素（单个或多个）
+    // 检查是否选中了视频元素
+    const hasVideoSelected = selectedElements.some(element => isVideoElement(element));
+    
+    // 检查是否选中了包含图片的元素（单个或多个），但排除视频元素
     const hasAIVideo = 
       selectedElements.length > 0 &&
+      !hasVideoSelected &&
       selectedElements.some(element => 
         PlaitDrawElement.isDrawElement(element) &&
         PlaitDrawElement.isImage(element)
       ) &&
       !PlaitBoard.hasBeenTextEditing(board);
+    
     // 检查是否只选中了一个视频元素
     const hasVideoFrame = 
       selectedElements.length === 1 &&
       isVideoElement(selectedElements[0]) &&
       !PlaitBoard.hasBeenTextEditing(board);
+    
+    // AI图像生成按钮：当没有选中视频时才显示
+    const hasAIImage = !hasVideoSelected && !PlaitBoard.hasBeenTextEditing(board);
+    
     state = {
       ...getElementState(board),
       hasFill,
@@ -128,6 +138,7 @@ export const PopupToolbar = () => {
       hasStroke,
       hasStrokeStyle,
       hasText,
+      hasAIImage,
       hasAIVideo,
       hasVideoFrame,
     };
@@ -303,18 +314,20 @@ export const PopupToolbar = () => {
                 title={`Link`}
               ></PopupLinkButton>
             )}
-            <ToolButton
-              className="ai-image"
-              key={5}
-              type="icon"
-              icon={AIImageIcon}
-              visible={true}
-              title={language === 'zh' ? 'AI图像生成' : 'AI Image Generation'}
-              aria-label={language === 'zh' ? 'AI图像生成' : 'AI Image Generation'}
-              onPointerUp={() => {
-                openDialog(DialogType.aiImageGeneration);
-              }}
-            />
+            {state.hasAIImage && (
+              <ToolButton
+                className="ai-image"
+                key={5}
+                type="icon"
+                icon={AIImageIcon}
+                visible={true}
+                title={language === 'zh' ? 'AI图像生成' : 'AI Image Generation'}
+                aria-label={language === 'zh' ? 'AI图像生成' : 'AI Image Generation'}
+                onPointerUp={() => {
+                  openDialog(DialogType.aiImageGeneration);
+                }}
+              />
+            )}
             {state.hasAIVideo && (
               <ToolButton
                 className="ai-video"
