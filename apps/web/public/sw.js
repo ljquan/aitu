@@ -1,6 +1,6 @@
 // Service Worker for PWA functionality and handling CORS issues with external images
 // Version will be replaced during build process
-const APP_VERSION = '0.0.2';
+const APP_VERSION = '0.0.3';
 const CACHE_NAME = `drawnix-v${APP_VERSION}`;
 const IMAGE_CACHE_NAME = `drawnix-images-v${APP_VERSION}`;
 const STATIC_CACHE_NAME = `drawnix-static-v${APP_VERSION}`;
@@ -85,12 +85,49 @@ self.addEventListener('fetch', event => {
   }
 });
 
+// Utility function to perform fetch with retries
+async function fetchWithRetry(request, maxRetries = 2) {
+  let lastError;
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`Fetch attempt ${attempt + 1}/${maxRetries + 1} for:`, request.url);
+      const response = await fetch(request);
+      
+      if (response.ok || response.status < 500) {
+        // Consider 4xx errors as final (don't retry), only retry on 5xx or network errors
+        return response;
+      }
+      
+      if (attempt < maxRetries) {
+        console.warn(`Fetch attempt ${attempt + 1} failed with status ${response.status}, retrying...`);
+        lastError = new Error(`HTTP ${response.status}: ${response.statusText}`);
+        // Wait before retrying (exponential backoff)
+        await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+        continue;
+      }
+      
+      return response;
+    } catch (error) {
+      console.warn(`Fetch attempt ${attempt + 1} failed:`, error.message);
+      lastError = error;
+      
+      if (attempt < maxRetries) {
+        // Wait before retrying (exponential backoff: 1s, 2s, 4s...)
+        await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+      }
+    }
+  }
+  
+  throw lastError;
+}
+
 async function handleStaticRequest(request) {
   try {
-    // In development mode, always fetch from network first
+    // In development mode, always fetch from network first with retry logic
     if (isDevelopment) {
       console.log('Development mode: fetching from network', request.url);
-      return await fetch(request);
+      return await fetchWithRetry(request);
     }
     
     // Production mode: try cache first for static files
@@ -99,8 +136,8 @@ async function handleStaticRequest(request) {
       return cachedResponse;
     }
     
-    // Fetch from network and cache for future use
-    const response = await fetch(request);
+    // Fetch from network with retry logic and cache for future use
+    const response = await fetchWithRetry(request);
     
     // Cache successful responses (only in production)
     if (response && response.status === 200 && !isDevelopment) {
@@ -110,7 +147,7 @@ async function handleStaticRequest(request) {
     
     return response;
   } catch (error) {
-    console.error('Static request failed:', error);
+    console.error('Static request failed after retries:', error);
     
     // Try to return a cached version if available (only in production)
     if (!isDevelopment) {
@@ -142,7 +179,7 @@ async function handleImageRequest(request) {
       return cachedResponse;
     }
     
-    // 尝试多种获取方式
+    // 尝试多种获取方式，每种方式都支持重试
     let response;
     let fetchOptions = [
       // 1. 尝试no-cors模式
@@ -156,11 +193,35 @@ async function handleImageRequest(request) {
     for (let options of fetchOptions) {
       try {
         console.log(`Trying fetch with options:`, options);
-        response = await fetch(request.url, options);
+        
+        // Use retry logic for each fetch attempt
+        let lastError;
+        for (let attempt = 0; attempt <= 2; attempt++) {
+          try {
+            console.log(`Fetch attempt ${attempt + 1}/3 with options:`, options);
+            response = await fetch(request.url, options);
+            
+            if (response && response.status !== 0) {
+              console.log(`Fetch successful with status: ${response.status}`);
+              break;
+            }
+          } catch (fetchError) {
+            console.warn(`Fetch attempt ${attempt + 1} failed:`, fetchError);
+            lastError = fetchError;
+            
+            if (attempt < 2) {
+              // Wait before retrying (exponential backoff)
+              await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+            }
+          }
+        }
         
         if (response && response.status !== 0) {
-          console.log(`Fetch successful with status: ${response.status}`);
           break;
+        }
+        
+        if (lastError) {
+          console.warn(`All fetch attempts failed with options:`, options, lastError);
         }
       } catch (fetchError) {
         console.warn(`Fetch failed with options:`, options, fetchError);

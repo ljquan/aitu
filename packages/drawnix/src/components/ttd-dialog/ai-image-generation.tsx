@@ -179,6 +179,16 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
   useEffect(() => {
     setPrompt(initialPrompt);
     setUploadedImages(initialImages);
+    // 当弹窗重新打开时（有新的初始数据），清除预览图片
+    if (initialPrompt || initialImages.length > 0) {
+      setGeneratedImage(null);
+      // 清除缓存
+      try {
+        localStorage.removeItem(PREVIEW_CACHE_KEY);
+      } catch (error) {
+        console.warn('Failed to clear cache:', error);
+      }
+    }
   }, [initialPrompt, initialImages]);
 
   // 清除错误状态当组件挂载时（对话框打开时）
@@ -661,7 +671,6 @@ Description: ${prompt}`;
                       const isFile = item instanceof File;
                       const src = isFile ? URL.createObjectURL(item) : item.url;
                       const name = isFile ? item.name : item.name;
-                      const size = isFile ? `${(item.size / 1024 / 1024).toFixed(1)}MB` : 'URL';
                       
                       return (
                         <div key={index} className="uploaded-image-item" data-tooltip={src}>
