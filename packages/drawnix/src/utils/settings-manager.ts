@@ -1,7 +1,10 @@
 /**
  * 通用的全局设置管理器
  * 统一管理应用程序的所有配置设置
+ * 支持敏感信息加密存储
  */
+
+import { CryptoUtils } from './crypto-utils';
 
 // ====================================
 // 类型定义
@@ -33,6 +36,12 @@ const DEFAULT_SETTINGS: AppSettings = {
 type SettingsListener<T = any> = (newValue: T, oldValue: T) => void;
 type AnySettingsListener = SettingsListener<any>;
 
+// 需要加密存储的敏感字段列表
+const SENSITIVE_FIELDS = new Set([
+  'gemini.apiKey',
+  // 可以在这里添加其他敏感字段
+]);
+
 // ====================================
 // 设置管理器类
 // ====================================
@@ -45,10 +54,50 @@ class SettingsManager {
   private static instance: SettingsManager;
   private settings: AppSettings;
   private listeners: Map<string, Set<AnySettingsListener>> = new Map();
+  private cryptoAvailable: boolean = false;
+  private initializationPromise: Promise<void> | null = null;
 
   private constructor() {
     this.settings = this.loadSettings();
-    this.initializeFromUrl();
+    this.initializationPromise = this.initializeAsync();
+  }
+
+  /**
+   * 异步初始化
+   */
+  private async initializeAsync(): Promise<void> {
+    try {
+      await this.initializeCrypto();
+      await this.migrateStoredData();
+      this.initializeFromUrl();
+      console.log('SettingsManager initialization completed');
+    } catch (error) {
+      console.error('SettingsManager initialization failed:', error);
+    }
+  }
+
+  /**
+   * 等待初始化完成
+   */
+  public async waitForInitialization(): Promise<void> {
+    if (this.initializationPromise) {
+      await this.initializationPromise;
+    }
+  }
+
+  /**
+   * 初始化加密功能
+   */
+  private async initializeCrypto(): Promise<void> {
+    try {
+      this.cryptoAvailable = await CryptoUtils.testCrypto();
+      if (!this.cryptoAvailable) {
+        console.warn('Crypto functionality is not available, sensitive data will be stored as plain text');
+      }
+    } catch (error) {
+      console.error('Failed to initialize crypto:', error);
+      this.cryptoAvailable = false;
+    }
   }
 
   /**
@@ -59,6 +108,50 @@ class SettingsManager {
       SettingsManager.instance = new SettingsManager();
     }
     return SettingsManager.instance;
+  }
+
+  /**
+   * 检查字段是否为敏感字段
+   */
+  private isSensitiveField(path: string): boolean {
+    return SENSITIVE_FIELDS.has(path);
+  }
+
+  /**
+   * 加密敏感数据
+   */
+  private async encryptSensitiveData(path: string, value: string): Promise<string> {
+    if (!this.isSensitiveField(path) || !this.cryptoAvailable) {
+      return value;
+    }
+
+    try {
+      return await CryptoUtils.encrypt(value);
+    } catch (error) {
+      console.warn(`Failed to encrypt sensitive data for ${path}:`, error);
+      return value; // 加密失败时返回原值
+    }
+  }
+
+  /**
+   * 解密敏感数据
+   */
+  private async decryptSensitiveData(path: string, value: string): Promise<string> {
+    if (!this.isSensitiveField(path) || !this.cryptoAvailable) {
+      return value;
+    }
+
+    // 检查数据是否已加密
+    if (!CryptoUtils.isEncrypted(value)) {
+      return value;
+    }
+
+    try {
+      return await CryptoUtils.decrypt(value);
+    } catch (error) {
+      console.warn(`Failed to decrypt sensitive data for ${path}:`, error);
+      return value; // 解密失败时返回原值
+    }
   }
 
   /**
@@ -82,6 +175,55 @@ class SettingsManager {
     }
 
     return settings;
+  }
+
+  /**
+   * 迁移已存储的数据（处理加密数据）
+   */
+  private async migrateStoredData(): Promise<void> {
+    let hasChanges = false;
+
+    for (const fieldPath of SENSITIVE_FIELDS) {
+      const value = this.getSetting(fieldPath);
+      if (value && typeof value === 'string') {
+        try {
+          // 如果是已加密的数据，解密到内存中
+          if (CryptoUtils.isEncrypted(value)) {
+            const decryptedValue = await this.decryptSensitiveData(fieldPath, value);
+            if (decryptedValue !== value) {
+              this.setNestedValue(this.settings, fieldPath, decryptedValue);
+              console.log(`Decrypted stored sensitive field: ${fieldPath}`);
+              hasChanges = true;
+            }
+          }
+        } catch (error) {
+          console.warn(`Failed to decrypt stored field ${fieldPath}:`, error);
+        }
+      }
+    }
+
+    // 如果有解密操作，重新保存以确保数据一致性
+    if (hasChanges) {
+      await this.saveToStorage();
+    }
+  }
+
+  /**
+   * 设置嵌套对象的值
+   */
+  private setNestedValue(obj: any, path: string, value: any): void {
+    const keys = path.split('.');
+    const lastKey = keys.pop()!;
+    let current = obj;
+    
+    for (const key of keys) {
+      if (!current[key] || typeof current[key] !== 'object') {
+        current[key] = {};
+      }
+      current = current[key];
+    }
+    
+    current[lastKey] = value;
   }
 
   /**
@@ -128,15 +270,42 @@ class SettingsManager {
   /**
    * 保存设置到本地存储
    */
-  private saveToStorage(): void {
+  private async saveToStorage(): Promise<void> {
     if (typeof window === 'undefined') return;
 
     try {
+      // 创建设置副本用于存储
+      const settingsToSave = JSON.parse(JSON.stringify(this.settings));
+      
+      // 加密敏感数据
+      await this.encryptSensitiveDataForStorage(settingsToSave);
+      
       // 使用单个 key 存储序列化的设置
-      const settingsJson = JSON.stringify(this.settings);
+      const settingsJson = JSON.stringify(settingsToSave);
       localStorage.setItem('drawnix_settings', settingsJson);
     } catch (error) {
       console.warn('Failed to save settings to localStorage:', error);
+    }
+  }
+
+  /**
+   * 为存储加密敏感数据
+   */
+  private async encryptSensitiveDataForStorage(settings: AppSettings): Promise<void> {
+    for (const fieldPath of SENSITIVE_FIELDS) {
+      const value = this.getSetting.call({ settings }, fieldPath);
+      if (value && typeof value === 'string') {
+        try {
+          const encryptedValue = await this.encryptSensitiveData(fieldPath, value);
+          if (encryptedValue !== value) {
+            // 只有当加密成功时才更新存储副本
+            this.setNestedValue(settings, fieldPath, encryptedValue);
+            console.log(`Encrypted sensitive field for storage: ${fieldPath}`);
+          }
+        } catch (error) {
+          console.warn(`Failed to encrypt field ${fieldPath} for storage:`, error);
+        }
+      }
     }
   }
 
@@ -168,7 +337,7 @@ class SettingsManager {
   /**
    * 更新特定设置值（支持点记号法）
    */
-  public updateSetting<T = any>(path: string, newValue: T): void {
+  public async updateSetting<T = any>(path: string, newValue: T): Promise<void> {
     const keys = path.split('.');
     const lastKey = keys.pop()!;
     
@@ -188,7 +357,7 @@ class SettingsManager {
     target[lastKey] = newValue;
     
     // 保存到本地存储
-    this.saveToStorage();
+    await this.saveToStorage();
     
     // 通知监听器
     this.notifyListeners(path, newValue, oldValue);
@@ -199,14 +368,14 @@ class SettingsManager {
   /**
    * 批量更新设置
    */
-  public updateSettings(updates: Partial<AppSettings>): void {
+  public async updateSettings(updates: Partial<AppSettings>): Promise<void> {
     const oldSettings = { ...this.settings };
     
     // 深度合并设置
     this.settings = this.deepMerge(this.settings, updates);
     
     // 保存到本地存储
-    this.saveToStorage();
+    await this.saveToStorage();
     
     // 为每个更新的路径通知监听器
     this.notifySettingsChange(oldSettings, this.settings, '');
@@ -292,10 +461,10 @@ class SettingsManager {
   /**
    * 重置设置为默认值
    */
-  public resetSettings(): void {
+  public async resetSettings(): Promise<void> {
     const oldSettings = { ...this.settings };
     this.settings = { ...DEFAULT_SETTINGS };
-    this.saveToStorage();
+    await this.saveToStorage();
     this.notifySettingsChange(oldSettings, this.settings, '');
     console.log('Settings reset to default');
   }
@@ -303,10 +472,10 @@ class SettingsManager {
   /**
    * 重置特定设置为默认值
    */
-  public resetSetting(path: string): void {
+  public async resetSetting(path: string): Promise<void> {
     const defaultValue = this.getSetting.call({ settings: DEFAULT_SETTINGS }, path);
     if (defaultValue !== undefined) {
-      this.updateSetting(path, defaultValue);
+      await this.updateSetting(path, defaultValue);
     }
   }
 }
@@ -325,10 +494,10 @@ export const settingsManager = SettingsManager.getInstance();
  */
 export const geminiSettings = {
   get: () => settingsManager.getSetting<GeminiSettings>('gemini'),
-  update: (settings: Partial<GeminiSettings>) => {
+  update: async (settings: Partial<GeminiSettings>) => {
     const currentGeminiSettings = settingsManager.getSetting<GeminiSettings>('gemini');
     const updatedSettings: GeminiSettings = { ...currentGeminiSettings, ...settings };
-    settingsManager.updateSettings({ gemini: updatedSettings });
+    await settingsManager.updateSettings({ gemini: updatedSettings });
   },
   addListener: (listener: SettingsListener<GeminiSettings>) => {
     settingsManager.addListener('gemini', listener);

@@ -181,6 +181,17 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
     setUploadedImages(initialImages);
   }, [initialPrompt, initialImages]);
 
+  // 清除错误状态当组件挂载时（对话框打开时）
+  useEffect(() => {
+    // 组件挂载时清除之前的错误状态
+    setError(null);
+    
+    // 清理函数：组件卸载时也清除错误状态
+    return () => {
+      setError(null);
+    };
+  }, []); // 空依赖数组，只在组件挂载/卸载时执行
+
   // 处理图片上传
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;

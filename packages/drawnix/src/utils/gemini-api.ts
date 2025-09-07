@@ -620,24 +620,8 @@ export async function generateVideoWithGemini(
 
   // 构建视频生成专用的提示词（根据是否有图片使用不同提示词）
   const videoPrompt = image 
-    ? `Generate a video based on this image and description: "${prompt}"
-
-Requirements:
-- Create a short video (3-5 seconds) based on the provided image
-- Follow the description to animate the image naturally
-- Maintain the original image quality and style
-- Return only the direct video URL in your response
-
-Description: ${prompt}`
-    : `Generate a video based on this description: "${prompt}"
-
-Requirements:
-- Create a short video (3-5 seconds) based on the text description
-- Generate realistic visual content that matches the description
-- Use high quality rendering and smooth motion
-- Return only the direct video URL in your response
-
-Description: ${prompt}`;
+    ? `Generate a video based on this image and description: "${prompt}"`
+    : `Generate a video based on this description: "${prompt}"`;
 
   // 构建消息内容（只有在有图片时才包含图片）
   const contentList = image && imageContent
