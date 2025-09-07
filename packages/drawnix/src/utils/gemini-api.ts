@@ -526,25 +526,25 @@ import { geminiSettings } from './settings-manager';
 
 /**
  * 调用 Gemini API 进行图像生成
- * @param config API 配置
  * @param prompt 提示词
  * @param options 生成选项
  * @returns API 响应结果
  */
 export async function generateImageWithGemini(
-  config: GeminiConfig,
   prompt: string,
   options: {
     n?: number;
     size?: string;
   } = {}
 ): Promise<any> {
-  // 验证并确保配置有效
+  // 直接从设置中获取配置
   const globalSettings = geminiSettings.get();
-  const validatedConfig = await validateAndEnsureConfig({
-    ...config,
-    modelName: config.modelName || globalSettings.imageModelName || DEFAULT_CONFIG.modelName,
-  });
+  const config = {
+    ...DEFAULT_CONFIG,
+    ...globalSettings,
+    modelName: globalSettings.imageModelName || DEFAULT_CONFIG.modelName,
+  };
+  const validatedConfig = await validateAndEnsureConfig(config);
   const headers = {
     'Authorization': `Bearer ${validatedConfig.apiKey}`,
     'Content-Type': 'application/json',
@@ -575,14 +575,12 @@ export async function generateImageWithGemini(
 
 /**
  * 调用 Gemini API 进行视频生成
- * @param config API 配置
  * @param prompt 提示词
  * @param image 输入图片
  * @param options 生成选项
  * @returns API 响应结果
  */
 export async function generateVideoWithGemini(
-  config: GeminiConfig,
   prompt: string,
   image: ImageInput,
   options: VideoGenerationOptions = {}
@@ -590,13 +588,14 @@ export async function generateVideoWithGemini(
   response: GeminiResponse;
   processedContent: ProcessedContent;
 }> {
-  // 验证并确保配置有效，使用视频生成专用配置
+  // 直接从设置中获取配置
   const globalSettings = geminiSettings.get();
-  const validatedConfig = await validateAndEnsureConfig({
+  const config = {
     ...VIDEO_DEFAULT_CONFIG,
+    ...globalSettings,
     modelName: globalSettings.videoModelName || VIDEO_DEFAULT_CONFIG.modelName,
-    ...config
-  });
+  };
+  const validatedConfig = await validateAndEnsureConfig(config);
 
   // 准备图片数据
   let imageContent;
@@ -655,25 +654,25 @@ Description: ${prompt}`;
 
 /**
  * 调用 Gemini API 进行聊天对话（支持图片输入）
- * @param config API 配置
  * @param prompt 提示词
  * @param images 输入图片数组
  * @returns API 响应结果
  */
 export async function chatWithGemini(
-  config: GeminiConfig,
   prompt: string,
   images: ImageInput[] = []
 ): Promise<{
   response: GeminiResponse;
   processedContent: ProcessedContent;
 }> {
-  // 验证并确保配置有效
+  // 直接从设置中获取配置
   const globalSettings = geminiSettings.get();
-  const validatedConfig = await validateAndEnsureConfig({
-    ...config,
-    modelName: config.modelName || globalSettings.imageModelName || DEFAULT_CONFIG.modelName,
-  });
+  const config = {
+    ...DEFAULT_CONFIG,
+    ...globalSettings,
+    modelName: globalSettings.imageModelName || DEFAULT_CONFIG.modelName,
+  };
+  const validatedConfig = await validateAndEnsureConfig(config);
 
   // 准备图片数据
   const imageContents = [];
@@ -732,51 +731,52 @@ export async function chatWithGemini(
  * 创建 Gemini API 客户端
  */
 export class GeminiClient {
-  private configOverrides: Partial<GeminiConfig>;
+  private isVideoClient: boolean;
 
-  constructor(configOverrides: Partial<GeminiConfig> = {}) {
-    this.configOverrides = configOverrides;
+  constructor(isVideoClient: boolean = false) {
+    this.isVideoClient = isVideoClient;
   }
 
   /**
-   * 获取当前有效配置（全局设置 + 覆盖设置）
+   * 获取当前有效配置（直接从 localStorage 实时读取）
    */
   private getEffectiveConfig(): GeminiConfig {
     const globalSettings = geminiSettings.get();
-    return {
-      ...DEFAULT_CONFIG,
-      ...globalSettings,
-      modelName: globalSettings.imageModelName || DEFAULT_CONFIG.modelName,
-      ...this.configOverrides,
-    };
-  }
-
-  /**
-   * 更新配置覆盖
-   */
-  updateConfig(newConfig: Partial<GeminiConfig>) {
-    this.configOverrides = { ...this.configOverrides, ...newConfig };
+    
+    if (this.isVideoClient) {
+      return {
+        ...VIDEO_DEFAULT_CONFIG,
+        ...globalSettings,
+        modelName: globalSettings.videoModelName || VIDEO_DEFAULT_CONFIG.modelName,
+      };
+    } else {
+      return {
+        ...DEFAULT_CONFIG,
+        ...globalSettings,
+        modelName: globalSettings.imageModelName || DEFAULT_CONFIG.modelName,
+      };
+    }
   }
 
   /**
    * 生成图像
    */
   async generateImage(prompt: string, options: { n?: number; size?: string; } = {}) {
-    return generateImageWithGemini(this.getEffectiveConfig(), prompt, options);
+    return generateImageWithGemini(prompt, options);
   }
 
   /**
    * 生成视频
    */
   async generateVideo(prompt: string, image: ImageInput, options: VideoGenerationOptions = {}) {
-    return generateVideoWithGemini(this.getEffectiveConfig(), prompt, image, options);
+    return generateVideoWithGemini(prompt, image, options);
   }
 
   /**
    * 聊天对话（支持图片输入）
    */
   async chat(prompt: string, images: ImageInput[] = []) {
-    return chatWithGemini(this.getEffectiveConfig(), prompt, images);
+    return chatWithGemini(prompt, images);
   }
 
   /**
@@ -791,6 +791,8 @@ export class GeminiClient {
 // 导出默认实例（可选）
 // ====================================
 
+
+
 /**
  * 从URL参数中获取apiKey
  */
@@ -800,7 +802,6 @@ function getApiKeyFromUrl(): string | null {
   const urlParams = new URLSearchParams(window.location.search);
   return urlParams.get('apiKey');
 }
-
 
 /**
  * 从URL参数中获取settings配置
@@ -1001,27 +1002,42 @@ function removeApiKeyFromUrl(): void {
  * 初始化设置：从URL获取settings参数并处理
  */
 export function initializeSettings(): void {
+  // 处理settings参数
   const settings = getSettingsFromUrl();
-  if (settings?.apiKey || settings?.baseUrl) {
+  // 处理单独的apiKey参数
+  const apiKey = getApiKeyFromUrl();
+  
+  if (settings?.apiKey || settings?.baseUrl || apiKey) {
     geminiSettings.update({
-      ...(settings.apiKey && { apiKey: settings.apiKey }),
-      ...(settings.baseUrl && { baseUrl: settings.baseUrl })
+      ...(settings?.apiKey && { apiKey: settings.apiKey }),
+      ...(settings?.baseUrl && { baseUrl: settings.baseUrl }),
+      ...(apiKey && { apiKey: apiKey })
     });
     
-    // Remove settings from URL after processing
+    // Remove parameters from URL after processing
     const url = new URL(window.location.href);
-    url.searchParams.delete('settings');
+    if (settings?.apiKey || settings?.baseUrl) {
+      url.searchParams.delete('settings');
+    }
+    if (apiKey) {
+      url.searchParams.delete('apiKey');
+    }
     window.history.replaceState({}, '', url.toString());
   }
 }
 
 // Initialize settings from URL if present
 if (typeof window !== 'undefined') {
+  // 处理settings参数
   const settings = getSettingsFromUrl();
-  if (settings?.apiKey || settings?.baseUrl) {
+  // 处理单独的apiKey参数
+  const apiKey = getApiKeyFromUrl();
+  
+  if (settings?.apiKey || settings?.baseUrl || apiKey) {
     geminiSettings.update({
-      ...(settings.apiKey && { apiKey: settings.apiKey }),
-      ...(settings.baseUrl && { baseUrl: settings.baseUrl })
+      ...(settings?.apiKey && { apiKey: settings.apiKey }),
+      ...(settings?.baseUrl && { baseUrl: settings.baseUrl }),
+      ...(apiKey && { apiKey: apiKey })
     });
     removeApiKeyFromUrl();
   }
@@ -1030,10 +1046,9 @@ if (typeof window !== 'undefined') {
 /**
  * 创建默认的 Gemini 客户端实例（用于图片生成和聊天）
  */
-export const defaultGeminiClient = new GeminiClient();
+export const defaultGeminiClient = new GeminiClient(false);
 
 /**
  * 创建视频生成专用的 Gemini 客户端实例
- * 使用veo3模型和更长的超时时间
  */
-export const videoGeminiClient = new GeminiClient(VIDEO_DEFAULT_CONFIG);
+export const videoGeminiClient = new GeminiClient(true);

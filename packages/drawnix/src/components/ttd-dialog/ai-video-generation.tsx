@@ -7,7 +7,7 @@ import { useBoard } from '@plait-board/react-board';
 import { getSelectedElements, PlaitElement, getRectangleByElements, Point } from '@plait/core';
 import { defaultGeminiClient, videoGeminiClient, promptForApiKey } from '../../utils/gemini-api';
 import { geminiSettings } from '../../utils/settings-manager';
-import { compressImageUrl, getInsertionPointForSelectedElements } from '../../utils/selection-utils';
+import { /* compressImageUrl, */ getInsertionPointForSelectedElements } from '../../utils/selection-utils';
 import { insertVideoFromUrl } from '../../data/video';
 import { 
   GenerationHistory, 
@@ -527,28 +527,32 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
       // 处理上传的图片
       let imageInput;
       if (uploadedImage instanceof File) {
-        try {
-          // 将File转换为data URL
-          const fileDataUrl = await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result as string);
-            reader.onerror = reject;
-            reader.readAsDataURL(uploadedImage);
-          });
-          
-          // 对base64图片进行压缩处理
-          const compressedDataUrl = await compressImageUrl(fileDataUrl);
-          
-          // 将压缩后的data URL转换回File对象
-          const response = await fetch(compressedDataUrl);
-          const blob = await response.blob();
-          const compressedFile = new File([blob], uploadedImage.name, { type: blob.type || uploadedImage.type });
-          
-          imageInput = { file: compressedFile };
-        } catch (compressionError) {
-          console.warn('Failed to compress uploaded image, using original:', compressionError);
-          imageInput = { file: uploadedImage };
-        }
+        // 注释掉图片压缩逻辑，直接使用原图
+        // try {
+        //   // 将File转换为data URL
+        //   const fileDataUrl = await new Promise<string>((resolve, reject) => {
+        //     const reader = new FileReader();
+        //     reader.onload = () => resolve(reader.result as string);
+        //     reader.onerror = reject;
+        //     reader.readAsDataURL(uploadedImage);
+        //   });
+        //   
+        //   // 对base64图片进行压缩处理
+        //   const compressedDataUrl = await compressImageUrl(fileDataUrl);
+        //   
+        //   // 将压缩后的data URL转换回File对象
+        //   const response = await fetch(compressedDataUrl);
+        //   const blob = await response.blob();
+        //   const compressedFile = new File([blob], uploadedImage.name, { type: blob.type || uploadedImage.type });
+        //   
+        //   imageInput = { file: compressedFile };
+        // } catch (compressionError) {
+        //   console.warn('Failed to compress uploaded image, using original:', compressionError);
+        //   imageInput = { file: uploadedImage };
+        // }
+        
+        // 直接使用原图，不进行压缩
+        imageInput = { file: uploadedImage };
       } else {
         // 对于URL类型的图片，直接传递URL
         imageInput = { url: uploadedImage.url };
