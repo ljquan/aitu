@@ -1,0 +1,62 @@
+[build]
+  # 构建命令
+  command = "npm run build:web"
+  
+  # 发布目录 - Nx构建的web应用输出目录
+  publish = "dist/apps/web"
+  
+  # Node.js版本
+  environment = { NODE_VERSION = "18" }
+
+[build.processing]
+  # 跳过处理，使用原始文件
+  skip_processing = false
+
+[build.processing.css]
+  bundle = true
+  minify = true
+
+[build.processing.js]
+  bundle = true
+  minify = true
+
+# SPA路由重定向规则
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# 安全头设置
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-XSS-Protection = "1; mode=block"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+# 缓存设置
+[[headers]]
+  for = "/static/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]  
+  for = "/*.js"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/*.css"  
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# 部署上下文配置
+[context.production]
+  command = "npm run build:web"
+  
+[context.deploy-preview]
+  command = "npm run build:web"
+  
+[context.branch-deploy]
+  command = "npm run build:web"
