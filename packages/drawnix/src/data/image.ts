@@ -74,7 +74,7 @@ export const insertImage = async (
     MindTransforms.setImage(board, element as MindElement, imageItem);
     return;
   }
-  
+
   if (
     selectedElement &&
     MindElement.isMindElement(board, selectedElement) &&
@@ -87,8 +87,8 @@ export const insertImage = async (
     if (!startPoint && !isDrop) {
       const calculatedPoint = getInsertionPointForSelectedElements(board);
       if (calculatedPoint) {
-        // 调整X坐标，让图片以计算点为中心左右居中显示
-        // 将X坐标向左偏移图片宽度的一半
+        // 图片插入位置应该在所有选中元素垂直居中对齐
+        // 将X坐标向左偏移图片宽度的一半，让图片以计算点为中心显示
         insertionPoint = [calculatedPoint[0] - imageItem.width / 2, calculatedPoint[1]] as Point;
       }
     }
@@ -117,7 +117,6 @@ export const insertImageFromUrl = async (
     MindTransforms.setImage(board, element as MindElement, imageItem);
     return;
   }
-  
   if (
     selectedElement &&
     MindElement.isMindElement(board, selectedElement) &&
@@ -125,15 +124,20 @@ export const insertImageFromUrl = async (
   ) {
     MindTransforms.setImage(board, selectedElement as MindElement, imageItem);
   } else {
-    // If no startPoint is provided and we have selected elements, use the calculated insertion point
+    // 处理插入点逻辑
     let insertionPoint = startPoint;
     if (!startPoint && !isDrop) {
+      // 没有提供起始点时，使用计算的插入点
       const calculatedPoint = getInsertionPointForSelectedElements(board);
       if (calculatedPoint) {
-        // 调整X坐标，让图片以计算点为中心左右居中显示
-        // 将X坐标向左偏移图片宽度的一半
+        // 图片插入位置应该在所有选中元素垂直居中对齐
+        // 将X坐标向左偏移图片宽度的一半，让图片以计算点为中心显示
         insertionPoint = [calculatedPoint[0] - imageItem.width / 2, calculatedPoint[1]] as Point;
       }
+    } else if (startPoint && !isDrop) {
+      // 有提供起始点时，假设这是选中元素的中心点，需要进行居中调整
+      // 将X坐标向左偏移图片宽度的一半，让图片以起始点为中心显示
+      insertionPoint = [startPoint[0] - imageItem.width / 2, startPoint[1]] as Point;
     }
     
     DrawTransforms.insertImage(board, imageItem, insertionPoint);

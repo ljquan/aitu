@@ -211,7 +211,7 @@ export const TTDDialog = ({ container }: { container: HTMLElement | null }) => {
         header={language === 'zh' ? 'AI 图像生成' : 'AI Image Generation'}
         footer={false}
         width="80%"
-        className={`ttd-dialog ${ATTACHED_ELEMENT_CLASS_NAME}`}
+        className={`ttd-dialog`}
         closeOnOverlayClick={false}
         showOverlay={true}
         mode="modal"
@@ -256,7 +256,7 @@ export const TTDDialog = ({ container }: { container: HTMLElement | null }) => {
         header={language === 'zh' ? 'AI 视频生成' : 'AI Video Generation'}
         footer={false}
         width="80%"
-        className={`ttd-dialog ${ATTACHED_ELEMENT_CLASS_NAME}`}
+        className={`ttd-dialog`}
         closeOnOverlayClick={false}
         showOverlay={true}
         mode="modal"
