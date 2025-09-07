@@ -7,7 +7,6 @@ import {
 import { isHotkey } from 'is-hotkey';
 import { addImage, saveAsImage } from '../utils/image';
 import { saveAsJSON } from '../data/json';
-import { insertImage } from '../data/image';
 import { DrawnixState } from '../hooks/use-drawnix';
 import { BoardCreationMode, setCreationMode } from '@plait/common';
 import { MindPointerType } from '@plait/mind';
@@ -52,30 +51,8 @@ export const buildDrawnixHotkeyPlugin = (
         if (isHotkey(['mod+u'])(event)) {
           addImage(board);
         }
-        if (isHotkey(['mod+v'])(event)) {
-          // Paste functionality - let the browser handle clipboard access
-          navigator.clipboard.read().then((clipboardItems) => {
-            for (const clipboardItem of clipboardItems) {
-              for (const type of clipboardItem.types) {
-                if (type.startsWith('image/')) {
-                  clipboardItem.getType(type).then((blob) => {
-                    // Get current mouse position or use center of viewport
-                    const point = PlaitBoard.getMovingPointInBoard(board) || [0, 0];
-                    // Create a file from the blob
-                    const file = new File([blob], 'pasted-image.png', { type: blob.type });
-                    // Insert the image
-                    const imageFile = file;
-                    insertImage(board, imageFile, point, false);
-                  });
-                  return;
-                }
-              }
-            }
-          }).catch((err) => {
-            console.warn('Failed to read clipboard:', err);
-          });
-          event.preventDefault();
-        }
+        // Note: 复制图片粘贴功能由 with-image.tsx 中的 insertFragment 方法处理
+        // 不需要在这里手动处理 Ctrl+V，让 Plait 框架的原生粘贴机制工作
         if (!event.altKey && !event.metaKey && !event.ctrlKey) {
           if (event.key === 'h') {
             BoardTransforms.updatePointerType(board, PlaitPointerType.hand);
