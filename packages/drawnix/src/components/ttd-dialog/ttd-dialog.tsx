@@ -10,6 +10,10 @@ import { useBoard } from '@plait-board/react-board';
 import { useState, useEffect } from 'react';
 import { processSelectedContentForAI, extractSelectedContent } from '../../utils/selection-utils';
 import { ATTACHED_ELEMENT_CLASS_NAME, getSelectedElements } from '@plait/core';
+import { 
+  AI_IMAGE_GENERATION_PREVIEW_CACHE_KEY,
+  AI_VIDEO_GENERATION_PREVIEW_CACHE_KEY 
+} from '../../constants/storage';
 
 export const TTDDialog = ({ container }: { container: HTMLElement | null }) => {
   const { appState, setAppState } = useDrawnix();
@@ -183,13 +187,13 @@ export const TTDDialog = ({ container }: { container: HTMLElement | null }) => {
         visible={appState.openDialogType === DialogType.aiImageGeneration}
         onClose={() => {
           // 在关闭前保存AI图像生成的缓存
-          const cached = localStorage.getItem('ai_image_generation_preview_cache');
+          const cached = localStorage.getItem(AI_IMAGE_GENERATION_PREVIEW_CACHE_KEY);
           if (cached) {
             try {
               const data = JSON.parse(cached);
               // 更新时间戳以保持缓存有效
               data.timestamp = Date.now();
-              localStorage.setItem('ai_image_generation_preview_cache', JSON.stringify(data));
+              localStorage.setItem(AI_IMAGE_GENERATION_PREVIEW_CACHE_KEY, JSON.stringify(data));
             } catch (error) {
               console.warn('Failed to update cache timestamp:', error);
             }
@@ -228,13 +232,13 @@ export const TTDDialog = ({ container }: { container: HTMLElement | null }) => {
         visible={appState.openDialogType === DialogType.aiVideoGeneration}
         onClose={() => {
           // 在关闭前保存AI视频生成的缓存
-          const cached = localStorage.getItem('ai_video_generation_preview_cache');
+          const cached = localStorage.getItem(AI_VIDEO_GENERATION_PREVIEW_CACHE_KEY);
           if (cached) {
             try {
               const data = JSON.parse(cached);
               // 更新时间戳以保持缓存有效
               data.timestamp = Date.now();
-              localStorage.setItem('ai_video_generation_preview_cache', JSON.stringify(data));
+              localStorage.setItem(AI_VIDEO_GENERATION_PREVIEW_CACHE_KEY, JSON.stringify(data));
             } catch (error) {
               console.warn('Failed to update cache timestamp:', error);
             }

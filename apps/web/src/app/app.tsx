@@ -3,14 +3,13 @@ import { initializeData } from './initialize-data';
 import { Drawnix } from '@drawnix/drawnix';
 import { PlaitBoard, PlaitElement, PlaitTheme, Viewport } from '@plait/core';
 import localforage from 'localforage';
+import { OLD_DRAWNIX_LOCAL_DATA_KEY, DRAWNIX_STORE_NAME } from '@drawnix/drawnix';
 
-// 1个月后移出删除兼容
-const OLD_DRAWNIX_LOCAL_DATA_KEY = 'drawnix-local-data';
 const MAIN_BOARD_CONTENT_KEY = 'main_board_content';
 
 localforage.config({
   name: 'Drawnix',
-  storeName: 'drawnix_store',
+  storeName: DRAWNIX_STORE_NAME,
   driver: [localforage.INDEXEDDB, localforage.LOCALSTORAGE],
 });
 

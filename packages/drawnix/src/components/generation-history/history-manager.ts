@@ -1,10 +1,12 @@
 import { ImageHistoryItem, VideoHistoryItem, HistoryItem } from './generation-history';
+import { 
+  AI_IMAGE_GENERATION_HISTORY_KEY,
+  AI_VIDEO_GENERATION_HISTORY_KEY
+} from '../../constants/storage';
 
-// 图片历史记录缓存key
-export const IMAGE_HISTORY_CACHE_KEY = 'ai_image_generation_history';
-
-// 视频历史记录缓存key  
-export const VIDEO_HISTORY_CACHE_KEY = 'ai_video_generation_history';
+// Re-export with original names for backward compatibility
+export const IMAGE_HISTORY_CACHE_KEY = AI_IMAGE_GENERATION_HISTORY_KEY;
+export const VIDEO_HISTORY_CACHE_KEY = AI_VIDEO_GENERATION_HISTORY_KEY;
 
 /**
  * 保存历史记录到localStorage

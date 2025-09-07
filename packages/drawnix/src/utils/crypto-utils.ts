@@ -3,6 +3,8 @@
  * 使用 Web Crypto API 提供安全的数据加密/解密功能
  */
 
+import { DRAWNIX_DEVICE_ID_KEY } from '../constants/storage';
+
 // 加密配置
 const ALGORITHM = 'AES-GCM';
 const KEY_LENGTH = 256;
@@ -58,13 +60,13 @@ export class CryptoUtils {
    * 获取或生成设备唯一标识符
    */
   private static getDeviceId(): string {
-    let deviceId = localStorage.getItem('drawnix_device_id');
+    let deviceId = localStorage.getItem(DRAWNIX_DEVICE_ID_KEY);
     if (!deviceId) {
       // 生成基于时间戳和随机数的设备ID
       const timestamp = Date.now().toString();
       const random = Math.random().toString(36).substring(2);
       deviceId = `${timestamp}-${random}`;
-      localStorage.setItem('drawnix_device_id', deviceId);
+      localStorage.setItem(DRAWNIX_DEVICE_ID_KEY, deviceId);
     }
     return deviceId;
   }

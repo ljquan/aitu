@@ -20,8 +20,7 @@ import {
   extractUserPromptsFromHistory 
 } from '../generation-history';
 
-// 预览图缓存key
-const PREVIEW_CACHE_KEY = 'ai_image_generation_preview_cache';
+import { AI_IMAGE_GENERATION_PREVIEW_CACHE_KEY as PREVIEW_CACHE_KEY } from '../../constants/storage';
 
 // 缓存数据接口
 interface PreviewCache {

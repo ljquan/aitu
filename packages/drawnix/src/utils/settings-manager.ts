@@ -5,6 +5,7 @@
  */
 
 import { CryptoUtils } from './crypto-utils';
+import { DRAWNIX_SETTINGS_KEY } from '../constants/storage';
 
 // ====================================
 // 类型定义
@@ -166,7 +167,7 @@ class SettingsManager {
     let settings = { ...DEFAULT_SETTINGS };
 
     try {
-      const storedSettings = localStorage.getItem('drawnix_settings');
+      const storedSettings = localStorage.getItem(DRAWNIX_SETTINGS_KEY);
       if (storedSettings) {
         const parsedSettings = JSON.parse(storedSettings);
         settings = this.deepMerge(settings, parsedSettings);
@@ -274,7 +275,7 @@ class SettingsManager {
       
       // 使用单个 key 存储序列化的设置
       const settingsJson = JSON.stringify(settingsToSave);
-      localStorage.setItem('drawnix_settings', settingsJson);
+      localStorage.setItem(DRAWNIX_SETTINGS_KEY, settingsJson);
     } catch (error) {
       console.warn('Failed to save settings to localStorage:', error);
     }

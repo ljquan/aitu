@@ -20,8 +20,7 @@ import {
   extractUserPromptsFromHistory 
 } from '../generation-history';
 
-// 预览视频缓存key
-const PREVIEW_CACHE_KEY = 'ai_video_generation_preview_cache';
+import { AI_VIDEO_GENERATION_PREVIEW_CACHE_KEY as PREVIEW_CACHE_KEY } from '../../constants/storage';
 
 // 视频URL接口
 interface VideoUrls {
