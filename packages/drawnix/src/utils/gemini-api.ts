@@ -540,7 +540,11 @@ export async function generateImageWithGemini(
   } = {}
 ): Promise<any> {
   // 验证并确保配置有效
-  const validatedConfig = await validateAndEnsureConfig(config);
+  const globalSettings = geminiSettings.get();
+  const validatedConfig = await validateAndEnsureConfig({
+    ...config,
+    modelName: config.modelName || globalSettings.imageModelName || DEFAULT_CONFIG.modelName,
+  });
   const headers = {
     'Authorization': `Bearer ${validatedConfig.apiKey}`,
     'Content-Type': 'application/json',
@@ -587,8 +591,10 @@ export async function generateVideoWithGemini(
   processedContent: ProcessedContent;
 }> {
   // 验证并确保配置有效，使用视频生成专用配置
+  const globalSettings = geminiSettings.get();
   const validatedConfig = await validateAndEnsureConfig({
     ...VIDEO_DEFAULT_CONFIG,
+    modelName: globalSettings.videoModelName || VIDEO_DEFAULT_CONFIG.modelName,
     ...config
   });
 
@@ -663,7 +669,11 @@ export async function chatWithGemini(
   processedContent: ProcessedContent;
 }> {
   // 验证并确保配置有效
-  const validatedConfig = await validateAndEnsureConfig(config);
+  const globalSettings = geminiSettings.get();
+  const validatedConfig = await validateAndEnsureConfig({
+    ...config,
+    modelName: config.modelName || globalSettings.imageModelName || DEFAULT_CONFIG.modelName,
+  });
 
   // 准备图片数据
   const imageContents = [];
@@ -736,6 +746,7 @@ export class GeminiClient {
     return {
       ...DEFAULT_CONFIG,
       ...globalSettings,
+      modelName: globalSettings.imageModelName || DEFAULT_CONFIG.modelName,
       ...this.configOverrides,
     };
   }
@@ -790,41 +801,6 @@ function getApiKeyFromUrl(): string | null {
   return urlParams.get('apiKey');
 }
 
-/**
- * 从本地存储获取apiKey
- */
-function getApiKeyFromStorage(): string | null {
-  if (typeof window === 'undefined') return null;
-  
-  return localStorage.getItem('gemini_api_key');
-}
-
-/**
- * 从本地存储获取baseUrl
- */
-function getBaseUrlFromStorage(): string | null {
-  if (typeof window === 'undefined') return null;
-  
-  return localStorage.getItem('gemini_base_url');
-}
-
-/**
- * 保存apiKey到本地存储
- */
-function saveApiKeyToStorage(apiKey: string): void {
-  if (typeof window === 'undefined') return;
-  
-  localStorage.setItem('gemini_api_key', apiKey);
-}
-
-/**
- * 保存baseUrl到本地存储
- */
-function saveBaseUrlToStorage(baseUrl: string): void {
-  if (typeof window === 'undefined') return;
-  
-  localStorage.setItem('gemini_base_url', baseUrl);
-}
 
 /**
  * 从URL参数中获取settings配置
@@ -930,7 +906,7 @@ export function promptForApiKey(): Promise<string | null> {
     confirmBtn.addEventListener('click', () => {
       const apiKey = input.value.trim();
       if (apiKey) {
-        saveApiKeyToStorage(apiKey);
+        geminiSettings.update({ apiKey });
         cleanup();
         resolve(apiKey);
       } else {
@@ -971,17 +947,17 @@ async function validateAndEnsureConfig(config: GeminiConfig): Promise<GeminiConf
     throw new Error('Base URL 是必需的');
   }
   
-  // 检查 apiKey，优先从localStorage获取
+  // 检查 apiKey，优先从全局设置获取
   if (!config.apiKey) {
-    // 首先尝试从localStorage获取
-    const storedApiKey = getApiKeyFromStorage();
-    if (storedApiKey) {
+    // 首先尝试从全局设置获取
+    const globalSettings = geminiSettings.get();
+    if (globalSettings.apiKey) {
       // 更新原始config对象
-      config.apiKey = storedApiKey;
+      config.apiKey = globalSettings.apiKey;
       return config;
     }
     
-    // 如果localStorage中也没有，则弹窗获取
+    // 如果全局设置中也没有，则弹窗获取
     const newApiKey = await promptForApiKey();
     if (!newApiKey) {
       throw new Error('API Key 是必需的，操作已取消');
@@ -1019,48 +995,6 @@ function removeApiKeyFromUrl(): void {
   }
 }
 
-/**
- * 初始化配置：从URL获取并缓存，然后清除URL参数
- */
-function initializeConfig(): { apiKey: string; baseUrl: string } {
-  let apiKey = '';
-  let baseUrl = 'https://api.tu-zi.com/v1';
-  
-  // 首先尝试从URL的settings参数获取
-  const settingsFromUrl = getSettingsFromUrl();
-  if (settingsFromUrl) {
-    if (settingsFromUrl.apiKey) {
-      apiKey = settingsFromUrl.apiKey;
-      saveApiKeyToStorage(apiKey);
-    }
-    if (settingsFromUrl.baseUrl) {
-      baseUrl = settingsFromUrl.baseUrl;
-      saveBaseUrlToStorage(baseUrl);
-    }
-  }
-  
-  // 然后尝试从URL的apiKey参数获取（优先级更高）
-  const urlApiKey = getApiKeyFromUrl();
-  if (urlApiKey) {
-    apiKey = urlApiKey;
-    saveApiKeyToStorage(apiKey);
-  }
-  
-  // 如果URL中有参数，清除它们
-  if (settingsFromUrl || urlApiKey) {
-    removeApiKeyFromUrl();
-  }
-  
-  // 如果URL中没有，从本地存储获取
-  if (!apiKey) {
-    apiKey = getApiKeyFromStorage() || '';
-  }
-  if (!settingsFromUrl?.baseUrl) {
-    baseUrl = getBaseUrlFromStorage() || 'https://api.tu-zi.com/v1';
-  }
-  
-  return { apiKey, baseUrl };
-}
 
 
 /**
@@ -1068,13 +1002,12 @@ function initializeConfig(): { apiKey: string; baseUrl: string } {
  */
 export function initializeSettings(): void {
   const settings = getSettingsFromUrl();
-  if (settings?.apiKey) {
-    saveApiKeyToStorage(settings.apiKey);
-  }
-  if (settings?.baseUrl) {
-    saveBaseUrlToStorage(settings.baseUrl);
-  }
   if (settings?.apiKey || settings?.baseUrl) {
+    geminiSettings.update({
+      ...(settings.apiKey && { apiKey: settings.apiKey }),
+      ...(settings.baseUrl && { baseUrl: settings.baseUrl })
+    });
+    
     // Remove settings from URL after processing
     const url = new URL(window.location.href);
     url.searchParams.delete('settings');
@@ -1085,13 +1018,11 @@ export function initializeSettings(): void {
 // Initialize settings from URL if present
 if (typeof window !== 'undefined') {
   const settings = getSettingsFromUrl();
-  if (settings?.apiKey) {
-    saveApiKeyToStorage(settings.apiKey);
-  }
-  if (settings?.baseUrl) {
-    saveBaseUrlToStorage(settings.baseUrl);
-  }
   if (settings?.apiKey || settings?.baseUrl) {
+    geminiSettings.update({
+      ...(settings.apiKey && { apiKey: settings.apiKey }),
+      ...(settings.baseUrl && { baseUrl: settings.baseUrl })
+    });
     removeApiKeyFromUrl();
   }
 }

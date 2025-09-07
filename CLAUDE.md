@@ -57,4 +57,5 @@ Uses React context (`DrawnixContext`) for application state including:
 - Pencil mode toggling
 
 ### Rules
-- UI使用用TDesign
+- UI使用用TDesign，用light主题配色
+- Tooltip 用 theme='light'

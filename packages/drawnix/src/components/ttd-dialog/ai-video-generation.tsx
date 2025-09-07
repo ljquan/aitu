@@ -360,8 +360,7 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
         }
         
         // 更新历史记录
-        existingHistory[existingIndex] = updatedItem;
-        localStorage.setItem('video_generation_history', JSON.stringify(existingHistory));
+        saveVideoToHistory(updatedItem);
         
         // 更新历史列表状态
         const updatedHistoryItem: VideoHistoryItem = { ...updatedItem, type: 'video' };

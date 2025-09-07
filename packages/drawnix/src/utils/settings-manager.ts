@@ -10,6 +10,8 @@
 export interface GeminiSettings {
   apiKey: string;
   baseUrl: string;
+  imageModelName?: string;
+  videoModelName?: string;
 }
 
 export interface AppSettings {
@@ -22,6 +24,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   gemini: {
     apiKey: '',
     baseUrl: 'https://api.tu-zi.com/v1',
+    imageModelName: 'gemini-2.5-flash-image',
+    videoModelName: 'veo3',
   },
 };
 
@@ -65,17 +69,14 @@ class SettingsManager {
       return { ...DEFAULT_SETTINGS };
     }
 
-    const settings = { ...DEFAULT_SETTINGS };
+    let settings = { ...DEFAULT_SETTINGS };
 
     try {
-      // 加载 Gemini 设置
-      const geminiApiKey = localStorage.getItem('gemini_api_key');
-      const geminiBaseUrl = localStorage.getItem('gemini_base_url');
-      
-      if (geminiApiKey) settings.gemini.apiKey = geminiApiKey;
-      if (geminiBaseUrl) settings.gemini.baseUrl = geminiBaseUrl;
-
-
+      const storedSettings = localStorage.getItem('drawnix_settings');
+      if (storedSettings) {
+        const parsedSettings = JSON.parse(storedSettings);
+        settings = this.deepMerge(settings, parsedSettings);
+      }
     } catch (error) {
       console.warn('Failed to load settings from localStorage:', error);
     }
@@ -131,10 +132,9 @@ class SettingsManager {
     if (typeof window === 'undefined') return;
 
     try {
-      // 保存 Gemini 设置
-      localStorage.setItem('gemini_api_key', this.settings.gemini.apiKey);
-      localStorage.setItem('gemini_base_url', this.settings.gemini.baseUrl);
-
+      // 使用单个 key 存储序列化的设置
+      const settingsJson = JSON.stringify(this.settings);
+      localStorage.setItem('drawnix_settings', settingsJson);
     } catch (error) {
       console.warn('Failed to save settings to localStorage:', error);
     }

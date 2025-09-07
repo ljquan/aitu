@@ -16,6 +16,8 @@ export const SettingsDialog = ({
   const { t } = useI18n();
   const [apiKey, setApiKey] = useState('');
   const [baseUrl, setBaseUrl] = useState('');
+  const [imageModelName, setImageModelName] = useState('');
+  const [videoModelName, setVideoModelName] = useState('');
 
   // 加载当前配置
   useEffect(() => {
@@ -23,6 +25,8 @@ export const SettingsDialog = ({
       const config = geminiSettings.get();
       setApiKey(config.apiKey || '');
       setBaseUrl(config.baseUrl || 'https://api.tu-zi.com/v1');
+      setImageModelName(config.imageModelName || 'gemini-2.5-flash-image');
+      setVideoModelName(config.videoModelName || 'veo3');
     }
   }, [appState.openSettings]);
 
@@ -31,6 +35,8 @@ export const SettingsDialog = ({
     geminiSettings.update({
       apiKey: apiKey.trim(),
       baseUrl: baseUrl.trim() || 'https://api.tu-zi.com/v1',
+      imageModelName: imageModelName.trim() || 'gemini-2.5-flash-image',
+      videoModelName: videoModelName.trim() || 'veo3',
     });
 
     // 关闭弹窗
@@ -66,6 +72,7 @@ export const SettingsDialog = ({
                   </div>
                 }
                 placement="top"
+                theme='light'
               >
                 <InfoCircleIcon className="settings-dialog__tooltip-icon" />
               </Tooltip>
@@ -86,6 +93,26 @@ export const SettingsDialog = ({
               value={baseUrl}
               onChange={(e) => setBaseUrl(e.target.value)}
               placeholder="https://api.tu-zi.com/v1"
+            />
+          </div>
+          <div className="settings-dialog__field">
+            <label className="settings-dialog__label">图片模型名称</label>
+            <input
+              type="text"
+              className="settings-dialog__input"
+              value={imageModelName}
+              onChange={(e) => setImageModelName(e.target.value)}
+              placeholder="gemini-2.5-flash-image"
+            />
+          </div>
+          <div className="settings-dialog__field">
+            <label className="settings-dialog__label">视频模型名称</label>
+            <input
+              type="text"
+              className="settings-dialog__input"
+              value={videoModelName}
+              onChange={(e) => setVideoModelName(e.target.value)}
+              placeholder="veo3"
             />
           </div>
         </div>

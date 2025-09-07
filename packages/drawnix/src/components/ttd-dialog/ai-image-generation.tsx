@@ -271,8 +271,7 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
         };
         
         // 更新历史记录
-        existingHistory[existingIndex] = updatedItem;
-        localStorage.setItem('image_generation_history', JSON.stringify(existingHistory));
+        saveImageToHistory(updatedItem);
         
         // 更新历史列表状态
         const updatedHistoryItem: ImageHistoryItem = { ...updatedItem, type: 'image' };
@@ -323,8 +322,7 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
         };
         
         // 更新历史记录
-        existingHistory[existingIndex] = updatedItem;
-        localStorage.setItem('image_generation_history', JSON.stringify(existingHistory));
+        saveImageToHistory(updatedItem);
         
         // 更新历史列表状态
         const updatedHistoryItem: ImageHistoryItem = { ...updatedItem, type: 'image' };
