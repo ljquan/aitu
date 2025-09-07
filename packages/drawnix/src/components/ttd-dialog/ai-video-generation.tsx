@@ -4,6 +4,7 @@ import './ai-video-generation.scss';
 import { useDrawnix } from '../../hooks/use-drawnix';
 import { useI18n } from '../../i18n';
 import { useBoard } from '@plait-board/react-board';
+import { getVideoPrompts, type Language } from '../../constants/prompts';
 import { getSelectedElements, PlaitElement, getRectangleByElements, Point } from '@plait/core';
 import { defaultGeminiClient, videoGeminiClient, promptForApiKey } from '../../utils/gemini-api';
 import { geminiSettings } from '../../utils/settings-manager';
@@ -439,26 +440,8 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
 
   // 获取合并的预设提示词（用户历史 + 默认预设）
   const getMergedPresetPrompts = () => {
-    // 默认预设提示词（适用于无源图片场景）
-    const defaultPrompts = language === 'zh' ? [
-      '生成一个美丽的日出场景，阳光从山峰后缓缓升起，云朵轻柔地飘动',
-      '创造一个森林中的场景，树叶在微风中轻轻摇摆，阳光斑驳',
-      '生成一个海边场景，海浪轻拍岸边，海鸟在空中盘旋',
-      '创建一个花园场景，花朵在微风中轻摆，蝴蝶翩翩起舞',
-      '生成一个雨后场景，水滴从树叶上缓缓滴落，彩虹出现在天空',
-      '创造一个雪花飘落的冬日场景，雪花轻柔地降落',
-      '生成一个星空场景，星星闪烁，云朵缓缓飘过月亮',
-      '创建一个溪流场景，清水在石头间潺潺流淌，鱼儿游过'
-    ] : [
-      'Generate a beautiful sunrise scene where the sun slowly rises from behind mountains with clouds gently floating',
-      'Create a forest scene with leaves swaying gently in the breeze and dappled sunlight',
-      'Generate a beach scene with waves gently lapping the shore and seagulls soaring overhead',
-      'Create a garden scene with flowers swaying in the breeze and butterflies dancing',
-      'Generate a post-rain scene with water drops slowly falling from leaves and a rainbow in the sky',
-      'Create a winter scene with snowflakes gently falling from the sky',
-      'Generate a starry night scene with twinkling stars and clouds slowly drifting past the moon',
-      'Create a stream scene with clear water flowing gently between rocks and fish swimming by'
-    ];
+    // 获取默认预设提示词
+    const defaultPrompts = getVideoPrompts(language as Language);
 
     // 使用工具函数提取用户历史提示词
     const userPrompts = extractUserPromptsFromHistory(historyItems).slice(0, 8);

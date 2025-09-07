@@ -4,6 +4,7 @@ import './ai-image-generation.scss';
 import { useDrawnix } from '../../hooks/use-drawnix';
 import { useI18n } from '../../i18n';
 import { useBoard } from '@plait-board/react-board';
+import { getImagePrompts, type Language } from '../../constants/prompts';
 import { getSelectedElements, PlaitElement, getRectangleByElements, Point } from '@plait/core';
 import { defaultGeminiClient, promptForApiKey } from '../../utils/gemini-api';
 import { geminiSettings } from '../../utils/settings-manager';
@@ -387,26 +388,8 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
 
   // 获取合并的预设提示词（用户历史 + 默认预设）
   const getMergedPresetPrompts = () => {
-    // 默认预设提示词
-    const defaultPrompts = language === 'zh' ? [
-      '一只可爱的小猫坐在窗台上，阳光透过窗户洒在它的毛发上',
-      '美丽的山水风景，青山绿水，云雾缭绕',
-      '现代简约风格的室内设计，明亮宽敞',
-      '夜晚的城市天际线，霓虹灯闪烁',
-      '春天的樱花盛开，粉色花瓣飘落',
-      '科幻风格的太空站，星空背景',
-      '温馨的咖啡厅，暖色调灯光',
-      '抽象艺术风格，色彩丰富的几何图形'
-    ] : [
-      'A cute kitten sitting on a windowsill with sunlight streaming through',
-      'Beautiful mountain landscape with green hills and misty clouds',
-      'Modern minimalist interior design, bright and spacious',
-      'City skyline at night with neon lights glowing',
-      'Cherry blossoms in spring with pink petals falling',
-      'Sci-fi space station with starry background',
-      'Cozy coffee shop with warm ambient lighting',
-      'Abstract art with colorful geometric shapes'
-    ];
+    // 获取默认预设提示词
+    const defaultPrompts = getImagePrompts(language as Language);
 
     // 使用工具函数提取用户历史提示词
     const userPrompts = extractUserPromptsFromHistory(historyItems).slice(0, 8);

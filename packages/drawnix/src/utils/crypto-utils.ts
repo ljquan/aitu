@@ -84,21 +84,6 @@ export class CryptoUtils {
     return `drawnix-v2-${stableInfo}`;
   }
 
-  /**
-   * 生成旧版密码种子 (v1) - 用于向后兼容
-   */
-  private static generateLegacyPasswordSeed(): string {
-    const deviceId = this.getDeviceId();
-    const stableInfo = [
-      deviceId,
-      screen.width,
-      screen.height,
-      navigator.language || 'en-US',
-      Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
-    ].join('-');
-    
-    return `drawnix-v1-${stableInfo}`;
-  }
   
   /**
    * 加密数据
@@ -149,38 +134,19 @@ export class CryptoUtils {
       const iv = this.base64ToArrayBuffer(parsed.iv);
       const salt = this.base64ToArrayBuffer(parsed.salt);
       
-      // 先尝试新版密钥
-      try {
-        const password = this.generatePasswordSeed();
-        const key = await this.deriveKey(password, new Uint8Array(salt));
-        
-        const decrypted = await crypto.subtle.decrypt(
-          { name: ALGORITHM, iv: iv as BufferSource },
-          key,
-          data
-        );
-        
-        const decoder = new TextDecoder();
-        return decoder.decode(decrypted);
-      } catch (newKeyError) {
-        // 新版密钥失败，尝试旧版密钥
-        console.warn('New key failed, trying legacy key:', newKeyError);
-        
-        const legacyPassword = this.generateLegacyPasswordSeed();
-        const legacyKey = await this.deriveKey(legacyPassword, new Uint8Array(salt));
-        
-        const decrypted = await crypto.subtle.decrypt(
-          { name: ALGORITHM, iv: iv as BufferSource },
-          legacyKey,
-          data
-        );
-        
-        const decoder = new TextDecoder();
-        const result = decoder.decode(decrypted);
-        
-        console.log('Successfully decrypted with legacy key, data needs migration');
-        return result;
-      }
+      // 生成解密密钥
+      const password = this.generatePasswordSeed();
+      const key = await this.deriveKey(password, new Uint8Array(salt));
+      
+      // 解密数据
+      const decrypted = await crypto.subtle.decrypt(
+        { name: ALGORITHM, iv: iv as BufferSource },
+        key,
+        data
+      );
+      
+      const decoder = new TextDecoder();
+      return decoder.decode(decrypted);
     } catch (error) {
       console.error('Decryption failed:', error);
       throw new Error('Failed to decrypt data');

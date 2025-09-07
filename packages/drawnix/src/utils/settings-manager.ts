@@ -68,7 +68,6 @@ class SettingsManager {
   private async initializeAsync(): Promise<void> {
     try {
       await this.initializeCrypto();
-      await this.migrateStoredData();
       this.initializeFromUrl();
       console.log('SettingsManager initialization completed');
     } catch (error) {
@@ -133,26 +132,6 @@ class SettingsManager {
     }
   }
 
-  /**
-   * 解密敏感数据
-   */
-  private async decryptSensitiveData(path: string, value: string): Promise<string> {
-    if (!this.isSensitiveField(path) || !this.cryptoAvailable) {
-      return value;
-    }
-
-    // 检查数据是否已加密
-    if (!CryptoUtils.isEncrypted(value)) {
-      return value;
-    }
-
-    try {
-      return await CryptoUtils.decrypt(value);
-    } catch (error) {
-      console.warn(`Failed to decrypt sensitive data for ${path}:`, error);
-      return value; // 解密失败时返回原值
-    }
-  }
 
   /**
    * 从本地存储加载设置
@@ -177,36 +156,6 @@ class SettingsManager {
     return settings;
   }
 
-  /**
-   * 迁移已存储的数据（处理加密数据）
-   */
-  private async migrateStoredData(): Promise<void> {
-    let hasChanges = false;
-
-    for (const fieldPath of SENSITIVE_FIELDS) {
-      const value = this.getSetting(fieldPath);
-      if (value && typeof value === 'string') {
-        try {
-          // 如果是已加密的数据，解密到内存中
-          if (CryptoUtils.isEncrypted(value)) {
-            const decryptedValue = await this.decryptSensitiveData(fieldPath, value);
-            if (decryptedValue !== value) {
-              this.setNestedValue(this.settings, fieldPath, decryptedValue);
-              console.log(`Decrypted stored sensitive field: ${fieldPath}`);
-              hasChanges = true;
-            }
-          }
-        } catch (error) {
-          console.warn(`Failed to decrypt stored field ${fieldPath}:`, error);
-        }
-      }
-    }
-
-    // 如果有解密操作，重新保存以确保数据一致性
-    if (hasChanges) {
-      await this.saveToStorage();
-    }
-  }
 
   /**
    * 设置嵌套对象的值
