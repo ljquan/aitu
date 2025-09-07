@@ -518,7 +518,7 @@ export function base64ToBlobUrl(base64Data: string, mimeType: string = 'image/pn
 }
 
 // 导入通用设置管理器
-import { geminiSettings } from './settings-manager';
+import { geminiSettings, settingsManager } from './settings-manager';
 
 // ====================================
 // 主要 API 函数
@@ -537,6 +537,9 @@ export async function generateImageWithGemini(
     size?: string;
   } = {}
 ): Promise<any> {
+  // 等待设置管理器初始化完成
+  await settingsManager.waitForInitialization();
+  
   // 直接从设置中获取配置
   const globalSettings = geminiSettings.get();
   const config = {
@@ -588,6 +591,9 @@ export async function generateVideoWithGemini(
   response: GeminiResponse;
   processedContent: ProcessedContent;
 }> {
+  // 等待设置管理器初始化完成
+  await settingsManager.waitForInitialization();
+  
   // 直接从设置中获取配置
   const globalSettings = geminiSettings.get();
   const config = {
@@ -668,6 +674,9 @@ export async function chatWithGemini(
   response: GeminiResponse;
   processedContent: ProcessedContent;
 }> {
+  // 等待设置管理器初始化完成
+  await settingsManager.waitForInitialization();
+  
   // 直接从设置中获取配置
   const globalSettings = geminiSettings.get();
   const config = {

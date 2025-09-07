@@ -7,6 +7,7 @@ import {
 import { isHotkey } from 'is-hotkey';
 import { addImage, saveAsImage } from '../utils/image';
 import { saveAsJSON } from '../data/json';
+import { insertImage } from '../data/image';
 import { DrawnixState } from '../hooks/use-drawnix';
 import { BoardCreationMode, setCreationMode } from '@plait/common';
 import { MindPointerType } from '@plait/mind';
@@ -50,6 +51,30 @@ export const buildDrawnixHotkeyPlugin = (
         }
         if (isHotkey(['mod+u'])(event)) {
           addImage(board);
+        }
+        if (isHotkey(['mod+v'])(event)) {
+          // Paste functionality - let the browser handle clipboard access
+          navigator.clipboard.read().then((clipboardItems) => {
+            for (const clipboardItem of clipboardItems) {
+              for (const type of clipboardItem.types) {
+                if (type.startsWith('image/')) {
+                  clipboardItem.getType(type).then((blob) => {
+                    // Get current mouse position or use center of viewport
+                    const point = PlaitBoard.getMovingPointInBoard(board) || [0, 0];
+                    // Create a file from the blob
+                    const file = new File([blob], 'pasted-image.png', { type: blob.type });
+                    // Insert the image
+                    const imageFile = file;
+                    insertImage(board, imageFile, point, false);
+                  });
+                  return;
+                }
+              }
+            }
+          }).catch((err) => {
+            console.warn('Failed to read clipboard:', err);
+          });
+          event.preventDefault();
         }
         if (!event.altKey && !event.metaKey && !event.ctrlKey) {
           if (event.key === 'h') {

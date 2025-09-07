@@ -68,6 +68,8 @@ class SettingsManager {
   private async initializeAsync(): Promise<void> {
     try {
       await this.initializeCrypto();
+      // 加密功能初始化完成后，解密已加载的敏感数据
+      await this.decryptSensitiveDataForLoading(this.settings);
       this.initializeFromUrl();
       console.log('SettingsManager initialization completed');
     } catch (error) {
@@ -132,6 +134,26 @@ class SettingsManager {
     }
   }
 
+  /**
+   * 解密敏感数据
+   */
+  private async decryptSensitiveData(path: string, value: string): Promise<string> {
+    if (!this.isSensitiveField(path) || !this.cryptoAvailable) {
+      return value;
+    }
+
+    try {
+      // 检查数据是否已加密
+      if (CryptoUtils.isEncrypted(value)) {
+        return await CryptoUtils.decrypt(value);
+      }
+      return value; // 如果不是加密数据，返回原值
+    } catch (error) {
+      console.warn(`Failed to decrypt sensitive data for ${path}:`, error);
+      return value; // 解密失败时返回原值
+    }
+  }
+
 
   /**
    * 从本地存储加载设置
@@ -154,6 +176,27 @@ class SettingsManager {
     }
 
     return settings;
+  }
+
+  /**
+   * 为加载的设置解密敏感数据
+   */
+  private async decryptSensitiveDataForLoading(settings: AppSettings): Promise<void> {
+    for (const fieldPath of SENSITIVE_FIELDS) {
+      const value = this.getSetting.call({ settings }, fieldPath);
+      if (value && typeof value === 'string') {
+        try {
+          const decryptedValue = await this.decryptSensitiveData(fieldPath, value);
+          if (decryptedValue !== value) {
+            // 只有当解密成功时才更新设置
+            this.setNestedValue(settings, fieldPath, decryptedValue);
+            console.log(`Decrypted sensitive field: ${fieldPath}`);
+          }
+        } catch (error) {
+          console.warn(`Failed to decrypt field ${fieldPath} during loading:`, error);
+        }
+      }
+    }
   }
 
 
