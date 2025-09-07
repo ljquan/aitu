@@ -18,7 +18,7 @@ Type check: `nx typecheck <project-name>`
 ## Architecture
 
 ### Monorepo Structure
-- `apps/web/` - Main web application (aitu.app)
+- `apps/web/` - Main web application (aitu.chat)
 - `packages/drawnix/` - Core whiteboard library with UI components and plugins
 - `packages/react-board/` - React wrapper for Plait board functionality  
 - `packages/react-text/` - Text rendering and editing components
@@ -50,7 +50,7 @@ Plugins extend functionality through the `withXxx` pattern:
 - `withTextLink` - Link functionality in text
 
 ### State Management
-Uses React context (`DrawnixContext`) for application state including:
+Uses React context (`AituContext`) for application state including:
 - Pointer modes (hand, drawing tools)
 - Mobile detection and responsive behavior
 - Dialog and modal states

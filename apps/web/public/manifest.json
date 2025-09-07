@@ -1,7 +1,7 @@
 {
-  "name": "AI图片视频创作",
-  "short_name": "Drawnix",
-  "description": "Drawnix 是一款强大的AI图片视频创作，集成思维导图、流程图等功能。基于 Plait 框架开发，支持插件扩展，提供自动保存、无限画布等特性。",
+  "name": "爱图 - AI图片视频创作",
+  "short_name": "爱图",
+  "description": "爱图是一款强大的AI图片视频创作工具，集成思维导图、流程图等功能。基于 Plait 框架开发，支持插件扩展，提供自动保存、无限画布等特性。",
   "start_url": "/",
   "display": "standalone",
   "orientation": "any",

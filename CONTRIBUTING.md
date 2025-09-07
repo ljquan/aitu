@@ -1,6 +1,6 @@
 # 贡献指南 Contributing Guide
 
-感谢您对 Drawnix 项目的关注和支持！我们欢迎任何形式的贡献。
+感谢您对爱图(Aitu)项目的关注和支持！我们欢迎任何形式的贡献。
 
 [English](#english) | [中文](#中文)
 
@@ -9,7 +9,7 @@
 ### 🤝 如何贡献
 
 #### 报告问题
-- 在 [Issues](https://github.com/plait-board/drawnix/issues) 页面提交问题
+- 在 [Issues](https://github.com/ljquan/aitu/issues) 页面提交问题
 - 请详细描述问题，包括复现步骤、期望结果和实际结果
 - 附上相关的截图或错误日志
 
@@ -123,7 +123,7 @@ drawnix/
 ### 🤝 How to Contribute
 
 #### Report Issues
-- Submit issues on the [Issues](https://github.com/plait-board/drawnix/issues) page
+- Submit issues on the [Issues](https://github.com/ljquan/aitu/issues) page
 - Provide detailed descriptions including reproduction steps, expected and actual results
 - Attach relevant screenshots or error logs
 
@@ -235,7 +235,7 @@ docs: update installation guide
 
 ## 📞 联系我们
 
-- GitHub Issues: [https://github.com/plait-board/drawnix/issues](https://github.com/plait-board/drawnix/issues)
-- 项目网站: [https://drawnix.com](https://drawnix.com)
+- GitHub Issues: [https://github.com/ljquan/aitu/issues](https://github.com/ljquan/aitu/issues)
+- 项目网站: [https://aitu.chat](https://aitu.chat)
 
 再次感谢您的贡献！🎉

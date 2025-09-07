@@ -93,7 +93,7 @@ aitu/
 
 ## Try It Out
 
-*https://aitu.app* is the online application of *Aitu*.
+*https://aitu.chat* is the online application of *Aitu*.
 
 We will be iterating frequently on application features to continuously optimize user experience.
 
@@ -101,7 +101,7 @@ We will be iterating frequently on application features to continuously optimize
 ## 🚀 Quick Start
 
 ### Online Experience
-Visit [aitu.app](https://aitu.app) directly to start using it immediately, no installation required.
+Visit [aitu.chat](https://aitu.chat) directly to start using it immediately, no installation required.
 
 ### Local Development
 
