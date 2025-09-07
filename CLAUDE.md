@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Drawnix is an open-source whiteboard application built on the Plait framework. It supports mind maps, flowcharts, freehand drawing, image insertion, and AI-powered content generation. The project uses a plugin architecture with React components and is built with Nx as the monorepo management tool.
+Aitu (爱图) is an open-source whiteboard application built on the Plait framework. It supports mind maps, flowcharts, freehand drawing, image insertion, and AI-powered content generation. The project uses a plugin architecture with React components and is built with Nx as the monorepo management tool.
 
 ## Development Commands
 
@@ -18,7 +18,7 @@ Type check: `nx typecheck <project-name>`
 ## Architecture
 
 ### Monorepo Structure
-- `apps/web/` - Main web application (drawnix.com)
+- `apps/web/` - Main web application (aitu.app)
 - `packages/drawnix/` - Core whiteboard library with UI components and plugins
 - `packages/react-board/` - React wrapper for Plait board functionality  
 - `packages/react-text/` - Text rendering and editing components
@@ -27,7 +27,7 @@ Type check: `nx typecheck <project-name>`
 - popup-toolbar
 
 ### Core Components
-- **Drawnix Component** (`packages/drawnix/src/drawnix.tsx`) - Main application wrapper with state management and plugin composition
+- **Aitu Component** (`packages/drawnix/src/drawnix.tsx`) - Main application wrapper with state management and plugin composition
 - **Plugin System** - Extensible architecture with plugins for freehand drawing, mind maps, hotkeys, text editing, and image handling
 - **Toolbar System** - Modular toolbars for creation, zoom, themes, and context-sensitive popup tools
 - **TTD Dialog** - Text-to-diagram conversion supporting Markdown and Mermaid syntax

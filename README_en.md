@@ -7,7 +7,7 @@
 </p>
 <div align="center">
   <h2>
-    Open-source whiteboard tool (SaaS), an all-in-one collaborative canvas that includes mind mapping, flowcharts, freehand and more.
+    Aitu - Open-source whiteboard tool (SaaS), an all-in-one collaborative canvas that includes mind mapping, flowcharts, freehand and more.
   <br />
   </h2>
 </div>
@@ -36,7 +36,7 @@
   <a href="https://trendshift.io/repositories/13979" target="_blank"><img src="https://trendshift.io/api/badge/repositories/13979" alt="plait-board%2Fdrawnix | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 </div>
 
-[*中文*](https://github.com/plait-board/drawnix/blob/develop/README.md)
+[*中文*](https://github.com/ljquan/aitu/blob/develop/README.md)
 
 ## Features
 
@@ -57,27 +57,27 @@
 
 ## About the Name
 
-***Drawnix*** is born from the interweaving of ***Draw*** and ***Phoenix***, a fusion of artistic inspiration.
+***Aitu*** is born from the love of creation and the pursuit of visual expression.
 
-The *Phoenix* symbolizes endless creativity, while *Draw* represents humanity's most fundamental form of expression. Here, each creation is an artistic rebirth, every stroke a renaissance of inspiration.
+*Ai* represents passion and dedication to creation, while *tu* symbolizes the infinite possibilities of visual expression. Here, each creation is a pursuit of beauty, every stroke an extension of imagination.
 
-Like a Phoenix, creativity must rise from the flames to be reborn, and ***Drawnix*** stands as the guardian of both technical and creative fire.
+Creativity stems from inner love, and ***Aitu*** is committed to being a powerful assistant for every creator.
 
-*Draw Beyond, Rise Above.*
+*Love Creation, Visualize the Future.*
 
 ## About Plait Drawing Framework
 
-*Drawnix* is positioned as an out-of-the-box, *open-source*, and free tool product. It is built on top of the *Plait* framework, which is our company's *open-source* drawing framework representing significant technical accumulation in knowledge base products([PingCode Wiki](https://pingcode.com/product/wiki?utm_source=drawnix)).
+*Aitu* is positioned as an out-of-the-box, *open-source*, and free tool product. It is built on top of the *Plait* framework, which is an *open-source* drawing framework representing significant technical accumulation in knowledge visualization products.
 
 
-*Drawnix* uses a *plugin architecture*, which is technically more complex than the previously mentioned *open-source* tools. However, this *plugin architecture* has its advantages: it supports multiple *UI frameworks* (*Angular*, *React*), integrates with different *rich text frameworks* (currently only supporting *Slate* framework), enables better business layer separation in development, allows development of various fine-grained reusable plugins, and can expand to more whiteboard application scenarios.
+*Aitu* uses a *plugin architecture*, which is technically more complex than traditional *open-source* tools. However, this *plugin architecture* has its advantages: it supports multiple *UI frameworks* (*Angular*, *React*), integrates with different *rich text frameworks* (currently only supporting *Slate* framework), enables better business layer separation in development, allows development of various fine-grained reusable plugins, and can expand to more whiteboard application scenarios.
 
 ## Repository Structure
 
 ```
-drawnix/
+aitu/
 ├── apps/
-│   ├── web                   # drawnix.com
+│   ├── web                   # Aitu web application
 │   │    └── index.html       # HTML
 ├── dist/                     # Build artifacts
 ├── packages/
@@ -93,15 +93,15 @@ drawnix/
 
 ## Try It Out
 
-*https://drawnix.com* is the minimal application of *drawnix*.
+*https://aitu.app* is the online application of *Aitu*.
 
-I will be iterating frequently on *drawnix.com* until the release of the *Dawn* version.
+We will be iterating frequently on application features to continuously optimize user experience.
 
 
 ## 🚀 Quick Start
 
 ### Online Experience
-Visit [drawnix.com](https://drawnix.com) directly to start using it immediately, no installation required.
+Visit [aitu.app](https://aitu.app) directly to start using it immediately, no installation required.
 
 ### Local Development
 
@@ -113,8 +113,8 @@ Visit [drawnix.com](https://drawnix.com) directly to start using it immediately,
 
 ```bash
 # Clone the repository
-git clone https://github.com/plait-board/drawnix.git
-cd drawnix
+git clone https://github.com/ljquan/aitu.git
+cd aitu
 
 # Install dependencies
 npm install
@@ -190,10 +190,10 @@ nx test react-board
 
 ### 🔧 Plugin Development
 
-Drawnix is built on a plugin architecture and supports custom extensions:
+Aitu is built on a plugin architecture and supports custom extensions:
 
 ```typescript
-import { withFreehand, withMind, withDraw } from '@drawnix/core';
+import { withFreehand, withMind, withDraw } from '@aitu/core';
 
 // Create editor instance with specific plugins
 const editor = withFreehand(
@@ -207,10 +207,10 @@ const editor = withFreehand(
 
 ```bash
 # Pull image
-docker pull pubuzhixing/drawnix:latest
+docker pull ljquan/aitu:latest
 
 # Run container
-docker run -d -p 8080:80 pubuzhixing/drawnix:latest
+docker run -d -p 8080:80 ljquan/aitu:latest
 ```
 
 Visit `http://localhost:8080` to use.
@@ -273,7 +273,7 @@ We welcome and appreciate any form of contribution!
 ### Ways to Contribute
 
 #### 🐛 Report Issues
-- Use [GitHub Issues](https://github.com/plait-board/drawnix/issues) to report bugs
+- Use [GitHub Issues](https://github.com/ljquan/aitu/issues) to report bugs
 - Please provide detailed reproduction steps and environment information
 - Screenshots or screen recordings would be very helpful
 
@@ -286,7 +286,7 @@ We welcome and appreciate any form of contribution!
 
 1. **Fork the Project**
    ```bash
-   git clone https://github.com/your-username/drawnix.git
+   git clone https://github.com/your-username/aitu.git
    ```
 
 2. **Create Feature Branch**
@@ -365,8 +365,8 @@ nx lint drawnix
 
 ### Getting Help
 - 📖 Check [Documentation](./docs/)
-- 💬 Submit [Issue](https://github.com/plait-board/drawnix/issues)
-- 🗣️ Join [Discussions](https://github.com/plait-board/drawnix/discussions)
+- 💬 Submit [Issue](https://github.com/ljquan/aitu/issues)
+- 🗣️ Join [Discussions](https://github.com/ljquan/aitu/discussions)
 
 ## 🗺️ Roadmap
 
@@ -389,7 +389,7 @@ nx lint drawnix
 - 📅 Open API platform
 - 📅 Desktop client
 
-Follow [Releases](https://github.com/plait-board/drawnix/releases) for release plans.
+Follow [Releases](https://github.com/ljquan/aitu/releases) for release plans.
 
 ## Thank you for supporting
 
@@ -403,4 +403,4 @@ Special thanks to the company for its strong support for open source projects, a
 
 ## License
 
-[MIT License](https://github.com/plait-board/drawnix/blob/master/LICENSE)
+[MIT License](https://github.com/ljquan/aitu/blob/master/LICENSE)

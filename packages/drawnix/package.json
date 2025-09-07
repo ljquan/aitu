@@ -1,5 +1,5 @@
 {
-  "name": "@drawnix/drawnix",
+  "name": "@aitu/drawnix",
   "version": "0.2.1",
   "main": "./index.js",
   "types": "./index.d.ts",
