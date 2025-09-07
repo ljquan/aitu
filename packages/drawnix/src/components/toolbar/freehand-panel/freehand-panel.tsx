@@ -15,7 +15,7 @@ import { splitRows } from '../../../utils/common';
 import {
     DrawnixPointerType,
 } from '../../../hooks/use-drawnix';
-import { useI18n } from '../../../i18n';
+import { useI18n, Translations } from '../../../i18n';
 
 export interface FreehandProps {
     titleKey: string;
@@ -63,8 +63,8 @@ export const FreehandPanel: React.FC<FreehandPickerProps> = ({
                     size={'small'}
                     visible={true}
                     icon={freehand.icon}
-                    title={t(freehand.titleKey)}
-                    aria-label={t(freehand.titleKey)}
+                    title={t(freehand.titleKey as keyof Translations)}
+                    aria-label={t(freehand.titleKey as keyof Translations)}
                     onPointerDown={() => {
                       setCreationMode(board, BoardCreationMode.dnd);
                       BoardTransforms.updatePointerType(board, freehand.pointer);

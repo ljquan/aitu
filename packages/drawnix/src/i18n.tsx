@@ -16,6 +16,7 @@ export interface Translations {
   'toolbar.shape': string;
   'toolbar.image': string;
   'toolbar.aiImage': string;
+  'toolbar.aiVideo': string;
   'toolbar.extraTools': string;
   
   // Zoom controls
@@ -105,6 +106,7 @@ const translations: Record<Language, Translations> = {
     'toolbar.shape': '形状',
     'toolbar.image': '图片 — Cmd+U',
     'toolbar.aiImage': 'AI 图像生成',
+    'toolbar.aiVideo': 'AI 视频生成',
     'toolbar.extraTools': '更多工具',
     
     // Zoom controls
@@ -191,6 +193,7 @@ const translations: Record<Language, Translations> = {
     'toolbar.shape': 'Shape',
     'toolbar.image': 'Image — Cmd+U',
     'toolbar.aiImage': 'AI Image Generation',
+    'toolbar.aiVideo': 'AI Video Generation',
     'toolbar.extraTools': 'Extra Tools',
     
     // Zoom controls

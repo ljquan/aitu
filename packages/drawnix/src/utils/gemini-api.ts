@@ -582,7 +582,7 @@ export async function generateImageWithGemini(
  */
 export async function generateVideoWithGemini(
   prompt: string,
-  image: ImageInput,
+  image: ImageInput | null,
   options: VideoGenerationOptions = {}
 ): Promise<{
   response: GeminiResponse;
@@ -597,24 +597,30 @@ export async function generateVideoWithGemini(
   };
   const validatedConfig = await validateAndEnsureConfig(config);
 
-  // 准备图片数据
+  // 准备图片数据（现在是可选的）
   let imageContent;
-  try {
-    console.log('处理视频生成源图片...');
-    const imageData = await prepareImageData(image);
-    imageContent = {
-      type: 'image_url' as const,
-      image_url: {
-        url: imageData,
-      },
-    };
-  } catch (error) {
-    console.error('处理源图片时出错:', error);
-    throw error;
+  if (image) {
+    try {
+      console.log('处理视频生成源图片...');
+      const imageData = await prepareImageData(image);
+      imageContent = {
+        type: 'image_url' as const,
+        image_url: {
+          url: imageData,
+        },
+      };
+      console.log('视频生成源图片处理完成');
+    } catch (error) {
+      console.error('处理源图片时出错:', error);
+      throw error;
+    }
+  } else {
+    console.log('无源图片，使用纯文本生成视频');
   }
 
-  // 构建视频生成专用的提示词
-  const videoPrompt = `Generate a video based on this image and description: "${prompt}"
+  // 构建视频生成专用的提示词（根据是否有图片使用不同提示词）
+  const videoPrompt = image 
+    ? `Generate a video based on this image and description: "${prompt}"
 
 Requirements:
 - Create a short video (3-5 seconds) based on the provided image
@@ -622,13 +628,26 @@ Requirements:
 - Maintain the original image quality and style
 - Return only the direct video URL in your response
 
+Description: ${prompt}`
+    : `Generate a video based on this description: "${prompt}"
+
+Requirements:
+- Create a short video (3-5 seconds) based on the text description
+- Generate realistic visual content that matches the description
+- Use high quality rendering and smooth motion
+- Return only the direct video URL in your response
+
 Description: ${prompt}`;
 
-  // 构建消息内容
-  const contentList = [
-    { type: 'text' as const, text: videoPrompt },
-    imageContent,
-  ];
+  // 构建消息内容（只有在有图片时才包含图片）
+  const contentList = image && imageContent
+    ? [
+        { type: 'text' as const, text: videoPrompt },
+        imageContent,
+      ]
+    : [
+        { type: 'text' as const, text: videoPrompt },
+      ];
 
   const messages: GeminiMessage[] = [
     {
@@ -768,7 +787,7 @@ export class GeminiClient {
   /**
    * 生成视频
    */
-  async generateVideo(prompt: string, image: ImageInput, options: VideoGenerationOptions = {}) {
+  async generateVideo(prompt: string, image: ImageInput | null, options: VideoGenerationOptions = {}) {
     return generateVideoWithGemini(prompt, image, options);
   }
 

@@ -137,9 +137,9 @@ const generateVideoThumbnail = async (videoUrl: string): Promise<string | undefi
 
 const getPromptExample = (language: 'zh' | 'en') => {
   if (language === 'zh') {
-    return `让图片中的小猫缓缓转头看向镜头，眼睛慢慢眨动，尾巴轻轻摆动`;
+    return `生成一个美丽的日出场景，阳光从山峰后缓缓升起，云朵轻柔地飘动`;
   }
-  return `Make the cat in the image slowly turn its head towards the camera, blink its eyes slowly, and gently sway its tail`;
+  return `Generate a beautiful sunrise scene where the sun slowly rises from behind mountains with clouds gently floating`;
 };
 
 interface AIVideoGenerationProps {
@@ -439,25 +439,25 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
 
   // 获取合并的预设提示词（用户历史 + 默认预设）
   const getMergedPresetPrompts = () => {
-    // 默认预设提示词
+    // 默认预设提示词（适用于无源图片场景）
     const defaultPrompts = language === 'zh' ? [
-      '让图片中的人物缓缓转头看向镜头，微微点头',
-      '图片中的物体轻轻摇摆，营造微风吹动的效果',
-      '让画面中的水面产生涟漪，水波荡漾',
-      '使图片中的花朵轻轻摇摆，花瓣偶尔飘落',
-      '让人物的头发在风中轻柔摆动',
-      '使背景中的树叶缓缓摇动，阳光斑驳',
-      '让动物的眼睛慢慢眨动，显得生动活泼',
-      '使画面产生轻微的景深变化，聚焦效果'
+      '生成一个美丽的日出场景，阳光从山峰后缓缓升起，云朵轻柔地飘动',
+      '创造一个森林中的场景，树叶在微风中轻轻摇摆，阳光斑驳',
+      '生成一个海边场景，海浪轻拍岸边，海鸟在空中盘旋',
+      '创建一个花园场景，花朵在微风中轻摆，蝴蝶翩翩起舞',
+      '生成一个雨后场景，水滴从树叶上缓缓滴落，彩虹出现在天空',
+      '创造一个雪花飘落的冬日场景，雪花轻柔地降落',
+      '生成一个星空场景，星星闪烁，云朵缓缓飘过月亮',
+      '创建一个溪流场景，清水在石头间潺潺流淌，鱼儿游过'
     ] : [
-      'Make the person in the image slowly turn their head towards the camera and nod slightly',
-      'Let objects in the image sway gently, creating a breeze effect',
-      'Make ripples appear on the water surface in the image',
-      'Let flowers in the image sway gently with petals occasionally falling',
-      'Make the person\'s hair move softly in the wind',
-      'Let leaves in the background move slowly with dappled sunlight',
-      'Make the animal\'s eyes blink slowly, appearing lively',
-      'Create subtle depth of field changes in the scene'
+      'Generate a beautiful sunrise scene where the sun slowly rises from behind mountains with clouds gently floating',
+      'Create a forest scene with leaves swaying gently in the breeze and dappled sunlight',
+      'Generate a beach scene with waves gently lapping the shore and seagulls soaring overhead',
+      'Create a garden scene with flowers swaying in the breeze and butterflies dancing',
+      'Generate a post-rain scene with water drops slowly falling from leaves and a rainbow in the sky',
+      'Create a winter scene with snowflakes gently falling from the sky',
+      'Generate a starry night scene with twinkling stars and clouds slowly drifting past the moon',
+      'Create a stream scene with clear water flowing gently between rocks and fish swimming by'
     ];
 
     // 使用工具函数提取用户历史提示词
@@ -510,10 +510,11 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
       return;
     }
 
-    if (!uploadedImage) {
-      setError(language === 'zh' ? '请上传一张图片作为视频生成的源素材' : 'Please upload an image as source material for video generation');
-      return;
-    }
+    // 源图片现在是可选的
+    // if (!uploadedImage) {
+    //   setError(language === 'zh' ? '请上传一张图片作为视频生成的源素材' : 'Please upload an image as source material for video generation');
+    //   return;
+    // }
 
     // 在生成开始时保存提示词（不管是否生成成功）
     savePromptToHistory(prompt);
@@ -524,38 +525,43 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
     try {
       console.log('Using new Video Generation API...');
 
-      // 处理上传的图片
+      // 处理上传的图片（现在是可选的）
       let imageInput;
-      if (uploadedImage instanceof File) {
-        // 注释掉图片压缩逻辑，直接使用原图
-        // try {
-        //   // 将File转换为data URL
-        //   const fileDataUrl = await new Promise<string>((resolve, reject) => {
-        //     const reader = new FileReader();
-        //     reader.onload = () => resolve(reader.result as string);
-        //     reader.onerror = reject;
-        //     reader.readAsDataURL(uploadedImage);
-        //   });
-        //   
-        //   // 对base64图片进行压缩处理
-        //   const compressedDataUrl = await compressImageUrl(fileDataUrl);
-        //   
-        //   // 将压缩后的data URL转换回File对象
-        //   const response = await fetch(compressedDataUrl);
-        //   const blob = await response.blob();
-        //   const compressedFile = new File([blob], uploadedImage.name, { type: blob.type || uploadedImage.type });
-        //   
-        //   imageInput = { file: compressedFile };
-        // } catch (compressionError) {
-        //   console.warn('Failed to compress uploaded image, using original:', compressionError);
-        //   imageInput = { file: uploadedImage };
-        // }
-        
-        // 直接使用原图，不进行压缩
-        imageInput = { file: uploadedImage };
+      if (uploadedImage) {
+        if (uploadedImage instanceof File) {
+          // 注释掉图片压缩逻辑，直接使用原图
+          // try {
+          //   // 将File转换为data URL
+          //   const fileDataUrl = await new Promise<string>((resolve, reject) => {
+          //     const reader = new FileReader();
+          //     reader.onload = () => resolve(reader.result as string);
+          //     reader.onerror = reject;
+          //     reader.readAsDataURL(uploadedImage);
+          //   });
+          //   
+          //   // 对base64图片进行压缩处理
+          //   const compressedDataUrl = await compressImageUrl(fileDataUrl);
+          //   
+          //   // 将压缩后的data URL转换回File对象
+          //   const response = await fetch(compressedDataUrl);
+          //   const blob = await response.blob();
+          //   const compressedFile = new File([blob], uploadedImage.name, { type: blob.type || uploadedImage.type });
+          //   
+          //   imageInput = { file: compressedFile };
+          // } catch (compressionError) {
+          //   console.warn('Failed to compress uploaded image, using original:', compressionError);
+          //   imageInput = { file: uploadedImage };
+          // }
+          
+          // 直接使用原图，不进行压缩
+          imageInput = { file: uploadedImage };
+        } else {
+          // 对于URL类型的图片，直接传递URL
+          imageInput = { url: uploadedImage.url };
+        }
       } else {
-        // 对于URL类型的图片，直接传递URL
-        imageInput = { url: uploadedImage.url };
+        // 没有图片时传递 null
+        imageInput = null;
       }
       
       // 调用新的视频生成API（使用专用的视频客户端）
@@ -683,7 +689,7 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
     const handleKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
         event.preventDefault();
-        if (!isGenerating && prompt.trim() && uploadedImage) {
+        if (!isGenerating && prompt.trim()) {
           handleGenerate();
         }
       }
@@ -693,7 +699,7 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isGenerating, prompt, uploadedImage, handleGenerate]);
+  }, [isGenerating, prompt, handleGenerate]);
 
   // 组件卸载时清理视频播放
   useEffect(() => {
@@ -717,7 +723,7 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
             {/* 图片上传 (只支持单张图片) */}
             <div className="form-field">
               <label className="form-label">
-                {language === 'zh' ? '源图片 (必需)' : 'Source Image (Required)'}
+                {language === 'zh' ? '源图片 (可选)' : 'Source Image (Optional)'}
               </label>
               <div className="unified-image-area">
                 {!uploadedImage ? (
@@ -879,7 +885,7 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
         <div className="section-actions">
           <button
             onClick={handleGenerate}
-            disabled={isGenerating || !prompt.trim() || !uploadedImage}
+            disabled={isGenerating || !prompt.trim()}
             className={`action-button primary ${isGenerating ? 'loading' : ''}`}
           >
             {isGenerating

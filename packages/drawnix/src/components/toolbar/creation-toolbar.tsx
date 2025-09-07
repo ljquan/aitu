@@ -13,6 +13,7 @@ import {
   FeltTipPenIcon,
   ImageIcon,
   AIImageIcon,
+  AIVideoIcon,
   ExtraToolsIcon,
 } from '../icons';
 import { useBoard } from '@plait-board/react-board';
@@ -44,7 +45,7 @@ import {
 } from '../../hooks/use-drawnix';
 import { ExtraToolsButton } from './extra-tools/extra-tools-button';
 import { addImage } from '../../utils/image';
-import { useI18n } from '../../i18n';
+import { useI18n, Translations } from '../../i18n';
 
 export enum PopupKey {
   'shape' = 'shape',
@@ -57,7 +58,7 @@ type AppToolButtonProps = {
   name?: string;
   icon: React.ReactNode;
   pointer?: DrawnixPointerType;
-  key?: PopupKey | 'image' | 'ai-image' | 'extra-tools';
+  key?: PopupKey | 'image' | 'ai-image' | 'ai-video' | 'extra-tools';
 };
 
 const isBasicPointer = (pointer: string) => {
@@ -114,6 +115,11 @@ export const BUTTONS: AppToolButtonProps[] = [
     icon: AIImageIcon,
     titleKey: 'toolbar.aiImage',
     key: 'ai-image',
+  },
+  {
+    icon: AIVideoIcon,
+    titleKey: 'toolbar.aiVideo',
+    key: 'ai-video',
   },
   {
     icon: ExtraToolsIcon,
@@ -202,8 +208,8 @@ export const CreationToolbar = () => {
                       checkCurrentPointerIsFreehand(board)
                     }
                     icon={lastFreehandButton.icon}
-                    title={lastFreehandButton.titleKey ? t(lastFreehandButton.titleKey) : 'Freehand'}
-                    aria-label={lastFreehandButton.titleKey ? t(lastFreehandButton.titleKey) : 'Freehand'}
+                    title={lastFreehandButton.titleKey ? t(lastFreehandButton.titleKey as keyof Translations) : 'Freehand'}
+                    aria-label={lastFreehandButton.titleKey ? t(lastFreehandButton.titleKey as keyof Translations) : 'Freehand'}
                     onPointerDown={() => {
                       setFreehandOpen(!freehandOpen);
                       onPointerDown(lastFreehandButton.pointer!);
@@ -246,8 +252,8 @@ export const CreationToolbar = () => {
                         !PlaitBoard.isPointer(board, BasicShapes.text))
                     }
                     icon={button.icon}
-                    title={button.titleKey ? t(button.titleKey) : 'Shape'}
-                    aria-label={button.titleKey ? t(button.titleKey) : 'Shape'}
+                    title={button.titleKey ? t(button.titleKey as keyof Translations) : 'Shape'}
+                    aria-label={button.titleKey ? t(button.titleKey as keyof Translations) : 'Shape'}
                     onPointerDown={() => {
                       setShapeOpen(!shapeOpen);
                     }}
@@ -280,8 +286,8 @@ export const CreationToolbar = () => {
                     visible={true}
                     selected={arrowOpen || isArrowLinePointer(board)}
                     icon={button.icon}
-                    title={button.titleKey ? t(button.titleKey) : ''}
-                    aria-label={button.titleKey ? t(button.titleKey) : ''}
+                    title={button.titleKey ? t(button.titleKey as keyof Translations) : ''}
+                    aria-label={button.titleKey ? t(button.titleKey as keyof Translations) : ''}
                     onPointerDown={() => {
                       setArrowOpen(!arrowOpen);
                     }}
@@ -307,8 +313,8 @@ export const CreationToolbar = () => {
               type="radio"
               icon={button.icon}
               checked={isChecked(button)}
-              title={button.titleKey ? t(button.titleKey) : ''}
-              aria-label={button.titleKey ? t(button.titleKey) : ''}
+              title={button.titleKey ? t(button.titleKey as keyof Translations) : ''}
+              aria-label={button.titleKey ? t(button.titleKey as keyof Translations) : ''}
               onPointerDown={() => {
                 if (button.pointer && !isBasicPointer(button.pointer)) {
                   onPointerDown(button.pointer);
@@ -326,6 +332,9 @@ export const CreationToolbar = () => {
                 }
                 if (button.key === 'ai-image') {
                   openDialog(DialogType.aiImageGeneration);
+                }
+                if (button.key === 'ai-video') {
+                  openDialog(DialogType.aiVideoGeneration);
                 }
               }}
             />
