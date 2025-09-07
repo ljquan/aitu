@@ -879,7 +879,7 @@ export function promptForApiKey(): Promise<string | null> {
         请输入您的 Gemini API Key，输入后将自动保存到本地存储中。
       </p>
       <p style="margin: 0 0 16px 0; color: #666; line-height: 1.5;">
-        您可以从以下地址获取 API Key:
+        您可以从以下地址获取 API Key（新建令牌渠道分组选择default）:
         <a href="https://api.tu-zi.com/token" target="_blank" rel="noopener noreferrer" 
            style="color: #0052d9; text-decoration: none;">
           https://api.tu-zi.com/token
