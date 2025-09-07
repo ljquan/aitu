@@ -74,7 +74,7 @@ drawnix/ (项目根目录)
 
 - [项目主 README](../README.md) - 项目介绍和快速开始
 - [英文 README](../README_en.md) - English documentation
-- [GitHub 仓库](https://github.com/plait-board/drawnix) - 源代码仓库
+- [GitHub 仓库](https://github.com/ljquan/aitu) - 源代码仓库
 - [在线演示](https://drawnix.com) - 当前版本演示
 
 ## 🛠️ 开发规范
