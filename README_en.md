@@ -23,13 +23,7 @@
       </p>
     </figcaption>
   </figure>
-  <a href="https://hellogithub.com/repository/ljquan/aitu" target="_blank">
-    <picture style="width: 250">
-      <source media="(prefers-color-scheme: light)" srcset="https://abroad.hellogithub.com/v1/widgets/recommend.svg?rid=4dcea807fab7468a962c153b07ae4e4e&claim_uid=zmFSY5k8EuZri43&theme=neutral" />
-      <source media="(prefers-color-scheme: dark)" srcset="https://abroad.hellogithub.com/v1/widgets/recommend.svg?rid=4dcea807fab7468a962c153b07ae4e4e&claim_uid=zmFSY5k8EuZri43&theme=dark" />
-      <img src="https://abroad.hellogithub.com/v1/widgets/recommend.svg?rid=4dcea807fab7468a962c153b07ae4e4e&claim_uid=zmFSY5k8EuZri43&theme=neutral" alt="Featured｜HelloGitHub" style="width: 250px; height: 54px;" width="250" height="54"/>
-    </picture>
-  </a>
+
 
   <br />
 
@@ -391,15 +385,7 @@ nx lint drawnix
 
 Follow [Releases](https://github.com/ljquan/aitu/releases) for release plans.
 
-## Thank you for supporting
 
-Special thanks to the company for its strong support for open source projects, and also to the friends who contributed code and provided suggestions to this project.
-
-<p align="left">
-  <a href="https://pingcode.com?utm_source=drawnix" target="_blank">
-      <img src="https://cdn-aliyun.pingcode.com/static/site/img/pingcode-logo.4267e7b.svg" width="120" alt="PingCode" />
-  </a>
-</p>
 
 ## License
 

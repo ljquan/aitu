@@ -23,14 +23,6 @@
       </p>
     </figcaption>
   </figure>
-  <a href="https://hellogithub.com/repository/ljquan/aitu" target="_blank">
-    <picture style="width: 250">
-      <source media="(prefers-color-scheme: light)" srcset="https://abroad.hellogithub.com/v1/widgets/recommend.svg?rid=4dcea807fab7468a962c153b07ae4e4e&claim_uid=zmFSY5k8EuZri43&theme=neutral" />
-      <source media="(prefers-color-scheme: dark)" srcset="https://abroad.hellogithub.com/v1/widgets/recommend.svg?rid=4dcea807fab7468a962c153b07ae4e4e&claim_uid=zmFSY5k8EuZri43&theme=dark" />
-      <img src="https://abroad.hellogithub.com/v1/widgets/recommend.svg?rid=4dcea807fab7468a962c153b07ae4e4e&claim_uid=zmFSY5k8EuZri43&theme=neutral" alt="Featured｜HelloGitHub" style="width: 250px; height: 54px;" width="250" height="54"/>
-    </picture>
-  </a>
-
   <br />
 
   <a href="https://trendshift.io/repositories/13979" target="_blank"><img src="https://trendshift.io/api/badge/repositories/13979" alt="plait-board%2Fdrawnix | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
@@ -395,15 +387,6 @@ nx lint drawnix
 
 发布计划请关注 [Releases](https://github.com/ljquan/aitu/releases) 页面。
 
-## 感谢支持
-
-特别感谢公司对开源项目的大力支持，也感谢为本项目贡献代码、提供建议的朋友。
-
-<p align="left">
-  <a href="https://pingcode.com?utm_source=drawnix" target="_blank">
-      <img src="https://cdn-aliyun.pingcode.com/static/site/img/pingcode-logo.4267e7b.svg" width="120" alt="PingCode" />
-  </a>
-</p>
 
 ## License
 
