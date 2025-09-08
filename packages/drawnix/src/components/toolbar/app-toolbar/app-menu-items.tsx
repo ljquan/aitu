@@ -4,6 +4,7 @@ import {
   OpenFileIcon,
   SaveFileIcon,
   TrashIcon,
+  GithubIcon,
 } from '../../icons';
 import { useBoard, useListRender } from '@plait-board/react-board';
 import {
@@ -163,3 +164,19 @@ export const Settings = () => {
   );
 };
 Settings.displayName = 'Settings';
+
+export const GitHubLink = () => {
+  const { t } = useI18n();
+  return (
+    <MenuItem
+      icon={GithubIcon}
+      onSelect={() => {
+        window.open('https://github.com/ljquan/aitu', '_blank');
+      }}
+      aria-label={t('menu.github')}
+    >
+      {t('menu.github')}
+    </MenuItem>
+  );
+};
+GitHubLink.displayName = 'GitHubLink';

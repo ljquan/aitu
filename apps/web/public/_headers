@@ -1,9 +1,48 @@
-# 基本缓存配置
-/*
-  Cache-Control: public, max-age=31536000, immutable
+# Netlify 部署配置 - iframe嵌入和缓存策略
+
+# 首页和HTML文件 - 允许iframe嵌入，禁用缓存
+/
+  Cache-Control: public, max-age=0, must-revalidate
+  Content-Security-Policy: frame-ancestors 'self' localhost:* 127.0.0.1:* *.localhost:* https://api.tu-zi.com
+  X-Frame-Options: SAMEORIGIN
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: origin-when-cross-origin
 
 /*.html
   Cache-Control: public, max-age=0, must-revalidate
+  Content-Security-Policy: frame-ancestors 'self' localhost:* 127.0.0.1:* *.localhost:* https://api.tu-zi.com
+  X-Frame-Options: SAMEORIGIN
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: origin-when-cross-origin
 
-/
+# 测试页面特殊配置
+/iframe-test.html
   Cache-Control: public, max-age=0, must-revalidate
+  Content-Security-Policy: frame-ancestors 'self' localhost:* 127.0.0.1:* *.localhost:* https://api.tu-zi.com; frame-src 'self' localhost:* https://api.tu-zi.com data:
+  X-Frame-Options: SAMEORIGIN
+
+# 静态资源 - 长期缓存
+/*.js
+  Cache-Control: public, max-age=31536000, immutable
+  Content-Security-Policy: frame-ancestors 'self' localhost:* 127.0.0.1:* *.localhost:* https://api.tu-zi.com
+
+/*.css
+  Cache-Control: public, max-age=31536000, immutable
+  Content-Security-Policy: frame-ancestors 'self' localhost:* 127.0.0.1:* *.localhost:* https://api.tu-zi.com
+
+/*.png
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.jpg
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.svg
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.ico
+  Cache-Control: public, max-age=31536000, immutable
+
+# Service Worker
+/sw.js
+  Cache-Control: public, max-age=0, must-revalidate
+  Content-Security-Policy: frame-ancestors 'self' localhost:* 127.0.0.1:* *.localhost:* https://api.tu-zi.com

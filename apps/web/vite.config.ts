@@ -10,11 +10,19 @@ export default defineConfig({
   server: {
     port: 7200,
     host: 'localhost',
+    headers: {
+      'Content-Security-Policy': "frame-ancestors 'self' localhost:* 127.0.0.1:* https://api.tu-zi.com;",
+      'X-Frame-Options': 'ALLOWALL'
+    }
   },
 
   preview: {
     port: 4300,
     host: 'localhost',
+    headers: {
+      'Content-Security-Policy': "frame-ancestors 'self' localhost:* 127.0.0.1:* https://api.tu-zi.com;",
+      'X-Frame-Options': 'ALLOWALL'
+    }
   },
 
   plugins: [react(), nxViteTsPaths()],

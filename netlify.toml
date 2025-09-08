@@ -26,14 +26,31 @@
   to = "/index.html"
   status = 200
 
-# 安全头设置
+# 安全头设置 - 允许特定域名iframe嵌入
 [[headers]]
   for = "/*"
   [headers.values]
-    X-Frame-Options = "DENY"
+    Content-Security-Policy = "frame-ancestors 'self' localhost:* 127.0.0.1:* *.localhost:* https://api.tu-zi.com"
+    X-Frame-Options = "SAMEORIGIN"
     X-XSS-Protection = "1; mode=block"
     X-Content-Type-Options = "nosniff"
-    Referrer-Policy = "strict-origin-when-cross-origin"
+    Referrer-Policy = "origin-when-cross-origin"
+
+# HTML文件特定配置
+[[headers]]
+  for = "/*.html"
+  [headers.values]
+    Content-Security-Policy = "frame-ancestors 'self' localhost:* 127.0.0.1:* *.localhost:* https://api.tu-zi.com"
+    X-Frame-Options = "SAMEORIGIN"
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+# iframe测试页面配置
+[[headers]]
+  for = "/iframe-test.html"
+  [headers.values]
+    Content-Security-Policy = "frame-ancestors 'self' localhost:* 127.0.0.1:* *.localhost:* https://api.tu-zi.com; frame-src 'self' localhost:* https://api.tu-zi.com data:"
+    X-Frame-Options = "SAMEORIGIN"
+    Cache-Control = "public, max-age=0, must-revalidate"
 
 # 缓存设置
 [[headers]]
@@ -45,11 +62,20 @@
   for = "/*.js"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
+    Content-Security-Policy = "frame-ancestors 'self' localhost:* 127.0.0.1:* *.localhost:* https://api.tu-zi.com"
 
 [[headers]]
   for = "/*.css"  
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
+    Content-Security-Policy = "frame-ancestors 'self' localhost:* 127.0.0.1:* *.localhost:* https://api.tu-zi.com"
+
+# Service Worker特殊配置
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+    Content-Security-Policy = "frame-ancestors 'self' localhost:* 127.0.0.1:* *.localhost:* https://api.tu-zi.com"
 
 # 部署上下文配置
 [context.production]

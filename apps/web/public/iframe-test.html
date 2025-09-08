@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aitu iframe 嵌入测试</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            margin: 0;
+            font-size: 2em;
+        }
+        
+        .header p {
+            margin: 10px 0 0 0;
+            opacity: 0.9;
+        }
+        
+        .content {
+            padding: 20px;
+        }
+        
+        .test-section {
+            margin-bottom: 30px;
+        }
+        
+        .test-section h2 {
+            color: #667eea;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 5px;
+            margin-bottom: 15px;
+        }
+        
+        .iframe-container {
+            position: relative;
+            width: 100%;
+            height: 600px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            margin: 10px 0;
+            overflow: hidden;
+            background: #f8f9fa;
+        }
+        
+        .iframe-container iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+        
+        .iframe-info {
+            background: #f8f9fa;
+            padding: 10px 15px;
+            border-radius: 6px;
+            margin: 10px 0;
+            font-size: 0.9em;
+            border-left: 4px solid #667eea;
+        }
+        
+        .status {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            margin-left: 10px;
+        }
+        
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .note {
+            background: #fff3cd;
+            color: #856404;
+            padding: 12px;
+            border-radius: 6px;
+            border-left: 4px solid #ffc107;
+            margin: 15px 0;
+        }
+        
+        .controls {
+            margin: 15px 0;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: all 0.2s;
+        }
+        
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #5a6fd8;
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎨 Aitu iframe 嵌入测试</h1>
+            <p>模拟 api.tu-zi.com 和其他域名嵌入当前应用的效果</p>
+        </div>
+        
+        <div class="content">
+            <!-- 本地测试 - 模拟本地域名嵌入 -->
+            <div class="test-section">
+                <h2>本地环境嵌入测试 <span class="status success">✓ 允许</span></h2>
+                <div class="iframe-info">
+                    <strong>场景:</strong> 本地开发环境嵌入当前应用<br>
+                    <strong>状态:</strong> 本地域名已在白名单中，应该正常显示<br>
+                    <strong>用途:</strong> 验证本地开发时的嵌入效果
+                </div>
+                <div class="controls">
+                    <button class="btn btn-primary" onclick="loadLocalIframe()">嵌入当前应用</button>
+                    <button class="btn btn-secondary" onclick="reloadIframe('local-iframe')">重新加载</button>
+                </div>
+                <div class="iframe-container">
+                    <iframe id="local-iframe" src="" title="本地嵌入Aitu应用"></iframe>
+                </div>
+            </div>
+
+            <!-- 模拟 api.tu-zi.com 嵌入 -->
+            <div class="test-section">
+                <h2>api.tu-zi.com 嵌入测试 <span class="status success">✓ 允许</span></h2>
+                <div class="iframe-info">
+                    <strong>场景:</strong> 模拟 api.tu-zi.com 网站嵌入当前应用<br>
+                    <strong>状态:</strong> api.tu-zi.com 已在白名单中，应该正常显示<br>
+                    <strong>用途:</strong> 验证生产环境中的嵌入效果
+                </div>
+                <div class="note">
+                    <strong>注意:</strong> 这个测试页面本身运行在当前域名下，所以可以成功嵌入。在实际部署中，api.tu-zi.com 的页面可以通过同样的方式嵌入此应用。
+                </div>
+                <div class="controls">
+                    <button class="btn btn-primary" onclick="loadCurrentApp()">嵌入当前应用</button>
+                    <button class="btn btn-primary" onclick="loadAppWithQuery('source=api.tu-zi.com')">带来源参数嵌入</button>
+                    <button class="btn btn-secondary" onclick="reloadIframe('tuzi-iframe')">重新加载</button>
+                </div>
+                <div class="iframe-container">
+                    <iframe id="tuzi-iframe" src="" title="模拟api.tu-zi.com嵌入"></iframe>
+                </div>
+            </div>
+
+            <!-- 未授权域名测试 -->
+            <div class="test-section">
+                <h2>未授权域名嵌入测试 <span class="status error">✗ 应该被阻止</span></h2>
+                <div class="iframe-info">
+                    <strong>场景:</strong> 模拟未授权域名尝试嵌入当前应用<br>
+                    <strong>状态:</strong> 应该被CSP策略阻止<br>
+                    <strong>用途:</strong> 验证安全策略的有效性
+                </div>
+                <div class="note">
+                    <strong>说明:</strong> 由于这个测试页面运行在当前域名下，无法真实模拟外部域名的阻止效果。但在实际部署中，其他未授权域名将无法嵌入此应用。
+                </div>
+                <div class="controls">
+                    <button class="btn btn-secondary" disabled>无法在此测试</button>
+                </div>
+                <div class="iframe-container">
+                    <div style="padding: 50px; text-align: center; color: #666;">
+                        <p>❌ 未授权域名将被阻止嵌入</p>
+                        <small>实际效果需要在不同域名下测试</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 嵌入参数测试 -->
+            <div class="test-section">
+                <h2>嵌入参数测试</h2>
+                <div class="iframe-info">
+                    测试不同的URL参数和嵌入选项
+                </div>
+                <div class="controls">
+                    <button class="btn btn-primary" onclick="loadWithParams('embed=true')">嵌入模式</button>
+                    <button class="btn btn-primary" onclick="loadWithParams('readonly=true')">只读模式</button>
+                    <button class="btn btn-primary" onclick="loadWithParams('toolbar=false')">隐藏工具栏</button>
+                    <button class="btn btn-secondary" onclick="clearIframe('param-iframe')">清空</button>
+                </div>
+                <div class="iframe-container">
+                    <iframe id="param-iframe" src="" title="参数测试"></iframe>
+                </div>
+            </div>
+
+            <!-- CSP 策略说明 -->
+            <div class="test-section">
+                <h2>CSP 策略配置</h2>
+                <div class="note">
+                    为了允许当前应用被其他域名通过iframe嵌入，需要配置以下HTTP响应头：
+                    <pre style="margin: 10px 0; padding: 10px; background: #f1f3f4; border-radius: 4px; font-size: 0.85em;">Content-Security-Policy: frame-ancestors 'self' localhost:* 127.0.0.1:* https://api.tu-zi.com
+X-Frame-Options: ALLOWALL</pre>
+                </div>
+                <div class="iframe-info">
+                    <strong>当前策略允许嵌入的父域名:</strong><br>
+                    • localhost (任意端口) - 本地开发环境<br>
+                    • 127.0.0.1 (任意端口) - 本地IP访问<br>
+                    • https://api.tu-zi.com - 生产环境授权域名<br>
+                    • 同域名 (self) - 同域内嵌入
+                </div>
+                <div class="note">
+                    <strong>使用说明:</strong><br>
+                    1. 在 api.tu-zi.com 的网站中可以使用 <code>&lt;iframe src="你的应用URL"&gt;&lt;/iframe&gt;</code> 来嵌入此应用<br>
+                    2. 其他未授权域名将收到 "Refused to frame" 错误，无法嵌入<br>
+                    3. 配置已添加到 Vite 开发服务器、Netlify _headers 文件和 netlify.toml 中<br>
+                    4. Netlify 部署后会自动应用这些CSP策略
+                </div>
+                <div class="note">
+                    <strong>验证部署:</strong><br>
+                    部署后可以通过浏览器开发者工具的 Network 标签查看响应头，确认包含：<br>
+                    <code>Content-Security-Policy: frame-ancestors 'self' localhost:* 127.0.0.1:* *.localhost:* https://api.tu-zi.com</code>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 获取当前页面的基础URL
+        function getBaseUrl() {
+            return window.location.origin;
+        }
+        
+        // 加载本地iframe - 嵌入当前应用
+        function loadLocalIframe() {
+            const iframe = document.getElementById('local-iframe');
+            const baseUrl = getBaseUrl();
+            iframe.src = baseUrl;
+            console.log('Embedding current app in local iframe:', baseUrl);
+        }
+        
+        // 嵌入当前应用
+        function loadCurrentApp() {
+            const iframe = document.getElementById('tuzi-iframe');
+            const baseUrl = getBaseUrl();
+            iframe.src = baseUrl;
+            console.log('Embedding current app:', baseUrl);
+        }
+        
+        // 带查询参数嵌入当前应用
+        function loadAppWithQuery(query) {
+            const iframe = document.getElementById('tuzi-iframe');
+            const baseUrl = getBaseUrl();
+            iframe.src = `${baseUrl}?${query}`;
+            console.log('Embedding current app with query:', `${baseUrl}?${query}`);
+        }
+        
+        // 带参数加载
+        function loadWithParams(params) {
+            const iframe = document.getElementById('param-iframe');
+            const baseUrl = getBaseUrl();
+            iframe.src = `${baseUrl}?${params}`;
+            console.log('Loading with params:', `${baseUrl}?${params}`);
+        }
+        
+        // 重新加载指定iframe
+        function reloadIframe(iframeId) {
+            const iframe = document.getElementById(iframeId);
+            const src = iframe.src;
+            iframe.src = '';
+            setTimeout(() => {
+                iframe.src = src;
+            }, 100);
+        }
+        
+        // 清空iframe
+        function clearIframe(iframeId) {
+            const iframe = document.getElementById(iframeId);
+            iframe.src = '';
+        }
+        
+        // 监听iframe加载事件
+        document.addEventListener('DOMContentLoaded', function() {
+            const iframes = document.querySelectorAll('iframe');
+            iframes.forEach(iframe => {
+                iframe.addEventListener('load', function() {
+                    console.log(`Iframe loaded successfully: ${this.id}`);
+                });
+                
+                iframe.addEventListener('error', function() {
+                    console.log(`Iframe failed to load: ${this.id}`);
+                });
+            });
+        });
+        
+        // 检测CSP违规
+        document.addEventListener('securitypolicyviolation', function(e) {
+            console.log('CSP Violation:', {
+                directive: e.violatedDirective,
+                blockedURI: e.blockedURI,
+                lineNumber: e.lineNumber,
+                sourceFile: e.sourceFile
+            });
+        });
+    </script>
+</body>
+</html>
