@@ -6,10 +6,8 @@ import { useI18n } from '../../i18n';
 import { useBoard } from '@plait-board/react-board';
 import { getImagePrompts, type Language } from '../../constants/prompts';
 import { getSelectedElements, PlaitElement, getRectangleByElements, Point } from '@plait/core';
-import { defaultGeminiClient, promptForApiKey } from '../../utils/gemini-api';
-import { geminiSettings } from '../../utils/settings-manager';
+import { defaultGeminiClient } from '../../utils/gemini-api';
 import { insertImageFromUrl } from '../../data/image';
-// import { compressImageUrl } from '../../utils/selection-utils';
 import { 
   GenerationHistory, 
   ImageHistoryItem, 
@@ -19,57 +17,35 @@ import {
   generateHistoryId,
   extractUserPromptsFromHistory 
 } from '../generation-history';
-
+import {
+  useGenerationState,
+  useKeyboardShortcuts,
+  handleApiKeyError,
+  isInvalidTokenError,
+  createCacheManager,
+  PreviewCacheBase,
+  ActionButtons,
+  ErrorDisplay,
+  ImageUpload,
+  LoadingState,
+  PromptInput,
+  type ImageFile
+} from './shared';
 import { AI_IMAGE_GENERATION_PREVIEW_CACHE_KEY as PREVIEW_CACHE_KEY } from '../../constants/storage';
 
-// 缓存数据接口
-interface PreviewCache {
-  prompt: string;
+interface PreviewCache extends PreviewCacheBase {
   generatedImage: string | null;
-  timestamp: number;
   width: number | string;
   height: number | string;
 }
 
-// 保存预览缓存
-const savePreviewCache = (data: PreviewCache) => {
-  try {
-    localStorage.setItem(PREVIEW_CACHE_KEY, JSON.stringify(data));
-  } catch (error) {
-    console.warn('Failed to save preview cache:', error);
-  }
-};
-
-// 加载预览缓存
-const loadPreviewCache = (): PreviewCache | null => {
-  try {
-    const cached = localStorage.getItem(PREVIEW_CACHE_KEY);
-    if (cached) {
-      const data = JSON.parse(cached) as PreviewCache;
-      // 检查缓存是否过期（24小时）
-      const now = Date.now();
-      const cacheAge = now - data.timestamp;
-      if (cacheAge < 24 * 60 * 60 * 1000) {
-        return data;
-      }
-    }
-  } catch (error) {
-    console.warn('Failed to load preview cache:', error);
-  }
-  return null;
-};
+const cacheManager = createCacheManager<PreviewCache>(PREVIEW_CACHE_KEY);
 
 
-const getPromptExample = (language: 'zh' | 'en') => {
-  if (language === 'zh') {
-    return `一只可爱的小猫坐在窗台上，阳光透过窗户洒在它的毛发上，背景是温馨的家居环境`;
-  }
-  return `A cute kitten sitting on a windowsill, with sunlight streaming through the window onto its fur, with a cozy home environment in the background`;
-};
 
 interface AIImageGenerationProps {
   initialPrompt?: string;
-  initialImages?: (File | { url: string; name: string })[];
+  initialImages?: ImageFile[];
   selectedElementIds?: string[];
 }
 
@@ -77,33 +53,13 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
   const [prompt, setPrompt] = useState(initialPrompt);
   const [width, setWidth] = useState<number | string>(1024);
   const [height, setHeight] = useState<number | string>(1024);
-  const [isGenerating, setIsGenerating] = useState(false);
-  
-  // 通知Footer组件生成状态变化
-  const notifyGenerationStateChange = (generating: boolean, loading: boolean) => {
-    window.dispatchEvent(new CustomEvent('ai-generation-state-change', {
-      detail: { isGenerating: generating, imageLoading: loading }
-    }));
-  };
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
-  const [imageLoading, setImageLoading] = useState(false);
-  
-  // 包装setIsGenerating和setImageLoading以发送事件
-  const updateIsGenerating = (value: boolean) => {
-    setIsGenerating(value);
-    notifyGenerationStateChange(value, imageLoading);
-  };
-  
-  const updateImageLoading = (value: boolean) => {
-    setImageLoading(value);
-    notifyGenerationStateChange(isGenerating, value);
-  };
   const [error, setError] = useState<string | null>(null);
-  const [useImageAPI] = useState(false); // true: images/generations, false: chat/completions
-  // 支持文件和URL两种类型的图片
-  const [uploadedImages, setUploadedImages] = useState<(File | { url: string; name: string })[]>(initialImages);
-  // 历史相关状态
+  const [useImageAPI] = useState(false);
+  const [uploadedImages, setUploadedImages] = useState<ImageFile[]>(initialImages);
   const [historyItems, setHistoryItems] = useState<ImageHistoryItem[]>([]);
+  
+  const { isGenerating, isLoading: imageLoading, updateIsGenerating, updateIsLoading: updateImageLoading } = useGenerationState('image');
 
   const { appState, setAppState } = useDrawnix();
   const { language } = useI18n();
@@ -149,18 +105,9 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
   };
 
 
-  // 检查是否为Invalid Token错误
-  const isInvalidTokenError = (errorMessage: string): boolean => {
-    const message = errorMessage.toLowerCase();
-    return message.includes('invalid token') || 
-           message.includes('invalid api key') ||
-           message.includes('unauthorized') ||
-           message.includes('api_error') && message.includes('invalid');
-  };
 
-  // 组件初始化时加载缓存
   useEffect(() => {
-    const cachedData = loadPreviewCache();
+    const cachedData = cacheManager.load();
     if (cachedData) {
       setPrompt(cachedData.prompt);
       setWidth(cachedData.width);
@@ -202,23 +149,6 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
     };
   }, []); // 空依赖数组，只在组件挂载/卸载时执行
 
-  // 处理图片上传
-  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (files) {
-      const newImages = Array.from(files).filter(file => 
-        file.type.startsWith('image/') && file.size <= 10 * 1024 * 1024 // 限制10MB
-      );
-      setUploadedImages(prev => [...prev, ...newImages]);
-    }
-    // 清空input值，允许重复选择同一文件
-    event.target.value = '';
-  };
-
-  // 删除上传的图片
-  const removeUploadedImage = (index: number) => {
-    setUploadedImages(prev => prev.filter((_, i) => i !== index));
-  };
 
   // 重置所有状态
   const handleReset = () => {
@@ -275,7 +205,7 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
         width,
         height
       };
-      savePreviewCache(cacheData);
+      cacheManager.save(cacheData);
 
       // 更新已有的提示词记录，添加生成的图片信息
       const existingHistory = loadImageHistory();
@@ -326,7 +256,7 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
         width,
         height
       };
-      savePreviewCache(cacheData);
+      cacheManager.save(cacheData);
 
       // 更新已有的提示词记录，添加生成的图片信息
       const existingHistory = loadImageHistory();
@@ -384,7 +314,7 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
       width: historyItem.width,
       height: historyItem.height
     };
-    savePreviewCache(cacheData);
+    cacheManager.save(cacheData);
   };
 
   // 通用历史选择处理器（兼容各种类型）
@@ -448,11 +378,14 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
       return;
     }
 
+    // 清除旧的图像和错误信息
+    setGeneratedImage(null);
+    setError(null);
+    
     // 在生成开始时保存提示词（不管是否生成成功）
     savePromptToHistory(prompt);
 
     updateIsGenerating(true);
-    setError(null);
 
     try {
       const finalWidth = typeof width === 'string' ? (parseInt(width) || 1024) : width;
@@ -481,14 +414,7 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
       } else {
         // 使用聊天API (chat/completions)
         console.log('Using Chat API for generation...');
-        const imagePrompt = `Generate an image based on this description: "${prompt}"
-
-Requirements:
-- Dimensions: ${finalWidth} × ${finalHeight} pixels
-- High quality and detailed
-- Return only the direct image URL in your response
-
-Description: ${prompt}`;
+        const imagePrompt = `Generate an image based on this description: "${prompt}"`;
 
         // 将上传的图片转换为ImageInput格式，对File类型的图片进行压缩
         const imageInputs = await Promise.all(uploadedImages.map(async (item) => {
@@ -562,38 +488,19 @@ Description: ${prompt}`;
       console.error('AI image generation error:', err);
       const errorMessage = err instanceof Error ? err.message : String(err);
       
-      // 检查是否为Invalid Token错误
       if (isInvalidTokenError(errorMessage)) {
-        // 调用API Key设置弹窗
-        try {
-          const newApiKey = await promptForApiKey();
-          if (newApiKey) {
-            // 用户输入了新的API Key，更新全局设置
-            geminiSettings.update({ apiKey: newApiKey });
-            setError(null); // 清除错误信息
-            // 可以选择自动重新生成图片
-            // handleGenerate();
-          } else {
-            // 用户取消了API Key输入
-            setError(
-              language === 'zh' 
-                ? '需要有效的API Key才能生成图像' 
-                : 'Valid API Key is required to generate images'
-            );
-          }
-        } catch (apiKeyError) {
-          console.error('API Key setup error:', apiKeyError);
-          setError(
-            language === 'zh' 
-              ? 'API Key设置失败，请稍后重试' 
-              : 'API Key setup failed, please try again later'
-          );
+        const apiKeyError = await handleApiKeyError(errorMessage, language);
+        if (apiKeyError) {
+          setError(apiKeyError);
         }
+        // If apiKeyError is null, it means API key was successfully updated, don't clear the error here
+        // The user can try generating again
       } else {
+        // Show the actual error message for non-API key errors
         setError(
           language === 'zh' 
-            ? '图像生成失败，请检查网络连接或稍后重试' 
-            : 'Image generation failed, please check network connection or try again later'
+            ? `图像生成失败: ${errorMessage}` 
+            : `Image generation failed: ${errorMessage}`
         );
       }
     } finally {
@@ -602,22 +509,7 @@ Description: ${prompt}`;
   };
 
 
-  // 键盘快捷键支持
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
-        event.preventDefault();
-        if (!isGenerating && prompt.trim()) {
-          handleGenerate();
-        }
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [isGenerating, prompt, handleGenerate]);
+  useKeyboardShortcuts(isGenerating, prompt, handleGenerate);
 
 
 
@@ -631,162 +523,26 @@ Description: ${prompt}`;
         <div className="ai-image-generation-section">
         <div className="ai-image-generation-form">
           
-          {/* 图片上传 */}
           {!useImageAPI && (
-            <div className="form-field">
-              <label className="form-label">
-                {language === 'zh' ? '参考图片 (可选)' : 'Reference Images (Optional)'}
-              </label>
-              <div className="unified-image-area">
-                {uploadedImages.length === 0 ? (
-                  /* 没有图片时显示完整上传区域 */
-                  <div className="upload-area">
-                    <input
-                      type="file"
-                      id="image-upload"
-                      multiple
-                      accept="image/*"
-                      onChange={handleImageUpload}
-                      className="upload-input"
-                      disabled={isGenerating}
-                    />
-                    <label htmlFor="image-upload" className="upload-label">
-                      <div className="upload-icon">📷</div>
-                      <div className="upload-text">
-                        {language === 'zh' 
-                          ? '点击或拖拽上传图片' 
-                          : 'Click or drag to upload images'}
-                      </div>
-                      <div className="upload-hint">
-                        {language === 'zh' 
-                          ? '支持 JPG, PNG, WebP, 最大 10MB' 
-                          : 'Support JPG, PNG, WebP, Max 10MB'}
-                      </div>
-                    </label>
-                  </div>
-                ) : (
-                  /* 有图片时显示图片网格和小的添加按钮 */
-                  <div className="images-grid">
-                    {uploadedImages.map((item, index) => {
-                      const isFile = item instanceof File;
-                      const src = isFile ? URL.createObjectURL(item) : item.url;
-                      const name = isFile ? item.name : item.name;
-                      
-                      return (
-                        <div key={index} className="uploaded-image-item" data-tooltip={src}>
-                          <div 
-                            className="uploaded-image-preview-container"
-                            onMouseEnter={(e) => {
-                              const tooltip = e.currentTarget.querySelector('.image-hover-tooltip') as HTMLElement;
-                              if (tooltip) {
-                                const rect = e.currentTarget.getBoundingClientRect();
-                                tooltip.style.left = rect.left + rect.width / 2 + 'px';
-                                tooltip.style.top = rect.top - 10 + 'px';
-                                tooltip.style.opacity = '1';
-                                tooltip.style.visibility = 'visible';
-                              }
-                            }}
-                            onMouseLeave={(e) => {
-                              const tooltip = e.currentTarget.querySelector('.image-hover-tooltip') as HTMLElement;
-                              if (tooltip) {
-                                tooltip.style.opacity = '0';
-                                tooltip.style.visibility = 'hidden';
-                              }
-                            }}
-                          >
-                            <img
-                              src={src}
-                              alt={`Upload ${index + 1}`}
-                              className="uploaded-image-preview"
-                            />
-                            <div className="image-hover-tooltip">
-                              <img src={src} alt="Large preview" />
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => removeUploadedImage(index)}
-                            className="remove-image-btn"
-                            disabled={isGenerating}
-                          >
-                            ×
-                          </button>
-                          <div className="image-info">
-                            <span className="image-name">{name}</span>
-                            {/* <span className="image-size">
-                              {size}
-                            </span> */}
-                          </div>
-                        </div>
-                      );
-                    })}
-                    {/* 小的添加按钮 */}
-                    <div className="add-more-item">
-                      <input
-                        type="file"
-                        id="image-upload-more"
-                        multiple
-                        accept="image/*"
-                        onChange={handleImageUpload}
-                        className="upload-input"
-                        disabled={isGenerating}
-                      />
-                      <label htmlFor="image-upload-more" className="add-more-label">
-                        <div className="add-more-icon">+</div>
-                        <div className="add-more-text">
-                          {language === 'zh' ? '添加' : 'Add'}
-                        </div>
-                      </label>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
+            <ImageUpload
+              images={uploadedImages}
+              onImagesChange={setUploadedImages}
+              language={language}
+              disabled={isGenerating}
+              multiple={true}
+              onError={setError}
+            />
           )}
           
-          {/* 提示词输入 */}
-          <div className="form-field">
-            <div className="form-label-with-icon">
-              <label className="form-label">
-                {language === 'zh' ? '图像描述' : 'Image Description'}
-              </label>
-              <div className="preset-tooltip-container">
-                <button
-                  type="button"
-                  className="preset-icon-button"
-                  disabled={isGenerating}
-                >
-                  💡
-                </button>
-                <div className="preset-tooltip">
-                  <div className="preset-header">
-                    {language === 'zh' ? '预设提示词' : 'Preset Prompts'}
-                  </div>
-                  <div className="preset-list">
-                    {presetPrompts.map((preset, index) => (
-                      <button
-                        key={index}
-                        type="button"
-                        className="preset-item"
-                        onClick={() => setPrompt(preset)}
-                        disabled={isGenerating}
-                      >
-                        {preset}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-            <textarea
-              className="form-textarea"
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder={getPromptExample(language)}
-              rows={4}
-              disabled={isGenerating}
-            />
-          </div>
+          <PromptInput
+            prompt={prompt}
+            onPromptChange={setPrompt}
+            presetPrompts={presetPrompts}
+            language={language}
+            type="image"
+            disabled={isGenerating}
+            onError={setError}
+          />
           
           {/* 图片尺寸选择 */}
           {/* <div className="form-field">
@@ -960,58 +716,33 @@ Description: ${prompt}`;
             </div>
           </div> */}
           
-          {/* 错误信息 */}
-          {error && (
-            <div className="form-error">
-              {error}
-            </div>
-          )}
+          <ErrorDisplay error={error} />
         </div>
         
-        {/* 生成和重置按钮区域 */}
-        <div className="section-actions">
-          <button
-            onClick={handleGenerate}
-            disabled={isGenerating || !prompt.trim()}
-            className={`action-button primary ${isGenerating ? 'loading' : ''}`}
-          >
-            {isGenerating
-              ? (language === 'zh' ? '生成中...' : 'Generating...')
-              : generatedImage
-              ? (language === 'zh' ? '重新生成' : 'Regenerate')
-              : (language === 'zh' ? '生成' : 'Generate')
-            }
-          </button>
-          
-          <button
-            onClick={handleReset}
-            disabled={isGenerating}
-            className="action-button secondary"
-          >
-            {language === 'zh' ? '重置' : 'Reset'}
-          </button>
-        </div>
+        <ActionButtons
+          language={language}
+          type="image"
+          isGenerating={isGenerating}
+          hasGenerated={!!generatedImage}
+          canGenerate={!!prompt.trim()}
+          onGenerate={handleGenerate}
+          onReset={handleReset}
+        />
         
       </div>
       
       {/* 预览区域 */}
       <div className="preview-section">
         <div className="image-preview-container">
-          {isGenerating ? (
-            <div className="preview-loading">
-              <div className="loading-spinner"></div>
-              <div className="loading-text">
-                {language === 'zh' ? '正在生成图像...' : 'Generating image...'}
-              </div>
-            </div>
-          ) : imageLoading ? (
-            <div className="preview-loading">
-              <div className="loading-spinner"></div>
-              <div className="loading-text">
-                {language === 'zh' ? '正在加载图像...' : 'Loading image...'}
-              </div>
-            </div>
-          ) : generatedImage ? (
+          <LoadingState
+            language={language}
+            type="image"
+            isGenerating={isGenerating}
+            isLoading={imageLoading}
+            hasContent={!!generatedImage}
+          />
+          
+          {generatedImage && (
             <div className="preview-image-wrapper">
               <img 
                 src={generatedImage} 
@@ -1022,16 +753,8 @@ Description: ${prompt}`;
                 onLoad={() => console.log('Preview image loaded successfully')}
                 onError={() => {
                   console.warn('Preview image failed to load:', generatedImage);
-                  // 保持图片URL，让用户可以右键新窗口打开
                 }}
               />
-            </div>
-          ) : (
-            <div className="preview-placeholder">
-              <div className="placeholder-icon">🖼️</div>
-              <div className="placeholder-text">
-                {language === 'zh' ? '图像将在这里显示' : 'Image will be displayed here'}
-              </div>
             </div>
           )}
               {/* 统一历史记录组件 */}

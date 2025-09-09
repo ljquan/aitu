@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import './ttd-dialog.scss';
 import './ai-video-generation.scss';
 import { useDrawnix } from '../../hooks/use-drawnix';
@@ -6,9 +6,8 @@ import { useI18n } from '../../i18n';
 import { useBoard } from '@plait-board/react-board';
 import { getVideoPrompts, type Language } from '../../constants/prompts';
 import { getSelectedElements, PlaitElement, getRectangleByElements, Point } from '@plait/core';
-import { defaultGeminiClient, videoGeminiClient, promptForApiKey } from '../../utils/gemini-api';
-import { geminiSettings } from '../../utils/settings-manager';
-import { /* compressImageUrl, */ getInsertionPointForSelectedElements } from '../../utils/selection-utils';
+import { videoGeminiClient } from '../../utils/gemini-api';
+import { getInsertionPointForSelectedElements } from '../../utils/selection-utils';
 import { insertVideoFromUrl } from '../../data/video';
 import { 
   GenerationHistory, 
@@ -19,7 +18,21 @@ import {
   generateHistoryId,
   extractUserPromptsFromHistory 
 } from '../generation-history';
-
+import {
+  useGenerationState,
+  useKeyboardShortcuts,
+  handleApiKeyError,
+  isInvalidTokenError,
+  createCacheManager,
+  PreviewCacheBase,
+  getPromptExample,
+  ActionButtons,
+  ErrorDisplay,
+  ImageUpload,
+  LoadingState,
+  PromptInput,
+  type ImageFile
+} from './shared';
 import { AI_VIDEO_GENERATION_PREVIEW_CACHE_KEY as PREVIEW_CACHE_KEY } from '../../constants/storage';
 
 // 视频URL接口
@@ -28,41 +41,12 @@ interface VideoUrls {
   downloadUrl: string;
 }
 
-// 缓存数据接口
-interface PreviewCache {
-  prompt: string;
+interface PreviewCache extends PreviewCacheBase {
   generatedVideo: VideoUrls | null;
-  timestamp: number;
   sourceImage?: string;
 }
 
-// 保存预览缓存
-const savePreviewCache = (data: PreviewCache) => {
-  try {
-    localStorage.setItem(PREVIEW_CACHE_KEY, JSON.stringify(data));
-  } catch (error) {
-    console.warn('Failed to save preview cache:', error);
-  }
-};
-
-// 加载预览缓存
-const loadPreviewCache = (): PreviewCache | null => {
-  try {
-    const cached = localStorage.getItem(PREVIEW_CACHE_KEY);
-    if (cached) {
-      const data = JSON.parse(cached) as PreviewCache;
-      // 检查缓存是否过期（24小时）
-      const now = Date.now();
-      const cacheAge = now - data.timestamp;
-      if (cacheAge < 24 * 60 * 60 * 1000) {
-        return data;
-      }
-    }
-  } catch (error) {
-    console.warn('Failed to load preview cache:', error);
-  }
-  return null;
-};
+const cacheManager = createCacheManager<PreviewCache>(PREVIEW_CACHE_KEY);
 
 // 从视频生成缩略图（第一帧）
 const generateVideoThumbnail = async (videoUrl: string): Promise<string | undefined> => {
@@ -135,52 +119,24 @@ const generateVideoThumbnail = async (videoUrl: string): Promise<string | undefi
   });
 };
 
-const getPromptExample = (language: 'zh' | 'en') => {
-  if (language === 'zh') {
-    return `生成一个美丽的日出场景，阳光从山峰后缓缓升起，云朵轻柔地飘动`;
-  }
-  return `Generate a beautiful sunrise scene where the sun slowly rises from behind mountains with clouds gently floating`;
-};
 
 interface AIVideoGenerationProps {
   initialPrompt?: string;
-  initialImage?: File | { url: string; name: string };
+  initialImage?: ImageFile;
 }
 
 const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerationProps = {}) => {
   const [prompt, setPrompt] = useState(initialPrompt);
-  const [isGenerating, setIsGenerating] = useState(false);
-  
-  // 通知Footer组件生成状态变化
-  const notifyGenerationStateChange = (generating: boolean, loading: boolean) => {
-    window.dispatchEvent(new CustomEvent('ai-generation-state-change', {
-      detail: { isGenerating: generating, videoLoading: loading }
-    }));
-  };
-  
   const [generatedVideo, setGeneratedVideo] = useState<{
     previewUrl: string;
     downloadUrl: string;
   } | null>(null);
-  const [videoLoading, setVideoLoading] = useState(false);
   const [isInserting, setIsInserting] = useState(false);
-  
-  // 包装setIsGenerating和setVideoLoading以发送事件
-  const updateIsGenerating = (value: boolean) => {
-    setIsGenerating(value);
-    notifyGenerationStateChange(value, videoLoading);
-  };
-  
-  const updateVideoLoading = (value: boolean) => {
-    setVideoLoading(value);
-    notifyGenerationStateChange(isGenerating, value);
-  };
-  
   const [error, setError] = useState<string | null>(null);
-  // 只支持单张图片上传
-  const [uploadedImage, setUploadedImage] = useState<File | { url: string; name: string } | null>(initialImage || null);
-  // 历史相关状态
+  const [uploadedImage, setUploadedImage] = useState<ImageFile | null>(initialImage || null);
   const [historyItems, setHistoryItems] = useState<VideoHistoryItem[]>([]);
+  
+  const { isGenerating, isLoading: videoLoading, updateIsGenerating, updateIsLoading: updateVideoLoading } = useGenerationState('video');
 
   const { appState, setAppState } = useDrawnix();
   const { language } = useI18n();
@@ -192,14 +148,6 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
   // 视频元素引用，用于控制播放状态
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  // 检查是否为Invalid Token错误
-  const isInvalidTokenError = (errorMessage: string): boolean => {
-    const message = errorMessage.toLowerCase();
-    return message.includes('invalid token') || 
-           message.includes('invalid api key') ||
-           message.includes('unauthorized') ||
-           message.includes('api_error') && message.includes('invalid');
-  };
 
   // 计算视频插入位置
   const calculateInsertionPoint = (): Point | undefined => {
@@ -228,15 +176,13 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
     return calculatedPoint || undefined;
   };
 
-  // 组件初始化时加载缓存和保存选中元素
   useEffect(() => {
-    const cachedData = loadPreviewCache();
+    const cachedData = cacheManager.load();
     if (cachedData) {
       setPrompt(cachedData.prompt);
       setGeneratedVideo(cachedData.generatedVideo);
     }
 
-    // 保存当前选中的元素ID，用于后续插入位置计算
     if (board) {
       const currentSelectedElements = getSelectedElements(board);
       const elementIds = currentSelectedElements.map(el => (el as any).id || '').filter(Boolean);
@@ -251,48 +197,18 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
     setHistoryItems(history);
   }, []);
 
-  // 处理 props 变化，更新内部状态
   useEffect(() => {
     setPrompt(initialPrompt);
     setUploadedImage(initialImage || null);
-    // 清除之前的错误状态
     setError(null);
   }, [initialPrompt, initialImage]);
 
-  // 组件挂载时清除错误状态
   useEffect(() => {
     setError(null);
   }, []);
 
-  // 处理图片上传（只支持单张图片）
-  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (files && files[0]) {
-      const file = files[0];
-      if (file.type.startsWith('image/') && file.size <= 10 * 1024 * 1024) {
-        setUploadedImage(file);
-        // 成功上传图片时清除错误状态
-        setError(null);
-      } else {
-        setError(
-          language === 'zh' 
-            ? '请选择有效的图片文件（小于10MB）' 
-            : 'Please select a valid image file (less than 10MB)'
-        );
-      }
-    }
-    // 清空input值，允许重复选择同一文件
-    event.target.value = '';
-  };
 
-  // 删除上传的图片
-  const removeUploadedImage = () => {
-    setUploadedImage(null);
-  };
-
-  // 重置所有状态
   const handleReset = () => {
-    // 暂停并清理视频
     if (videoRef.current) {
       videoRef.current.pause();
       videoRef.current.src = '';
@@ -303,13 +219,7 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
     setUploadedImage(null);
     setGeneratedVideo(null);
     setError(null);
-    // 清除缓存
-    try {
-      localStorage.removeItem(PREVIEW_CACHE_KEY);
-    } catch (error) {
-      console.warn('Failed to clear cache:', error);
-    }
-    // 触发Footer组件更新
+    cacheManager.clear();
     window.dispatchEvent(new CustomEvent('ai-video-clear'));
   };
 
@@ -326,7 +236,7 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
         timestamp: Date.now(),
         sourceImage: uploadedImage instanceof File ? URL.createObjectURL(uploadedImage) : uploadedImage?.url
       };
-      savePreviewCache(cacheData);
+      cacheManager.save(cacheData);
 
       // 异步生成视频缩略图（使用预览URL）
       const thumbnailPromise = generateVideoThumbnail(videoUrls.previewUrl);
@@ -426,7 +336,7 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
       },
       timestamp: Date.now()
     };
-    savePreviewCache(cacheData);
+    cacheManager.save(cacheData);
   };
 
   // 通用历史选择处理器（兼容各种类型）
@@ -492,12 +402,10 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
       return;
     }
 
-    // 源图片现在是可选的
-    // if (!uploadedImage) {
-    //   setError(language === 'zh' ? '请上传一张图片作为视频生成的源素材' : 'Please upload an image as source material for video generation');
-    //   return;
-    // }
-
+    // 清除旧的视频和错误信息
+    setGeneratedVideo(null);
+    setError(null);
+    
     // 在生成开始时保存提示词（不管是否生成成功）
     savePromptToHistory(prompt);
 
@@ -629,36 +537,18 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
       console.error('AI video generation error:', err);
       const errorMessage = err instanceof Error ? err.message : String(err);
       
-      // 检查是否为Invalid Token错误
       if (isInvalidTokenError(errorMessage)) {
-        // 调用API Key设置弹窗
-        try {
-          const newApiKey = await promptForApiKey();
-          if (newApiKey) {
-            // 用户输入了新的API Key，更新全局设置
-            geminiSettings.update({ apiKey: newApiKey });
-            setError(null); // 清除错误信息
-          } else {
-            // 用户取消了API Key输入
-            setError(
-              language === 'zh' 
-                ? '需要有效的API Key才能生成视频' 
-                : 'Valid API Key is required to generate videos'
-            );
-          }
-        } catch (apiKeyError) {
-          console.error('API Key setup error:', apiKeyError);
-          setError(
-            language === 'zh' 
-              ? 'API Key设置失败，请稍后重试' 
-              : 'API Key setup failed, please try again later'
-          );
+        const apiKeyError = await handleApiKeyError(errorMessage, language);
+        if (apiKeyError) {
+          setError(apiKeyError);
         }
+        // If apiKeyError is null, it means API key was successfully updated
       } else {
+        // Show the actual error message for non-API key errors
         setError(
           language === 'zh' 
-            ? '视频生成失败，请检查网络连接或稍后重试' 
-            : 'Video generation failed, please check network connection or try again later'
+            ? `视频生成失败: ${errorMessage}` 
+          : `Video generation failed: ${errorMessage}`
         );
       }
     } finally {
@@ -666,22 +556,7 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
     }
   };
 
-  // 键盘快捷键支持
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
-        event.preventDefault();
-        if (!isGenerating && prompt.trim()) {
-          handleGenerate();
-        }
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [isGenerating, prompt, handleGenerate]);
+  useKeyboardShortcuts(isGenerating, prompt, handleGenerate);
 
   // 组件卸载时清理视频播放
   useEffect(() => {
@@ -702,211 +577,53 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
         <div className="ai-image-generation-section">
           <div className="ai-image-generation-form">
             
-            {/* 图片上传 (只支持单张图片) */}
-            <div className="form-field">
-              <label className="form-label">
-                {language === 'zh' ? '源图片 (可选)' : 'Source Image (Optional)'}
-              </label>
-              <div className="unified-image-area">
-                {!uploadedImage ? (
-                  /* 没有图片时显示完整上传区域 */
-                  <div className="upload-area">
-                    <input
-                      type="file"
-                      id="image-upload"
-                      accept="image/*"
-                      onChange={handleImageUpload}
-                      className="upload-input"
-                      disabled={isGenerating}
-                    />
-                    <label htmlFor="image-upload" className="upload-label">
-                      <div className="upload-icon">🎬</div>
-                      <div className="upload-text">
-                        {language === 'zh' 
-                          ? '点击或拖拽上传图片' 
-                          : 'Click or drag to upload image'}
-                      </div>
-                      <div className="upload-hint">
-                        {language === 'zh' 
-                          ? '支持 JPG, PNG, WebP, 最大 10MB' 
-                          : 'Support JPG, PNG, WebP, Max 10MB'}
-                      </div>
-                    </label>
-                  </div>
-                ) : (
-                  /* 有图片时显示图片网格样式（单张图片） */
-                  <div className="images-grid">
-                    <div className="uploaded-image-item" data-tooltip={uploadedImage instanceof File ? URL.createObjectURL(uploadedImage) : uploadedImage.url}>
-                      <div 
-                        className="uploaded-image-preview-container"
-                        onMouseEnter={(e) => {
-                          const tooltip = e.currentTarget.querySelector('.image-hover-tooltip') as HTMLElement;
-                          if (tooltip) {
-                            const rect = e.currentTarget.getBoundingClientRect();
-                            tooltip.style.left = rect.left + rect.width / 2 + 'px';
-                            tooltip.style.top = rect.top - 10 + 'px';
-                            tooltip.style.opacity = '1';
-                            tooltip.style.visibility = 'visible';
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          const tooltip = e.currentTarget.querySelector('.image-hover-tooltip') as HTMLElement;
-                          if (tooltip) {
-                            tooltip.style.opacity = '0';
-                            tooltip.style.visibility = 'hidden';
-                          }
-                        }}
-                      >
-                        <img
-                          src={uploadedImage instanceof File ? URL.createObjectURL(uploadedImage) : uploadedImage.url}
-                          alt="Source"
-                          className="uploaded-image-preview"
-                        />
-                        <div className="image-hover-tooltip">
-                          <img src={uploadedImage instanceof File ? URL.createObjectURL(uploadedImage) : uploadedImage.url} alt="Large preview" />
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={removeUploadedImage}
-                        className="remove-image-btn"
-                        disabled={isGenerating}
-                      >
-                        ×
-                      </button>
-                      <div className="image-info">
-                        <span className="image-name">
-                          {uploadedImage instanceof File ? uploadedImage.name : uploadedImage.name}
-                        </span>
-                      </div>
-                    </div>
-                    {/* 替换按钮（使用添加更多的样式） */}
-                    <div className="add-more-item">
-                      <input
-                        type="file"
-                        id="image-replace"
-                        accept="image/*"
-                        onChange={handleImageUpload}
-                        className="upload-input"
-                        disabled={isGenerating}
-                      />
-                      <label htmlFor="image-replace" className="add-more-label">
-                        <div className="add-more-icon">↻</div>
-                        <div className="add-more-text">
-                          {language === 'zh' ? '替换' : 'Replace'}
-                        </div>
-                      </label>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
+            <ImageUpload
+              images={uploadedImage ? [uploadedImage] : []}
+              onImagesChange={(images) => setUploadedImage(images[0] || null)}
+              language={language}
+              disabled={isGenerating}
+              multiple={false}
+              icon="🎬"
+              onError={setError}
+            />
             
-            {/* 提示词输入 */}
-            <div className="form-field">
-              <div className="form-label-with-icon">
-                <label className="form-label">
-                  {language === 'zh' ? '视频描述' : 'Video Description'}
-                </label>
-                <div className="preset-tooltip-container">
-                  <button
-                    type="button"
-                    className="preset-icon-button"
-                    disabled={isGenerating}
-                  >
-                    💡
-                  </button>
-                  <div className="preset-tooltip">
-                    <div className="preset-header">
-                      {language === 'zh' ? '预设提示词' : 'Preset Prompts'}
-                    </div>
-                    <div className="preset-list">
-                      {presetPrompts.map((preset, index) => (
-                        <button
-                          key={index}
-                          type="button"
-                          className="preset-item"
-                          onClick={() => {
-                            setPrompt(preset);
-                            // 选择预设提示词时清除错误状态
-                            if (error) setError(null);
-                          }}
-                          disabled={isGenerating}
-                        >
-                          {preset}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <textarea
-                className="form-textarea"
-                value={prompt}
-                onChange={(e) => {
-                  setPrompt(e.target.value);
-                  // 用户开始输入新内容时清除错误状态
-                  if (error) setError(null);
-                }}
-                placeholder={getPromptExample(language)}
-                rows={4}
-                disabled={isGenerating}
-              />
-            </div>
+            <PromptInput
+              prompt={prompt}
+              onPromptChange={setPrompt}
+              presetPrompts={presetPrompts}
+              language={language}
+              type="video"
+              disabled={isGenerating}
+              onError={setError}
+            />
             
-            {/* 错误信息 */}
-            {error && (
-              <div className="form-error">
-                {error}
-              </div>
-            )}
+            <ErrorDisplay error={error} />
           </div>
         </div>
         
-        {/* 生成和重置按钮区域 */}
-        <div className="section-actions">
-          <button
-            onClick={handleGenerate}
-            disabled={isGenerating || !prompt.trim()}
-            className={`action-button primary ${isGenerating ? 'loading' : ''}`}
-          >
-            {isGenerating
-              ? (language === 'zh' ? '生成中...' : 'Generating...')
-              : generatedVideo
-              ? (language === 'zh' ? '重新生成' : 'Regenerate')
-              : (language === 'zh' ? '生成视频' : 'Generate Video')
-            }
-          </button>
-          
-          <button
-            onClick={handleReset}
-            disabled={isGenerating}
-            className="action-button secondary"
-          >
-            {language === 'zh' ? '重置' : 'Reset'}
-          </button>
-        </div>
+        <ActionButtons
+          language={language}
+          type="video"
+          isGenerating={isGenerating}
+          hasGenerated={!!generatedVideo}
+          canGenerate={!!prompt.trim()}
+          onGenerate={handleGenerate}
+          onReset={handleReset}
+        />
       </div>
       
       {/* 预览区域 */}
       <div className="preview-section">
-        <div className="image-preview-container" >
+        <div className="image-preview-container">
+          <LoadingState
+            language={language}
+            type="video"
+            isGenerating={isGenerating}
+            isLoading={videoLoading}
+            hasContent={!!generatedVideo}
+          />
           
-          {isGenerating ? (
-            <div className="preview-loading">
-              <div className="loading-spinner"></div>
-              <div className="loading-text">
-                {language === 'zh' ? '正在生成视频...' : 'Generating video...'}
-              </div>
-            </div>
-          ) : videoLoading ? (
-            <div className="preview-loading">
-              <div className="loading-spinner"></div>
-              <div className="loading-text">
-                {language === 'zh' ? '正在加载视频...' : 'Loading video...'}
-              </div>
-            </div>
-          ) : generatedVideo ? (
+          {generatedVideo && (
             <div className="preview-image-wrapper">
               <video 
                 ref={videoRef}
@@ -919,16 +636,8 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
                 onLoadedData={() => console.log('Preview video loaded successfully')}
                 onError={() => {
                   console.warn('Preview video failed to load:', generatedVideo.previewUrl);
-                  // 保持视频URL，让用户可以右键新窗口打开
                 }}
               />
-            </div>
-          ) : (
-            <div className="preview-placeholder">
-              <div className="placeholder-icon">🎬</div>
-              <div className="placeholder-text">
-                {language === 'zh' ? '视频将在这里显示' : 'Video will be displayed here'}
-              </div>
             </div>
           )}
         </div>
