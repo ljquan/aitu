@@ -4,3 +4,8 @@ export * from './ErrorDisplay';
 export * from './ImageUpload';
 export * from './LoadingState';
 export * from './PromptInput';
+export * from './insertion-utils';
+export * from './prompt-utils';
+export * from './preload-utils';
+export * from './history-update-utils';
+export * from './size-constants';

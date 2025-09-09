@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { promptForApiKey } from '../../../utils/gemini-api';
 import { geminiSettings } from '../../../utils/settings-manager';
+import { CACHE_DURATION } from './size-constants';
 
 export const isInvalidTokenError = (errorMessage: string): boolean => {
   const message = errorMessage.toLowerCase();
@@ -68,7 +69,7 @@ export const createCacheManager = <T extends PreviewCacheBase>(cacheKey: string)
         const data = JSON.parse(cached) as T;
         const now = Date.now();
         const cacheAge = now - data.timestamp;
-        if (cacheAge < 24 * 60 * 60 * 1000) {
+        if (cacheAge < CACHE_DURATION) {
           return data;
         }
       }

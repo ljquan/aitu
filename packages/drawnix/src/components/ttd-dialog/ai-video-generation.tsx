@@ -4,7 +4,7 @@ import './ai-video-generation.scss';
 import { useDrawnix } from '../../hooks/use-drawnix';
 import { useI18n } from '../../i18n';
 import { useBoard } from '@plait-board/react-board';
-import { getVideoPrompts, type Language } from '../../constants/prompts';
+import { type Language } from '../../constants/prompts';
 import { getSelectedElements, PlaitElement, getRectangleByElements, Point } from '@plait/core';
 import { videoGeminiClient } from '../../utils/gemini-api';
 import { getInsertionPointForSelectedElements } from '../../utils/selection-utils';
@@ -13,10 +13,9 @@ import {
   GenerationHistory, 
   VideoHistoryItem, 
   ImageHistoryItem,
-  saveVideoToHistory, 
-  loadVideoHistory, 
-  generateHistoryId,
-  extractUserPromptsFromHistory 
+  loadVideoHistory,
+  saveVideoToHistory,
+  generateHistoryId
 } from '../generation-history';
 import {
   useGenerationState,
@@ -31,7 +30,12 @@ import {
   ImageUpload,
   LoadingState,
   PromptInput,
-  type ImageFile
+  type ImageFile,
+  getMergedPresetPrompts,
+  savePromptToHistory as savePromptToHistoryUtil,
+  generateVideoThumbnail as generateThumbnail,
+  updateHistoryWithGeneratedContent,
+  DEFAULT_VIDEO_DIMENSIONS
 } from './shared';
 import { AI_VIDEO_GENERATION_PREVIEW_CACHE_KEY as PREVIEW_CACHE_KEY } from '../../constants/storage';
 
@@ -48,76 +52,6 @@ interface PreviewCache extends PreviewCacheBase {
 
 const cacheManager = createCacheManager<PreviewCache>(PREVIEW_CACHE_KEY);
 
-// 从视频生成缩略图（第一帧）
-const generateVideoThumbnail = async (videoUrl: string): Promise<string | undefined> => {
-  return new Promise((resolve) => {
-    try {
-      const video = document.createElement('video');
-      video.crossOrigin = 'anonymous';
-      video.muted = true;
-      video.playsInline = true;
-      
-      video.onloadeddata = () => {
-        try {
-          // 设置为第一帧（0.1秒处，避免完全黑屏）
-          video.currentTime = 0.1;
-          
-          video.onseeked = () => {
-            try {
-              const canvas = document.createElement('canvas');
-              const ctx = canvas.getContext('2d');
-              
-              if (!ctx) {
-                resolve(undefined);
-                return;
-              }
-              
-              // 设置缩略图尺寸（保持比例）
-              const maxWidth = 80;
-              const maxHeight = 60;
-              const aspectRatio = video.videoWidth / video.videoHeight;
-              
-              let width = maxWidth;
-              let height = maxHeight;
-              
-              if (aspectRatio > maxWidth / maxHeight) {
-                height = maxWidth / aspectRatio;
-              } else {
-                width = maxHeight * aspectRatio;
-              }
-              
-              canvas.width = width;
-              canvas.height = height;
-              
-              // 绘制视频帧
-              ctx.drawImage(video, 0, 0, width, height);
-              
-              // 转换为 base64
-              const thumbnail = canvas.toDataURL('image/jpeg', 0.8);
-              resolve(thumbnail);
-            } catch (error) {
-              console.warn('Failed to generate thumbnail from frame:', error);
-              resolve(undefined);
-            }
-          };
-        } catch (error) {
-          console.warn('Failed to seek video for thumbnail:', error);
-          resolve(undefined);
-        }
-      };
-      
-      video.onerror = () => {
-        console.warn('Failed to load video for thumbnail');
-        resolve(undefined);
-      };
-      
-      video.src = videoUrl;
-    } catch (error) {
-      console.warn('Failed to create video element for thumbnail:', error);
-      resolve(undefined);
-    }
-  });
-};
 
 
 interface AIVideoGenerationProps {
@@ -239,7 +173,7 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
       cacheManager.save(cacheData);
 
       // 异步生成视频缩略图（使用预览URL）
-      const thumbnailPromise = generateVideoThumbnail(videoUrls.previewUrl);
+      const thumbnailPromise = generateThumbnail(videoUrls.previewUrl);
 
       // 更新已有的提示词记录，添加生成的视频信息
       const existingHistory = loadVideoHistory();
@@ -347,53 +281,16 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
     // 视频生成组件不处理图片类型
   };
 
-  // 获取合并的预设提示词（用户历史 + 默认预设）
-  const getMergedPresetPrompts = () => {
-    // 获取默认预设提示词
-    const defaultPrompts = getVideoPrompts(language as Language);
-
-    // 使用工具函数提取用户历史提示词
-    const userPrompts = extractUserPromptsFromHistory(historyItems).slice(0, 8);
-
-    // 合并：用户历史提示词在前，默认预设在后，总数不超过12个
-    const merged = [...userPrompts, ...defaultPrompts]
-      .filter((prompt, index, arr) => arr.indexOf(prompt) === index) // 再次去重，避免用户历史与默认重复
-      .slice(0, 12); // 限制总数
-
-    return merged;
-  };
-
   // 使用useMemo优化性能，当historyItems或language变化时重新计算
-  const presetPrompts = React.useMemo(() => getMergedPresetPrompts(), [historyItems, language]);
+  const presetPrompts = React.useMemo(() => 
+    getMergedPresetPrompts('video', language as Language, historyItems), 
+    [historyItems, language]
+  );
 
   // 保存提示词到历史记录（去重）
   const savePromptToHistory = (promptText: string) => {
-    if (!promptText.trim()) return;
-
-    // 获取现有的历史记录
-    const existingHistory = loadVideoHistory();
-    
-    // 检查是否已存在相同的提示词
-    const isDuplicate = existingHistory.some(item => item.prompt.trim() === promptText.trim());
-    
-    if (!isDuplicate) {
-      // 创建一个临时的历史项目，只用于保存提示词
-      const promptHistoryItem: Omit<VideoHistoryItem, 'type'> = {
-        id: generateHistoryId(),
-        prompt: promptText.trim(),
-        imageUrl: '', // 暂时为空
-        timestamp: Date.now(),
-        width: 400,   // 默认视频尺寸
-        height: 225,  // 默认视频尺寸
-        previewUrl: '',
-        downloadUrl: ''
-      };
-      
-      console.log('Saving prompt to history:', promptText);
-      saveVideoToHistory(promptHistoryItem);
-    } else {
-      console.log('Prompt already exists in history, skipping:', promptText);
-    }
+    const dimensions = { width: DEFAULT_VIDEO_DIMENSIONS.width, height: DEFAULT_VIDEO_DIMENSIONS.height };
+    savePromptToHistoryUtil('video', promptText, dimensions);
   };
 
   const handleGenerate = async () => {
@@ -515,19 +412,41 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
                   await setGeneratedVideoWithPreload({ previewUrl: potentialUrl, downloadUrl: potentialUrl });
                 } else {
                   console.log('No suitable video URL found in response');
-                  setError(
-                    language === 'zh' 
-                      ? `视频生成API无法生成视频。响应: ${responseContent.substring(0, 200)}...` 
-                      : `Video Generation API unable to generate video. Response: ${responseContent.substring(0, 200)}...`
-                  );
+                  console.log('Full response content:', responseContent);
+                  
+                  // 检查响应是否包含"正在生成"等中间状态信息
+                  if (responseContent.includes('正在生成') || responseContent.includes('拿到') || responseContent.includes('链接') || responseContent.includes('处理中')) {
+                    setError(
+                      language === 'zh' 
+                        ? '视频仍在后台生成中，请稍等片刻后重新生成。' 
+                        : 'Video is still being processed in the background, please wait a moment and try generating again.'
+                    );
+                  } else {
+                    setError(
+                      language === 'zh' 
+                        ? '视频生成失败：未找到有效的视频链接，请重试或检查网络连接。' 
+                        : 'Video generation failed: No valid video link found, please retry or check your network connection.'
+                    );
+                  }
                 }
               } else {
                 console.log('No URLs found in response');
-                setError(
-                  language === 'zh' 
-                    ? `视频生成API无法生成视频。响应: ${responseContent.substring(0, 200)}...` 
-                    : `Video Generation API unable to generate video. Response: ${responseContent.substring(0, 200)}...`
-                );
+                console.log('Full response content:', responseContent);
+                
+                // 检查响应是否包含"正在生成"等中间状态信息
+                if (responseContent.includes('正在生成') || responseContent.includes('拿到') || responseContent.includes('链接') || responseContent.includes('处理中')) {
+                  setError(
+                    language === 'zh' 
+                      ? '视频仍在后台生成中，请稍等片刻后重新生成。' 
+                      : 'Video is still being processed in the background, please wait a moment and try generating again.'
+                  );
+                } else {
+                  setError(
+                    language === 'zh' 
+                      ? '视频生成失败：未找到有效的视频链接，请重试或检查网络连接。' 
+                      : 'Video generation failed: No valid video link found, please retry or check your network connection.'
+                  );
+                }
               }
             }
           }

@@ -4,7 +4,7 @@ import './ai-image-generation.scss';
 import { useDrawnix } from '../../hooks/use-drawnix';
 import { useI18n } from '../../i18n';
 import { useBoard } from '@plait-board/react-board';
-import { getImagePrompts, type Language } from '../../constants/prompts';
+import { type Language } from '../../constants/prompts';
 import { getSelectedElements, PlaitElement, getRectangleByElements, Point } from '@plait/core';
 import { defaultGeminiClient } from '../../utils/gemini-api';
 import { insertImageFromUrl } from '../../data/image';
@@ -12,10 +12,7 @@ import {
   GenerationHistory, 
   ImageHistoryItem, 
   VideoHistoryItem,
-  saveImageToHistory, 
-  loadImageHistory, 
-  generateHistoryId,
-  extractUserPromptsFromHistory 
+  loadImageHistory 
 } from '../generation-history';
 import {
   useGenerationState,
@@ -29,7 +26,13 @@ import {
   ImageUpload,
   LoadingState,
   PromptInput,
-  type ImageFile
+  type ImageFile,
+  calculateInsertionPointFromIds,
+  getMergedPresetPrompts,
+  savePromptToHistory as savePromptToHistoryUtil,
+  preloadImage,
+  updateHistoryWithGeneratedContent,
+  DEFAULT_IMAGE_DIMENSIONS
 } from './shared';
 import { AI_IMAGE_GENERATION_PREVIEW_CACHE_KEY as PREVIEW_CACHE_KEY } from '../../constants/storage';
 
@@ -51,8 +54,8 @@ interface AIImageGenerationProps {
 
 const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedElementIds = [] }: AIImageGenerationProps = {}) => {
   const [prompt, setPrompt] = useState(initialPrompt);
-  const [width, setWidth] = useState<number | string>(1024);
-  const [height, setHeight] = useState<number | string>(1024);
+  const [width, setWidth] = useState<number | string>(DEFAULT_IMAGE_DIMENSIONS.width);
+  const [height, setHeight] = useState<number | string>(DEFAULT_IMAGE_DIMENSIONS.height);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [useImageAPI] = useState(false);
@@ -65,43 +68,9 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
   const { language } = useI18n();
   const board = useBoard();
 
-  // 根据保存的选中元素IDs计算插入位置
+  // 计算插入位置
   const calculateInsertionPoint = (): Point | undefined => {
-    if (!board || selectedElementIds.length === 0) {
-      return undefined;
-    }
-
-    // 查找对应的元素
-    const elements: PlaitElement[] = [];
-    for (const id of selectedElementIds) {
-      const element = board.children.find((el: PlaitElement) => el.id === id);
-      if (element) {
-        elements.push(element);
-      }
-    }
-
-    if (elements.length === 0) {
-      console.warn('No elements found for saved selected element IDs:', selectedElementIds);
-      return undefined;
-    }
-
-    try {
-      // 计算边界矩形
-      const boundingRect = getRectangleByElements(board, elements, false);
-      
-      // 计算几何中心X坐标
-      const centerX = boundingRect.x + boundingRect.width / 2;
-      
-      // 计算底部Y坐标 + 50px偏移
-      const insertionY = boundingRect.y + boundingRect.height + 50;
-      
-      console.log('Calculated insertion point from saved selection:', { centerX, insertionY, boundingRect });
-      
-      return [centerX, insertionY] as Point;
-    } catch (error) {
-      console.warn('Error calculating insertion point from saved selection:', error);
-      return undefined;
-    }
+    return calculateInsertionPointFromIds(board, selectedElementIds);
   };
 
 
@@ -166,28 +135,6 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
     window.dispatchEvent(new CustomEvent('ai-image-clear'));
   };
 
-  // 预加载图片并优化缓存
-  const preloadImage = (url: string): Promise<HTMLImageElement> => {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      
-      // 添加缓存策略
-      img.crossOrigin = 'anonymous';
-      img.referrerPolicy = 'no-referrer';
-      
-      img.onload = () => {
-        resolve(img);
-      };
-      
-      img.onerror = (error) => {
-        console.warn('Image preload failed:', url, error);
-        reject(error);
-      };
-      
-      // 设置src触发加载
-      img.src = url;
-    });
-  };
 
   // 设置生成图片并预加载
   const setGeneratedImageWithPreload = async (imageUrl: string) => {
@@ -207,42 +154,16 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
       };
       cacheManager.save(cacheData);
 
-      // 更新已有的提示词记录，添加生成的图片信息
-      const existingHistory = loadImageHistory();
-      const existingIndex = existingHistory.findIndex(item => item.prompt.trim() === prompt.trim());
-      
-      if (existingIndex >= 0) {
-        // 如果找到了相同提示词的记录，更新它的图片信息
-        const updatedItem = {
-          ...existingHistory[existingIndex],
-          imageUrl,
-          timestamp: Date.now(), // 更新时间戳
-          width: typeof width === 'string' ? parseInt(width) || 400 : width,
-          height: typeof height === 'string' ? parseInt(height) || 400 : height
-        };
-        
-        // 更新历史记录
-        saveImageToHistory(updatedItem);
-        
-        // 更新历史列表状态
-        const updatedHistoryItem: ImageHistoryItem = { ...updatedItem, type: 'image' };
-        setHistoryItems(prev => [updatedHistoryItem, ...prev.filter(h => h.id !== updatedItem.id)].slice(0, 50));
-      } else {
-        // 如果没有找到，创建新记录（理论上不应该到这里，因为已在handleGenerate中保存了）
-        const historyItem: Omit<ImageHistoryItem, 'type'> = {
-          id: generateHistoryId(),
-          prompt,
-          imageUrl,
-          timestamp: Date.now(),
-          width: typeof width === 'string' ? parseInt(width) || 400 : width,
-          height: typeof height === 'string' ? parseInt(height) || 400 : height
-        };
-        saveImageToHistory(historyItem);
-        
-        // 更新历史列表状态
-        const newHistoryItem: ImageHistoryItem = { ...historyItem, type: 'image' };
-        setHistoryItems(prev => [newHistoryItem, ...prev.filter(h => h.id !== historyItem.id)].slice(0, 50));
-      }
+      // 更新历史记录
+      updateHistoryWithGeneratedContent({
+        type: 'image',
+        prompt,
+        url: imageUrl,
+        dimensions: {
+          width: typeof width === 'string' ? parseInt(width) || DEFAULT_IMAGE_DIMENSIONS.width : width,
+          height: typeof height === 'string' ? parseInt(height) || DEFAULT_IMAGE_DIMENSIONS.height : height
+        }
+      }, setHistoryItems);
     } catch (error) {
       console.warn('Failed to preload image, setting anyway:', error);
       // 即使预加载失败，也设置图片URL，让浏览器正常加载
@@ -258,42 +179,16 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
       };
       cacheManager.save(cacheData);
 
-      // 更新已有的提示词记录，添加生成的图片信息
-      const existingHistory = loadImageHistory();
-      const existingIndex = existingHistory.findIndex(item => item.prompt.trim() === prompt.trim());
-      
-      if (existingIndex >= 0) {
-        // 如果找到了相同提示词的记录，更新它的图片信息
-        const updatedItem = {
-          ...existingHistory[existingIndex],
-          imageUrl,
-          timestamp: Date.now(), // 更新时间戳
-          width: typeof width === 'string' ? parseInt(width) || 400 : width,
-          height: typeof height === 'string' ? parseInt(height) || 400 : height
-        };
-        
-        // 更新历史记录
-        saveImageToHistory(updatedItem);
-        
-        // 更新历史列表状态
-        const updatedHistoryItem: ImageHistoryItem = { ...updatedItem, type: 'image' };
-        setHistoryItems(prev => [updatedHistoryItem, ...prev.filter(h => h.id !== updatedItem.id)].slice(0, 50));
-      } else {
-        // 如果没有找到，创建新记录（理论上不应该到这里，因为已在handleGenerate中保存了）
-        const historyItem: Omit<ImageHistoryItem, 'type'> = {
-          id: generateHistoryId(),
-          prompt,
-          imageUrl,
-          timestamp: Date.now(),
-          width: typeof width === 'string' ? parseInt(width) || 400 : width,
-          height: typeof height === 'string' ? parseInt(height) || 400 : height
-        };
-        saveImageToHistory(historyItem);
-        
-        // 更新历史列表状态
-        const newHistoryItem: ImageHistoryItem = { ...historyItem, type: 'image' };
-        setHistoryItems(prev => [newHistoryItem, ...prev.filter(h => h.id !== historyItem.id)].slice(0, 50));
-      }
+      // 更新历史记录
+      updateHistoryWithGeneratedContent({
+        type: 'image',
+        prompt,
+        url: imageUrl,
+        dimensions: {
+          width: typeof width === 'string' ? parseInt(width) || DEFAULT_IMAGE_DIMENSIONS.width : width,
+          height: typeof height === 'string' ? parseInt(height) || DEFAULT_IMAGE_DIMENSIONS.height : height
+        }
+      }, setHistoryItems);
     } finally {
       updateImageLoading(false);
     }
@@ -325,51 +220,19 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
     // 图片生成组件不处理视频类型
   };
 
-  // 获取合并的预设提示词（用户历史 + 默认预设）
-  const getMergedPresetPrompts = () => {
-    // 获取默认预设提示词
-    const defaultPrompts = getImagePrompts(language as Language);
-
-    // 使用工具函数提取用户历史提示词
-    const userPrompts = extractUserPromptsFromHistory(historyItems).slice(0, 8);
-
-    // 合并：用户历史提示词在前，默认预设在后，总数不超过12个
-    const merged = [...userPrompts, ...defaultPrompts]
-      .filter((prompt, index, arr) => arr.indexOf(prompt) === index) // 再次去重，避免用户历史与默认重复
-      .slice(0, 12); // 限制总数
-
-    return merged;
-  };
-
   // 使用useMemo优化性能，当historyItems或language变化时重新计算
-  const presetPrompts = React.useMemo(() => getMergedPresetPrompts(), [historyItems, language]);
+  const presetPrompts = React.useMemo(() => 
+    getMergedPresetPrompts('image', language as Language, historyItems), 
+    [historyItems, language]
+  );
 
   // 保存提示词到历史记录（去重）
   const savePromptToHistory = (promptText: string) => {
-    if (!promptText.trim()) return;
-
-    // 获取现有的历史记录
-    const existingHistory = loadImageHistory();
-    
-    // 检查是否已存在相同的提示词
-    const isDuplicate = existingHistory.some(item => item.prompt.trim() === promptText.trim());
-    
-    if (!isDuplicate) {
-      // 创建一个临时的历史项目，只用于保存提示词
-      const promptHistoryItem: Omit<ImageHistoryItem, 'type'> = {
-        id: generateHistoryId(),
-        prompt: promptText.trim(),
-        imageUrl: '', // 暂时为空
-        timestamp: Date.now(),
-        width: typeof width === 'string' ? parseInt(width) || 1024 : width,
-        height: typeof height === 'string' ? parseInt(height) || 1024 : height
-      };
-      
-      console.log('Saving prompt to history:', promptText);
-      saveImageToHistory(promptHistoryItem);
-    } else {
-      console.log('Prompt already exists in history, skipping:', promptText);
-    }
+    const dimensions = {
+      width: typeof width === 'string' ? parseInt(width) || DEFAULT_IMAGE_DIMENSIONS.width : width,
+      height: typeof height === 'string' ? parseInt(height) || DEFAULT_IMAGE_DIMENSIONS.height : height
+    };
+    savePromptToHistoryUtil('image', promptText, dimensions);
   };
 
   const handleGenerate = async () => {
