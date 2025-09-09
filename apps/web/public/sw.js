@@ -8,8 +8,111 @@ const STATIC_CACHE_NAME = `drawnix-static-v${APP_VERSION}`;
 // Detect development mode
 const isDevelopment = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
 
+// 允许跨域处理的域名配置 - 仅拦截需要CORS处理的域名
+// 备用域名 cdn.i666.fun 支持原生跨域显示，不需要拦截
+const CORS_ALLOWED_DOMAINS = [
+  {
+    hostname: 'google.datas.systems',
+    pathPattern: 'response_images',
+    fallbackDomain: 'cdn.i666.fun'
+  }
+];
+
+// 通用图片文件扩展名匹配
+const IMAGE_EXTENSIONS_REGEX = /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)$/i;
+
 // 图片请求去重字典：存储正在进行的请求Promise
 const pendingImageRequests = new Map();
+
+// 域名故障标记：记录已知失败的域名
+const failedDomains = new Set();
+
+// 检查URL是否需要CORS处理
+function shouldHandleCORS(url) {
+  for (const domain of CORS_ALLOWED_DOMAINS) {
+    if (url.hostname === domain.hostname && url.pathname.includes(domain.pathPattern)) {
+      return domain;
+    }
+  }
+  return null;
+}
+
+// 检查是否为图片请求
+function isImageRequest(url, request) {
+  return (
+    IMAGE_EXTENSIONS_REGEX.test(url.pathname) ||
+    request.destination === 'image' ||
+    shouldHandleCORS(url) !== null
+  );
+}
+
+// 从IndexedDB恢复失败域名列表
+async function loadFailedDomains() {
+  try {
+    const request = indexedDB.open('ServiceWorkerDB', 1);
+    
+    return new Promise((resolve, reject) => {
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const db = request.result;
+        if (db.objectStoreNames.contains('failedDomains')) {
+          const transaction = db.transaction(['failedDomains'], 'readonly');
+          const store = transaction.objectStore('failedDomains');
+          const getAllRequest = store.getAll();
+          
+          getAllRequest.onsuccess = () => {
+            const domains = getAllRequest.result;
+            domains.forEach(item => failedDomains.add(item.domain));
+            console.log('Service Worker: 恢复失败域名列表:', Array.from(failedDomains));
+            resolve();
+          };
+          getAllRequest.onerror = () => reject(getAllRequest.error);
+        } else {
+          resolve();
+        }
+      };
+      request.onupgradeneeded = (event) => {
+        const db = event.target.result;
+        if (!db.objectStoreNames.contains('failedDomains')) {
+          db.createObjectStore('failedDomains', { keyPath: 'domain' });
+        }
+      };
+    });
+  } catch (error) {
+    console.warn('Service Worker: 无法加载失败域名列表:', error);
+  }
+}
+
+// 保存失败域名到IndexedDB
+async function saveFailedDomain(domain) {
+  try {
+    const request = indexedDB.open('ServiceWorkerDB', 1);
+    
+    return new Promise((resolve, reject) => {
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const db = request.result;
+        const transaction = db.transaction(['failedDomains'], 'readwrite');
+        const store = transaction.objectStore('failedDomains');
+        
+        store.put({ domain: domain, timestamp: Date.now() });
+        transaction.oncomplete = () => {
+          console.log('Service Worker: 已保存失败域名到数据库:', domain);
+          resolve();
+        };
+        transaction.onerror = () => reject(transaction.error);
+      };
+      request.onupgradeneeded = (event) => {
+        const db = event.target.result;
+        if (!db.objectStoreNames.contains('failedDomains')) {
+          db.createObjectStore('failedDomains', { keyPath: 'domain' });
+        }
+      };
+    });
+  } catch (error) {
+    console.warn('Service Worker: 无法保存失败域名:', error);
+  }
+}
 
 // 清理过期的pending请求（避免内存泄漏）
 function cleanupPendingRequests() {
@@ -95,9 +198,14 @@ const STATIC_FILES = [
 self.addEventListener('install', event => {
   console.log('Service Worker installed');
   
+  const installPromises = [];
+  
+  // Load failed domains from database
+  installPromises.push(loadFailedDomains());
+  
   // Only pre-cache static files in production
   if (!isDevelopment) {
-    event.waitUntil(
+    installPromises.push(
       caches.open(STATIC_CACHE_NAME)
         .then(cache => {
           console.log('Caching static files');
@@ -107,6 +215,7 @@ self.addEventListener('install', event => {
     );
   }
   
+  event.waitUntil(Promise.all(installPromises));
   self.skipWaiting();
 });
 
@@ -212,11 +321,14 @@ self.addEventListener('fetch', event => {
     return;
   }
   
+  // 完全不拦截备用域名，让浏览器直接处理
+  if (url.hostname === 'cdn.i666.fun') {
+    console.log('Service Worker: 备用域名请求直接通过，不拦截:', url.href);
+    return; // 直接返回，让浏览器处理
+  }
+  
   // 拦截外部图片请求（非同源且为图片格式）
-  if (url.origin !== location.origin && 
-      (url.pathname.match(/\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)$/i) || 
-       event.request.destination === 'image' ||
-       (url.hostname === 'google.data.systems' && url.pathname.includes('response_images')))) {
+  if (url.origin !== location.origin && isImageRequest(url, event.request)) {
     console.log('Service Worker: Intercepting external image request:', url.href);
     event.respondWith(handleImageRequest(event.request));
     return;
@@ -442,7 +554,26 @@ async function handleImageRequestInternal(originalRequest, requestUrl, dedupeKey
       }
     }
     
-    // 尝试多种获取方式，每种方式都支持重试
+    // 检查域名配置，准备备用域名
+    const originalUrlObject = new URL(requestUrl);
+    const domainConfig = shouldHandleCORS(originalUrlObject);
+    let fallbackUrl = null;
+    let shouldUseFallbackDirectly = false;
+    
+    if (domainConfig && domainConfig.fallbackDomain) {
+      // 创建备用URL，替换域名
+      fallbackUrl = requestUrl.replace(domainConfig.hostname, domainConfig.fallbackDomain);
+      
+      // 检查该域名是否已被标记为失败
+      if (failedDomains.has(domainConfig.hostname)) {
+        shouldUseFallbackDirectly = true;
+        console.log(`Service Worker [${requestId}]: ${domainConfig.hostname}已标记为失败域名，直接使用备用URL:`, fallbackUrl);
+      } else {
+        console.log(`Service Worker [${requestId}]: 检测到${domainConfig.hostname}域名，准备备用URL:`, fallbackUrl);
+      }
+    }
+    
+    // 尝试多种获取方式，每种方式都支持重试和域名切换
     let response;
     let fetchOptions = [
       // 1. 优先尝试no-cors模式（可以绕过CORS限制）
@@ -468,47 +599,116 @@ async function handleImageRequestInternal(originalRequest, requestUrl, dedupeKey
       }
     ];
     
-    for (let options of fetchOptions) {
-      try {
-        console.log(`Trying fetch with options:`, options);
-        
-        // Use retry logic for each fetch attempt
-        let lastError;
-        for (let attempt = 0; attempt <= 2; attempt++) {
-          try {
-            console.log(`Fetch attempt ${attempt + 1}/3 with options:`, options);
-            response = await fetch(requestUrl, options);
-            
-            if (response && response.status !== 0) {
-              console.log(`Fetch successful with status: ${response.status}`);
-              break;
-            }
-          } catch (fetchError) {
-            console.warn(`Fetch attempt ${attempt + 1} failed:`, fetchError);
-            lastError = fetchError;
-            
-            if (attempt < 2) {
-              // Wait before retrying (exponential backoff)
-              await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+    // 尝试不同的URL和不同的fetch选项
+    let urlsToTry;
+    
+    if (shouldUseFallbackDirectly) {
+      // 如果域名已被标记为失败，直接使用备用URL
+      urlsToTry = [fallbackUrl];
+    } else {
+      // 正常情况下先尝试原始URL
+      urlsToTry = [requestUrl];
+      if (fallbackUrl) {
+        urlsToTry.push(fallbackUrl); // 如果有备用URL，添加到尝试列表
+      }
+    }
+    
+    let finalError = null;
+    let urlTried = false;
+    
+    for (let urlIndex = 0; urlIndex < urlsToTry.length; urlIndex++) {
+      const currentUrl = urlsToTry[urlIndex];
+      const isUsingFallback = urlIndex > 0;
+      
+      if (isUsingFallback) {
+        console.log(`Service Worker [${requestId}]: 原始URL失败，尝试备用域名:`, currentUrl);
+      }
+      
+      for (let options of fetchOptions) {
+        try {
+          console.log(`Service Worker [${requestId}]: Trying fetch with options (${isUsingFallback ? 'fallback' : 'original'} URL, mode: ${options.mode || 'default'}):`, options);
+          
+          // Use retry logic for each fetch attempt
+          let lastError;
+          for (let attempt = 0; attempt <= 2; attempt++) {
+            try {
+              console.log(`Service Worker [${requestId}]: Fetch attempt ${attempt + 1}/3 with options on ${isUsingFallback ? 'fallback' : 'original'} URL`);
+              response = await fetch(currentUrl, options);
+              
+              if (response && response.status !== 0) {
+                console.log(`Service Worker [${requestId}]: Fetch successful with status: ${response.status} from ${isUsingFallback ? 'fallback' : 'original'} URL`);
+                urlTried = true;
+                break;
+              }
+            } catch (fetchError) {
+              console.warn(`Service Worker [${requestId}]: Fetch attempt ${attempt + 1} failed on ${isUsingFallback ? 'fallback' : 'original'} URL:`, fetchError);
+              lastError = fetchError;
+              
+              if (attempt < 2) {
+                // Wait before retrying (exponential backoff)
+                await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+              }
             }
           }
+          
+          if (response && response.status !== 0) {
+            urlTried = true;
+            break;
+          }
+          
+          if (lastError) {
+            console.warn(`Service Worker [${requestId}]: All fetch attempts failed with options on ${isUsingFallback ? 'fallback' : 'original'} URL:`, options, lastError);
+            finalError = lastError;
+          }
+        } catch (fetchError) {
+          console.warn(`Service Worker [${requestId}]: Fetch failed with options on ${isUsingFallback ? 'fallback' : 'original'} URL:`, options, fetchError);
+          finalError = fetchError;
+          continue;
         }
-        
-        if (response && response.status !== 0) {
-          break;
+      }
+      
+      // 如果当前URL成功获取到响应，跳出URL循环
+      if (response && response.status !== 0) {
+        urlTried = true;
+        break;
+      } else {
+        // 如果是配置的域名且是第一次尝试（原始URL），标记为失败域名
+        if (domainConfig && domainConfig.fallbackDomain && urlIndex === 0 && !shouldUseFallbackDirectly) {
+          console.warn(`Service Worker [${requestId}]: 标记${domainConfig.hostname}为失败域名，后续请求将直接使用备用域名`);
+          failedDomains.add(domainConfig.hostname);
+          // 异步保存到数据库，不阻塞当前请求
+          saveFailedDomain(domainConfig.hostname).catch(error => {
+            console.warn('Service Worker: 保存失败域名到数据库时出错:', error);
+          });
         }
-        
-        if (lastError) {
-          console.warn(`All fetch attempts failed with options:`, options, lastError);
-        }
-      } catch (fetchError) {
-        console.warn(`Fetch failed with options:`, options, fetchError);
-        continue;
       }
     }
     
     if (!response || response.status === 0) {
-      throw new Error('All fetch attempts failed');
+      let errorMessage = 'All fetch attempts failed';
+      
+      if (domainConfig && domainConfig.fallbackDomain) {
+        if (shouldUseFallbackDirectly) {
+          errorMessage = `备用域名${domainConfig.fallbackDomain}也失败了`;
+        } else {
+          errorMessage = `All fetch attempts failed for both ${domainConfig.hostname} and ${domainConfig.fallbackDomain} domains`;
+        }
+      }
+      
+      console.error(`Service Worker [${requestId}]: ${errorMessage}`, finalError);
+      
+      // 不要抛出错误，而是返回一个表示图片加载失败的响应
+      // 这样前端img标签会触发onerror事件，但不会导致浏览器回退到默认CORS处理
+      return new Response('Image load failed after all attempts', {
+        status: 404,
+        statusText: 'Image Not Found',
+        headers: {
+          'Content-Type': 'text/plain',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET',
+          'Access-Control-Allow-Headers': '*'
+        }
+      });
     }
     
     // 处理no-cors模式的opaque响应
