@@ -69,7 +69,7 @@ const DEFAULT_CONFIG: Partial<GeminiConfig> = {
   modelName: 'gemini-2.5-flash-image', // 图片生成和聊天的默认模型
   maxRetries: 10,
   retryDelay: 0,
-  timeout: 120000, // 120秒
+  timeout: 180000, // 180秒
 };
 
 // 视频生成专用配置
@@ -77,7 +77,7 @@ const VIDEO_DEFAULT_CONFIG: Partial<GeminiConfig> = {
   modelName: 'veo3', // 视频生成模型
   maxRetries: 10,
   retryDelay: 0,
-  timeout: 300000, // 5分钟，视频生成需要更长时间
+  timeout: 600000, // 10分钟，视频生成需要更长时间
 };
 
 // ====================================

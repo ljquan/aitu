@@ -1,0 +1,167 @@
+.smart-image-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  overflow: hidden;
+
+  .smart-image {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    transition: opacity 0.3s ease;
+
+    &.loading {
+      opacity: 0;
+    }
+
+    &.loaded {
+      opacity: 1;
+    }
+
+    &.error {
+      opacity: 0;
+    }
+  }
+
+  .smart-image-loading {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+
+    .loading-spinner {
+      width: 24px;
+      height: 24px;
+      border: 2px solid #e9ecef;
+      border-top: 2px solid #007bff;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    .loading-text {
+      font-size: 14px;
+      color: #6c757d;
+      text-align: center;
+    }
+  }
+
+  .smart-image-error {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 20px;
+    text-align: center;
+
+    .error-icon {
+      font-size: 32px;
+      opacity: 0.7;
+    }
+
+    .error-text {
+      font-size: 14px;
+      color: #dc3545;
+      margin-bottom: 8px;
+    }
+
+    .retry-button {
+      padding: 8px 16px;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+
+      &:hover:not(:disabled) {
+        background-color: #0056b3;
+        transform: translateY(-1px);
+      }
+
+      &:active:not(:disabled) {
+        transform: translateY(0);
+      }
+
+      &:disabled {
+        background-color: #6c757d;
+        cursor: not-allowed;
+        opacity: 0.6;
+      }
+
+      &:focus {
+        outline: 2px solid #007bff40;
+        outline-offset: 2px;
+      }
+    }
+  }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .smart-image-container {
+    .smart-image-error {
+      padding: 16px;
+
+      .error-icon {
+        font-size: 24px;
+      }
+
+      .error-text, .loading-text {
+        font-size: 12px;
+      }
+
+      .retry-button {
+        padding: 6px 12px;
+        font-size: 12px;
+      }
+    }
+
+    .smart-image-loading {
+      gap: 8px;
+
+      .loading-spinner {
+        width: 20px;
+        height: 20px;
+      }
+
+      .loading-text {
+        font-size: 12px;
+      }
+    }
+  }
+}
+
+/* 暗色主题支持 */
+@media (prefers-color-scheme: dark) {
+  .smart-image-container {
+    background-color: #2d3748;
+
+    .smart-image-loading .loading-text {
+      color: #a0aec0;
+    }
+
+    .smart-image-loading .loading-spinner {
+      border-color: #4a5568;
+      border-top-color: #63b3ed;
+    }
+  }
+}

@@ -19,6 +19,7 @@ import {
   generateHistoryId,
   extractUserPromptsFromHistory 
 } from '../generation-history';
+import { SmartImage } from '../smart-image/smart-image';
 
 import { AI_IMAGE_GENERATION_PREVIEW_CACHE_KEY as PREVIEW_CACHE_KEY } from '../../constants/storage';
 
@@ -1013,16 +1014,20 @@ Description: ${prompt}`;
             </div>
           ) : generatedImage ? (
             <div className="preview-image-wrapper">
-              <img 
+              <SmartImage 
                 src={generatedImage} 
                 alt="Generated" 
                 className="preview-image"
+                language={language}
+                maxRetries={4}
+                retryDelay={2000}
+                showRetryButton={true}
                 loading="eager"
                 decoding="async"
+                bypassServiceWorker={false} // 先尝试正常流程
                 onLoad={() => console.log('Preview image loaded successfully')}
-                onError={() => {
-                  console.warn('Preview image failed to load:', generatedImage);
-                  // 保持图片URL，让用户可以右键新窗口打开
+                onError={(error) => {
+                  console.warn('Preview image failed to load:', generatedImage, error);
                 }}
               />
             </div>

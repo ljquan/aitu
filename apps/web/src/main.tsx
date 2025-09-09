@@ -33,6 +33,15 @@ if ('serviceWorker' in navigator) {
             });
           }
         });
+        
+        // 页面加载完成后延迟触发缓存清理，避免影响页面性能
+        setTimeout(() => {
+          if (navigator.serviceWorker.controller) {
+            console.log('Main: Requesting cache cleanup from Service Worker');
+            navigator.serviceWorker.controller.postMessage({ type: 'CLEAN_EXPIRED_CACHE' });
+          }
+        }, 3000); // 延迟3秒执行缓存清理
+        
       })
       .catch(error => {
         console.log('Service Worker registration failed:', error);
@@ -45,6 +54,11 @@ if ('serviceWorker' in navigator) {
       if (isDevelopment) {
         // 开发模式下自动刷新页面
         window.location.reload();
+      }
+    } else if (event.data && event.data.type === 'CACHE_CLEANUP_COMPLETE') {
+      const { cleanedCount } = event.data;
+      if (cleanedCount > 0) {
+        console.log(`Main: Cache cleanup completed, removed ${cleanedCount} expired entries`);
       }
     }
   });
