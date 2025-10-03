@@ -1,6 +1,6 @@
 // Service Worker for PWA functionality and handling CORS issues with external images
 // Version will be replaced during build process
-const APP_VERSION = '0.0.3';
+const APP_VERSION = '0.0.4';
 const CACHE_NAME = `drawnix-v${APP_VERSION}`;
 const IMAGE_CACHE_NAME = `drawnix-images-v${APP_VERSION}`;
 const STATIC_CACHE_NAME = `drawnix-static-v${APP_VERSION}`;
@@ -20,6 +20,9 @@ const CORS_ALLOWED_DOMAINS = [
 
 // 通用图片文件扩展名匹配
 const IMAGE_EXTENSIONS_REGEX = /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)$/i;
+
+// 视频文件扩展名匹配
+const VIDEO_EXTENSIONS_REGEX = /\.(mp4|webm|ogg|mov|avi|mkv|flv|wmv|m4v)$/i;
 
 // 图片请求去重字典：存储正在进行的请求Promise
 const pendingImageRequests = new Map();
@@ -43,6 +46,15 @@ function isImageRequest(url, request) {
     IMAGE_EXTENSIONS_REGEX.test(url.pathname) ||
     request.destination === 'image' ||
     shouldHandleCORS(url) !== null
+  );
+}
+
+// 检查是否为视频请求
+function isVideoRequest(url, request) {
+  return (
+    VIDEO_EXTENSIONS_REGEX.test(url.pathname) ||
+    request.destination === 'video' ||
+    url.pathname.includes('/video/')
   );
 }
 
@@ -313,27 +325,34 @@ async function cleanExpiredImageCache() {
 
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
-  
+
   // 检查是否要求绕过Service Worker
   if (url.searchParams.has('bypass_sw') || url.searchParams.has('direct_fetch')) {
     console.log('Service Worker: 检测到绕过参数，直接通过请求:', url.href);
     // 直接通过，不拦截
     return;
   }
-  
+
   // 完全不拦截备用域名，让浏览器直接处理
   if (url.hostname === 'cdn.i666.fun') {
     console.log('Service Worker: 备用域名请求直接通过，不拦截:', url.href);
     return; // 直接返回，让浏览器处理
   }
-  
+
+  // 拦截视频请求以支持 Range 请求
+  if (isVideoRequest(url, event.request)) {
+    console.log('Service Worker: Intercepting video request:', url.href);
+    event.respondWith(handleVideoRequest(event.request));
+    return;
+  }
+
   // 拦截外部图片请求（非同源且为图片格式）
   if (url.origin !== location.origin && isImageRequest(url, event.request)) {
     console.log('Service Worker: Intercepting external image request:', url.href);
     event.respondWith(handleImageRequest(event.request));
     return;
   }
-  
+
   // Handle static file requests with cache-first strategy
   if (event.request.method === 'GET') {
     event.respondWith(handleStaticRequest(event.request));
@@ -343,17 +362,17 @@ self.addEventListener('fetch', event => {
 // Utility function to perform fetch with retries
 async function fetchWithRetry(request, maxRetries = 2) {
   let lastError;
-  
+
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       console.log(`Fetch attempt ${attempt + 1}/${maxRetries + 1} for:`, request.url);
       const response = await fetch(request);
-      
+
       if (response.ok || response.status < 500) {
         // Consider 4xx errors as final (don't retry), only retry on 5xx or network errors
         return response;
       }
-      
+
       if (attempt < maxRetries) {
         console.warn(`Fetch attempt ${attempt + 1} failed with status ${response.status}, retrying...`);
         lastError = new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -361,20 +380,117 @@ async function fetchWithRetry(request, maxRetries = 2) {
         await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
         continue;
       }
-      
+
       return response;
     } catch (error) {
       console.warn(`Fetch attempt ${attempt + 1} failed:`, error.message);
       lastError = error;
-      
+
       if (attempt < maxRetries) {
         // Wait before retrying (exponential backoff: 1s, 2s, 4s...)
         await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
       }
     }
   }
-  
+
   throw lastError;
+}
+
+// 处理视频请求,支持 Range 请求以实现视频 seek 功能
+async function handleVideoRequest(request) {
+  const url = new URL(request.url);
+  console.log('Service Worker: Handling video request:', url.href);
+
+  try {
+    // 检查请求是否包含 Range header
+    const rangeHeader = request.headers.get('range');
+    console.log('Service Worker: Range header:', rangeHeader);
+
+    // 构建请求选项
+    const fetchOptions = {
+      method: 'GET',
+      headers: new Headers(request.headers),
+      mode: 'cors',
+      credentials: 'omit',
+      cache: 'no-cache'
+    };
+
+    // 获取视频响应
+    const response = await fetch(url, fetchOptions);
+
+    if (!response.ok) {
+      console.error('Service Worker: Video fetch failed:', response.status);
+      return response;
+    }
+
+    // 如果服务器已经支持 Range 请求,直接返回
+    if (response.status === 206) {
+      console.log('Service Worker: Server supports Range requests, returning response');
+      return response;
+    }
+
+    // 如果没有 Range 请求,直接返回完整视频
+    if (!rangeHeader) {
+      console.log('Service Worker: No Range header, returning full video');
+      // 添加 Accept-Ranges header 以告知浏览器支持 Range
+      const headers = new Headers(response.headers);
+      headers.set('Accept-Ranges', 'bytes');
+
+      const blob = await response.blob();
+      return new Response(blob, {
+        status: 200,
+        statusText: 'OK',
+        headers: headers
+      });
+    }
+
+    // 服务器不支持 Range 但客户端请求了 Range
+    // 我们需要手动处理 Range 请求
+    console.log('Service Worker: Server does not support Range, handling manually');
+
+    const videoBlob = await response.clone().blob();
+    const videoSize = videoBlob.size;
+
+    // 解析 Range header (格式: "bytes=start-end")
+    const rangeMatch = rangeHeader.match(/bytes=(\d+)-(\d*)/);
+    if (!rangeMatch) {
+      console.error('Service Worker: Invalid Range header format');
+      return response;
+    }
+
+    const start = parseInt(rangeMatch[1], 10);
+    const end = rangeMatch[2] ? parseInt(rangeMatch[2], 10) : videoSize - 1;
+
+    console.log(`Service Worker: Range request: ${start}-${end} of ${videoSize}`);
+
+    // 提取指定范围的数据
+    const slicedBlob = videoBlob.slice(start, end + 1);
+    const contentLength = end - start + 1;
+
+    // 构建 206 Partial Content 响应
+    const headers = new Headers(response.headers);
+    headers.set('Content-Range', `bytes ${start}-${end}/${videoSize}`);
+    headers.set('Content-Length', contentLength.toString());
+    headers.set('Accept-Ranges', 'bytes');
+    headers.set('Access-Control-Allow-Origin', '*');
+    headers.set('Access-Control-Expose-Headers', 'Content-Range, Accept-Ranges, Content-Length');
+
+    return new Response(slicedBlob, {
+      status: 206,
+      statusText: 'Partial Content',
+      headers: headers
+    });
+
+  } catch (error) {
+    console.error('Service Worker: Video request error:', error);
+    return new Response('Video loading error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+      headers: {
+        'Content-Type': 'text/plain'
+      }
+    });
+  }
 }
 
 async function handleStaticRequest(request) {

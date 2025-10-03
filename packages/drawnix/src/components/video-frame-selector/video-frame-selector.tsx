@@ -24,25 +24,57 @@ export const VideoFrameSelector: React.FC<VideoFrameSelectorProps> = ({
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [frameImage, setFrameImage] = useState<string>('');
+  const [isVideoReady, setIsVideoReady] = useState(false);
   
   // 初始化时设置为最后一帧
   useEffect(() => {
     if (visible && videoUrl) {
       setIsLoading(true);
       setFrameImage('');
+      setIsVideoReady(false);
     }
   }, [visible, videoUrl]);
-  
-  // 视频加载完成后设置到最后一帧
-  const handleVideoLoaded = () => {
+
+  // 视频元数据加载完成
+  const handleMetadataLoaded = () => {
     const video = videoRef.current;
     if (video) {
       setDuration(video.duration);
-      // 设置到最后一帧（稍微提前一点避免加载问题）
-      const lastFrameTime = Math.max(0, video.duration - 0.1);
-      setCurrentTime(lastFrameTime);
-      video.currentTime = lastFrameTime;
+      setIsVideoReady(true);
     }
+  };
+
+  // 视频准备就绪后设置到最后一帧
+  useEffect(() => {
+    const video = videoRef.current;
+    if (isVideoReady && video && duration > 0) {
+      // 设置到最后一帧（稍微提前一点避免加载问题）
+      const lastFrameTime = Math.max(0, duration - 0.1);
+      setCurrentTime(lastFrameTime);
+      seekToTime(lastFrameTime);
+    }
+  }, [isVideoReady, duration]);
+
+  // 安全地定位到指定时间
+  const seekToTime = (time: number) => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    // 确保视频处于可以seek的状态
+    if (video.readyState < 2) {
+      // HAVE_CURRENT_DATA = 2, 至少要有当前帧的数据
+      console.warn('Video not ready for seeking, readyState:', video.readyState);
+      // 等待视频准备好再seek
+      const handleCanPlay = () => {
+        video.currentTime = time;
+        video.removeEventListener('canplay', handleCanPlay);
+      };
+      video.addEventListener('canplay', handleCanPlay);
+      return;
+    }
+
+    // 直接设置时间
+    video.currentTime = time;
   };
   
   // 视频定位完成时生成帧图片（只在seeked事件触发）
@@ -93,10 +125,10 @@ export const VideoFrameSelector: React.FC<VideoFrameSelectorProps> = ({
   // 拖拽进度条
   const handleSliderChange = (value: number) => {
     const video = videoRef.current;
-    if (video && duration > 0) {
+    if (video && duration > 0 && isVideoReady) {
       const newTime = (value / 100) * duration;
       setCurrentTime(newTime);
-      video.currentTime = newTime;
+      seekToTime(newTime);
       // 设置loading状态，等待seeked事件
       setIsLoading(true);
     }
@@ -105,14 +137,14 @@ export const VideoFrameSelector: React.FC<VideoFrameSelectorProps> = ({
   // 输入时间
   const handleTimeInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const video = videoRef.current;
-    if (!video || duration === 0) return;
+    if (!video || duration === 0 || !isVideoReady) return;
 
     const inputValue = parseFloat(event.target.value);
     if (isNaN(inputValue)) return;
 
     const newTime = Math.max(0, Math.min(duration, inputValue));
     setCurrentTime(newTime);
-    video.currentTime = newTime;
+    seekToTime(newTime);
     // 设置loading状态，等待seeked事件
     setIsLoading(true);
   };
@@ -149,8 +181,9 @@ export const VideoFrameSelector: React.FC<VideoFrameSelectorProps> = ({
           style={{ display: 'none' }}
           muted
           playsInline
+          preload="auto"
           crossOrigin="anonymous"
-          onLoadedData={handleVideoLoaded}
+          onLoadedMetadata={handleMetadataLoaded}
           onSeeked={handleSeeked}
         />
         
