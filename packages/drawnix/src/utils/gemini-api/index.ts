@@ -21,4 +21,4 @@ export * from './services';
 export * from './auth';
 
 // 导出客户端
-export { GeminiClient } from './client';
+export { GeminiClient, defaultGeminiClient, videoGeminiClient } from './client';
