@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Dialog } from 'tdesign-react';
 import { useI18n } from '../../i18n';
 import './video-frame-selector.scss';
@@ -19,12 +19,14 @@ export const VideoFrameSelector: React.FC<VideoFrameSelectorProps> = ({
   const { language } = useI18n();
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  
+  const seekTimeoutRef = useRef<number | null>(null);
+
   const [isLoading, setIsLoading] = useState(true);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [frameImage, setFrameImage] = useState<string>('');
   const [isVideoReady, setIsVideoReady] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   
   // 初始化时设置为最后一帧
   useEffect(() => {
@@ -32,7 +34,15 @@ export const VideoFrameSelector: React.FC<VideoFrameSelectorProps> = ({
       setIsLoading(true);
       setFrameImage('');
       setIsVideoReady(false);
+      setIsDragging(false);
     }
+
+    // 清理定时器
+    return () => {
+      if (seekTimeoutRef.current !== null) {
+        window.clearTimeout(seekTimeoutRef.current);
+      }
+    };
   }, [visible, videoUrl]);
 
   // 视频元数据加载完成
@@ -44,6 +54,43 @@ export const VideoFrameSelector: React.FC<VideoFrameSelectorProps> = ({
     }
   };
 
+  // 安全地定位到指定时间(带防抖)
+  const seekToTime = useCallback((time: number, immediate = false) => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    // 清除之前的定时器
+    if (seekTimeoutRef.current !== null) {
+      window.clearTimeout(seekTimeoutRef.current);
+      seekTimeoutRef.current = null;
+    }
+
+    const performSeek = () => {
+      // 确保视频处于可以seek的状态
+      if (video.readyState < 2) {
+        // HAVE_CURRENT_DATA = 2, 至少要有当前帧的数据
+        console.warn('Video not ready for seeking, readyState:', video.readyState);
+        // 等待视频准备好再seek
+        const handleCanPlay = () => {
+          video.currentTime = time;
+          video.removeEventListener('canplay', handleCanPlay);
+        };
+        video.addEventListener('canplay', handleCanPlay);
+        return;
+      }
+
+      // 直接设置时间
+      video.currentTime = time;
+    };
+
+    if (immediate) {
+      performSeek();
+    } else {
+      // 防抖: 延迟执行seek操作
+      seekTimeoutRef.current = window.setTimeout(performSeek, 150);
+    }
+  }, []);
+
   // 视频准备就绪后设置到最后一帧
   useEffect(() => {
     const video = videoRef.current;
@@ -51,55 +98,27 @@ export const VideoFrameSelector: React.FC<VideoFrameSelectorProps> = ({
       // 设置到最后一帧（稍微提前一点避免加载问题）
       const lastFrameTime = Math.max(0, duration - 0.1);
       setCurrentTime(lastFrameTime);
-      seekToTime(lastFrameTime);
+      seekToTime(lastFrameTime, true);
     }
-  }, [isVideoReady, duration]);
-
-  // 安全地定位到指定时间
-  const seekToTime = (time: number) => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    // 确保视频处于可以seek的状态
-    if (video.readyState < 2) {
-      // HAVE_CURRENT_DATA = 2, 至少要有当前帧的数据
-      console.warn('Video not ready for seeking, readyState:', video.readyState);
-      // 等待视频准备好再seek
-      const handleCanPlay = () => {
-        video.currentTime = time;
-        video.removeEventListener('canplay', handleCanPlay);
-      };
-      video.addEventListener('canplay', handleCanPlay);
-      return;
-    }
-
-    // 直接设置时间
-    video.currentTime = time;
-  };
+  }, [isVideoReady, duration, seekToTime]);
   
-  // 视频定位完成时生成帧图片（只在seeked事件触发）
-  const handleSeeked = () => {
-    generateFrameImage();
-    setIsLoading(false);
-  };
-
   // 生成当前帧的图片
-  const generateFrameImage = () => {
+  const generateFrameImage = useCallback(() => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
     if (!video || !canvas) return;
-    
+
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    
+
     try {
       // 设置画布尺寸匹配视频
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
-      
+
       // 绘制当前帧
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      
+
       // 转换为 data URL
       const imageDataUrl = canvas.toDataURL('image/png');
       setFrameImage(imageDataUrl);
@@ -120,17 +139,43 @@ export const VideoFrameSelector: React.FC<VideoFrameSelectorProps> = ({
         setFrameImage('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==');
       }
     }
-  };
+  }, []);
+
+  // 视频定位完成时生成帧图片（只在seeked事件触发）
+  const handleSeeked = useCallback(() => {
+    // 只有在非拖动状态下才更新图片和loading状态
+    if (!isDragging) {
+      generateFrameImage();
+      setIsLoading(false);
+    }
+  }, [isDragging, generateFrameImage]);
   
-  // 拖拽进度条
+  // 拖拽进度条开始
+  const handleSliderMouseDown = () => {
+    setIsDragging(true);
+  };
+
+  // 拖拽进度条中
   const handleSliderChange = (value: number) => {
     const video = videoRef.current;
     if (video && duration > 0 && isVideoReady) {
       const newTime = (value / 100) * duration;
       setCurrentTime(newTime);
-      seekToTime(newTime);
-      // 设置loading状态，等待seeked事件
-      setIsLoading(true);
+
+      // 拖动时使用防抖,减少seek频率
+      seekToTime(newTime, false);
+    }
+  };
+
+  // 拖拽进度条结束
+  const handleSliderMouseUp = () => {
+    setIsDragging(false);
+    setIsLoading(true);
+
+    // 松开鼠标后立即seek到最终位置并生成图片
+    const video = videoRef.current;
+    if (video && isVideoReady) {
+      seekToTime(currentTime, true);
     }
   };
 
@@ -144,7 +189,7 @@ export const VideoFrameSelector: React.FC<VideoFrameSelectorProps> = ({
 
     const newTime = Math.max(0, Math.min(duration, inputValue));
     setCurrentTime(newTime);
-    seekToTime(newTime);
+    seekToTime(newTime, true);
     // 设置loading状态，等待seeked事件
     setIsLoading(true);
   };
@@ -229,8 +274,12 @@ export const VideoFrameSelector: React.FC<VideoFrameSelectorProps> = ({
               max={100}
               value={duration > 0 ? (currentTime / duration) * 100 : 0}
               onChange={(e) => handleSliderChange(Number(e.target.value))}
+              onMouseDown={handleSliderMouseDown}
+              onMouseUp={handleSliderMouseUp}
+              onTouchStart={handleSliderMouseDown}
+              onTouchEnd={handleSliderMouseUp}
               className="progress-slider"
-              disabled={isLoading}
+              disabled={isLoading && !isDragging}
             />
           </div>
           

@@ -541,8 +541,7 @@ async function handleImageRequest(request) {
   try {
     // 生成唯一的请求ID用于追踪
     const requestId = Math.random().toString(36).substring(2, 10);
-    const requestStartTime = Date.now();
-    
+
     console.log(`Service Worker [${requestId}]: Intercepting image request at ${new Date().toISOString()}:`, request.url);
     
     // 创建原始URL（不带缓存破坏参数）用于缓存键和去重键
@@ -728,10 +727,9 @@ async function handleImageRequestInternal(originalRequest, requestUrl, dedupeKey
         urlsToTry.push(fallbackUrl); // 如果有备用URL，添加到尝试列表
       }
     }
-    
+
     let finalError = null;
-    let urlTried = false;
-    
+
     for (let urlIndex = 0; urlIndex < urlsToTry.length; urlIndex++) {
       const currentUrl = urlsToTry[urlIndex];
       const isUsingFallback = urlIndex > 0;
@@ -750,28 +748,26 @@ async function handleImageRequestInternal(originalRequest, requestUrl, dedupeKey
             try {
               console.log(`Service Worker [${requestId}]: Fetch attempt ${attempt + 1}/3 with options on ${isUsingFallback ? 'fallback' : 'original'} URL`);
               response = await fetch(currentUrl, options);
-              
+
               if (response && response.status !== 0) {
                 console.log(`Service Worker [${requestId}]: Fetch successful with status: ${response.status} from ${isUsingFallback ? 'fallback' : 'original'} URL`);
-                urlTried = true;
                 break;
               }
             } catch (fetchError) {
               console.warn(`Service Worker [${requestId}]: Fetch attempt ${attempt + 1} failed on ${isUsingFallback ? 'fallback' : 'original'} URL:`, fetchError);
               lastError = fetchError;
-              
+
               if (attempt < 2) {
                 // Wait before retrying (exponential backoff)
                 await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
               }
             }
           }
-          
+
           if (response && response.status !== 0) {
-            urlTried = true;
             break;
           }
-          
+
           if (lastError) {
             console.warn(`Service Worker [${requestId}]: All fetch attempts failed with options on ${isUsingFallback ? 'fallback' : 'original'} URL:`, options, lastError);
             finalError = lastError;
@@ -782,10 +778,9 @@ async function handleImageRequestInternal(originalRequest, requestUrl, dedupeKey
           continue;
         }
       }
-      
+
       // 如果当前URL成功获取到响应，跳出URL循环
       if (response && response.status !== 0) {
-        urlTried = true;
         break;
       } else {
         // 如果是配置的域名且是第一次尝试（原始URL），标记为失败域名
