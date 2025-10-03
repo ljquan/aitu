@@ -45,12 +45,12 @@ export const VideoFrameSelector: React.FC<VideoFrameSelectorProps> = ({
     }
   };
   
-  // 视频时间更新时生成帧图片
-  const handleTimeUpdate = () => {
+  // 视频定位完成时生成帧图片（只在seeked事件触发）
+  const handleSeeked = () => {
     generateFrameImage();
     setIsLoading(false);
   };
-  
+
   // 生成当前帧的图片
   const generateFrameImage = () => {
     const video = videoRef.current;
@@ -97,20 +97,24 @@ export const VideoFrameSelector: React.FC<VideoFrameSelectorProps> = ({
       const newTime = (value / 100) * duration;
       setCurrentTime(newTime);
       video.currentTime = newTime;
+      // 设置loading状态，等待seeked事件
+      setIsLoading(true);
     }
   };
-  
+
   // 输入时间
   const handleTimeInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const video = videoRef.current;
     if (!video || duration === 0) return;
-    
+
     const inputValue = parseFloat(event.target.value);
     if (isNaN(inputValue)) return;
-    
+
     const newTime = Math.max(0, Math.min(duration, inputValue));
     setCurrentTime(newTime);
     video.currentTime = newTime;
+    // 设置loading状态，等待seeked事件
+    setIsLoading(true);
   };
   
   // 确认选择
@@ -147,8 +151,7 @@ export const VideoFrameSelector: React.FC<VideoFrameSelectorProps> = ({
           playsInline
           crossOrigin="anonymous"
           onLoadedData={handleVideoLoaded}
-          onSeeked={handleTimeUpdate}
-          onTimeUpdate={handleTimeUpdate}
+          onSeeked={handleSeeked}
         />
         
         {/* 隐藏的画布用于生成帧图片 */}
