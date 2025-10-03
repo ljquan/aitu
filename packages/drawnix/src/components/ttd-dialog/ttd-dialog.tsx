@@ -7,7 +7,7 @@ import AIImageGeneration from './ai-image-generation';
 import AIVideoGeneration from './ai-video-generation';
 import { useI18n } from '../../i18n';
 import { useBoard } from '@plait-board/react-board';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, memo } from 'react';
 import { processSelectedContentForAI, extractSelectedContent } from '../../utils/selection-utils';
 import { ATTACHED_ELEMENT_CLASS_NAME, getSelectedElements } from '@plait/core';
 import { 
@@ -15,10 +15,14 @@ import {
   AI_VIDEO_GENERATION_PREVIEW_CACHE_KEY 
 } from '../../constants/storage';
 
-export const TTDDialog = ({ container }: { container: HTMLElement | null }) => {
+const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) => {
   const { appState, setAppState } = useDrawnix();
   const { language } = useI18n();
   const board = useBoard();
+
+  // 使用ref来防止多次并发处理
+  const isProcessingRef = useRef(false);
+  const processingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   // AI 图像生成的初始数据
   const [aiImageData, setAiImageData] = useState<{
@@ -40,10 +44,45 @@ export const TTDDialog = ({ container }: { container: HTMLElement | null }) => {
     initialImage: undefined
   });
 
+  // 使用 useRef 来跟踪上一次的 openDialogType，避免不必要的处理
+  const prevOpenDialogTypeRef = useRef<typeof appState.openDialogType>(null);
+  
   // 当 AI 图像生成对话框打开时，处理选中内容
   useEffect(() => {
+    // 确保board存在并且弹窗确实要打开
+    if (!board || !appState.openDialogType) {
+      prevOpenDialogTypeRef.current = appState.openDialogType;
+      return;
+    }
+    
+    // 检查是否真的是新的对话框打开，而不是重复触发
+    if (prevOpenDialogTypeRef.current === appState.openDialogType) {
+      console.log('Dialog type unchanged, skipping processing...');
+      return;
+    }
+    
+    // 防止多次并发处理
+    if (isProcessingRef.current) {
+      console.log('Already processing content, skipping...');
+      return;
+    }
+    
+    // 更新上一次的状态
+    prevOpenDialogTypeRef.current = appState.openDialogType;
+    
     if (appState.openDialogType === DialogType.aiImageGeneration) {
       const processSelection = async () => {
+        isProcessingRef.current = true;
+        
+        // 设置超时保护，防止处理状态被永久锁定
+        if (processingTimeoutRef.current) {
+          clearTimeout(processingTimeoutRef.current);
+        }
+        processingTimeoutRef.current = setTimeout(() => {
+          console.warn('Processing timeout, resetting processing state');
+          isProcessingRef.current = false;
+        }, 10000); // 10秒超时
+        
         try {
           // 保存当前选中的元素IDs
           const selectedElements = getSelectedElements(board);
@@ -95,6 +134,12 @@ export const TTDDialog = ({ container }: { container: HTMLElement | null }) => {
             initialImages: imageItems,
             selectedElementIds: [] // 回退情况下没有选中元素信息
           });
+        } finally {
+          isProcessingRef.current = false;
+          if (processingTimeoutRef.current) {
+            clearTimeout(processingTimeoutRef.current);
+            processingTimeoutRef.current = null;
+          }
         }
       };
 
@@ -104,6 +149,17 @@ export const TTDDialog = ({ container }: { container: HTMLElement | null }) => {
     // 处理 AI 视频生成的选中内容
     if (appState.openDialogType === DialogType.aiVideoGeneration) {
       const processVideoSelection = async () => {
+        isProcessingRef.current = true;
+        
+        // 设置超时保护，防止处理状态被永久锁定
+        if (processingTimeoutRef.current) {
+          clearTimeout(processingTimeoutRef.current);
+        }
+        processingTimeoutRef.current = setTimeout(() => {
+          console.warn('Video processing timeout, resetting processing state');
+          isProcessingRef.current = false;
+        }, 10000); // 10秒超时
+        
         try {
           // 使用新的处理逻辑来处理选中的内容
           const processedContent = await processSelectedContentForAI(board);
@@ -149,12 +205,26 @@ export const TTDDialog = ({ container }: { container: HTMLElement | null }) => {
             initialPrompt: selectedContent.text || '',
             initialImage: firstImage
           });
+        } finally {
+          isProcessingRef.current = false;
+          if (processingTimeoutRef.current) {
+            clearTimeout(processingTimeoutRef.current);
+            processingTimeoutRef.current = null;
+          }
         }
       };
 
       processVideoSelection();
     }
-  }, [appState.openDialogType, board]);
+  }, [appState.openDialogType]); // Remove board dependency to prevent recursive updates
+  
+  // 清理处理状态当弹窗关闭时
+  useEffect(() => {
+    if (!appState.openDialogType) {
+      isProcessingRef.current = false;
+      prevOpenDialogTypeRef.current = null;
+    }
+  }, [appState.openDialogType]);
   return (
     <>
       <Dialog
@@ -275,3 +345,9 @@ export const TTDDialog = ({ container }: { container: HTMLElement | null }) => {
     </>
   );
 };
+
+// 使用 React.memo 优化组件，只有当关键属性变化时才重新渲染
+export const TTDDialog = memo(TTDDialogComponent, (prevProps, nextProps) => {
+  // 只有当 container 变化时才重新渲染
+  return prevProps.container === nextProps.container;
+});

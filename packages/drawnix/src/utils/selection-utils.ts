@@ -3,6 +3,7 @@ import { MindElement } from '@plait/mind';
 import { PlaitDrawElement } from '@plait/draw';
 import { Node } from 'slate';
 import { Freehand } from '../plugins/freehand/type';
+import { SAME_ROW_THRESHOLD } from '../components/ttd-dialog/shared/size-constants';
 
 /**
  * 压缩图像URL（用于生成的图像）
@@ -77,6 +78,64 @@ export interface ProcessedContent {
   remainingText: string;
   graphicsImage?: string;
 }
+
+/**
+ * Sort elements by position (left to right, top to bottom) while preserving layer order for overlapping elements
+ */
+export const sortElementsByPosition = (board: PlaitBoard, elements: PlaitElement[]): PlaitElement[] => {
+  try {
+    // Get original indices to preserve layer order
+    const elementIndices = new Map(elements.map((element, index) => [element.id, index]));
+    
+    // Create array with elements and their position data
+    const elementsWithPosition = elements.map(element => {
+      try {
+        const rect = getRectangleByElements(board, [element], false);
+        return {
+          element,
+          x: rect.x,
+          y: rect.y,
+          centerX: rect.x + rect.width / 2, // 用中心点X坐标进行排序
+          centerY: rect.y + rect.height / 2,  // 用中心点Y坐标进行排序
+          originalIndex: elementIndices.get(element.id) || 0 // 保存原始索引用于层级排序
+        };
+      } catch (error) {
+        console.warn('Failed to get position for element:', element.id, error);
+        // 如果获取位置失败，给予默认位置
+        return {
+          element,
+          x: 0,
+          y: 0,
+          centerX: 0,
+          centerY: 0,
+          originalIndex: elementIndices.get(element.id) || 0
+        };
+      }
+    });
+
+    // Sort by position: first by Y (top to bottom), then by X (left to right), finally by original index (layer order)
+    elementsWithPosition.sort((a, b) => {
+      // 如果Y坐标差异很小，认为在同一行，按X坐标排序
+      const yDiff = Math.abs(a.centerY - b.centerY);
+      if (yDiff < SAME_ROW_THRESHOLD) {
+        const xDiff = Math.abs(a.centerX - b.centerX);
+        // 如果在同一行且X坐标也很接近（可能重叠），保持原始层级顺序
+        if (xDiff < SAME_ROW_THRESHOLD) {
+          return a.originalIndex - b.originalIndex; // 按原始索引排序，保持层级
+        }
+        return a.centerX - b.centerX; // 按X坐标从左到右排序
+      }
+      return a.centerY - b.centerY; // 按Y坐标从上到下排序
+    });
+
+    console.log('Elements sorted by position with layer preservation');
+    // Return sorted elements
+    return elementsWithPosition.map(item => item.element);
+  } catch (error) {
+    console.warn('Error sorting elements by position:', error);
+    return elements; // 如果排序失败，返回原始顺序
+  }
+};
 
 /**
  * Extract text content from a Plait element
@@ -345,10 +404,27 @@ export const convertElementsToImage = async (board: PlaitBoard, elements: PlaitE
 
     console.log(`Converting ${elements.length} elements to image using Plait's native toImage function`);
     
+    // Sort elements by their original order in the board to maintain layer hierarchy
+    // Elements that appear later in the board.children array should be on top
+    const sortedElements = elements.slice().sort((a, b) => {
+      const indexA = board.children.findIndex(child => child.id === a.id);
+      const indexB = board.children.findIndex(child => child.id === b.id);
+      
+      // If either element is not found in board.children, maintain original order
+      if (indexA === -1 && indexB === -1) return 0;
+      if (indexA === -1) return 1;
+      if (indexB === -1) return -1;
+      
+      return indexA - indexB; // 保持原始顺序，早出现的在底层，晚出现的在顶层
+    });
+    
+    console.log('Elements sorted by board hierarchy for image conversion:', 
+      sortedElements.map(el => `${el.id}:${board.children.findIndex(child => child.id === el.id)}`));
+    
     // Use Plait's native toImage function with the same options as export
     // This ensures all colors, styles, and rendering are preserved exactly
     const imageDataUrl = await toImage(board, {
-      elements: elements, // Only render the selected elements
+      elements: sortedElements, // Use sorted elements to maintain layer order
       fillStyle: 'white', // White background for AI image generation
       inlineStyleClassNames: '.extend,.emojis,.text', // Include style classes for proper rendering
       padding: 20, // Add padding around elements
@@ -420,10 +496,13 @@ export const extractImagesFromElement = (element: PlaitElement, board?: PlaitBoa
 export const extractSelectedContent = (board: PlaitBoard): ExtractedContent => {
   const selectedElements = getSelectedElements(board);
   
+  // Sort elements by position (left to right, top to bottom)
+  const sortedElements = sortElementsByPosition(board, selectedElements);
+  
   const texts: string[] = [];
   const images: { url: string; name?: string }[] = [];
   
-  for (const element of selectedElements) {
+  for (const element of sortedElements) {
     // Extract text
     const elementText = extractTextFromElement(element, board);
     if (elementText) {
@@ -449,9 +528,13 @@ export const processSelectedContentForAI = async (board: PlaitBoard): Promise<Pr
   const selectedElements = getSelectedElements(board);
   console.log('processSelectedContentForAI: Selected elements count:', selectedElements.length);
   
-  // Debug: Log each selected element's details
-  selectedElements.forEach((el, index) => {
-    console.log(`Element ${index}:`, {
+  // Sort elements by position (left to right, top to bottom)
+  const sortedElements = sortElementsByPosition(board, selectedElements);
+  console.log('Elements sorted by position');
+  
+  // Debug: Log each selected element's details (using sorted elements)
+  sortedElements.forEach((el, index) => {
+    console.log(`Element ${index} (sorted):`, {
       id: el.id,
       type: el.type,
       isImage: isImageElement(board, el),
@@ -461,16 +544,16 @@ export const processSelectedContentForAI = async (board: PlaitBoard): Promise<Pr
     });
   });
   
-  // Step 1: Find graphics elements and their overlapping elements
-  const { graphicsElements, overlappingElements } = findElementsOverlappingWithGraphics(board, selectedElements);
+  // Step 1: Find graphics elements and their overlapping elements (using sorted elements)
+  const { graphicsElements, overlappingElements } = findElementsOverlappingWithGraphics(board, sortedElements);
   console.log('Graphics elements:', graphicsElements.length, 'Overlapping elements:', overlappingElements.length);
   
-  // Step 2: Combine graphics elements with overlapping elements, preserving original order
+  // Step 2: Combine graphics elements with overlapping elements, preserving sorted order
   const allGraphicsRelatedElementsSet = new Set([...graphicsElements, ...overlappingElements]);
-  const allGraphicsRelatedElements = selectedElements.filter(el => allGraphicsRelatedElementsSet.has(el));
+  const allGraphicsRelatedElements = sortedElements.filter(el => allGraphicsRelatedElementsSet.has(el));
   
-  // Step 3: Identify remaining elements (not graphics-related)
-  const remainingElements = selectedElements.filter(
+  // Step 3: Identify remaining elements (not graphics-related), preserving sorted order
+  const remainingElements = sortedElements.filter(
     el => !allGraphicsRelatedElements.includes(el)
   );
   console.log('Remaining elements count:', remainingElements.length);

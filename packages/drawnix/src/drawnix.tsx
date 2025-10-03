@@ -10,7 +10,7 @@ import {
   ThemeColorMode,
   Viewport,
 } from '@plait/core';
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { withGroup } from '@plait/common';
 import { withDraw } from '@plait/draw';
 import { MindThemeColors, withMind } from '@plait/mind';
@@ -87,16 +87,24 @@ export const Drawnix: React.FC<DrawnixProps> = ({
 
   const [board, setBoard] = useState<DrawnixBoard | null>(null);
 
-  if (board) {
-    board.appState = appState;
-  }
+  // 使用 useCallback 稳定 setAppState 函数引用
+  const stableSetAppState = useCallback((newAppState: DrawnixState) => {
+    setAppState(newAppState);
+  }, []);
 
-  const updateAppState = (newAppState: Partial<DrawnixState>) => {
-    setAppState({
-      ...appState,
+  const updateAppState = useCallback((newAppState: Partial<DrawnixState>) => {
+    setAppState(prevState => ({
+      ...prevState,
       ...newAppState,
-    });
-  };
+    }));
+  }, []);
+
+  // 使用 useEffect 来更新 board.appState，避免在每次渲染时执行
+  useEffect(() => {
+    if (board) {
+      board.appState = appState;
+    }
+  }, [board, appState]);
 
   const plugins: PlaitPlugin[] = [
     withDraw,
@@ -113,9 +121,15 @@ export const Drawnix: React.FC<DrawnixProps> = ({
 
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // 使用 useMemo 稳定 DrawnixContext.Provider 的 value
+  const contextValue = useMemo(() => ({
+    appState,
+    setAppState: stableSetAppState
+  }), [appState, stableSetAppState]);
+
   return (
     <I18nProvider>
-      <DrawnixContext.Provider value={{ appState, setAppState }}>
+      <DrawnixContext.Provider value={contextValue}>
         <div
           className={classNames('drawnix', {
             'drawnix--mobile': appState.isMobile,
