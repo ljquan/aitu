@@ -34,21 +34,61 @@ export const buildImage = (
   image: HTMLImageElement,
   dataURL: DataURL,
   maxWidth?: number,
-  useOriginalSize = false
+  useOriginalSize = false,
+  referenceDimensions?: { width: number; height: number }
 ) => {
   let width, height;
-  
+
   if (useOriginalSize) {
-    // 使用图片原始尺寸
-    width = image.width;
-    height = image.height;
+    const originalWidth = image.width;
+    const originalHeight = image.height;
+
+    if (referenceDimensions) {
+      // 如果提供了参考尺寸，使用参考尺寸作为目标大小
+      // 保持图片的宽高比，适配参考尺寸
+      const referenceAspectRatio = referenceDimensions.width / referenceDimensions.height;
+      const imageAspectRatio = originalWidth / originalHeight;
+
+      if (imageAspectRatio > referenceAspectRatio) {
+        // 图片更宽，以宽度为准
+        width = referenceDimensions.width;
+        height = width / imageAspectRatio;
+      } else {
+        // 图片更高，以高度为准
+        height = referenceDimensions.height;
+        width = height * imageAspectRatio;
+      }
+
+      console.log('Using reference dimensions for image sizing:', {
+        reference: referenceDimensions,
+        calculated: { width, height },
+        originalAspectRatio: imageAspectRatio
+      });
+    } else {
+      // 如果没有参考尺寸，使用固定的最大尺寸限制
+      const MAX_SIZE = 600; // 最大宽度或高度限制
+
+      // 计算缩放比例，保持宽高比
+      if (originalWidth > MAX_SIZE || originalHeight > MAX_SIZE) {
+        const widthScale = MAX_SIZE / originalWidth;
+        const heightScale = MAX_SIZE / originalHeight;
+        const scale = Math.min(widthScale, heightScale);
+
+        width = originalWidth * scale;
+        height = originalHeight * scale;
+      } else {
+        // 如果尺寸在限制内，使用原始尺寸
+        width = originalWidth;
+        height = originalHeight;
+      }
+    }
   } else {
     // 使用限制最大宽度的逻辑（保持向后兼容）
     const effectiveMaxWidth = maxWidth || 400;
     width = image.width > effectiveMaxWidth ? effectiveMaxWidth : image.width;
     height = (width / image.width) * image.height;
   }
-  
+
   return {
     url: dataURL,
     width,
@@ -101,17 +141,18 @@ export const insertImageFromUrl = async (
   board: PlaitBoard,
   imageUrl: string,
   startPoint?: Point,
-  isDrop?: boolean
+  isDrop?: boolean,
+  referenceDimensions?: { width: number; height: number }
 ) => {
   const selectedElement =
     getSelectedElements(board)[0] || getElementOfFocusedImage(board);
   const defaultImageWidth = selectedElement ? 240 : 400;
-  
+
   // Service Worker会处理CORS问题，直接使用URL即可
   const dataURL = createDataURL(imageUrl);
   const image = await loadHTMLImageElement(dataURL, true); // 设置crossOrigin以防万一
-  const imageItem = buildImage(image, dataURL, defaultImageWidth, true); // 使用原始尺寸
-  
+  const imageItem = buildImage(image, dataURL, defaultImageWidth, true, referenceDimensions); // 使用原始尺寸并传递参考尺寸
+
   const element = startPoint && getHitElementByPoint(board, startPoint);
   if (isDrop && element && MindElement.isMindElement(board, element)) {
     MindTransforms.setImage(board, element as MindElement, imageItem);
@@ -139,7 +180,7 @@ export const insertImageFromUrl = async (
       // 将X坐标向左偏移图片宽度的一半，让图片以起始点为中心显示
       insertionPoint = [startPoint[0] - imageItem.width / 2, startPoint[1]] as Point;
     }
-    
+
     DrawTransforms.insertImage(board, imageItem, insertionPoint);
   }
 };

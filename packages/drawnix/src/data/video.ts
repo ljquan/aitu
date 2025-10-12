@@ -102,17 +102,79 @@ export const getVideoDimensions = (videoUrl: string): Promise<VideoDimensions> =
 };
 
 /**
+ * 计算适合画板显示的视频尺寸
+ * 保持宽高比，但限制最大尺寸避免过大
+ */
+const calculateDisplayDimensions = (
+  originalWidth: number,
+  originalHeight: number,
+  referenceDimensions?: { width: number; height: number }
+): VideoDimensions => {
+  if (referenceDimensions) {
+    // 如果提供了参考尺寸，使用参考尺寸作为目标大小
+    // 保持视频的宽高比，适配参考尺寸
+    const referenceAspectRatio = referenceDimensions.width / referenceDimensions.height;
+    const videoAspectRatio = originalWidth / originalHeight;
+
+    let width, height;
+    if (videoAspectRatio > referenceAspectRatio) {
+      // 视频更宽，以宽度为准
+      width = referenceDimensions.width;
+      height = width / videoAspectRatio;
+    } else {
+      // 视频更高，以高度为准
+      height = referenceDimensions.height;
+      width = height * videoAspectRatio;
+    }
+
+    console.log('Using reference dimensions for video sizing:', {
+      reference: referenceDimensions,
+      calculated: { width: Math.round(width), height: Math.round(height) },
+      originalAspectRatio: videoAspectRatio
+    });
+
+    return {
+      width: Math.round(width),
+      height: Math.round(height)
+    };
+  } else {
+    // 如果没有参考尺寸，使用固定的最大尺寸限制
+    const MAX_SIZE = 600; // 最大宽度或高度限制
+
+    // 如果尺寸在限制内，直接使用原始尺寸
+    if (originalWidth <= MAX_SIZE && originalHeight <= MAX_SIZE) {
+      return {
+        width: originalWidth,
+        height: originalHeight
+      };
+    }
+
+    // 计算缩放比例，保持宽高比
+    const widthScale = MAX_SIZE / originalWidth;
+    const heightScale = MAX_SIZE / originalHeight;
+    const scale = Math.min(widthScale, heightScale);
+
+    return {
+      width: Math.round(originalWidth * scale),
+      height: Math.round(originalHeight * scale)
+    };
+  }
+};
+
+/**
  * 插入视频到画布（作为带视频元数据的图片元素）
  * @param board PlaitBoard实例
  * @param videoUrl 视频URL
  * @param startPoint 插入位置（可选）
  * @param isDrop 是否为拖拽操作
+ * @param referenceDimensions 参考尺寸（可选，用于适应选中元素的大小）
  */
 export const insertVideoFromUrl = async (
   board: PlaitBoard | null,
   videoUrl: string,
   startPoint?: Point,
-  isDrop?: boolean
+  isDrop?: boolean,
+  referenceDimensions?: { width: number; height: number }
 ) => {
   if (!board) {
     throw new Error('Board is required for video insertion');
@@ -121,8 +183,16 @@ export const insertVideoFromUrl = async (
   try {
     // 首先获取视频的真实尺寸
     console.log('Getting video dimensions for:', videoUrl);
-    const dimensions = await getVideoDimensions(videoUrl);
-    console.log('Video dimensions retrieved:', dimensions);
+    const originalDimensions = await getVideoDimensions(videoUrl);
+    console.log('Original video dimensions:', originalDimensions);
+
+    // 计算适合画板显示的尺寸（保持比例但使用参考尺寸或限制大小）
+    const displayDimensions = calculateDisplayDimensions(
+      originalDimensions.width,
+      originalDimensions.height,
+      referenceDimensions
+    );
+    console.log('Display dimensions after scaling:', displayDimensions);
 
     // 计算插入位置
     let insertionPoint = startPoint;
@@ -130,36 +200,36 @@ export const insertVideoFromUrl = async (
       const calculatedPoint = getInsertionPointForSelectedElements(board);
       if (calculatedPoint) {
         // 调整X坐标，让视频以计算点为中心左右居中显示
-        insertionPoint = [calculatedPoint[0] - dimensions.width / 2, calculatedPoint[1]] as Point;
+        insertionPoint = [calculatedPoint[0] - displayDimensions.width / 2, calculatedPoint[1]] as Point;
       }
     } else if (startPoint) {
       // 如果传入了具体的插入点，需要判断这个点是否已经是期望的左上角位置
       // 从AI视频生成对话框传入的点是中心点，需要调整为左上角位置
-      insertionPoint = [startPoint[0] - dimensions.width / 2, startPoint[1]] as Point;
+      insertionPoint = [startPoint[0] - displayDimensions.width / 2, startPoint[1]] as Point;
     }
 
     // 如果没有计算出插入位置，使用默认位置
     if (!insertionPoint) {
       insertionPoint = [100, 100] as Point;
     }
-    
-    console.log('Inserting video element with real dimensions:', dimensions, 'at point:', insertionPoint);
-    
+
+    console.log('Inserting video element with display dimensions:', displayDimensions, 'at point:', insertionPoint);
+
     // 使用图片元素，通过URL后缀识别为视频
     const videoAsImageElement = {
       url: videoUrl,
-      width: dimensions.width,
-      height: dimensions.height,
+      width: displayDimensions.width,
+      height: displayDimensions.height,
       // 不需要额外的标识属性，通过URL后缀就能识别
     };
-    
+
     console.log('Creating video as image element:', videoAsImageElement);
-    
+
     // 使用DrawTransforms插入，但保留视频标识
     const { DrawTransforms } = await import('@plait/draw');
     DrawTransforms.insertImage(board, videoAsImageElement, insertionPoint);
-    console.log('Video inserted successfully as video element with real dimensions:', dimensions);
-    
+    console.log('Video inserted successfully with scaled dimensions:', displayDimensions);
+
   } catch (error) {
     console.error('Failed to insert video:', error);
     throw new Error(`Video insertion failed: ${error instanceof Error ? error.message : 'Unknown error'}`);

@@ -32,7 +32,8 @@ import {
   savePromptToHistory as savePromptToHistoryUtil,
   preloadImage,
   updateHistoryWithGeneratedContent,
-  DEFAULT_IMAGE_DIMENSIONS
+  DEFAULT_IMAGE_DIMENSIONS,
+  getReferenceDimensionsFromIds
 } from './shared';
 import { AI_IMAGE_GENERATION_PREVIEW_CACHE_KEY as PREVIEW_CACHE_KEY } from '../../constants/storage';
 
@@ -650,35 +651,39 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
                 if (generatedImage) {
                   try {
                     console.log('Starting image insertion with URL...', generatedImage);
-                    
+
                     // 调试：检查当前选中状态
                     const currentSelectedElements = board ? getSelectedElements(board) : [];
                     console.log('Current selected elements:', currentSelectedElements.length, currentSelectedElements);
                     console.log('Saved selected element IDs:', selectedElementIds);
-                    
+
+                    // 计算参考尺寸（用于适应选中元素的大小）
+                    const referenceDimensions = getReferenceDimensionsFromIds(board, selectedElementIds);
+                    console.log('Reference dimensions for image insertion:', referenceDimensions);
+
                     // 计算插入位置
                     const insertionPoint = calculateInsertionPoint();
                     console.log('Calculated insertion point:', insertionPoint);
-                    
-                    await insertImageFromUrl(board, generatedImage, insertionPoint);
-                    
+
+                    await insertImageFromUrl(board, generatedImage, insertionPoint, false, referenceDimensions);
+
                     console.log('Image inserted successfully!');
-                    
+
                     // 清除缓存
                     try {
                       localStorage.removeItem(PREVIEW_CACHE_KEY);
                     } catch (error) {
                       console.warn('Failed to clear cache:', error);
                     }
-                    
+
                     // 关闭对话框
                     setAppState({ ...appState, openDialogType: null });
-                    
+
                   } catch (err) {
                     console.error('Insert image error:', err);
                     setError(
-                      language === 'zh' 
-                        ? `插入图片失败: ${err instanceof Error ? err.message : '未知错误'}` 
+                      language === 'zh'
+                        ? `插入图片失败: ${err instanceof Error ? err.message : '未知错误'}`
                         : `Failed to insert image: ${err instanceof Error ? err.message : 'Unknown error'}`
                     );
                   }
@@ -687,7 +692,7 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
               disabled={isGenerating || imageLoading}
               className="action-button secondary"
             >
-              {imageLoading 
+              {imageLoading
                 ? (language === 'zh' ? '加载中...' : 'Loading...')
                 : (language === 'zh' ? '插入' : 'Insert')
               }

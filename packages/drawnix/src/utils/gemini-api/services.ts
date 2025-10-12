@@ -36,7 +36,7 @@ export async function generateImageWithGemini(
   };
 
   const data = {
-    model: validatedConfig.modelName || 'gemini-2.5-flash-image',
+    model: validatedConfig.modelName || 'gemini-2.5-flash-image-vip',
     prompt,
     n: options.n || 1,
     size: options.size || '1024x1024',

@@ -25,7 +25,7 @@ export const SettingsDialog = ({
       const config = geminiSettings.get();
       setApiKey(config.apiKey || '');
       setBaseUrl(config.baseUrl || 'https://api.tu-zi.com/v1');
-      setImageModelName(config.imageModelName || 'gemini-2.5-flash-image');
+      setImageModelName(config.imageModelName || 'gemini-2.5-flash-image-vip');
       setVideoModelName(config.videoModelName || 'veo3');
     }
   }, [appState.openSettings]);
@@ -35,7 +35,7 @@ export const SettingsDialog = ({
     geminiSettings.update({
       apiKey: apiKey.trim(),
       baseUrl: baseUrl.trim() || 'https://api.tu-zi.com/v1',
-      imageModelName: imageModelName.trim() || 'gemini-2.5-flash-image',
+      imageModelName: imageModelName.trim() || 'gemini-2.5-flash-image-vip',
       videoModelName: videoModelName.trim() || 'veo3',
     });
 
@@ -102,7 +102,7 @@ export const SettingsDialog = ({
               className="settings-dialog__input"
               value={imageModelName}
               onChange={(e) => setImageModelName(e.target.value)}
-              placeholder="gemini-2.5-flash-image"
+              placeholder="gemini-2.5-flash-image-vip"
             />
           </div>
           <div className="settings-dialog__field">

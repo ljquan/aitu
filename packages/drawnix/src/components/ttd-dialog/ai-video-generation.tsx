@@ -35,7 +35,8 @@ import {
   savePromptToHistory as savePromptToHistoryUtil,
   generateVideoThumbnail as generateThumbnail,
   updateHistoryWithGeneratedContent,
-  DEFAULT_VIDEO_DIMENSIONS
+  DEFAULT_VIDEO_DIMENSIONS,
+  getReferenceDimensionsFromIds
 } from './shared';
 import { AI_VIDEO_GENERATION_PREVIEW_CACHE_KEY as PREVIEW_CACHE_KEY } from '../../constants/storage';
 
@@ -597,35 +598,39 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
                   try {
                     setIsInserting(true);
                     console.log('Starting video insertion with URL...', generatedVideo.previewUrl);
-                    
+
                     // 调试：检查当前选中状态
                     const currentSelectedElements = board ? getSelectedElements(board) : [];
                     console.log('Current selected elements:', currentSelectedElements.length, currentSelectedElements);
                     console.log('Saved selected element IDs:', selectedElementIds);
-                    
+
+                    // 计算参考尺寸（用于适应选中元素的大小）
+                    const referenceDimensions = getReferenceDimensionsFromIds(board, selectedElementIds);
+                    console.log('Reference dimensions for video insertion:', referenceDimensions);
+
                     // 计算插入位置
                     const insertionPoint = calculateInsertionPoint();
                     console.log('Calculated insertion point:', insertionPoint);
-                    
-                    await insertVideoFromUrl(board, generatedVideo.previewUrl, insertionPoint);
-                    
+
+                    await insertVideoFromUrl(board, generatedVideo.previewUrl, insertionPoint, false, referenceDimensions);
+
                     console.log('Video inserted successfully!');
-                    
+
                     // 清除缓存
                     try {
                       localStorage.removeItem(PREVIEW_CACHE_KEY);
                     } catch (error) {
                       console.warn('Failed to clear cache:', error);
                     }
-                    
+
                     // 关闭对话框
                     setAppState({ ...appState, openDialogType: null });
-                    
+
                   } catch (err) {
                     console.error('Insert video error:', err);
                     setError(
-                      language === 'zh' 
-                        ? '视频插入失败，请稍后重试' 
+                      language === 'zh'
+                        ? '视频插入失败，请稍后重试'
                         : 'Video insertion failed, please try again later'
                     );
                   } finally {
@@ -638,7 +643,7 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
             >
               {isInserting
                 ? (language === 'zh' ? '插入中...' : 'Inserting...')
-                : videoLoading 
+                : videoLoading
                 ? (language === 'zh' ? '加载中...' : 'Loading...')
                 : (language === 'zh' ? '插入视频' : 'Insert Video')
               }

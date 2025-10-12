@@ -19,7 +19,7 @@ export async function callApiRaw(
   };
 
   const data = {
-    model: config.modelName || 'gemini-2.5-flash-image',
+    model: config.modelName || 'gemini-2.5-flash-image-vip',
     messages,
     stream: false,
   };
@@ -53,7 +53,7 @@ export async function callApiStreamRaw(
     'Content-Type': 'application/json',
   };
   const data = {
-    model: config.modelName || 'gemini-2.5-flash-image',
+    model: config.modelName || 'gemini-2.5-flash-image-vip',
     messages,
     presence_penalty: 0,
     temperature: 0.5,
