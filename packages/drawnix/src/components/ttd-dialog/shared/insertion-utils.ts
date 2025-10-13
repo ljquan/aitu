@@ -50,10 +50,55 @@ export const calculateInsertionPointFromIds = (
  */
 export const calculateCurrentSelectionInsertionPoint = (board: PlaitBoard | null): Point | undefined => {
   if (!board) return undefined;
-  
+
   const selectedElements = getSelectedElements(board);
   if (selectedElements.length === 0) return undefined;
-  
+
   const elementIds = selectedElements.map(el => el.id);
   return calculateInsertionPointFromIds(board, elementIds);
+};
+
+/**
+ * 根据保存的选中元素IDs获取参考尺寸
+ * 用于让新插入的内容适应选中元素的大小
+ */
+export const getReferenceDimensionsFromIds = (
+  board: PlaitBoard | null,
+  selectedElementIds: string[]
+): { width: number; height: number } | undefined => {
+  if (!board || selectedElementIds.length === 0) {
+    return undefined;
+  }
+
+  // 查找对应的元素
+  const elements = [];
+  for (const id of selectedElementIds) {
+    const element = board.children.find((el: any) => el.id === id);
+    if (element) {
+      elements.push(element);
+    }
+  }
+
+  if (elements.length === 0) {
+    console.warn('No elements found for saved selected element IDs:', selectedElementIds);
+    return undefined;
+  }
+
+  try {
+    // 计算边界矩形
+    const boundingRect = getRectangleByElements(board, elements, false);
+
+    console.log('Calculated reference dimensions from saved selection:', {
+      width: boundingRect.width,
+      height: boundingRect.height
+    });
+
+    return {
+      width: boundingRect.width,
+      height: boundingRect.height
+    };
+  } catch (error) {
+    console.warn('Error calculating reference dimensions from saved selection:', error);
+    return undefined;
+  }
 };
