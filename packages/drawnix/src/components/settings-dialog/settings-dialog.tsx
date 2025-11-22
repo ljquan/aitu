@@ -4,8 +4,14 @@ import './settings-dialog.scss';
 import { useI18n } from '../../i18n';
 import { useState, useEffect } from 'react';
 import { geminiSettings } from '../../utils/settings-manager';
-import { Tooltip } from 'tdesign-react';
+import { Tooltip, Select } from 'tdesign-react';
 import { InfoCircleIcon } from 'tdesign-icons-react';
+
+const IMAGE_MODEL_OPTIONS = [
+  { label: 'gemini-2.5-flash-image', value: 'gemini-2.5-flash-image' },
+  { label: 'gemini-3-pro-image-preview-hd', value: 'gemini-3-pro-image-preview-hd' },
+  { label: 'gemini-3-pro-image-preview', value: 'gemini-3-pro-image-preview' },
+];
 
 export const SettingsDialog = ({
   container,
@@ -97,12 +103,14 @@ export const SettingsDialog = ({
           </div>
           <div className="settings-dialog__field">
             <label className="settings-dialog__label">图片模型名称</label>
-            <input
-              type="text"
-              className="settings-dialog__input"
+            <Select
+              className="settings-dialog__select"
               value={imageModelName}
-              onChange={(e) => setImageModelName(e.target.value)}
-              placeholder="gemini-2.5-flash-image-vip"
+              onChange={(value) => setImageModelName(value as string)}
+              options={IMAGE_MODEL_OPTIONS}
+              filterable
+              creatable
+              placeholder="gemini-2.5-flash-image"
             />
           </div>
           <div className="settings-dialog__field">
