@@ -251,3 +251,5 @@ npm run build  # Updates version, builds all packages
 - No hardcoded sensitive information
 - Use secure error handling in API calls
 - Filter sensitive info from logs
+
+- speckit生成的相关markdown文档产物以中文输出

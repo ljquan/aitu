@@ -134,3 +134,4 @@ Uses React context (`AituContext`) for application state including:
 - **Cards**: 12px border-radius, white background, subtle shadows, 24px padding  
 - **Inputs**: 8px border-radius, light background, 2px focus border in brand primary
 - **Animations**: smooth 150-300ms transitions with ease-out curves
+- speckit生成的相关markdown文档产物以中文输出
