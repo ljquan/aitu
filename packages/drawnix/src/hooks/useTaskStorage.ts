@@ -1,6 +1,6 @@
 /**
  * useTaskStorage Hook
- * 
+ *
  * Manages automatic synchronization between task queue state and IndexedDB storage.
  * Handles loading tasks on mount and debounced saving on updates.
  */
@@ -9,6 +9,9 @@ import { useEffect, useRef } from 'react';
 import { taskQueueService } from '../services/task-queue-service';
 import { storageService } from '../services/storage-service';
 import { UPDATE_INTERVALS } from '../constants/TASK_CONSTANTS';
+
+// Global flag to prevent multiple initializations (persists across HMR)
+let globalInitialized = false;
 
 /**
  * Hook for automatic task storage synchronization
@@ -27,16 +30,18 @@ import { UPDATE_INTERVALS } from '../constants/TASK_CONSTANTS';
  */
 export function useTaskStorage(): void {
   const saveTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const isInitializedRef = useRef(false);
 
   useEffect(() => {
     let subscriptionActive = true;
 
     // Initialize storage and load tasks
     const initializeStorage = async () => {
-      if (isInitializedRef.current) {
+      if (globalInitialized) {
+        console.log('[useTaskStorage] Already initialized, skipping');
         return;
       }
+
+      console.log('[useTaskStorage] Starting initialization...');
 
       try {
         // Initialize storage service
@@ -44,6 +49,7 @@ export function useTaskStorage(): void {
 
         // Load tasks from storage
         const storedTasks = await storageService.loadTasks();
+        console.log(`[useTaskStorage] Loaded ${storedTasks.length} tasks from IndexedDB`);
 
         if (storedTasks.length > 0 && subscriptionActive) {
           taskQueueService.restoreTasks(storedTasks);
@@ -75,7 +81,7 @@ export function useTaskStorage(): void {
           }
         }
 
-        isInitializedRef.current = true;
+        globalInitialized = true;
       } catch (error) {
         console.error('[useTaskStorage] Failed to initialize storage:', error);
       }

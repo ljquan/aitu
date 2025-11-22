@@ -49,11 +49,13 @@ export type DrawnixState = {
 export const DrawnixContext = createContext<{
   appState: DrawnixState;
   setAppState: (appState: DrawnixState) => void;
+  board: DrawnixBoard | null;
 } | null>(null);
 
 export const useDrawnix = (): {
   appState: DrawnixState;
   setAppState: (appState: DrawnixState) => void;
+  board: DrawnixBoard | null;
   openDialog: (dialogType: DialogType) => void;
 } => {
   const context = useContext(DrawnixContext);

@@ -133,8 +133,9 @@ export const Drawnix: React.FC<DrawnixProps> = ({
   // 使用 useMemo 稳定 DrawnixContext.Provider 的 value
   const contextValue = useMemo(() => ({
     appState,
-    setAppState: stableSetAppState
-  }), [appState, stableSetAppState]);
+    setAppState: stableSetAppState,
+    board
+  }), [appState, stableSetAppState, board]);
 
   return (
     <I18nProvider>

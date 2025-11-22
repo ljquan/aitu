@@ -10,7 +10,10 @@ import { Button, Tabs, Dialog } from 'tdesign-react';
 import { DeleteIcon, CloseIcon } from 'tdesign-icons-react';
 import { TaskItem } from './TaskItem';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
-import { Task, TaskStatus } from '../../types/task.types';
+import { Task, TaskStatus, TaskType } from '../../types/task.types';
+import { useDrawnix } from '../../hooks/use-drawnix';
+import { insertImageFromUrl } from '../../data/image';
+import { insertVideoFromUrl } from '../../data/video';
 import './task-queue.scss';
 
 const { TabPanel } = Tabs;
@@ -45,6 +48,7 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
     clearFailed,
   } = useTaskQueue();
 
+  const { board } = useDrawnix();
   const [activeTab, setActiveTab] = useState<string>('all');
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [clearType, setClearType] = useState<'completed' | 'failed'>('completed');
@@ -114,10 +118,27 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
     onTaskAction?.('download', taskId);
   };
 
-  const handleInsert = (taskId: string) => {
-    // This will be implemented when integrating with the board
-    console.log('Insert to board:', taskId);
-    onTaskAction?.('insert', taskId);
+  const handleInsert = async (taskId: string) => {
+    const task = tasks.find(t => t.id === taskId);
+    if (!task?.result?.url || !board) {
+      console.warn('Cannot insert: task result or board not available');
+      return;
+    }
+
+    try {
+      if (task.type === TaskType.IMAGE) {
+        // 插入图片到白板
+        await insertImageFromUrl(board, task.result.url);
+        console.log('Image inserted to board:', taskId);
+      } else if (task.type === TaskType.VIDEO) {
+        // 插入视频到白板
+        await insertVideoFromUrl(board, task.result.url);
+        console.log('Video inserted to board:', taskId);
+      }
+      onTaskAction?.('insert', taskId);
+    } catch (error) {
+      console.error('Failed to insert to board:', error);
+    }
   };
 
   return (

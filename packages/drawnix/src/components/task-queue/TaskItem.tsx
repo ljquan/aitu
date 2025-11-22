@@ -134,25 +134,9 @@ export const TaskItem: React.FC<TaskItemProps> = ({
 
       {/* Input Parameters Display */}
       <div className="task-item__details">
-        <div className="task-item__section">
-          <div className="task-item__section-title">输入参数</div>
-          <div className="task-item__section-content">
-            <div><strong>提示词:</strong> {task.params.prompt}</div>
-            {task.params.width && <div><strong>宽度:</strong> {task.params.width}px</div>}
-            {task.params.height && <div><strong>高度:</strong> {task.params.height}px</div>}
-            {task.params.duration && <div><strong>时长:</strong> {task.params.duration}s</div>}
-            {task.params.style && <div><strong>风格:</strong> {task.params.style}</div>}
-          </div>
-        </div>
 
         {/* Output Result Display */}
-        {isCompleted && task.result && (
-          <div className="task-item__section">
-            <div className="task-item__section-title">输出结果</div>
-            <div className="task-item__section-content">
-              <div><strong>格式:</strong> {task.result.format}</div>
-              <div><strong>大小:</strong> {(task.result.size / 1024 / 1024).toFixed(2)} MB</div>
-              {task.result.url && (
+        {isCompleted && task.result && task.result.url && (
                 <div className="task-item__preview">
                   {task.type === TaskType.IMAGE ? (
                     <img src={task.result.url} alt="Generated" />
@@ -160,9 +144,7 @@ export const TaskItem: React.FC<TaskItemProps> = ({
                     <video src={task.result.url} controls />
                   )}
                 </div>
-              )}
-            </div>
-          </div>
+              
         )}
       </div>
 

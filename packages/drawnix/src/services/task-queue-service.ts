@@ -263,6 +263,8 @@ class TaskQueueService {
     this.tasks.clear();
     tasks.forEach(task => {
       this.tasks.set(task.id, task);
+      // Emit event for each restored task so subscribers can update UI
+      this.emitEvent('taskCreated', task);
     });
     console.log(`[TaskQueueService] Restored ${tasks.length} tasks`);
   }
