@@ -55,8 +55,6 @@ export const INDEXEDDB_CONFIG = {
   DATABASE_VERSION: 1,
   /** Object store name for tasks */
   TASKS_STORE_NAME: 'tasks',
-  /** Storage key for task queue state */
-  STORAGE_KEY: 'taskQueueState',
 } as const;
 
 /**

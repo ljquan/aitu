@@ -6,11 +6,11 @@
  */
 
 import React, { useState } from 'react';
-import { Button, Tabs, Dialog } from 'tdesign-react';
-import { DeleteIcon, CloseIcon } from 'tdesign-icons-react';
+import { Button, Tabs, Dialog, MessagePlugin } from 'tdesign-react';
+import { DeleteIcon } from 'tdesign-icons-react';
 import { TaskItem } from './TaskItem';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
-import { Task, TaskStatus, TaskType } from '../../types/task.types';
+import { Task, TaskType } from '../../types/task.types';
 import { useDrawnix } from '../../hooks/use-drawnix';
 import { insertImageFromUrl } from '../../data/image';
 import { insertVideoFromUrl } from '../../data/video';
@@ -111,6 +111,9 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
     try {
       // Fetch the file as blob to handle cross-origin URLs
       const response = await fetch(task.result.url);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
       const blob = await response.blob();
 
       // Create blob URL
@@ -135,9 +138,11 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
       // Clean up blob URL
       URL.revokeObjectURL(blobUrl);
 
+      MessagePlugin.success('下载成功');
       onTaskAction?.('download', taskId);
     } catch (error) {
       console.error('Download failed:', error);
+      MessagePlugin.error(`下载失败: ${error instanceof Error ? error.message : '未知错误'}`);
     }
   };
 
@@ -145,6 +150,7 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
     const task = tasks.find(t => t.id === taskId);
     if (!task?.result?.url || !board) {
       console.warn('Cannot insert: task result or board not available');
+      MessagePlugin.warning('无法插入：白板未就绪');
       return;
     }
 
@@ -153,14 +159,17 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
         // 插入图片到白板
         await insertImageFromUrl(board, task.result.url);
         console.log('Image inserted to board:', taskId);
+        MessagePlugin.success('图片已插入到白板');
       } else if (task.type === TaskType.VIDEO) {
         // 插入视频到白板
         await insertVideoFromUrl(board, task.result.url);
         console.log('Video inserted to board:', taskId);
+        MessagePlugin.success('视频已插入到白板');
       }
       onTaskAction?.('insert', taskId);
     } catch (error) {
       console.error('Failed to insert to board:', error);
+      MessagePlugin.error(`插入失败: ${error instanceof Error ? error.message : '未知错误'}`);
     }
   };
 

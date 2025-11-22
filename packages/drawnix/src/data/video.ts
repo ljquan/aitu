@@ -28,7 +28,8 @@ export const getVideoDimensions = (videoUrl: string): Promise<VideoDimensions> =
   
   const promise = new Promise<VideoDimensions>((resolve) => {
     const video = document.createElement('video');
-    video.crossOrigin = 'anonymous';
+    // Remove crossOrigin to avoid CORS issues with external video URLs
+    // video.crossOrigin = 'anonymous';
     video.muted = true;
     video.playsInline = true;
     

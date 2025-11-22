@@ -93,20 +93,27 @@ export function useTaskStorage(): void {
         return;
       }
 
-      // Debounce save operation
-      if (saveTimerRef.current) {
-        clearTimeout(saveTimerRef.current);
-      }
-
-      saveTimerRef.current = setTimeout(async () => {
-        try {
-          const tasks = taskQueueService.getAllTasks();
-          await storageService.saveTasks(tasks);
-          console.log(`[useTaskStorage] Saved ${tasks.length} tasks to storage`);
-        } catch (error) {
-          console.error('[useTaskStorage] Failed to save tasks:', error);
+      // Handle different event types
+      if (event.type === 'taskDeleted') {
+        // Delete from storage immediately (no debounce)
+        storageService.deleteTask(event.task.id).catch(error => {
+          console.error('[useTaskStorage] Failed to delete task from storage:', error);
+        });
+      } else {
+        // Debounce save operation for created/updated tasks
+        if (saveTimerRef.current) {
+          clearTimeout(saveTimerRef.current);
         }
-      }, UPDATE_INTERVALS.STORAGE_SYNC);
+
+        saveTimerRef.current = setTimeout(async () => {
+          try {
+            await storageService.saveTask(event.task);
+            console.log(`[useTaskStorage] Saved task ${event.task.id} to storage`);
+          } catch (error) {
+            console.error('[useTaskStorage] Failed to save task:', error);
+          }
+        }, UPDATE_INTERVALS.STORAGE_SYNC);
+      }
     });
 
     // Initialize

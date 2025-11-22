@@ -48,22 +48,35 @@ class StorageService {
   }
 
   /**
+   * Saves a single task to storage
+   * Uses task.id as the storage key
+   *
+   * @param task - Task to save
+   * @throws Error if save operation fails
+   */
+  async saveTask(task: Task): Promise<void> {
+    try {
+      await this.ensureInitialized();
+      await this.store.setItem(task.id, task);
+      console.log(`[StorageService] Saved task ${task.id}`);
+    } catch (error) {
+      console.error('[StorageService] Failed to save task:', error);
+      throw new Error('Failed to save task to storage');
+    }
+  }
+
+  /**
    * Saves the complete task list to storage
-   * 
+   *
    * @param tasks - Array of tasks to save
    * @throws Error if save operation fails
    */
   async saveTasks(tasks: Task[]): Promise<void> {
     try {
       await this.ensureInitialized();
-      
-      // Convert array to map for efficient lookups
-      const tasksMap: Record<string, Task> = {};
-      tasks.forEach(task => {
-        tasksMap[task.id] = task;
-      });
-      
-      await this.store.setItem(INDEXEDDB_CONFIG.STORAGE_KEY, tasksMap);
+
+      // Save each task individually using taskId as key
+      await Promise.all(tasks.map(task => this.saveTask(task)));
       console.log(`[StorageService] Saved ${tasks.length} tasks`);
     } catch (error) {
       console.error('[StorageService] Failed to save tasks:', error);
@@ -72,25 +85,42 @@ class StorageService {
   }
 
   /**
+   * Loads a single task from storage by ID
+   *
+   * @param taskId - Task ID to load
+   * @returns Task or null if not found
+   */
+  async loadTask(taskId: string): Promise<Task | null> {
+    try {
+      await this.ensureInitialized();
+      const task = await this.store.getItem<Task>(taskId);
+      return task;
+    } catch (error) {
+      console.error(`[StorageService] Failed to load task ${taskId}:`, error);
+      return null;
+    }
+  }
+
+  /**
    * Loads all tasks from storage
-   * 
+   *
    * @returns Array of tasks
    * @throws Error if load operation fails
    */
   async loadTasks(): Promise<Task[]> {
     try {
       await this.ensureInitialized();
-      
-      const tasksMap = await this.store.getItem<Record<string, Task>>(
-        INDEXEDDB_CONFIG.STORAGE_KEY
-      );
-      
-      if (!tasksMap) {
-        console.log('[StorageService] No tasks found in storage');
-        return [];
-      }
-      
-      const tasks = Object.values(tasksMap);
+
+      const tasks: Task[] = [];
+
+      // Iterate through all keys in the store
+      await this.store.iterate<Task, void>((value) => {
+        // Add valid task objects
+        if (value && typeof value === 'object' && 'id' in value) {
+          tasks.push(value);
+        }
+      });
+
       console.log(`[StorageService] Loaded ${tasks.length} tasks`);
       return tasks;
     } catch (error) {
@@ -101,46 +131,21 @@ class StorageService {
   }
 
   /**
-   * Clears completed and cancelled tasks from storage
-   * Retains only active and failed tasks
+   * Deletes a task from storage by ID
+   *
+   * @param taskId - Task ID to delete
    */
-  async clearCompletedTasks(): Promise<void> {
+  async deleteTask(taskId: string): Promise<void> {
     try {
       await this.ensureInitialized();
-      
-      const tasks = await this.loadTasks();
-      const activeTasks = tasks.filter(task => 
-        task.status !== TaskStatus.COMPLETED && 
-        task.status !== TaskStatus.CANCELLED
-      );
-      
-      await this.saveTasks(activeTasks);
-      console.log(`[StorageService] Cleared completed tasks, ${activeTasks.length} remaining`);
+      await this.store.removeItem(taskId);
+      console.log(`[StorageService] Deleted task ${taskId}`);
     } catch (error) {
-      console.error('[StorageService] Failed to clear completed tasks:', error);
-      throw new Error('Failed to clear completed tasks');
+      console.error(`[StorageService] Failed to delete task ${taskId}:`, error);
+      throw new Error('Failed to delete task from storage');
     }
   }
 
-  /**
-   * Clears failed tasks from storage
-   */
-  async clearFailedTasks(): Promise<void> {
-    try {
-      await this.ensureInitialized();
-      
-      const tasks = await this.loadTasks();
-      const nonFailedTasks = tasks.filter(task => 
-        task.status !== TaskStatus.FAILED
-      );
-      
-      await this.saveTasks(nonFailedTasks);
-      console.log(`[StorageService] Cleared failed tasks, ${nonFailedTasks.length} remaining`);
-    } catch (error) {
-      console.error('[StorageService] Failed to clear failed tasks:', error);
-      throw new Error('Failed to clear failed tasks');
-    }
-  }
 
   /**
    * Gets the approximate storage size in bytes
@@ -180,17 +185,20 @@ class StorageService {
   async pruneOldTasks(): Promise<void> {
     try {
       await this.ensureInitialized();
-      
+
       const tasks = await this.loadTasks();
-      
+
       // Sort tasks by creation time (newest first)
       tasks.sort((a, b) => b.createdAt - a.createdAt);
-      
-      // Keep only the most recent tasks
-      const retainedTasks = tasks.slice(0, STORAGE_LIMITS.MAX_RETAINED_TASKS);
-      
-      await this.saveTasks(retainedTasks);
-      console.log(`[StorageService] Pruned to ${retainedTasks.length} tasks`);
+
+      // Identify tasks to delete (older than retention limit)
+      const tasksToDelete = tasks.slice(STORAGE_LIMITS.MAX_RETAINED_TASKS);
+
+      // Delete old tasks
+      await Promise.all(tasksToDelete.map(task => this.deleteTask(task.id)));
+
+      const remaining = tasks.length - tasksToDelete.length;
+      console.log(`[StorageService] Pruned ${tasksToDelete.length} old tasks, ${remaining} remaining`);
     } catch (error) {
       console.error('[StorageService] Failed to prune old tasks:', error);
       throw new Error('Failed to prune old tasks');
