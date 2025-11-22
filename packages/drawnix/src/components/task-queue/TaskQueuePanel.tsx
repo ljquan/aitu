@@ -104,18 +104,41 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
     onTaskAction?.('delete', taskId);
   };
 
-  const handleDownload = (taskId: string) => {
+  const handleDownload = async (taskId: string) => {
     const task = tasks.find(t => t.id === taskId);
-    if (task?.result?.url) {
+    if (!task?.result?.url) return;
+
+    try {
+      // Fetch the file as blob to handle cross-origin URLs
+      const response = await fetch(task.result.url);
+      const blob = await response.blob();
+
+      // Create blob URL
+      const blobUrl = URL.createObjectURL(blob);
+
+      // Generate filename from prompt (sanitize and truncate)
+      const sanitizedPrompt = task.params.prompt
+        .replace(/[^a-zA-Z0-9\u4e00-\u9fa5\s-]/g, '') // Remove special chars, keep Chinese
+        .replace(/\s+/g, '-') // Replace spaces with dashes
+        .substring(0, 50); // Limit to 50 chars
+
+      const filename = `${sanitizedPrompt || task.type}.${task.result.format}`;
+
       // Create a temporary link to download the file
       const link = document.createElement('a');
-      link.href = task.result.url;
-      link.download = `${task.type}-${task.id}.${task.result.format}`;
+      link.href = blobUrl;
+      link.download = filename;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+
+      // Clean up blob URL
+      URL.revokeObjectURL(blobUrl);
+
+      onTaskAction?.('download', taskId);
+    } catch (error) {
+      console.error('Download failed:', error);
     }
-    onTaskAction?.('download', taskId);
   };
 
   const handleInsert = async (taskId: string) => {
