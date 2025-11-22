@@ -26,7 +26,7 @@ class TaskQueueService {
     this.tasks = new Map();
     this.taskUpdates$ = new Subject();
     this.recentSubmissions = new Map();
-    
+
     // Clean up old submissions periodically
     setInterval(() => this.cleanupRecentSubmissions(), 60000); // Every minute
   }
@@ -256,7 +256,7 @@ class TaskQueueService {
 
   /**
    * Restores tasks from storage
-   * 
+   *
    * @param tasks - Array of tasks to restore
    */
   restoreTasks(tasks: Task[]): void {

@@ -44,10 +44,35 @@ export function useTaskStorage(): void {
 
         // Load tasks from storage
         const storedTasks = await storageService.loadTasks();
-        
+
         if (storedTasks.length > 0 && subscriptionActive) {
           taskQueueService.restoreTasks(storedTasks);
           console.log(`[useTaskStorage] Restored ${storedTasks.length} tasks from storage`);
+
+          // Resume incomplete tasks (processing tasks were interrupted by page reload)
+          const processingTasks = storedTasks.filter(task => task.status === 'processing');
+
+          if (processingTasks.length > 0) {
+            console.log(`[useTaskStorage] Resetting ${processingTasks.length} interrupted processing tasks to pending`);
+
+            // Reset processing tasks back to pending (they were interrupted)
+            processingTasks.forEach(task => {
+              taskQueueService.updateTaskStatus(task.id, 'pending' as any, {
+                startedAt: undefined,
+              });
+            });
+          }
+
+          // Count all incomplete tasks for logging
+          const incompleteTasks = storedTasks.filter(task =>
+            task.status === 'pending' ||
+            task.status === 'retrying'
+          );
+
+          if (incompleteTasks.length > 0 || processingTasks.length > 0) {
+            const totalIncomplete = incompleteTasks.length + processingTasks.length;
+            console.log(`[useTaskStorage] Total ${totalIncomplete} incomplete tasks ready for execution`);
+          }
         }
 
         isInitializedRef.current = true;

@@ -40,7 +40,7 @@
   }
 
   &__icon {
-    color: #000000; // 黑色图标
+    color: #757575; // 灰色图标
     display: flex;
     align-items: center;
     justify-content: center;
@@ -67,11 +67,21 @@
   }
 }
 
-// Badge positioning adjustment
+// Badge positioning and styling adjustment
 .task-toolbar-fab .t-badge {
   display: flex;
   align-items: center;
   justify-content: center;
+   background-color: transparent !important;
+}
+
+// Override badge background color to transparent
+.task-toolbar-fab {
+  .t-badge__count {
+   
+    color: #E91E63 !important;
+    border: 1px solid #E91E63 !important;
+  }
 }
 
 // Task Queue Panel (Expandable)
