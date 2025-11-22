@@ -1,6 +1,6 @@
 /**
  * TaskItem Component
- * 
+ *
  * Displays a single task with its details, status, and action buttons.
  * Shows input parameters (prompt) and output results when completed.
  */
@@ -9,7 +9,7 @@ import React from 'react';
 import { Button, Tag, Tooltip } from 'tdesign-react';
 import { ImageIcon, VideoIcon, DeleteIcon, RefreshIcon, CloseCircleIcon, DownloadIcon } from 'tdesign-icons-react';
 import { Task, TaskStatus, TaskType } from '../../types/task.types';
-import { getRelativeTime, formatTaskDuration, truncateString } from '../../utils/task-utils';
+import { getRelativeTime, formatTaskDuration } from '../../utils/task-utils';
 import { formatRetryDelay } from '../../utils/retry-utils';
 import './task-queue.scss';
 
@@ -26,6 +26,8 @@ export interface TaskItemProps {
   onDownload?: (taskId: string) => void;
   /** Callback when insert to board button is clicked */
   onInsert?: (taskId: string) => void;
+  /** Callback when preview is opened */
+  onPreviewOpen?: () => void;
 }
 
 /**
@@ -82,16 +84,17 @@ export const TaskItem: React.FC<TaskItemProps> = ({
   onDelete,
   onDownload,
   onInsert,
+  onPreviewOpen,
 }) => {
-  const isActive = task.status === TaskStatus.PENDING || 
-                   task.status === TaskStatus.PROCESSING || 
+  const isActive = task.status === TaskStatus.PENDING ||
+                   task.status === TaskStatus.PROCESSING ||
                    task.status === TaskStatus.RETRYING;
   const isCompleted = task.status === TaskStatus.COMPLETED;
   const isFailed = task.status === TaskStatus.FAILED;
 
   return (
     <div className="task-item">
-      {/* Header */}
+      {/* Left: Info + Status */}
       <div className="task-item__header">
         <div className="task-item__info">
           <div className="task-item__title">
@@ -100,73 +103,69 @@ export const TaskItem: React.FC<TaskItemProps> = ({
             </div>
             <Tooltip content={task.params.prompt}>
               <div className="task-item__prompt">
-                {truncateString(task.params.prompt, 60)}
+                {task.params.prompt}
               </div>
             </Tooltip>
           </div>
-        </div>
-        <div className="task-item__status">
-          <Tag theme={getStatusTagTheme(task.status)} variant="light">
-            {getStatusLabel(task.status)}
-          </Tag>
+
+
+          {/* Metadata */}
+          <div className="task-item__meta">
+            {/* Status in same line */}
+            <Tag theme={getStatusTagTheme(task.status)} variant="light">
+              {getStatusLabel(task.status)}
+            </Tag>
+            <div className="task-item__meta-item">
+              <span>创建时间:</span>
+              <span>{getRelativeTime(task.createdAt)}</span>
+            </div>
+            {task.startedAt && (
+              <div className="task-item__meta-item">
+                <span>执行时长:</span>
+                <span>{formatTaskDuration(Date.now() - task.startedAt)}</span>
+              </div>
+            )}
+            {task.params.width && task.params.height && (
+              <div className="task-item__meta-item">
+                <span>尺寸:</span>
+                <span>{task.params.width}x{task.params.height}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Error Display */}
+          {isFailed && task.error && (
+            <div className="task-item__error">
+              <div className="task-item__error-message">
+                <strong>错误:</strong> {task.error.message}
+              </div>
+            </div>
+          )}
+
+          {/* Retry Info */}
+          {task.status === TaskStatus.RETRYING && task.nextRetryAt && (
+            <div className="task-item__retry-info">
+              <div className="task-item__retry-info-text">
+                重试 {task.retryCount + 1}/3 - 下次重试: {formatRetryDelay(task.retryCount)} 后
+              </div>
+            </div>
+          )}
+
         </div>
       </div>
 
-      {/* Metadata */}
-      <div className="task-item__meta">
-        <div className="task-item__meta-item">
-          <span>创建时间:</span>
-          <span>{getRelativeTime(task.createdAt)}</span>
-        </div>
-        {task.startedAt && (
-          <div className="task-item__meta-item">
-            <span>执行时长:</span>
-            <span>{formatTaskDuration(Date.now() - task.startedAt)}</span>
-          </div>
-        )}
-        {task.params.width && task.params.height && (
-          <div className="task-item__meta-item">
-            <span>尺寸:</span>
-            <span>{task.params.width}x{task.params.height}</span>
-          </div>
-        )}
-      </div>
-
-      {/* Input Parameters Display */}
-      <div className="task-item__details">
-
-        {/* Output Result Display */}
-        {isCompleted && task.result && task.result.url && (
-                <div className="task-item__preview">
-                  {task.type === TaskType.IMAGE ? (
-                    <img src={task.result.url} alt="Generated" />
-                  ) : (
-                    <video src={task.result.url} controls />
-                  )}
-                </div>
-              
-        )}
-      </div>
-
-      {/* Error Display */}
-      {isFailed && task.error && (
-        <div className="task-item__error">
-          <div className="task-item__error-message">
-            <strong>错误:</strong> {task.error.message}
-          </div>
+      {/* Center: Preview Image/Video */}
+      {isCompleted && task.result && task.result.url && (
+        <div className="task-item__preview" onClick={onPreviewOpen}>
+          {task.type === TaskType.IMAGE ? (
+            <img src={task.result.url} alt="Generated" />
+          ) : (
+            <video src={task.result.url} />
+          )}
         </div>
       )}
 
-      {/* Retry Info */}
-      {task.status === TaskStatus.RETRYING && task.nextRetryAt && (
-        <div className="task-item__retry-info">
-          <div className="task-item__retry-info-text">
-            重试 {task.retryCount + 1}/3 - 下次重试: {formatRetryDelay(task.retryCount)} 后
-          </div>
-        </div>
-      )}
-
-      {/* Action Buttons */}
+      {/* Right: Action Buttons (Vertical) */}
       <div className="task-item__actions">
         {/* Cancel button for active tasks */}
         {isActive && (
@@ -194,6 +193,17 @@ export const TaskItem: React.FC<TaskItemProps> = ({
           </Button>
         )}
 
+        {/* Insert button for completed tasks */}
+        {isCompleted && task.result?.url && (
+          <Button
+            size="small"
+            theme="primary"
+            onClick={() => onInsert?.(task.id)}
+          >
+            插入
+          </Button>
+        )}
+
         {/* Download button for completed tasks */}
         {isCompleted && task.result?.url && (
           <Button
@@ -203,17 +213,6 @@ export const TaskItem: React.FC<TaskItemProps> = ({
             onClick={() => onDownload?.(task.id)}
           >
             下载
-          </Button>
-        )}
-
-        {/* Insert button for completed tasks */}
-        {isCompleted && task.result?.url && (
-          <Button
-            size="small"
-            theme="primary"
-            onClick={() => onInsert?.(task.id)}
-          >
-            插入到白板
           </Button>
         )}
 

@@ -5,12 +5,12 @@
  * Supports filtering by status and provides batch operations.
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Button, Tabs, Dialog, MessagePlugin, Input, Radio } from 'tdesign-react';
-import { DeleteIcon, SearchIcon } from 'tdesign-icons-react';
+import { DeleteIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon } from 'tdesign-icons-react';
 import { TaskItem } from './TaskItem';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
-import { Task, TaskType } from '../../types/task.types';
+import { Task, TaskType, TaskStatus } from '../../types/task.types';
 import { useDrawnix } from '../../hooks/use-drawnix';
 import { insertImageFromUrl } from '../../data/image';
 import { insertVideoFromUrl } from '../../data/video';
@@ -55,6 +55,7 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
   const [clearType, setClearType] = useState<'completed' | 'failed'>('completed');
   const [searchText, setSearchText] = useState<string>('');
   const [typeFilter, setTypeFilter] = useState<'all' | 'image' | 'video'>('all');
+  const [previewTaskId, setPreviewTaskId] = useState<string | null>(null);
 
   // Filter and sort tasks
   const filteredTasks = useMemo(() => {
@@ -199,6 +200,72 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
     }
   };
 
+  // Get completed tasks with results for navigation
+  const completedTasksWithResults = useMemo(() => {
+    return filteredTasks.filter(
+      t => t.status === TaskStatus.COMPLETED && t.result?.url
+    );
+  }, [filteredTasks]);
+
+  // Get current preview index and navigation info
+  const previewInfo = useMemo(() => {
+    if (!previewTaskId) return null;
+    const currentIndex = completedTasksWithResults.findIndex(t => t.id === previewTaskId);
+    if (currentIndex === -1) return null;
+    return {
+      currentIndex,
+      total: completedTasksWithResults.length,
+      hasPrevious: currentIndex > 0,
+      hasNext: currentIndex < completedTasksWithResults.length - 1,
+    };
+  }, [previewTaskId, completedTasksWithResults]);
+
+  // Preview navigation handlers
+  const handlePreviewOpen = (taskId: string) => {
+    setPreviewTaskId(taskId);
+  };
+
+  const handlePreviewClose = () => {
+    setPreviewTaskId(null);
+  };
+
+  const handlePreviewPrevious = () => {
+    if (!previewInfo || !previewInfo.hasPrevious) return;
+    setPreviewTaskId(completedTasksWithResults[previewInfo.currentIndex - 1].id);
+  };
+
+  const handlePreviewNext = () => {
+    if (!previewInfo || !previewInfo.hasNext) return;
+    setPreviewTaskId(completedTasksWithResults[previewInfo.currentIndex + 1].id);
+  };
+
+  // Get current previewed task
+  const previewedTask = useMemo(() => {
+    if (!previewTaskId) return null;
+    return tasks.find(t => t.id === previewTaskId);
+  }, [previewTaskId, tasks]);
+
+  // Keyboard navigation for preview
+  useEffect(() => {
+    if (!previewTaskId) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        handlePreviewPrevious();
+      } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        handlePreviewNext();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        handlePreviewClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [previewTaskId, handlePreviewPrevious, handlePreviewNext]);
+
   return (
     <>
       <div className={`task-queue-panel ${expanded ? 'task-queue-panel--expanded' : ''}`}>
@@ -224,7 +291,7 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
             clearable
             prefixIcon={<SearchIcon />}
             size="small"
-            style={{ flex: 1, marginRight: '8px' }}
+            style={{ width: '180px', marginRight: '8px' }}
           />
 
           <RadioGroup
@@ -284,6 +351,7 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
                   onDelete={handleDelete}
                   onDownload={handleDownload}
                   onInsert={handleInsert}
+                  onPreviewOpen={() => handlePreviewOpen(task.id)}
                 />
               ))}
             </div>
@@ -309,6 +377,66 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
       >
         确定要清除所有{clearType === 'completed' ? '已完成' : '失败'}的任务吗？此操作无法撤销。
       </Dialog>
+
+      {/* Unified Preview Dialog */}
+      {previewedTask && previewedTask.result?.url && (
+        <Dialog
+          visible={!!previewTaskId}
+          onClose={handlePreviewClose}
+          width="90vw"
+          header={
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>{previewedTask.type === TaskType.IMAGE ? '图片预览' : '视频预览'}</span>
+              {previewInfo && (
+                <span style={{ fontSize: '14px', color: '#757575', fontWeight: 'normal' }}>
+                  {previewInfo.currentIndex + 1} / {previewInfo.total}
+                </span>
+              )}
+            </div>
+          }
+          footer={null}
+          className="task-preview-dialog"
+        >
+          <div className="task-preview-container">
+            <Button
+              className="task-preview-nav task-preview-nav--left"
+              icon={<ChevronLeftIcon />}
+              onClick={handlePreviewPrevious}
+              size="large"
+              shape="circle"
+              variant="outline"
+              disabled={!previewInfo?.hasPrevious}
+            />
+            <div className="task-preview-content">
+              {previewedTask.type === TaskType.IMAGE ? (
+                <img
+                  key={previewedTask.id}
+                  src={previewedTask.result.url}
+                  alt="Preview"
+                  style={{ maxWidth: '100%', maxHeight: '85vh', objectFit: 'contain' }}
+                />
+              ) : (
+                <video
+                  key={previewedTask.id}
+                  src={previewedTask.result.url}
+                  controls
+                  autoPlay
+                  style={{ maxWidth: '100%', maxHeight: '85vh' }}
+                />
+              )}
+            </div>
+            <Button
+              className="task-preview-nav task-preview-nav--right"
+              icon={<ChevronRightIcon />}
+              onClick={handlePreviewNext}
+              size="large"
+              shape="circle"
+              variant="outline"
+              disabled={!previewInfo?.hasNext}
+            />
+          </div>
+        </Dialog>
+      )}
     </>
   );
 };
