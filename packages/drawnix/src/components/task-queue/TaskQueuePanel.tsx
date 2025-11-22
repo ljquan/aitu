@@ -5,9 +5,9 @@
  * Supports filtering by status and provides batch operations.
  */
 
-import React, { useState } from 'react';
-import { Button, Tabs, Dialog, MessagePlugin } from 'tdesign-react';
-import { DeleteIcon } from 'tdesign-icons-react';
+import React, { useState, useMemo } from 'react';
+import { Button, Tabs, Dialog, MessagePlugin, Input, Radio } from 'tdesign-react';
+import { DeleteIcon, SearchIcon } from 'tdesign-icons-react';
 import { TaskItem } from './TaskItem';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
 import { Task, TaskType } from '../../types/task.types';
@@ -17,6 +17,7 @@ import { insertVideoFromUrl } from '../../data/video';
 import './task-queue.scss';
 
 const { TabPanel } = Tabs;
+const RadioGroup = Radio.Group;
 
 export interface TaskQueuePanelProps {
   /** Whether the panel is expanded */
@@ -49,29 +50,54 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
   } = useTaskQueue();
 
   const { board } = useDrawnix();
-  const [activeTab, setActiveTab] = useState<string>('all');
+  const [activeTab, setActiveTab] = useState<string>('active');
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [clearType, setClearType] = useState<'completed' | 'failed'>('completed');
+  const [searchText, setSearchText] = useState<string>('');
+  const [typeFilter, setTypeFilter] = useState<'all' | 'image' | 'video'>('all');
 
-  // Filter tasks based on active tab
-  const getFilteredTasks = (): Task[] => {
+  // Filter and sort tasks
+  const filteredTasks = useMemo(() => {
+    // Get tasks based on active tab
+    let tasksToFilter: Task[];
     switch (activeTab) {
       case 'all':
-        return tasks;
+        tasksToFilter = tasks;
+        break;
       case 'active':
-        return activeTasks;
+        tasksToFilter = activeTasks;
+        break;
       case 'completed':
-        return completedTasks;
+        tasksToFilter = completedTasks;
+        break;
       case 'failed':
-        return failedTasks;
+        tasksToFilter = failedTasks;
+        break;
       case 'cancelled':
-        return cancelledTasks;
+        tasksToFilter = cancelledTasks;
+        break;
       default:
-        return tasks;
+        tasksToFilter = tasks;
     }
-  };
 
-  const filteredTasks = getFilteredTasks();
+    // Apply type filter
+    if (typeFilter !== 'all') {
+      tasksToFilter = tasksToFilter.filter(task =>
+        task.type === (typeFilter === 'image' ? TaskType.IMAGE : TaskType.VIDEO)
+      );
+    }
+
+    // Apply search filter
+    if (searchText.trim()) {
+      const searchLower = searchText.toLowerCase().trim();
+      tasksToFilter = tasksToFilter.filter(task =>
+        task.params.prompt.toLowerCase().includes(searchLower)
+      );
+    }
+
+    // Sort by time - newest first (reverse chronological)
+    return [...tasksToFilter].sort((a, b) => b.createdAt - a.createdAt);
+  }, [activeTab, tasks, activeTasks, completedTasks, failedTasks, cancelledTasks, typeFilter, searchText]);
 
   // Handle clear action
   const handleClear = (type: 'completed' | 'failed') => {
@@ -176,17 +202,42 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
   return (
     <>
       <div className={`task-queue-panel ${expanded ? 'task-queue-panel--expanded' : ''}`}>
-        {/* Header with title and close button */}
+        {/* Header with title and tabs */}
         <div className="task-queue-panel__header">
           <div>
             <h3>任务队列</h3>
             <Tabs value={activeTab} onChange={(value) => setActiveTab(value as string)}>
-              <TabPanel value="all" label={`全部 (${tasks.length})`} />
               <TabPanel value="active" label={`活动 (${activeTasks.length})`} />
-              <TabPanel value="completed" label={`已完成 (${completedTasks.length})`} />
               <TabPanel value="failed" label={`失败 (${failedTasks.length})`} />
+              <TabPanel value="completed" label={`已完成 (${completedTasks.length})`} />
+              <TabPanel value="all" label={`全部 (${tasks.length})`} />
             </Tabs>
           </div>
+        </div>
+
+        {/* Filters and Actions */}
+        <div className="task-queue-panel__filters">
+          <Input
+            value={searchText}
+            onChange={(value) => setSearchText(value)}
+            placeholder="搜索 Prompt..."
+            clearable
+            prefixIcon={<SearchIcon />}
+            size="small"
+            style={{ flex: 1, marginRight: '8px' }}
+          />
+
+          <RadioGroup
+            value={typeFilter}
+            onChange={(value) => setTypeFilter(value as 'all' | 'image' | 'video')}
+            size="small"
+            variant="default-filled"
+            style={{ marginRight: '8px' }}
+          >
+            <Radio.Button value="all">全部</Radio.Button>
+            <Radio.Button value="image">图片</Radio.Button>
+            <Radio.Button value="video">视频</Radio.Button>
+          </RadioGroup>
 
           <div className="task-queue-panel__actions">
             {completedTasks.length > 0 && (

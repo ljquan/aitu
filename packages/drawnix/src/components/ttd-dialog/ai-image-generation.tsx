@@ -252,18 +252,8 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
         // 保存提示词到历史记录
         savePromptToHistory(prompt);
 
-        // 重置表单（500ms 延迟以提供更好的用户体验）
-        setTimeout(() => {
-          handleReset();
-        }, 100);
-
-        // 关闭对话框
-        setTimeout(() => {
-          setAppState({
-            ...appState,
-            openDialogType: null,
-          });
-        }, 300);
+        // 清空表单，允许用户继续生成
+        handleReset();
       } else {
         // 任务创建失败（可能是重复提交）
         setError(

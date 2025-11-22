@@ -119,14 +119,18 @@
   }
 
   &__filters {
+    padding: 12px 24px;
+    border-bottom: 1px solid var(--td-component-border, #e7e7e7);
     display: flex;
+    align-items: center;
     gap: 8px;
+    flex-wrap: wrap;
   }
 
   &__actions {
     display: flex;
     gap: 8px;
-    margin-top: 12px;
+    flex-shrink: 0;
   }
 
   &__content {
@@ -154,7 +158,8 @@
   }
 
   &__list {
-    // Task items will be rendered here
+    display: flex;
+    flex-direction: column;
   }
 
   &__empty {
