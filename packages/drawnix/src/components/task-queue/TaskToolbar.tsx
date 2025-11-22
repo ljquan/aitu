@@ -33,20 +33,16 @@ export const TaskToolbar: React.FC<TaskToolbarProps> = ({ onExpandChange }) => {
     onExpandChange?.(newExpanded);
   };
 
-  const totalTasks = activeTasks.length + completedTasks.length + failedTasks.length;
-
-  // Don't render if there are no tasks
-  if (totalTasks === 0) {
-    return null;
-  }
-
-  // Prepare tooltip content
-  const tooltipContent = `任务队列 (活动: ${activeTasks.length}, 已完成: ${completedTasks.length}, 失败: ${failedTasks.length})`;
-
   const handleClose = () => {
     setIsExpanded(false);
     onExpandChange?.(false);
   };
+
+  // Prepare tooltip content
+  const totalTasks = activeTasks.length + completedTasks.length + failedTasks.length;
+  const tooltipContent = totalTasks > 0
+    ? `任务队列 (活动: ${activeTasks.length}, 已完成: ${completedTasks.length}, 失败: ${failedTasks.length})`
+    : '任务队列 (暂无任务)';
 
   return (
     <>

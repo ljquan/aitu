@@ -12,9 +12,9 @@
   left: 36px;   // 与菜单按钮左边对齐
   width: 56px;
   height: 56px;
-  background: var(--td-brand-color, #0052d9);
+  background: #ffffff; // 白色背景
   border-radius: 50%;
-  box-shadow: var(--td-shadow-3, 0 4px 12px rgba(0, 0, 0, 0.15));
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15); // 灰色阴影
   display: flex;
   align-items: center;
   justify-content: center;
@@ -25,9 +25,9 @@
   position: relative;
 
   &:hover {
-    transform: scale(1.1);
-    box-shadow: var(--td-shadow-4, 0 6px 16px rgba(0, 0, 0, 0.2));
-    background: var(--td-brand-color-hover, #0042b3);
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    background: #f5f5f5; // 悬停时稍微变灰
   }
 
   &:active {
@@ -35,15 +35,12 @@
   }
 
   &--expanded {
-    background: var(--td-brand-color-active, #003399);
-    
-    .task-toolbar-fab__icon {
-      transform: rotate(180deg);
-    }
+    background: #f0f0f0; // 展开时浅灰色
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
   }
 
   &__icon {
-    color: #ffffff;
+    color: #000000; // 黑色图标
     display: flex;
     align-items: center;
     justify-content: center;
