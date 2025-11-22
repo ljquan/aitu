@@ -9,6 +9,7 @@ import { useEffect, useRef } from 'react';
 import { taskQueueService } from '../services/task-queue-service';
 import { storageService } from '../services/storage-service';
 import { UPDATE_INTERVALS } from '../constants/TASK_CONSTANTS';
+import { migrateLegacyHistory } from '../utils/history-migration';
 
 // Global flag to prevent multiple initializations (persists across HMR)
 let globalInitialized = false;
@@ -47,7 +48,10 @@ export function useTaskStorage(): void {
         // Initialize storage service
         await storageService.initialize();
 
-        // Load tasks from storage
+        // Migrate legacy history data from localStorage to task queue
+        await migrateLegacyHistory();
+
+        // Load tasks from storage (including migrated history)
         const storedTasks = await storageService.loadTasks();
         console.log(`[useTaskStorage] Loaded ${storedTasks.length} tasks from IndexedDB`);
 

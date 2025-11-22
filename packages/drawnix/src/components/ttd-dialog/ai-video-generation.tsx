@@ -9,14 +9,12 @@ import { getSelectedElements, PlaitElement, getRectangleByElements, Point } from
 import { videoGeminiClient } from '../../utils/gemini-api';
 import { getInsertionPointForSelectedElements } from '../../utils/selection-utils';
 import { insertVideoFromUrl } from '../../data/video';
-import { 
-  GenerationHistory, 
-  VideoHistoryItem, 
-  ImageHistoryItem,
-  loadVideoHistory,
-  saveVideoToHistory,
-  generateHistoryId
+import {
+  GenerationHistory,
+  VideoHistoryItem,
+  ImageHistoryItem
 } from '../generation-history';
+import { useGenerationHistory } from '../../hooks/useGenerationHistory';
 import {
   useGenerationState,
   useKeyboardShortcuts,
@@ -33,8 +31,6 @@ import {
   type ImageFile,
   getMergedPresetPrompts,
   savePromptToHistory as savePromptToHistoryUtil,
-  generateVideoThumbnail as generateThumbnail,
-  updateHistoryWithGeneratedContent,
   DEFAULT_VIDEO_DIMENSIONS,
   getReferenceDimensionsFromIds
 } from './shared';
@@ -72,8 +68,10 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
   const [isInserting, setIsInserting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploadedImage, setUploadedImage] = useState<ImageFile | null>(initialImage || null);
-  const [historyItems, setHistoryItems] = useState<VideoHistoryItem[]>([]);
-  
+
+  // Use generation history from task queue
+  const { videoHistory } = useGenerationHistory();
+
   const { isGenerating, isLoading: videoLoading, updateIsGenerating, updateIsLoading: updateVideoLoading } = useGenerationState('video');
 
   const { appState, setAppState } = useDrawnix();
@@ -130,11 +128,6 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
     }
   }, [board]);
 
-  // 加载历史记录
-  useEffect(() => {
-    const history = loadVideoHistory();
-    setHistoryItems(history);
-  }, []);
 
   useEffect(() => {
     setPrompt(initialPrompt);
@@ -177,77 +170,6 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
       };
       cacheManager.save(cacheData);
 
-      // 异步生成视频缩略图（使用预览URL）
-      const thumbnailPromise = generateThumbnail(videoUrls.previewUrl);
-
-      // 更新已有的提示词记录，添加生成的视频信息
-      const existingHistory = loadVideoHistory();
-      const existingIndex = existingHistory.findIndex(item => item.prompt.trim() === prompt.trim());
-      
-      if (existingIndex >= 0) {
-        // 如果找到了相同提示词的记录，更新它的视频信息
-        const updatedItem = {
-          ...existingHistory[existingIndex],
-          previewUrl: videoUrls.previewUrl,
-          downloadUrl: videoUrls.downloadUrl,
-          timestamp: Date.now(), // 更新时间戳
-        };
-        
-        // 等待缩略图生成完成，然后更新imageUrl
-        try {
-          const thumbnail = await thumbnailPromise;
-          if (thumbnail) {
-            updatedItem.imageUrl = thumbnail; // 使用缩略图作为 imageUrl
-          } else {
-            // 如果缩略图生成失败，使用预览URL
-            updatedItem.imageUrl = videoUrls.previewUrl;
-          }
-        } catch (error) {
-          console.warn('Failed to generate video thumbnail:', error);
-          // 如果缩略图生成失败，使用预览URL
-          updatedItem.imageUrl = videoUrls.previewUrl;
-        }
-        
-        // 更新历史记录
-        saveVideoToHistory(updatedItem);
-        
-        // 更新历史列表状态
-        const updatedHistoryItem: VideoHistoryItem = { ...updatedItem, type: 'video' };
-        setHistoryItems(prev => [updatedHistoryItem, ...prev.filter(h => h.id !== updatedItem.id)].slice(0, 50));
-      } else {
-        // 如果没有找到，创建新记录（理论上不应该到这里，因为已在handleGenerate中保存了）
-        const historyItem: Omit<VideoHistoryItem, 'type'> = {
-          id: generateHistoryId(),
-          prompt,
-          imageUrl: '', // 先置空，等待缩略图生成
-          width: 400,   // 默认尺寸
-          height: 225,  // 默认尺寸
-          previewUrl: videoUrls.previewUrl,
-          downloadUrl: videoUrls.downloadUrl,
-          timestamp: Date.now()
-        };
-
-        // 等待缩略图生成完成，然后更新历史记录
-        try {
-          const thumbnail = await thumbnailPromise;
-          if (thumbnail) {
-            historyItem.imageUrl = thumbnail; // 使用缩略图作为 imageUrl
-          } else {
-            // 如果缩略图生成失败，使用预览URL
-            historyItem.imageUrl = videoUrls.previewUrl;
-          }
-        } catch (error) {
-          console.warn('Failed to generate video thumbnail:', error);
-          // 如果缩略图生成失败，使用预览URL
-          historyItem.imageUrl = videoUrls.previewUrl;
-        }
-
-        saveVideoToHistory(historyItem);
-        
-        // 更新历史列表状态
-        const newHistoryItem: VideoHistoryItem = { ...historyItem, type: 'video' };
-        setHistoryItems(prev => [newHistoryItem, ...prev.filter(h => h.id !== historyItem.id)].slice(0, 50));
-      }
     } catch (error) {
       console.warn('Failed to set generated video:', error);
       setGeneratedVideo(videoUrls);
@@ -286,10 +208,10 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
     // 视频生成组件不处理图片类型
   };
 
-  // 使用useMemo优化性能，当historyItems或language变化时重新计算
-  const presetPrompts = React.useMemo(() => 
-    getMergedPresetPrompts('video', language as Language, historyItems), 
-    [historyItems, language]
+  // 使用useMemo优化性能，当videoHistory或language变化时重新计算
+  const presetPrompts = React.useMemo(() =>
+    getMergedPresetPrompts('video', language as Language, videoHistory),
+    [videoHistory, language]
   );
 
   // 保存提示词到历史记录（去重）
@@ -448,7 +370,7 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
         
           {/* 统一历史记录组件 */}
           <GenerationHistory
-            historyItems={historyItems}
+            historyItems={videoHistory}
             onSelectFromHistory={handleSelectFromHistory}
             position={{ bottom: '60px', right: '8px' }}
           />

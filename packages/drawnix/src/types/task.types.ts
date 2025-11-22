@@ -74,6 +74,8 @@ export interface TaskResult {
   height?: number;
   /** Video duration in seconds (video only) */
   duration?: number;
+  /** Video thumbnail URL (video only) */
+  thumbnailUrl?: string;
 }
 
 /**

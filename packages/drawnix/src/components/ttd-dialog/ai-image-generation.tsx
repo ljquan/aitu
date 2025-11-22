@@ -11,12 +11,12 @@ import { insertImageFromUrl } from '../../data/image';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
 import { TaskType } from '../../types/task.types';
 import { MessagePlugin } from 'tdesign-react';
-import { 
-  GenerationHistory, 
-  ImageHistoryItem, 
-  VideoHistoryItem,
-  loadImageHistory 
+import {
+  GenerationHistory,
+  ImageHistoryItem,
+  VideoHistoryItem
 } from '../generation-history';
+import { useGenerationHistory } from '../../hooks/useGenerationHistory';
 import {
   useGenerationState,
   useKeyboardShortcuts,
@@ -34,7 +34,6 @@ import {
   getMergedPresetPrompts,
   savePromptToHistory as savePromptToHistoryUtil,
   preloadImage,
-  updateHistoryWithGeneratedContent,
   DEFAULT_IMAGE_DIMENSIONS,
   getReferenceDimensionsFromIds
 } from './shared';
@@ -64,7 +63,8 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
   const [error, setError] = useState<string | null>(null);
   const [useImageAPI] = useState(false);
   const [uploadedImages, setUploadedImages] = useState<ImageFile[]>(initialImages);
-  const [historyItems, setHistoryItems] = useState<ImageHistoryItem[]>([]);
+  // Use generation history from task queue
+  const { imageHistory } = useGenerationHistory();
   
   const { isGenerating, isLoading: imageLoading, updateIsGenerating, updateIsLoading: updateImageLoading } = useGenerationState('image');
 
@@ -90,11 +90,6 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
     }
   }, []);
 
-  // 加载历史记录
-  useEffect(() => {
-    const history = loadImageHistory();
-    setHistoryItems(history);
-  }, []);
 
   // 处理 props 变化，更新内部状态
   useEffect(() => {
@@ -158,17 +153,6 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
         height
       };
       cacheManager.save(cacheData);
-
-      // 更新历史记录
-      updateHistoryWithGeneratedContent({
-        type: 'image',
-        prompt,
-        url: imageUrl,
-        dimensions: {
-          width: typeof width === 'string' ? parseInt(width) || DEFAULT_IMAGE_DIMENSIONS.width : width,
-          height: typeof height === 'string' ? parseInt(height) || DEFAULT_IMAGE_DIMENSIONS.height : height
-        }
-      }, setHistoryItems);
     } catch (error) {
       console.warn('Failed to preload image, setting anyway:', error);
       // 即使预加载失败，也设置图片URL，让浏览器正常加载
@@ -183,17 +167,6 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
         height
       };
       cacheManager.save(cacheData);
-
-      // 更新历史记录
-      updateHistoryWithGeneratedContent({
-        type: 'image',
-        prompt,
-        url: imageUrl,
-        dimensions: {
-          width: typeof width === 'string' ? parseInt(width) || DEFAULT_IMAGE_DIMENSIONS.width : width,
-          height: typeof height === 'string' ? parseInt(height) || DEFAULT_IMAGE_DIMENSIONS.height : height
-        }
-      }, setHistoryItems);
     } finally {
       updateImageLoading(false);
     }
@@ -225,10 +198,10 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
     // 图片生成组件不处理视频类型
   };
 
-  // 使用useMemo优化性能，当historyItems或language变化时重新计算
-  const presetPrompts = React.useMemo(() => 
-    getMergedPresetPrompts('image', language as Language, historyItems), 
-    [historyItems, language]
+  // 使用useMemo优化性能，当imageHistory或language变化时重新计算
+  const presetPrompts = React.useMemo(() =>
+    getMergedPresetPrompts('image', language as Language, imageHistory),
+    [imageHistory, language]
   );
 
   // 保存提示词到历史记录（去重）
@@ -560,7 +533,7 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
           )}
               {/* 统一历史记录组件 */}
               <GenerationHistory
-                historyItems={historyItems}
+                historyItems={imageHistory}
                 onSelectFromHistory={handleSelectFromHistory}
               />
 
