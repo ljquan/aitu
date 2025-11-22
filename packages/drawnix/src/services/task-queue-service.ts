@@ -1,0 +1,324 @@
+/**
+ * Task Queue Service
+ * 
+ * Core service for managing the task queue lifecycle.
+ * Implements singleton pattern and uses RxJS for event-driven architecture.
+ */
+
+import { Subject, Observable } from 'rxjs';
+import { Task, TaskStatus, TaskType, TaskEvent, GenerationParams } from '../types/task.types';
+import { generateTaskId, isTaskActive } from '../utils/task-utils';
+import { validateGenerationParams, generateParamsHash, sanitizeGenerationParams } from '../utils/validation-utils';
+import { getNextRetryTime } from '../utils/retry-utils';
+import { DUPLICATE_SUBMISSION_WINDOW } from '../constants/TASK_CONSTANTS';
+
+/**
+ * Task Queue Service
+ * Manages task creation, updates, and lifecycle events
+ */
+class TaskQueueService {
+  private static instance: TaskQueueService;
+  private tasks: Map<string, Task>;
+  private taskUpdates$: Subject<TaskEvent>;
+  private recentSubmissions: Map<string, number>; // hash -> timestamp
+
+  private constructor() {
+    this.tasks = new Map();
+    this.taskUpdates$ = new Subject();
+    this.recentSubmissions = new Map();
+    
+    // Clean up old submissions periodically
+    setInterval(() => this.cleanupRecentSubmissions(), 60000); // Every minute
+  }
+
+  /**
+   * Gets the singleton instance of TaskQueueService
+   */
+  static getInstance(): TaskQueueService {
+    if (!TaskQueueService.instance) {
+      TaskQueueService.instance = new TaskQueueService();
+    }
+    return TaskQueueService.instance;
+  }
+
+  /**
+   * Creates a new task and adds it to the queue
+   * 
+   * @param params - Generation parameters
+   * @param type - Task type (image or video)
+   * @returns The created task
+   * @throws Error if validation fails or duplicate submission detected
+   */
+  createTask(params: GenerationParams, type: TaskType): Task {
+    // Validate parameters
+    const validation = validateGenerationParams(params, type);
+    if (!validation.valid) {
+      throw new Error(`Invalid parameters: ${validation.errors.join(', ')}`);
+    }
+
+    // Sanitize parameters
+    const sanitizedParams = sanitizeGenerationParams(params);
+
+    // Check for duplicate submission
+    const paramsHash = generateParamsHash(sanitizedParams, type);
+    if (this.isDuplicateSubmission(paramsHash)) {
+      throw new Error('Duplicate submission detected. Please wait before submitting the same task again.');
+    }
+
+    // Create new task
+    const now = Date.now();
+    const task: Task = {
+      id: generateTaskId(),
+      type,
+      status: TaskStatus.PENDING,
+      params: sanitizedParams,
+      createdAt: now,
+      updatedAt: now,
+      retryCount: 0,
+    };
+
+    // Add to queue
+    this.tasks.set(task.id, task);
+    
+    // Track recent submission
+    this.recentSubmissions.set(paramsHash, now);
+
+    // Emit event
+    this.emitEvent('taskCreated', task);
+
+    console.log(`[TaskQueueService] Created task ${task.id} (${type})`);
+    return task;
+  }
+
+  /**
+   * Updates a task's status
+   * 
+   * @param taskId - The task ID
+   * @param status - New status
+   * @param updates - Additional fields to update
+   */
+  updateTaskStatus(
+    taskId: string,
+    status: TaskStatus,
+    updates?: Partial<Task>
+  ): void {
+    const task = this.tasks.get(taskId);
+    if (!task) {
+      console.warn(`[TaskQueueService] Task ${taskId} not found`);
+      return;
+    }
+
+    const now = Date.now();
+    const updatedTask: Task = {
+      ...task,
+      ...updates,
+      status,
+      updatedAt: now,
+    };
+
+    // Set timestamps based on status
+    if (status === TaskStatus.PROCESSING && !updatedTask.startedAt) {
+      updatedTask.startedAt = now;
+    } else if (status === TaskStatus.COMPLETED || status === TaskStatus.FAILED) {
+      updatedTask.completedAt = now;
+    } else if (status === TaskStatus.RETRYING) {
+      updatedTask.retryCount = task.retryCount + 1;
+      updatedTask.nextRetryAt = getNextRetryTime(updatedTask) || undefined;
+    }
+
+    this.tasks.set(taskId, updatedTask);
+    this.emitEvent('taskUpdated', updatedTask);
+
+    console.log(`[TaskQueueService] Updated task ${taskId} to ${status}`);
+  }
+
+  /**
+   * Gets a task by ID
+   * 
+   * @param taskId - The task ID
+   * @returns The task or undefined
+   */
+  getTask(taskId: string): Task | undefined {
+    return this.tasks.get(taskId);
+  }
+
+  /**
+   * Gets all tasks
+   * 
+   * @returns Array of all tasks
+   */
+  getAllTasks(): Task[] {
+    return Array.from(this.tasks.values());
+  }
+
+  /**
+   * Gets tasks by status
+   * 
+   * @param status - The status to filter by
+   * @returns Array of tasks with the specified status
+   */
+  getTasksByStatus(status: TaskStatus): Task[] {
+    return this.getAllTasks().filter(task => task.status === status);
+  }
+
+  /**
+   * Gets active tasks (pending, processing, retrying)
+   * 
+   * @returns Array of active tasks
+   */
+  getActiveTasks(): Task[] {
+    return this.getAllTasks().filter(isTaskActive);
+  }
+
+  /**
+   * Cancels a task
+   * 
+   * @param taskId - The task ID to cancel
+   */
+  cancelTask(taskId: string): void {
+    const task = this.tasks.get(taskId);
+    if (!task) {
+      console.warn(`[TaskQueueService] Task ${taskId} not found`);
+      return;
+    }
+
+    if (!isTaskActive(task)) {
+      console.warn(`[TaskQueueService] Task ${taskId} is not active, cannot cancel`);
+      return;
+    }
+
+    this.updateTaskStatus(taskId, TaskStatus.CANCELLED);
+    console.log(`[TaskQueueService] Cancelled task ${taskId}`);
+  }
+
+  /**
+   * Retries a failed task
+   * 
+   * @param taskId - The task ID to retry
+   */
+  retryTask(taskId: string): void {
+    const task = this.tasks.get(taskId);
+    if (!task) {
+      console.warn(`[TaskQueueService] Task ${taskId} not found`);
+      return;
+    }
+
+    if (task.status !== TaskStatus.FAILED) {
+      console.warn(`[TaskQueueService] Task ${taskId} is not failed, cannot retry`);
+      return;
+    }
+
+    // Reset task for retry
+    this.updateTaskStatus(taskId, TaskStatus.PENDING, {
+      retryCount: 0,
+      error: undefined,
+      nextRetryAt: undefined,
+    });
+
+    console.log(`[TaskQueueService] Retrying task ${taskId}`);
+  }
+
+  /**
+   * Deletes a task from the queue
+   * 
+   * @param taskId - The task ID to delete
+   */
+  deleteTask(taskId: string): void {
+    const task = this.tasks.get(taskId);
+    if (!task) {
+      console.warn(`[TaskQueueService] Task ${taskId} not found`);
+      return;
+    }
+
+    this.tasks.delete(taskId);
+    this.emitEvent('taskDeleted', task);
+
+    console.log(`[TaskQueueService] Deleted task ${taskId}`);
+  }
+
+  /**
+   * Clears completed tasks
+   */
+  clearCompletedTasks(): void {
+    const completedTasks = this.getTasksByStatus(TaskStatus.COMPLETED);
+    completedTasks.forEach(task => this.deleteTask(task.id));
+    console.log(`[TaskQueueService] Cleared ${completedTasks.length} completed tasks`);
+  }
+
+  /**
+   * Clears failed tasks
+   */
+  clearFailedTasks(): void {
+    const failedTasks = this.getTasksByStatus(TaskStatus.FAILED);
+    failedTasks.forEach(task => this.deleteTask(task.id));
+    console.log(`[TaskQueueService] Cleared ${failedTasks.length} failed tasks`);
+  }
+
+  /**
+   * Restores tasks from storage
+   * 
+   * @param tasks - Array of tasks to restore
+   */
+  restoreTasks(tasks: Task[]): void {
+    this.tasks.clear();
+    tasks.forEach(task => {
+      this.tasks.set(task.id, task);
+    });
+    console.log(`[TaskQueueService] Restored ${tasks.length} tasks`);
+  }
+
+  /**
+   * Observes task update events
+   * 
+   * @returns Observable stream of task events
+   */
+  observeTaskUpdates(): Observable<TaskEvent> {
+    return this.taskUpdates$.asObservable();
+  }
+
+  /**
+   * Checks if a submission is a duplicate
+   * @private
+   */
+  private isDuplicateSubmission(paramsHash: string): boolean {
+    const lastSubmission = this.recentSubmissions.get(paramsHash);
+    if (!lastSubmission) {
+      return false;
+    }
+
+    const elapsed = Date.now() - lastSubmission;
+    return elapsed < DUPLICATE_SUBMISSION_WINDOW;
+  }
+
+  /**
+   * Cleans up old submission tracking data
+   * @private
+   */
+  private cleanupRecentSubmissions(): void {
+    const now = Date.now();
+    const toDelete: string[] = [];
+
+    this.recentSubmissions.forEach((timestamp, hash) => {
+      if (now - timestamp > DUPLICATE_SUBMISSION_WINDOW) {
+        toDelete.push(hash);
+      }
+    });
+
+    toDelete.forEach(hash => this.recentSubmissions.delete(hash));
+  }
+
+  /**
+   * Emits a task event
+   * @private
+   */
+  private emitEvent(type: TaskEvent['type'], task: Task): void {
+    this.taskUpdates$.next({
+      type,
+      task,
+      timestamp: Date.now(),
+    });
+  }
+}
+
+// Export singleton instance
+export const taskQueueService = TaskQueueService.getInstance();

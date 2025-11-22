@@ -8,6 +8,9 @@ import { type Language } from '../../constants/prompts';
 import { getSelectedElements, PlaitElement, getRectangleByElements, Point } from '@plait/core';
 import { defaultGeminiClient } from '../../utils/gemini-api';
 import { insertImageFromUrl } from '../../data/image';
+import { useTaskQueue } from '../../hooks/useTaskQueue';
+import { TaskType } from '../../types/task.types';
+import { MessagePlugin } from 'tdesign-react';
 import { 
   GenerationHistory, 
   ImageHistoryItem, 
@@ -68,6 +71,7 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
   const { appState, setAppState } = useDrawnix();
   const { language } = useI18n();
   const board = useBoard();
+  const { createTask } = useTaskQueue();
 
   // 计算插入位置
   const calculateInsertionPoint = (): Point | undefined => {
@@ -242,133 +246,66 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
       return;
     }
 
-    // 清除旧的图像和错误信息
-    setGeneratedImage(null);
-    setError(null);
-    
-    // 在生成开始时保存提示词（不管是否生成成功）
-    savePromptToHistory(prompt);
-
-    updateIsGenerating(true);
-
     try {
       const finalWidth = typeof width === 'string' ? (parseInt(width) || 1024) : width;
       const finalHeight = typeof height === 'string' ? (parseInt(height) || 1024) : height;
       
-      if (useImageAPI) {
-        // 使用专用图像生成API (images/generations)
-        console.log('Using Images API for generation...');
-        const result = await defaultGeminiClient.generateImage(prompt, {
-          n: 1,
-          size: `${finalWidth}x${finalHeight}`
-        });
-        
-        // 处理图像生成API的响应格式: { data: [{ url: "..." }], created: timestamp }
-        if (result.data && result.data.length > 0) {
-          const imageUrl = result.data[0].url;
-          console.log('Generated image URL:', imageUrl);
-          await setGeneratedImageWithPreload(imageUrl);
-        } else {
-          setError(
-            language === 'zh' 
-              ? '图像生成失败，API未返回图像数据' 
-              : 'Image generation failed, API returned no image data'
-          );
-        }
-      } else {
-        // 使用聊天API (chat/completions)
-        console.log('Using Chat API for generation...');
-        const imagePrompt = `Generate an image based on this description: "${prompt}"`;
+      // 创建任务参数
+      const taskParams = {
+        prompt: prompt.trim(),
+        width: finalWidth,
+        height: finalHeight,
+        // 保存上传的图片引用（如果有）
+        uploadedImages: uploadedImages.map(img => {
+          if (img instanceof File) {
+            return { type: 'file', name: img.name };
+          } else {
+            return { type: 'url', url: img.url, name: img.name };
+          }
+        })
+      };
 
-        // 将上传的图片转换为ImageInput格式，对File类型的图片进行压缩
-        const imageInputs = await Promise.all(uploadedImages.map(async (item) => {
-          if (item instanceof File) {
-            // 注释掉图片压缩逻辑，直接使用原图
-            // try {
-            //   // 将File转换为data URL
-            //   const fileDataUrl = await new Promise<string>((resolve, reject) => {
-            //     const reader = new FileReader();
-            //     reader.onload = () => resolve(reader.result as string);
-            //     reader.onerror = reject;
-            //     reader.readAsDataURL(item);
-            //   });
-            //   
-            //   // 对base64图片进行压缩处理
-            //   const compressedDataUrl = await compressImageUrl(fileDataUrl);
-            //   
-            //   // 将压缩后的data URL转换回File对象
-            //   const response = await fetch(compressedDataUrl);
-            //   const blob = await response.blob();
-            //   const compressedFile = new File([blob], item.name, { type: blob.type || item.type });
-            //   
-            //   return { file: compressedFile };
-            // } catch (compressionError) {
-            //   console.warn('Failed to compress uploaded image, using original:', compressionError);
-            //   return { file: item };
-            // }
-            
-            // 直接使用原图，不进行压缩
-            return { file: item };
-          } else {
-            // 对于URL类型的图片，直接传递URL
-            return { url: item.url };
-          }
-        }));
-        
-        const result = await defaultGeminiClient.chat(imagePrompt, imageInputs);
-        
-        // 从聊天响应中提取内容
-        const responseContent = result.response.choices[0]?.message?.content || '';
-        console.log('Chat API response:', responseContent);
-        
-        // 先检查是否有处理过的内容（可能包含图片）
-        if (result.processedContent && result.processedContent.images && result.processedContent.images.length > 0) {
-          // 如果响应中包含图片，使用第一张图片
-          const firstImage = result.processedContent.images[0];
-          if (firstImage.type === 'url') {
-            await setGeneratedImageWithPreload(firstImage.data);
-          } else if (firstImage.type === 'base64') {
-            // 将base64转换为data URL
-            const dataUrl = `data:image/png;base64,${firstImage.data}`;
-            await setGeneratedImageWithPreload(dataUrl);
-          }
-        } else {
-          // 尝试从文本响应中提取图片URL
-          const urlMatch = responseContent.match(/https?:\/\/[^\s<>"'\n]+/);
-          if (urlMatch) {
-            const imageUrl = urlMatch[0].replace(/[.,;!?]*$/, ''); // 移除末尾的标点符号
-            console.log('Extracted URL:', imageUrl);
-            await setGeneratedImageWithPreload(imageUrl);
-          } else {
-            setError(
-              language === 'zh' 
-                ? `聊天API无法生成图像。响应: ${responseContent.substring(0, 100)}...` 
-                : `Chat API unable to generate image. Response: ${responseContent.substring(0, 100)}...`
-            );
-          }
-        }
-      }
-    } catch (err) {
-      console.error('AI image generation error:', err);
-      const errorMessage = err instanceof Error ? err.message : String(err);
+      // 创建任务并添加到队列
+      const task = createTask(taskParams, TaskType.IMAGE);
       
-      if (isInvalidTokenError(errorMessage)) {
-        const apiKeyError = await handleApiKeyError(errorMessage, language);
-        if (apiKeyError) {
-          setError(apiKeyError);
-        }
-        // If apiKeyError is null, it means API key was successfully updated, don't clear the error here
-        // The user can try generating again
+      if (task) {
+        // 任务创建成功
+        MessagePlugin.success(
+          language === 'zh' 
+            ? '任务已添加到队列，将在后台生成' 
+            : 'Task added to queue, will be generated in background'
+        );
+
+        // 保存提示词到历史记录
+        savePromptToHistory(prompt);
+
+        // 重置表单（500ms 延迟以提供更好的用户体验）
+        setTimeout(() => {
+          handleReset();
+        }, 100);
+
+        // 关闭对话框
+        setTimeout(() => {
+          setAppState({
+            ...appState,
+            openDialogType: null,
+          });
+        }, 300);
       } else {
-        // Show the actual error message for non-API key errors
+        // 任务创建失败（可能是重复提交）
         setError(
           language === 'zh' 
-            ? `图像生成失败: ${errorMessage}` 
-            : `Image generation failed: ${errorMessage}`
+            ? '任务创建失败，请检查参数或稍后重试' 
+            : 'Failed to create task, please check parameters or try again later'
         );
       }
-    } finally {
-      updateIsGenerating(false);
+    } catch (err: any) {
+      console.error('Failed to create task:', err);
+      setError(
+        language === 'zh' 
+          ? `创建任务失败: ${err.message}` 
+          : `Failed to create task: ${err.message}`
+      );
     }
   };
 

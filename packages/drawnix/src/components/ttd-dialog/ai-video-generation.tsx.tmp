@@ -298,67 +298,6 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
     savePromptToHistoryUtil('video', promptText, dimensions);
   };
 
-  const handleGenerate = async () => {
-    if (!prompt.trim()) {
-      setError(language === 'zh' ? '请输入视频描述' : 'Please enter video description');
-      return;
-    }
-
-    try {
-      // 创建任务参数
-      const taskParams = {
-        prompt: prompt.trim(),
-        // 保存上传的图片引用（如果有）
-        uploadedImage: uploadedImage ? (
-          uploadedImage instanceof File 
-            ? { type: 'file', name: uploadedImage.name }
-            : { type: 'url', url: uploadedImage.url, name: uploadedImage.name }
-        ) : undefined
-      };
-
-      // 创建任务并添加到队列
-      const task = createTask(taskParams, TaskType.VIDEO);
-      
-      if (task) {
-        // 任务创建成功
-        MessagePlugin.success(
-          language === 'zh' 
-            ? '视频任务已添加到队列，将在后台生成' 
-            : 'Video task added to queue, will be generated in background'
-        );
-
-        // 保存提示词到历史记录
-        savePromptToHistory(prompt);
-
-        // 重置表单
-        setTimeout(() => {
-          handleReset();
-        }, 100);
-
-        // 关闭对话框
-        setTimeout(() => {
-          setAppState({
-            ...appState,
-            openDialogType: null,
-          });
-        }, 300);
-      } else {
-        // 任务创建失败
-        setError(
-          language === 'zh' 
-            ? '任务创建失败，请检查参数或稍后重试' 
-            : 'Failed to create task, please check parameters or try again later'
-        );
-      }
-    } catch (err: any) {
-      console.error('Failed to create task:', err);
-      setError(
-        language === 'zh' 
-          ? `创建任务失败: ${err.message}` 
-          : `Failed to create task: ${err.message}`
-      );
-    }
-  };
 
   useKeyboardShortcuts(isGenerating, prompt, handleGenerate);
 

@@ -1,0 +1,151 @@
+/**
+ * Validation Utilities
+ * 
+ * Provides validation functions for generation parameters and task data.
+ * Ensures data integrity before task creation and API calls.
+ */
+
+import { GenerationParams, TaskType } from '../types/task.types';
+
+/**
+ * Validation result interface
+ * Contains validation status and error messages
+ */
+export interface ValidationResult {
+  /** Whether validation passed */
+  valid: boolean;
+  /** Error messages if validation failed */
+  errors: string[];
+}
+
+/**
+ * Validates generation parameters for completeness and correctness
+ * 
+ * @param params - The generation parameters to validate
+ * @param type - The task type (image or video)
+ * @returns Validation result with status and error messages
+ * 
+ * @example
+ * validateGenerationParams({ prompt: "cat" }, 'image')
+ * // Returns { valid: true, errors: [] }
+ * 
+ * validateGenerationParams({}, 'image')
+ * // Returns { valid: false, errors: ["Prompt is required"] }
+ */
+export function validateGenerationParams(
+  params: GenerationParams,
+  type?: TaskType
+): ValidationResult {
+  const errors: string[] = [];
+  
+  // Validate required fields
+  if (!params.prompt || typeof params.prompt !== 'string') {
+    errors.push('Prompt is required and must be a string');
+  } else if (params.prompt.trim().length === 0) {
+    errors.push('Prompt cannot be empty');
+  } else if (params.prompt.length > 1000) {
+    errors.push('Prompt must not exceed 1000 characters');
+  }
+  
+  // Validate optional numeric fields
+  if (params.width !== undefined) {
+    if (typeof params.width !== 'number' || params.width <= 0) {
+      errors.push('Width must be a positive number');
+    } else if (params.width > 4096) {
+      errors.push('Width must not exceed 4096 pixels');
+    }
+  }
+  
+  if (params.height !== undefined) {
+    if (typeof params.height !== 'number' || params.height <= 0) {
+      errors.push('Height must be a positive number');
+    } else if (params.height > 4096) {
+      errors.push('Height must not exceed 4096 pixels');
+    }
+  }
+  
+  // Validate video-specific fields
+  if (type === TaskType.VIDEO && params.duration !== undefined) {
+    if (typeof params.duration !== 'number' || params.duration <= 0) {
+      errors.push('Duration must be a positive number');
+    } else if (params.duration > 60) {
+      errors.push('Duration must not exceed 60 seconds');
+    }
+  }
+  
+  if (params.seed !== undefined) {
+    if (typeof params.seed !== 'number' || !Number.isInteger(params.seed)) {
+      errors.push('Seed must be an integer');
+    }
+  }
+  
+  return {
+    valid: errors.length === 0,
+    errors
+  };
+}
+
+/**
+ * Validates a task type value
+ * 
+ * @param type - The task type to validate
+ * @returns True if the type is valid, false otherwise
+ */
+export function isValidTaskType(type: string): type is TaskType {
+  return type === TaskType.IMAGE || type === TaskType.VIDEO;
+}
+
+/**
+ * Sanitizes generation parameters by removing invalid fields
+ * 
+ * @param params - The generation parameters to sanitize
+ * @returns Sanitized parameters object
+ */
+export function sanitizeGenerationParams(params: GenerationParams): GenerationParams {
+  const sanitized: GenerationParams = {
+    prompt: params.prompt?.trim() || '',
+  };
+  
+  if (params.width && typeof params.width === 'number' && params.width > 0) {
+    sanitized.width = Math.min(params.width, 4096);
+  }
+  
+  if (params.height && typeof params.height === 'number' && params.height > 0) {
+    sanitized.height = Math.min(params.height, 4096);
+  }
+  
+  if (params.duration && typeof params.duration === 'number' && params.duration > 0) {
+    sanitized.duration = Math.min(params.duration, 60);
+  }
+  
+  if (params.style && typeof params.style === 'string') {
+    sanitized.style = params.style.trim();
+  }
+  
+  if (params.seed && typeof params.seed === 'number' && Number.isInteger(params.seed)) {
+    sanitized.seed = params.seed;
+  }
+  
+  return sanitized;
+}
+
+/**
+ * Generates a hash from generation parameters for duplicate detection
+ * 
+ * @param params - The generation parameters
+ * @param type - The task type
+ * @returns Hash string representing the parameters
+ */
+export function generateParamsHash(params: GenerationParams, type: TaskType): string {
+  const sortedParams = {
+    type,
+    prompt: params.prompt,
+    width: params.width,
+    height: params.height,
+    duration: params.duration,
+    style: params.style,
+    seed: params.seed,
+  };
+  
+  return JSON.stringify(sortedParams);
+}
