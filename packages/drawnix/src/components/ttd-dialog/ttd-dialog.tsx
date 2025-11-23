@@ -97,13 +97,12 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
             return;
           }
 
-          // 保存当前选中的元素IDs
-          const selectedElements = getSelectedElements(board);
-          const selectedElementIds = selectedElements.map(el => el.id);
-          console.log('Saving selected element IDs for AI image generation:', selectedElementIds);
+          // 使用保存在appState中的最近选中元素IDs
+          const selectedElementIds = appState.lastSelectedElementIds || [];
+          console.log('Using saved selected element IDs for AI image generation:', selectedElementIds);
 
-          // 使用新的处理逻辑来处理选中的内容
-          const processedContent = await processSelectedContentForAI(board);
+          // 使用新的处理逻辑来处理选中的内容,传入保存的元素IDs
+          const processedContent = await processSelectedContentForAI(board, selectedElementIds);
           
           // 准备图片列表
           const imageItems: (File | { url: string; name: string })[] = [];
@@ -184,8 +183,12 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
             return;
           }
 
-          // 使用新的处理逻辑来处理选中的内容
-          const processedContent = await processSelectedContentForAI(board);
+          // 使用保存在appState中的最近选中元素IDs
+          const selectedElementIds = appState.lastSelectedElementIds || [];
+          console.log('Using saved selected element IDs for AI video generation:', selectedElementIds);
+
+          // 使用新的处理逻辑来处理选中的内容,传入保存的元素IDs
+          const processedContent = await processSelectedContentForAI(board, selectedElementIds);
 
           // 对于视频生成，只使用第一张图片
           let firstImage: File | { url: string; name: string } | undefined = undefined;

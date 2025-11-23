@@ -63,7 +63,7 @@ interface AIImageGenerationProps {
 const AIImageGeneration = ({
   initialPrompt = '',
   initialImages = [],
-  selectedElementIds = [],
+  selectedElementIds: initialSelectedElementIds = [],
   initialWidth,
   initialHeight,
   initialResultUrl
@@ -89,9 +89,12 @@ const AIImageGeneration = ({
   // Track task IDs created in this dialog session
   const [dialogTaskIds, setDialogTaskIds] = useState<string[]>([]);
 
+  // 保存选中元素的ID,用于计算插入位置
+  const [savedSelectedElementIds, setSavedSelectedElementIds] = useState<string[]>(initialSelectedElementIds);
+
   // 计算插入位置
   const calculateInsertionPoint = (): Point | undefined => {
-    return calculateInsertionPointFromIds(board, selectedElementIds);
+    return calculateInsertionPointFromIds(board, savedSelectedElementIds);
   };
 
 
@@ -112,8 +115,11 @@ const AIImageGeneration = ({
   useEffect(() => {
     setPrompt(initialPrompt);
     setUploadedImages(initialImages);
+    setSavedSelectedElementIds(initialSelectedElementIds);
     if (initialWidth) setWidth(initialWidth);
     if (initialHeight) setHeight(initialHeight);
+
+    console.log('AI Image Generation: Updated savedSelectedElementIds:', initialSelectedElementIds);
 
     // 如果编辑任务且有结果URL,显示预览图
     if (initialResultUrl) {
@@ -129,7 +135,7 @@ const AIImageGeneration = ({
         console.warn('Failed to clear cache:', error);
       }
     }
-  }, [initialPrompt, initialImages, initialWidth, initialHeight, initialResultUrl]);
+  }, [initialPrompt, initialImages, initialSelectedElementIds, initialWidth, initialHeight, initialResultUrl]);
 
   // 清除错误状态当组件挂载时（对话框打开时）
   useEffect(() => {
@@ -417,10 +423,10 @@ const AIImageGeneration = ({
                     // 调试：检查当前选中状态
                     const currentSelectedElements = board ? getSelectedElements(board) : [];
                     console.log('Current selected elements:', currentSelectedElements.length, currentSelectedElements);
-                    console.log('Saved selected element IDs:', selectedElementIds);
+                    console.log('Saved selected element IDs:', savedSelectedElementIds);
 
                     // 计算参考尺寸（用于适应选中元素的大小）
-                    const referenceDimensions = getReferenceDimensionsFromIds(board, selectedElementIds);
+                    const referenceDimensions = getReferenceDimensionsFromIds(board, savedSelectedElementIds);
                     console.log('Reference dimensions for image insertion:', referenceDimensions);
 
                     // 计算插入位置

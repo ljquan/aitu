@@ -42,7 +42,7 @@ export const TaskToolbar: React.FC<TaskToolbarProps> = ({ onExpandChange }) => {
   // Prepare tooltip content
   const totalTasks = activeTasks.length + completedTasks.length + failedTasks.length;
   const tooltipContent = totalTasks > 0
-    ? `任务队列 (活动: ${activeTasks.length}, 已完成: ${completedTasks.length}, 失败: ${failedTasks.length})`
+    ? `任务队列 (生成中: ${activeTasks.length}, 已完成: ${completedTasks.length}, 失败: ${failedTasks.length})`
     : '任务队列 (暂无任务)';
 
   return (

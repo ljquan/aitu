@@ -9,6 +9,7 @@ import {
   Selection,
   ThemeColorMode,
   Viewport,
+  getSelectedElements,
 } from '@plait/core';
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { withGroup } from '@plait/common';
@@ -91,6 +92,9 @@ export const Drawnix: React.FC<DrawnixProps> = ({
 
   const [board, setBoard] = useState<DrawnixBoard | null>(null);
 
+  // 使用 ref 来保存 board 的最新引用,避免 useCallback 依赖问题
+  const boardRef = useRef<DrawnixBoard | null>(null);
+
   // 使用 useCallback 稳定 setAppState 函数引用
   const stableSetAppState = useCallback((newAppState: DrawnixState) => {
     setAppState(newAppState);
@@ -103,10 +107,11 @@ export const Drawnix: React.FC<DrawnixProps> = ({
     }));
   }, []);
 
-  // 使用 useEffect 来更新 board.appState，避免在每次渲染时执行
+  // 使用 useEffect 来更新 board.appState 和 boardRef，避免在每次渲染时执行
   useEffect(() => {
     if (board) {
       board.appState = appState;
+      boardRef.current = board;
     }
   }, [board, appState]);
 
@@ -130,6 +135,26 @@ export const Drawnix: React.FC<DrawnixProps> = ({
   
   // Initialize task executor for background processing
   useTaskExecutor();
+
+  // 处理选中状态变化,保存最近选中的元素IDs
+  const handleSelectionChange = useCallback((selection: Selection | null) => {
+    const currentBoard = boardRef.current;
+    if (currentBoard && selection) {
+      // 使用Plait的getSelectedElements函数来获取选中的元素
+      const selectedElements = getSelectedElements(currentBoard);
+
+      const elementIds = selectedElements.map((el: any) => el.id).filter(Boolean);
+
+      // 只有当选中了元素时才更新lastSelectedElementIds
+      if (elementIds.length > 0) {
+        console.log('Selection changed, saving element IDs:', elementIds);
+        updateAppState({ lastSelectedElementIds: elementIds });
+      }
+    }
+
+    // 调用外部的onSelectionChange回调
+    onSelectionChange && onSelectionChange(selection);
+  }, [onSelectionChange, updateAppState]);
 
   // 使用 useMemo 稳定 DrawnixContext.Provider 的 value
   const contextValue = useMemo(() => ({
@@ -156,7 +181,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
             onChange={(data: BoardChangeData) => {
               onChange && onChange(data);
             }}
-            onSelectionChange={onSelectionChange}
+            onSelectionChange={handleSelectionChange}
             onViewportChange={onViewportChange}
             onThemeChange={onThemeChange}
             onValueChange={onValueChange}

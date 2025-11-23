@@ -54,6 +54,7 @@ export type DrawnixState = {
   openCleanConfirm: boolean;
   openSettings: boolean;
   linkState?: LinkState | null;
+  lastSelectedElementIds?: string[]; // 最近选中的元素IDs,用于AI生成插入位置计算
 };
 
 export const DrawnixContext = createContext<{

@@ -17,7 +17,7 @@ export async function callApiRaw(
   const startTime = Date.now();
   const model = config.modelName || 'gemini-2.5-flash-image-vip';
   const endpoint = '/chat/completions';
-debugger
+
   // Track API call start
   analytics.trackAPICallStart({
     endpoint,

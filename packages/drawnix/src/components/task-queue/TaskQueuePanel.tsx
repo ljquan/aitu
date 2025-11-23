@@ -290,7 +290,7 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
             <h3>任务队列</h3>
             <Tabs value={activeTab} onChange={(value) => setActiveTab(value as string)}>
               <TabPanel value="all" label={`全部 (${tasks.length})`} />
-              <TabPanel value="active" label={`活动 (${activeTasks.length})`} />
+              <TabPanel value="active" label={`生成中 (${activeTasks.length})`} />
               <TabPanel value="failed" label={`失败 (${failedTasks.length})`} />
               <TabPanel value="completed" label={`已完成 (${completedTasks.length})`} />
             </Tabs>
@@ -341,7 +341,7 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
             <div className="task-queue-panel__empty">
               <div className="task-queue-panel__empty-icon">📋</div>
               <div className="task-queue-panel__empty-text">
-                {activeTab === 'all' ? '暂无任务' : `暂无${activeTab === 'active' ? '活动' : activeTab === 'completed' ? '已完成' : activeTab === 'failed' ? '失败' : '已取消'}任务`}
+                {activeTab === 'all' ? '暂无任务' : `暂无${activeTab === 'active' ? '生成中' : activeTab === 'completed' ? '已完成' : activeTab === 'failed' ? '失败' : '已取消'}任务`}
               </div>
             </div>
           ) : (
