@@ -12,7 +12,7 @@ import { Task, TaskType } from '../../types/task.types';
 import { useDrawnix, DialogType } from '../../hooks/use-drawnix';
 import { insertImageFromUrl } from '../../data/image';
 import { insertVideoFromUrl } from '../../data/video';
-import { MessagePlugin } from 'tdesign-react';
+import { MessagePlugin, Dialog } from 'tdesign-react';
 import { downloadMediaFile } from '../../utils/download-utils';
 import './dialog-task-list.scss';
 
@@ -38,6 +38,8 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
   } = useTaskQueue();
 
   const { board, openDialog } = useDrawnix();
+  const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
+  const [taskToDelete, setTaskToDelete] = React.useState<string | null>(null);
 
   // Filter tasks by IDs and optionally by type
   const filteredTasks = useMemo(() => {
@@ -61,7 +63,16 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
   };
 
   const handleDelete = (taskId: string) => {
-    deleteTask(taskId);
+    setTaskToDelete(taskId);
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDelete = () => {
+    if (taskToDelete) {
+      deleteTask(taskToDelete);
+    }
+    setShowDeleteConfirm(false);
+    setTaskToDelete(null);
   };
 
   const handleDownload = async (taskId: string) => {
@@ -133,24 +144,37 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
   }
 
   return (
-    <div className="dialog-task-list">
-      <div className="dialog-task-list__header">
-        <h4>生成任务 ({filteredTasks.length})</h4>
+    <>
+      <div className="dialog-task-list">
+        <div className="dialog-task-list__header">
+          <h4>生成任务 ({filteredTasks.length})</h4>
+        </div>
+        <div className="dialog-task-list__content">
+          {filteredTasks.map(task => (
+            <TaskItem
+              key={task.id}
+              task={task}
+              onCancel={handleCancel}
+              onRetry={handleRetry}
+              onDelete={handleDelete}
+              onDownload={handleDownload}
+              onInsert={handleInsert}
+              onEdit={handleEdit}
+            />
+          ))}
+        </div>
       </div>
-      <div className="dialog-task-list__content">
-        {filteredTasks.map(task => (
-          <TaskItem
-            key={task.id}
-            task={task}
-            onCancel={handleCancel}
-            onRetry={handleRetry}
-            onDelete={handleDelete}
-            onDownload={handleDownload}
-            onInsert={handleInsert}
-            onEdit={handleEdit}
-          />
-        ))}
-      </div>
-    </div>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        visible={showDeleteConfirm}
+        header="确认删除"
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={confirmDelete}
+        onCancel={() => setShowDeleteConfirm(false)}
+      >
+        确定要删除此任务吗？此操作无法撤销。
+      </Dialog>
+    </>
   );
 };

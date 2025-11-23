@@ -57,6 +57,8 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
   const [searchText, setSearchText] = useState<string>('');
   const [typeFilter, setTypeFilter] = useState<'all' | 'image' | 'video'>('all');
   const [previewTaskId, setPreviewTaskId] = useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [taskToDelete, setTaskToDelete] = useState<string | null>(null);
 
   // Filter and sort tasks
   const filteredTasks = useMemo(() => {
@@ -128,8 +130,17 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
   };
 
   const handleDelete = (taskId: string) => {
-    deleteTask(taskId);
-    onTaskAction?.('delete', taskId);
+    setTaskToDelete(taskId);
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDelete = () => {
+    if (taskToDelete) {
+      deleteTask(taskToDelete);
+      onTaskAction?.('delete', taskToDelete);
+    }
+    setShowDeleteConfirm(false);
+    setTaskToDelete(null);
   };
 
   const handleDownload = async (taskId: string) => {
@@ -310,16 +321,6 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
           />
 
           <div className="task-queue-panel__actions">
-            {completedTasks.length > 0 && (
-              <Button
-                size="small"
-                variant="text"
-                icon={<DeleteIcon />}
-                onClick={() => handleClear('completed')}
-              >
-                清除已完成
-              </Button>
-            )}
             {failedTasks.length > 0 && (
               <Button
                 size="small"
@@ -380,6 +381,17 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
         onCancel={() => setShowClearConfirm(false)}
       >
         确定要清除所有{clearType === 'completed' ? '已完成' : '失败'}的任务吗？此操作无法撤销。
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        visible={showDeleteConfirm}
+        header="确认删除"
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={confirmDelete}
+        onCancel={() => setShowDeleteConfirm(false)}
+      >
+        确定要删除此任务吗？此操作无法撤销。
       </Dialog>
 
       {/* Unified Preview Dialog */}
