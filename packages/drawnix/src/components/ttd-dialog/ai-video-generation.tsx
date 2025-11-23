@@ -261,15 +261,33 @@ const AIVideoGeneration = ({
     }
 
     try {
+      // Convert File object to base64 data URL for serialization
+      let convertedImage: { type: 'url'; url: string; name: string } | undefined;
+      if (uploadedImage) {
+        if (uploadedImage.file) {
+          // Convert File to base64 data URL
+          convertedImage = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+              resolve({
+                type: 'url',
+                url: reader.result as string,
+                name: uploadedImage.name
+              });
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(uploadedImage.file!);
+          });
+        } else if (uploadedImage.url) {
+          convertedImage = { type: 'url', url: uploadedImage.url, name: uploadedImage.name };
+        }
+      }
+
       // 创建任务参数
       const taskParams = {
         prompt: prompt.trim(),
-        // 保存上传的图片引用（如果有）
-        uploadedImage: uploadedImage ? (
-          uploadedImage instanceof File 
-            ? { type: 'file', name: uploadedImage.name }
-            : { type: 'url', url: uploadedImage.url, name: uploadedImage.name }
-        ) : undefined
+        // 保存上传的图片（已转换为可序列化的格式）
+        uploadedImage: convertedImage
       };
 
       // 创建任务并添加到队列

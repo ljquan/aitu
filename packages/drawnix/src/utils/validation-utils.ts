@@ -105,27 +105,35 @@ export function sanitizeGenerationParams(params: GenerationParams): GenerationPa
   const sanitized: GenerationParams = {
     prompt: params.prompt?.trim() || '',
   };
-  
+
   if (params.width && typeof params.width === 'number' && params.width > 0) {
     sanitized.width = Math.min(params.width, 4096);
   }
-  
+
   if (params.height && typeof params.height === 'number' && params.height > 0) {
     sanitized.height = Math.min(params.height, 4096);
   }
-  
+
   if (params.duration && typeof params.duration === 'number' && params.duration > 0) {
     sanitized.duration = Math.min(params.duration, 60);
   }
-  
+
   if (params.style && typeof params.style === 'string') {
     sanitized.style = params.style.trim();
   }
-  
+
   if (params.seed && typeof params.seed === 'number' && Number.isInteger(params.seed)) {
     sanitized.seed = params.seed;
   }
-  
+
+  // Preserve custom parameters (uploadedImages, uploadedImage, etc.)
+  // Copy all other properties from the original params
+  Object.keys(params).forEach(key => {
+    if (!['prompt', 'width', 'height', 'duration', 'style', 'seed'].includes(key)) {
+      (sanitized as any)[key] = params[key as keyof GenerationParams];
+    }
+  });
+
   return sanitized;
 }
 

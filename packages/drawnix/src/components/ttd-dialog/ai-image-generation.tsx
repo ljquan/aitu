@@ -254,20 +254,37 @@ const AIImageGeneration = ({
     try {
       const finalWidth = typeof width === 'string' ? (parseInt(width) || 1024) : width;
       const finalHeight = typeof height === 'string' ? (parseInt(height) || 1024) : height;
-      
+      // Convert File objects to base64 data URLs for serialization
+      const convertedImages = await Promise.all(
+        uploadedImages.map(async (img) => {
+          if (img.file) {
+            // Convert File to base64 data URL
+            return new Promise<{ type: 'url'; url: string; name: string }>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => {
+                resolve({
+                  type: 'url',
+                  url: reader.result as string,
+                  name: img.name
+                });
+              };
+              reader.onerror = reject;
+              reader.readAsDataURL(img.file!);
+            });
+          } else if (img.url) {
+            return { type: 'url', url: img.url, name: img.name };
+          }
+          throw new Error('Invalid image data');
+        })
+      );
+
       // 创建任务参数
       const taskParams = {
         prompt: prompt.trim(),
         width: finalWidth,
         height: finalHeight,
-        // 保存上传的图片引用（如果有）
-        uploadedImages: uploadedImages.map(img => {
-          if (img instanceof File) {
-            return { type: 'file', name: img.name };
-          } else {
-            return { type: 'url', url: img.url, name: img.name };
-          }
-        })
+        // 保存上传的图片（已转换为可序列化的格式）
+        uploadedImages: convertedImages
       };
 
       // 创建任务并添加到队列

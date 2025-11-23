@@ -142,16 +142,15 @@ class GenerationAPIService {
     try {
       // Use Chat API for image generation
       const imagePrompt = `Generate an image based on this description: "${params.prompt}"`;
-      
+
       // Convert uploaded images if any (from params metadata)
       const imageInputs: any[] = [];
       if ((params as any).uploadedImages) {
         const uploadedImages = (params as any).uploadedImages;
         for (const img of uploadedImages) {
-          if (img.type === 'url') {
+          if (img.type === 'url' && img.url) {
             imageInputs.push({ url: img.url });
           }
-          // File type images would need to be handled differently
         }
       }
 
