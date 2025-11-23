@@ -1,0 +1,111 @@
+/**
+ * Download Utilities
+ *
+ * Centralized download logic for images, videos, and other media files
+ */
+
+/**
+ * Sanitize a string to be used as a filename
+ * - Removes special characters except Chinese, English, numbers, spaces, and dashes
+ * - Replaces spaces with dashes
+ * - Truncates to specified max length
+ */
+export function sanitizeFilename(text: string, maxLength: number = 50): string {
+  return text
+    .replace(/[^a-zA-Z0-9\u4e00-\u9fa5\s-]/g, '') // Remove special chars, keep Chinese
+    .replace(/\s+/g, '-') // Replace spaces with dashes
+    .substring(0, maxLength); // Limit length
+}
+
+/**
+ * Download a file from URL
+ * Handles cross-origin URLs by fetching as blob first
+ *
+ * @param url - The URL of the file to download
+ * @param filename - Optional filename (will be sanitized if provided)
+ * @returns Promise that resolves when download is complete
+ */
+export async function downloadFile(url: string, filename?: string): Promise<void> {
+  try {
+    // Fetch the file as blob to handle cross-origin URLs
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    const blob = await response.blob();
+
+    // Create blob URL
+    const blobUrl = URL.createObjectURL(blob);
+
+    // Determine filename
+    let finalFilename = filename;
+    if (!finalFilename) {
+      // Try to extract filename from URL
+      const urlPath = new URL(url).pathname;
+      finalFilename = urlPath.substring(urlPath.lastIndexOf('/') + 1) || 'download';
+    }
+
+    // Create a temporary link to download the file
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = finalFilename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    // Clean up blob URL
+    URL.revokeObjectURL(blobUrl);
+  } catch (error) {
+    console.error('Download failed:', error);
+    throw error;
+  }
+}
+
+/**
+ * Download a media file with auto-generated filename from prompt
+ *
+ * @param url - The URL of the media file
+ * @param prompt - The prompt text to use for filename
+ * @param format - File extension (e.g., 'png', 'mp4', 'webp')
+ * @param fallbackName - Fallback name if prompt is empty
+ * @returns Promise that resolves when download is complete
+ */
+export async function downloadMediaFile(
+  url: string,
+  prompt: string,
+  format: string,
+  fallbackName: string = 'media'
+): Promise<void> {
+  const sanitizedPrompt = sanitizeFilename(prompt);
+  const filename = `${sanitizedPrompt || fallbackName}.${format}`;
+  return downloadFile(url, filename);
+}
+
+/**
+ * Get file extension from URL or MIME type
+ */
+export function getFileExtension(url: string, mimeType?: string): string {
+  // Try to get extension from URL
+  const urlPath = new URL(url).pathname;
+  const urlExtension = urlPath.substring(urlPath.lastIndexOf('.') + 1).toLowerCase();
+
+  if (urlExtension && urlExtension.length <= 5) {
+    return urlExtension;
+  }
+
+  // Fallback to MIME type
+  if (mimeType) {
+    const mimeToExt: Record<string, string> = {
+      'image/png': 'png',
+      'image/jpeg': 'jpg',
+      'image/jpg': 'jpg',
+      'image/webp': 'webp',
+      'image/gif': 'gif',
+      'video/mp4': 'mp4',
+      'video/webm': 'webm',
+    };
+    return mimeToExt[mimeType] || 'bin';
+  }
+
+  return 'bin';
+}

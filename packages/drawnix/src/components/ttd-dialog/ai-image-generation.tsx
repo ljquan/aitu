@@ -11,6 +11,7 @@ import { insertImageFromUrl } from '../../data/image';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
 import { TaskType } from '../../types/task.types';
 import { MessagePlugin } from 'tdesign-react';
+import { downloadMediaFile } from '../../utils/download-utils';
 import {
   GenerationHistory,
   ImageHistoryItem,
@@ -61,6 +62,7 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
   const [width, setWidth] = useState<number | string>(DEFAULT_IMAGE_DIMENSIONS.width);
   const [height, setHeight] = useState<number | string>(DEFAULT_IMAGE_DIMENSIONS.height);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
+  const [generatedImagePrompt, setGeneratedImagePrompt] = useState<string>(''); // Track prompt for current image
   const [error, setError] = useState<string | null>(null);
   const [useImageAPI] = useState(false);
   const [uploadedImages, setUploadedImages] = useState<ImageFile[]>(initialImages);
@@ -91,6 +93,7 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
       setWidth(cachedData.width);
       setHeight(cachedData.height);
       setGeneratedImage(cachedData.generatedImage);
+      setGeneratedImagePrompt(cachedData.prompt); // Set prompt for download
     }
   }, []);
 
@@ -183,7 +186,8 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
     setWidth(historyItem.width);
     setHeight(historyItem.height);
     setGeneratedImage(historyItem.imageUrl);
-    
+    setGeneratedImagePrompt(historyItem.prompt); // Save prompt for download
+
     // 更新预览缓存
     const cacheData: PreviewCache = {
       prompt: historyItem.prompt,
@@ -430,10 +434,36 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
               }
             </button>
             <button
-              onClick={() => {
+              onClick={async () => {
                 if (generatedImage) {
-                  // 在新页面打开下载链接
-                  window.open(generatedImage, '_blank');
+                  try {
+                    // Extract file extension from URL
+                    let format = 'png';
+                    try {
+                      const urlPath = new URL(generatedImage).pathname;
+                      const ext = urlPath.substring(urlPath.lastIndexOf('.') + 1).toLowerCase();
+                      if (ext && ['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(ext)) {
+                        format = ext;
+                      }
+                    } catch (e) {
+                      // Keep default format
+                    }
+
+                    await downloadMediaFile(
+                      generatedImage,
+                      generatedImagePrompt || 'image',
+                      format,
+                      'image'
+                    );
+                    MessagePlugin.success(language === 'zh' ? '下载成功' : 'Download successful');
+                  } catch (err) {
+                    console.error('Download failed:', err);
+                    MessagePlugin.error(
+                      language === 'zh'
+                        ? '下载失败，请重试'
+                        : 'Download failed, please try again'
+                    );
+                  }
                 }
               }}
               disabled={isGenerating || imageLoading}

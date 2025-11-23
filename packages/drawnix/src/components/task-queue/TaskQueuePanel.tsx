@@ -14,6 +14,7 @@ import { Task, TaskType, TaskStatus } from '../../types/task.types';
 import { useDrawnix } from '../../hooks/use-drawnix';
 import { insertImageFromUrl } from '../../data/image';
 import { insertVideoFromUrl } from '../../data/video';
+import { downloadMediaFile } from '../../utils/download-utils';
 import './task-queue.scss';
 
 const { TabPanel } = Tabs;
@@ -136,35 +137,12 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
     if (!task?.result?.url) return;
 
     try {
-      // Fetch the file as blob to handle cross-origin URLs
-      const response = await fetch(task.result.url);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const blob = await response.blob();
-
-      // Create blob URL
-      const blobUrl = URL.createObjectURL(blob);
-
-      // Generate filename from prompt (sanitize and truncate)
-      const sanitizedPrompt = task.params.prompt
-        .replace(/[^a-zA-Z0-9\u4e00-\u9fa5\s-]/g, '') // Remove special chars, keep Chinese
-        .replace(/\s+/g, '-') // Replace spaces with dashes
-        .substring(0, 50); // Limit to 50 chars
-
-      const filename = `${sanitizedPrompt || task.type}.${task.result.format}`;
-
-      // Create a temporary link to download the file
-      const link = document.createElement('a');
-      link.href = blobUrl;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      // Clean up blob URL
-      URL.revokeObjectURL(blobUrl);
-
+      await downloadMediaFile(
+        task.result.url,
+        task.params.prompt,
+        task.result.format,
+        task.type
+      );
       MessagePlugin.success('下载成功');
       onTaskAction?.('download', taskId);
     } catch (error) {

@@ -9,6 +9,7 @@ import { getSelectedElements, PlaitElement, getRectangleByElements, Point } from
 import { videoGeminiClient } from '../../utils/gemini-api';
 import { getInsertionPointForSelectedElements } from '../../utils/selection-utils';
 import { insertVideoFromUrl } from '../../data/video';
+import { downloadMediaFile } from '../../utils/download-utils';
 import {
   GenerationHistory,
   VideoHistoryItem,
@@ -66,6 +67,7 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
     previewUrl: string;
     downloadUrl: string;
   } | null>(null);
+  const [generatedVideoPrompt, setGeneratedVideoPrompt] = useState<string>(''); // Track prompt for current video
   const [isInserting, setIsInserting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploadedImage, setUploadedImage] = useState<ImageFile | null>(initialImage || null);
@@ -122,6 +124,7 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
     if (cachedData) {
       setPrompt(cachedData.prompt);
       setGeneratedVideo(cachedData.generatedVideo);
+      setGeneratedVideoPrompt(cachedData.prompt); // Set prompt for download
     }
 
     if (board) {
@@ -190,9 +193,10 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
       previewUrl: historyItem.previewUrl,
       downloadUrl: historyItem.downloadUrl || historyItem.previewUrl
     });
+    setGeneratedVideoPrompt(historyItem.prompt); // Save prompt for download
     // 选择历史记录时清除错误状态
     setError(null);
-    
+
     // 更新预览缓存
     const cacheData: PreviewCache = {
       prompt: historyItem.prompt,
@@ -446,10 +450,36 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
               }
             </button>
             <button
-              onClick={() => {
+              onClick={async () => {
                 if (generatedVideo) {
-                  // 在新页面打开下载链接
-                  window.open(generatedVideo.downloadUrl, '_blank');
+                  try {
+                    // Extract file extension from URL
+                    let format = 'mp4';
+                    try {
+                      const urlPath = new URL(generatedVideo.downloadUrl).pathname;
+                      const ext = urlPath.substring(urlPath.lastIndexOf('.') + 1).toLowerCase();
+                      if (ext && ['mp4', 'webm', 'mov'].includes(ext)) {
+                        format = ext;
+                      }
+                    } catch (e) {
+                      // Keep default format
+                    }
+
+                    await downloadMediaFile(
+                      generatedVideo.downloadUrl,
+                      generatedVideoPrompt || 'video',
+                      format,
+                      'video'
+                    );
+                    MessagePlugin.success(language === 'zh' ? '下载成功' : 'Download successful');
+                  } catch (err) {
+                    console.error('Download failed:', err);
+                    MessagePlugin.error(
+                      language === 'zh'
+                        ? '下载失败，请重试'
+                        : 'Download failed, please try again'
+                    );
+                  }
                 }
               }}
               disabled={isGenerating || videoLoading || isInserting}

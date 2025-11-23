@@ -13,6 +13,7 @@ import { useDrawnix } from '../../hooks/use-drawnix';
 import { insertImageFromUrl } from '../../data/image';
 import { insertVideoFromUrl } from '../../data/video';
 import { MessagePlugin } from 'tdesign-react';
+import { downloadMediaFile } from '../../utils/download-utils';
 import './dialog-task-list.scss';
 
 export interface DialogTaskListProps {
@@ -68,28 +69,12 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
     if (!task?.result?.url) return;
 
     try {
-      const response = await fetch(task.result.url);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const blob = await response.blob();
-      const blobUrl = URL.createObjectURL(blob);
-
-      const sanitizedPrompt = task.params.prompt
-        .replace(/[^a-zA-Z0-9\u4e00-\u9fa5\s-]/g, '')
-        .replace(/\s+/g, '-')
-        .substring(0, 50);
-
-      const filename = `${sanitizedPrompt || task.type}.${task.result.format}`;
-
-      const link = document.createElement('a');
-      link.href = blobUrl;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(blobUrl);
-
+      await downloadMediaFile(
+        task.result.url,
+        task.params.prompt,
+        task.result.format,
+        task.type
+      );
       MessagePlugin.success('下载成功');
     } catch (error) {
       console.error('Download failed:', error);
