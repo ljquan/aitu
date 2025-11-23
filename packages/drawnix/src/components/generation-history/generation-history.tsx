@@ -47,7 +47,7 @@ export interface GenerationHistoryProps {
 export const GenerationHistory: React.FC<GenerationHistoryProps> = ({
   historyItems,
   onSelectFromHistory,
-  position = { bottom: '8px', right: '8px' },
+  position = { bottom: '3px', right: '3px' },
   className = ''
 }) => {
   const { language } = useI18n();
@@ -147,16 +147,8 @@ export const GenerationHistory: React.FC<GenerationHistoryProps> = ({
             </button>
           </div>
           <div className="history-list">
-            {historyItems.slice(0, 10).map(renderHistoryItem)}
+            {historyItems.map(renderHistoryItem)}
           </div>
-          {historyItems.length > 10 && (
-            <div className="history-more-info">
-              {language === 'zh' 
-                ? `还有 ${historyItems.length - 10} 个项目...`
-                : `${historyItems.length - 10} more items...`
-              }
-            </div>
-          )}
         </div>
       )}
     </div>

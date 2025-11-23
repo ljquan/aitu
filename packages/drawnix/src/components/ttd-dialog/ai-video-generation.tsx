@@ -38,6 +38,7 @@ import { AI_VIDEO_GENERATION_PREVIEW_CACHE_KEY as PREVIEW_CACHE_KEY } from '../.
 import { useTaskQueue } from '../../hooks/useTaskQueue';
 import { TaskType } from '../../types/task.types';
 import { MessagePlugin } from 'tdesign-react';
+import { DialogTaskList } from '../task-queue/DialogTaskList';
 
 // 视频URL接口
 interface VideoUrls {
@@ -81,7 +82,10 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
 
   // 保存选中元素的ID，用于计算插入位置
   const [selectedElementIds, setSelectedElementIds] = useState<string[]>([]);
-  
+
+  // Track task IDs created in this dialog session
+  const [dialogTaskIds, setDialogTaskIds] = useState<string[]>([]);
+
   // 视频元素引用，用于控制播放状态
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -146,11 +150,12 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
       videoRef.current.src = '';
       videoRef.current.load();
     }
-    
+
     setPrompt('');
     setUploadedImage(null);
     setGeneratedVideo(null);
     setError(null);
+    setDialogTaskIds([]); // 清除任务列表
     cacheManager.clear();
     window.dispatchEvent(new CustomEvent('ai-video-clear'));
   };
@@ -240,20 +245,24 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
 
       // 创建任务并添加到队列
       const task = createTask(taskParams, TaskType.VIDEO);
-      
+
       if (task) {
         // 任务创建成功
         MessagePlugin.success(
-          language === 'zh' 
-            ? '视频任务已添加到队列，将在后台生成' 
+          language === 'zh'
+            ? '视频任务已添加到队列，将在后台生成'
             : 'Video task added to queue, will be generated in background'
         );
+
+        // 保存任务ID到对话框任务列表
+        setDialogTaskIds(prev => [...prev, task.id]);
 
         // 保存提示词到历史记录
         savePromptToHistory(prompt);
 
-        // 清空表单，允许用户继续生成
-        handleReset();
+        // 只清空prompt，保留任务列表显示
+        setPrompt('');
+        setError(null);
       } else {
         // 任务创建失败
         setError(
@@ -315,21 +324,19 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
             
             <ErrorDisplay error={error} />
           </div>
+
+          <ActionButtons
+            language={language}
+            type="video"
+            isGenerating={isGenerating}
+            hasGenerated={!!generatedVideo}
+            canGenerate={!!prompt.trim()}
+            onGenerate={handleGenerate}
+            onReset={handleReset}
+          />
         </div>
-        
-        <ActionButtons
-          language={language}
-          type="video"
-          isGenerating={isGenerating}
-          hasGenerated={!!generatedVideo}
-          canGenerate={!!prompt.trim()}
-          onGenerate={handleGenerate}
-          onReset={handleReset}
-        />
-      </div>
-      
-      {/* 预览区域 */}
-      <div className="preview-section">
+
+          <div className="preview-section">
         <div className="image-preview-container">
           <LoadingState
             language={language}
@@ -341,9 +348,9 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
           
           {generatedVideo && (
             <div className="preview-image-wrapper">
-              <video 
+              <video
                 ref={videoRef}
-                src={generatedVideo.previewUrl} 
+                src={generatedVideo.previewUrl}
                 controls
                 loop
                 muted
@@ -357,13 +364,7 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
             </div>
           )}
         </div>
-        
-          {/* 统一历史记录组件 */}
-          <GenerationHistory
-            historyItems={videoHistory}
-            onSelectFromHistory={handleSelectFromHistory}
-            position={{ bottom: '60px', right: '8px' }}
-          />
+
         {/* 插入、下载和清除按钮区域 */}
         {generatedVideo && (
           <div className="section-actions">
@@ -454,14 +455,27 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
               disabled={isGenerating || videoLoading || isInserting}
               className="action-button secondary"
             >
-              {videoLoading 
+              {videoLoading
                 ? (language === 'zh' ? '加载中...' : 'Loading...')
                 : (language === 'zh' ? '下载' : 'Download')
               }
             </button>
+
           </div>
         )}
+            {/* 统一历史记录组件 */}
+            <GenerationHistory
+              historyItems={videoHistory}
+              onSelectFromHistory={handleSelectFromHistory}
+            />
       </div>
+      </div>
+      
+      {/* 预览区域 */}
+    
+
+                {/* 对话框任务列表 - 只显示本次对话框生成的任务 */}
+          <DialogTaskList taskIds={dialogTaskIds} taskType={TaskType.VIDEO} />
     </div>
   );
 };

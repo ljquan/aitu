@@ -50,7 +50,7 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
   } = useTaskQueue();
 
   const { board } = useDrawnix();
-  const [activeTab, setActiveTab] = useState<string>('active');
+  const [activeTab, setActiveTab] = useState<string>('all');
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [clearType, setClearType] = useState<'completed' | 'failed'>('completed');
   const [searchText, setSearchText] = useState<string>('');
@@ -274,16 +274,27 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
           <div>
             <h3>任务队列</h3>
             <Tabs value={activeTab} onChange={(value) => setActiveTab(value as string)}>
+              <TabPanel value="all" label={`全部 (${tasks.length})`} />
               <TabPanel value="active" label={`活动 (${activeTasks.length})`} />
               <TabPanel value="failed" label={`失败 (${failedTasks.length})`} />
               <TabPanel value="completed" label={`已完成 (${completedTasks.length})`} />
-              <TabPanel value="all" label={`全部 (${tasks.length})`} />
             </Tabs>
           </div>
         </div>
 
         {/* Filters and Actions */}
         <div className="task-queue-panel__filters">
+          <RadioGroup
+            value={typeFilter}
+            onChange={(value) => setTypeFilter(value as 'all' | 'image' | 'video')}
+            size="small"
+            variant="default-filled"
+          >
+            <Radio.Button value="all">全部</Radio.Button>
+            <Radio.Button value="image">图片</Radio.Button>
+            <Radio.Button value="video">视频</Radio.Button>
+          </RadioGroup>
+
           <Input
             value={searchText}
             onChange={(value) => setSearchText(value)}
@@ -291,20 +302,8 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
             clearable
             prefixIcon={<SearchIcon />}
             size="small"
-            style={{ width: '180px', marginRight: '8px' }}
+            style={{ width: '180px' }}
           />
-
-          <RadioGroup
-            value={typeFilter}
-            onChange={(value) => setTypeFilter(value as 'all' | 'image' | 'video')}
-            size="small"
-            variant="default-filled"
-            style={{ marginRight: '8px' }}
-          >
-            <Radio.Button value="all">全部</Radio.Button>
-            <Radio.Button value="image">图片</Radio.Button>
-            <Radio.Button value="video">视频</Radio.Button>
-          </RadioGroup>
 
           <div className="task-queue-panel__actions">
             {completedTasks.length > 0 && (

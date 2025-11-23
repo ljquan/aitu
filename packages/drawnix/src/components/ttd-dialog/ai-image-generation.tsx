@@ -38,6 +38,7 @@ import {
   getReferenceDimensionsFromIds
 } from './shared';
 import { AI_IMAGE_GENERATION_PREVIEW_CACHE_KEY as PREVIEW_CACHE_KEY } from '../../constants/storage';
+import { DialogTaskList } from '../task-queue/DialogTaskList';
 
 interface PreviewCache extends PreviewCacheBase {
   generatedImage: string | null;
@@ -65,13 +66,16 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
   const [uploadedImages, setUploadedImages] = useState<ImageFile[]>(initialImages);
   // Use generation history from task queue
   const { imageHistory } = useGenerationHistory();
-  
+
   const { isGenerating, isLoading: imageLoading, updateIsGenerating, updateIsLoading: updateImageLoading } = useGenerationState('image');
 
   const { appState, setAppState } = useDrawnix();
   const { language } = useI18n();
   const board = useBoard();
   const { createTask } = useTaskQueue();
+
+  // Track task IDs created in this dialog session
+  const [dialogTaskIds, setDialogTaskIds] = useState<string[]>([]);
 
   // 计算插入位置
   const calculateInsertionPoint = (): Point | undefined => {
@@ -125,6 +129,7 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
     setUploadedImages([]);
     setGeneratedImage(null);
     setError(null);
+    setDialogTaskIds([]); // 清除任务列表
     // 清除缓存
     try {
       localStorage.removeItem(PREVIEW_CACHE_KEY);
@@ -240,20 +245,24 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
 
       // 创建任务并添加到队列
       const task = createTask(taskParams, TaskType.IMAGE);
-      
+
       if (task) {
         // 任务创建成功
         MessagePlugin.success(
-          language === 'zh' 
-            ? '任务已添加到队列，将在后台生成' 
+          language === 'zh'
+            ? '任务已添加到队列，将在后台生成'
             : 'Task added to queue, will be generated in background'
         );
+
+        // 保存任务ID到对话框任务列表
+        setDialogTaskIds(prev => [...prev, task.id]);
 
         // 保存提示词到历史记录
         savePromptToHistory(prompt);
 
-        // 清空表单，允许用户继续生成
-        handleReset();
+        // 只清空prompt，保留任务列表显示
+        setPrompt('');
+        setError(null);
       } else {
         // 任务创建失败（可能是重复提交）
         setError(
@@ -285,7 +294,7 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
       <div className="main-content">
         {/* AI 图像生成表单 */}
         <div className="ai-image-generation-section">
-        <div className="ai-image-generation-form">
+          <div className="ai-image-generation-form">
           
           {!useImageAPI && (
             <ImageUpload
@@ -308,192 +317,20 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
             onError={setError}
           />
           
-          {/* 图片尺寸选择 */}
-          {/* <div className="form-field">
-            <label className="form-label">
-              {language === 'zh' ? '图片尺寸' : 'Image Size'}
-            </label>
-            <div className="size-inputs">
-              <div className="size-input-row">
-                <label className="size-label">
-                  {language === 'zh' ? '宽度' : 'Width'}
-                </label>
-                <input
-                  type="number"
-                  className="size-input"
-                  value={width}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    if (value === '') {
-                      setWidth('');
-                    } else {
-                      const numValue = parseInt(value);
-                      if (!isNaN(numValue) && numValue >= 0) {
-                        setWidth(Math.min(2048, numValue));
-                      }
-                    }
-                  }}
-                  onBlur={(e) => {
-                    const value = e.target.value;
-                    if (value === '' || isNaN(parseInt(value)) || parseInt(value) < 256) {
-                      setWidth(1024);
-                    } else {
-                      const numValue = Math.max(256, Math.min(2048, parseInt(value)));
-                      setWidth(numValue);
-                    }
-                  }}
-                  min="256"
-                  max="2048"
-                  disabled={isGenerating}
-                />
-              </div>
-              <div className="size-input-row">
-                <label className="size-label">
-                  {language === 'zh' ? '高度' : 'Height'}
-                </label>
-                <input
-                  type="number"
-                  className="size-input"
-                  value={height}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    if (value === '') {
-                      setHeight('');
-                    } else {
-                      const numValue = parseInt(value);
-                      if (!isNaN(numValue) && numValue >= 0) {
-                        setHeight(Math.min(2048, numValue));
-                      }
-                    }
-                  }}
-                  onBlur={(e) => {
-                    const value = e.target.value;
-                    if (value === '' || isNaN(parseInt(value)) || parseInt(value) < 256) {
-                      setHeight(1024);
-                    } else {
-                      const numValue = Math.max(256, Math.min(2048, parseInt(value)));
-                      setHeight(numValue);
-                    }
-                  }}
-                  min="256"
-                  max="2048"
-                  disabled={isGenerating}
-                />
-                <div className="size-shortcuts-tooltip">
-                  <span className="tooltip-trigger">📐</span>
-                  <div className="tooltip-content">
-                    <div className="tooltip-header">
-                      {language === 'zh' ? '常用尺寸' : 'Common Sizes'}
-                    </div>
-                    <div className="shortcuts-grid">
-                      <button
-                        type="button"
-                        className="shortcut-button"
-                        onClick={() => { setWidth(512); setHeight(512); }}
-                        disabled={isGenerating}
-                      >
-                        512×512
-                      </button>
-                      <button
-                        type="button"
-                        className="shortcut-button"
-                        onClick={() => { setWidth(768); setHeight(768); }}
-                        disabled={isGenerating}
-                      >
-                        768×768
-                      </button>
-                      <button
-                        type="button"
-                        className="shortcut-button"
-                        onClick={() => { setWidth(1024); setHeight(1024); }}
-                        disabled={isGenerating}
-                      >
-                        1024×1024
-                      </button>
-                      <button
-                        type="button"
-                        className="shortcut-button"
-                        onClick={() => { setWidth(1024); setHeight(768); }}
-                        disabled={isGenerating}
-                      >
-                        1024×768
-                      </button>
-                      <button
-                        type="button"
-                        className="shortcut-button"
-                        onClick={() => { setWidth(1280); setHeight(720); }}
-                        disabled={isGenerating}
-                      >
-                        1280×720
-                      </button>
-                      <button
-                        type="button"
-                        className="shortcut-button"
-                        onClick={() => { setWidth(1920); setHeight(1080); }}
-                        disabled={isGenerating}
-                      >
-                        1920×1080
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div> */}
-          
-          {/* API 模式选择 */}
-          {/* <div className="form-field">
-            <label className="form-label">
-              {language === 'zh' ? 'API 模式' : 'API Mode'}
-            </label>
-            <div className="api-mode-selector">
-              <label className="api-mode-option">
-                <input
-                  type="radio"
-                  name="api-mode"
-                  checked={useImageAPI}
-                  onChange={() => setUseImageAPI(true)}
-                  disabled={isGenerating}
-                />
-                <span className="api-mode-label">
-                  {language === 'zh' ? '图像生成API' : 'Image Generation API'}
-                </span>
-                <span className="api-mode-desc">
-                  {language === 'zh' ? '(images/generations)' : '(images/generations)'}
-                </span>
-              </label>
-              <label className="api-mode-option">
-                <input
-                  type="radio"
-                  name="api-mode"
-                  checked={!useImageAPI}
-                  onChange={() => setUseImageAPI(false)}
-                  disabled={isGenerating}
-                />
-                <span className="api-mode-label">
-                  {language === 'zh' ? '聊天API' : 'Chat API'}
-                </span>
-                <span className="api-mode-desc">
-                  {language === 'zh' ? '(chat/completions)' : '(chat/completions)'}
-                </span>
-              </label>
-            </div>
-          </div> */}
-          
-          <ErrorDisplay error={error} />
+            <ErrorDisplay error={error} />
+          </div>
+
+          <ActionButtons
+            language={language}
+            type="image"
+            isGenerating={isGenerating}
+            hasGenerated={!!generatedImage}
+            canGenerate={!!prompt.trim()}
+            onGenerate={handleGenerate}
+            onReset={handleReset}
+          />
+
         </div>
-        
-        <ActionButtons
-          language={language}
-          type="image"
-          isGenerating={isGenerating}
-          hasGenerated={!!generatedImage}
-          canGenerate={!!prompt.trim()}
-          onGenerate={handleGenerate}
-          onReset={handleReset}
-        />
-        
-      </div>
       
       {/* 预览区域 */}
       <div className="preview-section">
@@ -508,9 +345,9 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
           
           {generatedImage && (
             <div className="preview-image-wrapper">
-              <img 
-                src={generatedImage} 
-                alt="Generated" 
+              <img
+                src={generatedImage}
+                alt="Generated"
                 className="preview-image"
                 loading="eager"
                 decoding="async"
@@ -521,14 +358,9 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
               />
             </div>
           )}
-              {/* 统一历史记录组件 */}
-              <GenerationHistory
-                historyItems={imageHistory}
-                onSelectFromHistory={handleSelectFromHistory}
-              />
 
         </div>
-        
+
         {/* 插入和清除按钮区域 */}
         {generatedImage && (
           <div className="section-actions">
@@ -590,19 +422,42 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
                 }
               }}
               disabled={isGenerating || imageLoading}
+              className="action-button primary"
+            >
+              {imageLoading
+                ? (language === 'zh' ? '加载中...' : 'Loading...')
+                : (language === 'zh' ? '插入图片' : 'Insert Image')
+              }
+            </button>
+            <button
+              onClick={() => {
+                if (generatedImage) {
+                  // 在新页面打开下载链接
+                  window.open(generatedImage, '_blank');
+                }
+              }}
+              disabled={isGenerating || imageLoading}
               className="action-button secondary"
             >
               {imageLoading
                 ? (language === 'zh' ? '加载中...' : 'Loading...')
-                : (language === 'zh' ? '插入' : 'Insert')
+                : (language === 'zh' ? '下载' : 'Download')
               }
             </button>
+
           </div>
         )}
-        
+            {/* 统一历史记录组件 */}
+            <GenerationHistory
+              historyItems={imageHistory}
+              onSelectFromHistory={handleSelectFromHistory}
+            />
       </div>
       </div>
-      
+
+
+      {/* 对话框任务列表 - 只显示本次对话框生成的任务 */}
+      <DialogTaskList taskIds={dialogTaskIds} taskType={TaskType.IMAGE} />
     </div>
   );
 };

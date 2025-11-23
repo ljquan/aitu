@@ -1,7 +1,7 @@
 /* AI Video Generation Container - reuse AI Image Generation styles */
 .ai-video-generation-container {
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
   max-height: 80vh;
   overflow-y: auto;
   position: relative;
@@ -10,7 +10,7 @@
   .main-content {
     flex: 1;
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     gap: 24px;
     min-height: 400px;
   }
