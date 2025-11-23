@@ -9,6 +9,7 @@ import { GenerationParams, TaskType, TaskResult } from '../types/task.types';
 import { GenerationRequest, GenerationResponse, GenerationError } from '../types/generation.types';
 import { defaultGeminiClient, videoGeminiClient } from '../utils/gemini-api';
 import { TASK_TIMEOUT } from '../constants/TASK_CONSTANTS';
+import { analytics } from '../utils/umami-analytics';
 
 /**
  * Generation API Service
@@ -38,12 +39,25 @@ class GenerationAPIService {
     const abortController = new AbortController();
     this.abortControllers.set(taskId, abortController);
 
+    const startTime = Date.now();
+    const taskType = type === TaskType.IMAGE ? 'image' : 'video';
+
+    // Track model call start
+    analytics.trackModelCall({
+      taskId,
+      taskType,
+      model: taskType === 'image' ? 'gemini-image' : 'gemini-video',
+      promptLength: params.prompt.length,
+      hasUploadedImage: !!(params as any).uploadedImage || !!(params as any).uploadedImages,
+      startTime,
+    });
+
     try {
       console.log(`[GenerationAPI] Starting generation for task ${taskId} (${type})`);
-      
+
       // Get timeout for this task type
       const timeout = TASK_TIMEOUT[type.toUpperCase() as keyof typeof TASK_TIMEOUT];
-      
+
       // Create timeout promise
       const timeoutPromise = new Promise<never>((_, reject) => {
         setTimeout(() => {
@@ -58,20 +72,55 @@ class GenerationAPIService {
 
       // Race between generation and timeout
       const result = await Promise.race([generationPromise, timeoutPromise]);
-      
+
+      const duration = Date.now() - startTime;
       console.log(`[GenerationAPI] Generation completed for task ${taskId}`);
+
+      // Track success
+      analytics.trackModelSuccess({
+        taskId,
+        taskType,
+        model: taskType === 'image' ? 'gemini-image' : 'gemini-video',
+        duration,
+        resultSize: result.size,
+      });
+
       return result;
     } catch (error: any) {
+      const duration = Date.now() - startTime;
       console.error(`[GenerationAPI] Generation failed for task ${taskId}:`, error);
-      
+
       if (error.message === 'TIMEOUT') {
+        // Track timeout failure
+        analytics.trackModelFailure({
+          taskId,
+          taskType,
+          model: taskType === 'image' ? 'gemini-image' : 'gemini-video',
+          duration,
+          error: 'TIMEOUT',
+        });
         throw new Error(`${type === TaskType.IMAGE ? '图片' : '视频'}生成超时`);
       }
-      
+
       if (error.name === 'AbortError') {
+        // Track cancellation
+        analytics.trackTaskCancellation({
+          taskId,
+          taskType,
+          duration,
+        });
         throw new Error('任务已取消');
       }
-      
+
+      // Track other failures
+      analytics.trackModelFailure({
+        taskId,
+        taskType,
+        model: taskType === 'image' ? 'gemini-image' : 'gemini-video',
+        duration,
+        error: error.message || 'UNKNOWN_ERROR',
+      });
+
       throw error;
     } finally {
       // Cleanup abort controller

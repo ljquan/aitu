@@ -281,9 +281,18 @@ const AIImageGeneration = ({
         // 保存提示词到历史记录
         savePromptToHistory(prompt);
 
-        // 只清空prompt，保留任务列表显示
+        // 完全清空表单（prompt、参考图、预览）
         setPrompt('');
+        setUploadedImages([]);
+        setGeneratedImage(null);
         setError(null);
+
+        // 清除缓存
+        try {
+          localStorage.removeItem(PREVIEW_CACHE_KEY);
+        } catch (error) {
+          console.warn('Failed to clear cache:', error);
+        }
       } else {
         // 任务创建失败（可能是重复提交）
         setError(

@@ -289,9 +289,21 @@ const AIVideoGeneration = ({
         // 保存提示词到历史记录
         savePromptToHistory(prompt);
 
-        // 只清空prompt，保留任务列表显示
+        // 完全清空表单（prompt、参考图、预览）
         setPrompt('');
+        setUploadedImage(null);
+        setGeneratedVideo(null);
         setError(null);
+
+        // 清除视频播放
+        if (videoRef.current) {
+          videoRef.current.pause();
+          videoRef.current.src = '';
+          videoRef.current.load();
+        }
+
+        // 清除缓存
+        cacheManager.clear();
       } else {
         // 任务创建失败
         setError(
