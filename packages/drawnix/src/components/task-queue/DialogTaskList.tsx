@@ -9,7 +9,7 @@ import React, { useMemo } from 'react';
 import { TaskItem } from './TaskItem';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
 import { Task, TaskType } from '../../types/task.types';
-import { useDrawnix } from '../../hooks/use-drawnix';
+import { useDrawnix, DialogType } from '../../hooks/use-drawnix';
 import { insertImageFromUrl } from '../../data/image';
 import { insertVideoFromUrl } from '../../data/video';
 import { MessagePlugin } from 'tdesign-react';
@@ -37,7 +37,7 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
     deleteTask,
   } = useTaskQueue();
 
-  const { board } = useDrawnix();
+  const { board, openDialog } = useDrawnix();
 
   // Filter tasks by IDs and optionally by type
   const filteredTasks = useMemo(() => {
@@ -104,6 +104,30 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
     }
   };
 
+  const handleEdit = (taskId: string) => {
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) {
+      console.warn('Cannot edit: task not found');
+      return;
+    }
+
+    // 准备初始数据
+    const initialData = {
+      prompt: task.params.prompt,
+      width: task.params.width,
+      height: task.params.height,
+      duration: task.params.duration,
+      resultUrl: task.result?.url,  // 传递结果URL用于预览
+    };
+
+    // 根据任务类型打开对应的对话框
+    if (task.type === TaskType.IMAGE) {
+      openDialog(DialogType.aiImageGeneration, initialData);
+    } else if (task.type === TaskType.VIDEO) {
+      openDialog(DialogType.aiVideoGeneration, initialData);
+    }
+  };
+
   if (filteredTasks.length === 0) {
     return null;
   }
@@ -123,6 +147,7 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
             onDelete={handleDelete}
             onDownload={handleDownload}
             onInsert={handleInsert}
+            onEdit={handleEdit}
           />
         ))}
       </div>

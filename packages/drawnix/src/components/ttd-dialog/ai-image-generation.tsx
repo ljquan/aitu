@@ -55,12 +55,22 @@ interface AIImageGenerationProps {
   initialPrompt?: string;
   initialImages?: ImageFile[];
   selectedElementIds?: string[];
+  initialWidth?: number;
+  initialHeight?: number;
+  initialResultUrl?: string;
 }
 
-const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedElementIds = [] }: AIImageGenerationProps = {}) => {
+const AIImageGeneration = ({
+  initialPrompt = '',
+  initialImages = [],
+  selectedElementIds = [],
+  initialWidth,
+  initialHeight,
+  initialResultUrl
+}: AIImageGenerationProps = {}) => {
   const [prompt, setPrompt] = useState(initialPrompt);
-  const [width, setWidth] = useState<number | string>(DEFAULT_IMAGE_DIMENSIONS.width);
-  const [height, setHeight] = useState<number | string>(DEFAULT_IMAGE_DIMENSIONS.height);
+  const [width, setWidth] = useState<number | string>(initialWidth || DEFAULT_IMAGE_DIMENSIONS.width);
+  const [height, setHeight] = useState<number | string>(initialHeight || DEFAULT_IMAGE_DIMENSIONS.height);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [generatedImagePrompt, setGeneratedImagePrompt] = useState<string>(''); // Track prompt for current image
   const [error, setError] = useState<string | null>(null);
@@ -102,8 +112,15 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
   useEffect(() => {
     setPrompt(initialPrompt);
     setUploadedImages(initialImages);
-    // 当弹窗重新打开时（有新的初始数据），清除预览图片
-    if (initialPrompt || initialImages.length > 0) {
+    if (initialWidth) setWidth(initialWidth);
+    if (initialHeight) setHeight(initialHeight);
+
+    // 如果编辑任务且有结果URL,显示预览图
+    if (initialResultUrl) {
+      setGeneratedImage(initialResultUrl);
+      setGeneratedImagePrompt(initialPrompt);
+    } else if (initialPrompt || initialImages.length > 0) {
+      // 当弹窗重新打开时（有新的初始数据），清除预览图片
       setGeneratedImage(null);
       // 清除缓存
       try {
@@ -112,7 +129,7 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
         console.warn('Failed to clear cache:', error);
       }
     }
-  }, [initialPrompt, initialImages]);
+  }, [initialPrompt, initialImages, initialWidth, initialHeight, initialResultUrl]);
 
   // 清除错误状态当组件挂载时（对话框打开时）
   useEffect(() => {

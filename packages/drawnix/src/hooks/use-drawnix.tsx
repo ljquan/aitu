@@ -36,11 +36,21 @@ export type LinkState = {
   isHoveringOrigin: boolean;
 };
 
+export type DialogInitialData = {
+  prompt?: string;
+  width?: number;
+  height?: number;
+  duration?: number;
+  resultUrl?: string;  // 已生成的结果URL,用于显示预览
+  [key: string]: any;
+};
+
 export type DrawnixState = {
   pointer: DrawnixPointerType;
   isMobile: boolean;
   isPencilMode: boolean;
   openDialogType: DialogType | null;
+  dialogInitialData?: DialogInitialData | null;
   openCleanConfirm: boolean;
   openSettings: boolean;
   linkState?: LinkState | null;
@@ -56,7 +66,7 @@ export const useDrawnix = (): {
   appState: DrawnixState;
   setAppState: (appState: DrawnixState) => void;
   board: DrawnixBoard | null;
-  openDialog: (dialogType: DialogType) => void;
+  openDialog: (dialogType: DialogType, initialData?: DialogInitialData) => void;
 } => {
   const context = useContext(DrawnixContext);
 
@@ -66,8 +76,12 @@ export const useDrawnix = (): {
     );
   }
 
-  const openDialog = (dialogType: DialogType) => {
-    context.setAppState({ ...context.appState, openDialogType: dialogType });
+  const openDialog = (dialogType: DialogType, initialData?: DialogInitialData) => {
+    context.setAppState({
+      ...context.appState,
+      openDialogType: dialogType,
+      dialogInitialData: initialData || null
+    });
   };
 
   return { ...context, openDialog };

@@ -59,9 +59,16 @@ const cacheManager = createCacheManager<PreviewCache>(PREVIEW_CACHE_KEY);
 interface AIVideoGenerationProps {
   initialPrompt?: string;
   initialImage?: ImageFile;
+  initialDuration?: number;
+  initialResultUrl?: string;
 }
 
-const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerationProps = {}) => {
+const AIVideoGeneration = ({
+  initialPrompt = '',
+  initialImage,
+  initialDuration,
+  initialResultUrl
+}: AIVideoGenerationProps = {}) => {
   const [prompt, setPrompt] = useState(initialPrompt);
   const [generatedVideo, setGeneratedVideo] = useState<{
     previewUrl: string;
@@ -140,7 +147,25 @@ const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerati
     setPrompt(initialPrompt);
     setUploadedImage(initialImage || null);
     setError(null);
-  }, [initialPrompt, initialImage]);
+
+    // 如果编辑任务且有结果URL,显示预览视频
+    if (initialResultUrl) {
+      setGeneratedVideo({
+        previewUrl: initialResultUrl,
+        downloadUrl: initialResultUrl
+      });
+      setGeneratedVideoPrompt(initialPrompt);
+    } else if (initialPrompt || initialImage) {
+      // 当弹窗重新打开时（有新的初始数据），清除预览视频
+      setGeneratedVideo(null);
+      // 清除缓存
+      try {
+        localStorage.removeItem(PREVIEW_CACHE_KEY);
+      } catch (error) {
+        console.warn('Failed to clear cache:', error);
+      }
+    }
+  }, [initialPrompt, initialImage, initialResultUrl]);
 
   useEffect(() => {
     setError(null);

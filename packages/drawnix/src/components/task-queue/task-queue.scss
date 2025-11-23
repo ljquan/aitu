@@ -47,6 +47,17 @@
     transition: transform 0.3s ease;
   }
 
+  &__text {
+    color: #757575; // 灰色文字
+    font-size: 14px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+    transition: color 0.3s ease;
+  }
+
   &__status {
     position: absolute;
     width: 12px;
@@ -390,6 +401,10 @@
         width: 20px;
         height: 20px;
       }
+    }
+
+    &__text {
+      font-size: 12px;
     }
 
     &__status {

@@ -18,7 +18,8 @@ export interface Translations {
   'toolbar.aiImage': string;
   'toolbar.aiVideo': string;
   'toolbar.extraTools': string;
-  
+  'toolbar.tasks': string;
+
   // Zoom controls
   'zoom.in': string;
   'zoom.out': string;
@@ -108,7 +109,8 @@ const translations: Record<Language, Translations> = {
     'toolbar.aiImage': 'AI 图像生成',
     'toolbar.aiVideo': 'AI 视频生成',
     'toolbar.extraTools': '更多工具',
-    
+    'toolbar.tasks': '任务',
+
     // Zoom controls
     'zoom.in': '放大 — Cmd++',
     'zoom.out': '缩小 — Cmd+-',
@@ -195,7 +197,8 @@ const translations: Record<Language, Translations> = {
     'toolbar.aiImage': 'AI Image Generation',
     'toolbar.aiVideo': 'AI Video Generation',
     'toolbar.extraTools': 'Extra Tools',
-    
+    'toolbar.tasks': 'Tasks',
+
     // Zoom controls
     'zoom.in': 'Zoom In — Cmd++',
     'zoom.out': 'Zoom Out — Cmd+-',

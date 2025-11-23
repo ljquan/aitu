@@ -7,7 +7,7 @@
 
 import React from 'react';
 import { Button, Tag, Tooltip } from 'tdesign-react';
-import { ImageIcon, VideoIcon, DeleteIcon, RefreshIcon, CloseCircleIcon, DownloadIcon } from 'tdesign-icons-react';
+import { ImageIcon, VideoIcon, DeleteIcon, RefreshIcon, CloseCircleIcon, DownloadIcon, EditIcon } from 'tdesign-icons-react';
 import { Task, TaskStatus, TaskType } from '../../types/task.types';
 import { getRelativeTime, formatTaskDuration } from '../../utils/task-utils';
 import { formatRetryDelay } from '../../utils/retry-utils';
@@ -28,6 +28,8 @@ export interface TaskItemProps {
   onInsert?: (taskId: string) => void;
   /** Callback when preview is opened */
   onPreviewOpen?: () => void;
+  /** Callback when edit button is clicked */
+  onEdit?: (taskId: string) => void;
 }
 
 /**
@@ -85,6 +87,7 @@ export const TaskItem: React.FC<TaskItemProps> = ({
   onDownload,
   onInsert,
   onPreviewOpen,
+  onEdit,
 }) => {
   const isActive = task.status === TaskStatus.PENDING ||
                    task.status === TaskStatus.PROCESSING ||
@@ -215,6 +218,16 @@ export const TaskItem: React.FC<TaskItemProps> = ({
             下载
           </Button>
         )}
+
+        {/* Edit button for all tasks */}
+        <Button
+          size="small"
+          variant="outline"
+          icon={<EditIcon />}
+          onClick={() => onEdit?.(task.id)}
+        >
+          编辑
+        </Button>
 
         {/* Delete button for completed/failed/cancelled tasks */}
         {(isCompleted || isFailed || task.status === TaskStatus.CANCELLED) && (

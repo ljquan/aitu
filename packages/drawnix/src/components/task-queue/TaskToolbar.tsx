@@ -6,10 +6,10 @@
  */
 
 import React, { useState } from 'react';
-import { ViewListIcon } from 'tdesign-icons-react';
 import { Badge, Tooltip } from 'tdesign-react';
 import { TaskQueuePanel } from './TaskQueuePanel';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
+import { useI18n } from '../../i18n';
 import './task-queue.scss';
 
 export interface TaskToolbarProps {
@@ -26,6 +26,7 @@ export interface TaskToolbarProps {
 export const TaskToolbar: React.FC<TaskToolbarProps> = ({ onExpandChange }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const { activeTasks, completedTasks, failedTasks } = useTaskQueue();
+  const { t } = useI18n();
 
   const handleToggle = () => {
     const newExpanded = !isExpanded;
@@ -50,14 +51,14 @@ export const TaskToolbar: React.FC<TaskToolbarProps> = ({ onExpandChange }) => {
       <TaskQueuePanel expanded={isExpanded} onClose={handleClose} />
 
       {/* Circular Floating Button */}
-      <Tooltip content={tooltipContent} placement="right">
-        <div 
+      <Tooltip content={tooltipContent} placement="right" theme="light">
+        <div
           className={`task-toolbar-fab ${isExpanded ? 'task-toolbar-fab--expanded' : ''}`}
           onClick={handleToggle}
         >
           <Badge count={activeTasks.length > 0 ? activeTasks.length : 0} showZero={false}>
-            <div className="task-toolbar-fab__icon">
-              <ViewListIcon size="24px" />
+            <div className="task-toolbar-fab__text">
+              {t('toolbar.tasks')}
             </div>
           </Badge>
           

@@ -83,6 +83,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
       isMobile: md.mobile() !== null,
       isPencilMode: false,
       openDialogType: null,
+      dialogInitialData: null,
       openCleanConfirm: false,
       openSettings: false,
     };
