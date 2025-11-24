@@ -101,7 +101,7 @@
   bottom: 0;
   left: 0;  // 从左侧滑出
   top: 0;
-  width: max(1024px, 50vw); // 1024px或50%屏幕宽度取最大值
+  width: min(1024px, 50vw); // 1024px或50%屏幕宽度取最大值
   background: var(--td-bg-color-container, #ffffff);
   box-shadow: var(--td-shadow-3, 2px 0 8px rgba(0, 0, 0, 0.08));
   border-right: 1px solid var(--td-component-border, #e7e7e7);

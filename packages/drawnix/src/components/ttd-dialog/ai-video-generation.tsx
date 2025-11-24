@@ -219,6 +219,10 @@ const AIVideoGeneration = ({
       downloadUrl: historyItem.downloadUrl || historyItem.previewUrl
     });
     setGeneratedVideoPrompt(historyItem.prompt); // Save prompt for download
+
+    // 设置参考图片 (如果有的话)
+    setUploadedImage(historyItem.uploadedImage || null);
+
     // 选择历史记录时清除错误状态
     setError(null);
 

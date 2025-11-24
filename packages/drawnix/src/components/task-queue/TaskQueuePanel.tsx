@@ -202,6 +202,8 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
       width: task.params.width,
       height: task.params.height,
       duration: task.params.duration,
+      uploadedImages: task.params.uploadedImages,  // 图片任务:传递上传的参考图片(数组)
+      uploadedImage: task.params.uploadedImage,    // 视频任务:传递上传的图片(单个)
       resultUrl: task.result?.url,  // 传递结果URL用于预览
     };
 

@@ -35,6 +35,7 @@ export function useGenerationHistory() {
         imageUrl: task.result!.url,
         width: task.result!.width || 1024,
         height: task.result!.height || 1024,
+        uploadedImages: task.params.uploadedImages, // 包含参考图片
       }))
       .sort((a, b) => b.timestamp - a.timestamp); // Most recent first
   }, [completedTasks]);
@@ -53,6 +54,7 @@ export function useGenerationHistory() {
         height: task.result!.height || 225,
         previewUrl: task.result!.url,
         downloadUrl: task.result!.url,
+        uploadedImage: task.params.uploadedImage, // 包含参考图片
       }))
       .sort((a, b) => b.timestamp - a.timestamp); // Most recent first
   }, [completedTasks]);

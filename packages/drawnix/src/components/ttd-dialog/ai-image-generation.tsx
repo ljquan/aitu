@@ -114,7 +114,8 @@ const AIImageGeneration = ({
   // 处理 props 变化，更新内部状态
   useEffect(() => {
     setPrompt(initialPrompt);
-    setUploadedImages(initialImages);
+    // 使用 initialImages 的值,如果是 undefined 则使用空数组(确保清空)
+    setUploadedImages(initialImages || []);
     setSavedSelectedElementIds(initialSelectedElementIds);
     if (initialWidth) setWidth(initialWidth);
     if (initialHeight) setHeight(initialHeight);
@@ -125,7 +126,7 @@ const AIImageGeneration = ({
     if (initialResultUrl) {
       setGeneratedImage(initialResultUrl);
       setGeneratedImagePrompt(initialPrompt);
-    } else if (initialPrompt || initialImages.length > 0) {
+    } else if (initialPrompt || (initialImages && initialImages.length > 0)) {
       // 当弹窗重新打开时（有新的初始数据），清除预览图片
       setGeneratedImage(null);
       // 清除缓存
@@ -210,6 +211,9 @@ const AIImageGeneration = ({
     setHeight(historyItem.height);
     setGeneratedImage(historyItem.imageUrl);
     setGeneratedImagePrompt(historyItem.prompt); // Save prompt for download
+
+    // 设置参考图片 (如果有的话)
+    setUploadedImages(historyItem.uploadedImages || []);
 
     // 更新预览缓存
     const cacheData: PreviewCache = {

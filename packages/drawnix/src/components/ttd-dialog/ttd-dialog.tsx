@@ -90,7 +90,7 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
           if (appState.dialogInitialData) {
             setAiImageData({
               initialPrompt: appState.dialogInitialData.prompt || '',
-              initialImages: [],
+              initialImages: appState.dialogInitialData.uploadedImages || [],
               selectedElementIds: [],
               initialResultUrl: appState.dialogInitialData.resultUrl
             });
@@ -177,7 +177,7 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
           if (appState.dialogInitialData) {
             setAiVideoData({
               initialPrompt: appState.dialogInitialData.prompt || '',
-              initialImage: undefined,
+              initialImage: appState.dialogInitialData.uploadedImage,
               initialResultUrl: appState.dialogInitialData.resultUrl
             });
             return;

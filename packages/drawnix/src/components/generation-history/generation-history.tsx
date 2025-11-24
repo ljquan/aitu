@@ -16,6 +16,7 @@ export interface ImageHistoryItem extends BaseHistoryItem {
   imageUrl: string;
   width: number;
   height: number;
+  uploadedImages?: Array<{ url: string; name: string }>; // 参考图片
 }
 
 // 视频历史记录项接口（适配图片格式）
@@ -27,6 +28,7 @@ export interface VideoHistoryItem extends BaseHistoryItem {
   // 视频特有字段
   previewUrl: string;
   downloadUrl?: string;
+  uploadedImage?: { url: string; name: string }; // 参考图片
 }
 
 // 联合类型
