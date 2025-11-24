@@ -81,16 +81,9 @@ export const GenerationHistory: React.FC<GenerationHistoryProps> = ({
             // 视频类型，使用统一的 imageUrl 字段
             item.imageUrl ? (
               <div className="history-video-thumbnail">
-                <img
-                  src={item.imageUrl}
-                  alt="Video thumbnail"
-                  className="history-item-image"
-                  loading="lazy"
-                />
-                <div className="video-play-overlay">
-                  <div className="play-icon">▶</div>
-                </div>
+                <video src={item.imageUrl }/>
               </div>
+
             ) : (
               <div className="history-item-image history-video-placeholder">
                 <div className="placeholder-icon">🎬</div>
