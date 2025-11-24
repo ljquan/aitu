@@ -744,6 +744,53 @@ Then: 触摸区域足够大(最小 44x44px),操作流畅
 - **.specify/constitution.md** - 功能级宪章,特定开发任务生效
 - 建议: CLAUDE.md 保持简洁,详细规范放入 `.specify/`
 
+
+### Q: 为什么不是全自动？
+
+**A:** 这是设计理念，而不是技术限制：
+
+  1. 检查点验证 - 每个阶段都是质量门禁，防止错误累积
+  2. 人类在循环中 - 关键决策（架构选择、技术方案）需要人类判断
+  3. 早期纠偏 - 在编码前发现需求理解偏差，避免返工
+  4. 渐进式明确 - 从模糊的想法逐步细化到可执行任务
+
+  可以简化的场景
+
+  对于简单、明确的需求，你可以：
+
+  快速模式（跳过可选步骤）：
+  /speckit.specify      # 必需
+  /speckit.plan         # 必需  
+  /speckit.tasks        # 必需
+  /speckit.implement    # 必需
+
+  最小化模式（极简单任务）：
+  /speckit.specify      # 直接在这里描述清楚所有细节
+  /speckit.implement    # 跳过 plan 和 tasks，直接实现
+
+  未来可能性
+
+  虽然官方没有全自动模式，但理论上你可以：
+
+  1. 自己创建自动化脚本（但不推荐）：
+  #!/bin/bash
+  # 不推荐：绕过检查点可能导致质量问题
+  claude-code "/speckit.specify $1 && /speckit.plan && /speckit.tasks && /speckit.implement"
+
+  2. 提交 Feature Request 到 https://github.com/github/spec-kit/issues，建议增加：
+    - --auto 标志自动执行所有步骤
+    - --fast 模式跳过可选步骤
+    - 交互式确认点（而非完全自动）
+
+  我的建议
+
+  保持当前的分阶段流程，因为：
+  - ✅ 质量更高：每个检查点都是质量保证
+  - ✅ 更可控：出问题时容易定位在哪个阶段
+  - ✅ 更灵活：可以在任何阶段调整方向
+  - ✅ 学习价值：理解 AI 的思考过程
+
+  对于重复性高的简单任务，可以使用快速模式（跳过 clarify/analyze），但保留核心的 specify → plan → tasks → implement 流程。
 ## 参考资源
 
 ### 官方文档

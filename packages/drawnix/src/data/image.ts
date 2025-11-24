@@ -1,6 +1,7 @@
 import {
   getHitElementByPoint,
   getSelectedElements,
+  getRectangleByElements,
   PlaitBoard,
   Point,
 } from '@plait/core';
@@ -13,6 +14,62 @@ import { getInsertionPointForSelectedElements } from '../utils/selection-utils';
 
 // 辅助函数：将字符串转换为DataURL类型（用于外部URL）
 const createDataURL = (url: string): DataURL => url as DataURL;
+
+/**
+ * 从保存的选中元素IDs计算插入点
+ * @param board - PlaitBoard实例
+ * @param imageWidth - 图片宽度,用于调整X坐标使图片居中
+ * @returns 插入点坐标,如果没有保存的选中元素则返回undefined
+ */
+const getInsertionPointFromSavedSelection = (
+  board: PlaitBoard,
+  imageWidth: number
+): Point | undefined => {
+  const appState = (board as any).appState;
+  const savedElementIds = appState?.lastSelectedElementIds || [];
+
+  if (savedElementIds.length === 0) {
+    return undefined;
+  }
+
+  // 查找对应的元素
+  const elements = savedElementIds
+    .map((id: string) => board.children.find((el: any) => el.id === id))
+    .filter(Boolean);
+
+  if (elements.length === 0) {
+    console.warn(
+      'getInsertionPointFromSavedSelection: No elements found for saved IDs:',
+      savedElementIds
+    );
+    return undefined;
+  }
+
+  try {
+    const boundingRect = getRectangleByElements(board, elements, false);
+    const centerX = boundingRect.x + boundingRect.width / 2;
+    const insertionY = boundingRect.y + boundingRect.height + 50;
+
+    console.log(
+      'getInsertionPointFromSavedSelection: Calculated insertion point:',
+      {
+        centerX,
+        insertionY,
+        boundingRect,
+        imageWidth,
+      }
+    );
+
+    // 将X坐标向左偏移图片宽度的一半，让图片以中心点对齐
+    return [centerX - imageWidth / 2, insertionY] as Point;
+  } catch (error) {
+    console.warn(
+      'getInsertionPointFromSavedSelection: Error calculating insertion point:',
+      error
+    );
+    return undefined;
+  }
+};
 
 export const loadHTMLImageElement = (dataURL: DataURL, crossOrigin = false) => {
   return new Promise<HTMLImageElement>((resolve, reject) => {
@@ -46,7 +103,8 @@ export const buildImage = (
     if (referenceDimensions) {
       // 如果提供了参考尺寸，使用参考尺寸作为目标大小
       // 保持图片的宽高比，适配参考尺寸
-      const referenceAspectRatio = referenceDimensions.width / referenceDimensions.height;
+      const referenceAspectRatio =
+        referenceDimensions.width / referenceDimensions.height;
       const imageAspectRatio = originalWidth / originalHeight;
 
       if (imageAspectRatio > referenceAspectRatio) {
@@ -62,7 +120,7 @@ export const buildImage = (
       console.log('Using reference dimensions for image sizing:', {
         reference: referenceDimensions,
         calculated: { width, height },
-        originalAspectRatio: imageAspectRatio
+        originalAspectRatio: imageAspectRatio,
       });
     } else {
       // 如果没有参考尺寸，使用固定的最大尺寸限制
@@ -102,14 +160,17 @@ export const insertImage = async (
   startPoint?: Point,
   isDrop?: boolean
 ) => {
-  const selectedElement =
-    getSelectedElements(board)[0] || getElementOfFocusedImage(board);
+  // 只有在没有提供startPoint时,才获取当前选中元素
+  // 当从文件选择器上传时,已经没有选中状态了,不应该依赖当前选中
+  const selectedElement = startPoint
+    ? null
+    : getSelectedElements(board)[0] || getElementOfFocusedImage(board);
   const defaultImageWidth = selectedElement ? 240 : 400;
   const dataURL = await getDataURL(imageFile);
   const image = await loadHTMLImageElement(dataURL);
   const imageItem = buildImage(image, dataURL, defaultImageWidth);
   const element = startPoint && getHitElementByPoint(board, startPoint);
-  
+
   if (isDrop && element && MindElement.isMindElement(board, element)) {
     MindTransforms.setImage(board, element as MindElement, imageItem);
     return;
@@ -122,17 +183,29 @@ export const insertImage = async (
   ) {
     MindTransforms.setImage(board, selectedElement as MindElement, imageItem);
   } else {
-    // If no startPoint is provided and we have selected elements, use the calculated insertion point
+    // If no startPoint is provided, use saved selection for insertion point calculation
     let insertionPoint = startPoint;
     if (!startPoint && !isDrop) {
-      const calculatedPoint = getInsertionPointForSelectedElements(board);
-      if (calculatedPoint) {
-        // 图片插入位置应该在所有选中元素垂直居中对齐
-        // 将X坐标向左偏移图片宽度的一半，让图片以计算点为中心显示
-        insertionPoint = [calculatedPoint[0] - imageItem.width / 2, calculatedPoint[1]] as Point;
+      // 优先使用保存的选中元素IDs计算插入位置
+      insertionPoint = getInsertionPointFromSavedSelection(
+        board,
+        imageItem.width
+      );
+
+      // 如果没有保存的选中元素,回退到使用当前选中元素
+      if (!insertionPoint) {
+        const calculatedPoint = getInsertionPointForSelectedElements(board);
+        if (calculatedPoint) {
+          // 图片插入位置应该在所有选中元素垂直居中对齐
+          // 将X坐标向左偏移图片宽度的一半，让图片以计算点为中心显示
+          insertionPoint = [
+            calculatedPoint[0] - imageItem.width / 2,
+            calculatedPoint[1],
+          ] as Point;
+        }
       }
     }
-    
+
     DrawTransforms.insertImage(board, imageItem, insertionPoint);
   }
 };
@@ -144,43 +217,48 @@ export const insertImageFromUrl = async (
   isDrop?: boolean,
   referenceDimensions?: { width: number; height: number }
 ) => {
+  // 只有在没有提供startPoint和referenceDimensions时,才获取当前选中元素
+  // 当从AI生成对话框调用时,已经传入了这些参数,不应该依赖当前选中状态
   const selectedElement =
-    getSelectedElements(board)[0] || getElementOfFocusedImage(board);
+    !startPoint && !referenceDimensions
+      ? getSelectedElements(board)[0] || getElementOfFocusedImage(board)
+      : null;
   const defaultImageWidth = selectedElement ? 240 : 400;
 
   // Service Worker会处理CORS问题，直接使用URL即可
   const dataURL = createDataURL(imageUrl);
   const image = await loadHTMLImageElement(dataURL, true); // 设置crossOrigin以防万一
-  const imageItem = buildImage(image, dataURL, defaultImageWidth, true, referenceDimensions); // 使用原始尺寸并传递参考尺寸
+  const imageItem = buildImage(
+    image,
+    dataURL,
+    defaultImageWidth,
+    true,
+    referenceDimensions
+  ); // 使用原始尺寸并传递参考尺寸
 
   const element = startPoint && getHitElementByPoint(board, startPoint);
   if (isDrop && element && MindElement.isMindElement(board, element)) {
     MindTransforms.setImage(board, element as MindElement, imageItem);
     return;
   }
-  if (
-    selectedElement &&
-    MindElement.isMindElement(board, selectedElement) &&
-    !isDrop
-  ) {
-    MindTransforms.setImage(board, selectedElement as MindElement, imageItem);
-  } else {
-    // 处理插入点逻辑
-    let insertionPoint = startPoint;
-    if (!startPoint && !isDrop) {
-      // 没有提供起始点时，使用计算的插入点
-      const calculatedPoint = getInsertionPointForSelectedElements(board);
-      if (calculatedPoint) {
-        // 图片插入位置应该在所有选中元素垂直居中对齐
-        // 将X坐标向左偏移图片宽度的一半，让图片以计算点为中心显示
-        insertionPoint = [calculatedPoint[0] - imageItem.width / 2, calculatedPoint[1]] as Point;
-      }
-    } else if (startPoint && !isDrop) {
-      // 有提供起始点时，假设这是选中元素的中心点，需要进行居中调整
-      // 将X坐标向左偏移图片宽度的一半，让图片以起始点为中心显示
-      insertionPoint = [startPoint[0] - imageItem.width / 2, startPoint[1]] as Point;
-    }
+  // 处理插入点逻辑
+  let insertionPoint = getInsertionPointFromSavedSelection(
+    board,
+    imageItem.width
+  );
 
-    DrawTransforms.insertImage(board, imageItem, insertionPoint);
+  // 如果没有保存的选中元素,回退到使用当前选中元素(向后兼容)
+  if (!insertionPoint) {
+    const calculatedPoint = getInsertionPointForSelectedElements(board);
+    if (calculatedPoint) {
+      // 图片插入位置应该在所有选中元素垂直居中对齐
+      // 将X坐标向左偏移图片宽度的一半，让图片以计算点为中心显示
+      insertionPoint = [
+        calculatedPoint[0] - imageItem.width / 2,
+        calculatedPoint[1],
+      ] as Point;
+    }
+    
   }
+  DrawTransforms.insertImage(board, imageItem, insertionPoint);
 };

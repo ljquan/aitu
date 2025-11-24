@@ -9,13 +9,14 @@ import { getSelectedElements, PlaitElement, getRectangleByElements, Point } from
 import { videoGeminiClient } from '../../utils/gemini-api';
 import { getInsertionPointForSelectedElements } from '../../utils/selection-utils';
 import { insertVideoFromUrl } from '../../data/video';
-import { downloadMediaFile } from '../../utils/download-utils';
-import {
-  GenerationHistory,
-  VideoHistoryItem,
-  ImageHistoryItem
+import { 
+  GenerationHistory, 
+  VideoHistoryItem, 
+  ImageHistoryItem,
+  loadVideoHistory,
+  saveVideoToHistory,
+  generateHistoryId
 } from '../generation-history';
-import { useGenerationHistory } from '../../hooks/useGenerationHistory';
 import {
   useGenerationState,
   useKeyboardShortcuts,
@@ -32,6 +33,8 @@ import {
   type ImageFile,
   getMergedPresetPrompts,
   savePromptToHistory as savePromptToHistoryUtil,
+  generateVideoThumbnail as generateThumbnail,
+  updateHistoryWithGeneratedContent,
   DEFAULT_VIDEO_DIMENSIONS,
   getReferenceDimensionsFromIds
 } from './shared';
@@ -39,7 +42,6 @@ import { AI_VIDEO_GENERATION_PREVIEW_CACHE_KEY as PREVIEW_CACHE_KEY } from '../.
 import { useTaskQueue } from '../../hooks/useTaskQueue';
 import { TaskType } from '../../types/task.types';
 import { MessagePlugin } from 'tdesign-react';
-import { DialogTaskList } from '../task-queue/DialogTaskList';
 
 // 视频URL接口
 interface VideoUrls {
@@ -59,29 +61,19 @@ const cacheManager = createCacheManager<PreviewCache>(PREVIEW_CACHE_KEY);
 interface AIVideoGenerationProps {
   initialPrompt?: string;
   initialImage?: ImageFile;
-  initialDuration?: number;
-  initialResultUrl?: string;
 }
 
-const AIVideoGeneration = ({
-  initialPrompt = '',
-  initialImage,
-  initialDuration,
-  initialResultUrl
-}: AIVideoGenerationProps = {}) => {
+const AIVideoGeneration = ({ initialPrompt = '', initialImage }: AIVideoGenerationProps = {}) => {
   const [prompt, setPrompt] = useState(initialPrompt);
   const [generatedVideo, setGeneratedVideo] = useState<{
     previewUrl: string;
     downloadUrl: string;
   } | null>(null);
-  const [generatedVideoPrompt, setGeneratedVideoPrompt] = useState<string>(''); // Track prompt for current video
   const [isInserting, setIsInserting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploadedImage, setUploadedImage] = useState<ImageFile | null>(initialImage || null);
-
-  // Use generation history from task queue
-  const { videoHistory } = useGenerationHistory();
-
+  const [historyItems, setHistoryItems] = useState<VideoHistoryItem[]>([]);
+  
   const { isGenerating, isLoading: videoLoading, updateIsGenerating, updateIsLoading: updateVideoLoading } = useGenerationState('video');
 
   const { appState, setAppState } = useDrawnix();
@@ -91,10 +83,7 @@ const AIVideoGeneration = ({
 
   // 保存选中元素的ID，用于计算插入位置
   const [selectedElementIds, setSelectedElementIds] = useState<string[]>([]);
-
-  // Track task IDs created in this dialog session
-  const [dialogTaskIds, setDialogTaskIds] = useState<string[]>([]);
-
+  
   // 视频元素引用，用于控制播放状态
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -131,7 +120,6 @@ const AIVideoGeneration = ({
     if (cachedData) {
       setPrompt(cachedData.prompt);
       setGeneratedVideo(cachedData.generatedVideo);
-      setGeneratedVideoPrompt(cachedData.prompt); // Set prompt for download
     }
 
     if (board) {
@@ -142,30 +130,17 @@ const AIVideoGeneration = ({
     }
   }, [board]);
 
+  // 加载历史记录
+  useEffect(() => {
+    const history = loadVideoHistory();
+    setHistoryItems(history);
+  }, []);
 
   useEffect(() => {
     setPrompt(initialPrompt);
     setUploadedImage(initialImage || null);
     setError(null);
-
-    // 如果编辑任务且有结果URL,显示预览视频
-    if (initialResultUrl) {
-      setGeneratedVideo({
-        previewUrl: initialResultUrl,
-        downloadUrl: initialResultUrl
-      });
-      setGeneratedVideoPrompt(initialPrompt);
-    } else if (initialPrompt || initialImage) {
-      // 当弹窗重新打开时（有新的初始数据），清除预览视频
-      setGeneratedVideo(null);
-      // 清除缓存
-      try {
-        localStorage.removeItem(PREVIEW_CACHE_KEY);
-      } catch (error) {
-        console.warn('Failed to clear cache:', error);
-      }
-    }
-  }, [initialPrompt, initialImage, initialResultUrl]);
+  }, [initialPrompt, initialImage]);
 
   useEffect(() => {
     setError(null);
@@ -178,12 +153,11 @@ const AIVideoGeneration = ({
       videoRef.current.src = '';
       videoRef.current.load();
     }
-
+    
     setPrompt('');
     setUploadedImage(null);
     setGeneratedVideo(null);
     setError(null);
-    setDialogTaskIds([]); // 清除任务列表
     cacheManager.clear();
     window.dispatchEvent(new CustomEvent('ai-video-clear'));
   };
@@ -203,6 +177,77 @@ const AIVideoGeneration = ({
       };
       cacheManager.save(cacheData);
 
+      // 异步生成视频缩略图（使用预览URL）
+      const thumbnailPromise = generateThumbnail(videoUrls.previewUrl);
+
+      // 更新已有的提示词记录，添加生成的视频信息
+      const existingHistory = loadVideoHistory();
+      const existingIndex = existingHistory.findIndex(item => item.prompt.trim() === prompt.trim());
+      
+      if (existingIndex >= 0) {
+        // 如果找到了相同提示词的记录，更新它的视频信息
+        const updatedItem = {
+          ...existingHistory[existingIndex],
+          previewUrl: videoUrls.previewUrl,
+          downloadUrl: videoUrls.downloadUrl,
+          timestamp: Date.now(), // 更新时间戳
+        };
+        
+        // 等待缩略图生成完成，然后更新imageUrl
+        try {
+          const thumbnail = await thumbnailPromise;
+          if (thumbnail) {
+            updatedItem.imageUrl = thumbnail; // 使用缩略图作为 imageUrl
+          } else {
+            // 如果缩略图生成失败，使用预览URL
+            updatedItem.imageUrl = videoUrls.previewUrl;
+          }
+        } catch (error) {
+          console.warn('Failed to generate video thumbnail:', error);
+          // 如果缩略图生成失败，使用预览URL
+          updatedItem.imageUrl = videoUrls.previewUrl;
+        }
+        
+        // 更新历史记录
+        saveVideoToHistory(updatedItem);
+        
+        // 更新历史列表状态
+        const updatedHistoryItem: VideoHistoryItem = { ...updatedItem, type: 'video' };
+        setHistoryItems(prev => [updatedHistoryItem, ...prev.filter(h => h.id !== updatedItem.id)].slice(0, 50));
+      } else {
+        // 如果没有找到，创建新记录（理论上不应该到这里，因为已在handleGenerate中保存了）
+        const historyItem: Omit<VideoHistoryItem, 'type'> = {
+          id: generateHistoryId(),
+          prompt,
+          imageUrl: '', // 先置空，等待缩略图生成
+          width: 400,   // 默认尺寸
+          height: 225,  // 默认尺寸
+          previewUrl: videoUrls.previewUrl,
+          downloadUrl: videoUrls.downloadUrl,
+          timestamp: Date.now()
+        };
+
+        // 等待缩略图生成完成，然后更新历史记录
+        try {
+          const thumbnail = await thumbnailPromise;
+          if (thumbnail) {
+            historyItem.imageUrl = thumbnail; // 使用缩略图作为 imageUrl
+          } else {
+            // 如果缩略图生成失败，使用预览URL
+            historyItem.imageUrl = videoUrls.previewUrl;
+          }
+        } catch (error) {
+          console.warn('Failed to generate video thumbnail:', error);
+          // 如果缩略图生成失败，使用预览URL
+          historyItem.imageUrl = videoUrls.previewUrl;
+        }
+
+        saveVideoToHistory(historyItem);
+        
+        // 更新历史列表状态
+        const newHistoryItem: VideoHistoryItem = { ...historyItem, type: 'video' };
+        setHistoryItems(prev => [newHistoryItem, ...prev.filter(h => h.id !== historyItem.id)].slice(0, 50));
+      }
     } catch (error) {
       console.warn('Failed to set generated video:', error);
       setGeneratedVideo(videoUrls);
@@ -218,14 +263,9 @@ const AIVideoGeneration = ({
       previewUrl: historyItem.previewUrl,
       downloadUrl: historyItem.downloadUrl || historyItem.previewUrl
     });
-    setGeneratedVideoPrompt(historyItem.prompt); // Save prompt for download
-
-    // 设置参考图片 (如果有的话)
-    setUploadedImage(historyItem.uploadedImage || null);
-
     // 选择历史记录时清除错误状态
     setError(null);
-
+    
     // 更新预览缓存
     const cacheData: PreviewCache = {
       prompt: historyItem.prompt,
@@ -246,10 +286,10 @@ const AIVideoGeneration = ({
     // 视频生成组件不处理图片类型
   };
 
-  // 使用useMemo优化性能，当videoHistory或language变化时重新计算
-  const presetPrompts = React.useMemo(() =>
-    getMergedPresetPrompts('video', language as Language, videoHistory),
-    [videoHistory, language]
+  // 使用useMemo优化性能，当historyItems或language变化时重新计算
+  const presetPrompts = React.useMemo(() => 
+    getMergedPresetPrompts('video', language as Language, historyItems), 
+    [historyItems, language]
   );
 
   // 保存提示词到历史记录（去重）
@@ -258,91 +298,6 @@ const AIVideoGeneration = ({
     savePromptToHistoryUtil('video', promptText, dimensions);
   };
 
-  const handleGenerate = async () => {
-    if (!prompt.trim()) {
-      setError(language === 'zh' ? '请输入视频描述' : 'Please enter video description');
-      return;
-    }
-
-    try {
-      // Convert File object to base64 data URL for serialization
-      let convertedImage: { type: 'url'; url: string; name: string } | undefined;
-      if (uploadedImage) {
-        if (uploadedImage.file) {
-          // Convert File to base64 data URL
-          convertedImage = await new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => {
-              resolve({
-                type: 'url',
-                url: reader.result as string,
-                name: uploadedImage.name
-              });
-            };
-            reader.onerror = reject;
-            reader.readAsDataURL(uploadedImage.file!);
-          });
-        } else if (uploadedImage.url) {
-          convertedImage = { type: 'url', url: uploadedImage.url, name: uploadedImage.name };
-        }
-      }
-
-      // 创建任务参数
-      const taskParams = {
-        prompt: prompt.trim(),
-        // 保存上传的图片（已转换为可序列化的格式）
-        uploadedImage: convertedImage
-      };
-
-      // 创建任务并添加到队列
-      const task = createTask(taskParams, TaskType.VIDEO);
-
-      if (task) {
-        // 任务创建成功
-        MessagePlugin.success(
-          language === 'zh'
-            ? '视频任务已添加到队列，将在后台生成'
-            : 'Video task added to queue, will be generated in background'
-        );
-
-        // 保存任务ID到对话框任务列表
-        setDialogTaskIds(prev => [...prev, task.id]);
-
-        // 保存提示词到历史记录
-        savePromptToHistory(prompt);
-
-        // 完全清空表单（prompt、参考图、预览）
-        setPrompt('');
-        setUploadedImage(null);
-        setGeneratedVideo(null);
-        setError(null);
-
-        // 清除视频播放
-        if (videoRef.current) {
-          videoRef.current.pause();
-          videoRef.current.src = '';
-          videoRef.current.load();
-        }
-
-        // 清除缓存
-        cacheManager.clear();
-      } else {
-        // 任务创建失败
-        setError(
-          language === 'zh' 
-            ? '任务创建失败，请检查参数或稍后重试' 
-            : 'Failed to create task, please check parameters or try again later'
-        );
-      }
-    } catch (err: any) {
-      console.error('Failed to create task:', err);
-      setError(
-        language === 'zh' 
-          ? `创建任务失败: ${err.message}` 
-          : `Failed to create task: ${err.message}`
-      );
-    }
-  };
 
   useKeyboardShortcuts(isGenerating, prompt, handleGenerate);
 
@@ -387,19 +342,21 @@ const AIVideoGeneration = ({
             
             <ErrorDisplay error={error} />
           </div>
-
-          <ActionButtons
-            language={language}
-            type="video"
-            isGenerating={isGenerating}
-            hasGenerated={!!generatedVideo}
-            canGenerate={!!prompt.trim()}
-            onGenerate={handleGenerate}
-            onReset={handleReset}
-          />
         </div>
-
-          <div className="preview-section">
+        
+        <ActionButtons
+          language={language}
+          type="video"
+          isGenerating={isGenerating}
+          hasGenerated={!!generatedVideo}
+          canGenerate={!!prompt.trim()}
+          onGenerate={handleGenerate}
+          onReset={handleReset}
+        />
+      </div>
+      
+      {/* 预览区域 */}
+      <div className="preview-section">
         <div className="image-preview-container">
           <LoadingState
             language={language}
@@ -411,9 +368,9 @@ const AIVideoGeneration = ({
           
           {generatedVideo && (
             <div className="preview-image-wrapper">
-              <video
+              <video 
                 ref={videoRef}
-                src={generatedVideo.previewUrl}
+                src={generatedVideo.previewUrl} 
                 controls
                 loop
                 muted
@@ -427,7 +384,13 @@ const AIVideoGeneration = ({
             </div>
           )}
         </div>
-
+        
+          {/* 统一历史记录组件 */}
+          <GenerationHistory
+            historyItems={historyItems}
+            onSelectFromHistory={handleSelectFromHistory}
+            position={{ bottom: '60px', right: '8px' }}
+          />
         {/* 插入、下载和清除按钮区域 */}
         {generatedVideo && (
           <div className="section-actions">
@@ -509,62 +472,23 @@ const AIVideoGeneration = ({
               }
             </button>
             <button
-              onClick={async () => {
+              onClick={() => {
                 if (generatedVideo) {
-                  try {
-                    // Extract file extension from URL
-                    let format = 'mp4';
-                    try {
-                      const urlPath = new URL(generatedVideo.downloadUrl).pathname;
-                      const ext = urlPath.substring(urlPath.lastIndexOf('.') + 1).toLowerCase();
-                      if (ext && ['mp4', 'webm', 'mov'].includes(ext)) {
-                        format = ext;
-                      }
-                    } catch (e) {
-                      // Keep default format
-                    }
-
-                    await downloadMediaFile(
-                      generatedVideo.downloadUrl,
-                      generatedVideoPrompt || 'video',
-                      format,
-                      'video'
-                    );
-                    MessagePlugin.success(language === 'zh' ? '下载成功' : 'Download successful');
-                  } catch (err) {
-                    console.error('Download failed:', err);
-                    MessagePlugin.error(
-                      language === 'zh'
-                        ? '下载失败，请重试'
-                        : 'Download failed, please try again'
-                    );
-                  }
+                  // 在新页面打开下载链接
+                  window.open(generatedVideo.downloadUrl, '_blank');
                 }
               }}
               disabled={isGenerating || videoLoading || isInserting}
               className="action-button secondary"
             >
-              {videoLoading
+              {videoLoading 
                 ? (language === 'zh' ? '加载中...' : 'Loading...')
                 : (language === 'zh' ? '下载' : 'Download')
               }
             </button>
-
           </div>
         )}
-            {/* 统一历史记录组件 */}
-            <GenerationHistory
-              historyItems={videoHistory}
-              onSelectFromHistory={handleSelectFromHistory}
-            />
       </div>
-      </div>
-      
-      {/* 预览区域 */}
-    
-
-                {/* 对话框任务列表 - 只显示本次对话框生成的任务 */}
-          <DialogTaskList taskIds={dialogTaskIds} taskType={TaskType.VIDEO} />
     </div>
   );
 };

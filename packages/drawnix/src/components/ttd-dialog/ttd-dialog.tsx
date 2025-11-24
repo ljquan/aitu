@@ -29,6 +29,7 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
     initialPrompt: string;
     initialImages: (File | { url: string; name: string })[];
     selectedElementIds: string[]; // 保存选中元素的IDs
+    initialResultUrl?: string; // 初始结果URL,用于显示预览
   }>({
     initialPrompt: '',
     initialImages: [],
@@ -39,6 +40,7 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
   const [aiVideoData, setAiVideoData] = useState<{
     initialPrompt: string;
     initialImage: File | { url: string; name: string } | undefined;
+    initialResultUrl?: string;
   }>({
     initialPrompt: '',
     initialImage: undefined
@@ -84,13 +86,23 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
         }, 10000); // 10秒超时
         
         try {
-          // 保存当前选中的元素IDs
-          const selectedElements = getSelectedElements(board);
-          const selectedElementIds = selectedElements.map(el => el.id);
-          console.log('Saving selected element IDs for AI image generation:', selectedElementIds);
-          
-          // 使用新的处理逻辑来处理选中的内容
-          const processedContent = await processSelectedContentForAI(board);
+          // 如果有初始数据（从任务编辑传入），直接使用
+          if (appState.dialogInitialData) {
+            setAiImageData({
+              initialPrompt: appState.dialogInitialData.prompt || '',
+              initialImages: appState.dialogInitialData.uploadedImages || [],
+              selectedElementIds: [],
+              initialResultUrl: appState.dialogInitialData.resultUrl
+            });
+            return;
+          }
+
+          // 使用保存在appState中的最近选中元素IDs
+          const selectedElementIds = appState.lastSelectedElementIds || [];
+          console.log('Using saved selected element IDs for AI image generation:', selectedElementIds);
+
+          // 使用新的处理逻辑来处理选中的内容,传入保存的元素IDs
+          const processedContent = await processSelectedContentForAI(board, selectedElementIds);
           
           // 准备图片列表
           const imageItems: (File | { url: string; name: string })[] = [];
@@ -161,9 +173,23 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
         }, 10000); // 10秒超时
         
         try {
-          // 使用新的处理逻辑来处理选中的内容
-          const processedContent = await processSelectedContentForAI(board);
-          
+          // 如果有初始数据（从任务编辑传入），直接使用
+          if (appState.dialogInitialData) {
+            setAiVideoData({
+              initialPrompt: appState.dialogInitialData.prompt || '',
+              initialImage: appState.dialogInitialData.uploadedImage,
+              initialResultUrl: appState.dialogInitialData.resultUrl
+            });
+            return;
+          }
+
+          // 使用保存在appState中的最近选中元素IDs
+          const selectedElementIds = appState.lastSelectedElementIds || [];
+          console.log('Using saved selected element IDs for AI video generation:', selectedElementIds);
+
+          // 使用新的处理逻辑来处理选中的内容,传入保存的元素IDs
+          const processedContent = await processSelectedContentForAI(board, selectedElementIds);
+
           // 对于视频生成，只使用第一张图片
           let firstImage: File | { url: string; name: string } | undefined = undefined;
           
@@ -292,10 +318,13 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
           color: '#333333'
         } as React.CSSProperties}
       >
-        <AIImageGeneration 
+        <AIImageGeneration
           initialPrompt={aiImageData.initialPrompt}
           initialImages={aiImageData.initialImages}
           selectedElementIds={aiImageData.selectedElementIds}
+          initialWidth={appState.dialogInitialData?.width}
+          initialHeight={appState.dialogInitialData?.height}
+          initialResultUrl={aiImageData.initialResultUrl}
         />
       </TDialog>
       {appState.openDialogType === DialogType.aiVideoGeneration &&       <TDialog
@@ -337,9 +366,11 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
           color: '#333333'
         } as React.CSSProperties}
       >
-        <AIVideoGeneration 
+        <AIVideoGeneration
           initialPrompt={aiVideoData.initialPrompt}
           initialImage={aiVideoData.initialImage}
+          initialDuration={appState.dialogInitialData?.duration}
+          initialResultUrl={aiVideoData.initialResultUrl}
         />
       </TDialog>}
     </>

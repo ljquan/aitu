@@ -1,0 +1,107 @@
+/**
+ * DialogTaskList Styles
+ * Compact task list for display within generation dialogs
+ */
+
+.dialog-task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 12px;
+  background-color: #f5f5f5;
+  border-radius: 8px;
+  height: 140px; // Fixed height for one task item
+  overflow-y: auto;
+
+  &__header {
+    flex-shrink: 0;
+    h4 {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 500;
+      color: #424242;
+    }
+  }
+
+  &__content {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex: 1;
+    overflow-y: auto;
+  }
+
+  // Customize task items for compact display in dialog
+  .task-item {
+    padding: 8px;
+    background-color: white;
+    border-radius: 6px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    font-size: 12px;
+    min-height: auto;
+
+    &__header {
+      gap: 6px;
+    }
+
+    &__info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    &__title {
+      gap: 4px;
+    }
+
+    &__type-icon {
+      font-size: 14px;
+    }
+
+    &__prompt {
+      font-size: 12px;
+      max-width: 200px;
+    }
+
+    &__meta {
+      gap: 6px;
+      font-size: 11px;
+      flex-wrap: wrap;
+    }
+
+    &__meta-item {
+      font-size: 11px;
+    }
+
+    &__preview {
+      max-width: 60px;
+      max-height: 60px;
+      flex-shrink: 0;
+
+      img, video {
+        max-width: 60px;
+        max-height: 60px;
+        border-radius: 4px;
+      }
+    }
+
+    &__actions {
+      gap: 4px;
+      flex-shrink: 0;
+
+      button {
+        font-size: 12px;
+        padding: 4px 8px;
+        min-width: 50px;
+      }
+    }
+
+    &__error {
+      font-size: 11px;
+    }
+
+    &__retry-info {
+      font-size: 11px;
+    }
+  }
+}

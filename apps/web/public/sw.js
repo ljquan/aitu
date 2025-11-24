@@ -27,6 +27,12 @@ const VIDEO_EXTENSIONS_REGEX = /\.(mp4|webm|ogg|mov|avi|mkv|flv|wmv|m4v)$/i;
 // 图片请求去重字典：存储正在进行的请求Promise
 const pendingImageRequests = new Map();
 
+// 视频请求去重字典：存储正在进行的视频下载Promise
+const pendingVideoRequests = new Map();
+
+// 视频缓存：存储已下载的完整视频Blob，用于快速响应Range请求
+const videoBlobCache = new Map();
+
 // 域名故障标记：记录已知失败的域名
 const failedDomains = new Set();
 
@@ -133,14 +139,35 @@ function cleanupPendingRequests() {
   
   for (const [key, entry] of pendingImageRequests.entries()) {
     if (now - entry.timestamp > maxAge) {
-      console.log('Service Worker: 清理过期的pending请求:', key);
+      console.log('Service Worker: 清理过期的pending图片请求:', key);
       pendingImageRequests.delete(key);
+    }
+  }
+  
+  for (const [key, entry] of pendingVideoRequests.entries()) {
+    if (now - entry.timestamp > maxAge) {
+      console.log('Service Worker: 清理过期的pending视频请求:', key);
+      pendingVideoRequests.delete(key);
     }
   }
 }
 
-// 定期清理pending请求
+// 清理过期的视频Blob缓存（避免内存泄漏）
+function cleanupVideoBlobCache() {
+  const now = Date.now();
+  const maxAge = 5 * 60 * 1000; // 5分钟后清理视频缓存
+  
+  for (const [key, entry] of videoBlobCache.entries()) {
+    if (now - entry.timestamp > maxAge) {
+      console.log('Service Worker: 清理过期的视频Blob缓存:', key);
+      videoBlobCache.delete(key);
+    }
+  }
+}
+
+// 定期清理pending请求和视频缓存
 setInterval(cleanupPendingRequests, 60000); // 每分钟清理一次
+setInterval(cleanupVideoBlobCache, 2 * 60 * 1000); // 每2分钟清理一次视频缓存
 
 // 清理旧的缓存条目以释放空间（基于LRU策略）
 async function cleanOldCacheEntries(cache) {
@@ -399,90 +426,131 @@ async function fetchWithRetry(request, maxRetries = 2) {
 // 处理视频请求,支持 Range 请求以实现视频 seek 功能
 async function handleVideoRequest(request) {
   const url = new URL(request.url);
-  console.log('Service Worker: Handling video request:', url.href);
+  const requestId = Math.random().toString(36).substring(2, 10);
+  console.log(`Service Worker [Video-${requestId}]: Handling video request:`, url.href);
 
   try {
     // 检查请求是否包含 Range header
     const rangeHeader = request.headers.get('range');
-    console.log('Service Worker: Range header:', rangeHeader);
+    console.log(`Service Worker [Video-${requestId}]: Range header:`, rangeHeader);
 
-    // 构建请求选项
-    const fetchOptions = {
-      method: 'GET',
-      headers: new Headers(request.headers),
-      mode: 'cors',
-      credentials: 'omit',
-      cache: 'no-cache'
-    };
+    // 创建去重键（移除缓存破坏参数）
+    const dedupeUrl = new URL(url);
+    const cacheBreakingParams = ['_t', 'cache_buster', 'v', 'timestamp', 'nocache', '_cb', 't', 'retry', 'rand'];
+    cacheBreakingParams.forEach(param => dedupeUrl.searchParams.delete(param));
+    const dedupeKey = dedupeUrl.toString();
 
-    // 获取视频响应
-    const response = await fetch(url, fetchOptions);
-
-    if (!response.ok) {
-      console.error('Service Worker: Video fetch failed:', response.status);
-      return response;
+    // 检查是否有相同视频正在下载
+    if (pendingVideoRequests.has(dedupeKey)) {
+      const existingEntry = pendingVideoRequests.get(dedupeKey);
+      existingEntry.count = (existingEntry.count || 1) + 1;
+      const waitTime = Date.now() - existingEntry.timestamp;
+      
+      console.log(`Service Worker [Video-${requestId}]: 发现重复视频请求 (等待${waitTime}ms)，复用下载Promise:`, dedupeKey);
+      console.log(`Service Worker [Video-${requestId}]: 重复请求计数: ${existingEntry.count}`);
+      
+      // 等待视频下载完成
+      const videoBlob = await existingEntry.promise;
+      
+      // 使用缓存的blob响应Range请求
+      return createVideoResponse(videoBlob, rangeHeader, requestId);
     }
 
-    // 如果服务器已经支持 Range 请求,直接返回
-    if (response.status === 206) {
-      console.log('Service Worker: Server supports Range requests, returning response');
-      return response;
+    // 检查是否已有缓存的视频Blob
+    if (videoBlobCache.has(dedupeKey)) {
+      const cacheEntry = videoBlobCache.get(dedupeKey);
+      console.log(`Service Worker [Video-${requestId}]: 使用缓存的视频Blob (缓存时间: ${Math.round((Date.now() - cacheEntry.timestamp) / 1000)}秒)`);
+      
+      // 更新访问时间
+      cacheEntry.timestamp = Date.now();
+      
+      return createVideoResponse(cacheEntry.blob, rangeHeader, requestId);
     }
 
-    // 如果没有 Range 请求,直接返回完整视频
-    if (!rangeHeader) {
-      console.log('Service Worker: No Range header, returning full video');
-      // 添加 Accept-Ranges header 以告知浏览器支持 Range
-      const headers = new Headers(response.headers);
-      headers.set('Accept-Ranges', 'bytes');
+    // 创建新的视频下载Promise
+    console.log(`Service Worker [Video-${requestId}]: 开始下载新视频:`, dedupeKey);
+    
+    const downloadPromise = (async () => {
+      // 构建请求选项
+      const fetchOptions = {
+        method: 'GET',
+        mode: 'cors',
+        credentials: 'omit',
+        cache: 'default' // 使用浏览器默认缓存策略
+      };
 
-      const blob = await response.blob();
-      return new Response(blob, {
-        status: 200,
-        statusText: 'OK',
-        headers: headers
-      });
-    }
+      // 获取视频响应（不带Range header，获取完整视频）
+      const fetchUrl = new URL(dedupeUrl);
+      const response = await fetch(fetchUrl, fetchOptions);
 
-    // 服务器不支持 Range 但客户端请求了 Range
-    // 我们需要手动处理 Range 请求
-    console.log('Service Worker: Server does not support Range, handling manually');
+      if (!response.ok) {
+        console.error(`Service Worker [Video-${requestId}]: Video fetch failed:`, response.status);
+        throw new Error(`Video fetch failed: ${response.status}`);
+      }
 
-    const videoBlob = await response.clone().blob();
-    const videoSize = videoBlob.size;
+      // 如果服务器返回206，说明服务器原生支持Range，直接返回不缓存
+      if (response.status === 206) {
+        console.log(`Service Worker [Video-${requestId}]: 服务器原生支持Range请求，直接返回`);
+        return null; // 返回null表示不缓存，直接使用服务器响应
+      }
 
-    // 解析 Range header (格式: "bytes=start-end")
-    const rangeMatch = rangeHeader.match(/bytes=(\d+)-(\d*)/);
-    if (!rangeMatch) {
-      console.error('Service Worker: Invalid Range header format');
-      return response;
-    }
+      // 下载完整视频
+      console.log(`Service Worker [Video-${requestId}]: 开始下载完整视频...`);
+      const videoBlob = await response.blob();
+      const videoSizeMB = videoBlob.size / (1024 * 1024);
+      console.log(`Service Worker [Video-${requestId}]: 视频下载完成 (大小: ${videoSizeMB.toFixed(2)}MB)`);
 
-    const start = parseInt(rangeMatch[1], 10);
-    const end = rangeMatch[2] ? parseInt(rangeMatch[2], 10) : videoSize - 1;
+      // 缓存视频Blob（仅缓存小于50MB的视频）
+      if (videoSizeMB < 50) {
+        videoBlobCache.set(dedupeKey, {
+          blob: videoBlob,
+          timestamp: Date.now()
+        });
+        console.log(`Service Worker [Video-${requestId}]: 视频已缓存到内存`);
+      } else {
+        console.log(`Service Worker [Video-${requestId}]: 视频过大(${videoSizeMB.toFixed(2)}MB)，不缓存`);
+      }
 
-    console.log(`Service Worker: Range request: ${start}-${end} of ${videoSize}`);
+      return videoBlob;
+    })();
 
-    // 提取指定范围的数据
-    const slicedBlob = videoBlob.slice(start, end + 1);
-    const contentLength = end - start + 1;
-
-    // 构建 206 Partial Content 响应
-    const headers = new Headers(response.headers);
-    headers.set('Content-Range', `bytes ${start}-${end}/${videoSize}`);
-    headers.set('Content-Length', contentLength.toString());
-    headers.set('Accept-Ranges', 'bytes');
-    headers.set('Access-Control-Allow-Origin', '*');
-    headers.set('Access-Control-Expose-Headers', 'Content-Range, Accept-Ranges, Content-Length');
-
-    return new Response(slicedBlob, {
-      status: 206,
-      statusText: 'Partial Content',
-      headers: headers
+    // 将下载Promise存储到去重字典
+    pendingVideoRequests.set(dedupeKey, {
+      promise: downloadPromise,
+      timestamp: Date.now(),
+      count: 1,
+      requestId: requestId
     });
 
+    // 下载完成后从字典中移除
+    downloadPromise.finally(() => {
+      const entry = pendingVideoRequests.get(dedupeKey);
+      if (entry) {
+        const totalTime = Date.now() - entry.timestamp;
+        console.log(`Service Worker [Video-${requestId}]: 视频下载完成 (耗时${totalTime}ms，请求计数: ${entry.count})`);
+        pendingVideoRequests.delete(dedupeKey);
+      }
+    });
+
+    // 等待视频下载完成
+    const videoBlob = await downloadPromise;
+
+    // 如果返回null，说明服务器支持Range，重新发送原始请求
+    if (videoBlob === null) {
+      const fetchOptions = {
+        method: 'GET',
+        headers: new Headers(request.headers),
+        mode: 'cors',
+        credentials: 'omit'
+      };
+      return await fetch(url, fetchOptions);
+    }
+
+    // 使用下载的blob响应Range请求
+    return createVideoResponse(videoBlob, rangeHeader, requestId);
+
   } catch (error) {
-    console.error('Service Worker: Video request error:', error);
+    console.error(`Service Worker [Video-${requestId}]: Video request error:`, error);
     return new Response('Video loading error', {
       status: 500,
       statusText: 'Internal Server Error',
@@ -491,6 +559,64 @@ async function handleVideoRequest(request) {
       }
     });
   }
+}
+
+// 创建视频响应，支持Range请求
+function createVideoResponse(videoBlob, rangeHeader, requestId) {
+  const videoSize = videoBlob.size;
+
+  // 如果没有Range请求，返回完整视频
+  if (!rangeHeader) {
+    console.log(`Service Worker [Video-${requestId}]: 返回完整视频 (大小: ${(videoSize / 1024 / 1024).toFixed(2)}MB)`);
+    return new Response(videoBlob, {
+      status: 200,
+      statusText: 'OK',
+      headers: {
+        'Content-Type': 'video/mp4',
+        'Content-Length': videoSize.toString(),
+        'Accept-Ranges': 'bytes',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Expose-Headers': 'Content-Range, Accept-Ranges, Content-Length'
+      }
+    });
+  }
+
+  // 解析Range header (格式: "bytes=start-end")
+  const rangeMatch = rangeHeader.match(/bytes=(\d+)-(\d*)/);
+  if (!rangeMatch) {
+    console.error(`Service Worker [Video-${requestId}]: Invalid Range header format`);
+    return new Response(videoBlob, {
+      status: 200,
+      statusText: 'OK',
+      headers: {
+        'Content-Type': 'video/mp4',
+        'Accept-Ranges': 'bytes'
+      }
+    });
+  }
+
+  const start = parseInt(rangeMatch[1], 10);
+  const end = rangeMatch[2] ? parseInt(rangeMatch[2], 10) : videoSize - 1;
+
+  console.log(`Service Worker [Video-${requestId}]: Range请求: ${start}-${end} / ${videoSize} (${((end - start + 1) / 1024).toFixed(2)}KB)`);
+
+  // 提取指定范围的数据
+  const slicedBlob = videoBlob.slice(start, end + 1);
+  const contentLength = end - start + 1;
+
+  // 构建206 Partial Content响应
+  return new Response(slicedBlob, {
+    status: 206,
+    statusText: 'Partial Content',
+    headers: {
+      'Content-Type': 'video/mp4',
+      'Content-Range': `bytes ${start}-${end}/${videoSize}`,
+      'Content-Length': contentLength.toString(),
+      'Accept-Ranges': 'bytes',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Expose-Headers': 'Content-Range, Accept-Ranges, Content-Length'
+    }
+  });
 }
 
 async function handleStaticRequest(request) {

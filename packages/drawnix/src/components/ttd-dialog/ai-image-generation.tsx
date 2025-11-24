@@ -8,12 +8,16 @@ import { type Language } from '../../constants/prompts';
 import { getSelectedElements, PlaitElement, getRectangleByElements, Point } from '@plait/core';
 import { defaultGeminiClient } from '../../utils/gemini-api';
 import { insertImageFromUrl } from '../../data/image';
-import { 
-  GenerationHistory, 
-  ImageHistoryItem, 
-  VideoHistoryItem,
-  loadImageHistory 
+import { useTaskQueue } from '../../hooks/useTaskQueue';
+import { TaskType } from '../../types/task.types';
+import { MessagePlugin } from 'tdesign-react';
+import { downloadMediaFile } from '../../utils/download-utils';
+import {
+  GenerationHistory,
+  ImageHistoryItem,
+  VideoHistoryItem
 } from '../generation-history';
+import { useGenerationHistory } from '../../hooks/useGenerationHistory';
 import {
   useGenerationState,
   useKeyboardShortcuts,
@@ -31,11 +35,11 @@ import {
   getMergedPresetPrompts,
   savePromptToHistory as savePromptToHistoryUtil,
   preloadImage,
-  updateHistoryWithGeneratedContent,
   DEFAULT_IMAGE_DIMENSIONS,
   getReferenceDimensionsFromIds
 } from './shared';
 import { AI_IMAGE_GENERATION_PREVIEW_CACHE_KEY as PREVIEW_CACHE_KEY } from '../../constants/storage';
+import { DialogTaskList } from '../task-queue/DialogTaskList';
 
 interface PreviewCache extends PreviewCacheBase {
   generatedImage: string | null;
@@ -51,27 +55,46 @@ interface AIImageGenerationProps {
   initialPrompt?: string;
   initialImages?: ImageFile[];
   selectedElementIds?: string[];
+  initialWidth?: number;
+  initialHeight?: number;
+  initialResultUrl?: string;
 }
 
-const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedElementIds = [] }: AIImageGenerationProps = {}) => {
+const AIImageGeneration = ({
+  initialPrompt = '',
+  initialImages = [],
+  selectedElementIds: initialSelectedElementIds = [],
+  initialWidth,
+  initialHeight,
+  initialResultUrl
+}: AIImageGenerationProps = {}) => {
   const [prompt, setPrompt] = useState(initialPrompt);
-  const [width, setWidth] = useState<number | string>(DEFAULT_IMAGE_DIMENSIONS.width);
-  const [height, setHeight] = useState<number | string>(DEFAULT_IMAGE_DIMENSIONS.height);
+  const [width, setWidth] = useState<number | string>(initialWidth || DEFAULT_IMAGE_DIMENSIONS.width);
+  const [height, setHeight] = useState<number | string>(initialHeight || DEFAULT_IMAGE_DIMENSIONS.height);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
+  const [generatedImagePrompt, setGeneratedImagePrompt] = useState<string>(''); // Track prompt for current image
   const [error, setError] = useState<string | null>(null);
   const [useImageAPI] = useState(false);
   const [uploadedImages, setUploadedImages] = useState<ImageFile[]>(initialImages);
-  const [historyItems, setHistoryItems] = useState<ImageHistoryItem[]>([]);
-  
+  // Use generation history from task queue
+  const { imageHistory } = useGenerationHistory();
+
   const { isGenerating, isLoading: imageLoading, updateIsGenerating, updateIsLoading: updateImageLoading } = useGenerationState('image');
 
   const { appState, setAppState } = useDrawnix();
   const { language } = useI18n();
   const board = useBoard();
+  const { createTask } = useTaskQueue();
+
+  // Track task IDs created in this dialog session
+  const [dialogTaskIds, setDialogTaskIds] = useState<string[]>([]);
+
+  // 保存选中元素的ID,用于计算插入位置
+  const [savedSelectedElementIds, setSavedSelectedElementIds] = useState<string[]>(initialSelectedElementIds);
 
   // 计算插入位置
   const calculateInsertionPoint = (): Point | undefined => {
-    return calculateInsertionPointFromIds(board, selectedElementIds);
+    return calculateInsertionPointFromIds(board, savedSelectedElementIds);
   };
 
 
@@ -83,21 +106,28 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
       setWidth(cachedData.width);
       setHeight(cachedData.height);
       setGeneratedImage(cachedData.generatedImage);
+      setGeneratedImagePrompt(cachedData.prompt); // Set prompt for download
     }
   }, []);
 
-  // 加载历史记录
-  useEffect(() => {
-    const history = loadImageHistory();
-    setHistoryItems(history);
-  }, []);
 
   // 处理 props 变化，更新内部状态
   useEffect(() => {
     setPrompt(initialPrompt);
-    setUploadedImages(initialImages);
-    // 当弹窗重新打开时（有新的初始数据），清除预览图片
-    if (initialPrompt || initialImages.length > 0) {
+    // 使用 initialImages 的值,如果是 undefined 则使用空数组(确保清空)
+    setUploadedImages(initialImages || []);
+    setSavedSelectedElementIds(initialSelectedElementIds);
+    if (initialWidth) setWidth(initialWidth);
+    if (initialHeight) setHeight(initialHeight);
+
+    console.log('AI Image Generation: Updated savedSelectedElementIds:', initialSelectedElementIds);
+
+    // 如果编辑任务且有结果URL,显示预览图
+    if (initialResultUrl) {
+      setGeneratedImage(initialResultUrl);
+      setGeneratedImagePrompt(initialPrompt);
+    } else if (initialPrompt || (initialImages && initialImages.length > 0)) {
+      // 当弹窗重新打开时（有新的初始数据），清除预览图片
       setGeneratedImage(null);
       // 清除缓存
       try {
@@ -106,7 +136,7 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
         console.warn('Failed to clear cache:', error);
       }
     }
-  }, [initialPrompt, initialImages]);
+  }, [initialPrompt, initialImages, initialSelectedElementIds, initialWidth, initialHeight, initialResultUrl]);
 
   // 清除错误状态当组件挂载时（对话框打开时）
   useEffect(() => {
@@ -126,6 +156,7 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
     setUploadedImages([]);
     setGeneratedImage(null);
     setError(null);
+    setDialogTaskIds([]); // 清除任务列表
     // 清除缓存
     try {
       localStorage.removeItem(PREVIEW_CACHE_KEY);
@@ -154,17 +185,6 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
         height
       };
       cacheManager.save(cacheData);
-
-      // 更新历史记录
-      updateHistoryWithGeneratedContent({
-        type: 'image',
-        prompt,
-        url: imageUrl,
-        dimensions: {
-          width: typeof width === 'string' ? parseInt(width) || DEFAULT_IMAGE_DIMENSIONS.width : width,
-          height: typeof height === 'string' ? parseInt(height) || DEFAULT_IMAGE_DIMENSIONS.height : height
-        }
-      }, setHistoryItems);
     } catch (error) {
       console.warn('Failed to preload image, setting anyway:', error);
       // 即使预加载失败，也设置图片URL，让浏览器正常加载
@@ -179,17 +199,6 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
         height
       };
       cacheManager.save(cacheData);
-
-      // 更新历史记录
-      updateHistoryWithGeneratedContent({
-        type: 'image',
-        prompt,
-        url: imageUrl,
-        dimensions: {
-          width: typeof width === 'string' ? parseInt(width) || DEFAULT_IMAGE_DIMENSIONS.width : width,
-          height: typeof height === 'string' ? parseInt(height) || DEFAULT_IMAGE_DIMENSIONS.height : height
-        }
-      }, setHistoryItems);
     } finally {
       updateImageLoading(false);
     }
@@ -201,7 +210,11 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
     setWidth(historyItem.width);
     setHeight(historyItem.height);
     setGeneratedImage(historyItem.imageUrl);
-    
+    setGeneratedImagePrompt(historyItem.prompt); // Save prompt for download
+
+    // 设置参考图片 (如果有的话)
+    setUploadedImages(historyItem.uploadedImages || []);
+
     // 更新预览缓存
     const cacheData: PreviewCache = {
       prompt: historyItem.prompt,
@@ -221,10 +234,10 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
     // 图片生成组件不处理视频类型
   };
 
-  // 使用useMemo优化性能，当historyItems或language变化时重新计算
-  const presetPrompts = React.useMemo(() => 
-    getMergedPresetPrompts('image', language as Language, historyItems), 
-    [historyItems, language]
+  // 使用useMemo优化性能，当imageHistory或language变化时重新计算
+  const presetPrompts = React.useMemo(() =>
+    getMergedPresetPrompts('image', language as Language, imageHistory),
+    [imageHistory, language]
   );
 
   // 保存提示词到历史记录（去重）
@@ -242,133 +255,86 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
       return;
     }
 
-    // 清除旧的图像和错误信息
-    setGeneratedImage(null);
-    setError(null);
-    
-    // 在生成开始时保存提示词（不管是否生成成功）
-    savePromptToHistory(prompt);
-
-    updateIsGenerating(true);
-
     try {
       const finalWidth = typeof width === 'string' ? (parseInt(width) || 1024) : width;
       const finalHeight = typeof height === 'string' ? (parseInt(height) || 1024) : height;
-      
-      if (useImageAPI) {
-        // 使用专用图像生成API (images/generations)
-        console.log('Using Images API for generation...');
-        const result = await defaultGeminiClient.generateImage(prompt, {
-          n: 1,
-          size: `${finalWidth}x${finalHeight}`
-        });
-        
-        // 处理图像生成API的响应格式: { data: [{ url: "..." }], created: timestamp }
-        if (result.data && result.data.length > 0) {
-          const imageUrl = result.data[0].url;
-          console.log('Generated image URL:', imageUrl);
-          await setGeneratedImageWithPreload(imageUrl);
-        } else {
-          setError(
-            language === 'zh' 
-              ? '图像生成失败，API未返回图像数据' 
-              : 'Image generation failed, API returned no image data'
-          );
-        }
-      } else {
-        // 使用聊天API (chat/completions)
-        console.log('Using Chat API for generation...');
-        const imagePrompt = `Generate an image based on this description: "${prompt}"`;
+      // Convert File objects to base64 data URLs for serialization
+      const convertedImages = await Promise.all(
+        uploadedImages.map(async (img) => {
+          if (img.file) {
+            // Convert File to base64 data URL
+            return new Promise<{ type: 'url'; url: string; name: string }>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => {
+                resolve({
+                  type: 'url',
+                  url: reader.result as string,
+                  name: img.name
+                });
+              };
+              reader.onerror = reject;
+              reader.readAsDataURL(img.file!);
+            });
+          } else if (img.url) {
+            return { type: 'url', url: img.url, name: img.name };
+          }
+          throw new Error('Invalid image data');
+        })
+      );
 
-        // 将上传的图片转换为ImageInput格式，对File类型的图片进行压缩
-        const imageInputs = await Promise.all(uploadedImages.map(async (item) => {
-          if (item instanceof File) {
-            // 注释掉图片压缩逻辑，直接使用原图
-            // try {
-            //   // 将File转换为data URL
-            //   const fileDataUrl = await new Promise<string>((resolve, reject) => {
-            //     const reader = new FileReader();
-            //     reader.onload = () => resolve(reader.result as string);
-            //     reader.onerror = reject;
-            //     reader.readAsDataURL(item);
-            //   });
-            //   
-            //   // 对base64图片进行压缩处理
-            //   const compressedDataUrl = await compressImageUrl(fileDataUrl);
-            //   
-            //   // 将压缩后的data URL转换回File对象
-            //   const response = await fetch(compressedDataUrl);
-            //   const blob = await response.blob();
-            //   const compressedFile = new File([blob], item.name, { type: blob.type || item.type });
-            //   
-            //   return { file: compressedFile };
-            // } catch (compressionError) {
-            //   console.warn('Failed to compress uploaded image, using original:', compressionError);
-            //   return { file: item };
-            // }
-            
-            // 直接使用原图，不进行压缩
-            return { file: item };
-          } else {
-            // 对于URL类型的图片，直接传递URL
-            return { url: item.url };
-          }
-        }));
-        
-        const result = await defaultGeminiClient.chat(imagePrompt, imageInputs);
-        
-        // 从聊天响应中提取内容
-        const responseContent = result.response.choices[0]?.message?.content || '';
-        console.log('Chat API response:', responseContent);
-        
-        // 先检查是否有处理过的内容（可能包含图片）
-        if (result.processedContent && result.processedContent.images && result.processedContent.images.length > 0) {
-          // 如果响应中包含图片，使用第一张图片
-          const firstImage = result.processedContent.images[0];
-          if (firstImage.type === 'url') {
-            await setGeneratedImageWithPreload(firstImage.data);
-          } else if (firstImage.type === 'base64') {
-            // 将base64转换为data URL
-            const dataUrl = `data:image/png;base64,${firstImage.data}`;
-            await setGeneratedImageWithPreload(dataUrl);
-          }
-        } else {
-          // 尝试从文本响应中提取图片URL
-          const urlMatch = responseContent.match(/https?:\/\/[^\s<>"'\n]+/);
-          if (urlMatch) {
-            const imageUrl = urlMatch[0].replace(/[.,;!?]*$/, ''); // 移除末尾的标点符号
-            console.log('Extracted URL:', imageUrl);
-            await setGeneratedImageWithPreload(imageUrl);
-          } else {
-            setError(
-              language === 'zh' 
-                ? `聊天API无法生成图像。响应: ${responseContent.substring(0, 100)}...` 
-                : `Chat API unable to generate image. Response: ${responseContent.substring(0, 100)}...`
-            );
-          }
+      // 创建任务参数
+      const taskParams = {
+        prompt: prompt.trim(),
+        width: finalWidth,
+        height: finalHeight,
+        // 保存上传的图片（已转换为可序列化的格式）
+        uploadedImages: convertedImages
+      };
+
+      // 创建任务并添加到队列
+      const task = createTask(taskParams, TaskType.IMAGE);
+
+      if (task) {
+        // 任务创建成功
+        MessagePlugin.success(
+          language === 'zh'
+            ? '任务已添加到队列，将在后台生成'
+            : 'Task added to queue, will be generated in background'
+        );
+
+        // 保存任务ID到对话框任务列表
+        setDialogTaskIds(prev => [...prev, task.id]);
+
+        // 保存提示词到历史记录
+        savePromptToHistory(prompt);
+
+        // 完全清空表单（prompt、参考图、预览）
+        setPrompt('');
+        setUploadedImages([]);
+        setGeneratedImage(null);
+        setError(null);
+
+        // 清除缓存
+        try {
+          localStorage.removeItem(PREVIEW_CACHE_KEY);
+        } catch (error) {
+          console.warn('Failed to clear cache:', error);
         }
-      }
-    } catch (err) {
-      console.error('AI image generation error:', err);
-      const errorMessage = err instanceof Error ? err.message : String(err);
-      
-      if (isInvalidTokenError(errorMessage)) {
-        const apiKeyError = await handleApiKeyError(errorMessage, language);
-        if (apiKeyError) {
-          setError(apiKeyError);
-        }
-        // If apiKeyError is null, it means API key was successfully updated, don't clear the error here
-        // The user can try generating again
       } else {
-        // Show the actual error message for non-API key errors
+        // 任务创建失败（可能是重复提交）
         setError(
           language === 'zh' 
-            ? `图像生成失败: ${errorMessage}` 
-            : `Image generation failed: ${errorMessage}`
+            ? '任务创建失败，请检查参数或稍后重试' 
+            : 'Failed to create task, please check parameters or try again later'
         );
       }
-    } finally {
-      updateIsGenerating(false);
+    } catch (err: any) {
+      console.error('Failed to create task:', err);
+      setError(
+        language === 'zh' 
+          ? `创建任务失败: ${err.message}` 
+          : `Failed to create task: ${err.message}`
+      );
     }
   };
 
@@ -385,7 +351,7 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
       <div className="main-content">
         {/* AI 图像生成表单 */}
         <div className="ai-image-generation-section">
-        <div className="ai-image-generation-form">
+          <div className="ai-image-generation-form">
           
           {!useImageAPI && (
             <ImageUpload
@@ -408,192 +374,20 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
             onError={setError}
           />
           
-          {/* 图片尺寸选择 */}
-          {/* <div className="form-field">
-            <label className="form-label">
-              {language === 'zh' ? '图片尺寸' : 'Image Size'}
-            </label>
-            <div className="size-inputs">
-              <div className="size-input-row">
-                <label className="size-label">
-                  {language === 'zh' ? '宽度' : 'Width'}
-                </label>
-                <input
-                  type="number"
-                  className="size-input"
-                  value={width}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    if (value === '') {
-                      setWidth('');
-                    } else {
-                      const numValue = parseInt(value);
-                      if (!isNaN(numValue) && numValue >= 0) {
-                        setWidth(Math.min(2048, numValue));
-                      }
-                    }
-                  }}
-                  onBlur={(e) => {
-                    const value = e.target.value;
-                    if (value === '' || isNaN(parseInt(value)) || parseInt(value) < 256) {
-                      setWidth(1024);
-                    } else {
-                      const numValue = Math.max(256, Math.min(2048, parseInt(value)));
-                      setWidth(numValue);
-                    }
-                  }}
-                  min="256"
-                  max="2048"
-                  disabled={isGenerating}
-                />
-              </div>
-              <div className="size-input-row">
-                <label className="size-label">
-                  {language === 'zh' ? '高度' : 'Height'}
-                </label>
-                <input
-                  type="number"
-                  className="size-input"
-                  value={height}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    if (value === '') {
-                      setHeight('');
-                    } else {
-                      const numValue = parseInt(value);
-                      if (!isNaN(numValue) && numValue >= 0) {
-                        setHeight(Math.min(2048, numValue));
-                      }
-                    }
-                  }}
-                  onBlur={(e) => {
-                    const value = e.target.value;
-                    if (value === '' || isNaN(parseInt(value)) || parseInt(value) < 256) {
-                      setHeight(1024);
-                    } else {
-                      const numValue = Math.max(256, Math.min(2048, parseInt(value)));
-                      setHeight(numValue);
-                    }
-                  }}
-                  min="256"
-                  max="2048"
-                  disabled={isGenerating}
-                />
-                <div className="size-shortcuts-tooltip">
-                  <span className="tooltip-trigger">📐</span>
-                  <div className="tooltip-content">
-                    <div className="tooltip-header">
-                      {language === 'zh' ? '常用尺寸' : 'Common Sizes'}
-                    </div>
-                    <div className="shortcuts-grid">
-                      <button
-                        type="button"
-                        className="shortcut-button"
-                        onClick={() => { setWidth(512); setHeight(512); }}
-                        disabled={isGenerating}
-                      >
-                        512×512
-                      </button>
-                      <button
-                        type="button"
-                        className="shortcut-button"
-                        onClick={() => { setWidth(768); setHeight(768); }}
-                        disabled={isGenerating}
-                      >
-                        768×768
-                      </button>
-                      <button
-                        type="button"
-                        className="shortcut-button"
-                        onClick={() => { setWidth(1024); setHeight(1024); }}
-                        disabled={isGenerating}
-                      >
-                        1024×1024
-                      </button>
-                      <button
-                        type="button"
-                        className="shortcut-button"
-                        onClick={() => { setWidth(1024); setHeight(768); }}
-                        disabled={isGenerating}
-                      >
-                        1024×768
-                      </button>
-                      <button
-                        type="button"
-                        className="shortcut-button"
-                        onClick={() => { setWidth(1280); setHeight(720); }}
-                        disabled={isGenerating}
-                      >
-                        1280×720
-                      </button>
-                      <button
-                        type="button"
-                        className="shortcut-button"
-                        onClick={() => { setWidth(1920); setHeight(1080); }}
-                        disabled={isGenerating}
-                      >
-                        1920×1080
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div> */}
-          
-          {/* API 模式选择 */}
-          {/* <div className="form-field">
-            <label className="form-label">
-              {language === 'zh' ? 'API 模式' : 'API Mode'}
-            </label>
-            <div className="api-mode-selector">
-              <label className="api-mode-option">
-                <input
-                  type="radio"
-                  name="api-mode"
-                  checked={useImageAPI}
-                  onChange={() => setUseImageAPI(true)}
-                  disabled={isGenerating}
-                />
-                <span className="api-mode-label">
-                  {language === 'zh' ? '图像生成API' : 'Image Generation API'}
-                </span>
-                <span className="api-mode-desc">
-                  {language === 'zh' ? '(images/generations)' : '(images/generations)'}
-                </span>
-              </label>
-              <label className="api-mode-option">
-                <input
-                  type="radio"
-                  name="api-mode"
-                  checked={!useImageAPI}
-                  onChange={() => setUseImageAPI(false)}
-                  disabled={isGenerating}
-                />
-                <span className="api-mode-label">
-                  {language === 'zh' ? '聊天API' : 'Chat API'}
-                </span>
-                <span className="api-mode-desc">
-                  {language === 'zh' ? '(chat/completions)' : '(chat/completions)'}
-                </span>
-              </label>
-            </div>
-          </div> */}
-          
-          <ErrorDisplay error={error} />
+            <ErrorDisplay error={error} />
+          </div>
+
+          <ActionButtons
+            language={language}
+            type="image"
+            isGenerating={isGenerating}
+            hasGenerated={!!generatedImage}
+            canGenerate={!!prompt.trim()}
+            onGenerate={handleGenerate}
+            onReset={handleReset}
+          />
+
         </div>
-        
-        <ActionButtons
-          language={language}
-          type="image"
-          isGenerating={isGenerating}
-          hasGenerated={!!generatedImage}
-          canGenerate={!!prompt.trim()}
-          onGenerate={handleGenerate}
-          onReset={handleReset}
-        />
-        
-      </div>
       
       {/* 预览区域 */}
       <div className="preview-section">
@@ -608,9 +402,9 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
           
           {generatedImage && (
             <div className="preview-image-wrapper">
-              <img 
-                src={generatedImage} 
-                alt="Generated" 
+              <img
+                src={generatedImage}
+                alt="Generated"
                 className="preview-image"
                 loading="eager"
                 decoding="async"
@@ -621,14 +415,9 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
               />
             </div>
           )}
-              {/* 统一历史记录组件 */}
-              <GenerationHistory
-                historyItems={historyItems}
-                onSelectFromHistory={handleSelectFromHistory}
-              />
 
         </div>
-        
+
         {/* 插入和清除按钮区域 */}
         {generatedImage && (
           <div className="section-actions">
@@ -655,10 +444,10 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
                     // 调试：检查当前选中状态
                     const currentSelectedElements = board ? getSelectedElements(board) : [];
                     console.log('Current selected elements:', currentSelectedElements.length, currentSelectedElements);
-                    console.log('Saved selected element IDs:', selectedElementIds);
+                    console.log('Saved selected element IDs:', savedSelectedElementIds);
 
                     // 计算参考尺寸（用于适应选中元素的大小）
-                    const referenceDimensions = getReferenceDimensionsFromIds(board, selectedElementIds);
+                    const referenceDimensions = getReferenceDimensionsFromIds(board, savedSelectedElementIds);
                     console.log('Reference dimensions for image insertion:', referenceDimensions);
 
                     // 计算插入位置
@@ -690,19 +479,68 @@ const AIImageGeneration = ({ initialPrompt = '', initialImages = [], selectedEle
                 }
               }}
               disabled={isGenerating || imageLoading}
+              className="action-button primary"
+            >
+              {imageLoading
+                ? (language === 'zh' ? '加载中...' : 'Loading...')
+                : (language === 'zh' ? '插入图片' : 'Insert Image')
+              }
+            </button>
+            <button
+              onClick={async () => {
+                if (generatedImage) {
+                  try {
+                    // Extract file extension from URL
+                    let format = 'png';
+                    try {
+                      const urlPath = new URL(generatedImage).pathname;
+                      const ext = urlPath.substring(urlPath.lastIndexOf('.') + 1).toLowerCase();
+                      if (ext && ['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(ext)) {
+                        format = ext;
+                      }
+                    } catch (e) {
+                      // Keep default format
+                    }
+
+                    await downloadMediaFile(
+                      generatedImage,
+                      generatedImagePrompt || 'image',
+                      format,
+                      'image'
+                    );
+                    MessagePlugin.success(language === 'zh' ? '下载成功' : 'Download successful');
+                  } catch (err) {
+                    console.error('Download failed:', err);
+                    MessagePlugin.error(
+                      language === 'zh'
+                        ? '下载失败，请重试'
+                        : 'Download failed, please try again'
+                    );
+                  }
+                }
+              }}
+              disabled={isGenerating || imageLoading}
               className="action-button secondary"
             >
               {imageLoading
                 ? (language === 'zh' ? '加载中...' : 'Loading...')
-                : (language === 'zh' ? '插入' : 'Insert')
+                : (language === 'zh' ? '下载' : 'Download')
               }
             </button>
+
           </div>
         )}
-        
+            {/* 统一历史记录组件 */}
+            <GenerationHistory
+              historyItems={imageHistory}
+              onSelectFromHistory={handleSelectFromHistory}
+            />
       </div>
       </div>
-      
+
+
+      {/* 对话框任务列表 - 只显示本次对话框生成的任务 */}
+      <DialogTaskList taskIds={dialogTaskIds} taskType={TaskType.IMAGE} />
     </div>
   );
 };

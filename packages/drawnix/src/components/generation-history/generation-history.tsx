@@ -16,6 +16,7 @@ export interface ImageHistoryItem extends BaseHistoryItem {
   imageUrl: string;
   width: number;
   height: number;
+  uploadedImages?: Array<{ url: string; name: string }>; // 参考图片
 }
 
 // 视频历史记录项接口（适配图片格式）
@@ -27,6 +28,7 @@ export interface VideoHistoryItem extends BaseHistoryItem {
   // 视频特有字段
   previewUrl: string;
   downloadUrl?: string;
+  uploadedImage?: { url: string; name: string }; // 参考图片
 }
 
 // 联合类型
@@ -47,7 +49,7 @@ export interface GenerationHistoryProps {
 export const GenerationHistory: React.FC<GenerationHistoryProps> = ({
   historyItems,
   onSelectFromHistory,
-  position = { bottom: '8px', right: '8px' },
+  position = { bottom: '3px', right: '3px' },
   className = ''
 }) => {
   const { language } = useI18n();
@@ -79,16 +81,9 @@ export const GenerationHistory: React.FC<GenerationHistoryProps> = ({
             // 视频类型，使用统一的 imageUrl 字段
             item.imageUrl ? (
               <div className="history-video-thumbnail">
-                <img
-                  src={item.imageUrl}
-                  alt="Video thumbnail"
-                  className="history-item-image"
-                  loading="lazy"
-                />
-                <div className="video-play-overlay">
-                  <div className="play-icon">▶</div>
-                </div>
+                <video src={item.imageUrl }/>
               </div>
+
             ) : (
               <div className="history-item-image history-video-placeholder">
                 <div className="placeholder-icon">🎬</div>
@@ -147,16 +142,8 @@ export const GenerationHistory: React.FC<GenerationHistoryProps> = ({
             </button>
           </div>
           <div className="history-list">
-            {historyItems.slice(0, 10).map(renderHistoryItem)}
+            {historyItems.map(renderHistoryItem)}
           </div>
-          {historyItems.length > 10 && (
-            <div className="history-more-info">
-              {language === 'zh' 
-                ? `还有 ${historyItems.length - 10} 个项目...`
-                : `${historyItems.length - 10} more items...`
-              }
-            </div>
-          )}
         </div>
       )}
     </div>

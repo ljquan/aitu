@@ -523,11 +523,27 @@ export const extractSelectedContent = (board: PlaitBoard): ExtractedContent => {
 /**
  * Process selected elements according to new AI image generation rules
  * This implements the logic for handling graphics elements with overlap detection
+ * @param board - The PlaitBoard instance
+ * @param selectedElementIds - Optional array of element IDs to process. If not provided, uses currently selected elements.
  */
-export const processSelectedContentForAI = async (board: PlaitBoard): Promise<ProcessedContent> => {
-  const selectedElements = getSelectedElements(board);
-  console.log('processSelectedContentForAI: Selected elements count:', selectedElements.length);
-  
+export const processSelectedContentForAI = async (
+  board: PlaitBoard,
+  selectedElementIds?: string[]
+): Promise<ProcessedContent> => {
+  let selectedElements: PlaitElement[];
+
+  if (selectedElementIds && selectedElementIds.length > 0) {
+    // 使用提供的元素IDs查找元素
+    selectedElements = selectedElementIds
+      .map(id => board.children.find((el: any) => el.id === id))
+      .filter(Boolean) as PlaitElement[];
+    console.log('processSelectedContentForAI: Using provided element IDs, found elements:', selectedElements.length);
+  } else {
+    // 回退到当前选中的元素
+    selectedElements = getSelectedElements(board);
+    console.log('processSelectedContentForAI: Using currently selected elements:', selectedElements.length);
+  }
+
   // Sort elements by position (left to right, top to bottom)
   const sortedElements = sortElementsByPosition(board, selectedElements);
   console.log('Elements sorted by position');

@@ -1,8 +1,56 @@
 import {
   PlaitBoard,
   Point,
+  getRectangleByElements,
 } from '@plait/core';
 import { getInsertionPointForSelectedElements } from '../utils/selection-utils';
+
+/**
+ * 从保存的选中元素IDs计算插入点
+ * @param board - PlaitBoard实例
+ * @param videoWidth - 视频宽度,用于调整X坐标使视频居中
+ * @returns 插入点坐标,如果没有保存的选中元素则返回undefined
+ */
+const getInsertionPointFromSavedSelection = (
+  board: PlaitBoard,
+  videoWidth: number
+): Point | undefined => {
+  const appState = (board as any).appState;
+  const savedElementIds = appState?.lastSelectedElementIds || [];
+
+  if (savedElementIds.length === 0) {
+    return undefined;
+  }
+
+  // 查找对应的元素
+  const elements = savedElementIds
+    .map((id: string) => board.children.find((el: any) => el.id === id))
+    .filter(Boolean);
+
+  if (elements.length === 0) {
+    console.warn('getInsertionPointFromSavedSelection (video): No elements found for saved IDs:', savedElementIds);
+    return undefined;
+  }
+
+  try {
+    const boundingRect = getRectangleByElements(board, elements, false);
+    const centerX = boundingRect.x + boundingRect.width / 2;
+    const insertionY = boundingRect.y + boundingRect.height + 50;
+
+    console.log('getInsertionPointFromSavedSelection (video): Calculated insertion point:', {
+      centerX,
+      insertionY,
+      boundingRect,
+      videoWidth
+    });
+
+    // 将X坐标向左偏移视频宽度的一半，让视频以中心点对齐
+    return [centerX - videoWidth / 2, insertionY] as Point;
+  } catch (error) {
+    console.warn('getInsertionPointFromSavedSelection (video): Error calculating insertion point:', error);
+    return undefined;
+  }
+};
 
 /**
  * 获取视频真实尺寸的接口
@@ -28,7 +76,8 @@ export const getVideoDimensions = (videoUrl: string): Promise<VideoDimensions> =
   
   const promise = new Promise<VideoDimensions>((resolve) => {
     const video = document.createElement('video');
-    video.crossOrigin = 'anonymous';
+    // Remove crossOrigin to avoid CORS issues with external video URLs
+    // video.crossOrigin = 'anonymous';
     video.muted = true;
     video.playsInline = true;
     
@@ -196,16 +245,24 @@ export const insertVideoFromUrl = async (
 
     // 计算插入位置
     let insertionPoint = startPoint;
-    if (!startPoint && !isDrop) {
-      const calculatedPoint = getInsertionPointForSelectedElements(board);
-      if (calculatedPoint) {
-        // 调整X坐标，让视频以计算点为中心左右居中显示
-        insertionPoint = [calculatedPoint[0] - displayDimensions.width / 2, calculatedPoint[1]] as Point;
+
+    // 如果提供了起始点(startPoint),它应该是选中元素的中心点
+    // 需要将X坐标向左偏移视频宽度的一半,让视频以中心点对齐
+    if (insertionPoint && !isDrop) {
+      insertionPoint = [insertionPoint[0] - displayDimensions.width / 2, insertionPoint[1]] as Point;
+      console.log('insertVideoFromUrl: Adjusted insertion point for video centering:', insertionPoint);
+    } else if (!startPoint && !isDrop) {
+      // 没有提供起始点时,优先使用保存的选中元素IDs计算插入位置
+      insertionPoint = getInsertionPointFromSavedSelection(board, displayDimensions.width);
+
+      // 如果没有保存的选中元素,回退到使用当前选中元素(向后兼容)
+      if (!insertionPoint) {
+        const calculatedPoint = getInsertionPointForSelectedElements(board);
+        if (calculatedPoint) {
+          // 调整X坐标，让视频以计算点为中心左右居中显示
+          insertionPoint = [calculatedPoint[0] - displayDimensions.width / 2, calculatedPoint[1]] as Point;
+        }
       }
-    } else if (startPoint) {
-      // 如果传入了具体的插入点，需要判断这个点是否已经是期望的左上角位置
-      // 从AI视频生成对话框传入的点是中心点，需要调整为左上角位置
-      insertionPoint = [startPoint[0] - displayDimensions.width / 2, startPoint[1]] as Point;
     }
 
     // 如果没有计算出插入位置，使用默认位置

@@ -5,6 +5,7 @@
 import { GeminiConfig, GeminiMessage, GeminiResponse, VideoGenerationOptions } from './types';
 import { DEFAULT_CONFIG, VIDEO_DEFAULT_CONFIG } from './config';
 import { isQuotaExceededError, isTimeoutError } from './utils';
+import { analytics } from '../umami-analytics';
 
 /**
  * 使用原始 fetch 调用聊天 API
@@ -13,32 +14,79 @@ export async function callApiRaw(
   config: GeminiConfig,
   messages: GeminiMessage[],
 ): Promise<GeminiResponse> {
+  const startTime = Date.now();
+  const model = config.modelName || 'gemini-2.5-flash-image-vip';
+  const endpoint = '/chat/completions';
+
+  // Track API call start
+  analytics.trackAPICallStart({
+    endpoint,
+    model,
+    messageCount: messages.length,
+    stream: false,
+  });
+
   const headers = {
     'Authorization': `Bearer ${config.apiKey}`,
     'Content-Type': 'application/json',
   };
 
   const data = {
-    model: config.modelName || 'gemini-2.5-flash-image-vip',
+    model,
     messages,
     stream: false,
   };
 
-  const url = `${config.baseUrl}/chat/completions`;
+  const url = `${config.baseUrl}${endpoint}`;
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(data),
-    signal: AbortSignal.timeout(config.timeout || DEFAULT_CONFIG.timeout!),
-  });
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(data),
+      signal: AbortSignal.timeout(config.timeout || DEFAULT_CONFIG.timeout!),
+    });
 
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    if (!response.ok) {
+      const duration = Date.now() - startTime;
+      analytics.trackAPICallFailure({
+        endpoint,
+        model,
+        duration,
+        error: response.statusText,
+        httpStatus: response.status,
+        stream: false,
+      });
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    // 处理非流式响应
+    const result = await response.json();
+    const duration = Date.now() - startTime;
+
+    analytics.trackAPICallSuccess({
+      endpoint,
+      model,
+      duration,
+      responseLength: result.choices?.[0]?.message?.content?.length,
+      stream: false,
+    });
+
+    return result;
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    const errorMessage = error instanceof Error ? error.message : String(error);
+
+    analytics.trackAPICallFailure({
+      endpoint,
+      model,
+      duration,
+      error: errorMessage,
+      stream: false,
+    });
+
+    throw error;
   }
-
-  // 处理非流式响应
-  return await response.json();
 }
 
 /**
@@ -48,12 +96,24 @@ export async function callApiStreamRaw(
   config: GeminiConfig,
   messages: GeminiMessage[],
 ): Promise<GeminiResponse> {
+  const startTime = Date.now();
+  const model = config.modelName || 'gemini-2.5-flash-image-vip';
+  const endpoint = '/chat/completions';
+
+  // Track API call start
+  analytics.trackAPICallStart({
+    endpoint,
+    model,
+    messageCount: messages.length,
+    stream: true,
+  });
+
   const headers = {
     'Authorization': `Bearer ${config.apiKey}`,
     'Content-Type': 'application/json',
   };
   const data = {
-    model: config.modelName || 'gemini-2.5-flash-image-vip',
+    model,
     messages,
     presence_penalty: 0,
     temperature: 0.5,
@@ -61,69 +121,102 @@ export async function callApiStreamRaw(
     stream: true,
   };
 
-  const url = `${config.baseUrl}/chat/completions`;
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(data),
-    signal: AbortSignal.timeout(config.timeout || DEFAULT_CONFIG.timeout!),
-  });
-
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-  }
-
-  // 处理流式响应
-  const reader = response.body?.getReader();
-  if (!reader) {
-    throw new Error('无法获取响应流');
-  }
-
-  const decoder = new TextDecoder();
-  let fullContent = '';
+  const url = `${config.baseUrl}${endpoint}`;
 
   try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(data),
+      signal: AbortSignal.timeout(config.timeout || DEFAULT_CONFIG.timeout!),
+    });
 
-      const chunk = decoder.decode(value, { stream: true });
-      const lines = chunk.split('\n');
+    if (!response.ok) {
+      const duration = Date.now() - startTime;
+      analytics.trackAPICallFailure({
+        endpoint,
+        model,
+        duration,
+        error: response.statusText,
+        httpStatus: response.status,
+        stream: true,
+      });
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
 
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const data = line.slice(6).trim();
-          if (data === '[DONE]') {
-            break;
-          }
+    // 处理流式响应
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error('无法获取响应流');
+    }
 
-          try {
-            const parsed = JSON.parse(data);
-            const content = parsed.choices?.[0]?.delta?.content;
-            if (content) {
-              fullContent += content;
+    const decoder = new TextDecoder();
+    let fullContent = '';
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6).trim();
+            if (data === '[DONE]') {
+              break;
             }
-          } catch (e) {
-            // 忽略解析错误的数据块
-            console.warn('解析流式数据块失败:', e);
+
+            try {
+              const parsed = JSON.parse(data);
+              const content = parsed.choices?.[0]?.delta?.content;
+              if (content) {
+                fullContent += content;
+              }
+            } catch (e) {
+              // 忽略解析错误的数据块
+              console.warn('解析流式数据块失败:', e);
+            }
           }
         }
       }
+    } finally {
+      reader.releaseLock();
     }
-  } finally {
-    reader.releaseLock();
-  }
 
-  // 返回标准格式的响应
-  return {
-    choices: [{
-      message: {
-        role: 'assistant',
-        content: fullContent
-      }
-    }]
-  };
+    const duration = Date.now() - startTime;
+    analytics.trackAPICallSuccess({
+      endpoint,
+      model,
+      duration,
+      responseLength: fullContent.length,
+      stream: true,
+    });
+
+    // 返回标准格式的响应
+    return {
+      choices: [{
+        message: {
+          role: 'assistant',
+          content: fullContent
+        }
+      }]
+    };
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    const errorMessage = error instanceof Error ? error.message : String(error);
+
+    analytics.trackAPICallFailure({
+      endpoint,
+      model,
+      duration,
+      error: errorMessage,
+      stream: true,
+    });
+
+    throw error;
+  }
 }
 
 /**
@@ -134,6 +227,18 @@ export async function callVideoApiStreamRaw(
   messages: GeminiMessage[],
   options: VideoGenerationOptions = {}
 ): Promise<GeminiResponse> {
+  const startTime = Date.now();
+  const model = config.modelName || VIDEO_DEFAULT_CONFIG.modelName;
+  const endpoint = '/chat/completions';
+
+  // Track API call start
+  analytics.trackAPICallStart({
+    endpoint,
+    model,
+    messageCount: messages.length + 1, // +1 for system message
+    stream: true,
+  });
+
   const headers = {
     'Authorization': `Bearer ${config.apiKey}`,
     'Content-Type': 'application/json',
@@ -144,13 +249,13 @@ export async function callVideoApiStreamRaw(
     role: 'user',
     content: [{
       type: 'text',
-      text: `You are Video Creator.\nCurrent model: ${config.modelName || VIDEO_DEFAULT_CONFIG.modelName}\nCurrent time: ${new Date().toLocaleString()}\nLatex inline: $x^2$\nLatex block: $e=mc^2$`
+      text: `You are Video Creator.\nCurrent model: ${model}\nCurrent time: ${new Date().toLocaleString()}\nLatex inline: $x^2$\nLatex block: $e=mc^2$`
     }]
   };
 
   const data = {
     max_tokens: options.max_tokens || 1024,
-    model: config.modelName || VIDEO_DEFAULT_CONFIG.modelName,
+    model,
     temperature: options.temperature || 0.5,
     top_p: options.top_p || 1,
     presence_penalty: options.presence_penalty || 0,
@@ -159,69 +264,102 @@ export async function callVideoApiStreamRaw(
     stream: true,
   };
 
-  const url = `${config.baseUrl}/chat/completions`;
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(data),
-    signal: AbortSignal.timeout(config.timeout || VIDEO_DEFAULT_CONFIG.timeout!),
-  });
-
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-  }
-
-  // 处理流式响应
-  const reader = response.body?.getReader();
-  if (!reader) {
-    throw new Error('无法获取响应流');
-  }
-
-  const decoder = new TextDecoder();
-  let fullContent = '';
+  const url = `${config.baseUrl}${endpoint}`;
 
   try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(data),
+      signal: AbortSignal.timeout(config.timeout || VIDEO_DEFAULT_CONFIG.timeout!),
+    });
 
-      const chunk = decoder.decode(value, { stream: true });
-      const lines = chunk.split('\n');
+    if (!response.ok) {
+      const duration = Date.now() - startTime;
+      analytics.trackAPICallFailure({
+        endpoint,
+        model,
+        duration,
+        error: response.statusText,
+        httpStatus: response.status,
+        stream: true,
+      });
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
 
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const data = line.slice(6).trim();
-          if (data === '[DONE]') {
-            break;
-          }
+    // 处理流式响应
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error('无法获取响应流');
+    }
 
-          try {
-            const parsed = JSON.parse(data);
-            const content = parsed.choices?.[0]?.delta?.content;
-            if (content) {
-              fullContent += content;
+    const decoder = new TextDecoder();
+    let fullContent = '';
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6).trim();
+            if (data === '[DONE]') {
+              break;
             }
-          } catch (e) {
-            // 忽略解析错误的数据块
-            console.warn('解析流式数据块失败:', e);
+
+            try {
+              const parsed = JSON.parse(data);
+              const content = parsed.choices?.[0]?.delta?.content;
+              if (content) {
+                fullContent += content;
+              }
+            } catch (e) {
+              // 忽略解析错误的数据块
+              console.warn('解析流式数据块失败:', e);
+            }
           }
         }
       }
+    } finally {
+      reader.releaseLock();
     }
-  } finally {
-    reader.releaseLock();
-  }
 
-  // 返回标准格式的响应
-  return {
-    choices: [{
-      message: {
-        role: 'assistant',
-        content: fullContent
-      }
-    }]
-  };
+    const duration = Date.now() - startTime;
+    analytics.trackAPICallSuccess({
+      endpoint,
+      model,
+      duration,
+      responseLength: fullContent.length,
+      stream: true,
+    });
+
+    // 返回标准格式的响应
+    return {
+      choices: [{
+        message: {
+          role: 'assistant',
+          content: fullContent
+        }
+      }]
+    };
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    const errorMessage = error instanceof Error ? error.message : String(error);
+
+    analytics.trackAPICallFailure({
+      endpoint,
+      model,
+      duration,
+      error: errorMessage,
+      stream: true,
+    });
+
+    throw error;
+  }
 }
 
 /**
@@ -233,6 +371,8 @@ export async function callApiWithRetry(
 ): Promise<GeminiResponse> {
   const maxRetries = config.maxRetries || DEFAULT_CONFIG.maxRetries!;
   const retryDelay = config.retryDelay || DEFAULT_CONFIG.retryDelay!;
+  const model = config.modelName || 'gemini-2.5-flash-image-vip';
+  const endpoint = '/chat/completions';
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
@@ -247,6 +387,14 @@ export async function callApiWithRetry(
       // 检查是否为配额超出错误或超时错误
       if (isQuotaExceededError(errorMessage) || isTimeoutError(errorMessage)) {
         if (attempt < maxRetries - 1) {
+          // Track retry
+          analytics.trackAPICallRetry({
+            endpoint,
+            model,
+            attempt: attempt + 1,
+            reason: isQuotaExceededError(errorMessage) ? 'QUOTA_EXCEEDED' : 'TIMEOUT',
+          });
+
           if (retryDelay > 0) {
             console.log(`将在 ${retryDelay}ms 后进行第 ${attempt + 2} 次重试...`);
             await new Promise(resolve => setTimeout(resolve, retryDelay));
