@@ -1,25 +1,75 @@
-<p align="center">
-  <picture style="width: 320px">
-    <source media="(prefers-color-scheme: light)" srcset="https://github.com/ljquan/aitu/blob/develop/apps/web/public/logo/logo_drawnix_h.svg?raw=true" />
-    <source media="(prefers-color-scheme: dark)" srcset="https://github.com/ljquan/aitu/blob/develop/apps/web/public/logo/logo_drawnix_h_dark.svg?raw=true" />
-    <img src="https://github.com/ljquan/aitu/blob/develop/apps/web/public/logo/logo_drawnix_h.svg?raw=true" width="360" alt="Drawnix logo and name" />
-  </picture>
-</p>
 <div align="center">
-  <h2>
-    爱图 - AI图片视频创作（SaaS），一体化白板，包含思维导图、流程图、自由画等
-  <br />
-  </h2>
+  <h1>
+    爱图 (Aitu)
+  </h1>
+  <h3>
+    AI图片视频创作（SaaS） + 一体化白板
+  </h3>
+  <p>
+    思维导图 · 流程图 · 自由画 · AI生图 · AI生视频
+  </p>
 </div>
 
 <div align="center">
   <figure>
     <a target="_blank" rel="noopener">
-      <img src="https://github.com/ljquan/aitu/blob/develop/apps/web/public/product_showcase/case-2.png" alt="Product showcase" width="80%" />
+      <img src="https://github.com/ljquan/aitu/blob/develop/apps/web/public/product_showcase/aitu-01.png?raw=true" alt="提示词图像概率" width="100%" />
     </a>
     <figcaption>
       <p align="center">
-        All in one 白板，思维导图、流程图、自由画等
+        提示词 + 图像 概括一体
+      </p>
+    </figcaption>
+  </figure>
+</div>
+
+<div align="center">
+  <figure>
+    <a target="_blank" rel="noopener">
+      <img src="https://github.com/ljquan/aitu/blob/develop/apps/web/public/product_showcase/aitu-02.png?raw=true" alt="AI 图片生成" width="100%" />
+    </a>
+    <figcaption>
+      <p align="center">
+        AI 图片生成 - 质的创作飞跃
+      </p>
+    </figcaption>
+  </figure>
+</div>
+
+<div align="center">
+  <figure>
+    <a target="_blank" rel="noopener">
+      <img src="https://github.com/ljquan/aitu/blob/develop/apps/web/public/product_showcase/aitu-03.png?raw=true" alt="任务处理" width="100%" />
+    </a>
+    <figcaption>
+      <p align="center">
+        任务处理 - 批量生成
+      </p>
+    </figcaption>
+  </figure>
+</div>
+
+<div align="center">
+  <figure>
+    <a target="_blank" rel="noopener">
+      <img src="https://github.com/ljquan/aitu/blob/develop/apps/web/public/product_showcase/aitu-04.png?raw=true" alt="效果展示" width="100%" />
+    </a>
+    <figcaption>
+      <p align="center">
+        效果展示
+      </p>
+    </figcaption>
+  </figure>
+</div>
+
+<div align="center">
+  <figure>
+    <a target="_blank" rel="noopener">
+      <img src="https://github.com/ljquan/aitu/blob/develop/apps/web/public/product_showcase/case-2.png?raw=true" alt="流程图与自由画" width="100%" />
+    </a>
+    <figcaption>
+      <p align="center">
+        All in one 白板 - 流程图、自由画、图片等多种创作方式
       </p>
     </figcaption>
   </figure>
@@ -29,19 +79,30 @@
 
 ## 特性
 
-- 💯 免费 + 开源
-- ⚒️ 思维导图、流程图
-- 🖌 画笔
-- 😀 插入图片
-- 🚀 基于插件机制
-- 🖼️ 📃 导出为 PNG, JSON(`.drawnix`)
-- 💾 自动保存（浏览器缓存）
-- ⚡ 编辑特性：撤销、重做、复制、粘贴等
-- 🌌 无限画布：缩放、滚动
-- 🎨 主题模式
-- 📱 移动设备适配
-- 📈 支持 mermaid 语法转流程图
-- ✨ 支持 markdown 文本转思维导图（新支持 🔥🔥🔥）
+### AI 创作能力
+- **AI 图像生成** - 支持多种图像生成模型（Gemini 2.5/3.0 系列），文本转图像、图像参考生成 🔥🔥🔥
+- **AI 视频生成** - 支持视频生成模型，将静态图像转化为动态视频 🔥🔥🔥
+- **模型自由切换** - 在生成对话框中即时切换不同的 AI 模型
+- **任务队列管理** - 异步任务处理，支持批量生成、任务重试、历史记录
+
+### 白板与可视化
+- **思维导图** - 快速构建思维导图，支持多种布局和样式
+- **流程图** - 专业的流程图绘制，支持 Mermaid 语法转换
+- **自由画笔** - 手绘创作，支持多种画笔工具
+- **图片插入** - 支持插入和编辑图片元素
+- **Markdown 转思维导图** - 文本快速转换为可视化结构
+
+### 编辑与交互
+- **丰富的编辑功能** - 撤销、重做、复制、粘贴、多选等
+- **无限画布** - 自由缩放、滚动、移动
+- **自动保存** - 本地浏览器自动保存，数据不丢失
+- **多格式导出** - 支持 PNG、JSON(`.drawnix`) 等格式导出
+
+### 体验与生态
+- **完全免费 + 开源** - MIT 许可证，可商用
+- **插件化架构** - 灵活扩展，支持自定义插件开发
+- **主题模式** - 支持亮色/暗色主题切换
+- **移动端适配** - 完美支持移动设备使用
 
 
 ## 关于名称
@@ -68,23 +129,54 @@
 ```
 aitu/
 ├── apps/
-│   ├── web                   # 爱图 Web 应用
-│   │    └── index.html       # HTML
-├── dist/                     # 构建产物
+│   └── web/                         # 爱图 Web 应用
+│       ├── src/                     # 应用源码
+│       ├── public/                  # 静态资源
+│       └── index.html               # 入口 HTML
 ├── packages/
-│   └── drawnix/              # 白板应用核心
-│   └── react-board/          # 白板 React 视图层
-│   └── react-text/           # 文本渲染模块
-├── package.json
-├── ...
-└── README.md
-└── README_en.md
-
+│   ├── drawnix/                     # 白板应用核心库
+│   │   ├── src/
+│   │   │   ├── components/          # React 组件
+│   │   │   │   ├── toolbar/         # 工具栏组件
+│   │   │   │   ├── ttd-dialog/      # AI 生成对话框
+│   │   │   │   ├── task-queue/      # 任务队列管理
+│   │   │   │   └── settings-dialog/ # 设置对话框
+│   │   │   ├── plugins/             # 功能插件
+│   │   │   │   ├── with-freehand.ts # 自由画笔插件
+│   │   │   │   ├── with-mind.ts     # 思维导图插件
+│   │   │   │   └── with-draw.ts     # 绘图插件
+│   │   │   ├── services/            # 业务服务
+│   │   │   │   ├── generation-api-service.ts  # AI 生成 API
+│   │   │   │   └── task-queue-service.ts      # 任务队列服务
+│   │   │   ├── hooks/               # React Hooks
+│   │   │   ├── utils/               # 工具函数
+│   │   │   │   ├── gemini-api/      # Gemini API 客户端
+│   │   │   │   └── settings-manager.ts # 设置管理
+│   │   │   └── types/               # TypeScript 类型定义
+│   ├── react-board/                 # Plait React 视图适配层
+│   └── react-text/                  # 文本渲染组件
+├── dist/                            # 构建产物目录
+├── docs/                            # 开发文档
+├── package.json                     # 项目配置
+├── nx.json                          # Nx 配置
+├── tsconfig.base.json               # TypeScript 基础配置
+└── README.md                        # 项目说明文档
 ```
+
+### 关键目录说明
+
+- **apps/web**: Web 应用入口，包含页面路由和全局配置
+- **packages/drawnix**: 核心白板库，包含所有核心功能和组件
+  - `components/`: UI 组件，包括工具栏、对话框、任务队列等
+  - `plugins/`: 功能插件，采用组合模式扩展编辑器能力
+  - `services/`: 业务服务层，处理 API 调用和状态管理
+  - `hooks/`: React Hooks，提供可复用的状态逻辑
+- **packages/react-board**: Plait 框架的 React 适配层
+- **packages/react-text**: 文本编辑和渲染组件
 
 ## 应用
 
-[*https://aitu.chat*](https://aitu.chat) 是 *爱图* 的在线应用。
+[*https://aitu.tu-zi.com*](https://aitu.tu-zi.com) 是 *爱图* 的在线应用。
 
 近期会高频迭代应用功能，持续优化用户体验。
 
@@ -92,7 +184,7 @@ aitu/
 ## 🚀 快速开始
 
 ### 在线体验
-直接访问 [aitu.chat](https://aitu.chat) 立即开始使用，无需安装任何软件。
+直接访问 [aitu.tu-zi.com](https://aitu.tu-zi.com) 立即开始使用，无需安装任何软件。
 
 ### 本地开发
 

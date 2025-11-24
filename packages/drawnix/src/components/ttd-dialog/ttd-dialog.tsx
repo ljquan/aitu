@@ -1,5 +1,5 @@
 import { Dialog, DialogContent } from '../dialog/dialog';
-import { Dialog as TDialog } from 'tdesign-react';
+import { Dialog as TDialog, Select } from 'tdesign-react';
 import MermaidToDrawnix from './mermaid-to-drawnix';
 import { DialogType, useDrawnix } from '../../hooks/use-drawnix';
 import MarkdownToDrawnix from './markdown-to-drawnix';
@@ -10,10 +10,12 @@ import { useBoard } from '@plait-board/react-board';
 import { useState, useEffect, useRef, memo } from 'react';
 import { processSelectedContentForAI, extractSelectedContent } from '../../utils/selection-utils';
 import { ATTACHED_ELEMENT_CLASS_NAME, getSelectedElements } from '@plait/core';
-import { 
+import {
   AI_IMAGE_GENERATION_PREVIEW_CACHE_KEY,
-  AI_VIDEO_GENERATION_PREVIEW_CACHE_KEY 
+  AI_VIDEO_GENERATION_PREVIEW_CACHE_KEY
 } from '../../constants/storage';
+import { IMAGE_MODEL_OPTIONS } from '../settings-dialog/settings-dialog';
+import { geminiSettings } from '../../utils/settings-manager';
 
 const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) => {
   const { appState, setAppState } = useDrawnix();
@@ -23,7 +25,38 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
   // 使用ref来防止多次并发处理
   const isProcessingRef = useRef(false);
   const processingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  
+
+  // 模型选择状态
+  const [selectedImageModel, setSelectedImageModel] = useState<string>('');
+  const [selectedVideoModel, setSelectedVideoModel] = useState<string>('');
+
+  // 加载当前模型设置
+  useEffect(() => {
+    const config = geminiSettings.get();
+    setSelectedImageModel(config.imageModelName || 'gemini-2.5-flash-image-vip');
+    setSelectedVideoModel(config.videoModelName || 'veo3');
+  }, []);
+
+  // 图片模型变更处理（同步更新到全局设置）
+  const handleImageModelChange = (value: string) => {
+    setSelectedImageModel(value);
+    const config = geminiSettings.get();
+    geminiSettings.update({
+      ...config,
+      imageModelName: value
+    });
+  };
+
+  // 视频模型变更处理（同步更新到全局设置）
+  const handleVideoModelChange = (value: string) => {
+    setSelectedVideoModel(value);
+    const config = geminiSettings.get();
+    geminiSettings.update({
+      ...config,
+      videoModelName: value
+    });
+  };
+
   // AI 图像生成的初始数据
   const [aiImageData, setAiImageData] = useState<{
     initialPrompt: string;
@@ -304,7 +337,21 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
           });
         }}
         attach={container ? () => container : undefined}
-        header={language === 'zh' ? 'AI 图像生成' : 'AI Image Generation'}
+        header={(
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <span>{language === 'zh' ? 'AI 图像生成' : 'AI Image Generation'}</span>
+            <Select
+              value={selectedImageModel}
+              onChange={(value) => handleImageModelChange(value as string)}
+              options={IMAGE_MODEL_OPTIONS}
+              size="small"
+              style={{ width: '260px' }}
+              placeholder="选择图片模型"
+              filterable
+              creatable
+            />
+          </div>
+        )}
         footer={false}
         width="80%"
         className={`ttd-dialog`}
@@ -352,7 +399,24 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
           });
         }}
         attach={container ? () => container : undefined}
-        header={language === 'zh' ? 'AI 视频生成' : 'AI Video Generation'}
+        header={(
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <span>{language === 'zh' ? 'AI 视频生成' : 'AI Video Generation'}</span>
+            <input
+              type="text"
+              value={selectedVideoModel}
+              onChange={(e) => handleVideoModelChange(e.target.value)}
+              placeholder="veo3"
+              style={{
+                width: '280px',
+                padding: '4px 12px',
+                borderRadius: '3px',
+                border: '1px solid #dcdcdc',
+                fontSize: '14px'
+              }}
+            />
+          </div>
+        )}
         footer={false}
         width="80%"
         className={`ttd-dialog`}

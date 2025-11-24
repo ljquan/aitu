@@ -7,10 +7,12 @@ import { geminiSettings } from '../../utils/settings-manager';
 import { Tooltip, Select } from 'tdesign-react';
 import { InfoCircleIcon } from 'tdesign-icons-react';
 
-const IMAGE_MODEL_OPTIONS = [
+export const IMAGE_MODEL_OPTIONS = [
   { label: 'gemini-2.5-flash-image', value: 'gemini-2.5-flash-image' },
   { label: 'gemini-3-pro-image-preview-hd', value: 'gemini-3-pro-image-preview-hd' },
   { label: 'gemini-3-pro-image-preview', value: 'gemini-3-pro-image-preview' },
+  { label: 'gemini-3-pro-image-preview-2k', value: 'gemini-3-pro-image-preview-2k' },
+  { label: 'gemini-3-pro-image-preview-4k', value: 'gemini-3-pro-image-preview-4k' },
 ];
 
 export const SettingsDialog = ({
