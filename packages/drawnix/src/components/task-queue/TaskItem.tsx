@@ -7,7 +7,7 @@
 
 import React from 'react';
 import { Button, Tag, Tooltip } from 'tdesign-react';
-import { ImageIcon, VideoIcon, DeleteIcon, RefreshIcon, CloseCircleIcon, DownloadIcon, EditIcon } from 'tdesign-icons-react';
+import { ImageIcon, VideoIcon, DeleteIcon, RefreshIcon, DownloadIcon, EditIcon } from 'tdesign-icons-react';
 import { Task, TaskStatus, TaskType } from '../../types/task.types';
 import { getRelativeTime, formatTaskDuration } from '../../utils/task-utils';
 import { formatRetryDelay } from '../../utils/retry-utils';
@@ -16,8 +16,6 @@ import './task-queue.scss';
 export interface TaskItemProps {
   /** The task to display */
   task: Task;
-  /** Callback when cancel button is clicked */
-  onCancel?: (taskId: string) => void;
   /** Callback when retry button is clicked */
   onRetry?: (taskId: string) => void;
   /** Callback when delete button is clicked */
@@ -81,7 +79,6 @@ function getStatusLabel(status: TaskStatus): string {
  */
 export const TaskItem: React.FC<TaskItemProps> = ({
   task,
-  onCancel,
   onRetry,
   onDelete,
   onDownload,
@@ -89,11 +86,24 @@ export const TaskItem: React.FC<TaskItemProps> = ({
   onPreviewOpen,
   onEdit,
 }) => {
-  const isActive = task.status === TaskStatus.PENDING ||
-                   task.status === TaskStatus.PROCESSING ||
-                   task.status === TaskStatus.RETRYING;
+  const [imageDimensions, setImageDimensions] = React.useState<{ width: number; height: number } | null>(null);
   const isCompleted = task.status === TaskStatus.COMPLETED;
   const isFailed = task.status === TaskStatus.FAILED;
+
+  // Load image to get actual dimensions
+  React.useEffect(() => {
+    if (isCompleted && task.result?.url && task.type === TaskType.IMAGE) {
+      const img = new Image();
+      img.onload = () => {
+        setImageDimensions({ width: img.naturalWidth, height: img.naturalHeight });
+      };
+      img.onerror = () => {
+        // If image fails to load, keep dimensions null
+        setImageDimensions(null);
+      };
+      img.src = task.result.url;
+    }
+  }, [isCompleted, task.result?.url, task.type]);
 
   return (
     <div className="task-item">
@@ -128,12 +138,21 @@ export const TaskItem: React.FC<TaskItemProps> = ({
                 <span>{formatTaskDuration(Date.now() - task.startedAt)}</span>
               </div>
             )}
-            {task.params.width && task.params.height && (
-              <div className="task-item__meta-item">
-                <span>尺寸:</span>
-                <span>{task.params.width}x{task.params.height}</span>
-              </div>
-            )}
+            {/* Display actual image dimensions or fallback to params */}
+            {(() => {
+              const displayWidth = imageDimensions?.width || task.result?.width || task.params.width;
+              const displayHeight = imageDimensions?.height || task.result?.height || task.params.height;
+
+              if (displayWidth && displayHeight) {
+                return (
+                  <div className="task-item__meta-item">
+                    <span>尺寸:</span>
+                    <span>{displayWidth}x{displayHeight}</span>
+                  </div>
+                );
+              }
+              return null;
+            })()}
           </div>
 
           {/* Error Display */}
@@ -170,18 +189,16 @@ export const TaskItem: React.FC<TaskItemProps> = ({
 
       {/* Right: Action Buttons (Vertical) */}
       <div className="task-item__actions">
-        {/* Cancel button for active tasks */}
-        {isActive && (
-          <Button
-            size="small"
-            variant="outline"
-            theme="danger"
-            icon={<CloseCircleIcon />}
-            onClick={() => onCancel?.(task.id)}
-          >
-            取消
-          </Button>
-        )}
+        {/* Delete button for all tasks */}
+        <Button
+          size="small"
+          variant="outline"
+          theme="danger"
+          icon={<DeleteIcon />}
+          onClick={() => onDelete?.(task.id)}
+        >
+          删除
+        </Button>
 
         {/* Retry button for failed tasks */}
         {isFailed && (
@@ -228,19 +245,6 @@ export const TaskItem: React.FC<TaskItemProps> = ({
         >
           编辑
         </Button>
-
-        {/* Delete button for completed/failed/cancelled tasks */}
-        {(isCompleted || isFailed || task.status === TaskStatus.CANCELLED) && (
-          <Button
-            size="small"
-            variant="text"
-            theme="danger"
-            icon={<DeleteIcon />}
-            onClick={() => onDelete?.(task.id)}
-          >
-            删除
-          </Button>
-        )}
       </div>
     </div>
   );
