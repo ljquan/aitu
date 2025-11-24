@@ -8,7 +8,7 @@
 import React, { useMemo } from 'react';
 import { TaskItem } from './TaskItem';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
-import { Task, TaskType } from '../../types/task.types';
+import { Task, TaskType, TaskStatus } from '../../types/task.types';
 import { useDrawnix, DialogType } from '../../hooks/use-drawnix';
 import { insertImageFromUrl } from '../../data/image';
 import { insertVideoFromUrl } from '../../data/video';
@@ -52,6 +52,31 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
     // Sort by creation time - newest first
     return filtered.sort((a, b) => b.createdAt - a.createdAt);
   }, [tasks, taskIds, taskType]);
+
+  // Group tasks by batchId for display
+  const batchGroups = useMemo(() => {
+    const groups = new Map<string, { tasks: Task[]; completed: number; total: number }>();
+
+    filteredTasks.forEach(task => {
+      const batchId = task.params.batchId || task.id; // Single tasks use their own ID
+      const existing = groups.get(batchId);
+
+      if (existing) {
+        existing.tasks.push(task);
+        if (task.status === TaskStatus.COMPLETED) {
+          existing.completed++;
+        }
+      } else {
+        groups.set(batchId, {
+          tasks: [task],
+          completed: task.status === TaskStatus.COMPLETED ? 1 : 0,
+          total: task.params.batchTotal || 1
+        });
+      }
+    });
+
+    return groups;
+  }, [filteredTasks]);
 
   // Task action handlers
   const handleCancel = (taskId: string) => {
@@ -143,25 +168,53 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
     return null;
   }
 
+  // Get batch count info for header
+  const batchCount = batchGroups.size;
+  const hasBatches = Array.from(batchGroups.values()).some(g => g.total > 1);
+
   return (
     <>
       <div className="dialog-task-list">
         <div className="dialog-task-list__header">
-          <h4>生成任务 ({filteredTasks.length})</h4>
+          <h4>
+            生成任务 ({filteredTasks.length})
+            {hasBatches && batchCount > 0 && (
+              <span className="dialog-task-list__batch-info">
+                {' '}· {batchCount} 批次
+              </span>
+            )}
+          </h4>
         </div>
         <div className="dialog-task-list__content">
-          {filteredTasks.map(task => (
-            <TaskItem
-              key={task.id}
-              task={task}
-              onCancel={handleCancel}
-              onRetry={handleRetry}
-              onDelete={handleDelete}
-              onDownload={handleDownload}
-              onInsert={handleInsert}
-              onEdit={handleEdit}
-            />
-          ))}
+          {filteredTasks.map(task => {
+            const batchId = task.params.batchId;
+            const batchGroup = batchId ? batchGroups.get(batchId) : null;
+            const showBatchLabel = batchGroup && batchGroup.total > 1;
+
+            return (
+              <div key={task.id} className="dialog-task-list__task-wrapper">
+                {showBatchLabel && (
+                  <div className="dialog-task-list__batch-label">
+                    {task.params.batchIndex}/{task.params.batchTotal}
+                    {batchGroup && (
+                      <span className="dialog-task-list__batch-progress">
+                        ({batchGroup.completed}/{batchGroup.total} 完成)
+                      </span>
+                    )}
+                  </div>
+                )}
+                <TaskItem
+                  task={task}
+                  onCancel={handleCancel}
+                  onRetry={handleRetry}
+                  onDelete={handleDelete}
+                  onDownload={handleDownload}
+                  onInsert={handleInsert}
+                  onEdit={handleEdit}
+                />
+              </div>
+            );
+          })}
         </div>
       </div>
 

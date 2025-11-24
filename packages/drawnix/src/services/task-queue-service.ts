@@ -270,6 +270,50 @@ class TaskQueueService {
   }
 
   /**
+   * Creates multiple tasks for batch generation
+   *
+   * @param params - Generation parameters (shared across all tasks)
+   * @param type - Task type (image or video)
+   * @param count - Number of tasks to create
+   * @returns Array of created tasks
+   */
+  createBatchTasks(params: GenerationParams, type: TaskType, count: number): Task[] {
+    // Generate unique batch ID
+    const batchId = generateTaskId();
+    const tasks: Task[] = [];
+
+    for (let i = 0; i < count; i++) {
+      const batchParams: GenerationParams = {
+        ...params,
+        batchId,
+        batchIndex: i + 1,
+        batchTotal: count
+      };
+
+      try {
+        const task = this.createTask(batchParams, type);
+        tasks.push(task);
+      } catch (error) {
+        // If one task in batch fails, log but continue with others
+        console.error(`[TaskQueueService] Failed to create batch task ${i + 1}/${count}:`, error);
+      }
+    }
+
+    console.log(`[TaskQueueService] Created batch of ${tasks.length}/${count} tasks with batchId ${batchId}`);
+    return tasks;
+  }
+
+  /**
+   * Gets all tasks belonging to a specific batch
+   *
+   * @param batchId - The batch ID
+   * @returns Array of tasks in the batch
+   */
+  getTasksByBatchId(batchId: string): Task[] {
+    return this.getAllTasks().filter(task => task.params.batchId === batchId);
+  }
+
+  /**
    * Observes task update events
    * 
    * @returns Observable stream of task events

@@ -24,6 +24,36 @@
     }
   }
 
+  &__batch-info {
+    font-weight: normal;
+    color: #666;
+    font-size: 12px;
+  }
+
+  &__task-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  &__batch-label {
+    font-size: 11px;
+    color: var(--td-brand-color, #0052d9);
+    font-weight: 500;
+    padding: 2px 6px;
+    background: rgba(0, 82, 217, 0.08);
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    width: fit-content;
+  }
+
+  &__batch-progress {
+    font-weight: normal;
+    color: #666;
+  }
+
   &__content {
     display: flex;
     flex-direction: column;

@@ -53,6 +53,12 @@ export interface GenerationParams {
   style?: string;
   /** Random seed for reproducible generation */
   seed?: number;
+  /** Batch generation ID, used to associate tasks in the same batch */
+  batchId?: string;
+  /** Index within the batch (1-based) */
+  batchIndex?: number;
+  /** Total number of tasks in the batch */
+  batchTotal?: number;
   /** Additional parameters for specific generation types */
   [key: string]: any;
 }

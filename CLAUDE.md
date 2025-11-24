@@ -135,3 +135,10 @@ Uses React context (`AituContext`) for application state including:
 - **Inputs**: 8px border-radius, light background, 2px focus border in brand primary
 - **Animations**: smooth 150-300ms transitions with ease-out curves
 - speckit生成的相关markdown文档产物以中文输出
+
+## Active Technologies
+- TypeScript 5.x with React 18 + TDesign React, @plait/core, localforage (002-batch-generation)
+- localforage for browser storage, localStorage for user preferences (002-batch-generation)
+
+## Recent Changes
+- 002-batch-generation: Added TypeScript 5.x with React 18 + TDesign React, @plait/core, localforage

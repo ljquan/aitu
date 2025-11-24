@@ -25,6 +25,10 @@ export interface UseTaskQueueReturn {
   cancelledTasks: Task[];
   /** Creates a new task */
   createTask: (params: GenerationParams, type: TaskType) => Task | null;
+  /** Creates multiple tasks for batch generation */
+  createBatchTasks: (params: GenerationParams, type: TaskType, count: number) => Task[];
+  /** Gets all tasks in a batch */
+  getTasksByBatchId: (batchId: string) => Task[];
   /** Cancels a task */
   cancelTask: (taskId: string) => void;
   /** Retries a failed task */
@@ -112,6 +116,19 @@ export function useTaskQueue(): UseTaskQueueReturn {
     }
   }, []);
 
+  const createBatchTasks = useCallback((params: GenerationParams, type: TaskType, count: number): Task[] => {
+    try {
+      return taskQueueService.createBatchTasks(params, type, count);
+    } catch (error) {
+      console.error('[useTaskQueue] Failed to create batch tasks:', error);
+      return [];
+    }
+  }, []);
+
+  const getTasksByBatchId = useCallback((batchId: string): Task[] => {
+    return taskQueueService.getTasksByBatchId(batchId);
+  }, [updateCounter]);
+
   const cancelTask = useCallback((taskId: string) => {
     taskQueueService.cancelTask(taskId);
   }, []);
@@ -143,6 +160,8 @@ export function useTaskQueue(): UseTaskQueueReturn {
     failedTasks,
     cancelledTasks,
     createTask,
+    createBatchTasks,
+    getTasksByBatchId,
     cancelTask,
     retryTask,
     deleteTask,

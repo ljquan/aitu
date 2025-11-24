@@ -40,6 +40,8 @@ import { useTaskQueue } from '../../hooks/useTaskQueue';
 import { TaskType } from '../../types/task.types';
 import { MessagePlugin } from 'tdesign-react';
 import { DialogTaskList } from '../task-queue/DialogTaskList';
+import { GenerationCountSelector } from './generation-count-selector/GenerationCountSelector';
+import { useGenerationCount } from '../../hooks/useGenerationCount';
 
 // 视频URL接口
 interface VideoUrls {
@@ -87,7 +89,8 @@ const AIVideoGeneration = ({
   const { appState, setAppState } = useDrawnix();
   const { language } = useI18n();
   const board = useBoard();
-  const { createTask } = useTaskQueue();
+  const { createBatchTasks } = useTaskQueue();
+  const { count: generationCount, setCount: setGenerationCount } = useGenerationCount();
 
   // 保存选中元素的ID，用于计算插入位置
   const [selectedElementIds, setSelectedElementIds] = useState<string[]>([]);
@@ -294,19 +297,22 @@ const AIVideoGeneration = ({
         uploadedImage: convertedImage
       };
 
-      // 创建任务并添加到队列
-      const task = createTask(taskParams, TaskType.VIDEO);
+      // 创建批量任务并添加到队列
+      const tasks = createBatchTasks(taskParams, TaskType.VIDEO, generationCount);
 
-      if (task) {
+      if (tasks.length > 0) {
         // 任务创建成功
-        MessagePlugin.success(
-          language === 'zh'
+        const message = generationCount > 1
+          ? (language === 'zh'
+            ? `${tasks.length} 个视频任务已添加到队列，将在后台生成`
+            : `${tasks.length} video tasks added to queue, will be generated in background`)
+          : (language === 'zh'
             ? '视频任务已添加到队列，将在后台生成'
-            : 'Video task added to queue, will be generated in background'
-        );
+            : 'Video task added to queue, will be generated in background');
+        MessagePlugin.success(message);
 
         // 保存任务ID到对话框任务列表
-        setDialogTaskIds(prev => [...prev, task.id]);
+        setDialogTaskIds(prev => [...prev, ...tasks.map(t => t.id)]);
 
         // 保存提示词到历史记录
         savePromptToHistory(prompt);
@@ -329,8 +335,8 @@ const AIVideoGeneration = ({
       } else {
         // 任务创建失败
         setError(
-          language === 'zh' 
-            ? '任务创建失败，请检查参数或稍后重试' 
+          language === 'zh'
+            ? '任务创建失败，请检查参数或稍后重试'
             : 'Failed to create task, please check parameters or try again later'
         );
       }
@@ -384,7 +390,14 @@ const AIVideoGeneration = ({
               disabled={isGenerating}
               onError={setError}
             />
-            
+
+            <GenerationCountSelector
+              value={generationCount}
+              onChange={setGenerationCount}
+              language={language as 'zh' | 'en'}
+              disabled={isGenerating}
+            />
+
             <ErrorDisplay error={error} />
           </div>
 
