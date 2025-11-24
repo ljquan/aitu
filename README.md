@@ -12,8 +12,8 @@
 
 <div align="center">
   <figure>
-    <a target="_blank" rel="noopener">
-      <img src="https://github.com/ljquan/aitu/blob/develop/apps/web/public/product_showcase/aitu-01.png?raw=true" alt="提示词图像概率" width="100%" />
+    <a href="./apps/web/public/product_showcase/aitu-01.png" target="_blank" rel="noopener">
+      <img src="./apps/web/public/product_showcase/aitu-01.png" alt="提示词图像概率" width="100%" />
     </a>
     <figcaption>
       <p align="center">
@@ -25,8 +25,8 @@
 
 <div align="center">
   <figure>
-    <a target="_blank" rel="noopener">
-      <img src="https://github.com/ljquan/aitu/blob/develop/apps/web/public/product_showcase/aitu-02.png?raw=true" alt="AI 图片生成" width="100%" />
+    <a href="./apps/web/public/product_showcase/aitu-02.png" target="_blank" rel="noopener">
+      <img src="./apps/web/public/product_showcase/aitu-02.png" alt="AI 图片生成" width="100%" />
     </a>
     <figcaption>
       <p align="center">
@@ -38,8 +38,8 @@
 
 <div align="center">
   <figure>
-    <a target="_blank" rel="noopener">
-      <img src="https://github.com/ljquan/aitu/blob/develop/apps/web/public/product_showcase/aitu-03.png?raw=true" alt="任务处理" width="100%" />
+    <a href="./apps/web/public/product_showcase/aitu-03.png" target="_blank" rel="noopener">
+      <img src="./apps/web/public/product_showcase/aitu-03.png" alt="任务处理" width="100%" />
     </a>
     <figcaption>
       <p align="center">
@@ -51,8 +51,8 @@
 
 <div align="center">
   <figure>
-    <a target="_blank" rel="noopener">
-      <img src="https://github.com/ljquan/aitu/blob/develop/apps/web/public/product_showcase/aitu-04.png?raw=true" alt="效果展示" width="100%" />
+    <a href="./apps/web/public/product_showcase/aitu-04.png" target="_blank" rel="noopener">
+      <img src="./apps/web/public/product_showcase/aitu-04.png" alt="效果展示" width="100%" />
     </a>
     <figcaption>
       <p align="center">
@@ -64,8 +64,8 @@
 
 <div align="center">
   <figure>
-    <a target="_blank" rel="noopener">
-      <img src="https://github.com/ljquan/aitu/blob/develop/apps/web/public/product_showcase/case-2.png?raw=true" alt="流程图与自由画" width="100%" />
+    <a href="./apps/web/public/product_showcase/case-2.png" target="_blank" rel="noopener">
+      <img src="./apps/web/public/product_showcase/case-2.png" alt="流程图与自由画" width="100%" />
     </a>
     <figcaption>
       <p align="center">
@@ -75,7 +75,8 @@
   </figure>
 </div>
 
-[*English README*](https://github.com/ljquan/aitu/blob/develop/README_en.md)
+[*English README*](./README_en.md)
+
 
 ## 特性
 
