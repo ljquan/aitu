@@ -269,11 +269,18 @@
 
   &__meta {
     display: flex;
-    align-items: center;
-    gap: 12px;
+    flex-direction: column;
+    gap: 8px;
     font-size: 12px;
     color: var(--td-text-color-secondary, #757575);
     margin-top: 8px;
+  }
+
+  &__meta-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
   }
 
   &__meta-item {
@@ -379,12 +386,106 @@
     }
   }
 
+  &__cache-badge {
+    position: absolute;
+    bottom: 4px;
+    left: 4px;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px 6px;
+    background: rgba(0, 168, 112, 0.9);
+    color: white;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 500;
+
+    svg {
+      width: 12px;
+      height: 12px;
+    }
+  }
+
   &__actions {
     display: flex;
     flex-direction: column;
     gap: 8px;
     flex-shrink: 0;
     justify-content: flex-start;
+  }
+
+  // Progress bar styles - horizontal layout, full width in its row
+  &__progress {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    max-width: 400px; // Max width for readability
+  }
+
+  &__progress-label {
+    font-size: 12px;
+    color: var(--td-text-color-secondary, #757575);
+    font-weight: 500;
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  &__progress-percent {
+    font-size: 12px;
+    color: var(--td-text-color-secondary, #757575);
+    font-weight: 500;
+    width: 36px; // Fixed width for percentage display
+    text-align: right;
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  &__progress-bar {
+    flex: 1;
+    min-width: 100px;
+    height: 6px;
+    background: var(--td-bg-color-component, #e7e7e7);
+    border-radius: 3px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  &__progress-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.3s ease, background-color 0.3s ease;
+
+    // Processing - blue/brand color
+    &--processing {
+      background: var(--td-brand-color, #0052d9);
+    }
+
+    // Completed - green
+    &--completed {
+      background: var(--td-success-color, #52c41a);
+    }
+
+    // Failed - red
+    &--failed {
+      background: var(--td-error-color, #ff4d4f);
+    }
+
+    // Pending/Queued - gray
+    &--pending {
+      background: var(--td-gray-color-6, #d9d9d9);
+    }
+
+    // Retrying - orange
+    &--retrying {
+      background: var(--td-warning-color, #faad14);
+    }
+
+    // Cancelled - gray (same as pending)
+    &--cancelled {
+      background: var(--td-gray-color-6, #d9d9d9);
+    }
   }
 }
 
@@ -445,6 +546,11 @@
       flex-direction: column;
       align-items: flex-start;
       gap: 6px;
+    }
+
+    &__progress {
+      width: 100%; // Full width on mobile
+      max-width: 280px; // Keep max width constraint
     }
 
     &__actions {

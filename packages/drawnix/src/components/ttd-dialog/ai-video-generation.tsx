@@ -6,7 +6,6 @@ import { useI18n } from '../../i18n';
 import { useBoard } from '@plait-board/react-board';
 import { type Language } from '../../constants/prompts';
 import { getSelectedElements, PlaitElement, getRectangleByElements, Point } from '@plait/core';
-import { videoGeminiClient } from '../../utils/gemini-api';
 import { getInsertionPointForSelectedElements } from '../../utils/selection-utils';
 import { insertVideoFromUrl } from '../../data/video';
 import { downloadMediaFile } from '../../utils/download-utils';
@@ -26,20 +25,24 @@ import {
   getPromptExample,
   ActionButtons,
   ErrorDisplay,
-  ImageUpload,
   LoadingState,
   PromptInput,
   type ImageFile,
   getMergedPresetPrompts,
   savePromptToHistory as savePromptToHistoryUtil,
   DEFAULT_VIDEO_DIMENSIONS,
-  getReferenceDimensionsFromIds
+  getReferenceDimensionsFromIds,
+  VideoModelOptions,
+  MultiImageUpload,
 } from './shared';
+import { geminiSettings } from '../../utils/settings-manager';
 import { AI_VIDEO_GENERATION_PREVIEW_CACHE_KEY as PREVIEW_CACHE_KEY } from '../../constants/storage';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
 import { TaskType } from '../../types/task.types';
 import { MessagePlugin } from 'tdesign-react';
 import { DialogTaskList } from '../task-queue/DialogTaskList';
+import type { VideoModel, UploadedVideoImage } from '../../types/video.types';
+import { getVideoModelConfig, getDefaultModelParams } from '../../constants/video-model-config';
 
 // 视频URL接口
 interface VideoUrls {
@@ -77,12 +80,36 @@ const AIVideoGeneration = ({
   const [generatedVideoPrompt, setGeneratedVideoPrompt] = useState<string>(''); // Track prompt for current video
   const [isInserting, setIsInserting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [uploadedImage, setUploadedImage] = useState<ImageFile | null>(initialImage || null);
+
+  // Video model parameters
+  const settings = geminiSettings.get();
+  const currentModel = (settings.videoModelName || 'veo3') as VideoModel;
+  const modelConfig = getVideoModelConfig(currentModel);
+  const defaultParams = getDefaultModelParams(currentModel);
+
+  // Duration and size state
+  const [duration, setDuration] = useState(initialDuration?.toString() || defaultParams.duration);
+  const [size, setSize] = useState(defaultParams.size);
+
+  // Multi-image upload state (replaces single uploadedImage)
+  const [uploadedImages, setUploadedImages] = useState<UploadedVideoImage[]>(() => {
+    // Convert initial single image to multi-image format
+    if (initialImage) {
+      return [{
+        slot: 0,
+        slotLabel: modelConfig.imageUpload.labels?.[0] || '参考图',
+        url: initialImage.url || '',
+        name: initialImage.name,
+        file: initialImage.file,
+      }];
+    }
+    return [];
+  });
 
   // Use generation history from task queue
   const { videoHistory } = useGenerationHistory();
 
-  const { isGenerating, isLoading: videoLoading, updateIsGenerating, updateIsLoading: updateVideoLoading } = useGenerationState('video');
+  const { isGenerating, isLoading: videoLoading, updateIsLoading: updateVideoLoading } = useGenerationState('video');
 
   const { appState, setAppState } = useDrawnix();
   const { language } = useI18n();
@@ -97,6 +124,15 @@ const AIVideoGeneration = ({
 
   // 视频元素引用，用于控制播放状态
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  // Reset parameters when model changes
+  useEffect(() => {
+    const newDefaults = getDefaultModelParams(currentModel);
+    setDuration(newDefaults.duration);
+    setSize(newDefaults.size);
+    // Clear uploaded images when model changes (different upload requirements)
+    setUploadedImages([]);
+  }, [currentModel]);
 
 
   // 计算视频插入位置
@@ -145,7 +181,18 @@ const AIVideoGeneration = ({
 
   useEffect(() => {
     setPrompt(initialPrompt);
-    setUploadedImage(initialImage || null);
+    // Convert initial single image to multi-image format
+    if (initialImage) {
+      setUploadedImages([{
+        slot: 0,
+        slotLabel: modelConfig.imageUpload.labels?.[0] || '参考图',
+        url: initialImage.url || '',
+        name: initialImage.name,
+        file: initialImage.file,
+      }]);
+    } else {
+      setUploadedImages([]);
+    }
     setError(null);
 
     // 如果编辑任务且有结果URL,显示预览视频
@@ -165,7 +212,7 @@ const AIVideoGeneration = ({
         console.warn('Failed to clear cache:', error);
       }
     }
-  }, [initialPrompt, initialImage, initialResultUrl]);
+  }, [initialPrompt, initialImage, initialResultUrl, modelConfig.imageUpload.labels]);
 
   useEffect(() => {
     setError(null);
@@ -180,35 +227,16 @@ const AIVideoGeneration = ({
     }
 
     setPrompt('');
-    setUploadedImage(null);
+    setUploadedImages([]);
     setGeneratedVideo(null);
     setError(null);
     setDialogTaskIds([]); // 清除任务列表
+    // Reset duration and size to defaults
+    const newDefaults = getDefaultModelParams(currentModel);
+    setDuration(newDefaults.duration);
+    setSize(newDefaults.size);
     cacheManager.clear();
     window.dispatchEvent(new CustomEvent('ai-video-clear'));
-  };
-
-  // 设置生成视频并预加载
-  const setGeneratedVideoWithPreload = async (videoUrls: VideoUrls) => {
-    updateVideoLoading(true);
-    try {
-      setGeneratedVideo(videoUrls);
-      
-      // 保存到缓存
-      const cacheData: PreviewCache = {
-        prompt,
-        generatedVideo: videoUrls,
-        timestamp: Date.now(),
-        sourceImage: uploadedImage instanceof File ? URL.createObjectURL(uploadedImage) : uploadedImage?.url
-      };
-      cacheManager.save(cacheData);
-
-    } catch (error) {
-      console.warn('Failed to set generated video:', error);
-      setGeneratedVideo(videoUrls);
-    } finally {
-      updateVideoLoading(false);
-    }
   };
 
   // 从历史记录选择视频
@@ -220,8 +248,17 @@ const AIVideoGeneration = ({
     });
     setGeneratedVideoPrompt(historyItem.prompt); // Save prompt for download
 
-    // 设置参考图片 (如果有的话)
-    setUploadedImage(historyItem.uploadedImage || null);
+    // 设置参考图片 (如果有的话) - convert to new format
+    if (historyItem.uploadedImage) {
+      setUploadedImages([{
+        slot: 0,
+        slotLabel: modelConfig.imageUpload.labels?.[0] || '参考图',
+        url: historyItem.uploadedImage.url || '',
+        name: historyItem.uploadedImage.name,
+      }]);
+    } else {
+      setUploadedImages([]);
+    }
 
     // 选择历史记录时清除错误状态
     setError(null);
@@ -265,33 +302,38 @@ const AIVideoGeneration = ({
     }
 
     try {
-      // Convert File object to base64 data URL for serialization
-      let convertedImage: { type: 'url'; url: string; name: string } | undefined;
-      if (uploadedImage) {
-        if (uploadedImage.file) {
+      // Convert uploaded images to serializable format
+      const convertedImages: UploadedVideoImage[] = [];
+      for (const img of uploadedImages) {
+        if (img.file) {
           // Convert File to base64 data URL
-          convertedImage = await new Promise((resolve, reject) => {
+          const base64Url = await new Promise<string>((resolve, reject) => {
             const reader = new FileReader();
-            reader.onload = () => {
-              resolve({
-                type: 'url',
-                url: reader.result as string,
-                name: uploadedImage.name
-              });
-            };
+            reader.onload = () => resolve(reader.result as string);
             reader.onerror = reject;
-            reader.readAsDataURL(uploadedImage.file!);
+            reader.readAsDataURL(img.file!);
           });
-        } else if (uploadedImage.url) {
-          convertedImage = { type: 'url', url: uploadedImage.url, name: uploadedImage.name };
+          convertedImages.push({
+            ...img,
+            url: base64Url,
+            file: undefined, // Remove File object for serialization
+          });
+        } else {
+          convertedImages.push({
+            ...img,
+            file: undefined,
+          });
         }
       }
 
-      // 创建任务参数
+      // 创建任务参数（包含新的 duration, size, uploadedImages）
       const taskParams = {
         prompt: prompt.trim(),
+        model: currentModel,
+        seconds: duration,
+        size: size,
         // 保存上传的图片（已转换为可序列化的格式）
-        uploadedImage: convertedImage
+        uploadedImages: convertedImages,
       };
 
       // 创建任务并添加到队列
@@ -313,7 +355,7 @@ const AIVideoGeneration = ({
 
         // 完全清空表单（prompt、参考图、预览）
         setPrompt('');
-        setUploadedImage(null);
+        setUploadedImages([]);
         setGeneratedVideo(null);
         setError(null);
 
@@ -364,17 +406,24 @@ const AIVideoGeneration = ({
         {/* AI 视频生成表单 */}
         <div className="ai-image-generation-section">
           <div className="ai-image-generation-form">
-            
-            <ImageUpload
-              images={uploadedImage ? [uploadedImage] : []}
-              onImagesChange={(images) => setUploadedImage(images[0] || null)}
-              language={language}
+            {/* Video model options: duration & size */}
+            <VideoModelOptions
+              model={currentModel}
+              duration={duration}
+              size={size}
+              onDurationChange={setDuration}
+              onSizeChange={setSize}
               disabled={isGenerating}
-              multiple={false}
-              icon="🎬"
-              onError={setError}
             />
-            
+
+            {/* Multi-image upload based on model config */}
+            <MultiImageUpload
+              config={modelConfig.imageUpload}
+              images={uploadedImages}
+              onImagesChange={setUploadedImages}
+              disabled={isGenerating}
+            />
+
             <PromptInput
               prompt={prompt}
               onPromptChange={setPrompt}
@@ -384,7 +433,7 @@ const AIVideoGeneration = ({
               disabled={isGenerating}
               onError={setError}
             />
-            
+
             <ErrorDisplay error={error} />
           </div>
 

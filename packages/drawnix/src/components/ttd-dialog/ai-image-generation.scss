@@ -79,6 +79,259 @@
   align-items: center;
   gap: 12px;
   margin-top: auto;
+
+  &.unified-action-bar {
+    gap: 12px;
+  }
+}
+
+// Unified Action Box - Combined quantity control and generate button
+.unified-action-box {
+  display: flex;
+  align-items: center;
+  padding: 4px 4px 4px 8px;
+  background: #fff;
+  border: 1px solid #e8e8e8;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
+  height: 36px;
+  min-width: 200px;
+
+  &:hover {
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    border-color: #f39c12;
+  }
+
+  &:focus-within {
+    border-color: #f39c12;
+    box-shadow: 0 0 0 2px rgba(243, 156, 18, 0.1);
+  }
+
+  &.is-generating {
+    opacity: 0.9;
+  }
+}
+
+.quantity-section {
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  position: relative;
+  z-index: 10;
+}
+
+.quantity-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #999;
+  margin-right: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.quantity-control {
+  display: flex;
+  align-items: center;
+  background: #f5f5f5;
+  border: 1px solid #e8e8e8;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+
+  &:hover {
+    border-color: #d9d9d9;
+  }
+
+  &.is-open {
+    border-color: var(--color-primary, #0052d9);
+    box-shadow: 0 0 0 2px rgba(0, 82, 217, 0.1);
+  }
+
+  &.is-disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: #f0f0f0;
+  }
+}
+
+.quantity-input {
+  width: 36px;
+  padding: 4px 0 4px 8px;
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+  text-align: center;
+  outline: none;
+
+  &:disabled {
+    cursor: not-allowed;
+  }
+}
+
+.quantity-toggle {
+  padding: 4px 6px 4px 2px;
+  border: none;
+  background: transparent;
+  color: #999;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s ease;
+
+  &:hover:not(:disabled) {
+    color: #666;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+  }
+}
+
+.quantity-icon {
+  transition: transform 0.2s ease;
+
+  &.is-open {
+    transform: rotate(180deg);
+  }
+}
+
+.quantity-dropdown {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  margin-bottom: 8px;
+  width: 140px;
+  max-height: 280px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #e8e8e8;
+  border-radius: 8px;
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.12);
+  z-index: 1000;
+  animation: dropdownFadeInUp 0.15s ease;
+}
+
+@keyframes dropdownFadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.quantity-dropdown-header {
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #999;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: #fafafa;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.quantity-option {
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  font-size: 13px;
+  color: #666;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: #f5f5f5;
+  }
+
+  &.is-selected {
+    color: var(--color-primary, #0052d9);
+    font-weight: 500;
+    background: rgba(0, 82, 217, 0.05);
+
+    svg {
+      color: var(--color-primary, #0052d9);
+    }
+  }
+}
+
+.action-divider {
+  width: 1px;
+  height: 28px;
+  background: #e8e8e8;
+  margin: 0 4px;
+}
+
+.generate-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 32px;
+  height: 28px;
+  min-width: 110px;
+  // Default: disabled state (light orange)
+  background: linear-gradient(135deg, #fbd38d 0%, #f6ad55 100%);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(243, 156, 18, 0.2);
+
+  &:hover:not(:disabled) {
+    background: linear-gradient(135deg, #e67e22 0%, #d35400 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(243, 156, 18, 0.3);
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(0);
+  }
+
+  &:disabled {
+    background: linear-gradient(135deg, #fbd38d 0%, #f6ad55 100%);
+    box-shadow: none;
+    cursor: not-allowed;
+    opacity: 0.8;
+  }
+
+  &.loading {
+    position: relative;
+    color: transparent;
+
+    &::after {
+      content: '';
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-top: 2px solid #fff;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+  }
+}
+
+// When can generate - active orange color
+.unified-action-box.can-generate .generate-button {
+  background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+
+  &:hover:not(:disabled) {
+    background: linear-gradient(135deg, #e67e22 0%, #d35400 100%);
+  }
 }
 
 // Action buttons (shared styles)

@@ -1,0 +1,114 @@
+/**
+ * MultiImageUpload Styles
+ */
+
+.multi-image-upload {
+  margin: 12px 0;
+
+  &__header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  &__title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--td-text-color-primary, #000000);
+  }
+
+  &__hint {
+    font-size: 12px;
+    color: var(--td-text-color-placeholder, #999999);
+  }
+
+  &__slots {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  &__slot {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  &__slot-label {
+    font-size: 12px;
+    color: var(--td-text-color-secondary, #666666);
+    text-align: center;
+  }
+
+  &__preview {
+    position: relative;
+    width: 100px;
+    height: 100px;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--td-component-border, #e7e7e7);
+
+    &:hover .multi-image-upload__overlay {
+      opacity: 1;
+    }
+  }
+
+  &__image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  &__overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+  }
+
+  &__placeholder {
+    width: 100px;
+    height: 100px;
+    border: 2px dashed var(--td-component-border, #dcdcdc);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: var(--td-bg-color-container, #ffffff);
+
+    &:hover {
+      border-color: var(--td-brand-color, #0052d9);
+      background: var(--td-bg-color-container-hover, #f9f9f9);
+    }
+  }
+
+  &__add-icon {
+    font-size: 24px;
+    color: var(--td-text-color-placeholder, #999999);
+  }
+
+  &__add-text {
+    font-size: 11px;
+    color: var(--td-text-color-placeholder, #999999);
+  }
+
+  // TDesign Upload overrides
+  .t-upload {
+    display: block;
+  }
+
+  .t-upload__dragger {
+    padding: 0;
+    border: none;
+    background: transparent;
+  }
+}

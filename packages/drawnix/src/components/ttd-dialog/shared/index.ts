@@ -8,3 +8,5 @@ export * from './insertion-utils';
 export * from './prompt-utils';
 export * from './preload-utils';
 export * from './size-constants';
+export * from './VideoModelOptions';
+export * from './MultiImageUpload';

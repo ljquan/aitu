@@ -5,12 +5,13 @@
  * Shows input parameters (prompt) and output results when completed.
  */
 
-import React from 'react';
-import { Button, Tag, Tooltip } from 'tdesign-react';
-import { ImageIcon, VideoIcon, DeleteIcon, RefreshIcon, DownloadIcon, EditIcon } from 'tdesign-icons-react';
+import React, { useState, useEffect } from 'react';
+import { Button, Tag, Tooltip, Progress } from 'tdesign-react';
+import { ImageIcon, VideoIcon, DeleteIcon, RefreshIcon, DownloadIcon, EditIcon, SaveIcon, CheckCircleFilledIcon } from 'tdesign-icons-react';
 import { Task, TaskStatus, TaskType } from '../../types/task.types';
 import { getRelativeTime, formatTaskDuration } from '../../utils/task-utils';
 import { formatRetryDelay } from '../../utils/retry-utils';
+import { useMediaCache, useMediaUrl } from '../../hooks/useMediaCache';
 import './task-queue.scss';
 
 export interface TaskItemProps {
@@ -86,13 +87,41 @@ export const TaskItem: React.FC<TaskItemProps> = ({
   onPreviewOpen,
   onEdit,
 }) => {
-  const [imageDimensions, setImageDimensions] = React.useState<{ width: number; height: number } | null>(null);
+  const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
   const isCompleted = task.status === TaskStatus.COMPLETED;
   const isFailed = task.status === TaskStatus.FAILED;
 
+  // Media cache hook
+  const {
+    isCaching,
+    isCached,
+    cacheProgress,
+    cacheMedia,
+    deleteCache,
+  } = useMediaCache(
+    task.id,
+    task.result?.url,
+    task.type === TaskType.IMAGE ? 'image' : 'video',
+    task.params.prompt
+  );
+
+  // Get media URL with cache fallback
+  const { url: mediaUrl, isFromCache } = useMediaUrl(task.id, task.result?.url);
+
+  // Handle cache button click
+  const handleCacheClick = async () => {
+    if (isCached) {
+      // If already cached, delete cache
+      await deleteCache();
+    } else if (!isCaching) {
+      // Start caching
+      await cacheMedia();
+    }
+  };
+
   // Load image to get actual dimensions
-  React.useEffect(() => {
-    if (isCompleted && task.result?.url && task.type === TaskType.IMAGE) {
+  useEffect(() => {
+    if (isCompleted && mediaUrl && task.type === TaskType.IMAGE) {
       const img = new Image();
       img.onload = () => {
         setImageDimensions({ width: img.naturalWidth, height: img.naturalHeight });
@@ -101,9 +130,9 @@ export const TaskItem: React.FC<TaskItemProps> = ({
         // If image fails to load, keep dimensions null
         setImageDimensions(null);
       };
-      img.src = task.result.url;
+      img.src = mediaUrl;
     }
-  }, [isCompleted, task.result?.url, task.type]);
+  }, [isCompleted, mediaUrl, task.type]);
 
   return (
     <div className="task-item">
@@ -124,18 +153,70 @@ export const TaskItem: React.FC<TaskItemProps> = ({
 
           {/* Metadata */}
           <div className="task-item__meta">
-            {/* Status in same line */}
-            <Tag theme={getStatusTagTheme(task.status)} variant="light">
-              {getStatusLabel(task.status)}
-            </Tag>
-            <div className="task-item__meta-item">
-              <span>创建时间:</span>
-              <span>{getRelativeTime(task.createdAt)}</span>
-            </div>
-            {task.startedAt && (
+            {/* First row: status + time info */}
+            <div className="task-item__meta-row">
+              {/* Status in same line */}
+              <Tag theme={getStatusTagTheme(task.status)} variant="light">
+                {getStatusLabel(task.status)}
+              </Tag>
+              {/* Image params: model */}
+              {task.type === TaskType.IMAGE && task.params.model && (
+                <Tag variant="outline">
+                  {task.params.model}
+                </Tag>
+              )}
+              {/* Video params: model, duration, size */}
+              {task.type === TaskType.VIDEO && (
+                <>
+                  {task.params.model && (
+                    <Tag variant="outline">
+                      {task.params.model}
+                    </Tag>
+                  )}
+                  {task.params.seconds && (
+                    <Tag variant="outline">
+                      {task.params.seconds}秒
+                    </Tag>
+                  )}
+                  {task.params.size && (
+                    <Tag variant="outline">
+                      {task.params.size}
+                    </Tag>
+                  )}
+                </>
+              )}
+              {/* Batch info */}
+              {task.params.batchId && task.params.batchIndex && task.params.batchTotal && (
+                <Tag variant="outline">
+                  批量 {task.params.batchIndex}/{task.params.batchTotal}
+                </Tag>
+              )}
               <div className="task-item__meta-item">
-                <span>执行时长:</span>
-                <span>{formatTaskDuration(Date.now() - task.startedAt)}</span>
+                <span>创建时间:</span>
+                <span>{getRelativeTime(task.createdAt)}</span>
+              </div>
+              {task.startedAt && (
+                <div className="task-item__meta-item">
+                  <span>执行时长:</span>
+                  <span>{formatTaskDuration(
+                    (task.completedAt || Date.now()) - task.startedAt
+                  )}</span>
+                </div>
+              )}
+            </div>
+            {/* Second row: progress bar for video tasks */}
+            {task.type === TaskType.VIDEO && (
+              <div className="task-item__meta-row">
+                <div className="task-item__progress">
+                  <span className="task-item__progress-label">进度:</span>
+                  <span className="task-item__progress-percent">{task.progress ?? 0}%</span>
+                  <div className="task-item__progress-bar">
+                    <div
+                      className={`task-item__progress-fill task-item__progress-fill--${task.status}`}
+                      style={{ width: `${task.progress ?? 0}%` }}
+                    />
+                  </div>
+                </div>
               </div>
             )}
             {/* Display actual image dimensions or fallback to params */}
@@ -177,12 +258,19 @@ export const TaskItem: React.FC<TaskItemProps> = ({
       </div>
 
       {/* Center: Preview Image/Video */}
-      {isCompleted && task.result && task.result.url && (
+      {isCompleted && mediaUrl && (
         <div className="task-item__preview" onClick={onPreviewOpen}>
           {task.type === TaskType.IMAGE ? (
-            <img src={task.result.url} alt="Generated" />
+            <img src={mediaUrl} alt="Generated" />
           ) : (
-            <video src={task.result.url} />
+            <video src={mediaUrl} />
+          )}
+          {/* Cache indicator */}
+          {isFromCache && (
+            <div className="task-item__cache-badge">
+              <CheckCircleFilledIcon />
+              <span>已缓存</span>
+            </div>
           )}
         </div>
       )}
@@ -234,6 +322,22 @@ export const TaskItem: React.FC<TaskItemProps> = ({
           >
             下载
           </Button>
+        )}
+
+        {/* Cache button for completed tasks */}
+        {isCompleted && task.result?.url && (
+          <Tooltip content={isCached ? '点击删除缓存' : '缓存到本地，URL过期后仍可使用'}>
+            <Button
+              size="small"
+              variant="outline"
+              theme={isCached ? 'success' : 'default'}
+              icon={isCached ? <CheckCircleFilledIcon /> : <SaveIcon />}
+              onClick={handleCacheClick}
+              disabled={isCaching}
+            >
+              {isCaching ? `缓存中 ${cacheProgress}%` : isCached ? '已缓存' : '缓存'}
+            </Button>
+          </Tooltip>
         )}
 
         {/* Edit button for all tasks */}

@@ -15,6 +15,7 @@ import { useDrawnix, DialogType } from '../../hooks/use-drawnix';
 import { insertImageFromUrl } from '../../data/image';
 import { insertVideoFromUrl } from '../../data/video';
 import { downloadMediaFile } from '../../utils/download-utils';
+import { mediaCacheService } from '../../services/media-cache-service';
 import './task-queue.scss';
 
 const { TabPanel } = Tabs;
@@ -43,7 +44,6 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
     completedTasks,
     failedTasks,
     cancelledTasks,
-    cancelTask,
     retryTask,
     deleteTask,
     clearCompleted,
@@ -59,6 +59,11 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
   const [previewTaskId, setPreviewTaskId] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState<string | null>(null);
+
+  // Initialize media cache status on component mount
+  useEffect(() => {
+    mediaCacheService.initCacheStatus();
+  }, []);
 
   // Filter and sort tasks
   const filteredTasks = useMemo(() => {
@@ -119,11 +124,6 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
   };
 
   // Task action handlers
-  const handleCancel = (taskId: string) => {
-    cancelTask(taskId);
-    onTaskAction?.('cancel', taskId);
-  };
-
   const handleRetry = (taskId: string) => {
     retryTask(taskId);
     onTaskAction?.('retry', taskId);
@@ -352,7 +352,6 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
                 <TaskItem
                   key={task.id}
                   task={task}
-                  onCancel={handleCancel}
                   onRetry={handleRetry}
                   onDelete={handleDelete}
                   onDownload={handleDownload}

@@ -1,0 +1,58 @@
+/**
+ * VideoModelOptions Styles
+ */
+
+.video-model-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--td-component-border, #e7e7e7);
+  border-bottom: 1px solid var(--td-component-border, #e7e7e7);
+  margin: 12px 0;
+
+  &__row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  &__label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--td-text-color-primary, #000000);
+    min-width: 40px;
+    flex-shrink: 0;
+  }
+
+  &__control {
+    flex: 1;
+    display: flex;
+    align-items: center;
+  }
+
+  &__fixed-value {
+    font-size: 13px;
+    color: var(--td-text-color-secondary, #666666);
+    padding: 4px 12px;
+    background: var(--td-bg-color-component, #f3f3f3);
+    border-radius: 4px;
+  }
+
+  // TDesign RadioGroup overrides
+  .t-radio-group {
+    gap: 8px;
+  }
+
+  .t-radio-button {
+    font-size: 12px;
+    padding: 0 12px;
+    height: 28px;
+    line-height: 28px;
+  }
+
+  // TDesign Select overrides
+  .t-select {
+    font-size: 13px;
+  }
+}
