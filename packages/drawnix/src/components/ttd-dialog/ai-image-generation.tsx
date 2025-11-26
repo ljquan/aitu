@@ -9,7 +9,7 @@ import { getSelectedElements, PlaitElement, getRectangleByElements, Point } from
 import { defaultGeminiClient } from '../../utils/gemini-api';
 import { insertImageFromUrl } from '../../data/image';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
-import { TaskType } from '../../types/task.types';
+import { TaskType, TaskStatus } from '../../types/task.types';
 import { MessagePlugin } from 'tdesign-react';
 import { downloadMediaFile } from '../../utils/download-utils';
 import {
@@ -40,6 +40,7 @@ import {
 } from './shared';
 import { AI_IMAGE_GENERATION_PREVIEW_CACHE_KEY as PREVIEW_CACHE_KEY } from '../../constants/storage';
 import { DialogTaskList } from '../task-queue/DialogTaskList';
+import { geminiSettings } from '../../utils/settings-manager';
 
 interface PreviewCache extends PreviewCacheBase {
   generatedImage: string | null;
@@ -84,7 +85,7 @@ const AIImageGeneration = ({
   const { appState, setAppState } = useDrawnix();
   const { language } = useI18n();
   const board = useBoard();
-  const { createTask } = useTaskQueue();
+  const { createTask, tasks } = useTaskQueue();
 
   // Track task IDs created in this dialog session
   const [dialogTaskIds, setDialogTaskIds] = useState<string[]>([]);
@@ -249,7 +250,32 @@ const AIImageGeneration = ({
     savePromptToHistoryUtil('image', promptText, dimensions);
   };
 
-  const handleGenerate = async () => {
+  // 转换图片为可序列化格式
+  const convertImagesToSerializable = async () => {
+    return Promise.all(
+      uploadedImages.map(async (img) => {
+        if (img.file) {
+          return new Promise<{ type: 'url'; url: string; name: string }>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+              resolve({
+                type: 'url',
+                url: reader.result as string,
+                name: img.name
+              });
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(img.file!);
+          });
+        } else if (img.url) {
+          return { type: 'url', url: img.url, name: img.name };
+        }
+        throw new Error('Invalid image data');
+      })
+    );
+  };
+
+  const handleGenerate = async (count: number = 1) => {
     if (!prompt.trim()) {
       setError(language === 'zh' ? '请输入图像描述' : 'Please enter image description');
       return;
@@ -259,34 +285,74 @@ const AIImageGeneration = ({
       const finalWidth = typeof width === 'string' ? (parseInt(width) || 1024) : width;
       const finalHeight = typeof height === 'string' ? (parseInt(height) || 1024) : height;
       // Convert File objects to base64 data URLs for serialization
-      const convertedImages = await Promise.all(
-        uploadedImages.map(async (img) => {
-          if (img.file) {
-            // Convert File to base64 data URL
-            return new Promise<{ type: 'url'; url: string; name: string }>((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onload = () => {
-                resolve({
-                  type: 'url',
-                  url: reader.result as string,
-                  name: img.name
-                });
-              };
-              reader.onerror = reject;
-              reader.readAsDataURL(img.file!);
-            });
-          } else if (img.url) {
-            return { type: 'url', url: img.url, name: img.name };
+      const convertedImages = await convertImagesToSerializable();
+
+      // 如果数量大于1，使用批量生成
+      if (count > 1) {
+        const batchTaskIds: string[] = [];
+        const batchId = `batch_${Date.now()}`;
+
+        // Get current image model from settings
+        const settings = geminiSettings.get();
+        const currentImageModel = settings.imageModelName || 'gemini-2.5-flash-image-vip';
+
+        for (let i = 0; i < count; i++) {
+          const taskParams = {
+            prompt: prompt.trim(),
+            width: finalWidth,
+            height: finalHeight,
+            model: currentImageModel,
+            uploadedImages: convertedImages,
+            batchId,
+            batchIndex: i + 1,
+            batchTotal: count
+          };
+
+          const task = createTask(taskParams, TaskType.IMAGE);
+          if (task) {
+            batchTaskIds.push(task.id);
           }
-          throw new Error('Invalid image data');
-        })
-      );
+        }
+
+        if (batchTaskIds.length > 0) {
+          MessagePlugin.success(
+            language === 'zh'
+              ? `已添加 ${batchTaskIds.length} 个任务到队列`
+              : `Added ${batchTaskIds.length} tasks to queue`
+          );
+
+          setDialogTaskIds(prev => [...prev, ...batchTaskIds]);
+          savePromptToHistory(prompt);
+          setGeneratedImage(null);
+          setError(null);
+
+          try {
+            localStorage.removeItem(PREVIEW_CACHE_KEY);
+          } catch (error) {
+            console.warn('Failed to clear cache:', error);
+          }
+        } else {
+          setError(
+            language === 'zh'
+              ? '批量任务创建失败，请稍后重试'
+              : 'Failed to create batch tasks, please try again later'
+          );
+        }
+        return;
+      }
+
+      // 单个任务生成
+
+      // Get current image model from settings
+      const settings = geminiSettings.get();
+      const currentImageModel = settings.imageModelName || 'gemini-2.5-flash-image-vip';
 
       // 创建任务参数
       const taskParams = {
         prompt: prompt.trim(),
         width: finalWidth,
         height: finalHeight,
+        model: currentImageModel,
         // 保存上传的图片（已转换为可序列化的格式）
         uploadedImages: convertedImages
       };
@@ -308,13 +374,11 @@ const AIImageGeneration = ({
         // 保存提示词到历史记录
         savePromptToHistory(prompt);
 
-        // 完全清空表单（prompt、参考图、预览）
-        setPrompt('');
-        setUploadedImages([]);
+        // 只清除预览和错误，保留表单数据（prompt和参考图）
         setGeneratedImage(null);
         setError(null);
 
-        // 清除缓存
+        // 清除预览缓存
         try {
           localStorage.removeItem(PREVIEW_CACHE_KEY);
         } catch (error) {
@@ -338,8 +402,32 @@ const AIImageGeneration = ({
     }
   };
 
+  useKeyboardShortcuts(isGenerating, prompt, () => handleGenerate(1));
 
-  useKeyboardShortcuts(isGenerating, prompt, handleGenerate);
+  // 记录上一次显示的任务ID，避免重复显示旧任务
+  const [lastDisplayedTaskId, setLastDisplayedTaskId] = useState<string | null>(null);
+
+  // 监听任务完成，自动更新预览
+  useEffect(() => {
+    if (dialogTaskIds.length === 0) return;
+
+    // 获取最新创建的任务ID
+    const latestTaskId = dialogTaskIds[dialogTaskIds.length - 1];
+
+    // 从 tasks 中找到最新任务
+    const latestTask = tasks.find(task => task.id === latestTaskId);
+
+    // 只有当最新任务完成且还未显示过时，才更新预览
+    if (
+      latestTask?.status === TaskStatus.COMPLETED &&
+      latestTask?.result?.url &&
+      latestTask.id !== lastDisplayedTaskId
+    ) {
+      setGeneratedImageWithPreload(latestTask.result.url);
+      setGeneratedImagePrompt(latestTask.params.prompt);
+      setLastDisplayedTaskId(latestTask.id);
+    }
+  }, [tasks, dialogTaskIds, lastDisplayedTaskId]);
 
 
 

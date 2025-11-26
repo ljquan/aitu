@@ -51,6 +51,8 @@ export interface GenerationParams {
   duration?: number;
   /** Style or model to use for generation */
   style?: string;
+  /** AI model to use (e.g., 'veo3', 'sora-2') */
+  model?: string;
   /** Random seed for reproducible generation */
   seed?: number;
   /** Additional parameters for specific generation types */
@@ -122,6 +124,8 @@ export interface Task {
   nextRetryAt?: number;
   /** User identifier (reserved for multi-user support) */
   userId?: string;
+  /** Task progress percentage (0-100) for video generation */
+  progress?: number;
 }
 
 /**

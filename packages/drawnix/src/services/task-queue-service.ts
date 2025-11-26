@@ -75,6 +75,8 @@ class TaskQueueService {
       createdAt: now,
       updatedAt: now,
       retryCount: 0,
+      // Initialize progress for video tasks
+      ...(type === TaskType.VIDEO && { progress: 0 }),
     };
 
     // Add to queue
@@ -133,8 +135,31 @@ class TaskQueueService {
   }
 
   /**
+   * Updates a task's progress
+   *
+   * @param taskId - The task ID
+   * @param progress - Progress percentage (0-100)
+   */
+  updateTaskProgress(taskId: string, progress: number): void {
+    const task = this.tasks.get(taskId);
+    if (!task) {
+      console.warn(`[TaskQueueService] Task ${taskId} not found`);
+      return;
+    }
+
+    const updatedTask: Task = {
+      ...task,
+      progress: Math.min(100, Math.max(0, progress)),
+      updatedAt: Date.now(),
+    };
+
+    this.tasks.set(taskId, updatedTask);
+    this.emitEvent('taskUpdated', updatedTask);
+  }
+
+  /**
    * Gets a task by ID
-   * 
+   *
    * @param taskId - The task ID
    * @returns The task or undefined
    */
@@ -262,9 +287,14 @@ class TaskQueueService {
   restoreTasks(tasks: Task[]): void {
     this.tasks.clear();
     tasks.forEach(task => {
-      this.tasks.set(task.id, task);
+      // Ensure video tasks have progress field (for backward compatibility)
+      const restoredTask: Task = task.type === TaskType.VIDEO && task.progress === undefined
+        ? { ...task, progress: 0 }
+        : task;
+
+      this.tasks.set(restoredTask.id, restoredTask);
       // Emit event for each restored task so subscribers can update UI
-      this.emitEvent('taskCreated', task);
+      this.emitEvent('taskCreated', restoredTask);
     });
     console.log(`[TaskQueueService] Restored ${tasks.length} tasks`);
   }

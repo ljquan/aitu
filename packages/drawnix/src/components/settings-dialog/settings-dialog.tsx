@@ -8,11 +8,22 @@ import { Tooltip, Select } from 'tdesign-react';
 import { InfoCircleIcon } from 'tdesign-icons-react';
 
 export const IMAGE_MODEL_OPTIONS = [
-  { label: 'gemini-2.5-flash-image', value: 'gemini-2.5-flash-image' },
-  { label: 'gemini-3-pro-image-preview-hd', value: 'gemini-3-pro-image-preview-hd' },
-  { label: 'gemini-3-pro-image-preview', value: 'gemini-3-pro-image-preview' },
-  { label: 'gemini-3-pro-image-preview-2k', value: 'gemini-3-pro-image-preview-2k' },
-  { label: 'gemini-3-pro-image-preview-4k', value: 'gemini-3-pro-image-preview-4k' },
+  { label: 'gemini-2.5-flash-image (nano-banana)', value: 'gemini-2.5-flash-image' },
+  { label: 'gemini-2.5-flash-image-vip (nano-banana-vip)', value: 'gemini-2.5-flash-image-vip' },
+  { label: 'gemini-3-pro-image-preview (nano-banana-2)', value: 'gemini-3-pro-image-preview' },
+  { label: 'gemini-3-pro-image-preview-hd (nano-banana-2-hd)', value: 'gemini-3-pro-image-preview-hd' },
+  { label: 'gemini-3-pro-image-preview-2k (nano-banana-2-2k)', value: 'gemini-3-pro-image-preview-2k' },
+  { label: 'gemini-3-pro-image-preview-4k (nano-banana-2-4k)', value: 'gemini-3-pro-image-preview-4k' },
+];
+
+export const VIDEO_MODEL_OPTIONS = [
+  { label: 'veo3', value: 'veo3' },
+  { label: 'veo3-pro', value: 'veo3-pro' },
+  { label: 'veo3.1', value: 'veo3.1' },
+  { label: 'veo3.1-pro', value: 'veo3.1-pro' },
+  { label: 'veo3.1-components', value: 'veo3.1-components' },
+  { label: 'sora-2', value: 'sora-2' },
+  { label: 'sora-2-pro', value: 'sora-2-pro' },
 ];
 
 export const SettingsDialog = ({
@@ -117,11 +128,13 @@ export const SettingsDialog = ({
           </div>
           <div className="settings-dialog__field">
             <label className="settings-dialog__label">视频模型名称</label>
-            <input
-              type="text"
-              className="settings-dialog__input"
+            <Select
+              className="settings-dialog__select"
               value={videoModelName}
-              onChange={(e) => setVideoModelName(e.target.value)}
+              onChange={(value) => setVideoModelName(value as string)}
+              options={VIDEO_MODEL_OPTIONS}
+              filterable
+              creatable
               placeholder="veo3"
             />
           </div>

@@ -153,7 +153,10 @@ export function generateParamsHash(params: GenerationParams, type: TaskType): st
     duration: params.duration,
     style: params.style,
     seed: params.seed,
+    // Include batch info for unique hash per batch task
+    batchId: (params as any).batchId,
+    batchIndex: (params as any).batchIndex,
   };
-  
+
   return JSON.stringify(sortedParams);
 }

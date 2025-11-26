@@ -1,48 +1,148 @@
-<p align="center">
-  <picture style="width: 320px">
-    <source media="(prefers-color-scheme: light)" srcset="https://github.com/ljquan/aitu/blob/develop/apps/web/public/logo/logo_drawnix_h.svg?raw=true" />
-    <source media="(prefers-color-scheme: dark)" srcset="https://github.com/ljquan/aitu/blob/develop/apps/web/public/logo/logo_drawnix_h_dark.svg?raw=true" />
-    <img src="https://github.com/ljquan/aitu/blob/develop/apps/web/public/logo/logo_drawnix_h.svg?raw=true" width="360" alt="Drawnix logo and name" />
-  </picture>
-</p>
 <div align="center">
-  <h2>
-    Aitu - Open-source whiteboard tool (SaaS), an all-in-one collaborative canvas that includes mind mapping, flowcharts, freehand and more.
-  <br />
-  </h2>
-</div>
-
-<div align="center">
-  <figure>
-    <a target="_blank" rel="noopener">
-      <img src="https://github.com/ljquan/aitu/blob/develop/apps/web/public/product_showcase/case-2.png" alt="Product showcase" width="80%" />
-    </a>
-    <figcaption>
-      <p align="center">
-      Whiteboard with mind mapping, flowcharts, freehand drawing and more
-      </p>
-    </figcaption>
-  </figure>
-
+  <h1>
+    Aitu
+  </h1>
+  <h3>
+    AI Image & Video Creation (SaaS) + All-in-One Whiteboard
+  </h3>
+  <p>
+    Mind Maps · Flowcharts · Freehand · AI Image Generation · AI Video Generation
+  </p>
+  <p>
+    <a href="https://github.com/ljquan/aitu/releases"><img src="https://img.shields.io/badge/version-0.0.11-blue.svg" alt="Version"></a>
+    <a href="https://github.com/ljquan/aitu/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
+    <a href="https://aitu.tu-zi.com"><img src="https://img.shields.io/badge/demo-online-brightgreen.svg" alt="Demo"></a>
+  </p>
 </div>
 
 [*中文*](https://github.com/ljquan/aitu/blob/develop/README.md)
 
 ## Features
 
-- 💯 Free and Open Source
-- ⚒️ Mind Maps and Flowcharts
-- 🖌 Freehand
-- 😀 Image Support
-- 🚀 Plugin-based Architecture - Extensible
-- 🖼️ 📃 Export to PNG, JPG, JSON(.drawnix)
-- 💾 Auto-save (Browser Storage)
-- ⚡ Edit Features: Undo, Redo, Copy, Paste, etc.
-- 🌌 Infinite Canvas: Zoom, Pan
-- 🎨 Theme Support
-- 📱 Mobile-friendly
-- 📈 Support mermaid syntax conversion to flowchart
-- ✨ Support markdown text conversion to mind map（New 🔥🔥🔥）
+### AI Creation Capabilities 🔥
+- **AI Image Generation** - Multiple image generation models
+  - gemini-2.5-flash-image (nano-banana) - Fast image generation
+  - gemini-3-pro-image-preview (nano-banana-2) - High quality, supports HD/2K/4K resolution
+  - Text-to-image, image reference generation, batch generation
+- **AI Video Generation** - Multiple video generation models
+  - Veo3 / Veo3 Pro - High quality video generation
+  - Veo3.1 / Veo3.1 Pro - First/last frame control, multi-image reference
+  - Sora-2 / Sora-2 Pro - OpenAI video model
+  - Image-to-video, progress tracking, task management
+- **Model Switching** - Instantly switch between AI models in generation dialogs
+- **Task Queue Management** - Async task processing, batch generation, retry, history, media caching
+
+### Whiteboard & Visualization
+- **Mind Maps** - Quick mind map creation with various layouts and styles
+- **Flowcharts** - Professional flowchart drawing with Mermaid syntax support
+- **Freehand Drawing** - Hand-drawn creations with multiple brush tools
+- **Image Support** - Insert and edit image elements
+- **Markdown to Mind Map** - Convert text to visual structures
+
+### Editing & Interaction
+- **Rich Editing Features** - Undo, redo, copy, paste, multi-select, etc.
+- **Infinite Canvas** - Free zoom, scroll, pan
+- **Auto-save** - Local browser auto-save, no data loss
+- **Multi-format Export** - Supports PNG, JSON(`.drawnix`) formats
+
+### Experience & Ecosystem
+- **Free & Open Source** - MIT license, commercial use allowed
+- **Plugin Architecture** - Flexible extensions with custom plugin development
+- **Theme Support** - Light/dark theme switching
+- **Mobile-friendly** - Perfect mobile device support
+
+## Product Showcase
+
+<div align="center">
+  <figure>
+    <a target="_blank" rel="noopener">
+      <img src="./apps/web/public/product_showcase/aitu-01.png" alt="Prompt and Image" width="100%" />
+    </a>
+    <figcaption>
+      <p align="center">
+        Prompt + Image Integration
+      </p>
+    </figcaption>
+  </figure>
+</div>
+
+<div align="center">
+  <figure>
+    <a target="_blank" rel="noopener">
+      <img src="./apps/web/public/product_showcase/aitu-02.png" alt="AI Image Generation" width="100%" />
+    </a>
+    <figcaption>
+      <p align="center">
+        AI Image Generation - Creative Leap
+      </p>
+    </figcaption>
+  </figure>
+</div>
+
+<div align="center">
+  <figure>
+    <a target="_blank" rel="noopener">
+      <img src="./apps/web/public/product_showcase/aitu-03.png" alt="Task Processing" width="100%" />
+    </a>
+    <figcaption>
+      <p align="center">
+        Task Processing - Batch Generation
+      </p>
+    </figcaption>
+  </figure>
+</div>
+
+<div align="center">
+  <figure>
+    <a target="_blank" rel="noopener">
+      <img src="./apps/web/public/product_showcase/aitu-04.png" alt="Results Display" width="100%" />
+    </a>
+    <figcaption>
+      <p align="center">
+        Results Display
+      </p>
+    </figcaption>
+  </figure>
+</div>
+
+<div align="center">
+  <figure>
+    <a target="_blank" rel="noopener">
+      <img src="./apps/web/public/product_showcase/aitu-05.png" alt="AI Video Generation" width="100%" />
+    </a>
+    <figcaption>
+      <p align="center">
+        AI Video Generation - Multi-model, Image-to-Video
+      </p>
+    </figcaption>
+  </figure>
+</div>
+
+<div align="center">
+  <figure>
+    <a target="_blank" rel="noopener">
+      <img src="./apps/web/public/product_showcase/aitu-06.png" alt="Task Queue Management" width="100%" />
+    </a>
+    <figcaption>
+      <p align="center">
+        Task Queue - Progress Tracking, Batch Management, Media Cache
+      </p>
+    </figcaption>
+  </figure>
+</div>
+
+<div align="center">
+  <figure>
+    <a target="_blank" rel="noopener">
+      <img src="./apps/web/public/product_showcase/case-2.png" alt="Flowchart and Freehand" width="100%" />
+    </a>
+    <figcaption>
+      <p align="center">
+        All-in-One Whiteboard - Flowcharts, Freehand, Images and More
+      </p>
+    </figcaption>
+  </figure>
+</div>
 
 
 ## About the Name
@@ -67,23 +167,54 @@ Creativity stems from inner love, and ***Aitu*** is committed to being a powerfu
 ```
 aitu/
 ├── apps/
-│   ├── web                   # Aitu web application
-│   │    └── index.html       # HTML
-├── dist/                     # Build artifacts
+│   └── web/                         # Aitu Web Application
+│       ├── src/                     # Source code
+│       ├── public/                  # Static assets
+│       └── index.html               # Entry HTML
 ├── packages/
-│   └── drawnix/              # Whiteboard application core
-│   └── react-board/          # Whiteboard react view layer
-│   └── react-text/           # Text rendering module
-├── package.json
-├── ...
-└── README.md
-└── README_en.md
-
+│   ├── drawnix/                     # Whiteboard core library
+│   │   ├── src/
+│   │   │   ├── components/          # React components
+│   │   │   │   ├── toolbar/         # Toolbar components
+│   │   │   │   ├── ttd-dialog/      # AI generation dialogs
+│   │   │   │   ├── task-queue/      # Task queue management
+│   │   │   │   └── settings-dialog/ # Settings dialog
+│   │   │   ├── plugins/             # Feature plugins
+│   │   │   │   ├── with-freehand.ts # Freehand drawing plugin
+│   │   │   │   ├── with-mind.ts     # Mind map plugin
+│   │   │   │   └── with-draw.ts     # Drawing plugin
+│   │   │   ├── services/            # Business services
+│   │   │   │   ├── generation-api-service.ts  # AI generation API
+│   │   │   │   └── task-queue-service.ts      # Task queue service
+│   │   │   ├── hooks/               # React Hooks
+│   │   │   ├── utils/               # Utility functions
+│   │   │   │   ├── gemini-api/      # Gemini API client
+│   │   │   │   └── settings-manager.ts # Settings management
+│   │   │   └── types/               # TypeScript type definitions
+│   ├── react-board/                 # Plait React view adapter
+│   └── react-text/                  # Text rendering components
+├── dist/                            # Build artifacts
+├── docs/                            # Development docs
+├── package.json                     # Project config
+├── nx.json                          # Nx config
+├── tsconfig.base.json               # TypeScript base config
+└── README.md                        # Project readme
 ```
+
+### Key Directory Description
+
+- **apps/web**: Web application entry, contains page routing and global config
+- **packages/drawnix**: Core whiteboard library with all core features and components
+  - `components/`: UI components including toolbars, dialogs, task queue
+  - `plugins/`: Feature plugins using composition pattern
+  - `services/`: Business service layer for API calls and state management
+  - `hooks/`: React Hooks providing reusable state logic
+- **packages/react-board**: Plait framework React adapter layer
+- **packages/react-text**: Text editing and rendering components
 
 ## Try It Out
 
-*https://aitu.chat* is the online application of *Aitu*.
+[*https://aitu.tu-zi.com*](https://aitu.tu-zi.com) is the online application of *Aitu*.
 
 We will be iterating frequently on application features to continuously optimize user experience.
 
@@ -91,7 +222,7 @@ We will be iterating frequently on application features to continuously optimize
 ## 🚀 Quick Start
 
 ### Online Experience
-Visit [aitu.chat](https://aitu.chat) directly to start using it immediately, no installation required.
+Visit [aitu.tu-zi.com](https://aitu.tu-zi.com) directly to start using it immediately, no installation required.
 
 ### Local Development
 
@@ -126,7 +257,7 @@ npm run build:web            # Build web app only
 
 # Version Management
 npm run version:patch        # Version +0.0.1
-npm run version:minor        # Version +0.1.0  
+npm run version:minor        # Version +0.1.0
 npm run version:major        # Version +1.0.0
 
 # Release
@@ -166,13 +297,13 @@ nx test react-board
 
 #### Import/Export
 - **Export Formats**: Supports PNG, JPG, JSON(.drawnix) formats
-- **Text Conversion**: 
+- **Text Conversion**:
   - Support Markdown text to mind map conversion
   - Support Mermaid syntax to flowchart conversion
 
 #### Shortcuts
 - `Ctrl/Cmd + Z`: Undo
-- `Ctrl/Cmd + Y`: Redo  
+- `Ctrl/Cmd + Y`: Redo
 - `Ctrl/Cmd + C`: Copy
 - `Ctrl/Cmd + V`: Paste
 - Mouse wheel: Zoom canvas
@@ -223,7 +354,7 @@ packages/
 ├── drawnix/           # Core whiteboard application
 │   ├── src/
 │   │   ├── components/    # React components
-│   │   ├── plugins/       # Feature plugins  
+│   │   ├── plugins/       # Feature plugins
 │   │   ├── transforms/    # Data transformations
 │   │   └── utils/         # Utility functions
 ├── react-board/       # Plait React adapter layer
@@ -235,7 +366,7 @@ packages/
 Uses a composable plugin architecture where each plugin handles specific functionality:
 
 - **withFreehand**: Freehand drawing capabilities
-- **withMind**: Mind mapping functionality  
+- **withMind**: Mind mapping functionality
 - **withDraw**: Basic shape drawing
 - **withHotkey**: Keyboard shortcut support
 - **withTextLink**: Text link functionality
@@ -366,6 +497,10 @@ nx lint drawnix
 - ✅ Freehand drawing and image insertion
 - ✅ Markdown/Mermaid conversion
 - ✅ Mobile adaptation
+- ✅ AI Image Generation (multi-model support)
+- ✅ AI Video Generation (Veo3/Sora-2)
+- ✅ Task Queue & Batch Generation
+- ✅ Media Caching
 
 ### In Development 🚧
 - 🚧 Collaboration features (real-time multi-user editing)
@@ -381,6 +516,17 @@ nx lint drawnix
 
 Follow [Releases](https://github.com/ljquan/aitu/releases) for release plans.
 
+## 💬 Community & Feedback
+
+Welcome to join the community to share your experiences and creations!
+
+<div align="center">
+  <img src="https://tuziai.oss-cn-shenzhen.aliyuncs.com/linkme.png" alt="Community QR Code" width="200" />
+  <p>Scan to join the community</p>
+</div>
+
+- 💬 GitHub Discussions: [Join Discussion](https://github.com/ljquan/aitu/discussions)
+- 🐛 Issue Feedback: [Submit Issue](https://github.com/ljquan/aitu/issues)
 
 
 ## License

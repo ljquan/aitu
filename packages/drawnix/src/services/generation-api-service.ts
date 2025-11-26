@@ -7,9 +7,12 @@
 
 import { GenerationParams, TaskType, TaskResult } from '../types/task.types';
 import { GenerationRequest, GenerationResponse, GenerationError } from '../types/generation.types';
-import { defaultGeminiClient, videoGeminiClient } from '../utils/gemini-api';
+import { defaultGeminiClient } from '../utils/gemini-api';
+import { videoAPIService, VideoModel } from './video-api-service';
 import { TASK_TIMEOUT } from '../constants/TASK_CONSTANTS';
 import { analytics } from '../utils/umami-analytics';
+import { taskQueueService } from './task-queue-service';
+import { geminiSettings } from '../utils/settings-manager';
 
 /**
  * Generation API Service
@@ -68,7 +71,7 @@ class GenerationAPIService {
       // Create generation promise
       const generationPromise = type === TaskType.IMAGE
         ? this.generateImage(params, abortController.signal)
-        : this.generateVideo(params, abortController.signal);
+        : this.generateVideo(taskId, params, abortController.signal);
 
       // Race between generation and timeout
       const result = await Promise.race([generationPromise, timeoutPromise]);
@@ -203,64 +206,88 @@ class GenerationAPIService {
   }
 
   /**
-   * Generates a video using the video generation API
+   * Generates a video using the video generation API with async polling
    * @private
    */
   private async generateVideo(
+    taskId: string,
     params: GenerationParams,
     signal: AbortSignal
   ): Promise<TaskResult> {
     try {
-      // Handle uploaded image if any
-      let imageInput = null;
-      if ((params as any).uploadedImage) {
+      // Handle uploaded images (new multi-image format)
+      let inputReferences: any[] | undefined;
+      let inputReference: string | undefined;
+
+      if ((params as any).uploadedImages && (params as any).uploadedImages.length > 0) {
+        // New multi-image format
+        inputReferences = (params as any).uploadedImages;
+      } else if ((params as any).uploadedImage) {
+        // Legacy single image format
         const img = (params as any).uploadedImage;
-        if (img.type === 'url') {
-          imageInput = { url: img.url };
+        if (img.type === 'url' && img.url) {
+          inputReference = img.url;
         }
       }
 
-      const result = await videoGeminiClient.generateVideo(params.prompt, imageInput);
-      
-      // Extract video URLs from response
-      const responseContent = result.response.choices[0]?.message?.content || '';
-      
-      // Check processed content for videos
-      if (result.processedContent && (result.processedContent as any).videos) {
-        const videos = (result.processedContent as any).videos;
-        
-        if (videos.length >= 2) {
-          // First is preview, second is download
-          return {
-            url: videos[0].data,
-            format: 'mp4',
-            size: 0,
-            duration: params.duration || 5,
-          };
-        } else if (videos.length === 1) {
-          return {
-            url: videos[0].data,
-            format: 'mp4',
-            size: 0,
-            duration: params.duration || 5,
-          };
+      // Get model from params, settings, or use default
+      const settings = geminiSettings.get();
+      const model: VideoModel = (params as any).model || (settings.videoModelName as VideoModel) || 'veo3';
+
+      // Get duration from params (new format uses 'seconds' string)
+      let seconds: string | undefined;
+      if ((params as any).seconds) {
+        seconds = (params as any).seconds;
+      } else if (params.duration) {
+        seconds = params.duration.toString();
+      } else if (model.startsWith('sora')) {
+        seconds = '10'; // sora default
+      } else {
+        seconds = '8'; // veo default
+      }
+
+      // Get size from params (new format uses 'size' string like '1280x720')
+      let size: string | undefined;
+      if ((params as any).size) {
+        size = (params as any).size;
+      } else if (params.width && params.height) {
+        size = `${params.width}x${params.height}`;
+      } else {
+        size = '1280x720'; // default landscape
+      }
+
+      // Use new async polling API
+      const result = await videoAPIService.generateVideoWithPolling(
+        {
+          model,
+          prompt: params.prompt,
+          seconds,
+          size,
+          inputReferences,
+          inputReference,
+        },
+        {
+          interval: 5000, // Poll every 5 seconds
+          onProgress: (progress, status) => {
+            console.log(`[GenerationAPI] Video progress: ${progress}% (${status})`);
+            // Update task progress in queue
+            taskQueueService.updateTaskProgress(taskId, progress);
+          },
         }
+      );
+
+      // Extract video URL from response
+      const videoUrl = result.video_url || result.url;
+      if (!videoUrl) {
+        throw new Error('API 未返回有效的视频 URL');
       }
 
-      // Try to extract URL from text response
-      const urlMatch = responseContent.match(/https?:\/\/[^\s<>"'\n]+/);
-      if (urlMatch) {
-        const videoUrl = urlMatch[0].replace(/[.,;!?]*$/, '');
-        
-        return {
-          url: videoUrl,
-          format: 'mp4',
-          size: 0,
-          duration: params.duration || 5,
-        };
-      }
-
-      throw new Error('API 未返回有效的视频数据');
+      return {
+        url: videoUrl,
+        format: 'mp4',
+        size: 0,
+        duration: parseInt(result.seconds) || params.duration || 8,
+      };
     } catch (error: any) {
       console.error('[GenerationAPI] Video generation error:', error);
       throw new Error(error.message || '视频生成失败');

@@ -14,7 +14,7 @@ import {
   AI_IMAGE_GENERATION_PREVIEW_CACHE_KEY,
   AI_VIDEO_GENERATION_PREVIEW_CACHE_KEY
 } from '../../constants/storage';
-import { IMAGE_MODEL_OPTIONS } from '../settings-dialog/settings-dialog';
+import { IMAGE_MODEL_OPTIONS, VIDEO_MODEL_OPTIONS } from '../settings-dialog/settings-dialog';
 import { geminiSettings } from '../../utils/settings-manager';
 
 const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) => {
@@ -345,7 +345,7 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
               onChange={(value) => handleImageModelChange(value as string)}
               options={IMAGE_MODEL_OPTIONS}
               size="small"
-              style={{ width: '260px' }}
+              style={{ width: '360px' }}
               placeholder="选择图片模型"
               filterable
               creatable
@@ -402,18 +402,15 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
         header={(
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
             <span>{language === 'zh' ? 'AI 视频生成' : 'AI Video Generation'}</span>
-            <input
-              type="text"
+            <Select
               value={selectedVideoModel}
-              onChange={(e) => handleVideoModelChange(e.target.value)}
-              placeholder="veo3"
-              style={{
-                width: '280px',
-                padding: '4px 12px',
-                borderRadius: '3px',
-                border: '1px solid #dcdcdc',
-                fontSize: '14px'
-              }}
+              onChange={(value) => handleVideoModelChange(value as string)}
+              options={VIDEO_MODEL_OPTIONS}
+              size="small"
+              style={{ width: '200px' }}
+              placeholder="选择视频模型"
+              filterable
+              creatable
             />
           </div>
         )}
