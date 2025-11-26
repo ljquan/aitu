@@ -8,7 +8,7 @@
 import React, { useMemo } from 'react';
 import { TaskItem } from './TaskItem';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
-import { Task, TaskType } from '../../types/task.types';
+import { TaskType } from '../../types/task.types';
 import { useDrawnix, DialogType } from '../../hooks/use-drawnix';
 import { insertImageFromUrl } from '../../data/image';
 import { insertVideoFromUrl } from '../../data/video';

@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Button, Tag, Tooltip, Progress } from 'tdesign-react';
+import { Button, Tag, Tooltip } from 'tdesign-react';
 import { ImageIcon, VideoIcon, DeleteIcon, RefreshIcon, DownloadIcon, EditIcon, SaveIcon, CheckCircleFilledIcon } from 'tdesign-icons-react';
 import { Task, TaskStatus, TaskType } from '../../types/task.types';
 import { getRelativeTime, formatTaskDuration } from '../../utils/task-utils';
