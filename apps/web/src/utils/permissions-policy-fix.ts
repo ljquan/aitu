@@ -17,12 +17,20 @@ window.addEventListener = function(type: string, listener: EventListenerOrEventL
   return originalAddEventListener.call(this, type, listener, options);
 };
 
+// 存储可能需要移除的监听器引用
+const noopUnloadHandler = () => {
+  // Placeholder handler for removing unload listeners
+};
+const noopBeforeunloadHandler = () => {
+  // Placeholder handler for removing beforeunload listeners
+};
+
 // 如果有第三方库已经添加了 unload 事件监听器，移除它们
 const removeExistingUnloadListeners = () => {
   try {
     // 尝试移除可能存在的 unload 监听器
-    window.removeEventListener('unload', () => {});
-    window.removeEventListener('beforeunload', () => {});
+    window.removeEventListener('unload', noopUnloadHandler);
+    window.removeEventListener('beforeunload', noopBeforeunloadHandler);
   } catch (error) {
     // 忽略移除不存在的监听器时的错误
   }

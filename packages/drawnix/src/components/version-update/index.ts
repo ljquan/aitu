@@ -1,1 +1,0 @@
-export { VersionUpdate, default } from './version-update';

@@ -86,7 +86,7 @@ export const GenerationHistory: React.FC<GenerationHistoryProps> = ({
 
             ) : (
               <div className="history-item-image history-video-placeholder">
-                <div className="placeholder-icon">🎬</div>
+                <span role="img" aria-label="视频" className="placeholder-icon">🎬</span>
               </div>
             )
           )}

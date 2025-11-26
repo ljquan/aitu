@@ -61,29 +61,33 @@ export const LinkPopup = () => {
         },
       });
     }
-  }, [board.viewport, target]);
+  }, [board.viewport, target, refs]);
+
+  const handleClickOutsideRef = useRef<(event: MouseEvent) => void>();
+  handleClickOutsideRef.current = (event: MouseEvent) => {
+    if (
+      refs.floating.current &&
+      !refs.floating.current.contains(event.target as Node)
+    ) {
+      if (linkStateRef.current) {
+        const linkElement = LinkEditor.getLinkElement(
+          linkStateRef.current.editor
+        );
+        if (linkElement && !(linkElement[0] as LinkElement).url.trim()) {
+          LinkEditor.unwrapLink(linkStateRef.current.editor);
+        }
+      }
+      setAppState({
+        ...appState,
+        linkState: null,
+      });
+    }
+  };
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (
-        refs.floating.current &&
-        !refs.floating.current.contains(event.target as Node)
-      ) {
-        if (linkStateRef.current) {
-          const linkElement = LinkEditor.getLinkElement(
-            linkStateRef.current.editor
-          );
-          if (linkElement && !(linkElement[0] as LinkElement).url.trim()) {
-            LinkEditor.unwrapLink(linkStateRef.current.editor);
-          }
-        }
-        setAppState({
-          ...appState,
-          linkState: null,
-        });
-      }
+      handleClickOutsideRef.current?.(event);
     };
-
     document.addEventListener('mousedown', handleClickOutside);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
@@ -91,21 +95,23 @@ export const LinkPopup = () => {
   }, []);
 
   const saveUrlAndExitEditing = () => {
-    if (url !== linkState!.targetElement.url) {
-      const editor = linkState!.editor;
-      const node = linkState!.targetElement;
+    if (!linkState) return;
+    if (url !== linkState.targetElement.url) {
+      const editor = linkState.editor;
+      const node = linkState.targetElement;
       const path = ReactEditor.findPath(editor, node);
       Transforms.setNodes(editor, { url: url }, { at: path });
     }
-    const linkElement = LinkEditor.getLinkElement(linkState!.editor);
+    const linkElement = LinkEditor.getLinkElement(linkState.editor);
+    if (!linkElement) return;
     setAppState({
       ...appState,
       linkState: {
-        ...appState.linkState!,
+        ...appState.linkState,
         targetElement: linkElement[0] as LinkElement,
         isEditing: false,
         isHoveringOrigin: true,
-      },
+      } as typeof appState.linkState,
     });
   };
 
@@ -117,22 +123,22 @@ export const LinkPopup = () => {
         padding={1}
         className={classNames('link-popup')}
         onPointerEnter={() => {
-          if (!isHovering) {
+          if (!isHovering && appState.linkState) {
             setAppState({
               ...appState,
               linkState: {
-                ...appState.linkState!,
+                ...appState.linkState,
                 isHovering: true,
               },
             });
           }
         }}
         onPointerLeave={() => {
-          if (!isEditing) {
+          if (!isEditing && appState.linkState) {
             setAppState({
               ...appState,
               linkState: {
-                ...appState.linkState!,
+                ...appState.linkState,
                 isHovering: false,
               },
             });
@@ -163,8 +169,9 @@ export const LinkPopup = () => {
                 title={`Delete link`}
                 aria-label={`Delete link`}
                 onPointerDown={() => {
-                  const editor = linkState!.editor;
-                  const targetElement = linkState!.targetElement;
+                  if (!linkState) return;
+                  const editor = linkState.editor;
+                  const targetElement = linkState.targetElement;
                   const path = ReactEditor.findPath(editor, targetElement);
                   Transforms.unwrapNodes(editor, {
                     at: path,
@@ -195,10 +202,11 @@ export const LinkPopup = () => {
                 aria-label={`Edit link`}
                 onPointerDown={({ event }) => {
                   event.preventDefault();
+                  if (!appState.linkState) return;
                   setAppState({
                     ...appState,
                     linkState: {
-                      ...appState.linkState!,
+                      ...appState.linkState,
                       isEditing: true,
                     },
                   });
@@ -211,8 +219,9 @@ export const LinkPopup = () => {
                 title={`Delete link`}
                 aria-label={`Delete link`}
                 onPointerDown={() => {
-                  const editor = linkState!.editor;
-                  const targetElement = linkState!.targetElement;
+                  if (!linkState) return;
+                  const editor = linkState.editor;
+                  const targetElement = linkState.targetElement;
                   const path = ReactEditor.findPath(editor, targetElement);
                   Transforms.unwrapNodes(editor, {
                     at: path,
