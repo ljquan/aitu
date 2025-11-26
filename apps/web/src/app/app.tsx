@@ -22,9 +22,13 @@ export function App() {
 
   useEffect(() => {
     const loadData = async () => {
-      const storedData = await localforage.getItem(MAIN_BOARD_CONTENT_KEY);
+      const storedData = await localforage.getItem<{
+        children: PlaitElement[];
+        viewport?: Viewport;
+        theme?: PlaitTheme;
+      }>(MAIN_BOARD_CONTENT_KEY);
       if (storedData) {
-        setValue(storedData as any);
+        setValue(storedData);
         return;
       }
       const localData = localStorage.getItem(OLD_DRAWNIX_LOCAL_DATA_KEY);
@@ -54,7 +58,7 @@ export function App() {
         console.log(
           `add __drawnix__web__debug_log to window, so you can call add log anywhere, like: window.__drawnix__web__console('some thing')`
         );
-        (window as any)['__drawnix__web__console'] = (value: string) => {
+        (window as unknown as { __drawnix__web__console: (value: string) => void })['__drawnix__web__console'] = (value: string) => {
           addDebugLog(board, value);
         };
       }}
