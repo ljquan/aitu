@@ -3,7 +3,7 @@
  */
 
 import { GeminiConfig, ImageInput, GeminiMessage, VideoGenerationOptions, ProcessedContent, GeminiResponse } from './types';
-import { DEFAULT_CONFIG, VIDEO_DEFAULT_CONFIG } from './config';
+import { DEFAULT_CONFIG, VIDEO_DEFAULT_CONFIG, shouldUseNonStreamMode } from './config';
 import { prepareImageData, processMixedContent } from './utils';
 import { callApiWithRetry, callApiStreamRaw, callVideoApiStreamRaw } from './apiCalls';
 import { geminiSettings, settingsManager } from '../settings-manager';
@@ -194,9 +194,16 @@ export async function chatWithGemini(
 
   console.log(`共发送 ${imageContents.length} 张图片到 Gemini API`);
 
-  // 图文混合必须使用流式调用
+  // 根据模型选择流式或非流式调用
   let response: GeminiResponse;
-  if (images.length > 0) {
+  const modelName = validatedConfig.modelName || '';
+
+  if (shouldUseNonStreamMode(modelName)) {
+    // 某些模型（如 seedream）在流式模式下可能返回不完整响应，使用非流式调用
+    console.log(`模型 ${modelName} 使用非流式调用确保响应完整`);
+    response = await callApiWithRetry(validatedConfig, messages);
+  } else if (images.length > 0) {
+    // 其他模型：图文混合使用流式调用
     console.log('检测到图片输入，使用流式调用');
     response = await callApiStreamRaw(validatedConfig, messages);
   } else {

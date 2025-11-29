@@ -1,6 +1,6 @@
 // Service Worker for PWA functionality and handling CORS issues with external images
 // Version will be replaced during build process
-const APP_VERSION = '0.0.4';
+const APP_VERSION = '0.1.1';
 const CACHE_NAME = `drawnix-v${APP_VERSION}`;
 const IMAGE_CACHE_NAME = `drawnix-images-v${APP_VERSION}`;
 const STATIC_CACHE_NAME = `drawnix-static-v${APP_VERSION}`;
@@ -363,6 +363,13 @@ self.addEventListener('fetch', event => {
   // 完全不拦截备用域名，让浏览器直接处理
   if (url.hostname === 'cdn.i666.fun') {
     console.log('Service Worker: 备用域名请求直接通过，不拦截:', url.href);
+    return; // 直接返回，让浏览器处理
+  }
+
+  // 放行火山引擎域名（seedream 模型图片），让浏览器直接用 <img> 标签加载
+  // 这些域名不支持 CORS，但 <img> 标签可以直接加载
+  if (url.hostname.endsWith('.volces.com') || url.hostname.endsWith('.volccdn.com')) {
+    console.log('Service Worker: 火山引擎域名请求直接通过，不拦截:', url.href);
     return; // 直接返回，让浏览器处理
   }
 

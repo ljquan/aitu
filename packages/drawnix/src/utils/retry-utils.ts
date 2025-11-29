@@ -5,7 +5,7 @@
  * Provides functions to calculate retry delays and determine retry eligibility.
  */
 
-import { Task } from '../types/task.types';
+import { Task, TaskType } from '../types/task.types';
 import { RETRY_DELAYS, MAX_RETRY_COUNT } from '../constants/TASK_CONSTANTS';
 
 /**
@@ -30,18 +30,23 @@ export function calculateRetryDelay(retryCount: number): number {
 
 /**
  * Determines if a task should be retried based on its current state
- * 
+ *
  * @param task - The task to evaluate
  * @returns True if the task is eligible for retry, false otherwise
- * 
+ *
+ * Note: Both image and video tasks do NOT auto-retry because:
+ * 1. Generation is expensive (time and cost)
+ * 2. If generation fails, it's usually due to content policy, quota, or API issues
+ * 3. User can manually retry if needed
+ *
  * @example
- * shouldRetry({ ...task, retryCount: 2, status: 'failed' }) // Returns true
- * shouldRetry({ ...task, retryCount: 3, status: 'failed' }) // Returns false
- * shouldRetry({ ...task, retryCount: 0, status: 'completed' }) // Returns false
+ * shouldRetry({ ...task, type: 'image', retryCount: 2, status: 'failed' }) // Returns false
+ * shouldRetry({ ...task, type: 'video', retryCount: 0, status: 'failed' }) // Returns false
  */
 export function shouldRetry(task: Task): boolean {
-  return task.retryCount < MAX_RETRY_COUNT && 
-         (task.status === 'failed' || task.status === 'retrying');
+  // Disable auto-retry for all tasks
+  // User can manually retry if needed
+  return false;
 }
 
 /**

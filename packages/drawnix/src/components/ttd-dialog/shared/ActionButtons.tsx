@@ -8,10 +8,13 @@ interface ActionButtonsProps {
   canGenerate: boolean;
   onGenerate: (count?: number) => void;
   onReset: () => void;
+  leftContent?: React.ReactNode;
 }
 
 const PRESETS = [1, 2, 3, 4, 5, 10, 20, 50, 100];
-const STORAGE_KEY = 'aitu_image_generation_quantity';
+const IMAGE_STORAGE_KEY = 'aitu_image_generation_quantity';
+const VIDEO_STORAGE_KEY = 'aitu_video_generation_quantity';
+const MAX_QUANTITY = 100;
 
 export const ActionButtons: React.FC<ActionButtonsProps> = ({
   language,
@@ -20,15 +23,19 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
   hasGenerated,
   canGenerate,
   onGenerate,
-  onReset
+  onReset,
+  leftContent
 }) => {
+  // Get type-specific storage key
+  const storageKey = type === 'video' ? VIDEO_STORAGE_KEY : IMAGE_STORAGE_KEY;
+
   // Initialize from localStorage
   const [quantity, setQuantity] = useState(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
+      const saved = localStorage.getItem(storageKey);
       if (saved) {
         const num = parseInt(saved, 10);
-        if (!isNaN(num) && num >= 1 && num <= 100) {
+        if (!isNaN(num) && num >= 1 && num <= MAX_QUANTITY) {
           return num;
         }
       }
@@ -46,11 +53,11 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
     setInputValue(quantity.toString());
     // Save to localStorage
     try {
-      localStorage.setItem(STORAGE_KEY, quantity.toString());
+      localStorage.setItem(storageKey, quantity.toString());
     } catch (e) {
       // localStorage not available
     }
-  }, [quantity]);
+  }, [quantity, storageKey]);
 
   // Handle outside click to close dropdown
   useEffect(() => {
@@ -67,7 +74,7 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
   const handleBlur = () => {
     let num = parseInt(inputValue, 10);
     if (isNaN(num) || num < 1) num = 1;
-    if (num > 100) num = 100;
+    if (num > MAX_QUANTITY) num = MAX_QUANTITY;
 
     setInputValue(num.toString());
     setQuantity(num);
@@ -98,103 +105,98 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
 
   return (
     <div className="section-actions unified-action-bar">
-      {/* Unified Action Box Container - Only for image type */}
-      {type === 'image' ? (
-        <div className={`unified-action-box ${isGenerating ? 'is-generating' : ''} ${canGenerate ? 'can-generate' : ''}`}>
-          {/* Left Side: Quantity Control */}
-          <div className="quantity-section" ref={containerRef}>
-            <span className="quantity-label">
-              {language === 'zh' ? '数量' : 'Count'}
-            </span>
-            <div className={`quantity-control ${isOpen ? 'is-open' : ''} ${isGenerating ? 'is-disabled' : ''}`}>
-              <input
-                type="text"
-                inputMode="numeric"
-                value={inputValue}
-                onChange={handleInputChange}
-                onBlur={handleBlur}
-                onClick={() => !isGenerating && setIsOpen(true)}
-                disabled={isGenerating}
-                className="quantity-input"
-              />
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleDropdown();
-                }}
-                disabled={isGenerating}
-                className="quantity-toggle"
-              >
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  className={`quantity-icon ${isOpen ? 'is-open' : ''}`}
-                >
-                  <polyline points="6 9 12 15 18 9"></polyline>
-                </svg>
-              </button>
-            </div>
+      {/* Left Content (e.g., AspectRatioSelector) */}
+      {leftContent && <div className="action-bar-left">{leftContent}</div>}
 
-            {/* Dropdown Menu */}
-            {isOpen && (
-              <div className="quantity-dropdown">
-                <div className="quantity-dropdown-header">
-                  {language === 'zh' ? '选择数量' : 'Select Quantity'}
-                </div>
-                {PRESETS.map((preset) => (
-                  <button
-                    key={preset}
-                    type="button"
-                    onClick={() => handleSelect(preset)}
-                    className={`quantity-option ${quantity === preset ? 'is-selected' : ''}`}
-                  >
-                    <span>{preset} {language === 'zh' ? '张' : (preset > 1 ? 'images' : 'image')}</span>
-                    {quantity === preset && (
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <polyline points="20 6 9 17 4 12"></polyline>
-                      </svg>
-                    )}
-                  </button>
-                ))}
-              </div>
-            )}
+      {/* Unified Action Box Container - For both image and video types */}
+      <div className={`unified-action-box ${isGenerating ? 'is-generating' : ''} ${canGenerate ? 'can-generate' : ''}`}>
+        {/* Left Side: Quantity Control */}
+        <div className="quantity-section" ref={containerRef}>
+          <span className="quantity-label">
+            {language === 'zh' ? '数量' : 'Count'}
+          </span>
+          <div className={`quantity-control ${isOpen ? 'is-open' : ''} ${isGenerating ? 'is-disabled' : ''}`}>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={inputValue}
+              onChange={handleInputChange}
+              onBlur={handleBlur}
+              onClick={() => !isGenerating && setIsOpen(true)}
+              disabled={isGenerating}
+              className="quantity-input"
+            />
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleDropdown();
+              }}
+              disabled={isGenerating}
+              className="quantity-toggle"
+            >
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                className={`quantity-icon ${isOpen ? 'is-open' : ''}`}
+              >
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </button>
           </div>
 
-          {/* Middle: Vertical Divider */}
-          <div className="action-divider"></div>
-
-          {/* Right Side: Generate Button */}
-          <button
-            onClick={handleGenerateClick}
-            disabled={isGenerating || !canGenerate}
-            className={`generate-button ${isGenerating ? 'loading' : ''}`}
-          >
-            {isGenerating
-              ? (language === 'zh' ? '生成中...' : 'Generating...')
-              : hasGenerated
-              ? (language === 'zh' ? '重新生成' : 'Regenerate')
-              : (language === 'zh' ? '生成' : 'Generate')}
-          </button>
+          {/* Dropdown Menu */}
+          {isOpen && (
+            <div className="quantity-dropdown">
+              <div className="quantity-dropdown-header">
+                {language === 'zh' ? '选择数量' : 'Select Quantity'}
+              </div>
+              {PRESETS.map((preset) => (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => handleSelect(preset)}
+                  className={`quantity-option ${quantity === preset ? 'is-selected' : ''}`}
+                >
+                  <span>
+                    {preset} {type === 'video'
+                      ? (language === 'zh' ? '个' : (preset > 1 ? 'videos' : 'video'))
+                      : (language === 'zh' ? '张' : (preset > 1 ? 'images' : 'image'))
+                    }
+                  </span>
+                  {quantity === preset && (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
-      ) : (
-        /* Video type - simple button without quantity */
+
+        {/* Middle: Vertical Divider */}
+        <div className="action-divider"></div>
+
+        {/* Right Side: Generate Button */}
         <button
-          onClick={() => onGenerate(1)}
+          onClick={handleGenerateClick}
           disabled={isGenerating || !canGenerate}
-          className={`action-button primary ${isGenerating ? 'loading' : ''}`}
+          className={`generate-button ${isGenerating ? 'loading' : ''}`}
         >
           {isGenerating
             ? (language === 'zh' ? '生成中...' : 'Generating...')
             : hasGenerated
             ? (language === 'zh' ? '重新生成' : 'Regenerate')
-            : (language === 'zh' ? '生成视频' : 'Generate Video')}
+            : type === 'video'
+            ? (language === 'zh' ? '生成视频' : 'Generate Video')
+            : (language === 'zh' ? '生成' : 'Generate')}
         </button>
-      )}
+      </div>
 
       {/* Reset Button */}
       <button

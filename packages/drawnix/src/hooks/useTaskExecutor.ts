@@ -8,9 +8,91 @@
 import { useEffect, useRef } from 'react';
 import { taskQueueService } from '../services/task-queue-service';
 import { generationAPIService } from '../services/generation-api-service';
-import { Task, TaskStatus } from '../types/task.types';
+import { Task, TaskStatus, TaskType } from '../types/task.types';
 import { isTaskTimeout } from '../utils/task-utils';
 import { shouldRetry, getNextRetryTime } from '../utils/retry-utils';
+
+/**
+ * Converts error to user-friendly message
+ */
+function getFriendlyErrorMessage(error: any): string {
+  const message = error?.message || String(error);
+  const apiErrorBody = error?.apiErrorBody || '';
+  const httpStatus = error?.httpStatus;
+
+  // 首先检查 API 错误体中的特定错误类型
+  if (apiErrorBody.includes('insufficient_user_quota') || message.includes('insufficient_user_quota')) {
+    return '账户额度不足，请充值后重试';
+  }
+  if (apiErrorBody.includes('预扣费额度失败') || message.includes('预扣费额度失败')) {
+    return '账户额度不足，请充值后重试';
+  }
+
+  // 检查 AI 模型拒绝生成的情况（返回文本而非图片）
+  if (message.includes('cannot') || message.includes('I cannot') || message.includes("I can't")) {
+    return 'AI 拒绝生成此内容';
+  }
+  if (message.includes('unable to') || message.includes('not able to')) {
+    return 'AI 无法处理此请求';
+  }
+
+  // HTTP 请求超时（AbortSignal.timeout）
+  if (message.includes('signal') && message.includes('timed out')) {
+    return '请求超时，服务器响应过慢，正在自动重试';
+  }
+
+  // 任务超时
+  if (message.includes('TIMEOUT') || message.includes('超时')) {
+    return '生成超时，请稍后重试';
+  }
+
+  // 网络错误
+  if (message.includes('network') || message.includes('Network') || message.includes('fetch') || message.includes('Failed to fetch')) {
+    return '网络连接失败，请检查网络后重试';
+  }
+
+  // 限流
+  if (message.includes('rate limit') || message.includes('429') || httpStatus === 429) {
+    return '请求过于频繁，请稍后重试';
+  }
+
+  // 认证错误
+  if (message.includes('401') || httpStatus === 401) {
+    return 'API 认证失败，请检查 API Key 配置';
+  }
+
+  // 权限错误（非额度问题）
+  if ((message.includes('403') || httpStatus === 403) && !apiErrorBody.includes('quota')) {
+    return 'API 访问被拒绝，请检查配置';
+  }
+
+  // 服务器错误
+  if (message.includes('500') || httpStatus === 500) {
+    return 'AI 服务器内部错误，正在自动重试';
+  }
+  if (message.includes('502') || httpStatus === 502) {
+    return 'AI 服务暂时不可用（502），正在自动重试';
+  }
+  if (message.includes('503') || httpStatus === 503) {
+    return 'AI 服务繁忙（503），正在自动重试';
+  }
+  if (message.includes('504') || httpStatus === 504) {
+    return 'AI 服务响应超时（504），正在自动重试';
+  }
+
+  // 通用 API 错误
+  if ((message.includes('API') || message.includes('api')) && message.length < 30) {
+    return 'AI 服务暂时不可用，请稍后重试';
+  }
+
+  // 如果消息是完整的英文句子（可能是AI的拒绝理由），直接返回
+  if (message.length > 20 && message.length <= 200) {
+    return message;
+  }
+
+  // Return shortened message for other errors
+  return message.length > 200 ? '生成失败，请稍后重试' : message;
+}
 
 /**
  * Hook for automatic task execution
@@ -34,9 +116,103 @@ export function useTaskExecutor(): void {
   useEffect(() => {
     let isActive = true;
 
+    // Function to resume a video task that has a remoteId
+    const resumeVideoTask = async (task: Task) => {
+      const taskId = task.id;
+      const remoteId = task.remoteId!;
+
+      // Prevent duplicate execution
+      if (executingTasksRef.current.has(taskId)) {
+        console.log(`[TaskExecutor] Task ${taskId} is already executing`);
+        return;
+      }
+
+      executingTasksRef.current.add(taskId);
+      console.log(`[TaskExecutor] Resuming video task ${taskId} with remoteId ${remoteId}`);
+
+      try {
+        // Resume video polling
+        const result = await generationAPIService.resumeVideoGeneration(taskId, remoteId);
+
+        if (!isActive) return;
+
+        // Mark as completed with result
+        taskQueueService.updateTaskStatus(taskId, TaskStatus.COMPLETED, {
+          result,
+        });
+
+        console.log(`[TaskExecutor] Resumed task ${taskId} completed successfully`);
+      } catch (error: any) {
+        if (!isActive) return;
+
+        console.error(`[TaskExecutor] Resumed task ${taskId} failed:`, error);
+
+        const updatedTask = taskQueueService.getTask(taskId);
+        if (!updatedTask) return;
+
+        // Extract error details
+        const errorCode = error.httpStatus ? `HTTP_${error.httpStatus}` : (error.name || 'ERROR');
+        const errorMessage = getFriendlyErrorMessage(error);
+        // 如果有完整响应，使用它；否则使用 API 错误体或错误消息
+        const originalErrorInfo = error.fullResponse || error.apiErrorBody || error.message || String(error);
+        const errorDetails = {
+          originalError: originalErrorInfo,
+          timestamp: Date.now(),
+        };
+
+        // Check if we should retry
+        if (shouldRetry(updatedTask)) {
+          const nextRetryAt = getNextRetryTime(updatedTask);
+
+          taskQueueService.updateTaskStatus(taskId, TaskStatus.RETRYING, {
+            error: {
+              code: errorCode,
+              message: errorMessage,
+              details: errorDetails,
+            },
+          });
+
+          console.log(
+            `[TaskExecutor] Resumed task ${taskId} will retry (attempt ${updatedTask.retryCount + 1}/3) at ${new Date(nextRetryAt!).toLocaleTimeString()}`
+          );
+
+          // Schedule retry - for resumed tasks, we can retry the polling
+          if (nextRetryAt) {
+            const delay = nextRetryAt - Date.now();
+            setTimeout(() => {
+              if (!isActive) return;
+              const t = taskQueueService.getTask(taskId);
+              if (t && t.status === TaskStatus.RETRYING) {
+                // Keep remoteId and reset to processing to trigger resume
+                taskQueueService.updateTaskStatus(taskId, TaskStatus.PROCESSING);
+              }
+            }, delay);
+          }
+        } else {
+          // Mark as failed (no more retries)
+          taskQueueService.updateTaskStatus(taskId, TaskStatus.FAILED, {
+            error: {
+              code: errorCode,
+              message: errorMessage,
+              details: errorDetails,
+            },
+          });
+
+          console.log(`[TaskExecutor] Resumed task ${taskId} failed permanently`);
+        }
+      } finally {
+        executingTasksRef.current.delete(taskId);
+      }
+    };
+
     // Function to execute a single task
     const executeTask = async (task: Task) => {
       const taskId = task.id;
+
+      // Check if this is a resumable video task
+      if (task.type === TaskType.VIDEO && task.remoteId && task.status === TaskStatus.PROCESSING) {
+        return resumeVideoTask(task);
+      }
 
       // Prevent duplicate execution
       if (executingTasksRef.current.has(taskId)) {
@@ -74,14 +250,25 @@ export function useTaskExecutor(): void {
         const updatedTask = taskQueueService.getTask(taskId);
         if (!updatedTask) return;
 
+        // Extract error details - 优先使用 API 返回的详细错误信息
+        const errorCode = error.httpStatus ? `HTTP_${error.httpStatus}` : (error.name || 'ERROR');
+        const errorMessage = getFriendlyErrorMessage(error);
+        // 如果有完整响应，使用它；否则使用 API 错误体或错误消息
+        const originalErrorInfo = error.fullResponse || error.apiErrorBody || error.message || String(error);
+        const errorDetails = {
+          originalError: originalErrorInfo,
+          timestamp: Date.now(),
+        };
+
         // Check if we should retry
         if (shouldRetry(updatedTask)) {
           const nextRetryAt = getNextRetryTime(updatedTask);
-          
+
           taskQueueService.updateTaskStatus(taskId, TaskStatus.RETRYING, {
             error: {
-              code: error.name || 'ERROR',
-              message: error.message || '生成失败',
+              code: errorCode,
+              message: errorMessage,
+              details: errorDetails,
             },
           });
 
@@ -105,8 +292,9 @@ export function useTaskExecutor(): void {
           // Mark as failed (no more retries)
           taskQueueService.updateTaskStatus(taskId, TaskStatus.FAILED, {
             error: {
-              code: error.name || 'ERROR',
-              message: error.message || '生成失败',
+              code: errorCode,
+              message: errorMessage,
+              details: errorDetails,
             },
           });
 
@@ -117,14 +305,26 @@ export function useTaskExecutor(): void {
       }
     };
 
-    // Function to check for pending tasks and execute them
+    // Function to check for pending tasks and resumable video tasks
     const processPendingTasks = () => {
       if (!isActive) return;
 
       const tasks = taskQueueService.getAllTasks();
-      const pendingTasks = tasks.filter(task => task.status === TaskStatus.PENDING);
 
+      // Process pending tasks
+      const pendingTasks = tasks.filter(task => task.status === TaskStatus.PENDING);
       pendingTasks.forEach(task => {
+        executeTask(task);
+      });
+
+      // Process resumable video tasks (processing with remoteId)
+      const resumableTasks = tasks.filter(
+        task => task.type === TaskType.VIDEO &&
+                task.status === TaskStatus.PROCESSING &&
+                task.remoteId
+      );
+      resumableTasks.forEach(task => {
+        console.log(`[TaskExecutor] Found resumable video task ${task.id}`);
         executeTask(task);
       });
     };
@@ -143,14 +343,20 @@ export function useTaskExecutor(): void {
           // Cancel the API request
           generationAPIService.cancelRequest(task.id);
           
+          const timeoutDetails = {
+            originalError: `Task ${task.id} timed out after processing`,
+            timestamp: Date.now(),
+          };
+
           // Check if we should retry
           if (shouldRetry(task)) {
             const nextRetryAt = getNextRetryTime(task);
-            
+
             taskQueueService.updateTaskStatus(task.id, TaskStatus.RETRYING, {
               error: {
                 code: 'TIMEOUT',
                 message: '任务执行超时',
+                details: timeoutDetails,
               },
             });
 
@@ -170,6 +376,7 @@ export function useTaskExecutor(): void {
               error: {
                 code: 'TIMEOUT',
                 message: '任务执行超时，已达最大重试次数',
+                details: timeoutDetails,
               },
             });
           }
@@ -177,19 +384,34 @@ export function useTaskExecutor(): void {
       });
     };
 
-    // Subscribe to task updates to catch new pending tasks
+    // Subscribe to task updates to catch new pending tasks and resumable video tasks
     const subscription = taskQueueService.observeTaskUpdates().subscribe(event => {
       if (!isActive) return;
 
       if (event.type === 'taskCreated' || event.type === 'taskUpdated') {
-        if (event.task.status === TaskStatus.PENDING) {
-          // New pending task, execute it
-          executeTask(event.task);
+        const task = event.task;
+
+        // Execute pending tasks
+        if (task.status === TaskStatus.PENDING) {
+          executeTask(task);
+        }
+        // Resume video tasks that have remoteId and are in processing state
+        // This handles tasks restored from storage after page refresh
+        else if (
+          task.type === TaskType.VIDEO &&
+          task.status === TaskStatus.PROCESSING &&
+          task.remoteId &&
+          !executingTasksRef.current.has(task.id)
+        ) {
+          console.log(`[TaskExecutor] Detected resumable video task from event: ${task.id}`);
+          executeTask(task);
         }
       }
     });
 
     // Process existing pending tasks on mount
+    // Note: This runs synchronously, but tasks may be restored asynchronously by useTaskStorage
+    // The subscription above will catch tasks restored after this point
     processPendingTasks();
 
     // Set up timeout checker (every 10 seconds)

@@ -343,6 +343,62 @@
       font-size: 13px;
       color: var(--td-error-color-7, #8e353c);
     }
+
+    &-details-link {
+      color: var(--td-brand-color, #0052d9);
+      cursor: pointer;
+      margin-left: 8px;
+      font-size: 12px;
+      text-decoration: underline;
+
+      &:hover {
+        color: var(--td-brand-color-hover, #0066ff);
+      }
+    }
+
+    &-details-tooltip {
+      max-width: min(600px, 80vw);
+      padding: 12px;
+    }
+
+    &-details-title {
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: var(--td-text-color-primary, #333);
+      font-size: 13px;
+    }
+
+    &-details-content {
+      font-size: 12px;
+      color: var(--td-text-color-secondary, #666);
+      word-break: break-word;
+      white-space: pre-wrap;
+      max-height: min(400px, 50vh);
+      overflow-y: auto;
+      line-height: 1.5;
+      font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+      background: var(--td-bg-color-secondarycontainer, #f5f5f5);
+      padding: 8px;
+      border-radius: 4px;
+
+      // 自定义滚动条样式
+      &::-webkit-scrollbar {
+        width: 6px;
+      }
+
+      &::-webkit-scrollbar-track {
+        background: transparent;
+      }
+
+      &::-webkit-scrollbar-thumb {
+        background: var(--td-bg-color-component, #d0d0d0);
+        border-radius: 3px;
+
+        &:hover {
+          background: var(--td-bg-color-component-hover, #bbb);
+        }
+      }
+    }
   }
 
   &__retry-info {
@@ -412,6 +468,20 @@
     gap: 8px;
     flex-shrink: 0;
     justify-content: flex-start;
+
+    // 重试按钮样式 - 使用橙色，更醒目
+    .t-button--theme-primary.t-button--variant-outline {
+      background: #FFF7E6 !important;
+      border: 2px solid #F39C12 !important;
+      color: #E67E22 !important;
+      font-weight: 600;
+
+      &:hover {
+        background: linear-gradient(135deg, #F39C12 0%, #E67E22 100%) !important;
+        border-color: #E67E22 !important;
+        color: white !important;
+      }
+    }
   }
 
   // Progress bar styles - horizontal layout, full width in its row

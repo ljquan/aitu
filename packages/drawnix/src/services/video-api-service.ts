@@ -56,6 +56,7 @@ interface PollingOptions {
   interval?: number;      // Polling interval in ms (default: 5000)
   maxAttempts?: number;   // Max polling attempts (default: 360 = 30min at 5s interval)
   onProgress?: (progress: number, status: string) => void;
+  onSubmitted?: (videoId: string) => void; // Callback when video is submitted (for saving remoteId)
 }
 
 /**
@@ -152,7 +153,10 @@ class VideoAPIService {
     if (!response.ok) {
       const errorText = await response.text();
       console.error('[VideoAPI] Submit failed:', response.status, errorText);
-      throw new Error(`视频生成提交失败: ${response.status} - ${errorText}`);
+      const error = new Error(`视频生成提交失败: ${response.status} - ${errorText}`);
+      (error as any).apiErrorBody = errorText;
+      (error as any).httpStatus = response.status;
+      throw error;
     }
 
     const result = await response.json();
@@ -181,7 +185,10 @@ class VideoAPIService {
     if (!response.ok) {
       const errorText = await response.text();
       console.error('[VideoAPI] Query failed:', response.status, errorText);
-      throw new Error(`视频状态查询失败: ${response.status} - ${errorText}`);
+      const error = new Error(`视频状态查询失败: ${response.status} - ${errorText}`);
+      (error as any).apiErrorBody = errorText;
+      (error as any).httpStatus = response.status;
+      throw error;
     }
 
     const result = await response.json();
@@ -201,12 +208,18 @@ class VideoAPIService {
       interval = 5000,
       maxAttempts = 360,
       onProgress,
+      onSubmitted,
     } = options;
 
     // Submit video generation task
     console.log('[VideoAPI] Submitting video generation task...');
     const submitResponse = await this.submitVideoGeneration(params);
     console.log('[VideoAPI] Task submitted:', submitResponse.id, 'Status:', submitResponse.status);
+
+    // Notify that video has been submitted (for saving remoteId)
+    if (onSubmitted) {
+      onSubmitted(submitResponse.id);
+    }
 
     // Report initial progress
     if (onProgress) {
@@ -226,7 +239,71 @@ class VideoAPIService {
       throw new Error(errorMessage);
     }
 
-    const videoId = submitResponse.id;
+    // Continue with polling
+    return this.pollUntilComplete(submitResponse.id, { interval, maxAttempts, onProgress });
+  }
+
+  /**
+   * Resume polling for an existing video task
+   * Used to recover from page refresh
+   */
+  async resumePolling(
+    videoId: string,
+    options: PollingOptions = {}
+  ): Promise<VideoQueryResponse> {
+    console.log('[VideoAPI] Resuming polling for video:', videoId);
+
+    const { onProgress } = options;
+
+    // For resumed tasks, check status immediately first (video may already be completed)
+    console.log('[VideoAPI] Checking status immediately for resumed task...');
+    const immediateStatus = await this.queryVideoStatus(videoId);
+    const immediateProgress = immediateStatus.progress ??
+      (immediateStatus.status === 'failed' ? 100 : (immediateStatus.status === 'completed' ? 100 : 0));
+    console.log(`[VideoAPI] Immediate check: Status=${immediateStatus.status}, Progress=${immediateProgress}%`);
+
+    // Report progress
+    if (onProgress) {
+      onProgress(immediateProgress, immediateStatus.status);
+    }
+
+    // If already completed, return immediately
+    if (immediateStatus.status === 'completed') {
+      console.log('[VideoAPI] Video already completed:', immediateStatus.video_url || immediateStatus.url);
+      return immediateStatus;
+    }
+
+    // If already failed, throw error immediately
+    if (immediateStatus.status === 'failed') {
+      let errorMessage = '视频生成失败';
+      if (immediateStatus.error) {
+        if (typeof immediateStatus.error === 'string') {
+          errorMessage = immediateStatus.error;
+        } else if (typeof immediateStatus.error === 'object') {
+          errorMessage = (immediateStatus.error as any).message || JSON.stringify(immediateStatus.error);
+        }
+      }
+      throw new Error(errorMessage);
+    }
+
+    // Continue polling if still in progress
+    return this.pollUntilComplete(videoId, options);
+  }
+
+  /**
+   * Poll for video completion
+   * @private
+   */
+  private async pollUntilComplete(
+    videoId: string,
+    options: PollingOptions = {}
+  ): Promise<VideoQueryResponse> {
+    const {
+      interval = 5000,
+      maxAttempts = 360,
+      onProgress,
+    } = options;
+
     let attempts = 0;
 
     // Poll for completion

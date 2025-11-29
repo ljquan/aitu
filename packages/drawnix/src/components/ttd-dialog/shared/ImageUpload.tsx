@@ -15,6 +15,7 @@ interface ImageUploadProps {
   label?: string;
   icon?: string;
   onError?: (error: string | null) => void;
+  headerRight?: React.ReactNode;
 }
 
 export const ImageUpload: React.FC<ImageUploadProps> = ({
@@ -25,7 +26,8 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
   multiple = true,
   label,
   icon = '📷',
-  onError
+  onError,
+  headerRight
 }) => {
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -69,9 +71,12 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
 
   return (
     <div className="form-field">
-      <label className="form-label">
-        {label || defaultLabel}
-      </label>
+      <div className="form-label-row">
+        <label className="form-label">
+          {label || defaultLabel}
+        </label>
+        {headerRight && <div className="form-label-right">{headerRight}</div>}
+      </div>
       <div className="unified-image-area">
         {images.length === 0 ? (
           <div className="upload-area">

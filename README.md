@@ -82,32 +82,6 @@
 <div align="center">
   <figure>
     <a target="_blank" rel="noopener">
-      <img src="./apps/web/public/product_showcase/aitu-03.png" alt="任务处理" width="100%" />
-    </a>
-    <figcaption>
-      <p align="center">
-        任务处理 - 批量生成
-      </p>
-    </figcaption>
-  </figure>
-</div>
-
-<div align="center">
-  <figure>
-    <a target="_blank" rel="noopener">
-      <img src="./apps/web/public/product_showcase/aitu-04.png" alt="效果展示" width="100%" />
-    </a>
-    <figcaption>
-      <p align="center">
-        效果展示
-      </p>
-    </figcaption>
-  </figure>
-</div>
-
-<div align="center">
-  <figure>
-    <a target="_blank" rel="noopener">
       <img src="./apps/web/public/product_showcase/aitu-05.png" alt="AI 视频生成" width="100%" />
     </a>
     <figcaption>
@@ -130,6 +104,37 @@
     </figcaption>
   </figure>
 </div>
+
+<div align="center">
+  <figure>
+    <a target="_blank" rel="noopener">
+      <img src="./apps/web/public/product_showcase/aitu-03.png" alt="任务处理" width="100%" />
+    </a>
+    <figcaption>
+      <p align="center">
+        任务处理 - 批量生成
+      </p>
+    </figcaption>
+  </figure>
+</div>
+
+
+<div align="center">
+  <figure>
+    <a target="_blank" rel="noopener">
+      <img src="./apps/web/public/product_showcase/aitu-04.png" alt="效果展示" width="100%" />
+    </a>
+    <figcaption>
+      <p align="center">
+        效果展示
+      </p>
+    </figcaption>
+  </figure>
+</div>
+
+
+
+
 
 <div align="center">
   <figure>

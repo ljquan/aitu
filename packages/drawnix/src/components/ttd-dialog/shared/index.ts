@@ -10,3 +10,4 @@ export * from './preload-utils';
 export * from './size-constants';
 export * from './VideoModelOptions';
 export * from './MultiImageUpload';
+export * from './AspectRatioSelector';
