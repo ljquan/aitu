@@ -1,0 +1,86 @@
+/**
+ * Active Task Warning Styles
+ *
+ * Centered top banner, compact design with expand/collapse animation
+ */
+
+.active-task-warning {
+  position: fixed;
+  top: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid #F39C12;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(243, 156, 18, 0.15);
+  animation: expandIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform-origin: center top;
+  white-space: nowrap;
+
+  // Collapsing state
+  &--collapsing {
+    animation: collapseOut 0.35s ease-in forwards;
+  }
+
+  &__message {
+    font-size: 12px;
+    font-weight: 500;
+    color: #E67E22;
+  }
+
+  &__divider {
+    color: #ddd;
+    font-size: 12px;
+  }
+
+  &__hint {
+    font-size: 11px;
+    color: #999;
+  }
+}
+
+// Expand animation
+@keyframes expandIn {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.8);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1);
+  }
+}
+
+// Collapse animation
+@keyframes collapseOut {
+  0% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.8);
+  }
+}
+
+// Responsive
+@media (max-width: 768px) {
+  .active-task-warning {
+    top: 4px;
+    padding: 3px 10px;
+
+    &__message {
+      font-size: 11px;
+    }
+
+    &__divider,
+    &__hint {
+      display: none;
+    }
+  }
+}

@@ -88,11 +88,27 @@
     &__actions {
       gap: 4px;
       flex-shrink: 0;
+      flex-direction: row;
+      flex-wrap: wrap;
 
       button {
         font-size: 12px;
         padding: 4px 8px;
         min-width: 50px;
+      }
+
+      // 重试按钮样式 - 使用橙色，更醒目
+      .t-button--theme-primary.t-button--variant-outline {
+        background: #FFF7E6 !important;
+        border: 2px solid #F39C12 !important;
+        color: #E67E22 !important;
+        font-weight: 600;
+
+        &:hover {
+          background: linear-gradient(135deg, #F39C12 0%, #E67E22 100%) !important;
+          border-color: #E67E22 !important;
+          color: white !important;
+        }
       }
     }
 
@@ -102,6 +118,130 @@
 
     &__retry-info {
       font-size: 11px;
+    }
+  }
+}
+
+// 响应式适配
+@media (max-width: 768px) {
+  .dialog-task-list {
+    padding: 10px;
+    height: 130px;
+    gap: 10px;
+
+    &__header {
+      h4 {
+        font-size: 12px;
+      }
+    }
+
+    .task-item {
+      padding: 6px;
+      flex-direction: column;
+      gap: 8px;
+
+      &__header {
+        width: 100%;
+      }
+
+      &__prompt {
+        max-width: 100%;
+        -webkit-line-clamp: 1;
+      }
+
+      &__preview {
+        max-width: 50px;
+        max-height: 50px;
+
+        img, video {
+          max-width: 50px;
+          max-height: 50px;
+        }
+      }
+
+      &__actions {
+        flex-direction: row;
+        flex-wrap: wrap;
+        width: 100%;
+        justify-content: flex-start;
+
+        button {
+          font-size: 11px;
+          padding: 3px 6px;
+          min-width: 44px;
+        }
+      }
+    }
+  }
+}
+
+@media (max-width: 480px) {
+  .dialog-task-list {
+    padding: 8px;
+    height: 120px;
+    gap: 8px;
+    margin-top: 12px;
+
+    &__header {
+      h4 {
+        font-size: 11px;
+      }
+    }
+
+    &__content {
+      gap: 6px;
+    }
+
+    .task-item {
+      padding: 5px;
+      gap: 6px;
+
+      &__type-icon {
+        font-size: 12px;
+      }
+
+      &__prompt {
+        font-size: 11px;
+      }
+
+      &__meta {
+        font-size: 10px;
+        gap: 4px;
+      }
+
+      &__meta-item {
+        font-size: 10px;
+      }
+
+      &__preview {
+        max-width: 40px;
+        max-height: 40px;
+
+        img, video {
+          max-width: 40px;
+          max-height: 40px;
+        }
+      }
+
+      &__actions {
+        gap: 3px;
+
+        button {
+          font-size: 10px;
+          padding: 2px 5px;
+          min-width: 38px;
+        }
+      }
+
+      &__error {
+        font-size: 10px;
+        padding: 4px 6px;
+      }
+
+      &__retry-info {
+        font-size: 10px;
+        padding: 4px 6px;
+      }
     }
   }
 }

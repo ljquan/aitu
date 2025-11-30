@@ -83,6 +83,7 @@
   &.unified-action-bar {
     gap: 12px;
   }
+
 }
 
 // Unified Action Box - Combined quantity control and generate button
@@ -421,6 +422,24 @@
   }
 }
 
+// Image params row (reference images + aspect ratio)
+.image-params-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+
+  // ImageUpload takes available space
+  .image-upload-container {
+    flex: 1;
+  }
+
+  // AspectRatioSelector stays compact
+  .aspect-ratio-selector--compact {
+    flex-shrink: 0;
+    padding-top: 4px;
+  }
+}
+
 // AI Image Generation Form
 .ai-image-generation-form {
   display: flex;
@@ -439,6 +458,17 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
+
+    .form-label-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .form-label-right {
+      flex-shrink: 0;
+    }
 
     .form-label {
       font-size: 14px;
@@ -1568,4 +1598,99 @@
   color: var(--color-text-secondary, #666);
   background: var(--color-bg-secondary, #f5f5f5);
   border-top: 1px solid var(--color-border-light, #f0f0f0);
+}
+
+// 响应式适配
+@media (max-width: 768px) {
+  .main-content {
+    flex-direction: column;
+    gap: 16px;
+    min-height: auto;
+  }
+
+  .ai-image-generation-section {
+    max-height: none;
+  }
+
+  .preview-section {
+    max-height: none;
+  }
+
+  .section-actions {
+    flex-wrap: wrap;
+    gap: 8px;
+
+    &.unified-action-bar {
+      gap: 8px;
+    }
+  }
+
+  .unified-action-box {
+    min-width: 160px;
+  }
+
+  .generate-button {
+    padding: 8px 20px;
+    min-width: 90px;
+  }
+
+  .action-button {
+    padding: 8px 12px;
+    min-width: 60px;
+  }
+}
+
+@media (max-width: 480px) {
+  .section-actions {
+    justify-content: space-between;
+    gap: 6px;
+
+    &.unified-action-bar {
+      gap: 6px;
+    }
+  }
+
+  .unified-action-box {
+    min-width: 140px;
+    padding: 3px 3px 3px 6px;
+    height: 32px;
+  }
+
+  .quantity-section {
+    padding: 0 4px;
+  }
+
+  .quantity-label {
+    font-size: 11px;
+    margin-right: 4px;
+  }
+
+  .quantity-input {
+    width: 28px;
+    font-size: 13px;
+    padding: 3px 0 3px 4px;
+  }
+
+  .generate-button {
+    padding: 6px 14px;
+    min-width: 70px;
+    font-size: 13px;
+    height: 26px;
+  }
+
+  .action-button {
+    padding: 6px 10px;
+    min-width: 50px;
+    font-size: 13px;
+    height: 32px;
+
+    &.secondary {
+      padding: 6px 8px;
+    }
+  }
+
+  .action-divider {
+    height: 20px;
+    margin: 0 2px;
+  }
 }

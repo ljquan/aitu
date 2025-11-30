@@ -5,7 +5,7 @@
  * Handles timeouts, cancellation, and error handling.
  */
 
-import { GenerationParams, TaskType, TaskResult } from '../types/task.types';
+import { GenerationParams, TaskType, TaskResult, TaskExecutionPhase } from '../types/task.types';
 import { GenerationRequest, GenerationResponse, GenerationError } from '../types/generation.types';
 import { defaultGeminiClient } from '../utils/gemini-api';
 import { videoAPIService, VideoModel } from './video-api-service';
@@ -132,6 +132,15 @@ class GenerationAPIService {
   }
 
   /**
+   * Builds the final image prompt with aspect ratio and generation emphasis
+   * @private
+   */
+  private buildImagePrompt(userPrompt: string, aspectRatio?: string): string {
+    const ratioClause = aspectRatio ? ` with aspect ratio ${aspectRatio}` : '';
+    return `Generate an image. ${userPrompt}. Output as a single complete image${ratioClause}. Do not include any text, watermark, or explanation in the response.`;
+  }
+
+  /**
    * Generates an image using the image generation API
    * @private
    */
@@ -143,8 +152,9 @@ class GenerationAPIService {
     const finalHeight = params.height || 1024;
 
     try {
-      // Use Chat API for image generation
-      const imagePrompt = `Generate an image based on this description: "${params.prompt}"`;
+      // Build optimized prompt with aspect ratio and generation emphasis
+      const aspectRatio = (params as any).aspectRatio;
+      const imagePrompt = this.buildImagePrompt(params.prompt, aspectRatio);
 
       // Convert uploaded images if any (from params metadata)
       const imageInputs: any[] = [];
@@ -185,10 +195,13 @@ class GenerationAPIService {
       }
 
       // Try to extract URL from text response
-      const urlMatch = responseContent.match(/https?:\/\/[^\s<>"'\n]+/);
-      if (urlMatch) {
-        const imageUrl = urlMatch[0].replace(/[.,;!?]*$/, '');
-        
+      // Support formats: direct URL, Markdown image ![alt](url)
+      // First try to extract URL from Markdown image format ![alt](url)
+      const markdownMatch = responseContent.match(/!\[[^\]]*\]\(([^)]+)\)/);
+      if (markdownMatch && markdownMatch[1]) {
+        const imageUrl = markdownMatch[1];
+        console.log('[GenerationAPI] Extracted URL from Markdown format:', imageUrl);
+
         return {
           url: imageUrl,
           format: 'png',
@@ -198,10 +211,56 @@ class GenerationAPIService {
         };
       }
 
+      // Fallback: extract URL directly from text
+      // Original regex: /https?:\/\/[^\s<>"'\n]+/
+      const urlMatch = responseContent.match(/https?:\/\/[^\s<>"'\n)]+/);
+      if (urlMatch) {
+        const imageUrl = urlMatch[0].replace(/[.,;!?]*$/, '');
+        console.log('[GenerationAPI] Extracted URL from text (fallback):', imageUrl);
+
+        return {
+          url: imageUrl,
+          format: 'png',
+          size: 0,
+          width: finalWidth,
+          height: finalHeight,
+        };
+      }
+
+      // Check if API returned a text response (rejection message)
+      if (responseContent && responseContent.length > 0) {
+        // Log full response for debugging
+        console.log('[GenerationAPI] Full API response (no image extracted):', responseContent);
+
+        // API returned text instead of image - use it as error message
+        // Truncate for display but preserve full response in error details
+        const truncatedResponse = responseContent.length > 500
+          ? responseContent.substring(0, 500) + '...'
+          : responseContent;
+        const error = new Error(truncatedResponse);
+        (error as any).fullResponse = responseContent; // Preserve full response
+        throw error;
+      }
+
       throw new Error('API 未返回有效的图片数据');
     } catch (error: any) {
       console.error('[GenerationAPI] Image generation error:', error);
-      throw new Error(error.message || '图片生成失败');
+      // Log full response if available
+      if (error.fullResponse) {
+        console.log('[GenerationAPI] Full response for debugging:', error.fullResponse);
+      }
+      // Preserve original error properties (apiErrorBody, httpStatus) for better error reporting
+      const wrappedError = new Error(error.message || '图片生成失败');
+      if (error.apiErrorBody) {
+        (wrappedError as any).apiErrorBody = error.apiErrorBody;
+      }
+      if (error.httpStatus) {
+        (wrappedError as any).httpStatus = error.httpStatus;
+      }
+      if (error.fullResponse) {
+        (wrappedError as any).fullResponse = error.fullResponse;
+      }
+      throw wrappedError;
     }
   }
 
@@ -215,6 +274,12 @@ class GenerationAPIService {
     signal: AbortSignal
   ): Promise<TaskResult> {
     try {
+      // Mark task as submitting phase (before API call)
+      // This helps identify tasks interrupted during submission
+      taskQueueService.updateTaskStatus(taskId, 'processing' as any, {
+        executionPhase: TaskExecutionPhase.SUBMITTING,
+      });
+
       // Handle uploaded images (new multi-image format)
       let inputReferences: any[] | undefined;
       let inputReference: string | undefined;
@@ -273,6 +338,14 @@ class GenerationAPIService {
             // Update task progress in queue
             taskQueueService.updateTaskProgress(taskId, progress);
           },
+          onSubmitted: (videoId) => {
+            // Save remoteId immediately after submission for recovery support
+            console.log(`[GenerationAPI] Video submitted, saving remoteId: ${videoId}`);
+            taskQueueService.updateTaskStatus(taskId, 'processing' as any, {
+              remoteId: videoId,
+              executionPhase: TaskExecutionPhase.POLLING,
+            });
+          },
         }
       );
 
@@ -290,7 +363,104 @@ class GenerationAPIService {
       };
     } catch (error: any) {
       console.error('[GenerationAPI] Video generation error:', error);
-      throw new Error(error.message || '视频生成失败');
+      // Preserve original error properties (apiErrorBody, httpStatus) for better error reporting
+      const wrappedError = new Error(error.message || '视频生成失败');
+      if (error.apiErrorBody) {
+        (wrappedError as any).apiErrorBody = error.apiErrorBody;
+      }
+      if (error.httpStatus) {
+        (wrappedError as any).httpStatus = error.httpStatus;
+      }
+      throw wrappedError;
+    }
+  }
+
+  /**
+   * Resumes video polling for a task that was interrupted (e.g., by page refresh)
+   *
+   * @param taskId - Task identifier
+   * @param remoteId - Remote video ID from API
+   * @returns Promise with task result
+   */
+  async resumeVideoGeneration(
+    taskId: string,
+    remoteId: string
+  ): Promise<TaskResult> {
+    const startTime = Date.now();
+
+    // Track resumed task
+    analytics.trackModelCall({
+      taskId,
+      taskType: 'video',
+      model: 'gemini-video',
+      promptLength: 0, // Unknown for resumed tasks
+      hasUploadedImage: false,
+      startTime,
+    });
+
+    try {
+      console.log(`[GenerationAPI] Resuming video generation for task ${taskId}, remoteId: ${remoteId}`);
+
+      // Get timeout for video
+      const timeout = TASK_TIMEOUT.VIDEO;
+
+      // Create timeout promise
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => {
+          reject(new Error('TIMEOUT'));
+        }, timeout);
+      });
+
+      // Resume polling
+      const pollingPromise = videoAPIService.resumePolling(remoteId, {
+        interval: 5000,
+        onProgress: (progress, status) => {
+          console.log(`[GenerationAPI] Resumed video progress: ${progress}% (${status})`);
+          taskQueueService.updateTaskProgress(taskId, progress);
+        },
+      });
+
+      // Race between polling and timeout
+      const result = await Promise.race([pollingPromise, timeoutPromise]);
+
+      const duration = Date.now() - startTime;
+      console.log(`[GenerationAPI] Resumed video generation completed for task ${taskId}`);
+
+      // Track success
+      analytics.trackModelSuccess({
+        taskId,
+        taskType: 'video',
+        model: 'gemini-video',
+        duration,
+        resultSize: 0,
+      });
+
+      // Extract video URL from response
+      const videoUrl = result.video_url || result.url;
+      if (!videoUrl) {
+        throw new Error('API 未返回有效的视频 URL');
+      }
+
+      return {
+        url: videoUrl,
+        format: 'mp4',
+        size: 0,
+        duration: parseInt(result.seconds) || 8,
+      };
+    } catch (error: any) {
+      const duration = Date.now() - startTime;
+      console.error(`[GenerationAPI] Resumed video generation failed for task ${taskId}:`, error);
+
+      // Track failure
+      analytics.trackModelFailure({
+        taskId,
+        taskType: 'video',
+        model: 'gemini-video',
+        duration,
+        error: error.message || 'UNKNOWN_ERROR',
+      });
+
+      throw error;
     }
   }
 

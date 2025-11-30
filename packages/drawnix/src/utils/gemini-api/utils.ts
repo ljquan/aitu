@@ -84,8 +84,14 @@ export function processMixedContent(content: string): ProcessedContent {
   const base64Pattern = /data:image\/[^;]+;base64,([A-Za-z0-9+/=]+)/g;
   const base64Matches = Array.from(content.matchAll(base64Pattern));
 
-  // 查找图片 URL 链接
-  const imageUrlPattern = /https?:\/\/[^\s<>"'\]]+\.(png|jpg|jpeg|gif|webp)/gi;
+  // 优先查找 Markdown 格式的图片 ![alt](url)
+  // 这能正确提取带查询参数的完整 URL
+  const markdownImagePattern = /!\[[^\]]*\]\((https?:\/\/[^)]+)\)/gi;
+  const markdownImageMatches = Array.from(content.matchAll(markdownImagePattern));
+
+  // 查找图片 URL 链接（支持带查询参数的 URL）
+  // Original: /https?:\/\/[^\s<>"'\]]+\.(png|jpg|jpeg|gif|webp)/gi
+  const imageUrlPattern = /https?:\/\/[^\s<>"'\])]+\.(png|jpg|jpeg|gif|webp)(\?[^\s<>"'\])]*)?/gi;
   const imageUrlMatches = Array.from(content.matchAll(imageUrlPattern));
 
   // 查找视频 URL 链接（包括markdown格式）
@@ -119,18 +125,42 @@ export function processMixedContent(content: string): ProcessedContent {
     imageIndex++;
   }
 
-  // 处理图片 URL
+  // 用于避免重复处理同一 URL
+  const processedUrls = new Set<string>();
+
+  // 优先处理 Markdown 格式的图片 ![alt](url) - 能正确提取带查询参数的完整 URL
+  for (const match of markdownImageMatches) {
+    const fullMatch = match[0]; // ![alt](url)
+    const url = match[1]; // 括号内的完整 URL
+
+    if (!processedUrls.has(url)) {
+      processedUrls.add(url);
+      images.push({
+        type: 'url',
+        data: url,
+        index: imageIndex,
+      });
+
+      textContent = textContent.replace(fullMatch, `[图片 ${imageIndex}]`);
+      imageIndex++;
+    }
+  }
+
+  // 处理普通图片 URL（排除已处理的）
   for (const match of imageUrlMatches) {
     const url = match[0];
 
-    images.push({
-      type: 'url',
-      data: url,
-      index: imageIndex,
-    });
+    if (!processedUrls.has(url)) {
+      processedUrls.add(url);
+      images.push({
+        type: 'url',
+        data: url,
+        index: imageIndex,
+      });
 
-    textContent = textContent.replace(url, `[图片 ${imageIndex}]`);
-    imageIndex++;
+      textContent = textContent.replace(url, `[图片 ${imageIndex}]`);
+      imageIndex++;
+    }
   }
 
   // 处理视频 URL（按优先级顺序）

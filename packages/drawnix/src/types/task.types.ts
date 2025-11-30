@@ -81,16 +81,42 @@ export interface TaskResult {
 }
 
 /**
+ * Task error details interface
+ * Contains the original error information for debugging
+ */
+export interface TaskErrorDetails {
+  /** Original error message from the API or system */
+  originalError?: string;
+  /** API response data (sensitive info filtered) */
+  apiResponse?: any;
+  /** Error occurrence timestamp */
+  timestamp?: number;
+}
+
+/**
  * Task error interface
  * Contains detailed information about task failures
  */
 export interface TaskError {
   /** Error code for categorization (e.g., 'TIMEOUT', 'NETWORK', 'API_ERROR') */
   code: string;
-  /** Human-readable error message */
+  /** Human-readable error message (user-friendly) */
   message: string;
-  /** Additional error details */
-  details?: any;
+  /** Detailed error information for debugging */
+  details?: TaskErrorDetails;
+}
+
+/**
+ * Task execution phase enumeration
+ * Used for tracking async task progress and enabling recovery after page refresh
+ */
+export enum TaskExecutionPhase {
+  /** Task is being submitted to the API */
+  SUBMITTING = 'submitting',
+  /** Task submitted, polling for completion (video only) */
+  POLLING = 'polling',
+  /** Task completed, downloading result */
+  DOWNLOADING = 'downloading'
 }
 
 /**
@@ -126,6 +152,10 @@ export interface Task {
   userId?: string;
   /** Task progress percentage (0-100) for video generation */
   progress?: number;
+  /** Remote task ID from API (e.g., videoId for video generation) */
+  remoteId?: string;
+  /** Current execution phase for recovery support */
+  executionPhase?: TaskExecutionPhase;
 }
 
 /**

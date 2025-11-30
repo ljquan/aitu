@@ -319,4 +319,89 @@ $verticalBreakpoint: 861px;
       border-radius: 4px;
     }
   }
+
+  // 响应式适配 - 小屏幕对话框
+  @media (max-width: 768px) {
+    .Dialog.ttd-dialog {
+      padding: 1rem;
+      max-height: 85vh;
+      margin-top: 60px; // 给顶部工具栏留出空间
+
+      .Island {
+        padding: 0;
+      }
+    }
+
+    .ttd-dialog-triggers {
+      padding-inline: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .ttd-dialog-content {
+      padding-inline: 1rem;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .Dialog.ttd-dialog {
+      padding: 0.75rem;
+      max-height: 80vh;
+      margin-top: 50px;
+      max-width: 95vw;
+
+      .Modal__content {
+        max-height: 75vh;
+      }
+    }
+
+    .ttd-dialog-triggers {
+      padding-inline: 0.5rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .ttd-dialog-content {
+      padding-inline: 0.5rem;
+    }
+
+    .ttd-dialog-tab-trigger {
+      padding: 0 0.5rem;
+      font-size: 0.75rem;
+      height: 2.5rem;
+    }
+  }
+
+  // 对话框 header 中的模型选择器响应式
+  @media (max-width: 768px) {
+    .t-dialog__header {
+      // Header 内的 flex 容器
+      > div {
+        flex-wrap: wrap;
+        gap: 8px !important;
+      }
+
+      // TDesign Select 组件
+      .t-select {
+        max-width: 200px !important;
+        min-width: 120px !important;
+        flex-shrink: 1;
+      }
+    }
+  }
+
+  @media (max-width: 480px) {
+    .t-dialog__header {
+      > div {
+        gap: 6px !important;
+      }
+
+      .t-select {
+        max-width: 140px !important;
+        min-width: 100px !important;
+
+        .t-input__inner {
+          font-size: 12px;
+        }
+      }
+    }
+  }
 }

@@ -1,46 +1,56 @@
 /**
  * 权限策略修复工具
  * 用于解决第三方库触发的 unload 权限策略违规警告
+ *
+ * 只拦截 unload 事件（影响 bfcache），允许 beforeunload 事件（用于离开提醒）
  */
 
-// 重写可能触发警告的事件监听器
-const originalAddEventListener = window.addEventListener;
+// 保存原始的 addEventListener 和 removeEventListener
+const originalAddEventListener = window.addEventListener.bind(window);
+const originalRemoveEventListener = window.removeEventListener.bind(window);
 
-window.addEventListener = function(type: string, listener: EventListenerOrEventListenerObject, options?: boolean | AddEventListenerOptions) {
-  // 拦截 unload 和 beforeunload 事件的注册
-  if (type === 'unload' || type === 'beforeunload') {
-    console.warn(`[Permissions Policy] Blocked ${type} event listener to avoid policy violation`);
+// 存储 beforeunload 监听器的引用
+let beforeUnloadHandler: EventListenerOrEventListenerObject | null = null;
+
+window.addEventListener = function(
+  type: string,
+  listener: EventListenerOrEventListenerObject,
+  options?: boolean | AddEventListenerOptions
+) {
+  // 只拦截 unload 事件（总是阻止，因为它会影响 bfcache）
+  if (type === 'unload') {
+    console.warn('[Permissions Policy] Blocked unload event listener');
     return;
   }
-  
-  // 其他事件正常处理
-  return originalAddEventListener.call(this, type, listener, options);
-};
 
-// 存储可能需要移除的监听器引用
-const noopUnloadHandler = () => {
-  // Placeholder handler for removing unload listeners
-};
-const noopBeforeunloadHandler = () => {
-  // Placeholder handler for removing beforeunload listeners
-};
-
-// 如果有第三方库已经添加了 unload 事件监听器，移除它们
-const removeExistingUnloadListeners = () => {
-  try {
-    // 尝试移除可能存在的 unload 监听器
-    window.removeEventListener('unload', noopUnloadHandler);
-    window.removeEventListener('beforeunload', noopBeforeunloadHandler);
-  } catch (error) {
-    // 忽略移除不存在的监听器时的错误
+  // 对于 beforeunload，保存引用并使用原生方法
+  if (type === 'beforeunload') {
+    beforeUnloadHandler = listener;
+    console.log('[Permissions Policy] Registering beforeunload with native method');
+    return originalAddEventListener.call(window, type, listener, options);
   }
+
+  // 其他事件正常处理
+  return originalAddEventListener.call(window, type, listener, options);
 };
 
-// 页面加载时清理
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', removeExistingUnloadListeners);
-} else {
-  removeExistingUnloadListeners();
-}
+window.removeEventListener = function(
+  type: string,
+  listener: EventListenerOrEventListenerObject,
+  options?: boolean | EventListenerOptions
+) {
+  // 对于 beforeunload，清除引用
+  if (type === 'beforeunload') {
+    beforeUnloadHandler = null;
+  }
+
+  return originalRemoveEventListener.call(window, type, listener, options);
+};
+
+// 暴露调试函数
+(window as any).__checkBeforeUnload = () => {
+  console.log('[Permissions Policy] beforeUnloadHandler registered:', !!beforeUnloadHandler);
+  return !!beforeUnloadHandler;
+};
 
 export {};

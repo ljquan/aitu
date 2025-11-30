@@ -295,7 +295,7 @@ const AIVideoGeneration = ({
     savePromptToHistoryUtil('video', promptText, dimensions);
   };
 
-  const handleGenerate = async () => {
+  const handleGenerate = async (count: number = 1) => {
     if (!prompt.trim()) {
       setError(language === 'zh' ? '请输入视频描述' : 'Please enter video description');
       return;
@@ -326,29 +326,49 @@ const AIVideoGeneration = ({
         }
       }
 
-      // 创建任务参数（包含新的 duration, size, uploadedImages）
-      const taskParams = {
-        prompt: prompt.trim(),
-        model: currentModel,
-        seconds: duration,
-        size: size,
-        // 保存上传的图片（已转换为可序列化的格式）
-        uploadedImages: convertedImages,
-      };
+      // 批量生成逻辑
+      const batchTaskIds: string[] = [];
+      const batchId = count > 1 ? `video_batch_${Date.now()}` : undefined;
 
-      // 创建任务并添加到队列
-      const task = createTask(taskParams, TaskType.VIDEO);
+      for (let i = 0; i < count; i++) {
+        // 创建任务参数（包含新的 duration, size, uploadedImages）
+        const taskParams = {
+          prompt: prompt.trim(),
+          model: currentModel,
+          seconds: duration,
+          size: size,
+          // 保存上传的图片（已转换为可序列化的格式）
+          uploadedImages: convertedImages,
+          // 批量生成信息
+          ...(batchId && {
+            batchId,
+            batchIndex: i + 1,
+            batchTotal: count,
+          }),
+        };
 
-      if (task) {
+        // 创建任务并添加到队列
+        const task = createTask(taskParams, TaskType.VIDEO);
+
+        if (task) {
+          batchTaskIds.push(task.id);
+        }
+      }
+
+      if (batchTaskIds.length > 0) {
         // 任务创建成功
         MessagePlugin.success(
           language === 'zh'
-            ? '视频任务已添加到队列，将在后台生成'
-            : 'Video task added to queue, will be generated in background'
+            ? count > 1
+              ? `${batchTaskIds.length} 个视频任务已添加到队列，将在后台生成`
+              : '视频任务已添加到队列，将在后台生成'
+            : count > 1
+              ? `${batchTaskIds.length} video tasks added to queue, will be generated in background`
+              : 'Video task added to queue, will be generated in background'
         );
 
         // 保存任务ID到对话框任务列表
-        setDialogTaskIds(prev => [...prev, task.id]);
+        setDialogTaskIds(prev => [...prev, ...batchTaskIds]);
 
         // 保存提示词到历史记录
         savePromptToHistory(prompt);
@@ -371,16 +391,16 @@ const AIVideoGeneration = ({
       } else {
         // 任务创建失败
         setError(
-          language === 'zh' 
-            ? '任务创建失败，请检查参数或稍后重试' 
+          language === 'zh'
+            ? '任务创建失败，请检查参数或稍后重试'
             : 'Failed to create task, please check parameters or try again later'
         );
       }
     } catch (err: any) {
       console.error('Failed to create task:', err);
       setError(
-        language === 'zh' 
-          ? `创建任务失败: ${err.message}` 
+        language === 'zh'
+          ? `创建任务失败: ${err.message}`
           : `Failed to create task: ${err.message}`
       );
     }
@@ -573,13 +593,17 @@ const AIVideoGeneration = ({
                       // Keep default format
                     }
 
-                    await downloadMediaFile(
+                    const result = await downloadMediaFile(
                       generatedVideo.downloadUrl,
                       generatedVideoPrompt || 'video',
                       format,
                       'video'
                     );
-                    MessagePlugin.success(language === 'zh' ? '下载成功' : 'Download successful');
+                    if (result && 'opened' in result) {
+                      MessagePlugin.success(language === 'zh' ? '已在新标签页打开，请右键另存为' : 'Opened in new tab, please right-click to save');
+                    } else {
+                      MessagePlugin.success(language === 'zh' ? '下载成功' : 'Download successful');
+                    }
                   } catch (err) {
                     console.error('Download failed:', err);
                     MessagePlugin.error(

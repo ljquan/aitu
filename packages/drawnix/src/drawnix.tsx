@@ -42,8 +42,11 @@ import { LinkPopup } from './components/popup/link-popup/link-popup';
 import { useI18n, I18nProvider } from './i18n';
 import { withVideo } from './plugins/with-video';
 import { TaskToolbar } from './components/task-queue/TaskToolbar';
+import { ActiveTaskWarning } from './components/task-queue/ActiveTaskWarning';
 import { useTaskStorage } from './hooks/useTaskStorage';
 import { useTaskExecutor } from './hooks/useTaskExecutor';
+import { useBeforeUnload } from './hooks/useBeforeUnload';
+import { FeedbackButton } from './components/feedback-button';
 
 export type DrawnixProps = {
   value: PlaitElement[];
@@ -131,9 +134,12 @@ export const Drawnix: React.FC<DrawnixProps> = ({
 
   // Initialize task storage synchronization
   useTaskStorage();
-  
+
   // Initialize task executor for background processing
   useTaskExecutor();
+
+  // Warn users before leaving page with active tasks
+  useBeforeUnload();
 
   // 处理选中状态变化,保存最近选中的元素IDs
   const handleSelectionChange = useCallback((selection: Selection | null) => {
@@ -202,7 +208,9 @@ export const Drawnix: React.FC<DrawnixProps> = ({
             <CleanConfirm container={containerRef.current}></CleanConfirm>
             <SettingsDialog container={containerRef.current}></SettingsDialog>
           </Wrapper>
+          <ActiveTaskWarning />
           <TaskToolbar />
+          <FeedbackButton />
         </div>
       </DrawnixContext.Provider>
     </I18nProvider>

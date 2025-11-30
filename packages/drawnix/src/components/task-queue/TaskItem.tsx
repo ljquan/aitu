@@ -241,6 +241,22 @@ export const TaskItem: React.FC<TaskItemProps> = ({
             <div className="task-item__error">
               <div className="task-item__error-message">
                 <strong>错误:</strong> {task.error.message}
+                {task.error.details?.originalError && (
+                  <Tooltip
+                    content={
+                      <div className="task-item__error-details-tooltip">
+                        <div className="task-item__error-details-title">原始错误信息:</div>
+                        <div className="task-item__error-details-content">
+                          {task.error.details.originalError}
+                        </div>
+                      </div>
+                    }
+                    theme="light"
+                    placement="bottom"
+                  >
+                    <span className="task-item__error-details-link">[详情]</span>
+                  </Tooltip>
+                )}
               </div>
             </div>
           )}
