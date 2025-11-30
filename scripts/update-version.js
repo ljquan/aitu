@@ -11,13 +11,21 @@ function getCurrentVersion() {
 function updateServiceWorkerVersion(version) {
   const swPath = path.join(__dirname, '../apps/web/public/sw.js');
   let swContent = fs.readFileSync(swPath, 'utf8');
-  
-  // 替换版本占位符
+
+  // 替换版本占位符或现有版本号
   swContent = swContent.replace(
-    'BUILD_VERSION_PLACEHOLDER',
-    version
+    /const APP_VERSION = ['"]BUILD_VERSION_PLACEHOLDER['"];/,
+    `const APP_VERSION = '${version}';`
   );
-  
+
+  // 如果占位符不存在，尝试替换现有版本号
+  if (!swContent.includes(`const APP_VERSION = '${version}';`)) {
+    swContent = swContent.replace(
+      /const APP_VERSION = ['"][^'"]*['"];/,
+      `const APP_VERSION = '${version}';`
+    );
+  }
+
   fs.writeFileSync(swPath, swContent);
   console.log(`✅ Service Worker updated to version ${version}`);
 }

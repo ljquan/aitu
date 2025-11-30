@@ -1,4 +1,5 @@
 const fs = require('fs');
+const path = require('path');
 const { execSync } = require('child_process');
 
 function getCurrentVersion() {
@@ -55,6 +56,34 @@ function updatePackageVersion(newVersion) {
   fs.writeFileSync('package.json', JSON.stringify(packageJson, null, 2) + '\n');
 }
 
+// 更新 Service Worker 中的版本号
+function updateServiceWorkerVersion(version) {
+  const swPath = path.join(__dirname, '../apps/web/public/sw.js');
+  let swContent = fs.readFileSync(swPath, 'utf8');
+
+  // 替换 APP_VERSION (无论是占位符还是具体版本号)
+  swContent = swContent.replace(
+    /const APP_VERSION = ['"][^'"]*['"];/,
+    `const APP_VERSION = '${version}';`
+  );
+
+  fs.writeFileSync(swPath, swContent);
+  console.log(`✅ Service Worker 版本已更新到 ${version}`);
+}
+
+// 创建版本信息文件
+function createVersionFile(version) {
+  const versionInfo = {
+    version: version,
+    buildTime: new Date().toISOString(),
+    gitCommit: process.env.GITHUB_SHA || 'unknown'
+  };
+
+  const versionPath = path.join(__dirname, '../apps/web/public/version.json');
+  fs.writeFileSync(versionPath, JSON.stringify(versionInfo, null, 2));
+  console.log(`✅ 版本信息文件已创建: ${version}`);
+}
+
 function main() {
   const versionType = process.argv[2] || 'patch';
   
@@ -68,10 +97,16 @@ function main() {
     // 更新 package.json
     updatePackageVersion(nextVersion);
     console.log(`✅ package.json 已更新到 ${nextVersion}`);
+
+    // 更新 Service Worker 版本
+    updateServiceWorkerVersion(nextVersion);
+
+    // 创建版本信息文件
+    createVersionFile(nextVersion);
     
     // 提交更改
     try {
-      execSync('git add package.json package-lock.json', { stdio: 'inherit' });
+      execSync('git add package.json package-lock.json apps/web/public/sw.js apps/web/public/version.json', { stdio: 'inherit' });
       execSync(`git commit -m "chore: bump version to ${nextVersion}"`, { stdio: 'inherit' });
       console.log(`✅ 版本更改已提交`);
     } catch (error) {

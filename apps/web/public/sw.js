@@ -1,7 +1,7 @@
 /* eslint-disable no-restricted-globals */
 // Service Worker for PWA functionality and handling CORS issues with external images
 // Version will be replaced during build process
-const APP_VERSION = '0.1.1';
+const APP_VERSION = 'BUILD_VERSION_PLACEHOLDER';
 const CACHE_NAME = `drawnix-v${APP_VERSION}`;
 const IMAGE_CACHE_NAME = `drawnix-images-v${APP_VERSION}`;
 const STATIC_CACHE_NAME = `drawnix-static-v${APP_VERSION}`;
@@ -390,7 +390,10 @@ self.addEventListener('fetch', event => {
   }
 
   // Handle static file requests with cache-first strategy
-  if (event.request.method === 'GET') {
+  // Exclude XHR/fetch API requests - only handle navigation and static resources
+  if (event.request.method === 'GET' &&
+      event.request.destination !== '' &&
+      event.request.destination !== 'empty') {
     event.respondWith(handleStaticRequest(event.request));
   }
 });
