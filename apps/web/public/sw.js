@@ -21,6 +21,11 @@ const CORS_ALLOWED_DOMAINS = [
     hostname: 'googlecdn2.datas.systems',
     pathPattern: 'response_images',
     fallbackDomain: 'googlecdn2.i666.fun'
+  },
+  {
+    hostname: 'filesystem.i666.fun',
+    pathPattern: 'response_images',
+    fallbackDomain: 'filesystem.i666.fun'
   }
 ];
 
