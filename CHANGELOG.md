@@ -1,3 +1,14 @@
+## 0.2.2 (2025-11-30)
+
+### 🔧 Chores
+
+- choice: 优化changelog ([9b47e75](https://github.com/ljquan/aitu/commit/9b47e75))
+- 优化缓存和版本管理 ([cde96d4](https://github.com/ljquan/aitu/commit/cde96d4))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+
 ## 0.2.1 (2025-08-06)
 
 
