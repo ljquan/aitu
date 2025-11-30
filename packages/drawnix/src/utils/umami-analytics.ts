@@ -71,10 +71,8 @@ export enum FeatureUsageEvent {
  * Analytics utility class
  */
 class UmamiAnalytics {
-  private isEnabled: boolean;
 
   constructor() {
-    this.isEnabled = typeof window !== 'undefined' && !!window.umami;
   }
 
   /**
@@ -84,7 +82,7 @@ class UmamiAnalytics {
    * @param eventData - Additional data to track
    */
   track(eventName: string, eventData?: Record<string, any>): void {
-    if (!this.isEnabled || !window.umami) {
+    if (!window.umami) {
       console.debug('[Analytics] Tracking disabled or Umami not loaded:', eventName, eventData);
       return;
     }
