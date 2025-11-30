@@ -1,6 +1,6 @@
 {
   "name": "@aitu/source",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "license": "MIT",
   "description": "Aitu - An open-source whiteboard tool with AI-powered image/video creation, mind mapping, flowcharts, and freehand drawing",
   "homepage": "https://aitu.chat",
@@ -11,7 +11,15 @@
   "bugs": {
     "url": "https://github.com/ljquan/aitu/issues"
   },
-  "keywords": ["whiteboard", "mindmap", "flowchart", "drawing", "AI", "collaboration", "visualization"],
+  "keywords": [
+    "whiteboard",
+    "mindmap",
+    "flowchart",
+    "drawing",
+    "AI",
+    "collaboration",
+    "visualization"
+  ],
   "author": "ljquan",
   "scripts": {
     "start": "nx serve web --host=0.0.0.0",
