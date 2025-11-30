@@ -1,3 +1,13 @@
+## 0.2.4 (2025-11-30)
+
+### 🔧 Chores
+
+- 优化缓存 ([72ca629](https://github.com/ljquan/aitu/commit/72ca629))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+
 ## 0.2.3 (2025-11-30)
 
 ### 🔧 Chores
