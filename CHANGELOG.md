@@ -1,3 +1,13 @@
+## 0.2.3 (2025-11-30)
+
+### 🔧 Chores
+
+- 添加图片加载的重试组件 ([f365f84](https://github.com/ljquan/aitu/commit/f365f84))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+
 ## 0.2.2 (2025-11-30)
 
 ### 🔧 Chores
