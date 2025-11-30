@@ -290,7 +290,9 @@ export const TaskItem: React.FC<TaskItemProps> = ({
                   minHeight: '100px',
                   color: '#999',
                   fontSize: '14px'
-                }}>
+                }}
+                src-value={mediaUrl}
+                >
                   图片加载失败
                 </div>
               }

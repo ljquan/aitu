@@ -3,7 +3,7 @@
 // Version will be replaced during build process
 const APP_VERSION = '0.2.3';
 const CACHE_NAME = `drawnix-v${APP_VERSION}`;
-const IMAGE_CACHE_NAME = `drawnix-images-v${APP_VERSION}`;
+const IMAGE_CACHE_NAME = `drawnix-images`;
 const STATIC_CACHE_NAME = `drawnix-static-v${APP_VERSION}`;
 
 // Detect development mode
@@ -16,6 +16,11 @@ const CORS_ALLOWED_DOMAINS = [
     hostname: 'google.datas.systems',
     pathPattern: 'response_images',
     fallbackDomain: 'cdn.i666.fun'
+  },
+  {
+    hostname: 'googlecdn2.datas.systems',
+    pathPattern: 'response_images',
+    fallbackDomain: 'googlecdn2.i666.fun'
   }
 ];
 
@@ -261,14 +266,56 @@ self.addEventListener('install', event => {
 
 self.addEventListener('activate', event => {
   console.log('Service Worker activated');
-  
-  // Clean up old caches - delete all caches that don't match current version
+
+  // 迁移旧的图片缓存并清理过期缓存
   event.waitUntil(
-    caches.keys().then(cacheNames => {
+    caches.keys().then(async cacheNames => {
+      // 查找旧的版本化图片缓存
+      const legacyImageCaches = cacheNames.filter(name =>
+        name.startsWith('drawnix-images-v') && name !== IMAGE_CACHE_NAME
+      );
+
+      // 如果存在旧的图片缓存,迁移到新的固定名称缓存
+      if (legacyImageCaches.length > 0) {
+        console.log('Migrating legacy image caches to new cache name:', legacyImageCaches);
+
+        const newImageCache = await caches.open(IMAGE_CACHE_NAME);
+
+        // 迁移所有旧缓存中的数据
+        for (const legacyCacheName of legacyImageCaches) {
+          try {
+            const legacyCache = await caches.open(legacyCacheName);
+            const requests = await legacyCache.keys();
+
+            console.log(`Migrating ${requests.length} images from ${legacyCacheName}`);
+
+            for (const request of requests) {
+              const response = await legacyCache.match(request);
+              if (response) {
+                await newImageCache.put(request, response);
+              }
+            }
+
+            // 迁移完成后删除旧缓存
+            await caches.delete(legacyCacheName);
+            console.log(`Deleted legacy cache: ${legacyCacheName}`);
+          } catch (error) {
+            console.warn(`Failed to migrate cache ${legacyCacheName}:`, error);
+          }
+        }
+
+        console.log('Image cache migration completed');
+      }
+
+      // 清理其他不需要的缓存
       return Promise.all(
         cacheNames.map(cacheName => {
-          // Keep current version caches, delete all others
-          if (cacheName !== CACHE_NAME && cacheName !== IMAGE_CACHE_NAME && cacheName !== STATIC_CACHE_NAME) {
+          // 保留当前版本的缓存
+          const isCurrentCache = cacheName === CACHE_NAME ||
+                                 cacheName === IMAGE_CACHE_NAME ||
+                                 cacheName === STATIC_CACHE_NAME;
+
+          if (!isCurrentCache) {
             console.log('Deleting old cache:', cacheName);
             return caches.delete(cacheName);
           }
