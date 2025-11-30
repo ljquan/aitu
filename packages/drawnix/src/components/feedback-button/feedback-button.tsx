@@ -9,7 +9,7 @@ import React, { useState, useEffect } from 'react';
 import { ChatIcon } from 'tdesign-icons-react';
 import './feedback-button.scss';
 
-const QR_CODE_URL = '/logo/cardid.jpg';
+const QR_CODE_URL = '/logo/group-qr.png';
 
 export const FeedbackButton: React.FC = () => {
   const [isHovered, setIsHovered] = useState(false);
