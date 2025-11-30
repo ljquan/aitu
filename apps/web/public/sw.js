@@ -1,3 +1,4 @@
+/* eslint-disable no-restricted-globals */
 // Service Worker for PWA functionality and handling CORS issues with external images
 // Version will be replaced during build process
 const APP_VERSION = '0.1.1';
@@ -271,6 +272,7 @@ self.addEventListener('activate', event => {
             console.log('Deleting old cache:', cacheName);
             return caches.delete(cacheName);
           }
+          return null;
         })
       );
     }).then(() => {

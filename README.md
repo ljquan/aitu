@@ -55,7 +55,7 @@
 
 <div align="center">
   <figure>
-    <a target="_blank" rel="noopener">
+    <a href="./apps/web/public/product_showcase/aitu-01.png" target="_blank" rel="noopener">
       <img src="./apps/web/public/product_showcase/aitu-01.png" alt="提示词图像概率" width="100%" />
     </a>
     <figcaption>
@@ -68,7 +68,7 @@
 
 <div align="center">
   <figure>
-    <a target="_blank" rel="noopener">
+    <a href="./apps/web/public/product_showcase/aitu-02.png" target="_blank" rel="noopener">
       <img src="./apps/web/public/product_showcase/aitu-02.png" alt="AI 图片生成" width="100%" />
     </a>
     <figcaption>
@@ -540,4 +540,4 @@ nx lint drawnix
 
 ## License
 
-[MIT License](https://github.com/ljquan/aitu/blob/master/LICENSE)
+[MIT License](https://github.com/ljquan/aitu/blob/master/LICENSE)  
