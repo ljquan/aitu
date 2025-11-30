@@ -12,6 +12,7 @@ import { Task, TaskStatus, TaskType } from '../../types/task.types';
 import { getRelativeTime, formatTaskDuration } from '../../utils/task-utils';
 import { formatRetryDelay } from '../../utils/retry-utils';
 import { useMediaCache, useMediaUrl } from '../../hooks/useMediaCache';
+import { RetryImage } from '../retry-image';
 import './task-queue.scss';
 
 export interface TaskItemProps {
@@ -277,7 +278,23 @@ export const TaskItem: React.FC<TaskItemProps> = ({
       {isCompleted && mediaUrl && (
         <div className="task-item__preview" onClick={onPreviewOpen}>
           {task.type === TaskType.IMAGE ? (
-            <img src={mediaUrl} alt="Generated" />
+            <RetryImage
+              src={mediaUrl}
+              alt="Generated"
+              maxRetries={5}
+              fallback={
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  minHeight: '100px',
+                  color: '#999',
+                  fontSize: '14px'
+                }}>
+                  图片加载失败
+                </div>
+              }
+            />
           ) : (
             <video src={mediaUrl} />
           )}
