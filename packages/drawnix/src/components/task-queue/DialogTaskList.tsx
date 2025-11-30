@@ -8,7 +8,7 @@
 import React, { useMemo } from 'react';
 import { TaskItem } from './TaskItem';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
-import { Task, TaskType } from '../../types/task.types';
+import { TaskType } from '../../types/task.types';
 import { useDrawnix, DialogType } from '../../hooks/use-drawnix';
 import { insertImageFromUrl } from '../../data/image';
 import { insertVideoFromUrl } from '../../data/video';
@@ -80,13 +80,17 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
     if (!task?.result?.url) return;
 
     try {
-      await downloadMediaFile(
+      const result = await downloadMediaFile(
         task.result.url,
         task.params.prompt,
         task.result.format,
         task.type
       );
-      MessagePlugin.success('下载成功');
+      if (result && 'opened' in result) {
+        MessagePlugin.success('已在新标签页打开，请右键另存为');
+      } else {
+        MessagePlugin.success('下载成功');
+      }
     } catch (error) {
       console.error('Download failed:', error);
       MessagePlugin.error(`下载失败: ${error instanceof Error ? error.message : '未知错误'}`);

@@ -5,6 +5,27 @@
  */
 
 /**
+ * Check if a URL is from Volces (火山引擎) domains
+ * These domains don't support CORS, so we need special handling
+ */
+export function isVolcesDomain(url: string): boolean {
+  try {
+    const hostname = new URL(url).hostname;
+    return hostname.endsWith('.volces.com') || hostname.endsWith('.volccdn.com');
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Open URL in new tab (fallback for CORS-restricted domains)
+ * User can right-click to save the file
+ */
+export function openInNewTab(url: string): void {
+  window.open(url, '_blank');
+}
+
+/**
  * Sanitize a string to be used as a filename
  * - Removes special characters except Chinese, English, numbers, spaces, and dashes
  * - Replaces spaces with dashes
@@ -63,19 +84,26 @@ export async function downloadFile(url: string, filename?: string): Promise<void
 
 /**
  * Download a media file with auto-generated filename from prompt
+ * For Volces (火山引擎) domains that don't support CORS, opens in new tab instead
  *
  * @param url - The URL of the media file
  * @param prompt - The prompt text to use for filename
  * @param format - File extension (e.g., 'png', 'mp4', 'webp')
  * @param fallbackName - Fallback name if prompt is empty
- * @returns Promise that resolves when download is complete
+ * @returns Promise that resolves when download is complete, or object with opened flag for new tab
  */
 export async function downloadMediaFile(
   url: string,
   prompt: string,
   format: string,
   fallbackName: string = 'media'
-): Promise<void> {
+): Promise<{ opened: boolean } | void> {
+  // For Volces domains (火山引擎), open in new tab due to CORS restrictions
+  if (isVolcesDomain(url)) {
+    openInNewTab(url);
+    return { opened: true };
+  }
+
   const sanitizedPrompt = sanitizeFilename(prompt);
   const filename = `${sanitizedPrompt || fallbackName}.${format}`;
   return downloadFile(url, filename);

@@ -8,21 +8,21 @@ import { Tooltip, Select } from 'tdesign-react';
 import { InfoCircleIcon } from 'tdesign-icons-react';
 
 export const IMAGE_MODEL_OPTIONS = [
-  { label: 'gemini-2.5-flash-image (nano-banana)', value: 'gemini-2.5-flash-image' },
-  { label: 'gemini-2.5-flash-image-vip (nano-banana-vip)', value: 'gemini-2.5-flash-image-vip' },
   { label: 'gemini-3-pro-image-preview (nano-banana-2)', value: 'gemini-3-pro-image-preview' },
   { label: 'gemini-3-pro-image-preview-hd (nano-banana-2-hd)', value: 'gemini-3-pro-image-preview-hd' },
   { label: 'gemini-3-pro-image-preview-2k (nano-banana-2-2k)', value: 'gemini-3-pro-image-preview-2k' },
   { label: 'gemini-3-pro-image-preview-4k (nano-banana-2-4k)', value: 'gemini-3-pro-image-preview-4k' },
+  { label: 'gemini-2.5-flash-image-vip (nano-banana-vip)', value: 'gemini-2.5-flash-image-vip' },
+  { label: 'gemini-2.5-flash-image (nano-banana)', value: 'gemini-2.5-flash-image' },
 ];
 
 export const VIDEO_MODEL_OPTIONS = [
+  { label: 'veo3.1', value: 'veo3.1' },
+  { label: 'sora-2', value: 'sora-2' },
   { label: 'veo3', value: 'veo3' },
   { label: 'veo3-pro', value: 'veo3-pro' },
-  { label: 'veo3.1', value: 'veo3.1' },
   { label: 'veo3.1-pro', value: 'veo3.1-pro' },
   { label: 'veo3.1-components', value: 'veo3.1-components' },
-  { label: 'sora-2', value: 'sora-2' },
   { label: 'sora-2-pro', value: 'sora-2-pro' },
 ];
 

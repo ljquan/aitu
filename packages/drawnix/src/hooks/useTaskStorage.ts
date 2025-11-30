@@ -10,6 +10,7 @@ import { taskQueueService } from '../services/task-queue-service';
 import { storageService } from '../services/storage-service';
 import { UPDATE_INTERVALS } from '../constants/TASK_CONSTANTS';
 import { migrateLegacyHistory } from '../utils/history-migration';
+import { TaskType, TaskStatus, TaskExecutionPhase } from '../types/task.types';
 
 // Global flag to prevent multiple initializations (persists across HMR)
 let globalInitialized = false;
@@ -59,17 +60,45 @@ export function useTaskStorage(): void {
           taskQueueService.restoreTasks(storedTasks);
           console.log(`[useTaskStorage] Restored ${storedTasks.length} tasks from storage`);
 
-          // Resume incomplete tasks (processing tasks were interrupted by page reload)
+          // Handle interrupted processing tasks based on task type and remoteId
           const processingTasks = storedTasks.filter(task => task.status === 'processing');
 
           if (processingTasks.length > 0) {
-            console.log(`[useTaskStorage] Resetting ${processingTasks.length} interrupted processing tasks to pending`);
+            console.log(`[useTaskStorage] Found ${processingTasks.length} interrupted processing tasks`);
 
-            // Reset processing tasks back to pending (they were interrupted)
             processingTasks.forEach(task => {
-              taskQueueService.updateTaskStatus(task.id, 'pending' as any, {
-                startedAt: undefined,
-              });
+              // Video tasks with remoteId can be resumed (polling can continue)
+              if (task.type === TaskType.VIDEO && task.remoteId) {
+                console.log(`[useTaskStorage] Video task ${task.id} can resume polling (remoteId: ${task.remoteId})`);
+                // Keep as processing, useTaskExecutor will handle resumption
+              } else {
+                // Image tasks or video tasks without remoteId cannot be resumed
+                // Mark as failed and let user decide to retry
+                console.log(`[useTaskStorage] Task ${task.id} (${task.type}) cannot be resumed, marking as failed`);
+
+                // Provide more specific error message based on execution phase
+                let errorMessage = '任务被中断（页面刷新）';
+                let errorCode = 'INTERRUPTED';
+
+                // Check if video task was in submitting phase (API request may have succeeded on server)
+                if (task.type === TaskType.VIDEO && task.executionPhase === TaskExecutionPhase.SUBMITTING) {
+                  errorMessage = '任务在提交过程中被中断，可能已在后台执行';
+                  errorCode = 'INTERRUPTED_DURING_SUBMISSION';
+                }
+
+                taskQueueService.updateTaskStatus(task.id, TaskStatus.FAILED, {
+                  startedAt: undefined,
+                  executionPhase: undefined, // Clear execution phase
+                  error: {
+                    code: errorCode,
+                    message: errorMessage,
+                    details: {
+                      originalError: `Task interrupted by page refresh before completion (phase: ${task.executionPhase || 'unknown'})`,
+                      timestamp: Date.now(),
+                    },
+                  },
+                });
+              }
             });
           }
 
@@ -78,9 +107,12 @@ export function useTaskStorage(): void {
             task.status === 'pending' ||
             task.status === 'retrying'
           );
+          const resumableTasks = processingTasks.filter(
+            task => task.type === TaskType.VIDEO && task.remoteId
+          );
 
-          if (incompleteTasks.length > 0 || processingTasks.length > 0) {
-            const totalIncomplete = incompleteTasks.length + processingTasks.length;
+          if (incompleteTasks.length > 0 || resumableTasks.length > 0) {
+            const totalIncomplete = incompleteTasks.length + resumableTasks.length;
             console.log(`[useTaskStorage] Total ${totalIncomplete} incomplete tasks ready for execution`);
           }
         }

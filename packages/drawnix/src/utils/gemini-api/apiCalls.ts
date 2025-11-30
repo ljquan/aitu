@@ -49,15 +49,35 @@ export async function callApiRaw(
 
     if (!response.ok) {
       const duration = Date.now() - startTime;
+      // 尝试读取响应体中的错误信息
+      let errorBody = '';
+      let errorMessage = response.statusText;
+      try {
+        const errorJson = await response.json();
+        if (errorJson.error) {
+          errorMessage = errorJson.error.message || errorJson.error.code || response.statusText;
+          errorBody = JSON.stringify(errorJson.error);
+        }
+      } catch (e) {
+        // 如果无法解析 JSON，尝试读取文本
+        try {
+          errorBody = await response.text();
+        } catch (e2) {
+          // 忽略读取错误
+        }
+      }
       analytics.trackAPICallFailure({
         endpoint,
         model,
         duration,
-        error: response.statusText,
+        error: errorMessage,
         httpStatus: response.status,
         stream: false,
       });
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      const error = new Error(`HTTP ${response.status}: ${errorMessage}`);
+      (error as any).apiErrorBody = errorBody;
+      (error as any).httpStatus = response.status;
+      throw error;
     }
 
     // 处理非流式响应
@@ -133,15 +153,35 @@ export async function callApiStreamRaw(
 
     if (!response.ok) {
       const duration = Date.now() - startTime;
+      // 尝试读取响应体中的错误信息
+      let errorBody = '';
+      let errorMessage = response.statusText;
+      try {
+        const errorJson = await response.json();
+        if (errorJson.error) {
+          errorMessage = errorJson.error.message || errorJson.error.code || response.statusText;
+          errorBody = JSON.stringify(errorJson.error);
+        }
+      } catch (e) {
+        // 如果无法解析 JSON，尝试读取文本
+        try {
+          errorBody = await response.text();
+        } catch (e2) {
+          // 忽略读取错误
+        }
+      }
       analytics.trackAPICallFailure({
         endpoint,
         model,
         duration,
-        error: response.statusText,
+        error: errorMessage,
         httpStatus: response.status,
         stream: true,
       });
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      const error = new Error(`HTTP ${response.status}: ${errorMessage}`);
+      (error as any).apiErrorBody = errorBody;
+      (error as any).httpStatus = response.status;
+      throw error;
     }
 
     // 处理流式响应
@@ -156,7 +196,10 @@ export async function callApiStreamRaw(
     try {
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+          console.log('[StreamAPI] Stream ended (done=true)');
+          break;
+        }
 
         const chunk = decoder.decode(value, { stream: true });
         const lines = chunk.split('\n');
@@ -165,6 +208,7 @@ export async function callApiStreamRaw(
           if (line.startsWith('data: ')) {
             const data = line.slice(6).trim();
             if (data === '[DONE]') {
+              console.log('[StreamAPI] Received [DONE] signal');
               break;
             }
 
@@ -186,6 +230,19 @@ export async function callApiStreamRaw(
     }
 
     const duration = Date.now() - startTime;
+
+    // Log full content for debugging incomplete responses
+    console.log('[StreamAPI] Stream completed, full content length:', fullContent.length);
+    console.log('[StreamAPI] Full response content:', fullContent);
+
+    // Check for incomplete response patterns
+    const hasGeneratingText = fullContent.includes('正在生成') || fullContent.includes('generating');
+    const hasImageUrl = fullContent.includes('![') && fullContent.includes('](http');
+
+    if (hasGeneratingText && !hasImageUrl) {
+      console.warn('[StreamAPI] Warning: Response contains "generating" text but no image URL - response may be incomplete');
+    }
+
     analytics.trackAPICallSuccess({
       endpoint,
       model,
@@ -228,7 +285,7 @@ export async function callVideoApiStreamRaw(
   options: VideoGenerationOptions = {}
 ): Promise<GeminiResponse> {
   const startTime = Date.now();
-  const model = config.modelName || VIDEO_DEFAULT_CONFIG.modelName;
+  const model = config.modelName || VIDEO_DEFAULT_CONFIG.modelName || 'veo3';
   const endpoint = '/chat/completions';
 
   // Track API call start
@@ -276,15 +333,35 @@ export async function callVideoApiStreamRaw(
 
     if (!response.ok) {
       const duration = Date.now() - startTime;
+      // 尝试读取响应体中的错误信息
+      let errorBody = '';
+      let errorMessage = response.statusText;
+      try {
+        const errorJson = await response.json();
+        if (errorJson.error) {
+          errorMessage = errorJson.error.message || errorJson.error.code || response.statusText;
+          errorBody = JSON.stringify(errorJson.error);
+        }
+      } catch (e) {
+        // 如果无法解析 JSON，尝试读取文本
+        try {
+          errorBody = await response.text();
+        } catch (e2) {
+          // 忽略读取错误
+        }
+      }
       analytics.trackAPICallFailure({
         endpoint,
         model,
         duration,
-        error: response.statusText,
+        error: errorMessage,
         httpStatus: response.status,
         stream: true,
       });
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      const error = new Error(`HTTP ${response.status}: ${errorMessage}`);
+      (error as any).apiErrorBody = errorBody;
+      (error as any).httpStatus = response.status;
+      throw error;
     }
 
     // 处理流式响应

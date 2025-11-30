@@ -81,7 +81,33 @@
 
 <div align="center">
   <figure>
-    <a href="./apps/web/public/product_showcase/aitu-03.png" target="_blank" rel="noopener">
+    <a target="_blank" rel="noopener">
+      <img src="./apps/web/public/product_showcase/aitu-05.png" alt="AI 视频生成" width="100%" />
+    </a>
+    <figcaption>
+      <p align="center">
+        AI 视频生成 - 多模型选择，图生视频
+      </p>
+    </figcaption>
+  </figure>
+</div>
+
+<div align="center">
+  <figure>
+    <a target="_blank" rel="noopener">
+      <img src="./apps/web/public/product_showcase/aitu-06.png" alt="任务队列管理" width="100%" />
+    </a>
+    <figcaption>
+      <p align="center">
+        任务队列 - 进度追踪、批量管理、媒体缓存
+      </p>
+    </figcaption>
+  </figure>
+</div>
+
+<div align="center">
+  <figure>
+    <a target="_blank" rel="noopener">
       <img src="./apps/web/public/product_showcase/aitu-03.png" alt="任务处理" width="100%" />
     </a>
     <figcaption>
@@ -92,9 +118,10 @@
   </figure>
 </div>
 
+
 <div align="center">
   <figure>
-    <a href="./apps/web/public/product_showcase/aitu-04.png" target="_blank" rel="noopener">
+    <a target="_blank" rel="noopener">
       <img src="./apps/web/public/product_showcase/aitu-04.png" alt="效果展示" width="100%" />
     </a>
     <figcaption>
@@ -105,42 +132,9 @@
   </figure>
 </div>
 
-<div align="center">
-  <figure>
-    <a href="./apps/web/public/product_showcase/case-2.png" target="_blank" rel="noopener">
-      <img src="./apps/web/public/product_showcase/case-2.png" alt="流程图与自由画" width="100%" />
-    </a>
-    <figcaption>
-      <p align="center">
-        AI 视频生成 - 多模型选择，图生视频
-      </p>
-    </figcaption>
-  </figure>
-</div>
-
-[*English README*](./README_en.md)
 
 
-## 特性
 
-### AI 创作能力
-- **AI 图像生成** - 支持多种图像生成模型（Gemini 2.5/3.0 系列），文本转图像、图像参考生成 🔥🔥🔥
-- **AI 视频生成** - 支持视频生成模型，将静态图像转化为动态视频 🔥🔥🔥
-- **模型自由切换** - 在生成对话框中即时切换不同的 AI 模型
-- **任务队列管理** - 异步任务处理，支持批量生成、任务重试、历史记录
-
-### 白板与可视化
-- **思维导图** - 快速构建思维导图，支持多种布局和样式
-- **流程图** - 专业的流程图绘制，支持 Mermaid 语法转换
-- **自由画笔** - 手绘创作，支持多种画笔工具
-- **图片插入** - 支持插入和编辑图片元素
-- **Markdown 转思维导图** - 文本快速转换为可视化结构
-
-### 编辑与交互
-- **丰富的编辑功能** - 撤销、重做、复制、粘贴、多选等
-- **无限画布** - 自由缩放、滚动、移动
-- **自动保存** - 本地浏览器自动保存，数据不丢失
-- **多格式导出** - 支持 PNG、JSON(`.drawnix`) 等格式导出
 
 <div align="center">
   <figure>

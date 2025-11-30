@@ -30,6 +30,7 @@ import {
   ImageUpload,
   LoadingState,
   PromptInput,
+  AspectRatioSelector,
   type ImageFile,
   calculateInsertionPointFromIds,
   getMergedPresetPrompts,
@@ -38,6 +39,7 @@ import {
   DEFAULT_IMAGE_DIMENSIONS,
   getReferenceDimensionsFromIds
 } from './shared';
+import { DEFAULT_ASPECT_RATIO } from '../../constants/image-aspect-ratios';
 import { AI_IMAGE_GENERATION_PREVIEW_CACHE_KEY as PREVIEW_CACHE_KEY } from '../../constants/storage';
 import { DialogTaskList } from '../task-queue/DialogTaskList';
 import { geminiSettings } from '../../utils/settings-manager';
@@ -46,6 +48,7 @@ interface PreviewCache extends PreviewCacheBase {
   generatedImage: string | null;
   width: number | string;
   height: number | string;
+  aspectRatio?: string;
 }
 
 const cacheManager = createCacheManager<PreviewCache>(PREVIEW_CACHE_KEY);
@@ -72,6 +75,7 @@ const AIImageGeneration = ({
   const [prompt, setPrompt] = useState(initialPrompt);
   const [width, setWidth] = useState<number | string>(initialWidth || DEFAULT_IMAGE_DIMENSIONS.width);
   const [height, setHeight] = useState<number | string>(initialHeight || DEFAULT_IMAGE_DIMENSIONS.height);
+  const [aspectRatio, setAspectRatio] = useState<string>(DEFAULT_ASPECT_RATIO);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [generatedImagePrompt, setGeneratedImagePrompt] = useState<string>(''); // Track prompt for current image
   const [error, setError] = useState<string | null>(null);
@@ -108,6 +112,9 @@ const AIImageGeneration = ({
       setHeight(cachedData.height);
       setGeneratedImage(cachedData.generatedImage);
       setGeneratedImagePrompt(cachedData.prompt); // Set prompt for download
+      if (cachedData.aspectRatio) {
+        setAspectRatio(cachedData.aspectRatio);
+      }
     }
   }, []);
 
@@ -158,6 +165,7 @@ const AIImageGeneration = ({
     setGeneratedImage(null);
     setError(null);
     setDialogTaskIds([]); // 清除任务列表
+    setAspectRatio(DEFAULT_ASPECT_RATIO); // 重置比例
     // 清除缓存
     try {
       localStorage.removeItem(PREVIEW_CACHE_KEY);
@@ -183,21 +191,23 @@ const AIImageGeneration = ({
         generatedImage: imageUrl,
         timestamp: Date.now(),
         width,
-        height
+        height,
+        aspectRatio
       };
       cacheManager.save(cacheData);
     } catch (error) {
       console.warn('Failed to preload image, setting anyway:', error);
       // 即使预加载失败，也设置图片URL，让浏览器正常加载
       setGeneratedImage(imageUrl);
-      
+
       // 保存到缓存
       const cacheData: PreviewCache = {
         prompt,
         generatedImage: imageUrl,
         timestamp: Date.now(),
         width,
-        height
+        height,
+        aspectRatio
       };
       cacheManager.save(cacheData);
     } finally {
@@ -301,6 +311,7 @@ const AIImageGeneration = ({
             prompt: prompt.trim(),
             width: finalWidth,
             height: finalHeight,
+            aspectRatio,
             model: currentImageModel,
             uploadedImages: convertedImages,
             batchId,
@@ -352,6 +363,7 @@ const AIImageGeneration = ({
         prompt: prompt.trim(),
         width: finalWidth,
         height: finalHeight,
+        aspectRatio,
         model: currentImageModel,
         // 保存上传的图片（已转换为可序列化的格式）
         uploadedImages: convertedImages
@@ -441,6 +453,7 @@ const AIImageGeneration = ({
         <div className="ai-image-generation-section">
           <div className="ai-image-generation-form">
           
+          {/* 参考图片区域 */}
           {!useImageAPI && (
             <ImageUpload
               images={uploadedImages}
@@ -451,7 +464,7 @@ const AIImageGeneration = ({
               onError={setError}
             />
           )}
-          
+
           <PromptInput
             prompt={prompt}
             onPromptChange={setPrompt}
@@ -461,7 +474,7 @@ const AIImageGeneration = ({
             disabled={isGenerating}
             onError={setError}
           />
-          
+
             <ErrorDisplay error={error} />
           </div>
 
@@ -473,6 +486,13 @@ const AIImageGeneration = ({
             canGenerate={!!prompt.trim()}
             onGenerate={handleGenerate}
             onReset={handleReset}
+            leftContent={
+              <AspectRatioSelector
+                value={aspectRatio}
+                onChange={setAspectRatio}
+                compact={true}
+              />
+            }
           />
 
         </div>
@@ -590,13 +610,17 @@ const AIImageGeneration = ({
                       // Keep default format
                     }
 
-                    await downloadMediaFile(
+                    const result = await downloadMediaFile(
                       generatedImage,
                       generatedImagePrompt || 'image',
                       format,
                       'image'
                     );
-                    MessagePlugin.success(language === 'zh' ? '下载成功' : 'Download successful');
+                    if (result && 'opened' in result) {
+                      MessagePlugin.success(language === 'zh' ? '已在新标签页打开，请右键另存为' : 'Opened in new tab, please right-click to save');
+                    } else {
+                      MessagePlugin.success(language === 'zh' ? '下载成功' : 'Download successful');
+                    }
                   } catch (err) {
                     console.error('Download failed:', err);
                     MessagePlugin.error(
