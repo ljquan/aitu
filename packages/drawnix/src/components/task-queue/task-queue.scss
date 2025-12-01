@@ -706,6 +706,22 @@
     align-items: center;
     justify-content: center;
     max-width: calc(100% - 120px);
+    position: relative;
+  }
+
+  .task-preview-cache-badge {
+    position: absolute;
+    bottom: 12px;
+    left: 12px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    background: rgba(0, 168, 112, 0.9);
+    color: white;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
   }
 
   .task-preview-nav {

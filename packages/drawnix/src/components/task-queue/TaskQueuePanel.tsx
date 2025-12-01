@@ -11,6 +11,7 @@ import { DeleteIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon } from 'tdesi
 import { TaskItem } from './TaskItem';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
 import { Task, TaskType, TaskStatus } from '../../types/task.types';
+import { useMediaUrl } from '../../hooks/useMediaCache';
 import { useDrawnix, DialogType } from '../../hooks/use-drawnix';
 import { insertImageFromUrl } from '../../data/image';
 import { insertVideoFromUrl } from '../../data/video';
@@ -29,6 +30,41 @@ export interface TaskQueuePanelProps {
   /** Callback when a task action is performed */
   onTaskAction?: (action: string, taskId: string) => void;
 }
+
+/**
+ * PreviewContent component - displays preview media with cache support
+ */
+const PreviewContent: React.FC<{ task: Task }> = ({ task }) => {
+  const { url, isFromCache } = useMediaUrl(task.id, task.result?.url);
+
+  if (!url) {
+    return <div className="task-preview-content">加载中...</div>;
+  }
+
+  return (
+    <div className="task-preview-content">
+      {task.type === TaskType.IMAGE ? (
+        <img
+          key={task.id}
+          src={url}
+          alt="Preview"
+          style={{ maxWidth: '100%', maxHeight: '85vh', objectFit: 'contain' }}
+        />
+      ) : (
+        <video
+          key={task.id}
+          src={url}
+          controls
+          autoPlay
+          style={{ maxWidth: '100%', maxHeight: '85vh' }}
+        />
+      )}
+      {isFromCache && (
+        <div className="task-preview-cache-badge">已缓存</div>
+      )}
+    </div>
+  );
+};
 
 /**
  * TaskQueuePanel component - displays the full task queue
@@ -428,24 +464,7 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
               variant="outline"
               disabled={!previewInfo?.hasPrevious}
             />
-            <div className="task-preview-content">
-              {previewedTask.type === TaskType.IMAGE ? (
-                <img
-                  key={previewedTask.id}
-                  src={previewedTask.result.url}
-                  alt="Preview"
-                  style={{ maxWidth: '100%', maxHeight: '85vh', objectFit: 'contain' }}
-                />
-              ) : (
-                <video
-                  key={previewedTask.id}
-                  src={previewedTask.result.url}
-                  controls
-                  autoPlay
-                  style={{ maxWidth: '100%', maxHeight: '85vh' }}
-                />
-              )}
-            </div>
+            <PreviewContent task={previewedTask} />
             <Button
               className="task-preview-nav task-preview-nav--right"
               icon={<ChevronRightIcon />}

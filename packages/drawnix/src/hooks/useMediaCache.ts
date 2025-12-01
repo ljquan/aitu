@@ -97,6 +97,7 @@ export function useMediaCache(
 /**
  * Hook to get media URL with cache fallback
  * Returns cached URL if available, otherwise original URL
+ * Automatically switches to cached URL when caching completes
  */
 export function useMediaUrl(
   taskId: string,
@@ -105,44 +106,60 @@ export function useMediaUrl(
   const [url, setUrl] = useState<string | null>(originalUrl || null);
   const [isFromCache, setIsFromCache] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    let blobUrl: string | null = null;
+  // Load URL function
+  const loadUrl = useCallback(async () => {
+    setIsLoading(true);
 
-    const loadUrl = async () => {
-      setIsLoading(true);
+    // First try to get cached URL
+    const cachedUrl = await mediaCacheService.getCachedUrl(taskId);
 
-      // First try to get cached URL
-      const cachedUrl = await mediaCacheService.getCachedUrl(taskId);
-
-      if (cancelled) return;
-
-      if (cachedUrl) {
-        blobUrl = cachedUrl;
-        setUrl(cachedUrl);
-        setIsFromCache(true);
-      } else if (originalUrl) {
-        setUrl(originalUrl);
-        setIsFromCache(false);
-      } else {
-        setUrl(null);
-        setIsFromCache(false);
+    if (cachedUrl) {
+      // Revoke old blob URL if exists
+      if (blobUrl && blobUrl !== cachedUrl) {
+        URL.revokeObjectURL(blobUrl);
       }
+      setBlobUrl(cachedUrl);
+      setUrl(cachedUrl);
+      setIsFromCache(true);
+    } else if (originalUrl) {
+      setUrl(originalUrl);
+      setIsFromCache(false);
+    } else {
+      setUrl(null);
+      setIsFromCache(false);
+    }
 
-      setIsLoading(false);
-    };
+    setIsLoading(false);
+  }, [taskId, originalUrl, blobUrl]);
 
+  // Initial load
+  useEffect(() => {
     loadUrl();
+  }, [taskId, originalUrl]);
 
-    // Cleanup blob URL on unmount
+  // Subscribe to cache status changes
+  useEffect(() => {
+    const unsubscribe = mediaCacheService.subscribe(() => {
+      const status = mediaCacheService.getCacheStatus(taskId);
+      // When cache status changes to 'cached' or 'none', reload URL
+      if (status === 'cached' || status === 'none') {
+        loadUrl();
+      }
+    });
+
+    return unsubscribe;
+  }, [taskId, loadUrl]);
+
+  // Cleanup blob URL on unmount
+  useEffect(() => {
     return () => {
-      cancelled = true;
       if (blobUrl) {
         URL.revokeObjectURL(blobUrl);
       }
     };
-  }, [taskId, originalUrl]);
+  }, [blobUrl]);
 
   return { url, isFromCache, isLoading };
 }

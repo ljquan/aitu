@@ -136,7 +136,8 @@ class GenerationAPIService {
    * @private
    */
   private buildImagePrompt(userPrompt: string, aspectRatio?: string): string {
-    const ratioClause = aspectRatio ? ` with aspect ratio ${aspectRatio}` : '';
+    // 当 aspectRatio 为 'auto' 或未设置时，不添加比例约束，让模型自动决定
+    const ratioClause = aspectRatio && aspectRatio !== 'auto' ? ` with aspect ratio ${aspectRatio}` : '';
     return `Generate an image. ${userPrompt}. Output as a single complete image${ratioClause}. Do not include any text, watermark, or explanation in the response.`;
   }
 

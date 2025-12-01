@@ -11,9 +11,21 @@ export interface AspectRatioOption {
 }
 
 /**
+ * 自动比例选项（模型根据提示词自动决定）
+ */
+export const AUTO_ASPECT_RATIO: AspectRatioOption = {
+  label: '自动',
+  value: 'auto',
+  width: 0,
+  height: 0,
+  description: '由模型自动决定最佳比例'
+};
+
+/**
  * 支持的图片宽高比选项
  */
 export const ASPECT_RATIO_OPTIONS: AspectRatioOption[] = [
+  AUTO_ASPECT_RATIO,
   { label: '1:1', value: '1:1', width: 1, height: 1, description: '正方形' },
   { label: '2:3', value: '2:3', width: 2, height: 3, description: '竖版标准' },
   { label: '3:2', value: '3:2', width: 3, height: 2, description: '横版标准' },
@@ -27,9 +39,9 @@ export const ASPECT_RATIO_OPTIONS: AspectRatioOption[] = [
 ];
 
 /**
- * 默认宽高比
+ * 默认宽高比（自动）
  */
-export const DEFAULT_ASPECT_RATIO = '1:1';
+export const DEFAULT_ASPECT_RATIO = 'auto';
 
 /**
  * 根据宽高比值获取配置

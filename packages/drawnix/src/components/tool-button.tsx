@@ -3,10 +3,14 @@ import './tool-icon.scss';
 
 import type { CSSProperties } from 'react';
 import React, { useEffect, useRef, useState } from 'react';
+import { Tooltip } from 'tdesign-react';
 import { AbortError } from '../errors';
 import { isPromiseLike } from '../utils/common';
 import classNames from 'classnames';
 import { EventPointerType } from '../types';
+
+// Tooltip 延迟配置（毫秒）
+const TOOLTIP_DELAY = 300;
 
 export type ToolButtonSize = 'small' | 'medium';
 
@@ -105,7 +109,8 @@ export const ToolButton = React.forwardRef((props: ToolButtonProps, ref) => {
     const type = (props.type === 'icon' ? 'button' : props.type) as
       | 'button'
       | 'submit';
-    return (
+
+    const buttonElement = (
       <button
         className={classNames(
           'tool-icon_type_button',
@@ -122,7 +127,6 @@ export const ToolButton = React.forwardRef((props: ToolButtonProps, ref) => {
         style={props.style}
         data-testid={props['data-testid']}
         hidden={props.hidden}
-        title={props.title}
         aria-label={props['aria-label']}
         type={type}
         onClick={onClick}
@@ -160,12 +164,28 @@ export const ToolButton = React.forwardRef((props: ToolButtonProps, ref) => {
         )}
       </button>
     );
+
+    // 如果有 title，使用 Tooltip 包裹
+    if (props.title) {
+      return (
+        <Tooltip
+          content={props.title}
+          theme="light"
+          placement="bottom"
+          showArrow={false}
+          delay={TOOLTIP_DELAY}
+        >
+          {buttonElement}
+        </Tooltip>
+      );
+    }
+
+    return buttonElement;
   }
 
-  return (
+  const labelElement = (
     <label
       className={classNames('tool-icon', props.className)}
-      title={props.title}
       onPointerDown={(event) => {
         lastPointerTypeRef.current = event.pointerType || null;
         props.onPointerDown?.({
@@ -202,6 +222,23 @@ export const ToolButton = React.forwardRef((props: ToolButtonProps, ref) => {
       </div>
     </label>
   );
+
+  // 如果有 title，使用 Tooltip 包裹
+  if (props.title) {
+    return (
+      <Tooltip
+        content={props.title}
+        theme="light"
+        placement="bottom"
+        showArrow={false}
+        delay={TOOLTIP_DELAY}
+      >
+        {labelElement}
+      </Tooltip>
+    );
+  }
+
+  return labelElement;
 });
 
 ToolButton.displayName = 'ToolButton';

@@ -4,6 +4,7 @@ import {
   getRectangleByElements,
 } from '@plait/core';
 import { getInsertionPointForSelectedElements } from '../utils/selection-utils';
+import { urlCacheService } from '../services/url-cache-service';
 
 /**
  * 从保存的选中元素IDs计算插入点
@@ -243,6 +244,12 @@ export const insertVideoFromUrl = async (
     );
     console.log('Display dimensions after scaling:', displayDimensions);
 
+    // 使用缓存服务下载并缓存视频
+    // 视频文件较大，存储 Blob 而不是 Base64
+    // 使用 ObjectURL 作为视频源
+    const { objectUrl } = await urlCacheService.getVideoAsBlob(videoUrl);
+    console.log('Video cached, using ObjectURL:', objectUrl.substring(0, 50));
+
     // 计算插入位置
     let insertionPoint = startPoint;
 
@@ -273,11 +280,14 @@ export const insertVideoFromUrl = async (
     console.log('Inserting video element with display dimensions:', displayDimensions, 'at point:', insertionPoint);
 
     // 使用图片元素，通过URL后缀识别为视频
+    // 注意：使用 ObjectURL 在页面刷新后会失效
+    // 但视频数据已缓存到 IndexedDB，后续可以实现从缓存恢复的逻辑
     const videoAsImageElement = {
-      url: videoUrl,
+      url: objectUrl,
       width: displayDimensions.width,
       height: displayDimensions.height,
-      // 不需要额外的标识属性，通过URL后缀就能识别
+      // 存储原始 URL 以便后续从缓存恢复
+      originalUrl: videoUrl,
     };
 
     console.log('Creating video as image element:', videoAsImageElement);
