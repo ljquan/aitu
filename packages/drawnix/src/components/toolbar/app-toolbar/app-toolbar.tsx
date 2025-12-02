@@ -24,8 +24,12 @@ import { LanguageSwitcherMenu } from './language-switcher-menu';
 import Menu from '../../menu/menu';
 import MenuSeparator from '../../menu/menu-separator';
 import { useI18n } from '../../../i18n';
+import { ToolbarSectionProps } from '../toolbar.types';
 
-export const AppToolbar = () => {
+export const AppToolbar: React.FC<ToolbarSectionProps> = ({
+  embedded = false,
+  iconMode = false
+}) => {
   const board = useBoard();
   const { t } = useI18n();
   const container = PlaitBoard.getBoardContainer(board);
@@ -33,11 +37,8 @@ export const AppToolbar = () => {
   const [appMenuOpen, setAppMenuOpen] = useState(false);
   const isUndoDisabled = board.history.undos.length <= 0;
   const isRedoDisabled = board.history.redos.length <= 0;
-  return (
-    <Island
-      padding={1}
-      className={classNames('app-toolbar', ATTACHED_ELEMENT_CLASS_NAME)}
-    >
+
+  const content = (
       <Stack.Row gap={1}>
         <Popover
           key={0}
@@ -46,7 +47,7 @@ export const AppToolbar = () => {
           onOpenChange={(open) => {
             setAppMenuOpen(open);
           }}
-          placement="bottom-start"
+          placement={embedded ? "right-start" : "bottom-start"}
         >
           <PopoverTrigger asChild>
             <ToolButton
@@ -61,7 +62,7 @@ export const AppToolbar = () => {
               }}
             />
           </PopoverTrigger>
-          <PopoverContent container={container}>
+          <PopoverContent container={container} style={{ zIndex: 1000 }}>
             <Menu
               onSelect={() => {
                 setAppMenuOpen(false);
@@ -91,48 +92,40 @@ export const AppToolbar = () => {
           }}
           disabled={isUndoDisabled}
         />
-        <ToolButton
-          key={2}
-          type="icon"
-          icon={RedoIcon}
-          visible={true}
-          title={t('general.redo')}
-          aria-label={t('general.redo')}
-          onPointerUp={() => {
-            board.redo();
-          }}
-          disabled={isRedoDisabled}
-        />
-        {selectedElements.length > 0 && (
-          <ToolButton
-            className="duplicate"
-            key={3}
-            type="icon"
-            icon={DuplicateIcon}
-            visible={true}
-            title={t('general.duplicate')}
-            aria-label={t('general.duplicate')}
-            onPointerUp={() => {
-              duplicateElements(board);
-            }}
-          />
-        )}
-        {selectedElements.length > 0 && (
-          <ToolButton
-            className="trash"
-            key={4}
-            type="icon"
-            icon={TrashIcon}
-            visible={true}
-            title={t('general.delete')}
-            aria-label={t('general.delete')}
-            onPointerUp={() => {
-              deleteFragment(board);
-            }}
-          />
-        )}
-        
-      </Stack.Row>
+                  <ToolButton
+                    key={2}
+                    type="icon"
+                    icon={RedoIcon}
+                    visible={true}
+                    title={t('general.redo')}
+                    aria-label={t('general.redo')}
+                    onPointerUp={() => {
+                      board.redo();
+                    }}
+                    disabled={isRedoDisabled}
+                  />
+              </Stack.Row>
+          );
+  if (embedded) {
+    return (
+      <div className={classNames('app-toolbar', {
+        'app-toolbar--embedded': embedded,
+        'app-toolbar--icon-only': iconMode,
+      })}>
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <Island
+      padding={1}
+      className={classNames('app-toolbar', ATTACHED_ELEMENT_CLASS_NAME, {
+        'app-toolbar--embedded': embedded,
+        'app-toolbar--icon-only': iconMode,
+      })}
+    >
+      {content}
     </Island>
   );
 };

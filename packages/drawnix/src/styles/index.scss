@@ -23,29 +23,23 @@
         top: 36px;
         left: 50%;
         transform: translateX(-50%);
-        @include isMobile {
-            top: 20px;
-        }
     }
     .zoom-toolbar {
         cursor: default;
         position: absolute;
         top: 36px;
         right: 36px;
-        @include isMobile {
-            display: none;
-        }
         .zoom-out-button {
             border-top-right-radius: 0 !important;
             border-bottom-right-radius: 0 !important;
         }
         .zoom-menu-trigger {
-            width: 56px;;
+            width: 56px;
             display: flex;
             align-items: center;
             justify-content: center;
             color: var(--color-on-surface);
-            border-radius: var(--border-radius-sm);;
+            border-radius: var(--border-radius-sm);
             cursor: pointer;
 
             &:hover, &.active {
@@ -58,33 +52,31 @@
             border-top-left-radius: 0 !important;
             border-bottom-left-radius: 0 !important;
         }
+
+        // 嵌入模式下调整zoom按钮布局
+        &.zoom-toolbar--embedded {
+            .zoom-out-button,
+            .zoom-in-button {
+                border-radius: var(--border-radius-sm) !important;
+            }
+            .zoom-menu-trigger {
+                width: 100%;
+                min-width: 48px;
+                font-size: 12px;
+            }
+        }
     }
     .app-toolbar {
         position: absolute;
         top: 36px;
         left: 36px;
-        @include isMobile {
-            bottom: 20px;
-            top: auto;
-            width: 86%;
-            left: 50%;
-            transform: translateX(-50%);
-        }
         .stack {
-            @include isMobile {
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-            }
         }
     }
     .theme-toolbar {
         position: absolute;
         bottom: 36px;
         right: 36px;
-        @include isMobile {
-            display: none;
-        }
         select {
             width: 100px;
             background-color: var(--color-surface-secondary-container);
@@ -99,7 +91,109 @@
                 background-color: var(--color-surface-primary-container);
             }
         }
+
+        // 嵌入模式下调整主题选择器
+        &.theme-toolbar--embedded {
+            select {
+                width: 100%;
+                min-width: 60px;
+                font-size: 12px;
+                padding: 4px;
+                text-align: center;
+                text-align-last: center;
+            }
+        }
     }
+
+    // Unified Toolbar Container (统一左侧工具栏 - 桌面端和移动端通用)
+    .unified-toolbar {
+        position: absolute;
+        left: 0px;
+        top: 10px;
+        bottom: auto; // Remove bottom constraint
+        max-height: calc(100% - 72px); // Prevent overflow off screen
+        overflow-y: auto; // Allow scrolling if too tall
+        display: flex;
+        flex-direction: column;
+        gap: 0; // Dividers implemented with border, no gap needed
+        width: fit-content; // Adapt width to content
+        max-width: 80px; // Constraint width
+        scrollbar-width: none; // Hide scrollbar for cleaner look
+        -ms-overflow-style: none;
+        &::-webkit-scrollbar {
+            display: none;
+        }
+
+        &__section {
+            // 分区之间添加分割线和间距
+            &:not(:first-child) {
+                border-top: 1px solid var(--color-border);
+                padding-top: 8px;
+            }
+            // Add padding to bottom to separate from next border
+            padding-bottom: 8px; 
+            
+            // First child only padding bottom
+            &:first-child {
+                padding-top: 4px;
+            }
+            // Last child only padding top (already handled)
+            &:last-child {
+                padding-bottom: 4px;
+            }
+        }
+
+        // 图标模式修饰符 (窗口高度不足时自动切换)
+        &--icon-only {
+            // 隐藏工具按钮标签,仅显示图标
+            .tool-icon__label {
+                display: none;
+            }
+        }
+    }
+
+    // Embedded mode for individual toolbars (适配80px垂直布局)
+    .app-toolbar--embedded,
+    .draw-toolbar--embedded,
+    .zoom-toolbar--embedded,
+    .theme-toolbar--embedded {
+        position: static;
+        top: auto;
+        left: auto;
+        right: auto;
+        bottom: auto;
+        transform: none;
+        width: 100%; // 填充容器宽度
+
+        // 调整 Island 容器
+        .island {
+            width: 100%;
+            padding: 4px; // 减小padding以适应窄宽度
+        }
+
+        // Stack 改为垂直布局以适应80px宽度
+        .stack {
+            display: flex !important; // Override Grid
+            flex-direction: column !important;
+            align-items: center;
+            gap: 4px;
+            width: 100%;
+        }
+
+        // 调整工具按钮尺寸以适应窄宽度
+        .tool-button,
+        .tool-icon {
+            min-width: 40px;
+            max-width: 100%;
+            width: auto;
+        }
+
+        // 隐藏文本标签，节省空间
+        .tool-icon__label {
+            display: none;
+        }
+    }
+
     .drawnix-link, a {
         text-decoration: none;
         color: var(--link-color);
