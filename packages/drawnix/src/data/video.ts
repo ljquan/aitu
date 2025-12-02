@@ -282,12 +282,17 @@ export const insertVideoFromUrl = async (
     // 使用图片元素，通过URL后缀识别为视频
     // 注意：使用 ObjectURL 在页面刷新后会失效
     // 但视频数据已缓存到 IndexedDB，后续可以实现从缓存恢复的逻辑
+    // 在 ObjectURL 后面添加 #video 标识符
+    // 因为 DrawTransforms.insertImage 可能不会保留自定义属性（如 isVideo）
+    // 通过 URL hash 来标识视频元素是最可靠的方式
     const videoAsImageElement = {
-      url: objectUrl,
+      url: `${objectUrl}#video`,
       width: displayDimensions.width,
       height: displayDimensions.height,
       // 存储原始 URL 以便后续从缓存恢复
       originalUrl: videoUrl,
+      // 显式标识为视频，因为 ObjectURL 没有扩展名无法通过后缀识别
+      isVideo: true,
     };
 
     console.log('Creating video as image element:', videoAsImageElement);

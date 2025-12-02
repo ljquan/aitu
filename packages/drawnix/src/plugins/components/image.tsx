@@ -2,15 +2,22 @@ import type { ImageProps } from '@plait/common';
 import classNames from 'classnames';
 import { Video } from './video';
 
-// 检查是否为视频元素（通过URL扩展名或者元数据）
+// 检查是否为视频元素（通过URL标识、扩展名或元数据）
 const isVideoElement = (imageItem: any): boolean => {
-  // 检查是否有视频标识
+  // 检查是否有视频标识属性
   if (imageItem.isVideo === true || imageItem.videoType) {
     return true;
   }
-  
-  // 检查URL扩展名
+
   const url = imageItem.url || '';
+
+  // 检查 URL hash 标识符（用于 ObjectURL 的视频识别）
+  // 格式：blob:http://...#video
+  if (url.includes('#video')) {
+    return true;
+  }
+
+  // 检查URL扩展名（用于普通 URL 的视频识别）
   const videoExtensions = ['.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm', '.mkv'];
   return videoExtensions.some(ext => url.toLowerCase().includes(ext));
 };
