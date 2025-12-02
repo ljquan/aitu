@@ -55,16 +55,28 @@ export const withVideo = (board: PlaitBoard) => {
 
 /**
  * 检查元素是否为视频类型
- * 通过URL后缀名判断
+ * 通过URL标识符、扩展名或元数据判断
  */
 export function isVideoElement(element: any): boolean {
   if (!element || !element.url) {
     return false;
   }
-  
+
+  // 检查是否有视频标识属性
+  if (element.isVideo === true || element.videoType) {
+    return true;
+  }
+
   const url = element.url.toLowerCase();
+
+  // 检查 URL hash 标识符（用于 ObjectURL 的视频识别）
+  // 格式：blob:http://...#video
+  if (url.includes('#video')) {
+    return true;
+  }
+
+  // 检查URL扩展名（用于普通 URL 的视频识别）
   const videoExtensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.m4v', '.flv', '.wmv'];
-  
   return videoExtensions.some(ext => url.includes(ext));
 }
 

@@ -22,7 +22,10 @@ export const Video: React.FC<VideoProps> = (props: VideoProps) => {
   const [isLoading, setIsLoading] = useState(true);
 
   const { videoItem, isFocus = false, isSelected = false, readonly = false } = props;
-  const { url, poster, videoType } = videoItem;
+  const { url: rawUrl, poster, videoType } = videoItem;
+
+  // 清理 URL 中的 #video 标识符（用于视频类型识别，但不影响实际播放）
+  const url = rawUrl?.replace('#video', '') || '';
   
   useEffect(() => {
     const video = videoRef.current;
