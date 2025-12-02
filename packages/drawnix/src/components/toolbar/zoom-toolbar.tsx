@@ -14,17 +14,18 @@ import { useState } from 'react';
 import Menu from '../menu/menu';
 import MenuItem from '../menu/menu-item';
 import { useI18n } from '../../i18n';
+import { ToolbarSectionProps } from './toolbar.types';
 
-export const ZoomToolbar = () => {
+export const ZoomToolbar: React.FC<ToolbarSectionProps> = ({
+  embedded = false,
+  iconMode = false
+}) => {
   const board = useBoard();
   const { t } = useI18n();
   const container = PlaitBoard.getBoardContainer(board);
   const [zoomMenuOpen, setZoomMenuOpen] = useState(false);
-  return (
-    <Island
-      padding={1}
-      className={classNames('zoom-toolbar', ATTACHED_ELEMENT_CLASS_NAME)}
-    >
+
+  const content = (
       <Stack.Row gap={1}>
         <ToolButton
           key={0}
@@ -44,7 +45,7 @@ export const ZoomToolbar = () => {
           onOpenChange={(open) => {
             setZoomMenuOpen(open);
           }}
-          placement="bottom-end"
+          placement={embedded ? "right-start" : "bottom-end"}
         >
           <PopoverTrigger asChild>
             <div
@@ -61,7 +62,7 @@ export const ZoomToolbar = () => {
               {Number(((board?.viewport?.zoom || 1) * 100).toFixed(0))}%
             </div>
           </PopoverTrigger>
-          <PopoverContent container={container}>
+          <PopoverContent container={container} style={{ zIndex: 1000 }}>
             <Menu
               onSelect={() => {
                 setZoomMenuOpen(false);
@@ -99,6 +100,28 @@ export const ZoomToolbar = () => {
           className="zoom-in-button"
         />
       </Stack.Row>
+  );
+
+  if (embedded) {
+    return (
+      <div className={classNames('zoom-toolbar', {
+        'zoom-toolbar--embedded': embedded,
+        'zoom-toolbar--icon-only': iconMode,
+      })}>
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <Island
+      padding={1}
+      className={classNames('zoom-toolbar', ATTACHED_ELEMENT_CLASS_NAME, {
+        'zoom-toolbar--embedded': embedded,
+        'zoom-toolbar--icon-only': iconMode,
+      })}
+    >
+      {content}
     </Island>
   );
 };

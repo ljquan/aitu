@@ -12,6 +12,8 @@ import {
   RectangleClient,
   toHostPointFromViewBoxPoint,
   toScreenPointFromHostPoint,
+  duplicateElements,
+  deleteFragment,
 } from '@plait/core';
 import { useEffect, useRef, useState } from 'react';
 import { useBoard } from '@plait-board/react-board';
@@ -40,7 +42,7 @@ import { isWhite, removeHexAlpha } from '../../../utils/color';
 import { NO_COLOR } from '../../../constants/color';
 import { Freehand } from '../../../plugins/freehand/type';
 import { PopupLinkButton } from './link-button';
-import { AIImageIcon, AIVideoIcon, VideoFrameIcon } from '../../icons';
+import { AIImageIcon, AIVideoIcon, VideoFrameIcon, DuplicateIcon, TrashIcon } from '../../icons';
 import { useDrawnix, DialogType } from '../../../hooks/use-drawnix';
 import { useI18n } from '../../../i18n';
 import { ToolButton } from '../../tool-button';
@@ -53,10 +55,10 @@ export const PopupToolbar = () => {
   const board = useBoard();
   const selectedElements = getSelectedElements(board);
   const { openDialog } = useDrawnix();
-  const { language } = useI18n();
+  const { language, t } = useI18n();
   const [movingOrDragging, setMovingOrDragging] = useState(false);
   const movingOrDraggingRef = useRef(movingOrDragging);
-
+  
   // 视频帧选择弹窗状态
   const [showVideoFrameSelector, setShowVideoFrameSelector] = useState(false);
   const [selectedVideoElement, setSelectedVideoElement] = useState<PlaitElement | null>(null);
@@ -328,6 +330,30 @@ export const PopupToolbar = () => {
                 }}
               />
             )}
+            <ToolButton
+              className="duplicate"
+              key={8}
+              type="icon"
+              icon={DuplicateIcon}
+              visible={true}
+              title={t('general.duplicate')}
+              aria-label={t('general.duplicate')}
+              onPointerUp={() => {
+                duplicateElements(board);
+              }}
+            />
+            <ToolButton
+              className="trash"
+              key={9}
+              type="icon"
+              icon={TrashIcon}
+              visible={true}
+              title={t('general.delete')}
+              aria-label={t('general.delete')}
+              onPointerUp={() => {
+                deleteFragment(board);
+              }}
+            />
           </Stack.Row>
         </Island>
       )}

@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 💬 讨论和问题
+    url: https://github.com/aitu-dk/aitu/discussions
+    about: 对于一般性问题、想法讨论或寻求帮助，请使用Discussions
+  - name: 📖 文档
+    url: https://github.com/aitu-dk/aitu/tree/main/docs
+    about: 查看项目文档和开发指南
+  - name: 🌐 官网
+    url: https://aitu.chat
+    about: 访问Aitu官方网站
