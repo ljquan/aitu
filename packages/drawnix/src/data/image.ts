@@ -11,9 +11,7 @@ import { MindElement, MindTransforms } from '@plait/mind';
 import { DrawTransforms } from '@plait/draw';
 import { getElementOfFocusedImage } from '@plait/common';
 import { getInsertionPointForSelectedElements } from '../utils/selection-utils';
-
-// 辅助函数：将字符串转换为DataURL类型（用于外部URL）
-const createDataURL = (url: string): DataURL => url as DataURL;
+import { urlCacheService } from '../services/url-cache-service';
 
 /**
  * 从保存的选中元素IDs计算插入点
@@ -225,9 +223,10 @@ export const insertImageFromUrl = async (
       : null;
   const defaultImageWidth = selectedElement ? 240 : 400;
 
-  // Service Worker会处理CORS问题，直接使用URL即可
-  const dataURL = createDataURL(imageUrl);
-  const image = await loadHTMLImageElement(dataURL, true); // 设置crossOrigin以防万一
+  // 使用缓存服务获取图片的 Base64 数据
+  // 这样可以避免重复下载，并且存储 Base64 确保 URL 过期后图片仍然可用
+  const dataURL = await urlCacheService.getImageAsBase64(imageUrl);
+  const image = await loadHTMLImageElement(dataURL, false); // Base64 不需要 crossOrigin
   const imageItem = buildImage(
     image,
     dataURL,
@@ -258,7 +257,7 @@ export const insertImageFromUrl = async (
         calculatedPoint[1],
       ] as Point;
     }
-    
+
   }
   DrawTransforms.insertImage(board, imageItem, insertionPoint);
 };
