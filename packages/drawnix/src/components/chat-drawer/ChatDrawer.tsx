@@ -20,6 +20,8 @@ import { ChatDrawerTrigger } from './ChatDrawerTrigger';
 import { MermaidRenderer } from './MermaidRenderer';
 import { chatStorageService } from '../../services/chat-storage-service';
 import { useChatHandler } from '../../hooks/useChatHandler';
+import { geminiSettings } from '../../utils/settings-manager';
+import { useDrawnix } from '../../hooks/use-drawnix';
 import type { ChatDrawerProps, ChatSession } from '../../types/chat.types';
 import type { Message } from '@llamaindex/chat-ui';
 
@@ -37,6 +39,9 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = React.memo(
     // Refs for click outside detection
     const sessionListRef = React.useRef<HTMLDivElement>(null);
     const toggleButtonRef = React.useRef<HTMLButtonElement>(null);
+
+    // Get app state for settings dialog
+    const { appState, setAppState } = useDrawnix();
 
     // Handle session title updates
     const handleSessionTitleUpdate = useCallback(
@@ -180,6 +185,14 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = React.memo(
     // Handle send with auto-create session
     const handleSendWrapper = useCallback(
       async (msg: Message) => {
+        // Check if API key is configured
+        const settings = geminiSettings.get();
+        if (!settings?.apiKey) {
+          // Open settings dialog to configure API key
+          setAppState({ ...appState, openSettings: true });
+          return;
+        }
+
         if (!activeSessionId) {
           const newSession = await chatStorageService.createSession();
           setSessions((prev) => [newSession, ...prev]);
@@ -192,7 +205,7 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = React.memo(
         }
         await chatHandler.sendMessage(msg);
       },
-      [activeSessionId, chatHandler]
+      [activeSessionId, chatHandler, appState, setAppState]
     );
 
     // Wrapped handler for ChatSection
