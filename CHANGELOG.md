@@ -1,3 +1,26 @@
+## 0.2.6 (2025-12-02)
+
+### 🚀 Features
+
+- 优化布局 #12 ([28d2ee3](https://github.com/ljquan/aitu/commit/28d2ee3))
+
+### 🩹 Fixes
+
+- 修复视频插入画板后不显示的问题 ([91bdfa4](https://github.com/ljquan/aitu/commit/91bdfa4))
+- 优化缓存机制、工具栏交互和AI图片生成功能 ([b606db4](https://github.com/ljquan/aitu/commit/b606db4))
+
+### 🔧 Chores
+
+- bump version to 0.2.4 ([bb46198](https://github.com/ljquan/aitu/commit/bb46198))
+- 添加filesystem兜底 ([622ce19](https://github.com/ljquan/aitu/commit/622ce19))
+- 优化缓存 ([72ca629](https://github.com/ljquan/aitu/commit/72ca629))
+
+### ❤️  Thank You
+
+- liquidliang <ljquan@qq.com>
+- gongchengtu <1817063960@qq.com>
+- liquid <ljquan@qq.com>
+
 ## 0.2.4 (2025-11-30)
 
 ### 🔧 Chores

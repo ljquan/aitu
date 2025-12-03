@@ -18,15 +18,12 @@ import { MindThemeColors, withMind } from '@plait/mind';
 import MobileDetect from 'mobile-detect';
 import { withMindExtend } from './plugins/with-mind-extend';
 import { withCommonPlugin } from './plugins/with-common';
-import { CreationToolbar } from './components/toolbar/creation-toolbar';
-import { ZoomToolbar } from './components/toolbar/zoom-toolbar';
 import { PopupToolbar } from './components/toolbar/popup-toolbar/popup-toolbar';
-import { AppToolbar } from './components/toolbar/app-toolbar/app-toolbar';
+import { UnifiedToolbar } from './components/toolbar/unified-toolbar';
 import classNames from 'classnames';
 import './styles/index.scss';
 import { buildDrawnixHotkeyPlugin } from './plugins/with-hotkey';
 import { withFreehand } from './plugins/freehand/with-freehand';
-import { ThemeToolbar } from './components/toolbar/theme-toolbar';
 import { buildPencilPlugin } from './plugins/with-pencil';
 import {
   DrawnixBoard,
@@ -39,7 +36,7 @@ import { CleanConfirm } from './components/clean-confirm/clean-confirm';
 import { SettingsDialog } from './components/settings-dialog/settings-dialog';
 import { buildTextLinkPlugin } from './plugins/with-text-link';
 import { LinkPopup } from './components/popup/link-popup/link-popup';
-import { useI18n, I18nProvider } from './i18n';
+import { I18nProvider } from './i18n';
 import { withVideo } from './plugins/with-video';
 import { TaskToolbar } from './components/task-queue/TaskToolbar';
 import { ActiveTaskWarning } from './components/task-queue/ActiveTaskWarning';
@@ -197,10 +194,9 @@ export const Drawnix: React.FC<DrawnixProps> = ({
                 afterInit && afterInit(board);
               }}
             ></Board>
-            <AppToolbar></AppToolbar>
-            <CreationToolbar></CreationToolbar>
-            <ZoomToolbar></ZoomToolbar>
-            <ThemeToolbar></ThemeToolbar>
+            {/* 统一左侧工具栏 (桌面端和移动端一致) */}
+            <UnifiedToolbar />
+
             <PopupToolbar></PopupToolbar>
             <LinkPopup></LinkPopup>
             <ClosePencilToolbar></ClosePencilToolbar>
@@ -210,7 +206,6 @@ export const Drawnix: React.FC<DrawnixProps> = ({
           </Wrapper>
           <ActiveTaskWarning />
           <TaskToolbar />
-          <FeedbackButton />
         </div>
       </DrawnixContext.Provider>
     </I18nProvider>

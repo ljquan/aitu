@@ -12,6 +12,8 @@ import {
   RectangleClient,
   toHostPointFromViewBoxPoint,
   toScreenPointFromHostPoint,
+  duplicateElements,
+  deleteFragment,
 } from '@plait/core';
 import { useEffect, useRef, useState } from 'react';
 import { useBoard } from '@plait-board/react-board';
@@ -40,11 +42,11 @@ import { isWhite, removeHexAlpha } from '../../../utils/color';
 import { NO_COLOR } from '../../../constants/color';
 import { Freehand } from '../../../plugins/freehand/type';
 import { PopupLinkButton } from './link-button';
-import { AIImageIcon, AIVideoIcon, VideoFrameIcon } from '../../icons';
+import { AIImageIcon, AIVideoIcon, VideoFrameIcon, DuplicateIcon, TrashIcon } from '../../icons';
 import { useDrawnix, DialogType } from '../../../hooks/use-drawnix';
 import { useI18n } from '../../../i18n';
 import { ToolButton } from '../../tool-button';
-import { useGlobalMousePosition, getCurrentMousePosition } from '../../../hooks/use-global-mouse-position';
+import { useGlobalMousePosition } from '../../../hooks/use-global-mouse-position';
 import { isVideoElement } from '../../../plugins/with-video';
 import { VideoFrameSelector } from '../../video-frame-selector/video-frame-selector';
 import { insertVideoFrame } from '../../../utils/video-frame';
@@ -53,16 +55,14 @@ export const PopupToolbar = () => {
   const board = useBoard();
   const selectedElements = getSelectedElements(board);
   const { openDialog } = useDrawnix();
-  const { language } = useI18n();
+  const { language, t } = useI18n();
   const [movingOrDragging, setMovingOrDragging] = useState(false);
   const movingOrDraggingRef = useRef(movingOrDragging);
-  const [isInitialPositioning, setIsInitialPositioning] = useState(true);
-  const isInitialPositioningRef = useRef(isInitialPositioning);
   
   // 视频帧选择弹窗状态
   const [showVideoFrameSelector, setShowVideoFrameSelector] = useState(false);
   const [selectedVideoElement, setSelectedVideoElement] = useState<PlaitElement | null>(null);
-  
+
   // 初始化全局鼠标位置跟踪
   useGlobalMousePosition();
   const open =
@@ -149,46 +149,23 @@ export const PopupToolbar = () => {
       if (!movingOrDragging && hasSelected) {
         let referenceX, referenceY;
         
-        if (isInitialPositioning) {
-          // First time positioning - use current global mouse position
-          const currentMousePos = getCurrentMousePosition();
-          if (currentMousePos.x > 0 && currentMousePos.y > 0) {
-            referenceX = currentMousePos.x;
-            referenceY = currentMousePos.y;
-          } else {
-            // Fallback to selection center if no valid mouse position
-            const elements = getSelectedElements(board);
-            const rectangle = getRectangleByElements(board, elements, false);
-            const [start, end] = RectangleClient.getPoints(rectangle);
-            const screenStart = toScreenPointFromHostPoint(
-              board,
-              toHostPointFromViewBoxPoint(board, start)
-            );
-            const screenEnd = toScreenPointFromHostPoint(
-              board,
-              toHostPointFromViewBoxPoint(board, end)
-            );
-            referenceX = screenStart[0] + (screenEnd[0] - screenStart[0]) / 2;
-            referenceY = screenStart[1] + (screenEnd[1] - screenStart[1]) / 2;
-          }
-          setIsInitialPositioning(false);
-        } else {
-          // Subsequent positioning - keep toolbar stable relative to selection
-          const elements = getSelectedElements(board);
-          const rectangle = getRectangleByElements(board, elements, false);
-          const [start, end] = RectangleClient.getPoints(rectangle);
-          const screenStart = toScreenPointFromHostPoint(
-            board,
-            toHostPointFromViewBoxPoint(board, start)
-          );
-          const screenEnd = toScreenPointFromHostPoint(
-            board,
-            toHostPointFromViewBoxPoint(board, end)
-          );
-          referenceX = screenStart[0] + (screenEnd[0] - screenStart[0]) / 2;
-          referenceY = screenStart[1] + (screenEnd[1] - screenStart[1]) / 2;
-        }
-        
+        // 计算选中元素包围盒的顶部边缘中点（与 Figma/Excalidraw 等主流工具一致）
+        const elements = getSelectedElements(board);
+        const rectangle = getRectangleByElements(board, elements, false);
+        const [start, end] = RectangleClient.getPoints(rectangle);
+        const screenStart = toScreenPointFromHostPoint(
+          board,
+          toHostPointFromViewBoxPoint(board, start)
+        );
+        const screenEnd = toScreenPointFromHostPoint(
+          board,
+          toHostPointFromViewBoxPoint(board, end)
+        );
+
+        // 参考点：顶部边缘的水平中点
+        referenceX = screenStart[0] + (screenEnd[0] - screenStart[0]) / 2;
+        referenceY = screenStart[1]; // 使用顶部 Y 坐标，而非中心
+
         refs.setPositionReference({
           getBoundingClientRect() {
             return {
@@ -204,20 +181,12 @@ export const PopupToolbar = () => {
           },
         });
       }
-    } else {
-      // Reset positioning state when toolbar is closed
-      setIsInitialPositioning(true);
-      isInitialPositioningRef.current = true;
     }
   }, [viewport, selection, children, movingOrDragging]);
 
   useEffect(() => {
     movingOrDraggingRef.current = movingOrDragging;
   }, [movingOrDragging]);
-
-  useEffect(() => {
-    isInitialPositioningRef.current = isInitialPositioning;
-  }, [isInitialPositioning]);
 
   useEffect(() => {
     const { pointerUp, pointerMove } = board;
@@ -361,6 +330,30 @@ export const PopupToolbar = () => {
                 }}
               />
             )}
+            <ToolButton
+              className="duplicate"
+              key={8}
+              type="icon"
+              icon={DuplicateIcon}
+              visible={true}
+              title={t('general.duplicate')}
+              aria-label={t('general.duplicate')}
+              onPointerUp={() => {
+                duplicateElements(board);
+              }}
+            />
+            <ToolButton
+              className="trash"
+              key={9}
+              type="icon"
+              icon={TrashIcon}
+              visible={true}
+              title={t('general.delete')}
+              aria-label={t('general.delete')}
+              onPointerUp={() => {
+                deleteFragment(board);
+              }}
+            />
           </Stack.Row>
         </Island>
       )}

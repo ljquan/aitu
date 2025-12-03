@@ -1,7 +1,7 @@
 /* eslint-disable no-restricted-globals */
 // Service Worker for PWA functionality and handling CORS issues with external images
 // Version will be replaced during build process
-const APP_VERSION = '0.2.4';
+const APP_VERSION = '0.2.6';
 const CACHE_NAME = `drawnix-v${APP_VERSION}`;
 const IMAGE_CACHE_NAME = `drawnix-images`;
 const STATIC_CACHE_NAME = `drawnix-static-v${APP_VERSION}`;
@@ -21,6 +21,11 @@ const CORS_ALLOWED_DOMAINS = [
     hostname: 'googlecdn2.datas.systems',
     pathPattern: 'response_images',
     fallbackDomain: 'googlecdn2.i666.fun'
+  },
+  {
+    hostname: 'filesystem.i666.fun',
+    pathPattern: 'response_images',
+    fallbackDomain: 'filesystem.i666.fun'
   }
 ];
 

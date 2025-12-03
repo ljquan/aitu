@@ -46,6 +46,7 @@ import {
 import { ExtraToolsButton } from './extra-tools/extra-tools-button';
 import { addImage } from '../../utils/image';
 import { useI18n, Translations } from '../../i18n';
+import { ToolbarSectionProps } from './toolbar.types';
 
 export enum PopupKey {
   'shape' = 'shape',
@@ -140,20 +141,141 @@ export const isShapePointer = (board: PlaitBoard) => {
   );
 };
 
-export const CreationToolbar = () => {
+export const CreationToolbar: React.FC<ToolbarSectionProps> = ({
+  embedded = false,
+  iconMode = false
+}) => {
   const board = useBoard();
   const { appState, openDialog } = useDrawnix();
   const { t } = useI18n();
   const setPointer = useSetPointer();
   const container = PlaitBoard.getBoardContainer(board);
 
-  const [freehandOpen, setFreehandOpen] = useState(false);
-  const [arrowOpen, setArrowOpen] = useState(false);
-  const [shapeOpen, setShapeOpen] = useState(false);
+  // 统一的 Popover 状态管理
+  const [openPopovers, setOpenPopovers] = useState<Record<PopupKey, boolean>>({
+    [PopupKey.freehand]: false,
+    [PopupKey.arrow]: false,
+    [PopupKey.shape]: false,
+  });
+
+  // 追踪是否是 hover 触发的
+  const [hoverPopover, setHoverPopover] = useState<PopupKey | null>(null);
+  const hoverTimeoutRef = useState<Record<PopupKey, NodeJS.Timeout | null>>({
+    [PopupKey.freehand]: null,
+    [PopupKey.arrow]: null,
+    [PopupKey.shape]: null,
+  })[0];
+
   const [lastFreehandButton, setLastFreehandButton] =
     useState<AppToolButtonProps>(
       BUTTONS.find((button) => button.key === PopupKey.freehand)!
     );
+
+  // 统一重置所有 Popover
+  const resetAllPopovers = () => {
+    setOpenPopovers({
+      [PopupKey.freehand]: false,
+      [PopupKey.arrow]: false,
+      [PopupKey.shape]: false,
+    });
+    setHoverPopover(null);
+    // 清除所有定时器
+    Object.values(hoverTimeoutRef).forEach(timeout => {
+      if (timeout) clearTimeout(timeout);
+    });
+  };
+
+  // 统一激活指定 Popover (点击触发)
+  const showPopover = (key: PopupKey) => {
+    // 清除 hover 状态
+    setHoverPopover(null);
+    Object.values(hoverTimeoutRef).forEach(timeout => {
+      if (timeout) clearTimeout(timeout);
+    });
+    
+    setOpenPopovers({
+      [PopupKey.freehand]: false,
+      [PopupKey.arrow]: false,
+      [PopupKey.shape]: false,
+      [key]: true,
+    });
+  };
+
+  // Hover 进入时显示 Popover
+  const handleMouseEnter = (key: PopupKey) => {
+    // 清除之前的定时器
+    if (hoverTimeoutRef[key]) {
+      clearTimeout(hoverTimeoutRef[key]!);
+    }
+    
+    // 清除其他所有 Popover 的定时器
+    Object.entries(hoverTimeoutRef).forEach(([popupKey, timeout]) => {
+      if (popupKey !== key && timeout) {
+        clearTimeout(timeout);
+        hoverTimeoutRef[popupKey as PopupKey] = null;
+      }
+    });
+    
+    // 如果当前有其他 hover 触发的 Popover 正在显示，立即切换
+    if (hoverPopover && hoverPopover !== key) {
+      setOpenPopovers(prev => ({
+        ...prev,
+        [hoverPopover]: false,
+        [key]: true,
+      }));
+      setHoverPopover(key);
+    } 
+    // 如果没有被点击打开，则通过 hover 打开
+    else if (!openPopovers[key]) {
+      hoverTimeoutRef[key] = setTimeout(() => {
+        setOpenPopovers(prev => ({
+          ...prev,
+          [key]: true,
+        }));
+        setHoverPopover(key);
+      }, 300); // 300ms 延迟，避免误触
+    }
+  };
+
+  // Hover 离开时隐藏 Popover
+  const handleMouseLeave = (key: PopupKey) => {
+    // 清除进入的定时器
+    if (hoverTimeoutRef[key]) {
+      clearTimeout(hoverTimeoutRef[key]!);
+      hoverTimeoutRef[key] = null;
+    }
+
+    // 只有当是 hover 触发的才自动关闭
+    if (hoverPopover === key) {
+      hoverTimeoutRef[key] = setTimeout(() => {
+        setOpenPopovers(prev => ({
+          ...prev,
+          [key]: false,
+        }));
+        setHoverPopover(null);
+      }, 200); // 200ms 延迟，允许鼠标移动到 Popover 或其他按钮
+    }
+  };
+
+  // Popover 内容区域的 hover 事件
+  const handlePopoverMouseEnter = (key: PopupKey) => {
+    // 清除离开的定时器
+    if (hoverTimeoutRef[key]) {
+      clearTimeout(hoverTimeoutRef[key]!);
+      hoverTimeoutRef[key] = null;
+    }
+  };
+
+  const handlePopoverMouseLeave = (key: PopupKey) => {
+    // 只有当是 hover 触发的才自动关闭
+    if (hoverPopover === key) {
+      setOpenPopovers(prev => ({
+        ...prev,
+        [key]: false,
+      }));
+      setHoverPopover(null);
+    }
+  };
 
   const onPointerDown = (pointer: DrawnixPointerType) => {
     setCreationMode(board, BoardCreationMode.dnd);
@@ -165,182 +287,221 @@ export const CreationToolbar = () => {
     setCreationMode(board, BoardCreationMode.drawing);
   };
 
+  const hasOpenPopover = () => {
+    return Object.values(openPopovers).some(isOpen => isOpen);
+  };
+
   const isChecked = (button: AppToolButtonProps) => {
-    return (
-      PlaitBoard.isPointer(board, button.pointer) && !arrowOpen && !shapeOpen && !freehandOpen
-    );
+    return PlaitBoard.isPointer(board, button.pointer) && !hasOpenPopover();
   };
 
   const checkCurrentPointerIsFreehand = (board: PlaitBoard) => {
     return PlaitBoard.isInPointer(board, [
-      FreehandShape.feltTipPen, 
+      FreehandShape.feltTipPen,
       FreehandShape.eraser,
     ]);
   };
+
+  // 统一的按钮点击处理
+  const handleButtonClick = (button: AppToolButtonProps) => {
+    resetAllPopovers();
+
+    if (button.pointer && !isBasicPointer(button.pointer)) {
+      onPointerUp();
+    } else if (button.pointer && isBasicPointer(button.pointer)) {
+      BoardTransforms.updatePointerType(board, button.pointer);
+      setPointer(button.pointer);
+    }
+
+    // 特殊按钮处理
+    if (button.key === 'image') {
+      addImage(board);
+    } else if (button.key === 'ai-image') {
+      openDialog(DialogType.aiImageGeneration);
+    } else if (button.key === 'ai-video') {
+      openDialog(DialogType.aiVideoGeneration);
+    }
+  };
+
+  // 渲染带 Popover 的按钮
+  const renderPopoverButton = (button: AppToolButtonProps, index: number, popupKey: PopupKey) => {
+    // 根据不同的 popupKey 获取对应的内容和选中状态
+    const getPopoverContent = () => {
+      switch (popupKey) {
+        case PopupKey.freehand:
+          return (
+            <FreehandPanel
+              onPointerUp={(pointer: DrawnixPointerType) => {
+                resetAllPopovers();
+                setPointer(pointer);
+                setLastFreehandButton(
+                  FREEHANDS.find((btn) => btn.pointer === pointer)!
+                );
+              }}
+            />
+          );
+        case PopupKey.shape:
+          return (
+            <ShapePicker
+              onPointerUp={(pointer: DrawPointerType) => {
+                resetAllPopovers();
+                setPointer(pointer);
+              }}
+            />
+          );
+        case PopupKey.arrow:
+          return (
+            <ArrowPicker
+              onPointerUp={(pointer: DrawPointerType) => {
+                resetAllPopovers();
+                setPointer(pointer);
+              }}
+            />
+          );
+      }
+    };
+
+    const getIsSelected = () => {
+      const isPopoverOpen = openPopovers[popupKey];
+      const hasOtherPopoverOpen = Object.entries(openPopovers).some(
+        ([key, isOpen]) => key !== popupKey && isOpen
+      );
+
+      switch (popupKey) {
+        case PopupKey.freehand:
+          return isPopoverOpen || (checkCurrentPointerIsFreehand(board) && !hasOtherPopoverOpen);
+        case PopupKey.shape:
+          return isPopoverOpen || (isShapePointer(board) && !PlaitBoard.isPointer(board, BasicShapes.text));
+        case PopupKey.arrow:
+          return isPopoverOpen || isArrowLinePointer(board);
+        default:
+          return isPopoverOpen;
+      }
+    };
+
+    const displayIcon = popupKey === PopupKey.freehand ? lastFreehandButton.icon : button.icon;
+    const displayTitle = popupKey === PopupKey.freehand 
+      ? (lastFreehandButton.titleKey ? t(lastFreehandButton.titleKey as keyof Translations) : 'Freehand')
+      : (button.titleKey ? t(button.titleKey as keyof Translations) : '');
+
+    return (
+      <Popover
+        key={index}
+        open={openPopovers[popupKey]}
+        sideOffset={12}
+        onOpenChange={(open) => {
+          if (!open) {
+            resetAllPopovers();
+          }
+        }}
+        placement={embedded ? "right-start" : "bottom"}
+      >
+        <PopoverTrigger asChild>
+          <div
+            onMouseEnter={() => handleMouseEnter(popupKey)}
+            onMouseLeave={() => handleMouseLeave(popupKey)}
+          >
+            <ToolButton
+              type="icon"
+              visible={true}
+              selected={getIsSelected()}
+              icon={displayIcon}
+              title={displayTitle}
+              aria-label={displayTitle}
+              onPointerDown={() => {
+                showPopover(popupKey);
+                if (popupKey === PopupKey.freehand && lastFreehandButton.pointer) {
+                  onPointerDown(lastFreehandButton.pointer);
+                }
+              }}
+              onPointerUp={() => {
+                if (popupKey === PopupKey.freehand) {
+                  onPointerUp();
+                }
+              }}
+            />
+          </div>
+        </PopoverTrigger>
+        <PopoverContent 
+          container={container} 
+          style={{ zIndex: 1000 }}
+          onMouseEnter={() => handlePopoverMouseEnter(popupKey)}
+          onMouseLeave={() => handlePopoverMouseLeave(popupKey)}
+        >
+          {getPopoverContent()}
+        </PopoverContent>
+      </Popover>
+    );
+  };
+
+  // 渲染普通按钮
+  const renderNormalButton = (button: AppToolButtonProps, index: number) => {
+    return (
+      <ToolButton
+        key={index}
+        type="radio"
+        icon={button.icon}
+        checked={isChecked(button)}
+        title={button.titleKey ? t(button.titleKey as keyof Translations) : ''}
+        aria-label={button.titleKey ? t(button.titleKey as keyof Translations) : ''}
+        onPointerDown={() => {
+          if (button.pointer && !isBasicPointer(button.pointer)) {
+            onPointerDown(button.pointer);
+          }
+        }}
+        onPointerUp={() => {
+          handleButtonClick(button);
+        }}
+      />
+    );
+  };
+
+
+  const content = (
+    <Stack.Row gap={1}>
+      {BUTTONS.map((button, index) => {
+        // 移动端隐藏手型工具
+        if (appState.isMobile && button.pointer === PlaitPointerType.hand) {
+          return null;
+        }
+
+        // 额外工具按钮
+        if (button.key === 'extra-tools') {
+          return <ExtraToolsButton key={index} />;
+        }
+
+        // 带 Popover 的按钮
+        if (button.key && Object.values(PopupKey).includes(button.key as PopupKey)) {
+          return renderPopoverButton(button, index, button.key as PopupKey);
+        }
+
+        // 普通按钮
+        return renderNormalButton(button, index);
+      })}
+    </Stack.Row>
+  );
+
+  if (embedded) {
+    return (
+      <div className={classNames('draw-toolbar', {
+        'draw-toolbar--embedded': embedded,
+        'draw-toolbar--icon-only': iconMode,
+      })}>
+        {content}
+      </div>
+    );
+  }
 
 
   return (
     <Island
       padding={1}
-      className={classNames('draw-toolbar', ATTACHED_ELEMENT_CLASS_NAME)}
+      className={classNames('draw-toolbar', ATTACHED_ELEMENT_CLASS_NAME, {
+        'draw-toolbar--embedded': embedded,
+        'draw-toolbar--icon-only': iconMode,
+      })}
     >
-      <Stack.Row gap={1}>
-        {BUTTONS.map((button, index) => {
-          if (appState.isMobile && button.pointer === PlaitPointerType.hand) {
-            return <></>;
-          }
-          if (button.key === PopupKey.freehand) {
-            return (
-              <Popover
-                key={index}
-                open={freehandOpen || checkCurrentPointerIsFreehand(board)}
-                sideOffset={12}
-                onOpenChange={(open) => {
-                  setFreehandOpen(open);
-                }}
-              >
-                <PopoverTrigger asChild>
-                  <ToolButton
-                    type="icon"
-                    visible={true}
-                    selected={
-                      freehandOpen ||
-                      checkCurrentPointerIsFreehand(board)
-                    }
-                    icon={lastFreehandButton.icon}
-                    title={lastFreehandButton.titleKey ? t(lastFreehandButton.titleKey as keyof Translations) : 'Freehand'}
-                    aria-label={lastFreehandButton.titleKey ? t(lastFreehandButton.titleKey as keyof Translations) : 'Freehand'}
-                    onPointerDown={() => {
-                      setFreehandOpen(!freehandOpen);
-                      onPointerDown(lastFreehandButton.pointer!);
-                    }}
-                    onPointerUp={() => {
-                      onPointerUp();
-                    }}
-                  />
-                </PopoverTrigger>
-                <PopoverContent container={container}>
-                  <FreehandPanel
-                    onPointerUp={(pointer: DrawnixPointerType) => {
-                      setPointer(pointer);
-                      setLastFreehandButton(
-                        FREEHANDS.find((button) => button.pointer === pointer)!
-                      );
-                    }}
-                  ></FreehandPanel>
-                </PopoverContent>
-              </Popover>
-            );
-          }
-          if (button.key === PopupKey.shape) {
-            return (
-              <Popover
-                key={index}
-                open={shapeOpen}
-                sideOffset={12}
-                onOpenChange={(open) => {
-                  setShapeOpen(open);
-                }}
-              >
-                <PopoverTrigger asChild>
-                  <ToolButton
-                    type="icon"
-                    visible={true}
-                    selected={
-                      shapeOpen ||
-                      (isShapePointer(board) &&
-                        !PlaitBoard.isPointer(board, BasicShapes.text))
-                    }
-                    icon={button.icon}
-                    title={button.titleKey ? t(button.titleKey as keyof Translations) : 'Shape'}
-                    aria-label={button.titleKey ? t(button.titleKey as keyof Translations) : 'Shape'}
-                    onPointerDown={() => {
-                      setShapeOpen(!shapeOpen);
-                    }}
-                  />
-                </PopoverTrigger>
-                <PopoverContent container={container}>
-                  <ShapePicker
-                    onPointerUp={(pointer: DrawPointerType) => {
-                      setShapeOpen(false);
-                      setPointer(pointer);
-                    }}
-                  ></ShapePicker>
-                </PopoverContent>
-              </Popover>
-            );
-          }
-          if (button.key === PopupKey.arrow) {
-            return (
-              <Popover
-                key={index}
-                open={arrowOpen}
-                sideOffset={12}
-                onOpenChange={(open) => {
-                  setArrowOpen(open);
-                }}
-              >
-                <PopoverTrigger asChild>
-                  <ToolButton
-                    type="icon"
-                    visible={true}
-                    selected={arrowOpen || isArrowLinePointer(board)}
-                    icon={button.icon}
-                    title={button.titleKey ? t(button.titleKey as keyof Translations) : ''}
-                    aria-label={button.titleKey ? t(button.titleKey as keyof Translations) : ''}
-                    onPointerDown={() => {
-                      setArrowOpen(!arrowOpen);
-                    }}
-                  />
-                </PopoverTrigger>
-                <PopoverContent container={container}>
-                  <ArrowPicker
-                    onPointerUp={(pointer: DrawPointerType) => {
-                      setArrowOpen(false);
-                      setPointer(pointer);
-                    }}
-                  ></ArrowPicker>
-                </PopoverContent>
-              </Popover>
-            );
-          }
-          if (button.key === 'extra-tools') {
-            return <ExtraToolsButton key={index}></ExtraToolsButton>;
-          }
-          return (
-            <ToolButton
-              key={index}
-              type="radio"
-              icon={button.icon}
-              checked={isChecked(button)}
-              title={button.titleKey ? t(button.titleKey as keyof Translations) : ''}
-              aria-label={button.titleKey ? t(button.titleKey as keyof Translations) : ''}
-              onPointerDown={() => {
-                if (button.pointer && !isBasicPointer(button.pointer)) {
-                  onPointerDown(button.pointer);
-                }
-              }}
-              onPointerUp={() => {
-                if (button.pointer && !isBasicPointer(button.pointer)) {
-                  onPointerUp();
-                } else if (button.pointer && isBasicPointer(button.pointer)) {
-                  BoardTransforms.updatePointerType(board, button.pointer);
-                  setPointer(button.pointer);
-                }
-                if (button.key === 'image') {
-                  addImage(board);
-                }
-                if (button.key === 'ai-image') {
-                  openDialog(DialogType.aiImageGeneration);
-                }
-                if (button.key === 'ai-video') {
-                  openDialog(DialogType.aiVideoGeneration);
-                }
-              }}
-            />
-          );
-        })}
-      </Stack.Row>
+      {content}
     </Island>
   );
 };

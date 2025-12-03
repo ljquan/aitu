@@ -3,7 +3,8 @@ import { Tooltip } from 'tdesign-react';
 import {
   ASPECT_RATIO_OPTIONS,
   AspectRatioOption,
-  getAspectRatioOption
+  getAspectRatioOption,
+  AUTO_ASPECT_RATIO
 } from '../../../constants/image-aspect-ratios';
 import { useI18n } from '../../../i18n';
 import './AspectRatioSelector.scss';
@@ -26,7 +27,10 @@ export const AspectRatioSelector: React.FC<AspectRatioSelectorProps> = ({
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const selectedOption = useMemo(() => getAspectRatioOption(value), [value]);
+  const selectedOption = useMemo(() => {
+    if (value === 'auto') return AUTO_ASPECT_RATIO;
+    return getAspectRatioOption(value);
+  }, [value]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
