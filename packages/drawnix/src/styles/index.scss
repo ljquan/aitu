@@ -1,8 +1,10 @@
 @import './../../../../node_modules/@plait/draw/styles/styles.scss';
 @import './../../../../node_modules/@plait/mind/styles/styles.scss';
 @import './../../../../node_modules/tdesign-react/dist/tdesign.css';
+@import 'tailwindcss';
 @import './tdesign-theme.scss';
 @import './theme.scss';
+@import '../components/chat-drawer/chat-drawer.scss';
 
 .drawnix {
     height: 100%;
@@ -108,21 +110,29 @@
     // Unified Toolbar Container (统一左侧工具栏 - 桌面端和移动端通用)
     .unified-toolbar {
         position: absolute;
-        left: 0px;
-        top: 10px;
-        bottom: auto; // Remove bottom constraint
-        // 预留底部空间给任务按钮 (bottom: 96px + height: 56px + margin: 10px = 162px)
-        max-height: calc(100vh - 10px - 162px); // 10px 是 top 的值
-        overflow-y: auto; // Allow scrolling if too tall
+        left: 0;
+        top: 0;
+        z-index: 1000; // 提高z-index以确保任务按钮在task-queue-panel (z-index: 999)上方
+        bottom: 0;
         display: flex;
         flex-direction: column;
-        gap: 0; // Dividers implemented with border, no gap needed
-        width: fit-content; // Adapt width to content
-        max-width: 80px; // Constraint width
-        scrollbar-width: none; // Hide scrollbar for cleaner look
-        -ms-overflow-style: none;
-        &::-webkit-scrollbar {
-            display: none;
+        gap: 0;
+        width: fit-content;
+        max-width: 80px;
+        overflow: hidden; // Prevent overflow
+
+        // 可滚动内容区域
+        &__scrollable {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+            scrollbar-width: none; // Hide scrollbar for cleaner look
+            -ms-overflow-style: none;
+            &::-webkit-scrollbar {
+                display: none;
+            }
         }
 
         &__section {
@@ -132,8 +142,8 @@
                 padding-top: 8px;
             }
             // Add padding to bottom to separate from next border
-            padding-bottom: 8px; 
-            
+            padding-bottom: 8px;
+
             // First child only padding bottom
             &:first-child {
                 padding-top: 4px;
@@ -141,6 +151,19 @@
             // Last child only padding top (already handled)
             &:last-child {
                 padding-bottom: 4px;
+            }
+
+            // 固定在底部的section (任务按钮)
+            &--fixed-bottom {
+                flex-shrink: 0;
+                border-top: 1px solid var(--color-border);
+                padding-top: 8px;
+                padding-bottom: 4px;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                position: relative;
+                z-index: 1000; // 高于task-queue-panel (999),确保按钮始终在抽屉上方可点击
             }
         }
 

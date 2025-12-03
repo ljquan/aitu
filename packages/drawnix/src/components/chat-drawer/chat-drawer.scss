@@ -1,0 +1,1067 @@
+/**
+ * Chat Drawer Styles
+ *
+ * BEM naming convention with TDesign CSS variables.
+ */
+
+// Variables
+$drawer-min-width: 375px;
+$toolbar-width: 70px;
+$animation-duration: 300ms;
+$border-radius: 12px;
+$spacing-sm: 8px;
+$spacing-md: 12px;
+$spacing-lg: 16px;
+$spacing-xl: 24px;
+
+// ============================================================================
+// Chat Drawer Container
+// ============================================================================
+
+.chat-drawer {
+  position: fixed;
+  top: 0;
+  left: $toolbar-width;
+  bottom: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  width: max($drawer-min-width, 50vw);
+  max-width: calc(100vw - $toolbar-width);
+  background: #ffffff;
+  border-right: 1px solid var(--td-component-border);
+  box-shadow: 4px 0 16px rgba(0, 0, 0, 0.08);
+  transform: translateX(calc(-100% - #{$toolbar-width}));
+  transition: transform $animation-duration ease-out;
+
+  &--open {
+    transform: translateX(0);
+  }
+
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: $spacing-md $spacing-lg;
+    border-bottom: 1px solid var(--td-component-border);
+    background: #ffffff;
+  }
+
+  &__title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--td-text-color-primary);
+  }
+
+  &__actions {
+    display: flex;
+    gap: $spacing-sm;
+  }
+
+  &__content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  &__close-btn {
+    padding: $spacing-sm;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--td-text-color-secondary);
+    transition: all 0.2s ease;
+
+    &:hover {
+      background: var(--td-bg-color-container-hover);
+      color: var(--td-text-color-primary);
+    }
+
+    &--active {
+      background: var(--td-brand-color-light);
+      color: var(--td-brand-color);
+    }
+  }
+}
+
+// ============================================================================
+// Chat Drawer Trigger Button
+// ============================================================================
+
+.chat-drawer-trigger {
+  position: fixed;
+  top: 50%;
+  left: $toolbar-width;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 48px;
+  background: #ffffff;
+  border: 1px solid var(--td-component-border);
+  border-left: none;
+  border-radius: 0 8px 8px 0;
+  cursor: pointer;
+  transform: translateY(-50%);
+  transition: all 0.3s ease;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.06);
+
+  &:hover {
+    width: 28px;
+    background: var(--td-bg-color-container-hover);
+  }
+
+  &__icon {
+    color: var(--td-text-color-secondary);
+    transition: transform 0.2s ease;
+  }
+
+  &--active {
+    left: calc($toolbar-width + max($drawer-min-width, 50vw) - 24px);
+    transform: scaleX(-1);
+
+    &:hover{
+        left: calc($toolbar-width + max($drawer-min-width, 50vw) - 28px);
+    }
+  }
+}
+
+// ============================================================================
+// Message List
+// ============================================================================
+
+.message-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: $spacing-lg;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-lg;
+
+  &__empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--td-text-color-placeholder);
+    text-align: center;
+    padding: $spacing-xl;
+  }
+
+  &__loading {
+    display: flex;
+    align-items: center;
+    gap: $spacing-sm;
+    padding: $spacing-md;
+    color: var(--td-text-color-secondary);
+  }
+}
+
+// ============================================================================
+// Message Item
+// ============================================================================
+
+.message-item {
+  display: flex;
+  gap: $spacing-md;
+  max-width: 100%;
+
+  &--user {
+    flex-direction: row-reverse;
+
+    .message-item__bubble {
+      background: var(--td-brand-color);
+      color: white;
+      border-radius: $border-radius $border-radius 4px $border-radius;
+    }
+  }
+
+  &--assistant {
+    .message-item__bubble {
+      background: var(--td-bg-color-secondarycontainer);
+      color: var(--td-text-color-primary);
+      border-radius: $border-radius $border-radius $border-radius 4px;
+    }
+  }
+
+  &__avatar {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--td-bg-color-secondarycontainer);
+    color: var(--td-text-color-secondary);
+    font-size: 14px;
+  }
+
+  &__content {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: $spacing-sm;
+  }
+
+  &__bubble {
+    padding: $spacing-md $spacing-lg;
+    word-break: break-word;
+    white-space: pre-wrap;
+    line-height: 1.6;
+    font-size: 14px;
+  }
+
+  &__actions {
+    display: flex;
+    gap: $spacing-sm;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+  }
+
+  &:hover &__actions {
+    opacity: 1;
+  }
+
+  &__action-btn {
+    padding: 4px 8px;
+    font-size: 12px;
+    background: transparent;
+    border: 1px solid var(--td-component-border);
+    border-radius: 4px;
+    cursor: pointer;
+    color: var(--td-text-color-secondary);
+    transition: all 0.2s ease;
+
+    &:hover {
+      background: var(--td-bg-color-container-hover);
+      color: var(--td-text-color-primary);
+    }
+  }
+
+  &__error {
+    color: var(--td-error-color);
+    font-size: 12px;
+    padding: $spacing-sm;
+    background: var(--td-error-color-1);
+    border-radius: 4px;
+  }
+
+  &__time {
+    font-size: 11px;
+    color: var(--td-text-color-placeholder);
+  }
+}
+
+// ============================================================================
+// Message Input
+// ============================================================================
+
+.message-input {
+  padding: $spacing-lg;
+  border-top: 1px solid var(--td-component-border);
+  background: var(--td-bg-color-container);
+
+  &__container {
+    display: flex;
+    align-items: flex-end;
+    gap: $spacing-md;
+    padding: $spacing-md;
+    background: var(--td-bg-color-secondarycontainer);
+    border-radius: $border-radius;
+    border: 1px solid var(--td-component-border);
+    transition: border-color 0.2s ease;
+
+    &:focus-within {
+      border-color: var(--td-brand-color);
+    }
+  }
+
+  &__textarea {
+    flex: 1;
+    min-height: 24px;
+    max-height: 120px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    outline: none;
+    resize: none;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--td-text-color-primary);
+
+    &::placeholder {
+      color: var(--td-text-color-placeholder);
+    }
+  }
+
+  &__actions {
+    display: flex;
+    gap: $spacing-sm;
+    align-items: center;
+  }
+
+  &__btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    color: var(--td-text-color-secondary);
+    transition: all 0.2s ease;
+
+    &:hover:not(:disabled) {
+      background: var(--td-bg-color-container-hover);
+      color: var(--td-brand-color);
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    &--send {
+      background: var(--td-brand-color);
+      color: white;
+
+      &:hover:not(:disabled) {
+        background: var(--td-brand-color-hover);
+        color: white;
+      }
+    }
+
+    &--stop {
+      background: var(--td-error-color);
+      color: white;
+
+      &:hover:not(:disabled) {
+        background: var(--td-error-color-hover);
+        color: white;
+      }
+    }
+  }
+}
+
+// ============================================================================
+// Attachment Preview
+// ============================================================================
+
+.attachment-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-sm;
+  padding: $spacing-sm 0;
+
+  &__item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: $spacing-sm;
+    padding: $spacing-sm $spacing-md;
+    background: var(--td-bg-color-container);
+    border: 1px solid var(--td-component-border);
+    border-radius: 6px;
+    font-size: 12px;
+    color: var(--td-text-color-secondary);
+  }
+
+  &__icon {
+    flex-shrink: 0;
+  }
+
+  &__name {
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__remove {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    background: var(--td-error-color);
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    color: white;
+    font-size: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  &__image {
+    width: 48px;
+    height: 48px;
+    object-fit: cover;
+    border-radius: 4px;
+  }
+}
+
+// ============================================================================
+// Session List
+// ============================================================================
+
+.session-list {
+  position: absolute;
+  top: 57px; // Header高度
+  left: 0;
+  right: 0;
+  z-index: 100;
+  background: #ffffff;
+  border-bottom: 1px solid var(--td-component-border);
+  max-height: 400px;
+  overflow-y: auto;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: $spacing-sm $spacing-lg;
+    background: var(--td-bg-color-secondarycontainer);
+  }
+
+  &__title {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--td-text-color-secondary);
+  }
+
+  &__new-btn {
+    padding: 4px 8px;
+    font-size: 12px;
+    background: transparent;
+    border: 1px solid var(--td-component-border);
+    border-radius: 4px;
+    cursor: pointer;
+    color: var(--td-text-color-secondary);
+
+    &:hover {
+      background: var(--td-bg-color-container-hover);
+      color: var(--td-brand-color);
+    }
+  }
+
+  &__items {
+    padding: $spacing-sm;
+  }
+
+  &__empty {
+    padding: $spacing-lg;
+    text-align: center;
+    color: var(--td-text-color-placeholder);
+    font-size: 13px;
+  }
+}
+
+// ============================================================================
+// Session Item
+// ============================================================================
+
+.session-item {
+  display: flex;
+  align-items: center;
+  gap: $spacing-md;
+  padding: $spacing-sm $spacing-md;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+
+  &:hover {
+    background: var(--td-bg-color-container-hover);
+  }
+
+  &--active {
+    .session-item__title {
+      color: #ffffff;
+    }
+    background: var(--td-brand-color-light);
+  }
+
+  &__content {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__title {
+    font-size: 13px;
+    color: var(--td-text-color-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__time {
+    font-size: 11px;
+    color: var(--td-text-color-placeholder);
+  }
+
+  &__delete {
+    opacity: 0;
+    padding: 4px;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    color: var(--td-text-color-secondary);
+    transition: all 0.2s ease;
+
+    &:hover {
+      background: var(--td-error-color-1);
+      color: var(--td-error-color);
+    }
+  }
+
+  &:hover &__delete {
+    opacity: 1;
+  }
+}
+
+// ============================================================================
+// Streaming Text
+// ============================================================================
+
+.streaming-text {
+  &__cursor {
+    display: inline-block;
+    width: 2px;
+    height: 1em;
+    background: var(--td-brand-color);
+    margin-left: 2px;
+    animation: blink 1s infinite;
+  }
+}
+
+@keyframes blink {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  51%,
+  100% {
+    opacity: 0;
+  }
+}
+
+// ============================================================================
+// Mobile Styles
+// ============================================================================
+
+@media (max-width: 768px) {
+  .chat-drawer {
+    width: calc(100vw - $toolbar-width);
+    border-left: none;
+
+    &--open {
+      transform: translateX(0);
+    }
+  }
+
+  .chat-drawer-trigger {
+    bottom: 80px;
+    top: auto;
+    right: $spacing-lg;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border: 1px solid var(--td-component-border);
+    transform: none;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+
+    &:hover {
+      width: 48px;
+    }
+  }
+
+  .message-item__actions {
+    opacity: 1;
+  }
+}
+
+// ============================================================================
+// @llamaindex/chat-ui Component Styles
+// ============================================================================
+
+.chat-section {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  padding: 0!important;
+}
+
+.chat-messages {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0!important;
+}
+
+.chat-messages-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: $spacing-lg;
+  padding-right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-lg;
+}
+
+.chat-message {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-md;
+  max-width: 90%;
+  padding: 0!important;
+
+  &--user {
+    flex-direction: row-reverse;
+    align-self: flex-end;
+  }
+
+  &--assistant {
+    align-self: flex-start;
+
+    .chat-message-content {
+      background: var(--td-bg-color-secondarycontainer);
+      border-radius: $border-radius $border-radius $border-radius 4px;
+    }
+  }
+
+  // Error message styling
+  &--error {
+    .chat-message-content {
+      background: var(--td-error-color-1);
+      border: 1px solid var(--td-error-color-3);
+      color: var(--td-error-color-7);
+    }
+
+    .chat-message-avatar {
+      background: var(--td-error-color-1);
+      color: var(--td-error-color);
+    }
+  }
+}
+
+.chat-message-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--td-bg-color-secondarycontainer);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+
+  svg {
+    width: 18px;
+    height: 18px;
+    color: var(--td-text-color-secondary);
+  }
+}
+
+.chat-message-content {
+  padding: $spacing-md $spacing-lg;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--td-text-color-primary);
+  word-break: break-word;
+
+  // Markdown styles
+  p {
+    margin: 0 0 $spacing-sm;
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+  }
+
+  pre {
+    margin: $spacing-md 0;
+    padding: $spacing-md;
+    background: var(--td-bg-color-page);
+    border-radius: 8px;
+    overflow-x: auto;
+    font-size: 13px;
+
+    code {
+      background: none;
+      padding: 0;
+    }
+  }
+
+  code {
+    background: var(--td-bg-color-page);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-family: 'SF Mono', Monaco, monospace;
+  }
+
+  ul,
+  ol {
+    margin: $spacing-sm 0;
+    padding-left: $spacing-xl;
+  }
+
+  blockquote {
+    margin: $spacing-md 0;
+    padding-left: $spacing-md;
+    border-left: 3px solid var(--td-brand-color);
+    color: var(--td-text-color-secondary);
+  }
+}
+
+.chat-message-actions {
+  flex-basis: 100%;
+  display: flex;
+  justify-content: flex-end;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 8px;
+  margin-top: 0;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  --spacing: 5px;
+
+  .chat-message:hover & {
+    opacity: 1;
+  }
+
+  .chat-message--user & {
+    margin-left: 0;
+    justify-content: flex-end;
+    
+
+    .chat-message-content{
+      padding: 0!important;
+    }
+  }
+
+  button {
+    padding: 6px 12px;
+    background: var(--td-bg-color-container);
+    border: 1px solid var(--td-component-border);
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--td-text-color-secondary);
+    font-size: 12px;
+    transition: all 0.2s ease;
+
+    &:hover {
+      background: var(--td-bg-color-container-hover);
+      color: var(--td-text-color-primary);
+      border-color: var(--td-brand-color);
+    }
+  }
+}
+
+.chat-loading {
+  display: flex;
+  align-items: center;
+  gap: $spacing-sm;
+  padding: $spacing-lg;
+  color: var(--td-text-color-secondary);
+  font-size: 14px;
+
+  &__spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--td-bg-color-secondarycontainer);
+    border-top-color: var(--td-brand-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.chat-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: $spacing-xl;
+  text-align: center;
+
+  h3 {
+    margin: 0 0 $spacing-sm;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--td-text-color-primary);
+  }
+
+  p {
+    margin: 0;
+    color: var(--td-text-color-placeholder);
+    font-size: 14px;
+  }
+}
+
+.chat-input {
+  padding: $spacing-lg $spacing-xl;
+  border-top: 1px solid var(--td-component-border);
+  background: var(--td-bg-color-container);
+}
+
+.chat-input-form {
+  display: flex;
+  align-items: flex-end;
+  gap: $spacing-md;
+  background: var(--td-bg-color-container);
+  border-radius: 16px;
+  padding: 8px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  transition: all 0.3s ease;
+
+  &:focus-within {
+    box-shadow: 0 4px 20px rgba(90, 79, 207, 0.15);
+  }
+
+
+    &textarea:focus {
+      border: none!important;
+    }
+}
+
+.chat-input-field {
+  flex: 1;
+  width: 100%;
+  min-height: 44px;
+  max-height: 120px;
+  padding: 8px;
+  background: transparent;
+  border: none;
+  border-radius: 12px;
+  resize: none;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--td-text-color-primary);
+  outline: none;
+  transition: all 0.2s ease;
+
+  &::placeholder {
+    color: var(--td-text-color-placeholder);
+  }
+}
+
+.chat-input-submit {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #5a4fcf 0%, #7b68ee 100%);
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  color: white;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(90, 79, 207, 0.25);
+
+  &:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(90, 79, 207, 0.35);
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(0);
+  }
+
+  &:disabled {
+    background: var(--td-bg-color-component-disabled);
+    color: var(--td-text-color-disabled);
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+
+  svg {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+.chat-actions {
+  display: flex;
+  justify-content: center;
+  gap: $spacing-md;
+  padding: $spacing-md;
+
+  button {
+    padding: 10px 24px;
+    background: linear-gradient(135deg, #5a4fcf 0%, #7b68ee 50%, #e91e63 100%);
+    color: #ffffff;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(90, 79, 207, 0.3);
+
+    &:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 16px rgba(90, 79, 207, 0.4);
+    }
+
+    &:active {
+      transform: translateY(0);
+    }
+
+    svg {
+      width: 16px;
+      height: 16px;
+    }
+  }
+}
+
+// Mermaid Renderer Styles
+.mermaid-renderer {
+  position: relative;
+  margin: $spacing-md 0;
+  padding: $spacing-lg;
+  background: var(--td-bg-color-container);
+  border: 1px solid var(--td-component-border);
+  border-radius: $border-radius;
+  overflow-x: auto;
+  transition: all 0.2s ease;
+
+  &:hover {
+    border-color: var(--td-brand-color);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  }
+
+  &__loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: $spacing-xl;
+    color: var(--td-text-color-placeholder);
+    font-size: 14px;
+  }
+
+  &__container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+
+    &:hover {
+      transform: scale(1.02);
+    }
+
+    svg {
+      max-width: 100%;
+      height: auto;
+    }
+  }
+
+  &__hint {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin-top: $spacing-md;
+    padding: $spacing-sm;
+    color: var(--td-text-color-placeholder);
+    font-size: 12px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+
+    svg {
+      width: 16px;
+      height: 16px;
+    }
+  }
+
+  &:hover &__hint {
+    opacity: 1;
+  }
+
+  &--error {
+    background: var(--td-error-color-1);
+    border-color: var(--td-error-color-3);
+  }
+
+  &__error {
+    color: var(--td-error-color-7);
+    font-size: 14px;
+
+    strong {
+      display: block;
+      margin-bottom: $spacing-sm;
+    }
+
+    pre {
+      margin: $spacing-sm 0;
+      padding: $spacing-sm;
+      background: var(--td-bg-color-container);
+      border-radius: 4px;
+      font-size: 12px;
+      overflow-x: auto;
+    }
+
+    details {
+      margin-top: $spacing-md;
+
+      summary {
+        cursor: pointer;
+        color: var(--td-text-color-secondary);
+        font-size: 12px;
+        padding: $spacing-sm;
+
+        &:hover {
+          color: var(--td-text-color-primary);
+        }
+      }
+    }
+  }
+}
+
+// Mermaid Preview Dialog Styles
+.mermaid-preview-dialog {
+  .t-dialog__body {
+    padding: $spacing-xl;
+    max-height: 80vh;
+    overflow: auto;
+    background: var(--td-bg-color-container);
+  }
+}
+
+.mermaid-preview-content {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 400px;
+
+  svg {
+    max-width: 100%;
+    height: auto;
+  }
+}

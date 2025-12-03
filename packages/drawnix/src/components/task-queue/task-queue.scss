@@ -120,12 +120,31 @@
     padding: 20px 24px;
     border-bottom: 1px solid var(--td-component-border, #e7e7e7);
     flex-shrink: 0;
-    
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+
+    &-content {
+      flex: 1;
+      min-width: 0; // Allow content to shrink
+    }
+
     h3 {
       margin: 0 0 16px 0;
       font-size: 18px;
       font-weight: 600;
       color: var(--td-text-color-primary, #000000);
+    }
+  }
+
+  &__close-btn {
+    flex-shrink: 0;
+    margin-left: 16px;
+    color: var(--td-text-color-secondary, #757575) !important;
+
+    &:hover {
+      color: var(--td-text-color-primary, #000000) !important;
+      background: var(--td-bg-color-component-hover, #f5f5f5) !important;
     }
   }
 
@@ -740,5 +759,93 @@
       transform: scale(1.1);
       transition: transform 0.2s ease;
     }
+  }
+}
+
+// Task Toolbar Button - Embedded version for UnifiedToolbar
+.task-toolbar-button {
+  width: 56px;
+  height: 56px;
+  background: #ffffff;
+  border-radius: 50%;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
+  position: relative;
+
+  &:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    background: #f5f5f5;
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+
+  &--expanded {
+    background: #f0f0f0;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  }
+
+  &--icon-only {
+    width: 48px;
+    height: 48px;
+  }
+
+  &__content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  &__text {
+    color: #757575;
+    font-size: 14px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+    transition: color 0.3s ease;
+  }
+
+  &__status {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    bottom: 4px;
+    right: 4px;
+    border: 2px solid #ffffff;
+    animation: pulse 2s infinite;
+
+    &--active {
+      background: var(--td-success-color, #00a870);
+    }
+
+    &--failed {
+      background: var(--td-error-color, #e34d59);
+    }
+  }
+}
+
+// Badge positioning and styling adjustment for embedded button
+.task-toolbar-button .t-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: transparent !important;
+}
+
+// Override badge background color to transparent for embedded button
+.task-toolbar-button {
+  .t-badge__count {
+    color: #E91E63 !important;
+    border: 1px solid #E91E63 !important;
   }
 }

@@ -7,7 +7,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { Button, Tabs, Dialog, MessagePlugin, Input, Radio } from 'tdesign-react';
-import { DeleteIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon } from 'tdesign-icons-react';
+import { DeleteIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon } from 'tdesign-icons-react';
 import { TaskItem } from './TaskItem';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
 import { Task, TaskType, TaskStatus } from '../../types/task.types';
@@ -328,7 +328,7 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
       <div className={`task-queue-panel ${expanded ? 'task-queue-panel--expanded' : ''}`}>
         {/* Header with title and tabs */}
         <div className="task-queue-panel__header">
-          <div>
+          <div className="task-queue-panel__header-content">
             <h3>任务队列</h3>
             <Tabs value={activeTab} onChange={(value) => setActiveTab(value as string)}>
               <TabPanel value="all" label={`全部 (${tasks.length})`} />
@@ -337,6 +337,15 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
               <TabPanel value="completed" label={`已完成 (${completedTasks.length})`} />
             </Tabs>
           </div>
+          <Button
+            className="task-queue-panel__close-btn"
+            icon={<CloseIcon />}
+            onClick={onClose}
+            size="large"
+            shape="circle"
+            variant="text"
+            theme="default"
+          />
         </div>
 
         {/* Filters and Actions */}

@@ -8,6 +8,7 @@ import { ThemeToolbar } from './theme-toolbar';
 import { UnifiedToolbarProps } from './toolbar.types';
 import { Island } from '../island';
 import { FeedbackButton } from '../feedback-button';
+import { TaskToolbarButton } from '../task-queue/TaskToolbarButton';
 
 // 工具栏高度阈值: 当容器高度小于此值时切换到图标模式
 // 基于四个分区的最小高度 + 分割线 + padding 计算得出
@@ -64,29 +65,37 @@ export const UnifiedToolbar: React.FC<UnifiedToolbarProps> = React.memo(({
       )}
       padding={1}
     >
-      {/* 应用工具分区 - 菜单、撤销、重做、复制、删除 */}
-      <div className="unified-toolbar__section">
-        <AppToolbar embedded={true} iconMode={isIconMode} />
+      {/* 可滚动的工具栏内容区 */}
+      <div className="unified-toolbar__scrollable">
+        {/* 应用工具分区 - 菜单、撤销、重做、复制、删除 */}
+        <div className="unified-toolbar__section">
+          <AppToolbar embedded={true} iconMode={isIconMode} />
+        </div>
+
+        {/* 创作工具分区 - 手型、选择、思维导图、文本、画笔、箭头、形状、图片、AI工具 */}
+        <div className="unified-toolbar__section">
+          <CreationToolbar embedded={true} iconMode={isIconMode} />
+        </div>
+
+        {/* 缩放工具分区 - 缩小、缩放百分比、放大 */}
+        <div className="unified-toolbar__section">
+          <ZoomToolbar embedded={true} iconMode={isIconMode} />
+        </div>
+
+        {/* 主题选择分区 - 主题下拉选择器 */}
+        <div className="unified-toolbar__section">
+          <ThemeToolbar embedded={true} iconMode={isIconMode} />
+        </div>
+
+        {/* 反馈按钮分区 */}
+        <div className="unified-toolbar__section" style={{ display: 'flex', justifyContent: 'center' }}>
+          <FeedbackButton />
+        </div>
       </div>
 
-      {/* 创作工具分区 - 手型、选择、思维导图、文本、画笔、箭头、形状、图片、AI工具 */}
-      <div className="unified-toolbar__section">
-        <CreationToolbar embedded={true} iconMode={isIconMode} />
-      </div>
-
-      {/* 缩放工具分区 - 缩小、缩放百分比、放大 */}
-      <div className="unified-toolbar__section">
-        <ZoomToolbar embedded={true} iconMode={isIconMode} />
-      </div>
-
-      {/* 主题选择分区 - 主题下拉选择器 */}
-      <div className="unified-toolbar__section">
-        <ThemeToolbar embedded={true} iconMode={isIconMode} />
-      </div>
-
-      {/* 反馈按钮分区 */}
-      <div className="unified-toolbar__section" style={{ display: 'flex', justifyContent: 'center' }}>
-        <FeedbackButton />
+      {/* 任务按钮分区 - 固定在底部 */}
+      <div className="unified-toolbar__section unified-toolbar__section--fixed-bottom">
+        <TaskToolbarButton iconMode={isIconMode} />
       </div>
     </Island>
   );
