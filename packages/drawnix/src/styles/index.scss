@@ -111,7 +111,8 @@
         left: 0px;
         top: 10px;
         bottom: auto; // Remove bottom constraint
-        max-height: calc(100% - 72px); // Prevent overflow off screen
+        // 预留底部空间给任务按钮 (bottom: 96px + height: 56px + margin: 10px = 162px)
+        max-height: calc(100vh - 10px - 162px); // 10px 是 top 的值
         overflow-y: auto; // Allow scrolling if too tall
         display: flex;
         flex-direction: column;
