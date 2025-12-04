@@ -79,6 +79,8 @@
   align-items: center;
   gap: 12px;
   margin-top: auto;
+  flex-wrap: wrap;
+  max-width: 100%;
 
   &.unified-action-bar {
     gap: 12px;
@@ -279,9 +281,10 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 8px 32px;
+  padding: 8px 20px;
   height: 28px;
-  min-width: 110px;
+  min-width: 90px;
+  flex-shrink: 1;
   // Default: disabled state (light orange)
   background: linear-gradient(135deg, #fbd38d 0%, #f6ad55 100%);
   color: #fff;
@@ -292,7 +295,7 @@
   cursor: pointer;
   transition: all 0.2s ease;
   box-shadow: 0 2px 4px rgba(243, 156, 18, 0.2);
-
+ white-space: nowrap;
   &:hover:not(:disabled) {
     background: linear-gradient(135deg, #e67e22 0%, #d35400 100%);
     transform: translateY(-1px);
