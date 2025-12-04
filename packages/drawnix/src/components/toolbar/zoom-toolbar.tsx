@@ -14,6 +14,7 @@ import { useState } from 'react';
 import Menu from '../menu/menu';
 import MenuItem from '../menu/menu-item';
 import { useI18n } from '../../i18n';
+import { Z_INDEX } from '../../constants/z-index';
 import { ToolbarSectionProps } from './toolbar.types';
 
 export const ZoomToolbar: React.FC<ToolbarSectionProps> = ({
@@ -62,7 +63,7 @@ export const ZoomToolbar: React.FC<ToolbarSectionProps> = ({
               {Number(((board?.viewport?.zoom || 1) * 100).toFixed(0))}%
             </div>
           </PopoverTrigger>
-          <PopoverContent container={container} style={{ zIndex: 1000 }}>
+          <PopoverContent container={container} style={{ zIndex: Z_INDEX.POPOVER_ZOOM }}>
             <Menu
               onSelect={() => {
                 setZoomMenuOpen(false);

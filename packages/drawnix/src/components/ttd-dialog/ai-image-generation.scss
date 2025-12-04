@@ -78,6 +78,7 @@
   justify-content: center;
   align-items: center;
   gap: 12px;
+  flex-wrap: wrap;
 
   &.unified-action-bar {
     gap: 12px;
@@ -97,6 +98,8 @@
   transition: all 0.2s ease;
   height: 36px;
   min-width: 200px;
+  flex-shrink: 1;
+  max-width: 100%;
 
   &:hover {
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
@@ -277,9 +280,13 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 8px 32px;
+  padding: 8px 16px;
   height: 28px;
-  min-width: 110px;
+  min-width: 80px;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   // Default: disabled state (light orange)
   background: linear-gradient(135deg, #fbd38d 0%, #f6ad55 100%);
   color: #fff;
@@ -443,8 +450,7 @@
 .ai-image-generation-form {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  padding: 16px 0;
+  gap: 12px;
 
   .form-description {
     font-size: 14px;

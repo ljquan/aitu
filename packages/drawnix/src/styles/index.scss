@@ -4,6 +4,7 @@
 @import 'tailwindcss';
 @import './tdesign-theme.scss';
 @import './theme.scss';
+@import './z-index.scss'; // Z-Index层级管理变量
 @import '../components/chat-drawer/chat-drawer.scss';
 
 .drawnix {
@@ -112,7 +113,7 @@
         position: absolute;
         left: 0;
         top: 0;
-        z-index: 1000; // 提高z-index以确保任务按钮在task-queue-panel (z-index: 999)上方
+        z-index: $z-unified-toolbar; // Layer 2: Toolbars (2000)
         bottom: 0;
         display: flex;
         flex-direction: column;
@@ -163,7 +164,7 @@
                 justify-content: center;
                 align-items: center;
                 position: relative;
-                z-index: 1000; // 高于task-queue-panel (999),确保按钮始终在抽屉上方可点击
+                // 继承父级z-index即可,无需单独设置
             }
         }
 

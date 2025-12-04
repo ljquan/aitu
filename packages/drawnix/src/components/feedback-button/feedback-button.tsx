@@ -10,6 +10,7 @@ import { ChatIcon } from 'tdesign-icons-react';
 import { Popover, PopoverContent, PopoverTrigger } from '../popover/popover';
 import { useBoard } from '@plait-board/react-board';
 import { PlaitBoard } from '@plait/core';
+import { Z_INDEX } from '../../constants/z-index';
 import './feedback-button.scss';
 
 const QR_CODE_URL = '/logo/group-qr.png';
@@ -32,7 +33,7 @@ export const FeedbackButton: React.FC = () => {
             <ChatIcon size={22} />
           </button>
         </PopoverTrigger>
-        <PopoverContent container={container} style={{ zIndex: 1000 }}>
+        <PopoverContent container={container} style={{ zIndex: Z_INDEX.POPOVER_FEEDBACK }}>
           <div className="feedback-qrcode-content">
             <img
               src={QR_CODE_URL}

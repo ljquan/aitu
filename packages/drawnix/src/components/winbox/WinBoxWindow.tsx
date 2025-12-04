@@ -188,6 +188,8 @@ export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
       if (!minimizable) classList.push('no-min');
       if (!resizable) classList.push('no-resize');
       if (!movable) classList.push('no-move');
+      // 隐藏全屏按钮,因为全屏功能可能导致用户体验问题
+      classList.push('no-full');
       if (className) classList.push(className);
 
       // 创建 WinBox 实例

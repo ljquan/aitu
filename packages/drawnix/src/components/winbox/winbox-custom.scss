@@ -1,6 +1,13 @@
 // WinBox 自定义样式
 // 配合 aitu 品牌设计系统
 
+@import '../../styles/z-index.scss';
+
+// WinBox 容器全局 z-index
+.winbox {
+  z-index: $z-dialog-ai-image !important; // Layer 5: Modals, 确保在 unified-toolbar 之上
+}
+
 .winbox-react {
   // 自定义圆角
   border-radius: 12px !important;
@@ -8,13 +15,16 @@
 
   // 标题栏样式 - 重新布局
   .wb-header {
-    background: linear-gradient(135deg, #5A4FCF 0%, #7B68EE 50%, #E91E63 100%);
+    background: #e67e22;
     border-radius: 12px 12px 0 0;
     height: 44px;
     display: flex;
-    flex-direction: row-reverse; // 反转顺序：标题在左，按钮在右
+    flex-direction: row-reverse; // 反转顺序:标题在左,按钮在右
     align-items: center;
     padding: 0 8px;
+    // 确保header始终显示,即使在全屏模式下
+    display: flex !important;
+    visibility: visible !important;
   }
 
   // 拖拽区域（包含标题）
@@ -123,10 +133,27 @@
     
     .wb-header {
       border-radius: 0;
+      // 确保header在最大化时仍然显示
+      display: flex !important;
     }
     
     .wb-body {
       border-radius: 0;
+      // 最大化时body从header下方开始
+      top: 44px !important;
+    }
+  }
+  
+  // 全屏状态(WinBox的full模式)
+  &.full {
+    .wb-header {
+      // 全屏时也保留header,确保关闭按钮可用
+      display: flex !important;
+    }
+    
+    .wb-body {
+      // 全屏时body从header下方开始,而不是从顶部(0)
+      top: 44px !important;
     }
   }
 }
@@ -157,6 +184,8 @@
 
 // AI 生成弹窗专用样式
 .winbox-ai-generation {
+  z-index: $z-dialog-ai-image !important; // Layer 5: AI 图像/视频生成弹窗
+  
   .wb-body {
     padding: 0;
     display: flex;

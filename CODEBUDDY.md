@@ -136,6 +136,48 @@ Full coding standards are documented in `docs/CODING_STANDARDS.md`. Key highligh
 - Use proper error handling for API calls
 - Filter sensitive information in logs
 
+#### Z-Index Management
+**规范文档**: 参考 `docs/Z_INDEX_GUIDE.md` 获取完整规范
+
+**核心原则**:
+- 使用预定义的层级常量,禁止硬编码魔术数字
+- TypeScript: 从 `constants/z-index.ts` 导入 `Z_INDEX`
+- SCSS: 从 `styles/z-index.scss` 导入并使用 `$z-*` 变量或 `z()` 函数
+
+**层级结构** (每层预留100单位):
+```
+Layer 0 (0-999):     Base & Canvas Internal
+Layer 1 (1000-1999): Canvas Elements & Decorations
+Layer 2 (2000-2999): Toolbars (unified-toolbar: 2000, popovers: 3000)
+Layer 3 (3000-3999): Popovers & Tooltips
+Layer 4 (4000-4999): Drawers & Panels (task-queue, chat-drawer)
+Layer 5 (5000-5999): Modals & Dialogs (AI dialogs: 5100+)
+Layer 6 (6000-6999): Notifications (active-task-warning: 6000)
+Layer 7 (7000-7999): Auth Dialogs
+Layer 8 (8000-8999): Image Viewer
+Layer 9 (9000+):     Critical Overlays (loading, system-error)
+```
+
+**使用示例**:
+```typescript
+// TypeScript/TSX
+import { Z_INDEX } from '@/constants/z-index';
+<Rnd style={{ zIndex: Z_INDEX.DIALOG_AI_IMAGE }}>
+```
+
+```scss
+// SCSS
+@import 'styles/z-index';
+.my-toolbar {
+  z-index: $z-unified-toolbar;  // 或 z-index: z('unified-toolbar');
+}
+```
+
+**禁止事项**:
+- ❌ 禁止使用随意的数字 (如 9999, 10000, 10001)
+- ❌ 禁止在同一层级随意 +1/-1
+- ❌ 临时修复必须在完成后转换为规范用法
+
 #### Git Commit Convention
 - Format: `<type>(<scope>): <subject>`
 - Types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`, `perf`, `ci`

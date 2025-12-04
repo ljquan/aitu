@@ -394,10 +394,10 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
         visible={appState.openDialogType === DialogType.aiVideoGeneration}
         title={language === 'zh' ? 'AI 视频生成' : 'AI Video Generation'}
         onClose={handleVideoDialogClose}
-        width="60%"
+        width="70%"
         height="60%"
-        minWidth={600}
-        minHeight={500}
+        minWidth={800}
+        minHeight={600}
         x="center"
         y="center"
         modal={false}

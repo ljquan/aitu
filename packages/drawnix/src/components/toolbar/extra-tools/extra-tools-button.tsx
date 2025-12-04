@@ -7,6 +7,7 @@ import { ExtraToolsIcon } from "../../icons";
 import Menu from "../../menu/menu";
 import { MarkdownToDrawnixItem, MermaidToDrawnixItem } from "./menu-items";
 import { useI18n } from "../../../i18n";
+import { Z_INDEX } from "../../../constants/z-index";
 
 export const ExtraToolsButton = () => {
   const board = useBoard();
@@ -21,7 +22,7 @@ export const ExtraToolsButton = () => {
       onOpenChange={(open) => {
         setAppMenuOpen(open);
       }}
-      placement="bottom-start"
+      placement="right-start"
     >
       <PopoverTrigger asChild>
         <ToolButton
@@ -36,7 +37,7 @@ export const ExtraToolsButton = () => {
           }}
         />
       </PopoverTrigger>
-      <PopoverContent container={container}>
+      <PopoverContent container={container} style={{ zIndex: Z_INDEX.POPOVER }}>
         <Menu
           onSelect={() => {
             setAppMenuOpen(false);

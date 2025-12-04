@@ -24,6 +24,7 @@ import { LanguageSwitcherMenu } from './language-switcher-menu';
 import Menu from '../../menu/menu';
 import MenuSeparator from '../../menu/menu-separator';
 import { useI18n } from '../../../i18n';
+import { Z_INDEX } from '../../../constants/z-index';
 import { ToolbarSectionProps } from '../toolbar.types';
 
 export const AppToolbar: React.FC<ToolbarSectionProps> = ({
@@ -62,7 +63,7 @@ export const AppToolbar: React.FC<ToolbarSectionProps> = ({
               }}
             />
           </PopoverTrigger>
-          <PopoverContent container={container} style={{ zIndex: 1000 }}>
+          <PopoverContent container={container} style={{ zIndex: Z_INDEX.POPOVER_APP }}>
             <Menu
               onSelect={() => {
                 setAppMenuOpen(false);
