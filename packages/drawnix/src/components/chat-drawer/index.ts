@@ -10,3 +10,5 @@ export { ChatDrawerTrigger } from './ChatDrawerTrigger';
 export { SessionList } from './SessionList';
 export { SessionItem } from './SessionItem';
 export { MermaidRenderer } from './MermaidRenderer';
+export { ModelSelector } from './ModelSelector';
+export { ProviderIcon } from './ProviderIcon';

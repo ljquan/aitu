@@ -18,6 +18,7 @@ import '@llamaindex/chat-ui/styles/pdf.css';
 import { SessionList } from './SessionList';
 import { ChatDrawerTrigger } from './ChatDrawerTrigger';
 import { MermaidRenderer } from './MermaidRenderer';
+import { ModelSelector } from './ModelSelector';
 import { chatStorageService } from '../../services/chat-storage-service';
 import { useChatHandler } from '../../hooks/useChatHandler';
 import { geminiSettings } from '../../utils/settings-manager';
@@ -227,7 +228,10 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = React.memo(
 
         <div className={`chat-drawer ${isOpen ? 'chat-drawer--open' : ''}`}>
           <div className="chat-drawer__header">
-            <h2 className="chat-drawer__title">{title}</h2>
+            <div className="chat-drawer__header-left">
+              <h2 className="chat-drawer__title">{title}</h2>
+              <ModelSelector />
+            </div>
             <div className="chat-drawer__actions">
               <Tooltip content="会话列表" theme="light">
                 <button
