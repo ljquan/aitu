@@ -38,12 +38,12 @@ import { buildTextLinkPlugin } from './plugins/with-text-link';
 import { LinkPopup } from './components/popup/link-popup/link-popup';
 import { I18nProvider } from './i18n';
 import { withVideo } from './plugins/with-video';
-import { TaskToolbar } from './components/task-queue/TaskToolbar';
 import { ActiveTaskWarning } from './components/task-queue/ActiveTaskWarning';
 import { useTaskStorage } from './hooks/useTaskStorage';
 import { useTaskExecutor } from './hooks/useTaskExecutor';
 import { useBeforeUnload } from './hooks/useBeforeUnload';
 import { FeedbackButton } from './components/feedback-button';
+import { ChatDrawer } from './components/chat-drawer';
 
 export type DrawnixProps = {
   value: PlaitElement[];
@@ -205,7 +205,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
             <SettingsDialog container={containerRef.current}></SettingsDialog>
           </Wrapper>
           <ActiveTaskWarning />
-          <TaskToolbar />
+          <ChatDrawer />
         </div>
       </DrawnixContext.Provider>
     </I18nProvider>

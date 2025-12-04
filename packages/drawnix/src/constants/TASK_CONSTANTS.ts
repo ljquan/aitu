@@ -11,10 +11,10 @@
  * This is the total task timeout (including retries), not HTTP request timeout
  */
 export const TASK_TIMEOUT = {
-  /** Image generation task timeout: 20 minutes */
-  IMAGE: 20 * 60 * 1000,
-  /** Video generation task timeout: 1 hour */
-  VIDEO: 60 * 60 * 1000,
+  /** Image generation task timeout: 45 minutes */
+  IMAGE: 45 * 60 * 1000,
+  /** Video generation task timeout: 1.5 hours (90 minutes) */
+  VIDEO: 90 * 60 * 1000,
 } as const;
 
 /**

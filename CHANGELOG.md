@@ -1,3 +1,33 @@
+## 0.2.7 (2025-12-04)
+
+### 🚀 Features
+
+- 添加聊天模型选择器组件 ([289857a](https://github.com/ljquan/aitu/commit/289857a))
+- 添加文本对话抽屉 ([8ad019e](https://github.com/ljquan/aitu/commit/8ad019e))
+- 优化布局 #12 ([28d2ee3](https://github.com/ljquan/aitu/commit/28d2ee3))
+
+### 🩹 Fixes
+
+- 修复对话抽屉API key检查和弹窗层级问题 ([06cf9d5](https://github.com/ljquan/aitu/commit/06cf9d5))
+- 修复统一工具栏与任务按钮位置冲突 ([88f2c4c](https://github.com/ljquan/aitu/commit/88f2c4c))
+- 修复视频插入画板后不显示的问题 ([91bdfa4](https://github.com/ljquan/aitu/commit/91bdfa4))
+- 优化缓存机制、工具栏交互和AI图片生成功能 ([b606db4](https://github.com/ljquan/aitu/commit/b606db4))
+
+### 🔧 Chores
+
+- bump version to 0.2.6 ([4774a24](https://github.com/ljquan/aitu/commit/4774a24))
+- 布局优化2 ([a8a9faa](https://github.com/ljquan/aitu/commit/a8a9faa))
+- 布局优化1 ([ecf8d8d](https://github.com/ljquan/aitu/commit/ecf8d8d))
+- 提高超时时间 ([620d5c2](https://github.com/ljquan/aitu/commit/620d5c2))
+- docs: 完善项目文档和工具链 ([4dae671](https://github.com/ljquan/aitu/commit/4dae671))
+- 添加filesystem兜底 ([622ce19](https://github.com/ljquan/aitu/commit/622ce19))
+
+### ❤️  Thank You
+
+- gongchengtu <1817063960@qq.com>
+- liquidliang <ljquan@qq.com>
+- liquid <ljquan@qq.com>
+
 ## 0.2.6 (2025-12-02)
 
 ### 🚀 Features

@@ -54,7 +54,7 @@ export interface VideoQueryResponse {
 // Polling options
 interface PollingOptions {
   interval?: number;      // Polling interval in ms (default: 5000)
-  maxAttempts?: number;   // Max polling attempts (default: 360 = 30min at 5s interval)
+  maxAttempts?: number;   // Max polling attempts (default: 1080 = 90min at 5s interval)
   onProgress?: (progress: number, status: string) => void;
   onSubmitted?: (videoId: string) => void; // Callback when video is submitted (for saving remoteId)
 }
@@ -206,7 +206,7 @@ class VideoAPIService {
   ): Promise<VideoQueryResponse> {
     const {
       interval = 5000,
-      maxAttempts = 360,
+      maxAttempts = 1080,
       onProgress,
       onSubmitted,
     } = options;
@@ -300,7 +300,7 @@ class VideoAPIService {
   ): Promise<VideoQueryResponse> {
     const {
       interval = 5000,
-      maxAttempts = 360,
+      maxAttempts = 1080,
       onProgress,
     } = options;
 

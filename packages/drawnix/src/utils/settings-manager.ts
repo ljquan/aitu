@@ -14,6 +14,7 @@ import { DRAWNIX_SETTINGS_KEY } from '../constants/storage';
 export interface GeminiSettings {
   apiKey: string;
   baseUrl: string;
+  chatModel?: string;
   imageModelName?: string;
   videoModelName?: string;
 }
@@ -28,6 +29,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   gemini: {
     apiKey: '',
     baseUrl: 'https://api.tu-zi.com/v1',
+    chatModel: 'gpt-5',
     imageModelName: 'gemini-2.5-flash-image-vip',
     videoModelName: 'veo3',
   },
