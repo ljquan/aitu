@@ -1,12 +1,12 @@
 [build]
   # 构建命令
   command = "npm run build:web"
-  
+
   # 发布目录 - Nx构建的web应用输出目录
   publish = "dist/apps/web"
-  
-  # Node.js版本
-  environment = { NODE_VERSION = "18" }
+
+  # Node.js版本和内存设置
+  environment = { NODE_VERSION = "18", NODE_OPTIONS = "--max-old-space-size=8192" }
 
 [build.processing]
   # 跳过处理，使用原始文件
