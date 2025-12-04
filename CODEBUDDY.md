@@ -1,255 +1,189 @@
-# CODEBUDDY.md
+# CLAUDE.md
 
-This file provides guidance to CodeBuddy Code when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
 
-Aitu (爱图) is an open-source whiteboard application supporting mind maps, flowcharts, freehand drawing, and AI-powered content generation. Built on the Plait framework with React, managed as an Nx monorepo.
+Aitu (爱图) is an open-source whiteboard application built on the Plait framework. It supports mind maps, flowcharts, freehand drawing, image insertion, and AI-powered content generation (images via Gemini, videos via Veo3/Sora-2). The project uses a plugin architecture with React components and is built with Nx as the monorepo management tool.
 
 ## Development Commands
 
-```bash
-# Development
-npm start                    # Start dev server (http://localhost:4200)
-npm test                     # Run all tests
-npm run build                # Build all packages
-npm run build:web            # Build web app only
+**Essential Commands:**
+- `npm start` - Start development server (serves web app at localhost:4200)
+- `npm run build` - Build all packages
+- `npm run build:web` - Build only the web application
+- `npm test` - Run all tests
+- `nx test <project-name>` - Run tests for specific project
+- `nx lint <project-name>` - Lint specific project
+- `nx typecheck <project-name>` - Type check specific project
 
-# Nx commands for specific projects
-nx build <project>           # Build specific project (web, drawnix, react-board, react-text)
-nx test <project>            # Test specific project
-nx lint <project>            # Lint specific project
-nx typecheck <project>       # Type check specific project
-
-# Version management
-npm run version:patch        # Bump patch version (+0.0.1)
-npm run version:minor        # Bump minor version (+0.1.0)
-npm run version:major        # Bump major version (+1.0.0)
-
-# Release
-npm run release              # Patch release (version, build, package)
-npm run release:minor        # Minor release
-npm run release:major        # Major release
-```
-
-## Monorepo Structure
-
-```
-aitu/
-├── apps/
-│   ├── web/                 # Main web application
-│   └── web-e2e/             # E2E tests
-├── packages/
-│   ├── drawnix/             # Core whiteboard library
-│   ├── react-board/         # React wrapper for Plait board
-│   └── react-text/          # Text rendering components
-├── docs/                    # Development documentation
-├── scripts/                 # Build and release scripts
-└── dist/                    # Build output
-```
+**Version & Release:**
+- `npm run version:patch` - Bump patch version (0.0.x)
+- `npm run version:minor` - Bump minor version (0.x.0)
+- `npm run version:major` - Bump major version (x.0.0)
+- `npm run release` - Build and package patch release
+- `npm run release:minor` - Build and package minor release
+- `npm run release:major` - Build and package major release
 
 ## Architecture
 
-### Core Packages
+### Monorepo Structure
+- `apps/web/` - Main web application (aitu.chat)
+- `packages/drawnix/` - Core whiteboard library with UI components and plugins
+- `packages/react-board/` - React wrapper for Plait board functionality
+- `packages/react-text/` - Text rendering and editing components
+- `docs/` - Development documentation (开发文档)
 
-**drawnix** (`packages/drawnix/src/`):
-- `components/` - UI components (toolbar, dialogs, popups)
-  - `toolbar/creation-toolbar.tsx` - Main creation toolbar
-  - `toolbar/popup-toolbar.tsx` - Context-sensitive tools
-- `plugins/` - Extensible functionality via `withXxx` pattern
-- `hooks/` - Custom React hooks
-- `utils/` - Utility functions
-- `transforms/` - Data conversion (Markdown/Mermaid)
-- `styles/` - Global styles and SCSS
-- `drawnix.tsx` - Main application wrapper with state management
+### Core Components
+- **Drawnix Component** (`packages/drawnix/src/drawnix.tsx`) - Main application wrapper with state management and plugin composition
+- **Plugin System** - Extensible architecture with plugins using the `withXxx` pattern:
+  - `withFreehand` - Freehand drawing capabilities
+  - `withMind` / `withMindExtend` - Mind mapping functionality
+  - `withDraw` - Basic drawing primitives (shapes, arrows)
+  - `withHotkey` - Keyboard shortcut handling
+  - `withPencil` - Pencil/eraser modes
+  - `withTextLink` - Link functionality in text
+  - `withVideo` - Video element support
+  - `withGroup` - Element grouping
+- **Toolbar System** - Modular toolbars:
+  - `UnifiedToolbar` - Main creation toolbar with drawing tools
+  - `PopupToolbar` - Context-sensitive popup tools for selected elements
+  - `ClosePencilToolbar` - Toolbar for pencil mode
+- **Dialogs & Drawers**:
+  - `TTDDialog` - Text-to-diagram conversion (Markdown → mind map, Mermaid → flowchart)
+  - `SettingsDialog` - Application settings (API keys, theme)
+  - `ChatDrawer` - AI chat interface with session management
+- **AI Services** (`packages/drawnix/src/services/`):
+  - `generation-api-service.ts` - Image generation API (Gemini)
+  - `video-api-service.ts` - Video generation API (Veo3, Sora-2)
+  - `chat-service.ts` - Chat API integration
+  - `task-queue-service.ts` - Async task queue management
+  - `media-cache-service.ts` - Media caching in IndexedDB
+  - `storage-service.ts` - Local storage management
+  - `url-cache-service.ts` - URL response caching
+  - `chat-storage-service.ts` - Chat session persistence
+- **Data Persistence** - Uses localforage (IndexedDB wrapper) for:
+  - Board data auto-save
+  - Task queue state
+  - Media cache
+  - Chat sessions and messages
 
-**react-board**: Plait framework React integration layer
-
-**react-text**: Text rendering and editing components
-
-### Technology Stack
-
-- **React 18.3+** with TypeScript
-- **Nx** - Monorepo management
-- **Vite** - Build tool (all packages)
-- **Plait** - Core drawing framework (`@plait/core`, `@plait/draw`, `@plait/mind`)
-- **Slate.js** - Rich text editing
+### Key Libraries
+- **Plait** (`@plait/core`, `@plait/draw`, `@plait/mind`) - Core drawing framework
+- **Slate.js** - Rich text editing framework
 - **TDesign React** - UI component library (use light theme)
-- **Floating UI** - Popover positioning
-- **localforage** - Browser storage with auto-save
-
-### Plugin Architecture
-
-Plugins extend functionality through composition:
-- `withFreehand` - Freehand drawing
-- `withMind` - Mind mapping
-- `withDraw` - Basic drawing primitives
-- `withHotkey` - Keyboard shortcuts
-- `withPencil` - Pencil/eraser modes
-- `withTextLink` - Text link functionality
+- **Floating UI** - Positioning for popover elements
+- **Vite** - Build tool for all packages
+- **localforage** - IndexedDB wrapper for storage
+- **RxJS** - Reactive state management for services
+- **ahooks** - React Hooks utility library
 
 ### State Management
+- **React Context** (`DrawnixContext`) for application state:
+  - Pointer modes (hand, selection, drawing tools)
+  - Mobile detection and responsive behavior
+  - Dialog and modal states
+  - Pencil mode toggling
+- **RxJS Subjects** for service-level state (task queue, chat sessions)
+- **localforage** for persistent storage
 
-React Context (`AituContext`) manages:
-- Pointer modes (hand, drawing tools)
-- Mobile detection and responsive behavior
-- Dialog and modal states
-- Pencil mode toggling
+### Development Rules
+- **UI Framework**: Use TDesign React with light theme configuration
+- **Tooltips**: Always use `theme='light'` for TDesign tooltips
+- **File Size Limit**: Single files must not exceed 500 lines (including comments and blank lines)
+- **Documentation**: SpecKit-generated markdown documents should be in Chinese (中文)
 
-## Coding Standards
+### Coding Standards
 
-### File Size & Naming
+Full coding standards are documented in `docs/CODING_STANDARDS.md`. Key highlights:
 
-**Critical Rule**: Single files must not exceed 500 lines (including comments)
+#### File Naming Conventions
+- **Components**: `PascalCase.tsx` (e.g., `ImageCropPopup.tsx`)
+- **Hooks**: `camelCase.ts` (e.g., `useImageCrop.ts`)
+- **Utilities**: `kebab-case.ts` (e.g., `image-utils.ts`)
+- **Types**: `kebab-case.types.ts` (e.g., `image-crop.types.ts`)
+- **Constants**: `UPPER_SNAKE_CASE.ts` (e.g., `STORAGE_KEYS.ts`)
 
-File naming conventions:
-- Components: `PascalCase.tsx` (e.g., `ImageCropPopup.tsx`)
-- Hooks: `camelCase.ts` (e.g., `useImageCrop.ts`)
-- Utils: `kebab-case.ts` (e.g., `image-utils.ts`)
-- Types: `kebab-case.types.ts` (e.g., `image-crop.types.ts`)
-- Constants: `UPPER_SNAKE_CASE.ts` (e.g., `STORAGE_KEYS.ts`)
-
-### TypeScript
-
-- Use `interface` for object types, `type` for unions
+#### TypeScript Guidelines
+- Use `interface` for object types, `type` for union types
 - All component Props must have type definitions
 - Avoid `any` - use specific types or generics
-- Strict TypeScript configuration enabled
+- Strict TypeScript configuration is enforced
 
-### React Components
-
-- Use functional components and Hooks
-- Props destructuring with default values
-- Use `React.memo` to optimize re-renders
+#### React Component Guidelines
+- Use functional components with Hooks
+- Destructure props with default values
+- Use `React.memo` to optimize re-renders where beneficial
 - Wrap event handlers with `useCallback`
-- Complete dependency arrays in `useEffect`
+- Use `useEffect` with complete dependency arrays
+- Hook order in components: state hooks → effect hooks → event handlers → render logic
 
-### CSS/SCSS
-
+#### CSS/SCSS Guidelines
 - Use BEM naming convention
-- Prefer design system CSS variables
-- Property order: position → box model → appearance → typography → animation
+- Prefer design system CSS variables (see Brand Guidelines below)
+- Property order: positioning → box model → appearance → typography → animations
 - Use nested selectors for organization
 
-### Git Commits
-
-Format: `<type>(<scope>): <subject>`
-
-Types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`, `perf`, `ci`
-
-Example: `feat(crop): add circular and elliptical image cropping`
-
-## UI/Brand Guidelines
-
-### Design System
-
-**TDesign Configuration**:
-- Use light theme (`theme='light'`)
-- Tooltips with `theme='light'`
-
-**Brand Colors**:
-- Primary: #F39C12, #E67E22, #D35400 (orange-gold)
-- Secondary: #5A4FCF, #7B68EE, #9966CC (blue-purple)
-- Accent: #E91E63, #F06292 (creation magenta)
-
-**Gradients**:
-```css
-/* Brand gradient */
-linear-gradient(135deg, #F39C12 0%, #E67E22 30%, #5A4FCF 70%, #E91E63 100%)
-
-/* Brush gradient */
-linear-gradient(135deg, #5A4FCF 0%, #7B68EE 50%, #E91E63 100%)
-
-/* Film gradient */
-linear-gradient(135deg, #F39C12 0%, #E67E22 50%, #D35400 100%)
-```
-
-**Component Patterns**:
-- Buttons: 8px border-radius, brand gradients for primary
-- Cards: 12px border-radius, 24px padding, subtle shadows
-- Inputs: 8px border-radius, 2px focus border in brand primary
-- Animations: 150-300ms transitions with ease-out
-
-**Typography**:
-- Font stack: 'Inter', 'SF Pro Display', -apple-system, sans-serif
-- Sizes: xs(12px), sm(14px), base(16px), lg(18px), xl(20px), 2xl(24px), 3xl(30px), 4xl(36px)
-
-## Testing
-
-```bash
-# Run all tests
-npm test
-
-# Test specific package
-nx test drawnix
-nx test react-board
-nx test web
-
-# E2E tests
-nx e2e web-e2e
-```
-
-Test framework: Jest + React Testing Library for unit tests, Playwright for E2E
-
-## Key Features
-
-- Mind maps and flowcharts
-- Freehand drawing with pencil tool
-- Image insertion and manipulation
-- Markdown → mind map conversion
-- Mermaid → flowchart conversion
-- Export to PNG, JSON (.drawnix)
-- Auto-save to browser storage
-- Infinite canvas with zoom/pan
-- Theme modes
-- Mobile responsive
-
-## Important Files
-
-- `packages/drawnix/src/drawnix.tsx` - Main application component
-- `packages/drawnix/src/components/toolbar/creation-toolbar.tsx` - Creation toolbar
-- `packages/drawnix/src/plugins/` - Plugin implementations
-- `apps/web/index.html` - Web app entry point
-- `docs/CODING_STANDARDS.md` - Detailed coding standards
-- `docs/VERSION_CONTROL.md` - Version management workflow
-- `docs/CFPAGE-DEPLOY.md` - Deployment guide
-
-## Common Tasks
-
-**Run single test file**:
-```bash
-nx test drawnix --testFile=<filename>
-```
-
-**Type check before commit**:
-```bash
-nx typecheck drawnix
-nx typecheck web
-```
-
-**Lint and fix**:
-```bash
-nx lint <project> --fix
-```
-
-**Build for production**:
-```bash
-npm run build  # Updates version, builds all packages
-```
-
-## Performance Considerations
-
-- Large components: use `React.lazy` for code splitting
-- Images: use lazy loading and preload strategies
+#### Performance Guidelines
+- Use `React.lazy` for code splitting large components
+- Implement lazy loading and preloading for images
 - Avoid creating new objects/functions in render
 - Consider virtualization for long lists
-- Use `React.memo`, `useMemo`, `useCallback` appropriately
 
-## Security
-
+#### Security Guidelines
 - Validate and sanitize all user input
-- No hardcoded sensitive information
-- Use secure error handling in API calls
-- Filter sensitive info from logs
+- Never hardcode sensitive information (API keys, etc.)
+- Use proper error handling for API calls
+- Filter sensitive information in logs
 
-- speckit生成的相关markdown文档产物以中文输出
+#### Git Commit Convention
+- Format: `<type>(<scope>): <subject>`
+- Types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`, `perf`, `ci`
+- Must pass type checking and tests before committing
+
+### Brand Guidelines
+
+**Brand Identity:**
+- Name: aitu (爱图) - AI Image & Video Creation Tool
+- Tagline: 爱上图像，爱上创作 (Love Images, Love Creation)
+
+**Color System:**
+- Primary Colors:
+  - Orange-Gold: `#F39C12`, `#E67E22`, `#D35400`
+  - Blue-Purple: `#5A4FCF`, `#7B68EE`, `#9966CC`
+  - Creation Accent: `#E91E63`, `#F06292`
+- Gradients:
+  - Brand: `linear-gradient(135deg, #F39C12 0%, #E67E22 30%, #5A4FCF 70%, #E91E63 100%)`
+  - Brush: `linear-gradient(135deg, #5A4FCF 0%, #7B68EE 50%, #E91E63 100%)`
+  - Film: `linear-gradient(135deg, #F39C12 0%, #E67E22 50%, #D35400 100%)`
+- Usage Guidelines:
+  - Primary buttons → brand gradients
+  - Links/emphasis → orange-gold (#F39C12)
+  - Creation features → magenta (#E91E63)
+  - AI features → blue-purple (#5A4FCF)
+
+**Typography:**
+- Font Stack: `'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif`
+- Sizes: xs(12px), sm(14px), base(16px), lg(18px), xl(20px), 2xl(24px), 3xl(30px), 4xl(36px)
+
+**Component Design:**
+- Buttons: 8px border-radius, brand gradients for primary, 12px/24px padding
+- Cards: 12px border-radius, white background, subtle shadows, 24px padding
+- Inputs: 8px border-radius, light background, 2px focus border in brand primary
+- Animations: 150-300ms transitions with ease-out curves
+
+## Important Implementation Notes
+
+### Chat Drawer (Branch: 003-chat-drawer)
+- Uses IndexedDB via localforage for chat persistence
+- Stores: `chat-sessions`, `chat-messages`
+- Service architecture: `chat-service.ts` → API, `chat-storage-service.ts` → storage
+- Component structure: `ChatDrawer.tsx` (main), `SessionList.tsx`, `SessionItem.tsx`, `MermaidRenderer.tsx`
+- Mermaid diagrams preprocessed before rendering (see `MERMAID_PREPROCESSING.md`)
+
+### AI Generation Services
+- Image generation: Gemini API (`generation-api-service.ts`)
+- Video generation: Veo3/Sora-2 API (`video-api-service.ts`)
+- Task management: Async queue with retry logic (`task-queue-service.ts`)
+- Media caching: IndexedDB-based cache (`media-cache-service.ts`)
+- All services use RxJS for reactive state management

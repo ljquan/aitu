@@ -2,9 +2,9 @@
  * Gemini API 客户端类
  */
 
-import { GeminiConfig, ImageInput, VideoGenerationOptions } from './types';
+import { GeminiConfig, ImageInput, VideoGenerationOptions, GeminiMessage } from './types';
 import { DEFAULT_CONFIG, VIDEO_DEFAULT_CONFIG } from './config';
-import { generateImageWithGemini, generateVideoWithGemini, chatWithGemini } from './services';
+import { generateImageWithGemini, generateVideoWithGemini, chatWithGemini, sendChatWithGemini } from './services';
 import { geminiSettings } from '../settings-manager';
 
 /**
@@ -55,8 +55,15 @@ export class GeminiClient {
   /**
    * 聊天对话（支持图片输入）
    */
-  async chat(prompt: string, images: ImageInput[] = []) {
-    return chatWithGemini(prompt, images);
+  async chat(prompt: string, images: ImageInput[] = [], onChunk?: (content: string) => void) {
+    return chatWithGemini(prompt, images, onChunk);
+  }
+
+  /**
+   * 发送多轮对话消息
+   */
+  async sendChat(messages: GeminiMessage[], onChunk?: (content: string) => void, signal?: AbortSignal) {
+    return sendChatWithGemini(messages, onChunk, signal);
   }
 
   /**

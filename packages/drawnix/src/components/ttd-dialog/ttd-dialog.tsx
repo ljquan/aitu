@@ -1,5 +1,5 @@
 import { Dialog, DialogContent } from '../dialog/dialog';
-import { Dialog as TDialog, Select } from 'tdesign-react';
+import { Select } from 'tdesign-react';
 import MermaidToDrawnix from './mermaid-to-drawnix';
 import { DialogType, useDrawnix } from '../../hooks/use-drawnix';
 import MarkdownToDrawnix from './markdown-to-drawnix';
@@ -7,15 +7,15 @@ import AIImageGeneration from './ai-image-generation';
 import AIVideoGeneration from './ai-video-generation';
 import { useI18n } from '../../i18n';
 import { useBoard } from '@plait-board/react-board';
-import { useState, useEffect, useRef, memo } from 'react';
+import { useState, useEffect, useRef, memo, useCallback } from 'react';
 import { processSelectedContentForAI, extractSelectedContent } from '../../utils/selection-utils';
-import { ATTACHED_ELEMENT_CLASS_NAME, getSelectedElements } from '@plait/core';
 import {
   AI_IMAGE_GENERATION_PREVIEW_CACHE_KEY,
   AI_VIDEO_GENERATION_PREVIEW_CACHE_KEY
 } from '../../constants/storage';
 import { IMAGE_MODEL_OPTIONS, VIDEO_MODEL_OPTIONS } from '../settings-dialog/settings-dialog';
 import { geminiSettings } from '../../utils/settings-manager';
+import { WinBoxWindow } from '../winbox';
 
 const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) => {
   const { appState, setAppState } = useDrawnix();
@@ -284,6 +284,46 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
       prevOpenDialogTypeRef.current = null;
     }
   }, [appState.openDialogType]);
+
+  // WinBox 关闭回调
+  const handleImageDialogClose = useCallback(() => {
+    // 在关闭前保存AI图像生成的缓存
+    const cached = localStorage.getItem(AI_IMAGE_GENERATION_PREVIEW_CACHE_KEY);
+    if (cached) {
+      try {
+        const data = JSON.parse(cached);
+        data.timestamp = Date.now();
+        localStorage.setItem(AI_IMAGE_GENERATION_PREVIEW_CACHE_KEY, JSON.stringify(data));
+      } catch (error) {
+        console.warn('Failed to update cache timestamp:', error);
+      }
+    }
+    console.log('Image dialog closing - selection should be preserved');
+    setAppState({
+      ...appState,
+      openDialogType: null,
+    });
+  }, [appState, setAppState]);
+
+  const handleVideoDialogClose = useCallback(() => {
+    // 在关闭前保存AI视频生成的缓存
+    const cached = localStorage.getItem(AI_VIDEO_GENERATION_PREVIEW_CACHE_KEY);
+    if (cached) {
+      try {
+        const data = JSON.parse(cached);
+        data.timestamp = Date.now();
+        localStorage.setItem(AI_VIDEO_GENERATION_PREVIEW_CACHE_KEY, JSON.stringify(data));
+      } catch (error) {
+        console.warn('Failed to update cache timestamp:', error);
+      }
+    }
+    console.log('Video dialog closing - selection should be preserved');
+    setAppState({
+      ...appState,
+      openDialogType: null,
+    });
+  }, [appState, setAppState]);
+
   return (
     <>
       <Dialog
@@ -312,58 +352,33 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
           <MarkdownToDrawnix></MarkdownToDrawnix>
         </DialogContent>
       </Dialog>
-      <TDialog
+      {/* AI 图像生成窗口 - 使用 WinBox */}
+      <WinBoxWindow
         visible={appState.openDialogType === DialogType.aiImageGeneration}
-        onClose={() => {
-          // 在关闭前保存AI图像生成的缓存
-          const cached = localStorage.getItem(AI_IMAGE_GENERATION_PREVIEW_CACHE_KEY);
-          if (cached) {
-            try {
-              const data = JSON.parse(cached);
-              // 更新时间戳以保持缓存有效
-              data.timestamp = Date.now();
-              localStorage.setItem(AI_IMAGE_GENERATION_PREVIEW_CACHE_KEY, JSON.stringify(data));
-            } catch (error) {
-              console.warn('Failed to update cache timestamp:', error);
-            }
-          }
-          
-          console.log('Dialog closing - selection should be preserved via ATTACHED_ELEMENT_CLASS_NAME');
-          
-          // 关闭对话框 - 选择状态应该会被保持，因为对话框有ATTACHED_ELEMENT_CLASS_NAME类
-          setAppState({
-            ...appState,
-            openDialogType: null,
-          });
-        }}
-        attach={container ? () => container : undefined}
-        header={(
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <span>{language === 'zh' ? 'AI 图像生成' : 'AI Image Generation'}</span>
-            <Select
-              value={selectedImageModel}
-              onChange={(value) => handleImageModelChange(value as string)}
-              options={IMAGE_MODEL_OPTIONS}
-              size="small"
-              style={{ width: '360px' }}
-              placeholder="选择图片模型"
-              filterable
-              creatable
-            />
-          </div>
-        )}
-        footer={false}
-        width="80%"
-        className={`ttd-dialog`}
-        closeOnOverlayClick={false}
-        showOverlay={true}
-        mode="modal"
-        preventScrollThrough={true}
-        closeBtn={true}
-        style={{ 
-          backgroundColor: '#ffffff',
-          color: '#333333'
-        } as React.CSSProperties}
+        title={language === 'zh' ? 'AI 图像生成' : 'AI Image Generation'}
+        onClose={handleImageDialogClose}
+        width="60%"
+        height="60%"
+        minWidth={800}
+        minHeight={500}
+        x="center"
+        y="center"
+        modal={false}
+        minimizable={false}
+        className="winbox-ai-generation"
+        container={container}
+        headerContent={
+          <Select
+            value={selectedImageModel}
+            onChange={(value) => handleImageModelChange(value as string)}
+            options={IMAGE_MODEL_OPTIONS}
+            size="small"
+            style={{ width: '300px', marginLeft: '12px' }}
+            placeholder="选择图片模型"
+            filterable
+            creatable
+          />
+        }
       >
         <AIImageGeneration
           initialPrompt={aiImageData.initialPrompt}
@@ -373,59 +388,34 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
           initialHeight={appState.dialogInitialData?.height}
           initialResultUrl={aiImageData.initialResultUrl}
         />
-      </TDialog>
-      {appState.openDialogType === DialogType.aiVideoGeneration &&       <TDialog
+      </WinBoxWindow>
+      {/* AI 视频生成窗口 - 使用 WinBox */}
+      <WinBoxWindow
         visible={appState.openDialogType === DialogType.aiVideoGeneration}
-        onClose={() => {
-          // 在关闭前保存AI视频生成的缓存
-          const cached = localStorage.getItem(AI_VIDEO_GENERATION_PREVIEW_CACHE_KEY);
-          if (cached) {
-            try {
-              const data = JSON.parse(cached);
-              // 更新时间戳以保持缓存有效
-              data.timestamp = Date.now();
-              localStorage.setItem(AI_VIDEO_GENERATION_PREVIEW_CACHE_KEY, JSON.stringify(data));
-            } catch (error) {
-              console.warn('Failed to update cache timestamp:', error);
-            }
-          }
-          
-          console.log('Video dialog closing - selection should be preserved via ATTACHED_ELEMENT_CLASS_NAME');
-          
-          // 关闭对话框 - 选择状态应该会被保持，因为对话框有ATTACHED_ELEMENT_CLASS_NAME类
-          setAppState({
-            ...appState,
-            openDialogType: null,
-          });
-        }}
-        attach={container ? () => container : undefined}
-        header={(
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <span>{language === 'zh' ? 'AI 视频生成' : 'AI Video Generation'}</span>
-            <Select
-              value={selectedVideoModel}
-              onChange={(value) => handleVideoModelChange(value as string)}
-              options={VIDEO_MODEL_OPTIONS}
-              size="small"
-              style={{ width: '200px' }}
-              placeholder="选择视频模型"
-              filterable
-              creatable
-            />
-          </div>
-        )}
-        footer={false}
-        width="80%"
-        className={`ttd-dialog`}
-        closeOnOverlayClick={false}
-        showOverlay={true}
-        mode="modal"
-        preventScrollThrough={true}
-        closeBtn={true}
-        style={{ 
-          backgroundColor: '#ffffff',
-          color: '#333333'
-        } as React.CSSProperties}
+        title={language === 'zh' ? 'AI 视频生成' : 'AI Video Generation'}
+        onClose={handleVideoDialogClose}
+        width="60%"
+        height="60%"
+        minWidth={600}
+        minHeight={500}
+        x="center"
+        y="center"
+        modal={false}
+        minimizable={false}
+        className="winbox-ai-generation"
+        container={container}
+        headerContent={
+          <Select
+            value={selectedVideoModel}
+            onChange={(value) => handleVideoModelChange(value as string)}
+            options={VIDEO_MODEL_OPTIONS}
+            size="small"
+            style={{ width: '180px', marginLeft: '12px' }}
+            placeholder="选择视频模型"
+            filterable
+            creatable
+          />
+        }
       >
         <AIVideoGeneration
           initialPrompt={aiVideoData.initialPrompt}
@@ -433,7 +423,7 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
           initialDuration={appState.dialogInitialData?.duration}
           initialResultUrl={aiVideoData.initialResultUrl}
         />
-      </TDialog>}
+      </WinBoxWindow>
     </>
   );
 };

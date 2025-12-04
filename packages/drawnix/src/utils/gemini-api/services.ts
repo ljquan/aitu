@@ -144,7 +144,8 @@ export async function generateVideoWithGemini(
  */
 export async function chatWithGemini(
   prompt: string,
-  images: ImageInput[] = []
+  images: ImageInput[] = [],
+  onChunk?: (content: string) => void
 ): Promise<{
   response: GeminiResponse;
   processedContent: ProcessedContent;
@@ -202,12 +203,16 @@ export async function chatWithGemini(
     // 某些模型（如 seedream）在流式模式下可能返回不完整响应，使用非流式调用
     console.log(`模型 ${modelName} 使用非流式调用确保响应完整`);
     response = await callApiWithRetry(validatedConfig, messages);
-  } else if (images.length > 0) {
-    // 其他模型：图文混合使用流式调用
-    console.log('检测到图片输入，使用流式调用');
-    response = await callApiStreamRaw(validatedConfig, messages);
+    // Non-stream mode simulates one chunk at the end if callback is provided
+    if (onChunk && response.choices[0]?.message?.content) {
+      onChunk(response.choices[0].message.content);
+    }
+  } else if (images.length > 0 || onChunk) {
+    // 其他模型：图文混合或明确要求流式（提供了 onChunk）使用流式调用
+    console.log('使用流式调用');
+    response = await callApiStreamRaw(validatedConfig, messages, onChunk);
   } else {
-    // 纯文本可以使用非流式调用
+    // 纯文本且无流式回调，可以使用非流式调用
     response = await callApiWithRetry(validatedConfig, messages);
   }
 
@@ -219,4 +224,33 @@ export async function chatWithGemini(
     response,
     processedContent,
   };
+}
+
+/**
+ * 发送多轮对话消息
+ */
+export async function sendChatWithGemini(
+  messages: GeminiMessage[],
+  onChunk?: (content: string) => void,
+  signal?: AbortSignal
+): Promise<GeminiResponse> {
+  // 等待设置管理器初始化完成
+  await settingsManager.waitForInitialization();
+  
+  // 直接从设置中获取配置
+  const globalSettings = geminiSettings.get();
+  const config = {
+    ...DEFAULT_CONFIG,
+    ...globalSettings,
+    modelName: globalSettings.chatModel || 'gpt-4o-mini', // Use chatModel preference
+  };
+  const validatedConfig = await validateAndEnsureConfig(config);
+
+  // Use stream if callback provided
+  if (onChunk) {
+    return await callApiStreamRaw(validatedConfig, messages, onChunk, signal);
+  } else {
+    // Note: callApiWithRetry doesn't support signal yet, but for now ChatService uses onChunk
+    return await callApiWithRetry(validatedConfig, messages);
+  }
 }
