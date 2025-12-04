@@ -1,68 +1,137 @@
-import { useState, useEffect } from 'react';
-import { initializeData } from './initialize-data';
-import { Drawnix } from '@drawnix/drawnix';
+import { useState, useEffect, useCallback } from 'react';
+import {
+  Drawnix,
+  WorkspaceService,
+  migrateToWorkspace,
+  isWorkspaceMigrationCompleted,
+  Branch,
+  BoardChangeData,
+} from '@drawnix/drawnix';
 import { PlaitBoard, PlaitElement, PlaitTheme, Viewport } from '@plait/core';
-import localforage from 'localforage';
-import { OLD_DRAWNIX_LOCAL_DATA_KEY, DRAWNIX_STORE_NAME } from '@drawnix/drawnix';
-
-const MAIN_BOARD_CONTENT_KEY = 'main_board_content';
-
-localforage.config({
-  name: 'Drawnix',
-  storeName: DRAWNIX_STORE_NAME,
-  driver: [localforage.INDEXEDDB, localforage.LOCALSTORAGE],
-});
+import { initializeData } from './initialize-data';
 
 export function App() {
+  const [isLoading, setIsLoading] = useState(true);
   const [value, setValue] = useState<{
     children: PlaitElement[];
     viewport?: Viewport;
     theme?: PlaitTheme;
   }>({ children: [] });
 
+  // Initialize workspace and handle migration
   useEffect(() => {
-    const loadData = async () => {
-      const storedData = await localforage.getItem<{
-        children: PlaitElement[];
-        viewport?: Viewport;
-        theme?: PlaitTheme;
-      }>(MAIN_BOARD_CONTENT_KEY);
-      if (storedData) {
-        setValue(storedData);
-        return;
+    const initialize = async () => {
+      try {
+        const workspaceService = WorkspaceService.getInstance();
+        await workspaceService.initialize();
+
+        // Check and perform migration if needed
+        const migrated = await isWorkspaceMigrationCompleted();
+        if (!migrated) {
+          const branchId = await migrateToWorkspace();
+          if (branchId) {
+            console.log('[App] Migrated legacy data to workspace, branch:', branchId);
+          }
+        }
+
+        // Load current branch data if available
+        let currentBranch = workspaceService.getCurrentBranch();
+
+        // If no current branch and no projects exist, create default project with initializeData
+        if (!currentBranch && !workspaceService.hasProjects()) {
+          console.log('[App] First visit, creating default project with initial data');
+          const project = await workspaceService.createProject({
+            name: '默认画板',
+            elements: initializeData,
+          });
+
+          if (project) {
+            const branch = await workspaceService.switchBranch(project.defaultBranchId);
+            currentBranch = branch;
+            console.log('[App] Created default project:', project.name);
+          }
+        }
+
+        if (currentBranch) {
+          setValue({
+            children: currentBranch.elements || [],
+            viewport: currentBranch.viewport,
+            theme: currentBranch.theme,
+          });
+        }
+      } catch (error) {
+        console.error('[App] Initialization failed:', error);
+      } finally {
+        setIsLoading(false);
       }
-      const localData = localStorage.getItem(OLD_DRAWNIX_LOCAL_DATA_KEY);
-      if (localData) {
-        const parsedData = JSON.parse(localData);
-        setValue(parsedData);
-        await localforage.setItem(MAIN_BOARD_CONTENT_KEY, parsedData);
-        localStorage.removeItem(OLD_DRAWNIX_LOCAL_DATA_KEY);
-        return;
-      }
-      setValue({ children: initializeData });
     };
 
-    loadData();
+    initialize();
   }, []);
+
+  // Handle branch switching
+  const handleBranchSwitch = useCallback((branch: Branch) => {
+    console.log('[App] Branch switched:', branch.name);
+    setValue({
+      children: branch.elements || [],
+      viewport: branch.viewport,
+      theme: branch.theme,
+    });
+  }, []);
+
+  // Handle board changes (auto-save)
+  const handleBoardChange = useCallback(
+    (data: BoardChangeData) => {
+      setValue(data);
+
+      // Save to current branch
+      const workspaceService = WorkspaceService.getInstance();
+      workspaceService.saveCurrentBranch(data).catch((err: Error) => {
+        console.error('[App] Failed to save branch:', err);
+      });
+    },
+    []
+  );
+
+  if (isLoading) {
+    return (
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: '100vh',
+        }}
+      >
+        加载中...
+      </div>
+    );
+  }
+
   return (
-    <Drawnix
-      value={value.children}
-      viewport={value.viewport}
-      theme={value.theme}
-      onChange={(value) => {
-        localforage.setItem(MAIN_BOARD_CONTENT_KEY, value);
-        setValue(value);
-      }}
-      afterInit={(board) => {
-        console.log('board initialized');
-        console.log(
-          `add __drawnix__web__debug_log to window, so you can call add log anywhere, like: window.__drawnix__web__console('some thing')`
-        );
-        (window as unknown as { __drawnix__web__console: (value: string) => void })['__drawnix__web__console'] = (value: string) => {
-          addDebugLog(board, value);
-        };
-      }}
-    ></Drawnix>
+    <div style={{ height: '100vh' }}>
+      <Drawnix
+        value={value.children}
+        viewport={value.viewport}
+        theme={value.theme}
+        onChange={handleBoardChange}
+        enableWorkspace={true}
+        onBranchSwitch={handleBranchSwitch}
+        afterInit={(board) => {
+          console.log('board initialized');
+          console.log(
+            `add __drawnix__web__debug_log to window, so you can call add log anywhere, like: window.__drawnix__web__console('some thing')`
+          );
+          (
+            window as unknown as {
+              __drawnix__web__console: (value: string) => void;
+            }
+          )['__drawnix__web__console'] = (value: string) => {
+            addDebugLog(board, value);
+          };
+        }}
+      />
+    </div>
   );
 }
 
