@@ -97,7 +97,8 @@
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
   transition: all 0.2s ease;
   height: 36px;
-  min-width: 200px;
+  max-width: 100%;
+  flex-shrink: 1;
 
   &:hover {
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
