@@ -5,7 +5,7 @@
  * Displays task count badge and provides expand/collapse functionality
  */
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Badge, Tooltip } from 'tdesign-react';
 import { TaskQueuePanel } from './TaskQueuePanel';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
@@ -30,11 +30,15 @@ export const TaskToolbarButton: React.FC<TaskToolbarButtonProps> = ({
   onExpandChange
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const hasEverExpanded = useRef(false);
   const { activeTasks, completedTasks, failedTasks } = useTaskQueue();
   const { t } = useI18n();
 
   const handleToggle = () => {
     const newExpanded = !isExpanded;
+    if (newExpanded && !hasEverExpanded.current) {
+      hasEverExpanded.current = true;
+    }
     setIsExpanded(newExpanded);
     onExpandChange?.(newExpanded);
   };
@@ -52,8 +56,8 @@ export const TaskToolbarButton: React.FC<TaskToolbarButtonProps> = ({
 
   return (
     <>
-      {/* Task Queue Panel */}
-      <TaskQueuePanel expanded={isExpanded} onClose={handleClose} />
+      {/* Task Queue Panel - Only render after first expand */}
+      {hasEverExpanded.current && <TaskQueuePanel expanded={isExpanded} onClose={handleClose} />}
 
       {/* Embedded Task Button */}
       <Tooltip content={tooltipContent} placement="right" theme="light">

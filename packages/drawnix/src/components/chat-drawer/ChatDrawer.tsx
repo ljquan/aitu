@@ -85,6 +85,45 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = React.memo(
       });
     }, [isOpen, activeSessionId]);
 
+    // Send pending message when session is ready
+    useEffect(() => {
+      if (activeSessionId && pendingMessageRef.current) {
+        const msg = pendingMessageRef.current;
+        pendingMessageRef.current = null;
+        // Use setTimeout to ensure handler is updated
+        setTimeout(() => {
+          chatHandler.sendMessage(msg);
+        }, 100);
+      }
+    }, [activeSessionId, chatHandler]);
+
+    // Send pending message when API key is configured and settings dialog closes
+    useEffect(() => {
+      // When settings dialog closes, check if we have a pending message and API key
+      if (!appState.openSettings && pendingMessageRef.current) {
+        const settings = geminiSettings.get();
+        if (settings?.apiKey) {
+          const msg = pendingMessageRef.current;
+          pendingMessageRef.current = null;
+          // If there's no active session, create one first
+          if (!activeSessionId) {
+            (async () => {
+              const newSession = await chatStorageService.createSession();
+              setSessions((prev) => [newSession, ...prev]);
+              setActiveSessionId(newSession.id);
+              // Store message again for the session effect to pick up
+              pendingMessageRef.current = msg;
+            })();
+          } else {
+            // Send immediately if session exists
+            setTimeout(() => {
+              chatHandler.sendMessage(msg);
+            }, 100);
+          }
+        }
+      }
+    }, [appState.openSettings, activeSessionId, chatHandler]);
+
     // Handle Escape key to close drawer
     useEffect(() => {
       const handleKeyDown = (e: KeyboardEvent) => {
@@ -183,27 +222,34 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = React.memo(
       [activeSessionId]
     );
 
+    // Store pending message for retry after session creation or API key config
+    const pendingMessageRef = React.useRef<Message | null>(null);
+
     // Handle send with auto-create session
     const handleSendWrapper = useCallback(
       async (msg: Message) => {
         // Check if API key is configured
         const settings = geminiSettings.get();
         if (!settings?.apiKey) {
+          // Store message for sending after API key is configured
+          pendingMessageRef.current = msg;
           // Open settings dialog to configure API key
           setAppState({ ...appState, openSettings: true });
           return;
         }
 
+        // Clear pending message since we're processing it
+        pendingMessageRef.current = null;
+
         if (!activeSessionId) {
           const newSession = await chatStorageService.createSession();
           setSessions((prev) => [newSession, ...prev]);
           setActiveSessionId(newSession.id);
-          // Wait for state update then send
-          setTimeout(() => {
-            chatHandler.sendMessage(msg);
-          }, 50);
+          // Store message to send after session is created
+          pendingMessageRef.current = msg;
           return;
         }
+
         await chatHandler.sendMessage(msg);
       },
       [activeSessionId, chatHandler, appState, setAppState]
