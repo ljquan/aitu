@@ -54,6 +54,7 @@ export const TaskToolbar: React.FC<TaskToolbarProps> = ({ onExpandChange }) => {
       <Tooltip content={tooltipContent} placement="right" theme="light">
         <div
           className={`task-toolbar-fab ${isExpanded ? 'task-toolbar-fab--expanded' : ''}`}
+          data-track="task_click_fab_toggle"
           onClick={handleToggle}
         >
           <Badge count={activeTasks.length > 0 ? activeTasks.length : 0} showZero={false}>

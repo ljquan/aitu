@@ -530,6 +530,7 @@ const AIImageGeneration = ({
         {generatedImage && (
           <div className="section-actions">
             <button
+              data-track="ai_click_image_clear"
               onClick={() => {
                 setGeneratedImage(null);
                 try {
@@ -544,6 +545,7 @@ const AIImageGeneration = ({
               {language === 'zh' ? '清除' : 'Clear'}
             </button>
             <button
+              data-track="ai_click_image_insert"
               onClick={async () => {
                 if (generatedImage) {
                   try {
@@ -595,6 +597,7 @@ const AIImageGeneration = ({
               }
             </button>
             <button
+              data-track="ai_click_image_download"
               onClick={async () => {
                 if (generatedImage) {
                   try {

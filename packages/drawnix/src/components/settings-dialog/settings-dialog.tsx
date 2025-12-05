@@ -142,12 +142,14 @@ export const SettingsDialog = ({
         <div className="settings-dialog__actions">
           <button
             className="settings-dialog__button settings-dialog__button--cancel"
+            data-track="settings_click_cancel"
             onClick={handleCancel}
           >
             {t('settings.cancel')}
           </button>
           <button
             className="settings-dialog__button settings-dialog__button--save"
+            data-track="settings_click_save"
             onClick={handleSave}
           >
             {t('settings.save')}

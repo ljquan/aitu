@@ -122,12 +122,14 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
               value={inputValue}
               onChange={handleInputChange}
               onBlur={handleBlur}
+              data-track="ai_click_quantity_input"
               onClick={() => !isGenerating && setIsOpen(true)}
               disabled={isGenerating}
               className="quantity-input"
             />
             <button
               type="button"
+              data-track="ai_click_quantity_toggle"
               onClick={(e) => {
                 e.stopPropagation();
                 toggleDropdown();
@@ -159,6 +161,7 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
                 <button
                   key={preset}
                   type="button"
+                  data-track="ai_click_quantity_select"
                   onClick={() => handleSelect(preset)}
                   className={`quantity-option ${quantity === preset ? 'is-selected' : ''}`}
                 >
@@ -184,6 +187,7 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
 
         {/* Right Side: Generate Button */}
         <button
+          data-track="ai_click_generate"
           onClick={handleGenerateClick}
           disabled={isGenerating || !canGenerate}
           className={`generate-button ${isGenerating ? 'loading' : ''}`}
@@ -200,6 +204,7 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
 
       {/* Reset Button */}
       <button
+        data-track="ai_click_reset"
         onClick={onReset}
         disabled={isGenerating}
         className="action-button secondary"

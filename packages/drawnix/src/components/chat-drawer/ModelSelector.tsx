@@ -143,6 +143,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = React.memo(
         <button
           ref={triggerRef}
           className={`model-selector__trigger ${isOpen ? 'model-selector__trigger--active' : ''}`}
+          data-track="chat_click_model_selector"
           onClick={handleToggle}
           aria-label="选择模型"
           aria-expanded={isOpen}
@@ -191,6 +192,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = React.memo(
                             ? 'model-selector__item--active'
                             : ''
                         }`}
+                        data-track="chat_click_model_select"
                         onClick={() => handleSelectModel(model.id)}
                       >
                         <ProviderIcon

@@ -19,6 +19,7 @@ export const ThemeToolbar: React.FC<ToolbarSectionProps> = ({
   
   const content = (
       <select
+        data-track="toolbar_click_theme"
         onChange={(e) => {
           const value = (e.target as HTMLSelectElement).value;
           BoardTransforms.updateThemeColor(board, value as ThemeColorMode);

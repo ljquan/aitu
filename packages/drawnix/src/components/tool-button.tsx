@@ -19,6 +19,7 @@ type ToolButtonBaseProps = {
   'aria-label': string;
   'aria-keyshortcuts'?: string;
   'data-testid'?: string;
+  'data-track'?: string;
   label?: string;
   title?: string;
   name?: string;
@@ -126,6 +127,7 @@ export const ToolButton = React.forwardRef((props: ToolButtonProps, ref) => {
         )}
         style={props.style}
         data-testid={props['data-testid']}
+        data-track={props['data-track']}
         hidden={props.hidden}
         aria-label={props['aria-label']}
         type={type}
@@ -186,6 +188,7 @@ export const ToolButton = React.forwardRef((props: ToolButtonProps, ref) => {
   const labelElement = (
     <label
       className={classNames('tool-icon', props.className)}
+      data-track={props['data-track']}
       onPointerDown={(event) => {
         lastPointerTypeRef.current = event.pointerType || null;
         props.onPointerDown?.({

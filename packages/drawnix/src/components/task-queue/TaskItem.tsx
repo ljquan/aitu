@@ -276,7 +276,7 @@ export const TaskItem: React.FC<TaskItemProps> = ({
 
       {/* Center: Preview Image/Video */}
       {isCompleted && mediaUrl && (
-        <div className="task-item__preview" onClick={onPreviewOpen}>
+        <div className="task-item__preview" data-track="task_click_preview" onClick={onPreviewOpen}>
           {task.type === TaskType.IMAGE ? (
             <RetryImage
               src={mediaUrl}
@@ -318,6 +318,7 @@ export const TaskItem: React.FC<TaskItemProps> = ({
           variant="outline"
           theme="danger"
           icon={<DeleteIcon />}
+          data-track="task_click_delete"
           onClick={() => onDelete?.(task.id)}
         >
           删除
@@ -330,6 +331,7 @@ export const TaskItem: React.FC<TaskItemProps> = ({
             variant="outline"
             theme="primary"
             icon={<RefreshIcon />}
+            data-track="task_click_retry"
             onClick={() => onRetry?.(task.id)}
           >
             重试
@@ -341,6 +343,7 @@ export const TaskItem: React.FC<TaskItemProps> = ({
           <Button
             size="small"
             theme="primary"
+            data-track="task_click_insert"
             onClick={() => onInsert?.(task.id)}
           >
             插入
@@ -353,6 +356,7 @@ export const TaskItem: React.FC<TaskItemProps> = ({
             size="small"
             variant="outline"
             icon={<DownloadIcon />}
+            data-track="task_click_download"
             onClick={() => onDownload?.(task.id)}
           >
             下载
@@ -367,6 +371,7 @@ export const TaskItem: React.FC<TaskItemProps> = ({
               variant="outline"
               theme={isCached ? 'success' : 'default'}
               icon={isCached ? <CheckCircleFilledIcon /> : <SaveIcon />}
+              data-track="task_click_cache"
               onClick={handleCacheClick}
               disabled={isCaching}
             >
@@ -380,6 +385,7 @@ export const TaskItem: React.FC<TaskItemProps> = ({
           size="small"
           variant="outline"
           icon={<EditIcon />}
+          data-track="task_click_edit"
           onClick={() => onEdit?.(task.id)}
         >
           编辑

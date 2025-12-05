@@ -17,7 +17,6 @@ import {
 } from '@plait/core';
 import { loadFromJSON, saveAsJSON } from '../../../data/json';
 import MenuItem from '../../menu/menu-item';
-import MenuItemLink from '../../menu/menu-item-link';
 import { saveAsImage } from '../../../utils/image';
 import { useDrawnix } from '../../../hooks/use-drawnix';
 import { useI18n } from '../../../i18n';
@@ -32,6 +31,7 @@ export const SaveToFile = () => {
   return (
     <MenuItem
       data-testid="save-button"
+      data-track="toolbar_click_menu_save"
       onSelect={() => {
         saveAsJSON(board);
       }}
@@ -65,6 +65,7 @@ export const OpenFile = () => {
   return (
     <MenuItem
       data-testid="open-button"
+      data-track="toolbar_click_menu_open"
       onSelect={() => {
         loadFromJSON(board).then((data) => {
           clearAndLoad(data.elements, data.viewport);
@@ -85,6 +86,7 @@ export const SaveAsImage = () => {
     <MenuItem
       icon={ExportImageIcon}
       data-testid="image-export-button"
+      data-track="toolbar_click_menu_export"
       onSelect={() => {
         saveAsImage(board, true);
       }}
@@ -97,6 +99,7 @@ export const SaveAsImage = () => {
           menuContentProps.onSelect?.(itemSelectEvent);
         }}>
           <MenuItem
+            data-track="toolbar_click_menu_export_png"
             onSelect={() => {
               saveAsImage(board, true);
             }}
@@ -105,6 +108,7 @@ export const SaveAsImage = () => {
             {t('menu.exportImage.png')}
           </MenuItem>
           <MenuItem
+            data-track="toolbar_click_menu_export_jpg"
             onSelect={() => {
               saveAsImage(board, false);
             }}
@@ -130,6 +134,7 @@ export const CleanBoard = () => {
     <MenuItem
       icon={TrashIcon}
       data-testid="reset-button"
+      data-track="toolbar_click_menu_clean"
       onSelect={() => {
         setAppState({
           ...appState,
@@ -151,6 +156,7 @@ export const Settings = () => {
   return (
     <MenuItem
       icon={SettingsIcon}
+      data-track="toolbar_click_menu_settings"
       onSelect={() => {
         setAppState({
           ...appState,
@@ -170,6 +176,7 @@ export const GitHubLink = () => {
   return (
     <MenuItem
       icon={GithubIcon}
+      data-track="toolbar_click_menu_github"
       onSelect={() => {
         window.open('https://github.com/ljquan/aitu', '_blank');
       }}

@@ -4,6 +4,7 @@ import react from '@vitejs/plugin-react';
 import dts from 'vite-plugin-dts';
 import * as path from 'path';
 import { nxViteTsPaths } from '@nx/vite/plugins/nx-tsconfig-paths.plugin';
+import packageJson from './package.json';
 
 export default defineConfig({
   root: __dirname,
@@ -17,6 +18,11 @@ export default defineConfig({
       tsconfigPath: path.join(__dirname, 'tsconfig.lib.json'),
     }),
   ],
+
+  // Inject version number as environment variable
+  define: {
+    'import.meta.env.VITE_APP_VERSION': JSON.stringify(packageJson.version),
+  },
 
   // Uncomment this if you are using workers.
   // worker: {

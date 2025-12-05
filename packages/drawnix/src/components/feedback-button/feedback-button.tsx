@@ -29,7 +29,7 @@ export const FeedbackButton: React.FC = () => {
     <div className="feedback-button-container">
       <Popover placement="right-end" sideOffset={12}>
         <PopoverTrigger asChild>
-          <button className="feedback-button">
+          <button className="feedback-button" data-track="toolbar_click_feedback">
             <ChatIcon size={22} />
           </button>
         </PopoverTrigger>

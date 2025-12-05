@@ -44,6 +44,7 @@ export const PromptInput: React.FC<PromptInputProps> = ({
                   key={index}
                   type="button"
                   className="preset-item"
+                  data-track="ai_click_prompt_preset"
                   onClick={() => {
                     onPromptChange(preset);
                     onError?.(null);

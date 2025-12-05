@@ -340,6 +340,7 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
           <Button
             className="task-queue-panel__close-btn"
             icon={<CloseIcon />}
+            data-track="task_click_panel_close"
             onClick={onClose}
             size="large"
             shape="circle"
@@ -378,6 +379,7 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
                 variant="text"
                 theme="danger"
                 icon={<DeleteIcon />}
+                data-track="task_click_clear_failed"
                 onClick={() => handleClear('failed')}
               >
                 清除失败
@@ -416,8 +418,9 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
 
       {/* Backdrop overlay */}
       {expanded && (
-        <div 
+        <div
           className="task-queue-panel__backdrop"
+          data-track="task_click_backdrop_close"
           onClick={onClose}
         />
       )}
@@ -467,6 +470,7 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
             <Button
               className="task-preview-nav task-preview-nav--left"
               icon={<ChevronLeftIcon />}
+              data-track="task_click_preview_previous"
               onClick={handlePreviewPrevious}
               size="large"
               shape="circle"
@@ -477,6 +481,7 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
             <Button
               className="task-preview-nav task-preview-nav--right"
               icon={<ChevronRightIcon />}
+              data-track="task_click_preview_next"
               onClick={handlePreviewNext}
               size="large"
               shape="circle"

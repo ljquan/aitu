@@ -35,6 +35,7 @@ export const ZoomToolbar: React.FC<ToolbarSectionProps> = ({
           visible={true}
           title={t('zoom.out')}
           aria-label={t('zoom.out')}
+          data-track="toolbar_click_zoom_out"
           onPointerUp={() => {
             BoardTransforms.updateZoom(board, board.viewport.zoom - 0.1);
           }}
@@ -53,6 +54,7 @@ export const ZoomToolbar: React.FC<ToolbarSectionProps> = ({
               key={1}
               title={t('zoom.fit')}
               aria-label={t('zoom.fit')}
+              data-track="toolbar_click_zoom_menu"
               className={classNames('zoom-menu-trigger', {
                 active: zoomMenuOpen,
               })}
@@ -71,6 +73,7 @@ export const ZoomToolbar: React.FC<ToolbarSectionProps> = ({
             >
               <MenuItem
                 data-testid="open-button"
+                data-track="toolbar_click_zoom_fit"
                 onSelect={() => {
                   BoardTransforms.fitViewport(board);
                 }}
@@ -79,6 +82,7 @@ export const ZoomToolbar: React.FC<ToolbarSectionProps> = ({
               >{t('zoom.fit')}</MenuItem>
               <MenuItem
                 data-testid="open-button"
+                data-track="toolbar_click_zoom_100"
                 onSelect={() => {
                   BoardTransforms.updateZoom(board, 1);
                 }}
@@ -95,6 +99,7 @@ export const ZoomToolbar: React.FC<ToolbarSectionProps> = ({
           visible={true}
           title={t('zoom.in')}
           aria-label={t('zoom.in')}
+          data-track="toolbar_click_zoom_in"
           onPointerUp={() => {
             BoardTransforms.updateZoom(board, board.viewport.zoom + 0.1);
           }}
