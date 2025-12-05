@@ -596,6 +596,7 @@
 
 // Task Preview Dialog
 .task-preview-dialog {
+    z-index: $z-dialog!important; // 确保在panel之上
   .task-preview-container {
     position: relative;
     display: flex;
