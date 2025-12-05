@@ -575,36 +575,7 @@ $spacing-xl: 24px;
 // Mobile Styles
 // ============================================================================
 
-@media (max-width: 768px) {
-  .chat-drawer {
-    width: calc(100vw - $toolbar-width);
-    border-left: none;
 
-    &--open {
-      transform: translateX(0);
-    }
-  }
-
-  .chat-drawer-trigger {
-    bottom: 80px;
-    top: auto;
-    right: $spacing-lg;
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-    border: 1px solid var(--td-component-border);
-    transform: none;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-
-    &:hover {
-      width: 48px;
-    }
-  }
-
-  .message-item__actions {
-    opacity: 1;
-  }
-}
 
 // ============================================================================
 // @llamaindex/chat-ui Component Styles

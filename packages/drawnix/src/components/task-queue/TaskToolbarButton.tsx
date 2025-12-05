@@ -59,6 +59,7 @@ export const TaskToolbarButton: React.FC<TaskToolbarButtonProps> = ({
       <Tooltip content={tooltipContent} placement="right" theme="light">
         <div
           className={`task-toolbar-button ${isExpanded ? 'task-toolbar-button--expanded' : ''} ${iconMode ? 'task-toolbar-button--icon-only' : ''}`}
+          data-track="toolbar_click_tasks"
           onClick={handleToggle}
         >
           <Badge count={activeTasks.length > 0 ? activeTasks.length : 0} showZero={false}>

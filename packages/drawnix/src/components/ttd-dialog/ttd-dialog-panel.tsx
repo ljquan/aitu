@@ -42,6 +42,7 @@ export const TTDDialogPanel = ({
       >
         <button
           className="ttd-dialog-panel-button drawnix-button "
+          data-track="ttd_click_panel_action"
           onClick={panelAction && panelAction.action}
           disabled={panelActionDisabled || onTextSubmitInProgress}
         >

@@ -58,6 +58,7 @@ export const AppToolbar: React.FC<ToolbarSectionProps> = ({
               icon={MenuIcon}
               title={t('general.menu')}
               aria-label={t('general.menu')}
+              data-track="toolbar_click_menu"
               onPointerDown={() => {
                 setAppMenuOpen(!appMenuOpen);
               }}
@@ -88,6 +89,7 @@ export const AppToolbar: React.FC<ToolbarSectionProps> = ({
           visible={true}
           title={t('general.undo')}
           aria-label={t('general.undo')}
+          data-track="toolbar_click_undo"
           onPointerUp={() => {
             board.undo();
           }}
@@ -100,6 +102,7 @@ export const AppToolbar: React.FC<ToolbarSectionProps> = ({
                     visible={true}
                     title={t('general.redo')}
                     aria-label={t('general.redo')}
+                    data-track="toolbar_click_redo"
                     onPointerUp={() => {
                       board.redo();
                     }}

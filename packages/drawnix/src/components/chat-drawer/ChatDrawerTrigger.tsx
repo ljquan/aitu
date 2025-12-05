@@ -19,6 +19,7 @@ export const ChatDrawerTrigger: React.FC<ChatDrawerTriggerProps> = React.memo(
       <Tooltip content={isOpen ? '收起对话' : '展开对话'} theme="light">
         <button
           className={`chat-drawer-trigger ${isOpen ? 'chat-drawer-trigger--active' : ''}`}
+          data-track={isOpen ? 'chat_click_drawer_close' : 'chat_click_drawer_open'}
           onClick={onClick}
           aria-label={isOpen ? '收起对话' : '展开对话'}
           aria-expanded={isOpen}

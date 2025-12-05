@@ -43,6 +43,7 @@ export const SessionItem: React.FC<SessionItemProps> = React.memo(
     return (
       <div
         className={`session-item ${isActive ? 'session-item--active' : ''}`}
+        data-track="chat_click_session_select"
         onClick={handleClick}
         role="button"
         tabIndex={0}
@@ -54,6 +55,7 @@ export const SessionItem: React.FC<SessionItemProps> = React.memo(
         </div>
         <button
           className="session-item__delete"
+          data-track="chat_click_session_delete"
           onClick={handleDelete}
           aria-label={`删除会话: ${session.title}`}
         >

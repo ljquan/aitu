@@ -140,6 +140,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
                   </div>
                   <button
                     type="button"
+                    data-track="ai_click_image_remove"
                     onClick={() => removeImage(index)}
                     className="remove-image-btn"
                     disabled={disabled}

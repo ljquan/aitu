@@ -80,6 +80,7 @@ export const ColorPicker = React.forwardRef((props: ColorPickerProps, ref) => {
                         ? WHITE
                         : DEFAULT_COLOR,
                     }}
+                    data-track="toolbar_click_color_select"
                     onClick={() => {
                       setSelectedColor(color.value);
                       if (color.value === NO_COLOR) {

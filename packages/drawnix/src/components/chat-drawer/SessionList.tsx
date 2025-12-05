@@ -42,6 +42,7 @@ export const SessionList: React.FC<SessionListProps> = React.memo(
           <span className="session-list__title">会话列表</span>
           <button
             className="session-list__new-btn"
+            data-track="chat_click_session_new"
             onClick={onNewSession}
             aria-label="新建会话"
           >

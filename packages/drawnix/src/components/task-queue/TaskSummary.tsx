@@ -38,7 +38,7 @@ export const TaskSummary: React.FC<TaskSummaryProps> = ({
   onClick,
 }) => {
   return (
-    <div className="task-summary" onClick={onClick}>
+    <div className="task-summary" data-track="task_click_summary" onClick={onClick}>
       {activeCount > 0 && (
         <div className="task-summary__item task-summary__item--active">
           <span className="task-summary__label">生成中:</span>

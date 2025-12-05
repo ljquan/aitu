@@ -409,6 +409,7 @@ export const CreationToolbar: React.FC<ToolbarSectionProps> = ({
               icon={displayIcon}
               title={displayTitle}
               aria-label={displayTitle}
+              data-track={`toolbar_click_${popupKey}`}
               onPointerDown={() => {
                 showPopover(popupKey);
                 if (popupKey === PopupKey.freehand && lastFreehandButton.pointer) {
@@ -445,6 +446,7 @@ export const CreationToolbar: React.FC<ToolbarSectionProps> = ({
         checked={isChecked(button)}
         title={button.titleKey ? t(button.titleKey as keyof Translations) : ''}
         aria-label={button.titleKey ? t(button.titleKey as keyof Translations) : ''}
+        data-track={`toolbar_click_${button.pointer || button.key}`}
         onPointerDown={() => {
           if (button.pointer && !isBasicPointer(button.pointer)) {
             onPointerDown(button.pointer);

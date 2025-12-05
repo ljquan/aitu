@@ -38,6 +38,7 @@ import { buildTextLinkPlugin } from './plugins/with-text-link';
 import { LinkPopup } from './components/popup/link-popup/link-popup';
 import { I18nProvider } from './i18n';
 import { withVideo } from './plugins/with-video';
+import { withTracking } from './plugins/tracking';
 import { ActiveTaskWarning } from './components/task-queue/ActiveTaskWarning';
 import { useTaskStorage } from './hooks/useTaskStorage';
 import { useTaskExecutor } from './hooks/useTaskExecutor';
@@ -125,6 +126,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
     buildPencilPlugin(updateAppState),
     buildTextLinkPlugin(updateAppState),
     withVideo,
+    withTracking,
   ];
 
   const containerRef = useRef<HTMLDivElement>(null);

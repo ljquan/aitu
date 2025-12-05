@@ -101,6 +101,7 @@ export const SizeSlider: React.FC<SliderProps> = ({
       <div
         ref={sliderRef}
         className="slider-track"
+        data-track="toolbar_click_size_slider"
         onClick={(event) => {
           if (disabled || isDragging) {
             return;

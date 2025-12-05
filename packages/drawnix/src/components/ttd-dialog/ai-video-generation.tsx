@@ -501,6 +501,7 @@ const AIVideoGeneration = ({
         {generatedVideo && (
           <div className="section-actions">
             <button
+              data-track="ai_click_video_clear"
               onClick={() => {
                 // 暂停并清理视频
                 if (videoRef.current) {
@@ -522,6 +523,7 @@ const AIVideoGeneration = ({
               {language === 'zh' ? '清除' : 'Clear'}
             </button>
             <button
+              data-track="ai_click_video_insert"
               onClick={async () => {
                 if (generatedVideo) {
                   try {
@@ -578,6 +580,7 @@ const AIVideoGeneration = ({
               }
             </button>
             <button
+              data-track="ai_click_video_download"
               onClick={async () => {
                 if (generatedVideo) {
                   try {

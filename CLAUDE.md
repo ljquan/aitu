@@ -92,6 +92,7 @@ Aitu (爱图) is an open-source whiteboard application built on the Plait framew
 - **Tooltips**: Always use `theme='light'` for TDesign tooltips
 - **File Size Limit**: Single files must not exceed 500 lines (including comments and blank lines)
 - **Documentation**: SpecKit-generated markdown documents should be in Chinese (中文)
+- **Declarative Tracking**: Use `data-track` attribute for event tracking (see Analytics section below)
 
 ### Coding Standards
 
@@ -187,3 +188,75 @@ Full coding standards are documented in `docs/CODING_STANDARDS.md`. Key highligh
 - Task management: Async queue with retry logic (`task-queue-service.ts`)
 - Media caching: IndexedDB-based cache (`media-cache-service.ts`)
 - All services use RxJS for reactive state management
+
+### Analytics & Tracking
+
+**Declarative Tracking System** (`packages/drawnix/src/services/tracking/`)
+
+The project uses a dual-approach analytics system powered by Umami:
+
+#### 1. Manual Tracking (Business Events)
+For AI generation, API calls, and complex business logic:
+```typescript
+import { analytics } from '../utils/umami-analytics';
+
+// Track AI generation events
+analytics.trackAIGeneration(AIGenerationEvent.IMAGE_GENERATION_START, {
+  taskId: task.id,
+  model: 'gemini-pro',
+  duration: 2500,
+});
+```
+
+#### 2. Declarative Tracking (UI Interactions)
+For buttons, links, and UI elements - add `data-track` attribute:
+```tsx
+// ✅ Correct - Use data-track attribute
+<button data-track="button_click_save">Save</button>
+<ToolButton data-track="toolbar_click_undo" />
+<MenuItem data-track="menu_item_export" />
+
+// ❌ Wrong - Don't use custom track attribute
+<button track="button_click_save">Save</button>
+```
+
+**Key Features:**
+- **Automatic Event Capture**: No manual `analytics.track()` calls needed
+- **Batch Upload**: Queues up to 10 events OR 5 seconds before sending
+- **Retry Mechanism**: Re-queues failed events for automatic retry
+- **Debouncing**: Prevents duplicate events within 1 second
+- **Rich Metadata**: Auto-injects version, url, sessionId, viewport, eventType
+
+**Event Naming Convention:**
+- Pattern: `{area}_{action}_{target}`
+- Examples: `toolbar_click_save`, `menu_item_export`, `button_hover_feature`
+- Use snake_case for consistency with Umami
+
+**Architecture:**
+```
+UI Element (data-track="event_name")
+  ↓
+TrackingService (event delegation)
+  ↓
+Metadata Injection + Debouncing
+  ↓
+BatchService (queue)
+  ↓
+UmamiAdapter → analytics.track()
+  ↓
+window.umami.track()
+  ↓
+Umami Server
+```
+
+**Documentation:**
+- Implementation: `specs/005-declarative-tracking/IMPLEMENTATION.md`
+- Integration: `specs/005-declarative-tracking/INTEGRATION.md`
+- Toolbar Events: `specs/005-declarative-tracking/TOOLBAR_TRACKING.md`
+
+## Active Technologies
+- TypeScript 5.x (strict mode) (005-declarative-tracking)
+- RxJS - Reactive state management for tracking service (005-declarative-tracking)
+
+## Recent Changes
+- 005-declarative-tracking: Added TypeScript 5.x (strict mode)

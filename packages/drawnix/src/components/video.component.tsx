@@ -64,7 +64,7 @@ export const VideoComponent: React.FC<VideoComponentProps> = ({
 
   if (videoError) {
     return (
-      <div style={containerStyle} onClick={handleVideoClick}>
+      <div style={containerStyle} data-track="video_click_open" onClick={handleVideoClick}>
         <div style={{
           display: 'flex',
           flexDirection: 'column',
@@ -87,7 +87,7 @@ export const VideoComponent: React.FC<VideoComponentProps> = ({
   }
 
   return (
-    <div style={containerStyle} onClick={handleVideoClick}>
+    <div style={containerStyle} data-track="video_click_open" onClick={handleVideoClick}>
       {isLoading && (
         <div style={{
           position: 'absolute',

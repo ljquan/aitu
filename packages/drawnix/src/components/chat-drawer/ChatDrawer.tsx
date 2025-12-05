@@ -237,6 +237,7 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = React.memo(
                 <button
                   ref={toggleButtonRef}
                   className={`chat-drawer__close-btn ${showSessions ? 'chat-drawer__close-btn--active' : ''}`}
+                  data-track="chat_click_sessions_toggle"
                   onClick={handleToggleSessions}
                   aria-label="会话列表"
                 >
@@ -246,6 +247,7 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = React.memo(
               <Tooltip content="新对话" theme="light">
                 <button
                   className="chat-drawer__close-btn"
+                  data-track="chat_click_new_session"
                   onClick={handleNewSession}
                   aria-label="新对话"
                 >
@@ -255,6 +257,7 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = React.memo(
               <Tooltip content="关闭" theme="light">
                 <button
                   className="chat-drawer__close-btn"
+                  data-track="chat_click_drawer_close"
                   onClick={handleClose}
                   aria-label="关闭对话"
                 >
