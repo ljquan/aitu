@@ -1,3 +1,14 @@
+## 0.2.9 (2025-12-05)
+
+### 🚀 Features
+
+- 统一应用版本管理并添加全局版本变量 ([b57d947](https://github.com/ljquan/aitu/commit/b57d947))
+- add declarative tracking specification and task breakdown ([53f18c7](https://github.com/ljquan/aitu/commit/53f18c7))
+
+### ❤️  Thank You
+
+- liquidliang <ljquan@qq.com>
+
 ## 0.2.8 (2025-12-05)
 
 ### 🚀 Features
