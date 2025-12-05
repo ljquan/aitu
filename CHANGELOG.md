@@ -1,3 +1,13 @@
+## 0.2.11 (2025-12-05)
+
+### 🔧 Chores
+
+- 优化升级逻辑 ([d03710d](https://github.com/ljquan/aitu/commit/d03710d))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+
 ## 0.2.10 (2025-12-05)
 
 ### 🔧 Chores
