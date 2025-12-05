@@ -39,11 +39,15 @@ import { LinkPopup } from './components/popup/link-popup/link-popup';
 import { I18nProvider } from './i18n';
 import { withVideo } from './plugins/with-video';
 import { ActiveTaskWarning } from './components/task-queue/ActiveTaskWarning';
+import { TaskToolbar } from './components/task-queue/TaskToolbar';
 import { useTaskStorage } from './hooks/useTaskStorage';
 import { useTaskExecutor } from './hooks/useTaskExecutor';
 import { useBeforeUnload } from './hooks/useBeforeUnload';
 import { FeedbackButton } from './components/feedback-button';
 import { ChatDrawer } from './components/chat-drawer';
+import { ProjectSidebar } from './components/project-sidebar';
+import { useWorkspace } from './hooks/useWorkspace';
+import { Branch } from './types/workspace.types';
 
 export type DrawnixProps = {
   value: PlaitElement[];
@@ -55,7 +59,11 @@ export type DrawnixProps = {
   onViewportChange?: (value: Viewport) => void;
   onThemeChange?: (value: ThemeColorMode) => void;
   afterInit?: (board: PlaitBoard) => void;
-} & React.HTMLAttributes<HTMLDivElement>;
+  /** Enable workspace sidebar */
+  enableWorkspace?: boolean;
+  /** Called when branch is switched */
+  onBranchSwitch?: (branch: Branch) => void;
+} & Omit<React.HTMLAttributes<HTMLDivElement>, 'onChange'>;
 
 export const Drawnix: React.FC<DrawnixProps> = ({
   value,
@@ -67,6 +75,8 @@ export const Drawnix: React.FC<DrawnixProps> = ({
   onThemeChange,
   onValueChange,
   afterInit,
+  enableWorkspace = false,
+  onBranchSwitch,
 }) => {
   const options: PlaitBoardOptions = {
     readonly: false,
@@ -138,6 +148,22 @@ export const Drawnix: React.FC<DrawnixProps> = ({
   // Warn users before leaving page with active tasks
   useBeforeUnload();
 
+  // Workspace management
+  const { saveBranch } = useWorkspace();
+
+  // Handle saving before branch switch
+  const handleBeforeSwitch = useCallback(async () => {
+    if (onChange && boardRef.current) {
+      // Get current data and save
+      const currentData = {
+        children: boardRef.current.children || [],
+        viewport: boardRef.current.viewport,
+        theme: boardRef.current.theme,
+      };
+      await saveBranch(currentData);
+    }
+  }, [onChange, saveBranch]);
+
   // 处理选中状态变化,保存最近选中的元素IDs
   const handleSelectionChange = useCallback((selection: Selection | null) => {
     const currentBoard = boardRef.current;
@@ -171,41 +197,53 @@ export const Drawnix: React.FC<DrawnixProps> = ({
         <div
           className={classNames('drawnix', {
             'drawnix--mobile': appState.isMobile,
+            'drawnix--with-sidebar': enableWorkspace,
           })}
           ref={containerRef}
         >
-          <Wrapper
-            value={value}
-            viewport={viewport}
-            theme={theme}
-            options={options}
-            plugins={plugins}
-            onChange={(data: BoardChangeData) => {
-              onChange && onChange(data);
-            }}
-            onSelectionChange={handleSelectionChange}
-            onViewportChange={onViewportChange}
-            onThemeChange={onThemeChange}
-            onValueChange={onValueChange}
-          >
-            <Board
-              afterInit={(board) => {
-                setBoard(board as DrawnixBoard);
-                afterInit && afterInit(board);
+          <div className="drawnix__main">
+            <Wrapper
+              value={value}
+              viewport={viewport}
+              theme={theme}
+              options={options}
+              plugins={plugins}
+              onChange={(data: BoardChangeData) => {
+                onChange && onChange(data);
               }}
-            ></Board>
-            {/* 统一左侧工具栏 (桌面端和移动端一致) */}
-            <UnifiedToolbar />
+              onSelectionChange={handleSelectionChange}
+              onViewportChange={onViewportChange}
+              onThemeChange={onThemeChange}
+              onValueChange={onValueChange}
+            >
+              <Board
+                afterInit={(board) => {
+                  setBoard(board as DrawnixBoard);
+                  afterInit && afterInit(board);
+                }}
+              ></Board>
+              {/* 统一左侧工具栏 (桌面端和移动端一致) */}
+              <UnifiedToolbar />
 
-            <PopupToolbar></PopupToolbar>
-            <LinkPopup></LinkPopup>
-            <ClosePencilToolbar></ClosePencilToolbar>
-            <TTDDialog container={containerRef.current}></TTDDialog>
-            <CleanConfirm container={containerRef.current}></CleanConfirm>
-            <SettingsDialog container={containerRef.current}></SettingsDialog>
-          </Wrapper>
-          <ActiveTaskWarning />
-          <ChatDrawer />
+              <PopupToolbar></PopupToolbar>
+              <LinkPopup></LinkPopup>
+              <ClosePencilToolbar></ClosePencilToolbar>
+              <TTDDialog container={containerRef.current}></TTDDialog>
+              <CleanConfirm container={containerRef.current}></CleanConfirm>
+              <SettingsDialog container={containerRef.current}></SettingsDialog>
+            </Wrapper>
+            <ActiveTaskWarning />
+            <TaskToolbar />
+            <ChatDrawer />
+          </div>
+
+          {/* Workspace Sidebar */}
+          {enableWorkspace && (
+            <ProjectSidebar
+              onBeforeSwitch={handleBeforeSwitch}
+              onBranchSwitch={onBranchSwitch}
+            />
+          )}
         </div>
       </DrawnixContext.Provider>
     </I18nProvider>
