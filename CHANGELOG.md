@@ -1,3 +1,13 @@
+## 0.2.10 (2025-12-05)
+
+### 🔧 Chores
+
+- 修复bug ([8e055a8](https://github.com/ljquan/aitu/commit/8e055a8))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+
 ## 0.2.9 (2025-12-05)
 
 ### 🚀 Features
