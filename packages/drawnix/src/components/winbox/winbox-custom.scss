@@ -186,6 +186,38 @@
 .winbox-ai-generation {
   z-index: $z-dialog-ai-image !important; // Layer 5: AI 图像/视频生成弹窗
   
+  // 白底灰黑色 header 样式
+  .wb-header {
+    background: #ffffff !important;
+    border-bottom: 1px solid #e5e5e5;
+  }
+  
+  // 标题文字改为灰黑色
+  .wb-title {
+    color: #333333 !important;
+    text-shadow: none !important;
+  }
+  
+  // 控制按钮改为灰黑色图标
+  .wb-min,
+  .wb-max,
+  .wb-full,
+  .wb-close {
+    // 使用 CSS filter 将白色图标转换为灰黑色
+    filter: invert(1) brightness(0.3);
+    
+    &:hover {
+      background-color: rgba(0, 0, 0, 0.08);
+      filter: invert(1) brightness(0.2);
+    }
+  }
+  
+  // 关闭按钮 hover 特殊样式
+  .wb-close:hover {
+    background-color: rgba(255, 59, 48, 0.15);
+    filter: invert(1) brightness(0.2);
+  }
+  
   .wb-body {
     padding: 0;
     display: flex;
@@ -207,6 +239,41 @@
     height: 100%;
     overflow: auto;
   }
+  
+  // 白底 header 中的 Select 组件样式调整
+  .wb-header-custom {
+    .t-select {
+      background: #f5f5f5;
+      border: 1px solid #d9d9d9;
+      
+      .t-input {
+        color: #333333;
+        
+        &::placeholder {
+          color: #999999;
+        }
+      }
+      
+      .t-input__inner {
+        color: #333333;
+      }
+      
+      .t-fake-arrow {
+        color: #666666;
+      }
+      
+      &:hover {
+        background: #eeeeee;
+        border-color: #bfbfbf;
+      }
+      
+      &.t-is-focused {
+        background: #ffffff;
+        border-color: #5A4FCF;
+        box-shadow: 0 0 0 2px rgba(90, 79, 207, 0.15);
+      }
+    }
+  }
 }
 
 // TDesign Select 组件在标题栏中的样式调整
@@ -224,20 +291,7 @@
       background: rgba(255, 255, 255, 0.15);
       border: 1px solid rgba(255, 255, 255, 0.3);
       border-radius: 6px;
-      
-      .t-input {
-        background: transparent;
-        border: none;
-        color: #ffffff;
-        
-        &::placeholder {
-          color: rgba(255, 255, 255, 0.7);
-        }
-      }
-      
-      .t-input__inner {
-        color: #ffffff;
-      }
+
       
       // 下拉箭头颜色
       .t-fake-arrow {
