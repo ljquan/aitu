@@ -1,3 +1,43 @@
+## 0.2.8 (2025-12-05)
+
+### 🚀 Features
+
+- 添加聊天模型选择器组件 ([289857a](https://github.com/ljquan/aitu/commit/289857a))
+- 添加文本对话抽屉 ([8ad019e](https://github.com/ljquan/aitu/commit/8ad019e))
+- 优化布局 #12 ([28d2ee3](https://github.com/ljquan/aitu/commit/28d2ee3))
+
+### 🩹 Fixes
+
+- 修复WinBox内容挂载导致的DOM节点引用错误 ([22c6c3d](https://github.com/ljquan/aitu/commit/22c6c3d))
+- 修复对话抽屉API key检查和弹窗层级问题 ([06cf9d5](https://github.com/ljquan/aitu/commit/06cf9d5))
+- 修复统一工具栏与任务按钮位置冲突 ([88f2c4c](https://github.com/ljquan/aitu/commit/88f2c4c))
+- 修复视频插入画板后不显示的问题 ([91bdfa4](https://github.com/ljquan/aitu/commit/91bdfa4))
+- 优化缓存机制、工具栏交互和AI图片生成功能 ([b606db4](https://github.com/ljquan/aitu/commit/b606db4))
+
+### 🔧 Chores
+
+- bump version to 0.2.7 ([8f926c5](https://github.com/ljquan/aitu/commit/8f926c5))
+- bump version to 0.2.6 ([4774a24](https://github.com/ljquan/aitu/commit/4774a24))
+- 优化样式 ([d12681d](https://github.com/ljquan/aitu/commit/d12681d))
+- 优化颜色 ([b94d6ab](https://github.com/ljquan/aitu/commit/b94d6ab))
+- 优化示例 ([964a8a8](https://github.com/ljquan/aitu/commit/964a8a8))
+- 优化构建 ([b0d9653](https://github.com/ljquan/aitu/commit/b0d9653))
+- 优化build ([152b9ca](https://github.com/ljquan/aitu/commit/152b9ca))
+- 添加type ([966ce2e](https://github.com/ljquan/aitu/commit/966ce2e))
+- 调整层级 ([57b4a98](https://github.com/ljquan/aitu/commit/57b4a98))
+- 布局优化2 ([a8a9faa](https://github.com/ljquan/aitu/commit/a8a9faa))
+- 布局优化1 ([ecf8d8d](https://github.com/ljquan/aitu/commit/ecf8d8d))
+- 提高超时时间 ([620d5c2](https://github.com/ljquan/aitu/commit/620d5c2))
+- 优化上报&弹窗 ([211fc9f](https://github.com/ljquan/aitu/commit/211fc9f))
+- docs: 完善项目文档和工具链 ([4dae671](https://github.com/ljquan/aitu/commit/4dae671))
+- 添加filesystem兜底 ([622ce19](https://github.com/ljquan/aitu/commit/622ce19))
+
+### ❤️  Thank You
+
+- liquidliang <ljquan@qq.com>
+- liquid <ljquan@qq.com>
+- gongchengtu <1817063960@qq.com>
+
 ## 0.2.7 (2025-12-04)
 
 ### 🚀 Features
