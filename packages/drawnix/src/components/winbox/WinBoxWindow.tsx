@@ -22,6 +22,7 @@ const loadWinBox = async (): Promise<any> => {
   loadingPromise = (async () => {
     try {
       // 动态导入 winbox bundle，Vite 会将其作为外部资源处理
+      // @ts-ignore
       await import('winbox/dist/winbox.bundle.min.js');
       WinBoxConstructor = (window as any).WinBox;
       if (WinBoxConstructor) {
@@ -273,12 +274,20 @@ export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
   // 渲染内容容器（WinBox 会挂载这个元素）
   return (
     <>
-      <div
-        ref={contentRef}
-        className="winbox-content-wrapper"
-        style={{ display: visible ? 'block' : 'none' }}
-      >
-        {children}
+      {/* 
+        创建一个持久的占位容器 div。
+        当 WinBox.mount() 把 contentRef 移走时，这个占位容器仍然留在原来的 DOM 位置。
+        这样 React 在进行兄弟节点插入（如 insertBefore）时，仍然能找到正确的参考节点，
+        避免 "The node before which the new node is to be inserted is not a child of this node" 错误。
+      */}
+      <div style={{ display: 'none' }} data-winbox-placeholder="true">
+        <div
+          ref={contentRef}
+          className="winbox-content-wrapper"
+          style={{ display: visible ? 'block' : 'none' }}
+        >
+          {children}
+        </div>
       </div>
       {/* 自定义标题栏内容通过 Portal 渲染 */}
       {isReady && headerContent && headerPortalContainer && 
