@@ -33,6 +33,9 @@ export enum AIGenerationEvent {
   VIDEO_GENERATION_START = 'video_generation_start',
   VIDEO_GENERATION_SUCCESS = 'video_generation_success',
   VIDEO_GENERATION_FAILED = 'video_generation_failed',
+  CHAT_GENERATION_START = 'chat_generation_start',
+  CHAT_GENERATION_SUCCESS = 'chat_generation_success',
+  CHAT_GENERATION_FAILED = 'chat_generation_failed',
   TASK_CANCELLED = 'task_cancelled',
 }
 
@@ -105,7 +108,7 @@ class UmamiAnalytics {
     event: AIGenerationEvent,
     data: {
       taskId?: string;
-      taskType?: 'image' | 'video';
+      taskType?: 'image' | 'video' | 'chat';
       model?: string;
       duration?: number;
       error?: string;
@@ -168,15 +171,18 @@ class UmamiAnalytics {
    */
   trackModelCall(params: {
     taskId: string;
-    taskType: 'image' | 'video';
+    taskType: 'image' | 'video' | 'chat';
     model: string;
     promptLength: number;
     hasUploadedImage: boolean;
     startTime: number;
   }): void {
-    const event = params.taskType === 'image'
-      ? AIGenerationEvent.IMAGE_GENERATION_START
-      : AIGenerationEvent.VIDEO_GENERATION_START;
+    let event = AIGenerationEvent.IMAGE_GENERATION_START;
+    if (params.taskType === 'video') {
+      event = AIGenerationEvent.VIDEO_GENERATION_START;
+    } else if (params.taskType === 'chat') {
+      event = AIGenerationEvent.CHAT_GENERATION_START;
+    }
 
     this.trackAIGeneration(event, params);
   }
@@ -188,14 +194,17 @@ class UmamiAnalytics {
    */
   trackModelSuccess(params: {
     taskId: string;
-    taskType: 'image' | 'video';
+    taskType: 'image' | 'video' | 'chat';
     model: string;
     duration: number;
     resultSize?: number;
   }): void {
-    const event = params.taskType === 'image'
-      ? AIGenerationEvent.IMAGE_GENERATION_SUCCESS
-      : AIGenerationEvent.VIDEO_GENERATION_SUCCESS;
+    let event = AIGenerationEvent.IMAGE_GENERATION_SUCCESS;
+    if (params.taskType === 'video') {
+      event = AIGenerationEvent.VIDEO_GENERATION_SUCCESS;
+    } else if (params.taskType === 'chat') {
+      event = AIGenerationEvent.CHAT_GENERATION_SUCCESS;
+    }
 
     this.trackAIGeneration(event, params);
   }
@@ -207,14 +216,17 @@ class UmamiAnalytics {
    */
   trackModelFailure(params: {
     taskId: string;
-    taskType: 'image' | 'video';
+    taskType: 'image' | 'video' | 'chat';
     model: string;
     duration: number;
     error: string;
   }): void {
-    const event = params.taskType === 'image'
-      ? AIGenerationEvent.IMAGE_GENERATION_FAILED
-      : AIGenerationEvent.VIDEO_GENERATION_FAILED;
+    let event = AIGenerationEvent.IMAGE_GENERATION_FAILED;
+    if (params.taskType === 'video') {
+      event = AIGenerationEvent.VIDEO_GENERATION_FAILED;
+    } else if (params.taskType === 'chat') {
+      event = AIGenerationEvent.CHAT_GENERATION_FAILED;
+    }
 
     this.trackAIGeneration(event, params);
   }
@@ -226,7 +238,7 @@ class UmamiAnalytics {
    */
   trackTaskCancellation(params: {
     taskId: string;
-    taskType: 'image' | 'video';
+    taskType: 'image' | 'video' | 'chat';
     duration: number;
   }): void {
     this.trackAIGeneration(AIGenerationEvent.TASK_CANCELLED, params);
@@ -311,7 +323,7 @@ class UmamiAnalytics {
    * Check if analytics is enabled
    */
   isAnalyticsEnabled(): boolean {
-    return this.isEnabled;
+    return typeof window !== 'undefined' && !!window.umami;
   }
 }
 

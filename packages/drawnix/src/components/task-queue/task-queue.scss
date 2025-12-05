@@ -5,6 +5,8 @@
  * Uses TDesign design tokens for consistency
  */
 
+@import '../../styles/z-index.scss';
+
 // Task Toolbar - Circular Floating Action Button
 .task-toolbar-fab {
   position: fixed;
@@ -19,7 +21,7 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  z-index: 1000;
+  z-index: $z-unified-toolbar; // Layer 2: 与工具栏同层,FAB按钮
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   user-select: none;
   position: relative;
@@ -105,7 +107,7 @@
   background: var(--td-bg-color-container, #ffffff);
   box-shadow: var(--td-shadow-3, 2px 0 8px rgba(0, 0, 0, 0.08));
   border-right: 1px solid var(--td-component-border, #e7e7e7);
-  z-index: 999; // 高于按钮
+  z-index: $z-task-queue-panel; // Layer 4: Drawers/Panels
   overflow: hidden;
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   transform: translateX(-100%); // 从左侧滑出
@@ -216,7 +218,7 @@
     right: 0;
     bottom: 0;
     background: rgba(0, 0, 0, 0.4);
-    z-index: 998;
+    z-index: calc(#{$z-task-queue-panel} - 1); // 比panel低一层
     animation: fadeIn 0.3s ease;
   }
 }
@@ -745,7 +747,7 @@
 
   .task-preview-nav {
     flex-shrink: 0;
-    z-index: 10;
+    z-index: 1; // 相对层级,在panel内部
 
     &--left {
       margin-right: auto;

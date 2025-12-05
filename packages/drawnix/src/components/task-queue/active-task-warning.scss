@@ -4,12 +4,14 @@
  * Centered top banner, compact design with expand/collapse animation
  */
 
+@import '../../styles/z-index.scss';
+
 .active-task-warning {
   position: fixed;
   top: 6px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 9999;
+  z-index: $z-active-task-warning; // Layer 6: Notifications
   display: flex;
   align-items: center;
   gap: 6px;

@@ -11,7 +11,7 @@
   padding: 12px;
   background-color: #f5f5f5;
   border-radius: 8px;
-  height: 140px; // Fixed height for one task item
+  min-height: 140px; // Fixed height for one task item
   overflow-y: auto;
 
   &__header {

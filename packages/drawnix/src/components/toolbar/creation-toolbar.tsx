@@ -1,4 +1,5 @@
 import classNames from 'classnames';
+import { Z_INDEX } from '../../constants/z-index';
 import { Island } from '../island';
 import Stack from '../stack';
 import { ToolButton } from '../tool-button';
@@ -424,7 +425,7 @@ export const CreationToolbar: React.FC<ToolbarSectionProps> = ({
         </PopoverTrigger>
         <PopoverContent 
           container={container} 
-          style={{ zIndex: 1000 }}
+          style={{ zIndex: Z_INDEX.POPOVER }}
           onMouseEnter={() => handlePopoverMouseEnter(popupKey)}
           onMouseLeave={() => handlePopoverMouseLeave(popupKey)}
         >

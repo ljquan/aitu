@@ -78,9 +78,7 @@
   justify-content: center;
   align-items: center;
   gap: 12px;
-  margin-top: auto;
   flex-wrap: wrap;
-  max-width: 100%;
 
   &.unified-action-bar {
     gap: 12px;
@@ -99,8 +97,9 @@
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
   transition: all 0.2s ease;
   height: 36px;
-  max-width: 100%;
+  min-width: 200px;
   flex-shrink: 1;
+  max-width: 100%;
 
   &:hover {
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
@@ -281,10 +280,13 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 8px 20px;
+  padding: 8px 16px;
   height: 28px;
-  min-width: 90px;
-  flex-shrink: 1;
+  min-width: 80px;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   // Default: disabled state (light orange)
   background: linear-gradient(135deg, #fbd38d 0%, #f6ad55 100%);
   color: #fff;
@@ -448,8 +450,7 @@
 .ai-image-generation-form {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  padding: 16px 0;
+  gap: 12px;
 
   .form-description {
     font-size: 14px;
@@ -1150,6 +1151,7 @@
   justify-content: center;
   min-height: 350px;
   height: calc(100% - 100px);
+  max-height: 510px;
   padding: 16px;
   border: 1px dashed var(--color-border, #d9d9d9);
   border-radius: 8px;
