@@ -134,34 +134,6 @@ const AIVideoGeneration = ({
     setUploadedImages([]);
   }, [currentModel]);
 
-
-  // 计算视频插入位置
-  const calculateInsertionPoint = (): Point | undefined => {
-    if (!board) {
-      console.warn('Board is not available');
-      return undefined;
-    }
-
-    // 优先使用保存的选中元素ID
-    if (selectedElementIds.length > 0 && board.children && Array.isArray(board.children)) {
-      const allElements = board.children as PlaitElement[];
-      const savedSelectedElements = allElements.filter(el => 
-        selectedElementIds.includes((el as any).id || '')
-      );
-      
-      if (savedSelectedElements.length > 0) {
-        const rectangle = getRectangleByElements(board, savedSelectedElements, false);
-        const centerX = rectangle.x + rectangle.width / 2;
-        const bottomY = rectangle.y + rectangle.height + 20; // 在底部留20px间距
-        return [centerX, bottomY] as Point;
-      }
-    }
-
-    // 使用工具函数获取当前选中元素的插入位置
-    const calculatedPoint = getInsertionPointForSelectedElements(board);
-    return calculatedPoint || undefined;
-  };
-
   useEffect(() => {
     const cachedData = cacheManager.load();
     if (cachedData) {
@@ -539,11 +511,9 @@ const AIVideoGeneration = ({
                     const referenceDimensions = getReferenceDimensionsFromIds(board, selectedElementIds);
                     console.log('Reference dimensions for video insertion:', referenceDimensions);
 
-                    // 计算插入位置
-                    const insertionPoint = calculateInsertionPoint();
-                    console.log('Calculated insertion point:', insertionPoint);
-
-                    await insertVideoFromUrl(board, generatedVideo.previewUrl, insertionPoint, false, referenceDimensions);
+                    // 不传入insertionPoint参数,让insertVideoFromUrl内部根据selectedElementIds自动计算
+                    // 这样可以确保使用正确的插入逻辑(左上角坐标而不是中心点)
+                    await insertVideoFromUrl(board, generatedVideo.previewUrl, undefined, false, referenceDimensions);
 
                     console.log('Video inserted successfully!');
 

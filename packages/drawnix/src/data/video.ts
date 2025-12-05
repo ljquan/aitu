@@ -3,7 +3,7 @@ import {
   Point,
   getRectangleByElements,
 } from '@plait/core';
-import { getInsertionPointForSelectedElements } from '../utils/selection-utils';
+import { getInsertionPointForSelectedElements, getInsertionPointBelowBottommostElement } from '../utils/selection-utils';
 import { urlCacheService } from '../services/url-cache-service';
 
 /**
@@ -268,6 +268,9 @@ export const insertVideoFromUrl = async (
         if (calculatedPoint) {
           // 调整X坐标，让视频以计算点为中心左右居中显示
           insertionPoint = [calculatedPoint[0] - displayDimensions.width / 2, calculatedPoint[1]] as Point;
+        } else {
+          // 如果没有选中元素,在最下方元素的下方插入
+          insertionPoint = getInsertionPointBelowBottommostElement(board, displayDimensions.width);
         }
       }
     }
