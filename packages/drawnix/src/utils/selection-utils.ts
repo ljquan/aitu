@@ -672,6 +672,63 @@ export const getInsertionPointForSelectedElements = (board: PlaitBoard): Point |
 };
 
 /**
+ * Calculate insertion point at the bottom of the bottommost element on the board
+ * Used when no elements are selected - prevents overlapping with existing content
+ * @param board - The PlaitBoard instance
+ * @param imageWidth - Width of the image to be inserted (for horizontal centering)
+ * @returns Point below the bottommost element, horizontally centered relative to it
+ */
+export const getInsertionPointBelowBottommostElement = (board: PlaitBoard, imageWidth: number): Point | undefined => {
+  if (!board.children || board.children.length === 0) {
+    console.log('No elements on board, no default insertion point');
+    return undefined;
+  }
+  
+  try {
+    // Find the element with the largest Y coordinate (bottommost)
+    let bottommostElement: PlaitElement | null = null;
+    let maxBottomY = -Infinity;
+    
+    for (const element of board.children) {
+      try {
+        const rect = getRectangleByElements(board, [element as PlaitElement], false);
+        const bottomY = rect.y + rect.height;
+        
+        if (bottomY > maxBottomY) {
+          maxBottomY = bottomY;
+          bottommostElement = element as PlaitElement;
+        }
+      } catch (error) {
+        console.warn('Failed to get rectangle for element:', element, error);
+      }
+    }
+    
+    if (!bottommostElement) {
+      console.warn('Could not find any valid element on board');
+      return undefined;
+    }
+    
+    // Calculate insertion point below the bottommost element
+    const bottommostRect = getRectangleByElements(board, [bottommostElement], false);
+    const centerX = bottommostRect.x + bottommostRect.width / 2;
+    const insertionY = bottommostRect.y + bottommostRect.height + 50; // 50px gap
+    
+    console.log('Insertion point below bottommost element:', {
+      centerX,
+      insertionY,
+      bottommostRect,
+      imageWidth,
+    });
+    
+    // Adjust X coordinate to center the image horizontally relative to the bottommost element
+    return [centerX - imageWidth / 2, insertionY] as Point;
+  } catch (error) {
+    console.warn('Error calculating insertion point below bottommost element:', error);
+    return undefined;
+  }
+};
+
+/**
  * Get the appropriate insertion point, considering selected elements
  * If elements are selected, return the calculated insertion point
  * Otherwise, return the provided default point

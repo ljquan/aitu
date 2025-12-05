@@ -5,7 +5,7 @@ import { useDrawnix } from '../../hooks/use-drawnix';
 import { useI18n } from '../../i18n';
 import { useBoard } from '@plait-board/react-board';
 import { type Language } from '../../constants/prompts';
-import { getSelectedElements, PlaitElement, getRectangleByElements, Point } from '@plait/core';
+import { getSelectedElements, PlaitElement, getRectangleByElements } from '@plait/core';
 import { defaultGeminiClient } from '../../utils/gemini-api';
 import { insertImageFromUrl } from '../../data/image';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
@@ -32,7 +32,6 @@ import {
   PromptInput,
   AspectRatioSelector,
   type ImageFile,
-  calculateInsertionPointFromIds,
   getMergedPresetPrompts,
   savePromptToHistory as savePromptToHistoryUtil,
   preloadImage,
@@ -96,13 +95,6 @@ const AIImageGeneration = ({
 
   // 保存选中元素的ID,用于计算插入位置
   const [savedSelectedElementIds, setSavedSelectedElementIds] = useState<string[]>(initialSelectedElementIds);
-
-  // 计算插入位置
-  const calculateInsertionPoint = (): Point | undefined => {
-    return calculateInsertionPointFromIds(board, savedSelectedElementIds);
-  };
-
-
 
   useEffect(() => {
     const cachedData = cacheManager.load();
@@ -560,11 +552,9 @@ const AIImageGeneration = ({
                     const referenceDimensions = getReferenceDimensionsFromIds(board, savedSelectedElementIds);
                     console.log('Reference dimensions for image insertion:', referenceDimensions);
 
-                    // 计算插入位置
-                    const insertionPoint = calculateInsertionPoint();
-                    console.log('Calculated insertion point:', insertionPoint);
-
-                    await insertImageFromUrl(board, generatedImage, insertionPoint, false, referenceDimensions);
+                    // 不传入insertionPoint参数,让insertImageFromUrl内部根据savedSelectedElementIds自动计算
+                    // 这样可以确保使用正确的插入逻辑(左上角坐标而不是中心点)
+                    await insertImageFromUrl(board, generatedImage, undefined, false, referenceDimensions);
 
                     console.log('Image inserted successfully!');
 

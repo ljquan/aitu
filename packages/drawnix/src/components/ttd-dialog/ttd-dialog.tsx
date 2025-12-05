@@ -72,7 +72,11 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
   // AI 视频生成的初始数据
   const [aiVideoData, setAiVideoData] = useState<{
     initialPrompt: string;
-    initialImage: File | { url: string; name: string } | undefined;
+    initialImage?: File | { url: string; name: string };
+    initialImages?: any[];  // 支持多图片格式
+    initialDuration?: number;
+    initialModel?: string;
+    initialSize?: string;
     initialResultUrl?: string;
   }>({
     initialPrompt: '',
@@ -122,10 +126,10 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
           // 如果有初始数据（从任务编辑传入），直接使用
           if (appState.dialogInitialData) {
             setAiImageData({
-              initialPrompt: appState.dialogInitialData.prompt || '',
-              initialImages: appState.dialogInitialData.uploadedImages || [],
+              initialPrompt: appState.dialogInitialData.initialPrompt || appState.dialogInitialData.prompt || '',
+              initialImages: appState.dialogInitialData.initialImages || appState.dialogInitialData.uploadedImages || [],
               selectedElementIds: [],
-              initialResultUrl: appState.dialogInitialData.resultUrl
+              initialResultUrl: appState.dialogInitialData.initialResultUrl || appState.dialogInitialData.resultUrl
             });
             return;
           }
@@ -208,11 +212,18 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
         try {
           // 如果有初始数据（从任务编辑传入），直接使用
           if (appState.dialogInitialData) {
-            setAiVideoData({
-              initialPrompt: appState.dialogInitialData.prompt || '',
-              initialImage: appState.dialogInitialData.uploadedImage,
-              initialResultUrl: appState.dialogInitialData.resultUrl
-            });
+            console.log('Video generation - dialogInitialData:', appState.dialogInitialData);
+            const videoData = {
+              initialPrompt: appState.dialogInitialData.initialPrompt || appState.dialogInitialData.prompt || '',
+              initialImage: appState.dialogInitialData.initialImage || appState.dialogInitialData.uploadedImage,
+              initialImages: appState.dialogInitialData.initialImages || appState.dialogInitialData.uploadedImages,
+              initialDuration: appState.dialogInitialData.initialDuration || appState.dialogInitialData.duration,
+              initialModel: appState.dialogInitialData.initialModel || appState.dialogInitialData.model,
+              initialSize: appState.dialogInitialData.initialSize || appState.dialogInitialData.size,
+              initialResultUrl: appState.dialogInitialData.initialResultUrl || appState.dialogInitialData.resultUrl
+            };
+            console.log('Video generation - setting aiVideoData:', videoData);
+            setAiVideoData(videoData);
             return;
           }
 
@@ -384,8 +395,8 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
           initialPrompt={aiImageData.initialPrompt}
           initialImages={aiImageData.initialImages}
           selectedElementIds={aiImageData.selectedElementIds}
-          initialWidth={appState.dialogInitialData?.width}
-          initialHeight={appState.dialogInitialData?.height}
+          initialWidth={appState.dialogInitialData?.initialWidth || appState.dialogInitialData?.width}
+          initialHeight={appState.dialogInitialData?.initialHeight || appState.dialogInitialData?.height}
           initialResultUrl={aiImageData.initialResultUrl}
         />
       </WinBoxWindow>
@@ -420,7 +431,10 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
         <AIVideoGeneration
           initialPrompt={aiVideoData.initialPrompt}
           initialImage={aiVideoData.initialImage}
-          initialDuration={appState.dialogInitialData?.duration}
+          initialImages={aiVideoData.initialImages}
+          initialDuration={aiVideoData.initialDuration}
+          initialModel={aiVideoData.initialModel}
+          initialSize={aiVideoData.initialSize}
           initialResultUrl={aiVideoData.initialResultUrl}
         />
       </WinBoxWindow>

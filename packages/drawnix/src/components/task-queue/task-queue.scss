@@ -7,96 +7,6 @@
 
 @import '../../styles/z-index.scss';
 
-// Task Toolbar - Circular Floating Action Button
-.task-toolbar-fab {
-  position: fixed;
-  bottom: 96px; // 与换肤按钮同一水平线
-  left: 10px;   // 与菜单按钮左边对齐
-  width: 56px;
-  height: 56px;
-  background: #ffffff; // 白色背景
-  border-radius: 50%;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15); // 灰色阴影
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  z-index: $z-unified-toolbar; // Layer 2: 与工具栏同层,FAB按钮
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  user-select: none;
-  position: relative;
-
-  &:hover {
-    transform: scale(1.05);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-    background: #f5f5f5; // 悬停时稍微变灰
-  }
-
-  &:active {
-    transform: scale(0.95);
-  }
-
-  &--expanded {
-    background: #f0f0f0; // 展开时浅灰色
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-  }
-
-  &__icon {
-    color: #757575; // 灰色图标
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: transform 0.3s ease;
-  }
-
-  &__text {
-    color: #757575; // 灰色文字
-    font-size: 14px;
-    font-weight: 500;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    white-space: nowrap;
-    transition: color 0.3s ease;
-  }
-
-  &__status {
-    position: absolute;
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    bottom: 4px;
-    right: 4px;
-    border: 2px solid #ffffff;
-    animation: pulse 2s infinite;
-
-    &--active {
-      background: var(--td-success-color, #00a870);
-    }
-
-    &--failed {
-      background: var(--td-error-color, #e34d59);
-    }
-  }
-}
-
-// Badge positioning and styling adjustment
-.task-toolbar-fab .t-badge {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-   background-color: transparent !important;
-}
-
-// Override badge background color to transparent
-.task-toolbar-fab {
-  .t-badge__count {
-   
-    color: #E91E63 !important;
-    border: 1px solid #E91E63 !important;
-  }
-}
-
 // Task Queue Panel (Expandable)
 .task-queue-panel {
   position: fixed;
@@ -582,31 +492,6 @@
 
 // Responsive Design
 @media (max-width: 768px) {
-  .task-toolbar-fab {
-    bottom: 80px; // 移动端在底部工具栏上方
-    left: 20px;   // 移动端左边距
-    width: 48px;
-    height: 48px;
-
-    &__icon {
-      svg {
-        width: 20px;
-        height: 20px;
-      }
-    }
-
-    &__text {
-      font-size: 12px;
-    }
-
-    &__status {
-      width: 10px;
-      height: 10px;
-      bottom: 2px;
-      right: 2px;
-    }
-  }
-
   .task-queue-panel {
     width: 100%; // 移动端占满宽度
     left: 0;
@@ -711,6 +596,7 @@
 
 // Task Preview Dialog
 .task-preview-dialog {
+    z-index: $z-dialog!important; // 确保在panel之上
   .task-preview-container {
     position: relative;
     display: flex;

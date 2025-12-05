@@ -61,15 +61,21 @@ const cacheManager = createCacheManager<PreviewCache>(PREVIEW_CACHE_KEY);
 
 interface AIVideoGenerationProps {
   initialPrompt?: string;
-  initialImage?: ImageFile;
+  initialImage?: ImageFile;  // 保留单图片支持（向后兼容）
+  initialImages?: UploadedVideoImage[];  // 新增：支持多图片
   initialDuration?: number;
+  initialModel?: VideoModel;  // 新增：模型选择
+  initialSize?: string;  // 新增：尺寸选择
   initialResultUrl?: string;
 }
 
 const AIVideoGeneration = ({
   initialPrompt = '',
   initialImage,
+  initialImages,
   initialDuration,
+  initialModel,
+  initialSize,
   initialResultUrl
 }: AIVideoGenerationProps = {}) => {
   const [prompt, setPrompt] = useState(initialPrompt);
@@ -83,17 +89,21 @@ const AIVideoGeneration = ({
 
   // Video model parameters
   const settings = geminiSettings.get();
-  const currentModel = (settings.videoModelName || 'veo3') as VideoModel;
+  const currentModel = (initialModel || settings.videoModelName || 'veo3') as VideoModel;
   const modelConfig = getVideoModelConfig(currentModel);
   const defaultParams = getDefaultModelParams(currentModel);
 
   // Duration and size state
   const [duration, setDuration] = useState(initialDuration?.toString() || defaultParams.duration);
-  const [size, setSize] = useState(defaultParams.size);
+  const [size, setSize] = useState(initialSize || defaultParams.size);
 
   // Multi-image upload state (replaces single uploadedImage)
   const [uploadedImages, setUploadedImages] = useState<UploadedVideoImage[]>(() => {
-    // Convert initial single image to multi-image format
+    // 优先使用 initialImages（多图片）
+    if (initialImages && initialImages.length > 0) {
+      return initialImages;
+    }
+    // 向后兼容：将单个 initialImage 转换为多图片格式
     if (initialImage) {
       return [{
         slot: 0,
@@ -134,34 +144,6 @@ const AIVideoGeneration = ({
     setUploadedImages([]);
   }, [currentModel]);
 
-
-  // 计算视频插入位置
-  const calculateInsertionPoint = (): Point | undefined => {
-    if (!board) {
-      console.warn('Board is not available');
-      return undefined;
-    }
-
-    // 优先使用保存的选中元素ID
-    if (selectedElementIds.length > 0 && board.children && Array.isArray(board.children)) {
-      const allElements = board.children as PlaitElement[];
-      const savedSelectedElements = allElements.filter(el => 
-        selectedElementIds.includes((el as any).id || '')
-      );
-      
-      if (savedSelectedElements.length > 0) {
-        const rectangle = getRectangleByElements(board, savedSelectedElements, false);
-        const centerX = rectangle.x + rectangle.width / 2;
-        const bottomY = rectangle.y + rectangle.height + 20; // 在底部留20px间距
-        return [centerX, bottomY] as Point;
-      }
-    }
-
-    // 使用工具函数获取当前选中元素的插入位置
-    const calculatedPoint = getInsertionPointForSelectedElements(board);
-    return calculatedPoint || undefined;
-  };
-
   useEffect(() => {
     const cachedData = cacheManager.load();
     if (cachedData) {
@@ -180,9 +162,24 @@ const AIVideoGeneration = ({
 
 
   useEffect(() => {
+    console.log('AIVideoGeneration useEffect - Received props:', {
+      initialPrompt,
+      initialImage,
+      initialImages,
+      initialDuration,
+      initialModel,
+      initialSize,
+      initialResultUrl
+    });
+    
     setPrompt(initialPrompt);
-    // Convert initial single image to multi-image format
-    if (initialImage) {
+    
+    // 处理图片：优先使用 initialImages，否则转换 initialImage
+    if (initialImages && initialImages.length > 0) {
+      console.log('Setting uploaded images from initialImages:', initialImages);
+      setUploadedImages(initialImages);
+    } else if (initialImage) {
+      console.log('Converting initialImage to multi-image format:', initialImage);
       setUploadedImages([{
         slot: 0,
         slotLabel: modelConfig.imageUpload.labels?.[0] || '参考图',
@@ -193,6 +190,17 @@ const AIVideoGeneration = ({
     } else {
       setUploadedImages([]);
     }
+    
+    // 更新 duration 和 size（如果有初始值）
+    if (initialDuration !== undefined) {
+      console.log('Setting duration from initialDuration:', initialDuration);
+      setDuration(initialDuration.toString());
+    }
+    if (initialSize) {
+      console.log('Setting size from initialSize:', initialSize);
+      setSize(initialSize);
+    }
+    
     setError(null);
 
     // 如果编辑任务且有结果URL,显示预览视频
@@ -202,7 +210,7 @@ const AIVideoGeneration = ({
         downloadUrl: initialResultUrl
       });
       setGeneratedVideoPrompt(initialPrompt);
-    } else if (initialPrompt || initialImage) {
+    } else if (initialPrompt || initialImage || (initialImages && initialImages.length > 0)) {
       // 当弹窗重新打开时（有新的初始数据），清除预览视频
       setGeneratedVideo(null);
       // 清除缓存
@@ -212,7 +220,7 @@ const AIVideoGeneration = ({
         console.warn('Failed to clear cache:', error);
       }
     }
-  }, [initialPrompt, initialImage, initialResultUrl, modelConfig.imageUpload.labels]);
+  }, [initialPrompt, initialImage, initialImages, initialDuration, initialSize, initialResultUrl, modelConfig.imageUpload.labels]);
 
   useEffect(() => {
     setError(null);
@@ -539,11 +547,9 @@ const AIVideoGeneration = ({
                     const referenceDimensions = getReferenceDimensionsFromIds(board, selectedElementIds);
                     console.log('Reference dimensions for video insertion:', referenceDimensions);
 
-                    // 计算插入位置
-                    const insertionPoint = calculateInsertionPoint();
-                    console.log('Calculated insertion point:', insertionPoint);
-
-                    await insertVideoFromUrl(board, generatedVideo.previewUrl, insertionPoint, false, referenceDimensions);
+                    // 不传入insertionPoint参数,让insertVideoFromUrl内部根据selectedElementIds自动计算
+                    // 这样可以确保使用正确的插入逻辑(左上角坐标而不是中心点)
+                    await insertVideoFromUrl(board, generatedVideo.previewUrl, undefined, false, referenceDimensions);
 
                     console.log('Video inserted successfully!');
 
