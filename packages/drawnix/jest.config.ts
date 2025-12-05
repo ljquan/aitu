@@ -8,4 +8,12 @@ export default {
   },
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx'],
   coverageDirectory: '../../coverage/packages/drawnix',
+  globals: {
+    __APP_VERSION__: '0.0.0-test',
+    'import.meta': {
+      env: {
+        VITE_APP_VERSION: '0.0.0-test',
+      },
+    },
+  },
 };

@@ -5,6 +5,24 @@ import dts from 'vite-plugin-dts';
 import * as path from 'path';
 import { nxViteTsPaths } from '@nx/vite/plugins/nx-tsconfig-paths.plugin';
 import packageJson from './package.json';
+import fs from 'fs';
+
+// Read version from public/version.json (shared with web app)
+const versionPath = path.resolve(__dirname, '../../apps/web/public/version.json');
+let appVersion = packageJson.version;
+
+try {
+  if (fs.existsSync(versionPath)) {
+    const versionContent = fs.readFileSync(versionPath, 'utf-8');
+    const versionJson = JSON.parse(versionContent);
+    if (versionJson.version) {
+      appVersion = versionJson.version;
+      console.log(`[Drawnix] Loaded version from shared version.json: ${appVersion}`);
+    }
+  }
+} catch (e) {
+  console.warn('[Drawnix] Failed to read shared version.json, falling back to package.json version', e);
+}
 
 export default defineConfig({
   root: __dirname,
@@ -21,7 +39,8 @@ export default defineConfig({
 
   // Inject version number as environment variable
   define: {
-    'import.meta.env.VITE_APP_VERSION': JSON.stringify(packageJson.version),
+    'import.meta.env.VITE_APP_VERSION': JSON.stringify(appVersion),
+    __APP_VERSION__: JSON.stringify(appVersion),
   },
 
   // Uncomment this if you are using workers.

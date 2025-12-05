@@ -62,7 +62,7 @@ export const DEFAULT_TRACK_CONFIG: TrackConfig = {
  * Get version from environment variable or fallback
  */
 export function getVersion(): string {
-  return import.meta.env.VITE_APP_VERSION || '0.0.0';
+  return typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0';
 }
 
 /**
