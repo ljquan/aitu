@@ -273,6 +273,7 @@ self.addEventListener('activate', event => {
   console.log('Service Worker activated');
 
   // 迁移旧的图片缓存并清理过期缓存
+  // 重要：延迟清理旧版本的静态资源缓存，避免升级时资源加载失败
   event.waitUntil(
     caches.keys().then(async cacheNames => {
       // 查找旧的版本化图片缓存
@@ -312,22 +313,37 @@ self.addEventListener('activate', event => {
         console.log('Image cache migration completed');
       }
 
-      // 清理其他不需要的缓存
-      return Promise.all(
-        cacheNames.map(cacheName => {
-          // 保留当前版本的缓存
-          const isCurrentCache = cacheName === CACHE_NAME ||
-                                 cacheName === IMAGE_CACHE_NAME ||
-                                 cacheName === STATIC_CACHE_NAME;
-
-          if (!isCurrentCache) {
-            console.log('Deleting old cache:', cacheName);
-            return caches.delete(cacheName);
-          }
-          return null;
-        })
+      // 找出旧版本的静态资源缓存（但不立即删除）
+      const oldStaticCaches = cacheNames.filter(name => 
+        name.startsWith('drawnix-static-v') && name !== STATIC_CACHE_NAME
       );
-    }).then(() => {
+      
+      const oldAppCaches = cacheNames.filter(name =>
+        name.startsWith('drawnix-v') && 
+        name !== CACHE_NAME && 
+        name !== IMAGE_CACHE_NAME &&
+        !name.startsWith('drawnix-static-v')
+      );
+
+      if (oldStaticCaches.length > 0 || oldAppCaches.length > 0) {
+        console.log('Found old version caches, will keep them temporarily:', [...oldStaticCaches, ...oldAppCaches]);
+        console.log('Old caches will be cleaned up after clients are updated');
+        
+        // 延迟 30 秒后清理旧缓存，给所有客户端足够时间刷新
+        setTimeout(async () => {
+          console.log('Cleaning up old version caches now...');
+          for (const cacheName of [...oldStaticCaches, ...oldAppCaches]) {
+            try {
+              await caches.delete(cacheName);
+              console.log('Deleted old cache:', cacheName);
+            } catch (error) {
+              console.warn('Failed to delete old cache:', cacheName, error);
+            }
+          }
+          console.log('Old version caches cleanup completed');
+        }, 30000); // 30秒延迟
+      }
+
       console.log(`Service Worker v${APP_VERSION} activated`);
       return self.clients.claim();
     })
