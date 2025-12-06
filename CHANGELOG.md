@@ -1,3 +1,17 @@
+## 0.2.13 (2025-12-06)
+
+### 🚀 Features
+
+- 实现智能升级机制,避免中断用户活跃请求 ([484797a](https://github.com/ljquan/aitu/commit/484797a))
+
+### 🔧 Chores
+
+- refactor(dialog): 重构AI生成对话框为任务列表驱动的工作流 ([3612715](https://github.com/ljquan/aitu/commit/3612715))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+
 ## 0.2.12 (2025-12-06)
 
 ### 🩹 Fixes

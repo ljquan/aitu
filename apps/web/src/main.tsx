@@ -9,6 +9,11 @@ import './utils/permissions-policy-fix';
 if ('serviceWorker' in navigator) {
   const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
   
+  // 新版本是否已准备好
+  let newVersionReady = false;
+  // 等待中的新 Worker
+  let pendingWorker: ServiceWorker | null = null;
+  
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js')
       .then(registration => {
@@ -28,21 +33,17 @@ if ('serviceWorker' in navigator) {
             newWorker.addEventListener('statechange', () => {
               if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
                 console.log('New Service Worker installed, waiting to activate...');
+                pendingWorker = newWorker;
                 
                 // 在开发模式下自动激活新的Service Worker
                 if (isDevelopment) {
                   console.log('Development mode: activating new Service Worker immediately');
                   newWorker.postMessage({ type: 'SKIP_WAITING' });
                 } else {
-                  // 生产模式：延迟激活，给用户提示
-                  console.log('Production mode: New version available, will reload after current operations complete');
-                  
-                  // 延迟 5 秒后静默刷新页面以应用更新
-                  // 这样用户当前的操作不会被打断
-                  setTimeout(() => {
-                    console.log('Applying new version update...');
-                    newWorker.postMessage({ type: 'SKIP_WAITING' });
-                  }, 5000);
+                  // 生产模式：新版本已安装，等待 SW 自己决定升级时机
+                  // SW 会在没有活跃请求时自动升级
+                  console.log('Production mode: New version installed, SW will upgrade when idle');
+                  newVersionReady = true;
                 }
               }
             });
@@ -85,6 +86,16 @@ if ('serviceWorker' in navigator) {
       if (cleanedCount > 0) {
         console.log(`Main: Cache cleanup completed, removed ${cleanedCount} expired entries`);
       }
+    } else if (event.data && event.data.type === 'SW_NEW_VERSION_READY') {
+      // Service Worker 通知新版本已准备好
+      console.log(`Main: New version v${event.data.version} ready, waiting for idle to upgrade`);
+      newVersionReady = true;
+    } else if (event.data && event.data.type === 'SW_UPGRADING') {
+      // Service Worker 正在升级
+      console.log(`Main: Service Worker upgrading to v${event.data.version}`);
+    } else if (event.data && event.data.type === 'UPGRADE_STATUS') {
+      // 升级状态响应
+      console.log('Main: Upgrade status:', event.data);
     }
   });
   
@@ -97,6 +108,22 @@ if ('serviceWorker' in navigator) {
       console.log('Reloading page to use new Service Worker...');
       window.location.reload();
     }, 1000);
+  });
+  
+  // 页面卸载前，如果有等待中的升级，触发升级
+  window.addEventListener('beforeunload', () => {
+    if (newVersionReady && pendingWorker) {
+      console.log('Main: Page unloading, triggering pending upgrade');
+      pendingWorker.postMessage({ type: 'SKIP_WAITING' });
+    }
+  });
+  
+  // 页面隐藏时（用户切换标签页），如果有等待中的升级，触发升级
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden' && newVersionReady && pendingWorker) {
+      console.log('Main: Page hidden, triggering pending upgrade');
+      pendingWorker.postMessage({ type: 'SKIP_WAITING' });
+    }
   });
 }
 

@@ -2,8 +2,8 @@
 .ai-image-generation-container {
   display: flex;
   flex-direction: column;
-  max-height: 80vh;
-  overflow-y: auto;
+  height: 80vh;
+  overflow: hidden;
   position: relative;
 }
 
@@ -44,15 +44,17 @@
   display: flex;
   gap: 24px;
   min-height: 400px;
+  height: 100%;
+  align-items: stretch;
+  flex: 1;
 }
 
 .ai-image-generation-section {
-  flex: 1;
+  flex: 2;
   display: flex;
   flex-direction: column;
   gap: 16px;
-  overflow-y: auto;
-  max-height: 70vh;
+  height: 100%;
 }
 
 .preview-section {
@@ -84,6 +86,17 @@
     gap: 12px;
   }
 
+}
+
+.task-sidebar {
+  flex: 3;
+  height: 100%;
+  overflow-y: auto;
+  background: var(--color-bg-container, #fff);
+  border: 1px solid var(--color-border-light, #e8e8e8);
+  border-radius: 10px;
+  padding: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
 // Unified Action Box - Combined quantity control and generate button
@@ -119,7 +132,6 @@
 .quantity-section {
   display: flex;
   align-items: center;
-  padding: 0 8px;
   position: relative;
   z-index: 10;
 }
@@ -488,9 +500,18 @@
       justify-content: space-between;
     }
 
+    // Textarea with preset button on the right
+    .textarea-with-preset {
+      position: relative;
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+    }
+
     .preset-tooltip-container {
        position: relative;
        display: inline-block;
+       flex-shrink: 0;
      }
 
      .preset-icon-button {
@@ -502,10 +523,15 @@
        font-size: 16px;
        transition: all 0.2s ease;
        color: var(--color-text-primary, #333);
+       height: 32px;
        
        &:hover {
          background: var(--color-bg-secondary, #f5f5f5);
          border-color: var(--color-primary, #0052d9);
+       }
+       
+       &:active {
+         background: var(--color-bg-tertiary, #e8e8e8);
        }
        
        &:disabled {
@@ -515,6 +541,7 @@
      }
 
     .form-textarea {
+      flex: 1;
       min-height: 120px;
       padding: 12px;
       border: 1px solid var(--color-border, #d9d9d9);
@@ -547,26 +574,15 @@
     .preset-tooltip {
        position: absolute;
        top: 100%;
-       right: 0;
        margin-top: 4px;
        border: 1px solid var(--color-border, #d9d9d9);
        border-radius: 6px;
        background: var(--color-bg-container, #fff);
        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-       max-height: 200px;
+       max-height: 300px;
        overflow-y: auto;
        min-width: 280px;
        z-index: 1000;
-       opacity: 0;
-       visibility: hidden;
-       transform: translateY(-8px);
-       transition: all 0.2s ease;
-     }
-
-     .preset-tooltip-container:hover .preset-tooltip {
-       opacity: 1;
-       visibility: visible;
-       transform: translateY(0);
      }
 
     .preset-header {

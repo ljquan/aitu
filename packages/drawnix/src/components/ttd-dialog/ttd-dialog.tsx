@@ -16,6 +16,7 @@ import {
 import { IMAGE_MODEL_OPTIONS, VIDEO_MODEL_OPTIONS } from '../settings-dialog/settings-dialog';
 import { geminiSettings } from '../../utils/settings-manager';
 import { WinBoxWindow } from '../winbox';
+import type { VideoModel } from '../../types/video.types';
 
 const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) => {
   const { appState, setAppState } = useDrawnix();
@@ -35,6 +36,23 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
     const config = geminiSettings.get();
     setSelectedImageModel(config.imageModelName || 'gemini-2.5-flash-image-vip');
     setSelectedVideoModel(config.videoModelName || 'veo3');
+  }, []);
+
+  // 监听设置变化,同步更新模型选择器
+  useEffect(() => {
+    const handleSettingsChange = (newSettings: any) => {
+      console.log('TTDDialog - settings changed:', newSettings);
+      if (newSettings.imageModelName) {
+        console.log('Updating selectedImageModel to:', newSettings.imageModelName);
+        setSelectedImageModel(newSettings.imageModelName);
+      }
+      if (newSettings.videoModelName) {
+        console.log('Updating selectedVideoModel to:', newSettings.videoModelName);
+        setSelectedVideoModel(newSettings.videoModelName);
+      }
+    };
+    geminiSettings.addListener(handleSettingsChange);
+    return () => geminiSettings.removeListener(handleSettingsChange);
   }, []);
 
   // 图片模型变更处理（同步更新到全局设置）
@@ -75,7 +93,7 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
     initialImage?: File | { url: string; name: string };
     initialImages?: any[];  // 支持多图片格式
     initialDuration?: number;
-    initialModel?: string;
+    initialModel?: VideoModel;
     initialSize?: string;
     initialResultUrl?: string;
   }>({
@@ -391,14 +409,16 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
           />
         }
       >
-        <AIImageGeneration
-          initialPrompt={aiImageData.initialPrompt}
-          initialImages={aiImageData.initialImages}
-          selectedElementIds={aiImageData.selectedElementIds}
-          initialWidth={appState.dialogInitialData?.initialWidth || appState.dialogInitialData?.width}
-          initialHeight={appState.dialogInitialData?.initialHeight || appState.dialogInitialData?.height}
-          initialResultUrl={aiImageData.initialResultUrl}
-        />
+        {appState.openDialogType === DialogType.aiImageGeneration && (
+          <AIImageGeneration
+            initialPrompt={aiImageData.initialPrompt}
+            initialImages={aiImageData.initialImages}
+            selectedElementIds={aiImageData.selectedElementIds}
+            initialWidth={appState.dialogInitialData?.initialWidth || appState.dialogInitialData?.width}
+            initialHeight={appState.dialogInitialData?.initialHeight || appState.dialogInitialData?.height}
+            initialResultUrl={aiImageData.initialResultUrl}
+          />
+        )}
       </WinBoxWindow>
       {/* AI 视频生成窗口 - 使用 WinBox */}
       <WinBoxWindow
@@ -428,15 +448,17 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
           />
         }
       >
-        <AIVideoGeneration
-          initialPrompt={aiVideoData.initialPrompt}
-          initialImage={aiVideoData.initialImage}
-          initialImages={aiVideoData.initialImages}
-          initialDuration={aiVideoData.initialDuration}
-          initialModel={aiVideoData.initialModel}
-          initialSize={aiVideoData.initialSize}
-          initialResultUrl={aiVideoData.initialResultUrl}
-        />
+        {appState.openDialogType === DialogType.aiVideoGeneration && (
+          <AIVideoGeneration
+            initialPrompt={aiVideoData.initialPrompt}
+            initialImage={aiVideoData.initialImage}
+            initialImages={aiVideoData.initialImages}
+            initialDuration={aiVideoData.initialDuration}
+            initialModel={aiVideoData.initialModel}
+            initialSize={aiVideoData.initialSize}
+            initialResultUrl={aiVideoData.initialResultUrl}
+          />
+        )}
       </WinBoxWindow>
     </>
   );
