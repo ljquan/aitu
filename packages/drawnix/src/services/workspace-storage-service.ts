@@ -2,14 +2,13 @@
  * Workspace Storage Service
  *
  * Handles IndexedDB operations for workspace data persistence.
- * Manages folders, projects, branches, and workspace state.
+ * Manages folders, boards, and workspace state.
  */
 
 import localforage from 'localforage';
 import {
   Folder,
-  Project,
-  Branch,
+  Board,
   WorkspaceState,
   WORKSPACE_DEFAULTS,
 } from '../types/workspace.types';
@@ -19,11 +18,10 @@ import {
  */
 const WORKSPACE_DB_CONFIG = {
   DATABASE_NAME: 'aitu-workspace',
-  DATABASE_VERSION: 1,
+  DATABASE_VERSION: 2,
   STORES: {
     FOLDERS: 'folders',
-    PROJECTS: 'projects',
-    BRANCHES: 'branches',
+    BOARDS: 'boards',
     STATE: 'state',
   },
 } as const;
@@ -35,8 +33,7 @@ const STATE_KEY = 'workspace_state';
  */
 class WorkspaceStorageService {
   private foldersStore: LocalForage;
-  private projectsStore: LocalForage;
-  private branchesStore: LocalForage;
+  private boardsStore: LocalForage;
   private stateStore: LocalForage;
   private initialized: boolean = false;
 
@@ -49,20 +46,12 @@ class WorkspaceStorageService {
       description: 'Workspace folders storage',
     });
 
-    this.projectsStore = localforage.createInstance({
+    this.boardsStore = localforage.createInstance({
       driver: localforage.INDEXEDDB,
       name: WORKSPACE_DB_CONFIG.DATABASE_NAME,
       version: WORKSPACE_DB_CONFIG.DATABASE_VERSION,
-      storeName: WORKSPACE_DB_CONFIG.STORES.PROJECTS,
-      description: 'Workspace projects storage',
-    });
-
-    this.branchesStore = localforage.createInstance({
-      driver: localforage.INDEXEDDB,
-      name: WORKSPACE_DB_CONFIG.DATABASE_NAME,
-      version: WORKSPACE_DB_CONFIG.DATABASE_VERSION,
-      storeName: WORKSPACE_DB_CONFIG.STORES.BRANCHES,
-      description: 'Workspace branches storage',
+      storeName: WORKSPACE_DB_CONFIG.STORES.BOARDS,
+      description: 'Workspace boards storage',
     });
 
     this.stateStore = localforage.createInstance({
@@ -83,8 +72,7 @@ class WorkspaceStorageService {
     try {
       await Promise.all([
         this.foldersStore.ready(),
-        this.projectsStore.ready(),
-        this.branchesStore.ready(),
+        this.boardsStore.ready(),
         this.stateStore.ready(),
       ]);
       this.initialized = true;
@@ -121,73 +109,47 @@ class WorkspaceStorageService {
     await this.foldersStore.removeItem(id);
   }
 
-  // ========== Project Operations ==========
+  // ========== Board Operations ==========
 
-  async saveProject(project: Project): Promise<void> {
+  async saveBoard(board: Board): Promise<void> {
     await this.ensureInitialized();
-    await this.projectsStore.setItem(project.id, project);
+    await this.boardsStore.setItem(board.id, board);
   }
 
-  async loadProject(id: string): Promise<Project | null> {
+  async loadBoard(id: string): Promise<Board | null> {
     await this.ensureInitialized();
-    return this.projectsStore.getItem<Project>(id);
+    return this.boardsStore.getItem<Board>(id);
   }
 
-  async loadAllProjects(): Promise<Project[]> {
+  async loadAllBoards(): Promise<Board[]> {
     await this.ensureInitialized();
-    const projects: Project[] = [];
-    await this.projectsStore.iterate<Project, void>((value) => {
-      if (value && value.id) projects.push(value);
+    const boards: Board[] = [];
+    await this.boardsStore.iterate<Board, void>((value) => {
+      if (value && value.id) boards.push(value);
     });
-    return projects.sort((a, b) => a.order - b.order);
+    return boards.sort((a, b) => a.order - b.order);
   }
 
-  async deleteProject(id: string): Promise<void> {
+  async loadFolderBoards(folderId: string | null): Promise<Board[]> {
     await this.ensureInitialized();
-    await this.projectsStore.removeItem(id);
-  }
-
-  // ========== Branch Operations ==========
-
-  async saveBranch(branch: Branch): Promise<void> {
-    await this.ensureInitialized();
-    await this.branchesStore.setItem(branch.id, branch);
-  }
-
-  async loadBranch(id: string): Promise<Branch | null> {
-    await this.ensureInitialized();
-    return this.branchesStore.getItem<Branch>(id);
-  }
-
-  async loadProjectBranches(projectId: string): Promise<Branch[]> {
-    await this.ensureInitialized();
-    const branches: Branch[] = [];
-    await this.branchesStore.iterate<Branch, void>((value) => {
-      if (value && value.projectId === projectId) {
-        branches.push(value);
+    const boards: Board[] = [];
+    await this.boardsStore.iterate<Board, void>((value) => {
+      if (value && value.folderId === folderId) {
+        boards.push(value);
       }
     });
-    return branches.sort((a, b) => a.createdAt - b.createdAt);
+    return boards.sort((a, b) => a.order - b.order);
   }
 
-  async loadAllBranches(): Promise<Branch[]> {
+  async deleteBoard(id: string): Promise<void> {
     await this.ensureInitialized();
-    const branches: Branch[] = [];
-    await this.branchesStore.iterate<Branch, void>((value) => {
-      if (value && value.id) branches.push(value);
-    });
-    return branches;
+    await this.boardsStore.removeItem(id);
   }
 
-  async deleteBranch(id: string): Promise<void> {
+  async deleteFolderBoards(folderId: string): Promise<void> {
     await this.ensureInitialized();
-    await this.branchesStore.removeItem(id);
-  }
-
-  async deleteProjectBranches(projectId: string): Promise<void> {
-    await this.ensureInitialized();
-    const branches = await this.loadProjectBranches(projectId);
-    await Promise.all(branches.map((b) => this.deleteBranch(b.id)));
+    const boards = await this.loadFolderBoards(folderId);
+    await Promise.all(boards.map((b) => this.deleteBoard(b.id)));
   }
 
   // ========== State Operations ==========
@@ -202,10 +164,8 @@ class WorkspaceStorageService {
     const state = await this.stateStore.getItem<WorkspaceState>(STATE_KEY);
     return (
       state || {
-        currentBranchId: null,
-        currentProjectId: null,
+        currentBoardId: null,
         expandedFolderIds: [],
-        expandedProjectIds: [],
         sidebarWidth: WORKSPACE_DEFAULTS.SIDEBAR_WIDTH,
         sidebarCollapsed: false,
       }
@@ -214,22 +174,16 @@ class WorkspaceStorageService {
 
   // ========== Utility Operations ==========
 
-  async getProjectCount(): Promise<number> {
+  async getBoardCount(): Promise<number> {
     await this.ensureInitialized();
-    return this.projectsStore.length();
-  }
-
-  async getBranchCount(): Promise<number> {
-    await this.ensureInitialized();
-    return this.branchesStore.length();
+    return this.boardsStore.length();
   }
 
   async clearAll(): Promise<void> {
     await this.ensureInitialized();
     await Promise.all([
       this.foldersStore.clear(),
-      this.projectsStore.clear(),
-      this.branchesStore.clear(),
+      this.boardsStore.clear(),
       this.stateStore.clear(),
     ]);
     console.log('[WorkspaceStorage] All data cleared');

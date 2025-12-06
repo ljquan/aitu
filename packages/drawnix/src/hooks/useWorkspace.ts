@@ -2,20 +2,18 @@
  * useWorkspace Hook
  *
  * Provides React components with workspace state and operations.
- * Manages folders, projects, branches, and tree structure.
+ * Manages folders, boards, and tree structure.
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { workspaceService } from '../services/workspace-service';
 import {
   Folder,
-  Project,
-  Branch,
+  Board,
   TreeNode,
   WorkspaceState,
   CreateFolderOptions,
-  CreateProjectOptions,
-  CreateBranchOptions,
+  CreateBoardOptions,
   BoardChangeData,
 } from '../types/workspace.types';
 
@@ -24,10 +22,9 @@ export interface UseWorkspaceReturn {
   isLoading: boolean;
   error: string | null;
   tree: TreeNode[];
-  currentBranch: Branch | null;
-  currentProject: Project | null;
+  currentBoard: Board | null;
   workspaceState: WorkspaceState;
-  hasProjects: boolean;
+  hasBoards: boolean;
 
   // Folder operations
   createFolder: (options: CreateFolderOptions) => Promise<Folder | null>;
@@ -35,19 +32,13 @@ export interface UseWorkspaceReturn {
   deleteFolder: (id: string) => Promise<boolean>;
   toggleFolderExpanded: (id: string) => void;
 
-  // Project operations
-  createProject: (options: CreateProjectOptions) => Promise<Project | null>;
-  renameProject: (id: string, name: string) => Promise<boolean>;
-  deleteProject: (id: string) => Promise<boolean>;
-  moveProject: (id: string, targetFolderId: string | null) => Promise<boolean>;
-  toggleProjectExpanded: (id: string) => void;
-
-  // Branch operations
-  createBranch: (options: CreateBranchOptions) => Promise<Branch | null>;
-  renameBranch: (id: string, name: string) => Promise<boolean>;
-  deleteBranch: (id: string) => Promise<boolean>;
-  switchBranch: (branchId: string) => Promise<Branch | null>;
-  saveBranch: (data: BoardChangeData) => Promise<boolean>;
+  // Board operations
+  createBoard: (options: CreateBoardOptions) => Promise<Board | null>;
+  renameBoard: (id: string, name: string) => Promise<boolean>;
+  deleteBoard: (id: string) => Promise<boolean>;
+  moveBoard: (id: string, targetFolderId: string | null) => Promise<boolean>;
+  switchBoard: (boardId: string) => Promise<Board | null>;
+  saveBoard: (data: BoardChangeData) => Promise<boolean>;
 
   // UI state
   setSidebarWidth: (width: number) => void;
@@ -61,8 +52,7 @@ export function useWorkspace(): UseWorkspaceReturn {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tree, setTree] = useState<TreeNode[]>([]);
-  const [currentBranch, setCurrentBranch] = useState<Branch | null>(null);
-  const [currentProject, setCurrentProject] = useState<Project | null>(null);
+  const [currentBoard, setCurrentBoard] = useState<Board | null>(null);
   const [workspaceState, setWorkspaceState] = useState<WorkspaceState>(
     workspaceService.getState()
   );
@@ -71,8 +61,7 @@ export function useWorkspace(): UseWorkspaceReturn {
   // Refresh function
   const refresh = useCallback(() => {
     setTree(workspaceService.getTree());
-    setCurrentBranch(workspaceService.getCurrentBranch());
-    setCurrentProject(workspaceService.getCurrentProject());
+    setCurrentBoard(workspaceService.getCurrentBoard());
     setWorkspaceState(workspaceService.getState());
   }, []);
 
@@ -115,8 +104,8 @@ export function useWorkspace(): UseWorkspaceReturn {
     };
   }, [refresh]);
 
-  const hasProjects = useMemo(() => {
-    return workspaceService.hasProjects();
+  const hasBoards = useMemo(() => {
+    return workspaceService.hasBoards();
   }, [updateCount]);
 
   // ========== Folder Operations ==========
@@ -163,127 +152,83 @@ export function useWorkspace(): UseWorkspaceReturn {
     workspaceService.toggleFolderExpanded(id);
   }, []);
 
-  // ========== Project Operations ==========
+  // ========== Board Operations ==========
 
-  const createProject = useCallback(
-    async (options: CreateProjectOptions): Promise<Project | null> => {
+  const createBoard = useCallback(
+    async (options: CreateBoardOptions): Promise<Board | null> => {
       try {
         setError(null);
-        return await workspaceService.createProject(options);
+        return await workspaceService.createBoard(options);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to create project');
+        setError(err instanceof Error ? err.message : 'Failed to create board');
         return null;
       }
     },
     []
   );
 
-  const renameProject = useCallback(
+  const renameBoard = useCallback(
     async (id: string, name: string): Promise<boolean> => {
       try {
         setError(null);
-        await workspaceService.renameProject(id, name);
+        await workspaceService.renameBoard(id, name);
         return true;
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to rename project');
+        setError(err instanceof Error ? err.message : 'Failed to rename board');
         return false;
       }
     },
     []
   );
 
-  const deleteProject = useCallback(async (id: string): Promise<boolean> => {
+  const deleteBoard = useCallback(async (id: string): Promise<boolean> => {
     try {
       setError(null);
-      await workspaceService.deleteProject(id);
+      await workspaceService.deleteBoard(id);
       return true;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete project');
+      setError(err instanceof Error ? err.message : 'Failed to delete board');
       return false;
     }
   }, []);
 
-  const moveProject = useCallback(
+  const moveBoard = useCallback(
     async (id: string, targetFolderId: string | null): Promise<boolean> => {
       try {
         setError(null);
-        await workspaceService.moveProject(id, targetFolderId);
+        await workspaceService.moveBoard(id, targetFolderId);
         return true;
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to move project');
+        setError(err instanceof Error ? err.message : 'Failed to move board');
         return false;
       }
     },
     []
   );
 
-  const toggleProjectExpanded = useCallback((id: string): void => {
-    workspaceService.toggleProjectExpanded(id);
-  }, []);
-
-  // ========== Branch Operations ==========
-
-  const createBranch = useCallback(
-    async (options: CreateBranchOptions): Promise<Branch | null> => {
+  const switchBoard = useCallback(
+    async (boardId: string): Promise<Board | null> => {
       try {
         setError(null);
-        return await workspaceService.createBranch(options);
+        return await workspaceService.switchBoard(boardId);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to create branch');
+        setError(err instanceof Error ? err.message : 'Failed to switch board');
         return null;
       }
     },
     []
   );
 
-  const renameBranch = useCallback(
-    async (id: string, name: string): Promise<boolean> => {
-      try {
-        setError(null);
-        await workspaceService.renameBranch(id, name);
-        return true;
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to rename branch');
-        return false;
-      }
-    },
-    []
-  );
-
-  const deleteBranch = useCallback(async (id: string): Promise<boolean> => {
-    try {
-      setError(null);
-      await workspaceService.deleteBranch(id);
-      return true;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete branch');
-      return false;
-    }
-  }, []);
-
-  const switchBranch = useCallback(
-    async (branchId: string): Promise<Branch | null> => {
-      try {
-        setError(null);
-        return await workspaceService.switchBranch(branchId);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to switch branch');
-        return null;
-      }
-    },
-    []
-  );
-
-  const saveBranch = useCallback(
+  const saveBoard = useCallback(
     async (data: BoardChangeData): Promise<boolean> => {
-      const branch = workspaceService.getCurrentBranch();
-      if (!branch) return false;
+      const board = workspaceService.getCurrentBoard();
+      if (!board) return false;
 
       try {
-        await workspaceService.saveBranch(branch.id, data);
+        await workspaceService.saveBoard(board.id, data);
         return true;
       } catch (err) {
-        console.error('[useWorkspace] Failed to save branch:', err);
+        console.error('[useWorkspace] Failed to save board:', err);
         return false;
       }
     },
@@ -306,24 +251,19 @@ export function useWorkspace(): UseWorkspaceReturn {
     isLoading,
     error,
     tree,
-    currentBranch,
-    currentProject,
+    currentBoard,
     workspaceState,
-    hasProjects,
+    hasBoards,
     createFolder,
     renameFolder,
     deleteFolder,
     toggleFolderExpanded,
-    createProject,
-    renameProject,
-    deleteProject,
-    moveProject,
-    toggleProjectExpanded,
-    createBranch,
-    renameBranch,
-    deleteBranch,
-    switchBranch,
-    saveBranch,
+    createBoard,
+    renameBoard,
+    deleteBoard,
+    moveBoard,
+    switchBoard,
+    saveBoard,
     setSidebarWidth,
     setSidebarCollapsed,
     refresh,

@@ -2,13 +2,13 @@
  * Workspace System Type Definitions
  *
  * Defines types for the sidebar-based file management system
- * with folder hierarchy, projects, and branches.
+ * with folder hierarchy and boards (simplified from project/branch structure).
  */
 
 import { PlaitElement, PlaitTheme, Viewport } from '@plait/core';
 
 /**
- * Folder node - for organizing projects
+ * Folder node - for organizing boards (supports nesting)
  */
 export interface Folder {
   /** Unique folder identifier */
@@ -28,39 +28,18 @@ export interface Folder {
 }
 
 /**
- * Project node - contains multiple branches
+ * Board node - contains the actual drawing board data
+ * (Merged from previous Project and Branch concepts)
  */
-export interface Project {
-  /** Unique project identifier */
+export interface Board {
+  /** Unique board identifier */
   id: string;
-  /** Project display name */
+  /** Board display name */
   name: string;
   /** Parent folder ID (null for root level) */
   folderId: string | null;
   /** Sort order within folder */
   order: number;
-  /** Default branch ID */
-  defaultBranchId: string;
-  /** Whether project is expanded in UI */
-  isExpanded?: boolean;
-  /** Creation timestamp */
-  createdAt: number;
-  /** Last update timestamp */
-  updatedAt: number;
-}
-
-/**
- * Branch - a version/variant of a project
- */
-export interface Branch {
-  /** Unique branch identifier */
-  id: string;
-  /** Parent project ID */
-  projectId: string;
-  /** Branch display name (e.g., "主分支", "方案A") */
-  name: string;
-  /** Parent branch ID (if derived from another branch) */
-  parentBranchId?: string;
   /** Board elements */
   elements: PlaitElement[];
   /** Viewport state */
@@ -76,7 +55,7 @@ export interface Branch {
 /**
  * Tree node types for rendering
  */
-export type TreeNodeType = 'folder' | 'project' | 'branch';
+export type TreeNodeType = 'folder' | 'board';
 
 /**
  * Folder tree node
@@ -88,39 +67,26 @@ export interface FolderTreeNode {
 }
 
 /**
- * Project tree node
+ * Board tree node
  */
-export interface ProjectTreeNode {
-  type: 'project';
-  data: Project;
-  branches: Branch[];
-}
-
-/**
- * Branch tree node (for flat rendering within project)
- */
-export interface BranchTreeNode {
-  type: 'branch';
-  data: Branch;
+export interface BoardTreeNode {
+  type: 'board';
+  data: Board;
 }
 
 /**
  * Union type for all tree nodes
  */
-export type TreeNode = FolderTreeNode | ProjectTreeNode;
+export type TreeNode = FolderTreeNode | BoardTreeNode;
 
 /**
  * Workspace state - persisted UI state
  */
 export interface WorkspaceState {
-  /** Currently active branch ID */
-  currentBranchId: string | null;
-  /** Currently active project ID */
-  currentProjectId: string | null;
+  /** Currently active board ID */
+  currentBoardId: string | null;
   /** IDs of expanded folders */
   expandedFolderIds: string[];
-  /** IDs of expanded projects */
-  expandedProjectIds: string[];
   /** Sidebar width in pixels */
   sidebarWidth: number;
   /** Whether sidebar is collapsed */
@@ -138,25 +104,15 @@ export interface CreateFolderOptions {
 }
 
 /**
- * Create project options
+ * Create board options
  */
-export interface CreateProjectOptions {
+export interface CreateBoardOptions {
   name: string;
   folderId?: string | null;
-  /** Initial elements for default branch */
+  /** Initial elements */
   elements?: PlaitElement[];
   viewport?: Viewport;
   theme?: PlaitTheme;
-}
-
-/**
- * Create branch options
- */
-export interface CreateBranchOptions {
-  projectId: string;
-  name: string;
-  /** Branch to copy from (if not provided, creates empty branch) */
-  fromBranchId?: string;
 }
 
 /**
@@ -175,13 +131,10 @@ export type WorkspaceEventType =
   | 'folderCreated'
   | 'folderUpdated'
   | 'folderDeleted'
-  | 'projectCreated'
-  | 'projectUpdated'
-  | 'projectDeleted'
-  | 'branchCreated'
-  | 'branchUpdated'
-  | 'branchDeleted'
-  | 'branchSwitched'
+  | 'boardCreated'
+  | 'boardUpdated'
+  | 'boardDeleted'
+  | 'boardSwitched'
   | 'treeChanged';
 
 /**
@@ -197,8 +150,7 @@ export interface WorkspaceEvent {
  * Default values
  */
 export const WORKSPACE_DEFAULTS = {
-  DEFAULT_BRANCH_NAME: '主分支',
-  DEFAULT_PROJECT_NAME: '未命名项目',
+  DEFAULT_BOARD_NAME: '未命名画板',
   DEFAULT_FOLDER_NAME: '新建文件夹',
   SIDEBAR_WIDTH: 280,
   SIDEBAR_MIN_WIDTH: 200,

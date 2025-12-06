@@ -2,22 +2,20 @@
  * Workspace Service
  *
  * Core service for managing workspace operations including
- * folders, projects, branches, and tree structure.
+ * folders, boards, and tree structure.
  */
 
 import { Subject, Observable } from 'rxjs';
 import {
   Folder,
-  Project,
-  Branch,
+  Board,
   TreeNode,
   FolderTreeNode,
-  ProjectTreeNode,
+  BoardTreeNode,
   WorkspaceState,
   WorkspaceEvent,
   CreateFolderOptions,
-  CreateProjectOptions,
-  CreateBranchOptions,
+  CreateBoardOptions,
   BoardChangeData,
   WORKSPACE_DEFAULTS,
 } from '../types/workspace.types';
@@ -40,18 +38,15 @@ function generateId(): string {
 class WorkspaceService {
   private static instance: WorkspaceService;
   private folders: Map<string, Folder> = new Map();
-  private projects: Map<string, Project> = new Map();
-  private branches: Map<string, Branch> = new Map();
+  private boards: Map<string, Board> = new Map();
   private state: WorkspaceState;
   private events$: Subject<WorkspaceEvent> = new Subject();
   private initialized: boolean = false;
 
   private constructor() {
     this.state = {
-      currentBranchId: null,
-      currentProjectId: null,
+      currentBoardId: null,
       expandedFolderIds: [],
-      expandedProjectIds: [],
       sidebarWidth: WORKSPACE_DEFAULTS.SIDEBAR_WIDTH,
       sidebarCollapsed: false,
     };
@@ -74,23 +69,20 @@ class WorkspaceService {
       await workspaceStorageService.initialize();
 
       // Load all data
-      const [folders, projects, branches, state] = await Promise.all([
+      const [folders, boards, state] = await Promise.all([
         workspaceStorageService.loadAllFolders(),
-        workspaceStorageService.loadAllProjects(),
-        workspaceStorageService.loadAllBranches(),
+        workspaceStorageService.loadAllBoards(),
         workspaceStorageService.loadState(),
       ]);
 
       this.folders = new Map(folders.map((f) => [f.id, f]));
-      this.projects = new Map(projects.map((p) => [p.id, p]));
-      this.branches = new Map(branches.map((b) => [b.id, b]));
+      this.boards = new Map(boards.map((b) => [b.id, b]));
       this.state = state;
 
       this.initialized = true;
       console.log('[WorkspaceService] Initialized with', {
         folders: this.folders.size,
-        projects: this.projects.size,
-        branches: this.branches.size,
+        boards: this.boards.size,
       });
     } catch (error) {
       console.error('[WorkspaceService] Failed to initialize:', error);
@@ -147,11 +139,11 @@ class WorkspaceService {
       await this.deleteFolder(child.id);
     }
 
-    // Move projects to root
-    const projects = this.getProjectsInFolder(id);
-    for (const project of projects) {
-      project.folderId = null;
-      await workspaceStorageService.saveProject(project);
+    // Move boards to root
+    const boards = this.getBoardsInFolder(id);
+    for (const board of boards) {
+      board.folderId = null;
+      await workspaceStorageService.saveBoard(board);
     }
 
     this.folders.delete(id);
@@ -180,20 +172,25 @@ class WorkspaceService {
     this.emit('treeChanged');
   }
 
-  // ========== Project Operations ==========
+  // ========== Board Operations ==========
 
-  async createProject(options: CreateProjectOptions): Promise<Project> {
+  async createBoard(options: CreateBoardOptions): Promise<Board> {
     await this.ensureInitialized();
 
-    const projectId = generateId();
-    const branchId = generateId();
+    const boardId = generateId();
     const now = Date.now();
 
-    // Create default branch
-    const defaultBranch: Branch = {
-      id: branchId,
-      projectId,
-      name: WORKSPACE_DEFAULTS.DEFAULT_BRANCH_NAME,
+    // Get max order in folder
+    const siblings = this.getBoardsInFolder(options.folderId || null);
+    const maxOrder = siblings.length > 0
+      ? Math.max(...siblings.map((s) => s.order)) + 1
+      : 0;
+
+    const board: Board = {
+      id: boardId,
+      name: options.name || WORKSPACE_DEFAULTS.DEFAULT_BOARD_NAME,
+      folderId: options.folderId || null,
+      order: maxOrder,
       elements: options.elements || [],
       viewport: options.viewport,
       theme: options.theme,
@@ -201,229 +198,93 @@ class WorkspaceService {
       updatedAt: now,
     };
 
-    // Get max order in folder
-    const siblings = this.getProjectsInFolder(options.folderId || null);
-    const maxOrder = siblings.length > 0
-      ? Math.max(...siblings.map((s) => s.order)) + 1
-      : 0;
+    this.boards.set(boardId, board);
+    await workspaceStorageService.saveBoard(board);
 
-    const project: Project = {
-      id: projectId,
-      name: options.name || WORKSPACE_DEFAULTS.DEFAULT_PROJECT_NAME,
-      folderId: options.folderId || null,
-      order: maxOrder,
-      defaultBranchId: branchId,
-      isExpanded: false,
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    this.projects.set(projectId, project);
-    this.branches.set(branchId, defaultBranch);
-
-    await Promise.all([
-      workspaceStorageService.saveProject(project),
-      workspaceStorageService.saveBranch(defaultBranch),
-    ]);
-
-    this.emit('projectCreated', project);
-    return project;
+    this.emit('boardCreated', board);
+    return board;
   }
 
-  async renameProject(id: string, name: string): Promise<void> {
-    const project = this.projects.get(id);
-    if (!project) throw new Error(`Project ${id} not found`);
+  async renameBoard(id: string, name: string): Promise<void> {
+    const board = this.boards.get(id);
+    if (!board) throw new Error(`Board ${id} not found`);
 
-    project.name = name;
-    project.updatedAt = Date.now();
+    board.name = name;
+    board.updatedAt = Date.now();
 
-    this.projects.set(id, project);
-    await workspaceStorageService.saveProject(project);
-    this.emit('projectUpdated', project);
+    this.boards.set(id, board);
+    await workspaceStorageService.saveBoard(board);
+    this.emit('boardUpdated', board);
   }
 
-  async deleteProject(id: string): Promise<void> {
-    const project = this.projects.get(id);
-    if (!project) throw new Error(`Project ${id} not found`);
+  async deleteBoard(id: string): Promise<void> {
+    const board = this.boards.get(id);
+    if (!board) throw new Error(`Board ${id} not found`);
 
-    // Delete all branches
-    const branches = this.getProjectBranches(id);
-    for (const branch of branches) {
-      this.branches.delete(branch.id);
-    }
-    await workspaceStorageService.deleteProjectBranches(id);
-
-    // Clear current if this project is active
-    if (this.state.currentProjectId === id) {
-      this.state.currentProjectId = null;
-      this.state.currentBranchId = null;
+    // Clear current if this board is active
+    if (this.state.currentBoardId === id) {
+      this.state.currentBoardId = null;
       this.saveState();
     }
 
-    this.projects.delete(id);
-    await workspaceStorageService.deleteProject(id);
-    this.emit('projectDeleted', project);
+    this.boards.delete(id);
+    await workspaceStorageService.deleteBoard(id);
+    this.emit('boardDeleted', board);
   }
 
-  async moveProject(id: string, targetFolderId: string | null): Promise<void> {
-    const project = this.projects.get(id);
-    if (!project) throw new Error(`Project ${id} not found`);
+  async moveBoard(id: string, targetFolderId: string | null): Promise<void> {
+    const board = this.boards.get(id);
+    if (!board) throw new Error(`Board ${id} not found`);
 
-    project.folderId = targetFolderId;
-    project.updatedAt = Date.now();
+    board.folderId = targetFolderId;
+    board.updatedAt = Date.now();
 
-    this.projects.set(id, project);
-    await workspaceStorageService.saveProject(project);
-    this.emit('projectUpdated', project);
+    this.boards.set(id, board);
+    await workspaceStorageService.saveBoard(board);
+    this.emit('boardUpdated', board);
   }
 
-  toggleProjectExpanded(id: string): void {
-    const project = this.projects.get(id);
-    if (!project) return;
-
-    project.isExpanded = !project.isExpanded;
-    this.projects.set(id, project);
-
-    // Update state
-    if (project.isExpanded) {
-      if (!this.state.expandedProjectIds.includes(id)) {
-        this.state.expandedProjectIds.push(id);
-      }
-    } else {
-      this.state.expandedProjectIds = this.state.expandedProjectIds.filter(
-        (pid) => pid !== id
-      );
-    }
-    this.saveState();
-    this.emit('treeChanged');
-  }
-
-  // ========== Branch Operations ==========
-
-  async createBranch(options: CreateBranchOptions): Promise<Branch> {
+  async switchBoard(boardId: string): Promise<Board> {
     await this.ensureInitialized();
 
-    const project = this.projects.get(options.projectId);
-    if (!project) throw new Error(`Project ${options.projectId} not found`);
+    const board = this.boards.get(boardId);
+    if (!board) throw new Error(`Board ${boardId} not found`);
 
-    let elements: any[] = [];
-    let viewport, theme;
-
-    // Copy from source branch if specified
-    if (options.fromBranchId) {
-      const sourceBranch = this.branches.get(options.fromBranchId);
-      if (sourceBranch) {
-        elements = JSON.parse(JSON.stringify(sourceBranch.elements));
-        viewport = sourceBranch.viewport;
-        theme = sourceBranch.theme;
-      }
+    // Save current board before switching
+    if (this.state.currentBoardId && this.state.currentBoardId !== boardId) {
+      // Current board data should be saved by the caller before switching
     }
 
-    const now = Date.now();
-    const branch: Branch = {
-      id: generateId(),
-      projectId: options.projectId,
-      name: options.name,
-      parentBranchId: options.fromBranchId,
-      elements,
-      viewport,
-      theme,
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    this.branches.set(branch.id, branch);
-    await workspaceStorageService.saveBranch(branch);
-    this.emit('branchCreated', branch);
-
-    return branch;
-  }
-
-  async renameBranch(id: string, name: string): Promise<void> {
-    const branch = this.branches.get(id);
-    if (!branch) throw new Error(`Branch ${id} not found`);
-
-    branch.name = name;
-    branch.updatedAt = Date.now();
-
-    this.branches.set(id, branch);
-    await workspaceStorageService.saveBranch(branch);
-    this.emit('branchUpdated', branch);
-  }
-
-  async deleteBranch(id: string): Promise<void> {
-    const branch = this.branches.get(id);
-    if (!branch) throw new Error(`Branch ${id} not found`);
-
-    const project = this.projects.get(branch.projectId);
-    if (project && project.defaultBranchId === id) {
-      throw new Error('Cannot delete the default branch');
-    }
-
-    // Clear current if this branch is active
-    if (this.state.currentBranchId === id) {
-      this.state.currentBranchId = project?.defaultBranchId || null;
-      this.saveState();
-    }
-
-    this.branches.delete(id);
-    await workspaceStorageService.deleteBranch(id);
-    this.emit('branchDeleted', branch);
-  }
-
-  async switchBranch(branchId: string): Promise<Branch> {
-    await this.ensureInitialized();
-
-    const branch = this.branches.get(branchId);
-    if (!branch) throw new Error(`Branch ${branchId} not found`);
-
-    const project = this.projects.get(branch.projectId);
-    if (!project) throw new Error(`Project ${branch.projectId} not found`);
-
-    // Save current branch before switching
-    if (this.state.currentBranchId && this.state.currentBranchId !== branchId) {
-      // Current branch data should be saved by the caller before switching
-    }
-
-    this.state.currentBranchId = branchId;
-    this.state.currentProjectId = branch.projectId;
+    this.state.currentBoardId = boardId;
     this.saveState();
 
-    this.emit('branchSwitched', branch);
-    return branch;
+    this.emit('boardSwitched', board);
+    return board;
   }
 
-  async saveBranch(branchId: string, data: BoardChangeData): Promise<void> {
-    const branch = this.branches.get(branchId);
-    if (!branch) throw new Error(`Branch ${branchId} not found`);
+  async saveBoard(boardId: string, data: BoardChangeData): Promise<void> {
+    const board = this.boards.get(boardId);
+    if (!board) throw new Error(`Board ${boardId} not found`);
 
-    branch.elements = data.children;
-    branch.viewport = data.viewport;
-    branch.theme = data.theme;
-    branch.updatedAt = Date.now();
+    board.elements = data.children;
+    board.viewport = data.viewport;
+    board.theme = data.theme;
+    board.updatedAt = Date.now();
 
-    this.branches.set(branchId, branch);
-    await workspaceStorageService.saveBranch(branch);
-
-    // Update project timestamp
-    const project = this.projects.get(branch.projectId);
-    if (project) {
-      project.updatedAt = Date.now();
-      this.projects.set(project.id, project);
-      await workspaceStorageService.saveProject(project);
-    }
+    this.boards.set(boardId, board);
+    await workspaceStorageService.saveBoard(board);
   }
 
   /**
-   * Save data to the current branch (convenience method)
+   * Save data to the current board (convenience method)
    */
-  async saveCurrentBranch(data: BoardChangeData): Promise<void> {
-    const currentBranchId = this.state.currentBranchId;
-    if (!currentBranchId) {
-      console.warn('[WorkspaceService] No current branch to save');
+  async saveCurrentBoard(data: BoardChangeData): Promise<void> {
+    const currentBoardId = this.state.currentBoardId;
+    if (!currentBoardId) {
+      console.warn('[WorkspaceService] No current board to save');
       return;
     }
-    await this.saveBranch(currentBranchId, data);
+    await this.saveBoard(currentBoardId, data);
   }
 
   // ========== Getters ==========
@@ -432,32 +293,17 @@ class WorkspaceService {
     return this.folders.get(id);
   }
 
-  getProject(id: string): Project | undefined {
-    return this.projects.get(id);
+  getBoard(id: string): Board | undefined {
+    return this.boards.get(id);
   }
 
-  getBranch(id: string): Branch | undefined {
-    return this.branches.get(id);
-  }
-
-  getCurrentBranch(): Branch | null {
-    if (!this.state.currentBranchId) return null;
-    return this.branches.get(this.state.currentBranchId) || null;
-  }
-
-  getCurrentProject(): Project | null {
-    if (!this.state.currentProjectId) return null;
-    return this.projects.get(this.state.currentProjectId) || null;
+  getCurrentBoard(): Board | null {
+    if (!this.state.currentBoardId) return null;
+    return this.boards.get(this.state.currentBoardId) || null;
   }
 
   getState(): WorkspaceState {
     return { ...this.state };
-  }
-
-  getProjectBranches(projectId: string): Branch[] {
-    return Array.from(this.branches.values())
-      .filter((b) => b.projectId === projectId)
-      .sort((a, b) => a.createdAt - b.createdAt);
   }
 
   private getFolderChildren(parentId: string | null): Folder[] {
@@ -466,9 +312,9 @@ class WorkspaceService {
       .sort((a, b) => a.order - b.order);
   }
 
-  private getProjectsInFolder(folderId: string | null): Project[] {
-    return Array.from(this.projects.values())
-      .filter((p) => p.folderId === folderId)
+  private getBoardsInFolder(folderId: string | null): Board[] {
+    return Array.from(this.boards.values())
+      .filter((b) => b.folderId === folderId)
       .sort((a, b) => a.order - b.order);
   }
 
@@ -477,11 +323,11 @@ class WorkspaceService {
   getTree(): TreeNode[] {
     const buildFolderNode = (folder: Folder): FolderTreeNode => {
       const childFolders = this.getFolderChildren(folder.id);
-      const childProjects = this.getProjectsInFolder(folder.id);
+      const childBoards = this.getBoardsInFolder(folder.id);
 
       const children: TreeNode[] = [
         ...childFolders.map(buildFolderNode),
-        ...childProjects.map(buildProjectNode),
+        ...childBoards.map(buildBoardNode),
       ];
 
       return {
@@ -491,22 +337,20 @@ class WorkspaceService {
       };
     };
 
-    const buildProjectNode = (project: Project): ProjectTreeNode => {
-      const branches = this.getProjectBranches(project.id);
+    const buildBoardNode = (board: Board): BoardTreeNode => {
       return {
-        type: 'project',
-        data: project,
-        branches,
+        type: 'board',
+        data: board,
       };
     };
 
     // Build root level nodes
     const rootFolders = this.getFolderChildren(null);
-    const rootProjects = this.getProjectsInFolder(null);
+    const rootBoards = this.getBoardsInFolder(null);
 
     return [
       ...rootFolders.map(buildFolderNode),
-      ...rootProjects.map(buildProjectNode),
+      ...rootBoards.map(buildBoardNode),
     ];
   }
 
@@ -551,8 +395,8 @@ class WorkspaceService {
     return this.initialized;
   }
 
-  hasProjects(): boolean {
-    return this.projects.size > 0;
+  hasBoards(): boolean {
+    return this.boards.size > 0;
   }
 }
 

@@ -4,7 +4,7 @@ import {
   WorkspaceService,
   migrateToWorkspace,
   isWorkspaceMigrationCompleted,
-  Branch,
+  Board,
   BoardChangeData,
 } from '@drawnix/drawnix';
 import { PlaitBoard, PlaitElement, PlaitTheme, Viewport } from '@plait/core';
@@ -28,35 +28,35 @@ export function App() {
         // Check and perform migration if needed
         const migrated = await isWorkspaceMigrationCompleted();
         if (!migrated) {
-          const branchId = await migrateToWorkspace();
-          if (branchId) {
-            console.log('[App] Migrated legacy data to workspace, branch:', branchId);
+          const boardId = await migrateToWorkspace();
+          if (boardId) {
+            console.log('[App] Migrated legacy data to workspace, board:', boardId);
           }
         }
 
-        // Load current branch data if available
-        let currentBranch = workspaceService.getCurrentBranch();
+        // Load current board data if available
+        let currentBoard = workspaceService.getCurrentBoard();
 
-        // If no current branch and no projects exist, create default project with initializeData
-        if (!currentBranch && !workspaceService.hasProjects()) {
-          console.log('[App] First visit, creating default project with initial data');
-          const project = await workspaceService.createProject({
+        // If no current board and no boards exist, create default board with initializeData
+        if (!currentBoard && !workspaceService.hasBoards()) {
+          console.log('[App] First visit, creating default board with initial data');
+          const board = await workspaceService.createBoard({
             name: '默认画板',
             elements: initializeData,
           });
 
-          if (project) {
-            const branch = await workspaceService.switchBranch(project.defaultBranchId);
-            currentBranch = branch;
-            console.log('[App] Created default project:', project.name);
+          if (board) {
+            const switchedBoard = await workspaceService.switchBoard(board.id);
+            currentBoard = switchedBoard;
+            console.log('[App] Created default board:', board.name);
           }
         }
 
-        if (currentBranch) {
+        if (currentBoard) {
           setValue({
-            children: currentBranch.elements || [],
-            viewport: currentBranch.viewport,
-            theme: currentBranch.theme,
+            children: currentBoard.elements || [],
+            viewport: currentBoard.viewport,
+            theme: currentBoard.theme,
           });
         }
       } catch (error) {
@@ -69,13 +69,13 @@ export function App() {
     initialize();
   }, []);
 
-  // Handle branch switching
-  const handleBranchSwitch = useCallback((branch: Branch) => {
-    console.log('[App] Branch switched:', branch.name);
+  // Handle board switching
+  const handleBoardSwitch = useCallback((board: Board) => {
+    console.log('[App] Board switched:', board.name);
     setValue({
-      children: branch.elements || [],
-      viewport: branch.viewport,
-      theme: branch.theme,
+      children: board.elements || [],
+      viewport: board.viewport,
+      theme: board.theme,
     });
   }, []);
 
@@ -84,10 +84,10 @@ export function App() {
     (data: BoardChangeData) => {
       setValue(data);
 
-      // Save to current branch
+      // Save to current board
       const workspaceService = WorkspaceService.getInstance();
-      workspaceService.saveCurrentBranch(data).catch((err: Error) => {
-        console.error('[App] Failed to save branch:', err);
+      workspaceService.saveCurrentBoard(data).catch((err: Error) => {
+        console.error('[App] Failed to save board:', err);
       });
     },
     []
@@ -115,8 +115,7 @@ export function App() {
         viewport={value.viewport}
         theme={value.theme}
         onChange={handleBoardChange}
-        enableWorkspace={true}
-        onBranchSwitch={handleBranchSwitch}
+        onBoardSwitch={handleBoardSwitch}
         afterInit={(board) => {
           console.log('board initialized');
           console.log(

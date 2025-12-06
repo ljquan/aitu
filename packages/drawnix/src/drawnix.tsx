@@ -39,15 +39,13 @@ import { LinkPopup } from './components/popup/link-popup/link-popup';
 import { I18nProvider } from './i18n';
 import { withVideo } from './plugins/with-video';
 import { ActiveTaskWarning } from './components/task-queue/ActiveTaskWarning';
-import { TaskToolbar } from './components/task-queue/TaskToolbar';
 import { useTaskStorage } from './hooks/useTaskStorage';
 import { useTaskExecutor } from './hooks/useTaskExecutor';
 import { useBeforeUnload } from './hooks/useBeforeUnload';
-import { FeedbackButton } from './components/feedback-button';
 import { ChatDrawer } from './components/chat-drawer';
-import { ProjectSidebar } from './components/project-sidebar';
+import { ProjectDrawer } from './components/project-drawer';
 import { useWorkspace } from './hooks/useWorkspace';
-import { Branch } from './types/workspace.types';
+import { Board as WorkspaceBoard } from './types/workspace.types';
 
 export type DrawnixProps = {
   value: PlaitElement[];
@@ -59,10 +57,8 @@ export type DrawnixProps = {
   onViewportChange?: (value: Viewport) => void;
   onThemeChange?: (value: ThemeColorMode) => void;
   afterInit?: (board: PlaitBoard) => void;
-  /** Enable workspace sidebar */
-  enableWorkspace?: boolean;
-  /** Called when branch is switched */
-  onBranchSwitch?: (branch: Branch) => void;
+  /** Called when board is switched */
+  onBoardSwitch?: (board: WorkspaceBoard) => void;
 } & Omit<React.HTMLAttributes<HTMLDivElement>, 'onChange'>;
 
 export const Drawnix: React.FC<DrawnixProps> = ({
@@ -75,8 +71,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
   onThemeChange,
   onValueChange,
   afterInit,
-  enableWorkspace = false,
-  onBranchSwitch,
+  onBoardSwitch,
 }) => {
   const options: PlaitBoardOptions = {
     readonly: false,
@@ -100,6 +95,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
   });
 
   const [board, setBoard] = useState<DrawnixBoard | null>(null);
+  const [projectDrawerOpen, setProjectDrawerOpen] = useState(false);
 
   // 使用 ref 来保存 board 的最新引用,避免 useCallback 依赖问题
   const boardRef = useRef<DrawnixBoard | null>(null);
@@ -149,9 +145,9 @@ export const Drawnix: React.FC<DrawnixProps> = ({
   useBeforeUnload();
 
   // Workspace management
-  const { saveBranch } = useWorkspace();
+  const { saveBoard } = useWorkspace();
 
-  // Handle saving before branch switch
+  // Handle saving before board switch
   const handleBeforeSwitch = useCallback(async () => {
     if (onChange && boardRef.current) {
       // Get current data and save
@@ -160,9 +156,9 @@ export const Drawnix: React.FC<DrawnixProps> = ({
         viewport: boardRef.current.viewport,
         theme: boardRef.current.theme,
       };
-      await saveBranch(currentData);
+      await saveBoard(currentData);
     }
-  }, [onChange, saveBranch]);
+  }, [onChange, saveBoard]);
 
   // 处理选中状态变化,保存最近选中的元素IDs
   const handleSelectionChange = useCallback((selection: Selection | null) => {
@@ -197,7 +193,6 @@ export const Drawnix: React.FC<DrawnixProps> = ({
         <div
           className={classNames('drawnix', {
             'drawnix--mobile': appState.isMobile,
-            'drawnix--with-sidebar': enableWorkspace,
           })}
           ref={containerRef}
         >
@@ -223,7 +218,10 @@ export const Drawnix: React.FC<DrawnixProps> = ({
                 }}
               ></Board>
               {/* 统一左侧工具栏 (桌面端和移动端一致) */}
-              <UnifiedToolbar />
+              <UnifiedToolbar
+                projectDrawerOpen={projectDrawerOpen}
+                onProjectDrawerToggle={() => setProjectDrawerOpen(!projectDrawerOpen)}
+              />
 
               <PopupToolbar></PopupToolbar>
               <LinkPopup></LinkPopup>
@@ -233,17 +231,14 @@ export const Drawnix: React.FC<DrawnixProps> = ({
               <SettingsDialog container={containerRef.current}></SettingsDialog>
             </Wrapper>
             <ActiveTaskWarning />
-            <TaskToolbar />
             <ChatDrawer />
-          </div>
-
-          {/* Workspace Sidebar */}
-          {enableWorkspace && (
-            <ProjectSidebar
+            <ProjectDrawer
+              isOpen={projectDrawerOpen}
+              onOpenChange={setProjectDrawerOpen}
               onBeforeSwitch={handleBeforeSwitch}
-              onBranchSwitch={onBranchSwitch}
+              onBoardSwitch={onBoardSwitch}
             />
-          )}
+          </div>
         </div>
       </DrawnixContext.Provider>
     </I18nProvider>
