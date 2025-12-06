@@ -1,7 +1,7 @@
 /* eslint-disable no-restricted-globals */
 // Service Worker for PWA functionality and handling CORS issues with external images
 // Version will be replaced during build process
-const APP_VERSION = '0.2.11';
+const APP_VERSION = '0.2.13';
 const CACHE_NAME = `drawnix-v${APP_VERSION}`;
 const IMAGE_CACHE_NAME = `drawnix-images`;
 const STATIC_CACHE_NAME = `drawnix-static-v${APP_VERSION}`;
@@ -459,7 +459,8 @@ self.addEventListener('fetch', event => {
 
   // Handle static file requests with cache-first strategy
   // Exclude XHR/fetch API requests - only handle navigation and static resources
-  if (event.request.method === 'GET' &&
+  if (!isDevelopment &&
+      event.request.method === 'GET' &&
       event.request.destination !== '' &&
       event.request.destination !== 'empty') {
     event.respondWith(handleStaticRequest(event.request));
@@ -467,13 +468,13 @@ self.addEventListener('fetch', event => {
 });
 
 // Utility function to perform fetch with retries
-async function fetchWithRetry(request, maxRetries = 2) {
+async function fetchWithRetry(request, maxRetries = 2, fetchOptions = {}) {
   let lastError;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       console.log(`Fetch attempt ${attempt + 1}/${maxRetries + 1} for:`, request.url);
-      const response = await fetch(request);
+      const response = await fetch(request, fetchOptions);
 
       if (response.ok || response.status < 500) {
         // Consider 4xx errors as final (don't retry), only retry on 5xx or network errors
@@ -707,17 +708,62 @@ async function handleStaticRequest(request) {
       return await fetchWithRetry(request);
     }
     
-    // Production mode: try cache first for static files
+    const url = new URL(request.url);
+    const isHtmlRequest = request.mode === 'navigate' || url.pathname.endsWith('.html');
+    
+    // For HTML files: ALWAYS use network-first strategy to prevent version mismatch
+    if (isHtmlRequest) {
+      console.log('HTML request: using network-first strategy', request.url);
+      try {
+        // Use 'reload' to bypass browser HTTP cache and force network request
+        const fetchOptions = { cache: 'reload' };
+        const response = await fetchWithRetry(request, 2, fetchOptions);
+        
+        // Cache the new HTML for offline use only
+        if (response && response.status === 200) {
+          const cache = await caches.open(STATIC_CACHE_NAME);
+          cache.put(request, response.clone());
+        }
+        
+        return response;
+      } catch (networkError) {
+        console.warn('Network request failed for HTML, trying cache:', networkError);
+        const cachedResponse = await caches.match(request);
+        if (cachedResponse) {
+          console.warn('WARNING: Using cached HTML which may be outdated');
+          return cachedResponse;
+        }
+        throw networkError;
+      }
+    }
+    
+    // For non-HTML static files: use cache-first strategy
     const cachedResponse = await caches.match(request);
     if (cachedResponse) {
+      console.log('Returning cached static resource:', request.url);
       return cachedResponse;
     }
     
     // Fetch from network with retry logic and cache for future use
     const response = await fetchWithRetry(request);
+
+    // Check if we got an invalid HTML response for a static asset (SPA fallback 404)
+    const contentType = response.headers.get('Content-Type');
+    const isInvalidResponse = response.status === 200 && 
+                             contentType && 
+                             contentType.includes('text/html') && 
+                             (url.pathname.match(/\.(js|css|png|jpg|jpeg|gif|webp|svg|json)$/i) || 
+                              request.destination === 'script' || 
+                              request.destination === 'style' || 
+                              request.destination === 'image');
+
+    if (isInvalidResponse) {
+       console.warn('Service Worker: Detected HTML response for static resource (likely 404), not caching and returning 404:', request.url);
+       return new Response('Resource not found', { status: 404, statusText: 'Not Found' });
+    }
     
-    // Cache successful responses (only in production)
-    if (response && response.status === 200 && !isDevelopment) {
+    // Cache successful responses
+    if (response && response.status === 200) {
       const cache = await caches.open(STATIC_CACHE_NAME);
       cache.put(request, response.clone());
     }
@@ -730,12 +776,8 @@ async function handleStaticRequest(request) {
     if (!isDevelopment) {
       const cachedResponse = await caches.match(request);
       if (cachedResponse) {
+        console.warn('Using cached fallback for failed request:', request.url);
         return cachedResponse;
-      }
-      
-      // Return a basic offline page for navigation requests
-      if (request.mode === 'navigate') {
-        return caches.match('/index.html');
       }
     }
     
