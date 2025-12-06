@@ -7,6 +7,9 @@
 @import './z-index.scss'; // Z-Index层级管理变量
 @import '../components/chat-drawer/chat-drawer.scss';
 
+.t-dialog__ctx.t-dialog__ctx--fixed{
+    z-index: $z-dialog !important;
+}
 .drawnix {
     height: 100%;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Noto Sans', 'Noto Sans CJK SC', 'Microsoft Yahei', 'Hiragino Sans GB', Arial, sans-serif;

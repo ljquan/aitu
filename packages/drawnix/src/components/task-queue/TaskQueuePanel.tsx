@@ -236,21 +236,29 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
       return;
     }
 
-    // 准备初始数据
-    const initialData = {
-      prompt: task.params.prompt,
-      width: task.params.width,
-      height: task.params.height,
-      duration: task.params.duration,
-      uploadedImages: task.params.uploadedImages,  // 图片任务:传递上传的参考图片(数组)
-      uploadedImage: task.params.uploadedImage,    // 视频任务:传递上传的图片(单个)
-      resultUrl: task.result?.url,  // 传递结果URL用于预览
-    };
-
     // 根据任务类型打开对应的对话框
     if (task.type === TaskType.IMAGE) {
+      // 准备图片生成初始数据
+      const initialData = {
+        initialPrompt: task.params.prompt,
+        initialWidth: task.params.width,
+        initialHeight: task.params.height,
+        initialImages: task.params.uploadedImages,  // 传递上传的参考图片(数组)
+        initialResultUrl: task.result?.url,  // 传递结果URL用于预览
+      };
       openDialog(DialogType.aiImageGeneration, initialData);
     } else if (task.type === TaskType.VIDEO) {
+      // 准备视频生成初始数据
+      const initialData = {
+        initialPrompt: task.params.prompt,
+        initialDuration: typeof task.params.seconds === 'string'
+          ? parseInt(task.params.seconds, 10)
+          : task.params.seconds,  // 确保转换为数字
+        initialModel: task.params.model,  // 传递模型
+        initialSize: task.params.size,  // 传递尺寸
+        initialImages: task.params.uploadedImages,  // 传递上传的图片（多图片格式）
+        initialResultUrl: task.result?.url,  // 传递结果URL用于预览
+      };
       openDialog(DialogType.aiVideoGeneration, initialData);
     }
 
