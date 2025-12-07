@@ -11,6 +11,14 @@ export interface UnifiedToolbarProps {
    * (可选) 自定义CSS类名
    */
   className?: string;
+  /**
+   * (可选) 项目抽屉是否打开
+   */
+  projectDrawerOpen?: boolean;
+  /**
+   * (可选) 项目抽屉打开/关闭切换回调
+   */
+  onProjectDrawerToggle?: () => void;
 }
 
 /**

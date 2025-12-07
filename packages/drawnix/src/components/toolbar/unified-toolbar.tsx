@@ -9,6 +9,7 @@ import { UnifiedToolbarProps } from './toolbar.types';
 import { Island } from '../island';
 import { FeedbackButton } from '../feedback-button';
 import { TaskToolbarButton } from '../task-queue/TaskToolbarButton';
+import { ProjectDrawerButton } from './project-drawer-button';
 
 // 工具栏高度阈值: 当容器高度小于此值时切换到图标模式
 // 基于四个分区的最小高度 + 分割线 + padding 计算得出
@@ -25,7 +26,9 @@ const TOOLBAR_MIN_HEIGHT = 460;
  * 仅在桌面端显示,移动端保持原有独立工具栏布局。
  */
 export const UnifiedToolbar: React.FC<UnifiedToolbarProps> = React.memo(({
-  className
+  className,
+  projectDrawerOpen = false,
+  onProjectDrawerToggle
 }) => {
   const [isIconMode, setIsIconMode] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -71,6 +74,17 @@ export const UnifiedToolbar: React.FC<UnifiedToolbarProps> = React.memo(({
         <div className="unified-toolbar__section">
           <AppToolbar embedded={true} iconMode={isIconMode} />
         </div>
+
+        {/* 项目抽屉按钮 - 文件夹图标 */}
+        {onProjectDrawerToggle && (
+          <div className="unified-toolbar__section" style={{ display: 'flex', justifyContent: 'center' }}>
+            <ProjectDrawerButton
+              isOpen={projectDrawerOpen}
+              onClick={onProjectDrawerToggle}
+              iconMode={isIconMode}
+            />
+          </div>
+        )}
 
         {/* 创作工具分区 - 手型、选择、思维导图、文本、画笔、箭头、形状、图片、AI工具 */}
         <div className="unified-toolbar__section">
