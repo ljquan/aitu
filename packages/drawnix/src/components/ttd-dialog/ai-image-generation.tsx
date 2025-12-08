@@ -5,8 +5,9 @@ import { useI18n } from '../../i18n';
 import { type Language } from '../../constants/prompts';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
 import { TaskType } from '../../types/task.types';
-import { MessagePlugin } from 'tdesign-react';
+import { MessagePlugin, Select } from 'tdesign-react';
 import { useGenerationHistory } from '../../hooks/useGenerationHistory';
+import { IMAGE_MODEL_OPTIONS } from '../settings-dialog/settings-dialog';
 import {
   useGenerationState,
   useKeyboardShortcuts,
@@ -30,6 +31,8 @@ interface AIImageGenerationProps {
   initialWidth?: number;
   initialHeight?: number;
   initialResultUrl?: string;
+  selectedModel?: string;
+  onModelChange?: (value: string) => void;
 }
 
 const AIImageGeneration = ({
@@ -38,7 +41,9 @@ const AIImageGeneration = ({
   selectedElementIds: initialSelectedElementIds = [],
   initialWidth,
   initialHeight,
-  initialResultUrl
+  initialResultUrl,
+  selectedModel,
+  onModelChange
 }: AIImageGenerationProps = {}) => {
   const [prompt, setPrompt] = useState(initialPrompt);
   const [width, setWidth] = useState<number | string>(initialWidth || 1024);
@@ -348,7 +353,26 @@ const AIImageGeneration = ({
         {/* AI 图像生成表单 */}
         <div className="ai-image-generation-section">
           <div className="ai-image-generation-form">
-          
+
+          {/* 模型选择器 */}
+          {selectedModel !== undefined && onModelChange && (
+            <div className="model-selector-wrapper">
+              {/* <label className="model-selector-label">
+                {language === 'zh' ? '模型' : 'Image Model'}
+              </label> */}
+              <Select
+                value={selectedModel}
+                onChange={(value) => onModelChange(value as string)}
+                options={IMAGE_MODEL_OPTIONS}
+                size="small"
+                placeholder={language === 'zh' ? '选择图片模型' : 'Select Image Model'}
+                filterable
+                creatable
+                disabled={isGenerating}
+              />
+            </div>
+          )}
+
           {/* 参考图片区域 */}
           <ImageUpload
             images={uploadedImages}

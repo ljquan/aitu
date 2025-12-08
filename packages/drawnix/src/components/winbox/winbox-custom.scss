@@ -34,6 +34,16 @@
     align-items: center;
     height: 100%;
     order: 2; // 放在左边
+
+    // 防止 Select 组件的点击事件被拖拽事件拦截
+    .wb-header-custom {
+      pointer-events: none;
+
+      // 重新启用 Select 及其子元素的点击事件
+      * {
+        pointer-events: auto;
+      }
+    }
   }
 
   // 标题文字
@@ -284,6 +294,8 @@
     .t-input,
     .t-popup {
       pointer-events: auto;
+      // 确保在移动端可以正常响应触摸事件
+      touch-action: auto;
     }
     
     // Select 组件样式适配
@@ -344,11 +356,11 @@
     .wb-header {
       height: 40px;
     }
-    
+
     .wb-title {
       font-size: 13px;
     }
-    
+
     .wb-min,
     .wb-max,
     .wb-full,
@@ -357,12 +369,34 @@
       height: 28px;
       background-size: 12px;
     }
+
+    // 移动端 Select 组件特殊处理
+    .wb-header-custom {
+      .t-select {
+        // 确保点击区域足够大
+        min-height: 32px;
+
+        // 确保输入框可以接收触摸事件
+        .t-input__inner {
+          pointer-events: auto;
+          touch-action: auto;
+          cursor: pointer;
+        }
+
+        // 确保下拉箭头可点击
+        .t-input__suffix,
+        .t-fake-arrow {
+          pointer-events: auto;
+          touch-action: auto;
+        }
+      }
+    }
   }
-  
+
   .winbox-content-wrapper {
     padding: 12px;
   }
-  
+
   .winbox-ai-generation .winbox-content-wrapper {
     padding: 12px 16px;
   }
