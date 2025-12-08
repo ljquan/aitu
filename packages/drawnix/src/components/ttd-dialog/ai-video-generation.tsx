@@ -19,10 +19,11 @@ import {
 import { geminiSettings } from '../../utils/settings-manager';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
 import { TaskType } from '../../types/task.types';
-import { MessagePlugin } from 'tdesign-react';
+import { MessagePlugin, Select } from 'tdesign-react';
 import { DialogTaskList } from '../task-queue/DialogTaskList';
 import type { VideoModel, UploadedVideoImage } from '../../types/video.types';
 import { getVideoModelConfig, getDefaultModelParams } from '../../constants/video-model-config';
+import { VIDEO_MODEL_OPTIONS } from '../settings-dialog/settings-dialog';
 
 
 
@@ -34,6 +35,8 @@ interface AIVideoGenerationProps {
   initialModel?: VideoModel;  // 新增：模型选择
   initialSize?: string;  // 新增：尺寸选择
   initialResultUrl?: string;
+  selectedModel?: string;
+  onModelChange?: (value: string) => void;
 }
 
 const AIVideoGeneration = ({
@@ -43,7 +46,9 @@ const AIVideoGeneration = ({
   initialDuration,
   initialModel,
   initialSize,
-  initialResultUrl
+  initialResultUrl,
+  selectedModel,
+  onModelChange
 }: AIVideoGenerationProps = {}) => {
   const [prompt, setPrompt] = useState(initialPrompt);
   const [error, setError] = useState<string | null>(null);
@@ -54,8 +59,9 @@ const AIVideoGeneration = ({
     return (initialModel || settings.videoModelName || 'veo3') as VideoModel;
   });
 
-  const modelConfig = getVideoModelConfig(currentModel);
-  const defaultParams = getDefaultModelParams(currentModel);
+  // Use useMemo to ensure modelConfig and defaultParams update when currentModel changes
+  const modelConfig = React.useMemo(() => getVideoModelConfig(currentModel), [currentModel]);
+  const defaultParams = React.useMemo(() => getDefaultModelParams(currentModel), [currentModel]);
 
   // Duration and size state
   const [duration, setDuration] = useState(initialDuration?.toString() || defaultParams.duration);
@@ -100,6 +106,14 @@ const AIVideoGeneration = ({
     return () => geminiSettings.removeListener(handleSettingsChange);
   }, [currentModel]);
 
+  // Sync model from selectedModel prop (from parent component)
+  useEffect(() => {
+    if (selectedModel && selectedModel !== currentModel) {
+      console.log('AIVideoGeneration - syncing model from prop:', selectedModel);
+      setCurrentModel(selectedModel as VideoModel);
+    }
+  }, [selectedModel]);
+
   // Track if we're in manual edit mode (from handleEditTask) to prevent props from overwriting
   const [isManualEdit, setIsManualEdit] = useState(false);
   
@@ -111,12 +125,16 @@ const AIVideoGeneration = ({
       setIsEditMode(false);
       return;
     }
-    const newDefaults = getDefaultModelParams(currentModel);
-    setDuration(newDefaults.duration);
-    setSize(newDefaults.size);
+    console.log('AIVideoGeneration - model changed, updating params:', {
+      model: currentModel,
+      duration: defaultParams.duration,
+      size: defaultParams.size
+    });
+    setDuration(defaultParams.duration);
+    setSize(defaultParams.size);
     // Clear uploaded images when model changes (different upload requirements)
     setUploadedImages([]);
-  }, [currentModel]);
+  }, [currentModel, defaultParams, isEditMode]);
 
   // Handle initial props - use ref to track if we've processed these props before
   const processedPropsRef = React.useRef<string>('');
@@ -348,11 +366,29 @@ const AIVideoGeneration = ({
       }
     } catch (err: any) {
       console.error('Failed to create task:', err);
-      setError(
-        language === 'zh'
-          ? `创建任务失败: ${err.message}`
-          : `Failed to create task: ${err.message}`
-      );
+
+      // 提取更友好的错误信息
+      let errorMessage = language === 'zh'
+        ? '任务创建失败，请检查参数或稍后重试'
+        : 'Failed to create task, please check parameters or try again later';
+
+      if (err.message) {
+        if (err.message.includes('exceed 5000 characters')) {
+          errorMessage = language === 'zh'
+            ? '提示词不能超过 5000 字符'
+            : 'Prompt must not exceed 5000 characters';
+        } else if (err.message.includes('Duplicate submission')) {
+          errorMessage = language === 'zh'
+            ? '请勿重复提交，请等待 5 秒后再试'
+            : 'Duplicate submission. Please wait 5 seconds.';
+        } else if (err.message.includes('Invalid parameters')) {
+          errorMessage = language === 'zh'
+            ? `参数错误: ${err.message.replace('Invalid parameters: ', '')}`
+            : err.message;
+        }
+      }
+
+      setError(errorMessage);
     }
   };
 
@@ -364,6 +400,26 @@ const AIVideoGeneration = ({
         {/* AI 视频生成表单 */}
         <div className="ai-image-generation-section">
           <div className="ai-image-generation-form">
+
+            {/* 模型选择器 */}
+            {selectedModel !== undefined && onModelChange && (
+              <div className="model-selector-wrapper">
+                {/* <label className="model-selector-label">
+                  {language === 'zh' ? '视频模型' : 'Video Model'}
+                </label> */}
+                <Select
+                  value={selectedModel}
+                  onChange={(value) => onModelChange(value as string)}
+                  options={VIDEO_MODEL_OPTIONS}
+                  size="small"
+                  placeholder={language === 'zh' ? '选择视频模型' : 'Select Video Model'}
+                  filterable
+                  creatable
+                  disabled={isGenerating}
+                />
+              </div>
+            )}
+
             {/* Video model options: duration & size */}
             <VideoModelOptions
               model={currentModel}

@@ -1,5 +1,4 @@
 import { Dialog, DialogContent } from '../dialog/dialog';
-import { Select } from 'tdesign-react';
 import MermaidToDrawnix from './mermaid-to-drawnix';
 import { DialogType, useDrawnix } from '../../hooks/use-drawnix';
 import MarkdownToDrawnix from './markdown-to-drawnix';
@@ -13,7 +12,6 @@ import {
   AI_IMAGE_GENERATION_PREVIEW_CACHE_KEY,
   AI_VIDEO_GENERATION_PREVIEW_CACHE_KEY
 } from '../../constants/storage';
-import { IMAGE_MODEL_OPTIONS, VIDEO_MODEL_OPTIONS } from '../settings-dialog/settings-dialog';
 import { geminiSettings } from '../../utils/settings-manager';
 import { WinBoxWindow } from '../winbox';
 import type { VideoModel } from '../../types/video.types';
@@ -396,18 +394,6 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
         minimizable={false}
         className="winbox-ai-generation"
         container={container}
-        headerContent={
-          <Select
-            value={selectedImageModel}
-            onChange={(value) => handleImageModelChange(value as string)}
-            options={IMAGE_MODEL_OPTIONS}
-            size="small"
-            style={{ width: '300px', marginLeft: '12px' }}
-            placeholder="选择图片模型"
-            filterable
-            creatable
-          />
-        }
       >
         {appState.openDialogType === DialogType.aiImageGeneration && (
           <AIImageGeneration
@@ -417,6 +403,8 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
             initialWidth={appState.dialogInitialData?.initialWidth || appState.dialogInitialData?.width}
             initialHeight={appState.dialogInitialData?.initialHeight || appState.dialogInitialData?.height}
             initialResultUrl={aiImageData.initialResultUrl}
+            selectedModel={selectedImageModel}
+            onModelChange={handleImageModelChange}
           />
         )}
       </WinBoxWindow>
@@ -435,18 +423,6 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
         minimizable={false}
         className="winbox-ai-generation"
         container={container}
-        headerContent={
-          <Select
-            value={selectedVideoModel}
-            onChange={(value) => handleVideoModelChange(value as string)}
-            options={VIDEO_MODEL_OPTIONS}
-            size="small"
-            style={{ width: '180px', marginLeft: '12px' }}
-            placeholder="选择视频模型"
-            filterable
-            creatable
-          />
-        }
       >
         {appState.openDialogType === DialogType.aiVideoGeneration && (
           <AIVideoGeneration
@@ -457,6 +433,8 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
             initialModel={aiVideoData.initialModel}
             initialSize={aiVideoData.initialSize}
             initialResultUrl={aiVideoData.initialResultUrl}
+            selectedModel={selectedVideoModel}
+            onModelChange={handleVideoModelChange}
           />
         )}
       </WinBoxWindow>
