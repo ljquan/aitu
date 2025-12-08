@@ -1,0 +1,95 @@
+/**
+ * Bottom Actions Section Styles
+ *
+ * 统一的底部工具区域样式,配合 ToolButton 组件使用
+ */
+
+.bottom-actions-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+
+  // 任务按钮包装器 - 添加相对定位以支持状态点
+  &__task-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    // 去除背景色 - 需要针对 button 元素本身，而不是内部的 icon div
+    .tool-icon_type_button {
+      background-color: transparent !important;
+
+      &:hover,
+      &:active {
+        background-color: transparent !important;
+      }
+
+      &.tool-icon--selected {
+        background-color: transparent !important;
+      }
+    }
+
+    // // 自定义 Badge 样式 - 使用透明背景
+    .t-badge {
+      background-color: transparent !important;
+      color: var(--brand-primary);
+      // border: 1px solid var(--brand-primary);
+    }
+  }
+
+  // 状态指示点
+  &__status {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    top: 4px;
+    right: 4px;
+    border: 2px solid var(--color-background);
+    animation: pulse 2s infinite;
+    pointer-events: none;
+    z-index: 1;
+
+    &--active {
+      background: var(--td-success-color, #00a870);
+    }
+
+    &--failed {
+      background: var(--td-error-color, #e34d59);
+    }
+  }
+}
+
+// 任务图标 + 文字样式
+.drawnix {
+  .task-icon-with-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+
+    svg {
+      flex-shrink: 0;
+    }
+
+    .task-icon-label {
+      font-size: 13px;
+      font-weight: 500;
+      line-height: 1;
+      white-space: nowrap;
+      user-select: none;
+    }
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 0.85;
+  }
+}

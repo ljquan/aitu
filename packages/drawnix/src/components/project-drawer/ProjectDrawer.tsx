@@ -200,7 +200,9 @@ export const ProjectDrawer: React.FC<ProjectDrawerProps> = ({
               autofocus
               onFocus={handleInputFocus}
               onClick={(e: { e: React.MouseEvent }) => e.e.stopPropagation()}
-              onChange={(value) => setEditingName(value)}
+              onChange={(value) => {
+                setEditingName(value);
+              }}
               onBlur={() => handleRenameSubmit('folder', folder.id)}
               onKeydown={(value: string, context: { e: React.KeyboardEvent }) => {
                 if (context.e.key === 'Enter') {
@@ -283,7 +285,9 @@ export const ProjectDrawer: React.FC<ProjectDrawerProps> = ({
               autofocus
               onFocus={handleInputFocus}
               onClick={(e: { e: React.MouseEvent }) => e.e.stopPropagation()}
-              onChange={(value) => setEditingName(value)}
+              onChange={(value) => {
+                setEditingName(value);
+              }}
               onBlur={() => handleRenameSubmit('board', board.id)}
               onKeydown={(value: string, context: { e: React.KeyboardEvent }) => {
                 if (context.e.key === 'Enter') {

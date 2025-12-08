@@ -39,6 +39,15 @@ export const PROVIDER_NAMES: Record<ModelProvider, string> = {
 export const CHAT_MODELS: ChatModel[] = [
   // OpenAI Models
   {
+    id: 'gpt-4o-image',
+    name: 'GPT-4o Image',
+    description: 'OpenAI 多模态图像模型',
+    provider: ModelProvider.OPENAI,
+    badges: ['Multimodal'],
+    maxTokens: 128000,
+    supportsVision: true,
+  },
+  {
     id: 'gpt-5.1',
     name: 'GPT-5.1',
     description: '最新旗舰模型',
@@ -75,6 +84,24 @@ export const CHAT_MODELS: ChatModel[] = [
     maxTokens: 128000,
   },
   // Google Models
+  {
+    id: 'gemini-3-pro-image-preview-2k',
+    name: 'Gemini 3 Pro Image Preview 2K',
+    description: 'Google 图像生成模型 (2K分辨率)',
+    provider: ModelProvider.GOOGLE,
+    badges: ['NEW', 'Multimodal'],
+    maxTokens: 2000000,
+    supportsVision: true,
+  },
+  {
+    id: 'gemini-3-pro-image-preview',
+    name: 'Gemini 3 Pro Image Preview',
+    description: 'Google 图像生成模型',
+    provider: ModelProvider.GOOGLE,
+    badges: ['NEW', 'Multimodal'],
+    maxTokens: 2000000,
+    supportsVision: true,
+  },
   {
     id: 'gemini-3-pro-preview',
     name: 'Gemini 3 Pro Preview',

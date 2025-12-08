@@ -227,8 +227,10 @@ $spacing-xl: 24px;
     min-width: 0;
 
     input {
-      font-size: 14px;
+      font-size: 14px !important;
       padding: 2px 8px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif !important;
+      color: var(--td-text-color-primary) !important;
     }
   }
 }

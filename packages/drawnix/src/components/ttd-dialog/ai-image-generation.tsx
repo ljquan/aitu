@@ -300,18 +300,36 @@ const AIImageGeneration = ({
       } else {
         // 任务创建失败（可能是重复提交）
         setError(
-          language === 'zh' 
-            ? '任务创建失败，请检查参数或稍后重试' 
+          language === 'zh'
+            ? '任务创建失败，请检查参数或稍后重试'
             : 'Failed to create task, please check parameters or try again later'
         );
       }
     } catch (err: any) {
       console.error('Failed to create task:', err);
-      setError(
-        language === 'zh' 
-          ? `创建任务失败: ${err.message}` 
-          : `Failed to create task: ${err.message}`
-      );
+
+      // 提取更友好的错误信息
+      let errorMessage = language === 'zh'
+        ? '任务创建失败，请检查参数或稍后重试'
+        : 'Failed to create task, please check parameters or try again later';
+
+      if (err.message) {
+        if (err.message.includes('exceed 5000 characters')) {
+          errorMessage = language === 'zh'
+            ? '提示词不能超过 5000 字符'
+            : 'Prompt must not exceed 5000 characters';
+        } else if (err.message.includes('Duplicate submission')) {
+          errorMessage = language === 'zh'
+            ? '请勿重复提交，请等待 5 秒后再试'
+            : 'Duplicate submission. Please wait 5 seconds.';
+        } else if (err.message.includes('Invalid parameters')) {
+          errorMessage = language === 'zh'
+            ? `参数错误: ${err.message.replace('Invalid parameters: ', '')}`
+            : err.message;
+        }
+      }
+
+      setError(errorMessage);
     }
   };
 
