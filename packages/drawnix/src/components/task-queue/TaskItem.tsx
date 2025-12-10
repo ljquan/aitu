@@ -135,31 +135,59 @@ export const TaskItem: React.FC<TaskItemProps> = ({
     }
   }, [isCompleted, mediaUrl, task.type]);
 
+  // Build detailed tooltip content
+  const buildTooltipContent = () => {
+    const displayWidth = imageDimensions?.width || task.result?.width || task.params.width;
+    const displayHeight = imageDimensions?.height || task.result?.height || task.params.height;
+
+    return (
+      <div style={{ fontSize: '12px', lineHeight: '1.6' }}>
+        <div><strong>提示词：</strong>{task.params.prompt}</div>
+        <div><strong>状态：</strong>{getStatusLabel(task.status)}</div>
+        {task.params.model && <div><strong>模型：</strong>{task.params.model}</div>}
+        {displayWidth && displayHeight && (
+          <div><strong>尺寸：</strong>{displayWidth}x{displayHeight}</div>
+        )}
+        {task.type === TaskType.VIDEO && task.params.seconds && (
+          <div><strong>时长：</strong>{task.params.seconds}秒</div>
+        )}
+        {task.type === TaskType.VIDEO && task.params.size && (
+          <div><strong>分辨率：</strong>{task.params.size}</div>
+        )}
+        {task.params.batchId && task.params.batchIndex && task.params.batchTotal && (
+          <div><strong>批量：</strong>{task.params.batchIndex}/{task.params.batchTotal}</div>
+        )}
+        <div><strong>创建时间：</strong>{getRelativeTime(task.createdAt)}</div>
+        {task.startedAt && (
+          <div><strong>执行时长：</strong>{formatTaskDuration(
+            (task.completedAt || Date.now()) - task.startedAt
+          )}</div>
+        )}
+        {task.type === TaskType.VIDEO && (
+          <div><strong>进度：</strong>{task.progress ?? 0}%</div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="task-item">
-      {/* Left: Info + Status */}
-      <div className="task-item__header">
-        <div className="task-item__info">
-          <div className="task-item__title">
-            <div className="task-item__type-icon">
-              {task.type === TaskType.IMAGE ? <ImageIcon /> : <VideoIcon />}
-            </div>
-            <Tooltip content={task.params.prompt}>
-              <div className="task-item__prompt">
+        <div className="task-item__header">
+          <div className="task-item__info">
+            {/* Title - Always visible */}
+            <div className="task-item__title">
+              <div className="task-item__type-icon">
+                {task.type === TaskType.IMAGE ? <ImageIcon /> : <VideoIcon />}
+              </div>
+              <div className="task-item__prompt" title={task.params.prompt}>
                 {task.params.prompt}
               </div>
-            </Tooltip>
-          </div>
+            </div>
 
-
-          {/* Metadata */}
+            {/* Metadata */}
           <div className="task-item__meta">
             {/* First row: status + time info */}
             <div className="task-item__meta-row">
-              {/* Status in same line */}
-              <Tag theme={getStatusTagTheme(task.status)} variant="light">
-                {getStatusLabel(task.status)}
-              </Tag>
               {/* Image params: model */}
               {task.type === TaskType.IMAGE && task.params.model && (
                 <Tag variant="outline">
@@ -186,6 +214,11 @@ export const TaskItem: React.FC<TaskItemProps> = ({
                   )}
                 </>
               )}
+
+              {/* Status in same line */}
+              <Tag theme={getStatusTagTheme(task.status)} variant="light">
+                {getStatusLabel(task.status)}
+              </Tag>
               {/* Batch info */}
               {task.params.batchId && task.params.batchIndex && task.params.batchTotal && (
                 <Tag variant="outline">
@@ -204,7 +237,6 @@ export const TaskItem: React.FC<TaskItemProps> = ({
                   )}</span>
                 </div>
               )}
-            </div>
             {/* Second row: progress bar for video tasks */}
             {task.type === TaskType.VIDEO && (
               <div className="task-item__meta-row">
@@ -235,6 +267,8 @@ export const TaskItem: React.FC<TaskItemProps> = ({
               }
               return null;
             })()}
+            </div>
+
           </div>
 
           {/* Error Display */}
@@ -272,11 +306,11 @@ export const TaskItem: React.FC<TaskItemProps> = ({
           )}
 
         </div>
-      </div>
+        </div>
 
       {/* Center: Preview Image/Video */}
       {isCompleted && mediaUrl && (
-        <div className="task-item__preview" onClick={onPreviewOpen}>
+        <div className="task-item__preview" data-track="task_click_preview" onClick={onPreviewOpen}>
           {task.type === TaskType.IMAGE ? (
             <RetryImage
               src={mediaUrl}
@@ -318,6 +352,7 @@ export const TaskItem: React.FC<TaskItemProps> = ({
           variant="outline"
           theme="danger"
           icon={<DeleteIcon />}
+          data-track="task_click_delete"
           onClick={() => onDelete?.(task.id)}
         >
           删除
@@ -330,6 +365,7 @@ export const TaskItem: React.FC<TaskItemProps> = ({
             variant="outline"
             theme="primary"
             icon={<RefreshIcon />}
+            data-track="task_click_retry"
             onClick={() => onRetry?.(task.id)}
           >
             重试
@@ -341,6 +377,7 @@ export const TaskItem: React.FC<TaskItemProps> = ({
           <Button
             size="small"
             theme="primary"
+            data-track="task_click_insert"
             onClick={() => onInsert?.(task.id)}
           >
             插入
@@ -353,6 +390,7 @@ export const TaskItem: React.FC<TaskItemProps> = ({
             size="small"
             variant="outline"
             icon={<DownloadIcon />}
+            data-track="task_click_download"
             onClick={() => onDownload?.(task.id)}
           >
             下载
@@ -367,6 +405,7 @@ export const TaskItem: React.FC<TaskItemProps> = ({
               variant="outline"
               theme={isCached ? 'success' : 'default'}
               icon={isCached ? <CheckCircleFilledIcon /> : <SaveIcon />}
+              data-track="task_click_cache"
               onClick={handleCacheClick}
               disabled={isCaching}
             >
@@ -380,6 +419,7 @@ export const TaskItem: React.FC<TaskItemProps> = ({
           size="small"
           variant="outline"
           icon={<EditIcon />}
+          data-track="task_click_edit"
           onClick={() => onEdit?.(task.id)}
         >
           编辑

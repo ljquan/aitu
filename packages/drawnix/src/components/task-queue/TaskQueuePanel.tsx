@@ -7,7 +7,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { Button, Tabs, Dialog, MessagePlugin, Input, Radio } from 'tdesign-react';
-import { DeleteIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon } from 'tdesign-icons-react';
+import { DeleteIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon } from 'tdesign-icons-react';
 import { TaskItem } from './TaskItem';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
 import { Task, TaskType, TaskStatus } from '../../types/task.types';
@@ -236,21 +236,29 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
       return;
     }
 
-    // 准备初始数据
-    const initialData = {
-      prompt: task.params.prompt,
-      width: task.params.width,
-      height: task.params.height,
-      duration: task.params.duration,
-      uploadedImages: task.params.uploadedImages,  // 图片任务:传递上传的参考图片(数组)
-      uploadedImage: task.params.uploadedImage,    // 视频任务:传递上传的图片(单个)
-      resultUrl: task.result?.url,  // 传递结果URL用于预览
-    };
-
     // 根据任务类型打开对应的对话框
     if (task.type === TaskType.IMAGE) {
+      // 准备图片生成初始数据
+      const initialData = {
+        initialPrompt: task.params.prompt,
+        initialWidth: task.params.width,
+        initialHeight: task.params.height,
+        initialImages: task.params.uploadedImages,  // 传递上传的参考图片(数组)
+        initialResultUrl: task.result?.url,  // 传递结果URL用于预览
+      };
       openDialog(DialogType.aiImageGeneration, initialData);
     } else if (task.type === TaskType.VIDEO) {
+      // 准备视频生成初始数据
+      const initialData = {
+        initialPrompt: task.params.prompt,
+        initialDuration: typeof task.params.seconds === 'string'
+          ? parseInt(task.params.seconds, 10)
+          : task.params.seconds,  // 确保转换为数字
+        initialModel: task.params.model,  // 传递模型
+        initialSize: task.params.size,  // 传递尺寸
+        initialImages: task.params.uploadedImages,  // 传递上传的图片（多图片格式）
+        initialResultUrl: task.result?.url,  // 传递结果URL用于预览
+      };
       openDialog(DialogType.aiVideoGeneration, initialData);
     }
 
@@ -328,7 +336,7 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
       <div className={`task-queue-panel ${expanded ? 'task-queue-panel--expanded' : ''}`}>
         {/* Header with title and tabs */}
         <div className="task-queue-panel__header">
-          <div>
+          <div className="task-queue-panel__header-content">
             <h3>任务队列</h3>
             <Tabs value={activeTab} onChange={(value) => setActiveTab(value as string)}>
               <TabPanel value="all" label={`全部 (${tasks.length})`} />
@@ -337,6 +345,16 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
               <TabPanel value="completed" label={`已完成 (${completedTasks.length})`} />
             </Tabs>
           </div>
+          <Button
+            className="task-queue-panel__close-btn"
+            icon={<CloseIcon />}
+            data-track="task_click_panel_close"
+            onClick={onClose}
+            size="large"
+            shape="circle"
+            variant="text"
+            theme="default"
+          />
         </div>
 
         {/* Filters and Actions */}
@@ -369,6 +387,7 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
                 variant="text"
                 theme="danger"
                 icon={<DeleteIcon />}
+                data-track="task_click_clear_failed"
                 onClick={() => handleClear('failed')}
               >
                 清除失败
@@ -407,8 +426,9 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
 
       {/* Backdrop overlay */}
       {expanded && (
-        <div 
+        <div
           className="task-queue-panel__backdrop"
+          data-track="task_click_backdrop_close"
           onClick={onClose}
         />
       )}
@@ -458,6 +478,7 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
             <Button
               className="task-preview-nav task-preview-nav--left"
               icon={<ChevronLeftIcon />}
+              data-track="task_click_preview_previous"
               onClick={handlePreviewPrevious}
               size="large"
               shape="circle"
@@ -468,6 +489,7 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
             <Button
               className="task-preview-nav task-preview-nav--right"
               icon={<ChevronRightIcon />}
+              data-track="task_click_preview_next"
               onClick={handlePreviewNext}
               size="large"
               shape="circle"

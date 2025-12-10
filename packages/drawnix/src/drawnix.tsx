@@ -38,12 +38,15 @@ import { buildTextLinkPlugin } from './plugins/with-text-link';
 import { LinkPopup } from './components/popup/link-popup/link-popup';
 import { I18nProvider } from './i18n';
 import { withVideo } from './plugins/with-video';
-import { TaskToolbar } from './components/task-queue/TaskToolbar';
+import { withTracking } from './plugins/tracking';
 import { ActiveTaskWarning } from './components/task-queue/ActiveTaskWarning';
 import { useTaskStorage } from './hooks/useTaskStorage';
 import { useTaskExecutor } from './hooks/useTaskExecutor';
 import { useBeforeUnload } from './hooks/useBeforeUnload';
-import { FeedbackButton } from './components/feedback-button';
+import { ChatDrawer } from './components/chat-drawer';
+import { ProjectDrawer } from './components/project-drawer';
+import { useWorkspace } from './hooks/useWorkspace';
+import { Board as WorkspaceBoard } from './types/workspace.types';
 
 export type DrawnixProps = {
   value: PlaitElement[];
@@ -55,7 +58,9 @@ export type DrawnixProps = {
   onViewportChange?: (value: Viewport) => void;
   onThemeChange?: (value: ThemeColorMode) => void;
   afterInit?: (board: PlaitBoard) => void;
-} & React.HTMLAttributes<HTMLDivElement>;
+  /** Called when board is switched */
+  onBoardSwitch?: (board: WorkspaceBoard) => void;
+} & Omit<React.HTMLAttributes<HTMLDivElement>, 'onChange'>;
 
 export const Drawnix: React.FC<DrawnixProps> = ({
   value,
@@ -67,6 +72,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
   onThemeChange,
   onValueChange,
   afterInit,
+  onBoardSwitch,
 }) => {
   const options: PlaitBoardOptions = {
     readonly: false,
@@ -90,6 +96,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
   });
 
   const [board, setBoard] = useState<DrawnixBoard | null>(null);
+  const [projectDrawerOpen, setProjectDrawerOpen] = useState(false);
 
   // 使用 ref 来保存 board 的最新引用,避免 useCallback 依赖问题
   const boardRef = useRef<DrawnixBoard | null>(null);
@@ -125,6 +132,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
     buildPencilPlugin(updateAppState),
     buildTextLinkPlugin(updateAppState),
     withVideo,
+    withTracking,
   ];
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -137,6 +145,22 @@ export const Drawnix: React.FC<DrawnixProps> = ({
 
   // Warn users before leaving page with active tasks
   useBeforeUnload();
+
+  // Workspace management
+  const { saveBoard } = useWorkspace();
+
+  // Handle saving before board switch
+  const handleBeforeSwitch = useCallback(async () => {
+    if (onChange && boardRef.current) {
+      // Get current data and save
+      const currentData = {
+        children: boardRef.current.children || [],
+        viewport: boardRef.current.viewport,
+        theme: boardRef.current.theme,
+      };
+      await saveBoard(currentData);
+    }
+  }, [onChange, saveBoard]);
 
   // 处理选中状态变化,保存最近选中的元素IDs
   const handleSelectionChange = useCallback((selection: Selection | null) => {
@@ -174,38 +198,49 @@ export const Drawnix: React.FC<DrawnixProps> = ({
           })}
           ref={containerRef}
         >
-          <Wrapper
-            value={value}
-            viewport={viewport}
-            theme={theme}
-            options={options}
-            plugins={plugins}
-            onChange={(data: BoardChangeData) => {
-              onChange && onChange(data);
-            }}
-            onSelectionChange={handleSelectionChange}
-            onViewportChange={onViewportChange}
-            onThemeChange={onThemeChange}
-            onValueChange={onValueChange}
-          >
-            <Board
-              afterInit={(board) => {
-                setBoard(board as DrawnixBoard);
-                afterInit && afterInit(board);
+          <div className="drawnix__main">
+            <Wrapper
+              value={value}
+              viewport={viewport}
+              theme={theme}
+              options={options}
+              plugins={plugins}
+              onChange={(data: BoardChangeData) => {
+                onChange && onChange(data);
               }}
-            ></Board>
-            {/* 统一左侧工具栏 (桌面端和移动端一致) */}
-            <UnifiedToolbar />
+              onSelectionChange={handleSelectionChange}
+              onViewportChange={onViewportChange}
+              onThemeChange={onThemeChange}
+              onValueChange={onValueChange}
+            >
+              <Board
+                afterInit={(board) => {
+                  setBoard(board as DrawnixBoard);
+                  afterInit && afterInit(board);
+                }}
+              ></Board>
+              {/* 统一左侧工具栏 (桌面端和移动端一致) */}
+              <UnifiedToolbar
+                projectDrawerOpen={projectDrawerOpen}
+                onProjectDrawerToggle={() => setProjectDrawerOpen(!projectDrawerOpen)}
+              />
 
-            <PopupToolbar></PopupToolbar>
-            <LinkPopup></LinkPopup>
-            <ClosePencilToolbar></ClosePencilToolbar>
-            <TTDDialog container={containerRef.current}></TTDDialog>
-            <CleanConfirm container={containerRef.current}></CleanConfirm>
-            <SettingsDialog container={containerRef.current}></SettingsDialog>
-          </Wrapper>
-          <ActiveTaskWarning />
-          <TaskToolbar />
+              <PopupToolbar></PopupToolbar>
+              <LinkPopup></LinkPopup>
+              <ClosePencilToolbar></ClosePencilToolbar>
+              <TTDDialog container={containerRef.current}></TTDDialog>
+              <CleanConfirm container={containerRef.current}></CleanConfirm>
+              <SettingsDialog container={containerRef.current}></SettingsDialog>
+            </Wrapper>
+            <ActiveTaskWarning />
+            <ChatDrawer />
+            <ProjectDrawer
+              isOpen={projectDrawerOpen}
+              onOpenChange={setProjectDrawerOpen}
+              onBeforeSwitch={handleBeforeSwitch}
+              onBoardSwitch={onBoardSwitch}
+            />
+          </div>
         </div>
       </DrawnixContext.Provider>
     </I18nProvider>

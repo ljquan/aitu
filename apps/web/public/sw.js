@@ -1,7 +1,7 @@
 /* eslint-disable no-restricted-globals */
 // Service Worker for PWA functionality and handling CORS issues with external images
 // Version will be replaced during build process
-const APP_VERSION = '0.2.6';
+const APP_VERSION = '0.2.13';
 const CACHE_NAME = `drawnix-v${APP_VERSION}`;
 const IMAGE_CACHE_NAME = `drawnix-images`;
 const STATIC_CACHE_NAME = `drawnix-static-v${APP_VERSION}`;
@@ -46,6 +46,28 @@ const videoBlobCache = new Map();
 
 // 域名故障标记：记录已知失败的域名
 const failedDomains = new Set();
+
+// ==================== 智能升级相关变量 ====================
+// 活跃请求计数器：追踪正在进行的请求数量
+let activeRequestCount = 0;
+
+// 是否有等待中的升级
+let pendingUpgrade = false;
+
+// 新版本资源是否已准备好
+let newVersionReady = false;
+
+// 升级检查间隔（毫秒）
+const UPGRADE_CHECK_INTERVAL = 500;
+
+// 空闲等待时间（毫秒）- 请求结束后等待一段时间确保没有新请求
+const IDLE_WAIT_TIME = 2000;
+
+// 最后一次请求结束时间
+let lastRequestEndTime = 0;
+
+// 升级检查定时器
+let upgradeCheckTimer = null;
 
 // 检查URL是否需要CORS处理
 function shouldHandleCORS(url) {
@@ -180,6 +202,102 @@ function cleanupVideoBlobCache() {
 setInterval(cleanupPendingRequests, 60000); // 每分钟清理一次
 setInterval(cleanupVideoBlobCache, 2 * 60 * 1000); // 每2分钟清理一次视频缓存
 
+// ==================== 智能升级相关函数 ====================
+
+// 增加活跃请求计数
+function incrementActiveRequests() {
+  activeRequestCount++;
+  console.log(`Service Worker: 活跃请求数 +1，当前: ${activeRequestCount}`);
+}
+
+// 减少活跃请求计数
+function decrementActiveRequests() {
+  activeRequestCount = Math.max(0, activeRequestCount - 1);
+  lastRequestEndTime = Date.now();
+  console.log(`Service Worker: 活跃请求数 -1，当前: ${activeRequestCount}`);
+  
+  // 如果有等待中的升级，检查是否可以执行
+  if (pendingUpgrade && activeRequestCount === 0) {
+    scheduleUpgradeCheck();
+  }
+}
+
+// 安排升级检查
+function scheduleUpgradeCheck() {
+  if (upgradeCheckTimer) {
+    clearTimeout(upgradeCheckTimer);
+  }
+  
+  upgradeCheckTimer = setTimeout(() => {
+    checkAndPerformUpgrade();
+  }, IDLE_WAIT_TIME);
+}
+
+// 检查并执行升级
+function checkAndPerformUpgrade() {
+  const now = Date.now();
+  const idleTime = now - lastRequestEndTime;
+  
+  console.log(`Service Worker: 检查升级条件 - 活跃请求: ${activeRequestCount}, 空闲时间: ${idleTime}ms`);
+  
+  // 条件：没有活跃请求，且空闲时间足够长
+  if (activeRequestCount === 0 && idleTime >= IDLE_WAIT_TIME) {
+    console.log('Service Worker: 满足升级条件，执行升级...');
+    performUpgrade();
+  } else if (pendingUpgrade) {
+    // 如果还有请求或空闲时间不够，继续等待
+    console.log('Service Worker: 升级条件不满足，继续等待...');
+    scheduleUpgradeCheck();
+  }
+}
+
+// 执行升级
+function performUpgrade() {
+  if (!pendingUpgrade) {
+    return;
+  }
+  
+  pendingUpgrade = false;
+  newVersionReady = false;
+  
+  console.log('Service Worker: 开始执行升级，调用 skipWaiting()');
+  self.skipWaiting();
+  
+  // 通知所有客户端 SW 即将更新
+  self.clients.matchAll().then(clients => {
+    clients.forEach(client => {
+      client.postMessage({ 
+        type: 'SW_UPGRADING',
+        version: APP_VERSION
+      });
+    });
+  });
+}
+
+// 标记新版本已准备好，等待合适时机升级
+function markNewVersionReady() {
+  newVersionReady = true;
+  pendingUpgrade = true;
+  lastRequestEndTime = Date.now();
+  
+  console.log(`Service Worker: 新版本 v${APP_VERSION} 已准备好，等待合适时机升级...`);
+  
+  // 通知客户端有新版本可用
+  self.clients.matchAll().then(clients => {
+    clients.forEach(client => {
+      client.postMessage({ 
+        type: 'SW_NEW_VERSION_READY',
+        version: APP_VERSION
+      });
+    });
+  });
+  
+  // 开始检查升级时机
+  if (activeRequestCount === 0) {
+    scheduleUpgradeCheck();
+  }
+}
+
 // 清理旧的缓存条目以释放空间（基于LRU策略）
 async function cleanOldCacheEntries(cache) {
   try {
@@ -246,7 +364,7 @@ const STATIC_FILES = [
 ];
 
 self.addEventListener('install', event => {
-  console.log('Service Worker installed');
+  console.log(`Service Worker v${APP_VERSION} installing...`);
   
   const installPromises = [];
   
@@ -258,21 +376,28 @@ self.addEventListener('install', event => {
     installPromises.push(
       caches.open(STATIC_CACHE_NAME)
         .then(cache => {
-          console.log('Caching static files');
+          console.log('Caching static files for new version');
           return cache.addAll(STATIC_FILES);
         })
         .catch(err => console.log('Cache pre-loading failed:', err))
     );
   }
   
-  event.waitUntil(Promise.all(installPromises));
-  self.skipWaiting();
+  event.waitUntil(
+    Promise.all(installPromises).then(() => {
+      console.log(`Service Worker v${APP_VERSION} installed, resources ready`);
+      // 不立即调用 skipWaiting()，而是标记新版本已准备好
+      // 等待合适的时机（没有活跃请求时）再升级
+      markNewVersionReady();
+    })
+  );
 });
 
 self.addEventListener('activate', event => {
   console.log('Service Worker activated');
 
   // 迁移旧的图片缓存并清理过期缓存
+  // 重要：延迟清理旧版本的静态资源缓存，避免升级时资源加载失败
   event.waitUntil(
     caches.keys().then(async cacheNames => {
       // 查找旧的版本化图片缓存
@@ -312,22 +437,37 @@ self.addEventListener('activate', event => {
         console.log('Image cache migration completed');
       }
 
-      // 清理其他不需要的缓存
-      return Promise.all(
-        cacheNames.map(cacheName => {
-          // 保留当前版本的缓存
-          const isCurrentCache = cacheName === CACHE_NAME ||
-                                 cacheName === IMAGE_CACHE_NAME ||
-                                 cacheName === STATIC_CACHE_NAME;
-
-          if (!isCurrentCache) {
-            console.log('Deleting old cache:', cacheName);
-            return caches.delete(cacheName);
-          }
-          return null;
-        })
+      // 找出旧版本的静态资源缓存（但不立即删除）
+      const oldStaticCaches = cacheNames.filter(name => 
+        name.startsWith('drawnix-static-v') && name !== STATIC_CACHE_NAME
       );
-    }).then(() => {
+      
+      const oldAppCaches = cacheNames.filter(name =>
+        name.startsWith('drawnix-v') && 
+        name !== CACHE_NAME && 
+        name !== IMAGE_CACHE_NAME &&
+        !name.startsWith('drawnix-static-v')
+      );
+
+      if (oldStaticCaches.length > 0 || oldAppCaches.length > 0) {
+        console.log('Found old version caches, will keep them temporarily:', [...oldStaticCaches, ...oldAppCaches]);
+        console.log('Old caches will be cleaned up after clients are updated');
+        
+        // 延迟 30 秒后清理旧缓存，给所有客户端足够时间刷新
+        setTimeout(async () => {
+          console.log('Cleaning up old version caches now...');
+          for (const cacheName of [...oldStaticCaches, ...oldAppCaches]) {
+            try {
+              await caches.delete(cacheName);
+              console.log('Deleted old cache:', cacheName);
+            } catch (error) {
+              console.warn('Failed to delete old cache:', cacheName, error);
+            }
+          }
+          console.log('Old version caches cleanup completed');
+        }, 30000); // 30秒延迟
+      }
+
       console.log(`Service Worker v${APP_VERSION} activated`);
       return self.clients.claim();
     })
@@ -337,7 +477,18 @@ self.addEventListener('activate', event => {
 // Handle messages from main thread
 self.addEventListener('message', event => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
-    self.skipWaiting();
+    // 主线程请求立即升级（用户主动触发）
+    console.log('Service Worker: 收到主线程的 SKIP_WAITING 请求');
+    
+    // 如果有等待中的升级，立即执行
+    if (pendingUpgrade) {
+      console.log('Service Worker: 用户主动触发升级，立即执行');
+      performUpgrade();
+    } else {
+      // 直接调用 skipWaiting
+      self.skipWaiting();
+    }
+    
     // Notify clients that SW has been updated
     self.clients.matchAll().then(clients => {
       clients.forEach(client => {
@@ -350,6 +501,28 @@ self.addEventListener('message', event => {
     cleanExpiredImageCache().catch(error => {
       console.warn('Service Worker: Cache cleanup failed:', error);
     });
+  } else if (event.data && event.data.type === 'GET_UPGRADE_STATUS') {
+    // 主线程查询升级状态
+    event.source.postMessage({
+      type: 'UPGRADE_STATUS',
+      pendingUpgrade: pendingUpgrade,
+      newVersionReady: newVersionReady,
+      activeRequestCount: activeRequestCount,
+      version: APP_VERSION
+    });
+  } else if (event.data && event.data.type === 'FORCE_UPGRADE') {
+    // 主线程强制升级（忽略活跃请求）
+    console.log('Service Worker: 收到强制升级请求');
+    if (pendingUpgrade) {
+      pendingUpgrade = false;
+      newVersionReady = false;
+      self.skipWaiting();
+      self.clients.matchAll().then(clients => {
+        clients.forEach(client => {
+          client.postMessage({ type: 'SW_UPDATED' });
+        });
+      });
+    }
   }
 });
 
@@ -430,34 +603,61 @@ self.addEventListener('fetch', event => {
   // 拦截视频请求以支持 Range 请求
   if (isVideoRequest(url, event.request)) {
     console.log('Service Worker: Intercepting video request:', url.href);
-    event.respondWith(handleVideoRequest(event.request));
+    
+    // 追踪视频请求（视频请求通常较长，需要追踪）
+    incrementActiveRequests();
+    event.respondWith(
+      handleVideoRequest(event.request).finally(() => {
+        decrementActiveRequests();
+      })
+    );
     return;
   }
 
   // 拦截外部图片请求（非同源且为图片格式）
   if (url.origin !== location.origin && isImageRequest(url, event.request)) {
     console.log('Service Worker: Intercepting external image request:', url.href);
-    event.respondWith(handleImageRequest(event.request));
+    
+    // 追踪图片请求
+    incrementActiveRequests();
+    event.respondWith(
+      handleImageRequest(event.request).finally(() => {
+        decrementActiveRequests();
+      })
+    );
     return;
   }
 
   // Handle static file requests with cache-first strategy
   // Exclude XHR/fetch API requests - only handle navigation and static resources
-  if (event.request.method === 'GET' &&
+  if (!isDevelopment &&
+      event.request.method === 'GET' &&
       event.request.destination !== '' &&
       event.request.destination !== 'empty') {
-    event.respondWith(handleStaticRequest(event.request));
+    
+    // 追踪静态资源请求
+    incrementActiveRequests();
+    event.respondWith(
+      handleStaticRequest(event.request).finally(() => {
+        decrementActiveRequests();
+      })
+    );
+    return;
   }
+  
+  // 对于其他请求（如 XHR/API 请求），不拦截，让浏览器直接处理
+  // 这些请求不会被追踪，但通常它们很快完成
+  // SW 升级会在拦截的请求（图片、视频、静态资源）完成后进行
 });
 
 // Utility function to perform fetch with retries
-async function fetchWithRetry(request, maxRetries = 2) {
+async function fetchWithRetry(request, maxRetries = 2, fetchOptions = {}) {
   let lastError;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       console.log(`Fetch attempt ${attempt + 1}/${maxRetries + 1} for:`, request.url);
-      const response = await fetch(request);
+      const response = await fetch(request, fetchOptions);
 
       if (response.ok || response.status < 500) {
         // Consider 4xx errors as final (don't retry), only retry on 5xx or network errors
@@ -691,17 +891,62 @@ async function handleStaticRequest(request) {
       return await fetchWithRetry(request);
     }
     
-    // Production mode: try cache first for static files
+    const url = new URL(request.url);
+    const isHtmlRequest = request.mode === 'navigate' || url.pathname.endsWith('.html');
+    
+    // For HTML files: ALWAYS use network-first strategy to prevent version mismatch
+    if (isHtmlRequest) {
+      console.log('HTML request: using network-first strategy', request.url);
+      try {
+        // Use 'reload' to bypass browser HTTP cache and force network request
+        const fetchOptions = { cache: 'reload' };
+        const response = await fetchWithRetry(request, 2, fetchOptions);
+        
+        // Cache the new HTML for offline use only
+        if (response && response.status === 200) {
+          const cache = await caches.open(STATIC_CACHE_NAME);
+          cache.put(request, response.clone());
+        }
+        
+        return response;
+      } catch (networkError) {
+        console.warn('Network request failed for HTML, trying cache:', networkError);
+        const cachedResponse = await caches.match(request);
+        if (cachedResponse) {
+          console.warn('WARNING: Using cached HTML which may be outdated');
+          return cachedResponse;
+        }
+        throw networkError;
+      }
+    }
+    
+    // For non-HTML static files: use cache-first strategy
     const cachedResponse = await caches.match(request);
     if (cachedResponse) {
+      console.log('Returning cached static resource:', request.url);
       return cachedResponse;
     }
     
     // Fetch from network with retry logic and cache for future use
     const response = await fetchWithRetry(request);
+
+    // Check if we got an invalid HTML response for a static asset (SPA fallback 404)
+    const contentType = response.headers.get('Content-Type');
+    const isInvalidResponse = response.status === 200 && 
+                             contentType && 
+                             contentType.includes('text/html') && 
+                             (url.pathname.match(/\.(js|css|png|jpg|jpeg|gif|webp|svg|json)$/i) || 
+                              request.destination === 'script' || 
+                              request.destination === 'style' || 
+                              request.destination === 'image');
+
+    if (isInvalidResponse) {
+       console.warn('Service Worker: Detected HTML response for static resource (likely 404), not caching and returning 404:', request.url);
+       return new Response('Resource not found', { status: 404, statusText: 'Not Found' });
+    }
     
-    // Cache successful responses (only in production)
-    if (response && response.status === 200 && !isDevelopment) {
+    // Cache successful responses
+    if (response && response.status === 200) {
       const cache = await caches.open(STATIC_CACHE_NAME);
       cache.put(request, response.clone());
     }
@@ -714,12 +959,8 @@ async function handleStaticRequest(request) {
     if (!isDevelopment) {
       const cachedResponse = await caches.match(request);
       if (cachedResponse) {
+        console.warn('Using cached fallback for failed request:', request.url);
         return cachedResponse;
-      }
-      
-      // Return a basic offline page for navigation requests
-      if (request.mode === 'navigate') {
-        return caches.match('/index.html');
       }
     }
     

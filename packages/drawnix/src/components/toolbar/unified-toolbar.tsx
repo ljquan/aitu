@@ -8,6 +8,8 @@ import { ThemeToolbar } from './theme-toolbar';
 import { UnifiedToolbarProps } from './toolbar.types';
 import { Island } from '../island';
 import { FeedbackButton } from '../feedback-button';
+import { BottomActionsSection } from './bottom-actions-section';
+import { TaskQueuePanel } from '../task-queue/TaskQueuePanel';
 
 // 工具栏高度阈值: 当容器高度小于此值时切换到图标模式
 // 基于四个分区的最小高度 + 分割线 + padding 计算得出
@@ -24,9 +26,13 @@ const TOOLBAR_MIN_HEIGHT = 460;
  * 仅在桌面端显示,移动端保持原有独立工具栏布局。
  */
 export const UnifiedToolbar: React.FC<UnifiedToolbarProps> = React.memo(({
-  className
+  className,
+  projectDrawerOpen = false,
+  onProjectDrawerToggle
 }) => {
   const [isIconMode, setIsIconMode] = useState(false);
+  const [taskPanelExpanded, setTaskPanelExpanded] = useState(false);
+  const hasEverExpanded = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // 使用 useCallback 稳定回调函数引用,配合 React.memo 优化性能
@@ -51,43 +57,77 @@ export const UnifiedToolbar: React.FC<UnifiedToolbarProps> = React.memo(({
     };
   }, [handleResize]);
 
+  // 任务面板切换处理
+  const handleTaskPanelToggle = useCallback(() => {
+    const newExpanded = !taskPanelExpanded;
+    if (newExpanded && !hasEverExpanded.current) {
+      hasEverExpanded.current = true;
+    }
+    setTaskPanelExpanded(newExpanded);
+  }, [taskPanelExpanded]);
+
+  const handleTaskPanelClose = useCallback(() => {
+    setTaskPanelExpanded(false);
+  }, []);
+
   return (
-    <Island
-      ref={containerRef}
-      className={classNames(
-        'unified-toolbar',
-        ATTACHED_ELEMENT_CLASS_NAME,
-        {
-          'unified-toolbar--icon-only': isIconMode,
-        },
-        className
+    <>
+      {/* 任务队列面板 - 只在首次展开后才渲染 */}
+      {hasEverExpanded.current && (
+        <TaskQueuePanel expanded={taskPanelExpanded} onClose={handleTaskPanelClose} />
       )}
-      padding={1}
-    >
-      {/* 应用工具分区 - 菜单、撤销、重做、复制、删除 */}
-      <div className="unified-toolbar__section">
-        <AppToolbar embedded={true} iconMode={isIconMode} />
-      </div>
 
-      {/* 创作工具分区 - 手型、选择、思维导图、文本、画笔、箭头、形状、图片、AI工具 */}
-      <div className="unified-toolbar__section">
-        <CreationToolbar embedded={true} iconMode={isIconMode} />
-      </div>
+      <Island
+        ref={containerRef}
+        className={classNames(
+          'unified-toolbar',
+          ATTACHED_ELEMENT_CLASS_NAME,
+          {
+            'unified-toolbar--icon-only': isIconMode,
+          },
+          className
+        )}
+        padding={1}
+      >
+        {/* 可滚动的工具栏内容区 */}
+        <div className="unified-toolbar__scrollable">
+          {/* 应用工具分区 - 菜单、撤销、重做、复制、删除 */}
+          <div className="unified-toolbar__section">
+            <AppToolbar embedded={true} iconMode={isIconMode} />
+          </div>
 
-      {/* 缩放工具分区 - 缩小、缩放百分比、放大 */}
-      <div className="unified-toolbar__section">
-        <ZoomToolbar embedded={true} iconMode={isIconMode} />
-      </div>
+          {/* 创作工具分区 - 手型、选择、思维导图、文本、画笔、箭头、形状、图片、AI工具 */}
+          <div className="unified-toolbar__section">
+            <CreationToolbar embedded={true} iconMode={isIconMode} />
+          </div>
 
-      {/* 主题选择分区 - 主题下拉选择器 */}
-      <div className="unified-toolbar__section">
-        <ThemeToolbar embedded={true} iconMode={isIconMode} />
-      </div>
+          {/* 缩放工具分区 - 缩小、缩放百分比、放大 */}
+          <div className="unified-toolbar__section">
+            <ZoomToolbar embedded={true} iconMode={isIconMode} />
+          </div>
 
-      {/* 反馈按钮分区 */}
-      <div className="unified-toolbar__section" style={{ display: 'flex', justifyContent: 'center' }}>
-        <FeedbackButton />
-      </div>
-    </Island>
+          {/* 主题选择分区 - 主题下拉选择器 */}
+          <div className="unified-toolbar__section">
+            <ThemeToolbar embedded={true} iconMode={isIconMode} />
+          </div>
+
+          {/* 反馈按钮分区 */}
+          <div className="unified-toolbar__section" style={{ display: 'flex', justifyContent: 'center' }}>
+            <FeedbackButton />
+          </div>
+        </div>
+
+        {/* 底部操作区域 - 打开项目 + 任务队列 - 固定在底部 */}
+        <div className="unified-toolbar__section unified-toolbar__section--fixed-bottom">
+          <BottomActionsSection
+            projectDrawerOpen={projectDrawerOpen}
+            onProjectDrawerToggle={onProjectDrawerToggle || (() => {})}
+            taskPanelExpanded={taskPanelExpanded}
+            onTaskPanelToggle={handleTaskPanelToggle}
+            iconMode={isIconMode}
+          />
+        </div>
+      </Island>
+    </>
   );
 });

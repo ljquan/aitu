@@ -3,7 +3,7 @@ import {
   Point,
   getRectangleByElements,
 } from '@plait/core';
-import { getInsertionPointForSelectedElements } from '../utils/selection-utils';
+import { getInsertionPointForSelectedElements, getInsertionPointBelowBottommostElement } from '../utils/selection-utils';
 import { urlCacheService } from '../services/url-cache-service';
 
 /**
@@ -244,11 +244,11 @@ export const insertVideoFromUrl = async (
     );
     console.log('Display dimensions after scaling:', displayDimensions);
 
-    // 使用缓存服务下载并缓存视频
-    // 视频文件较大，存储 Blob 而不是 Base64
-    // 使用 ObjectURL 作为视频源
-    const { objectUrl } = await urlCacheService.getVideoAsBlob(videoUrl);
-    console.log('Video cached, using ObjectURL:', objectUrl.substring(0, 50));
+    // 缓存视频到IndexedDB (后台任务，不阻塞插入)
+    // 这样即使URL过期，也可以从缓存恢复
+    urlCacheService.getVideoAsBlob(videoUrl).catch(error => {
+      console.warn('Failed to cache video in background:', error);
+    });
 
     // 计算插入位置
     let insertionPoint = startPoint;
@@ -268,6 +268,9 @@ export const insertVideoFromUrl = async (
         if (calculatedPoint) {
           // 调整X坐标，让视频以计算点为中心左右居中显示
           insertionPoint = [calculatedPoint[0] - displayDimensions.width / 2, calculatedPoint[1]] as Point;
+        } else {
+          // 如果没有选中元素,在最下方元素的下方插入
+          insertionPoint = getInsertionPointBelowBottommostElement(board, displayDimensions.width);
         }
       }
     }
@@ -279,25 +282,17 @@ export const insertVideoFromUrl = async (
 
     console.log('Inserting video element with display dimensions:', displayDimensions, 'at point:', insertionPoint);
 
-    // 使用图片元素，通过URL后缀识别为视频
-    // 注意：使用 ObjectURL 在页面刷新后会失效
-    // 但视频数据已缓存到 IndexedDB，后续可以实现从缓存恢复的逻辑
-    // 在 ObjectURL 后面添加 #video 标识符
-    // 因为 DrawTransforms.insertImage 可能不会保留自定义属性（如 isVideo）
-    // 通过 URL hash 来标识视频元素是最可靠的方式
+    // 直接使用原始URL，并添加 #video 标识符
+    // 这样刷新后视频仍然可以正常显示（只要原始URL有效）
     const videoAsImageElement = {
-      url: `${objectUrl}#video`,
+      url: `${videoUrl}#video`,
       width: displayDimensions.width,
       height: displayDimensions.height,
-      // 存储原始 URL 以便后续从缓存恢复
-      originalUrl: videoUrl,
-      // 显式标识为视频，因为 ObjectURL 没有扩展名无法通过后缀识别
-      isVideo: true,
     };
 
-    console.log('Creating video as image element:', videoAsImageElement);
+    console.log('Creating video as image element with original URL:', videoAsImageElement);
 
-    // 使用DrawTransforms插入，但保留视频标识
+    // 使用DrawTransforms插入视频元素
     const { DrawTransforms } = await import('@plait/draw');
     DrawTransforms.insertImage(board, videoAsImageElement, insertionPoint);
     console.log('Video inserted successfully with scaled dimensions:', displayDimensions);

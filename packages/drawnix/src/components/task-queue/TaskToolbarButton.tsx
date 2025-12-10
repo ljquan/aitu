@@ -1,35 +1,44 @@
 /**
- * TaskToolbar Component
- * 
- * Circular floating button that displays task count badge
- * and provides expand/collapse functionality for the task queue panel.
+ * TaskToolbarButton Component
+ *
+ * Embedded version of task button for UnifiedToolbar
+ * Displays task count badge and provides expand/collapse functionality
  */
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Badge, Tooltip } from 'tdesign-react';
 import { TaskQueuePanel } from './TaskQueuePanel';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
 import { useI18n } from '../../i18n';
 import './task-queue.scss';
 
-export interface TaskToolbarProps {
+export interface TaskToolbarButtonProps {
+  /** Whether in icon-only mode (for responsive layout) */
+  iconMode?: boolean;
   /** Callback when panel expand state changes */
   onExpandChange?: (expanded: boolean) => void;
 }
 
 /**
- * TaskToolbar component - Circular floating button for task queue
- * 
+ * TaskToolbarButton component - Embedded button for task queue in UnifiedToolbar
+ *
  * @example
- * <TaskToolbar onExpandChange={(expanded) => console.log(expanded)} />
+ * <TaskToolbarButton iconMode={false} onExpandChange={(expanded) => console.log(expanded)} />
  */
-export const TaskToolbar: React.FC<TaskToolbarProps> = ({ onExpandChange }) => {
+export const TaskToolbarButton: React.FC<TaskToolbarButtonProps> = ({
+  iconMode = false,
+  onExpandChange
+}) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const hasEverExpanded = useRef(false);
   const { activeTasks, completedTasks, failedTasks } = useTaskQueue();
   const { t } = useI18n();
 
   const handleToggle = () => {
     const newExpanded = !isExpanded;
+    if (newExpanded && !hasEverExpanded.current) {
+      hasEverExpanded.current = true;
+    }
     setIsExpanded(newExpanded);
     onExpandChange?.(newExpanded);
   };
@@ -47,27 +56,30 @@ export const TaskToolbar: React.FC<TaskToolbarProps> = ({ onExpandChange }) => {
 
   return (
     <>
-      {/* Task Queue Panel */}
-      <TaskQueuePanel expanded={isExpanded} onClose={handleClose} />
+      {/* Task Queue Panel - Only render after first expand */}
+      {hasEverExpanded.current && <TaskQueuePanel expanded={isExpanded} onClose={handleClose} />}
 
-      {/* Circular Floating Button */}
+      {/* Embedded Task Button */}
       <Tooltip content={tooltipContent} placement="right" theme="light">
         <div
-          className={`task-toolbar-fab ${isExpanded ? 'task-toolbar-fab--expanded' : ''}`}
+          className={`task-toolbar-button ${isExpanded ? 'task-toolbar-button--expanded' : ''} ${iconMode ? 'task-toolbar-button--icon-only' : ''}`}
+          data-track="toolbar_click_tasks"
           onClick={handleToggle}
         >
           <Badge count={activeTasks.length > 0 ? activeTasks.length : 0} showZero={false}>
-            <div className="task-toolbar-fab__text">
-              {t('toolbar.tasks')}
+            <div className="task-toolbar-button__content">
+              <div className="task-toolbar-button__text">
+                {t('toolbar.tasks')}
+              </div>
             </div>
           </Badge>
-          
+
           {/* Status indicator dot */}
           {activeTasks.length > 0 && (
-            <div className="task-toolbar-fab__status task-toolbar-fab__status--active" />
+            <div className="task-toolbar-button__status task-toolbar-button__status--active" />
           )}
           {failedTasks.length > 0 && activeTasks.length === 0 && (
-            <div className="task-toolbar-fab__status task-toolbar-fab__status--failed" />
+            <div className="task-toolbar-button__status task-toolbar-button__status--failed" />
           )}
         </div>
       </Tooltip>

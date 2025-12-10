@@ -10,7 +10,7 @@ import { getDataURL } from './blob';
 import { MindElement, MindTransforms } from '@plait/mind';
 import { DrawTransforms } from '@plait/draw';
 import { getElementOfFocusedImage } from '@plait/common';
-import { getInsertionPointForSelectedElements } from '../utils/selection-utils';
+import { getInsertionPointForSelectedElements, getInsertionPointBelowBottommostElement } from '../utils/selection-utils';
 import { urlCacheService } from '../services/url-cache-service';
 
 /**
@@ -200,6 +200,9 @@ export const insertImage = async (
             calculatedPoint[0] - imageItem.width / 2,
             calculatedPoint[1],
           ] as Point;
+        } else {
+          // 如果没有选中元素,在最下方元素的下方插入
+          insertionPoint = getInsertionPointBelowBottommostElement(board, imageItem.width);
         }
       }
     }
@@ -240,24 +243,31 @@ export const insertImageFromUrl = async (
     MindTransforms.setImage(board, element as MindElement, imageItem);
     return;
   }
+
   // 处理插入点逻辑
-  let insertionPoint = getInsertionPointFromSavedSelection(
-    board,
-    imageItem.width
-  );
+  let insertionPoint: Point | undefined = startPoint;
 
-  // 如果没有保存的选中元素,回退到使用当前选中元素(向后兼容)
-  if (!insertionPoint) {
-    const calculatedPoint = getInsertionPointForSelectedElements(board);
-    if (calculatedPoint) {
-      // 图片插入位置应该在所有选中元素垂直居中对齐
-      // 将X坐标向左偏移图片宽度的一半，让图片以计算点为中心显示
-      insertionPoint = [
-        calculatedPoint[0] - imageItem.width / 2,
-        calculatedPoint[1],
-      ] as Point;
+  // 只有在没有提供startPoint时才自动计算插入位置
+  if (!startPoint && !isDrop) {
+    // 优先使用保存的选中元素IDs计算插入位置
+    insertionPoint = getInsertionPointFromSavedSelection(board, imageItem.width);
+
+    // 如果没有保存的选中元素,回退到使用当前选中元素(向后兼容)
+    if (!insertionPoint) {
+      const calculatedPoint = getInsertionPointForSelectedElements(board);
+      if (calculatedPoint) {
+        // 图片插入位置应该在所有选中元素垂直居中对齐
+        // 将X坐标向左偏移图片宽度的一半，让图片以计算点为中心显示
+        insertionPoint = [
+          calculatedPoint[0] - imageItem.width / 2,
+          calculatedPoint[1],
+        ] as Point;
+      } else {
+        // 如果没有选中元素,在最下方元素的下方插入
+        insertionPoint = getInsertionPointBelowBottommostElement(board, imageItem.width);
+      }
     }
-
   }
+
   DrawTransforms.insertImage(board, imageItem, insertionPoint);
 };

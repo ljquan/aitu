@@ -98,6 +98,7 @@ export const MultiImageUpload: React.FC<MultiImageUploadProps> = ({
                 variant="text"
                 size="small"
                 icon={<DeleteIcon />}
+                data-track="ai_click_image_remove"
                 onClick={() => handleRemove(slot)}
                 disabled={disabled}
               />

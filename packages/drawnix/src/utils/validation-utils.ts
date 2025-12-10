@@ -43,8 +43,8 @@ export function validateGenerationParams(
     errors.push('Prompt is required and must be a string');
   } else if (params.prompt.trim().length === 0) {
     errors.push('Prompt cannot be empty');
-  } else if (params.prompt.length > 1000) {
-    errors.push('Prompt must not exceed 1000 characters');
+  } else if (params.prompt.length > 5000) {
+    errors.push('Prompt must not exceed 5000 characters');
   }
   
   // Validate optional numeric fields

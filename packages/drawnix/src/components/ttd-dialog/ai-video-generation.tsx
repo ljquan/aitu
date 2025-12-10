@@ -1,99 +1,79 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import './ttd-dialog.scss';
 import './ai-video-generation.scss';
-import { useDrawnix } from '../../hooks/use-drawnix';
 import { useI18n } from '../../i18n';
-import { useBoard } from '@plait-board/react-board';
 import { type Language } from '../../constants/prompts';
-import { getSelectedElements, PlaitElement, getRectangleByElements, Point } from '@plait/core';
-import { getInsertionPointForSelectedElements } from '../../utils/selection-utils';
-import { insertVideoFromUrl } from '../../data/video';
-import { downloadMediaFile } from '../../utils/download-utils';
-import {
-  GenerationHistory,
-  VideoHistoryItem,
-  ImageHistoryItem
-} from '../generation-history';
 import { useGenerationHistory } from '../../hooks/useGenerationHistory';
 import {
   useGenerationState,
   useKeyboardShortcuts,
-  handleApiKeyError,
-  isInvalidTokenError,
-  createCacheManager,
-  PreviewCacheBase,
-  getPromptExample,
   ActionButtons,
   ErrorDisplay,
-  LoadingState,
   PromptInput,
   type ImageFile,
   getMergedPresetPrompts,
   savePromptToHistory as savePromptToHistoryUtil,
-  DEFAULT_VIDEO_DIMENSIONS,
-  getReferenceDimensionsFromIds,
   VideoModelOptions,
   MultiImageUpload,
 } from './shared';
 import { geminiSettings } from '../../utils/settings-manager';
-import { AI_VIDEO_GENERATION_PREVIEW_CACHE_KEY as PREVIEW_CACHE_KEY } from '../../constants/storage';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
 import { TaskType } from '../../types/task.types';
-import { MessagePlugin } from 'tdesign-react';
+import { MessagePlugin, Select } from 'tdesign-react';
 import { DialogTaskList } from '../task-queue/DialogTaskList';
 import type { VideoModel, UploadedVideoImage } from '../../types/video.types';
 import { getVideoModelConfig, getDefaultModelParams } from '../../constants/video-model-config';
-
-// 视频URL接口
-interface VideoUrls {
-  previewUrl: string;
-  downloadUrl: string;
-}
-
-interface PreviewCache extends PreviewCacheBase {
-  generatedVideo: VideoUrls | null;
-  sourceImage?: string;
-}
-
-const cacheManager = createCacheManager<PreviewCache>(PREVIEW_CACHE_KEY);
+import { VIDEO_MODEL_OPTIONS } from '../settings-dialog/settings-dialog';
 
 
 
 interface AIVideoGenerationProps {
   initialPrompt?: string;
-  initialImage?: ImageFile;
+  initialImage?: ImageFile;  // 保留单图片支持（向后兼容）
+  initialImages?: UploadedVideoImage[];  // 新增：支持多图片
   initialDuration?: number;
+  initialModel?: VideoModel;  // 新增：模型选择
+  initialSize?: string;  // 新增：尺寸选择
   initialResultUrl?: string;
+  selectedModel?: string;
+  onModelChange?: (value: string) => void;
 }
 
 const AIVideoGeneration = ({
   initialPrompt = '',
   initialImage,
+  initialImages,
   initialDuration,
-  initialResultUrl
+  initialModel,
+  initialSize,
+  initialResultUrl,
+  selectedModel,
+  onModelChange
 }: AIVideoGenerationProps = {}) => {
   const [prompt, setPrompt] = useState(initialPrompt);
-  const [generatedVideo, setGeneratedVideo] = useState<{
-    previewUrl: string;
-    downloadUrl: string;
-  } | null>(null);
-  const [generatedVideoPrompt, setGeneratedVideoPrompt] = useState<string>(''); // Track prompt for current video
-  const [isInserting, setIsInserting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Video model parameters
-  const settings = geminiSettings.get();
-  const currentModel = (settings.videoModelName || 'veo3') as VideoModel;
-  const modelConfig = getVideoModelConfig(currentModel);
-  const defaultParams = getDefaultModelParams(currentModel);
+  // Video model parameters - use state to support dynamic updates
+  const [currentModel, setCurrentModel] = useState<VideoModel>(() => {
+    const settings = geminiSettings.get();
+    return (initialModel || settings.videoModelName || 'veo3') as VideoModel;
+  });
+
+  // Use useMemo to ensure modelConfig and defaultParams update when currentModel changes
+  const modelConfig = React.useMemo(() => getVideoModelConfig(currentModel), [currentModel]);
+  const defaultParams = React.useMemo(() => getDefaultModelParams(currentModel), [currentModel]);
 
   // Duration and size state
   const [duration, setDuration] = useState(initialDuration?.toString() || defaultParams.duration);
-  const [size, setSize] = useState(defaultParams.size);
+  const [size, setSize] = useState(initialSize || defaultParams.size);
 
   // Multi-image upload state (replaces single uploadedImage)
   const [uploadedImages, setUploadedImages] = useState<UploadedVideoImage[]>(() => {
-    // Convert initial single image to multi-image format
+    // 优先使用 initialImages（多图片）
+    if (initialImages && initialImages.length > 0) {
+      return initialImages;
+    }
+    // 向后兼容：将单个 initialImage 转换为多图片格式
     if (initialImage) {
       return [{
         slot: 0,
@@ -109,80 +89,88 @@ const AIVideoGeneration = ({
   // Use generation history from task queue
   const { videoHistory } = useGenerationHistory();
 
-  const { isGenerating, isLoading: videoLoading, updateIsLoading: updateVideoLoading } = useGenerationState('video');
+  const { isGenerating } = useGenerationState('video');
 
-  const { appState, setAppState } = useDrawnix();
   const { language } = useI18n();
-  const board = useBoard();
   const { createTask } = useTaskQueue();
 
-  // 保存选中元素的ID，用于计算插入位置
-  const [selectedElementIds, setSelectedElementIds] = useState<string[]>([]);
-
-  // Track task IDs created in this dialog session
-  const [dialogTaskIds, setDialogTaskIds] = useState<string[]>([]);
-
-  // 视频元素引用，用于控制播放状态
-  const videoRef = useRef<HTMLVideoElement>(null);
-
-  // Reset parameters when model changes
+  // Sync model from global settings changes (from header dropdown)
   useEffect(() => {
-    const newDefaults = getDefaultModelParams(currentModel);
-    setDuration(newDefaults.duration);
-    setSize(newDefaults.size);
-    // Clear uploaded images when model changes (different upload requirements)
-    setUploadedImages([]);
+    const handleSettingsChange = (newSettings: any) => {
+      const newModel = newSettings.videoModelName || 'veo3';
+      if (newModel !== currentModel) {
+        setCurrentModel(newModel as VideoModel);
+      }
+    };
+    geminiSettings.addListener(handleSettingsChange);
+    return () => geminiSettings.removeListener(handleSettingsChange);
   }, [currentModel]);
 
-
-  // 计算视频插入位置
-  const calculateInsertionPoint = (): Point | undefined => {
-    if (!board) {
-      console.warn('Board is not available');
-      return undefined;
-    }
-
-    // 优先使用保存的选中元素ID
-    if (selectedElementIds.length > 0 && board.children && Array.isArray(board.children)) {
-      const allElements = board.children as PlaitElement[];
-      const savedSelectedElements = allElements.filter(el => 
-        selectedElementIds.includes((el as any).id || '')
-      );
-      
-      if (savedSelectedElements.length > 0) {
-        const rectangle = getRectangleByElements(board, savedSelectedElements, false);
-        const centerX = rectangle.x + rectangle.width / 2;
-        const bottomY = rectangle.y + rectangle.height + 20; // 在底部留20px间距
-        return [centerX, bottomY] as Point;
-      }
-    }
-
-    // 使用工具函数获取当前选中元素的插入位置
-    const calculatedPoint = getInsertionPointForSelectedElements(board);
-    return calculatedPoint || undefined;
-  };
-
+  // Sync model from selectedModel prop (from parent component)
   useEffect(() => {
-    const cachedData = cacheManager.load();
-    if (cachedData) {
-      setPrompt(cachedData.prompt);
-      setGeneratedVideo(cachedData.generatedVideo);
-      setGeneratedVideoPrompt(cachedData.prompt); // Set prompt for download
+    if (selectedModel && selectedModel !== currentModel) {
+      console.log('AIVideoGeneration - syncing model from prop:', selectedModel);
+      setCurrentModel(selectedModel as VideoModel);
     }
+  }, [selectedModel]);
 
-    if (board) {
-      const currentSelectedElements = getSelectedElements(board);
-      const elementIds = currentSelectedElements.map(el => (el as any).id || '').filter(Boolean);
-      setSelectedElementIds(elementIds);
-      console.log('Saved selected element IDs for video insertion:', elementIds);
-    }
-  }, [board]);
-
-
+  // Track if we're in manual edit mode (from handleEditTask) to prevent props from overwriting
+  const [isManualEdit, setIsManualEdit] = useState(false);
+  
+  // Reset parameters when model changes (but don't clear uploaded images on edit)
+  const [isEditMode, setIsEditMode] = useState(false);
   useEffect(() => {
+    if (isEditMode) {
+      // In edit mode, don't reset parameters automatically
+      setIsEditMode(false);
+      return;
+    }
+    console.log('AIVideoGeneration - model changed, updating params:', {
+      model: currentModel,
+      duration: defaultParams.duration,
+      size: defaultParams.size
+    });
+    setDuration(defaultParams.duration);
+    setSize(defaultParams.size);
+    // Clear uploaded images when model changes (different upload requirements)
+    setUploadedImages([]);
+  }, [currentModel, defaultParams, isEditMode]);
+
+  // Handle initial props - use ref to track if we've processed these props before
+  const processedPropsRef = React.useRef<string>('');
+  useEffect(() => {
+    // Skip if we're in manual edit mode (user clicked edit in task list)
+    if (isManualEdit) {
+      console.log('AIVideoGeneration - skipping props update in manual edit mode');
+      return;
+    }
+    
+    // Create a unique key from all initial props to detect real changes
+    const propsKey = JSON.stringify({
+      prompt: initialPrompt,
+      image: initialImage?.url,
+      images: initialImages?.map(img => img.url),
+      duration: initialDuration,
+      model: initialModel,
+      size: initialSize,
+      result: initialResultUrl
+    });
+    
+    // Skip if we've already processed these exact props
+    if (processedPropsRef.current === propsKey) {
+      console.log('AIVideoGeneration - skipping duplicate props processing');
+      return;
+    }
+    
+    console.log('AIVideoGeneration - processing new props:', { propsKey });
+    processedPropsRef.current = propsKey;
+    
     setPrompt(initialPrompt);
-    // Convert initial single image to multi-image format
-    if (initialImage) {
+
+    // 处理图片：优先使用 initialImages，否则转换 initialImage
+    if (initialImages && initialImages.length > 0) {
+      setUploadedImages(initialImages);
+    } else if (initialImage) {
       setUploadedImages([{
         slot: 0,
         slotLabel: modelConfig.imageUpload.labels?.[0] || '参考图',
@@ -193,94 +181,38 @@ const AIVideoGeneration = ({
     } else {
       setUploadedImages([]);
     }
-    setError(null);
 
-    // 如果编辑任务且有结果URL,显示预览视频
-    if (initialResultUrl) {
-      setGeneratedVideo({
-        previewUrl: initialResultUrl,
-        downloadUrl: initialResultUrl
-      });
-      setGeneratedVideoPrompt(initialPrompt);
-    } else if (initialPrompt || initialImage) {
-      // 当弹窗重新打开时（有新的初始数据），清除预览视频
-      setGeneratedVideo(null);
-      // 清除缓存
-      try {
-        localStorage.removeItem(PREVIEW_CACHE_KEY);
-      } catch (error) {
-        console.warn('Failed to clear cache:', error);
-      }
+    // 更新 duration 和 size（如果有初始值）
+    if (initialDuration !== undefined) {
+      setDuration(initialDuration.toString());
     }
-  }, [initialPrompt, initialImage, initialResultUrl, modelConfig.imageUpload.labels]);
+    if (initialSize) {
+      setSize(initialSize);
+    }
 
+    setError(null);
+  }, [initialPrompt, initialImage, initialImages, initialDuration, initialSize, initialResultUrl, modelConfig.imageUpload.labels, isManualEdit]);
+
+  // Clear errors on mount
   useEffect(() => {
     setError(null);
+    return () => {
+      setError(null);
+    };
   }, []);
 
 
   const handleReset = () => {
-    if (videoRef.current) {
-      videoRef.current.pause();
-      videoRef.current.src = '';
-      videoRef.current.load();
-    }
-
     setPrompt('');
     setUploadedImages([]);
-    setGeneratedVideo(null);
     setError(null);
-    setDialogTaskIds([]); // 清除任务列表
     // Reset duration and size to defaults
     const newDefaults = getDefaultModelParams(currentModel);
     setDuration(newDefaults.duration);
     setSize(newDefaults.size);
-    cacheManager.clear();
+    // Clear manual edit mode
+    setIsManualEdit(false);
     window.dispatchEvent(new CustomEvent('ai-video-clear'));
-  };
-
-  // 从历史记录选择视频
-  const selectFromHistory = (historyItem: VideoHistoryItem) => {
-    setPrompt(historyItem.prompt);
-    setGeneratedVideo({
-      previewUrl: historyItem.previewUrl,
-      downloadUrl: historyItem.downloadUrl || historyItem.previewUrl
-    });
-    setGeneratedVideoPrompt(historyItem.prompt); // Save prompt for download
-
-    // 设置参考图片 (如果有的话) - convert to new format
-    if (historyItem.uploadedImage) {
-      setUploadedImages([{
-        slot: 0,
-        slotLabel: modelConfig.imageUpload.labels?.[0] || '参考图',
-        url: historyItem.uploadedImage.url || '',
-        name: historyItem.uploadedImage.name,
-      }]);
-    } else {
-      setUploadedImages([]);
-    }
-
-    // 选择历史记录时清除错误状态
-    setError(null);
-
-    // 更新预览缓存
-    const cacheData: PreviewCache = {
-      prompt: historyItem.prompt,
-      generatedVideo: {
-        previewUrl: historyItem.previewUrl,
-        downloadUrl: historyItem.downloadUrl || historyItem.previewUrl
-      },
-      timestamp: Date.now()
-    };
-    cacheManager.save(cacheData);
-  };
-
-  // 通用历史选择处理器（兼容各种类型）
-  const handleSelectFromHistory = (item: VideoHistoryItem | ImageHistoryItem) => {
-    if (item.type === 'video') {
-      selectFromHistory(item as VideoHistoryItem);
-    }
-    // 视频生成组件不处理图片类型
   };
 
   // 使用useMemo优化性能，当videoHistory或language变化时重新计算
@@ -291,8 +223,56 @@ const AIVideoGeneration = ({
 
   // 保存提示词到历史记录（去重）
   const savePromptToHistory = (promptText: string) => {
-    const dimensions = { width: DEFAULT_VIDEO_DIMENSIONS.width, height: DEFAULT_VIDEO_DIMENSIONS.height };
-    savePromptToHistoryUtil('video', promptText, dimensions);
+    savePromptToHistoryUtil('video', promptText, { width: 1280, height: 720 });
+  };
+
+  // 处理任务编辑（从弹窗内的任务列表点击编辑）
+  const handleEditTask = (task: any) => {
+    console.log('Video handleEditTask - task params:', task.params);
+
+    // 标记为手动编辑模式,防止 props 的 useEffect 覆盖我们的更改
+    setIsManualEdit(true);
+    
+    // 标记为编辑模式,防止模型变化时重置参数
+    setIsEditMode(true);
+
+    // 直接更新表单状态
+    setPrompt(task.params.prompt || '');
+
+    // 更新视频参数
+    if (task.params.seconds !== undefined) {
+      const durationValue = typeof task.params.seconds === 'string'
+        ? task.params.seconds
+        : task.params.seconds.toString();
+      console.log('Setting duration to:', durationValue);
+      setDuration(durationValue);
+    }
+
+    if (task.params.size) {
+      console.log('Setting size to:', task.params.size);
+      setSize(task.params.size);
+    }
+
+    // 更新上传的图片 - 确保格式正确
+    if (task.params.uploadedImages && task.params.uploadedImages.length > 0) {
+      console.log('Setting uploadedImages:', task.params.uploadedImages);
+      setUploadedImages(task.params.uploadedImages);
+    } else {
+      setUploadedImages([]);
+    }
+
+    // 更新模型选择（通过本地 state 和全局设置）
+    if (task.params.model) {
+      console.log('Updating model to:', task.params.model);
+      setCurrentModel(task.params.model as VideoModel);
+      const settings = geminiSettings.get();
+      geminiSettings.update({
+        ...settings,
+        videoModelName: task.params.model
+      });
+    }
+
+    setError(null);
   };
 
   const handleGenerate = async (count: number = 1) => {
@@ -367,27 +347,15 @@ const AIVideoGeneration = ({
               : 'Video task added to queue, will be generated in background'
         );
 
-        // 保存任务ID到对话框任务列表
-        setDialogTaskIds(prev => [...prev, ...batchTaskIds]);
-
         // 保存提示词到历史记录
         savePromptToHistory(prompt);
 
-        // 完全清空表单（prompt、参考图、预览）
+        // 清空表单（保留模型选择和尺寸设置）
         setPrompt('');
         setUploadedImages([]);
-        setGeneratedVideo(null);
         setError(null);
-
-        // 清除视频播放
-        if (videoRef.current) {
-          videoRef.current.pause();
-          videoRef.current.src = '';
-          videoRef.current.load();
-        }
-
-        // 清除缓存
-        cacheManager.clear();
+        // Clear manual edit mode after generating
+        setIsManualEdit(false);
       } else {
         // 任务创建失败
         setError(
@@ -398,27 +366,33 @@ const AIVideoGeneration = ({
       }
     } catch (err: any) {
       console.error('Failed to create task:', err);
-      setError(
-        language === 'zh'
-          ? `创建任务失败: ${err.message}`
-          : `Failed to create task: ${err.message}`
-      );
+
+      // 提取更友好的错误信息
+      let errorMessage = language === 'zh'
+        ? '任务创建失败，请检查参数或稍后重试'
+        : 'Failed to create task, please check parameters or try again later';
+
+      if (err.message) {
+        if (err.message.includes('exceed 5000 characters')) {
+          errorMessage = language === 'zh'
+            ? '提示词不能超过 5000 字符'
+            : 'Prompt must not exceed 5000 characters';
+        } else if (err.message.includes('Duplicate submission')) {
+          errorMessage = language === 'zh'
+            ? '请勿重复提交，请等待 5 秒后再试'
+            : 'Duplicate submission. Please wait 5 seconds.';
+        } else if (err.message.includes('Invalid parameters')) {
+          errorMessage = language === 'zh'
+            ? `参数错误: ${err.message.replace('Invalid parameters: ', '')}`
+            : err.message;
+        }
+      }
+
+      setError(errorMessage);
     }
   };
 
   useKeyboardShortcuts(isGenerating, prompt, handleGenerate);
-
-  // 组件卸载时清理视频播放
-  useEffect(() => {
-    return () => {
-      // 暂停视频播放
-      if (videoRef.current) {
-        videoRef.current.pause();
-        videoRef.current.src = '';
-        videoRef.current.load();
-      }
-    };
-  }, []);
 
   return (
     <div className="ai-video-generation-container">
@@ -426,6 +400,26 @@ const AIVideoGeneration = ({
         {/* AI 视频生成表单 */}
         <div className="ai-image-generation-section">
           <div className="ai-image-generation-form">
+
+            {/* 模型选择器 */}
+            {selectedModel !== undefined && onModelChange && (
+              <div className="model-selector-wrapper">
+                {/* <label className="model-selector-label">
+                  {language === 'zh' ? '视频模型' : 'Video Model'}
+                </label> */}
+                <Select
+                  value={selectedModel}
+                  onChange={(value) => onModelChange(value as string)}
+                  options={VIDEO_MODEL_OPTIONS}
+                  size="small"
+                  placeholder={language === 'zh' ? '选择视频模型' : 'Select Video Model'}
+                  filterable
+                  creatable
+                  disabled={isGenerating}
+                />
+              </div>
+            )}
+
             {/* Video model options: duration & size */}
             <VideoModelOptions
               model={currentModel}
@@ -461,183 +455,18 @@ const AIVideoGeneration = ({
             language={language}
             type="video"
             isGenerating={isGenerating}
-            hasGenerated={!!generatedVideo}
+            hasGenerated={false}
             canGenerate={!!prompt.trim()}
             onGenerate={handleGenerate}
             onReset={handleReset}
           />
         </div>
 
-          <div className="preview-section">
-        <div className="image-preview-container">
-          <LoadingState
-            language={language}
-            type="video"
-            isGenerating={isGenerating}
-            isLoading={videoLoading}
-            hasContent={!!generatedVideo}
-          />
-          
-          {generatedVideo && (
-            <div className="preview-image-wrapper">
-              <video
-                ref={videoRef}
-                src={generatedVideo.previewUrl}
-                controls
-                loop
-                muted
-                className="preview-image"
-                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                onLoadedData={() => console.log('Preview video loaded successfully')}
-                onError={() => {
-                  console.warn('Preview video failed to load:', generatedVideo.previewUrl);
-                }}
-              />
-            </div>
-          )}
+        {/* 任务列表侧栏 */}
+        <div className="task-sidebar">
+          <DialogTaskList taskType={TaskType.VIDEO} onEditTask={handleEditTask} />
         </div>
-
-        {/* 插入、下载和清除按钮区域 */}
-        {generatedVideo && (
-          <div className="section-actions">
-            <button
-              onClick={() => {
-                // 暂停并清理视频
-                if (videoRef.current) {
-                  videoRef.current.pause();
-                  videoRef.current.src = '';
-                  videoRef.current.load();
-                }
-                
-                setGeneratedVideo(null);
-                try {
-                  localStorage.removeItem(PREVIEW_CACHE_KEY);
-                } catch (error) {
-                  console.warn('Failed to clear cache:', error);
-                }
-              }}
-              disabled={isGenerating || videoLoading}
-              className="action-button tertiary"
-            >
-              {language === 'zh' ? '清除' : 'Clear'}
-            </button>
-            <button
-              onClick={async () => {
-                if (generatedVideo) {
-                  try {
-                    setIsInserting(true);
-                    console.log('Starting video insertion with URL...', generatedVideo.previewUrl);
-
-                    // 调试：检查当前选中状态
-                    const currentSelectedElements = board ? getSelectedElements(board) : [];
-                    console.log('Current selected elements:', currentSelectedElements.length, currentSelectedElements);
-                    console.log('Saved selected element IDs:', selectedElementIds);
-
-                    // 计算参考尺寸（用于适应选中元素的大小）
-                    const referenceDimensions = getReferenceDimensionsFromIds(board, selectedElementIds);
-                    console.log('Reference dimensions for video insertion:', referenceDimensions);
-
-                    // 计算插入位置
-                    const insertionPoint = calculateInsertionPoint();
-                    console.log('Calculated insertion point:', insertionPoint);
-
-                    await insertVideoFromUrl(board, generatedVideo.previewUrl, insertionPoint, false, referenceDimensions);
-
-                    console.log('Video inserted successfully!');
-
-                    // 清除缓存
-                    try {
-                      localStorage.removeItem(PREVIEW_CACHE_KEY);
-                    } catch (error) {
-                      console.warn('Failed to clear cache:', error);
-                    }
-
-                    // 关闭对话框
-                    setAppState({ ...appState, openDialogType: null });
-
-                  } catch (err) {
-                    console.error('Insert video error:', err);
-                    setError(
-                      language === 'zh'
-                        ? '视频插入失败，请稍后重试'
-                        : 'Video insertion failed, please try again later'
-                    );
-                  } finally {
-                    setIsInserting(false);
-                  }
-                }
-              }}
-              disabled={isGenerating || videoLoading || isInserting}
-              className="action-button primary"
-            >
-              {isInserting
-                ? (language === 'zh' ? '插入中...' : 'Inserting...')
-                : videoLoading
-                ? (language === 'zh' ? '加载中...' : 'Loading...')
-                : (language === 'zh' ? '插入视频' : 'Insert Video')
-              }
-            </button>
-            <button
-              onClick={async () => {
-                if (generatedVideo) {
-                  try {
-                    // Extract file extension from URL
-                    let format = 'mp4';
-                    try {
-                      const urlPath = new URL(generatedVideo.downloadUrl).pathname;
-                      const ext = urlPath.substring(urlPath.lastIndexOf('.') + 1).toLowerCase();
-                      if (ext && ['mp4', 'webm', 'mov'].includes(ext)) {
-                        format = ext;
-                      }
-                    } catch (e) {
-                      // Keep default format
-                    }
-
-                    const result = await downloadMediaFile(
-                      generatedVideo.downloadUrl,
-                      generatedVideoPrompt || 'video',
-                      format,
-                      'video'
-                    );
-                    if (result && 'opened' in result) {
-                      MessagePlugin.success(language === 'zh' ? '已在新标签页打开，请右键另存为' : 'Opened in new tab, please right-click to save');
-                    } else {
-                      MessagePlugin.success(language === 'zh' ? '下载成功' : 'Download successful');
-                    }
-                  } catch (err) {
-                    console.error('Download failed:', err);
-                    MessagePlugin.error(
-                      language === 'zh'
-                        ? '下载失败，请重试'
-                        : 'Download failed, please try again'
-                    );
-                  }
-                }
-              }}
-              disabled={isGenerating || videoLoading || isInserting}
-              className="action-button secondary"
-            >
-              {videoLoading
-                ? (language === 'zh' ? '加载中...' : 'Loading...')
-                : (language === 'zh' ? '下载' : 'Download')
-              }
-            </button>
-
-          </div>
-        )}
-            {/* 统一历史记录组件 */}
-            <GenerationHistory
-              historyItems={videoHistory}
-              onSelectFromHistory={handleSelectFromHistory}
-            />
       </div>
-      </div>
-      
-      {/* 预览区域 */}
-    
-
-                {/* 对话框任务列表 - 只显示本次对话框生成的任务 */}
-          <DialogTaskList taskIds={dialogTaskIds} taskType={TaskType.VIDEO} />
     </div>
   );
 };

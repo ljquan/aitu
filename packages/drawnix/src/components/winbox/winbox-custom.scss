@@ -1,0 +1,403 @@
+// WinBox 自定义样式
+// 配合 aitu 品牌设计系统
+
+@import '../../styles/z-index.scss';
+
+// WinBox 容器全局 z-index
+.winbox {
+  z-index: $z-dialog-ai-image !important; // Layer 5: Modals, 确保在 unified-toolbar 之上
+}
+
+.winbox-react {
+  // 自定义圆角
+  border-radius: 12px !important;
+  overflow: hidden;
+
+  // 标题栏样式 - 重新布局
+  .wb-header {
+    background: #e67e22;
+    border-radius: 12px 12px 0 0;
+    height: 44px;
+    display: flex;
+    flex-direction: row-reverse; // 反转顺序:标题在左,按钮在右
+    align-items: center;
+    padding: 0 8px;
+    // 确保header始终显示,即使在全屏模式下
+    display: flex !important;
+    visibility: visible !important;
+  }
+
+  // 拖拽区域（包含标题）
+  .wb-drag {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    height: 100%;
+    order: 2; // 放在左边
+
+    // 防止 Select 组件的点击事件被拖拽事件拦截
+    .wb-header-custom {
+      pointer-events: none;
+
+      // 重新启用 Select 及其子元素的点击事件
+      * {
+        pointer-events: auto;
+      }
+    }
+  }
+
+  // 标题文字
+  .wb-title {
+    font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    color: #ffffff;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    padding: 0 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: none;
+  }
+
+  // 自定义标题栏内容区域（模型选择器）
+  .wb-header-custom {
+    display: flex;
+    align-items: center;
+    margin-left: 12px;
+    min-width: 0;
+    flex-shrink: 0;
+  }
+
+  // 控制按钮容器
+  .wb-control {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    order: 1; // 放在右边
+    flex-shrink: 0;
+  }
+
+  // 控制按钮通用样式
+  .wb-min,
+  .wb-max,
+  .wb-full,
+  .wb-close {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    background-size: 14px;
+    background-repeat: no-repeat;
+    background-position: center;
+    opacity: 0.85;
+    transition: all 0.15s ease-out;
+    margin: 0;
+
+    &:hover {
+      opacity: 1;
+      background-color: rgba(255, 255, 255, 0.2);
+    }
+  }
+
+  // 关闭按钮特殊样式
+  .wb-close:hover {
+    background-color: rgba(255, 59, 48, 0.9);
+  }
+
+  // 窗口主体
+  .wb-body {
+    background: #ffffff;
+    border-radius: 0 0 12px 12px;
+    overflow: auto;
+    padding: 0;
+  }
+
+  // 阴影效果
+  &.focus {
+    box-shadow: 
+      0 25px 50px -12px rgba(0, 0, 0, 0.25),
+      0 0 0 1px rgba(90, 79, 207, 0.1);
+  }
+
+  &:not(.focus) {
+    box-shadow: 
+      0 10px 25px -5px rgba(0, 0, 0, 0.1),
+      0 0 0 1px rgba(0, 0, 0, 0.05);
+  }
+
+  // 调整大小手柄
+  .wb-n,
+  .wb-s,
+  .wb-e,
+  .wb-w,
+  .wb-nw,
+  .wb-ne,
+  .wb-sw,
+  .wb-se {
+    background: transparent;
+  }
+
+  // 最大化状态
+  &.max {
+    border-radius: 0 !important;
+    
+    .wb-header {
+      border-radius: 0;
+      // 确保header在最大化时仍然显示
+      display: flex !important;
+    }
+    
+    .wb-body {
+      border-radius: 0;
+      // 最大化时body从header下方开始
+      top: 44px !important;
+    }
+  }
+  
+  // 全屏状态(WinBox的full模式)
+  &.full {
+    .wb-header {
+      // 全屏时也保留header,确保关闭按钮可用
+      display: flex !important;
+    }
+    
+    .wb-body {
+      // 全屏时body从header下方开始,而不是从顶部(0)
+      top: 44px !important;
+    }
+  }
+}
+
+// 内容包装器样式
+.winbox-content-wrapper {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  background: #ffffff;
+  padding: 20px; // 添加内边距
+  box-sizing: border-box;
+}
+
+// 模态遮罩样式
+.winbox.modal {
+  &::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: -1;
+  }
+}
+
+// AI 生成弹窗专用样式
+.winbox-ai-generation {
+  z-index: $z-dialog-ai-image !important; // Layer 5: AI 图像/视频生成弹窗
+  
+  // 白底灰黑色 header 样式
+  .wb-header {
+    background: #ffffff !important;
+    border-bottom: 1px solid #e5e5e5;
+  }
+  
+  // 标题文字改为灰黑色
+  .wb-title {
+    color: #333333 !important;
+    text-shadow: none !important;
+  }
+  
+  // 控制按钮改为灰黑色图标
+  .wb-min,
+  .wb-max,
+  .wb-full,
+  .wb-close {
+    // 使用 CSS filter 将白色图标转换为灰黑色
+    filter: invert(1) brightness(0.3);
+    
+    &:hover {
+      background-color: rgba(0, 0, 0, 0.08);
+      filter: invert(1) brightness(0.2);
+    }
+  }
+  
+  // 关闭按钮 hover 特殊样式
+  .wb-close:hover {
+    background-color: rgba(255, 59, 48, 0.15);
+    filter: invert(1) brightness(0.2);
+  }
+  
+  .wb-body {
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  // 确保内容撑满
+  .winbox-content-wrapper {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 16px 20px; // AI 弹窗专用 padding
+  }
+  
+  // AI 图像/视频生成容器
+  .ai-image-generation-container,
+  .ai-video-generation-container {
+    flex: 1;
+    height: 100%;
+    overflow: auto;
+  }
+  
+  // 白底 header 中的 Select 组件样式调整
+  .wb-header-custom {
+    .t-select {
+      background: #f5f5f5;
+      border: 1px solid #d9d9d9;
+      
+      .t-input {
+        color: #333333;
+        
+        &::placeholder {
+          color: #999999;
+        }
+      }
+      
+      .t-input__inner {
+        color: #333333;
+      }
+      
+      .t-fake-arrow {
+        color: #666666;
+      }
+      
+      &:hover {
+        background: #eeeeee;
+        border-color: #bfbfbf;
+      }
+      
+      &.t-is-focused {
+        background: #ffffff;
+        border-color: #5A4FCF;
+        box-shadow: 0 0 0 2px rgba(90, 79, 207, 0.15);
+      }
+    }
+  }
+}
+
+// TDesign Select 组件在标题栏中的样式调整
+.winbox-react {
+  .wb-header-custom {
+    // 阻止拖拽事件穿透到 Select 组件
+    .t-select,
+    .t-input,
+    .t-popup {
+      pointer-events: auto;
+      // 确保在移动端可以正常响应触摸事件
+      touch-action: auto;
+    }
+    
+    // Select 组件样式适配
+    .t-select {
+      background: rgba(255, 255, 255, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 6px;
+
+      
+      // 下拉箭头颜色
+      .t-fake-arrow {
+        color: rgba(255, 255, 255, 0.8);
+      }
+      
+      &:hover {
+        background: rgba(255, 255, 255, 0.25);
+        border-color: rgba(255, 255, 255, 0.5);
+      }
+      
+      &.t-is-focused {
+        background: rgba(255, 255, 255, 0.3);
+        border-color: rgba(255, 255, 255, 0.7);
+        box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.2);
+      }
+    }
+  }
+}
+
+// 拖拽时的视觉反馈
+.winbox-react.wb-move {
+  cursor: grabbing;
+  
+  .wb-header {
+    cursor: grabbing;
+  }
+}
+
+// 调整大小时的视觉反馈
+.winbox-react.wb-resize {
+  .wb-body {
+    pointer-events: none;
+  }
+}
+
+// 深色模式支持（如果需要）
+@media (prefers-color-scheme: dark) {
+  .winbox-react {
+    .wb-body {
+      // 保持白色背景，因为 aitu 使用浅色主题
+      background: #ffffff;
+    }
+  }
+}
+
+// 响应式调整
+@media (max-width: 768px) {
+  .winbox-react {
+    .wb-header {
+      height: 40px;
+    }
+
+    .wb-title {
+      font-size: 13px;
+    }
+
+    .wb-min,
+    .wb-max,
+    .wb-full,
+    .wb-close {
+      width: 28px;
+      height: 28px;
+      background-size: 12px;
+    }
+
+    // 移动端 Select 组件特殊处理
+    .wb-header-custom {
+      .t-select {
+        // 确保点击区域足够大
+        min-height: 32px;
+
+        // 确保输入框可以接收触摸事件
+        .t-input__inner {
+          pointer-events: auto;
+          touch-action: auto;
+          cursor: pointer;
+        }
+
+        // 确保下拉箭头可点击
+        .t-input__suffix,
+        .t-fake-arrow {
+          pointer-events: auto;
+          touch-action: auto;
+        }
+      }
+    }
+  }
+
+  .winbox-content-wrapper {
+    padding: 12px;
+  }
+
+  .winbox-ai-generation .winbox-content-wrapper {
+    padding: 12px 16px;
+  }
+}

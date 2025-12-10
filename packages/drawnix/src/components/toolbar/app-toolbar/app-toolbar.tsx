@@ -24,6 +24,7 @@ import { LanguageSwitcherMenu } from './language-switcher-menu';
 import Menu from '../../menu/menu';
 import MenuSeparator from '../../menu/menu-separator';
 import { useI18n } from '../../../i18n';
+import { Z_INDEX } from '../../../constants/z-index';
 import { ToolbarSectionProps } from '../toolbar.types';
 
 export const AppToolbar: React.FC<ToolbarSectionProps> = ({
@@ -57,12 +58,13 @@ export const AppToolbar: React.FC<ToolbarSectionProps> = ({
               icon={MenuIcon}
               title={t('general.menu')}
               aria-label={t('general.menu')}
+              data-track="toolbar_click_menu"
               onPointerDown={() => {
                 setAppMenuOpen(!appMenuOpen);
               }}
             />
           </PopoverTrigger>
-          <PopoverContent container={container} style={{ zIndex: 1000 }}>
+          <PopoverContent container={container} style={{ zIndex: Z_INDEX.POPOVER_APP }}>
             <Menu
               onSelect={() => {
                 setAppMenuOpen(false);
@@ -87,6 +89,7 @@ export const AppToolbar: React.FC<ToolbarSectionProps> = ({
           visible={true}
           title={t('general.undo')}
           aria-label={t('general.undo')}
+          data-track="toolbar_click_undo"
           onPointerUp={() => {
             board.undo();
           }}
@@ -99,6 +102,7 @@ export const AppToolbar: React.FC<ToolbarSectionProps> = ({
                     visible={true}
                     title={t('general.redo')}
                     aria-label={t('general.redo')}
+                    data-track="toolbar_click_redo"
                     onPointerUp={() => {
                       board.redo();
                     }}

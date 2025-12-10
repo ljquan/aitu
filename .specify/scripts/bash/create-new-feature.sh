@@ -126,36 +126,57 @@ get_highest_from_branches() {
     echo "$highest"
 }
 
-# Function to check existing branches (local and remote) and return next available number
+# Function to get GLOBAL highest number from ALL specs directories and branches
+# This ensures feature numbers are globally unique across all features
+get_global_highest_number() {
+    local specs_dir="$1"
+    local max_num=0
+
+    # Fetch all remotes to get latest branch info (suppress errors if no remotes)
+    git fetch --all --prune 2>/dev/null || true
+
+    # Check ALL specs directories (regardless of short-name)
+    if [ -d "$specs_dir" ]; then
+        for dir in "$specs_dir"/*/; do
+            [ -d "$dir" ] || continue
+            dirname=$(basename "$dir")
+            # Extract number from directory name (e.g., 001-foo -> 001 -> 1)
+            number=$(echo "$dirname" | grep -o '^[0-9]\+' || echo "0")
+            number=$((10#$number))
+            if [ "$number" -gt "$max_num" ]; then
+                max_num=$number
+            fi
+        done
+    fi
+
+    # Also check ALL git branches matching pattern NNN-*
+    local branches=$(git branch -a 2>/dev/null || echo "")
+    if [ -n "$branches" ]; then
+        while IFS= read -r branch; do
+            # Clean branch name: remove leading markers and remote prefixes
+            clean_branch=$(echo "$branch" | sed 's/^[* ]*//; s|^remotes/[^/]*/||')
+            # Extract feature number if branch matches pattern ###-*
+            if echo "$clean_branch" | grep -qE '^[0-9]{3}-'; then
+                number=$(echo "$clean_branch" | grep -o '^[0-9]\{3\}' || echo "0")
+                number=$((10#$number))
+                if [ "$number" -gt "$max_num" ]; then
+                    max_num=$number
+                fi
+            fi
+        done <<< "$branches"
+    fi
+
+    # Return next number
+    echo $((max_num + 1))
+}
+
+# Legacy function kept for backwards compatibility but now uses global numbering
 check_existing_branches() {
     local short_name="$1"
     local specs_dir="$2"
-    
-    # Fetch all remotes to get latest branch info (suppress errors if no remotes)
-    git fetch --all --prune 2>/dev/null || true
-    
-    # Find all branches matching the pattern using git ls-remote (more reliable)
-    local remote_branches=$(git ls-remote --heads origin 2>/dev/null | grep -E "refs/heads/[0-9]+-${short_name}$" | sed 's/.*\/\([0-9]*\)-.*/\1/' | sort -n)
-    
-    # Also check local branches
-    local local_branches=$(git branch 2>/dev/null | grep -E "^[* ]*[0-9]+-${short_name}$" | sed 's/^[* ]*//' | sed 's/-.*//' | sort -n)
-    
-    # Check specs directory as well
-    local spec_dirs=""
-    if [ -d "$specs_dir" ]; then
-        spec_dirs=$(find "$specs_dir" -maxdepth 1 -type d -name "[0-9]*-${short_name}" 2>/dev/null | xargs -n1 basename 2>/dev/null | sed 's/-.*//' | sort -n)
-    fi
-    
-    # Combine all sources and get the highest number
-    local max_num=0
-    for num in $remote_branches $local_branches $spec_dirs; do
-        if [ "$num" -gt "$max_num" ]; then
-            max_num=$num
-        fi
-    done
-    
-    # Return next number
-    echo $((max_num + 1))
+
+    # Use global highest number instead of per-short-name
+    get_global_highest_number "$specs_dir"
 }
 
 # Function to clean and format a branch name

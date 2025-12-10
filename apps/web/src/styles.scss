@@ -1,6 +1,36 @@
 /* You can add global styles to this file, and also import other style files */
 
+/* Tailwind CSS 4.x 配置 */
+@import 'tailwindcss';
+@source '../**/*.{js,ts,jsx,tsx}';
+@source '../../packages/**/*.{js,ts,jsx,tsx}';
+@source '../../../node_modules/@llamaindex/chat-ui/**/*.{js,ts,jsx,tsx}';
+
 /* AITU 品牌全局样式 - 与 TDesign 主题保持一致 */
+@theme {
+  /* Tailwind 4.x 颜色定义 - 使用 AITU 品牌色 */
+  --color-background: #ffffff;
+  --color-foreground: #171717;
+  --color-card: #ffffff;
+  --color-card-foreground: #171717;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #171717;
+  --color-primary: #F39C12;  /* AITU 品牌橙色 */
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #5A4FCF;  /* AITU 品牌紫色 */
+  --color-secondary-foreground: #ffffff;
+  --color-muted: #f5f5f5;
+  --color-muted-foreground: #737373;
+  --color-accent: #f5f5f5;
+  --color-accent-foreground: #171717;
+  --color-destructive: #ef4444;
+  --color-destructive-foreground: #ffffff;
+  --color-border: #e5e5e5;
+  --color-input: #e5e5e5;
+  --color-ring: #F39C12;
+  --radius: 0.5rem;
+}
+
 :root {
   /* 品牌色彩变量 - 与 TDesign 主题同步 */
   --aitu-brand-primary: #F39C12;
@@ -10,19 +40,19 @@
   --aitu-brand-secondary-light: #7B68EE;
   --aitu-accent-create: #E91E63;
   --aitu-accent-create-light: #F06292;
-  
+
   /* 中性色系 */
   --aitu-neutral-900: #2D3436;
   --aitu-neutral-600: #636E72;
   --aitu-neutral-400: #B2BEC3;
   --aitu-neutral-200: #F8F9FF;
   --aitu-neutral-100: #FFFFFF;
-  
+
   /* 功能色彩 */
   --aitu-success: #00B894;
   --aitu-warning: #E67E22;
   --aitu-error: #E91E63;
-  
+
   /* 渐变色 */
   --aitu-gradient-primary: linear-gradient(135deg, #F39C12 0%, #E67E22 30%, #5A4FCF 70%, #E91E63 100%);
   --aitu-gradient-brush: linear-gradient(135deg, #5A4FCF 0%, #7B68EE 50%, #E91E63 100%);

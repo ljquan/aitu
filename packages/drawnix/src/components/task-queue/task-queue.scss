@@ -5,95 +5,7 @@
  * Uses TDesign design tokens for consistency
  */
 
-// Task Toolbar - Circular Floating Action Button
-.task-toolbar-fab {
-  position: fixed;
-  bottom: 96px; // 与换肤按钮同一水平线
-  left: 10px;   // 与菜单按钮左边对齐
-  width: 56px;
-  height: 56px;
-  background: #ffffff; // 白色背景
-  border-radius: 50%;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15); // 灰色阴影
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  z-index: 1000;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  user-select: none;
-  position: relative;
-
-  &:hover {
-    transform: scale(1.05);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-    background: #f5f5f5; // 悬停时稍微变灰
-  }
-
-  &:active {
-    transform: scale(0.95);
-  }
-
-  &--expanded {
-    background: #f0f0f0; // 展开时浅灰色
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-  }
-
-  &__icon {
-    color: #757575; // 灰色图标
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: transform 0.3s ease;
-  }
-
-  &__text {
-    color: #757575; // 灰色文字
-    font-size: 14px;
-    font-weight: 500;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    white-space: nowrap;
-    transition: color 0.3s ease;
-  }
-
-  &__status {
-    position: absolute;
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    bottom: 4px;
-    right: 4px;
-    border: 2px solid #ffffff;
-    animation: pulse 2s infinite;
-
-    &--active {
-      background: var(--td-success-color, #00a870);
-    }
-
-    &--failed {
-      background: var(--td-error-color, #e34d59);
-    }
-  }
-}
-
-// Badge positioning and styling adjustment
-.task-toolbar-fab .t-badge {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-   background-color: transparent !important;
-}
-
-// Override badge background color to transparent
-.task-toolbar-fab {
-  .t-badge__count {
-   
-    color: #E91E63 !important;
-    border: 1px solid #E91E63 !important;
-  }
-}
+@import '../../styles/z-index.scss';
 
 // Task Queue Panel (Expandable)
 .task-queue-panel {
@@ -105,7 +17,7 @@
   background: var(--td-bg-color-container, #ffffff);
   box-shadow: var(--td-shadow-3, 2px 0 8px rgba(0, 0, 0, 0.08));
   border-right: 1px solid var(--td-component-border, #e7e7e7);
-  z-index: 999; // 高于按钮
+  z-index: $z-task-queue-panel; // Layer 4: Drawers/Panels
   overflow: hidden;
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   transform: translateX(-100%); // 从左侧滑出
@@ -120,12 +32,31 @@
     padding: 20px 24px;
     border-bottom: 1px solid var(--td-component-border, #e7e7e7);
     flex-shrink: 0;
-    
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+
+    &-content {
+      flex: 1;
+      min-width: 0; // Allow content to shrink
+    }
+
     h3 {
       margin: 0 0 16px 0;
       font-size: 18px;
       font-weight: 600;
       color: var(--td-text-color-primary, #000000);
+    }
+  }
+
+  &__close-btn {
+    flex-shrink: 0;
+    margin-left: 16px;
+    color: var(--td-text-color-secondary, #757575) !important;
+
+    &:hover {
+      color: var(--td-text-color-primary, #000000) !important;
+      background: var(--td-bg-color-component-hover, #f5f5f5) !important;
     }
   }
 
@@ -197,7 +128,7 @@
     right: 0;
     bottom: 0;
     background: rgba(0, 0, 0, 0.4);
-    z-index: 998;
+    z-index: calc(#{$z-task-queue-panel} - 1); // 比panel低一层
     animation: fadeIn 0.3s ease;
   }
 }
@@ -246,13 +177,18 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-bottom: 8px;
+    width: 100%;
   }
 
   &__type-icon {
     font-size: 18px;
     color: var(--td-brand-color, #0052d9);
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 24px;
+    width: 24px;
   }
 
   &__prompt {
@@ -265,6 +201,9 @@
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     white-space: normal;
+    flex: 1;
+    min-width: 0;
+    line-height: 1.4;
   }
 
   &__meta {
@@ -273,7 +212,6 @@
     gap: 8px;
     font-size: 12px;
     color: var(--td-text-color-secondary, #757575);
-    margin-top: 8px;
   }
 
   &__meta-row {
@@ -561,31 +499,6 @@
 
 // Responsive Design
 @media (max-width: 768px) {
-  .task-toolbar-fab {
-    bottom: 80px; // 移动端在底部工具栏上方
-    left: 20px;   // 移动端左边距
-    width: 48px;
-    height: 48px;
-
-    &__icon {
-      svg {
-        width: 20px;
-        height: 20px;
-      }
-    }
-
-    &__text {
-      font-size: 12px;
-    }
-
-    &__status {
-      width: 10px;
-      height: 10px;
-      bottom: 2px;
-      right: 2px;
-    }
-  }
-
   .task-queue-panel {
     width: 100%; // 移动端占满宽度
     left: 0;
@@ -606,11 +519,6 @@
 
   .task-item {
     padding: 12px;
-
-    &__title {
-      flex-direction: column;
-      align-items: flex-start;
-    }
 
     &__meta {
       flex-direction: column;
@@ -690,6 +598,7 @@
 
 // Task Preview Dialog
 .task-preview-dialog {
+    z-index: $z-dialog!important; // 确保在panel之上
   .task-preview-container {
     position: relative;
     display: flex;
@@ -726,7 +635,7 @@
 
   .task-preview-nav {
     flex-shrink: 0;
-    z-index: 10;
+    z-index: 1; // 相对层级,在panel内部
 
     &--left {
       margin-right: auto;
@@ -740,5 +649,93 @@
       transform: scale(1.1);
       transition: transform 0.2s ease;
     }
+  }
+}
+
+// Task Toolbar Button - Embedded version for UnifiedToolbar
+.task-toolbar-button {
+  width: 56px;
+  height: 56px;
+  background: #ffffff;
+  border-radius: 50%;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
+  position: relative;
+
+  &:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    background: #f5f5f5;
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+
+  &--expanded {
+    background: #f0f0f0;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  }
+
+  &--icon-only {
+    width: 48px;
+    height: 48px;
+  }
+
+  &__content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  &__text {
+    color: #757575;
+    font-size: 14px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+    transition: color 0.3s ease;
+  }
+
+  &__status {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    bottom: 4px;
+    right: 4px;
+    border: 2px solid #ffffff;
+    animation: pulse 2s infinite;
+
+    &--active {
+      background: var(--td-success-color, #00a870);
+    }
+
+    &--failed {
+      background: var(--td-error-color, #e34d59);
+    }
+  }
+}
+
+// Badge positioning and styling adjustment for embedded button
+.task-toolbar-button .t-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: transparent !important;
+}
+
+// Override badge background color to transparent for embedded button
+.task-toolbar-button {
+  .t-badge__count {
+    color: #E91E63 !important;
+    border: 1px solid #E91E63 !important;
   }
 }

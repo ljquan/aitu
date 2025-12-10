@@ -91,6 +91,25 @@ export interface Translations {
   'settings.baseUrl': string;
   'settings.cancel': string;
   'settings.save': string;
+
+  // Chat drawer
+  'chat.openDrawer': string;
+  'chat.closeDrawer': string;
+  'chat.newSession': string;
+  'chat.sessionList': string;
+  'chat.sendMessage': string;
+  'chat.stopGenerate': string;
+  'chat.addAttachment': string;
+  'chat.copyMessage': string;
+  'chat.regenerate': string;
+  'chat.deleteSession': string;
+  'chat.deleteConfirm': string;
+  'chat.emptyState': string;
+  'chat.emptyStateHint': string;
+  'chat.inputPlaceholder': string;
+  'chat.noSessions': string;
+  'chat.newChat': string;
+  'chat.loading': string;
 }
 
 // Translation data
@@ -182,6 +201,25 @@ const translations: Record<Language, Translations> = {
     'settings.baseUrl': 'Base URL',
     'settings.cancel': '取消',
     'settings.save': '保存',
+
+    // Chat drawer
+    'chat.openDrawer': '打开对话',
+    'chat.closeDrawer': '关闭对话',
+    'chat.newSession': '新对话',
+    'chat.sessionList': '会话列表',
+    'chat.sendMessage': '发送消息',
+    'chat.stopGenerate': '停止生成',
+    'chat.addAttachment': '添加附件',
+    'chat.copyMessage': '复制消息',
+    'chat.regenerate': '重新生成',
+    'chat.deleteSession': '删除会话',
+    'chat.deleteConfirm': '确定删除此会话？',
+    'chat.emptyState': '开始对话吧',
+    'chat.emptyStateHint': '输入消息与AI助手交流',
+    'chat.inputPlaceholder': '输入消息...',
+    'chat.noSessions': '暂无会话',
+    'chat.newChat': '新建',
+    'chat.loading': '加载中...',
   },
   en: {
     // Toolbar items
@@ -270,6 +308,25 @@ const translations: Record<Language, Translations> = {
     'settings.baseUrl': 'Base URL',
     'settings.cancel': 'Cancel',
     'settings.save': 'Save',
+
+    // Chat drawer
+    'chat.openDrawer': 'Open Chat',
+    'chat.closeDrawer': 'Close Chat',
+    'chat.newSession': 'New Session',
+    'chat.sessionList': 'Session List',
+    'chat.sendMessage': 'Send Message',
+    'chat.stopGenerate': 'Stop Generating',
+    'chat.addAttachment': 'Add Attachment',
+    'chat.copyMessage': 'Copy Message',
+    'chat.regenerate': 'Regenerate',
+    'chat.deleteSession': 'Delete Session',
+    'chat.deleteConfirm': 'Are you sure you want to delete this session?',
+    'chat.emptyState': 'Start a conversation',
+    'chat.emptyStateHint': 'Send a message to chat with AI assistant',
+    'chat.inputPlaceholder': 'Type a message...',
+    'chat.noSessions': 'No sessions yet',
+    'chat.newChat': 'New',
+    'chat.loading': 'Loading...',
   },
 };
 

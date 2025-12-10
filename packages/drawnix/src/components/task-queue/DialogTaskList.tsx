@@ -5,22 +5,26 @@
  * Used within AI generation dialogs to show only tasks created in that dialog.
  */
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { TaskItem } from './TaskItem';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
-import { TaskType } from '../../types/task.types';
+import { TaskType, TaskStatus } from '../../types/task.types';
 import { useDrawnix, DialogType } from '../../hooks/use-drawnix';
 import { insertImageFromUrl } from '../../data/image';
 import { insertVideoFromUrl } from '../../data/video';
-import { MessagePlugin, Dialog } from 'tdesign-react';
+import { MessagePlugin, Dialog, Button, Input } from 'tdesign-react';
+import { ChevronLeftIcon, ChevronRightIcon, SearchIcon } from 'tdesign-icons-react';
 import { downloadMediaFile } from '../../utils/download-utils';
+import { useMediaUrl } from '../../hooks/useMediaCache';
 import './dialog-task-list.scss';
 
 export interface DialogTaskListProps {
-  /** Task IDs to display */
-  taskIds: string[];
+  /** Task IDs to display. If not provided, shows all tasks (subject to taskType filter) */
+  taskIds?: string[];
   /** Type of tasks to show (optional filter) */
   taskType?: TaskType;
+  /** Callback when edit button is clicked - if provided, will update parent form instead of opening dialog */
+  onEditTask?: (task: any) => void;
 }
 
 /**
@@ -28,36 +32,74 @@ export interface DialogTaskListProps {
  */
 export const DialogTaskList: React.FC<DialogTaskListProps> = ({
   taskIds,
-  taskType
+  taskType,
+  onEditTask
 }) => {
   const {
     tasks,
-    cancelTask,
     retryTask,
     deleteTask,
   } = useTaskQueue();
 
   const { board, openDialog } = useDrawnix();
-  const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
-  const [taskToDelete, setTaskToDelete] = React.useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [taskToDelete, setTaskToDelete] = useState<string | null>(null);
+  const [previewTaskId, setPreviewTaskId] = useState<string | null>(null);
+  const [searchText, setSearchText] = useState('');
 
-  // Filter tasks by IDs and optionally by type
+  // Fuzzy match helper: all tokens must be present in concatenated fields
+  const taskMatchesQuery = (task: any, query: string) => {
+    if (!query.trim()) return true;
+    const tokens = query.toLowerCase().split(/\s+/).filter(Boolean);
+    const statusLabelMap: Record<TaskStatus, string> = {
+      [TaskStatus.PENDING]: '待处理',
+      [TaskStatus.PROCESSING]: '处理中',
+      [TaskStatus.RETRYING]: '重试中',
+      [TaskStatus.COMPLETED]: '已完成',
+      [TaskStatus.FAILED]: '失败',
+      [TaskStatus.CANCELLED]: '已取消',
+    };
+
+    const haystackParts: string[] = [];
+    haystackParts.push(task.params?.prompt ?? '');
+    haystackParts.push(task.params?.model ?? '');
+    haystackParts.push(task.id ?? '');
+    haystackParts.push(statusLabelMap[task.status as TaskStatus] ?? String(task.status));
+    if (task.params?.batchId) haystackParts.push(String(task.params.batchId));
+    if (task.params?.batchIndex) haystackParts.push(String(task.params.batchIndex));
+    if (task.params?.batchTotal) haystackParts.push(String(task.params.batchTotal));
+    if (task.result?.format) haystackParts.push(String(task.result.format));
+    if (task.result?.width && task.result?.height) {
+      haystackParts.push(`${task.result.width}x${task.result.height}`);
+    } else if (task.params?.width && task.params?.height) {
+      haystackParts.push(`${task.params.width}x${task.params.height}`);
+    }
+
+    const haystack = haystackParts.join(' ').toLowerCase();
+    return tokens.every(t => haystack.includes(t));
+  };
+
+  // Filter tasks by IDs, type, and search text
   const filteredTasks = useMemo(() => {
-    let filtered = tasks.filter(task => taskIds.includes(task.id));
+    let filtered = tasks;
+
+    if (taskIds && taskIds.length > 0) {
+      filtered = filtered.filter(task => taskIds.includes(task.id));
+    }
 
     if (taskType !== undefined) {
       filtered = filtered.filter(task => task.type === taskType);
     }
 
+    if (searchText.trim()) {
+      filtered = filtered.filter(t => taskMatchesQuery(t, searchText));
+    }
+
     // Sort by creation time - newest first
     return filtered.sort((a, b) => b.createdAt - a.createdAt);
-  }, [tasks, taskIds, taskType]);
+  }, [tasks, taskIds, taskType, searchText]);
 
   // Task action handlers
-  const handleCancel = (taskId: string) => {
-    cancelTask(taskId);
-  };
-
   const handleRetry = (taskId: string) => {
     retryTask(taskId);
   };
@@ -126,22 +168,109 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
       return;
     }
 
-    // 准备初始数据
-    const initialData = {
-      prompt: task.params.prompt,
-      width: task.params.width,
-      height: task.params.height,
-      duration: task.params.duration,
-      resultUrl: task.result?.url,  // 传递结果URL用于预览
-    };
+    // 如果有 onEditTask 回调（从弹窗内部调用），直接更新父组件表单
+    if (onEditTask) {
+      onEditTask(task);
+      return;
+    }
 
-    // 根据任务类型打开对应的对话框
+    // 否则打开新的对话框（从任务队列面板调用）
     if (task.type === TaskType.IMAGE) {
+      // 准备图片生成初始数据
+      const initialData = {
+        initialPrompt: task.params.prompt,
+        initialWidth: task.params.width,
+        initialHeight: task.params.height,
+        initialImages: task.params.uploadedImages,  // 传递上传的参考图片(数组)
+        initialResultUrl: task.result?.url,  // 传递结果URL用于预览
+      };
       openDialog(DialogType.aiImageGeneration, initialData);
     } else if (task.type === TaskType.VIDEO) {
+      // 准备视频生成初始数据
+      const initialData = {
+        initialPrompt: task.params.prompt,
+        initialDuration: typeof task.params.seconds === 'string'
+          ? parseInt(task.params.seconds, 10)
+          : task.params.seconds,  // 确保转换为数字
+        initialModel: task.params.model,  // 传递模型
+        initialSize: task.params.size,  // 传递尺寸
+        initialImages: task.params.uploadedImages,  // 传递上传的图片（多图片格式）
+        initialResultUrl: task.result?.url,  // 传递结果URL用于预览
+      };
+      console.log('DialogTaskList - handleEdit VIDEO task:', {
+        taskId,
+        taskParams: task.params,
+        initialData
+      });
       openDialog(DialogType.aiVideoGeneration, initialData);
     }
   };
+
+  // Get completed tasks with results for navigation
+  const completedTasksWithResults = useMemo(() => {
+    return filteredTasks.filter(
+      t => t.status === TaskStatus.COMPLETED && t.result?.url
+    );
+  }, [filteredTasks]);
+
+  // Get current preview index and navigation info
+  const previewInfo = useMemo(() => {
+    if (!previewTaskId) return null;
+    const currentIndex = completedTasksWithResults.findIndex(t => t.id === previewTaskId);
+    if (currentIndex === -1) return null;
+    return {
+      currentIndex,
+      total: completedTasksWithResults.length,
+      hasPrevious: currentIndex > 0,
+      hasNext: currentIndex < completedTasksWithResults.length - 1,
+    };
+  }, [previewTaskId, completedTasksWithResults]);
+
+  // Preview navigation handlers
+  const handlePreviewOpen = (taskId: string) => {
+    setPreviewTaskId(taskId);
+  };
+
+  const handlePreviewClose = () => {
+    setPreviewTaskId(null);
+  };
+
+  const handlePreviewPrevious = () => {
+    if (!previewInfo || !previewInfo.hasPrevious) return;
+    setPreviewTaskId(completedTasksWithResults[previewInfo.currentIndex - 1].id);
+  };
+
+  const handlePreviewNext = () => {
+    if (!previewInfo || !previewInfo.hasNext) return;
+    setPreviewTaskId(completedTasksWithResults[previewInfo.currentIndex + 1].id);
+  };
+
+  // Get current previewed task
+  const previewedTask = useMemo(() => {
+    if (!previewTaskId) return null;
+    return tasks.find(t => t.id === previewTaskId);
+  }, [previewTaskId, tasks]);
+
+  // Keyboard navigation for preview
+  useEffect(() => {
+    if (!previewTaskId) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        handlePreviewPrevious();
+      } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        handlePreviewNext();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        handlePreviewClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [previewTaskId, previewInfo]);
 
   if (filteredTasks.length === 0) {
     return null;
@@ -150,20 +279,30 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
   return (
     <>
       <div className="dialog-task-list">
-        <div className="dialog-task-list__header">
+        <div className="dialog-task-list__header" style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
           <h4>生成任务 ({filteredTasks.length})</h4>
+          <div style={{ minWidth: '180px', maxWidth: '240px', flexShrink: 0 }}>
+            <Input
+              value={searchText}
+              onChange={(v) => setSearchText(v)}
+              placeholder="搜索任务（提示词/模型/状态/尺寸）"
+              clearable
+              prefixIcon={<SearchIcon />}
+              size="small"
+            />
+          </div>
         </div>
         <div className="dialog-task-list__content">
           {filteredTasks.map(task => (
             <TaskItem
               key={task.id}
               task={task}
-              onCancel={handleCancel}
               onRetry={handleRetry}
               onDelete={handleDelete}
               onDownload={handleDownload}
               onInsert={handleInsert}
               onEdit={handleEdit}
+              onPreviewOpen={() => handlePreviewOpen(task.id)}
             />
           ))}
         </div>
@@ -179,6 +318,86 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
       >
         确定要删除此任务吗？此操作无法撤销。
       </Dialog>
+
+      {/* Preview Dialog */}
+      {previewedTask && previewedTask.result?.url && (
+        <Dialog
+          visible={!!previewTaskId}
+          onClose={handlePreviewClose}
+          width="90vw"
+          header={
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>{previewedTask.type === TaskType.IMAGE ? '图片预览' : '视频预览'}</span>
+              {previewInfo && (
+                <span style={{ fontSize: '14px', color: '#757575', fontWeight: 'normal' }}>
+                  {previewInfo.currentIndex + 1} / {previewInfo.total}
+                </span>
+              )}
+            </div>
+          }
+          footer={null}
+          className="task-preview-dialog"
+        >
+          <div className="task-preview-container">
+            <Button
+              className="task-preview-nav task-preview-nav--left"
+              icon={<ChevronLeftIcon />}
+              data-track="task_click_preview_previous"
+              onClick={handlePreviewPrevious}
+              size="large"
+              shape="circle"
+              variant="outline"
+              disabled={!previewInfo?.hasPrevious}
+            />
+            <PreviewContent task={previewedTask} />
+            <Button
+              className="task-preview-nav task-preview-nav--right"
+              icon={<ChevronRightIcon />}
+              data-track="task_click_preview_next"
+              onClick={handlePreviewNext}
+              size="large"
+              shape="circle"
+              variant="outline"
+              disabled={!previewInfo?.hasNext}
+            />
+          </div>
+        </Dialog>
+      )}
     </>
+  );
+};
+
+/**
+ * PreviewContent component - displays preview media with cache support
+ */
+const PreviewContent: React.FC<{ task: any }> = ({ task }) => {
+  const { url, isFromCache } = useMediaUrl(task.id, task.result?.url);
+
+  if (!url) {
+    return <div className="task-preview-content">加载中...</div>;
+  }
+
+  return (
+    <div className="task-preview-content">
+      {task.type === TaskType.IMAGE ? (
+        <img
+          key={task.id}
+          src={url}
+          alt="Preview"
+          style={{ maxWidth: '100%', maxHeight: '85vh', objectFit: 'contain' }}
+        />
+      ) : (
+        <video
+          key={task.id}
+          src={url}
+          controls
+          autoPlay
+          style={{ maxWidth: '100%', maxHeight: '85vh' }}
+        />
+      )}
+      {isFromCache && (
+        <div className="task-preview-cache-badge">已缓存</div>
+      )}
+    </div>
   );
 };

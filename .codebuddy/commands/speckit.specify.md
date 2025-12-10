@@ -37,31 +37,31 @@ Given that feature description, do this:
      - "Fix payment processing timeout bug" → "fix-payment-timeout"
 
 2. **Check for existing branches before creating new one**:
-   
+
    a. First, fetch all remote branches to ensure we have the latest information:
       ```bash
       git fetch --all --prune
       ```
-   
-   b. Find the highest feature number across all sources for the short-name:
-      - Remote branches: `git ls-remote --heads origin | grep -E 'refs/heads/[0-9]+-<short-name>$'`
-      - Local branches: `git branch | grep -E '^[* ]*[0-9]+-<short-name>$'`
-      - Specs directories: Check for directories matching `specs/[0-9]+-<short-name>`
-   
+
+   b. Find the **GLOBAL highest feature number** across ALL specs directories (regardless of short-name):
+      - Specs directories: `ls specs/ | grep -E '^[0-9]+' | sed 's/-.*//' | sort -n | tail -1`
+      - This returns the highest number used by ANY feature spec (e.g., if specs has 001-foo, 002-bar, 003-baz, return 3)
+      - If no specs directories exist, start with 0
+
    c. Determine the next available number:
-      - Extract all numbers from all three sources
-      - Find the highest number N
-      - Use N+1 for the new branch number
-   
+      - Take the global highest number N from specs directories
+      - Use N+1 for the new feature number
+      - Example: If specs/ contains 001-foo, 002-bar, 003-baz → next number is 004
+
    d. Run the script `.specify/scripts/bash/create-new-feature.sh --json "$ARGUMENTS"` with the calculated number and short-name:
       - Pass `--number N+1` and `--short-name "your-short-name"` along with the feature description
       - Bash example: `.specify/scripts/bash/create-new-feature.sh --json "$ARGUMENTS" --json --number 5 --short-name "user-auth" "Add user authentication"`
       - PowerShell example: `.specify/scripts/bash/create-new-feature.sh --json "$ARGUMENTS" -Json -Number 5 -ShortName "user-auth" "Add user authentication"`
-   
+
    **IMPORTANT**:
-   - Check all three sources (remote branches, local branches, specs directories) to find the highest number
-   - Only match branches/directories with the exact short-name pattern
-   - If no existing branches/directories found with this short-name, start with number 1
+   - The feature number must be GLOBALLY unique across ALL specs, not just for this short-name
+   - Check specs/ directory to find the highest existing number regardless of feature name
+   - If specs/ directory is empty or doesn't exist, start with number 1
    - You must only ever run this script once per feature
    - The JSON is provided in the terminal as output - always refer to it to get the actual content you're looking for
    - The JSON output will contain BRANCH_NAME and SPEC_FILE paths

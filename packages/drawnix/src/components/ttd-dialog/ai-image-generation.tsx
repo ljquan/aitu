@@ -1,59 +1,28 @@
 import React, { useState, useEffect } from 'react';
 import './ttd-dialog.scss';
 import './ai-image-generation.scss';
-import { useDrawnix } from '../../hooks/use-drawnix';
 import { useI18n } from '../../i18n';
-import { useBoard } from '@plait-board/react-board';
 import { type Language } from '../../constants/prompts';
-import { getSelectedElements, PlaitElement, getRectangleByElements, Point } from '@plait/core';
-import { defaultGeminiClient } from '../../utils/gemini-api';
-import { insertImageFromUrl } from '../../data/image';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
-import { TaskType, TaskStatus } from '../../types/task.types';
-import { MessagePlugin } from 'tdesign-react';
-import { downloadMediaFile } from '../../utils/download-utils';
-import {
-  GenerationHistory,
-  ImageHistoryItem,
-  VideoHistoryItem
-} from '../generation-history';
+import { TaskType } from '../../types/task.types';
+import { MessagePlugin, Select } from 'tdesign-react';
 import { useGenerationHistory } from '../../hooks/useGenerationHistory';
+import { IMAGE_MODEL_OPTIONS } from '../settings-dialog/settings-dialog';
 import {
   useGenerationState,
   useKeyboardShortcuts,
-  handleApiKeyError,
-  isInvalidTokenError,
-  createCacheManager,
-  PreviewCacheBase,
   ActionButtons,
   ErrorDisplay,
   ImageUpload,
-  LoadingState,
   PromptInput,
   AspectRatioSelector,
   type ImageFile,
-  calculateInsertionPointFromIds,
   getMergedPresetPrompts,
   savePromptToHistory as savePromptToHistoryUtil,
-  preloadImage,
-  DEFAULT_IMAGE_DIMENSIONS,
-  getReferenceDimensionsFromIds
 } from './shared';
 import { DEFAULT_ASPECT_RATIO } from '../../constants/image-aspect-ratios';
-import { AI_IMAGE_GENERATION_PREVIEW_CACHE_KEY as PREVIEW_CACHE_KEY } from '../../constants/storage';
 import { DialogTaskList } from '../task-queue/DialogTaskList';
 import { geminiSettings } from '../../utils/settings-manager';
-
-interface PreviewCache extends PreviewCacheBase {
-  generatedImage: string | null;
-  width: number | string;
-  height: number | string;
-  aspectRatio?: string;
-}
-
-const cacheManager = createCacheManager<PreviewCache>(PREVIEW_CACHE_KEY);
-
-
 
 interface AIImageGenerationProps {
   initialPrompt?: string;
@@ -62,6 +31,8 @@ interface AIImageGenerationProps {
   initialWidth?: number;
   initialHeight?: number;
   initialResultUrl?: string;
+  selectedModel?: string;
+  onModelChange?: (value: string) => void;
 }
 
 const AIImageGeneration = ({
@@ -70,81 +41,60 @@ const AIImageGeneration = ({
   selectedElementIds: initialSelectedElementIds = [],
   initialWidth,
   initialHeight,
-  initialResultUrl
+  initialResultUrl,
+  selectedModel,
+  onModelChange
 }: AIImageGenerationProps = {}) => {
   const [prompt, setPrompt] = useState(initialPrompt);
-  const [width, setWidth] = useState<number | string>(initialWidth || DEFAULT_IMAGE_DIMENSIONS.width);
-  const [height, setHeight] = useState<number | string>(initialHeight || DEFAULT_IMAGE_DIMENSIONS.height);
+  const [width, setWidth] = useState<number | string>(initialWidth || 1024);
+  const [height, setHeight] = useState<number | string>(initialHeight || 1024);
   const [aspectRatio, setAspectRatio] = useState<string>(DEFAULT_ASPECT_RATIO);
-  const [generatedImage, setGeneratedImage] = useState<string | null>(null);
-  const [generatedImagePrompt, setGeneratedImagePrompt] = useState<string>(''); // Track prompt for current image
   const [error, setError] = useState<string | null>(null);
-  const [useImageAPI] = useState(false);
   const [uploadedImages, setUploadedImages] = useState<ImageFile[]>(initialImages);
+
   // Use generation history from task queue
   const { imageHistory } = useGenerationHistory();
-
-  const { isGenerating, isLoading: imageLoading, updateIsGenerating, updateIsLoading: updateImageLoading } = useGenerationState('image');
-
-  const { appState, setAppState } = useDrawnix();
+  const { isGenerating } = useGenerationState('image');
   const { language } = useI18n();
-  const board = useBoard();
-  const { createTask, tasks } = useTaskQueue();
+  const { createTask } = useTaskQueue();
 
-  // Track task IDs created in this dialog session
-  const [dialogTaskIds, setDialogTaskIds] = useState<string[]>([]);
-
-  // 保存选中元素的ID,用于计算插入位置
-  const [savedSelectedElementIds, setSavedSelectedElementIds] = useState<string[]>(initialSelectedElementIds);
-
-  // 计算插入位置
-  const calculateInsertionPoint = (): Point | undefined => {
-    return calculateInsertionPointFromIds(board, savedSelectedElementIds);
-  };
-
-
-
-  useEffect(() => {
-    const cachedData = cacheManager.load();
-    if (cachedData) {
-      setPrompt(cachedData.prompt);
-      setWidth(cachedData.width);
-      setHeight(cachedData.height);
-      setGeneratedImage(cachedData.generatedImage);
-      setGeneratedImagePrompt(cachedData.prompt); // Set prompt for download
-      if (cachedData.aspectRatio) {
-        setAspectRatio(cachedData.aspectRatio);
-      }
-    }
-  }, []);
-
+  // Track if we're in manual edit mode (from handleEditTask) to prevent props from overwriting
+  const [isManualEdit, setIsManualEdit] = useState(false);
 
   // 处理 props 变化，更新内部状态
+  const processedPropsRef = React.useRef<string>('');
   useEffect(() => {
+    // Skip if we're in manual edit mode (user clicked edit in task list)
+    if (isManualEdit) {
+      console.log('AIImageGeneration - skipping props update in manual edit mode');
+      return;
+    }
+    
+    // Create a unique key from all initial props to detect real changes
+    const propsKey = JSON.stringify({
+      prompt: initialPrompt,
+      images: initialImages?.map(img => img.url),
+      elementIds: initialSelectedElementIds,
+      width: initialWidth,
+      height: initialHeight,
+      result: initialResultUrl
+    });
+    
+    // Skip if we've already processed these exact props
+    if (processedPropsRef.current === propsKey) {
+      console.log('AIImageGeneration - skipping duplicate props processing');
+      return;
+    }
+    
+    console.log('AIImageGeneration - processing new props:', { propsKey });
+    processedPropsRef.current = propsKey;
+    
     setPrompt(initialPrompt);
     // 使用 initialImages 的值,如果是 undefined 则使用空数组(确保清空)
     setUploadedImages(initialImages || []);
-    setSavedSelectedElementIds(initialSelectedElementIds);
     if (initialWidth) setWidth(initialWidth);
     if (initialHeight) setHeight(initialHeight);
-
-    console.log('AI Image Generation: Updated savedSelectedElementIds:', initialSelectedElementIds);
-
-    // 如果编辑任务且有结果URL,显示预览图
-    if (initialResultUrl) {
-      setGeneratedImage(initialResultUrl);
-      setGeneratedImagePrompt(initialPrompt);
-    } else if (initialPrompt || (initialImages && initialImages.length > 0)) {
-      // 当弹窗重新打开时（有新的初始数据），清除预览图片
-      setGeneratedImage(null);
-      // 清除缓存
-      try {
-        localStorage.removeItem(PREVIEW_CACHE_KEY);
-      } catch (error) {
-        console.warn('Failed to clear cache:', error);
-      }
-    }
-  }, [initialPrompt, initialImages, initialSelectedElementIds, initialWidth, initialHeight, initialResultUrl]);
+  }, [initialPrompt, initialImages, initialSelectedElementIds, initialWidth, initialHeight, initialResultUrl, isManualEdit]);
 
   // 清除错误状态当组件挂载时（对话框打开时）
   useEffect(() => {
@@ -162,88 +112,18 @@ const AIImageGeneration = ({
   const handleReset = () => {
     setPrompt('');
     setUploadedImages([]);
-    setGeneratedImage(null);
     setError(null);
-    setDialogTaskIds([]); // 清除任务列表
     setAspectRatio(DEFAULT_ASPECT_RATIO); // 重置比例
-    // 清除缓存
-    try {
-      localStorage.removeItem(PREVIEW_CACHE_KEY);
-    } catch (error) {
-      console.warn('Failed to clear cache:', error);
-    }
+    // Clear manual edit mode
+    setIsManualEdit(false);
     // 触发Footer组件更新
     window.dispatchEvent(new CustomEvent('ai-image-clear'));
   };
 
 
-  // 设置生成图片并预加载
-  const setGeneratedImageWithPreload = async (imageUrl: string) => {
-    updateImageLoading(true);
-    try {
-      // 预加载图片
-      await preloadImage(imageUrl);
-      setGeneratedImage(imageUrl);
-      
-      // 保存到缓存
-      const cacheData: PreviewCache = {
-        prompt,
-        generatedImage: imageUrl,
-        timestamp: Date.now(),
-        width,
-        height,
-        aspectRatio
-      };
-      cacheManager.save(cacheData);
-    } catch (error) {
-      console.warn('Failed to preload image, setting anyway:', error);
-      // 即使预加载失败，也设置图片URL，让浏览器正常加载
-      setGeneratedImage(imageUrl);
 
-      // 保存到缓存
-      const cacheData: PreviewCache = {
-        prompt,
-        generatedImage: imageUrl,
-        timestamp: Date.now(),
-        width,
-        height,
-        aspectRatio
-      };
-      cacheManager.save(cacheData);
-    } finally {
-      updateImageLoading(false);
-    }
-  };
 
-  // 从历史记录选择图片
-  const selectFromHistory = (historyItem: ImageHistoryItem) => {
-    setPrompt(historyItem.prompt);
-    setWidth(historyItem.width);
-    setHeight(historyItem.height);
-    setGeneratedImage(historyItem.imageUrl);
-    setGeneratedImagePrompt(historyItem.prompt); // Save prompt for download
 
-    // 设置参考图片 (如果有的话)
-    setUploadedImages(historyItem.uploadedImages || []);
-
-    // 更新预览缓存
-    const cacheData: PreviewCache = {
-      prompt: historyItem.prompt,
-      generatedImage: historyItem.imageUrl,
-      timestamp: Date.now(),
-      width: historyItem.width,
-      height: historyItem.height
-    };
-    cacheManager.save(cacheData);
-  };
-
-  // 通用历史选择处理器（兼容各种类型）
-  const handleSelectFromHistory = (item: ImageHistoryItem | VideoHistoryItem) => {
-    if (item.type === 'image') {
-      selectFromHistory(item as ImageHistoryItem);
-    }
-    // 图片生成组件不处理视频类型
-  };
 
   // 使用useMemo优化性能，当imageHistory或language变化时重新计算
   const presetPrompts = React.useMemo(() =>
@@ -254,10 +134,51 @@ const AIImageGeneration = ({
   // 保存提示词到历史记录（去重）
   const savePromptToHistory = (promptText: string) => {
     const dimensions = {
-      width: typeof width === 'string' ? parseInt(width) || DEFAULT_IMAGE_DIMENSIONS.width : width,
-      height: typeof height === 'string' ? parseInt(height) || DEFAULT_IMAGE_DIMENSIONS.height : height
+      width: typeof width === 'string' ? parseInt(width) || 1024 : width,
+      height: typeof height === 'string' ? parseInt(height) || 1024 : height
     };
     savePromptToHistoryUtil('image', promptText, dimensions);
+  };
+
+  // 处理任务编辑（从弹窗内的任务列表点击编辑）
+  const handleEditTask = (task: any) => {
+    console.log('Image handleEditTask - task params:', task.params);
+
+    // 标记为手动编辑模式,防止 props 的 useEffect 覆盖我们的更改
+    setIsManualEdit(true);
+
+    // 直接更新表单状态
+    setPrompt(task.params.prompt || '');
+    setWidth(task.params.width || 1024);
+    setHeight(task.params.height || 1024);
+
+    // 更新上传的图片 - 确保格式正确
+    if (task.params.uploadedImages && task.params.uploadedImages.length > 0) {
+      console.log('Setting uploadedImages:', task.params.uploadedImages);
+      setUploadedImages(task.params.uploadedImages);
+    } else {
+      setUploadedImages([]);
+    }
+
+    // 更新模型选择（通过全局设置）
+    if (task.params.model) {
+      console.log('Updating image model to:', task.params.model);
+      const settings = geminiSettings.get();
+      console.log('Current settings:', settings);
+      geminiSettings.update({
+        ...settings,
+        imageModelName: task.params.model
+      });
+      console.log('Updated settings:', geminiSettings.get());
+    }
+
+    // 更新宽高比（如果有）
+    if (task.params.aspectRatio) {
+      console.log('Setting aspectRatio to:', task.params.aspectRatio);
+      setAspectRatio(task.params.aspectRatio);
+    }
+
+    setError(null);
   };
 
   // 转换图片为可序列化格式
@@ -332,16 +253,10 @@ const AIImageGeneration = ({
               : `Added ${batchTaskIds.length} tasks to queue`
           );
 
-          setDialogTaskIds(prev => [...prev, ...batchTaskIds]);
           savePromptToHistory(prompt);
-          setGeneratedImage(null);
           setError(null);
-
-          try {
-            localStorage.removeItem(PREVIEW_CACHE_KEY);
-          } catch (error) {
-            console.warn('Failed to clear cache:', error);
-          }
+          // Clear manual edit mode after batch generating
+          setIsManualEdit(false);
         } else {
           setError(
             language === 'zh'
@@ -380,66 +295,52 @@ const AIImageGeneration = ({
             : 'Task added to queue, will be generated in background'
         );
 
-        // 保存任务ID到对话框任务列表
-        setDialogTaskIds(prev => [...prev, task.id]);
-
         // 保存提示词到历史记录
         savePromptToHistory(prompt);
 
         // 只清除预览和错误，保留表单数据（prompt和参考图）
-        setGeneratedImage(null);
         setError(null);
-
-        // 清除预览缓存
-        try {
-          localStorage.removeItem(PREVIEW_CACHE_KEY);
-        } catch (error) {
-          console.warn('Failed to clear cache:', error);
-        }
+        // Clear manual edit mode after generating
+        setIsManualEdit(false);
       } else {
         // 任务创建失败（可能是重复提交）
         setError(
-          language === 'zh' 
-            ? '任务创建失败，请检查参数或稍后重试' 
+          language === 'zh'
+            ? '任务创建失败，请检查参数或稍后重试'
             : 'Failed to create task, please check parameters or try again later'
         );
       }
     } catch (err: any) {
       console.error('Failed to create task:', err);
-      setError(
-        language === 'zh' 
-          ? `创建任务失败: ${err.message}` 
-          : `Failed to create task: ${err.message}`
-      );
+
+      // 提取更友好的错误信息
+      let errorMessage = language === 'zh'
+        ? '任务创建失败，请检查参数或稍后重试'
+        : 'Failed to create task, please check parameters or try again later';
+
+      if (err.message) {
+        if (err.message.includes('exceed 5000 characters')) {
+          errorMessage = language === 'zh'
+            ? '提示词不能超过 5000 字符'
+            : 'Prompt must not exceed 5000 characters';
+        } else if (err.message.includes('Duplicate submission')) {
+          errorMessage = language === 'zh'
+            ? '请勿重复提交，请等待 5 秒后再试'
+            : 'Duplicate submission. Please wait 5 seconds.';
+        } else if (err.message.includes('Invalid parameters')) {
+          errorMessage = language === 'zh'
+            ? `参数错误: ${err.message.replace('Invalid parameters: ', '')}`
+            : err.message;
+        }
+      }
+
+      setError(errorMessage);
     }
   };
 
   useKeyboardShortcuts(isGenerating, prompt, () => handleGenerate(1));
 
-  // 记录上一次显示的任务ID，避免重复显示旧任务
-  const [lastDisplayedTaskId, setLastDisplayedTaskId] = useState<string | null>(null);
 
-  // 监听任务完成，自动更新预览
-  useEffect(() => {
-    if (dialogTaskIds.length === 0) return;
-
-    // 获取最新创建的任务ID
-    const latestTaskId = dialogTaskIds[dialogTaskIds.length - 1];
-
-    // 从 tasks 中找到最新任务
-    const latestTask = tasks.find(task => task.id === latestTaskId);
-
-    // 只有当最新任务完成且还未显示过时，才更新预览
-    if (
-      latestTask?.status === TaskStatus.COMPLETED &&
-      latestTask?.result?.url &&
-      latestTask.id !== lastDisplayedTaskId
-    ) {
-      setGeneratedImageWithPreload(latestTask.result.url);
-      setGeneratedImagePrompt(latestTask.params.prompt);
-      setLastDisplayedTaskId(latestTask.id);
-    }
-  }, [tasks, dialogTaskIds, lastDisplayedTaskId]);
 
 
 
@@ -452,18 +353,35 @@ const AIImageGeneration = ({
         {/* AI 图像生成表单 */}
         <div className="ai-image-generation-section">
           <div className="ai-image-generation-form">
-          
-          {/* 参考图片区域 */}
-          {!useImageAPI && (
-            <ImageUpload
-              images={uploadedImages}
-              onImagesChange={setUploadedImages}
-              language={language}
-              disabled={isGenerating}
-              multiple={true}
-              onError={setError}
-            />
+
+          {/* 模型选择器 */}
+          {selectedModel !== undefined && onModelChange && (
+            <div className="model-selector-wrapper">
+              {/* <label className="model-selector-label">
+                {language === 'zh' ? '模型' : 'Image Model'}
+              </label> */}
+              <Select
+                value={selectedModel}
+                onChange={(value) => onModelChange(value as string)}
+                options={IMAGE_MODEL_OPTIONS}
+                size="small"
+                placeholder={language === 'zh' ? '选择图片模型' : 'Select Image Model'}
+                filterable
+                creatable
+                disabled={isGenerating}
+              />
+            </div>
           )}
+
+          {/* 参考图片区域 */}
+          <ImageUpload
+            images={uploadedImages}
+            onImagesChange={setUploadedImages}
+            language={language}
+            disabled={isGenerating}
+            multiple={true}
+            onError={setError}
+          />
 
           <PromptInput
             prompt={prompt}
@@ -482,7 +400,7 @@ const AIImageGeneration = ({
             language={language}
             type="image"
             isGenerating={isGenerating}
-            hasGenerated={!!generatedImage}
+            hasGenerated={false}
             canGenerate={!!prompt.trim()}
             onGenerate={handleGenerate}
             onReset={handleReset}
@@ -496,163 +414,14 @@ const AIImageGeneration = ({
           />
 
         </div>
-      
-      {/* 预览区域 */}
-      <div className="preview-section">
-        <div className="image-preview-container">
-          <LoadingState
-            language={language}
-            type="image"
-            isGenerating={isGenerating}
-            isLoading={imageLoading}
-            hasContent={!!generatedImage}
-          />
-          
-          {generatedImage && (
-            <div className="preview-image-wrapper">
-              <img
-                src={generatedImage}
-                alt="Generated"
-                className="preview-image"
-                loading="eager"
-                decoding="async"
-                onLoad={() => console.log('Preview image loaded successfully')}
-                onError={() => {
-                  console.warn('Preview image failed to load:', generatedImage);
-                }}
-              />
-            </div>
-          )}
 
+        {/* 任务列表侧栏 */}
+        <div className="task-sidebar">
+          <DialogTaskList taskType={TaskType.IMAGE} onEditTask={handleEditTask} />
         </div>
-
-        {/* 插入和清除按钮区域 */}
-        {generatedImage && (
-          <div className="section-actions">
-            <button
-              onClick={() => {
-                setGeneratedImage(null);
-                try {
-                  localStorage.removeItem(PREVIEW_CACHE_KEY);
-                } catch (error) {
-                  console.warn('Failed to clear cache:', error);
-                }
-              }}
-              disabled={isGenerating || imageLoading}
-              className="action-button tertiary"
-            >
-              {language === 'zh' ? '清除' : 'Clear'}
-            </button>
-            <button
-              onClick={async () => {
-                if (generatedImage) {
-                  try {
-                    console.log('Starting image insertion with URL...', generatedImage);
-
-                    // 调试：检查当前选中状态
-                    const currentSelectedElements = board ? getSelectedElements(board) : [];
-                    console.log('Current selected elements:', currentSelectedElements.length, currentSelectedElements);
-                    console.log('Saved selected element IDs:', savedSelectedElementIds);
-
-                    // 计算参考尺寸（用于适应选中元素的大小）
-                    const referenceDimensions = getReferenceDimensionsFromIds(board, savedSelectedElementIds);
-                    console.log('Reference dimensions for image insertion:', referenceDimensions);
-
-                    // 计算插入位置
-                    const insertionPoint = calculateInsertionPoint();
-                    console.log('Calculated insertion point:', insertionPoint);
-
-                    await insertImageFromUrl(board, generatedImage, insertionPoint, false, referenceDimensions);
-
-                    console.log('Image inserted successfully!');
-
-                    // 清除缓存
-                    try {
-                      localStorage.removeItem(PREVIEW_CACHE_KEY);
-                    } catch (error) {
-                      console.warn('Failed to clear cache:', error);
-                    }
-
-                    // 关闭对话框
-                    setAppState({ ...appState, openDialogType: null });
-
-                  } catch (err) {
-                    console.error('Insert image error:', err);
-                    setError(
-                      language === 'zh'
-                        ? `插入图片失败: ${err instanceof Error ? err.message : '未知错误'}`
-                        : `Failed to insert image: ${err instanceof Error ? err.message : 'Unknown error'}`
-                    );
-                  }
-                }
-              }}
-              disabled={isGenerating || imageLoading}
-              className="action-button primary"
-            >
-              {imageLoading
-                ? (language === 'zh' ? '加载中...' : 'Loading...')
-                : (language === 'zh' ? '插入图片' : 'Insert Image')
-              }
-            </button>
-            <button
-              onClick={async () => {
-                if (generatedImage) {
-                  try {
-                    // Extract file extension from URL
-                    let format = 'png';
-                    try {
-                      const urlPath = new URL(generatedImage).pathname;
-                      const ext = urlPath.substring(urlPath.lastIndexOf('.') + 1).toLowerCase();
-                      if (ext && ['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(ext)) {
-                        format = ext;
-                      }
-                    } catch (e) {
-                      // Keep default format
-                    }
-
-                    const result = await downloadMediaFile(
-                      generatedImage,
-                      generatedImagePrompt || 'image',
-                      format,
-                      'image'
-                    );
-                    if (result && 'opened' in result) {
-                      MessagePlugin.success(language === 'zh' ? '已在新标签页打开，请右键另存为' : 'Opened in new tab, please right-click to save');
-                    } else {
-                      MessagePlugin.success(language === 'zh' ? '下载成功' : 'Download successful');
-                    }
-                  } catch (err) {
-                    console.error('Download failed:', err);
-                    MessagePlugin.error(
-                      language === 'zh'
-                        ? '下载失败，请重试'
-                        : 'Download failed, please try again'
-                    );
-                  }
-                }
-              }}
-              disabled={isGenerating || imageLoading}
-              className="action-button secondary"
-            >
-              {imageLoading
-                ? (language === 'zh' ? '加载中...' : 'Loading...')
-                : (language === 'zh' ? '下载' : 'Download')
-              }
-            </button>
-
-          </div>
-        )}
-            {/* 统一历史记录组件 */}
-            <GenerationHistory
-              historyItems={imageHistory}
-              onSelectFromHistory={handleSelectFromHistory}
-            />
-      </div>
       </div>
 
 
-      {/* 对话框任务列表 - 只显示本次对话框生成的任务 */}
-      <DialogTaskList taskIds={dialogTaskIds} taskType={TaskType.IMAGE} />
     </div>
   );
 };

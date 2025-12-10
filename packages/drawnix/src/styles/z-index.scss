@@ -1,0 +1,138 @@
+/**
+ * Z-Index 层级管理变量
+ * 
+ * 采用分层设计，每层预留100个单位空间
+ * 详细规范请参考: docs/Z_INDEX_GUIDE.md
+ */
+
+// ==========================================
+// Layer 0: Base (0-999)
+// ==========================================
+$z-canvas-internal: 100;
+
+// ==========================================
+// Layer 1: Canvas Elements (1000-1999)
+// ==========================================
+$z-canvas-decoration: 1000;
+$z-canvas-temporary: 1100;
+
+// ==========================================
+// Layer 2: Toolbars (2000-2999)
+// ==========================================
+$z-unified-toolbar: 2000;
+$z-creation-toolbar: 2010;
+$z-popup-toolbar: 2020;
+$z-zoom-toolbar: 2030;
+$z-app-toolbar: 2040;
+$z-pencil-toolbar: 2050;
+
+// ==========================================
+// Layer 3: Popovers (3000-3999)
+// ==========================================
+$z-popover: 3000;
+$z-popover-feedback: 3010;
+$z-popover-zoom: 3020;
+$z-popover-app: 3030;
+$z-tooltip: 3500;
+
+// ==========================================
+// Layer 4: Drawers/Panels (4000-4999)
+// ==========================================
+$z-task-queue-panel: 4000;
+$z-chat-drawer: 4010;
+$z-generation-history: 4020;
+
+// ==========================================
+// Layer 5: Modals (5000-5999)
+// ==========================================
+$z-dialog: 5200;
+$z-dialog-clean-confirm: 5210;
+$z-dialog-settings: 5120;
+$z-dialog-ai-image: 5000;
+$z-dialog-ai-video: 5000;
+$z-dialog-inner: 5200;
+$z-dialog-popover: 5500;
+
+// ==========================================
+// Layer 6: Notifications (6000-6999)
+// ==========================================
+$z-active-task-warning: 6000;
+$z-toast: 6100;
+$z-message: 6200;
+
+// ==========================================
+// Layer 7: Auth Dialogs (7000-7999)
+// ==========================================
+$z-auth-dialog: 7000;
+
+// ==========================================
+// Layer 8: Image Viewer (8000-8999)
+// ==========================================
+$z-image-viewer: 8000;
+$z-image-viewer-toolbar: 8010;
+$z-image-viewer-close: 8020;
+
+// ==========================================
+// Layer 9: Critical Overlays (9000+)
+// ==========================================
+$z-loading: 9000;
+$z-system-error: 9100;
+$z-debug: 9999;
+
+// ==========================================
+// Map for function access
+// ==========================================
+$z-index-map: (
+  'canvas-internal': $z-canvas-internal,
+  'canvas-decoration': $z-canvas-decoration,
+  'canvas-temporary': $z-canvas-temporary,
+  'unified-toolbar': $z-unified-toolbar,
+  'creation-toolbar': $z-creation-toolbar,
+  'popup-toolbar': $z-popup-toolbar,
+  'zoom-toolbar': $z-zoom-toolbar,
+  'app-toolbar': $z-app-toolbar,
+  'pencil-toolbar': $z-pencil-toolbar,
+  'popover': $z-popover,
+  'popover-feedback': $z-popover-feedback,
+  'popover-zoom': $z-popover-zoom,
+  'popover-app': $z-popover-app,
+  'tooltip': $z-tooltip,
+  'task-queue-panel': $z-task-queue-panel,
+  'chat-drawer': $z-chat-drawer,
+  'generation-history': $z-generation-history,
+  'dialog': $z-dialog,
+  'dialog-clean-confirm': $z-dialog-clean-confirm,
+  'dialog-settings': $z-dialog-settings,
+  'dialog-ai-image': $z-dialog-ai-image,
+  'dialog-ai-video': $z-dialog-ai-video,
+  'dialog-inner': $z-dialog-inner,
+  'dialog-popover': $z-dialog-popover,
+  'active-task-warning': $z-active-task-warning,
+  'toast': $z-toast,
+  'message': $z-message,
+  'auth-dialog': $z-auth-dialog,
+  'image-viewer': $z-image-viewer,
+  'image-viewer-toolbar': $z-image-viewer-toolbar,
+  'image-viewer-close': $z-image-viewer-close,
+  'loading': $z-loading,
+  'system-error': $z-system-error,
+  'debug': $z-debug,
+);
+
+/**
+ * 辅助函数：通过键名获取z-index值
+ * @param {String} $key - z-index层级的键名
+ * @returns {Number} z-index数值
+ * 
+ * @example
+ * .my-component {
+ *   z-index: z('dialog-ai-image');
+ * }
+ */
+@function z($key) {
+  @if map-has-key($z-index-map, $key) {
+    @return map-get($z-index-map, $key);
+  } @else {
+    @error "Unknown z-index key: #{$key}. Please check docs/Z_INDEX_GUIDE.md";
+  }
+}

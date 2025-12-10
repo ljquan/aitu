@@ -115,6 +115,8 @@ export async function callApiRaw(
 export async function callApiStreamRaw(
   config: GeminiConfig,
   messages: GeminiMessage[],
+  onChunk?: (content: string) => void,
+  signal?: AbortSignal
 ): Promise<GeminiResponse> {
   const startTime = Date.now();
   const model = config.modelName || 'gemini-2.5-flash-image-vip';
@@ -143,13 +145,32 @@ export async function callApiStreamRaw(
 
   const url = `${config.baseUrl}${endpoint}`;
 
+  // Handle signal merging (timeout + user cancel)
+  const controller = new AbortController();
+  const timeoutMs = config.timeout || DEFAULT_CONFIG.timeout!;
+  const timeoutId = setTimeout(() => controller.abort(new Error('Timeout')), timeoutMs);
+  
+  if (signal) {
+    if (signal.aborted) {
+      clearTimeout(timeoutId);
+      controller.abort(signal.reason);
+    } else {
+      signal.addEventListener('abort', () => {
+        clearTimeout(timeoutId);
+        controller.abort(signal.reason);
+      });
+    }
+  }
+
   try {
     const response = await fetch(url, {
       method: 'POST',
       headers,
       body: JSON.stringify(data),
-      signal: AbortSignal.timeout(config.timeout || DEFAULT_CONFIG.timeout!),
+      signal: controller.signal,
     });
+
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       const duration = Date.now() - startTime;
@@ -217,6 +238,9 @@ export async function callApiStreamRaw(
               const content = parsed.choices?.[0]?.delta?.content;
               if (content) {
                 fullContent += content;
+                if (onChunk) {
+                  onChunk(content);
+                }
               }
             } catch (e) {
               // 忽略解析错误的数据块
