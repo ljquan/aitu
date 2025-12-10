@@ -107,12 +107,6 @@ export interface TrackConfig {
   /** Enable auto-tracking */
   autoTrack: boolean;
 
-  /** Umami API endpoint for reporting */
-  apiEndpoint: string;
-
-  /** Umami website ID */
-  websiteId: string;
-
   /** Debounce time in milliseconds */
   debounceTime: number;
 

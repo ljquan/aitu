@@ -14,7 +14,7 @@ export { useTracking } from './hooks/useTracking';
 export { TrackingService, getTrackingService, resetTrackingService } from '../../services/tracking/tracking-service';
 export { TrackingBatchService } from '../../services/tracking/tracking-batch-service';
 export { TrackingStorageService } from '../../services/tracking/tracking-storage-service';
-export { umamiAdapter } from '../../services/tracking/umami-adapter';
+export { posthogAdapter } from '../../services/tracking/posthog-adapter';
 
 // Configuration
 export { DEFAULT_TRACK_CONFIG, getVersion, mergeConfig } from '../../services/tracking/tracking-config';
