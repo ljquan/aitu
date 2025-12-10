@@ -28,7 +28,9 @@ const TOOLBAR_MIN_HEIGHT = 460;
 export const UnifiedToolbar: React.FC<UnifiedToolbarProps> = React.memo(({
   className,
   projectDrawerOpen = false,
-  onProjectDrawerToggle
+  onProjectDrawerToggle,
+  toolboxDrawerOpen = false,
+  onToolboxDrawerToggle
 }) => {
   const [isIconMode, setIsIconMode] = useState(false);
   const [taskPanelExpanded, setTaskPanelExpanded] = useState(false);
@@ -117,11 +119,13 @@ export const UnifiedToolbar: React.FC<UnifiedToolbarProps> = React.memo(({
           </div>
         </div>
 
-        {/* 底部操作区域 - 打开项目 + 任务队列 - 固定在底部 */}
+        {/* 底部操作区域 - 打开项目 + 工具箱 + 任务队列 - 固定在底部 */}
         <div className="unified-toolbar__section unified-toolbar__section--fixed-bottom">
           <BottomActionsSection
             projectDrawerOpen={projectDrawerOpen}
             onProjectDrawerToggle={onProjectDrawerToggle || (() => {})}
+            toolboxDrawerOpen={toolboxDrawerOpen}
+            onToolboxDrawerToggle={onToolboxDrawerToggle}
             taskPanelExpanded={taskPanelExpanded}
             onTaskPanelToggle={handleTaskPanelToggle}
             iconMode={isIconMode}

@@ -16,6 +16,10 @@ export interface BottomActionsSectionProps {
   projectDrawerOpen: boolean;
   /** 项目抽屉切换回调 */
   onProjectDrawerToggle: () => void;
+  /** 工具箱抽屉是否打开 */
+  toolboxDrawerOpen?: boolean;
+  /** 工具箱抽屉切换回调 */
+  onToolboxDrawerToggle?: () => void;
   /** 任务面板是否展开 */
   taskPanelExpanded: boolean;
   /** 任务面板切换回调 */
@@ -44,6 +48,32 @@ const FolderIcon: React.FC = () => (
   </svg>
 );
 
+// 工具箱图标
+const ToolboxIcon: React.FC = () => (
+  <svg
+    width="20"
+    height="20"
+    viewBox="0 0 20 20"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      d="M3 5a2 2 0 012-2h10a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V5z"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M3 8h14M8 3v14"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
 // 任务图标 + 文字
 const TaskIcon: React.FC = () => (
   <div className="task-icon-with-label">
@@ -63,6 +93,8 @@ const TaskIcon: React.FC = () => (
 export const BottomActionsSection: React.FC<BottomActionsSectionProps> = ({
   projectDrawerOpen,
   onProjectDrawerToggle,
+  toolboxDrawerOpen = false,
+  onToolboxDrawerToggle,
   taskPanelExpanded,
   onTaskPanelToggle,
 }) => {
@@ -90,6 +122,23 @@ export const BottomActionsSection: React.FC<BottomActionsSectionProps> = ({
         }}
         onClick={onProjectDrawerToggle}
       />
+
+      {/* 工具箱按钮 */}
+      {onToolboxDrawerToggle && (
+        <ToolButton
+          type="icon"
+          icon={<ToolboxIcon />}
+          aria-label={toolboxDrawerOpen ? '关闭工具箱' : '打开工具箱'}
+          title={toolboxDrawerOpen ? '关闭工具箱' : '打开工具箱'}
+          selected={toolboxDrawerOpen}
+          visible={true}
+          data-track="toolbar_click_toolbox"
+          onPointerDown={(e) => {
+            e.event.stopPropagation();
+          }}
+          onClick={onToolboxDrawerToggle}
+        />
+      )}
 
       {/* 任务队列按钮 - 使用 ToolButton + Badge */}
       <div className="bottom-actions-section__task-wrapper">

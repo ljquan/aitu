@@ -42,6 +42,8 @@ export const Z_INDEX = {
   TASK_QUEUE_PANEL: 4000,
   CHAT_DRAWER: 4010,
   GENERATION_HISTORY: 4020,
+  MINIMAP: 4030,
+  TOOLBOX_DRAWER: 4040,
 
   // ==========================================
   // Layer 5: Modals (5000-5999)

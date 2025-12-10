@@ -1,0 +1,288 @@
+/**
+ * Toolbox Drawer Styles
+ *
+ * 工具箱侧边栏样式
+ */
+
+// Variables
+$drawer-width: 300px;
+$toolbar-width: 70px;
+$animation-duration: 300ms;
+$spacing-sm: 8px;
+$spacing-md: 12px;
+$spacing-lg: 16px;
+$spacing-xl: 24px;
+
+// ============================================================================
+// Toolbox Drawer Container
+// ============================================================================
+
+.toolbox-drawer {
+  position: fixed;
+  top: 0;
+  left: $toolbar-width;
+  bottom: 0;
+  z-index: 12; // Higher than project drawer (11)
+  display: flex;
+  flex-direction: column;
+  width: $drawer-width;
+  background: var(--td-bg-color-container, #fff);
+  border-right: 1px solid var(--td-component-border);
+  box-shadow: 4px 0 16px rgba(0, 0, 0, 0.08);
+  transform: translateX(calc(-100% - #{$toolbar-width}));
+  transition: transform $animation-duration cubic-bezier(0.4, 0, 0.2, 1);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  &--open {
+    transform: translateX(0);
+  }
+
+  // Header
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: $spacing-lg $spacing-md;
+    border-bottom: 1px solid var(--td-component-border);
+    flex-shrink: 0;
+  }
+
+  &__header-left {
+    display: flex;
+    align-items: center;
+    gap: $spacing-sm;
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__header-right {
+    display: flex;
+    align-items: center;
+    gap: $spacing-sm;
+  }
+
+  &__title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--td-text-color-primary);
+  }
+
+  &__count {
+    font-size: 12px;
+    color: var(--td-text-color-placeholder);
+  }
+
+  // Search
+  &__search {
+    padding: $spacing-md;
+    flex-shrink: 0;
+  }
+
+  // Category Filter
+  &__categories {
+    display: flex;
+    gap: $spacing-sm;
+    padding: $spacing-sm $spacing-md;
+    border-bottom: 1px solid var(--td-component-border);
+    flex-shrink: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+
+    .t-button {
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+  }
+
+  // Content
+  &__content {
+    flex: 1;
+    overflow-y: auto;
+    padding: $spacing-md;
+  }
+
+  // Empty State
+  &__empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 200px;
+    color: var(--td-text-color-placeholder);
+    font-size: 14px;
+  }
+}
+
+// ============================================================================
+// Tool List
+// ============================================================================
+
+.tool-list {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-lg;
+
+  &__category {
+    display: flex;
+    flex-direction: column;
+    gap: $spacing-sm;
+  }
+
+  &__category-title {
+    margin: 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--td-text-color-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  &__items {
+    display: flex;
+    flex-direction: column;
+    gap: $spacing-sm;
+  }
+
+  &__empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: $spacing-xl;
+    color: var(--td-text-color-placeholder);
+    font-size: 14px;
+  }
+}
+
+// ============================================================================
+// Tool Item
+// ============================================================================
+
+.tool-item {
+  display: flex;
+  align-items: flex-start;
+  gap: $spacing-md;
+  padding: $spacing-md;
+  border-radius: 8px;
+  background: var(--td-bg-color-container);
+  border: 1px solid var(--td-component-border);
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: var(--td-bg-color-container-hover);
+    border-color: var(--brand-primary, #f39c12);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    transform: translateY(-1px);
+  }
+
+  &:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  }
+
+  &__icon {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    background: linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%);
+    border-radius: 8px;
+  }
+
+  &__content {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  &__name {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--td-text-color-primary);
+    line-height: 1.4;
+  }
+
+  &__description {
+    font-size: 12px;
+    color: var(--td-text-color-secondary);
+    line-height: 1.4;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+}
+
+// ============================================================================
+// Responsive Design
+// ============================================================================
+
+// 平板端适配
+@media (max-width: 768px) {
+  .toolbox-drawer {
+    width: 100%;
+    max-width: 320px;
+  }
+}
+
+// 移动端适配
+@media (max-width: 480px) {
+  .toolbox-drawer {
+    &__search {
+      padding: $spacing-md $spacing-lg;
+    }
+
+    &__categories {
+      flex-wrap: wrap;
+      gap: $spacing-sm;
+    }
+
+    &__content {
+      padding: $spacing-md $spacing-lg;
+    }
+  }
+
+  .tool-item {
+    &__icon {
+      width: 36px;
+      height: 36px;
+      font-size: 20px;
+    }
+  }
+}
+
+// ============================================================================
+// Dark Mode Support
+// ============================================================================
+
+[data-theme='dark'] {
+  .toolbox-drawer {
+    background: var(--toolbox-bg);
+    border-right-color: var(--toolbox-border);
+  }
+
+  .tool-item {
+    background: var(--tool-card-bg);
+    border-color: var(--tool-card-border);
+
+    &:hover {
+      background: var(--toolbox-hover-bg);
+      border-color: var(--tool-card-hover-border);
+    }
+
+    &__icon {
+      background: linear-gradient(135deg, #3a3a3a 0%, #2a2a2a 100%);
+    }
+  }
+}

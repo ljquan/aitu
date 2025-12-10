@@ -5,7 +5,11 @@
 @import './tdesign-theme.scss';
 @import './theme.scss';
 @import './z-index.scss'; // Z-Index层级管理变量
+@import './toolbox-theme.scss'; // 工具箱主题变量
 @import '../components/chat-drawer/chat-drawer.scss';
+@import '../components/tool-element/tool.component.scss';
+@import '../components/toolbox-drawer/toolbox-drawer.scss';
+@import '../components/minimap/minimap.scss';
 
 .t-dialog__ctx.t-dialog__ctx--fixed{
     z-index: $z-dialog !important;

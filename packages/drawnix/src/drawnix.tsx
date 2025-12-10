@@ -39,14 +39,20 @@ import { LinkPopup } from './components/popup/link-popup/link-popup';
 import { I18nProvider } from './i18n';
 import { withVideo } from './plugins/with-video';
 import { withTracking } from './plugins/tracking';
+import { withTool } from './plugins/with-tool';
+import { withToolFocus } from './plugins/with-tool-focus';
+import { withToolResize } from './plugins/with-tool-resize';
 import { ActiveTaskWarning } from './components/task-queue/ActiveTaskWarning';
 import { useTaskStorage } from './hooks/useTaskStorage';
 import { useTaskExecutor } from './hooks/useTaskExecutor';
 import { useBeforeUnload } from './hooks/useBeforeUnload';
 import { ChatDrawer } from './components/chat-drawer';
 import { ProjectDrawer } from './components/project-drawer';
+import { ToolboxDrawer } from './components/toolbox-drawer/ToolboxDrawer';
 import { useWorkspace } from './hooks/useWorkspace';
 import { Board as WorkspaceBoard } from './types/workspace.types';
+import { toolTestHelper } from './utils/tool-test-helper';
+import { Minimap } from './components/minimap';
 
 export type DrawnixProps = {
   value: PlaitElement[];
@@ -97,9 +103,34 @@ export const Drawnix: React.FC<DrawnixProps> = ({
 
   const [board, setBoard] = useState<DrawnixBoard | null>(null);
   const [projectDrawerOpen, setProjectDrawerOpen] = useState(false);
+  const [toolboxDrawerOpen, setToolboxDrawerOpen] = useState(false);
 
   // 使用 ref 来保存 board 的最新引用,避免 useCallback 依赖问题
   const boardRef = useRef<DrawnixBoard | null>(null);
+
+  // 处理项目抽屉切换（互斥逻辑）
+  const handleProjectDrawerToggle = useCallback(() => {
+    setProjectDrawerOpen((prev) => {
+      const newState = !prev;
+      // 如果要打开项目抽屉，关闭工具箱抽屉
+      if (newState) {
+        setToolboxDrawerOpen(false);
+      }
+      return newState;
+    });
+  }, []);
+
+  // 处理工具箱抽屉切换（互斥逻辑）
+  const handleToolboxDrawerToggle = useCallback(() => {
+    setToolboxDrawerOpen((prev) => {
+      const newState = !prev;
+      // 如果要打开工具箱抽屉，关闭项目抽屉
+      if (newState) {
+        setProjectDrawerOpen(false);
+      }
+      return newState;
+    });
+  }, []);
 
   // 使用 useCallback 稳定 setAppState 函数引用
   const stableSetAppState = useCallback((newAppState: DrawnixState) => {
@@ -132,6 +163,9 @@ export const Drawnix: React.FC<DrawnixProps> = ({
     buildPencilPlugin(updateAppState),
     buildTextLinkPlugin(updateAppState),
     withVideo,
+    withTool,
+    withToolResize, // 工具缩放功能 - 拖拽缩放手柄
+    withToolFocus, // 工具焦点管理 - 双击编辑
     withTracking,
   ];
 
@@ -216,13 +250,19 @@ export const Drawnix: React.FC<DrawnixProps> = ({
               <Board
                 afterInit={(board) => {
                   setBoard(board as DrawnixBoard);
+                  // 设置测试助手的 board 实例（仅开发环境）
+                  if (process.env.NODE_ENV === 'development') {
+                    toolTestHelper.setBoard(board);
+                  }
                   afterInit && afterInit(board);
                 }}
               ></Board>
               {/* 统一左侧工具栏 (桌面端和移动端一致) */}
               <UnifiedToolbar
                 projectDrawerOpen={projectDrawerOpen}
-                onProjectDrawerToggle={() => setProjectDrawerOpen(!projectDrawerOpen)}
+                onProjectDrawerToggle={handleProjectDrawerToggle}
+                toolboxDrawerOpen={toolboxDrawerOpen}
+                onToolboxDrawerToggle={handleToolboxDrawerToggle}
               />
 
               <PopupToolbar></PopupToolbar>
@@ -240,6 +280,12 @@ export const Drawnix: React.FC<DrawnixProps> = ({
               onBeforeSwitch={handleBeforeSwitch}
               onBoardSwitch={onBoardSwitch}
             />
+            <ToolboxDrawer
+              isOpen={toolboxDrawerOpen}
+              onOpenChange={setToolboxDrawerOpen}
+            />
+            {/* Minimap - 小地图 */}
+            {board && <Minimap board={board} />}
           </div>
         </div>
       </DrawnixContext.Provider>
