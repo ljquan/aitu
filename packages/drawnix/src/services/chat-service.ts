@@ -10,7 +10,7 @@ import { prepareImageData } from '../utils/gemini-api/utils';
 import type { GeminiMessage } from '../utils/gemini-api/types';
 import type { ChatMessage, StreamEvent } from '../types/chat.types';
 import { MessageRole } from '../types/chat.types';
-import { analytics } from '../utils/umami-analytics';
+import { analytics } from '../utils/posthog-analytics';
 
 // Current abort controller for cancellation
 let currentAbortController: AbortController | null = null;

@@ -13,12 +13,6 @@ export const DEFAULT_TRACK_CONFIG: TrackConfig = {
   /** Auto-tracking disabled by default */
   autoTrack: false,
 
-  /** Umami default endpoint */
-  apiEndpoint: '/api/send',
-
-  /** Website ID must be configured by user */
-  websiteId: '',
-
   /** Debounce time: 500ms */
   debounceTime: 500,
 

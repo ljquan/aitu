@@ -1,19 +1,19 @@
 /**
- * Umami Analytics Adapter
+ * PostHog Analytics Adapter
  * Feature: 005-declarative-tracking
- * Purpose: Adapter to use existing UmamiAnalytics utility for declarative tracking
+ * Purpose: Adapter to use existing PostHogAnalytics utility for declarative tracking
  */
 
 import type { TrackEvent } from '../../types/tracking.types';
-import { analytics } from '../../utils/umami-analytics';
+import { analytics } from '../../utils/posthog-analytics';
 
 /**
- * Umami Tracking Adapter
- * Uses existing UmamiAnalytics singleton to avoid code duplication
+ * PostHog Tracking Adapter
+ * Uses existing PostHogAnalytics singleton to avoid code duplication
  */
-export class UmamiTrackingAdapter {
+export class PostHogTrackingAdapter {
   /**
-   * Check if Umami SDK is available
+   * Check if PostHog SDK is available
    */
   isAvailable(): boolean {
     return analytics.isAnalyticsEnabled();
@@ -22,15 +22,15 @@ export class UmamiTrackingAdapter {
   /**
    * Track event using existing analytics utility
    * @param event - Tracking event to upload
-   * @throws Error if Umami SDK is not loaded
+   * @throws Error if PostHog SDK is not loaded
    */
   async track(event: TrackEvent): Promise<void> {
     if (!this.isAvailable()) {
-      throw new Error('Umami SDK not loaded');
+      throw new Error('PostHog SDK not loaded');
     }
 
     // Enrich event data with metadata
-    const enrichedData = {
+    const enrichedData: Record<string, any> = {
       ...event.params,
       version: event.metadata.version,
       url: event.metadata.url,
@@ -48,7 +48,7 @@ export class UmamiTrackingAdapter {
       // Use existing analytics.track() method
       analytics.track(event.eventName, enrichedData);
     } catch (error) {
-      console.error('[Tracking] Umami track failed:', error);
+      console.error('[Tracking] PostHog track failed:', error);
       throw error; // Re-throw for retry handling
     }
   }
@@ -74,12 +74,12 @@ export class UmamiTrackingAdapter {
   }
 
   /**
-   * Get Umami SDK version info (if available)
+   * Get PostHog SDK version info (if available)
    */
   getSDKInfo(): { available: boolean; version?: string } {
     return {
       available: this.isAvailable(),
-      version: this.isAvailable() ? 'Umami v2.x' : undefined,
+      version: this.isAvailable() ? 'PostHog JS' : undefined,
     };
   }
 }
@@ -87,4 +87,4 @@ export class UmamiTrackingAdapter {
 /**
  * Singleton instance
  */
-export const umamiAdapter = new UmamiTrackingAdapter();
+export const posthogAdapter = new PostHogTrackingAdapter();

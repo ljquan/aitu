@@ -1,25 +1,25 @@
 /**
- * Unit tests for Umami Adapter
+ * Unit tests for PostHog Adapter
  * Feature: 005-declarative-tracking
  */
 
-import { UmamiTrackingAdapter } from '../umami-adapter';
-import { analytics } from '../../../utils/umami-analytics';
+import { PostHogTrackingAdapter } from '../posthog-adapter';
+import { analytics } from '../../../utils/posthog-analytics';
 import type { TrackEvent } from '../../../types/tracking.types';
 
 // Mock analytics utility
-jest.mock('../../../utils/umami-analytics', () => ({
+jest.mock('../../../utils/posthog-analytics', () => ({
   analytics: {
     track: jest.fn(),
     isAnalyticsEnabled: jest.fn(),
   },
 }));
 
-describe('UmamiTrackingAdapter', () => {
-  let adapter: UmamiTrackingAdapter;
+describe('PostHogTrackingAdapter', () => {
+  let adapter: PostHogTrackingAdapter;
 
   beforeEach(() => {
-    adapter = new UmamiTrackingAdapter();
+    adapter = new PostHogTrackingAdapter();
     jest.clearAllMocks();
 
     // Mock analytics as enabled by default
@@ -90,7 +90,7 @@ describe('UmamiTrackingAdapter', () => {
 
     it('should throw error when analytics is not available', async () => {
       (analytics.isAnalyticsEnabled as jest.Mock).mockReturnValue(false);
-      await expect(adapter.track(mockEvent)).rejects.toThrow('Umami SDK not loaded');
+      await expect(adapter.track(mockEvent)).rejects.toThrow('PostHog SDK not loaded');
     });
 
     it('should rethrow error from analytics', async () => {
@@ -165,7 +165,7 @@ describe('UmamiTrackingAdapter', () => {
     it('should return SDK info when analytics is enabled', () => {
       const info = adapter.getSDKInfo();
       expect(info.available).toBe(true);
-      expect(info.version).toBe('Umami v2.x');
+      expect(info.version).toBe('PostHog JS');
     });
 
     it('should return unavailable when analytics is disabled', () => {
