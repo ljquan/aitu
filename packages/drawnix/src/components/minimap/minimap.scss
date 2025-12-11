@@ -1,0 +1,132 @@
+/**
+ * Minimap Styles
+ *
+ * 小地图组件样式
+ */
+
+.minimap {
+  position: fixed;
+  user-select: none;
+  transition: all 0.3s ease-out;
+
+  &--expanded {
+    .minimap__content {
+      opacity: 1;
+      transform: scale(1);
+      pointer-events: auto;
+    }
+
+    .minimap__toggle {
+      transform: rotate(0deg);
+    }
+  }
+
+  &--collapsed {
+    .minimap__content {
+      opacity: 0;
+      transform: scale(0.8);
+      pointer-events: none;
+    }
+
+    .minimap__toggle {
+      transform: rotate(180deg);
+    }
+  }
+
+  // 内容区域
+  &__content {
+    background: var(--minimap-bg, rgba(255, 255, 255, 0.95));
+    border: 1px solid var(--minimap-border, rgba(0, 0, 0, 0.1));
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    padding: 0;
+    overflow: hidden;
+    transition: all 0.3s ease-out;
+    backdrop-filter: blur(10px);
+  }
+
+  // Canvas
+  &__canvas {
+    display: block;
+    border-radius: 8px;
+    touch-action: none;
+
+    &:active {
+      cursor: grabbing !important;
+    }
+  }
+
+  // 折叠/展开按钮
+  &__toggle {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    background: var(--minimap-toggle-bg, rgba(255, 255, 255, 0.9));
+    border: 1px solid var(--minimap-border, rgba(0, 0, 0, 0.1));
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease-out;
+    z-index: 10;
+
+    &:hover {
+      background: var(--minimap-toggle-hover-bg, rgba(90, 79, 207, 0.1));
+      border-color: var(--minimap-toggle-hover-border, rgba(90, 79, 207, 0.3));
+      transform: scale(1.1);
+    }
+
+    &:active {
+      transform: scale(0.95);
+    }
+
+    svg {
+      width: 16px;
+      height: 16px;
+      color: var(--minimap-toggle-icon, #666);
+      transition: transform 0.3s ease-out;
+    }
+
+    &--expanded svg {
+      transform: rotate(90deg);
+    }
+  }
+}
+
+// 响应式调整
+@media (max-width: 768px) {
+  .minimap {
+    &__content {
+      transform: scale(0.9);
+    }
+
+    &--collapsed {
+      .minimap__content {
+        transform: scale(0.7);
+      }
+    }
+  }
+}
+
+// 暗色主题支持（可选）
+@media (prefers-color-scheme: dark) {
+  .minimap {
+    &__content {
+      background: rgba(30, 30, 30, 0.95);
+      border-color: rgba(255, 255, 255, 0.1);
+    }
+
+    &__toggle {
+      background: rgba(30, 30, 30, 0.9);
+      border-color: rgba(255, 255, 255, 0.1);
+
+      svg {
+        color: #ccc;
+      }
+    }
+  }
+}
