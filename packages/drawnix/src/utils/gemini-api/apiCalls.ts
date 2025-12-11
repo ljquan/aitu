@@ -5,7 +5,7 @@
 import { GeminiConfig, GeminiMessage, GeminiResponse, VideoGenerationOptions } from './types';
 import { DEFAULT_CONFIG, VIDEO_DEFAULT_CONFIG } from './config';
 import { isQuotaExceededError, isTimeoutError } from './utils';
-import { analytics } from '../umami-analytics';
+import { analytics } from '../posthog-analytics';
 
 /**
  * 使用原始 fetch 调用聊天 API

@@ -10,7 +10,7 @@ import { GenerationRequest, GenerationResponse, GenerationError } from '../types
 import { defaultGeminiClient } from '../utils/gemini-api';
 import { videoAPIService, VideoModel } from './video-api-service';
 import { TASK_TIMEOUT } from '../constants/TASK_CONSTANTS';
-import { analytics } from '../utils/umami-analytics';
+import { analytics } from '../utils/posthog-analytics';
 import { taskQueueService } from './task-queue-service';
 import { geminiSettings } from '../utils/settings-manager';
 
