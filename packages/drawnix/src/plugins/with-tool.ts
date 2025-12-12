@@ -25,22 +25,35 @@ import { ToolComponent } from '../components/tool-element/tool.component';
 import { PlaitTool } from '../types/toolbox.types';
 import { DEFAULT_TOOL_CONFIG } from '../constants/built-in-tools';
 import { ToolCommunicationService, ToolCommunicationHelper } from '../services/tool-communication-service';
-import { ToolMessageType } from '../types/tool-communication.types';
+import { ToolMessageType, GenerateImagePayload, GenerateImageResponse } from '../types/tool-communication.types';
+import { generationAPIService } from '../services/generation-api-service';
+import { TaskType } from '../types/task.types';
+import { geminiSettings } from '../utils/settings-manager';
 
 /**
  * 设置通信处理器
  */
 function setupCommunicationHandlers(
   board: PlaitBoard,
-  helper: ToolCommunicationHelper
+  helper: ToolCommunicationHelper,
+  service: ToolCommunicationService
 ): void {
   // 处理工具就绪通知
   helper.onToolReady((toolId) => {
     console.log(`[ToolCommunication] Tool ready: ${toolId}`);
-    // 发送初始化配置
+
+    // 获取当前的 Gemini 设置
+    const settings = geminiSettings.get();
+
+    // 发送初始化配置（包含 API key 等敏感信息）
     helper.initTool(toolId, {
       boardId: (board as any).id || 'default-board',
       theme: 'light', // TODO: 从应用状态获取实际主题
+      config: {
+        apiKey: settings.apiKey,
+        baseUrl: settings.baseUrl,
+        imageModel: settings.imageModelName || 'gemini-2.5-flash-image-vip',
+      },
     });
   });
 
@@ -64,6 +77,77 @@ function setupCommunicationHandlers(
     const element = ToolTransforms.getToolById(board, toolId);
     if (element) {
       ToolTransforms.removeTool(board, element.id);
+    }
+  });
+
+  // 处理图片生成请求
+  service.on(ToolMessageType.TOOL_TO_BOARD_GENERATE_IMAGE, async (message) => {
+    const payload = message.payload as GenerateImagePayload;
+    console.log(`[ToolCommunication] Generate image request from ${message.toolId}:`, payload);
+
+    try {
+      // 生成唯一任务 ID
+      const taskId = `batch_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
+      // 构建生成参数
+      const generateParams: any = {
+        prompt: payload.prompt,
+      };
+
+      // 优先使用 size 参数（比例格式），否则使用 width/height
+      if (payload.size) {
+        generateParams.size = payload.size;
+      } else {
+        generateParams.width = payload.width || 1024;
+        generateParams.height = payload.height || 1024;
+      }
+
+      // 调用图片生成 API
+      const result = await generationAPIService.generate(
+        taskId,
+        generateParams,
+        TaskType.IMAGE
+      );
+
+      // 发送成功响应到 iframe
+      const response: GenerateImageResponse = {
+        success: true,
+        responseId: payload.messageId || message.messageId,
+        result: {
+          url: result.url,
+          format: result.format,
+          width: result.width,
+          height: result.height,
+        },
+      };
+
+      // 获取工具的 iframe 并发送响应
+      const iframe = document.querySelector(
+        `[data-element-id="${message.toolId}"] iframe`
+      ) as HTMLIFrameElement;
+
+      if (iframe?.contentWindow) {
+        iframe.contentWindow.postMessage(response, '*');
+        console.log(`[ToolCommunication] Image generation success sent to ${message.toolId}`);
+      }
+    } catch (error: any) {
+      console.error(`[ToolCommunication] Image generation failed for ${message.toolId}:`, error);
+
+      // 发送错误响应到 iframe
+      const response: GenerateImageResponse = {
+        success: false,
+        responseId: payload.messageId || message.messageId,
+        error: error.message || '图片生成失败',
+      };
+
+      const iframe = document.querySelector(
+        `[data-element-id="${message.toolId}"] iframe`
+      ) as HTMLIFrameElement;
+
+      if (iframe?.contentWindow) {
+        iframe.contentWindow.postMessage(response, '*');
+        console.log(`[ToolCommunication] Image generation error sent to ${message.toolId}`);
+      }
     }
   });
 }
@@ -121,7 +205,7 @@ export const withTool: PlaitPlugin = (board: PlaitBoard) => {
   (board as any).__toolCommunicationHelper = communicationHelper;
 
   // 注册通信处理器
-  setupCommunicationHandlers(board, communicationHelper);
+  setupCommunicationHandlers(board, communicationHelper, communicationService);
 
   // 注册工具元素渲染组件
   board.drawElement = (context: PlaitPluginElementContext) => {

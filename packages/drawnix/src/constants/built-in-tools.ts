@@ -33,7 +33,18 @@ export const BUILT_IN_TOOLS: ToolDefinition[] = [
     defaultWidth: 900,
     defaultHeight: 700,
     permissions: ['allow-scripts', 'allow-same-origin'],
-  }
+  },
+  {
+    id: 'batch-image',
+    name: '批量出图工具',
+    description: 'Excel式批量AI图片生成，支持批量编辑和快速生成',
+    icon: '🎨',
+    category: ToolCategory.AI_TOOLS,
+    url: '/batch-image.html',  // 静态 HTML 文件
+    defaultWidth: 1200,
+    defaultHeight: 800,
+    permissions: ['allow-scripts', 'allow-same-origin', 'allow-forms'],
+  },
 ];
 
 /**

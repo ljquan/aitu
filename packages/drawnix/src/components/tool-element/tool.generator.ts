@@ -193,7 +193,10 @@ export class ToolGenerator {
     // 设置超时检测
     this.setupLoadTimeout(element.id);
 
-    iframe.src = element.url;
+    // 设置 iframe URL，添加 toolId 参数用于通信
+    const url = new URL(element.url, window.location.origin);
+    url.searchParams.set('toolId', element.id);
+    iframe.src = url.toString();
 
     // 关键：默认禁用 iframe 的鼠标事件，让画布可以接收选中、拖拽等事件
     // 当元素被双击进入编辑模式时，再启用 iframe 交互
