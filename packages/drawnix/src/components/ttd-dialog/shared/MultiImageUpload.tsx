@@ -78,27 +78,43 @@ export const MultiImageUpload: React.FC<MultiImageUploadProps> = ({
   }, [images, onImagesChange]);
 
   // Handle media library selection
-  const handleMediaLibrarySelect = useCallback((asset: Asset) => {
-    const newImage: UploadedVideoImage = {
-      slot: currentSlot,
-      slotLabel: labels[currentSlot] || `图片${currentSlot + 1}`,
-      url: asset.url,
-      name: asset.name,
-    };
+  const handleMediaLibrarySelect = useCallback(async (asset: Asset) => {
+    // Need to fetch the actual blob data from the blob URL
+    // and convert it to base64 data URL for API compatibility
+    try {
+      const response = await fetch(asset.url);
+      const blob = await response.blob();
 
-    // Update images array
-    const newImages = [...images];
-    const existingIndex = newImages.findIndex(img => img.slot === currentSlot);
-    if (existingIndex >= 0) {
-      newImages[existingIndex] = newImage;
-    } else {
-      newImages.push(newImage);
+      // Convert blob to base64 data URL
+      const reader = new FileReader();
+      reader.onload = () => {
+        const newImage: UploadedVideoImage = {
+          slot: currentSlot,
+          slotLabel: labels[currentSlot] || `图片${currentSlot + 1}`,
+          url: reader.result as string, // base64 data URL
+          name: asset.name,
+        };
+
+        // Update images array
+        const newImages = [...images];
+        const existingIndex = newImages.findIndex(img => img.slot === currentSlot);
+        if (existingIndex >= 0) {
+          newImages[existingIndex] = newImage;
+        } else {
+          newImages.push(newImage);
+        }
+        // Sort by slot
+        newImages.sort((a, b) => a.slot - b.slot);
+        onImagesChange(newImages);
+
+        setShowMediaLibrary(false);
+      };
+      reader.readAsDataURL(blob);
+    } catch (error) {
+      console.error('[MultiImageUpload] Failed to convert asset to base64:', error);
+      MessagePlugin.error('加载图片失败');
+      setShowMediaLibrary(false);
     }
-    // Sort by slot
-    newImages.sort((a, b) => a.slot - b.slot);
-    onImagesChange(newImages);
-
-    setShowMediaLibrary(false);
   }, [currentSlot, images, labels, onImagesChange]);
 
   // Open media library for a specific slot
