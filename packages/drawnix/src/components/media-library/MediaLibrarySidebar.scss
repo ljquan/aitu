@@ -45,11 +45,11 @@
       transition: all 0.2s ease;
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 12px;
       height: auto;
       min-height: 32px;
 
-      // 图标容器 - 固定大小确保对齐
+      // 图标容器 - 固定大小确保对齐，增加右边距
       .t-icon,
       svg {
         flex-shrink: 0;
@@ -58,6 +58,7 @@
         display: flex;
         align-items: center;
         justify-content: center;
+        margin-right: 12px !important;
       }
 
       // 文本 - 确保垂直居中

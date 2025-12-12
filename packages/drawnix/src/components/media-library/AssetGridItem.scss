@@ -11,7 +11,7 @@
   cursor: pointer;
   transition: all 0.2s ease;
   background: white;
-  border: 1px solid #e5e7eb;
+  border: 2px solid transparent; // 始终保持2px边框，防止跳动
 
   &:hover {
     border-color: #c7d2fe;
@@ -29,7 +29,7 @@
   }
 
   &--selected {
-    border: 2px solid #6366f1;
+    border-color: #6366f1; // 只改变颜色，不改变宽度
     box-shadow: 0 10px 15px -3px rgba(99, 102, 241, 0.3), 0 4px 6px -2px rgba(99, 102, 241, 0.2);
     transform: scale(1.02);
     z-index: 10;

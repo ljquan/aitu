@@ -6,8 +6,8 @@
 .storage-bar {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 10px 12px;
+  gap: 8px;
+  padding: 12px 16px;
   background: white;
   border-radius: 8px;
   border: 1px solid #e5e7eb;
@@ -16,14 +16,18 @@
   &__header {
     display: flex;
     align-items: center;
-    gap: 6px;
-    color: #6b7280;
+    justify-content: space-between;
+  }
 
-    svg {
-      flex-shrink: 0;
-      width: 14px;
-      height: 14px;
-    }
+  &__header-left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  &__icon {
+    flex-shrink: 0;
+    color: #6b7280;
   }
 
   &__title {
@@ -32,105 +36,42 @@
     color: #111827;
   }
 
-  &__info {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    font-size: 11px;
-    margin-top: 2px;
-  }
-
   &__count {
     color: #6b7280;
     font-weight: 500;
-  }
-
-  &__percentage {
-    font-weight: 700;
-    color: #111827;
-    font-size: 12px;
-    font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+    font-size: 11px;
+    white-space: nowrap;
   }
 
   // 进度条容器样式调整
   .t-progress {
-    margin: 2px 0;
-  }
+    margin: 0;
 
-  &__size {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
-    font-size: 10px;
-    color: #9ca3af;
-    font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
-    padding-top: 2px;
-  }
-
-  &__separator {
-    color: #d1d5db;
-  }
-
-  &__warning {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 4px 6px;
-    background: #fef3c7;
-    border-radius: 4px;
-    font-size: 10px;
-    color: #92400e;
-    margin-top: 2px;
-
-    svg {
-      flex-shrink: 0;
-      width: 12px;
-      height: 12px;
-    }
-
-    &--critical {
-      background: #fee2e2;
-      color: #991b1b;
+    // 自定义进度条百分比显示样式
+    &__info {
+      font-size: 11px;
+      font-weight: 600;
+      color: #111827;
+      font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
     }
   }
 
   // 移动端优化
   @media (max-width: 768px) {
-    padding: 8px 10px;
-    gap: 5px;
+    padding: 10px 14px;
+    gap: 6px;
 
-    &__header {
-      svg {
-        width: 12px;
-        height: 12px;
-      }
+    &__icon {
+      width: 12px;
+      height: 12px;
     }
 
     &__title {
       font-size: 10px;
     }
 
-    &__info {
+    &__count {
       font-size: 10px;
-    }
-
-    &__percentage {
-      font-size: 11px;
-    }
-
-    &__size {
-      font-size: 9px;
-    }
-
-    &__warning {
-      font-size: 9px;
-      padding: 3px 5px;
-
-      svg {
-        width: 11px;
-        height: 11px;
-      }
     }
   }
 }

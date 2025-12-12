@@ -7,10 +7,11 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  padding: 14px;
-  gap: 12px;
+  padding: 12px;
+  gap: 10px;
   background: #f9fafb;
   min-width: 280px; // 设置最小宽度，防止抖动
+  overflow-y: auto; // 添加滚动，以防内容过多
 
   &--empty {
     align-items: center;
@@ -72,7 +73,7 @@
 
   &__preview {
     width: 100%;
-    aspect-ratio: 1 / 1;
+    max-height: 200px; // 限制最大高度，而非使用 aspect-ratio
     border-radius: 12px;
     overflow: hidden;
     background: white;
@@ -87,8 +88,8 @@
 
   &__image,
   &__video {
-    width: 100%;
-    height: 100%;
+    max-width: 100%;
+    max-height: 184px; // 200px - 8px*2 padding
     object-fit: contain;
     border-radius: 8px;
   }
@@ -98,7 +99,7 @@
     flex-direction: column;
     gap: 4px;
     flex-shrink: 0; // 固定高度，不因内容变化
-    min-height: 42px; // 减少最小高度
+    min-height: 36px;
   }
 
   &__label {
@@ -117,16 +118,13 @@
   &__name {
     flex: 1;
     margin: 0;
-    font-size: 13px; // 减少字体大小
+    font-size: 13px;
     font-weight: 700;
     color: #111827;
     overflow: hidden;
     text-overflow: ellipsis;
-    display: -webkit-box;
-    -webkit-line-clamp: 2; // 最多显示2行
-    -webkit-box-orient: vertical;
-    line-height: 1.3;
-    max-height: 34px; // 减少最大高度
+    white-space: nowrap; // 改为单行显示，节省空间
+    line-height: 1.4;
   }
 
   &__name-edit {
@@ -143,22 +141,23 @@
   &__metadata {
     display: flex;
     flex-direction: column;
-    gap: 8px; // 减少间距
-    padding: 10px; // 减少内边距
+    gap: 6px;
+    padding: 10px;
     background: white;
     border-radius: 8px;
     border: 1px solid #e5e7eb;
     box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-    flex-shrink: 0; // 固定大小
+    flex-shrink: 0;
+    overflow: hidden; // 防止内容溢出
   }
 
   &__meta-item {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
+    display: flex; // 使用 flex 而不是 grid
+    justify-content: space-between;
+    align-items: center;
     font-size: 11px;
-    align-items: center; // 垂直居中对齐
-    min-height: 14px; // 减少行高
+    min-height: 18px;
+    gap: 8px; // 标签和值之间的最小间距
   }
 
   &__meta-label {
@@ -166,10 +165,12 @@
     font-weight: 500;
     display: flex;
     align-items: center;
-    gap: 5px; // 减少间距
+    gap: 5px;
+    white-space: nowrap;
+    flex-shrink: 0; // 标签不收缩
 
     svg {
-      width: 13px; // 减少图标大小
+      width: 13px;
       height: 13px;
     }
   }
@@ -180,17 +181,19 @@
     text-align: right;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap; // 单行显示，超出省略
+    white-space: nowrap;
     font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+    flex-shrink: 1; // 值可以收缩
   }
 
   &__actions {
     display: flex;
     flex-direction: column;
-    gap: 6px; // 减少间距
+    gap: 6px;
     margin-top: auto;
-    padding-top: 12px; // 减少顶部内边距
+    padding-top: 10px;
     border-top: 1px solid #e5e7eb;
+    flex-shrink: 0; // 确保操作按钮始终可见
   }
 
   // 移动端优化
