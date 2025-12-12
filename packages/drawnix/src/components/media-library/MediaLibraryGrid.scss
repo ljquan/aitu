@@ -129,9 +129,15 @@
     }
 
     @media (max-width: 767px) {
-      grid-template-columns: repeat(2, 1fr);
-      padding: 16px;
-      gap: 12px;
+      grid-template-columns: repeat(3, 1fr); // 移动端显示3列，增加可见性
+      padding: 12px; // 减小内边距
+      gap: 10px; // 减小间距
+    }
+
+    @media (max-width: 480px) {
+      grid-template-columns: repeat(2, 1fr); // 小屏幕显示2列
+      padding: 10px;
+      gap: 8px;
     }
   }
 

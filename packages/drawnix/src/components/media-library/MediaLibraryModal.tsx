@@ -4,7 +4,7 @@
  */
 
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { Dialog, MessagePlugin } from 'tdesign-react';
+import { Dialog, MessagePlugin, Drawer } from 'tdesign-react';
 import { Grid } from 'lucide-react';
 import { useAssets } from '../../contexts/AssetContext';
 import { MediaLibraryGrid } from './MediaLibraryGrid';
@@ -42,6 +42,8 @@ export function MediaLibraryModal({
   const [localSelectedAssetId, setLocalSelectedAssetId] = useState<string | null>(
     null,
   );
+  const [showMobileInspector, setShowMobileInspector] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 加载素材和检查配额
@@ -66,14 +68,36 @@ export function MediaLibraryModal({
     }
   }, [isOpen, selectedAssetId]);
 
+  // 检测移动端
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
   // 处理资产选择
   const handleSelectAsset = useCallback(
     (id: string) => {
       setLocalSelectedAssetId(id);
       setSelectedAssetId(id);
+
+      // 在移动端，点击素材时打开抽屉
+      if (isMobile) {
+        setShowMobileInspector(true);
+      }
     },
-    [setSelectedAssetId],
+    [setSelectedAssetId, isMobile],
   );
+
+  // 关闭移动端检查器
+  const handleCloseMobileInspector = useCallback(() => {
+    setShowMobileInspector(false);
+  }, []);
 
   // 处理双击选择
   const handleDoubleClick = useCallback(
@@ -258,14 +282,45 @@ export function MediaLibraryModal({
           />
         </div>
 
-        {/* 右侧详情面板 */}
-        <div className="media-library-layout__inspector">
+        {/* 右侧详情面板 - 仅桌面端显示 */}
+        {!isMobile && (
+          <div className="media-library-layout__inspector">
+            <MediaLibraryInspector
+              asset={selectedAsset}
+              onRename={renameAsset}
+              onDelete={removeAsset}
+              onDownload={(asset) => {
+                // 下载功能在 asset-utils.ts 中实现
+                const link = document.createElement('a');
+                link.href = asset.url;
+                link.download = asset.name;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+              }}
+              onSelect={showSelectButton ? handleUseAsset : undefined}
+              showSelectButton={showSelectButton}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* 移动端详情抽屉 */}
+      {isMobile && (
+        <Drawer
+          visible={showMobileInspector}
+          onClose={handleCloseMobileInspector}
+          header="素材详情"
+          placement="bottom"
+          size="70vh"
+          destroyOnClose
+          className="media-library-mobile-drawer"
+        >
           <MediaLibraryInspector
             asset={selectedAsset}
             onRename={renameAsset}
             onDelete={removeAsset}
             onDownload={(asset) => {
-              // 下载功能在 asset-utils.ts 中实现
               const link = document.createElement('a');
               link.href = asset.url;
               link.download = asset.name;
@@ -276,8 +331,8 @@ export function MediaLibraryModal({
             onSelect={showSelectButton ? handleUseAsset : undefined}
             showSelectButton={showSelectButton}
           />
-        </div>
-      </div>
+        </Drawer>
+      )}
     </Dialog>
   );
 }

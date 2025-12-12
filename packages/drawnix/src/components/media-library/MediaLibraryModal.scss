@@ -92,6 +92,20 @@
   }
 }
 
+// 移动端详情抽屉样式
+.media-library-mobile-drawer {
+  .t-drawer__body {
+    padding: 0;
+    background: #f9fafb;
+  }
+
+  .t-drawer__header {
+    border-bottom: 1px solid #e5e7eb;
+    padding: 16px 20px;
+    background: white;
+  }
+}
+
 .media-library-layout {
   display: flex;
   height: 100%;
@@ -180,21 +194,25 @@
     &__sidebar {
       width: 100%;
       height: auto;
-      max-height: 160px;
+      max-height: 120px; // 减小高度，给图片区域更多空间
       border-right: none;
       border-bottom: 1px solid #e5e7eb;
-      padding: 12px;
+      padding: 10px;
+      overflow-y: auto; // 允许滚动查看所有筛选项
     }
 
     &__main {
       flex: 1;
       min-height: 0;
+      // 确保主区域获得足够空间
     }
 
     &__inspector {
+      display: none; // 移动端隐藏详情面板，节省空间
+      // 或者改为可折叠的形式
       width: 100%;
       height: auto;
-      max-height: 50vh;
+      max-height: 40vh;
       border-left: none;
       border-top: 1px solid #e5e7eb;
       min-width: auto;
@@ -203,8 +221,12 @@
 
   @media (max-width: 480px) {
     &__sidebar {
-      max-height: 140px;
-      padding: 10px;
+      max-height: 100px; // 更小屏幕进一步减小
+      padding: 8px;
+    }
+
+    &__inspector {
+      max-height: 35vh; // 如果显示的话，也减小高度
     }
   }
 }

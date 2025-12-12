@@ -110,60 +110,82 @@
 
   // 移动端优化
   @media (max-width: 768px) {
-    gap: 12px;
+    gap: 8px; // 减小间距
     flex-direction: row;
     flex-wrap: wrap;
+    padding: 8px; // 减小内边距
 
     &__section {
-      gap: 8px;
+      gap: 6px; // 减小间距
       flex: 1 1 auto;
-      min-width: 140px;
+      min-width: 120px; // 减小最小宽度
 
       &--storage {
         padding-top: 0;
         border-top: none;
         border-left: 1px solid #e5e7eb;
-        padding-left: 12px;
+        padding-left: 8px; // 减小内边距
         margin-left: auto;
+        // 在移动端隐藏存储栏，节省空间
+        display: none;
       }
     }
 
     &__title {
       font-size: 9px;
+      margin-bottom: 4px; // 减小标题下方间距
     }
 
     &__buttons {
       flex-direction: row;
       flex-wrap: wrap;
+      gap: 4px; // 减小按钮间距
 
       .t-button {
-        padding: 6px 8px;
-        font-size: 11px;
-        min-height: 28px;
-        gap: 8px;
+        padding: 4px 6px; // 减小内边距
+        font-size: 10px; // 减小字号
+        min-height: 26px; // 减小高度
+        gap: 4px; // 减小图标和文字间距
         flex: 1 1 auto;
-        min-width: 80px;
+        min-width: 70px; // 减小最小宽度
 
         .t-icon,
         svg {
-          width: 14px;
-          height: 14px;
+          width: 12px; // 减小图标
+          height: 12px;
         }
       }
     }
   }
 
   @media (max-width: 480px) {
+    padding: 6px; // 进一步减小
+
     &__section {
-      min-width: 120px;
+      min-width: 100px; // 更小
+      gap: 4px;
+    }
+
+    &__title {
+      font-size: 8px;
+      margin-bottom: 3px;
     }
 
     &__buttons {
+      gap: 3px;
+
       .t-button {
-        padding: 5px 6px;
-        font-size: 10px;
-        min-height: 26px;
-        min-width: 70px;
+        padding: 3px 5px; // 更小的内边距
+        font-size: 9px; // 更小字号
+        min-height: 24px; // 更小高度
+        min-width: 60px; // 更小宽度
+        gap: 3px;
+
+        .t-icon,
+        svg {
+          width: 10px; // 更小图标
+          height: 10px;
+        }
       }
     }
   }
