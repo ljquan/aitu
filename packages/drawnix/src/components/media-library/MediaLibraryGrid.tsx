@@ -26,11 +26,25 @@ export function MediaLibraryGrid({
 
   // 应用筛选和排序
   const filteredResult = useMemo(() => {
-    const mergedFilters = filterType
-      ? { ...filters, activeType: filterType }
-      : filters;
-    return filterAssets(assets, mergedFilters);
-  }, [assets, filters, filterType]);
+    console.log('[MediaLibraryGrid] Computing filtered assets, total assets:', assets.length);
+    console.log('[MediaLibraryGrid] All assets:', assets);
+
+    // Don't override filters with filterType - the initial filter is already set
+    // in MediaLibraryModal via setFilters. Overriding here prevents manual filter changes.
+    console.log('[MediaLibraryGrid] Applied filters:', filters);
+
+    const result = filterAssets(assets, filters);
+
+    console.log('[MediaLibraryGrid] Filtered result:', {
+      count: result.count,
+      isEmpty: result.isEmpty,
+      assetsLength: result.assets.length,
+    });
+
+    console.log('[MediaLibraryGrid] Filtered assets details:', result.assets);
+
+    return result;
+  }, [assets, filters]);
 
   // 拖放事件处理
   const handleDragOver = useCallback((e: React.DragEvent) => {

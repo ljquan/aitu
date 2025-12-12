@@ -100,18 +100,28 @@ export function MediaLibraryModal({
   // 处理文件上传
   const handleFileUpload = useCallback(
     async (files: FileList) => {
-      if (!files || files.length === 0) return;
+      console.log('[MediaLibrary] handleFileUpload called with files:', files);
+      if (!files || files.length === 0) {
+        console.log('[MediaLibrary] No files provided');
+        return;
+      }
 
       // 验证文件
       const validFiles: File[] = [];
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
+        console.log(`[MediaLibrary] Processing file ${i + 1}:`, {
+          name: file.name,
+          type: file.type,
+          size: file.size,
+        });
 
         // 检查文件类型
         const isImage = file.type.startsWith('image/');
         const isVideo = file.type.startsWith('video/');
 
         if (!isImage && !isVideo) {
+          console.warn(`[MediaLibrary] Invalid file type: ${file.type}`);
           MessagePlugin.warning(`文件 "${file.name}" 不是有效的图片或视频格式`);
           continue;
         }
@@ -119,31 +129,50 @@ export function MediaLibraryModal({
         // 检查文件大小 (最大 100MB)
         const maxSize = 100 * 1024 * 1024;
         if (file.size > maxSize) {
+          console.warn(`[MediaLibrary] File too large: ${file.size} bytes`);
           MessagePlugin.warning(`文件 "${file.name}" 超过 100MB 限制`);
           continue;
         }
 
+        console.log(`[MediaLibrary] File validation passed:`, {
+          isImage,
+          isVideo,
+          type: isImage ? 'IMAGE' : 'VIDEO',
+        });
         validFiles.push(file);
       }
 
       if (validFiles.length === 0) {
+        console.log('[MediaLibrary] No valid files to upload');
         return;
       }
+
+      console.log(`[MediaLibrary] Uploading ${validFiles.length} valid file(s)`);
 
       // 上传文件
       try {
         for (const file of validFiles) {
           const isImage = file.type.startsWith('image/');
           const type = isImage ? AssetType.IMAGE : AssetType.VIDEO;
-          await addAsset(file, type, AssetSource.LOCAL);
+          console.log(`[MediaLibrary] Calling addAsset for:`, {
+            fileName: file.name,
+            type,
+            source: AssetSource.LOCAL,
+          });
+
+          const asset = await addAsset(file, type, AssetSource.LOCAL);
+          console.log(`[MediaLibrary] Asset added successfully:`, asset);
         }
 
         MessagePlugin.success(`成功上传 ${validFiles.length} 个文件`);
+        console.log('[MediaLibrary] All files uploaded successfully');
 
         // 重新加载资产列表
+        console.log('[MediaLibrary] Reloading assets...');
         await loadAssets();
+        console.log('[MediaLibrary] Assets reloaded');
       } catch (error) {
-        console.error('File upload error:', error);
+        console.error('[MediaLibrary] File upload error:', error);
         // 错误信息已经在 AssetContext 中处理
       }
     },

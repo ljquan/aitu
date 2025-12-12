@@ -100,29 +100,45 @@ class AssetStorageService {
    * 添加新素材到存储
    */
   async addAsset(data: AddAssetData): Promise<Asset> {
+    console.log('[AssetStorageService] addAsset called with:', {
+      type: data.type,
+      source: data.source,
+      name: data.name,
+      mimeType: data.mimeType,
+      blobSize: data.blob.size,
+    });
+
     this.ensureInitialized();
 
     // 验证名称
     const nameValidation = validateAssetName(data.name);
     if (!nameValidation.valid) {
+      console.error('[AssetStorageService] Name validation failed:', nameValidation.error);
       throw new ValidationError(nameValidation.error!);
     }
 
     // 验证MIME类型
     const mimeValidation = validateMimeType(data.mimeType);
     if (!mimeValidation.valid) {
+      console.error('[AssetStorageService] MIME type validation failed:', mimeValidation.error);
       throw new ValidationError(mimeValidation.error!);
     }
 
     // 检查存储空间
+    console.log('[AssetStorageService] Checking storage quota...');
     const canAdd = await canAddAssetBySize(data.blob.size);
     if (!canAdd) {
+      console.error('[AssetStorageService] Quota exceeded');
       throw new QuotaExceededError();
     }
+    console.log('[AssetStorageService] Storage quota check passed');
 
     try {
       // 创建Asset对象
+      console.log('[AssetStorageService] Creating blob URL...');
       const blobUrl = URL.createObjectURL(data.blob);
+      console.log('[AssetStorageService] Blob URL created:', blobUrl);
+
       const asset = createAsset({
         type: data.type,
         source: data.source,
@@ -133,16 +149,22 @@ class AssetStorageService {
         prompt: data.prompt,
         modelName: data.modelName,
       });
+      console.log('[AssetStorageService] Asset object created:', asset);
 
       // 转换为StoredAsset并保存
+      console.log('[AssetStorageService] Converting to StoredAsset and saving to IndexedDB...');
       const storedAsset = assetToStoredAsset(asset, data.blob);
       await this.store!.setItem(asset.id, storedAsset);
+      console.log('[AssetStorageService] Asset saved to IndexedDB');
 
       // 缓存Blob URL
       this.blobUrlCache.set(asset.id, blobUrl);
+      console.log('[AssetStorageService] Blob URL cached');
 
+      console.log('[AssetStorageService] addAsset completed successfully');
       return asset;
     } catch (error: any) {
+      console.error('[AssetStorageService] Error during addAsset:', error);
       if (error.name === 'QuotaExceededError') {
         throw new QuotaExceededError();
       }
@@ -158,20 +180,32 @@ class AssetStorageService {
    * 获取所有素材
    */
   async getAllAssets(): Promise<Asset[]> {
+    console.log('[AssetStorageService] getAllAssets called');
     this.ensureInitialized();
 
     try {
       const keys = await this.store!.keys();
+      console.log(`[AssetStorageService] Found ${keys.length} keys in IndexedDB:`, keys);
       const assets: Asset[] = [];
 
       for (const key of keys) {
         const stored = (await this.store!.getItem(key)) as StoredAsset | null;
         if (stored) {
+          console.log(`[AssetStorageService] Loading asset ${key}:`, {
+            id: stored.id,
+            type: stored.type,
+            name: stored.name,
+            size: stored.size,
+          });
+
           // 检查是否已有缓存的Blob URL
           let url = this.blobUrlCache.get(stored.id);
           if (!url) {
+            console.log(`[AssetStorageService] Creating new blob URL for ${stored.id}`);
             url = URL.createObjectURL(stored.blobData);
             this.blobUrlCache.set(stored.id, url);
+          } else {
+            console.log(`[AssetStorageService] Using cached blob URL for ${stored.id}`);
           }
 
           const { blobData, ...assetData } = stored;
@@ -182,8 +216,10 @@ class AssetStorageService {
         }
       }
 
+      console.log(`[AssetStorageService] Returning ${assets.length} assets`);
       return assets;
     } catch (error: any) {
+      console.error('[AssetStorageService] Error loading assets:', error);
       throw new AssetStorageError(
         `Failed to load assets: ${error.message}`,
         'LOAD_FAILED',

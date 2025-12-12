@@ -112,6 +112,15 @@ export function AssetProvider({ children }: AssetProviderProps) {
       source: AssetSource,
       name?: string,
     ): Promise<Asset> => {
+      console.log('[AssetContext] addAsset called with:', {
+        fileName: file instanceof File ? file.name : 'Blob',
+        type,
+        source,
+        name,
+        fileSize: file.size,
+        fileType: file.type,
+      });
+
       setLoading(true);
       setError(null);
 
@@ -124,6 +133,7 @@ export function AssetProvider({ children }: AssetProviderProps) {
         const mimeType =
           file instanceof File ? file.type : 'application/octet-stream';
 
+        console.log('[AssetContext] Calling assetStorageService.addAsset...');
         const asset = await assetStorageService.addAsset({
           type,
           source,
@@ -132,10 +142,14 @@ export function AssetProvider({ children }: AssetProviderProps) {
           mimeType,
         });
 
+        console.log('[AssetContext] Asset added to storage:', asset);
+
         // 更新状态
         setAssets((prev) => [asset, ...prev]); // 新素材排在最前面
+        console.log('[AssetContext] Assets state updated');
 
         // 检查存储配额
+        console.log('[AssetContext] Checking storage quota...');
         await checkStorageQuota();
 
         MessagePlugin.success({
@@ -143,9 +157,13 @@ export function AssetProvider({ children }: AssetProviderProps) {
           duration: 2000,
         });
 
+        console.log('[AssetContext] addAsset completed successfully');
         return asset;
       } catch (err: any) {
-        console.error('Failed to add asset:', err);
+        console.error('[AssetContext] Failed to add asset:', err);
+        console.error('[AssetContext] Error name:', err.name);
+        console.error('[AssetContext] Error message:', err.message);
+        console.error('[AssetContext] Error stack:', err.stack);
         setError(err.message);
 
         if (err.name === 'QuotaExceededError') {
