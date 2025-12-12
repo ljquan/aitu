@@ -1,4 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { Button } from 'tdesign-react';
+import { FolderOpen, HardDrive } from 'lucide-react';
+import { MediaLibraryModal } from '../../media-library/MediaLibraryModal';
+import type { Asset } from '../../../types/asset.types';
+import { SelectionMode, AssetType } from '../../../types/asset.types';
 
 export interface ImageFile {
   file?: File;
@@ -29,6 +34,8 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
   onError,
   headerRight
 }) => {
+  const [showMediaLibrary, setShowMediaLibrary] = useState(false);
+
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (files) {
@@ -65,6 +72,22 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
     return image.file ? URL.createObjectURL(image.file) : image.url || '';
   };
 
+  const handleMediaLibrarySelect = (asset: Asset) => {
+    const newImage: ImageFile = {
+      url: asset.url,
+      name: asset.name
+    };
+
+    if (multiple) {
+      onImagesChange([...images, newImage]);
+    } else {
+      onImagesChange([newImage]);
+    }
+
+    setShowMediaLibrary(false);
+    onError?.(null);
+  };
+
   const defaultLabel = language === 'zh' 
     ? `${multiple ? '参考图片' : '源图片'} (可选)` 
     : `${multiple ? 'Reference Images' : 'Source Image'} (Optional)`;
@@ -80,6 +103,28 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
       <div className="unified-image-area">
         {images.length === 0 ? (
           <div className="upload-area">
+            <div className="upload-source-buttons">
+              <Button
+                block
+                variant="outline"
+                icon={<FolderOpen size={16} />}
+                onClick={() => setShowMediaLibrary(true)}
+                disabled={disabled}
+                data-track="image_upload_select_from_library"
+              >
+                {language === 'zh' ? '从素材库选择' : 'From Library'}
+              </Button>
+              <Button
+                block
+                variant="outline"
+                icon={<HardDrive size={16} />}
+                onClick={() => document.getElementById('image-upload')?.click()}
+                disabled={disabled}
+                data-track="image_upload_select_from_local"
+              >
+                {language === 'zh' ? '从本地选择' : 'From Local'}
+              </Button>
+            </div>
             <input
               type="file"
               id="image-upload"
@@ -88,20 +133,8 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
               onChange={handleImageUpload}
               className="upload-input"
               disabled={disabled}
+              style={{ display: 'none' }}
             />
-            <label htmlFor="image-upload" className="upload-label">
-              <div className="upload-icon">{icon}</div>
-              <div className="upload-text">
-                {language === 'zh' 
-                  ? '点击或拖拽上传图片' 
-                  : 'Click or drag to upload image'}
-              </div>
-              <div className="upload-hint">
-                {language === 'zh' 
-                  ? '支持 JPG, PNG, WebP, 最大 10MB' 
-                  : 'Support JPG, PNG, WebP, Max 10MB'}
-              </div>
-            </label>
           </div>
         ) : (
           <div className="images-grid">
@@ -193,6 +226,15 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
           </div>
         )}
       </div>
+
+      {/* Media Library Modal */}
+      <MediaLibraryModal
+        isOpen={showMediaLibrary}
+        onClose={() => setShowMediaLibrary(false)}
+        mode={SelectionMode.SELECT}
+        filterType={AssetType.IMAGE}
+        onSelect={handleMediaLibrarySelect}
+      />
     </div>
   );
 };

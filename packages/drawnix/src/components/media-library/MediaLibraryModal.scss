@@ -1,0 +1,210 @@
+/**
+ * Media Library Modal Styles
+ * 素材库弹窗样式 - Tailwind-inspired design
+ */
+
+.media-library-modal {
+  .t-dialog__body {
+    padding: 0;
+    height: 75vh;
+    max-height: 75vh;
+    background: white;
+
+    // 移动端适配
+    @media (max-width: 768px) {
+      height: 85vh;
+      max-height: 85vh;
+    }
+  }
+
+  .t-dialog__wrap {
+    background: rgba(17, 24, 39, 0.6);
+    backdrop-filter: blur(4px);
+  }
+
+  .t-dialog {
+    border-radius: 16px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(229, 231, 235, 0.5);
+    overflow: hidden;
+    background: white;
+
+    // 移动端适配
+    @media (max-width: 768px) {
+      width: 95vw !important;
+      max-width: 95vw;
+      border-radius: 12px;
+    }
+  }
+
+  .t-dialog__header {
+    background: white;
+    border-bottom: 1px solid #e5e7eb;
+    padding: 16px 24px;
+  }
+
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    gap: 12px;
+
+    @media (max-width: 768px) {
+      gap: 8px;
+    }
+
+    &-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 18px;
+      font-weight: 700;
+      color: #111827;
+
+      @media (max-width: 768px) {
+        font-size: 16px;
+        gap: 6px;
+      }
+
+      &-icon {
+        width: 32px;
+        height: 32px;
+        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+
+        @media (max-width: 768px) {
+          width: 28px;
+          height: 28px;
+          border-radius: 6px;
+
+          svg {
+            width: 14px;
+            height: 14px;
+          }
+        }
+      }
+    }
+  }
+}
+
+.media-library-layout {
+  display: flex;
+  height: 100%;
+  background: white;
+
+  &__sidebar {
+    width: 220px;
+    border-right: 1px solid #e5e7eb;
+    background: #f9fafb;
+    display: flex;
+    flex-direction: column;
+    padding: 14px;
+    overflow-y: auto; // 改回auto，允许滚动
+    flex-shrink: 0; // 防止被压缩
+
+    // 自定义滚动条样式
+    &::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: #d1d5db;
+      border-radius: 3px;
+
+      &:hover {
+        background: #9ca3af;
+      }
+    }
+  }
+
+  &__main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: white;
+    min-width: 0;
+  }
+
+  &__inspector {
+    width: 280px;
+    border-left: 1px solid #e5e7eb;
+    background: #f9fafb;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto; // 改回auto，允许滚动
+    flex-shrink: 0; // 防止被压缩
+
+    // 自定义滚动条样式
+    &::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: #d1d5db;
+      border-radius: 3px;
+
+      &:hover {
+        background: #9ca3af;
+      }
+    }
+  }
+
+  // 响应式布局
+  @media (max-width: 1024px) {
+    &__sidebar {
+      width: 200px;
+    }
+
+    &__inspector {
+      width: 260px;
+    }
+  }
+
+  @media (max-width: 768px) {
+    flex-direction: column;
+
+    &__sidebar {
+      width: 100%;
+      height: auto;
+      max-height: 160px;
+      border-right: none;
+      border-bottom: 1px solid #e5e7eb;
+      padding: 12px;
+    }
+
+    &__main {
+      flex: 1;
+      min-height: 0;
+    }
+
+    &__inspector {
+      width: 100%;
+      height: auto;
+      max-height: 50vh;
+      border-left: none;
+      border-top: 1px solid #e5e7eb;
+      min-width: auto;
+    }
+  }
+
+  @media (max-width: 480px) {
+    &__sidebar {
+      max-height: 140px;
+      padding: 10px;
+    }
+  }
+}

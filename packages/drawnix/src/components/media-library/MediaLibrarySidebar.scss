@@ -1,0 +1,169 @@
+/**
+ * Media Library Sidebar Styles
+ * 素材库侧边栏样式 - Tailwind-inspired design
+ */
+
+.media-library-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100%;
+
+  &__section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+
+    &--storage {
+      margin-top: auto;
+      padding-top: 12px;
+      border-top: 1px solid #e5e7eb;
+    }
+  }
+
+  &__title {
+    font-size: 10px;
+    font-weight: 700;
+    color: #9ca3af;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin: 0;
+    padding: 0 8px;
+  }
+
+  &__buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+
+    .t-button {
+      justify-content: flex-start;
+      padding: 7px 8px;
+      font-size: 12px;
+      font-weight: 500;
+      border-radius: 6px;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      height: auto;
+      min-height: 32px;
+
+      // 图标容器 - 固定大小确保对齐
+      .t-icon,
+      svg {
+        flex-shrink: 0;
+        width: 16px;
+        height: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      // 文本 - 确保垂直居中
+      > span {
+        flex: 1;
+        text-align: left;
+        line-height: 1.4;
+        display: flex;
+        align-items: center;
+      }
+
+      // 移除 TDesign 默认的间距和 margin
+      .t-button__icon {
+        margin: 0 !important;
+      }
+
+      // 确保内容容器也正确对齐
+      .t-button__text {
+        display: flex;
+        align-items: center;
+      }
+
+      // Active state (base variant)
+      &.t-button--variant-base {
+        background: white;
+        color: #6366f1;
+        box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05), 0 0 0 1px rgba(0, 0, 0, 0.05);
+        border-color: transparent;
+
+        &:hover {
+          background: white;
+          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+      }
+
+      // Inactive state (outline variant)
+      &.t-button--variant-outline {
+        background: transparent;
+        color: #6b7280;
+        border-color: transparent;
+
+        &:hover {
+          background: #f3f4f6;
+          color: #111827;
+        }
+      }
+    }
+  }
+
+  // 移动端优化
+  @media (max-width: 768px) {
+    gap: 12px;
+    flex-direction: row;
+    flex-wrap: wrap;
+
+    &__section {
+      gap: 8px;
+      flex: 1 1 auto;
+      min-width: 140px;
+
+      &--storage {
+        padding-top: 0;
+        border-top: none;
+        border-left: 1px solid #e5e7eb;
+        padding-left: 12px;
+        margin-left: auto;
+      }
+    }
+
+    &__title {
+      font-size: 9px;
+    }
+
+    &__buttons {
+      flex-direction: row;
+      flex-wrap: wrap;
+
+      .t-button {
+        padding: 6px 8px;
+        font-size: 11px;
+        min-height: 28px;
+        gap: 8px;
+        flex: 1 1 auto;
+        min-width: 80px;
+
+        .t-icon,
+        svg {
+          width: 14px;
+          height: 14px;
+        }
+      }
+    }
+  }
+
+  @media (max-width: 480px) {
+    &__section {
+      min-width: 120px;
+    }
+
+    &__buttons {
+      .t-button {
+        padding: 5px 6px;
+        font-size: 10px;
+        min-height: 26px;
+        min-width: 70px;
+      }
+    }
+  }
+}

@@ -5,10 +5,13 @@
  * Handles different upload modes: reference, frames (首帧/尾帧), components.
  */
 
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import { Upload, Button, MessagePlugin } from 'tdesign-react';
-import { AddIcon, DeleteIcon } from 'tdesign-icons-react';
+import { AddIcon, DeleteIcon, FolderOpenIcon } from 'tdesign-icons-react';
 import type { UploadedVideoImage, ImageUploadConfig } from '../../../types/video.types';
+import { MediaLibraryModal } from '../../media-library/MediaLibraryModal';
+import { SelectionMode, AssetType } from '../../../types/asset.types';
+import type { Asset } from '../../../types/asset.types';
 import './MultiImageUpload.scss';
 
 interface MultiImageUploadProps {
@@ -25,6 +28,8 @@ export const MultiImageUpload: React.FC<MultiImageUploadProps> = ({
   disabled = false,
 }) => {
   const { maxCount, labels = ['参考图'] } = config;
+  const [showMediaLibrary, setShowMediaLibrary] = useState(false);
+  const [currentSlot, setCurrentSlot] = useState<number>(0);
 
   // Handle file upload for a specific slot
   const handleUpload = useCallback(async (slot: number, file: File) => {
@@ -72,6 +77,36 @@ export const MultiImageUpload: React.FC<MultiImageUploadProps> = ({
     onImagesChange(newImages);
   }, [images, onImagesChange]);
 
+  // Handle media library selection
+  const handleMediaLibrarySelect = useCallback((asset: Asset) => {
+    const newImage: UploadedVideoImage = {
+      slot: currentSlot,
+      slotLabel: labels[currentSlot] || `图片${currentSlot + 1}`,
+      url: asset.url,
+      name: asset.name,
+    };
+
+    // Update images array
+    const newImages = [...images];
+    const existingIndex = newImages.findIndex(img => img.slot === currentSlot);
+    if (existingIndex >= 0) {
+      newImages[existingIndex] = newImage;
+    } else {
+      newImages.push(newImage);
+    }
+    // Sort by slot
+    newImages.sort((a, b) => a.slot - b.slot);
+    onImagesChange(newImages);
+
+    setShowMediaLibrary(false);
+  }, [currentSlot, images, labels, onImagesChange]);
+
+  // Open media library for a specific slot
+  const openMediaLibrary = useCallback((slot: number) => {
+    setCurrentSlot(slot);
+    setShowMediaLibrary(true);
+  }, []);
+
   // Get image for a specific slot
   const getImageForSlot = (slot: number): UploadedVideoImage | undefined => {
     return images.find(img => img.slot === slot);
@@ -105,25 +140,38 @@ export const MultiImageUpload: React.FC<MultiImageUploadProps> = ({
             </div>
           </div>
         ) : (
-          <Upload
-            theme="custom"
-            accept="image/*"
-            autoUpload={false}
-            disabled={disabled}
-            onChange={(files) => {
-              if (files && files.length > 0) {
-                const file = files[0];
-                if (file.raw) {
-                  handleUpload(slot, file.raw);
+          <div className="multi-image-upload__placeholder-container">
+            <Upload
+              theme="custom"
+              accept="image/*"
+              autoUpload={false}
+              disabled={disabled}
+              onChange={(files) => {
+                if (files && files.length > 0) {
+                  const file = files[0];
+                  if (file.raw) {
+                    handleUpload(slot, file.raw);
+                  }
                 }
-              }
-            }}
-          >
-            <div className="multi-image-upload__placeholder">
-              <AddIcon className="multi-image-upload__add-icon" />
-              <span className="multi-image-upload__add-text">上传{label}</span>
-            </div>
-          </Upload>
+              }}
+            >
+              <div className="multi-image-upload__placeholder">
+                <AddIcon className="multi-image-upload__add-icon" />
+                <span className="multi-image-upload__add-text">上传{label}</span>
+              </div>
+            </Upload>
+            <Button
+              variant="text"
+              size="small"
+              icon={<FolderOpenIcon />}
+              onClick={() => openMediaLibrary(slot)}
+              disabled={disabled}
+              data-track="ai_video_select_from_library"
+              className="multi-image-upload__library-btn"
+            >
+              从素材库选择
+            </Button>
+          </div>
         )}
       </div>
     );
@@ -144,6 +192,15 @@ export const MultiImageUpload: React.FC<MultiImageUploadProps> = ({
       <div className="multi-image-upload__slots">
         {Array.from({ length: maxCount }, (_, i) => renderUploadSlot(i))}
       </div>
+
+      {/* Media Library Modal */}
+      <MediaLibraryModal
+        isOpen={showMediaLibrary}
+        onClose={() => setShowMediaLibrary(false)}
+        mode={SelectionMode.SELECT}
+        filterType={AssetType.IMAGE}
+        onSelect={handleMediaLibrarySelect}
+      />
     </div>
   );
 };
