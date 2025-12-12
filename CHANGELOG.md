@@ -1,3 +1,24 @@
+## 0.2.14 (2025-12-10)
+
+### 🚀 Features
+
+- 优化工具栏和AI生成功能 ([51e6f5c](https://github.com/ljquan/aitu/commit/51e6f5c))
+- 优化项目抽屉UI和图标设计 ([615f4f6](https://github.com/ljquan/aitu/commit/615f4f6))
+- workspace项目管理系统及首次访问默认数据 ([a6d6a84](https://github.com/ljquan/aitu/commit/a6d6a84))
+
+### 🩹 Fixes
+
+- 修复视频模型切换参数同步问题 ([53a653e](https://github.com/ljquan/aitu/commit/53a653e))
+
+### 🔧 Chores
+
+- refactor(analytics): 将 Umami 分析替换为 PostHog ([c0b7069](https://github.com/ljquan/aitu/commit/c0b7069))
+
+### ❤️  Thank You
+
+- liquidliang <ljquan@qq.com>
+- gongchengtu <1817063960@qq.com>
+
 ## 0.2.13 (2025-12-06)
 
 ### 🚀 Features

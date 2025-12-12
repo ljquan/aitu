@@ -19,6 +19,14 @@ export interface UnifiedToolbarProps {
    * (可选) 项目抽屉打开/关闭切换回调
    */
   onProjectDrawerToggle?: () => void;
+  /**
+   * (可选) 工具箱抽屉是否打开
+   */
+  toolboxDrawerOpen?: boolean;
+  /**
+   * (可选) 工具箱抽屉打开/关闭切换回调
+   */
+  onToolboxDrawerToggle?: () => void;
 }
 
 /**

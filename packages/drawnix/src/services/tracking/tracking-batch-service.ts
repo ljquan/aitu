@@ -5,7 +5,7 @@
  */
 
 import type { TrackEvent, BatchConfig } from '../../types/tracking.types';
-import { umamiAdapter } from './umami-adapter';
+import { posthogAdapter } from './posthog-adapter';
 
 /**
  * Batch Upload Service
@@ -77,8 +77,8 @@ export class TrackingBatchService {
     this.queue = [];
 
     try {
-      // Upload batch using Umami adapter
-      const results = await umamiAdapter.trackBatch(eventsToUpload);
+      // Upload batch using PostHog adapter
+      const results = await posthogAdapter.trackBatch(eventsToUpload);
 
       // Check for failures
       const failures = results.filter(r => !r.success);
@@ -104,7 +104,7 @@ export class TrackingBatchService {
    */
   private async uploadImmediate(event: TrackEvent): Promise<void> {
     try {
-      await umamiAdapter.track(event);
+      await posthogAdapter.track(event);
     } catch (error) {
       console.error('Immediate upload failed:', error);
     }
@@ -167,7 +167,7 @@ export class TrackingBatchService {
     }
 
     // Use navigator.sendBeacon for reliable page unload tracking
-    // Note: Umami SDK should handle sendBeacon internally
+    // Note: PostHog SDK should handle sendBeacon internally
     this.flush();
   }
 }

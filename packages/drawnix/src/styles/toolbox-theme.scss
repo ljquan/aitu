@@ -1,0 +1,51 @@
+/**
+ * Toolbox Theme Styles
+ *
+ * 工具箱主题样式 - 支持亮色/暗色模式
+ */
+
+:root {
+  // === 工具箱主题色 ===
+  --toolbox-bg: #ffffff;
+  --toolbox-border: #e5e5e5;
+  --toolbox-text: #262626;
+  --toolbox-text-secondary: #8c8c8c;
+  --toolbox-hover-bg: #f5f5f5;
+  --toolbox-shadow: rgba(0, 0, 0, 0.08);
+
+  // === 工具卡片 ===
+  --tool-card-bg: #ffffff;
+  --tool-card-border: #d9d9d9;
+  --tool-card-hover-border: var(--brand-color-primary, #f39c12);
+  --tool-card-shadow: rgba(0, 0, 0, 0.1);
+
+  // === 工具元素（画布上） ===
+  --tool-element-border: transparent;
+  --tool-element-border-selected: var(--brand-color-primary, #f39c12);
+  --tool-element-shadow: rgba(0, 0, 0, 0.15);
+  --tool-element-shadow-hover: rgba(0, 0, 0, 0.2);
+  --tool-element-shadow-selected: rgba(243, 156, 18, 0.2);
+  --tool-element-bg: #ffffff;
+}
+
+// 深色模式
+[data-theme='dark'] {
+  --toolbox-bg: #1f1f1f;
+  --toolbox-border: #3a3a3a;
+  --toolbox-text: #e5e5e5;
+  --toolbox-text-secondary: #a6a6a6;
+  --toolbox-hover-bg: #2a2a2a;
+  --toolbox-shadow: rgba(0, 0, 0, 0.3);
+
+  --tool-card-bg: #2a2a2a;
+  --tool-card-border: #3a3a3a;
+  --tool-card-hover-border: var(--brand-color-primary, #f39c12);
+  --tool-card-shadow: rgba(0, 0, 0, 0.3);
+
+  --tool-element-border: transparent;
+  --tool-element-border-selected: var(--brand-color-primary, #f39c12);
+  --tool-element-shadow: rgba(0, 0, 0, 0.5);
+  --tool-element-shadow-hover: rgba(0, 0, 0, 0.6);
+  --tool-element-shadow-selected: rgba(243, 156, 18, 0.3);
+  --tool-element-bg: #2a2a2a;
+}
