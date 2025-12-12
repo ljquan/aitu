@@ -192,6 +192,32 @@ export function AssetProvider({ children }: AssetProviderProps) {
   );
 
   /**
+   * Check Storage Quota
+   * 检查存储配额
+   */
+  const checkStorageQuota = useCallback(async () => {
+    try {
+      const status = await getStorageStatus();
+      setStorageStatus(status);
+
+      // 如果接近限制，显示警告
+      if (status.isCritical) {
+        MessagePlugin.warning({
+          content: `存储空间已使用 ${status.quota.percentUsed.toFixed(1)}%，即将达到上限。请删除一些旧素材。`,
+          duration: 5000,
+        });
+      } else if (status.isNearLimit) {
+        MessagePlugin.info({
+          content: `存储空间已使用 ${status.quota.percentUsed.toFixed(1)}%，接近上限。`,
+          duration: 3000,
+        });
+      }
+    } catch (err: any) {
+      console.error('Failed to check storage quota:', err);
+    }
+  }, []);
+
+  /**
    * Remove Asset
    * 删除素材
    */
@@ -235,7 +261,68 @@ export function AssetProvider({ children }: AssetProviderProps) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [checkStorageQuota]);
+
+  /**
+   * Remove Multiple Assets (Batch Delete)
+   * 批量删除素材
+   */
+  const removeAssets = useCallback(async (ids: string[]): Promise<void> => {
+    if (ids.length === 0) return;
+
+    setLoading(true);
+    setError(null);
+
+    const errors: { id: string; error: any }[] = [];
+    const successIds: string[] = [];
+
+    try {
+      // 批量删除,并收集成功和失败的记录
+      for (const id of ids) {
+        try {
+          await assetStorageService.removeAsset(id);
+          successIds.push(id);
+        } catch (err: any) {
+          console.error(`Failed to remove asset ${id}:`, err);
+          errors.push({ id, error: err });
+        }
+      }
+
+      // 更新状态 - 只移除成功删除的素材
+      setAssets((prev) => prev.filter((asset) => !successIds.includes(asset.id)));
+
+      // 如果删除的包含当前选中的素材,清除选中状态
+      if (selectedAssetId && successIds.includes(selectedAssetId)) {
+        setSelectedAssetId(null);
+      }
+
+      // 检查存储配额
+      await checkStorageQuota();
+
+      // 显示结果消息
+      if (errors.length === 0) {
+        MessagePlugin.success({
+          content: `成功删除 ${successIds.length} 个素材`,
+          duration: 2000,
+        });
+      } else {
+        MessagePlugin.warning({
+          content: `删除了 ${successIds.length} 个素材，${errors.length} 个失败`,
+          duration: 3000,
+        });
+      }
+    } catch (err: any) {
+      console.error('Batch remove assets error:', err);
+      setError(err.message);
+      MessagePlugin.error({
+        content: '批量删除失败',
+        duration: 3000,
+      });
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedAssetId, checkStorageQuota]);
 
   /**
    * Rename Asset
@@ -300,32 +387,6 @@ export function AssetProvider({ children }: AssetProviderProps) {
     }));
   }, []);
 
-  /**
-   * Check Storage Quota
-   * 检查存储配额
-   */
-  const checkStorageQuota = useCallback(async () => {
-    try {
-      const status = await getStorageStatus();
-      setStorageStatus(status);
-
-      // 如果接近限制，显示警告
-      if (status.isCritical) {
-        MessagePlugin.warning({
-          content: `存储空间已使用 ${status.quota.percentUsed.toFixed(1)}%，即将达到上限。请删除一些旧素材。`,
-          duration: 5000,
-        });
-      } else if (status.isNearLimit) {
-        MessagePlugin.info({
-          content: `存储空间已使用 ${status.quota.percentUsed.toFixed(1)}%，接近上限。`,
-          duration: 3000,
-        });
-      }
-    } catch (err: any) {
-      console.error('Failed to check storage quota:', err);
-    }
-  }, []);
-
   // Context value
   const value = useMemo<AssetContextValue>(
     () => ({
@@ -341,6 +402,7 @@ export function AssetProvider({ children }: AssetProviderProps) {
       loadAssets,
       addAsset,
       removeAsset,
+      removeAssets,
       renameAsset,
       setFilters,
       setSelectedAssetId,
@@ -356,6 +418,7 @@ export function AssetProvider({ children }: AssetProviderProps) {
       loadAssets,
       addAsset,
       removeAsset,
+      removeAssets,
       renameAsset,
       setFilters,
       checkStorageQuota,

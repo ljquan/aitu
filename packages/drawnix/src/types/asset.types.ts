@@ -214,6 +214,7 @@ export interface AssetContextActions {
     name?: string,
   ) => Promise<Asset>;
   removeAsset: (id: string) => Promise<void>;
+  removeAssets: (ids: string[]) => Promise<void>;
   renameAsset: (id: string, newName: string) => Promise<void>;
 
   // 筛选和选择
@@ -258,6 +259,7 @@ export interface AssetGridItemProps {
   isSelected: boolean;
   onSelect: (assetId: string) => void;
   onDoubleClick?: (asset: Asset) => void;
+  isInSelectionMode?: boolean;
 }
 
 export interface MediaLibrarySidebarProps {

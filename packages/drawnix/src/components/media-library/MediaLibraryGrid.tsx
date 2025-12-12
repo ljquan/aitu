@@ -4,8 +4,8 @@
  */
 
 import { useMemo, useState, useCallback } from 'react';
-import { Loading, Input, Button } from 'tdesign-react';
-import { Upload as UploadIcon, Search } from 'lucide-react';
+import { Loading, Input, Button, Checkbox, Popconfirm } from 'tdesign-react';
+import { Upload as UploadIcon, Search, Trash2, CheckSquare, XSquare } from 'lucide-react';
 import { useAssets } from '../../contexts/AssetContext';
 import { filterAssets } from '../../utils/asset-utils';
 import { AssetGridItem } from './AssetGridItem';
@@ -21,8 +21,10 @@ export function MediaLibraryGrid({
   onFileUpload,
   onUploadClick,
 }: MediaLibraryGridProps) {
-  const { assets, filters, loading, setFilters } = useAssets();
+  const { assets, filters, loading, setFilters, removeAssets } = useAssets();
   const [isDragging, setIsDragging] = useState(false);
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
 
   // 应用筛选和排序
   const filteredResult = useMemo(() => {
@@ -45,6 +47,18 @@ export function MediaLibraryGrid({
 
     return result;
   }, [assets, filters]);
+
+  // 全选逻辑
+  const isAllSelected = useMemo(() => {
+    if (filteredResult.assets.length === 0) return false;
+    return filteredResult.assets.every(asset => selectedAssetIds.has(asset.id));
+  }, [filteredResult.assets, selectedAssetIds]);
+
+  const isPartialSelected = useMemo(() => {
+    if (filteredResult.assets.length === 0) return false;
+    const selectedCount = filteredResult.assets.filter(asset => selectedAssetIds.has(asset.id)).length;
+    return selectedCount > 0 && selectedCount < filteredResult.assets.length;
+  }, [filteredResult.assets, selectedAssetIds]);
 
   // 拖放事件处理
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -73,6 +87,44 @@ export function MediaLibraryGrid({
     [onFileUpload],
   );
 
+  // 批量选择处理
+  const toggleSelectionMode = useCallback(() => {
+    setIsSelectionMode(prev => !prev);
+    setSelectedAssetIds(new Set()); // 清空选择
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    if (isAllSelected) {
+      setSelectedAssetIds(new Set());
+    } else {
+      setSelectedAssetIds(new Set(filteredResult.assets.map(asset => asset.id)));
+    }
+  }, [isAllSelected, filteredResult.assets]);
+
+  const toggleAssetSelection = useCallback((assetId: string) => {
+    setSelectedAssetIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(assetId)) {
+        newSet.delete(assetId);
+      } else {
+        newSet.add(assetId);
+      }
+      return newSet;
+    });
+  }, []);
+
+  // 批量删除处理
+  const handleBatchDelete = useCallback(async () => {
+    const idsToDelete = Array.from(selectedAssetIds);
+    try {
+      await removeAssets(idsToDelete);
+      setSelectedAssetIds(new Set()); // 清空选择
+      setIsSelectionMode(false); // 退出选择模式
+    } catch (error) {
+      console.error('[MediaLibraryGrid] Batch delete failed:', error);
+    }
+  }, [selectedAssetIds, removeAssets]);
+
   if (loading && assets.length === 0) {
     return (
       <div className="media-library-grid__loading">
@@ -99,19 +151,71 @@ export function MediaLibraryGrid({
           className="media-library-grid__search"
         />
         <div className="media-library-grid__header-actions">
-          <span className="media-library-grid__count">
-            共 {filteredResult.count} 个素材
-          </span>
-          <Button
-            variant="base"
-            theme="primary"
-            size="small"
-            icon={<UploadIcon size={16} />}
-            onClick={onUploadClick}
-            data-track="grid_upload_click"
-          >
-            上传
-          </Button>
+          {isSelectionMode ? (
+            <>
+              <Checkbox
+                checked={isAllSelected}
+                indeterminate={isPartialSelected}
+                onChange={toggleSelectAll}
+                data-track="grid_select_all"
+              >
+                全选
+              </Checkbox>
+              <span className="media-library-grid__selection-count">
+                已选 {selectedAssetIds.size} 个
+              </span>
+              <Popconfirm
+                content={`确定要删除选中的 ${selectedAssetIds.size} 个素材吗？`}
+                onConfirm={handleBatchDelete}
+                theme="warning"
+              >
+                <Button
+                  variant="base"
+                  theme="danger"
+                  size="small"
+                  icon={<Trash2 size={16} />}
+                  disabled={selectedAssetIds.size === 0}
+                  data-track="grid_batch_delete"
+                >
+                  删除选中
+                </Button>
+              </Popconfirm>
+              <Button
+                variant="outline"
+                size="small"
+                icon={<XSquare size={16} />}
+                onClick={toggleSelectionMode}
+                data-track="grid_cancel_selection"
+              >
+                取消
+              </Button>
+            </>
+          ) : (
+            <>
+              <span className="media-library-grid__count">
+                共 {filteredResult.count} 个素材
+              </span>
+              <Button
+                variant="outline"
+                size="small"
+                icon={<CheckSquare size={16} />}
+                onClick={toggleSelectionMode}
+                data-track="grid_toggle_selection_mode"
+              >
+                批量选择
+              </Button>
+              <Button
+                variant="base"
+                theme="primary"
+                size="small"
+                icon={<UploadIcon size={16} />}
+                onClick={onUploadClick}
+                data-track="grid_upload_click"
+              >
+                上传
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
@@ -136,16 +240,17 @@ export function MediaLibraryGrid({
               <AssetGridItem
                 key={asset.id}
                 asset={asset}
-                isSelected={selectedAssetId === asset.id}
-                onSelect={onSelectAsset}
+                isSelected={isSelectionMode ? selectedAssetIds.has(asset.id) : selectedAssetId === asset.id}
+                onSelect={isSelectionMode ? toggleAssetSelection : onSelectAsset}
                 onDoubleClick={onDoubleClick}
+                isInSelectionMode={isSelectionMode}
               />
             ))}
           </div>
 
           <div className="media-library-grid__footer">
             <span>显示 {filteredResult.count} 个素材</span>
-            <span className="media-library-grid__footer-hint">双击选择</span>
+            {!isSelectionMode && <span className="media-library-grid__footer-hint">双击选择</span>}
           </div>
         </>
       )}

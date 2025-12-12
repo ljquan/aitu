@@ -5,24 +5,29 @@
 
 import { memo, useCallback } from 'react';
 import { Image as ImageIcon, Video as VideoIcon } from 'lucide-react';
+import { Checkbox } from 'tdesign-react';
 import type { AssetGridItemProps } from '../../types/asset.types';
 import './AssetGridItem.scss';
 
 export const AssetGridItem = memo<AssetGridItemProps>(
-  ({ asset, isSelected, onSelect, onDoubleClick }) => {
+  ({ asset, isSelected, onSelect, onDoubleClick, isInSelectionMode }) => {
     const handleClick = useCallback(() => {
       onSelect(asset.id);
     }, [asset.id, onSelect]);
 
     const handleDoubleClick = useCallback(() => {
-      if (onDoubleClick) {
+      if (onDoubleClick && !isInSelectionMode) {
         onDoubleClick(asset);
       }
-    }, [asset, onDoubleClick]);
+    }, [asset, onDoubleClick, isInSelectionMode]);
+
+    const handleCheckboxChange = useCallback((checked: boolean) => {
+      onSelect(asset.id);
+    }, [asset.id, onSelect]);
 
     return (
       <div
-        className={`asset-grid-item ${isSelected ? 'asset-grid-item--selected' : ''}`}
+        className={`asset-grid-item ${isSelected ? 'asset-grid-item--selected' : ''} ${isInSelectionMode ? 'asset-grid-item--selection-mode' : ''}`}
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
         role="button"
@@ -64,6 +69,17 @@ export const AssetGridItem = memo<AssetGridItemProps>(
             )}
           </div>
 
+          {/* 选择模式复选框 */}
+          {isInSelectionMode && (
+            <div className="asset-grid-item__checkbox" onClick={(e) => e.stopPropagation()}>
+              <Checkbox
+                checked={isSelected}
+                onChange={handleCheckboxChange}
+                data-track="asset_grid_item_checkbox"
+              />
+            </div>
+          )}
+
           {/* Gradient overlay */}
           <div className="asset-grid-item__overlay" />
 
@@ -76,10 +92,11 @@ export const AssetGridItem = memo<AssetGridItemProps>(
     );
   },
   (prevProps, nextProps) => {
-    // 自定义比较函数：只有ID或选中状态变化时才重新渲染
+    // 自定义比较函数：只有ID、选中状态或选择模式变化时才重新渲染
     return (
       prevProps.asset.id === nextProps.asset.id &&
-      prevProps.isSelected === nextProps.isSelected
+      prevProps.isSelected === nextProps.isSelected &&
+      prevProps.isInSelectionMode === nextProps.isInSelectionMode
     );
   },
 );

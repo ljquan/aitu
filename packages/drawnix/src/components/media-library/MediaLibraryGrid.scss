@@ -98,6 +98,13 @@
     white-space: nowrap;
   }
 
+  &__selection-count {
+    font-size: 13px;
+    font-weight: 600;
+    color: #6366f1;
+    white-space: nowrap;
+  }
+
   &__container {
     flex: 1;
     padding: 20px;

@@ -14,13 +14,13 @@ import type {
   MediaLibraryModalProps,
   Asset,
 } from '../../types/asset.types';
-import { AssetType, AssetSource } from '../../types/asset.types';
+import { AssetType, AssetSource, SelectionMode } from '../../types/asset.types';
 import './MediaLibraryModal.scss';
 
 export function MediaLibraryModal({
   isOpen,
   onClose,
-  mode = 'BROWSE',
+  mode = SelectionMode.BROWSE,
   filterType,
   onSelect,
 }: MediaLibraryModalProps) {
