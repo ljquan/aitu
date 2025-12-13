@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { createPortal } from 'react-dom';
 import 'winbox/dist/css/winbox.min.css';
 import './winbox-custom.scss';
+import { useViewportScale } from '../../hooks/useViewportScale';
 
 // 全局存储 WinBox 构造函数
 let WinBoxConstructor: any = null;
@@ -145,9 +146,17 @@ export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
 }) => {
   const winboxRef = useRef<any>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const winboxElementRef = useRef<HTMLDivElement | null>(null); // WinBox 窗口的 DOM 元素
   const [headerPortalContainer, setHeaderPortalContainer] = useState<HTMLElement | null>(null);
   const [isReady, setIsReady] = useState(false);
   const [winboxLoaded, setWinboxLoaded] = useState(!!WinBoxConstructor);
+
+  // 应用 viewport scale 以确保缩放时窗口位置和大小不变
+  // 注意：WinBox 使用 fixed 定位，所以不需要 enablePositionTracking
+  const refreshViewportScale = useViewportScale(winboxElementRef, {
+    enablePositionTracking: false, // WinBox 使用 fixed 定位
+    enableScaleCompensation: true, // 启用反向缩放保持大小不变
+  });
 
   // 加载 WinBox
   useEffect(() => {
@@ -175,6 +184,7 @@ export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
           // 忽略关闭错误
         }
         winboxRef.current = null;
+        winboxElementRef.current = null; // 清空 DOM 元素引用
         setHeaderPortalContainer(null);
         setIsReady(false);
       }
@@ -220,6 +230,15 @@ export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
 
       winboxRef.current = wb;
 
+      // 保存 WinBox 窗口的 DOM 元素引用，用于应用 viewport scale
+      if (wb.window) {
+        winboxElementRef.current = wb.window as HTMLDivElement;
+        // 立即触发一次缩放计算，确保弹窗首次显示时就应用正确的缩放
+        requestAnimationFrame(() => {
+          refreshViewportScale();
+        });
+      }
+
       // 如果有自定义标题栏内容，创建 portal 容器
       if (headerContent && wb.window) {
         const drag = wb.window.querySelector('.wb-drag');
@@ -248,6 +267,7 @@ export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
           // 忽略
         }
         winboxRef.current = null;
+        winboxElementRef.current = null; // 清空 DOM 元素引用
       }
     };
   }, []);

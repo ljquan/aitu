@@ -131,11 +131,12 @@
 
     // Unified Toolbar Container (统一左侧工具栏 - 桌面端和移动端通用)
     .unified-toolbar {
-        position: absolute;
+        position: absolute; // 使用 absolute 定位,通过 JS 动态调整位置跟随视口
         left: 0;
         top: 0;
         z-index: $z-unified-toolbar; // Layer 2: Toolbars (2000)
-        bottom: 0;
+        bottom: auto; // 允许通过 JS 动态调整 top
+        height: 100vh; // 使用视口高度
         display: flex;
         flex-direction: column;
         gap: 0;

@@ -77,7 +77,7 @@
     "@nx/js": "19.3.0",
     "@nx/playwright": "19.3.0",
     "@nx/react": "19.3.0",
-    "@nx/vite": "^20.6.0",
+    "@nx/vite": "19.3.0",
     "@nx/web": "19.3.0",
     "@nx/workspace": "19.3.0",
     "@playwright/test": "^1.36.0",
