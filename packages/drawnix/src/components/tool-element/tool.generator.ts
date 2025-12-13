@@ -17,12 +17,42 @@ export class ToolGenerator {
   private iframeCache = new Map<string, HTMLIFrameElement>();
   private loadStates = new Map<string, ToolLoadState>();
   private loadTimeouts = new Map<string, NodeJS.Timeout>();
+  private canvasClickHandler: ((e: MouseEvent) => void) | null = null;
 
   // 加载超时时间（毫秒）
   private static readonly LOAD_TIMEOUT = 10000; // 10 秒
 
   constructor(board: PlaitBoard) {
     this.board = board;
+
+    // 监听画布点击事件，恢复所有 iframe 蒙层
+    this.setupCanvasClickHandler();
+  }
+
+  /**
+   * 设置画布点击处理，恢复所有蒙层
+   */
+  private setupCanvasClickHandler(): void {
+    this.canvasClickHandler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+
+      // 如果点击的是 iframe 或蒙层本身，不处理
+      if (target.tagName === 'IFRAME' ||
+          target.closest('iframe') ||
+          target.classList.contains('iframe-protection-overlay') ||
+          target.closest('.plait-tool-content')) {
+        return;
+      }
+
+      // 恢复所有蒙层
+      const overlays = document.querySelectorAll('.iframe-protection-overlay') as NodeListOf<HTMLElement>;
+      overlays.forEach((overlay) => {
+        overlay.style.display = 'flex';
+      });
+    };
+
+    // 添加到 document，确保能捕获所有点击
+    document.addEventListener('click', this.canvasClickHandler);
   }
 
   /**
@@ -141,6 +171,10 @@ export class ToolGenerator {
     // 创建 iframe
     const iframe = this.createIframe(element);
     contentArea.appendChild(iframe);
+
+    // 创建保护蒙层（防止 iframe 内缩放页面）
+    const overlay = this.createIframeOverlay();
+    contentArea.appendChild(overlay);
 
     // iframe 加载完成后移除 loader
     iframe.onload = () => {
@@ -293,6 +327,63 @@ export class ToolGenerator {
     });
 
     return button;
+  }
+
+  /**
+   * 创建 iframe 保护蒙层
+   * 防止用户在 iframe 内缩放页面
+   */
+  private createIframeOverlay(): HTMLDivElement {
+    const overlay = document.createElement('div');
+    overlay.className = 'iframe-protection-overlay';
+    overlay.style.cssText = `
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.01);
+      z-index: 100;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 1;
+      transition: opacity 0.2s ease;
+    `;
+
+    // 添加提示文字（鼠标悬停时显示）
+    const hint = document.createElement('div');
+    hint.className = 'iframe-overlay-hint';
+    hint.textContent = '点击以交互';
+    hint.style.cssText = `
+      background: rgba(0, 0, 0, 0.7);
+      color: white;
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-size: 12px;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      pointer-events: none;
+    `;
+    overlay.appendChild(hint);
+
+    // 鼠标悬停时显示提示
+    overlay.addEventListener('mouseenter', () => {
+      hint.style.opacity = '1';
+    });
+
+    overlay.addEventListener('mouseleave', () => {
+      hint.style.opacity = '0';
+    });
+
+    // 点击蒙层时隐藏蒙层（允许与 iframe 交互）
+    overlay.addEventListener('click', (e) => {
+      e.stopPropagation();
+      overlay.style.display = 'none';
+    });
+
+    return overlay;
   }
 
   /**
@@ -589,6 +680,12 @@ export class ToolGenerator {
    * 清理资源
    */
   destroy(): void {
+    // 移除画布点击监听器
+    if (this.canvasClickHandler) {
+      document.removeEventListener('click', this.canvasClickHandler);
+      this.canvasClickHandler = null;
+    }
+
     // 清理所有超时定时器
     this.loadTimeouts.forEach((timeoutId) => {
       clearTimeout(timeoutId);
@@ -604,5 +701,9 @@ export class ToolGenerator {
 
     // 清理加载状态
     this.loadStates.clear();
+
+    // 移除所有蒙层
+    const overlays = document.querySelectorAll('.iframe-protection-overlay');
+    overlays.forEach((overlay) => overlay.remove());
   }
 }
