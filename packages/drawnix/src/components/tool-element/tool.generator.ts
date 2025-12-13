@@ -110,21 +110,37 @@ export class ToolGenerator {
     container.style.cssText = `
       width: 100%;
       height: 100%;
-      overflow: hidden;
+      display: flex;
+      flex-direction: column;
       border-radius: 8px;
       box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
-      background-color: transparent;
+      background-color: #fff;
       position: relative;
       outline: none;
+      overflow: hidden;
+    `;
+
+    // 创建标题栏
+    const titleBar = this.createTitleBar(element);
+    container.appendChild(titleBar);
+
+    // 创建内容区域（iframe 容器）
+    const contentArea = document.createElement('div');
+    contentArea.className = 'plait-tool-content';
+    contentArea.style.cssText = `
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      background: #fff;
     `;
 
     // 创建加载提示
     const loader = this.createLoader();
-    container.appendChild(loader);
+    contentArea.appendChild(loader);
 
     // 创建 iframe
     const iframe = this.createIframe(element);
-    container.appendChild(iframe);
+    contentArea.appendChild(iframe);
 
     // iframe 加载完成后移除 loader
     iframe.onload = () => {
@@ -137,8 +153,146 @@ export class ToolGenerator {
       loader.style.color = '#f5222d';
     };
 
+    container.appendChild(contentArea);
+
     foreignObject.appendChild(container);
     return foreignObject;
+  }
+
+  /**
+   * 创建标题栏
+   */
+  private createTitleBar(element: PlaitTool): HTMLDivElement {
+    const titleBar = document.createElement('div');
+    titleBar.className = 'plait-tool-titlebar';
+    titleBar.setAttribute('data-draggable', 'true'); // 标记为可拖动区域
+    titleBar.style.cssText = `
+      height: 36px;
+      min-height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 12px;
+      background: linear-gradient(180deg, #f5f5f5 0%, #ebebeb 100%);
+      border-bottom: 1px solid #d9d9d9;
+      cursor: move;
+      user-select: none;
+      flex-shrink: 0;
+    `;
+
+    // 左侧：工具图标和名称
+    const titleLeft = document.createElement('div');
+    titleLeft.style.cssText = `
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 1;
+      overflow: hidden;
+    `;
+
+    // 工具图标
+    const icon = document.createElement('span');
+    icon.textContent = '🔧';
+    icon.style.cssText = `
+      font-size: 16px;
+      line-height: 1;
+    `;
+
+    // 工具名称
+    const title = document.createElement('span');
+    title.className = 'plait-tool-title';
+    title.textContent = element.metadata?.name || '工具';
+    title.style.cssText = `
+      font-size: 13px;
+      font-weight: 500;
+      color: #333;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    `;
+
+    titleLeft.appendChild(icon);
+    titleLeft.appendChild(title);
+
+    // 右侧：操作按钮
+    const titleRight = document.createElement('div');
+    titleRight.style.cssText = `
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    `;
+
+    // 刷新按钮
+    const refreshBtn = this.createTitleButton('↻', '刷新', () => {
+      const iframe = this.iframeCache.get(element.id);
+      if (iframe) {
+        iframe.src = iframe.src; // 重新加载
+      }
+    });
+
+    // 最小化/最大化按钮（暂时隐藏，未来可实现）
+    // const minimizeBtn = this.createTitleButton('−', '最小化', () => {
+    //   console.log('Minimize tool:', element.id);
+    // });
+
+    titleRight.appendChild(refreshBtn);
+    // titleRight.appendChild(minimizeBtn);
+
+    titleBar.appendChild(titleLeft);
+    titleBar.appendChild(titleRight);
+
+    return titleBar;
+  }
+
+  /**
+   * 创建标题栏按钮
+   */
+  private createTitleButton(
+    text: string,
+    title: string,
+    onClick: () => void
+  ): HTMLButtonElement {
+    const button = document.createElement('button');
+    button.textContent = text;
+    button.title = title;
+    button.style.cssText = `
+      width: 24px;
+      height: 24px;
+      border: none;
+      background: transparent;
+      color: #666;
+      font-size: 18px;
+      line-height: 1;
+      cursor: pointer;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+      padding: 0;
+    `;
+
+    // Hover 效果
+    button.addEventListener('mouseenter', () => {
+      button.style.background = 'rgba(0, 0, 0, 0.05)';
+    });
+    button.addEventListener('mouseleave', () => {
+      button.style.background = 'transparent';
+    });
+
+    // 点击事件，阻止事件冒泡
+    button.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      onClick();
+    });
+
+    // 阻止鼠标按下事件冒泡，避免触发拖动
+    button.addEventListener('mousedown', (e) => {
+      e.stopPropagation();
+    });
+
+    return button;
   }
 
   /**
@@ -195,8 +349,8 @@ export class ToolGenerator {
 
     iframe.src = element.url;
 
-    // 关键：默认禁用 iframe 的鼠标事件，让画布可以接收选中、拖拽等事件
-    // 当元素被双击进入编辑模式时，再启用 iframe 交互
+    // 关键修改：默认启用 iframe 的鼠标事件，因为拖动只在标题栏上
+    // 这样 iframe 内的页面可以正常点击和滚动
     iframe.style.cssText = `
       width: 100%;
       height: 100%;
@@ -205,7 +359,7 @@ export class ToolGenerator {
       position: absolute;
       top: 0;
       left: 0;
-      pointer-events: none;
+      pointer-events: auto;
       background: #fff;
       z-index: 10;
     `;
