@@ -8,7 +8,7 @@
 
 .plait-tool-element {
   // 工具元素基础样式
-  cursor: move;
+  // 注意：移除了 cursor: move，因为只有标题栏才可拖动
 
   .plait-tool-foreign-object {
     overflow: visible;
@@ -25,15 +25,17 @@
 
   .plait-tool-container {
     position: relative;
-    background: var(--tool-element-bg) !important;
+    background: #fff !important;
     border-radius: 8px;
-    border: 2px solid var(--tool-element-border);
-    box-shadow: 0 2px 12px var(--tool-element-shadow);
+    border: 2px solid var(--tool-element-border, #d9d9d9);
+    box-shadow: 0 2px 12px var(--tool-element-shadow, rgba(0, 0, 0, 0.1));
     transition: all 0.2s ease;
     outline: none !important;
+    display: flex;
+    flex-direction: column;
 
     &:hover {
-      box-shadow: 0 4px 16px var(--tool-element-shadow-hover);
+      box-shadow: 0 4px 16px var(--tool-element-shadow-hover, rgba(0, 0, 0, 0.15));
     }
 
     // 禁用焦点效果
@@ -41,8 +43,74 @@
     &:focus-visible,
     &:focus-within {
       outline: none !important;
-      background: var(--tool-element-bg) !important;
+      background: #fff !important;
     }
+  }
+
+  // 标题栏样式
+  .plait-tool-titlebar {
+    height: 36px;
+    min-height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 12px;
+    background: linear-gradient(180deg, #f5f5f5 0%, #ebebeb 100%);
+    border-bottom: 1px solid #d9d9d9;
+    cursor: move;
+    user-select: none;
+    flex-shrink: 0;
+    border-radius: 6px 6px 0 0;
+
+    &:hover {
+      background: linear-gradient(180deg, #f8f8f8 0%, #efefef 100%);
+    }
+
+    // 标题文字
+    .plait-tool-title {
+      font-size: 13px;
+      font-weight: 500;
+      color: #333;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    // 标题栏按钮
+    button {
+      width: 24px;
+      height: 24px;
+      border: none;
+      background: transparent;
+      color: #666;
+      font-size: 18px;
+      line-height: 1;
+      cursor: pointer;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+      padding: 0;
+      outline: none;
+
+      &:hover {
+        background: rgba(0, 0, 0, 0.05);
+      }
+
+      &:active {
+        background: rgba(0, 0, 0, 0.1);
+      }
+    }
+  }
+
+  // 内容区域样式
+  .plait-tool-content {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background: #fff;
+    border-radius: 0 0 6px 6px;
 
     // 加载提示
     .plait-tool-loader {
@@ -68,6 +136,7 @@
       background: #fff !important;
       z-index: 10;
       position: relative;
+      pointer-events: auto; // 确保 iframe 可以交互
     }
   }
 
@@ -75,24 +144,34 @@
   &--selected,
   &.selected {
     .plait-tool-container {
-      border-color: var(--tool-element-border-selected);
-      box-shadow: 0 0 0 2px var(--tool-element-shadow-selected),
-                  0 4px 16px var(--tool-element-shadow-hover);
+      border-color: var(--tool-element-border-selected, #1890ff);
+      box-shadow: 0 0 0 2px var(--tool-element-shadow-selected, rgba(24, 144, 255, 0.2)),
+                  0 4px 16px var(--tool-element-shadow-hover, rgba(0, 0, 0, 0.15));
+    }
+
+    .plait-tool-titlebar {
+      background: linear-gradient(180deg, #e6f7ff 0%, #d6f1ff 100%);
+      border-bottom-color: #91d5ff;
     }
   }
 
   // 激活状态（正在拖拽/调整大小）
   &.active {
     .plait-tool-container {
-      box-shadow: 0 6px 20px var(--tool-element-shadow-hover);
+      box-shadow: 0 6px 20px var(--tool-element-shadow-hover, rgba(0, 0, 0, 0.2));
+    }
+
+    .plait-tool-titlebar {
+      cursor: grabbing;
     }
   }
 
-  // 编辑模式（双击后，iframe 可交互）
+  // 编辑模式（已废弃，因为现在 iframe 始终可交互）
   &--editing {
     .plait-tool-container {
-      border-color: var(--tool-element-border-selected);
-      box-shadow: 0 0 0 3px var(--tool-element-shadow-selected);
+      border-color: var(--tool-element-border-selected, #1890ff);
+      box-shadow: 0 0 0 3px var(--tool-element-shadow-selected, rgba(24, 144, 255, 0.2));
     }
   }
 }
+

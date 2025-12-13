@@ -81,12 +81,18 @@ body {
     min-height: 100vh;
     width: 100%;
     overflow: hidden;
+    /* 禁用触摸缩放 - 完全禁止 pinch-zoom */
+    touch-action: none;
+    -ms-touch-action: none;
 }
 
 #root {
     height: 100%;
     width: 100%;
     overflow: hidden;
+    /* 同样完全禁用触摸动作，防止页面缩放 */
+    touch-action: none;
+    -ms-touch-action: none;
 }
 
 /* 品牌色彩应用到常用元素 */
