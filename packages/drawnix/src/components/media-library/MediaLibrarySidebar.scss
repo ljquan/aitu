@@ -1,0 +1,192 @@
+/**
+ * Media Library Sidebar Styles
+ * 素材库侧边栏样式 - Tailwind-inspired design
+ */
+
+.media-library-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100%;
+
+  &__section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+
+    &--storage {
+      margin-top: auto;
+      padding-top: 12px;
+      border-top: 1px solid #e5e7eb;
+    }
+  }
+
+  &__title {
+    font-size: 10px;
+    font-weight: 700;
+    color: #9ca3af;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin: 0;
+    padding: 0 8px;
+  }
+
+  &__buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+
+    .t-button {
+      justify-content: flex-start;
+      padding: 7px 8px;
+      font-size: 12px;
+      font-weight: 500;
+      border-radius: 6px;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      height: auto;
+      min-height: 32px;
+
+      // 图标容器 - 固定大小确保对齐，增加右边距
+      .t-icon,
+      svg {
+        flex-shrink: 0;
+        width: 16px;
+        height: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 12px !important;
+      }
+
+      // 文本 - 确保垂直居中
+      > span {
+        flex: 1;
+        text-align: left;
+        line-height: 1.4;
+        display: flex;
+        align-items: center;
+      }
+
+      // 移除 TDesign 默认的间距和 margin
+      .t-button__icon {
+        margin: 0 !important;
+      }
+
+      // 确保内容容器也正确对齐
+      .t-button__text {
+        display: flex;
+        align-items: center;
+      }
+
+      // Active state (base variant)
+      &.t-button--variant-base {
+        background: white;
+        color: #6366f1;
+        box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05), 0 0 0 1px rgba(0, 0, 0, 0.05);
+        border-color: transparent;
+
+        &:hover {
+          background: white;
+          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+      }
+
+      // Inactive state (outline variant)
+      &.t-button--variant-outline {
+        background: transparent;
+        color: #6b7280;
+        border-color: transparent;
+
+        &:hover {
+          background: #f3f4f6;
+          color: #111827;
+        }
+      }
+    }
+  }
+
+  // 移动端优化
+  @media (max-width: 768px) {
+    gap: 8px; // 减小间距
+    flex-direction: row;
+    flex-wrap: wrap;
+    padding: 8px; // 减小内边距
+
+    &__section {
+      gap: 6px; // 减小间距
+      flex: 1 1 auto;
+      min-width: 120px; // 减小最小宽度
+
+      &--storage {
+        padding-top: 0;
+        border-top: none;
+        border-left: 1px solid #e5e7eb;
+        padding-left: 8px; // 减小内边距
+        margin-left: auto;
+        // 在移动端隐藏存储栏，节省空间
+        display: none;
+      }
+    }
+
+    &__title {
+      font-size: 9px;
+      margin-bottom: 4px; // 减小标题下方间距
+    }
+
+    &__buttons {
+      flex-direction: row;
+      flex-wrap: wrap;
+      gap: 4px; // 减小按钮间距
+
+      .t-button {
+        padding: 4px 6px; // 减小内边距
+        font-size: 10px; // 减小字号
+        min-height: 26px; // 减小高度
+        gap: 4px; // 减小图标和文字间距
+        flex: 1 1 auto;
+        min-width: 70px; // 减小最小宽度
+
+        .t-icon,
+        svg {
+          width: 12px; // 减小图标
+          height: 12px;
+        }
+      }
+    }
+  }
+
+  @media (max-width: 480px) {
+    padding: 6px; // 进一步减小
+
+    &__section {
+      min-width: 100px; // 更小
+      gap: 4px;
+    }
+
+    &__title {
+      font-size: 8px;
+      margin-bottom: 3px;
+    }
+
+    &__buttons {
+      gap: 3px;
+
+      .t-button {
+        padding: 3px 5px; // 更小的内边距
+        font-size: 9px; // 更小字号
+        min-height: 24px; // 更小高度
+        min-width: 60px; // 更小宽度
+        gap: 3px;
+
+        .t-icon,
+        svg {
+          width: 10px; // 更小图标
+          height: 10px;
+        }
+      }
+    }
+  }
+}

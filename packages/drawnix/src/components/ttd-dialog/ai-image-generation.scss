@@ -841,6 +841,51 @@
       position: relative;
     }
 
+    .upload-source-buttons {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 0;
+
+      button {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 12px 16px;
+        min-height: 100px;
+        border: 2px dashed var(--color-border, #d9d9d9);
+        border-radius: 8px;
+        background: var(--color-bg-secondary, #f5f5f5);
+        color: var(--color-text-primary, #333);
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        flex-direction: column;
+
+        &:hover:not(:disabled) {
+          border-color: var(--color-primary, #0052d9);
+          background: var(--color-primary-light, #e6f7ff);
+          color: var(--color-primary, #0052d9);
+
+          svg {
+            color: var(--color-primary, #0052d9);
+          }
+        }
+
+        &:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+
+        svg {
+          flex-shrink: 0;
+          transition: color 0.2s ease;
+        }
+      }
+    }
+
     .upload-input {
       position: absolute;
       width: 0;
@@ -971,6 +1016,42 @@
       &:hover {
         border-color: var(--color-primary, #0052d9);
         background: var(--color-primary-light, #e6f7ff);
+      }
+
+      // Container for two buttons
+      .add-more-buttons {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        width: 100%;
+        padding: 16px;
+
+        .add-more-btn {
+          flex: 1;
+          height: 36px;
+          font-size: 13px;
+          font-weight: 500;
+          border-width: 1.5px;
+
+          &:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0, 82, 217, 0.15);
+          }
+
+          &:active:not(:disabled) {
+            transform: translateY(0);
+          }
+        }
+      }
+
+      // Remove hover effect when contains buttons
+      &:has(.add-more-buttons) {
+        cursor: default;
+
+        &:hover {
+          border-color: var(--color-border, #d9d9d9);
+          background: var(--color-bg-secondary, #f5f5f5);
+        }
       }
 
       .add-more-label {

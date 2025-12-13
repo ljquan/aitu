@@ -1,0 +1,245 @@
+/**
+ * Media Library Inspector
+ * 素材库详情面板组件
+ */
+
+import { useState, useCallback } from 'react';
+import { Button, Input, Dialog, MessagePlugin } from 'tdesign-react';
+import {
+  Download,
+  Trash2,
+  Edit2,
+  Check,
+  X,
+  CheckCircle,
+} from 'lucide-react';
+import { formatDate, formatFileSize } from '../../utils/asset-utils';
+import type { MediaLibraryInspectorProps } from '../../types/asset.types';
+import './MediaLibraryInspector.scss';
+
+export function MediaLibraryInspector({
+  asset,
+  onRename,
+  onDelete,
+  onDownload,
+  onSelect,
+  showSelectButton,
+}: MediaLibraryInspectorProps) {
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
+
+  // 开始重命名
+  const handleStartRename = useCallback(() => {
+    if (asset) {
+      setNewName(asset.name);
+      setIsRenaming(true);
+    }
+  }, [asset]);
+
+  // 确认重命名
+  const handleConfirmRename = useCallback(async () => {
+    if (!asset || !newName.trim()) return;
+
+    try {
+      await onRename(asset.id, newName.trim());
+      setIsRenaming(false);
+      MessagePlugin.success('重命名成功');
+    } catch (error) {
+      // 错误已在Context中处理
+    }
+  }, [asset, newName, onRename]);
+
+  // 取消重命名
+  const handleCancelRename = useCallback(() => {
+    setIsRenaming(false);
+    setNewName('');
+  }, []);
+
+  // 打开删除确认对话框
+  const handleOpenDeleteDialog = useCallback(() => {
+    setDeleteDialogVisible(true);
+  }, []);
+
+  // 确认删除
+  const handleConfirmDelete = useCallback(async () => {
+    if (!asset) return;
+
+    try {
+      await onDelete(asset.id);
+      setDeleteDialogVisible(false);
+      MessagePlugin.success('删除成功');
+    } catch (error) {
+      // 错误已在Context中处理
+    }
+  }, [asset, onDelete]);
+
+  // 下载素材
+  const handleDownload = useCallback(() => {
+    if (asset) {
+      onDownload(asset);
+      MessagePlugin.success('开始下载');
+    }
+  }, [asset, onDownload]);
+
+  // 使用到画板
+  const handleSelect = useCallback(() => {
+    if (asset && onSelect) {
+      onSelect(asset);
+    }
+  }, [asset, onSelect]);
+
+  if (!asset) {
+    return (
+      <div className="media-library-inspector media-library-inspector--empty">
+        <p>选择素材查看详情</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="media-library-inspector">
+      {/* 预览 */}
+      <div className="media-library-inspector__preview">
+        {asset.type === 'IMAGE' ? (
+          <img
+            src={asset.url}
+            alt={asset.name}
+            className="media-library-inspector__image"
+          />
+        ) : (
+          <video
+            src={asset.url}
+            controls
+            className="media-library-inspector__video"
+          />
+        )}
+      </div>
+
+      {/* 名称编辑 */}
+      <div className="media-library-inspector__name-section">
+        {isRenaming ? (
+          <div className="media-library-inspector__name-edit">
+            <Input
+              value={newName}
+              onChange={(value) => setNewName(value as string)}
+              autoFocus
+              size="small"
+              onEnter={handleConfirmRename}
+            />
+            <div className="media-library-inspector__name-actions">
+              <Button
+                size="small"
+                variant="base"
+                theme="primary"
+                icon={<Check size={14} />}
+                onClick={handleConfirmRename}
+                data-track="inspector_rename_confirm"
+              />
+              <Button
+                size="small"
+                variant="outline"
+                icon={<X size={14} />}
+                onClick={handleCancelRename}
+                data-track="inspector_rename_cancel"
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="media-library-inspector__name-display">
+            <h3 className="media-library-inspector__name" title={asset.name}>
+              {asset.name}
+            </h3>
+            <Button
+              size="small"
+              variant="text"
+              icon={<Edit2 size={14} />}
+              onClick={handleStartRename}
+              data-track="inspector_rename_start"
+            />
+          </div>
+        )}
+      </div>
+
+      {/* 元数据 */}
+      <div className="media-library-inspector__metadata">
+        <div className="media-library-inspector__meta-item">
+          <span className="media-library-inspector__meta-label">类型</span>
+          <span className="media-library-inspector__meta-value">
+            {asset.type === 'IMAGE' ? '图片' : '视频'}
+          </span>
+        </div>
+        <div className="media-library-inspector__meta-item">
+          <span className="media-library-inspector__meta-label">来源</span>
+          <span className="media-library-inspector__meta-value">
+            {asset.source === 'AI_GENERATED' ? 'AI生成' : '本地上传'}
+          </span>
+        </div>
+        <div className="media-library-inspector__meta-item">
+          <span className="media-library-inspector__meta-label">创建时间</span>
+          <span className="media-library-inspector__meta-value">
+            {formatDate(asset.createdAt)}
+          </span>
+        </div>
+        {asset.size && (
+          <div className="media-library-inspector__meta-item">
+            <span className="media-library-inspector__meta-label">文件大小</span>
+            <span className="media-library-inspector__meta-value">
+              {formatFileSize(asset.size)}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* 操作按钮 */}
+      <div className="media-library-inspector__actions">
+        {showSelectButton && onSelect && (
+          <Button
+            theme="primary"
+            block
+            icon={<CheckCircle size={16} />}
+            onClick={handleSelect}
+            data-track="inspector_use_asset"
+          >
+            使用到画板
+          </Button>
+        )}
+        <Button
+          variant="outline"
+          block
+          icon={<Download size={16} />}
+          onClick={handleDownload}
+          data-track="inspector_download"
+        >
+          下载
+        </Button>
+        <Button
+          theme="danger"
+          variant="outline"
+          block
+          icon={<Trash2 size={16} />}
+          onClick={handleOpenDeleteDialog}
+          data-track="inspector_delete"
+        >
+          删除
+        </Button>
+      </div>
+
+      {/* 删除确认对话框 */}
+      <Dialog
+        visible={deleteDialogVisible}
+        onClose={() => setDeleteDialogVisible(false)}
+        header="确认删除"
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteDialogVisible(false)}
+        confirmBtn="删除"
+        cancelBtn="取消"
+      >
+        <p>删除后无法恢复，确认删除该素材？</p>
+        <p style={{ marginTop: '8px', color: 'var(--td-text-color-secondary)' }}>
+          素材名称: <strong>{asset.name}</strong>
+        </p>
+      </Dialog>
+    </div>
+  );
+}

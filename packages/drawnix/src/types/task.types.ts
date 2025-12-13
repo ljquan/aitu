@@ -156,6 +156,8 @@ export interface Task {
   remoteId?: string;
   /** Current execution phase for recovery support */
   executionPhase?: TaskExecutionPhase;
+  /** Whether the task result has been saved to the media library */
+  savedToLibrary?: boolean;
 }
 
 /**
