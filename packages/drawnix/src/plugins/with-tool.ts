@@ -26,7 +26,6 @@ import { PlaitTool } from '../types/toolbox.types';
 import { DEFAULT_TOOL_CONFIG } from '../constants/built-in-tools';
 import { ToolCommunicationService, ToolCommunicationHelper } from '../services/tool-communication-service';
 import { ToolMessageType, GenerateImagePayload, GenerateImageResponse } from '../types/tool-communication.types';
-import { generationAPIService } from '../services/generation-api-service';
 import { taskQueueService } from '../services/task-queue-service';
 import { TaskType } from '../types/task.types';
 import { geminiSettings } from '../utils/settings-manager';
@@ -87,17 +86,14 @@ function setupCommunicationHandlers(
     console.log(`[ToolCommunication] Generate image request from ${message.toolId}:`, payload);
 
     try {
-      // 生成唯一任务 ID
-      const taskId = `batch_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-
-      // 构建生成参数
+      // 构建生成参数（与 ai-image-generation.tsx 一致）
       const generateParams: any = {
         prompt: payload.prompt,
       };
 
       // 优先使用 size 参数（比例格式），否则使用 width/height
       if (payload.size) {
-        generateParams.size = payload.size;
+        generateParams.aspectRatio = payload.size;
       } else {
         generateParams.width = payload.width || 1024;
         generateParams.height = payload.height || 1024;
@@ -109,34 +105,73 @@ function setupCommunicationHandlers(
         console.log(`[ToolCommunication] Passing ${generateParams.uploadedImages.length} reference images`);
       }
 
-      // 调用图片生成 API
-      const result = await generationAPIService.generate(
-        taskId,
-        generateParams,
-        TaskType.IMAGE
-      );
+      // 传递批次信息（避免重复检测）
+      if ((payload as any).batchId) {
+        generateParams.batchId = (payload as any).batchId;
+        generateParams.batchIndex = (payload as any).batchIndex;
+        generateParams.batchTotal = (payload as any).batchTotal;
+        console.log(`[ToolCommunication] Batch info: ${generateParams.batchIndex}/${generateParams.batchTotal} (${generateParams.batchId})`);
+      }
 
-      // 发送成功响应到 iframe
-      const response: GenerateImageResponse = {
-        success: true,
-        responseId: payload.messageId || message.messageId,
-        result: {
-          url: result.url,
-          format: result.format,
-          width: result.width,
-          height: result.height,
-        },
-      };
+      // 获取当前图片模型
+      const settings = geminiSettings.get();
+      generateParams.model = settings.imageModelName || 'gemini-2.5-flash-image-vip';
 
-      // 获取工具的 iframe 并发送响应
+      // 通过 taskQueueService 创建任务（这样任务会出现在全局任务队列中）
+      const task = taskQueueService.createTask(generateParams, TaskType.IMAGE);
+
+      if (!task) {
+        throw new Error('任务创建失败，请稍后重试');
+      }
+
+      const taskId = task.id;
+      console.log(`[ToolCommunication] Created task ${taskId} for ${message.toolId}`);
+
+      // 获取工具的 iframe
       const iframe = document.querySelector(
         `[data-element-id="${message.toolId}"] iframe`
       ) as HTMLIFrameElement;
 
-      if (iframe?.contentWindow) {
-        iframe.contentWindow.postMessage(response, '*');
-        console.log(`[ToolCommunication] Image generation success sent to ${message.toolId}`);
+      if (!iframe?.contentWindow) {
+        console.error(`[ToolCommunication] Iframe not found for ${message.toolId}`);
+        return;
       }
+
+      // 监听该任务的状态变化
+      const subscription = taskQueueService.observeTaskUpdates().subscribe(event => {
+        if (event.task.id !== taskId) return;
+
+        // 任务完成
+        if (event.type === 'taskUpdated' && event.task.status === 'completed' && event.task.result) {
+          const response: GenerateImageResponse = {
+            success: true,
+            responseId: payload.messageId || message.messageId,
+            result: {
+              url: event.task.result.url,
+              format: event.task.result.format,
+              width: event.task.result.width,
+              height: event.task.result.height,
+            },
+          };
+
+          iframe.contentWindow?.postMessage(response, '*');
+          console.log(`[ToolCommunication] Image generation success sent to ${message.toolId}`);
+          subscription.unsubscribe();
+        }
+        // 任务失败
+        else if (event.type === 'taskUpdated' && event.task.status === 'failed') {
+          const response: GenerateImageResponse = {
+            success: false,
+            responseId: payload.messageId || message.messageId,
+            error: event.task.error?.message || '图片生成失败',
+          };
+
+          iframe.contentWindow?.postMessage(response, '*');
+          console.log(`[ToolCommunication] Image generation error sent to ${message.toolId}`);
+          subscription.unsubscribe();
+        }
+      });
+
     } catch (error: any) {
       console.error(`[ToolCommunication] Image generation failed for ${message.toolId}:`, error);
 
