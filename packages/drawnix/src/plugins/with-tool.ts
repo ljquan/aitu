@@ -110,7 +110,11 @@ function setupCommunicationHandlers(
         generateParams.batchId = (payload as any).batchId;
         generateParams.batchIndex = (payload as any).batchIndex;
         generateParams.batchTotal = (payload as any).batchTotal;
-        console.log(`[ToolCommunication] Batch info: ${generateParams.batchIndex}/${generateParams.batchTotal} (${generateParams.batchId})`);
+        // 全局唯一序号，确保每个子任务哈希唯一
+        if ((payload as any).globalIndex) {
+          generateParams.globalIndex = (payload as any).globalIndex;
+        }
+        console.log(`[ToolCommunication] Batch info: ${generateParams.batchIndex}/${generateParams.batchTotal} (${generateParams.batchId}), global: ${generateParams.globalIndex}`);
       }
 
       // 获取当前图片模型

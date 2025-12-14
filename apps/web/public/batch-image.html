@@ -1553,10 +1553,14 @@
 
       // 收集所有需要提交的子任务
       const allSubTasks = [];
+      const globalBatchTimestamp = Date.now();
+      let subTaskCounter = 0;
+
       for (const task of pendingTasks) {
         const taskIndex = tasks.indexOf(task);
         const generateCount = task.count || 1;
-        const batchId = `batch_${task.id}_${Date.now()}`;
+        // 使用全局时间戳 + 任务ID 确保 batchId 唯一
+        const batchId = `batch_${task.id}_${globalBatchTimestamp}`;
 
         // 将图片转换为 uploadedImages 格式
         const uploadedImages = (task.images || []).map((url, index) => ({
@@ -1567,13 +1571,16 @@
 
         // 为每个 count 创建子任务
         for (let i = 0; i < generateCount; i++) {
+          subTaskCounter++;
           allSubTasks.push({
             taskIndex,
             task,
             batchId,
             batchIndex: i + 1,
             batchTotal: generateCount,
-            uploadedImages
+            uploadedImages,
+            // 添加全局唯一序号，确保即使相同参数也能区分
+            globalIndex: subTaskCounter
           });
         }
 
@@ -1606,6 +1613,7 @@
               batchId: subTask.batchId,
               batchIndex: subTask.batchIndex,
               batchTotal: subTask.batchTotal,
+              globalIndex: subTask.globalIndex, // 全局唯一序号
               messageId: messageId
             },
             timestamp: Date.now()
