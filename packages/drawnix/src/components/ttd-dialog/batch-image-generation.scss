@@ -134,11 +134,30 @@
       z-index: 15;
     }
 
+    .col-checkbox {
+      width: 40px;
+      min-width: 40px;
+      text-align: center;
+
+      input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+        accent-color: #F39C12;
+      }
+    }
     .col-prompt { width: 35%; min-width: 200px; }
     .col-size { width: 80px; min-width: 80px; }
     .col-images { width: 150px; min-width: 150px; }
     .col-count { width: 60px; min-width: 60px; }
     .col-preview { width: 150px; min-width: 150px; }
+
+    // 选中行高亮
+    tr.row-selected {
+      td {
+        background: rgba(243, 156, 18, 0.08);
+      }
+    }
 
     .th-content {
       display: flex;

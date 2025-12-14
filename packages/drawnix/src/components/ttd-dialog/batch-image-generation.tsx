@@ -336,6 +336,43 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
     }
   }, [tasks, selectedCells]);
 
+  // 获取选中的行号集合
+  const selectedRowSet = useMemo(() => {
+    return new Set(selectedCells.map(c => c.row));
+  }, [selectedCells]);
+
+  // 切换单行选择
+  const toggleRowSelection = useCallback((rowIndex: number) => {
+    const isSelected = selectedRowSet.has(rowIndex);
+    if (isSelected) {
+      // 取消选择
+      setSelectedCells(prev => prev.filter(c => c.row !== rowIndex));
+      if (activeCell?.row === rowIndex) {
+        setActiveCell(null);
+      }
+    } else {
+      // 添加选择
+      setSelectedCells(prev => [...prev, { row: rowIndex, col: 'prompt' }]);
+      setActiveCell({ row: rowIndex, col: 'prompt' });
+    }
+  }, [selectedRowSet, activeCell]);
+
+  // 全选/取消全选
+  const toggleSelectAll = useCallback(() => {
+    if (selectedRowSet.size === tasks.length) {
+      // 全部取消
+      setSelectedCells([]);
+      setActiveCell(null);
+    } else {
+      // 全选
+      const allCells = tasks.map((_, rowIndex) => ({ row: rowIndex, col: 'prompt' }));
+      setSelectedCells(allCells);
+      if (allCells.length > 0) {
+        setActiveCell(allCells[0]);
+      }
+    }
+  }, [tasks, selectedRowSet]);
+
   // 提交到任务队列 - 只提交选中的行
   const submitToQueue = useCallback(async () => {
     // 获取选中的行索引（去重）
@@ -697,6 +734,14 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
           <table className="excel-table">
             <thead>
               <tr>
+                <th className="col-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={tasks.length > 0 && selectedRowSet.size === tasks.length}
+                    onChange={toggleSelectAll}
+                    title={language === 'zh' ? '全选/取消全选' : 'Select All / Deselect All'}
+                  />
+                </th>
                 <th className="row-number">#</th>
                 <th className="col-prompt">
                   <div className="th-content">
@@ -731,7 +776,14 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
             </thead>
             <tbody>
               {tasks.map((task, rowIndex) => (
-                <tr key={task.id}>
+                <tr key={task.id} className={selectedRowSet.has(rowIndex) ? 'row-selected' : ''}>
+                  <td className="col-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={selectedRowSet.has(rowIndex)}
+                      onChange={() => toggleRowSelection(rowIndex)}
+                    />
+                  </td>
                   <td className="row-number">{rowIndex + 1}</td>
                   <td>{renderCellContent(task, rowIndex, 'prompt')}</td>
                   <td>{renderCellContent(task, rowIndex, 'size')}</td>
