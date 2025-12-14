@@ -99,6 +99,60 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
+// 表单头部行 - 模型选择 + 批量切换按钮
+.form-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+
+  .model-selector-wrapper {
+    flex: 1;
+    min-width: 150px;
+    max-width: 300px;
+  }
+}
+
+// 批量出图切换按钮
+.batch-mode-btn {
+  padding: 6px 14px;
+  background: linear-gradient(135deg, #5A4FCF 0%, #7B68EE 100%);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+
+  &:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(90, 79, 207, 0.3);
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(0);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+// 加载中占位
+.loading-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 400px;
+  color: #999;
+  font-size: 14px;
+}
+
 // Unified Action Box - Combined quantity control and generate button
 .unified-action-box {
   display: flex;

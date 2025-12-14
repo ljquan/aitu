@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import './ttd-dialog.scss';
 import './ai-image-generation.scss';
 import { useI18n } from '../../i18n';
@@ -24,6 +24,12 @@ import { DEFAULT_ASPECT_RATIO } from '../../constants/image-aspect-ratios';
 import { DialogTaskList } from '../task-queue/DialogTaskList';
 import { geminiSettings } from '../../utils/settings-manager';
 
+// 懒加载批量出图组件
+const BatchImageGeneration = lazy(() => import('./batch-image-generation'));
+
+// 生成模式类型
+type GenerationMode = 'single' | 'batch';
+
 interface AIImageGenerationProps {
   initialPrompt?: string;
   initialImages?: ImageFile[];
@@ -45,6 +51,9 @@ const AIImageGeneration = ({
   selectedModel,
   onModelChange
 }: AIImageGenerationProps = {}) => {
+  // 生成模式：单图 or 批量
+  const [mode, setMode] = useState<GenerationMode>('single');
+
   const [prompt, setPrompt] = useState(initialPrompt);
   const [width, setWidth] = useState<number | string>(initialWidth || 1024);
   const [height, setHeight] = useState<number | string>(initialHeight || 1024);
@@ -347,6 +356,16 @@ const AIImageGeneration = ({
 
 
 
+  // 批量模式渲染
+  if (mode === 'batch') {
+    return (
+      <Suspense fallback={<div className="loading-fallback">{language === 'zh' ? '加载中...' : 'Loading...'}</div>}>
+        <BatchImageGeneration onSwitchToSingle={() => setMode('single')} />
+      </Suspense>
+    );
+  }
+
+  // 单图模式渲染
   return (
     <div className="ai-image-generation-container">
       <div className="main-content">
@@ -354,24 +373,33 @@ const AIImageGeneration = ({
         <div className="ai-image-generation-section">
           <div className="ai-image-generation-form">
 
-          {/* 模型选择器 */}
-          {selectedModel !== undefined && onModelChange && (
-            <div className="model-selector-wrapper">
-              {/* <label className="model-selector-label">
-                {language === 'zh' ? '模型' : 'Image Model'}
-              </label> */}
-              <Select
-                value={selectedModel}
-                onChange={(value) => onModelChange(value as string)}
-                options={IMAGE_MODEL_OPTIONS}
-                size="small"
-                placeholder={language === 'zh' ? '选择图片模型' : 'Select Image Model'}
-                filterable
-                creatable
-                disabled={isGenerating}
-              />
-            </div>
-          )}
+          {/* 模式切换 + 模型选择器 */}
+          <div className="form-header-row">
+            {/* 模型选择器 */}
+            {selectedModel !== undefined && onModelChange && (
+              <div className="model-selector-wrapper">
+                <Select
+                  value={selectedModel}
+                  onChange={(value) => onModelChange(value as string)}
+                  options={IMAGE_MODEL_OPTIONS}
+                  size="small"
+                  placeholder={language === 'zh' ? '选择图片模型' : 'Select Image Model'}
+                  filterable
+                  creatable
+                  disabled={isGenerating}
+                />
+              </div>
+            )}
+
+            {/* 批量出图切换按钮 */}
+            <button
+              className="batch-mode-btn"
+              onClick={() => setMode('batch')}
+              disabled={isGenerating}
+            >
+              {language === 'zh' ? '批量出图 →' : 'Batch Mode →'}
+            </button>
+          </div>
 
           {/* 参考图片区域 */}
           <ImageUpload
