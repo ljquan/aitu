@@ -631,8 +631,14 @@
       margin: 0 0 16px 0;
     }
 
-    .images-per-row-setting {
+    .import-settings-row {
+      display: flex;
+      gap: 24px;
       margin-bottom: 16px;
+    }
+
+    .import-setting-item {
+      flex: 1;
 
       label {
         display: block;
@@ -640,6 +646,29 @@
         font-weight: 500;
         color: #333;
         margin-bottom: 8px;
+      }
+
+      .start-row-input {
+        width: 80px;
+        height: 40px;
+        padding: 0 12px;
+        border: 2px solid #ddd;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: 600;
+        color: #333;
+        text-align: center;
+        transition: all 0.2s;
+
+        &:focus {
+          outline: none;
+          border-color: #F39C12;
+        }
+
+        &::-webkit-inner-spin-button,
+        &::-webkit-outer-spin-button {
+          opacity: 1;
+        }
       }
 
       .per-row-options {

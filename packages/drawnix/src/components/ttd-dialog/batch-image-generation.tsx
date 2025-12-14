@@ -80,6 +80,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
   const [imagesPerRow, setImagesPerRow] = useState<number>(1);
   const [showBatchImportModal, setShowBatchImportModal] = useState(false);
   const [pendingImportFiles, setPendingImportFiles] = useState<File[]>([]);
+  const [importStartRow, setImportStartRow] = useState<number>(1); // 从第几行开始插入（1-based）
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const batchImportInputRef = useRef<HTMLInputElement>(null);
@@ -278,13 +279,16 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
     }
 
     setPendingImportFiles(imageFiles);
+    // 默认从当前选中行或第1行开始
+    const defaultStartRow = activeCell ? activeCell.row + 1 : 1;
+    setImportStartRow(Math.min(defaultStartRow, tasks.length));
     setShowBatchImportModal(true);
 
     // 清空 input
     if (batchImportInputRef.current) {
       batchImportInputRef.current.value = '';
     }
-  }, [language]);
+  }, [language, activeCell, tasks.length]);
 
   // 执行批量导入
   const executeBatchImport = useCallback(async () => {
@@ -293,6 +297,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
     const perRow = imagesPerRow;
     const totalImages = pendingImportFiles.length;
     const rowsNeeded = Math.ceil(totalImages / perRow);
+    const startIndex = importStartRow - 1; // 转为 0-based index
 
     // 读取所有图片为 DataURL
     const imageDataUrls: string[] = [];
@@ -306,32 +311,51 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
       imageDataUrls.push(dataUrl);
     }
 
-    // 创建新行并分配图片
+    // 分配图片到行
     setTasks(prev => {
       const newTasks = [...prev];
       let imageIndex = 0;
+      let newRowsCreated = 0;
 
       for (let i = 0; i < rowsNeeded; i++) {
+        const targetRowIndex = startIndex + i;
         const rowImages: string[] = [];
+
+        // 收集本行的图片
         for (let j = 0; j < perRow && imageIndex < totalImages; j++) {
           rowImages.push(imageDataUrls[imageIndex]);
           imageIndex++;
         }
 
-        newTasks.push({
-          id: taskIdCounter + i,
-          prompt: '',
-          size: '1x1',
-          images: rowImages,
-          count: 1,
-          taskIds: []
-        });
+        if (targetRowIndex < newTasks.length) {
+          // 插入到已有行：追加图片到现有行
+          newTasks[targetRowIndex] = {
+            ...newTasks[targetRowIndex],
+            images: [...newTasks[targetRowIndex].images, ...rowImages]
+          };
+        } else {
+          // 超出现有行：创建新行
+          newTasks.push({
+            id: taskIdCounter + newRowsCreated,
+            prompt: '',
+            size: '1x1',
+            images: rowImages,
+            count: 1,
+            taskIds: []
+          });
+          newRowsCreated++;
+        }
       }
 
       return newTasks;
     });
 
-    setTaskIdCounter(prev => prev + rowsNeeded);
+    // 更新 ID 计数器（仅当创建了新行时）
+    const existingRowsUsed = Math.min(rowsNeeded, tasks.length - startIndex);
+    const newRowsCreated = Math.max(0, rowsNeeded - existingRowsUsed);
+    if (newRowsCreated > 0) {
+      setTaskIdCounter(prev => prev + newRowsCreated);
+    }
 
     // 同时添加到图片库
     setImageLibrary(prev => [...prev, ...imageDataUrls]);
@@ -340,12 +364,11 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
     setPendingImportFiles([]);
     setShowBatchImportModal(false);
 
-    MessagePlugin.success(
-      language === 'zh'
-        ? `已导入 ${totalImages} 张图片到 ${rowsNeeded} 行`
-        : `Imported ${totalImages} images into ${rowsNeeded} rows`
-    );
-  }, [pendingImportFiles, imagesPerRow, taskIdCounter, language]);
+    const message = language === 'zh'
+      ? `已导入 ${totalImages} 张图片，从第 ${importStartRow} 行开始`
+      : `Imported ${totalImages} images starting from row ${importStartRow}`;
+    MessagePlugin.success(message);
+  }, [pendingImportFiles, imagesPerRow, importStartRow, taskIdCounter, tasks.length, language]);
 
   // 取消批量导入
   const cancelBatchImport = useCallback(() => {
@@ -973,25 +996,42 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
                 }
               </p>
 
-              <div className="images-per-row-setting">
-                <label>{language === 'zh' ? '每行图片数：' : 'Images per row:'}</label>
-                <div className="per-row-options">
-                  {[1, 2, 3, 4, 5].map(num => (
-                    <button
-                      key={num}
-                      className={`per-row-btn ${imagesPerRow === num ? 'active' : ''}`}
-                      onClick={() => setImagesPerRow(num)}
-                    >
-                      {num}
-                    </button>
-                  ))}
+              <div className="import-settings-row">
+                <div className="import-setting-item">
+                  <label>{language === 'zh' ? '从第几行开始：' : 'Start from row:'}</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={tasks.length + Math.ceil(pendingImportFiles.length / imagesPerRow)}
+                    value={importStartRow}
+                    onChange={(e) => {
+                      const val = Math.max(1, parseInt(e.target.value) || 1);
+                      setImportStartRow(val);
+                    }}
+                    className="start-row-input"
+                  />
+                </div>
+
+                <div className="import-setting-item">
+                  <label>{language === 'zh' ? '每行图片数：' : 'Images per row:'}</label>
+                  <div className="per-row-options">
+                    {[1, 2, 3, 4, 5].map(num => (
+                      <button
+                        key={num}
+                        className={`per-row-btn ${imagesPerRow === num ? 'active' : ''}`}
+                        onClick={() => setImagesPerRow(num)}
+                      >
+                        {num}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
               <p className="import-preview">
                 {language === 'zh'
-                  ? `将创建 ${Math.ceil(pendingImportFiles.length / imagesPerRow)} 行，每行 ${imagesPerRow} 张图片`
-                  : `Will create ${Math.ceil(pendingImportFiles.length / imagesPerRow)} rows with ${imagesPerRow} image(s) each`
+                  ? `从第 ${importStartRow} 行开始，填充 ${Math.ceil(pendingImportFiles.length / imagesPerRow)} 行，每行 ${imagesPerRow} 张图片`
+                  : `Starting from row ${importStartRow}, filling ${Math.ceil(pendingImportFiles.length / imagesPerRow)} rows with ${imagesPerRow} image(s) each`
                 }
               </p>
 
