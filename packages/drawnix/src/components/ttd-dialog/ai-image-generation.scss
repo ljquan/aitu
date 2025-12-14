@@ -114,27 +114,21 @@
   }
 }
 
-// 批量出图切换按钮
+// 批量出图切换按钮 - 文字链接样式
 .batch-mode-btn {
-  padding: 6px 14px;
-  background: linear-gradient(135deg, #5A4FCF 0%, #7B68EE 100%);
-  color: white;
+  padding: 6px 12px;
+  background: none;
+  color: #666;
   border: none;
-  border-radius: 6px;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
   cursor: pointer;
   transition: all 0.2s ease;
   white-space: nowrap;
   flex-shrink: 0;
 
   &:hover:not(:disabled) {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(90, 79, 207, 0.3);
-  }
-
-  &:active:not(:disabled) {
-    transform: translateY(0);
+    color: #F39C12;
   }
 
   &:disabled {
