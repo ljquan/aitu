@@ -477,99 +477,6 @@
       outline-offset: -2px;
     }
 
-    /* 状态徽章 */
-    .status-badge {
-      padding: 2px 8px;
-      border-radius: 12px;
-      font-size: 11px;
-      font-weight: 500;
-      white-space: nowrap;
-    }
-
-    .status-pending {
-      background: #e3f2fd;
-      color: #1976d2;
-    }
-
-    .status-processing {
-      background: #fff3cd;
-      color: #856404;
-    }
-
-    .status-completed {
-      background: #d4edda;
-      color: #155724;
-    }
-
-    .status-failed {
-      background: #f8d7da;
-      color: #721c24;
-    }
-
-    /* 进度条 */
-    .progress-bar {
-      width: 100%;
-      height: 4px;
-      background: #e0e0e0;
-      border-radius: 2px;
-      overflow: hidden;
-      margin-top: 4px;
-    }
-
-    .progress-fill {
-      height: 100%;
-      background: linear-gradient(90deg, #F39C12, #E67E22);
-      transition: width 0.3s ease;
-    }
-
-    /* 缩略图 */
-    .thumbnail {
-      width: 60px;
-      height: 60px;
-      object-fit: cover;
-      border-radius: 4px;
-      cursor: pointer;
-    }
-
-    .thumbnail:hover {
-      opacity: 0.8;
-    }
-
-    .no-image {
-      width: 60px;
-      height: 60px;
-      background: #f5f5f5;
-      border-radius: 4px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: #999;
-      font-size: 11px;
-    }
-
-    /* 操作按钮 */
-    .action-btn {
-      padding: 4px 8px;
-      font-size: 11px;
-      border: none;
-      background: none;
-      color: #F39C12;
-      cursor: pointer;
-      text-decoration: underline;
-    }
-
-    .action-btn:hover {
-      color: #E67E22;
-    }
-
-    .action-btn.delete {
-      color: #dc3545;
-    }
-
-    .action-btn.delete:hover {
-      color: #c82333;
-    }
-
     .column-fill-btn {
       background: linear-gradient(135deg, #F39C12 0%, #E67E22 100%);
       color: white;
@@ -630,10 +537,7 @@
             🗑️ 删除选中
           </button>
           <button class="button button-primary" id="generateBtn" onclick="startBatchGeneration()">
-            🚀 开始生成
-          </button>
-          <button class="button button-secondary" onclick="clearCompleted()">
-            🧹 清除已完成
+            🚀 提交到任务队列
           </button>
         </div>
 
@@ -666,9 +570,6 @@
                     <button class="column-fill-btn" onclick="fillColumn('count')" title="批量填充数量">⬇</button>
                   </div>
                 </th>
-                <th style="width: 120px;">状态</th>
-                <th style="width: 80px;">预览</th>
-                <th style="width: 100px;">操作</th>
               </tr>
             </thead>
             <tbody id="tableBody">
@@ -901,13 +802,6 @@
       renderTable();
     }
 
-    function clearCompleted() {
-      tasks = tasks.filter(t => t.status !== 'completed');
-      selectedCells = [];
-      activeCell = null;
-      renderTable();
-    }
-
     function renderTable() {
       const tbody = document.getElementById('tableBody');
       tbody.innerHTML = '';
@@ -935,29 +829,6 @@
 
         // 数量
         tr.appendChild(createCell(rowIndex, 'count', task.count || 1, 'number'));
-
-        // 状态
-        const tdStatus = document.createElement('td');
-        const statusCell = createCellElement(rowIndex, 'status');
-        statusCell.innerHTML = getStatusHTML(task);
-        tdStatus.appendChild(statusCell);
-        tr.appendChild(tdStatus);
-
-        // 预览
-        const tdPreview = document.createElement('td');
-        const previewCell = createCellElement(rowIndex, 'preview');
-        previewCell.innerHTML = getPreviewHTML(task);
-        previewCell.style.justifyContent = 'center';
-        tdPreview.appendChild(previewCell);
-        tr.appendChild(tdPreview);
-
-        // 操作
-        const tdAction = document.createElement('td');
-        const actionCell = createCellElement(rowIndex, 'action');
-        actionCell.innerHTML = getActionHTML(task);
-        actionCell.style.justifyContent = 'center';
-        tdAction.appendChild(actionCell);
-        tr.appendChild(tdAction);
 
         tbody.appendChild(tr);
       });
@@ -1088,57 +959,6 @@
       });
 
       return cellDiv;
-    }
-
-    function getStatusHTML(task) {
-      let html = `<span class="status-badge status-${task.status}">`;
-      html += { pending: '待处理', processing: '生成中', completed: '已完成', failed: '失败' }[task.status];
-      html += '</span>';
-
-      if (task.status === 'processing') {
-        html += `<div class="progress-bar"><div class="progress-fill" style="width: ${task.progress}%"></div></div>`;
-      }
-
-      if (task.error) {
-        html += `<div style="font-size: 10px; color: #dc3545; margin-top: 4px;">${task.error}</div>`;
-      }
-
-      return html;
-    }
-
-    function getPreviewHTML(task) {
-      const urls = task.generatedUrls || (task.imageUrl ? [task.imageUrl] : []);
-      if (urls.length === 0) {
-        return '<div class="no-image">暂无</div>';
-      }
-
-      if (urls.length === 1) {
-        return `<img src="${urls[0]}" class="thumbnail" onclick="window.open('${urls[0]}', '_blank')">`;
-      }
-
-      // 多张图片显示
-      let html = `<div style="display: flex; flex-wrap: wrap; gap: 2px; justify-content: center;">`;
-      urls.slice(0, 4).forEach((url, i) => {
-        html += `<img src="${url}" class="thumbnail" style="width: 28px; height: 28px;" onclick="window.open('${url}', '_blank')">`;
-      });
-      if (urls.length > 4) {
-        html += `<div style="font-size: 10px; color: #666;">+${urls.length - 4}</div>`;
-      }
-      html += '</div>';
-      return html;
-    }
-
-    function getActionHTML(task) {
-      let html = '';
-      const urls = task.generatedUrls || (task.imageUrl ? [task.imageUrl] : []);
-      if (urls.length > 0) {
-        if (urls.length === 1) {
-          html += `<button class="action-btn" onclick="downloadImage('${urls[0]}', 'image-${task.id}.png')">下载</button>`;
-        } else {
-          html += `<button class="action-btn" onclick="downloadAllImages(${task.id})">下载全部(${urls.length})</button>`;
-        }
-      }
-      return html;
     }
 
     function handleCellClick(e, row, col) {
@@ -1530,19 +1350,14 @@
       }
 
       if (isGenerating) {
-        alert('已有生成任务在进行中');
+        alert('正在提交任务中...');
         return;
       }
 
-      const pendingTasks = tasks.filter(t => t.status === 'pending' || t.status === 'failed');
-      if (pendingTasks.length === 0) {
-        alert('没有待处理的任务');
-        return;
-      }
-
-      const emptyPrompts = pendingTasks.filter(t => !t.prompt || t.prompt.trim() === '');
-      if (emptyPrompts.length > 0) {
-        alert('请填写所有行的提示词');
+      // 获取所有有提示词的行
+      const validTasks = tasks.filter(t => t.prompt && t.prompt.trim() !== '');
+      if (validTasks.length === 0) {
+        alert('请至少填写一行提示词');
         return;
       }
 
@@ -1556,8 +1371,7 @@
       const globalBatchTimestamp = Date.now();
       let subTaskCounter = 0;
 
-      for (const task of pendingTasks) {
-        const taskIndex = tasks.indexOf(task);
+      for (const task of validTasks) {
         const generateCount = task.count || 1;
         // 使用全局时间戳 + 任务ID 确保 batchId 唯一
         const batchId = `batch_${task.id}_${globalBatchTimestamp}`;
@@ -1573,33 +1387,22 @@
         for (let i = 0; i < generateCount; i++) {
           subTaskCounter++;
           allSubTasks.push({
-            taskIndex,
             task,
             batchId,
             batchIndex: i + 1,
             batchTotal: generateCount,
             uploadedImages,
-            // 添加全局唯一序号，确保即使相同参数也能区分
             globalIndex: subTaskCounter
           });
         }
-
-        // 标记任务为处理中
-        tasks[taskIndex].status = 'processing';
-        tasks[taskIndex].progress = 0;
-        tasks[taskIndex].generatedUrls = [];
-        tasks[taskIndex].pendingCount = generateCount;
-        tasks[taskIndex].completedCount = 0;
       }
-      renderTable();
 
-      // 提交所有子任务到全局队列（不等待完成）
-      const submittedTasks = [];
+      // 提交所有子任务到全局队列
+      let submittedCount = 0;
       for (const subTask of allSubTasks) {
         try {
           const messageId = `batch-${Date.now()}-${Math.random()}`;
 
-          // 发送消息但不等待完成
           const toolMessage = {
             version: '1.0',
             type: 'tool:generate-image',
@@ -1613,148 +1416,25 @@
               batchId: subTask.batchId,
               batchIndex: subTask.batchIndex,
               batchTotal: subTask.batchTotal,
-              globalIndex: subTask.globalIndex, // 全局唯一序号
+              globalIndex: subTask.globalIndex,
               messageId: messageId
             },
             timestamp: Date.now()
           };
 
           window.parent.postMessage(toolMessage, '*');
-          submittedTasks.push({
-            messageId,
-            taskIndex: subTask.taskIndex,
-            batchIndex: subTask.batchIndex
-          });
-
-          console.log(`[BatchImage] Submitted task ${subTask.batchIndex}/${subTask.batchTotal} for row ${subTask.taskIndex + 1}`);
+          submittedCount++;
+          console.log(`[BatchImage] Submitted task ${subTask.globalIndex}/${allSubTasks.length}`);
         } catch (error) {
           console.error(`[BatchImage] Failed to submit task:`, error);
         }
       }
 
-      generateBtn.textContent = `⏳ 已提交 ${submittedTasks.length} 个任务`;
-
-      // 监听所有任务的响应
-      let completedCount = 0;
-      const totalCount = submittedTasks.length;
-
-      function handleResponse(event) {
-        const data = event.data;
-        if (!data || !data.responseId) return;
-
-        const submittedTask = submittedTasks.find(t => t.messageId === data.responseId);
-        if (!submittedTask) return;
-
-        const taskIndex = submittedTask.taskIndex;
-        const task = tasks[taskIndex];
-
-        if (data.success && data.result) {
-          // 成功
-          if (!task.generatedUrls) task.generatedUrls = [];
-          task.generatedUrls.push(data.result.url);
-          task.completedCount = (task.completedCount || 0) + 1;
-
-          // 更新进度
-          task.progress = Math.round((task.completedCount / task.pendingCount) * 100);
-
-          // 检查是否全部完成
-          if (task.completedCount >= task.pendingCount) {
-            task.status = 'completed';
-            task.imageUrl = task.generatedUrls[0];
-            task.error = null;
-          }
-        } else {
-          // 失败
-          task.completedCount = (task.completedCount || 0) + 1;
-          if (!task.errors) task.errors = [];
-          task.errors.push(data.error || '生成失败');
-
-          // 检查是否全部完成
-          if (task.completedCount >= task.pendingCount) {
-            if (task.generatedUrls && task.generatedUrls.length > 0) {
-              task.status = 'completed';
-              task.imageUrl = task.generatedUrls[0];
-              task.error = `部分失败: ${task.errors.length} 个`;
-            } else {
-              task.status = 'failed';
-              task.error = task.errors[0] || '生成失败';
-            }
-          }
-        }
-
-        completedCount++;
-        generateBtn.textContent = `⏳ ${completedCount}/${totalCount} 完成`;
-        renderTable();
-
-        // 所有任务完成
-        if (completedCount >= totalCount) {
-          window.removeEventListener('message', handleResponse);
-          isGenerating = false;
-          generateBtn.disabled = false;
-          generateBtn.textContent = '🚀 开始生成';
-          alert(`批量生成完成！共 ${totalCount} 个子任务`);
-        }
-      }
-
-      window.addEventListener('message', handleResponse);
-
-      // 设置超时（5分钟）
-      setTimeout(() => {
-        if (isGenerating) {
-          window.removeEventListener('message', handleResponse);
-          isGenerating = false;
-          generateBtn.disabled = false;
-          generateBtn.textContent = '🚀 开始生成';
-
-          // 标记未完成的任务为失败
-          pendingTasks.forEach((task, idx) => {
-            const taskIndex = tasks.indexOf(task);
-            if (tasks[taskIndex].status === 'processing') {
-              tasks[taskIndex].status = 'failed';
-              tasks[taskIndex].error = '超时';
-            }
-          });
-          renderTable();
-          alert('部分任务超时，请检查结果');
-        }
-      }, 300000); // 5分钟超时
-    }
-
-    async function downloadImage(url, filename) {
-      try {
-        const response = await fetch(url);
-        const blob = await response.blob();
-        const blobUrl = URL.createObjectURL(blob);
-
-        const a = document.createElement('a');
-        a.href = blobUrl;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-
-        URL.revokeObjectURL(blobUrl);
-      } catch (error) {
-        console.error('下载失败:', error);
-        alert('下载失败，请尝试右键保存图片');
-      }
-    }
-
-    /**
-     * 下载任务的所有图片
-     */
-    async function downloadAllImages(taskId) {
-      const task = tasks.find(t => t.id === taskId);
-      if (!task) return;
-
-      const urls = task.generatedUrls || (task.imageUrl ? [task.imageUrl] : []);
-      if (urls.length === 0) return;
-
-      for (let i = 0; i < urls.length; i++) {
-        await downloadImage(urls[i], `image-${taskId}-${i + 1}.png`);
-        // 添加小延迟，避免浏览器阻止多个下载
-        await new Promise(resolve => setTimeout(resolve, 300));
-      }
+      // 提交完成
+      isGenerating = false;
+      generateBtn.disabled = false;
+      generateBtn.textContent = '🚀 提交到任务队列';
+      alert(`已提交 ${submittedCount} 个任务到全局队列，请在左下角任务队列查看进度`);
     }
 
     // ===============================
