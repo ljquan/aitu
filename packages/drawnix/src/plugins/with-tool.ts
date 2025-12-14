@@ -27,6 +27,7 @@ import { DEFAULT_TOOL_CONFIG } from '../constants/built-in-tools';
 import { ToolCommunicationService, ToolCommunicationHelper } from '../services/tool-communication-service';
 import { ToolMessageType, GenerateImagePayload, GenerateImageResponse } from '../types/tool-communication.types';
 import { generationAPIService } from '../services/generation-api-service';
+import { taskQueueService } from '../services/task-queue-service';
 import { TaskType } from '../types/task.types';
 import { geminiSettings } from '../utils/settings-manager';
 
@@ -100,6 +101,12 @@ function setupCommunicationHandlers(
       } else {
         generateParams.width = payload.width || 1024;
         generateParams.height = payload.height || 1024;
+      }
+
+      // 传递参考图片（如果有）
+      if ((payload as any).uploadedImages && (payload as any).uploadedImages.length > 0) {
+        generateParams.uploadedImages = (payload as any).uploadedImages;
+        console.log(`[ToolCommunication] Passing ${generateParams.uploadedImages.length} reference images`);
       }
 
       // 调用图片生成 API

@@ -570,6 +570,31 @@
       color: #c82333;
     }
 
+    .column-fill-btn {
+      background: linear-gradient(135deg, #F39C12 0%, #E67E22 100%);
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-size: 11px;
+      cursor: pointer;
+      margin-left: 4px;
+      transition: all 0.2s;
+    }
+
+    .column-fill-btn:hover {
+      transform: scale(1.05);
+      box-shadow: 0 2px 8px rgba(243, 156, 18, 0.4);
+    }
+
+    .th-content {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      padding: 8px;
+    }
+
     /* 提示信息 */
     .hint-text {
       font-size: 11px;
@@ -617,9 +642,30 @@
             <thead>
               <tr>
                 <th>#</th>
-                <th style="width: 300px;">提示词</th>
-                <th style="width: 100px;">尺寸</th>
-                <th style="width: 150px;">参考图片</th>
+                <th style="width: 300px;">
+                  <div class="th-content">
+                    提示词
+                    <button class="column-fill-btn" onclick="fillColumn('prompt')" title="批量填充提示词">⬇</button>
+                  </div>
+                </th>
+                <th style="width: 80px;">
+                  <div class="th-content">
+                    尺寸
+                    <button class="column-fill-btn" onclick="fillColumn('size')" title="批量填充尺寸">⬇</button>
+                  </div>
+                </th>
+                <th style="width: 150px;">
+                  <div class="th-content">
+                    参考图片
+                    <button class="column-fill-btn" onclick="fillColumn('images')" title="批量填充图片">⬇</button>
+                  </div>
+                </th>
+                <th style="width: 60px;">
+                  <div class="th-content">
+                    数量
+                    <button class="column-fill-btn" onclick="fillColumn('count')" title="批量填充数量">⬇</button>
+                  </div>
+                </th>
                 <th style="width: 120px;">状态</th>
                 <th style="width: 80px;">预览</th>
                 <th style="width: 100px;">操作</th>
@@ -825,6 +871,7 @@
         prompt: promptText,
         size: '1x1',  // 修改为 API 支持的比例格式
         images: [],  // 参考图片数组
+        count: 1,    // 生成数量
         status: 'pending',
         progress: 0,
         imageUrl: null,
@@ -885,6 +932,9 @@
         imagesCell.innerHTML = getImageCellHTML(task, rowIndex);
         tdImages.appendChild(imagesCell);
         tr.appendChild(tdImages);
+
+        // 数量
+        tr.appendChild(createCell(rowIndex, 'count', task.count || 1, 'number'));
 
         // 状态
         const tdStatus = document.createElement('td');
@@ -979,6 +1029,22 @@
 
         cellDiv.appendChild(displayDiv);
         cellDiv.appendChild(select);
+      } else if (inputType === 'number') {
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.min = '1';
+        input.max = '10';
+        input.value = value;
+        input.readOnly = true;
+        input.style.width = '50px';
+        input.style.textAlign = 'center';
+        input.addEventListener('blur', () => {
+          const numValue = Math.max(1, Math.min(10, parseInt(input.value) || 1));
+          input.value = numValue;
+          saveCell(rowIndex, colName, numValue);
+        });
+        input.addEventListener('keydown', (e) => handleCellKeydown(e, rowIndex, colName));
+        cellDiv.appendChild(input);
       } else {
         const input = document.createElement('input');
         input.value = value;
@@ -1001,7 +1067,7 @@
       cellDiv.dataset.col = colName;
 
       // 填充柄（只在可编辑列显示）
-      if (['prompt', 'size', 'images'].includes(colName)) {
+      if (['prompt', 'size', 'images', 'count'].includes(colName)) {
         const fillHandle = document.createElement('div');
         fillHandle.className = 'fill-handle';
         cellDiv.appendChild(fillHandle);
@@ -1041,16 +1107,36 @@
     }
 
     function getPreviewHTML(task) {
-      if (task.imageUrl) {
-        return `<img src="${task.imageUrl}" class="thumbnail" onclick="window.open('${task.imageUrl}', '_blank')">`;
+      const urls = task.generatedUrls || (task.imageUrl ? [task.imageUrl] : []);
+      if (urls.length === 0) {
+        return '<div class="no-image">暂无</div>';
       }
-      return '<div class="no-image">暂无</div>';
+
+      if (urls.length === 1) {
+        return `<img src="${urls[0]}" class="thumbnail" onclick="window.open('${urls[0]}', '_blank')">`;
+      }
+
+      // 多张图片显示
+      let html = `<div style="display: flex; flex-wrap: wrap; gap: 2px; justify-content: center;">`;
+      urls.slice(0, 4).forEach((url, i) => {
+        html += `<img src="${url}" class="thumbnail" style="width: 28px; height: 28px;" onclick="window.open('${url}', '_blank')">`;
+      });
+      if (urls.length > 4) {
+        html += `<div style="font-size: 10px; color: #666;">+${urls.length - 4}</div>`;
+      }
+      html += '</div>';
+      return html;
     }
 
     function getActionHTML(task) {
       let html = '';
-      if (task.imageUrl) {
-        html += `<button class="action-btn" onclick="downloadImage('${task.imageUrl}', 'image-${task.id}.png')">下载</button>`;
+      const urls = task.generatedUrls || (task.imageUrl ? [task.imageUrl] : []);
+      if (urls.length > 0) {
+        if (urls.length === 1) {
+          html += `<button class="action-btn" onclick="downloadImage('${urls[0]}', 'image-${task.id}.png')">下载</button>`;
+        } else {
+          html += `<button class="action-btn" onclick="downloadAllImages(${task.id})">下载全部(${urls.length})</button>`;
+        }
       }
       return html;
     }
@@ -1199,7 +1285,7 @@
       let newRow = row;
       let newCol = col;
 
-      const cols = ['prompt', 'size', 'images'];
+      const cols = ['prompt', 'size', 'images', 'count'];
       const colIndex = cols.indexOf(col);
 
       switch (key) {
@@ -1235,19 +1321,104 @@
     function pasteSelection(row, col) {
       if (clipboard.length === 0) return;
 
-      clipboard.forEach(({ col: clipCol, value }, index) => {
-        const targetRow = row + index;
-        if (targetRow < tasks.length && clipCol in tasks[targetRow]) {
-          // 如果是 images 列，深拷贝数组
-          if (clipCol === 'images' && Array.isArray(value)) {
-            tasks[targetRow][clipCol] = [...value];
-          } else {
-            tasks[targetRow][clipCol] = value;
+      // 获取剪贴板中的第一个值（用于粘贴到所有选中的行）
+      const firstClipItem = clipboard[0];
+      if (!firstClipItem) return;
+
+      // 如果有多个选中的行，将第一个剪贴板内容粘贴到所有选中行
+      if (selectedCells.length > 0) {
+        // 获取所有选中的行（去重）
+        const selectedRows = [...new Set(selectedCells.map(c => c.row))];
+
+        selectedRows.forEach(targetRow => {
+          if (targetRow < tasks.length && firstClipItem.col in tasks[targetRow]) {
+            // 如果是 images 列，深拷贝数组
+            if (firstClipItem.col === 'images' && Array.isArray(firstClipItem.value)) {
+              tasks[targetRow][firstClipItem.col] = [...firstClipItem.value];
+            } else {
+              tasks[targetRow][firstClipItem.col] = firstClipItem.value;
+            }
           }
+        });
+      } else {
+        // 没有选中行时，使用原来的逻辑：按顺序粘贴
+        clipboard.forEach(({ col: clipCol, value }, index) => {
+          const targetRow = row + index;
+          if (targetRow < tasks.length && clipCol in tasks[targetRow]) {
+            if (clipCol === 'images' && Array.isArray(value)) {
+              tasks[targetRow][clipCol] = [...value];
+            } else {
+              tasks[targetRow][clipCol] = value;
+            }
+          }
+        });
+      }
+
+      renderTable();
+    }
+
+    /**
+     * 批量填充整列
+     * @param {string} colName - 列名
+     */
+    function fillColumn(colName) {
+      // 检查是否有选中的单元格
+      if (selectedCells.length === 0 || !activeCell) {
+        alert('请先选中一个单元格作为填充的源数据');
+        return;
+      }
+
+      // 获取当前活动单元格的值
+      const sourceRow = activeCell.row;
+      const sourceValue = tasks[sourceRow]?.[colName];
+
+      if (sourceValue === undefined || sourceValue === null ||
+          (typeof sourceValue === 'string' && sourceValue.trim() === '') ||
+          (Array.isArray(sourceValue) && sourceValue.length === 0)) {
+        alert('选中的单元格没有数据，无法填充');
+        return;
+      }
+
+      // 构建显示文本
+      let displayValue = '';
+      if (colName === 'images') {
+        displayValue = `${sourceValue.length} 张图片`;
+      } else if (colName === 'prompt') {
+        displayValue = sourceValue.length > 30 ? sourceValue.substring(0, 30) + '...' : sourceValue;
+      } else {
+        displayValue = String(sourceValue);
+      }
+
+      const confirmMsg = `是否使用选中的「${displayValue}」填充整列？\n\n这将覆盖所有行的 ${getColumnDisplayName(colName)} 列。`;
+
+      if (!confirm(confirmMsg)) {
+        return;
+      }
+
+      // 填充所有行
+      tasks.forEach((task, index) => {
+        if (colName === 'images' && Array.isArray(sourceValue)) {
+          task[colName] = [...sourceValue];
+        } else {
+          task[colName] = sourceValue;
         }
       });
 
       renderTable();
+      alert(`已将「${displayValue}」填充到所有行的 ${getColumnDisplayName(colName)} 列`);
+    }
+
+    /**
+     * 获取列的显示名称
+     */
+    function getColumnDisplayName(colName) {
+      const names = {
+        'prompt': '提示词',
+        'size': '尺寸',
+        'images': '参考图片',
+        'count': '数量'
+      };
+      return names[colName] || colName;
     }
 
     function startFillDrag(row, col) {
@@ -1392,24 +1563,46 @@
 
     async function generateSingleTask(task) {
       const taskIndex = tasks.indexOf(task);
+      const generateCount = task.count || 1;
+
       tasks[taskIndex].status = 'processing';
       tasks[taskIndex].progress = 10;
+      tasks[taskIndex].generatedUrls = []; // 存储多张生成的图片
       renderTable();
 
       try {
-        // size 现在是比例格式（如 1x1, 16x9），直接传递给 API
-        const result = await sendToolMessage({
-          type: 'tool:generate-image',
-          payload: {
-            prompt: task.prompt,
-            size: task.size,  // 直接传递比例格式
-            aspectRatio: 'auto'
-          }
-        }, 120000);
+        // 将图片转换为 uploadedImages 格式（与 aitu 原生生图一致）
+        const uploadedImages = (task.images || []).map((url, index) => ({
+          type: 'url',
+          url: url,
+          name: `reference_${index + 1}`
+        }));
+
+        // 根据 count 生成多次
+        const results = [];
+        for (let i = 0; i < generateCount; i++) {
+          tasks[taskIndex].progress = Math.round(10 + (80 * i / generateCount));
+          renderTable();
+
+          // size 现在是比例格式（如 1x1, 16x9），直接传递给 API
+          const result = await sendToolMessage({
+            type: 'tool:generate-image',
+            payload: {
+              prompt: task.prompt,
+              size: task.size,  // 直接传递比例格式
+              uploadedImages: uploadedImages,  // 传递参考图片
+              aspectRatio: 'auto',
+              count: 1  // 每次生成1张
+            }
+          }, 120000);
+
+          results.push(result.url);
+        }
 
         tasks[taskIndex].status = 'completed';
         tasks[taskIndex].progress = 100;
-        tasks[taskIndex].imageUrl = result.url;
+        tasks[taskIndex].imageUrl = results[0]; // 主预览使用第一张
+        tasks[taskIndex].generatedUrls = results; // 保存所有生成的图片
         tasks[taskIndex].error = null;
       } catch (error) {
         console.error('生成失败:', error);
@@ -1438,6 +1631,23 @@
       } catch (error) {
         console.error('下载失败:', error);
         alert('下载失败，请尝试右键保存图片');
+      }
+    }
+
+    /**
+     * 下载任务的所有图片
+     */
+    async function downloadAllImages(taskId) {
+      const task = tasks.find(t => t.id === taskId);
+      if (!task) return;
+
+      const urls = task.generatedUrls || (task.imageUrl ? [task.imageUrl] : []);
+      if (urls.length === 0) return;
+
+      for (let i = 0; i < urls.length; i++) {
+        await downloadImage(urls[i], `image-${taskId}-${i + 1}.png`);
+        // 添加小延迟，避免浏览器阻止多个下载
+        await new Promise(resolve => setTimeout(resolve, 300));
       }
     }
 

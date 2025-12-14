@@ -43,7 +43,7 @@ export const BUILT_IN_TOOLS: ToolDefinition[] = [
     url: '/batch-image.html',  // 静态 HTML 文件
     defaultWidth: 1200,
     defaultHeight: 800,
-    permissions: ['allow-scripts', 'allow-same-origin', 'allow-forms'],
+    permissions: ['allow-scripts', 'allow-same-origin', 'allow-forms', 'allow-modals'],
   },
 ];
 
