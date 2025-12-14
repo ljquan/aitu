@@ -76,7 +76,13 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
   const [fillStartCell, setFillStartCell] = useState<CellPosition | null>(null);
   const [fillPreviewRows, setFillPreviewRows] = useState<number[]>([]);
 
+  // 批量导入设置
+  const [imagesPerRow, setImagesPerRow] = useState<number>(1);
+  const [showBatchImportModal, setShowBatchImportModal] = useState(false);
+  const [pendingImportFiles, setPendingImportFiles] = useState<File[]>([]);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const batchImportInputRef = useRef<HTMLInputElement>(null);
 
   // 添加行
   const addRows = useCallback((count: number) => {
@@ -257,6 +263,94 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
   // 删除图片库中的图片
   const deleteLibraryImage = useCallback((index: number) => {
     setImageLibrary(prev => prev.filter((_, i) => i !== index));
+  }, []);
+
+  // 处理批量导入文件选择
+  const handleBatchImportSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    // 过滤出图片文件
+    const imageFiles = Array.from(files).filter(file => file.type.startsWith('image/'));
+    if (imageFiles.length === 0) {
+      MessagePlugin.warning(language === 'zh' ? '请选择图片文件' : 'Please select image files');
+      return;
+    }
+
+    setPendingImportFiles(imageFiles);
+    setShowBatchImportModal(true);
+
+    // 清空 input
+    if (batchImportInputRef.current) {
+      batchImportInputRef.current.value = '';
+    }
+  }, [language]);
+
+  // 执行批量导入
+  const executeBatchImport = useCallback(async () => {
+    if (pendingImportFiles.length === 0) return;
+
+    const perRow = imagesPerRow;
+    const totalImages = pendingImportFiles.length;
+    const rowsNeeded = Math.ceil(totalImages / perRow);
+
+    // 读取所有图片为 DataURL
+    const imageDataUrls: string[] = [];
+    for (const file of pendingImportFiles) {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (ev) => resolve(ev.target?.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      imageDataUrls.push(dataUrl);
+    }
+
+    // 创建新行并分配图片
+    setTasks(prev => {
+      const newTasks = [...prev];
+      let imageIndex = 0;
+
+      for (let i = 0; i < rowsNeeded; i++) {
+        const rowImages: string[] = [];
+        for (let j = 0; j < perRow && imageIndex < totalImages; j++) {
+          rowImages.push(imageDataUrls[imageIndex]);
+          imageIndex++;
+        }
+
+        newTasks.push({
+          id: taskIdCounter + i,
+          prompt: '',
+          size: '1x1',
+          images: rowImages,
+          count: 1,
+          taskIds: []
+        });
+      }
+
+      return newTasks;
+    });
+
+    setTaskIdCounter(prev => prev + rowsNeeded);
+
+    // 同时添加到图片库
+    setImageLibrary(prev => [...prev, ...imageDataUrls]);
+
+    // 清理状态
+    setPendingImportFiles([]);
+    setShowBatchImportModal(false);
+
+    MessagePlugin.success(
+      language === 'zh'
+        ? `已导入 ${totalImages} 张图片到 ${rowsNeeded} 行`
+        : `Imported ${totalImages} images into ${rowsNeeded} rows`
+    );
+  }, [pendingImportFiles, imagesPerRow, taskIdCounter, language]);
+
+  // 取消批量导入
+  const cancelBatchImport = useCallback(() => {
+    setPendingImportFiles([]);
+    setShowBatchImportModal(false);
   }, []);
 
   // 获取行的关联任务状态
@@ -709,6 +803,18 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
             <button className="btn btn-secondary" onClick={invertSelection}>
               {language === 'zh' ? '反选' : 'Invert'}
             </button>
+            <span className="toolbar-divider">|</span>
+            <input
+              ref={batchImportInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={handleBatchImportSelect}
+              style={{ display: 'none' }}
+            />
+            <button className="btn btn-secondary" onClick={() => batchImportInputRef.current?.click()}>
+              {language === 'zh' ? '📥 批量导入' : '📥 Batch Import'}
+            </button>
           </div>
           <div className="toolbar-right">
             {onSwitchToSingle && (
@@ -850,6 +956,70 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
           </div>
         )}
       </div>
+
+      {/* 批量导入弹窗 */}
+      {showBatchImportModal && (
+        <div className="batch-import-modal-overlay" onClick={cancelBatchImport}>
+          <div className="batch-import-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>{language === 'zh' ? '批量导入图片' : 'Batch Import Images'}</h3>
+              <button className="close-btn" onClick={cancelBatchImport}>×</button>
+            </div>
+            <div className="modal-body">
+              <p className="import-info">
+                {language === 'zh'
+                  ? `已选择 ${pendingImportFiles.length} 张图片`
+                  : `${pendingImportFiles.length} images selected`
+                }
+              </p>
+
+              <div className="images-per-row-setting">
+                <label>{language === 'zh' ? '每行图片数：' : 'Images per row:'}</label>
+                <div className="per-row-options">
+                  {[1, 2, 3, 4, 5].map(num => (
+                    <button
+                      key={num}
+                      className={`per-row-btn ${imagesPerRow === num ? 'active' : ''}`}
+                      onClick={() => setImagesPerRow(num)}
+                    >
+                      {num}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <p className="import-preview">
+                {language === 'zh'
+                  ? `将创建 ${Math.ceil(pendingImportFiles.length / imagesPerRow)} 行，每行 ${imagesPerRow} 张图片`
+                  : `Will create ${Math.ceil(pendingImportFiles.length / imagesPerRow)} rows with ${imagesPerRow} image(s) each`
+                }
+              </p>
+
+              {/* 图片预览 */}
+              <div className="import-preview-grid">
+                {pendingImportFiles.slice(0, 12).map((file, index) => (
+                  <div key={index} className="preview-item">
+                    <img src={URL.createObjectURL(file)} alt="" />
+                  </div>
+                ))}
+                {pendingImportFiles.length > 12 && (
+                  <div className="preview-more">
+                    +{pendingImportFiles.length - 12}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={cancelBatchImport}>
+                {language === 'zh' ? '取消' : 'Cancel'}
+              </button>
+              <button className="btn btn-primary" onClick={executeBatchImport}>
+                {language === 'zh' ? '确认导入' : 'Import'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
