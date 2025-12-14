@@ -6,6 +6,7 @@
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { MessagePlugin } from 'tdesign-react';
+import * as XLSX from 'xlsx';
 import { useI18n } from '../../i18n';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
 import { TaskType, TaskStatus, Task } from '../../types/task.types';
@@ -84,6 +85,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const batchImportInputRef = useRef<HTMLInputElement>(null);
+  const excelImportInputRef = useRef<HTMLInputElement>(null);
 
   // 添加行
   const addRows = useCallback((count: number) => {
@@ -375,6 +377,110 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
     setPendingImportFiles([]);
     setShowBatchImportModal(false);
   }, []);
+
+  // 导出 Excel
+  const exportToExcel = useCallback(() => {
+    // 准备导出数据
+    const exportData = tasks.map((task, index) => ({
+      '序号': index + 1,
+      '提示词': task.prompt,
+      '尺寸': task.size,
+      '数量': task.count,
+      '图片数': task.images.length
+    }));
+
+    // 创建工作簿和工作表
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(exportData);
+
+    // 设置列宽
+    ws['!cols'] = [
+      { wch: 6 },   // 序号
+      { wch: 50 },  // 提示词
+      { wch: 10 },  // 尺寸
+      { wch: 8 },   // 数量
+      { wch: 8 }    // 图片数
+    ];
+
+    XLSX.utils.book_append_sheet(wb, ws, '批量出图');
+
+    // 导出文件
+    const fileName = `batch-image-${new Date().toISOString().slice(0, 10)}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+
+    MessagePlugin.success(
+      language === 'zh'
+        ? `已导出 ${tasks.length} 行数据`
+        : `Exported ${tasks.length} rows`
+    );
+  }, [tasks, language]);
+
+  // 导入 Excel
+  const handleExcelImport = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const data = new Uint8Array(event.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+
+        // 读取第一个工作表
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+
+        // 转换为 JSON
+        const jsonData = XLSX.utils.sheet_to_json<Record<string, any>>(worksheet);
+
+        if (jsonData.length === 0) {
+          MessagePlugin.warning(language === 'zh' ? 'Excel 文件为空' : 'Excel file is empty');
+          return;
+        }
+
+        // 解析数据并创建任务行
+        const newTasks: TaskRow[] = jsonData.map((row, index) => {
+          // 支持多种列名格式
+          const prompt = row['提示词'] || row['prompt'] || row['Prompt'] || '';
+          const size = row['尺寸'] || row['size'] || row['Size'] || '1x1';
+          const count = parseInt(row['数量'] || row['count'] || row['Count'] || '1') || 1;
+
+          return {
+            id: taskIdCounter + index,
+            prompt: String(prompt).trim(),
+            size: SIZE_OPTIONS.includes(size) ? size : '1x1',
+            images: [],
+            count: Math.max(1, Math.min(10, count)),
+            taskIds: []
+          };
+        });
+
+        // 更新任务列表
+        setTasks(prev => [...prev, ...newTasks]);
+        setTaskIdCounter(prev => prev + newTasks.length);
+
+        MessagePlugin.success(
+          language === 'zh'
+            ? `已导入 ${newTasks.length} 行数据`
+            : `Imported ${newTasks.length} rows`
+        );
+      } catch (error) {
+        console.error('Excel import error:', error);
+        MessagePlugin.error(
+          language === 'zh'
+            ? '导入失败，请检查文件格式'
+            : 'Import failed, please check file format'
+        );
+      }
+    };
+
+    reader.readAsArrayBuffer(file);
+
+    // 清空 input
+    if (excelImportInputRef.current) {
+      excelImportInputRef.current.value = '';
+    }
+  }, [taskIdCounter, language]);
 
   // 获取行的关联任务状态
   const getRowTasksInfo = useCallback((taskRow: TaskRow): {
@@ -837,6 +943,20 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
             />
             <button className="btn btn-secondary" onClick={() => batchImportInputRef.current?.click()}>
               {language === 'zh' ? '📥 批量导入' : '📥 Batch Import'}
+            </button>
+            <span className="toolbar-divider">|</span>
+            <input
+              ref={excelImportInputRef}
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              onChange={handleExcelImport}
+              style={{ display: 'none' }}
+            />
+            <button className="btn btn-secondary" onClick={() => excelImportInputRef.current?.click()}>
+              {language === 'zh' ? '📄 导入Excel' : '📄 Import Excel'}
+            </button>
+            <button className="btn btn-secondary" onClick={exportToExcel}>
+              {language === 'zh' ? '📤 导出Excel' : '📤 Export Excel'}
             </button>
           </div>
           <div className="toolbar-right">
