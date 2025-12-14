@@ -4,11 +4,11 @@
  * 批量图片生成组件 - Excel 式批量 AI 图片生成
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { MessagePlugin } from 'tdesign-react';
 import { useI18n } from '../../i18n';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
-import { TaskType } from '../../types/task.types';
+import { TaskType, TaskStatus, Task } from '../../types/task.types';
 import { geminiSettings } from '../../utils/settings-manager';
 import './batch-image-generation.scss';
 
@@ -19,6 +19,8 @@ interface TaskRow {
   size: string;
   images: string[];
   count: number;
+  // 预览相关 - 关联到任务队列的taskId
+  taskIds: string[];   // 关联的任务队列ID列表（一行可能生成多个任务）
 }
 
 // 单元格位置
@@ -31,7 +33,7 @@ interface CellPosition {
 const SIZE_OPTIONS = ['1x1', '2x3', '3x2', '3x4', '4x3', '4x5', '5x4', '9x16', '16x9', '21x9'];
 
 // 可编辑列
-const EDITABLE_COLS = ['prompt', 'size', 'images', 'count'];
+const EDITABLE_COLS = ['prompt', 'size', 'images', 'count', 'preview'];
 
 interface BatchImageGenerationProps {
   onSwitchToSingle?: () => void;
@@ -39,7 +41,7 @@ interface BatchImageGenerationProps {
 
 const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToSingle }) => {
   const { language } = useI18n();
-  const { createTask } = useTaskQueue();
+  const { createTask, tasks: queueTasks } = useTaskQueue();
 
   // 任务数据
   const [tasks, setTasks] = useState<TaskRow[]>(() => {
@@ -50,7 +52,8 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
         prompt: '',
         size: '1x1',
         images: [],
-        count: 1
+        count: 1,
+        taskIds: []
       });
     }
     return initialTasks;
@@ -85,7 +88,8 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
           prompt: '',
           size: '1x1',
           images: [],
-          count: 1
+          count: 1,
+          taskIds: []
         });
       }
       return newTasks;
@@ -255,11 +259,101 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
     setImageLibrary(prev => prev.filter((_, i) => i !== index));
   }, []);
 
-  // 提交到任务队列
+  // 获取行的关联任务状态
+  const getRowTasksInfo = useCallback((taskRow: TaskRow): {
+    status: 'idle' | 'generating' | 'completed' | 'failed' | 'partial';
+    tasks: Task[];
+    completedCount: number;
+    failedCount: number;
+  } => {
+    if (taskRow.taskIds.length === 0) {
+      return { status: 'idle', tasks: [], completedCount: 0, failedCount: 0 };
+    }
+
+    const relatedTasks = queueTasks.filter(t => taskRow.taskIds.includes(t.id));
+    const completedCount = relatedTasks.filter(t => t.status === TaskStatus.COMPLETED).length;
+    const failedCount = relatedTasks.filter(t => t.status === TaskStatus.FAILED).length;
+    const processingCount = relatedTasks.filter(t =>
+      t.status === TaskStatus.PENDING ||
+      t.status === TaskStatus.PROCESSING ||
+      t.status === TaskStatus.RETRYING
+    ).length;
+
+    let status: 'idle' | 'generating' | 'completed' | 'failed' | 'partial' = 'idle';
+    if (processingCount > 0) {
+      status = 'generating';
+    } else if (failedCount > 0 && completedCount > 0) {
+      status = 'partial';
+    } else if (failedCount > 0) {
+      status = 'failed';
+    } else if (completedCount > 0) {
+      status = 'completed';
+    }
+
+    return { status, tasks: relatedTasks, completedCount, failedCount };
+  }, [queueTasks]);
+
+  // 选择失败的行
+  const selectFailedRows = useCallback(() => {
+    const failedCells: CellPosition[] = [];
+    tasks.forEach((task, rowIndex) => {
+      const { status } = getRowTasksInfo(task);
+      if (status === 'failed' || status === 'partial') {
+        failedCells.push({ row: rowIndex, col: 'prompt' });
+      }
+    });
+
+    if (failedCells.length === 0) {
+      MessagePlugin.info(language === 'zh' ? '没有失败的行' : 'No failed rows');
+      return;
+    }
+
+    setSelectedCells(failedCells);
+    setActiveCell(failedCells[0]);
+    MessagePlugin.success(
+      language === 'zh'
+        ? `已选中 ${failedCells.length} 个失败行`
+        : `Selected ${failedCells.length} failed rows`
+    );
+  }, [tasks, getRowTasksInfo, language]);
+
+  // 反选行
+  const invertSelection = useCallback(() => {
+    const currentSelectedRows = new Set(selectedCells.map(c => c.row));
+    const newSelectedCells: CellPosition[] = [];
+
+    tasks.forEach((_, rowIndex) => {
+      if (!currentSelectedRows.has(rowIndex)) {
+        newSelectedCells.push({ row: rowIndex, col: 'prompt' });
+      }
+    });
+
+    setSelectedCells(newSelectedCells);
+    if (newSelectedCells.length > 0) {
+      setActiveCell(newSelectedCells[0]);
+    } else {
+      setActiveCell(null);
+    }
+  }, [tasks, selectedCells]);
+
+  // 提交到任务队列 - 只提交选中的行
   const submitToQueue = useCallback(async () => {
-    const validTasks = tasks.filter(t => t.prompt && t.prompt.trim() !== '');
+    // 获取选中的行索引（去重）
+    const selectedRowIndices = [...new Set(selectedCells.map(c => c.row))];
+
+    // 如果没有选中行，提示用户
+    if (selectedRowIndices.length === 0) {
+      MessagePlugin.warning(language === 'zh' ? '请先选中要生成的行' : 'Please select rows to generate');
+      return;
+    }
+
+    // 获取选中行中有提示词的任务
+    const validTasks = selectedRowIndices
+      .map(idx => ({ task: tasks[idx], rowIndex: idx }))
+      .filter(({ task }) => task && task.prompt && task.prompt.trim() !== '');
+
     if (validTasks.length === 0) {
-      MessagePlugin.warning(language === 'zh' ? '请至少填写一行提示词' : 'Please fill at least one prompt');
+      MessagePlugin.warning(language === 'zh' ? '选中的行没有填写提示词' : 'Selected rows have no prompts');
       return;
     }
 
@@ -270,7 +364,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
     let subTaskCounter = 0;
     let submittedCount = 0;
 
-    for (const task of validTasks) {
+    for (const { task, rowIndex } of validTasks) {
       const generateCount = task.count || 1;
       const batchId = `batch_${task.id}_${globalBatchTimestamp}`;
 
@@ -279,6 +373,8 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
         url,
         name: `reference_${index + 1}`
       }));
+
+      const newTaskIds: string[] = [];
 
       for (let i = 0; i < generateCount; i++) {
         subTaskCounter++;
@@ -297,7 +393,22 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
         const createdTask = createTask(taskParams, TaskType.IMAGE);
         if (createdTask) {
           submittedCount++;
+          newTaskIds.push(createdTask.id);
         }
+      }
+
+      // 更新行的关联任务ID
+      if (newTaskIds.length > 0) {
+        setTasks(prev => {
+          const newTasks = [...prev];
+          if (newTasks[rowIndex]) {
+            newTasks[rowIndex] = {
+              ...newTasks[rowIndex],
+              taskIds: [...newTasks[rowIndex].taskIds, ...newTaskIds]
+            };
+          }
+          return newTasks;
+        });
       }
     }
 
@@ -310,7 +421,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
           : `Submitted ${submittedCount} tasks to queue`
       );
     }
-  }, [tasks, createTask, language]);
+  }, [tasks, selectedCells, createTask, language]);
 
   // 键盘导航
   useEffect(() => {
@@ -481,6 +592,62 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
           </div>
         );
 
+      case 'preview':
+        const rowInfo = getRowTasksInfo(task);
+        return (
+          <div
+            className={`${cellClassName} preview-cell preview-${rowInfo.status}`}
+            onClick={(e) => handleCellClick(e, rowIndex, col)}
+          >
+            {rowInfo.status === 'idle' && (
+              <span className="preview-idle">-</span>
+            )}
+            {rowInfo.status === 'generating' && (
+              <span className="preview-generating">
+                <span className="loading-spinner" />
+                {language === 'zh' ? '生成中...' : 'Generating...'}
+              </span>
+            )}
+            {rowInfo.status === 'completed' && rowInfo.tasks.length > 0 && (
+              <div className="preview-images">
+                {rowInfo.tasks
+                  .filter(t => t.status === TaskStatus.COMPLETED && t.result?.url)
+                  .slice(0, 3)
+                  .map((t, idx) => (
+                    <div key={t.id} className="preview-thumb">
+                      <img src={t.result!.url} alt={`Result ${idx + 1}`} />
+                    </div>
+                  ))}
+                {rowInfo.completedCount > 3 && (
+                  <span className="preview-more">+{rowInfo.completedCount - 3}</span>
+                )}
+              </div>
+            )}
+            {rowInfo.status === 'failed' && (
+              <span className="preview-error" title={rowInfo.tasks[0]?.error?.message}>
+                ❌ {language === 'zh' ? '失败' : 'Failed'}
+              </span>
+            )}
+            {rowInfo.status === 'partial' && (
+              <div className="preview-partial">
+                <div className="preview-images">
+                  {rowInfo.tasks
+                    .filter(t => t.status === TaskStatus.COMPLETED && t.result?.url)
+                    .slice(0, 2)
+                    .map((t, idx) => (
+                      <div key={t.id} className="preview-thumb">
+                        <img src={t.result!.url} alt={`Result ${idx + 1}`} />
+                      </div>
+                    ))}
+                </div>
+                <span className="preview-partial-info">
+                  ⚠️ {rowInfo.completedCount}/{rowInfo.tasks.length}
+                </span>
+              </div>
+            )}
+          </div>
+        );
+
       default:
         return null;
     }
@@ -498,6 +665,13 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
             <button className="btn btn-secondary" onClick={deleteSelected}>
               {language === 'zh' ? '删除选中' : 'Delete Selected'}
             </button>
+            <span className="toolbar-divider">|</span>
+            <button className="btn btn-secondary" onClick={selectFailedRows}>
+              {language === 'zh' ? '选择失败行' : 'Select Failed'}
+            </button>
+            <button className="btn btn-secondary" onClick={invertSelection}>
+              {language === 'zh' ? '反选' : 'Invert'}
+            </button>
           </div>
           <div className="toolbar-right">
             {onSwitchToSingle && (
@@ -512,7 +686,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
             >
               {isSubmitting
                 ? (language === 'zh' ? '提交中...' : 'Submitting...')
-                : (language === 'zh' ? '提交到任务队列' : 'Submit to Queue')
+                : (language === 'zh' ? '生成选中行' : 'Generate Selected')
               }
             </button>
           </div>
@@ -548,6 +722,11 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
                     <button className="column-fill-btn" onClick={() => fillColumn('count')}>⬇</button>
                   </div>
                 </th>
+                <th className="col-preview">
+                  <div className="th-content">
+                    {language === 'zh' ? '预览' : 'Preview'}
+                  </div>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -558,6 +737,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
                   <td>{renderCellContent(task, rowIndex, 'size')}</td>
                   <td>{renderCellContent(task, rowIndex, 'images')}</td>
                   <td>{renderCellContent(task, rowIndex, 'count')}</td>
+                  <td>{renderCellContent(task, rowIndex, 'preview')}</td>
                 </tr>
               ))}
             </tbody>

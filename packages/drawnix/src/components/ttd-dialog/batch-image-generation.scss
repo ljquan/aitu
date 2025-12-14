@@ -134,10 +134,11 @@
       z-index: 15;
     }
 
-    .col-prompt { width: 40%; min-width: 200px; }
+    .col-prompt { width: 35%; min-width: 200px; }
     .col-size { width: 80px; min-width: 80px; }
     .col-images { width: 150px; min-width: 150px; }
     .col-count { width: 60px; min-width: 60px; }
+    .col-preview { width: 150px; min-width: 150px; }
 
     .th-content {
       display: flex;
@@ -436,5 +437,107 @@
         display: flex;
       }
     }
+  }
+
+  // 工具栏分隔符
+  .toolbar-divider {
+    color: #ddd;
+    margin: 0 4px;
+  }
+
+  // 预览列样式
+  .preview-cell {
+    min-height: 50px;
+
+    &.preview-idle {
+      .preview-idle {
+        color: #999;
+        font-size: 14px;
+      }
+    }
+
+    &.preview-generating {
+      .preview-generating {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: #F39C12;
+        font-size: 12px;
+      }
+    }
+
+    &.preview-completed {
+      background: rgba(82, 196, 26, 0.05);
+    }
+
+    &.preview-failed {
+      background: rgba(255, 77, 79, 0.05);
+    }
+
+    &.preview-partial {
+      background: rgba(250, 173, 20, 0.05);
+    }
+  }
+
+  .preview-images {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .preview-thumb {
+    width: 40px;
+    height: 40px;
+    border-radius: 4px;
+    overflow: hidden;
+    border: 1px solid #ddd;
+    flex-shrink: 0;
+
+    img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+  }
+
+  .preview-more {
+    font-size: 11px;
+    color: #666;
+    padding: 2px 4px;
+    background: #f0f0f0;
+    border-radius: 3px;
+  }
+
+  .preview-error {
+    color: #ff4d4f;
+    font-size: 12px;
+    cursor: help;
+  }
+
+  .preview-partial {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .preview-partial-info {
+    font-size: 11px;
+    color: #faad14;
+  }
+
+  .loading-spinner {
+    width: 14px;
+    height: 14px;
+    border: 2px solid #f0f0f0;
+    border-top: 2px solid #F39C12;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    flex-shrink: 0;
+  }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
   }
 }
