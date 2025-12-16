@@ -27,6 +27,8 @@ import { geminiSettings } from '../../utils/settings-manager';
 // 懒加载批量出图组件
 const BatchImageGeneration = lazy(() => import('./batch-image-generation'));
 
+import { AI_IMAGE_MODE_CACHE_KEY } from '../../constants/storage';
+
 // 生成模式类型
 type GenerationMode = 'single' | 'batch';
 
@@ -54,7 +56,23 @@ const AIImageGeneration = ({
   onModeChange
 }: AIImageGenerationProps = {}) => {
   // 生成模式：单图 or 批量
-  const [mode, setMode] = useState<GenerationMode>('single');
+  // 如果有初始图片，默认使用单图模式；否则从 localStorage 读取上次的模式
+  const [mode, setMode] = useState<GenerationMode>(() => {
+    // 如果有初始图片，强制使用单图模式
+    if (initialImages && initialImages.length > 0) {
+      return 'single';
+    }
+    // 否则从 localStorage 读取上次保存的模式
+    try {
+      const savedMode = localStorage.getItem(AI_IMAGE_MODE_CACHE_KEY);
+      if (savedMode === 'batch') {
+        return 'batch';
+      }
+    } catch (e) {
+      console.warn('Failed to load mode from localStorage:', e);
+    }
+    return 'single';
+  });
 
   const [prompt, setPrompt] = useState(initialPrompt);
   const [width, setWidth] = useState<number | string>(initialWidth || 1024);
@@ -111,12 +129,26 @@ const AIImageGeneration = ({
   useEffect(() => {
     // 组件挂载时清除之前的错误状态
     setError(null);
-    
+
     // 清理函数：组件卸载时也清除错误状态
     return () => {
       setError(null);
     };
   }, []); // 空依赖数组，只在组件挂载/卸载时执行
+
+  // 初始化时通知父组件当前模式（用于自动放大判断）
+  useEffect(() => {
+    onModeChange?.(mode);
+  }, []); // 仅在挂载时执行一次
+
+  // 模式变化时保存到 localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(AI_IMAGE_MODE_CACHE_KEY, mode);
+    } catch (e) {
+      console.warn('Failed to save mode to localStorage:', e);
+    }
+  }, [mode]);
 
 
   // 重置所有状态
