@@ -548,9 +548,46 @@
   }
 
   .preview-error {
-    color: #ff4d4f;
+    display: flex;
+    align-items: center;
+    gap: 4px;
     font-size: 12px;
-    cursor: help;
+    flex-wrap: wrap;
+
+    .preview-error-message {
+      color: #ff4d4f;
+    }
+
+    .preview-error-details-link {
+      color: #1890ff;
+      cursor: pointer;
+      text-decoration: underline;
+      font-size: 11px;
+
+      &:hover {
+        color: #40a9ff;
+      }
+    }
+  }
+
+  // 错误详情 tooltip
+  .error-details-tooltip {
+    max-width: 400px;
+    font-size: 12px;
+
+    .error-details-title {
+      font-weight: 600;
+      margin-bottom: 4px;
+      color: #333;
+    }
+
+    .error-details-content {
+      color: #666;
+      word-break: break-all;
+      white-space: pre-wrap;
+      max-height: 200px;
+      overflow-y: auto;
+    }
   }
 
   .preview-partial {

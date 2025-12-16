@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { MessagePlugin, Select, Dialog } from 'tdesign-react';
+import { MessagePlugin, Select, Dialog, Tooltip } from 'tdesign-react';
 import { useI18n } from '../../i18n';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
 import { TaskType, TaskStatus, Task } from '../../types/task.types';
@@ -1079,10 +1079,28 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
                 )}
               </div>
             )}
-            {rowInfo.status === 'failed' && (
-              <span className="preview-error" title={rowInfo.tasks[0]?.error?.message}>
-                ❌ {language === 'zh' ? '失败' : 'Failed'}
-              </span>
+            {rowInfo.status === 'failed' && rowInfo.tasks[0]?.error && (
+              <div className="preview-error">
+                <span className="preview-error-message">
+                  ❌ {rowInfo.tasks[0].error.message}
+                </span>
+                {rowInfo.tasks[0].error.details?.originalError && (
+                  <Tooltip
+                    content={
+                      <div className="error-details-tooltip">
+                        <div className="error-details-title">{language === 'zh' ? '原始错误信息:' : 'Original Error:'}</div>
+                        <div className="error-details-content">
+                          {rowInfo.tasks[0].error.details.originalError}
+                        </div>
+                      </div>
+                    }
+                    theme="light"
+                    placement="bottom"
+                  >
+                    <span className="preview-error-details-link">[{language === 'zh' ? '详情' : 'Details'}]</span>
+                  </Tooltip>
+                )}
+              </div>
             )}
             {rowInfo.status === 'partial' && (
               <div className="preview-partial">
