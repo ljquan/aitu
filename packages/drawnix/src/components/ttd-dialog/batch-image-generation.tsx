@@ -142,10 +142,13 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
   }, []);
 
   // 进入编辑模式
-  const enterEditMode = useCallback((row: number, col: string) => {
+  // selectAll: true 表示选中全部内容（覆盖模式），false 表示追加模式
+  const enterEditMode = useCallback((row: number, col: string, selectAll: boolean = false) => {
     selectCell(row, col);
     if (EDITABLE_COLS.includes(col) && col !== 'images') {
       setEditingCell({ row, col });
+      // 存储是否需要选中全部内容
+      (window as any).__cellEditSelectAll = selectAll;
     }
   }, [selectCell]);
 
@@ -478,7 +481,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
               prompt: String(prompt).trim(),
               size: SIZE_OPTIONS.includes(size) ? size : '1x1',
               images: [],
-              count: Math.max(1, Math.min(10, count)),
+              count: Math.max(1, count),
               taskIds: []
             };
           });
@@ -904,23 +907,55 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
         return (
           <div
             className={cellClassName}
-            onClick={(e) => handleCellClick(e, rowIndex, col)}
-            onDoubleClick={() => handleCellDoubleClick(rowIndex, col)}
+            onClick={(e) => {
+              // 单击直接进入编辑模式（覆盖模式）
+              if (!e.shiftKey && !e.ctrlKey && !e.metaKey) {
+                enterEditMode(rowIndex, col, true);
+              } else {
+                handleCellClick(e, rowIndex, col);
+              }
+            }}
+            onDoubleClick={() => {
+              // 双击进入追加编辑模式
+              enterEditMode(rowIndex, col, false);
+            }}
           >
             {isEditing ? (
               <input
                 type="number"
                 autoFocus
                 min={1}
-                max={10}
-                value={task.count}
+                value={task.count === 0 ? '' : task.count}
                 onChange={(e) => {
-                  const val = Math.max(1, Math.min(10, parseInt(e.target.value) || 1));
-                  updateCellValue(rowIndex, col, val);
+                  const inputVal = e.target.value;
+                  // 允许输入空值，存储为 0 或 1
+                  if (inputVal === '') {
+                    updateCellValue(rowIndex, col, 0);
+                  } else {
+                    const val = Math.max(1, parseInt(inputVal) || 1);
+                    updateCellValue(rowIndex, col, val);
+                  }
                 }}
-                onBlur={() => setEditingCell(null)}
+                onFocus={(e) => {
+                  // 如果是覆盖模式，选中全部内容
+                  if ((window as any).__cellEditSelectAll) {
+                    e.target.select();
+                    (window as any).__cellEditSelectAll = false;
+                  }
+                }}
+                onBlur={() => {
+                  // 失去焦点时，如果值为0则设置为1
+                  if (task.count === 0) {
+                    updateCellValue(rowIndex, col, 1);
+                  }
+                  setEditingCell(null);
+                }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === 'Escape') {
+                    // 确保值至少为1
+                    if (task.count === 0) {
+                      updateCellValue(rowIndex, col, 1);
+                    }
                     setEditingCell(null);
                   }
                 }}
