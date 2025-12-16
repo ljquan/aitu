@@ -276,6 +276,8 @@ Umami Server
 ## Active Technologies
 - TypeScript 5.x (strict mode) (005-declarative-tracking)
 - RxJS - Reactive state management for tracking service (005-declarative-tracking)
+- TypeScript 5.x (strict mode), React 18.x (009-media-library)
+- IndexedDB (via localforage) for: (009-media-library)
 
 ## Recent Changes
 - 005-declarative-tracking: Added TypeScript 5.x (strict mode)

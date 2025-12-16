@@ -53,6 +53,8 @@ import { useWorkspace } from './hooks/useWorkspace';
 import { Board as WorkspaceBoard } from './types/workspace.types';
 import { toolTestHelper } from './utils/tool-test-helper';
 import { Minimap } from './components/minimap';
+import { AssetProvider } from './contexts/AssetContext';
+import { initializeAssetIntegration } from './services/asset-integration-service';
 
 export type DrawnixProps = {
   value: PlaitElement[];
@@ -152,6 +154,12 @@ export const Drawnix: React.FC<DrawnixProps> = ({
     }
   }, [board, appState]);
 
+  // Initialize asset integration service on mount
+  useEffect(() => {
+    const cleanup = initializeAssetIntegration();
+    return cleanup;
+  }, []);
+
   const plugins: PlaitPlugin[] = [
     withDraw,
     withGroup,
@@ -225,7 +233,8 @@ export const Drawnix: React.FC<DrawnixProps> = ({
 
   return (
     <I18nProvider>
-      <DrawnixContext.Provider value={contextValue}>
+      <AssetProvider>
+        <DrawnixContext.Provider value={contextValue}>
         <div
           className={classNames('drawnix', {
             'drawnix--mobile': appState.isMobile,
@@ -288,7 +297,8 @@ export const Drawnix: React.FC<DrawnixProps> = ({
             {board && <Minimap board={board} />}
           </div>
         </div>
-      </DrawnixContext.Provider>
+        </DrawnixContext.Provider>
+      </AssetProvider>
     </I18nProvider>
   );
 };

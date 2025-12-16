@@ -5,6 +5,37 @@ import App from './app/app';
 // 修复权限策略违规警告
 import './utils/permissions-policy-fix';
 
+// 初始化 Web Vitals 和 Page Report 监控
+import { initWebVitals } from '../../../packages/drawnix/src/services/web-vitals-service';
+import { initPageReport } from '../../../packages/drawnix/src/services/page-report-service';
+import { initPreventPinchZoom } from '../../../packages/drawnix/src/services/prevent-pinch-zoom-service';
+
+// ===== 立即初始化防止双指缩放 =====
+// 必须在任何其他代码之前执行，确保事件监听器最先注册
+let cleanupPinchZoom: (() => void) | undefined;
+if (typeof window !== 'undefined') {
+  cleanupPinchZoom = initPreventPinchZoom();
+  console.log('[Main] Pinch zoom prevention initialized immediately');
+}
+
+// 初始化性能监控
+if (typeof window !== 'undefined') {
+  // 等待 PostHog 加载完成后初始化监控
+  const initMonitoring = () => {
+    if (window.posthog) {
+      console.log('[Monitoring] PostHog loaded, initializing Web Vitals and Page Report');
+      initWebVitals();
+      initPageReport();
+    } else {
+      console.log('[Monitoring] Waiting for PostHog to load...');
+      setTimeout(initMonitoring, 500);
+    }
+  };
+
+  // 延迟初始化，确保 PostHog 已加载
+  setTimeout(initMonitoring, 1000);
+}
+
 // 注册Service Worker来处理CORS问题和PWA功能
 if ('serviceWorker' in navigator) {
   const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';

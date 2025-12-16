@@ -1,0 +1,277 @@
+/**
+ * Media Library Grid Styles
+ * 素材库网格视图样式 - Tailwind-inspired design
+ */
+
+.media-library-grid {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+
+  &--dragging {
+    .media-library-grid__container {
+      opacity: 0.5;
+    }
+  }
+
+  &__drop-overlay {
+    position: absolute;
+    inset: 16px;
+    background: rgba(99, 102, 241, 0.05);
+    border: 4px dashed #6366f1;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    pointer-events: none;
+  }
+
+  &__drop-message {
+    padding: 40px 64px;
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    border: 1px solid #e0e7ff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+
+    &-icon {
+      width: 64px;
+      height: 64px;
+      background: #eef2ff;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #6366f1;
+    }
+
+    &-title {
+      font-size: 20px;
+      font-weight: 700;
+      color: #111827;
+    }
+
+    &-description {
+      font-size: 14px;
+      color: #6b7280;
+    }
+  }
+
+  &__loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+  }
+
+  &__header {
+    padding: 12px 20px;
+    border-bottom: 1px solid #e5e7eb;
+    background: white;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  &__header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  &__search {
+    flex: 1;
+    max-width: 350px;
+  }
+
+  &__count {
+    font-size: 13px;
+    font-weight: 500;
+    color: #6b7280;
+    white-space: nowrap;
+  }
+
+  &__selection-count {
+    font-size: 13px;
+    font-weight: 600;
+    color: #6366f1;
+    white-space: nowrap;
+  }
+
+  &__container {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+    background: #fafbfc;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 14px;
+    align-content: start;
+
+    // 响应式网格列数
+    @media (min-width: 1920px) {
+      grid-template-columns: repeat(5, 1fr);
+    }
+
+    @media (min-width: 1280px) and (max-width: 1919px) {
+      grid-template-columns: repeat(4, 1fr);
+    }
+
+    @media (min-width: 768px) and (max-width: 1279px) {
+      grid-template-columns: repeat(3, 1fr);
+    }
+
+    @media (max-width: 767px) {
+      grid-template-columns: repeat(3, 1fr); // 移动端显示3列，增加可见性
+      padding: 12px; // 减小内边距
+      gap: 10px; // 减小间距
+    }
+
+    @media (max-width: 480px) {
+      grid-template-columns: repeat(2, 1fr); // 小屏幕显示2列
+      padding: 10px;
+      gap: 8px;
+    }
+  }
+
+  &__footer {
+    height: 36px;
+    border-top: 1px solid #e5e7eb;
+    background: white;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    font-size: 12px;
+    font-weight: 500;
+    color: #6b7280;
+
+    &-hint {
+      color: #6366f1;
+    }
+  }
+
+  // 移动端优化
+  @media (max-width: 768px) {
+    &__header {
+      padding: 10px 16px;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    &__search {
+      order: 2;
+      max-width: 100%;
+      flex: 1 1 100%;
+    }
+
+    &__header-actions {
+      order: 1;
+      width: 100%;
+      justify-content: space-between;
+    }
+
+    &__count {
+      font-size: 12px;
+    }
+
+    &__container {
+      padding: 16px;
+      gap: 12px;
+    }
+
+    &__footer {
+      padding: 0 16px;
+      font-size: 11px;
+    }
+
+    &__drop-message {
+      padding: 32px 48px;
+
+      &-icon {
+        width: 56px;
+        height: 56px;
+      }
+
+      &-title {
+        font-size: 18px;
+      }
+
+      &-description {
+        font-size: 13px;
+      }
+    }
+  }
+
+  @media (max-width: 480px) {
+    &__header {
+      padding: 8px 12px;
+    }
+
+    &__container {
+      padding: 12px;
+      gap: 10px;
+    }
+
+    &__drop-message {
+      padding: 24px 32px;
+
+      &-icon {
+        width: 48px;
+        height: 48px;
+      }
+
+      &-title {
+        font-size: 16px;
+      }
+
+      &-description {
+        font-size: 12px;
+      }
+    }
+  }
+}
+
+// 空状态样式
+.media-library-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 48px 24px;
+  text-align: center;
+
+  &__icon {
+    width: 80px;
+    height: 80px;
+    background: #f3f4f6;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #d1d5db;
+    margin-bottom: 24px;
+  }
+
+  &__title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #111827;
+    margin-bottom: 8px;
+  }
+
+  &__description {
+    font-size: 14px;
+    color: #6b7280;
+    max-width: 400px;
+    line-height: 1.5;
+  }
+}

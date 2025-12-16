@@ -90,6 +90,20 @@
     }
   }
 
+  &__placeholder-container {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    align-items: center;
+  }
+
+  &__library-btn {
+    font-size: 11px;
+    padding: 2px 6px;
+    height: auto;
+    min-width: auto;
+  }
+
   &__add-icon {
     font-size: 24px;
     color: var(--td-text-color-placeholder, #999999);

@@ -69,17 +69,42 @@ function setupCommunicationHandlers(
 }
 
 /**
- * 判断点是否命中工具元素
+ * 判断点是否命中工具元素的标题栏或边缘（用于拖动）
+ * 现在只有点击标题栏才算命中，iframe 区域不算命中
  */
 function isHitToolElement(element: PlaitTool, point: Point): boolean {
   const rect = RectangleClient.getRectangleByPoints(element.points);
   const [x, y] = point;
-  return (
-    x >= rect.x &&
-    x <= rect.x + rect.width &&
-    y >= rect.y &&
-    y <= rect.y + rect.height
-  );
+
+  // 检查点是否在元素矩形范围内
+  if (
+    x < rect.x ||
+    x > rect.x + rect.width ||
+    y < rect.y ||
+    y > rect.y + rect.height
+  ) {
+    return false;
+  }
+
+  // 标题栏高度（与 tool.generator.ts 中一致）
+  const TITLEBAR_HEIGHT = 36;
+
+  // 边缘检测范围（用于resize）
+  const EDGE_THRESHOLD = 8;
+
+  // 判断是否在标题栏区域
+  const inTitleBar = y >= rect.y && y <= rect.y + TITLEBAR_HEIGHT;
+
+  // 判断是否在边缘区域（用于 resize）
+  const nearLeftEdge = x >= rect.x && x <= rect.x + EDGE_THRESHOLD;
+  const nearRightEdge = x >= rect.x + rect.width - EDGE_THRESHOLD && x <= rect.x + rect.width;
+  const nearTopEdge = y >= rect.y && y <= rect.y + EDGE_THRESHOLD;
+  const nearBottomEdge = y >= rect.y + rect.height - EDGE_THRESHOLD && y <= rect.y + rect.height;
+  const nearEdge = nearLeftEdge || nearRightEdge || nearTopEdge || nearBottomEdge;
+
+  // 只有点击标题栏或边缘时才算命中（允许拖动和 resize）
+  // iframe 内容区域不算命中，让 iframe 可以正常交互
+  return inTitleBar || nearEdge;
 }
 
 /**
