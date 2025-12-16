@@ -549,3 +549,18 @@ export const VideoFrameIcon = createIcon(
     </g>
   </svg>
 );
+
+export const MediaLibraryIcon = createIcon(
+  <svg viewBox="0 0 16 16" version="1.1" xmlns="http://www.w3.org/2000/svg">
+    <g id="media-library" stroke="none" fill="currentColor">
+      {/* 网格图标表示素材库 */}
+      <rect x="1" y="1" width="6" height="6" rx="1" fill="none" stroke="currentColor" strokeWidth="1.2"/>
+      <rect x="9" y="1" width="6" height="6" rx="1" fill="none" stroke="currentColor" strokeWidth="1.2"/>
+      <rect x="1" y="9" width="6" height="6" rx="1" fill="none" stroke="currentColor" strokeWidth="1.2"/>
+      <rect x="9" y="9" width="6" height="6" rx="1" fill="none" stroke="currentColor" strokeWidth="1.2"/>
+      {/* 小图片图标 */}
+      <circle cx="3" cy="3" r="0.8" fill="currentColor"/>
+      <path d="M2 5.5L3.5 4L5.5 6" stroke="currentColor" strokeWidth="0.8" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+    </g>
+  </svg>
+);
