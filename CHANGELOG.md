@@ -1,3 +1,23 @@
+## 0.3.0 (2025-12-16)
+
+### 🩹 Fixes
+
+- 添加 .npmrc 解决 CI 依赖安装冲突 ([0b8f8e1](https://github.com/ljquan/aitu/commit/0b8f8e1))
+- 修复winbox 中任务显示不正常 ([3f16f13](https://github.com/ljquan/aitu/commit/3f16f13))
+
+### 🔧 Chores
+
+- 指示小优化 ([d90971f](https://github.com/ljquan/aitu/commit/d90971f))
+- 素材库位置优化 ([5e2e0ea](https://github.com/ljquan/aitu/commit/5e2e0ea))
+- 工具箱优化 ([794ca89](https://github.com/ljquan/aitu/commit/794ca89))
+- 更换chat生图接口为 image接口、修复素材库边距 ([4757992](https://github.com/ljquan/aitu/commit/4757992))
+- 优化教程 ([f927878](https://github.com/ljquan/aitu/commit/f927878))
+
+### ❤️  Thank You
+
+- gongchengtu <1817063960@qq.com>
+- liquid <ljquan@qq.com>
+
 ## 0.2.15 (2025-12-13)
 
 ### 🚀 Features
