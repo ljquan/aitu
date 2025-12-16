@@ -94,6 +94,10 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
   // 图片预览弹窗
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
 
+  // 添加行弹窗
+  const [showAddRowsModal, setShowAddRowsModal] = useState(false);
+  const [addRowsCount, setAddRowsCount] = useState(5);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const batchImportInputRef = useRef<HTMLInputElement>(null);
   const excelImportInputRef = useRef<HTMLInputElement>(null);
@@ -389,54 +393,51 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
     setShowBatchImportModal(false);
   }, []);
 
-  // 导出 Excel
-  const exportToExcel = useCallback(async () => {
+  // 下载 Excel 模板
+  const downloadExcelTemplate = useCallback(async () => {
     try {
       // 动态导入 xlsx 库
       const XLSX = await import('xlsx');
 
-      // 准备导出数据
-      const exportData = tasks.map((task, index) => ({
-        '序号': index + 1,
-        '提示词': task.prompt,
-        '尺寸': task.size,
-        '数量': task.count,
-        '图片数': task.images.length
-      }));
+      // 预制模板数据（示例行）
+      const templateData = [
+        { '提示词': '一只可爱的橘猫在阳光下睡觉', '尺寸': '1x1', '数量': 1 },
+        { '提示词': '未来城市的夜景，霓虹灯闪烁', '尺寸': '16x9', '数量': 2 },
+        { '提示词': '古风美女，水墨画风格', '尺寸': '3x4', '数量': 1 },
+        { '提示词': '', '尺寸': '1x1', '数量': 1 },
+        { '提示词': '', '尺寸': '1x1', '数量': 1 },
+      ];
 
       // 创建工作簿和工作表
       const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.json_to_sheet(exportData);
+      const ws = XLSX.utils.json_to_sheet(templateData);
 
       // 设置列宽
       ws['!cols'] = [
-        { wch: 6 },   // 序号
-        { wch: 50 },  // 提示词
+        { wch: 60 },  // 提示词
         { wch: 10 },  // 尺寸
         { wch: 8 },   // 数量
-        { wch: 8 }    // 图片数
       ];
 
-      XLSX.utils.book_append_sheet(wb, ws, '批量出图');
+      XLSX.utils.book_append_sheet(wb, ws, '批量出图模板');
 
       // 导出文件
-      const fileName = `batch-image-${new Date().toISOString().slice(0, 10)}.xlsx`;
-      XLSX.writeFile(wb, fileName);
+      XLSX.writeFile(wb, 'batch-image-template.xlsx');
 
       MessagePlugin.success(
         language === 'zh'
-          ? `已导出 ${tasks.length} 行数据`
-          : `Exported ${tasks.length} rows`
+          ? '模板下载成功，填写后可导入使用'
+          : 'Template downloaded, fill and import to use'
       );
     } catch (error) {
-      console.error('Excel export error:', error);
+      console.error('Excel template download error:', error);
       MessagePlugin.error(
         language === 'zh'
-          ? '导出失败，请稍后重试'
-          : 'Export failed, please try again'
+          ? '下载失败，请稍后重试'
+          : 'Download failed, please try again'
       );
     }
-  }, [tasks, language]);
+  }, [language]);
 
   // 导入 Excel
   const handleExcelImport = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1014,9 +1015,6 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
         {/* 工具栏 */}
         <div className="batch-toolbar">
           <div className="toolbar-left">
-            <button className="btn btn-secondary" onClick={() => addRows(5)}>
-              + {language === 'zh' ? '添加 5 行' : 'Add 5 Rows'}
-            </button>
             <button className="btn btn-secondary" onClick={deleteSelected}>
               {language === 'zh' ? '删除选中' : 'Delete Selected'}
             </button>
@@ -1050,8 +1048,8 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
             <button className="btn btn-secondary" onClick={() => excelImportInputRef.current?.click()}>
               {language === 'zh' ? '📄 导入Excel' : '📄 Import Excel'}
             </button>
-            <button className="btn btn-secondary" onClick={exportToExcel}>
-              {language === 'zh' ? '📤 导出Excel' : '📤 Export Excel'}
+            <button className="btn btn-secondary" onClick={downloadExcelTemplate}>
+              {language === 'zh' ? '📥 下载模板' : '📥 Template'}
             </button>
             <span className="toolbar-divider">|</span>
             <button className="btn btn-secondary" onClick={downloadSelectedImages}>
@@ -1155,6 +1153,17 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
               ))}
             </tbody>
           </table>
+
+          {/* 添加行按钮 */}
+          <div className="add-rows-section">
+            <button
+              className="add-rows-btn"
+              onClick={() => setShowAddRowsModal(true)}
+              title={language === 'zh' ? '添加行' : 'Add Rows'}
+            >
+              <span className="add-icon">+</span>
+            </button>
+          </div>
         </div>
 
         <p className="hint-text">
@@ -1308,6 +1317,45 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
             <img src={previewImageUrl} alt="Preview" />
           </div>
         )}
+      </Dialog>
+
+      {/* 添加行弹窗 */}
+      <Dialog
+        visible={showAddRowsModal}
+        onClose={() => setShowAddRowsModal(false)}
+        header={language === 'zh' ? '添加行' : 'Add Rows'}
+        confirmBtn={{
+          content: language === 'zh' ? '添加' : 'Add',
+          onClick: () => {
+            addRows(addRowsCount);
+            setShowAddRowsModal(false);
+            MessagePlugin.success(
+              language === 'zh'
+                ? `已添加 ${addRowsCount} 行`
+                : `Added ${addRowsCount} rows`
+            );
+          }
+        }}
+        cancelBtn={{
+          content: language === 'zh' ? '取消' : 'Cancel',
+          onClick: () => setShowAddRowsModal(false)
+        }}
+        width={360}
+        className="add-rows-dialog"
+        destroyOnClose
+      >
+        <div className="add-rows-content">
+          <label>{language === 'zh' ? '添加行数：' : 'Number of rows:'}</label>
+          <input
+            type="number"
+            min={1}
+            max={100}
+            value={addRowsCount}
+            onChange={(e) => setAddRowsCount(Math.max(1, Math.min(100, parseInt(e.target.value) || 1)))}
+            className="add-rows-input"
+            autoFocus
+          />
+        </div>
       </Dialog>
     </div>
   );

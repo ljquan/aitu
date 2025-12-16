@@ -798,3 +798,72 @@
     }
   }
 }
+
+// 添加行区域
+.add-rows-section {
+  display: flex;
+  justify-content: center;
+  padding: 12px 0;
+  border-top: 1px dashed #e0e0e0;
+  margin-top: 4px;
+
+  .add-rows-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 2px dashed #ccc;
+    background: #fafafa;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+
+    .add-icon {
+      font-size: 20px;
+      font-weight: 300;
+      color: #999;
+      line-height: 1;
+    }
+
+    &:hover {
+      border-color: var(--brand-primary, #F39C12);
+      background: #fff;
+
+      .add-icon {
+        color: var(--brand-primary, #F39C12);
+      }
+    }
+  }
+}
+
+// 添加行弹窗
+.add-rows-dialog {
+  .add-rows-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 0;
+
+    label {
+      font-size: 14px;
+      color: #333;
+      white-space: nowrap;
+    }
+
+    .add-rows-input {
+      flex: 1;
+      height: 36px;
+      padding: 0 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s;
+
+      &:focus {
+        border-color: var(--brand-primary, #F39C12);
+      }
+    }
+  }
+}
