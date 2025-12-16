@@ -36,6 +36,9 @@ const SIZE_OPTIONS = ['1x1', '2x3', '3x2', '3x4', '4x3', '4x5', '5x4', '9x16', '
 // 可编辑列
 const EDITABLE_COLS = ['prompt', 'size', 'images', 'count', 'preview'];
 
+// 本地缓存 key
+const BATCH_IMAGE_CACHE_KEY = 'batch-image-generation-cache';
+
 interface BatchImageGenerationProps {
   onSwitchToSingle?: () => void;
 }
@@ -44,8 +47,20 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
   const { language } = useI18n();
   const { createTask, tasks: queueTasks } = useTaskQueue();
 
-  // 任务数据
+  // 任务数据 - 从本地缓存加载
   const [tasks, setTasks] = useState<TaskRow[]>(() => {
+    try {
+      const cached = localStorage.getItem(BATCH_IMAGE_CACHE_KEY);
+      if (cached) {
+        const data = JSON.parse(cached);
+        if (data.tasks && Array.isArray(data.tasks) && data.tasks.length > 0) {
+          return data.tasks;
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to load batch image cache:', e);
+    }
+    // 默认初始化 5 行
     const initialTasks: TaskRow[] = [];
     for (let i = 0; i < 5; i++) {
       initialTasks.push({
@@ -60,7 +75,20 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
     return initialTasks;
   });
 
-  const [taskIdCounter, setTaskIdCounter] = useState(6);
+  const [taskIdCounter, setTaskIdCounter] = useState(() => {
+    try {
+      const cached = localStorage.getItem(BATCH_IMAGE_CACHE_KEY);
+      if (cached) {
+        const data = JSON.parse(cached);
+        if (data.taskIdCounter) {
+          return data.taskIdCounter;
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+    return 6;
+  });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // 选中状态
@@ -101,6 +129,20 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
   const fileInputRef = useRef<HTMLInputElement>(null);
   const batchImportInputRef = useRef<HTMLInputElement>(null);
   const excelImportInputRef = useRef<HTMLInputElement>(null);
+
+  // 保存到本地缓存
+  useEffect(() => {
+    try {
+      const cacheData = {
+        tasks,
+        taskIdCounter,
+        timestamp: Date.now()
+      };
+      localStorage.setItem(BATCH_IMAGE_CACHE_KEY, JSON.stringify(cacheData));
+    } catch (e) {
+      console.warn('Failed to save batch image cache:', e);
+    }
+  }, [tasks, taskIdCounter]);
 
   // 添加行
   const addRows = useCallback((count: number) => {
@@ -863,6 +905,11 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
                 autoFocus
                 value={task.prompt}
                 onChange={(e) => updateCellValue(rowIndex, col, e.target.value)}
+                onFocus={(e) => {
+                  // 光标移到末尾
+                  const len = e.target.value.length;
+                  e.target.setSelectionRange(len, len);
+                }}
                 onBlur={() => setEditingCell(null)}
                 onKeyDown={(e) => {
                   if (e.key === 'Escape') setEditingCell(null);
@@ -964,6 +1011,12 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
                     const val = Math.max(1, parseInt(inputVal) || 1);
                     updateCellValue(rowIndex, col, val);
                   }
+                }}
+                onFocus={(e) => {
+                  // 光标移到末尾
+                  const input = e.target;
+                  const len = input.value.length;
+                  setTimeout(() => input.setSelectionRange(len, len), 0);
                 }}
                 onBlur={() => {
                   if (task.count === 0) {
