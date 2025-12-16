@@ -108,6 +108,8 @@ export interface WinBoxWindowProps {
   onMove?: (x: number, y: number) => void;
   /** 窗口调整大小回调 */
   onResize?: (width: number, height: number) => void;
+  /** 是否自动最大化 */
+  autoMaximize?: boolean;
 }
 
 /**
@@ -142,6 +144,7 @@ export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
   onBlur,
   onMove,
   onResize,
+  autoMaximize = false,
 }) => {
   const winboxRef = useRef<any>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -235,8 +238,18 @@ export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
       }
 
       setIsReady(true);
+
+      // 如果设置了自动最大化，则在创建后最大化窗口
+      if (autoMaximize) {
+        // 使用 setTimeout 确保窗口完全创建后再最大化
+        setTimeout(() => {
+          if (winboxRef.current) {
+            winboxRef.current.maximize();
+          }
+        }, 100);
+      }
     }
-  }, [visible, winboxLoaded, handleClose]);
+  }, [visible, winboxLoaded, handleClose, autoMaximize]);
   
   // 组件卸载时清理
   useEffect(() => {
@@ -270,6 +283,13 @@ export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
       }
     }
   }, [visible]);
+
+  // 监听 autoMaximize 变化，动态最大化窗口
+  useEffect(() => {
+    if (winboxRef.current && autoMaximize) {
+      winboxRef.current.maximize();
+    }
+  }, [autoMaximize]);
 
   // 渲染内容容器（WinBox 会挂载这个元素）
   return (

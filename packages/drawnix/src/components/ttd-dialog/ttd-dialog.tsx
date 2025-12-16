@@ -99,6 +99,14 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
     initialImage: undefined
   });
 
+  // 图像生成窗口是否需要最大化（批量模式时自动最大化）
+  const [imageDialogAutoMaximize, setImageDialogAutoMaximize] = useState(false);
+
+  // 处理图像生成模式变化
+  const handleImageModeChange = useCallback((mode: 'single' | 'batch') => {
+    setImageDialogAutoMaximize(mode === 'batch');
+  }, []);
+
   // 使用 useRef 来跟踪上一次的 openDialogType，避免不必要的处理
   const prevOpenDialogTypeRef = useRef<typeof appState.openDialogType>(null);
   
@@ -394,6 +402,7 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
         minimizable={false}
         className="winbox-ai-generation"
         container={container}
+        autoMaximize={imageDialogAutoMaximize}
       >
         {appState.openDialogType === DialogType.aiImageGeneration && (
           <AIImageGeneration
@@ -405,6 +414,7 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
             initialResultUrl={aiImageData.initialResultUrl}
             selectedModel={selectedImageModel}
             onModelChange={handleImageModelChange}
+            onModeChange={handleImageModeChange}
           />
         )}
       </WinBoxWindow>

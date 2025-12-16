@@ -39,6 +39,7 @@ interface AIImageGenerationProps {
   initialResultUrl?: string;
   selectedModel?: string;
   onModelChange?: (value: string) => void;
+  onModeChange?: (mode: 'single' | 'batch') => void;
 }
 
 const AIImageGeneration = ({
@@ -49,7 +50,8 @@ const AIImageGeneration = ({
   initialHeight,
   initialResultUrl,
   selectedModel,
-  onModelChange
+  onModelChange,
+  onModeChange
 }: AIImageGenerationProps = {}) => {
   // 生成模式：单图 or 批量
   const [mode, setMode] = useState<GenerationMode>('single');
@@ -360,7 +362,10 @@ const AIImageGeneration = ({
   if (mode === 'batch') {
     return (
       <Suspense fallback={<div className="loading-fallback">{language === 'zh' ? '加载中...' : 'Loading...'}</div>}>
-        <BatchImageGeneration onSwitchToSingle={() => setMode('single')} />
+        <BatchImageGeneration onSwitchToSingle={() => {
+          setMode('single');
+          onModeChange?.('single');
+        }} />
       </Suspense>
     );
   }
@@ -394,7 +399,10 @@ const AIImageGeneration = ({
             {/* 批量出图切换按钮 */}
             <button
               className="batch-mode-btn"
-              onClick={() => setMode('batch')}
+              onClick={() => {
+                setMode('batch');
+                onModeChange?.('batch');
+              }}
               disabled={isGenerating}
             >
               {language === 'zh' ? '批量出图 →' : 'Batch Mode →'}
