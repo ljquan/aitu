@@ -851,7 +851,11 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
         return (
           <div
             className={cellClassName}
-            onClick={(e) => handleCellClick(e, rowIndex, col)}
+            onClick={(e) => {
+              // 如果已经在编辑当前单元格，不处理点击事件
+              if (isEditing) return;
+              handleCellClick(e, rowIndex, col);
+            }}
             onDoubleClick={() => enterEditMode(rowIndex, col)}
           >
             {isEditing ? (
@@ -939,7 +943,11 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
         return (
           <div
             className={cellClassName}
-            onClick={(e) => handleCellClick(e, rowIndex, col)}
+            onClick={(e) => {
+              // 如果已经在编辑当前单元格，不处理点击事件
+              if (isEditing) return;
+              handleCellClick(e, rowIndex, col);
+            }}
             onDoubleClick={() => enterEditMode(rowIndex, col)}
           >
             {isEditing ? (
