@@ -1082,13 +1082,13 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
             {rowInfo.status === 'failed' && rowInfo.tasks[0]?.error && (
               <div className="preview-error">
                 <span className="preview-error-message">
-                  ❌ {rowInfo.tasks[0].error.message}
+                  {rowInfo.tasks[0].error.message}
                 </span>
                 {rowInfo.tasks[0].error.details?.originalError && (
                   <Tooltip
                     content={
                       <div className="error-details-tooltip">
-                        <div className="error-details-title">{language === 'zh' ? '原始错误信息:' : 'Original Error:'}</div>
+                        <div className="error-details-title">原始错误信息:</div>
                         <div className="error-details-content">
                           {rowInfo.tasks[0].error.details.originalError}
                         </div>
@@ -1097,7 +1097,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
                     theme="light"
                     placement="bottom"
                   >
-                    <span className="preview-error-details-link">[{language === 'zh' ? '详情' : 'Details'}]</span>
+                    <span className="preview-error-details-link">[详情]</span>
                   </Tooltip>
                 )}
               </div>
