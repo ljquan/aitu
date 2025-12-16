@@ -272,9 +272,20 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [previewTaskId, previewInfo]);
 
-  if (filteredTasks.length === 0) {
-    return null;
-  }
+  // 计算总任务数（不受搜索影响）
+  const totalTaskCount = useMemo(() => {
+    let total = tasks;
+    if (taskIds && taskIds.length > 0) {
+      total = total.filter(task => taskIds.includes(task.id));
+    }
+    if (taskType !== undefined) {
+      total = total.filter(task => task.type === taskType);
+    }
+    return total.length;
+  }, [tasks, taskIds, taskType]);
+
+  // 判断是否有搜索但无匹配
+  const hasSearchNoMatch = searchText.trim() && filteredTasks.length === 0 && totalTaskCount > 0;
 
   return (
     <>
@@ -285,7 +296,7 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
             <Input
               value={searchText}
               onChange={(v) => setSearchText(v)}
-              placeholder="搜索任务（提示词/模型/状态/尺寸）"
+              placeholder="搜索任务（提示词/模型/...）"
               clearable
               prefixIcon={<SearchIcon />}
               size="small"
@@ -293,18 +304,28 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
           </div>
         </div>
         <div className="dialog-task-list__content">
-          {filteredTasks.map(task => (
-            <TaskItem
-              key={task.id}
-              task={task}
-              onRetry={handleRetry}
-              onDelete={handleDelete}
-              onDownload={handleDownload}
-              onInsert={handleInsert}
-              onEdit={handleEdit}
-              onPreviewOpen={() => handlePreviewOpen(task.id)}
-            />
-          ))}
+          {filteredTasks.length === 0 ? (
+            <div className="dialog-task-list__empty">
+              {hasSearchNoMatch ? (
+                <p>未找到匹配的任务</p>
+              ) : (
+                <p>暂无生成任务</p>
+              )}
+            </div>
+          ) : (
+            filteredTasks.map(task => (
+              <TaskItem
+                key={task.id}
+                task={task}
+                onRetry={handleRetry}
+                onDelete={handleDelete}
+                onDownload={handleDownload}
+                onInsert={handleInsert}
+                onEdit={handleEdit}
+                onPreviewOpen={() => handlePreviewOpen(task.id)}
+              />
+            ))
+          )}
         </div>
       </div>
 
