@@ -819,14 +819,31 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
         return (
           <div
             className={cellClassName}
-            onClick={(e) => handleCellClick(e, rowIndex, col)}
-            onDoubleClick={() => handleCellDoubleClick(rowIndex, col)}
+            onClick={(e) => {
+              // 单击直接进入编辑模式（覆盖模式）
+              if (!e.shiftKey && !e.ctrlKey && !e.metaKey) {
+                enterEditMode(rowIndex, col, true);
+              } else {
+                handleCellClick(e, rowIndex, col);
+              }
+            }}
+            onDoubleClick={() => {
+              // 双击进入追加编辑模式
+              enterEditMode(rowIndex, col, false);
+            }}
           >
             {isEditing ? (
               <textarea
                 autoFocus
                 value={task.prompt}
                 onChange={(e) => updateCellValue(rowIndex, col, e.target.value)}
+                onFocus={(e) => {
+                  // 如果是覆盖模式，选中全部内容
+                  if ((window as any).__cellEditSelectAll) {
+                    e.target.select();
+                    (window as any).__cellEditSelectAll = false;
+                  }
+                }}
                 onBlur={() => setEditingCell(null)}
                 onKeyDown={(e) => {
                   if (e.key === 'Escape') setEditingCell(null);
