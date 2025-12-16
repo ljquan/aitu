@@ -141,14 +141,11 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
     setEditingCell(null);
   }, []);
 
-  // 进入编辑模式
-  // selectAll: true 表示选中全部内容（覆盖模式），false 表示追加模式
-  const enterEditMode = useCallback((row: number, col: string, selectAll: boolean = false) => {
+  // 进入编辑模式（双击进入，追加编辑）
+  const enterEditMode = useCallback((row: number, col: string) => {
     selectCell(row, col);
     if (EDITABLE_COLS.includes(col) && col !== 'images') {
       setEditingCell({ row, col });
-      // 存储是否需要选中全部内容
-      (window as any).__cellEditSelectAll = selectAll;
     }
   }, [selectCell]);
 
@@ -766,13 +763,38 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
     }
   }, [tasks, selectedRows, createTask, language, selectedModel]);
 
-  // 键盘导航
+  // 键盘导航和直接输入
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!activeCell || editingCell) return;
 
       const { row, col } = activeCell;
       const colIndex = EDITABLE_COLS.indexOf(col);
+
+      // 检查是否是可打印字符（用于覆盖写入）
+      const isPrintableKey = e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey;
+
+      // 如果是可编辑列且按下可打印字符，进入覆盖写入模式
+      if (isPrintableKey && EDITABLE_COLS.includes(col) && col !== 'images' && col !== 'size') {
+        e.preventDefault();
+        // 先清空内容，再进入编辑模式
+        if (col === 'count') {
+          // 数量列：设置为输入的数字或清空
+          const num = parseInt(e.key);
+          if (!isNaN(num)) {
+            updateCellValue(row, col, num);
+          } else {
+            updateCellValue(row, col, 0);
+          }
+        } else if (col === 'prompt') {
+          // 提示词列：设置为输入的字符
+          updateCellValue(row, col, e.key);
+        }
+        setEditingCell({ row, col });
+        // 标记不需要选中全部（因为已经覆盖了，光标应该在末尾）
+        (window as any).__cellEditSelectAll = false;
+        return;
+      }
 
       switch (e.key) {
         case 'ArrowUp':
@@ -799,12 +821,22 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
           e.preventDefault();
           setEditingCell(null);
           break;
+        case 'Delete':
+        case 'Backspace':
+          e.preventDefault();
+          // 删除键清空单元格内容
+          if (col === 'prompt') {
+            updateCellValue(row, col, '');
+          } else if (col === 'count') {
+            updateCellValue(row, col, 1);
+          }
+          break;
       }
     };
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [activeCell, editingCell, tasks.length, selectCell, enterEditMode]);
+  }, [activeCell, editingCell, tasks.length, selectCell, enterEditMode, updateCellValue]);
 
   // 渲染单元格内容
   const renderCellContent = (task: TaskRow, rowIndex: number, col: string) => {
@@ -819,31 +851,14 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
         return (
           <div
             className={cellClassName}
-            onClick={(e) => {
-              // 单击直接进入编辑模式（覆盖模式）
-              if (!e.shiftKey && !e.ctrlKey && !e.metaKey) {
-                enterEditMode(rowIndex, col, true);
-              } else {
-                handleCellClick(e, rowIndex, col);
-              }
-            }}
-            onDoubleClick={() => {
-              // 双击进入追加编辑模式
-              enterEditMode(rowIndex, col, false);
-            }}
+            onClick={(e) => handleCellClick(e, rowIndex, col)}
+            onDoubleClick={() => enterEditMode(rowIndex, col)}
           >
             {isEditing ? (
               <textarea
                 autoFocus
                 value={task.prompt}
                 onChange={(e) => updateCellValue(rowIndex, col, e.target.value)}
-                onFocus={(e) => {
-                  // 如果是覆盖模式，选中全部内容
-                  if ((window as any).__cellEditSelectAll) {
-                    e.target.select();
-                    (window as any).__cellEditSelectAll = false;
-                  }
-                }}
                 onBlur={() => setEditingCell(null)}
                 onKeyDown={(e) => {
                   if (e.key === 'Escape') setEditingCell(null);
@@ -924,18 +939,8 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
         return (
           <div
             className={cellClassName}
-            onClick={(e) => {
-              // 单击直接进入编辑模式（覆盖模式）
-              if (!e.shiftKey && !e.ctrlKey && !e.metaKey) {
-                enterEditMode(rowIndex, col, true);
-              } else {
-                handleCellClick(e, rowIndex, col);
-              }
-            }}
-            onDoubleClick={() => {
-              // 双击进入追加编辑模式
-              enterEditMode(rowIndex, col, false);
-            }}
+            onClick={(e) => handleCellClick(e, rowIndex, col)}
+            onDoubleClick={() => enterEditMode(rowIndex, col)}
           >
             {isEditing ? (
               <input
@@ -945,7 +950,6 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
                 value={task.count === 0 ? '' : task.count}
                 onChange={(e) => {
                   const inputVal = e.target.value;
-                  // 允许输入空值，存储为 0 或 1
                   if (inputVal === '') {
                     updateCellValue(rowIndex, col, 0);
                   } else {
@@ -953,15 +957,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
                     updateCellValue(rowIndex, col, val);
                   }
                 }}
-                onFocus={(e) => {
-                  // 如果是覆盖模式，选中全部内容
-                  if ((window as any).__cellEditSelectAll) {
-                    e.target.select();
-                    (window as any).__cellEditSelectAll = false;
-                  }
-                }}
                 onBlur={() => {
-                  // 失去焦点时，如果值为0则设置为1
                   if (task.count === 0) {
                     updateCellValue(rowIndex, col, 1);
                   }
@@ -969,7 +965,6 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
                 }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === 'Escape') {
-                    // 确保值至少为1
                     if (task.count === 0) {
                       updateCellValue(rowIndex, col, 1);
                     }
