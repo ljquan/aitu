@@ -449,6 +449,7 @@ export const CreationToolbar: React.FC<ToolbarSectionProps> = ({
               selected={getIsSelected()}
               icon={displayIcon}
               title={displayTitle}
+              tooltipPlacement="bottom"
               aria-label={displayTitle}
               data-track={`toolbar_click_${popupKey}`}
               onPointerDown={() => {
@@ -486,6 +487,7 @@ export const CreationToolbar: React.FC<ToolbarSectionProps> = ({
         icon={button.icon}
         checked={isChecked(button)}
         title={button.titleKey ? t(button.titleKey as keyof Translations) : ''}
+        tooltipPlacement={embedded ? 'right' : 'bottom'}
         aria-label={button.titleKey ? t(button.titleKey as keyof Translations) : ''}
         data-track={`toolbar_click_${button.pointer || button.key}`}
         onPointerDown={() => {
