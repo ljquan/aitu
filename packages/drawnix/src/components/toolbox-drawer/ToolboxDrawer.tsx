@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useCallback, useMemo } from 'react';
-import { Button, Input } from 'tdesign-react';
+import { Button, Input, DialogPlugin, MessagePlugin } from 'tdesign-react';
 import { CloseIcon, SearchIcon, AddIcon } from 'tdesign-icons-react';
 import { PlaitBoard, getViewportOrigination } from '@plait/core';
 import { useDrawnix } from '../../hooks/use-drawnix';
@@ -150,14 +150,51 @@ export const ToolboxDrawer: React.FC<ToolboxDrawerProps> = ({
   }, []);
 
   /**
+   * 处理删除工具
+   */
+  const handleDeleteTool = useCallback(async (tool: ToolDefinition) => {
+    // 使用 TDesign 的确认对话框
+    const confirmDialog = DialogPlugin.confirm({
+      header: '确认删除',
+      body: `确定要删除工具 "${tool.name}" 吗？此操作不可撤销。`,
+      onConfirm: async () => {
+        try {
+          const removed = await toolboxService.removeCustomTool(tool.id);
+          if (removed) {
+            MessagePlugin.success('工具已删除');
+            // 触发列表刷新
+            setRefreshKey((prev) => prev + 1);
+          } else {
+            MessagePlugin.warning('工具不存在或删除失败');
+          }
+        } catch (error) {
+          console.error('Failed to delete tool:', error);
+          MessagePlugin.error('删除工具失败，请重试');
+        }
+        confirmDialog.destroy();
+      },
+      onClose: () => {
+        confirmDialog.destroy();
+      },
+    });
+  }, []);
+
+  /**
    * 处理添加成功
    */
-  const handleCustomToolAdded = useCallback(() => {
+  const handleCustomToolSaved = useCallback(() => {
     // 触发列表刷新
     setRefreshKey((prev) => prev + 1);
     // 清空搜索和分类过滤，显示所有工具
     setSearchQuery('');
     setSelectedCategory(null);
+  }, []);
+
+  /**
+   * 处理对话框关闭
+   */
+  const handleDialogClose = useCallback(() => {
+    setCustomToolDialogVisible(false);
   }, []);
 
   return (
@@ -234,6 +271,7 @@ export const ToolboxDrawer: React.FC<ToolboxDrawerProps> = ({
           <ToolList
             toolsByCategory={toolsByCategory}
             onToolClick={handleToolClick}
+            onToolDelete={handleDeleteTool}
           />
         )}
       </div>
@@ -241,8 +279,8 @@ export const ToolboxDrawer: React.FC<ToolboxDrawerProps> = ({
       {/* Custom Tool Dialog */}
       <CustomToolDialog
         visible={customToolDialogVisible}
-        onClose={() => setCustomToolDialogVisible(false)}
-        onSuccess={handleCustomToolAdded}
+        onClose={handleDialogClose}
+        onSuccess={handleCustomToolSaved}
       />
     </div>
   );

@@ -24,6 +24,7 @@ export function MediaLibraryInspector({
   onDownload,
   onSelect,
   showSelectButton,
+  selectButtonText = '使用到画板',
 }: MediaLibraryInspectorProps) {
   const [isRenaming, setIsRenaming] = useState(false);
   const [newName, setNewName] = useState('');
@@ -201,7 +202,7 @@ export function MediaLibraryInspector({
             onClick={handleSelect}
             data-track="inspector_use_asset"
           >
-            使用到画板
+            {selectButtonText}
           </Button>
         )}
         <Button

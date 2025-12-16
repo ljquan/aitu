@@ -3,7 +3,7 @@ import './tool-icon.scss';
 
 import type { CSSProperties } from 'react';
 import React, { useEffect, useRef, useState } from 'react';
-import { Tooltip } from 'tdesign-react';
+import { Tooltip, PopupPlacement } from 'tdesign-react';
 import { AbortError } from '../errors';
 import { isPromiseLike } from '../utils/common';
 import classNames from 'classnames';
@@ -22,6 +22,8 @@ type ToolButtonBaseProps = {
   'data-track'?: string;
   label?: string;
   title?: string;
+  /** Tooltip 显示位置，默认为 'bottom' */
+  tooltipPlacement?: PopupPlacement;
   name?: string;
   id?: string;
   size?: ToolButtonSize;
@@ -173,7 +175,7 @@ export const ToolButton = React.forwardRef((props: ToolButtonProps, ref) => {
         <Tooltip
           content={props.title}
           theme="light"
-          placement="bottom"
+          placement={props.tooltipPlacement || 'bottom'}
           showArrow={false}
           delay={TOOLTIP_DELAY}
         >
@@ -232,7 +234,7 @@ export const ToolButton = React.forwardRef((props: ToolButtonProps, ref) => {
       <Tooltip
         content={props.title}
         theme="light"
-        placement="bottom"
+        placement={props.tooltipPlacement || 'bottom'}
         showArrow={false}
         delay={TOOLTIP_DELAY}
       >

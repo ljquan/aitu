@@ -13,6 +13,7 @@ import {
   StraightArrowLineIcon,
   FeltTipPenIcon,
   ImageIcon,
+  MediaLibraryIcon,
   AIImageIcon,
   AIVideoIcon,
   ExtraToolsIcon,
@@ -35,7 +36,12 @@ import {
 import { FreehandPanel , FREEHANDS } from './freehand-panel/freehand-panel';
 import { ShapePicker } from '../shape-picker';
 import { ArrowPicker } from '../arrow-picker';
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
+import { MessagePlugin } from 'tdesign-react';
+import { MediaLibraryModal } from '../media-library/MediaLibraryModal';
+import { SelectionMode, Asset, AssetType } from '../../types/asset.types';
+import { insertImageFromUrl } from '../../data/image';
+import { insertVideoFromUrl } from '../../data/video';
 import { Popover, PopoverContent, PopoverTrigger } from '../popover/popover';
 import { FreehandShape } from '../../plugins/freehand/type';
 import {
@@ -60,7 +66,7 @@ type AppToolButtonProps = {
   name?: string;
   icon: React.ReactNode;
   pointer?: DrawnixPointerType;
-  key?: PopupKey | 'image' | 'ai-image' | 'ai-video' | 'extra-tools';
+  key?: PopupKey | 'image' | 'media-library' | 'ai-image' | 'ai-video' | 'extra-tools';
 };
 
 const isBasicPointer = (pointer: string) => {
@@ -112,6 +118,11 @@ export const BUTTONS: AppToolButtonProps[] = [
     icon: ImageIcon,
     titleKey: 'toolbar.image',
     key: 'image',
+  },
+  {
+    icon: MediaLibraryIcon,
+    titleKey: 'toolbar.mediaLibrary',
+    key: 'media-library',
   },
   {
     icon: AIImageIcon,
@@ -171,6 +182,34 @@ export const CreationToolbar: React.FC<ToolbarSectionProps> = ({
     useState<AppToolButtonProps>(
       BUTTONS.find((button) => button.key === PopupKey.freehand)!
     );
+
+  // 素材库状态
+  const [mediaLibraryOpen, setMediaLibraryOpen] = useState(false);
+
+  // 打开素材库
+  const handleOpenMediaLibrary = useCallback(() => {
+    setMediaLibraryOpen(true);
+  }, []);
+
+  // 关闭素材库
+  const handleCloseMediaLibrary = useCallback(() => {
+    setMediaLibraryOpen(false);
+  }, []);
+
+  // 插入素材到画板
+  const handleInsertAsset = useCallback(async (asset: Asset) => {
+    try {
+      if (asset.type === AssetType.IMAGE) {
+        await insertImageFromUrl(board, asset.url);
+      } else if (asset.type === AssetType.VIDEO) {
+        await insertVideoFromUrl(board, asset.url);
+      }
+      MessagePlugin.success('素材已插入到画板');
+    } catch (error) {
+      console.error('Failed to insert asset:', error);
+      MessagePlugin.error('插入素材失败');
+    }
+  }, [board]);
 
   // 统一重置所有 Popover
   const resetAllPopovers = () => {
@@ -317,6 +356,8 @@ export const CreationToolbar: React.FC<ToolbarSectionProps> = ({
     // 特殊按钮处理
     if (button.key === 'image') {
       addImage(board);
+    } else if (button.key === 'media-library') {
+      handleOpenMediaLibrary();
     } else if (button.key === 'ai-image') {
       openDialog(DialogType.aiImageGeneration);
     } else if (button.key === 'ai-video') {
@@ -408,6 +449,7 @@ export const CreationToolbar: React.FC<ToolbarSectionProps> = ({
               selected={getIsSelected()}
               icon={displayIcon}
               title={displayTitle}
+              tooltipPlacement="bottom"
               aria-label={displayTitle}
               data-track={`toolbar_click_${popupKey}`}
               onPointerDown={() => {
@@ -445,6 +487,7 @@ export const CreationToolbar: React.FC<ToolbarSectionProps> = ({
         icon={button.icon}
         checked={isChecked(button)}
         title={button.titleKey ? t(button.titleKey as keyof Translations) : ''}
+        tooltipPlacement={embedded ? 'right' : 'bottom'}
         aria-label={button.titleKey ? t(button.titleKey as keyof Translations) : ''}
         data-track={`toolbar_click_${button.pointer || button.key}`}
         onPointerDown={() => {
@@ -484,27 +527,44 @@ export const CreationToolbar: React.FC<ToolbarSectionProps> = ({
     </Stack.Row>
   );
 
+  // 素材库弹窗
+  const mediaLibraryModal = (
+    <MediaLibraryModal
+      isOpen={mediaLibraryOpen}
+      onClose={handleCloseMediaLibrary}
+      mode={SelectionMode.SELECT}
+      onSelect={handleInsertAsset}
+      selectButtonText="插入"
+    />
+  );
+
   if (embedded) {
     return (
-      <div className={classNames('draw-toolbar', {
-        'draw-toolbar--embedded': embedded,
-        'draw-toolbar--icon-only': iconMode,
-      })}>
-        {content}
-      </div>
+      <>
+        <div className={classNames('draw-toolbar', {
+          'draw-toolbar--embedded': embedded,
+          'draw-toolbar--icon-only': iconMode,
+        })}>
+          {content}
+        </div>
+        {mediaLibraryModal}
+      </>
     );
   }
 
 
   return (
-    <Island
-      padding={1}
-      className={classNames('draw-toolbar', ATTACHED_ELEMENT_CLASS_NAME, {
-        'draw-toolbar--embedded': embedded,
-        'draw-toolbar--icon-only': iconMode,
-      })}
-    >
-      {content}
-    </Island>
+    <>
+      <Island
+        padding={1}
+        className={classNames('draw-toolbar', ATTACHED_ELEMENT_CLASS_NAME, {
+          'draw-toolbar--embedded': embedded,
+          'draw-toolbar--icon-only': iconMode,
+        })}
+      >
+        {content}
+      </Island>
+      {mediaLibraryModal}
+    </>
   );
 };

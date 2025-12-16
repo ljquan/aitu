@@ -252,6 +252,8 @@ export interface MediaLibraryModalProps {
   mode?: SelectionMode;
   filterType?: AssetType;
   onSelect?: (asset: Asset) => void;
+  /** 自定义选择按钮文本，默认为"使用到画板" */
+  selectButtonText?: string;
 }
 
 export interface AssetGridItemProps {
@@ -276,6 +278,8 @@ export interface MediaLibraryInspectorProps {
   onDownload: (asset: Asset) => void;
   onSelect?: (asset: Asset) => void;
   showSelectButton: boolean;
+  /** 自定义选择按钮文本，默认为"使用到画板" */
+  selectButtonText?: string;
 }
 
 export interface MediaLibraryGridProps {

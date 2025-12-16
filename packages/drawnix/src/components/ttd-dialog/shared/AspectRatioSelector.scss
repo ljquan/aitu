@@ -175,6 +175,13 @@
     &__dropdown {
       min-width: 180px;
       padding: 6px;
+      // 移动端改为向下展开，避免超出屏幕顶部
+      bottom: auto;
+      top: 100%;
+      margin-top: 8px;
+      margin-bottom: 0;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+      animation: dropdownFadeInDown 0.15s ease;
 
       &-grid {
         grid-template-columns: repeat(4, 1fr);
@@ -185,6 +192,17 @@
         padding: 6px 4px;
         font-size: 12px;
         min-width: 36px;
+      }
+    }
+
+    @keyframes dropdownFadeInDown {
+      from {
+        opacity: 0;
+        transform: translateY(-4px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
       }
     }
   }
@@ -213,19 +231,24 @@
 
     &__dropdown {
       min-width: 160px;
-      padding: 4px;
-      left: auto;
-      right: 0;
+      max-width: calc(100vw - 40px); // 限制最大宽度
+      padding: 6px;
+      left: 0;
+      right: auto;
+      // 确保向下展开
+      bottom: auto;
+      top: 100%;
+      margin-top: 6px;
 
       &-grid {
         grid-template-columns: repeat(3, 1fr);
-        gap: 3px;
+        gap: 4px;
       }
 
       &-item {
-        padding: 5px 3px;
-        font-size: 11px;
-        min-width: 32px;
+        padding: 8px 4px;
+        font-size: 12px;
+        min-width: 40px;
         border-radius: 4px;
       }
     }

@@ -14,6 +14,8 @@ export interface ToolListProps {
   toolsByCategory: Record<string, ToolDefinition[]>;
   /** 工具点击回调 */
   onToolClick: (tool: ToolDefinition) => void;
+  /** 删除工具回调（仅自定义工具） */
+  onToolDelete?: (tool: ToolDefinition) => void;
 }
 
 /**
@@ -22,6 +24,7 @@ export interface ToolListProps {
 export const ToolList: React.FC<ToolListProps> = ({
   toolsByCategory,
   onToolClick,
+  onToolDelete,
 }) => {
   const categories = Object.keys(toolsByCategory);
 
@@ -52,6 +55,7 @@ export const ToolList: React.FC<ToolListProps> = ({
                   key={tool.id}
                   tool={tool}
                   onClick={() => onToolClick(tool)}
+                  onDelete={onToolDelete}
                 />
               ))}
             </div>

@@ -23,6 +23,7 @@ export function MediaLibraryModal({
   mode = SelectionMode.BROWSE,
   filterType,
   onSelect,
+  selectButtonText,
 }: MediaLibraryModalProps) {
   const {
     assets,
@@ -300,6 +301,7 @@ export function MediaLibraryModal({
               }}
               onSelect={showSelectButton ? handleUseAsset : undefined}
               showSelectButton={showSelectButton}
+              selectButtonText={selectButtonText}
             />
           </div>
         )}
@@ -330,6 +332,7 @@ export function MediaLibraryModal({
             }}
             onSelect={showSelectButton ? handleUseAsset : undefined}
             showSelectButton={showSelectButton}
+            selectButtonText={selectButtonText}
           />
         </Drawer>
       )}

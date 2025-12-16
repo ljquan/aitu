@@ -15,6 +15,7 @@ export interface Translations {
   'toolbar.arrow': string;
   'toolbar.shape': string;
   'toolbar.image': string;
+  'toolbar.mediaLibrary': string;
   'toolbar.aiImage': string;
   'toolbar.aiVideo': string;
   'toolbar.extraTools': string;
@@ -125,6 +126,7 @@ const translations: Record<Language, Translations> = {
     'toolbar.arrow': '箭头 — A',
     'toolbar.shape': '形状',
     'toolbar.image': '图片 — Cmd+U',
+    'toolbar.mediaLibrary': '素材库',
     'toolbar.aiImage': 'AI 图像生成',
     'toolbar.aiVideo': 'AI 视频生成',
     'toolbar.extraTools': '更多工具',
@@ -232,6 +234,7 @@ const translations: Record<Language, Translations> = {
     'toolbar.arrow': 'Arrow — A',
     'toolbar.shape': 'Shape',
     'toolbar.image': 'Image — Cmd+U',
+    'toolbar.mediaLibrary': 'Media Library',
     'toolbar.aiImage': 'AI Image Generation',
     'toolbar.aiVideo': 'AI Video Generation',
     'toolbar.extraTools': 'Extra Tools',
