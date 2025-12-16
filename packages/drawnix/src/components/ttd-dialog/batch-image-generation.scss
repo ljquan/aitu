@@ -139,6 +139,7 @@
       width: 40px;
       min-width: 40px;
       text-align: center;
+      vertical-align: middle; // 垂直居中
 
       input[type="checkbox"] {
         width: 16px;
@@ -146,6 +147,11 @@
         cursor: pointer;
         accent-color: #F39C12;
       }
+    }
+
+    // 行号列垂直居中
+    td.row-number {
+      vertical-align: middle;
     }
     .col-prompt { width: 35%; min-width: 200px; }
     .col-size { width: 80px; min-width: 80px; }
@@ -193,7 +199,7 @@
     cursor: cell;
     position: relative;
     display: flex;
-    align-items: flex-start;
+    align-items: center; // 垂直居中
     user-select: none; // 禁用文本选择，防止浏览器原生选择干扰单元格选择
     box-sizing: border-box;
 

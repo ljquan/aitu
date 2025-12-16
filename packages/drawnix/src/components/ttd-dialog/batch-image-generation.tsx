@@ -129,6 +129,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
   const fileInputRef = useRef<HTMLInputElement>(null);
   const batchImportInputRef = useRef<HTMLInputElement>(null);
   const excelImportInputRef = useRef<HTMLInputElement>(null);
+  const lastSelectedRowRef = useRef<number | null>(null); // 上次选择的行，用于 Shift 多选
 
   // 保存到本地缓存
   useEffect(() => {
@@ -596,25 +597,25 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
 
   // 选择失败的行
   const selectFailedRows = useCallback(() => {
-    const failedCells: CellPosition[] = [];
+    const failedRowIndices: number[] = [];
     tasks.forEach((task, rowIndex) => {
       const { status } = getRowTasksInfo(task);
       if (status === 'failed' || status === 'partial') {
-        failedCells.push({ row: rowIndex, col: 'prompt' });
+        failedRowIndices.push(rowIndex);
       }
     });
 
-    if (failedCells.length === 0) {
+    if (failedRowIndices.length === 0) {
       MessagePlugin.info(language === 'zh' ? '没有失败的行' : 'No failed rows');
       return;
     }
 
-    setSelectedCells(failedCells);
-    setActiveCell(failedCells[0]);
+    // 选中失败行的 checkbox
+    setSelectedRows(new Set(failedRowIndices));
     MessagePlugin.success(
       language === 'zh'
-        ? `已选中 ${failedCells.length} 个失败行`
-        : `Selected ${failedCells.length} failed rows`
+        ? `已选中 ${failedRowIndices.length} 个失败行`
+        : `Selected ${failedRowIndices.length} failed rows`
     );
   }, [tasks, getRowTasksInfo, language]);
 
@@ -631,17 +632,31 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
     setSelectedRows(newSelectedRows);
   }, [tasks, selectedRows]);
 
-  // 切换单行选择（checkbox）
-  const toggleRowSelection = useCallback((rowIndex: number) => {
+  // 切换单行选择（checkbox），支持 Shift 多选
+  const toggleRowSelection = useCallback((rowIndex: number, shiftKey: boolean = false) => {
     setSelectedRows(prev => {
       const newSet = new Set(prev);
-      if (newSet.has(rowIndex)) {
-        newSet.delete(rowIndex);
+
+      if (shiftKey && lastSelectedRowRef.current !== null) {
+        // Shift + 点击：选择范围内的所有行
+        const start = Math.min(lastSelectedRowRef.current, rowIndex);
+        const end = Math.max(lastSelectedRowRef.current, rowIndex);
+        for (let i = start; i <= end; i++) {
+          newSet.add(i);
+        }
       } else {
-        newSet.add(rowIndex);
+        // 普通点击：切换选择
+        if (newSet.has(rowIndex)) {
+          newSet.delete(rowIndex);
+        } else {
+          newSet.add(rowIndex);
+        }
       }
+
       return newSet;
     });
+    // 记录本次选择的行
+    lastSelectedRowRef.current = rowIndex;
   }, []);
 
   // 全选/取消全选（checkbox）
@@ -993,7 +1008,11 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
           <div
             className={cellClassName}
             onClick={(e) => handleCellClick(e, rowIndex, col)}
-            onDoubleClick={() => handleCellDoubleClick(rowIndex, col)}
+            onDoubleClick={() => {
+              // 双击进入编辑模式，显示下拉菜单
+              selectCell(rowIndex, col);
+              setEditingCell({ row: rowIndex, col });
+            }}
           >
             {isEditing ? (
               <select
@@ -1003,7 +1022,16 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
                   updateCellValue(rowIndex, col, e.target.value);
                   setEditingCell(null);
                 }}
-                onBlur={() => setEditingCell(null)}
+                onBlur={() => {
+                  // 延迟关闭，确保 onChange 先执行
+                  setTimeout(() => setEditingCell(null), 150);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    setEditingCell(null);
+                  }
+                }}
+                onClick={(e) => e.stopPropagation()}
               >
                 {SIZE_OPTIONS.map(size => (
                   <option key={size} value={size}>{size}</option>
@@ -1337,7 +1365,11 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
                     <input
                       type="checkbox"
                       checked={selectedRows.has(rowIndex)}
-                      onChange={() => toggleRowSelection(rowIndex)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleRowSelection(rowIndex, e.shiftKey);
+                      }}
+                      onChange={() => {}} // 由 onClick 处理
                     />
                   </td>
                   <td className="row-number">{rowIndex + 1}</td>
