@@ -109,11 +109,15 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
   }, []);
 
   // 当对话框将要打开时，预先计算是否需要自动放大
-  // 这需要在 WinBox 组件渲染前确定
+  // 这需要在 WinBox 组件渲染前确定，且逻辑需要与 AIImageGeneration 的模式判断一致
   useEffect(() => {
     if (appState.openDialogType === DialogType.aiImageGeneration) {
-      // 如果有初始图片，不自动放大（强制单图模式）
-      if (aiImageData.initialImages && aiImageData.initialImages.length > 0) {
+      // 如果有初始图片或初始提示词，说明是带内容进入，不自动放大（强制单图模式）
+      const hasInitialContent =
+        (aiImageData.initialImages && aiImageData.initialImages.length > 0) ||
+        (aiImageData.initialPrompt && aiImageData.initialPrompt.trim() !== '');
+
+      if (hasInitialContent) {
         setImageDialogAutoMaximize(false);
         return;
       }
@@ -125,7 +129,7 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
         setImageDialogAutoMaximize(false);
       }
     }
-  }, [appState.openDialogType, aiImageData.initialImages]);
+  }, [appState.openDialogType, aiImageData.initialImages, aiImageData.initialPrompt]);
 
   // 使用 useRef 来跟踪上一次的 openDialogType，避免不必要的处理
   const prevOpenDialogTypeRef = useRef<typeof appState.openDialogType>(null);

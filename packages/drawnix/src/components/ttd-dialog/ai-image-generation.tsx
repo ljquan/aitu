@@ -56,10 +56,12 @@ const AIImageGeneration = ({
   onModeChange
 }: AIImageGenerationProps = {}) => {
   // 生成模式：单图 or 批量
-  // 如果有初始图片，默认使用单图模式；否则从 localStorage 读取上次的模式
+  // 只有用户主动切换到批量模式后，下次才会自动进入批量模式
+  // 但如果有初始图片或提示词，说明是带内容进入，应使用单图模式
   const [mode, setMode] = useState<GenerationMode>(() => {
-    // 如果有初始图片，强制使用单图模式
-    if (initialImages && initialImages.length > 0) {
+    // 如果有初始图片或初始提示词，说明是带内容进入，使用单图模式
+    const hasInitialContent = (initialImages && initialImages.length > 0) || (initialPrompt && initialPrompt.trim() !== '');
+    if (hasInitialContent) {
       return 'single';
     }
     // 否则从 localStorage 读取上次保存的模式
