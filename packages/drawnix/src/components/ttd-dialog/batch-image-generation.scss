@@ -104,6 +104,7 @@
       border: 1px solid #e0e0e0;
       padding: 0;
       vertical-align: top;
+      height: 1px; // 让 td 高度由内容撑开，同时允许子元素 height: 100% 生效
     }
 
     th {
@@ -187,11 +188,14 @@
   // 单元格
   .excel-cell {
     min-height: 40px;
+    height: 100%; // 填满整个 td
     padding: 8px;
     cursor: cell;
     position: relative;
     display: flex;
     align-items: flex-start;
+    user-select: none; // 禁用文本选择，防止浏览器原生选择干扰单元格选择
+    box-sizing: border-box;
 
     &.active {
       background: white;
@@ -207,6 +211,7 @@
     .cell-text {
       word-break: break-word;
       white-space: pre-wrap;
+      pointer-events: none; // 确保点击事件传递到父级 .excel-cell
     }
 
     input, textarea, select {
@@ -218,6 +223,7 @@
       font-family: inherit;
       padding: 0;
       resize: none;
+      user-select: text; // 编辑模式下允许文本选择
     }
 
     textarea {

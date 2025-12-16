@@ -838,6 +838,68 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
         return;
       }
 
+      // Ctrl+C 复制（支持多行）
+      if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
+        e.preventDefault();
+        // 收集所有选中单元格的值（按行排序）
+        const sortedCells = [...selectedCells].sort((a, b) => a.row - b.row);
+        const values = sortedCells.map(cell => {
+          const cellValue = (tasks[cell.row] as any)?.[cell.col];
+          return { row: cell.row, col: cell.col, value: cellValue };
+        });
+
+        if (values.length > 0) {
+          // 生成文本用于系统剪贴板（每行一个值）
+          const textToCopy = values.map(v =>
+            v.col === 'images' ? JSON.stringify(v.value) : String(v.value ?? '')
+          ).join('\n');
+
+          navigator.clipboard.writeText(textToCopy).then(() => {
+            // 存储复制的单元格信息用于内部粘贴
+            (window as any).__copiedCells = values;
+          });
+        }
+        return;
+      }
+
+      // Ctrl+V 粘贴（支持多行）
+      if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+        e.preventDefault();
+        // 优先使用内部复制的单元格数据
+        const copiedCells = (window as any).__copiedCells as Array<{row: number, col: string, value: any}> | undefined;
+
+        if (copiedCells && copiedCells.length > 0 && copiedCells[0].col === col) {
+          // 从当前活动单元格开始粘贴多行
+          copiedCells.forEach((copied, index) => {
+            const targetRow = row + index;
+            if (targetRow < tasks.length) {
+              updateCellValue(targetRow, col, copied.value);
+            }
+          });
+        } else {
+          // 从系统剪贴板粘贴文本（支持多行）
+          navigator.clipboard.readText().then(text => {
+            const lines = text.split('\n');
+            lines.forEach((line, index) => {
+              const targetRow = row + index;
+              if (targetRow >= tasks.length) return;
+
+              if (col === 'prompt') {
+                updateCellValue(targetRow, col, line);
+              } else if (col === 'count') {
+                const num = parseInt(line);
+                if (!isNaN(num) && num >= 1) {
+                  updateCellValue(targetRow, col, num);
+                }
+              } else if (col === 'size' && SIZE_OPTIONS.includes(line)) {
+                updateCellValue(targetRow, col, line);
+              }
+            });
+          });
+        }
+        return;
+      }
+
       switch (e.key) {
         case 'ArrowUp':
           e.preventDefault();
@@ -878,7 +940,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [activeCell, editingCell, tasks.length, selectCell, enterEditMode, updateCellValue]);
+  }, [activeCell, editingCell, tasks, selectedCells, selectCell, enterEditMode, updateCellValue]);
 
   // 渲染单元格内容
   const renderCellContent = (task: TaskRow, rowIndex: number, col: string) => {
