@@ -135,7 +135,13 @@ class ToolboxService {
       category: tool.category || ToolCategory.CUSTOM,
       defaultWidth: tool.defaultWidth || 800,
       defaultHeight: tool.defaultHeight || 600,
-      permissions: tool.permissions || ['allow-scripts', 'allow-same-origin'],
+      permissions: tool.permissions || [
+        'allow-scripts',
+        'allow-same-origin',
+        'allow-popups',
+        'allow-forms',
+        'allow-top-navigation-by-user-activation'
+      ],
     };
 
     this.customTools.push(toolWithId);
@@ -160,17 +166,22 @@ class ToolboxService {
   /**
    * 更新自定义工具
    */
-  updateCustomTool(id: string, updates: Partial<ToolDefinition>): boolean {
+  async updateCustomTool(id: string, updates: Partial<ToolDefinition>): Promise<boolean> {
     const toolIndex = this.customTools.findIndex(t => t.id === id);
     if (toolIndex === -1) {
       return false;
     }
 
-    this.customTools[toolIndex] = {
+    // 验证更新后的工具定义
+    const updatedTool = {
       ...this.customTools[toolIndex],
       ...updates,
       id, // 确保 ID 不被修改
     };
+    this.validateToolDefinition(updatedTool);
+
+    this.customTools[toolIndex] = updatedTool;
+    await this.saveCustomTools();
     return true;
   }
 
