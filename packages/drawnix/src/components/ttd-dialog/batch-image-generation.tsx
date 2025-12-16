@@ -1045,7 +1045,16 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
         return (
           <div
             className={`${cellClassName} preview-cell preview-${rowInfo.status}`}
-            onClick={(e) => handleCellClick(e, rowIndex, col)}
+            onClick={(e) => {
+              // 失败状态下点击选中该行的复选框
+              if (rowInfo.status === 'failed') {
+                if (!selectedRows.has(rowIndex)) {
+                  toggleRowSelection(rowIndex);
+                }
+              } else {
+                handleCellClick(e, rowIndex, col);
+              }
+            }}
           >
             {rowInfo.status === 'idle' && (
               <span className="preview-idle">-</span>
