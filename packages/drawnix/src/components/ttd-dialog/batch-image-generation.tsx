@@ -989,7 +989,10 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
       const downloadUrl = URL.createObjectURL(zipBlob);
       const a = document.createElement('a');
       a.href = downloadUrl;
-      a.download = `batch_images_${new Date().toISOString().slice(0, 10)}.zip`;
+      const now = new Date();
+      const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+      const timeStr = `${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
+      a.download = `aitu_images_${successCount}pics_${dateStr}_${timeStr}.zip`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -1601,8 +1604,11 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
           <div
             className={`${cellClassName} preview-cell preview-${rowInfo.status}`}
             onClick={(e) => {
-              // 失败状态下点击选中该行的复选框
-              if (rowInfo.status === 'failed') {
+              // 有已完成的图片时，打开画廊
+              if (rowInfo.status === 'completed' || rowInfo.status === 'partial') {
+                setGalleryRowIndex(rowIndex);
+              } else if (rowInfo.status === 'failed') {
+                // 失败状态下点击选中该行的复选框
                 if (!selectedRows.has(rowIndex)) {
                   toggleRowSelection(rowIndex);
                 }
@@ -1644,7 +1650,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
                       className="preview-more clickable"
                       onClick={(e) => {
                         e.stopPropagation();
-                        openImagePreview(completedUrls, 3);
+                        setGalleryRowIndex(rowIndex);
                       }}
                       title={language === 'zh' ? '查看全部图片' : 'View all images'}
                     >
