@@ -30,7 +30,7 @@ const DEFAULT_SETTINGS: AppSettings = {
     apiKey: '',
     baseUrl: 'https://api.tu-zi.com/v1',
     chatModel: 'gpt-5',
-    imageModelName: 'gemini-2.5-flash-image-vip',
+    imageModelName: 'gemini-3-pro-image-preview-vip',
     videoModelName: 'veo3',
   },
 };

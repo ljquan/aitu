@@ -7,7 +7,7 @@ import { useTaskQueue } from '../../hooks/useTaskQueue';
 import { TaskType } from '../../types/task.types';
 import { MessagePlugin, Select } from 'tdesign-react';
 import { useGenerationHistory } from '../../hooks/useGenerationHistory';
-import { IMAGE_MODEL_OPTIONS } from '../settings-dialog/settings-dialog';
+import { IMAGE_MODEL_GROUPED_OPTIONS } from '../settings-dialog/settings-dialog';
 import {
   useGenerationState,
   useKeyboardShortcuts,
@@ -225,7 +225,7 @@ const AIImageGeneration = ({
 
         // Get current image model from settings
         const settings = geminiSettings.get();
-        const currentImageModel = settings.imageModelName || 'gemini-2.5-flash-image-vip';
+        const currentImageModel = settings.imageModelName || 'gemini-3-pro-image-preview-vip';
 
         for (let i = 0; i < count; i++) {
           const taskParams = {
@@ -363,7 +363,7 @@ const AIImageGeneration = ({
               <Select
                 value={selectedModel}
                 onChange={(value) => onModelChange(value as string)}
-                options={IMAGE_MODEL_OPTIONS}
+                options={IMAGE_MODEL_GROUPED_OPTIONS}
                 size="small"
                 placeholder={language === 'zh' ? '选择图片模型' : 'Select Image Model'}
                 filterable
