@@ -187,6 +187,13 @@
         td:first-child {
           border-left: 2px solid #F39C12;
         }
+      }
+
+      // 填充预览行
+      &.fill-preview {
+        td {
+          background: rgba(24, 144, 255, 0.1) !important;
+        }
 
         td:last-child {
           border-right: 2px solid #F39C12;
@@ -239,7 +246,14 @@
     }
 
     &.selected {
-      background: #e3f2fd;
+      background: rgba(243, 156, 18, 0.1);
+      outline: 2px solid #F39C12;
+      outline-offset: -2px;
+      z-index: 1;
+    }
+
+    &.active.selected {
+      z-index: 2;
     }
 
     .cell-text {
