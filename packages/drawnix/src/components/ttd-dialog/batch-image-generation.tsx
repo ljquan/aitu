@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { MessagePlugin, Select, Dialog, Tooltip } from 'tdesign-react';
+import { MessagePlugin, Select, Dialog, Tooltip, DialogPlugin } from 'tdesign-react';
 import { useI18n } from '../../i18n';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
 import { TaskType, TaskStatus, Task } from '../../types/task.types';
@@ -30,8 +30,23 @@ interface CellPosition {
   col: string;
 }
 
-// 尺寸选项
-const SIZE_OPTIONS = ['1x1', '2x3', '3x2', '3x4', '4x3', '4x5', '5x4', '9x16', '16x9', '21x9'];
+// 尺寸选项（auto 表示自动，其余格式为 宽x高）
+const SIZE_OPTIONS = ['auto', '1x1', '2x3', '3x2', '3x4', '4x3', '4x5', '5x4', '9x16', '16x9', '21x9'];
+
+// 尺寸显示名称
+const SIZE_LABELS: Record<string, string> = {
+  'auto': '自动',
+  '1x1': '1:1',
+  '2x3': '2:3',
+  '3x2': '3:2',
+  '3x4': '3:4',
+  '4x3': '4:3',
+  '4x5': '4:5',
+  '5x4': '5:4',
+  '9x16': '9:16',
+  '16x9': '16:9',
+  '21x9': '21:9'
+};
 
 // 可编辑列
 const EDITABLE_COLS = ['prompt', 'size', 'images', 'count', 'preview'];
@@ -66,7 +81,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
       initialTasks.push({
         id: i + 1,
         prompt: '',
-        size: '1x1',
+        size: 'auto',
         images: [],
         count: 1,
         taskIds: []
@@ -98,14 +113,35 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
   // 独立的行选择状态（checkbox），与单元格选择分离
   const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
 
-  // 图片库
-  const [imageLibrary, setImageLibrary] = useState<string[]>([]);
-  const [isLibraryCollapsed, setIsLibraryCollapsed] = useState(false);
+  // 撤销/重做历史
+  const historyRef = useRef<TaskRow[][]>([]);
+  const historyIndexRef = useRef<number>(-1);
+  const isUndoRedoRef = useRef<boolean>(false); // 标记是否正在撤销/重做，避免重复记录历史
+
+  // 图片库 - 从本地缓存加载
+  const [imageLibrary, setImageLibrary] = useState<string[]>(() => {
+    try {
+      const cached = localStorage.getItem(BATCH_IMAGE_CACHE_KEY);
+      if (cached) {
+        const data = JSON.parse(cached);
+        if (data.imageLibrary && Array.isArray(data.imageLibrary)) {
+          return data.imageLibrary;
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to load image library from cache:', e);
+    }
+    return [];
+  });
+  const [isLibraryCollapsed, setIsLibraryCollapsed] = useState(true); // 默认收纳
 
   // 填充拖拽
   const [isDraggingFill, setIsDraggingFill] = useState(false);
   const [fillStartCell, setFillStartCell] = useState<CellPosition | null>(null);
   const [fillPreviewRows, setFillPreviewRows] = useState<number[]>([]);
+
+  // 图片拖拽到行的高亮
+  const [dragOverRowIndex, setDragOverRowIndex] = useState<number | null>(null);
 
   // 批量导入设置
   const [imagesPerRow, setImagesPerRow] = useState<number>(1);
@@ -119,8 +155,11 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
     return settings.imageModelName || 'imagen-3.0-generate-002';
   });
 
-  // 图片预览弹窗
-  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  // 图片预览弹窗（支持左右切换）
+  const [previewImages, setPreviewImages] = useState<string[]>([]);
+  const [previewIndex, setPreviewIndex] = useState<number>(0);
+  // 行图片画廊弹窗（显示某行所有生成的图片）
+  const [galleryRowIndex, setGalleryRowIndex] = useState<number | null>(null);
 
   // 添加行弹窗
   const [showAddRowsModal, setShowAddRowsModal] = useState(false);
@@ -129,7 +168,9 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
   const fileInputRef = useRef<HTMLInputElement>(null);
   const batchImportInputRef = useRef<HTMLInputElement>(null);
   const excelImportInputRef = useRef<HTMLInputElement>(null);
+  const rowImageInputRef = useRef<HTMLInputElement>(null); // 行内图片上传
   const lastSelectedRowRef = useRef<number | null>(null); // 上次选择的行，用于 Shift 多选
+  const uploadTargetRowRef = useRef<number | null>(null); // 正在上传图片的目标行
 
   // 保存到本地缓存
   useEffect(() => {
@@ -137,13 +178,65 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
       const cacheData = {
         tasks,
         taskIdCounter,
+        imageLibrary,
         timestamp: Date.now()
       };
       localStorage.setItem(BATCH_IMAGE_CACHE_KEY, JSON.stringify(cacheData));
     } catch (e) {
       console.warn('Failed to save batch image cache:', e);
     }
-  }, [tasks, taskIdCounter]);
+  }, [tasks, taskIdCounter, imageLibrary]);
+
+  // 记录历史（用于撤销/重做）
+  const saveHistory = useCallback((newTasks: TaskRow[]) => {
+    if (isUndoRedoRef.current) {
+      isUndoRedoRef.current = false;
+      return;
+    }
+    // 截断当前位置之后的历史
+    historyRef.current = historyRef.current.slice(0, historyIndexRef.current + 1);
+    // 添加新状态（深拷贝）
+    historyRef.current.push(JSON.parse(JSON.stringify(newTasks)));
+    historyIndexRef.current = historyRef.current.length - 1;
+    // 限制历史记录数量（最多50条）
+    if (historyRef.current.length > 50) {
+      historyRef.current.shift();
+      historyIndexRef.current--;
+    }
+  }, []);
+
+  // 监听 tasks 变化，记录历史
+  useEffect(() => {
+    if (tasks.length > 0) {
+      saveHistory(tasks);
+    }
+  }, [tasks, saveHistory]);
+
+  // 撤销
+  const undo = useCallback(() => {
+    if (historyIndexRef.current > 0) {
+      historyIndexRef.current--;
+      isUndoRedoRef.current = true;
+      const previousState = JSON.parse(JSON.stringify(historyRef.current[historyIndexRef.current]));
+      setTasks(previousState);
+      MessagePlugin.info(language === 'zh' ? '已撤销' : 'Undone');
+    } else {
+      MessagePlugin.warning(language === 'zh' ? '没有可撤销的操作' : 'Nothing to undo');
+    }
+  }, [language]);
+
+  // 重做
+  const redo = useCallback(() => {
+    if (historyIndexRef.current < historyRef.current.length - 1) {
+      historyIndexRef.current++;
+      isUndoRedoRef.current = true;
+      const nextState = JSON.parse(JSON.stringify(historyRef.current[historyIndexRef.current]));
+      setTasks(nextState);
+      MessagePlugin.info(language === 'zh' ? '已重做' : 'Redone');
+    } else {
+      MessagePlugin.warning(language === 'zh' ? '没有可重做的操作' : 'Nothing to redo');
+    }
+  }, [language]);
 
   // 添加行
   const addRows = useCallback((count: number) => {
@@ -153,7 +246,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
         newTasks.push({
           id: taskIdCounter + i,
           prompt: '',
-          size: '1x1',
+          size: 'auto',
           images: [],
           count: 1,
           taskIds: []
@@ -285,14 +378,21 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
     }
   }, []);
 
-  // 从图片库添加图片到选中行
+  // 从图片库添加图片到选中行（支持 checkbox 选中或当前活动单元格所在行）
   const addImageToSelectedRows = useCallback((imageUrl: string) => {
-    if (selectedRows.size === 0) {
-      MessagePlugin.warning(language === 'zh' ? '请先勾选要添加图片的行' : 'Please check rows first');
+    // 优先使用 checkbox 选中的行，否则使用当前活动单元格所在行
+    let rowIndices: number[] = [];
+    if (selectedRows.size > 0) {
+      rowIndices = [...selectedRows];
+    } else if (activeCell) {
+      rowIndices = [activeCell.row];
+    }
+
+    if (rowIndices.length === 0) {
+      MessagePlugin.warning(language === 'zh' ? '请先选中要添加图片的行' : 'Please select a row first');
       return;
     }
 
-    const rowIndices = [...selectedRows];
     setTasks(prev => {
       const newTasks = [...prev];
       rowIndices.forEach(rowIndex => {
@@ -305,7 +405,21 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
       });
       return newTasks;
     });
-  }, [selectedRows, language]);
+  }, [selectedRows, activeCell, language]);
+
+  // 添加图片到指定行
+  const addImageToRow = useCallback((rowIndex: number, imageUrl: string) => {
+    setTasks(prev => {
+      const newTasks = [...prev];
+      if (newTasks[rowIndex] && !newTasks[rowIndex].images.includes(imageUrl)) {
+        newTasks[rowIndex] = {
+          ...newTasks[rowIndex],
+          images: [...newTasks[rowIndex].images, imageUrl]
+        };
+      }
+      return newTasks;
+    });
+  }, []);
 
   // 从行中移除图片
   const removeImageFromRow = useCallback((rowIndex: number, imageUrl: string) => {
@@ -324,6 +438,106 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
   // 删除图片库中的图片
   const deleteLibraryImage = useCallback((index: number) => {
     setImageLibrary(prev => prev.filter((_, i) => i !== index));
+  }, []);
+
+  // 处理行内图片上传（点击 + 按钮触发）
+  const handleRowImageUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    const targetRow = uploadTargetRowRef.current;
+    if (!files || files.length === 0 || targetRow === null) return;
+
+    Array.from(files).forEach(file => {
+      if (!file.type.startsWith('image/')) return;
+
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const dataUrl = ev.target?.result as string;
+        // 添加到图片库
+        setImageLibrary(prev => [...prev, dataUrl]);
+        // 添加到目标行
+        addImageToRow(targetRow, dataUrl);
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // 清空 input
+    if (rowImageInputRef.current) {
+      rowImageInputRef.current.value = '';
+    }
+    uploadTargetRowRef.current = null;
+  }, [addImageToRow]);
+
+  // 触发行内图片上传
+  const triggerRowImageUpload = useCallback((rowIndex: number) => {
+    uploadTargetRowRef.current = rowIndex;
+    setIsLibraryCollapsed(false); // 展开图片库
+    rowImageInputRef.current?.click(); // 打开文件选择
+  }, []);
+
+  // 处理行拖放
+  const handleRowDragOver = useCallback((e: React.DragEvent<HTMLTableRowElement>, rowIndex: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    setDragOverRowIndex(rowIndex);
+  }, []);
+
+  const handleRowDragLeave = useCallback((e: React.DragEvent<HTMLTableRowElement>) => {
+    // 检查是否真的离开了行（而不是进入子元素）
+    const relatedTarget = e.relatedTarget as HTMLElement;
+    if (!relatedTarget || !e.currentTarget.contains(relatedTarget)) {
+      setDragOverRowIndex(null);
+    }
+  }, []);
+
+  const handleRowDrop = useCallback((e: React.DragEvent<HTMLTableRowElement>, rowIndex: number) => {
+    e.preventDefault();
+    setDragOverRowIndex(null);
+
+    // 优先检查是否是从图片库拖拽的图片
+    const libraryImageUrl = e.dataTransfer.getData('text/library-image');
+    if (libraryImageUrl) {
+      addImageToRow(rowIndex, libraryImageUrl);
+      MessagePlugin.success(
+        language === 'zh'
+          ? `已添加图片到第 ${rowIndex + 1} 行`
+          : `Added image to row ${rowIndex + 1}`
+      );
+      return;
+    }
+
+    // 处理从文件管理器拖入的文件
+    const files = e.dataTransfer.files;
+    if (!files || files.length === 0) return;
+
+    let addedCount = 0;
+    Array.from(files).forEach(file => {
+      if (!file.type.startsWith('image/')) return;
+
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const dataUrl = ev.target?.result as string;
+        // 添加到图片库
+        setImageLibrary(prev => [...prev, dataUrl]);
+        // 添加到目标行
+        addImageToRow(rowIndex, dataUrl);
+      };
+      reader.readAsDataURL(file);
+      addedCount++;
+    });
+
+    if (addedCount > 0) {
+      MessagePlugin.success(
+        language === 'zh'
+          ? `已添加 ${addedCount} 张图片到第 ${rowIndex + 1} 行`
+          : `Added ${addedCount} images to row ${rowIndex + 1}`
+      );
+    }
+  }, [addImageToRow, language]);
+
+  // 图片库图片拖拽开始
+  const handleLibraryImageDragStart = useCallback((e: React.DragEvent<HTMLDivElement>, imageUrl: string) => {
+    e.dataTransfer.setData('text/library-image', imageUrl);
+    e.dataTransfer.effectAllowed = 'copy';
   }, []);
 
   // 处理批量导入文件选择
@@ -398,7 +612,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
           newTasks.push({
             id: taskIdCounter + newRowsCreated,
             prompt: '',
-            size: '1x1',
+            size: 'auto',
             images: rowImages,
             count: 1,
             taskIds: []
@@ -632,6 +846,28 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
     setSelectedRows(newSelectedRows);
   }, [tasks, selectedRows]);
 
+  // 打开图片预览（支持列表和索引）
+  const openImagePreview = useCallback((images: string[], startIndex: number = 0) => {
+    setPreviewImages(images);
+    setPreviewIndex(startIndex);
+  }, []);
+
+  // 关闭图片预览
+  const closeImagePreview = useCallback(() => {
+    setPreviewImages([]);
+    setPreviewIndex(0);
+  }, []);
+
+  // 切换到上一张图片
+  const prevImage = useCallback(() => {
+    setPreviewIndex(prev => (prev > 0 ? prev - 1 : previewImages.length - 1));
+  }, [previewImages.length]);
+
+  // 切换到下一张图片
+  const nextImage = useCallback(() => {
+    setPreviewIndex(prev => (prev < previewImages.length - 1 ? prev + 1 : 0));
+  }, [previewImages.length]);
+
   // 切换单行选择（checkbox），支持 Shift 多选
   const toggleRowSelection = useCallback((rowIndex: number, shiftKey: boolean = false) => {
     setSelectedRows(prev => {
@@ -733,27 +969,8 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
     );
   }, [selectedRows, tasks, queueTasks, language]);
 
-  // 提交到任务队列 - 只提交选中的行
-  const submitToQueue = useCallback(async () => {
-    // 获取选中的行索引（从 checkbox 选中状态获取）
-    const selectedRowIndices = [...selectedRows].sort((a, b) => a - b);
-
-    // 如果没有选中行，提示用户
-    if (selectedRowIndices.length === 0) {
-      MessagePlugin.warning(language === 'zh' ? '请先勾选要生成的行' : 'Please check rows to generate');
-      return;
-    }
-
-    // 获取选中行中有提示词的任务
-    const validTasks = selectedRowIndices
-      .map(idx => ({ task: tasks[idx], rowIndex: idx }))
-      .filter(({ task }) => task && task.prompt && task.prompt.trim() !== '');
-
-    if (validTasks.length === 0) {
-      MessagePlugin.warning(language === 'zh' ? '选中的行没有填写提示词' : 'Selected rows have no prompts');
-      return;
-    }
-
+  // 执行实际的任务提交
+  const executeSubmit = useCallback(async (validTasks: { task: TaskRow; rowIndex: number }[]) => {
     setIsSubmitting(true);
 
     const settings = geminiSettings.get();
@@ -818,11 +1035,128 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
           : `Submitted ${submittedCount} tasks to queue`
       );
     }
-  }, [tasks, selectedRows, createTask, language, selectedModel]);
+  }, [createTask, language, selectedModel, setTasks]);
+
+  // 提交到任务队列 - 只提交选中的行
+  const submitToQueue = useCallback(async () => {
+    // 获取选中的行索引（从 checkbox 选中状态获取）
+    const selectedRowIndices = [...selectedRows].sort((a, b) => a - b);
+
+    // 如果没有选中行，提示用户
+    if (selectedRowIndices.length === 0) {
+      MessagePlugin.warning(language === 'zh' ? '请先勾选要生成的行' : 'Please check rows to generate');
+      return;
+    }
+
+    // 获取选中行中有提示词的任务
+    const validTasks = selectedRowIndices
+      .map(idx => ({ task: tasks[idx], rowIndex: idx }))
+      .filter(({ task }) => task && task.prompt && task.prompt.trim() !== '');
+
+    if (validTasks.length === 0) {
+      MessagePlugin.warning(language === 'zh' ? '选中的行没有填写提示词' : 'Selected rows have no prompts');
+      return;
+    }
+
+    // 检查是否有正在生成中的行
+    const generatingRows = validTasks.filter(({ task }) => {
+      const rowInfo = getRowTasksInfo(task);
+      return rowInfo.status === 'generating';
+    });
+
+    // 检查是否有大于等于 100 的行
+    const overLimitRows = validTasks.filter(({ task }) => (task.count || 1) >= 100);
+    // 计算总任务数
+    const totalTaskCount = validTasks.reduce((sum, { task }) => sum + (task.count || 1), 0);
+    const isTotalOverLimit = totalTaskCount >= 100;
+
+    // 如果有警告情况，弹窗确认
+    if (generatingRows.length > 0 || overLimitRows.length > 0 || isTotalOverLimit) {
+      const warnings: string[] = [];
+
+      // 生成中的行警告
+      if (generatingRows.length > 0) {
+        const rowNumbers = generatingRows.map(({ rowIndex }) => rowIndex + 1).join('、');
+        warnings.push(
+          language === 'zh'
+            ? `第 ${rowNumbers} 行正在生成中`
+            : `Row ${rowNumbers} is generating`
+        );
+      }
+
+      // 单行超限警告
+      if (overLimitRows.length > 0) {
+        const rowWarnings = overLimitRows.map(({ task, rowIndex }) =>
+          language === 'zh'
+            ? `第 ${rowIndex + 1} 行数量为 ${task.count}`
+            : `Row ${rowIndex + 1} count is ${task.count}`
+        ).join('、');
+        warnings.push(rowWarnings);
+      }
+
+      // 总数超限警告
+      if (isTotalOverLimit) {
+        warnings.push(
+          language === 'zh'
+            ? `总任务数为 ${totalTaskCount}`
+            : `Total task count is ${totalTaskCount}`
+        );
+      }
+
+      const warningMessage = warnings.join(language === 'zh' ? '；' : '; ');
+      const confirmMessage = language === 'zh'
+        ? `${warningMessage}，是否继续？`
+        : `${warningMessage}. Continue?`;
+
+      // 使用 DialogPlugin 弹窗确认
+      const dialog = DialogPlugin.confirm({
+        header: language === 'zh' ? '生成提醒' : 'Generation Warning',
+        body: confirmMessage,
+        confirmBtn: language === 'zh' ? '继续生成' : 'Continue',
+        cancelBtn: language === 'zh' ? '取消' : 'Cancel',
+        theme: 'warning',
+        closeBtn: true,
+        onConfirm: () => {
+          dialog.destroy();
+          executeSubmit(validTasks);
+        },
+        onCancel: () => {
+          dialog.destroy();
+        },
+        onClose: () => {
+          dialog.destroy();
+        }
+      });
+      return;
+    }
+
+    // 没有超限，直接提交
+    executeSubmit(validTasks);
+  }, [tasks, selectedRows, language, executeSubmit, getRowTasksInfo]);
 
   // 键盘导航和直接输入
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // 图片预览模式下的键盘处理
+      if (previewImages.length > 0) {
+        if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          prevImage();
+          return;
+        }
+        if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          nextImage();
+          return;
+        }
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          closeImagePreview();
+          return;
+        }
+        return; // 预览模式下不处理其他键盘事件
+      }
+
       if (!activeCell || editingCell) return;
 
       const { row, col } = activeCell;
@@ -850,6 +1184,20 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
         setEditingCell({ row, col });
         // 标记不需要选中全部（因为已经覆盖了，光标应该在末尾）
         (window as any).__cellEditSelectAll = false;
+        return;
+      }
+
+      // Ctrl+Z 撤销
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+        return;
+      }
+
+      // Ctrl+Y 或 Ctrl+Shift+Z 重做
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+        e.preventDefault();
+        redo();
         return;
       }
 
@@ -932,6 +1280,26 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
           e.preventDefault();
           if (colIndex < EDITABLE_COLS.length - 1) selectCell(row, EDITABLE_COLS[colIndex + 1]);
           break;
+        case 'Tab':
+          e.preventDefault();
+          if (e.shiftKey) {
+            // Shift+Tab: 向前移动
+            if (colIndex > 0) {
+              selectCell(row, EDITABLE_COLS[colIndex - 1]);
+            } else if (row > 0) {
+              // 移动到上一行的最后一列
+              selectCell(row - 1, EDITABLE_COLS[EDITABLE_COLS.length - 1]);
+            }
+          } else {
+            // Tab: 向后移动
+            if (colIndex < EDITABLE_COLS.length - 1) {
+              selectCell(row, EDITABLE_COLS[colIndex + 1]);
+            } else if (row < tasks.length - 1) {
+              // 移动到下一行的第一列
+              selectCell(row + 1, EDITABLE_COLS[0]);
+            }
+          }
+          break;
         case 'Enter':
           e.preventDefault();
           if (col !== 'images') enterEditMode(row, col);
@@ -948,6 +1316,9 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
             updateCellValue(row, col, '');
           } else if (col === 'count') {
             updateCellValue(row, col, 1);
+          } else if (col === 'images') {
+            // 清空图片参考
+            updateCellValue(row, col, []);
           }
           break;
       }
@@ -955,7 +1326,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [activeCell, editingCell, tasks, selectedCells, selectCell, enterEditMode, updateCellValue]);
+  }, [activeCell, editingCell, tasks, selectedCells, selectCell, enterEditMode, updateCellValue, undo, redo, previewImages, prevImage, nextImage, closeImagePreview]);
 
   // 渲染单元格内容
   const renderCellContent = (task: TaskRow, rowIndex: number, col: string) => {
@@ -989,10 +1360,34 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
                 }}
                 onBlur={() => setEditingCell(null)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Escape') setEditingCell(null);
-                  if (e.key === 'Enter' && !e.shiftKey) {
+                  if (e.key === 'Escape') {
+                    setEditingCell(null);
+                  } else if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
                     setEditingCell(null);
+                    // 移动到下一行
+                    if (rowIndex < tasks.length - 1) {
+                      selectCell(rowIndex + 1, col);
+                    }
+                  } else if (e.key === 'Tab') {
+                    e.preventDefault();
+                    setEditingCell(null);
+                    const colIndex = EDITABLE_COLS.indexOf(col);
+                    if (e.shiftKey) {
+                      // Shift+Tab: 向前移动
+                      if (colIndex > 0) {
+                        selectCell(rowIndex, EDITABLE_COLS[colIndex - 1]);
+                      } else if (rowIndex > 0) {
+                        selectCell(rowIndex - 1, EDITABLE_COLS[EDITABLE_COLS.length - 1]);
+                      }
+                    } else {
+                      // Tab: 向后移动
+                      if (colIndex < EDITABLE_COLS.length - 1) {
+                        selectCell(rowIndex, EDITABLE_COLS[colIndex + 1]);
+                      } else if (rowIndex < tasks.length - 1) {
+                        selectCell(rowIndex + 1, EDITABLE_COLS[0]);
+                      }
+                    }
                   }
                 }}
               />
@@ -1034,11 +1429,11 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
                 onClick={(e) => e.stopPropagation()}
               >
                 {SIZE_OPTIONS.map(size => (
-                  <option key={size} value={size}>{size}</option>
+                  <option key={size} value={size}>{SIZE_LABELS[size] || size}</option>
                 ))}
               </select>
             ) : (
-              <span className="cell-text">{task.size}</span>
+              <span className="cell-text">{SIZE_LABELS[task.size] || task.size}</span>
             )}
             {isActive && <div className="fill-handle" onMouseDown={() => startFillDrag(rowIndex, col)} />}
           </div>
@@ -1068,8 +1463,9 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
                 onClick={(e) => {
                   e.stopPropagation();
                   selectCell(rowIndex, col);
-                  setIsLibraryCollapsed(false);
+                  triggerRowImageUpload(rowIndex);
                 }}
+                title={language === 'zh' ? '上传图片' : 'Upload image'}
               >+</button>
             </div>
             {isActive && <div className="fill-handle" onMouseDown={() => startFillDrag(rowIndex, col)} />}
@@ -1115,11 +1511,43 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
                   setEditingCell(null);
                 }}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === 'Escape') {
+                  if (e.key === 'Escape') {
                     if (task.count === 0) {
                       updateCellValue(rowIndex, col, 1);
                     }
                     setEditingCell(null);
+                  } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (task.count === 0) {
+                      updateCellValue(rowIndex, col, 1);
+                    }
+                    setEditingCell(null);
+                    // 移动到下一行
+                    if (rowIndex < tasks.length - 1) {
+                      selectCell(rowIndex + 1, col);
+                    }
+                  } else if (e.key === 'Tab') {
+                    e.preventDefault();
+                    if (task.count === 0) {
+                      updateCellValue(rowIndex, col, 1);
+                    }
+                    setEditingCell(null);
+                    const colIndex = EDITABLE_COLS.indexOf(col);
+                    if (e.shiftKey) {
+                      // Shift+Tab: 向前移动
+                      if (colIndex > 0) {
+                        selectCell(rowIndex, EDITABLE_COLS[colIndex - 1]);
+                      } else if (rowIndex > 0) {
+                        selectCell(rowIndex - 1, EDITABLE_COLS[EDITABLE_COLS.length - 1]);
+                      }
+                    } else {
+                      // Tab: 向后移动
+                      if (colIndex < EDITABLE_COLS.length - 1) {
+                        selectCell(rowIndex, EDITABLE_COLS[colIndex + 1]);
+                      } else if (rowIndex < tasks.length - 1) {
+                        selectCell(rowIndex + 1, EDITABLE_COLS[0]);
+                      }
+                    }
                   }
                 }}
               />
@@ -1155,29 +1583,40 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
                 {language === 'zh' ? '生成中...' : 'Generating...'}
               </span>
             )}
-            {rowInfo.status === 'completed' && rowInfo.tasks.length > 0 && (
-              <div className="preview-images">
-                {rowInfo.tasks
-                  .filter(t => t.status === TaskStatus.COMPLETED && t.result?.url)
-                  .slice(0, 3)
-                  .map((t, idx) => (
+            {rowInfo.status === 'completed' && rowInfo.tasks.length > 0 && (() => {
+              const completedUrls = rowInfo.tasks
+                .filter(t => t.status === TaskStatus.COMPLETED && t.result?.url)
+                .map(t => t.result!.url);
+              return (
+                <div className="preview-images">
+                  {completedUrls.slice(0, 3).map((url, idx) => (
                     <div
-                      key={t.id}
+                      key={idx}
                       className="preview-thumb clickable"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setPreviewImageUrl(t.result!.url);
+                        openImagePreview(completedUrls, idx);
                       }}
-                      title={language === 'zh' ? '点击放大' : 'Click to enlarge'}
+                      title={language === 'zh' ? '点击放大，左右切换' : 'Click to enlarge, swipe to navigate'}
                     >
-                      <img src={t.result!.url} alt={`Result ${idx + 1}`} />
+                      <img src={url} alt={`Result ${idx + 1}`} />
                     </div>
                   ))}
-                {rowInfo.completedCount > 3 && (
-                  <span className="preview-more">+{rowInfo.completedCount - 3}</span>
-                )}
-              </div>
-            )}
+                  {rowInfo.completedCount > 3 && (
+                    <span
+                      className="preview-more clickable"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openImagePreview(completedUrls, 3);
+                      }}
+                      title={language === 'zh' ? '查看全部图片' : 'View all images'}
+                    >
+                      +{rowInfo.completedCount - 3}
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
             {rowInfo.status === 'failed' && rowInfo.tasks[0]?.error && (
               <div className="preview-error">
                 <span className="preview-error-message">
@@ -1201,31 +1640,33 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
                 )}
               </div>
             )}
-            {rowInfo.status === 'partial' && (
-              <div className="preview-partial">
-                <div className="preview-images">
-                  {rowInfo.tasks
-                    .filter(t => t.status === TaskStatus.COMPLETED && t.result?.url)
-                    .slice(0, 2)
-                    .map((t, idx) => (
+            {rowInfo.status === 'partial' && (() => {
+              const partialUrls = rowInfo.tasks
+                .filter(t => t.status === TaskStatus.COMPLETED && t.result?.url)
+                .map(t => t.result!.url);
+              return (
+                <div className="preview-partial">
+                  <div className="preview-images">
+                    {partialUrls.slice(0, 2).map((url, idx) => (
                       <div
-                        key={t.id}
+                        key={idx}
                         className="preview-thumb clickable"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setPreviewImageUrl(t.result!.url);
+                          openImagePreview(partialUrls, idx);
                         }}
-                        title={language === 'zh' ? '点击放大' : 'Click to enlarge'}
+                        title={language === 'zh' ? '点击放大，左右切换' : 'Click to enlarge, swipe to navigate'}
                       >
-                        <img src={t.result!.url} alt={`Result ${idx + 1}`} />
+                        <img src={url} alt={`Result ${idx + 1}`} />
                       </div>
                     ))}
+                  </div>
+                  <span className="preview-partial-info">
+                    ⚠️ {rowInfo.completedCount}/{rowInfo.tasks.length}
+                  </span>
                 </div>
-                <span className="preview-partial-info">
-                  ⚠️ {rowInfo.completedCount}/{rowInfo.tasks.length}
-                </span>
-              </div>
-            )}
+              );
+            })()}
           </div>
         );
 
@@ -1257,6 +1698,15 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
               accept="image/*"
               multiple
               onChange={handleBatchImportSelect}
+              style={{ display: 'none' }}
+            />
+            {/* 行内图片上传 input */}
+            <input
+              ref={rowImageInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={handleRowImageUpload}
               style={{ display: 'none' }}
             />
             <button className="btn btn-secondary" onClick={() => batchImportInputRef.current?.click()}>
@@ -1300,6 +1750,25 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
                 {language === 'zh' ? '← 返回单图模式' : '← Back to Single'}
               </button>
             )}
+            {/* 选中任务统计 - 只计算有提示词的行 */}
+            {(() => {
+              const validSelectedRows = [...selectedRows].filter(idx => {
+                const task = tasks[idx];
+                return task && task.prompt && task.prompt.trim() !== '';
+              });
+              const selectedTaskCount = validSelectedRows.reduce((sum, idx) => {
+                const task = tasks[idx];
+                return sum + (task?.count || 1);
+              }, 0);
+              return validSelectedRows.length > 0 ? (
+                <span className="task-count-badge">
+                  {language === 'zh'
+                    ? `${validSelectedRows.length} 行 / ${selectedTaskCount} 任务`
+                    : `${validSelectedRows.length} rows / ${selectedTaskCount} tasks`
+                  }
+                </span>
+              ) : null;
+            })()}
             <button
               className="btn btn-primary"
               onClick={submitToQueue}
@@ -1360,7 +1829,13 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
             </thead>
             <tbody>
               {tasks.map((task, rowIndex) => (
-                <tr key={task.id} className={selectedRows.has(rowIndex) ? 'row-selected' : ''}>
+                <tr
+                  key={task.id}
+                  className={`${selectedRows.has(rowIndex) ? 'row-selected' : ''} ${dragOverRowIndex === rowIndex ? 'row-drag-over' : ''}`}
+                  onDragOver={(e) => handleRowDragOver(e, rowIndex)}
+                  onDragLeave={handleRowDragLeave}
+                  onDrop={(e) => handleRowDrop(e, rowIndex)}
+                >
                   <td className="col-checkbox">
                     <input
                       type="checkbox"
@@ -1397,8 +1872,8 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
 
         <p className="hint-text">
           {language === 'zh'
-            ? '提示：双击编辑 | 方向键导航 | Shift+点击多选 | 点击 + 添加参考图'
-            : 'Tip: Double-click to edit | Arrow keys to navigate | Shift+click to multi-select'
+            ? '提示：Enter 编辑/确认 | Tab 移动 | Ctrl+Z 撤销 | Ctrl+Y 重做 | 拖拽图片到行'
+            : 'Tip: Enter to edit/confirm | Tab to move | Ctrl+Z undo | Ctrl+Y redo | Drag images to rows'
           }
         </p>
       </div>
@@ -1433,8 +1908,15 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
                 </div>
               ) : (
                 imageLibrary.map((url, index) => (
-                  <div key={index} className="library-image" onClick={() => addImageToSelectedRows(url)}>
-                    <img src={url} alt="" />
+                  <div
+                    key={index}
+                    className="library-image"
+                    onClick={() => addImageToSelectedRows(url)}
+                    draggable
+                    onDragStart={(e) => handleLibraryImageDragStart(e, url)}
+                    title={language === 'zh' ? '点击添加到选中行，或拖拽到指定行' : 'Click to add to selected rows, or drag to a specific row'}
+                  >
+                    <img src={url} alt="" draggable={false} />
                     <button
                       className="delete-btn"
                       onClick={(e) => {
@@ -1531,19 +2013,79 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
         </div>
       )}
 
-      {/* 图片预览弹窗 */}
+      {/* 图片预览弹窗（支持左右切换） */}
       <Dialog
-        visible={!!previewImageUrl}
-        onClose={() => setPreviewImageUrl(null)}
-        header={language === 'zh' ? '图片预览' : 'Image Preview'}
+        visible={previewImages.length > 0}
+        onClose={closeImagePreview}
+        header={
+          previewImages.length > 1
+            ? `${language === 'zh' ? '图片预览' : 'Image Preview'} (${previewIndex + 1}/${previewImages.length})`
+            : (language === 'zh' ? '图片预览' : 'Image Preview')
+        }
         footer={null}
         width="80vw"
+        placement="center"
         className="image-preview-dialog"
         destroyOnClose
       >
-        {previewImageUrl && (
-          <div className="image-preview-content">
-            <img src={previewImageUrl} alt="Preview" />
+        {previewImages.length > 0 && (
+          <div
+            className="image-preview-content"
+            onTouchStart={(e) => {
+              const touch = e.touches[0];
+              (e.currentTarget as any)._touchStartX = touch.clientX;
+            }}
+            onTouchEnd={(e) => {
+              const touchStartX = (e.currentTarget as any)._touchStartX;
+              if (touchStartX === undefined) return;
+              const touch = e.changedTouches[0];
+              const diffX = touch.clientX - touchStartX;
+              if (Math.abs(diffX) > 50) {
+                if (diffX > 0) {
+                  prevImage();
+                } else {
+                  nextImage();
+                }
+              }
+              delete (e.currentTarget as any)._touchStartX;
+            }}
+          >
+            {/* 左切换按钮 */}
+            {previewImages.length > 1 && (
+              <button
+                className="preview-nav-btn preview-nav-prev"
+                onClick={prevImage}
+                title={language === 'zh' ? '上一张' : 'Previous'}
+              >
+                ‹
+              </button>
+            )}
+
+            <img src={previewImages[previewIndex]} alt={`Preview ${previewIndex + 1}`} />
+
+            {/* 右切换按钮 */}
+            {previewImages.length > 1 && (
+              <button
+                className="preview-nav-btn preview-nav-next"
+                onClick={nextImage}
+                title={language === 'zh' ? '下一张' : 'Next'}
+              >
+                ›
+              </button>
+            )}
+
+            {/* 底部指示器 */}
+            {previewImages.length > 1 && (
+              <div className="preview-indicators">
+                {previewImages.map((_, idx) => (
+                  <span
+                    key={idx}
+                    className={`preview-indicator ${idx === previewIndex ? 'active' : ''}`}
+                    onClick={() => setPreviewIndex(idx)}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         )}
       </Dialog>
@@ -1585,6 +2127,47 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
             autoFocus
           />
         </div>
+      </Dialog>
+
+      {/* 行图片画廊弹窗 */}
+      <Dialog
+        visible={galleryRowIndex !== null}
+        onClose={() => setGalleryRowIndex(null)}
+        header={language === 'zh' ? `第 ${(galleryRowIndex ?? 0) + 1} 行生成结果` : `Row ${(galleryRowIndex ?? 0) + 1} Results`}
+        footer={null}
+        width="70vw"
+        className="row-gallery-dialog"
+        destroyOnClose
+      >
+        {galleryRowIndex !== null && (() => {
+          const taskRow = tasks[galleryRowIndex];
+          if (!taskRow) return null;
+          const rowInfo = getRowTasksInfo(taskRow);
+          const completedTasks = rowInfo.tasks.filter(t => t.status === TaskStatus.COMPLETED && t.result?.url);
+          const galleryUrls = completedTasks.map(t => t.result!.url);
+
+          return (
+            <div className="row-gallery-content">
+              <div className="gallery-grid">
+                {completedTasks.map((t, idx) => (
+                  <div
+                    key={t.id}
+                    className="gallery-item"
+                    onClick={() => openImagePreview(galleryUrls, idx)}
+                  >
+                    <img src={t.result!.url} alt={`Result ${idx + 1}`} />
+                    <span className="gallery-item-index">{idx + 1}</span>
+                  </div>
+                ))}
+              </div>
+              {completedTasks.length === 0 && (
+                <div className="gallery-empty">
+                  {language === 'zh' ? '暂无生成结果' : 'No results yet'}
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </Dialog>
     </div>
   );
