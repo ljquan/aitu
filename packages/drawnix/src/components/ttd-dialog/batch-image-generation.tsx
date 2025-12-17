@@ -359,6 +359,10 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
 
   // 开始填充拖拽
   const startFillDrag = useCallback((row: number, col: string) => {
+    // 确保不会同时触发选择拖拽
+    setIsDraggingSelect(false);
+    setSelectStartCell(null);
+
     setIsDraggingFill(true);
     setFillStartCell({ row, col });
     setFillEndRow(row);
@@ -366,23 +370,25 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
 
   // 开始单元格选择拖拽
   const startSelectDrag = useCallback((row: number, col: string) => {
+    // 如果正在填充拖拽，不启动选择拖拽
+    if (isDraggingFill) return;
     setIsDraggingSelect(true);
     setSelectStartCell({ row, col });
     setActiveCell({ row, col });
     setSelectedCells([{ row, col }]);
-  }, []);
+  }, [isDraggingFill]);
 
   // 处理拖拽过程中的鼠标移动
   const handleTableMouseMove = useCallback((e: React.MouseEvent) => {
-    // 获取鼠标下的单元格
-    const target = e.target as HTMLElement;
-    const cell = target.closest('td');
-    if (!cell) return;
+    // 没有拖拽状态则不处理
+    if (!isDraggingFill && !isDraggingSelect) return;
 
-    const rowElement = cell.closest('tr');
+    // 获取鼠标下的行
+    const target = e.target as HTMLElement;
+    const rowElement = target.closest('tr[data-row-index]');
     if (!rowElement) return;
 
-    const rowIndex = parseInt(rowElement.dataset.rowIndex || '-1');
+    const rowIndex = parseInt((rowElement as HTMLElement).dataset.rowIndex || '-1');
     if (rowIndex < 0) return;
 
     // 填充拖拽
@@ -426,10 +432,6 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
       const endRow = fillEndRow;
       const minRow = Math.min(startRow, endRow);
       const maxRow = Math.max(startRow, endRow);
-
-      // 保存历史记录
-      setHistory(prev => [...prev.slice(-49), JSON.parse(JSON.stringify(tasks))]);
-      setFuture([]);
 
       setTasks(prev => {
         const newTasks = [...prev];
@@ -1468,6 +1470,18 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [activeCell, editingCell, tasks, selectedCells, selectCell, enterEditMode, updateCellValue, undo, redo, previewImages, prevImage, nextImage, closeImagePreview]);
 
+  // 全局鼠标释放监听 - 确保拖拽在任何地方释放都能结束
+  useEffect(() => {
+    const handleGlobalMouseUp = () => {
+      if (isDraggingFill || isDraggingSelect) {
+        handleTableMouseUp();
+      }
+    };
+
+    document.addEventListener('mouseup', handleGlobalMouseUp);
+    return () => document.removeEventListener('mouseup', handleGlobalMouseUp);
+  }, [isDraggingFill, isDraggingSelect, handleTableMouseUp]);
+
   // 渲染单元格内容
   const renderCellContent = (task: TaskRow, rowIndex: number, col: string) => {
     const isEditing = editingCell?.row === rowIndex && editingCell?.col === col;
@@ -1482,6 +1496,8 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
           <div
             className={cellClassName}
             onMouseDown={(e) => {
+              // 如果点击的是填充柄，不处理
+              if ((e.target as HTMLElement).classList.contains('fill-handle')) return;
               // 如果已经在编辑当前单元格，不处理
               if (isEditing) return;
               // 左键开始选择拖拽
@@ -1542,7 +1558,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
             ) : (
               <span className="cell-text">{task.prompt || ''}</span>
             )}
-            {isActive && <div className="fill-handle" onMouseDown={() => startFillDrag(rowIndex, col)} />}
+            {isActive && <div className="fill-handle" onMouseDown={(e) => { e.stopPropagation(); startFillDrag(rowIndex, col); }} />}
           </div>
         );
 
@@ -1551,6 +1567,8 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
           <div
             className={cellClassName}
             onMouseDown={(e) => {
+              // 如果点击的是填充柄，不处理
+              if ((e.target as HTMLElement).classList.contains('fill-handle')) return;
               if (e.button === 0 && !e.shiftKey) {
                 startSelectDrag(rowIndex, col);
               }
@@ -1588,7 +1606,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
             ) : (
               <span className="cell-text">{SIZE_LABELS[task.size] || task.size}</span>
             )}
-            {isActive && <div className="fill-handle" onMouseDown={() => startFillDrag(rowIndex, col)} />}
+            {isActive && <div className="fill-handle" onMouseDown={(e) => { e.stopPropagation(); startFillDrag(rowIndex, col); }} />}
           </div>
         );
 
@@ -1621,7 +1639,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
                 title={language === 'zh' ? '上传图片' : 'Upload image'}
               >+</button>
             </div>
-            {isActive && <div className="fill-handle" onMouseDown={() => startFillDrag(rowIndex, col)} />}
+            {isActive && <div className="fill-handle" onMouseDown={(e) => { e.stopPropagation(); startFillDrag(rowIndex, col); }} />}
           </div>
         );
 
@@ -1630,6 +1648,8 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
           <div
             className={cellClassName}
             onMouseDown={(e) => {
+              // 如果点击的是填充柄，不处理
+              if ((e.target as HTMLElement).classList.contains('fill-handle')) return;
               if (isEditing) return;
               if (e.button === 0 && !e.shiftKey) {
                 startSelectDrag(rowIndex, col);
@@ -1713,7 +1733,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
             ) : (
               <span className="cell-text">{task.count}</span>
             )}
-            {isActive && <div className="fill-handle" onMouseDown={() => startFillDrag(rowIndex, col)} />}
+            {isActive && <div className="fill-handle" onMouseDown={(e) => { e.stopPropagation(); startFillDrag(rowIndex, col); }} />}
           </div>
         );
 

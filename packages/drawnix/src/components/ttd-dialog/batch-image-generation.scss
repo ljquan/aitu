@@ -292,15 +292,21 @@
     // 填充柄
     .fill-handle {
       position: absolute;
-      bottom: -3px;
-      right: -3px;
-      width: 8px;
-      height: 8px;
+      bottom: -4px;
+      right: -4px;
+      width: 10px;
+      height: 10px;
       background: #F39C12;
-      border: 1px solid white;
+      border: 2px solid white;
       cursor: crosshair;
       z-index: 100;
       display: none;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+
+      &:hover {
+        transform: scale(1.2);
+        background: #E67E22;
+      }
     }
 
     &.active .fill-handle {
