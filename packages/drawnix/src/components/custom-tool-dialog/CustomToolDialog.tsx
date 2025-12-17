@@ -46,6 +46,17 @@ const CATEGORY_OPTIONS = [
   { value: ToolCategory.CUSTOM, label: '自定义' },
 ];
 
+// 默认表单数据
+const DEFAULT_FORM_DATA: Partial<ToolDefinition> = {
+  name: '',
+  url: '',
+  description: '',
+  icon: '🔧',
+  category: ToolCategory.CUSTOM,
+  defaultWidth: 800,
+  defaultHeight: 600,
+};
+
 /**
  * 自定义工具对话框组件
  */
@@ -55,16 +66,7 @@ export const CustomToolDialog: React.FC<CustomToolDialogProps> = ({
   onSuccess,
 }) => {
   // 表单状态
-  const [formData, setFormData] = useState<Partial<ToolDefinition>>({
-    name: '',
-    url: '',
-    description: '',
-    icon: '🔧',
-    category: ToolCategory.CUSTOM,
-    defaultWidth: 800,
-    defaultHeight: 600,
-  });
-
+  const [formData, setFormData] = useState<Partial<ToolDefinition>>(DEFAULT_FORM_DATA);
   const [loading, setLoading] = useState(false);
 
   // 更新表单字段
@@ -115,21 +117,11 @@ export const CustomToolDialog: React.FC<CustomToolDialogProps> = ({
     setLoading(true);
 
     try {
-      // 添加自定义工具
       await toolboxService.addCustomTool(formData as ToolDefinition);
-
       MessagePlugin.success('工具添加成功！');
 
-      // 重置表单
-      setFormData({
-        name: '',
-        url: '',
-        description: '',
-        icon: '🔧',
-        category: ToolCategory.CUSTOM,
-        defaultWidth: 800,
-        defaultHeight: 600,
-      });
+      // 重置表单为默认值
+      setFormData(DEFAULT_FORM_DATA);
 
       // 调用成功回调
       if (onSuccess) {
@@ -150,16 +142,7 @@ export const CustomToolDialog: React.FC<CustomToolDialogProps> = ({
 
   // 取消操作
   const handleCancel = useCallback(() => {
-    // 重置表单
-    setFormData({
-      name: '',
-      url: '',
-      description: '',
-      icon: '🔧',
-      category: ToolCategory.CUSTOM,
-      defaultWidth: 800,
-      defaultHeight: 600,
-    });
+    setFormData(DEFAULT_FORM_DATA);
     onClose();
   }, [onClose]);
 
@@ -169,6 +152,7 @@ export const CustomToolDialog: React.FC<CustomToolDialogProps> = ({
       header="添加自定义工具"
       onClose={handleCancel}
       width={520}
+      destroyOnClose
       footer={
         <div className="custom-tool-dialog__footer">
           <Button onClick={handleCancel} disabled={loading}>

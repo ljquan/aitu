@@ -163,6 +163,7 @@ $spacing-xl: 24px;
 // ============================================================================
 
 .tool-item {
+  position: relative;
   display: flex;
   align-items: flex-start;
   gap: $spacing-md;
@@ -172,6 +173,9 @@ $spacing-xl: 24px;
   border: 1px solid var(--td-component-border);
   cursor: pointer;
   transition: all 0.2s ease;
+  user-select: none; // 防止长按时选中文本
+  -webkit-user-select: none;
+  -webkit-touch-callout: none; // 禁用 iOS 长按菜单
 
   &:hover {
     background: var(--td-bg-color-container-hover);
@@ -183,6 +187,12 @@ $spacing-xl: 24px;
   &:active {
     transform: translateY(0);
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  }
+
+  // 长按时的视觉反馈（移动端）
+  &--long-pressing {
+    background: var(--td-bg-color-container-active);
+    border-color: var(--brand-primary, #f39c12);
   }
 
   &__icon {
@@ -221,6 +231,40 @@ $spacing-xl: 24px;
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
+  }
+
+  // 操作按钮容器（编辑和删除）
+  &__actions {
+    position: absolute;
+    top: 50%;
+    right: $spacing-sm;
+    transform: translateY(-50%); // 垂直居中
+    display: flex;
+    gap: 4px;
+    padding: 4px;
+    background: var(--td-bg-color-container);
+    border-radius: 6px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+    z-index: 1;
+
+    .t-button {
+      opacity: 0.7;
+      transition: opacity 0.2s ease;
+
+      &:hover {
+        opacity: 1;
+      }
+
+      // Edit button color
+      &:first-child:hover {
+        color: var(--brand-primary, #5a4fcf);
+      }
+
+      // Delete button color
+      &:last-child:hover {
+        color: var(--td-error-color, #e34d59);
+      }
+    }
   }
 }
 

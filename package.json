@@ -1,6 +1,6 @@
 {
   "name": "@aitu/source",
-  "version": "0.2.14",
+  "version": "0.3.0",
   "license": "MIT",
   "description": "Aitu - An open-source whiteboard tool with AI-powered image/video creation, mind mapping, flowcharts, and freehand drawing",
   "homepage": "https://aitu.chat",
@@ -64,6 +64,7 @@
     "tdesign-icons-react": "^0.5.1",
     "tdesign-react": "^1.14.5",
     "tslib": "^2.3.0",
+    "web-vitals": "^5.1.0",
     "winbox": "^0.2.82",
     "xlsx": "^0.18.5"
   },
@@ -78,7 +79,7 @@
     "@nx/js": "19.3.0",
     "@nx/playwright": "19.3.0",
     "@nx/react": "19.3.0",
-    "@nx/vite": "^20.6.0",
+    "@nx/vite": "19.3.0",
     "@nx/web": "19.3.0",
     "@nx/workspace": "19.3.0",
     "@playwright/test": "^1.36.0",

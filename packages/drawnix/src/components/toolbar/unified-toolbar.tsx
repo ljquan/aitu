@@ -10,6 +10,7 @@ import { Island } from '../island';
 import { FeedbackButton } from '../feedback-button';
 import { BottomActionsSection } from './bottom-actions-section';
 import { TaskQueuePanel } from '../task-queue/TaskQueuePanel';
+import { useViewportScale } from '../../hooks/useViewportScale';
 
 // 工具栏高度阈值: 当容器高度小于此值时切换到图标模式
 // 基于四个分区的最小高度 + 分割线 + padding 计算得出
@@ -36,6 +37,12 @@ export const UnifiedToolbar: React.FC<UnifiedToolbarProps> = React.memo(({
   const [taskPanelExpanded, setTaskPanelExpanded] = useState(false);
   const hasEverExpanded = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // 使用 viewport scale hook 确保缩放时工具栏保持在视口左上角且大小不变
+  useViewportScale(containerRef, {
+    enablePositionTracking: true, // 启用位置跟随（适用于 absolute 定位）
+    enableScaleCompensation: true, // 启用反向缩放保持大小不变
+  });
 
   // 使用 useCallback 稳定回调函数引用,配合 React.memo 优化性能
   const handleResize = useCallback((entries: ResizeObserverEntry[]) => {

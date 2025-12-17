@@ -1,3 +1,58 @@
+## 0.3.0 (2025-12-16)
+
+### 🩹 Fixes
+
+- 添加 .npmrc 解决 CI 依赖安装冲突 ([0b8f8e1](https://github.com/ljquan/aitu/commit/0b8f8e1))
+- 修复winbox 中任务显示不正常 ([3f16f13](https://github.com/ljquan/aitu/commit/3f16f13))
+
+### 🔧 Chores
+
+- 指示小优化 ([d90971f](https://github.com/ljquan/aitu/commit/d90971f))
+- 素材库位置优化 ([5e2e0ea](https://github.com/ljquan/aitu/commit/5e2e0ea))
+- 工具箱优化 ([794ca89](https://github.com/ljquan/aitu/commit/794ca89))
+- 更换chat生图接口为 image接口、修复素材库边距 ([4757992](https://github.com/ljquan/aitu/commit/4757992))
+- 优化教程 ([f927878](https://github.com/ljquan/aitu/commit/f927878))
+
+### ❤️  Thank You
+
+- gongchengtu <1817063960@qq.com>
+- liquid <ljquan@qq.com>
+
+## 0.2.15 (2025-12-13)
+
+### 🚀 Features
+
+- 素材库批量删除支持 ([5440dae](https://github.com/ljquan/aitu/commit/5440dae))
+- 素材库初版实现 ([9acfaa4](https://github.com/ljquan/aitu/commit/9acfaa4))
+- 实现多功能工具箱系统 ([2ece4c6](https://github.com/ljquan/aitu/commit/2ece4c6))
+- 优化工具栏和AI生成功能 ([51e6f5c](https://github.com/ljquan/aitu/commit/51e6f5c))
+- 优化项目抽屉UI和图标设计 ([615f4f6](https://github.com/ljquan/aitu/commit/615f4f6))
+- workspace项目管理系统及首次访问默认数据 ([a6d6a84](https://github.com/ljquan/aitu/commit/a6d6a84))
+
+### 🩹 Fixes
+
+- 素材库移动端优化 ([cad4025](https://github.com/ljquan/aitu/commit/cad4025))
+- 素材填入优化 ([6dfbe94](https://github.com/ljquan/aitu/commit/6dfbe94))
+- 视频加载修复 ([9e7a5f7](https://github.com/ljquan/aitu/commit/9e7a5f7))
+- 素材库样式修复 ([34b36a5](https://github.com/ljquan/aitu/commit/34b36a5))
+- 修复视频模型切换参数同步问题 ([53a653e](https://github.com/ljquan/aitu/commit/53a653e))
+
+### 🔧 Chores
+
+- bump version to 0.2.14 ([66e8bba](https://github.com/ljquan/aitu/commit/66e8bba))
+- 优化交互 ([a961727](https://github.com/ljquan/aitu/commit/a961727))
+- 优化缩放 ([c605f5a](https://github.com/ljquan/aitu/commit/c605f5a))
+- 优化工具 ([62d7d76](https://github.com/ljquan/aitu/commit/62d7d76))
+- docs: 添加openspec ([663998f](https://github.com/ljquan/aitu/commit/663998f))
+- docs(009-media-library): 添加媒体库功能规划文档 ([9c6c35a](https://github.com/ljquan/aitu/commit/9c6c35a))
+- refactor(analytics): 将 Umami 分析替换为 PostHog ([c0b7069](https://github.com/ljquan/aitu/commit/c0b7069))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+- gongchengtu <1817063960@qq.com>
+- liquidliang <ljquan@qq.com>
+
 ## 0.2.14 (2025-12-10)
 
 ### 🚀 Features

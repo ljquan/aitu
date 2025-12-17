@@ -111,40 +111,27 @@ export async function migrateToWorkspace(): Promise<string | null> {
     const workspaceService = WorkspaceService.getInstance();
     await workspaceService.initialize();
 
-    // Create a project for migrated data
-    const project = await workspaceService.createProject({
+    // Create a board for migrated data (using createBoard instead of createProject)
+    const board = await workspaceService.createBoard({
       name: '迁移的画板',
-    });
-
-    if (!project) {
-      console.error('[WorkspaceMigration] Failed to create project');
-      return null;
-    }
-
-    // Find the default branch
-    const branches = workspaceService.getProjectBranches(project.id);
-    const defaultBranch = branches.find((b) => b.id === project.defaultBranchId);
-
-    if (!defaultBranch) {
-      console.error('[WorkspaceMigration] Failed to find default branch');
-      return null;
-    }
-
-    // First switch to this branch to make it current
-    await workspaceService.switchBranch(defaultBranch.id);
-
-    // Then save legacy data to the current branch
-    await workspaceService.saveCurrentBranch({
-      children: legacyData.children,
+      elements: legacyData.children,
       viewport: legacyData.viewport,
       theme: legacyData.theme,
     });
 
+    if (!board) {
+      console.error('[WorkspaceMigration] Failed to create board');
+      return null;
+    }
+
+    // Switch to the newly created board
+    await workspaceService.switchBoard(board.id);
+
     // Mark migration as completed
     await markMigrationCompleted();
 
-    console.log('[WorkspaceMigration] Migration completed, branch:', defaultBranch.id);
-    return defaultBranch.id;
+    console.log('[WorkspaceMigration] Migration completed, board:', board.id);
+    return board.id;
   } catch (error) {
     console.error('[WorkspaceMigration] Migration failed:', error);
     return null;

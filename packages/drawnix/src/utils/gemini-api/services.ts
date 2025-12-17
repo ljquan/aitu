@@ -11,17 +11,21 @@ import { validateAndEnsureConfig } from './auth';
 
 /**
  * 调用 Gemini API 进行图像生成
+ * 使用专用的 /v1/images/generations 接口
  */
 export async function generateImageWithGemini(
   prompt: string,
   options: {
     n?: number;
     size?: string;
+    image?: string | string[]; // 支持单图或多图
+    response_format?: 'url' | 'b64_json';
+    quality?: '1k' | '2k' | '4k';
   } = {}
 ): Promise<any> {
   // 等待设置管理器初始化完成
   await settingsManager.waitForInitialization();
-  
+
   // 直接从设置中获取配置
   const globalSettings = geminiSettings.get();
   const config = {
@@ -35,12 +39,32 @@ export async function generateImageWithGemini(
     'Content-Type': 'application/json',
   };
 
-  const data = {
+  // 构建请求体
+  const data: any = {
     model: validatedConfig.modelName || 'gemini-2.5-flash-image-vip',
     prompt,
-    n: options.n || 1,
-    size: options.size || '1024x1024',
+    response_format: options.response_format || 'url', // 默认返回 url
   };
+
+  // n 参数可选，不传则由 API 决定
+  if (options.n !== undefined) {
+    data.n = options.n;
+  }
+
+  // size 参数可选，不传则由 API 自动决定（对应 auto）
+  if (options.size && options.size !== 'auto') {
+    data.size = options.size;
+  }
+
+  // image 参数可选（单图或多图）
+  if (options.image) {
+    data.image = options.image;
+  }
+
+  // quality 参数可选，仅对 gemini-3-pro-image-preview 有效
+  if (options.quality && data.model === 'gemini-3-pro-image-preview') {
+    data.quality = options.quality;
+  }
 
   const url = `${validatedConfig.baseUrl}/images/generations`;
 
@@ -52,7 +76,12 @@ export async function generateImageWithGemini(
   });
 
   if (!response.ok) {
-    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    const errorText = await response.text();
+    console.error('[ImageAPI] Request failed:', response.status, errorText);
+    const error = new Error(`图片生成请求失败: ${response.status} - ${errorText}`);
+    (error as any).apiErrorBody = errorText;
+    (error as any).httpStatus = response.status;
+    throw error;
   }
 
   return await response.json();

@@ -301,11 +301,31 @@ class TaskQueueService {
 
   /**
    * Observes task update events
-   * 
+   *
    * @returns Observable stream of task events
    */
   observeTaskUpdates(): Observable<TaskEvent> {
     return this.taskUpdates$.asObservable();
+  }
+
+  /**
+   * Marks a task as saved to the media library
+   * This prevents duplicate saves when task updates occur
+   *
+   * @param taskId - The task ID to mark as saved
+   */
+  markAsSaved(taskId: string): void {
+    const task = this.tasks.get(taskId);
+    if (!task) {
+      console.warn(`[TaskQueueService] Task ${taskId} not found`);
+      return;
+    }
+
+    this.updateTaskStatus(taskId, task.status, {
+      savedToLibrary: true,
+    });
+
+    console.log(`[TaskQueueService] Marked task ${taskId} as saved to library`);
   }
 
   /**

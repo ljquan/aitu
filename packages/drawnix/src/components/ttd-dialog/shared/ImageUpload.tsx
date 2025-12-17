@@ -1,4 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { Button } from 'tdesign-react';
+import { FolderOpen, HardDrive } from 'lucide-react';
+import { MediaLibraryModal } from '../../media-library/MediaLibraryModal';
+import type { Asset } from '../../../types/asset.types';
+import { SelectionMode, AssetType } from '../../../types/asset.types';
 
 export interface ImageFile {
   file?: File;
@@ -29,6 +34,8 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
   onError,
   headerRight
 }) => {
+  const [showMediaLibrary, setShowMediaLibrary] = useState(false);
+
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (files) {
@@ -65,6 +72,38 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
     return image.file ? URL.createObjectURL(image.file) : image.url || '';
   };
 
+  const handleMediaLibrarySelect = async (asset: Asset) => {
+    // Need to fetch the actual blob data from the blob URL
+    // and convert it to base64 data URL for API compatibility
+    try {
+      const response = await fetch(asset.url);
+      const blob = await response.blob();
+
+      // Convert blob to base64 data URL
+      const reader = new FileReader();
+      reader.onload = () => {
+        const newImage: ImageFile = {
+          url: reader.result as string, // base64 data URL
+          name: asset.name
+        };
+
+        if (multiple) {
+          onImagesChange([...images, newImage]);
+        } else {
+          onImagesChange([newImage]);
+        }
+
+        setShowMediaLibrary(false);
+        onError?.(null);
+      };
+      reader.readAsDataURL(blob);
+    } catch (error) {
+      console.error('[ImageUpload] Failed to convert asset to base64:', error);
+      onError?.(language === 'zh' ? '加载图片失败' : 'Failed to load image');
+      setShowMediaLibrary(false);
+    }
+  };
+
   const defaultLabel = language === 'zh' 
     ? `${multiple ? '参考图片' : '源图片'} (可选)` 
     : `${multiple ? 'Reference Images' : 'Source Image'} (Optional)`;
@@ -78,34 +117,45 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
         {headerRight && <div className="form-label-right">{headerRight}</div>}
       </div>
       <div className="unified-image-area">
-        {images.length === 0 ? (
-          <div className="upload-area">
-            <input
-              type="file"
-              id="image-upload"
-              multiple={multiple}
-              accept="image/*"
-              onChange={handleImageUpload}
-              className="upload-input"
-              disabled={disabled}
-            />
-            <label htmlFor="image-upload" className="upload-label">
-              <div className="upload-icon">{icon}</div>
-              <div className="upload-text">
-                {language === 'zh' 
-                  ? '点击或拖拽上传图片' 
-                  : 'Click or drag to upload image'}
+        <div className="images-grid">
+          {images.length === 0 ? (
+            <div className="add-more-item">
+              <input
+                type="file"
+                id="image-upload"
+                multiple={multiple}
+                accept="image/*"
+                onChange={handleImageUpload}
+                className="upload-input"
+                disabled={disabled}
+                style={{ display: 'none' }}
+              />
+              <div className="add-more-buttons">
+                <Button
+                  variant="outline"
+                  icon={<HardDrive size={18} />}
+                  onClick={() => document.getElementById('image-upload')?.click()}
+                  disabled={disabled}
+                  data-track="image_upload_select_from_local"
+                  className="add-more-btn"
+                >
+                  {language === 'zh' ? '本地' : 'Local'}
+                </Button>
+                <Button
+                  variant="outline"
+                  icon={<FolderOpen size={18} />}
+                  onClick={() => setShowMediaLibrary(true)}
+                  disabled={disabled}
+                  data-track="image_upload_select_from_library"
+                  className="add-more-btn"
+                >
+                  {language === 'zh' ? '素材库' : 'Library'}
+                </Button>
               </div>
-              <div className="upload-hint">
-                {language === 'zh' 
-                  ? '支持 JPG, PNG, WebP, 最大 10MB' 
-                  : 'Support JPG, PNG, WebP, Max 10MB'}
-              </div>
-            </label>
-          </div>
-        ) : (
-          <div className="images-grid">
-            {images.map((image, index) => {
+            </div>
+          ) : (
+            <>
+              {images.map((image, index) => {
               const src = getImageSrc(image);
               return (
                 <div key={index} className="uploaded-image-item" data-tooltip={src}>
@@ -163,13 +213,30 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
                   onChange={handleImageUpload}
                   className="upload-input"
                   disabled={disabled}
+                  style={{ display: 'none' }}
                 />
-                <label htmlFor="image-upload-more" className="add-more-label">
-                  <div className="add-more-icon">+</div>
-                  <div className="add-more-text">
-                    {language === 'zh' ? '添加' : 'Add'}
-                  </div>
-                </label>
+                <div className="add-more-buttons">
+                  <Button
+                    variant="outline"
+                    icon={<HardDrive size={18} />}
+                    onClick={() => document.getElementById('image-upload-more')?.click()}
+                    disabled={disabled}
+                    data-track="image_upload_select_from_local_more"
+                    className="add-more-btn"
+                  >
+                    {language === 'zh' ? '本地' : 'Local'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    icon={<FolderOpen size={18} />}
+                    onClick={() => setShowMediaLibrary(true)}
+                    disabled={disabled}
+                    data-track="image_upload_select_from_library_more"
+                    className="add-more-btn"
+                  >
+                    {language === 'zh' ? '素材库' : 'Library'}
+                  </Button>
+                </div>
               </div>
             )}
             {!multiple && (
@@ -181,18 +248,45 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
                   onChange={handleImageUpload}
                   className="upload-input"
                   disabled={disabled}
+                  style={{ display: 'none' }}
                 />
-                <label htmlFor="image-replace" className="add-more-label">
-                  <div className="add-more-icon">↻</div>
-                  <div className="add-more-text">
-                    {language === 'zh' ? '替换' : 'Replace'}
-                  </div>
-                </label>
+                <div className="add-more-buttons">
+                  <Button
+                    variant="outline"
+                    icon={<HardDrive size={18} />}
+                    onClick={() => document.getElementById('image-replace')?.click()}
+                    disabled={disabled}
+                    data-track="image_upload_replace_from_local"
+                    className="add-more-btn"
+                  >
+                    {language === 'zh' ? '本地' : 'Local'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    icon={<FolderOpen size={18} />}
+                    onClick={() => setShowMediaLibrary(true)}
+                    disabled={disabled}
+                    data-track="image_upload_replace_from_library"
+                    className="add-more-btn"
+                  >
+                    {language === 'zh' ? '素材库' : 'Library'}
+                  </Button>
+                </div>
               </div>
             )}
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </div>
+
+      {/* Media Library Modal */}
+      <MediaLibraryModal
+        isOpen={showMediaLibrary}
+        onClose={() => setShowMediaLibrary(false)}
+        mode={SelectionMode.SELECT}
+        filterType={AssetType.IMAGE}
+        onSelect={handleMediaLibrarySelect}
+      />
     </div>
   );
 };

@@ -21,7 +21,13 @@ export const BUILT_IN_TOOLS: ToolDefinition[] = [
     url: 'https://www.aiwind.org',
     defaultWidth: 800,
     defaultHeight: 600,
-    permissions: ['allow-scripts', 'allow-same-origin'],
+    permissions: [
+      'allow-scripts',
+      'allow-same-origin',
+      'allow-popups',
+      'allow-forms',
+      'allow-top-navigation-by-user-activation'
+    ],
   },
   {
     id: 'pose-library',
@@ -32,7 +38,13 @@ export const BUILT_IN_TOOLS: ToolDefinition[] = [
     url: 'https://www.posemaniacs.com/zh-Hans/poses',
     defaultWidth: 900,
     defaultHeight: 700,
-    permissions: ['allow-scripts', 'allow-same-origin'],
+    permissions: [
+      'allow-scripts',
+      'allow-same-origin',
+      'allow-popups',
+      'allow-forms',
+      'allow-top-navigation-by-user-activation'
+    ],
   },
   {
     id: 'batch-image',
@@ -40,11 +52,11 @@ export const BUILT_IN_TOOLS: ToolDefinition[] = [
     description: 'Excel式批量AI图片生成，支持批量编辑和快速生成',
     icon: '🎨',
     category: ToolCategory.AI_TOOLS,
-    url: '/batch-image.html',  // 静态 HTML 文件
+    url: '/batch-image.html',
     defaultWidth: 1200,
     defaultHeight: 800,
     permissions: ['allow-scripts', 'allow-same-origin', 'allow-forms', 'allow-modals'],
-  },
+  }
 ];
 
 /**
@@ -58,7 +70,13 @@ export const DEFAULT_TOOL_CONFIG = {
   defaultHeight: 400,
 
   /** 默认 iframe 权限 */
-  defaultPermissions: ['allow-scripts', 'allow-same-origin'] as string[],
+  defaultPermissions: [
+    'allow-scripts',
+    'allow-same-origin',
+    'allow-popups',
+    'allow-forms',
+    'allow-top-navigation-by-user-activation'
+  ] as string[],
 };
 
 /**
