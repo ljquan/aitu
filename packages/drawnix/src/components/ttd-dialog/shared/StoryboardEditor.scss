@@ -1,0 +1,286 @@
+/**
+ * StoryboardEditor Styles
+ * Clean and minimal design for storyboard scene editing
+ */
+
+.storyboard-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  background: var(--td-bg-color-container, #ffffff);
+  border: 1px solid var(--td-component-stroke, #e7e7e7);
+  border-radius: 12px;
+
+  &__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+
+  &__toggle {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+
+    .t-switch {
+      margin-top: 2px;
+    }
+  }
+
+  &__title {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  &__title-text {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--td-text-color-primary, #000000);
+  }
+
+  &__title-desc {
+    font-size: 12px;
+    color: var(--td-text-color-secondary, #666666);
+  }
+
+  &__new-badge {
+    font-size: 10px;
+    font-weight: 600;
+    color: #f59e0b;
+    background: #fef3c7;
+    padding: 2px 6px;
+    border-radius: 4px;
+    letter-spacing: 0.5px;
+  }
+
+  &__content {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  &__section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  &__section-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--td-text-color-primary, #000000);
+  }
+
+  &__section-hint {
+    font-size: 12px;
+    color: var(--td-text-color-placeholder, #999999);
+  }
+
+  // Scene cards - minimal style
+  &__scenes {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  &__scene {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px 14px;
+    background: var(--td-bg-color-secondarycontainer, #f9f9f9);
+    border-radius: 8px;
+    border: none;
+    transition: background-color 0.15s ease;
+
+    &:hover {
+      background: var(--td-bg-color-secondarycontainer-hover, #f3f3f3);
+    }
+  }
+
+  &__scene-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  &__scene-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  &__scene-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--td-text-color-primary, #1a1a1a);
+  }
+
+  &__scene-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  &__time-icon {
+    font-size: 14px;
+    color: var(--td-text-color-placeholder, #999999);
+  }
+
+  // Duration input - simple underline style
+  &__duration-input {
+    width: 40px !important;
+    display: inline-flex;
+
+    input {
+      width: 100%;
+      height: 24px;
+      padding: 0 2px;
+      font-size: 13px;
+      font-weight: 500;
+      text-align: center;
+      color: var(--td-text-color-primary, #000000);
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid var(--td-component-stroke, #dcdcdc);
+      border-radius: 0;
+      outline: none;
+      transition: border-color 0.15s ease;
+
+      &:focus {
+        border-bottom-color: var(--td-brand-color, #0052d9);
+      }
+
+      &:hover {
+        border-bottom-color: var(--td-text-color-secondary, #999999);
+      }
+    }
+
+    // Override TDesign input styles
+    .t-input {
+      height: 24px;
+      padding: 0;
+      background: transparent !important;
+      border: none !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+    }
+
+    .t-input__wrap {
+      border: none !important;
+      border-bottom: 1px solid var(--td-component-stroke, #dcdcdc) !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+      background: transparent !important;
+      transition: border-color 0.15s ease;
+
+      &:hover {
+        border-bottom-color: var(--td-text-color-secondary, #999999) !important;
+      }
+    }
+
+    .t-input.t-is-focused .t-input__wrap,
+    .t-input__wrap:focus-within {
+      border-bottom-color: var(--td-brand-color, #0052d9) !important;
+    }
+
+    .t-input__inner {
+      font-size: 13px;
+      font-weight: 500;
+      text-align: center;
+      color: var(--td-text-color-primary, #000000);
+      background: transparent;
+      padding: 0 2px;
+    }
+  }
+
+  &__duration-unit {
+    font-size: 13px;
+    color: var(--td-text-color-secondary, #666666);
+    margin-left: 2px;
+  }
+
+  &__scene-delete {
+    opacity: 0.4;
+    transition: opacity 0.15s ease, color 0.15s ease;
+    margin-left: 4px;
+    padding: 4px;
+
+    &:hover {
+      opacity: 1;
+      color: var(--td-error-color, #e34d59);
+    }
+  }
+
+  &__scene-prompt {
+    .t-textarea {
+      background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+
+      &:hover,
+      &.t-is-focused {
+        border: none !important;
+        box-shadow: none !important;
+      }
+    }
+
+    .t-textarea__inner {
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--td-text-color-primary, #000000);
+      resize: none;
+      background: transparent;
+      border: none;
+      padding: 0;
+      min-height: 44px;
+
+      &:focus {
+        outline: none;
+        box-shadow: none;
+      }
+
+      &::placeholder {
+        color: var(--td-text-color-placeholder, #b8b8b8);
+      }
+    }
+  }
+
+  // Add scene button - clean style without purple background
+  &__add-btn {
+    margin-top: 4px;
+    border: 1px dashed var(--td-component-stroke, #dcdcdc) !important;
+    color: var(--td-text-color-secondary, #666666) !important;
+    background: transparent !important;
+
+    &:hover {
+      border-color: var(--td-text-color-secondary, #999999) !important;
+      color: var(--td-text-color-primary, #333333) !important;
+      background: transparent !important;
+    }
+
+    &:active {
+      background: rgba(0, 0, 0, 0.02) !important;
+    }
+  }
+
+  // TDesign component overrides
+  .t-switch {
+    flex-shrink: 0;
+  }
+
+  // Override textarea globally in this component
+  .t-textarea {
+    border: none !important;
+    box-shadow: none !important;
+
+    &:hover,
+    &:focus,
+    &.t-is-focused {
+      border: none !important;
+      box-shadow: none !important;
+    }
+  }
+}

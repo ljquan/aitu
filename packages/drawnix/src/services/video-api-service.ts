@@ -81,6 +81,20 @@ class VideoAPIService {
       throw new Error('API Key 未配置，请先配置 API Key');
     }
 
+    // Log request parameters
+    console.log('[VideoAPI] ========== Video Generation Request ==========');
+    console.log('[VideoAPI] Request params:', {
+      model: params.model,
+      prompt: params.prompt,
+      seconds: params.seconds,
+      size: params.size,
+      inputReferencesCount: params.inputReferences?.length || 0,
+      hasLegacyInputReference: !!params.inputReference,
+    });
+    console.log('[VideoAPI] Full prompt:');
+    console.log(params.prompt);
+    console.log('[VideoAPI] ===============================================');
+
     const formData = new FormData();
     formData.append('model', params.model);
     formData.append('prompt', params.prompt);
@@ -141,6 +155,19 @@ class VideoAPIService {
         formData.append('input_reference', blob, 'reference.png');
       }
     }
+
+    // Log FormData summary before sending
+    console.log('[VideoAPI] FormData summary:');
+    const formDataEntries: Record<string, string> = {};
+    formData.forEach((value, key) => {
+      if (value instanceof Blob) {
+        formDataEntries[key] = `[Blob: ${value.size} bytes, type: ${value.type}]`;
+      } else {
+        formDataEntries[key] = key === 'prompt' ? `${String(value).substring(0, 100)}...` : String(value);
+      }
+    });
+    console.log('[VideoAPI] FormData entries:', formDataEntries);
+    console.log('[VideoAPI] Sending request to:', `${this.baseUrl}/v1/videos`);
 
     const response = await fetch(`${this.baseUrl}/v1/videos`, {
       method: 'POST',

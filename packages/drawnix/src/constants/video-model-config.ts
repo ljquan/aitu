@@ -17,7 +17,7 @@ export const VIDEO_MODEL_CONFIGS: Record<VideoModel, VideoModelConfig> = {
     id: 'sora-2',
     label: 'Sora 2',
     provider: 'sora',
-    description: '10s/15s 默认标清',
+    description: '10s/15s 默认标清，支持故事场景模式',
     durationOptions: [
       { label: '10秒', value: '10' },
       { label: '15秒', value: '15' },
@@ -33,12 +33,17 @@ export const VIDEO_MODEL_CONFIGS: Record<VideoModel, VideoModelConfig> = {
       mode: 'reference',
       labels: ['参考图'],
     },
+    storyboardMode: {
+      supported: true,
+      maxScenes: 5,
+      minSceneDuration: 1,
+    },
   },
   'sora-2-pro': {
     id: 'sora-2-pro',
     label: 'Sora 2 Pro',
     provider: 'sora',
-    description: '10s/15s 默认高清，25s 默认标清',
+    description: '10s/15s/25s 高清，支持故事场景模式',
     durationOptions: [
       { label: '10秒', value: '10' },
       { label: '15秒', value: '15' },
@@ -56,6 +61,11 @@ export const VIDEO_MODEL_CONFIGS: Record<VideoModel, VideoModelConfig> = {
       maxCount: 1,
       mode: 'reference',
       labels: ['参考图'],
+    },
+    storyboardMode: {
+      supported: true,
+      maxScenes: 5,
+      minSceneDuration: 1,
     },
   },
 
@@ -207,4 +217,24 @@ export function supportsMultipleImages(model: VideoModel): boolean {
 export function getImageUploadLabels(model: VideoModel): string[] {
   const config = VIDEO_MODEL_CONFIGS[model];
   return config.imageUpload.labels || ['参考图'];
+}
+
+/**
+ * Check if model supports storyboard mode
+ */
+export function supportsStoryboardMode(model: VideoModel): boolean {
+  const config = VIDEO_MODEL_CONFIGS[model];
+  return config.storyboardMode?.supported ?? false;
+}
+
+/**
+ * Get storyboard mode configuration for a model
+ */
+export function getStoryboardModeConfig(model: VideoModel) {
+  const config = VIDEO_MODEL_CONFIGS[model];
+  return config.storyboardMode ?? {
+    supported: false,
+    maxScenes: 5,
+    minSceneDuration: 1,
+  };
 }
