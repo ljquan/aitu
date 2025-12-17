@@ -616,6 +616,28 @@
     }
   }
 
+  // 生成中状态（内联显示在已完成图片后面）
+  .preview-generating-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: #1890ff;
+    padding: 2px 6px;
+    background: rgba(24, 144, 255, 0.1);
+    border-radius: 3px;
+    white-space: nowrap;
+
+    .loading-spinner {
+      width: 12px;
+      height: 12px;
+      border: 2px solid #1890ff;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+  }
+
   .preview-error {
     display: flex;
     align-items: center;

@@ -1620,19 +1620,31 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
             {rowInfo.status === 'idle' && (
               <span className="preview-idle">-</span>
             )}
-            {rowInfo.status === 'generating' && (
-              <span className="preview-generating">
-                <span className="loading-spinner" />
-                {language === 'zh' ? '生成中...' : 'Generating...'}
-              </span>
-            )}
-            {rowInfo.status === 'completed' && rowInfo.tasks.length > 0 && (() => {
+            {(rowInfo.status === 'generating' || rowInfo.status === 'completed') && (() => {
               const completedUrls = rowInfo.tasks
                 .filter(t => t.status === TaskStatus.COMPLETED && t.result?.url)
                 .map(t => t.result!.url);
+              const isGenerating = rowInfo.status === 'generating';
+              const processingCount = rowInfo.tasks.filter(t =>
+                t.status === TaskStatus.PENDING ||
+                t.status === TaskStatus.PROCESSING ||
+                t.status === TaskStatus.RETRYING
+              ).length;
+
+              // 没有已完成的图片，只显示生成中
+              if (completedUrls.length === 0 && isGenerating) {
+                return (
+                  <span className="preview-generating">
+                    <span className="loading-spinner" />
+                    {language === 'zh' ? '生成中...' : 'Generating...'}
+                  </span>
+                );
+              }
+
+              // 有已完成的图片
               return (
                 <div className="preview-images">
-                  {completedUrls.slice(0, 3).map((url, idx) => (
+                  {completedUrls.slice(0, isGenerating ? 2 : 3).map((url, idx) => (
                     <div
                       key={idx}
                       className="preview-thumb clickable"
@@ -1645,7 +1657,15 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
                       <img src={url} alt={`Result ${idx + 1}`} />
                     </div>
                   ))}
-                  {rowInfo.completedCount > 3 && (
+                  {/* 生成中状态：显示加载动画 */}
+                  {isGenerating && (
+                    <span className="preview-generating-inline" title={language === 'zh' ? `还有 ${processingCount} 张生成中` : `${processingCount} more generating`}>
+                      <span className="loading-spinner" />
+                      +{processingCount}
+                    </span>
+                  )}
+                  {/* 完成状态：超过3张显示更多 */}
+                  {!isGenerating && rowInfo.completedCount > 3 && (
                     <span
                       className="preview-more clickable"
                       onClick={(e) => {
