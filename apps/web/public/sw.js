@@ -1000,8 +1000,10 @@ async function handleImageRequest(request) {
       // 为重复请求添加标记，便于追踪
       existingEntry.duplicateRequestIds = existingEntry.duplicateRequestIds || [];
       existingEntry.duplicateRequestIds.push(requestId);
-      
-      return existingEntry.promise;
+
+      // Response body 只能被消费一次，重复请求需要返回克隆
+      const response = await existingEntry.promise;
+      return response && response.clone ? response.clone() : response;
     }
     
     // 创建请求处理Promise并存储到去重字典
