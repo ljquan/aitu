@@ -36,7 +36,7 @@ export const VIDEO_MODEL_CONFIGS: Record<VideoModel, VideoModelConfig> = {
     storyboardMode: {
       supported: true,
       maxScenes: 5,
-      minSceneDuration: 1,
+      minSceneDuration: 0.1,
     },
   },
   'sora-2-pro': {
@@ -65,7 +65,7 @@ export const VIDEO_MODEL_CONFIGS: Record<VideoModel, VideoModelConfig> = {
     storyboardMode: {
       supported: true,
       maxScenes: 5,
-      minSceneDuration: 1,
+      minSceneDuration: 0.1,
     },
   },
 
@@ -235,6 +235,6 @@ export function getStoryboardModeConfig(model: VideoModel) {
   return config.storyboardMode ?? {
     supported: false,
     maxScenes: 5,
-    minSceneDuration: 1,
+    minSceneDuration: 0.1,
   };
 }

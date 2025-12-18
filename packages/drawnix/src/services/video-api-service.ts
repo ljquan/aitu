@@ -163,7 +163,7 @@ class VideoAPIService {
       if (value instanceof Blob) {
         formDataEntries[key] = `[Blob: ${value.size} bytes, type: ${value.type}]`;
       } else {
-        formDataEntries[key] = key === 'prompt' ? `${String(value).substring(0, 100)}...` : String(value);
+        formDataEntries[key] = String(value);
       }
     });
     console.log('[VideoAPI] FormData entries:', formDataEntries);
@@ -192,7 +192,7 @@ class VideoAPIService {
   }
 
   /**
-   * Query video generation status
+   * Query video generation status (with network retry)
    */
   async queryVideoStatus(videoId: string): Promise<VideoQueryResponse> {
     const settings = geminiSettings.get();
@@ -202,25 +202,49 @@ class VideoAPIService {
       throw new Error('API Key 未配置');
     }
 
-    const response = await fetch(`${this.baseUrl}/v1/videos/${videoId}`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-      },
-    });
+    const maxRetries = 3;
+    const retryDelay = 2000; // 2 seconds
+    let lastError: Error | null = null;
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('[VideoAPI] Query failed:', response.status, errorText);
-      const error = new Error(`视频状态查询失败: ${response.status} - ${errorText}`);
-      (error as any).apiErrorBody = errorText;
-      (error as any).httpStatus = response.status;
-      throw error;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const response = await fetch(`${this.baseUrl}/v1/videos/${videoId}`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+          },
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('[VideoAPI] Query failed:', response.status, errorText);
+          const error = new Error(`视频状态查询失败: ${response.status} - ${errorText}`);
+          (error as any).apiErrorBody = errorText;
+          (error as any).httpStatus = response.status;
+          throw error;
+        }
+
+        const result = await response.json();
+        console.log('[VideoAPI] Query response:', JSON.stringify(result, null, 2));
+        return result;
+      } catch (error) {
+        lastError = error as Error;
+        const isNetworkError = error instanceof TypeError &&
+          (error.message.includes('Failed to fetch') || error.message.includes('network'));
+
+        if (isNetworkError && attempt < maxRetries) {
+          console.warn(`[VideoAPI] Network error on attempt ${attempt}/${maxRetries}, retrying in ${retryDelay}ms...`);
+          await this.sleep(retryDelay);
+          continue;
+        }
+
+        // Non-network error or last attempt, throw immediately
+        throw error;
+      }
     }
 
-    const result = await response.json();
-    console.log('[VideoAPI] Query response:', JSON.stringify(result, null, 2));
-    return result;
+    // Should not reach here, but just in case
+    throw lastError || new Error('视频状态查询失败');
   }
 
   /**

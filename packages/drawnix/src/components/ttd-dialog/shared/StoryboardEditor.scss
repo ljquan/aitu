@@ -129,70 +129,41 @@
     color: var(--td-text-color-placeholder, #999999);
   }
 
-  // Duration input - simple underline style
+  // Duration input - native number input with underline style
   &__duration-input {
-    width: 40px !important;
-    display: inline-flex;
+    width: 48px;
+    height: 26px;
+    padding: 0 4px;
+    font-size: 13px;
+    font-weight: 500;
+    text-align: center;
+    color: var(--td-text-color-primary, #000000);
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--td-component-stroke, #dcdcdc);
+    border-radius: 0;
+    outline: none;
+    transition: border-color 0.15s ease;
+    appearance: textfield; // Hide spinner
+    -moz-appearance: textfield; // Firefox compatibility
 
-    input {
-      width: 100%;
-      height: 24px;
-      padding: 0 2px;
-      font-size: 13px;
-      font-weight: 500;
-      text-align: center;
-      color: var(--td-text-color-primary, #000000);
-      background: transparent;
-      border: none;
-      border-bottom: 1px solid var(--td-component-stroke, #dcdcdc);
-      border-radius: 0;
-      outline: none;
-      transition: border-color 0.15s ease;
-
-      &:focus {
-        border-bottom-color: var(--td-brand-color, #0052d9);
-      }
-
-      &:hover {
-        border-bottom-color: var(--td-text-color-secondary, #999999);
-      }
+    &::-webkit-outer-spin-button,
+    &::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
     }
 
-    // Override TDesign input styles
-    .t-input {
-      height: 24px;
-      padding: 0;
-      background: transparent !important;
-      border: none !important;
-      border-radius: 0 !important;
-      box-shadow: none !important;
+    &:focus {
+      border-bottom-color: var(--td-brand-color, #0052d9);
     }
 
-    .t-input__wrap {
-      border: none !important;
-      border-bottom: 1px solid var(--td-component-stroke, #dcdcdc) !important;
-      border-radius: 0 !important;
-      box-shadow: none !important;
-      background: transparent !important;
-      transition: border-color 0.15s ease;
-
-      &:hover {
-        border-bottom-color: var(--td-text-color-secondary, #999999) !important;
-      }
+    &:hover:not(:disabled) {
+      border-bottom-color: var(--td-text-color-secondary, #999999);
     }
 
-    .t-input.t-is-focused .t-input__wrap,
-    .t-input__wrap:focus-within {
-      border-bottom-color: var(--td-brand-color, #0052d9) !important;
-    }
-
-    .t-input__inner {
-      font-size: 13px;
-      font-weight: 500;
-      text-align: center;
-      color: var(--td-text-color-primary, #000000);
-      background: transparent;
-      padding: 0 2px;
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
     }
   }
 
@@ -216,14 +187,20 @@
 
   &__scene-prompt {
     .t-textarea {
-      background: transparent !important;
-      border: none !important;
+      background: var(--td-bg-color-container, #ffffff) !important;
+      border: 1px solid var(--td-component-stroke, #e7e7e7) !important;
+      border-radius: 8px !important;
       box-shadow: none !important;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
 
-      &:hover,
-      &.t-is-focused {
-        border: none !important;
-        box-shadow: none !important;
+      &:hover {
+        border-color: var(--td-text-color-placeholder, #b8b8b8) !important;
+      }
+
+      &.t-is-focused,
+      &:focus-within {
+        border-color: var(--td-brand-color, #f39c12) !important;
+        box-shadow: 0 0 0 2px rgba(243, 156, 18, 0.1) !important;
       }
     }
 
@@ -234,8 +211,8 @@
       resize: none;
       background: transparent;
       border: none;
-      padding: 0;
-      min-height: 44px;
+      padding: 10px 12px;
+      min-height: 52px;
 
       &:focus {
         outline: none;
@@ -271,16 +248,4 @@
     flex-shrink: 0;
   }
 
-  // Override textarea globally in this component
-  .t-textarea {
-    border: none !important;
-    box-shadow: none !important;
-
-    &:hover,
-    &:focus,
-    &.t-is-focused {
-      border: none !important;
-      box-shadow: none !important;
-    }
-  }
 }

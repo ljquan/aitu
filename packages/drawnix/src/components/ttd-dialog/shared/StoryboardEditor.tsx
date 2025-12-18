@@ -6,12 +6,12 @@
  */
 
 import React, { useCallback } from 'react';
-import { Button, Input, Textarea, Switch } from 'tdesign-react';
+import { Button, Textarea, Switch } from 'tdesign-react';
 import { AddIcon, DeleteIcon, TimeIcon } from 'tdesign-icons-react';
 import type { StoryboardScene } from '../../../types/video.types';
 import {
   createEmptyScene,
-  reorderScenes,
+  calculateDefaultSceneDurations,
 } from '../../../utils/storyboard-utils';
 import './StoryboardEditor.scss';
 
@@ -37,29 +37,46 @@ export const StoryboardEditor: React.FC<StoryboardEditorProps> = ({
   onScenesChange,
   disabled = false,
 }) => {
-  // Handle adding a new scene with default duration (same as total)
+  // Handle adding a new scene - recalculate all durations using halving strategy
   const handleAddScene = useCallback(() => {
     if (scenes.length >= maxScenes) return;
 
     const newSceneCount = scenes.length + 1;
-    // New scene defaults to totalDuration (each scene can be up to totalDuration)
-    const newScene = createEmptyScene(newSceneCount, totalDuration);
-    onScenesChange([...scenes, newScene]);
+    const newDurations = calculateDefaultSceneDurations(totalDuration, newSceneCount);
+
+    // Update existing scenes with new durations and add new scene
+    const updatedScenes = scenes.map((scene, index) => ({
+      ...scene,
+      duration: newDurations[index],
+    }));
+
+    // Add new scene with its calculated duration
+    const newScene = createEmptyScene(newSceneCount, newDurations[newSceneCount - 1]);
+    onScenesChange([...updatedScenes, newScene]);
   }, [scenes, maxScenes, totalDuration, onScenesChange]);
 
-  // Handle removing a scene
+  // Handle removing a scene - recalculate all durations
   const handleRemoveScene = useCallback(
     (sceneId: string) => {
       if (scenes.length <= 1) return;
 
       const filteredScenes = scenes.filter(s => s.id !== sceneId);
-      const reordered = reorderScenes(filteredScenes);
-      onScenesChange(reordered);
+      const newSceneCount = filteredScenes.length;
+      const newDurations = calculateDefaultSceneDurations(totalDuration, newSceneCount);
+
+      // Update durations and reorder
+      const updatedScenes = filteredScenes.map((scene, index) => ({
+        ...scene,
+        order: index + 1,
+        duration: newDurations[index],
+      }));
+
+      onScenesChange(updatedScenes);
     },
-    [scenes, onScenesChange]
+    [scenes, totalDuration, onScenesChange]
   );
 
-  // Handle scene duration change - each scene can be 0.1 to totalDuration
+  // Handle scene duration change - keep up to 2 decimal places
   const handleDurationChange = useCallback(
     (sceneId: string, value: string) => {
       const newDuration = parseFloat(value);
@@ -72,8 +89,9 @@ export const StoryboardEditor: React.FC<StoryboardEditorProps> = ({
             minSceneDuration,
             Math.min(newDuration, totalDuration)
           );
-          // Round to 1 decimal place
-          return { ...scene, duration: Math.round(clampedDuration * 10) / 10 };
+          // Round to 2 decimal places using toFixed to avoid floating point issues
+          const rounded = parseFloat(clampedDuration.toFixed(2));
+          return { ...scene, duration: rounded };
         }
         return scene;
       });
@@ -158,12 +176,15 @@ export const StoryboardEditor: React.FC<StoryboardEditorProps> = ({
                   </div>
                   <div className="storyboard-editor__scene-controls">
                     <TimeIcon className="storyboard-editor__time-icon" />
-                    <Input
-                      value={scene.duration.toString()}
-                      onChange={value => handleDurationChange(scene.id, value as string)}
+                    <input
+                      type="number"
+                      value={parseFloat(scene.duration.toFixed(2))}
+                      onChange={e => handleDurationChange(scene.id, e.target.value)}
                       disabled={disabled}
                       className="storyboard-editor__duration-input"
-                      align="center"
+                      step="0.01"
+                      min={minSceneDuration}
+                      max={totalDuration}
                     />
                     <span className="storyboard-editor__duration-unit">秒</span>
                     {scenes.length > 1 && (

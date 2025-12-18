@@ -27,10 +27,25 @@ export function createEmptyScene(order: number, duration: number): StoryboardSce
 }
 
 /**
+ * Round to 2 decimal places (avoids floating point precision issues)
+ * Example: 1.875 -> 1.88, 7.5 -> 7.5, 10 -> 10
+ */
+function roundToTwoDecimals(value: number): number {
+  return parseFloat(value.toFixed(2));
+}
+
+/**
  * Calculate default scene durations using halving strategy
  *
- * Strategy: Each subsequent scene gets half of the remaining time.
- * Example for 15s with 3 scenes: [7.5, 3.75, 3.75]
+ * Strategy:
+ * - 1 scene: total duration
+ * - 2 scenes: half each (e.g., 15s -> [7.5, 7.5])
+ * - 3+ scenes: first scene gets half, then each new scene halves the last scene's time
+ *   (e.g., 15s with 3 scenes -> [7.5, 3.75, 3.75])
+ *
+ * Rules:
+ * - Keep up to 2 decimal places
+ * - Use floor for rounding (e.g., 1.875 -> 1.87)
  *
  * @param totalDuration Total video duration in seconds
  * @param sceneCount Number of scenes
@@ -49,12 +64,13 @@ export function calculateDefaultSceneDurations(
   for (let i = 0; i < sceneCount; i++) {
     if (i === sceneCount - 1) {
       // Last scene gets all remaining time
-      durations.push(Math.round(remaining * 10) / 10);
+      durations.push(roundToTwoDecimals(remaining));
     } else {
       // Each scene gets half of remaining time
       const duration = remaining / 2;
-      durations.push(Math.round(duration * 10) / 10);
-      remaining -= duration;
+      const rounded = roundToTwoDecimals(duration);
+      durations.push(rounded);
+      remaining -= rounded;
     }
   }
 
