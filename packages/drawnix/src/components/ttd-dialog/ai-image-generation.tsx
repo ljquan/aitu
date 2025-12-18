@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import './ttd-dialog.scss';
 import './ai-image-generation.scss';
 import { useI18n } from '../../i18n';
@@ -23,6 +23,15 @@ import {
 import { DEFAULT_ASPECT_RATIO } from '../../constants/image-aspect-ratios';
 import { DialogTaskList } from '../task-queue/DialogTaskList';
 import { geminiSettings } from '../../utils/settings-manager';
+import { promptForApiKey } from '../../utils/gemini-api';
+
+// 懒加载批量出图组件
+const BatchImageGeneration = lazy(() => import('./batch-image-generation'));
+
+import { AI_IMAGE_MODE_CACHE_KEY } from '../../constants/storage';
+
+// 生成模式类型
+type GenerationMode = 'single' | 'batch';
 
 interface AIImageGenerationProps {
   initialPrompt?: string;
@@ -33,6 +42,7 @@ interface AIImageGenerationProps {
   initialResultUrl?: string;
   selectedModel?: string;
   onModelChange?: (value: string) => void;
+  onModeChange?: (mode: 'single' | 'batch') => void;
 }
 
 const AIImageGeneration = ({
@@ -43,8 +53,30 @@ const AIImageGeneration = ({
   initialHeight,
   initialResultUrl,
   selectedModel,
-  onModelChange
+  onModelChange,
+  onModeChange
 }: AIImageGenerationProps = {}) => {
+  // 生成模式：单图 or 批量
+  // 只有用户主动切换到批量模式后，下次才会自动进入批量模式
+  // 但如果有初始图片或提示词，说明是带内容进入，应使用单图模式
+  const [mode, setMode] = useState<GenerationMode>(() => {
+    // 如果有初始图片或初始提示词，说明是带内容进入，使用单图模式
+    const hasInitialContent = (initialImages && initialImages.length > 0) || (initialPrompt && initialPrompt.trim() !== '');
+    if (hasInitialContent) {
+      return 'single';
+    }
+    // 否则从 localStorage 读取上次保存的模式
+    try {
+      const savedMode = localStorage.getItem(AI_IMAGE_MODE_CACHE_KEY);
+      if (savedMode === 'batch') {
+        return 'batch';
+      }
+    } catch (e) {
+      console.warn('Failed to load mode from localStorage:', e);
+    }
+    return 'single';
+  });
+
   const [prompt, setPrompt] = useState(initialPrompt);
   const [width, setWidth] = useState<number | string>(initialWidth || 1024);
   const [height, setHeight] = useState<number | string>(initialHeight || 1024);
@@ -100,12 +132,26 @@ const AIImageGeneration = ({
   useEffect(() => {
     // 组件挂载时清除之前的错误状态
     setError(null);
-    
+
     // 清理函数：组件卸载时也清除错误状态
     return () => {
       setError(null);
     };
   }, []); // 空依赖数组，只在组件挂载/卸载时执行
+
+  // 初始化时通知父组件当前模式（用于自动放大判断）
+  useEffect(() => {
+    onModeChange?.(mode);
+  }, []); // 仅在挂载时执行一次
+
+  // 模式变化时保存到 localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(AI_IMAGE_MODE_CACHE_KEY, mode);
+    } catch (e) {
+      console.warn('Failed to save mode to localStorage:', e);
+    }
+  }, [mode]);
 
 
   // 重置所有状态
@@ -210,6 +256,20 @@ const AIImageGeneration = ({
     if (!prompt.trim()) {
       setError(language === 'zh' ? '请输入图像描述' : 'Please enter image description');
       return;
+    }
+
+    // 先检查 API Key，没有则弹窗获取（只弹一次，避免批量生成时多次弹窗）
+    const settings = geminiSettings.get();
+    if (!settings.apiKey) {
+      const newApiKey = await promptForApiKey();
+      if (!newApiKey) {
+        setError(
+          language === 'zh'
+            ? '需要 API Key 才能生成图片'
+            : 'API Key is required to generate images'
+        );
+        return;
+      }
     }
 
     try {
@@ -347,6 +407,19 @@ const AIImageGeneration = ({
 
 
 
+  // 批量模式渲染
+  if (mode === 'batch') {
+    return (
+      <Suspense fallback={<div className="loading-fallback">{language === 'zh' ? '加载中...' : 'Loading...'}</div>}>
+        <BatchImageGeneration onSwitchToSingle={() => {
+          setMode('single');
+          onModeChange?.('single');
+        }} />
+      </Suspense>
+    );
+  }
+
+  // 单图模式渲染
   return (
     <div className="ai-image-generation-container">
       <div className="main-content">
@@ -354,24 +427,36 @@ const AIImageGeneration = ({
         <div className="ai-image-generation-section">
           <div className="ai-image-generation-form">
 
-          {/* 模型选择器 */}
-          {selectedModel !== undefined && onModelChange && (
-            <div className="model-selector-wrapper">
-              {/* <label className="model-selector-label">
-                {language === 'zh' ? '模型' : 'Image Model'}
-              </label> */}
-              <Select
-                value={selectedModel}
-                onChange={(value) => onModelChange(value as string)}
-                options={IMAGE_MODEL_GROUPED_OPTIONS}
-                size="small"
-                placeholder={language === 'zh' ? '选择图片模型' : 'Select Image Model'}
-                filterable
-                creatable
-                disabled={isGenerating}
-              />
-            </div>
-          )}
+          {/* 模式切换 + 模型选择器 */}
+          <div className="form-header-row">
+            {/* 模型选择器 */}
+            {selectedModel !== undefined && onModelChange && (
+              <div className="model-selector-wrapper">
+                <Select
+                  value={selectedModel}
+                  onChange={(value) => onModelChange(value as string)}
+                  options={IMAGE_MODEL_GROUPED_OPTIONS}
+                  size="small"
+                  placeholder={language === 'zh' ? '选择图片模型' : 'Select Image Model'}
+                  filterable
+                  creatable
+                  disabled={isGenerating}
+                />
+              </div>
+            )}
+
+            {/* 批量出图切换按钮 */}
+            <button
+              className="batch-mode-btn"
+              onClick={() => {
+                setMode('batch');
+                onModeChange?.('batch');
+              }}
+              disabled={isGenerating}
+            >
+              {language === 'zh' ? '批量出图 →' : 'Batch Mode →'}
+            </button>
+          </div>
 
           {/* 参考图片区域 */}
           <ImageUpload

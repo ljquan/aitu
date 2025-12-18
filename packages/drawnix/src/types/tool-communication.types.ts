@@ -34,6 +34,9 @@ export enum ToolMessageType {
 
   /** 通知画布关闭工具 */
   TOOL_TO_BOARD_CLOSE = 'tool:close',
+
+  /** 请求生成图片 */
+  TOOL_TO_BOARD_GENERATE_IMAGE = 'tool:generate-image',
 }
 
 /**
@@ -119,6 +122,56 @@ export interface InsertImagePayload {
 export interface RequestDataPayload {
   /** 请求的数据类型 */
   dataType: 'board-state' | 'selected-elements' | 'viewport';
+}
+
+/**
+ * 生成图片请求载荷
+ */
+export interface GenerateImagePayload {
+  /** 提示词 */
+  prompt: string;
+
+  /** 宽度 */
+  width?: number;
+
+  /** 高度 */
+  height?: number;
+
+  /** 宽高比 */
+  aspectRatio?: string;
+
+  /** 尺寸比例（如 1x1, 16x9 等） */
+  size?: string;
+
+  /** 消息 ID（用于响应） */
+  messageId?: string;
+}
+
+/**
+ * 生成图片响应载荷
+ */
+export interface GenerateImageResponse {
+  /** 是否成功 */
+  success: boolean;
+
+  /** 响应消息 ID */
+  responseId: string;
+
+  /** 结果数据 */
+  result?: {
+    /** 图片 URL */
+    url: string;
+
+    /** 格式 */
+    format?: string;
+
+    /** 尺寸 */
+    width?: number;
+    height?: number;
+  };
+
+  /** 错误信息 */
+  error?: string;
 }
 
 /**

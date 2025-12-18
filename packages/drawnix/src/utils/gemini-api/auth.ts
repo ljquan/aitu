@@ -73,11 +73,22 @@ export function promptForApiKey(): Promise<string | null> {
     const cancelBtn = dialog.querySelector('#cancelBtn') as HTMLButtonElement;
     const confirmBtn = dialog.querySelector('#confirmBtn') as HTMLButtonElement;
 
+    // 阻止所有键盘事件冒泡到页面其他元素（防止输入被捕获到表格等）
+    const stopKeyboardPropagation = (e: KeyboardEvent) => {
+      e.stopPropagation();
+    };
+    overlay.addEventListener('keydown', stopKeyboardPropagation, true);
+    overlay.addEventListener('keyup', stopKeyboardPropagation, true);
+    overlay.addEventListener('keypress', stopKeyboardPropagation, true);
+
     // 自动聚焦到输入框
     setTimeout(() => input.focus(), 100);
 
     // 清理函数
     const cleanup = () => {
+      overlay.removeEventListener('keydown', stopKeyboardPropagation, true);
+      overlay.removeEventListener('keyup', stopKeyboardPropagation, true);
+      overlay.removeEventListener('keypress', stopKeyboardPropagation, true);
       document.body.removeChild(overlay);
     };
 

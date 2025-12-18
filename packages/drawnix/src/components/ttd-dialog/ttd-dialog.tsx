@@ -10,7 +10,8 @@ import { useState, useEffect, useRef, memo, useCallback } from 'react';
 import { processSelectedContentForAI, extractSelectedContent } from '../../utils/selection-utils';
 import {
   AI_IMAGE_GENERATION_PREVIEW_CACHE_KEY,
-  AI_VIDEO_GENERATION_PREVIEW_CACHE_KEY
+  AI_VIDEO_GENERATION_PREVIEW_CACHE_KEY,
+  AI_IMAGE_MODE_CACHE_KEY
 } from '../../constants/storage';
 import { geminiSettings } from '../../utils/settings-manager';
 import { WinBoxWindow } from '../winbox';
@@ -98,6 +99,37 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
     initialPrompt: '',
     initialImage: undefined
   });
+
+  // 图像生成窗口是否需要最大化（批量模式时自动最大化）
+  const [imageDialogAutoMaximize, setImageDialogAutoMaximize] = useState(false);
+
+  // 处理图像生成模式变化
+  const handleImageModeChange = useCallback((mode: 'single' | 'batch') => {
+    setImageDialogAutoMaximize(mode === 'batch');
+  }, []);
+
+  // 当对话框将要打开时，预先计算是否需要自动放大
+  // 这需要在 WinBox 组件渲染前确定，且逻辑需要与 AIImageGeneration 的模式判断一致
+  useEffect(() => {
+    if (appState.openDialogType === DialogType.aiImageGeneration) {
+      // 如果有初始图片或初始提示词，说明是带内容进入，不自动放大（强制单图模式）
+      const hasInitialContent =
+        (aiImageData.initialImages && aiImageData.initialImages.length > 0) ||
+        (aiImageData.initialPrompt && aiImageData.initialPrompt.trim() !== '');
+
+      if (hasInitialContent) {
+        setImageDialogAutoMaximize(false);
+        return;
+      }
+      // 否则读取 localStorage 中保存的模式
+      try {
+        const savedMode = localStorage.getItem(AI_IMAGE_MODE_CACHE_KEY);
+        setImageDialogAutoMaximize(savedMode === 'batch');
+      } catch (e) {
+        setImageDialogAutoMaximize(false);
+      }
+    }
+  }, [appState.openDialogType, aiImageData.initialImages, aiImageData.initialPrompt]);
 
   // 使用 useRef 来跟踪上一次的 openDialogType，避免不必要的处理
   const prevOpenDialogTypeRef = useRef<typeof appState.openDialogType>(null);
@@ -394,6 +426,7 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
         minimizable={false}
         className="winbox-ai-generation"
         container={container}
+        autoMaximize={imageDialogAutoMaximize}
       >
         {appState.openDialogType === DialogType.aiImageGeneration && (
           <AIImageGeneration
@@ -405,6 +438,7 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
             initialResultUrl={aiImageData.initialResultUrl}
             selectedModel={selectedImageModel}
             onModelChange={handleImageModelChange}
+            onModeChange={handleImageModeChange}
           />
         )}
       </WinBoxWindow>

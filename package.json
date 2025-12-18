@@ -50,6 +50,7 @@
     "ahooks": "^3.8.0",
     "browser-fs-access": "^0.35.0",
     "classnames": "^2.5.1",
+    "jszip": "^3.10.1",
     "localforage": "^1.10.0",
     "mobile-detect": "^1.4.5",
     "open-color": "^1.9.1",
@@ -64,7 +65,8 @@
     "tdesign-react": "^1.14.5",
     "tslib": "^2.3.0",
     "web-vitals": "^5.1.0",
-    "winbox": "^0.2.82"
+    "winbox": "^0.2.82",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@babel/core": "^7.14.5",
