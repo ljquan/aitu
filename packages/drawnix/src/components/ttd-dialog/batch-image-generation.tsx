@@ -11,6 +11,7 @@ import { useI18n } from '../../i18n';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
 import { TaskType, TaskStatus, Task } from '../../types/task.types';
 import { geminiSettings } from '../../utils/settings-manager';
+import { promptForApiKey } from '../../utils/gemini-api';
 import { IMAGE_MODEL_OPTIONS } from '../settings-dialog/settings-dialog';
 import './batch-image-generation.scss';
 
@@ -1115,7 +1116,26 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
   const executeSubmit = useCallback(async (validTasks: { task: TaskRow; rowIndex: number }[]) => {
     setIsSubmitting(true);
 
+    // 先检查 API Key，没有则弹窗获取（只弹一次）
     const settings = geminiSettings.get();
+    if (!settings.apiKey) {
+      // 退出编辑模式，防止输入被捕获到表格
+      setEditingCell(null);
+      setActiveCell(null);
+
+      const newApiKey = await promptForApiKey();
+      if (!newApiKey) {
+        setIsSubmitting(false);
+        MessagePlugin.warning(
+          language === 'zh'
+            ? '需要 API Key 才能生成图片'
+            : 'API Key is required to generate images'
+        );
+        return;
+      }
+      // promptForApiKey 内部已经更新了 settings，重新获取
+      geminiSettings.update({ apiKey: newApiKey });
+    }
     const globalBatchTimestamp = Date.now();
     let subTaskCounter = 0;
     let submittedCount = 0;
@@ -1177,7 +1197,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
           : `Submitted ${submittedCount} tasks to queue`
       );
     }
-  }, [createTask, language, selectedModel, setTasks]);
+  }, [createTask, language, selectedModel, setTasks, setEditingCell, setActiveCell]);
 
   // 提交到任务队列 - 只提交选中的行
   const submitToQueue = useCallback(async () => {

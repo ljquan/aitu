@@ -23,6 +23,7 @@ import {
 import { DEFAULT_ASPECT_RATIO } from '../../constants/image-aspect-ratios';
 import { DialogTaskList } from '../task-queue/DialogTaskList';
 import { geminiSettings } from '../../utils/settings-manager';
+import { promptForApiKey } from '../../utils/gemini-api';
 
 // 懒加载批量出图组件
 const BatchImageGeneration = lazy(() => import('./batch-image-generation'));
@@ -255,6 +256,20 @@ const AIImageGeneration = ({
     if (!prompt.trim()) {
       setError(language === 'zh' ? '请输入图像描述' : 'Please enter image description');
       return;
+    }
+
+    // 先检查 API Key，没有则弹窗获取（只弹一次，避免批量生成时多次弹窗）
+    const settings = geminiSettings.get();
+    if (!settings.apiKey) {
+      const newApiKey = await promptForApiKey();
+      if (!newApiKey) {
+        setError(
+          language === 'zh'
+            ? '需要 API Key 才能生成图片'
+            : 'API Key is required to generate images'
+        );
+        return;
+      }
     }
 
     try {
