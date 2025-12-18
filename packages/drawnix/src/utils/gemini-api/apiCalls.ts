@@ -15,7 +15,7 @@ export async function callApiRaw(
   messages: GeminiMessage[],
 ): Promise<GeminiResponse> {
   const startTime = Date.now();
-  const model = config.modelName || 'gemini-2.5-flash-image-vip';
+  const model = config.modelName || 'gemini-3-pro-image-preview-vip';
   const endpoint = '/chat/completions';
 
   // Track API call start
@@ -119,7 +119,7 @@ export async function callApiStreamRaw(
   signal?: AbortSignal
 ): Promise<GeminiResponse> {
   const startTime = Date.now();
-  const model = config.modelName || 'gemini-2.5-flash-image-vip';
+  const model = config.modelName || 'gemini-3-pro-image-preview-vip';
   const endpoint = '/chat/completions';
 
   // Track API call start
@@ -472,7 +472,7 @@ export async function callApiWithRetry(
 ): Promise<GeminiResponse> {
   const maxRetries = config.maxRetries || DEFAULT_CONFIG.maxRetries!;
   const retryDelay = config.retryDelay || DEFAULT_CONFIG.retryDelay!;
-  const model = config.modelName || 'gemini-2.5-flash-image-vip';
+  const model = config.modelName || 'gemini-3-pro-image-preview-vip';
   const endpoint = '/chat/completions';
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {

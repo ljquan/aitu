@@ -12,7 +12,7 @@ import { useTaskQueue } from '../../hooks/useTaskQueue';
 import { TaskType, TaskStatus, Task } from '../../types/task.types';
 import { geminiSettings } from '../../utils/settings-manager';
 import { promptForApiKey } from '../../utils/gemini-api';
-import { IMAGE_MODEL_OPTIONS } from '../settings-dialog/settings-dialog';
+import { IMAGE_MODEL_GROUPED_OPTIONS } from '../settings-dialog/settings-dialog';
 import './batch-image-generation.scss';
 
 // 任务行数据
@@ -1959,7 +1959,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
               <Select
                 value={selectedModel}
                 onChange={(value) => setSelectedModel(value as string)}
-                options={IMAGE_MODEL_OPTIONS}
+                options={IMAGE_MODEL_GROUPED_OPTIONS}
                 size="small"
                 placeholder={language === 'zh' ? '选择图片模型' : 'Select Image Model'}
                 filterable

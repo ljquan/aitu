@@ -39,10 +39,11 @@ export async function generateImageWithGemini(
     'Content-Type': 'application/json',
   };
 
-  // 构建请求体
+  // 构建请求体 - 强调生成图片
+  const enhancedPrompt = `Generate an image: ${prompt}`;
   const data: any = {
-    model: validatedConfig.modelName || 'gemini-2.5-flash-image-vip',
-    prompt,
+    model: validatedConfig.modelName || 'gemini-3-pro-image-preview-vip',
+    prompt: enhancedPrompt,
     response_format: options.response_format || 'url', // 默认返回 url
   };
 

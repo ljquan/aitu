@@ -33,7 +33,7 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
   // 加载当前模型设置
   useEffect(() => {
     const config = geminiSettings.get();
-    setSelectedImageModel(config.imageModelName || 'gemini-2.5-flash-image-vip');
+    setSelectedImageModel(config.imageModelName || 'gemini-3-pro-image-preview-vip');
     setSelectedVideoModel(config.videoModelName || 'veo3');
   }, []);
 

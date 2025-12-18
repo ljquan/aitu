@@ -7,13 +7,39 @@ import { geminiSettings } from '../../utils/settings-manager';
 import { Tooltip, Select } from 'tdesign-react';
 import { InfoCircleIcon } from 'tdesign-icons-react';
 
-export const IMAGE_MODEL_OPTIONS = [
+// VIP models - shown at top
+export const IMAGE_MODEL_VIP_OPTIONS = [
+  { label: 'gemini-3-pro-image-preview-vip (nano-banana-2-vip)', value: 'gemini-3-pro-image-preview-vip' },
+  { label: 'gemini-3-pro-image-preview-2k-vip (nano-banana-2-2k-vip)', value: 'gemini-3-pro-image-preview-2k-vip' },
+  { label: 'gemini-3-pro-image-preview-4k-vip (nano-banana-2-4k-vip)', value: 'gemini-3-pro-image-preview-4k-vip' },
+  { label: 'gemini-2.5-flash-image-vip (nano-banana-vip)', value: 'gemini-2.5-flash-image-vip' },
+];
+
+// Additional models - shown in "More" section
+export const IMAGE_MODEL_MORE_OPTIONS = [
   { label: 'gemini-3-pro-image-preview (nano-banana-2)', value: 'gemini-3-pro-image-preview' },
+  { label: 'gemini-2.5-flash-image (nano-banana)', value: 'gemini-2.5-flash-image' },
   { label: 'gemini-3-pro-image-preview-hd (nano-banana-2-hd)', value: 'gemini-3-pro-image-preview-hd' },
   { label: 'gemini-3-pro-image-preview-2k (nano-banana-2-2k)', value: 'gemini-3-pro-image-preview-2k' },
   { label: 'gemini-3-pro-image-preview-4k (nano-banana-2-4k)', value: 'gemini-3-pro-image-preview-4k' },
-  { label: 'gemini-2.5-flash-image-vip (nano-banana-vip)', value: 'gemini-2.5-flash-image-vip' },
-  { label: 'gemini-2.5-flash-image (nano-banana)', value: 'gemini-2.5-flash-image' },
+];
+
+// Combined options for backward compatibility (flat list)
+export const IMAGE_MODEL_OPTIONS = [
+  ...IMAGE_MODEL_VIP_OPTIONS,
+  ...IMAGE_MODEL_MORE_OPTIONS,
+];
+
+// Grouped options for Select with "More" section
+export const IMAGE_MODEL_GROUPED_OPTIONS = [
+  {
+    group: '推荐',
+    children: IMAGE_MODEL_VIP_OPTIONS,
+  },
+  {
+    group: '更多',
+    children: IMAGE_MODEL_MORE_OPTIONS,
+  },
 ];
 
 export const VIDEO_MODEL_OPTIONS = [
@@ -44,7 +70,7 @@ export const SettingsDialog = ({
       const config = geminiSettings.get();
       setApiKey(config.apiKey || '');
       setBaseUrl(config.baseUrl || 'https://api.tu-zi.com/v1');
-      setImageModelName(config.imageModelName || 'gemini-2.5-flash-image-vip');
+      setImageModelName(config.imageModelName || 'gemini-3-pro-image-preview-vip');
       setVideoModelName(config.videoModelName || 'veo3');
     }
   }, [appState.openSettings]);
@@ -54,7 +80,7 @@ export const SettingsDialog = ({
     geminiSettings.update({
       apiKey: apiKey.trim(),
       baseUrl: baseUrl.trim() || 'https://api.tu-zi.com/v1',
-      imageModelName: imageModelName.trim() || 'gemini-2.5-flash-image-vip',
+      imageModelName: imageModelName.trim() || 'gemini-3-pro-image-preview-vip',
       videoModelName: videoModelName.trim() || 'veo3',
     });
 
@@ -120,10 +146,10 @@ export const SettingsDialog = ({
               className="settings-dialog__select"
               value={imageModelName}
               onChange={(value) => setImageModelName(value as string)}
-              options={IMAGE_MODEL_OPTIONS}
+              options={IMAGE_MODEL_GROUPED_OPTIONS}
               filterable
               creatable
-              placeholder="gemini-2.5-flash-image"
+              placeholder="gemini-3-pro-image-preview-vip"
             />
           </div>
           <div className="settings-dialog__field">
