@@ -4,7 +4,7 @@
  * React hook for managing media cache state and operations.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { mediaCacheService, CacheStatus } from '../services/media-cache-service';
 
 interface UseMediaCacheResult {
@@ -107,6 +107,8 @@ export function useMediaUrl(
   const [isFromCache, setIsFromCache] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  // Track the last known cache status to detect changes for THIS task only
+  const lastStatusRef = useRef<CacheStatus>('none');
 
   // Load URL function
   const loadUrl = useCallback(async () => {
@@ -137,15 +139,24 @@ export function useMediaUrl(
   // Initial load
   useEffect(() => {
     loadUrl();
+    // Initialize last status
+    lastStatusRef.current = mediaCacheService.getCacheStatus(taskId);
   }, [taskId, originalUrl]);
 
-  // Subscribe to cache status changes
+  // Subscribe to cache status changes - only react to THIS task's changes
   useEffect(() => {
     const unsubscribe = mediaCacheService.subscribe(() => {
-      const status = mediaCacheService.getCacheStatus(taskId);
-      // When cache status changes to 'cached' or 'none', reload URL
-      if (status === 'cached' || status === 'none') {
-        loadUrl();
+      const currentStatus = mediaCacheService.getCacheStatus(taskId);
+      const previousStatus = lastStatusRef.current;
+
+      // Only reload if THIS task's status actually changed
+      if (currentStatus !== previousStatus) {
+        lastStatusRef.current = currentStatus;
+
+        // Only reload when status becomes 'cached' or 'none' (not during 'caching')
+        if (currentStatus === 'cached' || currentStatus === 'none') {
+          loadUrl();
+        }
       }
     });
 
