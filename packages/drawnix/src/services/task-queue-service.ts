@@ -218,7 +218,7 @@ class TaskQueueService {
 
   /**
    * Retries a failed task
-   * 
+   *
    * @param taskId - The task ID to retry
    */
   retryTask(taskId: string): void {
@@ -233,11 +233,16 @@ class TaskQueueService {
       return;
     }
 
-    // Reset task for retry
+    // Reset task for retry - clear timing fields to prevent immediate timeout
     this.updateTaskStatus(taskId, TaskStatus.PENDING, {
       retryCount: 0,
       error: undefined,
       nextRetryAt: undefined,
+      startedAt: undefined,  // Reset start time so timeout is recalculated
+      completedAt: undefined, // Clear completion time
+      remoteId: undefined,   // Clear remote ID for fresh submission
+      executionPhase: undefined, // Clear execution phase
+      progress: task.type === TaskType.VIDEO ? 0 : undefined, // Reset progress for video
     });
 
     console.log(`[TaskQueueService] Retrying task ${taskId}`);
