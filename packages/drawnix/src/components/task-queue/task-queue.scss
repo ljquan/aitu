@@ -227,6 +227,18 @@
     gap: 4px;
   }
 
+  &__link {
+    color: var(--td-brand-color, #0052d9);
+    text-decoration: none;
+    cursor: pointer;
+    font-size: 12px;
+
+    &:hover {
+      text-decoration: underline;
+      color: var(--td-brand-color-hover, #0045b3);
+    }
+  }
+
   &__details {
     margin: 12px 0;
   }

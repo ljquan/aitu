@@ -302,6 +302,21 @@ export const TaskItem: React.FC<TaskItemProps> = ({
               }
               return null;
             })()}
+            {/* Display result URL link for completed tasks */}
+            {isCompleted && task.result?.url && (
+              <div className="task-item__meta-item">
+                <a
+                  href={task.result.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="task-item__link"
+                  data-track="task_click_open_link"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  打开链接
+                </a>
+              </div>
+            )}
             </div>
 
           </div>
