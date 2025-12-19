@@ -154,11 +154,11 @@ export function getRelativeTime(timestamp: number): string {
 
 /**
  * Truncates a string to a maximum length with ellipsis
- * 
+ *
  * @param str - The string to truncate
  * @param maxLength - Maximum length before truncation
  * @returns Truncated string
- * 
+ *
  * @example
  * truncateString("A very long prompt text", 10) // Returns "A very lon..."
  */
@@ -167,4 +167,26 @@ export function truncateString(str: string, maxLength: number): string {
     return str;
   }
   return str.substring(0, maxLength) + '...';
+}
+
+/**
+ * Formats a timestamp to a localized date-time string
+ *
+ * @param timestamp - Unix timestamp in milliseconds
+ * @returns Formatted date-time string (e.g., "2025-12-18 14:30:25")
+ *
+ * @example
+ * formatDateTime(Date.now()) // Returns "2025-12-18 14:30:25"
+ */
+export function formatDateTime(timestamp: number): string {
+  const date = new Date(timestamp);
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const seconds = String(date.getSeconds()).padStart(2, '0');
+
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 }
