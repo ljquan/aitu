@@ -15,7 +15,7 @@ import { useMediaUrl } from '../../hooks/useMediaCache';
 import { useDrawnix, DialogType } from '../../hooks/use-drawnix';
 import { insertImageFromUrl } from '../../data/image';
 import { insertVideoFromUrl } from '../../data/video';
-import { downloadMediaFile } from '../../utils/download-utils';
+import { downloadMediaFile, downloadFromBlob, sanitizeFilename } from '../../utils/download-utils';
 import { mediaCacheService } from '../../services/media-cache-service';
 import './task-queue.scss';
 
@@ -183,7 +183,21 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
     const task = tasks.find(t => t.id === taskId);
     if (!task?.result?.url) return;
 
+    const filename = `${sanitizeFilename(task.params.prompt) || task.type}.${task.result.format}`;
+
     try {
+      // 1. 优先从本地 IndexedDB 缓存获取
+      const cachedMedia = await mediaCacheService.getCachedMedia(taskId);
+      if (cachedMedia?.blob) {
+        console.log('[Download] Using cached blob for task:', taskId);
+        downloadFromBlob(cachedMedia.blob, filename);
+        MessagePlugin.success('下载成功');
+        onTaskAction?.('download', taskId);
+        return;
+      }
+
+      // 2. 缓存不存在，从 URL 下载（带重试，SW 会自动去重）
+      console.log('[Download] No cache, fetching from URL:', task.result.url);
       const result = await downloadMediaFile(
         task.result.url,
         task.params.prompt,
@@ -198,7 +212,7 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
       onTaskAction?.('download', taskId);
     } catch (error) {
       console.error('Download failed:', error);
-      MessagePlugin.error(`下载失败: ${error instanceof Error ? error.message : '未知错误'}`);
+      MessagePlugin.error('下载失败，请稍后重试');
     }
   };
 
