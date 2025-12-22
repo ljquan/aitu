@@ -1,13 +1,13 @@
 /**
  * TaskQueuePanel Component
- * 
+ *
  * Side panel that displays all tasks in the queue.
  * Supports filtering by status and provides batch operations.
  */
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Button, Tabs, Dialog, MessagePlugin, Input, Radio } from 'tdesign-react';
-import { DeleteIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon } from 'tdesign-icons-react';
+import { DeleteIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon, UserIcon } from 'tdesign-icons-react';
 import { TaskItem } from './TaskItem';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
 import { Task, TaskType, TaskStatus } from '../../types/task.types';
@@ -18,6 +18,9 @@ import { insertVideoFromUrl } from '../../data/video';
 import { downloadMediaFile, downloadFromBlob, sanitizeFilename } from '../../utils/download-utils';
 import { mediaCacheService } from '../../services/media-cache-service';
 import { SideDrawer } from '../side-drawer';
+import { CharacterCreateDialog } from '../character/CharacterCreateDialog';
+import { CharacterList } from '../character/CharacterList';
+import { useCharacters } from '../../hooks/useCharacters';
 import './task-queue.scss';
 
 const { TabPanel } = Tabs;
@@ -44,7 +47,7 @@ const PreviewContent: React.FC<{ task: Task }> = ({ task }) => {
 
   return (
     <div className="task-preview-content">
-      {task.type === TaskType.IMAGE ? (
+      {task.type === TaskType.IMAGE || task.type === TaskType.CHARACTER ? (
         <img
           key={task.id}
           src={url}
@@ -88,14 +91,20 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
   } = useTaskQueue();
 
   const { board, openDialog } = useDrawnix();
+  const { characters } = useCharacters();
   const [activeTab, setActiveTab] = useState<string>('all');
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [clearType, setClearType] = useState<'completed' | 'failed'>('completed');
   const [searchText, setSearchText] = useState<string>('');
-  const [typeFilter, setTypeFilter] = useState<'all' | 'image' | 'video'>('all');
+  const [typeFilter, setTypeFilter] = useState<'all' | 'image' | 'video' | 'character'>('all');
   const [previewTaskId, setPreviewTaskId] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState<string | null>(null);
+  // Character extraction dialog state
+  const [characterDialogTask, setCharacterDialogTask] = useState<Task | null>(null);
+
+  // Check if showing characters view
+  const isCharacterView = typeFilter === 'character';
 
   // Initialize media cache status on component mount
   useEffect(() => {
@@ -127,7 +136,7 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
     }
 
     // Apply type filter
-    if (typeFilter !== 'all') {
+    if (typeFilter !== 'all' && typeFilter !== 'character') {
       tasksToFilter = tasksToFilter.filter(task =>
         task.type === (typeFilter === 'image' ? TaskType.IMAGE : TaskType.VIDEO)
       );
@@ -280,6 +289,15 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
     onTaskAction?.('edit', taskId);
   };
 
+  // Handle extract character action
+  const handleExtractCharacter = (taskId: string) => {
+    const task = tasks.find(t => t.id === taskId);
+    if (task) {
+      setCharacterDialogTask(task);
+      onTaskAction?.('extractCharacter', taskId);
+    }
+  };
+
   // Get completed tasks with results for navigation
   const completedTasksWithResults = useMemo(() => {
     return filteredTasks.filter(
@@ -364,39 +382,50 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
       <div className="task-queue-panel__filters">
         <RadioGroup
           value={typeFilter}
-          onChange={(value) => setTypeFilter(value as 'all' | 'image' | 'video')}
+          onChange={(value) => setTypeFilter(value as 'all' | 'image' | 'video' | 'character')}
           size="small"
           variant="default-filled"
         >
           <Radio.Button value="all">全部</Radio.Button>
           <Radio.Button value="image">图片</Radio.Button>
           <Radio.Button value="video">视频</Radio.Button>
+          <Radio.Button value="character">
+            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <UserIcon size="14px" />
+              角色 ({characters.length})
+            </span>
+          </Radio.Button>
         </RadioGroup>
 
-        <Input
-          value={searchText}
-          onChange={(value) => setSearchText(value)}
-          placeholder="搜索 Prompt..."
-          clearable
-          prefixIcon={<SearchIcon />}
-          size="small"
-          style={{ width: '180px' }}
-        />
-
-        <div className="task-queue-panel__actions">
-          {failedTasks.length > 0 && (
-            <Button
+        {/* Hide search and actions when viewing characters */}
+        {!isCharacterView && (
+          <>
+            <Input
+              value={searchText}
+              onChange={(value) => setSearchText(value)}
+              placeholder="搜索 Prompt..."
+              clearable
+              prefixIcon={<SearchIcon />}
               size="small"
-              variant="text"
-              theme="danger"
-              icon={<DeleteIcon />}
-              data-track="task_click_clear_failed"
-              onClick={() => handleClear('failed')}
-            >
-              清除失败
-            </Button>
-          )}
-        </div>
+              style={{ width: '180px' }}
+            />
+
+            <div className="task-queue-panel__actions">
+              {failedTasks.length > 0 && (
+                <Button
+                  size="small"
+                  variant="text"
+                  theme="danger"
+                  icon={<DeleteIcon />}
+                  data-track="task_click_clear_failed"
+                  onClick={() => handleClear('failed')}
+                >
+                  清除失败
+                </Button>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -416,28 +445,38 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
         className="task-queue-panel"
         contentClassName="task-queue-panel__content"
       >
-        {filteredTasks.length === 0 ? (
-          <div className="task-queue-panel__empty">
-            <div className="task-queue-panel__empty-icon">📋</div>
-            <div className="task-queue-panel__empty-text">
-              {activeTab === 'all' ? '暂无任务' : `暂无${activeTab === 'active' ? '生成中' : activeTab === 'completed' ? '已完成' : activeTab === 'failed' ? '失败' : '已取消'}任务`}
-            </div>
-          </div>
+        {isCharacterView ? (
+          /* Character List View */
+          <CharacterList
+            showHeader={false}
+            title=""
+          />
         ) : (
-          <div className="task-queue-panel__list">
-            {filteredTasks.map(task => (
-              <TaskItem
-                key={task.id}
-                task={task}
-                onRetry={handleRetry}
-                onDelete={handleDelete}
-                onDownload={handleDownload}
-                onInsert={handleInsert}
-                onEdit={handleEdit}
-                onPreviewOpen={() => handlePreviewOpen(task.id)}
-              />
-            ))}
-          </div>
+          /* Task List View */
+          filteredTasks.length === 0 ? (
+            <div className="task-queue-panel__empty">
+              <div className="task-queue-panel__empty-icon">📋</div>
+              <div className="task-queue-panel__empty-text">
+                {activeTab === 'all' ? '暂无任务' : `暂无${activeTab === 'active' ? '生成中' : activeTab === 'completed' ? '已完成' : activeTab === 'failed' ? '失败' : '已取消'}任务`}
+              </div>
+            </div>
+          ) : (
+            <div className="task-queue-panel__list">
+              {filteredTasks.map(task => (
+                <TaskItem
+                  key={task.id}
+                  task={task}
+                  onRetry={handleRetry}
+                  onDelete={handleDelete}
+                  onDownload={handleDownload}
+                  onInsert={handleInsert}
+                  onEdit={handleEdit}
+                  onPreviewOpen={() => handlePreviewOpen(task.id)}
+                  onExtractCharacter={handleExtractCharacter}
+                />
+              ))}
+            </div>
+          )
         )}
       </SideDrawer>
 
@@ -471,7 +510,7 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
           width="90vw"
           header={
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>{previewedTask.type === TaskType.IMAGE ? '图片预览' : '视频预览'}</span>
+              <span>{previewedTask.type === TaskType.IMAGE ? '图片预览' : previewedTask.type === TaskType.CHARACTER ? '角色预览' : '视频预览'}</span>
               {previewInfo && (
                 <span style={{ fontSize: '14px', color: '#757575', fontWeight: 'normal' }}>
                   {previewInfo.currentIndex + 1} / {previewInfo.total}
@@ -507,6 +546,23 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
           </div>
         </Dialog>
       )}
+
+      {/* Character Create Dialog */}
+      <CharacterCreateDialog
+        visible={!!characterDialogTask}
+        task={characterDialogTask}
+        onClose={() => setCharacterDialogTask(null)}
+        onCreateStart={() => {
+          // Start indicator (API call begins)
+          console.log('Character creation started');
+        }}
+        onCreateComplete={(characterId) => {
+          console.log('Character created:', characterId);
+          // Close dialog and switch to character view after API succeeds
+          setCharacterDialogTask(null);
+          setTypeFilter('character');
+        }}
+      />
     </>
   );
 };

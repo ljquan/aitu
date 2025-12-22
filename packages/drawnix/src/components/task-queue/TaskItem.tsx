@@ -7,11 +7,12 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Button, Tag, Tooltip } from 'tdesign-react';
-import { ImageIcon, VideoIcon, DeleteIcon, RefreshIcon, DownloadIcon, EditIcon, SaveIcon, CheckCircleFilledIcon } from 'tdesign-icons-react';
+import { ImageIcon, VideoIcon, DeleteIcon, RefreshIcon, DownloadIcon, EditIcon, SaveIcon, CheckCircleFilledIcon, UserIcon } from 'tdesign-icons-react';
 import { Task, TaskStatus, TaskType } from '../../types/task.types';
 import { formatDateTime, formatTaskDuration } from '../../utils/task-utils';
 import { formatRetryDelay } from '../../utils/retry-utils';
 import { useMediaCache, useMediaUrl } from '../../hooks/useMediaCache';
+import { supportsCharacterExtraction, isSora2VideoId } from '../../types/character.types';
 import { RetryImage } from '../retry-image';
 import './task-queue.scss';
 
@@ -30,6 +31,8 @@ export interface TaskItemProps {
   onPreviewOpen?: () => void;
   /** Callback when edit button is clicked */
   onEdit?: (taskId: string) => void;
+  /** Callback when extract character button is clicked */
+  onExtractCharacter?: (taskId: string) => void;
 }
 
 /**
@@ -87,10 +90,18 @@ export const TaskItem: React.FC<TaskItemProps> = ({
   onInsert,
   onPreviewOpen,
   onEdit,
+  onExtractCharacter,
 }) => {
   const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
   const isCompleted = task.status === TaskStatus.COMPLETED;
   const isFailed = task.status === TaskStatus.FAILED;
+
+  // Check if task supports character extraction (Sora-2 completed video tasks)
+  const canExtractCharacter =
+    isCompleted &&
+    task.type === TaskType.VIDEO &&
+    isSora2VideoId(task.remoteId) &&
+    supportsCharacterExtraction(task.params.model);
 
   // Media cache hook
   const {
@@ -474,6 +485,22 @@ export const TaskItem: React.FC<TaskItemProps> = ({
         >
           编辑
         </Button>
+
+        {/* Extract character button for Sora-2 completed video tasks */}
+        {canExtractCharacter && (
+          <Tooltip content="从视频中提取角色，用于后续视频生成">
+            <Button
+              size="small"
+              variant="outline"
+              theme="warning"
+              icon={<UserIcon />}
+              data-track="task_click_extract_character"
+              onClick={() => onExtractCharacter?.(task.id)}
+            >
+              提取角色
+            </Button>
+          </Tooltip>
+        )}
       </div>
     </div>
   );
