@@ -192,56 +192,55 @@
   }
 }
 
-// AI 生成弹窗专用样式
+// AI 生成弹窗通用样式
 .winbox-ai-generation {
   z-index: $z-dialog-ai-image !important; // Layer 5: AI 图像/视频生成弹窗
-  
+
   // 白底灰黑色 header 样式
   .wb-header {
     background: #ffffff !important;
     border-bottom: 1px solid #e5e5e5;
   }
-  
-  // 标题文字改为灰黑色
+
+  // 标题文字样式
   .wb-title {
-    color: #333333 !important;
-    text-shadow: none !important;
+    color: #333333;
+    font-weight: 600;
   }
-  
+
   // 控制按钮改为灰黑色图标
   .wb-min,
   .wb-max,
   .wb-full,
   .wb-close {
-    // 使用 CSS filter 将白色图标转换为灰黑色
     filter: invert(1) brightness(0.3);
-    
+
     &:hover {
       background-color: rgba(0, 0, 0, 0.08);
       filter: invert(1) brightness(0.2);
     }
   }
-  
+
   // 关闭按钮 hover 特殊样式
   .wb-close:hover {
     background-color: rgba(255, 59, 48, 0.15);
     filter: invert(1) brightness(0.2);
   }
-  
+
   .wb-body {
     padding: 0;
     display: flex;
     flex-direction: column;
   }
-  
+
   // 确保内容撑满
   .winbox-content-wrapper {
     flex: 1;
     display: flex;
     flex-direction: column;
-    padding: 16px 20px; // AI 弹窗专用 padding
+    padding: 16px 20px;
   }
-  
+
   // AI 图像/视频生成容器
   .ai-image-generation-container,
   .ai-video-generation-container {
@@ -249,40 +248,87 @@
     height: 100%;
     overflow: auto;
   }
-  
+
   // 白底 header 中的 Select 组件样式调整
   .wb-header-custom {
     .t-select {
       background: #f5f5f5;
       border: 1px solid #d9d9d9;
-      
+
       .t-input {
         color: #333333;
-        
+
         &::placeholder {
           color: #999999;
         }
       }
-      
+
       .t-input__inner {
         color: #333333;
       }
-      
+
       .t-fake-arrow {
         color: #666666;
       }
-      
+
       &:hover {
         background: #eeeeee;
         border-color: #bfbfbf;
       }
-      
+
       &.t-is-focused {
         background: #ffffff;
         border-color: #5A4FCF;
         box-shadow: 0 0 0 2px rgba(90, 79, 207, 0.15);
       }
     }
+  }
+
+  // 模式切换按钮组
+  .image-generation-mode-tabs {
+    display: flex;
+    align-items: center;
+    background: transparent;
+    padding: 0;
+    gap: 8px;
+
+    .mode-tab {
+      padding: 8px 16px;
+      font-size: 14px;
+      font-weight: 500;
+      color: #666666;
+      background: transparent;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+
+      &:hover:not(.active) {
+        color: #333333;
+        background: rgba(0, 0, 0, 0.04);
+      }
+
+      &.active {
+        color: #F39C12;
+        font-weight: 600;
+        background: transparent;
+      }
+    }
+  }
+}
+
+// 图像生成弹窗 - 有模式切换时隐藏标题
+.winbox-ai-image-generation {
+  .wb-title {
+    display: none !important;
+  }
+}
+
+// 视频生成弹窗 - 保留标题显示
+.winbox-ai-video-generation {
+  .wb-title {
+    display: block !important;
   }
 }
 
