@@ -1,7 +1,7 @@
 /**
  * BottomActionsSection Component
  *
- * 统一的底部工具区域,整合"打开项目"和"任务队列"两个功能
+ * 统一的底部工具区域,整合"打开项目"、"工具箱"、"更多工具"和"任务队列"功能
  * 采用上下布局,视觉风格统一,使用标准的 ToolButton 组件
  */
 
@@ -9,6 +9,8 @@ import React from 'react';
 import { Badge } from 'tdesign-react';
 import { ToolButton } from '../tool-button';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
+import { FeedbackButton } from '../feedback-button';
+import { MoreToolsButton } from './more-tools-button';
 import './bottom-actions-section.scss';
 
 export interface BottomActionsSectionProps {
@@ -24,8 +26,6 @@ export interface BottomActionsSectionProps {
   taskPanelExpanded: boolean;
   /** 任务面板切换回调 */
   onTaskPanelToggle: () => void;
-  /** 是否为图标模式 */
-  iconMode?: boolean;
 }
 
 // 自定义文件夹图标
@@ -108,6 +108,12 @@ export const BottomActionsSection: React.FC<BottomActionsSectionProps> = ({
 
   return (
     <div className="bottom-actions-section">
+      {/* 更多工具按钮 */}
+      <MoreToolsButton embedded={true} />
+
+      {/* 反馈按钮 */}
+      <FeedbackButton />
+
       {/* 打开项目按钮 - 使用 ToolButton */}
       <ToolButton
         type="icon"

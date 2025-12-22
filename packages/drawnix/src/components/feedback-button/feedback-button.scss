@@ -2,38 +2,17 @@
  * FeedbackButton Styles
  */
 
-.feedback-button-container {
-  position: relative;
-  z-index: 100;
-  display: flex;
-  justify-content: center;
-}
-
-.feedback-button {
+.feedback-button__icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: var(--border-radius-sm); // Match tool button radius (approx) or keep circle if preferred. Tool buttons are usually square/rounded. Let's keep it consistent with tool buttons.
-  // Actually, tool buttons in Island are usually just icons. But FeedbackButton has a background.
-  // Let's make it look like a tool button.
-  background: transparent;
-  color: var(--color-on-surface);
-  cursor: pointer;
-  border: none;
-  box-shadow: none;
-  transition: background-color 0.2s ease;
+  width: 18px;
+  height: 18px;
 
-  &:hover {
-    background-color: var(--color-surface-primary-container);
-    color: var(--color-primary);
-    border-radius: var(--border-radius-sm);
+  svg {
+    width: 100%;
+    height: 100%;
   }
-}
-
-.feedback-qrcode-popup {
-  // Removed as we use Popover component now
 }
 
 .feedback-qrcode-content {
@@ -48,7 +27,7 @@
 }
 
 .feedback-qrcode-image {
-  max-width: 3000px;
+  max-width: 300px;
   border-radius: 8px;
   object-fit: cover;
 }

@@ -9,14 +9,17 @@ import {
   SelectionIcon,
   ShapeIcon,
   TextIcon,
-  EraseIcon,
   StraightArrowLineIcon,
   FeltTipPenIcon,
   ImageIcon,
   MediaLibraryIcon,
   AIImageIcon,
   AIVideoIcon,
-  ExtraToolsIcon,
+  ThemeIcon,
+  MermaidLogoIcon,
+  MarkdownLogoIcon,
+  ZoomInIcon,
+  ZoomOutIcon,
 } from '../icons';
 import { useBoard } from '@plait-board/react-board';
 import {
@@ -36,7 +39,7 @@ import {
 import { FreehandPanel , FREEHANDS } from './freehand-panel/freehand-panel';
 import { ShapePicker } from '../shape-picker';
 import { ArrowPicker } from '../arrow-picker';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo, useRef } from 'react';
 import { MessagePlugin } from 'tdesign-react';
 import { MediaLibraryModal } from '../media-library/MediaLibraryModal';
 import { SelectionMode, Asset, AssetType } from '../../types/asset.types';
@@ -50,15 +53,21 @@ import {
   useDrawnix,
   useSetPointer,
 } from '../../hooks/use-drawnix';
-import { ExtraToolsButton } from './extra-tools/extra-tools-button';
 import { addImage } from '../../utils/image';
 import { useI18n, Translations } from '../../i18n';
 import { ToolbarSectionProps } from './toolbar.types';
+import { useToolbarConfig } from '../../hooks/use-toolbar-config';
+import { useDragSort } from '../../hooks/use-drag-sort';
+import { ToolbarContextMenu } from './toolbar-context-menu';
+import Menu from '../menu/menu';
+import MenuItem from '../menu/menu-item';
+import { THEME_OPTIONS, CheckIcon, isBasicPointer, EmptyIcon } from './toolbar-shared';
 
 export enum PopupKey {
   'shape' = 'shape',
   'arrow' = 'arrow',
   'freehand' = 'freehand',
+  'theme' = 'theme',
 }
 
 type AppToolButtonProps = {
@@ -66,13 +75,9 @@ type AppToolButtonProps = {
   name?: string;
   icon: React.ReactNode;
   pointer?: DrawnixPointerType;
-  key?: PopupKey | 'image' | 'media-library' | 'ai-image' | 'ai-video' | 'extra-tools';
-};
-
-const isBasicPointer = (pointer: string) => {
-  return (
-    pointer === PlaitPointerType.hand || pointer === PlaitPointerType.selection
-  );
+  key?: PopupKey | 'image' | 'media-library' | 'ai-image' | 'ai-video' | 'extra-tools' | 'mermaid-to-drawnix' | 'markdown-to-drawnix';
+  /** 用于可见性检查的 key，对应 TOOLBAR_GROUPS 中的 buttonKeys */
+  visibilityKey?: string;
 };
 
 export const BUTTONS: AppToolButtonProps[] = [
@@ -80,64 +85,88 @@ export const BUTTONS: AppToolButtonProps[] = [
     icon: HandIcon,
     pointer: PlaitPointerType.hand,
     titleKey: 'toolbar.hand',
+    visibilityKey: 'hand',
   },
   {
     icon: SelectionIcon,
     pointer: PlaitPointerType.selection,
     titleKey: 'toolbar.selection',
+    visibilityKey: 'selection',
   },
   {
     icon: MindIcon,
     pointer: MindPointerType.mind,
     titleKey: 'toolbar.mind',
+    visibilityKey: 'mind',
   },
   {
     icon: TextIcon,
     pointer: BasicShapes.text,
     titleKey: 'toolbar.text',
+    visibilityKey: 'text',
   },
   {
     icon: FeltTipPenIcon,
     pointer: FreehandShape.feltTipPen,
     titleKey: 'toolbar.pen',
     key: PopupKey.freehand,
+    visibilityKey: 'freehand',
   },
   {
     icon: StraightArrowLineIcon,
     titleKey: 'toolbar.arrow',
     key: PopupKey.arrow,
     pointer: ArrowLineShape.straight,
+    visibilityKey: 'arrow',
   },
   {
     icon: ShapeIcon,
     titleKey: 'toolbar.shape',
     key: PopupKey.shape,
     pointer: BasicShapes.rectangle,
+    visibilityKey: 'shape',
   },
   {
     icon: ImageIcon,
     titleKey: 'toolbar.image',
     key: 'image',
+    visibilityKey: 'image',
   },
   {
     icon: MediaLibraryIcon,
     titleKey: 'toolbar.mediaLibrary',
     key: 'media-library',
+    visibilityKey: 'media-library',
   },
   {
     icon: AIImageIcon,
     titleKey: 'toolbar.aiImage',
     key: 'ai-image',
+    visibilityKey: 'ai-image',
   },
   {
     icon: AIVideoIcon,
     titleKey: 'toolbar.aiVideo',
     key: 'ai-video',
+    visibilityKey: 'ai-video',
   },
   {
-    icon: ExtraToolsIcon,
-    titleKey: 'toolbar.extraTools',
-    key: 'extra-tools',
+    icon: ThemeIcon,
+    titleKey: 'toolbar.theme',
+    key: 'theme',
+    visibilityKey: 'theme',
+  },
+  {
+    icon: MermaidLogoIcon,
+    titleKey: 'extraTools.mermaidToDrawnix',
+    key: 'mermaid-to-drawnix',
+    visibilityKey: 'mermaid-to-drawnix',
+  },
+  {
+    icon: MarkdownLogoIcon,
+    titleKey: 'extraTools.markdownToDrawnix',
+    key: 'markdown-to-drawnix',
+    visibilityKey: 'markdown-to-drawnix',
   },
 ];
 
@@ -162,21 +191,34 @@ export const CreationToolbar: React.FC<ToolbarSectionProps> = ({
   const { t } = useI18n();
   const setPointer = useSetPointer();
   const container = PlaitBoard.getBoardContainer(board);
+  const { visibleButtons, loading: configLoading, reorderButton } = useToolbarConfig();
+
+  // 拖拽排序
+  const { getDragProps } = useDragSort({
+    items: visibleButtons,
+    getId: (item) => item.id,
+    onReorder: (fromIndex, toIndex) => {
+      reorderButton(fromIndex, toIndex, true);
+    },
+    enabled: embedded, // 只在嵌入模式下启用拖拽
+  });
 
   // 统一的 Popover 状态管理
   const [openPopovers, setOpenPopovers] = useState<Record<PopupKey, boolean>>({
     [PopupKey.freehand]: false,
     [PopupKey.arrow]: false,
     [PopupKey.shape]: false,
+    [PopupKey.theme]: false,
   });
 
   // 追踪是否是 hover 触发的
   const [hoverPopover, setHoverPopover] = useState<PopupKey | null>(null);
-  const hoverTimeoutRef = useState<Record<PopupKey, NodeJS.Timeout | null>>({
+  const hoverTimeoutRef = useRef<Record<PopupKey, NodeJS.Timeout | null>>({
     [PopupKey.freehand]: null,
     [PopupKey.arrow]: null,
     [PopupKey.shape]: null,
-  })[0];
+    [PopupKey.theme]: null,
+  });
 
   const [lastFreehandButton, setLastFreehandButton] =
     useState<AppToolButtonProps>(
@@ -217,10 +259,11 @@ export const CreationToolbar: React.FC<ToolbarSectionProps> = ({
       [PopupKey.freehand]: false,
       [PopupKey.arrow]: false,
       [PopupKey.shape]: false,
+      [PopupKey.theme]: false,
     });
     setHoverPopover(null);
     // 清除所有定时器
-    Object.values(hoverTimeoutRef).forEach(timeout => {
+    Object.values(hoverTimeoutRef.current).forEach(timeout => {
       if (timeout) clearTimeout(timeout);
     });
   };
@@ -229,7 +272,7 @@ export const CreationToolbar: React.FC<ToolbarSectionProps> = ({
   const showPopover = (key: PopupKey) => {
     // 清除 hover 状态
     setHoverPopover(null);
-    Object.values(hoverTimeoutRef).forEach(timeout => {
+    Object.values(hoverTimeoutRef.current).forEach(timeout => {
       if (timeout) clearTimeout(timeout);
     });
     
@@ -237,6 +280,7 @@ export const CreationToolbar: React.FC<ToolbarSectionProps> = ({
       [PopupKey.freehand]: false,
       [PopupKey.arrow]: false,
       [PopupKey.shape]: false,
+      [PopupKey.theme]: false,
       [key]: true,
     });
   };
@@ -244,15 +288,15 @@ export const CreationToolbar: React.FC<ToolbarSectionProps> = ({
   // Hover 进入时显示 Popover
   const handleMouseEnter = (key: PopupKey) => {
     // 清除之前的定时器
-    if (hoverTimeoutRef[key]) {
-      clearTimeout(hoverTimeoutRef[key]!);
+    if (hoverTimeoutRef.current[key]) {
+      clearTimeout(hoverTimeoutRef.current[key]!);
     }
     
     // 清除其他所有 Popover 的定时器
-    Object.entries(hoverTimeoutRef).forEach(([popupKey, timeout]) => {
+    Object.entries(hoverTimeoutRef.current).forEach(([popupKey, timeout]) => {
       if (popupKey !== key && timeout) {
         clearTimeout(timeout);
-        hoverTimeoutRef[popupKey as PopupKey] = null;
+        hoverTimeoutRef.current[popupKey as PopupKey] = null;
       }
     });
     
@@ -267,7 +311,7 @@ export const CreationToolbar: React.FC<ToolbarSectionProps> = ({
     } 
     // 如果没有被点击打开，则通过 hover 打开
     else if (!openPopovers[key]) {
-      hoverTimeoutRef[key] = setTimeout(() => {
+      hoverTimeoutRef.current[key] = setTimeout(() => {
         setOpenPopovers(prev => ({
           ...prev,
           [key]: true,
@@ -280,14 +324,14 @@ export const CreationToolbar: React.FC<ToolbarSectionProps> = ({
   // Hover 离开时隐藏 Popover
   const handleMouseLeave = (key: PopupKey) => {
     // 清除进入的定时器
-    if (hoverTimeoutRef[key]) {
-      clearTimeout(hoverTimeoutRef[key]!);
-      hoverTimeoutRef[key] = null;
+    if (hoverTimeoutRef.current[key]) {
+      clearTimeout(hoverTimeoutRef.current[key]!);
+      hoverTimeoutRef.current[key] = null;
     }
 
     // 只有当是 hover 触发的才自动关闭
     if (hoverPopover === key) {
-      hoverTimeoutRef[key] = setTimeout(() => {
+      hoverTimeoutRef.current[key] = setTimeout(() => {
         setOpenPopovers(prev => ({
           ...prev,
           [key]: false,
@@ -300,9 +344,9 @@ export const CreationToolbar: React.FC<ToolbarSectionProps> = ({
   // Popover 内容区域的 hover 事件
   const handlePopoverMouseEnter = (key: PopupKey) => {
     // 清除离开的定时器
-    if (hoverTimeoutRef[key]) {
-      clearTimeout(hoverTimeoutRef[key]!);
-      hoverTimeoutRef[key] = null;
+    if (hoverTimeoutRef.current[key]) {
+      clearTimeout(hoverTimeoutRef.current[key]!);
+      hoverTimeoutRef.current[key] = null;
     }
   };
 
@@ -362,6 +406,10 @@ export const CreationToolbar: React.FC<ToolbarSectionProps> = ({
       openDialog(DialogType.aiImageGeneration);
     } else if (button.key === 'ai-video') {
       openDialog(DialogType.aiVideoGeneration);
+    } else if (button.key === 'mermaid-to-drawnix') {
+      openDialog(DialogType.mermaidToDrawnix);
+    } else if (button.key === 'markdown-to-drawnix') {
+      openDialog(DialogType.markdownToDrawnix);
     }
   };
 
@@ -399,6 +447,29 @@ export const CreationToolbar: React.FC<ToolbarSectionProps> = ({
                 setPointer(pointer);
               }}
             />
+          );
+        case PopupKey.theme:
+          return (
+            <Menu>
+              {THEME_OPTIONS.map((option) => {
+                const isSelected = board.theme.themeColorMode === option.value;
+                return (
+                  <MenuItem
+                    key={option.value}
+                    icon={isSelected ? CheckIcon : EmptyIcon}
+                    data-track={`toolbar_click_theme_${option.value}`}
+                    onSelect={() => {
+                      BoardTransforms.updateThemeColor(board, option.value);
+                      resetAllPopovers();
+                    }}
+                    aria-label={t(option.labelKey)}
+                    selected={isSelected}
+                  >
+                    {t(option.labelKey)}
+                  </MenuItem>
+                );
+              })}
+            </Menu>
           );
       }
     };
@@ -502,28 +573,170 @@ export const CreationToolbar: React.FC<ToolbarSectionProps> = ({
     );
   };
 
+  // 创建按钮 ID 到按钮配置的映射
+  const buttonMap = useMemo(() => {
+    const map = new Map<string, AppToolButtonProps>();
+    BUTTONS.forEach((button) => {
+      if (button.visibilityKey) {
+        map.set(button.visibilityKey, button);
+      }
+    });
+    return map;
+  }, []);
+
+  // zoom 菜单状态
+  const [zoomMenuOpen, setZoomMenuOpen] = useState(false);
+
+  // 渲染 zoom 工具栏（embedded模式纵向，普通模式横向）
+  const renderZoomToolbar = useCallback((index: number) => {
+    const StackComponent = embedded ? Stack.Col : Stack.Row;
+    
+    return (
+      <div
+        key={`zoom-${index}`}
+        className={classNames('creation-toolbar__zoom-inline', {
+          'creation-toolbar__zoom-inline--vertical': embedded,
+        })}
+      >
+        <StackComponent gap={0}>
+          <ToolButton
+            type="button"
+            icon={ZoomOutIcon}
+            visible={true}
+            title={t('zoom.out')}
+            tooltipPlacement={embedded ? 'right' : 'bottom'}
+            aria-label={t('zoom.out')}
+            data-track="toolbar_click_zoom_out"
+            onPointerUp={() => {
+              BoardTransforms.updateZoom(board, board.viewport.zoom - 0.1);
+            }}
+            className="zoom-out-button"
+          />
+          <Popover
+            sideOffset={12}
+            open={zoomMenuOpen}
+            onOpenChange={(open) => {
+              setZoomMenuOpen(open);
+            }}
+            placement={embedded ? 'right-start' : 'bottom'}
+          >
+            <PopoverTrigger asChild>
+              <div
+                title={t('zoom.fit')}
+                aria-label={t('zoom.fit')}
+                data-track="toolbar_click_zoom_menu"
+                className={classNames('zoom-menu-trigger', { active: zoomMenuOpen })}
+                onPointerUp={() => {
+                  setZoomMenuOpen(!zoomMenuOpen);
+                }}
+              >
+                {Number(((board?.viewport?.zoom || 1) * 100).toFixed(0))}%
+              </div>
+            </PopoverTrigger>
+            <PopoverContent container={container} style={{ zIndex: Z_INDEX.POPOVER }}>
+              <Menu
+                onSelect={() => {
+                  setZoomMenuOpen(false);
+                }}
+              >
+                <MenuItem
+                  data-track="toolbar_click_zoom_fit"
+                  onSelect={() => {
+                    BoardTransforms.fitViewport(board);
+                  }}
+                  aria-label={t('zoom.fit')}
+                  shortcut={`Cmd+Shift+=`}
+                >{t('zoom.fit')}</MenuItem>
+                <MenuItem
+                  data-track="toolbar_click_zoom_100"
+                  onSelect={() => {
+                    BoardTransforms.updateZoom(board, 1);
+                  }}
+                  aria-label={t('zoom.100')}
+                  shortcut={`Cmd+0`}
+                >{t('zoom.100')}</MenuItem>
+              </Menu>
+            </PopoverContent>
+          </Popover>
+          <ToolButton
+            type="button"
+            icon={ZoomInIcon}
+            visible={true}
+            title={t('zoom.in')}
+            tooltipPlacement={embedded ? 'right' : 'bottom'}
+            aria-label={t('zoom.in')}
+            data-track="toolbar_click_zoom_in"
+            onPointerUp={() => {
+              BoardTransforms.updateZoom(board, board.viewport.zoom + 0.1);
+            }}
+            className="zoom-in-button"
+          />
+        </StackComponent>
+      </div>
+    );
+  }, [board, container, embedded, t, zoomMenuOpen]);
+
+  // 根据按钮 ID 渲染按钮（不带拖拽包装）
+  const renderButtonById = useCallback((buttonId: string, index: number) => {
+    // zoom 使用特殊渲染
+    if (buttonId === 'zoom') {
+      return renderZoomToolbar(index);
+    }
+
+    const button = buttonMap.get(buttonId);
+    if (!button) return null;
+
+    // 移动端隐藏手型工具
+    if (appState.isMobile && button.pointer === PlaitPointerType.hand) {
+      return null;
+    }
+
+    // 带 Popover 的按钮
+    if (button.key && Object.values(PopupKey).includes(button.key as PopupKey)) {
+      return renderPopoverButton(button, index, button.key as PopupKey);
+    }
+
+    // 普通按钮
+    return renderNormalButton(button, index);
+  }, [buttonMap, appState.isMobile, renderPopoverButton, renderNormalButton, renderZoomToolbar]);
+
+  // 渲染带拖拽和右键菜单功能的按钮
+  const renderDraggableButton = useCallback((buttonId: string, index: number, isVisible: boolean = true, visibleIndex: number = -1) => {
+    const buttonElement = renderButtonById(buttonId, index);
+    if (!buttonElement) return null;
+
+    const dragProps = getDragProps(buttonId, index);
+
+    return (
+      <ToolbarContextMenu
+        key={`ctx-${buttonId}-${index}`}
+        buttonId={buttonId}
+        isVisible={isVisible}
+        visibleIndex={visibleIndex}
+      >
+        <div
+          className={classNames('toolbar-button-wrapper', {
+            'toolbar-button-wrapper--dragging': dragProps['data-dragging'],
+            'toolbar-button-wrapper--drag-over': dragProps['data-drag-over'],
+            'toolbar-button-wrapper--drag-before': dragProps['data-drag-position'] === 'before',
+            'toolbar-button-wrapper--drag-after': dragProps['data-drag-position'] === 'after',
+          })}
+          {...dragProps}
+        >
+          {buttonElement}
+        </div>
+      </ToolbarContextMenu>
+    );
+  }, [renderButtonById, getDragProps]);
 
   const content = (
     <Stack.Row gap={1}>
-      {BUTTONS.map((button, index) => {
-        // 移动端隐藏手型工具
-        if (appState.isMobile && button.pointer === PlaitPointerType.hand) {
-          return null;
-        }
-
-        // 额外工具按钮
-        if (button.key === 'extra-tools') {
-          return <ExtraToolsButton key={index} />;
-        }
-
-        // 带 Popover 的按钮
-        if (button.key && Object.values(PopupKey).includes(button.key as PopupKey)) {
-          return renderPopoverButton(button, index, button.key as PopupKey);
-        }
-
-        // 普通按钮
-        return renderNormalButton(button, index);
-      })}
+      {/* 渲染可见按钮（按配置顺序） */}
+      {!configLoading && visibleButtons.map((buttonConfig, index) => 
+        embedded 
+          ? renderDraggableButton(buttonConfig.id, index, true, index)
+          : renderButtonById(buttonConfig.id, index)
+      )}
     </Stack.Row>
   );
 

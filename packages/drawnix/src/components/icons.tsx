@@ -480,21 +480,6 @@ export const ImageIcon = createIcon(
   </svg>
 );
 
-export const ExtraToolsIcon = createIcon(
-  <svg
-    stroke="currentColor"
-    viewBox="0 0 24 24"
-    xmlns="http://www.w3.org/2000/svg"
-  >
-    <g strokeWidth={1.8} fill="none">
-      <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
-      <path d="M12 3l-4 7h8z"></path>
-      <path d="M17 17m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0"></path>
-      <path d="M4 14m0 1a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1z"></path>
-    </g>
-  </svg>
-);
-
 export const MermaidLogoIcon = createIcon(
   <svg
     stroke="currentColor"
@@ -561,6 +546,42 @@ export const MediaLibraryIcon = createIcon(
       {/* 小图片图标 */}
       <circle cx="3" cy="3" r="0.8" fill="currentColor"/>
       <path d="M2 5.5L3.5 4L5.5 6" stroke="currentColor" strokeWidth="0.8" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+    </g>
+  </svg>
+);
+
+export const ViewIcon = createIcon(
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+    <g strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+      <circle cx="12" cy="12" r="3"/>
+    </g>
+  </svg>
+);
+
+export const ThemeIcon = createIcon(
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+    <g strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <path d="M12 2a10 10 0 0 1 0 20"/>
+      <path d="M12 2c-2.5 2.5-4 6-4 10s1.5 7.5 4 10"/>
+    </g>
+  </svg>
+);
+
+export const WeComIcon = createIcon(
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" fill="currentColor">
+    <path d="M679.872 409.024c11.456 0 22.72 0.96 33.728 2.752-30.272-140.928-181.312-246.144-356.032-246.144C159.936 165.632 0 299.456 0 466.112c0 96.384 52.48 175.296 140.096 236.608l-35.008 105.216 122.304-61.248c43.84 8.768 78.912 17.536 122.752 17.536 10.944 0 21.76-0.512 32.512-1.408-6.848-23.232-10.752-47.616-10.752-72.896 0-154.176 136.512-280.896 307.968-280.896zM469.632 306.944c26.304 0 43.84 17.472 43.84 43.712 0 26.176-17.536 43.84-43.84 43.84-26.24 0-52.544-17.664-52.544-43.84 0-26.24 26.304-43.712 52.544-43.712z m-227.136 87.552c-26.304 0-52.608-17.664-52.608-43.84 0-26.24 26.304-43.712 52.608-43.712 26.24 0 43.776 17.472 43.776 43.712 0 26.176-17.536 43.84-43.776 43.84z" />
+    <path d="M1024 685.312c0-140.16-140.16-254.016-297.792-254.016-166.464 0-297.856 113.856-297.856 254.016 0 140.288 131.392 254.016 297.856 254.016 34.944 0 70.016-8.768 105.088-17.6l96.32 52.544-26.24-87.616c70.016-52.48 122.624-122.624 122.624-201.344z m-394.368-43.84c-17.472 0-35.072-17.472-35.072-35.008 0-17.472 17.6-35.008 35.072-35.008 26.304 0 43.84 17.536 43.84 35.008 0 17.536-17.536 35.008-43.84 35.008z m192.96 0c-17.472 0-34.944-17.472-34.944-35.008 0-17.472 17.472-35.008 34.944-35.008 26.24 0 43.84 17.536 43.84 35.008 0 17.536-17.6 35.008-43.84 35.008z" />
+  </svg>
+);
+
+export const MoreIcon = createIcon(
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+    <g strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="1" fill="currentColor"/>
+      <circle cx="12" cy="5" r="1" fill="currentColor"/>
+      <circle cx="12" cy="19" r="1" fill="currentColor"/>
     </g>
   </svg>
 );

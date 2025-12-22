@@ -6,6 +6,7 @@
 @import './theme.scss';
 @import './z-index.scss'; // Z-Index层级管理变量
 @import './toolbox-theme.scss'; // 工具箱主题变量
+@import '../components/side-drawer/side-drawer.scss'; // 通用侧边抽屉
 @import '../components/chat-drawer/chat-drawer.scss';
 @import '../components/tool-element/tool.component.scss';
 @import '../components/toolbox-drawer/toolbox-drawer.scss';
@@ -47,46 +48,73 @@
         top: 36px;
         left: 50%;
         transform: translateX(-50%);
-    }
-    .zoom-toolbar {
-        cursor: default;
-        position: absolute;
-        top: 36px;
-        right: 36px;
-        .zoom-out-button {
-            border-top-right-radius: 0 !important;
-            border-bottom-right-radius: 0 !important;
-        }
-        .zoom-menu-trigger {
-            width: 56px;
-            display: flex;
+
+        // zoom 内联样式（在 creation-toolbar 中）
+        .creation-toolbar__zoom-inline {
+            display: inline-flex;
             align-items: center;
-            justify-content: center;
-            color: var(--color-on-surface);
-            border-radius: var(--border-radius-sm);
-            cursor: pointer;
 
-            &:hover, &.active {
-                --background: var(--color-surface-primary-container);
-                background-color: var(--background);
+            .stack {
+                display: flex !important;
+                flex-direction: row !important;
+                align-items: center;
+                gap: 0;
             }
-        }
-        .zoom-in-button{
-            color: var(--color-on-surface);
-            border-top-left-radius: 0 !important;
-            border-bottom-left-radius: 0 !important;
-        }
 
-        // 嵌入模式下调整zoom按钮布局
-        &.zoom-toolbar--embedded {
-            .zoom-out-button,
-            .zoom-in-button {
-                border-radius: var(--border-radius-sm) !important;
+            .zoom-out-button {
+                border-top-right-radius: 0 !important;
+                border-bottom-right-radius: 0 !important;
             }
+
             .zoom-menu-trigger {
-                width: 100%;
-                min-width: 48px;
+                min-width: 40px;
+                padding: 0 2px;
+                height: 32px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: var(--color-on-surface);
+                border-radius: 0;
+                cursor: pointer;
                 font-size: 12px;
+
+                &:hover, &.active {
+                    background-color: var(--color-surface-primary-container);
+                }
+            }
+
+            .zoom-in-button {
+                color: var(--color-on-surface);
+                border-top-left-radius: 0 !important;
+                border-bottom-left-radius: 0 !important;
+            }
+
+            // 纵向模式（embedded工具栏）
+            &--vertical {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+
+                .stack {
+                    flex-direction: column !important;
+                }
+
+                .zoom-out-button {
+                    border-radius: var(--border-radius-sm) !important;
+                    border-bottom-left-radius: 0 !important;
+                    border-bottom-right-radius: 0 !important;
+                }
+
+                .zoom-menu-trigger {
+                    width: 100%;
+                    border-radius: 0;
+                }
+
+                .zoom-in-button {
+                    border-radius: var(--border-radius-sm) !important;
+                    border-top-left-radius: 0 !important;
+                    border-top-right-radius: 0 !important;
+                }
             }
         }
     }
@@ -94,39 +122,6 @@
         position: absolute;
         top: 36px;
         left: 36px;
-        .stack {
-        }
-    }
-    .theme-toolbar {
-        position: absolute;
-        bottom: 36px;
-        right: 36px;
-        select {
-            width: 100px;
-            background-color: var(--color-surface-secondary-container);
-            color: var(--color-on-surface);
-            border-radius: var(--border-radius-sm);
-            padding: 4px 8px;
-            cursor: pointer;
-            border: none;
-            outline: none;
-            font-size: 14px;
-            &:hover {
-                background-color: var(--color-surface-primary-container);
-            }
-        }
-
-        // 嵌入模式下调整主题选择器
-        &.theme-toolbar--embedded {
-            select {
-                width: 100%;
-                min-width: 60px;
-                font-size: 12px;
-                padding: 4px;
-                text-align: center;
-                text-align-last: center;
-            }
-        }
     }
 
     // Unified Toolbar Container (统一左侧工具栏 - 桌面端和移动端通用)
@@ -156,19 +151,32 @@
             &::-webkit-scrollbar {
                 display: none;
             }
+
+            // 使用伪元素实现：内容少时居中，内容多时从顶部开始
+            &::before,
+            &::after {
+                content: '';
+                flex: 1;
+            }
+
+            // 滚动区域内第一个section不需要顶部边框
+            .unified-toolbar__section:first-child {
+                border-top: none;
+                padding-top: 8px;
+            }
         }
 
         &__section {
             // 分区之间添加分割线和间距
-            &:not(:first-child) {
+            &:not(:first-child):not(&--fixed-top):not(&--fixed-bottom) {
                 border-top: 1px solid var(--color-border);
                 padding-top: 8px;
             }
             // Add padding to bottom to separate from next border
             padding-bottom: 8px;
 
-            // First child only padding bottom
-            &:first-child {
+            // First child only padding bottom (顶部固定区域已单独处理)
+            &:first-child:not(&--fixed-top) {
                 padding-top: 4px;
             }
             // Last child only padding top (already handled)
@@ -188,6 +196,14 @@
                 position: relative;
                 // 继承父级z-index即可,无需单独设置
             }
+
+            // 固定在顶部的section (菜单)
+            &--fixed-top {
+                flex-shrink: 0;
+                border-bottom: 1px solid var(--color-border);
+                padding-top: 4px;
+                padding-bottom: 8px;
+            }
         }
 
         // 图标模式修饰符 (窗口高度不足时自动切换)
@@ -201,9 +217,7 @@
 
     // Embedded mode for individual toolbars (适配80px垂直布局)
     .app-toolbar--embedded,
-    .draw-toolbar--embedded,
-    .zoom-toolbar--embedded,
-    .theme-toolbar--embedded {
+    .draw-toolbar--embedded {
         position: static;
         top: auto;
         left: auto;
@@ -238,6 +252,149 @@
         // 隐藏文本标签，节省空间
         .tool-icon__label {
             display: none;
+        }
+    }
+
+    // More tools panel styles
+    .more-tools-panel {
+        min-width: 200px;
+        max-width: 280px;
+        padding: 8px;
+        background: var(--island-bg-color);
+        border-radius: 8px;
+
+        &__header {
+            padding: 4px 8px 8px;
+            border-bottom: 1px solid var(--color-border);
+            margin-bottom: 8px;
+        }
+
+        &__title {
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-primary-color);
+        }
+
+        &__content {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        &__item {
+            border-radius: 6px;
+            transition: background-color 0.15s ease;
+
+            &:hover {
+                background-color: var(--color-surface-high);
+            }
+        }
+
+        &__footer {
+            padding: 8px 8px 4px;
+            border-top: 1px solid var(--color-border);
+            margin-top: 8px;
+        }
+
+        &__hint {
+            font-size: 11px;
+            color: var(--text-secondary-color);
+        }
+
+        &__empty {
+            padding: 16px 8px;
+            text-align: center;
+        }
+
+        &__empty-text {
+            font-size: 12px;
+            color: var(--text-secondary-color);
+        }
+
+        // Zoom 工具栏横向展示（内联在icon流中）
+        &__zoom-row {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 6px;
+            transition: background-color 0.15s ease;
+
+            &:hover {
+                background-color: var(--color-surface-high);
+            }
+
+            .stack {
+                display: flex !important;
+                flex-direction: row !important;
+                align-items: center;
+                gap: 0;
+            }
+
+            .zoom-out-button {
+                border-top-right-radius: 0 !important;
+                border-bottom-right-radius: 0 !important;
+            }
+
+            .zoom-menu-trigger {
+                min-width: 40px;
+                padding: 0 2px;
+                height: 32px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: var(--color-on-surface);
+                border-radius: 0;
+                cursor: pointer;
+                font-size: 12px;
+
+                &:hover, &.active {
+                    background-color: var(--color-surface-primary-container);
+                }
+            }
+
+            .zoom-in-button {
+                color: var(--color-on-surface);
+                border-top-left-radius: 0 !important;
+                border-bottom-left-radius: 0 !important;
+            }
+        }
+    }
+
+    // Toolbar button drag styles
+    .toolbar-button-wrapper {
+        position: relative;
+        cursor: grab;
+        transition: transform 0.15s ease, opacity 0.15s ease;
+
+        &:active {
+            cursor: grabbing;
+        }
+
+        &--dragging {
+            opacity: 0.5;
+            transform: scale(0.95);
+        }
+
+        &--drag-over {
+            &::before {
+                content: '';
+                position: absolute;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 80%;
+                height: 2px;
+                background-color: var(--color-primary);
+                border-radius: 1px;
+            }
+        }
+
+        &--drag-before::before {
+            top: -2px;
+        }
+
+        &--drag-after::before {
+            bottom: -2px;
         }
     }
 
@@ -287,6 +444,72 @@
     }
     .slate-editable-container {
         cursor: inherit !important;
+    }
+}
+
+// Toolbar context menu styles - 通过 portal 渲染到 body，需要在全局作用域
+.toolbar-context-menu {
+    animation: toolbarContextMenuFadeIn 0.15s ease;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Noto Sans', 'Noto Sans CJK SC', 'Microsoft Yahei', 'Hiragino Sans GB', Arial, sans-serif;
+
+    .menu {
+        min-width: 120px;
+        padding: 4px;
+        background: var(--island-bg-color, #fff);
+        border: 1px solid var(--color-border, #e0e0e0);
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .menu-container {
+        background-color: var(--island-bg-color, #fff);
+    }
+
+    .menu-item {
+        display: flex;
+        align-items: center;
+        padding: 0 10px;
+        height: 32px;
+        font-size: 14px;
+        color: var(--color-gray-90, #333);
+        background: transparent;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        width: 100%;
+        box-sizing: border-box;
+        margin-top: 2px;
+
+        &:first-child {
+            margin-top: 0;
+        }
+
+        &:hover {
+            background-color: var(--color-surface-primary-container, #f5f5f5);
+        }
+
+        &[disabled] {
+            opacity: 0.4;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+    }
+
+    .menu-separator {
+        height: 1px;
+        background-color: var(--color-border, #e0e0e0);
+        margin: 4px 0;
+    }
+}
+
+@keyframes toolbarContextMenuFadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
     }
 }
 

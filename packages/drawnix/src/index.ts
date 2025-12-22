@@ -6,8 +6,7 @@ export * from './constants/storage';
 // Export Gemini API utilities
 export * from './utils/gemini-api';
 
-// Export workspace management (sidebar-based)
-export * from './components/project-sidebar';
+// Export project management (folder/board structure)
 export * from './hooks/useWorkspace';
 export * from './services/workspace-service';
 export * from './services/workspace-migration';

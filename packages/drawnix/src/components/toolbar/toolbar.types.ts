@@ -27,11 +27,19 @@ export interface UnifiedToolbarProps {
    * (可选) 工具箱抽屉打开/关闭切换回调
    */
   onToolboxDrawerToggle?: () => void;
+  /**
+   * (可选) 任务面板是否展开
+   */
+  taskPanelExpanded?: boolean;
+  /**
+   * (可选) 任务面板展开/关闭切换回调
+   */
+  onTaskPanelToggle?: () => void;
 }
 
 /**
  * 工具栏分区通用属性
- * 应用于 AppToolbar, CreationToolbar, ZoomToolbar, ThemeToolbar
+ * 应用于 AppToolbar, CreationToolbar
  */
 export interface ToolbarSectionProps {
   /**
