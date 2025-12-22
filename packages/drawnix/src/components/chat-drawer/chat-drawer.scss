@@ -5,6 +5,7 @@
  */
 
 @import '../../styles/common-variables';
+@import '../../styles/z-index';
 
 // Local Variables
 $drawer-min-width: 375px;
@@ -19,7 +20,7 @@ $border-radius: 12px;
   top: 0;
   left: $toolbar-width;
   bottom: 0;
-  z-index: 10;
+  z-index: $z-chat-drawer;
   display: flex;
   flex-direction: column;
   width: max($drawer-min-width, 50vw);
@@ -103,7 +104,7 @@ $border-radius: 12px;
   position: fixed;
   top: 50%;
   left: $toolbar-width;
-  z-index: 100;
+  z-index: $z-chat-drawer-trigger;
   display: flex;
   align-items: center;
   justify-content: center;

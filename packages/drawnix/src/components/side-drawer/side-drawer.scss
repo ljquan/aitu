@@ -40,7 +40,7 @@ $drawer-width-wide: min(1024px, 50vw);
   // 工具栏右侧（ProjectDrawer, ToolboxDrawer）
   &--toolbar-right {
     left: $toolbar-width;
-    z-index: 11;
+    z-index: $z-side-drawer;
     transform: translateX(calc(-100% - #{$toolbar-width}));
 
     &.side-drawer--open {

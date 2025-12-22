@@ -40,7 +40,9 @@ $z-tooltip: 3500;
 // ==========================================
 $z-task-queue-panel: 4000;
 $z-chat-drawer: 4010;
+$z-chat-drawer-trigger: 4011;
 $z-generation-history: 4020;
+$z-side-drawer: 4030;
 
 // ==========================================
 // Layer 5: Modals (5000-5999)
@@ -99,7 +101,9 @@ $z-index-map: (
   'tooltip': $z-tooltip,
   'task-queue-panel': $z-task-queue-panel,
   'chat-drawer': $z-chat-drawer,
+  'chat-drawer-trigger': $z-chat-drawer-trigger,
   'generation-history': $z-generation-history,
+  'side-drawer': $z-side-drawer,
   'dialog': $z-dialog,
   'dialog-clean-confirm': $z-dialog-clean-confirm,
   'dialog-settings': $z-dialog-settings,
