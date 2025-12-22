@@ -30,38 +30,38 @@ export interface ToolbarConfig {
 /**
  * 当前配置版本
  */
-export const TOOLBAR_CONFIG_VERSION = 1;
+export const TOOLBAR_CONFIG_VERSION = 2;
 
 /**
- * 默认显示的按钮（按使用频率排序）
- * 基于埋点数据：AI生成(1165)、AI图片(262)、图片(122)、工具箱(110)、AI视频(108)、文本(63)、思维导图(38)
+ * 默认显示的按钮
+ * 顺序: 手形、选择、文本、素材库、AI图像、AI视频
  */
 export const DEFAULT_VISIBLE_BUTTONS = [
+  'hand',
+  'selection',
+  'text',
+  'media-library',
   'ai-image',
   'ai-video',
-  'image',
-  'media-library',
-  'text',
-  'mind',
 ];
 
 /**
  * 所有按钮的默认顺序
  */
 export const ALL_BUTTON_IDS = [
-  // 默认显示的按钮（按使用频率排序）
-  'ai-image',
-  'ai-video',
-  'image',
-  'media-library',
-  'text',
-  'mind',
-  // 默认收起的按钮
+  // 默认显示的按钮
   'hand',
   'selection',
+  'text',
+  'media-library',
+  'ai-image',
+  'ai-video',
+  // 默认收起的按钮（放在更多工具里）
+  'mind',
   'freehand',
   'arrow',
   'shape',
+  'image',
   'theme',
   'mermaid-to-drawnix',
   'markdown-to-drawnix',
