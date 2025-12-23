@@ -7,13 +7,14 @@
  */
 
 import React, { useCallback, useState, useRef, useEffect } from 'react';
-import { Button, Textarea, Switch } from 'tdesign-react';
+import { Button, Switch } from 'tdesign-react';
 import { AddIcon, DeleteIcon, TimeIcon, ChevronRightIcon } from 'tdesign-icons-react';
 import type { StoryboardScene } from '../../../types/video.types';
 import {
   createEmptyScene,
   calculateDefaultSceneDurations,
 } from '../../../utils/storyboard-utils';
+import { ScenePromptInput } from './ScenePromptInput';
 import './StoryboardEditor.scss';
 
 interface StoryboardEditorProps {
@@ -270,15 +271,16 @@ export const StoryboardEditor: React.FC<StoryboardEditorProps> = ({
                           )}
                         </div>
                       </div>
-                      <Textarea
-                        value={scene.prompt}
-                        onChange={value => handlePromptChange(scene.id, value as string)}
-                        placeholder={`描述场景 ${index + 1} 的内容（如："飞机缓缓起飞，飞向夕阳..."）`}
-                        autosize={{ minRows: 3, maxRows: 5 }}
-                        disabled={disabled}
-                        className="storyboard-editor__scene-prompt"
-                        autofocus
-                      />
+                      <div className="storyboard-editor__scene-prompt">
+                        <ScenePromptInput
+                          value={scene.prompt}
+                          onChange={value => handlePromptChange(scene.id, value)}
+                          placeholder={`描述场景 ${index + 1} 的内容，输入 @ 可引用角色`}
+                          disabled={disabled}
+                          autoFocus={true}
+                          enableMention={true}
+                        />
+                      </div>
                     </div>
                   )}
                 </div>

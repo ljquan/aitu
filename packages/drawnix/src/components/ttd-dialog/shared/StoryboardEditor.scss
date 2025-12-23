@@ -344,44 +344,7 @@
   }
 
   &__scene-prompt {
-    .t-textarea {
-      background: var(--td-bg-color-secondarycontainer, #f9f9f9) !important;
-      border: 1px solid var(--td-component-stroke, #e7e7e7) !important;
-      border-radius: 8px !important;
-      box-shadow: none !important;
-      transition: border-color 0.15s ease, box-shadow 0.15s ease;
-
-      &:hover {
-        border-color: var(--td-text-color-placeholder, #b8b8b8) !important;
-      }
-
-      &.t-is-focused,
-      &:focus-within {
-        border-color: var(--td-brand-color, #f39c12) !important;
-        box-shadow: 0 0 0 2px rgba(243, 156, 18, 0.1) !important;
-        background: var(--td-bg-color-container, #ffffff) !important;
-      }
-    }
-
-    .t-textarea__inner {
-      font-size: 13px;
-      line-height: 1.6;
-      color: var(--td-text-color-primary, #000000);
-      resize: none;
-      background: transparent;
-      border: none;
-      padding: 10px 12px;
-      min-height: 52px;
-
-      &:focus {
-        outline: none;
-        box-shadow: none;
-      }
-
-      &::placeholder {
-        color: var(--td-text-color-placeholder, #b8b8b8);
-      }
-    }
+    width: 100%;
   }
 
   // Add scene button
@@ -408,6 +371,47 @@
   // TDesign component overrides
   .t-switch {
     flex-shrink: 0;
+  }
+}
+
+// ScenePromptInput styles
+.scene-prompt-input {
+  position: relative;
+  width: 100%;
+
+  &__textarea {
+    width: 100%;
+    min-height: 72px;
+    padding: 10px 12px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--td-text-color-primary, #000000);
+    background: var(--td-bg-color-secondarycontainer, #f9f9f9);
+    border: 1px solid var(--td-component-stroke, #e7e7e7);
+    border-radius: 8px;
+    resize: none;
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+    box-sizing: border-box;
+
+    &:hover:not(:disabled) {
+      border-color: var(--td-text-color-placeholder, #b8b8b8);
+    }
+
+    &:focus {
+      border-color: var(--td-brand-color, #f39c12);
+      box-shadow: 0 0 0 2px rgba(243, 156, 18, 0.1);
+      background: var(--td-bg-color-container, #ffffff);
+    }
+
+    &::placeholder {
+      color: var(--td-text-color-placeholder, #b8b8b8);
+    }
+
+    &:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
   }
 }
 
