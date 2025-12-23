@@ -1,7 +1,7 @@
 /**
  * BottomActionsSection Component
  *
- * 统一的底部工具区域,整合"打开项目"、"工具箱"、"更多工具"和"任务队列"功能
+ * 统一的底部工具区域,整合"打开项目"、"工具箱"和"任务队列"功能
  * 采用上下布局,视觉风格统一,使用标准的 ToolButton 组件
  */
 
@@ -10,7 +10,6 @@ import { Badge } from 'tdesign-react';
 import { ToolButton } from '../tool-button';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
 import { FeedbackButton } from '../feedback-button';
-import { MoreToolsButton } from './more-tools-button';
 import './bottom-actions-section.scss';
 
 export interface BottomActionsSectionProps {
@@ -108,9 +107,6 @@ export const BottomActionsSection: React.FC<BottomActionsSectionProps> = ({
 
   return (
     <div className="bottom-actions-section">
-      {/* 更多工具按钮 */}
-      <MoreToolsButton embedded={true} />
-
       {/* 反馈按钮 */}
       <FeedbackButton />
 

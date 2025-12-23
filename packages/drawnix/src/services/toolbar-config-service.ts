@@ -16,6 +16,36 @@ import {
   moveButtonToHidden,
 } from '../types/toolbar-config.types';
 
+// 旧版默认布局，用于迁移判断
+const LEGACY_ALL_BUTTON_IDS = [
+  'ai-image',
+  'ai-video',
+  'image',
+  'media-library',
+  'text',
+  'mind',
+  'hand',
+  'selection',
+  'freehand',
+  'arrow',
+  'shape',
+  'theme',
+  'mermaid-to-drawnix',
+  'markdown-to-drawnix',
+  'undo',
+  'redo',
+  'zoom',
+];
+
+const LEGACY_DEFAULT_VISIBLE_BUTTONS = [
+  'ai-image',
+  'ai-video',
+  'image',
+  'media-library',
+  'text',
+  'mind',
+];
+
 /**
  * 工具栏配置服务类
  */
@@ -168,6 +198,10 @@ class ToolbarConfigService {
    * 迁移旧版本配置
    */
   private migrateConfig(config: ToolbarConfig): ToolbarConfig {
+    const isLegacyVersion = (config.version ?? 1) < TOOLBAR_CONFIG_VERSION;
+    const matchesLegacyDefault =
+      isLegacyVersion && this.matchesLegacyDefaultLayout(config);
+
     // 检查是否有新增的按钮需要添加
     const existingIds = new Set(config.buttons.map((btn) => btn.id));
     const newButtons: ToolbarButtonConfig[] = [];
@@ -203,6 +237,11 @@ class ToolbarConfigService {
       };
     }
 
+    // 旧版默认布局 -> 使用新的默认配置（手形/选择前置，思维导图收起）
+    if (matchesLegacyDefault) {
+      config = getDefaultToolbarConfig();
+    }
+
     // 更新版本号
     if (config.version !== TOOLBAR_CONFIG_VERSION) {
       config = {
@@ -212,6 +251,23 @@ class ToolbarConfigService {
     }
 
     return config;
+  }
+
+  /**
+   * 判断是否仍然使用旧版的默认布局
+   */
+  private matchesLegacyDefaultLayout(config: ToolbarConfig): boolean {
+    if (config.buttons.length !== LEGACY_ALL_BUTTON_IDS.length) {
+      return false;
+    }
+
+    return LEGACY_ALL_BUTTON_IDS.every((id, index) => {
+      const button = config.buttons.find((btn) => btn.id === id);
+      if (!button) return false;
+
+      const shouldBeVisible = LEGACY_DEFAULT_VISIBLE_BUTTONS.includes(id);
+      return button.order === index && button.visible === shouldBeVisible;
+    });
   }
 }
 

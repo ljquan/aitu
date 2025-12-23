@@ -62,6 +62,7 @@ import { ToolbarContextMenu } from './toolbar-context-menu';
 import Menu from '../menu/menu';
 import MenuItem from '../menu/menu-item';
 import { THEME_OPTIONS, CheckIcon, isBasicPointer, EmptyIcon } from './toolbar-shared';
+import { MoreToolsButton } from './more-tools-button';
 
 export enum PopupKey {
   'shape' = 'shape',
@@ -737,6 +738,7 @@ export const CreationToolbar: React.FC<ToolbarSectionProps> = ({
           ? renderDraggableButton(buttonConfig.id, index, true, index)
           : renderButtonById(buttonConfig.id, index)
       )}
+      <MoreToolsButton embedded={embedded} />
     </Stack.Row>
   );
 
