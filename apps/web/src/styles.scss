@@ -140,20 +140,6 @@ a {
   }
 }
 
-/* Focus 样式 */
-*:focus {
-  outline: 2px solid var(--aitu-brand-primary);
-  outline-offset: 2px;
-}
-
-*:focus:not(:focus-visible) {
-  outline: none;
-}
-
-*:focus-visible {
-  outline: 2px solid var(--aitu-brand-primary);
-  outline-offset: 2px;
-}
 
 .drawnix-console {
     position: absolute;

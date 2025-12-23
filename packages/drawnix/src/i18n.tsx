@@ -18,8 +18,8 @@ export interface Translations {
   'toolbar.mediaLibrary': string;
   'toolbar.aiImage': string;
   'toolbar.aiVideo': string;
-  'toolbar.extraTools': string;
   'toolbar.tasks': string;
+  'toolbar.theme': string;
 
   // Zoom controls
   'zoom.in': string;
@@ -111,6 +111,22 @@ export interface Translations {
   'chat.noSessions': string;
   'chat.newChat': string;
   'chat.loading': string;
+
+  // More tools panel
+  'toolbar.more': string;
+  'toolbar.moreTools': string;
+  'toolbar.clickToShow': string;
+  'toolbar.doubleClickToShow': string;
+  'toolbar.rightClickToHide': string;
+  'toolbar.rightClickToAdd': string;
+  'toolbar.addToToolbar': string;
+  'toolbar.allToolsVisible': string;
+  'toolbar.moveUp': string;
+  'toolbar.moveDown': string;
+  'toolbar.moveToTop': string;
+  'toolbar.zoom': string;
+  'toolbar.moveToBottom': string;
+  'toolbar.resetToDefault': string;
 }
 
 // Translation data
@@ -129,8 +145,8 @@ const translations: Record<Language, Translations> = {
     'toolbar.mediaLibrary': '素材库',
     'toolbar.aiImage': 'AI 图像生成',
     'toolbar.aiVideo': 'AI 视频生成',
-    'toolbar.extraTools': '更多工具',
     'toolbar.tasks': '任务',
+    'toolbar.theme': '主题色',
 
     // Zoom controls
     'zoom.in': '放大 — Cmd++',
@@ -222,6 +238,22 @@ const translations: Record<Language, Translations> = {
     'chat.noSessions': '暂无会话',
     'chat.newChat': '新建',
     'chat.loading': '加载中...',
+
+    // More tools panel
+    'toolbar.more': '更多',
+    'toolbar.moreTools': '更多工具',
+    'toolbar.clickToShow': '点击添加到工具栏',
+    'toolbar.doubleClickToShow': '双击添加到工具栏',
+    'toolbar.rightClickToHide': '移除',
+    'toolbar.rightClickToAdd': '右键添加到工具栏',
+    'toolbar.addToToolbar': '添加到工具栏',
+    'toolbar.allToolsVisible': '所有工具已显示在工具栏中',
+    'toolbar.moveUp': '上移',
+    'toolbar.moveDown': '下移',
+    'toolbar.moveToTop': '置顶',
+    'toolbar.moveToBottom': '置底',
+    'toolbar.resetToDefault': '重置为默认',
+    'toolbar.zoom': '缩放',
   },
   en: {
     // Toolbar items
@@ -237,8 +269,8 @@ const translations: Record<Language, Translations> = {
     'toolbar.mediaLibrary': 'Media Library',
     'toolbar.aiImage': 'AI Image Generation',
     'toolbar.aiVideo': 'AI Video Generation',
-    'toolbar.extraTools': 'Extra Tools',
     'toolbar.tasks': 'Tasks',
+    'toolbar.theme': 'Theme',
 
     // Zoom controls
     'zoom.in': 'Zoom In — Cmd++',
@@ -330,6 +362,22 @@ const translations: Record<Language, Translations> = {
     'chat.noSessions': 'No sessions yet',
     'chat.newChat': 'New',
     'chat.loading': 'Loading...',
+
+    // More tools panel
+    'toolbar.more': 'More',
+    'toolbar.moreTools': 'More Tools',
+    'toolbar.clickToShow': 'Click to add to toolbar',
+    'toolbar.doubleClickToShow': 'Double-click to add to toolbar',
+    'toolbar.rightClickToHide': 'Remove',
+    'toolbar.rightClickToAdd': 'Right-click to add to toolbar',
+    'toolbar.addToToolbar': 'Add to Toolbar',
+    'toolbar.allToolsVisible': 'All tools are visible in toolbar',
+    'toolbar.moveUp': 'Move Up',
+    'toolbar.moveDown': 'Move Down',
+    'toolbar.moveToTop': 'Move to Top',
+    'toolbar.moveToBottom': 'Move to Bottom',
+    'toolbar.resetToDefault': 'Reset to Default',
+    'toolbar.zoom': 'Zoom',
   },
 };
 

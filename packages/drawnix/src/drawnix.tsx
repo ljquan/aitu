@@ -55,6 +55,7 @@ import { toolTestHelper } from './utils/tool-test-helper';
 import { Minimap } from './components/minimap';
 import { AssetProvider } from './contexts/AssetContext';
 import { initializeAssetIntegration } from './services/asset-integration-service';
+import { ToolbarConfigProvider } from './hooks/use-toolbar-config';
 
 export type DrawnixProps = {
   value: PlaitElement[];
@@ -106,33 +107,41 @@ export const Drawnix: React.FC<DrawnixProps> = ({
   const [board, setBoard] = useState<DrawnixBoard | null>(null);
   const [projectDrawerOpen, setProjectDrawerOpen] = useState(false);
   const [toolboxDrawerOpen, setToolboxDrawerOpen] = useState(false);
+  const [taskPanelExpanded, setTaskPanelExpanded] = useState(false);
 
   // 使用 ref 来保存 board 的最新引用,避免 useCallback 依赖问题
   const boardRef = useRef<DrawnixBoard | null>(null);
 
+  // 关闭所有抽屉
+  const closeAllDrawers = useCallback(() => {
+    setProjectDrawerOpen(false);
+    setToolboxDrawerOpen(false);
+    setTaskPanelExpanded(false);
+  }, []);
+
   // 处理项目抽屉切换（互斥逻辑）
   const handleProjectDrawerToggle = useCallback(() => {
     setProjectDrawerOpen((prev) => {
-      const newState = !prev;
-      // 如果要打开项目抽屉，关闭工具箱抽屉
-      if (newState) {
-        setToolboxDrawerOpen(false);
-      }
-      return newState;
+      if (!prev) closeAllDrawers();
+      return !prev;
     });
-  }, []);
+  }, [closeAllDrawers]);
 
   // 处理工具箱抽屉切换（互斥逻辑）
   const handleToolboxDrawerToggle = useCallback(() => {
     setToolboxDrawerOpen((prev) => {
-      const newState = !prev;
-      // 如果要打开工具箱抽屉，关闭项目抽屉
-      if (newState) {
-        setProjectDrawerOpen(false);
-      }
-      return newState;
+      if (!prev) closeAllDrawers();
+      return !prev;
     });
-  }, []);
+  }, [closeAllDrawers]);
+
+  // 处理任务面板切换（互斥逻辑）
+  const handleTaskPanelToggle = useCallback(() => {
+    setTaskPanelExpanded((prev) => {
+      if (!prev) closeAllDrawers();
+      return !prev;
+    });
+  }, [closeAllDrawers]);
 
   // 使用 useCallback 稳定 setAppState 函数引用
   const stableSetAppState = useCallback((newAppState: DrawnixState) => {
@@ -233,72 +242,76 @@ export const Drawnix: React.FC<DrawnixProps> = ({
 
   return (
     <I18nProvider>
-      <AssetProvider>
-        <DrawnixContext.Provider value={contextValue}>
-        <div
-          className={classNames('drawnix', {
-            'drawnix--mobile': appState.isMobile,
-          })}
-          ref={containerRef}
-        >
-          <div className="drawnix__main">
-            <Wrapper
-              value={value}
-              viewport={viewport}
-              theme={theme}
-              options={options}
-              plugins={plugins}
-              onChange={(data: BoardChangeData) => {
-                onChange && onChange(data);
-              }}
-              onSelectionChange={handleSelectionChange}
-              onViewportChange={onViewportChange}
-              onThemeChange={onThemeChange}
-              onValueChange={onValueChange}
-            >
-              <Board
-                afterInit={(board) => {
-                  setBoard(board as DrawnixBoard);
-                  // 设置测试助手的 board 实例（仅开发环境）
-                  if (process.env.NODE_ENV === 'development') {
-                    toolTestHelper.setBoard(board);
-                  }
-                  afterInit && afterInit(board);
+      <ToolbarConfigProvider>
+        <AssetProvider>
+          <DrawnixContext.Provider value={contextValue}>
+          <div
+            className={classNames('drawnix', {
+              'drawnix--mobile': appState.isMobile,
+            })}
+            ref={containerRef}
+          >
+            <div className="drawnix__main">
+              <Wrapper
+                value={value}
+                viewport={viewport}
+                theme={theme}
+                options={options}
+                plugins={plugins}
+                onChange={(data: BoardChangeData) => {
+                  onChange && onChange(data);
                 }}
-              ></Board>
-              {/* 统一左侧工具栏 (桌面端和移动端一致) */}
-              <UnifiedToolbar
-                projectDrawerOpen={projectDrawerOpen}
-                onProjectDrawerToggle={handleProjectDrawerToggle}
-                toolboxDrawerOpen={toolboxDrawerOpen}
-                onToolboxDrawerToggle={handleToolboxDrawerToggle}
-              />
+                onSelectionChange={handleSelectionChange}
+                onViewportChange={onViewportChange}
+                onThemeChange={onThemeChange}
+                onValueChange={onValueChange}
+              >
+                <Board
+                  afterInit={(board) => {
+                    setBoard(board as DrawnixBoard);
+                    // 设置测试助手的 board 实例（仅开发环境）
+                    if (process.env.NODE_ENV === 'development') {
+                      toolTestHelper.setBoard(board);
+                    }
+                    afterInit && afterInit(board);
+                  }}
+                ></Board>
+                {/* 统一左侧工具栏 (桌面端和移动端一致) */}
+                <UnifiedToolbar
+                  projectDrawerOpen={projectDrawerOpen}
+                  onProjectDrawerToggle={handleProjectDrawerToggle}
+                  toolboxDrawerOpen={toolboxDrawerOpen}
+                  onToolboxDrawerToggle={handleToolboxDrawerToggle}
+                  taskPanelExpanded={taskPanelExpanded}
+                  onTaskPanelToggle={handleTaskPanelToggle}
+                />
 
-              <PopupToolbar></PopupToolbar>
-              <LinkPopup></LinkPopup>
-              <ClosePencilToolbar></ClosePencilToolbar>
-              <TTDDialog container={containerRef.current}></TTDDialog>
-              <CleanConfirm container={containerRef.current}></CleanConfirm>
-              <SettingsDialog container={containerRef.current}></SettingsDialog>
-            </Wrapper>
-            <ActiveTaskWarning />
-            <ChatDrawer />
-            <ProjectDrawer
-              isOpen={projectDrawerOpen}
-              onOpenChange={setProjectDrawerOpen}
-              onBeforeSwitch={handleBeforeSwitch}
-              onBoardSwitch={onBoardSwitch}
-            />
-            <ToolboxDrawer
-              isOpen={toolboxDrawerOpen}
-              onOpenChange={setToolboxDrawerOpen}
-            />
-            {/* Minimap - 小地图 */}
-            {board && <Minimap board={board} />}
+                <PopupToolbar></PopupToolbar>
+                <LinkPopup></LinkPopup>
+                <ClosePencilToolbar></ClosePencilToolbar>
+                <TTDDialog container={containerRef.current}></TTDDialog>
+                <CleanConfirm container={containerRef.current}></CleanConfirm>
+                <SettingsDialog container={containerRef.current}></SettingsDialog>
+              </Wrapper>
+              <ActiveTaskWarning />
+              <ChatDrawer />
+              <ProjectDrawer
+                isOpen={projectDrawerOpen}
+                onOpenChange={setProjectDrawerOpen}
+                onBeforeSwitch={handleBeforeSwitch}
+                onBoardSwitch={onBoardSwitch}
+              />
+              <ToolboxDrawer
+                isOpen={toolboxDrawerOpen}
+                onOpenChange={setToolboxDrawerOpen}
+              />
+              {/* Minimap - 小地图 */}
+              {board && <Minimap board={board} />}
+            </div>
           </div>
-        </div>
-        </DrawnixContext.Provider>
-      </AssetProvider>
+          </DrawnixContext.Provider>
+          </AssetProvider>
+      </ToolbarConfigProvider>
     </I18nProvider>
   );
 };

@@ -151,6 +151,33 @@ class WorkspaceService {
     this.emit('folderDeleted', folder);
   }
 
+  /**
+   * Delete folder and all its contents (boards and subfolders)
+   */
+  async deleteFolderWithContents(id: string): Promise<void> {
+    const folder = this.folders.get(id);
+    if (!folder) throw new Error(`Folder ${id} not found`);
+
+    // Delete all boards in this folder
+    const boards = this.getBoardsInFolder(id);
+    for (const board of boards) {
+      this.boards.delete(board.id);
+      await workspaceStorageService.deleteBoard(board.id);
+      this.emit('boardDeleted', board);
+    }
+
+    // Delete all child folders recursively (with their contents)
+    const childFolders = this.getFolderChildren(id);
+    for (const child of childFolders) {
+      await this.deleteFolderWithContents(child.id);
+    }
+
+    // Delete the folder itself
+    this.folders.delete(id);
+    await workspaceStorageService.deleteFolder(id);
+    this.emit('folderDeleted', folder);
+  }
+
   toggleFolderExpanded(id: string): void {
     const folder = this.folders.get(id);
     if (!folder) return;
@@ -232,16 +259,232 @@ class WorkspaceService {
     this.emit('boardDeleted', board);
   }
 
-  async moveBoard(id: string, targetFolderId: string | null): Promise<void> {
+  async moveBoard(
+    id: string, 
+    targetFolderId: string | null, 
+    targetId?: string, 
+    position?: 'before' | 'after'
+  ): Promise<void> {
     const board = this.boards.get(id);
     if (!board) throw new Error(`Board ${id} not found`);
 
     board.folderId = targetFolderId;
     board.updatedAt = Date.now();
 
-    this.boards.set(id, board);
-    await workspaceStorageService.saveBoard(board);
+    // Get all items in target folder (excluding the moved board)
+    const boardSiblings = this.getBoardsInFolder(targetFolderId).filter(b => b.id !== id);
+    const folderSiblings = this.getFolderChildren(targetFolderId);
+
+    // Build ordered list of all items
+    let allItems: Array<{ id: string; type: 'board' | 'folder' }> = [
+      ...folderSiblings.map(f => ({ id: f.id, type: 'folder' as const })),
+      ...boardSiblings.map(b => ({ id: b.id, type: 'board' as const })),
+    ].sort((a, b) => {
+      const orderA = a.type === 'board' ? this.boards.get(a.id)?.order ?? 0 : this.folders.get(a.id)?.order ?? 0;
+      const orderB = b.type === 'board' ? this.boards.get(b.id)?.order ?? 0 : this.folders.get(b.id)?.order ?? 0;
+      return orderA - orderB;
+    });
+
+    if (targetId && position) {
+      // Find target index
+      const targetIndex = allItems.findIndex(item => item.id === targetId);
+      if (targetIndex !== -1) {
+        // Insert at the correct position
+        const insertIndex = position === 'before' ? targetIndex : targetIndex + 1;
+        allItems.splice(insertIndex, 0, { id: board.id, type: 'board' });
+      } else {
+        // Target not found, add to end
+        allItems.push({ id: board.id, type: 'board' });
+      }
+    } else {
+      // No target specified, move to end
+      allItems.push({ id: board.id, type: 'board' });
+    }
+
+    // Reassign integer orders based on new positions
+    for (let i = 0; i < allItems.length; i++) {
+      const item = allItems[i];
+      if (item.type === 'board') {
+        const b = this.boards.get(item.id);
+        if (b) {
+          b.order = i;
+          this.boards.set(item.id, b);
+          await workspaceStorageService.saveBoard(b);
+        }
+      } else {
+        const f = this.folders.get(item.id);
+        if (f) {
+          f.order = i;
+          this.folders.set(item.id, f);
+          await workspaceStorageService.saveFolder(f);
+        }
+      }
+    }
+
     this.emit('boardUpdated', board);
+    this.emit('treeChanged');
+  }
+
+  /**
+   * Move folder to a new parent folder
+   */
+  async moveFolder(
+    id: string, 
+    targetParentId: string | null,
+    targetId?: string,
+    position?: 'before' | 'after'
+  ): Promise<void> {
+    const folder = this.folders.get(id);
+    if (!folder) throw new Error(`Folder ${id} not found`);
+
+    // Prevent moving folder into itself or its descendants
+    if (targetParentId) {
+      let parent = this.folders.get(targetParentId);
+      while (parent) {
+        if (parent.id === id) {
+          throw new Error('Cannot move folder into itself or its descendants');
+        }
+        parent = parent.parentId ? this.folders.get(parent.parentId) : undefined;
+      }
+    }
+
+    folder.parentId = targetParentId;
+    folder.updatedAt = Date.now();
+
+    // Get all items in target folder (excluding the moved folder)
+    const folderSiblings = this.getFolderChildren(targetParentId).filter(f => f.id !== id);
+    const boardSiblings = this.getBoardsInFolder(targetParentId);
+
+    // Build ordered list of all items
+    let allItems: Array<{ id: string; type: 'board' | 'folder' }> = [
+      ...folderSiblings.map(f => ({ id: f.id, type: 'folder' as const })),
+      ...boardSiblings.map(b => ({ id: b.id, type: 'board' as const })),
+    ].sort((a, b) => {
+      const orderA = a.type === 'board' ? this.boards.get(a.id)?.order ?? 0 : this.folders.get(a.id)?.order ?? 0;
+      const orderB = b.type === 'board' ? this.boards.get(b.id)?.order ?? 0 : this.folders.get(b.id)?.order ?? 0;
+      return orderA - orderB;
+    });
+
+    if (targetId && position) {
+      // Find target index
+      const targetIndex = allItems.findIndex(item => item.id === targetId);
+      if (targetIndex !== -1) {
+        // Insert at the correct position
+        const insertIndex = position === 'before' ? targetIndex : targetIndex + 1;
+        allItems.splice(insertIndex, 0, { id: folder.id, type: 'folder' });
+      } else {
+        // Target not found, add to end
+        allItems.push({ id: folder.id, type: 'folder' });
+      }
+    } else {
+      // No target specified, move to end
+      allItems.push({ id: folder.id, type: 'folder' });
+    }
+
+    // Reassign integer orders based on new positions
+    for (let i = 0; i < allItems.length; i++) {
+      const item = allItems[i];
+      if (item.type === 'board') {
+        const b = this.boards.get(item.id);
+        if (b) {
+          b.order = i;
+          this.boards.set(item.id, b);
+          await workspaceStorageService.saveBoard(b);
+        }
+      } else {
+        const f = this.folders.get(item.id);
+        if (f) {
+          f.order = i;
+          this.folders.set(item.id, f);
+          await workspaceStorageService.saveFolder(f);
+        }
+      }
+    }
+
+    this.emit('folderUpdated', folder);
+    this.emit('treeChanged');
+  }
+
+  /**
+   * Reorder items within the same parent
+   */
+  async reorderItems(
+    items: Array<{ id: string; type: 'board' | 'folder'; order: number }>
+  ): Promise<void> {
+    const now = Date.now();
+
+    for (const item of items) {
+      if (item.type === 'board') {
+        const board = this.boards.get(item.id);
+        if (board) {
+          board.order = item.order;
+          board.updatedAt = now;
+          this.boards.set(item.id, board);
+          await workspaceStorageService.saveBoard(board);
+        }
+      } else {
+        const folder = this.folders.get(item.id);
+        if (folder) {
+          folder.order = item.order;
+          folder.updatedAt = now;
+          this.folders.set(item.id, folder);
+          await workspaceStorageService.saveFolder(folder);
+        }
+      }
+    }
+
+    this.emit('treeChanged');
+  }
+
+  /**
+   * Copy a board with all its content
+   */
+  async copyBoard(id: string): Promise<Board> {
+    const sourceBoard = this.boards.get(id);
+    if (!sourceBoard) throw new Error(`Board ${id} not found`);
+
+    // Generate new name with "副本" suffix
+    let newName = `${sourceBoard.name} 副本`;
+    
+    // Check if name already exists and add number if needed
+    const existingNames = Array.from(this.boards.values())
+      .filter(b => b.folderId === sourceBoard.folderId)
+      .map(b => b.name);
+    
+    let counter = 1;
+    while (existingNames.includes(newName)) {
+      counter++;
+      newName = `${sourceBoard.name} 副本 ${counter}`;
+    }
+
+    // Create new board with copied content
+    const newBoard = await this.createBoard({
+      name: newName,
+      folderId: sourceBoard.folderId,
+      elements: JSON.parse(JSON.stringify(sourceBoard.elements)), // Deep copy
+      viewport: sourceBoard.viewport ? { ...sourceBoard.viewport } : undefined,
+      theme: sourceBoard.theme,
+    });
+
+    return newBoard;
+  }
+
+  /**
+   * Batch delete multiple boards
+   */
+  async deleteBoardsBatch(ids: string[]): Promise<void> {
+    for (const id of ids) {
+      await this.deleteBoard(id);
+    }
+  }
+
+  /**
+   * Batch move multiple boards to a folder
+   */
+  async moveBoardsBatch(ids: string[], targetFolderId: string | null): Promise<void> {
+    for (const id of ids) {
+      await this.moveBoard(id, targetFolderId);
+    }
   }
 
   async switchBoard(boardId: string): Promise<Board> {

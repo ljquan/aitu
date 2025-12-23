@@ -4,15 +4,12 @@
  * BEM naming convention with TDesign CSS variables.
  */
 
-// Variables
+@import '../../styles/common-variables';
+@import '../../styles/z-index';
+
+// Local Variables
 $drawer-min-width: 375px;
-$toolbar-width: 70px;
-$animation-duration: 300ms;
 $border-radius: 12px;
-$spacing-sm: 8px;
-$spacing-md: 12px;
-$spacing-lg: 16px;
-$spacing-xl: 24px;
 
 // ============================================================================
 // Chat Drawer Container
@@ -23,7 +20,7 @@ $spacing-xl: 24px;
   top: 0;
   left: $toolbar-width;
   bottom: 0;
-  z-index: 10;
+  z-index: $z-chat-drawer;
   display: flex;
   flex-direction: column;
   width: max($drawer-min-width, 50vw);
@@ -107,11 +104,11 @@ $spacing-xl: 24px;
   position: fixed;
   top: 50%;
   left: $toolbar-width;
-  z-index: 100;
+  z-index: $z-chat-drawer-trigger;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
+  width: 18px;
   height: 48px;
   background: #ffffff;
   border: 1px solid var(--td-component-border);

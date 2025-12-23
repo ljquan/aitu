@@ -130,6 +130,9 @@ export async function migrateToWorkspace(): Promise<string | null> {
     // Mark migration as completed
     await markMigrationCompleted();
 
+    // Clear legacy data to prevent duplicate migrations
+    await clearLegacyData();
+
     console.log('[WorkspaceMigration] Migration completed, board:', board.id);
     return board.id;
   } catch (error) {
