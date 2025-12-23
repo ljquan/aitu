@@ -184,38 +184,26 @@ export const GithubIcon = createIcon(
   </svg>
 );
 
-// AI 图像图标 - 基于 lucide image 图标 + AI 标识
+// AI 图像图标 - 图片图标 + 右上角 AI 文字
 export const AIImageIcon = createIcon(
-  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    {/* AI 标识背景 */}
-    <rect x="1" y="1" width="9" height="6" rx="1" fill="currentColor" opacity="0.15" stroke="none" />
-    {/* AI 文字 */}
-    <g stroke="currentColor" strokeWidth="1.2" fill="none">
-      <path d="M3 5.5L4.2 2.5L5.4 5.5" />
-      <path d="M3.3 4.5H5.1" />
-      <line x1="7.5" y1="2.5" x2="7.5" y2="5.5" />
-    </g>
+  <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
     {/* 图片图标主体 */}
-    <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
-    <circle cx="9" cy="9" r="2" />
-    <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+    <rect width="14" height="14" x="1" y="1" rx="2" ry="2" />
+    <circle cx="5" cy="5" r="1.5" />
+    <path d="m15 11-3-3a2 2 0 0 0-2.8 0L3 15" />
+    {/* 右上角 AI 文字 */}
+    <text x="11" y="6" textAnchor="middle" fontSize="5" fontWeight="bold" fontFamily="system-ui, sans-serif" fill="currentColor" stroke="none">AI</text>
   </svg>
 );
 
-// AI 视频图标 - 基于 lucide video 图标 + AI 标识
+// AI 视频图标 - 视频图标 + 中间 AI 文字
 export const AIVideoIcon = createIcon(
-  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    {/* AI 标识背景 */}
-    <rect x="0" y="0" width="9" height="6" rx="1" fill="currentColor" opacity="0.15" stroke="none" />
-    {/* AI 文字 */}
-    <g stroke="currentColor" strokeWidth="1.2" fill="none">
-      <path d="M2 5L3.2 2L4.4 5" />
-      <path d="M2.3 4H4.1" />
-      <line x1="6.5" y1="2" x2="6.5" y2="5" />
-    </g>
-    {/* 视频图标主体 */}
-    <path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5" />
-    <rect x="2" y="6" width="14" height="12" rx="2" />
+  <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+    {/* 视频图标主体 - 保持原有样式 */}
+    <path d="m12 9.5 3.5 2.2a.4.4 0 0 0 .6-.35V4.65a.4.4 0 0 0-.6-.35L12 6.5" />
+    <rect x="1" y="3" width="11" height="10" rx="1.5" />
+    {/* 中间 AI 文字 */}
+    <text x="6.5" y="10" textAnchor="middle" fontSize="6" fontWeight="bold" fontFamily="system-ui, sans-serif" fill="currentColor" stroke="none">AI</text>
   </svg>
 );
 
