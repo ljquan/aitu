@@ -35,12 +35,14 @@ export const PromptInput: React.FC<PromptInputProps> = ({
     visible: boolean;
     query: string;
     position: { top: number; left: number };
+    showBelow: boolean; // Whether to show popup below cursor
     startIndex: number; // Position of @ in the prompt
     selectedIndex: number;
   }>({
     visible: false,
     query: '',
     position: { top: 0, left: 0 },
+    showBelow: false,
     startIndex: -1,
     selectedIndex: 0,
   });
@@ -67,34 +69,97 @@ export const PromptInput: React.FC<PromptInputProps> = ({
     setIsPresetOpen(false); // 点击提示词后关闭弹窗
   };
 
-  // Calculate mention popup position - show above cursor using caret position
+  // Calculate mention popup position using mirror div technique
   const calculateMentionPosition = useCallback((cursorIndex: number) => {
-    if (!textareaRef.current) return { top: 0, left: 0 };
+    if (!textareaRef.current) return { top: 0, left: 0, showBelow: false };
 
     const textarea = textareaRef.current;
     const rect = textarea.getBoundingClientRect();
 
-    // Get text before cursor to calculate approximate position
+    // Create a mirror div that matches textarea styling
+    const mirror = document.createElement('div');
+    const computedStyle = window.getComputedStyle(textarea);
+
+    // Copy relevant styles to mirror
+    const stylesToCopy = [
+      'fontFamily', 'fontSize', 'fontWeight', 'fontStyle',
+      'letterSpacing', 'lineHeight', 'textTransform',
+      'wordSpacing', 'whiteSpace',
+      'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
+      'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth',
+      'boxSizing',
+    ];
+
+    mirror.style.position = 'absolute';
+    mirror.style.top = '0';
+    mirror.style.left = '-9999px';
+    mirror.style.visibility = 'hidden';
+    mirror.style.whiteSpace = 'pre-wrap';
+    mirror.style.overflowWrap = 'break-word';
+    mirror.style.overflow = 'hidden';
+    mirror.style.width = `${textarea.clientWidth}px`;
+
+    stylesToCopy.forEach(style => {
+      (mirror.style as any)[style] = computedStyle.getPropertyValue(
+        style.replace(/([A-Z])/g, '-$1').toLowerCase()
+      );
+    });
+
+    document.body.appendChild(mirror);
+
+    // Get text before cursor
     const textBeforeCursor = textarea.value.substring(0, cursorIndex);
-    const lines = textBeforeCursor.split('\n');
-    const currentLineIndex = lines.length - 1;
-    const currentLineText = lines[currentLineIndex];
 
-    // Approximate character width (monospace assumption ~8px per char)
-    const charWidth = 8;
-    const lineHeight = 20; // Approximate line height
+    // Create content with cursor marker
+    const textNode = document.createTextNode(textBeforeCursor);
+    const cursorSpan = document.createElement('span');
+    cursorSpan.textContent = '\u200B'; // Zero-width space as cursor marker
 
-    // Calculate x position based on current line length
-    const xOffset = Math.min(currentLineText.length * charWidth, rect.width - 200);
+    mirror.appendChild(textNode);
+    mirror.appendChild(cursorSpan);
 
-    // Calculate y position based on line number (from top of textarea)
-    const yOffset = currentLineIndex * lineHeight;
+    // Get cursor position
+    const cursorRect = cursorSpan.getBoundingClientRect();
+    const mirrorRect = mirror.getBoundingClientRect();
 
-    // Position popup above the cursor line
-    return {
-      top: rect.top + yOffset - 8, // Above cursor, will use transform to move up
-      left: rect.left + Math.max(0, xOffset),
-    };
+    // Calculate offset within textarea
+    const cursorOffsetTop = cursorRect.top - mirrorRect.top;
+    const cursorOffsetLeft = cursorRect.left - mirrorRect.left;
+
+    // Clean up
+    document.body.removeChild(mirror);
+
+    // Account for textarea scroll and get line height
+    const scrollTop = textarea.scrollTop;
+    const lineHeight = parseInt(computedStyle.lineHeight) || 20;
+
+    // Calculate position relative to viewport
+    let top = rect.top + cursorOffsetTop - scrollTop;
+    let left = rect.left + cursorOffsetLeft;
+
+    // Ensure popup doesn't go off-screen horizontally
+    const popupWidth = 240;
+    const viewportWidth = window.innerWidth;
+    if (left + popupWidth > viewportWidth - 16) {
+      left = viewportWidth - popupWidth - 16;
+    }
+    if (left < 16) {
+      left = 16;
+    }
+
+    // Check if there's enough space above for the popup
+    const popupHeight = 220;
+    const showBelow = top < popupHeight + 16;
+
+    if (showBelow) {
+      // Show below cursor - add line height to position below current line
+      top = top + lineHeight + 4;
+    } else {
+      // Show above cursor - move up a bit more for better visual spacing
+      top = top - 48;
+    }
+
+    return { top, left, showBelow };
   }, []);
 
   // Handle @ mention detection
@@ -129,10 +194,12 @@ export const PromptInput: React.FC<PromptInputProps> = ({
     }
 
     // Show mention popup
+    const positionResult = calculateMentionPosition(cursorPos);
     setMentionState({
       visible: true,
       query,
-      position: calculateMentionPosition(cursorPos),
+      position: { top: positionResult.top, left: positionResult.left },
+      showBelow: positionResult.showBelow,
       startIndex: lastAtIndex,
       selectedIndex: 0,
     });
@@ -279,6 +346,7 @@ export const PromptInput: React.FC<PromptInputProps> = ({
           visible={mentionState.visible}
           query={mentionState.query}
           position={mentionState.position}
+          showBelow={mentionState.showBelow}
           selectedIndex={mentionState.selectedIndex}
           onSelect={handleCharacterSelect}
           onClose={() => setMentionState(prev => ({ ...prev, visible: false }))}

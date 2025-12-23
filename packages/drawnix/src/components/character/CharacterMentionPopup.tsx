@@ -16,8 +16,10 @@ export interface CharacterMentionPopupProps {
   visible: boolean;
   /** Search query (characters after @) */
   query: string;
-  /** Position of the popup */
+  /** Position of the popup (cursor position) */
   position: { top: number; left: number };
+  /** Whether to show popup below cursor instead of above */
+  showBelow?: boolean;
   /** Index of currently selected item */
   selectedIndex: number;
   /** Callback when a character is selected */
@@ -33,6 +35,7 @@ export const CharacterMentionPopup: React.FC<CharacterMentionPopupProps> = ({
   visible,
   query,
   position,
+  showBelow = false,
   selectedIndex,
   onSelect,
   onClose,
@@ -84,13 +87,15 @@ export const CharacterMentionPopup: React.FC<CharacterMentionPopupProps> = ({
 
   if (!visible) return null;
 
-  // Popup style - positioned above the textarea, with transform to move up
+  // Popup style - positioned at cursor, above or below based on available space
   const popupStyle: React.CSSProperties = {
     position: 'fixed',
     top: position.top,
     left: position.left,
-    transform: 'translateY(-100%)', // Move above the reference point
+    transform: showBelow ? 'none' : 'translateY(-100%)',
     zIndex: 10000,
+    maxHeight: '200px',
+    overflowY: 'auto',
   };
 
   if (isLoading) {
