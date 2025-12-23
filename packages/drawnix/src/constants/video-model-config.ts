@@ -35,7 +35,7 @@ export const VIDEO_MODEL_CONFIGS: Record<VideoModel, VideoModelConfig> = {
     },
     storyboardMode: {
       supported: true,
-      maxScenes: 5,
+      maxScenes: 15,
       minSceneDuration: 0.1,
     },
   },
@@ -64,7 +64,7 @@ export const VIDEO_MODEL_CONFIGS: Record<VideoModel, VideoModelConfig> = {
     },
     storyboardMode: {
       supported: true,
-      maxScenes: 5,
+      maxScenes: 15,
       minSceneDuration: 0.1,
     },
   },
@@ -234,7 +234,7 @@ export function getStoryboardModeConfig(model: VideoModel) {
   const config = VIDEO_MODEL_CONFIGS[model];
   return config.storyboardMode ?? {
     supported: false,
-    maxScenes: 5,
+    maxScenes: 15,
     minSceneDuration: 0.1,
   };
 }

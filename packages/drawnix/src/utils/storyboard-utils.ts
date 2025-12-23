@@ -35,6 +35,11 @@ function roundToTwoDecimals(value: number): number {
 }
 
 /**
+ * Minimum scene duration constant
+ */
+const MIN_SCENE_DURATION = 0.1;
+
+/**
  * Calculate default scene durations using halving strategy
  *
  * Strategy:
@@ -45,7 +50,8 @@ function roundToTwoDecimals(value: number): number {
  *
  * Rules:
  * - Keep up to 2 decimal places
- * - Use floor for rounding (e.g., 1.875 -> 1.87)
+ * - When calculated duration approaches MIN_SCENE_DURATION (0.1s), use MIN_SCENE_DURATION
+ * - All subsequent scenes after hitting minimum also get MIN_SCENE_DURATION
  *
  * @param totalDuration Total video duration in seconds
  * @param sceneCount Number of scenes
@@ -60,17 +66,31 @@ export function calculateDefaultSceneDurations(
 
   const durations: number[] = [];
   let remaining = totalDuration;
+  let hitMinimum = false;
 
   for (let i = 0; i < sceneCount; i++) {
     if (i === sceneCount - 1) {
-      // Last scene gets all remaining time
-      durations.push(roundToTwoDecimals(remaining));
+      // Last scene gets all remaining time (but not less than minimum)
+      const finalDuration = Math.max(MIN_SCENE_DURATION, roundToTwoDecimals(remaining));
+      durations.push(finalDuration);
+    } else if (hitMinimum) {
+      // Once we hit minimum, all subsequent scenes get minimum duration
+      durations.push(MIN_SCENE_DURATION);
+      remaining -= MIN_SCENE_DURATION;
     } else {
       // Each scene gets half of remaining time
       const duration = remaining / 2;
       const rounded = roundToTwoDecimals(duration);
-      durations.push(rounded);
-      remaining -= rounded;
+
+      // Check if we're approaching minimum duration
+      if (rounded <= MIN_SCENE_DURATION) {
+        hitMinimum = true;
+        durations.push(MIN_SCENE_DURATION);
+        remaining -= MIN_SCENE_DURATION;
+      } else {
+        durations.push(rounded);
+        remaining -= rounded;
+      }
     }
   }
 
