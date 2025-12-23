@@ -1,3 +1,61 @@
+## 0.3.1 (2025-12-23)
+
+### 🚀 Features
+
+- 优化AI图像和AI视频图标样式 ([237695f](https://github.com/ljquan/aitu/commit/237695f))
+- 优化工具栏图标布局和AI图标样式 ([00392d4](https://github.com/ljquan/aitu/commit/00392d4))
+- 优化按钮布局 close #42 ([80ed227](https://github.com/ljquan/aitu/commit/80ed227))
+- 将模式切换按钮移至 WinBox 标题栏 ([4c8617b](https://github.com/ljquan/aitu/commit/4c8617b))
+- 添加新 VIP 图片模型并优化模型选择器 ([64ca946](https://github.com/ljquan/aitu/commit/64ca946))
+- 优化表格交互体验 ([093681e](https://github.com/ljquan/aitu/commit/093681e))
+- 生成中状态显示在已完成图片后面 ([3a81415](https://github.com/ljquan/aitu/commit/3a81415))
+- 智能下载功能（单张直接下载，多张打包zip） ([5ba9ab7](https://github.com/ljquan/aitu/commit/5ba9ab7))
+- 添加图片预览导航和生成警告功能 ([b02f181](https://github.com/ljquan/aitu/commit/b02f181))
+- 添加模式记忆功能 ([05a16ff](https://github.com/ljquan/aitu/commit/05a16ff))
+- 改进错误信息显示 ([a3d4d41](https://github.com/ljquan/aitu/commit/a3d4d41))
+- 添加本地缓存和修复光标位置 ([ab2cba7](https://github.com/ljquan/aitu/commit/ab2cba7))
+- 改进单元格交互体验 ([f8a88e5](https://github.com/ljquan/aitu/commit/f8a88e5))
+- 改进数量单元格的交互体验 ([5e86ff4](https://github.com/ljquan/aitu/commit/5e86ff4))
+- 切换到批量模式时自动最大化窗口 ([6dc6283](https://github.com/ljquan/aitu/commit/6dc6283))
+- 改进添加行UI和下载模板功能 ([4f9e2b8](https://github.com/ljquan/aitu/commit/4f9e2b8))
+- 添加图片预览放大、批量下载和模型选择功能 ([ab23c7d](https://github.com/ljquan/aitu/commit/ab23c7d))
+- 添加 Excel 导入导出功能 ([7afe54b](https://github.com/ljquan/aitu/commit/7afe54b))
+- 支持选择批量导入的起始行 ([c322a95](https://github.com/ljquan/aitu/commit/c322a95))
+- 添加批量上传导入表格功能 ([59d0c81](https://github.com/ljquan/aitu/commit/59d0c81))
+- 添加复选框列用于行选择 ([b373b8f](https://github.com/ljquan/aitu/commit/b373b8f))
+- 添加预览列、选择功能和仅生成选中行 ([efb9253](https://github.com/ljquan/aitu/commit/efb9253))
+- 将批量出图集成到 AI 图像生成对话框 ([51a8141](https://github.com/ljquan/aitu/commit/51a8141))
+- 重构批量任务提交逻辑，添加批次参数避免重复检测 ([9885195](https://github.com/ljquan/aitu/commit/9885195))
+- 增强批量出图功能 ([c608c09](https://github.com/ljquan/aitu/commit/c608c09))
+- 添加批量出图工具及图片库功能 ([5b943db](https://github.com/ljquan/aitu/commit/5b943db))
+
+### 🩹 Fixes
+
+- 修复批量生成预览图首次加载损坏问题 ([1ba7a93](https://github.com/ljquan/aitu/commit/1ba7a93))
+- 修复无API Key时批量生成弹出多个弹窗问题 ([0613708](https://github.com/ljquan/aitu/commit/0613708))
+- 修复填充柄与选择拖拽冲突问题 ([f128f28](https://github.com/ljquan/aitu/commit/f128f28))
+- 优化画廊和下载功能 ([af0e7d9](https://github.com/ljquan/aitu/commit/af0e7d9))
+- 修复带内容进入时自动放大问题 ([d60a25d](https://github.com/ljquan/aitu/commit/d60a25d))
+- 修复多项交互问题 ([c94283b](https://github.com/ljquan/aitu/commit/c94283b))
+- 修复单元格选择和复制粘贴功能 ([faa24b9](https://github.com/ljquan/aitu/commit/faa24b9))
+- 点击失败行预览单元格时选中行复选框 ([382e94b](https://github.com/ljquan/aitu/commit/382e94b))
+- 统一错误显示格式与任务队列一致 ([f2c1732](https://github.com/ljquan/aitu/commit/f2c1732))
+- 修复编辑模式下单击退出编辑的问题 ([796c5ec](https://github.com/ljquan/aitu/commit/796c5ec))
+- 修正单元格交互为Excel风格 ([335cbb9](https://github.com/ljquan/aitu/commit/335cbb9))
+- 添加 globalIndex 确保每个子任务哈希唯一 ([ed6c92b](https://github.com/ljquan/aitu/commit/ed6c92b))
+
+### 🔧 Chores
+
+- 优化z-index ([94e887d](https://github.com/ljquan/aitu/commit/94e887d))
+- style(batch-image): 将批量出图按钮改为文字链接样式 ([43e9871](https://github.com/ljquan/aitu/commit/43e9871))
+- refactor(batch-image): 移除状态、预览、操作列，简化为纯提交工具 ([735e736](https://github.com/ljquan/aitu/commit/735e736))
+
+### ❤️  Thank You
+
+- gongchengtu <1817063960@qq.com>
+- liquidliang <ljquan@qq.com>
+- likeusewin10 <1375280732@qq.com>
+
 ## 0.3.0 (2025-12-16)
 
 ### 🩹 Fixes
