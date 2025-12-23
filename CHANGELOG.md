@@ -1,3 +1,14 @@
+## 0.3.2 (2025-12-23)
+
+### 🔧 Chores
+
+- 添加域名处理 ([b227909](https://github.com/ljquan/aitu/commit/b227909))
+- v0.3.1 ([0f639c3](https://github.com/ljquan/aitu/commit/0f639c3))
+
+### ❤️  Thank You
+
+- liquidliang <ljquan@qq.com>
+
 ## 0.3.1 (2025-12-23)
 
 ### 🚀 Features
