@@ -25,22 +25,35 @@ import { ToolComponent } from '../components/tool-element/tool.component';
 import { PlaitTool } from '../types/toolbox.types';
 import { DEFAULT_TOOL_CONFIG } from '../constants/built-in-tools';
 import { ToolCommunicationService, ToolCommunicationHelper } from '../services/tool-communication-service';
-import { ToolMessageType } from '../types/tool-communication.types';
+import { ToolMessageType, GenerateImagePayload, GenerateImageResponse } from '../types/tool-communication.types';
+import { taskQueueService } from '../services/task-queue-service';
+import { TaskType } from '../types/task.types';
+import { geminiSettings } from '../utils/settings-manager';
 
 /**
  * 设置通信处理器
  */
 function setupCommunicationHandlers(
   board: PlaitBoard,
-  helper: ToolCommunicationHelper
+  helper: ToolCommunicationHelper,
+  service: ToolCommunicationService
 ): void {
   // 处理工具就绪通知
   helper.onToolReady((toolId) => {
     console.log(`[ToolCommunication] Tool ready: ${toolId}`);
-    // 发送初始化配置
+
+    // 获取当前的 Gemini 设置
+    const settings = geminiSettings.get();
+
+    // 发送初始化配置（包含 API key 等敏感信息）
     helper.initTool(toolId, {
       boardId: (board as any).id || 'default-board',
       theme: 'light', // TODO: 从应用状态获取实际主题
+      config: {
+        apiKey: settings.apiKey,
+        baseUrl: settings.baseUrl,
+        imageModel: settings.imageModelName || 'gemini-2.5-flash-image-vip',
+      },
     });
   });
 
@@ -64,6 +77,123 @@ function setupCommunicationHandlers(
     const element = ToolTransforms.getToolById(board, toolId);
     if (element) {
       ToolTransforms.removeTool(board, element.id);
+    }
+  });
+
+  // 处理图片生成请求
+  service.on(ToolMessageType.TOOL_TO_BOARD_GENERATE_IMAGE, async (message) => {
+    const payload = message.payload as GenerateImagePayload;
+    console.log(`[ToolCommunication] Generate image request from ${message.toolId}:`, payload);
+
+    try {
+      // 构建生成参数（与 ai-image-generation.tsx 一致）
+      const generateParams: any = {
+        prompt: payload.prompt,
+      };
+
+      // 优先使用 size 参数（比例格式），否则使用 width/height
+      if (payload.size) {
+        generateParams.aspectRatio = payload.size;
+      } else {
+        generateParams.width = payload.width || 1024;
+        generateParams.height = payload.height || 1024;
+      }
+
+      // 传递参考图片（如果有）
+      if ((payload as any).uploadedImages && (payload as any).uploadedImages.length > 0) {
+        generateParams.uploadedImages = (payload as any).uploadedImages;
+        console.log(`[ToolCommunication] Passing ${generateParams.uploadedImages.length} reference images`);
+      }
+
+      // 传递批次信息（避免重复检测）
+      if ((payload as any).batchId) {
+        generateParams.batchId = (payload as any).batchId;
+        generateParams.batchIndex = (payload as any).batchIndex;
+        generateParams.batchTotal = (payload as any).batchTotal;
+        // 全局唯一序号，确保每个子任务哈希唯一
+        if ((payload as any).globalIndex) {
+          generateParams.globalIndex = (payload as any).globalIndex;
+        }
+        console.log(`[ToolCommunication] Batch info: ${generateParams.batchIndex}/${generateParams.batchTotal} (${generateParams.batchId}), global: ${generateParams.globalIndex}`);
+      }
+
+      // 获取当前图片模型
+      const settings = geminiSettings.get();
+      generateParams.model = settings.imageModelName || 'gemini-2.5-flash-image-vip';
+
+      // 通过 taskQueueService 创建任务（这样任务会出现在全局任务队列中）
+      const task = taskQueueService.createTask(generateParams, TaskType.IMAGE);
+
+      if (!task) {
+        throw new Error('任务创建失败，请稍后重试');
+      }
+
+      const taskId = task.id;
+      console.log(`[ToolCommunication] Created task ${taskId} for ${message.toolId}`);
+
+      // 获取工具的 iframe
+      const iframe = document.querySelector(
+        `[data-element-id="${message.toolId}"] iframe`
+      ) as HTMLIFrameElement;
+
+      if (!iframe?.contentWindow) {
+        console.error(`[ToolCommunication] Iframe not found for ${message.toolId}`);
+        return;
+      }
+
+      // 监听该任务的状态变化
+      const subscription = taskQueueService.observeTaskUpdates().subscribe(event => {
+        if (event.task.id !== taskId) return;
+
+        // 任务完成
+        if (event.type === 'taskUpdated' && event.task.status === 'completed' && event.task.result) {
+          const response: GenerateImageResponse = {
+            success: true,
+            responseId: payload.messageId || message.messageId,
+            result: {
+              url: event.task.result.url,
+              format: event.task.result.format,
+              width: event.task.result.width,
+              height: event.task.result.height,
+            },
+          };
+
+          iframe.contentWindow?.postMessage(response, '*');
+          console.log(`[ToolCommunication] Image generation success sent to ${message.toolId}`);
+          subscription.unsubscribe();
+        }
+        // 任务失败
+        else if (event.type === 'taskUpdated' && event.task.status === 'failed') {
+          const response: GenerateImageResponse = {
+            success: false,
+            responseId: payload.messageId || message.messageId,
+            error: event.task.error?.message || '图片生成失败',
+          };
+
+          iframe.contentWindow?.postMessage(response, '*');
+          console.log(`[ToolCommunication] Image generation error sent to ${message.toolId}`);
+          subscription.unsubscribe();
+        }
+      });
+
+    } catch (error: any) {
+      console.error(`[ToolCommunication] Image generation failed for ${message.toolId}:`, error);
+
+      // 发送错误响应到 iframe
+      const response: GenerateImageResponse = {
+        success: false,
+        responseId: payload.messageId || message.messageId,
+        error: error.message || '图片生成失败',
+      };
+
+      const iframe = document.querySelector(
+        `[data-element-id="${message.toolId}"] iframe`
+      ) as HTMLIFrameElement;
+
+      if (iframe?.contentWindow) {
+        iframe.contentWindow.postMessage(response, '*');
+        console.log(`[ToolCommunication] Image generation error sent to ${message.toolId}`);
+      }
     }
   });
 }
@@ -146,7 +276,7 @@ export const withTool: PlaitPlugin = (board: PlaitBoard) => {
   (board as any).__toolCommunicationHelper = communicationHelper;
 
   // 注册通信处理器
-  setupCommunicationHandlers(board, communicationHelper);
+  setupCommunicationHandlers(board, communicationHelper, communicationService);
 
   // 注册工具元素渲染组件
   board.drawElement = (context: PlaitPluginElementContext) => {

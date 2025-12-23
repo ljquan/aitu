@@ -23,6 +23,7 @@ import {
 import { DEFAULT_ASPECT_RATIO } from '../../constants/image-aspect-ratios';
 import { DialogTaskList } from '../task-queue/DialogTaskList';
 import { geminiSettings } from '../../utils/settings-manager';
+import { promptForApiKey } from '../../utils/gemini-api';
 
 interface AIImageGenerationProps {
   initialPrompt?: string;
@@ -43,7 +44,7 @@ const AIImageGeneration = ({
   initialHeight,
   initialResultUrl,
   selectedModel,
-  onModelChange
+  onModelChange,
 }: AIImageGenerationProps = {}) => {
   const [prompt, setPrompt] = useState(initialPrompt);
   const [width, setWidth] = useState<number | string>(initialWidth || 1024);
@@ -100,13 +101,12 @@ const AIImageGeneration = ({
   useEffect(() => {
     // 组件挂载时清除之前的错误状态
     setError(null);
-    
+
     // 清理函数：组件卸载时也清除错误状态
     return () => {
       setError(null);
     };
   }, []); // 空依赖数组，只在组件挂载/卸载时执行
-
 
   // 重置所有状态
   const handleReset = () => {
@@ -210,6 +210,20 @@ const AIImageGeneration = ({
     if (!prompt.trim()) {
       setError(language === 'zh' ? '请输入图像描述' : 'Please enter image description');
       return;
+    }
+
+    // 先检查 API Key，没有则弹窗获取（只弹一次，避免批量生成时多次弹窗）
+    const settings = geminiSettings.get();
+    if (!settings.apiKey) {
+      const newApiKey = await promptForApiKey();
+      if (!newApiKey) {
+        setError(
+          language === 'zh'
+            ? '需要 API Key 才能生成图片'
+            : 'API Key is required to generate images'
+        );
+        return;
+      }
     }
 
     try {
@@ -340,13 +354,6 @@ const AIImageGeneration = ({
 
   useKeyboardShortcuts(isGenerating, prompt, () => handleGenerate(1));
 
-
-
-
-
-
-
-
   return (
     <div className="ai-image-generation-container">
       <div className="main-content">
@@ -356,20 +363,19 @@ const AIImageGeneration = ({
 
           {/* 模型选择器 */}
           {selectedModel !== undefined && onModelChange && (
-            <div className="model-selector-wrapper">
-              {/* <label className="model-selector-label">
-                {language === 'zh' ? '模型' : 'Image Model'}
-              </label> */}
-              <Select
-                value={selectedModel}
-                onChange={(value) => onModelChange(value as string)}
-                options={IMAGE_MODEL_GROUPED_OPTIONS}
-                size="small"
-                placeholder={language === 'zh' ? '选择图片模型' : 'Select Image Model'}
-                filterable
-                creatable
-                disabled={isGenerating}
-              />
+            <div className="form-header-row">
+              <div className="model-selector-wrapper">
+                <Select
+                  value={selectedModel}
+                  onChange={(value) => onModelChange(value as string)}
+                  options={IMAGE_MODEL_GROUPED_OPTIONS}
+                  size="small"
+                  placeholder={language === 'zh' ? '选择图片模型' : 'Select Image Model'}
+                  filterable
+                  creatable
+                  disabled={isGenerating}
+                />
+              </div>
             </div>
           )}
 

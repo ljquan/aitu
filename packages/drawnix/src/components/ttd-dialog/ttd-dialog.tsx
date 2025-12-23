@@ -6,15 +6,22 @@ import AIImageGeneration from './ai-image-generation';
 import AIVideoGeneration from './ai-video-generation';
 import { useI18n } from '../../i18n';
 import { useBoard } from '@plait-board/react-board';
-import { useState, useEffect, useRef, memo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, memo, useCallback, lazy, Suspense } from 'react';
 import { processSelectedContentForAI, extractSelectedContent } from '../../utils/selection-utils';
 import {
   AI_IMAGE_GENERATION_PREVIEW_CACHE_KEY,
-  AI_VIDEO_GENERATION_PREVIEW_CACHE_KEY
+  AI_VIDEO_GENERATION_PREVIEW_CACHE_KEY,
+  AI_IMAGE_MODE_CACHE_KEY
 } from '../../constants/storage';
 import { geminiSettings } from '../../utils/settings-manager';
 import { WinBoxWindow } from '../winbox';
 import type { VideoModel } from '../../types/video.types';
+
+// 懒加载批量出图组件
+const BatchImageGeneration = lazy(() => import('./batch-image-generation'));
+
+// 图像生成模式类型
+type ImageGenerationMode = 'single' | 'batch';
 
 const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) => {
   const { appState, setAppState } = useDrawnix();
@@ -98,6 +105,53 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
     initialPrompt: '',
     initialImage: undefined
   });
+
+  // 图像生成窗口是否需要最大化（批量模式时自动最大化）
+  const [imageDialogAutoMaximize, setImageDialogAutoMaximize] = useState(false);
+
+  // 图像生成模式状态（单图 / 批量）
+  const [imageGenerationMode, setImageGenerationMode] = useState<ImageGenerationMode>(() => {
+    try {
+      const savedMode = localStorage.getItem(AI_IMAGE_MODE_CACHE_KEY);
+      return savedMode === 'batch' ? 'batch' : 'single';
+    } catch (e) {
+      return 'single';
+    }
+  });
+
+  // 处理图像生成模式变化
+  const handleImageModeChange = useCallback((mode: ImageGenerationMode) => {
+    setImageGenerationMode(mode);
+    setImageDialogAutoMaximize(mode === 'batch');
+    try {
+      localStorage.setItem(AI_IMAGE_MODE_CACHE_KEY, mode);
+    } catch (e) {
+      console.warn('Failed to save image mode:', e);
+    }
+  }, []);
+
+  // 当对话框将要打开时，预先计算是否需要自动放大
+  // 这需要在 WinBox 组件渲染前确定，且逻辑需要与 AIImageGeneration 的模式判断一致
+  useEffect(() => {
+    if (appState.openDialogType === DialogType.aiImageGeneration) {
+      // 如果有初始图片或初始提示词，说明是带内容进入，不自动放大（强制单图模式）
+      const hasInitialContent =
+        (aiImageData.initialImages && aiImageData.initialImages.length > 0) ||
+        (aiImageData.initialPrompt && aiImageData.initialPrompt.trim() !== '');
+
+      if (hasInitialContent) {
+        setImageDialogAutoMaximize(false);
+        return;
+      }
+      // 否则读取 localStorage 中保存的模式
+      try {
+        const savedMode = localStorage.getItem(AI_IMAGE_MODE_CACHE_KEY);
+        setImageDialogAutoMaximize(savedMode === 'batch');
+      } catch (e) {
+        setImageDialogAutoMaximize(false);
+      }
+    }
+  }, [appState.openDialogType, aiImageData.initialImages, aiImageData.initialPrompt]);
 
   // 使用 useRef 来跟踪上一次的 openDialogType，避免不必要的处理
   const prevOpenDialogTypeRef = useRef<typeof appState.openDialogType>(null);
@@ -382,7 +436,26 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
       {/* AI 图像生成窗口 - 使用 WinBox */}
       <WinBoxWindow
         visible={appState.openDialogType === DialogType.aiImageGeneration}
-        title={language === 'zh' ? 'AI 图像生成' : 'AI Image Generation'}
+        title={imageGenerationMode === 'batch'
+          ? (language === 'zh' ? '批量出图' : 'Batch Generation')
+          : (language === 'zh' ? 'AI 图像生成' : 'AI Image Generation')
+        }
+        headerContent={
+          <div className="image-generation-mode-tabs">
+            <button
+              className={`mode-tab ${imageGenerationMode === 'single' ? 'active' : ''}`}
+              onClick={() => handleImageModeChange('single')}
+            >
+              {language === 'zh' ? 'AI 图像生成' : 'AI Image'}
+            </button>
+            <button
+              className={`mode-tab ${imageGenerationMode === 'batch' ? 'active' : ''}`}
+              onClick={() => handleImageModeChange('batch')}
+            >
+              {language === 'zh' ? '批量出图' : 'Batch'}
+            </button>
+          </div>
+        }
         onClose={handleImageDialogClose}
         width="60%"
         height="60%"
@@ -392,20 +465,27 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
         y="center"
         modal={false}
         minimizable={false}
-        className="winbox-ai-generation"
+        className="winbox-ai-generation winbox-ai-image-generation"
         container={container}
+        autoMaximize={imageDialogAutoMaximize}
       >
         {appState.openDialogType === DialogType.aiImageGeneration && (
-          <AIImageGeneration
-            initialPrompt={aiImageData.initialPrompt}
-            initialImages={aiImageData.initialImages}
-            selectedElementIds={aiImageData.selectedElementIds}
-            initialWidth={appState.dialogInitialData?.initialWidth || appState.dialogInitialData?.width}
-            initialHeight={appState.dialogInitialData?.initialHeight || appState.dialogInitialData?.height}
-            initialResultUrl={aiImageData.initialResultUrl}
-            selectedModel={selectedImageModel}
-            onModelChange={handleImageModelChange}
-          />
+          imageGenerationMode === 'batch' ? (
+            <Suspense fallback={<div className="loading-fallback">{language === 'zh' ? '加载中...' : 'Loading...'}</div>}>
+              <BatchImageGeneration onSwitchToSingle={() => handleImageModeChange('single')} />
+            </Suspense>
+          ) : (
+            <AIImageGeneration
+              initialPrompt={aiImageData.initialPrompt}
+              initialImages={aiImageData.initialImages}
+              selectedElementIds={aiImageData.selectedElementIds}
+              initialWidth={appState.dialogInitialData?.initialWidth || appState.dialogInitialData?.width}
+              initialHeight={appState.dialogInitialData?.initialHeight || appState.dialogInitialData?.height}
+              initialResultUrl={aiImageData.initialResultUrl}
+              selectedModel={selectedImageModel}
+              onModelChange={handleImageModelChange}
+            />
+          )
         )}
       </WinBoxWindow>
       {/* AI 视频生成窗口 - 使用 WinBox */}
@@ -421,7 +501,7 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
         y="center"
         modal={false}
         minimizable={false}
-        className="winbox-ai-generation"
+        className="winbox-ai-generation winbox-ai-video-generation"
         container={container}
       >
         {appState.openDialogType === DialogType.aiVideoGeneration && (

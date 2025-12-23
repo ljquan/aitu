@@ -5,9 +5,9 @@
  * Supports filtering by status and provides batch operations.
  */
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Button, Tabs, Dialog, MessagePlugin, Input, Radio } from 'tdesign-react';
-import { DeleteIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon } from 'tdesign-icons-react';
+import { DeleteIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon } from 'tdesign-icons-react';
 import { TaskItem } from './TaskItem';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
 import { Task, TaskType, TaskStatus } from '../../types/task.types';
@@ -17,6 +17,7 @@ import { insertImageFromUrl } from '../../data/image';
 import { insertVideoFromUrl } from '../../data/video';
 import { downloadMediaFile, downloadFromBlob, sanitizeFilename } from '../../utils/download-utils';
 import { mediaCacheService } from '../../services/media-cache-service';
+import { SideDrawer } from '../side-drawer';
 import './task-queue.scss';
 
 const { TabPanel } = Tabs;
@@ -345,107 +346,100 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [previewTaskId, handlePreviewPrevious, handlePreviewNext]);
 
-  return (
-    <>
-      <div className={`task-queue-panel ${expanded ? 'task-queue-panel--expanded' : ''}`}>
-        {/* Header with title and tabs */}
-        <div className="task-queue-panel__header">
-          <div className="task-queue-panel__header-content">
-            <h3>任务队列</h3>
-            <Tabs value={activeTab} onChange={(value) => setActiveTab(value as string)}>
-              <TabPanel value="all" label={`全部 (${tasks.length})`} />
-              <TabPanel value="active" label={`生成中 (${activeTasks.length})`} />
-              <TabPanel value="failed" label={`失败 (${failedTasks.length})`} />
-              <TabPanel value="completed" label={`已完成 (${completedTasks.length})`} />
-            </Tabs>
-          </div>
-          <Button
-            className="task-queue-panel__close-btn"
-            icon={<CloseIcon />}
-            data-track="task_click_panel_close"
-            onClick={onClose}
-            size="large"
-            shape="circle"
-            variant="text"
-            theme="default"
-          />
-        </div>
+  // Handle close
+  const handleClose = useCallback(() => {
+    onClose?.();
+  }, [onClose]);
 
-        {/* Filters and Actions */}
-        <div className="task-queue-panel__filters">
-          <RadioGroup
-            value={typeFilter}
-            onChange={(value) => setTypeFilter(value as 'all' | 'image' | 'video')}
-            size="small"
-            variant="default-filled"
-          >
-            <Radio.Button value="all">全部</Radio.Button>
-            <Radio.Button value="image">图片</Radio.Button>
-            <Radio.Button value="video">视频</Radio.Button>
-          </RadioGroup>
+  // Filter section with tabs and filters
+  const filterSection = (
+    <div className="task-queue-panel__filters-container">
+      <Tabs value={activeTab} onChange={(value) => setActiveTab(value as string)}>
+        <TabPanel value="all" label={`全部 (${tasks.length})`} />
+        <TabPanel value="active" label={`生成中 (${activeTasks.length})`} />
+        <TabPanel value="failed" label={`失败 (${failedTasks.length})`} />
+        <TabPanel value="completed" label={`已完成 (${completedTasks.length})`} />
+      </Tabs>
 
-          <Input
-            value={searchText}
-            onChange={(value) => setSearchText(value)}
-            placeholder="搜索 Prompt..."
-            clearable
-            prefixIcon={<SearchIcon />}
-            size="small"
-            style={{ width: '180px' }}
-          />
+      <div className="task-queue-panel__filters">
+        <RadioGroup
+          value={typeFilter}
+          onChange={(value) => setTypeFilter(value as 'all' | 'image' | 'video')}
+          size="small"
+          variant="default-filled"
+        >
+          <Radio.Button value="all">全部</Radio.Button>
+          <Radio.Button value="image">图片</Radio.Button>
+          <Radio.Button value="video">视频</Radio.Button>
+        </RadioGroup>
 
-          <div className="task-queue-panel__actions">
-            {failedTasks.length > 0 && (
-              <Button
-                size="small"
-                variant="text"
-                theme="danger"
-                icon={<DeleteIcon />}
-                data-track="task_click_clear_failed"
-                onClick={() => handleClear('failed')}
-              >
-                清除失败
-              </Button>
-            )}
-          </div>
-        </div>
+        <Input
+          value={searchText}
+          onChange={(value) => setSearchText(value)}
+          placeholder="搜索 Prompt..."
+          clearable
+          prefixIcon={<SearchIcon />}
+          size="small"
+          style={{ width: '180px' }}
+        />
 
-        {/* Task List */}
-        <div className="task-queue-panel__content">
-          {filteredTasks.length === 0 ? (
-            <div className="task-queue-panel__empty">
-              <div className="task-queue-panel__empty-icon">📋</div>
-              <div className="task-queue-panel__empty-text">
-                {activeTab === 'all' ? '暂无任务' : `暂无${activeTab === 'active' ? '生成中' : activeTab === 'completed' ? '已完成' : activeTab === 'failed' ? '失败' : '已取消'}任务`}
-              </div>
-            </div>
-          ) : (
-            <div className="task-queue-panel__list">
-              {filteredTasks.map(task => (
-                <TaskItem
-                  key={task.id}
-                  task={task}
-                  onRetry={handleRetry}
-                  onDelete={handleDelete}
-                  onDownload={handleDownload}
-                  onInsert={handleInsert}
-                  onEdit={handleEdit}
-                  onPreviewOpen={() => handlePreviewOpen(task.id)}
-                />
-              ))}
-            </div>
+        <div className="task-queue-panel__actions">
+          {failedTasks.length > 0 && (
+            <Button
+              size="small"
+              variant="text"
+              theme="danger"
+              icon={<DeleteIcon />}
+              data-track="task_click_clear_failed"
+              onClick={() => handleClear('failed')}
+            >
+              清除失败
+            </Button>
           )}
         </div>
       </div>
+    </div>
+  );
 
-      {/* Backdrop overlay */}
-      {expanded && (
-        <div
-          className="task-queue-panel__backdrop"
-          data-track="task_click_backdrop_close"
-          onClick={onClose}
-        />
-      )}
+  return (
+    <>
+      <SideDrawer
+        isOpen={expanded}
+        onClose={handleClose}
+        title="任务队列"
+        filterSection={filterSection}
+        position="toolbar-right"
+        width="responsive"
+        showBackdrop={false}
+        closeOnEsc={false}
+        showCloseButton={true}
+        className="task-queue-panel"
+        contentClassName="task-queue-panel__content"
+      >
+        {filteredTasks.length === 0 ? (
+          <div className="task-queue-panel__empty">
+            <div className="task-queue-panel__empty-icon">📋</div>
+            <div className="task-queue-panel__empty-text">
+              {activeTab === 'all' ? '暂无任务' : `暂无${activeTab === 'active' ? '生成中' : activeTab === 'completed' ? '已完成' : activeTab === 'failed' ? '失败' : '已取消'}任务`}
+            </div>
+          </div>
+        ) : (
+          <div className="task-queue-panel__list">
+            {filteredTasks.map(task => (
+              <TaskItem
+                key={task.id}
+                task={task}
+                onRetry={handleRetry}
+                onDelete={handleDelete}
+                onDownload={handleDownload}
+                onInsert={handleInsert}
+                onEdit={handleEdit}
+                onPreviewOpen={() => handlePreviewOpen(task.id)}
+              />
+            ))}
+          </div>
+        )}
+      </SideDrawer>
 
       {/* Clear Confirmation Dialog */}
       <Dialog

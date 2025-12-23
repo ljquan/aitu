@@ -3,11 +3,8 @@ import classNames from 'classnames';
 import { ATTACHED_ELEMENT_CLASS_NAME } from '@plait/core';
 import { AppToolbar } from './app-toolbar/app-toolbar';
 import { CreationToolbar } from './creation-toolbar';
-import { ZoomToolbar } from './zoom-toolbar';
-import { ThemeToolbar } from './theme-toolbar';
 import { UnifiedToolbarProps } from './toolbar.types';
 import { Island } from '../island';
-import { FeedbackButton } from '../feedback-button';
 import { BottomActionsSection } from './bottom-actions-section';
 import { TaskQueuePanel } from '../task-queue/TaskQueuePanel';
 import { useViewportScale } from '../../hooks/useViewportScale';
@@ -19,8 +16,8 @@ const TOOLBAR_MIN_HEIGHT = 460;
 /**
  * UnifiedToolbar - 统一左侧工具栏容器
  *
- * 将四个独立的工具栏(AppToolbar, CreationToolbar, ZoomToolbar, ThemeToolbar)
- * 整合到一个固定在页面左侧的垂直容器中,工具栏分区之间使用1px水平分割线分隔。
+ * 将 AppToolbar 和 CreationToolbar 整合到一个固定在页面左侧的垂直容器中,
+ * 工具栏分区之间使用1px水平分割线分隔。
  *
  * 支持响应式图标模式: 当浏览器窗口高度不足时,自动隐藏文本标签,仅显示图标。
  *
@@ -31,10 +28,11 @@ export const UnifiedToolbar: React.FC<UnifiedToolbarProps> = React.memo(({
   projectDrawerOpen = false,
   onProjectDrawerToggle,
   toolboxDrawerOpen = false,
-  onToolboxDrawerToggle
+  onToolboxDrawerToggle,
+  taskPanelExpanded = false,
+  onTaskPanelToggle
 }) => {
   const [isIconMode, setIsIconMode] = useState(false);
-  const [taskPanelExpanded, setTaskPanelExpanded] = useState(false);
   const hasEverExpanded = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -68,16 +66,18 @@ export const UnifiedToolbar: React.FC<UnifiedToolbarProps> = React.memo(({
 
   // 任务面板切换处理
   const handleTaskPanelToggle = useCallback(() => {
-    const newExpanded = !taskPanelExpanded;
-    if (newExpanded && !hasEverExpanded.current) {
+    if (!taskPanelExpanded && !hasEverExpanded.current) {
       hasEverExpanded.current = true;
     }
-    setTaskPanelExpanded(newExpanded);
-  }, [taskPanelExpanded]);
+    onTaskPanelToggle?.();
+  }, [taskPanelExpanded, onTaskPanelToggle]);
 
+  // 关闭任务面板（仅在打开时才关闭）
   const handleTaskPanelClose = useCallback(() => {
-    setTaskPanelExpanded(false);
-  }, []);
+    if (taskPanelExpanded) {
+      onTaskPanelToggle?.();
+    }
+  }, [taskPanelExpanded, onTaskPanelToggle]);
 
   return (
     <>
@@ -98,31 +98,16 @@ export const UnifiedToolbar: React.FC<UnifiedToolbarProps> = React.memo(({
         )}
         padding={1}
       >
+        {/* 顶部固定区域 - 应用工具分区（菜单、撤销、重做） */}
+        <div className="unified-toolbar__section unified-toolbar__section--fixed-top">
+          <AppToolbar embedded={true} iconMode={isIconMode} />
+        </div>
+
         {/* 可滚动的工具栏内容区 */}
         <div className="unified-toolbar__scrollable">
-          {/* 应用工具分区 - 菜单、撤销、重做、复制、删除 */}
-          <div className="unified-toolbar__section">
-            <AppToolbar embedded={true} iconMode={isIconMode} />
-          </div>
-
-          {/* 创作工具分区 - 手型、选择、思维导图、文本、画笔、箭头、形状、图片、AI工具 */}
+          {/* 创作工具分区 - 手型、选择、思维导图、文本、画笔、箭头、形状、图片、AI工具、缩放 */}
           <div className="unified-toolbar__section">
             <CreationToolbar embedded={true} iconMode={isIconMode} />
-          </div>
-
-          {/* 缩放工具分区 - 缩小、缩放百分比、放大 */}
-          <div className="unified-toolbar__section">
-            <ZoomToolbar embedded={true} iconMode={isIconMode} />
-          </div>
-
-          {/* 主题选择分区 - 主题下拉选择器 */}
-          <div className="unified-toolbar__section">
-            <ThemeToolbar embedded={true} iconMode={isIconMode} />
-          </div>
-
-          {/* 反馈按钮分区 */}
-          <div className="unified-toolbar__section" style={{ display: 'flex', justifyContent: 'center' }}>
-            <FeedbackButton />
           </div>
         </div>
 
@@ -135,7 +120,6 @@ export const UnifiedToolbar: React.FC<UnifiedToolbarProps> = React.memo(({
             onToolboxDrawerToggle={onToolboxDrawerToggle}
             taskPanelExpanded={taskPanelExpanded}
             onTaskPanelToggle={handleTaskPanelToggle}
-            iconMode={isIconMode}
           />
         </div>
       </Island>

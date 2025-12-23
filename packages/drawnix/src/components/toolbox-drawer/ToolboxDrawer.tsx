@@ -7,7 +7,7 @@
 
 import React, { useState, useCallback, useMemo } from 'react';
 import { Button, Input, DialogPlugin, MessagePlugin } from 'tdesign-react';
-import { CloseIcon, SearchIcon, AddIcon } from 'tdesign-icons-react';
+import { SearchIcon, AddIcon } from 'tdesign-icons-react';
 import { PlaitBoard, getViewportOrigination } from '@plait/core';
 import { useDrawnix } from '../../hooks/use-drawnix';
 import { ToolTransforms } from '../../plugins/with-tool';
@@ -16,6 +16,7 @@ import { ToolDefinition } from '../../types/toolbox.types';
 import { DEFAULT_TOOL_CONFIG, TOOL_CATEGORY_LABELS } from '../../constants/built-in-tools';
 import { ToolList } from './ToolList';
 import { CustomToolDialog } from '../custom-tool-dialog/CustomToolDialog';
+import { SideDrawer } from '../side-drawer';
 import './toolbox-drawer.scss';
 
 export interface ToolboxDrawerProps {
@@ -197,50 +198,31 @@ export const ToolboxDrawer: React.FC<ToolboxDrawerProps> = ({
     setCustomToolDialogVisible(false);
   }, []);
 
-  return (
-    <div className={`toolbox-drawer ${isOpen ? 'toolbox-drawer--open' : ''}`}>
-      {/* Header */}
-      <div className="toolbox-drawer__header">
-        <div className="toolbox-drawer__header-left">
-          <h3 className="toolbox-drawer__title">工具箱</h3>
-          <span className="toolbox-drawer__count">
-            {filteredTools.length} 个工具
-          </span>
-        </div>
-        <div className="toolbox-drawer__header-right">
-          <Button
-            variant="outline"
-            size="small"
-            icon={<AddIcon />}
-            onClick={handleAddCustomTool}
-            title="添加自定义工具"
-            data-track="toolbox_click_add_custom_tool"
-          >
-            添加工具
-          </Button>
-          <Button
-            variant="text"
-            size="small"
-            icon={<CloseIcon />}
-            onClick={handleClose}
-            title="关闭"
-          />
-        </div>
-      </div>
+  // Header actions
+  const headerActions = (
+    <Button
+      variant="outline"
+      size="small"
+      icon={<AddIcon />}
+      onClick={handleAddCustomTool}
+      title="添加自定义工具"
+      data-track="toolbox_click_add_custom_tool"
+    >
+      添加工具
+    </Button>
+  );
 
-      {/* Search */}
-      <div className="toolbox-drawer__search">
-        <Input
-          placeholder="搜索工具..."
-          value={searchQuery}
-          onChange={setSearchQuery}
-          prefixIcon={<SearchIcon />}
-          size="small"
-          clearable
-        />
-      </div>
-
-      {/* Category Filter */}
+  // Filter section: search + category
+  const filterSection = (
+    <>
+      <Input
+        placeholder="搜索工具..."
+        value={searchQuery}
+        onChange={setSearchQuery}
+        prefixIcon={<SearchIcon />}
+        size="small"
+        clearable
+      />
       <div className="toolbox-drawer__categories">
         <Button
           variant={selectedCategory === null ? 'base' : 'outline'}
@@ -260,9 +242,24 @@ export const ToolboxDrawer: React.FC<ToolboxDrawerProps> = ({
           </Button>
         ))}
       </div>
+    </>
+  );
 
-      {/* Content */}
-      <div className="toolbox-drawer__content">
+  return (
+    <>
+      <SideDrawer
+        isOpen={isOpen}
+        onClose={handleClose}
+        title="工具箱"
+        subtitle={`${filteredTools.length} 个工具`}
+        headerActions={headerActions}
+        filterSection={filterSection}
+        position="toolbar-right"
+        width="narrow"
+        zIndex={12}
+        className="toolbox-drawer"
+        contentClassName="toolbox-drawer__content"
+      >
         {filteredTools.length === 0 ? (
           <div className="toolbox-drawer__empty">
             <p>未找到匹配的工具</p>
@@ -274,7 +271,7 @@ export const ToolboxDrawer: React.FC<ToolboxDrawerProps> = ({
             onToolDelete={handleDeleteTool}
           />
         )}
-      </div>
+      </SideDrawer>
 
       {/* Custom Tool Dialog */}
       <CustomToolDialog
@@ -282,6 +279,6 @@ export const ToolboxDrawer: React.FC<ToolboxDrawerProps> = ({
         onClose={handleDialogClose}
         onSuccess={handleCustomToolSaved}
       />
-    </div>
+    </>
   );
 };

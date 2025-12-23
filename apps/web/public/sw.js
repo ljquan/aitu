@@ -1,7 +1,7 @@
 /* eslint-disable no-restricted-globals */
 // Service Worker for PWA functionality and handling CORS issues with external images
 // Version will be replaced during build process
-const APP_VERSION = '0.3.0';
+const APP_VERSION = '0.3.2';
 const CACHE_NAME = `drawnix-v${APP_VERSION}`;
 const IMAGE_CACHE_NAME = `drawnix-images`;
 const STATIC_CACHE_NAME = `drawnix-static-v${APP_VERSION}`;
@@ -600,6 +600,12 @@ self.addEventListener('fetch', event => {
     return; // 直接返回，让浏览器处理
   }
 
+  // 放行阿里云OSS域名，这些域名不支持CORS fetch，但<img>标签可以直接加载
+  if (url.hostname.endsWith('.aliyuncs.com')) {
+    console.log('Service Worker: 阿里云OSS域名请求直接通过，不拦截:', url.href);
+    return; // 直接返回，让浏览器处理
+  }
+
   // 拦截视频请求以支持 Range 请求
   if (isVideoRequest(url, event.request)) {
     console.log('Service Worker: Intercepting video request:', url.href);
@@ -1000,8 +1006,10 @@ async function handleImageRequest(request) {
       // 为重复请求添加标记，便于追踪
       existingEntry.duplicateRequestIds = existingEntry.duplicateRequestIds || [];
       existingEntry.duplicateRequestIds.push(requestId);
-      
-      return existingEntry.promise;
+
+      // Response body 只能被消费一次，重复请求需要返回克隆
+      const response = await existingEntry.promise;
+      return response && response.clone ? response.clone() : response;
     }
     
     // 创建请求处理Promise并存储到去重字典
@@ -1175,6 +1183,7 @@ async function handleImageRequestInternal(originalRequest, requestUrl, dedupeKey
           
           // Use retry logic for each fetch attempt
           let lastError;
+          let isCORSError = false;
           for (let attempt = 0; attempt <= 2; attempt++) {
             try {
               console.log(`Service Worker [${requestId}]: Fetch attempt ${attempt + 1}/3 with options on ${isUsingFallback ? 'fallback' : 'original'} URL`);
@@ -1188,11 +1197,39 @@ async function handleImageRequestInternal(originalRequest, requestUrl, dedupeKey
               console.warn(`Service Worker [${requestId}]: Fetch attempt ${attempt + 1} failed on ${isUsingFallback ? 'fallback' : 'original'} URL:`, fetchError);
               lastError = fetchError;
 
+              // 检测CORS错误，不重试直接跳过
+              const errorMessage = fetchError.message || '';
+              if (errorMessage.includes('CORS') || 
+                  errorMessage.includes('cross-origin') ||
+                  errorMessage.includes('Access-Control-Allow-Origin') ||
+                  errorMessage.includes('Failed to fetch') ||
+                  errorMessage.includes('NetworkError') ||
+                  errorMessage.includes('TypeError')) {
+                console.log(`Service Worker [${requestId}]: 检测到CORS/网络错误，跳过重试:`, errorMessage);
+                isCORSError = true;
+                break;
+              }
+
               if (attempt < 2) {
                 // Wait before retrying (exponential backoff)
                 await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
               }
             }
+          }
+
+          // 如果是CORS错误，返回特殊响应让前端直接用img标签加载
+          if (isCORSError) {
+            console.log(`Service Worker [${requestId}]: CORS错误，返回特殊响应提示前端直接加载`);
+            // 返回一个特殊的响应，前端可以根据这个响应决定直接用img标签加载
+            return new Response('CORS error - use img tag directly', {
+              status: 403,
+              statusText: 'CORS Error',
+              headers: {
+                'Content-Type': 'text/plain',
+                'X-SW-CORS-Error': 'true',
+                'Access-Control-Allow-Origin': '*'
+              }
+            });
           }
 
           if (response && response.status !== 0) {

@@ -156,6 +156,8 @@ export function generateParamsHash(params: GenerationParams, type: TaskType): st
     // Include batch info for unique hash per batch task
     batchId: (params as any).batchId,
     batchIndex: (params as any).batchIndex,
+    // Global index ensures uniqueness even for identical params
+    globalIndex: (params as any).globalIndex,
   };
 
   return JSON.stringify(sortedParams);

@@ -438,7 +438,10 @@ export class ToolGenerator {
     // 设置超时检测
     this.setupLoadTimeout(element.id);
 
-    iframe.src = element.url;
+    // 设置 iframe URL，添加 toolId 参数用于通信
+    const url = new URL(element.url, window.location.origin);
+    url.searchParams.set('toolId', element.id);
+    iframe.src = url.toString();
 
     // 关键修改：默认启用 iframe 的鼠标事件，因为拖动只在标题栏上
     // 这样 iframe 内的页面可以正常点击和滚动

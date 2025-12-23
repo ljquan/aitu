@@ -1,0 +1,1616 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>批量出图工具</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #f5f5f5;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .container {
+      height: 100%;
+      display: block;
+      padding: 16px;
+    }
+
+    .main-content {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .image-library-container {
+      position: fixed;
+      right: 16px;
+      top: 16px;
+      width: 320px;
+      max-height: calc(100vh - 32px);
+      display: flex;
+      flex-direction: column;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+      transition: all 0.3s;
+      z-index: 1000;
+    }
+
+    .image-library-container.collapsed {
+      width: 50px;
+      height: 50px;
+      max-height: 50px;
+      overflow: hidden;
+    }
+
+    .library-header {
+      padding: 12px;
+      border-bottom: 1px solid #eee;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: linear-gradient(135deg, #F39C12 0%, #E67E22 100%);
+      color: white;
+      border-radius: 8px 8px 0 0;
+    }
+
+    .library-header h3 {
+      font-size: 14px;
+      font-weight: 600;
+      margin: 0;
+    }
+
+    .toggle-btn {
+      background: none;
+      border: none;
+      color: white;
+      cursor: pointer;
+      font-size: 18px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .library-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .collapsed .library-content {
+      display: none;
+    }
+
+    .upload-section {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid #f0f0f0;
+    }
+
+    .upload-btn {
+      width: 100%;
+      padding: 8px 12px;
+      background: linear-gradient(135deg, #F39C12 0%, #E67E22 100%);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .upload-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(243, 156, 18, 0.3);
+    }
+
+    #imageUploadInput {
+      display: none;
+    }
+
+    .upload-hint {
+      font-size: 11px;
+      color: #999;
+      text-align: center;
+    }
+
+    .library-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+      gap: 8px;
+    }
+
+    .library-image {
+      aspect-ratio: 1;
+      border-radius: 4px;
+      overflow: hidden;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: all 0.2s;
+      position: relative;
+    }
+
+    .library-image:hover {
+      border-color: #F39C12;
+      transform: scale(1.05);
+    }
+
+    .library-image img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .library-image .delete-image-btn {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      width: 20px;
+      height: 20px;
+      background: rgba(220, 53, 69, 0.9);
+      color: white;
+      border: none;
+      border-radius: 50%;
+      font-size: 14px;
+      line-height: 1;
+      cursor: pointer;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .library-image:hover .delete-image-btn {
+      display: flex;
+    }
+
+    .empty-library {
+      text-align: center;
+      padding: 20px;
+      color: #999;
+      font-size: 13px;
+    }
+
+    /* 图片单元格样式 */
+    .image-cell-content {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      padding: 0;
+      padding-right: 15px;
+      padding-bottom: 15px;
+      width: 100%;
+      max-width: calc(100% - 15px);
+      position: relative;
+    }
+
+    .cell-image-thumb {
+      width: 40px;
+      height: 40px;
+      border-radius: 4px;
+      overflow: hidden;
+      position: relative;
+      border: 1px solid #ddd;
+    }
+
+    .cell-image-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .cell-image-thumb .remove-btn {
+      position: absolute;
+      top: 0;
+      right: 0;
+      background: rgba(220, 53, 69, 0.9);
+      color: white;
+      border: none;
+      width: 16px;
+      height: 16px;
+      font-size: 10px;
+      line-height: 1;
+      cursor: pointer;
+      display: none;
+      padding: 0;
+      z-index: 2;
+    }
+
+    .cell-image-thumb:hover .remove-btn {
+      display: block;
+    }
+
+    .add-image-btn {
+      width: 40px;
+      height: 40px;
+      border: 2px dashed #ccc;
+      border-radius: 4px;
+      background: #f9f9f9;
+      color: #999;
+      font-size: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      flex-shrink: 0;
+    }
+
+    .add-image-btn:hover {
+      border-color: #F39C12;
+      color: #F39C12;
+      background: #fff;
+    }
+
+    .header {
+      background: white;
+      padding: 16px 20px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .header h1 {
+      font-size: 20px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 8px;
+    }
+
+    .header p {
+      font-size: 14px;
+      color: #666;
+    }
+
+    .content {
+      flex: 1;
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      overflow: auto;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .button {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .button-primary {
+      background: linear-gradient(135deg, #F39C12 0%, #E67E22 100%);
+      color: white;
+    }
+
+    .button-primary:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(243, 156, 18, 0.3);
+    }
+
+    .button-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .button-secondary {
+      background: white;
+      color: #666;
+      border: 1px solid #ddd;
+    }
+
+    .button-secondary:hover {
+      background: #f5f5f5;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .info-box {
+      background: #fff3cd;
+      border-left: 4px solid #F39C12;
+      padding: 12px 16px;
+      border-radius: 4px;
+      margin-bottom: 16px;
+    }
+
+    .info-box p {
+      font-size: 13px;
+      color: #856404;
+      margin: 4px 0;
+    }
+
+    /* Excel 式表格样式 */
+    .excel-table-container {
+      flex: 1;
+      overflow: auto;
+      border: 2px solid #ddd;
+      border-radius: 6px;
+      background: white;
+      position: relative;
+      user-select: none;
+    }
+
+    .excel-table {
+      border-collapse: separate;
+      border-spacing: 0;
+      table-layout: fixed;
+      min-width: 100%;
+    }
+
+    .excel-table th,
+    .excel-table td {
+      border: 1px solid #e0e0e0;
+      padding: 0;
+      position: relative;
+      height: 36px;
+      min-width: 120px;
+    }
+
+    .excel-table th {
+      background: #f5f5f5;
+      font-weight: 600;
+      font-size: 13px;
+      color: #666;
+      text-align: center;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    /* 行号列 */
+    .excel-table th:first-child,
+    .excel-table td:first-child {
+      width: 50px;
+      min-width: 50px;
+      background: #f5f5f5;
+      text-align: center;
+      font-weight: 600;
+      color: #666;
+      position: sticky;
+      left: 0;
+      z-index: 5;
+    }
+
+    .excel-table th:first-child {
+      z-index: 15;
+    }
+
+    /* 单元格 */
+    .excel-cell {
+      width: 100%;
+      height: 100%;
+      padding: 8px;
+      display: flex;
+      align-items: center;
+      cursor: cell;
+      position: relative;
+      overflow: visible;
+    }
+
+    .excel-cell input,
+    .excel-cell select,
+    .excel-cell textarea {
+      width: 100%;
+      border: none;
+      outline: none;
+      background: transparent;
+      font-size: 13px;
+      font-family: inherit;
+      padding: 0;
+    }
+
+    .excel-cell textarea {
+      resize: none;
+      min-height: 20px;
+    }
+
+    /* 选中状态 */
+    .excel-cell.selected {
+      background: #e3f2fd;
+      outline: 2px solid #2196F3;
+      outline-offset: -2px;
+      z-index: 1;
+    }
+
+    .excel-cell.range-selected {
+      background: #e3f2fd;
+    }
+
+    .excel-cell.active {
+      background: white;
+      outline: 2px solid #F39C12;
+      outline-offset: -2px;
+      z-index: 20;
+    }
+
+    /* 填充柄 */
+    .fill-handle {
+      position: absolute;
+      bottom: -3px;
+      right: -3px;
+      width: 8px;
+      height: 8px;
+      background: #F39C12;
+      border: 1px solid white;
+      cursor: crosshair;
+      z-index: 100;
+      display: none;
+      pointer-events: auto;
+    }
+
+    .excel-cell.active .fill-handle {
+      display: block;
+    }
+
+    /* 拖拽填充预览 */
+    .excel-cell.fill-preview {
+      background: #fff3e0 !important;
+      outline: 2px dashed #F39C12 !important;
+      outline-offset: -2px;
+    }
+
+    .column-fill-btn {
+      background: linear-gradient(135deg, #F39C12 0%, #E67E22 100%);
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-size: 11px;
+      cursor: pointer;
+      margin-left: 4px;
+      transition: all 0.2s;
+    }
+
+    .column-fill-btn:hover {
+      transform: scale(1.05);
+      box-shadow: 0 2px 8px rgba(243, 156, 18, 0.4);
+    }
+
+    .th-content {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      padding: 8px;
+    }
+
+    /* 提示信息 */
+    .hint-text {
+      font-size: 11px;
+      color: #999;
+      margin-top: 8px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- 主内容区 -->
+    <div class="main-content">
+      <div class="header">
+        <h1>🎨 批量出图工具</h1>
+        <p>Excel式批量AI图片生成，支持拖拽填充、多选、键盘导航</p>
+      </div>
+
+      <div class="content">
+        <div class="info-box">
+          <p><strong>快捷键：</strong>方向键导航 | Enter编辑 | Ctrl+C复制 | Ctrl+V粘贴 | 拖拽右下角填充柄批量复制</p>
+          <p id="debug-info" style="color: #333;">
+            <strong>状态：</strong>
+            <span id="config-status">等待配置...</span>
+          </p>
+        </div>
+
+        <div class="button-group">
+          <button class="button button-secondary" onclick="addRows(5)">
+            ➕ 添加 5 行
+          </button>
+          <button class="button button-secondary" onclick="deleteSelected()">
+            🗑️ 删除选中
+          </button>
+          <button class="button button-primary" id="generateBtn" onclick="startBatchGeneration()">
+            🚀 提交到任务队列
+          </button>
+        </div>
+
+        <div class="excel-table-container" id="tableContainer">
+          <table class="excel-table" id="excelTable">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th style="width: 300px;">
+                  <div class="th-content">
+                    提示词
+                    <button class="column-fill-btn" onclick="fillColumn('prompt')" title="批量填充提示词">⬇</button>
+                  </div>
+                </th>
+                <th style="width: 80px;">
+                  <div class="th-content">
+                    尺寸
+                    <button class="column-fill-btn" onclick="fillColumn('size')" title="批量填充尺寸">⬇</button>
+                  </div>
+                </th>
+                <th style="width: 150px;">
+                  <div class="th-content">
+                    参考图片
+                    <button class="column-fill-btn" onclick="fillColumn('images')" title="批量填充图片">⬇</button>
+                  </div>
+                </th>
+                <th style="width: 60px;">
+                  <div class="th-content">
+                    数量
+                    <button class="column-fill-btn" onclick="fillColumn('count')" title="批量填充数量">⬇</button>
+                  </div>
+                </th>
+              </tr>
+            </thead>
+            <tbody id="tableBody">
+            </tbody>
+          </table>
+        </div>
+
+        <p class="hint-text">
+          提示：双击单元格编辑 | 拖拽填充柄批量填充 | Shift+点击多选 | 选中行后点击右侧图片库添加参考图
+        </p>
+      </div>
+    </div>
+
+    <!-- 图片库 -->
+    <div class="image-library-container" id="imageLibrary">
+      <div class="library-header">
+        <h3>图片库</h3>
+        <button class="toggle-btn" onclick="toggleLibrary()">◀</button>
+      </div>
+      <div class="library-content">
+        <!-- 上传区域 -->
+        <div class="upload-section">
+          <input type="file" id="imageUploadInput" accept="image/*" multiple onchange="handleImageUpload(event)">
+          <button class="upload-btn" onclick="document.getElementById('imageUploadInput').click()">
+            📤 上传图片
+          </button>
+          <p class="upload-hint">支持 JPG、PNG、GIF 等格式</p>
+        </div>
+
+        <!-- 图片网格 -->
+        <div class="library-grid" id="libraryGrid">
+          <!-- 图片将通过 JS 动态加载 -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 更新调试信息（需要先定义）
+    function updateDebugInfo(text) {
+      const statusEl = document.getElementById('config-status');
+      if (statusEl) {
+        statusEl.textContent = text;
+      }
+      console.log('[BatchImage Debug]', text);
+    }
+
+    // ===============================
+    // 全局配置和状态
+    // ===============================
+    let appConfig = {
+      apiKey: '',
+      baseUrl: 'https://api.tu-zi.com/v1',
+      imageModel: 'gemini-2.5-flash-image-vip'
+    };
+
+    // 从 URL 参数获取 toolId
+    const urlParams = new URLSearchParams(window.location.search);
+    let toolId = urlParams.get('toolId') || 'batch-image-tool';
+
+    console.log('[BatchImage] Tool ID from URL:', toolId);
+    updateDebugInfo('工具 ID: ' + toolId);
+
+    // 任务数据
+    let tasks = [];
+    let taskIdCounter = 1;
+    let isGenerating = false;
+
+    // Excel 表格状态
+    let activeCell = null;
+    let selectedCells = [];
+    let isSelecting = false;
+    let isDraggingFillHandle = false;
+    let fillStartCell = null;
+    let clipboard = [];
+
+    // 图片库状态
+    let isLibraryCollapsed = false;
+    let imageLibrary = []; // 初始为空，等待用户上传
+
+    // ===============================
+    // 工具通信协议
+    // ===============================
+    let isInitialized = false; // 防止重复初始化
+
+    window.addEventListener('message', (event) => {
+      const message = event.data;
+
+      if (message && message.version === '1.0' && message.type === 'board:init') {
+        console.log('[BatchImage] Received init message:', message);
+        updateDebugInfo('收到初始化消息');
+
+        if (message.toolId) {
+          toolId = message.toolId;
+        }
+
+        if (message.payload && message.payload.config) {
+          const config = message.payload.config;
+          if (config.apiKey) {
+            appConfig.apiKey = config.apiKey;
+            updateDebugInfo('API Key 已接收 ✓');
+          }
+          if (config.baseUrl) {
+            appConfig.baseUrl = config.baseUrl;
+          }
+          if (config.imageModel) {
+            appConfig.imageModel = config.imageModel;
+          }
+        }
+
+        isInitialized = true;
+        // 收到 init 后不再发送 ready，避免循环
+      }
+    });
+
+    window.addEventListener('load', () => {
+      console.log('[BatchImage] Tool loaded');
+      updateDebugInfo('页面已加载，发送就绪通知');
+
+      // 初始化表格
+      initTable();
+      setupTableEvents();
+
+      // 页面加载后发送 ready，触发主应用发送 init
+      sendToolMessage({
+        type: 'tool:ready',
+        payload: {}
+      });
+    });
+
+    function sendToolMessage(message, timeout = 120000) {
+      if (message.type === 'tool:generate-image') {
+        return new Promise((resolve, reject) => {
+          const messageId = `batch-${Date.now()}-${Math.random()}`;
+
+          const toolMessage = {
+            version: '1.0',
+            type: message.type,
+            toolId: toolId,
+            messageId: messageId,
+            payload: {
+              ...message.payload,
+              messageId: messageId
+            },
+            timestamp: Date.now()
+          };
+
+          const timeoutId = setTimeout(() => {
+            window.removeEventListener('message', messageHandler);
+            reject(new Error('生成超时'));
+          }, timeout);
+
+          function messageHandler(event) {
+            if (event.data.responseId === messageId) {
+              clearTimeout(timeoutId);
+              window.removeEventListener('message', messageHandler);
+
+              if (event.data.success && event.data.result) {
+                resolve(event.data.result);
+              } else {
+                reject(new Error(event.data.error || '生成失败'));
+              }
+            }
+          }
+
+          window.addEventListener('message', messageHandler);
+          window.parent.postMessage(toolMessage, '*');
+        });
+      } else {
+        const toolMessage = {
+          version: '1.0',
+          type: message.type,
+          toolId: toolId,
+          messageId: `msg-${Date.now()}-${Math.random()}`,
+          payload: message.payload || {},
+          timestamp: Date.now()
+        };
+
+        window.parent.postMessage(toolMessage, '*');
+      }
+    }
+
+    // ===============================
+    // Excel 表格功能
+    // ===============================
+
+    function initTable() {
+      // 添加初始行
+      for (let i = 0; i < 10; i++) {
+        addRow(i === 0 ? 'A cute cat sitting on a windowsill' : '');
+      }
+      renderTable();
+      // 初始化图片库
+      renderImageLibrary();
+    }
+
+    function addRow(promptText = '') {
+      const task = {
+        id: taskIdCounter++,
+        prompt: promptText,
+        size: '1x1',  // 修改为 API 支持的比例格式
+        images: [],  // 参考图片数组
+        count: 1,    // 生成数量
+        status: 'pending',
+        progress: 0,
+        imageUrl: null,
+        error: null
+      };
+      tasks.push(task);
+    }
+
+    function addRows(count) {
+      for (let i = 0; i < count; i++) {
+        addRow();
+      }
+      renderTable();
+    }
+
+    function deleteSelected() {
+      if (selectedCells.length === 0) {
+        alert('请先选择要删除的行');
+        return;
+      }
+
+      const rowsToDelete = new Set(selectedCells.map(c => c.row));
+      tasks = tasks.filter((_, index) => !rowsToDelete.has(index));
+
+      selectedCells = [];
+      activeCell = null;
+      renderTable();
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById('tableBody');
+      tbody.innerHTML = '';
+
+      tasks.forEach((task, rowIndex) => {
+        const tr = document.createElement('tr');
+
+        // 行号
+        const tdIndex = document.createElement('td');
+        tdIndex.textContent = rowIndex + 1;
+        tr.appendChild(tdIndex);
+
+        // 提示词
+        tr.appendChild(createCell(rowIndex, 'prompt', task.prompt, 'textarea'));
+
+        // 尺寸
+        tr.appendChild(createCell(rowIndex, 'size', task.size, 'select'));
+
+        // 参考图片
+        const tdImages = document.createElement('td');
+        const imagesCell = createCellElement(rowIndex, 'images');
+        imagesCell.innerHTML = getImageCellHTML(task, rowIndex);
+        tdImages.appendChild(imagesCell);
+        tr.appendChild(tdImages);
+
+        // 数量
+        tr.appendChild(createCell(rowIndex, 'count', task.count || 1, 'number'));
+
+        tbody.appendChild(tr);
+      });
+    }
+
+    function createCell(rowIndex, colName, value, inputType) {
+      const td = document.createElement('td');
+      const cellDiv = createCellElement(rowIndex, colName);
+
+      if (inputType === 'textarea') {
+        const textarea = document.createElement('textarea');
+        textarea.value = value;
+        textarea.rows = 2;
+        textarea.readOnly = true;
+        textarea.addEventListener('blur', () => {
+          saveCell(rowIndex, colName, textarea.value);
+        });
+        textarea.addEventListener('keydown', (e) => handleCellKeydown(e, rowIndex, colName));
+        cellDiv.appendChild(textarea);
+      } else if (inputType === 'select') {
+        // 创建一个只读显示的 div
+        const displayDiv = document.createElement('div');
+        displayDiv.className = 'select-display';
+        displayDiv.textContent = value;
+        displayDiv.style.cssText = `
+          width: 100%;
+          height: 100%;
+          padding: 8px;
+          cursor: cell;
+          background: white;
+        `;
+
+        // 创建真正的 select（隐藏）
+        const select = document.createElement('select');
+        const sizes = ['1x1', '2x3', '3x2', '3x4', '4x3', '4x5', '5x4', '9x16', '16x9', '21x9'];
+        sizes.forEach(size => {
+          const option = document.createElement('option');
+          option.value = size;
+          option.textContent = size;
+          option.selected = value === size;
+          select.appendChild(option);
+        });
+        select.style.display = 'none';
+
+        select.addEventListener('change', (e) => {
+          console.log('Select changed to:', select.value);
+          displayDiv.textContent = select.value;
+          saveCell(rowIndex, colName, select.value);
+          // 隐藏 select，显示 display
+          select.style.display = 'none';
+          displayDiv.style.display = 'block';
+        });
+
+        select.addEventListener('blur', () => {
+          console.log('Select blurred');
+          // 隐藏 select，显示 display
+          select.style.display = 'none';
+          displayDiv.style.display = 'block';
+        });
+
+        // 双击时显示 select，隐藏 display
+        displayDiv.addEventListener('dblclick', (e) => {
+          e.stopPropagation();
+          console.log('Display div double clicked');
+          displayDiv.style.display = 'none';
+          select.style.display = 'block';
+          select.focus();
+        });
+
+        cellDiv.appendChild(displayDiv);
+        cellDiv.appendChild(select);
+      } else if (inputType === 'number') {
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.min = '1';
+        input.max = '10';
+        input.value = value;
+        input.readOnly = true;
+        input.style.width = '50px';
+        input.style.textAlign = 'center';
+        input.addEventListener('blur', () => {
+          const numValue = Math.max(1, Math.min(10, parseInt(input.value) || 1));
+          input.value = numValue;
+          saveCell(rowIndex, colName, numValue);
+        });
+        input.addEventListener('keydown', (e) => handleCellKeydown(e, rowIndex, colName));
+        cellDiv.appendChild(input);
+      } else {
+        const input = document.createElement('input');
+        input.value = value;
+        input.readOnly = true;
+        input.addEventListener('blur', () => {
+          saveCell(rowIndex, colName, input.value);
+        });
+        input.addEventListener('keydown', (e) => handleCellKeydown(e, rowIndex, colName));
+        cellDiv.appendChild(input);
+      }
+
+      td.appendChild(cellDiv);
+      return td;
+    }
+
+    function createCellElement(rowIndex, colName) {
+      const cellDiv = document.createElement('div');
+      cellDiv.className = 'excel-cell';
+      cellDiv.dataset.row = rowIndex;
+      cellDiv.dataset.col = colName;
+
+      // 填充柄（只在可编辑列显示）
+      if (['prompt', 'size', 'images', 'count'].includes(colName)) {
+        const fillHandle = document.createElement('div');
+        fillHandle.className = 'fill-handle';
+        cellDiv.appendChild(fillHandle);
+
+        fillHandle.addEventListener('mousedown', (e) => {
+          e.stopPropagation();
+          startFillDrag(rowIndex, colName);
+        });
+      }
+
+      // 单击选中
+      cellDiv.addEventListener('click', (e) => handleCellClick(e, rowIndex, colName));
+
+      // 双击进入编辑
+      cellDiv.addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        activateCell(rowIndex, colName);
+      });
+
+      return cellDiv;
+    }
+
+    function handleCellClick(e, row, col) {
+      if (e.shiftKey && activeCell) {
+        // Shift + 点击：选择范围
+        selectRange(activeCell.row, activeCell.col, row, col);
+      } else if (e.ctrlKey || e.metaKey) {
+        // Ctrl + 点击：添加到选区
+        toggleCellSelection(row, col);
+      } else {
+        // 普通点击：单选
+        selectCell(row, col);
+      }
+    }
+
+    function selectCell(row, col) {
+      clearSelection();
+      activeCell = { row, col };
+      selectedCells = [{ row, col }];
+      updateCellStyles();
+    }
+
+    function toggleCellSelection(row, col) {
+      const index = selectedCells.findIndex(c => c.row === row && c.col === col);
+      if (index >= 0) {
+        selectedCells.splice(index, 1);
+      } else {
+        selectedCells.push({ row, col });
+      }
+      updateCellStyles();
+    }
+
+    function selectRange(startRow, startCol, endRow, endCol) {
+      clearSelection();
+      selectedCells = [];
+
+      const minRow = Math.min(startRow, endRow);
+      const maxRow = Math.max(startRow, endRow);
+
+      for (let r = minRow; r <= maxRow; r++) {
+        selectedCells.push({ row: r, col: startCol });
+      }
+
+      activeCell = { row: endRow, col: endCol };
+      updateCellStyles();
+    }
+
+    function clearSelection() {
+      document.querySelectorAll('.excel-cell').forEach(cell => {
+        cell.classList.remove('selected', 'active', 'range-selected');
+      });
+    }
+
+    function updateCellStyles() {
+      clearSelection();
+
+      selectedCells.forEach(({ row, col }) => {
+        const cell = document.querySelector(`.excel-cell[data-row="${row}"][data-col="${col}"]`);
+        if (cell) {
+          cell.classList.add('range-selected');
+        }
+      });
+
+      if (activeCell) {
+        const cell = document.querySelector(`.excel-cell[data-row="${activeCell.row}"][data-col="${activeCell.col}"]`);
+        if (cell) {
+          cell.classList.remove('range-selected');
+          cell.classList.add('active');
+        }
+      }
+    }
+
+    function activateCell(row, col) {
+      selectCell(row, col);
+      const cell = document.querySelector(`.excel-cell[data-row="${row}"][data-col="${col}"]`);
+      if (cell) {
+        const input = cell.querySelector('input, textarea');
+
+        if (input) {
+          input.readOnly = false;
+          input.focus();
+          if (input.select) input.select();
+        }
+        // select 现在通过 displayDiv 的双击事件处理
+      }
+    }
+
+    function saveCell(row, col, value) {
+      console.log('=== saveCell called ===');
+      console.log('Row:', row, 'Col:', col, 'Value:', value);
+
+      const task = tasks[row];
+      if (task && col in task) {
+        console.log('Before update - task[col]:', task[col]);
+        task[col] = value;
+        console.log('After update - task[col]:', task[col]);
+        console.log('Full task:', task);
+
+        // 重新渲染表格以显示更新后的值
+        console.log('Calling renderTable...');
+        renderTable();
+      } else {
+        console.error('Task not found or col not in task:', { task, col });
+      }
+
+      const cell = document.querySelector(`.excel-cell[data-row="${row}"][data-col="${col}"]`);
+      if (cell) {
+        const input = cell.querySelector('input, textarea');
+        if (input) input.readOnly = true;
+      }
+    }
+
+    function handleCellKeydown(e, row, col) {
+      const input = e.target;
+
+      // Enter: 保存并移动到下一行
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        input.blur();
+        if (row < tasks.length - 1) {
+          activateCell(row + 1, col);
+        }
+      }
+      // Escape: 取消编辑
+      else if (e.key === 'Escape') {
+        input.blur();
+      }
+      // 方向键导航
+      else if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key) && input.readOnly) {
+        e.preventDefault();
+        navigateCell(e.key, row, col);
+      }
+      // Ctrl+C: 复制
+      else if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
+        copySelection();
+      }
+      // Ctrl+V: 粘贴
+      else if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+        pasteSelection(row, col);
+      }
+    }
+
+    function navigateCell(key, row, col) {
+      let newRow = row;
+      let newCol = col;
+
+      const cols = ['prompt', 'size', 'images', 'count'];
+      const colIndex = cols.indexOf(col);
+
+      switch (key) {
+        case 'ArrowUp':
+          newRow = Math.max(0, row - 1);
+          break;
+        case 'ArrowDown':
+          newRow = Math.min(tasks.length - 1, row + 1);
+          break;
+        case 'ArrowLeft':
+          if (colIndex > 0) newCol = cols[colIndex - 1];
+          break;
+        case 'ArrowRight':
+          if (colIndex < cols.length - 1) newCol = cols[colIndex + 1];
+          break;
+      }
+
+      selectCell(newRow, newCol);
+    }
+
+    function copySelection() {
+      clipboard = selectedCells.map(({ row, col }) => {
+        const value = tasks[row]?.[col] || '';
+        return {
+          col,
+          // 如果是 images 列，深拷贝数组
+          value: col === 'images' && Array.isArray(value) ? [...value] : value
+        };
+      });
+      console.log('Copied:', clipboard);
+    }
+
+    function pasteSelection(row, col) {
+      if (clipboard.length === 0) return;
+
+      // 获取剪贴板中的第一个值（用于粘贴到所有选中的行）
+      const firstClipItem = clipboard[0];
+      if (!firstClipItem) return;
+
+      // 如果有多个选中的行，将第一个剪贴板内容粘贴到所有选中行
+      if (selectedCells.length > 0) {
+        // 获取所有选中的行（去重）
+        const selectedRows = [...new Set(selectedCells.map(c => c.row))];
+
+        selectedRows.forEach(targetRow => {
+          if (targetRow < tasks.length && firstClipItem.col in tasks[targetRow]) {
+            // 如果是 images 列，深拷贝数组
+            if (firstClipItem.col === 'images' && Array.isArray(firstClipItem.value)) {
+              tasks[targetRow][firstClipItem.col] = [...firstClipItem.value];
+            } else {
+              tasks[targetRow][firstClipItem.col] = firstClipItem.value;
+            }
+          }
+        });
+      } else {
+        // 没有选中行时，使用原来的逻辑：按顺序粘贴
+        clipboard.forEach(({ col: clipCol, value }, index) => {
+          const targetRow = row + index;
+          if (targetRow < tasks.length && clipCol in tasks[targetRow]) {
+            if (clipCol === 'images' && Array.isArray(value)) {
+              tasks[targetRow][clipCol] = [...value];
+            } else {
+              tasks[targetRow][clipCol] = value;
+            }
+          }
+        });
+      }
+
+      renderTable();
+    }
+
+    /**
+     * 批量填充整列
+     * @param {string} colName - 列名
+     */
+    function fillColumn(colName) {
+      // 检查是否有选中的单元格
+      if (selectedCells.length === 0 || !activeCell) {
+        alert('请先选中一个单元格作为填充的源数据');
+        return;
+      }
+
+      // 获取当前活动单元格的值
+      const sourceRow = activeCell.row;
+      const sourceValue = tasks[sourceRow]?.[colName];
+
+      if (sourceValue === undefined || sourceValue === null ||
+          (typeof sourceValue === 'string' && sourceValue.trim() === '') ||
+          (Array.isArray(sourceValue) && sourceValue.length === 0)) {
+        alert('选中的单元格没有数据，无法填充');
+        return;
+      }
+
+      // 构建显示文本
+      let displayValue = '';
+      if (colName === 'images') {
+        displayValue = `${sourceValue.length} 张图片`;
+      } else if (colName === 'prompt') {
+        displayValue = sourceValue.length > 30 ? sourceValue.substring(0, 30) + '...' : sourceValue;
+      } else {
+        displayValue = String(sourceValue);
+      }
+
+      const confirmMsg = `是否使用选中的「${displayValue}」填充整列？\n\n这将覆盖所有行的 ${getColumnDisplayName(colName)} 列。`;
+
+      if (!confirm(confirmMsg)) {
+        return;
+      }
+
+      // 填充所有行
+      tasks.forEach((task, index) => {
+        if (colName === 'images' && Array.isArray(sourceValue)) {
+          task[colName] = [...sourceValue];
+        } else {
+          task[colName] = sourceValue;
+        }
+      });
+
+      renderTable();
+      alert(`已将「${displayValue}」填充到所有行的 ${getColumnDisplayName(colName)} 列`);
+    }
+
+    /**
+     * 获取列的显示名称
+     */
+    function getColumnDisplayName(colName) {
+      const names = {
+        'prompt': '提示词',
+        'size': '尺寸',
+        'images': '参考图片',
+        'count': '数量'
+      };
+      return names[colName] || colName;
+    }
+
+    function startFillDrag(row, col) {
+      isDraggingFillHandle = true;
+      fillStartCell = { row, col };
+      document.body.style.cursor = 'crosshair';
+
+      // 清除之前的高亮
+      document.querySelectorAll('.excel-cell.fill-preview').forEach(cell => {
+        cell.classList.remove('fill-preview');
+      });
+
+      const handleMouseMove = (e) => {
+        // 清除之前的高亮
+        document.querySelectorAll('.excel-cell.fill-preview').forEach(cell => {
+          cell.classList.remove('fill-preview');
+        });
+
+        // 获取当前鼠标下的单元格
+        const target = document.elementFromPoint(e.clientX, e.clientY);
+        const cell = target?.closest('.excel-cell');
+
+        if (cell && cell.dataset.col === col) {
+          const currentRow = parseInt(cell.dataset.row);
+          const minRow = Math.min(row, currentRow);
+          const maxRow = Math.max(row, currentRow);
+
+          // 高亮填充区域
+          for (let r = minRow; r <= maxRow; r++) {
+            const targetCell = document.querySelector(`.excel-cell[data-row="${r}"][data-col="${col}"]`);
+            if (targetCell) {
+              targetCell.classList.add('fill-preview');
+            }
+          }
+        }
+      };
+
+      const handleMouseUp = (e) => {
+        isDraggingFillHandle = false;
+        document.body.style.cursor = '';
+
+        // 清除高亮
+        document.querySelectorAll('.excel-cell.fill-preview').forEach(cell => {
+          cell.classList.remove('fill-preview');
+        });
+
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+
+        // 查找结束单元格
+        const target = document.elementFromPoint(e.clientX, e.clientY);
+        const cell = target?.closest('.excel-cell');
+        if (cell) {
+          const endRow = parseInt(cell.dataset.row);
+          const endCol = cell.dataset.col;
+
+          if (endCol === col) {
+            fillCells(row, endRow, col);
+          }
+        }
+      };
+
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    }
+
+    function fillCells(startRow, endRow, col) {
+      const startValue = tasks[startRow][col];
+      const minRow = Math.min(startRow, endRow);
+      const maxRow = Math.max(startRow, endRow);
+
+      for (let r = minRow; r <= maxRow; r++) {
+        if (r !== startRow && tasks[r]) {
+          // 如果是 images 列，需要深拷贝数组
+          if (col === 'images' && Array.isArray(startValue)) {
+            tasks[r][col] = [...startValue];
+          } else {
+            tasks[r][col] = startValue;
+          }
+        }
+      }
+
+      renderTable();
+    }
+
+    function setupTableEvents() {
+      // 全局键盘事件
+      document.addEventListener('keydown', (e) => {
+        if (!activeCell) return;
+
+        const { row, col } = activeCell;
+        const cell = document.querySelector(`.excel-cell[data-row="${row}"][data-col="${col}"]`);
+        const input = cell?.querySelector('input, textarea, select');
+
+        if (input && !input.readOnly) return; // 正在编辑，不处理
+
+        handleCellKeydown(e, row, col);
+      });
+    }
+
+    // ===============================
+    // 批量生成功能
+    // ===============================
+
+    async function startBatchGeneration() {
+      if (!appConfig.apiKey) {
+        alert('未检测到 API Key，请先在 aitu 中配置 API Key');
+        return;
+      }
+
+      if (isGenerating) {
+        alert('正在提交任务中...');
+        return;
+      }
+
+      // 获取所有有提示词的行
+      const validTasks = tasks.filter(t => t.prompt && t.prompt.trim() !== '');
+      if (validTasks.length === 0) {
+        alert('请至少填写一行提示词');
+        return;
+      }
+
+      isGenerating = true;
+      const generateBtn = document.getElementById('generateBtn');
+      generateBtn.disabled = true;
+      generateBtn.textContent = '⏳ 提交中...';
+
+      // 收集所有需要提交的子任务
+      const allSubTasks = [];
+      const globalBatchTimestamp = Date.now();
+      let subTaskCounter = 0;
+
+      for (const task of validTasks) {
+        const generateCount = task.count || 1;
+        // 使用全局时间戳 + 任务ID 确保 batchId 唯一
+        const batchId = `batch_${task.id}_${globalBatchTimestamp}`;
+
+        // 将图片转换为 uploadedImages 格式
+        const uploadedImages = (task.images || []).map((url, index) => ({
+          type: 'url',
+          url: url,
+          name: `reference_${index + 1}`
+        }));
+
+        // 为每个 count 创建子任务
+        for (let i = 0; i < generateCount; i++) {
+          subTaskCounter++;
+          allSubTasks.push({
+            task,
+            batchId,
+            batchIndex: i + 1,
+            batchTotal: generateCount,
+            uploadedImages,
+            globalIndex: subTaskCounter
+          });
+        }
+      }
+
+      // 提交所有子任务到全局队列
+      let submittedCount = 0;
+      for (const subTask of allSubTasks) {
+        try {
+          const messageId = `batch-${Date.now()}-${Math.random()}`;
+
+          const toolMessage = {
+            version: '1.0',
+            type: 'tool:generate-image',
+            toolId: toolId,
+            messageId: messageId,
+            payload: {
+              prompt: subTask.task.prompt,
+              size: subTask.task.size,
+              uploadedImages: subTask.uploadedImages,
+              aspectRatio: 'auto',
+              batchId: subTask.batchId,
+              batchIndex: subTask.batchIndex,
+              batchTotal: subTask.batchTotal,
+              globalIndex: subTask.globalIndex,
+              messageId: messageId
+            },
+            timestamp: Date.now()
+          };
+
+          window.parent.postMessage(toolMessage, '*');
+          submittedCount++;
+          console.log(`[BatchImage] Submitted task ${subTask.globalIndex}/${allSubTasks.length}`);
+        } catch (error) {
+          console.error(`[BatchImage] Failed to submit task:`, error);
+        }
+      }
+
+      // 提交完成
+      isGenerating = false;
+      generateBtn.disabled = false;
+      generateBtn.textContent = '🚀 提交到任务队列';
+      alert(`已提交 ${submittedCount} 个任务到全局队列，请在左下角任务队列查看进度`);
+    }
+
+    // ===============================
+    // 图片库功能
+    // ===============================
+
+    /**
+     * 渲染图片库
+     */
+    function renderImageLibrary() {
+      const libraryGrid = document.getElementById('libraryGrid');
+      libraryGrid.innerHTML = '';
+
+      if (imageLibrary.length === 0) {
+        libraryGrid.innerHTML = '<div class="empty-library">暂无图片<br>请点击上方按钮上传</div>';
+        return;
+      }
+
+      imageLibrary.forEach((imageUrl, index) => {
+        const imageItem = document.createElement('div');
+        imageItem.className = 'library-image';
+        imageItem.innerHTML = `
+          <img src="${imageUrl}" alt="Image ${index + 1}">
+          <button class="delete-image-btn" onclick="deleteLibraryImage(${index})">×</button>
+        `;
+
+        // 点击图片添加到选中的行
+        imageItem.querySelector('img').addEventListener('click', () => {
+          onLibraryImageClick(imageUrl);
+        });
+
+        libraryGrid.appendChild(imageItem);
+      });
+    }
+
+    /**
+     * 处理图片上传
+     */
+    function handleImageUpload(event) {
+      const files = event.target.files;
+      if (!files || files.length === 0) return;
+
+      Array.from(files).forEach(file => {
+        if (!file.type.startsWith('image/')) {
+          console.warn('跳过非图片文件:', file.name);
+          return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const dataUrl = e.target.result;
+          imageLibrary.push(dataUrl);
+          renderImageLibrary();
+        };
+        reader.readAsDataURL(file);
+      });
+
+      // 清空 input 以允许重复上传同一文件
+      event.target.value = '';
+    }
+
+    /**
+     * 删除图片库中的图片
+     */
+    function deleteLibraryImage(index) {
+      if (confirm('确定要删除这张图片吗？')) {
+        imageLibrary.splice(index, 1);
+        renderImageLibrary();
+      }
+    }
+
+    /**
+     * 切换图片库显示/隐藏
+     */
+    function toggleLibrary() {
+      const library = document.getElementById('imageLibrary');
+      isLibraryCollapsed = !isLibraryCollapsed;
+
+      if (isLibraryCollapsed) {
+        library.classList.add('collapsed');
+      } else {
+        library.classList.remove('collapsed');
+      }
+    }
+
+    /**
+     * 点击图片库中的图片
+     */
+    function onLibraryImageClick(imageUrl) {
+      // 检查是否有选中的行
+      if (selectedCells.length === 0) {
+        alert('请先选中要添加参考图片的行');
+        return;
+      }
+
+      // 获取选中的行（去重）
+      const selectedRows = [...new Set(selectedCells.map(c => c.row))];
+
+      // 为每个选中的行添加图片
+      selectedRows.forEach(rowIndex => {
+        if (tasks[rowIndex]) {
+          // 检查是否已添加该图片
+          if (!tasks[rowIndex].images.includes(imageUrl)) {
+            tasks[rowIndex].images.push(imageUrl);
+          }
+        }
+      });
+
+      // 重新渲染表格
+      renderTable();
+    }
+
+    /**
+     * 获取图片单元格的 HTML
+     */
+    function getImageCellHTML(task, rowIndex) {
+      const images = task.images || [];
+
+      let html = '<div class="image-cell-content">';
+
+      // 渲染已添加的图片
+      images.forEach(imageUrl => {
+        html += `
+          <div class="cell-image-thumb">
+            <img src="${imageUrl}" alt="Reference">
+            <button class="remove-btn" onclick="removeImageFromCell(${rowIndex}, '${imageUrl}')">×</button>
+          </div>
+        `;
+      });
+
+      // 添加"添加图片"按钮
+      html += `
+        <div class="add-image-btn" onclick="showLibraryForRow(${rowIndex})">
+          +
+        </div>
+      `;
+
+      // 添加一个填充占位符，确保右下角有空间显示填充柄
+      html += '<div style="flex: 1; min-height: 12px;"></div>';
+
+      html += '</div>';
+      return html;
+    }
+
+    /**
+     * 从单元格移除图片
+     */
+    function removeImageFromCell(rowIndex, imageUrl) {
+      if (tasks[rowIndex]) {
+        const imageIndex = tasks[rowIndex].images.indexOf(imageUrl);
+        if (imageIndex > -1) {
+          tasks[rowIndex].images.splice(imageIndex, 1);
+          renderTable();
+        }
+      }
+    }
+
+    /**
+     * 点击"+"按钮时选中该行并提示
+     */
+    function showLibraryForRow(rowIndex) {
+      // 选中该行
+      selectCell(rowIndex, 'images');
+
+      // 确保图片库展开
+      const library = document.getElementById('imageLibrary');
+      if (isLibraryCollapsed) {
+        toggleLibrary();
+      }
+
+      // 滚动到图片库顶部
+      const libraryContent = library.querySelector('.library-content');
+      if (libraryContent) {
+        libraryContent.scrollTop = 0;
+      }
+    }
+  </script>
+</body>
+</html>

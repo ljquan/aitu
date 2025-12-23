@@ -35,6 +35,16 @@ export const AI_IMAGE_GENERATION_HISTORY_KEY = 'ai_image_generation_history';
 /** AI 视频生成历史记录键 */
 export const AI_VIDEO_GENERATION_HISTORY_KEY = 'ai_video_generation_history';
 
+/** AI 图像生成模式记忆键（单图/批量） */
+export const AI_IMAGE_MODE_CACHE_KEY = 'ai-image-generation-mode';
+
+// ====================================
+// 工具栏配置
+// ====================================
+
+/** 工具栏按钮配置存储键（顺序和显示状态） */
+export const TOOLBAR_CONFIG_KEY = 'toolbar_config';
+
 // ====================================
 // 导出所有键名（用于批量操作或调试）
 // ====================================
@@ -48,6 +58,8 @@ export const ALL_STORAGE_KEYS = [
   AI_VIDEO_GENERATION_PREVIEW_CACHE_KEY,
   AI_IMAGE_GENERATION_HISTORY_KEY,
   AI_VIDEO_GENERATION_HISTORY_KEY,
+  AI_IMAGE_MODE_CACHE_KEY,
+  TOOLBAR_CONFIG_KEY,
 ] as const;
 
 /** 敏感数据存储键（这些键对应的值可能包含加密数据） */

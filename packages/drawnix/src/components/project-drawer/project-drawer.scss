@@ -2,109 +2,16 @@
  * Project Drawer Styles
  *
  * Left-side drawer for project management.
+ * 基础抽屉样式由 SideDrawer 提供，此处仅定义业务特定样式
  */
 
-// Variables
-$drawer-width: 300px;
-$toolbar-width: 70px;
-$animation-duration: 300ms;
-$spacing-sm: 8px;
-$spacing-md: 12px;
-$spacing-lg: 16px;
-$spacing-xl: 24px;
+@import '../../styles/_common-variables.scss';
 
 // ============================================================================
-// Project Drawer Container
+// Project Drawer Content Styles
 // ============================================================================
 
 .project-drawer {
-  position: fixed;
-  top: 0;
-  left: $toolbar-width;
-  bottom: 0;
-  z-index: 11; // Higher than chat drawer (10)
-  display: flex;
-  flex-direction: column;
-  width: $drawer-width;
-  background: var(--td-bg-color-container, #fff);
-  border-right: 1px solid var(--td-component-border);
-  box-shadow: 4px 0 16px rgba(0, 0, 0, 0.08);
-  transform: translateX(calc(-100% - #{$toolbar-width}));
-  transition: transform $animation-duration cubic-bezier(0.4, 0, 0.2, 1);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-
-  &--open {
-    transform: translateX(0);
-  }
-
-  // Header
-  &__header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: $spacing-lg $spacing-md;
-    border-bottom: 1px solid var(--td-component-border);
-    flex-shrink: 0;
-  }
-
-  &__header-left {
-    display: flex;
-    align-items: center;
-    gap: $spacing-md;
-    flex: 1;
-    min-width: 0;
-  }
-
-  &__title {
-    margin: 0;
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--td-text-color-primary);
-  }
-
-  &__actions {
-    display: flex;
-    gap: 4px;
-
-    .t-button {
-      color: var(--td-text-color-placeholder, #999);
-
-      &:hover {
-        color: var(--td-text-color-primary);
-        background: var(--td-bg-color-container-hover);
-      }
-    }
-  }
-
-  &__close-btn {
-    padding: $spacing-sm;
-    background: transparent;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    color: var(--td-text-color-secondary);
-    transition: all 0.2s ease;
-
-    &:hover {
-      background: var(--td-bg-color-container-hover);
-      color: var(--td-text-color-primary);
-    }
-  }
-
-  // Search
-  &__search {
-    padding: $spacing-md;
-    border-bottom: 1px solid var(--td-component-border);
-    flex-shrink: 0;
-  }
-
-  // Content
-  &__content {
-    flex: 1;
-    overflow-y: auto;
-    overflow-x: hidden;
-  }
-
   &__loading,
   &__empty {
     display: flex;
@@ -120,14 +27,55 @@ $spacing-xl: 24px;
     padding: $spacing-sm 0;
   }
 
-  // Footer
-  &__footer {
-    padding: $spacing-md;
-    border-top: 1px solid var(--td-component-border);
+  &__footer-actions {
+    display: flex;
+    gap: $spacing-sm;
+    width: 100%;
+
+    .t-button {
+      flex: 1;
+    }
+  }
+
+  &__import-progress {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: $spacing-lg 0;
+    gap: $spacing-md;
+  }
+
+  &__import-message {
+    margin: 0;
+    font-size: 14px;
+    color: var(--td-text-color-secondary);
+  }
+
+  &__import-bar {
+    width: 100%;
+    height: 6px;
+    background: var(--td-bg-color-component);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  &__import-bar-fill {
+    height: 100%;
+    background: var(--td-brand-color);
+    border-radius: 3px;
+    transition: width 0.3s ease;
+  }
+
+  &__import-percent {
+    margin: 0;
     font-size: 12px;
     color: var(--td-text-color-placeholder);
-    text-align: center;
-    flex-shrink: 0;
+  }
+
+  &__delete-dialog-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: $spacing-sm;
   }
 }
 
@@ -145,6 +93,7 @@ $spacing-xl: 24px;
     user-select: none;
     transition: background-color 0.2s ease;
     min-height: 32px;
+    position: relative;
 
     &:hover {
       background: var(--td-bg-color-container-hover);
@@ -167,6 +116,37 @@ $spacing-xl: 24px;
 
     &--branch {
       font-size: 13px;
+    }
+
+    // Dragging state
+    &--dragging {
+      opacity: 0.5;
+    }
+
+    // Drag over states
+    &--drag-over-before::before,
+    &--drag-over-after::after {
+      content: '';
+      position: absolute;
+      left: 8px;
+      right: 8px;
+      height: 2px;
+      background: var(--td-brand-color);
+      border-radius: 1px;
+    }
+
+    &--drag-over-before::before {
+      top: 0;
+    }
+
+    &--drag-over-after::after {
+      bottom: 0;
+    }
+
+    &--drag-over-inside {
+      background: var(--td-brand-color-light);
+      outline: 2px solid var(--td-brand-color);
+      outline-offset: -2px;
     }
   }
 
@@ -207,12 +187,28 @@ $spacing-xl: 24px;
     font-size: 14px;
   }
 
+  &__drag-count {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
+    background: var(--td-brand-color);
+    color: white;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 9px;
+    margin-left: 4px;
+  }
+
   &__actions {
     flex-shrink: 0;
     opacity: 0;
     transition: opacity 0.2s ease;
 
-    .project-drawer-node__row:hover & {
+    .project-drawer-node__row:hover &,
+    .project-drawer-node__row--selected & {
       opacity: 1;
     }
   }
@@ -232,6 +228,40 @@ $spacing-xl: 24px;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif !important;
       color: var(--td-text-color-primary) !important;
     }
+  }
+}
+
+// ============================================================================
+// Drop Indicator
+// ============================================================================
+
+.project-drawer-drop-indicator {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  height: 2px;
+  background: var(--td-brand-color);
+  border-radius: 1px;
+  pointer-events: none;
+  z-index: 10;
+
+  &::before,
+  &::after {
+    content: '';
+    position: absolute;
+    top: -3px;
+    width: 8px;
+    height: 8px;
+    background: var(--td-brand-color);
+    border-radius: 50%;
+  }
+
+  &::before {
+    left: -4px;
+  }
+
+  &::after {
+    right: -4px;
   }
 }
 
