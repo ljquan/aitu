@@ -541,6 +541,7 @@ const AIVideoGeneration = ({
                 type="video"
                 disabled={isGenerating}
                 onError={setError}
+                videoProvider={modelConfig.provider}
               />
             )}
 

@@ -13,6 +13,8 @@ interface PromptInputProps {
   onError?: (error: string | null) => void;
   /** Whether to enable character @ mention feature */
   enableMention?: boolean;
+  /** Video model provider (sora, veo, etc.) - used to determine if @ mention should be enabled */
+  videoProvider?: 'sora' | 'veo' | string;
 }
 
 export const PromptInput: React.FC<PromptInputProps> = ({
@@ -23,13 +25,15 @@ export const PromptInput: React.FC<PromptInputProps> = ({
   type,
   disabled = false,
   onError,
-  enableMention = true, // Enable by default for video
+  enableMention = true,
+  videoProvider,
 }) => {
   const [isPresetOpen, setIsPresetOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Use mention hook for @ functionality
-  const isMentionEnabled = enableMention && type === 'video';
+  // Only enable for video type with Sora provider (@ mention is a Sora-specific feature)
+  const isMentionEnabled = enableMention && type === 'video' && videoProvider === 'sora';
   const {
     mentionState,
     textareaRef,
