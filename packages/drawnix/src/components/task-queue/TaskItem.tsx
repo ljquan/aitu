@@ -497,7 +497,7 @@ export const TaskItem: React.FC<TaskItemProps> = ({
               data-track="task_click_extract_character"
               onClick={() => onExtractCharacter?.(task.id)}
             >
-              提取角色
+              角色
             </Button>
           </Tooltip>
         )}

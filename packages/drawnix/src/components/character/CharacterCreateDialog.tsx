@@ -105,7 +105,7 @@ export const CharacterCreateDialog: React.FC<CharacterCreateDialogProps> = ({
   return (
     <Dialog
       visible={visible}
-      header="提取角色"
+      header="角色"
       onClose={handleClose}
       footer={null}
       width={560}

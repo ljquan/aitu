@@ -103,6 +103,18 @@ export const CharacterTimeRangeSelector: React.FC<CharacterTimeRangeSelectorProp
     }
   }, []);
 
+  // Video can play - generate initial frame
+  const handleCanPlay = useCallback(() => {
+    const video = videoRef.current;
+    if (video && isLoading) {
+      // If video is ready and we're at position 0, generate frame directly
+      // since seeking to 0 when already at 0 won't trigger seeked event
+      if (video.currentTime === 0 || Math.abs(video.currentTime - startTime) < 0.1) {
+        generateFrameImage();
+      }
+    }
+  }, [isLoading, startTime, generateFrameImage]);
+
   // Throttled seek - only seek if time changed significantly
   const seekToTime = useCallback((time: number) => {
     const video = videoRef.current;
@@ -301,6 +313,7 @@ export const CharacterTimeRangeSelector: React.FC<CharacterTimeRangeSelectorProp
         crossOrigin="anonymous"
         onLoadedMetadata={handleMetadataLoaded}
         onSeeked={handleSeeked}
+        onCanPlay={handleCanPlay}
       />
 
       {/* Hidden canvas */}
