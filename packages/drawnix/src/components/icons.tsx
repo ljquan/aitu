@@ -184,26 +184,26 @@ export const GithubIcon = createIcon(
   </svg>
 );
 
-// AI 图像图标 - 图片图标 + 右上角 AI 文字
+// AI 图像图标 - 图片图标 + 右上角 AI 文字（偏红主题色）
 export const AIImageIcon = createIcon(
-  <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-    {/* 图片图标主体 */}
-    <rect width="14" height="14" x="1" y="1" rx="2" ry="2" />
-    <circle cx="5" cy="5" r="1.5" />
-    <path d="m15 11-3-3a2 2 0 0 0-2.8 0L3 15" />
+  <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="none" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+    {/* 图片图标主体 - 浅红背景 + 红色描边 */}
+    <rect width="14" height="14" x="1" y="1" rx="2" ry="2" fill="#FFEBEE" stroke="#E53935" />
+    <circle cx="5" cy="5" r="1.5" stroke="#E53935" />
+    <path d="m15 11-3-3a2 2 0 0 0-2.8 0L3 15" stroke="#E53935" />
     {/* 右上角 AI 文字 */}
-    <text x="11" y="6" textAnchor="middle" fontSize="5" fontWeight="bold" fontFamily="system-ui, sans-serif" fill="currentColor" stroke="none">AI</text>
+    <text x="11" y="6" textAnchor="middle" fontSize="5" fontWeight="bold" fontFamily="system-ui, sans-serif" fill="#E53935" stroke="none">AI</text>
   </svg>
 );
 
-// AI 视频图标 - 视频图标 + 中间 AI 文字
+// AI 视频图标 - 视频图标 + 中间 AI 文字（偏橙主题色）
 export const AIVideoIcon = createIcon(
-  <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-    {/* 视频图标主体 - 保持原有样式 */}
-    <path d="m12 9.5 3.5 2.2a.4.4 0 0 0 .6-.35V4.65a.4.4 0 0 0-.6-.35L12 6.5" />
-    <rect x="1" y="3" width="11" height="10" rx="1.5" />
+  <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="none" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+    {/* 视频图标主体 - 浅橙背景 + 橙色描边 */}
+    <path d="m13 10 2.5 1.8a.4.4 0 0 0 .6-.35V4.55a.4.4 0 0 0-.6-.35L13 6" stroke="#FF9800" strokeWidth="2" fill="#FFF3E0" />
+    <rect x="0.5" y="1.5" width="12.5" height="13" rx="2" fill="#FFF3E0" stroke="#FF9800" />
     {/* 中间 AI 文字 */}
-    <text x="6.5" y="10" textAnchor="middle" fontSize="6" fontWeight="bold" fontFamily="system-ui, sans-serif" fill="currentColor" stroke="none">AI</text>
+    <text x="6.75" y="10.5" textAnchor="middle" fontSize="6" fontWeight="bold" fontFamily="system-ui, sans-serif" fill="#FF9800" stroke="none">AI</text>
   </svg>
 );
 
