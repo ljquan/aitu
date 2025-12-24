@@ -60,14 +60,12 @@ class CharacterAvatarCacheService {
 
       console.log('[AvatarCache] Caching avatar for:', characterId);
 
-      // Fetch the image
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch avatar: ${response.status}`);
+      // Use Image + Canvas approach to handle CORS issues
+      const blob = await this.fetchImageAsBlob(url);
+      if (!blob) {
+        throw new Error('Failed to fetch avatar image');
       }
 
-      // Get blob
-      const blob = await response.blob();
       const mimeType = blob.type || 'image/png';
 
       // Store in IndexedDB
@@ -88,6 +86,49 @@ class CharacterAvatarCacheService {
       console.error('[AvatarCache] Failed to cache avatar:', characterId, error);
       return false;
     }
+  }
+
+  /**
+   * Fetch image as blob using Image + Canvas to avoid CORS issues
+   * @param url - Image URL
+   * @returns Blob or null if failed
+   */
+  private async fetchImageAsBlob(url: string): Promise<Blob | null> {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth;
+          canvas.height = img.naturalHeight;
+
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve(null);
+            return;
+          }
+
+          ctx.drawImage(img, 0, 0);
+
+          canvas.toBlob((blob) => {
+            resolve(blob);
+          }, 'image/png');
+        } catch (error) {
+          console.warn('[AvatarCache] Canvas draw failed:', error);
+          resolve(null);
+        }
+      };
+
+      img.onerror = () => {
+        console.warn('[AvatarCache] Image load failed for:', url);
+        resolve(null);
+      };
+
+      // Add cache buster to avoid stale cache
+      img.src = url;
+    });
   }
 
   /**

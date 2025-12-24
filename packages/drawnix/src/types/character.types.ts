@@ -210,13 +210,13 @@ export function supportsCharacterExtraction(model?: string): boolean {
 }
 
 /**
- * Checks if a remote video ID is from Sora-2
+ * Checks if a remote video ID is from Sora-2 (including sora-2-pro)
  * @param remoteId - Remote video ID
- * @returns true if the ID is from Sora-2
+ * @returns true if the ID is from Sora-2 or Sora-2-Pro
  */
 export function isSora2VideoId(remoteId?: string): boolean {
   if (!remoteId) return false;
-  return remoteId.startsWith('sora-2:');
+  return remoteId.startsWith('sora-2:') || remoteId.startsWith('sora-2-pro:');
 }
 
 /**
