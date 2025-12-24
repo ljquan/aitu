@@ -8,6 +8,7 @@
 import localforage from 'localforage';
 import { BehaviorSubject, Observable } from 'rxjs';
 import type { SoraCharacter, CharacterStatus } from '../types/character.types';
+import { characterAvatarCacheService } from './character-avatar-cache-service';
 
 // Storage key for characters
 const STORAGE_KEY = 'sora-characters';
@@ -103,6 +104,12 @@ class CharacterStorageService {
     await this.saveToStorage(characters);
     this.characters$.next([...characters]);
     console.log('[CharacterStorage] Character saved:', character.id);
+
+    // Cache avatar if character is completed and has profile picture
+    if (character.status === 'completed' && character.profilePictureUrl) {
+      characterAvatarCacheService.cacheAvatar(character.id, character.profilePictureUrl)
+        .catch(err => console.warn('[CharacterStorage] Failed to cache avatar:', err));
+    }
   }
 
   /**
@@ -126,6 +133,12 @@ class CharacterStorageService {
     await this.saveToStorage(characters);
     this.characters$.next([...characters]);
     console.log('[CharacterStorage] Character updated:', id);
+
+    // Cache avatar if character becomes completed and has profile picture
+    if (updatedCharacter.status === 'completed' && updatedCharacter.profilePictureUrl) {
+      characterAvatarCacheService.cacheAvatar(id, updatedCharacter.profilePictureUrl)
+        .catch(err => console.warn('[CharacterStorage] Failed to cache avatar:', err));
+    }
 
     return updatedCharacter;
   }
@@ -168,6 +181,10 @@ class CharacterStorageService {
     await this.saveToStorage(characters);
     this.characters$.next([...characters]);
     console.log('[CharacterStorage] Character deleted:', id);
+
+    // Clean up avatar cache
+    characterAvatarCacheService.deleteCache(id)
+      .catch(err => console.warn('[CharacterStorage] Failed to delete avatar cache:', err));
 
     return true;
   }

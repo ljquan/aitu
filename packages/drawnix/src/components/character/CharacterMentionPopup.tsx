@@ -6,9 +6,9 @@
  */
 
 import React, { useCallback, useMemo, useEffect, useRef } from 'react';
-import { UserIcon } from 'tdesign-icons-react';
 import { useCharacters } from '../../hooks/useCharacters';
 import type { SoraCharacter } from '../../types/character.types';
+import { CharacterAvatar } from './CharacterAvatar';
 import './character.scss';
 
 export interface CharacterMentionPopupProps {
@@ -138,14 +138,11 @@ export const CharacterMentionPopup: React.FC<CharacterMentionPopupProps> = ({
           data-track="character_click_mention"
         >
           <div className="character-mention-popup__item-avatar">
-            {character.profilePictureUrl ? (
-              <img
-                src={character.profilePictureUrl}
-                alt={character.username}
-              />
-            ) : (
-              <UserIcon />
-            )}
+            <CharacterAvatar
+              characterId={character.id}
+              profilePictureUrl={character.profilePictureUrl}
+              alt={character.username}
+            />
           </div>
           <span className="character-mention-popup__item-name">
             @{character.username}

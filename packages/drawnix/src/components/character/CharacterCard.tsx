@@ -9,6 +9,7 @@ import React, { useCallback } from 'react';
 import { Button, Tooltip, MessagePlugin, Loading } from 'tdesign-react';
 import { DeleteIcon, CopyIcon, UserIcon } from 'tdesign-icons-react';
 import type { SoraCharacter } from '../../types/character.types';
+import { CharacterAvatar } from './CharacterAvatar';
 import './character.scss';
 
 export interface CharacterCardProps {
@@ -63,12 +64,13 @@ export const CharacterCard: React.FC<CharacterCardProps> = ({
     onDelete?.(character.id);
   }, [onDelete, character.id]);
 
-  // Render avatar
+  // Render avatar with cache support
   const renderAvatar = () => {
-    if (character.profilePictureUrl) {
+    if (character.profilePictureUrl || isCompleted) {
       return (
-        <img
-          src={character.profilePictureUrl}
+        <CharacterAvatar
+          characterId={character.id}
+          profilePictureUrl={character.profilePictureUrl}
           alt={character.username || 'Character'}
         />
       );
