@@ -97,11 +97,14 @@ export const TaskItem: React.FC<TaskItemProps> = ({
   const isFailed = task.status === TaskStatus.FAILED;
 
   // Check if task supports character extraction (Sora-2 completed video tasks)
+  // Note: Storyboard mode videos do not support character extraction
+  const isStoryboardVideo = task.params.storyboard?.enabled === true;
   const canExtractCharacter =
     isCompleted &&
     task.type === TaskType.VIDEO &&
     isSora2VideoId(task.remoteId) &&
-    supportsCharacterExtraction(task.params.model);
+    supportsCharacterExtraction(task.params.model) &&
+    !isStoryboardVideo;
 
   // Check if this is a character task
   const isCharacterTask = task.type === TaskType.CHARACTER;
