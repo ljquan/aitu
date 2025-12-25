@@ -128,7 +128,7 @@ export const PromptInput: React.FC<PromptInputProps> = ({
         value={prompt}
         onChange={handleChange}
         onKeyDown={handleKeyDown}
-        placeholder={getPromptExample(language, type)}
+        placeholder={getPromptExample(language, type, videoProvider)}
         rows={4}
         disabled={disabled}
       />
