@@ -403,7 +403,7 @@ export const TaskItem: React.FC<TaskItemProps> = ({
 
       {/* Center: Preview Image/Video/Character */}
       {isCompleted && (mediaUrl || isCharacterTask) && (
-        <div className="task-item__preview" data-track="task_click_preview" onClick={isCharacterTask ? undefined : onPreviewOpen}>
+        <div className="task-item__preview" data-track="task_click_preview" onClick={onPreviewOpen}>
           {task.type === TaskType.IMAGE && mediaUrl ? (
             <RetryImage
               src={mediaUrl}

@@ -18,6 +18,8 @@ export interface CharacterAvatarProps {
   alt?: string;
   /** CSS class name */
   className?: string;
+  /** Click handler */
+  onClick?: (e: React.MouseEvent) => void;
 }
 
 /**
@@ -28,6 +30,7 @@ export const CharacterAvatar: React.FC<CharacterAvatarProps> = ({
   profilePictureUrl,
   alt = 'Character',
   className,
+  onClick,
 }) => {
   const [imageUrl, setImageUrl] = useState<string | null>(profilePictureUrl || null);
   const [hasError, setHasError] = useState(false);
@@ -94,7 +97,7 @@ export const CharacterAvatar: React.FC<CharacterAvatarProps> = ({
   // Show placeholder if no URL or error
   if (hasError || !imageUrl) {
     return (
-      <div className={className}>
+      <div className={className} onClick={onClick} style={onClick ? { cursor: 'pointer' } : undefined}>
         <UserIcon />
       </div>
     );
@@ -107,7 +110,11 @@ export const CharacterAvatar: React.FC<CharacterAvatarProps> = ({
       className={className}
       onError={handleError}
       onLoad={handleLoad}
-      style={{ display: isLoading ? 'none' : 'block' }}
+      onClick={onClick}
+      style={{
+        display: isLoading ? 'none' : 'block',
+        cursor: onClick ? 'pointer' : undefined,
+      }}
     />
   );
 };

@@ -375,7 +375,7 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
           width="90vw"
           header={
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>{previewedTask.type === TaskType.IMAGE ? '图片预览' : '视频预览'}</span>
+              <span>{previewedTask.type === TaskType.IMAGE ? '图片预览' : previewedTask.type === TaskType.CHARACTER ? '角色预览' : '视频预览'}</span>
               {previewInfo && (
                 <span style={{ fontSize: '14px', color: '#757575', fontWeight: 'normal' }}>
                   {previewInfo.currentIndex + 1} / {previewInfo.total}
@@ -438,7 +438,7 @@ const PreviewContent: React.FC<{ task: any }> = ({ task }) => {
 
   return (
     <div className="task-preview-content">
-      {task.type === TaskType.IMAGE ? (
+      {task.type === TaskType.IMAGE || task.type === TaskType.CHARACTER ? (
         <img
           key={task.id}
           src={url}

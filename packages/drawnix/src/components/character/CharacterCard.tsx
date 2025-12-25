@@ -5,8 +5,9 @@
  * Supports different states: processing, completed, failed.
  */
 
-import React, { useCallback } from 'react';
-import { Button, Tooltip, MessagePlugin, Loading } from 'tdesign-react';
+import React, { useCallback, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { Button, Tooltip, MessagePlugin, Loading, ImageViewer } from 'tdesign-react';
 import { DeleteIcon, CopyIcon, UserIcon } from 'tdesign-icons-react';
 import type { SoraCharacter } from '../../types/character.types';
 import { CharacterAvatar } from './CharacterAvatar';
@@ -32,6 +33,7 @@ export const CharacterCard: React.FC<CharacterCardProps> = ({
   onSelect,
   compact = false,
 }) => {
+  const [imageViewerVisible, setImageViewerVisible] = useState(false);
   const isProcessing = character.status === 'processing' || character.status === 'pending';
   const isFailed = character.status === 'failed';
   const isCompleted = character.status === 'completed';
@@ -64,15 +66,27 @@ export const CharacterCard: React.FC<CharacterCardProps> = ({
     onDelete?.(character.id);
   }, [onDelete, character.id]);
 
+  // Handle avatar click to open image viewer
+  const handleAvatarClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isCompleted && character.profilePictureUrl) {
+      setImageViewerVisible(true);
+    }
+  }, [isCompleted, character.profilePictureUrl]);
+
   // Render avatar with cache support
   const renderAvatar = () => {
     if (character.profilePictureUrl || isCompleted) {
       return (
-        <CharacterAvatar
-          characterId={character.id}
-          profilePictureUrl={character.profilePictureUrl}
-          alt={character.username || 'Character'}
-        />
+        <Tooltip content="点击查看大图" theme="light">
+          <CharacterAvatar
+            characterId={character.id}
+            profilePictureUrl={character.profilePictureUrl}
+            alt={character.username || 'Character'}
+            className="character-card__avatar-img"
+            onClick={handleAvatarClick}
+          />
+        </Tooltip>
       );
     }
     return (
@@ -144,10 +158,10 @@ export const CharacterCard: React.FC<CharacterCardProps> = ({
           </div>
         )}
 
-        {/* Source prompt */}
-        {character.sourcePrompt && (
-          <Tooltip content={character.sourcePrompt} theme="light" placement="bottom">
-            <div className="character-card__source">{character.sourcePrompt}</div>
+        {/* Character ID */}
+        {character.id && (
+          <Tooltip content={character.id} theme="light" placement="bottom">
+            <div className="character-card__source">{character.id}</div>
           </Tooltip>
         )}
 
@@ -168,6 +182,18 @@ export const CharacterCard: React.FC<CharacterCardProps> = ({
           />
         </Tooltip>
       </div>
+
+      {/* Image Viewer for avatar - render in portal with high z-index to ensure it's on top */}
+      {character.profilePictureUrl && imageViewerVisible && createPortal(
+        <ImageViewer
+          visible={imageViewerVisible}
+          onClose={() => setImageViewerVisible(false)}
+          images={[character.profilePictureUrl]}
+          title={`@${character.username || 'Character'}`}
+          zIndex={8000}
+        />,
+        document.body
+      )}
     </div>
   );
 };
