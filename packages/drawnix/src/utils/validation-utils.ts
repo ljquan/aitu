@@ -72,7 +72,14 @@ export function validateGenerationParams(
       errors.push('Duration must not exceed 60 seconds');
     }
   }
-  
+
+  // Validate character-specific fields
+  if (type === TaskType.CHARACTER) {
+    if (!params.sourceVideoTaskId) {
+      errors.push('Source video task ID is required for character extraction');
+    }
+  }
+
   if (params.seed !== undefined) {
     if (typeof params.seed !== 'number' || !Number.isInteger(params.seed)) {
       errors.push('Seed must be an integer');
@@ -87,12 +94,12 @@ export function validateGenerationParams(
 
 /**
  * Validates a task type value
- * 
+ *
  * @param type - The task type to validate
  * @returns True if the type is valid, false otherwise
  */
 export function isValidTaskType(type: string): type is TaskType {
-  return type === TaskType.IMAGE || type === TaskType.VIDEO;
+  return type === TaskType.IMAGE || type === TaskType.VIDEO || type === TaskType.CHARACTER;
 }
 
 /**

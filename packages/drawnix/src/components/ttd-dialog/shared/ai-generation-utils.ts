@@ -132,12 +132,22 @@ export const useGenerationState = (type: 'image' | 'video') => {
   };
 };
 
-export const getPromptExample = (language: 'zh' | 'en', type: 'image' | 'video') => {
+export const getPromptExample = (
+  language: 'zh' | 'en',
+  type: 'image' | 'video',
+  videoProvider?: 'sora' | 'veo' | string
+) => {
   if (type === 'image') {
     return language === 'zh'
       ? '一只可爱的小猫坐在窗台上，阳光透过窗户洒在它的毛发上，背景是温馨的家居环境'
       : 'A cute kitten sitting on a windowsill, with sunlight streaming through the window onto its fur, with a cozy home environment in the background';
   } else {
+    // For Sora models, include @ mention hint in the placeholder
+    if (videoProvider === 'sora') {
+      return language === 'zh'
+        ? '描述视频内容，输入 @ 可引用已创建的角色，如 @username 在海边漫步...'
+        : 'Describe video content, type @ to reference created characters, e.g. @username walking on the beach...';
+    }
     return language === 'zh'
       ? '生成一个美丽的日出场景，阳光从山峰后缓缓升起，云朵轻柔地飘动'
       : 'Generate a beautiful sunrise scene where the sun slowly rises from behind mountains with clouds gently floating';

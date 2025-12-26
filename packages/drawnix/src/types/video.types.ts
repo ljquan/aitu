@@ -41,6 +41,13 @@ export interface ImageUploadConfig {
   required?: boolean;         // Whether image upload is required
 }
 
+// Storyboard mode configuration for models
+export interface StoryboardModeConfig {
+  supported: boolean;            // Whether model supports storyboard mode
+  maxScenes: number;             // Maximum scenes allowed (default 5)
+  minSceneDuration: number;      // Minimum duration per scene in seconds
+}
+
 // Video model configuration
 export interface VideoModelConfig {
   id: VideoModel;
@@ -55,6 +62,8 @@ export interface VideoModelConfig {
   defaultSize: string;
   // Image upload configuration
   imageUpload: ImageUploadConfig;
+  // Storyboard mode configuration (optional, only for supported models)
+  storyboardMode?: StoryboardModeConfig;
 }
 
 // Uploaded image with slot info
@@ -64,6 +73,21 @@ export interface UploadedVideoImage {
   url: string;                // Base64 or URL
   name: string;               // File name
   file?: File;                // Original file object
+}
+
+// Storyboard scene definition
+export interface StoryboardScene {
+  id: string;                    // Unique scene ID
+  duration: number;              // Duration in seconds (e.g., 7.5)
+  prompt: string;                // Scene prompt/description
+  order: number;                 // Scene order (1-5)
+}
+
+// Storyboard configuration
+export interface StoryboardConfig {
+  enabled: boolean;              // Whether storyboard mode is enabled
+  scenes: StoryboardScene[];     // Scene list (1-5 scenes)
+  totalDuration: number;         // Total video duration from model (10/15/25)
 }
 
 // Video generation parameters (extended)
@@ -76,4 +100,6 @@ export interface VideoGenerationParams {
   inputReferences?: UploadedVideoImage[];
   // Legacy single image support
   inputReference?: string;
+  // Storyboard mode configuration
+  storyboard?: StoryboardConfig;
 }

@@ -1,0 +1,425 @@
+/**
+ * StoryboardEditor Styles
+ * Clean and minimal design for storyboard scene editing
+ * Inspired by storyflow-lite with timeline visualization
+ */
+
+.storyboard-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  background: var(--td-bg-color-container, #ffffff);
+  border: 1px solid var(--td-component-stroke, #e7e7e7);
+  border-radius: 12px;
+
+  &__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+
+  &__toggle {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+
+    .t-switch {
+      margin-top: 2px;
+    }
+  }
+
+  &__title {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  &__title-text {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--td-text-color-primary, #000000);
+  }
+
+  &__title-desc {
+    font-size: 12px;
+    color: var(--td-text-color-secondary, #666666);
+  }
+
+  &__new-badge {
+    font-size: 10px;
+    font-weight: 600;
+    color: #f59e0b;
+    background: #fef3c7;
+    padding: 2px 6px;
+    border-radius: 4px;
+    letter-spacing: 0.5px;
+  }
+
+  &__content {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  &__section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  &__section-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--td-text-color-primary, #000000);
+  }
+
+  &__section-hint {
+    font-size: 12px;
+    color: var(--td-text-color-placeholder, #999999);
+  }
+
+  // Scene cards with timeline
+  &__scenes {
+    display: flex;
+    flex-direction: column;
+    gap: 0; // No gap - timeline connects scenes
+    position: relative;
+    width: 100%;
+    // Use table layout to force width constraints
+    display: block;
+  }
+
+  // Scene wrapper with timeline elements
+  &__scene-wrapper {
+    display: flex;
+    align-items: flex-start;
+    position: relative;
+    padding-left: 32px; // Space for timeline
+    min-height: 44px;
+    transition: all 0.2s ease;
+    box-sizing: border-box;
+    // Force width constraint using calc
+    width: 100%;
+    max-width: 100%;
+
+    &.is-selected {
+      .storyboard-editor__scene--expanded {
+        animation: sceneExpand 0.25s ease-out;
+      }
+    }
+  }
+
+  // Timeline connector line
+  &__timeline-line {
+    position: absolute;
+    left: 11px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: linear-gradient(
+      to bottom,
+      var(--td-component-stroke, #e7e7e7) 0%,
+      var(--td-component-stroke, #e7e7e7) 100%
+    );
+
+    &.is-last {
+      bottom: 50%;
+    }
+  }
+
+  // Timeline node
+  &__timeline-node {
+    position: absolute;
+    left: 4px;
+    top: 14px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--td-bg-color-container, #ffffff);
+    border: 2px solid var(--td-component-stroke, #dcdcdc);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    font-weight: 600;
+    color: transparent;
+    transition: all 0.2s ease;
+    z-index: 1;
+
+    &.is-selected {
+      width: 20px;
+      height: 20px;
+      left: 2px;
+      top: 12px;
+      border-color: var(--td-brand-color, #f39c12);
+      background: var(--td-brand-color, #f39c12);
+      color: #ffffff;
+      box-shadow: 0 2px 8px rgba(243, 156, 18, 0.3);
+    }
+  }
+
+  // Base scene card styles
+  &__scene {
+    flex: 1;
+    min-width: 0; // Critical: allow flex child to shrink below content size
+    display: flex;
+    flex-direction: column;
+    border-radius: 8px;
+    border: none;
+    transition: all 0.2s ease;
+    margin-bottom: 8px;
+    overflow: hidden; // Prevent content overflow
+  }
+
+  // Compact scene card - use CSS Grid for reliable text truncation
+  &__scene--compact {
+    display: grid;
+    grid-template-columns: 20px 1fr auto auto;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: var(--td-bg-color-secondarycontainer, #f9f9f9);
+    cursor: pointer;
+
+    &:hover {
+      background: var(--td-bg-color-secondarycontainer-hover, #f3f3f3);
+    }
+  }
+
+  &__scene-index {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--td-component-stroke, #e7e7e7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--td-text-color-secondary, #666666);
+  }
+
+  &__scene-preview {
+    // Grid item with minmax(0, 1fr) behavior - allows shrinking
+    min-width: 0; // Critical for text-overflow in grid
+    overflow: hidden;
+  }
+
+  &__scene-preview-text {
+    font-size: 13px;
+    color: var(--td-text-color-primary, #333333);
+    margin: 0;
+    line-height: 1.4;
+    // Single line ellipsis
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__scene-duration-badge {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 6px;
+    background: rgba(0, 0, 0, 0.04);
+    border-radius: 4px;
+    font-size: 11px;
+    color: var(--td-text-color-secondary, #666666);
+    white-space: nowrap;
+  }
+
+  &__scene-arrow {
+    color: var(--td-text-color-placeholder, #999999);
+    transition: transform 0.2s ease;
+  }
+
+  &__scene--compact:hover &__scene-arrow {
+    transform: translateX(2px);
+  }
+
+  // Expanded scene card
+  &__scene--expanded {
+    padding: 14px;
+    background: var(--td-bg-color-container, #ffffff);
+    border: 1px solid var(--td-brand-color, #f39c12);
+    box-shadow: 0 4px 16px rgba(243, 156, 18, 0.12);
+    gap: 12px;
+  }
+
+  &__scene-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  &__scene-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  &__scene-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--td-text-color-primary, #1a1a1a);
+  }
+
+  &__active-indicator {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--td-brand-color, #f39c12);
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+
+  &__scene-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  &__time-icon {
+    font-size: 14px;
+    color: var(--td-text-color-placeholder, #999999);
+  }
+
+  // Duration select - TDesign Select dropdown style
+  &__duration-select {
+    width: 90px !important;
+
+    .t-input {
+      font-size: 13px;
+      font-weight: 500;
+      text-align: center;
+    }
+
+    // Center the selected value text
+    .t-input__inner {
+      text-align: center;
+    }
+  }
+
+  // Duration popup style (rendered in portal)
+  &__duration-popup {
+    max-height: 120px;
+
+    .t-select-option {
+      font-size: 12px;
+      text-align: center;
+      justify-content: center;
+      padding: 2px 8px;
+      min-height: 24px;
+      line-height: 20px;
+    }
+  }
+
+  &__scene-delete {
+    opacity: 0.4;
+    transition: opacity 0.15s ease, color 0.15s ease;
+    margin-left: 4px;
+    padding: 4px;
+
+    &:hover {
+      opacity: 1;
+      color: var(--td-error-color, #e34d59);
+    }
+  }
+
+  &__scene-prompt {
+    width: 100%;
+  }
+
+  // Add scene button
+  &__add-btn {
+    margin-top: 4px;
+    margin-left: 32px; // Align with scene cards
+    width: calc(100% - 32px) !important; // Account for left margin
+    border: 1px dashed var(--td-component-stroke, #dcdcdc) !important;
+    color: var(--td-text-color-secondary, #666666) !important;
+    background: transparent !important;
+    transition: all 0.2s ease !important;
+
+    &:hover {
+      border-color: var(--td-brand-color, #f39c12) !important;
+      color: var(--td-brand-color, #f39c12) !important;
+      background: rgba(243, 156, 18, 0.04) !important;
+    }
+
+    &:active {
+      background: rgba(243, 156, 18, 0.08) !important;
+    }
+  }
+
+  // TDesign component overrides
+  .t-switch {
+    flex-shrink: 0;
+  }
+}
+
+// ScenePromptInput styles
+.scene-prompt-input {
+  position: relative;
+  width: 100%;
+
+  &__textarea {
+    width: 100%;
+    min-height: 72px;
+    padding: 10px 12px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--td-text-color-primary, #000000);
+    background: var(--td-bg-color-secondarycontainer, #f9f9f9);
+    border: 1px solid var(--td-component-stroke, #e7e7e7);
+    border-radius: 8px;
+    resize: none;
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+    box-sizing: border-box;
+
+    &:hover:not(:disabled) {
+      border-color: var(--td-text-color-placeholder, #b8b8b8);
+    }
+
+    &:focus {
+      border-color: var(--td-brand-color, #f39c12);
+      box-shadow: 0 0 0 2px rgba(243, 156, 18, 0.1);
+      background: var(--td-bg-color-container, #ffffff);
+    }
+
+    &::placeholder {
+      color: var(--td-text-color-placeholder, #b8b8b8);
+    }
+
+    &:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+  }
+}
+
+// Animations
+@keyframes sceneExpand {
+  from {
+    opacity: 0.8;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(0.9);
+  }
+}

@@ -33,7 +33,9 @@ export enum TaskType {
   /** Image generation task */
   IMAGE = 'image',
   /** Video generation task */
-  VIDEO = 'video'
+  VIDEO = 'video',
+  /** Character extraction task */
+  CHARACTER = 'character'
 }
 
 /**
@@ -55,6 +57,12 @@ export interface GenerationParams {
   model?: string;
   /** Random seed for reproducible generation */
   seed?: number;
+  /** Source video task ID for character extraction */
+  sourceVideoTaskId?: string;
+  /** Time range for character extraction (format: "start,end") */
+  characterTimestamps?: string;
+  /** Local task ID of source video */
+  sourceLocalTaskId?: string;
   /** Additional parameters for specific generation types */
   [key: string]: any;
 }
@@ -78,6 +86,12 @@ export interface TaskResult {
   duration?: number;
   /** Video thumbnail URL (video only) */
   thumbnailUrl?: string;
+  /** Character username for @mention (character only) */
+  characterUsername?: string;
+  /** Character profile picture URL (character only) */
+  characterProfileUrl?: string;
+  /** Character permalink (character only) */
+  characterPermalink?: string;
 }
 
 /**
