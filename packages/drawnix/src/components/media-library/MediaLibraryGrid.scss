@@ -110,35 +110,125 @@
     padding: 20px;
     overflow-y: auto;
     background: #fafbfc;
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    gap: 14px;
-    align-content: start;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    align-content: flex-start;
+    transition: gap 0.2s ease;
 
-    // 响应式网格列数
-    @media (min-width: 1920px) {
-      grid-template-columns: repeat(5, 1fr);
+    // 默认网格视图 (grid)
+    &--grid {
+      > *:not(.media-library-grid__load-more) {
+        flex: 0 0 calc((100% - 64px) / 5); // 5列
+        max-width: calc((100% - 64px) / 5);
+        transition: flex 0.2s ease, max-width 0.2s ease;
+      }
+
+      @media (min-width: 1280px) and (max-width: 1919px) {
+        > *:not(.media-library-grid__load-more) {
+          flex: 0 0 calc((100% - 48px) / 4); // 4列
+          max-width: calc((100% - 48px) / 4);
+        }
+      }
+
+      @media (min-width: 768px) and (max-width: 1279px) {
+        > *:not(.media-library-grid__load-more) {
+          flex: 0 0 calc((100% - 32px) / 3); // 3列
+          max-width: calc((100% - 32px) / 3);
+        }
+      }
+
+      @media (max-width: 767px) {
+        padding: 12px;
+        gap: 8px;
+        > *:not(.media-library-grid__load-more) {
+          flex: 0 0 calc((100% - 16px) / 3); // 3列
+          max-width: calc((100% - 16px) / 3);
+        }
+      }
+
+      @media (max-width: 480px) {
+        padding: 8px;
+        gap: 6px;
+        > *:not(.media-library-grid__load-more) {
+          flex: 0 0 calc((100% - 6px) / 2); // 2列
+          max-width: calc((100% - 6px) / 2);
+        }
+      }
     }
 
-    @media (min-width: 1280px) and (max-width: 1919px) {
-      grid-template-columns: repeat(4, 1fr);
+    // 紧凑网格视图 (compact) - 类似苹果图片库
+    &--compact {
+      gap: 4px;
+      padding: 12px;
+
+      > *:not(.media-library-grid__load-more) {
+        flex: 0 0 calc((100% - 32px) / 9); // 9列
+        max-width: calc((100% - 32px) / 9);
+        transition: flex 0.2s ease, max-width 0.2s ease;
+      }
+
+      @media (min-width: 1280px) and (max-width: 1919px) {
+        > *:not(.media-library-grid__load-more) {
+          flex: 0 0 calc((100% - 28px) / 8); // 8列
+          max-width: calc((100% - 28px) / 8);
+        }
+      }
+
+      @media (min-width: 768px) and (max-width: 1279px) {
+        > *:not(.media-library-grid__load-more) {
+          flex: 0 0 calc((100% - 24px) / 7); // 7列
+          max-width: calc((100% - 24px) / 7);
+        }
+      }
+
+      @media (max-width: 767px) {
+        padding: 8px;
+        gap: 3px;
+        > *:not(.media-library-grid__load-more) {
+          flex: 0 0 calc((100% - 15px) / 6); // 6列
+          max-width: calc((100% - 15px) / 6);
+        }
+      }
+
+      @media (max-width: 480px) {
+        padding: 6px;
+        gap: 2px;
+        > *:not(.media-library-grid__load-more) {
+          flex: 0 0 calc((100% - 8px) / 5); // 5列
+          max-width: calc((100% - 8px) / 5);
+        }
+      }
     }
 
-    @media (min-width: 768px) and (max-width: 1279px) {
-      grid-template-columns: repeat(3, 1fr);
-    }
-
-    @media (max-width: 767px) {
-      grid-template-columns: repeat(3, 1fr); // 移动端显示3列，增加可见性
-      padding: 12px; // 减小内边距
-      gap: 10px; // 减小间距
-    }
-
-    @media (max-width: 480px) {
-      grid-template-columns: repeat(2, 1fr); // 小屏幕显示2列
-      padding: 10px;
+    // 列表视图 (list)
+    &--list {
+      flex-direction: column;
+      flex-wrap: nowrap; // 禁用换行，确保垂直滚动
       gap: 8px;
+      padding: 16px;
+
+      > *:not(.media-library-grid__load-more) {
+        flex: 0 0 auto;
+        max-width: 100%;
+        width: 100%;
+      }
+
+      @media (max-width: 767px) {
+        padding: 12px;
+        gap: 6px;
+      }
     }
+  }
+
+  &__load-more {
+    flex: 0 0 100%; // 占满整行
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    min-height: 60px;
   }
 
   &__footer {
@@ -161,8 +251,8 @@
   // 移动端优化
   @media (max-width: 768px) {
     &__header {
-      padding: 10px 16px;
-      gap: 10px;
+      padding: 10px 12px;
+      gap: 8px;
       flex-wrap: wrap;
     }
 
@@ -176,20 +266,18 @@
       order: 1;
       width: 100%;
       justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
     }
 
     &__count {
       font-size: 12px;
     }
 
-    &__container {
-      padding: 16px;
-      gap: 12px;
-    }
-
     &__footer {
-      padding: 0 16px;
+      padding: 0 12px;
       font-size: 11px;
+      height: 32px;
     }
 
     &__drop-message {
@@ -212,12 +300,7 @@
 
   @media (max-width: 480px) {
     &__header {
-      padding: 8px 12px;
-    }
-
-    &__container {
-      padding: 12px;
-      gap: 10px;
+      padding: 8px 10px;
     }
 
     &__drop-message {

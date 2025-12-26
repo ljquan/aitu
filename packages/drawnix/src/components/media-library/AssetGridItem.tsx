@@ -10,7 +10,7 @@ import type { AssetGridItemProps } from '../../types/asset.types';
 import './AssetGridItem.scss';
 
 export const AssetGridItem = memo<AssetGridItemProps>(
-  ({ asset, isSelected, onSelect, onDoubleClick, isInSelectionMode }) => {
+  ({ asset, isSelected, onSelect, onDoubleClick, isInSelectionMode, viewMode = 'grid' }) => {
     const handleClick = useCallback(() => {
       onSelect(asset.id);
     }, [asset.id, onSelect]);
@@ -21,13 +21,20 @@ export const AssetGridItem = memo<AssetGridItemProps>(
       }
     }, [asset, onDoubleClick, isInSelectionMode]);
 
-    const handleCheckboxChange = useCallback((checked: boolean) => {
+    const handleCheckboxChange = useCallback(() => {
       onSelect(asset.id);
     }, [asset.id, onSelect]);
 
+    const itemClassName = [
+      'asset-grid-item',
+      `asset-grid-item--${viewMode}`,
+      isSelected ? 'asset-grid-item--selected' : '',
+      isInSelectionMode ? 'asset-grid-item--selection-mode' : '',
+    ].filter(Boolean).join(' ');
+
     return (
       <div
-        className={`asset-grid-item ${isSelected ? 'asset-grid-item--selected' : ''} ${isInSelectionMode ? 'asset-grid-item--selection-mode' : ''}`}
+        className={itemClassName}
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
         role="button"
@@ -92,11 +99,12 @@ export const AssetGridItem = memo<AssetGridItemProps>(
     );
   },
   (prevProps, nextProps) => {
-    // 自定义比较函数：只有ID、选中状态或选择模式变化时才重新渲染
+    // 自定义比较函数：只有ID、选中状态、选择模式或视图模式变化时才重新渲染
     return (
       prevProps.asset.id === nextProps.asset.id &&
       prevProps.isSelected === nextProps.isSelected &&
-      prevProps.isInSelectionMode === nextProps.isInSelectionMode
+      prevProps.isInSelectionMode === nextProps.isInSelectionMode &&
+      prevProps.viewMode === nextProps.viewMode
     );
   },
 );

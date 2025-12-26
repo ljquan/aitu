@@ -104,6 +104,12 @@ export type AssetSourceFilter = 'ALL' | 'LOCAL' | 'AI';
 export type SortOption = 'DATE_DESC' | 'DATE_ASC' | 'NAME_ASC';
 
 /**
+ * View Mode
+ * 视图模式
+ */
+export type ViewMode = 'grid' | 'compact' | 'list';
+
+/**
  * Filter State Interface
  * 筛选状态接口
  */
@@ -257,6 +263,15 @@ export interface MediaLibraryModalProps {
 }
 
 export interface AssetGridItemProps {
+  asset: Asset;
+  isSelected: boolean;
+  onSelect: (assetId: string) => void;
+  onDoubleClick?: (asset: Asset) => void;
+  isInSelectionMode?: boolean;
+  viewMode?: ViewMode;
+}
+
+export interface AssetListItemProps {
   asset: Asset;
   isSelected: boolean;
   onSelect: (assetId: string) => void;

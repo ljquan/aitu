@@ -3,15 +3,24 @@
  * 素材库网格视图组件
  */
 
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import { Loading, Input, Button, Checkbox, Popconfirm } from 'tdesign-react';
 import { Upload as UploadIcon, Search, Trash2, CheckSquare, XSquare } from 'lucide-react';
 import { useAssets } from '../../contexts/AssetContext';
 import { filterAssets } from '../../utils/asset-utils';
 import { AssetGridItem } from './AssetGridItem';
+import { AssetListItem } from './AssetListItem';
 import { MediaLibraryEmpty } from './MediaLibraryEmpty';
-import type { MediaLibraryGridProps } from '../../types/asset.types';
+import { ViewModeToggle } from './ViewModeToggle';
+import type { MediaLibraryGridProps, ViewMode } from '../../types/asset.types';
 import './MediaLibraryGrid.scss';
+
+// 每页显示数量 - 根据视图模式调整
+const PAGE_SIZE_MAP: Record<ViewMode, number> = {
+  grid: 24,
+  compact: 48, // 紧凑模式显示更多
+  list: 20,
+};
 
 export function MediaLibraryGrid({
   filterType,
@@ -25,28 +34,70 @@ export function MediaLibraryGrid({
   const [isDragging, setIsDragging] = useState(false);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
+  const [viewMode, setViewMode] = useState<ViewMode>('grid');
+
+  // 分页状态
+  const pageSize = PAGE_SIZE_MAP[viewMode];
+  const [displayCount, setDisplayCount] = useState(pageSize);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
 
   // 应用筛选和排序
   const filteredResult = useMemo(() => {
-    console.log('[MediaLibraryGrid] Computing filtered assets, total assets:', assets.length);
-    console.log('[MediaLibraryGrid] All assets:', assets);
-
-    // Don't override filters with filterType - the initial filter is already set
-    // in MediaLibraryModal via setFilters. Overriding here prevents manual filter changes.
-    console.log('[MediaLibraryGrid] Applied filters:', filters);
-
     const result = filterAssets(assets, filters);
-
-    console.log('[MediaLibraryGrid] Filtered result:', {
-      count: result.count,
-      isEmpty: result.isEmpty,
-      assetsLength: result.assets.length,
-    });
-
-    console.log('[MediaLibraryGrid] Filtered assets details:', result.assets);
-
     return result;
   }, [assets, filters]);
+
+  // 分页显示的资产
+  const displayedAssets = useMemo(() => {
+    return filteredResult.assets.slice(0, displayCount);
+  }, [filteredResult.assets, displayCount]);
+
+  // 是否还有更多数据
+  const hasMore = displayCount < filteredResult.assets.length;
+
+  // 重置分页（当筛选条件或视图模式变化时）
+  useEffect(() => {
+    setDisplayCount(pageSize);
+  }, [filters, pageSize]);
+
+  // 加载更多
+  const loadMore = useCallback(() => {
+    if (hasMore) {
+      setDisplayCount((prev) => prev + pageSize);
+    }
+  }, [hasMore, pageSize]);
+
+  // 视图模式切换处理
+  const handleViewModeChange = useCallback((mode: ViewMode) => {
+    setViewMode(mode);
+  }, []);
+
+  // IntersectionObserver 实现滚动加载
+  useEffect(() => {
+    const loadMoreElement = loadMoreRef.current;
+    if (!loadMoreElement) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const [entry] = entries;
+        if (entry.isIntersecting && hasMore && !loading) {
+          loadMore();
+        }
+      },
+      {
+        root: containerRef.current,
+        rootMargin: '100px',
+        threshold: 0.1,
+      }
+    );
+
+    observer.observe(loadMoreElement);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [hasMore, loading, loadMore]);
 
   // 全选逻辑
   const isAllSelected = useMemo(() => {
@@ -192,6 +243,7 @@ export function MediaLibraryGrid({
             </>
           ) : (
             <>
+              <ViewModeToggle viewMode={viewMode} onViewModeChange={handleViewModeChange} />
               <span className="media-library-grid__count">
                 共 {filteredResult.count} 个素材
               </span>
@@ -235,21 +287,46 @@ export function MediaLibraryGrid({
         <MediaLibraryEmpty />
       ) : (
         <>
-          <div className="media-library-grid__container">
-            {filteredResult.assets.map((asset) => (
-              <AssetGridItem
-                key={asset.id}
-                asset={asset}
-                isSelected={isSelectionMode ? selectedAssetIds.has(asset.id) : selectedAssetId === asset.id}
-                onSelect={isSelectionMode ? toggleAssetSelection : onSelectAsset}
-                onDoubleClick={onDoubleClick}
-                isInSelectionMode={isSelectionMode}
-              />
-            ))}
+          <div
+            className={`media-library-grid__container media-library-grid__container--${viewMode}`}
+            ref={containerRef}
+          >
+            {viewMode === 'list' ? (
+              // 列表视图
+              displayedAssets.map((asset) => (
+                <AssetListItem
+                  key={asset.id}
+                  asset={asset}
+                  isSelected={isSelectionMode ? selectedAssetIds.has(asset.id) : selectedAssetId === asset.id}
+                  onSelect={isSelectionMode ? toggleAssetSelection : onSelectAsset}
+                  onDoubleClick={onDoubleClick}
+                  isInSelectionMode={isSelectionMode}
+                />
+              ))
+            ) : (
+              // 网格视图（默认和紧凑）
+              displayedAssets.map((asset) => (
+                <AssetGridItem
+                  key={asset.id}
+                  asset={asset}
+                  isSelected={isSelectionMode ? selectedAssetIds.has(asset.id) : selectedAssetId === asset.id}
+                  onSelect={isSelectionMode ? toggleAssetSelection : onSelectAsset}
+                  onDoubleClick={onDoubleClick}
+                  isInSelectionMode={isSelectionMode}
+                  viewMode={viewMode}
+                />
+              ))
+            )}
+            {/* 加载更多触发器 */}
+            {hasMore && (
+              <div ref={loadMoreRef} className="media-library-grid__load-more">
+                <Loading size="small" text="加载更多..." />
+              </div>
+            )}
           </div>
 
           <div className="media-library-grid__footer">
-            <span>显示 {filteredResult.count} 个素材</span>
+            <span>显示 {displayedAssets.length} / {filteredResult.count} 个素材</span>
             {!isSelectionMode && <span className="media-library-grid__footer-hint">双击选择</span>}
           </div>
         </>
