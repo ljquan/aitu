@@ -1,25 +1,37 @@
 /**
  * Media Library Grid
- * 素材库网格视图组件
+ * 素材库网格视图组件 - 使用虚拟滚动优化大数据量性能
  */
 
-import { useMemo, useState, useCallback, useRef, useEffect } from 'react';
+import { useMemo, useState, useCallback, useRef, useEffect, useTransition } from 'react';
 import { Loading, Input, Button, Checkbox, Popconfirm } from 'tdesign-react';
 import { Upload as UploadIcon, Search, Trash2, CheckSquare, XSquare } from 'lucide-react';
 import { useAssets } from '../../contexts/AssetContext';
 import { filterAssets } from '../../utils/asset-utils';
-import { AssetGridItem } from './AssetGridItem';
-import { AssetListItem } from './AssetListItem';
+import { VirtualAssetGrid } from './VirtualAssetGrid';
 import { MediaLibraryEmpty } from './MediaLibraryEmpty';
 import { ViewModeToggle } from './ViewModeToggle';
 import type { MediaLibraryGridProps, ViewMode } from '../../types/asset.types';
 import './MediaLibraryGrid.scss';
+import './VirtualAssetGrid.scss';
 
-// 每页显示数量 - 根据视图模式调整
-const PAGE_SIZE_MAP: Record<ViewMode, number> = {
-  grid: 24,
-  compact: 48, // 紧凑模式显示更多
-  list: 20,
+// 视图切换防抖时间
+const VIEW_MODE_DEBOUNCE_MS = 150;
+
+// localStorage key
+const VIEW_MODE_STORAGE_KEY = 'media-library-view-mode';
+
+// 从 localStorage 读取视图模式
+const getStoredViewMode = (): ViewMode => {
+  try {
+    const stored = localStorage.getItem(VIEW_MODE_STORAGE_KEY);
+    if (stored === 'grid' || stored === 'compact' || stored === 'list') {
+      return stored;
+    }
+  } catch {
+    // localStorage 不可用时忽略
+  }
+  return 'grid';
 };
 
 export function MediaLibraryGrid({
@@ -34,13 +46,13 @@ export function MediaLibraryGrid({
   const [isDragging, setIsDragging] = useState(false);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
-  const [viewMode, setViewMode] = useState<ViewMode>('grid');
 
-  // 分页状态
-  const pageSize = PAGE_SIZE_MAP[viewMode];
-  const [displayCount, setDisplayCount] = useState(pageSize);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const loadMoreRef = useRef<HTMLDivElement>(null);
+  // 视图模式状态 - 使用两个状态实现平滑过渡，从 localStorage 恢复
+  const [viewMode, setViewMode] = useState<ViewMode>(getStoredViewMode);
+  const [pendingViewMode, setPendingViewMode] = useState<ViewMode>(getStoredViewMode);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const viewModeDebounceRef = useRef<NodeJS.Timeout | null>(null);
 
   // 应用筛选和排序
   const filteredResult = useMemo(() => {
@@ -48,56 +60,50 @@ export function MediaLibraryGrid({
     return result;
   }, [assets, filters]);
 
-  // 分页显示的资产
-  const displayedAssets = useMemo(() => {
-    return filteredResult.assets.slice(0, displayCount);
-  }, [filteredResult.assets, displayCount]);
-
-  // 是否还有更多数据
-  const hasMore = displayCount < filteredResult.assets.length;
-
-  // 重置分页（当筛选条件或视图模式变化时）
-  useEffect(() => {
-    setDisplayCount(pageSize);
-  }, [filters, pageSize]);
-
-  // 加载更多
-  const loadMore = useCallback(() => {
-    if (hasMore) {
-      setDisplayCount((prev) => prev + pageSize);
-    }
-  }, [hasMore, pageSize]);
-
-  // 视图模式切换处理
+  // 视图模式切换处理 - 带防抖和过渡动画，并持久化到 localStorage
   const handleViewModeChange = useCallback((mode: ViewMode) => {
-    setViewMode(mode);
-  }, []);
+    // 如果相同模式，不处理
+    if (mode === viewMode) return;
 
-  // IntersectionObserver 实现滚动加载
+    // 清除之前的防抖定时器
+    if (viewModeDebounceRef.current) {
+      clearTimeout(viewModeDebounceRef.current);
+    }
+
+    // 立即更新按钮状态
+    setPendingViewMode(mode);
+
+    // 显示过渡状态
+    setIsTransitioning(true);
+
+    // 保存到 localStorage
+    try {
+      localStorage.setItem(VIEW_MODE_STORAGE_KEY, mode);
+    } catch {
+      // localStorage 不可用时忽略
+    }
+
+    // 防抖处理实际的视图切换
+    viewModeDebounceRef.current = setTimeout(() => {
+      // 使用 startTransition 降低优先级，让 UI 保持响应
+      startTransition(() => {
+        setViewMode(mode);
+        // 延迟关闭过渡状态，让动画完成
+        setTimeout(() => {
+          setIsTransitioning(false);
+        }, 100);
+      });
+    }, VIEW_MODE_DEBOUNCE_MS);
+  }, [viewMode]);
+
+  // 清理防抖定时器
   useEffect(() => {
-    const loadMoreElement = loadMoreRef.current;
-    if (!loadMoreElement) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const [entry] = entries;
-        if (entry.isIntersecting && hasMore && !loading) {
-          loadMore();
-        }
-      },
-      {
-        root: containerRef.current,
-        rootMargin: '100px',
-        threshold: 0.1,
-      }
-    );
-
-    observer.observe(loadMoreElement);
-
     return () => {
-      observer.disconnect();
+      if (viewModeDebounceRef.current) {
+        clearTimeout(viewModeDebounceRef.current);
+      }
     };
-  }, [hasMore, loading, loadMore]);
+  }, []);
 
   // 全选逻辑
   const isAllSelected = useMemo(() => {
@@ -243,7 +249,7 @@ export function MediaLibraryGrid({
             </>
           ) : (
             <>
-              <ViewModeToggle viewMode={viewMode} onViewModeChange={handleViewModeChange} />
+              <ViewModeToggle viewMode={pendingViewMode} onViewModeChange={handleViewModeChange} />
               <span className="media-library-grid__count">
                 共 {filteredResult.count} 个素材
               </span>
@@ -287,46 +293,21 @@ export function MediaLibraryGrid({
         <MediaLibraryEmpty />
       ) : (
         <>
-          <div
-            className={`media-library-grid__container media-library-grid__container--${viewMode}`}
-            ref={containerRef}
-          >
-            {viewMode === 'list' ? (
-              // 列表视图
-              displayedAssets.map((asset) => (
-                <AssetListItem
-                  key={asset.id}
-                  asset={asset}
-                  isSelected={isSelectionMode ? selectedAssetIds.has(asset.id) : selectedAssetId === asset.id}
-                  onSelect={isSelectionMode ? toggleAssetSelection : onSelectAsset}
-                  onDoubleClick={onDoubleClick}
-                  isInSelectionMode={isSelectionMode}
-                />
-              ))
-            ) : (
-              // 网格视图（默认和紧凑）
-              displayedAssets.map((asset) => (
-                <AssetGridItem
-                  key={asset.id}
-                  asset={asset}
-                  isSelected={isSelectionMode ? selectedAssetIds.has(asset.id) : selectedAssetId === asset.id}
-                  onSelect={isSelectionMode ? toggleAssetSelection : onSelectAsset}
-                  onDoubleClick={onDoubleClick}
-                  isInSelectionMode={isSelectionMode}
-                  viewMode={viewMode}
-                />
-              ))
-            )}
-            {/* 加载更多触发器 */}
-            {hasMore && (
-              <div ref={loadMoreRef} className="media-library-grid__load-more">
-                <Loading size="small" text="加载更多..." />
-              </div>
-            )}
+          {/* 虚拟滚动网格 - 只渲染可见区域的元素 */}
+          <div className={`media-library-grid__container ${isTransitioning || isPending ? 'media-library-grid__container--transitioning' : ''}`}>
+            <VirtualAssetGrid
+              assets={filteredResult.assets}
+              viewMode={viewMode}
+              selectedAssetId={selectedAssetId}
+              selectedAssetIds={selectedAssetIds}
+              isSelectionMode={isSelectionMode}
+              onSelectAsset={isSelectionMode ? toggleAssetSelection : onSelectAsset}
+              onDoubleClick={onDoubleClick}
+            />
           </div>
 
           <div className="media-library-grid__footer">
-            <span>显示 {displayedAssets.length} / {filteredResult.count} 个素材</span>
+            <span>共 {filteredResult.count} 个素材</span>
             {!isSelectionMode && <span className="media-library-grid__footer-hint">双击选择</span>}
           </div>
         </>

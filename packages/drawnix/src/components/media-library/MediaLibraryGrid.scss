@@ -70,6 +70,29 @@
     height: 100%;
   }
 
+  // 骨架屏遮盖层 - 视图切换时显示
+  &__skeleton-overlay {
+    position: absolute;
+    inset: 0;
+    background: #fafbfc;
+    z-index: 10;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    padding: 20px;
+    align-content: flex-start;
+    animation: skeleton-fade-in 0.15s ease-out;
+  }
+
+  @keyframes skeleton-fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
   &__header {
     padding: 12px 20px;
     border-bottom: 1px solid #e5e7eb;
@@ -107,129 +130,19 @@
 
   &__container {
     flex: 1;
-    padding: 20px;
-    overflow-y: auto;
+    overflow: hidden;
     background: #fafbfc;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 16px;
-    align-content: flex-start;
-    transition: gap 0.2s ease;
+    position: relative;
 
-    // 默认网格视图 (grid)
-    &--grid {
-      > *:not(.media-library-grid__load-more) {
-        flex: 0 0 calc((100% - 64px) / 5); // 5列
-        max-width: calc((100% - 64px) / 5);
-        transition: flex 0.2s ease, max-width 0.2s ease;
-      }
-
-      @media (min-width: 1280px) and (max-width: 1919px) {
-        > *:not(.media-library-grid__load-more) {
-          flex: 0 0 calc((100% - 48px) / 4); // 4列
-          max-width: calc((100% - 48px) / 4);
-        }
-      }
-
-      @media (min-width: 768px) and (max-width: 1279px) {
-        > *:not(.media-library-grid__load-more) {
-          flex: 0 0 calc((100% - 32px) / 3); // 3列
-          max-width: calc((100% - 32px) / 3);
-        }
-      }
-
-      @media (max-width: 767px) {
-        padding: 12px;
-        gap: 8px;
-        > *:not(.media-library-grid__load-more) {
-          flex: 0 0 calc((100% - 16px) / 3); // 3列
-          max-width: calc((100% - 16px) / 3);
-        }
-      }
-
-      @media (max-width: 480px) {
-        padding: 8px;
-        gap: 6px;
-        > *:not(.media-library-grid__load-more) {
-          flex: 0 0 calc((100% - 6px) / 2); // 2列
-          max-width: calc((100% - 6px) / 2);
-        }
-      }
-    }
-
-    // 紧凑网格视图 (compact) - 类似苹果图片库
-    &--compact {
-      gap: 4px;
-      padding: 12px;
-
-      > *:not(.media-library-grid__load-more) {
-        flex: 0 0 calc((100% - 32px) / 9); // 9列
-        max-width: calc((100% - 32px) / 9);
-        transition: flex 0.2s ease, max-width 0.2s ease;
-      }
-
-      @media (min-width: 1280px) and (max-width: 1919px) {
-        > *:not(.media-library-grid__load-more) {
-          flex: 0 0 calc((100% - 28px) / 8); // 8列
-          max-width: calc((100% - 28px) / 8);
-        }
-      }
-
-      @media (min-width: 768px) and (max-width: 1279px) {
-        > *:not(.media-library-grid__load-more) {
-          flex: 0 0 calc((100% - 24px) / 7); // 7列
-          max-width: calc((100% - 24px) / 7);
-        }
-      }
-
-      @media (max-width: 767px) {
-        padding: 8px;
-        gap: 3px;
-        > *:not(.media-library-grid__load-more) {
-          flex: 0 0 calc((100% - 15px) / 6); // 6列
-          max-width: calc((100% - 15px) / 6);
-        }
-      }
-
-      @media (max-width: 480px) {
-        padding: 6px;
-        gap: 2px;
-        > *:not(.media-library-grid__load-more) {
-          flex: 0 0 calc((100% - 8px) / 5); // 5列
-          max-width: calc((100% - 8px) / 5);
-        }
-      }
-    }
-
-    // 列表视图 (list)
-    &--list {
-      flex-direction: column;
-      flex-wrap: nowrap; // 禁用换行，确保垂直滚动
-      gap: 8px;
-      padding: 16px;
-
-      > *:not(.media-library-grid__load-more) {
-        flex: 0 0 auto;
-        max-width: 100%;
-        width: 100%;
-      }
-
-      @media (max-width: 767px) {
-        padding: 12px;
-        gap: 6px;
+    // 过渡状态 - 内容淡出
+    &--transitioning {
+      .virtual-asset-grid {
+        opacity: 0.3;
+        pointer-events: none;
       }
     }
   }
 
-  &__load-more {
-    flex: 0 0 100%; // 占满整行
-    width: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 20px;
-    min-height: 60px;
-  }
 
   &__footer {
     height: 36px;
