@@ -107,27 +107,32 @@ export function useMention({
 
     document.body.appendChild(mirror);
 
-    // Get text before cursor
-    const textBeforeCursor = textarea.value.substring(0, cursorIndex);
+    let cursorOffsetTop = 0;
+    let cursorOffsetLeft = 0;
 
-    // Create content with cursor marker
-    const textNode = document.createTextNode(textBeforeCursor);
-    const cursorSpan = document.createElement('span');
-    cursorSpan.textContent = '\u200B'; // Zero-width space as cursor marker
+    try {
+      // Get text before cursor
+      const textBeforeCursor = textarea.value.substring(0, cursorIndex);
 
-    mirror.appendChild(textNode);
-    mirror.appendChild(cursorSpan);
+      // Create content with cursor marker
+      const textNode = document.createTextNode(textBeforeCursor);
+      const cursorSpan = document.createElement('span');
+      cursorSpan.textContent = '\u200B'; // Zero-width space as cursor marker
 
-    // Get cursor position
-    const cursorRect = cursorSpan.getBoundingClientRect();
-    const mirrorRect = mirror.getBoundingClientRect();
+      mirror.appendChild(textNode);
+      mirror.appendChild(cursorSpan);
 
-    // Calculate offset within textarea
-    const cursorOffsetTop = cursorRect.top - mirrorRect.top;
-    const cursorOffsetLeft = cursorRect.left - mirrorRect.left;
+      // Get cursor position
+      const cursorRect = cursorSpan.getBoundingClientRect();
+      const mirrorRect = mirror.getBoundingClientRect();
 
-    // Clean up
-    document.body.removeChild(mirror);
+      // Calculate offset within textarea
+      cursorOffsetTop = cursorRect.top - mirrorRect.top;
+      cursorOffsetLeft = cursorRect.left - mirrorRect.left;
+    } finally {
+      // Clean up - ensure mirror is always removed even if an error occurs
+      document.body.removeChild(mirror);
+    }
 
     // Account for textarea scroll and get line height
     const scrollTop = textarea.scrollTop;

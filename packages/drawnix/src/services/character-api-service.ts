@@ -6,6 +6,7 @@
  */
 
 import { geminiSettings } from '../utils/settings-manager';
+import { createLogger } from '../utils/logger';
 import {
   getCharacterModel,
   type CreateCharacterParams,
@@ -15,15 +16,27 @@ import {
   type CharacterStatus,
 } from '../types/character.types';
 
+// Create logger for this module
+const log = createLogger('CharacterAPI');
+
+// HTTP Status codes for better readability
+const HTTP_STATUS = {
+  ACCEPTED: 202,      // Request accepted, processing in background
+  NOT_FOUND: 404,     // Resource not found (or not ready yet)
+} as const;
+
 /**
  * Character API Service
  * Manages character creation with async polling
  */
 class CharacterAPIService {
-  private baseUrl: string;
-
-  constructor() {
-    this.baseUrl = 'https://api.tu-zi.com';
+  /**
+   * Get base URL from settings (without /v1 suffix for this service)
+   */
+  private get baseUrl(): string {
+    const settings = geminiSettings.get();
+    // Remove /v1 suffix if present, as we append it in the endpoint
+    return (settings.baseUrl || 'https://api.tu-zi.com/v1').replace(/\/v1\/?$/, '');
   }
 
   /**
@@ -42,9 +55,9 @@ class CharacterAPIService {
     // Get character model based on source video model
     const characterModel = getCharacterModel(params.sourceModel);
 
-    console.log('[CharacterAPI] Creating character from video:', params.videoTaskId);
-    console.log('[CharacterAPI] Source model:', params.sourceModel, '-> Character model:', characterModel);
-    console.log('[CharacterAPI] Timestamps:', params.characterTimestamps || 'default');
+    log.debug('Creating character from video:', params.videoTaskId);
+    log.debug('Source model:', params.sourceModel, '-> Character model:', characterModel);
+    log.debug('Timestamps:', params.characterTimestamps || 'default');
 
     const formData = new FormData();
     formData.append('character_from_task', params.videoTaskId);
@@ -65,7 +78,7 @@ class CharacterAPIService {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('[CharacterAPI] Create failed:', response.status, errorText);
+      log.error('Create failed:', response.status, errorText);
       const error = new Error(`角色创建失败: ${response.status} - ${errorText}`);
       (error as any).apiErrorBody = errorText;
       (error as any).httpStatus = response.status;
@@ -73,7 +86,7 @@ class CharacterAPIService {
     }
 
     const result = await response.json();
-    console.log('[CharacterAPI] Character created:', result);
+    log.debug('Character created:', result);
     return result;
   }
 
@@ -105,10 +118,12 @@ class CharacterAPIService {
 
         if (!response.ok) {
           const errorText = await response.text();
-          console.error('[CharacterAPI] Query failed:', response.status, errorText);
+          log.error('Query failed:', response.status, errorText);
 
-          // Check if it's a "not ready" error (character still being processed)
-          if (response.status === 404 || response.status === 202) {
+          // Check if character is still being processed:
+          // - 202 Accepted: Request received, processing in background
+          // - 404 Not Found: Character not ready yet (API returns 404 during processing)
+          if (response.status === HTTP_STATUS.NOT_FOUND || response.status === HTTP_STATUS.ACCEPTED) {
             throw new Error('CHARACTER_PROCESSING');
           }
 
@@ -119,7 +134,7 @@ class CharacterAPIService {
         }
 
         const result = await response.json();
-        console.log('[CharacterAPI] Character query result:', result);
+        log.debug('Character query result:', result);
         return result;
       } catch (error) {
         lastError = error as Error;
@@ -127,7 +142,7 @@ class CharacterAPIService {
           (error.message.includes('Failed to fetch') || error.message.includes('network'));
 
         if (isNetworkError && attempt < maxRetries) {
-          console.warn(`[CharacterAPI] Network error on attempt ${attempt}/${maxRetries}, retrying...`);
+          log.warn(`Network error on attempt ${attempt}/${maxRetries}, retrying...`);
           await this.sleep(retryDelay);
           continue;
         }
@@ -156,10 +171,10 @@ class CharacterAPIService {
     } = options;
 
     // Create character
-    console.log('[CharacterAPI] Submitting character creation...');
+    log.debug('Submitting character creation...');
     const createResponse = await this.createCharacter(params);
     const characterId = createResponse.id;
-    console.log('[CharacterAPI] Character creation submitted:', characterId);
+    log.debug('Character creation submitted:', characterId);
 
     // Notify status change
     if (onStatusChange) {
@@ -173,12 +188,12 @@ class CharacterAPIService {
       attempts++;
 
       try {
-        console.log(`[CharacterAPI] Polling attempt ${attempts}/${maxAttempts}...`);
+        log.debug(`Polling attempt ${attempts}/${maxAttempts}...`);
         const result = await this.queryCharacter(characterId);
 
         // Character is ready when we get username and profile_picture_url
         if (result.username && result.profile_picture_url) {
-          console.log('[CharacterAPI] Character ready:', result.username);
+          log.debug('Character ready:', result.username);
           if (onStatusChange) {
             onStatusChange('completed' as CharacterStatus);
           }
@@ -187,12 +202,12 @@ class CharacterAPIService {
       } catch (error) {
         // If it's a processing error, continue polling
         if ((error as Error).message === 'CHARACTER_PROCESSING') {
-          console.log('[CharacterAPI] Character still processing...');
+          log.debug('Character still processing...');
           continue;
         }
 
         // For other errors, check if we should continue
-        console.warn('[CharacterAPI] Query error:', (error as Error).message);
+        log.warn('Query error:', (error as Error).message);
 
         // If it's the last attempt, throw the error
         if (attempts >= maxAttempts) {
@@ -224,14 +239,14 @@ class CharacterAPIService {
   ): Promise<CharacterQueryResponse> {
     const { onStatusChange } = options;
 
-    console.log('[CharacterAPI] Resuming poll for character:', characterId);
+    log.debug('Resuming poll for character:', characterId);
 
     // Check immediate status
     try {
       const result = await this.queryCharacter(characterId);
 
       if (result.username && result.profile_picture_url) {
-        console.log('[CharacterAPI] Character already ready:', result.username);
+        log.debug('Character already ready:', result.username);
         if (onStatusChange) {
           onStatusChange('completed' as CharacterStatus);
         }
@@ -268,11 +283,11 @@ class CharacterAPIService {
       attempts++;
 
       try {
-        console.log(`[CharacterAPI] Poll attempt ${attempts}/${maxAttempts}...`);
+        log.debug(`Poll attempt ${attempts}/${maxAttempts}...`);
         const result = await this.queryCharacter(characterId);
 
         if (result.username && result.profile_picture_url) {
-          console.log('[CharacterAPI] Character ready:', result.username);
+          log.debug('Character ready:', result.username);
           if (onStatusChange) {
             onStatusChange('completed' as CharacterStatus);
           }
