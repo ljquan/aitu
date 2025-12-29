@@ -15,7 +15,7 @@
 |------|------|------|------|
 | `character_from_task` | string | 是 | 源视频任务ID，格式: `sora-2:task_xxx` |
 | `model` | string | 是 | 固定值: `sora-2-character` |
-| `chacter_timestamps` | string | 否 | 时间范围，格式: `start,end`，差值需在1-3秒内 |
+| `character_timestamps` | string | 否 | 时间范围，格式: `start,end`，差值需在1-3秒内 |
 
 **响应示例**:
 ```json

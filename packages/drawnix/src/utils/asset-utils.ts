@@ -162,42 +162,17 @@ export function formatFileSize(bytes: number): string {
 
 /**
  * Format Date
- * 格式化日期
+ * 格式化日期为 YYYY-MM-DD HH:mm:ss 格式
  */
 export function formatDate(timestamp: number): string {
   const date = new Date(timestamp);
-  const now = new Date();
-  const diff = now.getTime() - date.getTime();
 
-  // 小于1分钟
-  if (diff < 60000) {
-    return '刚刚';
-  }
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const seconds = String(date.getSeconds()).padStart(2, '0');
 
-  // 小于1小时
-  if (diff < 3600000) {
-    const minutes = Math.floor(diff / 60000);
-    return `${minutes}分钟前`;
-  }
-
-  // 小于1天
-  if (diff < 86400000) {
-    const hours = Math.floor(diff / 3600000);
-    return `${hours}小时前`;
-  }
-
-  // 小于7天
-  if (diff < 604800000) {
-    const days = Math.floor(diff / 86400000);
-    return `${days}天前`;
-  }
-
-  // 超过7天显示完整日期
-  return date.toLocaleDateString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 }

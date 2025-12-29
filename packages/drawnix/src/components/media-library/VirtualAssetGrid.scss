@@ -1,0 +1,57 @@
+/**
+ * Virtual Asset Grid Styles
+ * 虚拟滚动网格样式
+ */
+
+.virtual-asset-grid {
+  background: #fafbfc;
+
+  // 网格模式
+  &--grid {
+    .virtual-asset-grid__row {
+      display: flex;
+      flex-wrap: nowrap;
+      align-items: flex-start;
+
+      > .asset-item {
+        flex: 0 0 auto;
+        // 宽度由 JS 动态计算，这里只设置基础样式
+      }
+    }
+  }
+
+  // 紧凑模式
+  &--compact {
+    .virtual-asset-grid__row {
+      display: flex;
+      flex-wrap: nowrap;
+      align-items: flex-start;
+
+      > .asset-item {
+        flex: 0 0 auto;
+      }
+    }
+  }
+
+  // 列表模式
+  &--list {
+    .virtual-asset-grid__row {
+      display: block;
+
+      > .asset-item {
+        width: 100%;
+      }
+    }
+  }
+
+  &__row {
+    will-change: transform;
+    contain: layout style;
+
+    &--grid,
+    &--compact {
+      // 最后一行可能不满，需要让元素左对齐
+      justify-content: flex-start;
+    }
+  }
+}

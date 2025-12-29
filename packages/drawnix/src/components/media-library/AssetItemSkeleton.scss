@@ -1,0 +1,89 @@
+/**
+ * Asset Item Skeleton Styles
+ * 素材项骨架屏样式
+ */
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.asset-item-skeleton {
+  position: relative;
+  background: #f3f4f6;
+  overflow: hidden;
+
+  &__thumbnail {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background: #e5e7eb;
+    overflow: hidden;
+  }
+
+  &__shimmer {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.4) 50%,
+      transparent 100%
+    );
+    animation: shimmer 1.5s infinite;
+  }
+
+  &__info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 4px 0;
+  }
+
+  &__name {
+    height: 14px;
+    width: 60%;
+    background: #e5e7eb;
+    border-radius: 4px;
+  }
+
+  &__meta {
+    height: 12px;
+    width: 40%;
+    background: #e5e7eb;
+    border-radius: 4px;
+  }
+
+  // 网格模式
+  &--grid {
+    aspect-ratio: 1 / 1;
+    border-radius: 12px;
+  }
+
+  // 紧凑模式
+  &--compact {
+    aspect-ratio: 1 / 1;
+    border-radius: 4px;
+  }
+
+  // 列表模式
+  &--list {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 8px;
+
+    .asset-item-skeleton__thumbnail {
+      flex-shrink: 0;
+      width: 48px;
+      height: 48px;
+      border-radius: 6px;
+    }
+  }
+}

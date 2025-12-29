@@ -79,23 +79,48 @@ const AIVideoGeneration = ({
   const [duration, setDuration] = useState(initialDuration?.toString() || defaultParams.duration);
   const [size, setSize] = useState(initialSize || defaultParams.size);
 
-  // Multi-image upload state (replaces single uploadedImage)
-  const [uploadedImages, setUploadedImages] = useState<UploadedVideoImage[]>(() => {
-    // 优先使用 initialImages（多图片）
+  // 保存所有原始选中的图片（不受模型切换影响）
+  const [allSelectedImages, setAllSelectedImages] = useState<UploadedVideoImage[]>(() => {
     if (initialImages && initialImages.length > 0) {
       return initialImages;
     }
-    // 向后兼容：将单个 initialImage 转换为多图片格式
     if (initialImage) {
       return [{
         slot: 0,
-        slotLabel: modelConfig.imageUpload.labels?.[0] || '参考图',
+        slotLabel: '参考图',
         url: initialImage.url || '',
         name: initialImage.name,
         file: initialImage.file,
       }];
     }
     return [];
+  });
+
+  // 当前显示的图片（根据模型 maxCount 过滤）
+  const [uploadedImages, setUploadedImages] = useState<UploadedVideoImage[]>(() => {
+    const maxCount = modelConfig.imageUpload.maxCount;
+    const labels = modelConfig.imageUpload.labels || [];
+
+    // 从 allSelectedImages 初始值中截取
+    let sourceImages: UploadedVideoImage[] = [];
+    if (initialImages && initialImages.length > 0) {
+      sourceImages = initialImages;
+    } else if (initialImage) {
+      sourceImages = [{
+        slot: 0,
+        slotLabel: labels[0] || '参考图',
+        url: initialImage.url || '',
+        name: initialImage.name,
+        file: initialImage.file,
+      }];
+    }
+
+    // 按 maxCount 截取并更新 slot 和 label
+    return sourceImages.slice(0, maxCount).map((img, index) => ({
+      ...img,
+      slot: index,
+      slotLabel: labels[index] || `参考图${index + 1}`,
+    }));
   });
 
   // Storyboard mode state
@@ -138,7 +163,7 @@ const AIVideoGeneration = ({
   // Track if we're in manual edit mode (from handleEditTask) to prevent props from overwriting
   const [isManualEdit, setIsManualEdit] = useState(false);
   
-  // Reset parameters when model changes (but don't clear uploaded images on edit)
+  // Reset parameters when model changes (智能过滤图片而不是清空)
   const [isEditMode, setIsEditMode] = useState(false);
   useEffect(() => {
     if (isEditMode) {
@@ -146,21 +171,44 @@ const AIVideoGeneration = ({
       setIsEditMode(false);
       return;
     }
+
+    const maxCount = modelConfig.imageUpload.maxCount;
+    const labels = modelConfig.imageUpload.labels || [];
+
     console.log('AIVideoGeneration - model changed, updating params:', {
       model: currentModel,
       duration: defaultParams.duration,
-      size: defaultParams.size
+      size: defaultParams.size,
+      maxCount,
+      allSelectedImagesCount: allSelectedImages.length
     });
+
     setDuration(defaultParams.duration);
     setSize(defaultParams.size);
-    // Clear uploaded images when model changes (different upload requirements)
-    setUploadedImages([]);
+
+    // 智能过滤图片：从原始选中的图片中截取前 N 张
+    if (allSelectedImages.length > 0) {
+      const filteredImages = allSelectedImages.slice(0, maxCount).map((img, index) => ({
+        ...img,
+        slot: index,
+        slotLabel: labels[index] || `参考图${index + 1}`,
+      }));
+      setUploadedImages(filteredImages);
+
+      // 如果有图片被截断，输出提示日志
+      if (allSelectedImages.length > maxCount) {
+        console.log(`AIVideoGeneration - 当前模型最多支持 ${maxCount} 张图片，已保留前 ${maxCount} 张`);
+      }
+    } else {
+      setUploadedImages([]);
+    }
+
     // Disable storyboard mode if new model doesn't support it
     if (!supportsStoryboardMode(currentModel)) {
       setStoryboardEnabled(false);
       setStoryboardScenes([]);
     }
-  }, [currentModel, defaultParams, isEditMode]);
+  }, [currentModel, defaultParams, isEditMode, allSelectedImages, modelConfig.imageUpload]);
 
   // Handle initial props - use ref to track if we've processed these props before
   const processedPropsRef = React.useRef<string>('');
@@ -193,20 +241,33 @@ const AIVideoGeneration = ({
     
     setPrompt(initialPrompt);
 
-    // 处理图片：优先使用 initialImages，否则转换 initialImage
+    // 处理图片：保存所有原始图片，并按当前模型过滤显示
+    const maxCount = modelConfig.imageUpload.maxCount;
+    const labels = modelConfig.imageUpload.labels || [];
+
+    let newAllImages: UploadedVideoImage[] = [];
     if (initialImages && initialImages.length > 0) {
-      setUploadedImages(initialImages);
+      newAllImages = initialImages;
     } else if (initialImage) {
-      setUploadedImages([{
+      newAllImages = [{
         slot: 0,
-        slotLabel: modelConfig.imageUpload.labels?.[0] || '参考图',
+        slotLabel: '参考图',
         url: initialImage.url || '',
         name: initialImage.name,
         file: initialImage.file,
-      }]);
-    } else {
-      setUploadedImages([]);
+      }];
     }
+
+    // 更新原始图片列表
+    setAllSelectedImages(newAllImages);
+
+    // 按当前模型 maxCount 过滤显示
+    const filteredImages = newAllImages.slice(0, maxCount).map((img, index) => ({
+      ...img,
+      slot: index,
+      slotLabel: labels[index] || `参考图${index + 1}`,
+    }));
+    setUploadedImages(filteredImages);
 
     // 更新 duration 和 size（如果有初始值）
     if (initialDuration !== undefined) {
@@ -217,7 +278,7 @@ const AIVideoGeneration = ({
     }
 
     setError(null);
-  }, [initialPrompt, initialImage, initialImages, initialDuration, initialSize, initialResultUrl, modelConfig.imageUpload.labels, isManualEdit]);
+  }, [initialPrompt, initialImage, initialImages, initialDuration, initialSize, initialResultUrl, modelConfig.imageUpload, isManualEdit]);
 
   // Clear errors on mount
   useEffect(() => {
@@ -230,6 +291,7 @@ const AIVideoGeneration = ({
 
   const handleReset = () => {
     setPrompt('');
+    setAllSelectedImages([]);  // 清空原始图片
     setUploadedImages([]);
     setError(null);
     // Reset duration and size to defaults
@@ -243,6 +305,13 @@ const AIVideoGeneration = ({
     setStoryboardScenes([]);
     window.dispatchEvent(new CustomEvent('ai-video-clear'));
   };
+
+  // 处理图片变化（用户手动上传/删除时同步更新原始图片列表）
+  const handleImagesChange = React.useCallback((newImages: UploadedVideoImage[]) => {
+    setUploadedImages(newImages);
+    // 同步更新原始图片列表（用户手动操作后，原始列表以当前显示的为准）
+    setAllSelectedImages(newImages);
+  }, []);
 
   // 使用useMemo优化性能，当videoHistory或language变化时重新计算
   const presetPrompts = React.useMemo(() =>
@@ -313,11 +382,25 @@ const AIVideoGeneration = ({
       setSize(task.params.size);
     }
 
-    // 更新上传的图片 - 确保格式正确
+    // 更新上传的图片 - 保存原始图片并按模型过滤
     if (task.params.uploadedImages && task.params.uploadedImages.length > 0) {
       console.log('Setting uploadedImages:', task.params.uploadedImages);
-      setUploadedImages(task.params.uploadedImages);
+      // 保存原始图片
+      setAllSelectedImages(task.params.uploadedImages);
+      // 按当前模型过滤显示（这里使用任务中的模型配置）
+      const taskModel = task.params.model as VideoModel || currentModel;
+      const taskModelConfig = getVideoModelConfig(taskModel);
+      const maxCount = taskModelConfig.imageUpload.maxCount;
+      const labels = taskModelConfig.imageUpload.labels || [];
+
+      const filteredImages = task.params.uploadedImages.slice(0, maxCount).map((img: UploadedVideoImage, index: number) => ({
+        ...img,
+        slot: index,
+        slotLabel: labels[index] || `参考图${index + 1}`,
+      }));
+      setUploadedImages(filteredImages);
     } else {
+      setAllSelectedImages([]);
       setUploadedImages([]);
     }
 
@@ -429,6 +512,7 @@ const AIVideoGeneration = ({
 
         // 清空表单（保留模型选择和尺寸设置）
         setPrompt('');
+        setAllSelectedImages([]);  // 清空原始图片
         setUploadedImages([]);
         setStoryboardEnabled(false);
         setStoryboardScenes([]);
@@ -513,7 +597,7 @@ const AIVideoGeneration = ({
             <MultiImageUpload
               config={modelConfig.imageUpload}
               images={uploadedImages}
-              onImagesChange={setUploadedImages}
+              onImagesChange={handleImagesChange}
               disabled={isGenerating}
             />
 

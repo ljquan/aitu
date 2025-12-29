@@ -70,6 +70,29 @@
     height: 100%;
   }
 
+  // 骨架屏遮盖层 - 视图切换时显示
+  &__skeleton-overlay {
+    position: absolute;
+    inset: 0;
+    background: #fafbfc;
+    z-index: 10;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    padding: 20px;
+    align-content: flex-start;
+    animation: skeleton-fade-in 0.15s ease-out;
+  }
+
+  @keyframes skeleton-fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
   &__header {
     padding: 12px 20px;
     border-bottom: 1px solid #e5e7eb;
@@ -107,39 +130,19 @@
 
   &__container {
     flex: 1;
-    padding: 20px;
-    overflow-y: auto;
+    overflow: hidden;
     background: #fafbfc;
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    gap: 14px;
-    align-content: start;
+    position: relative;
 
-    // 响应式网格列数
-    @media (min-width: 1920px) {
-      grid-template-columns: repeat(5, 1fr);
-    }
-
-    @media (min-width: 1280px) and (max-width: 1919px) {
-      grid-template-columns: repeat(4, 1fr);
-    }
-
-    @media (min-width: 768px) and (max-width: 1279px) {
-      grid-template-columns: repeat(3, 1fr);
-    }
-
-    @media (max-width: 767px) {
-      grid-template-columns: repeat(3, 1fr); // 移动端显示3列，增加可见性
-      padding: 12px; // 减小内边距
-      gap: 10px; // 减小间距
-    }
-
-    @media (max-width: 480px) {
-      grid-template-columns: repeat(2, 1fr); // 小屏幕显示2列
-      padding: 10px;
-      gap: 8px;
+    // 过渡状态 - 内容淡出
+    &--transitioning {
+      .virtual-asset-grid {
+        opacity: 0.3;
+        pointer-events: none;
+      }
     }
   }
+
 
   &__footer {
     height: 36px;
@@ -161,8 +164,8 @@
   // 移动端优化
   @media (max-width: 768px) {
     &__header {
-      padding: 10px 16px;
-      gap: 10px;
+      padding: 10px 12px;
+      gap: 8px;
       flex-wrap: wrap;
     }
 
@@ -176,20 +179,18 @@
       order: 1;
       width: 100%;
       justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
     }
 
     &__count {
       font-size: 12px;
     }
 
-    &__container {
-      padding: 16px;
-      gap: 12px;
-    }
-
     &__footer {
-      padding: 0 16px;
+      padding: 0 12px;
       font-size: 11px;
+      height: 32px;
     }
 
     &__drop-message {
@@ -212,12 +213,7 @@
 
   @media (max-width: 480px) {
     &__header {
-      padding: 8px 12px;
-    }
-
-    &__container {
-      padding: 12px;
-      gap: 10px;
+      padding: 8px 10px;
     }
 
     &__drop-message {
