@@ -265,7 +265,7 @@ export function AssetProvider({ children }: AssetProviderProps) {
 
   /**
    * Remove Multiple Assets (Batch Delete)
-   * 批量删除素材
+   * 批量删除素材 - 使用并行删除优化性能
    */
   const removeAssets = useCallback(async (ids: string[]): Promise<void> => {
     if (ids.length === 0) return;
@@ -273,20 +273,24 @@ export function AssetProvider({ children }: AssetProviderProps) {
     setLoading(true);
     setError(null);
 
-    const errors: { id: string; error: any }[] = [];
-    const successIds: string[] = [];
-
     try {
-      // 批量删除,并收集成功和失败的记录
-      for (const id of ids) {
-        try {
-          await assetStorageService.removeAsset(id);
-          successIds.push(id);
-        } catch (err: any) {
-          console.error(`Failed to remove asset ${id}:`, err);
-          errors.push({ id, error: err });
+      // 并行删除所有素材
+      const deleteResults = await Promise.allSettled(
+        ids.map(id => assetStorageService.removeAsset(id))
+      );
+
+      // 统计成功和失败的结果
+      const successIds: string[] = [];
+      const errors: { id: string; error: any }[] = [];
+
+      deleteResults.forEach((result, index) => {
+        if (result.status === 'fulfilled') {
+          successIds.push(ids[index]);
+        } else {
+          console.error(`Failed to remove asset ${ids[index]}:`, result.reason);
+          errors.push({ id: ids[index], error: result.reason });
         }
-      }
+      });
 
       // 更新状态 - 只移除成功删除的素材
       setAssets((prev) => prev.filter((asset) => !successIds.includes(asset.id)));

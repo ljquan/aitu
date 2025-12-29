@@ -7,11 +7,12 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Button, Tag, Tooltip } from 'tdesign-react';
-import { ImageIcon, VideoIcon, DeleteIcon, RefreshIcon, DownloadIcon, EditIcon, SaveIcon, CheckCircleFilledIcon } from 'tdesign-icons-react';
+import { ImageIcon, VideoIcon, DeleteIcon, RefreshIcon, DownloadIcon, EditIcon, SaveIcon, CheckCircleFilledIcon, UserIcon } from 'tdesign-icons-react';
 import { Task, TaskStatus, TaskType } from '../../types/task.types';
 import { formatDateTime, formatTaskDuration } from '../../utils/task-utils';
 import { formatRetryDelay } from '../../utils/retry-utils';
 import { useMediaCache, useMediaUrl } from '../../hooks/useMediaCache';
+import { supportsCharacterExtraction, isSora2VideoId } from '../../types/character.types';
 import { RetryImage } from '../retry-image';
 import './task-queue.scss';
 
@@ -30,6 +31,8 @@ export interface TaskItemProps {
   onPreviewOpen?: () => void;
   /** Callback when edit button is clicked */
   onEdit?: (taskId: string) => void;
+  /** Callback when extract character button is clicked */
+  onExtractCharacter?: (taskId: string) => void;
 }
 
 /**
@@ -87,12 +90,26 @@ export const TaskItem: React.FC<TaskItemProps> = ({
   onInsert,
   onPreviewOpen,
   onEdit,
+  onExtractCharacter,
 }) => {
   const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
   const isCompleted = task.status === TaskStatus.COMPLETED;
   const isFailed = task.status === TaskStatus.FAILED;
 
-  // Media cache hook
+  // Check if task supports character extraction (Sora-2 completed video tasks)
+  // Note: Storyboard mode videos do not support character extraction
+  const isStoryboardVideo = task.params.storyboard?.enabled === true;
+  const canExtractCharacter =
+    isCompleted &&
+    task.type === TaskType.VIDEO &&
+    isSora2VideoId(task.remoteId) &&
+    supportsCharacterExtraction(task.params.model) &&
+    !isStoryboardVideo;
+
+  // Check if this is a character task
+  const isCharacterTask = task.type === TaskType.CHARACTER;
+
+  // Media cache hook (skip for character tasks)
   const {
     isCaching,
     isCached,
@@ -101,7 +118,7 @@ export const TaskItem: React.FC<TaskItemProps> = ({
     deleteCache,
   } = useMediaCache(
     task.id,
-    task.result?.url,
+    isCharacterTask ? undefined : task.result?.url,
     task.type === TaskType.IMAGE ? 'image' : 'video',
     task.params.prompt
   );
@@ -212,10 +229,15 @@ export const TaskItem: React.FC<TaskItemProps> = ({
             {/* Title - Always visible */}
             <div className="task-item__title">
               <div className="task-item__type-icon">
-                {task.type === TaskType.IMAGE ? <ImageIcon /> : <VideoIcon />}
+                {task.type === TaskType.IMAGE ? <ImageIcon /> :
+                 task.type === TaskType.CHARACTER ? <UserIcon /> : <VideoIcon />}
               </div>
               <div className="task-item__prompt" title={task.params.prompt}>
-                {task.params.prompt}
+                {isCharacterTask ? (
+                  isCompleted && task.result?.characterUsername
+                    ? `@${task.result.characterUsername}`
+                    : '角色创建中...'
+                ) : task.params.prompt}
               </div>
             </div>
 
@@ -245,6 +267,30 @@ export const TaskItem: React.FC<TaskItemProps> = ({
                   {task.params.size && (
                     <Tag variant="outline">
                       {task.params.size}
+                    </Tag>
+                  )}
+                </>
+              )}
+              {/* Character params: model, video id, time range */}
+              {isCharacterTask && (
+                <>
+                  {task.params.model && (
+                    <Tag variant="outline">
+                      {task.params.model}
+                    </Tag>
+                  )}
+                  {task.params.sourceVideoTaskId && (
+                    <Tooltip content={task.params.sourceVideoTaskId}>
+                      <Tag variant="outline">
+                        {task.params.sourceVideoTaskId.length > 20
+                          ? `${task.params.sourceVideoTaskId.slice(0, 20)}...`
+                          : task.params.sourceVideoTaskId}
+                      </Tag>
+                    </Tooltip>
+                  )}
+                  {task.params.characterTimestamps && (
+                    <Tag variant="outline">
+                      {task.params.characterTimestamps}s
                     </Tag>
                   )}
                 </>
@@ -358,10 +404,10 @@ export const TaskItem: React.FC<TaskItemProps> = ({
         </div>
         </div>
 
-      {/* Center: Preview Image/Video */}
-      {isCompleted && mediaUrl && (
+      {/* Center: Preview Image/Video/Character */}
+      {isCompleted && (mediaUrl || isCharacterTask) && (
         <div className="task-item__preview" data-track="task_click_preview" onClick={onPreviewOpen}>
-          {task.type === TaskType.IMAGE ? (
+          {task.type === TaskType.IMAGE && mediaUrl ? (
             <RetryImage
               src={mediaUrl}
               alt="Generated"
@@ -381,11 +427,24 @@ export const TaskItem: React.FC<TaskItemProps> = ({
                 </div>
               }
             />
-          ) : (
+          ) : isCharacterTask && task.result?.characterProfileUrl ? (
+            <div className="task-item__character-preview">
+              <RetryImage
+                src={task.result.characterProfileUrl}
+                alt={`@${task.result.characterUsername}`}
+                maxRetries={5}
+                fallback={
+                  <div className="task-item__character-fallback">
+                    <UserIcon size="32px" />
+                  </div>
+                }
+              />
+            </div>
+          ) : mediaUrl ? (
             <video src={mediaUrl} />
-          )}
+          ) : null}
           {/* Cache indicator */}
-          {isFromCache && (
+          {isFromCache && !isCharacterTask && (
             <div className="task-item__cache-badge">
               <CheckCircleFilledIcon />
               <span>已缓存</span>
@@ -422,8 +481,8 @@ export const TaskItem: React.FC<TaskItemProps> = ({
           </Button>
         )}
 
-        {/* Insert button for completed tasks */}
-        {isCompleted && task.result?.url && (
+        {/* Insert button for completed tasks (not for character tasks) */}
+        {isCompleted && task.result?.url && !isCharacterTask && (
           <Button
             size="small"
             theme="primary"
@@ -434,8 +493,8 @@ export const TaskItem: React.FC<TaskItemProps> = ({
           </Button>
         )}
 
-        {/* Download button for completed tasks */}
-        {isCompleted && task.result?.url && (
+        {/* Download button for completed tasks (not for character tasks) */}
+        {isCompleted && task.result?.url && !isCharacterTask && (
           <Button
             size="small"
             variant="outline"
@@ -447,8 +506,8 @@ export const TaskItem: React.FC<TaskItemProps> = ({
           </Button>
         )}
 
-        {/* Cache button for completed tasks */}
-        {isCompleted && task.result?.url && (
+        {/* Cache button for completed tasks (not for character tasks) */}
+        {isCompleted && task.result?.url && !isCharacterTask && (
           <Tooltip content={isCached ? '点击删除缓存' : '缓存到本地，URL过期后仍可使用'}>
             <Button
               size="small"
@@ -464,16 +523,34 @@ export const TaskItem: React.FC<TaskItemProps> = ({
           </Tooltip>
         )}
 
-        {/* Edit button for all tasks */}
-        <Button
-          size="small"
-          variant="outline"
-          icon={<EditIcon />}
-          data-track="task_click_edit"
-          onClick={() => onEdit?.(task.id)}
-        >
-          编辑
-        </Button>
+        {/* Edit button for image/video tasks (not for character tasks) */}
+        {!isCharacterTask && (
+          <Button
+            size="small"
+            variant="outline"
+            icon={<EditIcon />}
+            data-track="task_click_edit"
+            onClick={() => onEdit?.(task.id)}
+          >
+            编辑
+          </Button>
+        )}
+
+        {/* Extract character button for Sora-2 completed video tasks */}
+        {canExtractCharacter && (
+          <Tooltip content="从视频中提取角色，用于后续视频生成">
+            <Button
+              size="small"
+              variant="outline"
+              theme="warning"
+              icon={<UserIcon />}
+              data-track="task_click_extract_character"
+              onClick={() => onExtractCharacter?.(task.id)}
+            >
+              角色
+            </Button>
+          </Tooltip>
+        )}
       </div>
     </div>
   );

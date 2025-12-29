@@ -1,17 +1,38 @@
 /**
  * Media Library Grid
- * 素材库网格视图组件
+ * 素材库网格视图组件 - 使用虚拟滚动优化大数据量性能
  */
 
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback, useRef, useEffect, useTransition } from 'react';
 import { Loading, Input, Button, Checkbox, Popconfirm } from 'tdesign-react';
 import { Upload as UploadIcon, Search, Trash2, CheckSquare, XSquare } from 'lucide-react';
 import { useAssets } from '../../contexts/AssetContext';
 import { filterAssets } from '../../utils/asset-utils';
-import { AssetGridItem } from './AssetGridItem';
+import { VirtualAssetGrid } from './VirtualAssetGrid';
 import { MediaLibraryEmpty } from './MediaLibraryEmpty';
-import type { MediaLibraryGridProps } from '../../types/asset.types';
+import { ViewModeToggle } from './ViewModeToggle';
+import type { MediaLibraryGridProps, ViewMode } from '../../types/asset.types';
 import './MediaLibraryGrid.scss';
+import './VirtualAssetGrid.scss';
+
+// 视图切换防抖时间
+const VIEW_MODE_DEBOUNCE_MS = 150;
+
+// localStorage key
+const VIEW_MODE_STORAGE_KEY = 'media-library-view-mode';
+
+// 从 localStorage 读取视图模式
+const getStoredViewMode = (): ViewMode => {
+  try {
+    const stored = localStorage.getItem(VIEW_MODE_STORAGE_KEY);
+    if (stored === 'grid' || stored === 'compact' || stored === 'list') {
+      return stored;
+    }
+  } catch {
+    // localStorage 不可用时忽略
+  }
+  return 'grid';
+};
 
 export function MediaLibraryGrid({
   filterType,
@@ -26,27 +47,63 @@ export function MediaLibraryGrid({
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
 
+  // 视图模式状态 - 使用两个状态实现平滑过渡，从 localStorage 恢复
+  const [viewMode, setViewMode] = useState<ViewMode>(getStoredViewMode);
+  const [pendingViewMode, setPendingViewMode] = useState<ViewMode>(getStoredViewMode);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const viewModeDebounceRef = useRef<NodeJS.Timeout | null>(null);
+
   // 应用筛选和排序
   const filteredResult = useMemo(() => {
-    console.log('[MediaLibraryGrid] Computing filtered assets, total assets:', assets.length);
-    console.log('[MediaLibraryGrid] All assets:', assets);
-
-    // Don't override filters with filterType - the initial filter is already set
-    // in MediaLibraryModal via setFilters. Overriding here prevents manual filter changes.
-    console.log('[MediaLibraryGrid] Applied filters:', filters);
-
     const result = filterAssets(assets, filters);
-
-    console.log('[MediaLibraryGrid] Filtered result:', {
-      count: result.count,
-      isEmpty: result.isEmpty,
-      assetsLength: result.assets.length,
-    });
-
-    console.log('[MediaLibraryGrid] Filtered assets details:', result.assets);
-
     return result;
   }, [assets, filters]);
+
+  // 视图模式切换处理 - 带防抖和过渡动画，并持久化到 localStorage
+  const handleViewModeChange = useCallback((mode: ViewMode) => {
+    // 如果相同模式，不处理
+    if (mode === viewMode) return;
+
+    // 清除之前的防抖定时器
+    if (viewModeDebounceRef.current) {
+      clearTimeout(viewModeDebounceRef.current);
+    }
+
+    // 立即更新按钮状态
+    setPendingViewMode(mode);
+
+    // 显示过渡状态
+    setIsTransitioning(true);
+
+    // 保存到 localStorage
+    try {
+      localStorage.setItem(VIEW_MODE_STORAGE_KEY, mode);
+    } catch {
+      // localStorage 不可用时忽略
+    }
+
+    // 防抖处理实际的视图切换
+    viewModeDebounceRef.current = setTimeout(() => {
+      // 使用 startTransition 降低优先级，让 UI 保持响应
+      startTransition(() => {
+        setViewMode(mode);
+        // 延迟关闭过渡状态，让动画完成
+        setTimeout(() => {
+          setIsTransitioning(false);
+        }, 100);
+      });
+    }, VIEW_MODE_DEBOUNCE_MS);
+  }, [viewMode]);
+
+  // 清理防抖定时器
+  useEffect(() => {
+    return () => {
+      if (viewModeDebounceRef.current) {
+        clearTimeout(viewModeDebounceRef.current);
+      }
+    };
+  }, []);
 
   // 全选逻辑
   const isAllSelected = useMemo(() => {
@@ -192,6 +249,7 @@ export function MediaLibraryGrid({
             </>
           ) : (
             <>
+              <ViewModeToggle viewMode={pendingViewMode} onViewModeChange={handleViewModeChange} />
               <span className="media-library-grid__count">
                 共 {filteredResult.count} 个素材
               </span>
@@ -235,21 +293,21 @@ export function MediaLibraryGrid({
         <MediaLibraryEmpty />
       ) : (
         <>
-          <div className="media-library-grid__container">
-            {filteredResult.assets.map((asset) => (
-              <AssetGridItem
-                key={asset.id}
-                asset={asset}
-                isSelected={isSelectionMode ? selectedAssetIds.has(asset.id) : selectedAssetId === asset.id}
-                onSelect={isSelectionMode ? toggleAssetSelection : onSelectAsset}
-                onDoubleClick={onDoubleClick}
-                isInSelectionMode={isSelectionMode}
-              />
-            ))}
+          {/* 虚拟滚动网格 - 只渲染可见区域的元素 */}
+          <div className={`media-library-grid__container ${isTransitioning || isPending ? 'media-library-grid__container--transitioning' : ''}`}>
+            <VirtualAssetGrid
+              assets={filteredResult.assets}
+              viewMode={viewMode}
+              selectedAssetId={selectedAssetId}
+              selectedAssetIds={selectedAssetIds}
+              isSelectionMode={isSelectionMode}
+              onSelectAsset={isSelectionMode ? toggleAssetSelection : onSelectAsset}
+              onDoubleClick={onDoubleClick}
+            />
           </div>
 
           <div className="media-library-grid__footer">
-            <span>显示 {filteredResult.count} 个素材</span>
+            <span>共 {filteredResult.count} 个素材</span>
             {!isSelectionMode && <span className="media-library-grid__footer-hint">双击选择</span>}
           </div>
         </>

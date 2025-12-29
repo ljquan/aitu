@@ -17,6 +17,7 @@ export const IMAGE_MODEL_VIP_OPTIONS = [
 
 // Additional models - shown in "More" section
 export const IMAGE_MODEL_MORE_OPTIONS = [
+  { label: 'gpt-image-1.5', value: 'gpt-image-1.5' },
   { label: 'gemini-3-pro-image-preview (nano-banana-2)', value: 'gemini-3-pro-image-preview' },
   { label: 'gemini-2.5-flash-image (nano-banana)', value: 'gemini-2.5-flash-image' },
   { label: 'gemini-3-pro-image-preview-hd (nano-banana-2-hd)', value: 'gemini-3-pro-image-preview-hd' },
@@ -110,7 +111,7 @@ export const SettingsDialog = ({
                   <div>
                     您可以从以下地址获取 API Key（新建令牌渠道分组选择default）:
                     <br />
-                    <a href="https://api.tu-zi.com/token" target="_blank" rel="noopener noreferrer" 
+                    <a href="https://api.tu-zi.com/token" target="_blank" rel="noopener noreferrer"
                        style={{color: '#0052d9', textDecoration: 'none'}}>
                       https://api.tu-zi.com/token
                     </a>

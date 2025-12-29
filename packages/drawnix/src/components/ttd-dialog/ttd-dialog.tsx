@@ -304,46 +304,55 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
           // 使用新的处理逻辑来处理选中的内容,传入保存的元素IDs
           const processedContent = await processSelectedContentForAI(board, selectedElementIds);
 
-          // 对于视频生成，只使用第一张图片
-          let firstImage: File | { url: string; name: string } | undefined = undefined;
-          
+          // 对于视频生成，传入所有选中的图片（支持多图片模型）
+          const allImages: Array<{ url: string; name: string }> = [];
+
           if (processedContent.remainingImages.length > 0) {
-            const image = processedContent.remainingImages[0];
-            firstImage = {
-              url: image.url,
-              name: image.name || `selected-image-${Date.now()}.png`
-            };
+            processedContent.remainingImages.forEach((image, index) => {
+              allImages.push({
+                url: image.url,
+                name: image.name || `selected-image-${index + 1}-${Date.now()}.png`
+              });
+            });
           } else if (processedContent.graphicsImage) {
-            firstImage = {
+            allImages.push({
               url: processedContent.graphicsImage,
               name: `graphics-combined-${Date.now()}.png`
-            };
+            });
           }
 
-          // 设置 AI 视频生成的初始数据
+          // 设置 AI 视频生成的初始数据，传入所有图片
           setAiVideoData({
             initialPrompt: processedContent.remainingText || '',
-            initialImage: firstImage
+            initialImage: allImages.length > 0 ? allImages[0] : undefined,  // 向后兼容
+            initialImages: allImages.map((img, index) => ({
+              slot: index,
+              slotLabel: `参考图${index + 1}`,
+              url: img.url,
+              name: img.name,
+            }))
           });
           
         } catch (error) {
           console.warn('Error processing selected content for AI video:', error);
-          
-          // 如果新的处理逻辑失败，回退到原来的逻辑
+
+          // 如果新的处理逻辑失败，回退到原来的逻辑，但同样传入所有图片
           const selectedContent = extractSelectedContent(board);
-          
-          let firstImage: File | { url: string; name: string } | undefined = undefined;
-          if (selectedContent.images.length > 0) {
-            const image = selectedContent.images[0];
-            firstImage = {
-              url: image.url,
-              name: image.name || `selected-image-${Date.now()}.png`
-            };
-          }
-          
+
+          const fallbackImages = selectedContent.images.map((image, index) => ({
+            url: image.url,
+            name: image.name || `selected-image-${index + 1}-${Date.now()}.png`
+          }));
+
           setAiVideoData({
             initialPrompt: selectedContent.text || '',
-            initialImage: firstImage
+            initialImage: fallbackImages.length > 0 ? fallbackImages[0] : undefined,
+            initialImages: fallbackImages.map((img, index) => ({
+              slot: index,
+              slotLabel: `参考图${index + 1}`,
+              url: img.url,
+              name: img.name,
+            }))
           });
         } finally {
           isProcessingRef.current = false;

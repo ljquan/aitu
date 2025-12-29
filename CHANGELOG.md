@@ -1,3 +1,45 @@
+## 0.3.3 (2025-12-29)
+
+### 🚀 Features
+
+- 新增视图模式切换和性能优化 ([c8eecf5](https://github.com/ljquan/aitu/commit/c8eecf5))
+- 优化场景时长选择器和角色提取限制 ([12441ee](https://github.com/ljquan/aitu/commit/12441ee))
+- 优化故事场景模式UI和配置 ([9ff294a](https://github.com/ljquan/aitu/commit/9ff294a))
+- 添加 Sora-2 角色提取与复用功能 ([26aefb0](https://github.com/ljquan/aitu/commit/26aefb0))
+- 添加 Sora-2 故事场景模式支持 ([7155c5b](https://github.com/ljquan/aitu/commit/7155c5b))
+- 任务卡片添加打开链接功能 ([07bb0b3](https://github.com/ljquan/aitu/commit/07bb0b3))
+- 优化图片加载体验 ([3fba487](https://github.com/ljquan/aitu/commit/3fba487))
+- 任务创建时间改为绝对时间格式 ([fc5a864](https://github.com/ljquan/aitu/commit/fc5a864))
+
+### 🩹 Fixes
+
+- 添加 @tanstack/react-virtual 到根目录依赖解决构建问题 ([8a08d58](https://github.com/ljquan/aitu/commit/8a08d58))
+- 优化视频生成参考图多图处理和模型切换保留 ([e1782e8](https://github.com/ljquan/aitu/commit/e1782e8))
+- 虚拟滚动优化和视图模式持久化 ([af2978c](https://github.com/ljquan/aitu/commit/af2978c))
+- 优化角色任务队列展示和预览功能 ([718052a](https://github.com/ljquan/aitu/commit/718052a))
+- 修复角色接口兼容任务队列请求 ([e1b8562](https://github.com/ljquan/aitu/commit/e1b8562))
+- 角色加载优化 ([4c4879b](https://github.com/ljquan/aitu/commit/4c4879b))
+- 修复角色提取功能问题 ([8a121ba](https://github.com/ljquan/aitu/commit/8a121ba))
+- 修复创建角色缓存问题 ([6372a89](https://github.com/ljquan/aitu/commit/6372a89))
+- 故事板支持@角色 ([3f18b8e](https://github.com/ljquan/aitu/commit/3f18b8e))
+- 角色提示优化 ([4eafc4d](https://github.com/ljquan/aitu/commit/4eafc4d))
+- 故事场景模式优化 ([dc90986](https://github.com/ljquan/aitu/commit/dc90986))
+- 修复重试时立即报超时的问题 ([1f2df99](https://github.com/ljquan/aitu/commit/1f2df99))
+- 优化下载逻辑，优先使用本地缓存并增加重试机制 ([0c03c5d](https://github.com/ljquan/aitu/commit/0c03c5d))
+
+### 🔧 Chores
+
+- 同步 package-lock.json 添加 @tanstack/react-virtual ([69fe1d5](https://github.com/ljquan/aitu/commit/69fe1d5))
+- 添加 pnpm-lock.yaml 修复 Netlify 构建 ([c74f2ed](https://github.com/ljquan/aitu/commit/c74f2ed))
+- refactor(character): 代码质量优化 ([3918571](https://github.com/ljquan/aitu/commit/3918571))
+- 不同模型 @ 显示区分 ([6e1d8be](https://github.com/ljquan/aitu/commit/6e1d8be))
+- 优化图标 ([5c82e04](https://github.com/ljquan/aitu/commit/5c82e04))
+
+### ❤️  Thank You
+
+- gongchengtu <1817063960@qq.com>
+- liquidliang <ljquan@qq.com>
+
 ## 0.3.2 (2025-12-23)
 
 ### 🔧 Chores

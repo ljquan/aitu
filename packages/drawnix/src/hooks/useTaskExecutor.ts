@@ -8,7 +8,10 @@
 import { useEffect, useRef } from 'react';
 import { taskQueueService } from '../services/task-queue-service';
 import { generationAPIService } from '../services/generation-api-service';
+import { characterAPIService } from '../services/character-api-service';
+import { characterStorageService } from '../services/character-storage-service';
 import { Task, TaskStatus, TaskType } from '../types/task.types';
+import { CharacterStatus } from '../types/character.types';
 import { isTaskTimeout } from '../utils/task-utils';
 import { shouldRetry, getNextRetryTime } from '../utils/retry-utils';
 
@@ -205,9 +208,140 @@ export function useTaskExecutor(): void {
       }
     };
 
+    // Function to execute a character task
+    const executeCharacterTask = async (task: Task) => {
+      const taskId = task.id;
+
+      // Prevent duplicate execution
+      if (executingTasksRef.current.has(taskId)) {
+        console.log(`[TaskExecutor] Character task ${taskId} is already executing`);
+        return;
+      }
+
+      executingTasksRef.current.add(taskId);
+      console.log(`[TaskExecutor] Starting character task ${taskId}`);
+
+      try {
+        // Update status to processing
+        taskQueueService.updateTaskStatus(taskId, TaskStatus.PROCESSING);
+
+        const { sourceVideoTaskId, characterTimestamps, model, prompt } = task.params;
+
+        if (!sourceVideoTaskId) {
+          throw new Error('缺少源视频任务ID');
+        }
+
+        // Create character via API with polling
+        const result = await characterAPIService.createCharacterWithPolling(
+          {
+            videoTaskId: sourceVideoTaskId,
+            characterTimestamps,
+            localTaskId: task.params.sourceLocalTaskId,
+            sourcePrompt: prompt,
+            sourceModel: model,
+          },
+          {
+            onStatusChange: (status: CharacterStatus) => {
+              console.log(`[TaskExecutor] Character ${taskId} status: ${status}`);
+            },
+          }
+        );
+
+        if (!isActive) return;
+
+        // Save character to storage
+        await characterStorageService.saveCharacter({
+          id: result.characterId,
+          username: result.username,
+          profilePictureUrl: result.profile_picture_url,
+          permalink: result.permalink,
+          sourceTaskId: task.params.sourceLocalTaskId || '',
+          sourceVideoId: sourceVideoTaskId,
+          sourcePrompt: prompt,
+          characterTimestamps,
+          status: 'completed' as CharacterStatus,
+          createdAt: task.createdAt,
+          completedAt: Date.now(),
+        });
+
+        // Mark task as completed with character info
+        taskQueueService.updateTaskStatus(taskId, TaskStatus.COMPLETED, {
+          result: {
+            url: result.profile_picture_url,
+            format: 'character',
+            size: 0,
+            characterUsername: result.username,
+            characterProfileUrl: result.profile_picture_url,
+            characterPermalink: result.permalink,
+          },
+          remoteId: result.characterId,
+        });
+
+        console.log(`[TaskExecutor] Character task ${taskId} completed: @${result.username}`);
+      } catch (error: any) {
+        if (!isActive) return;
+
+        console.error(`[TaskExecutor] Character task ${taskId} failed:`, error);
+
+        const updatedTask = taskQueueService.getTask(taskId);
+        if (!updatedTask) return;
+
+        const errorCode = error.httpStatus ? `HTTP_${error.httpStatus}` : (error.name || 'ERROR');
+        const errorMessage = getFriendlyErrorMessage(error);
+        const originalErrorInfo = error.fullResponse || error.apiErrorBody || error.message || String(error);
+        const errorDetails = {
+          originalError: originalErrorInfo,
+          timestamp: Date.now(),
+        };
+
+        // Check if we should retry
+        if (shouldRetry(updatedTask)) {
+          const nextRetryAt = getNextRetryTime(updatedTask);
+
+          taskQueueService.updateTaskStatus(taskId, TaskStatus.RETRYING, {
+            error: {
+              code: errorCode,
+              message: errorMessage,
+              details: errorDetails,
+            },
+          });
+
+          console.log(`[TaskExecutor] Character task ${taskId} will retry`);
+
+          if (nextRetryAt) {
+            const delay = nextRetryAt - Date.now();
+            setTimeout(() => {
+              if (!isActive) return;
+              const t = taskQueueService.getTask(taskId);
+              if (t && t.status === TaskStatus.RETRYING) {
+                taskQueueService.updateTaskStatus(taskId, TaskStatus.PENDING);
+              }
+            }, delay);
+          }
+        } else {
+          taskQueueService.updateTaskStatus(taskId, TaskStatus.FAILED, {
+            error: {
+              code: errorCode,
+              message: errorMessage,
+              details: errorDetails,
+            },
+          });
+
+          console.log(`[TaskExecutor] Character task ${taskId} failed permanently`);
+        }
+      } finally {
+        executingTasksRef.current.delete(taskId);
+      }
+    };
+
     // Function to execute a single task
     const executeTask = async (task: Task) => {
       const taskId = task.id;
+
+      // Check if this is a character task
+      if (task.type === TaskType.CHARACTER) {
+        return executeCharacterTask(task);
+      }
 
       // Check if this is a resumable video task
       if (task.type === TaskType.VIDEO && task.remoteId && task.status === TaskStatus.PROCESSING) {

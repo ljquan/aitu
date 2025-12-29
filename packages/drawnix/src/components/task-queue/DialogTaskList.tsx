@@ -8,7 +8,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { TaskItem } from './TaskItem';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
-import { TaskType, TaskStatus } from '../../types/task.types';
+import { Task, TaskType, TaskStatus } from '../../types/task.types';
 import { useDrawnix, DialogType } from '../../hooks/use-drawnix';
 import { insertImageFromUrl } from '../../data/image';
 import { insertVideoFromUrl } from '../../data/video';
@@ -17,6 +17,8 @@ import { ChevronLeftIcon, ChevronRightIcon, SearchIcon } from 'tdesign-icons-rea
 import { downloadMediaFile, downloadFromBlob, sanitizeFilename } from '../../utils/download-utils';
 import { mediaCacheService } from '../../services/media-cache-service';
 import { useMediaUrl } from '../../hooks/useMediaCache';
+import { CharacterCreateDialog } from '../character/CharacterCreateDialog';
+import { supportsCharacterExtraction, isSora2VideoId } from '../../types/character.types';
 import './dialog-task-list.scss';
 
 export interface DialogTaskListProps {
@@ -47,6 +49,8 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
   const [taskToDelete, setTaskToDelete] = useState<string | null>(null);
   const [previewTaskId, setPreviewTaskId] = useState<string | null>(null);
   const [searchText, setSearchText] = useState('');
+  // Character extraction dialog state
+  const [characterDialogTask, setCharacterDialogTask] = useState<Task | null>(null);
 
   // Fuzzy match helper: all tokens must be present in concatenated fields
   const taskMatchesQuery = (task: any, query: string) => {
@@ -220,6 +224,14 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
     }
   };
 
+  // Handle extract character action
+  const handleExtractCharacter = (taskId: string) => {
+    const task = tasks.find(t => t.id === taskId);
+    if (task) {
+      setCharacterDialogTask(task);
+    }
+  };
+
   // Get completed tasks with results for navigation
   const completedTasksWithResults = useMemo(() => {
     return filteredTasks.filter(
@@ -337,6 +349,7 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
                 onInsert={handleInsert}
                 onEdit={handleEdit}
                 onPreviewOpen={() => handlePreviewOpen(task.id)}
+                onExtractCharacter={handleExtractCharacter}
               />
             ))
           )}
@@ -362,7 +375,7 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
           width="90vw"
           header={
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>{previewedTask.type === TaskType.IMAGE ? '图片预览' : '视频预览'}</span>
+              <span>{previewedTask.type === TaskType.IMAGE ? '图片预览' : previewedTask.type === TaskType.CHARACTER ? '角色预览' : '视频预览'}</span>
               {previewInfo && (
                 <span style={{ fontSize: '14px', color: '#757575', fontWeight: 'normal' }}>
                   {previewInfo.currentIndex + 1} / {previewInfo.total}
@@ -398,6 +411,17 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
           </div>
         </Dialog>
       )}
+
+      {/* Character Create Dialog */}
+      <CharacterCreateDialog
+        visible={!!characterDialogTask}
+        task={characterDialogTask}
+        onClose={() => setCharacterDialogTask(null)}
+        onCreateComplete={(characterId) => {
+          console.log('Character created:', characterId);
+          setCharacterDialogTask(null);
+        }}
+      />
     </>
   );
 };
@@ -414,7 +438,7 @@ const PreviewContent: React.FC<{ task: any }> = ({ task }) => {
 
   return (
     <div className="task-preview-content">
-      {task.type === TaskType.IMAGE ? (
+      {task.type === TaskType.IMAGE || task.type === TaskType.CHARACTER ? (
         <img
           key={task.id}
           src={url}

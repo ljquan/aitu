@@ -177,7 +177,7 @@ class AssetStorageService {
 
   /**
    * Get All Assets
-   * 获取所有素材
+   * 获取所有素材 - 使用并行加载优化性能
    */
   async getAllAssets(): Promise<Asset[]> {
     console.log('[AssetStorageService] getAllAssets called');
@@ -185,38 +185,37 @@ class AssetStorageService {
 
     try {
       const keys = await this.store!.keys();
-      console.log(`[AssetStorageService] Found ${keys.length} keys in IndexedDB:`, keys);
-      const assets: Asset[] = [];
+      console.log(`[AssetStorageService] Found ${keys.length} keys in IndexedDB`);
 
-      for (const key of keys) {
-        const stored = (await this.store!.getItem(key)) as StoredAsset | null;
-        if (stored) {
-          console.log(`[AssetStorageService] Loading asset ${key}:`, {
-            id: stored.id,
-            type: stored.type,
-            name: stored.name,
-            size: stored.size,
-          });
+      if (keys.length === 0) {
+        return [];
+      }
+
+      // 并行加载所有素材
+      const loadPromises = keys.map(async (key) => {
+        try {
+          const stored = (await this.store!.getItem(key)) as StoredAsset | null;
+          if (!stored) return null;
 
           // 检查是否已有缓存的Blob URL
           let url = this.blobUrlCache.get(stored.id);
           if (!url) {
-            console.log(`[AssetStorageService] Creating new blob URL for ${stored.id}`);
             url = URL.createObjectURL(stored.blobData);
             this.blobUrlCache.set(stored.id, url);
-          } else {
-            console.log(`[AssetStorageService] Using cached blob URL for ${stored.id}`);
           }
 
           const { blobData, ...assetData } = stored;
-          assets.push({
-            ...assetData,
-            url,
-          });
+          return { ...assetData, url } as Asset;
+        } catch (err) {
+          console.error(`[AssetStorageService] Failed to load asset ${key}:`, err);
+          return null;
         }
-      }
+      });
 
-      console.log(`[AssetStorageService] Returning ${assets.length} assets`);
+      const results = await Promise.all(loadPromises);
+      const assets = results.filter((asset): asset is Asset => asset !== null);
+
+      console.log(`[AssetStorageService] Loaded ${assets.length} assets`);
       return assets;
     } catch (error: any) {
       console.error('[AssetStorageService] Error loading assets:', error);

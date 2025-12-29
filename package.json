@@ -1,6 +1,6 @@
 {
   "name": "@aitu/source",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "license": "MIT",
   "description": "Aitu - An open-source whiteboard tool with AI-powered image/video creation, mind mapping, flowcharts, and freehand drawing",
   "homepage": "https://aitu.chat",
@@ -39,6 +39,7 @@
   "dependencies": {
     "@floating-ui/react": "^0.26.24",
     "@llamaindex/chat-ui": "^0.6.1",
+    "@tanstack/react-virtual": "^3.13.13",
     "@plait-board/markdown-to-drawnix": "^0.0.6",
     "@plait-board/mermaid-to-drawnix": "^0.0.7",
     "@plait/common": "^0.84.0",
