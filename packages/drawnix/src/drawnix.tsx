@@ -56,6 +56,7 @@ import { Minimap } from './components/minimap';
 import { AssetProvider } from './contexts/AssetContext';
 import { initializeAssetIntegration } from './services/asset-integration-service';
 import { ToolbarConfigProvider } from './hooks/use-toolbar-config';
+import { AIInputBar } from './components/ai-input-bar';
 
 export type DrawnixProps = {
   value: PlaitElement[];
@@ -292,6 +293,8 @@ export const Drawnix: React.FC<DrawnixProps> = ({
                 <TTDDialog container={containerRef.current}></TTDDialog>
                 <CleanConfirm container={containerRef.current}></CleanConfirm>
                 <SettingsDialog container={containerRef.current}></SettingsDialog>
+                {/* AI Input Bar - 底部 AI 输入框 */}
+                <AIInputBar />
               </Wrapper>
               <ActiveTaskWarning />
               <ChatDrawer />

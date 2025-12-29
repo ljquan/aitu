@@ -11,6 +11,7 @@
 @import '../components/tool-element/tool.component.scss';
 @import '../components/toolbox-drawer/toolbox-drawer.scss';
 @import '../components/minimap/minimap.scss';
+@import '../components/ai-input-bar/ai-input-bar.scss'; // AI 输入框
 
 .t-dialog__ctx.t-dialog__ctx--fixed{
     z-index: $z-dialog !important;

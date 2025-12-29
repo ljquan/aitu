@@ -287,9 +287,6 @@ $border-radius: 12px;
     border: 1px solid var(--td-component-border);
     transition: border-color 0.2s ease;
 
-    &:focus-within {
-      border-color: var(--td-brand-color);
-    }
   }
 
   &__textarea {
