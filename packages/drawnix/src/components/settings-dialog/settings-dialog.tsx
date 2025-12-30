@@ -9,8 +9,10 @@ import { InfoCircleIcon } from 'tdesign-icons-react';
 import {
   IMAGE_MODEL_GROUPED_SELECT_OPTIONS,
   VIDEO_MODEL_SELECT_OPTIONS,
+  TEXT_MODEL_SELECT_OPTIONS,
   DEFAULT_IMAGE_MODEL,
   DEFAULT_VIDEO_MODEL,
+  DEFAULT_TEXT_MODEL,
 } from '../../constants/model-config';
 
 // 为了向后兼容，重新导出这些常量
@@ -28,6 +30,7 @@ export const SettingsDialog = ({
   const [baseUrl, setBaseUrl] = useState('');
   const [imageModelName, setImageModelName] = useState('');
   const [videoModelName, setVideoModelName] = useState('');
+  const [textModelName, setTextModelName] = useState('');
 
   // 加载当前配置
   useEffect(() => {
@@ -37,6 +40,7 @@ export const SettingsDialog = ({
       setBaseUrl(config.baseUrl || 'https://api.tu-zi.com/v1');
       setImageModelName(config.imageModelName || DEFAULT_IMAGE_MODEL);
       setVideoModelName(config.videoModelName || DEFAULT_VIDEO_MODEL);
+      setTextModelName(config.textModelName || DEFAULT_TEXT_MODEL);
     }
   }, [appState.openSettings]);
 
@@ -47,6 +51,7 @@ export const SettingsDialog = ({
       baseUrl: baseUrl.trim() || 'https://api.tu-zi.com/v1',
       imageModelName: imageModelName.trim() || DEFAULT_IMAGE_MODEL,
       videoModelName: videoModelName.trim() || DEFAULT_VIDEO_MODEL,
+      textModelName: textModelName.trim() || DEFAULT_TEXT_MODEL,
     });
 
     // 关闭弹窗
@@ -127,6 +132,18 @@ export const SettingsDialog = ({
               filterable
               creatable
               placeholder={DEFAULT_VIDEO_MODEL}
+            />
+          </div>
+          <div className="settings-dialog__field">
+            <label className="settings-dialog__label">文本模型名称</label>
+            <Select
+              className="settings-dialog__select"
+              value={textModelName}
+              onChange={(value) => setTextModelName(value as string)}
+              options={TEXT_MODEL_SELECT_OPTIONS}
+              filterable
+              creatable
+              placeholder={DEFAULT_TEXT_MODEL}
             />
           </div>
         </div>

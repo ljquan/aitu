@@ -1,14 +1,14 @@
 /**
  * 统一的模型配置文件
  * 
- * 所有图片和视频模型的配置都在这里定义
+ * 所有图片、视频和文本模型的配置都在这里定义
  * 被 ModelSelector、settings-dialog、ai-image-generation、ai-video-generation 等组件使用
  */
 
 /**
  * 模型类型
  */
-export type ModelType = 'image' | 'video';
+export type ModelType = 'image' | 'video' | 'text';
 
 /**
  * 模型配置接口
@@ -199,6 +199,54 @@ export const VIDEO_MODELS: ModelConfig[] = [
 ];
 
 // ============================================
+// 文本模型配置
+// ============================================
+
+/**
+ * 文本/Agent 模型配置
+ */
+export const TEXT_MODELS: ModelConfig[] = [
+  {
+    id: 'claude-opus-4-5-20251101',
+    label: 'Claude Opus 4.5',
+    description: 'Anthropic 旗舰模型，推理能力最强',
+    type: 'text',
+    isVip: true,
+    supportsTools: true,
+  },
+  {
+    id: 'claude-sonnet-4-5-20250929',
+    label: 'Claude Sonnet 4.5',
+    description: 'Anthropic 均衡模型，性能与速度兼顾',
+    type: 'text',
+    isVip: true,
+    supportsTools: true,
+  },
+  {
+    id: 'deepseek-v3.2',
+    label: 'DeepSeek V3.2',
+    description: 'DeepSeek 最新大语言模型，性价比高',
+    type: 'text',
+    supportsTools: true,
+  },
+  {
+    id: 'gemini-2.5-flash',
+    label: 'Gemini 2.5 Flash',
+    description: 'Google 快速响应模型，适合日常任务',
+    type: 'text',
+    supportsTools: true,
+  },
+  {
+    id: 'gemini-3-pro-preview',
+    label: 'Gemini 3 Pro Preview',
+    description: 'Google 最新预览模型，能力强大',
+    type: 'text',
+    isVip: true,
+    supportsTools: true,
+  },
+];
+
+// ============================================
 // 所有模型
 // ============================================
 
@@ -208,6 +256,7 @@ export const VIDEO_MODELS: ModelConfig[] = [
 export const ALL_MODELS: ModelConfig[] = [
   ...IMAGE_MODELS,
   ...VIDEO_MODELS,
+  ...TEXT_MODELS,
 ];
 
 // ============================================
@@ -291,6 +340,14 @@ export const VIDEO_MODEL_SELECT_OPTIONS = VIDEO_MODELS.map(model => ({
 }));
 
 /**
+ * 文本模型选项（用于 Select 组件）
+ */
+export const TEXT_MODEL_SELECT_OPTIONS = TEXT_MODELS.map(model => ({
+  label: model.label,
+  value: model.id,
+}));
+
+/**
  * 默认图片模型
  */
 export const DEFAULT_IMAGE_MODEL = 'gemini-3-pro-image-preview-vip';
@@ -299,3 +356,8 @@ export const DEFAULT_IMAGE_MODEL = 'gemini-3-pro-image-preview-vip';
  * 默认视频模型
  */
 export const DEFAULT_VIDEO_MODEL = 'veo3';
+
+/**
+ * 默认文本模型
+ */
+export const DEFAULT_TEXT_MODEL = 'deepseek-v3.2';
