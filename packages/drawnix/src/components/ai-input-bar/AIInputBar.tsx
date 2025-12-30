@@ -106,12 +106,17 @@ export const AIInputBar: React.FC<AIInputBarProps> = ({ className }) => {
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [modelKeyword, setModelKeyword] = useState('');
 
-  // Auto-show suggestion panel when input is cleared and focused
+  // 解析输入中的模型标记（需要在 useEffect 之前定义）
+  const modelParseResult = useMemo(() => {
+    return parseModelFromInput(prompt);
+  }, [prompt]);
+
+  // Auto-show suggestion panel when input is cleared (or only has model tags) and focused
   useEffect(() => {
-    if (isFocused && prompt.trim() === '') {
+    if (isFocused && modelParseResult.cleanText === '') {
       setShowSuggestionPanel(true);
     }
-  }, [prompt, isFocused]);
+  }, [modelParseResult.cleanText, isFocused]);
   const [hoveredContent, setHoveredContent] = useState<{
     type: SelectedContentType;
     url?: string;
@@ -121,6 +126,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = ({ className }) => {
   } | null>(null);
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const richDisplayRef = useRef<HTMLDivElement>(null);
   const modelMenuRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -248,11 +254,6 @@ export const AIInputBar: React.FC<AIInputBarProps> = ({ className }) => {
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
   }, [isModelMenuOpen]);
-
-  // 解析输入中的模型标记
-  const modelParseResult = useMemo(() => {
-    return parseModelFromInput(prompt);
-  }, [prompt]);
 
   // 当检测到 # 时显示模型选择器
   useEffect(() => {
@@ -441,13 +442,23 @@ export const AIInputBar: React.FC<AIInputBarProps> = ({ className }) => {
     // Don't close suggestion panel immediately - let click events process first
   }, []);
 
+  // Handle textarea scroll - sync with rich display
+  const handleScroll = useCallback(() => {
+    if (inputRef.current && richDisplayRef.current) {
+      richDisplayRef.current.scrollTop = inputRef.current.scrollTop;
+    }
+  }, []);
+
   // Handle prompt selection from suggestion panel
   const handlePromptSelect = useCallback((promptItem: PromptItem) => {
-    setPrompt(promptItem.content);
+    // 保留模型标记，把提示词追加到后面
+    const modelPrefix = prompt.replace(modelParseResult.cleanText, '').trim();
+    const newPrompt = modelPrefix ? `${modelPrefix} ${promptItem.content}` : promptItem.content;
+    setPrompt(newPrompt);
     setShowSuggestionPanel(false);
     // Focus input after selection
     inputRef.current?.focus();
-  }, []);
+  }, [prompt, modelParseResult.cleanText]);
 
   // Handle close suggestion panel
   const handleCloseSuggestionPanel = useCallback(() => {
@@ -557,7 +568,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = ({ className }) => {
         <PromptSuggestionPanel
           visible={showSuggestionPanel && isFocused && !showModelSelector}
           prompts={allPrompts}
-          filterKeyword={prompt}
+          filterKeyword={modelParseResult.cleanText}
           onSelect={handlePromptSelect}
           onClose={handleCloseSuggestionPanel}
           onDeleteHistory={handleDeleteHistory}
@@ -624,6 +635,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = ({ className }) => {
           <div className="ai-input-bar__rich-input">
             {/* Overlay with formatted text - 使用原始文本保持光标位置同步 */}
             <div 
+              ref={richDisplayRef}
               className={classNames('ai-input-bar__rich-display', {
                 'ai-input-bar__rich-display--hidden': !prompt || modelParseResult.modelTags.length === 0
               })}
@@ -662,6 +674,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = ({ className }) => {
               onKeyDown={handleKeyDown}
               onFocus={handleFocus}
               onBlur={handleBlur}
+              onScroll={handleScroll}
               placeholder={agentMode 
                 ? (language === 'zh' ? '描述你想创建的内容，输入 # 选择模型' : 'Describe what you want to create, type # to select model')
                 : getPlaceholder()

@@ -485,7 +485,7 @@ $text-dark: #1F2937;
     position: absolute;
     top: 0;
     left: 0;
-    right: 0;
+    right: 8px; // 给滚动条留出空间
     bottom: 0;
     padding: 6px 12px;
     font-size: 15px;
@@ -495,7 +495,8 @@ $text-dark: #1F2937;
     word-break: break-word;
     pointer-events: none;
     font-family: 'PingFang SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    overflow: hidden;
+    overflow: hidden; // 不需要滚动，由 textarea 控制
+    z-index: 1; // 低于 textarea 的 z-index
 
     &--hidden {
       display: none;
@@ -538,18 +539,32 @@ $text-dark: #1F2937;
     outline: none;
     min-height: 24px;
     max-height: 120px;
+    overflow-y: scroll; // 强制显示滚动条
     padding: 6px 12px;
     font-family: 'PingFang SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     transition: all 0.2s ease;
     position: relative;
-    z-index: 1;
+    z-index: 2; // 提高 z-index 确保滚动条可交互
 
-    // Hide scrollbar
-    scrollbar-width: none; // Firefox
-    -ms-overflow-style: none; // IE and Edge
-
+    // Custom scrollbar - 强制显示
     &::-webkit-scrollbar {
-      display: none; // Chrome, Safari, Opera
+      width: 8px;
+      -webkit-appearance: none; // 强制显示滚动条
+    }
+
+    &::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.05);
+      border-radius: 4px;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 4px;
+      min-height: 30px; // 最小高度
+
+      &:hover {
+        background: rgba(0, 0, 0, 0.35);
+      }
     }
 
     &::placeholder {
@@ -783,6 +798,14 @@ $text-dark: #1F2937;
 
     &__input {
       color: var(--color-gray-20, #ccc);
+
+      &::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.2);
+
+        &:hover {
+          background: rgba(255, 255, 255, 0.3);
+        }
+      }
 
       &::placeholder {
         color: var(--color-gray-60, #666);
