@@ -106,7 +106,7 @@ export const UnifiedToolbar: React.FC<UnifiedToolbarProps> = React.memo(({
         </div>
 
         {/* 可滚动的工具栏内容区 */}
-        <div className="unified-toolbar__scrollable">
+        <div id={TUTORIAL_TARGET_IDS.CREATION_TOOLS} className="unified-toolbar__scrollable">
           {/* 创作工具分区 - 手型、选择、思维导图、文本、画笔、箭头、形状、图片、AI工具、缩放 */}
           <div className="unified-toolbar__section">
             <CreationToolbar embedded={true} iconMode={isIconMode} />

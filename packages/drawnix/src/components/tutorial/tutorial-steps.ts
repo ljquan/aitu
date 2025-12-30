@@ -10,6 +10,8 @@ import { TutorialStep } from '../../types/tutorial.types';
 export const TUTORIAL_TARGET_IDS = {
   /** 统一工具栏 */
   UNIFIED_TOOLBAR: 'tour-unified-toolbar',
+  /** 创作工具区域（中间可滚动部分） */
+  CREATION_TOOLS: 'tour-creation-tools',
   /** AI 生图按钮 */
   AI_IMAGE_BUTTON: 'tour-ai-image-button',
   /** AI 视频按钮 */
@@ -34,7 +36,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     title: '创作工具栏',
     description:
       '这是您的创作工具箱，包含了丰富的绘图和编辑工具：\n• 手形工具 - 拖动画布\n• 选择工具 - 选中元素\n• 思维导图 - 快速创建脑图\n• 文本、画笔、形状、箭头等',
-    targetId: TUTORIAL_TARGET_IDS.UNIFIED_TOOLBAR,
+    targetId: TUTORIAL_TARGET_IDS.CREATION_TOOLS,
     position: 'right',
   },
   {
