@@ -8,7 +8,6 @@
 
 import React, { useMemo, useCallback, useRef, useEffect } from 'react';
 import { History, Lightbulb, X } from 'lucide-react';
-import classNames from 'classnames';
 
 export interface PromptItem {
   id: string;
@@ -120,26 +119,19 @@ export const PromptSuggestionPanel: React.FC<PromptSuggestionPanelProps> = ({
 
   if (!visible) return null;
 
+  // 如果没有匹配的提示词，不显示面板
   const hasResults = filteredPrompts.length > 0;
-  const showEmptyState = !hasResults && filterKeyword.trim().length > 0;
+  if (!hasResults) return null;
 
   return (
     <div 
       ref={panelRef}
-      className={classNames('prompt-suggestion-panel', {
-        'prompt-suggestion-panel--empty': showEmptyState,
-      })}
+      className="prompt-suggestion-panel"
     >
       {/* 面板内容 */}
       <div className="prompt-suggestion-panel__content">
-        {showEmptyState ? (
-          <div className="prompt-suggestion-panel__empty">
-            {language === 'zh' ? '没有匹配的提示词' : 'No matching prompts'}
-          </div>
-        ) : (
-          <>
-            {/* 历史提示词 */}
-            {historyPrompts.length > 0 && (
+        {/* 历史提示词 */}
+        {historyPrompts.length > 0 && (
               <div className="prompt-suggestion-panel__section">
                 <div className="prompt-suggestion-panel__section-header">
                   <History size={14} />
@@ -194,8 +186,6 @@ export const PromptSuggestionPanel: React.FC<PromptSuggestionPanelProps> = ({
                 </div>
               </div>
             )}
-          </>
-        )}
       </div>
     </div>
   );
