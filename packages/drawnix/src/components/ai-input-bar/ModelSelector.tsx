@@ -45,6 +45,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   onClose,
   language = 'zh',
 }) => {
+  // console.log('[ModelSelector] render, visible:', visible, 'filterKeyword:', filterKeyword);
   const panelRef = useRef<HTMLDivElement>(null);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
 
@@ -97,45 +98,63 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   useEffect(() => {
     if (!visible) return;
     
-    // 如果所有模型都已选择，按任意键关闭
+    // 如果所有模型都已选择，只处理 Escape 关闭，不拦截 Enter（让用户可以发送消息）
     if (allModelsSelected) {
       const handleKeyDown = (event: KeyboardEvent) => {
-        if (event.key === 'Escape' || event.key === 'Enter' || event.key === ' ') {
+        if (event.key === 'Escape') {
           event.preventDefault();
           event.stopPropagation();
           onClose();
         }
+        // 不拦截 Enter，让它传递到 textarea 的 onKeyDown 处理发送
       };
       document.addEventListener('keydown', handleKeyDown, true);
       return () => document.removeEventListener('keydown', handleKeyDown, true);
     }
     
-    if (filteredModels.length === 0) return;
+    // 如果没有可选模型，只处理 Escape
+    if (filteredModels.length === 0) {
+      const handleKeyDown = (event: KeyboardEvent) => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          event.stopPropagation();
+          onClose();
+        }
+        // 不拦截其他键，让它们传递到 textarea
+      };
+      document.addEventListener('keydown', handleKeyDown, true);
+      return () => document.removeEventListener('keydown', handleKeyDown, true);
+    }
 
+    // 有可选模型时，处理方向键和选择
     const handleKeyDown = (event: KeyboardEvent) => {
+      // console.log('[ModelSelector] handleKeyDown, key:', event.key, 'filteredModels.length:', filteredModels.length);
       switch (event.key) {
         case 'ArrowUp':
           event.preventDefault();
           event.stopPropagation();
-          setHighlightedIndex(prev => 
+          setHighlightedIndex(prev =>
             prev <= 0 ? filteredModels.length - 1 : prev - 1
           );
           break;
         case 'ArrowDown':
           event.preventDefault();
           event.stopPropagation();
-          setHighlightedIndex(prev => 
+          setHighlightedIndex(prev =>
             prev >= filteredModels.length - 1 ? 0 : prev + 1
           );
           break;
-        case 'Enter':
         case 'Tab':
-        case ' ':
+          // Tab 键选择当前高亮项
+          // console.log('[ModelSelector] Tab pressed, selecting model');
           event.preventDefault();
           event.stopPropagation();
           if (filteredModels[highlightedIndex]) {
             handleSelect(filteredModels[highlightedIndex].id);
           }
+          break;
+        case 'Enter':
+          // Enter 键：不拦截，让 AIInputBar 处理发送逻辑
           break;
         case 'Escape':
           event.preventDefault();
@@ -252,7 +271,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         <Bot size={16} />
         <span>{language === 'zh' ? '选择模型' : 'Select Model'}</span>
         <span className="model-selector__hint">
-          {language === 'zh' ? '↑↓选择 Enter确认' : '↑↓ to select, Enter to confirm'}
+          {language === 'zh' ? '↑↓选择 Tab确认' : '↑↓ to select, Tab to confirm'}
         </span>
       </div>
       

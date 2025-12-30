@@ -124,25 +124,24 @@ export function parseModelFromInput(input: string): ModelParseResult {
   }
   
   // 构建分段和清理后的文本
+  // 关键：segments 的总字符数必须与原始 input 完全一致，以确保光标位置正确
   let cleanText = '';
   lastIndex = 0;
-  
+
   // 按位置排序
   processedRanges.sort((a, b) => a.start - b.start);
-  
+
   for (const range of processedRanges) {
-    // 添加模型标记之前的文本
+    // 添加模型标记之前的文本（包括空白）
     if (range.start > lastIndex) {
       const textBefore = input.substring(lastIndex, range.start);
+      segments.push({ type: 'text', content: textBefore });
+      // 只有非空白文本才添加到 cleanText
       if (textBefore.trim()) {
-        segments.push({ type: 'text', content: textBefore });
         cleanText += textBefore;
-      } else if (textBefore) {
-        // 保留空白但不添加到 cleanText
-        segments.push({ type: 'text', content: textBefore });
       }
     }
-    
+
     // 添加模型标记（保持原始文本长度）
     const modelTag = modelTags.find(t => t.startIndex === range.start);
     if (modelTag) {
@@ -155,25 +154,21 @@ export function parseModelFromInput(input: string): ModelParseResult {
         modelId: modelTag.modelId,
       });
     }
-    
+
     lastIndex = range.end;
-    // 跳过模型标记后的空格
-    if (input[lastIndex] === ' ') {
-      lastIndex++;
-    }
+    // 不再跳过模型标记后的空格，保持字符位置一致
   }
-  
-  // 添加剩余文本
+
+  // 添加剩余文本（包括空白）
   if (lastIndex < input.length) {
     const remaining = input.substring(lastIndex);
+    segments.push({ type: 'text', content: remaining });
+    // 只有非空白文本才添加到 cleanText
     if (remaining.trim()) {
-      segments.push({ type: 'text', content: remaining });
       cleanText += remaining;
-    } else if (remaining) {
-      segments.push({ type: 'text', content: remaining });
     }
   }
-  
+
   cleanText = cleanText.trim();
   
   // 检查是否正在输入模型名

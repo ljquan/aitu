@@ -62,7 +62,7 @@ export function useTextSelection(
     const handleKeyDown = (e: KeyboardEvent) => {
       const isCopyShortcut = (e.ctrlKey || e.metaKey) && e.key === 'c';
       const isCutShortcut = (e.ctrlKey || e.metaKey) && e.key === 'x';
-      
+
       if (enableCopy && (isCopyShortcut || isCutShortcut)) {
         // 获取当前选中的文本
         const target = e.target as TextInputElement;
@@ -86,12 +86,14 @@ export function useTextSelection(
             }
           });
         }
-      }
 
-      // 阻止事件冒泡
-      if (stopPropagation) {
-        e.stopPropagation();
+        // 只对复制/剪切快捷键阻止冒泡，其他按键需要传递给 React 的 onKeyDown
+        if (stopPropagation) {
+          e.stopPropagation();
+        }
       }
+      // 注意：不再对所有按键调用 stopPropagation()
+      // 这样 Enter 等按键可以正常触发 React 的 onKeyDown
     };
 
     // 处理右键菜单复制（浏览器原生支持）

@@ -82,12 +82,99 @@ interface AIInputBarProps {
   className?: string;
 }
 
-export const AIInputBar: React.FC<AIInputBarProps> = ({ className }) => {
+/**
+ * 独立的选择内容监听组件
+ * 将 useBoard 隔离在这个组件中，避免 board context 变化导致主组件重渲染
+ */
+const SelectionWatcher: React.FC<{
+  language: string;
+  onSelectionChange: (content: SelectedContent[], text: string) => void;
+}> = React.memo(({ language, onSelectionChange }) => {
   const board = useBoard();
+  const boardRef = useRef(board);
+  boardRef.current = board;
+  const onSelectionChangeRef = useRef(onSelectionChange);
+  onSelectionChangeRef.current = onSelectionChange;
+
+  useEffect(() => {
+    const handleSelectionChange = async () => {
+      const currentBoard = boardRef.current;
+      if (!currentBoard) return;
+      
+      const selectedElements = getSelectedElements(currentBoard);
+      
+      if (selectedElements.length === 0) {
+        onSelectionChangeRef.current([], '');
+        return;
+      }
+
+      try {
+        const processedContent = await processSelectedContentForAI(currentBoard);
+        const content: SelectedContent[] = [];
+
+        if (processedContent.graphicsImage) {
+          content.push({
+            url: processedContent.graphicsImage,
+            name: language === 'zh' ? '图形元素' : 'Graphics',
+            type: 'graphics',
+          });
+        }
+
+        for (const img of processedContent.remainingImages) {
+          const imgUrl = img.url || '';
+          const isVideo = isVideoUrl(imgUrl);
+          
+          content.push({
+            url: imgUrl,
+            name: img.name || (isVideo ? `video-${Date.now()}` : `image-${Date.now()}`),
+            type: isVideo ? 'video' : 'image',
+          });
+        }
+
+        if (processedContent.remainingText && processedContent.remainingText.trim()) {
+          content.push({
+            type: 'text',
+            text: processedContent.remainingText.trim(),
+            name: language === 'zh' ? '文字内容' : 'Text Content',
+          });
+        }
+
+        onSelectionChangeRef.current(content, processedContent.remainingText || '');
+      } catch (error) {
+        console.error('Failed to process selected content:', error);
+        onSelectionChangeRef.current([], '');
+      }
+    };
+
+    handleSelectionChange();
+
+    const handleMouseUp = () => {
+      setTimeout(handleSelectionChange, 50);
+    };
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [language]);
+
+  return null; // 这个组件不渲染任何内容
+});
+
+SelectionWatcher.displayName = 'SelectionWatcher';
+
+export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) => {
+  // console.log('[AIInputBar] Component rendering');
+
   const { language } = useI18n();
+
+  // 只获取需要的函数，避免整个对象变化导致重渲染
   const { createTask } = useTaskQueue();
   const { history, addHistory, removeHistory } = usePromptHistory();
-  const { sendMessageToChatDrawer } = useChatDrawerControl();
+  const chatDrawerControl = useChatDrawerControl();
+  // 使用 ref 存储，避免依赖变化
+  const sendMessageToChatDrawerRef = useRef(chatDrawerControl.sendMessageToChatDrawer);
+  sendMessageToChatDrawerRef.current = chatDrawerControl.sendMessageToChatDrawer;
 
   // State
   const [prompt, setPrompt] = useState('');
@@ -154,92 +241,11 @@ export const AIInputBar: React.FC<AIInputBarProps> = ({ className }) => {
     return [...historyPrompts, ...presetPrompts];
   }, [language, history]);
 
-  // Handle selection change - process all selected elements using the same logic as AI generation
-  useEffect(() => {
-    if (!board) return;
-
-    const handleSelectionChange = async () => {
-      const selectedElements = getSelectedElements(board);
-      
-      if (selectedElements.length === 0) {
-        setSelectedContent([]);
-        setSelectedText('');
-        return;
-      }
-
-      try {
-        // Use the same processing logic as AI image/video generation
-        const processedContent = await processSelectedContentForAI(board);
-        const content: SelectedContent[] = [];
-
-        // Add graphics image if exists (converted from graphics elements)
-        if (processedContent.graphicsImage) {
-          content.push({
-            url: processedContent.graphicsImage,
-            name: language === 'zh' ? '图形元素' : 'Graphics',
-            type: 'graphics',
-          });
-        }
-
-        // Add remaining images - distinguish between images and videos (sync, no thumbnail generation)
-        for (const img of processedContent.remainingImages) {
-          const imgUrl = img.url || '';
-          const isVideo = isVideoUrl(imgUrl);
-          
-          content.push({
-            url: imgUrl,
-            name: img.name || (isVideo ? `video-${Date.now()}` : `image-${Date.now()}`),
-            type: isVideo ? 'video' : 'image',
-          });
-        }
-
-        // Add text content if exists
-        if (processedContent.remainingText && processedContent.remainingText.trim()) {
-          content.push({
-            type: 'text',
-            text: processedContent.remainingText.trim(),
-            name: language === 'zh' ? '文字内容' : 'Text Content',
-          });
-        }
-
-        setSelectedContent(content);
-        setSelectedText(processedContent.remainingText || '');
-      } catch (error) {
-        console.error('Failed to process selected content:', error);
-        setSelectedContent([]);
-        setSelectedText('');
-      }
-    };
-
-    // Initial check
-    handleSelectionChange();
-
-    // Listen to selection changes via board events
-    const observer = new MutationObserver(() => {
-      handleSelectionChange();
-    });
-
-    // Observe the board container for selection changes
-    const boardContainer = document.querySelector('.plait-board-container');
-    if (boardContainer) {
-      observer.observe(boardContainer, {
-        attributes: true,
-        subtree: true,
-        attributeFilter: ['class'],
-      });
-    }
-
-    // Also listen to mouseup for selection changes
-    const handleMouseUp = () => {
-      setTimeout(handleSelectionChange, 50);
-    };
-    document.addEventListener('mouseup', handleMouseUp);
-
-    return () => {
-      observer.disconnect();
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [board, language]);
+  // 处理选择变化的回调（由 SelectionWatcher 调用）
+  const handleSelectionChange = useCallback((content: SelectedContent[], text: string) => {
+    setSelectedContent(content);
+    setSelectedText(text);
+  }, []);
 
   // Close model menu when clicking outside
   useEffect(() => {
@@ -363,7 +369,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = ({ className }) => {
         });
 
         // Send message to ChatDrawer
-        await sendMessageToChatDrawer(finalPrompt);
+        await sendMessageToChatDrawerRef.current(finalPrompt);
 
         if (!result.success && result.error) {
           console.error('[AIInputBar] Agent execution failed:', result.error);
@@ -399,7 +405,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = ({ className }) => {
           );
         }
 
-        await sendMessageToChatDrawer(finalPrompt);
+        await sendMessageToChatDrawerRef.current(finalPrompt);
       }
 
       // Clear input after successful submission
@@ -412,33 +418,55 @@ export const AIInputBar: React.FC<AIInputBarProps> = ({ className }) => {
     } finally {
       setIsGenerating(false);
     }
-  }, [prompt, selectedContent, selectedText, generationType, videoModel, aspectRatio, createTask, isGenerating, addHistory, sendMessageToChatDrawer, agentMode, modelParseResult]);
+  }, [prompt, selectedContent, selectedText, generationType, videoModel, aspectRatio, createTask, isGenerating, addHistory, agentMode, modelParseResult]);
 
   // Handle key press
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
-      if (event.key === 'Enter' && !event.shiftKey) {
+      // console.log('[AIInputBar] handleKeyDown called, key:', event.key, 'isTypingModel:', modelParseResult.isTypingModel);
+
+      // Shift+Enter, Alt/Option+Enter 换行
+      if (event.key === 'Enter' && (event.shiftKey || event.altKey)) {
+        // 允许默认行为（换行）
+        return;
+      }
+
+      // 单独 Enter 发送（当不在输入模型名时）
+      // 使用 modelParseResult.isTypingModel 而不是 showModelSelector，避免状态更新延迟问题
+      if (event.key === 'Enter' && !modelParseResult.isTypingModel) {
+        // console.log('[AIInputBar] Enter pressed, will call handleGenerate');
         event.preventDefault();
         handleGenerate();
+        return;
       }
+
       // Close panels on Escape
       if (event.key === 'Escape') {
         setShowSuggestionPanel(false);
         setShowModelSelector(false);
       }
     },
-    [handleGenerate]
+    [handleGenerate, modelParseResult.isTypingModel]
   );
 
   // Handle input focus
   const handleFocus = useCallback(() => {
-    setIsFocused(true);
-    setShowSuggestionPanel(true);
+    setIsFocused(prev => {
+      if (prev) return prev; // 已经是 true，不触发更新
+      return true;
+    });
+    setShowSuggestionPanel(prev => {
+      if (prev) return prev;
+      return true;
+    });
   }, []);
 
   // Handle input blur
   const handleBlur = useCallback(() => {
-    setIsFocused(false);
+    setIsFocused(prev => {
+      if (!prev) return prev; // 已经是 false，不触发更新
+      return false;
+    });
     // Don't close suggestion panel immediately - let click events process first
   }, []);
 
@@ -462,7 +490,10 @@ export const AIInputBar: React.FC<AIInputBarProps> = ({ className }) => {
 
   // Handle close suggestion panel
   const handleCloseSuggestionPanel = useCallback(() => {
-    setShowSuggestionPanel(false);
+    setShowSuggestionPanel(prev => {
+      if (!prev) return prev;
+      return false;
+    });
   }, []);
 
   // Handle delete history
@@ -503,6 +534,11 @@ export const AIInputBar: React.FC<AIInputBarProps> = ({ className }) => {
       ref={containerRef}
       className={classNames('ai-input-bar', ATTACHED_ELEMENT_CLASS_NAME, className)}
     >
+      {/* 独立的选择监听组件，隔离 useBoard 的 context 变化 */}
+      <SelectionWatcher 
+        language={language} 
+        onSelectionChange={handleSelectionChange} 
+      />
 
       {/* Hover preview - large content (rendered to body via portal) */}
       {hoveredContent && ReactDOM.createPortal(
@@ -633,41 +669,36 @@ export const AIInputBar: React.FC<AIInputBarProps> = ({ className }) => {
         <div className="ai-input-bar__input-row">
           {/* Text input wrapper for rich text display */}
           <div className="ai-input-bar__rich-input">
-            {/* Overlay with formatted text - 使用原始文本保持光标位置同步 */}
-            <div 
-              ref={richDisplayRef}
-              className={classNames('ai-input-bar__rich-display', {
-                'ai-input-bar__rich-display--hidden': !prompt || modelParseResult.modelTags.length === 0
-              })}
-            >
-              {modelParseResult.segments.map((segment, index) => {
-                if (segment.type === 'text') {
-                  return <span key={index}>{segment.content}</span>;
-                }
-                if (segment.type === 'image-model') {
+            {/* 高亮背景层 - 只显示模型标签的背景色块 */}
+            {modelParseResult.modelTags.length > 0 && (
+              <div
+                ref={richDisplayRef}
+                className="ai-input-bar__highlight-layer"
+                aria-hidden="true"
+              >
+                {modelParseResult.segments.map((segment, index) => {
+                  if (segment.type === 'text') {
+                    // 文本部分使用透明文字，只占位
+                    return <span key={index} className="ai-input-bar__highlight-text">{segment.content}</span>;
+                  }
+                  // 模型标签部分显示背景色块
+                  const tagClass = segment.type === 'image-model'
+                    ? 'ai-input-bar__highlight-tag--image'
+                    : 'ai-input-bar__highlight-tag--video';
                   return (
-                    <span key={index} className="ai-input-bar__model-tag ai-input-bar__model-tag--image">
+                    <span key={index} className={`ai-input-bar__highlight-tag ${tagClass}`}>
                       {segment.content}
                     </span>
                   );
-                }
-                if (segment.type === 'video-model') {
-                  return (
-                    <span key={index} className="ai-input-bar__model-tag ai-input-bar__model-tag--video">
-                      {segment.content}
-                    </span>
-                  );
-                }
-                return null;
-              })}
-            </div>
+                })}
+              </div>
+            )}
 
-            {/* Actual textarea */}
+            {/* Actual textarea - 文字直接显示，不透明 */}
             <textarea
               ref={inputRef}
-              className={classNames('ai-input-bar__input', { 
+              className={classNames('ai-input-bar__input', {
                 'ai-input-bar__input--focused': isFocused,
-                'ai-input-bar__input--has-model': modelParseResult.modelTags.length > 0
               })}
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
@@ -675,7 +706,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = ({ className }) => {
               onFocus={handleFocus}
               onBlur={handleBlur}
               onScroll={handleScroll}
-              placeholder={agentMode 
+              placeholder={agentMode
                 ? (language === 'zh' ? '描述你想创建的内容，输入 # 选择模型' : 'Describe what you want to create, type # to select model')
                 : getPlaceholder()
               }
@@ -696,6 +727,9 @@ export const AIInputBar: React.FC<AIInputBarProps> = ({ className }) => {
       </div>
     </div>
   );
-};
+});
+
+// 设置 displayName 便于调试
+AIInputBar.displayName = 'AIInputBar';
 
 export default AIInputBar;

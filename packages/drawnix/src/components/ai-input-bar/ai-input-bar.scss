@@ -480,87 +480,103 @@ $text-dark: #1F2937;
     width: 100%;
   }
 
-  // Rich display - formatted text overlay (only shown when model tag exists)
-  &__rich-display {
+  // 高亮背景层 - 在 textarea 下方显示模型标签的背景色块
+  // 新方案：不改变文字颜色，只添加背景高亮，避免光标偏移问题
+  &__highlight-layer {
     position: absolute;
     top: 0;
     left: 0;
-    right: 8px; // 给滚动条留出空间
+    right: 0;
     bottom: 0;
     padding: 6px 12px;
+    padding-right: 20px;
     font-size: 15px;
     line-height: 1.5;
-    color: $text-dark;
+    letter-spacing: normal;
+    word-spacing: normal;
     white-space: pre-wrap;
+    word-wrap: break-word;
     word-break: break-word;
+    overflow-wrap: break-word;
     pointer-events: none;
     font-family: 'PingFang SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    overflow: hidden; // 不需要滚动，由 textarea 控制
-    z-index: 1; // 低于 textarea 的 z-index
-
-    &--hidden {
-      display: none;
-    }
+    overflow: hidden;
+    z-index: 1;
+    box-sizing: border-box;
+    border: 1px solid transparent;
+    margin: 0;
   }
 
-  // Model tag (highlighted inline) - 不使用 padding/margin 以保持光标位置同步
-  &__model-tag {
-    display: inline;
-    padding: 0;
-    margin: 0;
-    background: transparent;
-    border-radius: 0;
-    color: $orange-primary;
-    font-weight: 600;
-    font-size: 15px;
-    line-height: 1.5;
-    vertical-align: baseline;
+  // 高亮层中的普通文本 - 完全透明，只占位
+  &__highlight-text {
+    color: transparent;
+  }
 
-    // 图片模型标签 - 蓝色
+  // 高亮层中的模型标签 - 显示背景色块，文字透明
+  &__highlight-tag {
+    color: transparent;
+    border-radius: 3px;
+    // 使用 box-decoration-break 确保跨行时背景正确显示
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+    // 微调垂直位置，补偿 div 和 textarea 的渲染差异
+    padding: 1px 0;
+    margin: -1px 0;
+
+    // 图片模型标签 - 蓝色背景
     &--image {
-      color: #3B82F6;
+      background: rgba(59, 130, 246, 0.15);
     }
 
-    // 视频模型标签 - 紫色
+    // 视频模型标签 - 紫色背景
     &--video {
-      color: #A855F7;
+      background: rgba(168, 85, 247, 0.15);
     }
   }
 
   // Text input (textarea)
+  // 关键：必须与 rich-display 完全一致才能保证光标位置准确
   &__input {
     width: 100%;
-    border: none;
+    border: 1px solid transparent; // 与 rich-display 保持一致
     background: transparent;
     font-size: 15px;
     line-height: 1.5;
+    letter-spacing: normal;
+    word-spacing: normal;
+    text-rendering: auto;
+    -webkit-font-smoothing: auto;
     color: $text-dark;
     resize: none;
     outline: none;
     min-height: 24px;
     max-height: 120px;
-    overflow-y: scroll; // 强制显示滚动条
+    overflow-y: auto;
     padding: 6px 12px;
+    padding-right: 20px;
+    margin: 0;
     font-family: 'PingFang SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     transition: all 0.2s ease;
     position: relative;
-    z-index: 2; // 提高 z-index 确保滚动条可交互
+    z-index: 2;
+    box-sizing: border-box;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    word-break: break-word;
+    overflow-wrap: break-word;
 
-    // Custom scrollbar - 强制显示
+    // Custom scrollbar
     &::-webkit-scrollbar {
       width: 8px;
-      -webkit-appearance: none; // 强制显示滚动条
     }
 
     &::-webkit-scrollbar-track {
-      background: rgba(0, 0, 0, 0.05);
-      border-radius: 4px;
+      background: transparent;
     }
 
     &::-webkit-scrollbar-thumb {
       background: rgba(0, 0, 0, 0.2);
       border-radius: 4px;
-      min-height: 30px; // 最小高度
 
       &:hover {
         background: rgba(0, 0, 0, 0.35);
@@ -592,17 +608,8 @@ $text-dark: #1F2937;
       min-height: 96px; // 4 lines approximately
     }
 
-    // When has model tag, make text transparent to show rich display
-    &--has-model {
-      color: transparent;
-      caret-color: $text-dark; // Keep cursor visible
-      
-      // 选中时只让文字透明，保留选中背景
-      &::selection {
-        background: rgba(59, 130, 246, 0.3); // 蓝色选中背景
-        color: transparent;
-      }
-    }
+    // 新方案：文字保持可见，背景层在下方显示高亮
+    // 不再需要 --has-model 类
   }
 
   // Send button
@@ -780,19 +787,14 @@ $text-dark: #1F2937;
       }
     }
 
-    &__rich-display {
-      color: var(--color-gray-20, #ccc);
-    }
-
-    &__model-tag {
-      color: $orange-primary;
-
+    // 高亮背景层 - 深色模式下使用更亮的背景色
+    &__highlight-tag {
       &--image {
-        color: #60A5FA;
+        background: rgba(96, 165, 250, 0.2);
       }
 
       &--video {
-        color: #C084FC;
+        background: rgba(192, 132, 252, 0.2);
       }
     }
 
@@ -809,15 +811,6 @@ $text-dark: #1F2937;
 
       &::placeholder {
         color: var(--color-gray-60, #666);
-      }
-
-      &--has-model {
-        caret-color: var(--color-gray-20, #ccc);
-        
-        &::selection {
-          background: rgba(96, 165, 250, 0.4); // 深色模式下更亮的选中背景
-          color: transparent;
-        }
       }
     }
 
@@ -923,12 +916,14 @@ $text-dark: #1F2937;
     transition: all 0.15s ease;
     background: transparent;
 
-    &:hover {
+    &:hover,
+    &--highlighted {
       background: $gray-light;
     }
 
     &--history {
-      &:hover {
+      &:hover,
+      &.prompt-suggestion-panel__item--highlighted {
         .prompt-suggestion-panel__item-delete {
           opacity: 1;
         }
@@ -1088,13 +1083,9 @@ $text-dark: #1F2937;
       height: 32px;
     }
 
-    &__rich-display {
+    &__highlight-layer {
       font-size: 14px;
       padding: 4px 6px;
-    }
-
-    &__model-tag {
-      font-size: 14px;
     }
 
     &__input {

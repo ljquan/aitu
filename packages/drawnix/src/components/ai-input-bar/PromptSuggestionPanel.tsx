@@ -4,9 +4,10 @@
  * 提示词选择面板组件
  * 在输入框聚焦时显示，支持预设提示词和历史提示词
  * 支持根据输入内容动态匹配过滤
+ * 支持键盘导航（上下键选择，Enter 确认）
  */
 
-import React, { useMemo, useCallback, useRef, useEffect } from 'react';
+import React, { useMemo, useCallback, useRef, useEffect, useState } from 'react';
 import { History, Lightbulb, X } from 'lucide-react';
 
 export interface PromptItem {
@@ -45,7 +46,9 @@ export const PromptSuggestionPanel: React.FC<PromptSuggestionPanelProps> = ({
   onDeleteHistory,
   language = 'zh',
 }) => {
+  // console.log('[PromptSuggestionPanel] render, visible:', visible, 'prompts.length:', prompts.length);
   const panelRef = useRef<HTMLDivElement>(null);
+  const [highlightedIndex, setHighlightedIndex] = useState(0);
 
   // 过滤提示词
   const filteredPrompts = useMemo(() => {
@@ -79,6 +82,16 @@ export const PromptSuggestionPanel: React.FC<PromptSuggestionPanelProps> = ({
     return { historyPrompts: history, presetPrompts: preset };
   }, [filteredPrompts]);
 
+  // 合并后的列表（用于键盘导航）
+  const allFilteredPrompts = useMemo(() => {
+    return [...historyPrompts, ...presetPrompts];
+  }, [historyPrompts, presetPrompts]);
+
+  // 重置高亮索引当过滤结果变化时
+  useEffect(() => {
+    setHighlightedIndex(0);
+  }, [allFilteredPrompts.length]);
+
   // 处理点击外部关闭
   useEffect(() => {
     if (!visible) return;
@@ -105,6 +118,68 @@ export const PromptSuggestionPanel: React.FC<PromptSuggestionPanelProps> = ({
     };
   }, [visible, onClose]);
 
+  // 键盘事件监听
+  useEffect(() => {
+    if (!visible || allFilteredPrompts.length === 0) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // console.log('[PromptSuggestionPanel] handleKeyDown called, key:', event.key);
+      switch (event.key) {
+        case 'ArrowUp':
+          event.preventDefault();
+          event.stopPropagation();
+          setHighlightedIndex(prev =>
+            prev <= 0 ? allFilteredPrompts.length - 1 : prev - 1
+          );
+          break;
+        case 'ArrowDown':
+          event.preventDefault();
+          event.stopPropagation();
+          setHighlightedIndex(prev =>
+            prev >= allFilteredPrompts.length - 1 ? 0 : prev + 1
+          );
+          break;
+        case 'Tab':
+          // Tab 键选择当前高亮项
+          if (allFilteredPrompts[highlightedIndex]) {
+            event.preventDefault();
+            event.stopPropagation();
+            onSelect(allFilteredPrompts[highlightedIndex]);
+          }
+          break;
+        case 'Enter':
+          // Enter 键：不拦截，让 AIInputBar 处理发送逻辑
+          // 用户可以用 Tab 键选择提示词
+          // console.log('[PromptSuggestionPanel] Enter key - not intercepting');
+          break;
+        case 'Escape':
+          event.preventDefault();
+          event.stopPropagation();
+          onClose();
+          break;
+      }
+    };
+
+    // 使用 capture 阶段捕获事件
+    document.addEventListener('keydown', handleKeyDown, true);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown, true);
+    };
+  }, [visible, allFilteredPrompts, highlightedIndex, onSelect, onClose]);
+
+  // 滚动高亮项到可见区域
+  useEffect(() => {
+    if (!visible || allFilteredPrompts.length === 0) return;
+    
+    const highlightedElement = panelRef.current?.querySelector(
+      `.prompt-suggestion-panel__item--highlighted`
+    );
+    if (highlightedElement) {
+      highlightedElement.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  }, [highlightedIndex, visible, allFilteredPrompts.length]);
+
   // 处理删除历史记录
   const handleDeleteHistory = useCallback((e: React.MouseEvent, id: string) => {
     e.stopPropagation();
@@ -115,6 +190,14 @@ export const PromptSuggestionPanel: React.FC<PromptSuggestionPanelProps> = ({
   const truncateText = (text: string, maxLength: number = 80) => {
     if (text.length <= maxLength) return text;
     return text.substring(0, maxLength) + '...';
+  };
+
+  // 获取全局索引
+  const getGlobalIndex = (source: 'history' | 'preset', localIndex: number) => {
+    if (source === 'history') {
+      return localIndex;
+    }
+    return historyPrompts.length + localIndex;
   };
 
   if (!visible) return null;
@@ -138,12 +221,15 @@ export const PromptSuggestionPanel: React.FC<PromptSuggestionPanelProps> = ({
                   <span>{language === 'zh' ? '历史记录' : 'History'}</span>
                 </div>
                 <div className="prompt-suggestion-panel__list">
-                  {historyPrompts.map(prompt => (
+                  {historyPrompts.map((prompt, index) => (
                     <div
                       key={prompt.id}
-                      className="prompt-suggestion-panel__item prompt-suggestion-panel__item--history"
+                      className={`prompt-suggestion-panel__item prompt-suggestion-panel__item--history ${
+                        getGlobalIndex('history', index) === highlightedIndex ? 'prompt-suggestion-panel__item--highlighted' : ''
+                      }`}
                       onMouseDown={(e) => e.preventDefault()}
                       onClick={() => onSelect(prompt)}
+                      onMouseEnter={() => setHighlightedIndex(getGlobalIndex('history', index))}
                     >
                       <span className="prompt-suggestion-panel__item-text">
                         {truncateText(prompt.content)}
@@ -171,12 +257,15 @@ export const PromptSuggestionPanel: React.FC<PromptSuggestionPanelProps> = ({
                   <span>{language === 'zh' ? '推荐提示词' : 'Suggestions'}</span>
                 </div>
                 <div className="prompt-suggestion-panel__list">
-                  {presetPrompts.map(prompt => (
+                  {presetPrompts.map((prompt, index) => (
                     <div
                       key={prompt.id}
-                      className="prompt-suggestion-panel__item"
+                      className={`prompt-suggestion-panel__item ${
+                        getGlobalIndex('preset', index) === highlightedIndex ? 'prompt-suggestion-panel__item--highlighted' : ''
+                      }`}
                       onMouseDown={(e) => e.preventDefault()}
                       onClick={() => onSelect(prompt)}
+                      onMouseEnter={() => setHighlightedIndex(getGlobalIndex('preset', index))}
                     >
                       <span className="prompt-suggestion-panel__item-text">
                         {truncateText(prompt.content)}

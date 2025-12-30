@@ -6,7 +6,6 @@
  */
 
 import { defaultGeminiClient } from '../utils/gemini-api';
-import { prepareImageData } from '../utils/gemini-api/utils';
 import type { GeminiMessage } from '../utils/gemini-api/types';
 import type { ChatMessage, StreamEvent } from '../types/chat.types';
 import { MessageRole } from '../types/chat.types';
@@ -15,14 +14,110 @@ import { analytics } from '../utils/posthog-analytics';
 // Current abort controller for cancellation
 let currentAbortController: AbortController | null = null;
 
+// 媒体 URL 映射，用于在响应中替换回原始 URL
+interface MediaUrlMap {
+  [placeholder: string]: string;
+}
+
+/**
+ * 替换消息中的图片/视频 URL 为带索引的占位符，并返回映射表
+ * 用于发送给文本模型时减少 token 消耗，响应后可替换回原始 URL
+ */
+function extractAndReplaceMediaUrls(content: string): { sanitized: string; urlMap: MediaUrlMap } {
+  const urlMap: MediaUrlMap = {};
+  let imageIndex = 1;
+  let videoIndex = 1;
+  let mediaIndex = 1;
+  
+  let result = content;
+  
+  // 替换 base64 图片
+  result = result.replace(
+    /data:image\/[^;]+;base64,[A-Za-z0-9+/=]+/g,
+    (match) => {
+      const placeholder = `[图片${imageIndex}]`;
+      urlMap[placeholder] = match;
+      imageIndex++;
+      return placeholder;
+    }
+  );
+  
+  // 替换 base64 视频
+  result = result.replace(
+    /data:video\/[^;]+;base64,[A-Za-z0-9+/=]+/g,
+    (match) => {
+      const placeholder = `[视频${videoIndex}]`;
+      urlMap[placeholder] = match;
+      videoIndex++;
+      return placeholder;
+    }
+  );
+  
+  // 替换 blob URL
+  result = result.replace(
+    /blob:[^\s"'<>]+/g,
+    (match) => {
+      const placeholder = `[媒体${mediaIndex}]`;
+      urlMap[placeholder] = match;
+      mediaIndex++;
+      return placeholder;
+    }
+  );
+  
+  // 替换远程图片 URL (常见图片扩展名)
+  result = result.replace(
+    /https?:\/\/[^\s"'<>]+\.(png|jpg|jpeg|gif|webp|svg|bmp)(\?[^\s"'<>]*)?/gi,
+    (match) => {
+      const placeholder = `[图片${imageIndex}]`;
+      urlMap[placeholder] = match;
+      imageIndex++;
+      return placeholder;
+    }
+  );
+  
+  // 替换远程视频 URL (常见视频扩展名)
+  result = result.replace(
+    /https?:\/\/[^\s"'<>]+\.(mp4|webm|mov|avi|mkv)(\?[^\s"'<>]*)?/gi,
+    (match) => {
+      const placeholder = `[视频${videoIndex}]`;
+      urlMap[placeholder] = match;
+      videoIndex++;
+      return placeholder;
+    }
+  );
+  
+  return { sanitized: result, urlMap };
+}
+
+/**
+ * 将响应中的占位符替换回原始 URL
+ */
+function restoreMediaUrls(content: string, urlMap: MediaUrlMap): string {
+  let result = content;
+  for (const [placeholder, url] of Object.entries(urlMap)) {
+    // 使用全局替换，因为模型可能多次引用同一个占位符
+    result = result.split(placeholder).join(url);
+  }
+  return result;
+}
+
 /** Convert ChatMessage to GeminiMessage format */
-function convertToGeminiMessages(messages: ChatMessage[]): GeminiMessage[] {
-  return messages
+function convertToGeminiMessages(messages: ChatMessage[]): { geminiMessages: GeminiMessage[]; urlMap: MediaUrlMap } {
+  const combinedUrlMap: MediaUrlMap = {};
+  
+  const geminiMessages = messages
     .filter((m) => m.status === 'success' || m.status === 'streaming')
-    .map((m) => ({
-      role: m.role === MessageRole.USER ? 'user' : 'assistant',
-      content: [{ type: 'text', text: m.content }],
-    }));
+    .map((m) => {
+      const { sanitized, urlMap } = extractAndReplaceMediaUrls(m.content);
+      // 合并 URL 映射
+      Object.assign(combinedUrlMap, urlMap);
+      return {
+        role: m.role === MessageRole.USER ? 'user' : 'assistant',
+        content: [{ type: 'text', text: sanitized }],
+      };
+    });
+  
+  return { geminiMessages: geminiMessages as GeminiMessage[], urlMap: combinedUrlMap };
 }
 
 /** Send message and get streaming response */
@@ -53,31 +148,22 @@ export async function sendChatMessage(
       startTime,
     });
 
-    // Build history
-    const history = convertToGeminiMessages(messages);
+    // Build history with URL extraction
+    const { geminiMessages: history, urlMap: historyUrlMap } = convertToGeminiMessages(messages);
 
-    // Prepare current message content
+    // Process current message content
+    const { sanitized: sanitizedContent, urlMap: currentUrlMap } = extractAndReplaceMediaUrls(newContent);
+    
+    // 合并所有 URL 映射
+    const allUrlMap: MediaUrlMap = { ...historyUrlMap, ...currentUrlMap };
+    
+    // Prepare current message content (文本模型不需要附件图片)
     const currentMessageContent: GeminiMessage['content'] = [
-      { type: 'text', text: newContent }
+      { type: 'text', text: sanitizedContent }
     ];
 
-    // Process attachments
-    if (attachments.length > 0) {
-      for (const file of attachments) {
-        try {
-          // prepareImageData handles file -> base64 conversion
-          const imageUrl = await prepareImageData({ file });
-          currentMessageContent.push({
-            type: 'image_url',
-            image_url: { url: imageUrl }
-          });
-        } catch (e) {
-          console.error('Failed to process attachment:', e);
-          // Continue without this attachment or throw?
-          // Let's log and continue
-        }
-      }
-    }
+    // 注意：对于文本模型，不发送 attachments 中的图片
+    // 如果需要图片理解功能，应该使用多模态模型
 
     // Combine into full message list
     const geminiMessages: GeminiMessage[] = [
@@ -95,8 +181,10 @@ export async function sendChatMessage(
       geminiMessages,
       (chunk) => {
         if (signal.aborted) return;
-        fullContent += chunk;
-        onStream({ type: 'content', content: chunk });
+        // 实时替换响应中的占位符为原始 URL
+        const restoredChunk = restoreMediaUrls(chunk, allUrlMap);
+        fullContent += restoredChunk;
+        onStream({ type: 'content', content: restoredChunk });
       },
       signal
     );
