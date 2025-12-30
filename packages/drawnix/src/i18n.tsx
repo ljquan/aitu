@@ -56,6 +56,7 @@ export interface Translations {
   'menu.cleanBoard': string;
   'menu.github': string;
   'menu.settings': string;
+  'menu.tutorial': string;
   
   // Dialog translations
   'dialog.mermaid.title': string;
@@ -183,6 +184,7 @@ const translations: Record<Language, Translations> = {
     'menu.cleanBoard': '清除画布',
     'menu.github': 'GitHub',
     'menu.settings': '设置',
+    'menu.tutorial': '新手教程',
     
     // Dialog translations
     'dialog.mermaid.title': 'Mermaid 转 Drawnix',
@@ -307,6 +309,7 @@ const translations: Record<Language, Translations> = {
     'menu.cleanBoard': 'Clear Board',
     'menu.github': 'GitHub',
     'menu.settings': 'Settings',
+    'menu.tutorial': 'Tutorial',
     
     // Dialog translations
     'dialog.mermaid.title': 'Mermaid to Drawnix',

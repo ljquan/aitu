@@ -5,6 +5,7 @@ import {
   SaveFileIcon,
   TrashIcon,
   GithubIcon,
+  HelpCircleIcon,
 } from '../../icons';
 import { useBoard, useListRender } from '@plait-board/react-board';
 import {
@@ -20,6 +21,7 @@ import MenuItem from '../../menu/menu-item';
 import { saveAsImage } from '../../../utils/image';
 import { useDrawnix } from '../../../hooks/use-drawnix';
 import { useI18n } from '../../../i18n';
+import { useTutorialContext } from '../../../contexts/TutorialContext';
 import Menu from '../../menu/menu';
 import { useContext } from 'react';
 import { MenuContentPropsContext } from '../../menu/common';
@@ -187,3 +189,21 @@ export const GitHubLink = () => {
   );
 };
 GitHubLink.displayName = 'GitHubLink';
+
+export const Tutorial = () => {
+  const { t } = useI18n();
+  const tutorial = useTutorialContext();
+  return (
+    <MenuItem
+      icon={HelpCircleIcon}
+      data-track="toolbar_click_menu_tutorial"
+      onSelect={() => {
+        tutorial.open();
+      }}
+      aria-label={t('menu.tutorial')}
+    >
+      {t('menu.tutorial')}
+    </MenuItem>
+  );
+};
+Tutorial.displayName = 'Tutorial';

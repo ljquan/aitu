@@ -8,6 +8,7 @@ import { Island } from '../island';
 import { BottomActionsSection } from './bottom-actions-section';
 import { TaskQueuePanel } from '../task-queue/TaskQueuePanel';
 import { useViewportScale } from '../../hooks/useViewportScale';
+import { TUTORIAL_TARGET_IDS } from '../tutorial';
 
 // 工具栏高度阈值: 当容器高度小于此值时切换到图标模式
 // 基于四个分区的最小高度 + 分割线 + padding 计算得出
@@ -87,6 +88,7 @@ export const UnifiedToolbar: React.FC<UnifiedToolbarProps> = React.memo(({
       )}
 
       <Island
+        id={TUTORIAL_TARGET_IDS.UNIFIED_TOOLBAR}
         ref={containerRef}
         className={classNames(
           'unified-toolbar',
