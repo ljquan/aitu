@@ -46,6 +46,8 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
       '这是 AI 图片生成功能。输入文字描述，AI 将为您创作独特的图片。支持写实风、插画风、卡通风等多种风格。',
     targetId: TUTORIAL_TARGET_IDS.AI_IMAGE_BUTTON,
     position: 'right',
+    media: '/tutorial/ai-image.mp4',
+    mediaType: 'video',
   },
   {
     id: 'ai-video',
@@ -54,21 +56,16 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
       '使用 AI 生成短视频。描述您想要的场景，AI 将创作出动态视频内容。支持多种风格和场景。',
     targetId: TUTORIAL_TARGET_IDS.AI_VIDEO_BUTTON,
     position: 'right',
+    media: '/tutorial/ai-video.mp4',
+    mediaType: 'video',
   },
   {
     id: 'task-panel',
     title: '任务队列',
     description:
-      '这里显示您的 AI 生成任务。所有图片和视频的生成进度都可以在这里查看。任务完成后，作品会自动添加到画布中。',
+      '这里显示您的 AI 生成任务。所有图片和视频的生成进度都可以在这里查看。任务完成后，可以点击任务查看。',
     targetId: TUTORIAL_TARGET_IDS.TASK_BUTTON,
     position: 'top',
-  },
-  {
-    id: 'canvas-tips',
-    title: '画布操作技巧',
-    description:
-      '• 鼠标滚轮可以缩放画布\n• 按住空格键拖动可以平移视图\n• 双指捏合在触控设备上也可以缩放\n• 工具栏支持拖拽排序，右键可以自定义显示的工具',
-    position: 'center',
   },
   {
     id: 'finish',

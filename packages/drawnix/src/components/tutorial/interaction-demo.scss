@@ -1,0 +1,161 @@
+/**
+ * 交互演示动画样式
+ */
+
+.interaction-demo {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: #f8fafc;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  // 网格背景
+  &__grid {
+    position: absolute;
+    inset: 0;
+    opacity: 0.4;
+    pointer-events: none;
+    background-image: radial-gradient(#94a3b8 1.5px, transparent 0);
+    background-size: 20px 20px;
+  }
+
+  // 光标容器
+  &__cursor {
+    position: absolute;
+    z-index: 10;
+    color: #334155;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+  }
+
+  // 点击涟漪
+  &__ripple {
+    position: absolute;
+    top: -4px;
+    left: -4px;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(100, 116, 139, 0.3);
+    pointer-events: none;
+  }
+
+  // 示例盒子
+  &__sample-box {
+    width: 60px;
+    height: 60px;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  }
+
+  // 绘制矩形
+  &__drawing-rect {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    border: 2px solid #5A4FCF;
+    background: rgba(90, 79, 207, 0.1);
+    border-radius: 4px;
+  }
+
+  // AI 生成动画
+  &__ai-icon {
+    position: relative;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  // 进度环
+  &__progress-ring {
+    position: absolute;
+    width: 80px;
+    height: 80px;
+    border: 3px solid transparent;
+    border-top-color: #F39C12;
+    border-right-color: #5A4FCF;
+    border-radius: 50%;
+    opacity: 0.6;
+  }
+
+  // 粒子
+  &__particle {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    background: linear-gradient(135deg, #F39C12, #5A4FCF);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+  }
+
+  // 文字标签
+  &__label {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 12px;
+    color: #64748b;
+    background: white;
+    padding: 4px 12px;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  // 缩放容器
+  &__zoom-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  // 缩放对象
+  &__zoom-objects {
+    position: relative;
+    z-index: 5;
+    display: flex;
+    gap: 16px;
+  }
+
+  &__circle {
+    width: 50px;
+    height: 50px;
+    background: #dcfce7;
+    border: 1px solid #bbf7d0;
+    border-radius: 50%;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  }
+
+  &__square {
+    width: 50px;
+    height: 50px;
+    background: #e0e7ff;
+    border: 1px solid #c7d2fe;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  }
+
+  // 缩放比例标签
+  &__zoom-label {
+    position: absolute;
+    bottom: 8px;
+    right: 8px;
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(4px);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-family: monospace;
+    color: #64748b;
+    border: 1px solid #e2e8f0;
+  }
+}

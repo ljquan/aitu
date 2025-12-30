@@ -5,6 +5,13 @@
 /** 引导步骤位置 */
 export type TutorialPosition = 'top' | 'bottom' | 'left' | 'right' | 'center';
 
+/** 交互演示类型 */
+export type InteractionType =
+  | 'ai-generate'    // AI 生成动画
+  | 'drag-pan'       // 拖拽画布
+  | 'draw-shape'     // 绘制形状
+  | 'zoom-canvas';   // 缩放画布
+
 /** 引导步骤配置 */
 export interface TutorialStep {
   /** 步骤唯一标识 */
@@ -23,6 +30,8 @@ export interface TutorialStep {
   mediaType?: 'image' | 'video';
   /** 媒体替代文本 */
   mediaAlt?: string;
+  /** 交互演示类型（用于动画演示） */
+  interactionType?: InteractionType;
 }
 
 /** 元素位置信息 */

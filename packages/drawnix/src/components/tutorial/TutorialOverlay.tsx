@@ -3,6 +3,8 @@ import { motion, AnimatePresence, Transition } from 'framer-motion';
 import { TutorialOverlayProps, ElementRect } from '../../types/tutorial.types';
 import { getElementRect, SPOTLIGHT_PADDING } from '../../utils/tutorial-utils';
 import { CloseIcon, CheckIcon, ArrowRightIcon } from '../icons';
+import { MacOSFrame } from './MacOSFrame';
+import { InteractionDemo } from './InteractionDemo';
 import './tutorial-overlay.scss';
 
 /**
@@ -250,25 +252,19 @@ export const TutorialOverlay: React.FC<TutorialOverlayProps> = ({
                 </button>
               </div>
 
-              {/* 媒体区域 */}
-              {currentStep.media && (
+              {/* 媒体区域 - 使用 macOS 风格窗口 */}
+              {(currentStep.media || currentStep.interactionType) && (
                 <div className="tutorial-overlay__media">
-                  {currentStep.mediaType === 'video' ? (
-                    <video
-                      src={currentStep.media}
-                      autoPlay
-                      loop
-                      muted
-                      playsInline
-                      className="tutorial-overlay__video"
-                    />
-                  ) : (
-                    <img
-                      src={currentStep.media}
-                      alt={currentStep.mediaAlt || currentStep.title}
-                      className="tutorial-overlay__image"
-                    />
-                  )}
+                  <MacOSFrame
+                    videoSrc={currentStep.mediaType === 'video' ? currentStep.media : undefined}
+                    imageSrc={currentStep.mediaType !== 'video' ? currentStep.media : undefined}
+                    imageAlt={currentStep.mediaAlt || currentStep.title}
+                  >
+                    {/* 交互演示动画 */}
+                    {currentStep.interactionType && (
+                      <InteractionDemo type={currentStep.interactionType} />
+                    )}
+                  </MacOSFrame>
                 </div>
               )}
 
