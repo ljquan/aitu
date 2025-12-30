@@ -15,16 +15,18 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Image, Video, ChevronUp, Send, Upload, Type, Play } from 'lucide-react';
+import ReactDOM from 'react-dom';
+import { Video, Send, Type, Play } from 'lucide-react';
 import { useBoard } from '@plait-board/react-board';
 import { getSelectedElements, ATTACHED_ELEMENT_CLASS_NAME } from '@plait/core';
 import { useI18n } from '../../i18n';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
 import { TaskType } from '../../types/task.types';
 import { processSelectedContentForAI } from '../../utils/selection-utils';
-import { VIDEO_MODEL_CONFIGS, getVideoModelOptions } from '../../constants/video-model-config';
+import { VIDEO_MODEL_CONFIGS } from '../../constants/video-model-config';
 import type { VideoModel } from '../../types/video.types';
 import { calculateDimensions, DEFAULT_ASPECT_RATIO } from '../../constants/image-aspect-ratios';
+import { useTextSelection } from '../../hooks/useTextSelection';
 import classNames from 'classnames';
 import './ai-input-bar.scss';
 
@@ -68,22 +70,30 @@ export const AIInputBar: React.FC<AIInputBarProps> = ({ className }) => {
 
   // State
   const [prompt, setPrompt] = useState('');
-  const [generationType, setGenerationType] = useState<GenerationType>('image');
+  const [generationType] = useState<GenerationType>('image');
   const [selectedContent, setSelectedContent] = useState<SelectedContent[]>([]);
   const [selectedText, setSelectedText] = useState('');
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
-  const [videoModel, setVideoModel] = useState<VideoModel>('veo3');
+  const [videoModel] = useState<VideoModel>('veo3');
   const [isGenerating, setIsGenerating] = useState(false);
   const [aspectRatio] = useState(DEFAULT_ASPECT_RATIO);
+  const [isFocused, setIsFocused] = useState(false);
+  const [hoveredContent, setHoveredContent] = useState<{
+    type: SelectedContentType;
+    url?: string;
+    text?: string;
+    x: number;
+    y: number;
+  } | null>(null);
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const modelMenuRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Get current model label
-  const currentModelLabel = generationType === 'video'
-    ? VIDEO_MODEL_CONFIGS[videoModel]?.label || 'Veo 3'
-    : 'Gemini';
+  // 使用自定义 hook 处理文本选择和复制，同时阻止事件冒泡
+  useTextSelection(inputRef, {
+    enableCopy: true,
+    stopPropagation: true,
+  });
 
   // Handle selection change - process all selected elements using the same logic as AI generation
   useEffect(() => {
@@ -186,33 +196,6 @@ export const AIInputBar: React.FC<AIInputBarProps> = ({ className }) => {
     }
   }, [isModelMenuOpen]);
 
-  // Handle image upload from local
-  const handleImageUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (!files) return;
-
-    const validFiles = Array.from(files).filter(
-      (file) => file.type.startsWith('image/') && file.size <= 10 * 1024 * 1024
-    );
-
-    for (const file of validFiles) {
-      const reader = new FileReader();
-      reader.onload = () => {
-        setSelectedContent((prev) => [
-          ...prev,
-          {
-            url: reader.result as string,
-            name: file.name,
-            type: 'image',
-          },
-        ]);
-      };
-      reader.readAsDataURL(file);
-    }
-
-    event.target.value = '';
-  }, []);
-
   // Handle generation
   const handleGenerate = useCallback(async () => {
     if (!prompt.trim() && selectedContent.length === 0) return;
@@ -285,6 +268,26 @@ export const AIInputBar: React.FC<AIInputBarProps> = ({ className }) => {
     [handleGenerate]
   );
 
+  // Handle content hover for preview
+  const handleContentMouseEnter = useCallback((item: SelectedContent, e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const topY = rect.top - 10;
+    console.log('Content hover enter:', item.type, rect);
+    setHoveredContent({
+      type: item.type,
+      url: item.url,
+      text: item.text,
+      x: centerX,
+      y: topY,
+    });
+  }, []);
+
+  const handleContentMouseLeave = useCallback(() => {
+    console.log('Content hover leave');
+    setHoveredContent(null);
+  }, []);
+
   // Get placeholder text
   const getPlaceholder = () => {
     if (selectedContent.length > 0) {
@@ -306,6 +309,8 @@ export const AIInputBar: React.FC<AIInputBarProps> = ({ className }) => {
               <div 
                 key={`${item.type}-${index}`} 
                 className={`ai-input-bar__content-item ai-input-bar__content-item--${item.type}`}
+                onMouseEnter={(e) => handleContentMouseEnter(item, e)}
+                onMouseLeave={handleContentMouseLeave}
               >
                 {/* Render based on content type */}
                 {item.type === 'text' ? (
@@ -351,98 +356,64 @@ export const AIInputBar: React.FC<AIInputBarProps> = ({ className }) => {
         </div>
       )}
 
+      {/* Hover preview - large content (rendered to body via portal) */}
+      {hoveredContent && ReactDOM.createPortal(
+        <div 
+          className={`ai-input-bar__hover-preview ai-input-bar__hover-preview--${hoveredContent.type}`}
+          style={{
+            left: `${hoveredContent.x}px`,
+            top: `${hoveredContent.y}px`,
+            transform: 'translate(-50%, -100%)',
+          }}
+        >
+          {/* Image or graphics preview */}
+          {(hoveredContent.type === 'image' || hoveredContent.type === 'graphics') && hoveredContent.url && (
+            <img src={hoveredContent.url} alt="Preview" />
+          )}
+          
+          {/* Video preview */}
+          {hoveredContent.type === 'video' && hoveredContent.url && (
+            <div className="ai-input-bar__hover-video">
+              <video 
+                src={hoveredContent.url} 
+                controls 
+                autoPlay 
+                muted 
+                loop
+                playsInline
+              />
+            </div>
+          )}
+          
+          {/* Text preview */}
+          {hoveredContent.type === 'text' && hoveredContent.text && (
+            <div className="ai-input-bar__hover-text">
+              <div className="ai-input-bar__hover-text-header">
+                <Type size={16} />
+                <span>{language === 'zh' ? '文字内容' : 'Text Content'}</span>
+              </div>
+              <div className="ai-input-bar__hover-text-content">
+                {hoveredContent.text}
+              </div>
+            </div>
+          )}
+        </div>,
+        document.body
+      )}
+
       {/* Main input container - single row layout */}
       <div className="ai-input-bar__container">
-        {/* Left: Tool buttons group */}
-        <div className="ai-input-bar__tools">
-          {/* Image/Video toggle */}
-          <div className="ai-input-bar__type-toggle">
-            <button
-              className={`ai-input-bar__type-btn ${generationType === 'image' ? 'active' : ''}`}
-              onClick={() => setGenerationType('image')}
-              title={language === 'zh' ? '图片' : 'Image'}
-            >
-              <Image size={18} />
-            </button>
-            <button
-              className={`ai-input-bar__type-btn ${generationType === 'video' ? 'active' : ''}`}
-              onClick={() => setGenerationType('video')}
-              title={language === 'zh' ? '视频' : 'Video'}
-            >
-              <Video size={18} />
-            </button>
-          </div>
-
-          {/* Model selector */}
-          <div className="ai-input-bar__model-selector" ref={modelMenuRef}>
-            <button
-              className="ai-input-bar__model-btn"
-              onClick={() => setIsModelMenuOpen(!isModelMenuOpen)}
-            >
-              <span>{currentModelLabel}</span>
-              <ChevronUp size={14} className={isModelMenuOpen ? '' : 'rotated'} />
-            </button>
-
-            {isModelMenuOpen && (
-              <div className="ai-input-bar__model-menu">
-                {generationType === 'video' ? (
-                  getVideoModelOptions().map((option) => (
-                    <button
-                      key={option.value}
-                      className={`ai-input-bar__model-option ${videoModel === option.value ? 'active' : ''}`}
-                      onClick={() => {
-                        setVideoModel(option.value);
-                        setIsModelMenuOpen(false);
-                      }}
-                    >
-                      <span className="model-name">{option.label}</span>
-                      <span className="model-desc">
-                        {VIDEO_MODEL_CONFIGS[option.value]?.description}
-                      </span>
-                    </button>
-                  ))
-                ) : (
-                  <button
-                    className="ai-input-bar__model-option active"
-                    onClick={() => setIsModelMenuOpen(false)}
-                  >
-                    <span className="model-name">Gemini</span>
-                    <span className="model-desc">
-                      {language === 'zh' ? 'Google AI 图片生成' : 'Google AI Image Generation'}
-                    </span>
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Upload button */}
-          <button
-            className="ai-input-bar__upload-btn"
-            onClick={() => fileInputRef.current?.click()}
-            title={language === 'zh' ? '上传图片' : 'Upload Image'}
-          >
-            <Upload size={18} />
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            multiple
-            onChange={handleImageUpload}
-            style={{ display: 'none' }}
-          />
-        </div>
-
-        {/* Center: Text input */}
+        {/* Text input */}
         <textarea
           ref={inputRef}
-          className="ai-input-bar__input"
+          className={classNames('ai-input-bar__input', { 'ai-input-bar__input--focused': isFocused })}
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           onKeyDown={handleKeyDown}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setIsFocused(false)}
           placeholder={getPlaceholder()}
-          rows={1}
+          rows={isFocused ? 4 : 1}
           disabled={isGenerating}
         />
 
