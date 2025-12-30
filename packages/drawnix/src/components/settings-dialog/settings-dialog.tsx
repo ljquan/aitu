@@ -6,52 +6,16 @@ import { useState, useEffect } from 'react';
 import { geminiSettings } from '../../utils/settings-manager';
 import { Tooltip, Select } from 'tdesign-react';
 import { InfoCircleIcon } from 'tdesign-icons-react';
+import {
+  IMAGE_MODEL_GROUPED_SELECT_OPTIONS,
+  VIDEO_MODEL_SELECT_OPTIONS,
+  DEFAULT_IMAGE_MODEL,
+  DEFAULT_VIDEO_MODEL,
+} from '../../constants/model-config';
 
-// VIP models - shown at top
-export const IMAGE_MODEL_VIP_OPTIONS = [
-  { label: 'gemini-3-pro-image-preview-vip (nano-banana-2-vip)', value: 'gemini-3-pro-image-preview-vip' },
-  { label: 'gemini-3-pro-image-preview-2k-vip (nano-banana-2-2k-vip)', value: 'gemini-3-pro-image-preview-2k-vip' },
-  { label: 'gemini-3-pro-image-preview-4k-vip (nano-banana-2-4k-vip)', value: 'gemini-3-pro-image-preview-4k-vip' },
-  { label: 'gemini-2.5-flash-image-vip (nano-banana-vip)', value: 'gemini-2.5-flash-image-vip' },
-];
-
-// Additional models - shown in "More" section
-export const IMAGE_MODEL_MORE_OPTIONS = [
-  { label: 'gpt-image-1.5', value: 'gpt-image-1.5' },
-  { label: 'gemini-3-pro-image-preview (nano-banana-2)', value: 'gemini-3-pro-image-preview' },
-  { label: 'gemini-2.5-flash-image (nano-banana)', value: 'gemini-2.5-flash-image' },
-  { label: 'gemini-3-pro-image-preview-hd (nano-banana-2-hd)', value: 'gemini-3-pro-image-preview-hd' },
-  { label: 'gemini-3-pro-image-preview-2k (nano-banana-2-2k)', value: 'gemini-3-pro-image-preview-2k' },
-  { label: 'gemini-3-pro-image-preview-4k (nano-banana-2-4k)', value: 'gemini-3-pro-image-preview-4k' },
-];
-
-// Combined options for backward compatibility (flat list)
-export const IMAGE_MODEL_OPTIONS = [
-  ...IMAGE_MODEL_VIP_OPTIONS,
-  ...IMAGE_MODEL_MORE_OPTIONS,
-];
-
-// Grouped options for Select with "More" section
-export const IMAGE_MODEL_GROUPED_OPTIONS = [
-  {
-    group: '推荐',
-    children: IMAGE_MODEL_VIP_OPTIONS,
-  },
-  {
-    group: '更多',
-    children: IMAGE_MODEL_MORE_OPTIONS,
-  },
-];
-
-export const VIDEO_MODEL_OPTIONS = [
-  { label: 'veo3.1', value: 'veo3.1' },
-  { label: 'sora-2', value: 'sora-2' },
-  { label: 'veo3', value: 'veo3' },
-  { label: 'veo3-pro', value: 'veo3-pro' },
-  { label: 'veo3.1-pro', value: 'veo3.1-pro' },
-  { label: 'veo3.1-components', value: 'veo3.1-components' },
-  { label: 'sora-2-pro', value: 'sora-2-pro' },
-];
+// 为了向后兼容，重新导出这些常量
+export { IMAGE_MODEL_GROUPED_SELECT_OPTIONS as IMAGE_MODEL_GROUPED_OPTIONS } from '../../constants/model-config';
+export { VIDEO_MODEL_SELECT_OPTIONS as VIDEO_MODEL_OPTIONS } from '../../constants/model-config';
 
 export const SettingsDialog = ({
   container,
@@ -71,8 +35,8 @@ export const SettingsDialog = ({
       const config = geminiSettings.get();
       setApiKey(config.apiKey || '');
       setBaseUrl(config.baseUrl || 'https://api.tu-zi.com/v1');
-      setImageModelName(config.imageModelName || 'gemini-3-pro-image-preview-vip');
-      setVideoModelName(config.videoModelName || 'veo3');
+      setImageModelName(config.imageModelName || DEFAULT_IMAGE_MODEL);
+      setVideoModelName(config.videoModelName || DEFAULT_VIDEO_MODEL);
     }
   }, [appState.openSettings]);
 
@@ -81,8 +45,8 @@ export const SettingsDialog = ({
     geminiSettings.update({
       apiKey: apiKey.trim(),
       baseUrl: baseUrl.trim() || 'https://api.tu-zi.com/v1',
-      imageModelName: imageModelName.trim() || 'gemini-3-pro-image-preview-vip',
-      videoModelName: videoModelName.trim() || 'veo3',
+      imageModelName: imageModelName.trim() || DEFAULT_IMAGE_MODEL,
+      videoModelName: videoModelName.trim() || DEFAULT_VIDEO_MODEL,
     });
 
     // 关闭弹窗
@@ -147,10 +111,10 @@ export const SettingsDialog = ({
               className="settings-dialog__select"
               value={imageModelName}
               onChange={(value) => setImageModelName(value as string)}
-              options={IMAGE_MODEL_GROUPED_OPTIONS}
+              options={IMAGE_MODEL_GROUPED_SELECT_OPTIONS}
               filterable
               creatable
-              placeholder="gemini-3-pro-image-preview-vip"
+              placeholder={DEFAULT_IMAGE_MODEL}
             />
           </div>
           <div className="settings-dialog__field">
@@ -159,10 +123,10 @@ export const SettingsDialog = ({
               className="settings-dialog__select"
               value={videoModelName}
               onChange={(value) => setVideoModelName(value as string)}
-              options={VIDEO_MODEL_OPTIONS}
+              options={VIDEO_MODEL_SELECT_OPTIONS}
               filterable
               creatable
-              placeholder="veo3"
+              placeholder={DEFAULT_VIDEO_MODEL}
             />
           </div>
         </div>

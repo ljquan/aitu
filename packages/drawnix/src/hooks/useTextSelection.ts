@@ -58,11 +58,12 @@ export function useTextSelection(
       }
     };
 
-    // 处理键盘复制事件 (Ctrl+C / Cmd+C)
+    // 处理键盘复制/剪切事件 (Ctrl+C / Cmd+C, Ctrl+X / Cmd+X)
     const handleKeyDown = (e: KeyboardEvent) => {
       const isCopyShortcut = (e.ctrlKey || e.metaKey) && e.key === 'c';
+      const isCutShortcut = (e.ctrlKey || e.metaKey) && e.key === 'x';
       
-      if (enableCopy && isCopyShortcut) {
+      if (enableCopy && (isCopyShortcut || isCutShortcut)) {
         // 获取当前选中的文本
         const target = e.target as TextInputElement;
         const selectedText = target.value.substring(
@@ -73,7 +74,7 @@ export function useTextSelection(
         if (selectedText) {
           // 使用 Clipboard API 复制
           navigator.clipboard.writeText(selectedText).then(() => {
-            console.log('Text copied via keyboard shortcut:', selectedText);
+            console.log(`Text ${isCutShortcut ? 'cut' : 'copied'} via keyboard shortcut:`, selectedText);
           }).catch(err => {
             console.error('Failed to copy text:', err);
             // 降级：使用 document.execCommand (已废弃但仍然有效)
@@ -115,6 +116,28 @@ export function useTextSelection(
       }
     };
 
+    // 处理右键菜单剪切
+    const handleCut = (e: ClipboardEvent) => {
+      if (enableCopy) {
+        const target = e.target as TextInputElement;
+        const selectedText = target.value.substring(
+          target.selectionStart || 0,
+          target.selectionEnd || 0
+        );
+
+        if (selectedText && e.clipboardData) {
+          e.clipboardData.setData('text/plain', selectedText);
+          console.log('Text cut via context menu:', selectedText);
+          // 不阻止默认行为，让浏览器删除选中的文本
+        }
+      }
+
+      // 阻止事件冒泡
+      if (stopPropagation) {
+        e.stopPropagation();
+      }
+    };
+
     // 保存文本选择状态
     const handleSelectionChange = () => {
       const start = element.selectionStart || 0;
@@ -136,8 +159,9 @@ export function useTextSelection(
     element.addEventListener('mousedown', handleStopPropagation);
     element.addEventListener('mouseup', handleStopPropagation);
     element.addEventListener('click', handleStopPropagation);
-    element.addEventListener('keydown', handleKeyDown);
-    element.addEventListener('copy', handleCopy);
+    element.addEventListener('keydown', handleKeyDown as EventListener);
+    element.addEventListener('copy', handleCopy as EventListener);
+    element.addEventListener('cut', handleCut as EventListener);
     element.addEventListener('select', handleSelectionChange);
 
     // 清理函数
@@ -148,8 +172,9 @@ export function useTextSelection(
       element.removeEventListener('mousedown', handleStopPropagation);
       element.removeEventListener('mouseup', handleStopPropagation);
       element.removeEventListener('click', handleStopPropagation);
-      element.removeEventListener('keydown', handleKeyDown);
-      element.removeEventListener('copy', handleCopy);
+      element.removeEventListener('keydown', handleKeyDown as EventListener);
+      element.removeEventListener('copy', handleCopy as EventListener);
+      element.removeEventListener('cut', handleCut as EventListener);
       element.removeEventListener('select', handleSelectionChange);
     };
   }, [elementRef, enableCopy, stopPropagation]);

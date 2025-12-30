@@ -10,10 +10,11 @@
  * - Text input for prompts
  * - Selected images display
  * - Generation type toggle (image/video)
- * - Model selection dropdown
+ * - Model selection dropdown with "#模型名" syntax support
  * - Send button to trigger generation
  * - Prompt suggestion panel with history and presets
  * - Integration with ChatDrawer for conversation display
+ * - Agent mode: AI decides which MCP tool to use (image/video generation)
  */
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
@@ -33,8 +34,20 @@ import { usePromptHistory } from '../../hooks/usePromptHistory';
 import { useChatDrawerControl } from '../../contexts/ChatDrawerContext';
 import { AI_IMAGE_PROMPTS } from '../../constants/prompts';
 import { PromptSuggestionPanel, type PromptItem } from './PromptSuggestionPanel';
+import { ModelSelector } from './ModelSelector';
+import { parseModelFromInput, insertModelToInput } from '../../utils/model-parser';
+import { agentExecutor } from '../../services/agent';
+import { initializeMCP } from '../../mcp';
 import classNames from 'classnames';
 import './ai-input-bar.scss';
+import './model-selector.scss';
+
+// 初始化 MCP 模块
+let mcpInitialized = false;
+if (!mcpInitialized) {
+  initializeMCP();
+  mcpInitialized = true;
+}
 
 export type GenerationType = 'image' | 'video';
 
@@ -87,6 +100,11 @@ export const AIInputBar: React.FC<AIInputBarProps> = ({ className }) => {
   const [aspectRatio] = useState(DEFAULT_ASPECT_RATIO);
   const [isFocused, setIsFocused] = useState(false);
   const [showSuggestionPanel, setShowSuggestionPanel] = useState(false);
+  
+  // Agent mode state
+  const [agentMode] = useState(true); // 默认启用 Agent 模式
+  const [showModelSelector, setShowModelSelector] = useState(false);
+  const [modelKeyword, setModelKeyword] = useState('');
 
   // Auto-show suggestion panel when input is cleared and focused
   useEffect(() => {
@@ -231,6 +249,33 @@ export const AIInputBar: React.FC<AIInputBarProps> = ({ className }) => {
     }
   }, [isModelMenuOpen]);
 
+  // 解析输入中的模型标记
+  const modelParseResult = useMemo(() => {
+    return parseModelFromInput(prompt);
+  }, [prompt]);
+
+  // 当检测到 # 时显示模型选择器
+  useEffect(() => {
+    if (modelParseResult.isTypingModel) {
+      setShowModelSelector(true);
+      setModelKeyword(modelParseResult.modelKeyword);
+      setShowSuggestionPanel(false); // 隐藏提示词面板
+    } else {
+      setShowModelSelector(false);
+      setModelKeyword('');
+    }
+  }, [modelParseResult]);
+
+  // 处理模型选择
+  const handleModelSelect = useCallback((modelId: string) => {
+    // 将模型插入到输入中
+    const newPrompt = insertModelToInput(prompt, modelId, modelParseResult.hashPosition);
+    setPrompt(newPrompt);
+    setShowModelSelector(false);
+    // 聚焦输入框
+    inputRef.current?.focus();
+  }, [prompt, modelParseResult.hashPosition]);
+
   // Handle generation
   const handleGenerate = useCallback(async () => {
     if (!prompt.trim() && selectedContent.length === 0) return;
@@ -239,55 +284,122 @@ export const AIInputBar: React.FC<AIInputBarProps> = ({ className }) => {
     setIsGenerating(true);
 
     try {
-      // Get aspect ratio dimensions
-      const { width, height } = calculateDimensions(aspectRatio);
-
       // Collect all reference images (exclude text type)
       const referenceImages: string[] = selectedContent
         .filter((item) => item.type !== 'text' && item.url)
         .map((item) => item.url!);
 
+      // 获取清理后的提示词（移除模型标记）
+      const cleanPrompt = modelParseResult.cleanText || prompt.trim();
+      
       // Combine selected text with user prompt
       const finalPrompt = selectedText 
-        ? `${selectedText}\n${prompt.trim()}`.trim()
-        : prompt.trim();
+        ? `${selectedText}\n${cleanPrompt}`.trim()
+        : cleanPrompt;
 
       // Save prompt to history if not empty
-      if (prompt.trim()) {
-        addHistory(prompt.trim());
+      if (cleanPrompt) {
+        addHistory(cleanPrompt);
       }
 
-      if (generationType === 'image') {
-        // Create image generation task
-        createTask(
-          {
-            prompt: finalPrompt,
-            width,
-            height,
-            referenceImages,
+      // Agent 模式：让 AI 决定使用哪个工具
+      if (agentMode) {
+        // 使用解析出的图片模型，如果没有则使用默认模型
+        const modelToUse = modelParseResult.imageModelId || 'gemini-2.5-flash';
+        console.log('[AIInputBar] Using Agent mode with model:', modelToUse);
+        
+        const result = await agentExecutor.execute(finalPrompt, {
+          model: modelToUse,
+          referenceImages,
+          onChunk: (chunk) => {
+            console.log('[AIInputBar] Agent chunk:', chunk);
           },
-          TaskType.IMAGE
-        );
+          onToolCall: (toolCall) => {
+            console.log('[AIInputBar] Agent calling tool:', toolCall.name);
+          },
+          onToolResult: (toolResult) => {
+            console.log('[AIInputBar] Tool result:', toolResult);
+            
+            // 如果生成成功，创建任务并添加到画布
+            if (toolResult.success && toolResult.data) {
+              const data = toolResult.data as any;
+              
+              if (toolResult.type === 'image') {
+                // 创建图片任务
+                const { width, height } = calculateDimensions(aspectRatio);
+                createTask(
+                  {
+                    prompt: data.prompt || finalPrompt,
+                    width,
+                    height,
+                    referenceImages,
+                    // 直接使用生成的 URL
+                    generatedUrl: data.url,
+                  },
+                  TaskType.IMAGE
+                );
+              } else if (toolResult.type === 'video') {
+                // 创建视频任务
+                const modelConfig = VIDEO_MODEL_CONFIGS[data.model as VideoModel] || VIDEO_MODEL_CONFIGS['veo3'];
+                const [videoWidth, videoHeight] = (data.size || modelConfig.defaultSize).split('x').map(Number);
+                
+                createTask(
+                  {
+                    prompt: data.prompt || finalPrompt,
+                    width: videoWidth,
+                    height: videoHeight,
+                    duration: parseInt(data.seconds || modelConfig.defaultDuration, 10),
+                    model: data.model || 'veo3',
+                    referenceImages,
+                    // 直接使用生成的 URL
+                    generatedUrl: data.url,
+                  },
+                  TaskType.VIDEO
+                );
+              }
+            }
+          },
+        });
+
+        // Send message to ChatDrawer
+        await sendMessageToChatDrawer(finalPrompt);
+
+        if (!result.success && result.error) {
+          console.error('[AIInputBar] Agent execution failed:', result.error);
+        }
       } else {
-        // Create video generation task
-        const modelConfig = VIDEO_MODEL_CONFIGS[videoModel];
-        const [videoWidth, videoHeight] = modelConfig.defaultSize.split('x').map(Number);
+        // 传统模式：直接创建任务
+        const { width, height } = calculateDimensions(aspectRatio);
 
-        createTask(
-          {
-            prompt: finalPrompt,
-            width: videoWidth,
-            height: videoHeight,
-            duration: parseInt(modelConfig.defaultDuration, 10),
-            model: videoModel,
-            referenceImages,
-          },
-          TaskType.VIDEO
-        );
+        if (generationType === 'image') {
+          createTask(
+            {
+              prompt: finalPrompt,
+              width,
+              height,
+              referenceImages,
+            },
+            TaskType.IMAGE
+          );
+        } else {
+          const modelConfig = VIDEO_MODEL_CONFIGS[videoModel];
+          const [videoWidth, videoHeight] = modelConfig.defaultSize.split('x').map(Number);
+
+          createTask(
+            {
+              prompt: finalPrompt,
+              width: videoWidth,
+              height: videoHeight,
+              duration: parseInt(modelConfig.defaultDuration, 10),
+              model: videoModel,
+              referenceImages,
+            },
+            TaskType.VIDEO
+          );
+        }
+
+        await sendMessageToChatDrawer(finalPrompt);
       }
-
-      // Send message to ChatDrawer and open it
-      await sendMessageToChatDrawer(finalPrompt);
 
       // Clear input after successful submission
       setPrompt('');
@@ -299,7 +411,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = ({ className }) => {
     } finally {
       setIsGenerating(false);
     }
-  }, [prompt, selectedContent, selectedText, generationType, videoModel, aspectRatio, createTask, isGenerating, addHistory, sendMessageToChatDrawer]);
+  }, [prompt, selectedContent, selectedText, generationType, videoModel, aspectRatio, createTask, isGenerating, addHistory, sendMessageToChatDrawer, agentMode, modelParseResult]);
 
   // Handle key press
   const handleKeyDown = useCallback(
@@ -308,9 +420,10 @@ export const AIInputBar: React.FC<AIInputBarProps> = ({ className }) => {
         event.preventDefault();
         handleGenerate();
       }
-      // Close suggestion panel on Escape
+      // Close panels on Escape
       if (event.key === 'Escape') {
         setShowSuggestionPanel(false);
+        setShowModelSelector(false);
       }
     },
     [handleGenerate]
@@ -429,9 +542,20 @@ export const AIInputBar: React.FC<AIInputBarProps> = ({ className }) => {
       <div className={classNames('ai-input-bar__container', {
         'ai-input-bar__container--has-content': selectedContent.length > 0
       })}>
+        {/* Model Selector - shown when typing # */}
+        <ModelSelector
+          visible={showModelSelector && isFocused}
+          filterKeyword={modelKeyword}
+          selectedImageModel={modelParseResult.imageModelId}
+          selectedVideoModel={modelParseResult.videoModelId}
+          onSelect={handleModelSelect}
+          onClose={() => setShowModelSelector(false)}
+          language={language}
+        />
+
         {/* Prompt Suggestion Panel - shown above the input container */}
         <PromptSuggestionPanel
-          visible={showSuggestionPanel && isFocused}
+          visible={showSuggestionPanel && isFocused && !showModelSelector}
           prompts={allPrompts}
           filterKeyword={prompt}
           onSelect={handlePromptSelect}
@@ -496,19 +620,56 @@ export const AIInputBar: React.FC<AIInputBarProps> = ({ className }) => {
 
         {/* Input row - textarea and send button */}
         <div className="ai-input-bar__input-row">
-          {/* Text input */}
-          <textarea
-            ref={inputRef}
-            className={classNames('ai-input-bar__input', { 'ai-input-bar__input--focused': isFocused })}
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            onKeyDown={handleKeyDown}
-            onFocus={handleFocus}
-            onBlur={handleBlur}
-            placeholder={getPlaceholder()}
-            rows={isFocused ? 4 : 1}
-            disabled={isGenerating}
-          />
+          {/* Text input wrapper for rich text display */}
+          <div className="ai-input-bar__rich-input">
+            {/* Overlay with formatted text - 使用原始文本保持光标位置同步 */}
+            <div 
+              className={classNames('ai-input-bar__rich-display', {
+                'ai-input-bar__rich-display--hidden': !prompt || modelParseResult.modelTags.length === 0
+              })}
+            >
+              {modelParseResult.segments.map((segment, index) => {
+                if (segment.type === 'text') {
+                  return <span key={index}>{segment.content}</span>;
+                }
+                if (segment.type === 'image-model') {
+                  return (
+                    <span key={index} className="ai-input-bar__model-tag ai-input-bar__model-tag--image">
+                      {segment.content}
+                    </span>
+                  );
+                }
+                if (segment.type === 'video-model') {
+                  return (
+                    <span key={index} className="ai-input-bar__model-tag ai-input-bar__model-tag--video">
+                      {segment.content}
+                    </span>
+                  );
+                }
+                return null;
+              })}
+            </div>
+
+            {/* Actual textarea */}
+            <textarea
+              ref={inputRef}
+              className={classNames('ai-input-bar__input', { 
+                'ai-input-bar__input--focused': isFocused,
+                'ai-input-bar__input--has-model': modelParseResult.modelTags.length > 0
+              })}
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              onKeyDown={handleKeyDown}
+              onFocus={handleFocus}
+              onBlur={handleBlur}
+              placeholder={agentMode 
+                ? (language === 'zh' ? '描述你想创建的内容，输入 # 选择模型' : 'Describe what you want to create, type # to select model')
+                : getPlaceholder()
+              }
+              rows={isFocused ? 4 : 1}
+              disabled={isGenerating}
+            />
+          </div>
 
           {/* Right: Send button */}
           <button

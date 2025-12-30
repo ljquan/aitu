@@ -472,10 +472,63 @@ $text-dark: #1F2937;
     width: 100%;
   }
 
-  // Text input
-  &__input {
+  // Rich input wrapper - contains textarea and formatted overlay
+  &__rich-input {
+    position: relative;
     flex: 1;
     min-width: 0;
+    width: 100%;
+  }
+
+  // Rich display - formatted text overlay (only shown when model tag exists)
+  &__rich-display {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 6px 12px;
+    font-size: 15px;
+    line-height: 1.5;
+    color: $text-dark;
+    white-space: pre-wrap;
+    word-break: break-word;
+    pointer-events: none;
+    font-family: 'PingFang SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    overflow: hidden;
+
+    &--hidden {
+      display: none;
+    }
+  }
+
+  // Model tag (highlighted inline) - 不使用 padding/margin 以保持光标位置同步
+  &__model-tag {
+    display: inline;
+    padding: 0;
+    margin: 0;
+    background: transparent;
+    border-radius: 0;
+    color: $orange-primary;
+    font-weight: 600;
+    font-size: 15px;
+    line-height: 1.5;
+    vertical-align: baseline;
+
+    // 图片模型标签 - 蓝色
+    &--image {
+      color: #3B82F6;
+    }
+
+    // 视频模型标签 - 紫色
+    &--video {
+      color: #A855F7;
+    }
+  }
+
+  // Text input (textarea)
+  &__input {
+    width: 100%;
     border: none;
     background: transparent;
     font-size: 15px;
@@ -488,6 +541,8 @@ $text-dark: #1F2937;
     padding: 6px 12px;
     font-family: 'PingFang SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     transition: all 0.2s ease;
+    position: relative;
+    z-index: 1;
 
     // Hide scrollbar
     scrollbar-width: none; // Firefox
@@ -520,6 +575,18 @@ $text-dark: #1F2937;
     // When focused, expand height smoothly
     &--focused {
       min-height: 96px; // 4 lines approximately
+    }
+
+    // When has model tag, make text transparent to show rich display
+    &--has-model {
+      color: transparent;
+      caret-color: $text-dark; // Keep cursor visible
+      
+      // 选中时只让文字透明，保留选中背景
+      &::selection {
+        background: rgba(59, 130, 246, 0.3); // 蓝色选中背景
+        color: transparent;
+      }
     }
   }
 
@@ -698,11 +765,36 @@ $text-dark: #1F2937;
       }
     }
 
+    &__rich-display {
+      color: var(--color-gray-20, #ccc);
+    }
+
+    &__model-tag {
+      color: $orange-primary;
+
+      &--image {
+        color: #60A5FA;
+      }
+
+      &--video {
+        color: #C084FC;
+      }
+    }
+
     &__input {
       color: var(--color-gray-20, #ccc);
 
       &::placeholder {
         color: var(--color-gray-60, #666);
+      }
+
+      &--has-model {
+        caret-color: var(--color-gray-20, #ccc);
+        
+        &::selection {
+          background: rgba(96, 165, 250, 0.4); // 深色模式下更亮的选中背景
+          color: transparent;
+        }
       }
     }
 
@@ -971,6 +1063,15 @@ $text-dark: #1F2937;
     &__upload-btn {
       width: 32px;
       height: 32px;
+    }
+
+    &__rich-display {
+      font-size: 14px;
+      padding: 4px 6px;
+    }
+
+    &__model-tag {
+      font-size: 14px;
     }
 
     &__input {
