@@ -38,11 +38,13 @@ $text-dark: #1F2937;
     flex-wrap: wrap; // 允许换行
     gap: 8px;
     padding: 0;
+    padding-left: 12px; // 与下方输入框文字对齐（输入框 padding-left: 12px）
     background: transparent;
     border-radius: 0;
     box-shadow: none;
     width: 100%; // 占满第一行
     flex-shrink: 0;
+    box-sizing: border-box;
   }
 
   &__processing {
@@ -516,12 +518,11 @@ $text-dark: #1F2937;
   &__highlight-tag {
     color: transparent;
     border-radius: 3px;
-    // 使用 box-decoration-break 确保跨行时背景正确显示
     box-decoration-break: clone;
     -webkit-box-decoration-break: clone;
-    // 微调垂直位置，补偿 div 和 textarea 的渲染差异
-    padding: 1px 0;
-    margin: -1px 0;
+    // 向上偏移以对齐文字
+    position: relative;
+    top: -2px;
 
     // 图片模型标签 - 蓝色背景
     &--image {
