@@ -4,7 +4,7 @@
  * Main chat drawer component using @llamaindex/chat-ui.
  */
 
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useImperativeHandle, forwardRef } from 'react';
 import { CloseIcon, AddIcon, ViewListIcon } from 'tdesign-icons-react';
 import { Tooltip } from 'tdesign-react';
 import {
@@ -23,11 +23,11 @@ import { chatStorageService } from '../../services/chat-storage-service';
 import { useChatHandler } from '../../hooks/useChatHandler';
 import { geminiSettings } from '../../utils/settings-manager';
 import { useDrawnix } from '../../hooks/use-drawnix';
-import type { ChatDrawerProps, ChatSession } from '../../types/chat.types';
+import type { ChatDrawerProps, ChatDrawerRef, ChatSession } from '../../types/chat.types';
 import type { Message } from '@llamaindex/chat-ui';
 
-export const ChatDrawer: React.FC<ChatDrawerProps> = React.memo(
-  ({ defaultOpen = false, onOpenChange }) => {
+export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
+  ({ defaultOpen = false, onOpenChange }, ref) => {
     // Initialize state from cache synchronously to prevent flash
     const [isOpen, setIsOpen] = useState(() => {
       const cached = chatStorageService.getDrawerState();
@@ -255,6 +255,35 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = React.memo(
       [activeSessionId, chatHandler, appState, setAppState]
     );
 
+    // Expose ref API for external control
+    useImperativeHandle(ref, () => ({
+      open: () => {
+        setIsOpen(true);
+        onOpenChange?.(true);
+      },
+      close: () => {
+        setIsOpen(false);
+        onOpenChange?.(false);
+      },
+      toggle: handleToggle,
+      sendMessage: async (content: string) => {
+        // Open drawer first
+        setIsOpen(true);
+        onOpenChange?.(true);
+        
+        // Create message object
+        const msg: Message = {
+          id: `msg_${Date.now()}`,
+          role: 'user',
+          parts: [{ type: 'text', text: content }],
+        };
+        
+        // Send the message
+        await handleSendWrapper(msg);
+      },
+      isOpen: () => isOpen,
+    }), [isOpen, handleToggle, handleSendWrapper, onOpenChange]);
+
     // Wrapped handler for ChatSection
     const wrappedHandler = useMemo(
       () => ({
@@ -391,7 +420,5 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = React.memo(
     );
   }
 );
-
-ChatDrawer.displayName = 'ChatDrawer';
 
 ChatDrawer.displayName = 'ChatDrawer';

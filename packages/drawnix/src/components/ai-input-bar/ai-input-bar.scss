@@ -31,17 +31,18 @@ $text-dark: #1F2937;
   align-items: center;
   gap: 8px;
 
-  // Selected content preview above the input bar
+  // Selected content preview - first row in container
   &__content-preview {
     pointer-events: auto;
     display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    padding: 6px 8px;
-    background: var(--island-bg-color, #fff);
-    border-radius: 12px;
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
-    max-width: 100%;
+    flex-wrap: wrap; // 允许换行
+    gap: 8px;
+    padding: 0;
+    background: transparent;
+    border-radius: 0;
+    box-shadow: none;
+    width: 100%; // 占满第一行
+    flex-shrink: 0;
   }
 
   &__processing {
@@ -55,9 +56,9 @@ $text-dark: #1F2937;
 
   &__content-item {
     position: relative;
-    width: 36px;
+    width: 36px; // 参考截图尺寸
     height: 36px;
-    border-radius: 6px;
+    border-radius: 4px; // 更圆润
     overflow: hidden;
     background: $gray-light;
     flex-shrink: 0;
@@ -75,24 +76,24 @@ $text-dark: #1F2937;
     }
 
     &--graphics {
-      border: 1.5px solid $orange-primary;
+      border: 1px solid $orange-primary;
     }
 
     &--video {
-      border: 1.5px solid #3B82F6; // Blue border for video
+      border: 2px solid #3B82F6;
     }
 
     &--text {
       width: auto;
-      min-width: 36px;
-      max-width: 120px;
-      height: auto;
-      min-height: 32px;
-      padding: 4px 6px;
-      background: #EFF6FF; // Light blue background for text
+      height: auto; // 不继承固定高度
+      min-width: 64px;
+      max-width: 180px; // 增大文本框宽度
+      padding: 8px 12px;
+      background: #EFF6FF;
       border: 1px solid #BFDBFE;
       display: flex;
       align-items: center;
+      justify-content: flex-start;
     }
   }
 
@@ -268,7 +269,6 @@ $text-dark: #1F2937;
     color: #fff;
     font-size: 10px;
     text-align: center;
-    padding: 1px 2px;
 
     &--video {
       background: rgba(59, 130, 246, 0.9); // Blue for video
@@ -288,24 +288,29 @@ $text-dark: #1F2937;
     @extend .ai-input-bar__content-remove;
   }
 
-  // Main container - single row horizontal layout
+  // Main container - two-row layout when content is selected
   &__container {
+    position: relative; // 作为提示词面板的定位基准
     pointer-events: auto;
     display: flex;
+    flex-direction: row; // 默认横向布局（无选中内容时）
     align-items: center;
-    gap: 8px;
+    gap: 12px;
     width: 100%;
     background: var(--island-bg-color, #fff);
 
-    border-radius: 36px; // Pill shape
-    padding: 8px 12px 8px 10px;
+    border-radius: 48px; // 默认药丸形状
+    padding: 8px 12px 8px 16px;
     box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-    // transition: border-radius 0.2s ease;
 
-    // When input is focused, reduce border radius
-    // &:has(.ai-input-bar__input--focused) {
-    //   border-radius: 64px;
-    // }
+    // 当有选中内容时，切换为垂直布局
+    &--has-content {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 8px;
+      border-radius: 24px; // 更方形的圆角
+      padding: 12px 16px;
+    }
   }
 
   // Left tools area
@@ -457,6 +462,14 @@ $text-dark: #1F2937;
       background: $gray-light;
       border-color: $gray-medium;
     }
+  }
+
+  // Input row - contains textarea and send button (second row when content is selected)
+  &__input-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
   }
 
   // Text input
@@ -705,6 +718,204 @@ $text-dark: #1F2937;
   }
 }
 
+// Prompt Suggestion Panel Styles
+.prompt-suggestion-panel {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  background: var(--island-bg-color, #fff);
+  border-radius: 16px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+  animation: panelSlideUp 0.2s ease;
+  max-height: 320px;
+  display: flex;
+  flex-direction: column;
+  pointer-events: auto; // 覆盖父容器的 pointer-events: none，启用点击和滚动
+
+  &--empty {
+    max-height: auto;
+  }
+
+  &__content {
+    overflow-y: auto;
+    padding: 8px;
+
+    // Custom scrollbar
+    &::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: rgba(0, 0, 0, 0.15);
+      border-radius: 3px;
+
+      &:hover {
+        background: rgba(0, 0, 0, 0.25);
+      }
+    }
+  }
+
+  &__empty {
+    padding: 24px 16px;
+    text-align: center;
+    color: $gray-medium;
+    font-size: 14px;
+  }
+
+  &__section {
+    &:not(:last-child) {
+      margin-bottom: 12px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid $gray-light;
+    }
+  }
+
+  &__section-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px 8px;
+    font-size: 12px;
+    font-weight: 500;
+    color: $gray-medium;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+
+    svg {
+      opacity: 0.7;
+    }
+  }
+
+  &__list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  &__item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    background: transparent;
+
+    &:hover {
+      background: $gray-light;
+    }
+
+    &--history {
+      &:hover {
+        .prompt-suggestion-panel__item-delete {
+          opacity: 1;
+        }
+      }
+    }
+  }
+
+  &__item-text {
+    flex: 1;
+    font-size: 14px;
+    line-height: 1.4;
+    color: $text-dark;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding-right: 8px;
+  }
+
+  &__item-delete {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border: none;
+    background: transparent;
+    border-radius: 4px;
+    color: $gray-medium;
+    cursor: pointer;
+    opacity: 0;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+
+    &:hover {
+      background: rgba(239, 68, 68, 0.1);
+      color: #EF4444;
+    }
+  }
+}
+
+@keyframes panelSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+// Dark mode for prompt suggestion panel
+:root[data-theme='dark'] {
+  .prompt-suggestion-panel {
+    background: var(--color-surface-high, #2a2a2a);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+
+    &__content {
+      &::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.15);
+
+        &:hover {
+          background: rgba(255, 255, 255, 0.25);
+        }
+      }
+    }
+
+    &__empty {
+      color: var(--color-gray-50, #999);
+    }
+
+    &__section {
+      &:not(:last-child) {
+        border-bottom-color: var(--color-border, #444);
+      }
+    }
+
+    &__section-header {
+      color: var(--color-gray-50, #999);
+    }
+
+    &__item {
+      &:hover {
+        background: var(--color-surface-mid, #333);
+      }
+    }
+
+    &__item-text {
+      color: var(--color-gray-20, #ccc);
+    }
+
+    &__item-delete {
+      color: var(--color-gray-50, #999);
+
+      &:hover {
+        background: rgba(239, 68, 68, 0.15);
+        color: #F87171;
+      }
+    }
+  }
+}
+
 // Mobile responsive
 @media (max-width: 640px) {
   .ai-input-bar {
@@ -712,13 +923,16 @@ $text-dark: #1F2937;
     padding: 0 12px;
 
     &__content-preview {
-      padding: 4px 6px;
-      gap: 4px;
+      gap: 6px;
     }
 
     &__content-item {
-      width: 32px;
-      height: 32px;
+
+      &--text {
+        height: auto; // 移动端也使用自动高度
+        min-width: 56px;
+        max-width: 140px;
+      }
     }
 
     &__hover-preview {
@@ -767,6 +981,11 @@ $text-dark: #1F2937;
     &__send-btn {
       width: 36px;
       height: 36px;
+    }
+
+    &__send-logo {
+      width: 18px;
+      height: 18px;
     }
   }
 }

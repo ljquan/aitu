@@ -12,9 +12,11 @@
  * - Generation type toggle (image/video)
  * - Model selection dropdown
  * - Send button to trigger generation
+ * - Prompt suggestion panel with history and presets
+ * - Integration with ChatDrawer for conversation display
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import ReactDOM from 'react-dom';
 import { Video, Send, Type, Play } from 'lucide-react';
 import { useBoard } from '@plait-board/react-board';
@@ -27,6 +29,10 @@ import { VIDEO_MODEL_CONFIGS } from '../../constants/video-model-config';
 import type { VideoModel } from '../../types/video.types';
 import { calculateDimensions, DEFAULT_ASPECT_RATIO } from '../../constants/image-aspect-ratios';
 import { useTextSelection } from '../../hooks/useTextSelection';
+import { usePromptHistory } from '../../hooks/usePromptHistory';
+import { useChatDrawerControl } from '../../contexts/ChatDrawerContext';
+import { AI_IMAGE_PROMPTS } from '../../constants/prompts';
+import { PromptSuggestionPanel, type PromptItem } from './PromptSuggestionPanel';
 import classNames from 'classnames';
 import './ai-input-bar.scss';
 
@@ -67,6 +73,8 @@ export const AIInputBar: React.FC<AIInputBarProps> = ({ className }) => {
   const board = useBoard();
   const { language } = useI18n();
   const { createTask } = useTaskQueue();
+  const { history, addHistory, removeHistory } = usePromptHistory();
+  const { sendMessageToChatDrawer } = useChatDrawerControl();
 
   // State
   const [prompt, setPrompt] = useState('');
@@ -78,6 +86,14 @@ export const AIInputBar: React.FC<AIInputBarProps> = ({ className }) => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [aspectRatio] = useState(DEFAULT_ASPECT_RATIO);
   const [isFocused, setIsFocused] = useState(false);
+  const [showSuggestionPanel, setShowSuggestionPanel] = useState(false);
+
+  // Auto-show suggestion panel when input is cleared and focused
+  useEffect(() => {
+    if (isFocused && prompt.trim() === '') {
+      setShowSuggestionPanel(true);
+    }
+  }, [prompt, isFocused]);
   const [hoveredContent, setHoveredContent] = useState<{
     type: SelectedContentType;
     url?: string;
@@ -88,12 +104,31 @@ export const AIInputBar: React.FC<AIInputBarProps> = ({ className }) => {
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const modelMenuRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   // 使用自定义 hook 处理文本选择和复制，同时阻止事件冒泡
   useTextSelection(inputRef, {
     enableCopy: true,
     stopPropagation: true,
   });
+
+  // 合并预设提示词和历史提示词
+  const allPrompts = useMemo((): PromptItem[] => {
+    const presetPrompts = AI_IMAGE_PROMPTS[language].map((content, index) => ({
+      id: `preset_${index}`,
+      content,
+      source: 'preset' as const,
+    }));
+
+    const historyPrompts = history.map(item => ({
+      id: item.id,
+      content: item.content,
+      source: 'history' as const,
+      timestamp: item.timestamp,
+    }));
+
+    return [...historyPrompts, ...presetPrompts];
+  }, [language, history]);
 
   // Handle selection change - process all selected elements using the same logic as AI generation
   useEffect(() => {
@@ -217,6 +252,11 @@ export const AIInputBar: React.FC<AIInputBarProps> = ({ className }) => {
         ? `${selectedText}\n${prompt.trim()}`.trim()
         : prompt.trim();
 
+      // Save prompt to history if not empty
+      if (prompt.trim()) {
+        addHistory(prompt.trim());
+      }
+
       if (generationType === 'image') {
         // Create image generation task
         createTask(
@@ -246,16 +286,20 @@ export const AIInputBar: React.FC<AIInputBarProps> = ({ className }) => {
         );
       }
 
+      // Send message to ChatDrawer and open it
+      await sendMessageToChatDrawer(finalPrompt);
+
       // Clear input after successful submission
       setPrompt('');
       setSelectedContent([]);
       setSelectedText('');
+      setShowSuggestionPanel(false);
     } catch (error) {
       console.error('Failed to create generation task:', error);
     } finally {
       setIsGenerating(false);
     }
-  }, [prompt, selectedContent, selectedText, generationType, videoModel, aspectRatio, createTask, isGenerating]);
+  }, [prompt, selectedContent, selectedText, generationType, videoModel, aspectRatio, createTask, isGenerating, addHistory, sendMessageToChatDrawer]);
 
   // Handle key press
   const handleKeyDown = useCallback(
@@ -264,16 +308,49 @@ export const AIInputBar: React.FC<AIInputBarProps> = ({ className }) => {
         event.preventDefault();
         handleGenerate();
       }
+      // Close suggestion panel on Escape
+      if (event.key === 'Escape') {
+        setShowSuggestionPanel(false);
+      }
     },
     [handleGenerate]
   );
+
+  // Handle input focus
+  const handleFocus = useCallback(() => {
+    setIsFocused(true);
+    setShowSuggestionPanel(true);
+  }, []);
+
+  // Handle input blur
+  const handleBlur = useCallback(() => {
+    setIsFocused(false);
+    // Don't close suggestion panel immediately - let click events process first
+  }, []);
+
+  // Handle prompt selection from suggestion panel
+  const handlePromptSelect = useCallback((promptItem: PromptItem) => {
+    setPrompt(promptItem.content);
+    setShowSuggestionPanel(false);
+    // Focus input after selection
+    inputRef.current?.focus();
+  }, []);
+
+  // Handle close suggestion panel
+  const handleCloseSuggestionPanel = useCallback(() => {
+    setShowSuggestionPanel(false);
+  }, []);
+
+  // Handle delete history
+  const handleDeleteHistory = useCallback((id: string) => {
+    removeHistory(id);
+  }, [removeHistory]);
 
   // Handle content hover for preview
   const handleContentMouseEnter = useCallback((item: SelectedContent, e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const centerX = rect.left + rect.width / 2;
     const topY = rect.top - 10;
-    console.log('Content hover enter:', item.type, rect);
     setHoveredContent({
       type: item.type,
       url: item.url,
@@ -284,7 +361,6 @@ export const AIInputBar: React.FC<AIInputBarProps> = ({ className }) => {
   }, []);
 
   const handleContentMouseLeave = useCallback(() => {
-    console.log('Content hover leave');
     setHoveredContent(null);
   }, []);
 
@@ -300,61 +376,9 @@ export const AIInputBar: React.FC<AIInputBarProps> = ({ className }) => {
 
   return (
     <div 
+      ref={containerRef}
       className={classNames('ai-input-bar', ATTACHED_ELEMENT_CLASS_NAME, className)}
     >
-      {/* Selected content preview - shown above the input bar */}
-      {selectedContent.length > 0 && (
-        <div className="ai-input-bar__content-preview">
-          {selectedContent.map((item, index) => (
-              <div 
-                key={`${item.type}-${index}`} 
-                className={`ai-input-bar__content-item ai-input-bar__content-item--${item.type}`}
-                onMouseEnter={(e) => handleContentMouseEnter(item, e)}
-                onMouseLeave={handleContentMouseLeave}
-              >
-                {/* Render based on content type */}
-                {item.type === 'text' ? (
-                  // Text content preview
-                  <div className="ai-input-bar__text-preview">
-                    <Type size={14} className="ai-input-bar__text-icon" />
-                    <span className="ai-input-bar__text-content">
-                      {item.text && item.text.length > 20 
-                        ? `${item.text.substring(0, 20)}...` 
-                        : item.text}
-                    </span>
-                  </div>
-                ) : item.type === 'video' ? (
-                  // Video preview with icon placeholder (no thumbnail generation)
-                  <>
-                    <div className="ai-input-bar__video-placeholder">
-                      <Video size={20} />
-                    </div>
-                    <div className="ai-input-bar__video-overlay">
-                      <Play size={16} fill="white" />
-                    </div>
-                  </>
-                ) : (
-                  // Image or graphics preview
-                  <img src={item.url} alt={item.name} />
-                )}
-                
-                {/* Type label for graphics */}
-                {item.type === 'graphics' && (
-                  <span className="ai-input-bar__content-label">
-                    {language === 'zh' ? '图形' : 'Graphics'}
-                  </span>
-                )}
-                
-                {/* Type label for video */}
-                {item.type === 'video' && (
-                  <span className="ai-input-bar__content-label ai-input-bar__content-label--video">
-                    {language === 'zh' ? '视频' : 'Video'}
-                  </span>
-                )}
-              </div>
-          ))}
-        </div>
-      )}
 
       {/* Hover preview - large content (rendered to body via portal) */}
       {hoveredContent && ReactDOM.createPortal(
@@ -401,30 +425,100 @@ export const AIInputBar: React.FC<AIInputBarProps> = ({ className }) => {
         document.body
       )}
 
-      {/* Main input container - single row layout */}
-      <div className="ai-input-bar__container">
-        {/* Text input */}
-        <textarea
-          ref={inputRef}
-          className={classNames('ai-input-bar__input', { 'ai-input-bar__input--focused': isFocused })}
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          onKeyDown={handleKeyDown}
-          onFocus={() => setIsFocused(true)}
-          onBlur={() => setIsFocused(false)}
-          placeholder={getPlaceholder()}
-          rows={isFocused ? 4 : 1}
-          disabled={isGenerating}
+      {/* Main input container - dynamic layout based on content */}
+      <div className={classNames('ai-input-bar__container', {
+        'ai-input-bar__container--has-content': selectedContent.length > 0
+      })}>
+        {/* Prompt Suggestion Panel - shown above the input container */}
+        <PromptSuggestionPanel
+          visible={showSuggestionPanel && isFocused}
+          prompts={allPrompts}
+          filterKeyword={prompt}
+          onSelect={handlePromptSelect}
+          onClose={handleCloseSuggestionPanel}
+          onDeleteHistory={handleDeleteHistory}
+          language={language}
         />
 
-        {/* Right: Send button */}
-        <button
-          className={`ai-input-bar__send-btn ${canGenerate ? 'active' : ''} ${isGenerating ? 'loading' : ''}`}
-          onClick={handleGenerate}
-          disabled={!canGenerate || isGenerating}
-        >
-          <Send size={18} />
-        </button>
+        {/* Selected content preview - shown inside input container on the left */}
+        {selectedContent.length > 0 && (
+          <div className="ai-input-bar__content-preview">
+            {selectedContent.map((item, index) => (
+                <div 
+                  key={`${item.type}-${index}`} 
+                  className={`ai-input-bar__content-item ai-input-bar__content-item--${item.type}`}
+                  onMouseEnter={(e) => handleContentMouseEnter(item, e)}
+                  onMouseLeave={handleContentMouseLeave}
+                >
+                  {/* Render based on content type */}
+                  {item.type === 'text' ? (
+                    // Text content preview
+                    <div className="ai-input-bar__text-preview">
+                      <Type size={14} className="ai-input-bar__text-icon" />
+                      <span className="ai-input-bar__text-content">
+                        {item.text && item.text.length > 20 
+                          ? `${item.text.substring(0, 20)}...` 
+                          : item.text}
+                      </span>
+                    </div>
+                  ) : item.type === 'video' ? (
+                    // Video preview with icon placeholder (no thumbnail generation)
+                    <>
+                      <div className="ai-input-bar__video-placeholder">
+                        <Video size={20} />
+                      </div>
+                      <div className="ai-input-bar__video-overlay">
+                        <Play size={16} fill="white" />
+                      </div>
+                    </>
+                  ) : (
+                    // Image or graphics preview
+                    <img src={item.url} alt={item.name} />
+                  )}
+                  
+                  {/* Type label for graphics */}
+                  {item.type === 'graphics' && (
+                    <span className="ai-input-bar__content-label">
+                      {language === 'zh' ? '图形' : 'Graphics'}
+                    </span>
+                  )}
+                  
+                  {/* Type label for video */}
+                  {item.type === 'video' && (
+                    <span className="ai-input-bar__content-label ai-input-bar__content-label--video">
+                      {language === 'zh' ? '视频' : 'Video'}
+                    </span>
+                  )}
+                </div>
+            ))}
+          </div>
+        )}
+
+        {/* Input row - textarea and send button */}
+        <div className="ai-input-bar__input-row">
+          {/* Text input */}
+          <textarea
+            ref={inputRef}
+            className={classNames('ai-input-bar__input', { 'ai-input-bar__input--focused': isFocused })}
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onFocus={handleFocus}
+            onBlur={handleBlur}
+            placeholder={getPlaceholder()}
+            rows={isFocused ? 4 : 1}
+            disabled={isGenerating}
+          />
+
+          {/* Right: Send button */}
+          <button
+            className={`ai-input-bar__send-btn ${canGenerate ? 'active' : ''} ${isGenerating ? 'loading' : ''}`}
+            onClick={handleGenerate}
+            disabled={!canGenerate || isGenerating}
+          >
+            <Send size={18} />
+          </button>
+        </div>
       </div>
     </div>
   );

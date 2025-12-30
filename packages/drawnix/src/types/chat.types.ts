@@ -92,6 +92,20 @@ export interface ChatDrawerProps {
   onOpenChange?: (isOpen: boolean) => void;
 }
 
+/** ChatDrawer Ref API - 用于外部控制 ChatDrawer */
+export interface ChatDrawerRef {
+  /** 打开抽屉 */
+  open: () => void;
+  /** 关闭抽屉 */
+  close: () => void;
+  /** 切换抽屉状态 */
+  toggle: () => void;
+  /** 打开抽屉并发送消息 */
+  sendMessage: (content: string) => Promise<void>;
+  /** 获取当前打开状态 */
+  isOpen: () => boolean;
+}
+
 
 /** SessionList 组件 Props */
 export interface SessionListProps {
