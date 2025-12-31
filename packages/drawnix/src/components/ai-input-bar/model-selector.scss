@@ -1,8 +1,9 @@
 /**
  * 模型选择器样式
+ * 注意：使用 .ai-input-bar 限定作用域，避免与 chat-drawer 的 ModelSelector 冲突
  */
 
-.model-selector {
+.ai-input-bar .ai-model-selector {
   position: absolute;
   bottom: 100%;
   left: 0;
@@ -196,7 +197,7 @@
 
 // 暗色主题支持
 :root[data-theme='dark'] {
-  .model-selector {
+  .ai-input-bar .ai-model-selector {
     background: var(--color-surface-high, #2a2a2a);
     border-color: var(--color-border, #444444);
 

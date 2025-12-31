@@ -28,7 +28,6 @@ import { TaskType } from '../../types/task.types';
 import { processSelectedContentForAI } from '../../utils/selection-utils';
 import { VIDEO_MODEL_CONFIGS } from '../../constants/video-model-config';
 import type { VideoModel } from '../../types/video.types';
-import { calculateDimensions, DEFAULT_ASPECT_RATIO } from '../../constants/image-aspect-ratios';
 import { useTextSelection } from '../../hooks/useTextSelection';
 import { usePromptHistory } from '../../hooks/usePromptHistory';
 import { useChatDrawerControl } from '../../contexts/ChatDrawerContext';
@@ -40,9 +39,36 @@ import {
   type PromptItem,
 } from './smart-suggestion-panel';
 import { agentExecutor } from '../../services/agent';
-import { initializeMCP } from '../../mcp';
+import { initializeMCP, setCanvasBoard } from '../../mcp';
+import { parseAIInput, generateDefaultPrompt } from '../../utils/ai-input-parser';
+import { convertToWorkflow, type WorkflowDefinition } from './workflow-converter';
+import { useWorkflowControl } from '../../contexts/WorkflowContext';
+import type { WorkflowMessageData } from '../../types/chat.types';
 import classNames from 'classnames';
 import './ai-input-bar.scss';
+
+/**
+ * 将 WorkflowDefinition 转换为 WorkflowMessageData
+ */
+function toWorkflowMessageData(workflow: WorkflowDefinition): WorkflowMessageData {
+  return {
+    id: workflow.id,
+    name: workflow.name,
+    generationType: workflow.generationType,
+    prompt: workflow.metadata.prompt,
+    count: workflow.metadata.count,
+    steps: workflow.steps.map(step => ({
+      id: step.id,
+      description: step.description,
+      status: step.status,
+      mcp: step.mcp,
+      args: step.args,
+      result: step.result,
+      error: step.error,
+      duration: step.duration,
+    })),
+  };
+}
 
 // 初始化 MCP 模块
 let mcpInitialized = false;
@@ -95,6 +121,12 @@ const SelectionWatcher: React.FC<{
   const board = useBoard();
   const boardRef = useRef(board);
   boardRef.current = board;
+
+  // 设置 canvas board 引用给 MCP 工具使用
+  useEffect(() => {
+    setCanvasBoard(board);
+    return () => setCanvasBoard(null);
+  }, [board]);
   const onSelectionChangeRef = useRef(onSelectionChange);
   onSelectionChangeRef.current = onSelectionChange;
 
@@ -174,16 +206,18 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
   const { createTask } = useTaskQueue();
   const { history, addHistory, removeHistory } = usePromptHistory();
   const chatDrawerControl = useChatDrawerControl();
+  const workflowControl = useWorkflowControl();
   // 使用 ref 存储，避免依赖变化
-  const sendMessageToChatDrawerRef = useRef(chatDrawerControl.sendMessageToChatDrawer);
-  sendMessageToChatDrawerRef.current = chatDrawerControl.sendMessageToChatDrawer;
+  const sendWorkflowMessageRef = useRef(chatDrawerControl.sendWorkflowMessage);
+  sendWorkflowMessageRef.current = chatDrawerControl.sendWorkflowMessage;
+  const updateWorkflowMessageRef = useRef(chatDrawerControl.updateWorkflowMessage);
+  updateWorkflowMessageRef.current = chatDrawerControl.updateWorkflowMessage;
 
   // State
   const [prompt, setPrompt] = useState('');
   const [selectedContent, setSelectedContent] = useState<SelectedContent[]>([]);
   const [selectedText, setSelectedText] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
-  const [aspectRatio] = useState(DEFAULT_ASPECT_RATIO);
   const [isFocused, setIsFocused] = useState(false);
   const [showSuggestionPanel, setShowSuggestionPanel] = useState(false);
 
@@ -269,99 +303,280 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
     setIsGenerating(true);
 
     try {
-      // Collect all reference images (exclude text type)
+      // 收集所有参考图片（排除文字类型）
       const referenceImages: string[] = selectedContent
         .filter((item) => item.type !== 'text' && item.url)
         .map((item) => item.url!);
 
-      // 获取清理后的提示词（移除模型/参数/个数标记）
-      const cleanPrompt = parseResult.cleanText || prompt.trim();
-      
-      // Combine selected text with user prompt
-      const finalPrompt = selectedText 
-        ? `${selectedText}\n${cleanPrompt}`.trim()
-        : cleanPrompt;
+      // 收集选中的文字内容
+      const selectedTexts: string[] = selectedContent
+        .filter((item) => item.type === 'text' && item.text)
+        .map((item) => item.text!);
 
-      // Save prompt to history if not empty
-      if (cleanPrompt) {
-        addHistory(cleanPrompt);
+      // 图片数量（包括图形）
+      const imageCount = selectedContent.filter(
+        (item) => item.type === 'image' || item.type === 'graphics'
+      ).length;
+
+      // 解析输入内容
+      const parsedParams = parseAIInput(
+        prompt,
+        selectedContent.length > 0,
+        selectedTexts,
+        imageCount
+      );
+
+      console.log('[AIInputBar] Parsed params:', parsedParams);
+
+      // 构建最终提示词
+      let finalPrompt = parsedParams.prompt;
+      
+      // 如果有选中的文字且用户也输入了内容，合并它们
+      if (selectedText && parsedParams.parseResult.cleanText) {
+        finalPrompt = `${selectedText}\n${parsedParams.parseResult.cleanText}`.trim();
+      } else if (selectedText && !parsedParams.parseResult.cleanText) {
+        // 只有选中文字，没有用户输入
+        finalPrompt = selectedText;
       }
 
-      // 使用解析出的图片模型，如果没有则使用默认模型
-      const modelToUse = parseResult.selectedImageModel || 'gemini-2.5-flash';
-      console.log('[AIInputBar] Using Agent mode with model:', modelToUse);
-      
-      const result = await agentExecutor.execute(finalPrompt, {
-        model: modelToUse,
-        referenceImages,
-        onChunk: (chunk) => {
-          console.log('[AIInputBar] Agent chunk:', chunk);
-        },
-        onToolCall: (toolCall) => {
-          console.log('[AIInputBar] Agent calling tool:', toolCall.name);
-        },
-        onToolResult: (toolResult) => {
-          console.log('[AIInputBar] Tool result:', toolResult);
+      // 如果最终没有 prompt，使用默认 prompt
+      if (!finalPrompt) {
+        finalPrompt = generateDefaultPrompt(
+          selectedContent.length > 0,
+          selectedTexts,
+          imageCount
+        );
+      }
+
+      // 更新 parsedParams 的 prompt
+      const updatedParams = { ...parsedParams, prompt: finalPrompt };
+
+      // 保存提示词到历史记录
+      if (parsedParams.parseResult.cleanText) {
+        addHistory(parsedParams.parseResult.cleanText);
+      }
+
+      console.log('[AIInputBar] Final prompt:', finalPrompt);
+      console.log('[AIInputBar] Scenario:', parsedParams.scenario);
+
+      // 创建工作流定义
+      const workflow = convertToWorkflow(updatedParams, referenceImages);
+      console.log('[AIInputBar] Created workflow:', workflow);
+
+      // 启动工作流（内部状态管理）
+      workflowControl.startWorkflow(workflow);
+
+      // 发送工作流消息到 ChatDrawer（创建新对话并显示）
+      const workflowMessageData = toWorkflowMessageData(workflow);
+      await sendWorkflowMessageRef.current({
+        prompt: finalPrompt,
+        images: referenceImages,
+        workflow: workflowMessageData,
+      });
+
+      // 根据场景处理
+      if (parsedParams.scenario === 'direct_generation') {
+        // 场景 1-3: 直接生成（无额外内容）
+        // 直接创建任务添加到任务队列
+        
+        const { generationType, modelId, count, width, height, duration } = parsedParams;
+        
+        console.log(`[AIInputBar] Direct generation: type=${generationType}, model=${modelId}, count=${count}`);
+        
+        // 将参考图片转换为 uploadedImages 格式（与 AI 图片/视频弹窗一致）
+        const uploadedImages = referenceImages.map((url, index) => ({
+          type: 'url' as const,
+          url,
+          name: `reference-${index + 1}`,
+        }));
+        
+        // 根据数量创建多个任务，并更新工作流步骤状态
+        for (let i = 0; i < count; i++) {
+          const stepId = `step-${i + 1}`;
+          const startTime = Date.now();
           
-          // 如果生成成功，创建任务并添加到画布
-          if (toolResult.success && toolResult.data) {
-            const data = toolResult.data as any;
-            
-            if (toolResult.type === 'image') {
-              // 创建图片任务
-              const { width, height } = calculateDimensions(aspectRatio);
+          // 更新步骤为运行中
+          workflowControl.updateStep(stepId, 'running');
+          // 同步更新 ChatDrawer 中的工作流消息
+          const currentWorkflow = workflowControl.getWorkflow();
+          if (currentWorkflow) {
+            updateWorkflowMessageRef.current(toWorkflowMessageData(currentWorkflow));
+          }
+          
+          try {
+            if (generationType === 'image') {
               createTask(
                 {
-                  prompt: data.prompt || finalPrompt,
-                  width,
-                  height,
-                  referenceImages,
-                  // 直接使用生成的 URL
-                  generatedUrl: data.url,
+                  prompt: finalPrompt,
+                  width: width || 1024,
+                  height: height || 1024,
+                  uploadedImages: uploadedImages.length > 0 ? uploadedImages : undefined,
+                  model: modelId,
                 },
                 TaskType.IMAGE
               );
-            } else if (toolResult.type === 'video') {
-              // 创建视频任务
-              const modelConfig = VIDEO_MODEL_CONFIGS[data.model as VideoModel] || VIDEO_MODEL_CONFIGS['veo3'];
-              const [videoWidth, videoHeight] = (data.size || modelConfig.defaultSize).split('x').map(Number);
-              
+            } else {
+              // 视频任务
+              const modelConfig = VIDEO_MODEL_CONFIGS[modelId as VideoModel] || VIDEO_MODEL_CONFIGS['veo3'];
               createTask(
                 {
-                  prompt: data.prompt || finalPrompt,
-                  width: videoWidth,
-                  height: videoHeight,
-                  duration: parseInt(data.seconds || modelConfig.defaultDuration, 10),
-                  model: data.model || 'veo3',
-                  referenceImages,
-                  // 直接使用生成的 URL
-                  generatedUrl: data.url,
+                  prompt: finalPrompt,
+                  width: width || 1280,
+                  height: height || 720,
+                  duration: parseInt(duration || modelConfig.defaultDuration, 10),
+                  model: modelId,
+                  uploadedImages: uploadedImages.length > 0 ? uploadedImages : undefined,
                 },
                 TaskType.VIDEO
               );
             }
+            
+            // 更新步骤为完成（任务已添加到队列）
+            workflowControl.updateStep(stepId, 'completed', { taskAdded: true }, undefined, Date.now() - startTime);
+            // 同步更新 ChatDrawer 中的工作流消息
+            const updatedWorkflow = workflowControl.getWorkflow();
+            if (updatedWorkflow) {
+              updateWorkflowMessageRef.current(toWorkflowMessageData(updatedWorkflow));
+            }
+          } catch (stepError) {
+            // 更新步骤为失败
+            workflowControl.updateStep(stepId, 'failed', undefined, String(stepError), Date.now() - startTime);
+            // 同步更新 ChatDrawer 中的工作流消息
+            const failedWorkflow = workflowControl.getWorkflow();
+            if (failedWorkflow) {
+              updateWorkflowMessageRef.current(toWorkflowMessageData(failedWorkflow));
+            }
           }
-        },
-      });
+        }
+      } else {
+        // 场景 4: Agent 流程
+        // 有额外内容，需要调用 Agent
+        console.log('[AIInputBar] Using Agent mode with model:', parsedParams.modelId);
+        
+        // 更新分析步骤为运行中
+        const analyzeStartTime = Date.now();
+        workflowControl.updateStep('step-analyze', 'running');
+        // 同步更新 ChatDrawer 中的工作流消息
+        const runningWorkflow = workflowControl.getWorkflow();
+        if (runningWorkflow) {
+          updateWorkflowMessageRef.current(toWorkflowMessageData(runningWorkflow));
+        }
+        
+        // 将参考图片转换为 uploadedImages 格式
+        const uploadedImages = referenceImages.map((url, index) => ({
+          type: 'url' as const,
+          url,
+          name: `reference-${index + 1}`,
+        }));
+        
+        const result = await agentExecutor.execute(finalPrompt, {
+          model: parsedParams.modelId,
+          referenceImages,
+          onChunk: (chunk) => {
+            console.log('[AIInputBar] Agent chunk:', chunk);
+          },
+          onToolCall: (toolCall) => {
+            console.log('[AIInputBar] Agent calling tool:', toolCall.name);
+            
+            // 分析步骤完成，添加工具调用步骤
+            if (workflowControl.getWorkflow()?.steps.find(s => s.id === 'step-analyze')?.status === 'running') {
+              workflowControl.updateStep('step-analyze', 'completed', { analysis: 'completed' }, undefined, Date.now() - analyzeStartTime);
+            }
+            
+            // 动态添加工具调用步骤
+            const newStepId = `step-tool-${Date.now()}`;
+            workflowControl.addSteps([{
+              id: newStepId,
+              mcp: toolCall.name,
+              args: toolCall.arguments || {},
+              description: `执行 ${toolCall.name}`,
+              status: 'running',
+            }]);
+            
+            // 同步更新 ChatDrawer 中的工作流消息
+            const toolCallWorkflow = workflowControl.getWorkflow();
+            if (toolCallWorkflow) {
+              updateWorkflowMessageRef.current(toWorkflowMessageData(toolCallWorkflow));
+            }
+          },
+          onToolResult: (toolResult) => {
+            console.log('[AIInputBar] Tool result:', toolResult);
+            
+            // 如果生成成功，创建任务并添加到画布
+            if (toolResult.success && toolResult.data) {
+              const data = toolResult.data as any;
+              
+              if (toolResult.type === 'image') {
+                // 创建图片任务
+                createTask(
+                  {
+                    prompt: data.prompt || finalPrompt,
+                    width: parsedParams.width || 1024,
+                    height: parsedParams.height || 1024,
+                    uploadedImages: uploadedImages.length > 0 ? uploadedImages : undefined,
+                    // 直接使用生成的 URL
+                    generatedUrl: data.url,
+                  },
+                  TaskType.IMAGE
+                );
+              } else if (toolResult.type === 'video') {
+                // 创建视频任务
+                const modelConfig = VIDEO_MODEL_CONFIGS[data.model as VideoModel] || VIDEO_MODEL_CONFIGS['veo3'];
+                const [videoWidth, videoHeight] = (data.size || modelConfig.defaultSize).split('x').map(Number);
+                
+                createTask(
+                  {
+                    prompt: data.prompt || finalPrompt,
+                    width: videoWidth,
+                    height: videoHeight,
+                    duration: parseInt(data.seconds || modelConfig.defaultDuration, 10),
+                    model: data.model || 'veo3',
+                    uploadedImages: uploadedImages.length > 0 ? uploadedImages : undefined,
+                    // 直接使用生成的 URL
+                    generatedUrl: data.url,
+                  },
+                  TaskType.VIDEO
+                );
+              }
+            }
+            
+            // 同步更新 ChatDrawer 中的工作流消息
+            const toolResultWorkflow = workflowControl.getWorkflow();
+            if (toolResultWorkflow) {
+              updateWorkflowMessageRef.current(toWorkflowMessageData(toolResultWorkflow));
+            }
+          },
+        });
 
-      // Send message to ChatDrawer
-      await sendMessageToChatDrawerRef.current(finalPrompt);
-
-      if (!result.success && result.error) {
-        console.error('[AIInputBar] Agent execution failed:', result.error);
+        if (!result.success && result.error) {
+          console.error('[AIInputBar] Agent execution failed:', result.error);
+          // 更新分析步骤为失败（如果还在运行中）
+          const currentWorkflow = workflowControl.getWorkflow();
+          const analyzeStep = currentWorkflow?.steps.find(s => s.id === 'step-analyze');
+          if (analyzeStep?.status === 'running') {
+            workflowControl.updateStep('step-analyze', 'failed', undefined, result.error, Date.now() - analyzeStartTime);
+            // 同步更新 ChatDrawer 中的工作流消息
+            const failedWorkflow = workflowControl.getWorkflow();
+            if (failedWorkflow) {
+              updateWorkflowMessageRef.current(toWorkflowMessageData(failedWorkflow));
+            }
+          }
+        }
       }
 
-      // Clear input after successful submission
+      // 清空输入
       setPrompt('');
       setSelectedContent([]);
       setSelectedText('');
       setShowSuggestionPanel(false);
     } catch (error) {
       console.error('Failed to create generation task:', error);
+      // 中止工作流
+      workflowControl.abortWorkflow();
     } finally {
       setIsGenerating(false);
     }
-  }, [prompt, selectedContent, selectedText, aspectRatio, createTask, isGenerating, addHistory, parseResult]);
+  }, [prompt, selectedContent, selectedText, createTask, isGenerating, addHistory, workflowControl]);
 
   // Handle key press
   const handleKeyDown = useCallback(

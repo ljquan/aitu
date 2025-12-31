@@ -45,9 +45,11 @@ import { withToolResize } from './plugins/with-tool-resize';
 import { ActiveTaskWarning } from './components/task-queue/ActiveTaskWarning';
 import { useTaskStorage } from './hooks/useTaskStorage';
 import { useTaskExecutor } from './hooks/useTaskExecutor';
+import { useAutoInsertToCanvas } from './hooks/useAutoInsertToCanvas';
 import { useBeforeUnload } from './hooks/useBeforeUnload';
 import { ChatDrawer } from './components/chat-drawer';
 import { ChatDrawerProvider, useChatDrawer } from './contexts/ChatDrawerContext';
+import { WorkflowProvider } from './contexts/WorkflowContext';
 import { ProjectDrawer } from './components/project-drawer';
 import { ToolboxDrawer } from './components/toolbox-drawer/ToolboxDrawer';
 import { useWorkspace } from './hooks/useWorkspace';
@@ -196,6 +198,9 @@ export const Drawnix: React.FC<DrawnixProps> = ({
   // Initialize task executor for background processing
   useTaskExecutor();
 
+  // Auto-insert completed tasks to canvas
+  useAutoInsertToCanvas({ enabled: true, insertPrompt: false, groupSimilarTasks: true });
+
   // Warn users before leaving page with active tasks
   useBeforeUnload();
 
@@ -247,35 +252,37 @@ export const Drawnix: React.FC<DrawnixProps> = ({
       <ToolbarConfigProvider>
         <AssetProvider>
           <ChatDrawerProvider>
-            <DrawnixContext.Provider value={contextValue}>
-              <DrawnixContent
-                value={value}
-                viewport={viewport}
-                theme={theme}
-                options={options}
-                plugins={plugins}
-                containerRef={containerRef}
-                appState={appState}
-                board={board}
-                setBoard={setBoard}
-                projectDrawerOpen={projectDrawerOpen}
-                toolboxDrawerOpen={toolboxDrawerOpen}
-                taskPanelExpanded={taskPanelExpanded}
-                onChange={onChange}
-                onSelectionChange={handleSelectionChange}
-                onViewportChange={onViewportChange}
-                onThemeChange={onThemeChange}
-                onValueChange={onValueChange}
-                afterInit={afterInit}
-                onBoardSwitch={onBoardSwitch}
-                handleProjectDrawerToggle={handleProjectDrawerToggle}
-                handleToolboxDrawerToggle={handleToolboxDrawerToggle}
-                handleTaskPanelToggle={handleTaskPanelToggle}
-                setProjectDrawerOpen={setProjectDrawerOpen}
-                setToolboxDrawerOpen={setToolboxDrawerOpen}
-                handleBeforeSwitch={handleBeforeSwitch}
-              />
-            </DrawnixContext.Provider>
+            <WorkflowProvider>
+              <DrawnixContext.Provider value={contextValue}>
+                <DrawnixContent
+                  value={value}
+                  viewport={viewport}
+                  theme={theme}
+                  options={options}
+                  plugins={plugins}
+                  containerRef={containerRef}
+                  appState={appState}
+                  board={board}
+                  setBoard={setBoard}
+                  projectDrawerOpen={projectDrawerOpen}
+                  toolboxDrawerOpen={toolboxDrawerOpen}
+                  taskPanelExpanded={taskPanelExpanded}
+                  onChange={onChange}
+                  onSelectionChange={handleSelectionChange}
+                  onViewportChange={onViewportChange}
+                  onThemeChange={onThemeChange}
+                  onValueChange={onValueChange}
+                  afterInit={afterInit}
+                  onBoardSwitch={onBoardSwitch}
+                  handleProjectDrawerToggle={handleProjectDrawerToggle}
+                  handleToolboxDrawerToggle={handleToolboxDrawerToggle}
+                  handleTaskPanelToggle={handleTaskPanelToggle}
+                  setProjectDrawerOpen={setProjectDrawerOpen}
+                  setToolboxDrawerOpen={setToolboxDrawerOpen}
+                  handleBeforeSwitch={handleBeforeSwitch}
+                />
+              </DrawnixContext.Provider>
+            </WorkflowProvider>
           </ChatDrawerProvider>
         </AssetProvider>
       </ToolbarConfigProvider>

@@ -23,6 +23,33 @@
     flex-wrap: wrap;
   }
 
+  &__search-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__search-input {
+    flex: 1;
+    min-width: 120px;
+    max-width: 200px;
+  }
+
+  &__clear-btn {
+    flex-shrink: 0;
+  }
+
+  &__clear-text {
+    display: inline;
+
+    // 宽度较小时隐藏文字，只显示图标
+    @media (max-width: 480px) {
+      display: none;
+    }
+  }
+
   &__actions {
     display: flex;
     gap: 8px;
@@ -437,10 +464,14 @@
       flex-direction: column;
       align-items: stretch;
       gap: 8px;
+    }
 
-      .t-input {
-        width: 100% !important;
-      }
+    &__search-row {
+      width: 100%;
+    }
+
+    &__search-input {
+      max-width: none;
     }
 
     &__content {

@@ -61,17 +61,11 @@ class AgentExecutor {
       // 构建消息
       const messages: GeminiMessage[] = [
         {
-          role: 'user',
+          role: 'system',
           content: [
             { type: 'text', text: systemPrompt },
           ],
-        },
-        {
-          role: 'assistant',
-          content: [
-            { type: 'text', text: '我明白了，我会根据用户的需求选择合适的工具来生成图片或视频。' },
-          ],
-        },
+        }
       ];
 
       // 添加用户消息（包含参考图片）

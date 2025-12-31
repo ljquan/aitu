@@ -8,14 +8,24 @@ export * from './types';
 // 导出注册中心
 export { mcpRegistry, MCPRegistry } from './registry';
 
-// 导出工具（将在后续文件中实现）
+// 导出工具
 export { imageGenerationTool } from './tools/image-generation';
 export { videoGenerationTool } from './tools/video-generation';
+export {
+  canvasInsertionTool,
+  setCanvasBoard,
+  getCanvasBoard,
+  quickInsert,
+  insertImageGroup,
+  insertAIFlow,
+} from './tools/canvas-insertion';
+export type { ContentType, InsertionItem, CanvasInsertionParams } from './tools/canvas-insertion';
 
 // 初始化函数：注册所有内置工具
 import { mcpRegistry } from './registry';
 import { imageGenerationTool } from './tools/image-generation';
 import { videoGenerationTool } from './tools/video-generation';
+import { canvasInsertionTool } from './tools/canvas-insertion';
 
 /**
  * 初始化 MCP 模块，注册所有内置工具
@@ -24,6 +34,7 @@ export function initializeMCP(): void {
   mcpRegistry.registerAll([
     imageGenerationTool,
     videoGenerationTool,
+    canvasInsertionTool,
   ]);
   console.log('[MCP] Initialized with built-in tools');
 }

@@ -4,6 +4,11 @@
   "main": "./index.js",
   "types": "./index.d.ts",
   "private": false,
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui"
+  },
   "dependencies": {
     "@floating-ui/react": "^0.26.24",
     "@plait-board/markdown-to-drawnix": "^0.0.6",
@@ -16,9 +21,9 @@
   },
   "exports": {
     ".": {
+      "types": "./index.d.ts",
       "import": "./index.mjs",
-      "require": "./index.js",
-      "types": "./index.d.ts"
+      "require": "./index.js"
     }
   },
   "devDependencies": {

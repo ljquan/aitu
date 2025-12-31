@@ -36,6 +36,31 @@ export interface Attachment {
   isBlob: boolean;
 }
 
+/** 工作流数据接口（用于消息中嵌入工作流） */
+export interface WorkflowMessageData {
+  /** 工作流 ID */
+  id: string;
+  /** 工作流名称 */
+  name: string;
+  /** 生成类型 */
+  generationType: 'image' | 'video';
+  /** 原始提示词 */
+  prompt: string;
+  /** 生成数量 */
+  count: number;
+  /** 步骤列表 */
+  steps: Array<{
+    id: string;
+    description: string;
+    status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
+    mcp: string;
+    args: Record<string, unknown>;
+    result?: unknown;
+    error?: string;
+    duration?: number;
+  }>;
+}
+
 /** 对话消息接口 */
 export interface ChatMessage {
   id: string;
@@ -46,6 +71,8 @@ export interface ChatMessage {
   status: MessageStatus;
   attachments?: Attachment[];
   error?: string;
+  /** 工作流数据（当消息包含工作流时） */
+  workflow?: WorkflowMessageData;
 }
 
 /** 对话会话接口 */
@@ -92,6 +119,16 @@ export interface ChatDrawerProps {
   onOpenChange?: (isOpen: boolean) => void;
 }
 
+/** 工作流消息参数 */
+export interface WorkflowMessageParams {
+  /** 用户输入的提示词 */
+  prompt: string;
+  /** 参考图片 URL 数组 */
+  images?: string[];
+  /** 工作流数据 */
+  workflow: WorkflowMessageData;
+}
+
 /** ChatDrawer Ref API - 用于外部控制 ChatDrawer */
 export interface ChatDrawerRef {
   /** 打开抽屉 */
@@ -102,6 +139,10 @@ export interface ChatDrawerRef {
   toggle: () => void;
   /** 打开抽屉并发送消息 */
   sendMessage: (content: string) => Promise<void>;
+  /** 打开抽屉并发送工作流消息（创建新对话） */
+  sendWorkflowMessage: (params: WorkflowMessageParams) => Promise<void>;
+  /** 更新当前工作流消息 */
+  updateWorkflowMessage: (workflow: WorkflowMessageData) => void;
   /** 获取当前打开状态 */
   isOpen: () => boolean;
 }

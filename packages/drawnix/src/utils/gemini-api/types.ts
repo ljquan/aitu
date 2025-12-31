@@ -18,7 +18,7 @@ export interface ImageInput {
 }
 
 export interface GeminiMessage {
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'system';
   content: Array<{
     type: 'text' | 'image_url';
     text?: string;

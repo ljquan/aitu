@@ -5,7 +5,7 @@
  */
 
 import React, { createContext, useContext, useRef, type MutableRefObject } from 'react';
-import type { ChatDrawerRef } from '../types/chat.types';
+import type { ChatDrawerRef, WorkflowMessageData, WorkflowMessageParams } from '../types/chat.types';
 
 interface ChatDrawerContextValue {
   chatDrawerRef: MutableRefObject<ChatDrawerRef | null>;
@@ -65,6 +65,14 @@ export function useChatDrawerControl() {
     /** 打开 ChatDrawer 并发送消息 */
     sendMessageToChatDrawer: async (content: string) => {
       await chatDrawerRef.current?.sendMessage(content);
+    },
+    /** 打开 ChatDrawer 并发送工作流消息（创建新对话） */
+    sendWorkflowMessage: async (params: WorkflowMessageParams) => {
+      await chatDrawerRef.current?.sendWorkflowMessage(params);
+    },
+    /** 更新当前工作流消息 */
+    updateWorkflowMessage: (workflow: WorkflowMessageData) => {
+      chatDrawerRef.current?.updateWorkflowMessage(workflow);
     },
     /** 获取 ChatDrawer 是否打开 */
     isChatDrawerOpen: () => {

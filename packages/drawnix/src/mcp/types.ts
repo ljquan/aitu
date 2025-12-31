@@ -63,7 +63,7 @@ export interface MCPResult {
   /** 错误信息 */
   error?: string;
   /** 结果类型标识 */
-  type?: 'image' | 'video' | 'text' | 'error';
+  type?: 'image' | 'video' | 'text' | 'canvas' | 'error';
 }
 
 /**

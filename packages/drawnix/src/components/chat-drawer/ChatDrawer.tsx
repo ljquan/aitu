@@ -4,7 +4,7 @@
  * Main chat drawer component using @llamaindex/chat-ui.
  */
 
-import React, { useState, useCallback, useEffect, useMemo, useImperativeHandle, forwardRef } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useImperativeHandle, forwardRef, useRef } from 'react';
 import { CloseIcon, AddIcon, ViewListIcon } from 'tdesign-icons-react';
 import { Tooltip } from 'tdesign-react';
 import {
@@ -19,12 +19,17 @@ import { SessionList } from './SessionList';
 import { ChatDrawerTrigger } from './ChatDrawerTrigger';
 import { MermaidRenderer } from './MermaidRenderer';
 import { ModelSelector } from './ModelSelector';
+import { WorkflowMessageBubble } from './WorkflowMessageBubble';
+import { UserMessageBubble } from './UserMessageBubble';
 import { chatStorageService } from '../../services/chat-storage-service';
 import { useChatHandler } from '../../hooks/useChatHandler';
 import { geminiSettings } from '../../utils/settings-manager';
 import { useDrawnix } from '../../hooks/use-drawnix';
-import type { ChatDrawerProps, ChatDrawerRef, ChatSession } from '../../types/chat.types';
+import type { ChatDrawerProps, ChatDrawerRef, ChatSession, WorkflowMessageData, WorkflowMessageParams } from '../../types/chat.types';
 import type { Message } from '@llamaindex/chat-ui';
+
+// 工作流消息的特殊标记前缀
+const WORKFLOW_MESSAGE_PREFIX = '[[WORKFLOW_MESSAGE]]';
 
 export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
   ({ defaultOpen = false, onOpenChange }, ref) => {
@@ -36,6 +41,11 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
     const [sessions, setSessions] = useState<ChatSession[]>([]);
     const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
     const [showSessions, setShowSessions] = useState(false);
+    
+    // 工作流消息状态：存储当前会话中的工作流数据
+    const [workflowMessages, setWorkflowMessages] = useState<Map<string, WorkflowMessageData>>(new Map());
+    // 当前正在更新的工作流消息 ID
+    const currentWorkflowMsgIdRef = useRef<string | null>(null);
 
     // Refs for click outside detection
     const sessionListRef = React.useRef<HTMLDivElement>(null);
@@ -193,6 +203,9 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
       setSessions((prev) => [newSession, ...prev]);
       setActiveSessionId(newSession.id);
       setShowSessions(false);
+      // 清空工作流消息
+      setWorkflowMessages(new Map());
+      currentWorkflowMsgIdRef.current = null;
     }, []);
 
     // Toggle session list
@@ -204,6 +217,9 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
     const handleSelectSession = useCallback((sessionId: string) => {
       setActiveSessionId(sessionId);
       setShowSessions(false);
+      // 切换会话时清空工作流消息（TODO: 可以从存储中加载）
+      setWorkflowMessages(new Map());
+      currentWorkflowMsgIdRef.current = null;
     }, []);
 
     // Delete session
@@ -224,6 +240,8 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
 
     // Store pending message for retry after session creation or API key config
     const pendingMessageRef = React.useRef<Message | null>(null);
+    // Store pending workflow message
+    const pendingWorkflowRef = React.useRef<{ userPrompt: string; workflow: WorkflowMessageData } | null>(null);
 
     // Handle send with auto-create session
     const handleSendWrapper = useCallback(
@@ -255,6 +273,87 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
       [activeSessionId, chatHandler, appState, setAppState]
     );
 
+    // 发送工作流消息（创建新对话）
+    const handleSendWorkflowMessage = useCallback(
+      async (params: WorkflowMessageParams) => {
+        const { prompt: userPrompt, images, workflow } = params;
+        
+        // 打开抽屉
+        setIsOpen(true);
+        onOpenChange?.(true);
+
+        // 创建新对话
+        const newSession = await chatStorageService.createSession();
+        
+        // 使用用户提示词作为会话标题
+        const title = userPrompt.length > 30 ? userPrompt.slice(0, 30) + '...' : userPrompt;
+        await chatStorageService.updateSession(newSession.id, { title });
+        newSession.title = title;
+        
+        setSessions((prev) => [newSession, ...prev]);
+        setActiveSessionId(newSession.id);
+
+        // 创建用户消息（包含图片）
+        const userMsgId = `msg_${Date.now()}_user`;
+        const userMsgParts: Message['parts'] = [{ type: 'text', text: userPrompt }];
+        
+        // 添加图片作为附件
+        if (images && images.length > 0) {
+          for (let i = 0; i < images.length; i++) {
+            userMsgParts.push({
+              type: 'data-file',
+              data: {
+                filename: `image-${i + 1}.png`,
+                mediaType: 'image/png',
+                url: images[i],
+              },
+            } as any);
+          }
+        }
+        
+        const userMsg: Message = {
+          id: userMsgId,
+          role: 'user',
+          parts: userMsgParts,
+        };
+
+        // 创建工作流消息（助手消息）
+        const workflowMsgId = `msg_${Date.now()}_workflow`;
+        const workflowMsg: Message = {
+          id: workflowMsgId,
+          role: 'assistant',
+          parts: [{ type: 'text', text: `${WORKFLOW_MESSAGE_PREFIX}${workflowMsgId}` }],
+        };
+
+        // 存储工作流数据
+        setWorkflowMessages((prev) => {
+          const newMap = new Map(prev);
+          newMap.set(workflowMsgId, workflow);
+          return newMap;
+        });
+        currentWorkflowMsgIdRef.current = workflowMsgId;
+
+        // 直接设置消息（不通过 sendMessage，因为这不是普通对话）
+        chatHandler.setMessages([userMsg, workflowMsg]);
+      },
+      [chatHandler, onOpenChange]
+    );
+
+    // 更新当前工作流消息
+    const handleUpdateWorkflowMessage = useCallback(
+      (workflow: WorkflowMessageData) => {
+        const msgId = currentWorkflowMsgIdRef.current;
+        if (!msgId) return;
+
+        setWorkflowMessages((prev) => {
+          const newMap = new Map(prev);
+          newMap.set(msgId, workflow);
+          return newMap;
+        });
+      },
+      []
+    );
+
     // Expose ref API for external control
     useImperativeHandle(ref, () => ({
       open: () => {
@@ -281,8 +380,10 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
         // Send the message
         await handleSendWrapper(msg);
       },
+      sendWorkflowMessage: handleSendWorkflowMessage,
+      updateWorkflowMessage: handleUpdateWorkflowMessage,
       isOpen: () => isOpen,
-    }), [isOpen, handleToggle, handleSendWrapper, onOpenChange]);
+    }), [isOpen, handleToggle, handleSendWrapper, handleSendWorkflowMessage, handleUpdateWorkflowMessage, onOpenChange]);
 
     // Wrapped handler for ChatSection
     const wrappedHandler = useMemo(
@@ -296,6 +397,23 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
     // Get current session title
     const currentSession = sessions.find((s) => s.id === activeSessionId);
     const title = currentSession?.title || '新对话';
+
+    // 检查消息是否为工作流消息
+    const isWorkflowMessage = useCallback((message: Message): string | null => {
+      const textPart = message.parts.find((p) => p.type === 'text');
+      if (textPart && 'text' in textPart) {
+        const text = textPart.text as string;
+        if (text.startsWith(WORKFLOW_MESSAGE_PREFIX)) {
+          return text.replace(WORKFLOW_MESSAGE_PREFIX, '');
+        }
+      }
+      return null;
+    }, []);
+
+    // 检查用户消息是否包含图片
+    const hasImages = useCallback((message: Message): boolean => {
+      return message.parts.some((p) => p.type === 'data-file');
+    }, []);
 
     return (
       <>
@@ -359,6 +477,20 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
               <ChatMessages className="chat-messages">
                 <ChatMessages.List className="chat-messages-list">
                   {chatHandler.messages.map((message, index) => {
+                    // 检查是否为工作流消息
+                    const workflowMsgId = isWorkflowMessage(message);
+                    if (workflowMsgId) {
+                      const workflowData = workflowMessages.get(workflowMsgId);
+                      if (workflowData) {
+                        return (
+                          <WorkflowMessageBubble
+                            key={message.id}
+                            workflow={workflowData}
+                          />
+                        );
+                      }
+                    }
+
                     // Check if message is an error
                     const isError = message.parts.some(
                       (part) =>
@@ -368,6 +500,16 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
                     const messageClass = `chat-message chat-message--${message.role} ${
                       isError ? 'chat-message--error' : ''
                     }`;
+
+                    // 用户消息包含图片时使用自定义气泡
+                    if (message.role === 'user' && hasImages(message)) {
+                      return (
+                        <UserMessageBubble
+                          key={message.id}
+                          message={message}
+                        />
+                      );
+                    }
 
                     return (
                       <ChatMessage

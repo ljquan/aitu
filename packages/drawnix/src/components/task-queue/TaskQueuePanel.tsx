@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { Button, Tabs, Dialog, MessagePlugin, Input, Radio } from 'tdesign-react';
+import { Button, Tabs, Dialog, MessagePlugin, Input, Radio, Tooltip } from 'tdesign-react';
 import { DeleteIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon, UserIcon } from 'tdesign-icons-react';
 import { TaskItem } from './TaskItem';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
@@ -399,7 +399,7 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
 
         {/* Hide search and actions when viewing characters */}
         {!isCharacterView && (
-          <>
+          <div className="task-queue-panel__search-row">
             <Input
               value={searchText}
               onChange={(value) => setSearchText(value)}
@@ -407,11 +407,11 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
               clearable
               prefixIcon={<SearchIcon />}
               size="small"
-              style={{ width: '180px' }}
+              className="task-queue-panel__search-input"
             />
 
-            <div className="task-queue-panel__actions">
-              {failedTasks.length > 0 && (
+            {failedTasks.length > 0 && (
+              <Tooltip content="清除失败" theme="light">
                 <Button
                   size="small"
                   variant="text"
@@ -419,12 +419,13 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
                   icon={<DeleteIcon />}
                   data-track="task_click_clear_failed"
                   onClick={() => handleClear('failed')}
+                  className="task-queue-panel__clear-btn"
                 >
-                  清除失败
+                  <span className="task-queue-panel__clear-text">清除失败</span>
                 </Button>
-              )}
-            </div>
-          </>
+              </Tooltip>
+            )}
+          </div>
         )}
       </div>
     </div>

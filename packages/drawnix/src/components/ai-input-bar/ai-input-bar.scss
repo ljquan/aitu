@@ -546,10 +546,9 @@ $text-dark: #1F2937;
   }
 
   // Text input (textarea)
-  // 关键：必须与 rich-display 完全一致才能保证光标位置准确
   &__input {
     width: 100%;
-    border: 1px solid transparent; // 与 rich-display 保持一致
+    border: none;
     background: transparent;
     font-size: 15px;
     line-height: 1.5;

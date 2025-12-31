@@ -175,9 +175,9 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   // 滚动高亮项到可见区域
   useEffect(() => {
     if (!visible) return;
-    
+
     const highlightedElement = panelRef.current?.querySelector(
-      `.model-selector__item:nth-child(${highlightedIndex + 1})`
+      `.ai-model-selector__item:nth-child(${highlightedIndex + 1})`
     );
     
     if (highlightedElement) {
@@ -190,9 +190,9 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   // 如果两种模型都已选择，显示提示信息
   if (allModelsSelected) {
     return (
-      <div 
+      <div
         ref={panelRef}
-        className="model-selector"
+        className="ai-model-selector"
         role="dialog"
         aria-label={language === 'zh' ? '模型已选择' : 'Models Selected'}
         onMouseDown={(e) => {
@@ -200,36 +200,36 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
           e.preventDefault();
         }}
       >
-        <div className="model-selector__header">
+        <div className="ai-model-selector__header">
           <Bot size={16} />
           <span>{language === 'zh' ? '模型已选择' : 'Models Selected'}</span>
         </div>
-        <div className="model-selector__complete-message">
-          <div className="model-selector__selected-models">
-            <div className="model-selector__selected-item">
+        <div className="ai-model-selector__complete-message">
+          <div className="ai-model-selector__selected-models">
+            <div className="ai-model-selector__selected-item">
               <Image size={14} />
-              <span className="model-selector__selected-label">
+              <span className="ai-model-selector__selected-label">
                 {language === 'zh' ? '图片' : 'Image'}:
               </span>
-              <span className="model-selector__selected-name">
+              <span className="ai-model-selector__selected-name">
                 {getModelConfig(selectedImageModel)?.shortLabel || getModelConfig(selectedImageModel)?.label || selectedImageModel}
               </span>
-              <Check size={14} className="model-selector__selected-check" />
+              <Check size={14} className="ai-model-selector__selected-check" />
             </div>
-            <div className="model-selector__selected-item">
+            <div className="ai-model-selector__selected-item">
               <Video size={14} />
-              <span className="model-selector__selected-label">
+              <span className="ai-model-selector__selected-label">
                 {language === 'zh' ? '视频' : 'Video'}:
               </span>
-              <span className="model-selector__selected-name">
+              <span className="ai-model-selector__selected-name">
                 {getModelConfig(selectedVideoModel)?.shortLabel || getModelConfig(selectedVideoModel)?.label || selectedVideoModel}
               </span>
-              <Check size={14} className="model-selector__selected-check" />
+              <Check size={14} className="ai-model-selector__selected-check" />
             </div>
           </div>
-          <p className="model-selector__hint-text">
-            {language === 'zh' 
-              ? '已选择图片和视频模型，无需再指定其他模型' 
+          <p className="ai-model-selector__hint-text">
+            {language === 'zh'
+              ? '已选择图片和视频模型，无需再指定其他模型'
               : 'Image and video models selected, no need to specify more'}
           </p>
         </div>
@@ -257,9 +257,9 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   };
 
   return (
-    <div 
+    <div
       ref={panelRef}
-      className="model-selector"
+      className="ai-model-selector"
       role="listbox"
       aria-label={language === 'zh' ? '选择模型' : 'Select Model'}
       onMouseDown={(e) => {
@@ -267,43 +267,43 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         e.preventDefault();
       }}
     >
-      <div className="model-selector__header">
+      <div className="ai-model-selector__header">
         <Bot size={16} />
         <span>{language === 'zh' ? '选择模型' : 'Select Model'}</span>
-        <span className="model-selector__hint">
+        <span className="ai-model-selector__hint">
           {language === 'zh' ? '↑↓选择 Tab确认' : '↑↓ to select, Tab to confirm'}
         </span>
       </div>
-      
-      <div className="model-selector__list">
+
+      <div className="ai-model-selector__list">
         {filteredModels.map((model, index) => {
-          const isSelected = 
+          const isSelected =
             (model.type === 'image' && selectedImageModel === model.id) ||
             (model.type === 'video' && selectedVideoModel === model.id);
-          
+
           return (
             <div
               key={model.id}
-              className={`model-selector__item ${
-                isSelected ? 'model-selector__item--selected' : ''
-              } ${highlightedIndex === index ? 'model-selector__item--highlighted' : ''}`}
+              className={`ai-model-selector__item ${
+                isSelected ? 'ai-model-selector__item--selected' : ''
+              } ${highlightedIndex === index ? 'ai-model-selector__item--highlighted' : ''}`}
               onClick={() => handleSelect(model.id)}
               role="option"
               aria-selected={isSelected}
             >
-              <div className="model-selector__item-content">
-                <div className="model-selector__item-name">
-                  <span className={`model-selector__item-id model-selector__item-id--${model.type}`}>#{model.id}</span>
-                  <span className="model-selector__item-label">{model.shortLabel || model.label}</span>
-                  <span className={`model-selector__item-type model-selector__item-type--${model.type}`}>
+              <div className="ai-model-selector__item-content">
+                <div className="ai-model-selector__item-name">
+                  <span className={`ai-model-selector__item-id ai-model-selector__item-id--${model.type}`}>#{model.id}</span>
+                  <span className="ai-model-selector__item-label">{model.shortLabel || model.label}</span>
+                  <span className={`ai-model-selector__item-type ai-model-selector__item-type--${model.type}`}>
                     <TypeIcon type={model.type} />
                     {getTypeLabel(model.type)}
                   </span>
                 </div>
-                <div className="model-selector__item-desc">{model.description}</div>
+                <div className="ai-model-selector__item-desc">{model.description}</div>
               </div>
               {isSelected && (
-                <Check size={16} className="model-selector__item-check" />
+                <Check size={16} className="ai-model-selector__item-check" />
               )}
             </div>
           );
