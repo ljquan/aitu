@@ -688,9 +688,66 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
       if (event.key === 'Escape') {
         setIsFocused(false);
         inputRef.current?.blur();
+        return;
+      }
+
+      // 智能删除：Backspace 删除整个标记
+      if (event.key === 'Backspace' && inputRef.current) {
+        const cursorPos = inputRef.current.selectionStart || 0;
+        const selectionEnd = inputRef.current.selectionEnd || 0;
+        
+        // 如果有选中文本，使用默认行为
+        if (cursorPos !== selectionEnd) {
+          return;
+        }
+        
+        // 检查光标前的字符，判断是否在标记末尾
+        const textBeforeCursor = prompt.substring(0, cursorPos);
+        
+        // 查找最近的标记（标记后面可能有空格）
+        // 模型标记: #xxx
+        // 参数标记: -xxx=yyy
+        // 数量标记: +数字
+        const modelMatch = textBeforeCursor.match(/(#[\w.-]+)\s?$/);
+        const paramMatch = textBeforeCursor.match(/(-[\w]+=[\w:x.]+)\s?$/);
+        const countMatch = textBeforeCursor.match(/(\+\d+)\s?$/);
+        
+        // 找出位置最靠后的匹配（最近的标记）
+        type MatchInfo = { match: RegExpMatchArray; index: number };
+        const matches: MatchInfo[] = [];
+        
+        if (modelMatch && modelMatch.index !== undefined) {
+          matches.push({ match: modelMatch, index: modelMatch.index });
+        }
+        if (paramMatch && paramMatch.index !== undefined) {
+          matches.push({ match: paramMatch, index: paramMatch.index });
+        }
+        if (countMatch && countMatch.index !== undefined) {
+          matches.push({ match: countMatch, index: countMatch.index });
+        }
+        
+        // 按位置排序，取最靠后的
+        if (matches.length > 0) {
+          matches.sort((a, b) => b.index - a.index);
+          const matchToDelete = matches[0];
+          
+          event.preventDefault();
+          const deleteStart = matchToDelete.index;
+          const newPrompt = prompt.substring(0, deleteStart) + prompt.substring(cursorPos);
+          setPrompt(newPrompt.trim());
+          
+          // 设置光标位置
+          setTimeout(() => {
+            if (inputRef.current) {
+              inputRef.current.selectionStart = deleteStart;
+              inputRef.current.selectionEnd = deleteStart;
+            }
+          }, 0);
+          return;
+        }
       }
     },
-    [handleGenerate, parseResult.triggerPosition]
+    [handleGenerate, parseResult.triggerPosition, prompt]
   );
 
   // Handle input focus
