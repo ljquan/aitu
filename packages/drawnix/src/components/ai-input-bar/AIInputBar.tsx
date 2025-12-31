@@ -10,7 +10,7 @@
  * - Text input for prompts
  * - Selected images display
  * - Generation type toggle (image/video)
- * - Model selection dropdown with "#模型名" syntax support
+ * - Smart suggestion panel with "#模型名", "-参数:值", "+个数" syntax support
  * - Send button to trigger generation
  * - Prompt suggestion panel with history and presets
  * - Integration with ChatDrawer for conversation display
@@ -33,14 +33,16 @@ import { useTextSelection } from '../../hooks/useTextSelection';
 import { usePromptHistory } from '../../hooks/usePromptHistory';
 import { useChatDrawerControl } from '../../contexts/ChatDrawerContext';
 import { AI_IMAGE_PROMPTS } from '../../constants/prompts';
-import { PromptSuggestionPanel, type PromptItem } from './PromptSuggestionPanel';
-import { ModelSelector } from './ModelSelector';
-import { parseModelFromInput, insertModelToInput } from '../../utils/model-parser';
+import { 
+  SmartSuggestionPanel, 
+  useTriggerDetection,
+  insertToInput,
+  type PromptItem,
+} from './smart-suggestion-panel';
 import { agentExecutor } from '../../services/agent';
 import { initializeMCP } from '../../mcp';
 import classNames from 'classnames';
 import './ai-input-bar.scss';
-import './model-selector.scss';
 
 // 初始化 MCP 模块
 let mcpInitialized = false;
@@ -181,7 +183,6 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
   const [generationType] = useState<GenerationType>('image');
   const [selectedContent, setSelectedContent] = useState<SelectedContent[]>([]);
   const [selectedText, setSelectedText] = useState('');
-  const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
   const [videoModel] = useState<VideoModel>('veo3');
   const [isGenerating, setIsGenerating] = useState(false);
   const [aspectRatio] = useState(DEFAULT_ASPECT_RATIO);
@@ -190,20 +191,16 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
   
   // Agent mode state
   const [agentMode] = useState(true); // 默认启用 Agent 模式
-  const [showModelSelector, setShowModelSelector] = useState(false);
-  const [modelKeyword, setModelKeyword] = useState('');
 
-  // 解析输入中的模型标记（需要在 useEffect 之前定义）
-  const modelParseResult = useMemo(() => {
-    return parseModelFromInput(prompt);
-  }, [prompt]);
+  // 使用新的 useTriggerDetection hook 解析输入
+  const parseResult = useTriggerDetection(prompt);
 
-  // Auto-show suggestion panel when input is cleared (or only has model tags) and focused
+  // Auto-show suggestion panel when input is cleared and focused
   useEffect(() => {
-    if (isFocused && modelParseResult.cleanText === '') {
+    if (isFocused && parseResult.cleanText === '') {
       setShowSuggestionPanel(true);
     }
-  }, [modelParseResult.cleanText, isFocused]);
+  }, [parseResult.cleanText, isFocused]);
   const [hoveredContent, setHoveredContent] = useState<{
     type: SelectedContentType;
     url?: string;
@@ -214,7 +211,6 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const richDisplayRef = useRef<HTMLDivElement>(null);
-  const modelMenuRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // 使用自定义 hook 处理文本选择和复制，同时阻止事件冒泡
@@ -247,41 +243,27 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
     setSelectedText(text);
   }, []);
 
-  // Close model menu when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (modelMenuRef.current && !modelMenuRef.current.contains(event.target as Node)) {
-        setIsModelMenuOpen(false);
-      }
-    };
-
-    if (isModelMenuOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }
-  }, [isModelMenuOpen]);
-
-  // 当检测到 # 时显示模型选择器
-  useEffect(() => {
-    if (modelParseResult.isTypingModel) {
-      setShowModelSelector(true);
-      setModelKeyword(modelParseResult.modelKeyword);
-      setShowSuggestionPanel(false); // 隐藏提示词面板
-    } else {
-      setShowModelSelector(false);
-      setModelKeyword('');
-    }
-  }, [modelParseResult]);
-
   // 处理模型选择
   const handleModelSelect = useCallback((modelId: string) => {
-    // 将模型插入到输入中
-    const newPrompt = insertModelToInput(prompt, modelId, modelParseResult.hashPosition);
+    const newPrompt = insertToInput(prompt, modelId, parseResult.triggerPosition, '#');
     setPrompt(newPrompt);
-    setShowModelSelector(false);
-    // 聚焦输入框
     inputRef.current?.focus();
-  }, [prompt, modelParseResult.hashPosition]);
+  }, [prompt, parseResult.triggerPosition]);
+
+  // 处理参数选择
+  const handleParamSelect = useCallback((paramId: string, value?: string) => {
+    const paramValue = value ? `${paramId}=${value}` : paramId;
+    const newPrompt = insertToInput(prompt, paramValue, parseResult.triggerPosition, '-');
+    setPrompt(newPrompt);
+    inputRef.current?.focus();
+  }, [prompt, parseResult.triggerPosition]);
+
+  // 处理个数选择
+  const handleCountSelect = useCallback((count: number) => {
+    const newPrompt = insertToInput(prompt, count.toString(), parseResult.triggerPosition, '+');
+    setPrompt(newPrompt);
+    inputRef.current?.focus();
+  }, [prompt, parseResult.triggerPosition]);
 
   // Handle generation
   const handleGenerate = useCallback(async () => {
@@ -296,8 +278,8 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
         .filter((item) => item.type !== 'text' && item.url)
         .map((item) => item.url!);
 
-      // 获取清理后的提示词（移除模型标记）
-      const cleanPrompt = modelParseResult.cleanText || prompt.trim();
+      // 获取清理后的提示词（移除模型/参数/个数标记）
+      const cleanPrompt = parseResult.cleanText || prompt.trim();
       
       // Combine selected text with user prompt
       const finalPrompt = selectedText 
@@ -312,7 +294,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
       // Agent 模式：让 AI 决定使用哪个工具
       if (agentMode) {
         // 使用解析出的图片模型，如果没有则使用默认模型
-        const modelToUse = modelParseResult.imageModelId || 'gemini-2.5-flash';
+        const modelToUse = parseResult.selectedImageModel || 'gemini-2.5-flash';
         console.log('[AIInputBar] Using Agent mode with model:', modelToUse);
         
         const result = await agentExecutor.execute(finalPrompt, {
@@ -418,23 +400,23 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
     } finally {
       setIsGenerating(false);
     }
-  }, [prompt, selectedContent, selectedText, generationType, videoModel, aspectRatio, createTask, isGenerating, addHistory, agentMode, modelParseResult]);
+  }, [prompt, selectedContent, selectedText, generationType, videoModel, aspectRatio, createTask, isGenerating, addHistory, agentMode, parseResult]);
 
   // Handle key press
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
-      // console.log('[AIInputBar] handleKeyDown called, key:', event.key, 'isTypingModel:', modelParseResult.isTypingModel);
-
       // Shift+Enter, Alt/Option+Enter 换行
       if (event.key === 'Enter' && (event.shiftKey || event.altKey)) {
-        // 允许默认行为（换行）
         return;
       }
 
-      // 单独 Enter 发送（当不在输入模型名时）
-      // 使用 modelParseResult.isTypingModel 而不是 showModelSelector，避免状态更新延迟问题
-      if (event.key === 'Enter' && !modelParseResult.isTypingModel) {
-        // console.log('[AIInputBar] Enter pressed, will call handleGenerate');
+      // 单独 Enter 发送（当不在输入触发字符后的内容时）
+      // 检查是否在输入模型/参数/个数
+      const isTypingTrigger = parseResult.mode === 'model' || 
+                              parseResult.mode === 'param' || 
+                              parseResult.mode === 'count';
+      
+      if (event.key === 'Enter' && !isTypingTrigger) {
         event.preventDefault();
         handleGenerate();
         return;
@@ -443,10 +425,9 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
       // Close panels on Escape
       if (event.key === 'Escape') {
         setShowSuggestionPanel(false);
-        setShowModelSelector(false);
       }
     },
-    [handleGenerate, modelParseResult.isTypingModel]
+    [handleGenerate, parseResult.mode]
   );
 
   // Handle input focus
@@ -479,14 +460,13 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
 
   // Handle prompt selection from suggestion panel
   const handlePromptSelect = useCallback((promptItem: PromptItem) => {
-    // 保留模型标记，把提示词追加到后面
-    const modelPrefix = prompt.replace(modelParseResult.cleanText, '').trim();
-    const newPrompt = modelPrefix ? `${modelPrefix} ${promptItem.content}` : promptItem.content;
+    // 保留模型/参数/个数标记，把提示词追加到后面
+    const tagsPrefix = prompt.replace(parseResult.cleanText, '').trim();
+    const newPrompt = tagsPrefix ? `${tagsPrefix} ${promptItem.content}` : promptItem.content;
     setPrompt(newPrompt);
     setShowSuggestionPanel(false);
-    // Focus input after selection
     inputRef.current?.focus();
-  }, [prompt, modelParseResult.cleanText]);
+  }, [prompt, parseResult.cleanText]);
 
   // Handle close suggestion panel
   const handleCloseSuggestionPanel = useCallback(() => {
@@ -589,25 +569,22 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
       <div className={classNames('ai-input-bar__container', {
         'ai-input-bar__container--has-content': selectedContent.length > 0
       })}>
-        {/* Model Selector - shown when typing # */}
-        <ModelSelector
-          visible={showModelSelector && isFocused}
-          filterKeyword={modelKeyword}
-          selectedImageModel={modelParseResult.imageModelId}
-          selectedVideoModel={modelParseResult.videoModelId}
-          onSelect={handleModelSelect}
-          onClose={() => setShowModelSelector(false)}
-          language={language}
-        />
-
-        {/* Prompt Suggestion Panel - shown above the input container */}
-        <PromptSuggestionPanel
-          visible={showSuggestionPanel && isFocused && !showModelSelector}
+        {/* Smart Suggestion Panel - unified panel for models, params, counts, and prompts */}
+        <SmartSuggestionPanel
+          visible={(showSuggestionPanel || parseResult.mode !== 'prompt') && isFocused}
+          mode={parseResult.mode}
+          filterKeyword={parseResult.keyword}
+          selectedImageModel={parseResult.selectedImageModel}
+          selectedVideoModel={parseResult.selectedVideoModel}
+          selectedParams={parseResult.selectedParams}
+          selectedCount={parseResult.selectedCount}
           prompts={allPrompts}
-          filterKeyword={modelParseResult.cleanText}
-          onSelect={handlePromptSelect}
-          onClose={handleCloseSuggestionPanel}
+          onSelectModel={handleModelSelect}
+          onSelectParam={handleParamSelect}
+          onSelectCount={handleCountSelect}
+          onSelectPrompt={handlePromptSelect}
           onDeleteHistory={handleDeleteHistory}
+          onClose={handleCloseSuggestionPanel}
           language={language}
         />
 
@@ -669,22 +646,33 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
         <div className="ai-input-bar__input-row">
           {/* Text input wrapper for rich text display */}
           <div className="ai-input-bar__rich-input">
-            {/* 高亮背景层 - 只显示模型标签的背景色块 */}
-            {modelParseResult.modelTags.length > 0 && (
+            {/* 高亮背景层 - 显示模型/参数/个数标签的背景色块 */}
+            {parseResult.segments.some(s => s.type !== 'text') && (
               <div
                 ref={richDisplayRef}
                 className="ai-input-bar__highlight-layer"
                 aria-hidden="true"
               >
-                {modelParseResult.segments.map((segment, index) => {
+                {parseResult.segments.map((segment, index) => {
                   if (segment.type === 'text') {
-                    // 文本部分使用透明文字，只占位
                     return <span key={index} className="ai-input-bar__highlight-text">{segment.content}</span>;
                   }
-                  // 模型标签部分显示背景色块
-                  const tagClass = segment.type === 'image-model'
-                    ? 'ai-input-bar__highlight-tag--image'
-                    : 'ai-input-bar__highlight-tag--video';
+                  // 根据类型显示不同颜色的背景色块
+                  let tagClass = '';
+                  switch (segment.type) {
+                    case 'image-model':
+                      tagClass = 'ai-input-bar__highlight-tag--image';
+                      break;
+                    case 'video-model':
+                      tagClass = 'ai-input-bar__highlight-tag--video';
+                      break;
+                    case 'param':
+                      tagClass = 'ai-input-bar__highlight-tag--param';
+                      break;
+                    case 'count':
+                      tagClass = 'ai-input-bar__highlight-tag--count';
+                      break;
+                  }
                   return (
                     <span key={index} className={`ai-input-bar__highlight-tag ${tagClass}`}>
                       {segment.content}
@@ -707,7 +695,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
               onBlur={handleBlur}
               onScroll={handleScroll}
               placeholder={agentMode
-                ? (language === 'zh' ? '描述你想创建的内容，输入 # 选择模型' : 'Describe what you want to create, type # to select model')
+                ? (language === 'zh' ? '输入 # 选择模型（默认生图），- 选择参数， + 选择个数（默认1），描述你想要创建什么' : 'Enter # to select the model (default graph), - to select parameters, + to select the number (default 1), and describe what you want to create')
                 : getPlaceholder()
               }
               rows={isFocused ? 4 : 1}

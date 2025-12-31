@@ -520,9 +520,9 @@ $text-dark: #1F2937;
     border-radius: 3px;
     box-decoration-break: clone;
     -webkit-box-decoration-break: clone;
-    // 向上偏移以对齐文字
-    position: relative;
-    top: -2px;
+    // 添加左右 padding 确保背景完全覆盖文字
+    padding: 0 2px;
+    margin: 0 -2px;
 
     // 图片模型标签 - 红色背景 #E53935
     &--image {
@@ -532,6 +532,16 @@ $text-dark: #1F2937;
     // 视频模型标签 - 橙色背景 #FF9800
     &--video {
       background: rgba(255, 152, 0, 0.15);
+    }
+
+    // 参数标签 - 紫色背景 #9C27B0
+    &--param {
+      background: rgba(156, 39, 176, 0.15);
+    }
+
+    // 个数标签 - 蓝色背景 #2196F3
+    &--count {
+      background: rgba(33, 150, 243, 0.15);
     }
   }
 
@@ -796,6 +806,14 @@ $text-dark: #1F2937;
 
       &--video {
         background: rgba(255, 152, 0, 0.2);
+      }
+
+      &--param {
+        background: rgba(156, 39, 176, 0.2);
+      }
+
+      &--count {
+        background: rgba(33, 150, 243, 0.2);
       }
     }
 

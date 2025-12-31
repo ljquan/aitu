@@ -3,12 +3,43 @@
  * 
  * 所有图片、视频和文本模型的配置都在这里定义
  * 被 ModelSelector、settings-dialog、ai-image-generation、ai-video-generation 等组件使用
+ * 
+ * 参数配置用于 SmartSuggestionPanel 的 - 参数提示功能
  */
 
 /**
  * 模型类型
  */
 export type ModelType = 'image' | 'video' | 'text';
+
+/**
+ * 参数值类型
+ */
+export type ParamValueType = 'enum' | 'number' | 'string';
+
+/**
+ * 参数配置接口
+ */
+export interface ParamConfig {
+  /** 参数 ID（用于输入，如 -duration） */
+  id: string;
+  /** 显示标签 */
+  label: string;
+  /** 简短标签 */
+  shortLabel?: string;
+  /** 描述信息 */
+  description?: string;
+  /** 参数值类型 */
+  valueType: ParamValueType;
+  /** 可选值列表（enum 类型时使用） */
+  options?: Array<{ value: string; label: string }>;
+  /** 默认值 */
+  defaultValue?: string;
+  /** 兼容的模型 ID 列表（空数组表示所有模型都兼容） */
+  compatibleModels: string[];
+  /** 适用的模型类型 */
+  modelType: ModelType;
+}
 
 /**
  * 图片模型默认参数
@@ -485,3 +516,178 @@ export const DEFAULT_VIDEO_MODEL = 'veo3';
  * 默认文本模型
  */
 export const DEFAULT_TEXT_MODEL = 'deepseek-v3.2';
+
+// ============================================
+// 参数配置（用于 SmartSuggestionPanel）
+// ============================================
+
+/** Veo 系列模型 ID（只支持 8 秒） */
+const VEO_MODEL_IDS = ['veo3', 'veo3-pro', 'veo3.1', 'veo3.1-pro', 'veo3.1-components'];
+
+/** Sora 2 模型（支持 10/15 秒） */
+const SORA_2_MODEL_IDS = ['sora-2'];
+
+/** Sora 2 Pro 模型（支持 10/15/25 秒和高清尺寸） */
+const SORA_2_PRO_MODEL_IDS = ['sora-2-pro'];
+
+/** 所有图片模型 ID */
+const ALL_IMAGE_MODEL_IDS = IMAGE_MODELS.map(m => m.id);
+
+/**
+ * 视频参数配置
+ * 根据 video-model-config.ts 中各模型的实际参数配置
+ */
+export const VIDEO_PARAMS: ParamConfig[] = [
+  // Veo 系列时长参数（只有 8 秒）
+  {
+    id: 'duration',
+    label: '视频时长',
+    shortLabel: '时长',
+    description: '生成视频的时长（秒）',
+    valueType: 'enum',
+    options: [
+      { value: '8', label: '8秒' },
+    ],
+    defaultValue: '8',
+    compatibleModels: VEO_MODEL_IDS,
+    modelType: 'video',
+  },
+  // Sora 2 时长参数（10/15 秒）
+  {
+    id: 'duration',
+    label: '视频时长',
+    shortLabel: '时长',
+    description: '生成视频的时长（秒）',
+    valueType: 'enum',
+    options: [
+      { value: '10', label: '10秒' },
+      { value: '15', label: '15秒' },
+    ],
+    defaultValue: '10',
+    compatibleModels: SORA_2_MODEL_IDS,
+    modelType: 'video',
+  },
+  // Sora 2 Pro 时长参数（10/15/25 秒）
+  {
+    id: 'duration',
+    label: '视频时长',
+    shortLabel: '时长',
+    description: '生成视频的时长（秒）',
+    valueType: 'enum',
+    options: [
+      { value: '10', label: '10秒' },
+      { value: '15', label: '15秒' },
+      { value: '25', label: '25秒' },
+    ],
+    defaultValue: '10',
+    compatibleModels: SORA_2_PRO_MODEL_IDS,
+    modelType: 'video',
+  },
+  // Veo 和 Sora 2 尺寸参数（标清）
+  {
+    id: 'size',
+    label: '视频尺寸',
+    shortLabel: '尺寸',
+    description: '生成视频的分辨率',
+    valueType: 'enum',
+    options: [
+      { value: '1280x720', label: '横屏 16:9 (1280x720)' },
+      { value: '720x1280', label: '竖屏 9:16 (720x1280)' },
+    ],
+    defaultValue: '1280x720',
+    compatibleModels: [...VEO_MODEL_IDS, ...SORA_2_MODEL_IDS],
+    modelType: 'video',
+  },
+  // Sora 2 Pro 尺寸参数（含高清）
+  {
+    id: 'size',
+    label: '视频尺寸',
+    shortLabel: '尺寸',
+    description: '生成视频的分辨率',
+    valueType: 'enum',
+    options: [
+      { value: '1280x720', label: '横屏 16:9 (1280x720)' },
+      { value: '720x1280', label: '竖屏 9:16 (720x1280)' },
+      { value: '1792x1024', label: '高清横屏 (1792x1024)' },
+      { value: '1024x1792', label: '高清竖屏 (1024x1792)' },
+    ],
+    defaultValue: '1280x720',
+    compatibleModels: SORA_2_PRO_MODEL_IDS,
+    modelType: 'video',
+  },
+];
+
+/**
+ * 图片参数配置
+ * 根据 API 文档，size 使用宽高比格式（如 16x9），API 会自动转换为对应像素
+ */
+export const IMAGE_PARAMS: ParamConfig[] = [
+  {
+    id: 'size',
+    label: '图片尺寸',
+    shortLabel: '尺寸',
+    description: '生成图片的尺寸比例',
+    valueType: 'enum',
+    options: [
+      { value: '1x1', label: '1:1 方形 (1024x1024)' },
+      { value: '16x9', label: '16:9 横版 (1344x768)' },
+      { value: '9x16', label: '9:16 竖版 (768x1344)' },
+      { value: '3x2', label: '3:2 横版 (1248x832)' },
+      { value: '2x3', label: '2:3 竖版 (832x1248)' },
+      { value: '4x3', label: '4:3 横版 (1184x864)' },
+      { value: '3x4', label: '3:4 竖版 (864x1184)' },
+      { value: '5x4', label: '5:4 横版 (1152x896)' },
+      { value: '4x5', label: '4:5 竖版 (896x1152)' },
+      { value: '21x9', label: '21:9 超宽 (1536x672)' },
+    ],
+    defaultValue: '1x1',
+    compatibleModels: ALL_IMAGE_MODEL_IDS,
+    modelType: 'image',
+  },
+];
+
+/**
+ * 所有参数配置
+ */
+export const ALL_PARAMS: ParamConfig[] = [
+  ...VIDEO_PARAMS,
+  ...IMAGE_PARAMS,
+];
+
+/**
+ * 根据模型类型获取参数列表
+ */
+export function getParamsByModelType(modelType: ModelType): ParamConfig[] {
+  return ALL_PARAMS.filter(param => param.modelType === modelType);
+}
+
+/**
+ * 根据模型 ID 获取兼容的参数列表
+ */
+export function getCompatibleParams(modelId: string): ParamConfig[] {
+  const modelConfig = getModelConfig(modelId);
+  if (!modelConfig) return [];
+  
+  return ALL_PARAMS.filter(param => {
+    // 检查模型类型是否匹配
+    if (param.modelType !== modelConfig.type) return false;
+    // 检查是否在兼容列表中（空数组表示所有模型都兼容）
+    if (param.compatibleModels.length === 0) return true;
+    return param.compatibleModels.includes(modelId);
+  });
+}
+
+/**
+ * 获取参数配置
+ */
+export function getParamConfig(paramId: string): ParamConfig | undefined {
+  return ALL_PARAMS.find(param => param.id === paramId);
+}
+
+/**
+ * 获取参数 ID 列表
+ */
+export function getParamIds(modelType?: ModelType): string[] {
+  const params = modelType ? getParamsByModelType(modelType) : ALL_PARAMS;
+  return params.map(param => param.id);
+}
