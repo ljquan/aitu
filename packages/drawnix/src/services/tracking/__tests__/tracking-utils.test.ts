@@ -63,11 +63,20 @@ describe('TrackingDebouncer', () => {
   });
 
   it('should clear debounce state', () => {
+    jest.useFakeTimers();
+    const now = Date.now();
+    jest.setSystemTime(now);
+
     debouncer.shouldTrack(element, 'test_event');
     debouncer.clear(element);
 
-    // Should allow immediately after clear
+    // Advance time past global debounce window (200ms)
+    jest.setSystemTime(now + 300);
+
+    // Should allow after clear and past global debounce
     expect(debouncer.shouldTrack(element, 'test_event')).toBe(true);
+
+    jest.useRealTimers();
   });
 });
 
@@ -170,7 +179,8 @@ describe('generateAutoEventName', () => {
     const button = document.createElement('button');
     button.textContent = 'This is a very long button text that should be truncated';
     const eventName = generateAutoEventName(button);
-    expect(eventName).toHaveLength(expect.any(Number));
+    expect(typeof eventName).toBe('string');
+    expect(eventName.length).toBeGreaterThan(0);
     expect(eventName.length).toBeLessThan(60);
   });
 });

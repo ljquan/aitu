@@ -4,10 +4,10 @@
  */
 
 import { TrackingBatchService } from '../tracking-batch-service';
-import { umamiAdapter } from '../umami-adapter';
+import { posthogAdapter } from '../posthog-adapter';
 import type { TrackEvent, BatchConfig } from '../../../types/tracking.types';
 
-jest.mock('../umami-adapter');
+jest.mock('../posthog-adapter');
 
 describe('TrackingBatchService', () => {
   let service: TrackingBatchService;
@@ -16,6 +16,7 @@ describe('TrackingBatchService', () => {
 
   beforeEach(() => {
     jest.useFakeTimers();
+    jest.clearAllMocks();
 
     mockConfig = {
       enabled: true,
@@ -39,7 +40,7 @@ describe('TrackingBatchService', () => {
       createdAt: Date.now(),
     };
 
-    (umamiAdapter.trackBatch as jest.Mock).mockResolvedValue([{ success: true }]);
+    (posthogAdapter.trackBatch as jest.Mock).mockResolvedValue([{ success: true }]);
   });
 
   afterEach(() => {
@@ -63,7 +64,7 @@ describe('TrackingBatchService', () => {
       await jest.runAllTimersAsync();
 
       expect(service.getQueueSize()).toBe(0);
-      expect(umamiAdapter.trackBatch).toHaveBeenCalledTimes(1);
+      expect(posthogAdapter.trackBatch).toHaveBeenCalledTimes(1);
     });
 
     it('should flush on timeout', async () => {
@@ -76,14 +77,14 @@ describe('TrackingBatchService', () => {
       await jest.runAllTimersAsync();
 
       expect(service.getQueueSize()).toBe(0);
-      expect(umamiAdapter.trackBatch).toHaveBeenCalled();
+      expect(posthogAdapter.trackBatch).toHaveBeenCalled();
     });
 
     it('should upload immediately when batch is disabled', async () => {
       const disabledConfig = { ...mockConfig, enabled: false };
       const disabledService = new TrackingBatchService(disabledConfig);
 
-      (umamiAdapter.track as jest.Mock) = jest.fn().mockResolvedValue(undefined);
+      (posthogAdapter.track as jest.Mock) = jest.fn().mockResolvedValue(undefined);
 
       disabledService.enqueue(mockEvent);
       await jest.runAllTimersAsync();
@@ -108,13 +109,13 @@ describe('TrackingBatchService', () => {
       await jest.runAllTimersAsync();
 
       expect(service.getQueueSize()).toBe(0);
-      expect(umamiAdapter.trackBatch).toHaveBeenCalledWith(events);
+      expect(posthogAdapter.trackBatch).toHaveBeenCalledWith(events);
     });
 
     it('should handle empty queue', async () => {
       await service.flush();
 
-      expect(umamiAdapter.trackBatch).not.toHaveBeenCalled();
+      expect(posthogAdapter.trackBatch).not.toHaveBeenCalled();
     });
 
     it('should prevent concurrent flushes', async () => {
@@ -126,7 +127,7 @@ describe('TrackingBatchService', () => {
       await Promise.all([flush1, flush2]);
       await jest.runAllTimersAsync();
 
-      expect(umamiAdapter.trackBatch).toHaveBeenCalledTimes(1);
+      expect(posthogAdapter.trackBatch).toHaveBeenCalledTimes(1);
     });
   });
 

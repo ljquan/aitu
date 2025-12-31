@@ -43,7 +43,7 @@ describe('PostHogTrackingAdapter', () => {
       params: { key: 'value' },
       metadata: {
         timestamp: Date.now(),
-        url: 'https://example.com',
+        url: 'https://aitu.tu-zi.com',
         version: '1.0.0',
         sessionId: 'session-123',
         eventType: 'click',
@@ -59,7 +59,7 @@ describe('PostHogTrackingAdapter', () => {
       expect(analytics.track).toHaveBeenCalledWith('test_event', {
         key: 'value',
         version: '1.0.0',
-        url: 'https://example.com',
+        url: 'https://aitu.tu-zi.com',
         timestamp: mockEvent.metadata.timestamp,
         sessionId: 'session-123',
         eventType: 'click',
@@ -73,7 +73,7 @@ describe('PostHogTrackingAdapter', () => {
 
       expect(analytics.track).toHaveBeenCalledWith('test_event', expect.objectContaining({
         version: '1.0.0',
-        url: 'https://example.com',
+        url: 'https://aitu.tu-zi.com',
       }));
     });
 
@@ -110,7 +110,7 @@ describe('PostHogTrackingAdapter', () => {
         params: {},
         metadata: {
           timestamp: Date.now(),
-          url: 'https://example.com',
+          url: 'https://aitu.tu-zi.com',
           version: '1.0.0',
           sessionId: 'session-123',
           eventType: 'click',
@@ -123,7 +123,7 @@ describe('PostHogTrackingAdapter', () => {
         params: {},
         metadata: {
           timestamp: Date.now(),
-          url: 'https://example.com',
+          url: 'https://aitu.tu-zi.com',
           version: '1.0.0',
           sessionId: 'session-123',
           eventType: 'click',
@@ -134,6 +134,9 @@ describe('PostHogTrackingAdapter', () => {
     ];
 
     it('should track all events successfully', async () => {
+      // Ensure track mock doesn't throw
+      (analytics.track as jest.Mock).mockImplementation(() => undefined);
+
       const results = await adapter.trackBatch(mockEvents);
 
       expect(results).toEqual([
