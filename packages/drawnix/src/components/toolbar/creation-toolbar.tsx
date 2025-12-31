@@ -63,6 +63,7 @@ import Menu from '../menu/menu';
 import MenuItem from '../menu/menu-item';
 import { THEME_OPTIONS, CheckIcon, isBasicPointer, EmptyIcon } from './toolbar-shared';
 import { MoreToolsButton } from './more-tools-button';
+import { TUTORIAL_TARGET_IDS } from '../tutorial';
 
 export enum PopupKey {
   'shape' = 'shape',
@@ -76,9 +77,11 @@ type AppToolButtonProps = {
   name?: string;
   icon: React.ReactNode;
   pointer?: DrawnixPointerType;
-  key?: PopupKey | 'image' | 'media-library' | 'ai-image' | 'ai-video' | 'extra-tools' | 'mermaid-to-drawnix' | 'markdown-to-drawnix';
+  key?: PopupKey | 'image' | 'media-library' | 'ai-image' | 'ai-video' | 'extra-tools' | 'mermaid-to-drawnix' | 'markdown-to-drawnix' | 'theme';
   /** 用于可见性检查的 key，对应 TOOLBAR_GROUPS 中的 buttonKeys */
   visibilityKey?: string;
+  /** DOM 元素 ID，用于教程引导定位 */
+  tutorialId?: string;
 };
 
 export const BUTTONS: AppToolButtonProps[] = [
@@ -132,6 +135,7 @@ export const BUTTONS: AppToolButtonProps[] = [
     titleKey: 'toolbar.image',
     key: 'image',
     visibilityKey: 'image',
+    tutorialId: TUTORIAL_TARGET_IDS.IMAGE_BUTTON,
   },
   {
     icon: MediaLibraryIcon,
@@ -144,12 +148,14 @@ export const BUTTONS: AppToolButtonProps[] = [
     titleKey: 'toolbar.aiImage',
     key: 'ai-image',
     visibilityKey: 'ai-image',
+    tutorialId: TUTORIAL_TARGET_IDS.AI_IMAGE_BUTTON,
   },
   {
     icon: AIVideoIcon,
     titleKey: 'toolbar.aiVideo',
     key: 'ai-video',
     visibilityKey: 'ai-video',
+    tutorialId: TUTORIAL_TARGET_IDS.AI_VIDEO_BUTTON,
   },
   {
     icon: ThemeIcon,
@@ -707,6 +713,8 @@ export const CreationToolbar: React.FC<ToolbarSectionProps> = ({
     if (!buttonElement) return null;
 
     const dragProps = getDragProps(buttonId, index);
+    const button = buttonMap.get(buttonId);
+    const tutorialId = button?.tutorialId;
 
     return (
       <ToolbarContextMenu
@@ -716,6 +724,7 @@ export const CreationToolbar: React.FC<ToolbarSectionProps> = ({
         visibleIndex={visibleIndex}
       >
         <div
+          id={tutorialId}
           className={classNames('toolbar-button-wrapper', {
             'toolbar-button-wrapper--dragging': dragProps['data-dragging'],
             'toolbar-button-wrapper--drag-over': dragProps['data-drag-over'],
@@ -728,7 +737,7 @@ export const CreationToolbar: React.FC<ToolbarSectionProps> = ({
         </div>
       </ToolbarContextMenu>
     );
-  }, [renderButtonById, getDragProps]);
+  }, [renderButtonById, getDragProps, buttonMap]);
 
   const content = (
     <Stack.Row gap={1}>

@@ -11,6 +11,7 @@
 @import '../components/tool-element/tool.component.scss';
 @import '../components/toolbox-drawer/toolbox-drawer.scss';
 @import '../components/minimap/minimap.scss';
+@import '../components/tutorial/tutorial-overlay.scss';
 
 .t-dialog__ctx.t-dialog__ctx--fixed{
     z-index: $z-dialog !important;

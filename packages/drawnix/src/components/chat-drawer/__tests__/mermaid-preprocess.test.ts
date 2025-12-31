@@ -109,7 +109,7 @@ describe('Mermaid Code Preprocessing', () => {
     expect(result).toContain('["k = nπ/L"]');
     expect(result).toContain('["能量离散: E_n"]');
     expect(result).toContain('["归一化波函数 ψ_n(x)"]');
-    expect(result).toContain('["量子数 n = 1,2,3,...]');
+    expect(result).toContain('["量子数 n = 1,2,3,..."]');
     expect(result).toContain('["概率分布 |ψ|²"]');
   });
 

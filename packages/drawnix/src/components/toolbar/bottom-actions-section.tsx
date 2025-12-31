@@ -10,6 +10,7 @@ import { Badge } from 'tdesign-react';
 import { ToolButton } from '../tool-button';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
 import { FeedbackButton } from '../feedback-button';
+import { TUTORIAL_TARGET_IDS } from '../tutorial';
 import './bottom-actions-section.scss';
 
 export interface BottomActionsSectionProps {
@@ -145,7 +146,7 @@ export const BottomActionsSection: React.FC<BottomActionsSectionProps> = ({
       )}
 
       {/* 任务队列按钮 - 使用 ToolButton + Badge */}
-      <div className="bottom-actions-section__task-wrapper">
+      <div id={TUTORIAL_TARGET_IDS.TASK_BUTTON} className="bottom-actions-section__task-wrapper">
         <Badge
           count={activeTasks.length > 0 ? activeTasks.length : 0}
           showZero={false}

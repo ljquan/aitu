@@ -56,6 +56,8 @@ import { Minimap } from './components/minimap';
 import { AssetProvider } from './contexts/AssetContext';
 import { initializeAssetIntegration } from './services/asset-integration-service';
 import { ToolbarConfigProvider } from './hooks/use-toolbar-config';
+import { TutorialOverlay, TUTORIAL_STEPS } from './components/tutorial';
+import { TutorialProvider, useTutorialContext } from './contexts/TutorialContext';
 
 export type DrawnixProps = {
   value: PlaitElement[];
@@ -243,9 +245,10 @@ export const Drawnix: React.FC<DrawnixProps> = ({
   return (
     <I18nProvider>
       <ToolbarConfigProvider>
-        <AssetProvider>
-          <DrawnixContext.Provider value={contextValue}>
-          <div
+        <TutorialProvider>
+          <AssetProvider>
+            <DrawnixContext.Provider value={contextValue}>
+            <div
             className={classNames('drawnix', {
               'drawnix--mobile': appState.isMobile,
             })}
@@ -307,11 +310,35 @@ export const Drawnix: React.FC<DrawnixProps> = ({
               />
               {/* Minimap - 小地图 */}
               {board && <Minimap board={board} />}
+
+              {/* Tutorial Overlay - 新手引导 */}
+              <TutorialOverlayWrapper />
             </div>
           </div>
-          </DrawnixContext.Provider>
+            </DrawnixContext.Provider>
           </AssetProvider>
+        </TutorialProvider>
       </ToolbarConfigProvider>
     </I18nProvider>
+  );
+};
+
+/**
+ * TutorialOverlay 包装组件
+ * 使用 TutorialContext 来获取引导状态和控制方法
+ */
+const TutorialOverlayWrapper: React.FC = () => {
+  const tutorial = useTutorialContext();
+
+  return (
+    <TutorialOverlay
+      steps={TUTORIAL_STEPS}
+      activeStepIndex={tutorial.activeStepIndex}
+      isOpen={tutorial.isOpen}
+      onNext={tutorial.next}
+      onPrev={tutorial.prev}
+      onSkip={tutorial.skip}
+      onComplete={tutorial.complete}
+    />
   );
 };

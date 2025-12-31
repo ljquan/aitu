@@ -7,7 +7,7 @@ import { TrackingService, resetTrackingService } from '../tracking-service';
 import type { TrackConfig } from '../../../types/tracking.types';
 
 // Mock dependencies
-jest.mock('../umami-adapter');
+jest.mock('../posthog-adapter');
 jest.mock('localforage');
 
 describe('TrackingService', () => {
@@ -57,10 +57,10 @@ describe('TrackingService', () => {
     });
   });
 
-  describe('track attribute parsing', () => {
-    it('should track click on element with track attribute', () => {
+  describe('data-track attribute parsing', () => {
+    it('should track click on element with data-track attribute', () => {
       const button = document.createElement('button');
-      button.setAttribute('track', 'button_click_test');
+      button.setAttribute('data-track', 'button_click_test');
       document.body.appendChild(button);
 
       const trackSpy = jest.spyOn(service as any, 'track');
@@ -72,7 +72,7 @@ describe('TrackingService', () => {
       expect(event.eventName).toBe('button_click_test');
     });
 
-    it('should not track click on element without track attribute', () => {
+    it('should not track click on element without data-track attribute', () => {
       const button = document.createElement('button');
       document.body.appendChild(button);
 
@@ -83,9 +83,9 @@ describe('TrackingService', () => {
       expect(trackSpy).not.toHaveBeenCalled();
     });
 
-    it('should track on closest element with track attribute', () => {
+    it('should track on closest element with data-track attribute', () => {
       const button = document.createElement('button');
-      button.setAttribute('track', 'button_click');
+      button.setAttribute('data-track', 'button_click');
       const span = document.createElement('span');
       span.textContent = 'Click me';
       button.appendChild(span);
@@ -104,7 +104,7 @@ describe('TrackingService', () => {
   describe('metadata injection', () => {
     it('should inject version metadata', () => {
       const button = document.createElement('button');
-      button.setAttribute('track', 'test_event');
+      button.setAttribute('data-track', 'test_event');
       document.body.appendChild(button);
 
       const trackSpy = jest.spyOn(service as any, 'track');
@@ -118,7 +118,7 @@ describe('TrackingService', () => {
 
     it('should inject url metadata', () => {
       const button = document.createElement('button');
-      button.setAttribute('track', 'test_event');
+      button.setAttribute('data-track', 'test_event');
       document.body.appendChild(button);
 
       const trackSpy = jest.spyOn(service as any, 'track');
@@ -132,7 +132,7 @@ describe('TrackingService', () => {
 
     it('should inject timestamp metadata', () => {
       const button = document.createElement('button');
-      button.setAttribute('track', 'test_event');
+      button.setAttribute('data-track', 'test_event');
       document.body.appendChild(button);
 
       const trackSpy = jest.spyOn(service as any, 'track');
@@ -148,7 +148,7 @@ describe('TrackingService', () => {
 
     it('should inject sessionId metadata', () => {
       const button = document.createElement('button');
-      button.setAttribute('track', 'test_event');
+      button.setAttribute('data-track', 'test_event');
       document.body.appendChild(button);
 
       const trackSpy = jest.spyOn(service as any, 'track');
@@ -162,7 +162,7 @@ describe('TrackingService', () => {
 
     it('should inject viewport metadata', () => {
       const button = document.createElement('button');
-      button.setAttribute('track', 'test_event');
+      button.setAttribute('data-track', 'test_event');
       document.body.appendChild(button);
 
       const trackSpy = jest.spyOn(service as any, 'track');
@@ -177,7 +177,7 @@ describe('TrackingService', () => {
 
     it('should set eventType to click', () => {
       const button = document.createElement('button');
-      button.setAttribute('track', 'test_event');
+      button.setAttribute('data-track', 'test_event');
       document.body.appendChild(button);
 
       const trackSpy = jest.spyOn(service as any, 'track');
@@ -192,9 +192,9 @@ describe('TrackingService', () => {
   describe('event bubbling prevention', () => {
     it('should only track innermost element with track attribute', () => {
       const outer = document.createElement('div');
-      outer.setAttribute('track', 'outer_click');
+      outer.setAttribute('data-track', 'outer_click');
       const inner = document.createElement('button');
-      inner.setAttribute('track', 'inner_click');
+      inner.setAttribute('data-track', 'inner_click');
       outer.appendChild(inner);
       document.body.appendChild(outer);
 
@@ -214,7 +214,7 @@ describe('TrackingService', () => {
       jest.useFakeTimers();
 
       const button = document.createElement('button');
-      button.setAttribute('track', 'test_event');
+      button.setAttribute('data-track', 'test_event');
       document.body.appendChild(button);
 
       const trackSpy = jest.spyOn(service as any, 'track');
@@ -242,7 +242,7 @@ describe('TrackingService', () => {
       jest.useFakeTimers();
 
       const button = document.createElement('button');
-      button.setAttribute('track', 'test_event');
+      button.setAttribute('data-track', 'test_event');
       document.body.appendChild(button);
 
       button.click();
@@ -258,7 +258,7 @@ describe('TrackingService', () => {
   describe('track-params parsing', () => {
     it('should parse valid track-params', () => {
       const button = document.createElement('button');
-      button.setAttribute('track', 'test_event');
+      button.setAttribute('data-track', 'test_event');
       button.setAttribute('track-params', '{"key": "value", "count": 123}');
       document.body.appendChild(button);
 
@@ -272,7 +272,7 @@ describe('TrackingService', () => {
 
     it('should handle invalid track-params JSON', () => {
       const button = document.createElement('button');
-      button.setAttribute('track', 'test_event');
+      button.setAttribute('data-track', 'test_event');
       button.setAttribute('track-params', 'invalid json');
       document.body.appendChild(button);
 
@@ -292,7 +292,7 @@ describe('TrackingService', () => {
   describe('element exclusion', () => {
     it('should not track element with data-track-ignore', () => {
       const button = document.createElement('button');
-      button.setAttribute('track', 'test_event');
+      button.setAttribute('data-track', 'test_event');
       button.setAttribute('data-track-ignore', '');
       document.body.appendChild(button);
 
@@ -306,7 +306,7 @@ describe('TrackingService', () => {
     it('should not track element in nav', () => {
       const nav = document.createElement('nav');
       const button = document.createElement('button');
-      button.setAttribute('track', 'test_event');
+      button.setAttribute('data-track', 'test_event');
       nav.appendChild(button);
       document.body.appendChild(nav);
 
@@ -321,7 +321,7 @@ describe('TrackingService', () => {
   describe('stats tracking', () => {
     it('should increment totalEvents stat', () => {
       const button = document.createElement('button');
-      button.setAttribute('track', 'test_event');
+      button.setAttribute('data-track', 'test_event');
       document.body.appendChild(button);
 
       button.click();
@@ -334,7 +334,7 @@ describe('TrackingService', () => {
   describe('destroy', () => {
     it('should remove event listeners on destroy', () => {
       const button = document.createElement('button');
-      button.setAttribute('track', 'test_event');
+      button.setAttribute('data-track', 'test_event');
       document.body.appendChild(button);
 
       service.destroy();
