@@ -180,17 +180,12 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
 
   // State
   const [prompt, setPrompt] = useState('');
-  const [generationType] = useState<GenerationType>('image');
   const [selectedContent, setSelectedContent] = useState<SelectedContent[]>([]);
   const [selectedText, setSelectedText] = useState('');
-  const [videoModel] = useState<VideoModel>('veo3');
   const [isGenerating, setIsGenerating] = useState(false);
   const [aspectRatio] = useState(DEFAULT_ASPECT_RATIO);
   const [isFocused, setIsFocused] = useState(false);
   const [showSuggestionPanel, setShowSuggestionPanel] = useState(false);
-  
-  // Agent mode state
-  const [agentMode] = useState(true); // 默认启用 Agent 模式
 
   // 使用新的 useTriggerDetection hook 解析输入
   const parseResult = useTriggerDetection(prompt);
@@ -292,103 +287,68 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
         addHistory(cleanPrompt);
       }
 
-      // Agent 模式：让 AI 决定使用哪个工具
-      if (agentMode) {
-        // 使用解析出的图片模型，如果没有则使用默认模型
-        const modelToUse = parseResult.selectedImageModel || 'gemini-2.5-flash';
-        console.log('[AIInputBar] Using Agent mode with model:', modelToUse);
-        
-        const result = await agentExecutor.execute(finalPrompt, {
-          model: modelToUse,
-          referenceImages,
-          onChunk: (chunk) => {
-            console.log('[AIInputBar] Agent chunk:', chunk);
-          },
-          onToolCall: (toolCall) => {
-            console.log('[AIInputBar] Agent calling tool:', toolCall.name);
-          },
-          onToolResult: (toolResult) => {
-            console.log('[AIInputBar] Tool result:', toolResult);
+      // 使用解析出的图片模型，如果没有则使用默认模型
+      const modelToUse = parseResult.selectedImageModel || 'gemini-2.5-flash';
+      console.log('[AIInputBar] Using Agent mode with model:', modelToUse);
+      
+      const result = await agentExecutor.execute(finalPrompt, {
+        model: modelToUse,
+        referenceImages,
+        onChunk: (chunk) => {
+          console.log('[AIInputBar] Agent chunk:', chunk);
+        },
+        onToolCall: (toolCall) => {
+          console.log('[AIInputBar] Agent calling tool:', toolCall.name);
+        },
+        onToolResult: (toolResult) => {
+          console.log('[AIInputBar] Tool result:', toolResult);
+          
+          // 如果生成成功，创建任务并添加到画布
+          if (toolResult.success && toolResult.data) {
+            const data = toolResult.data as any;
             
-            // 如果生成成功，创建任务并添加到画布
-            if (toolResult.success && toolResult.data) {
-              const data = toolResult.data as any;
+            if (toolResult.type === 'image') {
+              // 创建图片任务
+              const { width, height } = calculateDimensions(aspectRatio);
+              createTask(
+                {
+                  prompt: data.prompt || finalPrompt,
+                  width,
+                  height,
+                  referenceImages,
+                  // 直接使用生成的 URL
+                  generatedUrl: data.url,
+                },
+                TaskType.IMAGE
+              );
+            } else if (toolResult.type === 'video') {
+              // 创建视频任务
+              const modelConfig = VIDEO_MODEL_CONFIGS[data.model as VideoModel] || VIDEO_MODEL_CONFIGS['veo3'];
+              const [videoWidth, videoHeight] = (data.size || modelConfig.defaultSize).split('x').map(Number);
               
-              if (toolResult.type === 'image') {
-                // 创建图片任务
-                const { width, height } = calculateDimensions(aspectRatio);
-                createTask(
-                  {
-                    prompt: data.prompt || finalPrompt,
-                    width,
-                    height,
-                    referenceImages,
-                    // 直接使用生成的 URL
-                    generatedUrl: data.url,
-                  },
-                  TaskType.IMAGE
-                );
-              } else if (toolResult.type === 'video') {
-                // 创建视频任务
-                const modelConfig = VIDEO_MODEL_CONFIGS[data.model as VideoModel] || VIDEO_MODEL_CONFIGS['veo3'];
-                const [videoWidth, videoHeight] = (data.size || modelConfig.defaultSize).split('x').map(Number);
-                
-                createTask(
-                  {
-                    prompt: data.prompt || finalPrompt,
-                    width: videoWidth,
-                    height: videoHeight,
-                    duration: parseInt(data.seconds || modelConfig.defaultDuration, 10),
-                    model: data.model || 'veo3',
-                    referenceImages,
-                    // 直接使用生成的 URL
-                    generatedUrl: data.url,
-                  },
-                  TaskType.VIDEO
-                );
-              }
+              createTask(
+                {
+                  prompt: data.prompt || finalPrompt,
+                  width: videoWidth,
+                  height: videoHeight,
+                  duration: parseInt(data.seconds || modelConfig.defaultDuration, 10),
+                  model: data.model || 'veo3',
+                  referenceImages,
+                  // 直接使用生成的 URL
+                  generatedUrl: data.url,
+                },
+                TaskType.VIDEO
+              );
             }
-          },
-        });
+          }
+        },
+      });
 
-        // Send message to ChatDrawer
-        await sendMessageToChatDrawerRef.current(finalPrompt);
+      // Send message to ChatDrawer
+      await sendMessageToChatDrawerRef.current(finalPrompt);
 
-        if (!result.success && result.error) {
-          console.error('[AIInputBar] Agent execution failed:', result.error);
-        }
-      } else {
-        // 传统模式：直接创建任务
-        const { width, height } = calculateDimensions(aspectRatio);
-
-        if (generationType === 'image') {
-          createTask(
-            {
-              prompt: finalPrompt,
-              width,
-              height,
-              referenceImages,
-            },
-            TaskType.IMAGE
-          );
-        } else {
-          const modelConfig = VIDEO_MODEL_CONFIGS[videoModel];
-          const [videoWidth, videoHeight] = modelConfig.defaultSize.split('x').map(Number);
-
-          createTask(
-            {
-              prompt: finalPrompt,
-              width: videoWidth,
-              height: videoHeight,
-              duration: parseInt(modelConfig.defaultDuration, 10),
-              model: videoModel,
-              referenceImages,
-            },
-            TaskType.VIDEO
-          );
-        }
-
-        await sendMessageToChatDrawerRef.current(finalPrompt);
+      if (!result.success && result.error) {
+        console.error('[AIInputBar] Agent execution failed:', result.error);
       }
 
       // Clear input after successful submission
@@ -401,7 +361,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
     } finally {
       setIsGenerating(false);
     }
-  }, [prompt, selectedContent, selectedText, generationType, videoModel, aspectRatio, createTask, isGenerating, addHistory, agentMode, parseResult]);
+  }, [prompt, selectedContent, selectedText, aspectRatio, createTask, isGenerating, addHistory, parseResult]);
 
   // Handle key press
   const handleKeyDown = useCallback(
@@ -499,14 +459,6 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
   const handleContentMouseLeave = useCallback(() => {
     setHoveredContent(null);
   }, []);
-
-  // Get placeholder text
-  const getPlaceholder = () => {
-    if (selectedContent.length > 0) {
-      return language === 'zh' ? '想要做什么改变？' : 'What do you want to change?';
-    }
-    return language === 'zh' ? '想要创建什么？' : 'What do you want to create?';
-  };
 
   const canGenerate = prompt.trim().length > 0 || selectedContent.length > 0;
 
@@ -695,9 +647,9 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
               onFocus={handleFocus}
               onBlur={handleBlur}
               onScroll={handleScroll}
-              placeholder={agentMode
+              placeholder={isFocused
                 ? (language === 'zh' ? '输入 # 选择模型（默认生图），- 选择参数， + 选择个数（默认1），描述你想要创建什么' : 'Enter # to select the model (default graph), - to select parameters, + to select the number (default 1), and describe what you want to create')
-                : getPlaceholder()
+                : (language === 'zh' ? '描述你想要创建什么' : 'Describe what you want to create')
               }
               rows={isFocused ? 4 : 1}
               disabled={isGenerating}
