@@ -16,63 +16,96 @@ import { AI_IMAGE_PROMPTS } from '../../../constants/prompts';
 import { usePromptHistory } from '../../../hooks/usePromptHistory';
 import './prompt-button.scss';
 
-// 文本宽度计算常量
-const TEXT_CHAR_WIDTH = 14; // 每个字符的估算宽度（中文字符）
-const TEXT_PADDING = 16; // 文本框内边距
+// 文本尺寸计算常量
+const TEXT_PADDING = 8; // 文本框内边距
 const TEXT_MIN_WIDTH = 60; // 最小宽度
-const TEXT_MAX_WIDTH = 400; // 最大宽度
+const TEXT_MAX_WIDTH = 600; // 最大宽度
 const TEXT_LINE_HEIGHT = 24; // 行高
+const DEFAULT_FONT = '16px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+
+// 缓存 canvas context 用于文本测量
+let measureCanvas: HTMLCanvasElement | null = null;
+let measureContext: CanvasRenderingContext2D | null = null;
 
 /**
- * 估算文本内容所需的宽度和高度
- * @param text 文本内容
- * @returns 估算的宽度和高度
+ * 获取用于测量文本的 Canvas Context
  */
-function estimateTextDimensions(text: string): { width: number; height: number } {
-  // 按行分割
+function getMeasureContext(): CanvasRenderingContext2D {
+  if (!measureCanvas) {
+    measureCanvas = document.createElement('canvas');
+    measureContext = measureCanvas.getContext('2d');
+  }
+  if (!measureContext) {
+    throw new Error('Failed to get canvas context');
+  }
+  measureContext.font = DEFAULT_FONT;
+  return measureContext;
+}
+
+/**
+ * 使用 Canvas API 精确测量文本宽度
+ * @param text 文本内容
+ * @returns 文本宽度（像素）
+ */
+function measureTextWidth(text: string): number {
+  const ctx = getMeasureContext();
+  return ctx.measureText(text).width;
+}
+
+/**
+ * 计算文本内容所需的宽度和高度
+ * 使用 Canvas API 精确测量，确保与实际渲染一致
+ * @param text 文本内容
+ * @returns 计算的宽度和高度
+ */
+function calculateTextDimensions(text: string): { width: number; height: number } {
+  // 按换行符分割
   const lines = text.split('\n');
   
-  // 计算最长行的宽度
+  // 测量每行的实际宽度，找出最宽的行
   let maxLineWidth = 0;
   for (const line of lines) {
-    // 估算每行宽度：中文字符占 TEXT_CHAR_WIDTH，英文/数字占一半
-    let lineWidth = 0;
-    for (const char of line) {
-      // 判断是否为 ASCII 字符（英文、数字、标点）
-      if (char.charCodeAt(0) < 128) {
-        lineWidth += TEXT_CHAR_WIDTH * 0.6;
-      } else {
-        lineWidth += TEXT_CHAR_WIDTH;
-      }
-    }
+    const lineWidth = measureTextWidth(line);
     maxLineWidth = Math.max(maxLineWidth, lineWidth);
   }
   
   // 添加内边距，并限制在最小和最大宽度之间
-  const width = Math.min(
-    TEXT_MAX_WIDTH,
-    Math.max(TEXT_MIN_WIDTH, maxLineWidth + TEXT_PADDING * 2)
+  const contentWidth = Math.min(
+    TEXT_MAX_WIDTH - TEXT_PADDING * 2,
+    Math.max(TEXT_MIN_WIDTH - TEXT_PADDING * 2, maxLineWidth)
   );
+  const width = contentWidth + TEXT_PADDING * 2;
   
-  // 如果宽度被限制，需要重新计算行数
-  const effectiveWidth = width - TEXT_PADDING * 2;
+  // 如果宽度被限制到最大宽度，需要重新计算换行后的行数
   let totalLines = 0;
   for (const line of lines) {
-    let lineWidth = 0;
-    let lineCount = 1;
-    for (const char of line) {
-      const charWidth = char.charCodeAt(0) < 128 ? TEXT_CHAR_WIDTH * 0.6 : TEXT_CHAR_WIDTH;
-      lineWidth += charWidth;
-      if (lineWidth > effectiveWidth) {
-        lineCount++;
-        lineWidth = charWidth;
-      }
+    if (line.length === 0) {
+      totalLines += 1; // 空行
+      continue;
     }
-    totalLines += lineCount;
+    
+    const lineWidth = measureTextWidth(line);
+    if (lineWidth <= contentWidth) {
+      totalLines += 1;
+    } else {
+      // 需要换行，逐字符计算
+      let currentLineWidth = 0;
+      let lineCount = 1;
+      for (const char of line) {
+        const charWidth = measureTextWidth(char);
+        if (currentLineWidth + charWidth > contentWidth) {
+          lineCount++;
+          currentLineWidth = charWidth;
+        } else {
+          currentLineWidth += charWidth;
+        }
+      }
+      totalLines += lineCount;
+    }
   }
   
-  // 计算高度
-  const height = Math.max(TEXT_LINE_HEIGHT, totalLines * TEXT_LINE_HEIGHT + TEXT_PADDING);
+  // 计算高度：行数 * 行高 + 内边距
+  const height = Math.max(TEXT_LINE_HEIGHT + TEXT_PADDING * 2, totalLines * TEXT_LINE_HEIGHT + TEXT_PADDING * 2);
   
   return { width, height };
 }
@@ -159,8 +192,8 @@ export const PopupPromptButton: React.FC<PopupPromptButtonProps> = ({
       children: [{ text: content }],
     });
 
-    // 估算新文本的尺寸
-    const { width: newWidth, height: newHeight } = estimateTextDimensions(prompt.content);
+    // 使用 Canvas API 精确计算新文本的尺寸
+    const { width: newWidth, height: newHeight } = calculateTextDimensions(prompt.content);
 
     // 更新选中元素的文本内容
     for (const element of selectedElements) {
