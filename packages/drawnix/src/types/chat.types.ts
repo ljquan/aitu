@@ -36,6 +36,45 @@ export interface Attachment {
   isBlob: boolean;
 }
 
+/** Agent 执行日志条目类型 */
+export type AgentLogEntry =
+  | {
+      type: 'thinking';
+      timestamp: number;
+      /** AI 正在思考的内容（流式累积） */
+      content: string;
+    }
+  | {
+      type: 'tool_call';
+      timestamp: number;
+      /** 工具名称 */
+      toolName: string;
+      /** 工具参数 */
+      args: Record<string, unknown>;
+    }
+  | {
+      type: 'tool_result';
+      timestamp: number;
+      /** 工具名称 */
+      toolName: string;
+      /** 是否成功 */
+      success: boolean;
+      /** 结果数据 */
+      data?: unknown;
+      /** 错误信息 */
+      error?: string;
+      /** 结果类型 */
+      resultType?: 'image' | 'video' | 'text' | 'canvas' | 'error';
+    }
+  | {
+      type: 'retry';
+      timestamp: number;
+      /** 重试原因 */
+      reason: string;
+      /** 第几次重试 */
+      attempt: number;
+    };
+
 /** 工作流数据接口（用于消息中嵌入工作流） */
 export interface WorkflowMessageData {
   /** 工作流 ID */
@@ -59,6 +98,8 @@ export interface WorkflowMessageData {
     error?: string;
     duration?: number;
   }>;
+  /** Agent 执行日志（详细的执行过程） */
+  logs?: AgentLogEntry[];
 }
 
 /** 对话消息接口 */
@@ -119,14 +160,71 @@ export interface ChatDrawerProps {
   onOpenChange?: (isOpen: boolean) => void;
 }
 
+/** 选中的内容项 */
+export interface SelectedContentItem {
+  /** 内容类型 */
+  type: 'image' | 'video' | 'graphics' | 'text';
+  /** 媒体 URL（图片/视频/图形） */
+  url?: string;
+  /** 文字内容 */
+  text?: string;
+  /** 显示名称 */
+  name: string;
+}
+
+/** AI 输入上下文 - 完整的用户输入信息 */
+export interface AIInputContext {
+  /** 用户在输入框中输入的原始文本（包含 #模型 -参数 +数量 等） */
+  rawInput: string;
+  /** 解析后的纯文本（去除模型/参数/数量标记后的用户指令） */
+  userInstruction: string;
+
+  /** 选中的模型配置 */
+  model: {
+    /** 模型 ID */
+    id: string;
+    /** 生成类型 */
+    type: 'image' | 'video';
+    /** 是否为用户显式选择 */
+    isExplicit: boolean;
+  };
+
+  /** 选中的参数 */
+  params: {
+    /** 生成数量 */
+    count: number;
+    /** 尺寸（如 '16x9', '1x1'） */
+    size?: string;
+    /** 时长（视频） */
+    duration?: string;
+    /** 其他自定义参数 */
+    custom?: Record<string, string>;
+  };
+
+  /** 选中的画布元素 */
+  selection: {
+    /** 选中的文本内容（作为生成 prompt） */
+    texts: string[];
+    /** 选中的图片 URL */
+    images: string[];
+    /** 选中的视频 URL */
+    videos: string[];
+    /** 选中的图形转换为的图片 URL */
+    graphics: string[];
+  };
+
+  /** 合并后的最终 prompt（文本元素 + 默认 prompt） */
+  finalPrompt: string;
+}
+
 /** 工作流消息参数 */
 export interface WorkflowMessageParams {
-  /** 用户输入的提示词 */
-  prompt: string;
-  /** 参考图片 URL 数组 */
-  images?: string[];
+  /** 完整的 AI 输入上下文 */
+  context: AIInputContext;
   /** 工作流数据 */
   workflow: WorkflowMessageData;
+  /** 使用的文本模型（用于 Agent 流程） */
+  textModel?: string;
 }
 
 /** ChatDrawer Ref API - 用于外部控制 ChatDrawer */
@@ -143,6 +241,10 @@ export interface ChatDrawerRef {
   sendWorkflowMessage: (params: WorkflowMessageParams) => Promise<void>;
   /** 更新当前工作流消息 */
   updateWorkflowMessage: (workflow: WorkflowMessageData) => void;
+  /** 追加 Agent 执行日志 */
+  appendAgentLog: (log: AgentLogEntry) => void;
+  /** 更新 AI 思考内容（流式追加） */
+  updateThinkingContent: (content: string) => void;
   /** 获取当前打开状态 */
   isOpen: () => boolean;
 }

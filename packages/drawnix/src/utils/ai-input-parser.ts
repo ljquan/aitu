@@ -31,6 +31,20 @@ export type SendScenario =
 export type GenerationType = 'image' | 'video';
 
 /**
+ * 选中元素的分类信息
+ */
+export interface SelectionInfo {
+  /** 选中的文本内容（作为生成 prompt） */
+  texts: string[];
+  /** 选中的图片 URL */
+  images: string[];
+  /** 选中的视频 URL */
+  videos: string[];
+  /** 选中的图形转换为的图片 URL */
+  graphics: string[];
+}
+
+/**
  * 解析后的生成参数
  */
 export interface ParsedGenerationParams {
@@ -40,22 +54,26 @@ export interface ParsedGenerationParams {
   generationType: GenerationType;
   /** 使用的模型 ID */
   modelId: string;
-  /** 提示词 */
+  /** 是否为用户显式选择的模型 */
+  isModelExplicit: boolean;
+  /** 最终生成用的提示词（选中文本 + 默认 prompt） */
   prompt: string;
+  /** 用户在输入框输入的指令（去除模型/参数/数量后的纯文本） */
+  userInstruction: string;
+  /** 原始输入文本 */
+  rawInput: string;
   /** 生成数量 */
   count: number;
-  /** 尺寸参数 */
+  /** 尺寸参数（如 '16x9', '1x1'） */
   size?: string;
   /** 时长参数（视频） */
   duration?: string;
-  /** 宽度 */
-  width?: number;
-  /** 高度 */
-  height?: number;
   /** 原始解析结果 */
   parseResult: ParseResult;
   /** 是否有额外内容（除模型/参数/数量外） */
   hasExtraContent: boolean;
+  /** 选中元素的分类信息 */
+  selection: SelectionInfo;
 }
 
 /**
@@ -104,76 +122,29 @@ export function generateDefaultPrompt(
 }
 
 /**
- * 解析尺寸字符串为宽高
- * 支持格式: "1024x768", "16x9", "1:1"
+ * 标准化尺寸字符串
+ * 将 "16:9" 转换为 "16x9" 格式（API 使用 x 分隔符）
  */
-function parseSizeToWidthHeight(size: string): { width: number; height: number } | null {
-  // 尝试解析 "1024x768" 格式
-  const pixelMatch = size.match(/^(\d+)x(\d+)$/i);
-  if (pixelMatch) {
-    return {
-      width: parseInt(pixelMatch[1], 10),
-      height: parseInt(pixelMatch[2], 10),
-    };
-  }
-  
-  // 尝试解析 "16x9" 或 "16:9" 比例格式，转换为标准尺寸
-  const ratioMatch = size.match(/^(\d+)[x:](\d+)$/i);
-  if (ratioMatch) {
-    const ratioW = parseInt(ratioMatch[1], 10);
-    const ratioH = parseInt(ratioMatch[2], 10);
-    
-    // 常见比例映射到标准尺寸
-    const ratioMap: Record<string, { width: number; height: number }> = {
-      '1:1': { width: 1024, height: 1024 },
-      '16:9': { width: 1344, height: 768 },
-      '9:16': { width: 768, height: 1344 },
-      '3:2': { width: 1248, height: 832 },
-      '2:3': { width: 832, height: 1248 },
-      '4:3': { width: 1184, height: 864 },
-      '3:4': { width: 864, height: 1184 },
-      '5:4': { width: 1152, height: 896 },
-      '4:5': { width: 896, height: 1152 },
-      '21:9': { width: 1536, height: 672 },
-    };
-    
-    const key = `${ratioW}:${ratioH}`;
-    if (ratioMap[key]) {
-      return ratioMap[key];
-    }
-    
-    // 如果不是标准比例，按比例计算（基于 1024 的基准）
-    const baseSize = 1024;
-    if (ratioW > ratioH) {
-      return {
-        width: baseSize,
-        height: Math.round(baseSize * ratioH / ratioW),
-      };
-    } else {
-      return {
-        width: Math.round(baseSize * ratioW / ratioH),
-        height: baseSize,
-      };
-    }
-  }
-  
-  return null;
+function normalizeSize(size: string): string {
+  return size.replace(':', 'x').toLowerCase();
 }
 
 /**
  * 解析 AI 输入内容
- * 
+ *
  * @param inputText 输入框文本
- * @param hasSelectedElements 是否有选中元素
- * @param selectedTexts 选中的文字内容数组
- * @param imageCount 选中的图片数量
+ * @param selection 选中元素的分类信息
  */
 export function parseAIInput(
   inputText: string,
-  hasSelectedElements: boolean,
-  selectedTexts: string[],
-  imageCount: number
+  selection: SelectionInfo
 ): ParsedGenerationParams {
+  const hasSelectedElements = selection.texts.length > 0 ||
+    selection.images.length > 0 ||
+    selection.videos.length > 0 ||
+    selection.graphics.length > 0;
+  const selectedTexts = selection.texts;
+  const imageCount = selection.images.length + selection.graphics.length;
   // 使用现有的 parseInput 函数解析输入
   const parseResult = parseInput(inputText);
   
@@ -186,15 +157,18 @@ export function parseAIInput(
   // 确定生成类型和模型
   let generationType: GenerationType = 'image';
   let modelId: string;
-  
+  let isModelExplicit = false;
+
   if (parseResult.selectedVideoModel) {
     // 如果明确选择了视频模型，生成视频
     generationType = 'video';
     modelId = parseResult.selectedVideoModel;
+    isModelExplicit = true;
   } else if (parseResult.selectedImageModel) {
     // 如果选择了图片模型，生成图片
     generationType = 'image';
     modelId = parseResult.selectedImageModel;
+    isModelExplicit = true;
   } else {
     // 默认使用设置中的图片模型
     modelId = getDefaultImageModel();
@@ -212,51 +186,34 @@ export function parseAIInput(
   // 解析参数
   let size: string | undefined;
   let duration: string | undefined;
-  let width: number | undefined;
-  let height: number | undefined;
   
   for (const param of parseResult.selectedParams) {
     if (param.id === 'size') {
-      size = param.value;
-      const dimensions = parseSizeToWidthHeight(param.value);
-      if (dimensions) {
-        width = dimensions.width;
-        height = dimensions.height;
-      }
+      // 直接保留 size 字符串，标准化为 API 格式（如 16x9）
+      size = normalizeSize(param.value);
     } else if (param.id === 'duration') {
       duration = param.value;
     }
   }
   
-  // 如果没有指定尺寸，使用模型默认值
-  if (!width || !height) {
+  // 如果没有指定尺寸或时长，使用模型默认值
+  if (!size) {
     const modelConfig = getModelConfig(modelId);
     if (modelConfig?.type === 'image' && modelConfig.imageDefaults) {
-      width = modelConfig.imageDefaults.width;
-      height = modelConfig.imageDefaults.height;
+      // 图片模型使用默认尺寸
+      size = '1x1'; // 默认正方形
     } else if (modelConfig?.type === 'video' && modelConfig.videoDefaults) {
-      const defaultSize = modelConfig.videoDefaults.size;
-      const dimensions = parseSizeToWidthHeight(defaultSize);
-      if (dimensions) {
-        width = dimensions.width;
-        height = dimensions.height;
-      }
+      size = normalizeSize(modelConfig.videoDefaults.size);
       if (!duration) {
         duration = modelConfig.videoDefaults.duration;
       }
     } else {
       // 使用通用默认值
       if (generationType === 'image') {
-        const defaults = getImageModelDefaults(modelId);
-        width = defaults.width;
-        height = defaults.height;
+        size = '1x1';
       } else {
         const defaults = getVideoModelDefaults(modelId);
-        const dimensions = parseSizeToWidthHeight(defaults.size);
-        if (dimensions) {
-          width = dimensions.width;
-          height = dimensions.height;
-        }
+        size = normalizeSize(defaults.size);
         if (!duration) {
           duration = defaults.duration;
         }
@@ -264,18 +221,23 @@ export function parseAIInput(
     }
   }
   
+  // 用户指令（去除模型/参数/数量后的纯文本）
+  const userInstruction = parseResult.cleanText.trim();
+
   return {
     scenario,
     generationType,
     modelId,
+    isModelExplicit,
     prompt,
+    userInstruction,
+    rawInput: inputText,
     count,
     size,
     duration,
-    width,
-    height,
     parseResult,
     hasExtraContent,
+    selection,
   };
 }
 

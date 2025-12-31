@@ -7,18 +7,10 @@
 import { defaultGeminiClient } from '../../utils/gemini-api';
 import type { GeminiMessage } from '../../utils/gemini-api/types';
 import { mcpRegistry } from '../../mcp/registry';
-import type { AgentResult, AgentExecuteOptions, MCPResult, ToolCall } from '../../mcp/types';
+import type { AgentResult, AgentExecuteOptions, MCPResult, ToolCall, AgentExecutionContext } from '../../mcp/types';
 import { generateSystemPrompt, generateReferenceImagesPrompt } from './system-prompts';
 import { parseToolCalls, extractTextContent } from './tool-parser';
-
-/**
- * 生成图片占位符
- * 格式: [图片1], [图片2], ...
- * 用于在发送给文本大模型时替代真实图片 URL，节省 token
- */
-function generateImagePlaceholder(index: number): string {
-  return `[图片${index}]`;
-}
+import { geminiSettings } from '../../utils/settings-manager';
 
 /**
  * 将占位符替换为真实图片 URL
@@ -49,6 +41,80 @@ function replacePlaceholdersWithUrls(
   });
 
   return result;
+}
+
+/**
+ * 构建结构化的用户消息
+ * 使用 Markdown 格式清晰展示所有上下文信息
+ */
+function buildStructuredUserMessage(context: AgentExecutionContext): string {
+  const parts: string[] = [];
+
+  // 1. 模型和参数信息
+  parts.push('## 生成配置');
+  parts.push('');
+  const modelStatus = context.model.isExplicit ? '(用户指定)' : '(默认)';
+  parts.push(`- **模型**: ${context.model.id} ${modelStatus}`);
+  parts.push(`- **类型**: ${context.model.type === 'image' ? '图片生成' : '视频生成'}`);
+  parts.push(`- **数量**: ${context.params.count}`);
+  if (context.params.size) {
+    parts.push(`- **尺寸**: ${context.params.size}`);
+  }
+  if (context.params.duration) {
+    parts.push(`- **时长**: ${context.params.duration}秒`);
+  }
+  parts.push('');
+
+  // 2. 选中的文本元素（作为生成 prompt 的主要来源）
+  if (context.selection.texts.length > 0) {
+    parts.push('## 选中的文本内容（作为生成提示词）');
+    parts.push('');
+    parts.push('```');
+    parts.push(context.selection.texts.join('\n'));
+    parts.push('```');
+    parts.push('');
+  }
+
+  // 3. 用户输入的指令（额外要求）
+  if (context.userInstruction) {
+    parts.push('## 用户指令');
+    parts.push('');
+    parts.push(context.userInstruction);
+    parts.push('');
+  }
+
+  // 4. 参考素材
+  const hasImages = context.selection.images.length > 0 || context.selection.graphics.length > 0;
+  const hasVideos = context.selection.videos.length > 0;
+
+  if (hasImages || hasVideos) {
+    parts.push('## 参考素材（已把url替换为占位符，严格返回即可）');
+    parts.push('');
+
+    // 图片（包括图形转换的图片）
+    if (hasImages) {
+      const allImages = [...context.selection.images, ...context.selection.graphics];
+      const placeholders = allImages.map((_, i) => `[图片${i + 1}]`).join('、');
+      parts.push(`- **参考图片**: ${placeholders}`);
+    }
+
+    // 视频
+    if (hasVideos) {
+      const placeholders = context.selection.videos.map((_, i) => `[视频${i + 1}]`).join('、');
+      parts.push(`- **参考视频**: ${placeholders}`);
+    }
+    parts.push('');
+  }
+
+  // 5. 最终 prompt（如果没有用户指令和选中文本，则显示默认 prompt）
+  if (!context.userInstruction && context.selection.texts.length === 0 && context.finalPrompt) {
+    parts.push('## 生成提示词');
+    parts.push('');
+    parts.push(context.finalPrompt);
+    parts.push('');
+  }
+
+  return parts.join('\n');
 }
 
 /**
@@ -127,11 +193,11 @@ class AgentExecutor {
 
   /**
    * 执行 Agent 请求
-   * 
-   * @param input 用户输入
+   *
+   * @param context 完整的执行上下文
    * @param options 执行选项
    */
-  async execute(input: string, options: AgentExecuteOptions = {}): Promise<AgentResult> {
+  async execute(context: AgentExecutionContext, options: AgentExecuteOptions = {}): Promise<AgentResult> {
     const {
       model,
       onChunk,
@@ -139,29 +205,26 @@ class AgentExecutor {
       onToolResult,
       signal,
       maxIterations = 3,
-      referenceImages,
     } = options;
 
     try {
-      console.log('[AgentExecutor] Starting execution with input:', input.substring(0, 100));
+      console.log('[AgentExecutor] Starting execution with context:', context.userInstruction.substring(0, 100));
+
+      // 收集所有参考图片 URL
+      const allReferenceImages = [...context.selection.images, ...context.selection.graphics];
 
       // 生成系统提示词
       const toolsDescription = mcpRegistry.generateToolsDescription();
       let systemPrompt = generateSystemPrompt(toolsDescription, 'zh');
 
       // 如果有参考图片，添加补充说明（使用占位符方式）
-      if (referenceImages && referenceImages.length > 0) {
-        systemPrompt += generateReferenceImagesPrompt(referenceImages.length, 'zh');
+      if (allReferenceImages.length > 0) {
+        systemPrompt += generateReferenceImagesPrompt(allReferenceImages.length, 'zh');
       }
 
-      // 构建用户消息
-      // 使用占位符代替真实图片 URL，节省 token
-      let userMessage = input;
-      if (referenceImages && referenceImages.length > 0) {
-        // 在用户消息中添加图片占位符说明
-        const placeholders = referenceImages.map((_, i) => generateImagePlaceholder(i + 1)).join('、');
-        userMessage = `${input}\n\n[参考图片: ${placeholders}]`;
-      }
+      // 构建结构化用户消息
+      const userMessage = buildStructuredUserMessage(context);
+      console.log('[AgentExecutor] Structured user message:\n', userMessage);
 
       // 构建消息（不传递实际图片给文本大模型）
       const messages: GeminiMessage[] = [
@@ -184,11 +247,16 @@ class AgentExecutor {
       const toolResults: MCPResult[] = [];
       let finalResponse = '';
 
+      // 获取全局设置的文本模型
+      const globalSettings = geminiSettings.get();
+      const textModel = globalSettings.textModelName;
+      console.log('[AgentExecutor] Using text model from global settings:', textModel);
+
       while (iterations < maxIterations) {
         iterations++;
         console.log(`[AgentExecutor] Iteration ${iterations}/${maxIterations}`);
 
-        // 调用 LLM
+        // 调用 LLM，使用全局设置的文本模型
         let fullResponse = '';
         const response = await defaultGeminiClient.sendChat(
           messages,
@@ -196,7 +264,8 @@ class AgentExecutor {
             fullResponse += chunk;
             onChunk?.(chunk);
           },
-          signal
+          signal,
+          textModel // 使用全局设置的文本模型
         );
 
         // 获取完整响应
@@ -218,8 +287,8 @@ class AgentExecutor {
         // 执行工具调用
         for (const rawToolCall of toolCalls) {
           // 替换占位符为真实图片 URL
-          const toolCall = referenceImages && referenceImages.length > 0
-            ? replaceToolCallPlaceholders(rawToolCall, referenceImages)
+          const toolCall = allReferenceImages.length > 0
+            ? replaceToolCallPlaceholders(rawToolCall, allReferenceImages)
             : rawToolCall;
 
           console.log(`[AgentExecutor] Executing tool: ${toolCall.name}`, toolCall.arguments);

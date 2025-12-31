@@ -32,8 +32,13 @@ $z-pencil-toolbar: 2050;
 $z-popover: 3000;
 $z-popover-feedback: 3010;
 $z-popover-zoom: 3020;
-$z-popover-app: 3030;
 $z-tooltip: 3500;
+
+// ==========================================
+// Layer 3.5: Popovers above Drawers (4500-4999)
+// 这些 popover 需要显示在抽屉之上
+// ==========================================
+$z-popover-app: 4500;
 
 // ==========================================
 // Layer 4: Drawers/Panels (4000-4999)

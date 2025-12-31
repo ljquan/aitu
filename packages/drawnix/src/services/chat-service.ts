@@ -125,7 +125,8 @@ export async function sendChatMessage(
   messages: ChatMessage[],
   newContent: string,
   attachments: File[] = [],
-  onStream: (event: StreamEvent) => void
+  onStream: (event: StreamEvent) => void,
+  temporaryModel?: string // 临时模型（仅在当前会话中使用，不影响全局设置）
 ): Promise<string> {
   // Cancel any existing request
   if (currentAbortController) {
@@ -136,13 +137,16 @@ export async function sendChatMessage(
   const signal = currentAbortController.signal;
   const taskId = Date.now().toString();
   const startTime = Date.now();
+  
+  // 确定使用的模型名称（临时模型优先）
+  const modelName = temporaryModel || defaultGeminiClient.getConfig().modelName || 'unknown';
 
   try {
     // Track chat start
     analytics.trackModelCall({
       taskId,
       taskType: 'chat',
-      model: defaultGeminiClient.getConfig().modelName || 'unknown',
+      model: modelName,
       promptLength: newContent.length,
       hasUploadedImage: attachments.length > 0,
       startTime,
@@ -176,7 +180,7 @@ export async function sendChatMessage(
 
     let fullContent = '';
 
-    // Call API using unified client
+    // Call API using unified client, passing temporaryModel
     await defaultGeminiClient.sendChat(
       geminiMessages,
       (chunk) => {
@@ -186,7 +190,8 @@ export async function sendChatMessage(
         fullContent += restoredChunk;
         onStream({ type: 'content', content: restoredChunk });
       },
-      signal
+      signal,
+      temporaryModel // 传递临时模型
     );
 
     if (signal.aborted) {
@@ -198,7 +203,7 @@ export async function sendChatMessage(
     analytics.trackModelSuccess({
       taskId,
       taskType: 'chat',
-      model: defaultGeminiClient.getConfig().modelName || 'unknown',
+      model: modelName,
       duration,
       resultSize: fullContent.length,
     });
@@ -226,7 +231,7 @@ export async function sendChatMessage(
     analytics.trackModelFailure({
       taskId,
       taskType: 'chat',
-      model: defaultGeminiClient.getConfig().modelName || 'unknown',
+      model: modelName,
       duration,
       error: errorMessage,
     });

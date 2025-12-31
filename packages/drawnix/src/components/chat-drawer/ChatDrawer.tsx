@@ -25,7 +25,8 @@ import { chatStorageService } from '../../services/chat-storage-service';
 import { useChatHandler } from '../../hooks/useChatHandler';
 import { geminiSettings } from '../../utils/settings-manager';
 import { useDrawnix } from '../../hooks/use-drawnix';
-import type { ChatDrawerProps, ChatDrawerRef, ChatSession, WorkflowMessageData, WorkflowMessageParams } from '../../types/chat.types';
+import type { ChatDrawerProps, ChatDrawerRef, ChatSession, WorkflowMessageData, WorkflowMessageParams, AgentLogEntry, ChatMessage as ChatMessageType } from '../../types/chat.types';
+import { MessageRole, MessageStatus } from '../../types/chat.types';
 import type { Message } from '@llamaindex/chat-ui';
 
 // 工作流消息的特殊标记前缀
@@ -41,6 +42,9 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
     const [sessions, setSessions] = useState<ChatSession[]>([]);
     const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
     const [showSessions, setShowSessions] = useState(false);
+    
+    // 临时模型选择（仅在当前会话中有效，不影响全局设置）
+    const [sessionModel, setSessionModel] = useState<string | undefined>(undefined);
     
     // 工作流消息状态：存储当前会话中的工作流数据
     const [workflowMessages, setWorkflowMessages] = useState<Map<string, WorkflowMessageData>>(new Map());
@@ -68,6 +72,7 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
     const chatHandler = useChatHandler({
       sessionId: activeSessionId,
       onSessionTitleUpdate: handleSessionTitleUpdate,
+      temporaryModel: sessionModel, // 传递临时模型
     });
 
     // Load initial sessions and active session
@@ -77,10 +82,36 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
         const loadedSessions = await chatStorageService.getAllSessions();
         setSessions(loadedSessions);
 
+        let activeId: string | null = null;
         if (drawerState.activeSessionId) {
+          activeId = drawerState.activeSessionId;
           setActiveSessionId(drawerState.activeSessionId);
         } else if (loadedSessions.length > 0) {
+          activeId = loadedSessions[0].id;
           setActiveSessionId(loadedSessions[0].id);
+        }
+
+        // 加载活动会话的工作流数据
+        if (activeId) {
+          try {
+            const messages = await chatStorageService.getMessages(activeId);
+            const newWorkflowMessages = new Map<string, WorkflowMessageData>();
+
+            for (const msg of messages) {
+              if (msg.workflow) {
+                newWorkflowMessages.set(msg.id, msg.workflow);
+              }
+            }
+
+            setWorkflowMessages(newWorkflowMessages);
+            // 如果有正在进行的工作流，设置为当前工作流
+            const runningWorkflow = messages.find(
+              (m) => m.workflow && m.status === MessageStatus.STREAMING
+            );
+            currentWorkflowMsgIdRef.current = runningWorkflow?.id || null;
+          } catch (error) {
+            console.error('[ChatDrawer] Failed to load workflow messages:', error);
+          }
         }
       };
 
@@ -206,6 +237,8 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
       // 清空工作流消息
       setWorkflowMessages(new Map());
       currentWorkflowMsgIdRef.current = null;
+      // 重置临时模型选择
+      setSessionModel(undefined);
     }, []);
 
     // Toggle session list
@@ -213,13 +246,35 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
       setShowSessions((prev) => !prev);
     }, []);
 
-    // Select session
-    const handleSelectSession = useCallback((sessionId: string) => {
+    // Select session（从存储中加载工作流数据）
+    const handleSelectSession = useCallback(async (sessionId: string) => {
       setActiveSessionId(sessionId);
       setShowSessions(false);
-      // 切换会话时清空工作流消息（TODO: 可以从存储中加载）
-      setWorkflowMessages(new Map());
-      currentWorkflowMsgIdRef.current = null;
+      // 重置临时模型选择
+      setSessionModel(undefined);
+
+      // 从存储中加载会话的消息，提取工作流数据
+      try {
+        const messages = await chatStorageService.getMessages(sessionId);
+        const newWorkflowMessages = new Map<string, WorkflowMessageData>();
+
+        for (const msg of messages) {
+          if (msg.workflow) {
+            newWorkflowMessages.set(msg.id, msg.workflow);
+          }
+        }
+
+        setWorkflowMessages(newWorkflowMessages);
+        // 如果有正在进行的工作流，设置为当前工作流
+        const runningWorkflow = messages.find(
+          (m) => m.workflow && m.status === MessageStatus.STREAMING
+        );
+        currentWorkflowMsgIdRef.current = runningWorkflow?.id || null;
+      } catch (error) {
+        console.error('[ChatDrawer] Failed to load workflow messages:', error);
+        setWorkflowMessages(new Map());
+        currentWorkflowMsgIdRef.current = null;
+      }
     }, []);
 
     // Delete session
@@ -240,8 +295,6 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
 
     // Store pending message for retry after session creation or API key config
     const pendingMessageRef = React.useRef<Message | null>(null);
-    // Store pending workflow message
-    const pendingWorkflowRef = React.useRef<{ userPrompt: string; workflow: WorkflowMessageData } | null>(null);
 
     // Handle send with auto-create session
     const handleSendWrapper = useCallback(
@@ -276,41 +329,89 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
     // 发送工作流消息（创建新对话）
     const handleSendWorkflowMessage = useCallback(
       async (params: WorkflowMessageParams) => {
-        const { prompt: userPrompt, images, workflow } = params;
-        
+        const { context, workflow, textModel } = params;
+
         // 打开抽屉
         setIsOpen(true);
         onOpenChange?.(true);
 
+        // 如果传入了文本模型，设置为当前会话的临时模型
+        if (textModel) {
+          setSessionModel(textModel);
+        }
+
         // 创建新对话
         const newSession = await chatStorageService.createSession();
-        
-        // 使用用户提示词作为会话标题
-        const title = userPrompt.length > 30 ? userPrompt.slice(0, 30) + '...' : userPrompt;
+
+        // 构建显示用的消息内容
+        // 区分：选中的文本元素（作为 prompt）vs 用户输入的指令（额外要求）
+        const displayParts: string[] = [];
+
+        // 1. 显示模型和参数信息
+        const modelInfo = context.model.isExplicit
+          ? `模型: ${context.model.id}`
+          : `模型: ${context.model.id} (默认)`;
+        displayParts.push(modelInfo);
+
+        if (context.params.count > 1) {
+          displayParts.push(`数量: ${context.params.count}`);
+        }
+
+        // 2. 显示选中的文本元素（作为生成 prompt）
+        if (context.selection.texts.length > 0) {
+          displayParts.push(`\n📝 选中的文本:\n${context.selection.texts.join('\n')}`);
+        }
+
+        // 3. 显示用户输入的指令（额外要求）
+        if (context.userInstruction) {
+          displayParts.push(`\n💬 用户指令:\n${context.userInstruction}`);
+        }
+
+        // 4. 如果两者都没有，显示 finalPrompt
+        if (context.selection.texts.length === 0 && !context.userInstruction && context.finalPrompt) {
+          displayParts.push(`\n提示词:\n${context.finalPrompt}`);
+        }
+
+        const userDisplayText = displayParts.join('\n');
+
+        // 使用简短的标题
+        const titleText = context.userInstruction || context.finalPrompt || '新任务';
+        const title = titleText.length > 30 ? titleText.slice(0, 30) + '...' : titleText;
         await chatStorageService.updateSession(newSession.id, { title });
         newSession.title = title;
-        
+
         setSessions((prev) => [newSession, ...prev]);
         setActiveSessionId(newSession.id);
 
-        // 创建用户消息（包含图片）
+        // 创建用户消息（包含图片和视频）
         const userMsgId = `msg_${Date.now()}_user`;
-        const userMsgParts: Message['parts'] = [{ type: 'text', text: userPrompt }];
-        
-        // 添加图片作为附件
-        if (images && images.length > 0) {
-          for (let i = 0; i < images.length; i++) {
-            userMsgParts.push({
-              type: 'data-file',
-              data: {
-                filename: `image-${i + 1}.png`,
-                mediaType: 'image/png',
-                url: images[i],
-              },
-            } as any);
-          }
+        const userMsgParts: Message['parts'] = [{ type: 'text', text: userDisplayText }];
+
+        // 添加参考图片
+        const allImages = [...context.selection.images, ...context.selection.graphics];
+        for (let i = 0; i < allImages.length; i++) {
+          userMsgParts.push({
+            type: 'data-file',
+            data: {
+              filename: `image-${i + 1}.png`,
+              mediaType: 'image/png',
+              url: allImages[i],
+            },
+          } as any);
         }
-        
+
+        // 添加参考视频
+        for (let i = 0; i < context.selection.videos.length; i++) {
+          userMsgParts.push({
+            type: 'data-file',
+            data: {
+              filename: `video-${i + 1}.mp4`,
+              mediaType: 'video/mp4',
+              url: context.selection.videos[i],
+            },
+          } as any);
+        }
+
         const userMsg: Message = {
           id: userMsgId,
           role: 'user',
@@ -325,7 +426,7 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
           parts: [{ type: 'text', text: `${WORKFLOW_MESSAGE_PREFIX}${workflowMsgId}` }],
         };
 
-        // 存储工作流数据
+        // 存储工作流数据到内存
         setWorkflowMessages((prev) => {
           const newMap = new Map(prev);
           newMap.set(workflowMsgId, workflow);
@@ -333,13 +434,56 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
         });
         currentWorkflowMsgIdRef.current = workflowMsgId;
 
+        // 持久化用户消息到本地存储
+        const userChatMsg: ChatMessageType = {
+          id: userMsgId,
+          sessionId: newSession.id,
+          role: MessageRole.USER,
+          content: userDisplayText,
+          timestamp: Date.now(),
+          status: MessageStatus.SUCCESS,
+          attachments: allImages.length > 0 || context.selection.videos.length > 0
+            ? [
+                ...allImages.map((url, i) => ({
+                  id: `${userMsgId}-img-${i}`,
+                  name: `image-${i + 1}.png`,
+                  type: 'image/png',
+                  size: 0,
+                  data: url,
+                  isBlob: false,
+                })),
+                ...context.selection.videos.map((url, i) => ({
+                  id: `${userMsgId}-vid-${i}`,
+                  name: `video-${i + 1}.mp4`,
+                  type: 'video/mp4',
+                  size: 0,
+                  data: url,
+                  isBlob: false,
+                })),
+              ]
+            : undefined,
+        };
+        await chatStorageService.addMessage(userChatMsg);
+
+        // 持久化工作流消息到本地存储
+        const workflowChatMsg: ChatMessageType = {
+          id: workflowMsgId,
+          sessionId: newSession.id,
+          role: MessageRole.ASSISTANT,
+          content: `${WORKFLOW_MESSAGE_PREFIX}${workflowMsgId}`,
+          timestamp: Date.now(),
+          status: MessageStatus.STREAMING,
+          workflow: workflow,
+        };
+        await chatStorageService.addMessage(workflowChatMsg);
+
         // 直接设置消息（不通过 sendMessage，因为这不是普通对话）
-        chatHandler.setMessages([userMsg, workflowMsg]);
+        chatHandler.setMessages?.([userMsg, workflowMsg]);
       },
       [chatHandler, onOpenChange]
     );
 
-    // 更新当前工作流消息
+    // 更新当前工作流消息（同时持久化到本地存储）
     const handleUpdateWorkflowMessage = useCallback(
       (workflow: WorkflowMessageData) => {
         const msgId = currentWorkflowMsgIdRef.current;
@@ -348,6 +492,91 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
         setWorkflowMessages((prev) => {
           const newMap = new Map(prev);
           newMap.set(msgId, workflow);
+          return newMap;
+        });
+
+        // 持久化到本地存储
+        chatStorageService.updateMessage(msgId, { workflow });
+      },
+      []
+    );
+
+    // 追加 Agent 执行日志（同时持久化）
+    const handleAppendAgentLog = useCallback(
+      (log: AgentLogEntry) => {
+        const msgId = currentWorkflowMsgIdRef.current;
+        if (!msgId) return;
+
+        setWorkflowMessages((prev) => {
+          const newMap = new Map(prev);
+          const workflow = newMap.get(msgId);
+          if (workflow) {
+            const logs = workflow.logs || [];
+            const updatedWorkflow = {
+              ...workflow,
+              logs: [...logs, log],
+            };
+            newMap.set(msgId, updatedWorkflow);
+            // 持久化到本地存储
+            chatStorageService.updateMessage(msgId, { workflow: updatedWorkflow });
+          }
+          return newMap;
+        });
+      },
+      []
+    );
+
+    // 更新 AI 思考内容（流式追加，使用防抖减少存储频率）
+    const thinkingUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const handleUpdateThinkingContent = useCallback(
+      (content: string) => {
+        const msgId = currentWorkflowMsgIdRef.current;
+        if (!msgId) return;
+
+        setWorkflowMessages((prev) => {
+          const newMap = new Map(prev);
+          const workflow = newMap.get(msgId);
+          if (workflow) {
+            const logs = workflow.logs || [];
+            // 查找最后一个 thinking 日志（从后向前遍历）
+            let lastThinkingIndex = -1;
+            for (let i = logs.length - 1; i >= 0; i--) {
+              if (logs[i].type === 'thinking') {
+                lastThinkingIndex = i;
+                break;
+              }
+            }
+
+            let updatedWorkflow: WorkflowMessageData;
+            if (lastThinkingIndex >= 0) {
+              // 更新现有的 thinking 日志
+              const updatedLogs = [...logs];
+              const thinkingLog = updatedLogs[lastThinkingIndex] as Extract<AgentLogEntry, { type: 'thinking' }>;
+              updatedLogs[lastThinkingIndex] = {
+                ...thinkingLog,
+                content: thinkingLog.content + content,
+              };
+              updatedWorkflow = { ...workflow, logs: updatedLogs };
+            } else {
+              // 创建新的 thinking 日志
+              updatedWorkflow = {
+                ...workflow,
+                logs: [
+                  ...logs,
+                  { type: 'thinking' as const, timestamp: Date.now(), content },
+                ],
+              };
+            }
+            newMap.set(msgId, updatedWorkflow);
+
+            // 防抖持久化（500ms 内只保存一次）
+            if (thinkingUpdateTimeoutRef.current) {
+              clearTimeout(thinkingUpdateTimeoutRef.current);
+            }
+            thinkingUpdateTimeoutRef.current = setTimeout(() => {
+              chatStorageService.updateMessage(msgId, { workflow: updatedWorkflow });
+            }, 500);
+          }
           return newMap;
         });
       },
@@ -369,21 +598,23 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
         // Open drawer first
         setIsOpen(true);
         onOpenChange?.(true);
-        
+
         // Create message object
         const msg: Message = {
           id: `msg_${Date.now()}`,
           role: 'user',
           parts: [{ type: 'text', text: content }],
         };
-        
+
         // Send the message
         await handleSendWrapper(msg);
       },
       sendWorkflowMessage: handleSendWorkflowMessage,
       updateWorkflowMessage: handleUpdateWorkflowMessage,
+      appendAgentLog: handleAppendAgentLog,
+      updateThinkingContent: handleUpdateThinkingContent,
       isOpen: () => isOpen,
-    }), [isOpen, handleToggle, handleSendWrapper, handleSendWorkflowMessage, handleUpdateWorkflowMessage, onOpenChange]);
+    }), [isOpen, handleToggle, handleSendWrapper, handleSendWorkflowMessage, handleUpdateWorkflowMessage, handleAppendAgentLog, handleUpdateThinkingContent, onOpenChange]);
 
     // Wrapped handler for ChatSection
     const wrappedHandler = useMemo(
@@ -423,7 +654,10 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
           <div className="chat-drawer__header">
             <div className="chat-drawer__header-left">
               <h2 className="chat-drawer__title">{title}</h2>
-              <ModelSelector />
+              <ModelSelector 
+                value={sessionModel}
+                onChange={setSessionModel}
+              />
             </div>
             <div className="chat-drawer__actions">
               <Tooltip content="会话列表" theme="light">

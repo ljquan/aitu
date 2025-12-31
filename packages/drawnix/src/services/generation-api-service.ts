@@ -166,13 +166,13 @@ class GenerationAPIService {
     params: GenerationParams,
     signal: AbortSignal
   ): Promise<TaskResult> {
-    const finalWidth = params.width || 1024;
-    const finalHeight = params.height || 1024;
-
     try {
-      // 转换 aspectRatio 到 size 参数
-      const aspectRatio = (params as any).aspectRatio;
-      const size = this.convertAspectRatioToSize(aspectRatio);
+      // 直接使用传入的 size 参数，或兼容旧的 aspectRatio 参数
+      let size: string | undefined = params.size;
+      if (!size) {
+        const aspectRatio = (params as any).aspectRatio;
+        size = this.convertAspectRatioToSize(aspectRatio);
+      }
 
       // 转换上传的图片为 URL 数组
       let imageUrls: string[] | undefined;
@@ -186,12 +186,15 @@ class GenerationAPIService {
       // 获取 quality 参数（如果有）
       const quality = (params as any).quality as '1k' | '2k' | '4k' | undefined;
 
+      console.log('[GenerationAPI] Image generation params - model:', params.model, 'size:', size);
+
       // 调用新的图片生成接口
       const result = await defaultGeminiClient.generateImage(params.prompt, {
         size,
         image: imageUrls && imageUrls.length > 0 ? imageUrls : undefined,
         response_format: 'url',
         quality,
+        model: params.model, // 传递指定的模型
       });
 
       console.log('[GenerationAPI] Image generation response:', result);
@@ -213,8 +216,6 @@ class GenerationAPIService {
           url: imageUrl,
           format: 'png',
           size: 0,
-          width: finalWidth,
-          height: finalHeight,
         };
       }
 

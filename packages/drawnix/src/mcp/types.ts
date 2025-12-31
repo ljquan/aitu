@@ -119,6 +119,51 @@ export interface AgentResult {
 }
 
 /**
+ * Agent 执行上下文 - 完整的用户输入信息
+ */
+export interface AgentExecutionContext {
+  /** 用户在输入框输入的指令（去除模型/参数/数量后的纯文本） */
+  userInstruction: string;
+  /** 原始输入文本（包含 #模型 -参数 +数量 等） */
+  rawInput: string;
+
+  /** 模型配置 */
+  model: {
+    /** 模型 ID */
+    id: string;
+    /** 生成类型 */
+    type: 'image' | 'video';
+    /** 是否为用户显式选择 */
+    isExplicit: boolean;
+  };
+
+  /** 参数配置 */
+  params: {
+    /** 生成数量 */
+    count: number;
+    /** 尺寸（如 '16x9', '1x1'） */
+    size?: string;
+    /** 时长（视频） */
+    duration?: string;
+  };
+
+  /** 选中的画布元素 */
+  selection: {
+    /** 选中的文本内容（作为生成 prompt） */
+    texts: string[];
+    /** 选中的图片 URL */
+    images: string[];
+    /** 选中的视频 URL */
+    videos: string[];
+    /** 选中的图形转换为的图片 URL */
+    graphics: string[];
+  };
+
+  /** 最终生成用的 prompt */
+  finalPrompt: string;
+}
+
+/**
  * Agent 执行选项
  */
 export interface AgentExecuteOptions {
@@ -134,6 +179,4 @@ export interface AgentExecuteOptions {
   signal?: AbortSignal;
   /** 最大工具调用轮数 */
   maxIterations?: number;
-  /** 参考图片 */
-  referenceImages?: string[];
 }

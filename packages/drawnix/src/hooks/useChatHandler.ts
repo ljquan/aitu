@@ -15,6 +15,8 @@ import type { ChatHandler, Message, MessagePart } from '@llamaindex/chat-ui';
 interface UseChatHandlerOptions {
   sessionId: string | null;
   onSessionTitleUpdate?: (sessionId: string, title: string) => void;
+  /** 临时模型（仅在当前会话中使用，不影响全局设置） */
+  temporaryModel?: string;
 }
 
 // Convert our ChatMessage to chat-ui Message format
@@ -76,7 +78,7 @@ function fromChatUIMessage(msg: Message, sessionId: string): ChatMessage {
 export function useChatHandler(options: UseChatHandlerOptions): ChatHandler & {
   isLoading: boolean;
 } {
-  const { sessionId, onSessionTitleUpdate } = options;
+  const { sessionId, onSessionTitleUpdate, temporaryModel } = options;
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [status, setStatus] = useState<ChatHandler['status']>('ready');
@@ -230,7 +232,8 @@ export function useChatHandler(options: UseChatHandlerOptions): ChatHandler & {
 
               currentAssistantMsgRef.current = null;
             }
-          }
+          },
+          temporaryModel // 传递临时模型
         );
       } catch (error: any) {
         if (error.message !== 'Request cancelled') {

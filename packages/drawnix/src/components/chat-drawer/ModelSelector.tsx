@@ -3,6 +3,10 @@
  *
  * A modern dropdown component for selecting the chat model.
  * Features: search, grouping by provider, and badges.
+ * 
+ * Note: This selector manages a temporary/session-level model selection
+ * that does NOT affect global settings. The global text model is configured
+ * in the settings dialog.
  */
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
@@ -18,11 +22,13 @@ import {
   type ChatModel,
   type ModelBadge,
 } from '../../constants/CHAT_MODELS';
-import { settingsManager } from '../../utils/settings-manager';
 import { ProviderIcon } from './ProviderIcon';
 
 export interface ModelSelectorProps {
   className?: string;
+  /** Current selected model ID (controlled mode) */
+  value?: string;
+  /** Callback when model changes - does NOT save to global settings */
   onChange?: (modelId: string) => void;
 }
 
@@ -37,24 +43,15 @@ const BADGE_COLORS: Record<ModelBadge, string> = {
 };
 
 export const ModelSelector: React.FC<ModelSelectorProps> = React.memo(
-  ({ className, onChange }) => {
-    const [selectedModel, setSelectedModel] = useState<string>(DEFAULT_CHAT_MODEL_ID);
+  ({ className, value, onChange }) => {
+    // Use controlled value if provided, otherwise use internal state
+    const [internalModel, setInternalModel] = useState<string>(DEFAULT_CHAT_MODEL_ID);
+    const selectedModel = value ?? internalModel;
+    
     const [isOpen, setIsOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const dropdownRef = useRef<HTMLDivElement>(null);
     const triggerRef = useRef<HTMLButtonElement>(null);
-
-    // Load saved model from settings
-    useEffect(() => {
-      const loadModel = async () => {
-        await settingsManager.waitForInitialization();
-        const savedModel = settingsManager.getSetting<string>('gemini.chatModel');
-        if (savedModel && getChatModelById(savedModel)) {
-          setSelectedModel(savedModel);
-        }
-      };
-      loadModel();
-    }, []);
 
     // Close dropdown when clicking outside
     useEffect(() => {
@@ -84,16 +81,19 @@ export const ModelSelector: React.FC<ModelSelectorProps> = React.memo(
       };
     }, [isOpen]);
 
-    // Handle model selection
+    // Handle model selection - only updates local state, does NOT save to global settings
     const handleSelectModel = useCallback(
-      async (modelId: string) => {
-        setSelectedModel(modelId);
-        await settingsManager.updateSetting('gemini.chatModel', modelId);
+      (modelId: string) => {
+        if (value === undefined) {
+          // Uncontrolled mode: update internal state
+          setInternalModel(modelId);
+        }
+        // Always notify parent
         onChange?.(modelId);
         setIsOpen(false);
         setSearchQuery('');
       },
-      [onChange]
+      [value, onChange]
     );
 
     // Toggle dropdown

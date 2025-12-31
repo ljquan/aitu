@@ -9,7 +9,7 @@
  * 场景4: 输入内容包含其他内容 -> 走 Agent 流程（调用文本模型获取工作流）
  */
 
-import type { ParsedGenerationParams, GenerationType } from '../../utils/ai-input-parser';
+import type { ParsedGenerationParams, GenerationType, SelectionInfo } from '../../utils/ai-input-parser';
 
 /**
  * 工作流步骤定义
@@ -51,13 +51,26 @@ export interface WorkflowDefinition {
   steps: WorkflowStep[];
   /** 元数据 */
   metadata: {
+    /** 最终生成用的提示词 */
     prompt: string;
+    /** 用户输入的指令（可能包含额外要求） */
+    userInstruction: string;
+    /** 原始输入文本 */
+    rawInput: string;
+    /** 模型 ID */
     modelId: string;
+    /** 是否为用户显式选择的模型 */
+    isModelExplicit: boolean;
+    /** 生成数量 */
     count: number;
-    width?: number;
-    height?: number;
+    /** 尺寸参数（如 '16x9', '1x1'） */
+    size?: string;
+    /** 时长（视频） */
     duration?: string;
+    /** 参考图片（图片 + 图形） */
     referenceImages?: string[];
+    /** 选中元素的分类信息 */
+    selection: SelectionInfo;
   };
   /** 创建时间 */
   createdAt: number;
@@ -79,7 +92,18 @@ export function convertDirectGenerationToWorkflow(
   params: ParsedGenerationParams,
   referenceImages: string[] = []
 ): WorkflowDefinition {
-  const { generationType, modelId, prompt, count, width, height, duration } = params;
+  const {
+    generationType,
+    modelId,
+    isModelExplicit,
+    prompt,
+    userInstruction,
+    rawInput,
+    count,
+    size,
+    duration,
+    selection,
+  } = params;
   
   const steps: WorkflowStep[] = [];
   
@@ -94,8 +118,7 @@ export function convertDirectGenerationToWorkflow(
         args: {
           prompt,
           model: modelId,
-          width: width || 1024,
-          height: height || 1024,
+          size: size || '1x1',
           referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
         },
         description: count > 1 
@@ -111,8 +134,7 @@ export function convertDirectGenerationToWorkflow(
         args: {
           prompt,
           model: modelId,
-          width: width || 1280,
-          height: height || 720,
+          size: size || '16x9',
           duration: duration || '5',
           referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
         },
@@ -133,12 +155,15 @@ export function convertDirectGenerationToWorkflow(
     steps,
     metadata: {
       prompt,
+      userInstruction,
+      rawInput,
       modelId,
+      isModelExplicit,
       count,
-      width,
-      height,
+      size,
       duration,
       referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
+      selection,
     },
     createdAt: Date.now(),
   };
@@ -154,8 +179,19 @@ export function convertAgentFlowToWorkflow(
   params: ParsedGenerationParams,
   referenceImages: string[] = []
 ): WorkflowDefinition {
-  const { generationType, modelId, prompt, count, width, height, duration } = params;
-  
+  const {
+    generationType,
+    modelId,
+    isModelExplicit,
+    prompt,
+    userInstruction,
+    rawInput,
+    count,
+    size,
+    duration,
+    selection,
+  } = params;
+
   // Agent 流程初始只有一个分析步骤
   // 后续步骤会在 AI 分析后动态添加
   const steps: WorkflowStep[] = [
@@ -163,22 +199,27 @@ export function convertAgentFlowToWorkflow(
       id: 'step-analyze',
       mcp: 'ai_analyze',
       args: {
-        prompt,
+        // 用户指令（包含额外要求）
+        userInstruction,
+        // 选中的文本作为生成 prompt
+        selectedTexts: selection.texts,
         context: {
           generationType,
           modelId,
+          isModelExplicit,
           count,
-          width,
-          height,
+          size,
           duration,
           hasReferenceImages: referenceImages.length > 0,
+          hasSelectedTexts: selection.texts.length > 0,
+          hasSelectedVideos: selection.videos.length > 0,
         },
       },
       description: 'AI 分析用户意图',
       status: 'pending',
     },
   ];
-  
+
   return {
     id: generateId(),
     name: 'AI 智能生成',
@@ -188,12 +229,15 @@ export function convertAgentFlowToWorkflow(
     steps,
     metadata: {
       prompt,
+      userInstruction,
+      rawInput,
       modelId,
+      isModelExplicit,
       count,
-      width,
-      height,
+      size,
       duration,
       referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
+      selection,
     },
     createdAt: Date.now(),
   };

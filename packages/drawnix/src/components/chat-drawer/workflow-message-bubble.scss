@@ -346,3 +346,158 @@
     transform: rotate(360deg);
   }
 }
+
+// ============================================================================
+// 工作流日志区域
+// ============================================================================
+
+.workflow-bubble__logs {
+  margin-top: $spacing-md;
+  border-top: 1px solid var(--td-component-border);
+  padding-top: $spacing-md;
+}
+
+.workflow-bubble__logs-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: $spacing-sm;
+}
+
+.workflow-bubble__logs-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--td-text-color-secondary);
+}
+
+.workflow-bubble__logs-list {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-sm;
+}
+
+// ============================================================================
+// Agent 日志项
+// ============================================================================
+
+.agent-log {
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--td-bg-color-container);
+  border: 1px solid var(--td-component-border);
+
+  &__header {
+    display: flex;
+    align-items: center;
+    gap: $spacing-sm;
+    padding: $spacing-sm $spacing-md;
+    font-size: 12px;
+
+    &--clickable {
+      cursor: pointer;
+      transition: background 0.2s ease;
+
+      &:hover {
+        background: var(--td-bg-color-container-hover);
+      }
+    }
+  }
+
+  &__icon {
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+
+  &__title {
+    flex: 1;
+    color: var(--td-text-color-primary);
+    font-weight: 500;
+  }
+
+  &__expand {
+    font-size: 10px;
+    color: var(--td-text-color-placeholder);
+    transition: transform 0.2s ease;
+
+    &--open {
+      transform: rotate(180deg);
+    }
+  }
+
+  &__content {
+    padding: $spacing-sm $spacing-md;
+    border-top: 1px solid var(--td-component-border);
+    background: var(--td-bg-color-page);
+  }
+
+  &__thinking-text {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--td-text-color-secondary);
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: inherit;
+  }
+
+  &__toggle {
+    margin-top: $spacing-xs;
+    padding: 2px 8px;
+    font-size: 11px;
+    color: var(--td-brand-color);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+
+  &__args,
+  &__data {
+    margin: 0;
+    padding: $spacing-sm;
+    font-size: 11px;
+    font-family: 'SF Mono', Monaco, monospace;
+    background: var(--td-bg-color-container);
+    border-radius: 4px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 150px;
+    overflow-y: auto;
+    color: var(--td-text-color-primary);
+  }
+
+  &__error {
+    padding: $spacing-sm;
+    font-size: 12px;
+    color: var(--td-error-color-7);
+    background: var(--td-error-color-1);
+    border-radius: 4px;
+    margin-bottom: $spacing-xs;
+  }
+
+  // 不同类型的日志样式
+  &--thinking {
+    border-left: 3px solid var(--td-brand-color);
+  }
+
+  &--tool-call {
+    border-left: 3px solid var(--td-warning-color);
+  }
+
+  &--tool-result {
+    &.agent-log--success {
+      border-left: 3px solid var(--td-success-color);
+    }
+
+    &.agent-log--error {
+      border-left: 3px solid var(--td-error-color);
+    }
+  }
+
+  &--retry {
+    border-left: 3px solid var(--td-warning-color);
+    background: var(--td-warning-color-1);
+  }
+}

@@ -88,9 +88,9 @@ const StepItem: React.FC<StepItemProps> = ({
             <div className="workflow-display-item-result">
               <span className="workflow-display-label">执行结果:</span>
               <div className="workflow-display-result-content">
-                {typeof step.result === 'string' 
-                  ? step.result 
-                  : JSON.stringify(step.result, null, 2)}
+                {typeof step.result === 'string'
+                  ? step.result
+                  : String(JSON.stringify(step.result, null, 2))}
               </div>
             </div>
           )}

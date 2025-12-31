@@ -49,6 +49,7 @@ export class GeminiClient {
       image?: string | string[];
       response_format?: 'url' | 'b64_json';
       quality?: '1k' | '2k' | '4k';
+      model?: string; // 支持指定模型
     } = {}
   ) {
     return generateImageWithGemini(prompt, options);
@@ -70,9 +71,18 @@ export class GeminiClient {
 
   /**
    * 发送多轮对话消息
+   * @param messages 消息列表
+   * @param onChunk 流式回调
+   * @param signal 取消信号
+   * @param temporaryModel 临时模型（仅在当前会话中使用，不影响全局设置）
    */
-  async sendChat(messages: GeminiMessage[], onChunk?: (content: string) => void, signal?: AbortSignal) {
-    return sendChatWithGemini(messages, onChunk, signal);
+  async sendChat(
+    messages: GeminiMessage[],
+    onChunk?: (content: string) => void,
+    signal?: AbortSignal,
+    temporaryModel?: string
+  ) {
+    return sendChatWithGemini(messages, onChunk, signal, temporaryModel);
   }
 
   /**

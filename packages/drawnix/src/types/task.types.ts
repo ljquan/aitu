@@ -49,6 +49,8 @@ export interface GenerationParams {
   width?: number;
   /** Image/video height in pixels */
   height?: number;
+  /** Size parameter for API (e.g., '16x9', '1x1') */
+  size?: string;
   /** Video duration in seconds (video only) */
   duration?: number;
   /** Style or model to use for generation */

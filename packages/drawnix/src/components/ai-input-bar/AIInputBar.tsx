@@ -24,7 +24,8 @@ import { useBoard } from '@plait-board/react-board';
 import { getSelectedElements, ATTACHED_ELEMENT_CLASS_NAME } from '@plait/core';
 import { useI18n } from '../../i18n';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
-import { TaskType } from '../../types/task.types';
+import { TaskType, TaskStatus } from '../../types/task.types';
+import { taskQueueService } from '../../services/task-queue-service';
 import { processSelectedContentForAI } from '../../utils/selection-utils';
 import { VIDEO_MODEL_CONFIGS } from '../../constants/video-model-config';
 import type { VideoModel } from '../../types/video.types';
@@ -40,10 +41,12 @@ import {
 } from './smart-suggestion-panel';
 import { agentExecutor } from '../../services/agent';
 import { initializeMCP, setCanvasBoard } from '../../mcp';
-import { parseAIInput, generateDefaultPrompt } from '../../utils/ai-input-parser';
+import { parseAIInput } from '../../utils/ai-input-parser';
 import { convertToWorkflow, type WorkflowDefinition } from './workflow-converter';
 import { useWorkflowControl } from '../../contexts/WorkflowContext';
+import { geminiSettings } from '../../utils/settings-manager';
 import type { WorkflowMessageData } from '../../types/chat.types';
+import type { AgentExecutionContext } from '../../mcp/types';
 import classNames from 'classnames';
 import './ai-input-bar.scss';
 
@@ -116,7 +119,7 @@ interface AIInputBarProps {
  */
 const SelectionWatcher: React.FC<{
   language: string;
-  onSelectionChange: (content: SelectedContent[], text: string) => void;
+  onSelectionChange: (content: SelectedContent[]) => void;
 }> = React.memo(({ language, onSelectionChange }) => {
   const board = useBoard();
   const boardRef = useRef(board);
@@ -138,7 +141,7 @@ const SelectionWatcher: React.FC<{
       const selectedElements = getSelectedElements(currentBoard);
       
       if (selectedElements.length === 0) {
-        onSelectionChangeRef.current([], '');
+        onSelectionChangeRef.current([]);
         return;
       }
 
@@ -173,10 +176,10 @@ const SelectionWatcher: React.FC<{
           });
         }
 
-        onSelectionChangeRef.current(content, processedContent.remainingText || '');
+        onSelectionChangeRef.current(content);
       } catch (error) {
         console.error('Failed to process selected content:', error);
-        onSelectionChangeRef.current([], '');
+        onSelectionChangeRef.current([]);
       }
     };
 
@@ -212,11 +215,14 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
   sendWorkflowMessageRef.current = chatDrawerControl.sendWorkflowMessage;
   const updateWorkflowMessageRef = useRef(chatDrawerControl.updateWorkflowMessage);
   updateWorkflowMessageRef.current = chatDrawerControl.updateWorkflowMessage;
+  const appendAgentLogRef = useRef(chatDrawerControl.appendAgentLog);
+  appendAgentLogRef.current = chatDrawerControl.appendAgentLog;
+  const updateThinkingContentRef = useRef(chatDrawerControl.updateThinkingContent);
+  updateThinkingContentRef.current = chatDrawerControl.updateThinkingContent;
 
   // State
   const [prompt, setPrompt] = useState('');
   const [selectedContent, setSelectedContent] = useState<SelectedContent[]>([]);
-  const [selectedText, setSelectedText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false); // 仅用于防止重复点击，不阻止并行任务
   const [isFocused, setIsFocused] = useState(false);
   const [showSuggestionPanel, setShowSuggestionPanel] = useState(false);
@@ -248,6 +254,67 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isFocused]);
+
+  // 监听任务状态变化，同步更新工作流步骤状态
+  useEffect(() => {
+    const subscription = taskQueueService.observeTaskUpdates().subscribe((event) => {
+      const task = event.task;
+      const workflow = workflowControl.getWorkflow();
+
+      if (!workflow) return;
+
+      // 查找与此任务关联的步骤
+      const step = workflow.steps.find((s) => {
+        const result = s.result as { taskId?: string } | undefined;
+        return result?.taskId === task.id;
+      });
+
+      if (!step) return;
+
+      // 根据任务状态更新步骤状态
+      let newStatus: 'pending' | 'running' | 'completed' | 'failed' | 'skipped' = step.status;
+      let stepResult = step.result;
+      let stepError = step.error;
+
+      switch (task.status) {
+        case TaskStatus.PENDING:
+        case TaskStatus.PROCESSING:
+        case TaskStatus.RETRYING:
+          newStatus = 'running';
+          break;
+        case TaskStatus.COMPLETED:
+          newStatus = 'completed';
+          // 添加任务结果信息
+          stepResult = {
+            ...(typeof stepResult === 'object' ? stepResult : {}),
+            taskId: task.id,
+            result: task.result,
+          };
+          break;
+        case TaskStatus.FAILED:
+          newStatus = 'failed';
+          stepError = task.error?.message || '任务执行失败';
+          break;
+        case TaskStatus.CANCELLED:
+          newStatus = 'skipped';
+          break;
+      }
+
+      // 只有状态变化时才更新
+      if (newStatus !== step.status) {
+        workflowControl.updateStep(step.id, newStatus, stepResult, stepError);
+
+        // 同步更新 ChatDrawer 中的工作流消息
+        const updatedWorkflow = workflowControl.getWorkflow();
+        if (updatedWorkflow) {
+          updateWorkflowMessageRef.current(toWorkflowMessageData(updatedWorkflow));
+        }
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [workflowControl]);
+
   const [hoveredContent, setHoveredContent] = useState<{
     type: SelectedContentType;
     url?: string;
@@ -286,9 +353,8 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
   }, [language, history]);
 
   // 处理选择变化的回调（由 SelectionWatcher 调用）
-  const handleSelectionChange = useCallback((content: SelectedContent[], text: string) => {
+  const handleSelectionChange = useCallback((content: SelectedContent[]) => {
     setSelectedContent(content);
-    setSelectedText(text);
   }, []);
 
   // 处理模型选择
@@ -321,85 +387,88 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
     setIsSubmitting(true);
 
     try {
-      // 收集所有参考图片（排除文字类型）
-      const referenceImages: string[] = selectedContent
-        .filter((item) => item.type !== 'text' && item.url)
-        .map((item) => item.url!);
+      // 构建选中元素的分类信息
+      const selection = {
+        texts: selectedContent
+          .filter((item) => item.type === 'text' && item.text)
+          .map((item) => item.text!),
+        images: selectedContent
+          .filter((item) => item.type === 'image' && item.url)
+          .map((item) => item.url!),
+        videos: selectedContent
+          .filter((item) => item.type === 'video' && item.url)
+          .map((item) => item.url!),
+        graphics: selectedContent
+          .filter((item) => item.type === 'graphics' && item.url)
+          .map((item) => item.url!),
+      };
 
-      // 收集选中的文字内容
-      const selectedTexts: string[] = selectedContent
-        .filter((item) => item.type === 'text' && item.text)
-        .map((item) => item.text!);
-
-      // 图片数量（包括图形）
-      const imageCount = selectedContent.filter(
-        (item) => item.type === 'image' || item.type === 'graphics'
-      ).length;
-
-      // 解析输入内容
-      const parsedParams = parseAIInput(
-        prompt,
-        selectedContent.length > 0,
-        selectedTexts,
-        imageCount
-      );
+      // 解析输入内容（使用新的 API）
+      const parsedParams = parseAIInput(prompt, selection);
 
       console.log('[AIInputBar] Parsed params:', parsedParams);
+      console.log('[AIInputBar] Key params - model:', parsedParams.modelId, 'count:', parsedParams.count, 'size:', parsedParams.size);
 
-      // 构建最终提示词
-      let finalPrompt = parsedParams.prompt;
-      
-      // 如果有选中的文字且用户也输入了内容，合并它们
-      if (selectedText && parsedParams.parseResult.cleanText) {
-        finalPrompt = `${selectedText}\n${parsedParams.parseResult.cleanText}`.trim();
-      } else if (selectedText && !parsedParams.parseResult.cleanText) {
-        // 只有选中文字，没有用户输入
-        finalPrompt = selectedText;
+      // 保存提示词到历史记录（只保存用户输入的指令部分）
+      if (parsedParams.userInstruction) {
+        addHistory(parsedParams.userInstruction);
       }
 
-      // 如果最终没有 prompt，使用默认 prompt
-      if (!finalPrompt) {
-        finalPrompt = generateDefaultPrompt(
-          selectedContent.length > 0,
-          selectedTexts,
-          imageCount
-        );
-      }
+      // 收集所有参考媒体（图片 + 图形 + 视频）
+      const referenceImages = [...selection.images, ...selection.graphics];
 
-      // 更新 parsedParams 的 prompt
-      const updatedParams = { ...parsedParams, prompt: finalPrompt };
-
-      // 保存提示词到历史记录
-      if (parsedParams.parseResult.cleanText) {
-        addHistory(parsedParams.parseResult.cleanText);
-      }
-
-      console.log('[AIInputBar] Final prompt:', finalPrompt);
+      console.log('[AIInputBar] Final prompt:', parsedParams.prompt);
+      console.log('[AIInputBar] User instruction:', parsedParams.userInstruction);
       console.log('[AIInputBar] Scenario:', parsedParams.scenario);
 
       // 创建工作流定义
-      const workflow = convertToWorkflow(updatedParams, referenceImages);
+      const workflow = convertToWorkflow(parsedParams, referenceImages);
       console.log('[AIInputBar] Created workflow:', workflow);
 
       // 启动工作流（内部状态管理）
       workflowControl.startWorkflow(workflow);
 
+      // 构建完整的 AI 输入上下文
+      const aiContext = {
+        rawInput: prompt,
+        userInstruction: parsedParams.userInstruction,
+        model: {
+          id: parsedParams.modelId,
+          type: parsedParams.generationType,
+          isExplicit: parsedParams.isModelExplicit,
+        },
+        params: {
+          count: parsedParams.count,
+          size: parsedParams.size,
+          duration: parsedParams.duration,
+        },
+        selection,
+        finalPrompt: parsedParams.prompt,
+      };
+
+      // 获取全局设置的文本模型（用于 Agent 流程）
+      const globalSettings = geminiSettings.get();
+      const textModel = globalSettings.textModelName;
+
       // 发送工作流消息到 ChatDrawer（创建新对话并显示）
       const workflowMessageData = toWorkflowMessageData(workflow);
       await sendWorkflowMessageRef.current({
-        prompt: finalPrompt,
-        images: referenceImages,
+        context: aiContext,
         workflow: workflowMessageData,
+        textModel, // 传递全局文本模型
       });
+
+      // 获取最终 prompt（用于任务创建）
+      const finalPrompt = parsedParams.prompt;
 
       // 根据场景处理
       if (parsedParams.scenario === 'direct_generation') {
         // 场景 1-3: 直接生成（无额外内容）
         // 直接创建任务添加到任务队列
         
-        const { generationType, modelId, count, width, height, duration } = parsedParams;
+        const { generationType, modelId, count, size, duration } = parsedParams;
         
-        console.log(`[AIInputBar] Direct generation: type=${generationType}, model=${modelId}, count=${count}`);
+        console.log(`[AIInputBar] Direct generation: type=${generationType}, model=${modelId}, count=${count}, size=${size}, duration=${duration}`);
         
         // 将参考图片转换为 uploadedImages 格式（与 AI 图片/视频弹窗一致）
         const uploadedImages = referenceImages.map((url, index) => ({
@@ -409,25 +478,23 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
         }));
         
         // 根据数量创建多个任务，并更新工作流步骤状态
+        // 注意：任务创建后状态为 PENDING，需要等任务实际完成后才更新步骤为 completed
+        // 这里使用并行创建任务，步骤状态通过 taskQueueService 的事件订阅来更新
+        const createdTaskIds: string[] = [];
+
         for (let i = 0; i < count; i++) {
           const stepId = `step-${i + 1}`;
-          const startTime = Date.now();
-          
-          // 更新步骤为运行中
+
+          // 更新步骤为运行中（表示任务正在排队或执行中）
           workflowControl.updateStep(stepId, 'running');
-          // 同步更新 ChatDrawer 中的工作流消息
-          const currentWorkflow = workflowControl.getWorkflow();
-          if (currentWorkflow) {
-            updateWorkflowMessageRef.current(toWorkflowMessageData(currentWorkflow));
-          }
-          
+
           try {
+            let task;
             if (generationType === 'image') {
-              createTask(
+              task = createTask(
                 {
                   prompt: finalPrompt,
-                  width: width || 1024,
-                  height: height || 1024,
+                  size: size || '1x1',
                   uploadedImages: uploadedImages.length > 0 ? uploadedImages : undefined,
                   model: modelId,
                 },
@@ -436,11 +503,10 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
             } else {
               // 视频任务
               const modelConfig = VIDEO_MODEL_CONFIGS[modelId as VideoModel] || VIDEO_MODEL_CONFIGS['veo3'];
-              createTask(
+              task = createTask(
                 {
                   prompt: finalPrompt,
-                  width: width || 1280,
-                  height: height || 720,
+                  size: size || '16x9',
                   duration: parseInt(duration || modelConfig.defaultDuration, 10),
                   model: modelId,
                   uploadedImages: uploadedImages.length > 0 ? uploadedImages : undefined,
@@ -448,29 +514,31 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
                 TaskType.VIDEO
               );
             }
-            
-            // 更新步骤为完成（任务已添加到队列）
-            workflowControl.updateStep(stepId, 'completed', { taskAdded: true }, undefined, Date.now() - startTime);
-            // 同步更新 ChatDrawer 中的工作流消息
-            const updatedWorkflow = workflowControl.getWorkflow();
-            if (updatedWorkflow) {
-              updateWorkflowMessageRef.current(toWorkflowMessageData(updatedWorkflow));
+
+            if (task) {
+              createdTaskIds.push(task.id);
+              // 记录任务 ID 到步骤中，便于后续状态同步
+              workflowControl.updateStep(stepId, 'running', { taskId: task.id });
+            } else {
+              // 任务创建失败
+              workflowControl.updateStep(stepId, 'failed', undefined, '任务创建失败');
             }
           } catch (stepError) {
             // 更新步骤为失败
-            workflowControl.updateStep(stepId, 'failed', undefined, String(stepError), Date.now() - startTime);
-            // 同步更新 ChatDrawer 中的工作流消息
-            const failedWorkflow = workflowControl.getWorkflow();
-            if (failedWorkflow) {
-              updateWorkflowMessageRef.current(toWorkflowMessageData(failedWorkflow));
-            }
+            workflowControl.updateStep(stepId, 'failed', undefined, String(stepError));
           }
+        }
+
+        // 同步更新 ChatDrawer 中的工作流消息
+        const updatedWorkflow = workflowControl.getWorkflow();
+        if (updatedWorkflow) {
+          updateWorkflowMessageRef.current(toWorkflowMessageData(updatedWorkflow));
         }
       } else {
         // 场景 4: Agent 流程
         // 有额外内容，需要调用 Agent
         console.log('[AIInputBar] Using Agent mode with model:', parsedParams.modelId);
-        
+
         // 更新分析步骤为运行中
         const analyzeStartTime = Date.now();
         workflowControl.updateStep('step-analyze', 'running');
@@ -479,28 +547,44 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
         if (runningWorkflow) {
           updateWorkflowMessageRef.current(toWorkflowMessageData(runningWorkflow));
         }
-        
-        // 将参考图片转换为 uploadedImages 格式
-        const uploadedImages = referenceImages.map((url, index) => ({
-          type: 'url' as const,
-          url,
-          name: `reference-${index + 1}`,
-        }));
-        
-        const result = await agentExecutor.execute(finalPrompt, {
+
+        // 构建 Agent 执行上下文
+        const agentContext: AgentExecutionContext = {
+          userInstruction: parsedParams.userInstruction,
+          rawInput: parsedParams.rawInput,
+          model: {
+            id: parsedParams.modelId,
+            type: parsedParams.generationType,
+            isExplicit: parsedParams.isModelExplicit,
+          },
+          params: {
+            count: parsedParams.count,
+            size: parsedParams.size,
+            duration: parsedParams.duration,
+          },
+          selection,
+          finalPrompt,
+        };
+
+        // 记录当前工具调用的名称，用于日志
+        let currentToolName = '';
+
+        const result = await agentExecutor.execute(agentContext, {
           model: parsedParams.modelId,
-          referenceImages,
           onChunk: (chunk) => {
             console.log('[AIInputBar] Agent chunk:', chunk);
+            // 流式追加 AI 思考内容到日志
+            updateThinkingContentRef.current(chunk);
           },
           onToolCall: (toolCall) => {
             console.log('[AIInputBar] Agent calling tool:', toolCall.name);
-            
+            currentToolName = toolCall.name;
+
             // 分析步骤完成，添加工具调用步骤
             if (workflowControl.getWorkflow()?.steps.find(s => s.id === 'step-analyze')?.status === 'running') {
               workflowControl.updateStep('step-analyze', 'completed', { analysis: 'completed' }, undefined, Date.now() - analyzeStartTime);
             }
-            
+
             // 动态添加工具调用步骤
             const newStepId = `step-tool-${Date.now()}`;
             workflowControl.addSteps([{
@@ -510,7 +594,15 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
               description: `执行 ${toolCall.name}`,
               status: 'running',
             }]);
-            
+
+            // 追加工具调用日志
+            appendAgentLogRef.current({
+              type: 'tool_call',
+              timestamp: Date.now(),
+              toolName: toolCall.name,
+              args: toolCall.arguments || {},
+            });
+
             // 同步更新 ChatDrawer 中的工作流消息
             const toolCallWorkflow = workflowControl.getWorkflow();
             if (toolCallWorkflow) {
@@ -519,49 +611,35 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
           },
           onToolResult: (toolResult) => {
             console.log('[AIInputBar] Tool result:', toolResult);
-            
-            // 如果生成成功，创建任务并添加到画布
-            if (toolResult.success && toolResult.data) {
-              const data = toolResult.data as any;
-              
-              if (toolResult.type === 'image') {
-                // 创建图片任务
-                createTask(
-                  {
-                    prompt: data.prompt || finalPrompt,
-                    width: parsedParams.width || 1024,
-                    height: parsedParams.height || 1024,
-                    uploadedImages: uploadedImages.length > 0 ? uploadedImages : undefined,
-                    // 直接使用生成的 URL
-                    generatedUrl: data.url,
-                  },
-                  TaskType.IMAGE
-                );
-              } else if (toolResult.type === 'video') {
-                // 创建视频任务
-                const modelConfig = VIDEO_MODEL_CONFIGS[data.model as VideoModel] || VIDEO_MODEL_CONFIGS['veo3'];
-                const [videoWidth, videoHeight] = (data.size || modelConfig.defaultSize).split('x').map(Number);
-                
-                createTask(
-                  {
-                    prompt: data.prompt || finalPrompt,
-                    width: videoWidth,
-                    height: videoHeight,
-                    duration: parseInt(data.seconds || modelConfig.defaultDuration, 10),
-                    model: data.model || 'veo3',
-                    uploadedImages: uploadedImages.length > 0 ? uploadedImages : undefined,
-                    // 直接使用生成的 URL
-                    generatedUrl: data.url,
-                  },
-                  TaskType.VIDEO
-                );
-              }
-            }
-            
+
+            // 追加工具结果日志
+            appendAgentLogRef.current({
+              type: 'tool_result',
+              timestamp: Date.now(),
+              toolName: currentToolName,
+              success: toolResult.success,
+              data: toolResult.data,
+              error: toolResult.error,
+              resultType: toolResult.type,
+            });
+
+            // MCP 工具已经完成了生成任务并返回了 URL
+            // 这里只需要更新工作流状态，不需要再创建任务
+            // 因为 MCP 工具内部已经调用了生成 API 并等待完成
+
             // 同步更新 ChatDrawer 中的工作流消息
             const toolResultWorkflow = workflowControl.getWorkflow();
             if (toolResultWorkflow) {
               updateWorkflowMessageRef.current(toWorkflowMessageData(toolResultWorkflow));
+            }
+
+            // 如果生成成功，结果已经在 toolResult.data 中
+            // TODO: 这里可以直接把生成的图片/视频添加到画布上
+            // 目前 MCP 工具返回的是 URL，需要决定是否自动添加到画布
+            if (toolResult.success && toolResult.data) {
+              const data = toolResult.data as any;
+              console.log('[AIInputBar] Generation completed, URL:', data.url);
+              // 未来可以在这里调用 addToCanvas(data.url, toolResult.type)
             }
           },
         });
@@ -585,7 +663,6 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
       // 清空输入并关闭面板
       setPrompt('');
       setSelectedContent([]);
-      setSelectedText('');
       setShowSuggestionPanel(false);
       setIsFocused(false);
       // 让输入框失去焦点
@@ -597,7 +674,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
     } finally {
       setIsSubmitting(false);
     }
-  }, [prompt, selectedContent, selectedText, createTask, isSubmitting, addHistory, workflowControl]);
+  }, [prompt, selectedContent, createTask, isSubmitting, addHistory, workflowControl]);
 
   // Handle key press
   const handleKeyDown = useCallback(

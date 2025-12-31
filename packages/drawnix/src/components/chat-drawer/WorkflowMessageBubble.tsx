@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import type { WorkflowMessageData } from '../../types/chat.types';
+import type { WorkflowMessageData, AgentLogEntry } from '../../types/chat.types';
 import './workflow-message-bubble.scss';
 
 // ============ 状态图标映射 ============
@@ -96,9 +96,9 @@ const StepItem: React.FC<StepItemProps> = ({
             <div className="workflow-bubble-step__detail-row workflow-bubble-step__detail-row--block">
               <span className="workflow-bubble-step__label">执行结果:</span>
               <div className="workflow-bubble-step__result">
-                {typeof step.result === 'string' 
-                  ? step.result 
-                  : JSON.stringify(step.result, null, 2)}
+                {typeof step.result === 'string'
+                  ? step.result
+                  : String(JSON.stringify(step.result, null, 2))}
               </div>
             </div>
           )}
@@ -114,6 +114,121 @@ const StepItem: React.FC<StepItemProps> = ({
       )}
     </div>
   );
+};
+
+// ============ Agent 日志项组件 ============
+
+interface AgentLogItemProps {
+  log: AgentLogEntry;
+}
+
+const AgentLogItem: React.FC<AgentLogItemProps> = ({ log }) => {
+  const [expanded, setExpanded] = useState(false);
+
+  if (log.type === 'thinking') {
+    // AI 思考内容
+    const content = log.content;
+    const isLong = content.length > 200;
+    const displayContent = expanded ? content : content.substring(0, 200);
+
+    return (
+      <div className="agent-log agent-log--thinking">
+        <div className="agent-log__header">
+          <span className="agent-log__icon">💭</span>
+          <span className="agent-log__title">AI 分析</span>
+        </div>
+        <div className="agent-log__content">
+          <pre className="agent-log__thinking-text">
+            {displayContent}
+            {isLong && !expanded && '...'}
+          </pre>
+          {isLong && (
+            <button
+              className="agent-log__toggle"
+              onClick={() => setExpanded(!expanded)}
+            >
+              {expanded ? '收起' : '展开全部'}
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (log.type === 'tool_call') {
+    return (
+      <div className="agent-log agent-log--tool-call">
+        <div
+          className="agent-log__header agent-log__header--clickable"
+          onClick={() => setExpanded(!expanded)}
+        >
+          <span className="agent-log__icon">🔧</span>
+          <span className="agent-log__title">调用工具: {log.toolName}</span>
+          <span className={`agent-log__expand ${expanded ? 'agent-log__expand--open' : ''}`}>
+            ▼
+          </span>
+        </div>
+        {expanded && (
+          <div className="agent-log__content">
+            <pre className="agent-log__args">
+              {JSON.stringify(log.args, null, 2)}
+            </pre>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (log.type === 'tool_result') {
+    const statusClass = log.success ? 'success' : 'error';
+    const statusIcon = log.success ? '✅' : '❌';
+
+    return (
+      <div className={`agent-log agent-log--tool-result agent-log--${statusClass}`}>
+        <div
+          className="agent-log__header agent-log__header--clickable"
+          onClick={() => setExpanded(!expanded)}
+        >
+          <span className="agent-log__icon">{statusIcon}</span>
+          <span className="agent-log__title">
+            {log.toolName} {log.success ? '执行成功' : '执行失败'}
+          </span>
+          <span className={`agent-log__expand ${expanded ? 'agent-log__expand--open' : ''}`}>
+            ▼
+          </span>
+        </div>
+        {expanded && (
+          <div className="agent-log__content">
+            {log.error && (
+              <div className="agent-log__error">{log.error}</div>
+            )}
+            {log.data && (
+              <pre className="agent-log__data">
+                {typeof log.data === 'string'
+                  ? log.data
+                  : String(JSON.stringify(log.data, null, 2))}
+              </pre>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (log.type === 'retry') {
+    return (
+      <div className="agent-log agent-log--retry">
+        <div className="agent-log__header">
+          <span className="agent-log__icon">🔄</span>
+          <span className="agent-log__title">
+            重试 #{log.attempt}: {log.reason}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
 };
 
 // ============ 工作流消息气泡组件 ============
@@ -217,6 +332,20 @@ export const WorkflowMessageBubble: React.FC<WorkflowMessageBubbleProps> = ({
             />
           ))}
         </div>
+
+        {/* Agent 执行日志 */}
+        {workflow.logs && workflow.logs.length > 0 && (
+          <div className="workflow-bubble__logs">
+            <div className="workflow-bubble__logs-header">
+              <span className="workflow-bubble__logs-title">执行详情</span>
+            </div>
+            <div className="workflow-bubble__logs-list">
+              {workflow.logs.map((log, index) => (
+                <AgentLogItem key={`log-${index}-${log.timestamp}`} log={log} />
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* 完成摘要 */}
         {isCompleted && (
