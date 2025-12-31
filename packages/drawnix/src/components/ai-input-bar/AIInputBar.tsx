@@ -225,17 +225,9 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
   const [selectedContent, setSelectedContent] = useState<SelectedContent[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false); // 仅用于防止重复点击，不阻止并行任务
   const [isFocused, setIsFocused] = useState(false);
-  const [showSuggestionPanel, setShowSuggestionPanel] = useState(false);
 
   // 使用新的 useTriggerDetection hook 解析输入
   const parseResult = useTriggerDetection(prompt);
-
-  // Auto-show suggestion panel when input is cleared and focused
-  useEffect(() => {
-    if (isFocused && parseResult.cleanText === '') {
-      setShowSuggestionPanel(true);
-    }
-  }, [parseResult.cleanText, isFocused]);
 
   // 点击外部关闭输入框的展开状态
   useEffect(() => {
@@ -246,7 +238,6 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
       // 检查点击是否在 AIInputBar 容器外部
       if (containerRef.current && !containerRef.current.contains(target)) {
         setIsFocused(false);
-        setShowSuggestionPanel(false);
       }
     };
 
@@ -663,7 +654,6 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
       // 清空输入并关闭面板
       setPrompt('');
       setSelectedContent([]);
-      setShowSuggestionPanel(false);
       setIsFocused(false);
       // 让输入框失去焦点
       inputRef.current?.blur();
@@ -685,10 +675,8 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
       }
 
       // 单独 Enter 发送（当不在输入触发字符后的内容时）
-      // 检查是否在输入模型/参数/个数
-      const isTypingTrigger = parseResult.mode === 'model' || 
-                              parseResult.mode === 'param' || 
-                              parseResult.mode === 'count';
+      // 检查是否在输入触发字符（有 triggerPosition 表示正在输入 #、-、+ 后的内容）
+      const isTypingTrigger = parseResult.triggerPosition !== undefined;
       
       if (event.key === 'Enter' && !isTypingTrigger) {
         event.preventDefault();
@@ -698,20 +686,17 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
 
       // Close panels on Escape
       if (event.key === 'Escape') {
-        setShowSuggestionPanel(false);
+        setIsFocused(false);
+        inputRef.current?.blur();
       }
     },
-    [handleGenerate, parseResult.mode]
+    [handleGenerate, parseResult.triggerPosition]
   );
 
   // Handle input focus
   const handleFocus = useCallback(() => {
     setIsFocused(prev => {
       if (prev) return prev; // 已经是 true，不触发更新
-      return true;
-    });
-    setShowSuggestionPanel(prev => {
-      if (prev) return prev;
       return true;
     });
   }, []);
@@ -738,16 +723,13 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
     const tagsPrefix = prompt.replace(parseResult.cleanText, '').trim();
     const newPrompt = tagsPrefix ? `${tagsPrefix} ${promptItem.content}` : promptItem.content;
     setPrompt(newPrompt);
-    setShowSuggestionPanel(false);
     inputRef.current?.focus();
   }, [prompt, parseResult.cleanText]);
 
   // Handle close suggestion panel
   const handleCloseSuggestionPanel = useCallback(() => {
-    setShowSuggestionPanel(prev => {
-      if (!prev) return prev;
-      return false;
-    });
+    setIsFocused(false);
+    inputRef.current?.blur();
   }, []);
 
   // Handle delete history
@@ -837,9 +819,9 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
       })}>
         {/* Smart Suggestion Panel - unified panel for models, params, counts, and prompts */}
         <SmartSuggestionPanel
-          visible={(showSuggestionPanel || parseResult.mode !== 'prompt') && isFocused}
+          visible={isFocused && parseResult.mode !== null}
           mode={parseResult.mode}
-          filterKeyword={parseResult.keyword}
+          filterKeyword={parseResult.mode === 'prompt' ? parseResult.cleanText : parseResult.keyword}
           selectedImageModel={parseResult.selectedImageModel}
           selectedVideoModel={parseResult.selectedVideoModel}
           selectedParams={parseResult.selectedParams}

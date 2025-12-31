@@ -183,7 +183,8 @@ export function parseInput(input: string): ParseResult {
     paramIds,
     selectedImageModel,
     selectedVideoModel,
-    selectedParams
+    selectedParams,
+    selectedCount
   );
   
   return {
@@ -201,6 +202,13 @@ export function parseInput(input: string): ParseResult {
 
 /**
  * 检测当前正在输入的模式
+ * 
+ * 智能提示优先级：
+ * 1. 正在输入触发字符（#、-、+）→ 显示对应面板
+ * 2. 没有指定模型 → 提示模型
+ * 3. 指定了模型，没有指定参数 → 提示参数
+ * 4. 指定了模型和参数，没有指定数量 → 提示数量
+ * 5. 都指定了 → 提示 Prompt
  */
 function detectCurrentMode(
   input: string,
@@ -209,7 +217,8 @@ function detectCurrentMode(
   _paramIds: string[],
   selectedImageModel?: string,
   selectedVideoModel?: string,
-  _selectedParams?: SelectedParam[]
+  selectedParams?: SelectedParam[],
+  selectedCount?: number
 ): { mode: SuggestionMode; keyword: string; triggerPosition?: number } {
   // 检查最后一个 # 是否正在输入模型
   const lastHashIndex = input.lastIndexOf('#');
@@ -293,7 +302,39 @@ function detectCurrentMode(
     }
   }
   
-  // 默认显示提示词模式（当输入为空或没有触发字符时）
+  // 智能提示：根据已选择的内容决定显示哪种提示
+  // 优先级：模型 > 参数 > 数量 > Prompt
+  
+  // 1. 没有指定任何模型 → 提示模型
+  const hasAnyModel = !!selectedImageModel || !!selectedVideoModel;
+  if (!hasAnyModel) {
+    return {
+      mode: 'model',
+      keyword: '',
+      triggerPosition: undefined,
+    };
+  }
+  
+  // 2. 指定了模型，没有指定参数 → 提示参数
+  const hasParams = selectedParams && selectedParams.length > 0;
+  if (!hasParams) {
+    return {
+      mode: 'param',
+      keyword: '',
+      triggerPosition: undefined,
+    };
+  }
+  
+  // 3. 指定了模型和参数，没有指定数量 → 提示数量
+  if (!selectedCount) {
+    return {
+      mode: 'count',
+      keyword: '',
+      triggerPosition: undefined,
+    };
+  }
+  
+  // 4. 都指定了 → 提示 Prompt
   return {
     mode: 'prompt',
     keyword: input,
@@ -303,6 +344,11 @@ function detectCurrentMode(
 
 /**
  * 将选择的内容插入到输入中
+ * 
+ * 插入规则：
+ * 1. 如果有 triggerPosition，替换触发字符及其后面的内容
+ * 2. 如果没有 triggerPosition（智能提示模式），在已有标记之后、prompt 文本之前插入
+ *    - 标记顺序：#模型 -参数 +数量 提示词
  */
 export function insertToInput(
   input: string,
@@ -320,8 +366,80 @@ export function insertToInput(
     return `${beforeTrigger}${triggerChar}${value}${afterKeyword ? afterKeyword : ' '}`.trimEnd() + ' ';
   }
   
-  // 在开头添加
-  return `${triggerChar}${value} ${input}`;
+  // 智能提示模式：在合适的位置插入
+  // 标记顺序：#模型 -参数 +数量 提示词
+  const newTag = `${triggerChar}${value}`;
+  
+  // 解析现有输入，找到各部分的位置
+  const parts = parseInputParts(input);
+  
+  // 根据触发字符类型决定插入位置
+  let result = '';
+  
+  if (triggerChar === '#') {
+    // 模型标记：放在最前面
+    result = newTag;
+    if (parts.models) result += ' ' + parts.models;
+    if (parts.params) result += ' ' + parts.params;
+    if (parts.count) result += ' ' + parts.count;
+    if (parts.prompt) result += ' ' + parts.prompt;
+  } else if (triggerChar === '-') {
+    // 参数标记：放在模型之后
+    if (parts.models) result = parts.models + ' ';
+    result += newTag;
+    if (parts.params) result += ' ' + parts.params;
+    if (parts.count) result += ' ' + parts.count;
+    if (parts.prompt) result += ' ' + parts.prompt;
+  } else if (triggerChar === '+') {
+    // 数量标记：放在模型和参数之后
+    if (parts.models) result = parts.models + ' ';
+    if (parts.params) result += parts.params + ' ';
+    result += newTag;
+    if (parts.count) result += ' ' + parts.count; // 已有的数量会被保留（虽然通常只有一个）
+    if (parts.prompt) result += ' ' + parts.prompt;
+  }
+  
+  return result.trim() + ' ';
+}
+
+/**
+ * 解析输入的各个部分
+ */
+function parseInputParts(input: string): {
+  models: string;
+  params: string;
+  count: string;
+  prompt: string;
+} {
+  const models: string[] = [];
+  const params: string[] = [];
+  let count = '';
+  const promptParts: string[] = [];
+  
+  // 按空格分割
+  const tokens = input.split(/\s+/).filter(t => t);
+  
+  for (const token of tokens) {
+    if (token.startsWith('#')) {
+      models.push(token);
+    } else if (token.startsWith('-') && token.includes('=')) {
+      params.push(token);
+    } else if (token.startsWith('+') && /^\+\d+$/.test(token)) {
+      count = token;
+    } else if (token.startsWith('-')) {
+      // 不完整的参数，当作 prompt
+      promptParts.push(token);
+    } else {
+      promptParts.push(token);
+    }
+  }
+  
+  return {
+    models: models.join(' '),
+    params: params.join(' '),
+    count,
+    prompt: promptParts.join(' '),
+  };
 }
 
 export default useTriggerDetection;
