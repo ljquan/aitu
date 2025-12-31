@@ -27,12 +27,16 @@ import type {
 
 /**
  * 生成个数选项
+ * 参考设计：1, 2, 3, 4, 5, 10, 20 张
  */
 const COUNT_OPTIONS_DATA = [
-  { value: 1, label: '1' },
-  { value: 2, label: '2' },
-  { value: 3, label: '3' },
-  { value: 4, label: '4' },
+  { value: 1, label: '1 张' },
+  { value: 2, label: '2 张' },
+  { value: 3, label: '3 张' },
+  { value: 4, label: '4 张' },
+  { value: 5, label: '5 张' },
+  { value: 10, label: '10 张' },
+  { value: 20, label: '20 张' },
 ];
 
 interface FilterOptions {
@@ -231,9 +235,8 @@ function filterCounts(
   return options.map(opt => ({
     id: `count-${opt.value}`,
     type: 'count' as const,
-    label: `生成 ${opt.value} 张`,
-    shortLabel: opt.label,
-    description: `生成 ${opt.value} 张图片/视频`,
+    label: opt.label,
+    shortLabel: `${opt.value}`,
     value: opt.value,
   }));
 }

@@ -36,7 +36,7 @@ function getModeTitle(mode: SuggestionMode, language: 'zh' | 'en', pendingParam?
   const titles = {
     model: language === 'zh' ? '选择模型' : 'Select Model',
     param: language === 'zh' ? '选择参数' : 'Select Parameter',
-    count: language === 'zh' ? '生成个数' : 'Generation Count',
+    count: language === 'zh' ? '选择数量' : 'Select Count',
     prompt: language === 'zh' ? '提示词' : 'Prompts',
   };
   return mode ? titles[mode] : '';
@@ -466,12 +466,9 @@ export const SmartSuggestionPanel: React.FC<SmartSuggestionPanelProps> = ({
                     </>
                   )}
                   
-                  {/* 个数模式显示 +数字 */}
+                  {/* 个数模式显示简洁列表 */}
                   {item.type === 'count' && (
                     <>
-                      <span className="smart-suggestion-panel__item-id smart-suggestion-panel__item-id--count">
-                        +{item.value}
-                      </span>
                       <span className="smart-suggestion-panel__item-label">
                         {item.label}
                       </span>
@@ -484,6 +481,10 @@ export const SmartSuggestionPanel: React.FC<SmartSuggestionPanelProps> = ({
                   </div>
                 )}
               </div>
+              {/* 数量模式高亮时显示勾选图标 */}
+              {item.type === 'count' && isHighlighted && (
+                <Check size={16} className="smart-suggestion-panel__item-check" />
+              )}
             </div>
           );
         })}
