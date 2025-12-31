@@ -1,8 +1,8 @@
 /**
  * PromptSuggestionPanel Component
  * 
- * 提示词选择面板组件
- * 在输入框聚焦时显示，支持预设提示词和历史提示词
+ * AI 指令选择面板组件
+ * 在输入框聚焦时显示，支持预设指令和历史指令
  * 支持根据输入内容动态匹配过滤
  * 支持键盘导航（上下键选择，Enter 确认）
  */
@@ -20,11 +20,11 @@ export interface PromptItem {
 interface PromptSuggestionPanelProps {
   /** 是否可见 */
   visible: boolean;
-  /** 提示词列表 */
+  /** 指令列表 */
   prompts: PromptItem[];
   /** 过滤关键词 */
   filterKeyword: string;
-  /** 选择提示词回调 */
+  /** 选择指令回调 */
   onSelect: (prompt: PromptItem) => void;
   /** 关闭面板回调 */
   onClose: () => void;
@@ -35,7 +35,7 @@ interface PromptSuggestionPanelProps {
 }
 
 /**
- * 提示词选择面板
+ * AI 指令选择面板
  */
 export const PromptSuggestionPanel: React.FC<PromptSuggestionPanelProps> = ({
   visible,
@@ -50,18 +50,18 @@ export const PromptSuggestionPanel: React.FC<PromptSuggestionPanelProps> = ({
   const panelRef = useRef<HTMLDivElement>(null);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
 
-  // 过滤提示词
+  // 过滤指令
   const filteredPrompts = useMemo(() => {
     const keyword = filterKeyword.trim().toLowerCase();
     
-    // 如果没有输入内容，显示所有提示词
+    // 如果没有输入内容，显示所有指令
     if (!keyword) {
       return prompts;
     }
     
     // 过滤逻辑：
-    // 1. 过滤掉与输入内容完全相同的提示词
-    // 2. 只保留包含输入关键词的提示词（模糊匹配）
+    // 1. 过滤掉与输入内容完全相同的指令
+    // 2. 只保留包含输入关键词的指令（模糊匹配）
     return prompts.filter(prompt => {
       const content = prompt.content.trim().toLowerCase();
       
@@ -75,7 +75,7 @@ export const PromptSuggestionPanel: React.FC<PromptSuggestionPanelProps> = ({
     });
   }, [prompts, filterKeyword]);
 
-  // 分组：历史提示词和预设提示词
+  // 分组：历史指令和预设指令
   const { historyPrompts, presetPrompts } = useMemo(() => {
     const history = filteredPrompts.filter(p => p.source === 'history');
     const preset = filteredPrompts.filter(p => p.source === 'preset');
@@ -149,7 +149,7 @@ export const PromptSuggestionPanel: React.FC<PromptSuggestionPanelProps> = ({
           break;
         case 'Enter':
           // Enter 键：不拦截，让 AIInputBar 处理发送逻辑
-          // 用户可以用 Tab 键选择提示词
+          // 用户可以用 Tab 键选择指令
           // console.log('[PromptSuggestionPanel] Enter key - not intercepting');
           break;
         case 'Escape':
@@ -202,7 +202,7 @@ export const PromptSuggestionPanel: React.FC<PromptSuggestionPanelProps> = ({
 
   if (!visible) return null;
 
-  // 如果没有匹配的提示词，不显示面板
+  // 如果没有匹配的指令，不显示面板
   const hasResults = filteredPrompts.length > 0;
   if (!hasResults) return null;
 
@@ -213,7 +213,7 @@ export const PromptSuggestionPanel: React.FC<PromptSuggestionPanelProps> = ({
     >
       {/* 面板内容 */}
       <div className="prompt-suggestion-panel__content">
-        {/* 历史提示词 */}
+        {/* 历史指令 */}
         {historyPrompts.length > 0 && (
               <div className="prompt-suggestion-panel__section">
                 <div className="prompt-suggestion-panel__section-header">
@@ -249,12 +249,12 @@ export const PromptSuggestionPanel: React.FC<PromptSuggestionPanelProps> = ({
               </div>
             )}
 
-            {/* 预设提示词 */}
+            {/* 预设指令 */}
             {presetPrompts.length > 0 && (
               <div className="prompt-suggestion-panel__section">
                 <div className="prompt-suggestion-panel__section-header">
                   <Lightbulb size={14} />
-                  <span>{language === 'zh' ? '推荐提示词' : 'Suggestions'}</span>
+                  <span>{language === 'zh' ? '推荐指令' : 'Suggestions'}</span>
                 </div>
                 <div className="prompt-suggestion-panel__list">
                   {presetPrompts.map((prompt, index) => (

@@ -30,6 +30,12 @@ import type { MappingRule, ToolMappingConfig, LogLevel } from '../parameter/type
 
 /**
  * 工作流执行引擎
+ * 
+ * 处理简洁 JSON 格式的链式 MCP 调用：
+ * - 解析大模型返回的 {"content": "...", "next": [...]} 格式
+ * - 按顺序执行 next 数组中的 MCP 调用
+ * - 自动将前一个工具的输出传递给后一个工具的 content 参数
+ * - 最后一个工具的输出作为下次大模型调用的输入
  */
 export class WorkflowEngine {
   private config: WorkflowConfig;
@@ -377,6 +383,15 @@ export class WorkflowEngine {
 
   /**
    * 执行单个 MCP 调用
+   * 
+   * 链式调用的核心逻辑：
+   * 1. 如果有 previousOutput，尝试通过参数映射器转换
+   * 2. 如果映射失败，将 previousOutput 注入到 args.content
+   * 3. 执行工具并返回结果
+   * 
+   * @param call - MCP 调用定义
+   * @param previousOutput - 前一个工具的输出（用于链式传递）
+   * @returns MCP 调用记录
    */
   private async executeMCPCall(
     call: WorkflowMCPCall,
@@ -384,10 +399,12 @@ export class WorkflowEngine {
   ): Promise<MCPCallRecord> {
     const startTime = Date.now();
 
+    // 构建参数，实现输出到输入的自动传递
     let args = { ...call.args };
     
-    if (this.config.enableParameterMapping && previousOutput) {
-      if (this.lastToolId) {
+    if (previousOutput) {
+      // 优先使用参数映射器进行智能映射
+      if (this.config.enableParameterMapping && this.lastToolId) {
         const mappingResult = this.parameterMapper.map(
           this.lastToolId,
           call.mcp,
@@ -397,19 +414,14 @@ export class WorkflowEngine {
         
         if (mappingResult.success) {
           args = mappingResult.params as Record<string, unknown>;
+          this.logger.info(`参数映射成功: ${this.lastToolId} -> ${call.mcp}`);
         } else {
-          if (!args.content) {
-            args.content = previousOutput;
-          }
+          // 映射失败，使用默认的 content 参数注入
+          this.injectPreviousOutput(args, previousOutput);
         }
       } else {
-        if (!args.content) {
-          args.content = previousOutput;
-        }
-      }
-    } else {
-      if (previousOutput && !args.content) {
-        args.content = previousOutput;
+        // 未启用映射或无前置工具，直接注入
+        this.injectPreviousOutput(args, previousOutput);
       }
     }
 
@@ -448,6 +460,24 @@ export class WorkflowEngine {
         duration,
       };
     }
+  }
+
+  /**
+   * 将前一个工具的输出注入到参数中
+   * 
+   * 注入规则：
+   * 1. 如果 args 中没有 content 字段，注入到 content
+   * 2. 如果 args 中没有 input 字段，注入到 input
+   * 3. 否则不覆盖已有参数
+   */
+  private injectPreviousOutput(args: Record<string, unknown>, previousOutput: string): void {
+    if (!args.content && !args.input) {
+      // 优先使用 content 字段
+      args.content = previousOutput;
+    } else if (!args.content) {
+      args.content = previousOutput;
+    }
+    // 如果已有 content，不覆盖
   }
 
   /**

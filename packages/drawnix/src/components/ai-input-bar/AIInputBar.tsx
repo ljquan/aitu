@@ -473,6 +473,10 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
         // 这里使用并行创建任务，步骤状态通过 taskQueueService 的事件订阅来更新
         const createdTaskIds: string[] = [];
 
+        // 生成批次ID和全局计数器，用于区分同一批次中的不同任务（与批量图片生成弹窗保持一致）
+        const batchId = `input_${Date.now()}`;
+        let globalIndex = 0;
+
         for (let i = 0; i < count; i++) {
           const stepId = `step-${i + 1}`;
 
@@ -480,6 +484,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
           workflowControl.updateStep(stepId, 'running');
 
           try {
+            globalIndex++;
             let task;
             if (generationType === 'image') {
               task = createTask(
@@ -488,6 +493,11 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
                   size: size || '1x1',
                   uploadedImages: uploadedImages.length > 0 ? uploadedImages : undefined,
                   model: modelId,
+                  // 批量参数：确保同一批次中的不同任务有唯一哈希（与批量图片生成弹窗保持一致）
+                  batchId,
+                  batchIndex: i + 1,
+                  batchTotal: count,
+                  globalIndex,
                 },
                 TaskType.IMAGE
               );
@@ -501,6 +511,11 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
                   duration: parseInt(duration || modelConfig.defaultDuration, 10),
                   model: modelId,
                   uploadedImages: uploadedImages.length > 0 ? uploadedImages : undefined,
+                  // 批量参数：确保同一批次中的不同任务有唯一哈希（与批量图片生成弹窗保持一致）
+                  batchId,
+                  batchIndex: i + 1,
+                  batchTotal: count,
+                  globalIndex,
                 },
                 TaskType.VIDEO
               );

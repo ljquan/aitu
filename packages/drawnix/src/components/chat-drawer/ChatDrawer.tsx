@@ -374,8 +374,15 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
 
         const userDisplayText = displayParts.join('\n');
 
-        // 使用简短的标题
-        const titleText = context.userInstruction || context.finalPrompt || '新任务';
+        // 生成标题优先级：1. 用户指令 2. 选中的文本元素 3. 模型名称
+        let titleText = '新任务';
+        if (context.userInstruction) {
+          titleText = context.userInstruction;
+        } else if (context.selection.texts.length > 0) {
+          titleText = context.selection.texts[0];
+        } else if (context.model.id) {
+          titleText = context.model.id;
+        }
         const title = titleText.length > 30 ? titleText.slice(0, 30) + '...' : titleText;
         await chatStorageService.updateSession(newSession.id, { title });
         newSession.title = title;
@@ -384,7 +391,8 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
         setActiveSessionId(newSession.id);
 
         // 创建用户消息（包含图片和视频）
-        const userMsgId = `msg_${Date.now()}_user`;
+        const timestamp = Date.now();
+        const userMsgId = `msg_${timestamp}_user`;
         const userMsgParts: Message['parts'] = [{ type: 'text', text: userDisplayText }];
 
         // 添加参考图片
@@ -419,7 +427,7 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
         };
 
         // 创建工作流消息（助手消息）
-        const workflowMsgId = `msg_${Date.now()}_workflow`;
+        const workflowMsgId = `msg_${timestamp}_workflow`;
         const workflowMsg: Message = {
           id: workflowMsgId,
           role: 'assistant',

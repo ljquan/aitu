@@ -30,6 +30,7 @@ export function filterMarkdownImages(text: string): string {
 
 /**
  * 生成工作流系统提示词
+ * 采用简洁的 JSON 格式约束，支持链式 MCP 调用
  */
 export function getWorkflowSystemPrompt(tools: MCPTool[]): string {
   const toolList = tools.length > 0
@@ -38,108 +39,102 @@ export function getWorkflowSystemPrompt(tools: MCPTool[]): string {
           ? Object.entries(t.inputSchema.properties)
               .map(([name, schema]: [string, any]) => {
                 const required = t.inputSchema?.required?.includes(name) ? '*' : '';
-                return `      ${name}${required}: ${schema.description || schema.type || 'any'}`;
+                return `    ${name}${required}: ${schema.description || schema.type || 'any'}`;
               })
               .join('\n')
-          : '      (无参数)';
-        return `  - ${t.name}: ${t.description || '无描述'}\n${params}`;
+          : '    (无参数)';
+        return `- ${t.name}: ${t.description || '无描述'}\n${params}`;
       }).join('\n')
-    : '  (无可用工具)';
+    : '(无可用工具)';
 
-  return `你是一个智能任务执行助手。分析用户请求，规划并执行任务。
+  return `你是智能任务执行助手。分析请求，规划并执行任务。
 
-## 可用 MCP 工具
-
+# 可用工具
 ${toolList}
 
-## 输出格式（严格遵循）
+# 输出格式（严格 JSON）
 
-必须返回以下 JSON 格式，不要添加任何额外字段或嵌套：
+**只允许两个字段**：\`content\` 和 \`next\`，禁止任何额外字段。
 
 \`\`\`json
-{"content": "当前步骤的思考或输出", "next": [{"mcp": "工具名", "args": {"参数": "值"}}]}
+{"content": "思考或输出", "next": [{"mcp": "工具名", "args": {}}]}
 \`\`\`
 
-### 字段说明
+## 字段规范
 
-- **content**: 必填，记录当前步骤的思考过程、分析结果或最终输出
-- **next**: 可选数组，定义后续要调用的 MCP 工具序列
-  - **mcp**: MCP 工具名称（必须是上述可用工具之一）
-  - **args**: 工具参数对象
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| content | string | ✅ | 当前步骤的思考、分析或最终输出 |
+| next | array | ❌ | MCP 工具调用序列，省略或空数组表示终止 |
 
-### 链式调用规则
+## next 数组元素格式
 
-1. \`next\` 数组中的工具按顺序执行
-2. 前一个工具的字符串输出会作为后一个工具的 \`content\` 参数输入
-3. 最后一个工具的输出将作为下次大模型调用的输入
-
-## ⚠️ 重要：直接回答 vs 调用工具
-
-### 必须直接回答（不调用任何工具）的情况
-1. **知识性问题** - 用户询问概念、原理、技术等通用知识
-2. **解释说明类** - 用户要求解释、说明、对比某些概念或技术
-3. **观点建议类** - 用户询问建议、看法、最佳实践
-4. **已有足够信息** - 上下文中已包含足够信息来回答问题
-5. **无需操作** - 问题与操作无关，纯粹是知识问答
-
-对于这些情况，直接在 \`content\` 中给出完整答案，**不要返回 \`next\` 字段**。
-
-### 必须调用工具的情况
-1. **图片生成** - 需要生成图片
-2. **视频生成** - 需要生成视频
-3. **数据获取** - 需要从外部获取数据
-
-## ⚠️ 终止条件
-
-你必须在以下情况下立即终止工作流（不返回 \`next\` 或返回空数组 \`[]\`）：
-
-### 必须终止的情况
-1. **任务已完成** - 用户请求的目标已经达成
-2. **获取到最终结果** - 已经得到了用户需要的信息或完成了操作
-3. **工具返回明确的完成状态** - 工具返回包含 "完成"、"成功" 等关键词
-4. **无法继续** - 遇到错误、缺少必要信息、或任务不可行
-5. **重复调用无意义** - 多次调用同一工具得到相同结果
-6. **知识问答已回答** - 对于知识性问题，直接回答后必须终止
-
-### 终止决策框架
-在每次响应前，请自问：
-- 这是一个知识性问题吗？如果是，直接回答并终止
-- 用户的原始目标是否已达成？
-- 继续调用工具是否能带来新的价值？
-- 是否在重复之前的操作？
-- 当前结果是否足以回答用户？
-
-如果以上任一问题的答案表明应该终止，请立即在 \`content\` 中返回最终结果，不要添加 \`next\` 字段。
-
-## 示例
-
-### 示例1：需要调用单个工具
 \`\`\`json
-{"content": "需要生成图片", "next": [{"mcp": "generate_image", "args": {"prompt": "一只可爱的猫"}}]}
+{"mcp": "工具名称", "args": {"参数名": "参数值"}}
 \`\`\`
 
-### 示例2：链式调用多个工具
+# 链式调用规则
+
+1. \`next\` 数组按索引顺序执行
+2. **输出传递**：前一个工具的输出自动注入后一个工具的 \`content\` 参数
+3. **递归输入**：最后一个工具的输出作为下次大模型调用的输入
+
+# 终止条件
+
+**以下情况必须终止**（不返回 \`next\` 或返回 \`[]\`）：
+- 任务已完成
+- 知识性问题已回答
+- 工具返回最终结果
+- 遇到错误或无法继续
+- 重复调用无意义
+
+# 示例
+
+## ✅ 正确示例
+
+**调用单个工具**：
 \`\`\`json
-{"content": "先获取数据再处理", "next": [{"mcp": "fetch_data", "args": {"url": "..."}}, {"mcp": "process", "args": {}}]}
+{"content": "生成一张猫的图片", "next": [{"mcp": "generate_image", "args": {"prompt": "一只可爱的猫"}}]}
 \`\`\`
 
-### 示例3：知识性问题，直接回答（不调用工具）
+**链式调用**：
 \`\`\`json
-{"content": "大模型的核心技术主要包括：\\n\\n1. **Transformer架构** - 基于自注意力机制的神经网络结构\\n2. **预训练-微调范式** - 先在大规模数据上预训练，再针对特定任务微调\\n3. **规模化训练** - 通过增加模型参数和训练数据提升能力"}
+{"content": "先生成图片再插入画布", "next": [{"mcp": "generate_image", "args": {"prompt": "风景画"}}, {"mcp": "insert_to_canvas", "args": {"type": "image"}}]}
 \`\`\`
 
-### 示例4：任务完成，终止执行（没有next）
+**直接回答（终止）**：
 \`\`\`json
-{"content": "只需给出最终答案不要有额外信息"}
+{"content": "Transformer 是一种基于自注意力机制的神经网络架构，广泛应用于 NLP 和多模态任务。"}
 \`\`\`
 
-## 执行原则
+**任务完成（终止）**：
+\`\`\`json
+{"content": "图片已成功生成并插入画布。"}
+\`\`\`
 
-1. **判断优先**：先判断问题类型，知识问答直接回答，操作任务才调用工具
-2. **简洁明了**：content 简短描述当前状态或结果
-3. **链式思维**：合理规划工具调用顺序，利用输出传递
-4. **及时终止**：目标达成后立即终止，不做多余调用
-5. **避免循环**：不要重复调用相同工具处理相同内容`;
+## ❌ 错误示例
+
+**错误：添加额外字段**
+\`\`\`json
+{"content": "...", "next": [...], "status": "success", "thinking": "..."}
+\`\`\`
+
+**错误：嵌套结构**
+\`\`\`json
+{"response": {"content": "...", "next": [...]}}
+\`\`\`
+
+**错误：next 格式错误**
+\`\`\`json
+{"content": "...", "next": [{"tool": "xxx", "params": {}}]}
+\`\`\`
+
+# 执行原则
+
+1. **格式优先**：严格遵循 JSON 格式，只有 content 和 next
+2. **判断优先**：知识问答直接回答，操作任务才调用工具
+3. **及时终止**：目标达成立即终止，不做多余调用
+4. **链式思维**：合理规划工具顺序，利用输出传递`;
 }
 
 /**
@@ -202,62 +197,343 @@ export function getWorkflowUserPrompt(
 
 /**
  * 工作流响应类型
+ * 
+ * 大模型返回的 JSON 响应格式，只允许两个字段：
+ * - content: 必填，当前步骤的思考或输出
+ * - next: 可选，MCP 工具调用序列
+ * 
+ * @example
+ * // 调用工具
+ * { content: "生成图片", next: [{ mcp: "generate_image", args: { prompt: "猫" } }] }
+ * 
+ * // 终止（无 next）
+ * { content: "任务完成" }
  */
 export interface WorkflowResponse {
+  /** 当前步骤的思考、分析或最终输出（必填） */
   content: string;
+  /** MCP 工具调用序列，省略或空数组表示终止 */
   next?: WorkflowMCPCall[];
 }
 
 /**
  * MCP 调用定义
+ * 
+ * 定义单个 MCP 工具调用的格式：
+ * - mcp: 工具名称
+ * - args: 工具参数对象
+ * 
+ * @example
+ * { mcp: "generate_image", args: { prompt: "一只可爱的猫", style: "realistic" } }
  */
 export interface WorkflowMCPCall {
+  /** MCP 工具名称 */
   mcp: string;
+  /** 工具参数对象 */
   args: Record<string, unknown>;
 }
 
 /**
+ * 解析结果类型
+ */
+export interface ParseResult {
+  /** 是否解析成功 */
+  success: boolean;
+  /** 解析后的响应 */
+  response: WorkflowResponse;
+  /** 错误信息（解析失败时） */
+  error?: string;
+  /** 原始 JSON 字符串 */
+  rawJson?: string;
+}
+
+/**
+ * 从响应中提取 JSON 字符串
+ * 支持多种格式：```json 代码块、裸 JSON、嵌套 JSON
+ */
+function extractJsonString(response: string): string | null {
+  // 1. 优先匹配 ```json 代码块
+  const codeBlockMatch = response.match(/```json\s*([\s\S]*?)\s*```/);
+  if (codeBlockMatch) {
+    return codeBlockMatch[1].trim();
+  }
+
+  // 2. 匹配裸 JSON 对象（从第一个 { 到最后一个 }）
+  const firstBrace = response.indexOf('{');
+  const lastBrace = response.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    return response.substring(firstBrace, lastBrace + 1);
+  }
+
+  return null;
+}
+
+/**
+ * 校验 MCP 调用格式
+ */
+function isValidMCPCall(item: unknown): item is WorkflowMCPCall {
+  if (!item || typeof item !== 'object') return false;
+  const obj = item as Record<string, unknown>;
+  return (
+    typeof obj.mcp === 'string' &&
+    obj.mcp.length > 0 &&
+    typeof obj.args === 'object' &&
+    obj.args !== null
+  );
+}
+
+/**
+ * 校验响应格式是否符合规范
+ * 只允许 content 和 next 两个字段
+ */
+function validateResponseFormat(parsed: unknown): { valid: boolean; errors: string[] } {
+  const errors: string[] = [];
+
+  if (!parsed || typeof parsed !== 'object') {
+    errors.push('响应必须是 JSON 对象');
+    return { valid: false, errors };
+  }
+
+  const obj = parsed as Record<string, unknown>;
+
+  // 检查必填字段 content
+  if (!('content' in obj)) {
+    errors.push('缺少必填字段 content');
+  } else if (typeof obj.content !== 'string') {
+    errors.push('content 必须是字符串');
+  }
+
+  // 检查 next 字段格式
+  if ('next' in obj && obj.next !== undefined) {
+    if (!Array.isArray(obj.next)) {
+      errors.push('next 必须是数组');
+    } else {
+      obj.next.forEach((item, index) => {
+        if (!isValidMCPCall(item)) {
+          errors.push(`next[${index}] 格式错误，必须包含 mcp(string) 和 args(object)`);
+        }
+      });
+    }
+  }
+
+  // 检查是否有额外字段（警告但不阻止）
+  const allowedFields = ['content', 'next'];
+  const extraFields = Object.keys(obj).filter(k => !allowedFields.includes(k));
+  if (extraFields.length > 0) {
+    errors.push(`存在额外字段将被忽略: ${extraFields.join(', ')}`);
+  }
+
+  return { valid: errors.filter(e => !e.startsWith('存在额外字段')).length === 0, errors };
+}
+
+/**
  * 解析工作流响应
+ * 
+ * 从大模型的原始响应中解析出结构化的 WorkflowResponse。
+ * 支持多种输入格式，具有容错能力。
+ * 
+ * @param response - 大模型的原始响应字符串
+ * @returns 解析后的 WorkflowResponse
+ * 
+ * @example
+ * // 正常 JSON
+ * parseWorkflowResponse('{"content": "hello", "next": []}')
+ * // => { content: "hello" }
+ * 
+ * // 带代码块
+ * parseWorkflowResponse('```json\n{"content": "test"}\n```')
+ * // => { content: "test" }
+ * 
+ * // 纯文本（降级处理）
+ * parseWorkflowResponse('这是一段纯文本')
+ * // => { content: "这是一段纯文本" }
  */
 export function parseWorkflowResponse(response: string): WorkflowResponse {
-  const jsonMatch = response.match(/```json\s*([\s\S]*?)\s*```/) || 
-                    response.match(/\{[\s\S]*\}/);
-  
-  if (!jsonMatch) {
+  const jsonStr = extractJsonString(response);
+
+  if (!jsonStr) {
+    // 无法提取 JSON，将整个响应作为 content
     return { content: response.trim() };
   }
 
   try {
-    const jsonStr = jsonMatch[1] || jsonMatch[0];
     const parsed = JSON.parse(jsonStr);
-    
-    if (typeof parsed.content !== 'string') {
+
+    // 校验格式
+    const validation = validateResponseFormat(parsed);
+    if (!validation.valid) {
+      console.warn('[WorkflowParser] 格式校验失败:', validation.errors);
+      // 尝试容错处理
+      if (typeof parsed.content === 'string') {
+        return { content: parsed.content };
+      }
       return { content: response.trim() };
     }
 
+    // 构建结果，只提取 content 和 next
     const result: WorkflowResponse = { content: parsed.content };
 
     if (Array.isArray(parsed.next) && parsed.next.length > 0) {
-      const filteredNext = parsed.next.filter((item: any) => 
-        typeof item.mcp === 'string' && 
-        typeof item.args === 'object'
-      );
-      if (filteredNext.length > 0) {
-        result.next = filteredNext;
+      const validCalls = parsed.next.filter(isValidMCPCall);
+      if (validCalls.length > 0) {
+        result.next = validCalls;
       }
     }
 
     return result;
-  } catch {
+  } catch (error) {
+    console.warn('[WorkflowParser] JSON 解析失败:', error);
     return { content: response.trim() };
   }
 }
 
 /**
+ * 解析工作流响应（带详细结果）
+ * 
+ * 与 parseWorkflowResponse 类似，但返回更详细的解析结果，
+ * 包括成功/失败状态、错误信息等。
+ * 
+ * @param response - 大模型的原始响应字符串
+ * @returns 详细的解析结果
+ */
+export function parseWorkflowResponseDetailed(response: string): ParseResult {
+  const jsonStr = extractJsonString(response);
+
+  if (!jsonStr) {
+    return {
+      success: false,
+      response: { content: response.trim() },
+      error: '无法从响应中提取 JSON',
+    };
+  }
+
+  try {
+    const parsed = JSON.parse(jsonStr);
+    const validation = validateResponseFormat(parsed);
+
+    if (!validation.valid) {
+      return {
+        success: false,
+        response: { content: typeof parsed.content === 'string' ? parsed.content : response.trim() },
+        error: validation.errors.join('; '),
+        rawJson: jsonStr,
+      };
+    }
+
+    const result: WorkflowResponse = { content: parsed.content };
+    if (Array.isArray(parsed.next) && parsed.next.length > 0) {
+      const validCalls = parsed.next.filter(isValidMCPCall);
+      if (validCalls.length > 0) {
+        result.next = validCalls;
+      }
+    }
+
+    return {
+      success: true,
+      response: result,
+      rawJson: jsonStr,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      response: { content: response.trim() },
+      error: `JSON 解析失败: ${error instanceof Error ? error.message : String(error)}`,
+      rawJson: jsonStr,
+    };
+  }
+}
+
+/**
+ * 终止原因枚举
+ */
+export enum TerminationReason {
+  /** 无 next 字段 */
+  NO_NEXT = 'no_next',
+  /** next 为空数组 */
+  EMPTY_NEXT = 'empty_next',
+  /** 任务完成关键词 */
+  TASK_COMPLETED = 'task_completed',
+  /** 继续执行 */
+  CONTINUE = 'continue',
+}
+
+/**
+ * 终止检测结果
+ */
+export interface TerminationCheckResult {
+  /** 是否应该终止 */
+  shouldTerminate: boolean;
+  /** 终止原因 */
+  reason: TerminationReason;
+  /** 详细描述 */
+  description?: string;
+}
+
+/**
  * 判断工作流是否应该终止
+ * 
+ * 终止条件：
+ * 1. next 字段不存在
+ * 2. next 为空数组 []
+ * 3. next 中没有有效的 MCP 调用
+ * 
+ * @param response - 解析后的工作流响应
+ * @returns 是否应该终止
  */
 export function shouldTerminate(response: WorkflowResponse): boolean {
   return !response.next || response.next.length === 0;
+}
+
+/**
+ * 详细的终止条件检测
+ * 
+ * 提供更详细的终止原因分析，用于调试和日志记录。
+ * 
+ * @param response - 解析后的工作流响应
+ * @returns 终止检测结果
+ */
+export function checkTermination(response: WorkflowResponse): TerminationCheckResult {
+  // 检查 next 字段是否存在
+  if (response.next === undefined) {
+    return {
+      shouldTerminate: true,
+      reason: TerminationReason.NO_NEXT,
+      description: 'next 字段不存在，工作流终止',
+    };
+  }
+
+  // 检查 next 是否为空数组
+  if (Array.isArray(response.next) && response.next.length === 0) {
+    return {
+      shouldTerminate: true,
+      reason: TerminationReason.EMPTY_NEXT,
+      description: 'next 为空数组，工作流终止',
+    };
+  }
+
+  // 检查 content 中是否包含任务完成的关键词
+  const completionKeywords = [
+    '任务完成', '执行完成', '操作完成', '处理完成',
+    '已完成', '已结束', '已终止',
+    'completed', 'finished', 'done',
+  ];
+  
+  const contentLower = response.content.toLowerCase();
+  const hasCompletionKeyword = completionKeywords.some(kw => 
+    contentLower.includes(kw.toLowerCase())
+  );
+
+  // 如果有完成关键词但仍有 next，记录但不强制终止
+  if (hasCompletionKeyword && response.next && response.next.length > 0) {
+    console.warn('[Termination] content 包含完成关键词但仍有 next 调用，继续执行');
+  }
+
+  // 有有效的 next 调用，继续执行
+  return {
+    shouldTerminate: false,
+    reason: TerminationReason.CONTINUE,
+    description: `继续执行 ${response.next?.length || 0} 个 MCP 调用`,
+  };
 }
 
 /**
