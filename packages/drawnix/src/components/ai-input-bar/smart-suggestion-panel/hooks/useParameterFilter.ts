@@ -268,6 +268,7 @@ function filterPrompts(
     description: prompt.source === 'history' ? '历史记录' : '推荐提示词',
     source: prompt.source,
     content: prompt.content,
+    scene: prompt.scene,
     timestamp: prompt.timestamp,
   }));
 }

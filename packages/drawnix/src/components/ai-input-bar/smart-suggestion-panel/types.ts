@@ -48,6 +48,8 @@ export const COUNT_OPTIONS: CountOption[] = [
 export interface PromptItem {
   id: string;
   content: string;
+  /** 适用场景描述 */
+  scene?: string;
   source: 'preset' | 'history';
   timestamp?: number;
 }
@@ -96,6 +98,8 @@ export interface PromptSuggestionItem extends BaseSuggestionItem {
   type: 'prompt';
   source: 'preset' | 'history';
   content: string;
+  /** 适用场景描述 */
+  scene?: string;
   timestamp?: number;
 }
 

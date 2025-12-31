@@ -381,9 +381,16 @@ export const SmartSuggestionPanel: React.FC<SmartSuggestionPanelProps> = ({
                     onClick={() => handleSelect(item)}
                     onMouseEnter={() => setHighlightedIndex(getGlobalIndex('preset', index))}
                   >
-                    <span className="smart-suggestion-panel__item-text">
-                      {item.shortLabel || item.label}
-                    </span>
+                    <div className="smart-suggestion-panel__item-content">
+                      <span className="smart-suggestion-panel__item-text">
+                        {item.shortLabel || item.label}
+                      </span>
+                      {item.scene && (
+                        <span className="smart-suggestion-panel__item-scene">
+                          {item.scene}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>

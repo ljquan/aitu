@@ -221,9 +221,10 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
 
   // 合并预设提示词和历史提示词
   const allPrompts = useMemo((): PromptItem[] => {
-    const presetPrompts = AI_IMAGE_PROMPTS[language].map((content, index) => ({
+    const presetPrompts = AI_IMAGE_PROMPTS[language].map((item, index) => ({
       id: `preset_${index}`,
-      content,
+      content: item.content,
+      scene: item.scene,
       source: 'preset' as const,
     }));
 
