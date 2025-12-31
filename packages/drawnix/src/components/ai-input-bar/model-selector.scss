@@ -92,7 +92,16 @@
       font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
       font-size: 13px;
       font-weight: 600;
-      color: #F59E0B;
+      // 默认颜色，具体颜色通过 &--image 和 &--video 修饰符设置
+      color: var(--color-text, #333333);
+
+      &--image {
+        color: #E53935;
+      }
+
+      &--video {
+        color: #FF9800;
+      }
     }
 
     &-label {
@@ -111,13 +120,13 @@
       font-weight: 500;
 
       &--image {
-        background-color: rgba(59, 130, 246, 0.1);
-        color: #3B82F6;
+        background-color: rgba(229, 57, 53, 0.1);
+        color: #E53935;
       }
 
       &--video {
-        background-color: rgba(168, 85, 247, 0.1);
-        color: #A855F7;
+        background-color: rgba(255, 152, 0, 0.1);
+        color: #FF9800;
       }
     }
 
@@ -223,11 +232,11 @@
 
       &-type {
         &--image {
-          background-color: rgba(59, 130, 246, 0.2);
+          background-color: rgba(229, 57, 53, 0.15);
         }
 
         &--video {
-          background-color: rgba(168, 85, 247, 0.2);
+          background-color: rgba(255, 152, 0, 0.15);
         }
       }
     }

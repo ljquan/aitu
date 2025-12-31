@@ -9,7 +9,7 @@
 import React, { useMemo, useCallback, useRef, useEffect, useState } from 'react';
 import { Bot, Check, Image, Video } from 'lucide-react';
 import { 
-  ALL_MODELS, 
+  IMAGE_VIDEO_MODELS, 
   getModelConfig,
   type ModelType,
   type ModelConfig,
@@ -61,7 +61,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       return [];
     }
     
-    let models: ModelConfig[] = ALL_MODELS.filter(model => {
+    let models: ModelConfig[] = IMAGE_VIDEO_MODELS.filter(model => {
       // 过滤掉已选择类型的模型
       if (model.type === 'image' && selectedImageModel) {
         return false;
@@ -293,7 +293,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             >
               <div className="model-selector__item-content">
                 <div className="model-selector__item-name">
-                  <span className="model-selector__item-id">#{model.id}</span>
+                  <span className={`model-selector__item-id model-selector__item-id--${model.type}`}>#{model.id}</span>
                   <span className="model-selector__item-label">{model.shortLabel || model.label}</span>
                   <span className={`model-selector__item-type model-selector__item-type--${model.type}`}>
                     <TypeIcon type={model.type} />

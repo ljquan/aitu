@@ -11,6 +11,30 @@
 export type ModelType = 'image' | 'video' | 'text';
 
 /**
+ * 图片模型默认参数
+ */
+export interface ImageModelDefaults {
+  /** 默认宽高比 */
+  aspectRatio: string;
+  /** 默认宽度 */
+  width: number;
+  /** 默认高度 */
+  height: number;
+}
+
+/**
+ * 视频模型默认参数
+ */
+export interface VideoModelDefaults {
+  /** 默认时长（秒） */
+  duration: string;
+  /** 默认尺寸 */
+  size: string;
+  /** 默认宽高比 */
+  aspectRatio: string;
+}
+
+/**
  * 模型配置接口
  */
 export interface ModelConfig {
@@ -28,11 +52,49 @@ export interface ModelConfig {
   isVip?: boolean;
   /** 是否支持工具调用（用于 Agent 模式） */
   supportsTools?: boolean;
+  /** 图片模型默认参数 */
+  imageDefaults?: ImageModelDefaults;
+  /** 视频模型默认参数 */
+  videoDefaults?: VideoModelDefaults;
 }
+
+// ============================================
+// 模型颜色配置
+// ============================================
+
+/**
+ * 模型类型对应的颜色
+ */
+export const MODEL_TYPE_COLORS = {
+  image: '#E53935',  // 红色
+  video: '#FF9800',  // 橙色
+  text: '#4CAF50',   // 绿色
+} as const;
 
 // ============================================
 // 图片模型配置
 // ============================================
+
+/** 图片模型通用默认参数 */
+const IMAGE_DEFAULT_PARAMS: ImageModelDefaults = {
+  aspectRatio: 'auto',
+  width: 1024,
+  height: 1024,
+};
+
+/** 2K 图片模型默认参数 */
+const IMAGE_2K_DEFAULT_PARAMS: ImageModelDefaults = {
+  aspectRatio: 'auto',
+  width: 2048,
+  height: 2048,
+};
+
+/** 4K 图片模型默认参数 */
+const IMAGE_4K_DEFAULT_PARAMS: ImageModelDefaults = {
+  aspectRatio: 'auto',
+  width: 4096,
+  height: 4096,
+};
 
 /**
  * VIP/推荐图片模型
@@ -46,6 +108,7 @@ export const IMAGE_MODEL_VIP_OPTIONS: ModelConfig[] = [
     type: 'image',
     isVip: true,
     supportsTools: true,
+    imageDefaults: IMAGE_DEFAULT_PARAMS,
   },
   {
     id: 'gemini-3-pro-image-preview-2k-vip',
@@ -55,6 +118,7 @@ export const IMAGE_MODEL_VIP_OPTIONS: ModelConfig[] = [
     type: 'image',
     isVip: true,
     supportsTools: true,
+    imageDefaults: IMAGE_2K_DEFAULT_PARAMS,
   },
   {
     id: 'gemini-3-pro-image-preview-4k-vip',
@@ -64,6 +128,7 @@ export const IMAGE_MODEL_VIP_OPTIONS: ModelConfig[] = [
     type: 'image',
     isVip: true,
     supportsTools: true,
+    imageDefaults: IMAGE_4K_DEFAULT_PARAMS,
   },
   {
     id: 'gemini-2.5-flash-image-vip',
@@ -73,6 +138,7 @@ export const IMAGE_MODEL_VIP_OPTIONS: ModelConfig[] = [
     type: 'image',
     isVip: true,
     supportsTools: true,
+    imageDefaults: IMAGE_DEFAULT_PARAMS,
   },
 ];
 
@@ -86,6 +152,7 @@ export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
     description: 'GPT 图片生成模型',
     type: 'image',
     supportsTools: true,
+    imageDefaults: IMAGE_DEFAULT_PARAMS,
   },
   {
     id: 'gemini-3-pro-image-preview',
@@ -94,6 +161,7 @@ export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
     description: 'Gemini 3 Pro 图片模型',
     type: 'image',
     supportsTools: true,
+    imageDefaults: IMAGE_DEFAULT_PARAMS,
   },
   {
     id: 'gemini-2.5-flash-image',
@@ -102,6 +170,7 @@ export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
     description: '快速图片生成模型',
     type: 'image',
     supportsTools: true,
+    imageDefaults: IMAGE_DEFAULT_PARAMS,
   },
   {
     id: 'gemini-3-pro-image-preview-hd',
@@ -110,6 +179,7 @@ export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
     description: 'HD 高清图片模型',
     type: 'image',
     supportsTools: true,
+    imageDefaults: IMAGE_DEFAULT_PARAMS,
   },
   {
     id: 'gemini-3-pro-image-preview-2k',
@@ -118,6 +188,7 @@ export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
     description: '2K 高清图片模型',
     type: 'image',
     supportsTools: true,
+    imageDefaults: IMAGE_2K_DEFAULT_PARAMS,
   },
   {
     id: 'gemini-3-pro-image-preview-4k',
@@ -126,6 +197,7 @@ export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
     description: '4K 超高清图片模型',
     type: 'image',
     supportsTools: true,
+    imageDefaults: IMAGE_4K_DEFAULT_PARAMS,
   },
 ];
 
@@ -141,6 +213,20 @@ export const IMAGE_MODELS: ModelConfig[] = [
 // 视频模型配置
 // ============================================
 
+/** Veo 模型默认参数（8秒） */
+const VEO_DEFAULT_PARAMS: VideoModelDefaults = {
+  duration: '8',
+  size: '1280x720',
+  aspectRatio: '16:9',
+};
+
+/** Sora 模型默认参数（10秒） */
+const SORA_DEFAULT_PARAMS: VideoModelDefaults = {
+  duration: '10',
+  size: '1280x720',
+  aspectRatio: '16:9',
+};
+
 /**
  * 视频模型配置
  */
@@ -152,6 +238,7 @@ export const VIDEO_MODELS: ModelConfig[] = [
     type: 'video',
     isVip: true,
     supportsTools: true,
+    videoDefaults: VEO_DEFAULT_PARAMS,
   },
   {
     id: 'sora-2',
@@ -160,6 +247,7 @@ export const VIDEO_MODELS: ModelConfig[] = [
     type: 'video',
     isVip: true,
     supportsTools: true,
+    videoDefaults: SORA_DEFAULT_PARAMS,
   },
   {
     id: 'veo3',
@@ -167,6 +255,7 @@ export const VIDEO_MODELS: ModelConfig[] = [
     description: '8秒视频',
     type: 'video',
     supportsTools: true,
+    videoDefaults: VEO_DEFAULT_PARAMS,
   },
   {
     id: 'veo3-pro',
@@ -174,6 +263,7 @@ export const VIDEO_MODELS: ModelConfig[] = [
     description: '8秒高质量视频',
     type: 'video',
     supportsTools: true,
+    videoDefaults: VEO_DEFAULT_PARAMS,
   },
   {
     id: 'veo3.1-pro',
@@ -181,6 +271,7 @@ export const VIDEO_MODELS: ModelConfig[] = [
     description: '8秒高质量模式，支持首尾帧',
     type: 'video',
     supportsTools: true,
+    videoDefaults: VEO_DEFAULT_PARAMS,
   },
   {
     id: 'veo3.1-components',
@@ -188,6 +279,7 @@ export const VIDEO_MODELS: ModelConfig[] = [
     description: '8秒模式，支持3张参考图',
     type: 'video',
     supportsTools: true,
+    videoDefaults: VEO_DEFAULT_PARAMS,
   },
   {
     id: 'sora-2-pro',
@@ -195,6 +287,7 @@ export const VIDEO_MODELS: ModelConfig[] = [
     description: '10s/15s/25s 高清，支持故事场景模式',
     type: 'video',
     supportsTools: true,
+    videoDefaults: SORA_DEFAULT_PARAMS,
   },
 ];
 
@@ -251,6 +344,14 @@ export const TEXT_MODELS: ModelConfig[] = [
 // ============================================
 
 /**
+ * 图片和视频模型（用于 ModelSelector）
+ */
+export const IMAGE_VIDEO_MODELS: ModelConfig[] = [
+  ...IMAGE_MODELS,
+  ...VIDEO_MODELS,
+];
+
+/**
  * 所有支持的模型
  */
 export const ALL_MODELS: ModelConfig[] = [
@@ -297,6 +398,29 @@ export function getModelIds(type?: ModelType): string[] {
  */
 export function supportsTools(modelId: string): boolean {
   return getModelConfig(modelId)?.supportsTools ?? false;
+}
+
+/**
+ * 获取图片模型默认参数
+ */
+export function getImageModelDefaults(modelId: string): ImageModelDefaults {
+  const config = getModelConfig(modelId);
+  return config?.imageDefaults ?? IMAGE_DEFAULT_PARAMS;
+}
+
+/**
+ * 获取视频模型默认参数
+ */
+export function getVideoModelDefaults(modelId: string): VideoModelDefaults {
+  const config = getModelConfig(modelId);
+  return config?.videoDefaults ?? VEO_DEFAULT_PARAMS;
+}
+
+/**
+ * 获取模型颜色
+ */
+export function getModelTypeColor(type: ModelType): string {
+  return MODEL_TYPE_COLORS[type];
 }
 
 // ============================================
