@@ -55,6 +55,14 @@ ${toolsDescription}
 - **模型选择**：通过 #模型名 指定，如 #imagen3、#veo3
 - **参数设置**：通过 -参数:值 指定，如 -size:16x9、-seconds:10
 - **生成数量**：通过 +数字 指定，如 +3 表示生成3张
+- **参考图片**：末尾可能有 [参考图片: [图片1]、[图片2]...] 说明
+
+## 图片占位符规则（重要）
+
+当用户提供参考图片时，会以 **[图片1]、[图片2]** 等占位符形式告知你。
+- 在 \`referenceImages\` 参数中使用占位符，如 \`"referenceImages": ["[图片1]"]\`
+- 系统会自动将占位符替换为真实图片 URL
+- prompt 中描述你希望如何处理参考图片（如风格迁移、图生视频等）
 
 ## 示例
 
@@ -72,8 +80,10 @@ ${toolsDescription}
 
 ### 示例3：基于选中图片生成（图生图）
 用户：[图片1] 把这张图片变成水彩画风格
+
+[参考图片: [图片1]]
 \`\`\`tool_call
-{"name": "generate_image", "arguments": {"prompt": "Transform to watercolor painting style, soft brush strokes, artistic color palette, delicate watercolor texture, maintain original composition"}}
+{"name": "generate_image", "arguments": {"prompt": "Transform to watercolor painting style, soft brush strokes, artistic color palette, delicate watercolor texture, maintain original composition", "referenceImages": ["[图片1]"]}}
 \`\`\`
 
 ### 示例4：基于选中文字生成图片
@@ -84,14 +94,18 @@ ${toolsDescription}
 
 ### 示例5：基于图片生成视频（图生视频）
 用户：[图片1] #veo3 让画面动起来
+
+[参考图片: [图片1]]
 \`\`\`tool_call
-{"name": "generate_video", "arguments": {"prompt": "Animate the scene with gentle movement, subtle motion in the environment, smooth camera pan, cinematic quality, natural flow", "model": "veo3", "seconds": "8", "size": "1280x720"}}
+{"name": "generate_video", "arguments": {"prompt": "Animate the scene with gentle movement, subtle motion in the environment, smooth camera pan, cinematic quality, natural flow", "model": "veo3", "seconds": "8", "size": "1280x720", "referenceImages": ["[图片1]"]}}
 \`\`\`
 
 ### 示例6：多图片参考生成
 用户：[图片1] [图片2] 把这两个角色放在同一个场景里
+
+[参考图片: [图片1]、[图片2]]
 \`\`\`tool_call
-{"name": "generate_image", "arguments": {"prompt": "Combine both characters in the same scene, harmonious composition, consistent lighting and style, natural interaction between subjects, professional digital art"}}
+{"name": "generate_image", "arguments": {"prompt": "Combine both characters in the same scene, harmonious composition, consistent lighting and style, natural interaction between subjects, professional digital art", "referenceImages": ["[图片1]", "[图片2]"]}}
 \`\`\`
 
 ### 示例7：视频生成带参数
@@ -155,6 +169,14 @@ User input may contain:
 - **Model selection**: Specified with #modelname, e.g., #imagen3, #veo3
 - **Parameters**: Specified with -param:value, e.g., -size:16x9, -seconds:10
 - **Generation count**: Specified with +number, e.g., +3 for generating 3 images
+- **Reference images**: May end with [Reference images: [Image 1], [Image 2]...]
+
+## Image Placeholder Rules (Important)
+
+When user provides reference images, they are indicated as **[Image 1], [Image 2]** placeholders.
+- Use placeholders in the \`referenceImages\` parameter, e.g., \`"referenceImages": ["[Image 1]"]\`
+- The system automatically replaces placeholders with real image URLs
+- In prompt, describe how you want to process the reference images (style transfer, image-to-video, etc.)
 
 ## Examples
 
@@ -172,8 +194,10 @@ User: #imagen3 -size:16x9 a cat running on grass
 
 ### Example 3: Image-to-image based on selected image
 User: [Image 1] Transform this to watercolor style
+
+[Reference images: [Image 1]]
 \`\`\`tool_call
-{"name": "generate_image", "arguments": {"prompt": "Transform to watercolor painting style, soft brush strokes, artistic color palette, delicate watercolor texture, maintain original composition"}}
+{"name": "generate_image", "arguments": {"prompt": "Transform to watercolor painting style, soft brush strokes, artistic color palette, delicate watercolor texture, maintain original composition", "referenceImages": ["[Image 1]"]}}
 \`\`\`
 
 ### Example 4: Generate image from selected text
@@ -184,14 +208,18 @@ User: "Sunset beach" create an image of this
 
 ### Example 5: Image-to-video
 User: [Image 1] #veo3 Animate this scene
+
+[Reference images: [Image 1]]
 \`\`\`tool_call
-{"name": "generate_video", "arguments": {"prompt": "Animate the scene with gentle movement, subtle motion in the environment, smooth camera pan, cinematic quality, natural flow", "model": "veo3", "seconds": "8", "size": "1280x720"}}
+{"name": "generate_video", "arguments": {"prompt": "Animate the scene with gentle movement, subtle motion in the environment, smooth camera pan, cinematic quality, natural flow", "model": "veo3", "seconds": "8", "size": "1280x720", "referenceImages": ["[Image 1]"]}}
 \`\`\`
 
 ### Example 6: Multi-image reference
 User: [Image 1] [Image 2] Combine these two characters in one scene
+
+[Reference images: [Image 1], [Image 2]]
 \`\`\`tool_call
-{"name": "generate_image", "arguments": {"prompt": "Combine both characters in the same scene, harmonious composition, consistent lighting and style, natural interaction between subjects, professional digital art"}}
+{"name": "generate_image", "arguments": {"prompt": "Combine both characters in the same scene, harmonious composition, consistent lighting and style, natural interaction between subjects, professional digital art", "referenceImages": ["[Image 1]", "[Image 2]"]}}
 \`\`\`
 
 ### Example 7: Video with parameters
@@ -213,21 +241,33 @@ What would you like to create?`;
  * 生成带参考图片的系统提示词补充
  */
 export function generateReferenceImagesPrompt(imageCount: number, language: 'zh' | 'en' = 'zh'): string {
+  // 生成占位符列表
+  const placeholders = Array.from({ length: imageCount }, (_, i) => `[图片${i + 1}]`).join('、');
+  const placeholdersArray = Array.from({ length: imageCount }, (_, i) => `"[图片${i + 1}]"`).join(', ');
+  const placeholdersEn = Array.from({ length: imageCount }, (_, i) => `[Image ${i + 1}]`).join(', ');
+  const placeholdersArrayEn = Array.from({ length: imageCount }, (_, i) => `"[Image ${i + 1}]"`).join(', ');
+
   if (language === 'zh') {
     return `
 
-## 参考图片
+## 参考图片说明
 
-用户提供了 ${imageCount} 张参考图片。在生成时：
-- 如果生成图片，将参考图片传入 referenceImages 参数，可以用于风格参考或图生图
-- 如果生成视频，将参考图片传入 referenceImages 参数，可以用于图生视频`;
+用户提供了 ${imageCount} 张参考图片：${placeholders}
+
+**使用方法**：
+- 在 \`referenceImages\` 参数中使用占位符数组：\`"referenceImages": [${placeholdersArray}]\`
+- 系统会自动将占位符替换为真实图片 URL
+- prompt 中描述你希望如何处理这些图片`;
   }
 
   return `
 
 ## Reference Images
 
-The user provided ${imageCount} reference image(s). When generating:
-- For images, pass reference images to the referenceImages parameter for style reference or image-to-image
-- For videos, pass reference images to the referenceImages parameter for image-to-video`;
+The user provided ${imageCount} reference image(s): ${placeholdersEn}
+
+**How to use**:
+- Use placeholder array in \`referenceImages\` parameter: \`"referenceImages": [${placeholdersArrayEn}]\`
+- The system will automatically replace placeholders with real image URLs
+- In prompt, describe how you want to process these images`;
 }

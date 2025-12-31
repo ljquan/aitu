@@ -217,7 +217,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
   const [prompt, setPrompt] = useState('');
   const [selectedContent, setSelectedContent] = useState<SelectedContent[]>([]);
   const [selectedText, setSelectedText] = useState('');
-  const [isGenerating, setIsGenerating] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false); // 仅用于防止重复点击，不阻止并行任务
   const [isFocused, setIsFocused] = useState(false);
   const [showSuggestionPanel, setShowSuggestionPanel] = useState(false);
 
@@ -230,6 +230,24 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
       setShowSuggestionPanel(true);
     }
   }, [parseResult.cleanText, isFocused]);
+
+  // 点击外部关闭输入框的展开状态
+  useEffect(() => {
+    if (!isFocused) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      // 检查点击是否在 AIInputBar 容器外部
+      if (containerRef.current && !containerRef.current.contains(target)) {
+        setIsFocused(false);
+        setShowSuggestionPanel(false);
+      }
+    };
+
+    // 使用 mousedown 而不是 click，以便在失焦前处理
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isFocused]);
   const [hoveredContent, setHoveredContent] = useState<{
     type: SelectedContentType;
     url?: string;
@@ -298,9 +316,9 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
   // Handle generation
   const handleGenerate = useCallback(async () => {
     if (!prompt.trim() && selectedContent.length === 0) return;
-    if (isGenerating) return;
+    if (isSubmitting) return; // 仅防止快速重复点击
 
-    setIsGenerating(true);
+    setIsSubmitting(true);
 
     try {
       // 收集所有参考图片（排除文字类型）
@@ -564,19 +582,22 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
         }
       }
 
-      // 清空输入
+      // 清空输入并关闭面板
       setPrompt('');
       setSelectedContent([]);
       setSelectedText('');
       setShowSuggestionPanel(false);
+      setIsFocused(false);
+      // 让输入框失去焦点
+      inputRef.current?.blur();
     } catch (error) {
       console.error('Failed to create generation task:', error);
       // 中止工作流
       workflowControl.abortWorkflow();
     } finally {
-      setIsGenerating(false);
+      setIsSubmitting(false);
     }
-  }, [prompt, selectedContent, selectedText, createTask, isGenerating, addHistory, workflowControl]);
+  }, [prompt, selectedContent, selectedText, createTask, isSubmitting, addHistory, workflowControl]);
 
   // Handle key press
   const handleKeyDown = useCallback(
@@ -867,15 +888,15 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
                 : (language === 'zh' ? '描述你想要创建什么' : 'Describe what you want to create')
               }
               rows={isFocused ? 4 : 1}
-              disabled={isGenerating}
+              disabled={isSubmitting}
             />
           </div>
 
           {/* Right: Send button */}
           <button
-            className={`ai-input-bar__send-btn ${canGenerate ? 'active' : ''} ${isGenerating ? 'loading' : ''}`}
+            className={`ai-input-bar__send-btn ${canGenerate ? 'active' : ''} ${isSubmitting ? 'loading' : ''}`}
             onClick={handleGenerate}
-            disabled={!canGenerate || isGenerating}
+            disabled={!canGenerate || isSubmitting}
           >
             <Send size={18} />
           </button>
