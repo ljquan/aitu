@@ -42,6 +42,7 @@ import { isWhite, removeHexAlpha } from '../../../utils/color';
 import { NO_COLOR } from '../../../constants/color';
 import { Freehand } from '../../../plugins/freehand/type';
 import { PopupLinkButton } from './link-button';
+import { PopupPromptButton } from './prompt-button';
 import { AIImageIcon, AIVideoIcon, VideoFrameIcon, DuplicateIcon, TrashIcon } from '../../icons';
 import { useDrawnix, DialogType } from '../../../hooks/use-drawnix';
 import { useI18n } from '../../../i18n';
@@ -287,6 +288,14 @@ export const PopupToolbar = () => {
                 key={4}
                 title={`Link`}
               ></PopupLinkButton>
+            )}
+            {state.hasText && (
+              <PopupPromptButton
+                board={board}
+                key={'prompt'}
+                language={language as 'zh' | 'en'}
+                title={language === 'zh' ? '提示词' : 'Prompts'}
+              />
             )}
             {state.hasAIImage && (
               <ToolButton

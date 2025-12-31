@@ -32,7 +32,7 @@ import type { VideoModel } from '../../types/video.types';
 import { useTextSelection } from '../../hooks/useTextSelection';
 import { usePromptHistory } from '../../hooks/usePromptHistory';
 import { useChatDrawerControl } from '../../contexts/ChatDrawerContext';
-import { AI_IMAGE_PROMPTS } from '../../constants/prompts';
+import { AI_INSTRUCTIONS } from '../../constants/prompts';
 import { 
   SmartSuggestionPanel, 
   useTriggerDetection,
@@ -324,9 +324,9 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
     stopPropagation: true,
   });
 
-  // 合并预设提示词和历史提示词
+  // 合并预设指令和历史指令
   const allPrompts = useMemo((): PromptItem[] => {
-    const presetPrompts = AI_IMAGE_PROMPTS[language].map((item, index) => ({
+    const presetPrompts = AI_INSTRUCTIONS[language].map((item, index) => ({
       id: `preset_${index}`,
       content: item.content,
       scene: item.scene,

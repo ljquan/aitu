@@ -1,0 +1,166 @@
+/**
+ * 提示词按钮弹窗样式
+ */
+
+.popup-prompt-panel {
+  width: 320px;
+  max-height: 400px;
+  padding: 0;
+  background: var(--island-bg-color, #ffffff);
+  border: 1px solid var(--color-border, #e5e5e5);
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+
+  &__content {
+    max-height: 380px;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  &__section {
+    &:not(:last-child) {
+      border-bottom: 1px solid var(--color-border, #e5e5e5);
+    }
+  }
+
+  &__section-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 14px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--color-text-tertiary, #999999);
+    background: var(--color-surface, #f9f9f9);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+
+    svg {
+      color: var(--color-text-tertiary, #999999);
+    }
+  }
+
+  &__list {
+    padding: 6px;
+  }
+
+  &__item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+
+    &:hover {
+      background-color: var(--color-hover, #f5f5f5);
+    }
+
+    &--highlighted {
+      background-color: rgba(245, 158, 11, 0.1);
+    }
+
+    &-content {
+      flex: 1;
+      min-width: 0;
+    }
+
+    &-text {
+      display: block;
+      font-size: 13px;
+      color: var(--color-text, #333333);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    &-scene {
+      display: block;
+      font-size: 11px;
+      color: var(--color-text-tertiary, #999999);
+      margin-top: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    &-delete {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
+      padding: 0;
+      border: none;
+      background: transparent;
+      border-radius: 4px;
+      color: var(--color-text-tertiary, #999999);
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.15s ease, background-color 0.15s ease;
+      flex-shrink: 0;
+      margin-left: 8px;
+
+      &:hover {
+        background-color: rgba(0, 0, 0, 0.1);
+        color: #E53935;
+      }
+    }
+
+    &:hover &-delete,
+    &--highlighted &-delete {
+      opacity: 1;
+    }
+  }
+}
+
+// 提示词按钮图标样式
+.prompt-button {
+  svg {
+    color: #F59E0B;
+  }
+  
+  &:hover svg {
+    color: #D97706;
+  }
+}
+
+// ============================================
+// Dark theme
+// ============================================
+:root[data-theme='dark'] {
+  .popup-prompt-panel {
+    background: var(--color-surface-high, #2a2a2a);
+    border-color: var(--color-border, #444444);
+
+    &__section-header {
+      background: var(--color-surface-mid, #333333);
+      color: var(--color-gray-60, #666666);
+    }
+
+    &__item {
+      &:hover {
+        background-color: var(--color-surface-mid, #333333);
+      }
+
+      &--highlighted {
+        background-color: rgba(245, 158, 11, 0.15);
+      }
+
+      &-text {
+        color: var(--color-gray-20, #cccccc);
+      }
+
+      &-scene {
+        color: var(--color-gray-60, #666666);
+      }
+
+      &-delete:hover {
+        background-color: rgba(255, 255, 255, 0.1);
+      }
+    }
+  }
+}
