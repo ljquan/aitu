@@ -1026,6 +1026,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
           {/* Right: Send button */}
           <button
             className={`ai-input-bar__send-btn ${canGenerate ? 'active' : ''} ${isSubmitting ? 'loading' : ''}`}
+            onMouseDown={(e) => e.preventDefault()} // 阻止点击按钮时输入框失焦
             onClick={handleGenerate}
             disabled={!canGenerate || isSubmitting}
           >
