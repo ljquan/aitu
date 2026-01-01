@@ -37,6 +37,7 @@ import {
   type PromptItem,
 } from './smart-suggestion-panel';
 import { initializeMCP, setCanvasBoard, setBoard, mcpRegistry } from '../../mcp';
+import { photoWallService } from '../../services/photo-wall';
 import type { MCPTaskResult } from '../../mcp/types';
 import { parseAIInput } from '../../utils/ai-input-parser';
 import { convertToWorkflow, type WorkflowDefinition, type WorkflowStepOptions } from './workflow-converter';
@@ -125,9 +126,11 @@ const SelectionWatcher: React.FC<{
   useEffect(() => {
     setCanvasBoard(board);
     setBoard(board);
+    photoWallService.setBoard(board);
     return () => {
       setCanvasBoard(null);
       setBoard(null);
+      photoWallService.setBoard(null);
     };
   }, [board]);
   const onSelectionChangeRef = useRef(onSelectionChange);

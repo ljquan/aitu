@@ -166,7 +166,7 @@ export interface ColdStartSuggestion {
   content: string;
   scene: string;
   /** 建议的模型类型，帮助用户快速选择 */
-  modelType?: 'image' | 'video';
+  modelType?: 'image' | 'video' | 'photo-wall';
 }
 
 export const AI_COLD_START_SUGGESTIONS: Record<'zh' | 'en', ColdStartSuggestion[]> = {
@@ -204,6 +204,16 @@ export const AI_COLD_START_SUGGESTIONS: Record<'zh' | 'en', ColdStartSuggestion[
       scene: '产品展示',
       modelType: 'image',
     },
+    {
+      content: '生成照片墙：孟菲斯风格餐具，色彩鲜艳的杯碗盘',
+      scene: '照片墙',
+      modelType: 'photo-wall',
+    },
+    {
+      content: '生成照片墙：可爱猫咪表情包，9宫格散落布局',
+      scene: '照片墙',
+      modelType: 'photo-wall',
+    },
   ],
   en: [
     {
@@ -238,6 +248,16 @@ export const AI_COLD_START_SUGGESTIONS: Record<'zh' | 'en', ColdStartSuggestion[
       content: 'Draw an image: A cup of hot coffee with steam rising, beautiful lighting',
       scene: 'Product showcase',
       modelType: 'image',
+    },
+    {
+      content: 'Generate photo wall: Memphis style tableware, colorful cups bowls and plates',
+      scene: 'Photo wall',
+      modelType: 'photo-wall',
+    },
+    {
+      content: 'Generate photo wall: Cute cat emoji pack, 3x3 scattered layout',
+      scene: 'Photo wall',
+      modelType: 'photo-wall',
     },
   ],
 };

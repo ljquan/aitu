@@ -35,7 +35,9 @@ export enum TaskType {
   /** Video generation task */
   VIDEO = 'video',
   /** Character extraction task */
-  CHARACTER = 'character'
+  CHARACTER = 'character',
+  /** Photo wall generation task (image + split + layout) */
+  PHOTO_WALL = 'photo_wall'
 }
 
 /**
@@ -65,6 +67,12 @@ export interface GenerationParams {
   characterTimestamps?: string;
   /** Local task ID of source video */
   sourceLocalTaskId?: string;
+  /** Photo wall grid rows (photo_wall only) */
+  photoWallRows?: number;
+  /** Photo wall grid columns (photo_wall only) */
+  photoWallCols?: number;
+  /** Photo wall layout style (photo_wall only) */
+  photoWallLayoutStyle?: 'scattered' | 'grid' | 'circular';
   /** Additional parameters for specific generation types */
   [key: string]: any;
 }

@@ -181,6 +181,8 @@ function getToolDescription(toolName: string, args?: Record<string, unknown>): s
       return `生成图片: ${((args?.prompt as string) || '').substring(0, 30)}...`;
     case 'generate_video':
       return `生成视频: ${((args?.prompt as string) || '').substring(0, 30)}...`;
+    case 'generate_photo_wall':
+      return `生成照片墙: ${((args?.theme as string) || '').substring(0, 30)}...`;
     case 'canvas_insertion':
       return '插入到画布';
     default:
