@@ -52,7 +52,7 @@ import { isVideoElement } from '../../../plugins/with-video';
 import { VideoFrameSelector } from '../../video-frame-selector/video-frame-selector';
 import { insertVideoFrame } from '../../../utils/video-frame';
 import { isToolElement } from '../../../plugins/with-tool';
-import { splitAndInsertImages } from '../../../utils/image-splitter';
+import { splitAndInsertImages, hasSplitLines } from '../../../utils/image-splitter';
 import { MessagePlugin } from 'tdesign-react';
 
 export const PopupToolbar = () => {
@@ -66,6 +66,10 @@ export const PopupToolbar = () => {
   // 视频帧选择弹窗状态
   const [showVideoFrameSelector, setShowVideoFrameSelector] = useState(false);
   const [selectedVideoElement, setSelectedVideoElement] = useState<PlaitElement | null>(null);
+
+  // 智能拆图预检测状态
+  const [canSplitImage, setCanSplitImage] = useState(false);
+  const [checkingImageUrl, setCheckingImageUrl] = useState<string | null>(null);
 
   // 初始化全局鼠标位置跟踪
   useGlobalMousePosition();
@@ -139,14 +143,17 @@ export const PopupToolbar = () => {
     // AI图像生成按钮：排除视频元素和工具元素(内嵌网页)
     const hasAIImage = !hasVideoSelected && !hasToolSelected && !PlaitBoard.hasBeenTextEditing(board);
 
-    // 拆图按钮：只在选中单个图片元素时显示
-    const hasSplitImage =
+    // 拆图按钮：只在选中单个图片元素且检测到分割线时显示
+    const isImageSelected =
       selectedElements.length === 1 &&
       !hasVideoSelected &&
       !hasToolSelected &&
       PlaitDrawElement.isDrawElement(selectedElements[0]) &&
       PlaitDrawElement.isImage(selectedElements[0]) &&
       !PlaitBoard.hasBeenTextEditing(board);
+
+    // 只有检测到分割线时才显示拆图按钮
+    const hasSplitImage = isImageSelected && canSplitImage;
 
     state = {
       ...getElementState(board),
@@ -206,6 +213,49 @@ export const PopupToolbar = () => {
   useEffect(() => {
     movingOrDraggingRef.current = movingOrDragging;
   }, [movingOrDragging]);
+
+  // 预检测图片是否包含分割线
+  useEffect(() => {
+    // 检查是否选中了单个图片元素
+    if (selectedElements.length !== 1) {
+      setCanSplitImage(false);
+      setCheckingImageUrl(null);
+      return;
+    }
+
+    const element = selectedElements[0];
+    if (
+      !PlaitDrawElement.isDrawElement(element) ||
+      !PlaitDrawElement.isImage(element) ||
+      !element.url
+    ) {
+      setCanSplitImage(false);
+      setCheckingImageUrl(null);
+      return;
+    }
+
+    const imageUrl = element.url;
+
+    // 如果是同一张图片，不重复检测
+    if (imageUrl === checkingImageUrl) {
+      return;
+    }
+
+    // 开始检测
+    setCheckingImageUrl(imageUrl);
+    setCanSplitImage(false);
+
+    hasSplitLines(imageUrl)
+      .then((result) => {
+        // 确保仍然是同一张图片
+        if (imageUrl === checkingImageUrl || selectedElements[0]?.id === element.id) {
+          setCanSplitImage(result);
+        }
+      })
+      .catch(() => {
+        setCanSplitImage(false);
+      });
+  }, [selectedElements]);
 
   useEffect(() => {
     const { pointerUp, pointerMove } = board;

@@ -141,9 +141,14 @@ function mergeSplitLines(lines: number[], minGap: number = 10): number[] {
 }
 
 /**
- * 智能检测图片中的网格分割线
+ * 内部检测函数，返回图片数据和检测结果
  */
-export async function detectGridLines(imageUrl: string): Promise<GridDetectionResult> {
+async function detectGridLinesInternal(imageUrl: string): Promise<{
+  detection: GridDetectionResult;
+  img: HTMLImageElement;
+  imageData: ImageData;
+  canvas: HTMLCanvasElement;
+}> {
   const img = await loadImage(imageUrl);
   const { naturalWidth: width, naturalHeight: height } = img;
 
@@ -182,15 +187,109 @@ export async function detectGridLines(imageUrl: string): Promise<GridDetectionRe
   const mergedHorizontal = mergeSplitLines(horizontalLines, Math.floor(height * 0.02));
   const mergedVertical = mergeSplitLines(verticalLines, Math.floor(width * 0.02));
 
-  console.log('[ImageSplitter] Detected horizontal lines:', mergedHorizontal);
-  console.log('[ImageSplitter] Detected vertical lines:', mergedVertical);
-
   return {
-    rows: mergedHorizontal.length + 1,
-    cols: mergedVertical.length + 1,
-    rowLines: mergedHorizontal,
-    colLines: mergedVertical,
+    detection: {
+      rows: mergedHorizontal.length + 1,
+      cols: mergedVertical.length + 1,
+      rowLines: mergedHorizontal,
+      colLines: mergedVertical,
+    },
+    img,
+    imageData,
+    canvas,
   };
+}
+
+/**
+ * 智能检测图片中的网格分割线
+ */
+export async function detectGridLines(imageUrl: string): Promise<GridDetectionResult> {
+  const { detection } = await detectGridLinesInternal(imageUrl);
+  console.log('[ImageSplitter] Detected horizontal lines:', detection.rowLines);
+  console.log('[ImageSplitter] Detected vertical lines:', detection.colLines);
+  return detection;
+}
+
+/**
+ * 快速检测图片是否包含分割线（用于判断是否显示拆图按钮）
+ *
+ * @param imageUrl - 图片 URL
+ * @returns 是否包含分割线
+ */
+export async function hasSplitLines(imageUrl: string): Promise<boolean> {
+  try {
+    const { detection } = await detectGridLinesInternal(imageUrl);
+    // 至少有一条水平或垂直分割线才认为可以拆分
+    return detection.rows > 1 || detection.cols > 1;
+  } catch (error) {
+    console.warn('[ImageSplitter] Failed to detect split lines:', error);
+    return false;
+  }
+}
+
+/**
+ * 检测图片区域的白边并返回裁剪后的边界
+ * 从四个方向向内扫描，找到第一个非白色像素行/列
+ */
+function detectAndTrimWhiteBorders(
+  imageData: ImageData,
+  threshold: number = 245
+): { top: number; right: number; bottom: number; left: number } {
+  const { width, height, data } = imageData;
+
+  // 检测一行是否全是白色/浅色
+  const isRowLight = (y: number): boolean => {
+    for (let x = 0; x < width; x++) {
+      const idx = (y * width + x) * 4;
+      const r = data[idx];
+      const g = data[idx + 1];
+      const b = data[idx + 2];
+      if (r < threshold || g < threshold || b < threshold) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  // 检测一列是否全是白色/浅色
+  const isColLight = (x: number): boolean => {
+    for (let y = 0; y < height; y++) {
+      const idx = (y * width + x) * 4;
+      const r = data[idx];
+      const g = data[idx + 1];
+      const b = data[idx + 2];
+      if (r < threshold || g < threshold || b < threshold) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  // 从顶部向下扫描
+  let top = 0;
+  while (top < height && isRowLight(top)) {
+    top++;
+  }
+
+  // 从底部向上扫描
+  let bottom = height - 1;
+  while (bottom > top && isRowLight(bottom)) {
+    bottom--;
+  }
+
+  // 从左边向右扫描
+  let left = 0;
+  while (left < width && isColLight(left)) {
+    left++;
+  }
+
+  // 从右边向左扫描
+  let right = width - 1;
+  while (right > left && isColLight(right)) {
+    right--;
+  }
+
+  return { top, right, bottom, left };
 }
 
 /**
@@ -210,6 +309,14 @@ export async function splitImageByLines(
   const elements: SplitImageElement[] = [];
   let index = 0;
 
+  // 创建完整图片的 Canvas 用于获取像素数据
+  const fullCanvas = document.createElement('canvas');
+  fullCanvas.width = width;
+  fullCanvas.height = height;
+  const fullCtx = fullCanvas.getContext('2d');
+  if (!fullCtx) return elements;
+  fullCtx.drawImage(img, 0, 0);
+
   for (let row = 0; row < rowBounds.length - 1; row++) {
     for (let col = 0; col < colBounds.length - 1; col++) {
       const x1 = colBounds[col];
@@ -217,32 +324,47 @@ export async function splitImageByLines(
       const y1 = rowBounds[row];
       const y2 = rowBounds[row + 1];
 
-      // 裁剪边距，去除分割线区域
-      const padding = 5;
-      const sx = x1 + (col > 0 ? padding : 0);
-      const sy = y1 + (row > 0 ? padding : 0);
-      const sw = x2 - x1 - (col > 0 ? padding : 0) - (col < colBounds.length - 2 ? padding : 0);
-      const sh = y2 - y1 - (row > 0 ? padding : 0) - (row < rowBounds.length - 2 ? padding : 0);
+      // 初步裁剪：在分割线位置两侧各裁剪一些像素
+      const splitLinePadding = 8;
+      let sx = x1 + (col > 0 ? splitLinePadding : 0);
+      let sy = y1 + (row > 0 ? splitLinePadding : 0);
+      let sw = x2 - x1 - (col > 0 ? splitLinePadding : 0) - (col < colBounds.length - 2 ? splitLinePadding : 0);
+      let sh = y2 - y1 - (row > 0 ? splitLinePadding : 0) - (row < rowBounds.length - 2 ? splitLinePadding : 0);
 
       if (sw <= 0 || sh <= 0) continue;
 
-      // 创建裁剪 Canvas
+      // 获取这个区域的像素数据
+      const regionData = fullCtx.getImageData(sx, sy, sw, sh);
+
+      // 检测并裁剪白边
+      const borders = detectAndTrimWhiteBorders(regionData);
+
+      // 计算最终裁剪区域
+      const finalSx = sx + borders.left;
+      const finalSy = sy + borders.top;
+      const finalSw = borders.right - borders.left + 1;
+      const finalSh = borders.bottom - borders.top + 1;
+
+      // 确保有有效内容
+      if (finalSw <= 10 || finalSh <= 10) continue;
+
+      // 创建最终裁剪 Canvas
       const canvas = document.createElement('canvas');
-      canvas.width = sw;
-      canvas.height = sh;
+      canvas.width = finalSw;
+      canvas.height = finalSh;
 
       const ctx = canvas.getContext('2d');
       if (!ctx) continue;
 
-      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+      ctx.drawImage(img, finalSx, finalSy, finalSw, finalSh, 0, 0, finalSw, finalSh);
 
       elements.push({
         imageData: canvas.toDataURL('image/png', 0.92),
         index: index++,
-        width: sw,
-        height: sh,
-        sourceX: sx,
-        sourceY: sy,
+        width: finalSw,
+        height: finalSh,
+        sourceX: finalSx,
+        sourceY: finalSy,
       });
     }
   }
