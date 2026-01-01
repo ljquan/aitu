@@ -1,43 +1,128 @@
 /**
  * 工具调用解析器
- * 
+ *
  * 从 LLM 响应中解析工具调用
  */
 
 import type { ToolCall } from '../../mcp/types';
 
 /**
+ * 工作流 JSON 响应格式
+ */
+export interface WorkflowJsonResponse {
+  content: string;
+  next: Array<{
+    mcp: string;
+    args: Record<string, unknown>;
+  }>;
+}
+
+/**
+ * 尝试解析 JSON 字符串，失败时尝试修复
+ */
+function tryParseJson(jsonStr: string): Record<string, unknown> | null {
+  const trimmed = jsonStr.trim();
+
+  // 首先直接尝试解析
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    // 尝试修复后再解析
+    try {
+      return JSON.parse(healJson(trimmed));
+    } catch {
+      return null;
+    }
+  }
+}
+
+/**
+ * 解析新格式的工作流 JSON 响应
+ * 格式: {"content": "...", "next": [{"mcp": "tool_name", "args": {...}}]}
+ */
+export function parseWorkflowJson(response: string): WorkflowJsonResponse | null {
+  // 先尝试直接解析整个响应
+  let parsed = tryParseJson(response);
+
+  // 如果直接解析失败，尝试从响应中提取 JSON
+  if (!parsed) {
+    // 移除可能的代码块标记
+    let cleaned = response.replace(/```(?:json)?\s*\n?/gi, '').replace(/\n?```/gi, '');
+    parsed = tryParseJson(cleaned);
+  }
+
+  // 如果还是失败，尝试从文本中找到 JSON 对象
+  if (!parsed) {
+    const jsonMatch = response.match(/\{[\s\S]*"content"[\s\S]*"next"[\s\S]*\}/);
+    if (jsonMatch) {
+      parsed = tryParseJson(jsonMatch[0]);
+    }
+  }
+
+  if (!parsed) {
+    console.warn('[ToolParser] Failed to parse workflow JSON from response');
+    return null;
+  }
+
+  // 验证格式
+  if (typeof parsed.content !== 'string') {
+    console.warn('[ToolParser] Invalid workflow JSON: missing or invalid content field');
+    return null;
+  }
+
+  // next 可以不存在或为空数组
+  const next = Array.isArray(parsed.next) ? parsed.next : [];
+
+  // 验证 next 数组中的每个项
+  const validNext = next.filter((item: any) => {
+    return typeof item === 'object' &&
+           item !== null &&
+           typeof item.mcp === 'string' &&
+           typeof item.args === 'object';
+  }).map((item: any) => ({
+    mcp: item.mcp,
+    args: item.args as Record<string, unknown>,
+  }));
+
+  return {
+    content: parsed.content as string,
+    next: validNext,
+  };
+}
+
+/**
+ * 从工作流 JSON 响应中提取工具调用
+ */
+export function extractToolCallsFromWorkflowJson(workflowJson: WorkflowJsonResponse): ToolCall[] {
+  return workflowJson.next.map((item, index) => ({
+    name: item.mcp,
+    arguments: item.args,
+    id: `tc_${Date.now()}_${index}_${Math.random().toString(36).substr(2, 9)}`,
+  }));
+}
+
+/**
  * 从 LLM 响应中解析工具调用
- * 
+ *
  * 支持多种格式：
- * 1. ```tool_call\n{...}\n``` 格式
- * 2. ```json\n{"name": "...", "arguments": {...}}\n``` 格式
- * 3. <tool_call>{...}</tool_call> 格式
+ * 1. 新格式: {"content": "...", "next": [{"mcp": "...", "args": {...}}]}
+ * 2. ```tool_call\n{...}\n``` 格式
+ * 3. ```json\n{"name": "...", "arguments": {...}}\n``` 格式
+ * 4. <tool_call>{...}</tool_call> 格式
  */
 export function parseToolCalls(response: string): ToolCall[] {
+  // 首先尝试新的工作流 JSON 格式
+  const workflowJson = parseWorkflowJson(response);
+  if (workflowJson && workflowJson.next.length > 0) {
+    console.log('[ToolParser] Parsed workflow JSON format');
+    return extractToolCallsFromWorkflowJson(workflowJson);
+  }
+
+  // 回退到旧格式解析
   const toolCalls: ToolCall[] = [];
 
   /**
-   * 尝试解析 JSON 字符串，失败时尝试修复
-   */
-  const tryParseJson = (jsonStr: string): Record<string, unknown> | null => {
-    const trimmed = jsonStr.trim();
-
-    // 首先直接尝试解析
-    try {
-      return JSON.parse(trimmed);
-    } catch {
-      // 尝试修复后再解析
-      try {
-        return JSON.parse(healJson(trimmed));
-      } catch {
-        return null;
-      }
-    }
-  };
-
-  /**
-   * 从解析结果创建 ToolCall
+   * 从解析结果创建 ToolCall（旧格式）
    */
   const createToolCall = (parsed: Record<string, unknown>): ToolCall | null => {
     if (!parsed.name || typeof parsed.name !== 'string') {
@@ -102,7 +187,7 @@ export function parseToolCalls(response: string): ToolCall[] {
     }
   }
 
-  // 格式 4: 直接在文本中的 JSON（无代码块包裹）
+  // 格式 4: 直接在文本中的 JSON（无代码块包裹，旧格式）
   if (toolCalls.length === 0) {
     // 匹配看起来像工具调用的 JSON 对象
     const directJsonRegex = /\{[\s\S]*?"name"\s*:\s*"(?:generate_image|generate_video)"[\s\S]*?\}/g;
@@ -123,23 +208,31 @@ export function parseToolCalls(response: string): ToolCall[] {
 }
 
 /**
- * 从响应中提取纯文本内容（移除工具调用部分）
+ * 从响应中提取纯文本内容
+ * 优先从新格式的 content 字段提取，否则移除工具调用部分
  */
 export function extractTextContent(response: string): string {
+  // 首先尝试从新格式中提取 content
+  const workflowJson = parseWorkflowJson(response);
+  if (workflowJson) {
+    return workflowJson.content;
+  }
+
+  // 回退到旧格式处理
   let text = response;
 
   // 移除 ```tool_call...``` 块
   text = text.replace(/```tool_call\s*\n?[\s\S]*?\n?```/gi, '');
-  
+
   // 移除 <tool_call>...</tool_call> 标签
   text = text.replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, '');
-  
+
   // 移除包含工具调用的 JSON 块
   text = text.replace(/```(?:json)?\s*\n?\s*\{\s*"name"\s*:[\s\S]*?\n?```/gi, '');
 
   // 清理多余的空行
   text = text.replace(/\n{3,}/g, '\n\n');
-  
+
   return text.trim();
 }
 

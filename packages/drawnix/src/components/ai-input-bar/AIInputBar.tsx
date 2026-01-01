@@ -339,12 +339,17 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
       source: 'preset' as const,
     }));
 
-    const historyPrompts = history.map(item => ({
-      id: item.id,
-      content: item.content,
-      source: 'history' as const,
-      timestamp: item.timestamp,
-    }));
+    // 获取所有预设指令的内容集合，用于过滤
+    const presetContents = new Set(presetPrompts.map(p => p.content));
+
+    const historyPrompts = history
+      .filter(item => !presetContents.has(item.content)) // 过滤掉与推荐提示词重复的历史记录
+      .map(item => ({
+        id: item.id,
+        content: item.content,
+        source: 'history' as const,
+        timestamp: item.timestamp,
+      }));
 
     return [...historyPrompts, ...presetPrompts];
   }, [language, history]);

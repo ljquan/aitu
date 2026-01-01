@@ -26,6 +26,8 @@ export interface ImageGenerationParams {
   quality?: '1k' | '2k' | '4k';
   /** AI 模型 */
   model?: string;
+  /** 生成数量（仅 queue 模式支持） */
+  count?: number;
 }
 
 /**
@@ -113,9 +115,10 @@ async function executeAsync(params: ImageGenerationParams): Promise<MCPResult> {
 
 /**
  * 创建任务加入队列（queue 模式）
+ * 支持批量创建任务（通过 count 参数）
  */
 function executeQueue(params: ImageGenerationParams, options: MCPExecuteOptions): MCPTaskResult {
-  const { prompt, size, referenceImages, model } = params;
+  const { prompt, size, referenceImages, model, count = 1 } = params;
 
   if (!prompt || typeof prompt !== 'string') {
     return {
@@ -133,35 +136,47 @@ function executeQueue(params: ImageGenerationParams, options: MCPExecuteOptions)
       name: `reference-${index + 1}`,
     }));
 
-    // 创建任务
-    const task = taskQueueService.createTask(
-      {
-        prompt,
-        size: size || '1x1',
-        uploadedImages: uploadedImages && uploadedImages.length > 0 ? uploadedImages : undefined,
-        model: model || 'imagen-3.0-generate-002',
-        // 批量参数
-        batchId: options.batchId,
-        batchIndex: options.batchIndex,
-        batchTotal: options.batchTotal,
-        globalIndex: options.globalIndex,
-      },
-      TaskType.IMAGE
-    );
+    // 生成批次 ID（如果有多个任务）
+    const actualCount = Math.min(Math.max(1, count), 10); // 限制 1-10 个
+    const batchId = actualCount > 1 ? `batch_${Date.now()}` : options.batchId;
 
-    console.log('[ImageGenerationTool] Created task:', task.id);
+    const createdTasks: any[] = [];
+
+    // 创建任务（支持批量）
+    for (let i = 0; i < actualCount; i++) {
+      const task = taskQueueService.createTask(
+        {
+          prompt,
+          size: size || '1x1',
+          uploadedImages: uploadedImages && uploadedImages.length > 0 ? uploadedImages : undefined,
+          model: model || 'imagen-3.0-generate-002',
+          // 批量参数
+          batchId: batchId,
+          batchIndex: i + 1,
+          batchTotal: actualCount,
+          globalIndex: options.globalIndex ? options.globalIndex + i : i + 1,
+        },
+        TaskType.IMAGE
+      );
+      createdTasks.push(task);
+      console.log(`[ImageGenerationTool] Created task ${i + 1}/${actualCount}:`, task.id);
+    }
+
+    const firstTask = createdTasks[0];
 
     return {
       success: true,
       data: {
-        taskId: task.id,
+        taskId: firstTask.id,
+        taskIds: createdTasks.map(t => t.id),
         prompt,
         size: size || '1x1',
         model: model || 'imagen-3.0-generate-002',
+        count: actualCount,
       },
       type: 'image',
-      taskId: task.id,
-      task,
+      taskId: firstTask.id,
+      task: firstTask,
     };
   } catch (error: any) {
     console.error('[ImageGenerationTool] Failed to create task:', error);
@@ -220,6 +235,11 @@ export const imageGenerationTool: MCPTool = {
         type: 'string',
         description: '图片生成模型',
         default: 'imagen-3.0-generate-002',
+      },
+      count: {
+        type: 'number',
+        description: '生成数量，1-10 之间，默认为 1',
+        default: 1,
       },
     },
     required: ['prompt'],

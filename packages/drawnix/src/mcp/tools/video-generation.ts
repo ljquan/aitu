@@ -28,6 +28,8 @@ export interface VideoGenerationParams {
   size?: string;
   /** 参考图片 URL 列表 */
   referenceImages?: string[];
+  /** 生成数量（仅 queue 模式支持） */
+  count?: number;
 }
 
 /**
@@ -128,9 +130,10 @@ async function executeAsync(params: VideoGenerationParams): Promise<MCPResult> {
 
 /**
  * 创建任务加入队列（queue 模式）
+ * 支持批量创建任务（通过 count 参数）
  */
 function executeQueue(params: VideoGenerationParams, options: MCPExecuteOptions): MCPTaskResult {
-  const { prompt, model = 'veo3', seconds, size, referenceImages } = params;
+  const { prompt, model = 'veo3', seconds, size, referenceImages, count = 1 } = params;
 
   if (!prompt || typeof prompt !== 'string') {
     return {
@@ -151,37 +154,49 @@ function executeQueue(params: VideoGenerationParams, options: MCPExecuteOptions)
       name: `reference-${index + 1}`,
     }));
 
-    // 创建任务
-    const task = taskQueueService.createTask(
-      {
-        prompt,
-        size: size || '16x9',
-        duration: parseInt(seconds || modelConfig.defaultDuration, 10),
-        model,
-        uploadedImages: uploadedImages && uploadedImages.length > 0 ? uploadedImages : undefined,
-        // 批量参数
-        batchId: options.batchId,
-        batchIndex: options.batchIndex,
-        batchTotal: options.batchTotal,
-        globalIndex: options.globalIndex,
-      },
-      TaskType.VIDEO
-    );
+    // 生成批次 ID（如果有多个任务）
+    const actualCount = Math.min(Math.max(1, count), 10); // 限制 1-10 个
+    const batchId = actualCount > 1 ? `batch_${Date.now()}` : options.batchId;
 
-    console.log('[VideoGenerationTool] Created task:', task.id);
+    const createdTasks: any[] = [];
+
+    // 创建任务（支持批量）
+    for (let i = 0; i < actualCount; i++) {
+      const task = taskQueueService.createTask(
+        {
+          prompt,
+          size: size || '16x9',
+          duration: parseInt(seconds || modelConfig.defaultDuration, 10),
+          model,
+          uploadedImages: uploadedImages && uploadedImages.length > 0 ? uploadedImages : undefined,
+          // 批量参数
+          batchId: batchId,
+          batchIndex: i + 1,
+          batchTotal: actualCount,
+          globalIndex: options.globalIndex ? options.globalIndex + i : i + 1,
+        },
+        TaskType.VIDEO
+      );
+      createdTasks.push(task);
+      console.log(`[VideoGenerationTool] Created task ${i + 1}/${actualCount}:`, task.id);
+    }
+
+    const firstTask = createdTasks[0];
 
     return {
       success: true,
       data: {
-        taskId: task.id,
+        taskId: firstTask.id,
+        taskIds: createdTasks.map(t => t.id),
         prompt,
         size: size || '16x9',
         duration: parseInt(seconds || modelConfig.defaultDuration, 10),
         model,
+        count: actualCount,
       },
       type: 'video',
-      taskId: task.id,
-      task,
+      taskId: firstTask.id,
+      task: firstTask,
     };
   } catch (error: any) {
     console.error('[VideoGenerationTool] Failed to create task:', error);
@@ -242,6 +257,11 @@ export const videoGenerationTool: MCPTool = {
         items: {
           type: 'string',
         },
+      },
+      count: {
+        type: 'number',
+        description: '生成数量，1-10 之间，默认为 1',
+        default: 1,
       },
     },
     required: ['prompt'],

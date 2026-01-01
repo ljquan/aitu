@@ -125,7 +125,7 @@ class MCPRegistry {
    */
   generateToolsDescription(): string {
     const tools = this.getAllTools();
-    
+
     if (tools.length === 0) {
       return '当前没有可用的工具。';
     }
@@ -133,12 +133,32 @@ class MCPRegistry {
     const descriptions = tools.map(tool => {
       const params = tool.inputSchema.properties || {};
       const required = tool.inputSchema.required || [];
-      
+
       const paramDescriptions = Object.entries(params)
         .map(([name, schema]) => {
           const isRequired = required.includes(name);
-          const reqStr = isRequired ? '(必填)' : '(可选)';
-          return `    - ${name} ${reqStr}: ${schema.description || '无描述'}`;
+          const reqStr = isRequired ? '（必填）' : '（可选）';
+
+          // 构建参数详情
+          const details: string[] = [];
+
+          // 类型信息
+          if (schema.type) {
+            details.push(`类型: ${schema.type}`);
+          }
+
+          // 枚举值
+          if (schema.enum && Array.isArray(schema.enum)) {
+            details.push(`可选值: ${schema.enum.map(v => `"${v}"`).join(' | ')}`);
+          }
+
+          // 默认值
+          if (schema.default !== undefined) {
+            details.push(`默认: "${schema.default}"`);
+          }
+
+          const detailStr = details.length > 0 ? ` [${details.join(', ')}]` : '';
+          return `  - **${name}**${reqStr}: ${schema.description || '无描述'}${detailStr}`;
         })
         .join('\n');
 
@@ -146,7 +166,7 @@ class MCPRegistry {
 ${tool.description}
 
 **参数:**
-${paramDescriptions || '    无参数'}`;
+${paramDescriptions || '  无参数'}`;
     });
 
     return descriptions.join('\n\n');

@@ -113,7 +113,7 @@ export const AI_INSTRUCTIONS: Record<'zh' | 'en', InstructionItemData[]> = {
     //   scene: '视觉辅助、内容配图、演示美化'
     // },
     {
-      content: '优化提示词',
+      content: '优化提示词并生成',
       scene: '提示词优化、效果提升、Prompt润色'
     }
   ],
@@ -155,7 +155,7 @@ export const AI_INSTRUCTIONS: Record<'zh' | 'en', InstructionItemData[]> = {
     //   scene: 'Visual aid, content illustration, presentation enhancement'
     // },
     {
-      content: 'Optimize the prompt',
+      content: 'Optimize prompt and generate',
       scene: 'Prompt optimization, Quality improvement, Prompt polishing'
     }
   ]

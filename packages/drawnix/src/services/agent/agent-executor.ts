@@ -213,13 +213,12 @@ class AgentExecutor {
       // 收集所有参考图片 URL
       const allReferenceImages = [...context.selection.images, ...context.selection.graphics];
 
-      // 生成系统提示词
-      const toolsDescription = mcpRegistry.generateToolsDescription();
-      let systemPrompt = generateSystemPrompt(toolsDescription, 'zh');
+      // 生成系统提示词（自动从 registry 获取工具描述）
+      let systemPrompt = generateSystemPrompt();
 
       // 如果有参考图片，添加补充说明（使用占位符方式）
       if (allReferenceImages.length > 0) {
-        systemPrompt += generateReferenceImagesPrompt(allReferenceImages.length, 'zh');
+        systemPrompt += generateReferenceImagesPrompt(allReferenceImages.length);
       }
 
       // 构建结构化用户消息
@@ -294,7 +293,8 @@ class AgentExecutor {
           console.log(`[AgentExecutor] Executing tool: ${toolCall.name}`, toolCall.arguments);
           onToolCall?.(toolCall);
 
-          const result = await mcpRegistry.executeTool(toolCall);
+          // 使用 queue 模式执行工具，确保任务进入队列并由 useAutoInsertToCanvas 处理插入
+          const result = await mcpRegistry.executeTool(toolCall, { mode: 'queue' });
           toolResults.push(result);
           onToolResult?.(result);
 
