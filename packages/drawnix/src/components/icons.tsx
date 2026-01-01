@@ -616,3 +616,16 @@ export const SplitImageIcon = createIcon(
     <path d="M3 3L2 2M13 3L14 2M3 13L2 14M13 13L14 14" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
   </svg>
 );
+
+// 下载图标 - 与其他图标风格一致
+export const DownloadIcon = createIcon(
+  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <g strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
+      {/* 向下箭头 */}
+      <path d="M10 3.333v9.167" />
+      <path d="M6.667 9.167L10 12.5l3.333-3.333" />
+      {/* 底部托盘 */}
+      <path d="M3.333 12.5v2.5c0 .92.747 1.667 1.667 1.667h10c.92 0 1.667-.747 1.667-1.667v-2.5" />
+    </g>
+  </svg>
+);

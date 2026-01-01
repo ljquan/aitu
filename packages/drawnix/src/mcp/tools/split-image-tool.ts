@@ -10,8 +10,7 @@
 import type { MCPTool, MCPResult, MCPExecuteOptions } from '../types';
 import { imageSplitService, SplitMode } from '../../services/image-split-service';
 import type { LayoutStyle, GridConfig } from '../../types/photo-wall.types';
-import { getCanvasBoard } from '../canvas-registry';
-import { Point } from '@plait/core';
+import { getCanvasBoard } from './canvas-insertion';
 
 /**
  * 拆分工具参数

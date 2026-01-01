@@ -43,7 +43,7 @@ import { NO_COLOR } from '../../../constants/color';
 import { Freehand } from '../../../plugins/freehand/type';
 import { PopupLinkButton } from './link-button';
 import { PopupPromptButton } from './prompt-button';
-import { AIImageIcon, AIVideoIcon, VideoFrameIcon, DuplicateIcon, TrashIcon, SplitImageIcon } from '../../icons';
+import { AIImageIcon, AIVideoIcon, VideoFrameIcon, DuplicateIcon, TrashIcon, SplitImageIcon, DownloadIcon } from '../../icons';
 import { useDrawnix, DialogType } from '../../../hooks/use-drawnix';
 import { useI18n } from '../../../i18n';
 import { ToolButton } from '../../tool-button';
@@ -53,6 +53,7 @@ import { VideoFrameSelector } from '../../video-frame-selector/video-frame-selec
 import { insertVideoFrame } from '../../../utils/video-frame';
 import { isToolElement } from '../../../plugins/with-tool';
 import { splitAndInsertImages, hasSplitLines } from '../../../utils/image-splitter';
+import { smartDownload, BatchDownloadItem } from '../../../utils/download-utils';
 import { MessagePlugin } from 'tdesign-react';
 
 export const PopupToolbar = () => {
@@ -101,6 +102,7 @@ export const PopupToolbar = () => {
     hasAIVideo?: boolean; // 是否显示AI视频生成按钮
     hasVideoFrame?: boolean; // 是否显示视频帧选择按钮
     hasSplitImage?: boolean; // 是否显示拆图按钮
+    hasDownloadable?: boolean; // 是否显示下载按钮
   } = {
     fill: 'red',
   };
@@ -155,6 +157,16 @@ export const PopupToolbar = () => {
     // 只有检测到分割线时才显示拆图按钮
     const hasSplitImage = isImageSelected && canSplitImage;
 
+    // 下载按钮：选中图片或视频时显示
+    const hasDownloadable =
+      selectedElements.length > 0 &&
+      !hasToolSelected &&
+      selectedElements.some(element =>
+        (PlaitDrawElement.isDrawElement(element) && PlaitDrawElement.isImage(element)) ||
+        isVideoElement(element)
+      ) &&
+      !PlaitBoard.hasBeenTextEditing(board);
+
     state = {
       ...getElementState(board),
       hasFill,
@@ -167,6 +179,7 @@ export const PopupToolbar = () => {
       hasAIVideo,
       hasVideoFrame,
       hasSplitImage,
+      hasDownloadable,
     };
   }
   useEffect(() => {
@@ -437,6 +450,51 @@ export const PopupToolbar = () => {
                       MessagePlugin.closeAll();
                       MessagePlugin.error(error.message || (language === 'zh' ? '拆图失败' : 'Split failed'));
                     }
+                  }
+                }}
+              />
+            )}
+            {state.hasDownloadable && (
+              <ToolButton
+                className="download"
+                key="download"
+                type="icon"
+                icon={DownloadIcon}
+                visible={true}
+                title={language === 'zh' ? '下载' : 'Download'}
+                aria-label={language === 'zh' ? '下载' : 'Download'}
+                onPointerUp={async () => {
+                  // 收集可下载的元素
+                  const downloadItems: BatchDownloadItem[] = [];
+                  for (const element of selectedElements) {
+                    if (PlaitDrawElement.isDrawElement(element) && PlaitDrawElement.isImage(element) && element.url) {
+                      downloadItems.push({ url: element.url, type: 'image' });
+                    } else if (isVideoElement(element) && (element as any).url) {
+                      downloadItems.push({ url: (element as any).url, type: 'video' });
+                    }
+                  }
+
+                  if (downloadItems.length === 0) {
+                    MessagePlugin.warning(language === 'zh' ? '没有可下载的内容' : 'No downloadable content');
+                    return;
+                  }
+
+                  const loadingMsg = downloadItems.length > 1
+                    ? (language === 'zh' ? '正在打包下载...' : 'Packaging download...')
+                    : (language === 'zh' ? '正在下载...' : 'Downloading...');
+
+                  MessagePlugin.loading(loadingMsg, 0);
+                  try {
+                    await smartDownload(downloadItems);
+                    MessagePlugin.closeAll();
+                    MessagePlugin.success(
+                      downloadItems.length > 1
+                        ? (language === 'zh' ? `已下载 ${downloadItems.length} 个文件` : `Downloaded ${downloadItems.length} files`)
+                        : (language === 'zh' ? '下载成功' : 'Download complete')
+                    );
+                  } catch (error: any) {
+                    MessagePlugin.closeAll();
+                    MessagePlugin.error(error.message || (language === 'zh' ? '下载失败' : 'Download failed'));
                   }
                 }}
               />
