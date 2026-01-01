@@ -14,6 +14,9 @@ import {
   toScreenPointFromHostPoint,
   duplicateElements,
   deleteFragment,
+  toImage,
+  addSelectedElement,
+  clearSelectedElement,
 } from '@plait/core';
 import { useEffect, useRef, useState } from 'react';
 import { useBoard } from '@plait-board/react-board';
@@ -31,6 +34,7 @@ import {
   isClosedDrawElement,
   isDrawElementsIncludeText,
   PlaitDrawElement,
+  DrawTransforms,
 } from '@plait/draw';
 import { CustomText } from '@plait/common';
 import { getTextMarksByElement } from '@plait/text-plugins';
@@ -43,7 +47,7 @@ import { NO_COLOR } from '../../../constants/color';
 import { Freehand } from '../../../plugins/freehand/type';
 import { PopupLinkButton } from './link-button';
 import { PopupPromptButton } from './prompt-button';
-import { AIImageIcon, AIVideoIcon, VideoFrameIcon, DuplicateIcon, TrashIcon, SplitImageIcon, DownloadIcon } from '../../icons';
+import { AIImageIcon, AIVideoIcon, VideoFrameIcon, DuplicateIcon, TrashIcon, SplitImageIcon, DownloadIcon, MergeIcon } from '../../icons';
 import { useDrawnix, DialogType } from '../../../hooks/use-drawnix';
 import { useI18n } from '../../../i18n';
 import { ToolButton } from '../../tool-button';
@@ -103,6 +107,7 @@ export const PopupToolbar = () => {
     hasVideoFrame?: boolean; // 是否显示视频帧选择按钮
     hasSplitImage?: boolean; // 是否显示拆图按钮
     hasDownloadable?: boolean; // 是否显示下载按钮
+    hasMergeable?: boolean; // 是否显示合并按钮
   } = {
     fill: 'red',
   };
@@ -167,6 +172,18 @@ export const PopupToolbar = () => {
       ) &&
       !PlaitBoard.hasBeenTextEditing(board);
 
+    // 合并按钮：选中多个元素，且只包含图片和文字（排除视频和工具元素）
+    const hasMergeable =
+      selectedElements.length > 1 &&
+      !hasVideoSelected &&
+      !hasToolSelected &&
+      selectedElements.every(element =>
+        (PlaitDrawElement.isDrawElement(element) && PlaitDrawElement.isImage(element)) ||
+        (PlaitDrawElement.isDrawElement(element) && isDrawElementsIncludeText([element])) ||
+        MindElement.isMindElement(board, element)
+      ) &&
+      !PlaitBoard.hasBeenTextEditing(board);
+
     state = {
       ...getElementState(board),
       hasFill,
@@ -180,6 +197,7 @@ export const PopupToolbar = () => {
       hasVideoFrame,
       hasSplitImage,
       hasDownloadable,
+      hasMergeable,
     };
   }
   useEffect(() => {
@@ -248,6 +266,14 @@ export const PopupToolbar = () => {
     }
 
     const imageUrl = element.url;
+
+    // data URL（base64 编码的图片，如合并后的图片）
+    // 默认允许拆分，跳过昂贵的检测（检测会导致页面卡死）
+    if (imageUrl.startsWith('data:')) {
+      setCanSplitImage(true);
+      setCheckingImageUrl(imageUrl);
+      return;
+    }
 
     // 如果是同一张图片，不重复检测
     if (imageUrl === checkingImageUrl) {
@@ -502,6 +528,86 @@ export const PopupToolbar = () => {
                   } catch (error: any) {
                     MessagePlugin.closeAll();
                     MessagePlugin.error(error.message || (language === 'zh' ? '下载失败' : 'Download failed'));
+                  }
+                }}
+              />
+            )}
+            {state.hasMergeable && (
+              <ToolButton
+                className="merge"
+                key="merge"
+                type="icon"
+                icon={MergeIcon}
+                visible={true}
+                title={language === 'zh' ? '合并为图片' : 'Merge to Image'}
+                aria-label={language === 'zh' ? '合并为图片' : 'Merge to Image'}
+                onPointerUp={async () => {
+                  MessagePlugin.loading(language === 'zh' ? '正在合并...' : 'Merging...', 0);
+                  try {
+                    // 获取选中元素的边界矩形
+                    const boundingRect = getRectangleByElements(board, selectedElements, false);
+
+                    // 按照元素在画布中的顺序排序，保持层级
+                    const sortedElements = [...selectedElements].sort((a, b) => {
+                      const indexA = board.children.findIndex(child => child.id === a.id);
+                      const indexB = board.children.findIndex(child => child.id === b.id);
+                      return indexA - indexB;
+                    });
+
+                    // 使用 toImage 将选中元素转换为图片
+                    const imageDataUrl = await toImage(board, {
+                      elements: sortedElements,
+                      fillStyle: 'transparent',
+                      inlineStyleClassNames: '.extend,.emojis,.text',
+                      ratio: 2, // 2x 清晰度
+                    });
+
+                    if (!imageDataUrl) {
+                      throw new Error(language === 'zh' ? '合并失败：无法生成图片' : 'Merge failed: Unable to generate image');
+                    }
+
+                    // 创建图片获取实际尺寸
+                    const img = new Image();
+                    await new Promise<void>((resolve, reject) => {
+                      img.onload = () => resolve();
+                      img.onerror = () => reject(new Error('Failed to load merged image'));
+                      img.src = imageDataUrl;
+                    });
+
+                    // 计算插入位置（原位置）
+                    const insertX = boundingRect.x;
+                    const insertY = boundingRect.y;
+
+                    // 删除原元素
+                    deleteFragment(board);
+
+                    // 记录插入前的元素数量
+                    const childrenCountBefore = board.children.length;
+
+                    // 插入合并后的图片
+                    const imageItem = {
+                      url: imageDataUrl,
+                      width: boundingRect.width,
+                      height: boundingRect.height,
+                    };
+                    DrawTransforms.insertImage(board, imageItem, [insertX, insertY]);
+
+                    // 选中新插入的图片元素
+                    const newElement = board.children[childrenCountBefore];
+                    if (newElement) {
+                      clearSelectedElement(board);
+                      addSelectedElement(board, newElement);
+                    }
+
+                    MessagePlugin.closeAll();
+                    MessagePlugin.success(
+                      language === 'zh'
+                        ? `已将 ${selectedElements.length} 个元素合并为图片`
+                        : `Merged ${selectedElements.length} elements into image`
+                    );
+                  } catch (error: any) {
+                    MessagePlugin.closeAll();
+                    MessagePlugin.error(error.message || (language === 'zh' ? '合并失败' : 'Merge failed'));
                   }
                 }}
               />

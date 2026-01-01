@@ -629,3 +629,23 @@ export const DownloadIcon = createIcon(
     </g>
   </svg>
 );
+
+// 合并图标 - 表示将多个元素合并成一张图片
+export const MergeIcon = createIcon(
+  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <g strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
+      {/* 左上角小框 */}
+      <rect x="2.5" y="2.5" width="5" height="5" rx="1" />
+      {/* 右上角小框 */}
+      <rect x="12.5" y="2.5" width="5" height="5" rx="1" />
+      {/* 左下角小框 */}
+      <rect x="2.5" y="12.5" width="5" height="5" rx="1" />
+      {/* 中心合并目标框 */}
+      <rect x="9" y="9" width="8" height="8" rx="1.5" strokeWidth="1.5" />
+      {/* 合并箭头 */}
+      <path d="M7.5 5L9 6.5" />
+      <path d="M12.5 5L11 6.5" />
+      <path d="M5 7.5L6.5 9" />
+    </g>
+  </svg>
+);

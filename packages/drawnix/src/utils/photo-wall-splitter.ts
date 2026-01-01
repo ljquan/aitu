@@ -2,14 +2,18 @@
  * 照片墙智能拆图器
  *
  * 专门用于检测和拆分不规则照片墙图片
- * 特点：图片大小不一、位置不规则、有白色边框、灰色背景
+ * 特点：图片大小不一、位置不规则、有白色边框、灰色/白色背景间隔
  *
  * 算法思路：
- * 1. 检测背景颜色（灰色区域）
+ * 1. 检测背景颜色（灰色或白色间隔区域）
  * 2. 找到非背景的连通区域
  * 3. 为每个连通区域计算边界矩形
  * 4. 过滤掉太小的区域（噪点）
  * 5. 提取每个区域的图片
+ *
+ * 优化：
+ * - 大图片自动降采样检测，避免阻塞主线程
+ * - 异步处理，定期 yield 给浏览器
  */
 
 import type { ImageElement } from '../types/photo-wall.types';
@@ -19,6 +23,19 @@ import {
   isWhiteBorderPixel,
   extractAndTrimRegion,
 } from './image-border-utils';
+
+/** 检测时的最大尺寸，超过此尺寸会降采样 */
+const MAX_DETECTION_SIZE = 1500;
+
+/** 每处理多少像素后 yield 一次 */
+const YIELD_INTERVAL = 500000;
+
+/**
+ * 让出主线程，避免阻塞 UI
+ */
+function yieldToMain(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
 
 /**
  * 检测结果
@@ -36,12 +53,13 @@ export interface PhotoWallDetectionResult {
 }
 
 /**
- * 创建二值化遮罩
+ * 创建二值化遮罩（异步版本）
  * 背景 = 0，前景（图片区域）= 1
  */
-function createBinaryMask(imageData: ImageData): Uint8Array {
+async function createBinaryMask(imageData: ImageData): Promise<Uint8Array> {
   const { width, height, data } = imageData;
   const mask = new Uint8Array(width * height);
+  let processedPixels = 0;
 
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
@@ -56,6 +74,12 @@ function createBinaryMask(imageData: ImageData): Uint8Array {
       } else {
         mask[y * width + x] = 1;
       }
+
+      // 定期 yield 给浏览器
+      processedPixels++;
+      if (processedPixels % YIELD_INTERVAL === 0) {
+        await yieldToMain();
+      }
     }
   }
 
@@ -63,11 +87,12 @@ function createBinaryMask(imageData: ImageData): Uint8Array {
 }
 
 /**
- * 形态学操作：膨胀
+ * 形态学操作：膨胀（异步版本）
  * 用于连接相邻的前景像素
  */
-function dilate(mask: Uint8Array, width: number, height: number, radius: number = 2): Uint8Array {
+async function dilate(mask: Uint8Array, width: number, height: number, radius: number = 2): Promise<Uint8Array> {
   const result = new Uint8Array(mask.length);
+  let processedPixels = 0;
 
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
@@ -87,6 +112,12 @@ function dilate(mask: Uint8Array, width: number, height: number, radius: number 
       }
 
       result[y * width + x] = hasNeighbor ? 1 : 0;
+
+      // 定期 yield 给浏览器
+      processedPixels++;
+      if (processedPixels % YIELD_INTERVAL === 0) {
+        await yieldToMain();
+      }
     }
   }
 
@@ -94,16 +125,17 @@ function dilate(mask: Uint8Array, width: number, height: number, radius: number 
 }
 
 /**
- * 连通区域标记（使用 Flood Fill）
+ * 连通区域标记（使用 Flood Fill，异步版本）
  * 返回每个像素的标签（0 = 背景，1+ = 不同的连通区域）
  */
-function labelConnectedComponents(
+async function labelConnectedComponents(
   mask: Uint8Array,
   width: number,
   height: number
-): { labels: Int32Array; count: number } {
+): Promise<{ labels: Int32Array; count: number }> {
   const labels = new Int32Array(mask.length);
   let currentLabel = 0;
+  let processedPixels = 0;
 
   const queue: Array<{ x: number; y: number }> = [];
 
@@ -138,6 +170,12 @@ function labelConnectedComponents(
         queue.push({ x: cx - 1, y: cy - 1 });
         queue.push({ x: cx + 1, y: cy - 1 });
         queue.push({ x: cx - 1, y: cy + 1 });
+
+        // 定期 yield 给浏览器
+        processedPixels++;
+        if (processedPixels % YIELD_INTERVAL === 0) {
+          await yieldToMain();
+        }
       }
     }
   }
@@ -378,6 +416,7 @@ function expandBoxesToIncludeBorder(
 
 /**
  * 检测照片墙中的图片区域
+ * 对于大图片会自动降采样检测，然后映射回原始坐标
  */
 export async function detectPhotoWallRegions(
   imageUrl: string,
@@ -389,12 +428,22 @@ export async function detectPhotoWallRegions(
   const { minRegionSize = 5000, minRegionRatio = 0.01 } = options;
 
   const img = await loadImage(imageUrl);
-  const { naturalWidth: width, naturalHeight: height } = img;
-  const totalArea = width * height;
+  const { naturalWidth: originalWidth, naturalHeight: originalHeight } = img;
+  const totalArea = originalWidth * originalHeight;
 
-  console.log(`[PhotoWallSplitter] Image size: ${width}x${height}`);
+  console.log(`[PhotoWallSplitter] Image size: ${originalWidth}x${originalHeight}`);
 
-  // 创建 Canvas 获取像素数据
+  // 计算是否需要降采样
+  const maxDimension = Math.max(originalWidth, originalHeight);
+  const scale = maxDimension > MAX_DETECTION_SIZE ? MAX_DETECTION_SIZE / maxDimension : 1;
+  const width = Math.round(originalWidth * scale);
+  const height = Math.round(originalHeight * scale);
+
+  if (scale < 1) {
+    console.log(`[PhotoWallSplitter] Downscaling to ${width}x${height} (scale: ${scale.toFixed(2)})`);
+  }
+
+  // 创建 Canvas 获取像素数据（可能是降采样后的）
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
@@ -403,28 +452,36 @@ export async function detectPhotoWallRegions(
     throw new Error('Failed to get canvas context');
   }
 
-  ctx.drawImage(img, 0, 0);
+  ctx.drawImage(img, 0, 0, width, height);
   const imageData = ctx.getImageData(0, 0, width, height);
+
+  await yieldToMain();
 
   // 1. 创建二值化遮罩
   console.log('[PhotoWallSplitter] Creating binary mask...');
-  let mask = createBinaryMask(imageData);
+  let mask = await createBinaryMask(imageData);
+
+  await yieldToMain();
 
   // 2. 膨胀操作，连接相邻区域
   console.log('[PhotoWallSplitter] Dilating mask...');
-  mask = dilate(mask, width, height, 3);
+  mask = await dilate(mask, width, height, 3);
+
+  await yieldToMain();
 
   // 3. 连通区域标记
   console.log('[PhotoWallSplitter] Labeling connected components...');
-  const { labels, count } = labelConnectedComponents(mask, width, height);
+  const { labels, count } = await labelConnectedComponents(mask, width, height);
   console.log(`[PhotoWallSplitter] Found ${count} raw regions`);
+
+  await yieldToMain();
 
   // 4. 计算边界矩形
   const rawBoxes = computeBoundingBoxes(labels, width, height, count);
 
-  // 5. 过滤太小的区域
-  const minArea = Math.max(minRegionSize, totalArea * minRegionRatio);
-  const filteredBoxes = rawBoxes.filter((box) => box.area >= minArea);
+  // 5. 过滤太小的区域（注意：面积阈值也需要按比例缩放）
+  const scaledMinArea = Math.max(minRegionSize * scale * scale, totalArea * scale * scale * minRegionRatio);
+  const filteredBoxes = rawBoxes.filter((box) => box.area >= scaledMinArea);
   console.log(`[PhotoWallSplitter] After filtering: ${filteredBoxes.length} regions`);
 
   // 6. 合并重叠的矩形
@@ -432,7 +489,17 @@ export async function detectPhotoWallRegions(
   console.log(`[PhotoWallSplitter] After merging: ${mergedBoxes.length} regions`);
 
   // 7. 扩展边界以包含白色边框
-  const finalBoxes = expandBoxesToIncludeBorder(mergedBoxes, imageData);
+  const expandedBoxes = expandBoxesToIncludeBorder(mergedBoxes, imageData);
+
+  // 8. 如果有降采样，将坐标映射回原始尺寸
+  const finalBoxes = scale < 1
+    ? expandedBoxes.map((box) => ({
+        x: Math.round(box.x / scale),
+        y: Math.round(box.y / scale),
+        width: Math.round(box.width / scale),
+        height: Math.round(box.height / scale),
+      }))
+    : expandedBoxes;
 
   return {
     count: finalBoxes.length,

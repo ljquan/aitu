@@ -55,7 +55,8 @@ export function isBorderColor(
 }
 
 /**
- * 检测像素是否为背景色（灰色）
+ * 检测像素是否为背景色（灰色或白色）
+ * 用于照片墙分割时识别图片之间的间隔区域
  */
 export function isBackgroundPixel(
   r: number,
@@ -67,7 +68,8 @@ export function isBackgroundPixel(
     maxColorDiff?: number;
   } = {}
 ): boolean {
-  const { minGray = 180, maxGray = 230, maxColorDiff = 15 } = options;
+  // 扩展 maxGray 到 255 以支持白色/浅灰色背景
+  const { minGray = 180, maxGray = 255, maxColorDiff = 15 } = options;
 
   // 检查是否为灰色（R、G、B 接近）
   const maxVal = Math.max(r, g, b);
