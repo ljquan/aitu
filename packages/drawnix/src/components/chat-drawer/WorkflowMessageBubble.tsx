@@ -265,11 +265,17 @@ const AgentLogItem: React.FC<AgentLogItemProps> = ({ log }) => {
 interface WorkflowMessageBubbleProps {
   workflow: WorkflowMessageData;
   className?: string;
+  /** 重试回调，从指定步骤索引开始重试 */
+  onRetry?: (stepIndex: number) => void;
+  /** 是否正在重试 */
+  isRetrying?: boolean;
 }
 
 export const WorkflowMessageBubble: React.FC<WorkflowMessageBubbleProps> = ({
   workflow,
   className = '',
+  onRetry,
+  isRetrying = false,
 }) => {
   // 计算工作流状态
   const workflowStatus = useMemo(() => {
@@ -312,6 +318,21 @@ export const WorkflowMessageBubble: React.FC<WorkflowMessageBubbleProps> = ({
   const currentStepIndex = useMemo(() => {
     return workflow.steps.findIndex(s => s.status === 'running');
   }, [workflow.steps]);
+
+  // 获取第一个失败步骤的索引
+  const firstFailedStepIndex = useMemo(() => {
+    return workflow.steps.findIndex(s => s.status === 'failed');
+  }, [workflow.steps]);
+
+  // 检查是否可以重试（有重试上下文且有失败步骤）
+  const canRetry = isFailed && workflow.retryContext && firstFailedStepIndex >= 0;
+
+  // 处理重试点击
+  const handleRetry = () => {
+    if (onRetry && firstFailedStepIndex >= 0) {
+      onRetry(firstFailedStepIndex);
+    }
+  };
 
   return (
     <div className={`workflow-bubble chat-message chat-message--assistant ${className}`}>
@@ -393,6 +414,15 @@ export const WorkflowMessageBubble: React.FC<WorkflowMessageBubbleProps> = ({
           <div className="workflow-bubble__summary workflow-bubble__summary--error">
             <span className="workflow-bubble__summary-icon">❌</span>
             <span>执行失败，请重试</span>
+            {canRetry && onRetry && (
+              <button
+                className="workflow-bubble__retry-btn"
+                onClick={handleRetry}
+                disabled={isRetrying}
+              >
+                {isRetrying ? '重试中...' : '🔄 从失败步骤重试'}
+              </button>
+            )}
           </div>
         )}
       </div>

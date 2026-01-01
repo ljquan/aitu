@@ -25,6 +25,7 @@ import { chatStorageService } from '../../services/chat-storage-service';
 import { useChatHandler } from '../../hooks/useChatHandler';
 import { geminiSettings } from '../../utils/settings-manager';
 import { useDrawnix } from '../../hooks/use-drawnix';
+import { useChatDrawer } from '../../contexts/ChatDrawerContext';
 import type { ChatDrawerProps, ChatDrawerRef, ChatSession, WorkflowMessageData, WorkflowMessageParams, AgentLogEntry, ChatMessage as ChatMessageType } from '../../types/chat.types';
 import { MessageRole, MessageStatus } from '../../types/chat.types';
 import type { Message } from '@llamaindex/chat-ui';
@@ -50,6 +51,11 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
     const [workflowMessages, setWorkflowMessages] = useState<Map<string, WorkflowMessageData>>(new Map());
     // 当前正在更新的工作流消息 ID
     const currentWorkflowMsgIdRef = useRef<string | null>(null);
+    // 正在重试的工作流 ID
+    const [retryingWorkflowId, setRetryingWorkflowId] = useState<string | null>(null);
+
+    // 获取重试执行器
+    const { executeRetry } = useChatDrawer();
 
     // Refs for click outside detection
     const sessionListRef = React.useRef<HTMLDivElement>(null);
@@ -591,6 +597,24 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
       []
     );
 
+    // 处理工作流重试
+    const handleWorkflowRetry = useCallback(
+      async (workflowMsgId: string, workflow: WorkflowMessageData, stepIndex: number) => {
+        if (retryingWorkflowId) return; // 已经在重试中
+
+        try {
+          setRetryingWorkflowId(workflowMsgId);
+          // 设置当前工作流消息 ID，以便更新时能正确关联
+          currentWorkflowMsgIdRef.current = workflowMsgId;
+          // 调用注册的重试处理器
+          await executeRetry(workflow, stepIndex);
+        } finally {
+          setRetryingWorkflowId(null);
+        }
+      },
+      [executeRetry, retryingWorkflowId]
+    );
+
     // Expose ref API for external control
     useImperativeHandle(ref, () => ({
       open: () => {
@@ -728,6 +752,8 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
                           <WorkflowMessageBubble
                             key={message.id}
                             workflow={workflowData}
+                            onRetry={(stepIndex) => handleWorkflowRetry(workflowMsgId, workflowData, stepIndex)}
+                            isRetrying={retryingWorkflowId === workflowMsgId}
                           />
                         );
                       }

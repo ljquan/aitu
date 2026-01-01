@@ -124,8 +124,59 @@ export class PhotoWallService {
   }
   
   /**
+   * 处理已有图片：分割和布局
+   * 用于任务完成后的后处理，避免重新生成图片
+   *
+   * @param imageUrl - 已生成的拼贴图 URL
+   * @param gridConfig - 网格配置
+   * @param layoutStyle - 布局风格
+   * @returns 处理结果
+   */
+  async processExistingImage(
+    imageUrl: string,
+    gridConfig: GridConfig,
+    layoutStyle: LayoutStyle = 'scattered'
+  ): Promise<PhotoWallResult> {
+    console.log('[PhotoWallService] Processing existing image with config:', { gridConfig, layoutStyle });
+
+    try {
+      // 1. 将图片转换为 base64（确保可以被 Canvas 处理）
+      const imageDataUrl = await urlCacheService.getImageAsBase64(imageUrl);
+
+      // 2. 分割图片
+      console.log('[PhotoWallService] Splitting image into grid...');
+      const splitElements = await gridSplitter.split(imageDataUrl, gridConfig);
+      console.log(`[PhotoWallService] Split into ${splitElements.length} elements`);
+
+      // 3. 计算布局
+      const layoutParams = this.calculateLayoutParams(splitElements);
+      console.log('[PhotoWallService] Calculating layout with style:', layoutStyle);
+
+      const positionedElements = layoutEngine.calculate(
+        splitElements,
+        layoutStyle,
+        layoutParams
+      );
+
+      console.log('[PhotoWallService] Layout calculated, ready to insert');
+
+      return {
+        success: true,
+        originalImageUrl: imageUrl,
+        elements: positionedElements,
+      };
+    } catch (error: any) {
+      console.error('[PhotoWallService] Processing failed:', error);
+      return {
+        success: false,
+        error: error.message || '照片墙处理失败',
+      };
+    }
+  }
+
+  /**
    * 将照片墙元素插入画板
-   * 
+   *
    * @param elements - 带位置信息的元素数组
    * @param startPoint - 起始位置（可选）
    */

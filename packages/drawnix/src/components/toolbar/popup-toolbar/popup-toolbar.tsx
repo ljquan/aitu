@@ -43,7 +43,7 @@ import { NO_COLOR } from '../../../constants/color';
 import { Freehand } from '../../../plugins/freehand/type';
 import { PopupLinkButton } from './link-button';
 import { PopupPromptButton } from './prompt-button';
-import { AIImageIcon, AIVideoIcon, VideoFrameIcon, DuplicateIcon, TrashIcon } from '../../icons';
+import { AIImageIcon, AIVideoIcon, VideoFrameIcon, DuplicateIcon, TrashIcon, SplitImageIcon } from '../../icons';
 import { useDrawnix, DialogType } from '../../../hooks/use-drawnix';
 import { useI18n } from '../../../i18n';
 import { ToolButton } from '../../tool-button';
@@ -52,6 +52,8 @@ import { isVideoElement } from '../../../plugins/with-video';
 import { VideoFrameSelector } from '../../video-frame-selector/video-frame-selector';
 import { insertVideoFrame } from '../../../utils/video-frame';
 import { isToolElement } from '../../../plugins/with-tool';
+import { splitAndInsertImages } from '../../../utils/image-splitter';
+import { MessagePlugin } from 'tdesign-react';
 
 export const PopupToolbar = () => {
   const board = useBoard();
@@ -94,6 +96,7 @@ export const PopupToolbar = () => {
     hasAIImage?: boolean; // 是否显示AI图像生成按钮
     hasAIVideo?: boolean; // 是否显示AI视频生成按钮
     hasVideoFrame?: boolean; // 是否显示视频帧选择按钮
+    hasSplitImage?: boolean; // 是否显示拆图按钮
   } = {
     fill: 'red',
   };
@@ -135,7 +138,16 @@ export const PopupToolbar = () => {
 
     // AI图像生成按钮：排除视频元素和工具元素(内嵌网页)
     const hasAIImage = !hasVideoSelected && !hasToolSelected && !PlaitBoard.hasBeenTextEditing(board);
-    
+
+    // 拆图按钮：只在选中单个图片元素时显示
+    const hasSplitImage =
+      selectedElements.length === 1 &&
+      !hasVideoSelected &&
+      !hasToolSelected &&
+      PlaitDrawElement.isDrawElement(selectedElements[0]) &&
+      PlaitDrawElement.isImage(selectedElements[0]) &&
+      !PlaitBoard.hasBeenTextEditing(board);
+
     state = {
       ...getElementState(board),
       hasFill,
@@ -147,6 +159,7 @@ export const PopupToolbar = () => {
       hasAIImage,
       hasAIVideo,
       hasVideoFrame,
+      hasSplitImage,
     };
   }
   useEffect(() => {
@@ -340,6 +353,40 @@ export const PopupToolbar = () => {
                   if (videoElement) {
                     setSelectedVideoElement(videoElement);
                     setShowVideoFrameSelector(true);
+                  }
+                }}
+              />
+            )}
+            {state.hasSplitImage && (
+              <ToolButton
+                className="split-image"
+                key="split-image"
+                type="icon"
+                icon={SplitImageIcon}
+                visible={true}
+                title={language === 'zh' ? '智能拆图' : 'Smart Split'}
+                aria-label={language === 'zh' ? '智能拆图' : 'Smart Split'}
+                onPointerUp={async () => {
+                  // 获取选中的图片元素
+                  const imageElement = selectedElements[0] as PlaitDrawElement;
+                  if (PlaitDrawElement.isImage(imageElement) && imageElement.url) {
+                    MessagePlugin.loading(language === 'zh' ? '正在分析图片...' : 'Analyzing image...', 0);
+                    try {
+                      const result = await splitAndInsertImages(board, imageElement.url);
+                      MessagePlugin.closeAll();
+                      if (result.success) {
+                        MessagePlugin.success(
+                          language === 'zh'
+                            ? `成功拆分为 ${result.count} 张图片`
+                            : `Split into ${result.count} images`
+                        );
+                      } else {
+                        MessagePlugin.warning(result.error || (language === 'zh' ? '拆图失败' : 'Split failed'));
+                      }
+                    } catch (error: any) {
+                      MessagePlugin.closeAll();
+                      MessagePlugin.error(error.message || (language === 'zh' ? '拆图失败' : 'Split failed'));
+                    }
                   }
                 }}
               />

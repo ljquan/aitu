@@ -171,6 +171,35 @@
   &__summary-icon {
     font-size: 14px;
   }
+
+  // 重试按钮
+  &__retry-btn {
+    margin-left: auto;
+    padding: 4px 12px;
+    font-size: 12px;
+    font-weight: 500;
+    color: #fff;
+    background: linear-gradient(135deg, #F39C12 0%, #E67E22 100%);
+    border: none;
+    border-radius: 16px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+
+    &:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 2px 8px rgba(243, 156, 18, 0.4);
+    }
+
+    &:active:not(:disabled) {
+      transform: translateY(0);
+    }
+
+    &:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+  }
 }
 
 // ============================================================================

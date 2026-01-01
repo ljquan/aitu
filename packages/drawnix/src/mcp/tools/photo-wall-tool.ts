@@ -96,7 +96,7 @@ function executeQueue(params: PhotoWallToolParams, options: MCPExecuteOptions): 
   });
 
   try {
-    // 创建照片墙任务（使用 PHOTO_WALL 类型）
+    // 创建照片墙任务（使用 IMAGE 类型复用图片生成能力）
     // 任务完成后由 photo-wall-integration-service 处理分割和布局
     const task = taskQueueService.createTask(
       {
@@ -113,7 +113,7 @@ function executeQueue(params: PhotoWallToolParams, options: MCPExecuteOptions): 
         batchId: options.batchId,
         globalIndex: options.globalIndex || 1,
       },
-      TaskType.PHOTO_WALL
+      TaskType.IMAGE
     );
 
     console.log('[PhotoWallTool] Created photo wall task:', task.id);

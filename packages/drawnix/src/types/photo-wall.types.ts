@@ -193,22 +193,52 @@ export const PHOTO_WALL_DEFAULTS = {
  */
 export const PHOTO_WALL_PROMPT_TEMPLATE = {
   zh: (theme: string, rows: number, cols: number) =>
-    `创建一个 ${rows}x${cols} 的产品展示拼贴图，主题是"${theme}"。
-要求：
-- 图片被清晰地分成 ${rows * cols} 个等大的区域
-- 每个区域展示一个独立的物品或场景
-- 区域之间有明显的白色分隔线
-- 整体风格统一协调
-- 每个物品有独立的白色或浅色背景
-- 适合用于照片墙展示`,
+    `创建一个 ${rows}x${cols} 的多样化展示拼贴图，主题是"${theme}"。
+
+布局要求：
+- 图片被清晰地分成 ${rows * cols} 个等大的正方形区域，排列成 ${rows} 行 ${cols} 列
+- 区域之间有明显的白色分隔线（约 10px 宽度）
+- 每个区域有独立的白色或浅色纯色背景
+
+多样性要求（极其重要）：
+- ${rows * cols} 个区域必须展示 ${rows * cols} 种完全不同的物品/元素
+- 禁止任何重复：每个物品的形状、颜色、姿态、角度都必须明显不同
+- 追求最大差异化：如果主题是动物，展示不同种类；如果是物品，展示不同类别
+- 每个元素应有不同的视觉特征：不同的颜色、不同的形态、不同的细节
+- 元素之间的风格可以有变化：有的写实、有的卡通、有的简约、有的精细
+
+示例多样性参考：
+- 若主题是"猫"：不同品种、不同毛色、不同姿势、不同表情
+- 若主题是"餐具"：碗、盘、杯、勺、叉、刀等不同类别
+- 若主题是"花卉"：不同种类、不同颜色、不同形态的花
+
+输出要求：
+- 每个物品居中放置在其区域内
+- 物品大小适中，占据区域 60%-80% 的空间
+- 适合分割后独立展示`,
 
   en: (theme: string, rows: number, cols: number) =>
-    `Create a ${rows}x${cols} product showcase collage with the theme "${theme}".
-Requirements:
-- The image is clearly divided into ${rows * cols} equal sections
-- Each section displays an independent item or scene
-- Clear white dividing lines between sections
-- Unified and coordinated overall style
-- Each item has an independent white or light background
-- Suitable for photo wall display`,
+    `Create a ${rows}x${cols} diverse showcase collage with the theme "${theme}".
+
+Layout requirements:
+- The image is clearly divided into ${rows * cols} equal square sections, arranged in ${rows} rows and ${cols} columns
+- Clear white dividing lines between sections (approximately 10px width)
+- Each section has an independent white or light solid background
+
+Diversity requirements (extremely important):
+- The ${rows * cols} sections MUST display ${rows * cols} completely different items/elements
+- No repetition allowed: each item must have distinctly different shape, color, pose, and angle
+- Maximize variation: if the theme is animals, show different species; if objects, show different categories
+- Each element should have different visual features: different colors, forms, and details
+- Styles can vary between elements: some realistic, some cartoon, some minimalist, some detailed
+
+Diversity reference examples:
+- If theme is "cats": different breeds, fur colors, poses, expressions
+- If theme is "tableware": bowls, plates, cups, spoons, forks, knives - different categories
+- If theme is "flowers": different species, colors, and forms
+
+Output requirements:
+- Each item centered within its section
+- Items moderately sized, occupying 60%-80% of the section space
+- Suitable for independent display after splitting`,
 };

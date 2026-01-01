@@ -15,6 +15,7 @@ import { useMediaUrl } from '../../hooks/useMediaCache';
 import { useDrawnix, DialogType } from '../../hooks/use-drawnix';
 import { insertImageFromUrl } from '../../data/image';
 import { insertVideoFromUrl } from '../../data/video';
+import { photoWallService } from '../../services/photo-wall';
 import { downloadMediaFile, downloadFromBlob, sanitizeFilename } from '../../utils/download-utils';
 import { mediaCacheService } from '../../services/media-cache-service';
 import { SideDrawer } from '../side-drawer';
@@ -236,10 +237,34 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
 
     try {
       if (task.type === TaskType.IMAGE) {
-        // 插入图片到白板
-        await insertImageFromUrl(board, task.result.url);
-        console.log('Image inserted to board:', taskId);
-        MessagePlugin.success('图片已插入到白板');
+        // 检查是否是照片墙任务（通过 photoWallRows 参数判断）
+        if (task.params.photoWallRows && task.params.photoWallCols) {
+          // 照片墙任务：使用已生成的图片进行分割和布局
+          console.log('Inserting photo wall to board:', taskId);
+          photoWallService.setBoard(board);
+
+          // 使用已生成的图片进行分割和布局
+          const result = await photoWallService.processExistingImage(
+            task.result.url,
+            {
+              rows: task.params.photoWallRows,
+              cols: task.params.photoWallCols,
+            },
+            task.params.photoWallLayoutStyle || 'scattered'
+          );
+
+          if (result.success && result.elements) {
+            await photoWallService.insertToBoard(result.elements);
+            MessagePlugin.success('照片墙已插入到白板');
+          } else {
+            throw new Error(result.error || '照片墙处理失败');
+          }
+        } else {
+          // 普通图片任务
+          await insertImageFromUrl(board, task.result.url);
+          console.log('Image inserted to board:', taskId);
+          MessagePlugin.success('图片已插入到白板');
+        }
       } else if (task.type === TaskType.VIDEO) {
         // 插入视频到白板
         await insertVideoFromUrl(board, task.result.url);

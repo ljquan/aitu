@@ -12,6 +12,7 @@ import { Task, TaskType, TaskStatus } from '../../types/task.types';
 import { useDrawnix, DialogType } from '../../hooks/use-drawnix';
 import { insertImageFromUrl } from '../../data/image';
 import { insertVideoFromUrl } from '../../data/video';
+import { photoWallService } from '../../services/photo-wall';
 import { MessagePlugin, Dialog, Button, Input } from 'tdesign-react';
 import { ChevronLeftIcon, ChevronRightIcon, SearchIcon } from 'tdesign-icons-react';
 import { downloadMediaFile, downloadFromBlob, sanitizeFilename } from '../../utils/download-utils';
@@ -167,8 +168,31 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
 
     try {
       if (task.type === TaskType.IMAGE) {
-        await insertImageFromUrl(board, task.result.url);
-        MessagePlugin.success('图片已插入到白板');
+        // 检查是否是照片墙任务（通过 photoWallRows 参数判断）
+        if (task.params.photoWallRows && task.params.photoWallCols) {
+          // 照片墙任务：使用已生成的图片进行分割和布局
+          console.log('Inserting photo wall to board:', taskId);
+          photoWallService.setBoard(board);
+
+          const result = await photoWallService.processExistingImage(
+            task.result.url,
+            {
+              rows: task.params.photoWallRows,
+              cols: task.params.photoWallCols,
+            },
+            task.params.photoWallLayoutStyle || 'scattered'
+          );
+
+          if (result.success && result.elements) {
+            await photoWallService.insertToBoard(result.elements);
+            MessagePlugin.success('照片墙已插入到白板');
+          } else {
+            throw new Error(result.error || '照片墙处理失败');
+          }
+        } else {
+          await insertImageFromUrl(board, task.result.url);
+          MessagePlugin.success('图片已插入到白板');
+        }
       } else if (task.type === TaskType.VIDEO) {
         await insertVideoFromUrl(board, task.result.url);
         MessagePlugin.success('视频已插入到白板');

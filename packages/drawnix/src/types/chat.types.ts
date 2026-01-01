@@ -75,6 +75,44 @@ export type AgentLogEntry =
       attempt: number;
     };
 
+/** 工作流步骤选项（批量参数等） */
+export interface WorkflowStepOptions {
+  /** 执行模式 */
+  mode?: 'async' | 'queue';
+  /** 批次 ID */
+  batchId?: string;
+  /** 批次索引（1-based） */
+  batchIndex?: number;
+  /** 批次总数 */
+  batchTotal?: number;
+  /** 全局索引 */
+  globalIndex?: number;
+}
+
+/** 工作流步骤接口 */
+export interface WorkflowStepData {
+  id: string;
+  description: string;
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
+  mcp: string;
+  args: Record<string, unknown>;
+  result?: unknown;
+  error?: string;
+  duration?: number;
+  /** 步骤选项（用于重试） */
+  options?: WorkflowStepOptions;
+}
+
+/** 工作流重试上下文 */
+export interface WorkflowRetryContext {
+  /** AI 输入上下文 */
+  aiContext: AIInputContext;
+  /** 参考图片 URL 列表 */
+  referenceImages: string[];
+  /** 文本模型（用于 Agent 流程） */
+  textModel?: string;
+}
+
 /** 工作流数据接口（用于消息中嵌入工作流） */
 export interface WorkflowMessageData {
   /** 工作流 ID */
@@ -82,24 +120,17 @@ export interface WorkflowMessageData {
   /** 工作流名称 */
   name: string;
   /** 生成类型 */
-  generationType: 'image' | 'video';
+  generationType: 'image' | 'video' | 'text';
   /** 原始提示词 */
   prompt: string;
   /** 生成数量 */
   count: number;
   /** 步骤列表 */
-  steps: Array<{
-    id: string;
-    description: string;
-    status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
-    mcp: string;
-    args: Record<string, unknown>;
-    result?: unknown;
-    error?: string;
-    duration?: number;
-  }>;
+  steps: WorkflowStepData[];
   /** Agent 执行日志（详细的执行过程） */
   logs?: AgentLogEntry[];
+  /** 重试上下文（保存用于重试的必要信息） */
+  retryContext?: WorkflowRetryContext;
 }
 
 /** 对话消息接口 */
@@ -184,7 +215,7 @@ export interface AIInputContext {
     /** 模型 ID */
     id: string;
     /** 生成类型 */
-    type: 'image' | 'video';
+    type: 'image' | 'video' | 'text';
     /** 是否为用户显式选择 */
     isExplicit: boolean;
   };
@@ -247,6 +278,8 @@ export interface ChatDrawerRef {
   updateThinkingContent: (content: string) => void;
   /** 获取当前打开状态 */
   isOpen: () => boolean;
+  /** 从指定步骤重试工作流 */
+  retryWorkflowFromStep: (workflow: WorkflowMessageData, stepIndex: number) => Promise<void>;
 }
 
 

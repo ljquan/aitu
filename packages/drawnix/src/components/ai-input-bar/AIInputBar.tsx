@@ -39,7 +39,7 @@ import {
 import { initializeMCP, setCanvasBoard, setBoard, mcpRegistry } from '../../mcp';
 import { photoWallService } from '../../services/photo-wall';
 import type { MCPTaskResult } from '../../mcp/types';
-import { parseAIInput } from '../../utils/ai-input-parser';
+import { parseAIInput, type GenerationType } from '../../utils/ai-input-parser';
 import { convertToWorkflow, type WorkflowDefinition, type WorkflowStepOptions } from './workflow-converter';
 import { useWorkflowControl } from '../../contexts/WorkflowContext';
 import { geminiSettings } from '../../utils/settings-manager';
@@ -47,10 +47,17 @@ import type { WorkflowMessageData } from '../../types/chat.types';
 import classNames from 'classnames';
 import './ai-input-bar.scss';
 
+import type { WorkflowRetryContext } from '../../types/chat.types';
+
 /**
  * 将 WorkflowDefinition 转换为 WorkflowMessageData
+ * @param workflow 工作流定义
+ * @param retryContext 可选的重试上下文
  */
-function toWorkflowMessageData(workflow: WorkflowDefinition): WorkflowMessageData {
+function toWorkflowMessageData(
+  workflow: WorkflowDefinition,
+  retryContext?: WorkflowRetryContext
+): WorkflowMessageData {
   return {
     id: workflow.id,
     name: workflow.name,
@@ -66,7 +73,9 @@ function toWorkflowMessageData(workflow: WorkflowDefinition): WorkflowMessageDat
       result: step.result,
       error: step.error,
       duration: step.duration,
+      options: step.options,
     })),
+    retryContext,
   };
 }
 
@@ -76,8 +85,6 @@ if (!mcpInitialized) {
   initializeMCP();
   mcpInitialized = true;
 }
-
-export type GenerationType = 'image' | 'video';
 
 // 选中内容类型：图片、视频、图形、文字
 type SelectedContentType = 'image' | 'video' | 'graphics' | 'text';
@@ -220,6 +227,11 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
   appendAgentLogRef.current = chatDrawerControl.appendAgentLog;
   const updateThinkingContentRef = useRef(chatDrawerControl.updateThinkingContent);
   updateThinkingContentRef.current = chatDrawerControl.updateThinkingContent;
+  const registerRetryHandlerRef = useRef(chatDrawerControl.registerRetryHandler);
+  registerRetryHandlerRef.current = chatDrawerControl.registerRetryHandler;
+
+  // 当前工作流的重试上下文（用于在更新时保持 retryContext）
+  const currentRetryContextRef = useRef<WorkflowRetryContext | null>(null);
 
   // State
   const [prompt, setPrompt] = useState('');
@@ -312,7 +324,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
         // 同步更新 ChatDrawer 中的工作流消息
         const updatedWorkflow = workflowControl.getWorkflow();
         if (updatedWorkflow) {
-          updateWorkflowMessageRef.current(toWorkflowMessageData(updatedWorkflow));
+          updateWorkflowMessageRef.current(toWorkflowMessageData(updatedWorkflow, currentRetryContextRef.current || undefined));
         }
       }
     });
@@ -475,8 +487,17 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
       const globalSettings = geminiSettings.get();
       const textModel = globalSettings.textModelName;
 
+      // 创建重试上下文（保存用于重试的必要信息）
+      const retryContext: WorkflowRetryContext = {
+        aiContext,
+        referenceImages,
+        textModel,
+      };
+      // 保存到 ref，用于后续更新时保持 retryContext
+      currentRetryContextRef.current = retryContext;
+
       // 发送工作流消息到 ChatDrawer（创建新对话并显示）
-      const workflowMessageData = toWorkflowMessageData(workflow);
+      const workflowMessageData = toWorkflowMessageData(workflow, retryContext);
       await sendWorkflowMessageRef.current({
         context: aiContext,
         workflow: workflowMessageData,
@@ -537,7 +558,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
             });
           });
 
-          updateWorkflowMessageRef.current(toWorkflowMessageData(workflowControl.getWorkflow()!));
+          updateWorkflowMessageRef.current(toWorkflowMessageData(workflowControl.getWorkflow()!, currentRetryContextRef.current || undefined));
         },
         // 更新步骤状态回调
         onUpdateStep: (stepId: string, status: string, result?: unknown, error?: string) => {
@@ -553,7 +574,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
             error,
           });
 
-          updateWorkflowMessageRef.current(toWorkflowMessageData(workflowControl.getWorkflow()!));
+          updateWorkflowMessageRef.current(toWorkflowMessageData(workflowControl.getWorkflow()!, currentRetryContextRef.current || undefined));
         },
       });
 
@@ -565,7 +586,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
 
         // 更新步骤为运行中
         workflowControl.updateStep(step.id, 'running');
-        updateWorkflowMessageRef.current(toWorkflowMessageData(workflowControl.getWorkflow()!));
+        updateWorkflowMessageRef.current(toWorkflowMessageData(workflowControl.getWorkflow()!, currentRetryContextRef.current || undefined));
 
         try {
           // 合并步骤选项和标准回调（工具自行决定是否使用回调）
@@ -603,7 +624,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
           return false; // 返回失败
         } finally {
           // 同步更新 ChatDrawer 中的工作流消息
-          updateWorkflowMessageRef.current(toWorkflowMessageData(workflowControl.getWorkflow()!));
+          updateWorkflowMessageRef.current(toWorkflowMessageData(workflowControl.getWorkflow()!, currentRetryContextRef.current || undefined));
         }
       };
 
@@ -612,7 +633,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
         // 如果工作流已失败，跳过剩余步骤
         if (workflowFailed) {
           workflowControl.updateStep(step.id, 'skipped');
-          updateWorkflowMessageRef.current(toWorkflowMessageData(workflowControl.getWorkflow()!));
+          updateWorkflowMessageRef.current(toWorkflowMessageData(workflowControl.getWorkflow()!, currentRetryContextRef.current || undefined));
           continue;
         }
 
@@ -634,7 +655,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
         for (const newStep of pendingNewSteps) {
           if (workflowFailed) {
             workflowControl.updateStep(newStep.id, 'skipped');
-            updateWorkflowMessageRef.current(toWorkflowMessageData(workflowControl.getWorkflow()!));
+            updateWorkflowMessageRef.current(toWorkflowMessageData(workflowControl.getWorkflow()!, currentRetryContextRef.current || undefined));
             continue;
           }
 
@@ -667,6 +688,201 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
       setIsSubmitting(false);
     }
   }, [prompt, selectedContent, isSubmitting, addHistory, workflowControl]);
+
+  // 处理工作流重试（从指定步骤开始）
+  const handleWorkflowRetry = useCallback(async (
+    workflowMessageData: WorkflowMessageData,
+    startStepIndex: number
+  ) => {
+    const retryContext = workflowMessageData.retryContext;
+    if (!retryContext) {
+      console.error('[AIInputBar] No retry context available for workflow');
+      return;
+    }
+
+    console.log(`[AIInputBar] Retrying workflow from step ${startStepIndex}`, workflowMessageData);
+
+    // 将 WorkflowMessageData 转换为 WorkflowDefinition（用于内部状态管理）
+    const workflowDefinition: WorkflowDefinition = {
+      id: workflowMessageData.id,
+      name: workflowMessageData.name,
+      description: `重试: ${workflowMessageData.name}`,
+      scenarioType: workflowMessageData.steps.some(s => s.mcp === 'ai_analyze')
+        ? 'agent_flow'
+        : 'direct_generation',
+      generationType: workflowMessageData.generationType as GenerationType,
+      steps: workflowMessageData.steps.map((step, index) => ({
+        id: step.id,
+        mcp: step.mcp,
+        args: step.args,
+        description: step.description,
+        // 重置从 startStepIndex 开始的步骤状态
+        status: index < startStepIndex ? step.status : 'pending',
+        // 保留已完成步骤的结果，清除失败步骤的结果
+        result: index < startStepIndex ? step.result : undefined,
+        error: index < startStepIndex ? step.error : undefined,
+        duration: index < startStepIndex ? step.duration : undefined,
+        options: step.options,
+      })),
+      metadata: {
+        prompt: workflowMessageData.prompt,
+        userInstruction: retryContext.aiContext.userInstruction,
+        rawInput: retryContext.aiContext.rawInput,
+        modelId: retryContext.aiContext.model.id,
+        isModelExplicit: retryContext.aiContext.model.isExplicit,
+        count: workflowMessageData.count,
+        size: retryContext.aiContext.params.size,
+        duration: retryContext.aiContext.params.duration,
+        referenceImages: retryContext.referenceImages,
+        selection: retryContext.aiContext.selection,
+      },
+      createdAt: Date.now(),
+    };
+
+    // 启动工作流（内部状态管理）
+    workflowControl.startWorkflow(workflowDefinition);
+
+    // 添加重试日志
+    appendAgentLogRef.current({
+      type: 'retry',
+      timestamp: Date.now(),
+      reason: `从步骤 ${startStepIndex + 1} 开始重试`,
+      attempt: 1,
+    });
+
+    // 更新 ChatDrawer 显示
+    updateWorkflowMessageRef.current(toWorkflowMessageData(workflowDefinition, retryContext));
+
+    // 创建标准回调
+    const createStepCallbacks = (currentStep: typeof workflowDefinition.steps[0], stepStartTime: number) => ({
+      onChunk: (chunk: string) => {
+        updateThinkingContentRef.current(chunk);
+      },
+      onAddSteps: (newSteps: Array<{ id: string; mcp: string; args: Record<string, unknown>; description: string; status: string }>) => {
+        workflowControl.updateStep(currentStep.id, 'completed', { analysis: 'completed' }, undefined, Date.now() - stepStartTime);
+        const stepsWithOptions = newSteps.map((s, index) => ({
+          ...s,
+          status: 'pending' as const,
+          options: {
+            mode: 'queue' as const,
+            batchId: `agent_${Date.now()}`,
+            batchIndex: index + 1,
+            batchTotal: newSteps.length,
+            globalIndex: index + 1,
+          },
+        }));
+        workflowControl.addSteps(stepsWithOptions);
+        pendingNewStepsForRetry.push(...stepsWithOptions);
+        newSteps.forEach(s => {
+          appendAgentLogRef.current({
+            type: 'tool_call',
+            timestamp: Date.now(),
+            toolName: s.mcp,
+            args: s.args,
+          });
+        });
+        updateWorkflowMessageRef.current(toWorkflowMessageData(workflowControl.getWorkflow()!, retryContext));
+      },
+      onUpdateStep: (stepId: string, status: string, result?: unknown, error?: string) => {
+        workflowControl.updateStep(stepId, status as 'pending' | 'running' | 'completed' | 'failed' | 'skipped', result, error);
+        appendAgentLogRef.current({
+          type: 'tool_result',
+          timestamp: Date.now(),
+          toolName: stepId,
+          success: status === 'completed',
+          data: result,
+          error,
+        });
+        updateWorkflowMessageRef.current(toWorkflowMessageData(workflowControl.getWorkflow()!, retryContext));
+      },
+    });
+
+    // 收集动态添加的步骤
+    const pendingNewStepsForRetry: Array<{
+      id: string;
+      mcp: string;
+      args: Record<string, unknown>;
+      description: string;
+      options?: WorkflowStepOptions;
+    }> = [];
+
+    let workflowFailed = false;
+
+    // 执行单个步骤
+    const executeStep = async (step: typeof workflowDefinition.steps[0]) => {
+      const stepStartTime = Date.now();
+      workflowControl.updateStep(step.id, 'running');
+      updateWorkflowMessageRef.current(toWorkflowMessageData(workflowControl.getWorkflow()!, retryContext));
+
+      try {
+        const executeOptions = {
+          ...step.options,
+          ...createStepCallbacks(step, stepStartTime),
+        };
+        const result = await mcpRegistry.executeTool(
+          { name: step.mcp, arguments: step.args },
+          executeOptions
+        ) as MCPTaskResult;
+
+        const currentStepStatus = workflowControl.getWorkflow()?.steps.find(s => s.id === step.id)?.status;
+
+        if (!result.success) {
+          workflowControl.updateStep(step.id, 'failed', undefined, result.error || '执行失败', Date.now() - stepStartTime);
+          return false;
+        } else if (result.taskId) {
+          workflowControl.updateStep(step.id, 'running', { taskId: result.taskId });
+        } else if (currentStepStatus === 'running') {
+          workflowControl.updateStep(step.id, 'completed', result.data, undefined, Date.now() - stepStartTime);
+        }
+        return true;
+      } catch (stepError) {
+        workflowControl.updateStep(step.id, 'failed', undefined, String(stepError));
+        return false;
+      } finally {
+        updateWorkflowMessageRef.current(toWorkflowMessageData(workflowControl.getWorkflow()!, retryContext));
+      }
+    };
+
+    // 执行步骤（从 startStepIndex 开始）
+    const stepsToExecute = workflowDefinition.steps.slice(startStepIndex);
+    for (const step of stepsToExecute) {
+      if (workflowFailed) {
+        workflowControl.updateStep(step.id, 'skipped');
+        updateWorkflowMessageRef.current(toWorkflowMessageData(workflowControl.getWorkflow()!, retryContext));
+        continue;
+      }
+      const success = await executeStep(step);
+      if (!success) {
+        workflowFailed = true;
+      }
+    }
+
+    // 执行动态添加的步骤
+    if (!workflowFailed && pendingNewStepsForRetry.length > 0) {
+      console.log(`[AIInputBar] Executing ${pendingNewStepsForRetry.length} dynamically added steps during retry`);
+      for (const newStep of pendingNewStepsForRetry) {
+        if (workflowFailed) {
+          workflowControl.updateStep(newStep.id, 'skipped');
+          updateWorkflowMessageRef.current(toWorkflowMessageData(workflowControl.getWorkflow()!, retryContext));
+          continue;
+        }
+        const fullStep = workflowControl.getWorkflow()?.steps.find(s => s.id === newStep.id);
+        if (fullStep) {
+          const success = await executeStep(fullStep);
+          if (!success) {
+            workflowFailed = true;
+          }
+        }
+      }
+    }
+
+    console.log('[AIInputBar] Retry workflow completed, failed:', workflowFailed);
+  }, [workflowControl]);
+
+  // 注册重试处理器
+  useEffect(() => {
+    registerRetryHandlerRef.current(handleWorkflowRetry);
+  }, [handleWorkflowRetry]);
 
   // Handle key press
   const handleKeyDown = useCallback(

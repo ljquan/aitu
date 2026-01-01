@@ -24,8 +24,10 @@ export { mermaidTool, insertMermaid, setMermaidBoard, getMermaidBoard } from './
 export type { MermaidToolParams } from './tools/mermaid-tool';
 export { mindmapTool, insertMindmap } from './tools/mindmap-tool';
 export type { MindmapToolParams } from './tools/mindmap-tool';
-export { photoWallTool, generatePhotoWall } from './tools/photo-wall-tool';
+export { photoWallTool, createPhotoWallTask } from './tools/photo-wall-tool';
 export type { PhotoWallToolParams } from './tools/photo-wall-tool';
+export { splitImageTool } from './tools/split-image-tool';
+export type { SplitImageToolParams } from './tools/split-image-tool';
 
 // 共享模块导出
 export { setBoard, getBoard } from './tools/shared';
@@ -39,6 +41,7 @@ import { aiAnalyzeTool } from './tools/ai-analyze';
 import { mermaidTool } from './tools/mermaid-tool';
 import { mindmapTool } from './tools/mindmap-tool';
 import { photoWallTool } from './tools/photo-wall-tool';
+import { splitImageTool } from './tools/split-image-tool';
 
 /**
  * 初始化 MCP 模块，注册所有内置工具
@@ -52,6 +55,7 @@ export function initializeMCP(): void {
     mermaidTool,
     mindmapTool,
     photoWallTool,
+    splitImageTool,
   ]);
   console.log('[MCP] Initialized with built-in tools');
 }

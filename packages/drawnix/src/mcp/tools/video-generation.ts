@@ -13,20 +13,13 @@ import { taskQueueService } from '../../services/task-queue-service';
 import { TaskType } from '../../types/task.types';
 import type { VideoModel } from '../../types/video.types';
 import { VIDEO_MODEL_CONFIGS } from '../../constants/video-model-config';
-import { VIDEO_MODELS, DEFAULT_VIDEO_MODEL } from '../../constants/model-config';
+import { DEFAULT_VIDEO_MODEL } from '../../constants/model-config';
 
 /**
- * 生成视频模型的描述文本
+ * 获取当前使用的视频模型名称
  */
-function getVideoModelDescription(): string {
-  return VIDEO_MODELS.map(m => `- ${m.id}${m.isVip ? '（推荐）' : ''}${m.description ? `：${m.description}` : ''}`).join('\n');
-}
-
-/**
- * 获取视频模型 ID 列表
- */
-function getVideoModelIds(): string[] {
-  return VIDEO_MODELS.map(m => m.id);
+function getCurrentVideoModel(): string {
+  return DEFAULT_VIDEO_MODEL;
 }
 
 /**
@@ -263,8 +256,7 @@ export const videoGenerationTool: MCPTool = {
 - 用户想要生成静态图片（使用 generate_image 工具）
 - 用户只是在聊天，没有生成视频的意图
 
-可用模型：
-${getVideoModelDescription()}`,
+当前使用模型：${getCurrentVideoModel()}`,
 
   inputSchema: {
     type: 'object',
@@ -275,8 +267,7 @@ ${getVideoModelDescription()}`,
       },
       model: {
         type: 'string',
-        description: '视频生成模型',
-        enum: getVideoModelIds(),
+        description: `视频生成模型，默认使用 ${DEFAULT_VIDEO_MODEL}`,
         default: DEFAULT_VIDEO_MODEL,
       },
       seconds: {

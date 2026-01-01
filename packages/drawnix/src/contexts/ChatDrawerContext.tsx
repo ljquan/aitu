@@ -1,14 +1,21 @@
 /**
  * ChatDrawer Context
- * 
+ *
  * 提供 ChatDrawer 的 ref 访问，使其他组件可以控制 ChatDrawer
  */
 
-import React, { createContext, useContext, useRef, type MutableRefObject } from 'react';
+import React, { createContext, useContext, useRef, useCallback, type MutableRefObject } from 'react';
 import type { ChatDrawerRef, WorkflowMessageData, WorkflowMessageParams, AgentLogEntry } from '../types/chat.types';
+
+/** 重试处理器类型 */
+export type RetryHandler = (workflow: WorkflowMessageData, startStepIndex: number) => Promise<void>;
 
 interface ChatDrawerContextValue {
   chatDrawerRef: MutableRefObject<ChatDrawerRef | null>;
+  /** 注册重试处理器 */
+  registerRetryHandler: (handler: RetryHandler) => void;
+  /** 执行重试 */
+  executeRetry: (workflow: WorkflowMessageData, startStepIndex: number) => Promise<void>;
 }
 
 const ChatDrawerContext = createContext<ChatDrawerContextValue | null>(null);
@@ -23,9 +30,22 @@ export interface ChatDrawerProviderProps {
  */
 export const ChatDrawerProvider: React.FC<ChatDrawerProviderProps> = ({ children }) => {
   const chatDrawerRef = useRef<ChatDrawerRef>(null);
+  const retryHandlerRef = useRef<RetryHandler | null>(null);
+
+  const registerRetryHandler = useCallback((handler: RetryHandler) => {
+    retryHandlerRef.current = handler;
+  }, []);
+
+  const executeRetry = useCallback(async (workflow: WorkflowMessageData, startStepIndex: number) => {
+    if (retryHandlerRef.current) {
+      await retryHandlerRef.current(workflow, startStepIndex);
+    } else {
+      console.warn('[ChatDrawerContext] No retry handler registered');
+    }
+  }, []);
 
   return (
-    <ChatDrawerContext.Provider value={{ chatDrawerRef }}>
+    <ChatDrawerContext.Provider value={{ chatDrawerRef, registerRetryHandler, executeRetry }}>
       {children}
     </ChatDrawerContext.Provider>
   );
@@ -47,7 +67,7 @@ export function useChatDrawer(): ChatDrawerContextValue {
  * 提供便捷的方法来控制 ChatDrawer
  */
 export function useChatDrawerControl() {
-  const { chatDrawerRef } = useChatDrawer();
+  const { chatDrawerRef, registerRetryHandler, executeRetry } = useChatDrawer();
 
   return {
     /** 打开 ChatDrawer */
@@ -85,6 +105,12 @@ export function useChatDrawerControl() {
     /** 获取 ChatDrawer 是否打开 */
     isChatDrawerOpen: () => {
       return chatDrawerRef.current?.isOpen() ?? false;
+    },
+    /** 注册重试处理器 */
+    registerRetryHandler,
+    /** 从失败步骤重试工作流 */
+    retryWorkflowFromStep: async (workflow: WorkflowMessageData, stepIndex: number) => {
+      await executeRetry(workflow, stepIndex);
     },
   };
 }

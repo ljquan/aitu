@@ -11,20 +11,13 @@ import type { MCPTool, MCPResult, MCPExecuteOptions, MCPTaskResult } from '../ty
 import { defaultGeminiClient } from '../../utils/gemini-api';
 import { taskQueueService } from '../../services/task-queue-service';
 import { TaskType } from '../../types/task.types';
-import { IMAGE_MODELS, DEFAULT_IMAGE_MODEL, IMAGE_PARAMS } from '../../constants/model-config';
+import { DEFAULT_IMAGE_MODEL, IMAGE_PARAMS } from '../../constants/model-config';
 
 /**
- * 生成图片模型的描述文本
+ * 获取当前使用的图片模型名称
  */
-function getImageModelDescription(): string {
-  return IMAGE_MODELS.map(m => `- ${m.id}${m.isVip ? '（推荐）' : ''}${m.description ? `：${m.description}` : ''}`).join('\n');
-}
-
-/**
- * 获取图片模型 ID 列表
- */
-function getImageModelIds(): string[] {
-  return IMAGE_MODELS.map(m => m.id);
+function getCurrentImageModel(): string {
+  return DEFAULT_IMAGE_MODEL;
 }
 
 /**
@@ -228,8 +221,7 @@ export const imageGenerationTool: MCPTool = {
 - 用户想要生成视频（使用 generate_video 工具）
 - 用户只是在聊天，没有生成图片的意图
 
-可用模型：
-${getImageModelDescription()}`,
+当前使用模型：${getCurrentImageModel()}`,
 
   inputSchema: {
     type: 'object',
@@ -259,8 +251,7 @@ ${getImageModelDescription()}`,
       },
       model: {
         type: 'string',
-        description: '图片生成模型',
-        enum: getImageModelIds(),
+        description: `图片生成模型，默认使用 ${DEFAULT_IMAGE_MODEL}`,
         default: DEFAULT_IMAGE_MODEL,
       },
       count: {

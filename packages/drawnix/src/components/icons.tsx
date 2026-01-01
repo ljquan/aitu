@@ -600,3 +600,19 @@ export const MoreIcon = createIcon(
     </g>
   </svg>
 );
+
+// 拆图图标 - 表示将一张图片分割成多个
+export const SplitImageIcon = createIcon(
+  <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="none">
+    {/* 外框 */}
+    <rect x="1" y="1" width="14" height="14" rx="1.5" stroke="currentColor" strokeWidth="1.2" fill="none"/>
+    {/* 垂直分割线 */}
+    <line x1="5.5" y1="1" x2="5.5" y2="15" stroke="currentColor" strokeWidth="1" strokeDasharray="2,1"/>
+    <line x1="10.5" y1="1" x2="10.5" y2="15" stroke="currentColor" strokeWidth="1" strokeDasharray="2,1"/>
+    {/* 水平分割线 */}
+    <line x1="1" y1="5.5" x2="15" y2="5.5" stroke="currentColor" strokeWidth="1" strokeDasharray="2,1"/>
+    <line x1="1" y1="10.5" x2="15" y2="10.5" stroke="currentColor" strokeWidth="1" strokeDasharray="2,1"/>
+    {/* 分散箭头表示拆开 */}
+    <path d="M3 3L2 2M13 3L14 2M3 13L2 14M13 13L14 14" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+  </svg>
+);
