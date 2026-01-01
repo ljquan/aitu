@@ -1,17 +1,23 @@
 /**
  * 视频生成 MCP 工具
- * 
+ *
  * 封装现有的视频生成服务，提供标准化的 MCP 工具接口
+ * 支持两种执行模式：
+ * - async: 直接调用 API 等待返回（Agent 流程）
+ * - queue: 创建任务加入队列（直接生成流程）
  */
 
-import type { MCPTool, MCPResult } from '../types';
+import type { MCPTool, MCPResult, MCPExecuteOptions, MCPTaskResult } from '../types';
 import { videoAPIService } from '../../services/video-api-service';
+import { taskQueueService } from '../../services/task-queue-service';
+import { TaskType } from '../../types/task.types';
 import type { VideoModel } from '../../types/video.types';
+import { VIDEO_MODEL_CONFIGS } from '../../constants/video-model-config';
 
 /**
  * 视频生成参数
  */
-interface VideoGenerationParams {
+export interface VideoGenerationParams {
   /** 视频描述提示词 */
   prompt: string;
   /** 视频模型 */
@@ -22,6 +28,170 @@ interface VideoGenerationParams {
   size?: string;
   /** 参考图片 URL 列表 */
   referenceImages?: string[];
+}
+
+/**
+ * 直接调用 API 生成视频（async 模式）
+ */
+async function executeAsync(params: VideoGenerationParams): Promise<MCPResult> {
+  const {
+    prompt,
+    model = 'veo3',
+    seconds = '8',
+    size = '1280x720',
+    referenceImages,
+  } = params;
+
+  if (!prompt || typeof prompt !== 'string') {
+    return {
+      success: false,
+      error: '缺少必填参数 prompt',
+      type: 'error',
+    };
+  }
+
+  try {
+    console.log('[VideoGenerationTool] Generating video with params:', {
+      prompt: prompt.substring(0, 100) + (prompt.length > 100 ? '...' : ''),
+      model,
+      seconds,
+      size,
+      referenceImages: referenceImages?.length || 0,
+    });
+
+    // 准备参考图片
+    let inputReferences: Array<{ type: 'url'; url: string }> | undefined;
+    if (referenceImages && referenceImages.length > 0) {
+      inputReferences = referenceImages.map((url) => ({
+        type: 'url' as const,
+        url,
+      }));
+    }
+
+    // 调用视频生成 API（带轮询）
+    const result = await videoAPIService.generateVideoWithPolling(
+      {
+        model: model as VideoModel,
+        prompt,
+        seconds,
+        size,
+        inputReferences,
+      },
+      {
+        interval: 5000, // 每 5 秒轮询一次
+        onProgress: (progress, status) => {
+          console.log(`[VideoGenerationTool] Progress: ${progress}% (${status})`);
+        },
+      }
+    );
+
+    console.log('[VideoGenerationTool] Generation completed:', result);
+
+    // 提取视频 URL
+    const videoUrl = result.video_url || result.url;
+    if (!videoUrl) {
+      return {
+        success: false,
+        error: 'API 未返回有效的视频 URL',
+        type: 'error',
+      };
+    }
+
+    return {
+      success: true,
+      data: {
+        url: videoUrl,
+        format: 'mp4',
+        prompt,
+        model,
+        seconds,
+        size,
+      },
+      type: 'video',
+    };
+  } catch (error: any) {
+    console.error('[VideoGenerationTool] Generation failed:', error);
+
+    // 提取更详细的错误信息
+    let errorMessage = error.message || '视频生成失败';
+    if (error.apiErrorBody) {
+      errorMessage = `${errorMessage} - ${JSON.stringify(error.apiErrorBody)}`;
+    }
+
+    return {
+      success: false,
+      error: errorMessage,
+      type: 'error',
+    };
+  }
+}
+
+/**
+ * 创建任务加入队列（queue 模式）
+ */
+function executeQueue(params: VideoGenerationParams, options: MCPExecuteOptions): MCPTaskResult {
+  const { prompt, model = 'veo3', seconds, size, referenceImages } = params;
+
+  if (!prompt || typeof prompt !== 'string') {
+    return {
+      success: false,
+      error: '缺少必填参数 prompt',
+      type: 'error',
+    };
+  }
+
+  try {
+    // 获取模型默认配置
+    const modelConfig = VIDEO_MODEL_CONFIGS[model as VideoModel] || VIDEO_MODEL_CONFIGS['veo3'];
+
+    // 将参考图片转换为 uploadedImages 格式
+    const uploadedImages = referenceImages?.map((url, index) => ({
+      type: 'url' as const,
+      url,
+      name: `reference-${index + 1}`,
+    }));
+
+    // 创建任务
+    const task = taskQueueService.createTask(
+      {
+        prompt,
+        size: size || '16x9',
+        duration: parseInt(seconds || modelConfig.defaultDuration, 10),
+        model,
+        uploadedImages: uploadedImages && uploadedImages.length > 0 ? uploadedImages : undefined,
+        // 批量参数
+        batchId: options.batchId,
+        batchIndex: options.batchIndex,
+        batchTotal: options.batchTotal,
+        globalIndex: options.globalIndex,
+      },
+      TaskType.VIDEO
+    );
+
+    console.log('[VideoGenerationTool] Created task:', task.id);
+
+    return {
+      success: true,
+      data: {
+        taskId: task.id,
+        prompt,
+        size: size || '16x9',
+        duration: parseInt(seconds || modelConfig.defaultDuration, 10),
+        model,
+      },
+      type: 'video',
+      taskId: task.id,
+      task,
+    };
+  } catch (error: any) {
+    console.error('[VideoGenerationTool] Failed to create task:', error);
+
+    return {
+      success: false,
+      error: error.message || '创建任务失败',
+      type: 'error',
+    };
+  }
 }
 
 /**
@@ -77,96 +247,36 @@ export const videoGenerationTool: MCPTool = {
     required: ['prompt'],
   },
 
-  execute: async (params: Record<string, unknown>): Promise<MCPResult> => {
-    const { 
-      prompt, 
-      model = 'veo3', 
-      seconds = '8', 
-      size = '1280x720',
-      referenceImages 
-    } = params as VideoGenerationParams;
+  supportedModes: ['async', 'queue'],
 
-    if (!prompt || typeof prompt !== 'string') {
-      return {
-        success: false,
-        error: '缺少必填参数 prompt',
-        type: 'error',
-      };
+  execute: async (params: Record<string, unknown>, options?: MCPExecuteOptions): Promise<MCPResult> => {
+    const typedParams = params as unknown as VideoGenerationParams;
+    const mode = options?.mode || 'async';
+
+    if (mode === 'queue') {
+      return executeQueue(typedParams, options || {});
     }
 
-    try {
-      console.log('[VideoGenerationTool] Generating video with params:', {
-        prompt: prompt.substring(0, 100) + (prompt.length > 100 ? '...' : ''),
-        model,
-        seconds,
-        size,
-        referenceImages: referenceImages?.length || 0,
-      });
-
-      // 准备参考图片
-      let inputReferences: Array<{ type: 'url'; url: string }> | undefined;
-      if (referenceImages && referenceImages.length > 0) {
-        inputReferences = referenceImages.map(url => ({
-          type: 'url' as const,
-          url,
-        }));
-      }
-
-      // 调用视频生成 API（带轮询）
-      const result = await videoAPIService.generateVideoWithPolling(
-        {
-          model: model as VideoModel,
-          prompt,
-          seconds,
-          size,
-          inputReferences,
-        },
-        {
-          interval: 5000, // 每 5 秒轮询一次
-          onProgress: (progress, status) => {
-            console.log(`[VideoGenerationTool] Progress: ${progress}% (${status})`);
-          },
-        }
-      );
-
-      console.log('[VideoGenerationTool] Generation completed:', result);
-
-      // 提取视频 URL
-      const videoUrl = result.video_url || result.url;
-      if (!videoUrl) {
-        return {
-          success: false,
-          error: 'API 未返回有效的视频 URL',
-          type: 'error',
-        };
-      }
-
-      return {
-        success: true,
-        data: {
-          url: videoUrl,
-          format: 'mp4',
-          prompt,
-          model,
-          seconds,
-          size,
-        },
-        type: 'video',
-      };
-    } catch (error: any) {
-      console.error('[VideoGenerationTool] Generation failed:', error);
-      
-      // 提取更详细的错误信息
-      let errorMessage = error.message || '视频生成失败';
-      if (error.apiErrorBody) {
-        errorMessage = `${errorMessage} - ${JSON.stringify(error.apiErrorBody)}`;
-      }
-
-      return {
-        success: false,
-        error: errorMessage,
-        type: 'error',
-      };
-    }
+    return executeAsync(typedParams);
   },
 };
+
+/**
+ * 便捷方法：直接生成视频（async 模式）
+ */
+export async function generateVideo(params: VideoGenerationParams): Promise<MCPResult> {
+  return videoGenerationTool.execute(params as unknown as Record<string, unknown>, { mode: 'async' });
+}
+
+/**
+ * 便捷方法：创建视频生成任务（queue 模式）
+ */
+export function createVideoTask(
+  params: VideoGenerationParams,
+  options?: Omit<MCPExecuteOptions, 'mode'>
+): MCPTaskResult {
+  return videoGenerationTool.execute(params as unknown as Record<string, unknown>, {
+    ...options,
+    mode: 'queue',
+  }) as unknown as MCPTaskResult;
+}

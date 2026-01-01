@@ -23,30 +23,26 @@ import { Video, Send, Type, Play } from 'lucide-react';
 import { useBoard } from '@plait-board/react-board';
 import { getSelectedElements, ATTACHED_ELEMENT_CLASS_NAME } from '@plait/core';
 import { useI18n } from '../../i18n';
-import { useTaskQueue } from '../../hooks/useTaskQueue';
-import { TaskType, TaskStatus } from '../../types/task.types';
+import { TaskStatus } from '../../types/task.types';
 import { taskQueueService } from '../../services/task-queue-service';
 import { processSelectedContentForAI } from '../../utils/selection-utils';
-import { VIDEO_MODEL_CONFIGS } from '../../constants/video-model-config';
-import type { VideoModel } from '../../types/video.types';
 import { useTextSelection } from '../../hooks/useTextSelection';
 import { usePromptHistory } from '../../hooks/usePromptHistory';
 import { useChatDrawerControl } from '../../contexts/ChatDrawerContext';
 import { AI_INSTRUCTIONS } from '../../constants/prompts';
-import { 
-  SmartSuggestionPanel, 
+import {
+  SmartSuggestionPanel,
   useTriggerDetection,
   insertToInput,
   type PromptItem,
 } from './smart-suggestion-panel';
-import { agentExecutor } from '../../services/agent';
-import { initializeMCP, setCanvasBoard } from '../../mcp';
+import { initializeMCP, setCanvasBoard, mcpRegistry } from '../../mcp';
+import type { MCPTaskResult } from '../../mcp/types';
 import { parseAIInput } from '../../utils/ai-input-parser';
 import { convertToWorkflow, type WorkflowDefinition } from './workflow-converter';
 import { useWorkflowControl } from '../../contexts/WorkflowContext';
 import { geminiSettings } from '../../utils/settings-manager';
 import type { WorkflowMessageData } from '../../types/chat.types';
-import type { AgentExecutionContext } from '../../mcp/types';
 import classNames from 'classnames';
 import './ai-input-bar.scss';
 
@@ -205,8 +201,6 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
 
   const { language } = useI18n();
 
-  // 只获取需要的函数，避免整个对象变化导致重渲染
-  const { createTask } = useTaskQueue();
   const { history, addHistory, removeHistory } = usePromptHistory();
   const chatDrawerControl = useChatDrawerControl();
   const workflowControl = useWorkflowControl();
@@ -294,6 +288,18 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
       // 只有状态变化时才更新
       if (newStatus !== step.status) {
         workflowControl.updateStep(step.id, newStatus, stepResult, stepError);
+
+        // 如果步骤失败，将同批次中其他 running 状态的步骤标记为 skipped
+        if (newStatus === 'failed') {
+          const stepBatchId = step.options?.batchId;
+          if (stepBatchId) {
+            workflow.steps.forEach((s) => {
+              if (s.id !== step.id && s.options?.batchId === stepBatchId && s.status === 'running') {
+                workflowControl.updateStep(s.id, 'skipped', undefined, '前置任务失败');
+              }
+            });
+          }
+        }
 
         // 同步更新 ChatDrawer 中的工作流消息
         const updatedWorkflow = workflowControl.getWorkflow();
@@ -449,221 +455,110 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
         textModel, // 传递全局文本模型
       });
 
-      // 获取最终 prompt（用于任务创建）
-      const finalPrompt = parsedParams.prompt;
+      // 统一处理：遍历工作流步骤，通过 MCP Registry 执行
+      console.log(`[AIInputBar] Executing workflow: ${workflow.steps.length} steps, scenario: ${parsedParams.scenario}`);
 
-      // 根据场景处理
-      if (parsedParams.scenario === 'direct_generation') {
-        // 场景 1-3: 直接生成（无额外内容）
-        // 直接创建任务添加到任务队列
-        
-        const { generationType, modelId, count, size, duration } = parsedParams;
-        
-        console.log(`[AIInputBar] Direct generation: type=${generationType}, model=${modelId}, count=${count}, size=${size}, duration=${duration}`);
-        
-        // 将参考图片转换为 uploadedImages 格式（与 AI 图片/视频弹窗一致）
-        const uploadedImages = referenceImages.map((url, index) => ({
-          type: 'url' as const,
-          url,
-          name: `reference-${index + 1}`,
-        }));
-        
-        // 根据数量创建多个任务，并更新工作流步骤状态
-        // 注意：任务创建后状态为 PENDING，需要等任务实际完成后才更新步骤为 completed
-        // 这里使用并行创建任务，步骤状态通过 taskQueueService 的事件订阅来更新
-        const createdTaskIds: string[] = [];
+      const createdTaskIds: string[] = [];
 
-        // 生成批次ID和全局计数器，用于区分同一批次中的不同任务（与批量图片生成弹窗保持一致）
-        const batchId = `input_${Date.now()}`;
-        let globalIndex = 0;
+      // 创建标准回调（所有工具都可使用，不需要的会忽略）
+      const createStepCallbacks = (currentStep: typeof workflow.steps[0], stepStartTime: number) => ({
+        // 流式输出回调
+        onChunk: (chunk: string) => {
+          updateThinkingContentRef.current(chunk);
+        },
+        // 动态添加步骤回调
+        onAddSteps: (newSteps: Array<{ id: string; mcp: string; args: Record<string, unknown>; description: string; status: string }>) => {
+          // 当前步骤完成
+          workflowControl.updateStep(currentStep.id, 'completed', { analysis: 'completed' }, undefined, Date.now() - stepStartTime);
 
-        for (let i = 0; i < count; i++) {
-          const stepId = `step-${i + 1}`;
+          // 添加新步骤到工作流
+          workflowControl.addSteps(newSteps.map(s => ({
+            ...s,
+            status: s.status as 'pending' | 'running' | 'completed' | 'failed' | 'skipped',
+          })));
 
-          // 更新步骤为运行中（表示任务正在排队或执行中）
-          workflowControl.updateStep(stepId, 'running');
-
-          try {
-            globalIndex++;
-            let task;
-            if (generationType === 'image') {
-              task = createTask(
-                {
-                  prompt: finalPrompt,
-                  size: size || '1x1',
-                  uploadedImages: uploadedImages.length > 0 ? uploadedImages : undefined,
-                  model: modelId,
-                  // 批量参数：确保同一批次中的不同任务有唯一哈希（与批量图片生成弹窗保持一致）
-                  batchId,
-                  batchIndex: i + 1,
-                  batchTotal: count,
-                  globalIndex,
-                },
-                TaskType.IMAGE
-              );
-            } else {
-              // 视频任务
-              const modelConfig = VIDEO_MODEL_CONFIGS[modelId as VideoModel] || VIDEO_MODEL_CONFIGS['veo3'];
-              task = createTask(
-                {
-                  prompt: finalPrompt,
-                  size: size || '16x9',
-                  duration: parseInt(duration || modelConfig.defaultDuration, 10),
-                  model: modelId,
-                  uploadedImages: uploadedImages.length > 0 ? uploadedImages : undefined,
-                  // 批量参数：确保同一批次中的不同任务有唯一哈希（与批量图片生成弹窗保持一致）
-                  batchId,
-                  batchIndex: i + 1,
-                  batchTotal: count,
-                  globalIndex,
-                },
-                TaskType.VIDEO
-              );
-            }
-
-            if (task) {
-              createdTaskIds.push(task.id);
-              // 记录任务 ID 到步骤中，便于后续状态同步
-              workflowControl.updateStep(stepId, 'running', { taskId: task.id });
-            } else {
-              // 任务创建失败
-              workflowControl.updateStep(stepId, 'failed', undefined, '任务创建失败');
-            }
-          } catch (stepError) {
-            // 更新步骤为失败
-            workflowControl.updateStep(stepId, 'failed', undefined, String(stepError));
-          }
-        }
-
-        // 同步更新 ChatDrawer 中的工作流消息
-        const updatedWorkflow = workflowControl.getWorkflow();
-        if (updatedWorkflow) {
-          updateWorkflowMessageRef.current(toWorkflowMessageData(updatedWorkflow));
-        }
-      } else {
-        // 场景 4: Agent 流程
-        // 有额外内容，需要调用 Agent
-        console.log('[AIInputBar] Using Agent mode with model:', parsedParams.modelId);
-
-        // 更新分析步骤为运行中
-        const analyzeStartTime = Date.now();
-        workflowControl.updateStep('step-analyze', 'running');
-        // 同步更新 ChatDrawer 中的工作流消息
-        const runningWorkflow = workflowControl.getWorkflow();
-        if (runningWorkflow) {
-          updateWorkflowMessageRef.current(toWorkflowMessageData(runningWorkflow));
-        }
-
-        // 构建 Agent 执行上下文
-        const agentContext: AgentExecutionContext = {
-          userInstruction: parsedParams.userInstruction,
-          rawInput: parsedParams.rawInput,
-          model: {
-            id: parsedParams.modelId,
-            type: parsedParams.generationType,
-            isExplicit: parsedParams.isModelExplicit,
-          },
-          params: {
-            count: parsedParams.count,
-            size: parsedParams.size,
-            duration: parsedParams.duration,
-          },
-          selection,
-          finalPrompt,
-        };
-
-        // 记录当前工具调用的名称，用于日志
-        let currentToolName = '';
-
-        const result = await agentExecutor.execute(agentContext, {
-          model: parsedParams.modelId,
-          onChunk: (chunk) => {
-            console.log('[AIInputBar] Agent chunk:', chunk);
-            // 流式追加 AI 思考内容到日志
-            updateThinkingContentRef.current(chunk);
-          },
-          onToolCall: (toolCall) => {
-            console.log('[AIInputBar] Agent calling tool:', toolCall.name);
-            currentToolName = toolCall.name;
-
-            // 分析步骤完成，添加工具调用步骤
-            if (workflowControl.getWorkflow()?.steps.find(s => s.id === 'step-analyze')?.status === 'running') {
-              workflowControl.updateStep('step-analyze', 'completed', { analysis: 'completed' }, undefined, Date.now() - analyzeStartTime);
-            }
-
-            // 动态添加工具调用步骤
-            const newStepId = `step-tool-${Date.now()}`;
-            workflowControl.addSteps([{
-              id: newStepId,
-              mcp: toolCall.name,
-              args: toolCall.arguments || {},
-              description: `执行 ${toolCall.name}`,
-              status: 'running',
-            }]);
-
-            // 追加工具调用日志
+          // 追加工具调用日志
+          newSteps.forEach(s => {
             appendAgentLogRef.current({
               type: 'tool_call',
               timestamp: Date.now(),
-              toolName: toolCall.name,
-              args: toolCall.arguments || {},
+              toolName: s.mcp,
+              args: s.args,
             });
+          });
 
-            // 同步更新 ChatDrawer 中的工作流消息
-            const toolCallWorkflow = workflowControl.getWorkflow();
-            if (toolCallWorkflow) {
-              updateWorkflowMessageRef.current(toWorkflowMessageData(toolCallWorkflow));
-            }
-          },
-          onToolResult: (toolResult) => {
-            console.log('[AIInputBar] Tool result:', toolResult);
+          updateWorkflowMessageRef.current(toWorkflowMessageData(workflowControl.getWorkflow()!));
+        },
+        // 更新步骤状态回调
+        onUpdateStep: (stepId: string, status: string, result?: unknown, error?: string) => {
+          workflowControl.updateStep(stepId, status as 'pending' | 'running' | 'completed' | 'failed' | 'skipped', result, error);
 
-            // 追加工具结果日志
-            appendAgentLogRef.current({
-              type: 'tool_result',
-              timestamp: Date.now(),
-              toolName: currentToolName,
-              success: toolResult.success,
-              data: toolResult.data,
-              error: toolResult.error,
-              resultType: toolResult.type,
-            });
+          // 追加工具结果日志
+          appendAgentLogRef.current({
+            type: 'tool_result',
+            timestamp: Date.now(),
+            toolName: stepId,
+            success: status === 'completed',
+            data: result,
+            error,
+          });
 
-            // MCP 工具已经完成了生成任务并返回了 URL
-            // 这里只需要更新工作流状态，不需要再创建任务
-            // 因为 MCP 工具内部已经调用了生成 API 并等待完成
+          updateWorkflowMessageRef.current(toWorkflowMessageData(workflowControl.getWorkflow()!));
+        },
+      });
 
-            // 同步更新 ChatDrawer 中的工作流消息
-            const toolResultWorkflow = workflowControl.getWorkflow();
-            if (toolResultWorkflow) {
-              updateWorkflowMessageRef.current(toWorkflowMessageData(toolResultWorkflow));
-            }
+      let workflowFailed = false;
 
-            // 如果生成成功，结果已经在 toolResult.data 中
-            // TODO: 这里可以直接把生成的图片/视频添加到画布上
-            // 目前 MCP 工具返回的是 URL，需要决定是否自动添加到画布
-            if (toolResult.success && toolResult.data) {
-              const data = toolResult.data as any;
-              console.log('[AIInputBar] Generation completed, URL:', data.url);
-              // 未来可以在这里调用 addToCanvas(data.url, toolResult.type)
-            }
-          },
-        });
-
-        if (!result.success && result.error) {
-          console.error('[AIInputBar] Agent execution failed:', result.error);
-          // 更新分析步骤为失败（如果还在运行中）
-          const currentWorkflow = workflowControl.getWorkflow();
-          const analyzeStep = currentWorkflow?.steps.find(s => s.id === 'step-analyze');
-          if (analyzeStep?.status === 'running') {
-            workflowControl.updateStep('step-analyze', 'failed', undefined, result.error, Date.now() - analyzeStartTime);
-            // 同步更新 ChatDrawer 中的工作流消息
-            const failedWorkflow = workflowControl.getWorkflow();
-            if (failedWorkflow) {
-              updateWorkflowMessageRef.current(toWorkflowMessageData(failedWorkflow));
-            }
-          }
+      for (const step of workflow.steps) {
+        // 如果工作流已失败，跳过剩余步骤
+        if (workflowFailed) {
+          workflowControl.updateStep(step.id, 'skipped');
+          updateWorkflowMessageRef.current(toWorkflowMessageData(workflowControl.getWorkflow()!));
+          continue;
         }
+
+        const stepStartTime = Date.now();
+
+        // 更新步骤为运行中
+        workflowControl.updateStep(step.id, 'running');
+        updateWorkflowMessageRef.current(toWorkflowMessageData(workflowControl.getWorkflow()!));
+
+        try {
+          // 合并步骤选项和标准回调（工具自行决定是否使用回调）
+          const executeOptions = {
+            ...step.options,
+            ...createStepCallbacks(step, stepStartTime),
+          };
+
+          // 通过 MCP Registry 执行工具
+          const result = await mcpRegistry.executeTool(
+            { name: step.mcp, arguments: step.args },
+            executeOptions
+          ) as MCPTaskResult;
+
+          // 根据结果更新步骤状态
+          const currentStepStatus = workflowControl.getWorkflow()?.steps.find(s => s.id === step.id)?.status;
+
+          if (!result.success) {
+            // 执行失败，标记工作流失败
+            workflowControl.updateStep(step.id, 'failed', undefined, result.error || '执行失败', Date.now() - stepStartTime);
+            workflowFailed = true;
+          } else if (result.taskId) {
+            // 队列模式：记录任务 ID（状态保持 running，等任务完成后更新）
+            createdTaskIds.push(result.taskId);
+            workflowControl.updateStep(step.id, 'running', { taskId: result.taskId });
+          } else if (currentStepStatus === 'running') {
+            // 同步模式且未被回调更新：标记为完成
+            workflowControl.updateStep(step.id, 'completed', result.data, undefined, Date.now() - stepStartTime);
+          }
+        } catch (stepError) {
+          // 更新步骤为失败，标记工作流失败
+          workflowControl.updateStep(step.id, 'failed', undefined, String(stepError));
+          workflowFailed = true;
+        }
+
+        // 同步更新 ChatDrawer 中的工作流消息
+        updateWorkflowMessageRef.current(toWorkflowMessageData(workflowControl.getWorkflow()!));
       }
 
       // 清空输入并关闭面板
@@ -679,7 +574,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
     } finally {
       setIsSubmitting(false);
     }
-  }, [prompt, selectedContent, createTask, isSubmitting, addHistory, workflowControl]);
+  }, [prompt, selectedContent, isSubmitting, addHistory, workflowControl]);
 
   // Handle key press
   const handleKeyDown = useCallback(

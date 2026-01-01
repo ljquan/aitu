@@ -26,6 +26,7 @@ import { mcpRegistry } from './registry';
 import { imageGenerationTool } from './tools/image-generation';
 import { videoGenerationTool } from './tools/video-generation';
 import { canvasInsertionTool } from './tools/canvas-insertion';
+import { aiAnalyzeTool } from './tools/ai-analyze';
 
 /**
  * 初始化 MCP 模块，注册所有内置工具
@@ -35,6 +36,7 @@ export function initializeMCP(): void {
     imageGenerationTool,
     videoGenerationTool,
     canvasInsertionTool,
+    aiAnalyzeTool,
   ]);
   console.log('[MCP] Initialized with built-in tools');
 }

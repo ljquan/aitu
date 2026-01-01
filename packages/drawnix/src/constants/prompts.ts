@@ -76,79 +76,87 @@ export interface InstructionItemData {
 // AI 指令 - 用于文本模型生成工作流（AI 输入框使用）
 export const AI_INSTRUCTIONS: Record<'zh' | 'en', InstructionItemData[]> = {
   zh: [
+    // {
+    //   content: '将选中的内容整理成思维导图',
+    //   scene: '知识梳理、内容结构化、学习笔记'
+    // },
+    // {
+    //   content: '为选中的主题生成详细的分析框架',
+    //   scene: '项目分析、问题拆解、决策支持'
+    // },
+    // {
+    //   content: '将文本内容转换为流程图',
+    //   scene: '流程可视化、步骤说明、操作指南'
+    // },
+    // {
+    //   content: '为这个概念生成相关的扩展内容',
+    //   scene: '头脑风暴、创意发散、内容扩展'
+    // },
+    // {
+    //   content: '总结并提炼关键要点',
+    //   scene: '内容摘要、报告总结、快速了解'
+    // },
+    // {
+    //   content: '分析这些内容之间的关联关系',
+    //   scene: '关系分析、逻辑梳理、知识图谱'
+    // },
+    // {
+    //   content: '为当前内容生成行动计划',
+    //   scene: '任务规划、项目管理、执行方案'
+    // },
+    // {
+    //   content: '对比分析这些选项的优缺点',
+    //   scene: '方案对比、决策分析、选型评估'
+    // },
+    // {
+    //   content: '生成一张与主题相关的配图',
+    //   scene: '视觉辅助、内容配图、演示美化'
+    // },
     {
-      content: '将选中的内容整理成思维导图',
-      scene: '知识梳理、内容结构化、学习笔记'
-    },
-    {
-      content: '为选中的主题生成详细的分析框架',
-      scene: '项目分析、问题拆解、决策支持'
-    },
-    {
-      content: '将文本内容转换为流程图',
-      scene: '流程可视化、步骤说明、操作指南'
-    },
-    {
-      content: '为这个概念生成相关的扩展内容',
-      scene: '头脑风暴、创意发散、内容扩展'
-    },
-    {
-      content: '总结并提炼关键要点',
-      scene: '内容摘要、报告总结、快速了解'
-    },
-    {
-      content: '分析这些内容之间的关联关系',
-      scene: '关系分析、逻辑梳理、知识图谱'
-    },
-    {
-      content: '为当前内容生成行动计划',
-      scene: '任务规划、项目管理、执行方案'
-    },
-    {
-      content: '对比分析这些选项的优缺点',
-      scene: '方案对比、决策分析、选型评估'
-    },
-    {
-      content: '生成一张与主题相关的配图',
-      scene: '视觉辅助、内容配图、演示美化'
+      content: '优化提示词',
+      scene: '提示词优化、效果提升、Prompt润色'
     }
   ],
   en: [
+    // {
+    //   content: 'Organize the selected content into a mind map',
+    //   scene: 'Knowledge organization, content structuring, study notes'
+    // },
+    // {
+    //   content: 'Generate a detailed analysis framework for the selected topic',
+    //   scene: 'Project analysis, problem breakdown, decision support'
+    // },
+    // {
+    //   content: 'Convert the text content into a flowchart',
+    //   scene: 'Process visualization, step explanation, operation guide'
+    // },
+    // {
+    //   content: 'Generate related extended content for this concept',
+    //   scene: 'Brainstorming, creative expansion, content extension'
+    // },
+    // {
+    //   content: 'Summarize and extract key points',
+    //   scene: 'Content summary, report summary, quick overview'
+    // },
+    // {
+    //   content: 'Analyze the relationships between these contents',
+    //   scene: 'Relationship analysis, logic organization, knowledge graph'
+    // },
+    // {
+    //   content: 'Generate an action plan for the current content',
+    //   scene: 'Task planning, project management, execution plan'
+    // },
+    // {
+    //   content: 'Compare and analyze the pros and cons of these options',
+    //   scene: 'Solution comparison, decision analysis, selection evaluation'
+    // },
+    // {
+    //   content: 'Generate an image related to the topic',
+    //   scene: 'Visual aid, content illustration, presentation enhancement'
+    // },
     {
-      content: 'Organize the selected content into a mind map',
-      scene: 'Knowledge organization, content structuring, study notes'
-    },
-    {
-      content: 'Generate a detailed analysis framework for the selected topic',
-      scene: 'Project analysis, problem breakdown, decision support'
-    },
-    {
-      content: 'Convert the text content into a flowchart',
-      scene: 'Process visualization, step explanation, operation guide'
-    },
-    {
-      content: 'Generate related extended content for this concept',
-      scene: 'Brainstorming, creative expansion, content extension'
-    },
-    {
-      content: 'Summarize and extract key points',
-      scene: 'Content summary, report summary, quick overview'
-    },
-    {
-      content: 'Analyze the relationships between these contents',
-      scene: 'Relationship analysis, logic organization, knowledge graph'
-    },
-    {
-      content: 'Generate an action plan for the current content',
-      scene: 'Task planning, project management, execution plan'
-    },
-    {
-      content: 'Compare and analyze the pros and cons of these options',
-      scene: 'Solution comparison, decision analysis, selection evaluation'
-    },
-    {
-      content: 'Generate an image related to the topic',
-      scene: 'Visual aid, content illustration, presentation enhancement'
+      content: 'Optimize the prompt',
+      scene: 'Prompt optimization, Quality improvement, Prompt polishing'
     }
   ]
 };

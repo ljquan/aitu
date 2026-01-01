@@ -39,6 +39,60 @@ export interface JSONSchemaProperty {
 }
 
 /**
+ * MCP 工具执行模式
+ */
+export type MCPExecuteMode = 'async' | 'queue';
+
+/**
+ * 工作流步骤信息（用于回调）
+ */
+export interface WorkflowStepInfo {
+  id: string;
+  mcp: string;
+  args: Record<string, unknown>;
+  description: string;
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
+}
+
+/**
+ * MCP 工具执行回调（标准回调，所有工具都可使用）
+ */
+export interface MCPExecuteCallbacks {
+  /** 流式输出回调（用于 AI 思考过程） */
+  onChunk?: (content: string) => void;
+  /** 动态添加工作流步骤回调 */
+  onAddSteps?: (steps: WorkflowStepInfo[]) => void;
+  /** 更新步骤状态回调 */
+  onUpdateStep?: (stepId: string, status: WorkflowStepInfo['status'], result?: unknown, error?: string, duration?: number) => void;
+}
+
+/**
+ * MCP 工具执行选项
+ */
+export interface MCPExecuteOptions extends MCPExecuteCallbacks {
+  /** 执行模式：async（等待API返回）或 queue（加入任务队列） */
+  mode?: MCPExecuteMode;
+  /** 批次 ID（用于批量任务去重） */
+  batchId?: string;
+  /** 批次索引（1-based） */
+  batchIndex?: number;
+  /** 批次总数 */
+  batchTotal?: number;
+  /** 全局索引（用于批量任务排序） */
+  globalIndex?: number;
+}
+
+/**
+ * 队列模式返回的任务信息
+ */
+export interface MCPTaskResult extends MCPResult {
+  /** 创建的任务 ID（队列模式） */
+  taskId?: string;
+  /** 创建的任务对象（队列模式） */
+  task?: unknown;
+}
+
+/**
  * MCP 工具定义
  */
 export interface MCPTool {
@@ -48,8 +102,10 @@ export interface MCPTool {
   description: string;
   /** 输入参数 Schema */
   inputSchema: JSONSchema;
-  /** 工具执行函数 */
-  execute: (params: Record<string, unknown>) => Promise<MCPResult>;
+  /** 工具执行函数（默认 async 模式） */
+  execute: (params: Record<string, unknown>, options?: MCPExecuteOptions) => Promise<MCPResult>;
+  /** 支持的执行模式（默认只支持 async） */
+  supportedModes?: MCPExecuteMode[];
 }
 
 /**

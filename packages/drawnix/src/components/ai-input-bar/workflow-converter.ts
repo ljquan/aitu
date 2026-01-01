@@ -12,6 +12,22 @@
 import type { ParsedGenerationParams, GenerationType, SelectionInfo } from '../../utils/ai-input-parser';
 
 /**
+ * 工作流步骤执行选项（批量参数等）
+ */
+export interface WorkflowStepOptions {
+  /** 执行模式 */
+  mode?: 'async' | 'queue';
+  /** 批次 ID */
+  batchId?: string;
+  /** 批次索引（1-based） */
+  batchIndex?: number;
+  /** 批次总数 */
+  batchTotal?: number;
+  /** 全局索引 */
+  globalIndex?: number;
+}
+
+/**
  * 工作流步骤定义
  */
 export interface WorkflowStep {
@@ -21,6 +37,8 @@ export interface WorkflowStep {
   mcp: string;
   /** 工具参数 */
   args: Record<string, unknown>;
+  /** 执行选项（批量参数等） */
+  options?: WorkflowStepOptions;
   /** 步骤描述 */
   description: string;
   /** 步骤状态 */
@@ -85,8 +103,9 @@ function generateId(): string {
 
 /**
  * 场景1-3: 将直接生成场景转换为工作流定义
- * 
+ *
  * 这些场景通过正则解析用户输入，直接生成图片/视频
+ * 步骤中包含完整的工具调用信息（mcp、args、options），调用方可直接执行
  */
 export function convertDirectGenerationToWorkflow(
   params: ParsedGenerationParams,
@@ -104,13 +123,25 @@ export function convertDirectGenerationToWorkflow(
     duration,
     selection,
   } = params;
-  
+
   const steps: WorkflowStep[] = [];
-  
+
+  // 生成批次 ID（用于区分同一批次中的不同任务）
+  const batchId = `workflow_${Date.now()}`;
+
   // 根据数量创建多个生成步骤
   for (let i = 0; i < count; i++) {
     const stepId = `step-${i + 1}`;
-    
+
+    // 通用的执行选项
+    const options: WorkflowStepOptions = {
+      mode: 'queue',
+      batchId,
+      batchIndex: i + 1,
+      batchTotal: count,
+      globalIndex: i + 1,
+    };
+
     if (generationType === 'image') {
       steps.push({
         id: stepId,
@@ -121,9 +152,8 @@ export function convertDirectGenerationToWorkflow(
           size: size || '1x1',
           referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
         },
-        description: count > 1 
-          ? `生成图片 (${i + 1}/${count})`
-          : '生成图片',
+        options,
+        description: count > 1 ? `生成图片 (${i + 1}/${count})` : '生成图片',
         status: 'pending',
       });
     } else {
@@ -135,17 +165,16 @@ export function convertDirectGenerationToWorkflow(
           prompt,
           model: modelId,
           size: size || '16x9',
-          duration: duration || '5',
+          seconds: duration || '5',
           referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
         },
-        description: count > 1 
-          ? `生成视频 (${i + 1}/${count})`
-          : '生成视频',
+        options,
+        description: count > 1 ? `生成视频 (${i + 1}/${count})` : '生成视频',
         status: 'pending',
       });
     }
   }
-  
+
   return {
     id: generateId(),
     name: generationType === 'image' ? '图片生成' : '视频生成',
@@ -171,9 +200,10 @@ export function convertDirectGenerationToWorkflow(
 
 /**
  * 场景4: 将 Agent 流程转换为工作流定义
- * 
- * 这个场景需要先调用文本模型分析用户意图，然后根据分析结果生成工作流
- * 初始只创建一个"分析"步骤，后续步骤由 AI 动态生成
+ *
+ * 这个场景需要先调用文本模型分析用户意图，然后根据分析结果执行工具
+ * 初始只创建一个 ai_analyze 步骤，后续步骤由 AI 动态生成
+ * 步骤中包含完整的工具调用信息，调用方可直接执行
  */
 export function convertAgentFlowToWorkflow(
   params: ParsedGenerationParams,
@@ -192,28 +222,36 @@ export function convertAgentFlowToWorkflow(
     selection,
   } = params;
 
-  // Agent 流程初始只有一个分析步骤
+  // 构建 Agent 执行上下文（与 AgentExecutionContext 类型一致）
+  const agentContext = {
+    userInstruction,
+    rawInput,
+    model: {
+      id: modelId,
+      type: generationType,
+      isExplicit: isModelExplicit,
+    },
+    params: {
+      count,
+      size,
+      duration,
+    },
+    selection,
+    finalPrompt: prompt,
+  };
+
+  // Agent 流程初始只有一个 ai_analyze 步骤
   // 后续步骤会在 AI 分析后动态添加
   const steps: WorkflowStep[] = [
     {
       id: 'step-analyze',
       mcp: 'ai_analyze',
       args: {
-        // 用户指令（包含额外要求）
-        userInstruction,
-        // 选中的文本作为生成 prompt
-        selectedTexts: selection.texts,
-        context: {
-          generationType,
-          modelId,
-          isModelExplicit,
-          count,
-          size,
-          duration,
-          hasReferenceImages: referenceImages.length > 0,
-          hasSelectedTexts: selection.texts.length > 0,
-          hasSelectedVideos: selection.videos.length > 0,
-        },
+        context: agentContext,
+        textModel: modelId,
+      },
+      options: {
+        mode: 'async',
       },
       description: 'AI 分析用户意图',
       status: 'pending',
@@ -223,7 +261,7 @@ export function convertAgentFlowToWorkflow(
   return {
     id: generateId(),
     name: 'AI 智能生成',
-    description: `AI 分析用户请求并执行相应操作`,
+    description: 'AI 分析用户请求并执行相应操作',
     scenarioType: 'agent_flow',
     generationType,
     steps,

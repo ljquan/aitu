@@ -4,7 +4,7 @@
  * 管理所有 MCP 工具的注册、查询和执行
  */
 
-import type { MCPTool, MCPResult, ToolCall } from './types';
+import type { MCPTool, MCPResult, ToolCall, MCPExecuteOptions } from './types';
 
 /**
  * MCP 工具注册中心
@@ -84,10 +84,12 @@ class MCPRegistry {
 
   /**
    * 执行工具调用
+   * @param toolCall - 工具调用信息
+   * @param options - 执行选项（可选，用于指定执行模式等）
    */
-  async executeTool(toolCall: ToolCall): Promise<MCPResult> {
+  async executeTool(toolCall: ToolCall, options?: MCPExecuteOptions): Promise<MCPResult> {
     const tool = this.tools.get(toolCall.name);
-    
+
     if (!tool) {
       return {
         success: false,
@@ -97,8 +99,8 @@ class MCPRegistry {
     }
 
     try {
-      console.log(`[MCPRegistry] Executing tool "${toolCall.name}" with args:`, toolCall.arguments);
-      const result = await tool.execute(toolCall.arguments);
+      console.log(`[MCPRegistry] Executing tool "${toolCall.name}" with args:`, toolCall.arguments, 'options:', options);
+      const result = await tool.execute(toolCall.arguments, options);
       console.log(`[MCPRegistry] Tool "${toolCall.name}" execution completed:`, result.success);
       return result;
     } catch (error: any) {
