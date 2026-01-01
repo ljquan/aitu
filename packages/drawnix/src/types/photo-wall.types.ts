@@ -20,7 +20,7 @@ export interface GridConfig {
 /**
  * 布局风格枚举
  */
-export type LayoutStyle = 'scattered' | 'grid' | 'circular';
+export type LayoutStyle = 'scattered' | 'grid' | 'circular' | 'photo-wall';
 
 /**
  * 布局风格配置
@@ -57,6 +57,12 @@ export const LAYOUT_STYLES: LayoutStyleConfig[] = [
     labelZh: '环形',
     labelEn: 'Circular',
     description: '围绕中心点环形分布，适合突出中心主题',
+  },
+  {
+    style: 'photo-wall',
+    labelZh: '照片墙',
+    labelEn: 'Photo Wall',
+    description: '不规则大小的横向散落布局，创意感更强',
   },
 ];
 
@@ -185,6 +191,108 @@ export const GRID_IMAGE_DEFAULTS = {
     centerIndex: -1,
     startAngle: -90, // 从顶部开始
   } as CircularLayoutConfig,
+};
+
+/**
+ * 照片墙布局配置
+ */
+export interface PhotoWallLayoutConfig {
+  /** 图片数量（6-12） */
+  imageCount?: number;
+  /** 最小宽度比例（相对于平均尺寸） */
+  minWidthRatio?: number;
+  /** 最大宽度比例（相对于平均尺寸） */
+  maxWidthRatio?: number;
+  /** 最大旋转角度（度） */
+  maxRotation?: number;
+  /** 元素间距 */
+  gap?: number;
+}
+
+/**
+ * 照片墙默认配置
+ */
+export const PHOTO_WALL_DEFAULTS = {
+  imageCount: 9,
+  minWidthRatio: 0.7,
+  maxWidthRatio: 1.4,
+  maxRotation: 8,
+  gap: 15,
+};
+
+/**
+ * 照片墙提示词模板
+ * 生成不规则布局的照片墙，图片大小不一，位置不规则，有白色边框，灰色背景
+ * 智能拆图算法会检测并分割这些不规则区域
+ */
+export const PHOTO_WALL_PROMPT_TEMPLATE = {
+  zh: (theme: string, imageCount: number) => {
+    return `创建一个创意照片墙拼贴图，主题是"${theme}"。
+
+整体布局要求（极其重要）：
+- 统一的灰色背景（RGB 200-210 左右的浅灰色）
+- 在灰色背景上放置 ${imageCount} 张独立的照片/卡片
+- 每张照片有明显的白色边框（约 10-15px 宽度），呈现相框效果
+- 照片大小不一：有大有小，比例各异（正方形、横向、竖向混合）
+- 位置不规则：照片随意散落摆放，不要整齐排列成网格
+- 所有照片必须保持水平，不要旋转
+
+间距要求（最重要，必须严格遵守）：
+- 所有照片之间必须完全分离，绝对禁止任何重叠
+- 照片之间必须保持至少 20px 的灰色背景间隙
+- 每张照片的四边都必须被灰色背景包围
+- 灰色背景必须在所有照片之间清晰可见
+- 照片边缘不能触碰或相交
+
+照片内容要求：
+- ${imageCount} 张照片必须展示 ${imageCount} 种完全不同的物品/场景
+- 禁止任何重复：每张照片的内容、构图、色调都必须明显不同
+- 追求最大差异化：不同的场景、不同的物品、不同的风格
+
+大小分布参考：
+- 1-2 张大图（占据较大空间，是视觉焦点）
+- 3-4 张中等大小的图
+- 剩余为小图
+
+输出要求：
+- 整体呈横向布局，宽高比约 16:9
+- 灰色背景在所有照片周围和之间都清晰可见
+- 白色边框清晰完整，不被遮挡`;
+  },
+
+  en: (theme: string, imageCount: number) => {
+    return `Create a creative photo wall collage with the theme "${theme}".
+
+Overall layout requirements (extremely important):
+- Uniform gray background (light gray around RGB 200-210)
+- Place ${imageCount} independent photos/cards on the gray background
+- Each photo has a clear white border (about 10-15px width), creating a frame effect
+- Varying photo sizes: mix of large and small, different aspect ratios (square, landscape, portrait)
+- Irregular positions: photos scattered randomly, NOT aligned in a grid
+- All photos must remain horizontal, no rotation
+
+Spacing requirements (MOST IMPORTANT, must strictly follow):
+- All photos MUST be completely separated, absolutely NO overlapping allowed
+- There MUST be at least 20px gray background gap between all photos
+- Each photo must be surrounded by gray background on all four sides
+- Gray background MUST be clearly visible between all photos
+- Photo edges must NOT touch or intersect
+
+Photo content requirements:
+- ${imageCount} photos MUST display ${imageCount} completely different items/scenes
+- No repetition allowed: each photo must have distinctly different content, composition, and tone
+- Maximize variation: different scenes, different objects, different styles
+
+Size distribution reference:
+- 1-2 large photos (occupy more space, serve as visual focal points)
+- 3-4 medium-sized photos
+- Remaining photos are smaller
+
+Output requirements:
+- Overall horizontal layout, aspect ratio about 16:9
+- Gray background clearly visible around and between all photos
+- White borders clear and complete, not obscured`;
+  },
 };
 
 /**

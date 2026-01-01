@@ -166,7 +166,7 @@ export interface ColdStartSuggestion {
   content: string;
   scene: string;
   /** 建议的模型类型，帮助用户快速选择 */
-  modelType?: 'image' | 'video' | 'grid-image';
+  modelType?: 'image' | 'video' | 'grid-image' | 'photo-wall';
 }
 
 export const AI_COLD_START_SUGGESTIONS: Record<'zh' | 'en', ColdStartSuggestion[]> = {
@@ -214,6 +214,16 @@ export const AI_COLD_START_SUGGESTIONS: Record<'zh' | 'en', ColdStartSuggestion[
       scene: '宫格图',
       modelType: 'grid-image',
     },
+    {
+      content: '生成照片墙：可爱香蕉的各种形态，卡通与写实混搭',
+      scene: '照片墙',
+      modelType: 'photo-wall',
+    },
+    {
+      content: '生成照片墙：咖啡文化灵感板，咖啡豆、拉花、咖啡馆场景',
+      scene: '照片墙',
+      modelType: 'photo-wall',
+    },
   ],
   en: [
     {
@@ -258,6 +268,16 @@ export const AI_COLD_START_SUGGESTIONS: Record<'zh' | 'en', ColdStartSuggestion[
       content: 'Generate grid image: Cute cat emoji pack, 4x4 scattered layout',
       scene: 'Grid image',
       modelType: 'grid-image',
+    },
+    {
+      content: 'Generate photo wall: Cute bananas in various forms, cartoon and realistic mix',
+      scene: 'Photo wall',
+      modelType: 'photo-wall',
+    },
+    {
+      content: 'Generate photo wall: Coffee culture mood board, beans, latte art, cafe scenes',
+      scene: 'Photo wall',
+      modelType: 'photo-wall',
     },
   ],
 };

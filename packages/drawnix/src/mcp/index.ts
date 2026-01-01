@@ -9,8 +9,8 @@ export * from './types';
 export { mcpRegistry, MCPRegistry } from './registry';
 
 // 导出工具
-export { imageGenerationTool } from './tools/image-generation';
-export { videoGenerationTool } from './tools/video-generation';
+export { imageGenerationTool, getCurrentImageModel } from './tools/image-generation';
+export { videoGenerationTool, getCurrentVideoModel } from './tools/video-generation';
 export {
   canvasInsertionTool,
   setCanvasBoard,
@@ -26,6 +26,8 @@ export { mindmapTool, insertMindmap } from './tools/mindmap-tool';
 export type { MindmapToolParams } from './tools/mindmap-tool';
 export { gridImageTool, createGridImageTask, photoWallTool, createPhotoWallTask } from './tools/photo-wall-tool';
 export type { GridImageToolParams, PhotoWallToolParams } from './tools/photo-wall-tool';
+export { creativePhotoWallTool, createPhotoWallTaskNew } from './tools/creative-photo-wall-tool';
+export type { CreativePhotoWallParams } from './tools/creative-photo-wall-tool';
 export { splitImageTool } from './tools/split-image-tool';
 export type { SplitImageToolParams } from './tools/split-image-tool';
 
@@ -41,12 +43,22 @@ import { aiAnalyzeTool } from './tools/ai-analyze';
 import { mermaidTool } from './tools/mermaid-tool';
 import { mindmapTool } from './tools/mindmap-tool';
 import { gridImageTool } from './tools/photo-wall-tool';
+import { creativePhotoWallTool } from './tools/creative-photo-wall-tool';
 import { splitImageTool } from './tools/split-image-tool';
+
+/** 标记 MCP 是否已初始化 */
+let mcpInitialized = false;
 
 /**
  * 初始化 MCP 模块，注册所有内置工具
+ * 多次调用只会执行一次
  */
 export function initializeMCP(): void {
+  if (mcpInitialized) {
+    return;
+  }
+  mcpInitialized = true;
+
   mcpRegistry.registerAll([
     imageGenerationTool,
     videoGenerationTool,
@@ -55,6 +67,7 @@ export function initializeMCP(): void {
     mermaidTool,
     mindmapTool,
     gridImageTool,
+    creativePhotoWallTool,
     splitImageTool,
   ]);
   console.log('[MCP] Initialized with built-in tools');

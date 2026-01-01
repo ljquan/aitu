@@ -12,7 +12,9 @@ import type {
   LayoutParams,
   ScatteredLayoutConfig,
   CircularLayoutConfig,
+  PhotoWallLayoutConfig,
 } from '../../types/photo-wall.types';
+import { PHOTO_WALL_DEFAULTS } from '../../types/photo-wall.types';
 
 /**
  * 随机数生成器（指定范围）
@@ -52,7 +54,7 @@ export class LayoutEngine {
     elements: ImageElement[],
     style: LayoutStyle,
     params: LayoutParams,
-    config?: ScatteredLayoutConfig | CircularLayoutConfig
+    config?: ScatteredLayoutConfig | CircularLayoutConfig | PhotoWallLayoutConfig
   ): PositionedElement[] {
     switch (style) {
       case 'scattered':
@@ -61,6 +63,8 @@ export class LayoutEngine {
         return this.gridLayout(elements, params);
       case 'circular':
         return this.circularLayout(elements, params, config as CircularLayoutConfig);
+      case 'photo-wall':
+        return this.photoWallLayout(elements, params, config as PhotoWallLayoutConfig);
       default:
         console.warn(`[LayoutEngine] Unknown layout style: ${style}, falling back to grid`);
         return this.gridLayout(elements, params);
@@ -295,10 +299,164 @@ export class LayoutEngine {
         zIndex: index,
       });
     });
-    
+
     return result;
   }
-  
+
+  /**
+   * 照片墙布局
+   *
+   * 特点：不规则大小、横向散落、带旋转和层叠效果
+   * 模拟真实照片墙/灵感板效果
+   */
+  private photoWallLayout(
+    elements: ImageElement[],
+    params: LayoutParams,
+    config?: PhotoWallLayoutConfig
+  ): PositionedElement[] {
+    const {
+      minWidthRatio = PHOTO_WALL_DEFAULTS.minWidthRatio,
+      maxWidthRatio = PHOTO_WALL_DEFAULTS.maxWidthRatio,
+      maxRotation = PHOTO_WALL_DEFAULTS.maxRotation,
+      gap = PHOTO_WALL_DEFAULTS.gap,
+    } = config || {};
+
+    const { canvasWidth, canvasHeight, startX, startY } = params;
+    const count = elements.length;
+
+    // 为每个元素分配随机的尺寸比例（大、中、小）
+    const sizeCategories = this.assignSizeCategories(count);
+
+    // 计算基础尺寸
+    const avgWidth = elements.reduce((sum, e) => sum + e.width, 0) / count;
+    const avgHeight = elements.reduce((sum, e) => sum + e.height, 0) / count;
+
+    // 横向布局：宽度大于高度
+    const layoutWidth = canvasWidth || 1200;
+    const layoutHeight = canvasHeight || 600;
+
+    // 计算基础缩放比例，使元素适合布局区域
+    const baseScale = Math.min(
+      (layoutWidth * 0.25) / avgWidth,
+      (layoutHeight * 0.4) / avgHeight,
+      1
+    );
+
+    // 使用分区算法放置元素
+    const positions = this.calculatePhotoWallPositions(
+      count,
+      layoutWidth,
+      layoutHeight,
+      gap
+    );
+
+    // 打乱 zIndex 顺序，增加层叠感
+    const zIndexOrder = shuffleArray(elements.map((_, i) => i));
+
+    return elements.map((element, index) => {
+      const pos = positions[index];
+      const sizeCategory = sizeCategories[index];
+
+      // 根据尺寸类别调整缩放
+      let scaleMultiplier: number;
+      switch (sizeCategory) {
+        case 'large':
+          scaleMultiplier = randomInRange(1.2, maxWidthRatio);
+          break;
+        case 'medium':
+          scaleMultiplier = randomInRange(0.9, 1.1);
+          break;
+        case 'small':
+          scaleMultiplier = randomInRange(minWidthRatio, 0.85);
+          break;
+        default:
+          scaleMultiplier = 1;
+      }
+
+      const finalScale = baseScale * scaleMultiplier;
+
+      // 随机旋转角度（比散落布局小一些，更优雅）
+      const rotation = randomInRange(-maxRotation, maxRotation);
+
+      // 添加位置抖动
+      const jitterX = randomInRange(-20, 20);
+      const jitterY = randomInRange(-15, 15);
+
+      const scaledWidth = element.width * finalScale;
+      const scaledHeight = element.height * finalScale;
+
+      return {
+        ...element,
+        x: startX + pos.x + jitterX - scaledWidth / 2,
+        y: startY + pos.y + jitterY - scaledHeight / 2,
+        rotation,
+        scale: finalScale,
+        zIndex: zIndexOrder[index],
+      };
+    });
+  }
+
+  /**
+   * 为元素分配尺寸类别（大、中、小）
+   * 照片墙效果需要混合不同大小的图片
+   */
+  private assignSizeCategories(count: number): ('large' | 'medium' | 'small')[] {
+    const categories: ('large' | 'medium' | 'small')[] = [];
+
+    // 分配比例：约 25% 大图，50% 中图，25% 小图
+    const largeCount = Math.max(2, Math.floor(count * 0.25));
+    const smallCount = Math.max(2, Math.floor(count * 0.25));
+    const mediumCount = count - largeCount - smallCount;
+
+    for (let i = 0; i < largeCount; i++) categories.push('large');
+    for (let i = 0; i < mediumCount; i++) categories.push('medium');
+    for (let i = 0; i < smallCount; i++) categories.push('small');
+
+    // 打乱顺序
+    return shuffleArray(categories);
+  }
+
+  /**
+   * 计算照片墙位置
+   * 使用横向分区 + 随机偏移的方式生成自然的散落效果
+   */
+  private calculatePhotoWallPositions(
+    count: number,
+    width: number,
+    height: number,
+    gap: number
+  ): Array<{ x: number; y: number }> {
+    const positions: Array<{ x: number; y: number }> = [];
+
+    // 横向布局：分成多行，每行位置有随机性
+    const rows = Math.ceil(count / 4); // 每行约 4 个元素
+    const cols = Math.ceil(count / rows);
+
+    const cellWidth = (width - gap * 2) / cols;
+    const cellHeight = (height - gap * 2) / rows;
+
+    for (let i = 0; i < count; i++) {
+      const row = Math.floor(i / cols);
+      const col = i % cols;
+
+      // 基础位置（单元格中心）
+      const baseX = gap + col * cellWidth + cellWidth / 2;
+      const baseY = gap + row * cellHeight + cellHeight / 2;
+
+      // 添加随机偏移（横向偏移更大，强调横向布局）
+      const offsetX = randomInRange(-cellWidth * 0.3, cellWidth * 0.3);
+      const offsetY = randomInRange(-cellHeight * 0.2, cellHeight * 0.2);
+
+      positions.push({
+        x: baseX + offsetX,
+        y: baseY + offsetY,
+      });
+    }
+
+    // 打乱位置顺序，增加随机感
+    return shuffleArray(positions);
+  }
+
   /**
    * 计算布局所需的画布尺寸
    * 

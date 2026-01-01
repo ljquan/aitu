@@ -156,7 +156,7 @@ async function detectGridLinesInternal(imageUrl: string): Promise<{
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
   if (!ctx) {
     throw new Error('Failed to get canvas context');
   }
@@ -212,17 +212,47 @@ export async function detectGridLines(imageUrl: string): Promise<GridDetectionRe
 
 /**
  * 快速检测图片是否包含分割线（用于判断是否显示拆图按钮）
+ * 支持两种格式：
+ * 1. 网格分割线格式（白色分割线）
+ * 2. 照片墙格式（灰色背景 + 白边框照片）
  *
  * @param imageUrl - 图片 URL
  * @returns 是否包含分割线
  */
 export async function hasSplitLines(imageUrl: string): Promise<boolean> {
   try {
+    // 1. 先检测网格分割线
     const { detection } = await detectGridLinesInternal(imageUrl);
-    // 至少有一条水平或垂直分割线才认为可以拆分
-    return detection.rows > 1 || detection.cols > 1;
+    if (detection.rows > 1 || detection.cols > 1) {
+      return true;
+    }
+
+    // 2. 检测照片墙格式（灰色背景 + 白边框）
+    const isPhotoWall = await detectPhotoWallFormat(imageUrl);
+    return isPhotoWall;
   } catch (error) {
     console.warn('[ImageSplitter] Failed to detect split lines:', error);
+    return false;
+  }
+}
+
+/**
+ * 快速检测图片是否为照片墙格式
+ * 特征：灰色背景占比较大，存在多个白色边框区域
+ */
+async function detectPhotoWallFormat(imageUrl: string): Promise<boolean> {
+  try {
+    // 动态导入照片墙检测器
+    const { detectPhotoWallRegions } = await import('./photo-wall-splitter');
+    const result = await detectPhotoWallRegions(imageUrl, {
+      minRegionSize: 3000, // 降低阈值以快速检测
+      minRegionRatio: 0.005,
+    });
+
+    // 如果检测到 2 个以上的区域，认为是照片墙
+    return result.count >= 2;
+  } catch (error) {
+    console.warn('[ImageSplitter] Failed to detect photo wall format:', error);
     return false;
   }
 }
@@ -313,7 +343,7 @@ export async function splitImageByLines(
   const fullCanvas = document.createElement('canvas');
   fullCanvas.width = width;
   fullCanvas.height = height;
-  const fullCtx = fullCanvas.getContext('2d');
+  const fullCtx = fullCanvas.getContext('2d', { willReadFrequently: true });
   if (!fullCtx) return elements;
   fullCtx.drawImage(img, 0, 0);
 
@@ -374,6 +404,9 @@ export async function splitImageByLines(
 
 /**
  * 智能拆分图片并插入到画板
+ * 支持两种格式：
+ * 1. 网格分割线格式（白色分割线）
+ * 2. 照片墙格式（灰色背景 + 白边框照片）
  *
  * @param board - 画板实例
  * @param imageUrl - 图片 URL
@@ -389,30 +422,52 @@ export async function splitAndInsertImages(
   try {
     console.log('[ImageSplitter] Starting smart split...');
 
-    // 1. 检测分割线
+    // 1. 先尝试检测网格分割线
     const detection = await detectGridLines(imageUrl);
-    console.log('[ImageSplitter] Detection result:', detection);
+    console.log('[ImageSplitter] Grid detection result:', detection);
 
-    // 如果没有检测到分割线，返回错误
-    if (detection.rows <= 1 && detection.cols <= 1) {
-      return {
-        success: false,
-        count: 0,
-        error: '未检测到分割线，请确保图片包含白色分割线',
-      };
+    let elements: SplitImageElement[] = [];
+    let cols = 1;
+
+    if (detection.rows > 1 || detection.cols > 1) {
+      // 网格分割线格式
+      console.log('[ImageSplitter] Using grid split mode');
+      elements = await splitImageByLines(imageUrl, detection);
+      cols = detection.cols;
+    } else {
+      // 2. 尝试照片墙格式
+      console.log('[ImageSplitter] Grid not detected, trying photo wall mode...');
+      const isPhotoWall = await detectPhotoWallFormat(imageUrl);
+
+      if (isPhotoWall) {
+        console.log('[ImageSplitter] Using photo wall split mode');
+        const { splitPhotoWall } = await import('./photo-wall-splitter');
+        const photoWallElements = await splitPhotoWall(imageUrl);
+
+        // 转换为 SplitImageElement 格式
+        elements = photoWallElements.map((el, index) => ({
+          imageData: el.imageData,
+          index,
+          width: el.width,
+          height: el.height,
+          sourceX: 0,
+          sourceY: 0,
+        }));
+
+        // 照片墙使用自适应列数
+        cols = Math.ceil(Math.sqrt(elements.length));
+      }
     }
-
-    // 2. 分割图片
-    const elements = await splitImageByLines(imageUrl, detection);
-    console.log(`[ImageSplitter] Split into ${elements.length} images`);
 
     if (elements.length === 0) {
       return {
         success: false,
         count: 0,
-        error: '分割失败，未能生成图片',
+        error: '未检测到可拆分的区域，请确保图片包含分割线或照片墙格式',
       };
     }
+
+    console.log(`[ImageSplitter] Split into ${elements.length} images`);
 
     // 3. 计算插入位置
     let baseX = startPoint?.[0] ?? 100;
@@ -425,7 +480,6 @@ export async function splitAndInsertImages(
     }
 
     // 4. 按网格布局插入图片
-    const cols = detection.cols;
     let currentX = baseX;
     let currentY = baseY;
     let rowMaxHeight = 0;

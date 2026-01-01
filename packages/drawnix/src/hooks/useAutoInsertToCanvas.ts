@@ -155,6 +155,14 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
     };
 
     /**
+     * 检查是否为照片墙任务
+     */
+    const isPhotoWallTask = (task: Task): boolean => {
+      const params = task.params as Record<string, unknown>;
+      return !!(params.isPhotoWall && params.photoWallLayoutStyle === 'photo-wall');
+    };
+
+    /**
      * 处理宫格图任务：拆分并插入
      */
     const handleGridImageTask = async (task: Task) => {
@@ -196,6 +204,43 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
     };
 
     /**
+     * 处理照片墙任务：智能检测并分割，以照片墙布局插入
+     */
+    const handlePhotoWallTask = async (task: Task) => {
+      const board = getCanvasBoard();
+      if (!board) {
+        console.error('[AutoInsert] Board not available for photo wall task');
+        return;
+      }
+
+      const url = task.result?.url;
+
+      if (!url) {
+        console.error('[AutoInsert] Photo wall task has no result URL');
+        return;
+      }
+
+      console.log(`[AutoInsert] Processing photo wall task ${task.id} with intelligent detection`);
+
+      try {
+        // 使用智能检测模式拆分照片墙（自动检测不规则区域）
+        const result = await imageSplitService.splitAndInsert(board, url, {
+          mode: 'photo-wall', // 使用智能检测模式
+          layoutStyle: 'photo-wall', // 使用照片墙布局
+          gap: 15,
+        });
+
+        if (result.success) {
+          console.log(`[AutoInsert] Photo wall split into ${result.count} images using intelligent detection`);
+        } else {
+          console.error(`[AutoInsert] Photo wall split failed: ${result.error}`);
+        }
+      } catch (error) {
+        console.error('[AutoInsert] Photo wall processing error:', error);
+      }
+    };
+
+    /**
      * 处理任务完成事件
      */
     const handleTaskCompleted = (task: Task) => {
@@ -217,6 +262,12 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
 
       // 标记为已处理
       insertedTaskIds.add(task.id);
+
+      // 检查是否为照片墙任务（需要在宫格图之前检查）
+      if (isPhotoWallTask(task)) {
+        handlePhotoWallTask(task);
+        return;
+      }
 
       // 检查是否为宫格图任务
       if (isGridImageTask(task)) {

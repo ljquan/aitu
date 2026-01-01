@@ -10,7 +10,7 @@ import type { LayoutStyle, GridConfig } from '../../types/photo-wall.types';
 import { LAYOUT_STYLES, GRID_IMAGE_DEFAULTS, GRID_IMAGE_PROMPT_TEMPLATE } from '../../types/photo-wall.types';
 import { taskQueueService } from '../../services/task-queue-service';
 import { TaskType } from '../../types/task.types';
-import { DEFAULT_IMAGE_MODEL } from '../../constants/model-config';
+import { getCurrentImageModel } from './image-generation';
 
 /**
  * 宫格图工具参数
@@ -105,7 +105,7 @@ function executeQueue(params: GridImageToolParams, options: MCPExecuteOptions): 
       {
         prompt,
         size: imageSize,
-        model: model || DEFAULT_IMAGE_MODEL,
+        model: model || getCurrentImageModel(),
         // 宫格图特有参数，用于任务完成后的处理
         // 保留 photoWall 前缀以兼容现有代码
         photoWallRows: validRows,

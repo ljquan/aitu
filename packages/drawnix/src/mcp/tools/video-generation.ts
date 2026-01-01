@@ -14,12 +14,15 @@ import { TaskType } from '../../types/task.types';
 import type { VideoModel } from '../../types/video.types';
 import { VIDEO_MODEL_CONFIGS } from '../../constants/video-model-config';
 import { DEFAULT_VIDEO_MODEL } from '../../constants/model-config';
+import { geminiSettings } from '../../utils/settings-manager';
 
 /**
  * 获取当前使用的视频模型名称
+ * 优先级：设置中的模型 > 默认模型
  */
-function getCurrentVideoModel(): string {
-  return DEFAULT_VIDEO_MODEL;
+export function getCurrentVideoModel(): string {
+  const settings = geminiSettings.get();
+  return settings?.videoModelName || DEFAULT_VIDEO_MODEL;
 }
 
 /**

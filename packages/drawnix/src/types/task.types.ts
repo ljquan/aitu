@@ -72,7 +72,7 @@ export interface GenerationParams {
   /** Photo wall grid columns (photo_wall only) */
   photoWallCols?: number;
   /** Photo wall layout style (photo_wall only) */
-  photoWallLayoutStyle?: 'scattered' | 'grid' | 'circular';
+  photoWallLayoutStyle?: 'scattered' | 'grid' | 'circular' | 'photo-wall';
   /** Additional parameters for specific generation types */
   [key: string]: any;
 }

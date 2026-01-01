@@ -13,6 +13,7 @@ import { DrawTransforms } from '@plait/draw';
 import { gridSplitter } from './photo-wall/grid-splitter';
 import { layoutEngine } from './photo-wall/layout-engine';
 import { detectGridLines, splitImageByLines } from '../utils/image-splitter';
+import { splitPhotoWall } from '../utils/photo-wall-splitter';
 import { getInsertionPointBelowBottommostElement } from '../utils/selection-utils';
 import type {
   GridConfig,
@@ -24,8 +25,11 @@ import type {
 
 /**
  * 拆分模式
+ * - grid: 按网格均匀分割
+ * - auto: 自动检测白色分割线
+ * - photo-wall: 智能检测照片墙中的不规则区域
  */
-export type SplitMode = 'grid' | 'auto';
+export type SplitMode = 'grid' | 'auto' | 'photo-wall';
 
 /**
  * 拆分选项
@@ -121,6 +125,41 @@ class ImageSplitService {
   }
 
   /**
+   * 智能检测照片墙并拆分
+   * 适用于不规则布局的照片墙（大小不一、位置不规则、白色边框、灰色背景）
+   *
+   * @param imageUrl - 图片 URL 或 base64 DataURL
+   * @returns 拆分后的图片元素数组
+   */
+  async splitPhotoWall(imageUrl: string): Promise<{
+    elements: ImageElement[];
+    gridConfig: GridConfig;
+  }> {
+    console.log('[ImageSplitService] Splitting photo wall by intelligent detection');
+
+    const elements = await splitPhotoWall(imageUrl);
+
+    if (elements.length === 0) {
+      console.log('[ImageSplitService] No photo wall regions detected');
+      return {
+        elements: [],
+        gridConfig: { rows: 1, cols: 1 },
+      };
+    }
+
+    // 估算网格配置（用于布局计算）
+    const cols = Math.ceil(Math.sqrt(elements.length));
+    const rows = Math.ceil(elements.length / cols);
+
+    console.log(`[ImageSplitService] Photo wall split into ${elements.length} images (estimated grid: ${rows}x${cols})`);
+
+    return {
+      elements,
+      gridConfig: { rows, cols },
+    };
+  }
+
+  /**
    * 拆分图片（统一入口）
    *
    * @param imageUrl - 图片 URL
@@ -138,6 +177,8 @@ class ImageSplitService {
       }
       const elements = await this.splitByGrid(imageUrl, gridConfig);
       return { elements, gridConfig };
+    } else if (mode === 'photo-wall') {
+      return this.splitPhotoWall(imageUrl);
     } else {
       return this.splitByDetection(imageUrl);
     }

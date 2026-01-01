@@ -12,12 +12,15 @@ import { defaultGeminiClient } from '../../utils/gemini-api';
 import { taskQueueService } from '../../services/task-queue-service';
 import { TaskType } from '../../types/task.types';
 import { DEFAULT_IMAGE_MODEL, IMAGE_PARAMS } from '../../constants/model-config';
+import { geminiSettings } from '../../utils/settings-manager';
 
 /**
  * 获取当前使用的图片模型名称
+ * 优先级：设置中的模型 > 默认模型
  */
-function getCurrentImageModel(): string {
-  return DEFAULT_IMAGE_MODEL;
+export function getCurrentImageModel(): string {
+  const settings = geminiSettings.get();
+  return settings?.imageModelName || DEFAULT_IMAGE_MODEL;
 }
 
 /**
@@ -165,7 +168,7 @@ function executeQueue(params: ImageGenerationParams, options: MCPExecuteOptions)
           prompt,
           size: size || '1x1',
           uploadedImages: uploadedImages && uploadedImages.length > 0 ? uploadedImages : undefined,
-          model: model || DEFAULT_IMAGE_MODEL,
+          model: model || getCurrentImageModel(),
           // 批量参数
           batchId: batchId,
           batchIndex: i + 1,
@@ -187,7 +190,7 @@ function executeQueue(params: ImageGenerationParams, options: MCPExecuteOptions)
         taskIds: createdTasks.map(t => t.id),
         prompt,
         size: size || '1x1',
-        model: model || DEFAULT_IMAGE_MODEL,
+        model: model || getCurrentImageModel(),
         count: actualCount,
       },
       type: 'image',

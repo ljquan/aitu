@@ -100,12 +100,21 @@ export const aiAnalyzeTool: MCPTool = {
         onToolCall: (toolCall) => {
           console.log('[AIAnalyzeTool] Tool call:', toolCall.name);
 
+          // 注入模型参数到工具参数中
+          // 如果工具支持 model 参数且 AI 没有指定，则使用上下文中的模型
+          const toolArgs = { ...toolCall.arguments };
+          const generationTools = ['generate_image', 'generate_video', 'generate_grid_image', 'generate_photo_wall'];
+          if (generationTools.includes(toolCall.name) && !toolArgs.model && context.model?.id) {
+            toolArgs.model = context.model.id;
+            console.log(`[AIAnalyzeTool] Injected model '${context.model.id}' into ${toolCall.name} args`);
+          }
+
           // 创建新的工作流步骤
           const newStep: WorkflowStepInfo = {
             id: `step-tool-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
             mcp: toolCall.name,
-            args: toolCall.arguments || {},
-            description: getToolDescription(toolCall.name, toolCall.arguments),
+            args: toolArgs,
+            description: getToolDescription(toolCall.name, toolArgs),
             status: 'running',
           };
 
