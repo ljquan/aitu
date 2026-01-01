@@ -13,6 +13,43 @@ import { taskQueueService } from '../../services/task-queue-service';
 import { TaskType } from '../../types/task.types';
 import type { VideoModel } from '../../types/video.types';
 import { VIDEO_MODEL_CONFIGS } from '../../constants/video-model-config';
+import { VIDEO_MODELS, DEFAULT_VIDEO_MODEL } from '../../constants/model-config';
+
+/**
+ * 生成视频模型的描述文本
+ */
+function getVideoModelDescription(): string {
+  return VIDEO_MODELS.map(m => `- ${m.id}${m.isVip ? '（推荐）' : ''}${m.description ? `：${m.description}` : ''}`).join('\n');
+}
+
+/**
+ * 获取视频模型 ID 列表
+ */
+function getVideoModelIds(): string[] {
+  return VIDEO_MODELS.map(m => m.id);
+}
+
+/**
+ * 获取所有可用的视频时长选项（去重）
+ */
+function getVideoDurationOptions(): string[] {
+  const durations = new Set<string>();
+  Object.values(VIDEO_MODEL_CONFIGS).forEach(config => {
+    config.durationOptions.forEach(opt => durations.add(opt.value));
+  });
+  return Array.from(durations).sort((a, b) => parseInt(a) - parseInt(b));
+}
+
+/**
+ * 获取所有可用的视频尺寸选项（去重）
+ */
+function getVideoSizeOptions(): string[] {
+  const sizes = new Set<string>();
+  Object.values(VIDEO_MODEL_CONFIGS).forEach(config => {
+    config.sizeOptions.forEach(opt => sizes.add(opt.value));
+  });
+  return Array.from(sizes);
+}
 
 /**
  * 视频生成参数
@@ -224,7 +261,10 @@ export const videoGenerationTool: MCPTool = {
 
 不适用场景：
 - 用户想要生成静态图片（使用 generate_image 工具）
-- 用户只是在聊天，没有生成视频的意图`,
+- 用户只是在聊天，没有生成视频的意图
+
+可用模型：
+${getVideoModelDescription()}`,
 
   inputSchema: {
     type: 'object',
@@ -235,20 +275,20 @@ export const videoGenerationTool: MCPTool = {
       },
       model: {
         type: 'string',
-        description: '视频生成模型，可选值：veo3（Google Veo3，高质量）、sora-2（OpenAI Sora 2）',
-        enum: ['veo3', 'sora-2'],
-        default: 'veo3',
+        description: '视频生成模型',
+        enum: getVideoModelIds(),
+        default: DEFAULT_VIDEO_MODEL,
       },
       seconds: {
         type: 'string',
-        description: '视频时长（秒），veo3 支持 5-8 秒，sora-2 支持 5-20 秒',
-        enum: ['5', '6', '7', '8', '10', '15', '20'],
+        description: '视频时长（秒），不同模型支持的时长不同',
+        enum: getVideoDurationOptions(),
         default: '8',
       },
       size: {
         type: 'string',
-        description: '视频尺寸，格式为 宽x高，如 1280x720（横向）、720x1280（纵向）、1080x1080（正方形）',
-        enum: ['1280x720', '720x1280', '1080x1080', '1920x1080', '1080x1920'],
+        description: '视频尺寸',
+        enum: getVideoSizeOptions(),
         default: '1280x720',
       },
       referenceImages: {

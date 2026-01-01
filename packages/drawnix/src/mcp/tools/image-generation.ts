@@ -11,6 +11,29 @@ import type { MCPTool, MCPResult, MCPExecuteOptions, MCPTaskResult } from '../ty
 import { defaultGeminiClient } from '../../utils/gemini-api';
 import { taskQueueService } from '../../services/task-queue-service';
 import { TaskType } from '../../types/task.types';
+import { IMAGE_MODELS, DEFAULT_IMAGE_MODEL, IMAGE_PARAMS } from '../../constants/model-config';
+
+/**
+ * 生成图片模型的描述文本
+ */
+function getImageModelDescription(): string {
+  return IMAGE_MODELS.map(m => `- ${m.id}${m.isVip ? '（推荐）' : ''}${m.description ? `：${m.description}` : ''}`).join('\n');
+}
+
+/**
+ * 获取图片模型 ID 列表
+ */
+function getImageModelIds(): string[] {
+  return IMAGE_MODELS.map(m => m.id);
+}
+
+/**
+ * 获取图片尺寸选项
+ */
+function getImageSizeOptions(): string[] {
+  const sizeParam = IMAGE_PARAMS.find(p => p.id === 'size');
+  return sizeParam?.options?.map(o => o.value) || ['1x1', '16x9', '9x16'];
+}
 
 /**
  * 图片生成参数
@@ -149,7 +172,7 @@ function executeQueue(params: ImageGenerationParams, options: MCPExecuteOptions)
           prompt,
           size: size || '1x1',
           uploadedImages: uploadedImages && uploadedImages.length > 0 ? uploadedImages : undefined,
-          model: model || 'imagen-3.0-generate-002',
+          model: model || DEFAULT_IMAGE_MODEL,
           // 批量参数
           batchId: batchId,
           batchIndex: i + 1,
@@ -171,7 +194,7 @@ function executeQueue(params: ImageGenerationParams, options: MCPExecuteOptions)
         taskIds: createdTasks.map(t => t.id),
         prompt,
         size: size || '1x1',
-        model: model || 'imagen-3.0-generate-002',
+        model: model || DEFAULT_IMAGE_MODEL,
         count: actualCount,
       },
       type: 'image',
@@ -203,7 +226,10 @@ export const imageGenerationTool: MCPTool = {
 
 不适用场景：
 - 用户想要生成视频（使用 generate_video 工具）
-- 用户只是在聊天，没有生成图片的意图`,
+- 用户只是在聊天，没有生成图片的意图
+
+可用模型：
+${getImageModelDescription()}`,
 
   inputSchema: {
     type: 'object',
@@ -214,8 +240,8 @@ export const imageGenerationTool: MCPTool = {
       },
       size: {
         type: 'string',
-        description: '图片尺寸比例，可选值：1x1（正方形）、16x9（横向）、9x16（纵向）、3x2、2x3、4x3、3x4',
-        enum: ['1x1', '16x9', '9x16', '3x2', '2x3', '4x3', '3x4', '4x5', '5x4'],
+        description: '图片尺寸比例',
+        enum: getImageSizeOptions(),
         default: '1x1',
       },
       referenceImages: {
@@ -227,14 +253,15 @@ export const imageGenerationTool: MCPTool = {
       },
       quality: {
         type: 'string',
-        description: '图片质量，可选值：1k、2k、4k',
+        description: '图片质量',
         enum: ['1k', '2k', '4k'],
         default: '1k',
       },
       model: {
         type: 'string',
         description: '图片生成模型',
-        default: 'imagen-3.0-generate-002',
+        enum: getImageModelIds(),
+        default: DEFAULT_IMAGE_MODEL,
       },
       count: {
         type: 'number',
