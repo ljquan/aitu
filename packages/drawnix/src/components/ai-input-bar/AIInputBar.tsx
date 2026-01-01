@@ -36,7 +36,7 @@ import {
   insertToInput,
   type PromptItem,
 } from './smart-suggestion-panel';
-import { initializeMCP, setCanvasBoard, setMermaidBoard, mcpRegistry } from '../../mcp';
+import { initializeMCP, setCanvasBoard, setBoard, mcpRegistry } from '../../mcp';
 import type { MCPTaskResult } from '../../mcp/types';
 import { parseAIInput } from '../../utils/ai-input-parser';
 import { convertToWorkflow, type WorkflowDefinition, type WorkflowStepOptions } from './workflow-converter';
@@ -124,10 +124,10 @@ const SelectionWatcher: React.FC<{
   // 设置 canvas board 引用给 MCP 工具使用
   useEffect(() => {
     setCanvasBoard(board);
-    setMermaidBoard(board);
+    setBoard(board);
     return () => {
       setCanvasBoard(null);
-      setMermaidBoard(null);
+      setBoard(null);
     };
   }, [board]);
   const onSelectionChangeRef = useRef(onSelectionChange);

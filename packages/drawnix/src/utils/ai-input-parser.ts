@@ -28,7 +28,7 @@ export type SendScenario =
 /**
  * 生成类型
  */
-export type GenerationType = 'image' | 'video';
+export type GenerationType = 'image' | 'video' | 'text';
 
 /**
  * 选中元素的分类信息
@@ -90,6 +90,14 @@ function getDefaultImageModel(): string {
 function getDefaultVideoModel(): string {
   const settings = geminiSettings.get();
   return settings?.videoModelName || DEFAULT_VIDEO_MODEL;
+}
+
+/**
+ * 获取默认文本模型
+ */
+function getDefaultTextModel(): string {
+  const settings = geminiSettings.get();
+  return settings?.textModelName || 'claude-sonnet-4-5-20250929';
 }
 
 /**
@@ -169,8 +177,12 @@ export function parseAIInput(
     generationType = 'image';
     modelId = parseResult.selectedImageModel;
     isModelExplicit = true;
+  } else if (!hasSelectedElements && hasExtraContent) {
+    // 没有选中元素、只有文字输入时，使用文本模型（Agent 流程）
+    generationType = 'text';
+    modelId = getDefaultTextModel();
   } else {
-    // 默认使用设置中的图片模型
+    // 有选中元素但没指定模型时，默认使用图片模型
     modelId = getDefaultImageModel();
   }
   
@@ -196,8 +208,8 @@ export function parseAIInput(
     }
   }
   
-  // 如果没有指定尺寸或时长，使用模型默认值
-  if (!size) {
+  // 如果没有指定尺寸或时长，使用模型默认值（文本模型不需要这些参数）
+  if (!size && generationType !== 'text') {
     const modelConfig = getModelConfig(modelId);
     if (modelConfig?.type === 'image' && modelConfig.imageDefaults) {
       // 图片模型使用默认尺寸
@@ -211,7 +223,7 @@ export function parseAIInput(
       // 使用通用默认值
       if (generationType === 'image') {
         size = '1x1';
-      } else {
+      } else if (generationType === 'video') {
         const defaults = getVideoModelDefaults(modelId);
         size = normalizeSize(defaults.size);
         if (!duration) {

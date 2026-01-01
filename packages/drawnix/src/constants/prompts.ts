@@ -176,6 +176,10 @@ export const AI_COLD_START_SUGGESTIONS: Record<'zh' | 'en', ColdStartSuggestion[
       scene: '技术文档',
     },
     {
+      content: '画一个大模型发展趋势的思维导图',
+      scene: '知识梳理',
+    },
+    {
       content: '一只可爱的小猫坐在窗台上，阳光洒在它的毛发上',
       scene: '萌宠插画',
       modelType: 'image',
@@ -205,6 +209,10 @@ export const AI_COLD_START_SUGGESTIONS: Record<'zh' | 'en', ColdStartSuggestion[
     {
       content: 'Generate OAuth2.0 sequence diagram',
       scene: 'Tech docs',
+    },
+    {
+      content: 'Draw a mind map of LLM development trends',
+      scene: 'Knowledge organization',
     },
     {
       content: 'A cute kitten sitting on a windowsill with sunlight streaming through',

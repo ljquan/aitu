@@ -13,3 +13,11 @@ export type { AIAnalyzeParams, AIAnalyzeResult } from './ai-analyze';
 
 export { mermaidTool, insertMermaid, setMermaidBoard, getMermaidBoard } from './mermaid-tool';
 export type { MermaidToolParams } from './mermaid-tool';
+
+export { mindmapTool, insertMindmap } from './mindmap-tool';
+export type { MindmapToolParams } from './mindmap-tool';
+
+// 共享模块导出
+export { setBoard, getBoard, isBoardAvailable, requireBoard } from './shared';
+export { extractCodeBlock, getInsertionPoint, insertElementsToCanvas } from './shared';
+export type { CodeBlockResult, InsertResult } from './shared';

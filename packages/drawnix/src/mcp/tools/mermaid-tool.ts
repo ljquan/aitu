@@ -18,16 +18,11 @@
  */
 
 import type { MCPTool, MCPResult } from '../types';
-import { 
-  getViewportOrigination,
-  PlaitBoard, 
-  PlaitElement,
-  PlaitGroupElement,
-  Point, 
-  RectangleClient,
-  WritableClipboardOperationType 
-} from '@plait/core';
-import { getSmartInsertionPoint, getInsertionPointBelowBottommostElement } from '../../utils/selection-utils';
+import { getBoard, setBoard, extractCodeBlock, insertElementsToCanvas } from './shared';
+
+// 为了向后兼容，重新导出 Board 管理函数
+export const setMermaidBoard = setBoard;
+export const getMermaidBoard = getBoard;
 
 /**
  * Mermaid工具输入参数
@@ -35,26 +30,6 @@ import { getSmartInsertionPoint, getInsertionPointBelowBottommostElement } from 
 export interface MermaidToolParams {
   /** Mermaid markdown字符串 */
   mermaid: string;
-}
-
-/**
- * Board 引用持有器
- */
-let boardRef: PlaitBoard | null = null;
-
-/**
- * 设置 Board 引用
- */
-export function setMermaidBoard(board: PlaitBoard | null): void {
-  boardRef = board;
-  console.log('[MermaidTool] Board reference set:', !!board);
-}
-
-/**
- * 获取 Board 引用
- */
-export function getMermaidBoard(): PlaitBoard | null {
-  return boardRef;
 }
 
 /**
@@ -86,16 +61,7 @@ const mermaidToDrawnixLib: MermaidToDrawnixLib = {
  * 从代码块中提取Mermaid代码
  */
 function extractMermaidCode(input: string): string {
-  // 尝试提取```mermaid代码块
-  const mermaidBlockRegex = /```(?:mermaid|Mermaid)\s*([\s\S]*?)```/;
-  const match = input.match(mermaidBlockRegex);
-
-  if (match) {
-    return match[1].trim();
-  }
-
-  // 如果没有代码块，返回原始输入（去除首尾空白）
-  return input.trim();
+  return extractCodeBlock(input, 'mermaid');
 }
 
 /**
@@ -133,59 +99,10 @@ function detectDiagramType(code: string): string {
 }
 
 /**
- * 计算插入位置
- * 优先使用选中元素下方位置，否则使用画布最下方元素下方+20px位置
- */
-function getInsertionPoint(board: PlaitBoard, elements: PlaitElement[]): Point {
-  // 计算新元素的边界矩形，用于居中计算
-  const elementRectangle = RectangleClient.getBoundingRectangle(
-    elements
-      .filter((ele) => !PlaitGroupElement.isGroup(ele))
-      .map((ele) =>
-        RectangleClient.getRectangleByPoints(ele.points as Point[])
-      )
-  );
-  const newElementWidth = elementRectangle.width;
-
-  // 1. 优先尝试获取选中元素下方的插入点
-  const smartPoint = getSmartInsertionPoint(board);
-  if (smartPoint) {
-    // smartPoint 返回的是中心X坐标，需要调整为左上角
-    return [
-      smartPoint[0] - newElementWidth / 2,
-      smartPoint[1],
-    ] as Point;
-  }
-
-  // 2. 如果没有选中元素，在画布最下方元素下方插入
-  const bottomPoint = getInsertionPointBelowBottommostElement(board, newElementWidth);
-  if (bottomPoint) {
-    return bottomPoint;
-  }
-
-  // 3. 如果画布为空，使用画布中心位置
-  const boardContainerRect = PlaitBoard.getBoardContainer(board).getBoundingClientRect();
-  const focusPoint = [
-    boardContainerRect.width / 2,
-    boardContainerRect.height / 2,
-  ];
-  const zoom = board.viewport.zoom;
-  const origination = getViewportOrigination(board);
-  const centerX = origination![0] + focusPoint[0] / zoom;
-  const centerY = origination![1] + focusPoint[1] / zoom;
-  
-  // 返回居中后的起始点
-  return [
-    centerX - newElementWidth / 2,
-    centerY - elementRectangle.height / 2,
-  ] as Point;
-}
-
-/**
  * 执行Mermaid转换和插入
  */
 async function executeMermaidTool(params: MermaidToolParams): Promise<MCPResult> {
-  const board = boardRef;
+  const board = getBoard();
 
   if (!board) {
     return {
@@ -238,16 +155,16 @@ async function executeMermaidTool(params: MermaidToolParams): Promise<MCPResult>
 
     console.log('[MermaidTool] Parsed elements count:', elements.length);
 
-    // 4. 计算插入位置（需要传入elements以计算居中位置）
-    const insertionPoint = getInsertionPoint(board, elements);
-    console.log('[MermaidTool] Insertion point:', insertionPoint);
+    // 4. 插入到画布（使用共享工具函数）
+    const insertResult = insertElementsToCanvas(board, elements);
 
-    // 5. 插入到画布
-    board.insertFragment(
-      { elements: JSON.parse(JSON.stringify(elements)) },
-      insertionPoint,
-      WritableClipboardOperationType.paste
-    );
+    if (!insertResult.success) {
+      return {
+        success: false,
+        error: insertResult.error || '插入图表失败',
+        type: 'error',
+      };
+    }
 
     console.log('[MermaidTool] Successfully inserted', elements.length, 'elements to canvas');
 
@@ -255,7 +172,7 @@ async function executeMermaidTool(params: MermaidToolParams): Promise<MCPResult>
       success: true,
       data: {
         diagramType,
-        elementsCount: elements.length,
+        elementsCount: insertResult.elementsCount,
         mermaidCode: mermaidCode.substring(0, 200) + (mermaidCode.length > 200 ? '...' : ''),
       },
       type: 'canvas',

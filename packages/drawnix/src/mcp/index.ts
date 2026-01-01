@@ -22,6 +22,11 @@ export {
 export type { ContentType, InsertionItem, CanvasInsertionParams } from './tools/canvas-insertion';
 export { mermaidTool, insertMermaid, setMermaidBoard, getMermaidBoard } from './tools/mermaid-tool';
 export type { MermaidToolParams } from './tools/mermaid-tool';
+export { mindmapTool, insertMindmap } from './tools/mindmap-tool';
+export type { MindmapToolParams } from './tools/mindmap-tool';
+
+// 共享模块导出
+export { setBoard, getBoard } from './tools/shared';
 
 // 初始化函数：注册所有内置工具
 import { mcpRegistry } from './registry';
@@ -30,6 +35,7 @@ import { videoGenerationTool } from './tools/video-generation';
 import { canvasInsertionTool } from './tools/canvas-insertion';
 import { aiAnalyzeTool } from './tools/ai-analyze';
 import { mermaidTool } from './tools/mermaid-tool';
+import { mindmapTool } from './tools/mindmap-tool';
 
 /**
  * 初始化 MCP 模块，注册所有内置工具
@@ -41,6 +47,7 @@ export function initializeMCP(): void {
     canvasInsertionTool,
     aiAnalyzeTool,
     mermaidTool,
+    mindmapTool,
   ]);
   console.log('[MCP] Initialized with built-in tools');
 }
