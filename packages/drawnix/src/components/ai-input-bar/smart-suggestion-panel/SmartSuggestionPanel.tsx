@@ -9,9 +9,9 @@
  */
 
 import React, { useCallback, useRef, useEffect, useState, useMemo } from 'react';
-import { 
-  Bot, Check, Image, Video, Settings, Hash, Plus, 
-  History, Lightbulb, X 
+import {
+  Bot, Check, Image, Video, Settings, Hash, Plus,
+  History, Lightbulb, X, Sparkles
 } from 'lucide-react';
 import { getModelConfig, type ModelType, type ParamConfig } from '../../../constants/model-config';
 import { useParameterFilter } from './hooks/useParameterFilter';
@@ -32,14 +32,15 @@ function getModeTitle(mode: SuggestionMode, language: 'zh' | 'en', pendingParam?
     const paramLabel = pendingParam.shortLabel || pendingParam.label;
     return language === 'zh' ? `选择 ${paramLabel}` : `Select ${paramLabel}`;
   }
-  
-  const titles = {
+
+  const titles: Record<string, string> = {
     model: language === 'zh' ? '选择模型' : 'Select Model',
     param: language === 'zh' ? '选择参数' : 'Select Parameter',
     count: language === 'zh' ? '生成数量' : 'Select Count',
     prompt: language === 'zh' ? '提示词' : 'Prompts',
+    'cold-start': language === 'zh' ? '试试这些创意' : 'Try these ideas',
   };
-  return mode ? titles[mode] : '';
+  return mode ? titles[mode] || '' : '';
 }
 
 /**
@@ -55,6 +56,8 @@ function getModeIcon(mode: SuggestionMode): React.ReactNode {
       return <Plus size={16} />;
     case 'prompt':
       return <Lightbulb size={16} />;
+    case 'cold-start':
+      return <Sparkles size={16} />;
     default:
       return null;
   }
@@ -129,29 +132,37 @@ export const SmartSuggestionPanel: React.FC<SmartSuggestionPanelProps> = ({
     }
   }, [mode, suggestions, pendingParam]);
 
-  // 分组提示词（历史 + 预设）
-  const { historyPrompts, presetPrompts } = useMemo(() => {
+  // 分组提示词（历史 + 预设），也用于冷启动模式
+  const { historyPrompts, presetPrompts, coldStartSuggestions } = useMemo(() => {
+    if (mode === 'cold-start') {
+      // 冷启动模式只显示预设的引导提示词
+      const coldStart = suggestions.filter(s => s.type === 'cold-start');
+      return { historyPrompts: [], presetPrompts: [], coldStartSuggestions: coldStart };
+    }
     if (mode !== 'prompt') {
-      return { historyPrompts: [], presetPrompts: [] };
+      return { historyPrompts: [], presetPrompts: [], coldStartSuggestions: [] };
     }
     const history = suggestions.filter(s => s.type === 'prompt' && s.source === 'history');
     const preset = suggestions.filter(s => s.type === 'prompt' && s.source === 'preset');
-    return { historyPrompts: history, presetPrompts: preset };
+    return { historyPrompts: history, presetPrompts: preset, coldStartSuggestions: [] };
   }, [mode, suggestions]);
 
   // 非提示词模式的建议列表
   const nonPromptSuggestions = useMemo(() => {
-    if (mode === 'prompt') return [];
+    if (mode === 'prompt' || mode === 'cold-start') return [];
     return suggestions;
   }, [mode, suggestions]);
 
   // 合并后的列表（用于键盘导航）
   const allSuggestions = useMemo(() => {
+    if (mode === 'cold-start') {
+      return coldStartSuggestions;
+    }
     if (mode === 'prompt') {
       return [...historyPrompts, ...presetPrompts];
     }
     return nonPromptSuggestions;
-  }, [mode, historyPrompts, presetPrompts, nonPromptSuggestions]);
+  }, [mode, historyPrompts, presetPrompts, nonPromptSuggestions, coldStartSuggestions]);
 
   // 重置高亮索引
   useEffect(() => {
@@ -186,11 +197,19 @@ export const SmartSuggestionPanel: React.FC<SmartSuggestionPanelProps> = ({
         onSelectCount(item.value);
         break;
       case 'prompt':
-        onSelectPrompt?.({ 
-          id: item.id, 
-          content: item.content, 
+        onSelectPrompt?.({
+          id: item.id,
+          content: item.content,
           source: item.source,
           timestamp: item.timestamp,
+        });
+        break;
+      case 'cold-start':
+        // 冷启动提示词选择后，填入输入框
+        onSelectPrompt?.({
+          id: item.id,
+          content: item.content,
+          source: 'preset',
         });
         break;
     }
@@ -329,6 +348,54 @@ export const SmartSuggestionPanel: React.FC<SmartSuggestionPanelProps> = ({
   // 没有建议时不显示
   if (allSuggestions.length === 0) return null;
 
+  // 渲染冷启动模式（创意引导）
+  if (mode === 'cold-start') {
+    return (
+      <div
+        ref={panelRef}
+        className="smart-suggestion-panel smart-suggestion-panel--cold-start"
+        role="listbox"
+        aria-label={getModeTitle(mode, language)}
+        onMouseDown={(e) => e.preventDefault()}
+      >
+        <div className="smart-suggestion-panel__header">
+          {getModeIcon(mode)}
+          <span>{getModeTitle(mode, language)}</span>
+          <span className="smart-suggestion-panel__hint">
+            {getKeyboardHint(language)}
+          </span>
+        </div>
+        <div className="smart-suggestion-panel__content">
+          <div className="smart-suggestion-panel__list smart-suggestion-panel__list--cold-start">
+            {coldStartSuggestions.map((item, index) => (
+              <div
+                key={item.id}
+                className={`smart-suggestion-panel__item smart-suggestion-panel__item--cold-start ${
+                  index === highlightedIndex
+                    ? 'smart-suggestion-panel__item--highlighted'
+                    : ''
+                }`}
+                onClick={() => handleSelect(item)}
+                onMouseEnter={() => setHighlightedIndex(index)}
+              >
+                <div className="smart-suggestion-panel__item-content">
+                  <span className="smart-suggestion-panel__item-text">
+                    {item.shortLabel || item.label}
+                  </span>
+                  {item.type === 'cold-start' && item.scene && (
+                    <span className="smart-suggestion-panel__item-scene">
+                      {item.scene}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // 渲染提示词模式（分组显示）
   if (mode === 'prompt') {
     return (
@@ -400,7 +467,7 @@ export const SmartSuggestionPanel: React.FC<SmartSuggestionPanelProps> = ({
                       <span className="smart-suggestion-panel__item-text">
                         {item.shortLabel || item.label}
                       </span>
-                      {item.scene && (
+                      {item.type === 'prompt' && item.scene && (
                         <span className="smart-suggestion-panel__item-scene">
                           {item.scene}
                         </span>

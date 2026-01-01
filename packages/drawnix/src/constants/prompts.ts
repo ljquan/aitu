@@ -161,6 +161,79 @@ export const AI_INSTRUCTIONS: Record<'zh' | 'en', InstructionItemData[]> = {
   ]
 };
 
+// 冷启动引导提示词 - 用于引导新用户开始使用
+export interface ColdStartSuggestion {
+  content: string;
+  scene: string;
+  /** 建议的模型类型，帮助用户快速选择 */
+  modelType?: 'image' | 'video';
+}
+
+export const AI_COLD_START_SUGGESTIONS: Record<'zh' | 'en', ColdStartSuggestion[]> = {
+  zh: [
+    {
+      content: '生成OAuth2.0时序图',
+      scene: '技术文档',
+    },
+    {
+      content: '一只可爱的小猫坐在窗台上，阳光洒在它的毛发上',
+      scene: '萌宠插画',
+      modelType: 'image',
+    },
+    {
+      content: '日落时分的海边沙滩，海浪轻拍岸边，氛围温暖',
+      scene: '风景摄影',
+      modelType: 'image',
+    },
+    {
+      content: '未来科幻城市，霓虹灯闪烁，赛博朋克风格',
+      scene: '概念艺术',
+      modelType: 'image',
+    },
+    {
+      content: '樱花树下的少女，微风吹过，花瓣飘落',
+      scene: '视频创作',
+      modelType: 'video',
+    },
+    {
+      content: '一杯热咖啡，蒸汽缓缓升起，光影交错',
+      scene: '产品展示',
+      modelType: 'image',
+    },
+  ],
+  en: [
+    {
+      content: 'Generate OAuth2.0 sequence diagram',
+      scene: 'Tech docs',
+    },
+    {
+      content: 'A cute kitten sitting on a windowsill with sunlight streaming through',
+      scene: 'Pet illustration',
+      modelType: 'image',
+    },
+    {
+      content: 'Beach at sunset, gentle waves, warm atmosphere',
+      scene: 'Landscape photo',
+      modelType: 'image',
+    },
+    {
+      content: 'Futuristic sci-fi city, neon lights, cyberpunk style',
+      scene: 'Concept art',
+      modelType: 'image',
+    },
+    {
+      content: 'A girl under cherry blossom tree, petals falling in the breeze',
+      scene: 'Video creation',
+      modelType: 'video',
+    },
+    {
+      content: 'A cup of hot coffee with steam rising, beautiful lighting',
+      scene: 'Product showcase',
+      modelType: 'image',
+    },
+  ],
+};
+
 // 类型定义
 export type Language = 'zh' | 'en';
 
@@ -177,4 +250,9 @@ export const getVideoPrompts = (language: Language): readonly string[] => {
 // 获取 AI 指令的辅助函数
 export const getInstructions = (language: Language): InstructionItemData[] => {
   return AI_INSTRUCTIONS[language];
+};
+
+// 获取冷启动引导提示词的辅助函数
+export const getColdStartSuggestions = (language: Language): ColdStartSuggestion[] => {
+  return AI_COLD_START_SUGGESTIONS[language];
 };

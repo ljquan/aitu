@@ -14,12 +14,13 @@ import {
   type ParamConfig,
   type ModelType,
 } from '../../../../constants/model-config';
-import type { 
-  SuggestionItem, 
-  ModelSuggestionItem, 
+import type {
+  SuggestionItem,
+  ModelSuggestionItem,
   ParamSuggestionItem,
   CountSuggestionItem,
   PromptSuggestionItem,
+  ColdStartSuggestionItem,
   SelectedParam,
   PromptItem,
   SuggestionMode,
@@ -81,6 +82,9 @@ export function useParameterFilter(options: FilterOptions): SuggestionItem[] {
         return filterCounts(keyword, selectedCount);
       case 'prompt':
         return filterPrompts(keyword, prompts);
+      case 'cold-start':
+        // 冷启动模式直接显示所有提示词，无需过滤
+        return filterColdStartPrompts(prompts);
       default:
         return [];
     }
@@ -238,6 +242,23 @@ function filterCounts(
     label: opt.label,
     shortLabel: `${opt.value}`,
     value: opt.value,
+  }));
+}
+
+/**
+ * 冷启动模式的建议列表（不需要过滤，直接返回所有）
+ */
+function filterColdStartPrompts(
+  prompts: PromptItem[]
+): ColdStartSuggestionItem[] {
+  return prompts.map(prompt => ({
+    id: prompt.id,
+    type: 'cold-start' as const,
+    label: prompt.content,
+    shortLabel: prompt.content.length > 50 ? prompt.content.substring(0, 50) + '...' : prompt.content,
+    description: prompt.scene || '',
+    content: prompt.content,
+    scene: prompt.scene,
   }));
 }
 

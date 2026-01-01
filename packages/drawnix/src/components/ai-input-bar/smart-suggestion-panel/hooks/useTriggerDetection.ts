@@ -20,17 +20,21 @@ import type {
 
 /**
  * 解析输入文本，检测触发字符和已选择的内容
+ * @param input 输入文本
+ * @param hasSelection 是否有选中元素（有选中时启用智能提示）
  */
-export function useTriggerDetection(input: string): ParseResult {
+export function useTriggerDetection(input: string, hasSelection: boolean = false): ParseResult {
   return useMemo(() => {
-    return parseInput(input);
-  }, [input]);
+    return parseInput(input, hasSelection);
+  }, [input, hasSelection]);
 }
 
 /**
  * 解析输入文本
+ * @param input 输入文本
+ * @param hasSelection 是否有选中元素
  */
-export function parseInput(input: string): ParseResult {
+export function parseInput(input: string, hasSelection: boolean = false): ParseResult {
   const segments: ParseSegment[] = [];
   let cleanText = '';
   let selectedImageModel: string | undefined;
@@ -177,14 +181,15 @@ export function parseInput(input: string): ParseResult {
   
   // 检测当前正在输入的模式
   const { mode, keyword, triggerPosition } = detectCurrentMode(
-    input, 
+    input,
     processedRanges,
     modelIds,
     paramIds,
     selectedImageModel,
     selectedVideoModel,
     selectedParams,
-    selectedCount
+    selectedCount,
+    hasSelection
   );
   
   return {
@@ -202,13 +207,9 @@ export function parseInput(input: string): ParseResult {
 
 /**
  * 检测当前正在输入的模式
- * 
- * 智能提示优先级：
- * 1. 正在输入触发字符（#、-、+）→ 显示对应面板
- * 2. 没有指定模型 → 提示模型
- * 3. 指定了模型，没有指定参数 → 提示参数
- * 4. 指定了模型和参数，没有指定数量 → 提示数量
- * 5. 都指定了 → 提示 Prompt
+ *
+ * - 有选中元素时：启用智能提示（模型 > 参数 > 数量 > Prompt）
+ * - 无选中元素时：只有输入触发字符（#、-、+）时才显示对应面板
  */
 function detectCurrentMode(
   input: string,
@@ -218,7 +219,8 @@ function detectCurrentMode(
   selectedImageModel?: string,
   selectedVideoModel?: string,
   selectedParams?: SelectedParam[],
-  selectedCount?: number
+  selectedCount?: number,
+  hasSelection: boolean = false
 ): { mode: SuggestionMode; keyword: string; triggerPosition?: number } {
   // 检查最后一个 # 是否正在输入模型
   const lastHashIndex = input.lastIndexOf('#');
@@ -226,11 +228,11 @@ function detectCurrentMode(
     const isPartOfValidToken = processedRanges.some(
       range => lastHashIndex >= range.start && lastHashIndex < range.end
     );
-    
+
     if (!isPartOfValidToken) {
       const afterHash = input.substring(lastHashIndex + 1);
       const spaceIndex = afterHash.indexOf(' ');
-      
+
       // 如果 # 后面没有空格，说明正在输入
       if (spaceIndex === -1) {
         // 检查是否两种模型都已选择
@@ -245,18 +247,18 @@ function detectCurrentMode(
       }
     }
   }
-  
+
   // 检查最后一个 - 是否正在输入参数
   const lastDashIndex = input.lastIndexOf('-');
   if (lastDashIndex !== -1) {
     const isPartOfValidToken = processedRanges.some(
       range => lastDashIndex >= range.start && lastDashIndex < range.end
     );
-    
+
     if (!isPartOfValidToken) {
       const afterDash = input.substring(lastDashIndex + 1);
       const spaceIndex = afterDash.indexOf(' ');
-      
+
       // 如果 - 后面没有空格，说明正在输入
       if (spaceIndex === -1) {
         // 检查是否包含等号（正在输入值）
@@ -279,18 +281,18 @@ function detectCurrentMode(
       }
     }
   }
-  
+
   // 检查最后一个 + 是否正在输入个数
   const lastPlusIndex = input.lastIndexOf('+');
   if (lastPlusIndex !== -1) {
     const isPartOfValidToken = processedRanges.some(
       range => lastPlusIndex >= range.start && lastPlusIndex < range.end
     );
-    
+
     if (!isPartOfValidToken) {
       const afterPlus = input.substring(lastPlusIndex + 1);
       const spaceIndex = afterPlus.indexOf(' ');
-      
+
       // 如果 + 后面没有空格，说明正在输入
       if (spaceIndex === -1) {
         return {
@@ -301,43 +303,52 @@ function detectCurrentMode(
       }
     }
   }
-  
-  // 智能提示：根据已选择的内容决定显示哪种提示
-  // 优先级：模型 > 参数 > 数量 > Prompt
-  
-  // 1. 没有指定任何模型 → 提示模型
-  const hasAnyModel = !!selectedImageModel || !!selectedVideoModel;
-  if (!hasAnyModel) {
+
+  // 有选中元素时，启用智能提示
+  if (hasSelection) {
+    // 智能提示优先级：模型 > 参数 > 数量 > Prompt
+
+    // 1. 没有指定任何模型 → 提示模型
+    const hasAnyModel = !!selectedImageModel || !!selectedVideoModel;
+    if (!hasAnyModel) {
+      return {
+        mode: 'model',
+        keyword: '',
+        triggerPosition: undefined,
+      };
+    }
+
+    // 2. 指定了模型，没有指定参数 → 提示参数
+    const hasParams = selectedParams && selectedParams.length > 0;
+    if (!hasParams) {
+      return {
+        mode: 'param',
+        keyword: '',
+        triggerPosition: undefined,
+      };
+    }
+
+    // 3. 指定了模型和参数，没有指定数量 → 提示数量
+    if (!selectedCount) {
+      return {
+        mode: 'count',
+        keyword: '',
+        triggerPosition: undefined,
+      };
+    }
+
+    // 4. 都指定了 → 提示 Prompt
     return {
-      mode: 'model',
-      keyword: '',
+      mode: 'prompt',
+      keyword: input,
       triggerPosition: undefined,
     };
   }
-  
-  // 2. 指定了模型，没有指定参数 → 提示参数
-  const hasParams = selectedParams && selectedParams.length > 0;
-  if (!hasParams) {
-    return {
-      mode: 'param',
-      keyword: '',
-      triggerPosition: undefined,
-    };
-  }
-  
-  // 3. 指定了模型和参数，没有指定数量 → 提示数量
-  if (!selectedCount) {
-    return {
-      mode: 'count',
-      keyword: '',
-      triggerPosition: undefined,
-    };
-  }
-  
-  // 4. 都指定了 → 提示 Prompt
+
+  // 没有选中元素且没有触发字符时，不显示任何面板
   return {
-    mode: 'prompt',
-    keyword: input,
+    mode: null,
+    keyword: '',
     triggerPosition: undefined,
   };
 }

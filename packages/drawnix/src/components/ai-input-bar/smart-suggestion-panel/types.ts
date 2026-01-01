@@ -12,8 +12,13 @@ import type { ModelConfig, ParamConfig, ModelType } from '../../../constants/mod
 
 /**
  * 建议模式
+ * - model: 模型选择
+ * - param: 参数选择
+ * - count: 数量选择
+ * - prompt: 提示词建议
+ * - cold-start: 冷启动引导（无选中内容、输入框为空时显示）
  */
-export type SuggestionMode = 'model' | 'param' | 'count' | 'prompt' | null;
+export type SuggestionMode = 'model' | 'param' | 'count' | 'prompt' | 'cold-start' | null;
 
 /**
  * 触发字符映射
@@ -104,13 +109,26 @@ export interface PromptSuggestionItem extends BaseSuggestionItem {
 }
 
 /**
+ * 冷启动建议项（引导新用户）
+ */
+export interface ColdStartSuggestionItem extends BaseSuggestionItem {
+  type: 'cold-start';
+  content: string;
+  /** 适用场景描述 */
+  scene?: string;
+  /** 建议的模型类型 */
+  modelType?: 'image' | 'video';
+}
+
+/**
  * 联合建议项类型
  */
-export type SuggestionItem = 
-  | ModelSuggestionItem 
-  | ParamSuggestionItem 
-  | CountSuggestionItem 
-  | PromptSuggestionItem;
+export type SuggestionItem =
+  | ModelSuggestionItem
+  | ParamSuggestionItem
+  | CountSuggestionItem
+  | PromptSuggestionItem
+  | ColdStartSuggestionItem;
 
 /**
  * 已选择的参数

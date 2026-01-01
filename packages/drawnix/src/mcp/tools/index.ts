@@ -10,3 +10,6 @@ export type { VideoGenerationParams } from './video-generation';
 
 export { aiAnalyzeTool, analyzeWithAI } from './ai-analyze';
 export type { AIAnalyzeParams, AIAnalyzeResult } from './ai-analyze';
+
+export { mermaidTool, insertMermaid, setMermaidBoard, getMermaidBoard } from './mermaid-tool';
+export type { MermaidToolParams } from './mermaid-tool';

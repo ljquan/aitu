@@ -29,14 +29,14 @@ import { processSelectedContentForAI } from '../../utils/selection-utils';
 import { useTextSelection } from '../../hooks/useTextSelection';
 import { usePromptHistory } from '../../hooks/usePromptHistory';
 import { useChatDrawerControl } from '../../contexts/ChatDrawerContext';
-import { AI_INSTRUCTIONS } from '../../constants/prompts';
+import { AI_INSTRUCTIONS, AI_COLD_START_SUGGESTIONS } from '../../constants/prompts';
 import {
   SmartSuggestionPanel,
   useTriggerDetection,
   insertToInput,
   type PromptItem,
 } from './smart-suggestion-panel';
-import { initializeMCP, setCanvasBoard, mcpRegistry } from '../../mcp';
+import { initializeMCP, setCanvasBoard, setMermaidBoard, mcpRegistry } from '../../mcp';
 import type { MCPTaskResult } from '../../mcp/types';
 import { parseAIInput } from '../../utils/ai-input-parser';
 import { convertToWorkflow, type WorkflowDefinition, type WorkflowStepOptions } from './workflow-converter';
@@ -124,7 +124,11 @@ const SelectionWatcher: React.FC<{
   // 设置 canvas board 引用给 MCP 工具使用
   useEffect(() => {
     setCanvasBoard(board);
-    return () => setCanvasBoard(null);
+    setMermaidBoard(board);
+    return () => {
+      setCanvasBoard(null);
+      setMermaidBoard(null);
+    };
   }, [board]);
   const onSelectionChangeRef = useRef(onSelectionChange);
   onSelectionChangeRef.current = onSelectionChange;
@@ -221,7 +225,8 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
   const [isFocused, setIsFocused] = useState(false);
 
   // 使用新的 useTriggerDetection hook 解析输入
-  const parseResult = useTriggerDetection(prompt);
+  // 有选中元素时启用智能提示，无选中元素时只响应触发字符
+  const parseResult = useTriggerDetection(prompt, selectedContent.length > 0);
 
   // 点击外部关闭输入框的展开状态
   useEffect(() => {
@@ -353,6 +358,21 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
 
     return [...historyPrompts, ...presetPrompts];
   }, [language, history]);
+
+  // 冷启动引导提示词（无选中内容、输入框为空时显示）
+  const coldStartPrompts = useMemo((): PromptItem[] => {
+    return AI_COLD_START_SUGGESTIONS[language].map((item, index) => ({
+      id: `cold_start_${index}`,
+      content: item.content,
+      scene: item.scene,
+      source: 'preset' as const,
+    }));
+  }, [language]);
+
+  // 判断是否为冷启动场景（无选中内容、输入框为空）
+  const isColdStartMode = useMemo(() => {
+    return selectedContent.length === 0 && prompt.trim() === '';
+  }, [selectedContent.length, prompt]);
 
   // 处理选择变化的回调（由 SelectionWatcher 调用）
   const handleSelectionChange = useCallback((content: SelectedContent[]) => {
@@ -855,14 +875,14 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
       })}>
         {/* Smart Suggestion Panel - unified panel for models, params, counts, and prompts */}
         <SmartSuggestionPanel
-          visible={isFocused && parseResult.mode !== null}
-          mode={parseResult.mode}
+          visible={isFocused && (isColdStartMode || parseResult.mode !== null)}
+          mode={isColdStartMode ? 'cold-start' : parseResult.mode}
           filterKeyword={parseResult.mode === 'prompt' ? parseResult.cleanText : parseResult.keyword}
           selectedImageModel={parseResult.selectedImageModel}
           selectedVideoModel={parseResult.selectedVideoModel}
           selectedParams={parseResult.selectedParams}
           selectedCount={parseResult.selectedCount}
-          prompts={allPrompts}
+          prompts={isColdStartMode ? coldStartPrompts : allPrompts}
           onSelectModel={handleModelSelect}
           onSelectParam={handleParamSelect}
           onSelectCount={handleCountSelect}
