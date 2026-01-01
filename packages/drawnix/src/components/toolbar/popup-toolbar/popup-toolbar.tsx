@@ -435,7 +435,14 @@ export const PopupToolbar = () => {
                   if (PlaitDrawElement.isImage(imageElement) && imageElement.url) {
                     MessagePlugin.loading(language === 'zh' ? '正在分析图片...' : 'Analyzing image...', 0);
                     try {
-                      const result = await splitAndInsertImages(board, imageElement.url);
+                      // 获取源图片的位置信息
+                      const sourceRect = getRectangleByElements(board, [imageElement], false);
+                      const result = await splitAndInsertImages(board, imageElement.url, {
+                        x: sourceRect.x,
+                        y: sourceRect.y,
+                        width: sourceRect.width,
+                        height: sourceRect.height,
+                      });
                       MessagePlugin.closeAll();
                       if (result.success) {
                         MessagePlugin.success(

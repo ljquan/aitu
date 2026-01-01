@@ -6,7 +6,6 @@
 
 import { PlaitBoard, Point } from '@plait/core';
 import { DrawTransforms } from '@plait/draw';
-import { getInsertionPointBelowBottommostElement } from './selection-utils';
 import { loadImage, trimBorders } from './image-border-utils';
 
 /**
@@ -326,6 +325,20 @@ export async function splitImageByLines(
 }
 
 /**
+ * 源图片的位置信息
+ */
+export interface SourceImageRect {
+  /** X 坐标 */
+  x: number;
+  /** Y 坐标 */
+  y: number;
+  /** 宽度 */
+  width: number;
+  /** 高度 */
+  height: number;
+}
+
+/**
  * 智能拆分图片并插入到画板
  * 支持两种格式：
  * 1. 网格分割线格式（白色分割线）
@@ -333,13 +346,13 @@ export async function splitImageByLines(
  *
  * @param board - 画板实例
  * @param imageUrl - 图片 URL
- * @param startPoint - 起始位置（可选）
+ * @param sourceRect - 源图片的位置信息（用于计算插入位置）
  * @param gap - 图片间距（默认 20）
  */
 export async function splitAndInsertImages(
   board: PlaitBoard,
   imageUrl: string,
-  startPoint?: Point,
+  sourceRect?: SourceImageRect,
   gap: number = 20
 ): Promise<{ success: boolean; count: number; error?: string }> {
   try {
@@ -392,14 +405,18 @@ export async function splitAndInsertImages(
 
     console.log(`[ImageSplitter] Split into ${elements.length} images`);
 
-    // 3. 计算插入位置
-    let baseX = startPoint?.[0] ?? 100;
-    let baseY = startPoint?.[1];
+    // 3. 计算插入位置（在源图片下方，左对齐）
+    let baseX: number;
+    let baseY: number;
 
-    if (baseY === undefined) {
-      const bottomPoint = getInsertionPointBelowBottommostElement(board, 800);
-      baseY = bottomPoint?.[1] ?? 100;
-      baseX = bottomPoint?.[0] ?? baseX;
+    if (sourceRect) {
+      // 有源图片信息：在源图片正下方插入，左对齐
+      baseX = sourceRect.x;
+      baseY = sourceRect.y + sourceRect.height + gap;
+    } else {
+      // 兜底：在画布左上角
+      baseX = 100;
+      baseY = 100;
     }
 
     // 4. 按网格布局插入图片
