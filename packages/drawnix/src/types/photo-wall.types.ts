@@ -297,56 +297,58 @@ Output requirements:
 
 /**
  * 宫格图提示词模板
- * 用于生成适合分割的拼贴图
+ * 生成灰色背景 + 白边框的网格拼贴图，与照片墙使用相同的格式便于统一拆图
  */
 export const GRID_IMAGE_PROMPT_TEMPLATE = {
   zh: (theme: string, rows: number, cols: number) =>
     `创建一个 ${rows}x${cols} 的多样化展示拼贴图，主题是"${theme}"。
 
-布局要求：
-- 图片被清晰地分成 ${rows * cols} 个等大的正方形区域，排列成 ${rows} 行 ${cols} 列
-- 区域之间有明显的白色分隔线（约 10px 宽度）
-- 每个区域有独立的白色或浅色纯色背景
+整体布局要求：
+- 统一的灰色背景（RGB 200-210 左右的浅灰色）
+- 在灰色背景上放置 ${rows * cols} 张等大的正方形照片/卡片
+- 照片排列成 ${rows} 行 ${cols} 列的整齐网格
+- 每张照片有明显的白色边框（约 10-15px 宽度），呈现相框效果
+- 所有照片必须保持水平，不要旋转
 
-多样性要求（极其重要）：
-- ${rows * cols} 个区域必须展示 ${rows * cols} 种完全不同的物品/元素
+间距要求（必须严格遵守）：
+- 所有照片之间必须完全分离，绝对禁止任何重叠
+- 照片之间必须保持至少 15px 的灰色背景间隙
+- 每张照片的四边都必须被灰色背景包围
+
+照片内容要求（极其重要）：
+- ${rows * cols} 张照片必须展示 ${rows * cols} 种完全不同的物品/元素
 - 禁止任何重复：每个物品的形状、颜色、姿态、角度都必须明显不同
 - 追求最大差异化：如果主题是动物，展示不同种类；如果是物品，展示不同类别
 - 每个元素应有不同的视觉特征：不同的颜色、不同的形态、不同的细节
-- 元素之间的风格可以有变化：有的写实、有的卡通、有的简约、有的精细
-
-示例多样性参考：
-- 若主题是"猫"：不同品种、不同毛色、不同姿势、不同表情
-- 若主题是"餐具"：碗、盘、杯、勺、叉、刀等不同类别
-- 若主题是"花卉"：不同种类、不同颜色、不同形态的花
 
 输出要求：
-- 每个物品居中放置在其区域内
-- 物品大小适中，占据区域 60%-80% 的空间
-- 适合分割后独立展示`,
+- 整体呈正方形或接近正方形的比例
+- 灰色背景在所有照片周围和之间都清晰可见
+- 白色边框清晰完整，不被遮挡`,
 
   en: (theme: string, rows: number, cols: number) =>
     `Create a ${rows}x${cols} diverse showcase collage with the theme "${theme}".
 
-Layout requirements:
-- The image is clearly divided into ${rows * cols} equal square sections, arranged in ${rows} rows and ${cols} columns
-- Clear white dividing lines between sections (approximately 10px width)
-- Each section has an independent white or light solid background
+Overall layout requirements:
+- Uniform gray background (light gray around RGB 200-210)
+- Place ${rows * cols} equal-sized square photos/cards on the gray background
+- Photos arranged in a neat grid of ${rows} rows and ${cols} columns
+- Each photo has a clear white border (about 10-15px width), creating a frame effect
+- All photos must remain horizontal, no rotation
 
-Diversity requirements (extremely important):
-- The ${rows * cols} sections MUST display ${rows * cols} completely different items/elements
+Spacing requirements (must strictly follow):
+- All photos MUST be completely separated, absolutely NO overlapping allowed
+- There MUST be at least 15px gray background gap between all photos
+- Each photo must be surrounded by gray background on all four sides
+
+Photo content requirements (extremely important):
+- ${rows * cols} photos MUST display ${rows * cols} completely different items/elements
 - No repetition allowed: each item must have distinctly different shape, color, pose, and angle
 - Maximize variation: if the theme is animals, show different species; if objects, show different categories
 - Each element should have different visual features: different colors, forms, and details
-- Styles can vary between elements: some realistic, some cartoon, some minimalist, some detailed
-
-Diversity reference examples:
-- If theme is "cats": different breeds, fur colors, poses, expressions
-- If theme is "tableware": bowls, plates, cups, spoons, forks, knives - different categories
-- If theme is "flowers": different species, colors, and forms
 
 Output requirements:
-- Each item centered within its section
-- Items moderately sized, occupying 60%-80% of the section space
-- Suitable for independent display after splitting`,
+- Overall square or near-square aspect ratio
+- Gray background clearly visible around and between all photos
+- White borders clear and complete, not obscured`,
 };

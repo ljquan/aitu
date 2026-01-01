@@ -13,6 +13,12 @@
  */
 
 import type { ImageElement } from '../types/photo-wall.types';
+import {
+  loadImage,
+  isBackgroundPixel,
+  isWhiteBorderPixel,
+  extractAndTrimRegion,
+} from './image-border-utils';
 
 /**
  * 检测结果
@@ -27,56 +33,6 @@ export interface PhotoWallDetectionResult {
     width: number;
     height: number;
   }>;
-}
-
-/**
- * 加载图片
- */
-async function loadImage(imageUrl: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => resolve(img);
-    img.onerror = (error) => reject(new Error(`Failed to load image: ${error}`));
-    img.src = imageUrl;
-  });
-}
-
-/**
- * 检测像素是否为背景色（灰色）
- * 灰色特征：R、G、B 值接近，且在一定范围内
- */
-function isBackgroundPixel(
-  r: number,
-  g: number,
-  b: number,
-  options: {
-    minGray?: number;
-    maxGray?: number;
-    maxColorDiff?: number;
-  } = {}
-): boolean {
-  const { minGray = 180, maxGray = 230, maxColorDiff = 15 } = options;
-
-  // 检查是否为灰色（R、G、B 接近）
-  const maxVal = Math.max(r, g, b);
-  const minVal = Math.min(r, g, b);
-  const colorDiff = maxVal - minVal;
-
-  if (colorDiff > maxColorDiff) {
-    return false; // 颜色差异太大，不是灰色
-  }
-
-  // 检查灰度值范围
-  const grayValue = (r + g + b) / 3;
-  return grayValue >= minGray && grayValue <= maxGray;
-}
-
-/**
- * 检测像素是否为白色边框
- */
-function isWhiteBorderPixel(r: number, g: number, b: number, threshold: number = 245): boolean {
-  return r >= threshold && g >= threshold && b >= threshold;
 }
 
 /**
@@ -485,90 +441,6 @@ export async function detectPhotoWallRegions(
 }
 
 /**
- * 检测像素是否为边框色（白色或灰色）
- */
-function isBorderColor(r: number, g: number, b: number): boolean {
-  // 检查是否为白色（高亮度）
-  if (r >= 240 && g >= 240 && b >= 240) {
-    return true;
-  }
-
-  // 检查是否为灰色（R、G、B 接近且在一定范围内）
-  const maxVal = Math.max(r, g, b);
-  const minVal = Math.min(r, g, b);
-  const colorDiff = maxVal - minVal;
-  const grayValue = (r + g + b) / 3;
-
-  // 灰色：颜色差异小，灰度值在一定范围
-  if (colorDiff <= 20 && grayValue >= 160 && grayValue <= 240) {
-    return true;
-  }
-
-  return false;
-}
-
-/**
- * 裁剪图片的白边和灰边
- * 从四个方向向内扫描，找到第一个非边框像素
- */
-function trimBorders(
-  imageData: ImageData
-): { top: number; right: number; bottom: number; left: number } {
-  const { width, height, data } = imageData;
-
-  // 检测一行是否全是边框色
-  const isRowBorder = (y: number): boolean => {
-    let borderCount = 0;
-    for (let x = 0; x < width; x++) {
-      const idx = (y * width + x) * 4;
-      if (isBorderColor(data[idx], data[idx + 1], data[idx + 2])) {
-        borderCount++;
-      }
-    }
-    // 如果超过 90% 是边框色，认为是边框行
-    return borderCount / width > 0.9;
-  };
-
-  // 检测一列是否全是边框色
-  const isColBorder = (x: number): boolean => {
-    let borderCount = 0;
-    for (let y = 0; y < height; y++) {
-      const idx = (y * width + x) * 4;
-      if (isBorderColor(data[idx], data[idx + 1], data[idx + 2])) {
-        borderCount++;
-      }
-    }
-    return borderCount / height > 0.9;
-  };
-
-  // 从顶部向下扫描
-  let top = 0;
-  while (top < height - 1 && isRowBorder(top)) {
-    top++;
-  }
-
-  // 从底部向上扫描
-  let bottom = height - 1;
-  while (bottom > top && isRowBorder(bottom)) {
-    bottom--;
-  }
-
-  // 从左边向右扫描
-  let left = 0;
-  while (left < width - 1 && isColBorder(left)) {
-    left++;
-  }
-
-  // 从右边向左扫描
-  let right = width - 1;
-  while (right > left && isColBorder(right)) {
-    right--;
-  }
-
-  return { top, right, bottom, left };
-}
-
-/**
  * 拆分照片墙图片
  */
 export async function splitPhotoWall(imageUrl: string): Promise<ImageElement[]> {
@@ -590,69 +462,23 @@ export async function splitPhotoWall(imageUrl: string): Promise<ImageElement[]> 
   for (let i = 0; i < sortedRegions.length; i++) {
     const region = sortedRegions[i];
 
-    // 创建裁剪 Canvas
-    const canvas = document.createElement('canvas');
-    canvas.width = region.width;
-    canvas.height = region.height;
+    // 使用共享工具提取并裁剪区域边框
+    const trimResult = extractAndTrimRegion(img, region);
 
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    if (!ctx) continue;
-
-    ctx.drawImage(
-      img,
-      region.x,
-      region.y,
-      region.width,
-      region.height,
-      0,
-      0,
-      region.width,
-      region.height
-    );
-
-    // 获取像素数据并裁剪边框
-    const imageData = ctx.getImageData(0, 0, region.width, region.height);
-    const borders = trimBorders(imageData);
-
-    // 计算裁剪后的尺寸
-    const trimmedWidth = borders.right - borders.left + 1;
-    const trimmedHeight = borders.bottom - borders.top + 1;
-
-    // 确保裁剪后有有效内容
-    if (trimmedWidth <= 10 || trimmedHeight <= 10) {
+    if (!trimResult) {
       console.log(`[PhotoWallSplitter] Region ${i} too small after trimming, skipping`);
       continue;
     }
 
-    // 创建裁剪后的 Canvas
-    const trimmedCanvas = document.createElement('canvas');
-    trimmedCanvas.width = trimmedWidth;
-    trimmedCanvas.height = trimmedHeight;
-
-    const trimmedCtx = trimmedCanvas.getContext('2d');
-    if (!trimmedCtx) continue;
-
-    trimmedCtx.drawImage(
-      canvas,
-      borders.left,
-      borders.top,
-      trimmedWidth,
-      trimmedHeight,
-      0,
-      0,
-      trimmedWidth,
-      trimmedHeight
-    );
-
     elements.push({
       id: `photo-wall-${Date.now()}-${i}`,
-      imageData: trimmedCanvas.toDataURL('image/png', 0.92),
+      imageData: trimResult.canvas.toDataURL('image/png', 0.92),
       originalIndex: i,
-      width: trimmedWidth,
-      height: trimmedHeight,
+      width: trimResult.width,
+      height: trimResult.height,
     });
 
-    console.log(`[PhotoWallSplitter] Region ${i}: ${region.width}x${region.height} -> ${trimmedWidth}x${trimmedHeight} (trimmed ${borders.top}px top, ${region.height - 1 - borders.bottom}px bottom, ${borders.left}px left, ${region.width - 1 - borders.right}px right)`);
+    console.log(`[PhotoWallSplitter] Region ${i}: ${region.width}x${region.height} -> ${trimResult.width}x${trimResult.height}`);
   }
 
   console.log(`[PhotoWallSplitter] Split into ${elements.length} images`);

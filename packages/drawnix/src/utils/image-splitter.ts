@@ -7,6 +7,7 @@
 import { PlaitBoard, Point } from '@plait/core';
 import { DrawTransforms } from '@plait/draw';
 import { getInsertionPointBelowBottommostElement } from './selection-utils';
+import { loadImage, trimBorders } from './image-border-utils';
 
 /**
  * 分割后的图片元素
@@ -38,19 +39,6 @@ export interface GridDetectionResult {
   rowLines: number[];
   /** 列分割线位置（X 坐标） */
   colLines: number[];
-}
-
-/**
- * 加载图片
- */
-async function loadImage(imageUrl: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => resolve(img);
-    img.onerror = (error) => reject(new Error(`Failed to load image: ${error}`));
-    img.src = imageUrl;
-  });
 }
 
 /**
@@ -258,71 +246,6 @@ async function detectPhotoWallFormat(imageUrl: string): Promise<boolean> {
 }
 
 /**
- * 检测图片区域的白边并返回裁剪后的边界
- * 从四个方向向内扫描，找到第一个非白色像素行/列
- */
-function detectAndTrimWhiteBorders(
-  imageData: ImageData,
-  threshold: number = 245
-): { top: number; right: number; bottom: number; left: number } {
-  const { width, height, data } = imageData;
-
-  // 检测一行是否全是白色/浅色
-  const isRowLight = (y: number): boolean => {
-    for (let x = 0; x < width; x++) {
-      const idx = (y * width + x) * 4;
-      const r = data[idx];
-      const g = data[idx + 1];
-      const b = data[idx + 2];
-      if (r < threshold || g < threshold || b < threshold) {
-        return false;
-      }
-    }
-    return true;
-  };
-
-  // 检测一列是否全是白色/浅色
-  const isColLight = (x: number): boolean => {
-    for (let y = 0; y < height; y++) {
-      const idx = (y * width + x) * 4;
-      const r = data[idx];
-      const g = data[idx + 1];
-      const b = data[idx + 2];
-      if (r < threshold || g < threshold || b < threshold) {
-        return false;
-      }
-    }
-    return true;
-  };
-
-  // 从顶部向下扫描
-  let top = 0;
-  while (top < height && isRowLight(top)) {
-    top++;
-  }
-
-  // 从底部向上扫描
-  let bottom = height - 1;
-  while (bottom > top && isRowLight(bottom)) {
-    bottom--;
-  }
-
-  // 从左边向右扫描
-  let left = 0;
-  while (left < width && isColLight(left)) {
-    left++;
-  }
-
-  // 从右边向左扫描
-  let right = width - 1;
-  while (right > left && isColLight(right)) {
-    right--;
-  }
-
-  return { top, right, bottom, left };
-}
-
-/**
  * 根据检测到的分割线分割图片
  */
 export async function splitImageByLines(
@@ -366,8 +289,8 @@ export async function splitImageByLines(
       // 获取这个区域的像素数据
       const regionData = fullCtx.getImageData(sx, sy, sw, sh);
 
-      // 检测并裁剪白边
-      const borders = detectAndTrimWhiteBorders(regionData);
+      // 检测并裁剪边框（白边和灰边）
+      const borders = trimBorders(regionData);
 
       // 计算最终裁剪区域
       const finalSx = sx + borders.left;
