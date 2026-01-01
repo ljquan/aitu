@@ -39,7 +39,7 @@ import {
 import { initializeMCP, setCanvasBoard, mcpRegistry } from '../../mcp';
 import type { MCPTaskResult } from '../../mcp/types';
 import { parseAIInput } from '../../utils/ai-input-parser';
-import { convertToWorkflow, type WorkflowDefinition } from './workflow-converter';
+import { convertToWorkflow, type WorkflowDefinition, type WorkflowStepOptions } from './workflow-converter';
 import { useWorkflowControl } from '../../contexts/WorkflowContext';
 import { geminiSettings } from '../../utils/settings-manager';
 import type { WorkflowMessageData } from '../../types/chat.types';
@@ -465,6 +465,15 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
 
       const createdTaskIds: string[] = [];
 
+      // 收集动态添加的步骤（用于后续执行）
+      const pendingNewSteps: Array<{
+        id: string;
+        mcp: string;
+        args: Record<string, unknown>;
+        description: string;
+        options?: WorkflowStepOptions;
+      }> = [];
+
       // 创建标准回调（所有工具都可使用，不需要的会忽略）
       const createStepCallbacks = (currentStep: typeof workflow.steps[0], stepStartTime: number) => ({
         // 流式输出回调
@@ -476,11 +485,24 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
           // 当前步骤完成
           workflowControl.updateStep(currentStep.id, 'completed', { analysis: 'completed' }, undefined, Date.now() - stepStartTime);
 
-          // 添加新步骤到工作流
-          workflowControl.addSteps(newSteps.map(s => ({
+          // 为新步骤添加 queue 模式选项
+          const stepsWithOptions = newSteps.map((s, index) => ({
             ...s,
-            status: s.status as 'pending' | 'running' | 'completed' | 'failed' | 'skipped',
-          })));
+            status: 'pending' as const,
+            options: {
+              mode: 'queue' as const,
+              batchId: `agent_${Date.now()}`,
+              batchIndex: index + 1,
+              batchTotal: newSteps.length,
+              globalIndex: index + 1,
+            },
+          }));
+
+          // 添加新步骤到工作流
+          workflowControl.addSteps(stepsWithOptions);
+
+          // 收集待执行的步骤
+          pendingNewSteps.push(...stepsWithOptions);
 
           // 追加工具调用日志
           newSteps.forEach(s => {
@@ -514,14 +536,8 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
 
       let workflowFailed = false;
 
-      for (const step of workflow.steps) {
-        // 如果工作流已失败，跳过剩余步骤
-        if (workflowFailed) {
-          workflowControl.updateStep(step.id, 'skipped');
-          updateWorkflowMessageRef.current(toWorkflowMessageData(workflowControl.getWorkflow()!));
-          continue;
-        }
-
+      // 执行单个步骤的函数
+      const executeStep = async (step: typeof workflow.steps[0]) => {
         const stepStartTime = Date.now();
 
         // 更新步骤为运行中
@@ -547,7 +563,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
           if (!result.success) {
             // 执行失败，标记工作流失败
             workflowControl.updateStep(step.id, 'failed', undefined, result.error || '执行失败', Date.now() - stepStartTime);
-            workflowFailed = true;
+            return false; // 返回失败
           } else if (result.taskId) {
             // 队列模式：记录任务 ID（状态保持 running，等任务完成后更新）
             createdTaskIds.push(result.taskId);
@@ -556,14 +572,62 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
             // 同步模式且未被回调更新：标记为完成
             workflowControl.updateStep(step.id, 'completed', result.data, undefined, Date.now() - stepStartTime);
           }
+
+          return true; // 返回成功
         } catch (stepError) {
-          // 更新步骤为失败，标记工作流失败
+          // 更新步骤为失败
           workflowControl.updateStep(step.id, 'failed', undefined, String(stepError));
-          workflowFailed = true;
+          return false; // 返回失败
+        } finally {
+          // 同步更新 ChatDrawer 中的工作流消息
+          updateWorkflowMessageRef.current(toWorkflowMessageData(workflowControl.getWorkflow()!));
+        }
+      };
+
+      // 执行初始步骤
+      for (const step of workflow.steps) {
+        // 如果工作流已失败，跳过剩余步骤
+        if (workflowFailed) {
+          workflowControl.updateStep(step.id, 'skipped');
+          updateWorkflowMessageRef.current(toWorkflowMessageData(workflowControl.getWorkflow()!));
+          continue;
         }
 
-        // 同步更新 ChatDrawer 中的工作流消息
-        updateWorkflowMessageRef.current(toWorkflowMessageData(workflowControl.getWorkflow()!));
+        const success = await executeStep(step);
+        if (!success) {
+          workflowFailed = true;
+        }
+      }
+
+      // 执行动态添加的步骤（由 ai_analyze 通过 onAddSteps 添加）
+      if (!workflowFailed && pendingNewSteps.length > 0) {
+        console.log(`[AIInputBar] Executing ${pendingNewSteps.length} dynamically added steps`);
+
+        // 获取当前工作流状态用于调试
+        const currentWorkflow = workflowControl.getWorkflow();
+        console.log(`[AIInputBar] Current workflow steps:`, currentWorkflow?.steps.map(s => ({ id: s.id, mcp: s.mcp, status: s.status })));
+        console.log(`[AIInputBar] Pending steps to execute:`, pendingNewSteps.map(s => ({ id: s.id, mcp: s.mcp })));
+
+        for (const newStep of pendingNewSteps) {
+          if (workflowFailed) {
+            workflowControl.updateStep(newStep.id, 'skipped');
+            updateWorkflowMessageRef.current(toWorkflowMessageData(workflowControl.getWorkflow()!));
+            continue;
+          }
+
+          // 从 workflowControl 获取完整的步骤信息
+          const fullStep = workflowControl.getWorkflow()?.steps.find(s => s.id === newStep.id);
+          console.log(`[AIInputBar] Looking for step ${newStep.id}, found:`, fullStep ? 'yes' : 'no');
+          if (fullStep) {
+            console.log(`[AIInputBar] Executing dynamic step: ${fullStep.mcp}`, fullStep.args);
+            const success = await executeStep(fullStep);
+            if (!success) {
+              workflowFailed = true;
+            }
+          } else {
+            console.warn(`[AIInputBar] Step ${newStep.id} not found in workflow!`);
+          }
+        }
       }
 
       // 清空输入并关闭面板
@@ -926,7 +990,10 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
           {/* Right: Send button */}
           <button
             className={`ai-input-bar__send-btn ${canGenerate ? 'active' : ''} ${isSubmitting ? 'loading' : ''}`}
-            onMouseDown={(e) => e.preventDefault()} // 阻止点击按钮时输入框失焦
+            onMouseDown={(e) => {
+              e.preventDefault(); // 阻止点击按钮时输入框失焦
+              e.stopPropagation(); // 阻止事件冒泡到 document 监听器（避免触发 handleClickOutside）
+            }}
             onClick={handleGenerate}
             disabled={!canGenerate || isSubmitting}
           >

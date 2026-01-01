@@ -45,14 +45,33 @@ const StepItem: React.FC<StepItemProps> = ({
 
   const statusIcon = STATUS_ICONS[step.status];
   const statusLabel = STATUS_LABELS[step.status];
-  const hasDetails = step.result || step.error || step.duration !== undefined;
+  // 步骤有详情的条件：有参数、有结果、有错误、有耗时
+  const hasArgs = step.args && Object.keys(step.args).length > 0;
+  const hasDetails = hasArgs || step.result || step.error || step.duration !== undefined;
+
+  // 格式化显示参数，排除 context 等大对象
+  const formatArgs = (args: Record<string, unknown> | undefined) => {
+    if (!args) return null;
+    const filteredArgs: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(args)) {
+      // 排除 context 等大对象，只显示关键参数
+      if (key === 'context') {
+        filteredArgs[key] = '[AgentExecutionContext]';
+      } else if (typeof value === 'string' && value.length > 200) {
+        filteredArgs[key] = value.substring(0, 200) + '...';
+      } else {
+        filteredArgs[key] = value;
+      }
+    }
+    return filteredArgs;
+  };
 
   return (
     <div
       className={`workflow-bubble-step workflow-bubble-step--${step.status} ${isCurrentStep ? 'workflow-bubble-step--current' : ''}`}
     >
-      <div 
-        className="workflow-bubble-step__main" 
+      <div
+        className="workflow-bubble-step__main"
         onClick={() => hasDetails && setExpanded(!expanded)}
         style={{ cursor: hasDetails ? 'pointer' : 'default' }}
       >
@@ -82,6 +101,16 @@ const StepItem: React.FC<StepItemProps> = ({
             <span className="workflow-bubble-step__label">工具:</span>
             <code className="workflow-bubble-step__tool">{step.mcp}</code>
           </div>
+
+          {/* 输入参数 */}
+          {hasArgs && (
+            <div className="workflow-bubble-step__detail-row workflow-bubble-step__detail-row--block">
+              <span className="workflow-bubble-step__label">输入参数:</span>
+              <pre className="workflow-bubble-step__args">
+                {JSON.stringify(formatArgs(step.args), null, 2)}
+              </pre>
+            </div>
+          )}
 
           {/* 执行时间 */}
           {step.duration !== undefined && (

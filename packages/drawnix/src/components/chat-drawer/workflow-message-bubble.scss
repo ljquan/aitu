@@ -318,6 +318,21 @@
     font-size: 11px;
   }
 
+  &__args {
+    width: 100%;
+    margin: 0;
+    padding: $spacing-sm;
+    background: var(--td-bg-color-page);
+    border-radius: 4px;
+    font-size: 11px;
+    font-family: 'SF Mono', Monaco, monospace;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 200px;
+    overflow-y: auto;
+    color: var(--td-text-color-primary);
+  }
+
   &__result {
     width: 100%;
     padding: $spacing-sm;

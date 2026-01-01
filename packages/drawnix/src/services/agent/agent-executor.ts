@@ -6,8 +6,7 @@
 
 import { defaultGeminiClient } from '../../utils/gemini-api';
 import type { GeminiMessage } from '../../utils/gemini-api/types';
-import { mcpRegistry } from '../../mcp/registry';
-import type { AgentResult, AgentExecuteOptions, MCPResult, ToolCall, AgentExecutionContext } from '../../mcp/types';
+import type { AgentResult, AgentExecuteOptions, ToolCall, AgentExecutionContext } from '../../mcp/types';
 import { generateSystemPrompt, generateReferenceImagesPrompt } from './system-prompts';
 import { parseToolCalls, extractTextContent } from './tool-parser';
 import { geminiSettings } from '../../utils/settings-manager';
@@ -202,7 +201,6 @@ class AgentExecutor {
       model,
       onChunk,
       onToolCall,
-      onToolResult,
       signal,
       maxIterations = 3,
     } = options;
@@ -243,7 +241,6 @@ class AgentExecutor {
 
       // 执行循环
       let iterations = 0;
-      const toolResults: MCPResult[] = [];
       let finalResponse = '';
 
       // 获取全局设置的文本模型
@@ -276,58 +273,41 @@ class AgentExecutor {
 
         // 解析工具调用
         const toolCalls = parseToolCalls(fullResponse);
-        
+
+        // 提取文本内容
+        finalResponse = extractTextContent(fullResponse) || fullResponse;
+
         if (toolCalls.length === 0) {
           // 没有工具调用，返回文本响应
-          finalResponse = extractTextContent(fullResponse) || fullResponse;
           break;
         }
 
-        // 执行工具调用
+        // 报告工具调用（不执行，由调用方执行）
+        // 这样 AIInputBar 可以在 UI 中显示步骤并统一管理执行
         for (const rawToolCall of toolCalls) {
           // 替换占位符为真实图片 URL
           const toolCall = allReferenceImages.length > 0
             ? replaceToolCallPlaceholders(rawToolCall, allReferenceImages)
             : rawToolCall;
 
-          console.log(`[AgentExecutor] Executing tool: ${toolCall.name}`, toolCall.arguments);
+          console.log(`[AgentExecutor] Reporting tool call: ${toolCall.name}`, toolCall.arguments);
           onToolCall?.(toolCall);
-
-          // 使用 queue 模式执行工具，确保任务进入队列并由 useAutoInsertToCanvas 处理插入
-          const result = await mcpRegistry.executeTool(toolCall, { mode: 'queue' });
-          toolResults.push(result);
-          onToolResult?.(result);
-
-          // 如果工具执行成功，直接返回结果
-          if (result.success) {
-            finalResponse = this.formatToolResult(result);
-            return {
-              success: true,
-              response: finalResponse,
-              toolResults,
-              model,
-            };
-          }
-
-          // 工具执行失败，将错误添加到对话历史，让 LLM 重试或给出解释
-          messages.push({
-            role: 'assistant',
-            content: [{ type: 'text', text: fullResponse }],
-          });
-          messages.push({
-            role: 'user',
-            content: [{ 
-              type: 'text', 
-              text: `工具执行失败：${result.error}。请尝试其他方式或解释原因。` 
-            }],
-          });
         }
+
+        // 工具调用已报告，返回成功
+        // 实际执行由调用方（AIInputBar）在接收到 onAddSteps 后处理
+        return {
+          success: true,
+          response: finalResponse,
+          toolResults: [], // 工具尚未执行，没有结果
+          model,
+        };
       }
 
       return {
-        success: toolResults.some(r => r.success),
+        success: true,
         response: finalResponse,
-        toolResults,
+        toolResults: [],
         model,
       };
     } catch (error: any) {
@@ -338,27 +318,6 @@ class AgentExecutor {
         model,
       };
     }
-  }
-
-  /**
-   * 格式化工具结果为用户友好的文本
-   */
-  private formatToolResult(result: MCPResult): string {
-    if (!result.success) {
-      return `生成失败：${result.error}`;
-    }
-
-    const data = result.data as any;
-    
-    if (result.type === 'image') {
-      return `图片已生成！\n\n提示词：${data.prompt}\n尺寸：${data.size}`;
-    }
-    
-    if (result.type === 'video') {
-      return `视频已生成！\n\n提示词：${data.prompt}\n模型：${data.model}\n时长：${data.seconds}秒`;
-    }
-
-    return '生成完成！';
   }
 }
 

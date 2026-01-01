@@ -103,22 +103,26 @@ export function useWorkflow(): UseWorkflowReturn {
     duration?: number
   ) => {
     if (abortedRef.current) return;
-    
+
+    // 先从 ref 获取当前工作流，确保获取最新状态
+    const currentWorkflow = workflowRef.current;
+    if (!currentWorkflow) return;
+
+    // 立即更新 ref，确保 getWorkflow() 能获取最新状态
+    const updatedWorkflow = updateStepStatus(
+      currentWorkflow,
+      stepId,
+      status,
+      result,
+      error,
+      duration
+    );
+    workflowRef.current = updatedWorkflow;
+
+    // 然后更新 React state 触发重新渲染
     setState(prev => {
-      if (!prev.workflow) return prev;
-      
-      const updatedWorkflow = updateStepStatus(
-        prev.workflow,
-        stepId,
-        status,
-        result,
-        error,
-        duration
-      );
-      
-      workflowRef.current = updatedWorkflow;
       const workflowStatus = getWorkflowStatus(updatedWorkflow);
-      
+
       // 确定整体状态
       let overallStatus: WorkflowState['status'] = 'running';
       if (workflowStatus.status === 'completed') {
@@ -126,7 +130,7 @@ export function useWorkflow(): UseWorkflowReturn {
       } else if (workflowStatus.status === 'failed') {
         overallStatus = 'failed';
       }
-      
+
       return {
         ...prev,
         workflow: updatedWorkflow,
@@ -144,14 +148,19 @@ export function useWorkflow(): UseWorkflowReturn {
    */
   const addSteps = useCallback((steps: WorkflowStep[]) => {
     if (abortedRef.current || steps.length === 0) return;
-    
+
+    // 先从 ref 获取当前工作流，确保获取最新状态
+    const currentWorkflow = workflowRef.current;
+    if (!currentWorkflow) return;
+
+    // 立即更新 ref，确保 getWorkflow() 能获取最新状态
+    const updatedWorkflow = addStepsToWorkflow(currentWorkflow, steps);
+    workflowRef.current = updatedWorkflow;
+
+    // 然后更新 React state 触发重新渲染
     setState(prev => {
-      if (!prev.workflow) return prev;
-      
-      const updatedWorkflow = addStepsToWorkflow(prev.workflow, steps);
-      workflowRef.current = updatedWorkflow;
       const workflowStatus = getWorkflowStatus(updatedWorkflow);
-      
+
       return {
         ...prev,
         workflow: updatedWorkflow,

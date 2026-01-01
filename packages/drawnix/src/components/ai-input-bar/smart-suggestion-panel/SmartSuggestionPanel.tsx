@@ -36,7 +36,7 @@ function getModeTitle(mode: SuggestionMode, language: 'zh' | 'en', pendingParam?
   const titles = {
     model: language === 'zh' ? '选择模型' : 'Select Model',
     param: language === 'zh' ? '选择参数' : 'Select Parameter',
-    count: language === 'zh' ? '选择数量' : 'Select Count',
+    count: language === 'zh' ? '生成数量' : 'Select Count',
     prompt: language === 'zh' ? '提示词' : 'Prompts',
   };
   return mode ? titles[mode] : '';
@@ -113,6 +113,21 @@ export const SmartSuggestionPanel: React.FC<SmartSuggestionPanelProps> = ({
     prompts,
     pendingParam: pendingParam || undefined,
   });
+
+  // 当只有1个参数且有枚举值时，自动展开到枚举值选择
+  useEffect(() => {
+    if (mode === 'param' && !pendingParam && suggestions.length === 1) {
+      const singleSuggestion = suggestions[0];
+      if (singleSuggestion.type === 'param' && 
+          singleSuggestion.paramConfig.options && 
+          singleSuggestion.paramConfig.options.length > 0) {
+        // 自动进入枚举值选择模式
+        setPendingParam(singleSuggestion.paramConfig);
+        setEnumKeyword('');
+        setHighlightedIndex(0);
+      }
+    }
+  }, [mode, suggestions, pendingParam]);
 
   // 分组提示词（历史 + 预设）
   const { historyPrompts, presetPrompts } = useMemo(() => {
@@ -367,7 +382,7 @@ export const SmartSuggestionPanel: React.FC<SmartSuggestionPanelProps> = ({
             <div className="smart-suggestion-panel__section">
               <div className="smart-suggestion-panel__section-header">
                 <Lightbulb size={14} />
-                <span>{language === 'zh' ? '推荐提示词' : 'Suggestions'}</span>
+                <span>{language === 'zh' ? '推荐指令' : 'Suggestions'}</span>
               </div>
               <div className="smart-suggestion-panel__list">
                 {presetPrompts.map((item, index) => (
