@@ -168,10 +168,10 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
 
     try {
       if (task.type === TaskType.IMAGE) {
-        // 检查是否是照片墙任务（通过 photoWallRows 参数判断）
+        // 检查是否是宫格图任务（通过 photoWallRows 参数判断）
         if (task.params.photoWallRows && task.params.photoWallCols) {
-          // 照片墙任务：使用已生成的图片进行分割和布局
-          console.log('Inserting photo wall to board:', taskId);
+          // 宫格图任务：使用已生成的图片进行分割和布局
+          console.log('Inserting grid image to board:', taskId);
           photoWallService.setBoard(board);
 
           const result = await photoWallService.processExistingImage(
@@ -185,9 +185,9 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
 
           if (result.success && result.elements) {
             await photoWallService.insertToBoard(result.elements);
-            MessagePlugin.success('照片墙已插入到白板');
+            MessagePlugin.success('宫格图已插入到白板');
           } else {
-            throw new Error(result.error || '照片墙处理失败');
+            throw new Error(result.error || '宫格图处理失败');
           }
         } else {
           await insertImageFromUrl(board, task.result.url);

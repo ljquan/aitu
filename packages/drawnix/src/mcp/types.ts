@@ -93,6 +93,35 @@ export interface MCPTaskResult extends MCPResult {
 }
 
 /**
+ * 工具使用示例
+ */
+export interface ToolExample {
+  /** 用户输入描述 */
+  input: string;
+  /** 工具调用参数 */
+  args: Record<string, unknown>;
+  /** 说明（可选） */
+  explanation?: string;
+}
+
+/**
+ * 工具 Prompt 指导信息
+ * 用于指导文本模型如何更好地生成工具调用参数
+ */
+export interface ToolPromptGuidance {
+  /** 使用场景说明 */
+  whenToUse?: string;
+  /** 参数生成指导 */
+  parameterGuidance?: Record<string, string>;
+  /** 最佳实践 */
+  bestPractices?: string[];
+  /** 示例调用 */
+  examples?: ToolExample[];
+  /** 注意事项 */
+  warnings?: string[];
+}
+
+/**
  * MCP 工具定义
  */
 export interface MCPTool {
@@ -106,6 +135,8 @@ export interface MCPTool {
   execute: (params: Record<string, unknown>, options?: MCPExecuteOptions) => Promise<MCPResult>;
   /** 支持的执行模式（默认只支持 async） */
   supportedModes?: MCPExecuteMode[];
+  /** Prompt 指导信息，帮助文本模型更好地生成参数 */
+  promptGuidance?: ToolPromptGuidance;
 }
 
 /**

@@ -166,7 +166,7 @@ export interface ColdStartSuggestion {
   content: string;
   scene: string;
   /** 建议的模型类型，帮助用户快速选择 */
-  modelType?: 'image' | 'video' | 'photo-wall';
+  modelType?: 'image' | 'video' | 'grid-image';
 }
 
 export const AI_COLD_START_SUGGESTIONS: Record<'zh' | 'en', ColdStartSuggestion[]> = {
@@ -205,14 +205,14 @@ export const AI_COLD_START_SUGGESTIONS: Record<'zh' | 'en', ColdStartSuggestion[
       modelType: 'image',
     },
     {
-      content: '生成照片墙：孟菲斯风格餐具，色彩鲜艳的杯碗盘',
-      scene: '照片墙',
-      modelType: 'photo-wall',
+      content: '生成宫格图：孟菲斯风格餐具，色彩鲜艳的杯碗盘',
+      scene: '宫格图',
+      modelType: 'grid-image',
     },
     {
-      content: '生成照片墙：可爱猫咪表情包，9宫格散落布局',
-      scene: '照片墙',
-      modelType: 'photo-wall',
+      content: '生成宫格图：可爱猫咪表情包，16宫格',
+      scene: '宫格图',
+      modelType: 'grid-image',
     },
   ],
   en: [
@@ -250,14 +250,14 @@ export const AI_COLD_START_SUGGESTIONS: Record<'zh' | 'en', ColdStartSuggestion[
       modelType: 'image',
     },
     {
-      content: 'Generate photo wall: Memphis style tableware, colorful cups bowls and plates',
-      scene: 'Photo wall',
-      modelType: 'photo-wall',
+      content: 'Generate grid image: Memphis style tableware, colorful cups bowls and plates',
+      scene: 'Grid image',
+      modelType: 'grid-image',
     },
     {
-      content: 'Generate photo wall: Cute cat emoji pack, 3x3 scattered layout',
-      scene: 'Photo wall',
-      modelType: 'photo-wall',
+      content: 'Generate grid image: Cute cat emoji pack, 4x4 scattered layout',
+      scene: 'Grid image',
+      modelType: 'grid-image',
     },
   ],
 };

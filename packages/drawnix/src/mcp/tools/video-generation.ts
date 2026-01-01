@@ -300,6 +300,54 @@ export const videoGenerationTool: MCPTool = {
 
   supportedModes: ['async', 'queue'],
 
+  promptGuidance: {
+    whenToUse: '当用户想要生成视频、动画或动态内容时使用。适用于：将图片变成视频、创建短视频、生成动态场景等。关键词：视频、动画、动起来、动态。',
+
+    parameterGuidance: {
+      prompt: '将用户描述扩展为详细的英文视频提示词，包含：主体动作（walking, flying, spinning）、场景描述、镜头运动（camera pan, zoom in, tracking shot）、氛围（cinematic, dreamy）、时间节奏（slow motion, timelapse）。',
+      model: '默认使用 veo3，支持高质量视频生成。可选其他模型如需特定效果。',
+      seconds: '根据内容复杂度选择：简单动作用 5-8 秒，复杂场景用 8-10 秒。默认 8 秒。',
+      size: '横屏视频用 1280x720 或 1920x1080，竖屏用 720x1280，正方形用 1024x1024。',
+      referenceImages: '当用户提供图片并想让它"动起来"时使用，传入图片 URL 实现图生视频。',
+      count: '用户明确要求批量生成时使用，如 "+3 生成视频" 则 count=3。',
+    },
+
+    bestPractices: [
+      'prompt 使用英文能获得更好的生成效果',
+      '描述具体的动作和运动，如 "a cat walking slowly" 而非 "a cat"',
+      '添加镜头运动描述如 "camera slowly pans right"、"zoom in smoothly"',
+      '描述氛围和风格如 "cinematic lighting"、"slow motion"、"dreamy atmosphere"',
+      '对于图生视频，描述图片中元素如何运动，如 "the waves start to move"',
+      '避免过于复杂的场景变化，每个视频专注一个主要动作',
+    ],
+
+    examples: [
+      {
+        input: '生成一个猫咪走路的视频',
+        args: { prompt: 'A fluffy orange cat walking gracefully across a sunny room, soft natural lighting, camera tracking shot following the cat, gentle movements, high quality, cinematic', seconds: '8', size: '1280x720' },
+      },
+      {
+        input: '让这张日落图片动起来',
+        args: { prompt: 'Beautiful sunset scene with moving clouds drifting slowly across the sky, sun rays shifting, gentle wind effect on trees, time-lapse style, warm golden hour lighting, peaceful atmosphere', referenceImages: ['[图片1]'], seconds: '8' },
+        explanation: '图生视频使用 referenceImages 传递原图，prompt 描述期望的动态效果',
+      },
+      {
+        input: '赛博朋克城市夜景动画',
+        args: { prompt: 'Cyberpunk city at night with flying cars moving through neon-lit streets, holographic advertisements flickering, rain falling, camera slowly panning across the skyline, atmospheric fog, cinematic sci-fi mood', seconds: '10', size: '1920x1080' },
+      },
+      {
+        input: '生成一个产品旋转展示视频',
+        args: { prompt: 'Product showcase video, sleek modern headphones rotating 360 degrees on a white pedestal, smooth continuous rotation, professional studio lighting, minimal clean background, commercial quality', seconds: '8', size: '1280x720' },
+      },
+    ],
+
+    warnings: [
+      '视频生成时间较长（通常 1-3 分钟），请耐心等待',
+      '避免描述突然的场景切换或多个不连贯的动作',
+      '图生视频时，确保参考图片清晰且主体明确',
+    ],
+  },
+
   execute: async (params: Record<string, unknown>, options?: MCPExecuteOptions): Promise<MCPResult> => {
     const typedParams = params as unknown as VideoGenerationParams;
     const mode = options?.mode || 'async';

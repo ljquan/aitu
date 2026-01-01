@@ -1,5 +1,5 @@
 /**
- * LayoutEngine - 照片墙布局引擎
+ * LayoutEngine - 宫格图布局引擎
  * 
  * 根据布局风格计算每个图片元素在画板上的位置、旋转角度和缩放比例
  * 支持三种布局风格：散落、网格、环形
@@ -36,7 +36,7 @@ function shuffleArray<T>(array: T[]): T[] {
 /**
  * LayoutEngine 类
  * 
- * 负责计算照片墙中每个元素的位置和变换参数
+ * 负责计算宫格图中每个元素的位置和变换参数
  */
 export class LayoutEngine {
   /**

@@ -265,6 +265,41 @@ export const imageGenerationTool: MCPTool = {
 
   supportedModes: ['async', 'queue'],
 
+  promptGuidance: {
+    whenToUse: '当用户想要生成单张或多张图片时使用。适用于：创作插画、生成照片、艺术创作、图生图风格转换等。',
+
+    parameterGuidance: {
+      prompt: '将用户描述扩展为详细的英文提示词，包含：主体描述、风格（如 cinematic, watercolor, anime）、光线（如 soft lighting, golden hour）、构图（如 close-up, wide shot）、质量词（如 high quality, detailed）。',
+      size: '根据内容选择：人像用 9x16，风景用 16x9，正方形内容用 1x1。默认 1x1。',
+      referenceImages: '当用户提供参考图片时使用占位符如 ["[图片1]"]，系统会自动替换为真实 URL。',
+      count: '用户明确要求批量生成时使用，如 "+3 画一只猫" 则 count=3。',
+    },
+
+    bestPractices: [
+      'prompt 使用英文能获得更好的生成效果',
+      '添加风格关键词如 "professional photography"、"digital art"、"oil painting"',
+      '描述光线和氛围如 "warm lighting"、"dramatic shadows"、"soft bokeh"',
+      '使用质量词如 "highly detailed"、"8k resolution"、"masterpiece"',
+      '对于人物，描述表情、姿势、服装等细节',
+    ],
+
+    examples: [
+      {
+        input: '画一只猫',
+        args: { prompt: 'A cute orange kitten with fluffy fur and big eyes, sitting in warm sunlight, soft bokeh background, professional photography, highly detailed', size: '1x1' },
+      },
+      {
+        input: '赛博朋克城市',
+        args: { prompt: 'Cyberpunk cityscape at night, neon lights reflecting on wet streets, towering skyscrapers with holographic advertisements, flying cars, rain, cinematic atmosphere, highly detailed, 8k', size: '16x9' },
+      },
+      {
+        input: '[图片1] 把这张图变成水彩风格',
+        args: { prompt: 'Transform to watercolor painting style, soft brush strokes, artistic color palette, delicate watercolor texture, maintain original composition', referenceImages: ['[图片1]'] },
+        explanation: '图生图使用 referenceImages 传递参考图片',
+      },
+    ],
+  },
+
   execute: async (params: Record<string, unknown>, options?: MCPExecuteOptions): Promise<MCPResult> => {
     const typedParams = params as unknown as ImageGenerationParams;
     const mode = options?.mode || 'async';

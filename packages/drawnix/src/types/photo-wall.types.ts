@@ -1,7 +1,7 @@
 /**
- * 照片墙功能类型定义
- * 
- * 用于实现照片墙生成功能：
+ * 宫格图功能类型定义
+ *
+ * 用于实现宫格图生成功能：
  * 1. AI 生成一张拼贴图
  * 2. Canvas 分割成多个独立图片
  * 3. 按布局风格插入画板
@@ -93,9 +93,9 @@ export interface PositionedElement extends ImageElement {
 }
 
 /**
- * 照片墙生成参数
+ * 宫格图生成参数
  */
-export interface PhotoWallParams {
+export interface GridImageParams {
   /** 用户输入的主题描述 */
   theme: string;
   /** 网格配置（默认 3x3） */
@@ -109,9 +109,9 @@ export interface PhotoWallParams {
 }
 
 /**
- * 照片墙生成结果
+ * 宫格图生成结果
  */
-export interface PhotoWallResult {
+export interface GridImageResult {
   /** 是否成功 */
   success: boolean;
   /** 原始拼贴图 URL */
@@ -167,7 +167,7 @@ export interface CircularLayoutConfig {
 /**
  * 默认配置
  */
-export const PHOTO_WALL_DEFAULTS = {
+export const GRID_IMAGE_DEFAULTS = {
   gridConfig: { rows: 3, cols: 3 } as GridConfig,
   layoutStyle: 'scattered' as LayoutStyle,
   imageSize: '1x1',
@@ -188,10 +188,10 @@ export const PHOTO_WALL_DEFAULTS = {
 };
 
 /**
- * 照片墙提示词模板
+ * 宫格图提示词模板
  * 用于生成适合分割的拼贴图
  */
-export const PHOTO_WALL_PROMPT_TEMPLATE = {
+export const GRID_IMAGE_PROMPT_TEMPLATE = {
   zh: (theme: string, rows: number, cols: number) =>
     `创建一个 ${rows}x${cols} 的多样化展示拼贴图，主题是"${theme}"。
 

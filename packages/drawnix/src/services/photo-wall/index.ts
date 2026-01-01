@@ -1,6 +1,6 @@
 /**
- * PhotoWallService - 照片墙主服务
- * 
+ * GridImageService - 宫格图主服务
+ *
  * 串联生图、分割、布局、插入的完整流程
  */
 
@@ -9,25 +9,25 @@ import { DrawTransforms } from '@plait/draw';
 import { gridSplitter } from './grid-splitter';
 import { layoutEngine } from './layout-engine';
 import type {
-  PhotoWallParams,
-  PhotoWallResult,
+  GridImageParams,
+  GridImageResult,
   PositionedElement,
   GridConfig,
   LayoutStyle,
   LayoutParams,
-  PHOTO_WALL_DEFAULTS,
+  GRID_IMAGE_DEFAULTS,
 } from '../../types/photo-wall.types';
-import { PHOTO_WALL_PROMPT_TEMPLATE, PHOTO_WALL_DEFAULTS as DEFAULTS } from '../../types/photo-wall.types';
+import { GRID_IMAGE_PROMPT_TEMPLATE, GRID_IMAGE_DEFAULTS as DEFAULTS } from '../../types/photo-wall.types';
 import { defaultGeminiClient } from '../../utils/gemini-api';
 import { urlCacheService } from '../url-cache-service';
 import { getInsertionPointBelowBottommostElement } from '../../utils/selection-utils';
 
 /**
- * PhotoWallService 类
- * 
- * 照片墙功能的核心服务，协调生图、分割、布局流程
+ * GridImageService 类
+ *
+ * 宫格图功能的核心服务，协调生图、分割、布局流程
  */
-export class PhotoWallService {
+export class GridImageService {
   private board: PlaitBoard | null = null;
   
   /**
@@ -45,16 +45,16 @@ export class PhotoWallService {
   }
   
   /**
-   * 生成照片墙
-   * 
-   * @param params - 照片墙参数
+   * 生成宫格图
+   *
+   * @param params - 宫格图参数
    * @param language - 语言（用于生成提示词）
    * @returns 生成结果
    */
   async generate(
-    params: PhotoWallParams,
+    params: GridImageParams,
     language: 'zh' | 'en' = 'zh'
-  ): Promise<PhotoWallResult> {
+  ): Promise<GridImageResult> {
     const {
       theme,
       gridConfig = DEFAULTS.gridConfig,
@@ -63,15 +63,15 @@ export class PhotoWallService {
       imageQuality = DEFAULTS.imageQuality,
     } = params;
     
-    console.log('[PhotoWallService] Starting generation with params:', params);
+    console.log('[GridImageService] Starting generation with params:', params);
     
     try {
       // 1. 生成拼贴图提示词
       const prompt = this.buildPrompt(theme, gridConfig, language);
-      console.log('[PhotoWallService] Generated prompt:', prompt);
+      console.log('[GridImageService] Generated prompt:', prompt);
       
       // 2. 调用 AI 生成拼贴图
-      console.log('[PhotoWallService] Calling AI to generate collage image...');
+      console.log('[GridImageService] Calling AI to generate collage image...');
       const imageResult = await defaultGeminiClient.generateImage(prompt, {
         size: imageSize,
         quality: imageQuality,
@@ -87,19 +87,19 @@ export class PhotoWallService {
         throw new Error('AI 生成图片失败：未返回图片 URL');
       }
       
-      console.log('[PhotoWallService] Got original image URL');
+      console.log('[GridImageService] Got original image URL');
       
       // 3. 将图片转换为 base64（确保可以被 Canvas 处理）
       const imageDataUrl = await urlCacheService.getImageAsBase64(originalImageUrl);
       
       // 4. 分割图片
-      console.log('[PhotoWallService] Splitting image into grid...');
+      console.log('[GridImageService] Splitting image into grid...');
       const splitElements = await gridSplitter.split(imageDataUrl, gridConfig);
-      console.log(`[PhotoWallService] Split into ${splitElements.length} elements`);
+      console.log(`[GridImageService] Split into ${splitElements.length} elements`);
       
       // 5. 计算布局
       const layoutParams = this.calculateLayoutParams(splitElements);
-      console.log('[PhotoWallService] Calculating layout with style:', layoutStyle);
+      console.log('[GridImageService] Calculating layout with style:', layoutStyle);
       
       const positionedElements = layoutEngine.calculate(
         splitElements,
@@ -107,7 +107,7 @@ export class PhotoWallService {
         layoutParams
       );
       
-      console.log('[PhotoWallService] Layout calculated, ready to insert');
+      console.log('[GridImageService] Layout calculated, ready to insert');
       
       return {
         success: true,
@@ -115,10 +115,10 @@ export class PhotoWallService {
         elements: positionedElements,
       };
     } catch (error: any) {
-      console.error('[PhotoWallService] Generation failed:', error);
+      console.error('[GridImageService] Generation failed:', error);
       return {
         success: false,
-        error: error.message || '照片墙生成失败',
+        error: error.message || '宫格图生成失败',
       };
     }
   }
@@ -136,21 +136,21 @@ export class PhotoWallService {
     imageUrl: string,
     gridConfig: GridConfig,
     layoutStyle: LayoutStyle = 'scattered'
-  ): Promise<PhotoWallResult> {
-    console.log('[PhotoWallService] Processing existing image with config:', { gridConfig, layoutStyle });
+  ): Promise<GridImageResult> {
+    console.log('[GridImageService] Processing existing image with config:', { gridConfig, layoutStyle });
 
     try {
       // 1. 将图片转换为 base64（确保可以被 Canvas 处理）
       const imageDataUrl = await urlCacheService.getImageAsBase64(imageUrl);
 
       // 2. 分割图片
-      console.log('[PhotoWallService] Splitting image into grid...');
+      console.log('[GridImageService] Splitting image into grid...');
       const splitElements = await gridSplitter.split(imageDataUrl, gridConfig);
-      console.log(`[PhotoWallService] Split into ${splitElements.length} elements`);
+      console.log(`[GridImageService] Split into ${splitElements.length} elements`);
 
       // 3. 计算布局
       const layoutParams = this.calculateLayoutParams(splitElements);
-      console.log('[PhotoWallService] Calculating layout with style:', layoutStyle);
+      console.log('[GridImageService] Calculating layout with style:', layoutStyle);
 
       const positionedElements = layoutEngine.calculate(
         splitElements,
@@ -158,7 +158,7 @@ export class PhotoWallService {
         layoutParams
       );
 
-      console.log('[PhotoWallService] Layout calculated, ready to insert');
+      console.log('[GridImageService] Layout calculated, ready to insert');
 
       return {
         success: true,
@@ -166,16 +166,16 @@ export class PhotoWallService {
         elements: positionedElements,
       };
     } catch (error: any) {
-      console.error('[PhotoWallService] Processing failed:', error);
+      console.error('[GridImageService] Processing failed:', error);
       return {
         success: false,
-        error: error.message || '照片墙处理失败',
+        error: error.message || '宫格图处理失败',
       };
     }
   }
 
   /**
-   * 将照片墙元素插入画板
+   * 将宫格图元素插入画板
    *
    * @param elements - 带位置信息的元素数组
    * @param startPoint - 起始位置（可选）
@@ -199,7 +199,7 @@ export class PhotoWallService {
       baseX = bottomPoint?.[0] ?? baseX;
     }
     
-    console.log(`[PhotoWallService] Inserting ${elements.length} elements at (${baseX}, ${baseY})`);
+    console.log(`[GridImageService] Inserting ${elements.length} elements at (${baseX}, ${baseY})`);
     
     // 按 zIndex 排序，确保正确的层叠顺序
     const sortedElements = [...elements].sort((a, b) => a.zIndex - b.zIndex);
@@ -225,21 +225,21 @@ export class PhotoWallService {
       );
     }
     
-    console.log('[PhotoWallService] All elements inserted successfully');
+    console.log('[GridImageService] All elements inserted successfully');
   }
   
   /**
-   * 一键生成并插入照片墙
+   * 一键生成并插入宫格图
    * 
-   * @param params - 照片墙参数
+   * @param params - 宫格图参数
    * @param language - 语言
    * @param startPoint - 起始位置
    */
   async generateAndInsert(
-    params: PhotoWallParams,
+    params: GridImageParams,
     language: 'zh' | 'en' = 'zh',
     startPoint?: Point
-  ): Promise<PhotoWallResult> {
+  ): Promise<GridImageResult> {
     const result = await this.generate(params, language);
     
     if (result.success && result.elements) {
@@ -257,7 +257,7 @@ export class PhotoWallService {
     gridConfig: GridConfig,
     language: 'zh' | 'en'
   ): string {
-    const template = PHOTO_WALL_PROMPT_TEMPLATE[language];
+    const template = GRID_IMAGE_PROMPT_TEMPLATE[language];
     return template(theme, gridConfig.rows, gridConfig.cols);
   }
   
@@ -295,9 +295,15 @@ export class PhotoWallService {
 }
 
 /**
- * 默认的 PhotoWallService 实例
+ * 默认的 GridImageService 实例
  */
-export const photoWallService = new PhotoWallService();
+export const gridImageService = new GridImageService();
+
+// 保留旧导出名的别名，便于迁移
+export const photoWallService = gridImageService;
+
+// 保留旧类名的别名
+export { GridImageService as PhotoWallService };
 
 // 导出子模块
 export { gridSplitter, GridSplitter } from './grid-splitter';

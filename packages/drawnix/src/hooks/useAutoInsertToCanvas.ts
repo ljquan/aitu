@@ -3,7 +3,7 @@
  *
  * 监听任务完成事件，自动将生成的图片/视频插入到画布中
  * 支持 AI 对话产生的所有产物自动插入
- * 支持照片墙任务的自动拆分和插入
+ * 支持宫格图任务的自动拆分和插入
  */
 
 import { useEffect, useRef } from 'react';
@@ -147,20 +147,20 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
     };
 
     /**
-     * 检查是否为照片墙任务
+     * 检查是否为宫格图任务
      */
-    const isPhotoWallTask = (task: Task): boolean => {
+    const isGridImageTask = (task: Task): boolean => {
       const params = task.params as Record<string, unknown>;
       return !!(params.photoWallRows && params.photoWallCols);
     };
 
     /**
-     * 处理照片墙任务：拆分并插入
+     * 处理宫格图任务：拆分并插入
      */
-    const handlePhotoWallTask = async (task: Task) => {
+    const handleGridImageTask = async (task: Task) => {
       const board = getCanvasBoard();
       if (!board) {
-        console.error('[AutoInsert] Board not available for photo wall task');
+        console.error('[AutoInsert] Board not available for grid image task');
         return;
       }
 
@@ -171,11 +171,11 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
       const url = task.result?.url;
 
       if (!url) {
-        console.error('[AutoInsert] Photo wall task has no result URL');
+        console.error('[AutoInsert] Grid image task has no result URL');
         return;
       }
 
-      console.log(`[AutoInsert] Processing photo wall task ${task.id}: ${rows}x${cols}, style=${layoutStyle}`);
+      console.log(`[AutoInsert] Processing grid image task ${task.id}: ${rows}x${cols}, style=${layoutStyle}`);
 
       try {
         const result = await imageSplitService.splitAndInsert(board, url, {
@@ -186,12 +186,12 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
         });
 
         if (result.success) {
-          console.log(`[AutoInsert] Photo wall split into ${result.count} images`);
+          console.log(`[AutoInsert] Grid image split into ${result.count} images`);
         } else {
-          console.error(`[AutoInsert] Photo wall split failed: ${result.error}`);
+          console.error(`[AutoInsert] Grid image split failed: ${result.error}`);
         }
       } catch (error) {
-        console.error('[AutoInsert] Photo wall processing error:', error);
+        console.error('[AutoInsert] Grid image processing error:', error);
       }
     };
 
@@ -218,9 +218,9 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
       // 标记为已处理
       insertedTaskIds.add(task.id);
 
-      // 检查是否为照片墙任务
-      if (isPhotoWallTask(task)) {
-        handlePhotoWallTask(task);
+      // 检查是否为宫格图任务
+      if (isGridImageTask(task)) {
+        handleGridImageTask(task);
         return;
       }
 

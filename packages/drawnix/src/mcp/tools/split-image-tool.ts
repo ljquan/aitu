@@ -142,7 +142,7 @@ export const splitImageTool: MCPTool = {
 
 使用场景：
 - 用户有一张九宫格/拼贴图，想要拆分成独立图片
-- 用户想要将照片墙图片拆分后重新排列
+- 用户想要将宫格图图片拆分后重新排列
 - 用户有一张包含多个产品的图片，想要分开展示
 
 支持两种拆分模式：
@@ -156,7 +156,7 @@ export const splitImageTool: MCPTool = {
 
 不适用场景：
 - 想要生成图片（使用 generate_image 工具）
-- 想要生成照片墙（使用 generate_photo_wall 工具）
+- 想要生成宫格图（使用 generate_grid_image 工具）
 - 图片没有分割线也不是规则网格结构`,
 
   inputSchema: {

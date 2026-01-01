@@ -108,13 +108,13 @@ ${toolsDescription}
 用户：+3 画一只猫
 {"content": "批量生成3张猫咪图片", "next": [{"mcp": "generate_image", "args": {"prompt": "A cute orange kitten with fluffy fur and big eyes, sitting in warm sunlight, soft bokeh background, professional photography", "size": "1x1", "count": 3}}]}
 
-### 示例9：生成照片墙
-用户：生成照片墙：孟菲斯风格餐具
-{"content": "生成孟菲斯风格餐具照片墙", "next": [{"mcp": "generate_photo_wall", "args": {"theme": "孟菲斯风格餐具，色彩鲜艳的杯碗盘，几何图案装饰", "rows": 3, "cols": 3, "layoutStyle": "scattered"}}]}
+### 示例9：生成宫格图
+用户：生成宫格图：孟菲斯风格餐具
+{"content": "生成孟菲斯风格餐具宫格图", "next": [{"mcp": "generate_grid_image", "args": {"theme": "孟菲斯风格餐具，色彩鲜艳的杯碗盘，几何图案装饰", "rows": 3, "cols": 3, "layoutStyle": "scattered"}}]}
 
-### 示例10：生成照片墙（指定布局）
-用户：生成一个可爱猫咪表情包照片墙，4x4网格布局
-{"content": "生成猫咪表情包照片墙", "next": [{"mcp": "generate_photo_wall", "args": {"theme": "可爱猫咪表情包，各种有趣的猫咪表情和姿势", "rows": 4, "cols": 4, "layoutStyle": "grid"}}]}
+### 示例10：生成宫格图（指定布局）
+用户：生成一个可爱猫咪表情包宫格图，4x4网格布局
+{"content": "生成猫咪表情包宫格图", "next": [{"mcp": "generate_grid_image", "args": {"theme": "可爱猫咪表情包，各种有趣的猫咪表情和姿势", "rows": 4, "cols": 4, "layoutStyle": "grid"}}]}
 
 ### 示例11：无需工具调用（纯文字回复）
 用户：你好

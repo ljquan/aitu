@@ -133,7 +133,9 @@ class MCPRegistry {
     const descriptions = tools.map(tool => {
       const params = tool.inputSchema.properties || {};
       const required = tool.inputSchema.required || [];
+      const guidance = tool.promptGuidance;
 
+      // 参数描述
       const paramDescriptions = Object.entries(params)
         .map(([name, schema]) => {
           const isRequired = required.includes(name);
@@ -158,18 +160,50 @@ class MCPRegistry {
           }
 
           const detailStr = details.length > 0 ? ` [${details.join(', ')}]` : '';
-          return `  - **${name}**${reqStr}: ${schema.description || '无描述'}${detailStr}`;
+
+          // 添加参数指导（如果有）
+          const paramGuidance = guidance?.parameterGuidance?.[name];
+          const guidanceStr = paramGuidance ? `\n    💡 ${paramGuidance}` : '';
+
+          return `  - **${name}**${reqStr}: ${schema.description || '无描述'}${detailStr}${guidanceStr}`;
         })
         .join('\n');
 
-      return `### ${tool.name}
+      // 构建工具描述
+      let toolDesc = `### ${tool.name}
 ${tool.description}
 
 **参数:**
 ${paramDescriptions || '  无参数'}`;
+
+      // 添加使用场景
+      if (guidance?.whenToUse) {
+        toolDesc += `\n\n**使用场景:** ${guidance.whenToUse}`;
+      }
+
+      // 添加最佳实践
+      if (guidance?.bestPractices && guidance.bestPractices.length > 0) {
+        toolDesc += `\n\n**最佳实践:**\n${guidance.bestPractices.map(p => `  - ${p}`).join('\n')}`;
+      }
+
+      // 添加示例
+      if (guidance?.examples && guidance.examples.length > 0) {
+        const examplesStr = guidance.examples.map(ex => {
+          const argsJson = JSON.stringify(ex.args, null, 0);
+          return `  - 输入: "${ex.input}"\n    调用: {"mcp": "${tool.name}", "args": ${argsJson}}${ex.explanation ? `\n    说明: ${ex.explanation}` : ''}`;
+        }).join('\n');
+        toolDesc += `\n\n**示例:**\n${examplesStr}`;
+      }
+
+      // 添加注意事项
+      if (guidance?.warnings && guidance.warnings.length > 0) {
+        toolDesc += `\n\n**注意事项:**\n${guidance.warnings.map(w => `  ⚠️ ${w}`).join('\n')}`;
+      }
+
+      return toolDesc;
     });
 
-    return descriptions.join('\n\n');
+    return descriptions.join('\n\n---\n\n');
   }
 
   /**

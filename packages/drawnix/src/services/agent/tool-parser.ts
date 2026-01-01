@@ -190,7 +190,7 @@ export function parseToolCalls(response: string): ToolCall[] {
   // 格式 4: 直接在文本中的 JSON（无代码块包裹，旧格式）
   if (toolCalls.length === 0) {
     // 匹配看起来像工具调用的 JSON 对象
-    const directJsonRegex = /\{[\s\S]*?"name"\s*:\s*"(?:generate_image|generate_video|generate_photo_wall)"[\s\S]*?\}/g;
+    const directJsonRegex = /\{[\s\S]*?"name"\s*:\s*"(?:generate_image|generate_video|generate_grid_image|generate_photo_wall)"[\s\S]*?\}/g;
 
     while ((match = directJsonRegex.exec(response)) !== null) {
       const parsed = tryParseJson(match[0]);
