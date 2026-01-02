@@ -15,7 +15,7 @@ export interface BorderTrimResult {
 }
 
 /**
- * 检测像素是否为边框色（白色或灰色）
+ * 检测像素是否为边框色（白色、灰色或透明/黑色）
  */
 export function isBorderColor(
   r: number,
@@ -26,14 +26,26 @@ export function isBorderColor(
     grayMinValue?: number;
     grayMaxValue?: number;
     maxColorDiff?: number;
+    alpha?: number;  // alpha 通道值
   } = {}
 ): boolean {
   const {
-    whiteThreshold = 240,
-    grayMinValue = 160,
-    grayMaxValue = 240,
-    maxColorDiff = 20,
+    whiteThreshold = 230,  // 降低阈值，更容易检测白边
+    grayMinValue = 150,    // 降低阈值，检测更多灰色
+    grayMaxValue = 255,    // 扩展到纯白
+    maxColorDiff = 25,     // 稍微放宽颜色差异
+    alpha = 255,           // 默认不透明
   } = options;
+
+  // 检查是否为透明像素（PNG 透明背景）
+  if (alpha < 128) {
+    return true;
+  }
+
+  // 检查是否为黑色或接近黑色（PNG 透明背景渲染后可能是黑色）
+  if (r <= 10 && g <= 10 && b <= 10) {
+    return true;
+  }
 
   // 检查是否为白色（高亮度）
   if (r >= whiteThreshold && g >= whiteThreshold && b >= whiteThreshold) {
@@ -102,11 +114,13 @@ export function isWhiteBorderPixel(
  * 从四个方向向内扫描，找到第一个非边框行/列
  *
  * @param imageData - Canvas ImageData
- * @param borderRatio - 判定为边框行/列的边框色占比阈值（默认 0.9）
+ * @param borderRatio - 判定为边框行/列的边框色占比阈值（默认 0.5，更积极裁剪）
+ * @param debug - 是否输出调试日志
  */
 export function trimBorders(
   imageData: ImageData,
-  borderRatio: number = 0.9
+  borderRatio: number = 0.5,
+  debug: boolean = false
 ): BorderTrimResult {
   const { width, height, data } = imageData;
 
@@ -115,11 +129,16 @@ export function trimBorders(
     let borderCount = 0;
     for (let x = 0; x < width; x++) {
       const idx = (y * width + x) * 4;
-      if (isBorderColor(data[idx], data[idx + 1], data[idx + 2])) {
+      const alpha = data[idx + 3];
+      if (isBorderColor(data[idx], data[idx + 1], data[idx + 2], { alpha })) {
         borderCount++;
       }
     }
-    return borderCount / width > borderRatio;
+    const ratio = borderCount / width;
+    // if (debug && y < 5) {
+    //   console.log(`[trimBorders] Row ${y}: borderCount=${borderCount}/${width}, ratio=${ratio.toFixed(2)}`);
+    // }
+    return ratio > borderRatio;
   };
 
   // 检测一列是否为边框列
@@ -127,11 +146,16 @@ export function trimBorders(
     let borderCount = 0;
     for (let y = 0; y < height; y++) {
       const idx = (y * width + x) * 4;
-      if (isBorderColor(data[idx], data[idx + 1], data[idx + 2])) {
+      const alpha = data[idx + 3];
+      if (isBorderColor(data[idx], data[idx + 1], data[idx + 2], { alpha })) {
         borderCount++;
       }
     }
-    return borderCount / height > borderRatio;
+    const ratio = borderCount / height;
+    // if (debug && x < 5) {
+    //   console.log(`[trimBorders] Col ${x}: borderCount=${borderCount}/${height}, ratio=${ratio.toFixed(2)}`);
+    // }
+    return ratio > borderRatio;
   };
 
   // 从顶部向下扫描
@@ -158,6 +182,10 @@ export function trimBorders(
     right--;
   }
 
+  // if (debug) {
+  //   console.log(`[trimBorders] Result: top=${top}, bottom=${bottom}, left=${left}, right=${right}`);
+  // }
+
   return { top, right, bottom, left };
 }
 
@@ -166,17 +194,20 @@ export function trimBorders(
  *
  * @param sourceCanvas - 原始 Canvas
  * @param minSize - 裁剪后最小尺寸（默认 10）
+ * @param debug - 是否输出调试日志
  * @returns 裁剪后的 Canvas，如果裁剪后太小则返回 null
  */
 export function trimCanvasBorders(
   sourceCanvas: HTMLCanvasElement,
-  minSize: number = 10
+  minSize: number = 10,
+  debug: boolean = false
 ): HTMLCanvasElement | null {
   const ctx = sourceCanvas.getContext('2d', { willReadFrequently: true });
   if (!ctx) return null;
 
   const imageData = ctx.getImageData(0, 0, sourceCanvas.width, sourceCanvas.height);
-  const borders = trimBorders(imageData);
+
+  const borders = trimBorders(imageData, 0.5, debug);
 
   // 计算裁剪后的尺寸
   const trimmedWidth = borders.right - borders.left + 1;
@@ -208,6 +239,74 @@ export function trimCanvasBorders(
   );
 
   return trimmedCanvas;
+}
+
+/**
+ * 独立的去白边方法
+ * 从图片 URL 加载图片，去除四边白边后返回新的 data URL
+ *
+ * @param imageUrl - 图片 URL 或 data URL
+ * @param options - 配置选项
+ * @returns 去除白边后的 data URL，如果失败返回原 URL
+ */
+export async function removeWhiteBorder(
+  imageUrl: string,
+  options: {
+    borderRatio?: number;  // 边框判定阈值（默认 0.3，更激进）
+    debug?: boolean;
+  } = {}
+): Promise<string> {
+  const { borderRatio = 0.3, debug = false } = options;
+
+  try {
+    const img = await loadImage(imageUrl);
+    const { naturalWidth: width, naturalHeight: height } = img;
+
+    // 创建 Canvas
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return imageUrl;
+
+    ctx.drawImage(img, 0, 0);
+    const imageData = ctx.getImageData(0, 0, width, height);
+
+    const borders = trimBorders(imageData, borderRatio, debug);
+
+    // 计算裁剪后的尺寸
+    const trimmedWidth = borders.right - borders.left + 1;
+    const trimmedHeight = borders.bottom - borders.top + 1;
+
+    // 如果没有裁剪（尺寸相同），直接返回原图
+    if (trimmedWidth === width && trimmedHeight === height) {
+      return imageUrl;
+    }
+
+    // 创建裁剪后的 Canvas
+    const trimmedCanvas = document.createElement('canvas');
+    trimmedCanvas.width = trimmedWidth;
+    trimmedCanvas.height = trimmedHeight;
+    const trimmedCtx = trimmedCanvas.getContext('2d');
+    if (!trimmedCtx) return imageUrl;
+
+    trimmedCtx.drawImage(
+      canvas,
+      borders.left,
+      borders.top,
+      trimmedWidth,
+      trimmedHeight,
+      0,
+      0,
+      trimmedWidth,
+      trimmedHeight
+    );
+
+    return trimmedCanvas.toDataURL('image/png', 0.92);
+  } catch (error) {
+    console.error('[removeWhiteBorder] Error:', error);
+    return imageUrl;
+  }
 }
 
 /**

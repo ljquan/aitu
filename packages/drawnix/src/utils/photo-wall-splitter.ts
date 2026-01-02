@@ -4,16 +4,21 @@
  * 专门用于检测和拆分不规则照片墙图片
  * 特点：图片大小不一、位置不规则、有白色边框、灰色/白色背景间隔
  *
- * 算法思路：
- * 1. 检测背景颜色（灰色或白色间隔区域）
- * 2. 找到非背景的连通区域
- * 3. 为每个连通区域计算边界矩形
- * 4. 过滤掉太小的区域（噪点）
- * 5. 提取每个区域的图片
+ * 算法思路（增强版 - 边缘 Flood Fill）：
+ * 1. 计算图像梯度（Sobel 边缘检测）
+ * 2. 从四角采样检测背景颜色
+ * 3. 从图像边缘开始 Flood Fill，标记"从边缘可达"的背景区域
+ *    - 使用梯度作为边界，防止填充进入图片内部
+ *    - 即使图片内容有白色，只要不与边缘连通就不会被标记为背景
+ * 4. 膨胀操作连接相邻区域
+ * 5. 连通区域标记，找到各个图片区域
+ * 6. 过滤太小的区域（噪点）
+ * 7. 合并重叠区域，提取图片
  *
  * 优化：
  * - 大图片自动降采样检测，避免阻塞主线程
  * - 异步处理，定期 yield 给浏览器
+ * - 边缘检测失效时自动回退到颜色匹配算法
  */
 
 import type { ImageElement } from '../types/photo-wall.types';
@@ -21,14 +26,14 @@ import {
   loadImage,
   isBackgroundPixel,
   isWhiteBorderPixel,
-  extractAndTrimRegion,
+  removeWhiteBorder,
 } from './image-border-utils';
 
-/** 检测时的最大尺寸，超过此尺寸会降采样 */
-const MAX_DETECTION_SIZE = 1500;
+/** 检测时的最大尺寸，超过此尺寸会降采样（降低此值可提升性能） */
+const MAX_DETECTION_SIZE = 800;
 
-/** 每处理多少像素后 yield 一次 */
-const YIELD_INTERVAL = 500000;
+/** 每处理多少像素后 yield 一次（降低此值可提升 UI 响应性） */
+const YIELD_INTERVAL = 100000;
 
 /**
  * 让出主线程，避免阻塞 UI
@@ -53,10 +58,221 @@ export interface PhotoWallDetectionResult {
 }
 
 /**
- * 创建二值化遮罩（异步版本）
+ * 计算像素的灰度值
+ */
+function getGrayValue(r: number, g: number, b: number): number {
+  return 0.299 * r + 0.587 * g + 0.114 * b;
+}
+
+/**
+ * 计算图像的梯度幅值（用于边缘检测，异步版本）
+ * 使用 Sobel 算子
+ */
+async function computeGradientMagnitude(imageData: ImageData): Promise<Float32Array> {
+  const { width, height, data } = imageData;
+  const gradient = new Float32Array(width * height);
+  let processedPixels = 0;
+
+  // 预计算灰度值以提升性能
+  const grayValues = new Float32Array(width * height);
+  for (let i = 0; i < width * height; i++) {
+    const idx = i * 4;
+    grayValues[i] = getGrayValue(data[idx], data[idx + 1], data[idx + 2]);
+  }
+
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
+      const idx = y * width + x;
+
+      // Sobel 算子 - 使用预计算的灰度值
+      // Gx = [-1 0 1; -2 0 2; -1 0 1]
+      const gx =
+        -grayValues[idx - width - 1] + grayValues[idx - width + 1] +
+        -2 * grayValues[idx - 1] + 2 * grayValues[idx + 1] +
+        -grayValues[idx + width - 1] + grayValues[idx + width + 1];
+
+      // Gy = [-1 -2 -1; 0 0 0; 1 2 1]
+      const gy =
+        -grayValues[idx - width - 1] - 2 * grayValues[idx - width] - grayValues[idx - width + 1] +
+        grayValues[idx + width - 1] + 2 * grayValues[idx + width] + grayValues[idx + width + 1];
+
+      gradient[idx] = Math.sqrt(gx * gx + gy * gy);
+
+      // 定期 yield 给浏览器
+      processedPixels++;
+      if (processedPixels % YIELD_INTERVAL === 0) {
+        await yieldToMain();
+      }
+    }
+  }
+
+  return gradient;
+}
+
+/**
+ * 检测背景颜色（从图像四角采样）
+ */
+function detectBackgroundColor(imageData: ImageData): { r: number; g: number; b: number } {
+  const { width, height, data } = imageData;
+  const samples: Array<{ r: number; g: number; b: number }> = [];
+  const sampleSize = Math.min(20, Math.floor(Math.min(width, height) / 10));
+
+  // 从四角采样
+  const corners = [
+    { startX: 0, startY: 0 },
+    { startX: width - sampleSize, startY: 0 },
+    { startX: 0, startY: height - sampleSize },
+    { startX: width - sampleSize, startY: height - sampleSize },
+  ];
+
+  for (const corner of corners) {
+    for (let dy = 0; dy < sampleSize; dy++) {
+      for (let dx = 0; dx < sampleSize; dx++) {
+        const x = corner.startX + dx;
+        const y = corner.startY + dy;
+        if (x >= 0 && x < width && y >= 0 && y < height) {
+          const idx = (y * width + x) * 4;
+          samples.push({
+            r: data[idx],
+            g: data[idx + 1],
+            b: data[idx + 2],
+          });
+        }
+      }
+    }
+  }
+
+  // 计算平均值
+  const avg = samples.reduce(
+    (acc, s) => ({ r: acc.r + s.r, g: acc.g + s.g, b: acc.b + s.b }),
+    { r: 0, g: 0, b: 0 }
+  );
+  const count = samples.length;
+
+  return {
+    r: Math.round(avg.r / count),
+    g: Math.round(avg.g / count),
+    b: Math.round(avg.b / count),
+  };
+}
+
+/**
+ * 检查像素是否与背景色相似
+ */
+function isSimilarToBackground(
+  r: number, g: number, b: number,
+  bgColor: { r: number; g: number; b: number },
+  colorThreshold: number = 30
+): boolean {
+  const dr = Math.abs(r - bgColor.r);
+  const dg = Math.abs(g - bgColor.g);
+  const db = Math.abs(b - bgColor.b);
+  return dr <= colorThreshold && dg <= colorThreshold && db <= colorThreshold;
+}
+
+/**
+ * 使用边缘 Flood Fill 创建二值化遮罩（增强版）
+ * 从图像边缘开始填充，使用梯度作为边界
+ * 背景 = 0，前景（图片区域）= 1
+ *
+ * 性能优化：
+ * - 使用 Uint32Array 存储队列，避免对象创建开销
+ * - 使用索引代替 shift()，避免 O(n) 操作
+ * - 预先标记已入队像素，避免重复入队
+ */
+async function createBinaryMaskWithEdgeFloodFill(
+  imageData: ImageData,
+  gradient: Float32Array,
+  bgColor: { r: number; g: number; b: number }
+): Promise<Uint8Array> {
+  const { width, height, data } = imageData;
+  const mask = new Uint8Array(width * height);
+  const inQueue = new Uint8Array(width * height); // 标记是否已入队
+
+  // 梯度阈值（边缘检测）
+  const gradientThreshold = 30;
+  // 颜色相似度阈值
+  const colorThreshold = 40;
+
+  // 初始化：所有像素默认为前景 (1)
+  mask.fill(1);
+
+  // 使用 Uint32Array 存储队列（每个元素 = y * width + x）
+  // 预估最大队列大小为图像面积的一半
+  const maxQueueSize = Math.ceil((width * height) / 2);
+  const queue = new Uint32Array(maxQueueSize);
+  let queueHead = 0;
+  let queueTail = 0;
+
+  // 入队辅助函数
+  const enqueue = (x: number, y: number) => {
+    if (x < 0 || x >= width || y < 0 || y >= height) return;
+    const idx = y * width + x;
+    if (inQueue[idx]) return;
+    inQueue[idx] = 1;
+    queue[queueTail % maxQueueSize] = idx;
+    queueTail++;
+  };
+
+  // 添加四边的像素到队列
+  for (let x = 0; x < width; x++) {
+    enqueue(x, 0);
+    enqueue(x, height - 1);
+  }
+  for (let y = 1; y < height - 1; y++) {
+    enqueue(0, y);
+    enqueue(width - 1, y);
+  }
+
+  let processedPixels = 0;
+
+  while (queueHead < queueTail) {
+    const idx = queue[queueHead % maxQueueSize];
+    queueHead++;
+
+    const x = idx % width;
+    const y = Math.floor(idx / width);
+
+    const pixelIdx = idx * 4;
+    const r = data[pixelIdx];
+    const g = data[pixelIdx + 1];
+    const b = data[pixelIdx + 2];
+    const grad = gradient[idx];
+
+    // 判断是否为背景：
+    // 1. 颜色与背景相似
+    // 2. 梯度不太大（不是边缘）
+    // 3. 或者是纯白/灰色（通用背景色）
+    const isBgColor = isSimilarToBackground(r, g, b, bgColor, colorThreshold);
+    const isGenericBg = isBackgroundPixel(r, g, b) || isWhiteBorderPixel(r, g, b);
+    const isLowGradient = grad < gradientThreshold;
+
+    if ((isBgColor || isGenericBg) && isLowGradient) {
+      // 标记为背景
+      mask[idx] = 0;
+
+      // 继续扩展到邻居（4-连通）
+      enqueue(x + 1, y);
+      enqueue(x - 1, y);
+      enqueue(x, y + 1);
+      enqueue(x, y - 1);
+    }
+
+    // 定期 yield 给浏览器
+    processedPixels++;
+    if (processedPixels % YIELD_INTERVAL === 0) {
+      await yieldToMain();
+    }
+  }
+
+  return mask;
+}
+
+/**
+ * 创建二值化遮罩（原始颜色匹配版本，作为后备）
  * 背景 = 0，前景（图片区域）= 1
  */
-async function createBinaryMask(imageData: ImageData): Promise<Uint8Array> {
+async function createBinaryMaskByColor(imageData: ImageData): Promise<Uint8Array> {
   const { width, height, data } = imageData;
   const mask = new Uint8Array(width * height);
   let processedPixels = 0;
@@ -320,99 +536,6 @@ function mergeOverlappingBoxes(
   return merged;
 }
 
-/**
- * 扩展边界矩形以包含白色边框
- */
-function expandBoxesToIncludeBorder(
-  boxes: Array<{ x: number; y: number; width: number; height: number }>,
-  imageData: ImageData,
-  padding: number = 5
-): Array<{ x: number; y: number; width: number; height: number }> {
-  const { width: imgWidth, height: imgHeight, data } = imageData;
-
-  return boxes.map((box) => {
-    // 向外扩展，寻找白色边框
-    let { x, y, width, height } = box;
-
-    // 向左扩展
-    while (x > 0) {
-      let hasWhite = false;
-      for (let py = y; py < y + height && py < imgHeight; py++) {
-        const idx = (py * imgWidth + (x - 1)) * 4;
-        if (isWhiteBorderPixel(data[idx], data[idx + 1], data[idx + 2])) {
-          hasWhite = true;
-          break;
-        }
-      }
-      if (hasWhite) {
-        x--;
-        width++;
-      } else {
-        break;
-      }
-    }
-
-    // 向右扩展
-    while (x + width < imgWidth) {
-      let hasWhite = false;
-      for (let py = y; py < y + height && py < imgHeight; py++) {
-        const idx = (py * imgWidth + (x + width)) * 4;
-        if (isWhiteBorderPixel(data[idx], data[idx + 1], data[idx + 2])) {
-          hasWhite = true;
-          break;
-        }
-      }
-      if (hasWhite) {
-        width++;
-      } else {
-        break;
-      }
-    }
-
-    // 向上扩展
-    while (y > 0) {
-      let hasWhite = false;
-      for (let px = x; px < x + width && px < imgWidth; px++) {
-        const idx = ((y - 1) * imgWidth + px) * 4;
-        if (isWhiteBorderPixel(data[idx], data[idx + 1], data[idx + 2])) {
-          hasWhite = true;
-          break;
-        }
-      }
-      if (hasWhite) {
-        y--;
-        height++;
-      } else {
-        break;
-      }
-    }
-
-    // 向下扩展
-    while (y + height < imgHeight) {
-      let hasWhite = false;
-      for (let px = x; px < x + width && px < imgWidth; px++) {
-        const idx = ((y + height) * imgWidth + px) * 4;
-        if (isWhiteBorderPixel(data[idx], data[idx + 1], data[idx + 2])) {
-          hasWhite = true;
-          break;
-        }
-      }
-      if (hasWhite) {
-        height++;
-      } else {
-        break;
-      }
-    }
-
-    // 添加少量 padding
-    return {
-      x: Math.max(0, x - padding),
-      y: Math.max(0, y - padding),
-      width: Math.min(imgWidth - x + padding, width + padding * 2),
-      height: Math.min(imgHeight - y + padding, height + padding * 2),
-    };
-  });
-}
 
 /**
  * 检测照片墙中的图片区域
@@ -452,54 +575,113 @@ export async function detectPhotoWallRegions(
     throw new Error('Failed to get canvas context');
   }
 
+  // 添加灰色边框，确保 Flood Fill 能从边缘正确开始
+  const borderSize = Math.max(10, Math.round(Math.min(width, height) * 0.02));
+  const paddedWidth = width + borderSize * 2;
+  const paddedHeight = height + borderSize * 2;
+
+  const paddedCanvas = document.createElement('canvas');
+  paddedCanvas.width = paddedWidth;
+  paddedCanvas.height = paddedHeight;
+  const paddedCtx = paddedCanvas.getContext('2d', { willReadFrequently: true });
+  if (!paddedCtx) {
+    throw new Error('Failed to get padded canvas context');
+  }
+
+  // 填充灰色背景
+  paddedCtx.fillStyle = '#E0E0E0';
+  paddedCtx.fillRect(0, 0, paddedWidth, paddedHeight);
+
+  // 绘制原图到中心
   ctx.drawImage(img, 0, 0, width, height);
-  const imageData = ctx.getImageData(0, 0, width, height);
+  paddedCtx.drawImage(canvas, borderSize, borderSize);
+
+  const imageData = paddedCtx.getImageData(0, 0, paddedWidth, paddedHeight);
+  console.log(`[PhotoWallSplitter] Added ${borderSize}px gray border, detection size: ${paddedWidth}x${paddedHeight}`);
 
   await yieldToMain();
 
-  // 1. 创建二值化遮罩
-  console.log('[PhotoWallSplitter] Creating binary mask...');
-  let mask = await createBinaryMask(imageData);
+  // 1. 计算梯度（边缘检测）
+  console.log('[PhotoWallSplitter] Computing gradient...');
+  const gradient = await computeGradientMagnitude(imageData);
 
   await yieldToMain();
 
-  // 2. 膨胀操作，连接相邻区域
+  // 2. 检测背景颜色
+  const bgColor = detectBackgroundColor(imageData);
+  console.log(`[PhotoWallSplitter] Detected background color: RGB(${bgColor.r}, ${bgColor.g}, ${bgColor.b})`);
+
+  // 3. 使用边缘 Flood Fill 创建二值化遮罩
+  console.log('[PhotoWallSplitter] Creating binary mask with edge flood fill...');
+  let mask = await createBinaryMaskWithEdgeFloodFill(imageData, gradient, bgColor);
+
+  await yieldToMain();
+
+  // 统计前景像素数量，判断是否检测有效
+  const foregroundCount = mask.reduce((sum, val) => sum + val, 0);
+  const totalPaddedPixels = paddedWidth * paddedHeight;
+  const foregroundRatio = foregroundCount / totalPaddedPixels;
+  console.log(`[PhotoWallSplitter] Foreground ratio: ${(foregroundRatio * 100).toFixed(1)}%`);
+
+  // 如果前景占比过高（>95%）或过低（<5%），说明边缘检测可能失效，回退到颜色匹配
+  if (foregroundRatio > 0.95 || foregroundRatio < 0.05) {
+    console.log('[PhotoWallSplitter] Edge flood fill ineffective, falling back to color matching...');
+    mask = await createBinaryMaskByColor(imageData);
+  }
+
+  await yieldToMain();
+
+  // 4. 膨胀操作，连接相邻区域
   console.log('[PhotoWallSplitter] Dilating mask...');
-  mask = await dilate(mask, width, height, 3);
+  mask = await dilate(mask, paddedWidth, paddedHeight, 3);
 
   await yieldToMain();
 
-  // 3. 连通区域标记
+  // 5. 连通区域标记
   console.log('[PhotoWallSplitter] Labeling connected components...');
-  const { labels, count } = await labelConnectedComponents(mask, width, height);
+  const { labels, count } = await labelConnectedComponents(mask, paddedWidth, paddedHeight);
   console.log(`[PhotoWallSplitter] Found ${count} raw regions`);
 
   await yieldToMain();
 
-  // 4. 计算边界矩形
-  const rawBoxes = computeBoundingBoxes(labels, width, height, count);
+  // 6. 计算边界矩形
+  const rawBoxes = computeBoundingBoxes(labels, paddedWidth, paddedHeight, count);
 
-  // 5. 过滤太小的区域（注意：面积阈值也需要按比例缩放）
+  // 7. 过滤太小的区域（注意：面积阈值也需要按比例缩放）
   const scaledMinArea = Math.max(minRegionSize * scale * scale, totalArea * scale * scale * minRegionRatio);
   const filteredBoxes = rawBoxes.filter((box) => box.area >= scaledMinArea);
   console.log(`[PhotoWallSplitter] After filtering: ${filteredBoxes.length} regions`);
 
-  // 6. 合并重叠的矩形
+  // 8. 合并重叠的矩形
   const mergedBoxes = mergeOverlappingBoxes(filteredBoxes);
   console.log(`[PhotoWallSplitter] After merging: ${mergedBoxes.length} regions`);
 
-  // 7. 扩展边界以包含白色边框
-  const expandedBoxes = expandBoxesToIncludeBorder(mergedBoxes, imageData);
+  // 9. 不再扩展边界（之前会扩展太多白色区域）
+  // 后续 splitPhotoWall 会使用 removeWhiteBorder 裁剪白边
 
-  // 8. 如果有降采样，将坐标映射回原始尺寸
-  const finalBoxes = scale < 1
-    ? expandedBoxes.map((box) => ({
-        x: Math.round(box.x / scale),
-        y: Math.round(box.y / scale),
-        width: Math.round(box.width / scale),
-        height: Math.round(box.height / scale),
-      }))
-    : expandedBoxes;
+  // 10. 将坐标映射回原始尺寸（需要减去边框偏移，添加少量 padding）
+  const smallPadding = 2; // 添加 2px padding 确保不会裁掉边缘
+  const finalBoxes = mergedBoxes.map((box) => {
+    // 先减去边框偏移，添加少量 padding
+    const x = Math.max(0, box.x - borderSize - smallPadding);
+    const y = Math.max(0, box.y - borderSize - smallPadding);
+    // 限制在原图范围内
+    const right = Math.min(width, box.x + box.width - borderSize + smallPadding);
+    const bottom = Math.min(height, box.y + box.height - borderSize + smallPadding);
+    const w = Math.max(0, right - x);
+    const h = Math.max(0, bottom - y);
+
+    // 如果有降采样，按比例放大
+    if (scale < 1) {
+      return {
+        x: Math.round(x / scale),
+        y: Math.round(y / scale),
+        width: Math.round(w / scale),
+        height: Math.round(h / scale),
+      };
+    }
+    return { x, y, width: w, height: h };
+  }).filter((box) => box.width > 0 && box.height > 0);
 
   return {
     count: finalBoxes.length,
@@ -529,23 +711,53 @@ export async function splitPhotoWall(imageUrl: string): Promise<ImageElement[]> 
   for (let i = 0; i < sortedRegions.length; i++) {
     const region = sortedRegions[i];
 
-    // 使用共享工具提取并裁剪区域边框
-    const trimResult = extractAndTrimRegion(img, region);
+    // 先提取区域（不裁剪）
+    const regionCanvas = document.createElement('canvas');
+    regionCanvas.width = region.width;
+    regionCanvas.height = region.height;
+    const regionCtx = regionCanvas.getContext('2d');
+    if (!regionCtx) continue;
 
-    if (!trimResult) {
-      console.log(`[PhotoWallSplitter] Region ${i} too small after trimming, skipping`);
+    regionCtx.drawImage(
+      img,
+      region.x,
+      region.y,
+      region.width,
+      region.height,
+      0,
+      0,
+      region.width,
+      region.height
+    );
+
+    // 转换为 data URL
+    const rawImageData = regionCanvas.toDataURL('image/png', 0.92);
+
+    // 使用独立的去白边方法
+    const trimmedImageData = await removeWhiteBorder(rawImageData, {
+      borderRatio: 0.3,  // 更激进的裁剪
+    });
+
+    // 获取裁剪后的尺寸
+    const trimmedImg = await loadImage(trimmedImageData);
+    const trimmedWidth = trimmedImg.naturalWidth;
+    const trimmedHeight = trimmedImg.naturalHeight;
+
+    // 过滤太小的图片
+    if (trimmedWidth < 50 || trimmedHeight < 50) {
+      console.log(`[PhotoWallSplitter] Region ${i} too small after trimming (${trimmedWidth}x${trimmedHeight}), skipping`);
       continue;
     }
 
     elements.push({
       id: `photo-wall-${Date.now()}-${i}`,
-      imageData: trimResult.canvas.toDataURL('image/png', 0.92),
+      imageData: trimmedImageData,
       originalIndex: i,
-      width: trimResult.width,
-      height: trimResult.height,
+      width: trimmedWidth,
+      height: trimmedHeight,
     });
 
-    console.log(`[PhotoWallSplitter] Region ${i}: ${region.width}x${region.height} -> ${trimResult.width}x${trimResult.height}`);
+    console.log(`[PhotoWallSplitter] Region ${i}: ${region.width}x${region.height} -> ${trimmedWidth}x${trimmedHeight}`);
   }
 
   console.log(`[PhotoWallSplitter] Split into ${elements.length} images`);
