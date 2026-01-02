@@ -684,35 +684,8 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
 
         <div className={`chat-drawer ${isOpen ? 'chat-drawer--open' : ''}`}>
           <div className="chat-drawer__header">
-            <div className="chat-drawer__header-left">
+            <div className="chat-drawer__header-top">
               <h2 className="chat-drawer__title">{title}</h2>
-              <ModelSelector 
-                value={sessionModel}
-                onChange={setSessionModel}
-              />
-            </div>
-            <div className="chat-drawer__actions">
-              <Tooltip content="会话列表" theme="light">
-                <button
-                  ref={toggleButtonRef}
-                  className={`chat-drawer__close-btn ${showSessions ? 'chat-drawer__close-btn--active' : ''}`}
-                  data-track="chat_click_sessions_toggle"
-                  onClick={handleToggleSessions}
-                  aria-label="会话列表"
-                >
-                  <ViewListIcon size={18} />
-                </button>
-              </Tooltip>
-              <Tooltip content="新对话" theme="light">
-                <button
-                  className="chat-drawer__close-btn"
-                  data-track="chat_click_new_session"
-                  onClick={handleNewSession}
-                  aria-label="新对话"
-                >
-                  <AddIcon size={18} />
-                </button>
-              </Tooltip>
               <Tooltip content="关闭" theme="light">
                 <button
                   className="chat-drawer__close-btn"
@@ -720,9 +693,38 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
                   onClick={handleClose}
                   aria-label="关闭对话"
                 >
-                  <CloseIcon size={18} />
+                  <CloseIcon size={16} />
                 </button>
               </Tooltip>
+            </div>
+            <div className="chat-drawer__header-bottom">
+              <ModelSelector
+                value={sessionModel}
+                onChange={setSessionModel}
+              />
+              <div className="chat-drawer__session-actions">
+                <Tooltip content="会话列表" theme="light">
+                  <button
+                    ref={toggleButtonRef}
+                    className={`chat-drawer__close-btn ${showSessions ? 'chat-drawer__close-btn--active' : ''}`}
+                    data-track="chat_click_sessions_toggle"
+                    onClick={handleToggleSessions}
+                    aria-label="会话列表"
+                  >
+                    <ViewListIcon size={16} />
+                  </button>
+                </Tooltip>
+                <Tooltip content="新对话" theme="light">
+                  <button
+                    className="chat-drawer__close-btn"
+                    data-track="chat_click_new_session"
+                    onClick={handleNewSession}
+                    aria-label="新对话"
+                  >
+                    <AddIcon size={16} />
+                  </button>
+                </Tooltip>
+              </div>
             </div>
           </div>
 
@@ -811,7 +813,6 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
                   heading="开始对话"
                   subheading="输入消息与AI助手交流"
                 />
-                <ChatMessages.Actions className="chat-actions" />
               </ChatMessages>
 
               <ChatInput className="chat-input">
