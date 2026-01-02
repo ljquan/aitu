@@ -197,7 +197,7 @@ export const GRID_IMAGE_DEFAULTS = {
  * 灵感图布局配置
  */
 export interface InspirationBoardLayoutConfig {
-  /** 图片数量（6-12） */
+  /** 图片数量（1-36） */
   imageCount?: number;
   /** 最小宽度比例（相对于平均尺寸） */
   minWidthRatio?: number;

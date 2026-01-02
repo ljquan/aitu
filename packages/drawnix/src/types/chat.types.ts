@@ -290,6 +290,7 @@ export interface SessionListProps {
   onSelectSession: (sessionId: string) => void;
   onNewSession: () => void;
   onDeleteSession: (sessionId: string) => void;
+  onRenameSession: (sessionId: string, newTitle: string) => void;
 }
 
 /** SessionItem 组件 Props */
@@ -298,6 +299,7 @@ export interface SessionItemProps {
   isActive: boolean;
   onSelect: () => void;
   onDelete: () => void;
+  onRename: (newTitle: string) => void;
 }
 
 // ============================================================================

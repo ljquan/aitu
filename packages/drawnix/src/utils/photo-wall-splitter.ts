@@ -1003,7 +1003,7 @@ async function splitRegionRecursively(
       region.height
     );
 
-    const regionImageUrl = regionCanvas.toDataURL('image/png', 0.92);
+    const regionImageUrl = regionCanvas.toDataURL('image/jpeg', 0.92);
 
     // 递归拆分这个区域
     const subElements = await splitRegionRecursively(regionImageUrl, depth + 1, maxDepth);

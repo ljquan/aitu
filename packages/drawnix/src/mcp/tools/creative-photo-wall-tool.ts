@@ -17,7 +17,7 @@ import { getCurrentImageModel } from './image-generation';
 export interface InspirationBoardParams {
   /** 主题描述 */
   theme: string;
-  /** 图片数量（6-12，默认 9） */
+  /** 图片数量（1-16，默认 9） */
   imageCount?: number;
   /** 图片尺寸比例（默认 16x9 横向） */
   imageSize?: string;
@@ -64,7 +64,7 @@ function executeQueue(params: InspirationBoardParams, options: MCPExecuteOptions
   }
 
   // 验证参数范围
-  const validImageCount = Math.min(Math.max(6, imageCount), 12);
+  const validImageCount = Math.min(Math.max(1, imageCount), 16);
 
   // 构建生图提示词
   const prompt = buildInspirationBoardPrompt(theme, validImageCount, language);
@@ -183,7 +183,7 @@ export const inspirationBoardTool: MCPTool = {
       },
       imageCount: {
         type: 'number',
-        description: '图片数量，6-12 之间，默认 9',
+        description: '图片数量，1-16 之间，默认 9',
         default: 9,
       },
       imageSize: {
@@ -219,7 +219,7 @@ export const inspirationBoardTool: MCPTool = {
 
     parameterGuidance: {
       theme: '主题描述应该具体且有多样性潜力。好的主题：描述一类事物的多种变体、不同角度或不同场景。避免过于具体的单一描述。',
-      imageCount: '6-12 张，会自动计算最优网格布局（如 9 张 = 3x3，12 张 = 3x4）。',
+      imageCount: '1-16 张，会自动计算最优网格布局（如 9 张 = 3x3，12 张 = 3x4）。',
       imageSize: '建议使用 16x9 横向比例，生成更大尺寸的图片。',
     },
 
@@ -235,11 +235,6 @@ export const inspirationBoardTool: MCPTool = {
         input: '生成一个可爱香蕉的灵感图',
         args: { theme: '可爱香蕉的各种形态，包含卡通香蕉、写实香蕉、香蕉角色、香蕉图案等不同风格', imageCount: 9 },
         explanation: '生成 3x3 网格，拆分后 9 张等大图片以散落布局插入',
-      },
-      {
-        input: '创建一个咖啡文化灵感板',
-        args: { theme: '咖啡文化，包含咖啡豆、咖啡杯、拉花、咖啡馆场景、手冲咖啡等不同元素', imageCount: 12 },
-        explanation: '生成 3x4 网格，拆分后 12 张等大图片，内容更丰富',
       },
       {
         input: '做个城市街角的 Mood Board',

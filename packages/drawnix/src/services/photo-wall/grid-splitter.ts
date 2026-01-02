@@ -33,7 +33,7 @@ async function loadImage(imageUrl: string): Promise<HTMLImageElement> {
  * 将 Canvas 导出为 DataURL
  */
 function canvasToDataURL(canvas: HTMLCanvasElement, quality: number = 0.92): string {
-  return canvas.toDataURL('image/png', quality);
+  return canvas.toDataURL('image/jpeg', quality);
 }
 
 /**

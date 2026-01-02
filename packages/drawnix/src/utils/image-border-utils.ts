@@ -293,7 +293,7 @@ export async function removeWhiteBorder(
       trimmedHeight
     );
 
-    return trimmedCanvas.toDataURL('image/png', 0.92);
+    return trimmedCanvas.toDataURL('image/jpeg', 0.92);
   } catch (error) {
     console.error('[removeWhiteBorder] Error:', error);
     return imageUrl;

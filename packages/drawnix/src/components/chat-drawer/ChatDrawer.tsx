@@ -487,6 +487,17 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
       [activeSessionId]
     );
 
+    // Rename session
+    const handleRenameSession = useCallback(
+      async (sessionId: string, newTitle: string) => {
+        await chatStorageService.updateSession(sessionId, { title: newTitle });
+        setSessions((prev) =>
+          prev.map((s) => (s.id === sessionId ? { ...s, title: newTitle } : s))
+        );
+      },
+      []
+    );
+
     // Store pending message for retry after session creation or API key config
     const pendingMessageRef = React.useRef<Message | null>(null);
 
@@ -594,7 +605,7 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
         } else if (context.model.id) {
           titleText = `模型: ${context.model.id}`;
         }
-        const title = titleText.length > 30 ? titleText.slice(0, 30) + '...' : titleText;
+        const title = titleText;//.length > 30 ? titleText.slice(0, 30) + '...' : titleText;
         await chatStorageService.updateSession(newSession.id, { title });
         newSession.title = title;
 
@@ -964,6 +975,7 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
                 onSelectSession={handleSelectSession}
                 onNewSession={handleNewSession}
                 onDeleteSession={handleDeleteSession}
+                onRenameSession={handleRenameSession}
               />
             </div>
           )}
