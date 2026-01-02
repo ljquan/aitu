@@ -1,24 +1,24 @@
 /**
  * 照片墙智能拆图器
  *
- * 专门用于检测和拆分不规则照片墙图片
- * 特点：图片大小不一、位置不规则、有白色边框、灰色/白色背景间隔
+ * 支持两种布局格式：
+ * 1. 紧凑网格布局（新）：等大小图片 + 细白线分割，用于生产图
+ * 2. 不规则布局（旧）：不同大小图片 + 灰色背景间隔
  *
- * 算法思路（增强版 - 边缘 Flood Fill）：
+ * 检测策略：
+ * 1. 优先尝试网格检测（检测横竖白线分割）
+ * 2. 如果网格检测失败，回退到边缘 Flood Fill 算法
+ *
+ * 网格检测算法：
+ * 1. 扫描图像查找连续的白色横线和竖线
+ * 2. 根据线的位置计算网格结构
+ * 3. 直接按网格分割图片
+ *
+ * 边缘 Flood Fill 算法（用于不规则布局）：
  * 1. 计算图像梯度（Sobel 边缘检测）
  * 2. 从四角采样检测背景颜色
- * 3. 从图像边缘开始 Flood Fill，标记"从边缘可达"的背景区域
- *    - 使用梯度作为边界，防止填充进入图片内部
- *    - 即使图片内容有白色，只要不与边缘连通就不会被标记为背景
- * 4. 膨胀操作连接相邻区域
- * 5. 连通区域标记，找到各个图片区域
- * 6. 过滤太小的区域（噪点）
- * 7. 合并重叠区域，提取图片
- *
- * 优化：
- * - 大图片自动降采样检测，避免阻塞主线程
- * - 异步处理，定期 yield 给浏览器
- * - 边缘检测失效时自动回退到颜色匹配算法
+ * 3. 从图像边缘开始 Flood Fill，标记背景区域
+ * 4. 连通区域标记，找到各个图片区域
  */
 
 import type { ImageElement } from '../types/photo-wall.types';
@@ -35,11 +35,191 @@ const MAX_DETECTION_SIZE = 800;
 /** 每处理多少像素后 yield 一次（降低此值可提升 UI 响应性） */
 const YIELD_INTERVAL = 100000;
 
+/** 白线检测阈值 */
+const WHITE_LINE_THRESHOLD = 240;
+
+/** 最小白线长度比例（相对于图像宽/高） */
+const MIN_LINE_RATIO = 0.8;
+
 /**
  * 让出主线程，避免阻塞 UI
  */
 function yieldToMain(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+/**
+ * 网格检测结果
+ */
+interface GridDetectionResult {
+  success: boolean;
+  rows?: number;
+  cols?: number;
+  horizontalLines?: number[];
+  verticalLines?: number[];
+}
+
+/**
+ * 检测图像中的网格结构（基于白色分割线）
+ * 用于处理紧凑网格布局的生产图
+ */
+function detectGridStructure(imageData: ImageData): GridDetectionResult {
+  const { width, height, data } = imageData;
+
+  console.log('[GridDetection] Starting grid detection...');
+
+  // 扫描横向白线（y 位置）
+  const horizontalWhiteRows: number[] = [];
+  for (let y = 0; y < height; y++) {
+    let whiteCount = 0;
+    for (let x = 0; x < width; x++) {
+      const idx = (y * width + x) * 4;
+      const r = data[idx];
+      const g = data[idx + 1];
+      const b = data[idx + 2];
+      if (r >= WHITE_LINE_THRESHOLD && g >= WHITE_LINE_THRESHOLD && b >= WHITE_LINE_THRESHOLD) {
+        whiteCount++;
+      }
+    }
+    // 如果这一行超过 80% 是白色，认为是分割线
+    if (whiteCount / width >= MIN_LINE_RATIO) {
+      horizontalWhiteRows.push(y);
+    }
+  }
+
+  // 扫描纵向白线（x 位置）
+  const verticalWhiteCols: number[] = [];
+  for (let x = 0; x < width; x++) {
+    let whiteCount = 0;
+    for (let y = 0; y < height; y++) {
+      const idx = (y * width + x) * 4;
+      const r = data[idx];
+      const g = data[idx + 1];
+      const b = data[idx + 2];
+      if (r >= WHITE_LINE_THRESHOLD && g >= WHITE_LINE_THRESHOLD && b >= WHITE_LINE_THRESHOLD) {
+        whiteCount++;
+      }
+    }
+    // 如果这一列超过 80% 是白色，认为是分割线
+    if (whiteCount / height >= MIN_LINE_RATIO) {
+      verticalWhiteCols.push(x);
+    }
+  }
+
+  console.log(`[GridDetection] Found ${horizontalWhiteRows.length} horizontal white rows`);
+  console.log(`[GridDetection] Found ${verticalWhiteCols.length} vertical white cols`);
+
+  // 合并连续的白线为单一分割线（取中点）
+  const horizontalLines = mergeConsecutiveLines(horizontalWhiteRows);
+  const verticalLines = mergeConsecutiveLines(verticalWhiteCols);
+
+  console.log(`[GridDetection] Merged to ${horizontalLines.length} horizontal lines:`, horizontalLines);
+  console.log(`[GridDetection] Merged to ${verticalLines.length} vertical lines:`, verticalLines);
+
+  // 验证是否构成有效网格
+  // 需要至少 1 条横线和 1 条竖线（形成 2x2 网格）
+  // 或者 0 条横线但有竖线（1 行多列），或者 0 条竖线但有横线（多行 1 列）
+  const hasValidGrid =
+    (horizontalLines.length >= 1 && verticalLines.length >= 0) ||
+    (horizontalLines.length >= 0 && verticalLines.length >= 1);
+
+  if (!hasValidGrid) {
+    console.log('[GridDetection] No valid grid structure found');
+    return { success: false };
+  }
+
+  // 计算行列数
+  const rows = horizontalLines.length + 1;
+  const cols = verticalLines.length + 1;
+
+  // 验证网格是否合理（2-12 个单元格）
+  const cellCount = rows * cols;
+  if (cellCount < 2 || cellCount > 16) {
+    console.log(`[GridDetection] Invalid cell count: ${cellCount}`);
+    return { success: false };
+  }
+
+  console.log(`[GridDetection] Detected ${rows}x${cols} grid (${cellCount} cells)`);
+
+  return {
+    success: true,
+    rows,
+    cols,
+    horizontalLines,
+    verticalLines,
+  };
+}
+
+/**
+ * 合并连续的行/列为单一分割线
+ * 例如 [10, 11, 12, 50, 51] -> [11, 50.5]
+ */
+function mergeConsecutiveLines(lines: number[]): number[] {
+  if (lines.length === 0) return [];
+
+  const merged: number[] = [];
+  let start = lines[0];
+  let end = lines[0];
+
+  for (let i = 1; i < lines.length; i++) {
+    if (lines[i] <= end + 3) {
+      // 连续或间隔很小（允许 3px 误差）
+      end = lines[i];
+    } else {
+      // 不连续，记录当前组的中点
+      merged.push(Math.floor((start + end) / 2));
+      start = lines[i];
+      end = lines[i];
+    }
+  }
+  // 记录最后一组
+  merged.push(Math.floor((start + end) / 2));
+
+  return merged;
+}
+
+/**
+ * 根据网格结构生成区域
+ */
+function generateGridRegions(
+  width: number,
+  height: number,
+  horizontalLines: number[],
+  verticalLines: number[]
+): Array<{ x: number; y: number; width: number; height: number }> {
+  const regions: Array<{ x: number; y: number; width: number; height: number }> = [];
+
+  // 添加边界
+  const yPositions = [0, ...horizontalLines, height];
+  const xPositions = [0, ...verticalLines, width];
+
+  // 生成每个单元格的区域
+  for (let row = 0; row < yPositions.length - 1; row++) {
+    for (let col = 0; col < xPositions.length - 1; col++) {
+      const x = xPositions[col];
+      const y = yPositions[row];
+      const nextX = xPositions[col + 1];
+      const nextY = yPositions[row + 1];
+
+      // 跳过分割线（取内部区域）
+      const padding = 2; // 跳过分割线的像素
+      const regionX = x + (col === 0 ? padding : padding);
+      const regionY = y + (row === 0 ? padding : padding);
+      const regionWidth = nextX - x - padding * 2;
+      const regionHeight = nextY - y - padding * 2;
+
+      if (regionWidth > 20 && regionHeight > 20) {
+        regions.push({
+          x: regionX,
+          y: regionY,
+          width: regionWidth,
+          height: regionHeight,
+        });
+      }
+    }
+  }
+
+  return regions;
 }
 
 /**
@@ -179,6 +359,8 @@ function isSimilarToBackground(
  * - 使用 Uint32Array 存储队列，避免对象创建开销
  * - 使用索引代替 shift()，避免 O(n) 操作
  * - 预先标记已入队像素，避免重复入队
+ *
+ * 关键改进：白色边框也被视为可穿透区域，因为它属于照片的外围
  */
 async function createBinaryMaskWithEdgeFloodFill(
   imageData: ImageData,
@@ -189,10 +371,10 @@ async function createBinaryMaskWithEdgeFloodFill(
   const mask = new Uint8Array(width * height);
   const inQueue = new Uint8Array(width * height); // 标记是否已入队
 
-  // 梯度阈值（边缘检测）
-  const gradientThreshold = 30;
+  // 梯度阈值（边缘检测）- 提高阈值以穿过白色边框
+  const gradientThreshold = 50;
   // 颜色相似度阈值
-  const colorThreshold = 40;
+  const colorThreshold = 50;
 
   // 初始化：所有像素默认为前景 (1)
   mask.fill(1);
@@ -239,15 +421,21 @@ async function createBinaryMaskWithEdgeFloodFill(
     const b = data[pixelIdx + 2];
     const grad = gradient[idx];
 
-    // 判断是否为背景：
-    // 1. 颜色与背景相似
-    // 2. 梯度不太大（不是边缘）
-    // 3. 或者是纯白/灰色（通用背景色）
+    // 判断是否为背景/可穿透区域：
     const isBgColor = isSimilarToBackground(r, g, b, bgColor, colorThreshold);
-    const isGenericBg = isBackgroundPixel(r, g, b) || isWhiteBorderPixel(r, g, b);
+    const isGenericBg = isBackgroundPixel(r, g, b);
+    const isWhiteBorder = isWhiteBorderPixel(r, g, b, 240); // 白色边框
     const isLowGradient = grad < gradientThreshold;
 
-    if ((isBgColor || isGenericBg) && isLowGradient) {
+    // 关键改进：白色边框区域即使梯度较高也应该被穿透
+    // 因为白色边框是照片的外围，不是照片的内容
+    const canPassThrough =
+      // 背景色且低梯度 - 可以穿透
+      ((isBgColor || isGenericBg) && isLowGradient) ||
+      // 白色边框 - 无论梯度如何都可以穿透（但需要与已知背景相邻）
+      isWhiteBorder;
+
+    if (canPassThrough) {
       // 标记为背景
       mask[idx] = 0;
 
@@ -539,7 +727,7 @@ function mergeOverlappingBoxes(
 
 /**
  * 检测照片墙中的图片区域
- * 对于大图片会自动降采样检测，然后映射回原始坐标
+ * 优先使用网格检测（适用于紧凑网格布局），失败时回退到边缘 Flood Fill
  */
 export async function detectPhotoWallRegions(
   imageUrl: string,
@@ -575,6 +763,52 @@ export async function detectPhotoWallRegions(
     throw new Error('Failed to get canvas context');
   }
 
+  // 绘制图像
+  ctx.drawImage(img, 0, 0, width, height);
+  const originalImageData = ctx.getImageData(0, 0, width, height);
+
+  // =============================================
+  // 策略 1：优先尝试网格检测（适用于紧凑网格布局）
+  // =============================================
+  console.log('[PhotoWallSplitter] Trying grid detection first...');
+  const gridResult = detectGridStructure(originalImageData);
+
+  if (gridResult.success && gridResult.horizontalLines && gridResult.verticalLines) {
+    console.log(`[PhotoWallSplitter] Grid detection succeeded! ${gridResult.rows}x${gridResult.cols} grid`);
+
+    // 根据网格结构生成区域
+    const gridRegions = generateGridRegions(
+      width,
+      height,
+      gridResult.horizontalLines,
+      gridResult.verticalLines
+    );
+
+    // 映射回原始尺寸
+    const finalRegions = gridRegions.map((region) => {
+      if (scale < 1) {
+        return {
+          x: Math.round(region.x / scale),
+          y: Math.round(region.y / scale),
+          width: Math.round(region.width / scale),
+          height: Math.round(region.height / scale),
+        };
+      }
+      return region;
+    });
+
+    console.log(`[PhotoWallSplitter] Grid detection found ${finalRegions.length} regions`);
+    return {
+      count: finalRegions.length,
+      regions: finalRegions,
+    };
+  }
+
+  // =============================================
+  // 策略 2：回退到边缘 Flood Fill 算法
+  // =============================================
+  console.log('[PhotoWallSplitter] Grid detection failed, falling back to flood fill...');
+
   // 添加灰色边框，确保 Flood Fill 能从边缘正确开始
   const borderSize = Math.max(10, Math.round(Math.min(width, height) * 0.02));
   const paddedWidth = width + borderSize * 2;
@@ -593,7 +827,6 @@ export async function detectPhotoWallRegions(
   paddedCtx.fillRect(0, 0, paddedWidth, paddedHeight);
 
   // 绘制原图到中心
-  ctx.drawImage(img, 0, 0, width, height);
   paddedCtx.drawImage(canvas, borderSize, borderSize);
 
   const imageData = paddedCtx.getImageData(0, 0, paddedWidth, paddedHeight);
@@ -690,28 +923,68 @@ export async function detectPhotoWallRegions(
 }
 
 /**
- * 拆分照片墙图片
+ * 递归拆分单个区域
+ * 如果区域内还能检测到多个子区域，继续递归拆分
  */
-export async function splitPhotoWall(imageUrl: string): Promise<ImageElement[]> {
-  const detection = await detectPhotoWallRegions(imageUrl);
+async function splitRegionRecursively(
+  imageUrl: string,
+  depth: number = 0,
+  maxDepth: number = 5
+): Promise<ImageElement[]> {
+  const indent = '  '.repeat(depth);
+  console.log(`${indent}[RecursiveSplit] Depth ${depth}, analyzing image...`);
 
-  if (detection.count === 0) {
-    console.log('[PhotoWallSplitter] No regions detected');
-    return [];
+  // 防止无限递归
+  if (depth >= maxDepth) {
+    console.log(`${indent}[RecursiveSplit] Max depth reached, returning as leaf`);
+    const img = await loadImage(imageUrl);
+    return [{
+      id: `photo-wall-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      imageData: imageUrl,
+      originalIndex: 0,
+      width: img.naturalWidth,
+      height: img.naturalHeight,
+    }];
   }
 
+  // 检测当前图片中的区域
+  const detection = await detectPhotoWallRegions(imageUrl);
+
+  // 如果检测到 0 或 1 个区域，说明无法继续拆分，返回当前图片
+  if (detection.count <= 1) {
+    console.log(`${indent}[RecursiveSplit] Found ${detection.count} region(s), this is a leaf image`);
+
+    // 去白边后返回
+    const trimmedImageData = await removeWhiteBorder(imageUrl, { borderRatio: 0.3 });
+    const trimmedImg = await loadImage(trimmedImageData);
+    const trimmedWidth = trimmedImg.naturalWidth;
+    const trimmedHeight = trimmedImg.naturalHeight;
+
+    // 过滤太小的图片
+    if (trimmedWidth < 50 || trimmedHeight < 50) {
+      console.log(`${indent}[RecursiveSplit] Image too small (${trimmedWidth}x${trimmedHeight}), skipping`);
+      return [];
+    }
+
+    return [{
+      id: `photo-wall-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      imageData: trimmedImageData,
+      originalIndex: 0,
+      width: trimmedWidth,
+      height: trimmedHeight,
+    }];
+  }
+
+  console.log(`${indent}[RecursiveSplit] Found ${detection.count} regions, splitting further...`);
+
+  // 检测到多个区域，提取每个区域并递归处理
   const img = await loadImage(imageUrl);
-  const elements: ImageElement[] = [];
+  const allElements: ImageElement[] = [];
 
-  // 按面积降序排序（大图在前）
-  const sortedRegions = [...detection.regions].sort(
-    (a, b) => b.width * b.height - a.width * a.height
-  );
+  for (let i = 0; i < detection.regions.length; i++) {
+    const region = detection.regions[i];
 
-  for (let i = 0; i < sortedRegions.length; i++) {
-    const region = sortedRegions[i];
-
-    // 先提取区域（不裁剪）
+    // 提取区域
     const regionCanvas = document.createElement('canvas');
     regionCanvas.width = region.width;
     regionCanvas.height = region.height;
@@ -730,36 +1003,35 @@ export async function splitPhotoWall(imageUrl: string): Promise<ImageElement[]> 
       region.height
     );
 
-    // 转换为 data URL
-    const rawImageData = regionCanvas.toDataURL('image/png', 0.92);
+    const regionImageUrl = regionCanvas.toDataURL('image/png', 0.92);
 
-    // 使用独立的去白边方法
-    const trimmedImageData = await removeWhiteBorder(rawImageData, {
-      borderRatio: 0.3,  // 更激进的裁剪
-    });
-
-    // 获取裁剪后的尺寸
-    const trimmedImg = await loadImage(trimmedImageData);
-    const trimmedWidth = trimmedImg.naturalWidth;
-    const trimmedHeight = trimmedImg.naturalHeight;
-
-    // 过滤太小的图片
-    if (trimmedWidth < 50 || trimmedHeight < 50) {
-      console.log(`[PhotoWallSplitter] Region ${i} too small after trimming (${trimmedWidth}x${trimmedHeight}), skipping`);
-      continue;
-    }
-
-    elements.push({
-      id: `photo-wall-${Date.now()}-${i}`,
-      imageData: trimmedImageData,
-      originalIndex: i,
-      width: trimmedWidth,
-      height: trimmedHeight,
-    });
-
-    console.log(`[PhotoWallSplitter] Region ${i}: ${region.width}x${region.height} -> ${trimmedWidth}x${trimmedHeight}`);
+    // 递归拆分这个区域
+    const subElements = await splitRegionRecursively(regionImageUrl, depth + 1, maxDepth);
+    allElements.push(...subElements);
   }
 
-  console.log(`[PhotoWallSplitter] Split into ${elements.length} images`);
-  return elements;
+  return allElements;
+}
+
+/**
+ * 拆分照片墙图片（递归版本）
+ * 会递归拆分直到每个区域都无法再拆分为止
+ */
+export async function splitPhotoWall(imageUrl: string): Promise<ImageElement[]> {
+  console.log('[PhotoWallSplitter] Starting recursive split...');
+
+  const elements = await splitRegionRecursively(imageUrl, 0, 5);
+
+  // 重新分配 ID 和 index
+  const finalElements = elements.map((el, index) => ({
+    ...el,
+    id: `photo-wall-${Date.now()}-${index}`,
+    originalIndex: index,
+  }));
+
+  // 按面积降序排序（大图在前）
+  finalElements.sort((a, b) => b.width * b.height - a.width * a.height);
+
+  console.log(`[PhotoWallSplitter] Recursive split complete: ${finalElements.length} images`);
+  return finalElements;
 }

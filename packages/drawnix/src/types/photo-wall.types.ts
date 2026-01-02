@@ -222,133 +222,125 @@ export const PHOTO_WALL_DEFAULTS = {
 
 /**
  * 照片墙提示词模板
- * 生成不规则布局的照片墙，图片大小不一，位置不规则，有白色边框，灰色背景
- * 智能拆图算法会检测并分割这些不规则区域
+ * 生成紧凑拼贴布局的生产图，图片大小不一，用细白线分割
+ *
+ * 拆图算法：Flood Fill（从边缘开始，白线作为可穿透区域）
+ * 关键要求：白线必须从图片边缘连通到每张子图周围
  */
 export const PHOTO_WALL_PROMPT_TEMPLATE = {
   zh: (theme: string, imageCount: number) => {
-    return `创建一个创意照片墙拼贴图，主题是"${theme}"。
+    return `创建一个紧凑拼贴图（生产用），主题是"${theme}"，包含 ${imageCount} 张图片。
 
-整体布局要求（极其重要）：
-- 统一的灰色背景（RGB 200-210 左右的浅灰色）
-- 在灰色背景上放置 ${imageCount} 张独立的照片/卡片
-- 每张照片有明显的白色边框（约 10-15px 宽度），呈现相框效果
-- 照片大小不一：有大有小，比例各异（正方形、横向、竖向混合）
-- 位置不规则：照片随意散落摆放，不要整齐排列成网格
-- 所有照片必须保持水平，不要旋转
+【布局要求】
+- 图片大小不一：有大有小，比例各异（正方形、横向、竖向混合）
+- 大小分布：1-2 张大图，3-4 张中图，其余为小图
+- 不规则拼贴布局，类似杂志或 Pinterest 风格
+- 整个画面被图片填满，图片区域占比 > 95%
 
-间距要求（最重要，必须严格遵守）：
-- 所有照片之间必须完全分离，绝对禁止任何重叠
-- 照片之间必须保持至少 20px 的灰色背景间隙
-- 每张照片的四边都必须被灰色背景包围
-- 灰色背景必须在所有照片之间清晰可见
-- 照片边缘不能触碰或相交
+【白色分割线要求 - 算法依赖，必须严格遵守】
+- 整张图的最外圈必须是 2-3px 纯白色边框
+- 所有图片之间用 2-3px 纯白色 (#FFFFFF) 细线分隔
+- 白线必须连续、无断裂，形成连通的分割网络
+- 每张图片必须被白线完全包围（四边都有白线）
+- 白线从外边框延伸到每张图片周围，确保连通性
+- 禁止图片重叠或直接接触（必须有白线间隔）
 
-照片内容要求：
-- ${imageCount} 张照片必须展示 ${imageCount} 种完全不同的物品/场景
-- 禁止任何重复：每张照片的内容、构图、色调都必须明显不同
-- 追求最大差异化：不同的场景、不同的物品、不同的风格
+【图片内容要求】
+- ${imageCount} 张图片展示 ${imageCount} 种完全不同的内容
+- 禁止重复：内容、构图、色调都必须明显不同
+- 每张图片内容饱满，充分利用空间
 
-大小分布参考：
-- 1-2 张大图（占据较大空间，是视觉焦点）
-- 3-4 张中等大小的图
-- 剩余为小图
-
-输出要求：
-- 整体呈横向布局，宽高比约 16:9
-- 灰色背景在所有照片周围和之间都清晰可见
-- 白色边框清晰完整，不被遮挡`;
+【输出要求】
+- 横向布局，宽高比约 16:9
+- 这是生产图，用于智能拆分`;
   },
 
   en: (theme: string, imageCount: number) => {
-    return `Create a creative photo wall collage with the theme "${theme}".
+    return `Create a compact collage (production use) with the theme "${theme}", containing ${imageCount} images.
 
-Overall layout requirements (extremely important):
-- Uniform gray background (light gray around RGB 200-210)
-- Place ${imageCount} independent photos/cards on the gray background
-- Each photo has a clear white border (about 10-15px width), creating a frame effect
-- Varying photo sizes: mix of large and small, different aspect ratios (square, landscape, portrait)
-- Irregular positions: photos scattered randomly, NOT aligned in a grid
-- All photos must remain horizontal, no rotation
+【Layout Requirements】
+- Varying image sizes: large, medium, and small mixed
+- Different aspect ratios: square, landscape, portrait
+- Irregular collage layout, magazine or Pinterest style
+- Images fill the canvas, image area > 95%
 
-Spacing requirements (MOST IMPORTANT, must strictly follow):
-- All photos MUST be completely separated, absolutely NO overlapping allowed
-- There MUST be at least 20px gray background gap between all photos
-- Each photo must be surrounded by gray background on all four sides
-- Gray background MUST be clearly visible between all photos
-- Photo edges must NOT touch or intersect
+【White Divider Lines - Algorithm Critical, Must Follow】
+- The outermost border of the entire image must be 2-3px pure white
+- All images separated by 2-3px pure white (#FFFFFF) lines
+- White lines must be continuous, no breaks, forming a connected network
+- Each image must be completely surrounded by white lines (all four sides)
+- White lines extend from outer border to surround each image, ensuring connectivity
+- No overlapping or direct contact between images (must have white line separation)
 
-Photo content requirements:
-- ${imageCount} photos MUST display ${imageCount} completely different items/scenes
-- No repetition allowed: each photo must have distinctly different content, composition, and tone
-- Maximize variation: different scenes, different objects, different styles
+【Image Content Requirements】
+- ${imageCount} images showing ${imageCount} completely different contents
+- No repetition: different content, composition, and tone
+- Each image with full content, utilizing space effectively
 
-Size distribution reference:
-- 1-2 large photos (occupy more space, serve as visual focal points)
-- 3-4 medium-sized photos
-- Remaining photos are smaller
-
-Output requirements:
-- Overall horizontal layout, aspect ratio about 16:9
-- Gray background clearly visible around and between all photos
-- White borders clear and complete, not obscured`;
+【Output Requirements】
+- Horizontal layout, aspect ratio about 16:9
+- Production image for smart splitting`;
   },
 };
 
 /**
  * 宫格图提示词模板
- * 生成灰色背景 + 白边框的网格拼贴图，与照片墙使用相同的格式便于统一拆图
+ * 生成紧凑网格拼贴图，等大图片 + 细白线分割，最大化图片区域
  */
 export const GRID_IMAGE_PROMPT_TEMPLATE = {
   zh: (theme: string, rows: number, cols: number) =>
-    `创建一个 ${rows}x${cols} 的多样化展示拼贴图，主题是"${theme}"。
+    `创建一个 ${rows}x${cols} 紧凑网格拼贴图（生产用），主题是"${theme}"。
 
-整体布局要求：
-- 统一的灰色背景（RGB 200-210 左右的浅灰色）
-- 在灰色背景上放置 ${rows * cols} 张等大的正方形照片/卡片
-- 照片排列成 ${rows} 行 ${cols} 列的整齐网格
-- 每张照片有明显的白色边框（约 10-15px 宽度），呈现相框效果
-- 所有照片必须保持水平，不要旋转
+【布局要求 - 极其重要】
+- 严格的 ${rows} 行 × ${cols} 列网格布局
+- 所有 ${rows * cols} 张图片必须完全相同大小（正方形）
+- 图片之间用 2-3px 细白线分隔（仅作为分割线）
+- 整个画面几乎被图片填满，最小化边距
+- 外边缘也用 2-3px 细白线包围
 
-间距要求（必须严格遵守）：
-- 所有照片之间必须完全分离，绝对禁止任何重叠
-- 照片之间必须保持至少 15px 的灰色背景间隙
-- 每张照片的四边都必须被灰色背景包围
+【分割线要求 - 必须遵守】
+- 分割线必须是纯白色 (#FFFFFF)
+- 分割线必须笔直、连续、无断裂
+- 横向分割线贯穿整个宽度
+- 纵向分割线贯穿整个高度
+- 分割线宽度统一为 2-3px
 
-照片内容要求（极其重要）：
-- ${rows * cols} 张照片必须展示 ${rows * cols} 种完全不同的物品/元素
-- 禁止任何重复：每个物品的形状、颜色、姿态、角度都必须明显不同
-- 追求最大差异化：如果主题是动物，展示不同种类；如果是物品，展示不同类别
-- 每个元素应有不同的视觉特征：不同的颜色、不同的形态、不同的细节
+【图片内容要求】
+- ${rows * cols} 张图片必须展示 ${rows * cols} 种完全不同的内容
+- 禁止重复：每个元素的形状、颜色、姿态都必须明显不同
+- 追求最大差异化：不同种类、不同风格、不同细节
+- 每张图片内容饱满，充分利用空间
 
-输出要求：
+【输出要求】
 - 整体呈正方形或接近正方形的比例
-- 灰色背景在所有照片周围和之间都清晰可见
-- 白色边框清晰完整，不被遮挡`,
+- 图片区域最大化（占比 > 95%）
+- 这是生产图，用于后续拆分`,
 
   en: (theme: string, rows: number, cols: number) =>
-    `Create a ${rows}x${cols} diverse showcase collage with the theme "${theme}".
+    `Create a ${rows}x${cols} compact grid collage (production use) with the theme "${theme}".
 
-Overall layout requirements:
-- Uniform gray background (light gray around RGB 200-210)
-- Place ${rows * cols} equal-sized square photos/cards on the gray background
-- Photos arranged in a neat grid of ${rows} rows and ${cols} columns
-- Each photo has a clear white border (about 10-15px width), creating a frame effect
-- All photos must remain horizontal, no rotation
+【Layout Requirements - Extremely Important】
+- Strict ${rows} rows × ${cols} columns grid layout
+- All ${rows * cols} images must be exactly the same size (square)
+- Images separated by 2-3px thin white lines (only as dividers)
+- The entire canvas should be almost filled with images, minimize margins
+- Outer edges also surrounded by 2-3px thin white lines
 
-Spacing requirements (must strictly follow):
-- All photos MUST be completely separated, absolutely NO overlapping allowed
-- There MUST be at least 15px gray background gap between all photos
-- Each photo must be surrounded by gray background on all four sides
+【Divider Line Requirements - Must Follow】
+- Divider lines must be pure white (#FFFFFF)
+- Divider lines must be straight, continuous, no breaks
+- Horizontal dividers span the entire width
+- Vertical dividers span the entire height
+- Divider line width uniform at 2-3px
 
-Photo content requirements (extremely important):
-- ${rows * cols} photos MUST display ${rows * cols} completely different items/elements
-- No repetition allowed: each item must have distinctly different shape, color, pose, and angle
-- Maximize variation: if the theme is animals, show different species; if objects, show different categories
-- Each element should have different visual features: different colors, forms, and details
+【Image Content Requirements】
+- ${rows * cols} images must show ${rows * cols} completely different contents
+- No repetition: each element must have distinctly different shape, color, pose
+- Maximize variation: different types, styles, details
+- Each image should have full content, utilizing space effectively
 
-Output requirements:
+【Output Requirements】
 - Overall square or near-square aspect ratio
-- Gray background clearly visible around and between all photos
-- White borders clear and complete, not obscured`,
+- Maximize image area (> 95%)
+- This is a production image for subsequent splitting`,
 };

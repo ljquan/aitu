@@ -339,10 +339,54 @@ export interface SourceImageRect {
 }
 
 /**
+ * 递归拆分单个图片元素
+ * 如果元素内还能检测到分割线，继续拆分
+ *
+ * @exported 供 image-split-service.ts 复用
+ */
+export async function recursiveSplitElement(
+  element: SplitImageElement,
+  depth: number = 0,
+  maxDepth: number = 3
+): Promise<SplitImageElement[]> {
+  // 防止无限递归
+  if (depth >= maxDepth) {
+    return [element];
+  }
+
+  // 检测子元素中的分割线
+  const detection = await detectGridLines(element.imageData);
+
+  // 如果没有检测到分割线，返回当前元素
+  if (detection.rows <= 1 && detection.cols <= 1) {
+    return [element];
+  }
+
+  console.log(`[ImageSplitter] Depth ${depth}: Found ${detection.rows}x${detection.cols} grid in sub-image`);
+
+  // 有分割线，继续拆分
+  const subElements = await splitImageByLines(element.imageData, detection);
+
+  // 如果拆分结果和原来一样（只有 1 个），返回当前元素
+  if (subElements.length <= 1) {
+    return [element];
+  }
+
+  // 递归处理每个子元素
+  const allResults: SplitImageElement[] = [];
+  for (const subEl of subElements) {
+    const recursiveResults = await recursiveSplitElement(subEl, depth + 1, maxDepth);
+    allResults.push(...recursiveResults);
+  }
+
+  return allResults;
+}
+
+/**
  * 智能拆分图片并插入到画板
  * 支持两种格式：
- * 1. 网格分割线格式（白色分割线）
- * 2. 照片墙格式（灰色背景 + 白边框照片）
+ * 1. 网格分割线格式（白色分割线）- 支持递归拆分
+ * 2. 照片墙格式（灰色背景 + 白边框照片）- 支持递归拆分
  *
  * @param board - 画板实例
  * @param imageUrl - 图片 URL
@@ -368,10 +412,18 @@ export async function splitAndInsertImages(
     if (detection.rows > 1 || detection.cols > 1) {
       // 网格分割线格式
       console.log('[ImageSplitter] Using grid split mode');
-      elements = await splitImageByLines(imageUrl, detection);
-      cols = detection.cols;
+      const initialElements = await splitImageByLines(imageUrl, detection);
+
+      // 递归拆分每个元素
+      console.log('[ImageSplitter] Recursively splitting each element...');
+      for (const el of initialElements) {
+        const recursiveResults = await recursiveSplitElement(el, 0, 3);
+        elements.push(...recursiveResults);
+      }
+
+      cols = Math.ceil(Math.sqrt(elements.length));
     } else {
-      // 2. 尝试照片墙格式
+      // 2. 尝试照片墙格式（已内置递归拆分）
       console.log('[ImageSplitter] Grid not detected, trying photo wall mode...');
       const isPhotoWall = await detectPhotoWallFormat(imageUrl);
 
@@ -403,7 +455,10 @@ export async function splitAndInsertImages(
       };
     }
 
-    console.log(`[ImageSplitter] Split into ${elements.length} images`);
+    // 重新分配 index
+    elements = elements.map((el, idx) => ({ ...el, index: idx }));
+
+    console.log(`[ImageSplitter] Split into ${elements.length} images (after recursive split)`);
 
     // 3. 计算插入位置（在源图片下方，左对齐）
     let baseX: number;

@@ -12,7 +12,12 @@ import { PlaitBoard, Point } from '@plait/core';
 import { DrawTransforms } from '@plait/draw';
 import { gridSplitter } from './photo-wall/grid-splitter';
 import { layoutEngine } from './photo-wall/layout-engine';
-import { detectGridLines, splitImageByLines } from '../utils/image-splitter';
+import {
+  detectGridLines,
+  splitImageByLines,
+  recursiveSplitElement,
+  type SplitImageElement,
+} from '../utils/image-splitter';
 import { splitPhotoWall } from '../utils/photo-wall-splitter';
 import { getInsertionPointBelowBottommostElement } from '../utils/selection-utils';
 import type {
@@ -83,7 +88,8 @@ class ImageSplitService {
   }
 
   /**
-   * 智能检测并拆分图片
+   * 智能检测并拆分图片（支持递归拆分）
+   * 复用 image-splitter.ts 的 recursiveSplitElement
    *
    * @param imageUrl - 图片 URL 或 base64 DataURL
    * @returns 拆分后的图片元素数组和检测到的网格配置
@@ -92,7 +98,7 @@ class ImageSplitService {
     elements: ImageElement[];
     gridConfig: GridConfig;
   }> {
-    console.log('[ImageSplitService] Splitting by auto detection');
+    console.log('[ImageSplitService] Splitting by auto detection (with recursive)');
 
     // 检测分割线
     const detection = await detectGridLines(imageUrl);
@@ -106,21 +112,34 @@ class ImageSplitService {
       };
     }
 
-    // 按检测到的分割线拆分
-    const splitElements = await splitImageByLines(imageUrl, detection);
+    // 按检测到的分割线拆分（第一轮）
+    const initialElements = await splitImageByLines(imageUrl, detection);
+
+    // 递归拆分每个元素（复用 image-splitter.ts 的函数）
+    const allSplitElements: SplitImageElement[] = [];
+    for (const el of initialElements) {
+      const subElements = await recursiveSplitElement(el, 0, 3);
+      allSplitElements.push(...subElements);
+    }
 
     // 转换为 ImageElement 格式
-    const elements: ImageElement[] = splitElements.map((el, index) => ({
-      id: `split-${Date.now()}-${index}`,
+    const elements: ImageElement[] = allSplitElements.map((el, idx) => ({
+      id: `split-${Date.now()}-${idx}`,
       imageData: el.imageData,
-      originalIndex: el.index,
+      originalIndex: idx,
       width: el.width,
       height: el.height,
     }));
 
+    // 估算网格配置
+    const cols = Math.ceil(Math.sqrt(elements.length));
+    const rows = Math.ceil(elements.length / cols);
+
+    console.log(`[ImageSplitService] Recursive split: ${initialElements.length} -> ${elements.length} images`);
+
     return {
       elements,
-      gridConfig: { rows: detection.rows, cols: detection.cols },
+      gridConfig: { rows, cols },
     };
   }
 
@@ -210,7 +229,7 @@ class ImageSplitService {
     options: SplitAndInsertOptions
   ): Promise<SplitResult> {
     try {
-      const { mode, gridConfig, layoutStyle = 'grid', gap = 20, startPoint } = options;
+      const { mode, gridConfig, layoutStyle = 'grid', startPoint } = options;
 
       // 1. 拆分图片
       const { elements, gridConfig: detectedConfig } = await this.split(imageUrl, {
@@ -231,7 +250,7 @@ class ImageSplitService {
       const positionedElements = this.calculateLayout(elements, layoutStyle, finalConfig);
 
       // 3. 插入到画布
-      await this.insertToBoard(board, positionedElements, startPoint, gap);
+      await this.insertToBoard(board, positionedElements, startPoint);
 
       return {
         success: true,
@@ -254,8 +273,7 @@ class ImageSplitService {
   private async insertToBoard(
     board: PlaitBoard,
     elements: PositionedElement[],
-    startPoint?: Point,
-    gap: number = 20
+    startPoint?: Point
   ): Promise<void> {
     // 计算插入基准点
     let baseX = startPoint?.[0] ?? 100;
