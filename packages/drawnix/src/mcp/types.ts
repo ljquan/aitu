@@ -80,6 +80,8 @@ export interface MCPExecuteOptions extends MCPExecuteCallbacks {
   batchTotal?: number;
   /** 全局索引（用于批量任务排序） */
   globalIndex?: number;
+  /** 重试任务 ID（重试时复用原有任务） */
+  retryTaskId?: string;
 }
 
 /**

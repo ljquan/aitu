@@ -816,6 +816,15 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
 
     let workflowFailed = false;
 
+    // 从原始步骤中获取任务 ID 的映射（用于重试时复用任务）
+    const stepTaskIdMap = new Map<string, string>();
+    workflowMessageData.steps.forEach(step => {
+      const taskId = (step.result as { taskId?: string })?.taskId;
+      if (taskId) {
+        stepTaskIdMap.set(step.id, taskId);
+      }
+    });
+
     // 执行单个步骤
     const executeStep = async (step: typeof workflowDefinition.steps[0]) => {
       const stepStartTime = Date.now();
@@ -823,9 +832,14 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
       updateWorkflowMessageRef.current(toWorkflowMessageData(workflowControl.getWorkflow()!, retryContext));
 
       try {
+        // 获取原始步骤的任务 ID（如果有的话，用于重试时复用任务）
+        const retryTaskId = stepTaskIdMap.get(step.id);
+        
         const executeOptions = {
           ...step.options,
           ...createStepCallbacks(step, stepStartTime),
+          // 如果有原始任务 ID，传递给 MCP 工具以复用任务
+          ...(retryTaskId ? { retryTaskId } : {}),
         };
         const result = await mcpRegistry.executeTool(
           { name: step.mcp, arguments: step.args },

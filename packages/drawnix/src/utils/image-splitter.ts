@@ -42,60 +42,69 @@ export interface GridDetectionResult {
 
 /**
  * 检测像素是否为白色/浅色（分割线颜色）
+ * 提高阈值到 250，确保只检测真正的纯白分割线
  */
-function isLightPixel(r: number, g: number, b: number, threshold: number = 240): boolean {
-  // 检查是否接近白色
+function isLightPixel(r: number, g: number, b: number, threshold: number = 250): boolean {
+  // 检查是否接近纯白色
   return r >= threshold && g >= threshold && b >= threshold;
 }
 
 /**
- * 检测一行像素是否为分割线（大部分为白色）
+ * 获取一行的白色像素比例
  */
-function isHorizontalSplitLine(
-  imageData: ImageData,
-  y: number,
-  minWhiteRatio: number = 0.85
-): boolean {
+function getRowWhiteRatio(imageData: ImageData, y: number): number {
   const { width, data } = imageData;
   let whiteCount = 0;
 
   for (let x = 0; x < width; x++) {
     const idx = (y * width + x) * 4;
-    const r = data[idx];
-    const g = data[idx + 1];
-    const b = data[idx + 2];
-
-    if (isLightPixel(r, g, b)) {
+    if (isLightPixel(data[idx], data[idx + 1], data[idx + 2])) {
       whiteCount++;
     }
   }
 
-  return whiteCount / width >= minWhiteRatio;
+  return whiteCount / width;
 }
 
 /**
- * 检测一列像素是否为分割线
+ * 获取一列的白色像素比例
  */
-function isVerticalSplitLine(
-  imageData: ImageData,
-  x: number,
-  minWhiteRatio: number = 0.85
-): boolean {
+function getColWhiteRatio(imageData: ImageData, x: number): number {
   const { width, height, data } = imageData;
   let whiteCount = 0;
 
   for (let y = 0; y < height; y++) {
     const idx = (y * width + x) * 4;
-    const r = data[idx];
-    const g = data[idx + 1];
-    const b = data[idx + 2];
-
-    if (isLightPixel(r, g, b)) {
+    if (isLightPixel(data[idx], data[idx + 1], data[idx + 2])) {
       whiteCount++;
     }
   }
 
-  return whiteCount / height >= minWhiteRatio;
+  return whiteCount / height;
+}
+
+/**
+ * 检测一行像素是否为分割线（大部分为白色）
+ * 提高阈值到 95%，确保是真正的分割线
+ */
+function isHorizontalSplitLine(
+  imageData: ImageData,
+  y: number,
+  minWhiteRatio: number = 0.95
+): boolean {
+  return getRowWhiteRatio(imageData, y) >= minWhiteRatio;
+}
+
+/**
+ * 检测一列像素是否为分割线
+ * 提高阈值到 95%，确保是真正的分割线
+ */
+function isVerticalSplitLine(
+  imageData: ImageData,
+  x: number,
+  minWhiteRatio: number = 0.95
+): boolean {
+  return getColWhiteRatio(imageData, x) >= minWhiteRatio;
 }
 
 /**
@@ -128,6 +137,39 @@ function mergeSplitLines(lines: number[], minGap: number = 10): number[] {
 }
 
 /**
+ * 验证分割线是否有足够的宽度（连续多行/列都是白色）
+ * @param lines - 检测到的分割线位置
+ * @param minWidth - 最小宽度（默认 3 像素）
+ * @returns 有效的分割线位置
+ */
+function validateSplitLineWidth(lines: number[], minWidth: number = 3): number[] {
+  if (lines.length === 0) return [];
+
+  const sorted = [...lines].sort((a, b) => a - b);
+  const validated: number[] = [];
+
+  let groupStart = sorted[0];
+  let groupEnd = sorted[0];
+
+  for (let i = 1; i <= sorted.length; i++) {
+    if (i < sorted.length && sorted[i] - groupEnd <= 1) {
+      groupEnd = sorted[i];
+    } else {
+      const groupWidth = groupEnd - groupStart + 1;
+      if (groupWidth >= minWidth) {
+        validated.push(Math.floor((groupStart + groupEnd) / 2));
+      }
+      if (i < sorted.length) {
+        groupStart = sorted[i];
+        groupEnd = sorted[i];
+      }
+    }
+  }
+
+  return validated;
+}
+
+/**
  * 内部检测函数，返回图片数据和检测结果
  */
 async function detectGridLinesInternal(imageUrl: string): Promise<{
@@ -139,7 +181,6 @@ async function detectGridLinesInternal(imageUrl: string): Promise<{
   const img = await loadImage(imageUrl);
   const { naturalWidth: width, naturalHeight: height } = img;
 
-  // 创建 Canvas 获取像素数据
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
@@ -151,10 +192,9 @@ async function detectGridLinesInternal(imageUrl: string): Promise<{
   ctx.drawImage(img, 0, 0);
   const imageData = ctx.getImageData(0, 0, width, height);
 
-  // 检测水平分割线
+  // 检测水平分割线，跳过边缘区域（前后 10%）
   const horizontalLines: number[] = [];
-  // 跳过边缘区域（前后 5%）
-  const marginY = Math.floor(height * 0.05);
+  const marginY = Math.floor(height * 0.1);
   for (let y = marginY; y < height - marginY; y++) {
     if (isHorizontalSplitLine(imageData, y)) {
       horizontalLines.push(y);
@@ -163,16 +203,18 @@ async function detectGridLinesInternal(imageUrl: string): Promise<{
 
   // 检测垂直分割线
   const verticalLines: number[] = [];
-  const marginX = Math.floor(width * 0.05);
+  const marginX = Math.floor(width * 0.1);
   for (let x = marginX; x < width - marginX; x++) {
     if (isVerticalSplitLine(imageData, x)) {
       verticalLines.push(x);
     }
   }
 
-  // 合并相邻的分割线
-  const mergedHorizontal = mergeSplitLines(horizontalLines, Math.floor(height * 0.02));
-  const mergedVertical = mergeSplitLines(verticalLines, Math.floor(width * 0.02));
+  // 验证分割线宽度（至少 3 像素宽）并合并相邻分割线
+  const validatedHorizontal = validateSplitLineWidth(horizontalLines, 3);
+  const validatedVertical = validateSplitLineWidth(verticalLines, 3);
+  const mergedHorizontal = mergeSplitLines(validatedHorizontal, Math.floor(height * 0.02));
+  const mergedVertical = mergeSplitLines(validatedVertical, Math.floor(width * 0.02));
 
   return {
     detection: {

@@ -193,25 +193,36 @@ function executeQueue(params: VideoGenerationParams, options: MCPExecuteOptions)
 
     const createdTasks: any[] = [];
 
-    // 创建任务（支持批量）
-    for (let i = 0; i < actualCount; i++) {
-      const task = taskQueueService.createTask(
-        {
-          prompt,
-          size: size || '16x9',
-          duration: parseInt(seconds || modelConfig.defaultDuration, 10),
-          model,
-          uploadedImages: uploadedImages && uploadedImages.length > 0 ? uploadedImages : undefined,
-          // 批量参数
-          batchId: batchId,
-          batchIndex: i + 1,
-          batchTotal: actualCount,
-          globalIndex: options.globalIndex ? options.globalIndex + i : i + 1,
-        },
-        TaskType.VIDEO
-      );
+    // 如果是重试，复用原有任务
+    if (options.retryTaskId) {
+      console.log('[VideoGenerationTool] Retrying existing task:', options.retryTaskId);
+      taskQueueService.retryTask(options.retryTaskId);
+      const task = taskQueueService.getTask(options.retryTaskId);
+      if (!task) {
+        throw new Error(`重试任务不存在: ${options.retryTaskId}`);
+      }
       createdTasks.push(task);
-      console.log(`[VideoGenerationTool] Created task ${i + 1}/${actualCount}:`, task.id);
+    } else {
+      // 创建任务（支持批量）
+      for (let i = 0; i < actualCount; i++) {
+        const task = taskQueueService.createTask(
+          {
+            prompt,
+            size: size || '16x9',
+            duration: parseInt(seconds || modelConfig.defaultDuration, 10),
+            model,
+            uploadedImages: uploadedImages && uploadedImages.length > 0 ? uploadedImages : undefined,
+            // 批量参数
+            batchId: batchId,
+            batchIndex: i + 1,
+            batchTotal: actualCount,
+            globalIndex: options.globalIndex ? options.globalIndex + i : i + 1,
+          },
+          TaskType.VIDEO
+        );
+        createdTasks.push(task);
+        console.log(`[VideoGenerationTool] Created task ${i + 1}/${actualCount}:`, task.id);
+      }
     }
 
     const firstTask = createdTasks[0];

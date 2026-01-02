@@ -97,27 +97,39 @@ function executeQueue(params: GridImageToolParams, options: MCPExecuteOptions): 
   });
 
   try {
-    // 创建宫格图任务（使用 IMAGE 类型复用图片生成能力）
-    // 任务完成后由 image-split-service 处理分割和布局
-    const task = taskQueueService.createTask(
-      {
-        prompt,
-        size: imageSize,
-        model: model || getCurrentImageModel(),
-        // 宫格图特有参数，用于任务完成后的处理
-        gridImageRows: validRows,
-        gridImageCols: validCols,
-        gridImageLayoutStyle: layoutStyle as 'scattered' | 'grid' | 'circular',
-        // 保存原始主题，用于显示
-        originalTheme: theme,
-        // 批量参数
-        batchId: options.batchId,
-        globalIndex: options.globalIndex || 1,
-      },
-      TaskType.IMAGE
-    );
+    let task;
 
-    console.log('[GridImageTool] Created grid image task:', task.id);
+    // 如果是重试，复用原有任务
+    if (options.retryTaskId) {
+      console.log('[GridImageTool] Retrying existing task:', options.retryTaskId);
+      taskQueueService.retryTask(options.retryTaskId);
+      task = taskQueueService.getTask(options.retryTaskId);
+      if (!task) {
+        throw new Error(`重试任务不存在: ${options.retryTaskId}`);
+      }
+    } else {
+      // 创建宫格图任务（使用 IMAGE 类型复用图片生成能力）
+      // 任务完成后由 image-split-service 处理分割和布局
+      task = taskQueueService.createTask(
+        {
+          prompt,
+          size: imageSize,
+          model: model || getCurrentImageModel(),
+          // 宫格图特有参数，用于任务完成后的处理
+          gridImageRows: validRows,
+          gridImageCols: validCols,
+          gridImageLayoutStyle: layoutStyle as 'scattered' | 'grid' | 'circular',
+          // 保存原始主题，用于显示
+          originalTheme: theme,
+          // 批量参数
+          batchId: options.batchId,
+          globalIndex: options.globalIndex || 1,
+        },
+        TaskType.IMAGE
+      );
+    }
+
+    console.log('[GridImageTool] Created/retried grid image task:', task.id);
 
     return {
       success: true,

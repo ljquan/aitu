@@ -83,27 +83,39 @@ function executeQueue(params: InspirationBoardParams, options: MCPExecuteOptions
   });
 
   try {
-    // 创建灵感图任务
-    // 任务完成后由 useAutoInsertToCanvas 检测并处理
-    const task = taskQueueService.createTask(
-      {
-        prompt,
-        size: imageSize,
-        model: actualModel,
-        // 灵感图特有参数
-        isInspirationBoard: true,
-        inspirationBoardImageCount: validImageCount,
-        inspirationBoardLayoutStyle: 'inspiration-board',
-        // 保存原始主题，用于显示
-        originalTheme: theme,
-        // 批量参数
-        batchId: options.batchId,
-        globalIndex: options.globalIndex || 1,
-      },
-      TaskType.IMAGE
-    );
+    let task;
+    
+    // 如果是重试，复用原有任务
+    if (options.retryTaskId) {
+      console.log('[InspirationBoardTool] Retrying existing task:', options.retryTaskId);
+      taskQueueService.retryTask(options.retryTaskId);
+      task = taskQueueService.getTask(options.retryTaskId);
+      if (!task) {
+        throw new Error(`重试任务不存在: ${options.retryTaskId}`);
+      }
+    } else {
+      // 创建灵感图任务
+      // 任务完成后由 useAutoInsertToCanvas 检测并处理
+      task = taskQueueService.createTask(
+        {
+          prompt,
+          size: imageSize,
+          model: actualModel,
+          // 灵感图特有参数
+          isInspirationBoard: true,
+          inspirationBoardImageCount: validImageCount,
+          inspirationBoardLayoutStyle: 'inspiration-board',
+          // 保存原始主题，用于显示
+          originalTheme: theme,
+          // 批量参数
+          batchId: options.batchId,
+          globalIndex: options.globalIndex || 1,
+        },
+        TaskType.IMAGE
+      );
+    }
 
-    console.log('[InspirationBoardTool] Created inspiration board task:', task.id);
+    console.log('[InspirationBoardTool] Created/retried inspiration board task:', task.id);
 
     return {
       success: true,

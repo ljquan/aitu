@@ -114,15 +114,21 @@ export function isWhiteBorderPixel(
  * 从四个方向向内扫描，找到第一个非边框行/列
  *
  * @param imageData - Canvas ImageData
- * @param borderRatio - 判定为边框行/列的边框色占比阈值（默认 0.5，更积极裁剪）
- * @param debug - 是否输出调试日志
+ * @param borderRatio - 判定为边框行/列的边框色占比阈值（默认 0.5）
+ * @param maxTrimRatio - 每个方向最大裁剪比例（默认 0.15，防止裁掉过多内容）
  */
 export function trimBorders(
   imageData: ImageData,
   borderRatio: number = 0.5,
-  debug: boolean = false
+  maxTrimRatio: number = 0.15
 ): BorderTrimResult {
   const { width, height, data } = imageData;
+
+  // 计算每个方向的最大裁剪像素数
+  const maxTrimTop = Math.floor(height * maxTrimRatio);
+  const maxTrimBottom = Math.floor(height * maxTrimRatio);
+  const maxTrimLeft = Math.floor(width * maxTrimRatio);
+  const maxTrimRight = Math.floor(width * maxTrimRatio);
 
   // 检测一行是否为边框行
   const isRowBorder = (y: number): boolean => {
@@ -134,11 +140,7 @@ export function trimBorders(
         borderCount++;
       }
     }
-    const ratio = borderCount / width;
-    // if (debug && y < 5) {
-    //   console.log(`[trimBorders] Row ${y}: borderCount=${borderCount}/${width}, ratio=${ratio.toFixed(2)}`);
-    // }
-    return ratio > borderRatio;
+    return borderCount / width > borderRatio;
   };
 
   // 检测一列是否为边框列
@@ -151,40 +153,32 @@ export function trimBorders(
         borderCount++;
       }
     }
-    const ratio = borderCount / height;
-    // if (debug && x < 5) {
-    //   console.log(`[trimBorders] Col ${x}: borderCount=${borderCount}/${height}, ratio=${ratio.toFixed(2)}`);
-    // }
-    return ratio > borderRatio;
+    return borderCount / height > borderRatio;
   };
 
-  // 从顶部向下扫描
+  // 从顶部向下扫描（限制最大裁剪量）
   let top = 0;
-  while (top < height - 1 && isRowBorder(top)) {
+  while (top < maxTrimTop && top < height - 1 && isRowBorder(top)) {
     top++;
   }
 
-  // 从底部向上扫描
+  // 从底部向上扫描（限制最大裁剪量）
   let bottom = height - 1;
-  while (bottom > top && isRowBorder(bottom)) {
+  while (height - 1 - bottom < maxTrimBottom && bottom > top && isRowBorder(bottom)) {
     bottom--;
   }
 
-  // 从左边向右扫描
+  // 从左边向右扫描（限制最大裁剪量）
   let left = 0;
-  while (left < width - 1 && isColBorder(left)) {
+  while (left < maxTrimLeft && left < width - 1 && isColBorder(left)) {
     left++;
   }
 
-  // 从右边向左扫描
+  // 从右边向左扫描（限制最大裁剪量）
   let right = width - 1;
-  while (right > left && isColBorder(right)) {
+  while (width - 1 - right < maxTrimRight && right > left && isColBorder(right)) {
     right--;
   }
-
-  // if (debug) {
-  //   console.log(`[trimBorders] Result: top=${top}, bottom=${bottom}, left=${left}, right=${right}`);
-  // }
 
   return { top, right, bottom, left };
 }
@@ -194,20 +188,18 @@ export function trimBorders(
  *
  * @param sourceCanvas - 原始 Canvas
  * @param minSize - 裁剪后最小尺寸（默认 10）
- * @param debug - 是否输出调试日志
  * @returns 裁剪后的 Canvas，如果裁剪后太小则返回 null
  */
 export function trimCanvasBorders(
   sourceCanvas: HTMLCanvasElement,
-  minSize: number = 10,
-  debug: boolean = false
+  minSize: number = 10
 ): HTMLCanvasElement | null {
   const ctx = sourceCanvas.getContext('2d', { willReadFrequently: true });
   if (!ctx) return null;
 
   const imageData = ctx.getImageData(0, 0, sourceCanvas.width, sourceCanvas.height);
 
-  const borders = trimBorders(imageData, 0.5, debug);
+  const borders = trimBorders(imageData, 0.5);
 
   // 计算裁剪后的尺寸
   const trimmedWidth = borders.right - borders.left + 1;
@@ -253,10 +245,9 @@ export async function removeWhiteBorder(
   imageUrl: string,
   options: {
     borderRatio?: number;  // 边框判定阈值（默认 0.3，更激进）
-    debug?: boolean;
   } = {}
 ): Promise<string> {
-  const { borderRatio = 0.3, debug = false } = options;
+  const { borderRatio = 0.3 } = options;
 
   try {
     const img = await loadImage(imageUrl);
@@ -272,7 +263,7 @@ export async function removeWhiteBorder(
     ctx.drawImage(img, 0, 0);
     const imageData = ctx.getImageData(0, 0, width, height);
 
-    const borders = trimBorders(imageData, borderRatio, debug);
+    const borders = trimBorders(imageData, borderRatio);
 
     // 计算裁剪后的尺寸
     const trimmedWidth = borders.right - borders.left + 1;
