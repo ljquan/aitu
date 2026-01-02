@@ -71,5 +71,17 @@
     word-break: break-word;
     white-space: pre-wrap;
     line-height: 1.5;
+
+    // 支持文本选择
+    &--selectable {
+      user-select: text;
+      cursor: text;
+
+      // 选中时的高亮样式
+      &::selection {
+        background-color: rgba(255, 255, 255, 0.4);
+        color: white;
+      }
+    }
   }
 }

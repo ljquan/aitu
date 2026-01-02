@@ -503,10 +503,12 @@ export const SmartSuggestionPanel: React.FC<SmartSuggestionPanelProps> = ({
       <div className="smart-suggestion-panel__list">
         {nonPromptSuggestions.map((item, index) => {
           const isHighlighted = highlightedIndex === index;
-          
+          // 使用 index 作为 key 以避免重复 id 问题（如多个 duration 参数）
+          const uniqueKey = `${item.type}-${item.id}-${index}`;
+
           return (
             <div
-              key={item.id}
+              key={uniqueKey}
               className={`smart-suggestion-panel__item smart-suggestion-panel__item--${item.type} ${
                 isHighlighted ? 'smart-suggestion-panel__item--highlighted' : ''
               }`}

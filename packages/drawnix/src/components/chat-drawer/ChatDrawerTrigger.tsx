@@ -11,10 +11,14 @@ import { ChevronLeftIcon } from 'tdesign-icons-react';
 interface ChatDrawerTriggerProps {
   isOpen: boolean;
   onClick: () => void;
+  drawerWidth?: number;
 }
 
 export const ChatDrawerTrigger: React.FC<ChatDrawerTriggerProps> = React.memo(
-  ({ isOpen, onClick }) => {
+  ({ isOpen, onClick, drawerWidth }) => {
+    // 当抽屉打开时，根据抽屉宽度计算触发器位置
+    const style = isOpen && drawerWidth ? { right: drawerWidth - 18 } : undefined;
+    
     return (
       <Tooltip content={isOpen ? '收起对话' : '展开对话'} theme="light">
         <button
@@ -23,6 +27,7 @@ export const ChatDrawerTrigger: React.FC<ChatDrawerTriggerProps> = React.memo(
           onClick={onClick}
           aria-label={isOpen ? '收起对话' : '展开对话'}
           aria-expanded={isOpen}
+          style={style}
         >
           <ChevronLeftIcon size={16} className="chat-drawer-trigger__icon" />
         </button>

@@ -35,6 +35,43 @@ $border-radius: 12px;
     transform: translateX(0);
   }
 
+  &--dragging {
+    transition: none;
+    user-select: none;
+  }
+
+  // 拖动调整宽度的手柄
+  &__resize-handle {
+    position: absolute;
+    top: 0;
+    left: -4px;
+    width: 8px;
+    height: 100%;
+    cursor: ew-resize;
+    z-index: 10;
+
+    &::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 4px;
+      height: 40px;
+      background: transparent;
+      border-radius: 2px;
+      transition: background 0.2s ease;
+    }
+
+    &:hover::before {
+      background: var(--td-brand-color-light-hover);
+    }
+
+    &:active::before {
+      background: var(--td-brand-color);
+    }
+  }
+
   &__header {
     display: flex;
     flex-direction: column;
@@ -133,7 +170,7 @@ $border-radius: 12px;
   box-shadow: -2px 0 8px rgba(0, 0, 0, 0.06);
 
   &:hover {
-    width: 28px;
+
     background: var(--td-bg-color-container-hover);
   }
 
@@ -143,12 +180,10 @@ $border-radius: 12px;
   }
 
   &--active {
-    right: calc(max($drawer-min-width, 50vw) - 18px);
+    // right 由 JS 动态设置
     transform: translateY(-50%) scaleX(-1);
 
-    &:hover {
-      right: calc(max($drawer-min-width, 50vw) - 28px);
-    }
+
   }
 }
 
@@ -673,6 +708,13 @@ $border-radius: 12px;
   line-height: 1.6;
   color: var(--td-text-color-primary);
   word-break: break-word;
+  user-select: text;
+  cursor: text;
+
+  // 选中时的高亮样式
+  &::selection {
+    background-color: rgba(var(--td-brand-color-rgb), 0.3);
+  }
 
   // Markdown styles
   p {
@@ -893,6 +935,199 @@ $border-radius: 12px;
   }
 }
 
+// ============================================================================
+// Enhanced Chat Input
+// ============================================================================
+
+.enhanced-chat-input {
+  position: relative;
+  padding: $spacing-md $spacing-lg;
+  border-top: 1px solid var(--td-component-border);
+  background: #ffffff;
+
+  // 选中内容预览（对齐 AIInputBar 样式）
+  &__selection {
+    display: flex;
+    flex-wrap: wrap;
+    gap: $spacing-sm;
+    padding-bottom: $spacing-sm;
+    margin-bottom: $spacing-sm;
+    border-bottom: 1px dashed var(--td-component-border);
+    align-items: center;
+  }
+
+  &__selection-item {
+    position: relative;
+    width: 36px;
+    height: 36px;
+    border-radius: 4px;
+    overflow: hidden;
+    background: #f5f5f5;
+    flex-shrink: 0;
+    cursor: pointer;
+    transition: transform 0.15s ease;
+
+    &:hover {
+      transform: scale(1.05);
+    }
+
+    img, video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    &--graphics {
+      border: 1px solid #F39C12;
+    }
+
+    &--video {
+      border: 2px solid #3B82F6;
+    }
+
+    &--text {
+      width: auto;
+      height: auto;
+      min-width: 64px;
+      max-width: 180px;
+      padding: 8px 12px;
+      background: #EFF6FF;
+      border: 1px solid #BFDBFE;
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+    }
+  }
+
+  &__form {
+    display: flex;
+    align-items: flex-start;
+    gap: $spacing-sm;
+    background: #ffffff;
+    border-radius: 16px;
+    padding: 8px;
+  }
+
+  &__input-wrapper {
+    position: relative;
+    flex: 1;
+  }
+
+  // 高亮背景层 - 显示模型/参数/个数标签的背景色块
+  &__highlight-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 10px 12px;
+    font-size: 14px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    word-break: break-word;
+    pointer-events: none;
+    font-family: inherit;
+    overflow: hidden;
+    z-index: 1;
+    box-sizing: border-box;
+  }
+
+  &__highlight-text {
+    color: transparent;
+  }
+
+  &__highlight-tag {
+    color: transparent;
+    border-radius: 3px;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+    padding: 0 2px;
+    margin: 0 -2px;
+
+    // 图片模型标签 - 红色背景
+    &--image {
+      background: rgba(229, 57, 53, 0.15);
+    }
+
+    // 视频模型标签 - 橙色背景
+    &--video {
+      background: rgba(255, 152, 0, 0.15);
+    }
+
+    // 参数标签 - 紫色背景
+    &--param {
+      background: rgba(156, 39, 176, 0.15);
+    }
+
+    // 个数标签 - 蓝色背景
+    &--count {
+      background: rgba(33, 150, 243, 0.15);
+    }
+  }
+
+  &__textarea {
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    min-height: 88px;
+    max-height: 120px;
+    padding: 10px 12px;
+    background: transparent;
+    border: none;
+    border-radius: 12px;
+    resize: none;
+    font-size: 14px;
+    line-height: 1.5;
+    font-family: inherit;
+    color: var(--td-text-color-primary);
+    outline: none;
+    caret-color: var(--td-brand-color);
+
+    &::placeholder {
+      color: var(--td-text-color-placeholder);
+    }
+  }
+
+  &__send {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #F3F4F6;
+    border: none;
+    border-radius: 50%;
+    color: #9CA3AF;
+    cursor: not-allowed;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+
+    &--active {
+      background: #F59E0B;
+      color: #fff;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(245, 158, 11, 0.4);
+
+      &:hover {
+        background: #D97706;
+        transform: scale(1.05);
+      }
+    }
+
+    &:disabled {
+      background: #F3F4F6;
+      color: #9CA3AF;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
+    svg {
+      width: 20px;
+      height: 20px;
+    }
+  }
+}
 
 // Mermaid Renderer Styles
 .mermaid-renderer {

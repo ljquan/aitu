@@ -392,7 +392,14 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
   // 处理选择变化的回调（由 SelectionWatcher 调用）
   const handleSelectionChange = useCallback((content: SelectedContent[]) => {
     setSelectedContent(content);
-  }, []);
+    // 同步到 ChatDrawer Context，使 ChatDrawer 能获取选中内容
+    chatDrawerControl.setSelectedContent(content.map(c => ({
+      type: c.type,
+      url: c.url,
+      text: c.text,
+      name: c.name,
+    })));
+  }, [chatDrawerControl]);
 
   // 处理模型选择
   const handleModelSelect = useCallback((modelId: string) => {

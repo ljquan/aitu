@@ -4,8 +4,19 @@
  * 提供 ChatDrawer 的 ref 访问，使其他组件可以控制 ChatDrawer
  */
 
-import React, { createContext, useContext, useRef, useCallback, type MutableRefObject } from 'react';
+import React, { createContext, useContext, useRef, useCallback, useState, type MutableRefObject } from 'react';
 import type { ChatDrawerRef, WorkflowMessageData, WorkflowMessageParams, AgentLogEntry } from '../types/chat.types';
+
+/** 选中内容类型 */
+export type SelectedContentType = 'image' | 'video' | 'graphics' | 'text';
+
+/** 选中内容项 */
+export interface SelectedContentItem {
+  type: SelectedContentType;
+  url?: string;
+  text?: string;
+  name: string;
+}
 
 /** 重试处理器类型 */
 export type RetryHandler = (workflow: WorkflowMessageData, startStepIndex: number) => Promise<void>;
@@ -16,6 +27,10 @@ interface ChatDrawerContextValue {
   registerRetryHandler: (handler: RetryHandler) => void;
   /** 执行重试 */
   executeRetry: (workflow: WorkflowMessageData, startStepIndex: number) => Promise<void>;
+  /** 选中内容 */
+  selectedContent: SelectedContentItem[];
+  /** 设置选中内容 */
+  setSelectedContent: (content: SelectedContentItem[]) => void;
 }
 
 const ChatDrawerContext = createContext<ChatDrawerContextValue | null>(null);
@@ -31,6 +46,7 @@ export interface ChatDrawerProviderProps {
 export const ChatDrawerProvider: React.FC<ChatDrawerProviderProps> = ({ children }) => {
   const chatDrawerRef = useRef<ChatDrawerRef>(null);
   const retryHandlerRef = useRef<RetryHandler | null>(null);
+  const [selectedContent, setSelectedContent] = useState<SelectedContentItem[]>([]);
 
   const registerRetryHandler = useCallback((handler: RetryHandler) => {
     retryHandlerRef.current = handler;
@@ -45,7 +61,7 @@ export const ChatDrawerProvider: React.FC<ChatDrawerProviderProps> = ({ children
   }, []);
 
   return (
-    <ChatDrawerContext.Provider value={{ chatDrawerRef, registerRetryHandler, executeRetry }}>
+    <ChatDrawerContext.Provider value={{ chatDrawerRef, registerRetryHandler, executeRetry, selectedContent, setSelectedContent }}>
       {children}
     </ChatDrawerContext.Provider>
   );
@@ -67,7 +83,7 @@ export function useChatDrawer(): ChatDrawerContextValue {
  * 提供便捷的方法来控制 ChatDrawer
  */
 export function useChatDrawerControl() {
-  const { chatDrawerRef, registerRetryHandler, executeRetry } = useChatDrawer();
+  const { chatDrawerRef, registerRetryHandler, executeRetry, selectedContent, setSelectedContent } = useChatDrawer();
 
   return {
     /** 打开 ChatDrawer */
@@ -112,6 +128,10 @@ export function useChatDrawerControl() {
     retryWorkflowFromStep: async (workflow: WorkflowMessageData, stepIndex: number) => {
       await executeRetry(workflow, stepIndex);
     },
+    /** 选中内容 */
+    selectedContent,
+    /** 设置选中内容 */
+    setSelectedContent,
   };
 }
 

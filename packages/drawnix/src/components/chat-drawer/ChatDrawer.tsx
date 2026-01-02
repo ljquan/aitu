@@ -10,17 +10,18 @@ import { Tooltip } from 'tdesign-react';
 import {
   ChatSection,
   ChatMessages,
-  ChatInput,
   ChatMessage,
 } from '@llamaindex/chat-ui';
 import '@llamaindex/chat-ui/styles/markdown.css';
 import '@llamaindex/chat-ui/styles/pdf.css';
+import { ATTACHED_ELEMENT_CLASS_NAME } from '@plait/core';
 import { SessionList } from './SessionList';
 import { ChatDrawerTrigger } from './ChatDrawerTrigger';
 import { MermaidRenderer } from './MermaidRenderer';
 import { ModelSelector } from './ModelSelector';
 import { WorkflowMessageBubble } from './WorkflowMessageBubble';
 import { UserMessageBubble } from './UserMessageBubble';
+import { EnhancedChatInput } from './EnhancedChatInput';
 import { chatStorageService } from '../../services/chat-storage-service';
 import { useChatHandler } from '../../hooks/useChatHandler';
 import { geminiSettings } from '../../utils/settings-manager';
@@ -33,6 +34,15 @@ import type { Message } from '@llamaindex/chat-ui';
 // 工作流消息的特殊标记前缀
 const WORKFLOW_MESSAGE_PREFIX = '[[WORKFLOW_MESSAGE]]';
 
+// 抽屉宽度缓存 key
+const DRAWER_WIDTH_CACHE_KEY = 'chat-drawer-width';
+// 默认宽度（与 SCSS 中的 50vw 对应）
+const DEFAULT_DRAWER_WIDTH = Math.max(375, window.innerWidth * 0.5);
+// 最小宽度
+const MIN_DRAWER_WIDTH = 375;
+// 最大宽度（留出工具栏空间）
+const MAX_DRAWER_WIDTH = window.innerWidth - 60;
+
 export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
   ({ defaultOpen = false, onOpenChange }, ref) => {
     // Initialize state from cache synchronously to prevent flash
@@ -44,6 +54,22 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
     const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
     const [showSessions, setShowSessions] = useState(false);
     
+    // 抽屉宽度状态（从缓存初始化）
+    const [drawerWidth, setDrawerWidth] = useState(() => {
+      const cached = localStorage.getItem(DRAWER_WIDTH_CACHE_KEY);
+      if (cached) {
+        const width = parseInt(cached, 10);
+        if (!isNaN(width) && width >= MIN_DRAWER_WIDTH) {
+          return Math.min(width, window.innerWidth - 60);
+        }
+      }
+      return DEFAULT_DRAWER_WIDTH;
+    });
+    // 是否正在拖动
+    const [isDragging, setIsDragging] = useState(false);
+    // 拖动手柄 ref
+    const resizeHandleRef = useRef<HTMLDivElement>(null);
+    
     // 临时模型选择（仅在当前会话中有效，不影响全局设置）
     const [sessionModel, setSessionModel] = useState<string | undefined>(undefined);
     
@@ -54,8 +80,8 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
     // 正在重试的工作流 ID
     const [retryingWorkflowId, setRetryingWorkflowId] = useState<string | null>(null);
 
-    // 获取重试执行器
-    const { executeRetry } = useChatDrawer();
+    // 获取重试执行器和选中内容（从 Context）
+    const { executeRetry, selectedContent, setSelectedContent } = useChatDrawer();
 
     // Refs for click outside detection
     const sessionListRef = React.useRef<HTMLDivElement>(null);
@@ -63,6 +89,55 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
 
     // Get app state for settings dialog
     const { appState, setAppState } = useDrawnix();
+    
+    // 处理拖动调整宽度
+    useEffect(() => {
+      if (!isDragging) return;
+
+      const handleMouseMove = (e: MouseEvent) => {
+        const newWidth = window.innerWidth - e.clientX;
+        const clampedWidth = Math.max(MIN_DRAWER_WIDTH, Math.min(newWidth, window.innerWidth - 60));
+        setDrawerWidth(clampedWidth);
+      };
+
+      const handleMouseUp = () => {
+        setIsDragging(false);
+        // 保存到缓存
+        localStorage.setItem(DRAWER_WIDTH_CACHE_KEY, String(drawerWidth));
+      };
+
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      // 拖动时禁用文本选择
+      document.body.style.userSelect = 'none';
+      document.body.style.cursor = 'ew-resize';
+
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+        document.body.style.userSelect = '';
+        document.body.style.cursor = '';
+      };
+    }, [isDragging, drawerWidth]);
+
+    // 窗口大小变化时调整宽度
+    useEffect(() => {
+      const handleResize = () => {
+        const maxWidth = window.innerWidth - 60;
+        if (drawerWidth > maxWidth) {
+          setDrawerWidth(maxWidth);
+        }
+      };
+
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
+    }, [drawerWidth]);
+
+    // 开始拖动
+    const handleResizeStart = useCallback((e: React.MouseEvent) => {
+      e.preventDefault();
+      setIsDragging(true);
+    }, []);
 
     // Handle session title updates
     const handleSessionTitleUpdate = useCallback(
@@ -680,9 +755,18 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
 
     return (
       <>
-        <ChatDrawerTrigger isOpen={isOpen} onClick={handleToggle} />
+        <ChatDrawerTrigger isOpen={isOpen} onClick={handleToggle} drawerWidth={drawerWidth} />
 
-        <div className={`chat-drawer ${isOpen ? 'chat-drawer--open' : ''}`}>
+        <div 
+          className={`chat-drawer ${ATTACHED_ELEMENT_CLASS_NAME} ${isOpen ? 'chat-drawer--open' : ''} ${isDragging ? 'chat-drawer--dragging' : ''}`}
+          style={{ width: drawerWidth }}
+        >
+          {/* 拖动调整宽度的手柄 */}
+          <div
+            ref={resizeHandleRef}
+            className="chat-drawer__resize-handle"
+            onMouseDown={handleResizeStart}
+          />
           <div className="chat-drawer__header">
             <div className="chat-drawer__header-top">
               <h2 className="chat-drawer__title">{title}</h2>
@@ -815,16 +899,13 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
                 />
               </ChatMessages>
 
-              <ChatInput className="chat-input">
-                <ChatInput.Form className="chat-input-form">
-                  <ChatInput.Field
-                    className="chat-input-field"
-                    placeholder="输入消息..."
-                  />
-                  <ChatInput.Submit className="chat-input-submit" />
-                </ChatInput.Form>
-              </ChatInput>
             </ChatSection>
+
+            <EnhancedChatInput
+              selectedContent={selectedContent}
+              onSend={handleSendWrapper}
+              placeholder="输入消息... (可用 # 指定模型)"
+            />
           </div>
         </div>
       </>
