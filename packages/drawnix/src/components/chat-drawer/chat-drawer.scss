@@ -18,7 +18,7 @@ $border-radius: 12px;
 .chat-drawer {
   position: fixed;
   top: 0;
-  left: $toolbar-width;
+  right: 0;
   bottom: 0;
   z-index: $z-chat-drawer;
   display: flex;
@@ -26,9 +26,9 @@ $border-radius: 12px;
   width: max($drawer-min-width, 50vw);
   max-width: calc(100vw - $toolbar-width);
   background: #ffffff;
-  border-right: 1px solid var(--td-component-border);
-  box-shadow: 4px 0 16px rgba(0, 0, 0, 0.08);
-  transform: translateX(calc(-100% - #{$toolbar-width}));
+  border-left: 1px solid var(--td-component-border);
+  box-shadow: -4px 0 16px rgba(0, 0, 0, 0.08);
+  transform: translateX(100%);
   transition: transform $animation-duration ease-out;
 
   &--open {
@@ -103,7 +103,7 @@ $border-radius: 12px;
 .chat-drawer-trigger {
   position: fixed;
   top: 50%;
-  left: $toolbar-width;
+  right: 0;
   z-index: $z-chat-drawer-trigger;
   display: flex;
   align-items: center;
@@ -112,12 +112,12 @@ $border-radius: 12px;
   height: 48px;
   background: #ffffff;
   border: 1px solid var(--td-component-border);
-  border-left: none;
-  border-radius: 0 8px 8px 0;
+  border-right: none;
+  border-radius: 8px 0 0 8px;
   cursor: pointer;
   transform: translateY(-50%);
   transition: all 0.3s ease;
-  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.06);
+  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.06);
 
   &:hover {
     width: 28px;
@@ -130,11 +130,11 @@ $border-radius: 12px;
   }
 
   &--active {
-    left: calc($toolbar-width + max($drawer-min-width, 50vw) - 24px);
-    transform: scaleX(-1);
+    right: calc(max($drawer-min-width, 50vw) - 18px);
+    transform: translateY(-50%) scaleX(-1);
 
-    &:hover{
-        left: calc($toolbar-width + max($drawer-min-width, 50vw) - 28px);
+    &:hover {
+      right: calc(max($drawer-min-width, 50vw) - 28px);
     }
   }
 }

@@ -6,7 +6,7 @@
 
 import React from 'react';
 import { Tooltip } from 'tdesign-react';
-import { ChevronRightIcon } from 'tdesign-icons-react';
+import { ChevronLeftIcon } from 'tdesign-icons-react';
 
 interface ChatDrawerTriggerProps {
   isOpen: boolean;
@@ -24,7 +24,7 @@ export const ChatDrawerTrigger: React.FC<ChatDrawerTriggerProps> = React.memo(
           aria-label={isOpen ? '收起对话' : '展开对话'}
           aria-expanded={isOpen}
         >
-          <ChevronRightIcon size={16} className="chat-drawer-trigger__icon" />
+          <ChevronLeftIcon size={16} className="chat-drawer-trigger__icon" />
         </button>
       </Tooltip>
     );
