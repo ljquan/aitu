@@ -126,7 +126,8 @@ export async function sendChatMessage(
   newContent: string,
   attachments: File[] = [],
   onStream: (event: StreamEvent) => void,
-  temporaryModel?: string // 临时模型（仅在当前会话中使用，不影响全局设置）
+  temporaryModel?: string, // 临时模型（仅在当前会话中使用，不影响全局设置）
+  systemPrompt?: string // 系统提示词（包含 MCP 工具定义等）
 ): Promise<string> {
   // Cancel any existing request
   if (currentAbortController) {
@@ -170,13 +171,24 @@ export async function sendChatMessage(
     // 如果需要图片理解功能，应该使用多模态模型
 
     // Combine into full message list
-    const geminiMessages: GeminiMessage[] = [
+    const geminiMessages: GeminiMessage[] = [];
+
+    // 如果有系统提示词，插入到开头
+    if (systemPrompt) {
+      geminiMessages.push({
+        role: 'system',
+        content: [{ type: 'text', text: systemPrompt }]
+      });
+    }
+
+    // 添加历史消息和当前消息
+    geminiMessages.push(
       ...history,
       {
         role: 'user',
         content: currentMessageContent
       }
-    ];
+    );
 
     let fullContent = '';
 

@@ -159,7 +159,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
   // 模型选择
   const [selectedModel, setSelectedModel] = useState<string>(() => {
     const settings = geminiSettings.get();
-    return settings.imageModelName || 'imagen-3.0-generate-002';
+    return settings.imageModelName || 'gemini-2.5-flash-image-vip';
   });
 
   // 图片预览弹窗（支持左右切换）

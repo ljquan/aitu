@@ -34,6 +34,28 @@ import type { Message } from '@llamaindex/chat-ui';
 // 工作流消息的特殊标记前缀
 const WORKFLOW_MESSAGE_PREFIX = '[[WORKFLOW_MESSAGE]]';
 
+/**
+ * 根据工具名称生成描述
+ */
+function getToolDescription(toolName: string, args?: Record<string, unknown>): string {
+  switch (toolName) {
+    case 'generate_image':
+      return `生成图片: ${((args?.prompt as string) || '').substring(0, 30)}...`;
+    case 'generate_video':
+      return `生成视频: ${((args?.prompt as string) || '').substring(0, 30)}...`;
+    case 'generate_grid_image':
+      return `生成宫格图: ${((args?.theme as string) || '').substring(0, 30)}...`;
+    case 'canvas_insertion':
+      return '插入到画布';
+    case 'generate_mermaid':
+      return '生成流程图';
+    case 'generate_mindmap':
+      return '生成思维导图';
+    default:
+      return `执行 ${toolName}`;
+  }
+}
+
 // 抽屉宽度缓存 key
 const DRAWER_WIDTH_CACHE_KEY = 'chat-drawer-width';
 // 默认宽度（与 SCSS 中的 50vw 对应）
@@ -150,10 +172,101 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
       []
     );
 
+    // 处理工具调用回调
+    const handleToolCalls = useCallback(
+      async (
+        toolCalls: Array<{ name: string; arguments: Record<string, unknown>; id?: string }>,
+        messageId: string,
+        executeTools: () => Promise<Array<{
+          toolCall: { name: string; arguments: Record<string, unknown> };
+          success: boolean;
+          data?: unknown;
+          error?: string;
+          taskId?: string;
+        }>>
+      ) => {
+        console.log('[ChatDrawer] Tool calls received:', toolCalls.length);
+
+        // 创建工作流数据
+        const workflowId = `workflow-${Date.now()}`;
+        const workflowData: WorkflowMessageData = {
+          id: workflowId,
+          name: '对话工作流',
+          generationType: toolCalls[0]?.name.includes('video') ? 'video' : 'image',
+          prompt: '',
+          count: toolCalls.length,
+          steps: toolCalls.map((tc, idx) => ({
+            id: `step-${idx}`,
+            name: tc.name,
+            status: 'pending' as const,
+            description: getToolDescription(tc.name, tc.arguments),
+          })),
+        };
+
+        // 更新工作流状态
+        setWorkflowMessages((prev) => {
+          const newMap = new Map(prev);
+          newMap.set(messageId, workflowData);
+          return newMap;
+        });
+        currentWorkflowMsgIdRef.current = messageId;
+
+        // 执行工具
+        try {
+          const results = await executeTools();
+
+          // 更新步骤状态
+          setWorkflowMessages((prev) => {
+            const newMap = new Map(prev);
+            const workflow = newMap.get(messageId);
+            if (workflow) {
+              const updatedWorkflow = {
+                ...workflow,
+                steps: workflow.steps.map((step, idx) => {
+                  const result = results[idx];
+                  return {
+                    ...step,
+                    status: result?.success ? 'completed' as const : 'failed' as const,
+                    error: result?.error,
+                    result: result?.data,
+                  };
+                }),
+              };
+              newMap.set(messageId, updatedWorkflow);
+            }
+            return newMap;
+          });
+
+          console.log('[ChatDrawer] Tools executed:', results.length);
+        } catch (error: any) {
+          console.error('[ChatDrawer] Tool execution failed:', error);
+          // 标记所有步骤失败
+          setWorkflowMessages((prev) => {
+            const newMap = new Map(prev);
+            const workflow = newMap.get(messageId);
+            if (workflow) {
+              const updatedWorkflow = {
+                ...workflow,
+                steps: workflow.steps.map((step) => ({
+                  ...step,
+                  status: 'failed' as const,
+                  error: error.message || '执行失败',
+                })),
+              };
+              newMap.set(messageId, updatedWorkflow);
+            }
+            return newMap;
+          });
+        }
+      },
+      []
+    );
+
     const chatHandler = useChatHandler({
       sessionId: activeSessionId,
       onSessionTitleUpdate: handleSessionTitleUpdate,
       temporaryModel: sessionModel, // 传递临时模型
+      onToolCalls: handleToolCalls, // 传递工具调用回调
     });
 
     // Load initial sessions and active session
@@ -455,14 +568,31 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
 
         const userDisplayText = displayParts.join('\n');
 
-        // 生成标题优先级：1. 用户指令 2. 选中的文本元素 3. 模型名称
+        // 生成标题优先级：
+        // 1. finalPrompt（最终用于生成的提示词，最能代表任务内容）
+        // 2. 选中的文本元素（作为生成 prompt 的来源）
+        // 3. 用户指令冒号后面的内容（如 "生成照片墙: xxx" 取 "xxx"）
+        // 4. 模型名称（兜底）
         let titleText = '新任务';
-        if (context.userInstruction) {
-          titleText = context.userInstruction;
+        if (context.finalPrompt) {
+          titleText = context.finalPrompt;
         } else if (context.selection.texts.length > 0) {
           titleText = context.selection.texts[0];
+        } else if (context.userInstruction) {
+          // 提取冒号后面的内容作为标题
+          const colonIndex = context.userInstruction.indexOf(':');
+          const chineseColonIndex = context.userInstruction.indexOf('：');
+          const actualColonIndex = colonIndex >= 0 && chineseColonIndex >= 0 
+            ? Math.min(colonIndex, chineseColonIndex)
+            : Math.max(colonIndex, chineseColonIndex);
+          
+          if (actualColonIndex >= 0 && actualColonIndex < context.userInstruction.length - 1) {
+            titleText = context.userInstruction.substring(actualColonIndex + 1).trim();
+          } else {
+            titleText = context.userInstruction;
+          }
         } else if (context.model.id) {
-          titleText = context.model.id;
+          titleText = `模型: ${context.model.id}`;
         }
         const title = titleText.length > 30 ? titleText.slice(0, 30) + '...' : titleText;
         await chatStorageService.updateSession(newSession.id, { title });
@@ -574,7 +704,7 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
 
     // 更新当前工作流消息（同时持久化到本地存储）
     const handleUpdateWorkflowMessage = useCallback(
-      (workflow: WorkflowMessageData) => {
+      async (workflow: WorkflowMessageData) => {
         const msgId = currentWorkflowMsgIdRef.current;
         if (!msgId) return;
 
@@ -586,8 +716,22 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
 
         // 持久化到本地存储
         chatStorageService.updateMessage(msgId, { workflow });
+
+        // 如果工作流有 prompt 且当前会话标题是默认的（以"模型:"开头），则更新标题
+        if (workflow.prompt && activeSessionId) {
+          const currentSession = sessions.find(s => s.id === activeSessionId);
+          if (currentSession && currentSession.title.startsWith('模型:')) {
+            const newTitle = workflow.prompt.length > 30 
+              ? workflow.prompt.slice(0, 30) + '...' 
+              : workflow.prompt;
+            await chatStorageService.updateSession(activeSessionId, { title: newTitle });
+            setSessions(prev => prev.map(s => 
+              s.id === activeSessionId ? { ...s, title: newTitle } : s
+            ));
+          }
+        }
       },
-      []
+      [activeSessionId, sessions]
     );
 
     // 追加 Agent 执行日志（同时持久化）
