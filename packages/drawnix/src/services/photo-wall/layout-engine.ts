@@ -12,9 +12,9 @@ import type {
   LayoutParams,
   ScatteredLayoutConfig,
   CircularLayoutConfig,
-  PhotoWallLayoutConfig,
+  InspirationBoardLayoutConfig,
 } from '../../types/photo-wall.types';
-import { PHOTO_WALL_DEFAULTS } from '../../types/photo-wall.types';
+import { INSPIRATION_BOARD_DEFAULTS } from '../../types/photo-wall.types';
 
 /**
  * 随机数生成器（指定范围）
@@ -54,7 +54,7 @@ export class LayoutEngine {
     elements: ImageElement[],
     style: LayoutStyle,
     params: LayoutParams,
-    config?: ScatteredLayoutConfig | CircularLayoutConfig | PhotoWallLayoutConfig
+    config?: ScatteredLayoutConfig | CircularLayoutConfig | InspirationBoardLayoutConfig
   ): PositionedElement[] {
     switch (style) {
       case 'scattered':
@@ -63,8 +63,8 @@ export class LayoutEngine {
         return this.gridLayout(elements, params);
       case 'circular':
         return this.circularLayout(elements, params, config as CircularLayoutConfig);
-      case 'photo-wall':
-        return this.photoWallLayout(elements, params, config as PhotoWallLayoutConfig);
+      case 'inspiration-board':
+        return this.inspirationBoardLayout(elements, params, config as InspirationBoardLayoutConfig);
       default:
         console.warn(`[LayoutEngine] Unknown layout style: ${style}, falling back to grid`);
         return this.gridLayout(elements, params);
@@ -304,21 +304,21 @@ export class LayoutEngine {
   }
 
   /**
-   * 照片墙布局
+   * 灵感图布局
    *
    * 特点：不规则大小、横向散落、带旋转和层叠效果
-   * 模拟真实照片墙/灵感板效果
+   * 模拟灵感板/情绪板效果
    */
-  private photoWallLayout(
+  private inspirationBoardLayout(
     elements: ImageElement[],
     params: LayoutParams,
-    config?: PhotoWallLayoutConfig
+    config?: InspirationBoardLayoutConfig
   ): PositionedElement[] {
     const {
-      minWidthRatio = PHOTO_WALL_DEFAULTS.minWidthRatio,
-      maxWidthRatio = PHOTO_WALL_DEFAULTS.maxWidthRatio,
-      maxRotation = PHOTO_WALL_DEFAULTS.maxRotation,
-      gap = PHOTO_WALL_DEFAULTS.gap,
+      minWidthRatio = INSPIRATION_BOARD_DEFAULTS.minWidthRatio,
+      maxWidthRatio = INSPIRATION_BOARD_DEFAULTS.maxWidthRatio,
+      maxRotation = INSPIRATION_BOARD_DEFAULTS.maxRotation,
+      gap = INSPIRATION_BOARD_DEFAULTS.gap,
     } = config || {};
 
     const { canvasWidth, canvasHeight, startX, startY } = params;
@@ -343,7 +343,7 @@ export class LayoutEngine {
     );
 
     // 使用分区算法放置元素
-    const positions = this.calculatePhotoWallPositions(
+    const positions = this.calculateInspirationBoardPositions(
       count,
       layoutWidth,
       layoutHeight,
@@ -398,7 +398,7 @@ export class LayoutEngine {
 
   /**
    * 为元素分配尺寸类别（大、中、小）
-   * 照片墙效果需要混合不同大小的图片
+   * 灵感图效果需要混合不同大小的图片
    */
   private assignSizeCategories(count: number): ('large' | 'medium' | 'small')[] {
     const categories: ('large' | 'medium' | 'small')[] = [];
@@ -417,10 +417,10 @@ export class LayoutEngine {
   }
 
   /**
-   * 计算照片墙位置
+   * 计算灵感图位置
    * 使用横向分区 + 随机偏移的方式生成自然的散落效果
    */
-  private calculatePhotoWallPositions(
+  private calculateInspirationBoardPositions(
     count: number,
     width: number,
     height: number,

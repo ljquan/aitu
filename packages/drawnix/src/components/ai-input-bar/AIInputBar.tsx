@@ -37,7 +37,7 @@ import {
   type PromptItem,
 } from './smart-suggestion-panel';
 import { initializeMCP, setCanvasBoard, setBoard, mcpRegistry } from '../../mcp';
-import { photoWallService } from '../../services/photo-wall';
+import { gridImageService } from '../../services/photo-wall';
 import type { MCPTaskResult } from '../../mcp/types';
 import { parseAIInput, type GenerationType } from '../../utils/ai-input-parser';
 import { convertToWorkflow, type WorkflowDefinition, type WorkflowStepOptions } from './workflow-converter';
@@ -133,11 +133,11 @@ const SelectionWatcher: React.FC<{
   useEffect(() => {
     setCanvasBoard(board);
     setBoard(board);
-    photoWallService.setBoard(board);
+    gridImageService.setBoard(board);
     return () => {
       setCanvasBoard(null);
       setBoard(null);
-      photoWallService.setBoard(null);
+      gridImageService.setBoard(null);
     };
   }, [board]);
   const onSelectionChangeRef = useRef(onSelectionChange);
@@ -380,6 +380,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
       id: `cold_start_${index}`,
       content: item.content,
       scene: item.scene,
+      tips: item.tips,
       source: 'preset' as const,
     }));
   }, [language]);

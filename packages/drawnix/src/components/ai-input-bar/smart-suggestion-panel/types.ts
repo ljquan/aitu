@@ -55,6 +55,8 @@ export interface PromptItem {
   content: string;
   /** 适用场景描述 */
   scene?: string;
+  /** 模型调用说明 */
+  tips?: string;
   source: 'preset' | 'history';
   timestamp?: number;
 }
@@ -116,6 +118,8 @@ export interface ColdStartSuggestionItem extends BaseSuggestionItem {
   content: string;
   /** 适用场景描述 */
   scene?: string;
+  /** 模型调用说明 */
+  tips?: string;
   /** 建议的模型类型 */
   modelType?: 'image' | 'video';
 }

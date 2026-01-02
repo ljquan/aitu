@@ -1,5 +1,5 @@
 /**
- * 照片墙智能拆图器
+ * 灵感图智能拆图器
  *
  * 支持两种布局格式：
  * 1. 紧凑网格布局（新）：等大小图片 + 细白线分割，用于生产图
@@ -726,7 +726,7 @@ function mergeOverlappingBoxes(
 
 
 /**
- * 检测照片墙中的图片区域
+ * 检测灵感图中的图片区域
  * 优先使用网格检测（适用于紧凑网格布局），失败时回退到边缘 Flood Fill
  */
 export async function detectPhotoWallRegions(
@@ -1014,7 +1014,7 @@ async function splitRegionRecursively(
 }
 
 /**
- * 拆分照片墙图片（递归版本）
+ * 拆分灵感图图片（递归版本）
  * 会递归拆分直到每个区域都无法再拆分为止
  */
 export async function splitPhotoWall(imageUrl: string): Promise<ImageElement[]> {

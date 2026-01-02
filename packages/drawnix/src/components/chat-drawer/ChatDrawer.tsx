@@ -571,7 +571,7 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
         // 生成标题优先级：
         // 1. finalPrompt（最终用于生成的提示词，最能代表任务内容）
         // 2. 选中的文本元素（作为生成 prompt 的来源）
-        // 3. 用户指令冒号后面的内容（如 "生成照片墙: xxx" 取 "xxx"）
+        // 3. 用户指令冒号后面的内容（如 "生成灵感图: xxx" 取 "xxx"）
         // 4. 模型名称（兜底）
         let titleText = '新任务';
         if (context.finalPrompt) {

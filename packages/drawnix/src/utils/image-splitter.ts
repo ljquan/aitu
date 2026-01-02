@@ -201,7 +201,7 @@ export async function detectGridLines(imageUrl: string): Promise<GridDetectionRe
  * 快速检测图片是否包含分割线（用于判断是否显示拆图按钮）
  * 支持两种格式：
  * 1. 网格分割线格式（白色分割线）
- * 2. 照片墙格式（灰色背景 + 白边框照片）
+ * 2. 灵感图格式（灰色背景 + 白边框图片）
  *
  * @param imageUrl - 图片 URL
  * @returns 是否包含分割线
@@ -214,7 +214,7 @@ export async function hasSplitLines(imageUrl: string): Promise<boolean> {
       return true;
     }
 
-    // 2. 检测照片墙格式（灰色背景 + 白边框）
+    // 2. 检测灵感图格式（灰色背景 + 白边框）
     const isPhotoWall = await detectPhotoWallFormat(imageUrl);
     return isPhotoWall;
   } catch (error) {
@@ -224,22 +224,22 @@ export async function hasSplitLines(imageUrl: string): Promise<boolean> {
 }
 
 /**
- * 快速检测图片是否为照片墙格式
+ * 快速检测图片是否为灵感图格式
  * 特征：灰色背景占比较大，存在多个白色边框区域
  */
 async function detectPhotoWallFormat(imageUrl: string): Promise<boolean> {
   try {
-    // 动态导入照片墙检测器
+    // 动态导入灵感图检测器
     const { detectPhotoWallRegions } = await import('./photo-wall-splitter');
     const result = await detectPhotoWallRegions(imageUrl, {
       minRegionSize: 3000, // 降低阈值以快速检测
       minRegionRatio: 0.005,
     });
 
-    // 如果检测到 2 个以上的区域，认为是照片墙
+    // 如果检测到 2 个以上的区域，认为是灵感图
     return result.count >= 2;
   } catch (error) {
-    console.warn('[ImageSplitter] Failed to detect photo wall format:', error);
+    console.warn('[ImageSplitter] Failed to detect inspiration board format:', error);
     return false;
   }
 }
@@ -386,7 +386,7 @@ export async function recursiveSplitElement(
  * 智能拆分图片并插入到画板
  * 支持两种格式：
  * 1. 网格分割线格式（白色分割线）- 支持递归拆分
- * 2. 照片墙格式（灰色背景 + 白边框照片）- 支持递归拆分
+ * 2. 灵感图格式（灰色背景 + 白边框图片）- 支持递归拆分
  *
  * @param board - 画板实例
  * @param imageUrl - 图片 URL
@@ -423,17 +423,17 @@ export async function splitAndInsertImages(
 
       cols = Math.ceil(Math.sqrt(elements.length));
     } else {
-      // 2. 尝试照片墙格式（已内置递归拆分）
-      console.log('[ImageSplitter] Grid not detected, trying photo wall mode...');
+      // 2. 尝试灵感图格式（已内置递归拆分）
+      console.log('[ImageSplitter] Grid not detected, trying inspiration board mode...');
       const isPhotoWall = await detectPhotoWallFormat(imageUrl);
 
       if (isPhotoWall) {
-        console.log('[ImageSplitter] Using photo wall split mode');
+        console.log('[ImageSplitter] Using inspiration board split mode');
         const { splitPhotoWall } = await import('./photo-wall-splitter');
-        const photoWallElements = await splitPhotoWall(imageUrl);
+        const inspirationBoardElements = await splitPhotoWall(imageUrl);
 
         // 转换为 SplitImageElement 格式
-        elements = photoWallElements.map((el, index) => ({
+        elements = inspirationBoardElements.map((el, index) => ({
           imageData: el.imageData,
           index,
           width: el.width,
@@ -442,7 +442,7 @@ export async function splitAndInsertImages(
           sourceY: 0,
         }));
 
-        // 照片墙使用自适应列数
+        // 灵感图使用自适应列数
         cols = Math.ceil(Math.sqrt(elements.length));
       }
     }
@@ -451,7 +451,7 @@ export async function splitAndInsertImages(
       return {
         success: false,
         count: 0,
-        error: '未检测到可拆分的区域，请确保图片包含分割线或照片墙格式',
+        error: '未检测到可拆分的区域，请确保图片包含分割线或灵感图格式',
       };
     }
 

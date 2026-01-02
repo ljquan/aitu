@@ -299,12 +299,6 @@ export class GridImageService {
  */
 export const gridImageService = new GridImageService();
 
-// 保留旧导出名的别名，便于迁移
-export const photoWallService = gridImageService;
-
-// 保留旧类名的别名
-export { GridImageService as PhotoWallService };
-
 // 导出子模块
 export { gridSplitter, GridSplitter } from './grid-splitter';
 export { layoutEngine, LayoutEngine } from './layout-engine';

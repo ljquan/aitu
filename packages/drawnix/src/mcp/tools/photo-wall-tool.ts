@@ -34,8 +34,6 @@ export interface GridImageToolParams {
   model?: string;
 }
 
-// 保留旧类型名的别名，便于迁移
-export type PhotoWallToolParams = GridImageToolParams;
 
 /**
  * 获取布局风格描述
@@ -107,10 +105,9 @@ function executeQueue(params: GridImageToolParams, options: MCPExecuteOptions): 
         size: imageSize,
         model: model || getCurrentImageModel(),
         // 宫格图特有参数，用于任务完成后的处理
-        // 保留 photoWall 前缀以兼容现有代码
-        photoWallRows: validRows,
-        photoWallCols: validCols,
-        photoWallLayoutStyle: layoutStyle,
+        gridImageRows: validRows,
+        gridImageCols: validCols,
+        gridImageLayoutStyle: layoutStyle as 'scattered' | 'grid' | 'circular',
         // 保存原始主题，用于显示
         originalTheme: theme,
         // 批量参数
@@ -271,8 +268,6 @@ ${getLayoutStyleDescription()}
   },
 };
 
-// 保留旧导出名的别名，便于迁移
-export const photoWallTool = gridImageTool;
 
 /**
  * 便捷方法：创建宫格图任务
@@ -287,5 +282,3 @@ export function createGridImageTask(
   }) as unknown as MCPTaskResult;
 }
 
-// 保留旧函数名的别名，便于迁移
-export const createPhotoWallTask = createGridImageTask;

@@ -382,10 +382,19 @@ export const SmartSuggestionPanel: React.FC<SmartSuggestionPanelProps> = ({
                   <span className="smart-suggestion-panel__item-text">
                     {item.shortLabel || item.label}
                   </span>
-                  {item.type === 'cold-start' && item.scene && (
-                    <span className="smart-suggestion-panel__item-scene">
-                      {item.scene}
-                    </span>
+                  {item.type === 'cold-start' && (item.scene || item.tips) && (
+                    <div className="smart-suggestion-panel__item-meta">
+                      {item.scene && (
+                        <span className="smart-suggestion-panel__item-scene">
+                          {item.scene}
+                        </span>
+                      )}
+                      {item.tips && (
+                        <span className="smart-suggestion-panel__item-tips">
+                          {item.tips}
+                        </span>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>

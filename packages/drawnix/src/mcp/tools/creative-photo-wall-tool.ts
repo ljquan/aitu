@@ -1,20 +1,20 @@
 /**
- * 照片墙 MCP 工具
+ * 灵感图 MCP 工具
  *
- * 生成创意照片墙：调用一次生图模型，生成不规则分割的拼贴图，
+ * 生成创意灵感图：调用一次生图模型，生成不规则分割的拼贴图，
  * 然后以散落的横向布局插入画布，营造更有创意感的效果
  */
 
 import type { MCPTool, MCPResult, MCPExecuteOptions, MCPTaskResult } from '../types';
-import { PHOTO_WALL_DEFAULTS, PHOTO_WALL_PROMPT_TEMPLATE } from '../../types/photo-wall.types';
+import { INSPIRATION_BOARD_DEFAULTS, INSPIRATION_BOARD_PROMPT_TEMPLATE } from '../../types/photo-wall.types';
 import { taskQueueService } from '../../services/task-queue-service';
 import { TaskType } from '../../types/task.types';
 import { getCurrentImageModel } from './image-generation';
 
 /**
- * 照片墙工具参数
+ * 灵感图工具参数
  */
-export interface CreativePhotoWallParams {
+export interface InspirationBoardParams {
   /** 主题描述 */
   theme: string;
   /** 图片数量（6-12，默认 9） */
@@ -30,26 +30,26 @@ export interface CreativePhotoWallParams {
 }
 
 /**
- * 构建照片墙生图提示词
+ * 构建灵感图生图提示词
  */
-function buildPhotoWallPrompt(
+function buildInspirationBoardPrompt(
   theme: string,
   imageCount: number,
   language: 'zh' | 'en'
 ): string {
-  const template = PHOTO_WALL_PROMPT_TEMPLATE[language];
+  const template = INSPIRATION_BOARD_PROMPT_TEMPLATE[language];
   return template(theme, imageCount);
 }
 
 /**
- * 创建照片墙任务（queue 模式）
- * 复用图片生成的任务队列，添加照片墙特有参数
+ * 创建灵感图任务（queue 模式）
+ * 复用图片生成的任务队列，添加灵感图特有参数
  */
-function executeQueue(params: CreativePhotoWallParams, options: MCPExecuteOptions): MCPTaskResult {
+function executeQueue(params: InspirationBoardParams, options: MCPExecuteOptions): MCPTaskResult {
   const {
     theme,
-    imageCount = PHOTO_WALL_DEFAULTS.imageCount,
-    imageSize = '16x9', // 照片墙默认横向布局
+    imageCount = INSPIRATION_BOARD_DEFAULTS.imageCount,
+    imageSize = '16x9', // 灵感图默认横向布局
     imageQuality = '2k',
     language = 'zh',
     model,
@@ -67,12 +67,12 @@ function executeQueue(params: CreativePhotoWallParams, options: MCPExecuteOption
   const validImageCount = Math.min(Math.max(6, imageCount), 12);
 
   // 构建生图提示词
-  const prompt = buildPhotoWallPrompt(theme, validImageCount, language);
+  const prompt = buildInspirationBoardPrompt(theme, validImageCount, language);
 
   // 确定使用的模型
   const actualModel = model || getCurrentImageModel();
 
-  console.log('[CreativePhotoWallTool] Creating photo wall task with params:', {
+  console.log('[InspirationBoardTool] Creating inspiration board task with params:', {
     theme,
     imageCount: validImageCount,
     imageSize,
@@ -83,17 +83,17 @@ function executeQueue(params: CreativePhotoWallParams, options: MCPExecuteOption
   });
 
   try {
-    // 创建照片墙任务
+    // 创建灵感图任务
     // 任务完成后由 useAutoInsertToCanvas 检测并处理
     const task = taskQueueService.createTask(
       {
         prompt,
         size: imageSize,
         model: actualModel,
-        // 照片墙特有参数
-        isPhotoWall: true,
-        photoWallImageCount: validImageCount,
-        photoWallLayoutStyle: 'photo-wall', // 使用新的照片墙布局
+        // 灵感图特有参数
+        isInspirationBoard: true,
+        inspirationBoardImageCount: validImageCount,
+        inspirationBoardLayoutStyle: 'inspiration-board',
         // 保存原始主题，用于显示
         originalTheme: theme,
         // 批量参数
@@ -103,7 +103,7 @@ function executeQueue(params: CreativePhotoWallParams, options: MCPExecuteOption
       TaskType.IMAGE
     );
 
-    console.log('[CreativePhotoWallTool] Created photo wall task:', task.id);
+    console.log('[InspirationBoardTool] Created inspiration board task:', task.id);
 
     return {
       success: true,
@@ -118,23 +118,23 @@ function executeQueue(params: CreativePhotoWallParams, options: MCPExecuteOption
       task,
     };
   } catch (error: any) {
-    console.error('[CreativePhotoWallTool] Failed to create task:', error);
+    console.error('[InspirationBoardTool] Failed to create task:', error);
 
     return {
       success: false,
-      error: error.message || '创建照片墙任务失败',
+      error: error.message || '创建灵感图任务失败',
       type: 'error',
     };
   }
 }
 
 /**
- * 照片墙 MCP 工具定义
+ * 灵感图 MCP 工具定义
  */
-export const creativePhotoWallTool: MCPTool = {
-  name: 'generate_photo_wall',
-  description: `照片墙生成工具。根据主题描述生成一组等大小的高质量图片，
-以散落的横向布局插入画板，形成有创意感的照片墙效果。
+export const inspirationBoardTool: MCPTool = {
+  name: 'generate_inspiration_board',
+  description: `灵感图生成工具。根据主题描述生成一组等大小的高质量图片，
+以散落的横向布局插入画板，形成有创意感的灵感板效果。
 
 生成策略（重要）：
 - 生成紧凑的网格生产图（等大小图片 + 细分割线）
@@ -143,10 +143,10 @@ export const creativePhotoWallTool: MCPTool = {
 
 与宫格图的区别：
 - 宫格图：整齐排列，适合展示类场景
-- 照片墙：散落布局 + 随机旋转，更有创意感和艺术感
+- 灵感图：散落布局 + 随机旋转，更有创意感和艺术感
 
 使用场景：
-- 用户想要创建有创意感的照片墙、灵感板
+- 用户想要创建有创意感的灵感板、情绪板
 - 用户想要生成主题相关的多角度、多风格图片集合
 - 用户想要类似 Pinterest 或 Mood Board 的展示效果
 - 用户提到"创意"、"灵感"、"艺术感"等关键词
@@ -167,7 +167,7 @@ export const creativePhotoWallTool: MCPTool = {
     properties: {
       theme: {
         type: 'string',
-        description: '照片墙主题描述，如"可爱香蕉的各种形态"、"咖啡文化"、"城市街角"等',
+        description: '灵感图主题描述，如"可爱香蕉的各种形态"、"咖啡文化"、"城市街角"等',
       },
       imageCount: {
         type: 'number',
@@ -203,7 +203,7 @@ export const creativePhotoWallTool: MCPTool = {
   supportedModes: ['queue'],
 
   promptGuidance: {
-    whenToUse: '当用户想要生成创意照片墙、灵感板、Mood Board 效果时使用。关键词：照片墙、灵感板、创意拼贴、艺术展示、Mood Board、Pinterest 风格。',
+    whenToUse: '当用户想要生成创意灵感图、灵感板、Mood Board 效果时使用。关键词：灵感图、灵感板、创意拼贴、艺术展示、Mood Board、Pinterest 风格。',
 
     parameterGuidance: {
       theme: '主题描述应该具体且有多样性潜力。好的主题：描述一类事物的多种变体、不同角度或不同场景。避免过于具体的单一描述。',
@@ -220,7 +220,7 @@ export const creativePhotoWallTool: MCPTool = {
 
     examples: [
       {
-        input: '生成一个可爱香蕉的照片墙',
+        input: '生成一个可爱香蕉的灵感图',
         args: { theme: '可爱香蕉的各种形态，包含卡通香蕉、写实香蕉、香蕉角色、香蕉图案等不同风格', imageCount: 9 },
         explanation: '生成 3x3 网格，拆分后 9 张等大图片以散落布局插入',
       },
@@ -244,18 +244,18 @@ export const creativePhotoWallTool: MCPTool = {
   },
 
   execute: async (params: Record<string, unknown>, options?: MCPExecuteOptions): Promise<MCPResult> => {
-    return executeQueue(params as unknown as CreativePhotoWallParams, options || {});
+    return executeQueue(params as unknown as InspirationBoardParams, options || {});
   },
 };
 
 /**
- * 便捷方法：创建照片墙任务
+ * 便捷方法：创建灵感图任务
  */
-export function createPhotoWallTaskNew(
-  params: CreativePhotoWallParams,
+export function createInspirationBoardTask(
+  params: InspirationBoardParams,
   options?: Omit<MCPExecuteOptions, 'mode'>
 ): MCPTaskResult {
-  return creativePhotoWallTool.execute(params as unknown as Record<string, unknown>, {
+  return inspirationBoardTool.execute(params as unknown as Record<string, unknown>, {
     ...options,
     mode: 'queue',
   }) as unknown as MCPTaskResult;

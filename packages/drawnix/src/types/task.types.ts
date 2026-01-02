@@ -36,8 +36,8 @@ export enum TaskType {
   VIDEO = 'video',
   /** Character extraction task */
   CHARACTER = 'character',
-  /** Photo wall generation task (image + split + layout) */
-  PHOTO_WALL = 'photo_wall'
+  /** Inspiration board generation task (image + split + layout) */
+  INSPIRATION_BOARD = 'inspiration_board',
 }
 
 /**
@@ -67,12 +67,18 @@ export interface GenerationParams {
   characterTimestamps?: string;
   /** Local task ID of source video */
   sourceLocalTaskId?: string;
-  /** Photo wall grid rows (photo_wall only) */
-  photoWallRows?: number;
-  /** Photo wall grid columns (photo_wall only) */
-  photoWallCols?: number;
-  /** Photo wall layout style (photo_wall only) */
-  photoWallLayoutStyle?: 'scattered' | 'grid' | 'circular' | 'photo-wall';
+  /** Grid image grid rows (grid_image only) */
+  gridImageRows?: number;
+  /** Grid image grid columns (grid_image only) */
+  gridImageCols?: number;
+  /** Grid image layout style (grid_image only) */
+  gridImageLayoutStyle?: 'scattered' | 'grid' | 'circular';
+  /** Inspiration board layout style (inspiration_board only) */
+  inspirationBoardLayoutStyle?: 'inspiration-board';
+  /** Whether this is an inspiration board task */
+  isInspirationBoard?: boolean;
+  /** Inspiration board image count */
+  inspirationBoardImageCount?: number;
   /** Additional parameters for specific generation types */
   [key: string]: any;
 }

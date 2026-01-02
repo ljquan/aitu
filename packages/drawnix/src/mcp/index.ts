@@ -24,10 +24,10 @@ export { mermaidTool, insertMermaid, setMermaidBoard, getMermaidBoard } from './
 export type { MermaidToolParams } from './tools/mermaid-tool';
 export { mindmapTool, insertMindmap } from './tools/mindmap-tool';
 export type { MindmapToolParams } from './tools/mindmap-tool';
-export { gridImageTool, createGridImageTask, photoWallTool, createPhotoWallTask } from './tools/photo-wall-tool';
-export type { GridImageToolParams, PhotoWallToolParams } from './tools/photo-wall-tool';
-export { creativePhotoWallTool, createPhotoWallTaskNew } from './tools/creative-photo-wall-tool';
-export type { CreativePhotoWallParams } from './tools/creative-photo-wall-tool';
+export { gridImageTool, createGridImageTask } from './tools/photo-wall-tool';
+export type { GridImageToolParams } from './tools/photo-wall-tool';
+export { inspirationBoardTool, createInspirationBoardTask } from './tools/creative-photo-wall-tool';
+export type { InspirationBoardParams } from './tools/creative-photo-wall-tool';
 export { splitImageTool } from './tools/split-image-tool';
 export type { SplitImageToolParams } from './tools/split-image-tool';
 
@@ -43,7 +43,7 @@ import { aiAnalyzeTool } from './tools/ai-analyze';
 import { mermaidTool } from './tools/mermaid-tool';
 import { mindmapTool } from './tools/mindmap-tool';
 import { gridImageTool } from './tools/photo-wall-tool';
-import { creativePhotoWallTool } from './tools/creative-photo-wall-tool';
+import { inspirationBoardTool } from './tools/creative-photo-wall-tool';
 import { splitImageTool } from './tools/split-image-tool';
 
 /** 标记 MCP 是否已初始化 */
@@ -67,7 +67,7 @@ export function initializeMCP(): void {
     mermaidTool,
     mindmapTool,
     gridImageTool,
-    creativePhotoWallTool,
+    inspirationBoardTool,
     splitImageTool,
   ]);
   console.log('[MCP] Initialized with built-in tools');

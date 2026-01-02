@@ -259,6 +259,7 @@ function filterColdStartPrompts(
     description: prompt.scene || '',
     content: prompt.content,
     scene: prompt.scene,
+    tips: prompt.tips,
   }));
 }
 

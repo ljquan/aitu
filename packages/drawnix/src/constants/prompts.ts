@@ -165,119 +165,71 @@ export const AI_INSTRUCTIONS: Record<'zh' | 'en', InstructionItemData[]> = {
 export interface ColdStartSuggestion {
   content: string;
   scene: string;
+  /** 模型调用说明，介绍该命令会用到的模型概况 */
+  tips: string;
   /** 建议的模型类型，帮助用户快速选择 */
-  modelType?: 'image' | 'video' | 'grid-image' | 'photo-wall';
+  modelType?: 'image' | 'video' | 'grid-image' | 'inspiration-board';
 }
 
 export const AI_COLD_START_SUGGESTIONS: Record<'zh' | 'en', ColdStartSuggestion[]> = {
   zh: [
     {
-      content: '生成OAuth2.0时序图',
-      scene: '技术文档',
-    },
-    {
-      content: '画一个大模型发展趋势的思维导图',
-      scene: '知识梳理',
-    },
-    {
-      content: '画一张图片：一只可爱的小猫坐在窗台上，阳光洒在它的毛发上',
-      scene: '萌宠插画',
-      modelType: 'image',
-    },
-    {
-      content: '画一张图片：日落时分的海边沙滩，海浪轻拍岸边，氛围温暖',
-      scene: '风景摄影',
-      modelType: 'image',
-    },
-    {
-      content: '画一张图片：未来科幻城市，霓虹灯闪烁，赛博朋克风格',
-      scene: '概念艺术',
-      modelType: 'image',
-    },
-    {
-      content: '创作一个视频：樱花树下的少女，微风吹过，花瓣飘落',
-      scene: '视频创作',
-      modelType: 'video',
-    },
-    {
-      content: '画一张图片：一杯热咖啡，蒸汽缓缓升起，光影交错',
-      scene: '产品展示',
-      modelType: 'image',
-    },
-    {
-      content: '生成宫格图：孟菲斯风格餐具，色彩鲜艳的杯碗盘',
-      scene: '宫格图',
-      modelType: 'grid-image',
+      content: '生成灵感图：咖啡文化灵感板，咖啡豆、拉花、咖啡馆场景',
+      scene: '灵感图',
+      tips: '调用1次文本模型 + 1次生图模型',
+      modelType: 'inspiration-board',
     },
     {
       content: '生成宫格图：可爱猫咪表情包，16宫格',
       scene: '宫格图',
+      tips: '调用1次文本模型 + 1次生图模型',
       modelType: 'grid-image',
     },
     {
-      content: '生成照片墙：可爱香蕉的各种形态，卡通与写实混搭',
-      scene: '照片墙',
-      modelType: 'photo-wall',
+      content: '生成OAuth2.0时序图',
+      scene: '技术文档',
+      tips: '调用1次文本模型',
     },
     {
-      content: '生成照片墙：咖啡文化灵感板，咖啡豆、拉花、咖啡馆场景',
-      scene: '照片墙',
-      modelType: 'photo-wall',
+      content: '画一个大模型发展趋势的思维导图',
+      scene: '知识梳理',
+      tips: '调用1次文本模型',
+    },
+    {
+      content: '创作一个视频：樱花树下的少女，微风吹过，花瓣飘落',
+      scene: '视频创作',
+      tips: '调用1次文本模型 + 1次生视频模型',
+      modelType: 'video',
     },
   ],
   en: [
     {
-      content: 'Generate OAuth2.0 sequence diagram',
-      scene: 'Tech docs',
-    },
-    {
-      content: 'Draw a mind map of LLM development trends',
-      scene: 'Knowledge organization',
-    },
-    {
-      content: 'Draw an image: A cute kitten sitting on a windowsill with sunlight streaming through',
-      scene: 'Pet illustration',
-      modelType: 'image',
-    },
-    {
-      content: 'Draw an image: Beach at sunset, gentle waves, warm atmosphere',
-      scene: 'Landscape photo',
-      modelType: 'image',
-    },
-    {
-      content: 'Draw an image: Futuristic sci-fi city, neon lights, cyberpunk style',
-      scene: 'Concept art',
-      modelType: 'image',
-    },
-    {
-      content: 'Create a video: A girl under cherry blossom tree, petals falling in the breeze',
-      scene: 'Video creation',
-      modelType: 'video',
-    },
-    {
-      content: 'Draw an image: A cup of hot coffee with steam rising, beautiful lighting',
-      scene: 'Product showcase',
-      modelType: 'image',
-    },
-    {
-      content: 'Generate grid image: Memphis style tableware, colorful cups bowls and plates',
-      scene: 'Grid image',
-      modelType: 'grid-image',
+      content: 'Generate inspiration board: Coffee culture mood board, beans, latte art, cafe scenes',
+      scene: 'Inspiration board',
+      tips: '1 text model + 1 image model',
+      modelType: 'inspiration-board',
     },
     {
       content: 'Generate grid image: Cute cat emoji pack, 4x4 scattered layout',
       scene: 'Grid image',
+      tips: '1 text model + 1 image model',
       modelType: 'grid-image',
     },
     {
-      content: 'Generate photo wall: Cute bananas in various forms, cartoon and realistic mix',
-      scene: 'Photo wall',
-      modelType: 'photo-wall',
+      content: 'Generate OAuth2.0 sequence diagram',
+      scene: 'Tech docs',
+      tips: '1 text model',
     },
     {
-      content: 'Generate photo wall: Coffee culture mood board, beans, latte art, cafe scenes',
-      scene: 'Photo wall',
-      modelType: 'photo-wall',
+      content: 'Draw a mind map of LLM development trends',
+      scene: 'Knowledge organization',
+      tips: '1 text model',
+    },
+    {
+      content: 'Create a video: A girl under cherry blossom tree, petals falling in the breeze',
+      scene: 'Video creation',
+      tips: '1 text model + 1 video model',
+      modelType: 'video',
     },
   ],
 };

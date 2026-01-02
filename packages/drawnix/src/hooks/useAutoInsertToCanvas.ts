@@ -151,15 +151,15 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
      */
     const isGridImageTask = (task: Task): boolean => {
       const params = task.params as Record<string, unknown>;
-      return !!(params.photoWallRows && params.photoWallCols);
+      return !!(params.gridImageRows && params.gridImageCols);
     };
 
     /**
-     * 检查是否为照片墙任务
+     * 检查是否为灵感图任务
      */
-    const isPhotoWallTask = (task: Task): boolean => {
+    const isInspirationBoardTask = (task: Task): boolean => {
       const params = task.params as Record<string, unknown>;
-      return !!(params.isPhotoWall && params.photoWallLayoutStyle === 'photo-wall');
+      return !!(params.isInspirationBoard && params.inspirationBoardLayoutStyle === 'inspiration-board');
     };
 
     /**
@@ -173,9 +173,9 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
       }
 
       const params = task.params as Record<string, unknown>;
-      const rows = params.photoWallRows as number;
-      const cols = params.photoWallCols as number;
-      const layoutStyle = (params.photoWallLayoutStyle as LayoutStyle) || 'scattered';
+      const rows = params.gridImageRows as number;
+      const cols = params.gridImageCols as number;
+      const layoutStyle = (params.gridImageLayoutStyle as LayoutStyle) || 'scattered';
       const url = task.result?.url;
 
       if (!url) {
@@ -204,39 +204,39 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
     };
 
     /**
-     * 处理照片墙任务：智能检测并分割，以照片墙布局插入
+     * 处理灵感图任务：智能检测并分割，以灵感图布局插入
      */
-    const handlePhotoWallTask = async (task: Task) => {
+    const handleInspirationBoardTask = async (task: Task) => {
       const board = getCanvasBoard();
       if (!board) {
-        console.error('[AutoInsert] Board not available for photo wall task');
+        console.error('[AutoInsert] Board not available for inspiration board task');
         return;
       }
 
       const url = task.result?.url;
 
       if (!url) {
-        console.error('[AutoInsert] Photo wall task has no result URL');
+        console.error('[AutoInsert] Inspiration board task has no result URL');
         return;
       }
 
-      console.log(`[AutoInsert] Processing photo wall task ${task.id} with intelligent detection`);
+      console.log(`[AutoInsert] Processing inspiration board task ${task.id} with intelligent detection`);
 
       try {
-        // 使用智能检测模式拆分照片墙（自动检测不规则区域）
+        // 使用智能检测模式拆分灵感图（自动检测不规则区域）
         const result = await imageSplitService.splitAndInsert(board, url, {
-          mode: 'photo-wall', // 使用智能检测模式
-          layoutStyle: 'photo-wall', // 使用照片墙布局
+          mode: 'inspiration-board', // 使用智能检测模式
+          layoutStyle: 'inspiration-board', // 使用灵感图布局
           gap: 15,
         });
 
         if (result.success) {
-          console.log(`[AutoInsert] Photo wall split into ${result.count} images using intelligent detection`);
+          console.log(`[AutoInsert] Inspiration board split into ${result.count} images using intelligent detection`);
         } else {
-          console.error(`[AutoInsert] Photo wall split failed: ${result.error}`);
+          console.error(`[AutoInsert] Inspiration board split failed: ${result.error}`);
         }
       } catch (error) {
-        console.error('[AutoInsert] Photo wall processing error:', error);
+        console.error('[AutoInsert] Inspiration board processing error:', error);
       }
     };
 
@@ -263,9 +263,9 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
       // 标记为已处理
       insertedTaskIds.add(task.id);
 
-      // 检查是否为照片墙任务（需要在宫格图之前检查）
-      if (isPhotoWallTask(task)) {
-        handlePhotoWallTask(task);
+      // 检查是否为灵感图任务（需要在宫格图之前检查）
+      if (isInspirationBoardTask(task)) {
+        handleInspirationBoardTask(task);
         return;
       }
 

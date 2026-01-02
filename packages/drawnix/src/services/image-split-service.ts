@@ -32,9 +32,9 @@ import type {
  * 拆分模式
  * - grid: 按网格均匀分割
  * - auto: 自动检测白色分割线
- * - photo-wall: 智能检测照片墙中的不规则区域
+ * - inspiration-board: 智能检测灵感图中的不规则区域
  */
-export type SplitMode = 'grid' | 'auto' | 'photo-wall';
+export type SplitMode = 'grid' | 'auto' | 'inspiration-board';
 
 /**
  * 拆分选项
@@ -144,8 +144,8 @@ class ImageSplitService {
   }
 
   /**
-   * 智能检测照片墙并拆分
-   * 适用于不规则布局的照片墙（大小不一、位置不规则、白色边框、灰色背景）
+   * 智能检测灵感图并拆分
+   * 适用于不规则布局的灵感图（大小不一、位置不规则、白色边框、灰色背景）
    *
    * @param imageUrl - 图片 URL 或 base64 DataURL
    * @returns 拆分后的图片元素数组
@@ -154,12 +154,12 @@ class ImageSplitService {
     elements: ImageElement[];
     gridConfig: GridConfig;
   }> {
-    console.log('[ImageSplitService] Splitting photo wall by intelligent detection');
+    console.log('[ImageSplitService] Splitting inspiration board by intelligent detection');
 
     const elements = await splitPhotoWall(imageUrl);
 
     if (elements.length === 0) {
-      console.log('[ImageSplitService] No photo wall regions detected');
+      console.log('[ImageSplitService] No inspiration board regions detected');
       return {
         elements: [],
         gridConfig: { rows: 1, cols: 1 },
@@ -170,7 +170,7 @@ class ImageSplitService {
     const cols = Math.ceil(Math.sqrt(elements.length));
     const rows = Math.ceil(elements.length / cols);
 
-    console.log(`[ImageSplitService] Photo wall split into ${elements.length} images (estimated grid: ${rows}x${cols})`);
+    console.log(`[ImageSplitService] Inspiration board split into ${elements.length} images (estimated grid: ${rows}x${cols})`);
 
     return {
       elements,
@@ -196,7 +196,7 @@ class ImageSplitService {
       }
       const elements = await this.splitByGrid(imageUrl, gridConfig);
       return { elements, gridConfig };
-    } else if (mode === 'photo-wall') {
+    } else if (mode === 'inspiration-board') {
       return this.splitPhotoWall(imageUrl);
     } else {
       return this.splitByDetection(imageUrl);

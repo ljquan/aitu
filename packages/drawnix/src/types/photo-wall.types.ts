@@ -20,7 +20,7 @@ export interface GridConfig {
 /**
  * 布局风格枚举
  */
-export type LayoutStyle = 'scattered' | 'grid' | 'circular' | 'photo-wall';
+export type LayoutStyle = 'scattered' | 'grid' | 'circular' | 'inspiration-board';
 
 /**
  * 布局风格配置
@@ -59,10 +59,10 @@ export const LAYOUT_STYLES: LayoutStyleConfig[] = [
     description: '围绕中心点环形分布，适合突出中心主题',
   },
   {
-    style: 'photo-wall',
-    labelZh: '照片墙',
-    labelEn: 'Photo Wall',
-    description: '不规则大小的横向散落布局，创意感更强',
+    style: 'inspiration-board',
+    labelZh: '灵感图',
+    labelEn: 'Inspiration Board',
+    description: '不规则大小的紧凑拼贴布局，适合创意灵感展示',
   },
 ];
 
@@ -194,9 +194,9 @@ export const GRID_IMAGE_DEFAULTS = {
 };
 
 /**
- * 照片墙布局配置
+ * 灵感图布局配置
  */
-export interface PhotoWallLayoutConfig {
+export interface InspirationBoardLayoutConfig {
   /** 图片数量（6-12） */
   imageCount?: number;
   /** 最小宽度比例（相对于平均尺寸） */
@@ -210,9 +210,9 @@ export interface PhotoWallLayoutConfig {
 }
 
 /**
- * 照片墙默认配置
+ * 灵感图默认配置
  */
-export const PHOTO_WALL_DEFAULTS = {
+export const INSPIRATION_BOARD_DEFAULTS = {
   imageCount: 9,
   minWidthRatio: 0.7,
   maxWidthRatio: 1.4,
@@ -221,65 +221,81 @@ export const PHOTO_WALL_DEFAULTS = {
 };
 
 /**
- * 照片墙提示词模板
+ * 灵感图提示词模板
  * 生成紧凑拼贴布局的生产图，图片大小不一，用细白线分割
  *
  * 拆图算法：Flood Fill（从边缘开始，白线作为可穿透区域）
  * 关键要求：白线必须从图片边缘连通到每张子图周围
  */
-export const PHOTO_WALL_PROMPT_TEMPLATE = {
+export const INSPIRATION_BOARD_PROMPT_TEMPLATE = {
   zh: (theme: string, imageCount: number) => {
-    return `创建一个紧凑拼贴图（生产用），主题是"${theme}"，包含 ${imageCount} 张图片。
+    return `创建一个边缘到边缘的灵感拼贴图（生产用），主题是"${theme}"，包含 ${imageCount} 张图片。
+
+【关键要求 - 必须铺满画面】
+- 图片必须完全铺满整个画布，从左边缘到右边缘，从上边缘到下边缘
+- 禁止任何外部空白区域或边距
+- 最外侧的图片必须紧贴画布边界
+- 画布利用率必须达到 98% 以上
+- 禁止生成类似相框、照片边框的装饰效果
 
 【布局要求】
 - 图片大小不一：有大有小，比例各异（正方形、横向、竖向混合）
-- 大小分布：1-2 张大图，3-4 张中图，其余为小图
-- 不规则拼贴布局，类似杂志或 Pinterest 风格
-- 整个画面被图片填满，图片区域占比 > 95%
+- 大小分布：1-2 张大图占据显著区域，3-4 张中图，其余为小图
+- 不规则拼贴布局，类似杂志或 Pinterest 风格的灵感板
+- 图片之间紧密排列，只留分割线的空间
+- 图片边缘干净利落，无装饰边框或阴影效果
 
-【白色分割线要求 - 算法依赖，必须严格遵守】
-- 整张图的最外圈必须是 2-3px 纯白色边框
-- 所有图片之间用 2-3px 纯白色 (#FFFFFF) 细线分隔
+【白色分割线要求 - 算法依赖】
+- 图片之间用 2-3px 纯白色 (#FFFFFF) 细线分隔
 - 白线必须连续、无断裂，形成连通的分割网络
 - 每张图片必须被白线完全包围（四边都有白线）
-- 白线从外边框延伸到每张图片周围，确保连通性
-- 禁止图片重叠或直接接触（必须有白线间隔）
+- 画布最外边缘也有 2-3px 白线（不是大片空白）
+- 禁止图片重叠或直接接触
 
 【图片内容要求】
 - ${imageCount} 张图片展示 ${imageCount} 种完全不同的内容
 - 禁止重复：内容、构图、色调都必须明显不同
-- 每张图片内容饱满，充分利用空间
+- 每张图片内容饱满，主体居中
+- 图片内容直接呈现，不要有边框装饰
 
 【输出要求】
 - 横向布局，宽高比约 16:9
-- 这是生产图，用于智能拆分`;
+- 整个画面必须被图片填满，无外部留白`;
   },
 
   en: (theme: string, imageCount: number) => {
-    return `Create a compact collage (production use) with the theme "${theme}", containing ${imageCount} images.
+    return `Create an edge-to-edge inspiration board collage (production use) with the theme "${theme}", containing ${imageCount} images.
+
+【Critical Requirement - Must Fill Canvas】
+- Images must completely fill the entire canvas, from left edge to right edge, top to bottom
+- No external blank areas or margins allowed
+- Outermost images must touch canvas boundaries
+- Canvas utilization must be 98% or higher
+- Do NOT generate photo frame or border decorations
 
 【Layout Requirements】
 - Varying image sizes: large, medium, and small mixed
-- Different aspect ratios: square, landscape, portrait
-- Irregular collage layout, magazine or Pinterest style
-- Images fill the canvas, image area > 95%
+- Size distribution: 1-2 large images taking significant area, 3-4 medium, rest small
+- Irregular collage layout, magazine or Pinterest style inspiration board
+- Images tightly arranged, only leaving space for divider lines
+- Clean image edges, no decorative borders or shadow effects
 
-【White Divider Lines - Algorithm Critical, Must Follow】
-- The outermost border of the entire image must be 2-3px pure white
-- All images separated by 2-3px pure white (#FFFFFF) lines
+【White Divider Lines - Algorithm Critical】
+- Images separated by 2-3px pure white (#FFFFFF) lines
 - White lines must be continuous, no breaks, forming a connected network
 - Each image must be completely surrounded by white lines (all four sides)
-- White lines extend from outer border to surround each image, ensuring connectivity
-- No overlapping or direct contact between images (must have white line separation)
+- Canvas outer edge also has 2-3px white line (not large blank space)
+- No overlapping or direct contact between images
 
 【Image Content Requirements】
 - ${imageCount} images showing ${imageCount} completely different contents
 - No repetition: different content, composition, and tone
-- Each image with full content, utilizing space effectively
+- Each image with full content, subject centered
+- Present image content directly without frame decorations
 
 【Output Requirements】
 - Horizontal layout, aspect ratio about 16:9
-- Production image for smart splitting`;
+- Entire canvas must be filled with images, no external whitespace`;
   },
 };
 

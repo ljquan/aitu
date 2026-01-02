@@ -15,7 +15,7 @@ import { useMediaUrl } from '../../hooks/useMediaCache';
 import { useDrawnix, DialogType } from '../../hooks/use-drawnix';
 import { insertImageFromUrl } from '../../data/image';
 import { insertVideoFromUrl } from '../../data/video';
-import { photoWallService } from '../../services/photo-wall';
+import { gridImageService } from '../../services/photo-wall';
 import { downloadMediaFile, downloadFromBlob, sanitizeFilename } from '../../utils/download-utils';
 import { mediaCacheService } from '../../services/media-cache-service';
 import { SideDrawer } from '../side-drawer';
@@ -237,24 +237,24 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
 
     try {
       if (task.type === TaskType.IMAGE) {
-        // 检查是否是宫格图任务（通过 photoWallRows 参数判断）
-        if (task.params.photoWallRows && task.params.photoWallCols) {
+        // 检查是否是宫格图任务（通过 gridImageRows 参数判断）
+        if (task.params.gridImageRows && task.params.gridImageCols) {
           // 宫格图任务：使用已生成的图片进行分割和布局
           console.log('Inserting grid image to board:', taskId);
-          photoWallService.setBoard(board);
+          gridImageService.setBoard(board);
 
           // 使用已生成的图片进行分割和布局
-          const result = await photoWallService.processExistingImage(
+          const result = await gridImageService.processExistingImage(
             task.result.url,
             {
-              rows: task.params.photoWallRows,
-              cols: task.params.photoWallCols,
+              rows: task.params.gridImageRows,
+              cols: task.params.gridImageCols,
             },
-            task.params.photoWallLayoutStyle || 'scattered'
+            task.params.gridImageLayoutStyle || 'scattered'
           );
 
           if (result.success && result.elements) {
-            await photoWallService.insertToBoard(result.elements);
+            await gridImageService.insertToBoard(result.elements);
             MessagePlugin.success('宫格图已插入到白板');
           } else {
             throw new Error(result.error || '宫格图处理失败');
