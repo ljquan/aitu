@@ -350,7 +350,52 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
     stopPropagation: true,
   });
 
-  // 合并预设指令和历史指令
+  /**
+   * 去除提示词中的模型/参数/个数标记
+   * @param content 原始内容
+   * @returns 去除标记后的内容
+   */
+  const stripTagsFromPrompt = (content: string): string => {
+    return content
+      .replace(/#[\w.-]+\s*/g, '')  // 去除 #模型名
+      .replace(/-[\w]+=[\w:x.]+\s*/g, '')  // 去除 -参数=值
+      .replace(/\+\d+\s*/g, '')  // 去除 +个数
+      .trim();
+  };
+
+  /**
+   * 去除提示词中的数量部分（用于去重）
+   * 例如：生成灵感图：大模型、AI，16图 -> 生成灵感图：大模型、AI
+   * @param content 原始内容
+   * @returns 去除数量后的内容
+   */
+  const stripCountFromPrompt = (content: string): string => {
+    return content
+      .replace(/[,，]\s*\d+\s*(图|张|个图|个|幅)?\s*$/g, '')  // 去除末尾的 "，16图"、"，20个图" 等
+      .replace(/\s+\d+\s*(图|张|个图|个|幅)?\s*$/g, '')  // 去除末尾的 "16图"、"20个图" 等
+      .trim();
+  };
+
+  /**
+   * 对历史记录进行去重（去除数量后内容相同的只保留最新一条）
+   * @param items 历史记录列表
+   * @returns 去重后的列表
+   */
+  const deduplicateHistory = <T extends { id: string; content: string; timestamp?: number }>(items: T[]): T[] => {
+    const seen = new Map<string, T>();
+    // 按时间戳降序排列，确保保留最新的
+    const sorted = [...items].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    for (const item of sorted) {
+      const normalizedContent = stripCountFromPrompt(item.content);
+      if (!seen.has(normalizedContent)) {
+        seen.set(normalizedContent, item);
+      }
+    }
+    // 返回时保持原有顺序（最新在前）
+    return Array.from(seen.values());
+  };
+
+  // 合并预设指令和历史指令（用于有选中元素时的 prompt 模式）
   const allPrompts = useMemo((): PromptItem[] => {
     const presetPrompts = AI_INSTRUCTIONS[language].map((item, index) => ({
       id: `preset_${index}`,
@@ -362,28 +407,78 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
     // 获取所有预设指令的内容集合，用于过滤
     const presetContents = new Set(presetPrompts.map(p => p.content));
 
-    const historyPrompts = history
-      .filter(item => !presetContents.has(item.content)) // 过滤掉与推荐提示词重复的历史记录
-      .map(item => ({
-        id: item.id,
-        content: item.content,
-        source: 'history' as const,
-        timestamp: item.timestamp,
-      }));
+    // 过滤出有选中元素时的历史记录，并去除模型/参数/个数标记
+    const rawHistoryPrompts = history
+      .filter(item => item.hasSelection === true) // 只显示有选中元素时的历史记录
+      .map(item => {
+        const strippedContent = stripTagsFromPrompt(item.content);
+        return {
+          id: item.id,
+          content: strippedContent,
+          source: 'history' as const,
+          timestamp: item.timestamp,
+          hasSelection: item.hasSelection,
+        };
+      })
+      .filter(item => item.content.length > 0) // 过滤掉去除标记后为空的记录
+      .filter(item => !presetContents.has(item.content)); // 过滤掉与推荐提示词重复的历史记录
+
+    // 对历史记录去重（去除数量后内容相同的只保留最新一条）
+    const historyPrompts = deduplicateHistory(rawHistoryPrompts);
 
     return [...historyPrompts, ...presetPrompts];
   }, [language, history]);
 
   // 冷启动引导提示词（无选中内容、输入框为空时显示）
+  // 包含预设的创意提示词 + 无选中元素时的历史记录
   const coldStartPrompts = useMemo((): PromptItem[] => {
-    return AI_COLD_START_SUGGESTIONS[language].map((item, index) => ({
+    const presetPrompts = AI_COLD_START_SUGGESTIONS[language].map((item, index) => ({
       id: `cold_start_${index}`,
       content: item.content,
       scene: item.scene,
       tips: item.tips,
       source: 'preset' as const,
     }));
-  }, [language]);
+
+    // 获取所有预设创意提示词的内容集合，用于过滤（包含去除数量后的版本）
+    const presetContents = new Set(presetPrompts.map(p => p.content));
+    const presetContentsNormalized = new Set(presetPrompts.map(p => stripCountFromPrompt(p.content)));
+
+    // 过滤出无选中元素时的历史记录
+    const rawHistoryPrompts = history
+      .filter(item => item.hasSelection !== true) // 显示无选中元素时的历史记录（包括 undefined 和 false）
+      .filter(item => !presetContents.has(item.content)) // 过滤掉与创意提示词完全相同的历史记录
+      .filter(item => !presetContentsNormalized.has(stripCountFromPrompt(item.content))) // 过滤掉去除数量后与创意提示词相同的
+      .map(item => ({
+        id: item.id,
+        content: item.content,
+        source: 'history' as const,
+        timestamp: item.timestamp,
+        hasSelection: item.hasSelection,
+      }));
+
+    // 对历史记录去重（去除数量后内容相同的只保留最新一条）
+    const historyPrompts = deduplicateHistory(rawHistoryPrompts);
+
+    // 历史记录放在前面
+    return [...historyPrompts, ...presetPrompts];
+  }, [language, history]);
+
+  // 有选中元素时的历史记录（用于 model 模式显示）
+  const selectionHistoryPrompts = useMemo((): PromptItem[] => {
+    const rawPrompts = history
+      .filter(item => item.hasSelection === true) // 只显示有选中元素时的历史记录
+      .map(item => ({
+        id: item.id,
+        content: item.content,
+        source: 'history' as const,
+        timestamp: item.timestamp,
+        hasSelection: item.hasSelection,
+      }));
+
+    // 对历史记录去重（去除数量后内容相同的只保留最新一条）
+    return deduplicateHistory(rawPrompts);
+  }, [history]);
 
   // 判断是否为冷启动场景（无选中内容、输入框为空）
   const isColdStartMode = useMemo(() => {
@@ -454,9 +549,13 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
       console.log('[AIInputBar] Parsed params:', parsedParams);
       console.log('[AIInputBar] Key params - model:', parsedParams.modelId, 'count:', parsedParams.count, 'size:', parsedParams.size);
 
-      // 保存提示词到历史记录（只保存用户输入的指令部分）
-      if (parsedParams.userInstruction) {
-        addHistory(parsedParams.userInstruction);
+      // 保存提示词到历史记录
+      // 有选中元素时：保存完整输入（包含模型/参数/个数），用于在模型面板中展示
+      // 无选中元素时：保存完整输入，用于在创意面板中展示
+      const hasSelection = selectedContent.length > 0;
+      const historyContent = prompt.trim();
+      if (historyContent) {
+        addHistory(historyContent, hasSelection);
       }
 
       // 收集所有参考媒体（图片 + 图形 + 视频）
@@ -1124,6 +1223,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
           selectedParams={parseResult.selectedParams}
           selectedCount={parseResult.selectedCount}
           prompts={isColdStartMode ? coldStartPrompts : allPrompts}
+          selectionHistoryPrompts={selectionHistoryPrompts}
           onSelectModel={handleModelSelect}
           onSelectParam={handleParamSelect}
           onSelectCount={handleCountSelect}

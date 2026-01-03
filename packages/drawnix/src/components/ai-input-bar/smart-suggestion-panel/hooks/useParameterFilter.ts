@@ -255,7 +255,7 @@ function filterColdStartPrompts(
     id: prompt.id,
     type: 'cold-start' as const,
     label: prompt.content,
-    shortLabel: prompt.content.length > 50 ? prompt.content.substring(0, 50) + '...' : prompt.content,
+    shortLabel: prompt.content, // CSS 控制省略显示
     description: prompt.scene || '',
     content: prompt.content,
     scene: prompt.scene,
@@ -271,9 +271,9 @@ function filterPrompts(
   prompts: PromptItem[]
 ): PromptSuggestionItem[] {
   const normalizedKeyword = keyword.toLowerCase().trim();
-  
+
   let filtered = prompts;
-  
+
   // 按关键词过滤
   if (normalizedKeyword) {
     filtered = prompts.filter(prompt => {
@@ -284,12 +284,12 @@ function filterPrompts(
       return content.includes(normalizedKeyword);
     });
   }
-  
+
   return filtered.map(prompt => ({
     id: prompt.id,
     type: 'prompt' as const,
     label: prompt.content,
-    shortLabel: prompt.content.length > 50 ? prompt.content.substring(0, 50) + '...' : prompt.content,
+    shortLabel: prompt.content, // CSS 控制省略显示
     description: prompt.source === 'history' ? '历史记录' : '推荐提示词',
     source: prompt.source,
     content: prompt.content,

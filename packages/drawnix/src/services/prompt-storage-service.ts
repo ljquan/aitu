@@ -12,6 +12,8 @@ export interface PromptHistoryItem {
   id: string;
   content: string;
   timestamp: number;
+  /** 是否在有选中元素时输入的 */
+  hasSelection?: boolean;
 }
 
 /**
@@ -38,31 +40,34 @@ export function getPromptHistory(): PromptHistoryItem[] {
 /**
  * 添加历史提示词
  * 自动去重，新记录插入头部，限制最大数量
+ * @param content 提示词内容
+ * @param hasSelection 是否在有选中元素时输入的
  */
-export function addPromptHistory(content: string): void {
+export function addPromptHistory(content: string, hasSelection?: boolean): void {
   if (!content || !content.trim()) return;
-  
+
   const trimmedContent = content.trim();
-  
+
   try {
     let history = getPromptHistory();
-    
+
     // 去重：移除已存在的相同内容
     history = history.filter(item => item.content !== trimmedContent);
-    
+
     // 新记录插入头部
     const newItem: PromptHistoryItem = {
       id: generateId(),
       content: trimmedContent,
       timestamp: Date.now(),
+      hasSelection,
     };
     history.unshift(newItem);
-    
+
     // 限制最大数量
     if (history.length > MAX_HISTORY_COUNT) {
       history = history.slice(0, MAX_HISTORY_COUNT);
     }
-    
+
     localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
   } catch (error) {
     console.error('Failed to add prompt history:', error);

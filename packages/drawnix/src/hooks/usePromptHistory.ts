@@ -15,7 +15,7 @@ export interface UsePromptHistoryReturn {
   /** 历史提示词列表 */
   history: PromptHistoryItem[];
   /** 添加历史记录 */
-  addHistory: (content: string) => void;
+  addHistory: (content: string, hasSelection?: boolean) => void;
   /** 删除指定历史记录 */
   removeHistory: (id: string) => void;
   /** 清空所有历史记录 */
@@ -42,8 +42,8 @@ export function usePromptHistory(): UsePromptHistoryReturn {
   }, [refreshHistory]);
 
   // 添加历史记录
-  const addHistory = useCallback((content: string) => {
-    promptStorageService.addHistory(content);
+  const addHistory = useCallback((content: string, hasSelection?: boolean) => {
+    promptStorageService.addHistory(content, hasSelection);
     refreshHistory();
   }, [refreshHistory]);
 

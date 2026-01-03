@@ -82,6 +82,7 @@ export const SmartSuggestionPanel: React.FC<SmartSuggestionPanelProps> = ({
   selectedParams,
   selectedCount,
   prompts = [],
+  selectionHistoryPrompts = [],
   onSelectModel,
   onSelectParam,
   onSelectCount,
@@ -132,20 +133,51 @@ export const SmartSuggestionPanel: React.FC<SmartSuggestionPanelProps> = ({
     }
   }, [mode, suggestions, pendingParam]);
 
-  // 分组提示词（历史 + 预设），也用于冷启动模式
-  const { historyPrompts, presetPrompts, coldStartSuggestions } = useMemo(() => {
+  // 分组提示词（历史 + 预设），也用于冷启动模式和 model 模式
+  const { historyPrompts, presetPrompts, coldStartSuggestions, coldStartHistoryPrompts, modelModeHistoryPrompts } = useMemo(() => {
     if (mode === 'cold-start') {
-      // 冷启动模式只显示预设的引导提示词
-      const coldStart = suggestions.filter(s => s.type === 'cold-start');
-      return { historyPrompts: [], presetPrompts: [], coldStartSuggestions: coldStart };
+      // 冷启动模式：分开历史记录和预设引导提示词
+      const allColdStart = suggestions.filter(s => s.type === 'cold-start');
+      // 根据原始 prompts 的 source 来区分
+      const historyIds = new Set(prompts.filter(p => p.source === 'history').map(p => p.id));
+      const coldStartHistory = allColdStart.filter(s => historyIds.has(s.id));
+      const coldStartPreset = allColdStart.filter(s => !historyIds.has(s.id));
+      return {
+        historyPrompts: [],
+        presetPrompts: [],
+        coldStartSuggestions: coldStartPreset,
+        coldStartHistoryPrompts: coldStartHistory,
+        modelModeHistoryPrompts: [],
+      };
+    }
+    if (mode === 'model') {
+      // model 模式下，过滤历史记录（排除只有 #模型名 的记录）
+      const filteredHistory = selectionHistoryPrompts
+        .filter(item => {
+          const content = item.content.trim();
+          // 排除只有 #模型名 的记录（例如 "#gemini" 这种只有模型标记的）
+          const onlyModelPattern = /^#[\w.-]+$/;
+          return !onlyModelPattern.test(content);
+        })
+        .map(item => ({
+          id: item.id,
+          type: 'prompt' as const,
+          label: item.content,
+          shortLabel: item.content, // CSS 控制省略显示
+          description: '',
+          source: 'history' as const,
+          content: item.content,
+          timestamp: item.timestamp,
+        }));
+      return { historyPrompts: [], presetPrompts: [], coldStartSuggestions: [], coldStartHistoryPrompts: [], modelModeHistoryPrompts: filteredHistory };
     }
     if (mode !== 'prompt') {
-      return { historyPrompts: [], presetPrompts: [], coldStartSuggestions: [] };
+      return { historyPrompts: [], presetPrompts: [], coldStartSuggestions: [], coldStartHistoryPrompts: [], modelModeHistoryPrompts: [] };
     }
     const history = suggestions.filter(s => s.type === 'prompt' && s.source === 'history');
     const preset = suggestions.filter(s => s.type === 'prompt' && s.source === 'preset');
-    return { historyPrompts: history, presetPrompts: preset, coldStartSuggestions: [] };
-  }, [mode, suggestions]);
+    return { historyPrompts: history, presetPrompts: preset, coldStartSuggestions: [], coldStartHistoryPrompts: [], modelModeHistoryPrompts: [] };
+  }, [mode, suggestions, selectionHistoryPrompts, prompts]);
 
   // 非提示词模式的建议列表
   const nonPromptSuggestions = useMemo(() => {
@@ -156,13 +188,18 @@ export const SmartSuggestionPanel: React.FC<SmartSuggestionPanelProps> = ({
   // 合并后的列表（用于键盘导航）
   const allSuggestions = useMemo(() => {
     if (mode === 'cold-start') {
-      return coldStartSuggestions;
+      // 冷启动模式：历史记录 + 预设提示词
+      return [...coldStartHistoryPrompts, ...coldStartSuggestions];
     }
     if (mode === 'prompt') {
       return [...historyPrompts, ...presetPrompts];
     }
+    if (mode === 'model') {
+      // model 模式下，历史记录在上方 + 模型列表在下方
+      return [...modelModeHistoryPrompts, ...nonPromptSuggestions];
+    }
     return nonPromptSuggestions;
-  }, [mode, historyPrompts, presetPrompts, nonPromptSuggestions, coldStartSuggestions]);
+  }, [mode, historyPrompts, presetPrompts, nonPromptSuggestions, coldStartSuggestions, coldStartHistoryPrompts, modelModeHistoryPrompts]);
 
   // 重置高亮索引
   useEffect(() => {
@@ -350,6 +387,8 @@ export const SmartSuggestionPanel: React.FC<SmartSuggestionPanelProps> = ({
 
   // 渲染冷启动模式（创意引导）
   if (mode === 'cold-start') {
+    const hasColdStartHistory = coldStartHistoryPrompts.length > 0;
+
     return (
       <div
         ref={panelRef}
@@ -358,48 +397,94 @@ export const SmartSuggestionPanel: React.FC<SmartSuggestionPanelProps> = ({
         aria-label={getModeTitle(mode, language)}
         onMouseDown={(e) => e.preventDefault()}
       >
-        <div className="smart-suggestion-panel__header">
-          {getModeIcon(mode)}
-          <span>{getModeTitle(mode, language)}</span>
-          <span className="smart-suggestion-panel__hint">
-            {getKeyboardHint(language)}
-          </span>
-        </div>
         <div className="smart-suggestion-panel__content">
-          <div className="smart-suggestion-panel__list smart-suggestion-panel__list--cold-start">
-            {coldStartSuggestions.map((item, index) => (
-              <div
-                key={item.id}
-                className={`smart-suggestion-panel__item smart-suggestion-panel__item--cold-start ${
-                  index === highlightedIndex
-                    ? 'smart-suggestion-panel__item--highlighted'
-                    : ''
-                }`}
-                onClick={() => handleSelect(item)}
-                onMouseEnter={() => setHighlightedIndex(index)}
-              >
-                <div className="smart-suggestion-panel__item-content">
-                  <span className="smart-suggestion-panel__item-text">
-                    {item.shortLabel || item.label}
-                  </span>
-                  {item.type === 'cold-start' && (item.scene || item.tips) && (
-                    <div className="smart-suggestion-panel__item-meta">
-                      {item.scene && (
-                        <span className="smart-suggestion-panel__item-scene">
-                          {item.scene}
-                        </span>
-                      )}
-                      {item.tips && (
-                        <span className="smart-suggestion-panel__item-tips">
-                          {item.tips}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
+          {/* 历史记录区域 */}
+          {hasColdStartHistory && (
+            <div className="smart-suggestion-panel__section">
+              <div className="smart-suggestion-panel__section-header">
+                <History size={14} />
+                <span>{language === 'zh' ? '历史记录' : 'History'}</span>
               </div>
-            ))}
-          </div>
+              <div className="smart-suggestion-panel__list">
+                {coldStartHistoryPrompts.map((item, index) => (
+                  <div
+                    key={item.id}
+                    className={`smart-suggestion-panel__item smart-suggestion-panel__item--history ${
+                      index === highlightedIndex
+                        ? 'smart-suggestion-panel__item--highlighted'
+                        : ''
+                    }`}
+                    onClick={() => handleSelect(item)}
+                    onMouseEnter={() => setHighlightedIndex(index)}
+                    title={item.label}
+                  >
+                    <span className="smart-suggestion-panel__item-text">
+                      {item.shortLabel || item.label}
+                    </span>
+                    {onDeleteHistory && (
+                      <button
+                        className="smart-suggestion-panel__item-delete"
+                        onClick={(e) => handleDeleteHistory(e, item.id)}
+                        title={language === 'zh' ? '删除' : 'Delete'}
+                      >
+                        <X size={12} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 预设创意提示词区域 */}
+          {coldStartSuggestions.length > 0 && (
+            <div className="smart-suggestion-panel__section">
+              <div className="smart-suggestion-panel__section-header">
+                {getModeIcon(mode)}
+                <span>{getModeTitle(mode, language)}</span>
+                <span className="smart-suggestion-panel__hint">
+                  {getKeyboardHint(language)}
+                </span>
+              </div>
+              <div className="smart-suggestion-panel__list smart-suggestion-panel__list--cold-start">
+                {coldStartSuggestions.map((item, index) => {
+                  const globalIndex = coldStartHistoryPrompts.length + index;
+                  return (
+                    <div
+                      key={item.id}
+                      className={`smart-suggestion-panel__item smart-suggestion-panel__item--cold-start ${
+                        globalIndex === highlightedIndex
+                          ? 'smart-suggestion-panel__item--highlighted'
+                          : ''
+                      }`}
+                      onClick={() => handleSelect(item)}
+                      onMouseEnter={() => setHighlightedIndex(globalIndex)}
+                    >
+                      <div className="smart-suggestion-panel__item-content">
+                        <span className="smart-suggestion-panel__item-text">
+                          {item.shortLabel || item.label}
+                        </span>
+                        {item.type === 'cold-start' && (item.scene || item.tips) && (
+                          <div className="smart-suggestion-panel__item-meta">
+                            {item.scene && (
+                              <span className="smart-suggestion-panel__item-scene">
+                                {item.scene}
+                              </span>
+                            )}
+                            {item.tips && (
+                              <span className="smart-suggestion-panel__item-tips">
+                                {item.tips}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -428,12 +513,13 @@ export const SmartSuggestionPanel: React.FC<SmartSuggestionPanelProps> = ({
                   <div
                     key={item.id}
                     className={`smart-suggestion-panel__item smart-suggestion-panel__item--history ${
-                      getGlobalIndex('history', index) === highlightedIndex 
-                        ? 'smart-suggestion-panel__item--highlighted' 
+                      getGlobalIndex('history', index) === highlightedIndex
+                        ? 'smart-suggestion-panel__item--highlighted'
                         : ''
                     }`}
                     onClick={() => handleSelect(item)}
                     onMouseEnter={() => setHighlightedIndex(getGlobalIndex('history', index))}
+                    title={item.label}
                   >
                     <span className="smart-suggestion-panel__item-text">
                       {item.shortLabel || item.label}
@@ -493,94 +579,142 @@ export const SmartSuggestionPanel: React.FC<SmartSuggestionPanelProps> = ({
   }
 
   // 渲染其他模式（模型、参数、个数）
+  // model 模式下可能同时有历史记录
+  const hasModelModeHistory = mode === 'model' && modelModeHistoryPrompts.length > 0;
+
   return (
-    <div 
+    <div
       ref={panelRef}
-      className={`smart-suggestion-panel smart-suggestion-panel--${mode}${pendingParam ? ' smart-suggestion-panel--enum-values' : ''}`}
+      className={`smart-suggestion-panel smart-suggestion-panel--${mode}${pendingParam ? ' smart-suggestion-panel--enum-values' : ''}${hasModelModeHistory ? ' smart-suggestion-panel--with-history' : ''}`}
       role="listbox"
       aria-label={getModeTitle(mode, language, pendingParam)}
       onMouseDown={(e) => e.preventDefault()}
     >
-      <div className="smart-suggestion-panel__header">
-        {getModeIcon(mode)}
-        <span>{getModeTitle(mode, language, pendingParam)}</span>
-        <span className="smart-suggestion-panel__hint">
-          {getKeyboardHint(language)}
-        </span>
-      </div>
-      
-      <div className="smart-suggestion-panel__list">
-        {nonPromptSuggestions.map((item, index) => {
-          const isHighlighted = highlightedIndex === index;
-          // 使用 index 作为 key 以避免重复 id 问题（如多个 duration 参数）
-          const uniqueKey = `${item.type}-${item.id}-${index}`;
+      <div className="smart-suggestion-panel__content">
+        {/* model 模式下的历史记录区域（放在模型列表上方） */}
+        {hasModelModeHistory && (
+          <div className="smart-suggestion-panel__section">
+            <div className="smart-suggestion-panel__section-header">
+              <History size={14} />
+              <span>{language === 'zh' ? '历史记录' : 'History'}</span>
+            </div>
+            <div className="smart-suggestion-panel__list">
+              {modelModeHistoryPrompts.map((item, index) => {
+                const isHighlighted = highlightedIndex === index;
+                return (
+                  <div
+                    key={item.id}
+                    className={`smart-suggestion-panel__item smart-suggestion-panel__item--history ${
+                      isHighlighted ? 'smart-suggestion-panel__item--highlighted' : ''
+                    }`}
+                    onClick={() => handleSelect(item)}
+                    onMouseEnter={() => setHighlightedIndex(index)}
+                    title={item.label}
+                  >
+                    <span className="smart-suggestion-panel__item-text">
+                      {item.shortLabel || item.label}
+                    </span>
+                    {onDeleteHistory && (
+                      <button
+                        className="smart-suggestion-panel__item-delete"
+                        onClick={(e) => handleDeleteHistory(e, item.id)}
+                        title={language === 'zh' ? '删除' : 'Delete'}
+                      >
+                        <X size={12} />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
-          return (
-            <div
-              key={uniqueKey}
-              className={`smart-suggestion-panel__item smart-suggestion-panel__item--${item.type} ${
-                isHighlighted ? 'smart-suggestion-panel__item--highlighted' : ''
-              }`}
-              onClick={() => handleSelect(item)}
-              onMouseEnter={() => setHighlightedIndex(index)}
-              role="option"
-              aria-selected={isHighlighted}
-            >
-              <div className="smart-suggestion-panel__item-content">
-                <div className="smart-suggestion-panel__item-name">
-                  {/* 模型模式显示 #modelId */}
-                  {item.type === 'model' && (
-                    <>
-                      <span className={`smart-suggestion-panel__item-id smart-suggestion-panel__item-id--${item.modelType}`}>
-                        #{item.id}
-                      </span>
-                      <span className="smart-suggestion-panel__item-label">
-                        {item.shortLabel || item.label}
-                      </span>
-                      <span className={`smart-suggestion-panel__item-type smart-suggestion-panel__item-type--${item.modelType}`}>
-                        {item.modelType === 'image' ? <Image size={12} /> : <Video size={12} />}
-                        {item.modelType === 'image' 
-                          ? (language === 'zh' ? '图片' : 'Image')
-                          : (language === 'zh' ? '视频' : 'Video')
-                        }
-                      </span>
-                    </>
-                  )}
-                  
-                  {/* 参数模式显示 -paramId */}
-                  {item.type === 'param' && (
-                    <>
-                      <span className="smart-suggestion-panel__item-id smart-suggestion-panel__item-id--param">
-                        -{item.value ? `${item.paramConfig.id}:${item.value}` : item.id}
-                      </span>
-                      <span className="smart-suggestion-panel__item-label">
-                        {item.label}
-                      </span>
-                    </>
-                  )}
-                  
-                  {/* 个数模式显示简洁列表 */}
-                  {item.type === 'count' && (
-                    <>
-                      <span className="smart-suggestion-panel__item-label">
-                        {item.label}
-                      </span>
-                    </>
+        {/* 模型/参数/个数列表区域 */}
+        <div className="smart-suggestion-panel__section">
+          <div className="smart-suggestion-panel__section-header">
+            {getModeIcon(mode)}
+            <span>{getModeTitle(mode, language, pendingParam)}</span>
+            <span className="smart-suggestion-panel__hint">
+              {getKeyboardHint(language)}
+            </span>
+          </div>
+          <div className="smart-suggestion-panel__list">
+            {nonPromptSuggestions.map((item, index) => {
+              // 历史记录在上方，所以模型的 globalIndex 需要加上历史记录的数量
+              const globalIndex = hasModelModeHistory ? modelModeHistoryPrompts.length + index : index;
+              const isHighlighted = highlightedIndex === globalIndex;
+              // 使用 index 作为 key 以避免重复 id 问题（如多个 duration 参数）
+              const uniqueKey = `${item.type}-${item.id}-${index}`;
+
+              return (
+                <div
+                  key={uniqueKey}
+                  className={`smart-suggestion-panel__item smart-suggestion-panel__item--${item.type} ${
+                    isHighlighted ? 'smart-suggestion-panel__item--highlighted' : ''
+                  }`}
+                  onClick={() => handleSelect(item)}
+                  onMouseEnter={() => setHighlightedIndex(globalIndex)}
+                  role="option"
+                  aria-selected={isHighlighted}
+                >
+                  <div className="smart-suggestion-panel__item-content">
+                    <div className="smart-suggestion-panel__item-name">
+                      {/* 模型模式显示 #modelId */}
+                      {item.type === 'model' && (
+                        <>
+                          <span className={`smart-suggestion-panel__item-id smart-suggestion-panel__item-id--${item.modelType}`}>
+                            #{item.id}
+                          </span>
+                          <span className="smart-suggestion-panel__item-label">
+                            {item.shortLabel || item.label}
+                          </span>
+                          <span className={`smart-suggestion-panel__item-type smart-suggestion-panel__item-type--${item.modelType}`}>
+                            {item.modelType === 'image' ? <Image size={12} /> : <Video size={12} />}
+                            {item.modelType === 'image'
+                              ? (language === 'zh' ? '图片' : 'Image')
+                              : (language === 'zh' ? '视频' : 'Video')
+                            }
+                          </span>
+                        </>
+                      )}
+
+                      {/* 参数模式显示 -paramId */}
+                      {item.type === 'param' && (
+                        <>
+                          <span className="smart-suggestion-panel__item-id smart-suggestion-panel__item-id--param">
+                            -{item.value ? `${item.paramConfig.id}:${item.value}` : item.id}
+                          </span>
+                          <span className="smart-suggestion-panel__item-label">
+                            {item.label}
+                          </span>
+                        </>
+                      )}
+
+                      {/* 个数模式显示简洁列表 */}
+                      {item.type === 'count' && (
+                        <>
+                          <span className="smart-suggestion-panel__item-label">
+                            {item.label}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                    {item.description && (
+                      <div className="smart-suggestion-panel__item-desc">
+                        {item.description}
+                      </div>
+                    )}
+                  </div>
+                  {/* 数量模式高亮时显示勾选图标 */}
+                  {item.type === 'count' && isHighlighted && (
+                    <Check size={16} className="smart-suggestion-panel__item-check" />
                   )}
                 </div>
-                {item.description && (
-                  <div className="smart-suggestion-panel__item-desc">
-                    {item.description}
-                  </div>
-                )}
-              </div>
-              {/* 数量模式高亮时显示勾选图标 */}
-              {item.type === 'count' && isHighlighted && (
-                <Check size={16} className="smart-suggestion-panel__item-check" />
-              )}
-            </div>
-          );
-        })}
+              );
+            })}
+          </div>
+        </div>
       </div>
     </div>
   );

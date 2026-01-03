@@ -59,6 +59,8 @@ export interface PromptItem {
   tips?: string;
   source: 'preset' | 'history';
   timestamp?: number;
+  /** 是否在有选中元素时输入的（仅历史记录有此字段） */
+  hasSelection?: boolean;
 }
 
 /**
@@ -195,8 +197,10 @@ export interface SmartSuggestionPanelProps {
   selectedParams: SelectedParam[];
   /** 已选择的生成个数 */
   selectedCount?: number;
-  /** 提示词列表（用于 prompt 模式） */
+  /** 提示词列表（用于 prompt/cold-start 模式） */
   prompts?: PromptItem[];
+  /** 有选中元素时的历史记录列表（用于 model 模式） */
+  selectionHistoryPrompts?: PromptItem[];
   /** 选择模型回调 */
   onSelectModel: (modelId: string) => void;
   /** 选择参数回调 */
