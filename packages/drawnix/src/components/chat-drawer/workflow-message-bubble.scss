@@ -162,14 +162,43 @@
       color: var(--td-success-color-7);
     }
 
+    &--info {
+      background: var(--td-bg-color-component);
+      color: var(--td-text-color-secondary);
+    }
+
     &--error {
       background: var(--td-error-color-1);
       color: var(--td-error-color-7);
+    }
+
+    &--markdown {
+      align-items: flex-start;
+      font-weight: 400;
     }
   }
 
   &__summary-icon {
     font-size: 14px;
+  }
+
+  &__summary-markdown {
+    flex: 1;
+    min-width: 0;
+
+    .chat-message {
+      background: transparent;
+      border: 0;
+      padding: 0;
+      margin: 0;
+    }
+
+    .chat-message-content {
+      background: transparent;
+      border: 0;
+      padding: 0;
+      margin: 0;
+    }
   }
 
   // 重试按钮

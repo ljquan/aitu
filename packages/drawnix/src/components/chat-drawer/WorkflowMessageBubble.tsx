@@ -5,7 +5,10 @@
  */
 
 import React, { useState, useMemo } from 'react';
+import { ChatMessage } from '@llamaindex/chat-ui';
+import type { Message } from '@llamaindex/chat-ui';
 import type { WorkflowMessageData, AgentLogEntry } from '../../types/chat.types';
+import { MermaidRenderer } from './MermaidRenderer';
 import './workflow-message-bubble.scss';
 
 // ============ 状态图标映射 ============
@@ -46,8 +49,9 @@ const StepItem: React.FC<StepItemProps> = ({
   const statusIcon = STATUS_ICONS[step.status];
   const statusLabel = STATUS_LABELS[step.status];
   // 步骤有详情的条件：有参数、有结果、有错误、有耗时
-  const hasArgs = step.args && Object.keys(step.args).length > 0;
-  const hasDetails = hasArgs || step.result || step.error || step.duration !== undefined;
+  const hasArgs: boolean = Object.keys(step.args).length > 0;
+  const hasResult = step.result !== undefined && step.result !== null;
+  const hasDetails = hasArgs || hasResult || Boolean(step.error) || step.duration !== undefined;
 
   // 格式化显示参数，排除 context 等大对象
   const formatArgs = (args: Record<string, unknown> | undefined) => {
@@ -65,6 +69,11 @@ const StepItem: React.FC<StepItemProps> = ({
     }
     return filteredArgs;
   };
+
+  const argsText = useMemo(() => {
+    if (!hasArgs) return '';
+    return JSON.stringify(formatArgs(step.args), null, 2) || '';
+  }, [hasArgs, step.args]);
 
   return (
     <div
@@ -103,14 +112,14 @@ const StepItem: React.FC<StepItemProps> = ({
           </div>
 
           {/* 输入参数 */}
-          {hasArgs && (
+          {hasArgs ? (
             <div className="workflow-bubble-step__detail-row workflow-bubble-step__detail-row--block">
               <span className="workflow-bubble-step__label">输入参数:</span>
               <pre className="workflow-bubble-step__args">
-                {JSON.stringify(formatArgs(step.args), null, 2)}
+                {argsText}
               </pre>
             </div>
-          )}
+          ) : null}
 
           {/* 执行时间 */}
           {step.duration !== undefined && (
@@ -121,7 +130,7 @@ const StepItem: React.FC<StepItemProps> = ({
           )}
 
           {/* 执行结果 */}
-          {step.result && (
+          {hasResult ? (
             <div className="workflow-bubble-step__detail-row workflow-bubble-step__detail-row--block">
               <span className="workflow-bubble-step__label">执行结果:</span>
               <div className="workflow-bubble-step__result">
@@ -130,7 +139,7 @@ const StepItem: React.FC<StepItemProps> = ({
                   : String(JSON.stringify(step.result, null, 2))}
               </div>
             </div>
-          )}
+          ) : null}
 
           {/* 错误信息 */}
           {step.error && (
@@ -211,6 +220,7 @@ const AgentLogItem: React.FC<AgentLogItemProps> = ({ log }) => {
   if (log.type === 'tool_result') {
     const statusClass = log.success ? 'success' : 'error';
     const statusIcon = log.success ? '✅' : '❌';
+    const hasData = log.data !== undefined && log.data !== null;
 
     return (
       <div className={`agent-log agent-log--tool-result agent-log--${statusClass}`}>
@@ -231,7 +241,7 @@ const AgentLogItem: React.FC<AgentLogItemProps> = ({ log }) => {
             {log.error && (
               <div className="agent-log__error">{log.error}</div>
             )}
-            {log.data && (
+            {hasData && (
               <pre className="agent-log__data">
                 {typeof log.data === 'string'
                   ? log.data
@@ -314,6 +324,88 @@ export const WorkflowMessageBubble: React.FC<WorkflowMessageBubbleProps> = ({
   const isFailed = workflowStatus.status === 'failed';
   const isRunning = workflowStatus.status === 'running';
 
+  const completedSteps = useMemo(() => {
+    return workflow.steps.filter((s) => s.status === 'completed');
+  }, [workflow.steps]);
+
+  const summaryCounts = useMemo(() => {
+    const isImageStep = (mcp: string) =>
+      mcp === 'generate_image' ||
+      mcp === 'generate_grid_image' ||
+      mcp === 'generate_inspiration_board' ||
+      mcp === 'split_image';
+
+    const images = completedSteps.filter((s) => isImageStep(s.mcp)).length;
+    const videos = completedSteps.filter((s) => s.mcp === 'generate_video').length;
+    const flowcharts = completedSteps.filter((s) => s.mcp === 'insert_mermaid').length;
+    const mindmaps = completedSteps.filter((s) => s.mcp === 'insert_mindmap').length;
+
+    return { images, videos, flowcharts, mindmaps };
+  }, [completedSteps]);
+
+  const markdownResult = useMemo(() => {
+    if (!isCompleted) return '';
+
+    for (let i = workflow.steps.length - 1; i >= 0; i -= 1) {
+      const result = workflow.steps[i]?.result;
+      if (!result) continue;
+
+      if (typeof result === 'string') {
+        const text = result.trim();
+        if (text) return text;
+        continue;
+      }
+
+      if (typeof result === 'object' && result !== null) {
+        const response = (result as { response?: unknown }).response;
+        if (typeof response === 'string') {
+          const text = response.trim();
+          if (text) return text;
+        }
+      }
+    }
+
+    return '';
+  }, [isCompleted, workflow.steps]);
+
+  const summaryView = useMemo(() => {
+    if (!isCompleted) return null;
+
+    const displayImages = workflow.generationType === 'image'
+      ? Math.max(summaryCounts.images, workflow.count || 0)
+      : summaryCounts.images;
+    const displayVideos = workflow.generationType === 'video'
+      ? Math.max(summaryCounts.videos, workflow.count || 0)
+      : summaryCounts.videos;
+
+    const parts: string[] = [];
+    if (displayImages > 0) parts.push(`${displayImages} 张图片`);
+    if (displayVideos > 0) parts.push(`${displayVideos} 个视频`);
+    if (summaryCounts.flowcharts > 0) parts.push(`${summaryCounts.flowcharts} 个流程图`);
+    if (summaryCounts.mindmaps > 0) parts.push(`${summaryCounts.mindmaps} 个思维导图`);
+
+    const hasGenerated = parts.length > 0;
+
+    if (!hasGenerated && markdownResult) {
+      return { variant: 'markdown' as const, icon: '📝', markdown: markdownResult };
+    }
+
+    if (!hasGenerated) {
+      return { variant: 'info' as const, icon: 'ℹ️', text: '未生成任何内容' };
+    }
+
+    return { variant: 'success' as const, icon: '✨', text: `成功生成 ${parts.join('，')}` };
+  }, [isCompleted, markdownResult, summaryCounts, workflow.count, workflow.generationType]);
+
+  const markdownMessage: Message | null = useMemo(() => {
+    if (!summaryView || summaryView.variant !== 'markdown') return null;
+    return {
+      id: `workflow_${workflow.id}_result`,
+      role: 'assistant',
+      parts: [{ type: 'text', text: summaryView.markdown }],
+    };
+  }, [summaryView, workflow.id]);
+
   // 获取当前执行步骤的索引
   const currentStepIndex = useMemo(() => {
     return workflow.steps.findIndex(s => s.status === 'running');
@@ -337,7 +429,7 @@ export const WorkflowMessageBubble: React.FC<WorkflowMessageBubbleProps> = ({
   return (
     <div className={`workflow-bubble chat-message chat-message--assistant ${className}`}>
       <div className="chat-message-avatar">
-        <span>{workflow.generationType === 'image' ? '🖼️' : '🎬'}</span>
+        <span>{workflow.generationType === 'image' ? '🖼️' : workflow.generationType === 'video' ? '🎬' : '📝'}</span>
       </div>
       <div className="workflow-bubble__content chat-message-content">
         {/* 头部 */}
@@ -398,14 +490,26 @@ export const WorkflowMessageBubble: React.FC<WorkflowMessageBubbleProps> = ({
         )}
 
         {/* 完成摘要 */}
-        {isCompleted && (
-          <div className="workflow-bubble__summary workflow-bubble__summary--success">
-            <span className="workflow-bubble__summary-icon">✨</span>
-            <span>
-              {workflow.generationType === 'image' 
-                ? `成功生成 ${workflow.count} 张图片`
-                : `成功生成 ${workflow.count} 个视频`}
-            </span>
+        {summaryView && summaryView.variant !== 'markdown' && (
+          <div className={`workflow-bubble__summary workflow-bubble__summary--${summaryView.variant}`}>
+            <span className="workflow-bubble__summary-icon">{summaryView.icon}</span>
+            <span>{summaryView.text}</span>
+          </div>
+        )}
+
+        {summaryView && summaryView.variant === 'markdown' && markdownMessage && (
+          <div className="workflow-bubble__summary workflow-bubble__summary--success workflow-bubble__summary--markdown">
+            <span className="workflow-bubble__summary-icon">{summaryView.icon}</span>
+            <div className="workflow-bubble__summary-markdown">
+              <ChatMessage message={markdownMessage} isLast={false} className="workflow-bubble__markdown-message">
+                <ChatMessage.Content className="workflow-bubble__markdown-content">
+                  <ChatMessage.Content.Markdown
+                    className="chat-markdown"
+                    languageRenderers={{ mermaid: MermaidRenderer }}
+                  />
+                </ChatMessage.Content>
+              </ChatMessage>
+            </div>
           </div>
         )}
 

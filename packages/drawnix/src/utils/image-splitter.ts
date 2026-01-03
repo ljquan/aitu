@@ -38,6 +38,8 @@ export interface GridDetectionResult {
   rowLines: number[];
   /** 列分割线位置（X 坐标） */
   colLines: number[];
+  /** 白边偏移量，用于精确分割 */
+  borderOffset?: { left: number; top: number; right: number; bottom: number };
 }
 
 /**
@@ -134,6 +136,146 @@ function mergeSplitLines(lines: number[], minGap: number = 10): number[] {
 }
 
 /**
+ * 根据图片比例筛选可能的宫格配置
+ * 假设子图是正方形，根据图片宽高比计算合理的 rows/cols 组合
+ *
+ * @param width - 图片宽度
+ * @param height - 图片高度
+ * @returns 按可能性排序的宫格配置列表
+ */
+function getPossibleGridConfigs(width: number, height: number): Array<{ rows: number; cols: number; score: number }> {
+  // 所有候选配置
+  const allConfigs = [
+    { rows: 4, cols: 4 },
+    { rows: 4, cols: 3 },
+    { rows: 4, cols: 2 },
+    { rows: 2, cols: 2 },
+    { rows: 2, cols: 3 },
+    { rows: 2, cols: 4 },
+    { rows: 3, cols: 2 },
+    { rows: 3, cols: 3 },
+    { rows: 3, cols: 4 },
+    { rows: 5, cols: 5 },
+  ];
+
+  // 计算每个配置的得分（子图越接近正方形得分越高）
+  const scoredConfigs = allConfigs.map(config => {
+    // 子图的宽高比
+    const cellWidth = width / config.cols;
+    const cellHeight = height / config.rows;
+    const cellAspectRatio = cellWidth / cellHeight;
+
+    // 计算与正方形的偏离程度（1.0 表示完美正方形）
+    // 偏离越小得分越高
+    const deviation = Math.abs(cellAspectRatio - 1.0);
+    const score = 1 / (1 + deviation * 10); // 转换为 0-1 的得分
+
+    return { ...config, score, cellAspectRatio };
+  });
+
+  // 按得分降序排序，只保留子图接近正方形的配置（偏离不超过 20%）
+  const validConfigs = scoredConfigs
+    .filter(c => c.cellAspectRatio >= 0.8 && c.cellAspectRatio <= 1.25);
+
+  return validConfigs;
+}
+
+/**
+ * 直接使用图片数据检测标准宫格
+ * 尝试常见的宫格配置（2x2, 3x3, 4x4, 2x3, 3x2 等），验证等间距分割线是否存在
+ *
+ * @param imageData - 图片像素数据
+ * @param width - 图片宽度
+ * @param height - 图片高度
+ * @returns 检测到的宫格配置，如果不是标准宫格返回 null
+ */
+function detectStandardGridFromImage(
+  imageData: ImageData,
+  width: number,
+  height: number
+): { rows: number; cols: number } | null {
+
+  // 根据图片比例获取可能的宫格配置（子图接近正方形的优先）
+  const gridConfigs = getPossibleGridConfigs(width, height);
+
+  if (gridConfigs.length === 0) {
+    return null;
+  }
+
+  for (const config of gridConfigs) {
+    const result = verifyGridConfig(imageData, width, height, config.rows, config.cols);
+    if (result) {
+      return { rows: config.rows, cols: config.cols };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * 验证指定的宫格配置是否有效
+ * 检查等间距位置是否存在白色分割线
+ */
+function verifyGridConfig(
+  imageData: ImageData,
+  width: number,
+  height: number,
+  rows: number,
+  cols: number
+): boolean {
+  const cellWidth = width / cols;
+  const cellHeight = height / rows;
+
+  // 分割线检测的容差范围（像素）
+  const tolerance = 10;
+  // 分割线需要的最小白色像素比例（降低阈值以适应实际情况）
+  const minWhiteRatio = 0.70;
+
+
+  // 验证垂直分割线（列之间）
+  for (let col = 1; col < cols; col++) {
+    const expectedX = Math.round(col * cellWidth);
+    let found = false;
+    let maxRatio = 0;
+
+    // 在容差范围内搜索分割线
+    for (let x = expectedX - tolerance; x <= expectedX + tolerance; x++) {
+      if (x < 0 || x >= width) continue;
+      const ratio = getColWhiteRatio(imageData, x);
+      maxRatio = Math.max(maxRatio, ratio);
+      if (ratio >= minWhiteRatio) {
+        found = true;
+        break;
+      }
+    }
+
+    if (!found) return false;
+  }
+
+  // 验证水平分割线（行之间）
+  for (let row = 1; row < rows; row++) {
+    const expectedY = Math.round(row * cellHeight);
+    let found = false;
+    let maxRatio = 0;
+
+    // 在容差范围内搜索分割线
+    for (let y = expectedY - tolerance; y <= expectedY + tolerance; y++) {
+      if (y < 0 || y >= height) continue;
+      const ratio = getRowWhiteRatio(imageData, y);
+      maxRatio = Math.max(maxRatio, ratio);
+      if (ratio >= minWhiteRatio) {
+        found = true;
+        break;
+      }
+    }
+
+    if (!found) return false;
+  }
+
+  return true;
+}
+
+/**
  * 验证分割线是否有足够的宽度（连续多行/列都是白色）
  * @param lines - 检测到的分割线位置
  * @param minWidth - 最小宽度（默认 3 像素）
@@ -168,6 +310,7 @@ function validateSplitLineWidth(lines: number[], minWidth: number = 3): number[]
 
 /**
  * 内部检测函数，返回图片数据和检测结果
+ * 注意：调用此函数前应该已经完成去白边处理
  */
 async function detectGridLinesInternal(imageUrl: string): Promise<{
   detection: GridDetectionResult;
@@ -178,6 +321,7 @@ async function detectGridLinesInternal(imageUrl: string): Promise<{
   const img = await loadImage(imageUrl);
   const { naturalWidth: width, naturalHeight: height } = img;
 
+  // 创建 Canvas
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
@@ -213,6 +357,39 @@ async function detectGridLinesInternal(imageUrl: string): Promise<{
   const mergedHorizontal = mergeSplitLines(validatedHorizontal, Math.floor(height * 0.02));
   const mergedVertical = mergeSplitLines(validatedVertical, Math.floor(width * 0.02));
 
+  // 优先使用图片像素数据检测标准宫格
+  // 直接验证预期位置是否存在白色分割线，避免"切人头"问题
+  const standardGrid = detectStandardGridFromImage(imageData, width, height);
+
+  if (standardGrid) {
+
+    // 计算标准化的分割线位置
+    const cellWidth = width / standardGrid.cols;
+    const cellHeight = height / standardGrid.rows;
+    const standardRowLines: number[] = [];
+    const standardColLines: number[] = [];
+
+    for (let i = 1; i < standardGrid.rows; i++) {
+      standardRowLines.push(Math.round(i * cellHeight));
+    }
+    for (let i = 1; i < standardGrid.cols; i++) {
+      standardColLines.push(Math.round(i * cellWidth));
+    }
+
+    return {
+      detection: {
+        rows: standardGrid.rows,
+        cols: standardGrid.cols,
+        rowLines: standardRowLines,
+        colLines: standardColLines,
+      },
+      img,
+      imageData,
+      canvas,
+    };
+  }
+
+  // 不符合宫格规律，使用原始检测结果
   return {
     detection: {
       rows: mergedHorizontal.length + 1,
@@ -245,14 +422,17 @@ export async function detectGridLines(imageUrl: string): Promise<GridDetectionRe
  */
 export async function hasSplitLines(imageUrl: string): Promise<boolean> {
   try {
-    // 1. 先检测网格分割线
-    const { detection } = await detectGridLinesInternal(imageUrl);
+    // 0. 先去除白边
+    const { trimmedImageUrl } = await trimImageWhiteBorders(imageUrl);
+
+    // 1. 检测网格分割线（使用去白边后的图片）
+    const { detection } = await detectGridLinesInternal(trimmedImageUrl);
     if (detection.rows > 1 || detection.cols > 1) {
       return true;
     }
 
     // 2. 检测灵感图格式（灰色背景 + 白边框）
-    const isPhotoWall = await detectPhotoWallFormat(imageUrl);
+    const isPhotoWall = await detectPhotoWallFormat(trimmedImageUrl);
     return isPhotoWall;
   } catch (error) {
     console.warn('[ImageSplitter] Failed to detect split lines:', error);
@@ -282,6 +462,95 @@ async function detectPhotoWallFormat(imageUrl: string): Promise<boolean> {
 }
 
 /**
+ * 检测是否为标准宫格布局（等间距分割）
+ * 用于决定分割时使用精确模式还是普通模式
+ */
+function isUniformGridLayout(detection: GridDetectionResult, width: number, height: number): boolean {
+  const { rowLines, colLines } = detection;
+
+  // 必须同时有行和列的分割线才算标准宫格
+  if (rowLines.length === 0 || colLines.length === 0) {
+    return false;
+  }
+
+  // 检查行分割线是否等间距
+  const expectedRowGap = height / (rowLines.length + 1);
+  for (let i = 0; i < rowLines.length; i++) {
+    const expectedPos = expectedRowGap * (i + 1);
+    if (Math.abs(rowLines[i] - expectedPos) > expectedRowGap * 0.15) {
+      return false;
+    }
+  }
+
+  // 检查列分割线是否等间距
+  const expectedColGap = width / (colLines.length + 1);
+  for (let i = 0; i < colLines.length; i++) {
+    const expectedPos = expectedColGap * (i + 1);
+    if (Math.abs(colLines[i] - expectedPos) > expectedColGap * 0.15) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+/**
+ * 使用精确等分方式分割标准宫格图（类似 gridSplitter.split）
+ * 不做边框检测和裁剪，直接数学等分
+ * 注意：调用此函数前应该已经完成去白边处理
+ *
+ * @param img - 已去除白边的图片
+ * @param rows - 行数
+ * @param cols - 列数
+ */
+async function splitUniformGrid(
+  img: HTMLImageElement,
+  rows: number,
+  cols: number
+): Promise<SplitImageElement[]> {
+  const width = img.naturalWidth;
+  const height = img.naturalHeight;
+
+  // 精确计算每个格子的尺寸
+  const cellWidth = Math.floor(width / cols);
+  const cellHeight = Math.floor(height / rows);
+
+  const elements: SplitImageElement[] = [];
+
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      const index = row * cols + col;
+
+      // 精确计算裁剪区域
+      const sx = col * cellWidth;
+      const sy = row * cellHeight;
+
+      // 创建 Canvas
+      const canvas = document.createElement('canvas');
+      canvas.width = cellWidth;
+      canvas.height = cellHeight;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) continue;
+
+      // 直接裁剪，不做任何边框处理
+      ctx.drawImage(img, sx, sy, cellWidth, cellHeight, 0, 0, cellWidth, cellHeight);
+
+      elements.push({
+        imageData: canvas.toDataURL('image/jpeg', 0.92),
+        index,
+        width: cellWidth,
+        height: cellHeight,
+        sourceX: sx,
+        sourceY: sy,
+      });
+    }
+  }
+
+  return elements;
+}
+
+/**
  * 根据检测到的分割线分割图片
  */
 export async function splitImageByLines(
@@ -291,7 +560,16 @@ export async function splitImageByLines(
   const img = await loadImage(imageUrl);
   const { naturalWidth: width, naturalHeight: height } = img;
 
-  // 构建分割边界
+  // 检测是否为标准宫格布局
+  const isUniformGrid = isUniformGridLayout(detection, width, height);
+
+  // 对于标准宫格，使用精确等分方式（类似 gridSplitter.split）
+  // 注意：调用前已完成去白边处理
+  if (isUniformGrid) {
+    return splitUniformGrid(img, detection.rows, detection.cols);
+  }
+
+  // 非标准布局：使用检测到的分割线位置进行分割
   const rowBounds = [0, ...detection.rowLines, height];
   const colBounds = [0, ...detection.colLines, width];
 
@@ -313,8 +591,9 @@ export async function splitImageByLines(
       const y1 = rowBounds[row];
       const y2 = rowBounds[row + 1];
 
-      // 初步裁剪：在分割线位置两侧各裁剪一些像素
+      // 非标准布局使用较大的 padding 以确保裁剪干净
       const splitLinePadding = 8;
+
       let sx = x1 + (col > 0 ? splitLinePadding : 0);
       let sy = y1 + (row > 0 ? splitLinePadding : 0);
       let sw = x2 - x1 - (col > 0 ? splitLinePadding : 0) - (col < colBounds.length - 2 ? splitLinePadding : 0);
@@ -326,7 +605,7 @@ export async function splitImageByLines(
       const regionData = fullCtx.getImageData(sx, sy, sw, sh);
 
       // 检测并裁剪边框（白边和灰边）
-      const borders = trimBorders(regionData);
+      const borders = trimBorders(regionData, 0.5, 0.15);
 
       // 计算最终裁剪区域
       const finalSx = sx + borders.left;
@@ -362,6 +641,204 @@ export async function splitImageByLines(
 }
 
 /**
+ * 检测像素是否为白色/浅色（只检测白色，不检测黑色）
+ * 专门用于宫格图去白边，避免误裁黑色内容
+ */
+function isWhitePixel(r: number, g: number, b: number, threshold: number = 235): boolean {
+  return r >= threshold && g >= threshold && b >= threshold;
+}
+
+/**
+ * 只裁剪白色边框（不裁剪黑色）
+ * 专门用于宫格图拆分前的预处理
+ *
+ * 算法：从边缘向内扫描，检测中间区域（避开圆角）是否为白色
+ */
+function trimWhiteBordersOnly(
+  imageData: ImageData,
+  borderRatio: number = 0.7,
+  maxTrimRatio: number = 0.15
+): { top: number; right: number; bottom: number; left: number } {
+  const { width, height, data } = imageData;
+
+  // 计算每个方向的最大裁剪像素数
+  const maxTrimTop = Math.floor(height * maxTrimRatio);
+  const maxTrimBottom = Math.floor(height * maxTrimRatio);
+  const maxTrimLeft = Math.floor(width * maxTrimRatio);
+  const maxTrimRight = Math.floor(width * maxTrimRatio);
+
+  // 圆角区域大小（检测时跳过边缘的圆角部分）
+  const cornerSize = Math.min(width, height) * 0.15;
+
+  // 检测一行是否为白色边框行（只检测中间部分，避开圆角）
+  const isRowWhite = (y: number): boolean => {
+    let whiteCount = 0;
+    const startX = Math.floor(cornerSize);
+    const endX = width - Math.floor(cornerSize);
+    const checkWidth = endX - startX;
+    if (checkWidth <= 0) return false;
+
+    for (let x = startX; x < endX; x++) {
+      const idx = (y * width + x) * 4;
+      if (isWhitePixel(data[idx], data[idx + 1], data[idx + 2])) {
+        whiteCount++;
+      }
+    }
+    return whiteCount / checkWidth > borderRatio;
+  };
+
+  // 检测一列是否为白色边框列（只检测中间部分，避开圆角）
+  const isColWhite = (x: number): boolean => {
+    let whiteCount = 0;
+    const startY = Math.floor(cornerSize);
+    const endY = height - Math.floor(cornerSize);
+    const checkHeight = endY - startY;
+    if (checkHeight <= 0) return false;
+
+    for (let y = startY; y < endY; y++) {
+      const idx = (y * width + x) * 4;
+      if (isWhitePixel(data[idx], data[idx + 1], data[idx + 2])) {
+        whiteCount++;
+      }
+    }
+    return whiteCount / checkHeight > borderRatio;
+  };
+
+  // 从顶部向下扫描
+  let top = 0;
+  while (top < maxTrimTop && top < height - 1 && isRowWhite(top)) {
+    top++;
+  }
+
+  // 从底部向上扫描
+  let bottom = height - 1;
+  while (height - 1 - bottom < maxTrimBottom && bottom > top && isRowWhite(bottom)) {
+    bottom--;
+  }
+
+  // 从左边向右扫描
+  let left = 0;
+  while (left < maxTrimLeft && left < width - 1 && isColWhite(left)) {
+    left++;
+  }
+
+  // 从右边向左扫描
+  let right = width - 1;
+  while (width - 1 - right < maxTrimRight && right > left && isColWhite(right)) {
+    right--;
+  }
+
+  return { top, right, bottom, left };
+}
+
+/**
+ * 去除图片四周白边
+ * 作为所有拆图操作的前置步骤
+ * 注意：只去除白色边框，不去除黑色内容
+ *
+ * @param imageUrl - 图片 URL
+ * @returns 去除白边后的图片 data URL 和边框信息
+ */
+async function trimImageWhiteBorders(imageUrl: string): Promise<{
+  trimmedImageUrl: string;
+  borderInfo: {
+    original: { width: number; height: number };
+    trimmed: { width: number; height: number };
+    borders: { left: number; top: number; right: number; bottom: number };
+    hasBorders: boolean;
+  };
+}> {
+  const img = await loadImage(imageUrl);
+  const originalWidth = img.naturalWidth;
+  const originalHeight = img.naturalHeight;
+
+  // 创建 Canvas 获取图片数据
+  const canvas = document.createElement('canvas');
+  canvas.width = originalWidth;
+  canvas.height = originalHeight;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) {
+    return {
+      trimmedImageUrl: imageUrl,
+      borderInfo: {
+        original: { width: originalWidth, height: originalHeight },
+        trimmed: { width: originalWidth, height: originalHeight },
+        borders: { left: 0, top: 0, right: 0, bottom: 0 },
+        hasBorders: false,
+      },
+    };
+  }
+
+  ctx.drawImage(img, 0, 0);
+  const imageData = ctx.getImageData(0, 0, originalWidth, originalHeight);
+
+  // 只检测白色边框（不检测黑色），使用较高阈值
+  const borders = trimWhiteBordersOnly(imageData, 0.8, 0.1);
+  const trimmedWidth = borders.right - borders.left + 1;
+  const trimmedHeight = borders.bottom - borders.top + 1;
+
+  const borderLeft = borders.left;
+  const borderTop = borders.top;
+  const borderRight = originalWidth - borders.right - 1;
+  const borderBottom = originalHeight - borders.bottom - 1;
+
+  // 检查是否有实际的白边需要裁剪（至少 3 像素才算有白边）
+  const hasBorders = borderLeft > 3 || borderTop > 3 || borderRight > 3 || borderBottom > 3;
+
+  if (!hasBorders) {
+    // 没有明显白边，返回原图
+    return {
+      trimmedImageUrl: imageUrl,
+      borderInfo: {
+        original: { width: originalWidth, height: originalHeight },
+        trimmed: { width: originalWidth, height: originalHeight },
+        borders: { left: 0, top: 0, right: 0, bottom: 0 },
+        hasBorders: false,
+      },
+    };
+  }
+
+  // 创建裁剪后的 Canvas
+  const trimmedCanvas = document.createElement('canvas');
+  trimmedCanvas.width = trimmedWidth;
+  trimmedCanvas.height = trimmedHeight;
+  const trimmedCtx = trimmedCanvas.getContext('2d');
+  if (!trimmedCtx) {
+    return {
+      trimmedImageUrl: imageUrl,
+      borderInfo: {
+        original: { width: originalWidth, height: originalHeight },
+        trimmed: { width: originalWidth, height: originalHeight },
+        borders: { left: 0, top: 0, right: 0, bottom: 0 },
+        hasBorders: false,
+      },
+    };
+  }
+
+  trimmedCtx.drawImage(
+    canvas,
+    borders.left,
+    borders.top,
+    trimmedWidth,
+    trimmedHeight,
+    0,
+    0,
+    trimmedWidth,
+    trimmedHeight
+  );
+
+  return {
+    trimmedImageUrl: trimmedCanvas.toDataURL('image/jpeg', 0.95),
+    borderInfo: {
+      original: { width: originalWidth, height: originalHeight },
+      trimmed: { width: trimmedWidth, height: trimmedHeight },
+      borders: { left: borderLeft, top: borderTop, right: borderRight, bottom: borderBottom },
+      hasBorders: true,
+    },
+  };
+}
+
+/**
  * 源图片的位置信息
  */
 export interface SourceImageRect {
@@ -381,35 +858,86 @@ export interface SourceImageRect {
  *
  * @exported 供 image-split-service.ts 复用
  */
+/** 递归拆分的最小尺寸限制 */
+const MIN_SPLIT_SIZE = 100;
+
 export async function recursiveSplitElement(
   element: SplitImageElement,
   depth: number = 0,
-  maxDepth: number = 3
+  maxDepth: number = 2
 ): Promise<SplitImageElement[]> {
   // 防止无限递归
   if (depth >= maxDepth) {
     return [element];
   }
 
-  // 检测子元素中的分割线
-  const detection = await detectGridLines(element.imageData);
-
-  // 如果没有检测到分割线，返回当前元素
-  if (detection.rows <= 1 && detection.cols <= 1) {
+  // 尺寸太小，不再拆分
+  if (element.width < MIN_SPLIT_SIZE || element.height < MIN_SPLIT_SIZE) {
     return [element];
   }
 
-  // 有分割线，继续拆分
-  const subElements = await splitImageByLines(element.imageData, detection);
+  // 前置步骤：先去除白边
+  const { trimmedImageUrl, borderInfo } = await trimImageWhiteBorders(element.imageData);
+
+  // 去白边后尺寸太小，不再拆分
+  if (borderInfo.trimmed.width < MIN_SPLIT_SIZE || borderInfo.trimmed.height < MIN_SPLIT_SIZE) {
+    if (borderInfo.hasBorders) {
+      return [{
+        ...element,
+        imageData: trimmedImageUrl,
+        width: borderInfo.trimmed.width,
+        height: borderInfo.trimmed.height,
+      }];
+    }
+    return [element];
+  }
+
+  // 使用去白边后的图片检测分割线
+  const detection = await detectGridLines(trimmedImageUrl);
+
+  // 如果没有检测到分割线，返回当前元素（使用去白边后的图片）
+  if (detection.rows <= 1 && detection.cols <= 1) {
+    if (borderInfo.hasBorders) {
+      return [{
+        ...element,
+        imageData: trimmedImageUrl,
+        width: borderInfo.trimmed.width,
+        height: borderInfo.trimmed.height,
+      }];
+    }
+    return [element];
+  }
+
+  // 检测到标准宫格，直接拆分不再递归
+  const isStandardGrid = detection.rows > 1 && detection.cols > 1;
+  const subElements = await splitImageByLines(trimmedImageUrl, detection);
 
   // 如果拆分结果和原来一样（只有 1 个），返回当前元素
   if (subElements.length <= 1) {
+    if (borderInfo.hasBorders) {
+      return [{
+        ...element,
+        imageData: trimmedImageUrl,
+        width: borderInfo.trimmed.width,
+        height: borderInfo.trimmed.height,
+      }];
+    }
     return [element];
   }
 
-  // 递归处理每个子元素
+  // 标准宫格：直接返回拆分结果，不再递归
+  if (isStandardGrid) {
+    return subElements;
+  }
+
+  // 非标准布局：继续递归处理每个子元素
   const allResults: SplitImageElement[] = [];
   for (const subEl of subElements) {
+    // 子元素太小，直接添加
+    if (subEl.width < MIN_SPLIT_SIZE || subEl.height < MIN_SPLIT_SIZE) {
+      allResults.push(subEl);
+      continue;
+    }
     const recursiveResults = await recursiveSplitElement(subEl, depth + 1, maxDepth);
     allResults.push(...recursiveResults);
   }
@@ -433,27 +961,54 @@ export async function splitAndInsertImages(
   sourceRect?: SourceImageRect
 ): Promise<{ success: boolean; count: number; error?: string }> {
   try {
-    // 1. 先尝试检测网格分割线
-    const detection = await detectGridLines(imageUrl);
+    // 0. 前置步骤：去除四周白边
+    const { trimmedImageUrl, borderInfo } = await trimImageWhiteBorders(imageUrl);
+
+    // 1. 使用去除白边后的图片检测网格分割线
+    const detection = await detectGridLines(trimmedImageUrl);
 
     let elements: SplitImageElement[] = [];
 
     if (detection.rows > 1 || detection.cols > 1) {
-      // 网格分割线格式
-      const initialElements = await splitImageByLines(imageUrl, detection);
+      // 网格分割线格式 - 使用去除白边后的图片
+      const initialElements = await splitImageByLines(trimmedImageUrl, detection);
 
-      // 递归拆分每个元素
-      for (const el of initialElements) {
-        const recursiveResults = await recursiveSplitElement(el, 0, 3);
-        elements.push(...recursiveResults);
+      // 判断是否为标准宫格（行列数都大于1，说明是规则宫格）
+      const isStandardGrid = detection.rows > 1 && detection.cols > 1;
+
+      if (isStandardGrid) {
+        // 标准宫格：直接使用拆分结果，不需要递归
+        elements = initialElements;
+      } else {
+        // 非标准宫格（可能是灵感图或不规则布局）：递归拆分，但限制总数
+        const MAX_TOTAL_ELEMENTS = 25;
+        const MIN_ELEMENT_SIZE = 100; // 最小 100x100 像素
+
+        for (const el of initialElements) {
+          // 检查是否已达到最大数量
+          if (elements.length >= MAX_TOTAL_ELEMENTS) {
+            break;
+          }
+
+          // 检查元素是否太小，不需要继续拆分
+          if (el.width < MIN_ELEMENT_SIZE || el.height < MIN_ELEMENT_SIZE) {
+            elements.push(el);
+            continue;
+          }
+
+          const recursiveResults = await recursiveSplitElement(el, 0, 2);
+          // 限制添加的数量
+          const remainingSlots = MAX_TOTAL_ELEMENTS - elements.length;
+          elements.push(...recursiveResults.slice(0, remainingSlots));
+        }
       }
     } else {
-      // 2. 尝试灵感图格式（已内置递归拆分）
-      const isPhotoWall = await detectPhotoWallFormat(imageUrl);
+      // 2. 尝试灵感图格式（已内置递归拆分）- 使用去除白边后的图片
+      const isPhotoWall = await detectPhotoWallFormat(trimmedImageUrl);
 
       if (isPhotoWall) {
         const { splitPhotoWall } = await import('./photo-wall-splitter');
-        const inspirationBoardElements = await splitPhotoWall(imageUrl);
+        const inspirationBoardElements = await splitPhotoWall(trimmedImageUrl);
 
         // 转换为 SplitImageElement 格式
         elements = inspirationBoardElements.map((el, index) => ({
@@ -475,20 +1030,33 @@ export async function splitAndInsertImages(
       };
     }
 
+    // 2.5 对每个子图进行去白边处理，确保干净
+    const cleanedElements: SplitImageElement[] = [];
+    for (const el of elements) {
+      const { trimmedImageUrl, borderInfo: elBorderInfo } = await trimImageWhiteBorders(el.imageData);
+      cleanedElements.push({
+        ...el,
+        imageData: trimmedImageUrl,
+        width: elBorderInfo.trimmed.width,
+        height: elBorderInfo.trimmed.height,
+      });
+    }
+    elements = cleanedElements;
+
     // 重新分配 index
     elements = elements.map((el, idx) => ({ ...el, index: idx }));
 
-    // 3. 获取原图的实际像素尺寸，计算缩放比例
-    const originalImage = await loadImage(imageUrl);
-    const originalPixelWidth = originalImage.naturalWidth;
-    const originalPixelHeight = originalImage.naturalHeight;
+    // 3. 使用去白边后的尺寸计算缩放比例
+    // 注意：使用去白边后的尺寸，因为拆分的子图是基于去白边后的图片
+    const trimmedPixelWidth = borderInfo.trimmed.width;
+    const trimmedPixelHeight = borderInfo.trimmed.height;
 
-    // 计算缩放比例（原图显示尺寸 / 原图像素尺寸）
+    // 计算缩放比例（原图显示尺寸 / 去白边后像素尺寸）
     let scale = 1;
     if (sourceRect) {
       scale = Math.min(
-        sourceRect.width / originalPixelWidth,
-        sourceRect.height / originalPixelHeight
+        sourceRect.width / trimmedPixelWidth,
+        sourceRect.height / trimmedPixelHeight
       );
     }
 
@@ -508,7 +1076,6 @@ export async function splitAndInsertImages(
     const gap = 20; // 图片间距
     const count = elements.length;
     const cols = Math.ceil(Math.sqrt(count));
-    const rows = Math.ceil(count / cols);
 
     // 计算所有图片缩放后的最大尺寸
     const scaledElements = elements.map((el) => ({
