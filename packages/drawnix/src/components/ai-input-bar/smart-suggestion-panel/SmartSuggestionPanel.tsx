@@ -405,7 +405,7 @@ export const SmartSuggestionPanel: React.FC<SmartSuggestionPanelProps> = ({
                 <History size={14} />
                 <span>{language === 'zh' ? '历史记录' : 'History'}</span>
               </div>
-              <div className="smart-suggestion-panel__list">
+              <div className="smart-suggestion-panel__list" style={{ maxHeight: '150px', overflowY: 'auto' }}>
                 {coldStartHistoryPrompts.map((item, index) => (
                   <div
                     key={item.id}
@@ -508,7 +508,7 @@ export const SmartSuggestionPanel: React.FC<SmartSuggestionPanelProps> = ({
                 <History size={14} />
                 <span>{language === 'zh' ? '历史记录' : 'History'}</span>
               </div>
-              <div className="smart-suggestion-panel__list">
+              <div className="smart-suggestion-panel__list" style={{ maxHeight: '150px', overflowY: 'auto' }}>
                 {historyPrompts.map((item, index) => (
                   <div
                     key={item.id}
@@ -598,7 +598,7 @@ export const SmartSuggestionPanel: React.FC<SmartSuggestionPanelProps> = ({
               <History size={14} />
               <span>{language === 'zh' ? '历史记录' : 'History'}</span>
             </div>
-            <div className="smart-suggestion-panel__list">
+            <div className="smart-suggestion-panel__list" style={{ maxHeight: '150px', overflowY: 'auto' }}>
               {modelModeHistoryPrompts.map((item, index) => {
                 const isHighlighted = highlightedIndex === index;
                 return (

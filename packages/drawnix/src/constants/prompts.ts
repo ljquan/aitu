@@ -1,8 +1,8 @@
 /**
- * AI 生成的默认提示词常量
+ * AI 的默认提示词常量
  */
 
-// AI 图像生成默认提示词
+// AI 图像默认提示词
 export const AI_IMAGE_PROMPTS = {
   zh: [
     `一张写实的半身人像，一位身穿水蓝色连身裙的年轻韩国亚洲女人走进旅馆大厅，女人脸上带着温暖的微笑，左手拿着白色棒球帽，右手拉着黄色行李箱。
@@ -33,7 +33,7 @@ centered vertical portrait with bokeh background, medium shot.`,
   ]
 } as const;
 
-// AI 视频生成默认提示词
+// AI 视频默认提示词
 export const AI_VIDEO_PROMPTS = {
   zh: [
     `场景：日落时分，一座宏伟的城堡庭院，金色的光线透过彩色玻璃窗，营造出温暖而充满希望的氛围。
@@ -41,14 +41,14 @@ export const AI_VIDEO_PROMPTS = {
 动作：公主们互相微笑，然后开始和谐地唱歌，然后在灯光亮起时向天空举手。
 音频：柔和的管弦乐，伴随着令人振奋的弦乐和合唱，沙沙作响的树叶和远处鸟儿的环绕声，对话："我们相信明天会更加光明。"
 风格：迪士尼风格的动画，鲜艳的色彩，梦幻般的灯光。`,
-    '生成一个美丽的日出场景，阳光从山峰后缓缓升起，云朵轻柔地飘动',
-    '创造一个森林中的场景，树叶在微风中轻轻摇摆，阳光斑驳',
-    '生成一个海边场景，海浪轻拍岸边，海鸟在空中盘旋',
-    '创建一个花园场景，花朵在微风中轻摆，蝴蝶翩翩起舞',
-    '生成一个雨后场景，水滴从树叶上缓缓滴落，彩虹出现在天空',
-    '创造一个雪花飘落的冬日场景，雪花轻柔地降落',
-    '生成一个星空场景，星星闪烁，云朵缓缓飘过月亮',
-    '创建一个溪流场景，清水在石头间潺潺流淌，鱼儿游过'
+    '一个美丽的日出场景，阳光从山峰后缓缓升起，云朵轻柔地飘动',
+    '一个森林中的场景，树叶在微风中轻轻摇摆，阳光斑驳',
+    '一个海边场景，海浪轻拍岸边，海鸟在空中盘旋',
+    '一个花园场景，花朵在微风中轻摆，蝴蝶翩翩起舞',
+    '一个雨后场景，水滴从树叶上缓缓滴落，彩虹出现在天空',
+    '一个雪花飘落的冬日场景，雪花轻柔地降落',
+    '一个星空场景，星星闪烁，云朵缓缓飘过月亮',
+    '一个溪流场景，清水在石头间潺潺流淌，鱼儿游过'
   ],
   en: [
     `Scene: A grand castle courtyard at sunset, golden light filtering through stained glass windows, creating a warm and hopeful atmosphere.
@@ -56,14 +56,14 @@ Camera: Medium close-up tracking shot of the two princesses, then a wide-angle p
 Action: The princesses smile at each other, then begin singing in harmony, then raise their hands toward the sky as the light brightens.
 Audio: Soft orchestral music with uplifting strings and choir, ambient sounds of rustling leaves and distant birds, dialogue: "Together, we believe tomorrow will be brighter."
 Style: Disney-style animation, vibrant colors, dreamy lighting.`,
-    'Generate a beautiful sunrise scene where the sun slowly rises from behind mountains with clouds gently floating',
-    'Create a forest scene with leaves gently swaying in the breeze and dappled sunlight',
-    'Generate a seaside scene with waves gently lapping the shore and seagulls circling overhead',
-    'Create a garden scene with flowers swaying in the breeze and butterflies dancing',
-    'Generate a post-rain scene with water drops slowly dripping from leaves and a rainbow appearing in the sky',
-    'Create a winter scene with snowflakes gently falling',
-    'Generate a starry night scene with twinkling stars and clouds slowly drifting across the moon',
-    'Create a stream scene with clear water flowing gently between stones and fish swimming by'
+    'a beautiful sunrise scene where the sun slowly rises from behind mountains with clouds gently floating',
+    'a forest scene with leaves gently swaying in the breeze and dappled sunlight',
+    'a seaside scene with waves gently lapping the shore and seagulls circling overhead',
+    'a garden scene with flowers swaying in the breeze and butterflies dancing',
+    'a post-rain scene with water drops slowly dripping from leaves and a rainbow appearing in the sky',
+    'a winter scene with snowflakes gently falling',
+    'a starry night scene with twinkling stars and clouds slowly drifting across the moon',
+    'a stream scene with clear water flowing gently between stones and fish swimming by'
   ]
 } as const;
 
@@ -73,7 +73,7 @@ export interface InstructionItemData {
   scene: string;  // 适用场景描述
 }
 
-// AI 指令 - 用于文本模型生成工作流（AI 输入框使用）
+// AI 指令 - 用于文本模型工作流（AI 输入框使用）
 export const AI_INSTRUCTIONS: Record<'zh' | 'en', InstructionItemData[]> = {
   zh: [
     // {
@@ -81,7 +81,7 @@ export const AI_INSTRUCTIONS: Record<'zh' | 'en', InstructionItemData[]> = {
     //   scene: '知识梳理、内容结构化、学习笔记'
     // },
     // {
-    //   content: '为选中的主题生成详细的分析框架',
+    //   content: '为选中的主题详细的分析框架',
     //   scene: '项目分析、问题拆解、决策支持'
     // },
     // {
@@ -89,7 +89,7 @@ export const AI_INSTRUCTIONS: Record<'zh' | 'en', InstructionItemData[]> = {
     //   scene: '流程可视化、步骤说明、操作指南'
     // },
     // {
-    //   content: '为这个概念生成相关的扩展内容',
+    //   content: '为这个概念相关的扩展内容',
     //   scene: '头脑风暴、创意发散、内容扩展'
     // },
     // {
@@ -101,7 +101,7 @@ export const AI_INSTRUCTIONS: Record<'zh' | 'en', InstructionItemData[]> = {
     //   scene: '关系分析、逻辑梳理、知识图谱'
     // },
     // {
-    //   content: '为当前内容生成行动计划',
+    //   content: '为当前内容行动计划',
     //   scene: '任务规划、项目管理、执行方案'
     // },
     // {
@@ -109,11 +109,11 @@ export const AI_INSTRUCTIONS: Record<'zh' | 'en', InstructionItemData[]> = {
     //   scene: '方案对比、决策分析、选型评估'
     // },
     // {
-    //   content: '生成一张与主题相关的配图',
+    //   content: '一张与主题相关的配图',
     //   scene: '视觉辅助、内容配图、演示美化'
     // },
     {
-      content: '优化提示词并生成',
+      content: '优化提示词并',
       scene: '提示词优化、效果提升、Prompt润色'
     }
   ],
@@ -123,7 +123,7 @@ export const AI_INSTRUCTIONS: Record<'zh' | 'en', InstructionItemData[]> = {
     //   scene: 'Knowledge organization, content structuring, study notes'
     // },
     // {
-    //   content: 'Generate a detailed analysis framework for the selected topic',
+    //   content: 'a detailed analysis framework for the selected topic',
     //   scene: 'Project analysis, problem breakdown, decision support'
     // },
     // {
@@ -131,7 +131,7 @@ export const AI_INSTRUCTIONS: Record<'zh' | 'en', InstructionItemData[]> = {
     //   scene: 'Process visualization, step explanation, operation guide'
     // },
     // {
-    //   content: 'Generate related extended content for this concept',
+    //   content: 'related extended content for this concept',
     //   scene: 'Brainstorming, creative expansion, content extension'
     // },
     // {
@@ -143,7 +143,7 @@ export const AI_INSTRUCTIONS: Record<'zh' | 'en', InstructionItemData[]> = {
     //   scene: 'Relationship analysis, logic organization, knowledge graph'
     // },
     // {
-    //   content: 'Generate an action plan for the current content',
+    //   content: 'an action plan for the current content',
     //   scene: 'Task planning, project management, execution plan'
     // },
     // {
@@ -151,7 +151,7 @@ export const AI_INSTRUCTIONS: Record<'zh' | 'en', InstructionItemData[]> = {
     //   scene: 'Solution comparison, decision analysis, selection evaluation'
     // },
     // {
-    //   content: 'Generate an image related to the topic',
+    //   content: 'an image related to the topic',
     //   scene: 'Visual aid, content illustration, presentation enhancement'
     // },
     {
@@ -174,24 +174,24 @@ export interface ColdStartSuggestion {
 export const AI_COLD_START_SUGGESTIONS: Record<'zh' | 'en', ColdStartSuggestion[]> = {
   zh: [
     {
-      content: '生成灵感图：咖啡文化，16图',
+      content: '灵感图：咖啡文化，16图',
       scene: '灵感图',
-      tips: '调用1次文本模型 + 1次生图模型（最多16张）',
+      tips: '调用1次文本模型 + 1次生图模型，一张图排布n张子图（最多16张）',
       modelType: 'inspiration-board',
     },
     {
-      content: '生成宫格图：可爱猫咪表情包，16宫格',
+      content: '宫格图：可爱猫咪表情包，16宫格',
       scene: '宫格图',
-      tips: '调用1次文本模型 + 1次生图模型',
+      tips: '调用1次文本模型 + 1次生图模型，一张图排布n张正方形子图（最多16张）',
       modelType: 'grid-image',
     },
     {
-      content: '生成OAuth2.0时序图',
-      scene: '技术文档',
-      tips: '调用1次文本模型',
+      content: '画一个AI工作流的流程图',
+      scene: 'mermaid图',
+      tips: '调用1次文本模型，支持流程图、泳道图、',
     },
     {
-      content: '画一个大模型发展趋势的思维导图',
+      content: '大模型发展趋势的思维导图',
       scene: '知识梳理',
       tips: '调用1次文本模型',
     },
@@ -204,19 +204,19 @@ export const AI_COLD_START_SUGGESTIONS: Record<'zh' | 'en', ColdStartSuggestion[
   ],
   en: [
     {
-      content: 'Generate inspiration board: Coffee culture mood board, beans, latte art, cafe scenes',
+      content: 'inspiration board: Coffee culture mood board, beans, latte art, cafe scenes',
       scene: 'Inspiration board',
       tips: '1 text model + 1 image model',
       modelType: 'inspiration-board',
     },
     {
-      content: 'Generate grid image: Cute cat emoji pack, 4x4 scattered layout',
+      content: 'grid image: Cute cat emoji pack, 4x4 scattered layout',
       scene: 'Grid image',
       tips: '1 text model + 1 image model',
       modelType: 'grid-image',
     },
     {
-      content: 'Generate OAuth2.0 sequence diagram',
+      content: 'Draw a flowchart of AI workflow',
       scene: 'Tech docs',
       tips: '1 text model',
     },
@@ -226,7 +226,7 @@ export const AI_COLD_START_SUGGESTIONS: Record<'zh' | 'en', ColdStartSuggestion[
       tips: '1 text model',
     },
     {
-      content: 'Create a video: A girl under cherry blossom tree, petals falling in the breeze',
+      content: 'a video: A girl under cherry blossom tree, petals falling in the breeze',
       scene: 'Video creation',
       tips: '1 text model + 1 video model',
       modelType: 'video',
@@ -237,12 +237,12 @@ export const AI_COLD_START_SUGGESTIONS: Record<'zh' | 'en', ColdStartSuggestion[
 // 类型定义
 export type Language = 'zh' | 'en';
 
-// 获取图像生成提示词的辅助函数
+// 获取图像提示词的辅助函数
 export const getImagePrompts = (language: Language): readonly string[] => {
   return AI_IMAGE_PROMPTS[language];
 };
 
-// 获取视频生成提示词的辅助函数
+// 获取视频提示词的辅助函数
 export const getVideoPrompts = (language: Language): readonly string[] => {
   return AI_VIDEO_PROMPTS[language];
 };

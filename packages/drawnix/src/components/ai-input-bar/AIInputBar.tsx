@@ -371,8 +371,8 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
    */
   const stripCountFromPrompt = (content: string): string => {
     return content
-      .replace(/[,，]\s*\d+\s*(图|张|个图|个|幅)?\s*$/g, '')  // 去除末尾的 "，16图"、"，20个图" 等
-      .replace(/\s+\d+\s*(图|张|个图|个|幅)?\s*$/g, '')  // 去除末尾的 "16图"、"20个图" 等
+      .replace(/[,，]\s*\d+\s*(图|张|个图|个|幅|宫格)?\s*$/g, '')  // 去除末尾的 "，16图"、"，20个图"、"16宫格" 等
+      .replace(/\s+\d+\s*(图|张|个图|个|幅|宫格)?\s*$/g, '')  // 去除末尾的 "16图"、"20个图"、"16宫格" 等
       .trim();
   };
 

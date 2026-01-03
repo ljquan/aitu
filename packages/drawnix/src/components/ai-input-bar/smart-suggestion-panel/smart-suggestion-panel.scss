@@ -128,7 +128,8 @@
     }
 
     &--history {
-      // 历史记录样式
+      // 历史记录样式 - 使用默认 item 样式
+      opacity: 0.9;
     }
 
     &-content {
