@@ -23,8 +23,8 @@ export interface InspirationBoardParams {
   imageSize?: string;
   /** 图片质量（默认 2k） */
   imageQuality?: '1k' | '2k' | '4k';
-  /** 语言（默认 zh） */
-  language?: 'zh' | 'en';
+  /** 参考图片 URL 列表 */
+  referenceImages?: string[];
   /** AI 模型 */
   model?: string;
 }
@@ -32,12 +32,8 @@ export interface InspirationBoardParams {
 /**
  * 构建灵感图生图提示词
  */
-function buildInspirationBoardPrompt(
-  theme: string,
-  imageCount: number,
-  language: 'zh' | 'en'
-): string {
-  const template = INSPIRATION_BOARD_PROMPT_TEMPLATE[language];
+function buildInspirationBoardPrompt(theme: string, imageCount: number): string {
+  const template = INSPIRATION_BOARD_PROMPT_TEMPLATE.zh;
   return template(theme, imageCount);
 }
 
@@ -51,7 +47,7 @@ function executeQueue(params: InspirationBoardParams, options: MCPExecuteOptions
     imageCount = INSPIRATION_BOARD_DEFAULTS.imageCount,
     imageSize = '16x9', // 灵感图默认横向布局
     imageQuality = '2k',
-    language = 'zh',
+    referenceImages,
     model,
   } = params;
 
@@ -67,24 +63,31 @@ function executeQueue(params: InspirationBoardParams, options: MCPExecuteOptions
   const validImageCount = Math.min(Math.max(1, imageCount), 16);
 
   // 构建生图提示词
-  const prompt = buildInspirationBoardPrompt(theme, validImageCount, language);
+  const prompt = buildInspirationBoardPrompt(theme, validImageCount);
 
   // 确定使用的模型
   const actualModel = model || getCurrentImageModel();
+
+  // 将参考图片转换为 uploadedImages 格式
+  const uploadedImages = referenceImages?.map((url, index) => ({
+    type: 'url' as const,
+    url,
+    name: `reference-${index + 1}`,
+  }));
 
   console.log('[InspirationBoardTool] Creating inspiration board task with params:', {
     theme,
     imageCount: validImageCount,
     imageSize,
     imageQuality,
-    language,
+    referenceImages: referenceImages?.length || 0,
     model: actualModel,
     modelSource: model ? 'user-specified' : 'settings',
   });
 
   try {
     let task;
-    
+
     // 如果是重试，复用原有任务
     if (options.retryTaskId) {
       console.log('[InspirationBoardTool] Retrying existing task:', options.retryTaskId);
@@ -101,6 +104,8 @@ function executeQueue(params: InspirationBoardParams, options: MCPExecuteOptions
           prompt,
           size: imageSize,
           model: actualModel,
+          // 参考图片
+          uploadedImages: uploadedImages && uploadedImages.length > 0 ? uploadedImages : undefined,
           // 灵感图特有参数
           isInspirationBoard: true,
           inspirationBoardImageCount: validImageCount,
@@ -198,11 +203,12 @@ export const inspirationBoardTool: MCPTool = {
         enum: ['1k', '2k', '4k'],
         default: '2k',
       },
-      language: {
-        type: 'string',
-        description: '提示词语言',
-        enum: ['zh', 'en'],
-        default: 'zh',
+      referenceImages: {
+        type: 'array',
+        description: '参考图片 URL 列表，用于风格参考',
+        items: {
+          type: 'string',
+        },
       },
       model: {
         type: 'string',

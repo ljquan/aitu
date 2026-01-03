@@ -540,7 +540,17 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
         // 区分：选中的文本元素（作为 prompt）vs 用户输入的指令（额外要求）
         const displayParts: string[] = [];
 
-        // 1. 显示模型和参数信息
+
+        // 显示用户输入的指令（额外要求）
+        if (context.userInstruction) {
+          displayParts.push(`\n💬 用户指令:\n${context.userInstruction}`);
+        }
+
+        // 如果两者都没有，显示 finalPrompt
+        if (context.selection.texts.length === 0 && !context.userInstruction && context.finalPrompt) {
+          displayParts.push(`\n提示词:\n${context.finalPrompt}`);
+        }
+        // 显示模型和参数信息
         const modelInfo = context.model.isExplicit
           ? `模型: ${context.model.id}`
           : `模型: ${context.model.id} (默认)`;
@@ -550,19 +560,9 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
           displayParts.push(`数量: ${context.params.count}`);
         }
 
-        // 2. 显示选中的文本元素（作为生成 prompt）
+        // 显示选中的文本元素（作为生成 prompt）
         if (context.selection.texts.length > 0) {
           displayParts.push(`\n📝 选中的文本:\n${context.selection.texts.join('\n')}`);
-        }
-
-        // 3. 显示用户输入的指令（额外要求）
-        if (context.userInstruction) {
-          displayParts.push(`\n💬 用户指令:\n${context.userInstruction}`);
-        }
-
-        // 4. 如果两者都没有，显示 finalPrompt
-        if (context.selection.texts.length === 0 && !context.userInstruction && context.finalPrompt) {
-          displayParts.push(`\n提示词:\n${context.finalPrompt}`);
         }
 
         const userDisplayText = displayParts.join('\n');

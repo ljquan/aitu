@@ -28,8 +28,8 @@ export interface GridImageToolParams {
   imageSize?: string;
   /** 图片质量（默认 2k） */
   imageQuality?: '1k' | '2k' | '4k';
-  /** 语言（默认 zh） */
-  language?: 'zh' | 'en';
+  /** 参考图片 URL 列表 */
+  referenceImages?: string[];
   /** AI 模型 */
   model?: string;
 }
@@ -45,12 +45,8 @@ function getLayoutStyleDescription(): string {
 /**
  * 构建宫格图生图提示词
  */
-function buildGridImagePrompt(
-  theme: string,
-  gridConfig: GridConfig,
-  language: 'zh' | 'en'
-): string {
-  const template = GRID_IMAGE_PROMPT_TEMPLATE[language];
+function buildGridImagePrompt(theme: string, gridConfig: GridConfig): string {
+  const template = GRID_IMAGE_PROMPT_TEMPLATE.zh;
   return template(theme, gridConfig.rows, gridConfig.cols);
 }
 
@@ -66,7 +62,7 @@ function executeQueue(params: GridImageToolParams, options: MCPExecuteOptions): 
     layoutStyle = GRID_IMAGE_DEFAULTS.layoutStyle,
     imageSize = GRID_IMAGE_DEFAULTS.imageSize,
     imageQuality = GRID_IMAGE_DEFAULTS.imageQuality,
-    language = 'zh',
+    referenceImages,
     model,
   } = params;
 
@@ -85,7 +81,14 @@ function executeQueue(params: GridImageToolParams, options: MCPExecuteOptions): 
   const gridConfig: GridConfig = { rows: validRows, cols: validCols };
 
   // 构建生图提示词
-  const prompt = buildGridImagePrompt(theme, gridConfig, language);
+  const prompt = buildGridImagePrompt(theme, gridConfig);
+
+  // 将参考图片转换为 uploadedImages 格式
+  const uploadedImages = referenceImages?.map((url, index) => ({
+    type: 'url' as const,
+    url,
+    name: `reference-${index + 1}`,
+  }));
 
   console.log('[GridImageTool] Creating grid image task with params:', {
     theme,
@@ -93,7 +96,7 @@ function executeQueue(params: GridImageToolParams, options: MCPExecuteOptions): 
     layoutStyle,
     imageSize,
     imageQuality,
-    language,
+    referenceImages: referenceImages?.length || 0,
   });
 
   try {
@@ -115,6 +118,8 @@ function executeQueue(params: GridImageToolParams, options: MCPExecuteOptions): 
           prompt,
           size: imageSize,
           model: model || getCurrentImageModel(),
+          // 参考图片
+          uploadedImages: uploadedImages && uploadedImages.length > 0 ? uploadedImages : undefined,
           // 宫格图特有参数，用于任务完成后的处理
           gridImageRows: validRows,
           gridImageCols: validCols,
@@ -215,11 +220,12 @@ ${getLayoutStyleDescription()}
         enum: ['1k', '2k', '4k'],
         default: '2k',
       },
-      language: {
-        type: 'string',
-        description: '提示词语言',
-        enum: ['zh', 'en'],
-        default: 'zh',
+      referenceImages: {
+        type: 'array',
+        description: '参考图片 URL 列表，用于风格参考',
+        items: {
+          type: 'string',
+        },
       },
     },
     required: ['theme'],

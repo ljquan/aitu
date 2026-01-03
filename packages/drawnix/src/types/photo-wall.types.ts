@@ -262,41 +262,6 @@ export const INSPIRATION_BOARD_PROMPT_TEMPLATE = {
 - 横向布局，宽高比约 16:9
 - 整个画面必须被图片填满，无外部留白`;
   },
-
-  en: (theme: string, imageCount: number) => {
-    return `Create an edge-to-edge inspiration board collage (production use) with the theme "${theme}", containing ${imageCount} images.
-
-【Critical Requirement - Must Fill Canvas】
-- Images must completely fill the entire canvas, from left edge to right edge, top to bottom
-- No external blank areas or margins allowed
-- Outermost images must touch canvas boundaries
-- Canvas utilization must be 98% or higher
-- Do NOT generate photo frame or border decorations
-
-【Layout Requirements】
-- Varying image sizes: large, medium, and small mixed
-- Size distribution: 1-2 large images taking significant area, 3-4 medium, rest small
-- Irregular collage layout, magazine or Pinterest style inspiration board
-- Images tightly arranged, only leaving space for divider lines
-- Clean image edges, no decorative borders or shadow effects
-
-【White Divider Lines - Algorithm Critical】
-- Images separated by 2-3px pure white (#FFFFFF) lines
-- White lines must be continuous, no breaks, forming a connected network
-- Each image must be completely surrounded by white lines (all four sides)
-- Canvas outer edge also has 2-3px white line (not large blank space)
-- No overlapping or direct contact between images
-
-【Image Content Requirements】
-- ${imageCount} images showing ${imageCount} completely different contents
-- No repetition: different content, composition, and tone
-- Each image with full content, subject centered
-- Present image content directly without frame decorations
-
-【Output Requirements】
-- Horizontal layout, aspect ratio about 16:9
-- Entire canvas must be filled with images, no external whitespace`;
-  },
 };
 
 /**
@@ -305,16 +270,22 @@ export const INSPIRATION_BOARD_PROMPT_TEMPLATE = {
  */
 export const GRID_IMAGE_PROMPT_TEMPLATE = {
   zh: (theme: string, rows: number, cols: number) =>
-    `创建一个 ${rows}x${cols} 紧凑网格拼贴图（生产用），主题是"${theme}"。
+    `创建一个边缘到边缘的 ${rows}x${cols} 网格拼贴图（生产用），主题是"${theme}"。
+
+【关键要求 - 必须铺满画面】
+- 图片必须完全铺满整个画布，从左边缘到右边缘，从上边缘到下边缘
+- 禁止任何外部空白区域或边距
+- 最外侧的图片必须紧贴画布边界
+- 画布利用率必须达到 98% 以上
+- 禁止生成类似相框、照片边框的装饰效果
 
 【布局要求 - 极其重要】
 - 严格的 ${rows} 行 × ${cols} 列网格布局
 - 所有 ${rows * cols} 张图片必须完全相同大小（正方形）
 - 图片之间用 2-3px 细白线分隔（仅作为分割线）
-- 整个画面几乎被图片填满，最小化边距
-- 外边缘也用 2-3px 细白线包围
+- 图片边缘干净利落，无装饰边框或阴影效果
 
-【分割线要求 - 必须遵守】
+【白色分割线要求 - 算法依赖】
 - 分割线必须是纯白色 (#FFFFFF)
 - 分割线必须笔直、连续、无断裂
 - 横向分割线贯穿整个宽度
@@ -325,38 +296,11 @@ export const GRID_IMAGE_PROMPT_TEMPLATE = {
 - ${rows * cols} 张图片必须展示 ${rows * cols} 种完全不同的内容
 - 禁止重复：每个元素的形状、颜色、姿态都必须明显不同
 - 追求最大差异化：不同种类、不同风格、不同细节
-- 每张图片内容饱满，充分利用空间
+- 每张图片内容饱满，主体居中
+- 图片内容直接呈现，不要有边框装饰
 
 【输出要求】
 - 整体呈正方形或接近正方形的比例
-- 图片区域最大化（占比 > 95%）
+- 整个画面必须被图片填满，无外部留白
 - 这是生产图，用于后续拆分`,
-
-  en: (theme: string, rows: number, cols: number) =>
-    `Create a ${rows}x${cols} compact grid collage (production use) with the theme "${theme}".
-
-【Layout Requirements - Extremely Important】
-- Strict ${rows} rows × ${cols} columns grid layout
-- All ${rows * cols} images must be exactly the same size (square)
-- Images separated by 2-3px thin white lines (only as dividers)
-- The entire canvas should be almost filled with images, minimize margins
-- Outer edges also surrounded by 2-3px thin white lines
-
-【Divider Line Requirements - Must Follow】
-- Divider lines must be pure white (#FFFFFF)
-- Divider lines must be straight, continuous, no breaks
-- Horizontal dividers span the entire width
-- Vertical dividers span the entire height
-- Divider line width uniform at 2-3px
-
-【Image Content Requirements】
-- ${rows * cols} images must show ${rows * cols} completely different contents
-- No repetition: each element must have distinctly different shape, color, pose
-- Maximize variation: different types, styles, details
-- Each image should have full content, utilizing space effectively
-
-【Output Requirements】
-- Overall square or near-square aspect ratio
-- Maximize image area (> 95%)
-- This is a production image for subsequent splitting`,
 };

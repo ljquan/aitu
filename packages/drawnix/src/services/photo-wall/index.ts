@@ -48,13 +48,9 @@ export class GridImageService {
    * 生成宫格图
    *
    * @param params - 宫格图参数
-   * @param language - 语言（用于生成提示词）
    * @returns 生成结果
    */
-  async generate(
-    params: GridImageParams,
-    language: 'zh' | 'en' = 'zh'
-  ): Promise<GridImageResult> {
+  async generate(params: GridImageParams): Promise<GridImageResult> {
     const {
       theme,
       gridConfig = DEFAULTS.gridConfig,
@@ -62,12 +58,12 @@ export class GridImageService {
       imageSize = DEFAULTS.imageSize,
       imageQuality = DEFAULTS.imageQuality,
     } = params;
-    
+
     console.log('[GridImageService] Starting generation with params:', params);
-    
+
     try {
       // 1. 生成拼贴图提示词
-      const prompt = this.buildPrompt(theme, gridConfig, language);
+      const prompt = this.buildPrompt(theme, gridConfig);
       console.log('[GridImageService] Generated prompt:', prompt);
       
       // 2. 调用 AI 生成拼贴图
@@ -232,15 +228,13 @@ export class GridImageService {
    * 一键生成并插入宫格图
    * 
    * @param params - 宫格图参数
-   * @param language - 语言
    * @param startPoint - 起始位置
    */
   async generateAndInsert(
     params: GridImageParams,
-    language: 'zh' | 'en' = 'zh',
     startPoint?: Point
   ): Promise<GridImageResult> {
-    const result = await this.generate(params, language);
+    const result = await this.generate(params);
     
     if (result.success && result.elements) {
       await this.insertToBoard(result.elements, startPoint);
@@ -252,12 +246,8 @@ export class GridImageService {
   /**
    * 构建生图提示词
    */
-  private buildPrompt(
-    theme: string,
-    gridConfig: GridConfig,
-    language: 'zh' | 'en'
-  ): string {
-    const template = GRID_IMAGE_PROMPT_TEMPLATE[language];
+  private buildPrompt(theme: string, gridConfig: GridConfig): string {
+    const template = GRID_IMAGE_PROMPT_TEMPLATE.zh;
     return template(theme, gridConfig.rows, gridConfig.cols);
   }
   
