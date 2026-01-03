@@ -161,17 +161,6 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
       setIsDragging(true);
     }, []);
 
-    // Handle session title updates
-    const handleSessionTitleUpdate = useCallback(
-      async (sessionId: string, title: string) => {
-        await chatStorageService.updateSession(sessionId, { title });
-        setSessions((prev) =>
-          prev.map((s) => (s.id === sessionId ? { ...s, title } : s))
-        );
-      },
-      []
-    );
-
     // 处理工具调用回调
     const handleToolCalls = useCallback(
       async (
@@ -264,7 +253,6 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
 
     const chatHandler = useChatHandler({
       sessionId: activeSessionId,
-      onSessionTitleUpdate: handleSessionTitleUpdate,
       temporaryModel: sessionModel, // 传递临时模型
       onToolCalls: handleToolCalls, // 传递工具调用回调
     });
@@ -727,20 +715,6 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
 
         // 持久化到本地存储
         chatStorageService.updateMessage(msgId, { workflow });
-
-        // 如果工作流有 prompt 且当前会话标题是默认的（以"模型:"开头），则更新标题
-        if (workflow.prompt && activeSessionId) {
-          const currentSession = sessions.find(s => s.id === activeSessionId);
-          if (currentSession && currentSession.title.startsWith('模型:')) {
-            const newTitle = workflow.prompt.length > 30 
-              ? workflow.prompt.slice(0, 30) + '...' 
-              : workflow.prompt;
-            await chatStorageService.updateSession(activeSessionId, { title: newTitle });
-            setSessions(prev => prev.map(s => 
-              s.id === activeSessionId ? { ...s, title: newTitle } : s
-            ));
-          }
-        }
       },
       [activeSessionId, sessions]
     );
@@ -891,6 +865,51 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
     const currentSession = sessions.find((s) => s.id === activeSessionId);
     const title = currentSession?.title || '新对话';
 
+    // 标题编辑状态
+    const [isEditingTitle, setIsEditingTitle] = useState(false);
+    const [editingTitleValue, setEditingTitleValue] = useState('');
+    const titleInputRef = useRef<HTMLInputElement>(null);
+
+    // 开始编辑标题
+    const handleStartEditTitle = useCallback(() => {
+      setEditingTitleValue(title);
+      setIsEditingTitle(true);
+    }, [title]);
+
+    // 保存标题
+    const handleSaveTitle = useCallback(async () => {
+      const trimmedValue = editingTitleValue.trim();
+      if (trimmedValue && trimmedValue !== title && activeSessionId) {
+        await handleRenameSession(activeSessionId, trimmedValue);
+      }
+      setIsEditingTitle(false);
+    }, [editingTitleValue, title, activeSessionId, handleRenameSession]);
+
+    // 取消编辑标题
+    const handleCancelEditTitle = useCallback(() => {
+      setEditingTitleValue(title);
+      setIsEditingTitle(false);
+    }, [title]);
+
+    // 标题输入框按键处理
+    const handleTitleKeyDown = useCallback((e: React.KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        handleSaveTitle();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        handleCancelEditTitle();
+      }
+    }, [handleSaveTitle, handleCancelEditTitle]);
+
+    // 自动聚焦标题输入框
+    useEffect(() => {
+      if (isEditingTitle && titleInputRef.current) {
+        titleInputRef.current.focus();
+        titleInputRef.current.select();
+      }
+    }, [isEditingTitle]);
+
     // 检查消息是否为工作流消息
     const isWorkflowMessage = useCallback((message: Message): string | null => {
       const textPart = message.parts.find((p) => p.type === 'text');
@@ -924,7 +943,25 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
           />
           <div className="chat-drawer__header">
             <div className="chat-drawer__header-top">
-              <h2 className="chat-drawer__title">{title}</h2>
+              {isEditingTitle ? (
+                <input
+                  ref={titleInputRef}
+                  className="chat-drawer__title-input"
+                  value={editingTitleValue}
+                  onChange={(e) => setEditingTitleValue(e.target.value)}
+                  onKeyDown={handleTitleKeyDown}
+                  onBlur={handleSaveTitle}
+                  maxLength={50}
+                />
+              ) : (
+                <h2 
+                  className="chat-drawer__title chat-drawer__title--editable"
+                  onClick={handleStartEditTitle}
+                  title="点击编辑标题"
+                >
+                  {title}
+                </h2>
+              )}
               <Tooltip content="关闭" theme="light">
                 <button
                   className="chat-drawer__close-btn"

@@ -174,9 +174,9 @@ export interface ColdStartSuggestion {
 export const AI_COLD_START_SUGGESTIONS: Record<'zh' | 'en', ColdStartSuggestion[]> = {
   zh: [
     {
-      content: '生成灵感图：咖啡文化灵感板，咖啡豆、拉花、咖啡馆场景',
+      content: '生成灵感图：咖啡文化，16图',
       scene: '灵感图',
-      tips: '调用1次文本模型 + 1次生图模型',
+      tips: '调用1次文本模型 + 1次生图模型（最多16张）',
       modelType: 'inspiration-board',
     },
     {

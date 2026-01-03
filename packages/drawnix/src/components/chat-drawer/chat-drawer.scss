@@ -110,6 +110,38 @@ $border-radius: 12px;
     text-overflow: ellipsis;
     flex: 1;
     min-width: 0;
+
+    &--editable {
+      cursor: pointer;
+      border-radius: 4px;
+      padding: 2px 6px;
+      margin: -2px -6px;
+      transition: background 0.2s ease;
+
+      &:hover {
+        background: var(--td-bg-color-container-hover);
+      }
+    }
+  }
+
+  &__title-input {
+    flex: 1;
+    min-width: 150px;
+    width: 100%;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--td-text-color-primary);
+    background: var(--td-bg-color-container);
+    border: 1px solid var(--td-brand-color);
+    border-radius: 4px;
+    padding: 2px 6px;
+    outline: none;
+    box-sizing: border-box;
+
+    &:focus {
+      border-color: var(--td-brand-color);
+      box-shadow: 0 0 0 2px rgba(0, 82, 217, 0.1);
+    }
   }
 
   &__actions {

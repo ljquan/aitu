@@ -204,7 +204,7 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
     };
 
     /**
-     * 处理灵感图任务：智能检测并分割，以灵感图布局插入
+     * 处理灵感图任务：智能检测分割线并拆分，以网格布局插入
      */
     const handleInspirationBoardTask = async (task: Task) => {
       const board = getCanvasBoard();
@@ -220,18 +220,18 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
         return;
       }
 
-      console.log(`[AutoInsert] Processing inspiration board task ${task.id} with intelligent detection`);
+      console.log(`[AutoInsert] Processing inspiration board task ${task.id} with grid detection`);
 
       try {
-        // 使用智能检测模式拆分灵感图（自动检测不规则区域）
+        // 使用分割线检测模式拆分灵感图（检测白色分割线 + 递归拆分）
         const result = await imageSplitService.splitAndInsert(board, url, {
-          mode: 'inspiration-board', // 使用智能检测模式
-          layoutStyle: 'inspiration-board', // 使用灵感图布局
-          gap: 15,
+          mode: 'inspiration-board', // 使用分割线检测 + 递归拆分
+          layoutStyle: 'grid', // 使用网格布局，避免重叠
+          gap: 20,
         });
 
         if (result.success) {
-          console.log(`[AutoInsert] Inspiration board split into ${result.count} images using intelligent detection`);
+          console.log(`[AutoInsert] Inspiration board split into ${result.count} images`);
         } else {
           console.error(`[AutoInsert] Inspiration board split failed: ${result.error}`);
         }

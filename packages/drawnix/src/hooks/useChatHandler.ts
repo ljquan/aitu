@@ -84,7 +84,6 @@ interface ToolCallResult {
 
 interface UseChatHandlerOptions {
   sessionId: string | null;
-  onSessionTitleUpdate?: (sessionId: string, title: string) => void;
   /** 临时模型（仅在当前会话中使用，不影响全局设置） */
   temporaryModel?: string;
   /** 工具调用回调 - 当 AI 响应中包含工具调用时触发 */
@@ -156,7 +155,7 @@ function fromChatUIMessage(msg: Message, sessionId: string): ChatMessage {
 export function useChatHandler(options: UseChatHandlerOptions): ChatHandler & {
   isLoading: boolean;
 } {
-  const { sessionId, onSessionTitleUpdate, temporaryModel, onToolCalls, onWorkflowUpdate } = options;
+  const { sessionId, temporaryModel, onToolCalls, onWorkflowUpdate } = options;
 
   // 生成系统提示词（包含 MCP 工具定义）
   const systemPromptRef = useRef<string>(generateSystemPrompt());
@@ -195,16 +194,6 @@ export function useChatHandler(options: UseChatHandlerOptions): ChatHandler & {
     loadMessages();
   }, [sessionId]);
 
-  // Generate session title from first user message
-  const generateTitle = useCallback(
-    (content: string) => {
-      if (!sessionId) return;
-      const title = content.slice(0, 30) + (content.length > 30 ? '...' : '');
-      onSessionTitleUpdate?.(sessionId, title);
-    },
-    [sessionId, onSessionTitleUpdate]
-  );
-
   // Send message implementation
   const sendMessage = useCallback(
     async (msg: Message) => {
@@ -219,15 +208,8 @@ export function useChatHandler(options: UseChatHandlerOptions): ChatHandler & {
       // Update messages state
       setMessages((prev) => [...prev, msg]);
 
-      // Update session title from first message
+      // Get current session for message count
       const session = await chatStorageService.getSession(sessionId);
-      if (session && session.messageCount === 0) {
-        const textContent = msg.parts
-          .filter((p) => p.type === 'text')
-          .map((p) => (p as { type: 'text'; text: string }).text)
-          .join('');
-        generateTitle(textContent);
-      }
 
       await chatStorageService.updateSession(sessionId, {
         updatedAt: Date.now(),
@@ -400,7 +382,7 @@ export function useChatHandler(options: UseChatHandlerOptions): ChatHandler & {
         currentAssistantMsgRef.current = null;
       }
     },
-    [sessionId, messages, generateTitle]
+    [sessionId, messages]
   );
 
   // Stop generation

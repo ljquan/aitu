@@ -83,7 +83,6 @@ class ImageSplitService {
    * @returns 拆分后的图片元素数组
    */
   async splitByGrid(imageUrl: string, config: GridConfig): Promise<ImageElement[]> {
-    console.log(`[ImageSplitService] Splitting by grid: ${config.rows}x${config.cols}`);
     return gridSplitter.split(imageUrl, config);
   }
 
@@ -98,11 +97,8 @@ class ImageSplitService {
     elements: ImageElement[];
     gridConfig: GridConfig;
   }> {
-    console.log('[ImageSplitService] Splitting by auto detection (with recursive)');
-
     // 检测分割线
     const detection = await detectGridLines(imageUrl);
-    console.log('[ImageSplitService] Detected grid:', detection);
 
     // 如果没有检测到分割线，返回空数组
     if (detection.rows <= 1 && detection.cols <= 1) {
@@ -135,8 +131,6 @@ class ImageSplitService {
     const cols = Math.ceil(Math.sqrt(elements.length));
     const rows = Math.ceil(elements.length / cols);
 
-    console.log(`[ImageSplitService] Recursive split: ${initialElements.length} -> ${elements.length} images`);
-
     return {
       elements,
       gridConfig: { rows, cols },
@@ -154,12 +148,9 @@ class ImageSplitService {
     elements: ImageElement[];
     gridConfig: GridConfig;
   }> {
-    console.log('[ImageSplitService] Splitting inspiration board by intelligent detection');
-
     const elements = await splitPhotoWall(imageUrl);
 
     if (elements.length === 0) {
-      console.log('[ImageSplitService] No inspiration board regions detected');
       return {
         elements: [],
         gridConfig: { rows: 1, cols: 1 },
@@ -169,8 +160,6 @@ class ImageSplitService {
     // 估算网格配置（用于布局计算）
     const cols = Math.ceil(Math.sqrt(elements.length));
     const rows = Math.ceil(elements.length / cols);
-
-    console.log(`[ImageSplitService] Inspiration board split into ${elements.length} images (estimated grid: ${rows}x${cols})`);
 
     return {
       elements,
@@ -197,7 +186,8 @@ class ImageSplitService {
       const elements = await this.splitByGrid(imageUrl, gridConfig);
       return { elements, gridConfig };
     } else if (mode === 'inspiration-board') {
-      return this.splitPhotoWall(imageUrl);
+      // 灵感图使用分割线检测 + 递归拆分（和 auto 模式相同）
+      return this.splitByDetection(imageUrl);
     } else {
       return this.splitByDetection(imageUrl);
     }
@@ -285,7 +275,6 @@ class ImageSplitService {
       baseX = bottomPoint?.[0] ?? baseX;
     }
 
-    console.log(`[ImageSplitService] Inserting ${elements.length} elements at (${baseX}, ${baseY})`);
 
     // 按 zIndex 排序
     const sortedElements = [...elements].sort((a, b) => a.zIndex - b.zIndex);
@@ -304,7 +293,6 @@ class ImageSplitService {
       DrawTransforms.insertImage(board, imageItem, [insertX, insertY] as Point);
     }
 
-    console.log('[ImageSplitService] All elements inserted successfully');
   }
 
   /**

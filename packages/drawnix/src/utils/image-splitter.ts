@@ -231,8 +231,6 @@ async function detectGridLinesInternal(imageUrl: string): Promise<{
  */
 export async function detectGridLines(imageUrl: string): Promise<GridDetectionResult> {
   const { detection } = await detectGridLinesInternal(imageUrl);
-  console.log('[ImageSplitter] Detected horizontal lines:', detection.rowLines);
-  console.log('[ImageSplitter] Detected vertical lines:', detection.colLines);
   return detection;
 }
 
@@ -388,45 +386,34 @@ export async function recursiveSplitElement(
   depth: number = 0,
   maxDepth: number = 3
 ): Promise<SplitImageElement[]> {
-  console.log(`[ImageSplitter] recursiveSplitElement depth=${depth}, element size=${element.width}x${element.height}`);
-
   // 防止无限递归
   if (depth >= maxDepth) {
-    console.log(`[ImageSplitter] Max depth ${maxDepth} reached, stopping recursion`);
     return [element];
   }
 
   // 检测子元素中的分割线
   const detection = await detectGridLines(element.imageData);
-  console.log(`[ImageSplitter] Depth ${depth}: detection result = ${detection.rows}x${detection.cols}, lines: h=${detection.rowLines.length}, v=${detection.colLines.length}`);
 
   // 如果没有检测到分割线，返回当前元素
   if (detection.rows <= 1 && detection.cols <= 1) {
-    console.log(`[ImageSplitter] Depth ${depth}: No split lines found, returning element as-is`);
     return [element];
   }
 
-  console.log(`[ImageSplitter] Depth ${depth}: Found ${detection.rows}x${detection.cols} grid in sub-image`);
-
   // 有分割线，继续拆分
   const subElements = await splitImageByLines(element.imageData, detection);
-  console.log(`[ImageSplitter] Depth ${depth}: splitImageByLines returned ${subElements.length} elements`);
 
   // 如果拆分结果和原来一样（只有 1 个），返回当前元素
   if (subElements.length <= 1) {
-    console.log(`[ImageSplitter] Depth ${depth}: Only ${subElements.length} sub-element, returning original`);
     return [element];
   }
 
   // 递归处理每个子元素
   const allResults: SplitImageElement[] = [];
-  for (let i = 0; i < subElements.length; i++) {
-    console.log(`[ImageSplitter] Depth ${depth}: Recursing into sub-element ${i + 1}/${subElements.length}`);
-    const recursiveResults = await recursiveSplitElement(subElements[i], depth + 1, maxDepth);
+  for (const subEl of subElements) {
+    const recursiveResults = await recursiveSplitElement(subEl, depth + 1, maxDepth);
     allResults.push(...recursiveResults);
   }
 
-  console.log(`[ImageSplitter] Depth ${depth}: Returning ${allResults.length} total elements`);
   return allResults;
 }
 
@@ -446,17 +433,13 @@ export async function splitAndInsertImages(
   sourceRect?: SourceImageRect
 ): Promise<{ success: boolean; count: number; error?: string }> {
   try {
-    console.log('[ImageSplitter] Starting smart split...');
-
     // 1. 先尝试检测网格分割线
     const detection = await detectGridLines(imageUrl);
-    console.log('[ImageSplitter] Grid detection result:', detection);
 
     let elements: SplitImageElement[] = [];
 
     if (detection.rows > 1 || detection.cols > 1) {
       // 网格分割线格式
-      console.log('[ImageSplitter] Using grid split mode');
       const initialElements = await splitImageByLines(imageUrl, detection);
 
       // 递归拆分每个元素
@@ -466,11 +449,9 @@ export async function splitAndInsertImages(
       }
     } else {
       // 2. 尝试灵感图格式（已内置递归拆分）
-      console.log('[ImageSplitter] Grid not detected, trying inspiration board mode...');
       const isPhotoWall = await detectPhotoWallFormat(imageUrl);
 
       if (isPhotoWall) {
-        console.log('[ImageSplitter] Using inspiration board split mode');
         const { splitPhotoWall } = await import('./photo-wall-splitter');
         const inspirationBoardElements = await splitPhotoWall(imageUrl);
 
@@ -497,8 +478,6 @@ export async function splitAndInsertImages(
     // 重新分配 index
     elements = elements.map((el, idx) => ({ ...el, index: idx }));
 
-    console.log(`[ImageSplitter] Split into ${elements.length} images (after recursive split)`);
-
     // 3. 获取原图的实际像素尺寸，计算缩放比例
     const originalImage = await loadImage(imageUrl);
     const originalPixelWidth = originalImage.naturalWidth;
@@ -512,8 +491,6 @@ export async function splitAndInsertImages(
         sourceRect.height / originalPixelHeight
       );
     }
-
-    console.log(`[ImageSplitter] Original: ${originalPixelWidth}x${originalPixelHeight}, Display: ${sourceRect?.width}x${sourceRect?.height}, Scale: ${scale}`);
 
     // 4. 计算插入位置（在源图片下方，左对齐）
     let baseX: number;
@@ -547,8 +524,6 @@ export async function splitAndInsertImages(
     const cellWidth = maxScaledWidth + gap;
     const cellHeight = maxScaledHeight + gap;
 
-    console.log(`[ImageSplitter] Grid layout: ${rows}x${cols}, cell=${cellWidth.toFixed(1)}x${cellHeight.toFixed(1)}, scale=${scale}`);
-
     // 按网格布局插入
     for (let i = 0; i < scaledElements.length; i++) {
       const element = scaledElements[i];
@@ -572,14 +547,11 @@ export async function splitAndInsertImages(
       DrawTransforms.insertImage(board, imageItem, [insertX, insertY] as Point);
     }
 
-    console.log('[ImageSplitter] Successfully inserted all images');
-
     return {
       success: true,
       count: elements.length,
     };
   } catch (error: any) {
-    console.error('[ImageSplitter] Split failed:', error);
     return {
       success: false,
       count: 0,
