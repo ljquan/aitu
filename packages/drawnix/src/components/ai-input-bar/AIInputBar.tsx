@@ -657,13 +657,20 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
       console.log('[AIInputBar] Parsed params:', parsedParams);
       console.log('[AIInputBar] Key params - model:', parsedParams.modelId, 'count:', parsedParams.count, 'size:', parsedParams.size);
 
-      // 保存提示词到历史记录
-      // 有选中元素时：保存完整输入（包含模型/参数/个数），用于在模型面板中展示
-      // 无选中元素时：保存完整输入，用于在创意面板中展示
+      // 保存历史记录
+      // 有选中文本元素时：保存选中的文本元素内容（去重后）
+      // 无选中元素时：保存用户输入的提示词，用于在创意面板中展示
       const hasSelection = selectedContent.length > 0;
-      const historyContent = prompt.trim();
-      if (historyContent) {
-        addHistory(historyContent, hasSelection);
+      const selectedTexts = selectedContent
+        .filter((item) => item.type === 'text' && item.text)
+        .map((item) => item.text!);
+
+      if (hasSelection && selectedTexts.length > 0) {
+        // 有选中文本元素时，保存每个文本元素的内容
+        // 服务层会自动去重
+        for (const text of selectedTexts) {
+          addHistory(text, true);
+        }
       }
 
       // 收集所有参考媒体（图片 + 图形 + 视频）

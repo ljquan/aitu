@@ -181,7 +181,7 @@ export const MoreToolsButton: React.FC<MoreToolsButtonProps> = ({
           <ToolButton
             type="icon"
             icon={MoreIcon}
-            title={t('toolbar.more')}
+            title={isOpen ? undefined : t('toolbar.more')}
             tooltipPlacement={embedded ? 'right' : 'bottom'}
             aria-label={t('toolbar.more')}
             selected={isOpen}
