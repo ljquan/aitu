@@ -112,7 +112,7 @@ function executeQueue(params: GridImageToolParams, options: MCPExecuteOptions): 
       }
     } else {
       // 创建宫格图任务（使用 IMAGE 类型复用图片生成能力）
-      // 任务完成后由 image-split-service 处理分割和布局
+      // 任务完成后由 useAutoInsertToCanvas 使用 splitAndInsertImages 处理分割和布局
       task = taskQueueService.createTask(
         {
           prompt,

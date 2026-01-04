@@ -1,4 +1,4 @@
-import { getSelectedElements, PlaitBoard, PlaitElement, getRectangleByElements, RectangleClient, toImage, Point } from '@plait/core';
+import { getSelectedElements, PlaitBoard, PlaitElement, getRectangleByElements, RectangleClient, toImage, Point, BoardTransforms, getViewportOrigination } from '@plait/core';
 import { MindElement } from '@plait/mind';
 import { PlaitDrawElement } from '@plait/draw';
 import { Node } from 'slate';
@@ -736,4 +736,81 @@ export const getInsertionPointBelowBottommostElement = (board: PlaitBoard, image
 export const getSmartInsertionPoint = (board: PlaitBoard, defaultPoint?: Point): Point | undefined => {
   const calculatedPoint = getInsertionPointForSelectedElements(board);
   return calculatedPoint || defaultPoint;
+};
+
+/**
+ * 检查一个点是否在当前视口内可见
+ * @param board - PlaitBoard 实例
+ * @param point - 要检查的点坐标
+ * @param margin - 边距，点距离视口边缘的最小距离（默认 50px）
+ * @returns 如果点在视口内可见则返回 true
+ */
+export const isPointInViewport = (board: PlaitBoard, point: Point, margin: number = 50): boolean => {
+  try {
+    const boardContainer = PlaitBoard.getBoardContainer(board);
+    const containerRect = boardContainer.getBoundingClientRect();
+    const zoom = board.viewport.zoom;
+    const origination = getViewportOrigination(board);
+
+    if (!origination) {
+      return false;
+    }
+
+    // 计算视口的画布坐标范围
+    const viewportLeft = origination[0] + margin / zoom;
+    const viewportTop = origination[1] + margin / zoom;
+    const viewportRight = origination[0] + (containerRect.width - margin) / zoom;
+    const viewportBottom = origination[1] + (containerRect.height - margin) / zoom;
+
+    // 检查点是否在视口范围内
+    return (
+      point[0] >= viewportLeft &&
+      point[0] <= viewportRight &&
+      point[1] >= viewportTop &&
+      point[1] <= viewportBottom
+    );
+  } catch (error) {
+    console.warn('Error checking if point is in viewport:', error);
+    return false;
+  }
+};
+
+/**
+ * 滚动视口使指定点居中显示
+ * @param board - PlaitBoard 实例
+ * @param point - 目标点坐标（画布坐标系）
+ */
+export const scrollToPoint = (board: PlaitBoard, point: Point): void => {
+  try {
+    const boardContainer = PlaitBoard.getBoardContainer(board);
+    const containerRect = boardContainer.getBoundingClientRect();
+    const zoom = board.viewport.zoom;
+
+    // 计算新的视口原点，使目标点居中
+    const newOriginationX = point[0] - containerRect.width / (2 * zoom);
+    const newOriginationY = point[1] - containerRect.height / (2 * zoom);
+
+    console.log('[scrollToPoint] Scrolling to point:', {
+      targetPoint: point,
+      currentZoom: zoom,
+      newOrigination: [newOriginationX, newOriginationY],
+    });
+
+    // 使用 BoardTransforms 更新视口位置，保持当前缩放不变
+    BoardTransforms.updateViewport(board, [newOriginationX, newOriginationY], zoom);
+  } catch (error) {
+    console.warn('Error scrolling to point:', error);
+  }
+};
+
+/**
+ * 如果点不在当前视口内，则滚动视口使其可见（居中显示）
+ * @param board - PlaitBoard 实例
+ * @param point - 目标点坐标（画布坐标系）
+ * @param margin - 边距检查值（默认 100px）
+ */
+export const scrollToPointIfNeeded = (board: PlaitBoard, point: Point, margin: number = 100): void => {
+  if (!isPointInViewport(board, point, margin)) {
+    scrollToPoint(board, point);
+  }
 };

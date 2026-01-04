@@ -3,7 +3,7 @@ import {
   Point,
   getRectangleByElements,
 } from '@plait/core';
-import { getInsertionPointForSelectedElements, getInsertionPointBelowBottommostElement } from '../utils/selection-utils';
+import { getInsertionPointForSelectedElements, getInsertionPointBelowBottommostElement, scrollToPointIfNeeded } from '../utils/selection-utils';
 import { urlCacheService } from '../services/url-cache-service';
 
 /**
@@ -224,7 +224,8 @@ export const insertVideoFromUrl = async (
   videoUrl: string,
   startPoint?: Point,
   isDrop?: boolean,
-  referenceDimensions?: { width: number; height: number }
+  referenceDimensions?: { width: number; height: number },
+  skipScroll?: boolean
 ) => {
   if (!board) {
     throw new Error('Board is required for video insertion');
@@ -296,6 +297,20 @@ export const insertVideoFromUrl = async (
     const { DrawTransforms } = await import('@plait/draw');
     DrawTransforms.insertImage(board, videoAsImageElement, insertionPoint);
     console.log('Video inserted successfully with scaled dimensions:', displayDimensions);
+
+    // 插入后滚动视口到新元素位置（如果不在视口内）
+    // skipScroll 用于批量插入场景，由上层统一处理滚动
+    if (insertionPoint && !isDrop && !skipScroll) {
+      // 计算视频中心点位置用于滚动
+      const centerPoint: Point = [
+        insertionPoint[0] + displayDimensions.width / 2,
+        insertionPoint[1] + displayDimensions.height / 2,
+      ];
+      // 使用 requestAnimationFrame 确保 DOM 更新后再滚动
+      requestAnimationFrame(() => {
+        scrollToPointIfNeeded(board, centerPoint);
+      });
+    }
 
   } catch (error) {
     console.error('Failed to insert video:', error);

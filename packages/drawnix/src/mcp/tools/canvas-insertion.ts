@@ -12,6 +12,7 @@ import { PlaitBoard, Point, getRectangleByElements } from '@plait/core';
 import { DrawTransforms } from '@plait/draw';
 import { insertImageFromUrl } from '../../data/image';
 import { insertVideoFromUrl } from '../../data/video';
+import { scrollToPointIfNeeded } from '../../utils/selection-utils';
 
 /**
  * 内容类型
@@ -212,7 +213,8 @@ async function insertImageToCanvas(
   imageUrl: string,
   point: Point
 ): Promise<{ width: number; height: number }> {
-  await insertImageFromUrl(board, imageUrl, point, false);
+  // skipScroll: true - 由 executeCanvasInsertion 统一处理滚动
+  await insertImageFromUrl(board, imageUrl, point, false, undefined, true);
   // 返回默认尺寸，实际尺寸在插入时已处理
   return { width: LAYOUT_CONSTANTS.MEDIA_DEFAULT_SIZE, height: LAYOUT_CONSTANTS.MEDIA_DEFAULT_SIZE };
 }
@@ -225,7 +227,8 @@ async function insertVideoToCanvas(
   videoUrl: string,
   point: Point
 ): Promise<{ width: number; height: number }> {
-  await insertVideoFromUrl(board, videoUrl, point, false);
+  // skipScroll: true - 由 executeCanvasInsertion 统一处理滚动
+  await insertVideoFromUrl(board, videoUrl, point, false, undefined, true);
   return { width: LAYOUT_CONSTANTS.MEDIA_DEFAULT_SIZE, height: 225 };
 }
 
@@ -323,11 +326,26 @@ async function executeCanvasInsertion(params: CanvasInsertionParams): Promise<MC
 
     console.log('[CanvasInsertion] Successfully inserted', insertedItems.length, 'items');
 
+    // 插入完成后，滚动到第一个插入元素的位置
+    if (insertedItems.length > 0) {
+      const firstItem = insertedItems[0];
+      // 计算第一个元素的中心点
+      const centerPoint: Point = [
+        firstItem.point[0] + LAYOUT_CONSTANTS.MEDIA_DEFAULT_SIZE / 2,
+        firstItem.point[1] + LAYOUT_CONSTANTS.MEDIA_DEFAULT_SIZE / 2,
+      ];
+      requestAnimationFrame(() => {
+        scrollToPointIfNeeded(board, centerPoint);
+      });
+    }
+
     return {
       success: true,
       data: {
         insertedCount: insertedItems.length,
         items: insertedItems,
+        // 返回第一个元素的位置，供上层使用
+        firstElementPosition: insertedItems.length > 0 ? insertedItems[0].point : undefined,
       },
       type: 'text',
     };

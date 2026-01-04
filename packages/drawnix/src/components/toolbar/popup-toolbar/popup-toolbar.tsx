@@ -464,10 +464,13 @@ export const PopupToolbar = () => {
                       // 获取源图片的位置信息
                       const sourceRect = getRectangleByElements(board, [imageElement], false);
                       const result = await splitAndInsertImages(board, imageElement.url, {
-                        x: sourceRect.x,
-                        y: sourceRect.y,
-                        width: sourceRect.width,
-                        height: sourceRect.height,
+                        sourceRect: {
+                          x: sourceRect.x,
+                          y: sourceRect.y,
+                          width: sourceRect.width,
+                          height: sourceRect.height,
+                        },
+                        scrollToResult: true,
                       });
                       MessagePlugin.closeAll();
                       if (result.success) {

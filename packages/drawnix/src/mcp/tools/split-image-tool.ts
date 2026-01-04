@@ -2,14 +2,11 @@
  * 图片拆分 MCP 工具
  *
  * 将一张图片拆分成多个独立图片并插入画板
- * 支持两种模式：
- * - grid：按指定的行列数均匀分割
- * - auto：智能检测白色分割线并拆分
+ * 使用智能检测模式自动识别网格分割线或灵感图格式
  */
 
 import type { MCPTool, MCPResult, MCPExecuteOptions } from '../types';
-import { imageSplitService, SplitMode } from '../../services/image-split-service';
-import type { LayoutStyle, GridConfig } from '../../types/photo-wall.types';
+import { splitAndInsertImages } from '../../utils/image-splitter';
 import { getCanvasBoard } from './canvas-insertion';
 
 /**
@@ -18,16 +15,6 @@ import { getCanvasBoard } from './canvas-insertion';
 export interface SplitImageToolParams {
   /** 图片 URL（支持 http/https/base64） */
   imageUrl: string;
-  /** 拆分模式：grid（网格）/ auto（智能检测） */
-  mode?: SplitMode;
-  /** 网格行数（grid 模式使用） */
-  rows?: number;
-  /** 网格列数（grid 模式使用） */
-  cols?: number;
-  /** 布局风格 */
-  layoutStyle?: LayoutStyle;
-  /** 元素间距 */
-  gap?: number;
 }
 
 /**
@@ -50,14 +37,7 @@ async function executeSplit(
   params: SplitImageToolParams,
   _options: MCPExecuteOptions
 ): Promise<MCPResult> {
-  const {
-    imageUrl,
-    mode = 'auto',
-    rows = 3,
-    cols = 3,
-    layoutStyle = 'grid',
-    gap = 20,
-  } = params;
+  const { imageUrl } = params;
 
   // 验证参数
   if (!isValidImageUrl(imageUrl)) {
@@ -78,26 +58,13 @@ async function executeSplit(
     };
   }
 
-  // 验证网格参数
-  const validRows = Math.min(Math.max(1, rows), 10);
-  const validCols = Math.min(Math.max(1, cols), 10);
-
-  const gridConfig: GridConfig | undefined =
-    mode === 'grid' ? { rows: validRows, cols: validCols } : undefined;
-
-  console.log('[SplitImageTool] Executing split with params:', {
-    mode,
-    gridConfig,
-    layoutStyle,
-    gap,
-  });
+  console.log('[SplitImageTool] Executing split with smart detection');
 
   try {
-    const result = await imageSplitService.splitAndInsert(board, imageUrl, {
-      mode,
-      gridConfig,
-      layoutStyle,
-      gap,
+    // 使用统一的 splitAndInsertImages 函数
+    // 自动检测网格或灵感图格式、去除白边、清理子图白边并滚动到结果位置
+    const result = await splitAndInsertImages(board, imageUrl, {
+      scrollToResult: true,
     });
 
     if (!result.success) {
@@ -108,19 +75,11 @@ async function executeSplit(
       };
     }
 
-    const resultData: Record<string, unknown> = {
-      count: result.count,
-      mode,
-      layoutStyle,
-    };
-
-    if (result.detectedGrid) {
-      resultData.detectedGrid = result.detectedGrid;
-    }
-
     return {
       success: true,
-      data: resultData,
+      data: {
+        count: result.count,
+      },
       type: 'text',
     };
   } catch (error: any) {
@@ -145,14 +104,12 @@ export const splitImageTool: MCPTool = {
 - 用户想要将宫格图图片拆分后重新排列
 - 用户有一张包含多个产品的图片，想要分开展示
 
-支持两种拆分模式：
-1. auto（智能检测）：自动检测图片中的白色/浅色分割线，适用于有明显分隔的拼贴图
-2. grid（网格拆分）：按指定的行列数均匀分割，适用于已知网格结构的图片
-
-布局风格：
-- grid：整齐的网格排列
-- scattered：随机散落效果
-- circular：环形分布
+功能特点：
+- 自动检测图片中的白色/浅色分割线
+- 支持检测灵感图格式（灰色背景 + 白边框图片）
+- 自动去除图片四周白边
+- 对每个拆分后的子图进行白边清理
+- 拆分后自动滚动到结果位置
 
 不适用场景：
 - 想要生成图片（使用 generate_image 工具）
@@ -165,33 +122,6 @@ export const splitImageTool: MCPTool = {
       imageUrl: {
         type: 'string',
         description: '要拆分的图片 URL（支持 http/https/base64/blob 格式）',
-      },
-      mode: {
-        type: 'string',
-        description: '拆分模式：auto（智能检测分割线）或 grid（按固定网格分割）',
-        enum: ['auto', 'grid'],
-        default: 'auto',
-      },
-      rows: {
-        type: 'number',
-        description: '网格行数（1-10），仅 grid 模式有效',
-        default: 3,
-      },
-      cols: {
-        type: 'number',
-        description: '网格列数（1-10），仅 grid 模式有效',
-        default: 3,
-      },
-      layoutStyle: {
-        type: 'string',
-        description: '拆分后的布局风格',
-        enum: ['grid', 'scattered', 'circular'],
-        default: 'grid',
-      },
-      gap: {
-        type: 'number',
-        description: '元素之间的间距（像素）',
-        default: 20,
       },
     },
     required: ['imageUrl'],

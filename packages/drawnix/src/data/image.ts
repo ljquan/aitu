@@ -10,7 +10,7 @@ import { getDataURL } from './blob';
 import { MindElement, MindTransforms } from '@plait/mind';
 import { DrawTransforms } from '@plait/draw';
 import { getElementOfFocusedImage } from '@plait/common';
-import { getInsertionPointForSelectedElements, getInsertionPointBelowBottommostElement } from '../utils/selection-utils';
+import { getInsertionPointForSelectedElements, getInsertionPointBelowBottommostElement, scrollToPointIfNeeded } from '../utils/selection-utils';
 import { urlCacheService } from '../services/url-cache-service';
 
 /**
@@ -208,6 +208,19 @@ export const insertImage = async (
     }
 
     DrawTransforms.insertImage(board, imageItem, insertionPoint);
+
+    // 插入后滚动视口到新元素位置（如果不在视口内）
+    if (insertionPoint && !isDrop) {
+      // 计算图片中心点位置用于滚动
+      const centerPoint: Point = [
+        insertionPoint[0] + imageItem.width / 2,
+        insertionPoint[1] + imageItem.height / 2,
+      ];
+      // 使用 requestAnimationFrame 确保 DOM 更新后再滚动
+      requestAnimationFrame(() => {
+        scrollToPointIfNeeded(board, centerPoint);
+      });
+    }
   }
 };
 
@@ -216,7 +229,8 @@ export const insertImageFromUrl = async (
   imageUrl: string,
   startPoint?: Point,
   isDrop?: boolean,
-  referenceDimensions?: { width: number; height: number }
+  referenceDimensions?: { width: number; height: number },
+  skipScroll?: boolean
 ) => {
   // 只有在没有提供startPoint和referenceDimensions时,才获取当前选中元素
   // 当从AI生成对话框调用时,已经传入了这些参数,不应该依赖当前选中状态
@@ -270,4 +284,18 @@ export const insertImageFromUrl = async (
   }
 
   DrawTransforms.insertImage(board, imageItem, insertionPoint);
+
+  // 插入后滚动视口到新元素位置（如果不在视口内）
+  // skipScroll 用于批量插入场景，由上层统一处理滚动
+  if (insertionPoint && !isDrop && !skipScroll) {
+    // 计算图片中心点位置用于滚动
+    const centerPoint: Point = [
+      insertionPoint[0] + imageItem.width / 2,
+      insertionPoint[1] + imageItem.height / 2,
+    ];
+    // 使用 requestAnimationFrame 确保 DOM 更新后再滚动
+    requestAnimationFrame(() => {
+      scrollToPointIfNeeded(board, centerPoint);
+    });
+  }
 };

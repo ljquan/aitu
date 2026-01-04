@@ -14,12 +14,11 @@
 import { useEffect, useRef } from 'react';
 import type { Point } from '@plait/core';
 import { taskQueueService } from '../services/task-queue-service';
-import { imageSplitService } from '../services/image-split-service';
 import { workflowCompletionService } from '../services/workflow-completion-service';
 import { Task, TaskStatus, TaskType } from '../types/task.types';
 import { getCanvasBoard, insertAIFlow, insertImageGroup } from '../mcp';
 import { getInsertionPointBelowBottommostElement } from '../utils/selection-utils';
-import type { LayoutStyle } from '../types/photo-wall.types';
+import { splitAndInsertImages } from '../utils/image-splitter';
 
 /**
  * 配置项
@@ -212,8 +211,11 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
     /**
      * 处理宫格图任务：拆分并插入
      *
-     * 注意：由于AI生成的实际网格可能与用户指定的不一致（如用户要求16宫格但AI生成了3x4=12格），
-     * 这里改用智能检测模式（auto）来识别实际的网格结构，而不是盲目使用用户指定的参数。
+     * 使用 splitAndInsertImages 进行智能检测和拆分，包括：
+     * - 自动去除四周白边
+     * - 智能检测网格分割线
+     * - 对每个子图进行白边清理
+     * - 自动滚动到插入位置
      */
     const handleGridImageTask = async (task: Task) => {
       const board = getCanvasBoard();
@@ -226,7 +228,6 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
       const params = task.params as Record<string, unknown>;
       const userRows = params.gridImageRows as number;
       const userCols = params.gridImageCols as number;
-      const layoutStyle = (params.gridImageLayoutStyle as LayoutStyle) || 'scattered';
       const url = task.result?.url;
 
       if (!url) {
@@ -235,33 +236,29 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
         return;
       }
 
-      console.log(`[AutoInsert] Processing grid image task ${task.id}: user specified ${userRows}x${userCols}, style=${layoutStyle}`);
+      console.log(`[AutoInsert] Processing grid image task ${task.id}: user specified ${userRows}x${userCols}`);
 
       // 注册任务并开始后处理
       const batchId = params.batchId as string | undefined;
       workflowCompletionService.registerTask(task.id, batchId);
       workflowCompletionService.startPostProcessing(task.id, 'split_and_insert');
 
-      // 获取插入起始位置（用于后续滚动定位）
-      const startPoint = getInsertionPointBelowBottommostElement(board, 800);
-
       try {
-        // 使用智能检测模式（auto）来识别实际的网格结构
-        // 这样可以正确处理AI生成的实际网格与用户指定不一致的情况
-        const result = await imageSplitService.splitAndInsert(board, url, {
-          mode: 'auto', // 改用智能检测模式
-          layoutStyle,
-          gap: 20,
-          startPoint,
+        // 使用统一的 splitAndInsertImages 函数
+        // 该函数会自动检测网格、去除白边、清理子图白边并滚动到结果位置
+        const result = await splitAndInsertImages(board, url, {
+          scrollToResult: true,
         });
 
+        // 获取插入位置用于 workflow completion tracking
+        const insertionPoint = getInsertionPointBelowBottommostElement(board, 800);
+
         if (result.success) {
-          const detectedGrid = result.detectedGrid;
-          console.log(`[AutoInsert] Grid image split into ${result.count} images (detected: ${detectedGrid?.rows}x${detectedGrid?.cols}, user specified: ${userRows}x${userCols})`);
+          console.log(`[AutoInsert] Grid image split into ${result.count} images (user specified: ${userRows}x${userCols})`);
           workflowCompletionService.completePostProcessing(
             task.id,
             result.count,
-            startPoint as Point | undefined
+            insertionPoint
           );
         } else {
           console.error(`[AutoInsert] Grid image split failed: ${result.error}`);
@@ -275,6 +272,12 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
 
     /**
      * 处理灵感图任务：智能检测分割线并拆分，以网格布局插入
+     *
+     * 使用 splitAndInsertImages 进行智能检测和拆分，包括：
+     * - 自动去除四周白边
+     * - 智能检测网格分割线或灵感图格式
+     * - 对每个子图进行白边清理
+     * - 自动滚动到插入位置
      */
     const handleInspirationBoardTask = async (task: Task) => {
       const board = getCanvasBoard();
@@ -293,31 +296,29 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
         return;
       }
 
-      console.log(`[AutoInsert] Processing inspiration board task ${task.id} with grid detection`);
+      console.log(`[AutoInsert] Processing inspiration board task ${task.id}`);
 
       // 注册任务并开始后处理
       const batchId = params.batchId as string | undefined;
       workflowCompletionService.registerTask(task.id, batchId);
       workflowCompletionService.startPostProcessing(task.id, 'split_and_insert');
 
-      // 获取插入起始位置（用于后续滚动定位）
-      const startPoint = getInsertionPointBelowBottommostElement(board, 800);
-
       try {
-        // 使用分割线检测模式拆分灵感图（检测白色分割线 + 递归拆分）
-        const result = await imageSplitService.splitAndInsert(board, url, {
-          mode: 'inspiration-board', // 使用分割线检测 + 递归拆分
-          layoutStyle: 'grid', // 使用网格布局，避免重叠
-          gap: 20,
-          startPoint,
+        // 使用统一的 splitAndInsertImages 函数
+        // 该函数会自动检测网格或灵感图格式、去除白边、清理子图白边并滚动到结果位置
+        const result = await splitAndInsertImages(board, url, {
+          scrollToResult: true,
         });
+
+        // 获取插入位置用于 workflow completion tracking
+        const insertionPoint = getInsertionPointBelowBottommostElement(board, 800);
 
         if (result.success) {
           console.log(`[AutoInsert] Inspiration board split into ${result.count} images`);
           workflowCompletionService.completePostProcessing(
             task.id,
             result.count,
-            startPoint as Point | undefined
+            insertionPoint
           );
         } else {
           console.error(`[AutoInsert] Inspiration board split failed: ${result.error}`);

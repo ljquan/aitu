@@ -4,9 +4,10 @@
  * 检测图片中的白色/浅色分割线，自动将图片拆分成多个独立图片
  */
 
-import { PlaitBoard, Point } from '@plait/core';
+import { PlaitBoard, Point, getRectangleByElements, PlaitElement } from '@plait/core';
 import { DrawTransforms } from '@plait/draw';
 import { loadImage, trimBorders } from './image-border-utils';
+import { scrollToPointIfNeeded } from './selection-utils';
 
 /**
  * 分割后的图片元素
@@ -855,8 +856,6 @@ export interface SourceImageRect {
 /**
  * 递归拆分单个图片元素
  * 如果元素内还能检测到分割线，继续拆分
- *
- * @exported 供 image-split-service.ts 复用
  */
 /** 递归拆分的最小尺寸限制 */
 const MIN_SPLIT_SIZE = 100;
@@ -946,6 +945,60 @@ export async function recursiveSplitElement(
 }
 
 /**
+ * 获取画布最底部元素下方的插入位置
+ * 用于在没有指定 startPoint 和 sourceRect 时计算默认插入位置
+ */
+function getBottommostInsertionPoint(board: PlaitBoard): { x: number; y: number } {
+  if (!board.children || board.children.length === 0) {
+    return { x: 100, y: 100 };
+  }
+
+  try {
+    let bottommostElement: PlaitElement | null = null;
+    let maxBottomY = -Infinity;
+
+    for (const element of board.children) {
+      try {
+        const rect = getRectangleByElements(board, [element as PlaitElement], false);
+        const bottomY = rect.y + rect.height;
+
+        if (bottomY > maxBottomY) {
+          maxBottomY = bottomY;
+          bottommostElement = element as PlaitElement;
+        }
+      } catch {
+        // 忽略无法计算矩形的元素
+      }
+    }
+
+    if (!bottommostElement) {
+      return { x: 100, y: 100 };
+    }
+
+    const bottommostRect = getRectangleByElements(board, [bottommostElement], false);
+    // 在最底部元素的左侧开始，下方 50px
+    return {
+      x: bottommostRect.x,
+      y: bottommostRect.y + bottommostRect.height + 50,
+    };
+  } catch {
+    return { x: 100, y: 100 };
+  }
+}
+
+/**
+ * 拆分并插入选项
+ */
+export interface SplitAndInsertOptions {
+  /** 源图片的位置信息（用于计算插入位置和缩放） */
+  sourceRect?: SourceImageRect;
+  /** 自定义起始插入位置（优先于 sourceRect） */
+  startPoint?: Point;
+  /** 是否滚动到插入位置（默认 true） */
+  scrollToResult?: boolean;
+}
+
+/**
  * 智能拆分图片并插入到画板
  * 支持两种格式：
  * 1. 网格分割线格式（白色分割线）- 支持递归拆分
@@ -953,13 +1006,14 @@ export async function recursiveSplitElement(
  *
  * @param board - 画板实例
  * @param imageUrl - 图片 URL
- * @param sourceRect - 源图片的位置信息（用于计算插入位置）
+ * @param options - 拆分和插入选项
  */
 export async function splitAndInsertImages(
   board: PlaitBoard,
   imageUrl: string,
-  sourceRect?: SourceImageRect
+  options?: SplitAndInsertOptions
 ): Promise<{ success: boolean; count: number; error?: string }> {
+  const { sourceRect, startPoint, scrollToResult = true } = options || {};
   try {
     // 0. 前置步骤：去除四周白边
     const { trimmedImageUrl, borderInfo } = await trimImageWhiteBorders(imageUrl);
@@ -1060,16 +1114,27 @@ export async function splitAndInsertImages(
       );
     }
 
-    // 4. 计算插入位置（在源图片下方，左对齐）
+    // 4. 计算插入位置
+    // 优先使用 startPoint，其次使用 sourceRect，最后在画布最底部元素下方
     let baseX: number;
     let baseY: number;
 
-    if (sourceRect) {
+    if (startPoint) {
+      // 使用自定义起始位置
+      baseX = startPoint[0];
+      baseY = startPoint[1];
+      console.log('[splitAndInsertImages] Using startPoint:', { baseX, baseY });
+    } else if (sourceRect) {
+      // 在源图片下方，左对齐
       baseX = sourceRect.x;
       baseY = sourceRect.y + sourceRect.height + 20;
+      console.log('[splitAndInsertImages] Using sourceRect:', { sourceRect, baseX, baseY });
     } else {
-      baseX = 100;
-      baseY = 100;
+      // 查找画布最底部元素，在其下方插入
+      const bottomPosition = getBottommostInsertionPoint(board);
+      baseX = bottomPosition.x;
+      baseY = bottomPosition.y;
+      console.log('[splitAndInsertImages] Using bottommost position:', { baseX, baseY });
     }
 
     // 5. 使用网格布局，中心集中避免重叠
@@ -1092,6 +1157,9 @@ export async function splitAndInsertImages(
     const cellHeight = maxScaledHeight + gap;
 
     // 按网格布局插入
+    let firstInsertPoint: Point | undefined;
+    let firstElementSize: { width: number; height: number } | undefined;
+
     for (let i = 0; i < scaledElements.length; i++) {
       const element = scaledElements[i];
       const row = Math.floor(i / cols);
@@ -1105,6 +1173,12 @@ export async function splitAndInsertImages(
       const insertX = cellX + (cellWidth - element.scaledWidth) / 2;
       const insertY = cellY + (cellHeight - element.scaledHeight) / 2;
 
+      // 记录第一个插入点用于滚动
+      if (!firstInsertPoint) {
+        firstInsertPoint = [insertX, insertY] as Point;
+        firstElementSize = { width: element.scaledWidth, height: element.scaledHeight };
+      }
+
       const imageItem = {
         url: element.imageData,
         width: element.scaledWidth,
@@ -1112,6 +1186,17 @@ export async function splitAndInsertImages(
       };
 
       DrawTransforms.insertImage(board, imageItem, [insertX, insertY] as Point);
+    }
+
+    // 插入完成后滚动到第一个元素的位置
+    if (scrollToResult && firstInsertPoint && firstElementSize) {
+      const centerPoint: Point = [
+        firstInsertPoint[0] + firstElementSize.width / 2,
+        firstInsertPoint[1] + firstElementSize.height / 2,
+      ];
+      requestAnimationFrame(() => {
+        scrollToPointIfNeeded(board, centerPoint);
+      });
     }
 
     return {

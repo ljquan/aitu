@@ -21,7 +21,7 @@ import {
   getRectangleByElements,
   Transforms,
 } from '@plait/core';
-import { getSmartInsertionPoint } from '../../../utils/selection-utils';
+import { getSmartInsertionPoint, scrollToPointIfNeeded } from '../../../utils/selection-utils';
 
 /**
  * 代码块提取结果
@@ -558,6 +558,16 @@ export function insertElementsToCanvas(
         if (adjusted) {
           console.log('[InsertUtils] Adjusted overlapping elements');
         }
+
+        // 6. 滚动视口到新元素位置（如果不在视口内）
+        if (point) {
+          scrollToPointIfNeeded(board, point);
+        }
+      });
+    } else if (point) {
+      // 如果没有新元素需要调整，直接滚动
+      requestAnimationFrame(() => {
+        scrollToPointIfNeeded(board, point);
       });
     }
 
