@@ -62,8 +62,6 @@ const DRAWER_WIDTH_CACHE_KEY = 'chat-drawer-width';
 const DEFAULT_DRAWER_WIDTH = Math.max(375, window.innerWidth * 0.5);
 // 最小宽度
 const MIN_DRAWER_WIDTH = 375;
-// 最大宽度（留出工具栏空间）
-const MAX_DRAWER_WIDTH = window.innerWidth - 60;
 
 export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
   ({ defaultOpen = false, onOpenChange }, ref) => {
@@ -103,7 +101,7 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
     const [retryingWorkflowId, setRetryingWorkflowId] = useState<string | null>(null);
 
     // 获取重试执行器和选中内容（从 Context）
-    const { executeRetry, selectedContent, setSelectedContent } = useChatDrawer();
+    const { executeRetry, selectedContent } = useChatDrawer();
 
     // Refs for click outside detection
     const sessionListRef = React.useRef<HTMLDivElement>(null);
@@ -172,23 +170,26 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
           data?: unknown;
           error?: string;
           taskId?: string;
-        }>>
+        }>>,
+        aiAnalysis?: string
       ) => {
-        console.log('[ChatDrawer] Tool calls received:', toolCalls.length);
+        console.log('[ChatDrawer] Tool calls received:', toolCalls.length, 'aiAnalysis:', aiAnalysis?.substring(0, 50));
 
         // 创建工作流数据
         const workflowId = `workflow-${Date.now()}`;
         const workflowData: WorkflowMessageData = {
           id: workflowId,
-          name: '对话工作流',
+          name: 'AI 智能生成',
           generationType: toolCalls[0]?.name.includes('video') ? 'video' : 'image',
-          prompt: '',
+          prompt: aiAnalysis || '',
+          aiAnalysis: aiAnalysis,
           count: toolCalls.length,
           steps: toolCalls.map((tc, idx) => ({
             id: `step-${idx}`,
-            name: tc.name,
+            mcp: tc.name,
             status: 'pending' as const,
             description: getToolDescription(tc.name, tc.arguments),
+            args: tc.arguments,
           })),
         };
 
@@ -199,6 +200,9 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
           return newMap;
         });
         currentWorkflowMsgIdRef.current = messageId;
+
+        // 持久化工作流数据到存储
+        chatStorageService.updateMessage(messageId, { workflow: workflowData });
 
         // 执行工具
         try {
@@ -222,6 +226,11 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
                 }),
               };
               newMap.set(messageId, updatedWorkflow);
+              // 持久化更新后的工作流
+              chatStorageService.updateMessage(messageId, {
+                workflow: updatedWorkflow,
+                status: MessageStatus.SUCCESS,
+              });
             }
             return newMap;
           });
@@ -243,6 +252,11 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
                 })),
               };
               newMap.set(messageId, updatedWorkflow);
+              // 持久化失败状态
+              chatStorageService.updateMessage(messageId, {
+                workflow: updatedWorkflow,
+                status: MessageStatus.FAILED,
+              });
             }
             return newMap;
           });
@@ -696,7 +710,11 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
         await chatStorageService.addMessage(workflowChatMsg);
 
         // 直接设置消息（不通过 sendMessage，因为这不是普通对话）
-        chatHandler.setMessages?.([userMsg, workflowMsg]);
+        // 同时设置原始消息以确保多轮对话时上下文正确
+        chatHandler.setMessagesWithRaw?.(
+          [userMsg, workflowMsg],
+          [userChatMsg, workflowChatMsg]
+        );
       },
       [chatHandler, onOpenChange]
     );
@@ -715,8 +733,11 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
 
         // 持久化到本地存储
         chatStorageService.updateMessage(msgId, { workflow });
+
+        // 同步更新 chatHandler 中的原始消息，确保多轮对话上下文正确
+        chatHandler.updateRawMessageWorkflow?.(msgId, workflow);
       },
-      [activeSessionId, sessions]
+      [activeSessionId, sessions, chatHandler]
     );
 
     // 追加 Agent 执行日志（同时持久化）
@@ -737,11 +758,13 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
             newMap.set(msgId, updatedWorkflow);
             // 持久化到本地存储
             chatStorageService.updateMessage(msgId, { workflow: updatedWorkflow });
+            // 同步更新 chatHandler 中的原始消息
+            chatHandler.updateRawMessageWorkflow?.(msgId, updatedWorkflow);
           }
           return newMap;
         });
       },
-      []
+      [chatHandler]
     );
 
     // 更新 AI 思考内容（流式追加，使用防抖减少存储频率）
@@ -793,12 +816,14 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
             }
             thinkingUpdateTimeoutRef.current = setTimeout(() => {
               chatStorageService.updateMessage(msgId, { workflow: updatedWorkflow });
+              // 同步更新 chatHandler 中的原始消息
+              chatHandler.updateRawMessageWorkflow?.(msgId, updatedWorkflow);
             }, 500);
           }
           return newMap;
         });
       },
-      []
+      [chatHandler]
     );
 
     // 处理工作流重试
@@ -850,7 +875,23 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
       appendAgentLog: handleAppendAgentLog,
       updateThinkingContent: handleUpdateThinkingContent,
       isOpen: () => isOpen,
-    }), [isOpen, handleToggle, handleSendWrapper, handleSendWorkflowMessage, handleUpdateWorkflowMessage, handleAppendAgentLog, handleUpdateThinkingContent, onOpenChange]);
+      retryWorkflowFromStep: async (workflow: WorkflowMessageData, stepIndex: number) => {
+        // Find the message ID associated with this workflow
+        let targetMsgId: string | null = null;
+        for (const [msgId, wf] of workflowMessages.entries()) {
+          if (wf.id === workflow.id) {
+            targetMsgId = msgId;
+            break;
+          }
+        }
+
+        if (targetMsgId) {
+          await handleWorkflowRetry(targetMsgId, workflow, stepIndex);
+        } else {
+          console.warn('[ChatDrawer] Could not find message ID for workflow retry', workflow.id);
+        }
+      },
+    }), [isOpen, handleToggle, handleSendWrapper, handleSendWorkflowMessage, handleUpdateWorkflowMessage, handleAppendAgentLog, handleUpdateThinkingContent, onOpenChange, workflowMessages, handleWorkflowRetry]);
 
     // Wrapped handler for ChatSection
     const wrappedHandler = useMemo(

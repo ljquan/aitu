@@ -13,7 +13,7 @@ import {
   updateStepStatus,
   addStepsToWorkflow,
   getWorkflowStatus,
-  parseAIResponseToSteps,
+  parseAIResponse,
 } from '../components/ai-input-bar/workflow-converter';
 
 export interface WorkflowState {
@@ -46,8 +46,8 @@ export interface UseWorkflowReturn {
   ) => void;
   /** 添加新步骤（Agent 流程动态添加） */
   addSteps: (steps: WorkflowStep[]) => void;
-  /** 从 AI 响应解析并添加步骤 */
-  addStepsFromAIResponse: (response: string) => WorkflowStep[];
+  /** 从 AI 响应解析并添加步骤，返回解析结果 */
+  addStepsFromAIResponse: (response: string) => { content: string; steps: WorkflowStep[] };
   /** 重置工作流 */
   resetWorkflow: () => void;
   /** 中止工作流 */
@@ -171,20 +171,28 @@ export function useWorkflow(): UseWorkflowReturn {
   }, []);
 
   /**
-   * 从 AI 响应解析并添加步骤
+   * 从 AI 响应解析并添加步骤，同时更新 AI 分析内容
    */
-  const addStepsFromAIResponse = useCallback((response: string): WorkflowStep[] => {
+  const addStepsFromAIResponse = useCallback((response: string): { content: string; steps: WorkflowStep[] } => {
     const currentWorkflow = workflowRef.current;
-    if (!currentWorkflow || abortedRef.current) return [];
-    
+    if (!currentWorkflow || abortedRef.current) return { content: '', steps: [] };
+
     const existingStepCount = currentWorkflow.steps.length;
-    const newSteps = parseAIResponseToSteps(response, existingStepCount);
-    
+    const { content, steps: newSteps } = parseAIResponse(response, existingStepCount);
+
+    // 更新 AI 分析内容
+    if (content && !currentWorkflow.aiAnalysis) {
+      workflowRef.current = {
+        ...currentWorkflow,
+        aiAnalysis: content,
+      };
+    }
+
     if (newSteps.length > 0) {
       addSteps(newSteps);
     }
-    
-    return newSteps;
+
+    return { content, steps: newSteps };
   }, [addSteps]);
 
   /**

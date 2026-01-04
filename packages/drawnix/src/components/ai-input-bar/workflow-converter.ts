@@ -65,6 +65,8 @@ export interface WorkflowDefinition {
   scenarioType: 'direct_generation' | 'agent_flow';
   /** 生成类型 */
   generationType: GenerationType;
+  /** AI 分析内容（AI 对用户请求的理解和计划） */
+  aiAnalysis?: string;
   /** 步骤列表 */
   steps: WorkflowStep[];
   /** 元数据 */
@@ -296,32 +298,46 @@ export function convertToWorkflow(
 }
 
 /**
- * 从 AI 响应解析工作流步骤
- * 
+ * AI 响应解析结果
+ */
+export interface AIResponseParseResult {
+  /** AI 分析内容（对用户请求的理解和计划） */
+  content: string;
+  /** 工作流步骤列表 */
+  steps: WorkflowStep[];
+}
+
+/**
+ * 从 AI 响应解析工作流步骤和分析内容
+ *
  * AI 返回的格式：
  * {"content": "分析结果", "next": [{"mcp": "工具名", "args": {...}}]}
  */
-export function parseAIResponseToSteps(
+export function parseAIResponse(
   response: string,
   existingStepCount: number = 0
-): WorkflowStep[] {
+): AIResponseParseResult {
   try {
     // 尝试提取 JSON
-    const jsonMatch = response.match(/```json\s*([\s\S]*?)\s*```/) || 
+    const jsonMatch = response.match(/```json\s*([\s\S]*?)\s*```/) ||
                       response.match(/\{[\s\S]*\}/);
-    
+
     if (!jsonMatch) {
-      return [];
+      return { content: '', steps: [] };
     }
-    
+
     const jsonStr = jsonMatch[1] || jsonMatch[0];
     const parsed = JSON.parse(jsonStr);
-    
+
+    // 提取 content 字段
+    const content = typeof parsed.content === 'string' ? parsed.content : '';
+
+    // 提取 steps
     if (!Array.isArray(parsed.next) || parsed.next.length === 0) {
-      return [];
+      return { content, steps: [] };
     }
-    
-    return parsed.next
+
+    const steps = parsed.next
       .filter((item: any) => typeof item.mcp === 'string' && typeof item.args === 'object')
       .map((item: any, index: number) => ({
         id: `step-${existingStepCount + index + 1}`,
@@ -330,9 +346,24 @@ export function parseAIResponseToSteps(
         description: getStepDescription(item.mcp, item.args),
         status: 'pending' as const,
       }));
+
+    return { content, steps };
   } catch {
-    return [];
+    return { content: '', steps: [] };
   }
+}
+
+/**
+ * 从 AI 响应解析工作流步骤（兼容旧接口）
+ *
+ * AI 返回的格式：
+ * {"content": "分析结果", "next": [{"mcp": "工具名", "args": {...}}]}
+ */
+export function parseAIResponseToSteps(
+  response: string,
+  existingStepCount: number = 0
+): WorkflowStep[] {
+  return parseAIResponse(response, existingStepCount).steps;
 }
 
 /**

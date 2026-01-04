@@ -23,8 +23,8 @@ interface WorkflowContextValue {
   ) => void;
   /** 添加新步骤 */
   addSteps: (steps: WorkflowStep[]) => void;
-  /** 从 AI 响应解析并添加步骤 */
-  addStepsFromAIResponse: (response: string) => WorkflowStep[];
+  /** 从 AI 响应解析并添加步骤，返回解析结果 */
+  addStepsFromAIResponse: (response: string) => { content: string; steps: WorkflowStep[] };
   /** 重置工作流 */
   resetWorkflow: () => void;
   /** 中止工作流 */

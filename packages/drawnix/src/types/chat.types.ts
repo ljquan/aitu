@@ -126,6 +126,8 @@ export interface WorkflowMessageData {
   generationType: 'image' | 'video' | 'text';
   /** 原始提示词 */
   prompt: string;
+  /** AI 分析内容（AI 对用户请求的理解和执行计划） */
+  aiAnalysis?: string;
   /** 生成数量 */
   count: number;
   /** 步骤列表 */

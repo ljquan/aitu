@@ -69,6 +69,7 @@ function toWorkflowMessageData(
     name: workflow.name,
     generationType: workflow.generationType,
     prompt: workflow.metadata.prompt,
+    aiAnalysis: workflow.aiAnalysis,
     count: workflow.metadata.count,
     steps: workflow.steps.map(step => ({
       id: step.id,

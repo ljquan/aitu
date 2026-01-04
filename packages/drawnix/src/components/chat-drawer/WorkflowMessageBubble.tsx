@@ -4,7 +4,7 @@
  * 在对话消息中展示工作流执行过程
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { ChatMessage } from '@llamaindex/chat-ui';
 import type { Message } from '@llamaindex/chat-ui';
 import type { WorkflowMessageData, AgentLogEntry } from '../../types/chat.types';
@@ -433,6 +433,16 @@ export const WorkflowMessageBubble: React.FC<WorkflowMessageBubbleProps> = ({
     if (summaryCounts.mindmaps > 0) parts.push(`${summaryCounts.mindmaps} 个思维导图`);
 
     const hasGenerated = parts.length > 0;
+    const generatedText = hasGenerated ? `成功生成 ${parts.join('，')}` : '';
+
+    // 优先使用 AI 分析内容作为 markdown 显示
+    if (workflow.aiAnalysis) {
+      // 如果有生成内容，在 AI 分析后追加生成摘要
+      const markdown = hasGenerated
+        ? `${workflow.aiAnalysis}\n\n✨ ${generatedText}`
+        : workflow.aiAnalysis;
+      return { variant: 'markdown' as const, icon: '🤖', markdown };
+    }
 
     if (!hasGenerated && markdownResult) {
       return { variant: 'markdown' as const, icon: '📝', markdown: markdownResult };
@@ -442,8 +452,8 @@ export const WorkflowMessageBubble: React.FC<WorkflowMessageBubbleProps> = ({
       return { variant: 'info' as const, icon: 'ℹ️', text: '未生成任何内容' };
     }
 
-    return { variant: 'success' as const, icon: '✨', text: `成功生成 ${parts.join('，')}` };
-  }, [isCompleted, markdownResult, summaryCounts, workflow.count, workflow.generationType, workflow.insertedCount]);
+    return { variant: 'success' as const, icon: '✨', text: generatedText };
+  }, [isCompleted, markdownResult, summaryCounts, workflow.count, workflow.generationType, workflow.insertedCount, workflow.aiAnalysis]);
 
   const markdownMessage: Message | null = useMemo(() => {
     if (!summaryView || summaryView.variant !== 'markdown') return null;
@@ -464,6 +474,27 @@ export const WorkflowMessageBubble: React.FC<WorkflowMessageBubbleProps> = ({
     return workflow.steps.findIndex(s => s.status === 'failed');
   }, [workflow.steps]);
 
+  // 当前执行步骤的 ref，用于自动滚动
+  const currentStepRef = useRef<HTMLDivElement>(null);
+  const bubbleRef = useRef<HTMLDivElement>(null);
+
+  // 当步骤状态变化时，自动滚动到当前执行的步骤
+  useEffect(() => {
+    // 只在运行中时自动滚动
+    if (!isRunning) return;
+
+    // 使用 requestAnimationFrame 确保 DOM 更新后再滚动
+    requestAnimationFrame(() => {
+      if (bubbleRef.current) {
+        // 滚动整个 bubble 到视口中
+        bubbleRef.current.scrollIntoView({
+          behavior: 'smooth',
+          block: 'end', // 滚动到底部，确保最新步骤可见
+        });
+      }
+    });
+  }, [currentStepIndex, isRunning, workflow.steps.length]);
+
   // 检查是否可以重试（有重试上下文且有失败步骤）
   const canRetry = isFailed && workflow.retryContext && firstFailedStepIndex >= 0;
 
@@ -475,7 +506,7 @@ export const WorkflowMessageBubble: React.FC<WorkflowMessageBubbleProps> = ({
   };
 
   return (
-    <div className={`workflow-bubble chat-message chat-message--assistant ${className}`}>
+    <div ref={bubbleRef} className={`workflow-bubble chat-message chat-message--assistant ${className}`}>
       <div className="chat-message-avatar">
         <span>{workflow.generationType === 'image' ? '🖼️' : workflow.generationType === 'video' ? '🎬' : '📝'}</span>
       </div>
@@ -502,14 +533,16 @@ export const WorkflowMessageBubble: React.FC<WorkflowMessageBubbleProps> = ({
         </div>
 
         {/* 原始请求 */}
-        <div className="workflow-bubble__prompt">
-          <span className="workflow-bubble__label">请求:</span>
-          <span className="workflow-bubble__prompt-text">
-            {workflow.prompt.length > 100 
-              ? `${workflow.prompt.substring(0, 100)}...` 
-              : workflow.prompt}
-          </span>
-        </div>
+        {workflow.prompt && (
+          <div className="workflow-bubble__prompt">
+            <span className="workflow-bubble__label">请求:</span>
+            <span className="workflow-bubble__prompt-text">
+              {workflow.prompt.length > 100
+                ? `${workflow.prompt.substring(0, 100)}...`
+                : workflow.prompt}
+            </span>
+          </div>
+        )}
 
         {/* 步骤列表 */}
         <div className="workflow-bubble__steps">

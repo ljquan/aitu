@@ -31,6 +31,11 @@ function getFriendlyErrorMessage(error: any): string {
     return '账户额度不足，请充值后重试';
   }
 
+  // 检查 Google Gemini 内容政策违规
+  if (message.includes('PROHIBITED_CONTENT') || message.includes('has been blocked by Google Gemini')) {
+    return message; // 直接返回原始错误信息，保留详细说明
+  }
+
   // 检查 AI 模型拒绝生成的情况（返回文本而非图片）
   if (message.includes('cannot') || message.includes('I cannot') || message.includes("I can't")) {
     return 'AI 拒绝生成此内容';

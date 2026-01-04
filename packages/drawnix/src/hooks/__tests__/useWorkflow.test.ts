@@ -260,22 +260,25 @@ describe('useWorkflow', () => {
       });
 
       const aiResponse = JSON.stringify({
+        content: 'AI 分析内容',
         next: [
           { mcp: 'generate_image', args: { prompt: 'cat' }, description: '生成猫图' },
         ],
       });
 
-      let addedSteps: WorkflowStep[] = [];
+      let parseResult: { content: string; steps: WorkflowStep[] } = { content: '', steps: [] };
       act(() => {
-        addedSteps = result.current.addStepsFromAIResponse(aiResponse);
+        parseResult = result.current.addStepsFromAIResponse(aiResponse);
       });
 
-      expect(addedSteps).toHaveLength(1);
-      expect(addedSteps[0].mcp).toBe('generate_image');
+      expect(parseResult.content).toBe('AI 分析内容');
+      expect(parseResult.steps).toHaveLength(1);
+      expect(parseResult.steps[0].mcp).toBe('generate_image');
       expect(result.current.state.workflow?.steps).toHaveLength(2);
+      expect(result.current.state.workflow?.aiAnalysis).toBe('AI 分析内容');
     });
 
-    it('应该在无效响应时返回空数组', () => {
+    it('应该在无效响应时返回空结果', () => {
       const { result } = renderHook(() => useWorkflow());
       const workflow = createMockWorkflow();
 
@@ -283,12 +286,13 @@ describe('useWorkflow', () => {
         result.current.startWorkflow(workflow);
       });
 
-      let addedSteps: WorkflowStep[] = [];
+      let parseResult: { content: string; steps: WorkflowStep[] } = { content: '', steps: [] };
       act(() => {
-        addedSteps = result.current.addStepsFromAIResponse('invalid json');
+        parseResult = result.current.addStepsFromAIResponse('invalid json');
       });
 
-      expect(addedSteps).toEqual([]);
+      expect(parseResult.content).toBe('');
+      expect(parseResult.steps).toEqual([]);
     });
   });
 

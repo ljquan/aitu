@@ -118,6 +118,25 @@
     }
   }
 
+  // AI 分析内容
+  &__analysis {
+    display: flex;
+    flex-direction: column;
+    gap: $spacing-xs;
+    margin-bottom: $spacing-md;
+    padding: $spacing-sm $spacing-md;
+    background: linear-gradient(135deg, rgba(90, 79, 207, 0.08) 0%, rgba(123, 104, 238, 0.05) 100%);
+    border-radius: 6px;
+    font-size: 13px;
+    border-left: 3px solid var(--td-brand-color);
+  }
+
+  &__analysis-text {
+    color: var(--td-text-color-primary);
+    word-break: break-word;
+    line-height: 1.5;
+  }
+
   // 原始请求
   &__prompt {
     display: flex;

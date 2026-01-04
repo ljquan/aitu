@@ -119,7 +119,7 @@ export const AI_INSTRUCTIONS: Record<'zh' | 'en', InstructionItemData[]> = {
       tips: '在生成图片/视频前先调一次文本模型对提示词进行优化'
     },
     {
-      content: '去掉人物背景，并生成该人物各种表情的16宫格图',
+      content: '生成该角色无背景的各种表情16宫格图',
       scene: '宫格图',
       tips: '调用1次文本模型 + 1次生图模型，一张图排布n张正方形子图（最多16张）'
     }

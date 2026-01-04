@@ -209,6 +209,21 @@ class GenerationAPIService {
         } else if (imageData.b64_json) {
           imageUrl = `data:image/png;base64,${imageData.b64_json}`;
         } else {
+          // Check if there's an error message in revised_prompt (e.g., PROHIBITED_CONTENT)
+          const revisedPrompt = imageData.revised_prompt || '';
+          if (revisedPrompt.includes('PROHIBITED_CONTENT') || revisedPrompt.includes('has been blocked')) {
+            // Extract the error message - look for the blocked reason
+            const blockedMatch = revisedPrompt.match(/your request has been blocked[^:]*:\s*([^.]+)/i);
+            if (blockedMatch) {
+              throw new Error(blockedMatch[0]);
+            }
+            // Fallback: extract everything after the last occurrence of "blocked"
+            const lastBlockedIndex = revisedPrompt.toLowerCase().lastIndexOf('blocked');
+            if (lastBlockedIndex !== -1) {
+              const errorPart = revisedPrompt.slice(lastBlockedIndex - 20);
+              throw new Error(errorPart.trim());
+            }
+          }
           throw new Error('API 未返回有效的图片数据');
         }
 
