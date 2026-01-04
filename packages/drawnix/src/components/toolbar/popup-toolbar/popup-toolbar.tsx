@@ -459,7 +459,7 @@ export const PopupToolbar = () => {
                   // 获取选中的图片元素
                   const imageElement = selectedElements[0] as PlaitDrawElement;
                   if (PlaitDrawElement.isImage(imageElement) && imageElement.url) {
-                    MessagePlugin.loading(language === 'zh' ? '正在分析图片...' : 'Analyzing image...', 0);
+                    const loadingInstance = MessagePlugin.loading(language === 'zh' ? '正在分析图片...' : 'Analyzing image...', 0);
                     try {
                       // 获取源图片的位置信息
                       const sourceRect = getRectangleByElements(board, [imageElement], false);
@@ -472,7 +472,7 @@ export const PopupToolbar = () => {
                         },
                         scrollToResult: true,
                       });
-                      MessagePlugin.closeAll();
+                      MessagePlugin.close(loadingInstance);
                       if (result.success) {
                         MessagePlugin.success(
                           language === 'zh'
@@ -483,7 +483,7 @@ export const PopupToolbar = () => {
                         MessagePlugin.warning(result.error || (language === 'zh' ? '拆图失败' : 'Split failed'));
                       }
                     } catch (error: any) {
-                      MessagePlugin.closeAll();
+                      MessagePlugin.close(loadingInstance);
                       MessagePlugin.error(error.message || (language === 'zh' ? '拆图失败' : 'Split failed'));
                     }
                   }
@@ -519,17 +519,17 @@ export const PopupToolbar = () => {
                     ? (language === 'zh' ? '正在打包下载...' : 'Packaging download...')
                     : (language === 'zh' ? '正在下载...' : 'Downloading...');
 
-                  MessagePlugin.loading(loadingMsg, 0);
+                  const loadingInstance = MessagePlugin.loading(loadingMsg, 0);
                   try {
                     await smartDownload(downloadItems);
-                    MessagePlugin.closeAll();
+                    MessagePlugin.close(loadingInstance);
                     MessagePlugin.success(
                       downloadItems.length > 1
                         ? (language === 'zh' ? `已下载 ${downloadItems.length} 个文件` : `Downloaded ${downloadItems.length} files`)
                         : (language === 'zh' ? '下载成功' : 'Download complete')
                     );
                   } catch (error: any) {
-                    MessagePlugin.closeAll();
+                    MessagePlugin.close(loadingInstance);
                     MessagePlugin.error(error.message || (language === 'zh' ? '下载失败' : 'Download failed'));
                   }
                 }}
@@ -545,7 +545,7 @@ export const PopupToolbar = () => {
                 title={language === 'zh' ? '合并为图片' : 'Merge to Image'}
                 aria-label={language === 'zh' ? '合并为图片' : 'Merge to Image'}
                 onPointerUp={async () => {
-                  MessagePlugin.loading(language === 'zh' ? '正在合并...' : 'Merging...', 0);
+                  const loadingInstance = MessagePlugin.loading(language === 'zh' ? '正在合并...' : 'Merging...', 0);
                   try {
                     // 获取选中元素的边界矩形
                     const boundingRect = getRectangleByElements(board, selectedElements, false);
@@ -602,14 +602,14 @@ export const PopupToolbar = () => {
                       addSelectedElement(board, newElement);
                     }
 
-                    MessagePlugin.closeAll();
+                    MessagePlugin.close(loadingInstance);
                     MessagePlugin.success(
                       language === 'zh'
                         ? `已将 ${selectedElements.length} 个元素合并为图片`
                         : `Merged ${selectedElements.length} elements into image`
                     );
                   } catch (error: any) {
-                    MessagePlugin.closeAll();
+                    MessagePlugin.close(loadingInstance);
                     MessagePlugin.error(error.message || (language === 'zh' ? '合并失败' : 'Merge failed'));
                   }
                 }}
