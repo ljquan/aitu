@@ -496,11 +496,79 @@ function isUniformGridLayout(detection: GridDetectionResult, width: number, heig
 }
 
 /**
- * 使用精确等分方式分割标准宫格图（类似 gridSplitter.split）
- * 不做边框检测和裁剪，直接数学等分
- * 注意：调用此函数前应该已经完成去白边处理
+ * 严格去白边：只裁剪100%纯白的边缘行/列
+ * 用于宫格图分割后的子图处理，避免误裁人物内容
  *
- * @param img - 已去除白边的图片
+ * @param ctx - Canvas 2D 上下文
+ * @param width - 图片宽度
+ * @param height - 图片高度
+ * @param threshold - 白色阈值（默认 250，非常严格）
+ * @returns 裁剪后的边界
+ */
+function getStrictWhiteBorders(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  threshold: number = 250
+): { top: number; right: number; bottom: number; left: number } {
+  const imageData = ctx.getImageData(0, 0, width, height);
+  const data = imageData.data;
+
+  // 检查像素是否为纯白
+  const isWhitePixel = (idx: number): boolean => {
+    return data[idx] >= threshold && data[idx + 1] >= threshold && data[idx + 2] >= threshold;
+  };
+
+  // 检查整行是否100%为白色
+  const isRowAllWhite = (y: number): boolean => {
+    for (let x = 0; x < width; x++) {
+      const idx = (y * width + x) * 4;
+      if (!isWhitePixel(idx)) return false;
+    }
+    return true;
+  };
+
+  // 检查整列是否100%为白色
+  const isColAllWhite = (x: number): boolean => {
+    for (let y = 0; y < height; y++) {
+      const idx = (y * width + x) * 4;
+      if (!isWhitePixel(idx)) return false;
+    }
+    return true;
+  };
+
+  // 从顶部向下扫描
+  let top = 0;
+  while (top < height && isRowAllWhite(top)) {
+    top++;
+  }
+
+  // 从底部向上扫描
+  let bottom = height - 1;
+  while (bottom > top && isRowAllWhite(bottom)) {
+    bottom--;
+  }
+
+  // 从左边向右扫描
+  let left = 0;
+  while (left < width && isColAllWhite(left)) {
+    left++;
+  }
+
+  // 从右边向左扫描
+  let right = width - 1;
+  while (right > left && isColAllWhite(right)) {
+    right--;
+  }
+
+  return { top, right, bottom, left };
+}
+
+/**
+ * 使用精确等分方式分割标准宫格图
+ * 分割后严格去除100%纯白的边缘行/列
+ *
+ * @param img - 图片元素
  * @param rows - 行数
  * @param cols - 列数
  */
@@ -526,25 +594,58 @@ async function splitUniformGrid(
       const sx = col * cellWidth;
       const sy = row * cellHeight;
 
-      // 创建 Canvas
-      const canvas = document.createElement('canvas');
-      canvas.width = cellWidth;
-      canvas.height = cellHeight;
+      // 创建临时 Canvas 用于裁剪
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = cellWidth;
+      tempCanvas.height = cellHeight;
 
-      const ctx = canvas.getContext('2d');
-      if (!ctx) continue;
+      const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
+      if (!tempCtx) continue;
 
-      // 直接裁剪，不做任何边框处理
-      ctx.drawImage(img, sx, sy, cellWidth, cellHeight, 0, 0, cellWidth, cellHeight);
+      // 先裁剪到临时 Canvas
+      tempCtx.drawImage(img, sx, sy, cellWidth, cellHeight, 0, 0, cellWidth, cellHeight);
 
-      elements.push({
-        imageData: canvas.toDataURL('image/jpeg', 0.92),
-        index,
-        width: cellWidth,
-        height: cellHeight,
-        sourceX: sx,
-        sourceY: sy,
-      });
+      // 获取严格的白边边界
+      const borders = getStrictWhiteBorders(tempCtx, cellWidth, cellHeight);
+
+      // 计算去白边后的尺寸
+      const trimmedWidth = borders.right - borders.left + 1;
+      const trimmedHeight = borders.bottom - borders.top + 1;
+
+      // 如果有白边需要裁剪，创建新的 Canvas
+      if (trimmedWidth < cellWidth || trimmedHeight < cellHeight) {
+        const finalCanvas = document.createElement('canvas');
+        finalCanvas.width = trimmedWidth;
+        finalCanvas.height = trimmedHeight;
+
+        const finalCtx = finalCanvas.getContext('2d');
+        if (!finalCtx) continue;
+
+        finalCtx.drawImage(
+          tempCanvas,
+          borders.left, borders.top, trimmedWidth, trimmedHeight,
+          0, 0, trimmedWidth, trimmedHeight
+        );
+
+        elements.push({
+          imageData: finalCanvas.toDataURL('image/jpeg', 0.92),
+          index,
+          width: trimmedWidth,
+          height: trimmedHeight,
+          sourceX: sx + borders.left,
+          sourceY: sy + borders.top,
+        });
+      } else {
+        // 没有白边，直接使用
+        elements.push({
+          imageData: tempCanvas.toDataURL('image/jpeg', 0.92),
+          index,
+          width: cellWidth,
+          height: cellHeight,
+          sourceX: sx,
+          sourceY: sy,
+        });
+      }
     }
   }
 
@@ -1015,64 +1116,85 @@ export async function splitAndInsertImages(
 ): Promise<{ success: boolean; count: number; error?: string }> {
   const { sourceRect, startPoint, scrollToResult = true } = options || {};
   try {
-    // 0. 前置步骤：去除四周白边
-    const { trimmedImageUrl, borderInfo } = await trimImageWhiteBorders(imageUrl);
-
-    // 1. 使用去除白边后的图片检测网格分割线
-    const detection = await detectGridLines(trimmedImageUrl);
-
     let elements: SplitImageElement[] = [];
+    // 标记是否为标准宫格（用于决定是否跳过子图去白边）
+    let isStandardGrid = false;
+    // 用于计算缩放的图片尺寸
+    let workingImageWidth: number;
+    let workingImageHeight: number;
 
-    if (detection.rows > 1 || detection.cols > 1) {
-      // 网格分割线格式 - 使用去除白边后的图片
-      const initialElements = await splitImageByLines(trimmedImageUrl, detection);
+    // 策略：先用原图检测标准宫格，避免去白边导致人物被切掉
+    // 标准宫格（如 4x4 表情包）的白色区域是分割线，不应该被去除
+    const originalDetection = await detectGridLines(imageUrl);
+    const isOriginalStandardGrid = originalDetection.rows > 1 && originalDetection.cols > 1;
 
-      // 判断是否为标准宫格（行列数都大于1，说明是规则宫格）
-      const isStandardGrid = detection.rows > 1 && detection.cols > 1;
-
-      if (isStandardGrid) {
-        // 标准宫格：直接使用拆分结果，不需要递归
-        elements = initialElements;
-      } else {
-        // 非标准宫格（可能是灵感图或不规则布局）：递归拆分，但限制总数
-        const MAX_TOTAL_ELEMENTS = 25;
-        const MIN_ELEMENT_SIZE = 100; // 最小 100x100 像素
-
-        for (const el of initialElements) {
-          // 检查是否已达到最大数量
-          if (elements.length >= MAX_TOTAL_ELEMENTS) {
-            break;
-          }
-
-          // 检查元素是否太小，不需要继续拆分
-          if (el.width < MIN_ELEMENT_SIZE || el.height < MIN_ELEMENT_SIZE) {
-            elements.push(el);
-            continue;
-          }
-
-          const recursiveResults = await recursiveSplitElement(el, 0, 2);
-          // 限制添加的数量
-          const remainingSlots = MAX_TOTAL_ELEMENTS - elements.length;
-          elements.push(...recursiveResults.slice(0, remainingSlots));
-        }
-      }
+    if (isOriginalStandardGrid) {
+      // 标准宫格：直接用原图分割，完全跳过去白边
+      // 这样可以避免白色背景的人物图边缘被误裁
+      isStandardGrid = true;
+      const img = await loadImage(imageUrl);
+      workingImageWidth = img.naturalWidth;
+      workingImageHeight = img.naturalHeight;
+      elements = await splitImageByLines(imageUrl, originalDetection);
     } else {
-      // 2. 尝试灵感图格式（已内置递归拆分）- 使用去除白边后的图片
-      const isPhotoWall = await detectPhotoWallFormat(trimmedImageUrl);
+      // 非标准宫格：尝试去白边后再检测
+      const { trimmedImageUrl, borderInfo } = await trimImageWhiteBorders(imageUrl);
+      workingImageWidth = borderInfo.trimmed.width;
+      workingImageHeight = borderInfo.trimmed.height;
 
-      if (isPhotoWall) {
-        const { splitPhotoWall } = await import('./photo-wall-splitter');
-        const inspirationBoardElements = await splitPhotoWall(trimmedImageUrl);
+      const detection = await detectGridLines(trimmedImageUrl);
 
-        // 转换为 SplitImageElement 格式
-        elements = inspirationBoardElements.map((el, index) => ({
-          imageData: el.imageData,
-          index,
-          width: el.width,
-          height: el.height,
-          sourceX: 0,
-          sourceY: 0,
-        }));
+      if (detection.rows > 1 || detection.cols > 1) {
+        // 网格分割线格式 - 使用去除白边后的图片
+        const initialElements = await splitImageByLines(trimmedImageUrl, detection);
+
+        // 判断是否为标准宫格（行列数都大于1，说明是规则宫格）
+        isStandardGrid = detection.rows > 1 && detection.cols > 1;
+
+        if (isStandardGrid) {
+          // 标准宫格：直接使用拆分结果，不需要递归
+          elements = initialElements;
+        } else {
+          // 非标准宫格（可能是灵感图或不规则布局）：递归拆分，但限制总数
+          const MAX_TOTAL_ELEMENTS = 25;
+          const MIN_ELEMENT_SIZE = 100; // 最小 100x100 像素
+
+          for (const el of initialElements) {
+            // 检查是否已达到最大数量
+            if (elements.length >= MAX_TOTAL_ELEMENTS) {
+              break;
+            }
+
+            // 检查元素是否太小，不需要继续拆分
+            if (el.width < MIN_ELEMENT_SIZE || el.height < MIN_ELEMENT_SIZE) {
+              elements.push(el);
+              continue;
+            }
+
+            const recursiveResults = await recursiveSplitElement(el, 0, 2);
+            // 限制添加的数量
+            const remainingSlots = MAX_TOTAL_ELEMENTS - elements.length;
+            elements.push(...recursiveResults.slice(0, remainingSlots));
+          }
+        }
+      } else {
+        // 尝试灵感图格式（已内置递归拆分）- 使用去除白边后的图片
+        const isPhotoWall = await detectPhotoWallFormat(trimmedImageUrl);
+
+        if (isPhotoWall) {
+          const { splitPhotoWall } = await import('./photo-wall-splitter');
+          const inspirationBoardElements = await splitPhotoWall(trimmedImageUrl);
+
+          // 转换为 SplitImageElement 格式
+          elements = inspirationBoardElements.map((el, index) => ({
+            imageData: el.imageData,
+            index,
+            width: el.width,
+            height: el.height,
+            sourceX: 0,
+            sourceY: 0,
+          }));
+        }
       }
     }
 
@@ -1084,33 +1206,33 @@ export async function splitAndInsertImages(
       };
     }
 
-    // 2.5 对每个子图进行去白边处理，确保干净
-    const cleanedElements: SplitImageElement[] = [];
-    for (const el of elements) {
-      const { trimmedImageUrl, borderInfo: elBorderInfo } = await trimImageWhiteBorders(el.imageData);
-      cleanedElements.push({
-        ...el,
-        imageData: trimmedImageUrl,
-        width: elBorderInfo.trimmed.width,
-        height: elBorderInfo.trimmed.height,
-      });
+    // 2.5 对非标准宫格的子图进行去白边处理
+    // 标准宫格使用精确等分，不需要去白边，避免裁掉白色背景人物图的边缘（手、头发等）
+    if (!isStandardGrid) {
+      const cleanedElements: SplitImageElement[] = [];
+      for (const el of elements) {
+        const { trimmedImageUrl: elTrimmedUrl, borderInfo: elBorderInfo } = await trimImageWhiteBorders(el.imageData);
+        cleanedElements.push({
+          ...el,
+          imageData: elTrimmedUrl,
+          width: elBorderInfo.trimmed.width,
+          height: elBorderInfo.trimmed.height,
+        });
+      }
+      elements = cleanedElements;
     }
-    elements = cleanedElements;
 
     // 重新分配 index
     elements = elements.map((el, idx) => ({ ...el, index: idx }));
 
-    // 3. 使用去白边后的尺寸计算缩放比例
-    // 注意：使用去白边后的尺寸，因为拆分的子图是基于去白边后的图片
-    const trimmedPixelWidth = borderInfo.trimmed.width;
-    const trimmedPixelHeight = borderInfo.trimmed.height;
-
-    // 计算缩放比例（原图显示尺寸 / 去白边后像素尺寸）
+    // 3. 使用工作图片尺寸计算缩放比例
+    // 注意：标准宫格使用原图尺寸，其他格式使用去白边后的尺寸
+    // 计算缩放比例（原图显示尺寸 / 工作图片像素尺寸）
     let scale = 1;
     if (sourceRect) {
       scale = Math.min(
-        sourceRect.width / trimmedPixelWidth,
-        sourceRect.height / trimmedPixelHeight
+        sourceRect.width / workingImageWidth,
+        sourceRect.height / workingImageHeight
       );
     }
 
