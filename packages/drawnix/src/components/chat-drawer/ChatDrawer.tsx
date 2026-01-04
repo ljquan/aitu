@@ -30,6 +30,7 @@ import { useChatDrawer } from '../../contexts/ChatDrawerContext';
 import type { ChatDrawerProps, ChatDrawerRef, ChatSession, WorkflowMessageData, WorkflowMessageParams, AgentLogEntry, ChatMessage as ChatMessageType } from '../../types/chat.types';
 import { MessageRole, MessageStatus } from '../../types/chat.types';
 import type { Message } from '@llamaindex/chat-ui';
+import { useTextSelection } from '../../hooks/useTextSelection';
 
 // 工作流消息的特殊标记前缀
 const WORKFLOW_MESSAGE_PREFIX = '[[WORKFLOW_MESSAGE]]';
@@ -968,6 +969,13 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
       return message.parts.some((p) => p.type === 'data-file');
     }, []);
 
+
+      const domRef = useRef<HTMLDivElement>(null);
+  // 使用自定义 hook 处理文本选择和复制，同时阻止事件冒泡
+  useTextSelection(domRef, {
+    enableCopy: true,
+    stopPropagation: true,
+  });
     return (
       <>
         <ChatDrawerTrigger isOpen={isOpen} onClick={handleToggle} drawerWidth={drawerWidth} />
@@ -982,164 +990,167 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
             className="chat-drawer__resize-handle"
             onMouseDown={handleResizeStart}
           />
-          <div className="chat-drawer__header">
-            <div className="chat-drawer__header-top">
-              {isEditingTitle ? (
-                <input
-                  ref={titleInputRef}
-                  className="chat-drawer__title-input"
-                  value={editingTitleValue}
-                  onChange={(e) => setEditingTitleValue(e.target.value)}
-                  onKeyDown={handleTitleKeyDown}
-                  onBlur={handleSaveTitle}
-                  maxLength={50}
-                />
-              ) : (
-                <h2 
-                  className="chat-drawer__title chat-drawer__title--editable"
-                  onClick={handleStartEditTitle}
-                  title="点击编辑标题"
-                >
-                  {title}
-                </h2>
-              )}
-              <Tooltip content="关闭" theme="light">
-                <button
-                  className="chat-drawer__close-btn"
-                  data-track="chat_click_drawer_close"
-                  onClick={handleClose}
-                  aria-label="关闭对话"
-                >
-                  <CloseIcon size={16} />
-                </button>
-              </Tooltip>
-            </div>
-            <div className="chat-drawer__header-bottom">
-              <ModelSelector
-                value={sessionModel}
-                onChange={setSessionModel}
-              />
-              <div className="chat-drawer__session-actions">
-                <Tooltip content="会话列表" theme="light">
-                  <button
-                    ref={toggleButtonRef}
-                    className={`chat-drawer__close-btn ${showSessions ? 'chat-drawer__close-btn--active' : ''}`}
-                    data-track="chat_click_sessions_toggle"
-                    onClick={handleToggleSessions}
-                    aria-label="会话列表"
+          <div ref={domRef} className="chat-drawer__body">
+            <div className="chat-drawer__header">
+              <div className="chat-drawer__header-top">
+                {isEditingTitle ? (
+                  <input
+                    ref={titleInputRef}
+                    className="chat-drawer__title-input"
+                    value={editingTitleValue}
+                    onChange={(e) => setEditingTitleValue(e.target.value)}
+                    onKeyDown={handleTitleKeyDown}
+                    onBlur={handleSaveTitle}
+                    maxLength={50}
+                  />
+                ) : (
+                  <h2 
+                    className="chat-drawer__title chat-drawer__title--editable"
+                    onClick={handleStartEditTitle}
+                    title="点击编辑标题"
                   >
-                    <ViewListIcon size={16} />
-                  </button>
-                </Tooltip>
-                <Tooltip content="新对话" theme="light">
+                    {title}
+                  </h2>
+                )}
+                <Tooltip content="关闭" theme="light">
                   <button
                     className="chat-drawer__close-btn"
-                    data-track="chat_click_new_session"
-                    onClick={handleNewSession}
-                    aria-label="新对话"
+                    data-track="chat_click_drawer_close"
+                    onClick={handleClose}
+                    aria-label="关闭对话"
                   >
-                    <AddIcon size={16} />
+                    <CloseIcon size={16} />
                   </button>
                 </Tooltip>
               </div>
+              <div className="chat-drawer__header-bottom">
+                <ModelSelector
+                  value={sessionModel}
+                  onChange={setSessionModel}
+                />
+                <div className="chat-drawer__session-actions">
+                  <Tooltip content="会话列表" theme="light">
+                    <button
+                      ref={toggleButtonRef}
+                      className={`chat-drawer__close-btn ${showSessions ? 'chat-drawer__close-btn--active' : ''}`}
+                      data-track="chat_click_sessions_toggle"
+                      onClick={handleToggleSessions}
+                      aria-label="会话列表"
+                    >
+                      <ViewListIcon size={16} />
+                    </button>
+                  </Tooltip>
+                  <Tooltip content="新对话" theme="light">
+                    <button
+                      className="chat-drawer__close-btn"
+                      data-track="chat_click_new_session"
+                      onClick={handleNewSession}
+                      aria-label="新对话"
+                    >
+                      <AddIcon size={16} />
+                    </button>
+                  </Tooltip>
+                </div>
+              </div>
             </div>
-          </div>
 
-          {showSessions && (
-            <div ref={sessionListRef}>
-              <SessionList
-                sessions={sessions}
-                activeSessionId={activeSessionId}
-                onSelectSession={handleSelectSession}
-                onNewSession={handleNewSession}
-                onDeleteSession={handleDeleteSession}
-                onRenameSession={handleRenameSession}
-              />
-            </div>
-          )}
+            {showSessions && (
+              <div ref={sessionListRef}>
+                <SessionList
+                  sessions={sessions}
+                  activeSessionId={activeSessionId}
+                  onSelectSession={handleSelectSession}
+                  onNewSession={handleNewSession}
+                  onDeleteSession={handleDeleteSession}
+                  onRenameSession={handleRenameSession}
+                />
+              </div>
+            )}
 
-          <div className="chat-drawer__content">
-            <ChatSection handler={wrappedHandler} className="chat-section">
-              <ChatMessages className="chat-messages">
-                <ChatMessages.List className="chat-messages-list">
-                  {chatHandler.messages.map((message, index) => {
-                    // 检查是否为工作流消息
-                    const workflowMsgId = isWorkflowMessage(message);
-                    if (workflowMsgId) {
-                      const workflowData = workflowMessages.get(workflowMsgId);
-                      if (workflowData) {
+            <div className="chat-drawer__content">
+              <ChatSection handler={wrappedHandler} className="chat-section">
+                <ChatMessages className="chat-messages">
+                  <ChatMessages.List className="chat-messages-list">
+                    {chatHandler.messages.map((message, index) => {
+                      // 检查是否为工作流消息
+                      const workflowMsgId = isWorkflowMessage(message);
+                      if (workflowMsgId) {
+                        const workflowData = workflowMessages.get(workflowMsgId);
+                        if (workflowData) {
+                          return (
+                            <WorkflowMessageBubble
+                              key={message.id}
+                              workflow={workflowData}
+                              onRetry={(stepIndex) => handleWorkflowRetry(workflowMsgId, workflowData, stepIndex)}
+                              isRetrying={retryingWorkflowId === workflowMsgId}
+                            />
+                          );
+                        }
+                      }
+
+                      // Check if message is an error
+                      const isError = message.parts.some(
+                        (part) =>
+                          part.type === 'text' &&
+                          (part as any).text?.startsWith('❌ 错误')
+                      );
+                      const messageClass = `chat-message chat-message--${message.role} ${
+                        isError ? 'chat-message--error' : ''
+                      }`;
+
+                      // 用户消息包含图片时使用自定义气泡
+                      if (message.role === 'user' && hasImages(message)) {
                         return (
-                          <WorkflowMessageBubble
+                          <UserMessageBubble
                             key={message.id}
-                            workflow={workflowData}
-                            onRetry={(stepIndex) => handleWorkflowRetry(workflowMsgId, workflowData, stepIndex)}
-                            isRetrying={retryingWorkflowId === workflowMsgId}
+                            message={message}
                           />
                         );
                       }
-                    }
 
-                    // Check if message is an error
-                    const isError = message.parts.some(
-                      (part) =>
-                        part.type === 'text' &&
-                        (part as any).text?.startsWith('❌ 错误')
-                    );
-                    const messageClass = `chat-message chat-message--${message.role} ${
-                      isError ? 'chat-message--error' : ''
-                    }`;
-
-                    // 用户消息包含图片时使用自定义气泡
-                    if (message.role === 'user' && hasImages(message)) {
                       return (
-                        <UserMessageBubble
+                        <ChatMessage
                           key={message.id}
                           message={message}
-                        />
+                          isLast={index === chatHandler.messages.length - 1}
+                          className={messageClass}
+                        >
+                          <ChatMessage.Avatar className="chat-message-avatar" />
+                          <ChatMessage.Content className="chat-message-content">
+                            <ChatMessage.Content.Markdown
+                              className="chat-markdown"
+                              languageRenderers={{
+                                mermaid: MermaidRenderer,
+                              }}
+                            />
+                          </ChatMessage.Content>
+                          {message.role === 'assistant' && !isError && (
+                            <ChatMessage.Actions className="chat-message-actions" />
+                          )}
+                        </ChatMessage>
                       );
-                    }
+                    })}
+                  </ChatMessages.List>
+                  <ChatMessages.Loading className="chat-loading">
+                    <div className="chat-loading__spinner" />
+                    <span>思考中...</span>
+                  </ChatMessages.Loading>
+                  <ChatMessages.Empty
+                    className="chat-empty"
+                    heading="开始对话"
+                    subheading="输入消息与AI助手交流"
+                  />
+                </ChatMessages>
 
-                    return (
-                      <ChatMessage
-                        key={message.id}
-                        message={message}
-                        isLast={index === chatHandler.messages.length - 1}
-                        className={messageClass}
-                      >
-                        <ChatMessage.Avatar className="chat-message-avatar" />
-                        <ChatMessage.Content className="chat-message-content">
-                          <ChatMessage.Content.Markdown
-                            className="chat-markdown"
-                            languageRenderers={{
-                              mermaid: MermaidRenderer,
-                            }}
-                          />
-                        </ChatMessage.Content>
-                        {message.role === 'assistant' && !isError && (
-                          <ChatMessage.Actions className="chat-message-actions" />
-                        )}
-                      </ChatMessage>
-                    );
-                  })}
-                </ChatMessages.List>
-                <ChatMessages.Loading className="chat-loading">
-                  <div className="chat-loading__spinner" />
-                  <span>思考中...</span>
-                </ChatMessages.Loading>
-                <ChatMessages.Empty
-                  className="chat-empty"
-                  heading="开始对话"
-                  subheading="输入消息与AI助手交流"
-                />
-              </ChatMessages>
+              </ChatSection>
 
-            </ChatSection>
+              <EnhancedChatInput
+                selectedContent={selectedContent}
+                onSend={handleSendWrapper}
+                placeholder="输入消息... (可用 # 指定模型)"
+              />
+            </div>
 
-            <EnhancedChatInput
-              selectedContent={selectedContent}
-              onSend={handleSendWrapper}
-              placeholder="输入消息... (可用 # 指定模型)"
-            />
           </div>
         </div>
       </>
