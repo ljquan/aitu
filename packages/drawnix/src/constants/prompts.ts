@@ -176,7 +176,7 @@ export interface ColdStartSuggestion {
   /** 模型调用说明，介绍该命令会用到的模型概况 */
   tips: string;
   /** 建议的模型类型，帮助用户快速选择 */
-  modelType?: 'image' | 'video' | 'grid-image' | 'inspiration-board';
+  modelType?: 'image' | 'video' | 'grid-image' | 'inspiration-board' | 'svg';
 }
 
 export const AI_COLD_START_SUGGESTIONS: Record<'zh' | 'en', ColdStartSuggestion[]> = {
@@ -194,6 +194,12 @@ export const AI_COLD_START_SUGGESTIONS: Record<'zh' | 'en', ColdStartSuggestion[
       modelType: 'grid-image',
     },
     {
+      content: '创作一个视频：樱花树下的少女，微风吹过，花瓣飘落',
+      scene: '视频创作',
+      tips: '调用1次文本模型 + 1次生视频模型',
+      modelType: 'video',
+    },
+    {
       content: '画一个AI工作流的流程图',
       scene: 'mermaid图',
       tips: '调用1次文本模型，支持流程图、泳道图、',
@@ -204,11 +210,11 @@ export const AI_COLD_START_SUGGESTIONS: Record<'zh' | 'en', ColdStartSuggestion[
       tips: '调用1次文本模型',
     },
     {
-      content: '创作一个视频：樱花树下的少女，微风吹过，花瓣飘落',
-      scene: '视频创作',
-      tips: '调用1次文本模型 + 1次生视频模型',
-      modelType: 'video',
-    },
+      content: '矢量图：一个简约风格的火箭作为公司logo',
+      scene: 'SVG矢量图',
+      tips: '调用1次文本模型生成SVG图标，可无损缩放',
+      modelType: 'svg',
+    }
   ],
   en: [
     {
@@ -224,6 +230,12 @@ export const AI_COLD_START_SUGGESTIONS: Record<'zh' | 'en', ColdStartSuggestion[
       modelType: 'grid-image',
     },
     {
+      content: 'a video: A girl under cherry blossom tree, petals falling in the breeze',
+      scene: 'Video creation',
+      tips: '1 text model + 1 video model',
+      modelType: 'video',
+    },
+    {
       content: 'Draw a flowchart of AI workflow',
       scene: 'Tech docs',
       tips: '1 text model',
@@ -234,10 +246,10 @@ export const AI_COLD_START_SUGGESTIONS: Record<'zh' | 'en', ColdStartSuggestion[
       tips: '1 text model',
     },
     {
-      content: 'a video: A girl under cherry blossom tree, petals falling in the breeze',
-      scene: 'Video creation',
-      tips: '1 text model + 1 video model',
-      modelType: 'video',
+      content: 'SVG: A minimalist rocket icon',
+      scene: 'SVG vector',
+      tips: '1 text model to generate SVG code, scalable and lossless',
+      modelType: 'svg',
     },
   ],
 };

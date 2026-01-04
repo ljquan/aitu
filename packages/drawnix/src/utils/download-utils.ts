@@ -164,6 +164,10 @@ export function getFileExtension(url: string, mimeType?: string): string {
 
   // Handle base64 data URLs
   if (url.startsWith('data:')) {
+    // Special handling for SVG (data:image/svg+xml)
+    if (url.startsWith('data:image/svg+xml')) {
+      return 'svg';
+    }
     const match = url.match(/data:(\w+)\/(\w+)/);
     if (match) {
       return match[2] === 'jpeg' ? 'jpg' : match[2];
@@ -178,6 +182,7 @@ export function getFileExtension(url: string, mimeType?: string): string {
       'image/jpg': 'jpg',
       'image/webp': 'webp',
       'image/gif': 'gif',
+      'image/svg+xml': 'svg',
       'video/mp4': 'mp4',
       'video/webm': 'webm',
     };
@@ -253,7 +258,8 @@ export async function smartDownload(items: BatchDownloadItem[]): Promise<void> {
 
   if (items.length === 1) {
     const item = items[0];
-    const ext = item.type === 'image' ? 'png' : 'mp4';
+    // Use getFileExtension to detect correct extension (handles SVG, PNG, etc.)
+    const ext = getFileExtension(item.url) || (item.type === 'image' ? 'png' : 'mp4');
     const filename = item.filename || `${item.type}_download.${ext}`;
     await downloadFile(item.url, filename);
   } else {

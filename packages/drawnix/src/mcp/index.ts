@@ -30,6 +30,8 @@ export { inspirationBoardTool, createInspirationBoardTask } from './tools/creati
 export type { InspirationBoardParams } from './tools/creative-photo-wall-tool';
 export { splitImageTool } from './tools/split-image-tool';
 export type { SplitImageToolParams } from './tools/split-image-tool';
+export { svgTool, insertSvg } from './tools/svg-tool';
+export type { SvgToolParams } from './tools/svg-tool';
 
 // 共享模块导出
 export { setBoard, getBoard } from './tools/shared';
@@ -45,6 +47,7 @@ import { mindmapTool } from './tools/mindmap-tool';
 import { gridImageTool } from './tools/photo-wall-tool';
 import { inspirationBoardTool } from './tools/creative-photo-wall-tool';
 import { splitImageTool } from './tools/split-image-tool';
+import { svgTool } from './tools/svg-tool';
 
 /** 标记 MCP 是否已初始化 */
 let mcpInitialized = false;
@@ -69,6 +72,7 @@ export function initializeMCP(): void {
     gridImageTool,
     inspirationBoardTool,
     splitImageTool,
+    svgTool,
   ]);
   console.log('[MCP] Initialized with built-in tools');
 }

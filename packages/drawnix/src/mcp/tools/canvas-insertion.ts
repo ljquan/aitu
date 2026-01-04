@@ -17,7 +17,7 @@ import { scrollToPointIfNeeded } from '../../utils/selection-utils';
 /**
  * 内容类型
  */
-export type ContentType = 'text' | 'image' | 'video';
+export type ContentType = 'text' | 'image' | 'video' | 'svg';
 
 /**
  * 单个要插入的内容项
@@ -233,6 +233,73 @@ async function insertVideoToCanvas(
 }
 
 /**
+ * 将SVG代码转换为Data URL
+ */
+function svgToDataUrl(svg: string): string {
+  const encoded = encodeURIComponent(svg)
+    .replace(/'/g, '%27')
+    .replace(/"/g, '%22');
+  return `data:image/svg+xml,${encoded}`;
+}
+
+/**
+ * 规范化SVG代码
+ */
+function normalizeSvg(svg: string): string {
+  let normalized = svg.trim();
+  if (!normalized.includes('xmlns=')) {
+    normalized = normalized.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
+  }
+  return normalized;
+}
+
+/**
+ * 解析SVG尺寸
+ */
+function parseSvgDimensions(svg: string): { width: number; height: number } {
+  const viewBoxMatch = svg.match(/viewBox=["']([^"']+)["']/i);
+  if (viewBoxMatch) {
+    const parts = viewBoxMatch[1].split(/\s+/).map(Number);
+    if (parts.length >= 4 && parts[2] && parts[3]) {
+      return { width: parts[2], height: parts[3] };
+    }
+  }
+  const widthMatch = svg.match(/width=["'](\d+)(?:px)?["']/i);
+  const heightMatch = svg.match(/height=["'](\d+)(?:px)?["']/i);
+  if (widthMatch && heightMatch) {
+    return { width: parseInt(widthMatch[1]), height: parseInt(heightMatch[1]) };
+  }
+  return { width: 400, height: 400 };
+}
+
+/**
+ * 插入单个SVG到画布
+ */
+async function insertSvgToCanvas(
+  board: PlaitBoard,
+  svgCode: string,
+  point: Point
+): Promise<{ width: number; height: number }> {
+  const normalized = normalizeSvg(svgCode);
+  const dimensions = parseSvgDimensions(normalized);
+
+  // 计算目标尺寸，保持宽高比
+  const targetWidth = Math.min(dimensions.width, LAYOUT_CONSTANTS.MEDIA_DEFAULT_SIZE);
+  const aspectRatio = dimensions.height / dimensions.width;
+  const targetHeight = targetWidth * aspectRatio;
+
+  const dataUrl = svgToDataUrl(normalized);
+  const imageItem = {
+    url: dataUrl,
+    width: targetWidth,
+    height: targetHeight,
+  };
+
+  DrawTransforms.insertImage(board, imageItem, point);
+  return { width: targetWidth, height: targetHeight };
+}
+
+/**
  * 执行画布插入
  */
 async function executeCanvasInsertion(params: CanvasInsertionParams): Promise<MCPResult> {
@@ -291,6 +358,9 @@ async function executeCanvasInsertion(params: CanvasInsertionParams): Promise<MC
         } else if (item.type === 'video') {
           await insertVideoToCanvas(board, item.content, point);
           currentY += 225 + verticalGap;
+        } else if (item.type === 'svg') {
+          const svgSize = await insertSvgToCanvas(board, item.content, point);
+          currentY += svgSize.height + verticalGap;
         }
 
         insertedItems.push({ type: item.type, point });
@@ -315,6 +385,10 @@ async function executeCanvasInsertion(params: CanvasInsertionParams): Promise<MC
             await insertVideoToCanvas(board, item.content, point);
             maxHeight = Math.max(maxHeight, 225);
             currentX += LAYOUT_CONSTANTS.MEDIA_DEFAULT_SIZE + horizontalGap;
+          } else if (item.type === 'svg') {
+            const svgSize = await insertSvgToCanvas(board, item.content, point);
+            maxHeight = Math.max(maxHeight, svgSize.height);
+            currentX += svgSize.width + horizontalGap;
           }
 
           insertedItems.push({ type: item.type, point });
@@ -390,8 +464,8 @@ export const canvasInsertionTool: MCPTool = {
           properties: {
             type: {
               type: 'string',
-              description: '内容类型：text（文本）、image（图片URL）、video（视频URL）',
-              enum: ['text', 'image', 'video'],
+              description: '内容类型：text（文本）、image（图片URL）、video（视频URL）、svg（SVG代码）',
+              enum: ['text', 'image', 'video', 'svg'],
             },
             content: {
               type: 'string',

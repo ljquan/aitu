@@ -214,70 +214,33 @@ Full coding standards are documented in `docs/CODING_STANDARDS.md`. Key highligh
 
 The project uses a dual-approach analytics system powered by Umami:
 
-#### 1. Manual Tracking (Business Events)
-For AI generation, API calls, and complex business logic:
-```typescript
-import { analytics } from '../utils/umami-analytics';
-
-// Track AI generation events
-analytics.trackAIGeneration(AIGenerationEvent.IMAGE_GENERATION_START, {
-  taskId: task.id,
-  model: 'gemini-pro',
-  duration: 2500,
-});
-```
-
-#### 2. Declarative Tracking (UI Interactions)
-For buttons, links, and UI elements - add `data-track` attribute:
+1. **Manual Tracking** - For AI generation, API calls, and complex business logic
+2. **Declarative Tracking** - For UI elements, use `data-track` attribute:
 ```tsx
-// ✅ Correct - Use data-track attribute
 <button data-track="button_click_save">Save</button>
 <ToolButton data-track="toolbar_click_undo" />
-<MenuItem data-track="menu_item_export" />
-
-// ❌ Wrong - Don't use custom track attribute
-<button track="button_click_save">Save</button>
 ```
 
-**Key Features:**
-- **Automatic Event Capture**: No manual `analytics.track()` calls needed
-- **Batch Upload**: Queues up to 10 events OR 5 seconds before sending
-- **Retry Mechanism**: Re-queues failed events for automatic retry
-- **Debouncing**: Prevents duplicate events within 1 second
-- **Rich Metadata**: Auto-injects version, url, sessionId, viewport, eventType
+**Event Naming**: `{area}_{action}_{target}` in snake_case (e.g., `toolbar_click_save`)
 
-**Event Naming Convention:**
-- Pattern: `{area}_{action}_{target}`
-- Examples: `toolbar_click_save`, `menu_item_export`, `button_hover_feature`
-- Use snake_case for consistency with Umami
+See `specs/005-declarative-tracking/` for detailed documentation.
 
-**Architecture:**
-```
-UI Element (data-track="event_name")
-  ↓
-TrackingService (event delegation)
-  ↓
-Metadata Injection + Debouncing
-  ↓
-BatchService (queue)
-  ↓
-UmamiAdapter → analytics.track()
-  ↓
-window.umami.track()
-  ↓
-Umami Server
-```
+### MCP Tool System
 
-**Documentation:**
-- Implementation: `specs/005-declarative-tracking/IMPLEMENTATION.md`
-- Integration: `specs/005-declarative-tracking/INTEGRATION.md`
-- Toolbar Events: `specs/005-declarative-tracking/TOOLBAR_TRACKING.md`
+The project uses an MCP (Model Context Protocol) pattern for AI operations:
 
-## Active Technologies
-- TypeScript 5.x (strict mode) (005-declarative-tracking)
-- RxJS - Reactive state management for tracking service (005-declarative-tracking)
-- TypeScript 5.x (strict mode), React 18.x (009-media-library)
-- IndexedDB (via localforage) for: (009-media-library)
+- **Location**: `packages/drawnix/src/mcp/`
+- **Registry**: `mcpRegistry` manages tool registration and execution
+- **Core Tools**:
+  - `ai_analyze` - AI analysis with text models (Gemini)
+  - `generate_image` - Image generation (Gemini Imagen)
+  - `generate_video` - Video generation (Veo3, Sora-2)
+  - `canvas_insert` - Insert content to canvas
+- **Workflow System**: `AIInputBar` → `workflow-converter` → MCP tools → Task queue
 
-## Recent Changes
-- 005-declarative-tracking: Added TypeScript 5.x (strict mode)
+### AI Input Syntax
+
+Users can use special syntax in the AI input bar:
+- `#model-name` - Select model (e.g., `#imagen-3`, `#veo3`)
+- `-param=value` - Set parameter (e.g., `-size=1:1`, `-duration=8`)
+- `+count` - Set generation count (e.g., `+4` for 4 images)

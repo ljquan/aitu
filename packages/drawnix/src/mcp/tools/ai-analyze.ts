@@ -217,7 +217,10 @@ function getToolDescription(toolName: string, args?: Record<string, unknown>): s
       return `生成视频: ${((args?.prompt as string) || '').substring(0, 30)}...`;
     case 'generate_grid_image':
       return `生成宫格图: ${((args?.theme as string) || '').substring(0, 30)}...`;
+    case 'insert_svg':
+      return `插入SVG矢量图`;
     case 'canvas_insertion':
+    case 'insert_to_canvas':
       return '插入到画布';
     default:
       return `执行 ${toolName}`;
