@@ -18,9 +18,9 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import ReactDOM from 'react-dom';
-import { Video, Send, Type, Play } from 'lucide-react';
+import { Send } from 'lucide-react';
 import { useBoard } from '@plait-board/react-board';
+import { SelectedContentPreview } from '../shared/SelectedContentPreview';
 import { getSelectedElements, ATTACHED_ELEMENT_CLASS_NAME } from '@plait/core';
 import { useI18n } from '../../i18n';
 import { TaskStatus } from '../../types/task.types';
@@ -438,14 +438,6 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
 
   // 保存 board 引用供后处理完成后使用
   const SelectionWatcherBoardRef = useRef<any>(null);
-
-  const [hoveredContent, setHoveredContent] = useState<{
-    type: SelectedContentType;
-    url?: string;
-    text?: string;
-    x: number;
-    y: number;
-  } | null>(null);
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const richDisplayRef = useRef<HTMLDivElement>(null);
@@ -1254,24 +1246,6 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
     removeHistory(id);
   }, [removeHistory]);
 
-  // Handle content hover for preview
-  const handleContentMouseEnter = useCallback((item: SelectedContent, e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const centerX = rect.left + rect.width / 2;
-    const topY = rect.top - 10;
-    setHoveredContent({
-      type: item.type,
-      url: item.url,
-      text: item.text,
-      x: centerX,
-      y: topY,
-    });
-  }, []);
-
-  const handleContentMouseLeave = useCallback(() => {
-    setHoveredContent(null);
-  }, []);
-
   const canGenerate = prompt.trim().length > 0 || selectedContent.length > 0;
 
   return (
@@ -1285,51 +1259,6 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
         onSelectionChange={handleSelectionChange}
         externalBoardRef={SelectionWatcherBoardRef}
       />
-
-      {/* Hover preview - large content (rendered to body via portal) */}
-      {hoveredContent && ReactDOM.createPortal(
-        <div 
-          className={`ai-input-bar__hover-preview ai-input-bar__hover-preview--${hoveredContent.type}`}
-          style={{
-            left: `${hoveredContent.x}px`,
-            top: `${hoveredContent.y}px`,
-            transform: 'translate(-50%, -100%)',
-          }}
-        >
-          {/* Image or graphics preview */}
-          {(hoveredContent.type === 'image' || hoveredContent.type === 'graphics') && hoveredContent.url && (
-            <img src={hoveredContent.url} alt="Preview" />
-          )}
-          
-          {/* Video preview */}
-          {hoveredContent.type === 'video' && hoveredContent.url && (
-            <div className="ai-input-bar__hover-video">
-              <video 
-                src={hoveredContent.url} 
-                controls 
-                autoPlay 
-                muted 
-                loop
-                playsInline
-              />
-            </div>
-          )}
-          
-          {/* Text preview */}
-          {hoveredContent.type === 'text' && hoveredContent.text && (
-            <div className="ai-input-bar__hover-text">
-              <div className="ai-input-bar__hover-text-header">
-                <Type size={16} />
-                <span>{language === 'zh' ? '文字内容' : 'Text Content'}</span>
-              </div>
-              <div className="ai-input-bar__hover-text-content">
-                {hoveredContent.text}
-              </div>
-            </div>
-          )}
-        </div>,
-        document.body
-      )}
 
       {/* Main input container - dynamic layout based on content */}
       <div className={classNames('ai-input-bar__container', {
@@ -1355,57 +1284,14 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
           language={language}
         />
 
-        {/* Selected content preview - shown inside input container on the left */}
+        {/* Selected content preview - using shared component */}
         {selectedContent.length > 0 && (
           <div className="ai-input-bar__content-preview">
-            {selectedContent.map((item, index) => (
-                <div 
-                  key={`${item.type}-${index}`} 
-                  className={`ai-input-bar__content-item ai-input-bar__content-item--${item.type}`}
-                  onMouseEnter={(e) => handleContentMouseEnter(item, e)}
-                  onMouseLeave={handleContentMouseLeave}
-                >
-                  {/* Render based on content type */}
-                  {item.type === 'text' ? (
-                    // Text content preview
-                    <div className="ai-input-bar__text-preview">
-                      <Type size={14} className="ai-input-bar__text-icon" />
-                      <span className="ai-input-bar__text-content">
-                        {item.text && item.text.length > 20 
-                          ? `${item.text.substring(0, 20)}...` 
-                          : item.text}
-                      </span>
-                    </div>
-                  ) : item.type === 'video' ? (
-                    // Video preview with icon placeholder (no thumbnail generation)
-                    <>
-                      <div className="ai-input-bar__video-placeholder">
-                        <Video size={20} />
-                      </div>
-                      <div className="ai-input-bar__video-overlay">
-                        <Play size={16} fill="white" />
-                      </div>
-                    </>
-                  ) : (
-                    // Image or graphics preview
-                    <img src={item.url} alt={item.name} />
-                  )}
-                  
-                  {/* Type label for graphics */}
-                  {item.type === 'graphics' && (
-                    <span className="ai-input-bar__content-label">
-                      {language === 'zh' ? '图形' : 'Graphics'}
-                    </span>
-                  )}
-                  
-                  {/* Type label for video */}
-                  {item.type === 'video' && (
-                    <span className="ai-input-bar__content-label ai-input-bar__content-label--video">
-                      {language === 'zh' ? '视频' : 'Video'}
-                    </span>
-                  )}
-                </div>
-            ))}
+            <SelectedContentPreview
+              items={selectedContent}
+              language={language}
+              enableHoverPreview={true}
+            />
           </div>
         )}
 

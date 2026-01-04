@@ -66,6 +66,9 @@ $text-dark: #1F2937;
     flex-shrink: 0;
     cursor: pointer;
     transition: transform 0.15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 
     &:hover {
       transform: scale(1.05);
@@ -74,7 +77,8 @@ $text-dark: #1F2937;
     img {
       width: 100%;
       height: 100%;
-      object-fit: cover;
+      object-fit: contain;
+      background: $gray-light;
     }
 
     &--graphics {

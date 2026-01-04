@@ -11,8 +11,9 @@
  */
 
 import React, { useRef, useCallback, useEffect } from 'react';
-import { SendIcon, ImageIcon, PlayCircleIcon, FileIcon } from 'tdesign-icons-react';
+import { SendIcon } from 'tdesign-icons-react';
 import { SmartSuggestionPanel } from '../ai-input-bar/smart-suggestion-panel';
+import { SelectedContentPreview } from '../shared/SelectedContentPreview';
 import type { SelectedContentItem } from '../../contexts/ChatDrawerContext';
 import type { Message } from '@llamaindex/chat-ui';
 import { useSmartInput } from '../../hooks/useSmartInput';
@@ -124,34 +125,17 @@ export const EnhancedChatInput: React.FC<EnhancedChatInputProps> = ({
     }
   }, [input]);
 
-  // 渲染选中内容预览（对齐 AIInputBar 样式，不显示名字）
+  // 渲染选中内容预览（使用公共组件）
   const renderSelectedContent = () => {
     if (selectedContent.length === 0) return null;
 
     return (
       <div className="enhanced-chat-input__selection">
-        {selectedContent.map((item, index) => (
-          <div
-            key={index}
-            className={`enhanced-chat-input__selection-item enhanced-chat-input__selection-item--${item.type}`}
-          >
-            {item.type === 'image' || item.type === 'graphics' ? (
-              item.url ? (
-                <img src={item.url} alt={item.name} />
-              ) : (
-                <ImageIcon size={20} />
-              )
-            ) : item.type === 'video' ? (
-              item.url ? (
-                <video src={item.url} />
-              ) : (
-                <PlayCircleIcon size={20} />
-              )
-            ) : (
-              <FileIcon size={20} />
-            )}
-          </div>
-        ))}
+        <SelectedContentPreview
+          items={selectedContent}
+          language="zh"
+          enableHoverPreview={true}
+        />
       </div>
     );
   };
