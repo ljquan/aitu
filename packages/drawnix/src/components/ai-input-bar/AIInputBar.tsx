@@ -47,16 +47,22 @@ import type { WorkflowMessageData } from '../../types/chat.types';
 import classNames from 'classnames';
 import './ai-input-bar.scss';
 
-import type { WorkflowRetryContext } from '../../types/chat.types';
+import type { WorkflowRetryContext, PostProcessingStatus } from '../../types/chat.types';
+import { workflowCompletionService } from '../../services/workflow-completion-service';
+import { BoardTransforms } from '@plait/core';
 
 /**
  * 将 WorkflowDefinition 转换为 WorkflowMessageData
  * @param workflow 工作流定义
  * @param retryContext 可选的重试上下文
+ * @param postProcessingStatus 后处理状态
+ * @param insertedCount 插入数量
  */
 function toWorkflowMessageData(
   workflow: WorkflowDefinition,
-  retryContext?: WorkflowRetryContext
+  retryContext?: WorkflowRetryContext,
+  postProcessingStatus?: PostProcessingStatus,
+  insertedCount?: number
 ): WorkflowMessageData {
   return {
     id: workflow.id,
@@ -76,6 +82,8 @@ function toWorkflowMessageData(
       options: step.options,
     })),
     retryContext,
+    postProcessingStatus,
+    insertedCount,
   };
 }
 
@@ -124,7 +132,9 @@ interface AIInputBarProps {
 const SelectionWatcher: React.FC<{
   language: string;
   onSelectionChange: (content: SelectedContent[]) => void;
-}> = React.memo(({ language, onSelectionChange }) => {
+  /** 用于存储 board 引用的 ref，供父组件使用 */
+  externalBoardRef?: React.MutableRefObject<any>;
+}> = React.memo(({ language, onSelectionChange, externalBoardRef }) => {
   const board = useBoard();
   const boardRef = useRef(board);
   boardRef.current = board;
@@ -134,12 +144,19 @@ const SelectionWatcher: React.FC<{
     setCanvasBoard(board);
     setBoard(board);
     gridImageService.setBoard(board);
+    // 同时设置外部 ref
+    if (externalBoardRef) {
+      externalBoardRef.current = board;
+    }
     return () => {
       setCanvasBoard(null);
       setBoard(null);
       gridImageService.setBoard(null);
+      if (externalBoardRef) {
+        externalBoardRef.current = null;
+      }
     };
-  }, [board]);
+  }, [board, externalBoardRef]);
   const onSelectionChangeRef = useRef(onSelectionChange);
   onSelectionChangeRef.current = onSelectionChange;
 
@@ -332,6 +349,95 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
     return () => subscription.unsubscribe();
   }, [workflowControl]);
 
+  // 当前后处理状态 ref
+  const postProcessingStatusRef = useRef<PostProcessingStatus | undefined>(undefined);
+  const insertedCountRef = useRef<number | undefined>(undefined);
+
+  // 监听后处理完成事件（图片拆分、插入画布等）
+  useEffect(() => {
+    const subscription = workflowCompletionService.observeCompletionEvents().subscribe((event) => {
+      const workflow = workflowControl.getWorkflow();
+      if (!workflow) return;
+
+      // 查找与此任务关联的步骤
+      const step = workflow.steps.find((s) => {
+        const result = s.result as { taskId?: string } | undefined;
+        return result?.taskId === event.taskId;
+      });
+
+      if (!step) return;
+
+      // 更新后处理状态
+      let newPostProcessingStatus: PostProcessingStatus | undefined;
+      let newInsertedCount: number | undefined;
+
+      switch (event.type) {
+        case 'postProcessingStarted':
+          newPostProcessingStatus = 'processing';
+          break;
+        case 'postProcessingCompleted':
+          newPostProcessingStatus = 'completed';
+          newInsertedCount = event.result.insertedCount;
+          break;
+        case 'postProcessingFailed':
+          newPostProcessingStatus = 'failed';
+          break;
+      }
+
+      // 保存状态到 ref
+      postProcessingStatusRef.current = newPostProcessingStatus;
+      if (newInsertedCount !== undefined) {
+        insertedCountRef.current = (insertedCountRef.current || 0) + newInsertedCount;
+      }
+
+      // 同步更新 ChatDrawer 中的工作流消息
+      const updatedWorkflow = workflowControl.getWorkflow();
+      if (updatedWorkflow) {
+        updateWorkflowMessageRef.current(toWorkflowMessageData(
+          updatedWorkflow,
+          currentRetryContextRef.current || undefined,
+          newPostProcessingStatus,
+          insertedCountRef.current
+        ));
+      }
+
+      // 如果后处理完成，执行后续操作
+      if (event.type === 'postProcessingCompleted') {
+        const position = event.result.firstElementPosition;
+
+        // 关闭 ChatDrawer（如果是由 AIInputBar 触发的对话）
+        // 注意：这里使用 setTimeout 确保消息更新后再关闭
+        setTimeout(() => {
+          chatDrawerControl.closeChatDrawer();
+
+          // 滚动画布到插入元素的位置
+          if (position) {
+            const board = SelectionWatcherBoardRef.current;
+            if (board) {
+              // 计算新的视口原点，使元素位于视口中心
+              const containerRect = board.host?.getBoundingClientRect();
+              if (containerRect) {
+                const zoom = board.viewport.zoom;
+                const newOriginationX = position[0] - containerRect.width / (2 * zoom);
+                const newOriginationY = position[1] - containerRect.height / (2 * zoom);
+                BoardTransforms.updateViewport(board, [newOriginationX, newOriginationY], zoom);
+              }
+            }
+          }
+        }, 500);
+
+        // 重置状态
+        postProcessingStatusRef.current = undefined;
+        insertedCountRef.current = undefined;
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [workflowControl, chatDrawerControl]);
+
+  // 保存 board 引用供后处理完成后使用
+  const SelectionWatcherBoardRef = useRef<any>(null);
+
   const [hoveredContent, setHoveredContent] = useState<{
     type: SelectedContentType;
     url?: string;
@@ -401,6 +507,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
       id: `preset_${index}`,
       content: item.content,
       scene: item.scene,
+      tips: item.tips,
       source: 'preset' as const,
     }));
 
@@ -1008,6 +1115,12 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
   // Handle key press
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
+      // 检测 IME 组合输入状态（如中文拼音输入法）
+      // 在组合输入时按回车是确认拼音转换，不应触发发送
+      if (event.nativeEvent.isComposing) {
+        return;
+      }
+
       // Shift+Enter, Alt/Option+Enter 换行
       if (event.key === 'Enter' && (event.shiftKey || event.altKey)) {
         return;
@@ -1016,7 +1129,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
       // 单独 Enter 发送（当不在输入触发字符后的内容时）
       // 检查是否在输入触发字符（有 triggerPosition 表示正在输入 #、-、+ 后的内容）
       const isTypingTrigger = parseResult.triggerPosition !== undefined;
-      
+
       if (event.key === 'Enter' && !isTypingTrigger) {
         event.preventDefault();
         handleGenerate();
@@ -1159,9 +1272,10 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
       className={classNames('ai-input-bar', ATTACHED_ELEMENT_CLASS_NAME, className)}
     >
       {/* 独立的选择监听组件，隔离 useBoard 的 context 变化 */}
-      <SelectionWatcher 
-        language={language} 
-        onSelectionChange={handleSelectionChange} 
+      <SelectionWatcher
+        language={language}
+        onSelectionChange={handleSelectionChange}
+        externalBoardRef={SelectionWatcherBoardRef}
       />
 
       {/* Hover preview - large content (rendered to body via portal) */}

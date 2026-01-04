@@ -287,7 +287,16 @@ export const WorkflowMessageBubble: React.FC<WorkflowMessageBubbleProps> = ({
   onRetry,
   isRetrying = false,
 }) => {
-  // 计算工作流状态
+  // 检查是否需要后处理（图片生成类任务需要拆分和插入画布）
+  const needsPostProcessing = useMemo(() => {
+    return workflow.generationType === 'image' && workflow.steps.some(s =>
+      s.mcp === 'generate_image' ||
+      s.mcp === 'generate_grid_image' ||
+      s.mcp === 'generate_inspiration_board'
+    );
+  }, [workflow.generationType, workflow.steps]);
+
+  // 计算工作流状态（考虑后处理）
   const workflowStatus = useMemo(() => {
     const steps = workflow.steps;
     const totalSteps = steps.length;
@@ -299,26 +308,54 @@ export const WorkflowMessageBubble: React.FC<WorkflowMessageBubbleProps> = ({
     if (failedSteps > 0) {
       status = 'failed';
     } else if (completedSteps === totalSteps && totalSteps > 0) {
-      status = 'completed';
+      // 所有步骤完成，但需要检查后处理状态
+      if (needsPostProcessing) {
+        const postStatus = workflow.postProcessingStatus;
+        if (postStatus === 'completed') {
+          status = 'completed';
+        } else if (postStatus === 'failed') {
+          status = 'failed';
+        } else if (postStatus === 'processing' || !postStatus) {
+          // 后处理进行中或尚未开始（等待后处理）
+          status = 'running';
+        } else {
+          status = 'running';
+        }
+      } else {
+        status = 'completed';
+      }
     } else if (runningSteps > 0 || completedSteps > 0) {
       status = 'running';
     }
 
     return { status, totalSteps, completedSteps };
-  }, [workflow.steps]);
+  }, [workflow.steps, workflow.postProcessingStatus, needsPostProcessing]);
 
   // 计算进度
   const progress = workflowStatus.totalSteps > 0 
     ? (workflowStatus.completedSteps / workflowStatus.totalSteps) * 100 
     : 0;
 
-  // 状态标签
-  const statusLabels: Record<typeof workflowStatus.status, string> = {
-    pending: '待开始',
-    running: '执行中',
-    completed: '已完成',
-    failed: '执行失败',
-  };
+  // 状态标签（考虑后处理状态）
+  const statusLabel = useMemo(() => {
+    const baseLabels: Record<typeof workflowStatus.status, string> = {
+      pending: '待开始',
+      running: '执行中',
+      completed: '已完成',
+      failed: '执行失败',
+    };
+
+    // 如果所有步骤完成但正在后处理，显示特定状态
+    const allStepsCompleted = workflow.steps.every(s => s.status === 'completed');
+    if (allStepsCompleted && needsPostProcessing && workflow.postProcessingStatus === 'processing') {
+      return '正在插入画布';
+    }
+    if (allStepsCompleted && needsPostProcessing && !workflow.postProcessingStatus) {
+      return '正在处理';
+    }
+
+    return baseLabels[workflowStatus.status];
+  }, [workflowStatus.status, workflow.steps, workflow.postProcessingStatus, needsPostProcessing]);
 
   const isCompleted = workflowStatus.status === 'completed';
   const isFailed = workflowStatus.status === 'failed';
@@ -371,12 +408,23 @@ export const WorkflowMessageBubble: React.FC<WorkflowMessageBubbleProps> = ({
   const summaryView = useMemo(() => {
     if (!isCompleted) return null;
 
-    const displayImages = workflow.generationType === 'image'
-      ? Math.max(summaryCounts.images, workflow.count || 0)
-      : summaryCounts.images;
-    const displayVideos = workflow.generationType === 'video'
-      ? Math.max(summaryCounts.videos, workflow.count || 0)
-      : summaryCounts.videos;
+    // 优先使用后处理返回的实际插入数量
+    const actualInsertedCount = workflow.insertedCount;
+
+    let displayImages: number;
+    let displayVideos: number;
+
+    if (workflow.generationType === 'image') {
+      // 图片类型：优先使用实际插入数量，否则使用步骤计数或 workflow.count
+      displayImages = actualInsertedCount || Math.max(summaryCounts.images, workflow.count || 0);
+      displayVideos = summaryCounts.videos;
+    } else if (workflow.generationType === 'video') {
+      displayImages = summaryCounts.images;
+      displayVideos = Math.max(summaryCounts.videos, workflow.count || 0);
+    } else {
+      displayImages = summaryCounts.images;
+      displayVideos = summaryCounts.videos;
+    }
 
     const parts: string[] = [];
     if (displayImages > 0) parts.push(`${displayImages} 张图片`);
@@ -395,7 +443,7 @@ export const WorkflowMessageBubble: React.FC<WorkflowMessageBubbleProps> = ({
     }
 
     return { variant: 'success' as const, icon: '✨', text: `成功生成 ${parts.join('，')}` };
-  }, [isCompleted, markdownResult, summaryCounts, workflow.count, workflow.generationType]);
+  }, [isCompleted, markdownResult, summaryCounts, workflow.count, workflow.generationType, workflow.insertedCount]);
 
   const markdownMessage: Message | null = useMemo(() => {
     if (!summaryView || summaryView.variant !== 'markdown') return null;
@@ -437,7 +485,7 @@ export const WorkflowMessageBubble: React.FC<WorkflowMessageBubbleProps> = ({
           <span className="workflow-bubble__title">{workflow.name}</span>
           <div className="workflow-bubble__status-info">
             <span className={`workflow-bubble__status workflow-bubble__status--${workflowStatus.status}`}>
-              {statusLabels[workflowStatus.status]}
+              {statusLabel}
             </span>
             <span className="workflow-bubble__progress-text">
               {workflowStatus.completedSteps}/{workflowStatus.totalSteps}

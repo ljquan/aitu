@@ -71,6 +71,7 @@ Style: Disney-style animation, vibrant colors, dreamy lighting.`,
 export interface InstructionItemData {
   content: string;
   scene: string;  // 适用场景描述
+  tips?: string;
 }
 
 // AI 指令 - 用于文本模型工作流（AI 输入框使用）
@@ -113,8 +114,14 @@ export const AI_INSTRUCTIONS: Record<'zh' | 'en', InstructionItemData[]> = {
     //   scene: '视觉辅助、内容配图、演示美化'
     // },
     {
-      content: '优化提示词并',
-      scene: '提示词优化、效果提升、Prompt润色'
+      content: '优化提示词并生成',
+      scene: '提示词',
+      tips: '在生成图片/视频前先调一次文本模型对提示词进行优化'
+    },
+    {
+      content: '去掉人物背景，并生成该人物各种表情的16宫格图',
+      scene: '宫格图',
+      tips: '调用1次文本模型 + 1次生图模型，一张图排布n张正方形子图（最多16张）'
     }
   ],
   en: [
@@ -156,7 +163,8 @@ export const AI_INSTRUCTIONS: Record<'zh' | 'en', InstructionItemData[]> = {
     // },
     {
       content: 'Optimize prompt and generate',
-      scene: 'Prompt optimization, Quality improvement, Prompt polishing'
+      scene: 'Optimization',
+      tips: 'Prompt optimization, Quality improvement, Prompt polishing'
     }
   ]
 };

@@ -109,6 +109,8 @@ export interface PromptSuggestionItem extends BaseSuggestionItem {
   content: string;
   /** 适用场景描述 */
   scene?: string;
+  /** 提示说明 */
+  tips?: string;
   timestamp?: number;
 }
 

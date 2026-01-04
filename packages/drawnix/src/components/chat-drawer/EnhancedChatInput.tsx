@@ -102,6 +102,12 @@ export const EnhancedChatInput: React.FC<EnhancedChatInputProps> = ({
 
   // 键盘事件处理
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // 检测 IME 组合输入状态（如中文拼音输入法）
+    // 在组合输入时按回车是确认拼音转换，不应触发发送
+    if (e.nativeEvent.isComposing) {
+      return;
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();

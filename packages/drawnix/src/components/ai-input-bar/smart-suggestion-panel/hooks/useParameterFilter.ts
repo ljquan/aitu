@@ -294,6 +294,7 @@ function filterPrompts(
     source: prompt.source,
     content: prompt.content,
     scene: prompt.scene,
+    tips: prompt.tips,
     timestamp: prompt.timestamp,
   }));
 }

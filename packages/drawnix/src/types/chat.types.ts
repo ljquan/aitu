@@ -113,6 +113,9 @@ export interface WorkflowRetryContext {
   textModel?: string;
 }
 
+/** 后处理状态（图片拆分、插入画布等） */
+export type PostProcessingStatus = 'pending' | 'processing' | 'completed' | 'failed';
+
 /** 工作流数据接口（用于消息中嵌入工作流） */
 export interface WorkflowMessageData {
   /** 工作流 ID */
@@ -131,6 +134,10 @@ export interface WorkflowMessageData {
   logs?: AgentLogEntry[];
   /** 重试上下文（保存用于重试的必要信息） */
   retryContext?: WorkflowRetryContext;
+  /** 后处理状态（图片拆分、插入画布等） */
+  postProcessingStatus?: PostProcessingStatus;
+  /** 插入到画布的元素数量 */
+  insertedCount?: number;
 }
 
 /** 对话消息接口 */

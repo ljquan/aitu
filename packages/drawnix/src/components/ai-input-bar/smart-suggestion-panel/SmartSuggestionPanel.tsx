@@ -71,6 +71,49 @@ function getKeyboardHint(language: 'zh' | 'en'): string {
 }
 
 /**
+ * 卡片样式列表项组件
+ */
+const CardItem: React.FC<{
+  item: SuggestionItem;
+  isHighlighted: boolean;
+  onSelect: (item: SuggestionItem) => void;
+  onMouseEnter: () => void;
+}> = ({ item, isHighlighted, onSelect, onMouseEnter }) => {
+  // 仅针对 cold-start 和 prompt 类型显示 scene/tips
+  const showMeta = (item.type === 'cold-start' || item.type === 'prompt') && (item.scene || item.tips);
+
+  return (
+    <div
+      className={`smart-suggestion-panel__item smart-suggestion-panel__item--card ${
+        isHighlighted ? 'smart-suggestion-panel__item--highlighted' : ''
+      }`}
+      onClick={() => onSelect(item)}
+      onMouseEnter={onMouseEnter}
+    >
+      <div className="smart-suggestion-panel__item-content">
+        <span className="smart-suggestion-panel__item-text">
+          {item.shortLabel || item.label}
+        </span>
+        {showMeta && (
+          <div className="smart-suggestion-panel__item-meta">
+            {item.scene && (
+              <span className="smart-suggestion-panel__item-scene">
+                {item.scene}
+              </span>
+            )}
+            {item.tips && (
+              <span className="smart-suggestion-panel__item-tips">
+                {item.tips}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+/**
  * SmartSuggestionPanel 组件
  */
 export const SmartSuggestionPanel: React.FC<SmartSuggestionPanelProps> = ({
@@ -450,36 +493,13 @@ export const SmartSuggestionPanel: React.FC<SmartSuggestionPanelProps> = ({
                 {coldStartSuggestions.map((item, index) => {
                   const globalIndex = coldStartHistoryPrompts.length + index;
                   return (
-                    <div
+                    <CardItem
                       key={item.id}
-                      className={`smart-suggestion-panel__item smart-suggestion-panel__item--cold-start ${
-                        globalIndex === highlightedIndex
-                          ? 'smart-suggestion-panel__item--highlighted'
-                          : ''
-                      }`}
-                      onClick={() => handleSelect(item)}
+                      item={item}
+                      isHighlighted={globalIndex === highlightedIndex}
+                      onSelect={handleSelect}
                       onMouseEnter={() => setHighlightedIndex(globalIndex)}
-                    >
-                      <div className="smart-suggestion-panel__item-content">
-                        <span className="smart-suggestion-panel__item-text">
-                          {item.shortLabel || item.label}
-                        </span>
-                        {item.type === 'cold-start' && (item.scene || item.tips) && (
-                          <div className="smart-suggestion-panel__item-meta">
-                            {item.scene && (
-                              <span className="smart-suggestion-panel__item-scene">
-                                {item.scene}
-                              </span>
-                            )}
-                            {item.tips && (
-                              <span className="smart-suggestion-panel__item-tips">
-                                {item.tips}
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                    />
                   );
                 })}
               </div>
@@ -548,27 +568,13 @@ export const SmartSuggestionPanel: React.FC<SmartSuggestionPanelProps> = ({
               </div>
               <div className="smart-suggestion-panel__list">
                 {presetPrompts.map((item, index) => (
-                  <div
+                  <CardItem
                     key={item.id}
-                    className={`smart-suggestion-panel__item ${
-                      getGlobalIndex('preset', index) === highlightedIndex 
-                        ? 'smart-suggestion-panel__item--highlighted' 
-                        : ''
-                    }`}
-                    onClick={() => handleSelect(item)}
+                    item={item}
+                    isHighlighted={getGlobalIndex('preset', index) === highlightedIndex}
+                    onSelect={handleSelect}
                     onMouseEnter={() => setHighlightedIndex(getGlobalIndex('preset', index))}
-                  >
-                    <div className="smart-suggestion-panel__item-content">
-                      <span className="smart-suggestion-panel__item-text">
-                        {item.shortLabel || item.label}
-                      </span>
-                      {item.type === 'prompt' && item.scene && (
-                        <span className="smart-suggestion-panel__item-scene">
-                          {item.scene}
-                        </span>
-                      )}
-                    </div>
-                  </div>
+                  />
                 ))}
               </div>
             </div>
@@ -580,7 +586,7 @@ export const SmartSuggestionPanel: React.FC<SmartSuggestionPanelProps> = ({
 
   // 渲染其他模式（模型、参数、个数）
   // model 模式下可能同时有历史记录
-  const hasModelModeHistory = mode === 'model' && modelModeHistoryPrompts.length > 0;
+  const hasModelModeHistory = modelModeHistoryPrompts.length > 0;
 
   return (
     <div
