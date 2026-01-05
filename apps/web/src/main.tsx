@@ -45,10 +45,14 @@ if ('serviceWorker' in navigator) {
   // 等待中的新 Worker
   let pendingWorker: ServiceWorker | null = null;
   
+  // Global reference to service worker registration
+  let swRegistration: ServiceWorkerRegistration | null = null;
+
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js')
       .then(registration => {
         console.log('Service Worker registered successfully:', registration);
+        swRegistration = registration;
         
         // 在开发模式下，强制更新Service Worker
         if (isDevelopment && registration.waiting) {
@@ -63,7 +67,7 @@ if ('serviceWorker' in navigator) {
             
             newWorker.addEventListener('statechange', () => {
               if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                console.log('New Service Worker installed, waiting to activate...');
+                console.log('New Service Worker installed, waiting for user confirmation...');
                 pendingWorker = newWorker;
                 
                 // 在开发模式下自动激活新的Service Worker
@@ -71,10 +75,12 @@ if ('serviceWorker' in navigator) {
                   console.log('Development mode: activating new Service Worker immediately');
                   newWorker.postMessage({ type: 'SKIP_WAITING' });
                 } else {
-                  // 生产模式：新版本已安装，等待 SW 自己决定升级时机
-                  // SW 会在没有活跃请求时自动升级
-                  console.log('Production mode: New version installed, SW will upgrade when idle');
+                  // 生产模式：新版本已安装，通知 UI 显示升级提示
+                  console.log('Production mode: New version installed, dispatching update event');
                   newVersionReady = true;
+                  window.dispatchEvent(new CustomEvent('sw-update-available', { 
+                    detail: { version: 'new' } 
+                  }));
                 }
               }
             });
@@ -119,8 +125,11 @@ if ('serviceWorker' in navigator) {
       }
     } else if (event.data && event.data.type === 'SW_NEW_VERSION_READY') {
       // Service Worker 通知新版本已准备好
-      console.log(`Main: New version v${event.data.version} ready, waiting for idle to upgrade`);
+      console.log(`Main: New version v${event.data.version} ready, waiting for user confirmation`);
       newVersionReady = true;
+      window.dispatchEvent(new CustomEvent('sw-update-available', { 
+        detail: { version: event.data.version } 
+      }));
     } else if (event.data && event.data.type === 'SW_UPGRADING') {
       // Service Worker 正在升级
       console.log(`Main: Service Worker upgrading to v${event.data.version}`);
@@ -141,21 +150,43 @@ if ('serviceWorker' in navigator) {
     }, 1000);
   });
   
-  // 页面卸载前，如果有等待中的升级，触发升级
-  window.addEventListener('beforeunload', () => {
-    if (newVersionReady && pendingWorker) {
-      console.log('Main: Page unloading, triggering pending upgrade');
+  // 监听用户确认升级事件
+  window.addEventListener('user-confirmed-upgrade', () => {
+    console.log('Main: User confirmed upgrade, triggering SKIP_WAITING');
+    
+    // 优先使用 pendingWorker
+    if (pendingWorker) {
       pendingWorker.postMessage({ type: 'SKIP_WAITING' });
+      return;
+    }
+    
+    // 如果没有 pendingWorker，尝试查找 waiting 状态的 worker
+    if (swRegistration && swRegistration.waiting) {
+      swRegistration.waiting.postMessage({ type: 'SKIP_WAITING' });
+      return;
+    }
+    
+    // 如果都没有，尝试向所有 worker 广播（兜底）
+    if (navigator.serviceWorker.controller) {
+       navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' });
     }
   });
   
-  // 页面隐藏时（用户切换标签页），如果有等待中的升级，触发升级
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden' && newVersionReady && pendingWorker) {
-      console.log('Main: Page hidden, triggering pending upgrade');
-      pendingWorker.postMessage({ type: 'SKIP_WAITING' });
-    }
-  });
+  // 页面卸载前，不再自动触发升级，必须用户手动确认
+  // window.addEventListener('beforeunload', () => {
+  //   if (newVersionReady && pendingWorker) {
+  //     console.log('Main: Page unloading, triggering pending upgrade');
+  //     pendingWorker.postMessage({ type: 'SKIP_WAITING' });
+  //   }
+  // });
+  
+  // 页面隐藏时，不再自动触发升级
+  // document.addEventListener('visibilitychange', () => {
+  //   if (document.visibilityState === 'hidden' && newVersionReady && pendingWorker) {
+  //     console.log('Main: Page hidden, triggering pending upgrade');
+  //     pendingWorker.postMessage({ type: 'SKIP_WAITING' });
+  //   }
+  // });
 }
 
 const root = ReactDOM.createRoot(
