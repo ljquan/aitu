@@ -1,3 +1,95 @@
+## 0.4.0 (2026-01-05)
+
+### 🚀 Features
+
+- 添加版本更新提示组件和交互逻辑 ([9084f9a](https://github.com/ljquan/aitu/commit/9084f9a))
+- 更新版本信息和初始化数据加载方式 ([e0fed52](https://github.com/ljquan/aitu/commit/e0fed52))
+- 优化 WorkZone 位置策略 ([604ef48](https://github.com/ljquan/aitu/commit/604ef48))
+- 添加长视频生成与恢复功能 ([c7c3fa2](https://github.com/ljquan/aitu/commit/c7c3fa2))
+- 发送工作流时不自动展开 ChatDrawer ([3275cd1](https://github.com/ljquan/aitu/commit/3275cd1))
+- 添加 WorkZone 画布元素显示工作流进度 ([74ef571](https://github.com/ljquan/aitu/commit/74ef571))
+- 添加 @ 触发模型选择和固定底栏布局 ([d409912](https://github.com/ljquan/aitu/commit/d409912))
+- 添加长视频生成功能 ([2f5d84f](https://github.com/ljquan/aitu/commit/2f5d84f))
+- 添加共享选中内容预览组件并重构相关代码 ([2a8be45](https://github.com/ljquan/aitu/commit/2a8be45))
+- 增强文本选择和复制功能并优化布局 ([655e5a3](https://github.com/ljquan/aitu/commit/655e5a3))
+- 添加SVG工具支持矢量图插入画布 ([404e8e1](https://github.com/ljquan/aitu/commit/404e8e1))
+- 添加AI分析内容显示和工作流消息优化 ([8cd8277](https://github.com/ljquan/aitu/commit/8cd8277))
+- 添加插入元素后自动滚动到视口的功能 ([1671c60](https://github.com/ljquan/aitu/commit/1671c60))
+
+### 🩹 Fixes
+
+- WorkZone 元素不触发 popup-toolbar ([bc6298b](https://github.com/ljquan/aitu/commit/bc6298b))
+- 优化白边检测逻辑并改进图片分割策略 ([c864077](https://github.com/ljquan/aitu/commit/c864077))
+- 修复工具栏按钮在打开状态时仍显示标题的问题 ([8973b8b](https://github.com/ljquan/aitu/commit/8973b8b))
+- 优化宫格图分割逻辑，避免误裁透明背景角色 ([795fd28](https://github.com/ljquan/aitu/commit/795fd28))
+- 修复消息提示实例未正确关闭的问题 ([0a5fbb9](https://github.com/ljquan/aitu/commit/0a5fbb9))
+
+### 🔧 Chores
+
+- 将package-lock.json添加到.gitignore中 ([c9730ac](https://github.com/ljquan/aitu/commit/c9730ac))
+- refactor: 移除未使用的ffmpeg依赖和视频合并服务 ([51ecdb2](https://github.com/ljquan/aitu/commit/51ecdb2))
+- docs: 更新 CLAUDE.md 添加 WorkZone 文档 ([3f9d194](https://github.com/ljquan/aitu/commit/3f9d194))
+- 优化 ([d785603](https://github.com/ljquan/aitu/commit/d785603))
+- 优化宫格拆图 ([47e4ca7](https://github.com/ljquan/aitu/commit/47e4ca7))
+- 优化宫格图 ([acf2372](https://github.com/ljquan/aitu/commit/acf2372))
+- 优化历史提示词展示 ([cf0f174](https://github.com/ljquan/aitu/commit/cf0f174))
+- 优化提示词 ([cdd5ac4](https://github.com/ljquan/aitu/commit/cdd5ac4))
+- 优化拆分 ([7c4d4fe](https://github.com/ljquan/aitu/commit/7c4d4fe))
+- 优化拆图 ([39885a1](https://github.com/ljquan/aitu/commit/39885a1))
+- 优化拆图 ([e072ca0](https://github.com/ljquan/aitu/commit/e072ca0))
+- 照片墙改成灵感图 ([e3f1d9a](https://github.com/ljquan/aitu/commit/e3f1d9a))
+- 优化拆分 ([0d1ebce](https://github.com/ljquan/aitu/commit/0d1ebce))
+- 优化模型注入 ([97d113e](https://github.com/ljquan/aitu/commit/97d113e))
+- 优化对话抽屉 ([d7b1714](https://github.com/ljquan/aitu/commit/d7b1714))
+- 优化抽屉输入框 ([cfb87f3](https://github.com/ljquan/aitu/commit/cfb87f3))
+- 对话抽屉换到右侧 ([50c8e72](https://github.com/ljquan/aitu/commit/50c8e72))
+- 优化去白边 ([94d2e24](https://github.com/ljquan/aitu/commit/94d2e24))
+- 优化 ([a49eba8](https://github.com/ljquan/aitu/commit/a49eba8))
+- 优化拆分 ([49828b8](https://github.com/ljquan/aitu/commit/49828b8))
+- 优化拆图 ([22afb18](https://github.com/ljquan/aitu/commit/22afb18))
+- 添加照片墙 ([24f1bee](https://github.com/ljquan/aitu/commit/24f1bee))
+- 修改概念 ([5213d28](https://github.com/ljquan/aitu/commit/5213d28))
+- 下载 ([9f924a1](https://github.com/ljquan/aitu/commit/9f924a1))
+- 优化切图 ([f299821](https://github.com/ljquan/aitu/commit/f299821))
+- 优化 ([99d3342](https://github.com/ljquan/aitu/commit/99d3342))
+- 生成照片墙 ([b17cf46](https://github.com/ljquan/aitu/commit/b17cf46))
+- 优化图、视频mcp ([8f2cee5](https://github.com/ljquan/aitu/commit/8f2cee5))
+- 添加思维导图mcp ([ab51889](https://github.com/ljquan/aitu/commit/ab51889))
+- 增加冷启动提示词 ([c705055](https://github.com/ljquan/aitu/commit/c705055))
+- 修复对话 ([a11d401](https://github.com/ljquan/aitu/commit/a11d401))
+- 优化指令 ([9f8ad01](https://github.com/ljquan/aitu/commit/9f8ad01))
+- 优化工作流实现 ([ba00566](https://github.com/ljquan/aitu/commit/ba00566))
+- 优化点击 ([904a6c5](https://github.com/ljquan/aitu/commit/904a6c5))
+- 优化 ([f096ce2](https://github.com/ljquan/aitu/commit/f096ce2))
+- 优化提示词 ([f281595](https://github.com/ljquan/aitu/commit/f281595))
+- 优化数量选择 ([18ca11d](https://github.com/ljquan/aitu/commit/18ca11d))
+- 优化多任务 ([61c615b](https://github.com/ljquan/aitu/commit/61c615b))
+- 优化删除 ([f000e29](https://github.com/ljquan/aitu/commit/f000e29))
+- 优化提示词 ([530ad3a](https://github.com/ljquan/aitu/commit/530ad3a))
+- 优化 ([6121a6a](https://github.com/ljquan/aitu/commit/6121a6a))
+- 并行 ([fd793c7](https://github.com/ljquan/aitu/commit/fd793c7))
+- 优化工作流 ([0dbd619](https://github.com/ljquan/aitu/commit/0dbd619))
+- 优化 ([5bfcf88](https://github.com/ljquan/aitu/commit/5bfcf88))
+- 优化输入框 ([7263289](https://github.com/ljquan/aitu/commit/7263289))
+- 优化参数 ([b46af91](https://github.com/ljquan/aitu/commit/b46af91))
+- 优化样式 ([560ee6f](https://github.com/ljquan/aitu/commit/560ee6f))
+- 样式优化 ([726d27b](https://github.com/ljquan/aitu/commit/726d27b))
+- 优化 ([1d24b51](https://github.com/ljquan/aitu/commit/1d24b51))
+- 添加文本模型设置 ([41670cf](https://github.com/ljquan/aitu/commit/41670cf))
+- 优化 ([441db62](https://github.com/ljquan/aitu/commit/441db62))
+- 优化输入框 ([b0fe73c](https://github.com/ljquan/aitu/commit/b0fe73c))
+- 优化提示词 ([50c06be](https://github.com/ljquan/aitu/commit/50c06be))
+- 优化输入框交互 ([f0017b8](https://github.com/ljquan/aitu/commit/f0017b8))
+- 优化输入框 ([0d3624d](https://github.com/ljquan/aitu/commit/0d3624d))
+- 优化 ([e18c059](https://github.com/ljquan/aitu/commit/e18c059))
+- 样式优化 ([620940d](https://github.com/ljquan/aitu/commit/620940d))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+- wj <wj@MacBook-Pro.local>
+- liquidliang <ljquan@qq.com>
+
 ## 0.3.3 (2025-12-29)
 
 ### 🚀 Features
