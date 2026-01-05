@@ -456,6 +456,7 @@ WorkZoneContent 组件响应更新，显示进度
 - 使用 SVG `foreignObject` 在画布中嵌入 React 组件
 - 使用 XHTML 命名空间确保 DOM 元素正确渲染
 - 需要在 `pointerdown` 阶段阻止事件冒泡，避免 Plait 拦截点击事件
+- WorkZone 元素被选中时不触发 popup-toolbar（在 `popup-toolbar.tsx` 中过滤）
 
 ---
 

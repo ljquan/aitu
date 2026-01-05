@@ -56,6 +56,7 @@ import { isVideoElement } from '../../../plugins/with-video';
 import { VideoFrameSelector } from '../../video-frame-selector/video-frame-selector';
 import { insertVideoFrame } from '../../../utils/video-frame';
 import { isToolElement } from '../../../plugins/with-tool';
+import { isWorkZoneElement } from '../../../plugins/with-workzone';
 import { splitAndInsertImages } from '../../../utils/image-splitter';
 import { smartDownload, BatchDownloadItem } from '../../../utils/download-utils';
 import { MessagePlugin } from 'tdesign-react';
@@ -63,7 +64,11 @@ import { mergeVideos } from '../../../services/video-merge-service';
 
 export const PopupToolbar = () => {
   const board = useBoard();
-  const selectedElements = getSelectedElements(board);
+  // 过滤掉 WorkZone 元素，避免点击 WorkZone 时弹出 popup-toolbar
+  const allSelectedElements = getSelectedElements(board);
+  const selectedElements = allSelectedElements.filter(
+    element => !isWorkZoneElement(element)
+  );
   const { openDialog } = useDrawnix();
   const { language, t } = useI18n();
   const [movingOrDragging, setMovingOrDragging] = useState(false);
