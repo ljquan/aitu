@@ -42,6 +42,7 @@ import { withTracking } from './plugins/tracking';
 import { withTool } from './plugins/with-tool';
 import { withToolFocus } from './plugins/with-tool-focus';
 import { withToolResize } from './plugins/with-tool-resize';
+import { withWorkZone } from './plugins/with-workzone';
 import { ActiveTaskWarning } from './components/task-queue/ActiveTaskWarning';
 import { useTaskStorage } from './hooks/useTaskStorage';
 import { useTaskExecutor } from './hooks/useTaskExecutor';
@@ -187,6 +188,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
     withTool,
     withToolResize, // 工具缩放功能 - 拖拽缩放手柄
     withToolFocus, // 工具焦点管理 - 双击编辑
+    withWorkZone, // 工作区元素 - 在画布上显示工作流进度
     withTracking,
   ];
 

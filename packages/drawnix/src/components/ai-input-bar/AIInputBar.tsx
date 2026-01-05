@@ -43,6 +43,8 @@ import './ai-input-bar.scss';
 import type { WorkflowRetryContext, PostProcessingStatus } from '../../types/chat.types';
 import { workflowCompletionService } from '../../services/workflow-completion-service';
 import { BoardTransforms } from '@plait/core';
+import { WorkZoneTransforms } from '../../plugins/with-workzone';
+import type { PlaitWorkZone } from '../../types/workzone.types';
 
 /**
  * 将 WorkflowDefinition 转换为 WorkflowMessageData
@@ -244,6 +246,9 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
   // 当前工作流的重试上下文（用于在更新时保持 retryContext）
   const currentRetryContextRef = useRef<WorkflowRetryContext | null>(null);
 
+  // 当前 WorkZone 元素 ID（用于在画布上显示工作流进度）
+  const currentWorkZoneIdRef = useRef<string | null>(null);
+
   // State
   const [prompt, setPrompt] = useState('');
   const [selectedContent, setSelectedContent] = useState<SelectedContent[]>([]);
@@ -339,7 +344,15 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
         // 同步更新 ChatDrawer 中的工作流消息
         const updatedWorkflow = workflowControl.getWorkflow();
         if (updatedWorkflow) {
-          updateWorkflowMessageRef.current(toWorkflowMessageData(updatedWorkflow, currentRetryContextRef.current || undefined));
+          const workflowData = toWorkflowMessageData(updatedWorkflow, currentRetryContextRef.current || undefined);
+          updateWorkflowMessageRef.current(workflowData);
+
+          // 同步更新 WorkZone（如果存在）
+          const workZoneId = currentWorkZoneIdRef.current;
+          const board = SelectionWatcherBoardRef.current;
+          if (workZoneId && board) {
+            WorkZoneTransforms.updateWorkflow(board, workZoneId, workflowData);
+          }
         }
       }
     });
@@ -391,12 +404,20 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
       // 同步更新 ChatDrawer 中的工作流消息
       const updatedWorkflow = workflowControl.getWorkflow();
       if (updatedWorkflow) {
-        updateWorkflowMessageRef.current(toWorkflowMessageData(
+        const workflowData = toWorkflowMessageData(
           updatedWorkflow,
           currentRetryContextRef.current || undefined,
           newPostProcessingStatus,
           insertedCountRef.current
-        ));
+        );
+        updateWorkflowMessageRef.current(workflowData);
+
+        // 同步更新 WorkZone（如果存在）
+        const workZoneId = currentWorkZoneIdRef.current;
+        const board = SelectionWatcherBoardRef.current;
+        if (workZoneId && board) {
+          WorkZoneTransforms.updateWorkflow(board, workZoneId, workflowData);
+        }
       }
 
       // 如果后处理完成，执行后续操作
@@ -408,9 +429,17 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
         setTimeout(() => {
           chatDrawerControl.closeChatDrawer();
 
+          // 删除 WorkZone（因为图片已经插入画布）
+          const workZoneId = currentWorkZoneIdRef.current;
+          const board = SelectionWatcherBoardRef.current;
+          if (workZoneId && board) {
+            WorkZoneTransforms.removeWorkZone(board, workZoneId);
+            currentWorkZoneIdRef.current = null;
+            console.log('[AIInputBar] Removed WorkZone after completion:', workZoneId);
+          }
+
           // 滚动画布到插入元素的位置
           if (position) {
-            const board = SelectionWatcherBoardRef.current;
             if (board) {
               // 计算新的视口原点，使元素位于视口中心
               const containerRect = board.host?.getBoundingClientRect();
@@ -588,6 +617,41 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
       // 启动工作流（内部状态管理）
       workflowControl.startWorkflow(workflow);
 
+      // 在画布上创建 WorkZone 显示工作流进度
+      const board = SelectionWatcherBoardRef.current;
+      console.log('[AIInputBar] Board ref:', board ? 'exists' : 'null');
+      if (board) {
+        // 计算 WorkZone 位置（视口中心）
+        const containerRect = board.host?.getBoundingClientRect();
+        const zoom = board.viewport?.zoom || 1;
+        const originX = board.viewport?.origination?.[0] || 0;
+        const originY = board.viewport?.origination?.[1] || 0;
+
+        let workzoneX = 100;
+        let workzoneY = 100;
+
+        if (containerRect) {
+          // 将视口中心转换为画布坐标
+          workzoneX = originX + (containerRect.width / 2 / zoom) - 150; // 居中显示
+          workzoneY = originY + (containerRect.height / 2 / zoom) - 100;
+        }
+
+        // 创建 WorkZone
+        const workflowMessageData = toWorkflowMessageData(workflow);
+        const workzoneElement = WorkZoneTransforms.insertWorkZone(board, {
+          workflow: workflowMessageData,
+          position: [workzoneX, workzoneY],
+          size: { width: 320, height: 240 },
+        });
+
+        // 保存 WorkZone ID 用于后续更新
+        currentWorkZoneIdRef.current = workzoneElement.id;
+        console.log('[AIInputBar] Created WorkZone:', workzoneElement.id, 'at position:', [workzoneX, workzoneY]);
+        console.log('[AIInputBar] Board children count:', board.children.length);
+      } else {
+        console.warn('[AIInputBar] Board not available, skipping WorkZone creation');
+      }
+
       // 构建完整的 AI 输入上下文
       const aiContext = {
         rawInput: prompt,
@@ -681,7 +745,12 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
             });
           });
 
-          updateWorkflowMessageRef.current(toWorkflowMessageData(workflowControl.getWorkflow()!, currentRetryContextRef.current || undefined));
+          const workflowData = toWorkflowMessageData(workflowControl.getWorkflow()!, currentRetryContextRef.current || undefined);
+          updateWorkflowMessageRef.current(workflowData);
+          // 同步更新 WorkZone
+          if (currentWorkZoneIdRef.current && board) {
+            WorkZoneTransforms.updateWorkflow(board, currentWorkZoneIdRef.current, workflowData);
+          }
         },
         // 更新步骤状态回调
         onUpdateStep: (stepId: string, status: string, result?: unknown, error?: string) => {
@@ -697,11 +766,25 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
             error,
           });
 
-          updateWorkflowMessageRef.current(toWorkflowMessageData(workflowControl.getWorkflow()!, currentRetryContextRef.current || undefined));
+          const workflowData = toWorkflowMessageData(workflowControl.getWorkflow()!, currentRetryContextRef.current || undefined);
+          updateWorkflowMessageRef.current(workflowData);
+          // 同步更新 WorkZone
+          if (currentWorkZoneIdRef.current && board) {
+            WorkZoneTransforms.updateWorkflow(board, currentWorkZoneIdRef.current, workflowData);
+          }
         },
       });
 
       let workflowFailed = false;
+
+      // 辅助函数：同步更新 ChatDrawer 和 WorkZone
+      const syncWorkflowUpdates = () => {
+        const workflowData = toWorkflowMessageData(workflowControl.getWorkflow()!, currentRetryContextRef.current || undefined);
+        updateWorkflowMessageRef.current(workflowData);
+        if (currentWorkZoneIdRef.current && board) {
+          WorkZoneTransforms.updateWorkflow(board, currentWorkZoneIdRef.current, workflowData);
+        }
+      };
 
       // 执行单个步骤的函数
       const executeStep = async (step: typeof workflow.steps[0]) => {
@@ -709,7 +792,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
 
         // 更新步骤为运行中
         workflowControl.updateStep(step.id, 'running');
-        updateWorkflowMessageRef.current(toWorkflowMessageData(workflowControl.getWorkflow()!, currentRetryContextRef.current || undefined));
+        syncWorkflowUpdates();
 
         try {
           // 合并步骤选项和标准回调（工具自行决定是否使用回调）
@@ -746,8 +829,8 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
           workflowControl.updateStep(step.id, 'failed', undefined, String(stepError));
           return false; // 返回失败
         } finally {
-          // 同步更新 ChatDrawer 中的工作流消息
-          updateWorkflowMessageRef.current(toWorkflowMessageData(workflowControl.getWorkflow()!, currentRetryContextRef.current || undefined));
+          // 同步更新 ChatDrawer 和 WorkZone
+          syncWorkflowUpdates();
         }
       };
 
@@ -756,7 +839,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
         // 如果工作流已失败，跳过剩余步骤
         if (workflowFailed) {
           workflowControl.updateStep(step.id, 'skipped');
-          updateWorkflowMessageRef.current(toWorkflowMessageData(workflowControl.getWorkflow()!, currentRetryContextRef.current || undefined));
+          syncWorkflowUpdates();
           continue;
         }
 
@@ -778,7 +861,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
         for (const newStep of pendingNewSteps) {
           if (workflowFailed) {
             workflowControl.updateStep(newStep.id, 'skipped');
-            updateWorkflowMessageRef.current(toWorkflowMessageData(workflowControl.getWorkflow()!, currentRetryContextRef.current || undefined));
+            syncWorkflowUpdates();
             continue;
           }
 
