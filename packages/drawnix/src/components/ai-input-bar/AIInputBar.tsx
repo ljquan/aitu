@@ -19,7 +19,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Send, Check } from 'lucide-react';
 import { useBoard } from '@plait-board/react-board';
 import { SelectedContentPreview } from '../shared/SelectedContentPreview';
-import { getSelectedElements, ATTACHED_ELEMENT_CLASS_NAME } from '@plait/core';
+import { getSelectedElements, ATTACHED_ELEMENT_CLASS_NAME, getRectangleByElements } from '@plait/core';
 import { useI18n } from '../../i18n';
 import { TaskStatus } from '../../types/task.types';
 import { taskQueueService } from '../../services/task-queue-service';
@@ -621,7 +621,11 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
       const board = SelectionWatcherBoardRef.current;
       console.log('[AIInputBar] Board ref:', board ? 'exists' : 'null');
       if (board) {
-        // 计算 WorkZone 位置（视口中心）
+        const WORKZONE_WIDTH = 320;
+        const WORKZONE_HEIGHT = 240;
+        const GAP = 50; // 间距
+
+        // 计算 WorkZone 位置（空白处策略）
         const containerRect = board.host?.getBoundingClientRect();
         const zoom = board.viewport?.zoom || 1;
         const originX = board.viewport?.origination?.[0] || 0;
@@ -630,10 +634,36 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
         let workzoneX = 100;
         let workzoneY = 100;
 
-        if (containerRect) {
-          // 将视口中心转换为画布坐标
-          workzoneX = originX + (containerRect.width / 2 / zoom) - 150; // 居中显示
-          workzoneY = originY + (containerRect.height / 2 / zoom) - 100;
+        // 获取选中的元素（排除 WorkZone 类型）
+        const selectedElements = getSelectedElements(board).filter(
+          el => el.type !== 'workzone'
+        );
+        // 获取所有非 WorkZone 元素
+        const allElements = board.children.filter(
+          (el: { type?: string }) => el.type !== 'workzone'
+        );
+
+        if (selectedElements.length > 0) {
+          // 策略 1: 有选中元素，放在选中元素的右侧
+          const selectionRect = getRectangleByElements(board, selectedElements, false);
+          workzoneX = selectionRect.x + selectionRect.width + GAP;
+          workzoneY = selectionRect.y;
+          console.log('[AIInputBar] WorkZone position: right of selection');
+        } else if (allElements.length > 0) {
+          // 策略 2: 没有选中元素，放在所有元素的右下方
+          const allRect = getRectangleByElements(board, allElements, false);
+          workzoneX = allRect.x + allRect.width + GAP;
+          workzoneY = allRect.y + allRect.height - WORKZONE_HEIGHT;
+          // 确保 Y 不为负
+          if (workzoneY < allRect.y) {
+            workzoneY = allRect.y;
+          }
+          console.log('[AIInputBar] WorkZone position: right-bottom of all elements');
+        } else if (containerRect) {
+          // 策略 3: 画布为空，放在视口中心
+          workzoneX = originX + (containerRect.width / 2 / zoom) - WORKZONE_WIDTH / 2;
+          workzoneY = originY + (containerRect.height / 2 / zoom) - WORKZONE_HEIGHT / 2;
+          console.log('[AIInputBar] WorkZone position: viewport center');
         }
 
         // 创建 WorkZone
@@ -641,7 +671,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
         const workzoneElement = WorkZoneTransforms.insertWorkZone(board, {
           workflow: workflowMessageData,
           position: [workzoneX, workzoneY],
-          size: { width: 320, height: 240 },
+          size: { width: WORKZONE_WIDTH, height: WORKZONE_HEIGHT },
         });
 
         // 保存 WorkZone ID 用于后续更新

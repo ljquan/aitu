@@ -458,6 +458,7 @@ WorkZoneContent 组件响应更新，显示进度
 - 需要在 `pointerdown` 阶段阻止事件冒泡，避免 Plait 拦截点击事件
 - WorkZone 元素被选中时不触发 popup-toolbar（在 `popup-toolbar.tsx` 中过滤）
 - AIInputBar 发送工作流时不自动展开 ChatDrawer（通过 `autoOpen: false` 参数控制）
+- WorkZone 位置策略：有选中元素放右侧，无选中放所有元素右下方，画布为空放视口中心
 
 ---
 
