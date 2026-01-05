@@ -47,28 +47,6 @@ const videoBlobCache = new Map();
 // 域名故障标记：记录已知失败的域名
 const failedDomains = new Set();
 
-// ==================== 智能升级相关变量 ====================
-// 活跃请求计数器：追踪正在进行的请求数量
-let activeRequestCount = 0;
-
-// 是否有等待中的升级
-let pendingUpgrade = false;
-
-// 新版本资源是否已准备好
-let newVersionReady = false;
-
-// 升级检查间隔（毫秒）
-const UPGRADE_CHECK_INTERVAL = 500;
-
-// 空闲等待时间（毫秒）- 请求结束后等待一段时间确保没有新请求
-const IDLE_WAIT_TIME = 2000;
-
-// 最后一次请求结束时间
-let lastRequestEndTime = 0;
-
-// 升级检查定时器
-let upgradeCheckTimer = null;
-
 // 检查URL是否需要CORS处理
 function shouldHandleCORS(url) {
   for (const domain of CORS_ALLOWED_DOMAINS) {
@@ -206,83 +184,9 @@ setInterval(cleanupVideoBlobCache, 2 * 60 * 1000); // 每2分钟清理一次视�
 
 // ==================== 智能升级相关函数 ====================
 
-// 增加活跃请求计数
-function incrementActiveRequests() {
-  activeRequestCount++;
-  console.log(`Service Worker: 活跃请求数 +1，当前: ${activeRequestCount}`);
-}
-
-// 减少活跃请求计数
-function decrementActiveRequests() {
-  activeRequestCount = Math.max(0, activeRequestCount - 1);
-  lastRequestEndTime = Date.now();
-  console.log(`Service Worker: 活跃请求数 -1，当前: ${activeRequestCount}`);
-  
-  // 如果有等待中的升级，检查是否可以执行
-  if (pendingUpgrade && activeRequestCount === 0) {
-    scheduleUpgradeCheck();
-  }
-}
-
-// 安排升级检查
-function scheduleUpgradeCheck() {
-  if (upgradeCheckTimer) {
-    clearTimeout(upgradeCheckTimer);
-  }
-  
-  upgradeCheckTimer = setTimeout(() => {
-    checkAndPerformUpgrade();
-  }, IDLE_WAIT_TIME);
-}
-
-// 检查并执行升级
-function checkAndPerformUpgrade() {
-  const now = Date.now();
-  const idleTime = now - lastRequestEndTime;
-  
-  console.log(`Service Worker: 检查升级条件 - 活跃请求: ${activeRequestCount}, 空闲时间: ${idleTime}ms`);
-  
-  // 条件：没有活跃请求，且空闲时间足够长
-  if (activeRequestCount === 0 && idleTime >= IDLE_WAIT_TIME) {
-    console.log('Service Worker: 满足升级条件，执行升级...');
-    performUpgrade();
-  } else if (pendingUpgrade) {
-    // 如果还有请求或空闲时间不够，继续等待
-    console.log('Service Worker: 升级条件不满足，继续等待...');
-    scheduleUpgradeCheck();
-  }
-}
-
-// 执行升级
-function performUpgrade() {
-  if (!pendingUpgrade) {
-    return;
-  }
-  
-  pendingUpgrade = false;
-  newVersionReady = false;
-  
-  console.log('Service Worker: 开始执行升级，调用 skipWaiting()');
-  self.skipWaiting();
-  
-  // 通知所有客户端 SW 即将更新
-  self.clients.matchAll().then(clients => {
-    clients.forEach(client => {
-      client.postMessage({ 
-        type: 'SW_UPGRADING',
-        version: APP_VERSION
-      });
-    });
-  });
-}
-
-// 标记新版本已准备好，等待合适时机升级
+// 标记新版本已准备好，等待用户确认
 function markNewVersionReady() {
-  newVersionReady = true;
-  pendingUpgrade = true;
-  lastRequestEndTime = Date.now();
-  
-  console.log(`Service Worker: 新版本 v${APP_VERSION} 已准备好，等待合适时机升级...`);
+  console.log(`Service Worker: 新版本 v${APP_VERSION} 已准备好，等待用户确认...`);
   
   // 通知客户端有新版本可用
   self.clients.matchAll().then(clients => {
@@ -293,11 +197,6 @@ function markNewVersionReady() {
       });
     });
   });
-  
-  // 开始检查升级时机
-  if (activeRequestCount === 0) {
-    scheduleUpgradeCheck();
-  }
 }
 
 // 清理旧的缓存条目以释放空间（基于LRU策略）
@@ -482,14 +381,8 @@ self.addEventListener('message', event => {
     // 主线程请求立即升级（用户主动触发）
     console.log('Service Worker: 收到主线程的 SKIP_WAITING 请求');
     
-    // 如果有等待中的升级，立即执行
-    if (pendingUpgrade) {
-      console.log('Service Worker: 用户主动触发升级，立即执行');
-      performUpgrade();
-    } else {
-      // 直接调用 skipWaiting
-      self.skipWaiting();
-    }
+    // 直接调用 skipWaiting
+    self.skipWaiting();
     
     // Notify clients that SW has been updated
     self.clients.matchAll().then(clients => {
@@ -507,24 +400,17 @@ self.addEventListener('message', event => {
     // 主线程查询升级状态
     event.source.postMessage({
       type: 'UPGRADE_STATUS',
-      pendingUpgrade: pendingUpgrade,
-      newVersionReady: newVersionReady,
-      activeRequestCount: activeRequestCount,
       version: APP_VERSION
     });
   } else if (event.data && event.data.type === 'FORCE_UPGRADE') {
-    // 主线程强制升级（忽略活跃请求）
+    // 主线程强制升级
     console.log('Service Worker: 收到强制升级请求');
-    if (pendingUpgrade) {
-      pendingUpgrade = false;
-      newVersionReady = false;
-      self.skipWaiting();
-      self.clients.matchAll().then(clients => {
-        clients.forEach(client => {
-          client.postMessage({ type: 'SW_UPDATED' });
-        });
+    self.skipWaiting();
+    self.clients.matchAll().then(clients => {
+      clients.forEach(client => {
+        client.postMessage({ type: 'SW_UPDATED' });
       });
-    }
+    });
   }
 });
 
@@ -612,12 +498,8 @@ self.addEventListener('fetch', event => {
   if (isVideoRequest(url, event.request)) {
     console.log('Service Worker: Intercepting video request:', url.href);
     
-    // 追踪视频请求（视频请求通常较长，需要追踪）
-    incrementActiveRequests();
     event.respondWith(
-      handleVideoRequest(event.request).finally(() => {
-        decrementActiveRequests();
-      })
+      handleVideoRequest(event.request)
     );
     return;
   }
@@ -626,12 +508,8 @@ self.addEventListener('fetch', event => {
   if (url.origin !== location.origin && isImageRequest(url, event.request)) {
     console.log('Service Worker: Intercepting external image request:', url.href);
     
-    // 追踪图片请求
-    incrementActiveRequests();
     event.respondWith(
-      handleImageRequest(event.request).finally(() => {
-        decrementActiveRequests();
-      })
+      handleImageRequest(event.request)
     );
     return;
   }
@@ -643,12 +521,8 @@ self.addEventListener('fetch', event => {
       event.request.destination !== '' &&
       event.request.destination !== 'empty') {
     
-    // 追踪静态资源请求
-    incrementActiveRequests();
     event.respondWith(
-      handleStaticRequest(event.request).finally(() => {
-        decrementActiveRequests();
-      })
+      handleStaticRequest(event.request)
     );
     return;
   }

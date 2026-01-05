@@ -60,6 +60,7 @@ import { AssetProvider } from './contexts/AssetContext';
 import { initializeAssetIntegration } from './services/asset-integration-service';
 import { ToolbarConfigProvider } from './hooks/use-toolbar-config';
 import { AIInputBar } from './components/ai-input-bar';
+import { VersionUpdatePrompt } from './components/version-update/version-update-prompt';
 
 export type DrawnixProps = {
   value: PlaitElement[];
@@ -407,6 +408,8 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
           <SettingsDialog container={containerRef.current}></SettingsDialog>
           {/* AI Input Bar - 底部 AI 输入框 */}
           <AIInputBar />
+          {/* Version Update Prompt - 顶部右上角升级提示 */}
+          <VersionUpdatePrompt />
         </Wrapper>
         <ActiveTaskWarning />
         <ChatDrawer ref={chatDrawerRef} />
