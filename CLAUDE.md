@@ -138,6 +138,9 @@ components/
 │   ├── SessionList.tsx            # 会话列表
 │   ├── SessionItem.tsx            # 会话项
 │   └── MermaidRenderer.tsx        # Mermaid 渲染器
+├── workzone-element/              # WorkZone 画布元素
+│   ├── WorkZoneContent.tsx        # 工作流进度显示组件
+│   └── workzone-content.scss      # 样式文件
 ├── media-library/                 # 媒体库 (22个子组件)
 ├── toolbar/                       # 工具栏
 │   ├── UnifiedToolbar/            # 主创建工具栏
@@ -189,6 +192,7 @@ plugins/
 ├── with-pencil.ts                 # 铅笔/橡皮模式
 ├── with-image.tsx                 # 图像插件
 ├── with-video.ts                  # 视频支持
+├── with-workzone.ts               # WorkZone 画布元素插件
 ├── with-mind-extend.tsx           # 思维导图扩展
 ├── with-text-link.tsx             # 文本链接
 ├── with-common.tsx                # 通用插件
@@ -248,6 +252,7 @@ utils/
 types/
 ├── task.types.ts                  # 任务类型定义
 ├── chat.types.ts                  # 聊天类型
+├── workzone.types.ts              # WorkZone 画布元素类型
 ├── photo-wall.types.ts            # 照墙类型
 ├── asset.types.ts                 # 资产类型
 ├── character.types.ts             # 角色类型
@@ -416,8 +421,41 @@ Drawnix (主编辑器)
       ├── withHotkey (快捷键)
       ├── withTextLink (文本链接)
       ├── withVideo (视频支持)
+      ├── withWorkZone (工作流进度)
       └── ...
 ```
+
+### WorkZone 画布元素
+
+WorkZone 是一个特殊的画布元素，用于在画布上直接显示 AI 生成任务的工作流进度。
+
+**核心文件**：
+- `plugins/with-workzone.ts` - Plait 插件，注册 WorkZone 元素类型
+- `components/workzone-element/WorkZoneContent.tsx` - React 渲染组件
+- `types/workzone.types.ts` - 类型定义
+
+**工作流程**：
+```
+AIInputBar 提交生成任务
+  ↓
+创建 WorkZone 元素到画布 (WorkZoneTransforms.insertWorkZone)
+  ↓
+WorkflowContext 更新工作流状态
+  ↓
+WorkZoneContent 组件响应更新，显示进度
+  ↓
+任务完成/失败后可删除 WorkZone
+```
+
+**关键 API**：
+- `WorkZoneTransforms.insertWorkZone(board, options)` - 创建 WorkZone
+- `WorkZoneTransforms.updateWorkflow(board, id, workflow)` - 更新工作流状态
+- `WorkZoneTransforms.removeWorkZone(board, id)` - 删除 WorkZone
+
+**技术要点**：
+- 使用 SVG `foreignObject` 在画布中嵌入 React 组件
+- 使用 XHTML 命名空间确保 DOM 元素正确渲染
+- 需要在 `pointerdown` 阶段阻止事件冒泡，避免 Plait 拦截点击事件
 
 ---
 
