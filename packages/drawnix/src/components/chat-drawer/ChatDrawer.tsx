@@ -537,11 +537,13 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
     // 发送工作流消息（创建新对话）
     const handleSendWorkflowMessage = useCallback(
       async (params: WorkflowMessageParams) => {
-        const { context, workflow, textModel } = params;
+        const { context, workflow, textModel, autoOpen = true } = params;
 
-        // 打开抽屉
-        setIsOpen(true);
-        onOpenChange?.(true);
+        // 根据 autoOpen 参数决定是否打开抽屉
+        if (autoOpen) {
+          setIsOpen(true);
+          onOpenChange?.(true);
+        }
 
         // 如果传入了文本模型，设置为当前会话的临时模型
         if (textModel) {

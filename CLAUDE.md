@@ -457,6 +457,7 @@ WorkZoneContent 组件响应更新，显示进度
 - 使用 XHTML 命名空间确保 DOM 元素正确渲染
 - 需要在 `pointerdown` 阶段阻止事件冒泡，避免 Plait 拦截点击事件
 - WorkZone 元素被选中时不触发 popup-toolbar（在 `popup-toolbar.tsx` 中过滤）
+- AIInputBar 发送工作流时不自动展开 ChatDrawer（通过 `autoOpen: false` 参数控制）
 
 ---
 

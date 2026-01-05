@@ -683,12 +683,13 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
       // 保存到 ref，用于后续更新时保持 retryContext
       currentRetryContextRef.current = retryContext;
 
-      // 发送工作流消息到 ChatDrawer（创建新对话并显示）
+      // 发送工作流消息到 ChatDrawer（创建新对话但不自动展开）
       const workflowMessageData = toWorkflowMessageData(workflow, retryContext);
       await sendWorkflowMessageRef.current({
         context: aiContext,
         workflow: workflowMessageData,
         textModel, // 传递全局文本模型
+        autoOpen: false, // 不自动展开 ChatDrawer，避免干扰工作
       });
 
       // 统一处理：遍历工作流步骤，通过 MCP Registry 执行
