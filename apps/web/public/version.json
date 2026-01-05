@@ -1,10 +1,4 @@
 {
-<<<<<<< HEAD
-  "version": "0.3.3",
-  "buildTime": "2026-01-05T15:02:34.330Z",
-  "gitCommit": "unknown"
-}
-=======
   "version": "0.4.0",
   "buildTime": "2026-01-05T16:17:47.351Z",
   "gitCommit": "unknown",
@@ -40,4 +34,3 @@
     "优化数量选择"
   ]
 }
->>>>>>> 222ff9e (feat: 升级版本至0.4.0并添加更新日志功能)
