@@ -11,7 +11,7 @@ import { SessionItem } from './SessionItem';
 import type { SessionListProps, ChatSession } from '../../types/chat.types';
 
 export const SessionList: React.FC<SessionListProps> = React.memo(
-  ({ sessions, activeSessionId, onSelectSession, onNewSession, onDeleteSession }) => {
+  ({ sessions, activeSessionId, onSelectSession, onNewSession, onDeleteSession, onRenameSession }) => {
     const [pendingDeleteId, setPendingDeleteId] = React.useState<string | null>(null);
 
     const handleSelect = useCallback(
@@ -35,6 +35,13 @@ export const SessionList: React.FC<SessionListProps> = React.memo(
     const handleDeleteCancel = useCallback(() => {
       setPendingDeleteId(null);
     }, []);
+
+    const handleRename = useCallback(
+      (sessionId: string, newTitle: string) => {
+        onRenameSession(sessionId, newTitle);
+      },
+      [onRenameSession]
+    );
 
     return (
       <div className="session-list">
@@ -61,6 +68,7 @@ export const SessionList: React.FC<SessionListProps> = React.memo(
                 isActive={session.id === activeSessionId}
                 onSelect={() => handleSelect(session.id)}
                 onDelete={() => handleDeleteClick(session.id)}
+                onRename={(newTitle) => handleRename(session.id, newTitle)}
               />
             ))
           )}

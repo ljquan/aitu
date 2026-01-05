@@ -42,11 +42,15 @@ import { withTracking } from './plugins/tracking';
 import { withTool } from './plugins/with-tool';
 import { withToolFocus } from './plugins/with-tool-focus';
 import { withToolResize } from './plugins/with-tool-resize';
+import { withWorkZone } from './plugins/with-workzone';
 import { ActiveTaskWarning } from './components/task-queue/ActiveTaskWarning';
 import { useTaskStorage } from './hooks/useTaskStorage';
 import { useTaskExecutor } from './hooks/useTaskExecutor';
+import { useAutoInsertToCanvas } from './hooks/useAutoInsertToCanvas';
 import { useBeforeUnload } from './hooks/useBeforeUnload';
 import { ChatDrawer } from './components/chat-drawer';
+import { ChatDrawerProvider, useChatDrawer } from './contexts/ChatDrawerContext';
+import { WorkflowProvider } from './contexts/WorkflowContext';
 import { ProjectDrawer } from './components/project-drawer';
 import { ToolboxDrawer } from './components/toolbox-drawer/ToolboxDrawer';
 import { useWorkspace } from './hooks/useWorkspace';
@@ -56,6 +60,7 @@ import { Minimap } from './components/minimap';
 import { AssetProvider } from './contexts/AssetContext';
 import { initializeAssetIntegration } from './services/asset-integration-service';
 import { ToolbarConfigProvider } from './hooks/use-toolbar-config';
+import { AIInputBar } from './components/ai-input-bar';
 
 export type DrawnixProps = {
   value: PlaitElement[];
@@ -169,6 +174,15 @@ export const Drawnix: React.FC<DrawnixProps> = ({
     return cleanup;
   }, []);
 
+  // Initialize video recovery service to restore expired blob URLs
+  useEffect(() => {
+    if (board) {
+      import('./services/video-recovery-service').then(({ initVideoRecoveryService }) => {
+        initVideoRecoveryService(board);
+      });
+    }
+  }, [board]);
+
   const plugins: PlaitPlugin[] = [
     withDraw,
     withGroup,
@@ -183,6 +197,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
     withTool,
     withToolResize, // 工具缩放功能 - 拖拽缩放手柄
     withToolFocus, // 工具焦点管理 - 双击编辑
+    withWorkZone, // 工作区元素 - 在画布上显示工作流进度
     withTracking,
   ];
 
@@ -193,6 +208,9 @@ export const Drawnix: React.FC<DrawnixProps> = ({
 
   // Initialize task executor for background processing
   useTaskExecutor();
+
+  // Auto-insert completed tasks to canvas
+  useAutoInsertToCanvas({ enabled: true, insertPrompt: false, groupSimilarTasks: true });
 
   // Warn users before leaving page with active tasks
   useBeforeUnload();
@@ -244,74 +262,169 @@ export const Drawnix: React.FC<DrawnixProps> = ({
     <I18nProvider>
       <ToolbarConfigProvider>
         <AssetProvider>
-          <DrawnixContext.Provider value={contextValue}>
-          <div
-            className={classNames('drawnix', {
-              'drawnix--mobile': appState.isMobile,
-            })}
-            ref={containerRef}
-          >
-            <div className="drawnix__main">
-              <Wrapper
-                value={value}
-                viewport={viewport}
-                theme={theme}
-                options={options}
-                plugins={plugins}
-                onChange={(data: BoardChangeData) => {
-                  onChange && onChange(data);
-                }}
-                onSelectionChange={handleSelectionChange}
-                onViewportChange={onViewportChange}
-                onThemeChange={onThemeChange}
-                onValueChange={onValueChange}
-              >
-                <Board
-                  afterInit={(board) => {
-                    setBoard(board as DrawnixBoard);
-                    // 设置测试助手的 board 实例（仅开发环境）
-                    if (process.env.NODE_ENV === 'development') {
-                      toolTestHelper.setBoard(board);
-                    }
-                    afterInit && afterInit(board);
-                  }}
-                ></Board>
-                {/* 统一左侧工具栏 (桌面端和移动端一致) */}
-                <UnifiedToolbar
+          <ChatDrawerProvider>
+            <WorkflowProvider>
+              <DrawnixContext.Provider value={contextValue}>
+                <DrawnixContent
+                  value={value}
+                  viewport={viewport}
+                  theme={theme}
+                  options={options}
+                  plugins={plugins}
+                  containerRef={containerRef}
+                  appState={appState}
+                  board={board}
+                  setBoard={setBoard}
                   projectDrawerOpen={projectDrawerOpen}
-                  onProjectDrawerToggle={handleProjectDrawerToggle}
                   toolboxDrawerOpen={toolboxDrawerOpen}
-                  onToolboxDrawerToggle={handleToolboxDrawerToggle}
                   taskPanelExpanded={taskPanelExpanded}
-                  onTaskPanelToggle={handleTaskPanelToggle}
+                  onChange={onChange}
+                  onSelectionChange={handleSelectionChange}
+                  onViewportChange={onViewportChange}
+                  onThemeChange={onThemeChange}
+                  onValueChange={onValueChange}
+                  afterInit={afterInit}
+                  onBoardSwitch={onBoardSwitch}
+                  handleProjectDrawerToggle={handleProjectDrawerToggle}
+                  handleToolboxDrawerToggle={handleToolboxDrawerToggle}
+                  handleTaskPanelToggle={handleTaskPanelToggle}
+                  setProjectDrawerOpen={setProjectDrawerOpen}
+                  setToolboxDrawerOpen={setToolboxDrawerOpen}
+                  handleBeforeSwitch={handleBeforeSwitch}
                 />
-
-                <PopupToolbar></PopupToolbar>
-                <LinkPopup></LinkPopup>
-                <ClosePencilToolbar></ClosePencilToolbar>
-                <TTDDialog container={containerRef.current}></TTDDialog>
-                <CleanConfirm container={containerRef.current}></CleanConfirm>
-                <SettingsDialog container={containerRef.current}></SettingsDialog>
-              </Wrapper>
-              <ActiveTaskWarning />
-              <ChatDrawer />
-              <ProjectDrawer
-                isOpen={projectDrawerOpen}
-                onOpenChange={setProjectDrawerOpen}
-                onBeforeSwitch={handleBeforeSwitch}
-                onBoardSwitch={onBoardSwitch}
-              />
-              <ToolboxDrawer
-                isOpen={toolboxDrawerOpen}
-                onOpenChange={setToolboxDrawerOpen}
-              />
-              {/* Minimap - 小地图 */}
-              {board && <Minimap board={board} />}
-            </div>
-          </div>
-          </DrawnixContext.Provider>
-          </AssetProvider>
+              </DrawnixContext.Provider>
+            </WorkflowProvider>
+          </ChatDrawerProvider>
+        </AssetProvider>
       </ToolbarConfigProvider>
     </I18nProvider>
+  );
+};
+
+// Internal component that uses ChatDrawer context
+interface DrawnixContentProps {
+  value: PlaitElement[];
+  viewport?: Viewport;
+  theme?: PlaitTheme;
+  options: PlaitBoardOptions;
+  plugins: PlaitPlugin[];
+  containerRef: React.RefObject<HTMLDivElement>;
+  appState: DrawnixState;
+  board: DrawnixBoard | null;
+  setBoard: React.Dispatch<React.SetStateAction<DrawnixBoard | null>>;
+  projectDrawerOpen: boolean;
+  toolboxDrawerOpen: boolean;
+  taskPanelExpanded: boolean;
+  onChange?: (value: BoardChangeData) => void;
+  onSelectionChange: (selection: Selection | null) => void;
+  onViewportChange?: (value: Viewport) => void;
+  onThemeChange?: (value: ThemeColorMode) => void;
+  onValueChange?: (value: PlaitElement[]) => void;
+  afterInit?: (board: PlaitBoard) => void;
+  onBoardSwitch?: (board: WorkspaceBoard) => void;
+  handleProjectDrawerToggle: () => void;
+  handleToolboxDrawerToggle: () => void;
+  handleTaskPanelToggle: () => void;
+  setProjectDrawerOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  setToolboxDrawerOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  handleBeforeSwitch: () => Promise<void>;
+}
+
+const DrawnixContent: React.FC<DrawnixContentProps> = ({
+  value,
+  viewport,
+  theme,
+  options,
+  plugins,
+  containerRef,
+  appState,
+  board,
+  setBoard,
+  projectDrawerOpen,
+  toolboxDrawerOpen,
+  taskPanelExpanded,
+  onChange,
+  onSelectionChange,
+  onViewportChange,
+  onThemeChange,
+  onValueChange,
+  afterInit,
+  onBoardSwitch,
+  handleProjectDrawerToggle,
+  handleToolboxDrawerToggle,
+  handleTaskPanelToggle,
+  setProjectDrawerOpen,
+  setToolboxDrawerOpen,
+  handleBeforeSwitch,
+}) => {
+  const { chatDrawerRef } = useChatDrawer();
+
+  return (
+    <div
+      className={classNames('drawnix', {
+        'drawnix--mobile': appState.isMobile,
+      })}
+      ref={containerRef}
+    >
+      <div className="drawnix__main">
+        <Wrapper
+          value={value}
+          viewport={viewport}
+          theme={theme}
+          options={options}
+          plugins={plugins}
+          onChange={(data: BoardChangeData) => {
+            onChange && onChange(data);
+          }}
+          onSelectionChange={onSelectionChange}
+          onViewportChange={onViewportChange}
+          onThemeChange={onThemeChange}
+          onValueChange={onValueChange}
+        >
+          <Board
+            afterInit={(board) => {
+              setBoard(board as DrawnixBoard);
+              // 设置测试助手的 board 实例（仅开发环境）
+              if (process.env.NODE_ENV === 'development') {
+                toolTestHelper.setBoard(board);
+              }
+              afterInit && afterInit(board);
+            }}
+          ></Board>
+          {/* 统一左侧工具栏 (桌面端和移动端一致) */}
+          <UnifiedToolbar
+            projectDrawerOpen={projectDrawerOpen}
+            onProjectDrawerToggle={handleProjectDrawerToggle}
+            toolboxDrawerOpen={toolboxDrawerOpen}
+            onToolboxDrawerToggle={handleToolboxDrawerToggle}
+            taskPanelExpanded={taskPanelExpanded}
+            onTaskPanelToggle={handleTaskPanelToggle}
+          />
+
+          <PopupToolbar></PopupToolbar>
+          <LinkPopup></LinkPopup>
+          <ClosePencilToolbar></ClosePencilToolbar>
+          <TTDDialog container={containerRef.current}></TTDDialog>
+          <CleanConfirm container={containerRef.current}></CleanConfirm>
+          <SettingsDialog container={containerRef.current}></SettingsDialog>
+          {/* AI Input Bar - 底部 AI 输入框 */}
+          <AIInputBar />
+        </Wrapper>
+        <ActiveTaskWarning />
+        <ChatDrawer ref={chatDrawerRef} />
+        <ProjectDrawer
+          isOpen={projectDrawerOpen}
+          onOpenChange={setProjectDrawerOpen}
+          onBeforeSwitch={handleBeforeSwitch}
+          onBoardSwitch={onBoardSwitch}
+        />
+        <ToolboxDrawer
+          isOpen={toolboxDrawerOpen}
+          onOpenChange={setToolboxDrawerOpen}
+        />
+        {/* Minimap - 小地图 */}
+        {board && <Minimap board={board} />}
+      </div>
+    </div>
   );
 };

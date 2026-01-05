@@ -10,6 +10,8 @@
 // Local Variables
 $drawer-min-width: 375px;
 $border-radius: 12px;
+$drawer-header-height: 93px;
+$drawer-input-height: 160px;
 
 // ============================================================================
 // Chat Drawer Container
@@ -18,7 +20,7 @@ $border-radius: 12px;
 .chat-drawer {
   position: fixed;
   top: 0;
-  left: $toolbar-width;
+  right: 0;
   bottom: 0;
   z-index: $z-chat-drawer;
   display: flex;
@@ -26,57 +28,147 @@ $border-radius: 12px;
   width: max($drawer-min-width, 50vw);
   max-width: calc(100vw - $toolbar-width);
   background: #ffffff;
-  border-right: 1px solid var(--td-component-border);
-  box-shadow: 4px 0 16px rgba(0, 0, 0, 0.08);
-  transform: translateX(calc(-100% - #{$toolbar-width}));
+  border-left: 1px solid var(--td-component-border);
+  box-shadow: -4px 0 16px rgba(0, 0, 0, 0.08);
+  transform: translateX(100%);
   transition: transform $animation-duration ease-out;
 
   &--open {
     transform: translateX(0);
   }
 
-  &__header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: $spacing-md $spacing-lg;
-    border-bottom: 1px solid var(--td-component-border);
-    background: #ffffff;
+  &--dragging {
+    transition: none;
+    user-select: none;
   }
 
-  &__header-left {
-    display: flex;
-    align-items: center;
-    gap: $spacing-md;
-    flex: 1;
-    min-width: 0;
+  // 拖动调整宽度的手柄
+  &__resize-handle {
+    position: absolute;
+    top: 0;
+    left: -4px;
+    width: 8px;
+    height: 100%;
+    cursor: ew-resize;
+    z-index: 10;
+
+    &::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 4px;
+      height: 40px;
+      background: transparent;
+      border-radius: 2px;
+      transition: background 0.2s ease;
+    }
+
+    &:hover::before {
+      background: var(--td-brand-color-light-hover);
+    }
+
+    &:active::before {
+      background: var(--td-brand-color);
+    }
   }
 
-  &__title {
-    margin: 0;
-    font-size: 16px;
-    font-weight: 600;
-    color: var(--td-text-color-primary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 150px;
-  }
-
-  &__actions {
-    display: flex;
-    gap: $spacing-sm;
-  }
-
-  &__content {
-    flex: 1;
+  &__body {
+    height: 100%;
     display: flex;
     flex-direction: column;
     overflow: hidden;
   }
 
+  &__header {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    padding: $spacing-sm $spacing-md;
+    border-bottom: 1px solid var(--td-component-border);
+    background: #ffffff;
+    gap: $spacing-xs;
+  }
+
+  &__header-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: $spacing-sm;
+  }
+
+  &__header-bottom {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  &__session-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+
+  &__title {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--td-text-color-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+    min-width: 0;
+
+    &--editable {
+      cursor: pointer;
+      border-radius: 4px;
+      padding: 2px 6px;
+      margin: -2px -6px;
+      transition: background 0.2s ease;
+
+      &:hover {
+        background: var(--td-bg-color-container-hover);
+      }
+    }
+  }
+
+  &__title-input {
+    flex: 1;
+    min-width: 150px;
+    width: 100%;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--td-text-color-primary);
+    background: var(--td-bg-color-container);
+    border: 1px solid var(--td-brand-color);
+    border-radius: 4px;
+    padding: 2px 6px;
+    outline: none;
+    box-sizing: border-box;
+
+    &:focus {
+      border-color: var(--td-brand-color);
+      box-shadow: 0 0 0 2px rgba(0, 82, 217, 0.1);
+    }
+  }
+
+  &__actions {
+    display: flex;
+    gap: 2px;
+    flex-shrink: 0;
+  }
+
+  &__content {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    height: calc(100vh - #{$drawer-header-height});
+  }
+
   &__close-btn {
-    padding: $spacing-sm;
+    padding: 6px;
     background: transparent;
     border: none;
     border-radius: 6px;
@@ -103,7 +195,7 @@ $border-radius: 12px;
 .chat-drawer-trigger {
   position: fixed;
   top: 50%;
-  left: $toolbar-width;
+  right: 0;
   z-index: $z-chat-drawer-trigger;
   display: flex;
   align-items: center;
@@ -112,15 +204,15 @@ $border-radius: 12px;
   height: 48px;
   background: #ffffff;
   border: 1px solid var(--td-component-border);
-  border-left: none;
-  border-radius: 0 8px 8px 0;
+  border-right: none;
+  border-radius: 8px 0 0 8px;
   cursor: pointer;
   transform: translateY(-50%);
   transition: all 0.3s ease;
-  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.06);
+  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.06);
 
   &:hover {
-    width: 28px;
+
     background: var(--td-bg-color-container-hover);
   }
 
@@ -130,12 +222,10 @@ $border-radius: 12px;
   }
 
   &--active {
-    left: calc($toolbar-width + max($drawer-min-width, 50vw) - 24px);
-    transform: scaleX(-1);
+    // right 由 JS 动态设置
+    transform: translateY(-50%) scaleX(-1);
 
-    &:hover{
-        left: calc($toolbar-width + max($drawer-min-width, 50vw) - 28px);
-    }
+
   }
 }
 
@@ -287,9 +377,6 @@ $border-radius: 12px;
     border: 1px solid var(--td-component-border);
     transition: border-color 0.2s ease;
 
-    &:focus-within {
-      border-color: var(--td-brand-color);
-    }
   }
 
   &__textarea {
@@ -428,7 +515,7 @@ $border-radius: 12px;
 
 .session-list {
   position: absolute;
-  top: 57px; // Header高度
+  top: 93px; // Header高度（两行布局）
   left: 0;
   right: 0;
   z-index: 100;
@@ -503,6 +590,10 @@ $border-radius: 12px;
     background: var(--td-brand-color-light);
   }
 
+  &--editing {
+    cursor: default;
+  }
+
   &__content {
     flex: 1;
     min-width: 0;
@@ -516,13 +607,38 @@ $border-radius: 12px;
     white-space: nowrap;
   }
 
+  &__title-input {
+    width: 100%;
+    font-size: 13px;
+    color: var(--td-text-color-primary);
+    background: var(--td-bg-color-container);
+    border: 1px solid var(--td-brand-color);
+    border-radius: 4px;
+    padding: 2px 6px;
+    outline: none;
+    box-sizing: border-box;
+
+    &:focus {
+      border-color: var(--td-brand-color);
+      box-shadow: 0 0 0 2px rgba(0, 82, 217, 0.1);
+    }
+  }
+
   &__time {
     font-size: 11px;
     color: var(--td-text-color-placeholder);
   }
 
-  &__delete {
+  &__actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
     opacity: 0;
+    transition: opacity 0.2s ease;
+  }
+
+  &__edit,
+  &__delete {
     padding: 4px;
     background: transparent;
     border: none;
@@ -530,14 +646,19 @@ $border-radius: 12px;
     cursor: pointer;
     color: var(--td-text-color-secondary);
     transition: all 0.2s ease;
-
-    &:hover {
-      background: var(--td-error-color-1);
-      color: var(--td-error-color);
-    }
   }
 
-  &:hover &__delete {
+  &__edit:hover {
+    background: var(--td-brand-color-light);
+    color: var(--td-brand-color);
+  }
+
+  &__delete:hover {
+    background: var(--td-error-color-1);
+    color: var(--td-error-color);
+  }
+
+  &:hover &__actions {
     opacity: 1;
   }
 }
@@ -581,7 +702,7 @@ $border-radius: 12px;
 .chat-section {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  height: calc(100vh - #{$drawer-header-height} - #{$drawer-input-height});
   overflow: hidden;
   padding: 0!important;
 }
@@ -663,6 +784,13 @@ $border-radius: 12px;
   line-height: 1.6;
   color: var(--td-text-color-primary);
   word-break: break-word;
+  user-select: text;
+  cursor: text;
+
+  // 选中时的高亮样式
+  &::selection {
+    background-color: rgba(var(--td-brand-color-rgb), 0.3);
+  }
 
   // Markdown styles
   p {
@@ -883,39 +1011,203 @@ $border-radius: 12px;
   }
 }
 
-.chat-actions {
-  display: flex;
-  justify-content: center;
-  gap: $spacing-md;
-  padding: $spacing-md;
+// ============================================================================
+// Enhanced Chat Input
+// ============================================================================
 
-  button {
-    padding: 10px 24px;
-    background: linear-gradient(135deg, #5a4fcf 0%, #7b68ee 50%, #e91e63 100%);
-    color: #ffffff;
-    border: none;
-    border-radius: 8px;
+.enhanced-chat-input {
+  position: relative;
+  flex-shrink: 0;
+  max-height: $drawer-input-height;
+  padding: $spacing-md $spacing-lg;
+  border-top: 1px solid var(--td-component-border);
+  background: #ffffff;
+  overflow-y: auto;
+
+  // 选中内容预览（对齐 AIInputBar 样式）
+  &__selection {
+    display: flex;
+    flex-wrap: wrap;
+    gap: $spacing-sm;
+    padding-bottom: $spacing-sm;
+    margin-bottom: $spacing-sm;
+    border-bottom: 1px dashed var(--td-component-border);
+    align-items: center;
+  }
+
+  &__selection-item {
+    position: relative;
+    width: 36px;
+    height: 36px;
+    border-radius: 4px;
+    overflow: hidden;
+    background: #f5f5f5;
+    flex-shrink: 0;
     cursor: pointer;
-    font-size: 14px;
-    font-weight: 500;
+    transition: transform 0.15s ease;
     display: flex;
     align-items: center;
-    gap: 8px;
-    transition: all 0.3s ease;
-    box-shadow: 0 2px 8px rgba(90, 79, 207, 0.3);
+    justify-content: center;
 
     &:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 16px rgba(90, 79, 207, 0.4);
+      transform: scale(1.05);
     }
 
-    &:active {
-      transform: translateY(0);
+    img, video {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      background: #f5f5f5;
+    }
+
+    &--graphics {
+      border: 1px solid #F39C12;
+    }
+
+    &--video {
+      border: 2px solid #3B82F6;
+    }
+
+    &--text {
+      width: auto;
+      height: auto;
+      min-width: 64px;
+      max-width: 180px;
+      padding: 8px 12px;
+      background: #EFF6FF;
+      border: 1px solid #BFDBFE;
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+    }
+  }
+
+  &__form {
+    display: flex;
+    align-items: flex-start;
+    gap: $spacing-sm;
+    background: #ffffff;
+    border-radius: 16px;
+    padding: 8px;
+  }
+
+  &__input-wrapper {
+    position: relative;
+    flex: 1;
+  }
+
+  // 高亮背景层 - 显示模型/参数/个数标签的背景色块
+  &__highlight-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 10px 12px;
+    font-size: 14px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    word-break: break-word;
+    pointer-events: none;
+    font-family: inherit;
+    overflow: hidden;
+    z-index: 1;
+    box-sizing: border-box;
+  }
+
+  &__highlight-text {
+    color: transparent;
+  }
+
+  &__highlight-tag {
+    color: transparent;
+    border-radius: 3px;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+    padding: 0 2px;
+    margin: 0 -2px;
+
+    // 图片模型标签 - 红色背景
+    &--image {
+      background: rgba(229, 57, 53, 0.15);
+    }
+
+    // 视频模型标签 - 橙色背景
+    &--video {
+      background: rgba(255, 152, 0, 0.15);
+    }
+
+    // 参数标签 - 紫色背景
+    &--param {
+      background: rgba(156, 39, 176, 0.15);
+    }
+
+    // 个数标签 - 蓝色背景
+    &--count {
+      background: rgba(33, 150, 243, 0.15);
+    }
+  }
+
+  &__textarea {
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    min-height: 88px;
+    max-height: 120px;
+    padding: 10px 12px;
+    background: transparent;
+    border: none;
+    border-radius: 12px;
+    resize: none;
+    font-size: 14px;
+    line-height: 1.5;
+    font-family: inherit;
+    color: var(--td-text-color-primary);
+    outline: none;
+    caret-color: var(--td-brand-color);
+
+    &::placeholder {
+      color: var(--td-text-color-placeholder);
+    }
+  }
+
+  &__send {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #F3F4F6;
+    border: none;
+    border-radius: 50%;
+    color: #9CA3AF;
+    cursor: not-allowed;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+
+    &--active {
+      background: #F59E0B;
+      color: #fff;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(245, 158, 11, 0.4);
+
+      &:hover {
+        background: #D97706;
+        transform: scale(1.05);
+      }
+    }
+
+    &:disabled {
+      background: #F3F4F6;
+      color: #9CA3AF;
+      cursor: not-allowed;
+      box-shadow: none;
     }
 
     svg {
-      width: 16px;
-      height: 16px;
+      width: 20px;
+      height: 20px;
     }
   }
 }
@@ -1057,48 +1349,50 @@ $border-radius: 12px;
   &__trigger {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    padding: 7px 14px;
+    gap: 6px;
+    padding: 4px 10px;
     background: #ffffff;
-    border: 1px solid #d1d5db;
-    border-radius: 20px;
-    font-size: 14px;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    font-size: 12px;
     font-weight: 500;
-    color: var(--td-text-color-primary);
+    color: var(--td-text-color-secondary);
     cursor: pointer;
     transition: all 0.2s ease;
     outline: none;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 
     &:hover {
       background: #f9fafb;
-      border-color: #9ca3af;
+      border-color: #d1d5db;
+      color: var(--td-text-color-primary);
     }
 
     &--active {
       border-color: var(--td-brand-color);
-      box-shadow: 0 0 0 3px rgba(243, 156, 18, 0.1);
+      box-shadow: 0 0 0 2px rgba(243, 156, 18, 0.1);
     }
   }
 
   &__trigger-icon-provider {
     flex-shrink: 0;
-    width: 20px;
-    height: 20px;
+    width: 16px;
+    height: 16px;
     border-radius: 50%;
   }
 
   &__trigger-text {
-    flex: 1;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    max-width: 120px;
   }
 
   &__trigger-icon {
     flex-shrink: 0;
     color: var(--td-text-color-placeholder);
     transition: transform 0.2s ease;
+    width: 14px;
+    height: 14px;
 
     &--open {
       transform: rotate(180deg);

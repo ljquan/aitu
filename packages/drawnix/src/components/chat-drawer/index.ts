@@ -12,3 +12,6 @@ export { SessionItem } from './SessionItem';
 export { MermaidRenderer } from './MermaidRenderer';
 export { ModelSelector } from './ModelSelector';
 export { ProviderIcon } from './ProviderIcon';
+
+// Re-export types
+export type { ChatDrawerRef } from '../../types/chat.types';

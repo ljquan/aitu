@@ -20,7 +20,7 @@ import {
 } from '@plait/core';
 import type { MermaidConfig } from '@plait-board/mermaid-to-drawnix/dist';
 import type { MermaidToDrawnixResult } from '@plait-board/mermaid-to-drawnix/dist/interfaces';
-import { getSmartInsertionPoint } from '../../utils/selection-utils';
+import { getSmartInsertionPoint, scrollToPointIfNeeded } from '../../utils/selection-utils';
 
 export interface MermaidToDrawnixLibProps {
   loaded: boolean;
@@ -133,6 +133,14 @@ const MermaidToDrawnix = () => {
       startPoint,
       WritableClipboardOperationType.paste
     );
+
+    // 插入后滚动视口到新元素位置（如果不在视口内）
+    if (startPoint) {
+      requestAnimationFrame(() => {
+        scrollToPointIfNeeded(board, startPoint);
+      });
+    }
+
     setAppState({ ...appState, openDialogType: null });
   };
 

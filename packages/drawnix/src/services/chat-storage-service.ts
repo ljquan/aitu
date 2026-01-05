@@ -100,11 +100,6 @@ export async function addMessage(message: ChatMessage): Promise<void> {
       updatedAt: Date.now(),
     };
 
-    // Update title from first user message
-    if (session.messageCount === 0 && message.role === 'user') {
-      updates.title = generateTitle(message.content);
-    }
-
     await updateSession(message.sessionId, updates);
   }
 }

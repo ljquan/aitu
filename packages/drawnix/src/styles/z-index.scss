@@ -21,19 +21,25 @@ $z-canvas-temporary: 1100;
 // ==========================================
 $z-unified-toolbar: 2000;
 $z-creation-toolbar: 2010;
-$z-popup-toolbar: 2020;
+$z-popup-toolbar: 4100; // Moved above Drawers (4000-4099)
 $z-zoom-toolbar: 2030;
 $z-app-toolbar: 2040;
 $z-pencil-toolbar: 2050;
 
 // ==========================================
-// Layer 3: Popovers (3000-3999)
+// Layer 3: Popovers (4200-4499)
+// Moved above Drawers & Popup Toolbar
 // ==========================================
-$z-popover: 3000;
-$z-popover-feedback: 3010;
-$z-popover-zoom: 3020;
-$z-popover-app: 3030;
-$z-tooltip: 3500;
+$z-popover: 4200;
+$z-popover-feedback: 4210;
+$z-popover-zoom: 4220;
+$z-tooltip: 4300;
+
+// ==========================================
+// Layer 3.5: Popovers above Drawers (4500-4999)
+// 这些 popover 需要显示在抽屉之上
+// ==========================================
+$z-popover-app: 4500;
 
 // ==========================================
 // Layer 4: Drawers/Panels (4000-4999)

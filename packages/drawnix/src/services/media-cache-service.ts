@@ -81,6 +81,47 @@ class MediaCacheService {
   }
 
   /**
+   * Cache media from Blob (直接缓存 Blob 对象)
+   */
+  async cacheMediaFromBlob(
+    taskId: string,
+    blob: Blob,
+    type: 'image' | 'video',
+    mimeType: string,
+    prompt?: string
+  ): Promise<string> {
+    try {
+      // Update status
+      this.setCacheStatus(taskId, 'caching');
+
+      // Store in IndexedDB
+      const db = await this.initDB();
+      const cachedMedia: CachedMedia = {
+        taskId,
+        type,
+        blob,
+        mimeType,
+        size: blob.size,
+        cachedAt: Date.now(),
+        prompt,
+      };
+
+      await this.storeMedia(db, cachedMedia);
+
+      // Update status
+      this.setCacheStatus(taskId, 'cached');
+      console.log(`[MediaCache] Cached ${type} from Blob for task ${taskId}, size: ${blob.size} bytes`);
+
+      // Return IndexedDB-backed URL
+      return URL.createObjectURL(blob);
+    } catch (error) {
+      console.error(`[MediaCache] Failed to cache Blob for task ${taskId}:`, error);
+      this.setCacheStatus(taskId, 'error');
+      throw error;
+    }
+  }
+
+  /**
    * Cache media from URL
    */
   async cacheMedia(

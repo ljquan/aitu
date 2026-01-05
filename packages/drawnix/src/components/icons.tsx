@@ -600,3 +600,73 @@ export const MoreIcon = createIcon(
     </g>
   </svg>
 );
+
+// 拆图图标 - 表示将一张图片分割成多个
+export const SplitImageIcon = createIcon(
+  <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="none">
+    {/* 外框 */}
+    <rect x="1" y="1" width="14" height="14" rx="1.5" stroke="currentColor" strokeWidth="1.2" fill="none"/>
+    {/* 垂直分割线 */}
+    <line x1="5.5" y1="1" x2="5.5" y2="15" stroke="currentColor" strokeWidth="1" strokeDasharray="2,1"/>
+    <line x1="10.5" y1="1" x2="10.5" y2="15" stroke="currentColor" strokeWidth="1" strokeDasharray="2,1"/>
+    {/* 水平分割线 */}
+    <line x1="1" y1="5.5" x2="15" y2="5.5" stroke="currentColor" strokeWidth="1" strokeDasharray="2,1"/>
+    <line x1="1" y1="10.5" x2="15" y2="10.5" stroke="currentColor" strokeWidth="1" strokeDasharray="2,1"/>
+    {/* 分散箭头表示拆开 */}
+    <path d="M3 3L2 2M13 3L14 2M3 13L2 14M13 13L14 14" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+  </svg>
+);
+
+// 下载图标 - 与其他图标风格一致
+export const DownloadIcon = createIcon(
+  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <g strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
+      {/* 向下箭头 */}
+      <path d="M10 3.333v9.167" />
+      <path d="M6.667 9.167L10 12.5l3.333-3.333" />
+      {/* 底部托盘 */}
+      <path d="M3.333 12.5v2.5c0 .92.747 1.667 1.667 1.667h10c.92 0 1.667-.747 1.667-1.667v-2.5" />
+    </g>
+  </svg>
+);
+
+// 合并图标 - 表示将多个元素合并成一张图片
+export const MergeIcon = createIcon(
+  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <g strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
+      {/* 左上角小框 */}
+      <rect x="2.5" y="2.5" width="5" height="5" rx="1" />
+      {/* 右上角小框 */}
+      <rect x="12.5" y="2.5" width="5" height="5" rx="1" />
+      {/* 左下角小框 */}
+      <rect x="2.5" y="12.5" width="5" height="5" rx="1" />
+      {/* 中心合并目标框 */}
+      <rect x="9" y="9" width="8" height="8" rx="1.5" strokeWidth="1.5" />
+      {/* 合并箭头 */}
+      <path d="M7.5 5L9 6.5" />
+      <path d="M12.5 5L11 6.5" />
+      <path d="M5 7.5L6.5 9" />
+    </g>
+  </svg>
+);
+
+// 视频合成图标 - 表示将多个视频片段合成为一个视频
+export const VideoMergeIcon = createIcon(
+  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <g strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
+      {/* 左侧视频片段 */}
+      <rect x="1.5" y="5" width="5" height="4" rx="0.5" />
+      <path d="M5.5 6.5L7 7L5.5 7.5" fill="currentColor" stroke="none" />
+      {/* 右侧视频片段 */}
+      <rect x="1.5" y="11" width="5" height="4" rx="0.5" />
+      <path d="M5.5 12.5L7 13L5.5 13.5" fill="currentColor" stroke="none" />
+      {/* 合并箭头 */}
+      <path d="M8 7L10 10L8 13" />
+      {/* 合成后的视频 */}
+      <rect x="11" y="4" width="7.5" height="12" rx="1" strokeWidth="1.5" />
+      {/* 播放按钮 */}
+      <path d="M13.5 10L16.5 10" strokeWidth="1.5" />
+      <path d="M15 8.5L15 11.5" strokeWidth="1.5" />
+    </g>
+  </svg>
+);

@@ -21,6 +21,7 @@ export async function generateImageWithGemini(
     image?: string | string[]; // 支持单图或多图
     response_format?: 'url' | 'b64_json';
     quality?: '1k' | '2k' | '4k';
+    model?: string; // 支持指定模型
   } = {}
 ): Promise<any> {
   // 等待设置管理器初始化完成
@@ -28,10 +29,14 @@ export async function generateImageWithGemini(
 
   // 直接从设置中获取配置
   const globalSettings = geminiSettings.get();
+  
+  // 优先使用传入的 model 参数，其次使用全局设置
+  const modelName = options.model || globalSettings.imageModelName || DEFAULT_CONFIG.modelName;
+  
   const config = {
     ...DEFAULT_CONFIG,
     ...globalSettings,
-    modelName: globalSettings.imageModelName || DEFAULT_CONFIG.modelName,
+    modelName,
   };
   const validatedConfig = await validateAndEnsureConfig(config);
   const headers = {
@@ -258,11 +263,16 @@ export async function chatWithGemini(
 
 /**
  * 发送多轮对话消息
+ * @param messages 消息列表
+ * @param onChunk 流式回调
+ * @param signal 取消信号
+ * @param temporaryModel 临时模型（仅在当前会话中使用，不影响全局设置）
  */
 export async function sendChatWithGemini(
   messages: GeminiMessage[],
   onChunk?: (content: string) => void,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  temporaryModel?: string
 ): Promise<GeminiResponse> {
   // 等待设置管理器初始化完成
   await settingsManager.waitForInitialization();
@@ -272,7 +282,8 @@ export async function sendChatWithGemini(
   const config = {
     ...DEFAULT_CONFIG,
     ...globalSettings,
-    modelName: globalSettings.chatModel || 'gpt-4o-mini', // Use chatModel preference
+    // 优先使用临时模型，其次使用全局 chatModel 设置
+    modelName: temporaryModel || globalSettings.chatModel || 'gpt-4o-mini',
   };
   const validatedConfig = await validateAndEnsureConfig(config);
 

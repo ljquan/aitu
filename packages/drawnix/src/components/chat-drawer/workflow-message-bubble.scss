@@ -1,0 +1,595 @@
+/**
+ * 工作流消息气泡样式
+ */
+
+@import '../../styles/common-variables';
+
+// ============================================================================
+// 工作流消息气泡
+// ============================================================================
+
+.workflow-bubble {
+  display: flex;
+  gap: $spacing-md;
+  max-width: 90%;
+  align-self: flex-start;
+
+  .chat-message-avatar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+
+  &__content {
+    flex: 1;
+    min-width: 0;
+    padding: $spacing-md $spacing-lg;
+    background: var(--td-bg-color-secondarycontainer);
+    border-radius: 12px 12px 12px 4px;
+    border: 1px solid var(--td-component-border);
+  }
+
+  // 头部
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: $spacing-sm;
+  }
+
+  &__title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--td-text-color-primary);
+  }
+
+  &__status-info {
+    display: flex;
+    align-items: center;
+    gap: $spacing-sm;
+  }
+
+  &__status {
+    font-size: 12px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: 500;
+
+    &--pending {
+      background: var(--td-bg-color-component);
+      color: var(--td-text-color-secondary);
+    }
+
+    &--running {
+      background: var(--td-brand-color-light);
+      color: var(--td-brand-color);
+    }
+
+    &--completed {
+      background: var(--td-success-color-1);
+      color: var(--td-success-color);
+    }
+
+    &--failed {
+      background: var(--td-error-color-1);
+      color: var(--td-error-color);
+    }
+  }
+
+  &__progress-text {
+    font-size: 12px;
+    color: var(--td-text-color-placeholder);
+  }
+
+  // 进度条
+  &__progress {
+    height: 4px;
+    background: var(--td-bg-color-component);
+    border-radius: 2px;
+    margin-bottom: $spacing-md;
+    overflow: hidden;
+  }
+
+  &__progress-bar {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.3s ease;
+
+    &--pending {
+      background: var(--td-bg-color-component-disabled);
+    }
+
+    &--running {
+      background: linear-gradient(90deg, var(--td-brand-color) 0%, var(--td-brand-color-hover) 100%);
+    }
+
+    &--completed {
+      background: var(--td-success-color);
+    }
+
+    &--failed {
+      background: var(--td-error-color);
+    }
+  }
+
+  // AI 分析内容
+  &__analysis {
+    display: flex;
+    flex-direction: column;
+    gap: $spacing-xs;
+    margin-bottom: $spacing-md;
+    padding: $spacing-sm $spacing-md;
+    background: linear-gradient(135deg, rgba(90, 79, 207, 0.08) 0%, rgba(123, 104, 238, 0.05) 100%);
+    border-radius: 6px;
+    font-size: 13px;
+    border-left: 3px solid var(--td-brand-color);
+  }
+
+  &__analysis-text {
+    color: var(--td-text-color-primary);
+    word-break: break-word;
+    line-height: 1.5;
+  }
+
+  // 原始请求
+  &__prompt {
+    display: flex;
+    gap: $spacing-sm;
+    margin-bottom: $spacing-md;
+    padding: $spacing-sm $spacing-md;
+    background: var(--td-bg-color-container);
+    border-radius: 6px;
+    font-size: 13px;
+  }
+
+  &__label {
+    color: var(--td-text-color-secondary);
+    flex-shrink: 0;
+  }
+
+  &__prompt-text {
+    color: var(--td-text-color-primary);
+    word-break: break-word;
+  }
+
+  // 步骤列表
+  &__steps {
+    display: flex;
+    flex-direction: column;
+    gap: $spacing-xs;
+  }
+
+  // 完成/失败摘要
+  &__summary {
+    display: flex;
+    align-items: center;
+    gap: $spacing-sm;
+    margin-top: $spacing-md;
+    padding: $spacing-sm $spacing-md;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+
+    &--success {
+      background: var(--td-success-color-1);
+      color: var(--td-success-color-7);
+    }
+
+    &--info {
+      background: var(--td-bg-color-component);
+      color: var(--td-text-color-secondary);
+    }
+
+    &--error {
+      background: var(--td-error-color-1);
+      color: var(--td-error-color-7);
+    }
+
+    &--markdown {
+      align-items: flex-start;
+      font-weight: 400;
+    }
+  }
+
+  &__summary-icon {
+    font-size: 14px;
+  }
+
+  &__summary-markdown {
+    flex: 1;
+    min-width: 0;
+
+    .chat-message {
+      background: transparent;
+      border: 0;
+      padding: 0;
+      margin: 0;
+    }
+
+    .chat-message-content {
+      background: transparent;
+      border: 0;
+      padding: 0;
+      margin: 0;
+    }
+  }
+
+  // 重试按钮
+  &__retry-btn {
+    margin-left: auto;
+    padding: 4px 12px;
+    font-size: 12px;
+    font-weight: 500;
+    color: #fff;
+    background: linear-gradient(135deg, #F39C12 0%, #E67E22 100%);
+    border: none;
+    border-radius: 16px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+
+    &:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 2px 8px rgba(243, 156, 18, 0.4);
+    }
+
+    &:active:not(:disabled) {
+      transform: translateY(0);
+    }
+
+    &:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+  }
+}
+
+// ============================================================================
+// 步骤项
+// ============================================================================
+
+.workflow-bubble-step {
+  border-radius: 6px;
+  overflow: hidden;
+  transition: all 0.2s ease;
+
+  &--current {
+    background: var(--td-brand-color-light);
+  }
+
+  &__main {
+    display: flex;
+    align-items: center;
+    gap: $spacing-sm;
+    padding: $spacing-sm $spacing-md;
+    transition: background 0.2s ease;
+
+    &:hover {
+      background: var(--td-bg-color-container-hover);
+    }
+  }
+
+  &__index {
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 600;
+    color: #fff;
+    background: var(--td-brand-color);
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  &__status {
+    width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    flex-shrink: 0;
+
+    &--pending {
+      color: var(--td-text-color-placeholder);
+    }
+
+    &--running {
+      color: var(--td-brand-color);
+    }
+
+    &--completed {
+      color: var(--td-success-color);
+    }
+
+    &--failed {
+      color: var(--td-error-color);
+    }
+
+    &--skipped {
+      color: var(--td-text-color-disabled);
+    }
+  }
+
+  &__spinner {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 2px solid var(--td-brand-color-light);
+    border-top-color: var(--td-brand-color);
+    border-radius: 50%;
+    animation: workflow-spin 0.8s linear infinite;
+  }
+
+  &__content {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__title {
+    font-size: 13px;
+    color: var(--td-text-color-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__status-text {
+    font-size: 11px;
+    color: var(--td-text-color-secondary);
+  }
+
+  &__expand {
+    font-size: 10px;
+    color: var(--td-text-color-placeholder);
+    transition: transform 0.2s ease;
+
+    &--open {
+      transform: rotate(180deg);
+    }
+  }
+
+  // 详情区域
+  &__details {
+    padding: $spacing-sm $spacing-md $spacing-md;
+    padding-left: calc(20px + $spacing-sm + $spacing-md);
+    background: var(--td-bg-color-container);
+    border-top: 1px solid var(--td-component-border);
+  }
+
+  &__detail-row {
+    display: flex;
+    align-items: center;
+    gap: $spacing-sm;
+    margin-bottom: $spacing-xs;
+    font-size: 12px;
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+
+    &--block {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+  }
+
+  &__label {
+    color: var(--td-text-color-secondary);
+    flex-shrink: 0;
+  }
+
+  &__tool {
+    padding: 2px 6px;
+    background: var(--td-bg-color-page);
+    border-radius: 4px;
+    font-family: 'SF Mono', Monaco, monospace;
+    font-size: 11px;
+  }
+
+  &__args {
+    width: 100%;
+    margin: 0;
+    padding: $spacing-sm;
+    background: var(--td-bg-color-page);
+    border-radius: 4px;
+    font-size: 11px;
+    font-family: 'SF Mono', Monaco, monospace;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 200px;
+    overflow-y: auto;
+    color: var(--td-text-color-primary);
+  }
+
+  &__result {
+    width: 100%;
+    padding: $spacing-sm;
+    background: var(--td-bg-color-page);
+    border-radius: 4px;
+    font-size: 11px;
+    font-family: 'SF Mono', Monaco, monospace;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 120px;
+    overflow-y: auto;
+  }
+
+  &__error {
+    width: 100%;
+    padding: $spacing-sm;
+    background: var(--td-error-color-1);
+    border-radius: 4px;
+    font-size: 12px;
+    color: var(--td-error-color-7);
+  }
+}
+
+@keyframes workflow-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+// ============================================================================
+// 工作流日志区域
+// ============================================================================
+
+.workflow-bubble__logs {
+  margin-top: $spacing-md;
+  border-top: 1px solid var(--td-component-border);
+  padding-top: $spacing-md;
+}
+
+.workflow-bubble__logs-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: $spacing-sm;
+}
+
+.workflow-bubble__logs-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--td-text-color-secondary);
+}
+
+.workflow-bubble__logs-list {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-sm;
+}
+
+// ============================================================================
+// Agent 日志项
+// ============================================================================
+
+.agent-log {
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--td-bg-color-container);
+  border: 1px solid var(--td-component-border);
+
+  &__header {
+    display: flex;
+    align-items: center;
+    gap: $spacing-sm;
+    padding: $spacing-sm $spacing-md;
+    font-size: 12px;
+
+    &--clickable {
+      cursor: pointer;
+      transition: background 0.2s ease;
+
+      &:hover {
+        background: var(--td-bg-color-container-hover);
+      }
+    }
+  }
+
+  &__icon {
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+
+  &__title {
+    flex: 1;
+    color: var(--td-text-color-primary);
+    font-weight: 500;
+  }
+
+  &__expand {
+    font-size: 10px;
+    color: var(--td-text-color-placeholder);
+    transition: transform 0.2s ease;
+
+    &--open {
+      transform: rotate(180deg);
+    }
+  }
+
+  &__content {
+    padding: $spacing-sm $spacing-md;
+    border-top: 1px solid var(--td-component-border);
+    background: var(--td-bg-color-page);
+  }
+
+  &__thinking-text {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--td-text-color-secondary);
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: inherit;
+  }
+
+  &__toggle {
+    margin-top: $spacing-xs;
+    padding: 2px 8px;
+    font-size: 11px;
+    color: var(--td-brand-color);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+
+  &__args,
+  &__data {
+    margin: 0;
+    padding: $spacing-sm;
+    font-size: 11px;
+    font-family: 'SF Mono', Monaco, monospace;
+    background: var(--td-bg-color-container);
+    border-radius: 4px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 150px;
+    overflow-y: auto;
+    color: var(--td-text-color-primary);
+  }
+
+  &__error {
+    padding: $spacing-sm;
+    font-size: 12px;
+    color: var(--td-error-color-7);
+    background: var(--td-error-color-1);
+    border-radius: 4px;
+    margin-bottom: $spacing-xs;
+  }
+
+  // 不同类型的日志样式
+  &--thinking {
+    border-left: 3px solid var(--td-brand-color);
+  }
+
+  &--tool-call {
+    border-left: 3px solid var(--td-warning-color);
+  }
+
+  &--tool-result {
+    &.agent-log--success {
+      border-left: 3px solid var(--td-success-color);
+    }
+
+    &.agent-log--error {
+      border-left: 3px solid var(--td-error-color);
+    }
+  }
+
+  &--retry {
+    border-left: 3px solid var(--td-warning-color);
+    background: var(--td-warning-color-1);
+  }
+}

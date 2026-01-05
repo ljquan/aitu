@@ -18,7 +18,6 @@ import { downloadMediaFile, downloadFromBlob, sanitizeFilename } from '../../uti
 import { mediaCacheService } from '../../services/media-cache-service';
 import { useMediaUrl } from '../../hooks/useMediaCache';
 import { CharacterCreateDialog } from '../character/CharacterCreateDialog';
-import { supportsCharacterExtraction, isSora2VideoId } from '../../types/character.types';
 import './dialog-task-list.scss';
 
 export interface DialogTaskListProps {
@@ -167,6 +166,7 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
 
     try {
       if (task.type === TaskType.IMAGE) {
+        // 直接插入原始生成的图片（包括宫格图和普通图片）
         await insertImageFromUrl(board, task.result.url);
         MessagePlugin.success('图片已插入到白板');
       } else if (task.type === TaskType.VIDEO) {

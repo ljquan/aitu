@@ -2,7 +2,10 @@
  * Download Utilities
  *
  * Centralized download logic for images, videos, and other media files
+ * Supports single file download and batch download as ZIP
  */
+
+import JSZip from 'jszip';
 
 /**
  * Check if a URL is from Volces (火山引擎) domains
@@ -46,6 +49,7 @@ export function sanitizeFilename(text: string, maxLength: number = 50): string {
  * @param filename - The filename to save as
  */
 export function downloadFromBlob(blob: Blob, filename: string): void {
+  // 确保 Blob 有正确的 MIME 类型
   const blobUrl = URL.createObjectURL(blob);
 
   const link = document.createElement('a');
@@ -55,8 +59,8 @@ export function downloadFromBlob(blob: Blob, filename: string): void {
   link.click();
   document.body.removeChild(link);
 
-  // Clean up blob URL
-  URL.revokeObjectURL(blobUrl);
+  // 延迟释放 URL，确保下载完成
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
 }
 
 /**
@@ -148,11 +152,27 @@ export async function downloadMediaFile(
  */
 export function getFileExtension(url: string, mimeType?: string): string {
   // Try to get extension from URL
-  const urlPath = new URL(url).pathname;
-  const urlExtension = urlPath.substring(urlPath.lastIndexOf('.') + 1).toLowerCase();
+  try {
+    const urlPath = new URL(url).pathname;
+    const urlExtension = urlPath.substring(urlPath.lastIndexOf('.') + 1).toLowerCase();
 
-  if (urlExtension && urlExtension.length <= 5) {
-    return urlExtension;
+    if (urlExtension && urlExtension.length <= 5) {
+      return urlExtension;
+    }
+  } catch {
+    // URL parsing failed
+  }
+
+  // Handle base64 data URLs
+  if (url.startsWith('data:')) {
+    // Special handling for SVG (data:image/svg+xml)
+    if (url.startsWith('data:image/svg+xml')) {
+      return 'svg';
+    }
+    const match = url.match(/data:(\w+)\/(\w+)/);
+    if (match) {
+      return match[2] === 'jpeg' ? 'jpg' : match[2];
+    }
   }
 
   // Fallback to MIME type
@@ -163,6 +183,7 @@ export function getFileExtension(url: string, mimeType?: string): string {
       'image/jpg': 'jpg',
       'image/webp': 'webp',
       'image/gif': 'gif',
+      'image/svg+xml': 'svg',
       'video/mp4': 'mp4',
       'video/webm': 'webm',
     };
@@ -170,4 +191,82 @@ export function getFileExtension(url: string, mimeType?: string): string {
   }
 
   return 'bin';
+}
+
+/**
+ * 批量下载项接口
+ */
+export interface BatchDownloadItem {
+  /** 文件 URL */
+  url: string;
+  /** 文件类型 */
+  type: 'image' | 'video';
+  /** 可选文件名 */
+  filename?: string;
+}
+
+/**
+ * 批量下载为 ZIP 文件
+ *
+ * @param items - 下载项数组
+ * @param zipFilename - 可选的 ZIP 文件名
+ * @returns Promise
+ */
+export async function downloadAsZip(items: BatchDownloadItem[], zipFilename?: string): Promise<void> {
+  if (items.length === 0) {
+    throw new Error('No files to download');
+  }
+
+  const zip = new JSZip();
+  const timestamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
+  const finalZipName = zipFilename || `aitu_download_${timestamp}.zip`;
+
+  // 添加文件到 ZIP 根目录
+  await Promise.all(
+    items.map(async (item, index) => {
+      try {
+        const response = await fetch(item.url);
+        if (!response.ok) {
+          console.warn(`Failed to fetch ${item.url}: ${response.status}`);
+          return;
+        }
+        const blob = await response.blob();
+        const ext = getFileExtension(item.url, blob.type);
+
+        const prefix = item.type === 'image' ? 'image' : 'video';
+        const filename = item.filename || `${prefix}_${index + 1}.${ext}`;
+
+        zip.file(filename, blob);
+      } catch (error) {
+        console.error(`Failed to add file to zip:`, error);
+      }
+    })
+  );
+
+  // 生成 ZIP 并下载
+  const content = await zip.generateAsync({ type: 'blob' });
+  downloadFromBlob(content, finalZipName);
+}
+
+/**
+ * 智能下载：单个直接下载，多个打包为 ZIP
+ *
+ * @param items - 下载项数组
+ * @param zipFilename - 可选的 ZIP 文件名（仅在多文件时使用）
+ * @returns Promise
+ */
+export async function smartDownload(items: BatchDownloadItem[], zipFilename?: string): Promise<void> {
+  if (items.length === 0) {
+    throw new Error('No files to download');
+  }
+
+  if (items.length === 1) {
+    const item = items[0];
+    // Use getFileExtension to detect correct extension (handles SVG, PNG, etc.)
+    const ext = getFileExtension(item.url) || (item.type === 'image' ? 'png' : 'mp4');
+    const filename = item.filename || `${item.type}_download.${ext}`;
+    await downloadFile(item.url, filename);
+  } else {
+    await downloadAsZip(items, zipFilename);
+  }
 }

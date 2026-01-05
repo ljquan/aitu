@@ -6,6 +6,7 @@ import {
   isWorkspaceMigrationCompleted,
   Board,
   BoardChangeData,
+  mediaCacheService,
 } from '@drawnix/drawnix';
 import { PlaitBoard, PlaitElement, PlaitTheme, Viewport } from '@plait/core';
 import { initializeData } from './initialize-data';
@@ -53,8 +54,11 @@ export function App() {
         }
 
         if (currentBoard) {
+          // 在设置 state 之前，预先恢复失效的视频 URL
+          const elements = await recoverVideoUrlsInElements(currentBoard.elements || []);
+
           setValue({
-            children: currentBoard.elements || [],
+            children: elements,
             viewport: currentBoard.viewport,
             theme: currentBoard.theme,
           });
@@ -70,10 +74,14 @@ export function App() {
   }, []);
 
   // Handle board switching
-  const handleBoardSwitch = useCallback((board: Board) => {
+  const handleBoardSwitch = useCallback(async (board: Board) => {
     console.log('[App] Board switched:', board.name);
+
+    // 在设置 state 之前，预先恢复失效的视频 URL
+    const elements = await recoverVideoUrlsInElements(board.elements || []);
+
     setValue({
-      children: board.elements || [],
+      children: elements,
       viewport: board.viewport,
       theme: board.theme,
     });
@@ -148,5 +156,57 @@ const addDebugLog = (board: PlaitBoard, value: string) => {
   div.innerHTML = value;
   consoleContainer.append(div);
 };
+
+/**
+ * 恢复元素数组中失效的视频 Blob URL
+ * 在数据加载后、渲染之前调用，避免视频加载失败
+ */
+async function recoverVideoUrlsInElements(elements: PlaitElement[]): Promise<PlaitElement[]> {
+  console.log('[App] Recovering video URLs in elements...');
+
+  const recoveredElements = await Promise.all(
+    elements.map(async (element) => {
+      const url = (element as any).url as string | undefined;
+
+      // 检查是否是合并视频的 URL
+      if (url && url.startsWith('blob:') && url.includes('#merged-video-')) {
+        // 提取 taskId
+        const mergedVideoIndex = url.indexOf('#merged-video-');
+        if (mergedVideoIndex === -1) return element;
+
+        const afterHash = url.substring(mergedVideoIndex + 1);
+        const nextHashIndex = afterHash.indexOf('#', 1);
+        const taskId = nextHashIndex > 0 ? afterHash.substring(0, nextHashIndex) : afterHash;
+
+        try {
+          // 从 IndexedDB 恢复
+          const cached = await mediaCacheService.getCachedMedia(taskId);
+          if (cached && cached.blob) {
+            const newBlobUrl = URL.createObjectURL(cached.blob);
+            const newUrl = `${newBlobUrl}#${taskId}`;
+
+            console.log('[App] Video URL recovered:', {
+              taskId,
+              oldUrl: url,
+              newUrl,
+              size: cached.blob.size,
+            });
+
+            // 返回更新后的元素
+            return { ...element, url: newUrl };
+          } else {
+            console.warn('[App] Cache not found for taskId:', taskId);
+          }
+        } catch (error) {
+          console.error('[App] Failed to recover video:', taskId, error);
+        }
+      }
+
+      return element;
+    })
+  );
+
+  return recoveredElements;
+}
 
 export default App;

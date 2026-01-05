@@ -166,13 +166,13 @@ class GenerationAPIService {
     params: GenerationParams,
     signal: AbortSignal
   ): Promise<TaskResult> {
-    const finalWidth = params.width || 1024;
-    const finalHeight = params.height || 1024;
-
     try {
-      // 转换 aspectRatio 到 size 参数
-      const aspectRatio = (params as any).aspectRatio;
-      const size = this.convertAspectRatioToSize(aspectRatio);
+      // 直接使用传入的 size 参数，或兼容旧的 aspectRatio 参数
+      let size: string | undefined = params.size;
+      if (!size) {
+        const aspectRatio = (params as any).aspectRatio;
+        size = this.convertAspectRatioToSize(aspectRatio);
+      }
 
       // 转换上传的图片为 URL 数组
       let imageUrls: string[] | undefined;
@@ -186,12 +186,15 @@ class GenerationAPIService {
       // 获取 quality 参数（如果有）
       const quality = (params as any).quality as '1k' | '2k' | '4k' | undefined;
 
+      console.log('[GenerationAPI] Image generation params - model:', params.model, 'size:', size);
+
       // 调用新的图片生成接口
       const result = await defaultGeminiClient.generateImage(params.prompt, {
         size,
         image: imageUrls && imageUrls.length > 0 ? imageUrls : undefined,
         response_format: 'url',
         quality,
+        model: params.model, // 传递指定的模型
       });
 
       console.log('[GenerationAPI] Image generation response:', result);
@@ -206,6 +209,21 @@ class GenerationAPIService {
         } else if (imageData.b64_json) {
           imageUrl = `data:image/png;base64,${imageData.b64_json}`;
         } else {
+          // Check if there's an error message in revised_prompt (e.g., PROHIBITED_CONTENT)
+          const revisedPrompt = imageData.revised_prompt || '';
+          if (revisedPrompt.includes('PROHIBITED_CONTENT') || revisedPrompt.includes('has been blocked')) {
+            // Extract the error message - look for the blocked reason
+            const blockedMatch = revisedPrompt.match(/your request has been blocked[^:]*:\s*([^.]+)/i);
+            if (blockedMatch) {
+              throw new Error(blockedMatch[0]);
+            }
+            // Fallback: extract everything after the last occurrence of "blocked"
+            const lastBlockedIndex = revisedPrompt.toLowerCase().lastIndexOf('blocked');
+            if (lastBlockedIndex !== -1) {
+              const errorPart = revisedPrompt.slice(lastBlockedIndex - 20);
+              throw new Error(errorPart.trim());
+            }
+          }
           throw new Error('API 未返回有效的图片数据');
         }
 
@@ -213,8 +231,6 @@ class GenerationAPIService {
           url: imageUrl,
           format: 'png',
           size: 0,
-          width: finalWidth,
-          height: finalHeight,
         };
       }
 

@@ -9,15 +9,160 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { chatStorageService } from '../services/chat-storage-service';
 import { chatService } from '../services/chat-service';
 import { MessageStatus, MessageRole } from '../types/chat.types';
-import type { ChatMessage } from '../types/chat.types';
+import type { ChatMessage, WorkflowMessageData } from '../types/chat.types';
 import type { ChatHandler, Message, MessagePart } from '@llamaindex/chat-ui';
+import { generateSystemPrompt } from '../services/agent';
+import { parseToolCalls, extractTextContent } from '../services/agent/tool-parser';
+import { mcpRegistry, initializeMCP } from '../mcp';
+import type { ToolCall, MCPTaskResult } from '../mcp/types';
+import { geminiSettings } from '../utils/settings-manager';
+import { getModelType, IMAGE_MODELS } from '../mcp/types';
+
+// 确保 MCP 模块已初始化
+initializeMCP();
+
+// 生成类工具列表
+const GENERATION_TOOLS = ['generate_image', 'generate_video', 'generate_grid_image', 'generate_photo_wall'];
+
+/**
+ * 为生成工具注入正确的模型
+ * 如果 AI 没有指定模型或指定了文本模型，使用默认的图片/视频模型
+ */
+function injectModelForGenerationTool(toolCall: ToolCall): ToolCall {
+  if (!GENERATION_TOOLS.includes(toolCall.name)) {
+    return toolCall;
+  }
+
+  const args = { ...toolCall.arguments };
+  const specifiedModel = args.model as string | undefined;
+
+  // 判断是否需要注入模型
+  let needsInjection = false;
+  let targetModel: string;
+
+  if (!specifiedModel) {
+    // 没有指定模型
+    needsInjection = true;
+  } else {
+    // 检查指定的模型类型是否正确
+    const modelType = getModelType(specifiedModel);
+    const isVideoTool = toolCall.name === 'generate_video';
+
+    if (isVideoTool && modelType !== 'video') {
+      needsInjection = true;
+    } else if (!isVideoTool && modelType !== 'image') {
+      needsInjection = true;
+    }
+  }
+
+  if (needsInjection) {
+    // 获取默认模型
+    const settings = geminiSettings.get();
+    const isVideoTool = toolCall.name === 'generate_video';
+
+    if (isVideoTool) {
+      targetModel = settings.videoModelName || 'veo3';
+    } else {
+      targetModel = settings.imageModelName || IMAGE_MODELS[0]?.id || 'gemini-2.5-flash-image-vip';
+    }
+
+    args.model = targetModel;
+    console.log(`[useChatHandler] Injected model '${targetModel}' into ${toolCall.name} (was: ${specifiedModel || 'undefined'})`);
+  }
+
+  return { ...toolCall, arguments: args };
+}
+
+/** 工具调用结果 */
+interface ToolCallResult {
+  toolCall: ToolCall;
+  success: boolean;
+  data?: unknown;
+  error?: string;
+  taskId?: string;
+}
 
 interface UseChatHandlerOptions {
   sessionId: string | null;
-  onSessionTitleUpdate?: (sessionId: string, title: string) => void;
+  /** 临时模型（仅在当前会话中使用，不影响全局设置） */
+  temporaryModel?: string;
+  /** 工具调用回调 - 当 AI 响应中包含工具调用时触发 */
+  onToolCalls?: (
+    toolCalls: ToolCall[],
+    messageId: string,
+    executeTools: () => Promise<ToolCallResult[]>,
+    /** AI 分析内容（JSON 中的 content 字段） */
+    aiAnalysis?: string
+  ) => void;
+  /** 工作流消息更新回调 */
+  onWorkflowUpdate?: (messageId: string, workflow: WorkflowMessageData) => void;
+}
+
+// 工作流消息的特殊标记前缀
+const WORKFLOW_MESSAGE_PREFIX = '[[WORKFLOW_MESSAGE]]';
+
+/**
+ * 将工作流数据序列化为 JSON 格式
+ *
+ * 重要：必须返回符合系统提示词要求的 JSON 格式，否则模型在多轮对话中会"忘记"自己是代理角色
+ * 格式：{"content": "...", "next": [...]}
+ */
+function serializeWorkflowToContext(workflow: WorkflowMessageData): string {
+  // 构建 AI 分析内容
+  let contentParts: string[] = [];
+
+  // 1. 添加 AI 分析内容（如果有）
+  if (workflow.aiAnalysis) {
+    contentParts.push(workflow.aiAnalysis);
+  }
+
+  // 2. 添加执行摘要
+  const completedSteps = workflow.steps.filter(s => s.status === 'completed');
+  const failedSteps = workflow.steps.filter(s => s.status === 'failed');
+
+  if (completedSteps.length > 0 || failedSteps.length > 0) {
+    const summaryParts: string[] = [];
+    if (completedSteps.length > 0) {
+      summaryParts.push(`成功执行 ${completedSteps.length} 个工具`);
+    }
+    if (failedSteps.length > 0) {
+      summaryParts.push(`${failedSteps.length} 个工具执行失败`);
+    }
+    if (summaryParts.length > 0) {
+      contentParts.push(`[执行结果: ${summaryParts.join('，')}]`);
+    }
+  }
+
+  // 3. 构建 next 数组（已执行的工具调用）
+  const nextArray = workflow.steps.map(step => {
+    // 简化参数，移除过长内容
+    const simplifiedArgs: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(step.args || {})) {
+      if (key === 'context') continue;
+      if (typeof value === 'string' && value.length > 200) {
+        simplifiedArgs[key] = value.substring(0, 200) + '...';
+      } else {
+        simplifiedArgs[key] = value;
+      }
+    }
+    return {
+      mcp: step.mcp,
+      args: simplifiedArgs,
+    };
+  });
+
+  // 4. 构建符合代理输出格式的 JSON
+  const response = {
+    content: contentParts.join('\n') || `已完成任务: ${workflow.name}`,
+    next: nextArray,
+  };
+
+  return JSON.stringify(response);
 }
 
 // Convert our ChatMessage to chat-ui Message format
+// Note: 工作流消息保持原始的 [[WORKFLOW_MESSAGE]] 前缀，以便 ChatDrawer 能识别并渲染 WorkflowMessageBubble
+// 序列化为上下文文本只在 toApiMessage 中进行（发送给 API 时）
 function toChatUIMessage(msg: ChatMessage): Message {
   const parts: MessagePart[] = [{ type: 'text', text: msg.content }];
 
@@ -73,20 +218,49 @@ function fromChatUIMessage(msg: Message, sessionId: string): ChatMessage {
   };
 }
 
+/**
+ * 将 ChatMessage 转换为适合发送给 API 的格式
+ * 如果是工作流消息，将工作流数据序列化为可读上下文
+ */
+function toApiMessage(msg: ChatMessage): ChatMessage {
+  // 如果是工作流消息，将工作流数据序列化为可读上下文
+  if (msg.workflow && msg.content.startsWith(WORKFLOW_MESSAGE_PREFIX)) {
+    return {
+      ...msg,
+      content: serializeWorkflowToContext(msg.workflow),
+    };
+  }
+  return msg;
+}
+
 export function useChatHandler(options: UseChatHandlerOptions): ChatHandler & {
   isLoading: boolean;
+  setMessagesWithRaw: (newMessages: Message[], rawChatMessages?: ChatMessage[]) => void;
+  updateRawMessageWorkflow: (messageId: string, workflow: WorkflowMessageData) => void;
 } {
-  const { sessionId, onSessionTitleUpdate } = options;
+  const { sessionId, temporaryModel, onToolCalls, onWorkflowUpdate } = options;
+
+  // 生成系统提示词（包含 MCP 工具定义）
+  const systemPromptRef = useRef<string>(generateSystemPrompt());
+
+  // 存储回调的 ref，避免依赖变化
+  const onToolCallsRef = useRef(onToolCalls);
+  onToolCallsRef.current = onToolCalls;
+  const onWorkflowUpdateRef = useRef(onWorkflowUpdate);
+  onWorkflowUpdateRef.current = onWorkflowUpdate;
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [status, setStatus] = useState<ChatHandler['status']>('ready');
   const [isLoading, setIsLoading] = useState(false);
   const currentAssistantMsgRef = useRef<string | null>(null);
+  // 保存原始的 ChatMessage 列表，用于构建完整的历史上下文
+  const rawMessagesRef = useRef<ChatMessage[]>([]);
 
   // Load messages when session changes
   useEffect(() => {
     if (!sessionId) {
       setMessages([]);
+      rawMessagesRef.current = [];
       return;
     }
 
@@ -94,10 +268,12 @@ export function useChatHandler(options: UseChatHandlerOptions): ChatHandler & {
       setIsLoading(true);
       try {
         const loaded = await chatStorageService.getMessages(sessionId);
+        rawMessagesRef.current = loaded; // 保存原始消息（包含 workflow 数据）
         setMessages(loaded.map(toChatUIMessage));
       } catch (error) {
         console.error('[useChatHandler] Failed to load messages:', error);
         setMessages([]);
+        rawMessagesRef.current = [];
       } finally {
         setIsLoading(false);
       }
@@ -105,16 +281,6 @@ export function useChatHandler(options: UseChatHandlerOptions): ChatHandler & {
 
     loadMessages();
   }, [sessionId]);
-
-  // Generate session title from first user message
-  const generateTitle = useCallback(
-    (content: string) => {
-      if (!sessionId) return;
-      const title = content.slice(0, 30) + (content.length > 30 ? '...' : '');
-      onSessionTitleUpdate?.(sessionId, title);
-    },
-    [sessionId, onSessionTitleUpdate]
-  );
 
   // Send message implementation
   const sendMessage = useCallback(
@@ -130,15 +296,8 @@ export function useChatHandler(options: UseChatHandlerOptions): ChatHandler & {
       // Update messages state
       setMessages((prev) => [...prev, msg]);
 
-      // Update session title from first message
+      // Get current session for message count
       const session = await chatStorageService.getSession(sessionId);
-      if (session && session.messageCount === 0) {
-        const textContent = msg.parts
-          .filter((p) => p.type === 'text')
-          .map((p) => (p as { type: 'text'; text: string }).text)
-          .join('');
-        generateTitle(textContent);
-      }
 
       await chatStorageService.updateSession(sessionId, {
         updatedAt: Date.now(),
@@ -157,9 +316,13 @@ export function useChatHandler(options: UseChatHandlerOptions): ChatHandler & {
       setMessages((prev) => [...prev, assistantMsg]);
       setStatus('streaming');
 
-      // Build conversation history
-      const history: ChatMessage[] = messages.map((m) => fromChatUIMessage(m, sessionId));
+      // Build conversation history from raw messages (preserves workflow data)
+      // Use rawMessagesRef which contains the original ChatMessage with workflow data
+      const history: ChatMessage[] = rawMessagesRef.current.map(toApiMessage);
       history.push(ourMsg);
+
+      // Also update rawMessagesRef with the new user message
+      rawMessagesRef.current = [...rawMessagesRef.current, ourMsg];
 
       // Get the user message content
       const userContent = msg.parts
@@ -185,18 +348,67 @@ export function useChatHandler(options: UseChatHandlerOptions): ChatHandler & {
                 )
               );
             } else if (event.type === 'done') {
+              // 解析工具调用
+              const toolCalls = parseToolCalls(fullContent);
+              const textContent = extractTextContent(fullContent) || fullContent;
+
+              if (toolCalls.length > 0 && onToolCallsRef.current) {
+                // 为生成工具注入正确的模型
+                const processedToolCalls = toolCalls.map(injectModelForGenerationTool);
+
+                // 有工具调用，创建执行函数
+                const executeTools = async (): Promise<ToolCallResult[]> => {
+                  const results: ToolCallResult[] = [];
+                  for (const toolCall of processedToolCalls) {
+                    try {
+                      const result = await mcpRegistry.executeTool(toolCall) as MCPTaskResult;
+                      results.push({
+                        toolCall,
+                        success: result.success,
+                        data: result.data,
+                        error: result.error,
+                        taskId: result.taskId,
+                      });
+                    } catch (error: any) {
+                      results.push({
+                        toolCall,
+                        success: false,
+                        error: error.message || '工具执行失败',
+                      });
+                    }
+                  }
+                  return results;
+                };
+
+                // 更新消息为工作流消息格式（使用特殊前缀，以便 ChatDrawer 识别并渲染 WorkflowMessageBubble）
+                const workflowMessageContent = `${WORKFLOW_MESSAGE_PREFIX}${assistantMsgId}`;
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === assistantMsgId
+                      ? { ...m, parts: [{ type: 'text', text: workflowMessageContent }] }
+                      : m
+                  )
+                );
+
+                // 触发回调，让 ChatDrawer 处理工具执行和 UI 显示
+                onToolCallsRef.current(processedToolCalls, assistantMsgId, executeTools, textContent);
+              }
+
               setStatus('ready');
 
               // Save assistant message
+              // 如果有工具调用，保存为工作流消息格式（内容使用前缀，workflow 数据由 ChatDrawer 后续更新）
               const assistantChatMsg: ChatMessage = {
                 id: assistantMsgId,
                 sessionId,
                 role: MessageRole.ASSISTANT,
-                content: fullContent,
+                content: toolCalls.length > 0 ? `${WORKFLOW_MESSAGE_PREFIX}${assistantMsgId}` : fullContent,
                 timestamp: Date.now(),
-                status: MessageStatus.SUCCESS,
+                status: toolCalls.length > 0 ? MessageStatus.STREAMING : MessageStatus.SUCCESS,
               };
               chatStorageService.addMessage(assistantChatMsg);
+              // Update rawMessagesRef with the assistant message
+              rawMessagesRef.current = [...rawMessagesRef.current, assistantChatMsg];
               chatStorageService.updateSession(sessionId, {
                 updatedAt: Date.now(),
                 messageCount: (session?.messageCount || 0) + 2,
@@ -227,10 +439,14 @@ export function useChatHandler(options: UseChatHandlerOptions): ChatHandler & {
                 error: event.error,
               };
               chatStorageService.addMessage(errorChatMsg);
+              // Update rawMessagesRef with the error message
+              rawMessagesRef.current = [...rawMessagesRef.current, errorChatMsg];
 
               currentAssistantMsgRef.current = null;
             }
-          }
+          },
+          temporaryModel, // 传递临时模型
+          systemPromptRef.current // 传递系统提示词
         );
       } catch (error: any) {
         if (error.message !== 'Request cancelled') {
@@ -259,12 +475,14 @@ export function useChatHandler(options: UseChatHandlerOptions): ChatHandler & {
               error: error.message || '未知错误',
             };
             chatStorageService.addMessage(errorChatMsg);
+            // Update rawMessagesRef with the error message
+            rawMessagesRef.current = [...rawMessagesRef.current, errorChatMsg];
           }
         }
         currentAssistantMsgRef.current = null;
       }
     },
-    [sessionId, messages, generateTitle]
+    [sessionId, messages]
   );
 
   // Stop generation
@@ -299,7 +517,7 @@ export function useChatHandler(options: UseChatHandlerOptions): ChatHandler & {
 
   // Regenerate last response
   const regenerate = useCallback(
-    (opts?: { messageId?: string }) => {
+    (_opts?: { messageId?: string }) => {
       if (messages.length < 2) return;
 
       // Find the last user message
@@ -321,6 +539,27 @@ export function useChatHandler(options: UseChatHandlerOptions): ChatHandler & {
     [messages, sendMessage]
   );
 
+  // 同时设置 UI 消息和原始消息（用于工作流场景）
+  const setMessagesWithRaw = useCallback((
+    newMessages: Message[],
+    rawChatMessages?: ChatMessage[]
+  ) => {
+    setMessages(newMessages);
+    if (rawChatMessages) {
+      rawMessagesRef.current = rawChatMessages;
+    }
+  }, []);
+
+  // 更新原始消息中的工作流数据（用于工作流更新场景）
+  const updateRawMessageWorkflow = useCallback((
+    messageId: string,
+    workflow: WorkflowMessageData
+  ) => {
+    rawMessagesRef.current = rawMessagesRef.current.map(msg =>
+      msg.id === messageId ? { ...msg, workflow } : msg
+    );
+  }, []);
+
   return {
     messages,
     status,
@@ -328,6 +567,8 @@ export function useChatHandler(options: UseChatHandlerOptions): ChatHandler & {
     stop,
     regenerate,
     setMessages,
+    setMessagesWithRaw,
+    updateRawMessageWorkflow,
     isLoading,
   };
 }

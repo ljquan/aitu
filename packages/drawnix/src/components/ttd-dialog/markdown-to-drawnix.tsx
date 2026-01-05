@@ -17,7 +17,7 @@ import {
   WritableClipboardOperationType,
 } from '@plait/core';
 import { MindElement } from '@plait/mind';
-import { getSmartInsertionPoint } from '../../utils/selection-utils';
+import { getSmartInsertionPoint, scrollToPointIfNeeded } from '../../utils/selection-utils';
 
 export interface MarkdownToDrawnixLibProps {
   loaded: boolean;
@@ -170,6 +170,14 @@ const MarkdownToDrawnix = () => {
       insertionPoint,
       WritableClipboardOperationType.paste
     );
+
+    // 插入后滚动视口到新元素位置（如果不在视口内）
+    if (insertionPoint) {
+      requestAnimationFrame(() => {
+        scrollToPointIfNeeded(board, insertionPoint);
+      });
+    }
+
     setAppState({ ...appState, openDialogType: null });
   };
 

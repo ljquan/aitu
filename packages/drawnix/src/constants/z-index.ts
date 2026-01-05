@@ -33,8 +33,13 @@ export const Z_INDEX = {
   POPOVER: 3000,
   POPOVER_FEEDBACK: 3010,
   POPOVER_ZOOM: 3020,
-  POPOVER_APP: 3030,
   TOOLTIP: 3500,
+
+  // ==========================================
+  // Layer 3.5: Popovers above Drawers (4500-4999)
+  // 这些 popover 需要显示在抽屉之上
+  // ==========================================
+  POPOVER_APP: 4500,
 
   // ==========================================
   // Layer 4: Drawers/Panels (4000-4999)

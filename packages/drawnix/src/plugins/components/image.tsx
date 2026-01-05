@@ -12,8 +12,8 @@ const isVideoElement = (imageItem: any): boolean => {
   const url = imageItem.url || '';
 
   // 检查 URL hash 标识符（用于 ObjectURL 的视频识别）
-  // 格式：blob:http://...#video
-  if (url.includes('#video')) {
+  // 格式：blob:http://...#video 或 blob:http://...#merged-video-{timestamp}
+  if (url.includes('#video') || url.includes('#merged-video-')) {
     return true;
   }
 

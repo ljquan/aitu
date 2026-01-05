@@ -17,6 +17,7 @@ export interface GeminiSettings {
   chatModel?: string;
   imageModelName?: string;
   videoModelName?: string;
+  textModelName?: string;
 }
 
 export interface AppSettings {
@@ -32,6 +33,7 @@ const DEFAULT_SETTINGS: AppSettings = {
     chatModel: 'gpt-5',
     imageModelName: 'gemini-3-pro-image-preview-vip',
     videoModelName: 'veo3',
+    textModelName:  'claude-sonnet-4-5-20250929',
   },
 };
 
