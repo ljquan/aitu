@@ -6,8 +6,8 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { MessagePlugin, Select, Dialog, Tooltip, DialogPlugin } from 'tdesign-react';
-import JSZip from 'jszip';
 import { useI18n } from '../../i18n';
+import { smartDownload } from '../../utils/download-utils';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
 import { TaskType, TaskStatus, Task } from '../../types/task.types';
 import { geminiSettings } from '../../utils/settings-manager';
@@ -92,7 +92,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
     return initialTasks;
   });
 
-  const [taskIdCounter, setTaskIdCounter] = useState(() => {
+  const [taskIdCounter, setTaskIdCounter] = useState<number>(() => {
     try {
       const cached = localStorage.getItem(BATCH_IMAGE_CACHE_KEY);
       if (cached) {
@@ -327,11 +327,6 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
       selectCell(row, col);
     }
   }, [activeCell, selectCell]);
-
-  // 处理双击进入编辑
-  const handleCellDoubleClick = useCallback((row: number, col: string) => {
-    enterEditMode(row, col);
-  }, [enterEditMode]);
 
   // 批量填充列
   const fillColumn = useCallback((colName: string) => {
@@ -1042,73 +1037,27 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
       return;
     }
 
-    // 单张图片直接下载
-    if (imageUrls.length === 1) {
-      const { url, filename } = imageUrls[0];
-      try {
-        MessagePlugin.info(language === 'zh' ? '正在下载...' : 'Downloading...');
-        const response = await fetch(url);
-        const blob = await response.blob();
-        const downloadUrl = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = downloadUrl;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(downloadUrl);
-        MessagePlugin.success(language === 'zh' ? '下载成功' : 'Download complete');
-      } catch (error) {
-        console.error('Download failed:', url, error);
-        MessagePlugin.error(language === 'zh' ? '下载失败' : 'Download failed');
-      }
-      return;
-    }
-
-    // 多张图片打包成zip
-    MessagePlugin.info(language === 'zh' ? `正在打包 ${imageUrls.length} 张图片...` : `Packing ${imageUrls.length} images...`);
-
-    const zip = new JSZip();
-    let successCount = 0;
-
-    for (const { url, filename } of imageUrls) {
-      try {
-        const response = await fetch(url);
-        const blob = await response.blob();
-        zip.file(filename, blob);
-        successCount++;
-      } catch (error) {
-        console.error('Failed to fetch image:', url, error);
-      }
-    }
-
-    if (successCount === 0) {
-      MessagePlugin.error(language === 'zh' ? '打包失败，无法获取图片' : 'Pack failed, cannot fetch images');
-      return;
-    }
-
+    // 智能下载（单张直接下载，多张打包zip）
     try {
-      const zipBlob = await zip.generateAsync({ type: 'blob' });
-      const downloadUrl = URL.createObjectURL(zipBlob);
-      const a = document.createElement('a');
-      a.href = downloadUrl;
+      MessagePlugin.info(language === 'zh' ? '正在准备下载...' : 'Preparing download...');
+      
       const now = new Date();
       const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
       const timeStr = `${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
-      a.download = `aitu_images_${successCount}pics_${dateStr}_${timeStr}.zip`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(downloadUrl);
+      const zipFilename = `aitu_images_${imageUrls.length}pics_${dateStr}_${timeStr}.zip`;
 
-      MessagePlugin.success(
-        language === 'zh'
-          ? `成功打包 ${successCount}/${imageUrls.length} 张图片`
-          : `Packed ${successCount}/${imageUrls.length} images`
-      );
+      const downloadItems = imageUrls.map(item => ({
+        url: item.url,
+        type: 'image' as const,
+        filename: item.filename
+      }));
+
+      await smartDownload(downloadItems, zipFilename);
+      
+      MessagePlugin.success(language === 'zh' ? '下载成功' : 'Download complete');
     } catch (error) {
-      console.error('Zip generation failed:', error);
-      MessagePlugin.error(language === 'zh' ? '打包失败' : 'Pack failed');
+      console.error('Download failed:', error);
+      MessagePlugin.error(language === 'zh' ? '下载失败' : 'Download failed');
     }
   }, [selectedRows, tasks, queueTasks, language]);
 

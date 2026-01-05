@@ -15,6 +15,7 @@ import type {
   Asset,
 } from '../../types/asset.types';
 import { AssetType, AssetSource, SelectionMode } from '../../types/asset.types';
+import { downloadFile } from '../../utils/download-utils';
 import './MediaLibraryModal.scss';
 
 export function MediaLibraryModal({
@@ -291,13 +292,7 @@ export function MediaLibraryModal({
               onRename={renameAsset}
               onDelete={removeAsset}
               onDownload={(asset) => {
-                // 下载功能在 asset-utils.ts 中实现
-                const link = document.createElement('a');
-                link.href = asset.url;
-                link.download = asset.name;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
+                downloadFile(asset.url, asset.name);
               }}
               onSelect={showSelectButton ? handleUseAsset : undefined}
               showSelectButton={showSelectButton}
@@ -323,12 +318,7 @@ export function MediaLibraryModal({
             onRename={renameAsset}
             onDelete={removeAsset}
             onDownload={(asset) => {
-              const link = document.createElement('a');
-              link.href = asset.url;
-              link.download = asset.name;
-              document.body.appendChild(link);
-              link.click();
-              document.body.removeChild(link);
+              downloadFile(asset.url, asset.name);
             }}
             onSelect={showSelectButton ? handleUseAsset : undefined}
             showSelectButton={showSelectButton}

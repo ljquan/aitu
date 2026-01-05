@@ -93,7 +93,9 @@ function isVideoRequest(url, request) {
   return (
     VIDEO_EXTENSIONS_REGEX.test(url.pathname) ||
     request.destination === 'video' ||
-    url.pathname.includes('/video/')
+    url.pathname.includes('/video/') ||
+    url.hash.startsWith('#merged-video-') || // 合并视频的特殊标识
+    url.hash.includes('video') // 视频的 # 标识
   );
 }
 

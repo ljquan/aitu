@@ -116,7 +116,16 @@ ${toolsDescription}
 用户：生成一个可爱猫咪表情包宫格图，4x4网格布局
 {"content": "生成猫咪表情包宫格图", "next": [{"mcp": "generate_grid_image", "args": {"theme": "可爱猫咪表情包，各种有趣的猫咪表情和姿势", "rows": 4, "cols": 4, "layoutStyle": "grid"}}]}
 
-### 示例11：无需工具调用（纯文字回复）
+### 示例11：生成长视频（1分钟以上）
+用户：帮我生成一个1分钟的视频，讲述一只猫咪从早到晚的一天
+{"content": "生成1分钟长视频，讲述猫咪的一天。系统会自动将故事拆分为多个连续片段，使用尾帧接首帧保证画面连贯。", "next": [{"mcp": "generate_long_video", "args": {"prompt": "一只可爱的橘猫从早到晚的一天生活：清晨在窗台晒太阳、中午在厨房偷吃鱼、下午追逐蝴蝶玩耍、傍晚蜷缩在沙发上打盹、夜晚望着月亮", "totalDuration": 60}}]}
+
+### 示例11a：长视频使用首帧图片
+用户：[图片1] 让这个场景动起来，生成30秒视频
+[参考图片: [图片1]]
+{"content": "使用参考图片作为首帧，生成30秒长视频", "next": [{"mcp": "generate_long_video", "args": {"prompt": "Cinematic video starting from this scene, camera slowly panning around, natural ambient movement, objects gently swaying, dynamic lighting changes, smooth transitions between moments", "totalDuration": 30, "firstFrameImage": "[图片1]"}}]}
+
+### 示例12：无需工具调用（纯文字回复）
 用户：你好
 {"content": "你好！我可以帮你生成图片和视频。请描述你想要创作的内容，或选中画布上的素材给我指令。", "next": []}
 

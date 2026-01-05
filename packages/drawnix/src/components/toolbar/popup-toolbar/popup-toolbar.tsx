@@ -47,7 +47,7 @@ import { NO_COLOR } from '../../../constants/color';
 import { Freehand } from '../../../plugins/freehand/type';
 import { PopupLinkButton } from './link-button';
 import { PopupPromptButton } from './prompt-button';
-import { AIImageIcon, AIVideoIcon, VideoFrameIcon, DuplicateIcon, TrashIcon, SplitImageIcon, DownloadIcon, MergeIcon } from '../../icons';
+import { AIImageIcon, AIVideoIcon, VideoFrameIcon, DuplicateIcon, TrashIcon, SplitImageIcon, DownloadIcon, MergeIcon, VideoMergeIcon } from '../../icons';
 import { useDrawnix, DialogType } from '../../../hooks/use-drawnix';
 import { useI18n } from '../../../i18n';
 import { ToolButton } from '../../tool-button';
@@ -59,6 +59,7 @@ import { isToolElement } from '../../../plugins/with-tool';
 import { splitAndInsertImages } from '../../../utils/image-splitter';
 import { smartDownload, BatchDownloadItem } from '../../../utils/download-utils';
 import { MessagePlugin } from 'tdesign-react';
+import { mergeVideos } from '../../../services/video-merge-webcodecs';
 
 export const PopupToolbar = () => {
   const board = useBoard();
@@ -104,6 +105,7 @@ export const PopupToolbar = () => {
     hasSplitImage?: boolean; // 是否显示拆图按钮
     hasDownloadable?: boolean; // 是否显示下载按钮
     hasMergeable?: boolean; // 是否显示合并按钮
+    hasVideoMergeable?: boolean; // 是否显示视频合成按钮
   } = {
     fill: 'red',
   };
@@ -187,6 +189,12 @@ export const PopupToolbar = () => {
       ) &&
       !PlaitBoard.hasBeenTextEditing(board);
 
+    // 视频合成按钮：选中多个视频元素（超过1个）
+    const videoElements = selectedElements.filter(element => isVideoElement(element));
+    const hasVideoMergeable =
+      videoElements.length > 1 &&
+      !PlaitBoard.hasBeenTextEditing(board);
+
     state = {
       ...getElementState(board),
       hasFill,
@@ -201,6 +209,7 @@ export const PopupToolbar = () => {
       hasSplitImage,
       hasDownloadable,
       hasMergeable,
+      hasVideoMergeable,
     };
   }
   useEffect(() => {
@@ -473,7 +482,61 @@ export const PopupToolbar = () => {
 
                   const loadingInstance = MessagePlugin.loading(loadingMsg, 0);
                   try {
-                    await smartDownload(downloadItems);
+                    // 特殊处理 blob: URL（可能是从IndexedDB缓存的视频）
+                    const { mediaCacheService } = await import('../../../services/media-cache-service');
+                    const { downloadFromBlob } = await import('../../../utils/download-utils');
+
+                    const processedItems: BatchDownloadItem[] = [];
+
+                    for (const item of downloadItems) {
+                      if (item.url.startsWith('blob:')) {
+                        // 从 URL fragment 提取 taskId (格式: blob:http://...#merged-video-{timestamp})
+                        const hashIndex = item.url.indexOf('#');
+                        const taskId = hashIndex > 0 ? item.url.substring(hashIndex + 1) : null;
+
+                        console.log('[Download] Processing blob URL:', { url: item.url, taskId });
+
+                        if (taskId && taskId.startsWith('merged-video-')) {
+                          // 从 IndexedDB 获取缓存的视频
+                          const cached = await mediaCacheService.getCachedMedia(taskId);
+                          if (cached && cached.blob) {
+                            const ext = cached.mimeType.startsWith('video/mp4') ? 'mp4' :
+                                       cached.mimeType.startsWith('video/webm') ? 'webm' : 'bin';
+                            const filename = `merged-video-${Date.now()}.${ext}`;
+
+                            console.log('[Download] Downloading from IndexedDB cache:', { taskId, ext, size: cached.blob.size });
+                            downloadFromBlob(cached.blob, filename);
+                            continue;
+                          } else {
+                            console.warn('[Download] Cache not found for taskId:', taskId);
+                          }
+                        }
+
+                        // 如果没有 taskId 或缓存不存在，尝试直接 fetch blob URL
+                        try {
+                          console.log('[Download] Fetching blob URL directly');
+                          const response = await fetch(item.url);
+                          const blob = await response.blob();
+                          const ext = blob.type.startsWith('video/mp4') ? 'mp4' :
+                                     blob.type.startsWith('video/webm') ? 'webm' :
+                                     blob.type.startsWith('image/') ? 'png' : 'bin';
+                          const filename = `${item.type}_${Date.now()}.${ext}`;
+                          downloadFromBlob(blob, filename);
+                        } catch (fetchError) {
+                          console.error('[Download] Failed to fetch blob URL:', fetchError);
+                          throw new Error(`Failed to download ${item.type}: Blob URL inaccessible`);
+                        }
+                      } else {
+                        // 普通 URL，添加到待处理列表
+                        processedItems.push(item);
+                      }
+                    }
+
+                    // 下载普通 URL
+                    if (processedItems.length > 0) {
+                      await smartDownload(processedItems);
+                    }
+
                     MessagePlugin.close(loadingInstance);
                     MessagePlugin.success(
                       downloadItems.length > 1
@@ -563,6 +626,108 @@ export const PopupToolbar = () => {
                   } catch (error: any) {
                     MessagePlugin.close(loadingInstance);
                     MessagePlugin.error(error.message || (language === 'zh' ? '合并失败' : 'Merge failed'));
+                  }
+                }}
+              />
+            )}
+            {state.hasVideoMergeable && (
+              <ToolButton
+                className="video-merge"
+                key="video-merge"
+                type="icon"
+                icon={VideoMergeIcon}
+                visible={true}
+                title={language === 'zh' ? '合成视频' : 'Merge Videos'}
+                aria-label={language === 'zh' ? '合成视频' : 'Merge Videos'}
+                onPointerUp={async () => {
+                  // 收集所有视频元素的 URL
+                  const videoUrls: string[] = [];
+                  for (const element of selectedElements) {
+                    if (isVideoElement(element) && (element as any).url) {
+                      videoUrls.push((element as any).url);
+                    }
+                  }
+
+                  if (videoUrls.length < 2) {
+                    MessagePlugin.warning(language === 'zh' ? '请选择至少2个视频' : 'Please select at least 2 videos');
+                    return;
+                  }
+
+                  const loadingInstance = MessagePlugin.loading(
+                    language === 'zh' ? '正在合成视频...' : 'Merging videos...',
+                    0
+                  );
+
+                  try {
+                    const result = await mergeVideos(videoUrls, (progress, stage) => {
+                      const stageText = {
+                        downloading: language === 'zh' ? '下载视频...' : 'Downloading videos...',
+                        decoding: language === 'zh' ? '解码视频...' : 'Decoding videos...',
+                        encoding: language === 'zh' ? '编码视频...' : 'Encoding videos...',
+                        finalizing: language === 'zh' ? '生成文件中...' : 'Finalizing...',
+                      };
+                      console.log(`[VideoMerge] ${stageText[stage]} ${Math.round(progress)}%`);
+                    });
+
+                    MessagePlugin.close(loadingInstance);
+
+                    console.log('[VideoMerge] Merge result:', {
+                      blobType: result.blob.type,
+                      blobSize: result.blob.size,
+                      url: result.url,
+                      duration: result.duration,
+                      urlType: result.url.startsWith('blob:') ? 'blob' : 'other'
+                    });
+
+                    // 插入合成后的视频到画布（而不是下载）
+                    try {
+                      // 导入插入视频的工具
+                      const { quickInsert } = await import('../../../mcp/tools/canvas-insertion');
+                      console.log('[VideoMerge] Attempting to insert video with URL:', result.url);
+                      await quickInsert('video', result.url);
+
+                      MessagePlugin.success(
+                        language === 'zh'
+                          ? `已合成并插入 ${videoUrls.length} 个视频`
+                          : `Merged and inserted ${videoUrls.length} videos`
+                      );
+                    } catch (insertError) {
+                      console.error('[VideoMerge] Failed to insert video:', insertError);
+                      // 如果插入失败，回退到下载
+                      // 根据 Blob 类型确定文件扩展名
+                      const mimeType = result.blob.type || 'video/webm';
+                      const extension = mimeType.startsWith('video/mp4') ? 'mp4' : 'webm';
+
+                      console.log('[VideoMerge] Fallback download:', {
+                        mimeType,
+                        extension,
+                        blobSize: result.blob.size,
+                        url: result.url
+                      });
+
+                      // 创建一个新的 Blob URL 确保 MIME 类型正确
+                      const downloadBlob = new Blob([result.blob], { type: mimeType });
+                      const downloadUrl = URL.createObjectURL(downloadBlob);
+
+                      const link = document.createElement('a');
+                      link.href = downloadUrl;
+                      link.download = `merged-video-${Date.now()}.${extension}`;
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+
+                      // 延迟释放 URL
+                      setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
+
+                      MessagePlugin.warning(
+                        language === 'zh'
+                          ? `视频已合成，但插入失败，已自动下载 (${extension.toUpperCase()})`
+                          : `Video merged but failed to insert, downloaded as ${extension.toUpperCase()}`
+                      );
+                    }
+                  } catch (error: any) {
+                    MessagePlugin.close(loadingInstance);
+                    MessagePlugin.error(error.message || (language === 'zh' ? '视频合成失败' : 'Video merge failed'));
                   }
                 }}
               />

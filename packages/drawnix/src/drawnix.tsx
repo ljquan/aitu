@@ -173,6 +173,15 @@ export const Drawnix: React.FC<DrawnixProps> = ({
     return cleanup;
   }, []);
 
+  // Initialize video recovery service to restore expired blob URLs
+  useEffect(() => {
+    if (board) {
+      import('./services/video-recovery-service').then(({ initVideoRecoveryService }) => {
+        initVideoRecoveryService(board);
+      });
+    }
+  }, [board]);
+
   const plugins: PlaitPlugin[] = [
     withDraw,
     withGroup,

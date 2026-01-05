@@ -39,12 +39,6 @@
       "options": {
         "targetName": "e2e"
       }
-    },
-    {
-      "plugin": "@nx/jest/plugin",
-      "options": {
-        "targetName": "test"
-      }
     }
   ],
   "generators": {
@@ -61,7 +55,7 @@
       "library": {
         "style": "scss",
         "linter": "eslint",
-        "unitTestRunner": "jest"
+        "unitTestRunner": "vitest"
       }
     }
   },

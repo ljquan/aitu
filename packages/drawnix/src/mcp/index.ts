@@ -32,6 +32,8 @@ export { splitImageTool } from './tools/split-image-tool';
 export type { SplitImageToolParams } from './tools/split-image-tool';
 export { svgTool, insertSvg } from './tools/svg-tool';
 export type { SvgToolParams } from './tools/svg-tool';
+export { longVideoGenerationTool, createLongVideoTask } from './tools/long-video-generation';
+export type { LongVideoGenerationParams } from './tools/long-video-generation';
 
 // 共享模块导出
 export { setBoard, getBoard } from './tools/shared';
@@ -48,6 +50,7 @@ import { gridImageTool } from './tools/photo-wall-tool';
 import { inspirationBoardTool } from './tools/creative-photo-wall-tool';
 import { splitImageTool } from './tools/split-image-tool';
 import { svgTool } from './tools/svg-tool';
+import { longVideoGenerationTool } from './tools/long-video-generation';
 
 /** 标记 MCP 是否已初始化 */
 let mcpInitialized = false;
@@ -65,6 +68,7 @@ export function initializeMCP(): void {
   mcpRegistry.registerAll([
     imageGenerationTool,
     videoGenerationTool,
+    longVideoGenerationTool,
     canvasInsertionTool,
     aiAnalyzeTool,
     mermaidTool,

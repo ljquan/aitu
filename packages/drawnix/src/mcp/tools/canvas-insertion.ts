@@ -227,9 +227,32 @@ async function insertVideoToCanvas(
   videoUrl: string,
   point: Point
 ): Promise<{ width: number; height: number }> {
-  // skipScroll: true - 由 executeCanvasInsertion 统一处理滚动
-  await insertVideoFromUrl(board, videoUrl, point, false, undefined, true);
-  return { width: LAYOUT_CONSTANTS.MEDIA_DEFAULT_SIZE, height: 225 };
+  // 提前获取视频尺寸用于正确的居中计算
+  const { getVideoDimensions } = await import('../../data/video');
+
+  try {
+    const dimensions = await getVideoDimensions(videoUrl);
+    // 计算显示尺寸（保持宽高比，限制最大尺寸）
+    const MAX_SIZE = 600;
+    let displayWidth = dimensions.width;
+    let displayHeight = dimensions.height;
+
+    if (displayWidth > MAX_SIZE || displayHeight > MAX_SIZE) {
+      const scale = Math.min(MAX_SIZE / displayWidth, MAX_SIZE / displayHeight);
+      displayWidth = Math.round(displayWidth * scale);
+      displayHeight = Math.round(displayHeight * scale);
+    }
+
+    // skipScroll: true - 由 executeCanvasInsertion 统一处理滚动
+    // skipCentering: true - point 已经是左上角坐标（已在 executeCanvasInsertion 中居中计算）
+    await insertVideoFromUrl(board, videoUrl, point, false, undefined, true, true);
+    return { width: displayWidth, height: displayHeight };
+  } catch (error) {
+    console.warn('[CanvasInsertion] Failed to get video dimensions, using default:', error);
+    // 降级：使用默认尺寸
+    await insertVideoFromUrl(board, videoUrl, point, false, undefined, true, true);
+    return { width: LAYOUT_CONSTANTS.MEDIA_DEFAULT_SIZE, height: 225 };
+  }
 }
 
 /**
@@ -345,19 +368,43 @@ async function executeCanvasInsertion(params: CanvasInsertionParams): Promise<MC
       if (group.length === 1) {
         // 单个项，垂直插入
         const item = group[0];
-        const size = estimateTextSize(item.type === 'text' ? item.content : '');
-        const itemWidth = item.type === 'text' ? size.width : LAYOUT_CONSTANTS.MEDIA_DEFAULT_SIZE;
-        const point: Point = [centerX - itemWidth / 2, currentY];
+        let itemSize = { width: LAYOUT_CONSTANTS.MEDIA_DEFAULT_SIZE, height: 225 };
+
+        // 预先获取尺寸用于正确的居中计算
+        if (item.type === 'text') {
+          itemSize = estimateTextSize(item.content);
+        } else if (item.type === 'video') {
+          // 提前获取视频尺寸
+          try {
+            const { getVideoDimensions } = await import('../../data/video');
+            const dimensions = await getVideoDimensions(item.content);
+            const MAX_SIZE = 600;
+            if (dimensions.width > MAX_SIZE || dimensions.height > MAX_SIZE) {
+              const scale = Math.min(MAX_SIZE / dimensions.width, MAX_SIZE / dimensions.height);
+              itemSize = {
+                width: Math.round(dimensions.width * scale),
+                height: Math.round(dimensions.height * scale),
+              };
+            } else {
+              itemSize = dimensions;
+            }
+          } catch (error) {
+            console.warn('[CanvasInsertion] Failed to get video dimensions:', error);
+            itemSize = { width: LAYOUT_CONSTANTS.MEDIA_DEFAULT_SIZE, height: 225 };
+          }
+        }
+
+        const point: Point = [centerX - itemSize.width / 2, currentY];
 
         if (item.type === 'text') {
           await insertTextToCanvas(board, item.content, point);
-          currentY += size.height + verticalGap;
+          currentY += itemSize.height + verticalGap;
         } else if (item.type === 'image') {
           await insertImageToCanvas(board, item.content, point);
           currentY += LAYOUT_CONSTANTS.MEDIA_DEFAULT_SIZE + verticalGap;
         } else if (item.type === 'video') {
           await insertVideoToCanvas(board, item.content, point);
-          currentY += 225 + verticalGap;
+          currentY += itemSize.height + verticalGap;
         } else if (item.type === 'svg') {
           const svgSize = await insertSvgToCanvas(board, item.content, point);
           currentY += svgSize.height + verticalGap;

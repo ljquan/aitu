@@ -17,10 +17,12 @@ const createMockParams = (overrides: Partial<ParsedGenerationParams> = {}): Pars
   scenario: 'direct_generation',
   generationType: 'image',
   modelId: 'gemini-3-pro-image-preview',
+  isModelExplicit: false,
   prompt: 'test prompt',
+  userInstruction: 'test prompt',
+  rawInput: 'test prompt',
   count: 1,
-  width: 1024,
-  height: 1024,
+  size: '1x1',
   duration: undefined,
   parseResult: {
     cleanText: 'test prompt',
@@ -33,6 +35,12 @@ const createMockParams = (overrides: Partial<ParsedGenerationParams> = {}): Pars
     originalText: 'test prompt',
   },
   hasExtraContent: false,
+  selection: {
+    texts: [],
+    images: [],
+    videos: [],
+    graphics: [],
+  },
   ...overrides,
 });
 
@@ -45,8 +53,7 @@ describe('workflow-converter', () => {
           modelId: 'gemini-3-pro-image-preview',
           prompt: '一只可爱的猫',
           count: 1,
-          width: 1024,
-          height: 1024,
+          size: '1x1',
         });
 
         const workflow = convertDirectGenerationToWorkflow(params);
@@ -58,8 +65,7 @@ describe('workflow-converter', () => {
         expect(workflow.steps[0].mcp).toBe('generate_image');
         expect(workflow.steps[0].args).toMatchObject({
           prompt: '一只可爱的猫',
-          width: 1024,
-          height: 1024,
+          size: '1x1',
           model: 'gemini-3-pro-image-preview',
         });
         expect(workflow.steps[0].status).toBe('pending');
@@ -94,30 +100,26 @@ describe('workflow-converter', () => {
         expect(workflow.steps[0].args.referenceImages).toEqual(referenceImages);
       });
 
-      it('应该使用默认宽高 1024x1024', () => {
+      it('应该使用默认宽高 1x1', () => {
         const params = createMockParams({
           generationType: 'image',
-          width: undefined,
-          height: undefined,
+          size: undefined,
         });
 
         const workflow = convertDirectGenerationToWorkflow(params);
 
-        expect(workflow.steps[0].args.width).toBe(1024);
-        expect(workflow.steps[0].args.height).toBe(1024);
+        expect(workflow.steps[0].args.size).toBe('1x1');
       });
 
       it('应该正确处理自定义尺寸', () => {
         const params = createMockParams({
           generationType: 'image',
-          width: 1920,
-          height: 1080,
+          size: '16x9',
         });
 
         const workflow = convertDirectGenerationToWorkflow(params);
 
-        expect(workflow.steps[0].args.width).toBe(1920);
-        expect(workflow.steps[0].args.height).toBe(1080);
+        expect(workflow.steps[0].args.size).toBe('16x9');
       });
     });
 
@@ -128,8 +130,7 @@ describe('workflow-converter', () => {
           modelId: 'veo3',
           prompt: '日落场景',
           count: 1,
-          width: 1280,
-          height: 720,
+          size: '16x9',
           duration: '8',
         });
 
@@ -140,24 +141,21 @@ describe('workflow-converter', () => {
         expect(workflow.steps[0].mcp).toBe('generate_video');
         expect(workflow.steps[0].args).toMatchObject({
           prompt: '日落场景',
-          width: 1280,
-          height: 720,
-          duration: '8',
+          size: '16x9',
+          seconds: '8',
           model: 'veo3',
         });
       });
 
-      it('应该使用默认视频尺寸 1280x720', () => {
+      it('应该使用默认视频尺寸 16x9', () => {
         const params = createMockParams({
           generationType: 'video',
-          width: undefined,
-          height: undefined,
+          size: undefined,
         });
 
         const workflow = convertDirectGenerationToWorkflow(params);
 
-        expect(workflow.steps[0].args.width).toBe(1280);
-        expect(workflow.steps[0].args.height).toBe(720);
+        expect(workflow.steps[0].args.size).toBe('16x9');
       });
 
       it('应该正确处理视频时长', () => {
@@ -168,7 +166,7 @@ describe('workflow-converter', () => {
 
         const workflow = convertDirectGenerationToWorkflow(params);
 
-        expect(workflow.steps[0].args.duration).toBe('15');
+        expect(workflow.steps[0].args.seconds).toBe('15');
       });
 
       it('应该使用默认时长 5 秒', () => {
@@ -179,7 +177,7 @@ describe('workflow-converter', () => {
 
         const workflow = convertDirectGenerationToWorkflow(params);
 
-        expect(workflow.steps[0].args.duration).toBe('5');
+        expect(workflow.steps[0].args.seconds).toBe('5');
       });
     });
 
@@ -258,9 +256,9 @@ describe('workflow-converter', () => {
 
       const workflow = convertAgentFlowToWorkflow(params, referenceImages);
 
-      expect(workflow.steps[0].args.prompt).toBe('复杂任务描述');
       expect(workflow.steps[0].args.context).toBeDefined();
-      expect((workflow.steps[0].args.context as any).hasReferenceImages).toBe(true);
+      expect((workflow.steps[0].args.context as any).finalPrompt).toBe('复杂任务描述');
+      expect((workflow.steps[0].args.context as any).selection).toBeDefined();
     });
   });
 

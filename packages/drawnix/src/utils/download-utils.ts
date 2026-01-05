@@ -49,6 +49,7 @@ export function sanitizeFilename(text: string, maxLength: number = 50): string {
  * @param filename - The filename to save as
  */
 export function downloadFromBlob(blob: Blob, filename: string): void {
+  // 确保 Blob 有正确的 MIME 类型
   const blobUrl = URL.createObjectURL(blob);
 
   const link = document.createElement('a');
@@ -58,8 +59,8 @@ export function downloadFromBlob(blob: Blob, filename: string): void {
   link.click();
   document.body.removeChild(link);
 
-  // Clean up blob URL
-  URL.revokeObjectURL(blobUrl);
+  // 延迟释放 URL，确保下载完成
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
 }
 
 /**
@@ -208,15 +209,17 @@ export interface BatchDownloadItem {
  * 批量下载为 ZIP 文件
  *
  * @param items - 下载项数组
+ * @param zipFilename - 可选的 ZIP 文件名
  * @returns Promise
  */
-export async function downloadAsZip(items: BatchDownloadItem[]): Promise<void> {
+export async function downloadAsZip(items: BatchDownloadItem[], zipFilename?: string): Promise<void> {
   if (items.length === 0) {
     throw new Error('No files to download');
   }
 
   const zip = new JSZip();
   const timestamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
+  const finalZipName = zipFilename || `aitu_download_${timestamp}.zip`;
 
   // 添加文件到 ZIP 根目录
   await Promise.all(
@@ -242,16 +245,17 @@ export async function downloadAsZip(items: BatchDownloadItem[]): Promise<void> {
 
   // 生成 ZIP 并下载
   const content = await zip.generateAsync({ type: 'blob' });
-  downloadFromBlob(content, `aitu_download_${timestamp}.zip`);
+  downloadFromBlob(content, finalZipName);
 }
 
 /**
  * 智能下载：单个直接下载，多个打包为 ZIP
  *
  * @param items - 下载项数组
+ * @param zipFilename - 可选的 ZIP 文件名（仅在多文件时使用）
  * @returns Promise
  */
-export async function smartDownload(items: BatchDownloadItem[]): Promise<void> {
+export async function smartDownload(items: BatchDownloadItem[], zipFilename?: string): Promise<void> {
   if (items.length === 0) {
     throw new Error('No files to download');
   }
@@ -263,6 +267,6 @@ export async function smartDownload(items: BatchDownloadItem[]): Promise<void> {
     const filename = item.filename || `${item.type}_download.${ext}`;
     await downloadFile(item.url, filename);
   } else {
-    await downloadAsZip(items);
+    await downloadAsZip(items, zipFilename);
   }
 }
