@@ -265,6 +265,8 @@ export interface WorkflowMessageParams {
   workflow: WorkflowMessageData;
   /** 使用的文本模型（用于 Agent 流程） */
   textModel?: string;
+  /** 是否自动打开 ChatDrawer，默认 true */
+  autoOpen?: boolean;
 }
 
 /** ChatDrawer Ref API - 用于外部控制 ChatDrawer */

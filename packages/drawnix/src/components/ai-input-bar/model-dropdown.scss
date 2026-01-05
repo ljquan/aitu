@@ -1,0 +1,257 @@
+/**
+ * 模型下拉选择器样式
+ *
+ * 显示 @shortCode 格式，点击弹出模型列表
+ */
+
+$orange-primary: #F59E0B;
+$orange-dark: #D97706;
+$gray-light: #F3F4F6;
+$gray-medium: #9CA3AF;
+$gray-dark: #6B7280;
+$text-dark: #1F2937;
+$vip-color: #E91E63;
+
+.model-dropdown {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+
+  // 触发按钮 - @shortCode 格式
+  &__trigger {
+    display: flex;
+    align-items: center;
+    gap: 1px;
+    padding: 4px 8px;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+
+    &:hover {
+      background: rgba($orange-primary, 0.1);
+    }
+
+    &--open {
+      background: rgba($orange-primary, 0.15);
+    }
+
+    &:focus {
+      outline: none;
+    }
+  }
+
+  &__at {
+    color: $orange-primary;
+    font-weight: 600;
+  }
+
+  &__code {
+    color: $gray-dark;
+    font-weight: 500;
+  }
+
+  // 下拉菜单
+  &__menu {
+    position: absolute;
+    bottom: calc(100% + 4px);
+    left: 0;
+    min-width: 280px;
+    max-height: 320px;
+    background: #fff;
+    border: 1px solid #E5E7EB;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+    overflow: hidden;
+    z-index: 1000;
+    animation: model-dropdown-fade-in 0.15s ease;
+  }
+
+  &__header {
+    padding: 10px 12px;
+    font-size: 12px;
+    font-weight: 500;
+    color: $gray-dark;
+    border-bottom: 1px solid #F3F4F6;
+    background: #FAFAFA;
+  }
+
+  &__list {
+    max-height: 260px;
+    overflow-y: auto;
+    padding: 4px;
+
+    &::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: #E5E7EB;
+      border-radius: 2px;
+    }
+  }
+
+  // 模型项
+  &__item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.1s ease;
+
+    &:hover {
+      background: $gray-light;
+    }
+
+    &--selected {
+      background: rgba($orange-primary, 0.08);
+
+      &:hover {
+        background: rgba($orange-primary, 0.12);
+      }
+
+      .model-dropdown__item-label {
+        color: $orange-dark;
+        font-weight: 500;
+      }
+
+      .model-dropdown__item-code {
+        color: $orange-primary;
+      }
+    }
+  }
+
+  &__item-content {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__item-name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  &__item-code {
+    font-size: 12px;
+    font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
+    color: $gray-medium;
+    flex-shrink: 0;
+  }
+
+  &__item-label {
+    font-size: 13px;
+    color: $text-dark;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__item-vip {
+    font-size: 10px;
+    font-weight: 600;
+    color: #fff;
+    background: linear-gradient(135deg, $vip-color 0%, #FF6B9D 100%);
+    padding: 1px 4px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+
+  &__item-desc {
+    font-size: 11px;
+    color: $gray-medium;
+    margin-top: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__item-check {
+    flex-shrink: 0;
+    color: $orange-primary;
+    margin-left: 8px;
+  }
+}
+
+@keyframes model-dropdown-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+// Dark mode support
+:root[data-theme='dark'] {
+  .model-dropdown {
+    &__trigger {
+      &:hover {
+        background: rgba($orange-primary, 0.15);
+      }
+
+      &--open {
+        background: rgba($orange-primary, 0.2);
+      }
+    }
+
+    &__code {
+      color: var(--color-gray-30, #bbb);
+    }
+
+    &__menu {
+      background: var(--color-surface-high, #2a2a2a);
+      border-color: var(--color-border, #444);
+    }
+
+    &__header {
+      background: var(--color-surface-mid, #333);
+      border-bottom-color: var(--color-border, #444);
+      color: var(--color-gray-50, #999);
+    }
+
+    &__list {
+      &::-webkit-scrollbar-thumb {
+        background: var(--color-border, #444);
+      }
+    }
+
+    &__item {
+      &:hover {
+        background: var(--color-surface-mid, #333);
+      }
+
+      &--selected {
+        background: rgba($orange-primary, 0.12);
+
+        &:hover {
+          background: rgba($orange-primary, 0.18);
+        }
+      }
+    }
+
+    &__item-code {
+      color: var(--color-gray-50, #999);
+    }
+
+    &__item-label {
+      color: var(--color-gray-20, #ccc);
+    }
+
+    &__item-desc {
+      color: var(--color-gray-50, #999);
+    }
+  }
+}

@@ -206,6 +206,12 @@ export const AI_COLD_START_SUGGESTIONS: Record<'zh' | 'en', ColdStartSuggestion[
     //   modelType: 'long-video',
     // },
     {
+      content: '长视频：一只猫咪从早到晚的一天生活，1分钟',
+      scene: '长视频',
+      tips: '调用1次文本模型生成分段脚本 + 多次生视频模型，尾帧接首帧保证连贯',
+      modelType: 'long-video',
+    },
+    {
       content: '画一个AI工作流的流程图',
       scene: 'mermaid图',
       tips: '调用1次文本模型，支持流程图、泳道图、',
@@ -247,6 +253,12 @@ export const AI_COLD_START_SUGGESTIONS: Record<'zh' | 'en', ColdStartSuggestion[
     //   tips: '1 text model for script + multiple video models, last frame connects to first frame',
     //   modelType: 'long-video',
     // },
+    {
+      content: 'long video: A day in the life of a cat, 1 minute',
+      scene: 'Long video',
+      tips: '1 text model for script + multiple video models, last frame connects to first frame',
+      modelType: 'long-video',
+    },
     {
       content: 'Draw a flowchart of AI workflow',
       scene: 'Tech docs',

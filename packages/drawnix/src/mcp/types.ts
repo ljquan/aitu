@@ -52,6 +52,7 @@ export interface WorkflowStepInfo {
   args: Record<string, unknown>;
   description: string;
   status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
+  options?: MCPExecuteOptions;
 }
 
 /**
