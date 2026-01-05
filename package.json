@@ -37,8 +37,6 @@
   },
   "private": true,
   "dependencies": {
-    "@ffmpeg/ffmpeg": "^0.12.15",
-    "@ffmpeg/util": "^0.12.2",
     "@floating-ui/react": "^0.26.24",
     "@llamaindex/chat-ui": "^0.6.1",
     "@plait-board/markdown-to-drawnix": "^0.0.6",
@@ -83,7 +81,6 @@
     "@nx/devkit": "19.3.0",
     "@nx/eslint": "19.3.0",
     "@nx/eslint-plugin": "19.3.0",
-    "@nx/jest": "^22.3.3",
     "@nx/js": "19.3.0",
     "@nx/playwright": "19.3.0",
     "@nx/react": "19.3.0",
