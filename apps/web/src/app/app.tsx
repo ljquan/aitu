@@ -9,7 +9,6 @@ import {
   mediaCacheService,
 } from '@drawnix/drawnix';
 import { PlaitBoard, PlaitElement, PlaitTheme, Viewport } from '@plait/core';
-import { initializeData } from './initialize-data';
 
 export function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -41,9 +40,21 @@ export function App() {
         // If no current board and no boards exist, create default board with initializeData
         if (!currentBoard && !workspaceService.hasBoards()) {
           console.log('[App] First visit, creating default board with initial data');
+
+          let initialElements: PlaitElement[] = [];
+          try {
+            const response = await fetch(`/init.json?v=${import.meta.env.VITE_APP_VERSION}`);
+            if (response.ok) {
+              const data = await response.json();
+              initialElements = data.elements || [];
+            }
+          } catch (error) {
+            console.error('[App] Failed to load initial data:', error);
+          }
+
           const board = await workspaceService.createBoard({
             name: '默认画板',
-            elements: initializeData,
+            elements: initialElements,
           });
 
           if (board) {
