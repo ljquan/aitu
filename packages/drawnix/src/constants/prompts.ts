@@ -176,7 +176,7 @@ export interface ColdStartSuggestion {
   /** 模型调用说明，介绍该命令会用到的模型概况 */
   tips: string;
   /** 建议的模型类型，帮助用户快速选择 */
-  modelType?: 'image' | 'video' | 'grid-image' | 'inspiration-board' | 'svg';
+  modelType?: 'image' | 'video' | 'grid-image' | 'inspiration-board' | 'svg' | 'long-video';
 }
 
 export const AI_COLD_START_SUGGESTIONS: Record<'zh' | 'en', ColdStartSuggestion[]> = {
@@ -198,6 +198,12 @@ export const AI_COLD_START_SUGGESTIONS: Record<'zh' | 'en', ColdStartSuggestion[
       scene: '视频创作',
       tips: '调用1次文本模型 + 1次生视频模型',
       modelType: 'video',
+    },
+    {
+      content: '长视频：一只猫咪从早到晚的一天生活，1分钟',
+      scene: '长视频',
+      tips: '调用1次文本模型生成分段脚本 + 多次生视频模型，尾帧接首帧保证连贯',
+      modelType: 'long-video',
     },
     {
       content: '画一个AI工作流的流程图',
@@ -234,6 +240,12 @@ export const AI_COLD_START_SUGGESTIONS: Record<'zh' | 'en', ColdStartSuggestion[
       scene: 'Video creation',
       tips: '1 text model + 1 video model',
       modelType: 'video',
+    },
+    {
+      content: 'long video: A day in the life of a cat, 1 minute',
+      scene: 'Long video',
+      tips: '1 text model for script + multiple video models, last frame connects to first frame',
+      modelType: 'long-video',
     },
     {
       content: 'Draw a flowchart of AI workflow',

@@ -47,7 +47,7 @@ import { NO_COLOR } from '../../../constants/color';
 import { Freehand } from '../../../plugins/freehand/type';
 import { PopupLinkButton } from './link-button';
 import { PopupPromptButton } from './prompt-button';
-import { AIImageIcon, AIVideoIcon, VideoFrameIcon, DuplicateIcon, TrashIcon, SplitImageIcon, DownloadIcon, MergeIcon } from '../../icons';
+import { AIImageIcon, AIVideoIcon, VideoFrameIcon, DuplicateIcon, TrashIcon, SplitImageIcon, DownloadIcon, MergeIcon, VideoMergeIcon } from '../../icons';
 import { useDrawnix, DialogType } from '../../../hooks/use-drawnix';
 import { useI18n } from '../../../i18n';
 import { ToolButton } from '../../tool-button';
@@ -59,6 +59,7 @@ import { isToolElement } from '../../../plugins/with-tool';
 import { splitAndInsertImages } from '../../../utils/image-splitter';
 import { smartDownload, BatchDownloadItem } from '../../../utils/download-utils';
 import { MessagePlugin } from 'tdesign-react';
+import { mergeVideos } from '../../../services/video-merge-service';
 
 export const PopupToolbar = () => {
   const board = useBoard();
@@ -104,6 +105,7 @@ export const PopupToolbar = () => {
     hasSplitImage?: boolean; // 是否显示拆图按钮
     hasDownloadable?: boolean; // 是否显示下载按钮
     hasMergeable?: boolean; // 是否显示合并按钮
+    hasVideoMergeable?: boolean; // 是否显示视频合成按钮
   } = {
     fill: 'red',
   };
@@ -187,6 +189,12 @@ export const PopupToolbar = () => {
       ) &&
       !PlaitBoard.hasBeenTextEditing(board);
 
+    // 视频合成按钮：选中多个视频元素（超过1个）
+    const videoElements = selectedElements.filter(element => isVideoElement(element));
+    const hasVideoMergeable =
+      videoElements.length > 1 &&
+      !PlaitBoard.hasBeenTextEditing(board);
+
     state = {
       ...getElementState(board),
       hasFill,
@@ -201,6 +209,7 @@ export const PopupToolbar = () => {
       hasSplitImage,
       hasDownloadable,
       hasMergeable,
+      hasVideoMergeable,
     };
   }
   useEffect(() => {
@@ -563,6 +572,65 @@ export const PopupToolbar = () => {
                   } catch (error: any) {
                     MessagePlugin.close(loadingInstance);
                     MessagePlugin.error(error.message || (language === 'zh' ? '合并失败' : 'Merge failed'));
+                  }
+                }}
+              />
+            )}
+            {state.hasVideoMergeable && (
+              <ToolButton
+                className="video-merge"
+                key="video-merge"
+                type="icon"
+                icon={VideoMergeIcon}
+                visible={true}
+                title={language === 'zh' ? '合成视频' : 'Merge Videos'}
+                aria-label={language === 'zh' ? '合成视频' : 'Merge Videos'}
+                onPointerUp={async () => {
+                  // 收集所有视频元素的 URL
+                  const videoUrls: string[] = [];
+                  for (const element of selectedElements) {
+                    if (isVideoElement(element) && (element as any).url) {
+                      videoUrls.push((element as any).url);
+                    }
+                  }
+
+                  if (videoUrls.length < 2) {
+                    MessagePlugin.warning(language === 'zh' ? '请选择至少2个视频' : 'Please select at least 2 videos');
+                    return;
+                  }
+
+                  const loadingInstance = MessagePlugin.loading(
+                    language === 'zh' ? '正在合成视频...' : 'Merging videos...',
+                    0
+                  );
+
+                  try {
+                    const result = await mergeVideos(videoUrls, (progress, stage) => {
+                      const stageText = {
+                        loading: language === 'zh' ? '加载 FFmpeg...' : 'Loading FFmpeg...',
+                        downloading: language === 'zh' ? '下载视频...' : 'Downloading videos...',
+                        merging: language === 'zh' ? '合成中...' : 'Merging...',
+                        encoding: language === 'zh' ? '编码中...' : 'Encoding...',
+                      };
+                      console.log(`[VideoMerge] ${stageText[stage]} ${Math.round(progress)}%`);
+                    });
+
+                    MessagePlugin.close(loadingInstance);
+
+                    // 下载合成后的视频
+                    const link = document.createElement('a');
+                    link.href = result.url;
+                    link.download = `merged-video-${Date.now()}.mp4`;
+                    link.click();
+
+                    MessagePlugin.success(
+                      language === 'zh'
+                        ? `已合成 ${videoUrls.length} 个视频`
+                        : `Merged ${videoUrls.length} videos`
+                    );
+                  } catch (error: any) {
+                    MessagePlugin.close(loadingInstance);
+                    MessagePlugin.error(error.message || (language === 'zh' ? '视频合成失败' : 'Video merge failed'));
                   }
                 }}
               />

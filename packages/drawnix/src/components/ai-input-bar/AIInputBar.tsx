@@ -37,6 +37,7 @@ import {
   type PromptItem,
 } from './smart-suggestion-panel';
 import { initializeMCP, setCanvasBoard, setBoard, mcpRegistry } from '../../mcp';
+import { initializeLongVideoChainService } from '../../services/long-video-chain-service';
 import { gridImageService } from '../../services/photo-wall';
 import type { MCPTaskResult } from '../../mcp/types';
 import { parseAIInput, type GenerationType } from '../../utils/ai-input-parser';
@@ -88,10 +89,11 @@ function toWorkflowMessageData(
   };
 }
 
-// 初始化 MCP 模块
+// 初始化 MCP 模块和长视频链服务
 let mcpInitialized = false;
 if (!mcpInitialized) {
   initializeMCP();
+  initializeLongVideoChainService();
   mcpInitialized = true;
 }
 
@@ -743,10 +745,10 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
           // 当前步骤完成
           workflowControl.updateStep(currentStep.id, 'completed', { analysis: 'completed' }, undefined, Date.now() - stepStartTime);
 
-          // 为新步骤添加 queue 模式选项
+          // 为新步骤添加 queue 模式选项（尊重传入的 status，若为 completed 则保留）
           const stepsWithOptions = newSteps.map((s, index) => ({
             ...s,
-            status: 'pending' as const,
+            status: (s.status === 'completed' ? 'completed' : 'pending') as 'pending' | 'completed',
             options: {
               mode: 'queue' as const,
               batchId: `agent_${Date.now()}`,
@@ -875,15 +877,23 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
 
           // 从 workflowControl 获取完整的步骤信息
           const fullStep = workflowControl.getWorkflow()?.steps.find(s => s.id === newStep.id);
-          console.log(`[AIInputBar] Looking for step ${newStep.id}, found:`, fullStep ? 'yes' : 'no');
-          if (fullStep) {
-            console.log(`[AIInputBar] Executing dynamic step: ${fullStep.mcp}`, fullStep.args);
-            const success = await executeStep(fullStep);
-            if (!success) {
-              workflowFailed = true;
-            }
-          } else {
+          console.log(`[AIInputBar] Looking for step ${newStep.id}, found:`, fullStep ? 'yes' : 'no', 'status:', fullStep?.status);
+
+          if (!fullStep) {
             console.warn(`[AIInputBar] Step ${newStep.id} not found in workflow!`);
+            continue;
+          }
+
+          // 如果步骤已标记为 completed（如 long-video-generation 预创建的任务），跳过执行
+          if (fullStep.status === 'completed') {
+            console.log(`[AIInputBar] Skipping already completed step: ${fullStep.mcp}`);
+            continue;
+          }
+
+          console.log(`[AIInputBar] Executing dynamic step: ${fullStep.mcp}`, fullStep.args);
+          const success = await executeStep(fullStep);
+          if (!success) {
+            workflowFailed = true;
           }
         }
       }
@@ -976,7 +986,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
         workflowControl.updateStep(currentStep.id, 'completed', { analysis: 'completed' }, undefined, Date.now() - stepStartTime);
         const stepsWithOptions = newSteps.map((s, index) => ({
           ...s,
-          status: 'pending' as const,
+          status: (s.status === 'completed' ? 'completed' : 'pending') as 'pending' | 'completed',
           options: {
             mode: 'queue' as const,
             batchId: `agent_${Date.now()}`,
@@ -1095,11 +1105,17 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
           continue;
         }
         const fullStep = workflowControl.getWorkflow()?.steps.find(s => s.id === newStep.id);
-        if (fullStep) {
-          const success = await executeStep(fullStep);
-          if (!success) {
-            workflowFailed = true;
-          }
+        if (!fullStep) {
+          continue;
+        }
+        // 如果步骤已标记为 completed（如 long-video-generation 预创建的任务），跳过执行
+        if (fullStep.status === 'completed') {
+          console.log(`[AIInputBar] Skipping already completed step during retry: ${fullStep.mcp}`);
+          continue;
+        }
+        const success = await executeStep(fullStep);
+        if (!success) {
+          workflowFailed = true;
         }
       }
     }

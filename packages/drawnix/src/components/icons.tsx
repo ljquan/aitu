@@ -649,3 +649,24 @@ export const MergeIcon = createIcon(
     </g>
   </svg>
 );
+
+// 视频合成图标 - 表示将多个视频片段合成为一个视频
+export const VideoMergeIcon = createIcon(
+  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <g strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
+      {/* 左侧视频片段 */}
+      <rect x="1.5" y="5" width="5" height="4" rx="0.5" />
+      <path d="M5.5 6.5L7 7L5.5 7.5" fill="currentColor" stroke="none" />
+      {/* 右侧视频片段 */}
+      <rect x="1.5" y="11" width="5" height="4" rx="0.5" />
+      <path d="M5.5 12.5L7 13L5.5 13.5" fill="currentColor" stroke="none" />
+      {/* 合并箭头 */}
+      <path d="M8 7L10 10L8 13" />
+      {/* 合成后的视频 */}
+      <rect x="11" y="4" width="7.5" height="12" rx="1" strokeWidth="1.5" />
+      {/* 播放按钮 */}
+      <path d="M13.5 10L16.5 10" strokeWidth="1.5" />
+      <path d="M15 8.5L15 11.5" strokeWidth="1.5" />
+    </g>
+  </svg>
+);
