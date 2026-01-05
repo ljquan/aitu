@@ -63,5 +63,41 @@ export default defineConfig({
     commonjsOptions: {
       transformMixedEsModules: true,
     },
+    rollupOptions: {
+      output: {
+        manualChunks: (id) => {
+          if (id.includes('node_modules')) {
+            if (id.includes('react') || id.includes('react-dom')) {
+              return 'react-vendor';
+            }
+            if (id.includes('@plait')) {
+              return 'plait-vendor';
+            }
+            if (id.includes('tdesign') || id.includes('lucide') || id.includes('floating-ui')) {
+              return 'ui-vendor';
+            }
+            if (id.includes('mermaid')) {
+              return 'mermaid-vendor';
+            }
+            if (id.includes('slate')) {
+              return 'editor-vendor';
+            }
+            if (id.includes('lodash') || id.includes('rxjs') || id.includes('ahooks')) {
+              return 'utils-vendor';
+            }
+            if (id.includes('xlsx')) {
+              return 'xlsx-vendor';
+            }
+            if (id.includes('@llamaindex')) {
+              return 'ai-vendor';
+            }
+            return 'vendor';
+          }
+          if (id.includes('packages/drawnix')) {
+            return 'drawnix-feature';
+          }
+        },
+      },
+    },
   },
 });
