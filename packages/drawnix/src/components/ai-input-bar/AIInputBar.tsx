@@ -9,16 +9,14 @@
  * - Orange theme border
  * - Text input for prompts
  * - Selected images display
- * - Generation type toggle (image/video)
- * - Smart suggestion panel with "#模型名", "-参数:值", "+个数" syntax support
+ * - Model dropdown selector in bottom-left corner
  * - Send button to trigger generation
- * - Prompt suggestion panel with history and presets
  * - Integration with ChatDrawer for conversation display
  * - Agent mode: AI decides which MCP tool to use (image/video generation)
  */
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Send } from 'lucide-react';
+import { Send, Check } from 'lucide-react';
 import { useBoard } from '@plait-board/react-board';
 import { SelectedContentPreview } from '../shared/SelectedContentPreview';
 import { getSelectedElements, ATTACHED_ELEMENT_CLASS_NAME } from '@plait/core';
@@ -27,15 +25,9 @@ import { TaskStatus } from '../../types/task.types';
 import { taskQueueService } from '../../services/task-queue-service';
 import { processSelectedContentForAI } from '../../utils/selection-utils';
 import { useTextSelection } from '../../hooks/useTextSelection';
-import { usePromptHistory } from '../../hooks/usePromptHistory';
 import { useChatDrawerControl } from '../../contexts/ChatDrawerContext';
-import { AI_INSTRUCTIONS, AI_COLD_START_SUGGESTIONS } from '../../constants/prompts';
-import {
-  SmartSuggestionPanel,
-  useTriggerDetection,
-  insertToInput,
-  type PromptItem,
-} from './smart-suggestion-panel';
+import { ModelDropdown } from './ModelDropdown';
+import { getDefaultImageModel, IMAGE_MODELS, getModelConfig } from '../../constants/model-config';
 import { initializeMCP, setCanvasBoard, setBoard, mcpRegistry } from '../../mcp';
 import { initializeLongVideoChainService } from '../../services/long-video-chain-service';
 import { gridImageService } from '../../services/photo-wall';
@@ -235,7 +227,6 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
 
   const { language } = useI18n();
 
-  const { history, addHistory, removeHistory } = usePromptHistory();
   const chatDrawerControl = useChatDrawerControl();
   const workflowControl = useWorkflowControl();
   // 使用 ref 存储，避免依赖变化
@@ -258,10 +249,14 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
   const [selectedContent, setSelectedContent] = useState<SelectedContent[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false); // 仅用于防止重复点击，不阻止并行任务
   const [isFocused, setIsFocused] = useState(false);
+  // 当前选中的图片模型（通过环境变量或默认值初始化）
+  const [selectedModel, setSelectedModel] = useState(getDefaultImageModel);
 
-  // 使用新的 useTriggerDetection hook 解析输入
-  // 有选中元素时启用智能提示，无选中元素时只响应触发字符
-  const parseResult = useTriggerDetection(prompt, selectedContent.length > 0);
+  // @ 触发模型选择相关状态
+  const [showAtSuggestion, setShowAtSuggestion] = useState(false);
+  const [atQuery, setAtQuery] = useState(''); // @ 后面的查询文本
+  const [atHighlightIndex, setAtHighlightIndex] = useState(0); // 当前高亮的选项索引
+  const atSuggestionRef = useRef<HTMLDivElement>(null);
 
   // 点击外部关闭输入框的展开状态
   useEffect(() => {
@@ -442,7 +437,6 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
   const SelectionWatcherBoardRef = useRef<any>(null);
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const richDisplayRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // 使用自定义 hook 处理文本选择和复制，同时阻止事件冒泡
@@ -450,142 +444,6 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
     enableCopy: true,
     stopPropagation: true,
   });
-
-  /**
-   * 去除提示词中的模型/参数/个数标记
-   * @param content 原始内容
-   * @returns 去除标记后的内容
-   */
-  const stripTagsFromPrompt = (content: string): string => {
-    return content
-      .replace(/#[\w.-]+\s*/g, '')  // 去除 #模型名
-      .replace(/-[\w]+=[\w:x.]+\s*/g, '')  // 去除 -参数=值
-      .replace(/\+\d+\s*/g, '')  // 去除 +个数
-      .trim();
-  };
-
-  /**
-   * 去除提示词中的数量部分（用于去重）
-   * 例如：生成灵感图：大模型、AI，16图 -> 生成灵感图：大模型、AI
-   * @param content 原始内容
-   * @returns 去除数量后的内容
-   */
-  const stripCountFromPrompt = (content: string): string => {
-    return content
-      .replace(/[,，]\s*\d+\s*(图|张|个图|个|幅|宫格)?\s*$/g, '')  // 去除末尾的 "，16图"、"，20个图"、"16宫格" 等
-      .replace(/\s+\d+\s*(图|张|个图|个|幅|宫格)?\s*$/g, '')  // 去除末尾的 "16图"、"20个图"、"16宫格" 等
-      .trim();
-  };
-
-  /**
-   * 对历史记录进行去重（去除数量后内容相同的只保留最新一条）
-   * @param items 历史记录列表
-   * @returns 去重后的列表
-   */
-  const deduplicateHistory = <T extends { id: string; content: string; timestamp?: number }>(items: T[]): T[] => {
-    const seen = new Map<string, T>();
-    // 按时间戳降序排列，确保保留最新的
-    const sorted = [...items].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-    for (const item of sorted) {
-      const normalizedContent = stripCountFromPrompt(item.content);
-      if (!seen.has(normalizedContent)) {
-        seen.set(normalizedContent, item);
-      }
-    }
-    // 返回时保持原有顺序（最新在前）
-    return Array.from(seen.values());
-  };
-
-  // 合并预设指令和历史指令（用于有选中元素时的 prompt 模式）
-  const allPrompts = useMemo((): PromptItem[] => {
-    const presetPrompts = AI_INSTRUCTIONS[language].map((item, index) => ({
-      id: `preset_${index}`,
-      content: item.content,
-      scene: item.scene,
-      tips: item.tips,
-      source: 'preset' as const,
-    }));
-
-    // 获取所有预设指令的内容集合，用于过滤
-    const presetContents = new Set(presetPrompts.map(p => p.content));
-
-    // 过滤出有选中元素时的历史记录，并去除模型/参数/个数标记
-    const rawHistoryPrompts = history
-      .filter(item => item.hasSelection === true) // 只显示有选中元素时的历史记录
-      .map(item => {
-        const strippedContent = stripTagsFromPrompt(item.content);
-        return {
-          id: item.id,
-          content: strippedContent,
-          source: 'history' as const,
-          timestamp: item.timestamp,
-          hasSelection: item.hasSelection,
-        };
-      })
-      .filter(item => item.content.length > 0) // 过滤掉去除标记后为空的记录
-      .filter(item => !presetContents.has(item.content)); // 过滤掉与推荐提示词重复的历史记录
-
-    // 对历史记录去重（去除数量后内容相同的只保留最新一条）
-    const historyPrompts = deduplicateHistory(rawHistoryPrompts);
-
-    return [...historyPrompts, ...presetPrompts];
-  }, [language, history]);
-
-  // 冷启动引导提示词（无选中内容、输入框为空时显示）
-  // 包含预设的创意提示词 + 无选中元素时的历史记录
-  const coldStartPrompts = useMemo((): PromptItem[] => {
-    const presetPrompts = AI_COLD_START_SUGGESTIONS[language].map((item, index) => ({
-      id: `cold_start_${index}`,
-      content: item.content,
-      scene: item.scene,
-      tips: item.tips,
-      source: 'preset' as const,
-    }));
-
-    // 获取所有预设创意提示词的内容集合，用于过滤（包含去除数量后的版本）
-    const presetContents = new Set(presetPrompts.map(p => p.content));
-    const presetContentsNormalized = new Set(presetPrompts.map(p => stripCountFromPrompt(p.content)));
-
-    // 过滤出无选中元素时的历史记录
-    const rawHistoryPrompts = history
-      .filter(item => item.hasSelection !== true) // 显示无选中元素时的历史记录（包括 undefined 和 false）
-      .filter(item => !presetContents.has(item.content)) // 过滤掉与创意提示词完全相同的历史记录
-      .filter(item => !presetContentsNormalized.has(stripCountFromPrompt(item.content))) // 过滤掉去除数量后与创意提示词相同的
-      .map(item => ({
-        id: item.id,
-        content: item.content,
-        source: 'history' as const,
-        timestamp: item.timestamp,
-        hasSelection: item.hasSelection,
-      }));
-
-    // 对历史记录去重（去除数量后内容相同的只保留最新一条）
-    const historyPrompts = deduplicateHistory(rawHistoryPrompts);
-
-    // 历史记录放在前面
-    return [...historyPrompts, ...presetPrompts];
-  }, [language, history]);
-
-  // 有选中元素时的历史记录（用于 model 模式显示）
-  const selectionHistoryPrompts = useMemo((): PromptItem[] => {
-    const rawPrompts = history
-      .filter(item => item.hasSelection === true) // 只显示有选中元素时的历史记录
-      .map(item => ({
-        id: item.id,
-        content: item.content,
-        source: 'history' as const,
-        timestamp: item.timestamp,
-        hasSelection: item.hasSelection,
-      }));
-
-    // 对历史记录去重（去除数量后内容相同的只保留最新一条）
-    return deduplicateHistory(rawPrompts);
-  }, [history]);
-
-  // 判断是否为冷启动场景（无选中内容、输入框为空）
-  const isColdStartMode = useMemo(() => {
-    return selectedContent.length === 0 && prompt.trim() === '';
-  }, [selectedContent.length, prompt]);
 
   // 处理选择变化的回调（由 SelectionWatcher 调用）
   const handleSelectionChange = useCallback((content: SelectedContent[]) => {
@@ -599,27 +457,92 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
     })));
   }, [chatDrawerControl]);
 
-  // 处理模型选择
+  // 处理模型选择（从下拉菜单）
   const handleModelSelect = useCallback((modelId: string) => {
-    const newPrompt = insertToInput(prompt, modelId, parseResult.triggerPosition, '#');
-    setPrompt(newPrompt);
-    inputRef.current?.focus();
-  }, [prompt, parseResult.triggerPosition]);
+    setSelectedModel(modelId);
+  }, []);
 
-  // 处理参数选择
-  const handleParamSelect = useCallback((paramId: string, value?: string) => {
-    const paramValue = value ? `${paramId}=${value}` : paramId;
-    const newPrompt = insertToInput(prompt, paramValue, parseResult.triggerPosition, '-');
-    setPrompt(newPrompt);
-    inputRef.current?.focus();
-  }, [prompt, parseResult.triggerPosition]);
+  // 过滤模型列表（根据 @ 后的查询文本）
+  const filteredModels = useMemo(() => {
+    if (!atQuery) return IMAGE_MODELS;
+    const query = atQuery.toLowerCase();
+    return IMAGE_MODELS.filter(model =>
+      (model.shortCode?.toLowerCase().includes(query)) ||
+      (model.shortLabel?.toLowerCase().includes(query)) ||
+      (model.label.toLowerCase().includes(query))
+    );
+  }, [atQuery]);
 
-  // 处理个数选择
-  const handleCountSelect = useCallback((count: number) => {
-    const newPrompt = insertToInput(prompt, count.toString(), parseResult.triggerPosition, '+');
-    setPrompt(newPrompt);
-    inputRef.current?.focus();
-  }, [prompt, parseResult.triggerPosition]);
+  // 检测输入中的 @ 触发
+  const detectAtTrigger = useCallback((text: string, cursorPos: number) => {
+    // 从光标位置往前找 @
+    let atPos = -1;
+    for (let i = cursorPos - 1; i >= 0; i--) {
+      const char = text[i];
+      // 遇到空格或换行，停止搜索
+      if (char === ' ' || char === '\n') break;
+      // 找到 @
+      if (char === '@') {
+        atPos = i;
+        break;
+      }
+    }
+
+    if (atPos >= 0) {
+      // 提取 @ 后面的查询文本
+      const query = text.slice(atPos + 1, cursorPos);
+      setAtQuery(query);
+      setShowAtSuggestion(true);
+      setAtHighlightIndex(0);
+    } else {
+      setShowAtSuggestion(false);
+      setAtQuery('');
+    }
+  }, []);
+
+  // 处理输入变化
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newValue = e.target.value;
+    setPrompt(newValue);
+
+    // 检测 @ 触发
+    const cursorPos = e.target.selectionStart || 0;
+    detectAtTrigger(newValue, cursorPos);
+  }, [detectAtTrigger]);
+
+  // 处理 @ 选择模型
+  const handleAtSelectModel = useCallback((modelId: string) => {
+    // 从 prompt 中移除 @query
+    const textarea = inputRef.current;
+    if (!textarea) return;
+
+    const cursorPos = textarea.selectionStart || 0;
+    const text = prompt;
+
+    // 找到 @ 的位置
+    let atPos = -1;
+    for (let i = cursorPos - 1; i >= 0; i--) {
+      if (text[i] === '@') {
+        atPos = i;
+        break;
+      }
+      if (text[i] === ' ' || text[i] === '\n') break;
+    }
+
+    if (atPos >= 0) {
+      // 移除 @query 部分
+      const newText = text.slice(0, atPos) + text.slice(cursorPos);
+      setPrompt(newText);
+    }
+
+    // 选择模型
+    setSelectedModel(modelId);
+    setShowAtSuggestion(false);
+    setAtQuery('');
+
+    // 保持焦点在输入框
+    textarea.focus();
+  }, [prompt]);
 
   // Handle generation
   const handleGenerate = useCallback(async () => {
@@ -645,27 +568,11 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
           .map((item) => item.url!),
       };
 
-      // 解析输入内容（使用新的 API）
-      const parsedParams = parseAIInput(prompt, selection);
+      // 解析输入内容，使用选中的模型
+      const parsedParams = parseAIInput(prompt, selection, { modelId: selectedModel });
 
       console.log('[AIInputBar] Parsed params:', parsedParams);
       console.log('[AIInputBar] Key params - model:', parsedParams.modelId, 'count:', parsedParams.count, 'size:', parsedParams.size);
-
-      // 保存历史记录
-      // 有选中文本元素时：保存选中的文本元素内容（去重后）
-      // 无选中元素时：保存用户输入的提示词，用于在创意面板中展示
-      const hasSelection = selectedContent.length > 0;
-      const selectedTexts = selectedContent
-        .filter((item) => item.type === 'text' && item.text)
-        .map((item) => item.text!);
-
-      if (hasSelection && selectedTexts.length > 0) {
-        // 有选中文本元素时，保存每个文本元素的内容
-        // 服务层会自动去重
-        for (const text of selectedTexts) {
-          addHistory(text, true);
-        }
-      }
 
       // 收集所有参考媒体（图片 + 图形 + 视频）
       const referenceImages = [...selection.images, ...selection.graphics];
@@ -911,7 +818,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
     } finally {
       setIsSubmitting(false);
     }
-  }, [prompt, selectedContent, isSubmitting, addHistory, workflowControl]);
+  }, [prompt, selectedContent, isSubmitting, selectedModel, workflowControl]);
 
   // 处理工作流重试（从指定步骤开始）
   const handleWorkflowRetry = useCallback(async (
@@ -1137,85 +1044,61 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
         return;
       }
 
+      // @ 建议面板打开时的键盘处理
+      if (showAtSuggestion && filteredModels.length > 0) {
+        // 上下箭头导航
+        if (event.key === 'ArrowDown') {
+          event.preventDefault();
+          setAtHighlightIndex(prev =>
+            prev < filteredModels.length - 1 ? prev + 1 : 0
+          );
+          return;
+        }
+        if (event.key === 'ArrowUp') {
+          event.preventDefault();
+          setAtHighlightIndex(prev =>
+            prev > 0 ? prev - 1 : filteredModels.length - 1
+          );
+          return;
+        }
+        // Tab 或 Enter 选择当前高亮项
+        if (event.key === 'Tab' || event.key === 'Enter') {
+          event.preventDefault();
+          const selectedModelItem = filteredModels[atHighlightIndex];
+          if (selectedModelItem) {
+            handleAtSelectModel(selectedModelItem.id);
+          }
+          return;
+        }
+        // Escape 关闭建议面板
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          setShowAtSuggestion(false);
+          setAtQuery('');
+          return;
+        }
+      }
+
       // Shift+Enter, Alt/Option+Enter 换行
       if (event.key === 'Enter' && (event.shiftKey || event.altKey)) {
         return;
       }
 
-      // 单独 Enter 发送（当不在输入触发字符后的内容时）
-      // 检查是否在输入触发字符（有 triggerPosition 表示正在输入 #、-、+ 后的内容）
-      const isTypingTrigger = parseResult.triggerPosition !== undefined;
-
-      if (event.key === 'Enter' && !isTypingTrigger) {
+      // Enter 发送
+      if (event.key === 'Enter') {
         event.preventDefault();
         handleGenerate();
         return;
       }
 
-      // Close panels on Escape
+      // Escape 关闭
       if (event.key === 'Escape') {
         setIsFocused(false);
         inputRef.current?.blur();
         return;
       }
-
-      // 智能删除：Backspace 删除整个标记
-      if (event.key === 'Backspace' && inputRef.current) {
-        const cursorPos = inputRef.current.selectionStart || 0;
-        const selectionEnd = inputRef.current.selectionEnd || 0;
-        
-        // 如果有选中文本，使用默认行为
-        if (cursorPos !== selectionEnd) {
-          return;
-        }
-        
-        // 检查光标前的字符，判断是否在标记末尾
-        const textBeforeCursor = prompt.substring(0, cursorPos);
-        
-        // 查找最近的标记（标记后面可能有空格）
-        // 模型标记: #xxx
-        // 参数标记: -xxx=yyy
-        // 数量标记: +数字
-        const modelMatch = textBeforeCursor.match(/(#[\w.-]+)\s?$/);
-        const paramMatch = textBeforeCursor.match(/(-[\w]+=[\w:x.]+)\s?$/);
-        const countMatch = textBeforeCursor.match(/(\+\d+)\s?$/);
-        
-        // 找出位置最靠后的匹配（最近的标记）
-        type MatchInfo = { match: RegExpMatchArray; index: number };
-        const matches: MatchInfo[] = [];
-        
-        if (modelMatch && modelMatch.index !== undefined) {
-          matches.push({ match: modelMatch, index: modelMatch.index });
-        }
-        if (paramMatch && paramMatch.index !== undefined) {
-          matches.push({ match: paramMatch, index: paramMatch.index });
-        }
-        if (countMatch && countMatch.index !== undefined) {
-          matches.push({ match: countMatch, index: countMatch.index });
-        }
-        
-        // 按位置排序，取最靠后的
-        if (matches.length > 0) {
-          matches.sort((a, b) => b.index - a.index);
-          const matchToDelete = matches[0];
-          
-          event.preventDefault();
-          const deleteStart = matchToDelete.index;
-          const newPrompt = prompt.substring(0, deleteStart) + prompt.substring(cursorPos);
-          setPrompt(newPrompt.trim());
-          
-          // 设置光标位置
-          setTimeout(() => {
-            if (inputRef.current) {
-              inputRef.current.selectionStart = deleteStart;
-              inputRef.current.selectionEnd = deleteStart;
-            }
-          }, 0);
-          return;
-        }
-      }
     },
-    [handleGenerate, parseResult.triggerPosition, prompt]
+    [handleGenerate, showAtSuggestion, filteredModels, atHighlightIndex, handleAtSelectModel]
   );
 
   // Handle input focus
@@ -1232,35 +1115,8 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
       if (!prev) return prev; // 已经是 false，不触发更新
       return false;
     });
-    // Don't close suggestion panel immediately - let click events process first
   }, []);
 
-  // Handle textarea scroll - sync with rich display
-  const handleScroll = useCallback(() => {
-    if (inputRef.current && richDisplayRef.current) {
-      richDisplayRef.current.scrollTop = inputRef.current.scrollTop;
-    }
-  }, []);
-
-  // Handle prompt selection from suggestion panel
-  const handlePromptSelect = useCallback((promptItem: PromptItem) => {
-    // 保留模型/参数/个数标记，把提示词追加到后面
-    const tagsPrefix = prompt.replace(parseResult.cleanText, '').trim();
-    const newPrompt = tagsPrefix ? `${tagsPrefix} ${promptItem.content}` : promptItem.content;
-    setPrompt(newPrompt);
-    inputRef.current?.focus();
-  }, [prompt, parseResult.cleanText]);
-
-  // Handle close suggestion panel
-  const handleCloseSuggestionPanel = useCallback(() => {
-    setIsFocused(false);
-    inputRef.current?.blur();
-  }, []);
-
-  // Handle delete history
-  const handleDeleteHistory = useCallback((id: string) => {
-    removeHistory(id);
-  }, [removeHistory]);
 
   const canGenerate = prompt.trim().length > 0 || selectedContent.length > 0;
 
@@ -1276,101 +1132,21 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
         externalBoardRef={SelectionWatcherBoardRef}
       />
 
-      {/* Main input container - dynamic layout based on content */}
+      {/* Main input container - flex-column-reverse to expand upward */}
       <div className={classNames('ai-input-bar__container', {
-        'ai-input-bar__container--has-content': selectedContent.length > 0
+        'ai-input-bar__container--expanded': isFocused || selectedContent.length > 0
       })}>
-        {/* Smart Suggestion Panel - unified panel for models, params, counts, and prompts */}
-        <SmartSuggestionPanel
-          visible={isFocused && (isColdStartMode || parseResult.mode !== null)}
-          mode={isColdStartMode ? 'cold-start' : parseResult.mode}
-          filterKeyword={parseResult.mode === 'prompt' ? parseResult.cleanText : parseResult.keyword}
-          selectedImageModel={parseResult.selectedImageModel}
-          selectedVideoModel={parseResult.selectedVideoModel}
-          selectedParams={parseResult.selectedParams}
-          selectedCount={parseResult.selectedCount}
-          prompts={isColdStartMode ? coldStartPrompts : allPrompts}
-          selectionHistoryPrompts={selectionHistoryPrompts}
-          onSelectModel={handleModelSelect}
-          onSelectParam={handleParamSelect}
-          onSelectCount={handleCountSelect}
-          onSelectPrompt={handlePromptSelect}
-          onDeleteHistory={handleDeleteHistory}
-          onClose={handleCloseSuggestionPanel}
-          language={language}
-        />
+        {/* Bottom bar - fixed position with model selector and send button */}
+        <div className="ai-input-bar__bottom-bar">
+          {/* Left: Model dropdown selector */}
+          <ModelDropdown
+            selectedModel={selectedModel}
+            onSelect={handleModelSelect}
+            language={language}
+          />
 
-        {/* Selected content preview - using shared component */}
-        {selectedContent.length > 0 && (
-          <div className="ai-input-bar__content-preview">
-            <SelectedContentPreview
-              items={selectedContent}
-              language={language}
-              enableHoverPreview={true}
-            />
-          </div>
-        )}
-
-        {/* Input row - textarea and send button */}
-        <div className="ai-input-bar__input-row">
-          {/* Text input wrapper for rich text display */}
-          <div className="ai-input-bar__rich-input">
-            {/* 高亮背景层 - 显示模型/参数/个数标签的背景色块 */}
-            {parseResult.segments.some(s => s.type !== 'text') && (
-              <div
-                ref={richDisplayRef}
-                className="ai-input-bar__highlight-layer"
-                aria-hidden="true"
-              >
-                {parseResult.segments.map((segment, index) => {
-                  if (segment.type === 'text') {
-                    return <span key={index} className="ai-input-bar__highlight-text">{segment.content}</span>;
-                  }
-                  // 根据类型显示不同颜色的背景色块
-                  let tagClass = '';
-                  switch (segment.type) {
-                    case 'image-model':
-                      tagClass = 'ai-input-bar__highlight-tag--image';
-                      break;
-                    case 'video-model':
-                      tagClass = 'ai-input-bar__highlight-tag--video';
-                      break;
-                    case 'param':
-                      tagClass = 'ai-input-bar__highlight-tag--param';
-                      break;
-                    case 'count':
-                      tagClass = 'ai-input-bar__highlight-tag--count';
-                      break;
-                  }
-                  return (
-                    <span key={index} className={`ai-input-bar__highlight-tag ${tagClass}`}>
-                      {segment.content}
-                    </span>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Actual textarea - 文字直接显示，不透明 */}
-            <textarea
-              ref={inputRef}
-              className={classNames('ai-input-bar__input', {
-                'ai-input-bar__input--focused': isFocused,
-              })}
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              onKeyDown={handleKeyDown}
-              onFocus={handleFocus}
-              onBlur={handleBlur}
-              onScroll={handleScroll}
-              placeholder={isFocused
-                ? (language === 'zh' ? '输入 # 选择模型（默认生图），- 选择参数， + 选择个数（默认1），描述你想要创建什么' : 'Enter # to select the model (default graph), - to select parameters, + to select the number (default 1), and describe what you want to create')
-                : (language === 'zh' ? '描述你想要创建什么' : 'Describe what you want to create')
-              }
-              rows={isFocused ? 4 : 1}
-              disabled={isSubmitting}
-            />
-          </div>
+          {/* Spacer to push send button to the right */}
+          <div className="ai-input-bar__bottom-spacer" />
 
           {/* Right: Send button */}
           <button
@@ -1384,6 +1160,93 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
           >
             <Send size={18} />
           </button>
+        </div>
+
+        {/* Input area - expands upward */}
+        <div className={classNames('ai-input-bar__input-area', {
+          'ai-input-bar__input-area--expanded': isFocused
+        })}>
+          {/* Selected content preview - using shared component */}
+          {selectedContent.length > 0 && (
+            <div className="ai-input-bar__content-preview">
+              <SelectedContentPreview
+                items={selectedContent}
+                language={language}
+                enableHoverPreview={true}
+              />
+            </div>
+          )}
+
+          {/* Text input */}
+          <div className="ai-input-bar__rich-input">
+            <textarea
+              ref={inputRef}
+              className={classNames('ai-input-bar__input', {
+                'ai-input-bar__input--focused': isFocused,
+              })}
+              value={prompt}
+              onChange={handleInputChange}
+              onKeyDown={handleKeyDown}
+              onFocus={handleFocus}
+              onBlur={handleBlur}
+              placeholder={language === 'zh' ? '描述你想要创建什么，输入 @ 选择模型' : 'Describe what you want to create, type @ to select model'}
+              rows={isFocused ? 4 : 1}
+              disabled={isSubmitting}
+            />
+
+            {/* @ 触发的模型建议面板 */}
+            {showAtSuggestion && filteredModels.length > 0 && (
+              <div
+                className="ai-input-bar__at-suggestion"
+                ref={atSuggestionRef}
+                role="listbox"
+                aria-label={language === 'zh' ? '选择模型' : 'Select Model'}
+              >
+                <div className="ai-input-bar__at-suggestion-header">
+                  {language === 'zh' ? '选择图片模型' : 'Select Image Model'}
+                </div>
+                <div className="ai-input-bar__at-suggestion-list">
+                  {filteredModels.map((model, index) => {
+                    const isHighlighted = index === atHighlightIndex;
+                    const isSelected = model.id === selectedModel;
+                    return (
+                      <div
+                        key={model.id}
+                        className={classNames('ai-input-bar__at-suggestion-item', {
+                          'ai-input-bar__at-suggestion-item--highlighted': isHighlighted,
+                          'ai-input-bar__at-suggestion-item--selected': isSelected,
+                        })}
+                        onClick={() => handleAtSelectModel(model.id)}
+                        onMouseEnter={() => setAtHighlightIndex(index)}
+                        role="option"
+                        aria-selected={isSelected}
+                      >
+                        <div className="ai-input-bar__at-suggestion-item-content">
+                          <div className="ai-input-bar__at-suggestion-item-name">
+                            <span className="ai-input-bar__at-suggestion-item-code">@{model.shortCode}</span>
+                            <span className="ai-input-bar__at-suggestion-item-label">
+                              {model.shortLabel || model.label}
+                            </span>
+                            {model.isVip && (
+                              <span className="ai-input-bar__at-suggestion-item-vip">VIP</span>
+                            )}
+                          </div>
+                          {model.description && (
+                            <div className="ai-input-bar__at-suggestion-item-desc">
+                              {model.description}
+                            </div>
+                          )}
+                        </div>
+                        {isSelected && (
+                          <Check size={16} className="ai-input-bar__at-suggestion-item-check" />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

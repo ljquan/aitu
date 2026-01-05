@@ -75,6 +75,8 @@ export interface ModelConfig {
   label: string;
   /** 简短显示名称（用于 ModelSelector 等） */
   shortLabel?: string;
+  /** 超短缩写（用于 @ 模型选择器显示，如 nb2v） */
+  shortCode?: string;
   /** 描述信息 */
   description?: string;
   /** 模型类型 */
@@ -135,6 +137,7 @@ export const IMAGE_MODEL_VIP_OPTIONS: ModelConfig[] = [
     id: 'gemini-3-pro-image-preview-vip',
     label: 'gemini-3-pro-image-preview-vip (nano-banana-2-vip)',
     shortLabel: 'nano-banana-2-vip',
+    shortCode: 'nb2v',
     description: '最新 Gemini 3 Pro 图片模型（VIP）',
     type: 'image',
     isVip: true,
@@ -145,6 +148,7 @@ export const IMAGE_MODEL_VIP_OPTIONS: ModelConfig[] = [
     id: 'gemini-3-pro-image-preview-2k-vip',
     label: 'gemini-3-pro-image-preview-2k-vip (nano-banana-2-2k-vip)',
     shortLabel: 'nano-banana-2-2k-vip',
+    shortCode: 'nb22kv',
     description: '2K 高清图片模型（VIP）',
     type: 'image',
     isVip: true,
@@ -155,6 +159,7 @@ export const IMAGE_MODEL_VIP_OPTIONS: ModelConfig[] = [
     id: 'gemini-3-pro-image-preview-4k-vip',
     label: 'gemini-3-pro-image-preview-4k-vip (nano-banana-2-4k-vip)',
     shortLabel: 'nano-banana-2-4k-vip',
+    shortCode: 'nb24kv',
     description: '4K 超高清图片模型（VIP）',
     type: 'image',
     isVip: true,
@@ -165,6 +170,7 @@ export const IMAGE_MODEL_VIP_OPTIONS: ModelConfig[] = [
     id: 'gemini-2.5-flash-image-vip',
     label: 'gemini-2.5-flash-image-vip (nano-banana-vip)',
     shortLabel: 'nano-banana-vip',
+    shortCode: 'nbv',
     description: '快速图片生成模型（VIP）',
     type: 'image',
     isVip: true,
@@ -180,6 +186,7 @@ export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
   {
     id: 'gpt-image-1.5',
     label: 'gpt-image-1.5',
+    shortCode: 'gpt15',
     description: 'GPT 图片生成模型',
     type: 'image',
     supportsTools: true,
@@ -189,6 +196,7 @@ export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
     id: 'gemini-3-pro-image-preview',
     label: 'gemini-3-pro-image-preview (nano-banana-2)',
     shortLabel: 'nano-banana-2',
+    shortCode: 'nb2',
     description: 'Gemini 3 Pro 图片模型',
     type: 'image',
     supportsTools: true,
@@ -198,6 +206,7 @@ export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
     id: 'gemini-2.5-flash-image',
     label: 'gemini-2.5-flash-image (nano-banana)',
     shortLabel: 'nano-banana',
+    shortCode: 'nb',
     description: '快速图片生成模型',
     type: 'image',
     supportsTools: true,
@@ -207,6 +216,7 @@ export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
     id: 'gemini-3-pro-image-preview-hd',
     label: 'gemini-3-pro-image-preview-hd (nano-banana-2-hd)',
     shortLabel: 'nano-banana-2-hd',
+    shortCode: 'nb2hd',
     description: 'HD 高清图片模型',
     type: 'image',
     supportsTools: true,
@@ -216,6 +226,7 @@ export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
     id: 'gemini-3-pro-image-preview-2k',
     label: 'gemini-3-pro-image-preview-2k (nano-banana-2-2k)',
     shortLabel: 'nano-banana-2-2k',
+    shortCode: 'nb22k',
     description: '2K 高清图片模型',
     type: 'image',
     supportsTools: true,
@@ -225,6 +236,7 @@ export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
     id: 'gemini-3-pro-image-preview-4k',
     label: 'gemini-3-pro-image-preview-4k (nano-banana-2-4k)',
     shortLabel: 'nano-banana-2-4k',
+    shortCode: 'nb24k',
     description: '4K 超高清图片模型',
     type: 'image',
     supportsTools: true,
@@ -503,9 +515,26 @@ export const TEXT_MODEL_SELECT_OPTIONS = TEXT_MODELS.map(model => ({
 }));
 
 /**
- * 默认图片模型
+ * 默认图片模型 ID
  */
-export const DEFAULT_IMAGE_MODEL = 'gemini-3-pro-image-preview-vip';
+export const DEFAULT_IMAGE_MODEL_ID = 'gemini-3-pro-image-preview-vip';
+
+/**
+ * 获取默认图片模型 ID（优先使用环境变量）
+ */
+export function getDefaultImageModel(): string {
+  const envModel = import.meta.env.VITE_DEFAULT_IMAGE_MODEL;
+  if (envModel && getModelConfig(envModel)?.type === 'image') {
+    return envModel;
+  }
+  return DEFAULT_IMAGE_MODEL_ID;
+}
+
+/**
+ * 默认图片模型（兼容旧代码）
+ * @deprecated 请使用 getDefaultImageModel()
+ */
+export const DEFAULT_IMAGE_MODEL = DEFAULT_IMAGE_MODEL_ID;
 
 /**
  * 默认视频模型

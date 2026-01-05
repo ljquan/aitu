@@ -294,28 +294,52 @@ $text-dark: #1F2937;
     @extend .ai-input-bar__content-remove;
   }
 
-  // Main container - two-row layout when content is selected
+  // Main container - flex-column-reverse for upward expansion
   &__container {
     position: relative; // 作为提示词面板的定位基准
     pointer-events: auto;
     display: flex;
-    flex-direction: row; // 默认横向布局（无选中内容时）
-    align-items: center;
-    gap: 12px;
+    flex-direction: column-reverse; // 倒序排列，底部栏在下，输入区向上扩展
     width: 100%;
     background: var(--island-bg-color, #fff);
-
-    border-radius: 48px; // 默认药丸形状
-    padding: 8px 12px 8px 16px;
+    border-radius: 24px;
+    padding: 8px 12px;
     box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+    transition: all 0.2s ease;
 
-    // 当有选中内容时，切换为垂直布局
-    &--has-content {
-      flex-direction: column;
-      align-items: stretch;
-      gap: 8px;
-      border-radius: 24px; // 更方形的圆角
-      padding: 12px 16px;
+    // 展开状态（聚焦或有选中内容时）
+    &--expanded {
+      border-radius: 16px;
+      padding: 12px;
+    }
+  }
+
+  // 底部固定栏 - 模型选择器 + 发送按钮
+  &__bottom-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    flex-shrink: 0;
+  }
+
+  // 底部栏中间的弹性空间
+  &__bottom-spacer {
+    flex: 1;
+  }
+
+  // 输入区域 - 向上扩展
+  &__input-area {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 8px;
+    width: 100%; // 确保输入区域占满宽度
+    transition: max-height 0.2s ease;
+
+    // 展开状态
+    &--expanded {
+      max-height: 200px; // 最大高度限制
     }
   }
 
@@ -470,14 +494,6 @@ $text-dark: #1F2937;
     }
   }
 
-  // Input row - contains textarea and send button (second row when content is selected)
-  &__input-row {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    width: 100%;
-  }
-
   // Rich input wrapper - contains textarea and formatted overlay
   &__rich-input {
     position: relative;
@@ -617,13 +633,11 @@ $text-dark: #1F2937;
       opacity: 0.6;
     }
 
-    // When focused, expand height smoothly
+    // When focused, expand height smoothly (controlled by parent container max-height)
     &--focused {
-      min-height: 96px; // 4 lines approximately
+      min-height: 80px; // 约 3-4 行
+      max-height: 160px; // 最大高度限制
     }
-
-    // 新方案：文字保持可见，背景层在下方显示高亮
-    // 不再需要 --has-model 类
   }
 
   // Send button
@@ -1123,6 +1137,198 @@ $text-dark: #1F2937;
     &__send-logo {
       width: 18px;
       height: 18px;
+    }
+  }
+}
+
+// @ 触发模型建议面板样式
+.ai-input-bar {
+  &__at-suggestion {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 0;
+    min-width: 280px;
+    max-width: 400px;
+    max-height: 320px;
+    background: var(--island-bg-color, #fff);
+    border: 1px solid #E5E7EB;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    overflow: hidden;
+    z-index: 1000;
+    animation: atSuggestionFadeIn 0.15s ease;
+  }
+
+  &__at-suggestion-header {
+    padding: 10px 12px;
+    font-size: 12px;
+    font-weight: 500;
+    color: $gray-dark;
+    border-bottom: 1px solid #F3F4F6;
+    background: #FAFAFA;
+  }
+
+  &__at-suggestion-list {
+    max-height: 260px;
+    overflow-y: auto;
+    padding: 4px;
+
+    &::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: #E5E7EB;
+      border-radius: 2px;
+    }
+  }
+
+  &__at-suggestion-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.1s ease;
+
+    &:hover,
+    &--highlighted {
+      background: $gray-light;
+    }
+
+    &--selected {
+      background: rgba($orange-primary, 0.08);
+
+      &:hover,
+      &.ai-input-bar__at-suggestion-item--highlighted {
+        background: rgba($orange-primary, 0.12);
+      }
+
+      .ai-input-bar__at-suggestion-item-label {
+        color: $orange-dark;
+        font-weight: 500;
+      }
+
+      .ai-input-bar__at-suggestion-item-code {
+        color: $orange-primary;
+      }
+    }
+  }
+
+  &__at-suggestion-item-content {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__at-suggestion-item-name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  &__at-suggestion-item-code {
+    font-size: 12px;
+    font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
+    color: $gray-medium;
+    flex-shrink: 0;
+  }
+
+  &__at-suggestion-item-label {
+    font-size: 13px;
+    color: $text-dark;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__at-suggestion-item-vip {
+    font-size: 10px;
+    font-weight: 600;
+    color: #fff;
+    background: linear-gradient(135deg, #E91E63 0%, #FF6B9D 100%);
+    padding: 1px 4px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+
+  &__at-suggestion-item-desc {
+    font-size: 11px;
+    color: $gray-medium;
+    margin-top: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__at-suggestion-item-check {
+    flex-shrink: 0;
+    color: $orange-primary;
+    margin-left: 8px;
+  }
+}
+
+@keyframes atSuggestionFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+// Dark mode for @ suggestion panel
+:root[data-theme='dark'] {
+  .ai-input-bar {
+    &__at-suggestion {
+      background: var(--color-surface-high, #2a2a2a);
+      border-color: var(--color-border, #444);
+    }
+
+    &__at-suggestion-header {
+      background: var(--color-surface-mid, #333);
+      border-bottom-color: var(--color-border, #444);
+      color: var(--color-gray-50, #999);
+    }
+
+    &__at-suggestion-list {
+      &::-webkit-scrollbar-thumb {
+        background: var(--color-border, #444);
+      }
+    }
+
+    &__at-suggestion-item {
+      &:hover,
+      &--highlighted {
+        background: var(--color-surface-mid, #333);
+      }
+
+      &--selected {
+        background: rgba($orange-primary, 0.12);
+
+        &:hover,
+        &.ai-input-bar__at-suggestion-item--highlighted {
+          background: rgba($orange-primary, 0.18);
+        }
+      }
+    }
+
+    &__at-suggestion-item-code {
+      color: var(--color-gray-50, #999);
+    }
+
+    &__at-suggestion-item-label {
+      color: var(--color-gray-20, #ccc);
+    }
+
+    &__at-suggestion-item-desc {
+      color: var(--color-gray-50, #999);
     }
   }
 }

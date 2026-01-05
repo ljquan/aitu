@@ -143,9 +143,18 @@ function normalizeSize(size: string): string {
  * @param inputText 输入框文本
  * @param selection 选中元素的分类信息
  */
+/**
+ * parseAIInput 的选项参数
+ */
+export interface ParseAIInputOptions {
+  /** 指定使用的模型 ID（来自下拉选择器） */
+  modelId?: string;
+}
+
 export function parseAIInput(
   inputText: string,
-  selection: SelectionInfo
+  selection: SelectionInfo,
+  options?: ParseAIInputOptions
 ): ParsedGenerationParams {
   const hasSelectedElements = selection.texts.length > 0 ||
     selection.images.length > 0 ||
@@ -155,19 +164,29 @@ export function parseAIInput(
   const imageCount = selection.images.length + selection.graphics.length;
   // 使用现有的 parseInput 函数解析输入
   const parseResult = parseInput(inputText);
-  
+
   // 判断是否有额外内容（除了模型/参数/数量标记外的文字）
   const hasExtraContent = parseResult.cleanText.trim().length > 0;
-  
+
   // 确定发送场景
   const scenario: SendScenario = hasExtraContent ? 'agent_flow' : 'direct_generation';
-  
+
   // 确定生成类型和模型
   let generationType: GenerationType = 'image';
   let modelId: string;
   let isModelExplicit = false;
 
-  if (parseResult.selectedVideoModel) {
+  // 优先使用 options 中传入的模型（来自下拉选择器）
+  if (options?.modelId) {
+    const modelConfig = getModelConfig(options.modelId);
+    if (modelConfig?.type === 'video') {
+      generationType = 'video';
+    } else {
+      generationType = 'image';
+    }
+    modelId = options.modelId;
+    isModelExplicit = true;
+  } else if (parseResult.selectedVideoModel) {
     // 如果明确选择了视频模型，生成视频
     generationType = 'video';
     modelId = parseResult.selectedVideoModel;
