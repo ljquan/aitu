@@ -199,6 +199,25 @@ class GenerationAPIService {
 
       console.log('[GenerationAPI] Image generation response:', result);
 
+      // 从 revised_prompt 中提取纯净的 API 响应（去掉 "Generate an image: 用户prompt: " 前缀）
+      const extractCleanResponse = (revisedPrompt: string): string => {
+        const prefix = `Generate an image: ${params.prompt}: `;
+        if (revisedPrompt.startsWith(prefix)) {
+          return revisedPrompt.substring(prefix.length);
+        }
+        // 如果前缀不匹配，尝试去掉 "Generate an image: " 部分
+        const simplePrefix = 'Generate an image: ';
+        if (revisedPrompt.startsWith(simplePrefix)) {
+          const rest = revisedPrompt.substring(simplePrefix.length);
+          // 找到用户 prompt 之后的内容（第一个 ": " 之后）
+          const colonIndex = rest.indexOf(': ');
+          if (colonIndex !== -1) {
+            return rest.substring(colonIndex + 2);
+          }
+        }
+        return revisedPrompt;
+      };
+
       // 解析响应 - 新接口返回格式: { data: [{ url: "..." }] }
       if (result.data && Array.isArray(result.data) && result.data.length > 0) {
         const imageData = result.data[0];
@@ -224,7 +243,17 @@ class GenerationAPIService {
               throw new Error(errorPart.trim());
             }
           }
-          throw new Error('API 未返回有效的图片数据');
+
+          // 返回了 data 但没有有效的图片格式，可能是文本响应
+          let responseText: string;
+          if (imageData.revised_prompt) {
+            responseText = extractCleanResponse(imageData.revised_prompt);
+          } else {
+            responseText = JSON.stringify(imageData);
+          }
+          const error = new Error(`API 未返回有效的图片数据: ${responseText}`);
+          (error as any).fullResponse = responseText;
+          throw error;
         }
 
         return {
@@ -234,16 +263,28 @@ class GenerationAPIService {
         };
       }
 
-      throw new Error('API 未返回有效的图片数据');
+      // API 响应格式不符合预期，提取纯净的错误信息
+      let cleanResponse: string;
+      if (result.revised_prompt) {
+        cleanResponse = extractCleanResponse(result.revised_prompt);
+      } else {
+        cleanResponse = JSON.stringify(result);
+      }
+      const error = new Error(`API 未返回有效的图片数据: ${cleanResponse}`);
+      (error as any).fullResponse = cleanResponse;
+      throw error;
     } catch (error: any) {
       console.error('[GenerationAPI] Image generation error:', error);
-      // Preserve original error properties (apiErrorBody, httpStatus) for better error reporting
+      // Preserve original error properties for better error reporting
       const wrappedError = new Error(error.message || '图片生成失败');
       if (error.apiErrorBody) {
         (wrappedError as any).apiErrorBody = error.apiErrorBody;
       }
       if (error.httpStatus) {
         (wrappedError as any).httpStatus = error.httpStatus;
+      }
+      if (error.fullResponse) {
+        (wrappedError as any).fullResponse = error.fullResponse;
       }
       throw wrappedError;
     }

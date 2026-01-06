@@ -16,18 +16,41 @@ import { isTaskTimeout } from '../utils/task-utils';
 import { shouldRetry, getNextRetryTime } from '../utils/retry-utils';
 
 /**
+ * 从 API 错误体中提取原始错误消息
+ */
+function extractApiErrorMessage(apiErrorBody: string): string | null {
+  if (!apiErrorBody) return null;
+
+  try {
+    const parsed = JSON.parse(apiErrorBody);
+    // 尝试常见的错误消息字段
+    if (parsed.error?.message) return parsed.error.message;
+    if (parsed.message) return parsed.message;
+    if (parsed.error && typeof parsed.error === 'string') return parsed.error;
+    if (parsed.detail) return parsed.detail;
+    if (parsed.msg) return parsed.msg;
+  } catch {
+    // 如果不是 JSON，直接返回原始内容
+    return apiErrorBody;
+  }
+  return null;
+}
+
+/**
  * Converts error to user-friendly message
+ * 优先保留原始 API 错误信息，便于用户理解和反馈
  */
 function getFriendlyErrorMessage(error: any): string {
   const message = error?.message || String(error);
   const apiErrorBody = error?.apiErrorBody || '';
   const httpStatus = error?.httpStatus;
 
-  // 首先检查 API 错误体中的特定错误类型
-  if (apiErrorBody.includes('insufficient_user_quota') || message.includes('insufficient_user_quota')) {
-    return '账户额度不足，请充值后重试';
-  }
-  if (apiErrorBody.includes('预扣费额度失败') || message.includes('预扣费额度失败')) {
+  // 首先尝试从 API 错误体中提取原始错误消息
+  const apiErrorMessage = extractApiErrorMessage(apiErrorBody);
+
+  // 检查 API 错误体中的特定错误类型
+  const combinedText = `${message} ${apiErrorBody}`;
+  if (combinedText.includes('insufficient_user_quota') || combinedText.includes('预扣费额度失败')) {
     return '账户额度不足，请充值后重试';
   }
 
@@ -74,32 +97,27 @@ function getFriendlyErrorMessage(error: any): string {
     return 'API 访问被拒绝，请检查配置';
   }
 
-  // 服务器错误
+  // 服务器错误 - 如果有原始 API 错误消息，附加显示
   if (message.includes('500') || httpStatus === 500) {
-    return 'AI 服务器内部错误，正在自动重试';
+    return apiErrorMessage ? `AI 服务器内部错误: ${apiErrorMessage}` : 'AI 服务器内部错误，正在自动重试';
   }
   if (message.includes('502') || httpStatus === 502) {
-    return 'AI 服务暂时不可用（502），正在自动重试';
+    return apiErrorMessage ? `AI 服务暂时不可用: ${apiErrorMessage}` : 'AI 服务暂时不可用（502），正在自动重试';
   }
   if (message.includes('503') || httpStatus === 503) {
-    return 'AI 服务繁忙（503），正在自动重试';
+    return apiErrorMessage ? `AI 服务繁忙: ${apiErrorMessage}` : 'AI 服务繁忙（503），正在自动重试';
   }
   if (message.includes('504') || httpStatus === 504) {
-    return 'AI 服务响应超时（504），正在自动重试';
+    return apiErrorMessage ? `AI 服务响应超时: ${apiErrorMessage}` : 'AI 服务响应超时（504），正在自动重试';
   }
 
-  // 通用 API 错误
-  if ((message.includes('API') || message.includes('api')) && message.length < 30) {
-    return 'AI 服务暂时不可用，请稍后重试';
+  // 如果有原始 API 错误消息，优先返回
+  if (apiErrorMessage) {
+    return apiErrorMessage;
   }
 
-  // 如果消息是完整的英文句子（可能是AI的拒绝理由），直接返回
-  if (message.length > 20 && message.length <= 200) {
-    return message;
-  }
-
-  // Return shortened message for other errors
-  return message.length > 200 ? '生成失败，请稍后重试' : message;
+  // 返回原始错误消息（不再截断）
+  return message;
 }
 
 /**
