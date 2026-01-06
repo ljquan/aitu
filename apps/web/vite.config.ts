@@ -88,9 +88,6 @@ export default defineConfig({
             if (id.includes('xlsx')) {
               return 'xlsx-vendor';
             }
-            if (id.includes('@llamaindex')) {
-              return 'ai-vendor';
-            }
             return 'vendor';
           }
           if (id.includes('packages/drawnix')) {
