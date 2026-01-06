@@ -18,17 +18,17 @@ import {
 
 // 旧版默认布局，用于迁移判断
 const LEGACY_ALL_BUTTON_IDS = [
-  'ai-image',
-  'ai-video',
-  'image',
-  'media-library',
-  'text',
-  'mind',
   'hand',
   'selection',
+  'text',
+  'media-library',
+  'ai-image',
+  'ai-video',
+  'mind',
   'freehand',
   'arrow',
   'shape',
+  'image',
   'theme',
   'mermaid-to-drawnix',
   'markdown-to-drawnix',
@@ -38,12 +38,12 @@ const LEGACY_ALL_BUTTON_IDS = [
 ];
 
 const LEGACY_DEFAULT_VISIBLE_BUTTONS = [
+  'hand',
+  'selection',
+  'text',
+  'media-library',
   'ai-image',
   'ai-video',
-  'image',
-  'media-library',
-  'text',
-  'mind',
 ];
 
 /**

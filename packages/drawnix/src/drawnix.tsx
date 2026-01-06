@@ -62,6 +62,7 @@ import { initializeAssetIntegration } from './services/asset-integration-service
 import { ToolbarConfigProvider } from './hooks/use-toolbar-config';
 import { AIInputBar } from './components/ai-input-bar';
 import { VersionUpdatePrompt } from './components/version-update/version-update-prompt';
+import { QuickCreationToolbar } from './components/toolbar/quick-creation-toolbar/quick-creation-toolbar';
 
 export type DrawnixProps = {
   value: PlaitElement[];
@@ -360,6 +361,38 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
 }) => {
   const { chatDrawerRef } = useChatDrawer();
 
+  // 快捷工具栏状态
+  const [quickToolbarVisible, setQuickToolbarVisible] = useState(false);
+  const [quickToolbarPosition, setQuickToolbarPosition] = useState<[number, number] | null>(null);
+
+  // 监听双击空白区域事件
+  useEffect(() => {
+    if (!board) return;
+
+    const handleDoubleClick = (event: MouseEvent) => {
+      // 检查是否双击在空白区域（没有选中任何元素）
+      const selectedElements = getSelectedElements(board);
+
+      if (selectedElements.length === 0) {
+        // 获取双击位置（屏幕坐标）
+        const position: [number, number] = [event.clientX, event.clientY];
+        setQuickToolbarPosition(position);
+        setQuickToolbarVisible(true);
+      }
+    };
+
+    const container = containerRef.current;
+    if (container) {
+      container.addEventListener('dblclick', handleDoubleClick);
+    }
+
+    return () => {
+      if (container) {
+        container.removeEventListener('dblclick', handleDoubleClick);
+      }
+    };
+  }, [board, containerRef]);
+
   return (
     <div
       className={classNames('drawnix', {
@@ -408,6 +441,12 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
           <TTDDialog container={containerRef.current}></TTDDialog>
           <CleanConfirm container={containerRef.current}></CleanConfirm>
           <SettingsDialog container={containerRef.current}></SettingsDialog>
+          {/* Quick Creation Toolbar - 双击空白区域显示的快捷工具栏 */}
+          <QuickCreationToolbar
+            position={quickToolbarPosition}
+            visible={quickToolbarVisible}
+            onClose={() => setQuickToolbarVisible(false)}
+          />
           {/* AI Input Bar - 底部 AI 输入框 */}
           <AIInputBar />
           {/* Version Update Prompt - 顶部右上角升级提示 */}

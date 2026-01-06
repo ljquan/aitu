@@ -128,16 +128,16 @@ export const BUTTONS: AppToolButtonProps[] = [
     visibilityKey: 'shape',
   },
   {
-    icon: ImageIcon,
-    titleKey: 'toolbar.image',
-    key: 'image',
-    visibilityKey: 'image',
-  },
-  {
     icon: MediaLibraryIcon,
     titleKey: 'toolbar.mediaLibrary',
     key: 'media-library',
     visibilityKey: 'media-library',
+  },
+  {
+    icon: ImageIcon,
+    titleKey: 'toolbar.image',
+    key: 'image',
+    visibilityKey: 'image',
   },
   {
     icon: AIImageIcon,
@@ -154,7 +154,7 @@ export const BUTTONS: AppToolButtonProps[] = [
   {
     icon: ThemeIcon,
     titleKey: 'toolbar.theme',
-    key: 'theme',
+    key: PopupKey.theme,
     visibilityKey: 'theme',
   },
   {

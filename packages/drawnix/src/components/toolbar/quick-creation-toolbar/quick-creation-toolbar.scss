@@ -1,0 +1,17 @@
+/**
+ * Quick Creation Toolbar - 双击空白区域显示的快捷工具栏
+ */
+
+.quick-creation-toolbar {
+  position: fixed;
+  pointer-events: auto;
+  user-select: none;
+
+  // 添加一些视觉效果，让工具栏更突出
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transition: box-shadow 0.2s ease;
+
+  &:hover {
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+  }
+}
