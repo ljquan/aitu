@@ -252,18 +252,51 @@ importers:
       '@floating-ui/react':
         specifier: ^0.26.24
         version: 0.26.28(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@llamaindex/chat-ui':
+        specifier: ^0.6.1
+        version: 0.6.1(@babel/runtime@7.28.4)(@codemirror/autocomplete@6.20.0)(@codemirror/language@6.11.3)(@codemirror/lint@6.9.2)(@codemirror/search@6.5.11)(@codemirror/state@6.5.2)(@codemirror/theme-one-dark@6.1.3)(@codemirror/view@6.39.4)(@lezer/highlight@1.2.3)(@types/react-dom@18.3.0)(@types/react@18.3.1)(codemirror@6.0.2)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(yjs@13.6.28)
       '@plait-board/markdown-to-drawnix':
         specifier: ^0.0.6
         version: 0.0.6
       '@plait-board/mermaid-to-drawnix':
         specifier: ^0.0.7
         version: 0.0.7
+      '@plait/common':
+        specifier: ^0.84.0
+        version: 0.84.0
+      '@plait/core':
+        specifier: ^0.84.0
+        version: 0.84.0(immer@10.2.0)(is-hotkey@0.2.0)(rxjs@7.8.2)
+      '@plait/draw':
+        specifier: ^0.84.0
+        version: 0.84.0
+      '@plait/mind':
+        specifier: ^0.84.0
+        version: 0.84.0
+      '@plait/text-plugins':
+        specifier: ^0.84.0
+        version: 0.84.0
       '@tanstack/react-virtual':
         specifier: ^3.13.13
         version: 3.13.13(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      browser-fs-access:
+        specifier: ^0.35.0
+        version: 0.35.0
+      classnames:
+        specifier: ^2.5.1
+        version: 2.5.1
       is-hotkey:
         specifier: ^0.2.0
         version: 0.2.0
+      jszip:
+        specifier: ^3.10.1
+        version: 3.10.1
+      localforage:
+        specifier: ^1.10.0
+        version: 1.10.0
+      lodash:
+        specifier: ^4.17.21
+        version: 4.17.21
       lucide-react:
         specifier: ^0.453.0
         version: 0.453.0(react@18.3.1)
@@ -276,6 +309,24 @@ importers:
       open-color:
         specifier: ^1.9.1
         version: 1.9.1
+      roughjs:
+        specifier: ^4.6.6
+        version: 4.6.6
+      rxjs:
+        specifier: ~7.8.0
+        version: 7.8.2
+      slate:
+        specifier: ^0.116.0
+        version: 0.116.0
+      slate-react:
+        specifier: ^0.116.0
+        version: 0.116.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(slate-dom@0.116.0(slate@0.116.0))(slate@0.116.0)
+      tdesign-icons-react:
+        specifier: ^0.5.1
+        version: 0.5.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      tdesign-react:
+        specifier: ^1.14.5
+        version: 1.15.8(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       web-vitals:
         specifier: ^5.1.0
         version: 5.1.0
@@ -11978,7 +12029,7 @@ snapshots:
 
   dom-helpers@5.2.1:
     dependencies:
-      '@babel/runtime': 7.26.10
+      '@babel/runtime': 7.28.4
       csstype: 3.2.3
 
   dom-serializer@2.0.0:
