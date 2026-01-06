@@ -337,7 +337,14 @@ importers:
         specifier: ^0.116.0
         version: 0.116.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(slate-dom@0.116.0(slate@0.116.0))(slate@0.116.0)
 
-  packages/utils: {}
+  packages/utils:
+    devDependencies:
+      vite:
+        specifier: ^6.4.1
+        version: 6.4.1(@types/node@18.16.9)(jiti@2.6.1)(lightningcss@1.30.2)(sass@1.94.2)(terser@5.44.1)(yaml@2.8.1)
+      vite-plugin-dts:
+        specifier: ^4.3.0
+        version: 4.5.4(@types/node@18.16.9)(rollup@4.53.3)(typescript@5.8.2)(vite@6.4.1(@types/node@18.16.9)(jiti@2.6.1)(lightningcss@1.30.2)(sass@1.94.2)(terser@5.44.1)(yaml@2.8.1))
 
 packages:
 
@@ -11228,6 +11235,19 @@ snapshots:
     optionalDependencies:
       typescript: 5.4.5
 
+  '@vue/language-core@2.2.0(typescript@5.8.2)':
+    dependencies:
+      '@volar/language-core': 2.4.26
+      '@vue/compiler-dom': 3.5.25
+      '@vue/compiler-vue2': 2.7.16
+      '@vue/shared': 3.5.25
+      alien-signals: 0.4.14
+      minimatch: 9.0.5
+      muggle-string: 0.4.1
+      path-browserify: 1.0.1
+    optionalDependencies:
+      typescript: 5.8.2
+
   '@vue/shared@3.5.25': {}
 
   '@webassemblyjs/ast@1.14.1':
@@ -16228,6 +16248,25 @@ snapshots:
       local-pkg: 1.1.2
       magic-string: 0.30.21
       typescript: 5.4.5
+    optionalDependencies:
+      vite: 6.4.1(@types/node@18.16.9)(jiti@2.6.1)(lightningcss@1.30.2)(sass@1.94.2)(terser@5.44.1)(yaml@2.8.1)
+    transitivePeerDependencies:
+      - '@types/node'
+      - rollup
+      - supports-color
+
+  vite-plugin-dts@4.5.4(@types/node@18.16.9)(rollup@4.53.3)(typescript@5.8.2)(vite@6.4.1(@types/node@18.16.9)(jiti@2.6.1)(lightningcss@1.30.2)(sass@1.94.2)(terser@5.44.1)(yaml@2.8.1)):
+    dependencies:
+      '@microsoft/api-extractor': 7.55.1(@types/node@18.16.9)
+      '@rollup/pluginutils': 5.3.0(rollup@4.53.3)
+      '@volar/typescript': 2.4.26
+      '@vue/language-core': 2.2.0(typescript@5.8.2)
+      compare-versions: 6.1.1
+      debug: 4.4.3
+      kolorist: 1.8.0
+      local-pkg: 1.1.2
+      magic-string: 0.30.21
+      typescript: 5.8.2
     optionalDependencies:
       vite: 6.4.1(@types/node@18.16.9)(jiti@2.6.1)(lightningcss@1.30.2)(sass@1.94.2)(terser@5.44.1)(yaml@2.8.1)
     transitivePeerDependencies:
