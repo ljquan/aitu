@@ -1,17 +1,32 @@
+/// <reference lib="webworker" />
 /* eslint-disable no-restricted-globals */
+
+// fix: self redeclaration error and type casting
+const sw = self as unknown as ServiceWorkerGlobalScope;
+export {}; // Make this a module
+
 // Service Worker for PWA functionality and handling CORS issues with external images
 // Version will be replaced during build process
-const APP_VERSION = '0.4.0';
+declare const __APP_VERSION__: string;
+const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0';
 const CACHE_NAME = `drawnix-v${APP_VERSION}`;
 const IMAGE_CACHE_NAME = `drawnix-images`;
 const STATIC_CACHE_NAME = `drawnix-static-v${APP_VERSION}`;
 
 // Detect development mode
+// 在构建时，process.env.NODE_ENV 会被替换，或者我们可以通过 mode 判断
+// 这里使用 location 判断也行，但通常构建时会注入
 const isDevelopment = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+
+interface CorsDomain {
+  hostname: string;
+  pathPattern: string;
+  fallbackDomain: string;
+}
 
 // 允许跨域处理的域名配置 - 仅拦截需要CORS处理的域名
 // 备用域名 cdn.i666.fun 支持原生跨域显示，不需要拦截
-const CORS_ALLOWED_DOMAINS = [
+const CORS_ALLOWED_DOMAINS: CorsDomain[] = [
   {
     hostname: 'google.datas.systems',
     pathPattern: 'response_images',
@@ -35,20 +50,42 @@ const IMAGE_EXTENSIONS_REGEX = /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)$/i;
 // 视频文件扩展名匹配
 const VIDEO_EXTENSIONS_REGEX = /\.(mp4|webm|ogg|mov|avi|mkv|flv|wmv|m4v)$/i;
 
+interface PendingRequestEntry {
+  promise: Promise<Response>;
+  timestamp: number;
+  count: number;
+  originalRequestId?: string;
+  duplicateRequestIds?: string[];
+  requestId?: string; // for video
+}
+
 // 图片请求去重字典：存储正在进行的请求Promise
-const pendingImageRequests = new Map();
+const pendingImageRequests = new Map<string, PendingRequestEntry>();
+
+interface VideoRequestEntry {
+  promise: Promise<Blob | null>;
+  timestamp: number;
+  count: number;
+  requestId: string;
+}
 
 // 视频请求去重字典：存储正在进行的视频下载Promise
-const pendingVideoRequests = new Map();
+// 注意：这里 promise 返回的是 Blob 而不是 Response，所以类型略有不同，但为了方便统一定义
+const pendingVideoRequests = new Map<string, VideoRequestEntry>();
+
+interface VideoCacheEntry {
+  blob: Blob;
+  timestamp: number;
+}
 
 // 视频缓存：存储已下载的完整视频Blob，用于快速响应Range请求
-const videoBlobCache = new Map();
+const videoBlobCache = new Map<string, VideoCacheEntry>();
 
 // 域名故障标记：记录已知失败的域名
-const failedDomains = new Set();
+const failedDomains = new Set<string>();
 
 // 检查URL是否需要CORS处理
-function shouldHandleCORS(url) {
+function shouldHandleCORS(url: URL): CorsDomain | null {
   for (const domain of CORS_ALLOWED_DOMAINS) {
     if (url.hostname === domain.hostname && url.pathname.includes(domain.pathPattern)) {
       return domain;
@@ -58,7 +95,7 @@ function shouldHandleCORS(url) {
 }
 
 // 检查是否为图片请求
-function isImageRequest(url, request) {
+function isImageRequest(url: URL, request: Request): boolean {
   return (
     IMAGE_EXTENSIONS_REGEX.test(url.pathname) ||
     request.destination === 'image' ||
@@ -67,7 +104,7 @@ function isImageRequest(url, request) {
 }
 
 // 检查是否为视频请求
-function isVideoRequest(url, request) {
+function isVideoRequest(url: URL, request: Request): boolean {
   return (
     VIDEO_EXTENSIONS_REGEX.test(url.pathname) ||
     request.destination === 'video' ||
@@ -78,7 +115,7 @@ function isVideoRequest(url, request) {
 }
 
 // 从IndexedDB恢复失败域名列表
-async function loadFailedDomains() {
+async function loadFailedDomains(): Promise<void> {
   try {
     const request = indexedDB.open('ServiceWorkerDB', 1);
     
@@ -93,7 +130,7 @@ async function loadFailedDomains() {
           
           getAllRequest.onsuccess = () => {
             const domains = getAllRequest.result;
-            domains.forEach(item => failedDomains.add(item.domain));
+            domains.forEach((item: any) => failedDomains.add(item.domain));
             console.log('Service Worker: 恢复失败域名列表:', Array.from(failedDomains));
             resolve();
           };
@@ -102,8 +139,8 @@ async function loadFailedDomains() {
           resolve();
         }
       };
-      request.onupgradeneeded = (event) => {
-        const db = event.target.result;
+      request.onupgradeneeded = (event: IDBVersionChangeEvent) => {
+        const db = (event.target as IDBOpenDBRequest).result;
         if (!db.objectStoreNames.contains('failedDomains')) {
           db.createObjectStore('failedDomains', { keyPath: 'domain' });
         }
@@ -115,7 +152,7 @@ async function loadFailedDomains() {
 }
 
 // 保存失败域名到IndexedDB
-async function saveFailedDomain(domain) {
+async function saveFailedDomain(domain: string): Promise<void> {
   try {
     const request = indexedDB.open('ServiceWorkerDB', 1);
     
@@ -133,8 +170,8 @@ async function saveFailedDomain(domain) {
         };
         transaction.onerror = () => reject(transaction.error);
       };
-      request.onupgradeneeded = (event) => {
-        const db = event.target.result;
+      request.onupgradeneeded = (event: IDBVersionChangeEvent) => {
+        const db = (event.target as IDBOpenDBRequest).result;
         if (!db.objectStoreNames.contains('failedDomains')) {
           db.createObjectStore('failedDomains', { keyPath: 'domain' });
         }
@@ -189,7 +226,7 @@ function markNewVersionReady() {
   console.log(`Service Worker: 新版本 v${APP_VERSION} 已准备好，等待用户确认...`);
   
   // 通知客户端有新版本可用
-  self.clients.matchAll().then(clients => {
+  sw.clients.matchAll().then(clients => {
     clients.forEach(client => {
       client.postMessage({ 
         type: 'SW_NEW_VERSION_READY',
@@ -200,7 +237,7 @@ function markNewVersionReady() {
 }
 
 // 清理旧的缓存条目以释放空间（基于LRU策略）
-async function cleanOldCacheEntries(cache) {
+async function cleanOldCacheEntries(cache: Cache) {
   try {
     console.log('Service Worker: Starting cache cleanup to free space');
     const requests = await cache.keys();
@@ -210,8 +247,14 @@ async function cleanOldCacheEntries(cache) {
       return;
     }
     
+    interface CacheEntry {
+      request: Request;
+      cacheDate: number;
+      imageSize: number;
+    }
+
     // 获取所有缓存条目及其时间戳
-    const entries = [];
+    const entries: CacheEntry[] = [];
     for (const request of requests) {
       try {
         const response = await cache.match(request);
@@ -264,10 +307,10 @@ const STATIC_FILES = [
   '/favicon-new.svg'
 ];
 
-self.addEventListener('install', event => {
+sw.addEventListener('install', (event: ExtendableEvent) => {
   console.log(`Service Worker v${APP_VERSION} installing...`);
   
-  const installPromises = [];
+  const installPromises: Promise<any>[] = [];
   
   // Load failed domains from database
   installPromises.push(loadFailedDomains());
@@ -294,7 +337,7 @@ self.addEventListener('install', event => {
   );
 });
 
-self.addEventListener('activate', event => {
+sw.addEventListener('activate', (event: ExtendableEvent) => {
   console.log('Service Worker activated');
 
   // 迁移旧的图片缓存并清理过期缓存
@@ -370,22 +413,22 @@ self.addEventListener('activate', event => {
       }
 
       console.log(`Service Worker v${APP_VERSION} activated`);
-      return self.clients.claim();
+      return sw.clients.claim();
     })
   );
 });
 
 // Handle messages from main thread
-self.addEventListener('message', event => {
+sw.addEventListener('message', (event: ExtendableMessageEvent) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     // 主线程请求立即升级（用户主动触发）
     console.log('Service Worker: 收到主线程的 SKIP_WAITING 请求');
     
     // 直接调用 skipWaiting
-    self.skipWaiting();
+    sw.skipWaiting();
     
     // Notify clients that SW has been updated
-    self.clients.matchAll().then(clients => {
+    sw.clients.matchAll().then(clients => {
       clients.forEach(client => {
         client.postMessage({ type: 'SW_UPDATED' });
       });
@@ -398,15 +441,15 @@ self.addEventListener('message', event => {
     });
   } else if (event.data && event.data.type === 'GET_UPGRADE_STATUS') {
     // 主线程查询升级状态
-    event.source.postMessage({
+    event.source?.postMessage({
       type: 'UPGRADE_STATUS',
       version: APP_VERSION
     });
   } else if (event.data && event.data.type === 'FORCE_UPGRADE') {
     // 主线程强制升级
     console.log('Service Worker: 收到强制升级请求');
-    self.skipWaiting();
-    self.clients.matchAll().then(clients => {
+    sw.skipWaiting();
+    sw.clients.matchAll().then(clients => {
       clients.forEach(client => {
         client.postMessage({ type: 'SW_UPDATED' });
       });
@@ -453,7 +496,7 @@ async function cleanExpiredImageCache() {
     }
     
     // 向主线程报告清理结果
-    const clients = await self.clients.matchAll();
+    const clients = await sw.clients.matchAll();
     clients.forEach(client => {
       client.postMessage({ 
         type: 'CACHE_CLEANUP_COMPLETE', 
@@ -465,7 +508,7 @@ async function cleanExpiredImageCache() {
   }
 }
 
-self.addEventListener('fetch', event => {
+sw.addEventListener('fetch', (event: FetchEvent) => {
   const url = new URL(event.request.url);
 
   // 检查是否要求绕过Service Worker
@@ -518,8 +561,7 @@ self.addEventListener('fetch', event => {
   // Exclude XHR/fetch API requests - only handle navigation and static resources
   if (!isDevelopment &&
       event.request.method === 'GET' &&
-      event.request.destination !== '' &&
-      event.request.destination !== 'empty') {
+      event.request.destination !== '') {
     
     event.respondWith(
       handleStaticRequest(event.request)
@@ -533,7 +575,7 @@ self.addEventListener('fetch', event => {
 });
 
 // Utility function to perform fetch with retries
-async function fetchWithRetry(request, maxRetries = 2, fetchOptions = {}) {
+async function fetchWithRetry(request: Request, maxRetries = 2, fetchOptions: any = {}): Promise<Response> {
   let lastError;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -555,7 +597,7 @@ async function fetchWithRetry(request, maxRetries = 2, fetchOptions = {}) {
       }
 
       return response;
-    } catch (error) {
+    } catch (error: any) {
       console.warn(`Fetch attempt ${attempt + 1} failed:`, error.message);
       lastError = error;
 
@@ -570,7 +612,7 @@ async function fetchWithRetry(request, maxRetries = 2, fetchOptions = {}) {
 }
 
 // 处理视频请求,支持 Range 请求以实现视频 seek 功能
-async function handleVideoRequest(request) {
+async function handleVideoRequest(request: Request): Promise<Response> {
   const url = new URL(request.url);
   const requestId = Math.random().toString(36).substring(2, 10);
   console.log(`Service Worker [Video-${requestId}]: Handling video request:`, url.href);
@@ -587,8 +629,8 @@ async function handleVideoRequest(request) {
     const dedupeKey = dedupeUrl.toString();
 
     // 检查是否有相同视频正在下载
-    if (pendingVideoRequests.has(dedupeKey)) {
-      const existingEntry = pendingVideoRequests.get(dedupeKey);
+    const existingEntry = pendingVideoRequests.get(dedupeKey);
+    if (existingEntry) {
       existingEntry.count = (existingEntry.count || 1) + 1;
       const waitTime = Date.now() - existingEntry.timestamp;
       
@@ -598,6 +640,16 @@ async function handleVideoRequest(request) {
       // 等待视频下载完成
       const videoBlob = await existingEntry.promise;
       
+      if (!videoBlob) {
+         const fetchOptions = {
+          method: 'GET',
+          headers: new Headers(request.headers),
+          mode: 'cors' as RequestMode,
+          credentials: 'omit' as RequestCredentials
+        };
+        return await fetch(url, fetchOptions);
+      }
+
       // 使用缓存的blob响应Range请求
       return createVideoResponse(videoBlob, rangeHeader, requestId);
     }
@@ -605,12 +657,14 @@ async function handleVideoRequest(request) {
     // 检查是否已有缓存的视频Blob
     if (videoBlobCache.has(dedupeKey)) {
       const cacheEntry = videoBlobCache.get(dedupeKey);
-      console.log(`Service Worker [Video-${requestId}]: 使用缓存的视频Blob (缓存时间: ${Math.round((Date.now() - cacheEntry.timestamp) / 1000)}秒)`);
-      
-      // 更新访问时间
-      cacheEntry.timestamp = Date.now();
-      
-      return createVideoResponse(cacheEntry.blob, rangeHeader, requestId);
+      if (cacheEntry) {
+        console.log(`Service Worker [Video-${requestId}]: 使用缓存的视频Blob (缓存时间: ${Math.round((Date.now() - cacheEntry.timestamp) / 1000)}秒)`);
+        
+        // 更新访问时间
+        cacheEntry.timestamp = Date.now();
+        
+        return createVideoResponse(cacheEntry.blob, rangeHeader, requestId);
+      }
     }
 
     // 创建新的视频下载Promise
@@ -620,9 +674,9 @@ async function handleVideoRequest(request) {
       // 构建请求选项
       const fetchOptions = {
         method: 'GET',
-        mode: 'cors',
-        credentials: 'omit',
-        cache: 'default' // 使用浏览器默认缓存策略
+        mode: 'cors' as RequestMode,
+        credentials: 'omit' as RequestCredentials,
+        cache: 'default' as RequestCache // 使用浏览器默认缓存策略
       };
 
       // 获取视频响应（不带Range header，获取完整视频）
@@ -686,14 +740,14 @@ async function handleVideoRequest(request) {
       const fetchOptions = {
         method: 'GET',
         headers: new Headers(request.headers),
-        mode: 'cors',
-        credentials: 'omit'
+        mode: 'cors' as RequestMode,
+        credentials: 'omit' as RequestCredentials
       };
       return await fetch(url, fetchOptions);
     }
 
     // 使用下载的blob响应Range请求
-    return createVideoResponse(videoBlob, rangeHeader, requestId);
+    return createVideoResponse(videoBlob as Blob, rangeHeader, requestId);
 
   } catch (error) {
     console.error(`Service Worker [Video-${requestId}]: Video request error:`, error);
@@ -708,7 +762,7 @@ async function handleVideoRequest(request) {
 }
 
 // 创建视频响应，支持Range请求
-function createVideoResponse(videoBlob, rangeHeader, requestId) {
+function createVideoResponse(videoBlob: Blob, rangeHeader: string | null, requestId: string): Response {
   const videoSize = videoBlob.size;
 
   // 如果没有Range请求，返回完整视频
@@ -765,7 +819,7 @@ function createVideoResponse(videoBlob, rangeHeader, requestId) {
   });
 }
 
-async function handleStaticRequest(request) {
+async function handleStaticRequest(request: Request): Promise<Response> {
   try {
     // In development mode, always fetch from network first with retry logic
     if (isDevelopment) {
@@ -850,7 +904,7 @@ async function handleStaticRequest(request) {
   }
 }
 
-async function handleImageRequest(request) {
+async function handleImageRequest(request: Request): Promise<Response> {
   try {
     // 生成唯一的请求ID用于追踪
     const requestId = Math.random().toString(36).substring(2, 10);
@@ -873,19 +927,21 @@ async function handleImageRequest(request) {
     // 检查是否有相同的请求正在进行
     if (pendingImageRequests.has(dedupeKey)) {
       const existingEntry = pendingImageRequests.get(dedupeKey);
-      existingEntry.count = (existingEntry.count || 1) + 1;
-      const waitTime = Date.now() - existingEntry.timestamp;
-      
-      console.log(`Service Worker [${requestId}]: 发现重复请求 (等待${waitTime}ms)，返回已有Promise:`, dedupeKey);
-      console.log(`Service Worker [${requestId}]: 重复请求计数: ${existingEntry.count}`, dedupeKey);
-      
-      // 为重复请求添加标记，便于追踪
-      existingEntry.duplicateRequestIds = existingEntry.duplicateRequestIds || [];
-      existingEntry.duplicateRequestIds.push(requestId);
+      if (existingEntry) {
+        existingEntry.count = (existingEntry.count || 1) + 1;
+        const waitTime = Date.now() - existingEntry.timestamp;
+        
+        console.log(`Service Worker [${requestId}]: 发现重复请求 (等待${waitTime}ms)，返回已有Promise:`, dedupeKey);
+        console.log(`Service Worker [${requestId}]: 重复请求计数: ${existingEntry.count}`, dedupeKey);
+        
+        // 为重复请求添加标记，便于追踪
+        existingEntry.duplicateRequestIds = existingEntry.duplicateRequestIds || [];
+        existingEntry.duplicateRequestIds.push(requestId);
 
-      // Response body 只能被消费一次，重复请求需要返回克隆
-      const response = await existingEntry.promise;
-      return response && response.clone ? response.clone() : response;
+        // Response body 只能被消费一次，重复请求需要返回克隆
+        const response = await existingEntry.promise;
+        return response && response.clone ? response.clone() : response;
+      }
     }
     
     // 创建请求处理Promise并存储到去重字典
@@ -907,7 +963,7 @@ async function handleImageRequest(request) {
       const entry = pendingImageRequests.get(dedupeKey);
       if (entry) {
         const totalTime = Date.now() - entry.timestamp;
-        const allRequestIds = [entry.originalRequestId, ...entry.duplicateRequestIds];
+        const allRequestIds = [entry.originalRequestId, ...entry.duplicateRequestIds || []];
         console.log(`Service Worker [${requestId}]: 请求完成 (耗时${totalTime}ms，总计数: ${entry.count}，涉及请求IDs: [${allRequestIds.join(', ')}]):`, dedupeKey);
         pendingImageRequests.delete(dedupeKey);
       }
@@ -922,7 +978,7 @@ async function handleImageRequest(request) {
 }
 
 // 实际的图片请求处理逻辑
-async function handleImageRequestInternal(originalRequest, requestUrl, dedupeKey, requestId) {
+async function handleImageRequestInternal(originalRequest: Request, requestUrl: string, dedupeKey: string, requestId: string): Promise<Response> {
   try {
     console.log(`Service Worker [${requestId}]: 开始处理图片请求:`, dedupeKey);
     
@@ -950,7 +1006,7 @@ async function handleImageRequestInternal(originalRequest, requestUrl, dedupeKey
             status: cachedResponse.status,
             statusText: cachedResponse.statusText,
             headers: {
-              ...Object.fromEntries(cachedResponse.headers.entries()),
+              ...Object.fromEntries((cachedResponse.headers as any).entries()),
               'sw-cache-date': now.toString() // 更新访问时间为当前时间
             }
           });
@@ -974,7 +1030,7 @@ async function handleImageRequestInternal(originalRequest, requestUrl, dedupeKey
           status: cachedResponse.status,
           statusText: cachedResponse.statusText,
           headers: {
-            ...Object.fromEntries(cachedResponse.headers.entries()),
+            ...Object.fromEntries((cachedResponse.headers as any).entries()),
             'sw-cache-date': Date.now().toString()
           }
         });
@@ -1009,32 +1065,32 @@ async function handleImageRequestInternal(originalRequest, requestUrl, dedupeKey
       // 1. 优先尝试no-cors模式（可以绕过CORS限制）
       { 
         method: 'GET',
-        mode: 'no-cors', 
-        cache: 'no-cache',
-        credentials: 'omit',
-        referrerPolicy: 'no-referrer'
+        mode: 'no-cors' as RequestMode, 
+        cache: 'no-cache' as RequestCache,
+        credentials: 'omit' as RequestCredentials,
+        referrerPolicy: 'no-referrer' as ReferrerPolicy
       },
       // 2. 尝试cors模式  
       { 
         method: 'GET',
-        mode: 'cors', 
-        cache: 'no-cache',
-        credentials: 'omit',
-        referrerPolicy: 'no-referrer'
+        mode: 'cors' as RequestMode, 
+        cache: 'no-cache' as RequestCache,
+        credentials: 'omit' as RequestCredentials,
+        referrerPolicy: 'no-referrer' as ReferrerPolicy
       },
       // 3. 最基本的设置
       { 
         method: 'GET',
-        cache: 'no-cache'
+        cache: 'no-cache' as RequestCache
       }
     ];
     
     // 尝试不同的URL和不同的fetch选项
-    let urlsToTry;
+    let urlsToTry: string[];
     
     if (shouldUseFallbackDirectly) {
       // 如果域名已被标记为失败，直接使用备用URL
-      urlsToTry = [fallbackUrl];
+      urlsToTry = [fallbackUrl!];
     } else {
       // 正常情况下先尝试原始URL
       urlsToTry = [requestUrl];
@@ -1069,7 +1125,7 @@ async function handleImageRequestInternal(originalRequest, requestUrl, dedupeKey
                 console.log(`Service Worker [${requestId}]: Fetch successful with status: ${response.status} from ${isUsingFallback ? 'fallback' : 'original'} URL`);
                 break;
               }
-            } catch (fetchError) {
+            } catch (fetchError: any) {
               console.warn(`Service Worker [${requestId}]: Fetch attempt ${attempt + 1} failed on ${isUsingFallback ? 'fallback' : 'original'} URL:`, fetchError);
               lastError = fetchError;
 
@@ -1251,7 +1307,7 @@ async function handleImageRequestInternal(originalRequest, requestUrl, dedupeKey
     
     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     
-  } catch (error) {
+  } catch (error: any) {
     console.error('Service Worker fetch error:', error);
     
     // 重新获取URL用于错误处理

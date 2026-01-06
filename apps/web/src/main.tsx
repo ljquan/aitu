@@ -54,9 +54,14 @@ if ('serviceWorker' in navigator) {
         console.log('Service Worker registered successfully:', registration);
         swRegistration = registration;
         
-        // 在开发模式下，强制更新Service Worker
-        if (isDevelopment && registration.waiting) {
-          registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+        // 在开发模式下，强制检查更新并处理等待中的Worker
+        if (isDevelopment) {
+          console.log('Development mode: forcing SW update check');
+          registration.update().catch(err => console.warn('Forced update check failed:', err));
+          
+          if (registration.waiting) {
+            registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+          }
         }
         
         // 监听Service Worker更新

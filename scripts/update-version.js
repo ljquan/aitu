@@ -80,7 +80,7 @@ function main() {
   
   console.log(`🚀 Updating app to version ${version}`);
   
-  updateServiceWorkerVersion(version);
+  // updateServiceWorkerVersion(version);
   createVersionFile(version);
   updateHtmlWithVersion(version);
   

@@ -49,3 +49,5 @@ Thumbs.db
 .nx/cache
 .nx/workspace-data
 package-lock.json
+apps/web/public/sw.js
+apps/web/public/sw.js.map

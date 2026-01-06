@@ -22,7 +22,7 @@
   ],
   "author": "ljquan",
   "scripts": {
-    "start": "nx serve web --host=0.0.0.0",
+    "start": "nx serve web",
     "build": "node scripts/update-version.js && nx run-many -t=build",
     "build:web": "node scripts/update-version.js && nx build web",
     "package": "node scripts/create-release-package.js",
