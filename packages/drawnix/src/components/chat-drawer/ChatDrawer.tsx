@@ -31,6 +31,7 @@ import type { ChatDrawerProps, ChatDrawerRef, ChatSession, WorkflowMessageData, 
 import { MessageRole, MessageStatus } from '../../types/chat.types';
 import type { Message } from '@llamaindex/chat-ui';
 import { useTextSelection } from '../../hooks/useTextSelection';
+import { analytics } from '../../utils/posthog-analytics';
 
 // 工作流消息的特殊标记前缀
 const WORKFLOW_MESSAGE_PREFIX = '[[WORKFLOW_MESSAGE]]';
@@ -208,6 +209,7 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
         // 执行工具
         try {
           const results = await executeTools();
+          analytics.track('chat_tool_execution_complete', { success: true, resultCount: results.length });
 
           // 更新步骤状态
           setWorkflowMessages((prev) => {
@@ -427,6 +429,7 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
 
     // Create new session
     const handleNewSession = useCallback(async () => {
+      analytics.track('chat_session_create');
       const newSession = await chatStorageService.createSession();
       setSessions((prev) => [newSession, ...prev]);
       setActiveSessionId(newSession.id);
@@ -445,6 +448,7 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
 
     // Select session（从存储中加载工作流数据）
     const handleSelectSession = useCallback(async (sessionId: string) => {
+      analytics.track('chat_session_select');
       setActiveSessionId(sessionId);
       setShowSessions(false);
       // 重置临时模型选择
@@ -477,6 +481,7 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
     // Delete session
     const handleDeleteSession = useCallback(
       async (sessionId: string) => {
+        analytics.track('chat_session_delete');
         await chatStorageService.deleteSession(sessionId);
         setSessions((prev) => {
           const updated = prev.filter((s) => s.id !== sessionId);
@@ -493,6 +498,7 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
     // Rename session
     const handleRenameSession = useCallback(
       async (sessionId: string, newTitle: string) => {
+        analytics.track('chat_session_rename');
         await chatStorageService.updateSession(sessionId, { title: newTitle });
         setSessions((prev) =>
           prev.map((s) => (s.id === sessionId ? { ...s, title: newTitle } : s))
@@ -507,6 +513,9 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
     // Handle send with auto-create session
     const handleSendWrapper = useCallback(
       async (msg: Message) => {
+        analytics.track('chat_message_send', {
+          hasImages: msg.parts.some(p => p.type === 'image_url') // Message parts uses image_url usually
+        });
         // Check if API key is configured
         const settings = geminiSettings.get();
         if (!settings?.apiKey) {
@@ -833,6 +842,8 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
     const handleWorkflowRetry = useCallback(
       async (workflowMsgId: string, workflow: WorkflowMessageData, stepIndex: number) => {
         if (retryingWorkflowId) return; // 已经在重试中
+
+        analytics.track('chat_workflow_retry', { stepIndex });
 
         try {
           setRetryingWorkflowId(workflowMsgId);

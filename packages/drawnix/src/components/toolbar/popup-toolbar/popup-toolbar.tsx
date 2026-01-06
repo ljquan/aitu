@@ -374,6 +374,7 @@ export const PopupToolbar = () => {
                 visible={true}
                 title={language === 'zh' ? 'AI图像生成' : 'AI Image Generation'}
                 aria-label={language === 'zh' ? 'AI图像生成' : 'AI Image Generation'}
+                data-track="toolbar_click_ai_image"
                 onPointerUp={() => {
                   openDialog(DialogType.aiImageGeneration);
                 }}
@@ -388,6 +389,7 @@ export const PopupToolbar = () => {
                 visible={true}
                 title={language === 'zh' ? 'AI视频生成' : 'AI Video Generation'}
                 aria-label={language === 'zh' ? 'AI视频生成' : 'AI Video Generation'}
+                data-track="toolbar_click_ai_video"
                 onPointerUp={() => {
                   openDialog(DialogType.aiVideoGeneration);
                 }}
@@ -402,6 +404,7 @@ export const PopupToolbar = () => {
                 visible={true}
                 title={language === 'zh' ? '视频帧选择' : 'Video Frame Selection'}
                 aria-label={language === 'zh' ? '视频帧选择' : 'Video Frame Selection'}
+                data-track="toolbar_click_video_frame"
                 onPointerUp={() => {
                   // 找到选中的视频元素
                   const videoElement = selectedElements.find(element => isVideoElement(element));
@@ -421,6 +424,7 @@ export const PopupToolbar = () => {
                 visible={true}
                 title={language === 'zh' ? '智能拆图' : 'Smart Split'}
                 aria-label={language === 'zh' ? '智能拆图' : 'Smart Split'}
+                data-track="toolbar_click_split_image"
                 onPointerUp={async () => {
                   // 获取选中的图片元素
                   const imageElement = selectedElements[0] as PlaitDrawElement;
@@ -465,6 +469,7 @@ export const PopupToolbar = () => {
                 visible={true}
                 title={language === 'zh' ? '下载' : 'Download'}
                 aria-label={language === 'zh' ? '下载' : 'Download'}
+                data-track="toolbar_click_download"
                 onPointerUp={async () => {
                   // 收集可下载的元素
                   const downloadItems: BatchDownloadItem[] = [];
@@ -564,6 +569,7 @@ export const PopupToolbar = () => {
                 visible={true}
                 title={language === 'zh' ? '合并为图片' : 'Merge to Image'}
                 aria-label={language === 'zh' ? '合并为图片' : 'Merge to Image'}
+                data-track="toolbar_click_merge"
                 onPointerUp={async () => {
                   const loadingInstance = MessagePlugin.loading(language === 'zh' ? '正在合并...' : 'Merging...', 0);
                   try {
@@ -644,6 +650,7 @@ export const PopupToolbar = () => {
                 visible={true}
                 title={language === 'zh' ? '合成视频' : 'Merge Videos'}
                 aria-label={language === 'zh' ? '合成视频' : 'Merge Videos'}
+                data-track="toolbar_click_video_merge"
                 onPointerUp={async () => {
                   // 收集所有视频元素的 URL
                   const videoUrls: string[] = [];
@@ -745,6 +752,7 @@ export const PopupToolbar = () => {
               visible={true}
               title={t('general.duplicate')}
               aria-label={t('general.duplicate')}
+              data-track="toolbar_click_duplicate"
               onPointerUp={() => {
                 duplicateElements(board);
               }}
@@ -757,6 +765,7 @@ export const PopupToolbar = () => {
               visible={true}
               title={t('general.delete')}
               aria-label={t('general.delete')}
+              data-track="toolbar_click_delete"
               onPointerUp={() => {
                 deleteFragment(board);
               }}

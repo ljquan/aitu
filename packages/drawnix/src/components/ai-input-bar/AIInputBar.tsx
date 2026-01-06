@@ -37,6 +37,7 @@ import { convertToWorkflow, type WorkflowDefinition, type WorkflowStepOptions } 
 import { useWorkflowControl } from '../../contexts/WorkflowContext';
 import { geminiSettings } from '../../utils/settings-manager';
 import type { WorkflowMessageData } from '../../types/chat.types';
+import { analytics } from '../../utils/posthog-analytics';
 import classNames from 'classnames';
 import './ai-input-bar.scss';
 
@@ -488,6 +489,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
 
   // 处理模型选择（从下拉菜单）
   const handleModelSelect = useCallback((modelId: string) => {
+    analytics.track('ai_input_change_model_dropdown', { model: modelId });
     setSelectedModel(modelId);
   }, []);
 
@@ -1180,6 +1182,9 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
           event.preventDefault();
           const selectedModelItem = filteredModels[atHighlightIndex];
           if (selectedModelItem) {
+            analytics.track('ai_input_select_model_at_keyboard', {
+              model: selectedModelItem.id
+            });
             handleAtSelectModel(selectedModelItem.id);
           }
           return;
@@ -1201,6 +1206,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
       // Enter 发送
       if (event.key === 'Enter') {
         event.preventDefault();
+        analytics.track('ai_input_submit_keyboard');
         handleGenerate();
         return;
       }
@@ -1217,6 +1223,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
 
   // Handle input focus
   const handleFocus = useCallback(() => {
+    analytics.track('ai_input_focus_textarea');
     setIsFocused(prev => {
       if (prev) return prev; // 已经是 true，不触发更新
       return true;
@@ -1225,6 +1232,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
 
   // Handle input blur
   const handleBlur = useCallback(() => {
+    analytics.track('ai_input_blur_textarea');
     setIsFocused(prev => {
       if (!prev) return prev; // 已经是 false，不触发更新
       return false;
@@ -1271,6 +1279,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
             }}
             onClick={handleGenerate}
             disabled={!canGenerate || isSubmitting}
+            data-track="ai_input_click_send"
           >
             <Send size={18} />
           </button>

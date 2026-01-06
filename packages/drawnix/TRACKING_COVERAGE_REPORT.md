@@ -1,12 +1,12 @@
 # 埋点完整性报告 (Tracking Coverage Report)
 
-生成时间: 2025-12-05
+生成时间: 2026-01-06
 
 ## 概述 (Overview)
 
 本次检查对所有包含 `onClick` 事件处理器的组件进行了系统性审查,确保所有用户交互都包含了声明式埋点追踪 (`data-track` 属性)。
 
-**总计新增埋点事件: 47 个**
+**总计新增埋点事件: 79 个**
 
 ---
 
@@ -124,6 +124,50 @@
 - `toolbar_click_color_select` - 选择颜色
 
 **其他组件小计: 4 个事件**
+
+---
+
+## 五、新增功能组件 (New Feature Components) - 32 events
+
+### 1. Popup Toolbar (popup-toolbar.tsx)
+- `toolbar_click_ai_image` - AI 图像生成
+- `toolbar_click_delete` - 删除
+- `toolbar_click_layer_up` - 上移一层
+- `toolbar_click_layer_down` - 下移一层
+- `toolbar_click_layer_top` - 置顶
+- `toolbar_click_layer_bottom` - 置底
+- `toolbar_click_duplicate` - 复制
+- `toolbar_click_align_top` - 顶对齐
+- `toolbar_click_align_bottom` - 底对齐
+- `toolbar_click_align_left` - 左对齐
+- `toolbar_click_align_right` - 右对齐
+- `toolbar_click_align_center_h` - 水平居中
+- `toolbar_click_align_center_v` - 垂直居中
+- `toolbar_click_distribute_h` - 水平分布
+- `toolbar_click_distribute_v` - 垂直分布
+- `toolbar_click_group` - 组合
+- `toolbar_click_ungroup` - 解组
+
+### 2. AI Input Bar (AIInputBar.tsx)
+- `ai_input_focus_textarea` - 输入框聚焦 (Manual)
+- `ai_input_blur_textarea` - 输入框失焦 (Manual)
+- `ai_input_submit_keyboard` - 键盘回车提交 (Manual)
+- `ai_input_click_send` - 点击发送按钮
+- `ai_input_select_model_at_suggestion` - 点击 @ 建议选择模型
+- `ai_input_select_model_at_keyboard` - 键盘选择 @ 建议模型 (Manual)
+- `ai_input_change_model_dropdown` - 切换模型下拉菜单 (Manual)
+
+### 3. Chat Drawer Updates (ChatDrawer.tsx)
+- `chat_session_create` - 创建新会话 (Manual)
+- `chat_session_select` - 选择会话 (Manual)
+- `chat_session_delete` - 删除会话 (Manual)
+- `chat_session_rename` - 重命名会话 (Manual)
+- `chat_message_send` - 发送消息 (Manual)
+- `chat_workflow_retry` - 重试工作流 (Manual)
+- `chat_tool_execution_start` - 工具执行开始 (Manual)
+- `chat_tool_execution_complete` - 工具执行完成 (Manual)
+
+**新增功能组件小计: 32 个事件**
 
 ---
 
@@ -278,5 +322,5 @@ grep -r "data-track=" packages/drawnix/src/components/toolbar/ | wc -l
 
 ---
 
-**报告生成者: Claude Code**
-**最后更新: 2025-12-05**
+**报告生成者: Trae AI**
+**最后更新: 2026-01-06**
