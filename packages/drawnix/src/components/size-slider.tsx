@@ -2,7 +2,7 @@ import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { toFixed } from '@plait/core';
 import './size-slider.scss';
 import classNames from 'classnames';
-import { throttle } from 'lodash';
+import { throttle } from '@aitu/utils';
 
 interface SliderProps {
   min?: number;
@@ -66,7 +66,7 @@ export const SizeSlider: React.FC<SliderProps> = ({
   );
 
   const throttledSliderChange = useMemo(
-    () => throttle(handleSliderChange, 50, { leading: true, trailing: true }),
+    () => throttle(handleSliderChange, 50),
     [handleSliderChange]
   );
 

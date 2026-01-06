@@ -11,7 +11,7 @@ import {
   Viewport,
   getSelectedElements,
 } from '@plait/core';
-import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
 import { withGroup } from '@plait/common';
 import { withDraw } from '@plait/draw';
 import { MindThemeColors, withMind } from '@plait/mind';
@@ -31,9 +31,7 @@ import {
   DrawnixState,
 } from './hooks/use-drawnix';
 import { ClosePencilToolbar } from './components/toolbar/pencil-mode-toolbar';
-import { TTDDialog } from './components/ttd-dialog/ttd-dialog';
 import { CleanConfirm } from './components/clean-confirm/clean-confirm';
-import { SettingsDialog } from './components/settings-dialog/settings-dialog';
 import { buildTextLinkPlugin } from './plugins/with-text-link';
 import { LinkPopup } from './components/popup/link-popup/link-popup';
 import { I18nProvider } from './i18n';
@@ -51,8 +49,6 @@ import { useBeforeUnload } from './hooks/useBeforeUnload';
 import { ChatDrawer } from './components/chat-drawer';
 import { ChatDrawerProvider, useChatDrawer } from './contexts/ChatDrawerContext';
 import { WorkflowProvider } from './contexts/WorkflowContext';
-import { ProjectDrawer } from './components/project-drawer';
-import { ToolboxDrawer } from './components/toolbox-drawer/ToolboxDrawer';
 import { useWorkspace } from './hooks/useWorkspace';
 import { Board as WorkspaceBoard } from './types/workspace.types';
 import { toolTestHelper } from './utils/tool-test-helper';
@@ -63,6 +59,11 @@ import { ToolbarConfigProvider } from './hooks/use-toolbar-config';
 import { AIInputBar } from './components/ai-input-bar';
 import { VersionUpdatePrompt } from './components/version-update/version-update-prompt';
 import { QuickCreationToolbar } from './components/toolbar/quick-creation-toolbar/quick-creation-toolbar';
+
+const TTDDialog = lazy(() => import('./components/ttd-dialog/ttd-dialog').then(module => ({ default: module.TTDDialog })));
+const SettingsDialog = lazy(() => import('./components/settings-dialog/settings-dialog').then(module => ({ default: module.SettingsDialog })));
+const ProjectDrawer = lazy(() => import('./components/project-drawer').then(module => ({ default: module.ProjectDrawer })));
+const ToolboxDrawer = lazy(() => import('./components/toolbox-drawer/ToolboxDrawer').then(module => ({ default: module.ToolboxDrawer })));
 
 export type DrawnixProps = {
   value: PlaitElement[];
@@ -438,9 +439,17 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
           <PopupToolbar></PopupToolbar>
           <LinkPopup></LinkPopup>
           <ClosePencilToolbar></ClosePencilToolbar>
-          <TTDDialog container={containerRef.current}></TTDDialog>
+          {appState.openDialogType && (
+            <Suspense fallback={null}>
+              <TTDDialog container={containerRef.current}></TTDDialog>
+            </Suspense>
+          )}
           <CleanConfirm container={containerRef.current}></CleanConfirm>
-          <SettingsDialog container={containerRef.current}></SettingsDialog>
+          {appState.openSettings && (
+            <Suspense fallback={null}>
+              <SettingsDialog container={containerRef.current}></SettingsDialog>
+            </Suspense>
+          )}
           {/* Quick Creation Toolbar - 双击空白区域显示的快捷工具栏 */}
           <QuickCreationToolbar
             position={quickToolbarPosition}
@@ -454,16 +463,20 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
         </Wrapper>
         <ActiveTaskWarning />
         <ChatDrawer ref={chatDrawerRef} />
-        <ProjectDrawer
-          isOpen={projectDrawerOpen}
-          onOpenChange={setProjectDrawerOpen}
-          onBeforeSwitch={handleBeforeSwitch}
-          onBoardSwitch={onBoardSwitch}
-        />
-        <ToolboxDrawer
-          isOpen={toolboxDrawerOpen}
-          onOpenChange={setToolboxDrawerOpen}
-        />
+        <Suspense fallback={null}>
+          <ProjectDrawer
+            isOpen={projectDrawerOpen}
+            onOpenChange={setProjectDrawerOpen}
+            onBeforeSwitch={handleBeforeSwitch}
+            onBoardSwitch={onBoardSwitch}
+          />
+        </Suspense>
+        <Suspense fallback={null}>
+          <ToolboxDrawer
+            isOpen={toolboxDrawerOpen}
+            onOpenChange={setToolboxDrawerOpen}
+          />
+        </Suspense>
         {/* Minimap - 小地图 */}
         {board && <Minimap board={board} />}
       </div>

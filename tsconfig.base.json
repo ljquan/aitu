@@ -16,6 +16,7 @@
     "baseUrl": ".",
     "paths": {
       "@drawnix/drawnix": ["packages/drawnix/src/index.ts"],
+      "@aitu/utils": ["packages/utils/src/index.ts"],
       "@plait-board/react-board": ["packages/react-board/src/index.ts"],
       "@plait-board/react-text": ["packages/react-text/src/index.ts"]
     }

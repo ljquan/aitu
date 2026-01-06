@@ -4,23 +4,16 @@
  * Main chat drawer component using @llamaindex/chat-ui.
  */
 
-import React, { useState, useCallback, useEffect, useMemo, useImperativeHandle, forwardRef, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useImperativeHandle, forwardRef, useRef, Suspense } from 'react';
 import { CloseIcon, AddIcon, ViewListIcon } from 'tdesign-icons-react';
 import { Tooltip } from 'tdesign-react';
 import {
-  ChatSection,
-  ChatMessages,
-  ChatMessage,
+  type ChatHandler,
 } from '@llamaindex/chat-ui';
-import '@llamaindex/chat-ui/styles/markdown.css';
-import '@llamaindex/chat-ui/styles/pdf.css';
 import { ATTACHED_ELEMENT_CLASS_NAME } from '@plait/core';
 import { SessionList } from './SessionList';
 import { ChatDrawerTrigger } from './ChatDrawerTrigger';
-import { MermaidRenderer } from './MermaidRenderer';
 import { ModelSelector } from './ModelSelector';
-import { WorkflowMessageBubble } from './WorkflowMessageBubble';
-import { UserMessageBubble } from './UserMessageBubble';
 import { EnhancedChatInput } from './EnhancedChatInput';
 import { chatStorageService } from '../../services/chat-storage-service';
 import { useChatHandler } from '../../hooks/useChatHandler';
@@ -32,6 +25,8 @@ import { MessageRole, MessageStatus } from '../../types/chat.types';
 import type { Message } from '@llamaindex/chat-ui';
 import { useTextSelection } from '../../hooks/useTextSelection';
 import { analytics } from '../../utils/posthog-analytics';
+
+const ChatMessagesArea = React.lazy(() => import('./ChatMessagesArea'));
 
 // 工作流消息的特殊标记前缀
 const WORKFLOW_MESSAGE_PREFIX = '[[WORKFLOW_MESSAGE]]';
@@ -965,30 +960,19 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
       }
     }, [isEditingTitle]);
 
-    // 检查消息是否为工作流消息
-    const isWorkflowMessage = useCallback((message: Message): string | null => {
-      const textPart = message.parts.find((p) => p.type === 'text');
-      if (textPart && 'text' in textPart) {
-        const text = textPart.text as string;
-        if (text.startsWith(WORKFLOW_MESSAGE_PREFIX)) {
-          return text.replace(WORKFLOW_MESSAGE_PREFIX, '');
-        }
+    const domRef = useRef<HTMLDivElement>(null);
+    // 使用自定义 hook 处理文本选择和复制，同时阻止事件冒泡
+    useTextSelection(domRef, {
+      enableCopy: true,
+      stopPropagation: true,
+    });
+
+    const [shouldRenderChat, setShouldRenderChat] = useState(false);
+    useEffect(() => {
+      if (isOpen) {
+        setShouldRenderChat(true);
       }
-      return null;
-    }, []);
-
-    // 检查用户消息是否包含图片
-    const hasImages = useCallback((message: Message): boolean => {
-      return message.parts.some((p) => p.type === 'data-file');
-    }, []);
-
-
-      const domRef = useRef<HTMLDivElement>(null);
-  // 使用自定义 hook 处理文本选择和复制，同时阻止事件冒泡
-  useTextSelection(domRef, {
-    enableCopy: true,
-    stopPropagation: true,
-  });
+    }, [isOpen]);
     return (
       <>
         <ChatDrawerTrigger isOpen={isOpen} onClick={handleToggle} drawerWidth={drawerWidth} />
@@ -1081,83 +1065,18 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
             )}
 
             <div className="chat-drawer__content">
-              <ChatSection handler={wrappedHandler} className="chat-section">
-                <ChatMessages className="chat-messages">
-                  <ChatMessages.List className="chat-messages-list">
-                    {chatHandler.messages.map((message, index) => {
-                      // 检查是否为工作流消息
-                      const workflowMsgId = isWorkflowMessage(message);
-                      if (workflowMsgId) {
-                        const workflowData = workflowMessages.get(workflowMsgId);
-                        if (workflowData) {
-                          return (
-                            <WorkflowMessageBubble
-                              key={message.id}
-                              workflow={workflowData}
-                              onRetry={(stepIndex) => handleWorkflowRetry(workflowMsgId, workflowData, stepIndex)}
-                              isRetrying={retryingWorkflowId === workflowMsgId}
-                            />
-                          );
-                        }
-                      }
-
-                      // Check if message is an error
-                      const isError = message.parts.some(
-                        (part) =>
-                          part.type === 'text' &&
-                          (part as any).text?.startsWith('❌ 错误')
-                      );
-                      const messageClass = `chat-message chat-message--${message.role} ${
-                        isError ? 'chat-message--error' : ''
-                      }`;
-
-                      // 用户消息包含图片时使用自定义气泡
-                      if (message.role === 'user' && hasImages(message)) {
-                        return (
-                          <UserMessageBubble
-                            key={message.id}
-                            message={message}
-                          />
-                        );
-                      }
-
-                      return (
-                        <ChatMessage
-                          key={message.id}
-                          message={message}
-                          isLast={index === chatHandler.messages.length - 1}
-                          className={messageClass}
-                        >
-                          <ChatMessage.Avatar className="chat-message-avatar" />
-                          <ChatMessage.Content className="chat-message-content">
-                            <ChatMessage.Content.Markdown
-                              className="chat-markdown"
-                              languageRenderers={{
-                                mermaid: MermaidRenderer,
-                              }}
-                            />
-                          </ChatMessage.Content>
-                          {message.role === 'assistant' && !isError && (
-                            <ChatMessage.Actions className="chat-message-actions" />
-                          )}
-                        </ChatMessage>
-                      );
-                    })}
-                  </ChatMessages.List>
-                  <ChatMessages.Loading className="chat-loading">
-                    <div className="chat-loading__spinner" />
-                    <span>思考中...</span>
-                  </ChatMessages.Loading>
-                  <ChatMessages.Empty
-                    className="chat-empty"
-                    heading="开始对话"
-                    subheading="输入消息与AI助手交流"
-                  />
-                </ChatMessages>
-
-              </ChatSection>
-
-              <EnhancedChatInput
+               {shouldRenderChat && (
+                 <Suspense fallback={<div className="chat-loading"><div className="chat-loading__spinner" /></div>}>
+                   <ChatMessagesArea
+                     handler={wrappedHandler}
+                     workflowMessages={workflowMessages}
+                     retryingWorkflowId={retryingWorkflowId}
+                     handleWorkflowRetry={handleWorkflowRetry}
+                   />
+                 </Suspense>
+               )}
+ 
+               <EnhancedChatInput
                 selectedContent={selectedContent}
                 onSend={handleSendWrapper}
                 placeholder="输入消息... (可用 # 指定模型)"

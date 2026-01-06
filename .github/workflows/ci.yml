@@ -40,3 +40,11 @@ jobs:
       - run: npx nx affected -t test build --base=origin/develop --verbose
       - run: npx nx affected -t lint --exclude=drawnix --base=origin/develop --verbose
       - run: npx nx affected --parallel 1 -t e2e-ci --base=origin/develop --verbose
+
+      - name: Upload Bundle Stats
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundle-stats
+          path: dist/apps/web/stats.html
+
