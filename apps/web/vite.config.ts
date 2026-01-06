@@ -75,23 +75,47 @@ export default defineConfig({
     },
     rollupOptions: {
       output: {
-        manualChunks: {
-          'vendor-react': ['react', 'react-dom'],
-          'vendor-tdesign': ['tdesign-react'],
-          'vendor-tdesign-icons': ['tdesign-icons-react'],
-          'vendor-plait': [
-            '@plait/core',
-            '@plait/common',
-            '@plait/draw',
-            '@plait/mind',
-            '@plait/layouts',
-            '@plait/text-plugins'
-          ],
-          'vendor-utils': ['rxjs', 'roughjs', 'is-hotkey', 'classnames'],
-          'vendor-slate': ['slate', 'slate-react', 'slate-history', 'slate-dom'],
-          'vendor-ui-libs': ['@floating-ui/react', '@tanstack/react-virtual', 'winbox', 'mobile-detect'],
-          'vendor-icons': ['lucide-react'],
-          'vendor-chat': ['@llamaindex/chat-ui'],
+        manualChunks: (id) => {
+          // 核心依赖
+          if (id.includes('node_modules')) {
+            if (id.includes('react') || id.includes('react-dom')) {
+              return 'vendor-react';
+            }
+            if (id.includes('tdesign-react')) {
+              return 'vendor-tdesign';
+            }
+            if (id.includes('tdesign-icons-react')) {
+              return 'vendor-tdesign-icons';
+            }
+            if (id.includes('@plait')) {
+              return 'vendor-plait';
+            }
+            if (id.includes('slate')) {
+              return 'vendor-slate';
+            }
+            // Chat UI - 只在 ChatDrawer 使用时加载
+            if (id.includes('@llamaindex/chat-ui')) {
+              return 'vendor-chat';
+            }
+            // Mermaid 核心
+            if (id.includes('mermaid') && !id.includes('elk')) {
+              return 'vendor-mermaid';
+            }
+            // Mermaid ELK 布局引擎 - 单独分离，按需加载
+            if (id.includes('elk') || id.includes('elkjs')) {
+              return 'vendor-mermaid-elk';
+            }
+            // 其他工具库
+            if (id.includes('rxjs') || id.includes('roughjs') || id.includes('is-hotkey') || id.includes('classnames')) {
+              return 'vendor-utils';
+            }
+            if (id.includes('@floating-ui') || id.includes('@tanstack') || id.includes('winbox') || id.includes('mobile-detect')) {
+              return 'vendor-ui-libs';
+            }
+            if (id.includes('lucide-react')) {
+              return 'vendor-icons';
+            }
+          }
         },
       },
     },
