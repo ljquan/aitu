@@ -4,6 +4,7 @@ import react from '@vitejs/plugin-react';
 import { nxViteTsPaths } from '@nx/vite/plugins/nx-tsconfig-paths.plugin';
 import fs from 'fs';
 import path from 'path';
+import { visualizer } from 'rollup-plugin-visualizer';
 
 // Read version from public/version.json
 const versionPath = path.resolve(__dirname, 'public/version.json');
@@ -49,7 +50,16 @@ export default defineConfig({
     }
   },
 
-  plugins: [react(), nxViteTsPaths()],
+  plugins: [
+    react(),
+    nxViteTsPaths(),
+    visualizer({
+      open: false,
+      filename: path.resolve(__dirname, '../../dist/apps/web/stats.html'),
+      gzipSize: true,
+      brotliSize: true,
+    }),
+  ],
 
   // Uncomment this if you are using workers.
   // worker: {
@@ -62,6 +72,28 @@ export default defineConfig({
     reportCompressedSize: true,
     commonjsOptions: {
       transformMixedEsModules: true,
+    },
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom'],
+          'vendor-tdesign': ['tdesign-react'],
+          'vendor-tdesign-icons': ['tdesign-icons-react'],
+          'vendor-plait': [
+            '@plait/core',
+            '@plait/common',
+            '@plait/draw',
+            '@plait/mind',
+            '@plait/layouts',
+            '@plait/text-plugins'
+          ],
+          'vendor-utils': ['rxjs', 'roughjs', 'is-hotkey', 'classnames'],
+          'vendor-slate': ['slate', 'slate-react', 'slate-history', 'slate-dom'],
+          'vendor-ui-libs': ['@floating-ui/react', '@tanstack/react-virtual', 'winbox', 'mobile-detect'],
+          'vendor-icons': ['lucide-react'],
+          'vendor-chat': ['@llamaindex/chat-ui'],
+        },
+      },
     },
   },
 });
