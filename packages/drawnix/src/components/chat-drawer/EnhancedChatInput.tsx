@@ -10,7 +10,7 @@
  * 使用 useSmartInput hook 复用 AIInputBar 的输入逻辑
  */
 
-import React, { useRef, useCallback, useEffect } from 'react';
+import React, { useRef, useCallback, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { SendIcon } from 'tdesign-icons-react';
 import { SmartSuggestionPanel } from '../ai-input-bar/smart-suggestion-panel';
 import { SelectedContentPreview } from '../shared/SelectedContentPreview';
@@ -25,12 +25,24 @@ interface EnhancedChatInputProps {
   placeholder?: string;
 }
 
-export const EnhancedChatInput: React.FC<EnhancedChatInputProps> = ({
+/**
+ * EnhancedChatInput Ref 接口
+ */
+export interface EnhancedChatInputRef {
+  /** 设置输入框内容 */
+  setContent: (content: string) => void;
+  /** 获取输入框内容 */
+  getContent: () => string;
+  /** 聚焦输入框 */
+  focus: () => void;
+}
+
+export const EnhancedChatInput = forwardRef<EnhancedChatInputRef, EnhancedChatInputProps>(({
   selectedContent,
   onSend,
   disabled = false,
   placeholder = '输入消息...',
-}) => {
+}, ref) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const hasSelection = selectedContent.length > 0;
@@ -54,6 +66,17 @@ export const EnhancedChatInput: React.FC<EnhancedChatInputProps> = ({
   });
 
   const { mode, keyword } = parseResult;
+
+  // 暴露方法给父组件
+  useImperativeHandle(ref, () => ({
+    setContent: (content: string) => {
+      setInput(content);
+      // 聚焦输入框
+      textareaRef.current?.focus();
+    },
+    getContent: () => input,
+    focus: () => textareaRef.current?.focus(),
+  }), [input, setInput]);
 
   // 发送消息
   const handleSend = useCallback(() => {
@@ -225,6 +248,8 @@ export const EnhancedChatInput: React.FC<EnhancedChatInputProps> = ({
       )}
     </div>
   );
-};
+});
+
+EnhancedChatInput.displayName = 'EnhancedChatInput';
 
 export default EnhancedChatInput;

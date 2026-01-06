@@ -640,6 +640,31 @@ $text-dark: #1F2937;
     }
   }
 
+  // Upload button
+  &__upload-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: transparent;
+    border-radius: 8px;
+    color: $gray-dark;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+
+    &:hover {
+      background: $gray-light;
+      color: $orange-primary;
+    }
+
+    &:active {
+      transform: scale(0.95);
+    }
+  }
+
   // Send button
   &__send-btn {
     display: flex;

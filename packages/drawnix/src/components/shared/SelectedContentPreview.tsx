@@ -11,7 +11,7 @@
 
 import React, { useState, useCallback } from 'react';
 import ReactDOM from 'react-dom';
-import { Video, Play, Type } from 'lucide-react';
+import { Video, Play, Type, X } from 'lucide-react';
 import type { SelectedContentItem } from '../../types/chat.types';
 import './selected-content-preview.scss';
 
@@ -24,6 +24,10 @@ export interface SelectedContentPreviewProps {
   enableHoverPreview?: boolean;
   /** 自定义类名 */
   className?: string;
+  /** 删除回调（传入索引），如果提供则显示删除按钮 */
+  onRemove?: (index: number) => void;
+  /** 可删除的索引范围起始位置（默认 0，用于区分上传内容和选中内容） */
+  removableStartIndex?: number;
 }
 
 interface HoveredContent {
@@ -39,6 +43,8 @@ export const SelectedContentPreview: React.FC<SelectedContentPreviewProps> = ({
   language = 'zh',
   enableHoverPreview = true,
   className,
+  onRemove,
+  removableStartIndex = 0,
 }) => {
   const [hoveredContent, setHoveredContent] = useState<HoveredContent | null>(null);
 
@@ -112,54 +118,74 @@ export const SelectedContentPreview: React.FC<SelectedContentPreviewProps> = ({
 
       {/* Content preview grid */}
       <div className={`selected-content-preview ${className || ''}`}>
-        {items.map((item, index) => (
-          <div
-            key={`${item.type}-${index}`}
-            className={`selected-content-preview__item selected-content-preview__item--${item.type}`}
-            onMouseEnter={(e) => handleContentMouseEnter(item, e)}
-            onMouseLeave={handleContentMouseLeave}
-          >
-            {/* Render based on content type */}
-            {item.type === 'text' ? (
-              // Text content preview
-              <div className="selected-content-preview__text">
-                <Type size={14} className="selected-content-preview__text-icon" />
-                <span className="selected-content-preview__text-content">
-                  {item.text && item.text.length > 20
-                    ? `${item.text.substring(0, 20)}...`
-                    : item.text}
+        {items.map((item, index) => {
+          // 判断是否可删除（只有上传的内容可删除，index < removableStartIndex 表示上传内容）
+          const canRemove = onRemove && index < removableStartIndex;
+
+          return (
+            <div
+              key={`${item.type}-${index}`}
+              className={`selected-content-preview__item selected-content-preview__item--${item.type}`}
+              onMouseEnter={(e) => handleContentMouseEnter(item, e)}
+              onMouseLeave={handleContentMouseLeave}
+            >
+              {/* Render based on content type */}
+              {item.type === 'text' ? (
+                // Text content preview
+                <div className="selected-content-preview__text">
+                  <Type size={14} className="selected-content-preview__text-icon" />
+                  <span className="selected-content-preview__text-content">
+                    {item.text && item.text.length > 20
+                      ? `${item.text.substring(0, 20)}...`
+                      : item.text}
+                  </span>
+                </div>
+              ) : item.type === 'video' ? (
+                // Video preview with icon placeholder
+                <>
+                  <div className="selected-content-preview__video-placeholder">
+                    <Video size={20} />
+                  </div>
+                  <div className="selected-content-preview__video-overlay">
+                    <Play size={16} fill="white" />
+                  </div>
+                </>
+              ) : (
+                // Image or graphics preview
+                <img src={item.url} alt={item.name} />
+              )}
+
+              {/* Type label for graphics */}
+              {item.type === 'graphics' && (
+                <span className="selected-content-preview__label">
+                  {language === 'zh' ? '图形' : 'Graphics'}
                 </span>
-              </div>
-            ) : item.type === 'video' ? (
-              // Video preview with icon placeholder
-              <>
-                <div className="selected-content-preview__video-placeholder">
-                  <Video size={20} />
-                </div>
-                <div className="selected-content-preview__video-overlay">
-                  <Play size={16} fill="white" />
-                </div>
-              </>
-            ) : (
-              // Image or graphics preview
-              <img src={item.url} alt={item.name} />
-            )}
+              )}
 
-            {/* Type label for graphics */}
-            {item.type === 'graphics' && (
-              <span className="selected-content-preview__label">
-                {language === 'zh' ? '图形' : 'Graphics'}
-              </span>
-            )}
+              {/* Type label for video */}
+              {item.type === 'video' && (
+                <span className="selected-content-preview__label selected-content-preview__label--video">
+                  {language === 'zh' ? '视频' : 'Video'}
+                </span>
+              )}
 
-            {/* Type label for video */}
-            {item.type === 'video' && (
-              <span className="selected-content-preview__label selected-content-preview__label--video">
-                {language === 'zh' ? '视频' : 'Video'}
-              </span>
-            )}
-          </div>
-        ))}
+              {/* 删除按钮（仅上传内容显示） */}
+              {canRemove && (
+                <button
+                  className="selected-content-preview__remove-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRemove(index);
+                  }}
+                  onMouseDown={(e) => e.preventDefault()}
+                  title={language === 'zh' ? '移除' : 'Remove'}
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+          );
+        })}
       </div>
     </>
   );

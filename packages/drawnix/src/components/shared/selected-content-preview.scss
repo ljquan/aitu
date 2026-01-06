@@ -131,6 +131,44 @@ $text-dark: #1F2937;
     }
   }
 
+  // Remove button (for uploaded content)
+  &__remove-btn {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.5);
+    color: #fff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: all 0.15s ease;
+    z-index: 10;
+    backdrop-filter: blur(4px);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+
+    svg {
+      width: 10px;
+      height: 10px;
+    }
+
+    &:hover {
+      background: #EF4444;
+      transform: scale(1.15);
+    }
+  }
+
+  // Show remove button on item hover
+  &__item:hover &__remove-btn {
+    opacity: 1;
+  }
+
   // Hover preview - large content
   &__hover {
     position: fixed;

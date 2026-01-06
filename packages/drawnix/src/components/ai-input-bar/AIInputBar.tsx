@@ -16,7 +16,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Send, Check } from 'lucide-react';
+import { Send, Check, ImagePlus } from 'lucide-react';
 import { useBoard } from '@plait-board/react-board';
 import { SelectedContentPreview } from '../shared/SelectedContentPreview';
 import { getSelectedElements, ATTACHED_ELEMENT_CLASS_NAME, getRectangleByElements } from '@plait/core';
@@ -39,6 +39,7 @@ import { geminiSettings } from '../../utils/settings-manager';
 import type { WorkflowMessageData } from '../../types/chat.types';
 import { analytics } from '../../utils/posthog-analytics';
 import classNames from 'classnames';
+import { InspirationBoard } from '../inspiration-board';
 import './ai-input-bar.scss';
 
 import type { WorkflowRetryContext, PostProcessingStatus } from '../../types/chat.types';
@@ -132,7 +133,9 @@ const SelectionWatcher: React.FC<{
   onSelectionChange: (content: SelectedContent[]) => void;
   /** 用于存储 board 引用的 ref，供父组件使用 */
   externalBoardRef?: React.MutableRefObject<any>;
-}> = React.memo(({ language, onSelectionChange, externalBoardRef }) => {
+  /** 画板空状态变化回调 */
+  onCanvasEmptyChange?: (isEmpty: boolean) => void;
+}> = React.memo(({ language, onSelectionChange, externalBoardRef, onCanvasEmptyChange }) => {
   const board = useBoard();
   const boardRef = useRef(board);
   boardRef.current = board;
@@ -155,6 +158,33 @@ const SelectionWatcher: React.FC<{
       }
     };
   }, [board, externalBoardRef]);
+
+  // 监听画板元素数量变化，通知父组件画板是否为空
+  const onCanvasEmptyChangeRef = useRef(onCanvasEmptyChange);
+  onCanvasEmptyChangeRef.current = onCanvasEmptyChange;
+
+  useEffect(() => {
+    if (!board || !onCanvasEmptyChangeRef.current) return;
+
+    // 初始检查
+    const checkEmpty = () => {
+      const elements = board.children || [];
+      onCanvasEmptyChangeRef.current?.(elements.length === 0);
+    };
+
+    checkEmpty();
+
+    // 监听 board 变化
+    const observer = new MutationObserver(checkEmpty);
+    // 简单方案：定期检查（因为 Plait 的数据变化可能不会触发 DOM 变化）
+    const interval = setInterval(checkEmpty, 500);
+
+    return () => {
+      observer.disconnect();
+      clearInterval(interval);
+    };
+  }, [board]);
+
   const onSelectionChangeRef = useRef(onSelectionChange);
   onSelectionChangeRef.current = onSelectionChange;
 
@@ -241,6 +271,8 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
   appendAgentLogRef.current = chatDrawerControl.appendAgentLog;
   const updateThinkingContentRef = useRef(chatDrawerControl.updateThinkingContent);
   updateThinkingContentRef.current = chatDrawerControl.updateThinkingContent;
+  const setSelectedContentRef = useRef(chatDrawerControl.setSelectedContent);
+  setSelectedContentRef.current = chatDrawerControl.setSelectedContent;
   const registerRetryHandlerRef = useRef(chatDrawerControl.registerRetryHandler);
   registerRetryHandlerRef.current = chatDrawerControl.registerRetryHandler;
 
@@ -252,9 +284,11 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
 
   // State
   const [prompt, setPrompt] = useState('');
-  const [selectedContent, setSelectedContent] = useState<SelectedContent[]>([]);
+  const [selectedContent, setSelectedContent] = useState<SelectedContent[]>([]); // 画布选中内容
+  const [uploadedContent, setUploadedContent] = useState<SelectedContent[]>([]); // 用户上传内容
   const [isSubmitting, setIsSubmitting] = useState(false); // 仅用于防止重复点击，不阻止并行任务
   const [isFocused, setIsFocused] = useState(false);
+  const [isCanvasEmpty, setIsCanvasEmpty] = useState(true); // 画板是否为空
   // 当前选中的图片模型（通过环境变量或默认值初始化）
   const [selectedModel, setSelectedModel] = useState(getDefaultImageModel);
 
@@ -263,6 +297,11 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
   const [atQuery, setAtQuery] = useState(''); // @ 后面的查询文本
   const [atHighlightIndex, setAtHighlightIndex] = useState(0); // 当前高亮的选项索引
   const atSuggestionRef = useRef<HTMLDivElement>(null);
+
+  // 合并画布选中内容和用户上传内容
+  const allContent = useMemo(() => {
+    return [...uploadedContent, ...selectedContent];
+  }, [uploadedContent, selectedContent]);
 
   // 点击外部关闭输入框的展开状态
   useEffect(() => {
@@ -468,6 +507,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 使用自定义 hook 处理文本选择和复制，同时阻止事件冒泡
   useTextSelection(inputRef, {
@@ -475,17 +515,85 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
     stopPropagation: true,
   });
 
+  // 处理灵感模版选择：将提示词替换到输入框
+  const handleSelectInspirationPrompt = useCallback((inspirationPrompt: string) => {
+    setPrompt(inspirationPrompt);
+    inputRef.current?.focus();
+  }, []);
+
+  // 处理上传按钮点击
+  const handleUploadClick = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  // 将文件转换为 base64 data URL
+  const fileToBase64 = useCallback((file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }, []);
+
+  // 处理文件选择
+  const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    // 处理选中的文件（转换为 base64）
+    const newContent: SelectedContent[] = [];
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      // 只处理图片文件
+      if (!file.type.startsWith('image/')) continue;
+
+      try {
+        // 转换为 base64 data URL（API 可以识别）
+        const base64Url = await fileToBase64(file);
+        newContent.push({
+          type: 'image',
+          url: base64Url,
+          name: file.name || `上传图片 ${i + 1}`,
+        });
+      } catch (error) {
+        console.error('Failed to convert file to base64:', error);
+      }
+    }
+
+    if (newContent.length > 0) {
+      // 追加到用户上传内容（独立于画布选中内容）
+      setUploadedContent(prev => [...prev, ...newContent]);
+    }
+
+    // 重置 input 以便可以再次选择相同文件
+    e.target.value = '';
+  }, [fileToBase64]);
+
   // 处理选择变化的回调（由 SelectionWatcher 调用）
   const handleSelectionChange = useCallback((content: SelectedContent[]) => {
     setSelectedContent(content);
-    // 同步到 ChatDrawer Context，使 ChatDrawer 能获取选中内容
-    chatDrawerControl.setSelectedContent(content.map(c => ({
+  }, []);
+
+  // 处理删除上传的图片（index 是在 allContent 中的索引）
+  const handleRemoveUploadedContent = useCallback((index: number) => {
+    // allContent = [...uploadedContent, ...selectedContent]
+    // 所以 index < uploadedContent.length 表示是上传的内容
+    if (index < uploadedContent.length) {
+      setUploadedContent(prev => prev.filter((_, i) => i !== index));
+    }
+  }, [uploadedContent.length]);
+
+  // 同步 allContent 到 ChatDrawer Context
+  useEffect(() => {
+    setSelectedContentRef.current(allContent.map(c => ({
       type: c.type,
       url: c.url,
       text: c.text,
       name: c.name,
     })));
-  }, [chatDrawerControl]);
+  }, [allContent]);
 
   // 处理模型选择（从下拉菜单）
   const handleModelSelect = useCallback((modelId: string) => {
@@ -577,24 +685,24 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
 
   // Handle generation
   const handleGenerate = useCallback(async () => {
-    if (!prompt.trim() && selectedContent.length === 0) return;
+    if (!prompt.trim() && allContent.length === 0) return;
     if (isSubmitting) return; // 仅防止快速重复点击
 
     setIsSubmitting(true);
 
     try {
-      // 构建选中元素的分类信息
+      // 构建选中元素的分类信息（使用合并后的 allContent）
       const selection = {
-        texts: selectedContent
+        texts: allContent
           .filter((item) => item.type === 'text' && item.text)
           .map((item) => item.text!),
-        images: selectedContent
+        images: allContent
           .filter((item) => item.type === 'image' && item.url)
           .map((item) => item.url!),
-        videos: selectedContent
+        videos: allContent
           .filter((item) => item.type === 'video' && item.url)
           .map((item) => item.url!),
-        graphics: selectedContent
+        graphics: allContent
           .filter((item) => item.type === 'graphics' && item.url)
           .map((item) => item.url!),
       };
@@ -924,6 +1032,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
       // 清空输入并关闭面板
       setPrompt('');
       setSelectedContent([]);
+      setUploadedContent([]); // 同时清空用户上传内容
       setIsFocused(false);
       // 让输入框失去焦点
       inputRef.current?.blur();
@@ -934,7 +1043,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
     } finally {
       setIsSubmitting(false);
     }
-  }, [prompt, selectedContent, isSubmitting, selectedModel, workflowControl]);
+  }, [prompt, allContent, isSubmitting, selectedModel, workflowControl]);
 
   // 处理工作流重试（从指定步骤开始）
   const handleWorkflowRetry = useCallback(async (
@@ -1240,10 +1349,10 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
   }, []);
 
 
-  const canGenerate = prompt.trim().length > 0 || selectedContent.length > 0;
+  const canGenerate = prompt.trim().length > 0 || allContent.length > 0;
 
   return (
-    <div 
+    <div
       ref={containerRef}
       className={classNames('ai-input-bar', ATTACHED_ELEMENT_CLASS_NAME, className)}
     >
@@ -1252,14 +1361,45 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
         language={language}
         onSelectionChange={handleSelectionChange}
         externalBoardRef={SelectionWatcherBoardRef}
+        onCanvasEmptyChange={setIsCanvasEmpty}
+      />
+
+      {/* 灵感创意板块：画板为空时显示 */}
+      <InspirationBoard
+        isCanvasEmpty={isCanvasEmpty}
+        onSelectPrompt={handleSelectInspirationPrompt}
       />
 
       {/* Main input container - flex-column-reverse to expand upward */}
       <div className={classNames('ai-input-bar__container', {
-        'ai-input-bar__container--expanded': isFocused || selectedContent.length > 0
+        'ai-input-bar__container--expanded': isFocused || allContent.length > 0
       })}>
         {/* Bottom bar - fixed position with model selector and send button */}
         <div className="ai-input-bar__bottom-bar">
+          {/* Hidden file input for image upload */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={handleFileChange}
+            style={{ display: 'none' }}
+          />
+
+          {/* Left: Upload button */}
+          <button
+            className="ai-input-bar__upload-btn"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+            onClick={handleUploadClick}
+            title={language === 'zh' ? '上传图片' : 'Upload images'}
+            data-track="ai_input_click_upload"
+          >
+            <ImagePlus size={18} />
+          </button>
+
           {/* Left: Model dropdown selector */}
           <ModelDropdown
             selectedModel={selectedModel}
@@ -1290,12 +1430,14 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
           'ai-input-bar__input-area--expanded': isFocused
         })}>
           {/* Selected content preview - using shared component */}
-          {selectedContent.length > 0 && (
+          {allContent.length > 0 && (
             <div className="ai-input-bar__content-preview">
               <SelectedContentPreview
-                items={selectedContent}
+                items={allContent}
                 language={language}
                 enableHoverPreview={true}
+                onRemove={handleRemoveUploadedContent}
+                removableStartIndex={uploadedContent.length}
               />
             </div>
           )}
