@@ -104,11 +104,9 @@ export default defineConfig({
             if (id.includes('@llamaindex/chat-ui')) {
               return 'vendor-chat';
             }
-            // Mermaid - 统一打包，避免循环依赖和初始化顺序问题
-            // 过细的分割会导致 ReferenceError: Cannot access 'j' before initialization
-            if (id.includes('mermaid') || id.includes('elk') || id.includes('elkjs')) {
-              return 'vendor-mermaid';
-            }
+            // Mermaid - 完全交给 Vite 自动处理，不手动分包
+            // 手动分包会导致循环依赖：ReferenceError: Cannot access 'R9n' before initialization
+            // 让 Vite 自动分析依赖关系进行最优分割
             // 其他工具库
             if (id.includes('rxjs')) {
               return 'vendor-rxjs';
