@@ -104,45 +104,10 @@ export default defineConfig({
             if (id.includes('@llamaindex/chat-ui')) {
               return 'vendor-chat';
             }
-            // Mermaid ELK 布局引擎 - 单独分离，按需加载（必须在 mermaid 之前检查）
-            if (id.includes('elk') || id.includes('elkjs')) {
-              return 'vendor-mermaid-elk';
-            }
-            // Mermaid - 让 Vite 自动分割子模块
-            if (id.includes('mermaid')) {
-              // Mermaid 图表类型单独分割
-              if (id.includes('flowchart') || id.includes('flowDiagram')) {
-                return 'mermaid-flowchart';
-              }
-              if (id.includes('sequence') || id.includes('sequenceDiagram')) {
-                return 'mermaid-sequence';
-              }
-              if (id.includes('gantt') || id.includes('ganttDiagram')) {
-                return 'mermaid-gantt';
-              }
-              if (id.includes('class') || id.includes('classDiagram')) {
-                return 'mermaid-class';
-              }
-              if (id.includes('state') || id.includes('stateDiagram')) {
-                return 'mermaid-state';
-              }
-              if (id.includes('er') || id.includes('erDiagram')) {
-                return 'mermaid-er';
-              }
-              if (id.includes('journey') || id.includes('journeyDiagram')) {
-                return 'mermaid-journey';
-              }
-              if (id.includes('git') || id.includes('gitGraph')) {
-                return 'mermaid-git';
-              }
-              if (id.includes('pie') || id.includes('pieDiagram')) {
-                return 'mermaid-pie';
-              }
-              if (id.includes('requirement') || id.includes('requirementDiagram')) {
-                return 'mermaid-requirement';
-              }
-              // Mermaid 核心
-              return 'vendor-mermaid-core';
+            // Mermaid - 统一打包，避免循环依赖和初始化顺序问题
+            // 过细的分割会导致 ReferenceError: Cannot access 'j' before initialization
+            if (id.includes('mermaid') || id.includes('elk') || id.includes('elkjs')) {
+              return 'vendor-mermaid';
             }
             // 其他工具库
             if (id.includes('rxjs')) {
