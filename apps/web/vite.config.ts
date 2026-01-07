@@ -76,18 +76,14 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: (id) => {
-          // 只分离最大的库，避免过度分包导致依赖问题
+          // 只分离 React DOM，其他库完全交给 Vite 自动处理
+          // 手动分包会导致模块依赖问题（如 "br is not a function"、"Cannot read properties of undefined" 等错误）
           if (id.includes('node_modules')) {
-            // React DOM - 最大的依赖
+            // React DOM - 最大的依赖，单独分离
             if (id.includes('react-dom')) {
               return 'vendor-react-dom';
             }
-            // Chat UI - 按需加载的大库
-            if (id.includes('@llamaindex/chat-ui')) {
-              return 'vendor-chat';
-            }
-            // 其他大库让 Vite 自动处理，避免手动分包导致的循环依赖和模块加载顺序问题
-            // 这样可以防止 "br is not a function" 等错误
+            // 所有其他依赖让 Vite 自动处理，避免破坏模块依赖链
           }
         },
       },
