@@ -27,7 +27,8 @@ import { processSelectedContentForAI } from '../../utils/selection-utils';
 import { useTextSelection } from '../../hooks/useTextSelection';
 import { useChatDrawerControl } from '../../contexts/ChatDrawerContext';
 import { ModelDropdown } from './ModelDropdown';
-import { getDefaultImageModel, IMAGE_MODELS, getModelConfig } from '../../constants/model-config';
+import { SizeDropdown } from './SizeDropdown';
+import { getDefaultImageModel, IMAGE_MODELS, getModelConfig, getDefaultSizeForModel } from '../../constants/model-config';
 import { initializeMCP, setCanvasBoard, setBoard, mcpRegistry } from '../../mcp';
 import { initializeLongVideoChainService } from '../../services/long-video-chain-service';
 import { gridImageService } from '../../services/photo-wall';
@@ -291,6 +292,8 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
   const [isCanvasEmpty, setIsCanvasEmpty] = useState(true); // 画板是否为空
   // 当前选中的图片模型（通过环境变量或默认值初始化）
   const [selectedModel, setSelectedModel] = useState(getDefaultImageModel);
+  // 当前选中的尺寸（默认为模型的默认尺寸）
+  const [selectedSize, setSelectedSize] = useState(() => getDefaultSizeForModel(getDefaultImageModel()));
 
   // @ 触发模型选择相关状态
   const [showAtSuggestion, setShowAtSuggestion] = useState(false);
@@ -707,8 +710,8 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
           .map((item) => item.url!),
       };
 
-      // 解析输入内容，使用选中的模型
-      const parsedParams = parseAIInput(prompt, selection, { modelId: selectedModel });
+      // 解析输入内容，使用选中的模型和尺寸
+      const parsedParams = parseAIInput(prompt, selection, { modelId: selectedModel, size: selectedSize });
 
       console.log('[AIInputBar] Parsed params:', parsedParams);
       console.log('[AIInputBar] Key params - model:', parsedParams.modelId, 'count:', parsedParams.count, 'size:', parsedParams.size);
@@ -1404,6 +1407,14 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
           <ModelDropdown
             selectedModel={selectedModel}
             onSelect={handleModelSelect}
+            language={language}
+          />
+
+          {/* Size dropdown selector */}
+          <SizeDropdown
+            selectedSize={selectedSize}
+            onSelect={setSelectedSize}
+            modelId={selectedModel}
             language={language}
           />
 
