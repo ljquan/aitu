@@ -343,6 +343,13 @@ export const VIDEO_MODELS: ModelConfig[] = [
  */
 export const TEXT_MODELS: ModelConfig[] = [
   {
+    id: 'deepseek-v3.2',
+    label: 'DeepSeek V3.2',
+    description: 'DeepSeek 最新大语言模型，性价比高',
+    type: 'text',
+    supportsTools: true,
+  },
+  {
     id: 'claude-opus-4-5-20251101',
     label: 'Claude Opus 4.5',
     description: 'Anthropic 旗舰模型，推理能力最强',
@@ -356,13 +363,6 @@ export const TEXT_MODELS: ModelConfig[] = [
     description: 'Anthropic 均衡模型，性能与速度兼顾',
     type: 'text',
     isVip: true,
-    supportsTools: true,
-  },
-  {
-    id: 'deepseek-v3.2',
-    label: 'DeepSeek V3.2',
-    description: 'DeepSeek 最新大语言模型，性价比高',
-    type: 'text',
     supportsTools: true,
   },
   {
@@ -530,6 +530,11 @@ export function getDefaultImageModel(): string {
   return DEFAULT_IMAGE_MODEL_ID;
 }
 
+/**
+ * 默认图片模型（兼容旧代码）
+ * @deprecated 请使用 getDefaultImageModel()
+ */
+export const DEFAULT_IMAGE_MODEL = DEFAULT_IMAGE_MODEL_ID;
 
 /**
  * 默认视频模型

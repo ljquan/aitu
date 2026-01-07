@@ -21,6 +21,10 @@ export interface PlaitWorkZone extends PlaitElement {
   workflow: WorkflowMessageData;
   /** 创建时间 */
   createdAt: number;
+  /** 预期的元素插入位置 [leftX, topY]（leftX 是左边缘X坐标，用于元素生成后左对齐插入） */
+  expectedInsertPosition?: Point;
+  /** 画布缩放级别（用于内容等比缩放） */
+  zoom: number;
 }
 
 /**
@@ -33,12 +37,17 @@ export interface WorkZoneCreateOptions {
   position: Point;
   /** 尺寸 */
   size?: { width: number; height: number };
+  /** 预期的元素插入位置 [leftX, topY]（leftX 是左边缘X坐标，用于元素生成后左对齐插入） */
+  expectedInsertPosition?: Point;
+  /** 画布缩放级别（用于内容等比缩放） */
+  zoom: number;
 }
 
 /**
- * 默认 WorkZone 尺寸
+ * 默认 WorkZone 尺寸（画布坐标）
+ * 因为容器应用了 scale(1/zoom)，所以这是固定的物理尺寸
  */
 export const DEFAULT_WORKZONE_SIZE = {
   width: 360,
-  height: 200,
+  height: 240,
 };

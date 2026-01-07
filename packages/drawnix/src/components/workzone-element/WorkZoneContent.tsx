@@ -79,7 +79,9 @@ export const WorkZoneContent: React.FC<WorkZoneContentProps> = ({
     : '📝';
 
   return (
-    <div className={`workzone-content workzone-content--${workflowStatus.status} ${className}`}>
+    <div
+      className={`workzone-content workzone-content--${workflowStatus.status} ${className}`}
+    >
       {/* 头部 */}
       <div className="workzone-content__header">
         <span className="workzone-content__icon">{typeIcon}</span>

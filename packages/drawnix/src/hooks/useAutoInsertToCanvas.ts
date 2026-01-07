@@ -19,6 +19,8 @@ import { Task, TaskStatus, TaskType } from '../types/task.types';
 import { getCanvasBoard, insertAIFlow, insertImageGroup } from '../mcp';
 import { getInsertionPointBelowBottommostElement } from '../utils/selection-utils';
 import { splitAndInsertImages } from '../utils/image-splitter';
+import { WorkZoneTransforms } from '../plugins/with-workzone';
+import type { PlaitWorkZone } from '../types/workzone.types';
 
 /**
  * 配置项
@@ -45,6 +47,29 @@ const DEFAULT_CONFIG: AutoInsertConfig = {
  * 已插入任务的记录，防止重复插入
  */
 const insertedTaskIds = new Set<string>();
+
+/**
+ * 查找与任务关联的 WorkZone
+ * @param taskId 任务 ID
+ * @returns WorkZone 元素或 null
+ */
+function findWorkZoneForTask(taskId: string): PlaitWorkZone | null {
+  const board = getCanvasBoard();
+  if (!board) return null;
+
+  const allWorkZones = WorkZoneTransforms.getAllWorkZones(board);
+  for (const workzone of allWorkZones) {
+    // 检查 workflow 的 steps 中是否包含此任务的 taskId
+    const hasTask = workzone.workflow.steps?.some(step => {
+      const result = step.result as { taskId?: string } | undefined;
+      return result?.taskId === taskId;
+    });
+    if (hasTask) {
+      return workzone;
+    }
+  }
+  return null;
+}
 
 /**
  * 待插入任务的缓冲区，用于分组
@@ -81,8 +106,23 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
       const toInsert = new Map(pendingMap);
       pendingMap.clear();
 
-      // 获取插入起始位置（用于后续滚动定位）
-      const startPoint = getInsertionPointBelowBottommostElement(board, 800);
+      // 尝试查找与第一个任务关联的 WorkZone，获取预期插入位置
+      const firstTask = Array.from(toInsert.values())[0]?.[0]?.task;
+      let insertionPoint: Point | undefined;
+
+      if (firstTask) {
+        const workzone = findWorkZoneForTask(firstTask.id);
+        if (workzone?.expectedInsertPosition) {
+          insertionPoint = workzone.expectedInsertPosition;
+          console.log('[AutoInsert] Using WorkZone expected insert position:', insertionPoint);
+        }
+      }
+
+      // 如果没有找到 WorkZone 或没有预期位置，回退到原来的逻辑
+      if (!insertionPoint) {
+        insertionPoint = getInsertionPointBelowBottommostElement(board, 800);
+        console.log('[AutoInsert] Using default insertion point:', insertionPoint);
+      }
 
       for (const [promptKey, inserts] of toInsert) {
         if (!isActive) break;
@@ -111,18 +151,18 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
 
             if (mergedConfig.insertPrompt) {
               // 插入 Prompt + 结果
-              await insertAIFlow(task.params.prompt, [{ type, url }]);
+              await insertAIFlow(task.params.prompt, [{ type, url }], insertionPoint);
             } else {
               // 只插入结果
               const { quickInsert } = await import('../mcp');
-              await quickInsert(type, url);
+              await quickInsert(type, url, insertionPoint);
             }
 
-            console.log(`[AutoInsert] Inserted ${type} for task ${task.id}`);
+            console.log(`[AutoInsert] Inserted ${type} for task ${task.id} at position:`, insertionPoint);
             workflowCompletionService.completePostProcessing(
               task.id,
               1,
-              startPoint as Point | undefined
+              insertionPoint
             );
           } else {
             // 多个同 Prompt 任务，水平排列
@@ -144,29 +184,30 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
               // 插入 Prompt + 多个结果（水平排列）
               await insertAIFlow(
                 firstTask.params.prompt,
-                urls.map(url => ({ type, url }))
+                urls.map(url => ({ type, url })),
+                insertionPoint
               );
             } else {
               // 只插入多个结果（水平排列）
               if (type === 'image') {
-                await insertImageGroup(urls);
+                await insertImageGroup(urls, insertionPoint);
               } else {
                 // 视频也可以用类似的方式
                 for (const url of urls) {
                   const { quickInsert } = await import('../mcp');
-                  await quickInsert('video', url);
+                  await quickInsert('video', url, insertionPoint);
                 }
               }
             }
 
-            console.log(`[AutoInsert] Inserted ${urls.length} ${type}s for prompt: ${promptKey.substring(0, 50)}...`);
+            console.log(`[AutoInsert] Inserted ${urls.length} ${type}s for prompt: ${promptKey.substring(0, 50)}... at position:`, insertionPoint);
 
             // 标记所有任务完成
             for (const { task } of inserts) {
               workflowCompletionService.completePostProcessing(
                 task.id,
                 1,
-                startPoint as Point | undefined
+                insertionPoint
               );
             }
           }
