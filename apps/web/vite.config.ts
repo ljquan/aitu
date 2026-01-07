@@ -76,61 +76,18 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: (id) => {
-          // 核心依赖
+          // 只分离最大的库，避免过度分包导致依赖问题
           if (id.includes('node_modules')) {
-            // React 核心（不包括 tdesign-react）
+            // React DOM - 最大的依赖
             if (id.includes('react-dom')) {
               return 'vendor-react-dom';
             }
-            if (id.includes('react') && !id.includes('tdesign') && !id.includes('lucide')) {
-              return 'vendor-react-core';
-            }
-            // TDesign
-            if (id.includes('tdesign-react')) {
-              return 'vendor-tdesign';
-            }
-            if (id.includes('tdesign-icons-react')) {
-              return 'vendor-tdesign-icons';
-            }
-            // Plait
-            if (id.includes('@plait')) {
-              return 'vendor-plait';
-            }
-            // Slate
-            if (id.includes('slate')) {
-              return 'vendor-slate';
-            }
-            // Chat UI - 只在 ChatDrawer 使用时加载
+            // Chat UI - 按需加载的大库
             if (id.includes('@llamaindex/chat-ui')) {
               return 'vendor-chat';
             }
-            // Mermaid - 完全交给 Vite 自动处理，不手动分包
-            // 手动分包会导致循环依赖：ReferenceError: Cannot access 'R9n' before initialization
-            // 让 Vite 自动分析依赖关系进行最优分割
-            // 其他工具库
-            if (id.includes('rxjs')) {
-              return 'vendor-rxjs';
-            }
-            if (id.includes('roughjs')) {
-              return 'vendor-roughjs';
-            }
-            if (id.includes('is-hotkey') || id.includes('classnames')) {
-              return 'vendor-utils';
-            }
-            if (id.includes('@floating-ui') || id.includes('@tanstack') || id.includes('winbox') || id.includes('mobile-detect')) {
-              return 'vendor-ui-libs';
-            }
-            if (id.includes('lucide-react')) {
-              return 'vendor-icons';
-            }
-            // XLSX
-            if (id.includes('xlsx')) {
-              return 'vendor-xlsx';
-            }
-            // cytoscape（图布局库，较大）
-            if (id.includes('cytoscape')) {
-              return 'vendor-cytoscape';
-            }
+            // 其他大库让 Vite 自动处理，避免手动分包导致的循环依赖和模块加载顺序问题
+            // 这样可以防止 "br is not a function" 等错误
           }
         },
       },

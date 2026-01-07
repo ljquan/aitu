@@ -1,3 +1,17 @@
+## 0.4.2 (2026-01-07)
+
+### 🩹 Fixes
+
+- 移除手动分包让Vite自动处理避免循环依赖 ([edbc280](https://github.com/ljquan/aitu/commit/edbc280))
+
+### 🔧 Chores
+
+- refactor(vite配置): 移除mermaid手动分包改为自动处理 ([3d47e65](https://github.com/ljquan/aitu/commit/3d47e65))
+
+### ❤️  Thank You
+
+- liquidliang <ljquan@qq.com>
+
 ## 0.4.1 (2026-01-07)
 
 ### 🚀 Features
