@@ -76,9 +76,9 @@ ${toolsDescription}
 
 ## 示例（直接输出 JSON，不要代码块）
 
-### 示例1：简单文字生成图片（需适度扩展）
+### 示例1：简单文字生成图片（保留原始提示词）
 用户：画一只猫
-{"content": "为用户生成一张可爱的猫咪图片", "next": [{"mcp": "generate_image", "args": {"prompt": "一只可爱的猫咪，毛茸茸的，柔和的光线，温馨的氛围", "size": "1x1"}}]}
+{"content": "为用户生成一张猫咪图片", "next": [{"mcp": "generate_image", "args": {"prompt": "一只猫", "size": "1x1"}}]}
 
 ### 示例2：带参数的生成（保留原始提示词）
 用户：#imagen3 -size:16x9 一只猫在草地上奔跑
