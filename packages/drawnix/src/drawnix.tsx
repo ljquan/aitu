@@ -59,11 +59,13 @@ import { ToolbarConfigProvider } from './hooks/use-toolbar-config';
 import { AIInputBar } from './components/ai-input-bar';
 import { VersionUpdatePrompt } from './components/version-update/version-update-prompt';
 import { QuickCreationToolbar } from './components/toolbar/quick-creation-toolbar/quick-creation-toolbar';
+import { CacheQuotaProvider } from './components/cache-quota-provider/CacheQuotaProvider';
 
 const TTDDialog = lazy(() => import('./components/ttd-dialog/ttd-dialog').then(module => ({ default: module.TTDDialog })));
 const SettingsDialog = lazy(() => import('./components/settings-dialog/settings-dialog').then(module => ({ default: module.SettingsDialog })));
 const ProjectDrawer = lazy(() => import('./components/project-drawer').then(module => ({ default: module.ProjectDrawer })));
 const ToolboxDrawer = lazy(() => import('./components/toolbox-drawer/ToolboxDrawer').then(module => ({ default: module.ToolboxDrawer })));
+const MediaLibraryModal = lazy(() => import('./components/media-library').then(module => ({ default: module.MediaLibraryModal })));
 
 export type DrawnixProps = {
   value: PlaitElement[];
@@ -116,6 +118,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
   const [projectDrawerOpen, setProjectDrawerOpen] = useState(false);
   const [toolboxDrawerOpen, setToolboxDrawerOpen] = useState(false);
   const [taskPanelExpanded, setTaskPanelExpanded] = useState(false);
+  const [mediaLibraryOpen, setMediaLibraryOpen] = useState(false);
 
   // 使用 ref 来保存 board 的最新引用,避免 useCallback 依赖问题
   const boardRef = useRef<DrawnixBoard | null>(null);
@@ -125,6 +128,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
     setProjectDrawerOpen(false);
     setToolboxDrawerOpen(false);
     setTaskPanelExpanded(false);
+    setMediaLibraryOpen(false);
   }, []);
 
   // 处理项目抽屉切换（互斥逻辑）
@@ -149,6 +153,12 @@ export const Drawnix: React.FC<DrawnixProps> = ({
       if (!prev) closeAllDrawers();
       return !prev;
     });
+  }, [closeAllDrawers]);
+
+  // 打开素材库（用于缓存满提示）
+  const handleOpenMediaLibrary = useCallback(() => {
+    closeAllDrawers();
+    setMediaLibraryOpen(true);
   }, [closeAllDrawers]);
 
   // 使用 useCallback 稳定 setAppState 函数引用
@@ -265,39 +275,49 @@ export const Drawnix: React.FC<DrawnixProps> = ({
     <I18nProvider>
       <ToolbarConfigProvider>
         <AssetProvider>
-          <ChatDrawerProvider>
-            <WorkflowProvider>
-              <DrawnixContext.Provider value={contextValue}>
-                <DrawnixContent
-                  value={value}
-                  viewport={viewport}
-                  theme={theme}
-                  options={options}
-                  plugins={plugins}
-                  containerRef={containerRef}
-                  appState={appState}
-                  board={board}
-                  setBoard={setBoard}
-                  projectDrawerOpen={projectDrawerOpen}
-                  toolboxDrawerOpen={toolboxDrawerOpen}
-                  taskPanelExpanded={taskPanelExpanded}
-                  onChange={onChange}
-                  onSelectionChange={handleSelectionChange}
-                  onViewportChange={onViewportChange}
-                  onThemeChange={onThemeChange}
-                  onValueChange={onValueChange}
-                  afterInit={afterInit}
-                  onBoardSwitch={onBoardSwitch}
-                  handleProjectDrawerToggle={handleProjectDrawerToggle}
-                  handleToolboxDrawerToggle={handleToolboxDrawerToggle}
-                  handleTaskPanelToggle={handleTaskPanelToggle}
-                  setProjectDrawerOpen={setProjectDrawerOpen}
-                  setToolboxDrawerOpen={setToolboxDrawerOpen}
-                  handleBeforeSwitch={handleBeforeSwitch}
-                />
-              </DrawnixContext.Provider>
-            </WorkflowProvider>
-          </ChatDrawerProvider>
+          <CacheQuotaProvider onOpenMediaLibrary={handleOpenMediaLibrary}>
+            <ChatDrawerProvider>
+              <WorkflowProvider>
+                <DrawnixContext.Provider value={contextValue}>
+                  <DrawnixContent
+                    value={value}
+                    viewport={viewport}
+                    theme={theme}
+                    options={options}
+                    plugins={plugins}
+                    containerRef={containerRef}
+                    appState={appState}
+                    board={board}
+                    setBoard={setBoard}
+                    projectDrawerOpen={projectDrawerOpen}
+                    toolboxDrawerOpen={toolboxDrawerOpen}
+                    taskPanelExpanded={taskPanelExpanded}
+                    mediaLibraryOpen={mediaLibraryOpen}
+                    onChange={onChange}
+                    onSelectionChange={handleSelectionChange}
+                    onViewportChange={onViewportChange}
+                    onThemeChange={onThemeChange}
+                    onValueChange={onValueChange}
+                    afterInit={afterInit}
+                    onBoardSwitch={onBoardSwitch}
+                    handleProjectDrawerToggle={handleProjectDrawerToggle}
+                    handleToolboxDrawerToggle={handleToolboxDrawerToggle}
+                    handleTaskPanelToggle={handleTaskPanelToggle}
+                    setProjectDrawerOpen={setProjectDrawerOpen}
+                    setToolboxDrawerOpen={setToolboxDrawerOpen}
+                    setMediaLibraryOpen={setMediaLibraryOpen}
+                    handleBeforeSwitch={handleBeforeSwitch}
+                  />
+                  <Suspense fallback={null}>
+                    <MediaLibraryModal
+                      isOpen={mediaLibraryOpen}
+                      onClose={() => setMediaLibraryOpen(false)}
+                    />
+                  </Suspense>
+                </DrawnixContext.Provider>
+              </WorkflowProvider>
+            </ChatDrawerProvider>
+          </CacheQuotaProvider>
         </AssetProvider>
       </ToolbarConfigProvider>
     </I18nProvider>
@@ -318,6 +338,7 @@ interface DrawnixContentProps {
   projectDrawerOpen: boolean;
   toolboxDrawerOpen: boolean;
   taskPanelExpanded: boolean;
+  mediaLibraryOpen: boolean;
   onChange?: (value: BoardChangeData) => void;
   onSelectionChange: (selection: Selection | null) => void;
   onViewportChange?: (value: Viewport) => void;
@@ -330,6 +351,7 @@ interface DrawnixContentProps {
   handleTaskPanelToggle: () => void;
   setProjectDrawerOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setToolboxDrawerOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  setMediaLibraryOpen: React.Dispatch<React.SetStateAction<boolean>>;
   handleBeforeSwitch: () => Promise<void>;
 }
 

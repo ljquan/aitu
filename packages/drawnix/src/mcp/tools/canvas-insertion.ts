@@ -224,11 +224,12 @@ async function insertImageToCanvas(
  */
 async function getImageDimensions(imageUrl: string): Promise<{ width: number; height: number }> {
   try {
-    const { urlCacheService } = await import('../../services/url-cache-service');
+    const { unifiedCacheService } = await import('../../services/unified-cache-service');
     const { loadHTMLImageElement } = await import('../../data/image');
 
-    const dataURL = await urlCacheService.getImageAsBase64(imageUrl);
-    const image = await loadHTMLImageElement(dataURL, false);
+    // 使用智能图片传递：优先URL，超过1天用base64
+    const imageData = await unifiedCacheService.getImageForAI(imageUrl);
+    const image = await loadHTMLImageElement(imageData.value, false);
 
     // 计算显示尺寸（保持宽高比，默认宽度400）
     const defaultImageWidth = 400;

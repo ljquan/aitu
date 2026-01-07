@@ -5,7 +5,7 @@
 
 export { MediaLibraryModal } from './MediaLibraryModal';
 export { MediaLibraryGrid } from './MediaLibraryGrid';
-export { AssetGridItem } from './AssetGridItem';
+export { AssetItem } from './AssetItem';
 export { MediaLibrarySidebar } from './MediaLibrarySidebar';
 export { MediaLibraryInspector } from './MediaLibraryInspector';
 export { MediaLibraryEmpty } from './MediaLibraryEmpty';
