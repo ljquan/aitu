@@ -2,6 +2,7 @@
   "name": "@aitu/source",
   "version": "0.4.0",
   "license": "MIT",
+  "packageManager": "pnpm@10.21.0",
   "description": "Aitu - An open-source whiteboard tool with AI-powered image/video creation, mind mapping, flowcharts, and freehand drawing",
   "homepage": "https://aitu.chat",
   "repository": {
@@ -116,6 +117,7 @@
     "nx": "19.3.0",
     "postcss": "^8.5.6",
     "prettier": "^2.6.2",
+    "rollup-plugin-visualizer": "^6.0.5",
     "sass": "^1.55.0",
     "size-limit": "^12.0.0",
     "tailwindcss": "^4.1.17",
