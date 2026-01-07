@@ -1,6 +1,6 @@
 [build]
   # 构建命令 - 使用 pnpm 并先重置 Nx 缓存
-  command = "pnpm install && nx reset && pnpm run build:web"
+  command = "pnpm install && pnpm nx reset && pnpm run build:web"
 
   # 发布目录 - Nx构建的web应用输出目录
   publish = "dist/apps/web"
@@ -79,10 +79,10 @@
 
 # 部署上下文配置
 [context.production]
-  command = "pnpm install && nx reset && pnpm run build:web"
+  command = "pnpm install && pnpm nx reset && pnpm run build:web"
 
 [context.deploy-preview]
-  command = "pnpm install && nx reset && pnpm run build:web"
+  command = "pnpm install && pnpm nx reset && pnpm run build:web"
 
 [context.branch-deploy]
-  command = "pnpm install && nx reset && pnpm run build:web"
+  command = "pnpm install && pnpm nx reset && pnpm run build:web"
