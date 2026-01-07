@@ -1251,15 +1251,19 @@ async function handleImageRequestInternal(originalRequest: Request, requestUrl: 
       
       // 尝试缓存响应，处理存储限制错误
       try {
-        await cache.put(originalRequest, corsResponse.clone());
-        console.log('Service Worker: Opaque response cached with 30-day expiry and timestamp');
+        if (originalRequest.url.startsWith('http')) {
+          await cache.put(originalRequest, corsResponse.clone());
+          console.log('Service Worker: Opaque response cached with 30-day expiry and timestamp');
+        }
       } catch (cacheError) {
         console.warn('Service Worker: Failed to cache opaque response (可能超出存储限制):', cacheError);
         // 尝试清理一些旧缓存后重试
         await cleanOldCacheEntries(cache);
         try {
-          await cache.put(originalRequest, corsResponse.clone());
-          console.log('Service Worker: Opaque response cached after cleanup');
+          if (originalRequest.url.startsWith('http')) {
+            await cache.put(originalRequest, corsResponse.clone());
+            console.log('Service Worker: Opaque response cached after cleanup');
+          }
         } catch (retryError) {
           console.error('Service Worker: Still failed to cache after cleanup:', retryError);
         }
@@ -1298,15 +1302,19 @@ async function handleImageRequestInternal(originalRequest: Request, requestUrl: 
       
       // 尝试缓存响应，处理存储限制错误
       try {
-        await cache.put(originalRequest, corsResponse.clone());
-        console.log(`Service Worker: Normal response cached (${imageSizeMB.toFixed(2)}MB) with 30-day expiry and timestamp`);
+        if (originalRequest.url.startsWith('http')) {
+          await cache.put(originalRequest, corsResponse.clone());
+          console.log(`Service Worker: Normal response cached (${imageSizeMB.toFixed(2)}MB) with 30-day expiry and timestamp`);
+        }
       } catch (cacheError) {
         console.warn(`Service Worker: Failed to cache normal response (${imageSizeMB.toFixed(2)}MB, 可能超出存储限制):`, cacheError);
         // 尝试清理一些旧缓存后重试
         await cleanOldCacheEntries(cache);
         try {
-          await cache.put(originalRequest, corsResponse.clone());
-          console.log(`Service Worker: Normal response cached after cleanup (${imageSizeMB.toFixed(2)}MB)`);
+          if (originalRequest.url.startsWith('http')) {
+            await cache.put(originalRequest, corsResponse.clone());
+            console.log(`Service Worker: Normal response cached after cleanup (${imageSizeMB.toFixed(2)}MB)`);
+          }
         } catch (retryError) {
           console.error('Service Worker: Still failed to cache after cleanup:', retryError);
         }
