@@ -6,7 +6,7 @@
  */
 
 import { geminiSettings } from '../utils/settings-manager';
-import { createLogger } from '../utils/logger';
+import { createLogger } from '@aitu/utils';
 import {
   getCharacterModel,
   type CreateCharacterParams,

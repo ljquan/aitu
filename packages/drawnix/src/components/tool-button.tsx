@@ -5,7 +5,7 @@ import type { CSSProperties } from 'react';
 import React, { useEffect, useRef, useState } from 'react';
 import { Tooltip, PopupPlacement } from 'tdesign-react';
 import { AbortError } from '../errors';
-import { isPromiseLike } from '../utils/common';
+import { isPromiseLike } from '@aitu/utils';
 import classNames from 'classnames';
 import { EventPointerType } from '../types';
 

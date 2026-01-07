@@ -14,7 +14,7 @@ import {
   getModelConfig, 
   getImageModelDefaults, 
   getVideoModelDefaults,
-  DEFAULT_IMAGE_MODEL,
+  getDefaultImageModel as getSystemDefaultImageModel,
   DEFAULT_VIDEO_MODEL,
 } from '../constants/model-config';
 
@@ -81,7 +81,7 @@ export interface ParsedGenerationParams {
  */
 function getDefaultImageModel(): string {
   const settings = geminiSettings.get();
-  return settings?.imageModelName || DEFAULT_IMAGE_MODEL;
+  return settings?.imageModelName || getSystemDefaultImageModel();
 }
 
 /**

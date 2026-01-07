@@ -1,7 +1,7 @@
 import { PlaitBoard } from '@plait/core';
 import { isValidDrawnixData } from './json';
 import { IMAGE_MIME_TYPES, MIME_TYPES } from '../constants';
-import { ValueOf } from '../utils/utility-types';
+import { ValueOf } from '@aitu/utils';
 import { DataURL } from '../types';
 
 export const loadFromBlob = async (board: PlaitBoard, blob: Blob | File) => {

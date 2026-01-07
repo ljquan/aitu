@@ -1,10 +1,5 @@
 import { DEFAULT_COLOR } from '@plait/core';
-
-export const TRANSPARENT = 'TRANSPARENT';
-
-export const NO_COLOR = 'NO_COLOR';
-
-export const WHITE = '#FFFFFF';
+import { NO_COLOR, WHITE } from '@aitu/utils';
 
 export const CLASSIC_COLORS = [
   { name: 'Topic Color', value: NO_COLOR },

@@ -1,0 +1,38 @@
+[
+  {
+    "name": "Initial Bundle (Core)",
+    "path": "dist/apps/web/assets/index-*.js",
+    "limit": "900 kB",
+    "gzip": true
+  },
+  {
+    "name": "Vendor React Core",
+    "path": "dist/apps/web/assets/vendor-react-core-*.js",
+    "limit": "120 kB",
+    "gzip": true
+  },
+  {
+    "name": "Vendor React DOM",
+    "path": "dist/apps/web/assets/vendor-react-dom-*.js",
+    "limit": "450 kB",
+    "gzip": true
+  },
+  {
+    "name": "Vendor Plait",
+    "path": "dist/apps/web/assets/vendor-plait-*.js",
+    "limit": "130 kB",
+    "gzip": true
+  },
+  {
+    "name": "Vendor Chat",
+    "path": "dist/apps/web/assets/vendor-chat-*.js",
+    "limit": "700 kB",
+    "gzip": true
+  },
+  {
+    "name": "Vendor Mermaid ELK",
+    "path": "dist/apps/web/assets/vendor-mermaid-elk-*.js",
+    "limit": "500 kB",
+    "gzip": true
+  }
+]

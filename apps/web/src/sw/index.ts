@@ -841,7 +841,10 @@ async function handleStaticRequest(request: Request): Promise<Response> {
         // Cache the new HTML for offline use only
         if (response && response.status === 200) {
           const cache = await caches.open(STATIC_CACHE_NAME);
-          cache.put(request, response.clone());
+          // Only cache http/https requests
+          if (request.url.startsWith('http')) {
+            cache.put(request, response.clone());
+          }
         }
         
         return response;
@@ -884,7 +887,10 @@ async function handleStaticRequest(request: Request): Promise<Response> {
     // Cache successful responses
     if (response && response.status === 200) {
       const cache = await caches.open(STATIC_CACHE_NAME);
-      cache.put(request, response.clone());
+      // Only cache http/https requests
+      if (request.url.startsWith('http')) {
+        cache.put(request, response.clone());
+      }
     }
     
     return response;
@@ -1012,7 +1018,9 @@ async function handleImageRequestInternal(originalRequest: Request, requestUrl: 
           });
           
           // 用新时间戳重新缓存（使用原始URL作为键）
-          await cache.put(originalRequest, refreshedResponse.clone());
+          if (originalRequest.url.startsWith('http')) {
+            await cache.put(originalRequest, refreshedResponse.clone());
+          }
           console.log(`Service Worker [${requestId}]: Cache expiry extended by 30 days for:`, requestUrl);
           
           return refreshedResponse;
@@ -1035,7 +1043,9 @@ async function handleImageRequestInternal(originalRequest: Request, requestUrl: 
           }
         });
         
-        await cache.put(originalRequest, refreshedResponse.clone());
+        if (originalRequest.url.startsWith('http')) {
+          await cache.put(originalRequest, refreshedResponse.clone());
+        }
         return refreshedResponse;
       }
     }
