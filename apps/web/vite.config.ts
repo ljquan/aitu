@@ -78,18 +78,25 @@ export default defineConfig({
         manualChunks: (id) => {
           // 核心依赖
           if (id.includes('node_modules')) {
-            if (id.includes('react') || id.includes('react-dom')) {
-              return 'vendor-react';
+            // React 核心（不包括 tdesign-react）
+            if (id.includes('react-dom')) {
+              return 'vendor-react-dom';
             }
+            if (id.includes('react') && !id.includes('tdesign') && !id.includes('lucide')) {
+              return 'vendor-react-core';
+            }
+            // TDesign
             if (id.includes('tdesign-react')) {
               return 'vendor-tdesign';
             }
             if (id.includes('tdesign-icons-react')) {
               return 'vendor-tdesign-icons';
             }
+            // Plait
             if (id.includes('@plait')) {
               return 'vendor-plait';
             }
+            // Slate
             if (id.includes('slate')) {
               return 'vendor-slate';
             }
@@ -97,16 +104,54 @@ export default defineConfig({
             if (id.includes('@llamaindex/chat-ui')) {
               return 'vendor-chat';
             }
-            // Mermaid 核心
-            if (id.includes('mermaid') && !id.includes('elk')) {
-              return 'vendor-mermaid';
-            }
-            // Mermaid ELK 布局引擎 - 单独分离，按需加载
+            // Mermaid ELK 布局引擎 - 单独分离，按需加载（必须在 mermaid 之前检查）
             if (id.includes('elk') || id.includes('elkjs')) {
               return 'vendor-mermaid-elk';
             }
+            // Mermaid - 让 Vite 自动分割子模块
+            if (id.includes('mermaid')) {
+              // Mermaid 图表类型单独分割
+              if (id.includes('flowchart') || id.includes('flowDiagram')) {
+                return 'mermaid-flowchart';
+              }
+              if (id.includes('sequence') || id.includes('sequenceDiagram')) {
+                return 'mermaid-sequence';
+              }
+              if (id.includes('gantt') || id.includes('ganttDiagram')) {
+                return 'mermaid-gantt';
+              }
+              if (id.includes('class') || id.includes('classDiagram')) {
+                return 'mermaid-class';
+              }
+              if (id.includes('state') || id.includes('stateDiagram')) {
+                return 'mermaid-state';
+              }
+              if (id.includes('er') || id.includes('erDiagram')) {
+                return 'mermaid-er';
+              }
+              if (id.includes('journey') || id.includes('journeyDiagram')) {
+                return 'mermaid-journey';
+              }
+              if (id.includes('git') || id.includes('gitGraph')) {
+                return 'mermaid-git';
+              }
+              if (id.includes('pie') || id.includes('pieDiagram')) {
+                return 'mermaid-pie';
+              }
+              if (id.includes('requirement') || id.includes('requirementDiagram')) {
+                return 'mermaid-requirement';
+              }
+              // Mermaid 核心
+              return 'vendor-mermaid-core';
+            }
             // 其他工具库
-            if (id.includes('rxjs') || id.includes('roughjs') || id.includes('is-hotkey') || id.includes('classnames')) {
+            if (id.includes('rxjs')) {
+              return 'vendor-rxjs';
+            }
+            if (id.includes('roughjs')) {
+              return 'vendor-roughjs';
+            }
+            if (id.includes('is-hotkey') || id.includes('classnames')) {
               return 'vendor-utils';
             }
             if (id.includes('@floating-ui') || id.includes('@tanstack') || id.includes('winbox') || id.includes('mobile-detect')) {
@@ -114,6 +159,14 @@ export default defineConfig({
             }
             if (id.includes('lucide-react')) {
               return 'vendor-icons';
+            }
+            // XLSX
+            if (id.includes('xlsx')) {
+              return 'vendor-xlsx';
+            }
+            // cytoscape（图布局库，较大）
+            if (id.includes('cytoscape')) {
+              return 'vendor-cytoscape';
             }
           }
         },

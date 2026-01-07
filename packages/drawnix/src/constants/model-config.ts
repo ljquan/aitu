@@ -530,11 +530,6 @@ export function getDefaultImageModel(): string {
   return DEFAULT_IMAGE_MODEL_ID;
 }
 
-/**
- * 默认图片模型（兼容旧代码）
- * @deprecated 请使用 getDefaultImageModel()
- */
-export const DEFAULT_IMAGE_MODEL = DEFAULT_IMAGE_MODEL_ID;
 
 /**
  * 默认视频模型

@@ -41,6 +41,10 @@ jobs:
       - run: npx nx affected -t lint --exclude=drawnix --base=origin/develop --verbose
       - run: npx nx affected --parallel 1 -t e2e-ci --base=origin/develop --verbose
 
+      - name: Check Bundle Size
+        if: always()
+        run: pnpm run size
+
       - name: Upload Bundle Stats
         if: always()
         uses: actions/upload-artifact@v4

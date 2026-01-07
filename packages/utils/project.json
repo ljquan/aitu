@@ -25,6 +25,14 @@
       "options": {
         "command": "tsc --noEmit -p packages/utils/tsconfig.json"
       }
+    },
+    "test": {
+      "executor": "@nx/vite:test",
+      "outputs": ["{options.reportsDirectory}"],
+      "options": {
+        "passWithNoTests": false,
+        "reportsDirectory": "../../coverage/packages/utils"
+      }
     }
   },
   "tags": ["type:library", "scope:shared"]

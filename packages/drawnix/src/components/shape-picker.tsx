@@ -16,7 +16,7 @@ import React from 'react';
 import { BoardCreationMode, setCreationMode } from '@plait/common';
 import { BasicShapes, DrawPointerType, FlowchartSymbols } from '@plait/draw';
 import { useBoard } from '@plait-board/react-board';
-import { splitRows } from '../utils/common';
+import { splitRows } from '@aitu/utils';
 
 export interface ShapeProps {
   icon: React.ReactNode;

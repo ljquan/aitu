@@ -10,7 +10,7 @@ import {
   IMAGE_MODEL_GROUPED_SELECT_OPTIONS,
   VIDEO_MODEL_SELECT_OPTIONS,
   TEXT_MODEL_SELECT_OPTIONS,
-  DEFAULT_IMAGE_MODEL,
+  getDefaultImageModel,
   DEFAULT_VIDEO_MODEL,
   DEFAULT_TEXT_MODEL,
 } from '../../constants/model-config';
@@ -38,7 +38,7 @@ export const SettingsDialog = ({
       const config = geminiSettings.get();
       setApiKey(config.apiKey || '');
       setBaseUrl(config.baseUrl || 'https://api.tu-zi.com/v1');
-      setImageModelName(config.imageModelName || DEFAULT_IMAGE_MODEL);
+      setImageModelName(config.imageModelName || getDefaultImageModel());
       setVideoModelName(config.videoModelName || DEFAULT_VIDEO_MODEL);
       setTextModelName(config.textModelName || DEFAULT_TEXT_MODEL);
     }
@@ -49,7 +49,7 @@ export const SettingsDialog = ({
     geminiSettings.update({
       apiKey: apiKey.trim(),
       baseUrl: baseUrl.trim() || 'https://api.tu-zi.com/v1',
-      imageModelName: imageModelName.trim() || DEFAULT_IMAGE_MODEL,
+      imageModelName: imageModelName.trim() || getDefaultImageModel(),
       videoModelName: videoModelName.trim() || DEFAULT_VIDEO_MODEL,
       textModelName: textModelName.trim() || DEFAULT_TEXT_MODEL,
     });
@@ -119,7 +119,7 @@ export const SettingsDialog = ({
               options={IMAGE_MODEL_GROUPED_SELECT_OPTIONS}
               filterable
               creatable
-              placeholder={DEFAULT_IMAGE_MODEL}
+              placeholder={getDefaultImageModel()}
             />
           </div>
           <div className="settings-dialog__field">

@@ -11,7 +11,7 @@ import type { MCPTool, MCPResult, MCPExecuteOptions, MCPTaskResult } from '../ty
 import { defaultGeminiClient } from '../../utils/gemini-api';
 import { taskQueueService } from '../../services/task-queue-service';
 import { TaskType } from '../../types/task.types';
-import { DEFAULT_IMAGE_MODEL, IMAGE_PARAMS } from '../../constants/model-config';
+import { getDefaultImageModel, IMAGE_PARAMS } from '../../constants/model-config';
 import { geminiSettings } from '../../utils/settings-manager';
 
 /**
@@ -20,7 +20,7 @@ import { geminiSettings } from '../../utils/settings-manager';
  */
 export function getCurrentImageModel(): string {
   const settings = geminiSettings.get();
-  return settings?.imageModelName || DEFAULT_IMAGE_MODEL;
+  return settings?.imageModelName || getDefaultImageModel();
 }
 
 /**
@@ -265,8 +265,8 @@ export const imageGenerationTool: MCPTool = {
       },
       model: {
         type: 'string',
-        description: `图片生成模型，默认使用 ${DEFAULT_IMAGE_MODEL}`,
-        default: DEFAULT_IMAGE_MODEL,
+        description: `图片生成模型，默认使用 ${getDefaultImageModel()}`,
+        default: getDefaultImageModel(),
       },
       count: {
         type: 'number',
