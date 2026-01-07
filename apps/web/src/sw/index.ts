@@ -511,6 +511,11 @@ async function cleanExpiredImageCache() {
 sw.addEventListener('fetch', (event: FetchEvent) => {
   const url = new URL(event.request.url);
 
+  // 只处理 http 和 https 协议的请求，忽略 chrome-extension、data、blob 等
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    return;
+  }
+
   // 检查是否要求绕过Service Worker
   if (url.searchParams.has('bypass_sw') || url.searchParams.has('direct_fetch')) {
     console.log('Service Worker: 检测到绕过参数，直接通过请求:', url.href);
