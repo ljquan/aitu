@@ -288,7 +288,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
   const [uploadedContent, setUploadedContent] = useState<SelectedContent[]>([]); // 用户上传内容
   const [isSubmitting, setIsSubmitting] = useState(false); // 仅用于防止重复点击，不阻止并行任务
   const [isFocused, setIsFocused] = useState(false);
-  const [isCanvasEmpty, setIsCanvasEmpty] = useState(true); // 画板是否为空
+  const [isCanvasEmpty, setIsCanvasEmpty] = useState(false); // 画板是否为空，默认 false 避免初始闪烁
   // 当前选中的图片模型（通过环境变量或默认值初始化）
   const [selectedModel, setSelectedModel] = useState(getDefaultImageModel);
 
