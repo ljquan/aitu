@@ -2,7 +2,8 @@
  * Asset Storage Service
  * 素材存储服务
  *
- * 使用 localforage (IndexedDB wrapper) 进行素材持久化存储
+ * 使用 localforage (IndexedDB wrapper) 进行素材元数据持久化存储
+ * 媒体数据由统一缓存服务 (unified-cache-service) 管理
  * Based on contracts/asset-storage-service.md
  */
 
@@ -11,23 +12,24 @@ import { ASSET_CONSTANTS } from '../constants/ASSET_CONSTANTS';
 import {
   validateAssetName,
   validateMimeType,
-  getAssetType,
 } from '../utils/asset-utils';
 import { canAddAssetBySize } from '../utils/storage-quota';
+import { unifiedCacheService } from './unified-cache-service';
 import type {
   Asset,
   StoredAsset,
+  LegacyStoredAsset,
   AddAssetData,
   StorageStats,
   StorageQuota,
-  AssetType,
-  AssetSource,
 } from '../types/asset.types';
 import {
-  createAsset,
-  storedAssetToAsset,
   assetToStoredAsset,
+  storedAssetToAsset,
 } from '../types/asset.types';
+
+/** 素材库 URL 前缀（用于本地上传的素材） */
+const ASSET_URL_PREFIX = '/asset-library/';
 
 /**
  * Custom Error Classes
@@ -68,7 +70,23 @@ export class ValidationError extends AssetStorageError {
  */
 class AssetStorageService {
   private store: LocalForage | null = null;
-  private blobUrlCache: Map<string, string> = new Map();
+  private migrationDone: boolean = false;
+
+  /**
+   * 生成素材的缓存 URL（用于本地上传的素材）
+   * 使用稳定的 URL 格式，便于统一缓存服务管理
+   */
+  private generateAssetUrl(assetId: string, mimeType: string): string {
+    const extension = mimeType.split('/')[1] || 'bin';
+    return `${ASSET_URL_PREFIX}${assetId}.${extension}`;
+  }
+
+  /**
+   * 检查是否是旧版存储格式（包含 blobData）
+   */
+  private isLegacyFormat(item: any): item is LegacyStoredAsset {
+    return item && 'blobData' in item && item.blobData instanceof Blob;
+  }
 
   /**
    * Initialize Storage Service
@@ -80,6 +98,84 @@ class AssetStorageService {
       storeName: ASSET_CONSTANTS.STORE_NAME,
       description: 'Media library assets storage',
     });
+
+    // 执行数据迁移
+    await this.migrateOldData();
+  }
+
+  /**
+   * 迁移旧版数据
+   * 1. 删除 AI 生成的素材（现在从任务队列读取）
+   * 2. 将本地上传的旧版 Blob 数据迁移到统一缓存
+   */
+  private async migrateOldData(): Promise<void> {
+    if (this.migrationDone || !this.store) return;
+
+    const migrationKey = 'drawnix_asset_migration_v3'; // 更新版本号
+    const migrated = localStorage.getItem(migrationKey);
+    if (migrated === 'done') {
+      this.migrationDone = true;
+      return;
+    }
+
+    console.log('[AssetStorageService] Starting data migration v3...');
+
+    try {
+      const keys = await this.store.keys();
+      let migratedCount = 0;
+      let deletedAiCount = 0;
+
+      for (const key of keys) {
+        try {
+          const item = await this.store.getItem(key) as any;
+          if (!item) continue;
+
+          // 删除 AI 生成的素材（现在从任务队列读取）
+          if (item.source === 'AI_GENERATED') {
+            await this.store.removeItem(key);
+            deletedAiCount++;
+            console.log(`[AssetStorageService] Deleted AI asset ${item.id}`);
+            continue;
+          }
+
+          // 迁移本地上传的旧版数据
+          if (this.isLegacyFormat(item)) {
+            // 生成新的 URL
+            const assetUrl = this.generateAssetUrl(item.id, item.mimeType);
+
+            // 将 Blob 数据迁移到统一缓存
+            const cacheType = item.type === 'IMAGE' ? 'image' : 'video';
+            await unifiedCacheService.cacheMediaFromBlob(assetUrl, item.blobData, cacheType, {
+              taskId: item.id,
+            });
+
+            // 更新为新格式（不含 blobData）
+            const newStoredAsset: StoredAsset = {
+              id: item.id,
+              type: item.type,
+              source: item.source,
+              url: assetUrl,
+              name: item.name,
+              mimeType: item.mimeType,
+              createdAt: item.createdAt,
+              size: item.size,
+            };
+
+            await this.store.setItem(key, newStoredAsset);
+            migratedCount++;
+            console.log(`[AssetStorageService] Migrated local asset ${item.id}`);
+          }
+        } catch (error) {
+          console.error(`[AssetStorageService] Failed to process asset ${key}:`, error);
+        }
+      }
+
+      localStorage.setItem(migrationKey, 'done');
+      this.migrationDone = true;
+      console.log(`[AssetStorageService] Migration v3 completed: migrated ${migratedCount} local assets, deleted ${deletedAiCount} AI assets`);
+    } catch (error) {
+      console.error('[AssetStorageService] Migration failed:', error);
+    }
   }
 
   /**
@@ -134,32 +230,39 @@ class AssetStorageService {
     console.log('[AssetStorageService] Storage quota check passed');
 
     try {
-      // 创建Asset对象
-      console.log('[AssetStorageService] Creating blob URL...');
-      const blobUrl = URL.createObjectURL(data.blob);
-      console.log('[AssetStorageService] Blob URL created:', blobUrl);
+      // 生成稳定的素材 URL
+      const assetId = crypto.randomUUID();
+      const assetUrl = this.generateAssetUrl(assetId, data.mimeType);
+      console.log('[AssetStorageService] Generated asset URL:', assetUrl);
 
-      const asset = createAsset({
+      // 使用统一缓存服务缓存媒体
+      const cacheType = data.type === 'IMAGE' ? 'image' : 'video';
+      await unifiedCacheService.cacheMediaFromBlob(assetUrl, data.blob, cacheType, {
+        taskId: assetId,
+        prompt: data.prompt,
+        model: data.modelName,
+      });
+      console.log('[AssetStorageService] Media cached via unified cache service');
+
+      const asset: Asset = {
+        id: assetId,
         type: data.type,
         source: data.source,
-        url: blobUrl,
+        url: assetUrl,
         name: data.name,
         mimeType: data.mimeType,
+        createdAt: Date.now(),
         size: data.blob.size,
         prompt: data.prompt,
         modelName: data.modelName,
-      });
+      };
       console.log('[AssetStorageService] Asset object created:', asset);
 
-      // 转换为StoredAsset并保存
-      console.log('[AssetStorageService] Converting to StoredAsset and saving to IndexedDB...');
-      const storedAsset = assetToStoredAsset(asset, data.blob);
+      // 转换为StoredAsset并保存（只存元数据，不存 Blob）
+      console.log('[AssetStorageService] Saving asset metadata to IndexedDB...');
+      const storedAsset = assetToStoredAsset(asset);
       await this.store!.setItem(asset.id, storedAsset);
       console.log('[AssetStorageService] Asset saved to IndexedDB');
-
-      // 缓存Blob URL
-      this.blobUrlCache.set(asset.id, blobUrl);
-      console.log('[AssetStorageService] Blob URL cached');
 
       console.log('[AssetStorageService] addAsset completed successfully');
       return asset;
@@ -197,15 +300,8 @@ class AssetStorageService {
           const stored = (await this.store!.getItem(key)) as StoredAsset | null;
           if (!stored) return null;
 
-          // 检查是否已有缓存的Blob URL
-          let url = this.blobUrlCache.get(stored.id);
-          if (!url) {
-            url = URL.createObjectURL(stored.blobData);
-            this.blobUrlCache.set(stored.id, url);
-          }
-
-          const { blobData, ...assetData } = stored;
-          return { ...assetData, url } as Asset;
+          // 直接使用存储的 URL
+          return storedAssetToAsset(stored);
         } catch (err) {
           console.error(`[AssetStorageService] Failed to load asset ${key}:`, err);
           return null;
@@ -239,18 +335,8 @@ class AssetStorageService {
         return null;
       }
 
-      // 检查是否已有缓存的Blob URL
-      let url = this.blobUrlCache.get(stored.id);
-      if (!url) {
-        url = URL.createObjectURL(stored.blobData);
-        this.blobUrlCache.set(stored.id, url);
-      }
-
-      const { blobData, ...assetData } = stored;
-      return {
-        ...assetData,
-        url,
-      };
+      // 直接使用存储的 URL
+      return storedAssetToAsset(stored);
     } catch (error: any) {
       throw new AssetStorageError(
         `Failed to get asset: ${error.message}`,
@@ -304,12 +390,8 @@ class AssetStorageService {
         throw new NotFoundError(id);
       }
 
-      // 释放Blob URL
-      const cachedUrl = this.blobUrlCache.get(id);
-      if (cachedUrl) {
-        URL.revokeObjectURL(cachedUrl);
-        this.blobUrlCache.delete(id);
-      }
+      // 从统一缓存中删除（使用存储的 URL）
+      await unifiedCacheService.deleteCache(stored.url);
 
       await this.store!.removeItem(id);
     } catch (error: any) {
@@ -331,11 +413,15 @@ class AssetStorageService {
     this.ensureInitialized();
 
     try {
-      // 释放所有Blob URLs
-      for (const url of this.blobUrlCache.values()) {
-        URL.revokeObjectURL(url);
-      }
-      this.blobUrlCache.clear();
+      // 获取所有素材的 URL 并从统一缓存中删除
+      const keys = await this.store!.keys();
+      const deletePromises = keys.map(async (key) => {
+        const stored = (await this.store!.getItem(key)) as StoredAsset | null;
+        if (stored) {
+          await unifiedCacheService.deleteCache(stored.url);
+        }
+      });
+      await Promise.all(deletePromises);
 
       await this.store!.clear();
     } catch (error: any) {
@@ -429,14 +515,10 @@ class AssetStorageService {
 
   /**
    * Cleanup
-   * 清理资源
+   * 清理资源（不再需要释放 blob URL，由统一缓存服务管理）
    */
   cleanup(): void {
-    // 释放所有Blob URLs
-    for (const url of this.blobUrlCache.values()) {
-      URL.revokeObjectURL(url);
-    }
-    this.blobUrlCache.clear();
+    // 统一缓存服务管理所有媒体 URL，无需手动清理
   }
 }
 

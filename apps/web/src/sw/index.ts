@@ -16,6 +16,9 @@ const STATIC_CACHE_NAME = `drawnix-static-v${APP_VERSION}`;
 // 缓存 URL 前缀 - 用于合并视频等本地缓存资源
 const CACHE_URL_PREFIX = '/__aitu_cache__/video/';
 
+// 素材库 URL 前缀 - 用于素材库媒体资源
+const ASSET_LIBRARY_PREFIX = '/asset-library/';
+
 // Detect development mode
 // 在构建时，process.env.NODE_ENV 会被替换，或者我们可以通过 mode 判断
 // 这里使用 location 判断也行，但通常构建时会注入
@@ -566,6 +569,16 @@ sw.addEventListener('fetch', (event: FetchEvent) => {
     return;
   }
 
+  // 拦截素材库 URL 请求 (/asset-library/{assetId}.{ext})
+  if (url.pathname.startsWith(ASSET_LIBRARY_PREFIX)) {
+    console.log('Service Worker: Intercepting asset library request:', event.request.url);
+
+    event.respondWith(
+      handleAssetLibraryRequest(event.request)
+    );
+    return;
+  }
+
   // 检查是否要求绕过Service Worker
   if (url.searchParams.has('bypass_sw') || url.searchParams.has('direct_fetch')) {
     console.log('Service Worker: 检测到绕过参数，直接通过请求:', url.href);
@@ -710,6 +723,71 @@ async function handleCacheUrlRequest(request: Request): Promise<Response> {
   }
 }
 
+// 处理素材库 URL 请求 (/asset-library/{assetId}.{ext})
+// 从 Cache API 获取素材库媒体并返回，支持 Range 请求（视频）
+async function handleAssetLibraryRequest(request: Request): Promise<Response> {
+  const requestId = Math.random().toString(36).substring(2, 10);
+  const url = new URL(request.url);
+  const rangeHeader = request.headers.get('range');
+
+  // 使用完整路径作为缓存 key
+  const cacheKey = url.pathname;
+
+  console.log(`Service Worker [Asset-${requestId}]: Handling asset library request:`, cacheKey);
+
+  try {
+    // 从 Cache API 获取
+    const cache = await caches.open(IMAGE_CACHE_NAME);
+    const cachedResponse = await cache.match(cacheKey);
+
+    if (cachedResponse) {
+      console.log(`Service Worker [Asset-${requestId}]: Found cached asset:`, cacheKey);
+      const blob = await cachedResponse.blob();
+
+      // 检查是否是视频请求
+      const isVideo = url.pathname.match(/\.(mp4|webm|ogg|mov)$/i);
+
+      if (isVideo && rangeHeader) {
+        // 视频请求支持 Range
+        return createVideoResponse(blob, rangeHeader, requestId);
+      }
+
+      // 图片或完整视频请求
+      return new Response(blob, {
+        status: 200,
+        statusText: 'OK',
+        headers: {
+          'Content-Type': blob.type || 'application/octet-stream',
+          'Content-Length': blob.size.toString(),
+          'Accept-Ranges': 'bytes',
+          'Access-Control-Allow-Origin': '*',
+          'Cache-Control': 'max-age=31536000' // 1年
+        }
+      });
+    }
+
+    // 如果 Cache API 没有，返回 404
+    console.error(`Service Worker [Asset-${requestId}]: Asset not found in cache:`, cacheKey);
+    return new Response('Asset not found', {
+      status: 404,
+      statusText: 'Not Found',
+      headers: {
+        'Content-Type': 'text/plain'
+      }
+    });
+
+  } catch (error) {
+    console.error(`Service Worker [Asset-${requestId}]: Error handling asset library request:`, error);
+    return new Response('Internal error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+      headers: {
+        'Content-Type': 'text/plain'
+      }
+    });
+  }
+}
+
 // 处理视频请求,支持 Range 请求以实现视频 seek 功能
 async function handleVideoRequest(request: Request): Promise<Response> {
   const url = new URL(request.url);
@@ -753,17 +831,41 @@ async function handleVideoRequest(request: Request): Promise<Response> {
       return createVideoResponse(videoBlob, rangeHeader, requestId);
     }
 
-    // 检查是否已有缓存的视频Blob
+    // 检查是否已有缓存的视频Blob（内存缓存）
     if (videoBlobCache.has(dedupeKey)) {
       const cacheEntry = videoBlobCache.get(dedupeKey);
       if (cacheEntry) {
-        console.log(`Service Worker [Video-${requestId}]: 使用缓存的视频Blob (缓存时间: ${Math.round((Date.now() - cacheEntry.timestamp) / 1000)}秒)`);
+        console.log(`Service Worker [Video-${requestId}]: 使用内存缓存的视频Blob (缓存时间: ${Math.round((Date.now() - cacheEntry.timestamp) / 1000)}秒)`);
 
         // 更新访问时间
         cacheEntry.timestamp = Date.now();
 
         return createVideoResponse(cacheEntry.blob, rangeHeader, requestId);
       }
+    }
+
+    // 检查 Cache API 持久化缓存
+    try {
+      const cache = await caches.open(IMAGE_CACHE_NAME);
+      const cachedResponse = await cache.match(dedupeKey);
+      if (cachedResponse) {
+        console.log(`Service Worker [Video-${requestId}]: 从 Cache API 恢复视频缓存`);
+        const videoBlob = await cachedResponse.blob();
+        const videoSizeMB = videoBlob.size / (1024 * 1024);
+
+        // 恢复到内存缓存（用于后续快速访问）
+        if (videoSizeMB < 50) {
+          videoBlobCache.set(dedupeKey, {
+            blob: videoBlob,
+            timestamp: Date.now()
+          });
+          console.log(`Service Worker [Video-${requestId}]: 视频已恢复到内存缓存`);
+        }
+
+        return createVideoResponse(videoBlob, rangeHeader, requestId);
+      }
+    } catch (cacheError) {
+      console.warn(`Service Worker [Video-${requestId}]: 检查 Cache API 失败:`, cacheError);
     }
 
     // 创建新的视频下载Promise
@@ -801,11 +903,29 @@ async function handleVideoRequest(request: Request): Promise<Response> {
 
       // 缓存视频Blob（仅缓存小于50MB的视频）
       if (videoSizeMB < 50) {
+        // 1. 内存缓存（用于当前会话快速访问）
         videoBlobCache.set(dedupeKey, {
           blob: videoBlob,
           timestamp: Date.now()
         });
         console.log(`Service Worker [Video-${requestId}]: 视频已缓存到内存`);
+
+        // 2. 持久化到 Cache API（用于跨会话持久化）
+        try {
+          const cache = await caches.open(IMAGE_CACHE_NAME);
+          const cacheResponse = new Response(videoBlob, {
+            headers: {
+              'Content-Type': videoBlob.type || 'video/mp4',
+              'Content-Length': videoBlob.size.toString(),
+              'sw-cache-date': Date.now().toString(),
+              'sw-video-size': videoBlob.size.toString()
+            }
+          });
+          await cache.put(dedupeKey, cacheResponse);
+          console.log(`Service Worker [Video-${requestId}]: 视频已持久化到 Cache API`);
+        } catch (cacheError) {
+          console.warn(`Service Worker [Video-${requestId}]: 持久化到 Cache API 失败:`, cacheError);
+        }
       } else {
         console.log(`Service Worker [Video-${requestId}]: 视频过大(${videoSizeMB.toFixed(2)}MB)，不缓存`);
       }
