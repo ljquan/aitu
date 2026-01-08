@@ -31,6 +31,26 @@ $text-dark: #1F2937;
   align-items: center;
   gap: 8px;
 
+  // 当有灵感板时，移除 gap 实现无缝连接，并添加统一阴影
+  &--with-inspiration {
+    gap: 0;
+
+    // 使用伪元素为整个组合添加统一的阴影和圆角边框
+    &::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 16px; // 与 padding 对应
+      right: 16px;
+      bottom: 0;
+      background: var(--island-bg-color, #fff);
+      border-radius: 24px;
+      box-shadow: 0 2px 16px rgba(0, 0, 0, 0.1);
+      z-index: -1;
+      pointer-events: none;
+    }
+  }
+
   // Selected content preview - first row in container
   &__content-preview {
     pointer-events: auto;
@@ -311,6 +331,16 @@ $text-dark: #1F2937;
     &--expanded {
       border-radius: 16px;
       padding: 12px;
+    }
+
+    // 当有灵感板时，上边缘直角与灵感板连接
+    .ai-input-bar--with-inspiration & {
+      border-radius: 0 0 24px 24px;
+      box-shadow: none; // 移除阴影，由灵感板统一处理
+
+      &--expanded {
+        border-radius: 0 0 16px 16px;
+      }
     }
   }
 

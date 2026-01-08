@@ -1457,10 +1457,15 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
 
   const canGenerate = prompt.trim().length > 0 || allContent.length > 0;
 
+  // 是否显示灵感板（画布为空时显示）
+  const showInspirationBoard = isCanvasEmpty;
+
   return (
     <div
       ref={containerRef}
-      className={classNames('ai-input-bar', ATTACHED_ELEMENT_CLASS_NAME, className)}
+      className={classNames('ai-input-bar', ATTACHED_ELEMENT_CLASS_NAME, className, {
+        'ai-input-bar--with-inspiration': showInspirationBoard
+      })}
     >
       {/* 独立的选择监听组件，隔离 useBoard 的 context 变化 */}
       <SelectionWatcher
