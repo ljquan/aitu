@@ -3,7 +3,7 @@
  * 素材库详情面板组件
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Button, Input, Dialog, MessagePlugin } from 'tdesign-react';
 import {
   Download,
@@ -12,8 +12,10 @@ import {
   Check,
   X,
   CheckCircle,
+  Copy,
 } from 'lucide-react';
 import { formatDate, formatFileSize } from '../../utils/asset-utils';
+import { unifiedCacheService } from '../../services/unified-cache-service';
 import type { MediaLibraryInspectorProps } from '../../types/asset.types';
 import './MediaLibraryInspector.scss';
 
@@ -29,6 +31,67 @@ export function MediaLibraryInspector({
   const [isRenaming, setIsRenaming] = useState(false);
   const [newName, setNewName] = useState('');
   const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
+  const [cachedSize, setCachedSize] = useState<number | null>(null);
+
+  // 获取缓存中的文件大小
+  useEffect(() => {
+    if (!asset) {
+      setCachedSize(null);
+      return;
+    }
+
+    // 如果 asset 已有有效的 size，直接使用
+    if (asset.size && asset.size > 0) {
+      setCachedSize(asset.size);
+      return;
+    }
+
+    // 否则尝试从缓存获取
+    const fetchCacheSize = async () => {
+      try {
+        // 首先尝试从 unifiedCacheService 获取
+        const cacheInfo = await unifiedCacheService.getCacheInfo(asset.url);
+        if (cacheInfo.isCached && cacheInfo.size && cacheInfo.size > 0) {
+          setCachedSize(cacheInfo.size);
+          return;
+        }
+
+        // 如果 unifiedCacheService 没有，直接从 Cache API 获取（主要用于视频）
+        if (typeof caches !== 'undefined') {
+          const cache = await caches.open('drawnix-images');
+          const response = await cache.match(asset.url);
+          if (response) {
+            // 尝试从 header 获取大小
+            const sizeHeader = response.headers.get('sw-video-size') ||
+                               response.headers.get('sw-image-size') ||
+                               response.headers.get('Content-Length');
+            if (sizeHeader) {
+              const size = parseInt(sizeHeader, 10);
+              if (size > 0) {
+                setCachedSize(size);
+                return;
+              }
+            }
+            // 如果 header 没有，获取 blob 大小
+            const blob = await response.blob();
+            if (blob.size > 0) {
+              setCachedSize(blob.size);
+              return;
+            }
+          }
+        }
+
+        setCachedSize(null);
+      } catch {
+        setCachedSize(null);
+      }
+    };
+
+    fetchCacheSize();
+  }, [asset?.id, asset?.url, asset?.size]);
+
+  // 实际显示的文件大小
+  const displaySize = cachedSize || (asset?.size && asset.size > 0 ? asset.size : null);
 
   // 开始重命名
   const handleStartRename = useCallback(() => {
@@ -89,6 +152,18 @@ export function MediaLibraryInspector({
       onSelect(asset);
     }
   }, [asset, onSelect]);
+
+  // 复制提示词
+  const handleCopyPrompt = useCallback(async () => {
+    if (asset?.prompt) {
+      try {
+        await navigator.clipboard.writeText(asset.prompt);
+        MessagePlugin.success('提示词已复制');
+      } catch {
+        MessagePlugin.error('复制失败');
+      }
+    }
+  }, [asset?.prompt]);
 
   if (!asset) {
     return (
@@ -182,15 +257,36 @@ export function MediaLibraryInspector({
             {formatDate(asset.createdAt)}
           </span>
         </div>
-        {asset.size && (
+        {displaySize && (
           <div className="media-library-inspector__meta-item">
             <span className="media-library-inspector__meta-label">文件大小</span>
             <span className="media-library-inspector__meta-value">
-              {formatFileSize(asset.size)}
+              {formatFileSize(displaySize)}
             </span>
           </div>
         )}
       </div>
+
+      {/* 提示词区域 - 仅 AI 生成的素材显示 */}
+      {asset.prompt && (
+        <div className="media-library-inspector__prompt-section">
+          <div className="media-library-inspector__prompt-header">
+            <span className="media-library-inspector__prompt-label">提示词</span>
+            <Button
+              size="small"
+              variant="text"
+              icon={<Copy size={12} />}
+              onClick={handleCopyPrompt}
+              data-track="inspector_copy_prompt"
+            >
+              复制
+            </Button>
+          </div>
+          <div className="media-library-inspector__prompt-content">
+            {asset.prompt}
+          </div>
+        </div>
+      )}
 
       {/* 操作按钮 */}
       <div className="media-library-inspector__actions">

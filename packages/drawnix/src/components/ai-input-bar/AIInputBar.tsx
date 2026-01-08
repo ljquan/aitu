@@ -26,6 +26,8 @@ import { taskQueueService } from '../../services/task-queue-service';
 import { processSelectedContentForAI } from '../../utils/selection-utils';
 import { useTextSelection } from '../../hooks/useTextSelection';
 import { useChatDrawerControl } from '../../contexts/ChatDrawerContext';
+import { useAssets } from '../../contexts/AssetContext';
+import { AssetType, AssetSource } from '../../types/asset.types';
 import { ModelDropdown } from './ModelDropdown';
 import { SizeDropdown } from './SizeDropdown';
 import { PromptHistoryPopover } from './PromptHistoryPopover';
@@ -275,6 +277,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
   const chatDrawerControl = useChatDrawerControl();
   const workflowControl = useWorkflowControl();
   const { addHistory: addPromptHistory } = usePromptHistory();
+  const { addAsset } = useAssets();
   // 使用 ref 存储，避免依赖变化
   const sendWorkflowMessageRef = useRef(chatDrawerControl.sendWorkflowMessage);
   sendWorkflowMessageRef.current = chatDrawerControl.sendWorkflowMessage;
@@ -633,6 +636,11 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
       // 只处理图片文件
       if (!file.type.startsWith('image/')) continue;
 
+      // Add to asset library (async, don't block UI)
+      addAsset(file, AssetType.IMAGE, AssetSource.LOCAL, file.name).catch((err) => {
+        console.warn('[AIInputBar] Failed to add asset to library:', err);
+      });
+
       try {
         // 转换为 base64 data URL 并获取尺寸
         const { url, width, height } = await fileToBase64WithDimensions(file);
@@ -655,7 +663,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
 
     // 重置 input 以便可以再次选择相同文件
     e.target.value = '';
-  }, [fileToBase64WithDimensions]);
+  }, [fileToBase64WithDimensions, addAsset]);
 
   // 处理选择变化的回调（由 SelectionWatcher 调用）
   const handleSelectionChange = useCallback((content: SelectedContent[]) => {

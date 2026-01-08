@@ -3,7 +3,8 @@ import { Button } from 'tdesign-react';
 import { FolderOpen, HardDrive } from 'lucide-react';
 import { MediaLibraryModal } from '../../media-library/MediaLibraryModal';
 import type { Asset } from '../../../types/asset.types';
-import { SelectionMode, AssetType } from '../../../types/asset.types';
+import { SelectionMode, AssetType, AssetSource } from '../../../types/asset.types';
+import { useAssets } from '../../../contexts/AssetContext';
 
 export interface ImageFile {
   file?: File;
@@ -35,6 +36,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
   headerRight
 }) => {
   const [showMediaLibrary, setShowMediaLibrary] = useState(false);
+  const { addAsset } = useAssets();
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -42,6 +44,13 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
       const validFiles = Array.from(files).filter(file => 
         file.type.startsWith('image/') && file.size <= 10 * 1024 * 1024
       );
+      
+      // Add valid files to asset library (async, don't block UI)
+      validFiles.forEach(file => {
+        addAsset(file, AssetType.IMAGE, AssetSource.LOCAL, file.name).catch((err) => {
+          console.warn('[ImageUpload] Failed to add asset to library:', err);
+        });
+      });
       
       const newImages = validFiles.map(file => ({ file, name: file.name }));
       

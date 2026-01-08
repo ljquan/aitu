@@ -396,6 +396,28 @@ packages/react-text/
 - 媒体缓存
 - 聊天会话和消息
 
+### 素材库数据来源
+素材库（AssetContext）合并两个数据来源展示：
+
+1. **本地上传的素材**：存储在 IndexedDB 中（通过 `asset-storage-service.ts`）
+2. **AI 生成的素材**：直接从任务队列读取已完成的任务（通过 `task-queue-service.ts`）
+
+**数据流**：
+```
+素材库展示：
+├── 本地上传素材 ← IndexedDB (asset-storage-service)
+└── AI 生成素材 ← 任务队列 (task-queue-service) 已完成的任务
+
+删除素材：
+├── 本地素材 → assetStorageService.removeAsset()
+└── AI 素材 → taskQueueService.deleteTask()
+```
+
+**设计原则**：
+- AI 生成的素材不重复存储，直接使用任务结果中的原始 URL
+- 只有本地上传的素材才使用 `/asset-library/` 前缀的 URL
+- `loadAssets` 方法合并两个来源的数据，按创建时间倒序排列
+
 ---
 
 ## 核心功能流程

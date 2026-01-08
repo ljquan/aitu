@@ -10,8 +10,9 @@ import { Upload, Button, MessagePlugin } from 'tdesign-react';
 import { AddIcon, DeleteIcon, FolderOpenIcon } from 'tdesign-icons-react';
 import type { UploadedVideoImage, ImageUploadConfig } from '../../../types/video.types';
 import { MediaLibraryModal } from '../../media-library/MediaLibraryModal';
-import { SelectionMode, AssetType } from '../../../types/asset.types';
+import { SelectionMode, AssetType, AssetSource } from '../../../types/asset.types';
 import type { Asset } from '../../../types/asset.types';
+import { useAssets } from '../../../contexts/AssetContext';
 import './MultiImageUpload.scss';
 
 interface MultiImageUploadProps {
@@ -30,6 +31,7 @@ export const MultiImageUpload: React.FC<MultiImageUploadProps> = ({
   const { maxCount, labels = ['参考图'] } = config;
   const [showMediaLibrary, setShowMediaLibrary] = useState(false);
   const [currentSlot, setCurrentSlot] = useState<number>(0);
+  const { addAsset } = useAssets();
 
   // Handle file upload for a specific slot
   const handleUpload = useCallback(async (slot: number, file: File) => {
@@ -44,6 +46,11 @@ export const MultiImageUpload: React.FC<MultiImageUploadProps> = ({
       MessagePlugin.error('图片大小不能超过 10MB');
       return;
     }
+
+    // Add to asset library (async, don't block UI)
+    addAsset(file, AssetType.IMAGE, AssetSource.LOCAL, file.name).catch((err) => {
+      console.warn('[MultiImageUpload] Failed to add asset to library:', err);
+    });
 
     // Convert to base64
     const reader = new FileReader();
@@ -69,7 +76,7 @@ export const MultiImageUpload: React.FC<MultiImageUploadProps> = ({
       onImagesChange(newImages);
     };
     reader.readAsDataURL(file);
-  }, [images, labels, onImagesChange]);
+  }, [images, labels, onImagesChange, addAsset]);
 
   // Handle image removal
   const handleRemove = useCallback((slot: number) => {

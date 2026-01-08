@@ -11,6 +11,8 @@ import { MindElement, MindTransforms } from '@plait/mind';
 import { DrawTransforms } from '@plait/draw';
 import { getElementOfFocusedImage } from '@plait/common';
 import { getInsertionPointForSelectedElements, getInsertionPointBelowBottommostElement, scrollToPointIfNeeded } from '../utils/selection-utils';
+import { assetStorageService } from '../services/asset-storage-service';
+import { AssetType, AssetSource } from '../types/asset.types';
 
 /**
  * 从保存的选中元素IDs计算插入点
@@ -157,6 +159,20 @@ export const insertImage = async (
   startPoint?: Point,
   isDrop?: boolean
 ) => {
+  // Add to asset library (async, don't block UI)
+  // Initialize service first to ensure it's ready
+  assetStorageService.initialize().then(() => {
+    return assetStorageService.addAsset({
+      type: AssetType.IMAGE,
+      source: AssetSource.LOCAL,
+      name: imageFile.name,
+      blob: imageFile,
+      mimeType: imageFile.type,
+    });
+  }).catch((err) => {
+    console.warn('[insertImage] Failed to add asset to library:', err);
+  });
+
   // 只有在没有提供startPoint时,才获取当前选中元素
   // 当从文件选择器上传时,已经没有选中状态了,不应该依赖当前选中
   const selectedElement = startPoint
