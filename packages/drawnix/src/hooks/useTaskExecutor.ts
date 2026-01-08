@@ -10,6 +10,7 @@ import { taskQueueService } from '../services/task-queue-service';
 import { generationAPIService } from '../services/generation-api-service';
 import { characterAPIService } from '../services/character-api-service';
 import { characterStorageService } from '../services/character-storage-service';
+import { unifiedCacheService } from '../services/unified-cache-service';
 import { Task, TaskStatus, TaskType } from '../types/task.types';
 import { CharacterStatus } from '../types/character.types';
 import { isTaskTimeout } from '../utils/task-utils';
@@ -168,6 +169,21 @@ export function useTaskExecutor(): void {
         });
 
         console.log(`[TaskExecutor] Resumed task ${taskId} completed successfully`);
+
+        // Register image/video metadata in unified cache
+        if (result.url) {
+          try {
+            await unifiedCacheService.registerImageMetadata(result.url, {
+              taskId: task.id,
+              model: task.params.model,
+              prompt: task.params.prompt,
+              params: task.params,
+            });
+            console.log(`[TaskExecutor] Registered metadata for resumed task ${taskId}`);
+          } catch (error) {
+            console.error(`[TaskExecutor] Failed to register metadata for resumed task ${taskId}:`, error);
+          }
+        }
       } catch (error: any) {
         if (!isActive) return;
 
@@ -399,6 +415,21 @@ export function useTaskExecutor(): void {
         });
 
         console.log(`[TaskExecutor] Task ${taskId} completed successfully`);
+
+        // Register image/video metadata in unified cache
+        if (result.url) {
+          try {
+            await unifiedCacheService.registerImageMetadata(result.url, {
+              taskId: task.id,
+              model: task.params.model,
+              prompt: task.params.prompt,
+              params: task.params,
+            });
+            console.log(`[TaskExecutor] Registered metadata for task ${taskId}`);
+          } catch (error) {
+            console.error(`[TaskExecutor] Failed to register metadata for task ${taskId}:`, error);
+          }
+        }
       } catch (error: any) {
         if (!isActive) return;
 

@@ -1,8 +1,8 @@
 /**
  * 场景转换器
- * 
+ *
  * 将 AIInputBar 的4种发送场景转换为工作流定义
- * 
+ *
  * 场景1: 只有选择元素，没有输入文字 -> 直接生成
  * 场景2: 输入内容有模型、参数 -> 解析后直接生成
  * 场景3: 输入内容指定了数量 -> 按数量生成
@@ -10,6 +10,7 @@
  */
 
 import type { ParsedGenerationParams, GenerationType, SelectionInfo } from '../../utils/ai-input-parser';
+import { cleanLLMResponse } from '../../services/agent/tool-parser';
 
 /**
  * 工作流步骤执行选项（批量参数等）
@@ -145,31 +146,44 @@ export function convertDirectGenerationToWorkflow(
     };
 
     if (generationType === 'image') {
+      // 构建图片生成参数，size 为 undefined 时不传（让模型自动决定）
+      const imageArgs: Record<string, unknown> = {
+        prompt,
+        model: modelId,
+      };
+      if (size) {
+        imageArgs.size = size;
+      }
+      if (referenceImages.length > 0) {
+        imageArgs.referenceImages = referenceImages;
+      }
+
       steps.push({
         id: stepId,
         mcp: 'generate_image',
-        args: {
-          prompt,
-          model: modelId,
-          size: size || '1x1',
-          referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
-        },
+        args: imageArgs,
         options,
         description: count > 1 ? `生成图片 (${i + 1}/${count})` : '生成图片',
         status: 'pending',
       });
     } else {
-      // 视频生成
+      // 构建视频生成参数，size 为 undefined 时不传（让模型自动决定）
+      const videoArgs: Record<string, unknown> = {
+        prompt,
+        model: modelId,
+        seconds: duration || '5',
+      };
+      if (size) {
+        videoArgs.size = size;
+      }
+      if (referenceImages.length > 0) {
+        videoArgs.referenceImages = referenceImages;
+      }
+
       steps.push({
         id: stepId,
         mcp: 'generate_video',
-        args: {
-          prompt,
-          model: modelId,
-          size: size || '16x9',
-          seconds: duration || '5',
-          referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
-        },
+        args: videoArgs,
         options,
         description: count > 1 ? `生成视频 (${i + 1}/${count})` : '生成视频',
         status: 'pending',
@@ -318,15 +332,18 @@ export function parseAIResponse(
   existingStepCount: number = 0
 ): AIResponseParseResult {
   try {
+    // 使用公共清理函数
+    const cleaned = cleanLLMResponse(response);
+
     // 尝试提取 JSON
-    const jsonMatch = response.match(/```json\s*([\s\S]*?)\s*```/) ||
-                      response.match(/\{[\s\S]*\}/);
+    const jsonMatch = cleaned.match(/\{\s*"content"\s*:[\s\S]*?"next"\s*:[\s\S]*?\}/) ||
+                      cleaned.match(/\{[\s\S]*"content"[\s\S]*"next"[\s\S]*\}/);
 
     if (!jsonMatch) {
       return { content: '', steps: [] };
     }
 
-    const jsonStr = jsonMatch[1] || jsonMatch[0];
+    const jsonStr = jsonMatch[0];
     const parsed = JSON.parse(jsonStr);
 
     // 提取 content 字段

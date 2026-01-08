@@ -1,12 +1,12 @@
 [build]
-  # 构建命令
-  command = "npm run build:web"
+  # 构建命令 - 使用 pnpm 并先重置 Nx 缓存
+  command = "pnpm install && pnpm nx reset && pnpm run build:web"
 
   # 发布目录 - Nx构建的web应用输出目录
   publish = "dist/apps/web"
 
-  # Node.js版本和内存设置
-  environment = { NODE_VERSION = "18", NODE_OPTIONS = "--max-old-space-size=8192" }
+  # Node.js版本和内存设置 - 升级到 Node 20 以支持 Vite 6
+  environment = { NODE_VERSION = "20", NODE_OPTIONS = "--max-old-space-size=8192" }
 
 [build.processing]
   # 跳过处理，使用原始文件
@@ -30,7 +30,7 @@
 [[headers]]
   for = "/*"
   [headers.values]
-    Content-Security-Policy = "frame-ancestors 'self' localhost:* 127.0.0.1:* *.localhost:* https://api.tu-zi.com"
+    Content-Security-Policy = "default-src 'self' https: data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com https://us.i.posthog.com https://us-assets.i.posthog.com https://wiki.tu-zi.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https: wss:; frame-ancestors 'self' localhost:* 127.0.0.1:* *.localhost:* https://api.tu-zi.com;"
     X-Frame-Options = "SAMEORIGIN"
     X-XSS-Protection = "1; mode=block"
     X-Content-Type-Options = "nosniff"
@@ -79,10 +79,10 @@
 
 # 部署上下文配置
 [context.production]
-  command = "npm run build:web"
-  
+  command = "pnpm install && pnpm nx reset && pnpm run build:web"
+
 [context.deploy-preview]
-  command = "npm run build:web"
-  
+  command = "pnpm install && pnpm nx reset && pnpm run build:web"
+
 [context.branch-deploy]
-  command = "npm run build:web"
+  command = "pnpm install && pnpm nx reset && pnpm run build:web"

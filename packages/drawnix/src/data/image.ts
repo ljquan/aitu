@@ -11,7 +11,8 @@ import { MindElement, MindTransforms } from '@plait/mind';
 import { DrawTransforms } from '@plait/draw';
 import { getElementOfFocusedImage } from '@plait/common';
 import { getInsertionPointForSelectedElements, getInsertionPointBelowBottommostElement, scrollToPointIfNeeded } from '../utils/selection-utils';
-import { urlCacheService } from '../services/url-cache-service';
+import { assetStorageService } from '../services/asset-storage-service';
+import { AssetType, AssetSource } from '../types/asset.types';
 
 /**
  * 从保存的选中元素IDs计算插入点
@@ -158,6 +159,20 @@ export const insertImage = async (
   startPoint?: Point,
   isDrop?: boolean
 ) => {
+  // Add to asset library (async, don't block UI)
+  // Initialize service first to ensure it's ready
+  assetStorageService.initialize().then(() => {
+    return assetStorageService.addAsset({
+      type: AssetType.IMAGE,
+      source: AssetSource.LOCAL,
+      name: imageFile.name,
+      blob: imageFile,
+      mimeType: imageFile.type,
+    });
+  }).catch((err) => {
+    console.warn('[insertImage] Failed to add asset to library:', err);
+  });
+
   // 只有在没有提供startPoint时,才获取当前选中元素
   // 当从文件选择器上传时,已经没有选中状态了,不应该依赖当前选中
   const selectedElement = startPoint
@@ -240,13 +255,12 @@ export const insertImageFromUrl = async (
       : null;
   const defaultImageWidth = selectedElement ? 240 : 400;
 
-  // 使用缓存服务获取图片的 Base64 数据
-  // 这样可以避免重复下载，并且存储 Base64 确保 URL 过期后图片仍然可用
-  const dataURL = await urlCacheService.getImageAsBase64(imageUrl);
-  const image = await loadHTMLImageElement(dataURL, false); // Base64 不需要 crossOrigin
+  // 直接使用原始 URL 加载图片，不等待缓存
+  // 缓存会在后台由 Service Worker 自动处理
+  const image = await loadHTMLImageElement(imageUrl as DataURL, true); // 使用 crossOrigin 以支持外部 URL
   const imageItem = buildImage(
     image,
-    dataURL,
+    imageUrl as DataURL,
     defaultImageWidth,
     true,
     referenceDimensions

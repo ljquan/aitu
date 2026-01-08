@@ -14,8 +14,9 @@ import { insertImageFromUrl } from '../../data/image';
 import { insertVideoFromUrl } from '../../data/video';
 import { MessagePlugin, Dialog, Button, Input } from 'tdesign-react';
 import { ChevronLeftIcon, ChevronRightIcon, SearchIcon } from 'tdesign-icons-react';
-import { downloadMediaFile, downloadFromBlob, sanitizeFilename } from '../../utils/download-utils';
-import { mediaCacheService } from '../../services/media-cache-service';
+import { sanitizeFilename } from '@aitu/utils';
+import { downloadMediaFile, downloadFromBlob } from '../../utils/download-utils';
+import { unifiedCacheService } from '../../services/unified-cache-service';
 import { useMediaUrl } from '../../hooks/useMediaCache';
 import { CharacterCreateDialog } from '../character/CharacterCreateDialog';
 import './dialog-task-list.scss';
@@ -129,10 +130,10 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
 
     try {
       // 1. 优先从本地 IndexedDB 缓存获取
-      const cachedMedia = await mediaCacheService.getCachedMedia(taskId);
-      if (cachedMedia?.blob) {
+      const cachedBlob = await unifiedCacheService.getCachedBlob(task.result.url);
+      if (cachedBlob) {
         console.log('[Download] Using cached blob for task:', taskId);
-        downloadFromBlob(cachedMedia.blob, filename);
+        downloadFromBlob(cachedBlob, filename);
         MessagePlugin.success('下载成功');
         return;
       }

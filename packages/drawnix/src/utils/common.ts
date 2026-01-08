@@ -1,52 +1,15 @@
 import { IS_APPLE, IS_MAC, PlaitBoard, toImage, ToImageOptions } from '@plait/core';
-import type { ResolutionType } from './utility-types';
 
-export const isPromiseLike = (
-  value: any
-): value is Promise<ResolutionType<typeof value>> => {
-  return (
-    !!value &&
-    typeof value === 'object' &&
-    'then' in value &&
-    'catch' in value &&
-    'finally' in value
-  );
-};
 
-// taken from Radix UI
-// https://github.com/radix-ui/primitives/blob/main/packages/core/primitive/src/primitive.tsx
-export const composeEventHandlers = <E>(
-  originalEventHandler?: (event: E) => void,
-  ourEventHandler?: (event: E) => void,
-  { checkForDefaultPrevented = true } = {}
-) => {
-  return function handleEvent(event: E) {
-    originalEventHandler?.(event);
 
-    if (
-      !checkForDefaultPrevented ||
-      !(event as unknown as Event)?.defaultPrevented
-    ) {
-      return ourEventHandler?.(event);
-    }
-  };
-};
 
-export const base64ToBlob = (base64: string) => {
-  const arr = base64.split(',');
-  const fileType = arr[0].match(/:(.*?);/)![1];
-  const bstr = atob(arr[1]);
-  let l = bstr.length;
-  const u8Arr = new Uint8Array(l);
-
-  while (l--) {
-    u8Arr[l] = bstr.charCodeAt(l);
-  }
-  return new Blob([u8Arr], {
-    type: fileType,
-  });
-};
-
+/**
+ * Convert Plait board to image (Plait-specific)
+ *
+ * @param board - Plait board instance
+ * @param options - Image export options
+ * @returns Promise resolving to image data URL
+ */
 export const boardToImage = (
   board: PlaitBoard,
   options: ToImageOptions = {}
@@ -60,6 +23,12 @@ export const boardToImage = (
   });
 };
 
+/**
+ * Trigger download of a Blob or MediaSource
+ *
+ * @param blob - Blob or MediaSource to download
+ * @param filename - Filename for downloaded file
+ */
 export function download(blob: Blob | MediaSource, filename: string) {
   const a = document.createElement('a');
   const url = window.URL.createObjectURL(blob);
@@ -71,14 +40,12 @@ export function download(blob: Blob | MediaSource, filename: string) {
   a.remove();
 }
 
-export const splitRows = <T>(shapes: T[], cols: number) => {
-  const result = [];
-  for (let i = 0; i < shapes.length; i += cols) {
-    result.push(shapes.slice(i, i + cols));
-  }
-  return result;
-};
-
+/**
+ * Format keyboard shortcut for current platform (Plait-specific)
+ *
+ * @param shortcut - Shortcut string with placeholders
+ * @returns Platform-specific shortcut string
+ */
 export const getShortcutKey = (shortcut: string): string => {
   shortcut = shortcut
     .replace(/\bAlt\b/i, "Alt")

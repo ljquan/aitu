@@ -19,15 +19,21 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Send, Check, ImagePlus } from 'lucide-react';
 import { useBoard } from '@plait-board/react-board';
 import { SelectedContentPreview } from '../shared/SelectedContentPreview';
-import { getSelectedElements, ATTACHED_ELEMENT_CLASS_NAME, getRectangleByElements } from '@plait/core';
+import { getSelectedElements, ATTACHED_ELEMENT_CLASS_NAME, getRectangleByElements, PlaitBoard, getViewportOrigination } from '@plait/core';
 import { useI18n } from '../../i18n';
 import { TaskStatus } from '../../types/task.types';
 import { taskQueueService } from '../../services/task-queue-service';
 import { processSelectedContentForAI } from '../../utils/selection-utils';
 import { useTextSelection } from '../../hooks/useTextSelection';
 import { useChatDrawerControl } from '../../contexts/ChatDrawerContext';
+import { useAssets } from '../../contexts/AssetContext';
+import { AssetType, AssetSource } from '../../types/asset.types';
 import { ModelDropdown } from './ModelDropdown';
-import { getDefaultImageModel, IMAGE_MODELS, getModelConfig } from '../../constants/model-config';
+import { SizeDropdown } from './SizeDropdown';
+import { PromptHistoryPopover } from './PromptHistoryPopover';
+import { usePromptHistory } from '../../hooks/usePromptHistory';
+import { getDefaultImageModel, IMAGE_MODELS, getModelConfig, getDefaultSizeForModel } from '../../constants/model-config';
+import { BUILT_IN_TOOLS, DEFAULT_TOOL_CONFIG } from '../../constants/built-in-tools';
 import { initializeMCP, setCanvasBoard, setBoard, mcpRegistry } from '../../mcp';
 import { initializeLongVideoChainService } from '../../services/long-video-chain-service';
 import { gridImageService } from '../../services/photo-wall';
@@ -46,6 +52,7 @@ import type { WorkflowRetryContext, PostProcessingStatus } from '../../types/cha
 import { workflowCompletionService } from '../../services/workflow-completion-service';
 import { BoardTransforms } from '@plait/core';
 import { WorkZoneTransforms } from '../../plugins/with-workzone';
+import { ToolTransforms } from '../../plugins/with-tool';
 import type { PlaitWorkZone } from '../../types/workzone.types';
 
 /**
@@ -101,6 +108,8 @@ interface SelectedContent {
   url?: string;       // 图片/视频/图形的 URL
   text?: string;      // 文字内容
   name: string;       // 显示名称
+  width?: number;     // 图片/视频宽度
+  height?: number;    // 图片/视频高度
 }
 
 /**
@@ -209,6 +218,9 @@ const SelectionWatcher: React.FC<{
             url: processedContent.graphicsImage,
             name: language === 'zh' ? '图形元素' : 'Graphics',
             type: 'graphics',
+            // 使用异步获取的图形图片尺寸
+            width: processedContent.graphicsImageDimensions?.width,
+            height: processedContent.graphicsImageDimensions?.height,
           });
         }
 
@@ -220,6 +232,8 @@ const SelectionWatcher: React.FC<{
             url: imgUrl,
             name: img.name || (isVideo ? `video-${Date.now()}` : `image-${Date.now()}`),
             type: isVideo ? 'video' : 'image',
+            width: img.width,
+            height: img.height,
           });
         }
 
@@ -262,6 +276,8 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
 
   const chatDrawerControl = useChatDrawerControl();
   const workflowControl = useWorkflowControl();
+  const { addHistory: addPromptHistory } = usePromptHistory();
+  const { addAsset } = useAssets();
   // 使用 ref 存储，避免依赖变化
   const sendWorkflowMessageRef = useRef(chatDrawerControl.sendWorkflowMessage);
   sendWorkflowMessageRef.current = chatDrawerControl.sendWorkflowMessage;
@@ -288,9 +304,11 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
   const [uploadedContent, setUploadedContent] = useState<SelectedContent[]>([]); // 用户上传内容
   const [isSubmitting, setIsSubmitting] = useState(false); // 仅用于防止重复点击，不阻止并行任务
   const [isFocused, setIsFocused] = useState(false);
-  const [isCanvasEmpty, setIsCanvasEmpty] = useState(true); // 画板是否为空
+  const [isCanvasEmpty, setIsCanvasEmpty] = useState(false); // 画板是否为空，默认 false 避免初始闪烁
   // 当前选中的图片模型（通过环境变量或默认值初始化）
   const [selectedModel, setSelectedModel] = useState(getDefaultImageModel);
+  // 当前选中的尺寸（默认为模型的默认尺寸）
+  const [selectedSize, setSelectedSize] = useState(() => getDefaultSizeForModel(getDefaultImageModel()));
 
   // @ 触发模型选择相关状态
   const [showAtSuggestion, setShowAtSuggestion] = useState(false);
@@ -521,16 +539,85 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
     inputRef.current?.focus();
   }, []);
 
+  // 处理历史提示词选择：将提示词回填到输入框
+  const handleSelectHistoryPrompt = useCallback((content: string) => {
+    setPrompt(content);
+    inputRef.current?.focus();
+  }, []);
+
+  // 处理打开提示词工具（香蕉提示词）- 复用工具箱的逻辑
+  const handleOpenPromptTool = useCallback(() => {
+    const board = SelectionWatcherBoardRef.current;
+    if (!board) {
+      console.warn('[AIInputBar] Board not ready for prompt tool');
+      return;
+    }
+
+    // 从内置工具列表中获取香蕉提示词工具配置
+    const tool = BUILT_IN_TOOLS.find(t => t.id === 'banana-prompt');
+    if (!tool) {
+      console.warn('[AIInputBar] Banana prompt tool not found');
+      return;
+    }
+
+    // 计算画布中心位置（与 ToolboxDrawer 相同的逻辑）
+    const boardContainerRect = PlaitBoard.getBoardContainer(board).getBoundingClientRect();
+    const focusPoint = [
+      boardContainerRect.width / 2,
+      boardContainerRect.height / 2,
+    ];
+    const zoom = board.viewport.zoom;
+    const origination = getViewportOrigination(board);
+    const centerX = origination![0] + focusPoint[0] / zoom;
+    const centerY = origination![1] + focusPoint[1] / zoom;
+
+    // 工具尺寸
+    const width = tool.defaultWidth || DEFAULT_TOOL_CONFIG.defaultWidth;
+    const height = tool.defaultHeight || DEFAULT_TOOL_CONFIG.defaultHeight;
+
+    // 插入到画布（中心对齐）
+    ToolTransforms.insertTool(
+      board,
+      tool.id,
+      tool.url,
+      [centerX - width / 2, centerY - height / 2],
+      { width, height },
+      {
+        name: tool.name,
+        category: tool.category,
+        permissions: tool.permissions,
+      }
+    );
+
+    console.log('[AIInputBar] Prompt tool inserted to canvas');
+  }, []);
+
   // 处理上传按钮点击
   const handleUploadClick = useCallback(() => {
     fileInputRef.current?.click();
   }, []);
 
-  // 将文件转换为 base64 data URL
-  const fileToBase64 = useCallback((file: File): Promise<string> => {
+  // 将文件转换为 base64 data URL 并获取尺寸
+  const fileToBase64WithDimensions = useCallback((file: File): Promise<{ url: string; width: number; height: number }> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
+      reader.onload = () => {
+        const base64Url = reader.result as string;
+        // 创建 Image 对象获取尺寸
+        const img = new Image();
+        img.onload = () => {
+          resolve({
+            url: base64Url,
+            width: img.naturalWidth,
+            height: img.naturalHeight,
+          });
+        };
+        img.onerror = () => {
+          // 即使获取尺寸失败，也返回 URL（尺寸为 0）
+          resolve({ url: base64Url, width: 0, height: 0 });
+        };
+        img.src = base64Url;
+      };
       reader.onerror = reject;
       reader.readAsDataURL(file);
     });
@@ -541,7 +628,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    // 处理选中的文件（转换为 base64）
+    // 处理选中的文件（转换为 base64 并获取尺寸）
     const newContent: SelectedContent[] = [];
 
     for (let i = 0; i < files.length; i++) {
@@ -549,13 +636,20 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
       // 只处理图片文件
       if (!file.type.startsWith('image/')) continue;
 
+      // Add to asset library (async, don't block UI)
+      addAsset(file, AssetType.IMAGE, AssetSource.LOCAL, file.name).catch((err) => {
+        console.warn('[AIInputBar] Failed to add asset to library:', err);
+      });
+
       try {
-        // 转换为 base64 data URL（API 可以识别）
-        const base64Url = await fileToBase64(file);
+        // 转换为 base64 data URL 并获取尺寸
+        const { url, width, height } = await fileToBase64WithDimensions(file);
         newContent.push({
           type: 'image',
-          url: base64Url,
+          url,
           name: file.name || `上传图片 ${i + 1}`,
+          width: width || undefined,
+          height: height || undefined,
         });
       } catch (error) {
         console.error('Failed to convert file to base64:', error);
@@ -569,7 +663,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
 
     // 重置 input 以便可以再次选择相同文件
     e.target.value = '';
-  }, [fileToBase64]);
+  }, [fileToBase64WithDimensions, addAsset]);
 
   // 处理选择变化的回调（由 SelectionWatcher 调用）
   const handleSelectionChange = useCallback((content: SelectedContent[]) => {
@@ -692,23 +786,33 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
 
     try {
       // 构建选中元素的分类信息（使用合并后的 allContent）
+      // 收集图片和图形的尺寸信息（按顺序：先 images，后 graphics）
+      const imageItems = allContent.filter((item) => item.type === 'image' && item.url);
+      const graphicsItems = allContent.filter((item) => item.type === 'graphics' && item.url);
+      const imageDimensions = [...imageItems, ...graphicsItems]
+        .map((item) => {
+          if (item.width && item.height) {
+            return { width: item.width, height: item.height };
+          }
+          return undefined;
+        })
+        .filter((dim): dim is { width: number; height: number } => dim !== undefined);
+
       const selection = {
         texts: allContent
           .filter((item) => item.type === 'text' && item.text)
           .map((item) => item.text!),
-        images: allContent
-          .filter((item) => item.type === 'image' && item.url)
-          .map((item) => item.url!),
+        images: imageItems.map((item) => item.url!),
         videos: allContent
           .filter((item) => item.type === 'video' && item.url)
           .map((item) => item.url!),
-        graphics: allContent
-          .filter((item) => item.type === 'graphics' && item.url)
-          .map((item) => item.url!),
+        graphics: graphicsItems.map((item) => item.url!),
+        // 添加图片尺寸信息（如果有）
+        imageDimensions: imageDimensions.length > 0 ? imageDimensions : undefined,
       };
 
-      // 解析输入内容，使用选中的模型
-      const parsedParams = parseAIInput(prompt, selection, { modelId: selectedModel });
+      // 解析输入内容，使用选中的模型和尺寸
+      const parsedParams = parseAIInput(prompt, selection, { modelId: selectedModel, size: selectedSize });
 
       console.log('[AIInputBar] Parsed params:', parsedParams);
       console.log('[AIInputBar] Key params - model:', parsedParams.modelId, 'count:', parsedParams.count, 'size:', parsedParams.size);
@@ -731,49 +835,67 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
       const board = SelectionWatcherBoardRef.current;
       console.log('[AIInputBar] Board ref:', board ? 'exists' : 'null');
       if (board) {
-        const WORKZONE_WIDTH = 320;
+        // WorkZone 固定尺寸（画布坐标）
+        // 因为容器已经应用了 scale(1/zoom)，所以这里不需要除以 zoom
+        const WORKZONE_WIDTH = 360;
         const WORKZONE_HEIGHT = 240;
         const GAP = 50; // 间距
 
-        // 计算 WorkZone 位置（空白处策略）
         const containerRect = board.host?.getBoundingClientRect();
         const zoom = board.viewport?.zoom || 1;
         const originX = board.viewport?.origination?.[0] || 0;
         const originY = board.viewport?.origination?.[1] || 0;
 
-        let workzoneX = 100;
-        let workzoneY = 100;
-
-        // 获取选中的元素（排除 WorkZone 类型）
-        const selectedElements = getSelectedElements(board).filter(
-          el => el.type !== 'workzone'
-        );
         // 获取所有非 WorkZone 元素
         const allElements = board.children.filter(
           (el: { type?: string }) => el.type !== 'workzone'
         );
 
-        if (selectedElements.length > 0) {
-          // 策略 1: 有选中元素，放在选中元素的右侧
-          const selectionRect = getRectangleByElements(board, selectedElements, false);
-          workzoneX = selectionRect.x + selectionRect.width + GAP;
-          workzoneY = selectionRect.y;
-          console.log('[AIInputBar] WorkZone position: right of selection');
-        } else if (allElements.length > 0) {
-          // 策略 2: 没有选中元素，放在所有元素的右下方
-          const allRect = getRectangleByElements(board, allElements, false);
-          workzoneX = allRect.x + allRect.width + GAP;
-          workzoneY = allRect.y + allRect.height - WORKZONE_HEIGHT;
-          // 确保 Y 不为负
-          if (workzoneY < allRect.y) {
-            workzoneY = allRect.y;
+        // 初始化默认值（视口中心）
+        const viewportCenterX = originX + (containerRect?.width || 0) / 2 / zoom;
+        const viewportCenterY = originY + (containerRect?.height || 0) / 2 / zoom;
+
+        let expectedInsertLeftX: number = viewportCenterX - 200; // 插入元素的左边缘X坐标（默认偏左一点）
+        let expectedInsertY: number = viewportCenterY;
+        let workzoneX: number = expectedInsertLeftX;
+        let workzoneY: number = viewportCenterY - WORKZONE_HEIGHT / 2;
+
+        if (allElements.length > 0) {
+          // 找到最底部的元素
+          let bottommostElement: PlaitElement | null = null;
+          let maxBottomY = -Infinity;
+
+          for (const element of allElements) {
+            try {
+              const rect = getRectangleByElements(board, [element as PlaitElement], false);
+              const bottomY = rect.y + rect.height;
+              if (bottomY > maxBottomY) {
+                maxBottomY = bottomY;
+                bottommostElement = element as PlaitElement;
+              }
+            } catch (error) {
+              console.warn('[AIInputBar] Failed to get rectangle for element:', error);
+            }
           }
-          console.log('[AIInputBar] WorkZone position: right-bottom of all elements');
-        } else if (containerRect) {
-          // 策略 3: 画布为空，放在视口中心
-          workzoneX = originX + (containerRect.width / 2 / zoom) - WORKZONE_WIDTH / 2;
-          workzoneY = originY + (containerRect.height / 2 / zoom) - WORKZONE_HEIGHT / 2;
-          console.log('[AIInputBar] WorkZone position: viewport center');
+
+          if (bottommostElement) {
+            // 计算插入位置：最底部元素下方，保存左边缘X坐标（左对齐）
+            const bottommostRect = getRectangleByElements(board, [bottommostElement], false);
+            expectedInsertLeftX = bottommostRect.x; // 左对齐：使用左边缘X坐标
+            expectedInsertY = bottommostRect.y + bottommostRect.height + GAP;
+
+            // WorkZone 也左对齐放置
+            workzoneX = expectedInsertLeftX;
+            workzoneY = expectedInsertY;
+
+            console.log('[AIInputBar] WorkZone position: left-aligned with bottommost element');
+          } else {
+            // 如果无法获取元素信息，使用默认值（视口中心）
+            console.log('[AIInputBar] WorkZone position: viewport center (no valid elements)');
+          }
+        } else {
+          // 画布为空，使用默认值（视口中心）
+          console.log('[AIInputBar] WorkZone position: viewport center (empty canvas)');
         }
 
         // 创建 WorkZone
@@ -782,12 +904,33 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
           workflow: workflowMessageData,
           position: [workzoneX, workzoneY],
           size: { width: WORKZONE_WIDTH, height: WORKZONE_HEIGHT },
+          expectedInsertPosition: [expectedInsertLeftX, expectedInsertY],
+          zoom,
         });
 
         // 保存 WorkZone ID 用于后续更新
         currentWorkZoneIdRef.current = workzoneElement.id;
-        console.log('[AIInputBar] Created WorkZone:', workzoneElement.id, 'at position:', [workzoneX, workzoneY]);
-        console.log('[AIInputBar] Board children count:', board.children.length);
+        console.log('[AIInputBar] Created WorkZone:', workzoneElement.id);
+        console.log('[AIInputBar] WorkZone position (left-top):', [workzoneX, workzoneY]);
+        console.log('[AIInputBar] WorkZone size:', [WORKZONE_WIDTH, WORKZONE_HEIGHT]);
+        console.log('[AIInputBar] Expected insert position (leftX, topY):', [expectedInsertLeftX, expectedInsertY]);
+        console.log('[AIInputBar] Zoom:', zoom);
+
+        // 延迟滚动到 WorkZone 位置，确保 DOM 已渲染
+        if (containerRect) {
+          setTimeout(() => {
+            // 计算 WorkZone 中心坐标
+            const workzoneCenterX = workzoneX + WORKZONE_WIDTH / 2;
+            const workzoneCenterY = workzoneY + WORKZONE_HEIGHT / 2;
+
+            // 让 WorkZone 中心位于视口中心
+            const newOriginationX = workzoneCenterX - containerRect.width / (2 * zoom);
+            const newOriginationY = workzoneCenterY - containerRect.height / (2 * zoom);
+
+            BoardTransforms.updateViewport(board, [newOriginationX, newOriginationY], zoom);
+            console.log('[AIInputBar] Scrolled to WorkZone center position');
+          }, 100);
+        }
       } else {
         console.warn('[AIInputBar] Board not available, skipping WorkZone creation');
       }
@@ -1027,6 +1170,12 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
             workflowFailed = true;
           }
         }
+      }
+
+      // 保存提示词到历史记录（只保存有实际内容的提示词）
+      if (prompt.trim()) {
+        const hasSelection = allContent.length > 0;
+        addPromptHistory(prompt.trim(), hasSelection);
       }
 
       // 清空输入并关闭面板
@@ -1351,10 +1500,15 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
 
   const canGenerate = prompt.trim().length > 0 || allContent.length > 0;
 
+  // 是否显示灵感板（画布为空时显示）
+  const showInspirationBoard = isCanvasEmpty;
+
   return (
     <div
       ref={containerRef}
-      className={classNames('ai-input-bar', ATTACHED_ELEMENT_CLASS_NAME, className)}
+      className={classNames('ai-input-bar', ATTACHED_ELEMENT_CLASS_NAME, className, {
+        'ai-input-bar--with-inspiration': showInspirationBoard
+      })}
     >
       {/* 独立的选择监听组件，隔离 useBoard 的 context 变化 */}
       <SelectionWatcher
@@ -1368,6 +1522,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
       <InspirationBoard
         isCanvasEmpty={isCanvasEmpty}
         onSelectPrompt={handleSelectInspirationPrompt}
+        onOpenPromptTool={handleOpenPromptTool}
       />
 
       {/* Main input container - flex-column-reverse to expand upward */}
@@ -1407,6 +1562,14 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
             language={language}
           />
 
+          {/* Size dropdown selector */}
+          <SizeDropdown
+            selectedSize={selectedSize}
+            onSelect={setSelectedSize}
+            modelId={selectedModel}
+            language={language}
+          />
+
           {/* Spacer to push send button to the right */}
           <div className="ai-input-bar__bottom-spacer" />
 
@@ -1441,6 +1604,12 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
               />
             </div>
           )}
+
+          {/* History prompt popover - top right corner */}
+          <PromptHistoryPopover
+            onSelectPrompt={handleSelectHistoryPrompt}
+            language={language}
+          />
 
           {/* Text input */}
           <div className="ai-input-bar__rich-input">

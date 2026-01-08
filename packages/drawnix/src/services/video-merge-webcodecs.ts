@@ -303,24 +303,30 @@ async function mergeVideosWithMediaRecorder(
 
   console.log(`[WebCodecs] Merge complete, size: ${(finalBlob.size / 1024 / 1024).toFixed(2)} MB, format: ${simpleMimeType} (original: ${format.mimeType})`);
 
-  // 缓存到 IndexedDB
+  // 缓存到 Cache API（由 Service Worker 处理）
   try {
-    const { mediaCacheService } = await import('./media-cache-service');
+    const { unifiedCacheService } = await import('./unified-cache-service');
     const taskId = `merged-video-${Date.now()}`;
-    const cachedUrl = await mediaCacheService.cacheMediaFromBlob(
-      taskId,
+
+    // 虚拟路径 URL（稳定，由 Service Worker 拦截并返回缓存内容）
+    // 格式: /__aitu_cache__/video/{taskId}.mp4
+    const stableUrl = `/__aitu_cache__/video/${taskId}.mp4`;
+
+    // 使用完整 URL 作为缓存 key，确保主线程和 Service Worker 使用相同的 key
+    const cacheKey = `${location.origin}${stableUrl}`;
+
+    // 缓存 blob
+    await unifiedCacheService.cacheMediaFromBlob(
+      cacheKey,
       finalBlob,
       'video',
-      simpleMimeType  // 使用简化的 MIME 类型
+      { taskId }
     );
-    console.log(`[WebCodecs] Video cached to IndexedDB: ${taskId}, mimeType: ${simpleMimeType}`);
+    console.log(`[WebCodecs] Video cached: ${cacheKey}, mimeType: ${simpleMimeType}`);
 
-    // 返回包含 taskId 的 URL，格式: blob:http://...#merged-video-{timestamp}
-    // 这样可以在刷新后通过 taskId 恢复视频
-    const urlWithTaskId = `${cachedUrl}#${taskId}`;
-
-    return { blob: finalBlob, url: urlWithTaskId, duration, taskId };
+    return { blob: finalBlob, url: stableUrl, duration, taskId };
   } catch (cacheError) {
+    // 降级到 blob URL（页面刷新后会失效）
     console.warn('[WebCodecs] Failed to cache video, using blob URL:', cacheError);
     const url = URL.createObjectURL(finalBlob);
     return { blob: finalBlob, url, duration };

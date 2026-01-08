@@ -6,6 +6,7 @@
 
 import React, { useState, useCallback } from 'react';
 import { ChevronLeftIcon, ChevronRightIcon } from 'tdesign-icons-react';
+import { Lightbulb } from 'lucide-react';
 import { InspirationCard } from './InspirationCard';
 import { INSPIRATION_TEMPLATES, ITEMS_PER_PAGE } from './constants';
 import type { InspirationBoardProps } from './types';
@@ -14,6 +15,7 @@ import './inspiration-board.scss';
 export const InspirationBoard: React.FC<InspirationBoardProps> = ({
   isCanvasEmpty,
   onSelectPrompt,
+  onOpenPromptTool,
   visible = true,
   className = '',
 }) => {
@@ -57,9 +59,23 @@ export const InspirationBoard: React.FC<InspirationBoardProps> = ({
     <div
       className={`inspiration-board ${className}`}
     >
-      {/* 头部：标题 + 切换按钮 */}
+      {/* 头部：标题 + 提示词按钮 + 切换按钮 */}
       <div className="inspiration-board__header">
         <h3 className="inspiration-board__title">灵感创意</h3>
+
+        {/* 提示词工具按钮 */}
+        {onOpenPromptTool && (
+          <button
+            className="inspiration-board__prompt-btn"
+            onClick={onOpenPromptTool}
+            onMouseDown={(e) => e.preventDefault()}
+            title="提示词工具"
+            data-track="inspiration_click_prompt_tool"
+          >
+            <Lightbulb size={14} />
+            <span>提示词</span>
+          </button>
+        )}
 
         {hasMultiplePages && (
           <div className="inspiration-board__pagination">

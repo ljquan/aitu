@@ -268,13 +268,18 @@ export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
         }, 100);
       }
     }
-  }, [visible, winboxLoaded, handleClose, autoMaximize]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, winboxLoaded, autoMaximize]);
+  // 注意: handleClose 不在依赖中，因为它只在创建时使用一次，
+  // 添加到依赖会导致 WinBox 实例频繁重建并触发关闭回调
   
   // 组件卸载时清理
   useEffect(() => {
     return () => {
       if (winboxRef.current) {
         try {
+          // 防止在卸载时触发 onclose 回调
+          winboxRef.current.onclose = null;
           winboxRef.current.close(true);
         } catch {
           // 忽略

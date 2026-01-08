@@ -14,9 +14,13 @@ import {
   getModelConfig, 
   getImageModelDefaults, 
   getVideoModelDefaults,
-  DEFAULT_IMAGE_MODEL,
+  getDefaultImageModel as getSystemDefaultImageModel,
   DEFAULT_VIDEO_MODEL,
 } from '../constants/model-config';
+import type { ImageDimensions } from '../mcp/types';
+
+// 重新导出 ImageDimensions 以便其他模块使用
+export type { ImageDimensions } from '../mcp/types';
 
 /**
  * 发送场景类型
@@ -31,6 +35,14 @@ export type SendScenario =
 export type GenerationType = 'image' | 'video' | 'text';
 
 /**
+ * 带尺寸信息的图片
+ */
+export interface ImageWithDimensions {
+  url: string;
+  dimensions?: ImageDimensions;
+}
+
+/**
  * 选中元素的分类信息
  */
 export interface SelectionInfo {
@@ -42,6 +54,8 @@ export interface SelectionInfo {
   videos: string[];
   /** 选中的图形转换为的图片 URL */
   graphics: string[];
+  /** 图片尺寸信息（按顺序对应 images + graphics） */
+  imageDimensions?: ImageDimensions[];
 }
 
 /**
@@ -81,7 +95,7 @@ export interface ParsedGenerationParams {
  */
 function getDefaultImageModel(): string {
   const settings = geminiSettings.get();
-  return settings?.imageModelName || DEFAULT_IMAGE_MODEL;
+  return settings?.imageModelName || getSystemDefaultImageModel();
 }
 
 /**
@@ -149,6 +163,8 @@ function normalizeSize(size: string): string {
 export interface ParseAIInputOptions {
   /** 指定使用的模型 ID（来自下拉选择器） */
   modelId?: string;
+  /** 指定使用的尺寸（来自尺寸选择器，'auto' 表示不传尺寸参数） */
+  size?: string;
 }
 
 export function parseAIInput(
@@ -217,18 +233,35 @@ export function parseAIInput(
   // 解析参数
   let size: string | undefined;
   let duration: string | undefined;
-  
+
+  // 尺寸优先级：
+  // 1. options.size（来自 SizeDropdown，'auto' 表示不指定尺寸）
+  // 2. parseResult.selectedParams 中的 -size=xxx
+  // 3. 模型默认值
+
+  if (options?.size && options.size !== 'auto') {
+    // 使用 SizeDropdown 选择的尺寸
+    size = normalizeSize(options.size);
+  } else if (options?.size !== 'auto') {
+    // 从提示词中解析 -size=xxx
+    for (const param of parseResult.selectedParams) {
+      if (param.id === 'size') {
+        size = normalizeSize(param.value);
+        break;
+      }
+    }
+  }
+  // 如果 options.size === 'auto'，不设置 size，让模型自动决定
+
+  // 解析 duration 参数
   for (const param of parseResult.selectedParams) {
-    if (param.id === 'size') {
-      // 直接保留 size 字符串，标准化为 API 格式（如 16x9）
-      size = normalizeSize(param.value);
-    } else if (param.id === 'duration') {
+    if (param.id === 'duration') {
       duration = param.value;
     }
   }
-  
-  // 如果没有指定尺寸或时长，使用模型默认值（文本模型不需要这些参数）
-  if (!size && generationType !== 'text') {
+
+  // 如果没有指定尺寸且不是 auto 模式，使用模型默认值（文本模型不需要这些参数）
+  if (!size && options?.size !== 'auto' && generationType !== 'text') {
     const modelConfig = getModelConfig(modelId);
     if (modelConfig?.type === 'image' && modelConfig.imageDefaults) {
       // 图片模型使用默认尺寸
@@ -250,6 +283,12 @@ export function parseAIInput(
         }
       }
     }
+  }
+
+  // 视频模型：如果没有指定时长，使用默认值
+  if (!duration && generationType === 'video') {
+    const defaults = getVideoModelDefaults(modelId);
+    duration = defaults.duration;
   }
   
   // 用户指令（去除模型/参数/数量后的纯文本）

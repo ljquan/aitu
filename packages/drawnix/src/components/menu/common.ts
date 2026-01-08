@@ -1,6 +1,6 @@
 import React, { useContext } from 'react';
 import { EVENT } from '../../constants';
-import { composeEventHandlers } from '../../utils/common';
+import { composeEventHandlers } from '@aitu/utils';
 
 export const MenuContentPropsContext = React.createContext<{
   onSelect?: (event: Event) => void;

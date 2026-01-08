@@ -7,6 +7,7 @@
 
 import { geminiSettings } from '../utils/settings-manager';
 import type { VideoModel, UploadedVideoImage } from '../types/video.types';
+import { unifiedCacheService } from './unified-cache-service';
 
 // Re-export VideoModel for backward compatibility
 export type { VideoModel };
@@ -125,16 +126,24 @@ class VideoAPIService {
         const fieldName = 'input_reference';
         console.log('[VideoAPI] Using field name:', fieldName, 'for model:', params.model, 'slot:', imageRef.slot);
 
+        // 检查缓存时间，超过1天的图片转为base64
+        let processedUrl = imageRef.url;
+        if (imageRef.url.startsWith('http')) {
+          const imageData = await unifiedCacheService.getImageForAI(imageRef.url);
+          processedUrl = imageData.value;
+          console.log(`[VideoAPI] Image processed: ${imageData.type === 'base64' ? 'converted to base64' : 'using URL'}`);
+        }
+
         // Convert to blob and append
-        if (imageRef.url.startsWith('data:')) {
+        if (processedUrl.startsWith('data:')) {
           console.log('[VideoAPI] Converting data URL to blob...');
-          const response = await fetch(imageRef.url);
+          const response = await fetch(processedUrl);
           const blob = await response.blob();
           console.log('[VideoAPI] Appending blob:', { fieldName, blobSize: blob.size, fileName: imageRef.name || 'image.png' });
           formData.append(fieldName, blob, imageRef.name || 'image.png');
-        } else if (imageRef.url.startsWith('http')) {
+        } else if (processedUrl.startsWith('http')) {
           console.log('[VideoAPI] Fetching remote URL...');
-          const response = await fetch(imageRef.url);
+          const response = await fetch(processedUrl);
           const blob = await response.blob();
           console.log('[VideoAPI] Appending blob:', { fieldName, blobSize: blob.size, fileName: imageRef.name || 'image.png' });
           formData.append(fieldName, blob, imageRef.name || 'image.png');
@@ -145,12 +154,20 @@ class VideoAPIService {
     }
     // Legacy single image support
     else if (params.inputReference) {
-      if (params.inputReference.startsWith('data:')) {
-        const response = await fetch(params.inputReference);
+      // 检查缓存时间，超过1天的图片转为base64
+      let processedUrl = params.inputReference;
+      if (params.inputReference.startsWith('http')) {
+        const imageData = await unifiedCacheService.getImageForAI(params.inputReference);
+        processedUrl = imageData.value;
+        console.log(`[VideoAPI] Legacy image processed: ${imageData.type === 'base64' ? 'converted to base64' : 'using URL'}`);
+      }
+
+      if (processedUrl.startsWith('data:')) {
+        const response = await fetch(processedUrl);
         const blob = await response.blob();
         formData.append('input_reference', blob, 'reference.png');
-      } else if (params.inputReference.startsWith('http')) {
-        const response = await fetch(params.inputReference);
+      } else if (processedUrl.startsWith('http')) {
+        const response = await fetch(processedUrl);
         const blob = await response.blob();
         formData.append('input_reference', blob, 'reference.png');
       }

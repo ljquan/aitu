@@ -4,7 +4,6 @@ import {
   getRectangleByElements,
 } from '@plait/core';
 import { getInsertionPointForSelectedElements, getInsertionPointBelowBottommostElement, scrollToPointIfNeeded } from '../utils/selection-utils';
-import { urlCacheService } from '../services/url-cache-service';
 
 /**
  * 从保存的选中元素IDs计算插入点
@@ -252,24 +251,22 @@ export const insertVideoFromUrl = async (
   }
 
   try {
-    // 首先获取视频的真实尺寸
-    console.log('Getting video dimensions for:', videoUrl);
-    const originalDimensions = await getVideoDimensions(videoUrl);
-    console.log('Original video dimensions:', originalDimensions);
+    // 使用默认尺寸立即插入，不等待获取视频真实尺寸
+    // 这样可以让视频立刻出现在画布上，提升用户体验
+    // 默认使用 16:9 比例的尺寸
+    const defaultDimensions: VideoDimensions = { width: 400, height: 225 };
 
     // 计算适合画板显示的尺寸（保持比例但使用参考尺寸或限制大小）
     const displayDimensions = calculateDisplayDimensions(
-      originalDimensions.width,
-      originalDimensions.height,
+      defaultDimensions.width,
+      defaultDimensions.height,
       referenceDimensions
     );
-    console.log('Display dimensions after scaling:', displayDimensions);
+    console.log('Using default dimensions for immediate insertion:', displayDimensions);
 
-    // 缓存视频到IndexedDB (后台任务，不阻塞插入)
-    // 这样即使URL过期，也可以从缓存恢复
-    urlCacheService.getVideoAsBlob(videoUrl).catch(error => {
-      console.warn('Failed to cache video in background:', error);
-    });
+    // 注意：合并视频已在 video-merge-webcodecs.ts 中通过 cacheMediaFromBlob 缓存
+    // 外部视频 URL 会被 Service Worker 自动缓存
+    // 虚拟路径 URL (/__aitu_cache__/video/...) 不需要额外缓存
 
     // 计算插入位置
     let insertionPoint = startPoint;

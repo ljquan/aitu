@@ -7,11 +7,29 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  padding: 12px;
-  gap: 10px;
-  background: #f9fafb;
-  min-width: 280px; // 设置最小宽度，防止抖动
-  overflow-y: auto; // 添加滚动，以防内容过多
+  padding: 16px;
+  gap: 12px;
+  background: linear-gradient(180deg, #f9fafb 0%, #f3f4f6 100%);
+  min-width: 280px;
+  overflow-y: auto;
+
+  // 自定义滚动条
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: #d1d5db;
+    border-radius: 3px;
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    background: #9ca3af;
+  }
 
   &--empty {
     align-items: center;
@@ -73,7 +91,7 @@
 
   &__preview {
     width: 100%;
-    height: 200px; // 固定高度，防止不同素材导致高度变化
+    height: 180px;
     border-radius: 12px;
     overflow: hidden;
     background: white;
@@ -82,8 +100,8 @@
     align-items: center;
     justify-content: center;
     padding: 8px;
-    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-    flex-shrink: 0; // 防止被压缩
+    box-shadow: 0 2px 8px 0 rgba(0, 0, 0, 0.06);
+    flex-shrink: 0;
   }
 
   &__image,
@@ -92,7 +110,7 @@
     max-height: 100%;
     width: 100%;
     height: 100%;
-    object-fit: contain; // 保持宽高比,居中显示
+    object-fit: contain;
     border-radius: 8px;
   }
 
@@ -100,7 +118,7 @@
     display: flex;
     flex-direction: column;
     gap: 4px;
-    flex-shrink: 0; // 固定高度，不因内容变化
+    flex-shrink: 0;
     min-height: 36px;
   }
 
@@ -114,18 +132,18 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 6px 0; // 减少内边距
+    padding: 4px 0;
   }
 
   &__name {
     flex: 1;
     margin: 0;
-    font-size: 13px;
-    font-weight: 700;
+    font-size: 14px;
+    font-weight: 600;
     color: #111827;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap; // 改为单行显示，节省空间
+    white-space: nowrap;
     line-height: 1.4;
   }
 
@@ -143,33 +161,33 @@
   &__metadata {
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    padding: 10px;
+    gap: 8px;
+    padding: 12px;
     background: white;
-    border-radius: 8px;
+    border-radius: 10px;
     border: 1px solid #e5e7eb;
-    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04);
     flex-shrink: 0;
-    overflow: hidden; // 防止内容溢出
+    overflow: hidden;
   }
 
   &__meta-item {
-    display: flex; // 使用 flex 而不是 grid
+    display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 11px;
-    min-height: 18px;
-    gap: 8px; // 标签和值之间的最小间距
+    font-size: 12px;
+    min-height: 20px;
+    gap: 12px;
   }
 
   &__meta-label {
-    color: #9ca3af;
+    color: #6b7280;
     font-weight: 500;
     display: flex;
     align-items: center;
     gap: 5px;
     white-space: nowrap;
-    flex-shrink: 0; // 标签不收缩
+    flex-shrink: 0;
 
     svg {
       width: 13px;
@@ -185,17 +203,79 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
-    flex-shrink: 1; // 值可以收缩
+    font-size: 11px;
+    flex-shrink: 1;
+  }
+
+  // 提示词区域样式
+  &__prompt-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    background: white;
+    border-radius: 10px;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04);
+    flex: 1;
+    min-height: 80px;
+    overflow: hidden;
+  }
+
+  &__prompt-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+
+  &__prompt-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #374151;
+  }
+
+  &__prompt-content {
+    font-size: 13px;
+    line-height: 1.7;
+    color: #4b5563;
+    overflow-y: auto;
+    flex: 1;
+    word-break: break-word;
+    white-space: pre-wrap;
+
+    // 自定义滚动条
+    &::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: #d1d5db;
+      border-radius: 2px;
+    }
+
+    &::-webkit-scrollbar-thumb:hover {
+      background: #9ca3af;
+    }
   }
 
   &__actions {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 8px;
     margin-top: auto;
-    padding-top: 10px;
-    border-top: 1px solid #e5e7eb;
-    flex-shrink: 0; // 确保操作按钮始终可见
+    padding-top: 12px;
+    flex-shrink: 0;
+
+    // 按钮样式优化
+    .t-button {
+      border-radius: 8px;
+      font-weight: 500;
+    }
   }
 
   // 移动端优化
@@ -204,6 +284,7 @@
     gap: 16px;
 
     &__preview {
+      height: auto;
       aspect-ratio: 16 / 9;
     }
 
@@ -217,14 +298,7 @@
     }
 
     &__meta-item {
-      grid-template-columns: 1fr;
-      gap: 4px;
-
-      &:not(&--full) {
-        .media-library-inspector__meta-value {
-          text-align: left;
-        }
-      }
+      gap: 8px;
     }
   }
 }

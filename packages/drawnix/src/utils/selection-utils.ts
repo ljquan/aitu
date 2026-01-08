@@ -6,6 +6,40 @@ import { Freehand } from '../plugins/freehand/type';
 import { SAME_ROW_THRESHOLD } from '../components/ttd-dialog/shared/size-constants';
 
 /**
+ * 从图片 URL 获取原始尺寸
+ * @param url 图片 URL（支持 http/https/data URL）
+ * @returns Promise<{ width: number; height: number } | null>
+ */
+export const getImageDimensionsFromUrl = (url: string): Promise<{ width: number; height: number } | null> => {
+  return new Promise((resolve) => {
+    if (!url) {
+      resolve(null);
+      return;
+    }
+    
+    const img = new Image();
+    // 对于非 data URL，设置 crossOrigin
+    if (!url.startsWith('data:')) {
+      img.crossOrigin = 'anonymous';
+      img.referrerPolicy = 'no-referrer';
+    }
+    
+    img.onload = () => {
+      resolve({
+        width: img.naturalWidth,
+        height: img.naturalHeight,
+      });
+    };
+    
+    img.onerror = () => {
+      resolve(null);
+    };
+    
+    img.src = url;
+  });
+};
+
+/**
  * 压缩图像URL（用于生成的图像）
  */
 export const compressImageUrl = (imageUrl: string, maxWidth: number = 512, maxHeight: number = 512, quality: number = 0.8): Promise<string> => {
@@ -70,13 +104,15 @@ export const compressImageUrl = (imageUrl: string, maxWidth: number = 512, maxHe
 
 export interface ExtractedContent {
   text: string;
-  images: { url: string; name?: string }[];
+  images: { url: string; name?: string; width?: number; height?: number }[];
 }
 
 export interface ProcessedContent {
-  remainingImages: { url: string; name?: string }[];
+  remainingImages: { url: string; name?: string; width?: number; height?: number }[];
   remainingText: string;
   graphicsImage?: string;
+  /** 图形图片的尺寸（如果有） */
+  graphicsImageDimensions?: { width: number; height: number };
 }
 
 /**
@@ -457,33 +493,46 @@ export const convertElementsToImage = async (board: PlaitBoard, elements: PlaitE
 /**
  * Extract image URLs from a Plait element
  */
-export const extractImagesFromElement = (element: PlaitElement, board?: PlaitBoard): { url: string; name?: string }[] => {
-  const images: { url: string; name?: string }[] = [];
+export const extractImagesFromElement = (element: PlaitElement, board?: PlaitBoard): { url: string; name?: string; width?: number; height?: number }[] => {
+  const images: { url: string; name?: string; width?: number; height?: number }[] = [];
   
   // Handle MindElement with images
   if (board && MindElement.isMindElement(board, element)) {
     const mindElement = element as MindElement;
     if (mindElement.image && mindElement.image.url) {
+      // MindElement 的 image 可能有 width 和 height
+      const imgWidth = (mindElement.image as any).width;
+      const imgHeight = (mindElement.image as any).height;
       images.push({ 
         url: mindElement.image.url,
-        name: `mind-image-${Date.now()}`
+        name: `mind-image-${Date.now()}`,
+        width: imgWidth,
+        height: imgHeight,
       });
     }
   }
   
   // Handle DrawImage elements (assuming they have url property)
   if ('url' in element && typeof element.url === 'string') {
+    // 尝试从元素中获取尺寸
+    const elemWidth = (element as any).width;
+    const elemHeight = (element as any).height;
     images.push({ 
       url: element.url,
-      name: `draw-image-${Date.now()}`
+      name: `draw-image-${Date.now()}`,
+      width: elemWidth,
+      height: elemHeight,
     });
   }
   
   // Handle elements with image property
   if ('image' in element && element.image && typeof element.image === 'object' && 'url' in element.image) {
+    const imgObj = element.image as any;
     images.push({ 
-      url: element.image.url as string,
-      name: `element-image-${Date.now()}`
+      url: imgObj.url as string,
+      name: `element-image-${Date.now()}`,
+      width: imgObj.width,
+      height: imgObj.height,
     });
   }
   
@@ -500,7 +549,7 @@ export const extractSelectedContent = (board: PlaitBoard): ExtractedContent => {
   const sortedElements = sortElementsByPosition(board, selectedElements);
   
   const texts: string[] = [];
-  const images: { url: string; name?: string }[] = [];
+  const images: { url: string; name?: string; width?: number; height?: number }[] = [];
   
   for (const element of sortedElements) {
     // Extract text
@@ -592,7 +641,7 @@ export const processSelectedContentForAI = async (
   }
   
   // Step 5: Extract images and text from remaining elements
-  const remainingImages: { url: string; name?: string }[] = [];
+  const remainingImages: { url: string; name?: string; width?: number; height?: number }[] = [];
   const remainingTexts: string[] = [];
   
   for (const element of remainingElements) {
@@ -611,10 +660,36 @@ export const processSelectedContentForAI = async (
     }
   }
   
+  // Step 6: 异步获取缺失的图片尺寸
+  const imagesWithDimensions = await Promise.all(
+    remainingImages.map(async (img) => {
+      // 如果已有有效尺寸，直接返回
+      if (img.width && img.height && img.width > 0 && img.height > 0) {
+        return img;
+      }
+      // 否则从 URL 获取尺寸
+      const dimensions = await getImageDimensionsFromUrl(img.url);
+      if (dimensions) {
+        return { ...img, width: dimensions.width, height: dimensions.height };
+      }
+      return img;
+    })
+  );
+  
+  // 同样获取 graphicsImage 的尺寸
+  let graphicsImageDimensions: { width: number; height: number } | undefined;
+  if (graphicsImage) {
+    const dims = await getImageDimensionsFromUrl(graphicsImage);
+    if (dims) {
+      graphicsImageDimensions = dims;
+    }
+  }
+  
   const result = {
-    remainingImages,
+    remainingImages: imagesWithDimensions,
     remainingText: remainingTexts.join('\n'),
-    graphicsImage
+    graphicsImage,
+    graphicsImageDimensions,
   };
   
   // console.log('Final result - Images:', result.remainingImages.length, 'Text length:', result.remainingText.length, 'Graphics image:', !!result.graphicsImage);

@@ -47,14 +47,6 @@ export interface ModelParseResult {
     displayName?: string;  // 显示名称（仅模型标签有）
     modelId?: string 
   }>;
-  
-  // 兼容旧接口
-  /** @deprecated 使用 imageModelId 或 videoModelId */
-  modelId?: string;
-  /** @deprecated 使用 segments */
-  textBeforeModel?: string;
-  /** @deprecated 使用 segments */
-  textAfterModel?: string;
 }
 
 /**
@@ -194,10 +186,6 @@ export function parseModelFromInput(input: string): ModelParseResult {
           cleanText,
           hashPosition: lastHashIndex,
           segments,
-          // 兼容旧接口
-          modelId: imageModelId || videoModelId,
-          textBeforeModel: input.substring(0, lastHashIndex),
-          textAfterModel: '',
         };
       }
     }
@@ -211,8 +199,6 @@ export function parseModelFromInput(input: string): ModelParseResult {
       modelTags: [],
       cleanText: input,
       segments: input ? [{ type: 'text', content: input }] : [],
-      textBeforeModel: input,
-      textAfterModel: '',
     };
   }
   
@@ -224,10 +210,6 @@ export function parseModelFromInput(input: string): ModelParseResult {
     modelTags,
     cleanText,
     segments,
-    // 兼容旧接口
-    modelId: imageModelId || videoModelId,
-    textBeforeModel: segments[0]?.type === 'text' ? segments[0].content : '',
-    textAfterModel: segments[segments.length - 1]?.type === 'text' ? segments[segments.length - 1].content : '',
   };
 }
 

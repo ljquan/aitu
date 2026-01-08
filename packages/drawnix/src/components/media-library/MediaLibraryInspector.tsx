@@ -12,8 +12,10 @@ import {
   Check,
   X,
   CheckCircle,
+  Copy,
 } from 'lucide-react';
 import { formatDate, formatFileSize } from '../../utils/asset-utils';
+import { useAssetSize } from '../../hooks/useAssetSize';
 import type { MediaLibraryInspectorProps } from '../../types/asset.types';
 import './MediaLibraryInspector.scss';
 
@@ -29,6 +31,9 @@ export function MediaLibraryInspector({
   const [isRenaming, setIsRenaming] = useState(false);
   const [newName, setNewName] = useState('');
   const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
+
+  // 获取实际文件大小（支持从缓存获取）
+  const displaySize = useAssetSize(asset?.id, asset?.url, asset?.size);
 
   // 开始重命名
   const handleStartRename = useCallback(() => {
@@ -90,6 +95,18 @@ export function MediaLibraryInspector({
     }
   }, [asset, onSelect]);
 
+  // 复制提示词
+  const handleCopyPrompt = useCallback(async () => {
+    if (asset?.prompt) {
+      try {
+        await navigator.clipboard.writeText(asset.prompt);
+        MessagePlugin.success('提示词已复制');
+      } catch {
+        MessagePlugin.error('复制失败');
+      }
+    }
+  }, [asset?.prompt]);
+
   if (!asset) {
     return (
       <div className="media-library-inspector media-library-inspector--empty">
@@ -124,7 +141,7 @@ export function MediaLibraryInspector({
             <Input
               value={newName}
               onChange={(value) => setNewName(value as string)}
-              autoFocus
+              autofocus
               size="small"
               onEnter={handleConfirmRename}
             />
@@ -182,15 +199,36 @@ export function MediaLibraryInspector({
             {formatDate(asset.createdAt)}
           </span>
         </div>
-        {asset.size && (
+        {displaySize && (
           <div className="media-library-inspector__meta-item">
             <span className="media-library-inspector__meta-label">文件大小</span>
             <span className="media-library-inspector__meta-value">
-              {formatFileSize(asset.size)}
+              {formatFileSize(displaySize)}
             </span>
           </div>
         )}
       </div>
+
+      {/* 提示词区域 - 仅 AI 生成的素材显示 */}
+      {asset.prompt && (
+        <div className="media-library-inspector__prompt-section">
+          <div className="media-library-inspector__prompt-header">
+            <span className="media-library-inspector__prompt-label">提示词</span>
+            <Button
+              size="small"
+              variant="text"
+              icon={<Copy size={12} />}
+              onClick={handleCopyPrompt}
+              data-track="inspector_copy_prompt"
+            >
+              复制
+            </Button>
+          </div>
+          <div className="media-library-inspector__prompt-content">
+            {asset.prompt}
+          </div>
+        </div>
+      )}
 
       {/* 操作按钮 */}
       <div className="media-library-inspector__actions">

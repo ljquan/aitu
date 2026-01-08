@@ -308,7 +308,7 @@ export function MediaLibraryGrid({
 
           <div className="media-library-grid__footer">
             <span>共 {filteredResult.count} 个素材</span>
-            {!isSelectionMode && <span className="media-library-grid__footer-hint">双击选择</span>}
+            {!isSelectionMode && <span className="media-library-grid__footer-hint">双击插入</span>}
           </div>
         </>
       )}

@@ -1,6 +1,10 @@
 /**
  * Asset Context
  * 素材Context - 状态管理
+ *
+ * 素材库数据来源：
+ * 1. 本地上传的素材：存储在 IndexedDB 中
+ * 2. AI 生成的素材：直接从任务队列获取已完成的任务
  */
 
 import {
@@ -14,7 +18,9 @@ import {
 } from 'react';
 import { MessagePlugin } from 'tdesign-react';
 import { assetStorageService } from '../services/asset-storage-service';
+import { taskQueueService } from '../services/task-queue-service';
 import { getStorageStatus } from '../utils/storage-quota';
+import { getAssetSizeFromCache } from '../hooks/useAssetSize';
 import type {
   Asset,
   AssetContextValue,
@@ -23,7 +29,8 @@ import type {
   FilterState,
   StorageStatus,
 } from '../types/asset.types';
-import { DEFAULT_FILTER_STATE } from '../types/asset.types';
+import { AssetType as AssetTypeEnum, AssetSource as AssetSourceEnum, DEFAULT_FILTER_STATE } from '../types/asset.types';
+import { TaskStatus, TaskType } from '../types/task.types';
 
 // 创建Context
 const AssetContext = createContext<AssetContextValue | null>(null);
@@ -79,16 +86,85 @@ export function AssetProvider({ children }: AssetProviderProps) {
   }, []);
 
   /**
+   * Convert completed task to Asset
+   * 将已完成的任务转换为素材
+   */
+  const taskToAsset = useCallback((task: any): Asset => {
+    return {
+      id: task.id,
+      type: task.type === TaskType.IMAGE ? AssetTypeEnum.IMAGE : AssetTypeEnum.VIDEO,
+      source: AssetSourceEnum.AI_GENERATED,
+      url: task.result.url,
+      name: task.params.prompt?.substring(0, 30) || 'AI生成',
+      mimeType: task.result.format === 'mp4'
+        ? 'video/mp4'
+        : task.result.format === 'webm'
+        ? 'video/webm'
+        : `image/${task.result.format || 'png'}`,
+      createdAt: task.completedAt || task.createdAt,
+      size: task.result.size,
+      prompt: task.params.prompt,
+      modelName: task.params.model,
+    };
+  }, []);
+
+  /**
    * Load Assets
    * 加载所有素材
+   * 合并本地上传的素材和任务队列中已完成的 AI 生成任务
    */
   const loadAssets = useCallback(async () => {
     setLoading(true);
     setError(null);
 
     try {
-      const loaded = await assetStorageService.getAllAssets();
-      setAssets(loaded);
+      // 1. 加载本地上传的素材（只包含 LOCAL 来源）
+      const localAssets = await assetStorageService.getAllAssets();
+
+      // 2. 从任务队列获取已完成的 AI 生成任务
+      const completedTasks = taskQueueService.getTasksByStatus(TaskStatus.COMPLETED);
+      const aiAssets = completedTasks
+        .filter(task =>
+          (task.type === TaskType.IMAGE || task.type === TaskType.VIDEO) &&
+          task.result?.url
+        )
+        .map(taskToAsset);
+
+      // 3. 合并两个来源的素材，按创建时间倒序排列
+      const allAssets = [...localAssets, ...aiAssets].sort(
+        (a, b) => b.createdAt - a.createdAt
+      );
+
+      setAssets(allAssets);
+
+      // 4. 异步填充缺失的文件大小（从缓存获取）
+      const assetsNeedingSize = allAssets.filter(a => !a.size || a.size === 0);
+      if (assetsNeedingSize.length > 0) {
+        // 并行获取所有缺失的文件大小
+        const sizePromises = assetsNeedingSize.map(async (asset) => {
+          const size = await getAssetSizeFromCache(asset.url);
+          return { id: asset.id, size };
+        });
+
+        const sizeResults = await Promise.all(sizePromises);
+
+        // 更新有新大小的素材
+        const sizeMap = new Map(
+          sizeResults
+            .filter(r => r.size !== null && r.size > 0)
+            .map(r => [r.id, r.size as number])
+        );
+
+        if (sizeMap.size > 0) {
+          setAssets(prev =>
+            prev.map(asset =>
+              sizeMap.has(asset.id)
+                ? { ...asset, size: sizeMap.get(asset.id) }
+                : asset
+            )
+          );
+        }
+      }
     } catch (err: any) {
       console.error('Failed to load assets:', err);
       setError(err.message);
@@ -99,7 +175,7 @@ export function AssetProvider({ children }: AssetProviderProps) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [taskToAsset]);
 
   /**
    * Add Asset
@@ -220,16 +296,27 @@ export function AssetProvider({ children }: AssetProviderProps) {
   /**
    * Remove Asset
    * 删除素材
+   * 本地素材：从 IndexedDB 删除
+   * AI 生成素材：从任务队列删除
    */
   const removeAsset = useCallback(async (id: string): Promise<void> => {
     setLoading(true);
     setError(null);
 
     try {
-      await assetStorageService.removeAsset(id);
+      // 查找素材来源
+      const asset = assets.find(a => a.id === id);
+
+      if (asset?.source === AssetSourceEnum.AI_GENERATED) {
+        // AI 生成的素材：从任务队列删除
+        taskQueueService.deleteTask(id);
+      } else {
+        // 本地上传的素材：从 IndexedDB 删除
+        await assetStorageService.removeAsset(id);
+      }
 
       // 更新状态
-      setAssets((prev) => prev.filter((asset) => asset.id !== id));
+      setAssets((prev) => prev.filter((a) => a.id !== id));
 
       // 如果删除的是当前选中的素材，清除选中状态
       setSelectedAssetId((prev) => (prev === id ? null : prev));
@@ -261,11 +348,11 @@ export function AssetProvider({ children }: AssetProviderProps) {
     } finally {
       setLoading(false);
     }
-  }, [checkStorageQuota]);
+  }, [assets, checkStorageQuota]);
 
   /**
    * Remove Multiple Assets (Batch Delete)
-   * 批量删除素材 - 使用并行删除优化性能
+   * 批量删除素材 - 区分本地素材和 AI 生成素材
    */
   const removeAssets = useCallback(async (ids: string[]): Promise<void> => {
     if (ids.length === 0) return;
@@ -274,23 +361,48 @@ export function AssetProvider({ children }: AssetProviderProps) {
     setError(null);
 
     try {
-      // 并行删除所有素材
-      const deleteResults = await Promise.allSettled(
-        ids.map(id => assetStorageService.removeAsset(id))
-      );
-
-      // 统计成功和失败的结果
       const successIds: string[] = [];
       const errors: { id: string; error: any }[] = [];
 
-      deleteResults.forEach((result, index) => {
-        if (result.status === 'fulfilled') {
-          successIds.push(ids[index]);
+      // 区分本地素材和 AI 生成素材
+      const localIds: string[] = [];
+      const aiIds: string[] = [];
+
+      for (const id of ids) {
+        const asset = assets.find(a => a.id === id);
+        if (asset?.source === AssetSourceEnum.AI_GENERATED) {
+          aiIds.push(id);
         } else {
-          console.error(`Failed to remove asset ${ids[index]}:`, result.reason);
-          errors.push({ id: ids[index], error: result.reason });
+          localIds.push(id);
         }
-      });
+      }
+
+      // 删除 AI 生成的素材（从任务队列）
+      for (const id of aiIds) {
+        try {
+          taskQueueService.deleteTask(id);
+          successIds.push(id);
+        } catch (err) {
+          console.error(`Failed to remove AI asset ${id}:`, err);
+          errors.push({ id, error: err });
+        }
+      }
+
+      // 并行删除本地素材
+      if (localIds.length > 0) {
+        const deleteResults = await Promise.allSettled(
+          localIds.map(id => assetStorageService.removeAsset(id))
+        );
+
+        deleteResults.forEach((result, index) => {
+          if (result.status === 'fulfilled') {
+            successIds.push(localIds[index]);
+          } else {
+            console.error(`Failed to remove asset ${localIds[index]}:`, result.reason);
+            errors.push({ id: localIds[index], error: result.reason });
+          }
+        });
+      }
 
       // 更新状态 - 只移除成功删除的素材
       setAssets((prev) => prev.filter((asset) => !successIds.includes(asset.id)));
@@ -326,7 +438,7 @@ export function AssetProvider({ children }: AssetProviderProps) {
     } finally {
       setLoading(false);
     }
-  }, [selectedAssetId, checkStorageQuota]);
+  }, [assets, selectedAssetId, checkStorageQuota]);
 
   /**
    * Rename Asset

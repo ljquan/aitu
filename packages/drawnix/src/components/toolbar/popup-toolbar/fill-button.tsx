@@ -8,7 +8,7 @@ import {
   hexAlphaToOpacity,
   isFullyTransparent,
   removeHexAlpha,
-} from '../../../utils/color';
+} from '@aitu/utils';
 import { BackgroundColorIcon } from '../../icons';
 import { Popover, PopoverContent, PopoverTrigger } from '../../popover/popover';
 import {

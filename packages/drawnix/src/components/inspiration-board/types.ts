@@ -44,6 +44,8 @@ export interface InspirationBoardProps {
   isCanvasEmpty: boolean;
   /** 选择提示词回调 */
   onSelectPrompt: (prompt: string) => void;
+  /** 打开提示词工具回调 */
+  onOpenPromptTool?: () => void;
   /** 外部控制显示（可选） */
   visible?: boolean;
   /** 自定义类名 */

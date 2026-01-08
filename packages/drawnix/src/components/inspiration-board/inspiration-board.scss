@@ -20,12 +20,12 @@ $animation-duration: 0.3s;
 
 .inspiration-board {
   padding: $spacing-md;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(250, 251, 252, 0.98) 100%);
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  border-bottom: none;
-  border-radius: 16px 16px 0 0;
+  padding-bottom: $spacing-md; // 底部内边距
+  background: var(--island-bg-color, #fff);
+  border: none;
+  border-radius: 24px 24px 0 0; // 上圆角，下直角与输入框连接
   backdrop-filter: blur(10px);
-  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.06);
+  box-shadow: none; // 移除阴影，由父容器统一处理
   animation: slideUp $animation-duration ease-out;
   pointer-events: auto; // 覆盖父容器 ai-input-bar 的 pointer-events: none
 
@@ -41,6 +41,34 @@ $animation-duration: 0.3s;
     font-size: 14px;
     font-weight: 600;
     color: var(--td-text-color-primary);
+    flex: 1; // 占据剩余空间，把右侧按钮推到最右边
+  }
+
+  // 提示词工具按钮
+  &__prompt-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+
+    font-size: 12px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    margin-right: 8px;
+
+
+
+    &:active {
+      transform: scale(0.97);
+    }
+
+    svg {
+      flex-shrink: 0;
+    }
   }
 
   &__pagination {

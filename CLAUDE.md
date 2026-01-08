@@ -10,7 +10,7 @@
 
 **项目信息：**
 - **名称**: Aitu (爱图) - AI 图像与视频创作工具
-- **版本**: 0.3.3
+- **版本**: 0.4.0
 - **许可证**: MIT
 - **标语**: 爱上图像，爱上创作
 - **官网**: https://aitu.tu-zi.com
@@ -133,6 +133,14 @@ packages/drawnix/
 ```
 components/
 ├── ai-input-bar/                  # AI 输入条
+│   ├── AIInputBar.tsx             # 主组件
+│   ├── ModelDropdown.tsx          # 模型下拉选择器
+│   ├── SizeDropdown.tsx           # 尺寸下拉选择器
+│   └── PromptHistoryPopover.tsx   # 历史提示词悬浮面板
+├── inspiration-board/             # 灵感创意板块
+│   ├── InspirationBoard.tsx       # 主组件（画板为空时显示）
+│   ├── InspirationCard.tsx        # 模版卡片
+│   └── constants.ts               # 模版数据
 ├── chat-drawer/                   # 聊天抽屉
 │   ├── ChatDrawer.tsx             # 主组件
 │   ├── SessionList.tsx            # 会话列表
@@ -177,6 +185,7 @@ services/
 ├── media-cache-service.ts         # 媒体缓存 (IndexedDB)
 ├── url-cache-service.ts           # URL 缓存
 ├── toolbar-config-service.ts      # 工具栏配置
+├── prompt-storage-service.ts      # 历史提示词存储
 ├── tracking/                      # 追踪服务
 └── ...其他服务
 ```
@@ -215,6 +224,7 @@ hooks/
 ├── useTaskQueue.ts                # 任务队列
 ├── useTaskStorage.ts              # 任务存储
 ├── useGenerationHistory.ts        # 生成历史
+├── usePromptHistory.ts            # 历史提示词管理
 ├── useSmartInput.ts               # 智能输入
 ├── useChatSessions.ts             # 聊天会话
 ├── useCharacters.ts               # 角色管理
@@ -386,6 +396,28 @@ packages/react-text/
 - 媒体缓存
 - 聊天会话和消息
 
+### 素材库数据来源
+素材库（AssetContext）合并两个数据来源展示：
+
+1. **本地上传的素材**：存储在 IndexedDB 中（通过 `asset-storage-service.ts`）
+2. **AI 生成的素材**：直接从任务队列读取已完成的任务（通过 `task-queue-service.ts`）
+
+**数据流**：
+```
+素材库展示：
+├── 本地上传素材 ← IndexedDB (asset-storage-service)
+└── AI 生成素材 ← 任务队列 (task-queue-service) 已完成的任务
+
+删除素材：
+├── 本地素材 → assetStorageService.removeAsset()
+└── AI 素材 → taskQueueService.deleteTask()
+```
+
+**设计原则**：
+- AI 生成的素材不重复存储，直接使用任务结果中的原始 URL
+- 只有本地上传的素材才使用 `/asset-library/` 前缀的 URL
+- `loadAssets` 方法合并两个来源的数据，按创建时间倒序排列
+
 ---
 
 ## 核心功能流程
@@ -459,6 +491,49 @@ WorkZoneContent 组件响应更新，显示进度
 - WorkZone 元素被选中时不触发 popup-toolbar（在 `popup-toolbar.tsx` 中过滤）
 - AIInputBar 发送工作流时不自动展开 ChatDrawer（通过 `autoOpen: false` 参数控制）
 - WorkZone 位置策略：有选中元素放右侧，无选中放所有元素右下方，画布为空放视口中心
+
+### 灵感创意板块 (InspirationBoard)
+
+当画板为空时，在 AI 输入框上方显示灵感创意板块，帮助用户快速开始创作。
+
+**核心文件**：
+- `components/inspiration-board/InspirationBoard.tsx` - 主组件
+- `components/inspiration-board/InspirationCard.tsx` - 模版卡片组件
+- `components/inspiration-board/constants.ts` - 模版数据配置
+
+**功能特点**：
+- 画板为空时自动显示，有内容时隐藏
+- 3x2 网格布局展示创意模版
+- 支持分页浏览更多模版
+- 点击模版自动填充提示词到输入框
+- 提供"提示词"快捷按钮，可打开香蕉提示词工具
+
+### 历史提示词功能
+
+支持记录和管理用户的历史提示词，方便快速复用。
+
+**核心文件**：
+- `services/prompt-storage-service.ts` - 存储服务（localStorage）
+- `hooks/usePromptHistory.ts` - React Hook
+- `components/ai-input-bar/PromptHistoryPopover.tsx` - UI 组件
+
+**功能特点**：
+- 自动保存用户发送的提示词（最多 20 条）
+- 支持置顶/取消置顶常用提示词
+- 鼠标悬浮三点图标显示历史列表
+- 点击历史提示词回填到输入框
+- 支持删除单条历史记录
+
+**API 示例**：
+```typescript
+const { history, addHistory, removeHistory, togglePinHistory } = usePromptHistory();
+
+// 添加历史
+addHistory('生成一张日落风景图', hasSelection);
+
+// 置顶/取消置顶
+togglePinHistory(itemId);
+```
 
 ---
 
@@ -567,6 +642,27 @@ AI 输入框左下角显示 `@shortCode` 格式的模型选择器（如 `@nb2v`�
 - 底部栏（模型选择器 + 发送按钮）固定不动
 - 输入区域聚焦时向上扩展，最大高度 200px
 
+### AI 输入栏与灵感板无缝连接
+
+当画布为空时，`InspirationBoard` 和 `AIInputBar` 会无缝连接成一个整体卡片：
+
+**实现方式**：
+- 父容器 `.ai-input-bar` 添加 `--with-inspiration` 修饰符时：
+  - 设置 `gap: 0` 移除组件间距
+  - 使用 `::before` 伪元素创建统一的背景和阴影
+- `InspirationBoard`：上圆角 (24px)，下直角，无阴影
+- `AIInputBar__container`：上直角，下圆角 (24px)，无阴影
+
+**相关文件**：
+- `components/ai-input-bar/AIInputBar.tsx` - 通过 `showInspirationBoard` 状态控制 class
+- `components/ai-input-bar/ai-input-bar.scss` - 父容器伪元素和子组件样式
+- `components/inspiration-board/inspiration-board.scss` - 灵感板样式
+
+**技术要点**：
+- 使用 CSS 伪元素 `::before` 在父容器层统一处理背景和阴影
+- 子组件设置 `box-shadow: none` 避免重叠阴影产生分割线
+- 通过 React 状态动态添加 `ai-input-bar--with-inspiration` class
+
 ---
 
 ## 数据分析追踪
@@ -636,9 +732,12 @@ pnpm start
 - 编辑器组件: `packages/drawnix/src/drawnix.tsx`
 - AI 服务: `packages/drawnix/src/services/generation-api-service.ts`
 - 任务队列: `packages/drawnix/src/services/task-queue-service.ts`
+- service worker源码：'apps/web/src/sw/index.ts'
 
 ### 重要 Context
 - `DrawnixContext` - 编辑器状态
 - `AssetContext` - 资产管理
 - `ChatDrawerContext` - 聊天抽屉
 - `WorkflowContext` - 工作流
+
+

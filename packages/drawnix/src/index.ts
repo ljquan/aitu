@@ -12,6 +12,6 @@ export * from './services/workspace-service';
 export * from './services/workspace-migration';
 export * from './types/workspace.types';
 
-// Export media cache service
-export { mediaCacheService } from './services/media-cache-service';
-export type { CachedMedia, CacheStatus } from './services/media-cache-service';
+// Export unified cache service
+export { unifiedCacheService } from './services/unified-cache-service';
+export type { CachedMedia, CacheStatus } from './services/unified-cache-service';

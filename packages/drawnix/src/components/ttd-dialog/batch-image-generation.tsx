@@ -13,6 +13,8 @@ import { TaskType, TaskStatus, Task } from '../../types/task.types';
 import { geminiSettings } from '../../utils/settings-manager';
 import { promptForApiKey } from '../../utils/gemini-api';
 import { IMAGE_MODEL_GROUPED_OPTIONS } from '../settings-dialog/settings-dialog';
+import { useAssets } from '../../contexts/AssetContext';
+import { AssetType, AssetSource } from '../../types/asset.types';
 import './batch-image-generation.scss';
 
 // 任务行数据
@@ -63,6 +65,7 @@ interface BatchImageGenerationProps {
 const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToSingle }) => {
   const { language } = useI18n();
   const { createTask, tasks: queueTasks } = useTaskQueue();
+  const { addAsset } = useAssets();
 
   // 任务数据 - 从本地缓存加载
   const [tasks, setTasks] = useState<TaskRow[]>(() => {
@@ -464,6 +467,11 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
     Array.from(files).forEach(file => {
       if (!file.type.startsWith('image/')) return;
 
+      // Add to asset library (async, don't block UI)
+      addAsset(file, AssetType.IMAGE, AssetSource.LOCAL, file.name).catch((err) => {
+        console.warn('[BatchImageGeneration] Failed to add asset to library:', err);
+      });
+
       const reader = new FileReader();
       reader.onload = (ev) => {
         const dataUrl = ev.target?.result as string;
@@ -475,7 +483,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
-  }, []);
+  }, [addAsset]);
 
   // 从图片库添加图片到选中行（支持 checkbox 选中或当前活动单元格所在行）
   const addImageToSelectedRows = useCallback((imageUrl: string) => {
@@ -548,6 +556,11 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
     Array.from(files).forEach(file => {
       if (!file.type.startsWith('image/')) return;
 
+      // Add to asset library (async, don't block UI)
+      addAsset(file, AssetType.IMAGE, AssetSource.LOCAL, file.name).catch((err) => {
+        console.warn('[BatchImageGeneration] Failed to add asset to library:', err);
+      });
+
       const reader = new FileReader();
       reader.onload = (ev) => {
         const dataUrl = ev.target?.result as string;
@@ -564,7 +577,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
       rowImageInputRef.current.value = '';
     }
     uploadTargetRowRef.current = null;
-  }, [addImageToRow]);
+  }, [addImageToRow, addAsset]);
 
   // 触发行内图片上传
   const triggerRowImageUpload = useCallback((rowIndex: number) => {
@@ -612,6 +625,11 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
     Array.from(files).forEach(file => {
       if (!file.type.startsWith('image/')) return;
 
+      // Add to asset library (async, don't block UI)
+      addAsset(file, AssetType.IMAGE, AssetSource.LOCAL, file.name).catch((err) => {
+        console.warn('[BatchImageGeneration] Failed to add asset to library:', err);
+      });
+
       const reader = new FileReader();
       reader.onload = (ev) => {
         const dataUrl = ev.target?.result as string;
@@ -631,7 +649,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
           : `Added ${addedCount} images to row ${rowIndex + 1}`
       );
     }
-  }, [addImageToRow, language]);
+  }, [addImageToRow, language, addAsset]);
 
   // 图片库图片拖拽开始
   const handleLibraryImageDragStart = useCallback((e: React.DragEvent<HTMLDivElement>, imageUrl: string) => {
@@ -672,9 +690,14 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
     const rowsNeeded = Math.ceil(totalImages / perRow);
     const startIndex = importStartRow - 1; // 转为 0-based index
 
-    // 读取所有图片为 DataURL
+    // 读取所有图片为 DataURL，同时添加到素材库
     const imageDataUrls: string[] = [];
     for (const file of pendingImportFiles) {
+      // Add to asset library (async, don't block UI)
+      addAsset(file, AssetType.IMAGE, AssetSource.LOCAL, file.name).catch((err) => {
+        console.warn('[BatchImageGeneration] Failed to add asset to library:', err);
+      });
+
       const dataUrl = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = (ev) => resolve(ev.target?.result as string);
@@ -741,7 +764,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
       ? `已导入 ${totalImages} 张图片，从第 ${importStartRow} 行开始`
       : `Imported ${totalImages} images starting from row ${importStartRow}`;
     MessagePlugin.success(message);
-  }, [pendingImportFiles, imagesPerRow, importStartRow, taskIdCounter, tasks.length, language]);
+  }, [pendingImportFiles, imagesPerRow, importStartRow, taskIdCounter, tasks.length, language, addAsset]);
 
   // 取消批量导入
   const cancelBatchImport = useCallback(() => {

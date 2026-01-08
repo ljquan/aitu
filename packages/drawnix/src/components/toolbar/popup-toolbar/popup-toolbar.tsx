@@ -42,8 +42,7 @@ import { PopupFontColorButton } from './font-color-button';
 import { PopupFontSizeButton } from './font-size-button';
 import { PopupStrokeButton } from './stroke-button';
 import { PopupFillButton } from './fill-button';
-import { isWhite, removeHexAlpha } from '../../../utils/color';
-import { NO_COLOR } from '../../../constants/color';
+import { isWhite, removeHexAlpha, NO_COLOR } from '@aitu/utils';
 import { Freehand } from '../../../plugins/freehand/type';
 import { PopupLinkButton } from './link-button';
 import { PopupPromptButton } from './prompt-button';
@@ -493,7 +492,7 @@ export const PopupToolbar = () => {
                   const loadingInstance = MessagePlugin.loading(loadingMsg, 0);
                   try {
                     // 特殊处理 blob: URL（可能是从IndexedDB缓存的视频）
-                    const { mediaCacheService } = await import('../../../services/media-cache-service');
+                    const { unifiedCacheService } = await import('../../../services/unified-cache-service');
                     const { downloadFromBlob } = await import('../../../utils/download-utils');
 
                     const processedItems: BatchDownloadItem[] = [];
@@ -508,14 +507,15 @@ export const PopupToolbar = () => {
 
                         if (taskId && taskId.startsWith('merged-video-')) {
                           // 从 IndexedDB 获取缓存的视频
-                          const cached = await mediaCacheService.getCachedMedia(taskId);
-                          if (cached && cached.blob) {
-                            const ext = cached.mimeType.startsWith('video/mp4') ? 'mp4' :
-                                       cached.mimeType.startsWith('video/webm') ? 'webm' : 'bin';
+                          const cachedBlob = await unifiedCacheService.getCachedBlob(taskId);
+                          if (cachedBlob) {
+                            const mimeType = cachedBlob.type || 'video/webm';
+                            const ext = mimeType.startsWith('video/mp4') ? 'mp4' :
+                                       mimeType.startsWith('video/webm') ? 'webm' : 'bin';
                             const filename = `merged-video-${Date.now()}.${ext}`;
 
-                            console.log('[Download] Downloading from IndexedDB cache:', { taskId, ext, size: cached.blob.size });
-                            downloadFromBlob(cached.blob, filename);
+                            console.log('[Download] Downloading from IndexedDB cache:', { taskId, ext, size: cachedBlob.size });
+                            downloadFromBlob(cachedBlob, filename);
                             continue;
                           } else {
                             console.warn('[Download] Cache not found for taskId:', taskId);

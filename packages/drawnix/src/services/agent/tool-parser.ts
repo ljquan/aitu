@@ -37,23 +37,45 @@ function tryParseJson(jsonStr: string): Record<string, unknown> | null {
 }
 
 /**
+ * 清理 LLM 响应文本
+ * 移除常见的干扰内容，提取纯净的 JSON
+ */
+export function cleanLLMResponse(response: string): string {
+  let cleaned = response;
+
+  // 1. 移除 <think>...</think> 标签及其内容
+  cleaned = cleaned.replace(/<think>[\s\S]*?<\/think>\s*/gi, '');
+
+  // 2. 移除可能的代码块标记
+  cleaned = cleaned.replace(/```(?:json)?\s*\n?/gi, '').replace(/\n?```/gi, '');
+
+  return cleaned.trim();
+}
+
+/**
  * 解析新格式的工作流 JSON 响应
  * 格式: {"content": "...", "next": [{"mcp": "tool_name", "args": {...}}]}
  */
 export function parseWorkflowJson(response: string): WorkflowJsonResponse | null {
+  // 清理响应文本
+  const cleaned = cleanLLMResponse(response);
+
   // 先尝试直接解析整个响应
-  let parsed = tryParseJson(response);
+  let parsed = tryParseJson(cleaned);
 
   // 如果直接解析失败，尝试从响应中提取 JSON
   if (!parsed) {
-    // 移除可能的代码块标记
-    let cleaned = response.replace(/```(?:json)?\s*\n?/gi, '').replace(/\n?```/gi, '');
-    parsed = tryParseJson(cleaned);
+    // 尝试从文本中找到 JSON 对象（更精确的匹配）
+    // 从第一个 { 开始匹配，包含 content 和 next 字段
+    const jsonMatch = cleaned.match(/\{\s*"content"\s*:\s*"[^"]*"\s*,\s*"next"\s*:\s*\[[\s\S]*?\]\s*\}/);
+    if (jsonMatch) {
+      parsed = tryParseJson(jsonMatch[0]);
+    }
   }
 
-  // 如果还是失败，尝试从文本中找到 JSON 对象
+  // 如果还是失败，尝试更宽松的匹配
   if (!parsed) {
-    const jsonMatch = response.match(/\{[\s\S]*"content"[\s\S]*"next"[\s\S]*\}/);
+    const jsonMatch = cleaned.match(/\{[\s\S]*"content"[\s\S]*"next"[\s\S]*\}/);
     if (jsonMatch) {
       parsed = tryParseJson(jsonMatch[0]);
     }
@@ -219,7 +241,8 @@ export function extractTextContent(response: string): string {
   }
 
   // 回退到旧格式处理
-  let text = response;
+  // 先使用公共清理函数
+  let text = cleanLLMResponse(response);
 
   // 移除 ```tool_call...``` 块
   text = text.replace(/```tool_call\s*\n?[\s\S]*?\n?```/gi, '');
@@ -229,6 +252,9 @@ export function extractTextContent(response: string): string {
 
   // 移除包含工具调用的 JSON 块
   text = text.replace(/```(?:json)?\s*\n?\s*\{\s*"name"\s*:[\s\S]*?\n?```/gi, '');
+
+  // 移除工作流 JSON 格式
+  text = text.replace(/\{\s*"content"\s*:\s*"[^"]*"\s*,\s*"next"\s*:\s*\[[\s\S]*?\]\s*\}/gi, '');
 
   // 清理多余的空行
   text = text.replace(/\n{3,}/g, '\n\n');

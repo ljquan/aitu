@@ -3,7 +3,7 @@
 
 // fix: self redeclaration error and type casting
 const sw = self as unknown as ServiceWorkerGlobalScope;
-export {}; // Make this a module
+export { }; // Make this a module
 
 // Service Worker for PWA functionality and handling CORS issues with external images
 // Version will be replaced during build process
@@ -12,6 +12,12 @@ const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '
 const CACHE_NAME = `drawnix-v${APP_VERSION}`;
 const IMAGE_CACHE_NAME = `drawnix-images`;
 const STATIC_CACHE_NAME = `drawnix-static-v${APP_VERSION}`;
+
+// 缓存 URL 前缀 - 用于合并视频等本地缓存资源
+const CACHE_URL_PREFIX = '/__aitu_cache__/video/';
+
+// 素材库 URL 前缀 - 用于素材库媒体资源
+const ASSET_LIBRARY_PREFIX = '/asset-library/';
 
 // Detect development mode
 // 在构建时，process.env.NODE_ENV 会被替换，或者我们可以通过 mode 判断
@@ -118,7 +124,7 @@ function isVideoRequest(url: URL, request: Request): boolean {
 async function loadFailedDomains(): Promise<void> {
   try {
     const request = indexedDB.open('ServiceWorkerDB', 1);
-    
+
     return new Promise((resolve, reject) => {
       request.onerror = () => reject(request.error);
       request.onsuccess = () => {
@@ -127,7 +133,7 @@ async function loadFailedDomains(): Promise<void> {
           const transaction = db.transaction(['failedDomains'], 'readonly');
           const store = transaction.objectStore('failedDomains');
           const getAllRequest = store.getAll();
-          
+
           getAllRequest.onsuccess = () => {
             const domains = getAllRequest.result;
             domains.forEach((item: any) => failedDomains.add(item.domain));
@@ -155,14 +161,14 @@ async function loadFailedDomains(): Promise<void> {
 async function saveFailedDomain(domain: string): Promise<void> {
   try {
     const request = indexedDB.open('ServiceWorkerDB', 1);
-    
+
     return new Promise((resolve, reject) => {
       request.onerror = () => reject(request.error);
       request.onsuccess = () => {
         const db = request.result;
         const transaction = db.transaction(['failedDomains'], 'readwrite');
         const store = transaction.objectStore('failedDomains');
-        
+
         store.put({ domain: domain, timestamp: Date.now() });
         transaction.oncomplete = () => {
           console.log('Service Worker: 已保存失败域名到数据库:', domain);
@@ -182,53 +188,17 @@ async function saveFailedDomain(domain: string): Promise<void> {
   }
 }
 
-// 清理过期的pending请求（避免内存泄漏）
-function cleanupPendingRequests() {
-  const now = Date.now();
-  const maxAge = 30000; // 30秒后清理未完成的请求
-  
-  for (const [key, entry] of pendingImageRequests.entries()) {
-    if (now - entry.timestamp > maxAge) {
-      console.log('Service Worker: 清理过期的pending图片请求:', key);
-      pendingImageRequests.delete(key);
-    }
-  }
-  
-  for (const [key, entry] of pendingVideoRequests.entries()) {
-    if (now - entry.timestamp > maxAge) {
-      console.log('Service Worker: 清理过期的pending视频请求:', key);
-      pendingVideoRequests.delete(key);
-    }
-  }
-}
-
-// 清理过期的视频Blob缓存（避免内存泄漏）
-function cleanupVideoBlobCache() {
-  const now = Date.now();
-  const maxAge = 5 * 60 * 1000; // 5分钟后清理视频缓存
-  
-  for (const [key, entry] of videoBlobCache.entries()) {
-    if (now - entry.timestamp > maxAge) {
-      console.log('Service Worker: 清理过期的视频Blob缓存:', key);
-      videoBlobCache.delete(key);
-    }
-  }
-}
-
-// 定期清理pending请求和视频缓存
-setInterval(cleanupPendingRequests, 60000); // 每分钟清理一次
-setInterval(cleanupVideoBlobCache, 2 * 60 * 1000); // 每2分钟清理一次视频缓存
 
 // ==================== 智能升级相关函数 ====================
 
 // 标记新版本已准备好，等待用户确认
 function markNewVersionReady() {
   console.log(`Service Worker: 新版本 v${APP_VERSION} 已准备好，等待用户确认...`);
-  
+
   // 通知客户端有新版本可用
   sw.clients.matchAll().then(clients => {
     clients.forEach(client => {
-      client.postMessage({ 
+      client.postMessage({
         type: 'SW_NEW_VERSION_READY',
         version: APP_VERSION
       });
@@ -241,12 +211,12 @@ async function cleanOldCacheEntries(cache: Cache) {
   try {
     console.log('Service Worker: Starting cache cleanup to free space');
     const requests = await cache.keys();
-    
+
     if (requests.length <= 10) {
       console.log('Service Worker: Cache has few entries, skipping cleanup');
       return;
     }
-    
+
     interface CacheEntry {
       request: Request;
       cacheDate: number;
@@ -271,15 +241,15 @@ async function cleanOldCacheEntries(cache: Cache) {
         console.warn('Service Worker: Error reading cache entry:', error);
       }
     }
-    
+
     // 按时间排序，最老的在前面
     entries.sort((a, b) => a.cacheDate - b.cacheDate);
-    
+
     // 删除最老的25%缓存条目
     const deleteCount = Math.max(1, Math.floor(entries.length * 0.25));
     let deletedCount = 0;
     let freedSpace = 0;
-    
+
     for (let i = 0; i < deleteCount && i < entries.length; i++) {
       try {
         await cache.delete(entries[i].request);
@@ -290,9 +260,9 @@ async function cleanOldCacheEntries(cache: Cache) {
         console.warn('Service Worker: Error deleting cache entry:', error);
       }
     }
-    
+
     console.log(`Service Worker: Cache cleanup completed, deleted ${deletedCount} entries, freed ${(freedSpace / 1024 / 1024).toFixed(2)}MB`);
-    
+
   } catch (error) {
     console.warn('Service Worker: Cache cleanup failed:', error);
   }
@@ -309,12 +279,12 @@ const STATIC_FILES = [
 
 sw.addEventListener('install', (event: ExtendableEvent) => {
   console.log(`Service Worker v${APP_VERSION} installing...`);
-  
+
   const installPromises: Promise<any>[] = [];
-  
+
   // Load failed domains from database
   installPromises.push(loadFailedDomains());
-  
+
   // Only pre-cache static files in production
   if (!isDevelopment) {
     installPromises.push(
@@ -326,7 +296,7 @@ sw.addEventListener('install', (event: ExtendableEvent) => {
         .catch(err => console.log('Cache pre-loading failed:', err))
     );
   }
-  
+
   event.waitUntil(
     Promise.all(installPromises).then(() => {
       console.log(`Service Worker v${APP_VERSION} installed, resources ready`);
@@ -382,13 +352,13 @@ sw.addEventListener('activate', (event: ExtendableEvent) => {
       }
 
       // 找出旧版本的静态资源缓存（但不立即删除）
-      const oldStaticCaches = cacheNames.filter(name => 
+      const oldStaticCaches = cacheNames.filter(name =>
         name.startsWith('drawnix-static-v') && name !== STATIC_CACHE_NAME
       );
-      
+
       const oldAppCaches = cacheNames.filter(name =>
-        name.startsWith('drawnix-v') && 
-        name !== CACHE_NAME && 
+        name.startsWith('drawnix-v') &&
+        name !== CACHE_NAME &&
         name !== IMAGE_CACHE_NAME &&
         !name.startsWith('drawnix-static-v')
       );
@@ -396,7 +366,7 @@ sw.addEventListener('activate', (event: ExtendableEvent) => {
       if (oldStaticCaches.length > 0 || oldAppCaches.length > 0) {
         console.log('Found old version caches, will keep them temporarily:', [...oldStaticCaches, ...oldAppCaches]);
         console.log('Old caches will be cleaned up after clients are updated');
-        
+
         // 延迟 30 秒后清理旧缓存，给所有客户端足够时间刷新
         setTimeout(async () => {
           console.log('Cleaning up old version caches now...');
@@ -423,21 +393,15 @@ sw.addEventListener('message', (event: ExtendableMessageEvent) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     // 主线程请求立即升级（用户主动触发）
     console.log('Service Worker: 收到主线程的 SKIP_WAITING 请求');
-    
+
     // 直接调用 skipWaiting
     sw.skipWaiting();
-    
+
     // Notify clients that SW has been updated
     sw.clients.matchAll().then(clients => {
       clients.forEach(client => {
         client.postMessage({ type: 'SW_UPDATED' });
       });
-    });
-  } else if (event.data && event.data.type === 'CLEAN_EXPIRED_CACHE') {
-    // 页面加载完成时清理过期缓存
-    console.log('Service Worker: Received cache cleanup request from main thread');
-    cleanExpiredImageCache().catch(error => {
-      console.warn('Service Worker: Cache cleanup failed:', error);
     });
   } else if (event.data && event.data.type === 'GET_UPGRADE_STATUS') {
     // 主线程查询升级状态
@@ -454,62 +418,166 @@ sw.addEventListener('message', (event: ExtendableMessageEvent) => {
         client.postMessage({ type: 'SW_UPDATED' });
       });
     });
+  } else if (event.data && event.data.type === 'DELETE_CACHE') {
+    // 删除单个缓存
+    const { url } = event.data;
+    if (url) {
+      deleteCacheByUrl(url).then(() => {
+        console.log('Service Worker: Cache deleted:', url);
+        // 通知主线程
+        sw.clients.matchAll().then(clients => {
+          clients.forEach(client => {
+            client.postMessage({ type: 'CACHE_DELETED', url });
+          });
+        });
+      }).catch(error => {
+        console.error('Service Worker: Failed to delete cache:', error);
+      });
+    }
+  } else if (event.data && event.data.type === 'DELETE_CACHE_BATCH') {
+    // 批量删除缓存
+    const { urls } = event.data;
+    if (urls && Array.isArray(urls)) {
+      deleteCacheBatch(urls).then(() => {
+        console.log('Service Worker: Batch cache deleted:', urls.length);
+      }).catch(error => {
+        console.error('Service Worker: Failed to batch delete caches:', error);
+      });
+    }
+  } else if (event.data && event.data.type === 'CLEAR_ALL_CACHE') {
+    // 清空所有缓存
+    clearImageCache().then(() => {
+      console.log('Service Worker: All image cache cleared');
+    }).catch(error => {
+      console.error('Service Worker: Failed to clear all cache:', error);
+    });
   }
 });
 
-// 清理过期的图片缓存
-async function cleanExpiredImageCache() {
+
+// 删除单个缓存条目
+async function deleteCacheByUrl(url: string): Promise<void> {
   try {
-    console.log('Service Worker: Starting expired image cache cleanup');
     const cache = await caches.open(IMAGE_CACHE_NAME);
-    const requests = await cache.keys();
-    const maxAge = 30 * 24 * 60 * 60 * 1000; // 30天
-    const now = Date.now();
-    let cleanedCount = 0;
-    
-    for (const request of requests) {
+    await cache.delete(url);
+    console.log('Service Worker: Deleted cache entry:', url);
+  } catch (error) {
+    console.error('Service Worker: Failed to delete cache entry:', url, error);
+    throw error;
+  }
+}
+
+// 批量删除缓存
+async function deleteCacheBatch(urls: string[]): Promise<void> {
+  try {
+    const cache = await caches.open(IMAGE_CACHE_NAME);
+    let deletedCount = 0;
+
+    for (const url of urls) {
       try {
-        const response = await cache.match(request);
-        if (response) {
-          const cacheDate = response.headers.get('sw-cache-date');
-          if (cacheDate) {
-            const cacheTime = parseInt(cacheDate);
-            const cacheAge = now - cacheTime;
-            
-            if (cacheAge > maxAge) {
-              await cache.delete(request);
-              cleanedCount++;
-              console.log('Service Worker: Cleaned expired cached image:', request.url);
-            }
-          }
-          // 旧的没有时间戳的缓存保留，在访问时会自动添加时间戳
-        }
+        await cache.delete(url);
+        deletedCount++;
       } catch (error) {
-        console.warn('Service Worker: Error checking cache entry:', request.url, error);
+        console.warn('Service Worker: Failed to delete cache in batch:', url, error);
       }
     }
-    
-    if (cleanedCount > 0) {
-      console.log(`Service Worker: Image cache cleanup completed, removed ${cleanedCount} expired entries`);
-    } else {
-      console.log('Service Worker: No expired cache entries found');
+
+    console.log(`Service Worker: Batch deleted ${deletedCount}/${urls.length} cache entries`);
+  } catch (error) {
+    console.error('Service Worker: Failed to batch delete caches:', error);
+    throw error;
+  }
+}
+
+// 清空所有图片缓存
+async function clearImageCache(): Promise<void> {
+  try {
+    const cache = await caches.open(IMAGE_CACHE_NAME);
+    const requests = await cache.keys();
+
+    for (const request of requests) {
+      await cache.delete(request);
     }
-    
-    // 向主线程报告清理结果
+
+    console.log(`Service Worker: Cleared ${requests.length} cache entries`);
+  } catch (error) {
+    console.error('Service Worker: Failed to clear image cache:', error);
+    throw error;
+  }
+}
+
+// 通知主线程图片已缓存（带元数据）
+async function notifyImageCached(url: string, size: number, mimeType: string): Promise<void> {
+  try {
     const clients = await sw.clients.matchAll();
     clients.forEach(client => {
-      client.postMessage({ 
-        type: 'CACHE_CLEANUP_COMPLETE', 
-        cleanedCount 
+      client.postMessage({
+        type: 'IMAGE_CACHED',
+        url,
+        size,
+        mimeType,
+        timestamp: Date.now()
       });
     });
   } catch (error) {
-    console.warn('Service Worker: Error during image cache cleanup:', error);
+    console.warn('Service Worker: Failed to notify image cached:', error);
+  }
+}
+
+// 检测并警告存储配额
+async function checkStorageQuota(): Promise<void> {
+  try {
+    if (navigator.storage && navigator.storage.estimate) {
+      const estimate = await navigator.storage.estimate();
+      const usage = estimate.usage || 0;
+      const quota = estimate.quota || 0;
+      const percentage = quota > 0 ? (usage / quota) * 100 : 0;
+
+      // 如果使用率超过 90%，发送警告
+      if (percentage > 90) {
+        console.warn('Service Worker: Storage quota warning:', { usage, quota, percentage });
+        const clients = await sw.clients.matchAll();
+        clients.forEach(client => {
+          client.postMessage({
+            type: 'QUOTA_WARNING',
+            usage,
+            quota
+          });
+        });
+      }
+    }
+  } catch (error) {
+    console.warn('Service Worker: Failed to check storage quota:', error);
   }
 }
 
 sw.addEventListener('fetch', (event: FetchEvent) => {
   const url = new URL(event.request.url);
+
+  // 只处理 http 和 https 协议的请求，忽略 chrome-extension、data、blob 等
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    return;
+  }
+
+  // 拦截缓存 URL 请求 (/__aitu_cache__/video/{taskId}.mp4)
+  if (url.pathname.startsWith(CACHE_URL_PREFIX)) {
+    console.log('Service Worker: Intercepting cache URL request:', event.request.url);
+
+    event.respondWith(
+      handleCacheUrlRequest(event.request)
+    );
+    return;
+  }
+
+  // 拦截素材库 URL 请求 (/asset-library/{assetId}.{ext})
+  if (url.pathname.startsWith(ASSET_LIBRARY_PREFIX)) {
+    console.log('Service Worker: Intercepting asset library request:', event.request.url);
+
+    event.respondWith(
+      handleAssetLibraryRequest(event.request)
+    );
+    return;
+  }
 
   // 检查是否要求绕过Service Worker
   if (url.searchParams.has('bypass_sw') || url.searchParams.has('direct_fetch')) {
@@ -540,7 +608,7 @@ sw.addEventListener('fetch', (event: FetchEvent) => {
   // 拦截视频请求以支持 Range 请求
   if (isVideoRequest(url, event.request)) {
     console.log('Service Worker: Intercepting video request:', url.href);
-    
+
     event.respondWith(
       handleVideoRequest(event.request)
     );
@@ -550,7 +618,7 @@ sw.addEventListener('fetch', (event: FetchEvent) => {
   // 拦截外部图片请求（非同源且为图片格式）
   if (url.origin !== location.origin && isImageRequest(url, event.request)) {
     console.log('Service Worker: Intercepting external image request:', url.href);
-    
+
     event.respondWith(
       handleImageRequest(event.request)
     );
@@ -560,15 +628,15 @@ sw.addEventListener('fetch', (event: FetchEvent) => {
   // Handle static file requests with cache-first strategy
   // Exclude XHR/fetch API requests - only handle navigation and static resources
   if (!isDevelopment &&
-      event.request.method === 'GET' &&
-      event.request.destination !== '') {
-    
+    event.request.method === 'GET' &&
+    event.request.destination !== '') {
+
     event.respondWith(
       handleStaticRequest(event.request)
     );
     return;
   }
-  
+
   // 对于其他请求（如 XHR/API 请求），不拦截，让浏览器直接处理
   // 这些请求不会被追踪，但通常它们很快完成
   // SW 升级会在拦截的请求（图片、视频、静态资源）完成后进行
@@ -611,6 +679,115 @@ async function fetchWithRetry(request: Request, maxRetries = 2, fetchOptions: an
   throw lastError;
 }
 
+// 处理缓存 URL 请求 (/__aitu_cache__/video/{taskId}.mp4)
+// 从 Cache API 获取合并视频并返回，支持 Range 请求
+async function handleCacheUrlRequest(request: Request): Promise<Response> {
+  const requestId = Math.random().toString(36).substring(2, 10);
+  const rangeHeader = request.headers.get('range');
+
+  // 使用完整 URL 作为缓存 key（与主线程保持一致）
+  const cacheKey = request.url;
+
+  console.log(`Service Worker [Cache-${requestId}]: Handling cache URL request:`, cacheKey);
+
+  try {
+    // 从 Cache API 获取
+    const cache = await caches.open(IMAGE_CACHE_NAME);
+    const cachedResponse = await cache.match(cacheKey);
+
+    if (cachedResponse) {
+      console.log(`Service Worker [Cache-${requestId}]: Found cached video:`, cacheKey);
+      const blob = await cachedResponse.blob();
+      return createVideoResponse(blob, rangeHeader, requestId);
+    }
+
+    // 如果 Cache API 没有，返回 404
+    console.error(`Service Worker [Cache-${requestId}]: Video not found in cache:`, cacheKey);
+    return new Response('Video not found', {
+      status: 404,
+      statusText: 'Not Found',
+      headers: {
+        'Content-Type': 'text/plain'
+      }
+    });
+
+  } catch (error) {
+    console.error(`Service Worker [Cache-${requestId}]: Error handling cache URL request:`, error);
+    return new Response('Internal error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+      headers: {
+        'Content-Type': 'text/plain'
+      }
+    });
+  }
+}
+
+// 处理素材库 URL 请求 (/asset-library/{assetId}.{ext})
+// 从 Cache API 获取素材库媒体并返回，支持 Range 请求（视频）
+async function handleAssetLibraryRequest(request: Request): Promise<Response> {
+  const requestId = Math.random().toString(36).substring(2, 10);
+  const url = new URL(request.url);
+  const rangeHeader = request.headers.get('range');
+
+  // 使用完整路径作为缓存 key
+  const cacheKey = url.pathname;
+
+  console.log(`Service Worker [Asset-${requestId}]: Handling asset library request:`, cacheKey);
+
+  try {
+    // 从 Cache API 获取
+    const cache = await caches.open(IMAGE_CACHE_NAME);
+    const cachedResponse = await cache.match(cacheKey);
+
+    if (cachedResponse) {
+      console.log(`Service Worker [Asset-${requestId}]: Found cached asset:`, cacheKey);
+      const blob = await cachedResponse.blob();
+
+      // 检查是否是视频请求
+      const isVideo = url.pathname.match(/\.(mp4|webm|ogg|mov)$/i);
+
+      if (isVideo && rangeHeader) {
+        // 视频请求支持 Range
+        return createVideoResponse(blob, rangeHeader, requestId);
+      }
+
+      // 图片或完整视频请求
+      return new Response(blob, {
+        status: 200,
+        statusText: 'OK',
+        headers: {
+          'Content-Type': blob.type || 'application/octet-stream',
+          'Content-Length': blob.size.toString(),
+          'Accept-Ranges': 'bytes',
+          'Access-Control-Allow-Origin': '*',
+          'Cache-Control': 'max-age=31536000' // 1年
+        }
+      });
+    }
+
+    // 如果 Cache API 没有，返回 404
+    console.error(`Service Worker [Asset-${requestId}]: Asset not found in cache:`, cacheKey);
+    return new Response('Asset not found', {
+      status: 404,
+      statusText: 'Not Found',
+      headers: {
+        'Content-Type': 'text/plain'
+      }
+    });
+
+  } catch (error) {
+    console.error(`Service Worker [Asset-${requestId}]: Error handling asset library request:`, error);
+    return new Response('Internal error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+      headers: {
+        'Content-Type': 'text/plain'
+      }
+    });
+  }
+}
+
 // 处理视频请求,支持 Range 请求以实现视频 seek 功能
 async function handleVideoRequest(request: Request): Promise<Response> {
   const url = new URL(request.url);
@@ -633,15 +810,15 @@ async function handleVideoRequest(request: Request): Promise<Response> {
     if (existingEntry) {
       existingEntry.count = (existingEntry.count || 1) + 1;
       const waitTime = Date.now() - existingEntry.timestamp;
-      
+
       console.log(`Service Worker [Video-${requestId}]: 发现重复视频请求 (等待${waitTime}ms)，复用下载Promise:`, dedupeKey);
       console.log(`Service Worker [Video-${requestId}]: 重复请求计数: ${existingEntry.count}`);
-      
+
       // 等待视频下载完成
       const videoBlob = await existingEntry.promise;
-      
+
       if (!videoBlob) {
-         const fetchOptions = {
+        const fetchOptions = {
           method: 'GET',
           headers: new Headers(request.headers),
           mode: 'cors' as RequestMode,
@@ -654,22 +831,46 @@ async function handleVideoRequest(request: Request): Promise<Response> {
       return createVideoResponse(videoBlob, rangeHeader, requestId);
     }
 
-    // 检查是否已有缓存的视频Blob
+    // 检查是否已有缓存的视频Blob（内存缓存）
     if (videoBlobCache.has(dedupeKey)) {
       const cacheEntry = videoBlobCache.get(dedupeKey);
       if (cacheEntry) {
-        console.log(`Service Worker [Video-${requestId}]: 使用缓存的视频Blob (缓存时间: ${Math.round((Date.now() - cacheEntry.timestamp) / 1000)}秒)`);
-        
+        console.log(`Service Worker [Video-${requestId}]: 使用内存缓存的视频Blob (缓存时间: ${Math.round((Date.now() - cacheEntry.timestamp) / 1000)}秒)`);
+
         // 更新访问时间
         cacheEntry.timestamp = Date.now();
-        
+
         return createVideoResponse(cacheEntry.blob, rangeHeader, requestId);
       }
     }
 
+    // 检查 Cache API 持久化缓存
+    try {
+      const cache = await caches.open(IMAGE_CACHE_NAME);
+      const cachedResponse = await cache.match(dedupeKey);
+      if (cachedResponse) {
+        console.log(`Service Worker [Video-${requestId}]: 从 Cache API 恢复视频缓存`);
+        const videoBlob = await cachedResponse.blob();
+        const videoSizeMB = videoBlob.size / (1024 * 1024);
+
+        // 恢复到内存缓存（用于后续快速访问）
+        if (videoSizeMB < 50) {
+          videoBlobCache.set(dedupeKey, {
+            blob: videoBlob,
+            timestamp: Date.now()
+          });
+          console.log(`Service Worker [Video-${requestId}]: 视频已恢复到内存缓存`);
+        }
+
+        return createVideoResponse(videoBlob, rangeHeader, requestId);
+      }
+    } catch (cacheError) {
+      console.warn(`Service Worker [Video-${requestId}]: 检查 Cache API 失败:`, cacheError);
+    }
+
     // 创建新的视频下载Promise
     console.log(`Service Worker [Video-${requestId}]: 开始下载新视频:`, dedupeKey);
-    
+
     const downloadPromise = (async () => {
       // 构建请求选项
       const fetchOptions = {
@@ -702,11 +903,29 @@ async function handleVideoRequest(request: Request): Promise<Response> {
 
       // 缓存视频Blob（仅缓存小于50MB的视频）
       if (videoSizeMB < 50) {
+        // 1. 内存缓存（用于当前会话快速访问）
         videoBlobCache.set(dedupeKey, {
           blob: videoBlob,
           timestamp: Date.now()
         });
         console.log(`Service Worker [Video-${requestId}]: 视频已缓存到内存`);
+
+        // 2. 持久化到 Cache API（用于跨会话持久化）
+        try {
+          const cache = await caches.open(IMAGE_CACHE_NAME);
+          const cacheResponse = new Response(videoBlob, {
+            headers: {
+              'Content-Type': videoBlob.type || 'video/mp4',
+              'Content-Length': videoBlob.size.toString(),
+              'sw-cache-date': Date.now().toString(),
+              'sw-video-size': videoBlob.size.toString()
+            }
+          });
+          await cache.put(dedupeKey, cacheResponse);
+          console.log(`Service Worker [Video-${requestId}]: 视频已持久化到 Cache API`);
+        } catch (cacheError) {
+          console.warn(`Service Worker [Video-${requestId}]: 持久化到 Cache API 失败:`, cacheError);
+        }
       } else {
         console.log(`Service Worker [Video-${requestId}]: 视频过大(${videoSizeMB.toFixed(2)}MB)，不缓存`);
       }
@@ -826,10 +1045,10 @@ async function handleStaticRequest(request: Request): Promise<Response> {
       console.log('Development mode: fetching from network', request.url);
       return await fetchWithRetry(request);
     }
-    
+
     const url = new URL(request.url);
     const isHtmlRequest = request.mode === 'navigate' || url.pathname.endsWith('.html');
-    
+
     // For HTML files: ALWAYS use network-first strategy to prevent version mismatch
     if (isHtmlRequest) {
       console.log('HTML request: using network-first strategy', request.url);
@@ -837,13 +1056,16 @@ async function handleStaticRequest(request: Request): Promise<Response> {
         // Use 'reload' to bypass browser HTTP cache and force network request
         const fetchOptions = { cache: 'reload' };
         const response = await fetchWithRetry(request, 2, fetchOptions);
-        
+
         // Cache the new HTML for offline use only
         if (response && response.status === 200) {
           const cache = await caches.open(STATIC_CACHE_NAME);
-          cache.put(request, response.clone());
+          // Only cache http/https requests
+          if (request.url.startsWith('http')) {
+            cache.put(request, response.clone());
+          }
         }
-        
+
         return response;
       } catch (networkError) {
         console.warn('Network request failed for HTML, trying cache:', networkError);
@@ -855,42 +1077,45 @@ async function handleStaticRequest(request: Request): Promise<Response> {
         throw networkError;
       }
     }
-    
+
     // For non-HTML static files: use cache-first strategy
     const cachedResponse = await caches.match(request);
     if (cachedResponse) {
       console.log('Returning cached static resource:', request.url);
       return cachedResponse;
     }
-    
+
     // Fetch from network with retry logic and cache for future use
     const response = await fetchWithRetry(request);
 
     // Check if we got an invalid HTML response for a static asset (SPA fallback 404)
     const contentType = response.headers.get('Content-Type');
-    const isInvalidResponse = response.status === 200 && 
-                             contentType && 
-                             contentType.includes('text/html') && 
-                             (url.pathname.match(/\.(js|css|png|jpg|jpeg|gif|webp|svg|json)$/i) || 
-                              request.destination === 'script' || 
-                              request.destination === 'style' || 
-                              request.destination === 'image');
+    const isInvalidResponse = response.status === 200 &&
+      contentType &&
+      contentType.includes('text/html') &&
+      (url.pathname.match(/\.(js|css|png|jpg|jpeg|gif|webp|svg|json)$/i) ||
+        request.destination === 'script' ||
+        request.destination === 'style' ||
+        request.destination === 'image');
 
     if (isInvalidResponse) {
-       console.warn('Service Worker: Detected HTML response for static resource (likely 404), not caching and returning 404:', request.url);
-       return new Response('Resource not found', { status: 404, statusText: 'Not Found' });
+      console.warn('Service Worker: Detected HTML response for static resource (likely 404), not caching and returning 404:', request.url);
+      return new Response('Resource not found', { status: 404, statusText: 'Not Found' });
     }
-    
+
     // Cache successful responses
     if (response && response.status === 200) {
       const cache = await caches.open(STATIC_CACHE_NAME);
-      cache.put(request, response.clone());
+      // Only cache http/https requests
+      if (request.url.startsWith('http')) {
+        cache.put(request, response.clone());
+      }
     }
-    
+
     return response;
   } catch (error) {
     console.error('Static request failed after retries:', error);
-    
+
     // Try to return a cached version if available (only in production)
     if (!isDevelopment) {
       const cachedResponse = await caches.match(request);
@@ -899,7 +1124,7 @@ async function handleStaticRequest(request: Request): Promise<Response> {
         return cachedResponse;
       }
     }
-    
+
     throw error;
   }
 }
@@ -910,7 +1135,7 @@ async function handleImageRequest(request: Request): Promise<Response> {
     const requestId = Math.random().toString(36).substring(2, 10);
 
     console.log(`Service Worker [${requestId}]: Intercepting image request at ${new Date().toISOString()}:`, request.url);
-    
+
     // 创建原始URL（不带缓存破坏参数）用于缓存键和去重键
     const originalUrl = new URL(request.url);
     const cacheBreakingParams = ['_t', 'cache_buster', 'v', 'timestamp', 'nocache', '_cb', 't', 'retry', 'rand', '_force', 'bypass_sw', 'direct_fetch'];
@@ -921,19 +1146,19 @@ async function handleImageRequest(request: Request): Promise<Response> {
       mode: request.mode,
       credentials: request.credentials
     });
-    
+
     const dedupeKey = originalUrl.toString();
-    
+
     // 检查是否有相同的请求正在进行
     if (pendingImageRequests.has(dedupeKey)) {
       const existingEntry = pendingImageRequests.get(dedupeKey);
       if (existingEntry) {
         existingEntry.count = (existingEntry.count || 1) + 1;
         const waitTime = Date.now() - existingEntry.timestamp;
-        
+
         console.log(`Service Worker [${requestId}]: 发现重复请求 (等待${waitTime}ms)，返回已有Promise:`, dedupeKey);
         console.log(`Service Worker [${requestId}]: 重复请求计数: ${existingEntry.count}`, dedupeKey);
-        
+
         // 为重复请求添加标记，便于追踪
         existingEntry.duplicateRequestIds = existingEntry.duplicateRequestIds || [];
         existingEntry.duplicateRequestIds.push(requestId);
@@ -943,10 +1168,10 @@ async function handleImageRequest(request: Request): Promise<Response> {
         return response && response.clone ? response.clone() : response;
       }
     }
-    
+
     // 创建请求处理Promise并存储到去重字典
     const requestPromise = handleImageRequestInternal(originalRequest, request.url, dedupeKey, requestId);
-    
+
     // 将Promise存储到去重字典中，包含时间戳和计数
     pendingImageRequests.set(dedupeKey, {
       promise: requestPromise,
@@ -955,9 +1180,9 @@ async function handleImageRequest(request: Request): Promise<Response> {
       originalRequestId: requestId,
       duplicateRequestIds: []
     });
-    
+
     console.log(`Service Worker [${requestId}]: 创建新的请求处理Promise:`, dedupeKey);
-    
+
     // 请求完成后从字典中移除
     requestPromise.finally(() => {
       const entry = pendingImageRequests.get(dedupeKey);
@@ -968,9 +1193,9 @@ async function handleImageRequest(request: Request): Promise<Response> {
         pendingImageRequests.delete(dedupeKey);
       }
     });
-    
+
     return requestPromise;
-    
+
   } catch (error) {
     console.error('Service Worker fetch error:', error);
     throw error;
@@ -981,51 +1206,40 @@ async function handleImageRequest(request: Request): Promise<Response> {
 async function handleImageRequestInternal(originalRequest: Request, requestUrl: string, dedupeKey: string, requestId: string): Promise<Response> {
   try {
     console.log(`Service Worker [${requestId}]: 开始处理图片请求:`, dedupeKey);
-    
+
     // 首先尝试从缓存获取，同时验证缓存是否过期
     const cache = await caches.open(IMAGE_CACHE_NAME);
     const cachedResponse = await cache.match(originalRequest);
-    
+
     if (cachedResponse) {
-      // 检查缓存是否过期（30天 = 30 * 24 * 60 * 60 * 1000 毫秒）
       const cacheDate = cachedResponse.headers.get('sw-cache-date');
       if (cacheDate) {
-        const cacheTime = parseInt(cacheDate);
         const now = Date.now();
-        const cacheAge = now - cacheTime;
-        const maxAge = 30 * 24 * 60 * 60 * 1000; // 30天
-        
-        if (cacheAge < maxAge) {
-          console.log(`Service Worker [${requestId}]: Returning cached image (age:`, Math.round(cacheAge / (24 * 60 * 60 * 1000)), 'days):', requestUrl);
-          
-          // 再次访问时延长缓存时间 - 创建新的响应并更新缓存
-          const responseClone = cachedResponse.clone();
-          const blob = await responseClone.blob();
-          
-          const refreshedResponse = new Response(blob, {
-            status: cachedResponse.status,
-            statusText: cachedResponse.statusText,
-            headers: {
-              ...Object.fromEntries((cachedResponse.headers as any).entries()),
-              'sw-cache-date': now.toString() // 更新访问时间为当前时间
-            }
-          });
-          
-          // 用新时间戳重新缓存（使用原始URL作为键）
+
+        // 再次访问时延长缓存时间 - 创建新的响应并更新缓存
+        const responseClone = cachedResponse.clone();
+        const blob = await responseClone.blob();
+
+        const refreshedResponse = new Response(blob, {
+          status: cachedResponse.status,
+          statusText: cachedResponse.statusText,
+          headers: {
+            ...Object.fromEntries((cachedResponse.headers as any).entries()),
+            'sw-cache-date': now.toString() // 更新访问时间为当前时间
+          }
+        });
+
+        // 用新时间戳重新缓存（使用原始URL作为键）
+        if (originalRequest.url.startsWith('http')) {
           await cache.put(originalRequest, refreshedResponse.clone());
-          console.log(`Service Worker [${requestId}]: Cache expiry extended by 30 days for:`, requestUrl);
-          
-          return refreshedResponse;
-        } else {
-          console.log(`Service Worker [${requestId}]: Cached image expired, removing from cache:`, requestUrl);
-          await cache.delete(originalRequest);
         }
+        return refreshedResponse;
       } else {
         // 旧的缓存没有时间戳，为其添加时间戳并延长
         console.log(`Service Worker [${requestId}]: Adding timestamp to legacy cached image:`, requestUrl);
         const responseClone = cachedResponse.clone();
         const blob = await responseClone.blob();
-        
+
         const refreshedResponse = new Response(blob, {
           status: cachedResponse.status,
           statusText: cachedResponse.statusText,
@@ -1034,22 +1248,24 @@ async function handleImageRequestInternal(originalRequest: Request, requestUrl: 
             'sw-cache-date': Date.now().toString()
           }
         });
-        
-        await cache.put(originalRequest, refreshedResponse.clone());
+
+        if (originalRequest.url.startsWith('http')) {
+          await cache.put(originalRequest, refreshedResponse.clone());
+        }
         return refreshedResponse;
       }
     }
-    
+
     // 检查域名配置，准备备用域名
     const originalUrlObject = new URL(requestUrl);
     const domainConfig = shouldHandleCORS(originalUrlObject);
     let fallbackUrl = null;
     let shouldUseFallbackDirectly = false;
-    
+
     if (domainConfig && domainConfig.fallbackDomain) {
       // 创建备用URL，替换域名
       fallbackUrl = requestUrl.replace(domainConfig.hostname, domainConfig.fallbackDomain);
-      
+
       // 检查该域名是否已被标记为失败
       if (failedDomains.has(domainConfig.hostname)) {
         shouldUseFallbackDirectly = true;
@@ -1058,36 +1274,36 @@ async function handleImageRequestInternal(originalRequest: Request, requestUrl: 
         console.log(`Service Worker [${requestId}]: 检测到${domainConfig.hostname}域名，准备备用URL:`, fallbackUrl);
       }
     }
-    
+
     // 尝试多种获取方式，每种方式都支持重试和域名切换
     let response;
     let fetchOptions = [
       // 1. 优先尝试no-cors模式（可以绕过CORS限制）
-      { 
+      {
         method: 'GET',
-        mode: 'no-cors' as RequestMode, 
+        mode: 'no-cors' as RequestMode,
         cache: 'no-cache' as RequestCache,
         credentials: 'omit' as RequestCredentials,
         referrerPolicy: 'no-referrer' as ReferrerPolicy
       },
       // 2. 尝试cors模式  
-      { 
+      {
         method: 'GET',
-        mode: 'cors' as RequestMode, 
+        mode: 'cors' as RequestMode,
         cache: 'no-cache' as RequestCache,
         credentials: 'omit' as RequestCredentials,
         referrerPolicy: 'no-referrer' as ReferrerPolicy
       },
       // 3. 最基本的设置
-      { 
+      {
         method: 'GET',
         cache: 'no-cache' as RequestCache
       }
     ];
-    
+
     // 尝试不同的URL和不同的fetch选项
     let urlsToTry: string[];
-    
+
     if (shouldUseFallbackDirectly) {
       // 如果域名已被标记为失败，直接使用备用URL
       urlsToTry = [fallbackUrl!];
@@ -1104,15 +1320,15 @@ async function handleImageRequestInternal(originalRequest: Request, requestUrl: 
     for (let urlIndex = 0; urlIndex < urlsToTry.length; urlIndex++) {
       const currentUrl = urlsToTry[urlIndex];
       const isUsingFallback = urlIndex > 0;
-      
+
       if (isUsingFallback) {
         console.log(`Service Worker [${requestId}]: 原始URL失败，尝试备用域名:`, currentUrl);
       }
-      
+
       for (let options of fetchOptions) {
         try {
           console.log(`Service Worker [${requestId}]: Trying fetch with options (${isUsingFallback ? 'fallback' : 'original'} URL, mode: ${options.mode || 'default'}):`, options);
-          
+
           // Use retry logic for each fetch attempt
           let lastError;
           let isCORSError = false;
@@ -1131,12 +1347,12 @@ async function handleImageRequestInternal(originalRequest: Request, requestUrl: 
 
               // 检测CORS错误，不重试直接跳过
               const errorMessage = fetchError.message || '';
-              if (errorMessage.includes('CORS') || 
-                  errorMessage.includes('cross-origin') ||
-                  errorMessage.includes('Access-Control-Allow-Origin') ||
-                  errorMessage.includes('Failed to fetch') ||
-                  errorMessage.includes('NetworkError') ||
-                  errorMessage.includes('TypeError')) {
+              if (errorMessage.includes('CORS') ||
+                errorMessage.includes('cross-origin') ||
+                errorMessage.includes('Access-Control-Allow-Origin') ||
+                errorMessage.includes('Failed to fetch') ||
+                errorMessage.includes('NetworkError') ||
+                errorMessage.includes('TypeError')) {
                 console.log(`Service Worker [${requestId}]: 检测到CORS/网络错误，跳过重试:`, errorMessage);
                 isCORSError = true;
                 break;
@@ -1194,10 +1410,10 @@ async function handleImageRequestInternal(originalRequest: Request, requestUrl: 
         }
       }
     }
-    
+
     if (!response || response.status === 0) {
       let errorMessage = 'All fetch attempts failed';
-      
+
       if (domainConfig && domainConfig.fallbackDomain) {
         if (shouldUseFallbackDirectly) {
           errorMessage = `备用域名${domainConfig.fallbackDomain}也失败了`;
@@ -1205,9 +1421,9 @@ async function handleImageRequestInternal(originalRequest: Request, requestUrl: 
           errorMessage = `All fetch attempts failed for both ${domainConfig.hostname} and ${domainConfig.fallbackDomain} domains`;
         }
       }
-      
+
       console.error(`Service Worker [${requestId}]: ${errorMessage}`, finalError);
-      
+
       // 不要抛出错误，而是返回一个表示图片加载失败的响应
       // 这样前端img标签会触发onerror事件，但不会导致浏览器回退到默认CORS处理
       return new Response('Image load failed after all attempts', {
@@ -1221,7 +1437,7 @@ async function handleImageRequestInternal(originalRequest: Request, requestUrl: 
         }
       });
     }
-    
+
     // 处理no-cors模式的opaque响应
     if (response.type === 'opaque') {
       console.log('Got opaque response, creating transparent CORS response');
@@ -1234,44 +1450,54 @@ async function handleImageRequestInternal(originalRequest: Request, requestUrl: 
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'GET',
           'Access-Control-Allow-Headers': '*',
-          'Cache-Control': 'max-age=2592000', // 30天
+          'Cache-Control': 'max-age=3153600000', // 100年
           'sw-cache-date': Date.now().toString() // 添加缓存时间戳
         }
       });
-      
+
       // 尝试缓存响应，处理存储限制错误
       try {
-        await cache.put(originalRequest, corsResponse.clone());
-        console.log('Service Worker: Opaque response cached with 30-day expiry and timestamp');
+        if (originalRequest.url.startsWith('http')) {
+          await cache.put(originalRequest, corsResponse.clone());
+          console.log('Service Worker: Opaque response cached with 30-day expiry and timestamp');
+          // 通知主线程图片已缓存
+          await notifyImageCached(requestUrl, 0, 'image/png');
+          // 检查存储配额
+          await checkStorageQuota();
+        }
       } catch (cacheError) {
         console.warn('Service Worker: Failed to cache opaque response (可能超出存储限制):', cacheError);
         // 尝试清理一些旧缓存后重试
         await cleanOldCacheEntries(cache);
         try {
-          await cache.put(originalRequest, corsResponse.clone());
-          console.log('Service Worker: Opaque response cached after cleanup');
+          if (originalRequest.url.startsWith('http')) {
+            await cache.put(originalRequest, corsResponse.clone());
+            console.log('Service Worker: Opaque response cached after cleanup');
+            // 通知主线程图片已缓存
+            await notifyImageCached(requestUrl, 0, 'image/png');
+          }
         } catch (retryError) {
           console.error('Service Worker: Still failed to cache after cleanup:', retryError);
         }
       }
-      
+
       return corsResponse;
     }
-    
+
     // 处理正常响应
     if (response.ok) {
       const responseClone = response.clone();
       const blob = await responseClone.blob();
-      
+
       // 检查图片大小
       const imageSizeMB = blob.size / (1024 * 1024);
       console.log(`Service Worker: Image size: ${imageSizeMB.toFixed(2)}MB`);
-      
+
       // 如果图片超过5MB，记录警告但仍尝试缓存
       if (imageSizeMB > 5) {
         console.warn(`Service Worker: Large image detected (${imageSizeMB.toFixed(2)}MB), 可能影响缓存性能`);
       }
-      
+
       const corsResponse = new Response(blob, {
         status: 200,
         statusText: 'OK',
@@ -1280,50 +1506,60 @@ async function handleImageRequestInternal(originalRequest: Request, requestUrl: 
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'GET',
           'Access-Control-Allow-Headers': '*',
-          'Cache-Control': 'max-age=2592000', // 30天
+          'Cache-Control': 'max-age=3153600000', // 100年
           'sw-cache-date': Date.now().toString(), // 添加缓存时间戳
           'sw-image-size': blob.size.toString() // 添加图片大小信息
         }
       });
-      
+
       // 尝试缓存响应，处理存储限制错误
       try {
-        await cache.put(originalRequest, corsResponse.clone());
-        console.log(`Service Worker: Normal response cached (${imageSizeMB.toFixed(2)}MB) with 30-day expiry and timestamp`);
+        if (originalRequest.url.startsWith('http')) {
+          await cache.put(originalRequest, corsResponse.clone());
+          console.log(`Service Worker: Normal response cached (${imageSizeMB.toFixed(2)}MB) with 30-day expiry and timestamp`);
+          // 通知主线程图片已缓存
+          await notifyImageCached(requestUrl, blob.size, blob.type);
+          // 检查存储配额
+          await checkStorageQuota();
+        }
       } catch (cacheError) {
         console.warn(`Service Worker: Failed to cache normal response (${imageSizeMB.toFixed(2)}MB, 可能超出存储限制):`, cacheError);
         // 尝试清理一些旧缓存后重试
         await cleanOldCacheEntries(cache);
         try {
-          await cache.put(originalRequest, corsResponse.clone());
-          console.log(`Service Worker: Normal response cached after cleanup (${imageSizeMB.toFixed(2)}MB)`);
+          if (originalRequest.url.startsWith('http')) {
+            await cache.put(originalRequest, corsResponse.clone());
+            console.log(`Service Worker: Normal response cached after cleanup (${imageSizeMB.toFixed(2)}MB)`);
+            // 通知主线程图片已缓存
+            await notifyImageCached(requestUrl, blob.size, blob.type);
+          }
         } catch (retryError) {
           console.error('Service Worker: Still failed to cache after cleanup:', retryError);
         }
       }
-      
+
       return corsResponse;
     }
-    
+
     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    
+
   } catch (error: any) {
     console.error('Service Worker fetch error:', error);
-    
+
     // 重新获取URL用于错误处理
     const errorUrl = new URL(requestUrl);
-    
+
     // 特殊处理SSL协议错误
-    const isSSLError = error.message.includes('SSL_PROTOCOL_ERROR') || 
-                      error.message.includes('ERR_SSL_PROTOCOL_ERROR') ||
-                      error.message.includes('net::ERR_CERT') ||
-                      error.message.includes('ERR_INSECURE_RESPONSE');
-    
+    const isSSLError = error.message.includes('SSL_PROTOCOL_ERROR') ||
+      error.message.includes('ERR_SSL_PROTOCOL_ERROR') ||
+      error.message.includes('net::ERR_CERT') ||
+      error.message.includes('ERR_INSECURE_RESPONSE');
+
     if (isSSLError) {
       console.warn('Service Worker: 检测到SSL/证书错误，尝试跳过Service Worker处理');
-      
+
       // 对于SSL错误，让请求回退到浏览器的默认网络处理
-      return fetch(requestUrl, { 
+      return fetch(requestUrl, {
         method: 'GET',
         mode: 'no-cors',
         cache: 'no-cache',
@@ -1340,15 +1576,15 @@ async function handleImageRequestInternal(originalRequest: Request, requestUrl: 
         });
       });
     }
-    
+
     // 对于图片请求，返回错误状态码而不是占位符图片
     // 这样前端的img标签会触发onerror事件，SmartImage组件可以进行重试
-    if (errorUrl.pathname.match(/\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)$/i) || 
-        errorUrl.searchParams.has('_t') || 
-        errorUrl.searchParams.has('cache_buster') || 
-        errorUrl.searchParams.has('timestamp')) {
+    if (errorUrl.pathname.match(/\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)$/i) ||
+      errorUrl.searchParams.has('_t') ||
+      errorUrl.searchParams.has('cache_buster') ||
+      errorUrl.searchParams.has('timestamp')) {
       console.log('Service Worker: 图片加载失败，返回错误状态码以触发前端重试');
-      
+
       // 返回404错误，让前端img标签触发onerror事件
       return new Response('Image not found', {
         status: 404,
@@ -1359,7 +1595,7 @@ async function handleImageRequestInternal(originalRequest: Request, requestUrl: 
         }
       });
     }
-    
+
     // 对于非图片请求，仍然返回错误信息
     return new Response(`Network Error: ${error.message}`, {
       status: 500,

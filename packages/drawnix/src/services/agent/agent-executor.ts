@@ -43,6 +43,22 @@ function replacePlaceholdersWithUrls(
 }
 
 /**
+ * 检测用户指令中是否包含明确的尺寸描述
+ * 如果包含，AI 应该使用用户指令中的尺寸，忽略配置中的尺寸参数
+ *
+ * @param text 用户指令文本
+ * @returns 是否包含明确的尺寸描述
+ */
+function hasExplicitSizeInInstruction(text: string): boolean {
+  // 匹配明确的尺寸格式：16:9, 1:1, 9:16, 1920x1080 等
+  const patterns = [
+    /\d+:\d+/,              // 16:9, 1:1, 9:16
+    /\d+x\d+/i,             // 1920x1080, 1024x768
+  ];
+  return patterns.some(pattern => pattern.test(text));
+}
+
+/**
  * 构建结构化的用户消息
  * 使用 Markdown 格式清晰展示所有上下文信息
  */
@@ -56,7 +72,9 @@ function buildStructuredUserMessage(context: AgentExecutionContext): string {
   parts.push(`- **模型**: ${context.model.id} ${modelStatus}`);
   parts.push(`- **类型**: ${context.model.type === 'image' ? '图片生成' : '视频生成'}`);
   parts.push(`- **数量**: ${context.params.count}`);
-  if (context.params.size) {
+  // 只有当用户指令中没有明确尺寸描述时，才传递配置中的尺寸参数
+  // 这样 AI 会优先使用用户指令中的尺寸
+  if (context.params.size && !hasExplicitSizeInInstruction(context.userInstruction || '')) {
     parts.push(`- **尺寸**: ${context.params.size}`);
   }
   if (context.params.duration) {
@@ -214,9 +232,12 @@ class AgentExecutor {
       // 生成系统提示词（自动从 registry 获取工具描述）
       let systemPrompt = generateSystemPrompt();
 
-      // 如果有参考图片，添加补充说明（使用占位符方式）
+      // 如果有参考图片，添加补充说明（使用占位符方式，包含尺寸信息）
       if (allReferenceImages.length > 0) {
-        systemPrompt += generateReferenceImagesPrompt(allReferenceImages.length);
+        systemPrompt += generateReferenceImagesPrompt(
+          allReferenceImages.length,
+          context.selection.imageDimensions
+        );
       }
 
       // 构建结构化用户消息
