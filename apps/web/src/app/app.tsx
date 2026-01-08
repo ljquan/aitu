@@ -6,7 +6,7 @@ import {
   isWorkspaceMigrationCompleted,
   Board,
   BoardChangeData,
-  mediaCacheService,
+  unifiedCacheService,
 } from '@drawnix/drawnix';
 import { PlaitBoard, PlaitElement, PlaitTheme, Viewport } from '@plait/core';
 
@@ -206,13 +206,13 @@ async function recoverVideoUrlsInElements(
           setTimeout(() => reject(new Error('Timeout')), TIMEOUT_MS)
         );
 
-        const cached = await Promise.race([
-          mediaCacheService.getCachedMedia(taskId),
+        const cachedBlob = await Promise.race([
+          unifiedCacheService.getCachedBlob(taskId),
           timeoutPromise,
         ]);
 
-        if (cached && cached.blob) {
-          const newBlobUrl = URL.createObjectURL(cached.blob);
+        if (cachedBlob) {
+          const newBlobUrl = URL.createObjectURL(cachedBlob);
           const newUrl = `${newBlobUrl}#${taskId}`;
 
           // 返回更新后的元素

@@ -305,13 +305,13 @@ async function mergeVideosWithMediaRecorder(
 
   // 缓存到 IndexedDB
   try {
-    const { mediaCacheService } = await import('./media-cache-service');
+    const { unifiedCacheService } = await import('./unified-cache-service');
     const taskId = `merged-video-${Date.now()}`;
-    const cachedUrl = await mediaCacheService.cacheMediaFromBlob(
+    const cachedUrl = await unifiedCacheService.cacheMediaFromBlob(
       taskId,
       finalBlob,
       'video',
-      simpleMimeType  // 使用简化的 MIME 类型
+      { taskId }
     );
     console.log(`[WebCodecs] Video cached to IndexedDB: ${taskId}, mimeType: ${simpleMimeType}`);
 

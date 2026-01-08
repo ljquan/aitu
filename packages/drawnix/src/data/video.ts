@@ -4,7 +4,7 @@ import {
   getRectangleByElements,
 } from '@plait/core';
 import { getInsertionPointForSelectedElements, getInsertionPointBelowBottommostElement, scrollToPointIfNeeded } from '../utils/selection-utils';
-import { urlCacheService } from '../services/url-cache-service';
+import { unifiedCacheService } from '../services/unified-cache-service';
 
 /**
  * 从保存的选中元素IDs计算插入点
@@ -267,7 +267,7 @@ export const insertVideoFromUrl = async (
 
     // 缓存视频到IndexedDB (后台任务，不阻塞插入)
     // 这样即使URL过期，也可以从缓存恢复
-    urlCacheService.getVideoAsBlob(videoUrl).catch(error => {
+    unifiedCacheService.cacheImage(videoUrl).catch(error => {
       console.warn('Failed to cache video in background:', error);
     });
 

@@ -12,12 +12,12 @@ import { TaskItem } from './TaskItem';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
 import { Task, TaskType, TaskStatus } from '../../types/task.types';
 import { useMediaUrl } from '../../hooks/useMediaCache';
+import { unifiedCacheService } from '../../services/unified-cache-service';
 import { useDrawnix, DialogType } from '../../hooks/use-drawnix';
 import { insertImageFromUrl } from '../../data/image';
 import { insertVideoFromUrl } from '../../data/video';
 import { sanitizeFilename } from '@aitu/utils';
 import { downloadMediaFile, downloadFromBlob } from '../../utils/download-utils';
-import { mediaCacheService } from '../../services/media-cache-service';
 import { SideDrawer } from '../side-drawer';
 import { CharacterCreateDialog } from '../character/CharacterCreateDialog';
 import { CharacterList } from '../character/CharacterList';
@@ -109,7 +109,7 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
 
   // Initialize media cache status on component mount
   useEffect(() => {
-    mediaCacheService.initCacheStatus();
+    unifiedCacheService.initCacheStatus();
   }, []);
 
   // Filter and sort tasks
@@ -198,10 +198,10 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
 
     try {
       // 1. 优先从本地 IndexedDB 缓存获取
-      const cachedMedia = await mediaCacheService.getCachedMedia(taskId);
-      if (cachedMedia?.blob) {
+      const cachedBlob = await unifiedCacheService.getCachedBlob(task.result.url);
+      if (cachedBlob) {
         console.log('[Download] Using cached blob for task:', taskId);
-        downloadFromBlob(cachedMedia.blob, filename);
+        downloadFromBlob(cachedBlob, filename);
         MessagePlugin.success('下载成功');
         onTaskAction?.('download', taskId);
         return;

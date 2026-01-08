@@ -19,7 +19,7 @@ import type {
 } from '../../types/photo-wall.types';
 import { GRID_IMAGE_PROMPT_TEMPLATE, GRID_IMAGE_DEFAULTS as DEFAULTS } from '../../types/photo-wall.types';
 import { defaultGeminiClient } from '../../utils/gemini-api';
-import { urlCacheService } from '../url-cache-service';
+import { unifiedCacheService } from '../unified-cache-service';
 import { getInsertionPointBelowBottommostElement } from '../../utils/selection-utils';
 
 /**
@@ -86,7 +86,8 @@ export class GridImageService {
       console.log('[GridImageService] Got original image URL');
       
       // 3. 将图片转换为 base64（确保可以被 Canvas 处理）
-      const imageDataUrl = await urlCacheService.getImageAsBase64(originalImageUrl);
+      const imageData = await unifiedCacheService.getImageForAI(originalImageUrl);
+      const imageDataUrl = imageData.type === 'base64' ? imageData.value : originalImageUrl;
       
       // 4. 分割图片
       console.log('[GridImageService] Splitting image into grid...');
@@ -137,7 +138,8 @@ export class GridImageService {
 
     try {
       // 1. 将图片转换为 base64（确保可以被 Canvas 处理）
-      const imageDataUrl = await urlCacheService.getImageAsBase64(imageUrl);
+      const imageData = await unifiedCacheService.getImageForAI(imageUrl);
+      const imageDataUrl = imageData.type === 'base64' ? imageData.value : imageUrl;
 
       // 2. 分割图片
       console.log('[GridImageService] Splitting image into grid...');

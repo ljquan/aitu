@@ -11,7 +11,7 @@ import { MindElement, MindTransforms } from '@plait/mind';
 import { DrawTransforms } from '@plait/draw';
 import { getElementOfFocusedImage } from '@plait/common';
 import { getInsertionPointForSelectedElements, getInsertionPointBelowBottommostElement, scrollToPointIfNeeded } from '../utils/selection-utils';
-import { urlCacheService } from '../services/url-cache-service';
+import { unifiedCacheService } from '../services/unified-cache-service';
 
 /**
  * 从保存的选中元素IDs计算插入点
@@ -242,11 +242,12 @@ export const insertImageFromUrl = async (
 
   // 使用缓存服务获取图片的 Base64 数据
   // 这样可以避免重复下载，并且存储 Base64 确保 URL 过期后图片仍然可用
-  const dataURL = await urlCacheService.getImageAsBase64(imageUrl);
-  const image = await loadHTMLImageElement(dataURL, false); // Base64 不需要 crossOrigin
+  const imageData = await unifiedCacheService.getImageForAI(imageUrl);
+  const dataURL = imageData.type === 'base64' ? imageData.value : imageUrl;
+  const image = await loadHTMLImageElement(dataURL as DataURL, false); // Base64 不需要 crossOrigin
   const imageItem = buildImage(
     image,
-    dataURL,
+    dataURL as DataURL,
     defaultImageWidth,
     true,
     referenceDimensions

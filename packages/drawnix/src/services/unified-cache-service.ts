@@ -35,6 +35,12 @@ export const CACHE_CONSTANTS = {
   QUOTA_WARNING_THRESHOLD: 0.9, // 90%
 } as const;
 
+/** 缓存状态（兼容旧 API） */
+export type CacheStatus = 'none' | 'caching' | 'cached' | 'error';
+
+/** 缓存进度回调 */
+export type CacheProgressCallback = (progress: number) => void;
+
 // ==================== 类型定义 ====================
 
 /** 缓存媒体类型 */
@@ -756,6 +762,97 @@ class UnifiedCacheService {
     }
     const item = await this.getItem(url);
     return !!item;
+  }
+
+  // ==================== 兼容旧 API ====================
+
+  /**
+   * 从 Blob 缓存媒体（兼容 mediaCacheService.cacheMediaFromBlob）
+   */
+  async cacheMediaFromBlob(
+    url: string,
+    blob: Blob,
+    type: CacheMediaType,
+    metadata?: { taskId?: string; prompt?: string; model?: string }
+  ): Promise<string> {
+    try {
+      // 1. 将 blob 放入 Cache API（通过创建 Response）
+      if (typeof caches !== 'undefined') {
+        const cache = await caches.open(IMAGE_CACHE_NAME);
+        const response = new Response(blob, {
+          headers: {
+            'Content-Type': blob.type || 'application/octet-stream',
+            'Content-Length': blob.size.toString(),
+          },
+        });
+        await cache.put(url, response);
+      }
+
+      // 2. 存储元数据到 IndexedDB
+      const now = Date.now();
+      const item: CachedMedia = {
+        url,
+        type,
+        mimeType: blob.type || (type === 'video' ? 'video/mp4' : 'image/png'),
+        size: blob.size,
+        cachedAt: now,
+        lastUsed: now,
+        metadata: metadata || {},
+      };
+
+      await this.putItem(item);
+      this.cachedUrls.add(url);
+      this.notifyListeners();
+
+      console.log('[UnifiedCache] Media cached from blob:', { url, type, size: blob.size });
+      return url;
+    } catch (error) {
+      this.handleQuotaError(error);
+      console.error('[UnifiedCache] Failed to cache media from blob:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 获取缓存的 Blob（兼容 urlCacheService.getVideoAsBlob）
+   */
+  async getCachedBlob(url: string): Promise<Blob | null> {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) {
+        return null;
+      }
+      return await response.blob();
+    } catch (error) {
+      console.error('[UnifiedCache] Failed to get cached blob:', error);
+      return null;
+    }
+  }
+
+  /**
+   * 获取缓存状态（兼容 mediaCacheService.getCacheStatus）
+   */
+  getCacheStatus(url: string): CacheStatus {
+    if (this.cachedUrls.has(url)) {
+      return 'cached';
+    }
+    return 'none';
+  }
+
+  /**
+   * 获取缓存的 URL（兼容 mediaCacheService.getCachedUrl）
+   * 如果已缓存返回原 URL，否则返回 null
+   */
+  async getCachedUrl(url: string): Promise<string | null> {
+    const cached = await this.isCached(url);
+    return cached ? url : null;
+  }
+
+  /**
+   * 初始化缓存状态（兼容旧 API，实际上在构造函数中已自动初始化）
+   */
+  async initCacheStatus(): Promise<void> {
+    await this.refreshCacheState();
   }
 
   // ==================== 事件订阅 ====================

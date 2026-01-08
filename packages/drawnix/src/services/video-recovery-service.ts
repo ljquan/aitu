@@ -5,7 +5,7 @@
  * 从 IndexedDB 中重新创建 Blob URL 并更新画布元素
  */
 
-import { mediaCacheService } from './media-cache-service';
+import { unifiedCacheService } from './unified-cache-service';
 import type { PlaitBoard } from '@plait/core';
 import { Transforms } from '@plait/core';
 
@@ -46,26 +46,21 @@ export async function recoverExpiredVideoUrls(board: PlaitBoard | null): Promise
       // 对于合并视频，刷新后 Blob URL 一定会失效，直接恢复即可
       // 从 IndexedDB 恢复
       try {
-        const cached = await mediaCacheService.getCachedMedia(taskId);
-        if (cached && cached.blob) {
-          const newBlobUrl = URL.createObjectURL(cached.blob);
+        const cachedBlob = await unifiedCacheService.getCachedBlob(taskId);
+        if (cachedBlob) {
+          const newBlobUrl = URL.createObjectURL(cachedBlob);
           const newUrl = `${newBlobUrl}#${taskId}`;
 
           // 使用 Transforms.setNode 更新元素（Plait 元素是只读的）
-          Transforms.setNode(
-            board,
-            { url: newUrl } as any,
-            {
-              at: board.children.indexOf(element),
-            }
-          );
+          const elementIndex = board.children.indexOf(element);
+          Transforms.setNode(board, { url: newUrl } as any, [elementIndex]);
           recoveredCount++;
 
           console.log('[VideoRecovery] Video URL recovered:', {
             taskId,
             oldUrl: url,
             newUrl,
-            size: cached.blob.size,
+            size: cachedBlob.size,
           });
         } else {
           console.warn('[VideoRecovery] Cache not found for taskId:', taskId);
