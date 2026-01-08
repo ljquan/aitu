@@ -209,6 +209,14 @@ export interface AgentResult {
 }
 
 /**
+ * 图片尺寸信息
+ */
+export interface ImageDimensions {
+  width: number;
+  height: number;
+}
+
+/**
  * Agent 执行上下文 - 完整的用户输入信息
  */
 export interface AgentExecutionContext {
@@ -247,6 +255,8 @@ export interface AgentExecutionContext {
     videos: string[];
     /** 选中的图形转换为的图片 URL */
     graphics: string[];
+    /** 图片尺寸信息（按顺序对应 images + graphics） */
+    imageDimensions?: ImageDimensions[];
   };
 
   /** 最终生成用的 prompt */

@@ -205,7 +205,7 @@ export function useCacheStats() {
     const loadStats = async () => {
       const usage = await unifiedCacheService.getStorageUsage();
       const urls = await unifiedCacheService.getAllCachedUrls();
-      setTotalSize(usage.used);
+      setTotalSize(usage.usage);
       setCachedCount(urls.length);
     };
 

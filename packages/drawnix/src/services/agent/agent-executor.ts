@@ -232,9 +232,12 @@ class AgentExecutor {
       // 生成系统提示词（自动从 registry 获取工具描述）
       let systemPrompt = generateSystemPrompt();
 
-      // 如果有参考图片，添加补充说明（使用占位符方式）
+      // 如果有参考图片，添加补充说明（使用占位符方式，包含尺寸信息）
       if (allReferenceImages.length > 0) {
-        systemPrompt += generateReferenceImagesPrompt(allReferenceImages.length);
+        systemPrompt += generateReferenceImagesPrompt(
+          allReferenceImages.length,
+          context.selection.imageDimensions
+        );
       }
 
       // 构建结构化用户消息

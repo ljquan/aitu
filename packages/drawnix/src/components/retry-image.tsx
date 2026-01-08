@@ -175,8 +175,7 @@ export const RetryImage: React.FC<RetryImageProps> = ({
           opacity: isLoading ? 0 : 1,
           transition: 'opacity 0.3s ease-out',
           width: '100%',
-          height: '100%',
-          objectFit: 'cover',
+          height: '100%'
         }}
       />
     </div>

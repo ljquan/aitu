@@ -17,6 +17,10 @@ import {
   getDefaultImageModel as getSystemDefaultImageModel,
   DEFAULT_VIDEO_MODEL,
 } from '../constants/model-config';
+import type { ImageDimensions } from '../mcp/types';
+
+// 重新导出 ImageDimensions 以便其他模块使用
+export type { ImageDimensions } from '../mcp/types';
 
 /**
  * 发送场景类型
@@ -31,6 +35,14 @@ export type SendScenario =
 export type GenerationType = 'image' | 'video' | 'text';
 
 /**
+ * 带尺寸信息的图片
+ */
+export interface ImageWithDimensions {
+  url: string;
+  dimensions?: ImageDimensions;
+}
+
+/**
  * 选中元素的分类信息
  */
 export interface SelectionInfo {
@@ -42,6 +54,8 @@ export interface SelectionInfo {
   videos: string[];
   /** 选中的图形转换为的图片 URL */
   graphics: string[];
+  /** 图片尺寸信息（按顺序对应 images + graphics） */
+  imageDimensions?: ImageDimensions[];
 }
 
 /**

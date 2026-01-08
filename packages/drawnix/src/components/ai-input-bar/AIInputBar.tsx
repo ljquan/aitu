@@ -106,6 +106,8 @@ interface SelectedContent {
   url?: string;       // 图片/视频/图形的 URL
   text?: string;      // 文字内容
   name: string;       // 显示名称
+  width?: number;     // 图片/视频宽度
+  height?: number;    // 图片/视频高度
 }
 
 /**
@@ -214,6 +216,9 @@ const SelectionWatcher: React.FC<{
             url: processedContent.graphicsImage,
             name: language === 'zh' ? '图形元素' : 'Graphics',
             type: 'graphics',
+            // 使用异步获取的图形图片尺寸
+            width: processedContent.graphicsImageDimensions?.width,
+            height: processedContent.graphicsImageDimensions?.height,
           });
         }
 
@@ -225,6 +230,8 @@ const SelectionWatcher: React.FC<{
             url: imgUrl,
             name: img.name || (isVideo ? `video-${Date.now()}` : `image-${Date.now()}`),
             type: isVideo ? 'video' : 'image',
+            width: img.width,
+            height: img.height,
           });
         }
 
@@ -587,11 +594,27 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
     fileInputRef.current?.click();
   }, []);
 
-  // 将文件转换为 base64 data URL
-  const fileToBase64 = useCallback((file: File): Promise<string> => {
+  // 将文件转换为 base64 data URL 并获取尺寸
+  const fileToBase64WithDimensions = useCallback((file: File): Promise<{ url: string; width: number; height: number }> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
+      reader.onload = () => {
+        const base64Url = reader.result as string;
+        // 创建 Image 对象获取尺寸
+        const img = new Image();
+        img.onload = () => {
+          resolve({
+            url: base64Url,
+            width: img.naturalWidth,
+            height: img.naturalHeight,
+          });
+        };
+        img.onerror = () => {
+          // 即使获取尺寸失败，也返回 URL（尺寸为 0）
+          resolve({ url: base64Url, width: 0, height: 0 });
+        };
+        img.src = base64Url;
+      };
       reader.onerror = reject;
       reader.readAsDataURL(file);
     });
@@ -602,7 +625,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    // 处理选中的文件（转换为 base64）
+    // 处理选中的文件（转换为 base64 并获取尺寸）
     const newContent: SelectedContent[] = [];
 
     for (let i = 0; i < files.length; i++) {
@@ -611,12 +634,14 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
       if (!file.type.startsWith('image/')) continue;
 
       try {
-        // 转换为 base64 data URL（API 可以识别）
-        const base64Url = await fileToBase64(file);
+        // 转换为 base64 data URL 并获取尺寸
+        const { url, width, height } = await fileToBase64WithDimensions(file);
         newContent.push({
           type: 'image',
-          url: base64Url,
+          url,
           name: file.name || `上传图片 ${i + 1}`,
+          width: width || undefined,
+          height: height || undefined,
         });
       } catch (error) {
         console.error('Failed to convert file to base64:', error);
@@ -630,7 +655,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
 
     // 重置 input 以便可以再次选择相同文件
     e.target.value = '';
-  }, [fileToBase64]);
+  }, [fileToBase64WithDimensions]);
 
   // 处理选择变化的回调（由 SelectionWatcher 调用）
   const handleSelectionChange = useCallback((content: SelectedContent[]) => {
@@ -753,19 +778,29 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
 
     try {
       // 构建选中元素的分类信息（使用合并后的 allContent）
+      // 收集图片和图形的尺寸信息（按顺序：先 images，后 graphics）
+      const imageItems = allContent.filter((item) => item.type === 'image' && item.url);
+      const graphicsItems = allContent.filter((item) => item.type === 'graphics' && item.url);
+      const imageDimensions = [...imageItems, ...graphicsItems]
+        .map((item) => {
+          if (item.width && item.height) {
+            return { width: item.width, height: item.height };
+          }
+          return undefined;
+        })
+        .filter((dim): dim is { width: number; height: number } => dim !== undefined);
+
       const selection = {
         texts: allContent
           .filter((item) => item.type === 'text' && item.text)
           .map((item) => item.text!),
-        images: allContent
-          .filter((item) => item.type === 'image' && item.url)
-          .map((item) => item.url!),
+        images: imageItems.map((item) => item.url!),
         videos: allContent
           .filter((item) => item.type === 'video' && item.url)
           .map((item) => item.url!),
-        graphics: allContent
-          .filter((item) => item.type === 'graphics' && item.url)
-          .map((item) => item.url!),
+        graphics: graphicsItems.map((item) => item.url!),
+        // 添加图片尺寸信息（如果有）
+        imageDimensions: imageDimensions.length > 0 ? imageDimensions : undefined,
       };
 
       // 解析输入内容，使用选中的模型和尺寸

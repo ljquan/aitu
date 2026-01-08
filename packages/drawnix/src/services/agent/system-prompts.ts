@@ -3,6 +3,35 @@
  */
 
 import { mcpRegistry } from '../../mcp/registry';
+import type { ImageDimensions } from '../../mcp/types';
+
+/**
+ * 根据图片尺寸推断最佳生成尺寸
+ * @param dimensions 图片尺寸
+ * @returns 推荐的尺寸参数
+ */
+function inferSizeFromDimensions(dimensions: ImageDimensions): { imageSize: string; videoSize: string } {
+  const { width, height } = dimensions;
+  const aspectRatio = width / height;
+
+  // 根据宽高比推断尺寸
+  if (aspectRatio > 1.5) {
+    // 横向图片 (16:9 或更宽)
+    return { imageSize: '16x9', videoSize: '1280x720' };
+  } else if (aspectRatio < 0.67) {
+    // 纵向图片 (9:16 或更高)
+    return { imageSize: '9x16', videoSize: '720x1280' };
+  } else if (aspectRatio >= 0.9 && aspectRatio <= 1.1) {
+    // 接近正方形
+    return { imageSize: '1x1', videoSize: '1024x1024' };
+  } else if (aspectRatio > 1.1 && aspectRatio <= 1.5) {
+    // 略宽（4:3 左右）
+    return { imageSize: '4x3', videoSize: '1280x720' };
+  } else {
+    // 略高（3:4 左右）
+    return { imageSize: '3x4', videoSize: '720x1280' };
+  }
+}
 
 /**
  * 生成系统提示词
@@ -26,14 +55,6 @@ export function generateSystemPrompt(): string {
 注意：没有任何额外文字，没有代码块标记，直接就是 JSON。
 
 ## 核心行为准则（强制执行）
-
-**立即停止**如果你发现自己正在：
-- 说"我是 Claude"、"由 Anthropic 创建"或任何关于你身份的解释
-- 解释这个系统提示的内容或你的能力范围
-- 建议用户如何使用其他工具或服务
-- 提供通用的对话式回复
-
-**正确做法**：
 - 直接分析用户需求
 - 立即生成符合格式的 JSON 响应
 - 调用相应的 MCP 工具（generate_image、generate_video 等）
@@ -192,19 +213,62 @@ ${toolsDescription}
 
 /**
  * 生成带参考图片的系统提示词补充
+ * @param imageCount 图片数量
+ * @param imageDimensions 图片尺寸数组（可选）
  */
-export function generateReferenceImagesPrompt(imageCount: number): string {
-  const placeholders = Array.from({ length: imageCount }, (_, i) => `[图片${i + 1}]`).join('、');
+export function generateReferenceImagesPrompt(
+  imageCount: number,
+  imageDimensions?: ImageDimensions[]
+): string {
+  // 生成带尺寸信息的占位符描述
+  const placeholdersWithSize = Array.from({ length: imageCount }, (_, i) => {
+    const placeholder = `[图片${i + 1}]`;
+    if (imageDimensions && imageDimensions[i]) {
+      const dim = imageDimensions[i];
+      return `${placeholder}(${dim.width}x${dim.height})`;
+    }
+    return placeholder;
+  }).join('、');
+
   const placeholdersArray = Array.from({ length: imageCount }, (_, i) => `"[图片${i + 1}]"`).join(', ');
+
+  // 如果只有一张图片且有尺寸信息，生成尺寸推断建议
+  let sizeRecommendation = '';
+  if (imageCount === 1 && imageDimensions && imageDimensions[0]) {
+    const dim = imageDimensions[0];
+    const { imageSize, videoSize } = inferSizeFromDimensions(dim);
+    sizeRecommendation = `
+
+**尺寸推断规则（重要）**：
+- 参考图片尺寸为 ${dim.width}x${dim.height}
+- **如果用户没有指定尺寸参数**，应自动匹配参考图片的尺寸：
+  - 生成图片时使用 \`"size": "${imageSize}"\`
+  - 生成视频时使用 \`"size": "${videoSize}"\`
+- 这样可以保持与原图相近的比例，避免裁剪或变形`;
+  } else if (imageCount > 1 && imageDimensions && imageDimensions.length > 0) {
+    // 多张图片时，提供每张图片的尺寸信息供参考
+    const sizeList = imageDimensions
+      .map((dim, i) => dim ? `  - [图片${i + 1}]: ${dim.width}x${dim.height}` : null)
+      .filter(Boolean)
+      .join('\n');
+    
+    if (sizeList) {
+      sizeRecommendation = `
+
+**参考图片尺寸信息**：
+${sizeList}
+- 如果用户没有指定尺寸，可参考主要图片的尺寸来选择合适的输出尺寸`;
+    }
+  }
 
   return `
 
 ## 参考图片说明
 
-用户提供了 ${imageCount} 张参考图片：${placeholders}
+用户提供了 ${imageCount} 张参考图片：${placeholdersWithSize}
 
 **使用方法**：
 - 在 \`referenceImages\` 参数中使用占位符数组：\`"referenceImages": [${placeholdersArray}]\`
 - 系统会自动将占位符替换为真实图片 URL
-- prompt 中描述你希望如何处理这些图片`;
+- prompt 中描述你希望如何处理这些图片${sizeRecommendation}`;
 }

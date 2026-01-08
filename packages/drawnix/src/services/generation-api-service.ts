@@ -13,6 +13,7 @@ import { TASK_TIMEOUT } from '../constants/TASK_CONSTANTS';
 import { analytics } from '../utils/posthog-analytics';
 import { taskQueueService } from './task-queue-service';
 import { geminiSettings } from '../utils/settings-manager';
+import { unifiedCacheService } from './unified-cache-service';
 
 /**
  * Generation API Service
@@ -174,13 +175,24 @@ class GenerationAPIService {
         size = this.convertAspectRatioToSize(aspectRatio);
       }
 
-      // 转换上传的图片为 URL 数组
+      // 转换上传的图片为 URL 数组（检查缓存时间，超过1天转为base64）
       let imageUrls: string[] | undefined;
       if ((params as any).uploadedImages) {
         const uploadedImages = (params as any).uploadedImages;
-        imageUrls = uploadedImages
-          .filter((img: any) => img.type === 'url' && img.url)
-          .map((img: any) => img.url);
+        const processedUrls: string[] = [];
+        
+        for (const img of uploadedImages) {
+          if (img.type === 'url' && img.url) {
+            // 使用智能图片传递：检查缓存时间，超过1天自动转为base64
+            const imageData = await unifiedCacheService.getImageForAI(img.url);
+            processedUrls.push(imageData.value);
+            console.log(`[GenerationAPI] Image processed: ${imageData.type === 'base64' ? 'converted to base64' : 'using URL'}`);
+          }
+        }
+        
+        if (processedUrls.length > 0) {
+          imageUrls = processedUrls;
+        }
       }
 
       // 获取 quality 参数（如果有）
