@@ -19,7 +19,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Send, Check, ImagePlus } from 'lucide-react';
 import { useBoard } from '@plait-board/react-board';
 import { SelectedContentPreview } from '../shared/SelectedContentPreview';
-import { getSelectedElements, ATTACHED_ELEMENT_CLASS_NAME, getRectangleByElements } from '@plait/core';
+import { getSelectedElements, ATTACHED_ELEMENT_CLASS_NAME, getRectangleByElements, PlaitBoard, getViewportOrigination } from '@plait/core';
 import { useI18n } from '../../i18n';
 import { TaskStatus } from '../../types/task.types';
 import { taskQueueService } from '../../services/task-queue-service';
@@ -31,6 +31,7 @@ import { SizeDropdown } from './SizeDropdown';
 import { PromptHistoryPopover } from './PromptHistoryPopover';
 import { usePromptHistory } from '../../hooks/usePromptHistory';
 import { getDefaultImageModel, IMAGE_MODELS, getModelConfig, getDefaultSizeForModel } from '../../constants/model-config';
+import { BUILT_IN_TOOLS, DEFAULT_TOOL_CONFIG } from '../../constants/built-in-tools';
 import { initializeMCP, setCanvasBoard, setBoard, mcpRegistry } from '../../mcp';
 import { initializeLongVideoChainService } from '../../services/long-video-chain-service';
 import { gridImageService } from '../../services/photo-wall';
@@ -49,6 +50,7 @@ import type { WorkflowRetryContext, PostProcessingStatus } from '../../types/cha
 import { workflowCompletionService } from '../../services/workflow-completion-service';
 import { BoardTransforms } from '@plait/core';
 import { WorkZoneTransforms } from '../../plugins/with-workzone';
+import { ToolTransforms } from '../../plugins/with-tool';
 import type { PlaitWorkZone } from '../../types/workzone.types';
 
 /**
@@ -531,6 +533,53 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
   const handleSelectHistoryPrompt = useCallback((content: string) => {
     setPrompt(content);
     inputRef.current?.focus();
+  }, []);
+
+  // 处理打开提示词工具（香蕉提示词）- 复用工具箱的逻辑
+  const handleOpenPromptTool = useCallback(() => {
+    const board = SelectionWatcherBoardRef.current;
+    if (!board) {
+      console.warn('[AIInputBar] Board not ready for prompt tool');
+      return;
+    }
+
+    // 从内置工具列表中获取香蕉提示词工具配置
+    const tool = BUILT_IN_TOOLS.find(t => t.id === 'banana-prompt');
+    if (!tool) {
+      console.warn('[AIInputBar] Banana prompt tool not found');
+      return;
+    }
+
+    // 计算画布中心位置（与 ToolboxDrawer 相同的逻辑）
+    const boardContainerRect = PlaitBoard.getBoardContainer(board).getBoundingClientRect();
+    const focusPoint = [
+      boardContainerRect.width / 2,
+      boardContainerRect.height / 2,
+    ];
+    const zoom = board.viewport.zoom;
+    const origination = getViewportOrigination(board);
+    const centerX = origination![0] + focusPoint[0] / zoom;
+    const centerY = origination![1] + focusPoint[1] / zoom;
+
+    // 工具尺寸
+    const width = tool.defaultWidth || DEFAULT_TOOL_CONFIG.defaultWidth;
+    const height = tool.defaultHeight || DEFAULT_TOOL_CONFIG.defaultHeight;
+
+    // 插入到画布（中心对齐）
+    ToolTransforms.insertTool(
+      board,
+      tool.id,
+      tool.url,
+      [centerX - width / 2, centerY - height / 2],
+      { width, height },
+      {
+        name: tool.name,
+        category: tool.category,
+        permissions: tool.permissions,
+      }
+    );
+
+    console.log('[AIInputBar] Prompt tool inserted to canvas');
   }, []);
 
   // 处理上传按钮点击
@@ -1386,6 +1435,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
       <InspirationBoard
         isCanvasEmpty={isCanvasEmpty}
         onSelectPrompt={handleSelectInspirationPrompt}
+        onOpenPromptTool={handleOpenPromptTool}
       />
 
       {/* Main input container - flex-column-reverse to expand upward */}
