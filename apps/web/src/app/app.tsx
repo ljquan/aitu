@@ -6,7 +6,6 @@ import {
   isWorkspaceMigrationCompleted,
   Board,
   BoardChangeData,
-  unifiedCacheService,
 } from '@drawnix/drawnix';
 import { PlaitBoard, PlaitElement, PlaitTheme, Viewport } from '@plait/core';
 
@@ -174,67 +173,40 @@ const addDebugLog = (board: PlaitBoard, value: string) => {
 };
 
 /**
- * 恢复元素数组中失效的视频 Blob URL
- * 在数据加载后、渲染之前调用，避免视频加载失败
+ * 迁移元素数组中的视频 URL 格式
+ * 新格式 (/__aitu_cache__/video/...) 是稳定的，由 Service Worker 直接从 Cache API 返回
+ * 旧格式 (blob:...#merged-video-xxx) 需要迁移到新格式
  */
 async function recoverVideoUrlsInElements(
   elements: PlaitElement[]
 ): Promise<PlaitElement[]> {
-  // 添加超时保护，避免永久卡住
-  const TIMEOUT_MS = 5000;
-
-  const recoverWithTimeout = async (
-    element: PlaitElement,
-    index: number
-  ): Promise<PlaitElement> => {
+  return elements.map((element) => {
     const url = (element as any).url as string | undefined;
 
-    // 检查是否是合并视频的 URL
-    if (url && url.startsWith('blob:') && url.includes('#merged-video-')) {
-      // 提取 taskId
-      const mergedVideoIndex = url.indexOf('#merged-video-');
-      if (mergedVideoIndex === -1) return element;
+    // 新格式：稳定 URL，无需处理
+    if (url?.startsWith('/__aitu_cache__/video/')) {
+      return element;
+    }
 
-      const afterHash = url.substring(mergedVideoIndex + 1);
-      const nextHashIndex = afterHash.indexOf('#', 1);
-      const taskId =
-        nextHashIndex > 0 ? afterHash.substring(0, nextHashIndex) : afterHash;
+    // 旧格式：blob URL + #merged-video-xxx
+    // 提取 taskId，转换为新格式
+    if (url?.startsWith('blob:') && url.includes('#merged-video-')) {
+      const hashIndex = url.indexOf('#merged-video-');
+      if (hashIndex !== -1) {
+        const afterHash = url.substring(hashIndex + 1);
+        const nextHashIndex = afterHash.indexOf('#', 1);
+        const taskId =
+          nextHashIndex > 0 ? afterHash.substring(0, nextHashIndex) : afterHash;
 
-      try {
-        // 添加超时保护
-        const timeoutPromise = new Promise<null>((_, reject) =>
-          setTimeout(() => reject(new Error('Timeout')), TIMEOUT_MS)
-        );
-
-        const cachedBlob = await Promise.race([
-          unifiedCacheService.getCachedBlob(taskId),
-          timeoutPromise,
-        ]);
-
-        if (cachedBlob) {
-          const newBlobUrl = URL.createObjectURL(cachedBlob);
-          const newUrl = `${newBlobUrl}#${taskId}`;
-
-          // 返回更新后的元素
-          return { ...element, url: newUrl };
-        }
-      } catch (error) {
-        console.error(`[App] Element ${index}: Failed to recover video:`, taskId, error);
+        // 转换为新格式的稳定 URL（带 .mp4 后缀）
+        const newUrl = `/__aitu_cache__/video/${taskId}.mp4`;
+        console.log(`[App] Migrating video URL: ${taskId}`);
+        return { ...element, url: newUrl };
       }
     }
 
     return element;
-  };
-
-  try {
-    const recoveredElements = await Promise.all(
-      elements.map((element, index) => recoverWithTimeout(element, index))
-    );
-    return recoveredElements;
-  } catch (error) {
-    console.error('[App] Video URL recovery failed:', error);
-    return elements; // 返回原始元素，避免卡住
-  }
+  });
 }
 
 export default App;

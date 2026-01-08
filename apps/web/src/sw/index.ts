@@ -13,6 +13,9 @@ const CACHE_NAME = `drawnix-v${APP_VERSION}`;
 const IMAGE_CACHE_NAME = `drawnix-images`;
 const STATIC_CACHE_NAME = `drawnix-static-v${APP_VERSION}`;
 
+// 缓存 URL 前缀 - 用于合并视频等本地缓存资源
+const CACHE_URL_PREFIX = '/__aitu_cache__/video/';
+
 // Detect development mode
 // 在构建时，process.env.NODE_ENV 会被替换，或者我们可以通过 mode 判断
 // 这里使用 location 判断也行，但通常构建时会注入
@@ -553,6 +556,16 @@ sw.addEventListener('fetch', (event: FetchEvent) => {
     return;
   }
 
+  // 拦截缓存 URL 请求 (/__aitu_cache__/video/{taskId}.mp4)
+  if (url.pathname.startsWith(CACHE_URL_PREFIX)) {
+    console.log('Service Worker: Intercepting cache URL request:', event.request.url);
+
+    event.respondWith(
+      handleCacheUrlRequest(event.request)
+    );
+    return;
+  }
+
   // 检查是否要求绕过Service Worker
   if (url.searchParams.has('bypass_sw') || url.searchParams.has('direct_fetch')) {
     console.log('Service Worker: 检测到绕过参数，直接通过请求:', url.href);
@@ -651,6 +664,50 @@ async function fetchWithRetry(request: Request, maxRetries = 2, fetchOptions: an
   }
 
   throw lastError;
+}
+
+// 处理缓存 URL 请求 (/__aitu_cache__/video/{taskId}.mp4)
+// 从 Cache API 获取合并视频并返回，支持 Range 请求
+async function handleCacheUrlRequest(request: Request): Promise<Response> {
+  const requestId = Math.random().toString(36).substring(2, 10);
+  const rangeHeader = request.headers.get('range');
+
+  // 使用完整 URL 作为缓存 key（与主线程保持一致）
+  const cacheKey = request.url;
+
+  console.log(`Service Worker [Cache-${requestId}]: Handling cache URL request:`, cacheKey);
+
+  try {
+    // 从 Cache API 获取
+    const cache = await caches.open(IMAGE_CACHE_NAME);
+    const cachedResponse = await cache.match(cacheKey);
+
+    if (cachedResponse) {
+      console.log(`Service Worker [Cache-${requestId}]: Found cached video:`, cacheKey);
+      const blob = await cachedResponse.blob();
+      return createVideoResponse(blob, rangeHeader, requestId);
+    }
+
+    // 如果 Cache API 没有，返回 404
+    console.error(`Service Worker [Cache-${requestId}]: Video not found in cache:`, cacheKey);
+    return new Response('Video not found', {
+      status: 404,
+      statusText: 'Not Found',
+      headers: {
+        'Content-Type': 'text/plain'
+      }
+    });
+
+  } catch (error) {
+    console.error(`Service Worker [Cache-${requestId}]: Error handling cache URL request:`, error);
+    return new Response('Internal error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+      headers: {
+        'Content-Type': 'text/plain'
+      }
+    });
+  }
 }
 
 // 处理视频请求,支持 Range 请求以实现视频 seek 功能

@@ -81,7 +81,7 @@ export interface CacheInfo {
 
 /** 存储使用情况 */
 export interface StorageUsage {
-  used: number;
+  usage: number;
   quota: number;
   percentage: number;
 }
@@ -815,9 +815,24 @@ class UnifiedCacheService {
 
   /**
    * 获取缓存的 Blob（兼容 urlCacheService.getVideoAsBlob）
+   * 支持 taskId（如 "merged-video-xxx"）或完整 URL
    */
   async getCachedBlob(url: string): Promise<Blob | null> {
     try {
+      // 如果是 taskId（不是完整 URL），直接从 Cache API 获取
+      if (!url.startsWith('http') && !url.startsWith('blob:') && !url.startsWith('/')) {
+        if (typeof caches !== 'undefined') {
+          const cache = await caches.open(IMAGE_CACHE_NAME);
+          const response = await cache.match(url);
+          if (response) {
+            return await response.blob();
+          }
+        }
+        console.warn('[UnifiedCache] Blob not found in cache:', url);
+        return null;
+      }
+
+      // 完整 URL 通过 fetch 获取
       const response = await fetch(url);
       if (!response.ok) {
         return null;
