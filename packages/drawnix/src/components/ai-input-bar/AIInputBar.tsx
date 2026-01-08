@@ -19,7 +19,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Send, Check, ImagePlus } from 'lucide-react';
 import { useBoard } from '@plait-board/react-board';
 import { SelectedContentPreview } from '../shared/SelectedContentPreview';
-import { getSelectedElements, ATTACHED_ELEMENT_CLASS_NAME, getRectangleByElements, PlaitElement } from '@plait/core';
+import { getSelectedElements, ATTACHED_ELEMENT_CLASS_NAME, getRectangleByElements, PlaitBoard, getViewportOrigination } from '@plait/core';
 import { useI18n } from '../../i18n';
 import { TaskStatus } from '../../types/task.types';
 import { taskQueueService } from '../../services/task-queue-service';
@@ -27,7 +27,11 @@ import { processSelectedContentForAI } from '../../utils/selection-utils';
 import { useTextSelection } from '../../hooks/useTextSelection';
 import { useChatDrawerControl } from '../../contexts/ChatDrawerContext';
 import { ModelDropdown } from './ModelDropdown';
-import { getDefaultImageModel, IMAGE_MODELS, getModelConfig } from '../../constants/model-config';
+import { SizeDropdown } from './SizeDropdown';
+import { PromptHistoryPopover } from './PromptHistoryPopover';
+import { usePromptHistory } from '../../hooks/usePromptHistory';
+import { getDefaultImageModel, IMAGE_MODELS, getModelConfig, getDefaultSizeForModel } from '../../constants/model-config';
+import { BUILT_IN_TOOLS, DEFAULT_TOOL_CONFIG } from '../../constants/built-in-tools';
 import { initializeMCP, setCanvasBoard, setBoard, mcpRegistry } from '../../mcp';
 import { initializeLongVideoChainService } from '../../services/long-video-chain-service';
 import { gridImageService } from '../../services/photo-wall';
@@ -46,6 +50,7 @@ import type { WorkflowRetryContext, PostProcessingStatus } from '../../types/cha
 import { workflowCompletionService } from '../../services/workflow-completion-service';
 import { BoardTransforms } from '@plait/core';
 import { WorkZoneTransforms } from '../../plugins/with-workzone';
+import { ToolTransforms } from '../../plugins/with-tool';
 import type { PlaitWorkZone } from '../../types/workzone.types';
 
 /**
@@ -262,6 +267,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
 
   const chatDrawerControl = useChatDrawerControl();
   const workflowControl = useWorkflowControl();
+  const { addHistory: addPromptHistory } = usePromptHistory();
   // 使用 ref 存储，避免依赖变化
   const sendWorkflowMessageRef = useRef(chatDrawerControl.sendWorkflowMessage);
   sendWorkflowMessageRef.current = chatDrawerControl.sendWorkflowMessage;
@@ -291,6 +297,8 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
   const [isCanvasEmpty, setIsCanvasEmpty] = useState(false); // 画板是否为空，默认 false 避免初始闪烁
   // 当前选中的图片模型（通过环境变量或默认值初始化）
   const [selectedModel, setSelectedModel] = useState(getDefaultImageModel);
+  // 当前选中的尺寸（默认为模型的默认尺寸）
+  const [selectedSize, setSelectedSize] = useState(() => getDefaultSizeForModel(getDefaultImageModel()));
 
   // @ 触发模型选择相关状态
   const [showAtSuggestion, setShowAtSuggestion] = useState(false);
@@ -521,6 +529,59 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
     inputRef.current?.focus();
   }, []);
 
+  // 处理历史提示词选择：将提示词回填到输入框
+  const handleSelectHistoryPrompt = useCallback((content: string) => {
+    setPrompt(content);
+    inputRef.current?.focus();
+  }, []);
+
+  // 处理打开提示词工具（香蕉提示词）- 复用工具箱的逻辑
+  const handleOpenPromptTool = useCallback(() => {
+    const board = SelectionWatcherBoardRef.current;
+    if (!board) {
+      console.warn('[AIInputBar] Board not ready for prompt tool');
+      return;
+    }
+
+    // 从内置工具列表中获取香蕉提示词工具配置
+    const tool = BUILT_IN_TOOLS.find(t => t.id === 'banana-prompt');
+    if (!tool) {
+      console.warn('[AIInputBar] Banana prompt tool not found');
+      return;
+    }
+
+    // 计算画布中心位置（与 ToolboxDrawer 相同的逻辑）
+    const boardContainerRect = PlaitBoard.getBoardContainer(board).getBoundingClientRect();
+    const focusPoint = [
+      boardContainerRect.width / 2,
+      boardContainerRect.height / 2,
+    ];
+    const zoom = board.viewport.zoom;
+    const origination = getViewportOrigination(board);
+    const centerX = origination![0] + focusPoint[0] / zoom;
+    const centerY = origination![1] + focusPoint[1] / zoom;
+
+    // 工具尺寸
+    const width = tool.defaultWidth || DEFAULT_TOOL_CONFIG.defaultWidth;
+    const height = tool.defaultHeight || DEFAULT_TOOL_CONFIG.defaultHeight;
+
+    // 插入到画布（中心对齐）
+    ToolTransforms.insertTool(
+      board,
+      tool.id,
+      tool.url,
+      [centerX - width / 2, centerY - height / 2],
+      { width, height },
+      {
+        name: tool.name,
+        category: tool.category,
+        permissions: tool.permissions,
+      }
+    );
+
+    console.log('[AIInputBar] Prompt tool inserted to canvas');
+  }, []);
+
   // 处理上传按钮点击
   const handleUploadClick = useCallback(() => {
     fileInputRef.current?.click();
@@ -707,8 +768,8 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
           .map((item) => item.url!),
       };
 
-      // 解析输入内容，使用选中的模型
-      const parsedParams = parseAIInput(prompt, selection, { modelId: selectedModel });
+      // 解析输入内容，使用选中的模型和尺寸
+      const parsedParams = parseAIInput(prompt, selection, { modelId: selectedModel, size: selectedSize });
 
       console.log('[AIInputBar] Parsed params:', parsedParams);
       console.log('[AIInputBar] Key params - model:', parsedParams.modelId, 'count:', parsedParams.count, 'size:', parsedParams.size);
@@ -1068,6 +1129,12 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
         }
       }
 
+      // 保存提示词到历史记录（只保存有实际内容的提示词）
+      if (prompt.trim()) {
+        const hasSelection = allContent.length > 0;
+        addPromptHistory(prompt.trim(), hasSelection);
+      }
+
       // 清空输入并关闭面板
       setPrompt('');
       setSelectedContent([]);
@@ -1407,6 +1474,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
       <InspirationBoard
         isCanvasEmpty={isCanvasEmpty}
         onSelectPrompt={handleSelectInspirationPrompt}
+        onOpenPromptTool={handleOpenPromptTool}
       />
 
       {/* Main input container - flex-column-reverse to expand upward */}
@@ -1446,6 +1514,14 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
             language={language}
           />
 
+          {/* Size dropdown selector */}
+          <SizeDropdown
+            selectedSize={selectedSize}
+            onSelect={setSelectedSize}
+            modelId={selectedModel}
+            language={language}
+          />
+
           {/* Spacer to push send button to the right */}
           <div className="ai-input-bar__bottom-spacer" />
 
@@ -1480,6 +1556,12 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
               />
             </div>
           )}
+
+          {/* History prompt popover - top right corner */}
+          <PromptHistoryPopover
+            onSelectPrompt={handleSelectHistoryPrompt}
+            language={language}
+          />
 
           {/* Text input */}
           <div className="ai-input-bar__rich-input">

@@ -146,31 +146,44 @@ export function convertDirectGenerationToWorkflow(
     };
 
     if (generationType === 'image') {
+      // 构建图片生成参数，size 为 undefined 时不传（让模型自动决定）
+      const imageArgs: Record<string, unknown> = {
+        prompt,
+        model: modelId,
+      };
+      if (size) {
+        imageArgs.size = size;
+      }
+      if (referenceImages.length > 0) {
+        imageArgs.referenceImages = referenceImages;
+      }
+
       steps.push({
         id: stepId,
         mcp: 'generate_image',
-        args: {
-          prompt,
-          model: modelId,
-          size: size || '1x1',
-          referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
-        },
+        args: imageArgs,
         options,
         description: count > 1 ? `生成图片 (${i + 1}/${count})` : '生成图片',
         status: 'pending',
       });
     } else {
-      // 视频生成
+      // 构建视频生成参数，size 为 undefined 时不传（让模型自动决定）
+      const videoArgs: Record<string, unknown> = {
+        prompt,
+        model: modelId,
+        seconds: duration || '5',
+      };
+      if (size) {
+        videoArgs.size = size;
+      }
+      if (referenceImages.length > 0) {
+        videoArgs.referenceImages = referenceImages;
+      }
+
       steps.push({
         id: stepId,
         mcp: 'generate_video',
-        args: {
-          prompt,
-          model: modelId,
-          size: size || '16x9',
-          seconds: duration || '5',
-          referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
-        },
+        args: videoArgs,
         options,
         description: count > 1 ? `生成视频 (${i + 1}/${count})` : '生成视频',
         status: 'pending',

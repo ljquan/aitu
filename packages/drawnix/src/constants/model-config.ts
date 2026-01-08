@@ -559,6 +559,14 @@ const SORA_2_MODEL_IDS = ['sora-2'];
 /** Sora 2 Pro 模型（支持 10/15/25 秒和高清尺寸） */
 const SORA_2_PRO_MODEL_IDS = ['sora-2-pro'];
 
+/** GPT 图片模型 ID（仅支持有限尺寸） */
+const GPT_IMAGE_MODEL_IDS = ['gpt-image-1.5'];
+
+/** Gemini 图片模型 ID（支持完整尺寸） */
+const GEMINI_IMAGE_MODEL_IDS = IMAGE_MODELS
+  .filter(m => !GPT_IMAGE_MODEL_IDS.includes(m.id))
+  .map(m => m.id);
+
 /** 所有图片模型 ID */
 const ALL_IMAGE_MODEL_IDS = IMAGE_MODELS.map(m => m.id);
 
@@ -649,8 +657,10 @@ export const VIDEO_PARAMS: ParamConfig[] = [
 /**
  * 图片参数配置
  * 根据 API 文档，size 使用宽高比格式（如 16x9），API 会自动转换为对应像素
+ * 'auto' 表示不传尺寸参数，让模型自动决定
  */
 export const IMAGE_PARAMS: ParamConfig[] = [
+  // GPT 图片模型尺寸（仅支持有限尺寸）
   {
     id: 'size',
     label: '图片尺寸',
@@ -658,19 +668,37 @@ export const IMAGE_PARAMS: ParamConfig[] = [
     description: '生成图片的尺寸比例',
     valueType: 'enum',
     options: [
-      { value: '1x1', label: '1:1 方形 (1024x1024)' },
-      { value: '16x9', label: '16:9 横版 (1344x768)' },
-      { value: '9x16', label: '9:16 竖版 (768x1344)' },
-      { value: '3x2', label: '3:2 横版 (1248x832)' },
-      { value: '2x3', label: '2:3 竖版 (832x1248)' },
-      { value: '4x3', label: '4:3 横版 (1184x864)' },
-      { value: '3x4', label: '3:4 竖版 (864x1184)' },
-      { value: '5x4', label: '5:4 横版 (1152x896)' },
-      { value: '4x5', label: '4:5 竖版 (896x1152)' },
-      { value: '21x9', label: '21:9 超宽 (1536x672)' },
+      { value: 'auto', label: '自动' },
+      { value: '1x1', label: '1:1 方形' },
+      { value: '3x2', label: '3:2 横版' },
+      { value: '2x3', label: '2:3 竖版' },
     ],
-    defaultValue: '1x1',
-    compatibleModels: ALL_IMAGE_MODEL_IDS,
+    defaultValue: 'auto',
+    compatibleModels: GPT_IMAGE_MODEL_IDS,
+    modelType: 'image',
+  },
+  // Gemini 图片模型尺寸（支持完整尺寸）
+  {
+    id: 'size',
+    label: '图片尺寸',
+    shortLabel: '尺寸',
+    description: '生成图片的尺寸比例',
+    valueType: 'enum',
+    options: [
+      { value: 'auto', label: '自动' },
+      { value: '1x1', label: '1:1 方形' },
+      { value: '16x9', label: '16:9 横版' },
+      { value: '9x16', label: '9:16 竖版' },
+      { value: '3x2', label: '3:2 横版' },
+      { value: '2x3', label: '2:3 竖版' },
+      { value: '4x3', label: '4:3 横版' },
+      { value: '3x4', label: '3:4 竖版' },
+      { value: '5x4', label: '5:4 横版' },
+      { value: '4x5', label: '4:5 竖版' },
+      { value: '21x9', label: '21:9 超宽' },
+    ],
+    defaultValue: 'auto',
+    compatibleModels: GEMINI_IMAGE_MODEL_IDS,
     modelType: 'image',
   },
 ];
@@ -719,4 +747,26 @@ export function getParamConfig(paramId: string): ParamConfig | undefined {
 export function getParamIds(modelType?: ModelType): string[] {
   const params = modelType ? getParamsByModelType(modelType) : ALL_PARAMS;
   return params.map(param => param.id);
+}
+
+/**
+ * 获取模型支持的尺寸选项
+ * @param modelId 模型 ID
+ * @returns 尺寸选项列表，包含 value 和 label
+ */
+export function getSizeOptionsForModel(modelId: string): Array<{ value: string; label: string }> {
+  const params = getCompatibleParams(modelId);
+  const sizeParam = params.find(p => p.id === 'size');
+  return sizeParam?.options || [];
+}
+
+/**
+ * 获取模型的默认尺寸
+ * @param modelId 模型 ID
+ * @returns 默认尺寸值
+ */
+export function getDefaultSizeForModel(modelId: string): string {
+  const params = getCompatibleParams(modelId);
+  const sizeParam = params.find(p => p.id === 'size');
+  return sizeParam?.defaultValue || 'auto';
 }
