@@ -10,7 +10,7 @@
 
 **项目信息：**
 - **名称**: Aitu (爱图) - AI 图像与视频创作工具
-- **版本**: 0.3.3
+- **版本**: 0.4.0
 - **许可证**: MIT
 - **标语**: 爱上图像，爱上创作
 - **官网**: https://aitu.tu-zi.com
@@ -133,6 +133,14 @@ packages/drawnix/
 ```
 components/
 ├── ai-input-bar/                  # AI 输入条
+│   ├── AIInputBar.tsx             # 主组件
+│   ├── ModelDropdown.tsx          # 模型下拉选择器
+│   ├── SizeDropdown.tsx           # 尺寸下拉选择器
+│   └── PromptHistoryPopover.tsx   # 历史提示词悬浮面板
+├── inspiration-board/             # 灵感创意板块
+│   ├── InspirationBoard.tsx       # 主组件（画板为空时显示）
+│   ├── InspirationCard.tsx        # 模版卡片
+│   └── constants.ts               # 模版数据
 ├── chat-drawer/                   # 聊天抽屉
 │   ├── ChatDrawer.tsx             # 主组件
 │   ├── SessionList.tsx            # 会话列表
@@ -177,6 +185,7 @@ services/
 ├── media-cache-service.ts         # 媒体缓存 (IndexedDB)
 ├── url-cache-service.ts           # URL 缓存
 ├── toolbar-config-service.ts      # 工具栏配置
+├── prompt-storage-service.ts      # 历史提示词存储
 ├── tracking/                      # 追踪服务
 └── ...其他服务
 ```
@@ -215,6 +224,7 @@ hooks/
 ├── useTaskQueue.ts                # 任务队列
 ├── useTaskStorage.ts              # 任务存储
 ├── useGenerationHistory.ts        # 生成历史
+├── usePromptHistory.ts            # 历史提示词管理
 ├── useSmartInput.ts               # 智能输入
 ├── useChatSessions.ts             # 聊天会话
 ├── useCharacters.ts               # 角色管理
@@ -459,6 +469,49 @@ WorkZoneContent 组件响应更新，显示进度
 - WorkZone 元素被选中时不触发 popup-toolbar（在 `popup-toolbar.tsx` 中过滤）
 - AIInputBar 发送工作流时不自动展开 ChatDrawer（通过 `autoOpen: false` 参数控制）
 - WorkZone 位置策略：有选中元素放右侧，无选中放所有元素右下方，画布为空放视口中心
+
+### 灵感创意板块 (InspirationBoard)
+
+当画板为空时，在 AI 输入框上方显示灵感创意板块，帮助用户快速开始创作。
+
+**核心文件**：
+- `components/inspiration-board/InspirationBoard.tsx` - 主组件
+- `components/inspiration-board/InspirationCard.tsx` - 模版卡片组件
+- `components/inspiration-board/constants.ts` - 模版数据配置
+
+**功能特点**：
+- 画板为空时自动显示，有内容时隐藏
+- 3x2 网格布局展示创意模版
+- 支持分页浏览更多模版
+- 点击模版自动填充提示词到输入框
+- 提供"提示词"快捷按钮，可打开香蕉提示词工具
+
+### 历史提示词功能
+
+支持记录和管理用户的历史提示词，方便快速复用。
+
+**核心文件**：
+- `services/prompt-storage-service.ts` - 存储服务（localStorage）
+- `hooks/usePromptHistory.ts` - React Hook
+- `components/ai-input-bar/PromptHistoryPopover.tsx` - UI 组件
+
+**功能特点**：
+- 自动保存用户发送的提示词（最多 20 条）
+- 支持置顶/取消置顶常用提示词
+- 鼠标悬浮三点图标显示历史列表
+- 点击历史提示词回填到输入框
+- 支持删除单条历史记录
+
+**API 示例**：
+```typescript
+const { history, addHistory, removeHistory, togglePinHistory } = usePromptHistory();
+
+// 添加历史
+addHistory('生成一张日落风景图', hasSelection);
+
+// 置顶/取消置顶
+togglePinHistory(itemId);
+```
 
 ---
 
