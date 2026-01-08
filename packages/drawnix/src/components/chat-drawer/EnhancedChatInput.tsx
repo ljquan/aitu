@@ -17,6 +17,7 @@ import { SelectedContentPreview } from '../shared/SelectedContentPreview';
 import type { SelectedContentItem } from '../../contexts/ChatDrawerContext';
 import type { Message } from '@llamaindex/chat-ui';
 import { useSmartInput } from '../../hooks/useSmartInput';
+import { usePromptHistory } from '../../hooks/usePromptHistory';
 
 interface EnhancedChatInputProps {
   selectedContent: SelectedContentItem[];
@@ -46,6 +47,7 @@ export const EnhancedChatInput = forwardRef<EnhancedChatInputRef, EnhancedChatIn
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const hasSelection = selectedContent.length > 0;
+  const { addHistory: addPromptHistory } = usePromptHistory();
 
   // 使用共享的智能输入 hook
   const {
@@ -120,9 +122,14 @@ export const EnhancedChatInput = forwardRef<EnhancedChatInputRef, EnhancedChatIn
       parts,
     };
 
+    // 保存提示词到历史记录
+    if (trimmedInput) {
+      addPromptHistory(trimmedInput, hasSelection);
+    }
+
     onSend(message);
     setInput('');
-  }, [input, selectedContent, onSend, setInput]);
+  }, [input, selectedContent, onSend, setInput, addPromptHistory, hasSelection]);
 
   // 键盘事件处理
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {

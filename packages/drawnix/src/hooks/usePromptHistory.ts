@@ -22,6 +22,8 @@ export interface UsePromptHistoryReturn {
   clearHistory: () => void;
   /** 刷新历史记录 */
   refreshHistory: () => void;
+  /** 切换置顶状态 */
+  togglePinHistory: (id: string) => void;
 }
 
 /**
@@ -59,12 +61,19 @@ export function usePromptHistory(): UsePromptHistoryReturn {
     refreshHistory();
   }, [refreshHistory]);
 
+  // 切换置顶状态
+  const togglePinHistory = useCallback((id: string) => {
+    promptStorageService.togglePin(id);
+    refreshHistory();
+  }, [refreshHistory]);
+
   return {
     history,
     addHistory,
     removeHistory,
     clearHistory,
     refreshHistory,
+    togglePinHistory,
   };
 }
 

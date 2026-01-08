@@ -28,6 +28,8 @@ import { useTextSelection } from '../../hooks/useTextSelection';
 import { useChatDrawerControl } from '../../contexts/ChatDrawerContext';
 import { ModelDropdown } from './ModelDropdown';
 import { SizeDropdown } from './SizeDropdown';
+import { PromptHistoryPopover } from './PromptHistoryPopover';
+import { usePromptHistory } from '../../hooks/usePromptHistory';
 import { getDefaultImageModel, IMAGE_MODELS, getModelConfig, getDefaultSizeForModel } from '../../constants/model-config';
 import { initializeMCP, setCanvasBoard, setBoard, mcpRegistry } from '../../mcp';
 import { initializeLongVideoChainService } from '../../services/long-video-chain-service';
@@ -263,6 +265,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
 
   const chatDrawerControl = useChatDrawerControl();
   const workflowControl = useWorkflowControl();
+  const { addHistory: addPromptHistory } = usePromptHistory();
   // 使用 ref 存储，避免依赖变化
   const sendWorkflowMessageRef = useRef(chatDrawerControl.sendWorkflowMessage);
   sendWorkflowMessageRef.current = chatDrawerControl.sendWorkflowMessage;
@@ -521,6 +524,12 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
   // 处理灵感模版选择：将提示词替换到输入框
   const handleSelectInspirationPrompt = useCallback((inspirationPrompt: string) => {
     setPrompt(inspirationPrompt);
+    inputRef.current?.focus();
+  }, []);
+
+  // 处理历史提示词选择：将提示词回填到输入框
+  const handleSelectHistoryPrompt = useCallback((content: string) => {
+    setPrompt(content);
     inputRef.current?.focus();
   }, []);
 
@@ -1032,6 +1041,12 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
         }
       }
 
+      // 保存提示词到历史记录（只保存有实际内容的提示词）
+      if (prompt.trim()) {
+        const hasSelection = allContent.length > 0;
+        addPromptHistory(prompt.trim(), hasSelection);
+      }
+
       // 清空输入并关闭面板
       setPrompt('');
       setSelectedContent([]);
@@ -1452,6 +1467,12 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
               />
             </div>
           )}
+
+          {/* History prompt popover - top right corner */}
+          <PromptHistoryPopover
+            onSelectPrompt={handleSelectHistoryPrompt}
+            language={language}
+          />
 
           {/* Text input */}
           <div className="ai-input-bar__rich-input">

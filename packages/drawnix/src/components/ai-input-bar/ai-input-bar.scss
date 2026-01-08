@@ -330,6 +330,7 @@ $text-dark: #1F2937;
 
   // 输入区域 - 向上扩展
   &__input-area {
+    position: relative; // 用于 PromptHistoryPopover 绝对定位
     display: flex;
     flex-direction: column;
     gap: 8px;
