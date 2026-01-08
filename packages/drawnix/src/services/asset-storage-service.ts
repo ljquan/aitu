@@ -73,6 +73,75 @@ class AssetStorageService {
   private migrationDone: boolean = false;
 
   /**
+   * 计算 Blob 内容的哈希值
+   * 使用 SHA-256 算法生成唯一标识
+   */
+  private async computeContentHash(blob: Blob): Promise<string> {
+    const arrayBuffer = await blob.arrayBuffer();
+    const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  /**
+   * 检查是否存在相同内容的素材
+   * 返回已存在的素材，如果不存在则返回 null
+   * 对于没有 contentHash 的旧素材，通过文件大小筛选后重新计算哈希
+   */
+  private async findAssetByContentHash(
+    contentHash: string,
+    blob: Blob
+  ): Promise<Asset | null> {
+    if (!this.store) return null;
+
+    try {
+      const keys = await this.store.keys();
+      for (const key of keys) {
+        const stored = await this.store.getItem(key) as StoredAsset | null;
+        if (!stored) continue;
+
+        // 如果已有 contentHash，直接比较
+        if (stored.contentHash) {
+          if (stored.contentHash === contentHash) {
+            console.log('[AssetStorageService] Found duplicate asset by hash:', stored.id);
+            return storedAssetToAsset(stored);
+          }
+          continue;
+        }
+
+        // 对于没有 contentHash 的旧素材，先用文件大小筛选
+        if (stored.size !== blob.size) {
+          continue;
+        }
+
+        // 文件大小相同，从缓存中获取内容计算哈希
+        console.log('[AssetStorageService] Size match, computing hash for old asset:', stored.id);
+        try {
+          const cachedBlob = await unifiedCacheService.getCachedBlob(stored.url);
+          if (cachedBlob) {
+            const oldHash = await this.computeContentHash(cachedBlob);
+            
+            // 更新旧素材的 contentHash
+            stored.contentHash = oldHash;
+            await this.store.setItem(key, stored);
+            console.log('[AssetStorageService] Updated contentHash for old asset:', stored.id);
+
+            if (oldHash === contentHash) {
+              console.log('[AssetStorageService] Found duplicate asset by computed hash:', stored.id);
+              return storedAssetToAsset(stored);
+            }
+          }
+        } catch (err) {
+          console.warn('[AssetStorageService] Failed to compute hash for old asset:', stored.id, err);
+        }
+      }
+    } catch (error) {
+      console.warn('[AssetStorageService] Error checking for duplicates:', error);
+    }
+    return null;
+  }
+
+  /**
    * 生成素材的缓存 URL（用于本地上传的素材）
    * 使用稳定的 URL 格式，便于统一缓存服务管理
    */
@@ -206,6 +275,18 @@ class AssetStorageService {
 
     this.ensureInitialized();
 
+    // 计算内容哈希用于去重
+    console.log('[AssetStorageService] Computing content hash...');
+    const contentHash = await this.computeContentHash(data.blob);
+    console.log('[AssetStorageService] Content hash:', contentHash.substring(0, 16) + '...');
+
+    // 检查是否已存在相同内容的素材
+    const existingAsset = await this.findAssetByContentHash(contentHash, data.blob);
+    if (existingAsset) {
+      console.log('[AssetStorageService] Duplicate asset found, skipping:', existingAsset.id);
+      return existingAsset;
+    }
+
     // 验证名称
     const nameValidation = validateAssetName(data.name);
     if (!nameValidation.valid) {
@@ -261,6 +342,8 @@ class AssetStorageService {
       // 转换为StoredAsset并保存（只存元数据，不存 Blob）
       console.log('[AssetStorageService] Saving asset metadata to IndexedDB...');
       const storedAsset = assetToStoredAsset(asset);
+      // 添加内容哈希到存储对象
+      storedAsset.contentHash = contentHash;
       await this.store!.setItem(asset.id, storedAsset);
       console.log('[AssetStorageService] Asset saved to IndexedDB');
 

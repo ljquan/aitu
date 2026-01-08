@@ -3,7 +3,7 @@
  * 素材库详情面板组件
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import { Button, Input, Dialog, MessagePlugin } from 'tdesign-react';
 import {
   Download,
@@ -15,7 +15,7 @@ import {
   Copy,
 } from 'lucide-react';
 import { formatDate, formatFileSize } from '../../utils/asset-utils';
-import { unifiedCacheService } from '../../services/unified-cache-service';
+import { useAssetSize } from '../../hooks/useAssetSize';
 import type { MediaLibraryInspectorProps } from '../../types/asset.types';
 import './MediaLibraryInspector.scss';
 
@@ -31,67 +31,9 @@ export function MediaLibraryInspector({
   const [isRenaming, setIsRenaming] = useState(false);
   const [newName, setNewName] = useState('');
   const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
-  const [cachedSize, setCachedSize] = useState<number | null>(null);
 
-  // 获取缓存中的文件大小
-  useEffect(() => {
-    if (!asset) {
-      setCachedSize(null);
-      return;
-    }
-
-    // 如果 asset 已有有效的 size，直接使用
-    if (asset.size && asset.size > 0) {
-      setCachedSize(asset.size);
-      return;
-    }
-
-    // 否则尝试从缓存获取
-    const fetchCacheSize = async () => {
-      try {
-        // 首先尝试从 unifiedCacheService 获取
-        const cacheInfo = await unifiedCacheService.getCacheInfo(asset.url);
-        if (cacheInfo.isCached && cacheInfo.size && cacheInfo.size > 0) {
-          setCachedSize(cacheInfo.size);
-          return;
-        }
-
-        // 如果 unifiedCacheService 没有，直接从 Cache API 获取（主要用于视频）
-        if (typeof caches !== 'undefined') {
-          const cache = await caches.open('drawnix-images');
-          const response = await cache.match(asset.url);
-          if (response) {
-            // 尝试从 header 获取大小
-            const sizeHeader = response.headers.get('sw-video-size') ||
-                               response.headers.get('sw-image-size') ||
-                               response.headers.get('Content-Length');
-            if (sizeHeader) {
-              const size = parseInt(sizeHeader, 10);
-              if (size > 0) {
-                setCachedSize(size);
-                return;
-              }
-            }
-            // 如果 header 没有，获取 blob 大小
-            const blob = await response.blob();
-            if (blob.size > 0) {
-              setCachedSize(blob.size);
-              return;
-            }
-          }
-        }
-
-        setCachedSize(null);
-      } catch {
-        setCachedSize(null);
-      }
-    };
-
-    fetchCacheSize();
-  }, [asset?.id, asset?.url, asset?.size]);
-
-  // 实际显示的文件大小
-  const displaySize = cachedSize || (asset?.size && asset.size > 0 ? asset.size : null);
+  // 获取实际文件大小（支持从缓存获取）
+  const displaySize = useAssetSize(asset?.id, asset?.url, asset?.size);
 
   // 开始重命名
   const handleStartRename = useCallback(() => {
@@ -199,7 +141,7 @@ export function MediaLibraryInspector({
             <Input
               value={newName}
               onChange={(value) => setNewName(value as string)}
-              autoFocus
+              autofocus
               size="small"
               onEnter={handleConfirmRename}
             />

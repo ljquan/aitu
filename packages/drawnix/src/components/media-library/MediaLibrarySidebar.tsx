@@ -133,6 +133,16 @@ export function MediaLibrarySidebar({
           >
             名称排序
           </Button>
+          <Button
+            variant={filters.sortBy === 'SIZE_DESC' ? 'base' : 'outline'}
+            onClick={() => onFilterChange({ sortBy: 'SIZE_DESC' })}
+            block
+            size="small"
+            theme="default"
+            data-track="sidebar_sort_size_desc"
+          >
+            大小排序
+          </Button>
         </div>
       </div>
 

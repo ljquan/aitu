@@ -20,6 +20,7 @@ import { MessagePlugin } from 'tdesign-react';
 import { assetStorageService } from '../services/asset-storage-service';
 import { taskQueueService } from '../services/task-queue-service';
 import { getStorageStatus } from '../utils/storage-quota';
+import { getAssetSizeFromCache } from '../hooks/useAssetSize';
 import type {
   Asset,
   AssetContextValue,
@@ -135,6 +136,35 @@ export function AssetProvider({ children }: AssetProviderProps) {
       );
 
       setAssets(allAssets);
+
+      // 4. 异步填充缺失的文件大小（从缓存获取）
+      const assetsNeedingSize = allAssets.filter(a => !a.size || a.size === 0);
+      if (assetsNeedingSize.length > 0) {
+        // 并行获取所有缺失的文件大小
+        const sizePromises = assetsNeedingSize.map(async (asset) => {
+          const size = await getAssetSizeFromCache(asset.url);
+          return { id: asset.id, size };
+        });
+
+        const sizeResults = await Promise.all(sizePromises);
+
+        // 更新有新大小的素材
+        const sizeMap = new Map(
+          sizeResults
+            .filter(r => r.size !== null && r.size > 0)
+            .map(r => [r.id, r.size as number])
+        );
+
+        if (sizeMap.size > 0) {
+          setAssets(prev =>
+            prev.map(asset =>
+              sizeMap.has(asset.id)
+                ? { ...asset, size: sizeMap.get(asset.id) }
+                : asset
+            )
+          );
+        }
+      }
     } catch (err: any) {
       console.error('Failed to load assets:', err);
       setError(err.message);

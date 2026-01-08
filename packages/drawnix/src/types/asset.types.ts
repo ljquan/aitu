@@ -65,6 +65,7 @@ export interface StoredAsset {
   mimeType: string;
   createdAt: number;
   size?: number;
+  contentHash?: string; // 文件内容哈希，用于去重
 }
 
 /**
@@ -114,7 +115,7 @@ export type AssetSourceFilter = 'ALL' | 'LOCAL' | 'AI';
  * Sort Option
  * 排序选项
  */
-export type SortOption = 'DATE_DESC' | 'DATE_ASC' | 'NAME_ASC';
+export type SortOption = 'DATE_DESC' | 'DATE_ASC' | 'NAME_ASC' | 'SIZE_DESC';
 
 /**
  * View Mode

@@ -101,7 +101,7 @@ export function MediaLibraryModal({
     setShowMobileInspector(false);
   }, []);
 
-  // 处理双击选择
+  // 处理双击插入
   const handleDoubleClick = useCallback(
     (asset: Asset) => {
       if (onSelect) {
