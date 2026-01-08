@@ -689,9 +689,12 @@ pnpm start
 - 编辑器组件: `packages/drawnix/src/drawnix.tsx`
 - AI 服务: `packages/drawnix/src/services/generation-api-service.ts`
 - 任务队列: `packages/drawnix/src/services/task-queue-service.ts`
+- service worker源码：'apps/web/src/sw/index.ts'
 
 ### 重要 Context
 - `DrawnixContext` - 编辑器状态
 - `AssetContext` - 资产管理
 - `ChatDrawerContext` - 聊天抽屉
 - `WorkflowContext` - 工作流
+
+

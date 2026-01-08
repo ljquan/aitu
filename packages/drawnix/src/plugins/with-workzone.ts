@@ -37,7 +37,7 @@ export function isWorkZoneElement(element: any): element is PlaitWorkZone {
  */
 export class WorkZoneComponent extends CommonElementFlavour<PlaitWorkZone, PlaitBoard> {
   private g: SVGGElement | null = null;
-  private container: HTMLDivElement | null = null;
+  private container: HTMLElement | null = null;
   private reactRoot: Root | null = null;
   activeGenerator!: ActiveGenerator<PlaitWorkZone>;
 
@@ -95,6 +95,11 @@ export class WorkZoneComponent extends CommonElementFlavour<PlaitWorkZone, Plait
     this.container.style.cursor = 'default';
     this.container.style.position = 'relative';
 
+    // 应用缩放以保持内容视觉大小恒定
+    const scale = 1 / this.element.zoom;
+    this.container.style.transform = `scale(${scale})`;
+    this.container.style.transformOrigin = 'top left';
+
     foreignObject.appendChild(this.container);
     this.g.appendChild(foreignObject);
 
@@ -145,6 +150,12 @@ export class WorkZoneComponent extends CommonElementFlavour<PlaitWorkZone, Plait
         foreignObject.setAttribute('y', String(rect.y));
         foreignObject.setAttribute('width', String(rect.width));
         foreignObject.setAttribute('height', String(rect.height));
+      }
+
+      // 更新容器缩放
+      if (this.container && value.element.zoom !== previous.element.zoom) {
+        const scale = 1 / value.element.zoom;
+        this.container.style.transform = `scale(${scale})`;
       }
 
       // 重新渲染 React 内容（workflow 数据可能变化）
@@ -283,7 +294,7 @@ export const WorkZoneTransforms = {
    * 插入 WorkZone 到画布
    */
   insertWorkZone(board: PlaitBoard, options: WorkZoneCreateOptions): PlaitWorkZone {
-    const { workflow, position, size = DEFAULT_WORKZONE_SIZE } = options;
+    const { workflow, position, size = DEFAULT_WORKZONE_SIZE, expectedInsertPosition, zoom } = options;
 
     const workzoneElement: PlaitWorkZone = {
       id: generateId(),
@@ -292,12 +303,14 @@ export const WorkZoneTransforms = {
       angle: 0,
       workflow,
       createdAt: Date.now(),
+      expectedInsertPosition,
+      zoom,
     };
 
     // 插入到画布
     Transforms.insertNode(board, workzoneElement, [board.children.length]);
 
-    console.log('[WorkZone] Inserted:', workzoneElement.id);
+    console.log('[WorkZone] Inserted:', workzoneElement.id, 'zoom:', zoom, 'expected insert position:', expectedInsertPosition);
     return workzoneElement;
   },
 

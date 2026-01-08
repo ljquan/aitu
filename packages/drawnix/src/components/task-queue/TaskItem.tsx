@@ -5,13 +5,13 @@
  * Shows input parameters (prompt) and output results when completed.
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button, Tag, Tooltip } from 'tdesign-react';
-import { ImageIcon, VideoIcon, DeleteIcon, RefreshIcon, DownloadIcon, EditIcon, SaveIcon, CheckCircleFilledIcon, UserIcon } from 'tdesign-icons-react';
+import { ImageIcon, VideoIcon, DeleteIcon, RefreshIcon, DownloadIcon, EditIcon, UserIcon, CheckCircleFilledIcon } from 'tdesign-icons-react';
 import { Task, TaskStatus, TaskType } from '../../types/task.types';
 import { formatDateTime, formatTaskDuration } from '../../utils/task-utils';
 import { formatRetryDelay } from '../../utils/retry-utils';
-import { useMediaCache, useMediaUrl } from '../../hooks/useMediaCache';
+import { useUnifiedCache } from '../../hooks/useUnifiedCache';
 import { supportsCharacterExtraction, isSora2VideoId } from '../../types/character.types';
 import { RetryImage } from '../retry-image';
 import './task-queue.scss';
@@ -109,23 +109,13 @@ export const TaskItem: React.FC<TaskItemProps> = ({
   // Check if this is a character task
   const isCharacterTask = task.type === TaskType.CHARACTER;
 
-  // Media cache hook (skip for character tasks)
-  const {
-    isCaching,
-    isCached,
-    cacheProgress,
-    cacheMedia,
-    deleteCache,
-  } = useMediaCache(
-    task.id,
-    isCharacterTask ? undefined : task.result?.url,
-    task.type === TaskType.IMAGE ? 'image' : 'video',
-    task.params.prompt
+  // Unified cache hook (skip for character tasks)
+  const { isCached } = useUnifiedCache(
+    isCharacterTask ? undefined : task.result?.url
   );
 
-  // Get media URL with cache fallback
-  const { url: mediaUrl, isFromCache } = useMediaUrl(task.id, task.result?.url);
-
+  // Use original URL or cached URL (Service Worker handles caching automatically)
+  const mediaUrl = task.result?.url;
 
   // Load image to get actual dimensions
   useEffect(() => {
@@ -141,51 +131,6 @@ export const TaskItem: React.FC<TaskItemProps> = ({
       img.src = mediaUrl;
     }
   }, [isCompleted, mediaUrl, task.type]);
-
-  // Track if user manually deleted cache (to prevent auto-recaching)
-  const userDeletedCacheRef = useRef(false);
-  // Track if initial auto-cache has been attempted
-  const autoCacheAttemptedRef = useRef(false);
-
-  // Handle cache button click - track user intent
-  const handleCacheClickWithTracking = async () => {
-    if (isCached) {
-      // User is manually deleting cache
-      userDeletedCacheRef.current = true;
-      await deleteCache();
-    } else if (!isCaching) {
-      // User is manually caching
-      userDeletedCacheRef.current = false;
-      await cacheMedia();
-    }
-  };
-
-  // Auto-cache media in background when task completes (only once, unless user manually caches)
-  useEffect(() => {
-    // Skip if: already cached, currently caching, user manually deleted, or already attempted
-    if (isCached || isCaching || userDeletedCacheRef.current || autoCacheAttemptedRef.current) {
-      return;
-    }
-
-    if (isCompleted && task.result?.url) {
-      autoCacheAttemptedRef.current = true;
-
-      // Use requestIdleCallback for low-priority background caching
-      const idleCallback = (window as any).requestIdleCallback || ((cb: () => void) => setTimeout(cb, 2000));
-      const handle = idleCallback(() => {
-        // Double-check conditions before caching
-        if (!userDeletedCacheRef.current) {
-          console.log(`[TaskItem] Auto-caching media for task ${task.id}`);
-          cacheMedia();
-        }
-      });
-
-      return () => {
-        const cancelIdleCallback = (window as any).cancelIdleCallback || clearTimeout;
-        cancelIdleCallback(handle);
-      };
-    }
-  }, [isCompleted, task.result?.url, task.id, isCached, isCaching, cacheMedia]);
 
   // Build detailed tooltip content
   const buildTooltipContent = () => {
@@ -444,7 +389,7 @@ export const TaskItem: React.FC<TaskItemProps> = ({
             <video src={mediaUrl} />
           ) : null}
           {/* Cache indicator */}
-          {isFromCache && !isCharacterTask && (
+          {isCached && !isCharacterTask && (
             <div className="task-item__cache-badge">
               <CheckCircleFilledIcon />
               <span>已缓存</span>
@@ -504,23 +449,6 @@ export const TaskItem: React.FC<TaskItemProps> = ({
           >
             下载
           </Button>
-        )}
-
-        {/* Cache button for completed tasks (not for character tasks) */}
-        {isCompleted && task.result?.url && !isCharacterTask && (
-          <Tooltip content={isCached ? '点击删除缓存' : '缓存到本地，URL过期后仍可使用'}>
-            <Button
-              size="small"
-              variant="outline"
-              theme={isCached ? 'success' : 'default'}
-              icon={isCached ? <CheckCircleFilledIcon /> : <SaveIcon />}
-              data-track="task_click_cache"
-              onClick={handleCacheClickWithTracking}
-              disabled={isCaching}
-            >
-              {isCaching ? `缓存中 ${cacheProgress}%` : isCached ? '已缓存' : '缓存'}
-            </Button>
-          </Tooltip>
         )}
 
         {/* Edit button for image/video tasks (not for character tasks) */}

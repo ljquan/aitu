@@ -28,10 +28,7 @@ export function App() {
         // Check and perform migration if needed
         const migrated = await isWorkspaceMigrationCompleted();
         if (!migrated) {
-          const boardId = await migrateToWorkspace();
-          if (boardId) {
-            console.log('[App] Migrated legacy data to workspace, board:', boardId);
-          }
+          await migrateToWorkspace();
         }
 
         // Load current board data if available
@@ -39,11 +36,11 @@ export function App() {
 
         // If no current board and no boards exist, create default board with initializeData
         if (!currentBoard && !workspaceService.hasBoards()) {
-          console.log('[App] First visit, creating default board with initial data');
-
           let initialElements: PlaitElement[] = [];
           try {
-            const response = await fetch(`/init.json?v=${import.meta.env.VITE_APP_VERSION}`);
+            const response = await fetch(
+              `/init.json?v=${import.meta.env.VITE_APP_VERSION}`
+            );
             if (response.ok) {
               const data = await response.json();
               initialElements = data.elements || [];
@@ -60,19 +57,33 @@ export function App() {
           if (board) {
             const switchedBoard = await workspaceService.switchBoard(board.id);
             currentBoard = switchedBoard;
-            console.log('[App] Created default board:', board.name);
           }
         }
 
         if (currentBoard) {
-          // 在设置 state 之前，预先恢复失效的视频 URL
-          const elements = await recoverVideoUrlsInElements(currentBoard.elements || []);
+          const elements = currentBoard.elements || [];
 
+          // 先设置原始元素，让页面先渲染
           setValue({
             children: elements,
             viewport: currentBoard.viewport,
             theme: currentBoard.theme,
           });
+
+          // 异步恢复视频 URL，不阻塞页面加载
+          recoverVideoUrlsInElements(elements)
+            .then((recoveredElements) => {
+              // 只有当有元素被恢复时才更新
+              if (recoveredElements !== elements) {
+                setValue((prev) => ({
+                  ...prev,
+                  children: recoveredElements,
+                }));
+              }
+            })
+            .catch((error) => {
+              console.error('[App] Video URL recovery failed:', error);
+            });
         }
       } catch (error) {
         console.error('[App] Initialization failed:', error);
@@ -86,8 +97,6 @@ export function App() {
 
   // Handle board switching
   const handleBoardSwitch = useCallback(async (board: Board) => {
-    console.log('[App] Board switched:', board.name);
-
     // 在设置 state 之前，预先恢复失效的视频 URL
     const elements = await recoverVideoUrlsInElements(board.elements || []);
 
@@ -136,10 +145,6 @@ export function App() {
         onChange={handleBoardChange}
         onBoardSwitch={handleBoardSwitch}
         afterInit={(board) => {
-          console.log('board initialized');
-          console.log(
-            `add __drawnix__web__debug_log to window, so you can call add log anywhere, like: window.__drawnix__web__console('some thing')`
-          );
           (
             window as unknown as {
               __drawnix__web__console: (value: string) => void;
@@ -172,52 +177,64 @@ const addDebugLog = (board: PlaitBoard, value: string) => {
  * 恢复元素数组中失效的视频 Blob URL
  * 在数据加载后、渲染之前调用，避免视频加载失败
  */
-async function recoverVideoUrlsInElements(elements: PlaitElement[]): Promise<PlaitElement[]> {
-  console.log('[App] Recovering video URLs in elements...');
+async function recoverVideoUrlsInElements(
+  elements: PlaitElement[]
+): Promise<PlaitElement[]> {
+  // 添加超时保护，避免永久卡住
+  const TIMEOUT_MS = 5000;
 
-  const recoveredElements = await Promise.all(
-    elements.map(async (element) => {
-      const url = (element as any).url as string | undefined;
+  const recoverWithTimeout = async (
+    element: PlaitElement,
+    index: number
+  ): Promise<PlaitElement> => {
+    const url = (element as any).url as string | undefined;
 
-      // 检查是否是合并视频的 URL
-      if (url && url.startsWith('blob:') && url.includes('#merged-video-')) {
-        // 提取 taskId
-        const mergedVideoIndex = url.indexOf('#merged-video-');
-        if (mergedVideoIndex === -1) return element;
+    // 检查是否是合并视频的 URL
+    if (url && url.startsWith('blob:') && url.includes('#merged-video-')) {
+      // 提取 taskId
+      const mergedVideoIndex = url.indexOf('#merged-video-');
+      if (mergedVideoIndex === -1) return element;
 
-        const afterHash = url.substring(mergedVideoIndex + 1);
-        const nextHashIndex = afterHash.indexOf('#', 1);
-        const taskId = nextHashIndex > 0 ? afterHash.substring(0, nextHashIndex) : afterHash;
+      const afterHash = url.substring(mergedVideoIndex + 1);
+      const nextHashIndex = afterHash.indexOf('#', 1);
+      const taskId =
+        nextHashIndex > 0 ? afterHash.substring(0, nextHashIndex) : afterHash;
 
-        try {
-          // 从 IndexedDB 恢复
-          const cached = await mediaCacheService.getCachedMedia(taskId);
-          if (cached && cached.blob) {
-            const newBlobUrl = URL.createObjectURL(cached.blob);
-            const newUrl = `${newBlobUrl}#${taskId}`;
+      try {
+        // 添加超时保护
+        const timeoutPromise = new Promise<null>((_, reject) =>
+          setTimeout(() => reject(new Error('Timeout')), TIMEOUT_MS)
+        );
 
-            console.log('[App] Video URL recovered:', {
-              taskId,
-              oldUrl: url,
-              newUrl,
-              size: cached.blob.size,
-            });
+        const cached = await Promise.race([
+          mediaCacheService.getCachedMedia(taskId),
+          timeoutPromise,
+        ]);
 
-            // 返回更新后的元素
-            return { ...element, url: newUrl };
-          } else {
-            console.warn('[App] Cache not found for taskId:', taskId);
-          }
-        } catch (error) {
-          console.error('[App] Failed to recover video:', taskId, error);
+        if (cached && cached.blob) {
+          const newBlobUrl = URL.createObjectURL(cached.blob);
+          const newUrl = `${newBlobUrl}#${taskId}`;
+
+          // 返回更新后的元素
+          return { ...element, url: newUrl };
         }
+      } catch (error) {
+        console.error(`[App] Element ${index}: Failed to recover video:`, taskId, error);
       }
+    }
 
-      return element;
-    })
-  );
+    return element;
+  };
 
-  return recoveredElements;
+  try {
+    const recoveredElements = await Promise.all(
+      elements.map((element, index) => recoverWithTimeout(element, index))
+    );
+    return recoveredElements;
+  } catch (error) {
+    console.error('[App] Video URL recovery failed:', error);
+    return elements; // 返回原始元素，避免卡住
+  }
 }
 
 export default App;

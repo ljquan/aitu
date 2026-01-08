@@ -5,12 +5,13 @@
  * Handles loading tasks on mount and debounced saving on updates.
  */
 
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { taskQueueService } from '../services/task-queue-service';
 import { storageService } from '../services/storage-service';
 import { UPDATE_INTERVALS } from '../constants/TASK_CONSTANTS';
 import { migrateLegacyHistory } from '../utils/history-migration';
-import { TaskType, TaskStatus, TaskExecutionPhase } from '../types/task.types';
+import { Task, TaskType, TaskStatus, TaskExecutionPhase } from '../types/task.types';
+import { debounce } from '@aitu/utils';
 
 // Global flag to prevent multiple initializations (persists across HMR)
 let globalInitialized = false;
@@ -31,8 +32,6 @@ let globalInitialized = false;
  * }
  */
 export function useTaskStorage(): void {
-  const saveTimerRef = useRef<NodeJS.Timeout | null>(null);
-
   useEffect(() => {
     let subscriptionActive = true;
 
@@ -123,6 +122,16 @@ export function useTaskStorage(): void {
       }
     };
 
+    // Create a debounced save function
+    const debouncedSave = debounce(async (task: Task) => {
+      try {
+        await storageService.saveTask(task);
+        console.log(`[useTaskStorage] Saved task ${task.id} to storage`);
+      } catch (error) {
+        console.error('[useTaskStorage] Failed to save task:', error);
+      }
+    }, UPDATE_INTERVALS.STORAGE_SYNC);
+
     // Subscribe to task updates
     const subscription = taskQueueService.observeTaskUpdates().subscribe(event => {
       if (!subscriptionActive) {
@@ -137,18 +146,7 @@ export function useTaskStorage(): void {
         });
       } else {
         // Debounce save operation for created/updated tasks
-        if (saveTimerRef.current) {
-          clearTimeout(saveTimerRef.current);
-        }
-
-        saveTimerRef.current = setTimeout(async () => {
-          try {
-            await storageService.saveTask(event.task);
-            console.log(`[useTaskStorage] Saved task ${event.task.id} to storage`);
-          } catch (error) {
-            console.error('[useTaskStorage] Failed to save task:', error);
-          }
-        }, UPDATE_INTERVALS.STORAGE_SYNC);
+        debouncedSave(event.task);
       }
     });
 
@@ -159,10 +157,6 @@ export function useTaskStorage(): void {
     return () => {
       subscriptionActive = false;
       subscription.unsubscribe();
-      
-      if (saveTimerRef.current) {
-        clearTimeout(saveTimerRef.current);
-      }
     };
   }, []);
 }

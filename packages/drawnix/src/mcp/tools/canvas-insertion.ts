@@ -39,7 +39,7 @@ export interface InsertionItem {
 export interface CanvasInsertionParams {
   /** 要插入的内容列表 */
   items: InsertionItem[];
-  /** 起始位置（可选，默认使用当前选中元素或画布底部） */
+  /** 起始位置 [leftX, topY]（可选，默认使用当前选中元素或画布底部，左对齐） */
   startPoint?: Point;
   /** 垂直间距（默认50px） */
   verticalGap?: number;
@@ -87,7 +87,7 @@ export function getCanvasBoard(): PlaitBoard | null {
 }
 
 /**
- * 从保存的选中元素IDs获取起始插入位置
+ * 从保存的选中元素IDs获取起始插入位置（左对齐）
  */
 function getStartPointFromSelection(board: PlaitBoard): Point | undefined {
   const appState = (board as any).appState;
@@ -107,9 +107,9 @@ function getStartPointFromSelection(board: PlaitBoard): Point | undefined {
 
   try {
     const boundingRect = getRectangleByElements(board, elements, false);
-    const centerX = boundingRect.x + boundingRect.width / 2;
+    const leftX = boundingRect.x; // 左对齐：使用左边缘X坐标
     const insertionY = boundingRect.y + boundingRect.height + LAYOUT_CONSTANTS.DEFAULT_VERTICAL_GAP;
-    return [centerX, insertionY] as Point;
+    return [leftX, insertionY] as Point;
   } catch (error) {
     console.warn('[CanvasInsertion] Error calculating start point:', error);
     return undefined;
@@ -117,7 +117,7 @@ function getStartPointFromSelection(board: PlaitBoard): Point | undefined {
 }
 
 /**
- * 获取画布底部最后一个元素的位置
+ * 获取画布底部最后一个元素的位置（左对齐）
  */
 function getBottomMostPoint(board: PlaitBoard): Point {
   if (!board.children || board.children.length === 0) {
@@ -125,7 +125,7 @@ function getBottomMostPoint(board: PlaitBoard): Point {
   }
 
   let maxY = 0;
-  let maxYCenterX = 100;
+  let maxYLeftX = 100;
 
   for (const element of board.children) {
     try {
@@ -133,14 +133,14 @@ function getBottomMostPoint(board: PlaitBoard): Point {
       const elementBottom = rect.y + rect.height;
       if (elementBottom > maxY) {
         maxY = elementBottom;
-        maxYCenterX = rect.x + rect.width / 2;
+        maxYLeftX = rect.x; // 左对齐：使用左边缘X坐标
       }
     } catch {
       // 忽略无法计算矩形的元素
     }
   }
 
-  return [maxYCenterX, maxY + LAYOUT_CONSTANTS.DEFAULT_VERTICAL_GAP] as Point;
+  return [maxYLeftX, maxY + LAYOUT_CONSTANTS.DEFAULT_VERTICAL_GAP] as Point;
 }
 
 /**
@@ -217,6 +217,31 @@ async function insertImageToCanvas(
   await insertImageFromUrl(board, imageUrl, point, false, undefined, true);
   // 返回默认尺寸，实际尺寸在插入时已处理
   return { width: LAYOUT_CONSTANTS.MEDIA_DEFAULT_SIZE, height: LAYOUT_CONSTANTS.MEDIA_DEFAULT_SIZE };
+}
+
+/**
+ * 预先获取图片尺寸（用于居中计算）
+ */
+async function getImageDimensions(imageUrl: string): Promise<{ width: number; height: number }> {
+  try {
+    const { unifiedCacheService } = await import('../../services/unified-cache-service');
+    const { loadHTMLImageElement } = await import('../../data/image');
+
+    // 使用智能图片传递：优先URL，超过1天用base64
+    const imageData = await unifiedCacheService.getImageForAI(imageUrl);
+    const image = await loadHTMLImageElement(imageData.value, false);
+
+    // 计算显示尺寸（保持宽高比，默认宽度400）
+    const defaultImageWidth = 400;
+    const targetWidth = Math.min(image.width, defaultImageWidth);
+    const aspectRatio = image.height / image.width;
+    const targetHeight = targetWidth * aspectRatio;
+
+    return { width: targetWidth, height: targetHeight };
+  } catch (error) {
+    console.warn('[CanvasInsertion] Failed to get image dimensions:', error);
+    return { width: LAYOUT_CONSTANTS.MEDIA_DEFAULT_SIZE, height: LAYOUT_CONSTANTS.MEDIA_DEFAULT_SIZE };
+  }
 }
 
 /**
@@ -360,7 +385,7 @@ async function executeCanvasInsertion(params: CanvasInsertionParams): Promise<MC
     const groupedItems = groupItems(items);
 
     let currentY = startPoint[1];
-    const centerX = startPoint[0];
+    const leftX = startPoint[0]; // 改为左对齐：startPoint[0] 是左边缘X坐标
     const insertedItems: { type: ContentType; point: Point }[] = [];
 
     // 逐组插入
@@ -373,6 +398,9 @@ async function executeCanvasInsertion(params: CanvasInsertionParams): Promise<MC
         // 预先获取尺寸用于正确的居中计算
         if (item.type === 'text') {
           itemSize = estimateTextSize(item.content);
+        } else if (item.type === 'image') {
+          // 提前获取图片尺寸
+          itemSize = await getImageDimensions(item.content);
         } else if (item.type === 'video') {
           // 提前获取视频尺寸
           try {
@@ -394,14 +422,14 @@ async function executeCanvasInsertion(params: CanvasInsertionParams): Promise<MC
           }
         }
 
-        const point: Point = [centerX - itemSize.width / 2, currentY];
+        const point: Point = [leftX, currentY]; // 左对齐：直接使用 leftX
 
         if (item.type === 'text') {
           await insertTextToCanvas(board, item.content, point);
           currentY += itemSize.height + verticalGap;
         } else if (item.type === 'image') {
           await insertImageToCanvas(board, item.content, point);
-          currentY += LAYOUT_CONSTANTS.MEDIA_DEFAULT_SIZE + verticalGap;
+          currentY += itemSize.height + verticalGap;
         } else if (item.type === 'video') {
           await insertVideoToCanvas(board, item.content, point);
           currentY += itemSize.height + verticalGap;
@@ -412,9 +440,8 @@ async function executeCanvasInsertion(params: CanvasInsertionParams): Promise<MC
 
         insertedItems.push({ type: item.type, point });
       } else {
-        // 多个项（同组），水平排列
-        const totalWidth = group.length * LAYOUT_CONSTANTS.MEDIA_DEFAULT_SIZE + (group.length - 1) * horizontalGap;
-        let currentX = centerX - totalWidth / 2;
+        // 多个项（同组），水平排列，从左边缘开始
+        let currentX = leftX; // 左对齐：从 leftX 开始
         let maxHeight = 0;
 
         for (const item of group) {

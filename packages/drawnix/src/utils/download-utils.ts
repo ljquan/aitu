@@ -6,19 +6,7 @@
  */
 
 import JSZip from 'jszip';
-
-/**
- * Check if a URL is from Volces (火山引擎) domains
- * These domains don't support CORS, so we need special handling
- */
-export function isVolcesDomain(url: string): boolean {
-  try {
-    const hostname = new URL(url).hostname;
-    return hostname.endsWith('.volces.com') || hostname.endsWith('.volccdn.com');
-  } catch {
-    return false;
-  }
-}
+import { sanitizeFilename, isVolcesDomain, getFileExtension } from '@aitu/utils';
 
 /**
  * Open URL in new tab (fallback for CORS-restricted domains)
@@ -26,19 +14,6 @@ export function isVolcesDomain(url: string): boolean {
  */
 export function openInNewTab(url: string): void {
   window.open(url, '_blank');
-}
-
-/**
- * Sanitize a string to be used as a filename
- * - Removes special characters except Chinese, English, numbers, spaces, and dashes
- * - Replaces spaces with dashes
- * - Truncates to specified max length
- */
-export function sanitizeFilename(text: string, maxLength: number = 50): string {
-  return text
-    .replace(/[^a-zA-Z0-9\u4e00-\u9fa5\s-]/g, '') // Remove special chars, keep Chinese
-    .replace(/\s+/g, '-') // Replace spaces with dashes
-    .substring(0, maxLength); // Limit length
 }
 
 /**
@@ -147,51 +122,7 @@ export async function downloadMediaFile(
   return downloadFile(url, filename);
 }
 
-/**
- * Get file extension from URL or MIME type
- */
-export function getFileExtension(url: string, mimeType?: string): string {
-  // Try to get extension from URL
-  try {
-    const urlPath = new URL(url).pathname;
-    const urlExtension = urlPath.substring(urlPath.lastIndexOf('.') + 1).toLowerCase();
-
-    if (urlExtension && urlExtension.length <= 5) {
-      return urlExtension;
-    }
-  } catch {
-    // URL parsing failed
-  }
-
-  // Handle base64 data URLs
-  if (url.startsWith('data:')) {
-    // Special handling for SVG (data:image/svg+xml)
-    if (url.startsWith('data:image/svg+xml')) {
-      return 'svg';
-    }
-    const match = url.match(/data:(\w+)\/(\w+)/);
-    if (match) {
-      return match[2] === 'jpeg' ? 'jpg' : match[2];
-    }
-  }
-
-  // Fallback to MIME type
-  if (mimeType) {
-    const mimeToExt: Record<string, string> = {
-      'image/png': 'png',
-      'image/jpeg': 'jpg',
-      'image/jpg': 'jpg',
-      'image/webp': 'webp',
-      'image/gif': 'gif',
-      'image/svg+xml': 'svg',
-      'video/mp4': 'mp4',
-      'video/webm': 'webm',
-    };
-    return mimeToExt[mimeType] || 'bin';
-  }
-
-  return 'bin';
-}
+// getFileExtension is now re-exported from @aitu/utils above
 
 /**
  * 批量下载项接口

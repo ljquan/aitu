@@ -389,11 +389,11 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
       }
     }
     console.log('Image dialog closing - selection should be preserved');
-    setAppState({
-      ...appState,
+    setAppState(prev => ({
+      ...prev,
       openDialogType: null,
-    });
-  }, [appState, setAppState]);
+    }));
+  }, [setAppState]);
 
   const handleVideoDialogClose = useCallback(() => {
     // 在关闭前保存AI视频生成的缓存
@@ -408,11 +408,11 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
       }
     }
     console.log('Video dialog closing - selection should be preserved');
-    setAppState({
-      ...appState,
+    setAppState(prev => ({
+      ...prev,
       openDialogType: null,
-    });
-  }, [appState, setAppState]);
+    }));
+  }, [setAppState]);
 
   return (
     <>

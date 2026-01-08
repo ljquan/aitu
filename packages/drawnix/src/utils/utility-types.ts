@@ -1,7 +1,5 @@
-export type ResolutionType<T extends (...args: any) => any> = T extends (
-  ...args: any
-) => Promise<infer R>
-  ? R
-  : any;
+/**
+ * TypeScript Utility Types
+ */
 
-export type ValueOf<T> = T[keyof T];
+

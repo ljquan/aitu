@@ -14,7 +14,7 @@ import {
   isNoColor,
   isValidColor,
   removeHexAlpha,
-} from '../utils/color';
+} from '@aitu/utils';
 import {
   getCurrentFill,
   getCurrentStrokeColor,

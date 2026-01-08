@@ -1,8 +1,8 @@
 /**
  * 场景转换器
- * 
+ *
  * 将 AIInputBar 的4种发送场景转换为工作流定义
- * 
+ *
  * 场景1: 只有选择元素，没有输入文字 -> 直接生成
  * 场景2: 输入内容有模型、参数 -> 解析后直接生成
  * 场景3: 输入内容指定了数量 -> 按数量生成
@@ -10,6 +10,7 @@
  */
 
 import type { ParsedGenerationParams, GenerationType, SelectionInfo } from '../../utils/ai-input-parser';
+import { cleanLLMResponse } from '../../services/agent/tool-parser';
 
 /**
  * 工作流步骤执行选项（批量参数等）
@@ -331,15 +332,18 @@ export function parseAIResponse(
   existingStepCount: number = 0
 ): AIResponseParseResult {
   try {
+    // 使用公共清理函数
+    const cleaned = cleanLLMResponse(response);
+
     // 尝试提取 JSON
-    const jsonMatch = response.match(/```json\s*([\s\S]*?)\s*```/) ||
-                      response.match(/\{[\s\S]*\}/);
+    const jsonMatch = cleaned.match(/\{\s*"content"\s*:[\s\S]*?"next"\s*:[\s\S]*?\}/) ||
+                      cleaned.match(/\{[\s\S]*"content"[\s\S]*"next"[\s\S]*\}/);
 
     if (!jsonMatch) {
       return { content: '', steps: [] };
     }
 
-    const jsonStr = jsonMatch[1] || jsonMatch[0];
+    const jsonStr = jsonMatch[0];
     const parsed = JSON.parse(jsonStr);
 
     // 提取 content 字段

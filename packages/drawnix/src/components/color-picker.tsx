@@ -2,13 +2,13 @@ import { useState } from 'react';
 import { Check, NoColorIcon } from './icons';
 import Stack from '../components/stack';
 import './color-picker.scss';
-import { splitRows } from '../utils/common';
+import { splitRows } from '@aitu/utils';
 import {
   hexAlphaToOpacity,
-  isDefaultStroke,
   isNoColor,
   removeHexAlpha,
-} from '../utils/color';
+} from '@aitu/utils';
+import { isDefaultStroke } from '../utils/color';
 import React from 'react';
 import { SizeSlider } from './size-slider';
 import {
@@ -18,11 +18,11 @@ import {
   PlaitHistoryBoard,
 } from '@plait/core';
 import {
-  CLASSIC_COLORS,
   NO_COLOR,
   TRANSPARENT,
   WHITE,
-} from '../constants/color';
+} from '@aitu/utils';
+import { CLASSIC_COLORS } from '../constants/color';
 import { useBoard } from '@plait-board/react-board';
 
 const ROWS_CLASSIC_COLORS = splitRows(CLASSIC_COLORS, 4);

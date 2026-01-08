@@ -100,13 +100,8 @@ if ('serviceWorker' in navigator) {
           });
         }, 5 * 60 * 1000);
         
-        // 页面加载完成后延迟触发缓存清理，避免影响页面性能
-        setTimeout(() => {
-          if (navigator.serviceWorker.controller) {
-            console.log('Main: Requesting cache cleanup from Service Worker');
-            navigator.serviceWorker.controller.postMessage({ type: 'CLEAN_EXPIRED_CACHE' });
-          }
-        }, 3000); // 延迟3秒执行缓存清理
+        // 注意：不自动清理图片和视频缓存，这些是用户生成的内容
+        // 只在用户手动操作时（如媒体库中删除）才清理
         
       })
       .catch(error => {
@@ -124,10 +119,8 @@ if ('serviceWorker' in navigator) {
         window.location.reload();
       }, 1000);
     } else if (event.data && event.data.type === 'CACHE_CLEANUP_COMPLETE') {
-      const { cleanedCount } = event.data;
-      if (cleanedCount > 0) {
-        console.log(`Main: Cache cleanup completed, removed ${cleanedCount} expired entries`);
-      }
+      // 缓存清理完成通知（只在有清理时才会有日志）
+      // 不需要在主线程额外输出日志，Service Worker 已经输出了
     } else if (event.data && event.data.type === 'SW_NEW_VERSION_READY') {
       // Service Worker 通知新版本已准备好
       console.log(`Main: New version v${event.data.version} ready, waiting for user confirmation`);

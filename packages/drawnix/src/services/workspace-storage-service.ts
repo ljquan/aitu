@@ -18,7 +18,7 @@ import {
  */
 const WORKSPACE_DB_CONFIG = {
   DATABASE_NAME: 'aitu-workspace',
-  DATABASE_VERSION: 2,
+  DATABASE_VERSION: 4,
   STORES: {
     FOLDERS: 'folders',
     BOARDS: 'boards',
@@ -76,7 +76,6 @@ class WorkspaceStorageService {
         this.stateStore.ready(),
       ]);
       this.initialized = true;
-      console.log('[WorkspaceStorage] Initialized successfully');
     } catch (error) {
       console.error('[WorkspaceStorage] Failed to initialize:', error);
       throw new Error('Workspace storage initialization failed');
@@ -186,7 +185,6 @@ class WorkspaceStorageService {
       this.boardsStore.clear(),
       this.stateStore.clear(),
     ]);
-    console.log('[WorkspaceStorage] All data cleared');
   }
 
   private async ensureInitialized(): Promise<void> {

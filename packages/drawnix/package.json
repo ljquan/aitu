@@ -10,8 +10,7 @@
     "test:ui": "vitest --ui"
   },
   "dependencies": {
-    "@ffmpeg/ffmpeg": "^0.12.10",
-    "@ffmpeg/util": "^0.12.1",
+    "@aitu/utils": "workspace:*",
     "@floating-ui/react": "^0.26.24",
     "@plait-board/markdown-to-drawnix": "^0.0.6",
     "@plait-board/mermaid-to-drawnix": "^0.0.7",
@@ -29,6 +28,5 @@
     }
   },
   "devDependencies": {
-    "@types/lodash": "^4.17.21"
   }
 }
