@@ -19,11 +19,11 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Send, Check, ImagePlus } from 'lucide-react';
 import { useBoard } from '@plait-board/react-board';
 import { SelectedContentPreview } from '../shared/SelectedContentPreview';
-import { getSelectedElements, ATTACHED_ELEMENT_CLASS_NAME, getRectangleByElements, PlaitBoard, getViewportOrigination } from '@plait/core';
+import { getSelectedElements, ATTACHED_ELEMENT_CLASS_NAME, getRectangleByElements, PlaitBoard, getViewportOrigination, PlaitElement } from '@plait/core';
 import { useI18n } from '../../i18n';
 import { TaskStatus } from '../../types/task.types';
 import { taskQueueService } from '../../services/task-queue-service';
-import { processSelectedContentForAI } from '../../utils/selection-utils';
+import { processSelectedContentForAI, scrollToPointIfNeeded } from '../../utils/selection-utils';
 import { useTextSelection } from '../../hooks/useTextSelection';
 import { useChatDrawerControl } from '../../contexts/ChatDrawerContext';
 import { useAssets } from '../../contexts/AssetContext';
@@ -859,43 +859,80 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
         let expectedInsertY: number = viewportCenterY;
         let workzoneX: number = expectedInsertLeftX;
         let workzoneY: number = viewportCenterY - WORKZONE_HEIGHT / 2;
+        let positionStrategy = 'viewport-center'; // 用于日志
 
         if (allElements.length > 0) {
-          // 找到最底部的元素
-          let bottommostElement: PlaitElement | null = null;
-          let maxBottomY = -Infinity;
+          // 获取选中的元素
+          const selectedElements = getSelectedElements(board);
+          let positionCalculated = false;
 
-          for (const element of allElements) {
+          // 策略1: 优先放在选中元素下方（如果有选中）
+          if (selectedElements.length > 0) {
             try {
-              const rect = getRectangleByElements(board, [element as PlaitElement], false);
-              const bottomY = rect.y + rect.height;
-              if (bottomY > maxBottomY) {
-                maxBottomY = bottomY;
-                bottommostElement = element as PlaitElement;
-              }
+              const selectedRect = getRectangleByElements(board, selectedElements, false);
+              const selectedBottomY = selectedRect.y + selectedRect.height;
+
+              console.log('[AIInputBar] === Strategy 1: Below Selected Elements ===');
+              console.log('[AIInputBar] Selected elements count:', selectedElements.length);
+              console.log('[AIInputBar] Selected rect:', selectedRect);
+              console.log('[AIInputBar] Selected bottom Y:', selectedBottomY);
+
+              // 直接放在选中元素下方，不检查视口空间
+              // 因为我们有滚动功能，可以滚动到 WorkZone 位置
+              expectedInsertLeftX = selectedRect.x; // 左对齐
+              expectedInsertY = selectedBottomY + GAP;
+              workzoneX = expectedInsertLeftX;
+              workzoneY = expectedInsertY;
+              positionStrategy = 'below-selected';
+              positionCalculated = true;
+
+              console.log('[AIInputBar] ✓ Using strategy: below selected elements');
+              console.log('[AIInputBar] WorkZone will be at:', [workzoneX, workzoneY]);
             } catch (error) {
-              console.warn('[AIInputBar] Failed to get rectangle for element:', error);
+              console.warn('[AIInputBar] Failed to calculate position for selected elements:', error);
             }
+          } else {
+            console.log('[AIInputBar] No selected elements, will use strategy 2');
           }
 
-          if (bottommostElement) {
-            // 计算插入位置：最底部元素下方，保存左边缘X坐标（左对齐）
-            const bottommostRect = getRectangleByElements(board, [bottommostElement], false);
-            expectedInsertLeftX = bottommostRect.x; // 左对齐：使用左边缘X坐标
-            expectedInsertY = bottommostRect.y + bottommostRect.height + GAP;
+          // 策略2: 如果策略1未成功，放在最底部元素下方
+          if (!positionCalculated) {
+            console.log('[AIInputBar] === Strategy 2: Below Bottommost Element ===');
 
-            // WorkZone 也左对齐放置
-            workzoneX = expectedInsertLeftX;
-            workzoneY = expectedInsertY;
+            let bottommostElement: PlaitElement | null = null;
+            let maxBottomY = -Infinity;
 
-            console.log('[AIInputBar] WorkZone position: left-aligned with bottommost element');
-          } else {
-            // 如果无法获取元素信息，使用默认值（视口中心）
-            console.log('[AIInputBar] WorkZone position: viewport center (no valid elements)');
+            for (const element of allElements) {
+              try {
+                const rect = getRectangleByElements(board, [element as PlaitElement], false);
+                const bottomY = rect.y + rect.height;
+                if (bottomY > maxBottomY) {
+                  maxBottomY = bottomY;
+                  bottommostElement = element as PlaitElement;
+                }
+              } catch (error) {
+                console.warn('[AIInputBar] Failed to get rectangle for element:', error);
+              }
+            }
+
+            if (bottommostElement) {
+              const bottommostRect = getRectangleByElements(board, [bottommostElement], false);
+              expectedInsertLeftX = bottommostRect.x;
+              expectedInsertY = bottommostRect.y + bottommostRect.height + GAP;
+              workzoneX = expectedInsertLeftX;
+              workzoneY = expectedInsertY;
+              positionStrategy = 'below-bottommost';
+
+              console.log('[AIInputBar] ✓ Using strategy: below bottommost element');
+              console.log('[AIInputBar] Bottommost rect:', bottommostRect);
+              console.log('[AIInputBar] WorkZone will be at:', [workzoneX, workzoneY]);
+            } else {
+              console.log('[AIInputBar] ✗ No valid elements found, using viewport center');
+            }
           }
         } else {
           // 画布为空，使用默认值（视口中心）
-          console.log('[AIInputBar] WorkZone position: viewport center (empty canvas)');
+          console.log('[AIInputBar] ✓ Using strategy: viewport center (empty canvas)');
         }
 
         // 创建 WorkZone
@@ -914,23 +951,19 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
         console.log('[AIInputBar] WorkZone position (left-top):', [workzoneX, workzoneY]);
         console.log('[AIInputBar] WorkZone size:', [WORKZONE_WIDTH, WORKZONE_HEIGHT]);
         console.log('[AIInputBar] Expected insert position (leftX, topY):', [expectedInsertLeftX, expectedInsertY]);
+        console.log('[AIInputBar] Position strategy:', positionStrategy);
         console.log('[AIInputBar] Zoom:', zoom);
 
         // 延迟滚动到 WorkZone 位置，确保 DOM 已渲染
-        if (containerRect) {
-          setTimeout(() => {
-            // 计算 WorkZone 中心坐标
-            const workzoneCenterX = workzoneX + WORKZONE_WIDTH / 2;
-            const workzoneCenterY = workzoneY + WORKZONE_HEIGHT / 2;
+        setTimeout(() => {
+          // 计算 WorkZone 中心点
+          const workzoneCenterX = workzoneX + WORKZONE_WIDTH / 2;
+          const workzoneCenterY = workzoneY + WORKZONE_HEIGHT / 2;
 
-            // 让 WorkZone 中心位于视口中心
-            const newOriginationX = workzoneCenterX - containerRect.width / (2 * zoom);
-            const newOriginationY = workzoneCenterY - containerRect.height / (2 * zoom);
-
-            BoardTransforms.updateViewport(board, [newOriginationX, newOriginationY], zoom);
-            console.log('[AIInputBar] Scrolled to WorkZone center position');
-          }, 100);
-        }
+          // 使用现有的滚动工具函数，如果 WorkZone 不在视口内则滚动
+          scrollToPointIfNeeded(board, [workzoneCenterX, workzoneCenterY], 100);
+          console.log('[AIInputBar] Scroll check completed for WorkZone center:', [workzoneCenterX, workzoneCenterY]);
+        }, 100);
       } else {
         console.warn('[AIInputBar] Board not available, skipping WorkZone creation');
       }

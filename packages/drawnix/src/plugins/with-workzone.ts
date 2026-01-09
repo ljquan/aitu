@@ -47,7 +47,15 @@ export class WorkZoneComponent extends CommonElementFlavour<PlaitWorkZone, Plait
     // 创建选中状态生成器
     this.activeGenerator = createActiveGenerator(this.board, {
       getRectangle: (element: PlaitWorkZone) => {
-        return RectangleClient.getRectangleByPoints(element.points);
+        const rect = RectangleClient.getRectangleByPoints(element.points);
+        // 根据 zoom 调整选中框大小，使其与缩放后的内容匹配
+        const scale = 1 / element.zoom;
+        return {
+          x: rect.x,
+          y: rect.y,
+          width: rect.width * scale,
+          height: rect.height * scale,
+        };
       },
       getStrokeWidth: () => 2,
       getStrokeOpacity: () => 1,

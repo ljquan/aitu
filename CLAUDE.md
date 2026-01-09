@@ -506,7 +506,21 @@ WorkZoneContent 组件响应更新，显示进度
 - 需要在 `pointerdown` 阶段阻止事件冒泡，避免 Plait 拦截点击事件
 - WorkZone 元素被选中时不触发 popup-toolbar（在 `popup-toolbar.tsx` 中过滤）
 - AIInputBar 发送工作流时不自动展开 ChatDrawer（通过 `autoOpen: false` 参数控制）
-- WorkZone 位置策略：有选中元素放右侧，无选中放所有元素右下方，画布为空放视口中心
+
+**位置策略**（按优先级）：
+1. **有选中元素** → 放在选中元素下方（左对齐）
+2. **无选中元素** → 放在最底部元素下方（左对齐）
+3. **画布为空** → 放在视口中心
+
+**选中框缩放**：
+- 选中框大小根据 `zoom` 属性自动调整，与缩放后的内容匹配
+- 使用 `activeGenerator` 的 `getRectangle` 计算缩放后的矩形
+
+**自动滚动**：
+- 使用 `scrollToPointIfNeeded` 函数智能滚动
+- WorkZone 不在视口内时自动滚动到中心位置
+- WorkZone 已在视口内时不滚动（避免干扰用户）
+
 
 ### 灵感创意板块 (InspirationBoard)
 
