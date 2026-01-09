@@ -25,10 +25,11 @@ import { ToolComponent } from '../components/tool-element/tool.component';
 import { PlaitTool } from '../types/toolbox.types';
 import { DEFAULT_TOOL_CONFIG } from '../constants/built-in-tools';
 import { ToolCommunicationService, ToolCommunicationHelper } from '../services/tool-communication-service';
-import { ToolMessageType, GenerateImagePayload, GenerateImageResponse } from '../types/tool-communication.types';
+import { ToolMessageType, GenerateImagePayload, GenerateImageResponse, InsertImagePayload } from '../types/tool-communication.types';
 import { taskQueueService } from '../services/task-queue-service';
 import { TaskType } from '../types/task.types';
 import { geminiSettings } from '../utils/settings-manager';
+import { insertImageFromUrlAndSelect } from '../data/image';
 
 /**
  * 设置通信处理器
@@ -65,10 +66,47 @@ function setupCommunicationHandlers(
   });
 
   // 处理插入图片请求
-  helper.onInsertImage((toolId, payload) => {
+  helper.onInsertImage(async (toolId, payload: InsertImagePayload) => {
     console.log(`[ToolCommunication] Insert image from ${toolId}:`, payload);
-    // TODO: 实现图片插入逻辑
-    // 可以使用 Plait 的图片节点 API
+    
+    if (!payload.url) {
+      console.error(`[ToolCommunication] Missing image URL from ${toolId}`);
+      return;
+    }
+
+    try {
+      // 计算插入位置
+      // 如果 payload 提供了位置，使用它；否则使用画布中心
+      let insertPoint: Point;
+      if (payload.position && payload.position.length === 2) {
+        insertPoint = payload.position as Point;
+      } else {
+        // 获取当前视口中心作为插入位置
+        const viewportRect = board.viewport?.viewBox;
+        if (viewportRect) {
+          insertPoint = [
+            viewportRect.x + viewportRect.width / 2 - (payload.width || 200) / 2,
+            viewportRect.y + viewportRect.height / 2 - (payload.height || 200) / 2,
+          ];
+        } else {
+          insertPoint = [100, 100];
+        }
+      }
+
+      // 插入图片并选中
+      await insertImageFromUrlAndSelect(
+        board,
+        payload.url,
+        insertPoint,
+        payload.width && payload.height
+          ? { width: payload.width, height: payload.height }
+          : undefined
+      );
+
+      console.log(`[ToolCommunication] Image inserted and selected from ${toolId}`);
+    } catch (error) {
+      console.error(`[ToolCommunication] Failed to insert image from ${toolId}:`, error);
+    }
   });
 
   // 处理工具关闭请求

@@ -40,6 +40,17 @@ pnpm run release:minor  # 构建并打包次版本
 pnpm run release:major  # 构建并打包主版本
 ```
 
+### Claude Code 命令
+```bash
+/update-claude-md       # 智能更新 CLAUDE.md 文档
+/auto-commit            # 自动分析并提交代码变更
+```
+
+**update-claude-md 命令**：
+- 用途：添加新功能、插件或组件后自动更新文档
+- 更新内容：插件列表、组件列表、功能说明、相关文档链接
+- 详细说明：`/docs/UPDATE_CLAUDE_MD_COMMAND.md`
+
 ---
 
 ## 项目架构
@@ -200,11 +211,12 @@ plugins/
 ├── with-hotkey.ts                 # 快捷键处理
 ├── with-pencil.ts                 # 铅笔/橡皮模式
 ├── with-image.tsx                 # 图像插件
+├── with-text-paste.ts             # 文本粘贴插件（自动换行）
 ├── with-video.ts                  # 视频支持
 ├── with-workzone.ts               # WorkZone 画布元素插件
 ├── with-mind-extend.tsx           # 思维导图扩展
 ├── with-text-link.tsx             # 文本链接
-├── with-common.tsx                # 通用插件
+├── with-common.tsx                # 通用插件（注册 image + text-paste）
 ├── with-tool-focus.ts             # 工具焦点
 ├── with-tool-resize.ts            # 工具调整大小
 ├── freehand/                      # 自由绘画插件
@@ -454,6 +466,8 @@ Drawnix (主编辑器)
       ├── withDraw (基础绘图)
       ├── withHotkey (快捷键)
       ├── withTextLink (文本链接)
+      ├── withTextPaste (文本粘贴)
+      ├── withImage (图片粘贴)
       ├── withVideo (视频支持)
       ├── withWorkZone (工作流进度)
       └── ...
@@ -536,6 +550,43 @@ addHistory('生成一张日落风景图', hasSelection);
 // 置顶/取消置顶
 togglePinHistory(itemId);
 ```
+
+### 文本粘贴功能
+
+支持智能文本粘贴到画布，自动控制文本宽度避免过长。
+
+**核心文件**：
+- `plugins/with-text-paste.ts` - 文本粘贴插件
+- `plugins/with-common.tsx` - 插件注册（文本粘贴 + 图片粘贴）
+
+**功能特点**：
+- 自动换行：超过 50 字符自动换行
+- 智能断行：优先在空格处断行，保持单词完整
+- 保留格式：保留原文本的换行符
+- 不影响现有功能：图片粘贴和 Plait 元素复制粘贴正常工作
+
+**配置参数**：
+```typescript
+const TEXT_CONFIG = {
+  MAX_CHARS_PER_LINE: 50,    // 最大字符数/行
+  DEFAULT_WIDTH: 400,         // 默认文本框宽度
+  MAX_WIDTH: 600,             // 最大文本框宽度
+  CHAR_WIDTH: 8,              // 估算字符宽度
+};
+```
+
+**使用方法**：
+1. 从任何地方复制文本
+2. 在画布上按 `Ctrl+V` / `Cmd+V`
+3. 文本自动插入并换行
+
+**插件链顺序**：
+```typescript
+// 在 with-common.tsx 中
+return withTextPastePlugin(withImagePlugin(newBoard));
+```
+
+详细文档：`/docs/TEXT_PASTE_FEATURE.md`
 
 ---
 
@@ -830,6 +881,8 @@ trimTransparentBorders(imageData: ImageData, strict: boolean = true)
 - `/docs/POSTHOG_MONITORING.md` - 监控配置
 - `/docs/TRANSPARENT_BORDER_TRIM.md` - 透明边框裁剪技术文档
 - `/docs/MERGED_IMAGE_SPLITTING.md` - 合并图片拆分功能文档
+- `/docs/TEXT_PASTE_FEATURE.md` - 文本粘贴功能文档
+- `/docs/UPDATE_CLAUDE_MD_COMMAND.md` - update-claude-md 命令使用说明
 - `/specs/005-declarative-tracking/` - 声明式追踪详细文档
 - `/openspec/AGENTS.md` - OpenSpec 规范说明
 

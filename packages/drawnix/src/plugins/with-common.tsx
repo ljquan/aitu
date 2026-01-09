@@ -7,6 +7,7 @@ import { PlaitBoard } from '@plait/core';
 import { createRoot } from 'react-dom/client';
 import { Image } from './components/image';
 import { withImagePlugin } from './with-image';
+import { withTextPastePlugin } from './with-text-paste';
 
 export const withCommonPlugin = (board: PlaitBoard) => {
   const newBoard = board as PlaitBoard & PlaitImageBoard;
@@ -32,5 +33,6 @@ export const withCommonPlugin = (board: PlaitBoard) => {
     return ref;
   };
 
-  return withImagePlugin(newBoard);
+  // 应用插件链：先处理文本粘贴，再处理图片
+  return withTextPastePlugin(withImagePlugin(newBoard));
 };

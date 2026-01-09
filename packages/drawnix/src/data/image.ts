@@ -4,6 +4,8 @@ import {
   getRectangleByElements,
   PlaitBoard,
   Point,
+  addSelectedElement,
+  clearSelectedElement,
 } from '@plait/core';
 import { DataURL } from '../types';
 import { getDataURL } from './blob';
@@ -314,5 +316,72 @@ export const insertImageFromUrl = async (
     requestAnimationFrame(() => {
       scrollToPointIfNeeded(board, centerPoint);
     });
+  }
+};
+
+/**
+ * 使用 img 标签直接加载图片（不需要 CORS）
+ * 仅用于获取图片尺寸
+ */
+const loadImageDirectly = (imageUrl: string): Promise<HTMLImageElement> => {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    // 不设置 crossOrigin，这样可以加载不支持 CORS 的图片
+    image.onload = () => resolve(image);
+    image.onerror = (error) => reject(error);
+    image.src = imageUrl;
+  });
+};
+
+/**
+ * 从 URL 插入图片到画布并选中
+ * 用于从工具 iframe 拖拽图片到画布的场景
+ * 直接使用 img 标签加载图片获取尺寸，避免 CORS 问题
+ */
+export const insertImageFromUrlAndSelect = async (
+  board: PlaitBoard,
+  imageUrl: string,
+  startPoint: Point,
+  referenceDimensions?: { width: number; height: number }
+): Promise<void> => {
+  const childrenCountBefore = board.children.length;
+  const defaultImageWidth = 400;
+
+  let image: HTMLImageElement;
+
+  try {
+    // 使用直接加载方式获取图片尺寸（不需要 CORS）
+    // 图片会使用原始 URL 存储，浏览器渲染 <img> 标签时不需要 CORS
+    console.log('[insertImageFromUrlAndSelect] Loading image directly:', imageUrl);
+    image = await loadImageDirectly(imageUrl);
+    console.log('[insertImageFromUrlAndSelect] Load successful, dimensions:', image.width, 'x', image.height);
+  } catch (error) {
+    console.error('[insertImageFromUrlAndSelect] Failed to load image:', error);
+    throw new Error('无法加载图片，请检查图片 URL 是否有效');
+  }
+
+  const imageItem = buildImage(
+    image,
+    imageUrl as DataURL,
+    defaultImageWidth,
+    true,
+    referenceDimensions
+  );
+
+  // 检查是否拖放到 MindElement 上
+  const element = getHitElementByPoint(board, startPoint);
+  if (element && MindElement.isMindElement(board, element)) {
+    MindTransforms.setImage(board, element as MindElement, imageItem);
+    return;
+  }
+
+  // 插入图片
+  DrawTransforms.insertImage(board, imageItem, startPoint);
+
+  // 选中新插入的图片元素
+  const newElement = board.children[childrenCountBefore];
+  if (newElement) {
+    clearSelectedElement(board);
+    addSelectedElement(board, newElement);
   }
 };
