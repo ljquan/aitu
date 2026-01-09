@@ -12,6 +12,8 @@ import { VirtualAssetGrid } from './VirtualAssetGrid';
 import { MediaLibraryEmpty } from './MediaLibraryEmpty';
 import { ViewModeToggle } from './ViewModeToggle';
 import type { MediaLibraryGridProps, ViewMode } from '../../types/asset.types';
+import { useDrawnix } from '../../hooks/use-drawnix';
+import { removeElementsByAssetIds } from '../../utils/asset-cleanup';
 import './MediaLibraryGrid.scss';
 import './VirtualAssetGrid.scss';
 
@@ -43,6 +45,7 @@ export function MediaLibraryGrid({
   onUploadClick,
 }: MediaLibraryGridProps) {
   const { assets, filters, loading, setFilters, removeAssets } = useAssets();
+  const { board } = useDrawnix();
   const [isDragging, setIsDragging] = useState(false);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
@@ -170,17 +173,26 @@ export function MediaLibraryGrid({
     });
   }, []);
 
-  // 批量删除处理
+  // 批量删除处理（同时删除画布上使用这些素材的元素）
   const handleBatchDelete = useCallback(async () => {
     const idsToDelete = Array.from(selectedAssetIds);
     try {
+      // 先删除画布上使用这些素材的元素
+      if (board) {
+        const removedCount = removeElementsByAssetIds(board, idsToDelete);
+        if (removedCount > 0) {
+          console.log(`[MediaLibraryGrid] Removed ${removedCount} canvas elements using ${idsToDelete.length} assets`);
+        }
+      }
+      
+      // 然后删除素材本身
       await removeAssets(idsToDelete);
       setSelectedAssetIds(new Set()); // 清空选择
       setIsSelectionMode(false); // 退出选择模式
     } catch (error) {
       console.error('[MediaLibraryGrid] Batch delete failed:', error);
     }
-  }, [selectedAssetIds, removeAssets]);
+  }, [selectedAssetIds, removeAssets, board]);
 
   if (loading && assets.length === 0) {
     return (

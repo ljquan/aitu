@@ -415,28 +415,42 @@ class UnifiedCacheService {
     } = options;
 
     try {
+      // 检查是否为虚拟 URL（素材库本地 URL）
+      // 虚拟 URL 必须转换为 base64，因为大模型无法访问本地虚拟路径
+      const isVirtualUrl = url.startsWith('/asset-library/') || url.startsWith('/__aitu_cache__/');
+
       // 1. 查询缓存信息
       const info = await this.getCacheInfo(url);
 
-      // 2. 如果未缓存或年龄未知，直接返回 URL
+      // 2. 如果未缓存或年龄未知
       if (!info.isCached || !info.cachedAt) {
-        console.log('[UnifiedCache] Image not cached or age unknown, using URL');
-        return { type: 'url', value: url };
+        // 虚拟 URL 必须从缓存获取，如果没有缓存则尝试 fetch
+        if (isVirtualUrl) {
+          console.log('[UnifiedCache] Virtual URL not in metadata, trying to fetch from Cache API');
+          // 继续执行下面的 fetch 逻辑
+        } else {
+          console.log('[UnifiedCache] Image not cached or age unknown, using URL');
+          return { type: 'url', value: url };
+        }
+      } else {
+        // 3. 计算年龄
+        const age = Date.now() - info.cachedAt;
+
+        // 4. 如果缓存时间在阈值内，且不是虚拟 URL，返回 URL
+        if (age < maxAge && !isVirtualUrl) {
+          console.log(`[UnifiedCache] Image is fresh (age: ${Math.round(age / 1000 / 60)}min), using URL`);
+          // 更新最后使用时间
+          this.touch(url);
+          return { type: 'url', value: url };
+        }
+
+        // 5. 缓存时间超过阈值或是虚拟 URL，需要转换为 base64
+        if (isVirtualUrl) {
+          console.log(`[UnifiedCache] Virtual URL detected, converting to base64`);
+        } else {
+          console.log(`[UnifiedCache] Image is old (age: ${Math.round(age / 1000 / 60 / 60)}h), converting to base64`);
+        }
       }
-
-      // 3. 计算年龄
-      const age = Date.now() - info.cachedAt;
-
-      // 4. 如果缓存时间在阈值内，返回 URL
-      if (age < maxAge) {
-        console.log(`[UnifiedCache] Image is fresh (age: ${Math.round(age / 1000 / 60)}min), using URL`);
-        // 更新最后使用时间
-        this.touch(url);
-        return { type: 'url', value: url };
-      }
-
-      // 5. 缓存时间超过阈值，需要转换为 base64
-      console.log(`[UnifiedCache] Image is old (age: ${Math.round(age / 1000 / 60 / 60)}h), converting to base64`);
 
       // 6. 从 Cache API 获取图片（通过 fetch）
       const response = await fetch(url);

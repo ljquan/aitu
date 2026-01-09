@@ -1,6 +1,6 @@
 /**
  * Media Library Storage Bar
- * 素材库存储空间进度条组件
+ * 素材库本地存储空间进度条组件
  */
 
 import { Progress } from 'tdesign-react';
@@ -21,7 +21,7 @@ export function MediaLibraryStorageBar({
       <div className="storage-bar__header">
         <div className="storage-bar__header-left">
           <HardDrive size={14} className="storage-bar__icon" />
-          <span className="storage-bar__title">存储空间</span>
+          <span className="storage-bar__title">本地存储空间</span>
         </div>
         <span className="storage-bar__count">{assetCount} 个素材</span>
       </div>

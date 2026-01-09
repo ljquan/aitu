@@ -245,7 +245,9 @@ utils/
 │   ├── config.ts                  # 配置
 │   └── types.ts                   # 类型定义
 ├── settings-manager.ts            # 设置管理
-├── image-splitter.ts              # 图像分割
+├── image-splitter.ts              # 图像分割（支持透明边框严格裁剪）
+├── image-border-utils.ts          # 图像边框检测工具
+├── photo-wall-splitter.ts         # 灵感图分割器
 ├── selection-utils.ts             # 选择工具
 ├── model-parser.ts                # 模型解析
 ├── download-utils.ts              # 下载工具
@@ -697,6 +699,128 @@ AI 输入框左下角显示 `@shortCode` 格式的模型选择器（如 `@nb2v`�
 
 ---
 
+## 图像分割系统
+
+### 概述
+
+项目支持智能图像分割功能，可以自动检测并拆分包含多个子图的图片。
+
+**核心文件**：
+- `utils/image-splitter.ts` - 主分割器（支持网格分割线和透明分割线）
+- `utils/image-border-utils.ts` - 边框检测工具
+- `utils/photo-wall-splitter.ts` - 灵感图分割器
+
+### 支持的图片格式
+
+1. **网格分割线格式**
+   - 白色分割线（RGB >= 240）
+   - 透明分割线（alpha = 0，100% 透明）
+   - 支持标准宫格（2x2, 3x3, 4x4 等）和不规则布局
+
+2. **灵感图格式**
+   - 灰色背景 + 白边框图片
+   - 自动检测白色边框区域
+
+### 透明边框裁剪
+
+对于透明背景图片（如合并图片还原），使用**严格模式**裁剪透明边框：
+
+**核心函数**：`trimTransparentBorders(imageData, strict)`
+
+**严格模式** (`strict = true`，默认)：
+- 只裁剪完全透明的边缘（alpha = 0）
+- 保留任何包含非透明像素的区域（alpha > 0）
+- 避免误裁剪半透明内容（如抗锯齿边缘）
+
+**非严格模式** (`strict = false`)：
+- 裁剪半透明边缘（alpha < 50）
+- 适用于需要去除模糊边缘的场景
+
+**技术细节**：
+```typescript
+// 严格模式：只有 alpha = 0 才认为是透明
+const alphaThreshold = strict ? 0 : 50;
+
+// 检测整行是否完全透明
+const isRowTransparent = (y: number): boolean => {
+  for (let x = 0; x < width; x++) {
+    const alpha = data[(y * width + x) * 4 + 3];
+    if (alpha > alphaThreshold) {
+      return false; // 发现非透明像素
+    }
+  }
+  return true;
+};
+```
+
+### 分割流程
+
+```
+用户点击拆图按钮
+  ↓
+hasSplitLines() - 快速检测是否包含分割线
+  ↓
+trimImageWhiteBorders() - 去除外围白边
+  ↓
+detectGridLines() - 检测网格分割线
+  ├── 白色分割线检测（普通图片）
+  └── 透明分割线检测（透明图片，要求 100% 透明）
+  ↓
+splitImageByLines() - 按分割线拆分
+  ├── 标准宫格：精确等分，不去白边
+  └── 非标准布局：按检测到的分割线拆分
+  ↓
+trimTransparentBorders(strict=true) - 严格裁剪透明边框
+  ↓
+插入到画板
+```
+
+### 关键 API
+
+```typescript
+// 检测是否包含分割线
+await hasSplitLines(imageUrl: string): Promise<boolean>
+
+// 检测网格分割线
+await detectGridLines(imageUrl: string, forceTransparency?: boolean): Promise<GridDetectionResult>
+
+// 拆分并插入到画板
+await splitAndInsertImages(
+  board: PlaitBoard,
+  imageUrl: string,
+  options?: {
+    sourceRect?: SourceImageRect;
+    startPoint?: Point;
+    scrollToResult?: boolean;
+  }
+): Promise<{ success: boolean; count: number; error?: string }>
+
+// 严格裁剪透明边框
+trimTransparentBorders(imageData: ImageData, strict: boolean = true)
+```
+
+### 使用场景
+
+**适用场景**：
+- ✅ AI 生成的宫格图（4x4, 3x3 等）
+- ✅ 合并图片还原（透明分割线）
+- ✅ 灵感图拆分（灰色背景 + 白边框）
+- ✅ 递归拆分（嵌套的宫格图）
+
+**不适用场景**：
+- ❌ 单张图片（无分割线）
+- ❌ 分割线不明显的图片
+- ❌ 需要手动指定分割位置的场景
+
+### 性能优化
+
+- 采样检测：透明度检测时每隔 10 个像素采样一次
+- 提前终止：遇到非透明像素立即停止扫描
+- 递归限制：最多递归 2 层，最多拆分 25 个子图
+- 尺寸限制：子图小于 100x100 像素时不再拆分
+
+---
+
 ## 相关文档
 
 - `/docs/CODING_STANDARDS.md` - 完整编码规范
@@ -704,6 +828,8 @@ AI 输入框左下角显示 `@shortCode` 格式的模型选择器（如 `@nb2v`�
 - `/docs/CFPAGE-DEPLOY.md` - Cloudflare 部署指南
 - `/docs/PWA_ICONS.md` - PWA 配置
 - `/docs/POSTHOG_MONITORING.md` - 监控配置
+- `/docs/TRANSPARENT_BORDER_TRIM.md` - 透明边框裁剪技术文档
+- `/docs/MERGED_IMAGE_SPLITTING.md` - 合并图片拆分功能文档
 - `/specs/005-declarative-tracking/` - 声明式追踪详细文档
 - `/openspec/AGENTS.md` - OpenSpec 规范说明
 

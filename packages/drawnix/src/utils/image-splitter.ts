@@ -25,6 +25,8 @@ export interface SplitImageElement {
   sourceX: number;
   /** 原始 Y 坐标 */
   sourceY: number;
+  /** 是否为透明背景图片（用于递归拆分时保持一致性） */
+  hasTransparency?: boolean;
 }
 
 /**
@@ -52,6 +54,14 @@ function isLightPixel(r: number, g: number, b: number, threshold: number = 240):
 }
 
 /**
+ * 检测像素是否为透明（用于检测合并图片的透明区域）
+ */
+function isTransparentPixel(a: number, threshold: number = 50): boolean {
+  // Alpha 值小于阈值认为是透明
+  return a < threshold;
+}
+
+/**
  * 获取一行的白色像素比例
  */
 function getRowWhiteRatio(imageData: ImageData, y: number): number {
@@ -66,6 +76,23 @@ function getRowWhiteRatio(imageData: ImageData, y: number): number {
   }
 
   return whiteCount / width;
+}
+
+/**
+ * 获取一行的透明像素比例
+ */
+function getRowTransparentRatio(imageData: ImageData, y: number): number {
+  const { width, data } = imageData;
+  let transparentCount = 0;
+
+  for (let x = 0; x < width; x++) {
+    const idx = (y * width + x) * 4;
+    if (isTransparentPixel(data[idx + 3])) {
+      transparentCount++;
+    }
+  }
+
+  return transparentCount / width;
 }
 
 /**
@@ -86,6 +113,23 @@ function getColWhiteRatio(imageData: ImageData, x: number): number {
 }
 
 /**
+ * 获取一列的透明像素比例
+ */
+function getColTransparentRatio(imageData: ImageData, x: number): number {
+  const { width, height, data } = imageData;
+  let transparentCount = 0;
+
+  for (let y = 0; y < height; y++) {
+    const idx = (y * width + x) * 4;
+    if (isTransparentPixel(data[idx + 3])) {
+      transparentCount++;
+    }
+  }
+
+  return transparentCount / height;
+}
+
+/**
  * 检测一行像素是否为分割线（大部分为白色）
  */
 function isHorizontalSplitLine(
@@ -97,6 +141,18 @@ function isHorizontalSplitLine(
 }
 
 /**
+ * 检测一行像素是否为透明分割线（用于合并图片还原）
+ * 要求 100% 透明，避免将图形/文字的细线误判为分割线
+ */
+function isHorizontalTransparentLine(
+  imageData: ImageData,
+  y: number,
+  minTransparentRatio: number = 1.0 // 必须 100% 透明
+): boolean {
+  return getRowTransparentRatio(imageData, y) >= minTransparentRatio;
+}
+
+/**
  * 检测一列像素是否为分割线
  */
 function isVerticalSplitLine(
@@ -105,6 +161,18 @@ function isVerticalSplitLine(
   minWhiteRatio: number = 0.90
 ): boolean {
   return getColWhiteRatio(imageData, x) >= minWhiteRatio;
+}
+
+/**
+ * 检测一列像素是否为透明分割线（用于合并图片还原）
+ * 要求 100% 透明，避免将图形/文字的细线误判为分割线
+ */
+function isVerticalTransparentLine(
+  imageData: ImageData,
+  x: number,
+  minTransparentRatio: number = 1.0 // 必须 100% 透明
+): boolean {
+  return getColTransparentRatio(imageData, x) >= minTransparentRatio;
 }
 
 /**
@@ -310,14 +378,58 @@ function validateSplitLineWidth(lines: number[], minWidth: number = 3): number[]
 }
 
 /**
+ * 检测图片是否完全透明（没有任何不透明的像素）
+ */
+function isCompletelyTransparent(imageData: ImageData): boolean {
+  const { data } = imageData;
+
+  // 检查是否所有像素都是透明的
+  for (let i = 3; i < data.length; i += 4) {
+    if (data[i] > 50) { // Alpha > 50 认为是不透明
+      return false;
+    }
+  }
+
+  return true;
+}
+
+/**
+ * 检测图片是否包含透明度（Alpha 通道）
+ * 用于判断是否为合并图片
+ */
+function hasTransparency(imageData: ImageData): boolean {
+  const { data } = imageData;
+  let transparentPixelCount = 0;
+  const totalPixels = data.length / 4;
+
+  // 采样检测，每隔 10 个像素检测一次以提高性能
+  for (let i = 3; i < data.length; i += 40) {
+    if (isTransparentPixel(data[i])) {
+      transparentPixelCount++;
+    }
+  }
+
+  // 如果超过 5% 的采样像素是透明的，认为图片有透明度
+  const sampledPixels = Math.floor(totalPixels / 10);
+  return transparentPixelCount / sampledPixels > 0.05;
+}
+
+/**
  * 内部检测函数，返回图片数据和检测结果
  * 注意：调用此函数前应该已经完成去白边处理
+ *
+ * @param imageUrl - 图片 URL
+ * @param forceTransparency - 强制使用透明分割线检测（用于递归拆分时保持一致性）
  */
-async function detectGridLinesInternal(imageUrl: string): Promise<{
+async function detectGridLinesInternal(
+  imageUrl: string,
+  forceTransparency?: boolean
+): Promise<{
   detection: GridDetectionResult;
   img: HTMLImageElement;
   imageData: ImageData;
   canvas: HTMLCanvasElement;
+  hasTransparency: boolean;
 }> {
   const img = await loadImage(imageUrl);
   const { naturalWidth: width, naturalHeight: height } = img;
@@ -334,21 +446,54 @@ async function detectGridLinesInternal(imageUrl: string): Promise<{
   ctx.drawImage(img, 0, 0);
   const imageData = ctx.getImageData(0, 0, width, height);
 
+  // 检测图片是否有透明度（合并图片特征）
+  // 如果 forceTransparency 为 true，则强制使用透明分割线检测
+  const hasAlpha = forceTransparency ?? hasTransparency(imageData);
+
+  console.log('[detectGridLinesInternal] Transparency detection:', {
+    hasAlpha,
+    forceTransparency,
+    width,
+    height
+  });
+
   // 检测水平分割线，跳过边缘区域（前后 5%）
   const horizontalLines: number[] = [];
   const marginY = Math.floor(height * 0.05);
-  for (let y = marginY; y < height - marginY; y++) {
-    if (isHorizontalSplitLine(imageData, y)) {
-      horizontalLines.push(y);
+
+  if (hasAlpha) {
+    // 合并图片：只检测透明分割线，避免误判白色内容为分割线
+    for (let y = marginY; y < height - marginY; y++) {
+      if (isHorizontalTransparentLine(imageData, y)) {
+        horizontalLines.push(y);
+      }
+    }
+  } else {
+    // 普通图片：检测白色分割线
+    for (let y = marginY; y < height - marginY; y++) {
+      if (isHorizontalSplitLine(imageData, y)) {
+        horizontalLines.push(y);
+      }
     }
   }
 
   // 检测垂直分割线
   const verticalLines: number[] = [];
   const marginX = Math.floor(width * 0.05);
-  for (let x = marginX; x < width - marginX; x++) {
-    if (isVerticalSplitLine(imageData, x)) {
-      verticalLines.push(x);
+
+  if (hasAlpha) {
+    // 合并图片：只检测透明分割线
+    for (let x = marginX; x < width - marginX; x++) {
+      if (isVerticalTransparentLine(imageData, x)) {
+        verticalLines.push(x);
+      }
+    }
+  } else {
+    // 普通图片：检测白色分割线
+    for (let x = marginX; x < width - marginX; x++) {
+      if (isVerticalSplitLine(imageData, x)) {
+        verticalLines.push(x);
+      }
     }
   }
 
@@ -387,6 +532,7 @@ async function detectGridLinesInternal(imageUrl: string): Promise<{
       img,
       imageData,
       canvas,
+      hasTransparency: hasAlpha,
     };
   }
 
@@ -401,22 +547,30 @@ async function detectGridLinesInternal(imageUrl: string): Promise<{
     img,
     imageData,
     canvas,
+    hasTransparency: hasAlpha,
   };
 }
 
 /**
  * 智能检测图片中的网格分割线
+ *
+ * @param imageUrl - 图片 URL
+ * @param forceTransparency - 强制使用透明分割线检测（用于递归拆分时保持一致性）
  */
-export async function detectGridLines(imageUrl: string): Promise<GridDetectionResult> {
-  const { detection } = await detectGridLinesInternal(imageUrl);
+export async function detectGridLines(
+  imageUrl: string,
+  forceTransparency?: boolean
+): Promise<GridDetectionResult> {
+  const { detection } = await detectGridLinesInternal(imageUrl, forceTransparency);
   return detection;
 }
 
 /**
  * 快速检测图片是否包含分割线（用于判断是否显示拆图按钮）
- * 支持两种格式：
+ * 支持三种格式：
  * 1. 网格分割线格式（白色分割线）
- * 2. 灵感图格式（灰色背景 + 白边框图片）
+ * 2. 透明分割线格式（合并图片的透明区域）
+ * 3. 灵感图格式（灰色背景 + 白边框图片）
  *
  * @param imageUrl - 图片 URL
  * @returns 是否包含分割线
@@ -427,13 +581,18 @@ export async function hasSplitLines(imageUrl: string): Promise<boolean> {
     const { trimmedImageUrl } = await trimImageWhiteBorders(imageUrl);
 
     // 1. 检测网格分割线（使用去白边后的图片）
+    // 注意：detectGridLinesInternal 内部已经支持透明分割线检测
     const { detection } = await detectGridLinesInternal(trimmedImageUrl);
     if (detection.rows > 1 || detection.cols > 1) {
+      console.log('[hasSplitLines] Detected grid lines:', { rows: detection.rows, cols: detection.cols });
       return true;
     }
 
     // 2. 检测灵感图格式（灰色背景 + 白边框）
     const isPhotoWall = await detectPhotoWallFormat(trimmedImageUrl);
+    if (isPhotoWall) {
+      console.log('[hasSplitLines] Detected photo wall format');
+    }
     return isPhotoWall;
   } catch (error) {
     console.warn('[ImageSplitter] Failed to detect split lines:', error);
@@ -571,11 +730,13 @@ function getStrictWhiteBorders(
  * @param img - 图片元素
  * @param rows - 行数
  * @param cols - 列数
+ * @param forceTransparency - 强制使用透明分割线检测（用于递归拆分时保持一致性）
  */
 async function splitUniformGrid(
   img: HTMLImageElement,
   rows: number,
-  cols: number
+  cols: number,
+  forceTransparency?: boolean
 ): Promise<SplitImageElement[]> {
   const width = img.naturalWidth;
   const height = img.naturalHeight;
@@ -634,6 +795,7 @@ async function splitUniformGrid(
           height: trimmedHeight,
           sourceX: sx + borders.left,
           sourceY: sy + borders.top,
+          hasTransparency: forceTransparency, // 传递透明度标记
         });
       } else {
         // 没有白边，直接使用
@@ -644,6 +806,7 @@ async function splitUniformGrid(
           height: cellHeight,
           sourceX: sx,
           sourceY: sy,
+          hasTransparency: forceTransparency, // 传递透明度标记
         });
       }
     }
@@ -654,10 +817,15 @@ async function splitUniformGrid(
 
 /**
  * 根据检测到的分割线分割图片
+ *
+ * @param imageUrl - 图片 URL
+ * @param detection - 检测结果
+ * @param forceTransparency - 强制使用透明分割线检测（用于递归拆分时保持一致性）
  */
 export async function splitImageByLines(
   imageUrl: string,
-  detection: GridDetectionResult
+  detection: GridDetectionResult,
+  forceTransparency?: boolean
 ): Promise<SplitImageElement[]> {
   const img = await loadImage(imageUrl);
   const { naturalWidth: width, naturalHeight: height } = img;
@@ -668,7 +836,7 @@ export async function splitImageByLines(
   // 对于标准宫格，使用精确等分方式（类似 gridSplitter.split）
   // 注意：调用前已完成去白边处理
   if (isUniformGrid) {
-    return splitUniformGrid(img, detection.rows, detection.cols);
+    return splitUniformGrid(img, detection.rows, detection.cols, forceTransparency);
   }
 
   // 非标准布局：使用检测到的分割线位置进行分割
@@ -686,6 +854,16 @@ export async function splitImageByLines(
   if (!fullCtx) return elements;
   fullCtx.drawImage(img, 0, 0);
 
+  // 检测图片是否有透明度（合并图片特征）
+  // 如果 forceTransparency 为 true，则强制使用透明分割线检测
+  const fullImageData = fullCtx.getImageData(0, 0, width, height);
+  const hasAlpha = forceTransparency ?? hasTransparency(fullImageData);
+
+  console.log('[splitImageByLines] Image transparency detection:', {
+    hasAlpha,
+    forceTransparency
+  });
+
   for (let row = 0; row < rowBounds.length - 1; row++) {
     for (let col = 0; col < colBounds.length - 1; col++) {
       const x1 = colBounds[col];
@@ -693,8 +871,10 @@ export async function splitImageByLines(
       const y1 = rowBounds[row];
       const y2 = rowBounds[row + 1];
 
-      // 非标准布局使用较大的 padding 以确保裁剪干净
-      const splitLinePadding = 8;
+      // 根据图片类型选择 padding
+      // 透明图片：不使用 padding，因为透明分割线检测已经足够精确（100% 透明）
+      // 普通图片：使用较大的 padding 以确保裁剪干净
+      const splitLinePadding = hasAlpha ? 0 : 8;
 
       let sx = x1 + (col > 0 ? splitLinePadding : 0);
       let sy = y1 + (row > 0 ? splitLinePadding : 0);
@@ -706,8 +886,31 @@ export async function splitImageByLines(
       // 获取这个区域的像素数据
       const regionData = fullCtx.getImageData(sx, sy, sw, sh);
 
-      // 检测并裁剪边框（白边和灰边）
-      const borders = trimBorders(regionData, 0.5, 0.15);
+      // 检查是否完全透明（对于透明背景图片）
+      if (hasAlpha && isCompletelyTransparent(regionData)) {
+        console.log('[splitImageByLines] Skipping completely transparent region:', { row, col });
+        continue;
+      }
+
+      // 根据图片类型选择裁剪方式
+      let borders: { top: number; right: number; bottom: number; left: number };
+      if (hasAlpha) {
+        // 透明图片：使用严格模式裁剪透明边框
+        // 只去除完全透明（alpha=0）的边缘，保留任何包含非透明像素的区域
+        borders = trimTransparentBorders(regionData, true);
+        console.log('[splitImageByLines] Transparent image: strict transparent border trim', {
+          row, col,
+          originalSize: { width: sw, height: sh },
+          borders,
+          trimmedSize: {
+            width: borders.right - borders.left + 1,
+            height: borders.bottom - borders.top + 1
+          }
+        });
+      } else {
+        // 普通图片：裁剪白边和灰边
+        borders = trimBorders(regionData, 0.5, 0.15);
+      }
 
       // 计算最终裁剪区域
       const finalSx = sx + borders.left;
@@ -728,13 +931,18 @@ export async function splitImageByLines(
 
       ctx.drawImage(img, finalSx, finalSy, finalSw, finalSh, 0, 0, finalSw, finalSh);
 
+      // 对于透明背景图片，保存为 PNG 以保留透明度
+      const imageFormat = hasAlpha ? 'image/png' : 'image/jpeg';
+      const imageQuality = hasAlpha ? undefined : 0.92;
+
       elements.push({
-        imageData: canvas.toDataURL('image/jpeg', 0.92),
+        imageData: canvas.toDataURL(imageFormat, imageQuality),
         index: index++,
         width: finalSw,
         height: finalSh,
         sourceX: finalSx,
         sourceY: finalSy,
+        hasTransparency: hasAlpha, // 传递透明度标记给子元素
       });
     }
   }
@@ -827,6 +1035,74 @@ function trimWhiteBordersOnly(
   // 从右边向左扫描
   let right = width - 1;
   while (width - 1 - right < maxTrimRight && right > left && isColWhite(right)) {
+    right--;
+  }
+
+  return { top, right, bottom, left };
+}
+
+/**
+ * 裁剪透明边框（用于合并图片还原）
+ * 检测并去除图片四周的透明区域
+ *
+ * @param imageData - 图片像素数据
+ * @param strict - 严格模式：true = 只裁剪完全透明（alpha=0）的边缘，false = 裁剪半透明（alpha<50）的边缘
+ */
+function trimTransparentBorders(
+  imageData: ImageData,
+  strict: boolean = true
+): { top: number; right: number; bottom: number; left: number } {
+  const { width, height, data } = imageData;
+
+  // 严格模式：只有 alpha = 0 才认为是透明
+  // 非严格模式：alpha < 50 认为是透明
+  const alphaThreshold = strict ? 0 : 50;
+
+  // 检测一行是否完全透明
+  const isRowTransparent = (y: number): boolean => {
+    for (let x = 0; x < width; x++) {
+      const idx = (y * width + x) * 4;
+      const alpha = data[idx + 3];
+      if (alpha > alphaThreshold) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  // 检测一列是否完全透明
+  const isColTransparent = (x: number): boolean => {
+    for (let y = 0; y < height; y++) {
+      const idx = (y * width + x) * 4;
+      const alpha = data[idx + 3];
+      if (alpha > alphaThreshold) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  // 从顶部向下扫描
+  let top = 0;
+  while (top < height && isRowTransparent(top)) {
+    top++;
+  }
+
+  // 从底部向上扫描
+  let bottom = height - 1;
+  while (bottom > top && isRowTransparent(bottom)) {
+    bottom--;
+  }
+
+  // 从左边向右扫描
+  let left = 0;
+  while (left < width && isColTransparent(left)) {
+    left++;
+  }
+
+  // 从右边向左扫描
+  let right = width - 1;
+  while (right > left && isColTransparent(right)) {
     right--;
   }
 
@@ -1025,7 +1301,8 @@ export async function recursiveSplitElement(
   }
 
   // 使用工作图片检测分割线
-  const detection = await detectGridLines(workingImageUrl);
+  // 如果元素有透明度标记，强制使用透明分割线检测
+  const detection = await detectGridLines(workingImageUrl, element.hasTransparency);
 
   // 如果没有检测到分割线，返回当前元素（使用去白边后的图片）
   if (detection.rows <= 1 && detection.cols <= 1) {
@@ -1042,7 +1319,8 @@ export async function recursiveSplitElement(
 
   // 检测到标准宫格，直接拆分不再递归
   const isStandardGrid = detection.rows > 1 && detection.cols > 1;
-  const subElements = await splitImageByLines(workingImageUrl, detection);
+  // 传递透明度标记给 splitImageByLines
+  const subElements = await splitImageByLines(workingImageUrl, detection, element.hasTransparency);
 
   // 如果拆分结果和原来一样（只有 1 个），返回当前元素
   if (subElements.length <= 1) {
@@ -1171,11 +1449,19 @@ export async function splitAndInsertImages(
     });
 
     // 使用去除外围白边后的图片检测网格
-    const detection = await detectGridLines(trimmedImageUrl);
+    // 使用 detectGridLinesInternal 以获取透明度信息
+    const { detection, hasTransparency } = await detectGridLinesInternal(trimmedImageUrl);
+
+    console.log('[splitAndInsertImages] Grid detection:', {
+      rows: detection.rows,
+      cols: detection.cols,
+      hasTransparency,
+    });
 
     if (detection.rows > 1 || detection.cols > 1) {
       // 网格分割线格式 - 使用去除外围白边后的图片
-      const initialElements = await splitImageByLines(trimmedImageUrl, detection);
+      // 传递透明度标记给 splitImageByLines
+      const initialElements = await splitImageByLines(trimmedImageUrl, detection, hasTransparency);
 
       // 判断是否为标准宫格（行列数都大于1，说明是规则宫格）
       isStandardGrid = detection.rows > 1 && detection.cols > 1;
@@ -1184,10 +1470,16 @@ export async function splitAndInsertImages(
         rows: detection.rows,
         cols: detection.cols,
         isStandardGrid,
+        hasTransparency,
         elementsCount: initialElements.length,
       });
 
-      if (isStandardGrid) {
+      // 对于透明背景的合并图片，禁用递归拆分
+      // 因为文字行之间的透明间隙会导致文字被切成碎片
+      if (hasTransparency) {
+        console.log('[splitAndInsertImages] Transparent image detected, disabling recursive split');
+        elements = initialElements;
+      } else if (isStandardGrid) {
         // 标准宫格：直接使用拆分结果，不需要递归
         // 子图不再额外去白边，避免裁掉白色背景人物图的边缘
         elements = initialElements;
@@ -1283,10 +1575,10 @@ export async function splitAndInsertImages(
       baseY = startPoint[1];
       console.log('[splitAndInsertImages] Using startPoint:', { baseX, baseY });
     } else if (sourceRect) {
-      // 在源图片下方，左对齐
+      // 在源图片下方 20px，保持左对齐
       baseX = sourceRect.x;
       baseY = sourceRect.y + sourceRect.height + 20;
-      console.log('[splitAndInsertImages] Using sourceRect:', { sourceRect, baseX, baseY });
+      console.log('[splitAndInsertImages] Using sourceRect (below original):', { sourceRect, baseX, baseY });
     } else {
       // 查找画布最底部元素，在其下方插入
       const bottomPosition = getBottommostInsertionPoint(board);
@@ -1295,52 +1587,36 @@ export async function splitAndInsertImages(
       console.log('[splitAndInsertImages] Using bottommost position:', { baseX, baseY });
     }
 
-    // 5. 使用网格布局，中心集中避免重叠
-    const gap = 20; // 图片间距
-    const count = elements.length;
-    const cols = Math.ceil(Math.sqrt(count));
-
-    // 计算所有图片缩放后的最大尺寸
-    const scaledElements = elements.map((el) => ({
-      ...el,
-      scaledWidth: el.width * scale,
-      scaledHeight: el.height * scale,
-    }));
-
-    const maxScaledWidth = Math.max(...scaledElements.map((e) => e.scaledWidth));
-    const maxScaledHeight = Math.max(...scaledElements.map((e) => e.scaledHeight));
-
-    // 计算单元格尺寸
-    const cellWidth = maxScaledWidth + gap;
-    const cellHeight = maxScaledHeight + gap;
-
-    // 按网格布局插入
+    // 5. 根据子图片在原图中的相对位置插入
+    // 保持原图的布局结构
     let firstInsertPoint: Point | undefined;
     let firstElementSize: { width: number; height: number } | undefined;
 
-    for (let i = 0; i < scaledElements.length; i++) {
-      const element = scaledElements[i];
-      const row = Math.floor(i / cols);
-      const col = i % cols;
+    for (let i = 0; i < elements.length; i++) {
+      const element = elements[i];
 
-      // 计算单元格位置
-      const cellX = baseX + col * cellWidth;
-      const cellY = baseY + row * cellHeight;
+      // 计算子图片在原图中的相对位置（缩放后）
+      const relativeX = element.sourceX * scale;
+      const relativeY = element.sourceY * scale;
 
-      // 在单元格内居中
-      const insertX = cellX + (cellWidth - element.scaledWidth) / 2;
-      const insertY = cellY + (cellHeight - element.scaledHeight) / 2;
+      // 计算最终插入位置
+      const insertX = baseX + relativeX;
+      const insertY = baseY + relativeY;
+
+      // 计算缩放后的尺寸
+      const scaledWidth = element.width * scale;
+      const scaledHeight = element.height * scale;
 
       // 记录第一个插入点用于滚动
       if (!firstInsertPoint) {
         firstInsertPoint = [insertX, insertY] as Point;
-        firstElementSize = { width: element.scaledWidth, height: element.scaledHeight };
+        firstElementSize = { width: scaledWidth, height: scaledHeight };
       }
 
       const imageItem = {
         url: element.imageData,
-        width: element.scaledWidth,
-        height: element.scaledHeight,
+        width: scaledWidth,
+        height: scaledHeight,
       };
 
       DrawTransforms.insertImage(board, imageItem, [insertX, insertY] as Point);

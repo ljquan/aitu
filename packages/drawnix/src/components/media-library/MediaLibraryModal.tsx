@@ -16,6 +16,8 @@ import type {
 } from '../../types/asset.types';
 import { AssetType, AssetSource, SelectionMode } from '../../types/asset.types';
 import { downloadFile } from '../../utils/download-utils';
+import { useDrawnix } from '../../hooks/use-drawnix';
+import { removeElementsByAssetId } from '../../utils/asset-cleanup';
 import './MediaLibraryModal.scss';
 
 export function MediaLibraryModal({
@@ -40,6 +42,8 @@ export function MediaLibraryModal({
     renameAsset,
     removeAsset,
   } = useAssets();
+
+  const { board } = useDrawnix();
 
   const [localSelectedAssetId, setLocalSelectedAssetId] = useState<string | null>(
     null,
@@ -230,6 +234,20 @@ export function MediaLibraryModal({
   // 显示选择按钮的条件：SELECT模式且有onSelect回调
   const showSelectButton = mode === 'SELECT' && !!onSelect;
 
+  // 处理删除素材（同时删除画布上使用该素材的元素）
+  const handleRemoveAsset = useCallback(async (assetId: string) => {
+    // 先删除画布上使用该素材的元素
+    if (board) {
+      const removedCount = removeElementsByAssetId(board, assetId);
+      if (removedCount > 0) {
+        console.log(`[MediaLibrary] Removed ${removedCount} canvas elements using asset: ${assetId}`);
+      }
+    }
+    
+    // 然后删除素材本身
+    await removeAsset(assetId);
+  }, [board, removeAsset]);
+
   return (
     <Dialog
       visible={isOpen}
@@ -290,7 +308,7 @@ export function MediaLibraryModal({
             <MediaLibraryInspector
               asset={selectedAsset}
               onRename={renameAsset}
-              onDelete={removeAsset}
+              onDelete={handleRemoveAsset}
               onDownload={(asset) => {
                 downloadFile(asset.url, asset.name);
               }}
@@ -316,7 +334,7 @@ export function MediaLibraryModal({
           <MediaLibraryInspector
             asset={selectedAsset}
             onRename={renameAsset}
-            onDelete={removeAsset}
+            onDelete={handleRemoveAsset}
             onDownload={(asset) => {
               downloadFile(asset.url, asset.name);
             }}

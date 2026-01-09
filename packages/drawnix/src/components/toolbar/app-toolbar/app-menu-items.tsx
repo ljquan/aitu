@@ -24,6 +24,7 @@ import Menu from '../../menu/menu';
 import { useContext } from 'react';
 import { MenuContentPropsContext } from '../../menu/common';
 import { EVENT } from '../../../constants';
+import { cleanupMissingAssets } from '../../../utils/asset-cleanup';
 
 export const SaveToFile = () => {
   const board = useBoard();
@@ -126,6 +127,35 @@ export const SaveAsImage = () => {
   );
 };
 SaveAsImage.displayName = 'SaveAsImage';
+
+export const CleanMissingAssets = () => {
+  const board = useBoard();
+  const { t } = useI18n();
+  return (
+    <MenuItem
+      icon={TrashIcon}
+      data-testid="clean-assets-button"
+      data-track="toolbar_click_menu_clean_assets"
+      onSelect={async () => {
+        try {
+          const removedCount = await cleanupMissingAssets(board);
+          if (removedCount > 0) {
+            console.log(`[CleanMissingAssets] Removed ${removedCount} elements with missing assets`);
+            // 可以在这里添加用户通知
+          } else {
+            console.log('[CleanMissingAssets] No missing assets found');
+          }
+        } catch (error) {
+          console.error('[CleanMissingAssets] Failed to cleanup missing assets:', error);
+        }
+      }}
+      aria-label={t('menu.cleanMissingAssets', '清理无效资源')}
+    >
+      {t('menu.cleanMissingAssets', '清理无效资源')}
+    </MenuItem>
+  );
+};
+CleanMissingAssets.displayName = 'CleanMissingAssets';
 
 export const CleanBoard = () => {
   const { appState, setAppState } = useDrawnix();

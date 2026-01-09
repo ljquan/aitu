@@ -24,6 +24,8 @@ import type {
   StorageQuota,
 } from '../types/asset.types';
 import {
+  AssetType,
+  AssetSource,
   assetToStoredAsset,
   storedAssetToAsset,
 } from '../types/asset.types';
@@ -602,6 +604,57 @@ class AssetStorageService {
    */
   cleanup(): void {
     // 统一缓存服务管理所有媒体 URL，无需手动清理
+  }
+
+  /**
+   * 将 Base64 DataURL 存入素材库并返回虚拟 URL
+   * 便捷方法，用于将 base64 图片转换为素材库虚拟 URL
+   *
+   * @param base64DataUrl - Base64 DataURL（如 data:image/png;base64,xxx）
+   * @param filename - 可选的文件名
+   * @returns 虚拟 URL（如 /asset-library/uuid.png）和素材 ID
+   */
+  async storeBase64AsAsset(
+    base64DataUrl: string,
+    filename?: string
+  ): Promise<{ virtualUrl: string; assetId: string }> {
+    // 解析 base64 DataURL
+    const match = base64DataUrl.match(/^data:([^;]+);base64,(.+)$/);
+    if (!match) {
+      throw new ValidationError('Invalid base64 DataURL format');
+    }
+
+    const mimeType = match[1];
+    const base64Data = match[2];
+
+    // 将 base64 转换为 Blob
+    const binaryString = atob(base64Data);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    const blob = new Blob([bytes], { type: mimeType });
+
+    // 确定素材类型
+    const assetType = mimeType.startsWith('video/') ? AssetType.VIDEO : AssetType.IMAGE;
+
+    // 生成默认文件名
+    const extension = mimeType.split('/')[1] || 'bin';
+    const defaultFilename = filename || `asset_${Date.now()}.${extension}`;
+
+    // 调用 addAsset 方法存储
+    const asset = await this.addAsset({
+      type: assetType,
+      source: AssetSource.LOCAL,
+      name: defaultFilename,
+      blob,
+      mimeType,
+    });
+
+    return {
+      virtualUrl: asset.url,
+      assetId: asset.id,
+    };
   }
 }
 

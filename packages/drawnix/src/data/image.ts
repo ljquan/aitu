@@ -12,7 +12,6 @@ import { DrawTransforms } from '@plait/draw';
 import { getElementOfFocusedImage } from '@plait/common';
 import { getInsertionPointForSelectedElements, getInsertionPointBelowBottommostElement, scrollToPointIfNeeded } from '../utils/selection-utils';
 import { assetStorageService } from '../services/asset-storage-service';
-import { AssetType, AssetSource } from '../types/asset.types';
 
 /**
  * 从保存的选中元素IDs计算插入点
@@ -159,29 +158,33 @@ export const insertImage = async (
   startPoint?: Point,
   isDrop?: boolean
 ) => {
-  // Add to asset library (async, don't block UI)
-  // Initialize service first to ensure it's ready
-  assetStorageService.initialize().then(() => {
-    return assetStorageService.addAsset({
-      type: AssetType.IMAGE,
-      source: AssetSource.LOCAL,
-      name: imageFile.name,
-      blob: imageFile,
-      mimeType: imageFile.type,
-    });
-  }).catch((err) => {
-    console.warn('[insertImage] Failed to add asset to library:', err);
-  });
-
   // 只有在没有提供startPoint时,才获取当前选中元素
   // 当从文件选择器上传时,已经没有选中状态了,不应该依赖当前选中
   const selectedElement = startPoint
     ? null
     : getSelectedElements(board)[0] || getElementOfFocusedImage(board);
   const defaultImageWidth = selectedElement ? 240 : 400;
+  
+  // 先读取图片数据用于获取尺寸
   const dataURL = await getDataURL(imageFile);
   const image = await loadHTMLImageElement(dataURL);
-  const imageItem = buildImage(image, dataURL, defaultImageWidth);
+  
+  // 将图片存入素材库获取虚拟 URL
+  let imageUrl: string = dataURL;
+  try {
+    await assetStorageService.initialize();
+    const { virtualUrl } = await assetStorageService.storeBase64AsAsset(
+      dataURL,
+      imageFile.name
+    );
+    imageUrl = virtualUrl;
+  } catch (err) {
+    console.warn('[insertImage] Failed to store asset, using base64:', err);
+    // 失败时回退到使用 base64
+  }
+  
+  // 使用虚拟 URL 构建 imageItem
+  const imageItem = buildImage(image, imageUrl as DataURL, defaultImageWidth);
   const element = startPoint && getHitElementByPoint(board, startPoint);
 
   if (isDrop && element && MindElement.isMindElement(board, element)) {

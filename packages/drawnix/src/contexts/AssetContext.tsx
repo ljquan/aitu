@@ -244,7 +244,7 @@ export function AssetProvider({ children }: AssetProviderProps) {
 
         if (err.name === 'QuotaExceededError') {
           MessagePlugin.error({
-            content: '存储空间不足，请删除一些旧素材',
+            content: '本地存储空间不足，请删除一些旧素材',
             duration: 5000,
           });
         } else if (err.name === 'ValidationError') {
@@ -279,12 +279,12 @@ export function AssetProvider({ children }: AssetProviderProps) {
       // 如果接近限制，显示警告
       if (status.isCritical) {
         MessagePlugin.warning({
-          content: `存储空间已使用 ${status.quota.percentUsed.toFixed(1)}%，即将达到上限。请删除一些旧素材。`,
+          content: `本地存储空间已使用 ${status.quota.percentUsed.toFixed(1)}%，即将达到上限。请删除一些旧素材。`,
           duration: 5000,
         });
       } else if (status.isNearLimit) {
         MessagePlugin.info({
-          content: `存储空间已使用 ${status.quota.percentUsed.toFixed(1)}%，接近上限。`,
+          content: `本地存储空间已使用 ${status.quota.percentUsed.toFixed(1)}%，接近上限。`,
           duration: 3000,
         });
       }

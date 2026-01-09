@@ -36,7 +36,7 @@ export default defineConfig({
     port: 7200,
     host: 'localhost',
     headers: {
-      'Content-Security-Policy': "default-src 'self' https: data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com https://us.i.posthog.com https://us-assets.i.posthog.com https://wiki.tu-zi.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https: wss:; frame-ancestors 'self' localhost:* 127.0.0.1:* https://api.tu-zi.com;",
+      'Content-Security-Policy': "default-src 'self' https: data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com https://us.i.posthog.com https://us-assets.i.posthog.com https://wiki.tu-zi.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https: wss: data:; frame-ancestors 'self' localhost:* 127.0.0.1:* https://api.tu-zi.com;",
       'X-Frame-Options': 'ALLOWALL'
     }
   },
@@ -45,7 +45,7 @@ export default defineConfig({
     port: 4300,
     host: 'localhost',
     headers: {
-      'Content-Security-Policy': "default-src 'self' https: data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com https://us.i.posthog.com https://us-assets.i.posthog.com https://wiki.tu-zi.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https: wss:; frame-ancestors 'self' localhost:* 127.0.0.1:* https://api.tu-zi.com;",
+      'Content-Security-Policy': "default-src 'self' https: data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com https://us.i.posthog.com https://us-assets.i.posthog.com https://wiki.tu-zi.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https: wss: data:; frame-ancestors 'self' localhost:* 127.0.0.1:* https://api.tu-zi.com;",
       'X-Frame-Options': 'ALLOWALL'
     }
   },
@@ -72,21 +72,6 @@ export default defineConfig({
     reportCompressedSize: true,
     commonjsOptions: {
       transformMixedEsModules: true,
-    },
-    rollupOptions: {
-      output: {
-        manualChunks: (id) => {
-          // 只分离 React DOM，其他库完全交给 Vite 自动处理
-          // 手动分包会导致模块依赖问题（如 "br is not a function"、"Cannot read properties of undefined" 等错误）
-          if (id.includes('node_modules')) {
-            // React DOM - 最大的依赖，单独分离
-            if (id.includes('react-dom')) {
-              return 'vendor-react-dom';
-            }
-            // 所有其他依赖让 Vite 自动处理，避免破坏模块依赖链
-          }
-        },
-      },
-    },
+    }
   },
 });
