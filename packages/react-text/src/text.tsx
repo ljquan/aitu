@@ -164,10 +164,26 @@ const Leaf: React.FC<RenderLeafProps> = ({ children, leaf, attributes }) => {
   }
   const customText = leaf as CustomText;
   const fontSize = customText['font-size'];
+  
+  // 扩展的自定义样式
+  const fontFamily = (leaf as any)['font-family'];
+  const textShadow = (leaf as any)['text-shadow'];
+  const background = (leaf as any)['background'];
+  const backgroundClip = (leaf as any)['background-clip'];
+  const webkitBackgroundClip = (leaf as any)['-webkit-background-clip'];
+  const webkitTextFillColor = (leaf as any)['-webkit-text-fill-color'];
+  
   const style: CSSProperties = {
     color: customText.color,
     fontSize: fontSize ? `${fontSize}px` : undefined,
-    lineHeight: fontSize ? 1.4 : undefined
+    lineHeight: fontSize ? 1.4 : undefined,
+    // 自定义文本效果样式
+    fontFamily: fontFamily || undefined,
+    textShadow: textShadow || undefined,
+    background: background || undefined,
+    backgroundClip: backgroundClip || undefined,
+    WebkitBackgroundClip: webkitBackgroundClip || undefined,
+    WebkitTextFillColor: webkitTextFillColor || undefined,
   };
 
   return (

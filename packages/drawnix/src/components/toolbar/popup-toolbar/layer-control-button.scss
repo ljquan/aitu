@@ -1,0 +1,134 @@
+/**
+ * 图层控制面板样式
+ * Layer Control Panel Styles
+ */
+
+.layer-control-panel {
+  width: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: #1F2937;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.layer-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #374151;
+
+  .panel-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: #F9FAFB;
+  }
+
+  .layer-info {
+    font-size: 12px;
+    color: #9CA3AF;
+    font-family: 'SF Mono', Monaco, monospace;
+    background: #374151;
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+}
+
+.layer-actions {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.layer-action-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 8px;
+  background: #374151;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  svg {
+    width: 20px;
+    height: 20px;
+    color: #9CA3AF;
+    transition: color 0.2s ease;
+  }
+
+  span {
+    font-size: 10px;
+    color: #9CA3AF;
+    transition: color 0.2s ease;
+  }
+
+  &:hover:not(.disabled) {
+    background: #4B5563;
+    border-color: #10B981;
+
+    svg,
+    span {
+      color: #10B981;
+    }
+  }
+
+  &:active:not(.disabled) {
+    transform: scale(0.95);
+  }
+
+  &.disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+}
+
+// 图层可视化
+.layer-visual {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px;
+  background: #111827;
+  border-radius: 6px;
+}
+
+.layer-stack {
+  position: relative;
+  width: 48px;
+  height: 48px;
+}
+
+.layer-item {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 8px;
+  background: #4B5563;
+  border-radius: 2px;
+  transition: all 0.2s ease;
+
+  &--current {
+    background: linear-gradient(90deg, #10B981, #34D399);
+    box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
+  }
+
+  &--above {
+    background: #6B7280;
+  }
+
+  &--below {
+    background: #374151;
+  }
+}
+
+.layer-label {
+  flex: 1;
+  font-size: 11px;
+  color: #9CA3AF;
+  line-height: 1.4;
+}

@@ -670,3 +670,110 @@ export const VideoMergeIcon = createIcon(
     </g>
   </svg>
 );
+
+// ============ 文本特效图标 ============
+
+// 字体选择图标
+export const FontFamilyIcon = createIcon(
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <g strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 12.5L8 3L13 12.5" />
+      <path d="M4.5 10H11.5" />
+      <path d="M2 14.5H6" />
+      <path d="M10 14.5H14" />
+    </g>
+  </svg>
+);
+
+// 阴影效果图标
+export const ShadowEffectIcon = createIcon(
+  <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <g strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="2" width="9" height="9" rx="1.5" stroke="currentColor" fill="none" />
+      <rect x="5" y="5" width="9" height="9" rx="1.5" stroke="currentColor" fill="none" opacity="0.4" />
+    </g>
+  </svg>
+);
+
+// 渐变图标
+export const GradientIcon = createIcon(
+  <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="gradientIconFill" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#FFD700" />
+        <stop offset="100%" stopColor="#FF4500" />
+      </linearGradient>
+    </defs>
+    <rect x="2" y="2" width="12" height="12" rx="2" fill="url(#gradientIconFill)" />
+    <rect x="2" y="2" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1" fill="none" opacity="0.5" />
+  </svg>
+);
+
+// 图层图标
+export const LayerIcon = createIcon(
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <g strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 2L14 5.5L8 9L2 5.5L8 2Z" />
+      <path d="M2 8L8 11.5L14 8" />
+      <path d="M2 10.5L8 14L14 10.5" />
+    </g>
+  </svg>
+);
+
+// 置顶图标
+export const BringToFrontIcon = createIcon(
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <g strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="5" y="1" width="6" height="6" rx="1" fill="currentColor" opacity="0.3" />
+      <rect x="2" y="5" width="6" height="6" rx="1" fill="none" />
+      <rect x="8" y="9" width="6" height="6" rx="1" fill="none" />
+      <path d="M8 4V1M8 1L6 3M8 1L10 3" />
+    </g>
+  </svg>
+);
+
+// 上移一层图标
+export const BringForwardIcon = createIcon(
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <g strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="4" y="2" width="8" height="5" rx="1" fill="currentColor" opacity="0.3" />
+      <rect x="4" y="9" width="8" height="5" rx="1" fill="none" />
+      <path d="M8 7V4M8 4L6 6M8 4L10 6" />
+    </g>
+  </svg>
+);
+
+// 下移一层图标
+export const SendBackwardIcon = createIcon(
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <g strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="4" y="2" width="8" height="5" rx="1" fill="none" />
+      <rect x="4" y="9" width="8" height="5" rx="1" fill="currentColor" opacity="0.3" />
+      <path d="M8 9V12M8 12L6 10M8 12L10 10" />
+    </g>
+  </svg>
+);
+
+// 置底图标
+export const SendToBackIcon = createIcon(
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <g strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="1" width="6" height="6" rx="1" fill="none" />
+      <rect x="8" y="5" width="6" height="6" rx="1" fill="none" />
+      <rect x="5" y="9" width="6" height="6" rx="1" fill="currentColor" opacity="0.3" />
+      <path d="M8 12V15M8 15L6 13M8 15L10 13" />
+    </g>
+  </svg>
+);
+
+// 属性设置图标
+export const PropertySettingsIcon = createIcon(
+  <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
+    <g strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 4h12M2 8h12M2 12h8" stroke="currentColor" fill="none" />
+      <circle cx="5" cy="4" r="1.5" fill="currentColor" />
+      <circle cx="11" cy="8" r="1.5" fill="currentColor" />
+      <circle cx="7" cy="12" r="1.5" fill="currentColor" />
+    </g>
+  </svg>
+);

@@ -127,6 +127,22 @@ export interface Translations {
   'toolbar.zoom': string;
   'toolbar.moveToBottom': string;
   'toolbar.resetToDefault': string;
+
+  // Text effects
+  'textEffect.fontFamily': string;
+  'textEffect.shadow': string;
+  'textEffect.gradient': string;
+  'textEffect.layer': string;
+
+  // Property panel
+  'propertyPanel.title': string;
+  'propertyPanel.fontSettings': string;
+  'propertyPanel.colorSettings': string;
+  'propertyPanel.shadowSettings': string;
+  'propertyPanel.gradientSettings': string;
+  'propertyPanel.fontSize': string;
+  'propertyPanel.fontFamily': string;
+  'propertyPanel.textColor': string;
 }
 
 // Translation data
@@ -254,6 +270,22 @@ const translations: Record<Language, Translations> = {
     'toolbar.moveToBottom': '置底',
     'toolbar.resetToDefault': '重置为默认',
     'toolbar.zoom': '缩放',
+
+    // Text effects
+    'textEffect.fontFamily': '艺术字体',
+    'textEffect.shadow': '光影效果',
+    'textEffect.gradient': '渐变色',
+    'textEffect.layer': '图层顺序',
+
+    // Property panel
+    'propertyPanel.title': '属性设置',
+    'propertyPanel.fontSettings': '字体设置',
+    'propertyPanel.colorSettings': '颜色设置',
+    'propertyPanel.shadowSettings': '阴影效果',
+    'propertyPanel.gradientSettings': '渐变效果',
+    'propertyPanel.fontSize': '字号',
+    'propertyPanel.fontFamily': '字体',
+    'propertyPanel.textColor': '文字颜色',
   },
   en: {
     // Toolbar items
@@ -378,6 +410,22 @@ const translations: Record<Language, Translations> = {
     'toolbar.moveToBottom': 'Move to Bottom',
     'toolbar.resetToDefault': 'Reset to Default',
     'toolbar.zoom': 'Zoom',
+
+    // Text effects
+    'textEffect.fontFamily': 'Art Font',
+    'textEffect.shadow': 'Shadow Effect',
+    'textEffect.gradient': 'Gradient',
+    'textEffect.layer': 'Layer Order',
+
+    // Property panel
+    'propertyPanel.title': 'Properties',
+    'propertyPanel.fontSettings': 'Font Settings',
+    'propertyPanel.colorSettings': 'Color Settings',
+    'propertyPanel.shadowSettings': 'Shadow Effect',
+    'propertyPanel.gradientSettings': 'Gradient Effect',
+    'propertyPanel.fontSize': 'Font Size',
+    'propertyPanel.fontFamily': 'Font Family',
+    'propertyPanel.textColor': 'Text Color',
   },
 };
 

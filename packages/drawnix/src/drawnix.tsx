@@ -48,6 +48,7 @@ import { useAutoInsertToCanvas } from './hooks/useAutoInsertToCanvas';
 import { useBeforeUnload } from './hooks/useBeforeUnload';
 import { ChatDrawer } from './components/chat-drawer';
 import { ChatDrawerProvider, useChatDrawer } from './contexts/ChatDrawerContext';
+import { fontManagerService } from './services/font-manager-service';
 import { WorkflowProvider } from './contexts/WorkflowContext';
 import { useWorkspace } from './hooks/useWorkspace';
 import { Board as WorkspaceBoard } from './types/workspace.types';
@@ -186,6 +187,20 @@ export const Drawnix: React.FC<DrawnixProps> = ({
     const cleanup = initializeAssetIntegration();
     return cleanup;
   }, []);
+
+  // 预加载画布中使用的字体（当 value 变化时）
+  useEffect(() => {
+    if (value && value.length > 0) {
+      fontManagerService.preloadBoardFonts(value).then(() => {
+        // 字体加载完成后，强制重新渲染
+        if (board) {
+          board.redraw();
+        }
+      }).catch(error => {
+        console.warn('Failed to preload board fonts:', error);
+      });
+    }
+  }, [value, board]);
 
   // Initialize video recovery service to restore expired blob URLs
   useEffect(() => {
@@ -445,6 +460,14 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
               if (process.env.NODE_ENV === 'development') {
                 toolTestHelper.setBoard(board);
               }
+
+              // 预加载画布中使用的字体
+              if (board.children && board.children.length > 0) {
+                fontManagerService.preloadBoardFonts(board.children).catch(error => {
+                  console.warn('Failed to preload board fonts:', error);
+                });
+              }
+
               afterInit && afterInit(board);
             }}
           ></Board>

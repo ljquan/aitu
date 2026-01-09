@@ -1,5 +1,5 @@
 import Stack from '../../stack';
-import { FontColorIcon } from '../../icons';
+import { FontColorIcon, PropertySettingsIcon } from '../../icons';
 import {
   ATTACHED_ELEMENT_CLASS_NAME,
   getRectangleByElements,
@@ -46,6 +46,8 @@ import { isWhite, removeHexAlpha, NO_COLOR } from '@aitu/utils';
 import { Freehand } from '../../../plugins/freehand/type';
 import { PopupLinkButton } from './link-button';
 import { PopupPromptButton } from './prompt-button';
+import { PopupLayerControlButton } from './layer-control-button';
+import { TextPropertyPanel } from './text-property-panel';
 import { AIImageIcon, AIVideoIcon, VideoFrameIcon, DuplicateIcon, TrashIcon, SplitImageIcon, DownloadIcon, MergeIcon, VideoMergeIcon } from '../../icons';
 import { useDrawnix, DialogType } from '../../../hooks/use-drawnix';
 import { useI18n } from '../../../i18n';
@@ -77,8 +79,19 @@ export const PopupToolbar = () => {
   const [showVideoFrameSelector, setShowVideoFrameSelector] = useState(false);
   const [selectedVideoElement, setSelectedVideoElement] = useState<PlaitElement | null>(null);
 
+  // 属性面板状态
+  const [showPropertyPanel, setShowPropertyPanel] = useState(false);
+  const propertyPanelOpenRef = useRef(false);
+
+  // 保存 toolbar 和选中元素的位置信息，用于定位属性面板
+  const [toolbarRect, setToolbarRect] = useState<{ top: number; left: number; width: number; height: number } | undefined>();
+  const [selectionRect, setSelectionRect] = useState<{ top: number; left: number; right: number; bottom: number; width: number; height: number } | undefined>();
+  const toolbarRef = useRef<HTMLDivElement>(null);
+
   // 初始化全局鼠标位置跟踪
   useGlobalMousePosition();
+
+  // popup-toolbar 的显示逻辑
   const open =
     selectedElements.length > 0 &&
     !isSelectionMoving(board);
@@ -270,6 +283,59 @@ export const PopupToolbar = () => {
     }
   }, [viewport, selection, children, movingOrDragging]);
 
+  // 更新 toolbar 和选中元素的位置信息，用于定位属性面板
+  useEffect(() => {
+    if (open && !movingOrDragging && toolbarRef.current) {
+      const rect = toolbarRef.current.getBoundingClientRect();
+      setToolbarRect({
+        top: rect.top,
+        left: rect.left,
+        width: rect.width,
+        height: rect.height,
+      });
+
+      // 计算选中元素的屏幕坐标
+      const elements = getSelectedElements(board);
+      if (elements.length > 0) {
+        const rectangle = getRectangleByElements(board, elements, false);
+        const [start, end] = RectangleClient.getPoints(rectangle);
+        const screenStart = toScreenPointFromHostPoint(
+          board,
+          toHostPointFromViewBoxPoint(board, start)
+        );
+        const screenEnd = toScreenPointFromHostPoint(
+          board,
+          toHostPointFromViewBoxPoint(board, end)
+        );
+
+        setSelectionRect({
+          top: screenStart[1],
+          left: screenStart[0],
+          right: screenEnd[0],
+          bottom: screenEnd[1],
+          width: screenEnd[0] - screenStart[0],
+          height: screenEnd[1] - screenStart[1],
+        });
+      }
+    }
+  }, [open, movingOrDragging, floatingStyles, board]);
+
+  // 同步 ref 和 state
+  useEffect(() => {
+    propertyPanelOpenRef.current = showPropertyPanel;
+  }, [showPropertyPanel]);
+
+  // 当选中元素完全清空时，延迟关闭属性面板（避免因修改属性导致的短暂重新渲染）
+  useEffect(() => {
+    if (selectedElements.length === 0 && !movingOrDragging) {
+      // 延迟关闭，给重新渲染留出时间
+      const timer = setTimeout(() => {
+        setShowPropertyPanel(false);
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [selectedElements.length, movingOrDragging]);
+
   useEffect(() => {
     movingOrDraggingRef.current = movingOrDragging;
   }, [movingOrDragging]);
@@ -309,7 +375,10 @@ export const PopupToolbar = () => {
         <Island
           padding={1}
           className={classNames('popup-toolbar', ATTACHED_ELEMENT_CLASS_NAME)}
-          ref={refs.setFloating}
+          ref={(node) => {
+            refs.setFloating(node);
+            (toolbarRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+          }}
           style={floatingStyles}
         >
           <Stack.Row gap={1}>
@@ -375,6 +444,28 @@ export const PopupToolbar = () => {
                 key={'prompt'}
                 language={language as 'zh' | 'en'}
                 title={language === 'zh' ? '提示词' : 'Prompts'}
+              />
+            )}
+            <PopupLayerControlButton
+              board={board}
+              key={'layer-control'}
+              title={t('textEffect.layer')}
+            />
+            {/* 属性设置按钮 - 仅在选中包含文本的元素时显示 */}
+            {state.hasText && (
+              <ToolButton
+                className="property-settings"
+                key={'property-settings'}
+                type="icon"
+                icon={PropertySettingsIcon}
+                visible={true}
+                selected={showPropertyPanel}
+                title={t('propertyPanel.title')}
+                aria-label={t('propertyPanel.title')}
+                data-track="toolbar_click_property_settings"
+                onPointerUp={() => {
+                  setShowPropertyPanel(!showPropertyPanel);
+                }}
               />
             )}
             {state.hasAIImage && (
@@ -608,7 +699,7 @@ export const PopupToolbar = () => {
                       throw new Error(language === 'zh' ? '合并失败：无法生成图片' : 'Merge failed: Unable to generate image');
                     }
 
-                    // 创建图片获取实际尺寸
+                    // 创建图片并裁剪透明边框
                     const img = new Image();
                     await new Promise<void>((resolve, reject) => {
                       img.onload = () => resolve();
@@ -616,9 +707,89 @@ export const PopupToolbar = () => {
                       img.src = imageDataUrl;
                     });
 
-                    // 计算插入位置（原位置）
-                    const insertX = boundingRect.x;
-                    const insertY = boundingRect.y;
+                    // 创建 canvas 裁剪透明边框
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    const ctx = canvas.getContext('2d');
+                    if (!ctx) {
+                      throw new Error('Failed to get canvas context');
+                    }
+
+                    // 绘制图片到 canvas
+                    ctx.drawImage(img, 0, 0);
+
+                    // 获取图片数据
+                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+                    // 裁剪透明边框（严格模式：只裁剪完全透明的边缘）
+                    const { data, width, height } = imageData;
+                    const alphaThreshold = 0; // 严格模式
+
+                    // 检测一行是否完全透明
+                    const isRowTransparent = (y: number): boolean => {
+                      for (let x = 0; x < width; x++) {
+                        const idx = (y * width + x) * 4;
+                        if (data[idx + 3] > alphaThreshold) return false;
+                      }
+                      return true;
+                    };
+
+                    // 检测一列是否完全透明
+                    const isColTransparent = (x: number): boolean => {
+                      for (let y = 0; y < height; y++) {
+                        const idx = (y * width + x) * 4;
+                        if (data[idx + 3] > alphaThreshold) return false;
+                      }
+                      return true;
+                    };
+
+                    // 从顶部向下扫描
+                    let top = 0;
+                    while (top < height && isRowTransparent(top)) top++;
+
+                    // 从底部向上扫描
+                    let bottom = height - 1;
+                    while (bottom > top && isRowTransparent(bottom)) bottom--;
+
+                    // 从左边向右扫描
+                    let left = 0;
+                    while (left < width && isColTransparent(left)) left++;
+
+                    // 从右边向左扫描
+                    let right = width - 1;
+                    while (right > left && isColTransparent(right)) right--;
+
+                    // 计算裁剪后的尺寸
+                    const trimmedWidth = right - left + 1;
+                    const trimmedHeight = bottom - top + 1;
+
+                    // 创建裁剪后的 canvas
+                    const trimmedCanvas = document.createElement('canvas');
+                    trimmedCanvas.width = trimmedWidth;
+                    trimmedCanvas.height = trimmedHeight;
+                    const trimmedCtx = trimmedCanvas.getContext('2d');
+                    if (!trimmedCtx) {
+                      throw new Error('Failed to get trimmed canvas context');
+                    }
+
+                    // 绘制裁剪后的图片
+                    trimmedCtx.drawImage(
+                      canvas,
+                      left, top, trimmedWidth, trimmedHeight,
+                      0, 0, trimmedWidth, trimmedHeight
+                    );
+
+                    // 转换为 data URL
+                    const trimmedImageDataUrl = trimmedCanvas.toDataURL('image/png');
+
+                    // 计算插入位置（考虑裁剪偏移）
+                    // 原始边界矩形是基于 ratio=2 的，所以需要除以 2
+                    const scale = 2; // ratio 参数
+                    const insertX = boundingRect.x + (left / scale);
+                    const insertY = boundingRect.y + (top / scale);
+                    const insertWidth = trimmedWidth / scale;
+                    const insertHeight = trimmedHeight / scale;
 
                     // 删除原元素
                     deleteFragment(board);
@@ -626,11 +797,11 @@ export const PopupToolbar = () => {
                     // 记录插入前的元素数量
                     const childrenCountBefore = board.children.length;
 
-                    // 插入合并后的图片
+                    // 插入裁剪后的图片
                     const imageItem = {
-                      url: imageDataUrl,
-                      width: boundingRect.width,
-                      height: boundingRect.height,
+                      url: trimmedImageDataUrl,
+                      width: insertWidth,
+                      height: insertHeight,
                     };
                     DrawTransforms.insertImage(board, imageItem, [insertX, insertY]);
 
@@ -806,6 +977,20 @@ export const PopupToolbar = () => {
               // 可以在这里添加错误提示
             }
           }}
+        />
+      )}
+
+      {/* 文本属性设置面板 */}
+      {state.hasText && (
+        <TextPropertyPanel
+          board={board}
+          isOpen={showPropertyPanel}
+          onClose={() => setShowPropertyPanel(false)}
+          currentFontSize={state.fontSize}
+          currentFontFamily={state.marks?.['font-family']}
+          currentColor={state.marks?.color}
+          toolbarRect={toolbarRect}
+          selectionRect={selectionRect}
         />
       )}
     </>

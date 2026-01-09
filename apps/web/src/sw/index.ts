@@ -12,6 +12,7 @@ const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '
 const CACHE_NAME = `drawnix-v${APP_VERSION}`;
 const IMAGE_CACHE_NAME = `drawnix-images`;
 const STATIC_CACHE_NAME = `drawnix-static-v${APP_VERSION}`;
+const FONT_CACHE_NAME = `drawnix-fonts`;
 
 // 缓存 URL 前缀 - 用于合并视频等本地缓存资源
 const CACHE_URL_PREFIX = '/__aitu_cache__/video/';
@@ -118,6 +119,21 @@ function isVideoRequest(url: URL, request: Request): boolean {
     url.hash.startsWith('#merged-video-') || // 合并视频的特殊标识
     url.hash.includes('video') // 视频的 # 标识
   );
+}
+
+// 检查是否为字体请求
+function isFontRequest(url: URL, request: Request): boolean {
+  // Google Fonts CSS 文件
+  if (url.hostname === 'fonts.googleapis.com') {
+    return true;
+  }
+  // Google Fonts 字体文件
+  if (url.hostname === 'fonts.gstatic.com') {
+    return true;
+  }
+  // 通用字体文件扩展名
+  const fontExtensions = /\.(woff|woff2|ttf|otf|eot)$/i;
+  return fontExtensions.test(url.pathname) || request.destination === 'font';
 }
 
 // 从IndexedDB恢复失败域名列表
@@ -615,6 +631,16 @@ sw.addEventListener('fetch', (event: FetchEvent) => {
     return;
   }
 
+  // 拦截字体请求（Google Fonts CSS 和字体文件）
+  if (isFontRequest(url, event.request)) {
+    console.log('Service Worker: Intercepting font request:', url.href);
+
+    event.respondWith(
+      handleFontRequest(event.request)
+    );
+    return;
+  }
+
   // 拦截外部图片请求（非同源且为图片格式）
   if (url.origin !== location.origin && isImageRequest(url, event.request)) {
     console.log('Service Worker: Intercepting external image request:', url.href);
@@ -641,6 +667,71 @@ sw.addEventListener('fetch', (event: FetchEvent) => {
   // 这些请求不会被追踪，但通常它们很快完成
   // SW 升级会在拦截的请求（图片、视频、静态资源）完成后进行
 });
+
+// 处理字体请求（Google Fonts CSS 和字体文件）
+async function handleFontRequest(request: Request): Promise<Response> {
+  const url = new URL(request.url);
+  const requestId = Math.random().toString(36).substring(2, 10);
+
+  try {
+    // 使用 Cache-First 策略：优先从缓存读取
+    const cache = await caches.open(FONT_CACHE_NAME);
+    const cachedResponse = await cache.match(request);
+
+    if (cachedResponse) {
+      console.log(`Service Worker [Font-${requestId}]: 从缓存返回字体:`, url.href);
+      return cachedResponse;
+    }
+
+    // 缓存未命中，从网络获取
+    console.log(`Service Worker [Font-${requestId}]: 从网络下载字体:`, url.href);
+    const response = await fetch(request);
+
+    // 只缓存成功的响应
+    if (response && response.status === 200) {
+      // 克隆响应用于缓存
+      const responseToCache = response.clone();
+
+      // 添加自定义头部标记缓存时间
+      const headers = new Headers(responseToCache.headers);
+      headers.set('sw-cache-date', Date.now().toString());
+
+      const cachedResponse = new Response(responseToCache.body, {
+        status: responseToCache.status,
+        statusText: responseToCache.statusText,
+        headers: headers,
+      });
+
+      // 异步缓存，不阻塞响应
+      cache.put(request, cachedResponse).catch(error => {
+        console.warn(`Service Worker [Font-${requestId}]: 缓存字体失败:`, error);
+      });
+
+      console.log(`Service Worker [Font-${requestId}]: 字体已缓存:`, url.href);
+    }
+
+    return response;
+  } catch (error) {
+    console.error(`Service Worker [Font-${requestId}]: 字体请求失败:`, error);
+
+    // 尝试从缓存返回（离线场景）
+    const cache = await caches.open(FONT_CACHE_NAME);
+    const cachedResponse = await cache.match(request);
+    if (cachedResponse) {
+      console.log(`Service Worker [Font-${requestId}]: 网络失败，从缓存返回:`, url.href);
+      return cachedResponse;
+    }
+
+    // 返回错误响应
+    return new Response('Font loading failed', {
+      status: 503,
+      statusText: 'Service Unavailable',
+      headers: {
+        'Content-Type': 'text/plain',
+      },
+    });
+  }
+}
 
 // Utility function to perform fetch with retries
 async function fetchWithRetry(request: Request, maxRetries = 2, fetchOptions: any = {}): Promise<Response> {

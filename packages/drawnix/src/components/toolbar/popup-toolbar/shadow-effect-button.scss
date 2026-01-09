@@ -1,0 +1,314 @@
+/**
+ * 光影效果面板样式
+ * Shadow Effect Panel Styles
+ */
+
+.shadow-effect-panel {
+  width: 280px;
+  max-height: 450px;
+  display: flex;
+  flex-direction: column;
+  background: #1F2937;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.shadow-tabs {
+  display: flex;
+  border-bottom: 1px solid #374151;
+  padding: 0 8px;
+  flex-shrink: 0;
+}
+
+.shadow-tab {
+  flex: 1;
+  padding: 10px 8px;
+  background: transparent;
+  border: none;
+  color: #9CA3AF;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+
+  &:hover {
+    color: #F9FAFB;
+  }
+
+  &.active {
+    color: #8B5CF6;
+
+    &::after {
+      content: '';
+      position: absolute;
+      bottom: -1px;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, #8B5CF6, #A855F7);
+      border-radius: 1px;
+    }
+  }
+}
+
+.shadow-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+
+  &::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: #374151;
+    border-radius: 2px;
+  }
+}
+
+.shadow-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+// 开关控件
+.toggle-control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: #374151;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #F9FAFB;
+}
+
+.toggle-btn {
+  width: 40px;
+  height: 22px;
+  background: #4B5563;
+  border: none;
+  border-radius: 11px;
+  cursor: pointer;
+  position: relative;
+  transition: background 0.2s ease;
+
+  &.active {
+    background: linear-gradient(90deg, #8B5CF6, #A855F7);
+  }
+
+  .toggle-slider {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 18px;
+    height: 18px;
+    background: #FFFFFF;
+    border-radius: 50%;
+    transition: transform 0.2s ease;
+  }
+
+  &.active .toggle-slider {
+    transform: translateX(18px);
+  }
+}
+
+// 预设区域
+.presets-section {
+  .section-title {
+    font-size: 11px;
+    color: #9CA3AF;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+}
+
+.presets-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.preset-item {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #374151;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    border-color: #8B5CF6;
+    background: #4B5563;
+  }
+
+  .preset-preview {
+    font-size: 18px;
+    font-weight: bold;
+    color: #F9FAFB;
+  }
+
+  &.glow-preset {
+    background: #111827;
+    
+    .preset-preview {
+      font-size: 20px;
+    }
+  }
+}
+
+// 发光类型按钮
+.glow-type-section {
+  .section-title {
+    font-size: 11px;
+    color: #9CA3AF;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+}
+
+.glow-type-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.glow-type-btn {
+  flex: 1;
+  padding: 8px 12px;
+  background: #374151;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: #9CA3AF;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: #4B5563;
+    color: #F9FAFB;
+  }
+
+  &.active {
+    background: rgba(139, 92, 246, 0.2);
+    border-color: #8B5CF6;
+    color: #A855F7;
+  }
+}
+
+// 自定义控制区
+.custom-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 8px;
+  border-top: 1px solid #374151;
+}
+
+// 滑块控件
+.slider-control {
+  .slider-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 6px;
+  }
+
+  .slider-label {
+    font-size: 12px;
+    color: #9CA3AF;
+  }
+
+  .slider-value {
+    font-size: 12px;
+    color: #F9FAFB;
+    font-family: 'SF Mono', Monaco, monospace;
+  }
+
+  .slider-input {
+    width: 100%;
+    height: 4px;
+    appearance: none;
+    background: #374151;
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+
+    &::-webkit-slider-thumb {
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      background: linear-gradient(135deg, #8B5CF6, #A855F7);
+      border-radius: 50%;
+      cursor: pointer;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+      transition: transform 0.15s ease;
+
+      &:hover {
+        transform: scale(1.1);
+      }
+    }
+
+    &::-moz-range-thumb {
+      width: 14px;
+      height: 14px;
+      background: linear-gradient(135deg, #8B5CF6, #A855F7);
+      border-radius: 50%;
+      border: none;
+      cursor: pointer;
+    }
+  }
+}
+
+// 颜色控件
+.color-control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  .color-label {
+    font-size: 12px;
+    color: #9CA3AF;
+  }
+
+  .color-input-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .color-input {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 2px solid #374151;
+    border-radius: 4px;
+    cursor: pointer;
+    background: transparent;
+
+    &::-webkit-color-swatch-wrapper {
+      padding: 0;
+    }
+
+    &::-webkit-color-swatch {
+      border: none;
+      border-radius: 2px;
+    }
+  }
+
+  .color-value {
+    font-size: 11px;
+    color: #6B7280;
+    font-family: 'SF Mono', Monaco, monospace;
+    text-transform: uppercase;
+  }
+}

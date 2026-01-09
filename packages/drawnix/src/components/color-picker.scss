@@ -21,10 +21,8 @@
   .selected-icon {
     stroke: currentColor;
     outline: none;
-    position: absolute;
     width: var(--default-icon-size);
     height: var(--default-icon-size);
-
   }
   &.no-color {
     border: none;
