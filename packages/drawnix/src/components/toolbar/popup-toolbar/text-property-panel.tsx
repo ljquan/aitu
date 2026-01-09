@@ -207,8 +207,8 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({
   // 计算面板位置 - 在选中元素右侧，且在 popup-toolbar 下方
   useEffect(() => {
     if (isOpen && toolbarRect && selectionRect) {
-      const panelWidth = 280;
-      const panelHeight = 480;
+      const panelWidth = 320;
+      const panelHeight = 520;
       const gap = 12; // 与选中元素的间距
 
       // 面板位置：选中元素右侧 + gap
@@ -820,6 +820,57 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({
                   
                   {/* 阴影细节配置 */}
                   <div className="effect-config">
+                    {/* 阴影颜色 */}
+                    <div className="inline-control">
+                      <label className="inline-control__label">{language === 'zh' ? '颜色' : 'Color'}</label>
+                      <div className="inline-control__color-group">
+                        <input
+                          type="color"
+                          className="inline-control__color-input"
+                          value={shadowConfig.color.startsWith('rgba') 
+                            ? `#${shadowConfig.color.match(/\d+/g)?.slice(0, 3).map(n => parseInt(n).toString(16).padStart(2, '0')).join('') || '000000'}`
+                            : shadowConfig.color}
+                          onChange={(e) => {
+                            // 转换为 rgba 格式，保留当前透明度
+                            const hex = e.target.value;
+                            const r = parseInt(hex.slice(1, 3), 16);
+                            const g = parseInt(hex.slice(3, 5), 16);
+                            const b = parseInt(hex.slice(5, 7), 16);
+                            // 从当前 color 提取 alpha
+                            const alphaMatch = shadowConfig.color.match(/[\d.]+\)$/);
+                            const alpha = alphaMatch ? parseFloat(alphaMatch[0]) : 0.5;
+                            handleShadowConfigChange('color', `rgba(${r}, ${g}, ${b}, ${alpha})`);
+                          }}
+                        />
+                        <input
+                          type="range"
+                          className="inline-control__slider inline-control__slider--short"
+                          value={(() => {
+                            const alphaMatch = shadowConfig.color.match(/[\d.]+\)$/);
+                            return alphaMatch ? parseFloat(alphaMatch[0]) * 100 : 50;
+                          })()}
+                          min={0}
+                          max={100}
+                          step={5}
+                          title={language === 'zh' ? '透明度' : 'Opacity'}
+                          onChange={(e) => {
+                            const alpha = Number(e.target.value) / 100;
+                            // 从当前 color 提取 RGB
+                            const rgbMatch = shadowConfig.color.match(/\d+/g);
+                            if (rgbMatch && rgbMatch.length >= 3) {
+                              const [r, g, b] = rgbMatch.slice(0, 3);
+                              handleShadowConfigChange('color', `rgba(${r}, ${g}, ${b}, ${alpha})`);
+                            }
+                          }}
+                        />
+                        <span className="inline-control__value inline-control__value--narrow">
+                          {(() => {
+                            const alphaMatch = shadowConfig.color.match(/[\d.]+\)$/);
+                            return alphaMatch ? Math.round(parseFloat(alphaMatch[0]) * 100) : 50;
+                          })()}%
+                        </span>
+                      </div>
+                    </div>
                     <div className="inline-control">
                       <label className="inline-control__label">{language === 'zh' ? 'X偏移' : 'X'}</label>
                       <div className="inline-control__slider-group">

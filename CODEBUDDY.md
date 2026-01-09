@@ -112,6 +112,36 @@ Aitu (爱图) is an open-source whiteboard application built on the Plait framew
 - **File Size Limit**: Single files must not exceed 500 lines (including comments and blank lines)
 - **Documentation**: SpecKit-generated markdown documents should be in Chinese (中文)
 
+### Claude Code 工作流
+
+**最佳实践文档**: 参考 `docs/CLAUDE_CODE_BEST_PRACTICES.md` 获取完整指南
+
+**核心原则**:
+1. **Plan 模式优先**: 复杂任务使用 `Shift+Tab×2` 进入 Plan 模式，先想清楚再动手
+2. **验证驱动**: 每次修改后运行验证命令确认质量
+3. **知识沉淀**: 发现问题后更新本文件，形成飞轮效应
+
+**验证命令** (修改代码后必须执行):
+```bash
+nx typecheck drawnix    # 类型检查
+nx lint drawnix         # 代码规范
+nx test drawnix         # 单元测试
+npm run build:web       # 构建验证
+```
+
+**常用斜杠命令**:
+| 命令 | 功能 |
+|------|------|
+| `/auto-commit` | 自动分析变更并提交 |
+| `/speckit.auto` | 完整 SpecKit 自动流程 |
+| `/speckit.specify` | 创建功能规范 |
+| `/speckit.implement` | 执行实现 |
+
+**SpecKit 工作流** (复杂功能开发):
+```
+/speckit.specify → /speckit.clarify → /speckit.plan → /speckit.tasks → /speckit.implement
+```
+
 ### Coding Standards
 
 Full coding standards are documented in `docs/CODING_STANDARDS.md`. Key highlights:
