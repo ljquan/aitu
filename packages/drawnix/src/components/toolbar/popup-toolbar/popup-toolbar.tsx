@@ -181,14 +181,27 @@ export const PopupToolbar = () => {
       ) &&
       !PlaitBoard.hasBeenTextEditing(board);
 
-    // 合并按钮：选中多个元素，且只包含图片和文字（排除视频和工具元素）
+    // 合并按钮：选中多个元素，支持图片、文字、图形、线条、手绘等（排除视频和工具元素）
     const hasMergeable =
       selectedElements.length > 1 &&
       !hasVideoSelected &&
       !hasToolSelected &&
       selectedElements.every(element =>
+        // 图片元素
         (PlaitDrawElement.isDrawElement(element) && PlaitDrawElement.isImage(element)) ||
+        // 包含文字的绘图元素
         (PlaitDrawElement.isDrawElement(element) && isDrawElementsIncludeText([element])) ||
+        // 图形元素（矩形、圆形等，排除图片和纯文本）
+        (PlaitDrawElement.isDrawElement(element) && PlaitDrawElement.isShapeElement(element) && !PlaitDrawElement.isImage(element)) ||
+        // 箭头线
+        (PlaitDrawElement.isDrawElement(element) && PlaitDrawElement.isArrowLine(element)) ||
+        // 矢量线
+        (PlaitDrawElement.isDrawElement(element) && PlaitDrawElement.isVectorLine(element)) ||
+        // 表格
+        (PlaitDrawElement.isDrawElement(element) && PlaitDrawElement.isTable(element)) ||
+        // 手绘元素
+        Freehand.isFreehand(element) ||
+        // 思维导图元素
         MindElement.isMindElement(board, element)
       ) &&
       !PlaitBoard.hasBeenTextEditing(board);
