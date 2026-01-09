@@ -633,7 +633,7 @@ sw.addEventListener('fetch', (event: FetchEvent) => {
 
   // 拦截字体请求（Google Fonts CSS 和字体文件）
   if (isFontRequest(url, event.request)) {
-    console.log('Service Worker: Intercepting font request:', url.href);
+    // console.log('Service Worker: Intercepting font request:', url.href);
 
     event.respondWith(
       handleFontRequest(event.request)
@@ -643,7 +643,7 @@ sw.addEventListener('fetch', (event: FetchEvent) => {
 
   // 拦截外部图片请求（非同源且为图片格式）
   if (url.origin !== location.origin && isImageRequest(url, event.request)) {
-    console.log('Service Worker: Intercepting external image request:', url.href);
+    // console.log('Service Worker: Intercepting external image request:', url.href);
 
     event.respondWith(
       handleImageRequest(event.request)
@@ -679,7 +679,7 @@ async function handleFontRequest(request: Request): Promise<Response> {
     const cachedResponse = await cache.match(request);
 
     if (cachedResponse) {
-      console.log(`Service Worker [Font-${requestId}]: 从缓存返回字体:`, url.href);
+      // console.log(`Service Worker [Font-${requestId}]: 从缓存返回字体:`, url.href);
       return cachedResponse;
     }
 
@@ -824,7 +824,7 @@ async function handleAssetLibraryRequest(request: Request): Promise<Response> {
   // 使用完整路径作为缓存 key
   const cacheKey = url.pathname;
 
-  console.log(`Service Worker [Asset-${requestId}]: Handling asset library request:`, cacheKey);
+  // console.log(`Service Worker [Asset-${requestId}]: Handling asset library request:`, cacheKey);
 
   try {
     // 从 Cache API 获取
@@ -832,7 +832,7 @@ async function handleAssetLibraryRequest(request: Request): Promise<Response> {
     const cachedResponse = await cache.match(cacheKey);
 
     if (cachedResponse) {
-      console.log(`Service Worker [Asset-${requestId}]: Found cached asset:`, cacheKey);
+      // console.log(`Service Worker [Asset-${requestId}]: Found cached asset:`, cacheKey);
       const blob = await cachedResponse.blob();
 
       // 检查是否是视频请求
@@ -1225,7 +1225,7 @@ async function handleImageRequest(request: Request): Promise<Response> {
     // 生成唯一的请求ID用于追踪
     const requestId = Math.random().toString(36).substring(2, 10);
 
-    console.log(`Service Worker [${requestId}]: Intercepting image request at ${new Date().toISOString()}:`, request.url);
+    // console.log(`Service Worker [${requestId}]: Intercepting image request at ${new Date().toISOString()}:`, request.url);
 
     // 创建原始URL（不带缓存破坏参数）用于缓存键和去重键
     const originalUrl = new URL(request.url);
@@ -1272,15 +1272,15 @@ async function handleImageRequest(request: Request): Promise<Response> {
       duplicateRequestIds: []
     });
 
-    console.log(`Service Worker [${requestId}]: 创建新的请求处理Promise:`, dedupeKey);
+    // console.log(`Service Worker [${requestId}]: 创建新的请求处理Promise:`, dedupeKey);
 
     // 请求完成后从字典中移除
     requestPromise.finally(() => {
       const entry = pendingImageRequests.get(dedupeKey);
       if (entry) {
-        const totalTime = Date.now() - entry.timestamp;
-        const allRequestIds = [entry.originalRequestId, ...entry.duplicateRequestIds || []];
-        console.log(`Service Worker [${requestId}]: 请求完成 (耗时${totalTime}ms，总计数: ${entry.count}，涉及请求IDs: [${allRequestIds.join(', ')}]):`, dedupeKey);
+        // const totalTime = Date.now() - entry.timestamp;
+        // const allRequestIds = [entry.originalRequestId, ...entry.duplicateRequestIds || []];
+        // console.log(`Service Worker [${requestId}]: 请求完成 (耗时${totalTime}ms，总计数: ${entry.count}，涉及请求IDs: [${allRequestIds.join(', ')}]):`, dedupeKey);
         pendingImageRequests.delete(dedupeKey);
       }
     });
@@ -1296,7 +1296,7 @@ async function handleImageRequest(request: Request): Promise<Response> {
 // 实际的图片请求处理逻辑
 async function handleImageRequestInternal(originalRequest: Request, requestUrl: string, dedupeKey: string, requestId: string): Promise<Response> {
   try {
-    console.log(`Service Worker [${requestId}]: 开始处理图片请求:`, dedupeKey);
+    // console.log(`Service Worker [${requestId}]: 开始处理图片请求:`, dedupeKey);
 
     // 首先尝试从缓存获取，同时验证缓存是否过期
     const cache = await caches.open(IMAGE_CACHE_NAME);

@@ -193,9 +193,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
     if (value && value.length > 0) {
       fontManagerService.preloadBoardFonts(value).then(() => {
         // 字体加载完成后，强制重新渲染
-        if (board) {
-          board.redraw();
-        }
+        // PlaitBoard 没有 redraw 方法，字体加载后会自动应用
       }).catch(error => {
         console.warn('Failed to preload board fonts:', error);
       });
