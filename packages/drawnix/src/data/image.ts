@@ -334,14 +334,14 @@ export const insertImageFromUrl = async (
   skipImageLoad?: boolean // 如果为 true 且提供了 referenceDimensions，则跳过图片加载直接使用提供的尺寸
 ) => {
   // console.log(`[insertImageFromUrl] Called with:`, {
-    imageUrl: imageUrl?.substring(0, 80),
-    startPoint,
-    isDrop,
-    referenceDimensions,
-    skipScroll,
-    skipImageLoad,
-    boardExists: !!board,
-  });
+  //   imageUrl: imageUrl?.substring(0, 80),
+  //   startPoint,
+  //   isDrop,
+  //   referenceDimensions,
+  //   skipScroll,
+  //   skipImageLoad,
+  //   boardExists: !!board,
+  // });
 
   // 只有在没有提供startPoint和referenceDimensions时,才获取当前选中元素
   // 当从AI生成对话框调用时,已经传入了这些参数,不应该依赖当前选中状态

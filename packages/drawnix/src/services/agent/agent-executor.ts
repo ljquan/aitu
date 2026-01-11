@@ -249,10 +249,10 @@ class AgentExecutor {
       const allReferenceImages = [...context.selection.images, ...context.selection.graphics];
       
       // console.log('[AgentExecutor] Reference images collected:', {
-        fromImages: context.selection.images.length,
-        fromGraphics: context.selection.graphics.length,
-        total: allReferenceImages.length,
-      });
+        // fromImages: context.selection.images.length,
+        // fromGraphics: context.selection.graphics.length,
+        // total: allReferenceImages.length,
+      // });
 
       // 生成系统提示词（自动从 registry 获取工具描述）
       let systemPrompt = generateSystemPrompt();

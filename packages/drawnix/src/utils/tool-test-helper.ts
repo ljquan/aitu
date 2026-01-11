@@ -184,7 +184,7 @@ export class ToolTestHelper {
    * 显示帮助信息
    */
   help(): void {
-    // console.log(`
+    /* console.log(`
 🔧 Tool Test Helper - Available Commands:
 
 📌 Setup:
@@ -204,7 +204,7 @@ export class ToolTestHelper {
 
 ❓ Help:
   testToolbox.help()                    - Show this help message
-    `);
+    `); */
   }
 }
 

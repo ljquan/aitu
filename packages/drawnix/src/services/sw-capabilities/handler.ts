@@ -446,10 +446,10 @@ export class SWCapabilitiesHandler {
       
       // Debug: Log context to check if selection.images is present
       // console.log('[AIAnalyze] Context received:', {
-        userInstruction: params.context?.userInstruction?.substring(0, 50),
-        selectionImages: params.context?.selection?.images?.length || 0,
-        selectionGraphics: (params.context?.selection as any)?.graphics?.length || 0,
-      });
+      //   userInstruction: params.context?.userInstruction?.substring(0, 50),
+      //   selectionImages: params.context?.selection?.images?.length || 0,
+      //   selectionGraphics: (params.context?.selection as any)?.graphics?.length || 0,
+      // });
       
       const result = await analyzeWithAI(params.context as any, {
         onChunk: (chunk) => {

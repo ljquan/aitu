@@ -325,9 +325,9 @@ async function executeCanvasInsertion(params: CanvasInsertionParams): Promise<MC
   const board = boardRef;
 
   // console.log('[CanvasInsertion] executeCanvasInsertion called, board:', !!board, 'params:', {
-    itemsCount: params.items?.length,
-    startPoint: params.startPoint,
-  });
+  //   itemsCount: params.items?.length,
+  //   startPoint: params.startPoint,
+  // });
 
   if (!board) {
     console.error('[CanvasInsertion] Board is null!');

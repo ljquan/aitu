@@ -322,11 +322,11 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
     const handleTaskCompleted = (task: Task) => {
       // console.log(`[AutoInsert] handleTaskCompleted called for task ${task.id}, type: ${task.type}, status: ${task.status}`);
       // console.log(`[AutoInsert] Task params:`, {
-        autoInsertToCanvas: task.params.autoInsertToCanvas,
-        prompt: task.params.prompt?.substring(0, 50),
-        hasResult: !!task.result,
-        resultUrl: task.result?.url?.substring(0, 100),
-      });
+      //   autoInsertToCanvas: task.params.autoInsertToCanvas,
+      //   prompt: task.params.prompt?.substring(0, 50),
+      //   hasResult: !!task.result,
+      //   resultUrl: task.result?.url?.substring(0, 100),
+      // });
 
       // 检查任务是否配置了自动插入画布
       if (!task.params.autoInsertToCanvas) {
