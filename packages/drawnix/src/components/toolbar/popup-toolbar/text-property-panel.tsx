@@ -206,7 +206,7 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({
 
   // 处理颜色变更
   const handleColorChange = useCallback((color: string) => {
-    console.log('[handleColorChange] color:', color);
+    // console.log('[handleColorChange] color:', color);
     // TDesign ColorPickerPanel 返回的颜色已包含透明度信息
     // 直接应用颜色，无需额外处理透明度
     setColorValue(color);
@@ -431,7 +431,7 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({
                         addToRecentColors(result.sRGBHex);
                       }
                     } catch (e) {
-                      console.log('EyeDropper cancelled or failed:', e);
+                      // console.log('EyeDropper cancelled or failed:', e);
                     }
                   }}
                   title={language === 'zh' ? '拾取屏幕颜色' : 'Pick screen color'}

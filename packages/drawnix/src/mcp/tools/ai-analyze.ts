@@ -86,21 +86,21 @@ export const aiAnalyzeTool: MCPTool = {
     const generatedSteps: WorkflowStepInfo[] = [];
 
     try {
-      console.log('[AIAnalyzeTool] Starting analysis with context:', {
-        userInstruction: context.userInstruction?.substring(0, 50),
-        model: context.model,
-        hasSelection: Object.values(context.selection).some(arr => arr.length > 0),
-      });
+      // console.log('[AIAnalyzeTool] Starting analysis with context:', {
+      //   userInstruction: context.userInstruction?.substring(0, 50),
+      //   model: context.model,
+      //   hasSelection: context.selection && Object.values(context.selection).some(arr => arr?.length > 0),
+      // });
 
       const result = await agentExecutor.execute(context, {
         model: textModel || context.model.id,
         onChunk: (chunk) => {
-          console.log('[AIAnalyzeTool] Chunk:', chunk);
+          // console.log('[AIAnalyzeTool] Chunk:', chunk);
           // 使用标准回调
           options?.onChunk?.(chunk);
         },
         onToolCall: (toolCall) => {
-          console.log('[AIAnalyzeTool] Tool call:', toolCall.name);
+          // console.log('[AIAnalyzeTool] Tool call:', toolCall.name);
 
           // 注入模型参数到工具参数中
           // 只有当 AI 指定了错误类型的模型时才需要注入
@@ -128,7 +128,7 @@ export const aiAnalyzeTool: MCPTool = {
                   : settings.imageModelName || IMAGE_MODELS[0]?.id || 'gemini-2.5-flash-image-vip';
 
                 toolArgs.model = correctModel;
-                console.log(`[AIAnalyzeTool] Corrected model '${specifiedModel}' -> '${correctModel}' for ${toolCall.name}`);
+                // console.log(`[AIAnalyzeTool] Corrected model '${specifiedModel}' -> '${correctModel}' for ${toolCall.name}`);
               }
             }
             // 如果没有指定模型，不注入，让 MCP 工具使用默认模型
@@ -149,7 +149,7 @@ export const aiAnalyzeTool: MCPTool = {
           options?.onAddSteps?.([newStep]);
         },
         onToolResult: (toolResult) => {
-          console.log('[AIAnalyzeTool] Tool result:', toolResult);
+          // console.log('[AIAnalyzeTool] Tool result:', toolResult);
 
           // 更新最后一个步骤的状态
           if (generatedSteps.length > 0) {

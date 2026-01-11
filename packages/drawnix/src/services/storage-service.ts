@@ -40,7 +40,7 @@ class StorageService {
     try {
       await this.store.ready();
       this.initialized = true;
-      console.log('[StorageService] Initialized successfully');
+      // console.log('[StorageService] Initialized successfully');
     } catch (error) {
       console.error('[StorageService] Failed to initialize:', error);
       throw new Error('Storage initialization failed');
@@ -58,7 +58,7 @@ class StorageService {
     try {
       await this.ensureInitialized();
       await this.store.setItem(task.id, task);
-      console.log(`[StorageService] Saved task ${task.id}`);
+      // console.log(`[StorageService] Saved task ${task.id}`);
     } catch (error) {
       console.error('[StorageService] Failed to save task:', error);
       throw new Error('Failed to save task to storage');
@@ -77,7 +77,7 @@ class StorageService {
 
       // Save each task individually using taskId as key
       await Promise.all(tasks.map(task => this.saveTask(task)));
-      console.log(`[StorageService] Saved ${tasks.length} tasks`);
+      // console.log(`[StorageService] Saved ${tasks.length} tasks`);
     } catch (error) {
       console.error('[StorageService] Failed to save tasks:', error);
       throw new Error('Failed to save tasks to storage');
@@ -121,7 +121,7 @@ class StorageService {
         }
       });
 
-      console.log(`[StorageService] Loaded ${tasks.length} tasks`);
+      // console.log(`[StorageService] Loaded ${tasks.length} tasks`);
       return tasks;
     } catch (error) {
       console.error('[StorageService] Failed to load tasks:', error);
@@ -139,7 +139,7 @@ class StorageService {
     try {
       await this.ensureInitialized();
       await this.store.removeItem(taskId);
-      console.log(`[StorageService] Deleted task ${taskId}`);
+      // console.log(`[StorageService] Deleted task ${taskId}`);
     } catch (error) {
       console.error(`[StorageService] Failed to delete task ${taskId}:`, error);
       throw new Error('Failed to delete task from storage');
@@ -198,7 +198,7 @@ class StorageService {
       await Promise.all(tasksToDelete.map(task => this.deleteTask(task.id)));
 
       const remaining = tasks.length - tasksToDelete.length;
-      console.log(`[StorageService] Pruned ${tasksToDelete.length} old tasks, ${remaining} remaining`);
+      // console.log(`[StorageService] Pruned ${tasksToDelete.length} old tasks, ${remaining} remaining`);
     } catch (error) {
       console.error('[StorageService] Failed to prune old tasks:', error);
       throw new Error('Failed to prune old tasks');
@@ -213,7 +213,7 @@ class StorageService {
     try {
       await this.ensureInitialized();
       await this.store.clear();
-      console.log('[StorageService] Cleared all storage');
+      // console.log('[StorageService] Cleared all storage');
     } catch (error) {
       console.error('[StorageService] Failed to clear storage:', error);
       throw new Error('Failed to clear storage');

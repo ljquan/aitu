@@ -37,12 +37,12 @@ const getInsertionPointFromSavedSelection = (
     const centerX = boundingRect.x + boundingRect.width / 2;
     const insertionY = boundingRect.y + boundingRect.height + 50;
 
-    console.log('getInsertionPointFromSavedSelection (video): Calculated insertion point:', {
-      centerX,
-      insertionY,
-      boundingRect,
-      videoWidth
-    });
+    // console.log('getInsertionPointFromSavedSelection (video): Calculated insertion point:', {
+    //   centerX,
+    //   insertionY,
+    //   boundingRect,
+    //   videoWidth
+    // });
 
     // 将X坐标向左偏移视频宽度的一半，让视频以中心点对齐
     return [centerX - videoWidth / 2, insertionY] as Point;
@@ -71,11 +71,11 @@ const dimensionsCache = new Map<string, Promise<VideoDimensions>>();
 export const getVideoDimensions = (videoUrl: string): Promise<VideoDimensions> => {
   // 检查缓存
   if (dimensionsCache.has(videoUrl)) {
-    console.log('[getVideoDimensions] Using cached dimensions for:', videoUrl);
+    // console.log('[getVideoDimensions] Using cached dimensions for:', videoUrl);
     return dimensionsCache.get(videoUrl)!;
   }
 
-  console.log('[getVideoDimensions] Loading video metadata for:', videoUrl);
+  // console.log('[getVideoDimensions] Loading video metadata for:', videoUrl);
 
   const promise = new Promise<VideoDimensions>((resolve) => {
     const video = document.createElement('video');
@@ -108,13 +108,13 @@ export const getVideoDimensions = (videoUrl: string): Promise<VideoDimensions> =
           height: video.videoHeight || 225 // 如果无法获取高度，使用默认值
         };
 
-        console.log('[getVideoDimensions] Successfully loaded metadata:', {
-          url: videoUrl,
-          dimensions,
-          videoWidth: video.videoWidth,
-          videoHeight: video.videoHeight,
-          readyState: video.readyState
-        });
+        // console.log('[getVideoDimensions] Successfully loaded metadata:', {
+        //   url: videoUrl,
+        //   dimensions,
+        //   videoWidth: video.videoWidth,
+        //   videoHeight: video.videoHeight,
+        //   readyState: video.readyState
+        // });
 
         // 清理视频元素
         video.src = '';
@@ -193,11 +193,11 @@ const calculateDisplayDimensions = (
       width = height * videoAspectRatio;
     }
 
-    console.log('Using reference dimensions for video sizing:', {
-      reference: referenceDimensions,
-      calculated: { width: Math.round(width), height: Math.round(height) },
-      originalAspectRatio: videoAspectRatio
-    });
+    // console.log('Using reference dimensions for video sizing:', {
+    //   reference: referenceDimensions,
+    //   calculated: { width: Math.round(width), height: Math.round(height) },
+    //   originalAspectRatio: videoAspectRatio
+    // });
 
     return {
       width: Math.round(width),
@@ -262,7 +262,7 @@ export const insertVideoFromUrl = async (
       defaultDimensions.height,
       referenceDimensions
     );
-    console.log('Using default dimensions for immediate insertion:', displayDimensions);
+    // console.log('Using default dimensions for immediate insertion:', displayDimensions);
 
     // 注意：合并视频已在 video-merge-webcodecs.ts 中通过 cacheMediaFromBlob 缓存
     // 外部视频 URL 会被 Service Worker 自动缓存
@@ -276,7 +276,7 @@ export const insertVideoFromUrl = async (
     // 除非 skipCentering=true（表示 startPoint 已经是左上角坐标）
     if (insertionPoint && !isDrop && !skipCentering) {
       insertionPoint = [insertionPoint[0] - displayDimensions.width / 2, insertionPoint[1]] as Point;
-      console.log('insertVideoFromUrl: Adjusted insertion point for video centering:', insertionPoint);
+      // console.log('insertVideoFromUrl: Adjusted insertion point for video centering:', insertionPoint);
     } else if (!startPoint && !isDrop) {
       // 没有提供起始点时,优先使用保存的选中元素IDs计算插入位置
       insertionPoint = getInsertionPointFromSavedSelection(board, displayDimensions.width);
@@ -299,7 +299,7 @@ export const insertVideoFromUrl = async (
       insertionPoint = [100, 100] as Point;
     }
 
-    console.log('Inserting video element with display dimensions:', displayDimensions, 'at point:', insertionPoint);
+    // console.log('Inserting video element with display dimensions:', displayDimensions, 'at point:', insertionPoint);
 
     // 直接使用原始URL，并添加 #video 标识符
     // 这样刷新后视频仍然可以正常显示（只要原始URL有效）
@@ -311,18 +311,17 @@ export const insertVideoFromUrl = async (
       height: displayDimensions.height,
     };
 
-    console.log('[insertVideoFromUrl] Creating video as image element:', {
-      originalUrl: videoUrl,
-      urlWithFragment: videoWithFragment,
-      dimensions: displayDimensions,
-      insertionPoint,
-      isBlobUrl: videoUrl.startsWith('blob:')
-    });
+    // console.log('[insertVideoFromUrl] Creating video as image element:', {
+    //   originalUrl: videoUrl,
+    //   urlWithFragment: videoWithFragment,
+    //   dimensions: displayDimensions,
+    //   insertionPoint,
+    //   isBlobUrl: videoUrl.startsWith('blob:')
+    // });
 
     // 使用DrawTransforms插入视频元素
     const { DrawTransforms } = await import('@plait/draw');
     DrawTransforms.insertImage(board, videoAsImageElement, insertionPoint);
-    console.log('[insertVideoFromUrl] Video inserted successfully at:', insertionPoint);
 
     // 插入后滚动视口到新元素位置（如果不在视口内）
     // skipScroll 用于批量插入场景，由上层统一处理滚动

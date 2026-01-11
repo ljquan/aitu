@@ -11,7 +11,7 @@ import { defaultGeminiClient } from '../utils/gemini-api';
 import { videoAPIService, VideoModel } from './video-api-service';
 import { TASK_TIMEOUT } from '../constants/TASK_CONSTANTS';
 import { analytics } from '../utils/posthog-analytics';
-import { taskQueueService } from './task-queue-service';
+import { legacyTaskQueueService as taskQueueService } from './task-queue';
 import { geminiSettings } from '../utils/settings-manager';
 import { unifiedCacheService } from './unified-cache-service';
 
@@ -57,7 +57,7 @@ class GenerationAPIService {
     });
 
     try {
-      console.log(`[GenerationAPI] Starting generation for task ${taskId} (${type})`);
+      // console.log(`[GenerationAPI] Starting generation for task ${taskId} (${type})`);
 
       // Get timeout for this task type
       const timeout = TASK_TIMEOUT[type.toUpperCase() as keyof typeof TASK_TIMEOUT];
@@ -78,7 +78,7 @@ class GenerationAPIService {
       const result = await Promise.race([generationPromise, timeoutPromise]);
 
       const duration = Date.now() - startTime;
-      console.log(`[GenerationAPI] Generation completed for task ${taskId}`);
+      // console.log(`[GenerationAPI] Generation completed for task ${taskId}`);
 
       // Track success
       analytics.trackModelSuccess({
@@ -186,7 +186,7 @@ class GenerationAPIService {
             // 使用智能图片传递：检查缓存时间，超过1天自动转为base64
             const imageData = await unifiedCacheService.getImageForAI(img.url);
             processedUrls.push(imageData.value);
-            console.log(`[GenerationAPI] Image processed: ${imageData.type === 'base64' ? 'converted to base64' : 'using URL'}`);
+            // console.log(`[GenerationAPI] Image processed: ${imageData.type === 'base64' ? 'converted to base64' : 'using URL'}`);
           }
         }
         
@@ -198,7 +198,7 @@ class GenerationAPIService {
       // 获取 quality 参数（如果有）
       const quality = (params as any).quality as '1k' | '2k' | '4k' | undefined;
 
-      console.log('[GenerationAPI] Image generation params - model:', params.model, 'size:', size);
+      // console.log('[GenerationAPI] Image generation params - model:', params.model, 'size:', size);
 
       // 调用新的图片生成接口
       const result = await defaultGeminiClient.generateImage(params.prompt, {
@@ -209,7 +209,7 @@ class GenerationAPIService {
         model: params.model, // 传递指定的模型
       });
 
-      console.log('[GenerationAPI] Image generation response:', result);
+      // console.log('[GenerationAPI] Image generation response:', result);
 
       // 从 revised_prompt 中提取纯净的 API 响应（去掉 "Generate an image: 用户prompt: " 前缀）
       const extractCleanResponse = (revisedPrompt: string): string => {
@@ -372,13 +372,13 @@ class GenerationAPIService {
         {
           interval: 5000, // Poll every 5 seconds
           onProgress: (progress, status) => {
-            console.log(`[GenerationAPI] Video progress: ${progress}% (${status})`);
+            // console.log(`[GenerationAPI] Video progress: ${progress}% (${status})`);
             // Update task progress in queue
             taskQueueService.updateTaskProgress(taskId, progress);
           },
           onSubmitted: (videoId) => {
             // Save remoteId immediately after submission for recovery support
-            console.log(`[GenerationAPI] Video submitted, saving remoteId: ${videoId}`);
+            // console.log(`[GenerationAPI] Video submitted, saving remoteId: ${videoId}`);
             taskQueueService.updateTaskStatus(taskId, 'processing' as any, {
               remoteId: videoId,
               executionPhase: TaskExecutionPhase.POLLING,
@@ -437,7 +437,7 @@ class GenerationAPIService {
     });
 
     try {
-      console.log(`[GenerationAPI] Resuming video generation for task ${taskId}, remoteId: ${remoteId}`);
+      // console.log(`[GenerationAPI] Resuming video generation for task ${taskId}, remoteId: ${remoteId}`);
 
       // Get timeout for video
       const timeout = TASK_TIMEOUT.VIDEO;
@@ -453,7 +453,7 @@ class GenerationAPIService {
       const pollingPromise = videoAPIService.resumePolling(remoteId, {
         interval: 5000,
         onProgress: (progress, status) => {
-          console.log(`[GenerationAPI] Resumed video progress: ${progress}% (${status})`);
+          // console.log(`[GenerationAPI] Resumed video progress: ${progress}% (${status})`);
           taskQueueService.updateTaskProgress(taskId, progress);
         },
       });
@@ -462,7 +462,7 @@ class GenerationAPIService {
       const result = await Promise.race([pollingPromise, timeoutPromise]);
 
       const duration = Date.now() - startTime;
-      console.log(`[GenerationAPI] Resumed video generation completed for task ${taskId}`);
+      // console.log(`[GenerationAPI] Resumed video generation completed for task ${taskId}`);
 
       // Track success
       analytics.trackModelSuccess({
@@ -512,7 +512,7 @@ class GenerationAPIService {
     if (controller) {
       controller.abort();
       this.abortControllers.delete(taskId);
-      console.log(`[GenerationAPI] Cancelled request for task ${taskId}`);
+      // console.log(`[GenerationAPI] Cancelled request for task ${taskId}`);
     }
   }
 

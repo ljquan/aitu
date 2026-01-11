@@ -78,5 +78,5 @@ export function initializeMCP(): void {
     splitImageTool,
     svgTool,
   ]);
-  console.log('[MCP] Initialized with built-in tools');
+  // console.log('[MCP] Initialized with built-in tools');
 }

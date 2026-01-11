@@ -268,7 +268,7 @@
 
 ### 🚀 Features
 
-- 优化AI图像和AI视频图标样式 ([237695f](https://github.com/ljquan/aitu/commit/237695f))
+- 优化AI图片和AI视频图标样式 ([237695f](https://github.com/ljquan/aitu/commit/237695f))
 - 优化工具栏图标布局和AI图标样式 ([00392d4](https://github.com/ljquan/aitu/commit/00392d4))
 - 优化按钮布局 close #42 ([80ed227](https://github.com/ljquan/aitu/commit/80ed227))
 - 将模式切换按钮移至 WinBox 标题栏 ([4c8617b](https://github.com/ljquan/aitu/commit/4c8617b))
@@ -290,7 +290,7 @@
 - 添加批量上传导入表格功能 ([59d0c81](https://github.com/ljquan/aitu/commit/59d0c81))
 - 添加复选框列用于行选择 ([b373b8f](https://github.com/ljquan/aitu/commit/b373b8f))
 - 添加预览列、选择功能和仅生成选中行 ([efb9253](https://github.com/ljquan/aitu/commit/efb9253))
-- 将批量出图集成到 AI 图像生成对话框 ([51a8141](https://github.com/ljquan/aitu/commit/51a8141))
+- 将批量出图集成到 AI 图片生成对话框 ([51a8141](https://github.com/ljquan/aitu/commit/51a8141))
 - 重构批量任务提交逻辑，添加批次参数避免重复检测 ([9885195](https://github.com/ljquan/aitu/commit/9885195))
 - 增强批量出图功能 ([c608c09](https://github.com/ljquan/aitu/commit/c608c09))
 - 添加批量出图工具及图片库功能 ([5b943db](https://github.com/ljquan/aitu/commit/5b943db))

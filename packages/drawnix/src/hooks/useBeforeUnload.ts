@@ -10,7 +10,7 @@
  */
 
 import { useEffect } from 'react';
-import { taskQueueService } from '../services/task-queue-service';
+import { taskQueueService } from '../services/task-queue';
 import { TaskStatus } from '../types/task.types';
 
 /**

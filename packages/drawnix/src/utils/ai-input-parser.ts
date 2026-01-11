@@ -111,7 +111,7 @@ function getDefaultVideoModel(): string {
  */
 function getDefaultTextModel(): string {
   const settings = geminiSettings.get();
-  return settings?.textModelName || 'claude-sonnet-4-5-20250929';
+  return settings?.textModelName || 'deepseek-v3.2';
 }
 
 /**

@@ -1135,7 +1135,8 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
           batchId,
           batchIndex: i + 1,
           batchTotal: generateCount,
-          globalIndex: subTaskCounter
+          globalIndex: subTaskCounter,
+          autoInsertToCanvas: true,
         };
 
         const createdTask = createTask(taskParams, TaskType.IMAGE);

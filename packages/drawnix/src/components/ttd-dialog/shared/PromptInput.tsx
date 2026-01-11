@@ -86,7 +86,7 @@ export const PromptInput: React.FC<PromptInputProps> = ({
     <div className="form-field">
       <div className="form-label-with-icon">
       <label className="form-label">
-        {language === 'zh' ? `${type === 'image' ? '图像' : '视频'}描述` : `${type === 'image' ? 'Image' : 'Video'} Description`}
+        {language === 'zh' ? `${type === 'image' ? '图片' : '视频'}描述` : `${type === 'image' ? 'Image' : 'Video'} Description`}
       </label>
       <div className="textarea-with-preset">
         <div className="preset-tooltip-container" ref={containerRef}>

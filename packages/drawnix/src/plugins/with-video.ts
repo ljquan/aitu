@@ -15,7 +15,7 @@ export const withVideo = (board: PlaitBoard) => {
     );
     
     if (videoElements.length > 0) {
-      console.log('Found video elements, converting to image+identifier format:', videoElements.length);
+      // console.log('Found video elements, converting to image+identifier format:', videoElements.length);
       
       // 转换每个video元素为image+标识元素
       videoElements.forEach((videoElement: any) => {
@@ -31,10 +31,10 @@ export const withVideo = (board: PlaitBoard) => {
             // 移除可能存在的poster字段
             delete (imageElement as any).poster;
             
-            console.log('Converting video element to image+identifier:', {
-              from: videoElement,
-              to: imageElement
-            });
+            // console.log('Converting video element to image+identifier:', {
+            //   from: videoElement,
+            //   to: imageElement
+            // });
             
             // 替换元素
             Transforms.setNode(board, imageElement, [elementIndex]);
@@ -49,7 +49,7 @@ export const withVideo = (board: PlaitBoard) => {
     onChange();
   };
   
-  console.log('Video plugin initialized with legacy video element conversion');
+  // console.log('Video plugin initialized with legacy video element conversion');
   return board;
 };
 

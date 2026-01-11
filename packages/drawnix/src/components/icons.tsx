@@ -184,7 +184,7 @@ export const GithubIcon = createIcon(
   </svg>
 );
 
-// AI 图像图标 - 图片图标 + 右上角 AI 文字（偏红主题色）
+// AI 图片图标 - 图片图标 + 右上角 AI 文字（偏红主题色）
 export const AIImageIcon = createIcon(
   <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="none" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
     {/* 图片图标主体 - 浅红背景 + 红色描边 */}

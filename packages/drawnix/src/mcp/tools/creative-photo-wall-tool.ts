@@ -7,7 +7,7 @@
 
 import type { MCPTool, MCPResult, MCPExecuteOptions, MCPTaskResult } from '../types';
 import { INSPIRATION_BOARD_DEFAULTS, INSPIRATION_BOARD_PROMPT_TEMPLATE } from '../../types/photo-wall.types';
-import { taskQueueService } from '../../services/task-queue-service';
+import { taskQueueService } from '../../services/task-queue';
 import { TaskType } from '../../types/task.types';
 import { getCurrentImageModel } from './image-generation';
 
@@ -75,22 +75,22 @@ function executeQueue(params: InspirationBoardParams, options: MCPExecuteOptions
     name: `reference-${index + 1}`,
   }));
 
-  console.log('[InspirationBoardTool] Creating inspiration board task with params:', {
-    theme,
-    imageCount: validImageCount,
-    imageSize,
-    imageQuality,
-    referenceImages: referenceImages?.length || 0,
-    model: actualModel,
-    modelSource: model ? 'user-specified' : 'settings',
-  });
+  // console.log('[InspirationBoardTool] Creating inspiration board task with params:', {
+  //   theme,
+  //   imageCount: validImageCount,
+  //   imageSize,
+  //   imageQuality,
+  //   referenceImages: referenceImages?.length || 0,
+  //   model: actualModel,
+  //   modelSource: model ? 'user-specified' : 'settings',
+  // });
 
   try {
     let task;
 
     // 如果是重试，复用原有任务
     if (options.retryTaskId) {
-      console.log('[InspirationBoardTool] Retrying existing task:', options.retryTaskId);
+      // console.log('[InspirationBoardTool] Retrying existing task:', options.retryTaskId);
       taskQueueService.retryTask(options.retryTaskId);
       task = taskQueueService.getTask(options.retryTaskId);
       if (!task) {
@@ -115,12 +115,14 @@ function executeQueue(params: InspirationBoardParams, options: MCPExecuteOptions
           // 批量参数
           batchId: options.batchId,
           globalIndex: options.globalIndex || 1,
+          // 自动插入画布
+          autoInsertToCanvas: true,
         },
         TaskType.IMAGE
       );
     }
 
-    console.log('[InspirationBoardTool] Created/retried inspiration board task:', task.id);
+    // console.log('[InspirationBoardTool] Created/retried inspiration board task:', task.id);
 
     return {
       success: true,

@@ -514,18 +514,27 @@ export const ProjectDrawer: React.FC<ProjectDrawerProps> = ({
 
   // Handle creating new board
   const handleCreateBoard = useCallback(async (folderId?: string) => {
+    // Save current before creating/switching
+    if (onBeforeSwitch) {
+      await onBeforeSwitch();
+    }
+
     const board = await createBoard({
       name: WORKSPACE_DEFAULTS.DEFAULT_BOARD_NAME,
       folderId: folderId || null,
     });
     if (board) {
       // 自动切换到新建的画板
-      await switchBoard(board.id);
+      const switched = await switchBoard(board.id);
+      // 通知父组件更新画布数据
+      if (switched && onBoardSwitch) {
+        onBoardSwitch(switched);
+      }
       // 自动进入重命名状态
       setAutoEditBoardId(board.id);
       MessagePlugin.success('画板已创建');
     }
-  }, [createBoard, switchBoard]);
+  }, [createBoard, switchBoard, onBeforeSwitch, onBoardSwitch]);
 
   // Handle creating new folder
   const handleCreateFolder = useCallback(async (parentId?: string) => {

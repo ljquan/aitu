@@ -9,7 +9,7 @@
 
 import type { MCPTool, MCPResult, MCPExecuteOptions, MCPTaskResult } from '../types';
 import { videoAPIService } from '../../services/video-api-service';
-import { taskQueueService } from '../../services/task-queue-service';
+import { taskQueueService } from '../../services/task-queue';
 import { TaskType } from '../../types/task.types';
 import type { VideoModel } from '../../types/video.types';
 import { VIDEO_MODEL_CONFIGS } from '../../constants/video-model-config';
@@ -86,13 +86,13 @@ async function executeAsync(params: VideoGenerationParams): Promise<MCPResult> {
   }
 
   try {
-    console.log('[VideoGenerationTool] Generating video with params:', {
-      prompt: prompt.substring(0, 100) + (prompt.length > 100 ? '...' : ''),
-      model,
-      seconds,
-      size,
-      referenceImages: referenceImages?.length || 0,
-    });
+    // console.log('[VideoGenerationTool] Generating video with params:', {
+    //   prompt: prompt.substring(0, 100) + (prompt.length > 100 ? '...' : ''),
+    //   model,
+    //   seconds,
+    //   size,
+    //   referenceImages: referenceImages?.length || 0,
+    // });
 
     // 准备参考图片
     let inputReferences: Array<{ type: 'url'; url: string }> | undefined;
@@ -115,12 +115,12 @@ async function executeAsync(params: VideoGenerationParams): Promise<MCPResult> {
       {
         interval: 5000, // 每 5 秒轮询一次
         onProgress: (progress, status) => {
-          console.log(`[VideoGenerationTool] Progress: ${progress}% (${status})`);
+          // console.log(`[VideoGenerationTool] Progress: ${progress}% (${status})`);
         },
       }
     );
 
-    console.log('[VideoGenerationTool] Generation completed:', result);
+    // console.log('[VideoGenerationTool] Generation completed:', result);
 
     // 提取视频 URL
     const videoUrl = result.video_url || result.url;
@@ -195,7 +195,7 @@ function executeQueue(params: VideoGenerationParams, options: MCPExecuteOptions)
 
     // 如果是重试，复用原有任务
     if (options.retryTaskId) {
-      console.log('[VideoGenerationTool] Retrying existing task:', options.retryTaskId);
+      // console.log('[VideoGenerationTool] Retrying existing task:', options.retryTaskId);
       taskQueueService.retryTask(options.retryTaskId);
       const task = taskQueueService.getTask(options.retryTaskId);
       if (!task) {
@@ -217,11 +217,13 @@ function executeQueue(params: VideoGenerationParams, options: MCPExecuteOptions)
             batchIndex: i + 1,
             batchTotal: actualCount,
             globalIndex: options.globalIndex ? options.globalIndex + i : i + 1,
+            // 自动插入画布
+            autoInsertToCanvas: true,
           },
           TaskType.VIDEO
         );
         createdTasks.push(task);
-        console.log(`[VideoGenerationTool] Created task ${i + 1}/${actualCount}:`, task.id);
+        // console.log(`[VideoGenerationTool] Created task ${i + 1}/${actualCount}:`, task.id);
       }
     }
 
@@ -384,12 +386,13 @@ export async function generateVideo(params: VideoGenerationParams): Promise<MCPR
 /**
  * 便捷方法：创建视频生成任务（queue 模式）
  */
-export function createVideoTask(
+export async function createVideoTask(
   params: VideoGenerationParams,
   options?: Omit<MCPExecuteOptions, 'mode'>
-): MCPTaskResult {
-  return videoGenerationTool.execute(params as unknown as Record<string, unknown>, {
+): Promise<MCPTaskResult> {
+  const result = await videoGenerationTool.execute(params as unknown as Record<string, unknown>, {
     ...options,
     mode: 'queue',
-  }) as unknown as MCPTaskResult;
+  });
+  return result as MCPTaskResult;
 }

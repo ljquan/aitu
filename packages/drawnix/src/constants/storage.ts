@@ -23,19 +23,19 @@ export const DRAWNIX_STORE_NAME = 'drawnix_store';
 // AI 生成功能
 // ====================================
 
-/** AI 图像生成预览缓存键 */
+/** AI 图片生成预览缓存键 */
 export const AI_IMAGE_GENERATION_PREVIEW_CACHE_KEY = 'ai_image_generation_preview_cache';
 
 /** AI 视频生成预览缓存键 */
 export const AI_VIDEO_GENERATION_PREVIEW_CACHE_KEY = 'ai_video_generation_preview_cache';
 
-/** AI 图像生成历史记录键 */
+/** AI 图片生成历史记录键 */
 export const AI_IMAGE_GENERATION_HISTORY_KEY = 'ai_image_generation_history';
 
 /** AI 视频生成历史记录键 */
 export const AI_VIDEO_GENERATION_HISTORY_KEY = 'ai_video_generation_history';
 
-/** AI 图像生成模式记忆键（单图/批量） */
+/** AI 图片生成模式记忆键（单图/批量） */
 export const AI_IMAGE_MODE_CACHE_KEY = 'ai-image-generation-mode';
 
 // ====================================

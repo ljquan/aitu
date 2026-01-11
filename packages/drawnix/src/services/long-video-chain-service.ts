@@ -8,7 +8,7 @@
  * 4. 所有片段完成后，合并视频并插入画布
  */
 
-import { taskQueueService } from './task-queue-service';
+import { taskQueueService } from './task-queue';
 import { TaskStatus, TaskType, Task } from '../types/task.types';
 import { extractLastFrame } from '../utils/video-frame-extractor';
 import { mergeVideos, type MergeProgressCallback } from './video-merge-webcodecs';
@@ -16,8 +16,8 @@ import {
   createLongVideoSegmentTask,
   type LongVideoMeta,
   type VideoSegmentScript,
-} from '../mcp/tools/long-video-generation';
-import { quickInsert } from '../mcp/tools/canvas-insertion';
+} from './canvas-operations/long-video';
+import { quickInsert } from './canvas-operations/canvas-insertion';
 
 /** 长视频批次跟踪信息 */
 interface LongVideoBatch {
@@ -75,7 +75,7 @@ class LongVideoChainService {
     this.isInitialized = true;
     this.initTimestamp = Date.now();
 
-    console.log('[LongVideoChain] Service initialized at', this.initTimestamp);
+    // console.log('[LongVideoChain] Service initialized at', this.initTimestamp);
 
     // 订阅任务更新事件
     taskQueueService.observeTaskUpdates().subscribe(event => {
@@ -89,7 +89,7 @@ class LongVideoChainService {
         // 忽略服务初始化之前完成的任务（从存储恢复的旧任务）
         const completedAt = event.task.completedAt || 0;
         if (completedAt < this.initTimestamp) {
-          console.log(`[LongVideoChain] Ignoring old completed task ${event.task.id}, completedAt: ${completedAt}`);
+          // console.log(`[LongVideoChain] Ignoring old completed task ${event.task.id}, completedAt: ${completedAt}`);
           return;
         }
 
@@ -127,14 +127,14 @@ class LongVideoChainService {
 
     // 防止重复处理同一个片段
     if (batch.processedSegments.has(segmentIndex)) {
-      console.log(`[LongVideoChain] Segment ${segmentIndex} already processed, skipping`);
+      // console.log(`[LongVideoChain] Segment ${segmentIndex} already processed, skipping`);
       return;
     }
 
     // 标记为已处理
     batch.processedSegments.add(segmentIndex);
 
-    console.log(`[LongVideoChain] Segment ${segmentIndex}/${totalSegments} completed`);
+    // console.log(`[LongVideoChain] Segment ${segmentIndex}/${totalSegments} completed`);
 
     // 记录已完成的片段
     if (videoUrl) {
@@ -150,7 +150,7 @@ class LongVideoChainService {
 
     // 防止并发创建下一个任务
     if (batch.creatingNextFor === segmentIndex) {
-      console.log(`[LongVideoChain] Already creating next segment for ${segmentIndex}, skipping`);
+      // console.log(`[LongVideoChain] Already creating next segment for ${segmentIndex}, skipping`);
       return;
     }
 
@@ -186,10 +186,10 @@ class LongVideoChainService {
     let lastFrameDataUrl: string | undefined;
     if (videoUrl) {
       try {
-        console.log(`[LongVideoChain] Extracting last frame from segment ${currentMeta.segmentIndex}...`);
+        // console.log(`[LongVideoChain] Extracting last frame from segment ${currentMeta.segmentIndex}...`);
         const lastFrame = await extractLastFrame(videoUrl);
         lastFrameDataUrl = lastFrame.dataUrl;
-        console.log(`[LongVideoChain] Last frame extracted: ${lastFrame.width}x${lastFrame.height}`);
+        // console.log(`[LongVideoChain] Last frame extracted: ${lastFrame.width}x${lastFrame.height}`);
       } catch (error) {
         console.error(`[LongVideoChain] Failed to extract last frame:`, error);
       }
@@ -204,7 +204,7 @@ class LongVideoChainService {
 
     // 创建任务
     const task = createLongVideoSegmentTask(nextScript, nextMeta, lastFrameDataUrl);
-    console.log(`[LongVideoChain] Created segment ${nextIndex}/${currentMeta.totalSegments}: ${task.id}`);
+    // console.log(`[LongVideoChain] Created segment ${nextIndex}/${currentMeta.totalSegments}: ${task.id}`);
   }
 
   /**
@@ -216,7 +216,7 @@ class LongVideoChainService {
     }
 
     batch.isMerging = true;
-    console.log(`[LongVideoChain] Starting merge for batch ${batch.batchId}`);
+    // console.log(`[LongVideoChain] Starting merge for batch ${batch.batchId}`);
 
     try {
       // 按顺序收集所有视频URL
@@ -233,24 +233,24 @@ class LongVideoChainService {
         return;
       }
 
-      console.log(`[LongVideoChain] Merging ${videoUrls.length} videos...`);
+      // console.log(`[LongVideoChain] Merging ${videoUrls.length} videos...`);
 
       // 合并视频
       const onProgress: MergeProgressCallback = (progress, stage, message) => {
         const msg = message || `${stage} ${progress.toFixed(1)}%`;
-        console.log(`[LongVideoChain] Merge progress: ${msg}`);
+        // console.log(`[LongVideoChain] Merge progress: ${msg}`);
         // TODO: 可以在这里更新 UI 显示进度
       };
 
       const result = await mergeVideos(videoUrls, onProgress);
 
-      console.log(`[LongVideoChain] Merge completed, duration: ${result.duration}s`);
+      // console.log(`[LongVideoChain] Merge completed, duration: ${result.duration}s`);
 
       // 插入画布
       await this.insertMergedVideo(result.url);
 
       batch.mergeCompleted = true;
-      console.log(`[LongVideoChain] Merged video inserted to canvas`);
+      // console.log(`[LongVideoChain] Merged video inserted to canvas`);
     } catch (error) {
       console.error('[LongVideoChain] Merge failed:', error);
     } finally {
@@ -265,11 +265,11 @@ class LongVideoChainService {
     try {
       // 使用 quickInsert 插入视频
       await quickInsert('video', videoUrl);
-      console.log(`[LongVideoChain] Merged video inserted to canvas`);
+      // console.log(`[LongVideoChain] Merged video inserted to canvas`);
     } catch (error) {
       console.error('[LongVideoChain] Failed to insert video to canvas:', error);
       // 回退：输出视频URL供用户手动下载
-      console.log(`[LongVideoChain] Merged video URL: ${videoUrl}`);
+      // console.log(`[LongVideoChain] Merged video URL: ${videoUrl}`);
     }
   }
 

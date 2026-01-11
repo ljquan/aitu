@@ -76,10 +76,10 @@ function setToolFocus(board: PlaitBoard, element: PlaitTool, isFocus: boolean): 
 
     if (isFocus) {
       focusedToolId = element.id;
-      console.log('Tool element focused:', element.id);
+      // console.log('Tool element focused:', element.id);
     } else if (focusedToolId === element.id) {
       focusedToolId = null;
-      console.log('Tool element unfocused:', element.id);
+      // console.log('Tool element unfocused:', element.id);
     }
   }
 }
@@ -99,7 +99,7 @@ function blurAllTools(board: PlaitBoard): void {
   });
 
   focusedToolId = null;
-  console.log('All tool elements unfocused');
+  // console.log('All tool elements unfocused');
 }
 
 /**
@@ -147,7 +147,7 @@ export const withToolFocus: PlaitPlugin = (board: PlaitBoard) => {
       event.preventDefault();
       event.stopPropagation();
 
-      console.log('Tool element double-clicked, entering edit mode:', toolElement.id);
+      // console.log('Tool element double-clicked, entering edit mode:', toolElement.id);
       return;
     }
 
@@ -165,7 +165,7 @@ export const withToolFocus: PlaitPlugin = (board: PlaitBoard) => {
       // 如果点击的不是焦点工具元素,取消焦点
       if (!clickedTool || clickedTool.id !== focusedToolId) {
         blurAllTools(board);
-        console.log('Clicked outside focused tool, exiting edit mode');
+        // console.log('Clicked outside focused tool, exiting edit mode');
       }
     }
 
@@ -187,7 +187,7 @@ export const withToolFocus: PlaitPlugin = (board: PlaitBoard) => {
         event.clientY > rect.bottom
       ) {
         blurAllTools(board);
-        console.log('Clicked outside canvas, exiting edit mode');
+        // console.log('Clicked outside canvas, exiting edit mode');
       }
     }
 
@@ -195,7 +195,7 @@ export const withToolFocus: PlaitPlugin = (board: PlaitBoard) => {
     globalPointerUp(event);
   };
 
-  console.log('withToolFocus plugin initialized');
+  // console.log('withToolFocus plugin initialized');
   return board;
 };
 

@@ -450,12 +450,12 @@ async function detectGridLinesInternal(
   // 如果 forceTransparency 为 true，则强制使用透明分割线检测
   const hasAlpha = forceTransparency ?? hasTransparency(imageData);
 
-  console.log('[detectGridLinesInternal] Transparency detection:', {
-    hasAlpha,
-    forceTransparency,
-    width,
-    height
-  });
+  // console.log('[detectGridLinesInternal] Transparency detection:', {
+  //   hasAlpha,
+  //   forceTransparency,
+  //   width,
+  //   height
+  // });
 
   // 检测水平分割线，跳过边缘区域（前后 5%）
   const horizontalLines: number[] = [];
@@ -584,15 +584,15 @@ export async function hasSplitLines(imageUrl: string): Promise<boolean> {
     // 注意：detectGridLinesInternal 内部已经支持透明分割线检测
     const { detection } = await detectGridLinesInternal(trimmedImageUrl);
     if (detection.rows > 1 || detection.cols > 1) {
-      console.log('[hasSplitLines] Detected grid lines:', { rows: detection.rows, cols: detection.cols });
+      // console.log('[hasSplitLines] Detected grid lines:', { rows: detection.rows, cols: detection.cols });
       return true;
     }
 
     // 2. 检测灵感图格式（灰色背景 + 白边框）
     const isPhotoWall = await detectPhotoWallFormat(trimmedImageUrl);
-    if (isPhotoWall) {
-      console.log('[hasSplitLines] Detected photo wall format');
-    }
+    // if (isPhotoWall) {
+    //   console.log('[hasSplitLines] Detected photo wall format');
+    // }
     return isPhotoWall;
   } catch (error) {
     console.warn('[ImageSplitter] Failed to detect split lines:', error);
@@ -859,10 +859,10 @@ export async function splitImageByLines(
   const fullImageData = fullCtx.getImageData(0, 0, width, height);
   const hasAlpha = forceTransparency ?? hasTransparency(fullImageData);
 
-  console.log('[splitImageByLines] Image transparency detection:', {
-    hasAlpha,
-    forceTransparency
-  });
+  // console.log('[splitImageByLines] Image transparency detection:', {
+  //   hasAlpha,
+  //   forceTransparency
+  // });
 
   for (let row = 0; row < rowBounds.length - 1; row++) {
     for (let col = 0; col < colBounds.length - 1; col++) {
@@ -888,7 +888,7 @@ export async function splitImageByLines(
 
       // 检查是否完全透明（对于透明背景图片）
       if (hasAlpha && isCompletelyTransparent(regionData)) {
-        console.log('[splitImageByLines] Skipping completely transparent region:', { row, col });
+        // console.log('[splitImageByLines] Skipping completely transparent region:', { row, col });
         continue;
       }
 
@@ -898,15 +898,15 @@ export async function splitImageByLines(
         // 透明图片：使用严格模式裁剪透明边框
         // 只去除完全透明（alpha=0）的边缘，保留任何包含非透明像素的区域
         borders = trimTransparentBorders(regionData, true);
-        console.log('[splitImageByLines] Transparent image: strict transparent border trim', {
-          row, col,
-          originalSize: { width: sw, height: sh },
-          borders,
-          trimmedSize: {
-            width: borders.right - borders.left + 1,
-            height: borders.bottom - borders.top + 1
-          }
-        });
+        // console.log('[splitImageByLines] Transparent image: strict transparent border trim', {
+        //   row, col,
+        //   originalSize: { width: sw, height: sh },
+        //   borders,
+        //   trimmedSize: {
+        //     width: borders.right - borders.left + 1,
+        //     height: borders.bottom - borders.top + 1
+        //   }
+        // });
       } else {
         // 普通图片：裁剪白边和灰边
         borders = trimBorders(regionData, 0.5, 0.15);
@@ -1172,11 +1172,11 @@ async function trimImageWhiteBorders(imageUrl: string): Promise<{
   // 避免只有单边误判（如浅色头发被误判为白边）导致内容被切掉
   const hasBorders = borderCount >= 2;
 
-  console.log('[trimImageWhiteBorders] Border detection:', {
-    borderLeft, borderTop, borderRight, borderBottom,
-    borderCount,
-    hasBorders,
-  });
+  // console.log('[trimImageWhiteBorders] Border detection:', {
+  //   borderLeft, borderTop, borderRight, borderBottom,
+  //   borderCount,
+  //   hasBorders,
+  // });
 
   if (!hasBorders) {
     // 没有明显白边，返回原图
@@ -1442,21 +1442,21 @@ export async function splitAndInsertImages(
     workingImageWidth = borderInfo.trimmed.width;
     workingImageHeight = borderInfo.trimmed.height;
 
-    console.log('[splitAndInsertImages] Trimmed outer border:', {
-      original: borderInfo.original,
-      trimmed: borderInfo.trimmed,
-      hasBorders: borderInfo.hasBorders,
-    });
+    // console.log('[splitAndInsertImages] Trimmed outer border:', {
+    //   original: borderInfo.original,
+    //   trimmed: borderInfo.trimmed,
+    //   hasBorders: borderInfo.hasBorders,
+    // });
 
     // 使用去除外围白边后的图片检测网格
     // 使用 detectGridLinesInternal 以获取透明度信息
     const { detection, hasTransparency } = await detectGridLinesInternal(trimmedImageUrl);
 
-    console.log('[splitAndInsertImages] Grid detection:', {
-      rows: detection.rows,
-      cols: detection.cols,
-      hasTransparency,
-    });
+    // console.log('[splitAndInsertImages] Grid detection:', {
+    //   rows: detection.rows,
+    //   cols: detection.cols,
+    //   hasTransparency,
+    // });
 
     if (detection.rows > 1 || detection.cols > 1) {
       // 网格分割线格式 - 使用去除外围白边后的图片
@@ -1466,18 +1466,18 @@ export async function splitAndInsertImages(
       // 判断是否为标准宫格（行列数都大于1，说明是规则宫格）
       isStandardGrid = detection.rows > 1 && detection.cols > 1;
 
-      console.log('[splitAndInsertImages] Grid detected:', {
-        rows: detection.rows,
-        cols: detection.cols,
-        isStandardGrid,
-        hasTransparency,
-        elementsCount: initialElements.length,
-      });
+      // console.log('[splitAndInsertImages] Grid detected:', {
+      //   rows: detection.rows,
+      //   cols: detection.cols,
+      //   isStandardGrid,
+      //   hasTransparency,
+      //   elementsCount: initialElements.length,
+      // });
 
       // 对于透明背景的合并图片，禁用递归拆分
       // 因为文字行之间的透明间隙会导致文字被切成碎片
       if (hasTransparency) {
-        console.log('[splitAndInsertImages] Transparent image detected, disabling recursive split');
+        // console.log('[splitAndInsertImages] Transparent image detected, disabling recursive split');
         elements = initialElements;
       } else if (isStandardGrid) {
         // 标准宫格：直接使用拆分结果，不需要递归
@@ -1573,18 +1573,18 @@ export async function splitAndInsertImages(
       // 使用自定义起始位置
       baseX = startPoint[0];
       baseY = startPoint[1];
-      console.log('[splitAndInsertImages] Using startPoint:', { baseX, baseY });
+      // console.log('[splitAndInsertImages] Using startPoint:', { baseX, baseY });
     } else if (sourceRect) {
       // 在源图片下方 20px，保持左对齐
       baseX = sourceRect.x;
       baseY = sourceRect.y + sourceRect.height + 20;
-      console.log('[splitAndInsertImages] Using sourceRect (below original):', { sourceRect, baseX, baseY });
+      // console.log('[splitAndInsertImages] Using sourceRect (below original):', { sourceRect, baseX, baseY });
     } else {
       // 查找画布最底部元素，在其下方插入
       const bottomPosition = getBottommostInsertionPoint(board);
       baseX = bottomPosition.x;
       baseY = bottomPosition.y;
-      console.log('[splitAndInsertImages] Using bottommost position:', { baseX, baseY });
+      // console.log('[splitAndInsertImages] Using bottommost position:', { baseX, baseY });
     }
 
     // 5. 根据子图片在原图中的相对位置插入

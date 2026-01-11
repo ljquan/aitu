@@ -266,17 +266,6 @@ export const QuickCreationToolbar: React.FC<QuickCreationToolbarProps> = ({
             onPointerUp={handleTextClick}
           />
 
-          {/* 素材库 */}
-          <ToolButton
-            type="icon"
-            visible={true}
-            icon={MediaLibraryIcon}
-            title="" // 不显示 tooltip
-            aria-label={t('toolbar.mediaLibrary')}
-            data-track="quick_toolbar_click_media_library"
-            onPointerUp={handleMediaLibraryClick}
-          />
-
           {/* 图片 */}
           <ToolButton
             type="icon"
@@ -286,6 +275,17 @@ export const QuickCreationToolbar: React.FC<QuickCreationToolbarProps> = ({
             aria-label={t('toolbar.image')}
             data-track="quick_toolbar_click_image"
             onPointerUp={handleImageClick}
+          />
+
+          {/* 素材库 */}
+          <ToolButton
+            type="icon"
+            visible={true}
+            icon={MediaLibraryIcon}
+            title="" // 不显示 tooltip
+            aria-label={t('toolbar.mediaLibrary')}
+            data-track="quick_toolbar_click_media_library"
+            onPointerUp={handleMediaLibraryClick}
           />
 
           {/* 画笔 - 带 Popover */}

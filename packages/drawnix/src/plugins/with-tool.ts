@@ -26,7 +26,7 @@ import { PlaitTool } from '../types/toolbox.types';
 import { DEFAULT_TOOL_CONFIG } from '../constants/built-in-tools';
 import { ToolCommunicationService, ToolCommunicationHelper } from '../services/tool-communication-service';
 import { ToolMessageType, GenerateImagePayload, GenerateImageResponse, InsertImagePayload } from '../types/tool-communication.types';
-import { taskQueueService } from '../services/task-queue-service';
+import { taskQueueService } from '../services/task-queue';
 import { TaskType } from '../types/task.types';
 import { geminiSettings } from '../utils/settings-manager';
 import { insertImageFromUrlAndSelect } from '../data/image';
@@ -41,7 +41,7 @@ function setupCommunicationHandlers(
 ): void {
   // 处理工具就绪通知
   helper.onToolReady((toolId) => {
-    console.log(`[ToolCommunication] Tool ready: ${toolId}`);
+    // console.log(`[ToolCommunication] Tool ready: ${toolId}`);
 
     // 获取当前的 Gemini 设置
     const settings = geminiSettings.get();
@@ -60,14 +60,14 @@ function setupCommunicationHandlers(
 
   // 处理插入文本请求
   helper.onInsertText((toolId, payload) => {
-    console.log(`[ToolCommunication] Insert text from ${toolId}:`, payload);
+    // console.log(`[ToolCommunication] Insert text from ${toolId}:`, payload);
     // TODO: 实现文本插入逻辑
     // 可以使用 Plait 的文本节点 API
   });
 
   // 处理插入图片请求
   helper.onInsertImage(async (toolId, payload: InsertImagePayload) => {
-    console.log(`[ToolCommunication] Insert image from ${toolId}:`, payload);
+    // console.log(`[ToolCommunication] Insert image from ${toolId}:`, payload);
     
     if (!payload.url) {
       console.error(`[ToolCommunication] Missing image URL from ${toolId}`);
@@ -103,7 +103,7 @@ function setupCommunicationHandlers(
           : undefined
       );
 
-      console.log(`[ToolCommunication] Image inserted and selected from ${toolId}`);
+      // console.log(`[ToolCommunication] Image inserted and selected from ${toolId}`);
     } catch (error) {
       console.error(`[ToolCommunication] Failed to insert image from ${toolId}:`, error);
     }
@@ -111,7 +111,7 @@ function setupCommunicationHandlers(
 
   // 处理工具关闭请求
   helper.onToolClose((toolId) => {
-    console.log(`[ToolCommunication] Tool close request: ${toolId}`);
+    // console.log(`[ToolCommunication] Tool close request: ${toolId}`);
     const element = ToolTransforms.getToolById(board, toolId);
     if (element) {
       ToolTransforms.removeTool(board, element.id);
@@ -121,7 +121,7 @@ function setupCommunicationHandlers(
   // 处理图片生成请求
   service.on(ToolMessageType.TOOL_TO_BOARD_GENERATE_IMAGE, async (message) => {
     const payload = message.payload as GenerateImagePayload;
-    console.log(`[ToolCommunication] Generate image request from ${message.toolId}:`, payload);
+    // console.log(`[ToolCommunication] Generate image request from ${message.toolId}:`, payload);
 
     try {
       // 构建生成参数（与 ai-image-generation.tsx 一致）
@@ -140,7 +140,7 @@ function setupCommunicationHandlers(
       // 传递参考图片（如果有）
       if ((payload as any).uploadedImages && (payload as any).uploadedImages.length > 0) {
         generateParams.uploadedImages = (payload as any).uploadedImages;
-        console.log(`[ToolCommunication] Passing ${generateParams.uploadedImages.length} reference images`);
+        // console.log(`[ToolCommunication] Passing ${generateParams.uploadedImages.length} reference images`);
       }
 
       // 传递批次信息（避免重复检测）
@@ -152,7 +152,7 @@ function setupCommunicationHandlers(
         if ((payload as any).globalIndex) {
           generateParams.globalIndex = (payload as any).globalIndex;
         }
-        console.log(`[ToolCommunication] Batch info: ${generateParams.batchIndex}/${generateParams.batchTotal} (${generateParams.batchId}), global: ${generateParams.globalIndex}`);
+        // console.log(`[ToolCommunication] Batch info: ${generateParams.batchIndex}/${generateParams.batchTotal} (${generateParams.batchId}), global: ${generateParams.globalIndex}`);
       }
 
       // 获取当前图片模型
@@ -167,7 +167,7 @@ function setupCommunicationHandlers(
       }
 
       const taskId = task.id;
-      console.log(`[ToolCommunication] Created task ${taskId} for ${message.toolId}`);
+      // console.log(`[ToolCommunication] Created task ${taskId} for ${message.toolId}`);
 
       // 获取工具的 iframe
       const iframe = document.querySelector(
@@ -197,7 +197,7 @@ function setupCommunicationHandlers(
           };
 
           iframe.contentWindow?.postMessage(response, '*');
-          console.log(`[ToolCommunication] Image generation success sent to ${message.toolId}`);
+          // console.log(`[ToolCommunication] Image generation success sent to ${message.toolId}`);
           subscription.unsubscribe();
         }
         // 任务失败
@@ -209,7 +209,7 @@ function setupCommunicationHandlers(
           };
 
           iframe.contentWindow?.postMessage(response, '*');
-          console.log(`[ToolCommunication] Image generation error sent to ${message.toolId}`);
+          // console.log(`[ToolCommunication] Image generation error sent to ${message.toolId}`);
           subscription.unsubscribe();
         }
       });
@@ -230,7 +230,7 @@ function setupCommunicationHandlers(
 
       if (iframe?.contentWindow) {
         iframe.contentWindow.postMessage(response, '*');
-        console.log(`[ToolCommunication] Image generation error sent to ${message.toolId}`);
+        // console.log(`[ToolCommunication] Image generation error sent to ${message.toolId}`);
       }
     }
   });
@@ -369,7 +369,7 @@ export const withTool: PlaitPlugin = (board: PlaitBoard) => {
     const toolElements = getSelectedToolElements(board);
     if (toolElements.length) {
       data.push(...toolElements);
-      console.log('Tool elements marked for deletion:', toolElements.length);
+      // console.log('Tool elements marked for deletion:', toolElements.length);
     }
     return getDeletedFragment(data);
   };
@@ -393,7 +393,7 @@ export const withTool: PlaitPlugin = (board: PlaitBoard) => {
         type: WritableClipboardType.elements,
         elements,
       });
-      console.log('Tool elements added to clipboard:', toolElements.length);
+      // console.log('Tool elements added to clipboard:', toolElements.length);
     }
     return buildFragment(clipboardContext, rectangle, operationType, originData);
   };
@@ -409,12 +409,12 @@ export const withTool: PlaitPlugin = (board: PlaitBoard) => {
     ) as PlaitTool[];
     if (toolElements && toolElements.length > 0) {
       insertClipboardData(board, toolElements, targetPoint);
-      console.log('Tool elements pasted from clipboard:', toolElements.length);
+      // console.log('Tool elements pasted from clipboard:', toolElements.length);
     }
     insertFragment(clipboardData, targetPoint, operationType);
   };
 
-  console.log('withTool plugin initialized');
+  // console.log('withTool plugin initialized');
   return board;
 };
 
@@ -465,7 +465,7 @@ export const ToolTransforms = {
     size: { width: number; height: number },
     metadata?: PlaitTool['metadata']
   ): PlaitTool {
-    console.log('insertTool called with:', { position, size, toolId });
+    // console.log('insertTool called with:', { position, size, toolId });
 
     // 验证输入参数
     if (!position || position.length !== 2) {
@@ -490,12 +490,12 @@ export const ToolTransforms = {
       metadata,
     };
 
-    console.log('Tool element created:', toolElement);
+    // console.log('Tool element created:', toolElement);
 
     // 插入到画板
     Transforms.insertNode(board, toolElement, [board.children.length]);
 
-    console.log('Tool element inserted:', toolElement);
+    // console.log('Tool element inserted:', toolElement);
     return toolElement;
   },
 
@@ -519,7 +519,7 @@ export const ToolTransforms = {
     const path = board.children.findIndex((el: any) => el.id === element.id);
     if (path >= 0) {
       Transforms.setNode(board, newElement, [path]);
-      console.log('Tool element resized:', element.id);
+      // console.log('Tool element resized:', element.id);
     }
   },
 
@@ -545,7 +545,7 @@ export const ToolTransforms = {
     const path = board.children.findIndex((el: any) => el.id === element.id);
     if (path >= 0) {
       Transforms.setNode(board, newElement, [path]);
-      console.log('Tool element moved:', element.id);
+      // console.log('Tool element moved:', element.id);
     }
   },
 
@@ -564,7 +564,7 @@ export const ToolTransforms = {
     const path = board.children.findIndex((el: any) => el.id === element.id);
     if (path >= 0) {
       Transforms.setNode(board, newElement, [path]);
-      console.log('Tool element rotated:', element.id, angle);
+      // console.log('Tool element rotated:', element.id, angle);
     }
   },
 
@@ -578,7 +578,7 @@ export const ToolTransforms = {
     const path = board.children.findIndex((el: any) => el.id === elementId);
     if (path >= 0) {
       Transforms.removeNode(board, [path]);
-      console.log('Tool element removed:', elementId);
+      // console.log('Tool element removed:', elementId);
     }
   },
 
@@ -593,7 +593,7 @@ export const ToolTransforms = {
     const path = board.children.findIndex((el: any) => el.id === elementId);
     if (path >= 0) {
       Transforms.setNode(board, { url: newUrl } as Partial<PlaitTool>, [path]);
-      console.log('Tool element URL updated:', elementId, newUrl);
+      // console.log('Tool element URL updated:', elementId, newUrl);
     }
   },
 
@@ -623,7 +623,7 @@ export const ToolTransforms = {
           { metadata: newMetadata } as Partial<PlaitTool>,
           [path]
         );
-        console.log('Tool element metadata updated:', elementId);
+        // console.log('Tool element metadata updated:', elementId);
       }
     }
   },

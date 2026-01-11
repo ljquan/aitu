@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { taskQueueService } from '../services/task-queue-service';
+import { taskQueueService } from '../services/task-queue';
 import { Task, TaskStatus, TaskType, GenerationParams } from '../types/task.types';
 
 /**

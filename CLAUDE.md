@@ -6,13 +6,13 @@
 
 ## 项目概述
 
-**Aitu (爱图)** 是一个基于 Plait 框架构建的开源白板应用。支持思维导图、流程图、自由绘画、图片插入，以及 AI 驱动的内容生成（通过 Gemini 生成图像，通过 Veo3/Sora-2 生成视频）。项目采用插件架构，使用 React 组件，并使用 Nx 作为 monorepo 管理工具。
+**Aitu (爱图)** 是一个基于 Plait 框架构建的开源白板应用。支持思维导图、流程图、自由绘画、图片插入，以及 AI 驱动的内容生成（通过 Gemini 生成图片，通过 Veo3/Sora-2 生成视频）。项目采用插件架构，使用 React 组件，并使用 Nx 作为 monorepo 管理工具。
 
 **项目信息：**
-- **名称**: Aitu (爱图) - AI 图像与视频创作工具
+- **名称**: Aitu (爱图) - AI 图片与视频创作工具
 - **版本**: 0.4.0
 - **许可证**: MIT
-- **标语**: 爱上图像，爱上创作
+- **标语**: 爱上图片，爱上创作
 - **官网**: https://aitu.tu-zi.com
 
 ---
@@ -166,9 +166,9 @@ components/
 │   ├── PopupToolbar/              # 上下文弹出工具
 │   └── ClosePencilToolbar/        # 铅笔模式工具栏
 ├── ttd-dialog/                    # AI 生成对话框
-│   ├── ai-image-generation.tsx    # 图像生成
+│   ├── ai-image-generation.tsx    # 图片生成
 │   ├── ai-video-generation.tsx    # 视频生成
-│   ├── batch-image-generation.tsx # 批量图像生成
+│   ├── batch-image-generation.tsx # 批量图片生成
 │   └── mermaid-to-drawnix.tsx     # Mermaid 转换
 ├── settings-dialog/               # 设置对话框
 ├── project-drawer/                # 项目抽屉
@@ -211,7 +211,7 @@ plugins/
 ├── with-tool.ts                   # 工具基础插件
 ├── with-hotkey.ts                 # 快捷键处理
 ├── with-pencil.ts                 # 铅笔/橡皮模式
-├── with-image.tsx                 # 图像插件
+├── with-image.tsx                 # 图片插件
 ├── with-text-paste.ts             # 文本粘贴插件（自动换行）
 ├── with-video.ts                  # 视频支持
 ├── with-workzone.ts               # WorkZone 画布元素插件
@@ -258,8 +258,8 @@ utils/
 │   ├── config.ts                  # 配置
 │   └── types.ts                   # 类型定义
 ├── settings-manager.ts            # 设置管理
-├── image-splitter.ts              # 图像分割（支持透明边框严格裁剪）
-├── image-border-utils.ts          # 图像边框检测工具
+├── image-splitter.ts              # 图片分割（支持透明边框严格裁剪）
+├── image-border-utils.ts          # 图片边框检测工具
 ├── photo-wall-splitter.ts         # 灵感图分割器
 ├── selection-utils.ts             # 选择工具
 ├── model-parser.ts                # 模型解析
@@ -295,7 +295,7 @@ constants/
 ├── CHAT_MODELS.ts                 # 聊天模型配置
 ├── model-config.ts                # 模型配置
 ├── video-model-config.ts          # 视频模型配置
-├── image-aspect-ratios.ts         # 图像宽高比
+├── image-aspect-ratios.ts         # 图片宽高比
 ├── built-in-tools.ts              # 内置工具
 ├── prompts.ts                     # 提示词
 └── storage.ts                     # 存储常量
@@ -366,7 +366,7 @@ packages/react-text/
 - **Mermaid**: ^11.12.2 (图表渲染)
 
 ### AI 与 API
-- **Google Gemini API**: 图像生成
+- **Google Gemini API**: 图片生成
 - **视频生成**: Veo3, Sora-2
 - **LlamaIndex**: ^0.6.1
 
@@ -718,7 +718,7 @@ Service Worker 拦截请求
 
 **核心工具**:
 - `ai_analyze` - AI 分析 (Gemini 文本模型)
-- `generate_image` - 图像生成 (Gemini Imagen)
+- `generate_image` - 图片生成 (Gemini Imagen)
 - `generate_video` - 视频生成 (Veo3, Sora-2)
 - `canvas_insert` - 插入内容到画布
 
@@ -901,11 +901,11 @@ const insertY = boundingRect.y + (top / scale);
 
 ---
 
-## 图像分割系统
+## 图片分割系统
 
 ### 概述
 
-项目支持智能图像分割功能，可以自动检测并拆分包含多个子图的图片。
+项目支持智能图片分割功能，可以自动检测并拆分包含多个子图的图片。
 
 **核心文件**：
 - `utils/image-splitter.ts` - 主分割器（支持网格分割线和透明分割线）

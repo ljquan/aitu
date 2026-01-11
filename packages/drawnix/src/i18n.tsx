@@ -159,7 +159,7 @@ const translations: Record<Language, Translations> = {
     'toolbar.shape': '形状',
     'toolbar.image': '图片 — Cmd+U',
     'toolbar.mediaLibrary': '素材库',
-    'toolbar.aiImage': 'AI 图像生成',
+    'toolbar.aiImage': 'AI 图片生成',
     'toolbar.aiVideo': 'AI 视频生成',
     'toolbar.tasks': '任务',
     'toolbar.theme': '主题色',

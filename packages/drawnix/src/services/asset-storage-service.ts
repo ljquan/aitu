@@ -105,7 +105,7 @@ class AssetStorageService {
         // 如果已有 contentHash，直接比较
         if (stored.contentHash) {
           if (stored.contentHash === contentHash) {
-            console.log('[AssetStorageService] Found duplicate asset by hash:', stored.id);
+            // console.log('[AssetStorageService] Found duplicate asset by hash:', stored.id);
             return storedAssetToAsset(stored);
           }
           continue;
@@ -117,7 +117,7 @@ class AssetStorageService {
         }
 
         // 文件大小相同，从缓存中获取内容计算哈希
-        console.log('[AssetStorageService] Size match, computing hash for old asset:', stored.id);
+        // console.log('[AssetStorageService] Size match, computing hash for old asset:', stored.id);
         try {
           const cachedBlob = await unifiedCacheService.getCachedBlob(stored.url);
           if (cachedBlob) {
@@ -126,10 +126,10 @@ class AssetStorageService {
             // 更新旧素材的 contentHash
             stored.contentHash = oldHash;
             await this.store.setItem(key, stored);
-            console.log('[AssetStorageService] Updated contentHash for old asset:', stored.id);
+            // console.log('[AssetStorageService] Updated contentHash for old asset:', stored.id);
 
             if (oldHash === contentHash) {
-              console.log('[AssetStorageService] Found duplicate asset by computed hash:', stored.id);
+              // console.log('[AssetStorageService] Found duplicate asset by computed hash:', stored.id);
               return storedAssetToAsset(stored);
             }
           }
@@ -189,7 +189,7 @@ class AssetStorageService {
       return;
     }
 
-    console.log('[AssetStorageService] Starting data migration v3...');
+    // console.log('[AssetStorageService] Starting data migration v3...');
 
     try {
       const keys = await this.store.keys();
@@ -205,7 +205,7 @@ class AssetStorageService {
           if (item.source === 'AI_GENERATED') {
             await this.store.removeItem(key);
             deletedAiCount++;
-            console.log(`[AssetStorageService] Deleted AI asset ${item.id}`);
+            // console.log(`[AssetStorageService] Deleted AI asset ${item.id}`);
             continue;
           }
 
@@ -234,7 +234,7 @@ class AssetStorageService {
 
             await this.store.setItem(key, newStoredAsset);
             migratedCount++;
-            console.log(`[AssetStorageService] Migrated local asset ${item.id}`);
+            // console.log(`[AssetStorageService] Migrated local asset ${item.id}`);
           }
         } catch (error) {
           console.error(`[AssetStorageService] Failed to process asset ${key}:`, error);
@@ -243,7 +243,7 @@ class AssetStorageService {
 
       localStorage.setItem(migrationKey, 'done');
       this.migrationDone = true;
-      console.log(`[AssetStorageService] Migration v3 completed: migrated ${migratedCount} local assets, deleted ${deletedAiCount} AI assets`);
+      // console.log(`[AssetStorageService] Migration v3 completed: migrated ${migratedCount} local assets, deleted ${deletedAiCount} AI assets`);
     } catch (error) {
       console.error('[AssetStorageService] Migration failed:', error);
     }
@@ -267,25 +267,25 @@ class AssetStorageService {
    * 添加新素材到存储
    */
   async addAsset(data: AddAssetData): Promise<Asset> {
-    console.log('[AssetStorageService] addAsset called with:', {
-      type: data.type,
-      source: data.source,
-      name: data.name,
-      mimeType: data.mimeType,
-      blobSize: data.blob.size,
-    });
+    // console.log('[AssetStorageService] addAsset called with:', {
+    //   type: data.type,
+    //   source: data.source,
+    //   name: data.name,
+    //   mimeType: data.mimeType,
+    //   blobSize: data.blob.size,
+    // });
 
     this.ensureInitialized();
 
     // 计算内容哈希用于去重
-    console.log('[AssetStorageService] Computing content hash...');
+    // console.log('[AssetStorageService] Computing content hash...');
     const contentHash = await this.computeContentHash(data.blob);
-    console.log('[AssetStorageService] Content hash:', contentHash.substring(0, 16) + '...');
+    // console.log('[AssetStorageService] Content hash:', contentHash.substring(0, 16) + '...');
 
     // 检查是否已存在相同内容的素材
     const existingAsset = await this.findAssetByContentHash(contentHash, data.blob);
     if (existingAsset) {
-      console.log('[AssetStorageService] Duplicate asset found, skipping:', existingAsset.id);
+      // console.log('[AssetStorageService] Duplicate asset found, skipping:', existingAsset.id);
       return existingAsset;
     }
 
@@ -304,19 +304,19 @@ class AssetStorageService {
     }
 
     // 检查存储空间
-    console.log('[AssetStorageService] Checking storage quota...');
+    // console.log('[AssetStorageService] Checking storage quota...');
     const canAdd = await canAddAssetBySize(data.blob.size);
     if (!canAdd) {
       console.error('[AssetStorageService] Quota exceeded');
       throw new QuotaExceededError();
     }
-    console.log('[AssetStorageService] Storage quota check passed');
+    // console.log('[AssetStorageService] Storage quota check passed');
 
     try {
       // 生成稳定的素材 URL
       const assetId = crypto.randomUUID();
       const assetUrl = this.generateAssetUrl(assetId, data.mimeType);
-      console.log('[AssetStorageService] Generated asset URL:', assetUrl);
+      // console.log('[AssetStorageService] Generated asset URL:', assetUrl);
 
       // 使用统一缓存服务缓存媒体
       const cacheType = data.type === 'IMAGE' ? 'image' : 'video';
@@ -325,7 +325,7 @@ class AssetStorageService {
         prompt: data.prompt,
         model: data.modelName,
       });
-      console.log('[AssetStorageService] Media cached via unified cache service');
+      // console.log('[AssetStorageService] Media cached via unified cache service');
 
       const asset: Asset = {
         id: assetId,
@@ -339,17 +339,17 @@ class AssetStorageService {
         prompt: data.prompt,
         modelName: data.modelName,
       };
-      console.log('[AssetStorageService] Asset object created:', asset);
+      // console.log('[AssetStorageService] Asset object created:', asset);
 
       // 转换为StoredAsset并保存（只存元数据，不存 Blob）
-      console.log('[AssetStorageService] Saving asset metadata to IndexedDB...');
+      // console.log('[AssetStorageService] Saving asset metadata to IndexedDB...');
       const storedAsset = assetToStoredAsset(asset);
       // 添加内容哈希到存储对象
       storedAsset.contentHash = contentHash;
       await this.store!.setItem(asset.id, storedAsset);
-      console.log('[AssetStorageService] Asset saved to IndexedDB');
+      // console.log('[AssetStorageService] Asset saved to IndexedDB');
 
-      console.log('[AssetStorageService] addAsset completed successfully');
+      // console.log('[AssetStorageService] addAsset completed successfully');
       return asset;
     } catch (error: any) {
       console.error('[AssetStorageService] Error during addAsset:', error);
@@ -368,12 +368,12 @@ class AssetStorageService {
    * 获取所有素材 - 使用并行加载优化性能
    */
   async getAllAssets(): Promise<Asset[]> {
-    console.log('[AssetStorageService] getAllAssets called');
+    // console.log('[AssetStorageService] getAllAssets called');
     this.ensureInitialized();
 
     try {
       const keys = await this.store!.keys();
-      console.log(`[AssetStorageService] Found ${keys.length} keys in IndexedDB`);
+      // console.log(`[AssetStorageService] Found ${keys.length} keys in IndexedDB`);
 
       if (keys.length === 0) {
         return [];
@@ -396,7 +396,7 @@ class AssetStorageService {
       const results = await Promise.all(loadPromises);
       const assets = results.filter((asset): asset is Asset => asset !== null);
 
-      console.log(`[AssetStorageService] Loaded ${assets.length} assets`);
+      // console.log(`[AssetStorageService] Loaded ${assets.length} assets`);
       return assets;
     } catch (error: any) {
       console.error('[AssetStorageService] Error loading assets:', error);

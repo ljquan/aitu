@@ -484,11 +484,11 @@ export class TrackingService {
 
     if (level === 'error' || (level === 'debug' && this.config.devMode)) {
       const prefix = '[Tracking]';
-      if (data) {
-        console.log(prefix, message, data);
-      } else {
-        console.log(prefix, message);
-      }
+      // if (data) {
+      //   console.log(prefix, message, data);
+      // } else {
+      //   console.log(prefix, message);
+      // }
     }
   }
 }

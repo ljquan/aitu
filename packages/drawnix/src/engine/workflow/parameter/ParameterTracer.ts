@@ -47,9 +47,9 @@ export class ParameterTracer implements IParameterTracer {
     };
     this.steps = [];
 
-    if (this.shouldLog('debug')) {
-      console.log(`[ParameterMapper] Starting: ${sourceToolId} → ${targetToolId}`);
-    }
+    // if (this.shouldLog('debug')) {
+    //   console.log(`[ParameterMapper] Starting: ${sourceToolId} → ${targetToolId}`);
+    // }
   }
 
   logStep(step: string, data?: unknown): void {
@@ -57,10 +57,10 @@ export class ParameterTracer implements IParameterTracer {
 
     this.steps.push({ step, data, timestamp: Date.now() });
 
-    if (this.shouldLog('debug')) {
-      const dataStr = data !== undefined ? `: ${this.formatValue(data)}` : '';
-      console.log(`  ├─ ${step}${dataStr}`);
-    }
+    // if (this.shouldLog('debug')) {
+    //   const dataStr = data !== undefined ? `: ${this.formatValue(data)}` : '';
+    //   console.log(`  ├─ ${step}${dataStr}`);
+    // }
   }
 
   logRuleApplication(
@@ -74,27 +74,27 @@ export class ParameterTracer implements IParameterTracer {
       this.currentTrace.rules = [...(this.currentTrace.rules || []), rule];
     }
 
-    if (this.shouldLog('debug')) {
-      console.log(`  ├─ Rule: "${rule.source}" → "${rule.target}"`);
-      console.log(`  │  Source: ${this.formatValue(sourceValue)}`);
-      console.log(`  │  Target: ${this.formatValue(targetValue)}`);
-    }
+    // if (this.shouldLog('debug')) {
+    //   console.log(`  ├─ Rule: "${rule.source}" → "${rule.target}"`);
+    //   console.log(`  │  Source: ${this.formatValue(sourceValue)}`);
+    //   console.log(`  │  Target: ${this.formatValue(targetValue)}`);
+    // }
   }
 
   logWarning(message: string): void {
     if (!this.enabled) return;
 
-    if (this.shouldLog('warn')) {
-      console.log(`  ├─ ⚠ Warning: ${message}`);
-    }
+    // if (this.shouldLog('warn')) {
+    //   console.log(`  ├─ ⚠ Warning: ${message}`);
+    // }
   }
 
   logError(message: string): void {
     if (!this.enabled) return;
 
-    if (this.shouldLog('error')) {
-      console.log(`  ├─ ✖ Error: ${message}`);
-    }
+    // if (this.shouldLog('error')) {
+    //   console.log(`  ├─ ✖ Error: ${message}`);
+    // }
   }
 
   endTrace(result: MappedParameters): void {
@@ -102,18 +102,18 @@ export class ParameterTracer implements IParameterTracer {
 
     const duration = Date.now() - (this.currentTrace.timestamp || Date.now());
 
-    if (this.shouldLog('debug')) {
-      console.log(`  └─ ${result.success ? '✔ Success' : '✖ Failed'} (${duration}ms)`);
-      if (result.warnings.length > 0) {
-        console.log(`     Warnings: ${result.warnings.length}`);
-      }
-      console.log(`     Output: ${this.formatValue(result.params)}`);
-    } else if (this.shouldLog('info')) {
-      const status = result.success ? '✔' : '✖';
-      console.log(
-        `[ParameterMapper] ${this.currentTrace.sourceToolId} → ${this.currentTrace.targetToolId}: ${status} (${duration}ms)`
-      );
-    }
+    // if (this.shouldLog('debug')) {
+    //   console.log(`  └─ ${result.success ? '✔ Success' : '✖ Failed'} (${duration}ms)`);
+    //   if (result.warnings.length > 0) {
+    //     console.log(`     Warnings: ${result.warnings.length}`);
+    //   }
+    //   console.log(`     Output: ${this.formatValue(result.params)}`);
+    // } else if (this.shouldLog('info')) {
+    //   const status = result.success ? '✔' : '✖';
+    //   console.log(
+    //     `[ParameterMapper] ${this.currentTrace.sourceToolId} → ${this.currentTrace.targetToolId}: ${status} (${duration}ms)`
+    //   );
+    // }
 
     this.currentTrace = null;
     this.steps = [];
@@ -148,10 +148,10 @@ export class ParameterTracer implements IParameterTracer {
   ): void {
     if (!this.enabled || !this.shouldLog('info')) return;
 
-    const paramKeys = Object.keys(params);
-    console.log(
-      `[ParameterMapper] ${sourceToolId} → ${targetToolId}: ${paramKeys.length} param(s) mapped [${paramKeys.join(', ')}]`
-    );
+    // const paramKeys = Object.keys(params);
+    // console.log(
+    //   `[ParameterMapper] ${sourceToolId} → ${targetToolId}: ${paramKeys.length} param(s) mapped [${paramKeys.join(', ')}]`
+    // );
   }
 }
 

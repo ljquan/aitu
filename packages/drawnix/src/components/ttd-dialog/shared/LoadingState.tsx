@@ -21,7 +21,7 @@ export const LoadingState: React.FC<LoadingStateProps> = ({
         <div className="loading-spinner"></div>
         <div className="loading-text">
           {language === 'zh' 
-            ? `正在生成${type === 'image' ? '图像' : '视频'}...` 
+            ? `正在生成${type === 'image' ? '图片' : '视频'}...` 
             : `Generating ${type}...`}
         </div>
       </div>
@@ -34,7 +34,7 @@ export const LoadingState: React.FC<LoadingStateProps> = ({
         <div className="loading-spinner"></div>
         <div className="loading-text">
           {language === 'zh' 
-            ? `正在加载${type === 'image' ? '图像' : '视频'}...` 
+            ? `正在加载${type === 'image' ? '图片' : '视频'}...` 
             : `Loading ${type}...`}
         </div>
       </div>
@@ -51,7 +51,7 @@ export const LoadingState: React.FC<LoadingStateProps> = ({
       <div className="placeholder-icon">{type === 'image' ? '🖼️' : '🎬'}</div>
       <div className="placeholder-text">
         {language === 'zh' 
-          ? `${type === 'image' ? '图像' : '视频'}将在这里显示` 
+          ? `${type === 'image' ? '图片' : '视频'}将在这里显示` 
           : `${type === 'image' ? 'Image' : 'Video'} will be displayed here`}
       </div>
     </div>

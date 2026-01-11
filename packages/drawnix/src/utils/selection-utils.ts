@@ -85,7 +85,7 @@ export const compressImageUrl = (imageUrl: string, maxWidth: number = 512, maxHe
         return;
       }
       
-      // 绘制图像
+      // 绘制图片
       ctx.drawImage(img, 0, 0, width, height);
       
       // 转换为data URL
@@ -750,10 +750,10 @@ export const getInsertionPointForSelectedElements = (board: PlaitBoard): Point |
  * Calculate insertion point at the bottom of the bottommost element on the board
  * Used when no elements are selected - prevents overlapping with existing content
  * @param board - The PlaitBoard instance
- * @param imageWidth - Width of the image to be inserted (for horizontal centering)
- * @returns Point below the bottommost element, horizontally centered relative to it
+ * @param _imageWidth - Deprecated, kept for backward compatibility (no longer used)
+ * @returns Point below the bottommost element, left-aligned with it
  */
-export const getInsertionPointBelowBottommostElement = (board: PlaitBoard, imageWidth: number): Point | undefined => {
+export const getInsertionPointBelowBottommostElement = (board: PlaitBoard, _imageWidth?: number): Point | undefined => {
   if (!board.children || board.children.length === 0) {
     // console.log('No elements on board, no default insertion point');
     return undefined;
@@ -783,20 +783,19 @@ export const getInsertionPointBelowBottommostElement = (board: PlaitBoard, image
       return undefined;
     }
     
-    // Calculate insertion point below the bottommost element
+    // Calculate insertion point below the bottommost element (left-aligned)
     const bottommostRect = getRectangleByElements(board, [bottommostElement], false);
-    const centerX = bottommostRect.x + bottommostRect.width / 2;
+    const leftX = bottommostRect.x; // 左对齐，使用最底部元素的左边缘 X 坐标
     const insertionY = bottommostRect.y + bottommostRect.height + 50; // 50px gap
     
     // console.log('Insertion point below bottommost element:', {
-    //   centerX,
+    //   leftX,
     //   insertionY,
     //   bottommostRect,
-    //   imageWidth,
     // });
     
-    // Adjust X coordinate to center the image horizontally relative to the bottommost element
-    return [centerX - imageWidth / 2, insertionY] as Point;
+    // Return left-aligned position
+    return [leftX, insertionY] as Point;
   } catch (error) {
     // console.warn('Error calculating insertion point below bottommost element:', error);
     return undefined;
@@ -865,11 +864,11 @@ export const scrollToPoint = (board: PlaitBoard, point: Point): void => {
     const newOriginationX = point[0] - containerRect.width / (2 * zoom);
     const newOriginationY = point[1] - containerRect.height / (2 * zoom);
 
-    console.log('[scrollToPoint] Scrolling to point:', {
-      targetPoint: point,
-      currentZoom: zoom,
-      newOrigination: [newOriginationX, newOriginationY],
-    });
+    // console.log('[scrollToPoint] Scrolling to point:', {
+    //   targetPoint: point,
+    //   currentZoom: zoom,
+    //   newOrigination: [newOriginationX, newOriginationY],
+    // });
 
     // 使用 BoardTransforms 更新视口位置，保持当前缩放不变
     BoardTransforms.updateViewport(board, [newOriginationX, newOriginationY], zoom);

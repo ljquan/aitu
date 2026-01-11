@@ -87,7 +87,7 @@ export const ToolboxDrawer: React.FC<ToolboxDrawerProps> = ({
         }
       );
 
-      console.log(`Tool "${tool.name}" inserted to canvas`);
+      // console.log(`Tool "${tool.name}" inserted to canvas`);
 
       // 插入后关闭抽屉
       handleClose();

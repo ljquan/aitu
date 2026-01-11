@@ -47,7 +47,7 @@ function reportWebVitals(metric: Metric): void {
   // Report to PostHog with $web_vitals event name
   analytics.track('$web_vitals', eventProperties);
 
-  console.log(`[Web Vitals] ${metric.name}: ${metric.value.toFixed(2)} (${rating})`);
+  // console.log(`[Web Vitals] ${metric.name}: ${metric.value.toFixed(2)} (${rating})`);
 }
 
 /**
@@ -101,7 +101,7 @@ export async function initWebVitals(): Promise<void> {
     onTTFB(reportWebVitals); // Time to First Byte
     onINP(reportWebVitals);  // Interaction to Next Paint (replaces FID)
 
-    console.log('[Web Vitals] Monitoring initialized successfully');
+    // console.log('[Web Vitals] Monitoring initialized successfully');
   } catch (error) {
     console.error('[Web Vitals] Failed to initialize monitoring:', error);
   }
@@ -113,5 +113,5 @@ export async function initWebVitals(): Promise<void> {
  * but observers will be garbage collected when page unloads
  */
 export function stopWebVitals(): void {
-  console.log('[Web Vitals] Monitoring stopped (observers will be garbage collected)');
+  // console.log('[Web Vitals] Monitoring stopped (observers will be garbage collected)');
 }

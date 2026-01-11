@@ -9,6 +9,9 @@ import {
 } from '@drawnix/drawnix';
 import { PlaitBoard, PlaitElement, PlaitTheme, Viewport } from '@plait/core';
 
+// Global flag to prevent duplicate initialization in StrictMode
+let appInitialized = false;
+
 export function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [value, setValue] = useState<{
@@ -20,6 +23,22 @@ export function App() {
   // Initialize workspace and handle migration
   useEffect(() => {
     const initialize = async () => {
+      // Prevent duplicate initialization in StrictMode
+      if (appInitialized) {
+        const workspaceService = WorkspaceService.getInstance();
+        const currentBoard = workspaceService.getCurrentBoard();
+        if (currentBoard) {
+          setValue({
+            children: currentBoard.elements || [],
+            viewport: currentBoard.viewport,
+            theme: currentBoard.theme,
+          });
+        }
+        setIsLoading(false);
+        return;
+      }
+      appInitialized = true;
+
       try {
         const workspaceService = WorkspaceService.getInstance();
         await workspaceService.initialize();
@@ -200,7 +219,7 @@ async function recoverVideoUrlsInElements(
 
         // 转换为新格式的稳定 URL（带 .mp4 后缀）
         const newUrl = `/__aitu_cache__/video/${taskId}.mp4`;
-        console.log(`[App] Migrating video URL: ${taskId}`);
+        // console.log(`[App] Migrating video URL: ${taskId}`);
         return { ...element, url: newUrl };
       }
     }

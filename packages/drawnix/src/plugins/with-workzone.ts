@@ -68,7 +68,7 @@ export class WorkZoneComponent extends CommonElementFlavour<PlaitWorkZone, Plait
     // 渲染 React 内容
     this.renderContent();
 
-    console.log('[WorkZone] Element initialized:', this.element.id);
+    // console.log('[WorkZone] Element initialized:', this.element.id);
   }
 
   /**
@@ -120,10 +120,10 @@ export class WorkZoneComponent extends CommonElementFlavour<PlaitWorkZone, Plait
    * 删除当前 WorkZone
    */
   private handleDelete = (): void => {
-    console.log('[WorkZone] Delete button clicked:', this.element.id);
-    console.log('[WorkZone] Board children before delete:', this.board.children.length);
+    // console.log('[WorkZone] Delete button clicked:', this.element.id);
+    // console.log('[WorkZone] Board children before delete:', this.board.children.length);
     WorkZoneTransforms.removeWorkZone(this.board, this.element.id);
-    console.log('[WorkZone] Board children after delete:', this.board.children.length);
+    // console.log('[WorkZone] Board children after delete:', this.board.children.length);
   };
 
   /**
@@ -189,11 +189,11 @@ export class WorkZoneComponent extends CommonElementFlavour<PlaitWorkZone, Plait
    * 销毁
    */
   destroy(): void {
-    console.log('[WorkZone] destroy() called for:', this.element?.id);
+    // console.log('[WorkZone] destroy() called for:', this.element?.id);
 
     // 先从 DOM 中移除 SVG 元素（同步）
     if (this.g && this.g.parentNode) {
-      console.log('[WorkZone] Removing g from DOM');
+      // console.log('[WorkZone] Removing g from DOM');
       this.g.parentNode.removeChild(this.g);
     }
 
@@ -205,12 +205,12 @@ export class WorkZoneComponent extends CommonElementFlavour<PlaitWorkZone, Plait
     // 异步卸载 React root 以避免竞态条件
     const reactRoot = this.reactRoot;
     if (reactRoot) {
-      console.log('[WorkZone] Scheduling React root unmount');
+      // console.log('[WorkZone] Scheduling React root unmount');
       this.reactRoot = null;
       // 使用 setTimeout 延迟卸载，避免在 React 渲染期间同步卸载
       setTimeout(() => {
         reactRoot.unmount();
-        console.log('[WorkZone] React root unmounted');
+        // console.log('[WorkZone] React root unmounted');
       }, 0);
     }
 
@@ -219,7 +219,7 @@ export class WorkZoneComponent extends CommonElementFlavour<PlaitWorkZone, Plait
 
     super.destroy();
 
-    console.log('[WorkZone] Element destroyed successfully:', this.element?.id);
+    // console.log('[WorkZone] Element destroyed successfully:', this.element?.id);
   }
 }
 
@@ -283,7 +283,7 @@ export const withWorkZone: PlaitPlugin = (board: PlaitBoard) => {
     return isMovable(element);
   };
 
-  console.log('[WorkZone] Plugin initialized');
+  // console.log('[WorkZone] Plugin initialized');
   return board;
 };
 
@@ -318,7 +318,7 @@ export const WorkZoneTransforms = {
     // 插入到画布
     Transforms.insertNode(board, workzoneElement, [board.children.length]);
 
-    console.log('[WorkZone] Inserted:', workzoneElement.id, 'zoom:', zoom, 'expected insert position:', expectedInsertPosition);
+    // console.log('[WorkZone] Inserted:', workzoneElement.id, 'zoom:', zoom, 'expected insert position:', expectedInsertPosition);
     return workzoneElement;
   },
 
@@ -341,7 +341,7 @@ export const WorkZoneTransforms = {
     const index = board.children.findIndex((el: any) => el.id === elementId);
     if (index >= 0) {
       Transforms.removeNode(board, [index]);
-      console.log('[WorkZone] Removed:', elementId);
+      // console.log('[WorkZone] Removed:', elementId);
     }
   },
 

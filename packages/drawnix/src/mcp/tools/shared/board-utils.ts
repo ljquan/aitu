@@ -16,7 +16,7 @@ let boardRef: PlaitBoard | null = null;
  */
 export function setBoard(board: PlaitBoard | null): void {
   boardRef = board;
-  console.log('[BoardUtils] Board reference set:', !!board);
+  // console.log('[BoardUtils] Board reference set:', !!board);
 }
 
 /**

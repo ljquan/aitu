@@ -139,12 +139,12 @@ export const CleanMissingAssets = () => {
       onSelect={async () => {
         try {
           const removedCount = await cleanupMissingAssets(board);
-          if (removedCount > 0) {
-            console.log(`[CleanMissingAssets] Removed ${removedCount} elements with missing assets`);
-            // 可以在这里添加用户通知
-          } else {
-            console.log('[CleanMissingAssets] No missing assets found');
-          }
+          // if (removedCount > 0) {
+          //   console.log(`[CleanMissingAssets] Removed ${removedCount} elements with missing assets`);
+          //   // 可以在这里添加用户通知
+          // } else {
+          //   console.log('[CleanMissingAssets] No missing assets found');
+          // }
         } catch (error) {
           console.error('[CleanMissingAssets] Failed to cleanup missing assets:', error);
         }

@@ -206,7 +206,7 @@ import { Z_INDEX } from '@/constants/z-index';
 
 **Brand Identity:**
 - Name: aitu (爱图) - AI Image & Video Creation Tool
-- Tagline: 爱上图像，爱上创作 (Love Images, Love Creation)
+- Tagline: 爱上图片，爱上创作 (Love Images, Love Creation)
 
 **Color System:**
 - Primary Colors:

@@ -9,13 +9,19 @@ import './utils/permissions-policy-fix';
 import { initWebVitals } from '../../../packages/drawnix/src/services/web-vitals-service';
 import { initPageReport } from '../../../packages/drawnix/src/services/page-report-service';
 import { initPreventPinchZoom } from '../../../packages/drawnix/src/services/prevent-pinch-zoom-service';
+import { runDatabaseCleanup } from '../../../packages/drawnix/src/services/db-cleanup-service';
 
 // ===== 立即初始化防止双指缩放 =====
 // 必须在任何其他代码之前执行，确保事件监听器最先注册
 let cleanupPinchZoom: (() => void) | undefined;
 if (typeof window !== 'undefined') {
   cleanupPinchZoom = initPreventPinchZoom();
-  console.log('[Main] Pinch zoom prevention initialized immediately');
+  // console.log('[Main] Pinch zoom prevention initialized immediately');
+
+  // 清理旧的冗余数据库（异步执行，不阻塞启动）
+  runDatabaseCleanup().catch(error => {
+    console.warn('[Main] Database cleanup failed:', error);
+  });
 }
 
 // 初始化性能监控
@@ -23,11 +29,11 @@ if (typeof window !== 'undefined') {
   // 等待 PostHog 加载完成后初始化监控
   const initMonitoring = () => {
     if (window.posthog) {
-      console.log('[Monitoring] PostHog loaded, initializing Web Vitals and Page Report');
+      // console.log('[Monitoring] PostHog loaded, initializing Web Vitals and Page Report');
       initWebVitals();
       initPageReport();
     } else {
-      console.log('[Monitoring] Waiting for PostHog to load...');
+      // console.log('[Monitoring] Waiting for PostHog to load...');
       setTimeout(initMonitoring, 500);
     }
   };
@@ -51,12 +57,12 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js')
       .then(registration => {
-        console.log('Service Worker registered successfully:', registration);
+        // console.log('Service Worker registered successfully:', registration);
         swRegistration = registration;
         
         // 在开发模式下，强制检查更新并处理等待中的Worker
         if (isDevelopment) {
-          console.log('Development mode: forcing SW update check');
+          // console.log('Development mode: forcing SW update check');
           registration.update().catch(err => console.warn('Forced update check failed:', err));
           
           if (registration.waiting) {
@@ -68,20 +74,20 @@ if ('serviceWorker' in navigator) {
         registration.addEventListener('updatefound', () => {
           const newWorker = registration.installing;
           if (newWorker) {
-            console.log('New Service Worker found, installing...');
+            // console.log('New Service Worker found, installing...');
             
             newWorker.addEventListener('statechange', () => {
               if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                console.log('New Service Worker installed, waiting for user confirmation...');
+                // console.log('New Service Worker installed, waiting for user confirmation...');
                 pendingWorker = newWorker;
                 
                 // 在开发模式下自动激活新的Service Worker
                 if (isDevelopment) {
-                  console.log('Development mode: activating new Service Worker immediately');
+                  // console.log('Development mode: activating new Service Worker immediately');
                   newWorker.postMessage({ type: 'SKIP_WAITING' });
                 } else {
                   // 生产模式：新版本已安装，通知 UI 显示升级提示
-                  console.log('Production mode: New version installed, dispatching update event');
+                  // console.log('Production mode: New version installed, dispatching update event');
                   newVersionReady = true;
                   window.dispatchEvent(new CustomEvent('sw-update-available', { 
                     detail: { version: 'new' } 
@@ -94,7 +100,7 @@ if ('serviceWorker' in navigator) {
         
         // 定期检查更新（每 5 分钟检查一次）
         setInterval(() => {
-          console.log('Checking for updates...');
+          // console.log('Checking for updates...');
           registration.update().catch(error => {
             console.warn('Update check failed:', error);
           });
@@ -105,14 +111,14 @@ if ('serviceWorker' in navigator) {
         
       })
       .catch(error => {
-        console.log('Service Worker registration failed:', error);
+        // console.log('Service Worker registration failed:', error);
       });
   });
   
   // 监听Service Worker消息
   navigator.serviceWorker.addEventListener('message', event => {
     if (event.data && event.data.type === 'SW_UPDATED') {
-      console.log('Service Worker updated, reloading page...');
+      // console.log('Service Worker updated, reloading page...');
       
       // 等待一小段时间，确保新的Service Worker已经完全接管
       setTimeout(() => {
@@ -123,34 +129,40 @@ if ('serviceWorker' in navigator) {
       // 不需要在主线程额外输出日志，Service Worker 已经输出了
     } else if (event.data && event.data.type === 'SW_NEW_VERSION_READY') {
       // Service Worker 通知新版本已准备好
-      console.log(`Main: New version v${event.data.version} ready, waiting for user confirmation`);
+      // console.log(`Main: New version v${event.data.version} ready, waiting for user confirmation`);
       newVersionReady = true;
       window.dispatchEvent(new CustomEvent('sw-update-available', { 
         detail: { version: event.data.version } 
       }));
     } else if (event.data && event.data.type === 'SW_UPGRADING') {
       // Service Worker 正在升级
-      console.log(`Main: Service Worker upgrading to v${event.data.version}`);
+      // console.log(`Main: Service Worker upgrading to v${event.data.version}`);
     } else if (event.data && event.data.type === 'UPGRADE_STATUS') {
       // 升级状态响应
-      console.log('Main: Upgrade status:', event.data);
+      // console.log('Main: Upgrade status:', event.data);
     }
   });
   
   // 监听controller变化（新的Service Worker接管）
+  // 在开发模式下不自动刷新，避免 "Update on reload" 导致死循环
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    console.log('Service Worker controller changed');
-    
+    // console.log('Service Worker controller changed');
+
+    if (isDevelopment) {
+      // console.log('Development mode: skipping auto-reload on controller change');
+      return;
+    }
+
     // 延迟刷新，确保新Service Worker的缓存已准备好
     setTimeout(() => {
-      console.log('Reloading page to use new Service Worker...');
+      // console.log('Reloading page to use new Service Worker...');
       window.location.reload();
     }, 1000);
   });
   
   // 监听用户确认升级事件
   window.addEventListener('user-confirmed-upgrade', () => {
-    console.log('Main: User confirmed upgrade, triggering SKIP_WAITING');
+    // console.log('Main: User confirmed upgrade, triggering SKIP_WAITING');
     
     // 优先使用 pendingWorker
     if (pendingWorker) {

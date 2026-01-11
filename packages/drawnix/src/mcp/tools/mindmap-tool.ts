@@ -91,7 +91,7 @@ async function executeMindmapTool(params: MindmapToolParams): Promise<MCPResult>
   try {
     // 1. 提取 Markdown 代码
     const markdownCode = extractMarkdownCode(markdown);
-    console.log('[MindmapTool] Extracted markdown code:', markdownCode.substring(0, 100) + '...');
+    // console.log('[MindmapTool] Extracted markdown code:', markdownCode.substring(0, 100) + '...');
 
     // 2. 加载并调用 markdown-to-drawnix 库
     const api = await markdownToDrawnixLib.api;
@@ -117,7 +117,7 @@ async function executeMindmapTool(params: MindmapToolParams): Promise<MCPResult>
     mindElement.points = [[0, 0]];
     const elements = [mindElement];
 
-    console.log('[MindmapTool] Parsed mindmap element');
+    // console.log('[MindmapTool] Parsed mindmap element');
 
     // 4. 插入到画布
     const insertResult = insertElementsToCanvas(board, elements);
@@ -130,7 +130,7 @@ async function executeMindmapTool(params: MindmapToolParams): Promise<MCPResult>
       };
     }
 
-    console.log('[MindmapTool] Successfully inserted mindmap to canvas');
+    // console.log('[MindmapTool] Successfully inserted mindmap to canvas');
 
     return {
       success: true,

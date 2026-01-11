@@ -80,10 +80,10 @@ class WorkspaceService {
       this.state = state;
 
       this.initialized = true;
-      console.log('[WorkspaceService] Initialized with', {
-        folders: this.folders.size,
-        boards: this.boards.size,
-      });
+      // console.log('[WorkspaceService] Initialized with', {
+      //   folders: this.folders.size,
+      //   boards: this.boards.size,
+      // });
     } catch (error) {
       console.error('[WorkspaceService] Failed to initialize:', error);
       throw error;

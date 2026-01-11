@@ -57,7 +57,7 @@ export async function downloadFile(
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
-      console.log(`[Download] Attempt ${attempt + 1}/${maxRetries} for:`, url);
+      // console.log(`[Download] Attempt ${attempt + 1}/${maxRetries} for:`, url);
 
       // Fetch the file as blob to handle cross-origin URLs
       const response = await fetch(url);
@@ -76,22 +76,22 @@ export async function downloadFile(
 
       // Use downloadFromBlob to trigger download
       downloadFromBlob(blob, finalFilename);
-      console.log('[Download] Success');
+      // console.log('[Download] Success');
       return;
     } catch (error) {
-      console.warn(`[Download] Attempt ${attempt + 1} failed:`, error);
+      // console.warn(`[Download] Attempt ${attempt + 1} failed:`, error);
       lastError = error as Error;
 
       // Wait before retrying (exponential backoff: 2s, 4s, 6s)
       if (attempt < maxRetries - 1) {
         const delay = 2000 * (attempt + 1);
-        console.log(`[Download] Retrying in ${delay}ms...`);
+        // console.log(`[Download] Retrying in ${delay}ms...`);
         await new Promise(r => setTimeout(r, delay));
       }
     }
   }
 
-  console.error('[Download] All attempts failed');
+  // console.error('[Download] All attempts failed');
   throw lastError || new Error('Download failed after all retries');
 }
 

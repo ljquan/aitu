@@ -125,11 +125,11 @@ async function executeMermaidTool(params: MermaidToolParams): Promise<MCPResult>
   try {
     // 1. 提取Mermaid代码
     const mermaidCode = extractMermaidCode(mermaid);
-    console.log('[MermaidTool] Extracted mermaid code:', mermaidCode.substring(0, 100) + '...');
+    // console.log('[MermaidTool] Extracted mermaid code:', mermaidCode.substring(0, 100) + '...');
 
     // 2. 检测图表类型
     const diagramType = detectDiagramType(mermaidCode);
-    console.log('[MermaidTool] Detected diagram type:', diagramType);
+    // console.log('[MermaidTool] Detected diagram type:', diagramType);
 
     // 3. 加载并调用mermaid-to-drawnix库
     const api = await mermaidToDrawnixLib.api;
@@ -153,7 +153,7 @@ async function executeMermaidTool(params: MermaidToolParams): Promise<MCPResult>
       };
     }
 
-    console.log('[MermaidTool] Parsed elements count:', elements.length);
+    // console.log('[MermaidTool] Parsed elements count:', elements.length);
 
     // 4. 插入到画布（使用共享工具函数）
     const insertResult = insertElementsToCanvas(board, elements);
@@ -166,7 +166,7 @@ async function executeMermaidTool(params: MermaidToolParams): Promise<MCPResult>
       };
     }
 
-    console.log('[MermaidTool] Successfully inserted', elements.length, 'elements to canvas');
+    // console.log('[MermaidTool] Successfully inserted', elements.length, 'elements to canvas');
 
     return {
       success: true,

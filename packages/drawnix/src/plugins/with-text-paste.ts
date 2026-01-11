@@ -125,10 +125,10 @@ export const withTextPastePlugin = (board: PlaitBoard) => {
         // 插入文本到画布
         DrawTransforms.insertText(board, targetPoint, wrappedText);
 
-        console.log('[TextPaste] Inserted text with auto-wrap:', {
-          originalLength: text.length,
-          wrappedLines: wrappedText.split('\n').length,
-        });
+        // console.log('[TextPaste] Inserted text with auto-wrap:', {
+        //   originalLength: text.length,
+        //   wrappedLines: wrappedText.split('\n').length,
+        // });
 
         return;
       }

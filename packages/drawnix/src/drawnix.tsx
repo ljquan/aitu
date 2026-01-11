@@ -191,16 +191,11 @@ export const Drawnix: React.FC<DrawnixProps> = ({
   // 预加载画布中使用的字体（当 value 变化时）
   useEffect(() => {
     if (value && value.length > 0) {
-      fontManagerService.preloadBoardFonts(value).then(() => {
-        // 字体加载完成后，强制重新渲染
-        if (board) {
-          board.redraw();
-        }
-      }).catch(error => {
+      fontManagerService.preloadBoardFonts(value).catch(error => {
         console.warn('Failed to preload board fonts:', error);
       });
     }
-  }, [value, board]);
+  }, [value]);
 
   // Initialize video recovery service to restore expired blob URLs
   useEffect(() => {
@@ -209,6 +204,293 @@ export const Drawnix: React.FC<DrawnixProps> = ({
         initVideoRecoveryService(board);
       });
     }
+  }, [board]);
+
+  // Handle interrupted WorkZone elements after page refresh
+  // Query task status from Service Worker and restore workflow state
+  useEffect(() => {
+    if (board && value && value.length > 0) {
+      const restoreWorkZones = async () => {
+        const { WorkZoneTransforms } = await import('./plugins/with-workzone');
+        const { shouldUseSWTaskQueue } = await import('./services/task-queue');
+        const { TaskStatus } = await import('./types/task.types');
+
+        // In SW mode, ensure tasks are synced from SW first
+        if (shouldUseSWTaskQueue()) {
+          const { swTaskQueueService } = await import('./services/sw-task-queue-service');
+          // Wait for SW to be initialized and tasks synced
+          await swTaskQueueService.initialize();
+          await swTaskQueueService.syncTasksFromSW();
+        }
+
+        // Query active chat workflows from SW
+        // SW will re-send pending tool requests to the new page
+        const { chatWorkflowClient } = await import('./services/sw-client/chat-workflow-client');
+        const activeChatWorkflows = await chatWorkflowClient.getAllActiveWorkflows();
+        const activeChatWorkflowIds = new Set(activeChatWorkflows.map(w => w.id));
+        
+        // Also query regular workflows
+        const { workflowSubmissionService } = await import('./services/workflow-submission-service');
+        const activeWorkflows = await workflowSubmissionService.queryAllWorkflows();
+        const activeWorkflowIds = new Set(activeWorkflows.map(w => w.id));
+        
+        console.log('[Drawnix] Active chat workflows:', activeChatWorkflows.length, 'regular workflows:', activeWorkflows.length);
+
+        // Now import taskQueueService after sync is complete
+        const { taskQueueService } = await import('./services/task-queue');
+
+        const workzones = WorkZoneTransforms.getAllWorkZones(board);
+
+        for (const workzone of workzones) {
+          const swWorkflow = activeWorkflows.find(w => w.id === workzone.workflow.id);
+          
+          const hasRunningSteps = workzone.workflow.steps.some(
+            step => step.status === 'running' || step.status === 'pending'
+          );
+
+          // If we found the workflow in SW, sync the steps list first (for dynamic steps and status)
+          if (swWorkflow) {
+            const needsSync = swWorkflow.steps.length !== workzone.workflow.steps.length || 
+                             swWorkflow.status !== workzone.workflow.status;
+            
+            if (needsSync) {
+              console.log(`[Drawnix] Syncing workflow for WorkZone ${workzone.id}, SW status: ${swWorkflow.status}, steps: ${swWorkflow.steps.length}`);
+              WorkZoneTransforms.updateWorkflow(board, workzone.id, {
+                steps: swWorkflow.steps,
+                status: swWorkflow.status,
+                error: swWorkflow.error,
+              });
+              // Update local workzone reference for the mapping logic below
+              workzone.workflow.steps = swWorkflow.steps;
+              workzone.workflow.status = swWorkflow.status;
+            }
+          }
+
+          if (!hasRunningSteps && !swWorkflow) continue;
+
+          // Check if this workzone's workflow is still active in SW
+          // For chat workflows, check activeChatWorkflowIds; for regular workflows, check activeWorkflowIds
+          const isChatWorkflowActive = activeChatWorkflowIds.has(workzone.workflow.id);
+          const isRegularWorkflowActive = activeWorkflowIds.has(workzone.workflow.id);
+          const isWorkflowActive = isChatWorkflowActive || isRegularWorkflowActive;
+
+          console.log('[Drawnix] Found interrupted WorkZone:', workzone.id, 'chatActive:', isChatWorkflowActive, 'regularActive:', isRegularWorkflowActive);
+
+          // Update steps based on task queue status
+          const updatedSteps = workzone.workflow.steps.map(step => {
+            if (step.status !== 'running' && step.status !== 'pending') {
+              return step;
+            }
+
+            // Get taskId from step result
+            const taskId = (step.result as { taskId?: string })?.taskId;
+            if (!taskId) {
+              // No taskId means it's an AI analyze step or similar
+              // For ai_analyze (text model), check if workflow is still active in SW
+              if (step.mcp === 'ai_analyze') {
+                if (isWorkflowActive) {
+                  // Workflow is still active in SW, SW will re-send the request
+                  // Keep as running, the new page will handle the re-sent request
+                  return step;
+                }
+                // Workflow is not active, mark as failed
+                return {
+                  ...step,
+                  status: 'failed' as const,
+                  error: '页面刷新导致中断，请删除后重新发起',
+                };
+              }
+              // For other steps without taskId (like insert_mindmap, insert_mermaid),
+              // they are synchronous and should have completed before refresh
+              // If they're still running/pending, mark as failed
+              if (step.status === 'running') {
+                return {
+                  ...step,
+                  status: 'failed' as const,
+                  error: '页面刷新导致中断，请删除后重新发起',
+                };
+              }
+              return step;
+            }
+
+            // Query task status from task queue
+            const task = taskQueueService.getTask(taskId);
+            if (!task) {
+              // Task not found in queue, mark as failed
+              return {
+                ...step,
+                status: 'failed' as const,
+                error: '任务未找到，请重试',
+              };
+            }
+
+            // Update step status based on task status
+            switch (task.status) {
+              case TaskStatus.COMPLETED:
+                return {
+                  ...step,
+                  status: 'completed' as const,
+                  result: { taskId, result: task.result },
+                };
+              case TaskStatus.FAILED:
+                return {
+                  ...step,
+                  status: 'failed' as const,
+                  error: task.error?.message || '任务执行失败',
+                };
+              case TaskStatus.CANCELLED:
+                return {
+                  ...step,
+                  status: 'skipped' as const,
+                };
+              case TaskStatus.PENDING:
+              case TaskStatus.PROCESSING:
+              case TaskStatus.RETRYING:
+                // Task is still running, keep as running
+                return step;
+              default:
+                return step;
+            }
+          });
+
+          // Check if any steps were updated
+          const hasChanges = updatedSteps.some((step, i) =>
+            step.status !== workzone.workflow.steps[i].status
+          );
+
+          if (hasChanges) {
+            WorkZoneTransforms.updateWorkflow(board, workzone.id, {
+              steps: updatedSteps,
+            });
+            // console.log('[Drawnix] Restored WorkZone state:', workzone.id);
+          }
+        }
+      };
+
+      restoreWorkZones().catch(error => {
+        console.error('[Drawnix] Failed to restore WorkZones:', error);
+      });
+    }
+  }, [board]); // Only run once when board is initialized
+
+  // Subscribe to workflow status updates from SW and sync to WorkZone
+  // This ensures WorkZone UI stays in sync even after page refresh
+  useEffect(() => {
+    if (!board) return;
+
+    let subscription: { unsubscribe: () => void } | null = null;
+
+    const setupWorkflowSync = async () => {
+      const workflowModule = await import('./services/workflow-submission-service');
+      const { WorkZoneTransforms } = await import('./plugins/with-workzone');
+      const { workflowSubmissionService } = workflowModule;
+
+      // Subscribe to all workflow events
+      subscription = workflowSubmissionService.subscribeToAllEvents((event) => {
+        const workflowEvent = event as { 
+          type: string; 
+          workflowId: string; 
+          stepId?: string; 
+          status?: string; 
+          result?: unknown; 
+          error?: string; 
+          duration?: number;
+          steps?: Array<{ id: string; mcp: string; args: Record<string, unknown>; description: string; status: string }>;
+        };
+        // console.log('[Drawnix] Workflow event:', workflowEvent.type, workflowEvent.workflowId);
+        
+        // Find WorkZone with this workflow ID
+        const workzones = WorkZoneTransforms.getAllWorkZones(board);
+        const workzone = workzones.find(wz => wz.workflow.id === workflowEvent.workflowId);
+        
+        if (!workzone) {
+          // console.log('[Drawnix] No WorkZone found for workflow:', workflowEvent.workflowId);
+          return;
+        }
+
+        switch (workflowEvent.type) {
+          case 'step': {
+            // Update specific step status
+            const updatedSteps = workzone.workflow.steps.map(step => {
+              if (step.id === workflowEvent.stepId) {
+                return {
+                  ...step,
+                  status: (workflowEvent.status || step.status) as 'pending' | 'running' | 'completed' | 'failed' | 'skipped',
+                  result: workflowEvent.result ?? step.result,
+                  error: workflowEvent.error ?? step.error,
+                  duration: workflowEvent.duration ?? step.duration,
+                };
+              }
+              return step;
+            });
+            WorkZoneTransforms.updateWorkflow(board, workzone.id, {
+              steps: updatedSteps,
+            });
+            break;
+          }
+
+          case 'steps_added': {
+            // Add new steps to workflow
+            const newSteps = (workflowEvent.steps || []).map(step => ({
+              id: step.id,
+              mcp: step.mcp,
+              args: step.args,
+              description: step.description,
+              status: step.status as 'pending' | 'running' | 'completed' | 'failed' | 'skipped',
+            }));
+            WorkZoneTransforms.updateWorkflow(board, workzone.id, {
+              steps: [...workzone.workflow.steps, ...newSteps],
+            });
+            break;
+          }
+
+          case 'completed':
+          case 'failed': {
+            // Workflow completed or failed - update all pending/running steps
+            const finalStatus = workflowEvent.type === 'completed' ? 'completed' : 'failed';
+            const updatedSteps = workzone.workflow.steps.map(step => {
+              if (step.status === 'running' || step.status === 'pending') {
+                // For steps with taskId, don't force status change - let task queue handle it
+                const stepResult = step.result as { taskId?: string } | undefined;
+                if (stepResult?.taskId) {
+                  return step;
+                }
+                return {
+                  ...step,
+                  status: finalStatus as 'completed' | 'failed',
+                  error: workflowEvent.type === 'failed' ? workflowEvent.error : undefined,
+                };
+              }
+              return step;
+            });
+            WorkZoneTransforms.updateWorkflow(board, workzone.id, {
+              steps: updatedSteps,
+            });
+            break;
+          }
+
+          case 'recovered': {
+            // Full workflow recovery - sync all steps and status
+            const swWorkflow = (workflowEvent as any).workflow;
+            if (swWorkflow) {
+              WorkZoneTransforms.updateWorkflow(board, workzone.id, {
+                steps: swWorkflow.steps,
+                status: swWorkflow.status,
+              });
+            }
+            break;
+          }
+        }
+      });
+    };
+
+    setupWorkflowSync().catch(error => {
+      console.error('[Drawnix] Failed to setup workflow sync:', error);
+    });
+
+    return () => {
+      subscription?.unsubscribe();
+    };
   }, [board]);
 
   const plugins: PlaitPlugin[] = [
@@ -270,7 +552,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
 
       // 只有当选中了元素时才更新lastSelectedElementIds
       if (elementIds.length > 0) {
-        console.log('Selection changed, saving element IDs:', elementIds);
+        // console.log('Selection changed, saving element IDs:', elementIds);
         updateAppState({ lastSelectedElementIds: elementIds });
       }
     }
@@ -288,8 +570,8 @@ export const Drawnix: React.FC<DrawnixProps> = ({
 
   return (
     <I18nProvider>
-      <ToolbarConfigProvider>
-        <AssetProvider>
+      <AssetProvider>
+        <ToolbarConfigProvider>
           <CacheQuotaProvider onOpenMediaLibrary={handleOpenMediaLibrary}>
             <ChatDrawerProvider>
               <WorkflowProvider>
@@ -333,8 +615,8 @@ export const Drawnix: React.FC<DrawnixProps> = ({
               </WorkflowProvider>
             </ChatDrawerProvider>
           </CacheQuotaProvider>
-        </AssetProvider>
-      </ToolbarConfigProvider>
+        </ToolbarConfigProvider>
+      </AssetProvider>
     </I18nProvider>
   );
 };

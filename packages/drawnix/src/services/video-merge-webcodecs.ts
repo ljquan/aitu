@@ -75,7 +75,7 @@ async function decodeVideo(
   videoBlob: Blob,
   onProgress?: (progress: number) => void
 ): Promise<VideoFrameData[]> {
-  console.log('[WebCodecs] Decoding video...');
+  // console.log('[WebCodecs] Decoding video...');
 
   const frames: VideoFrameData[] = [];
   let processedChunks = 0;
@@ -127,7 +127,7 @@ async function decodeVideo(
   await decoder.flush();
   decoder.close();
 
-  console.log(`[WebCodecs] Decoded ${frames.length} frames`);
+  // console.log(`[WebCodecs] Decoded ${frames.length} frames`);
   return frames;
 }
 
@@ -144,7 +144,7 @@ function getBestVideoFormat(): { mimeType: string; extension: string } {
 
   for (const format of formats) {
     if (MediaRecorder.isTypeSupported(format.mimeType)) {
-      console.log(`[WebCodecs] Using format: ${format.mimeType}`);
+      // console.log(`[WebCodecs] Using format: ${format.mimeType}`);
       return format;
     }
   }
@@ -161,7 +161,7 @@ async function mergeVideosWithMediaRecorder(
   videoUrls: string[],
   onProgress?: MergeProgressCallback
 ): Promise<MergeResult> {
-  console.log('[WebCodecs] Using MediaRecorder to merge videos...');
+  // console.log('[WebCodecs] Using MediaRecorder to merge videos...');
 
   // 创建一个画布
   const canvas = document.createElement('canvas');
@@ -184,7 +184,7 @@ async function mergeVideosWithMediaRecorder(
   canvas.width = firstVideo.videoWidth;
   canvas.height = firstVideo.videoHeight;
 
-  console.log(`[WebCodecs] Canvas size: ${canvas.width}x${canvas.height}`);
+  // console.log(`[WebCodecs] Canvas size: ${canvas.width}x${canvas.height}`);
 
   // 获取最佳格式
   const format = getBestVideoFormat();
@@ -206,7 +206,7 @@ async function mergeVideosWithMediaRecorder(
     audioBitsPerSecond: 128000,  // 128 kbps for audio
   });
 
-  console.log(`[WebCodecs] MediaRecorder tracks: ${combinedStream.getTracks().length} (video: ${combinedStream.getVideoTracks().length}, audio: ${combinedStream.getAudioTracks().length})`);
+  // console.log(`[WebCodecs] MediaRecorder tracks: ${combinedStream.getTracks().length} (video: ${combinedStream.getVideoTracks().length}, audio: ${combinedStream.getAudioTracks().length})`);
 
   const recordedChunks: Blob[] = [];
 
@@ -222,7 +222,7 @@ async function mergeVideosWithMediaRecorder(
 
   // 逐个播放和录制视频
   for (let i = 0; i < videoUrls.length; i++) {
-    console.log(`[WebCodecs] Processing video ${i + 1}/${videoUrls.length}`);
+    // console.log(`[WebCodecs] Processing video ${i + 1}/${videoUrls.length}`);
     onProgress?.(
       (i / videoUrls.length) * 100,
       'encoding',
@@ -245,7 +245,7 @@ async function mergeVideosWithMediaRecorder(
     try {
       audioSource = audioContext.createMediaElementSource(video);
       audioSource.connect(audioDestination);
-      console.log(`[WebCodecs] Connected audio from video ${i + 1}`);
+      // console.log(`[WebCodecs] Connected audio from video ${i + 1}`);
     } catch (error) {
       console.warn(`[WebCodecs] Failed to connect audio from video ${i + 1}:`, error);
     }
@@ -281,7 +281,7 @@ async function mergeVideosWithMediaRecorder(
   }
 
   // 停止录制
-  console.log('[WebCodecs] Finalizing...');
+  // console.log('[WebCodecs] Finalizing...');
   onProgress?.(100, 'finalizing', '正在生成最终视频...');
 
   await new Promise<void>((resolve) => {
@@ -291,7 +291,7 @@ async function mergeVideosWithMediaRecorder(
 
   // 清理音频上下文
   await audioContext.close();
-  console.log('[WebCodecs] Audio context closed');
+  // console.log('[WebCodecs] Audio context closed');
 
   // 合并所有录制的数据
   // 注意：不包含 codecs 参数，避免 Blob URL 和下载时的兼容性问题
@@ -301,7 +301,7 @@ async function mergeVideosWithMediaRecorder(
   // 计算总时长（假设每段 8 秒）
   const duration = videoUrls.length * 8;
 
-  console.log(`[WebCodecs] Merge complete, size: ${(finalBlob.size / 1024 / 1024).toFixed(2)} MB, format: ${simpleMimeType} (original: ${format.mimeType})`);
+  // console.log(`[WebCodecs] Merge complete, size: ${(finalBlob.size / 1024 / 1024).toFixed(2)} MB, format: ${simpleMimeType} (original: ${format.mimeType})`);
 
   // 缓存到 Cache API（由 Service Worker 处理）
   try {
@@ -322,7 +322,7 @@ async function mergeVideosWithMediaRecorder(
       'video',
       { taskId }
     );
-    console.log(`[WebCodecs] Video cached: ${cacheKey}, mimeType: ${simpleMimeType}`);
+    // console.log(`[WebCodecs] Video cached: ${cacheKey}, mimeType: ${simpleMimeType}`);
 
     return { blob: finalBlob, url: stableUrl, duration, taskId };
   } catch (cacheError) {
@@ -379,7 +379,7 @@ class VideoMergeWebCodecsService {
       const videoBlobs: Blob[] = [];
 
       for (let i = 0; i < videoUrls.length; i++) {
-        console.log(`[WebCodecs] Downloading video ${i + 1}/${videoUrls.length}`);
+        // console.log(`[WebCodecs] Downloading video ${i + 1}/${videoUrls.length}`);
         onProgress?.(
           (i / videoUrls.length) * 100,
           'downloading',

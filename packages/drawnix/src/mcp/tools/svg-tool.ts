@@ -214,11 +214,11 @@ async function executeSvgTool(params: SvgToolParams): Promise<MCPResult> {
   try {
     // 1. 提取并规范化SVG代码
     const svgCode = normalizeSvg(extractSvgCode(svg));
-    console.log('[SvgTool] Extracted SVG code:', svgCode.substring(0, 100) + '...');
+    // console.log('[SvgTool] Extracted SVG code:', svgCode.substring(0, 100) + '...');
 
     // 2. 解析SVG尺寸
     const svgDimensions = parseSvgDimensions(svgCode);
-    console.log('[SvgTool] SVG dimensions:', svgDimensions);
+    // console.log('[SvgTool] SVG dimensions:', svgDimensions);
 
     // 3. 计算最终尺寸
     const effectiveWidth = Math.min(
@@ -253,7 +253,7 @@ async function executeSvgTool(params: SvgToolParams): Promise<MCPResult> {
     // 7. 插入到画布
     DrawTransforms.insertImage(board, imageItem, insertionPoint);
 
-    console.log('[SvgTool] Successfully inserted SVG at:', insertionPoint);
+    // console.log('[SvgTool] Successfully inserted SVG at:', insertionPoint);
 
     // 8. 滚动到插入位置
     const centerPoint: Point = [

@@ -16,7 +16,7 @@ export const VersionUpdatePrompt: React.FC = () => {
     // Listen for custom event from main.tsx
     const handleUpdateAvailable = async (event: Event) => {
       const customEvent = event as CustomEvent;
-      console.log('[VersionUpdatePrompt] Update available:', customEvent.detail);
+      // console.log('[VersionUpdatePrompt] Update available:', customEvent.detail);
       
       const version = customEvent.detail?.version;
       
@@ -44,12 +44,12 @@ export const VersionUpdatePrompt: React.FC = () => {
     // 调试辅助：在开发环境下挂载手动触发方法
     if (process.env.NODE_ENV === 'development') {
       (window as any).__debugTriggerUpdate = (version = '9.9.9') => {
-        console.log('[Debug] Triggering update prompt');
+        // console.log('[Debug] Triggering update prompt');
         window.dispatchEvent(new CustomEvent('sw-update-available', { 
           detail: { version } 
         }));
       };
-      console.log('[VersionUpdatePrompt] Debug mode: run window.__debugTriggerUpdate() to test');
+      // console.log('[VersionUpdatePrompt] Debug mode: run window.__debugTriggerUpdate() to test');
     }
 
     return () => {
@@ -58,7 +58,7 @@ export const VersionUpdatePrompt: React.FC = () => {
   }, []);
 
   const handleUpdate = () => {
-    console.log('[VersionUpdatePrompt] User confirmed update');
+    // console.log('[VersionUpdatePrompt] User confirmed update');
     // Dispatch event to notify main.tsx to proceed with upgrade
     window.dispatchEvent(new CustomEvent('user-confirmed-upgrade'));
     setShowChangelog(false);

@@ -200,7 +200,7 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
       // 1. 优先从本地 IndexedDB 缓存获取
       const cachedBlob = await unifiedCacheService.getCachedBlob(task.result.url);
       if (cachedBlob) {
-        console.log('[Download] Using cached blob for task:', taskId);
+        // console.log('[Download] Using cached blob for task:', taskId);
         downloadFromBlob(cachedBlob, filename);
         MessagePlugin.success('下载成功');
         onTaskAction?.('download', taskId);
@@ -208,7 +208,7 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
       }
 
       // 2. 缓存不存在，从 URL 下载（带重试，SW 会自动去重）
-      console.log('[Download] No cache, fetching from URL:', task.result.url);
+      // console.log('[Download] No cache, fetching from URL:', task.result.url);
       const result = await downloadMediaFile(
         task.result.url,
         task.params.prompt,
@@ -239,12 +239,12 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
       if (task.type === TaskType.IMAGE) {
         // 直接插入原始生成的图片（包括宫格图和普通图片）
         await insertImageFromUrl(board, task.result.url);
-        console.log('Image inserted to board:', taskId);
+        // console.log('Image inserted to board:', taskId);
         MessagePlugin.success('图片已插入到白板');
       } else if (task.type === TaskType.VIDEO) {
         // 插入视频到白板
         await insertVideoFromUrl(board, task.result.url);
-        console.log('Video inserted to board:', taskId);
+        // console.log('Video inserted to board:', taskId);
         MessagePlugin.success('视频已插入到白板');
       }
       onTaskAction?.('insert', taskId);
@@ -556,10 +556,10 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
         onClose={() => setCharacterDialogTask(null)}
         onCreateStart={() => {
           // Start indicator (API call begins)
-          console.log('Character creation started');
+          // console.log('Character creation started');
         }}
         onCreateComplete={(characterId) => {
-          console.log('Character created:', characterId);
+          // console.log('Character created:', characterId);
           // Close dialog and switch to character view after API succeeds
           setCharacterDialogTask(null);
           setTypeFilter('character');
