@@ -10,8 +10,9 @@
  */
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { MoreHorizontal, Pin, PinOff, X } from 'lucide-react';
+import { MoreHorizontal } from 'lucide-react';
 import { usePromptHistory } from '../../hooks/usePromptHistory';
+import { PromptListPanel, type PromptItem } from '../shared';
 import './prompt-history-popover.scss';
 
 interface PromptHistoryPopoverProps {
@@ -74,14 +75,12 @@ export const PromptHistoryPopover: React.FC<PromptHistoryPopoverProps> = ({
   }, [onSelectPrompt]);
 
   // 处理删除
-  const handleDelete = useCallback((e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
+  const handleDelete = useCallback((id: string) => {
     removeHistory(id);
   }, [removeHistory]);
 
   // 处理置顶切换
-  const handleTogglePin = useCallback((e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
+  const handleTogglePin = useCallback((id: string) => {
     togglePinHistory(id);
   }, [togglePinHistory]);
 
@@ -89,6 +88,13 @@ export const PromptHistoryPopover: React.FC<PromptHistoryPopoverProps> = ({
   if (history.length === 0) {
     return null;
   }
+
+  // 转换为 PromptItem 格式
+  const promptItems: PromptItem[] = history.map(item => ({
+    id: item.id,
+    content: item.content,
+    pinned: item.pinned,
+  }));
 
   return (
     <div
@@ -108,55 +114,16 @@ export const PromptHistoryPopover: React.FC<PromptHistoryPopoverProps> = ({
 
       {/* 历史提示词面板 */}
       {isOpen && (
-        <div className="prompt-history-popover__panel">
-          <div className="prompt-history-popover__header">
-            <span>{language === 'zh' ? '历史提示词' : 'Prompt History'}</span>
-            <span className="prompt-history-popover__count">
-              {history.length}
-            </span>
-          </div>
-          <div className="prompt-history-popover__list">
-            {history.map((item) => (
-              <div
-                key={item.id}
-                className={`prompt-history-popover__item ${item.pinned ? 'prompt-history-popover__item--pinned' : ''}`}
-                onClick={() => handleSelectPrompt(item.content)}
-              >
-                {/* 置顶标识 */}
-                {item.pinned && (
-                  <div className="prompt-history-popover__item-pin-badge">
-                    <Pin size={10} />
-                  </div>
-                )}
-                {/* 提示词内容 */}
-                <span className="prompt-history-popover__item-text">
-                  {item.content}
-                </span>
-                {/* 操作按钮 */}
-                <div className="prompt-history-popover__item-actions">
-                  {/* 置顶/取消置顶按钮 */}
-                  <button
-                    className="prompt-history-popover__item-action"
-                    onClick={(e) => handleTogglePin(e, item.id)}
-                    title={item.pinned
-                      ? (language === 'zh' ? '取消置顶' : 'Unpin')
-                      : (language === 'zh' ? '置顶' : 'Pin')
-                    }
-                  >
-                    {item.pinned ? <PinOff size={14} /> : <Pin size={14} />}
-                  </button>
-                  {/* 删除按钮 */}
-                  <button
-                    className="prompt-history-popover__item-action prompt-history-popover__item-action--delete"
-                    onClick={(e) => handleDelete(e, item.id)}
-                    title={language === 'zh' ? '删除' : 'Delete'}
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
+        <div className="prompt-history-popover__panel-wrapper">
+          <PromptListPanel
+            title={language === 'zh' ? '历史提示词' : 'Prompt History'}
+            items={promptItems}
+            onSelect={handleSelectPrompt}
+            onTogglePin={handleTogglePin}
+            onDelete={handleDelete}
+            language={language}
+            showCount={true}
+          />
         </div>
       )}
     </div>

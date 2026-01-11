@@ -5,6 +5,7 @@ import { CharacterMentionPopup } from '../../character/CharacterMentionPopup';
 import { useMention } from '../../../hooks/useMention';
 import { Z_INDEX } from '../../../constants/z-index';
 import { promptStorageService } from '../../../services/prompt-storage-service';
+import { PromptListPanel, type PromptItem } from '../../shared';
 
 interface PromptInputProps {
   prompt: string;
@@ -37,9 +38,14 @@ export const PromptInput: React.FC<PromptInputProps> = ({
   const [tooltipPosition, setTooltipPosition] = useState<{ top: number; left: number } | null>(null);
   const [updateTrigger, setUpdateTrigger] = useState(0); // 用于触发重新渲染
 
-  // 处理后的提示词列表（排序和过滤）
-  const sortedPrompts = useMemo(() => {
-    return promptStorageService.sortPrompts(type, presetPrompts);
+  // 处理后的提示词列表（排序和过滤，转换为 PromptItem 格式）
+  const promptItems: PromptItem[] = useMemo(() => {
+    const sorted = promptStorageService.sortPrompts(type, presetPrompts);
+    return sorted.map((content, index) => ({
+      id: `preset-${index}-${content.slice(0, 20)}`,
+      content,
+      pinned: promptStorageService.isPinned(type, content),
+    }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [type, presetPrompts, updateTrigger]);
 
@@ -92,7 +98,7 @@ export const PromptInput: React.FC<PromptInputProps> = ({
       // 检查点击是否在按钮或 tooltip 内
       if (containerRef.current && !containerRef.current.contains(target)) {
         // 还需要检查是否点击了 portal 中的 tooltip
-        const tooltipElement = document.querySelector('.preset-tooltip-portal');
+        const tooltipElement = document.querySelector('.preset-prompt-panel-portal');
         if (!tooltipElement?.contains(target)) {
           setIsPresetOpen(false);
         }
@@ -105,30 +111,34 @@ export const PromptInput: React.FC<PromptInputProps> = ({
     }
   }, [isPresetOpen]);
 
-  const handlePresetClick = (preset: string) => {
-    onPromptChange(preset);
+  // 选择提示词
+  const handleSelect = useCallback((content: string) => {
+    onPromptChange(content);
     onError?.(null);
-    setIsPresetOpen(false); // 点击提示词后关闭弹窗
-  };
+    setIsPresetOpen(false);
+  }, [onPromptChange, onError]);
 
   // 置顶/取消置顶提示词
-  const handlePinToggle = useCallback((e: React.MouseEvent, preset: string) => {
-    e.stopPropagation();
-    const isPinned = promptStorageService.isPinned(type, preset);
-    if (isPinned) {
-      promptStorageService.unpinPrompt(type, preset);
+  const handleTogglePin = useCallback((id: string) => {
+    const item = promptItems.find(p => p.id === id);
+    if (!item) return;
+    
+    if (item.pinned) {
+      promptStorageService.unpinPrompt(type, item.content);
     } else {
-      promptStorageService.pinPrompt(type, preset);
+      promptStorageService.pinPrompt(type, item.content);
     }
     setUpdateTrigger(prev => prev + 1);
-  }, [type]);
+  }, [type, promptItems]);
 
   // 删除提示词
-  const handleDelete = useCallback((e: React.MouseEvent, preset: string) => {
-    e.stopPropagation();
-    promptStorageService.deletePrompt(type, preset);
+  const handleDelete = useCallback((id: string) => {
+    const item = promptItems.find(p => p.id === id);
+    if (!item) return;
+    
+    promptStorageService.deletePrompt(type, item.content);
     setUpdateTrigger(prev => prev + 1);
-  }, [type]);
+  }, [type, promptItems]);
 
   // Handle textarea change
   const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -149,9 +159,13 @@ export const PromptInput: React.FC<PromptInputProps> = ({
   const renderTooltipContent = () => {
     if (!isPresetOpen || !tooltipPosition) return null;
 
+    const title = language === 'zh' 
+      ? `${type === 'image' ? '图片' : '视频'}描述预设` 
+      : `${type === 'image' ? 'Image' : 'Video'} Description Presets`;
+
     const tooltipContent = (
       <div
-        className="preset-tooltip preset-tooltip-portal"
+        className="preset-prompt-panel-portal"
         style={{
           position: 'fixed',
           top: tooltipPosition.top,
@@ -160,50 +174,16 @@ export const PromptInput: React.FC<PromptInputProps> = ({
           zIndex: Z_INDEX.DIALOG_POPOVER,
         }}
       >
-        <div className="preset-header">
-          {language === 'zh' ? `${type === 'image' ? '图片' : '视频'}描述预设` : `${type === 'image' ? 'Image' : 'Video'} Description Presets`}
-        </div>
-        <div className="preset-list">
-          {sortedPrompts.map((preset, index) => {
-            const isPinned = promptStorageService.isPinned(type, preset);
-            return (
-              <div
-                key={index}
-                className={`preset-item-wrapper ${isPinned ? 'pinned' : ''}`}
-              >
-                <button
-                  type="button"
-                  className="preset-item"
-                  data-track="ai_click_prompt_preset"
-                  onClick={() => handlePresetClick(preset)}
-                  disabled={disabled}
-                  title={preset}
-                >
-                  {isPinned && <span className="pin-indicator">📌</span>}
-                  <span className="preset-text">{preset}</span>
-                </button>
-                <div className="preset-actions">
-                  <button
-                    type="button"
-                    className={`preset-action-btn pin-btn ${isPinned ? 'active' : ''}`}
-                    onClick={(e) => handlePinToggle(e, preset)}
-                    title={language === 'zh' ? (isPinned ? '取消置顶' : '置顶') : (isPinned ? 'Unpin' : 'Pin')}
-                  >
-                    {isPinned ? '📌' : '📍'}
-                  </button>
-                  <button
-                    type="button"
-                    className="preset-action-btn delete-btn"
-                    onClick={(e) => handleDelete(e, preset)}
-                    title={language === 'zh' ? '删除' : 'Delete'}
-                  >
-                    🗑️
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        <PromptListPanel
+          title={title}
+          items={promptItems}
+          onSelect={handleSelect}
+          onTogglePin={handleTogglePin}
+          onDelete={handleDelete}
+          language={language}
+          disabled={disabled}
+          showCount={true}
+        />
       </div>
     );
 
