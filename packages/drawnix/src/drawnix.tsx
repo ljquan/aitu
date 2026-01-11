@@ -690,6 +690,23 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
     if (!board) return;
 
     const handleDoubleClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      
+      // 检查是否双击在浮层组件内部（ChatDrawer、抽屉面板、弹窗等）
+      // 这些组件不应该触发画布的快捷工具栏
+      const isInsideOverlay = target.closest('.chat-drawer') ||
+                              target.closest('.project-drawer') ||
+                              target.closest('.toolbox-drawer') ||
+                              target.closest('.task-queue-panel') ||
+                              target.closest('.t-dialog') ||
+                              target.closest('.settings-dialog') ||
+                              target.closest('.minimap') ||
+                              target.closest('.ai-input-bar');
+      
+      if (isInsideOverlay) {
+        return; // 不处理浮层内的双击事件
+      }
+      
       // 检查是否双击在空白区域（没有选中任何元素）
       const selectedElements = getSelectedElements(board);
 

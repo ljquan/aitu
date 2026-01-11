@@ -45,9 +45,9 @@ export const Z_INDEX = {
   // Layer 4: Drawers/Panels (4000-4999)
   // ==========================================
   TASK_QUEUE_PANEL: 4000,
+  MINIMAP: 4005, // Minimap 应该在抽屉面板下方，避免挡住 ChatDrawer 的输入框
   CHAT_DRAWER: 4010,
   GENERATION_HISTORY: 4020,
-  MINIMAP: 4030,
   TOOLBOX_DRAWER: 4040,
 
   // ==========================================

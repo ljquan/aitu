@@ -52,6 +52,7 @@
 
 .ai-image-generation-section {
   flex: 2;
+  min-width: 320px; // 确保表单区域有足够的最小宽度
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -114,6 +115,7 @@
 
 .task-sidebar {
   flex: 3;
+  min-width: 280px; // 确保任务列表区域有足够的最小宽度
   height: 100%;
   overflow-y: auto;
   background: var(--color-bg-container, #fff);

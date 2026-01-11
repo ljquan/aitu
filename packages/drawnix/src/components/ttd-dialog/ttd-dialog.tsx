@@ -466,9 +466,9 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
           </div>
         }
         onClose={handleImageDialogClose}
-        width="60%"
+        width="80%"
         height="60%"
-        minWidth={800}
+        minWidth={1024}
         minHeight={500}
         x="center"
         y="center"
