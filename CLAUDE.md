@@ -437,23 +437,126 @@ packages/react-text/
 
 ## 核心功能流程
 
-### AI 生成流程
+### AI 生成流程（Service Worker 模式）
+
+项目使用 Service Worker 作为后台任务执行器，实现页面刷新不影响任务执行。
+
 ```
 用户输入
   ↓
 AIInputBar (输入组件)
   ↓
-TTDDialog (对话框)
-  ↓
-GenerationAPIService (API 调用)
-  ↓
-Gemini API / 视频 API
-  ↓
-TaskQueueService (任务管理)
-  ↓
-TaskExecutor Hook (执行逻辑)
+swTaskQueueService.createTask() (应用层)
+  ↓ postMessage
+Service Worker (后台)
+  ├── SWTaskQueue.submitTask() (任务管理)
+  ├── ImageHandler / VideoHandler (执行器)
+  └── taskQueueStorage (IndexedDB 持久化)
+  ↓ broadcastToClients
+应用层接收状态更新
   ↓
 Canvas 插入 / 媒体库缓存
+```
+
+**核心特性**：
+- **页面刷新恢复**：任务状态持久化到 IndexedDB，刷新后自动恢复
+- **多标签页同步**：通过 `broadcastToClients` 向所有标签页广播状态
+- **视频任务恢复**：通过 `remoteId` 恢复轮询，继续等待视频生成完成
+
+### Service Worker 任务队列架构
+
+```
+apps/web/src/sw/
+├── index.ts                       # SW 主入口
+└── task-queue/
+    ├── queue.ts                   # 任务队列核心 (SWTaskQueue)
+    ├── storage.ts                 # IndexedDB 存储 (TaskQueueStorage)
+    ├── types.ts                   # 类型定义
+    ├── handlers/                  # 任务处理器
+    │   ├── image.ts               # 图片生成处理器
+    │   ├── video.ts               # 视频生成处理器
+    │   ├── character.ts           # 角色生成处理器
+    │   └── chat.ts                # 聊天处理器
+    ├── workflow-executor.ts       # 工作流执行器
+    ├── workflow-types.ts          # 工作流类型
+    ├── chat-workflow/             # 聊天工作流
+    │   ├── executor.ts            # 聊天工作流执行器
+    │   └── types.ts               # 聊天工作流类型
+    ├── mcp/                       # MCP 工具系统
+    │   ├── tools.ts               # 工具注册
+    │   └── executor.ts            # 工具执行器
+    └── utils/
+        ├── fingerprint.ts         # 任务指纹（去重）
+        └── lock.ts                # 任务锁（防并发）
+```
+
+**应用层服务**：
+```
+packages/drawnix/src/services/
+├── sw-client/
+│   ├── client.ts                  # SW 通信客户端 (SWTaskQueueClient)
+│   ├── types.ts                   # 消息类型定义
+│   └── index.ts                   # 导出
+├── sw-task-queue-service.ts       # SW 任务队列服务
+├── sw-chat-service.ts             # SW 聊天服务
+├── sw-chat-workflow-service.ts    # SW 聊天工作流服务
+└── task-queue/
+    └── index.ts                   # 任务队列入口（自动选择 SW/传统模式）
+```
+
+**通信协议**：
+```typescript
+// 应用层 → Service Worker
+type MainToSWMessage =
+  | { type: 'TASK_QUEUE_INIT'; geminiConfig; videoConfig }
+  | { type: 'TASK_SUBMIT'; taskId; taskType; params }
+  | { type: 'TASK_CANCEL'; taskId }
+  | { type: 'TASK_RETRY'; taskId }
+  | { type: 'TASK_GET_ALL' }
+  | { type: 'CHAT_START'; chatId; params }
+  | { type: 'WORKFLOW_SUBMIT'; workflow }
+  // ...
+
+// Service Worker → 应用层
+type SWToMainMessage =
+  | { type: 'TASK_CREATED'; task }
+  | { type: 'TASK_STATUS'; taskId; status; progress }
+  | { type: 'TASK_COMPLETED'; taskId; result }
+  | { type: 'TASK_FAILED'; taskId; error; retryCount }
+  | { type: 'WORKFLOW_STEP_STATUS'; workflowId; stepId; status }
+  // ...
+```
+
+**IndexedDB 存储结构**：
+- `tasks` - 任务数据（图片/视频/角色生成）
+- `config` - API 配置（apiKey, baseUrl）
+- `workflows` - 工作流数据
+- `chat-workflows` - 聊天工作流数据
+- `pending-tool-requests` - 待处理的主线程工具请求
+
+**任务生命周期**：
+```
+PENDING → PROCESSING → COMPLETED
+                    ↘ FAILED → RETRYING → PENDING (重试)
+                    ↘ CANCELLED
+```
+
+**使用示例**：
+```typescript
+import { taskQueueService } from '../services/task-queue';
+
+// 创建任务
+const task = taskQueueService.createTask(
+  { prompt: '生成一张日落图片', size: '1:1' },
+  TaskType.IMAGE
+);
+
+// 监听任务更新
+taskQueueService.observeTaskUpdates().subscribe((event) => {
+  if (event.type === 'taskUpdated' && event.task.status === TaskStatus.COMPLETED) {
+    console.log('任务完成:', event.task.result?.url);
+  }
+});
 ```
 
 ### 编辑器插件系统
