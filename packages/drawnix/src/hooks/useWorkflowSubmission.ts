@@ -49,7 +49,8 @@ export interface UseWorkflowSubmissionReturn {
   submitWorkflow: (
     parsedInput: ParsedGenerationParams,
     referenceImages: string[],
-    retryContext?: WorkflowRetryContext
+    retryContext?: WorkflowRetryContext,
+    existingWorkflow?: LegacyWorkflowDefinition
   ) => Promise<{ workflowId: string; usedSW: boolean }>;
   /** Cancel a workflow */
   cancelWorkflow: (workflowId: string) => Promise<void>;
@@ -386,16 +387,18 @@ export function useWorkflowSubmission(
   const submitWorkflow = useCallback(async (
     parsedInput: ParsedGenerationParams,
     referenceImages: string[],
-    retryContext?: WorkflowRetryContext
+    retryContext?: WorkflowRetryContext,
+    existingWorkflow?: LegacyWorkflowDefinition
   ): Promise<{ workflowId: string; usedSW: boolean }> => {
     // console.log('[useWorkflowSubmission] ▶ submitWorkflow called');
     // console.log('[useWorkflowSubmission]   - Scenario:', parsedInput.scenario);
     // console.log('[useWorkflowSubmission]   - Generation type:', parsedInput.generationType);
     // console.log('[useWorkflowSubmission]   - useSWExecution option:', useSWExecution);
     // console.log('[useWorkflowSubmission]   - SW available:', checkSWAvailable());
+    // console.log('[useWorkflowSubmission]   - existingWorkflow:', existingWorkflow?.id);
 
-    // Create workflow using the existing converter (maintains compatibility)
-    const legacyWorkflow = convertToWorkflow(parsedInput, referenceImages);
+    // Use existing workflow if provided, otherwise create a new one
+    const legacyWorkflow = existingWorkflow || convertToWorkflow(parsedInput, referenceImages);
 
     // Start workflow in WorkflowContext
     workflowControl.startWorkflow(legacyWorkflow);

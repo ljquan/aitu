@@ -128,6 +128,11 @@ function updateWorkflowStepForTask(
       // 延迟删除 WorkZone，让用户有时间看到完成状态
       setTimeout(() => {
         WorkZoneTransforms.removeWorkZone(board, workzone.id);
+        
+        // 触发事件通知 AI 输入框生成完成
+        window.dispatchEvent(new CustomEvent('ai-generation-complete', {
+          detail: { type: 'image', success: true, workzoneId: workzone.id }
+        }));
       }, 1500);
     }
   }

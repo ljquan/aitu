@@ -126,6 +126,8 @@ packages/drawnix/
 │   ├── services/                  # 业务逻辑服务 (32个服务)
 │   ├── plugins/                   # 功能插件 (15个插件)
 │   ├── hooks/                     # React Hooks (24个)
+│   ├── useWorkflowSubmission.ts  # 工作流提交（核心）
+│   ├── useAutoInsertToCanvas.ts  # 自动插入画布
 │   ├── utils/                     # 工具函数 (33个模块)
 │   ├── types/                     # TypeScript 类型定义 (14个)
 │   ├── constants/                 # 常量定义 (13个)
@@ -187,6 +189,7 @@ services/
 ├── generation-api-service.ts      # AI 生成 API 服务 (Gemini)
 ├── video-api-service.ts           # 视频 API 服务 (Veo3/Sora-2)
 ├── task-queue-service.ts          # 任务队列管理
+├── workflow-submission-service.ts # 工作流提交服务
 ├── workspace-service.ts           # 工作空间管理
 ├── storage-service.ts             # 存储服务
 ├── chat-service.ts                # 聊天服务
@@ -198,6 +201,8 @@ services/
 ├── toolbar-config-service.ts      # 工具栏配置
 ├── prompt-storage-service.ts      # 历史提示词存储
 ├── font-manager-service.ts        # 字体管理服务（加载和缓存）
+├── sw-capabilities/               # SW 能力处理
+│   └── handler.ts                 # 思维导图/流程图生成处理
 ├── tracking/                      # 追踪服务
 └── ...其他服务
 ```
@@ -230,9 +235,10 @@ plugins/
 ```
 hooks/
 ├── useWorkspace.ts                # 工作空间管理
+├── useWorkflowSubmission.ts       # 工作流提交（核心）
 ├── useTaskExecutor.ts             # 任务执行器 (核心)
 ├── useChatHandler.ts              # 聊天处理
-├── useAutoInsertToCanvas.ts       # 自动插入画布
+├── useAutoInsertToCanvas.ts       # 自动插入画布（更新工作流步骤状态）
 ├── useTextSelection.ts            # 文本选择
 ├── useTaskQueue.ts                # 任务队列
 ├── useTaskStorage.ts              # 任务存储
@@ -577,6 +583,45 @@ Drawnix (主编辑器)
       └── ...
 ```
 
+### 工作流提交机制
+
+项目使用统一的工作流提交机制，避免重复创建工作流导致的问题。
+
+**核心文件**：
+- `hooks/useWorkflowSubmission.ts` - 工作流提交 Hook
+- `components/ai-input-bar/workflow-converter.ts` - 工作流转换器
+- `services/workflow-submission-service.ts` - 工作流提交服务
+
+**工作流程**：
+```
+AIInputBar 创建工作流
+  ↓
+convertToWorkflow() - 创建 LegacyWorkflowDefinition（唯一 ID）
+  ↓
+submitWorkflowToSW(parsedParams, referenceImages, retryContext, existingWorkflow)
+  ↓
+useWorkflowSubmission.submitWorkflow() - 复用已有工作流，避免重复创建
+  ↓
+workflowSubmissionService.submit() - 提交到 SW
+  ↓
+SW WorkflowExecutor 执行
+```
+
+**关键设计**：
+- `submitWorkflow` 接受可选的 `existingWorkflow` 参数
+- 如果传入 `existingWorkflow`，直接使用而不重新创建
+- 避免因重复调用 `convertToWorkflow` 导致不同 ID 的工作流
+
+**API 签名**：
+```typescript
+submitWorkflow: (
+  parsedInput: ParsedGenerationParams,
+  referenceImages: string[],
+  retryContext?: WorkflowRetryContext,
+  existingWorkflow?: LegacyWorkflowDefinition
+) => Promise<{ workflowId: string; usedSW: boolean }>
+```
+
 ### WorkZone 画布元素
 
 WorkZone 是一个特殊的画布元素，用于在画布上直接显示 AI 生成任务的工作流进度。
@@ -603,6 +648,17 @@ WorkZoneContent 组件响应更新，显示进度
 - `WorkZoneTransforms.insertWorkZone(board, options)` - 创建 WorkZone
 - `WorkZoneTransforms.updateWorkflow(board, id, workflow)` - 更新工作流状态
 - `WorkZoneTransforms.removeWorkZone(board, id)` - 删除 WorkZone
+
+**AI 生成完成事件**：
+当所有工作流步骤完成后，会触发 `ai-generation-complete` 事件：
+```typescript
+window.dispatchEvent(new CustomEvent('ai-generation-complete', {
+  detail: { type: 'image' | 'mind' | 'flowchart', success: boolean, workzoneId: string }
+}));
+```
+- 思维导图/流程图：在 `sw-capabilities/handler.ts` 中触发
+- 图片生成：在 `useAutoInsertToCanvas.ts` 的 `updateWorkflowStepForTask` 中触发
+- `AIInputBar` 监听此事件来重置 `isSubmitting` 状态
 
 **技术要点**：
 - 使用 SVG `foreignObject` 在画布中嵌入 React 组件

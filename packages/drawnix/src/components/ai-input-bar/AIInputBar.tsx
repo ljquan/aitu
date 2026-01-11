@@ -354,6 +354,24 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
     };
   }, []);
 
+  // 监听 AI 生成完成事件（思维导图、流程图等同步操作）
+  useEffect(() => {
+    const handleGenerationComplete = (event: CustomEvent) => {
+      console.log('[AIInputBar] ai-generation-complete event received:', event.detail);
+      // 立即重置提交状态，允许用户继续输入
+      if (submitCooldownRef.current) {
+        clearTimeout(submitCooldownRef.current);
+        submitCooldownRef.current = null;
+      }
+      setIsSubmitting(false);
+    };
+
+    window.addEventListener('ai-generation-complete', handleGenerationComplete as EventListener);
+    return () => {
+      window.removeEventListener('ai-generation-complete', handleGenerationComplete as EventListener);
+    };
+  }, []);
+
   // 监听任务状态变化，同步更新工作流步骤状态
   useEffect(() => {
     const subscription = taskQueueService.observeTaskUpdates().subscribe((event) => {
@@ -849,12 +867,12 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
       // console.log('[AIInputBar] User instruction:', parsedParams.userInstruction);
       // console.log('[AIInputBar] Scenario:', parsedParams.scenario);
 
-      // 创建工作流定义
+      // 创建工作流定义（仅用于 WorkZone 显示，实际工作流由 submitWorkflowToSW 创建）
       const workflow = convertToWorkflow(parsedParams, referenceImages);
       // console.log('[AIInputBar] Created workflow:', workflow);
 
-      // 启动工作流（内部状态管理）
-      workflowControl.startWorkflow(workflow);
+      // 注意：不在这里调用 workflowControl.startWorkflow，由 submitWorkflowToSW 统一处理
+      // 避免重复创建工作流导致多次请求
 
       // 在画布上创建 WorkZone 显示工作流进度
       const board = SelectionWatcherBoardRef.current;
@@ -1024,19 +1042,14 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
       // 保存到 ref，用于后续更新时保持 retryContext
       currentRetryContextRef.current = retryContext;
 
-      // 发送工作流消息到 ChatDrawer（创建新对话但不自动展开）
-      const workflowMessageData = toWorkflowMessageData(workflow, retryContext);
-      await sendWorkflowMessageRef.current({
-        context: aiContext,
-        workflow: workflowMessageData,
-        textModel, // 传递全局文本模型
-        autoOpen: false, // 不自动展开 ChatDrawer，避免干扰工作
-      });
+      // 注意：不在这里发送 ChatDrawer 消息，由 submitWorkflowToSW 统一处理
+      // 避免重复发送消息导致多次请求
 
       // 所有工作流都通过 SW 执行
       // SW 会根据工具类型决定是在 SW 中执行还是委托给主线程
       try {
-        const { usedSW } = await submitWorkflowToSW(parsedParams, referenceImages, retryContext);
+        // 传递已创建的 workflow，避免重复创建导致 ID 不一致
+        const { usedSW } = await submitWorkflowToSW(parsedParams, referenceImages, retryContext, workflow);
         if (usedSW) {
           // console.log('[AIInputBar] Workflow submitted to SW');
           // SW 执行成功

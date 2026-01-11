@@ -13,6 +13,7 @@ import {
   RectangleClient,
   PlaitElement,
   Selection,
+  PlaitHistoryBoard,
 } from '@plait/core';
 import {
   CommonElementFlavour,
@@ -299,7 +300,8 @@ function generateId(): string {
  */
 export const WorkZoneTransforms = {
   /**
-   * 插入 WorkZone 到画布
+   * 插入 WorkZone 到画布（不记录到撤销历史）
+   * WorkZone 是临时的 AI 生成面板，不应该被撤销恢复
    */
   insertWorkZone(board: PlaitBoard, options: WorkZoneCreateOptions): PlaitWorkZone {
     const { workflow, position, size = DEFAULT_WORKZONE_SIZE, expectedInsertPosition, zoom } = options;
@@ -315,33 +317,42 @@ export const WorkZoneTransforms = {
       zoom,
     };
 
-    // 插入到画布
-    Transforms.insertNode(board, workzoneElement, [board.children.length]);
+    // 使用 withoutSaving 来跳过撤销历史
+    PlaitHistoryBoard.withoutSaving(board, () => {
+      Transforms.insertNode(board, workzoneElement, [board.children.length]);
+    });
 
-    // console.log('[WorkZone] Inserted:', workzoneElement.id, 'zoom:', zoom, 'expected insert position:', expectedInsertPosition);
+    console.log('[WorkZone] Inserted (without history):', workzoneElement.id);
     return workzoneElement;
   },
 
   /**
-   * 更新 WorkZone 的 workflow 数据
+   * 更新 WorkZone 的 workflow 数据（不记录到撤销历史）
    */
   updateWorkflow(board: PlaitBoard, elementId: string, workflow: Partial<PlaitWorkZone['workflow']>): void {
     const index = board.children.findIndex((el: any) => el.id === elementId);
     if (index >= 0) {
       const element = board.children[index] as PlaitWorkZone;
       const updatedWorkflow = { ...element.workflow, ...workflow };
-      Transforms.setNode(board, { workflow: updatedWorkflow } as Partial<PlaitWorkZone>, [index]);
+      // 使用 withoutSaving 来跳过撤销历史
+      PlaitHistoryBoard.withoutSaving(board, () => {
+        Transforms.setNode(board, { workflow: updatedWorkflow } as Partial<PlaitWorkZone>, [index]);
+      });
     }
   },
 
   /**
-   * 删除 WorkZone
+   * 删除 WorkZone（不记录到撤销历史）
+   * WorkZone 是临时的 AI 生成面板，不应该被撤销恢复
    */
   removeWorkZone(board: PlaitBoard, elementId: string): void {
     const index = board.children.findIndex((el: any) => el.id === elementId);
     if (index >= 0) {
-      Transforms.removeNode(board, [index]);
-      // console.log('[WorkZone] Removed:', elementId);
+      // 使用 withoutSaving 来跳过撤销历史
+      PlaitHistoryBoard.withoutSaving(board, () => {
+        Transforms.removeNode(board, [index]);
+      });
+      console.log('[WorkZone] Removed (without history):', elementId);
     }
   },
 
