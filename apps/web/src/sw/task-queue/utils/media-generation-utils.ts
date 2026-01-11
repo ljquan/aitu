@@ -285,12 +285,12 @@ export async function fetchImageWithCache(
     const cachedResponse = await cache.match(url);
 
     if (cachedResponse) {
-      console.log(`[MediaUtils] Cache hit for image: ${url.substring(0, 50)}...`);
+      // console.log(`[MediaUtils] Cache hit for image: ${url.substring(0, 50)}...`);
       return await cachedResponse.blob();
     }
 
     // 2. 缓存未命中，从网络获取
-    console.log(`[MediaUtils] Cache miss, fetching from network: ${url.substring(0, 50)}...`);
+    // console.log(`[MediaUtils] Cache miss, fetching from network: ${url.substring(0, 50)}...`);
     const response = await fetch(url, { signal });
 
     if (response.ok) {

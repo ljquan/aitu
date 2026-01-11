@@ -140,7 +140,7 @@ export const loadHTMLImageElementWithRetry = (
           if (retryCount >= bypassSWAfterRetries && !bypassSW) {
             bypassSW = true;
             currentUrl = addBypassSWParam(dataURL) as DataURL;
-            console.log(`[loadHTMLImageElement] 重试 ${retryCount} 次后绕过 SW:`, dataURL);
+            // console.log(`[loadHTMLImageElement] 重试 ${retryCount} 次后绕过 SW:`, dataURL);
           }
           
           // 添加时间戳强制刷新
@@ -149,7 +149,7 @@ export const loadHTMLImageElementWithRetry = (
           
           // 延迟重试（指数退避）
           const delay = Math.min(1000 * Math.pow(2, retryCount - 1), 5000);
-          console.log(`[loadHTMLImageElement] 重试 ${retryCount}/${maxRetries}，延迟 ${delay}ms:`, dataURL);
+          // console.log(`[loadHTMLImageElement] 重试 ${retryCount}/${maxRetries}，延迟 ${delay}ms:`, dataURL);
           
           setTimeout(() => {
             image.src = retryUrl;
@@ -333,7 +333,7 @@ export const insertImageFromUrl = async (
   skipScroll?: boolean,
   skipImageLoad?: boolean // 如果为 true 且提供了 referenceDimensions，则跳过图片加载直接使用提供的尺寸
 ) => {
-  console.log(`[insertImageFromUrl] Called with:`, {
+  // console.log(`[insertImageFromUrl] Called with:`, {
     imageUrl: imageUrl?.substring(0, 80),
     startPoint,
     isDrop,
@@ -361,10 +361,10 @@ export const insertImageFromUrl = async (
       width: referenceDimensions.width,
       height: referenceDimensions.height,
     };
-    console.log(`[insertImageFromUrl] Using provided dimensions:`, imageItem);
+    // console.log(`[insertImageFromUrl] Using provided dimensions:`, imageItem);
   } else {
     // 使用带重试的图片加载函数，支持自动绕过 SW
-    console.log(`[insertImageFromUrl] Loading image with retry...`);
+    // console.log(`[insertImageFromUrl] Loading image with retry...`);
     const image = await loadHTMLImageElementWithRetry(imageUrl as DataURL, true); // 使用 crossOrigin 以支持外部 URL
     imageItem = buildImage(
       image,
@@ -373,13 +373,13 @@ export const insertImageFromUrl = async (
       true,
       referenceDimensions
     ); // 使用原始尺寸并传递参考尺寸
-    console.log(`[insertImageFromUrl] Image loaded, imageItem:`, imageItem);
+    // console.log(`[insertImageFromUrl] Image loaded, imageItem:`, imageItem);
   }
 
   const element = startPoint && getHitElementByPoint(board, startPoint);
   if (isDrop && element && MindElement.isMindElement(board, element)) {
     MindTransforms.setImage(board, element as MindElement, imageItem);
-    console.log(`[insertImageFromUrl] Set image to MindElement`);
+    // console.log(`[insertImageFromUrl] Set image to MindElement`);
     return;
   }
 
@@ -408,10 +408,10 @@ export const insertImageFromUrl = async (
     }
   }
 
-  console.log(`[insertImageFromUrl] Final insertionPoint:`, insertionPoint);
-  console.log(`[insertImageFromUrl] Calling DrawTransforms.insertImage...`);
+  // console.log(`[insertImageFromUrl] Final insertionPoint:`, insertionPoint);
+  // console.log(`[insertImageFromUrl] Calling DrawTransforms.insertImage...`);
   DrawTransforms.insertImage(board, imageItem, insertionPoint);
-  console.log(`[insertImageFromUrl] DrawTransforms.insertImage completed`);
+  // console.log(`[insertImageFromUrl] DrawTransforms.insertImage completed`);
 
   // 插入后滚动视口到新元素位置（如果不在视口内）
   // skipScroll 用于批量插入场景，由上层统一处理滚动

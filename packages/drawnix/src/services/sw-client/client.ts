@@ -675,7 +675,7 @@ export class SWTaskQueueClient {
       }
 
       case 'TASK_COMPLETED': {
-        console.log('[SWClient] Received TASK_COMPLETED:', message.taskId, 'result:', message.result);
+        // console.log('[SWClient] Received TASK_COMPLETED:', message.taskId, 'result:', message.result);
         // Update local cache
         const completedTask = this.localTaskCache.get(message.taskId);
         if (completedTask) {
@@ -779,7 +779,7 @@ export class SWTaskQueueClient {
     args: Record<string, unknown>;
   }): Promise<void> {
     const { requestId, toolName, args } = message;
-    console.log('[SWClient] ◀ Received main thread tool request:', toolName, requestId);
+    // console.log('[SWClient] ◀ Received main thread tool request:', toolName, requestId);
 
     try {
       // Dynamic import to avoid circular dependencies
@@ -794,7 +794,7 @@ export class SWTaskQueueClient {
         stepId: message.stepId,
       });
 
-      console.log('[SWClient] ▶ Sending tool response:', toolName, result.success);
+      // console.log('[SWClient] ▶ Sending tool response:', toolName, result.success);
       // Send response back to SW
       await this.postMessage({
         type: 'MAIN_THREAD_TOOL_RESPONSE',

@@ -234,7 +234,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
         const activeWorkflows = await workflowSubmissionService.queryAllWorkflows();
         const activeWorkflowIds = new Set(activeWorkflows.map(w => w.id));
         
-        console.log('[Drawnix] Active chat workflows:', activeChatWorkflows.length, 'regular workflows:', activeWorkflows.length);
+        // console.log('[Drawnix] Active chat workflows:', activeChatWorkflows.length, 'regular workflows:', activeWorkflows.length);
 
         // Now import taskQueueService after sync is complete
         const { taskQueueService } = await import('./services/task-queue');
@@ -254,7 +254,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
                              swWorkflow.status !== workzone.workflow.status;
             
             if (needsSync) {
-              console.log(`[Drawnix] Syncing workflow for WorkZone ${workzone.id}, SW status: ${swWorkflow.status}, steps: ${swWorkflow.steps.length}`);
+              // console.log(`[Drawnix] Syncing workflow for WorkZone ${workzone.id}, SW status: ${swWorkflow.status}, steps: ${swWorkflow.steps.length}`);
               WorkZoneTransforms.updateWorkflow(board, workzone.id, {
                 steps: swWorkflow.steps,
                 status: swWorkflow.status,
@@ -274,7 +274,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
           const isRegularWorkflowActive = activeWorkflowIds.has(workzone.workflow.id);
           const isWorkflowActive = isChatWorkflowActive || isRegularWorkflowActive;
 
-          console.log('[Drawnix] Found interrupted WorkZone:', workzone.id, 'chatActive:', isChatWorkflowActive, 'regularActive:', isRegularWorkflowActive);
+          // console.log('[Drawnix] Found interrupted WorkZone:', workzone.id, 'chatActive:', isChatWorkflowActive, 'regularActive:', isRegularWorkflowActive);
 
           // Update steps based on task queue status
           const updatedSteps = workzone.workflow.steps.map(step => {

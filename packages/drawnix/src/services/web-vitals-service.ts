@@ -22,7 +22,7 @@ import { analytics } from '../utils/posthog-analytics';
  */
 function reportWebVitals(metric: Metric): void {
   if (!analytics.isAnalyticsEnabled()) {
-    console.debug('[Web Vitals] PostHog not available, skipping metric:', metric.name);
+    // console.debug('[Web Vitals] PostHog not available, skipping metric:', metric.name);
     return;
   }
 

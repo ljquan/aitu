@@ -445,7 +445,7 @@ export class SWCapabilitiesHandler {
       const { analyzeWithAI } = await import('../canvas-operations/ai-analyze');
       
       // Debug: Log context to check if selection.images is present
-      console.log('[AIAnalyze] Context received:', {
+      // console.log('[AIAnalyze] Context received:', {
         userInstruction: params.context?.userInstruction?.substring(0, 50),
         selectionImages: params.context?.selection?.images?.length || 0,
         selectionGraphics: (params.context?.selection as any)?.graphics?.length || 0,
@@ -454,11 +454,11 @@ export class SWCapabilitiesHandler {
       const result = await analyzeWithAI(params.context as any, {
         onChunk: (chunk) => {
           // TODO: Forward chunks to SW via postMessage
-          console.log('[AIAnalyze] Chunk:', chunk);
+          // console.log('[AIAnalyze] Chunk:', chunk);
         },
         onAddSteps: (steps) => {
           // Steps will be returned in the result
-          console.log('[AIAnalyze] Add steps:', steps);
+          // console.log('[AIAnalyze] Add steps:', steps);
         },
       });
 

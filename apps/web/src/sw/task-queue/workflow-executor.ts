@@ -174,7 +174,7 @@ export class WorkflowExecutor {
       });
 
       if (step) {
-        console.log(`[WorkflowExecutor] Updating step ${step.id} for task ${taskId} to ${status}`);
+        // console.log(`[WorkflowExecutor] Updating step ${step.id} for task ${taskId} to ${status}`);
         
         step.status = status;
         if (status === 'completed' && result) {
@@ -270,7 +270,7 @@ export class WorkflowExecutor {
     const existing = this.workflows.get(workflow.id);
     if (existing) {
       if (existing.status === 'running' || existing.status === 'pending') {
-        console.log(`[WorkflowExecutor] Re-claiming active workflow ${workflow.id}`);
+        // console.log(`[WorkflowExecutor] Re-claiming active workflow ${workflow.id}`);
         // Already running, just broadcast current status to sync the new client
         this.broadcastWorkflowStatus(existing);
         // Also broadcast individual steps to ensure UI is fully populated
@@ -393,7 +393,7 @@ export class WorkflowExecutor {
           if (hasRunningSteps) {
             // Some steps are still running (e.g. delegated to main thread)
             // Wait for them to finish before checking again
-            console.log(`[WorkflowExecutor] No more executable steps but ${workflow.steps.filter(s => s.status === 'running').length} are still running`);
+            // console.log(`[WorkflowExecutor] No more executable steps but ${workflow.steps.filter(s => s.status === 'running').length} are still running`);
             break; // Exit the loop, execution will resume via updateWorkflowStepForTask
           }
 
@@ -456,7 +456,7 @@ export class WorkflowExecutor {
         });
       } else {
         // Still running (waiting for async steps)
-        console.log(`[WorkflowExecutor] Workflow ${workflowId} is still in progress (waiting for async steps)`);
+        // console.log(`[WorkflowExecutor] Workflow ${workflowId} is still in progress (waiting for async steps)`);
         await taskQueueStorage.saveWorkflow(workflow);
       }
     } catch (error: any) {
@@ -513,7 +513,7 @@ export class WorkflowExecutor {
 
         // Handle additional steps (for ai_analyze)
         if (response.addSteps && response.addSteps.length > 0) {
-          console.log(`[WorkflowExecutor] Adding ${response.addSteps.length} new steps to workflow ${workflow.id}`);
+          // console.log(`[WorkflowExecutor] Adding ${response.addSteps.length} new steps to workflow ${workflow.id}`);
           // Add new steps to workflow
           for (const newStep of response.addSteps) {
             if (!workflow.steps.find(s => s.id === newStep.id)) {
@@ -727,7 +727,7 @@ export class WorkflowExecutor {
       });
 
       // Send request to main thread
-      console.log('[WorkflowExecutor] ▶ Sending main thread tool request:', toolName, requestId);
+      // console.log('[WorkflowExecutor] ▶ Sending main thread tool request:', toolName, requestId);
       this.config.broadcast({
         type: 'MAIN_THREAD_TOOL_REQUEST',
         requestId,

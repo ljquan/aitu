@@ -128,7 +128,7 @@ export const RetryImage: React.FC<RetryImageProps> = ({
       const shouldBypassSW = nextRetryCount >= bypassSWAfterRetries && !bypassSW;
       
       if (shouldBypassSW) {
-        console.log(`[RetryImage] 重试 ${nextRetryCount} 次后绕过 SW:`, src);
+        // console.log(`[RetryImage] 重试 ${nextRetryCount} 次后绕过 SW:`, src);
         setBypassSW(true);
       }
       

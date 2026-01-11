@@ -76,10 +76,10 @@ export class ChatWorkflowHandler {
    */
   private async restoreFromStorage(): Promise<void> {
     try {
-      console.log('[ChatWorkflowHandler] Restoring workflows from storage...');
+      // console.log('[ChatWorkflowHandler] Restoring workflows from storage...');
       const workflows = await taskQueueStorage.getAllChatWorkflows();
 
-      console.log(`[ChatWorkflowHandler] Found ${workflows.length} chat workflows`);
+      // console.log(`[ChatWorkflowHandler] Found ${workflows.length} chat workflows`);
 
       for (const workflow of workflows) {
         // Skip completed/cancelled/failed workflows (keep in memory for queries)
@@ -94,7 +94,7 @@ export class ChatWorkflowHandler {
       }
 
       this.storageRestored = true;
-      console.log('[ChatWorkflowHandler] Storage restoration complete');
+      // console.log('[ChatWorkflowHandler] Storage restoration complete');
     } catch (error) {
       console.error('[ChatWorkflowHandler] Failed to restore from storage:', error);
       this.storageRestored = true; // Mark as done even on error
@@ -106,7 +106,7 @@ export class ChatWorkflowHandler {
    * Strategy: Mark as failed with appropriate message
    */
   private async handleInterruptedWorkflow(workflow: ChatWorkflow): Promise<void> {
-    console.log(`[ChatWorkflowHandler] Handling interrupted workflow: ${workflow.id}, status: ${workflow.status}`);
+    // console.log(`[ChatWorkflowHandler] Handling interrupted workflow: ${workflow.id}, status: ${workflow.status}`);
 
     let errorMessage: string;
     switch (workflow.status) {
@@ -148,7 +148,7 @@ export class ChatWorkflowHandler {
     // Update in IndexedDB
     await taskQueueStorage.saveChatWorkflow(workflow);
 
-    console.log(`[ChatWorkflowHandler] Marked workflow ${workflow.id} as failed due to interruption`);
+    // console.log(`[ChatWorkflowHandler] Marked workflow ${workflow.id} as failed due to interruption`);
   }
 
   /**
@@ -166,7 +166,7 @@ export class ChatWorkflowHandler {
     const existing = this.workflows.get(chatId);
     if (existing) {
       if (existing.status === 'streaming' || existing.status === 'pending' || existing.status === 'executing_tools') {
-        console.log(`[ChatWorkflowHandler] Re-claiming active chat workflow ${chatId}`);
+        // console.log(`[ChatWorkflowHandler] Re-claiming active chat workflow ${chatId}`);
         this.broadcastStatus(existing);
         return;
       }
@@ -226,7 +226,7 @@ export class ChatWorkflowHandler {
    * This is called when a new client connects to sync state
    */
   broadcastRecoveredWorkflows(): void {
-    console.log(`[ChatWorkflowHandler] Broadcasting ${this.workflows.size} chat workflows to sync state`);
+    // console.log(`[ChatWorkflowHandler] Broadcasting ${this.workflows.size} chat workflows to sync state`);
     for (const workflow of this.workflows.values()) {
       this.config.broadcast({
         type: 'CHAT_WORKFLOW_RECOVERED',

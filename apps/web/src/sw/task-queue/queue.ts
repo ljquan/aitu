@@ -763,7 +763,7 @@ export class SWTaskQueue {
     const task = this.tasks.get(taskId);
     if (!task) return;
 
-    console.log('[TaskQueue] Task completed:', taskId, 'result:', JSON.stringify(result));
+    // console.log('[TaskQueue] Task completed:', taskId, 'result:', JSON.stringify(result));
 
     task.status = TaskStatus.COMPLETED;
     task.result = result;

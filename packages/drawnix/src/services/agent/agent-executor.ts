@@ -248,7 +248,7 @@ class AgentExecutor {
       // 收集所有参考图片 URL
       const allReferenceImages = [...context.selection.images, ...context.selection.graphics];
       
-      console.log('[AgentExecutor] Reference images collected:', {
+      // console.log('[AgentExecutor] Reference images collected:', {
         fromImages: context.selection.images.length,
         fromGraphics: context.selection.graphics.length,
         total: allReferenceImages.length,

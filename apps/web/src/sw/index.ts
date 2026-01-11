@@ -337,7 +337,7 @@ sw.addEventListener('install', (event: ExtendableEvent) => {
           // console.log('Caching static files for new version');
           return cache.addAll(STATIC_FILES);
         })
-        .catch(err => console.log('Cache pre-loading failed:', err))
+        .catch(_err => {/* console.log('Cache pre-loading failed:', err) */})
     );
   }
 
@@ -1575,7 +1575,7 @@ async function handleImageRequest(request: Request): Promise<Response> {
 
 // 创建超时响应，通知前端使用直接加载方式
 function createTimeoutResponse(url: string, requestId: string): Response {
-  console.log(`Service Worker [${requestId}]: 创建超时响应，建议前端直接加载:`, url);
+  // console.log(`Service Worker [${requestId}]: 创建超时响应，建议前端直接加载:`, url);
   return new Response('Image request timeout - use direct load', {
     status: 504,
     statusText: 'Gateway Timeout',

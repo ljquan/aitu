@@ -75,10 +75,10 @@ export class ExecutionLogger {
 
     switch (level) {
       case 'debug':
-        console.debug(logMessage, data ?? '');
+        // console.debug(logMessage, data ?? '');
         break;
       case 'info':
-        console.info(logMessage, data ?? '');
+        // console.info(logMessage, data ?? '');
         break;
       case 'warn':
         console.warn(logMessage, data ?? '');

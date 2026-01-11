@@ -17,7 +17,7 @@ try {
     const versionJson = JSON.parse(versionContent);
     if (versionJson.version) {
       appVersion = versionJson.version;
-      console.log(`[Drawnix] Loaded version from shared version.json: ${appVersion}`);
+      // console.log(`[Drawnix] Loaded version from shared version.json: ${appVersion}`);
     }
   }
 } catch (e) {

@@ -390,14 +390,14 @@ class SWTaskQueueService {
   }
 
   private handleSWCompleted(taskId: string, result: TaskResult): void {
-    console.log(`[SWTaskQueueService] handleSWCompleted called for task ${taskId}, result:`, result);
+    // console.log(`[SWTaskQueueService] handleSWCompleted called for task ${taskId}, result:`, result);
     const task = this.tasks.get(taskId);
     if (!task) {
       console.warn(`[SWTaskQueueService] Task ${taskId} not found for completion`);
       return;
     }
 
-    console.log(`[SWTaskQueueService] Task ${taskId} found, updating status to COMPLETED`);
+    // console.log(`[SWTaskQueueService] Task ${taskId} found, updating status to COMPLETED`);
     this.updateTaskStatus(taskId, TaskStatus.COMPLETED, {
       result,
       progress: 100,
@@ -475,7 +475,7 @@ class SWTaskQueueService {
     }
 
     this.tasks.set(taskId, updatedTask);
-    console.log(`[SWTaskQueueService] Emitting taskUpdated for ${taskId}, status: ${status}, autoInsertToCanvas: ${updatedTask.params?.autoInsertToCanvas}`);
+    // console.log(`[SWTaskQueueService] Emitting taskUpdated for ${taskId}, status: ${status}, autoInsertToCanvas: ${updatedTask.params?.autoInsertToCanvas}`);
     this.emitEvent('taskUpdated', updatedTask);
   }
 

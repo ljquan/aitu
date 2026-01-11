@@ -171,7 +171,7 @@ function collectPagePerformanceData(): PagePerformanceData | null {
  */
 export function trackPageView(): void {
   if (!analytics.isAnalyticsEnabled()) {
-    console.debug('[Page Report] PostHog not available, skipping page view');
+    // console.debug('[Page Report] PostHog not available, skipping page view');
     return;
   }
 
@@ -195,7 +195,7 @@ export function trackPageView(): void {
  */
 export function trackPagePerformance(): void {
   if (!analytics.isAnalyticsEnabled()) {
-    console.debug('[Page Report] PostHog not available, skipping performance');
+    // console.debug('[Page Report] PostHog not available, skipping performance');
     return;
   }
 

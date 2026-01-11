@@ -217,12 +217,12 @@ async function insertImageToCanvas(
   dimensions?: { width: number; height: number }
 ): Promise<{ width: number; height: number }> {
   const size = dimensions || { width: LAYOUT_CONSTANTS.MEDIA_DEFAULT_SIZE, height: LAYOUT_CONSTANTS.MEDIA_DEFAULT_SIZE };
-  console.log(`[CanvasInsertion] insertImageToCanvas: url=${imageUrl.substring(0, 80)}, point=`, point, 'size=', size);
+  // console.log(`[CanvasInsertion] insertImageToCanvas: url=${imageUrl.substring(0, 80)}, point=`, point, 'size=', size);
   // skipScroll: true - 由 executeCanvasInsertion 统一处理滚动
   // skipImageLoad: true - 使用传入的尺寸，不等待图片加载
   try {
     await insertImageFromUrl(board, imageUrl, point, false, size, true, true);
-    console.log(`[CanvasInsertion] insertImageFromUrl completed successfully`);
+    // console.log(`[CanvasInsertion] insertImageFromUrl completed successfully`);
   } catch (error) {
     console.error(`[CanvasInsertion] insertImageFromUrl failed:`, error);
     throw error;
@@ -324,7 +324,7 @@ async function insertSvgToCanvas(
 async function executeCanvasInsertion(params: CanvasInsertionParams): Promise<MCPResult> {
   const board = boardRef;
 
-  console.log('[CanvasInsertion] executeCanvasInsertion called, board:', !!board, 'params:', {
+  // console.log('[CanvasInsertion] executeCanvasInsertion called, board:', !!board, 'params:', {
     itemsCount: params.items?.length,
     startPoint: params.startPoint,
   });
@@ -385,15 +385,15 @@ async function executeCanvasInsertion(params: CanvasInsertionParams): Promise<MC
 
         const point: Point = [leftX, currentY]; // 左对齐：直接使用 leftX
 
-        console.log(`[CanvasInsertion] Inserting item type: ${item.type}, point:`, point, 'content:', item.content?.substring(0, 80));
+        // console.log(`[CanvasInsertion] Inserting item type: ${item.type}, point:`, point, 'content:', item.content?.substring(0, 80));
 
         if (item.type === 'text') {
           await insertTextToCanvas(board, item.content, point);
           currentY += itemSize.height + verticalGap;
         } else if (item.type === 'image') {
-          console.log(`[CanvasInsertion] Calling insertImageToCanvas with dimensions:`, item.dimensions);
+          // console.log(`[CanvasInsertion] Calling insertImageToCanvas with dimensions:`, item.dimensions);
           const imgSize = await insertImageToCanvas(board, item.content, point, item.dimensions);
-          console.log(`[CanvasInsertion] insertImageToCanvas returned:`, imgSize);
+          // console.log(`[CanvasInsertion] insertImageToCanvas returned:`, imgSize);
           currentY += imgSize.height + verticalGap;
         } else if (item.type === 'video') {
           await insertVideoToCanvas(board, item.content, point, item.dimensions);

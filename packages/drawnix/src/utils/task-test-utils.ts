@@ -126,6 +126,6 @@ if (typeof window !== 'undefined') {
     const { taskQueueService } = require('../services/task-queue-service');
     const mockTasks = createMockTasks();
     taskQueueService.restoreTasks(mockTasks);
-    console.log('Added mock tasks:', mockTasks.length);
+    // console.log('Added mock tasks:', mockTasks.length);
   };
 }

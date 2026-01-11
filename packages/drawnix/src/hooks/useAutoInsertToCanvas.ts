@@ -158,20 +158,20 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
      * 执行批量插入
      */
     const flushPendingInserts = async () => {
-      console.log('[AutoInsert] flushPendingInserts called');
+      // console.log('[AutoInsert] flushPendingInserts called');
       const board = getCanvasBoard();
       if (!board || !isActive) {
-        console.log(`[AutoInsert] flushPendingInserts aborted: board=${!!board}, isActive=${isActive}`);
+        // console.log(`[AutoInsert] flushPendingInserts aborted: board=${!!board}, isActive=${isActive}`);
         return;
       }
 
       const pendingMap = pendingInsertsRef.current;
       if (pendingMap.size === 0) {
-        console.log('[AutoInsert] flushPendingInserts: no pending tasks');
+        // console.log('[AutoInsert] flushPendingInserts: no pending tasks');
         return;
       }
 
-      console.log(`[AutoInsert] flushPendingInserts: ${pendingMap.size} prompt groups to insert`);
+      // console.log(`[AutoInsert] flushPendingInserts: ${pendingMap.size} prompt groups to insert`);
 
       // 复制并清空待插入列表
       const toInsert = new Map(pendingMap);
@@ -193,12 +193,12 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
         insertionPoint = getInsertionPointBelowBottommostElement(board);
       }
 
-      console.log(`[AutoInsert] Insertion point:`, insertionPoint);
+      // console.log(`[AutoInsert] Insertion point:`, insertionPoint);
 
       for (const [promptKey, inserts] of toInsert) {
         if (!isActive) break;
 
-        console.log(`[AutoInsert] Processing prompt group "${promptKey.substring(0, 30)}..." with ${inserts.length} tasks`);
+        // console.log(`[AutoInsert] Processing prompt group "${promptKey.substring(0, 30)}..." with ${inserts.length} tasks`);
 
         // 注册所有任务
         for (const { task } of inserts) {
@@ -216,7 +216,7 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
             const { task } = inserts[0];
             const url = task.result?.url;
             if (!url) {
-              console.log(`[AutoInsert] Task ${task.id} has no result URL, skipping`);
+              // console.log(`[AutoInsert] Task ${task.id} has no result URL, skipping`);
               workflowCompletionService.failPostProcessing(task.id, 'No result URL');
               continue;
             }
@@ -224,18 +224,18 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
             const type = task.type === TaskType.VIDEO ? 'video' : 'image';
             const dimensions = parseSizeToPixels(task.params.size);
 
-            console.log(`[AutoInsert] Inserting single ${type} for task ${task.id}, url: ${url.substring(0, 80)}...`);
-            console.log(`[AutoInsert] dimensions:`, dimensions, `insertionPoint:`, insertionPoint);
+            // console.log(`[AutoInsert] Inserting single ${type} for task ${task.id}, url: ${url.substring(0, 80)}...`);
+            // console.log(`[AutoInsert] dimensions:`, dimensions, `insertionPoint:`, insertionPoint);
 
             if (mergedConfig.insertPrompt) {
               const result = await insertAIFlow(task.params.prompt, [{ type, url, dimensions }], insertionPoint);
-              console.log(`[AutoInsert] insertAIFlow result:`, result);
+              // console.log(`[AutoInsert] insertAIFlow result:`, result);
             } else {
               const result = await quickInsert(type, url, insertionPoint, dimensions);
-              console.log(`[AutoInsert] quickInsert result:`, result);
+              // console.log(`[AutoInsert] quickInsert result:`, result);
             }
 
-            console.log(`[AutoInsert] Successfully inserted ${type} for task ${task.id}`);
+            // console.log(`[AutoInsert] Successfully inserted ${type} for task ${task.id}`);
             workflowCompletionService.completePostProcessing(task.id, 1, insertionPoint);
           } else {
             // 多个同 Prompt 任务，水平排列
@@ -244,7 +244,7 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
               .filter((url): url is string => !!url);
 
             if (urls.length === 0) {
-              console.log(`[AutoInsert] No valid URLs in group, skipping`);
+              // console.log(`[AutoInsert] No valid URLs in group, skipping`);
               for (const { task } of inserts) {
                 workflowCompletionService.failPostProcessing(task.id, 'No result URL');
               }
@@ -255,7 +255,7 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
             const type = firstInsertTask.type === TaskType.VIDEO ? 'video' : 'image';
             const dimensions = parseSizeToPixels(firstInsertTask.params.size);
 
-            console.log(`[AutoInsert] Inserting group of ${urls.length} ${type}s`);
+            // console.log(`[AutoInsert] Inserting group of ${urls.length} ${type}s`);
 
             if (mergedConfig.insertPrompt) {
               await insertAIFlow(
@@ -273,7 +273,7 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
               }
             }
 
-            console.log(`[AutoInsert] Successfully inserted group of ${urls.length} ${type}s`);
+            // console.log(`[AutoInsert] Successfully inserted group of ${urls.length} ${type}s`);
 
             // 标记所有任务完成
             for (const { task } of inserts) {
@@ -320,8 +320,8 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
      * 处理任务完成事件
      */
     const handleTaskCompleted = (task: Task) => {
-      console.log(`[AutoInsert] handleTaskCompleted called for task ${task.id}, type: ${task.type}, status: ${task.status}`);
-      console.log(`[AutoInsert] Task params:`, {
+      // console.log(`[AutoInsert] handleTaskCompleted called for task ${task.id}, type: ${task.type}, status: ${task.status}`);
+      // console.log(`[AutoInsert] Task params:`, {
         autoInsertToCanvas: task.params.autoInsertToCanvas,
         prompt: task.params.prompt?.substring(0, 50),
         hasResult: !!task.result,
@@ -330,26 +330,26 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
 
       // 检查任务是否配置了自动插入画布
       if (!task.params.autoInsertToCanvas) {
-        console.log(`[AutoInsert] Task ${task.id} skipped: autoInsertToCanvas is false/undefined`);
+        // console.log(`[AutoInsert] Task ${task.id} skipped: autoInsertToCanvas is false/undefined`);
         return;
       }
 
       // 检查是否已经插入过（内存中的记录）
       if (insertedTaskIds.has(task.id)) {
-        console.log(`[AutoInsert] Task ${task.id} skipped: already in insertedTaskIds (memory)`);
+        // console.log(`[AutoInsert] Task ${task.id} skipped: already in insertedTaskIds (memory)`);
         return;
       }
 
       // 检查是否已经插入过（持久化的标记）
       if (task.insertedToCanvas) {
-        console.log(`[AutoInsert] Task ${task.id} skipped: insertedToCanvas flag is true (persisted)`);
+        // console.log(`[AutoInsert] Task ${task.id} skipped: insertedToCanvas flag is true (persisted)`);
         insertedTaskIds.add(task.id);
         return;
       }
 
       // 只处理图片和视频任务
       if (task.type !== TaskType.IMAGE && task.type !== TaskType.VIDEO) {
-        console.log(`[AutoInsert] Task ${task.id} skipped: type is ${task.type}, not IMAGE or VIDEO`);
+        // console.log(`[AutoInsert] Task ${task.id} skipped: type is ${task.type}, not IMAGE or VIDEO`);
         return;
       }
 
@@ -359,7 +359,7 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
         return;
       }
 
-      console.log(`[AutoInsert] Task ${task.id} passed all checks, will be inserted`);
+      // console.log(`[AutoInsert] Task ${task.id} passed all checks, will be inserted`);
 
       // 更新关联的工作流步骤状态为 completed
       updateWorkflowStepForTask(task.id, 'completed', { url: task.result.url });
@@ -375,21 +375,21 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
 
       // 检查是否为灵感图任务（需要在宫格图之前检查）
       if (checkInspirationBoardTask(params)) {
-        console.log(`[AutoInsert] Task ${task.id} is inspiration board task, handling split`);
+        // console.log(`[AutoInsert] Task ${task.id} is inspiration board task, handling split`);
         handleSplitTask(task);
         return;
       }
 
       // 检查是否为宫格图任务
       if (checkGridImageTask(params)) {
-        console.log(`[AutoInsert] Task ${task.id} is grid image task, handling split`);
+        // console.log(`[AutoInsert] Task ${task.id} is grid image task, handling split`);
         handleSplitTask(task);
         return;
       }
 
       // 获取 Prompt 作为分组 key
       const promptKey = task.params.prompt || 'unknown';
-      console.log(`[AutoInsert] Task ${task.id} added to pending inserts with promptKey: ${promptKey.substring(0, 30)}`);
+      // console.log(`[AutoInsert] Task ${task.id} added to pending inserts with promptKey: ${promptKey.substring(0, 30)}`);
 
       // 添加到待插入列表
       const pendingList = pendingInsertsRef.current.get(promptKey) || [];
@@ -398,10 +398,10 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
 
       // 调度 flush
       if (mergedConfig.groupSimilarTasks) {
-        console.log(`[AutoInsert] Scheduling flush in ${mergedConfig.groupTimeWindow}ms`);
+        // console.log(`[AutoInsert] Scheduling flush in ${mergedConfig.groupTimeWindow}ms`);
         scheduleFlush();
       } else {
-        console.log(`[AutoInsert] Flushing immediately`);
+        // console.log(`[AutoInsert] Flushing immediately`);
         flushPendingInserts();
       }
     };
@@ -415,14 +415,14 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
 
     // 订阅任务更新事件
     const taskQueueService = getTaskQueueService();
-    console.log('[AutoInsert] Subscribing to task updates');
+    // console.log('[AutoInsert] Subscribing to task updates');
     const subscription = taskQueueService.observeTaskUpdates().subscribe(event => {
       if (!isActive) {
-        console.log('[AutoInsert] Received event but hook is inactive, ignoring');
+        // console.log('[AutoInsert] Received event but hook is inactive, ignoring');
         return;
       }
 
-      console.log(`[AutoInsert] Received event: ${event.type}, task: ${event.task.id}, status: ${event.task.status}`);
+      // console.log(`[AutoInsert] Received event: ${event.type}, task: ${event.task.id}, status: ${event.task.status}`);
 
       if (event.type === 'taskUpdated') {
         if (event.task.status === TaskStatus.COMPLETED) {

@@ -30,14 +30,14 @@ export const VideoConcatTest: React.FC = () => {
       const onProgress: ConcatProgressCallback = (prog, st) => {
         setProgress(Math.round(prog));
         setStage(st);
-        console.log(`[Test] Progress: ${Math.round(prog)}% - ${st}`);
+        // console.log(`[Test] Progress: ${Math.round(prog)}% - ${st}`);
       };
 
       const result = await videoConcatService.concatVideos(testUrls, onProgress);
 
       setResultUrl(result.url);
       MessagePlugin.success('视频合并成功！');
-      console.log('[Test] Result:', result);
+      // console.log('[Test] Result:', result);
     } catch (error) {
       console.error('[Test] Error:', error);
       MessagePlugin.error(`合并失败: ${error}`);
