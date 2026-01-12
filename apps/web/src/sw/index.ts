@@ -1592,7 +1592,7 @@ function createTimeoutResponse(url: string, requestId: string): Response {
 // bypassCache: 如果为 true，跳过缓存检查直接 fetch，但成功后仍会缓存响应
 async function handleImageRequestInternal(originalRequest: Request, requestUrl: string, dedupeKey: string, requestId: string, bypassCache: boolean = false): Promise<Response> {
   try {
-    // console.log(`Service Worker [${requestId}]: 开始处理图片请求 (bypassCache=${bypassCache}):`, dedupeKey);
+    // console.log(`Service Worker [${requestId}]: 开始处理图片请求:`, dedupeKey);
 
     const cache = await caches.open(IMAGE_CACHE_NAME);
 

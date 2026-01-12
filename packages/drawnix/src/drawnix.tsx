@@ -191,7 +191,10 @@ export const Drawnix: React.FC<DrawnixProps> = ({
   // 预加载画布中使用的字体（当 value 变化时）
   useEffect(() => {
     if (value && value.length > 0) {
-      fontManagerService.preloadBoardFonts(value).catch(error => {
+      fontManagerService.preloadBoardFonts(value).then(() => {
+        // 字体加载完成后，强制重新渲染
+        // PlaitBoard 没有 redraw 方法，字体加载后会自动应用
+      }).catch(error => {
         console.warn('Failed to preload board fonts:', error);
       });
     }

@@ -164,27 +164,35 @@ const Leaf: React.FC<RenderLeafProps> = ({ children, leaf, attributes }) => {
   }
   const customText = leaf as CustomText;
   const fontSize = customText['font-size'];
-  
+
   // 扩展的自定义样式
   const fontFamily = (leaf as any)['font-family'];
+  const fontWeight = (leaf as any)['font-weight'];
   const textShadow = (leaf as any)['text-shadow'];
-  const background = (leaf as any)['background'];
-  const backgroundClip = (leaf as any)['background-clip'];
-  const webkitBackgroundClip = (leaf as any)['-webkit-background-clip'];
-  const webkitTextFillColor = (leaf as any)['-webkit-text-fill-color'];
-  
+  const textGradient = (leaf as any)['text-gradient'];
+  const lineHeight = (leaf as any)['line-height'];
+  const letterSpacing = (leaf as any)['letter-spacing'];
+
   const style: CSSProperties = {
     color: customText.color,
     fontSize: fontSize ? `${fontSize}px` : undefined,
-    lineHeight: fontSize ? 1.4 : undefined,
     // 自定义文本效果样式
     fontFamily: fontFamily || undefined,
+    fontWeight: fontWeight || undefined,
     textShadow: textShadow || undefined,
-    background: background || undefined,
-    backgroundClip: backgroundClip || undefined,
-    WebkitBackgroundClip: webkitBackgroundClip || undefined,
-    WebkitTextFillColor: webkitTextFillColor || undefined,
+    lineHeight: lineHeight || undefined,
+    letterSpacing: letterSpacing || undefined,
   };
+
+  // 如果有文字渐变，设置渐变相关样式
+  if (textGradient) {
+    style.backgroundImage = textGradient;
+    style.backgroundClip = 'text';
+    style.WebkitBackgroundClip = 'text';
+    style.WebkitTextFillColor = 'transparent';
+    // 清除可能冲突的 color
+    style.color = undefined;
+  }
 
   return (
     <span style={style} {...attributes}>
