@@ -179,7 +179,8 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
   const batchImportInputRef = useRef<HTMLInputElement>(null);
   const excelImportInputRef = useRef<HTMLInputElement>(null);
   const rowImageInputRef = useRef<HTMLInputElement>(null); // 行内图片上传
-  const lastSelectedRowRef = useRef<number | null>(null); // 上次选择的行，用于 Shift 多选
+  const lastSelectedRowRef = useRef<number | null>(null); // 上次选择的行（单元格），用于单元格 Shift 多选
+  const lastCheckedRowRef = useRef<number | null>(null); // 上次勾选的行（checkbox），用于 checkbox Shift 多选
   const uploadTargetRowRef = useRef<number | null>(null); // 正在上传图片的目标行
 
   // 保存到本地缓存
@@ -1106,10 +1107,10 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
     setSelectedRows(prev => {
       const newSet = new Set(prev);
 
-      if (shiftKey && lastSelectedRowRef.current !== null) {
+      if (shiftKey && lastCheckedRowRef.current !== null) {
         // Shift + 点击：选择范围内的所有行
-        const start = Math.min(lastSelectedRowRef.current, rowIndex);
-        const end = Math.max(lastSelectedRowRef.current, rowIndex);
+        const start = Math.min(lastCheckedRowRef.current, rowIndex);
+        const end = Math.max(lastCheckedRowRef.current, rowIndex);
         for (let i = start; i <= end; i++) {
           newSet.add(i);
         }
@@ -1124,8 +1125,8 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
 
       return newSet;
     });
-    // 记录本次选择的行
-    lastSelectedRowRef.current = rowIndex;
+    // 记录本次勾选的行（用于 checkbox Shift 多选）
+    lastCheckedRowRef.current = rowIndex;
   }, []);
 
   // 全选/取消全选（checkbox）

@@ -6,8 +6,8 @@
  */
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { Button, Tabs, Dialog, MessagePlugin, Input, Radio, Tooltip } from 'tdesign-react';
-import { DeleteIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon, UserIcon } from 'tdesign-icons-react';
+import { Button, Tabs, Dialog, MessagePlugin, Input, Radio, Tooltip, Checkbox } from 'tdesign-react';
+import { DeleteIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon, UserIcon, RefreshIcon, CheckIcon, CloseIcon, PauseCircleIcon } from 'tdesign-icons-react';
 import { TaskItem } from './TaskItem';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
 import { Task, TaskType, TaskStatus } from '../../types/task.types';
@@ -89,6 +89,9 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
     deleteTask,
     clearCompleted,
     clearFailed,
+    batchDeleteTasks,
+    batchRetryTasks,
+    batchCancelTasks,
   } = useTaskQueue();
 
   const { board, openDialog } = useDrawnix();
@@ -103,6 +106,10 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
   const [taskToDelete, setTaskToDelete] = useState<string | null>(null);
   // Character extraction dialog state
   const [characterDialogTask, setCharacterDialogTask] = useState<Task | null>(null);
+  // Multi-selection state
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
+  const [showBatchDeleteConfirm, setShowBatchDeleteConfirm] = useState(false);
 
   // Check if showing characters view
   const isCharacterView = typeFilter === 'character';
@@ -188,6 +195,103 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
     }
     setShowDeleteConfirm(false);
     setTaskToDelete(null);
+  };
+
+  // Multi-selection handlers
+  const handleToggleSelectionMode = () => {
+    if (selectionMode) {
+      // Exit selection mode and clear selections
+      setSelectionMode(false);
+      setSelectedTaskIds(new Set());
+    } else {
+      setSelectionMode(true);
+    }
+  };
+
+  const handleSelectionChange = (taskId: string, selected: boolean) => {
+    setSelectedTaskIds(prev => {
+      const newSet = new Set(prev);
+      if (selected) {
+        newSet.add(taskId);
+      } else {
+        newSet.delete(taskId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleSelectAll = () => {
+    const allTaskIds = filteredTasks.map(t => t.id);
+    setSelectedTaskIds(new Set(allTaskIds));
+  };
+
+  const handleDeselectAll = () => {
+    setSelectedTaskIds(new Set());
+  };
+
+  const handleBatchDelete = () => {
+    if (selectedTaskIds.size === 0) return;
+    setShowBatchDeleteConfirm(true);
+  };
+
+  const confirmBatchDelete = () => {
+    batchDeleteTasks(Array.from(selectedTaskIds));
+    setSelectedTaskIds(new Set());
+    setSelectionMode(false);
+    setShowBatchDeleteConfirm(false);
+    MessagePlugin.success(`已删除 ${selectedTaskIds.size} 个任务`);
+  };
+
+  const handleBatchRetry = () => {
+    // Only retry failed tasks
+    const failedSelectedIds = Array.from(selectedTaskIds).filter(id => {
+      const task = tasks.find(t => t.id === id);
+      return task?.status === TaskStatus.FAILED;
+    });
+    if (failedSelectedIds.length === 0) {
+      MessagePlugin.warning('没有可重试的失败任务');
+      return;
+    }
+    batchRetryTasks(failedSelectedIds);
+    setSelectedTaskIds(new Set());
+    setSelectionMode(false);
+    MessagePlugin.success(`已重试 ${failedSelectedIds.length} 个任务`);
+  };
+
+  // Count selected failed tasks for retry button
+  const selectedFailedCount = useMemo(() => {
+    return Array.from(selectedTaskIds).filter(id => {
+      const task = tasks.find(t => t.id === id);
+      return task?.status === TaskStatus.FAILED;
+    }).length;
+  }, [selectedTaskIds, tasks]);
+
+  // Count selected active tasks for cancel button
+  const selectedActiveCount = useMemo(() => {
+    return Array.from(selectedTaskIds).filter(id => {
+      const task = tasks.find(t => t.id === id);
+      return task?.status === TaskStatus.PENDING ||
+             task?.status === TaskStatus.PROCESSING ||
+             task?.status === TaskStatus.RETRYING;
+    }).length;
+  }, [selectedTaskIds, tasks]);
+
+  const handleBatchCancel = () => {
+    // Only cancel active tasks
+    const activeSelectedIds = Array.from(selectedTaskIds).filter(id => {
+      const task = tasks.find(t => t.id === id);
+      return task?.status === TaskStatus.PENDING ||
+             task?.status === TaskStatus.PROCESSING ||
+             task?.status === TaskStatus.RETRYING;
+    });
+    if (activeSelectedIds.length === 0) {
+      MessagePlugin.warning('没有可停止的进行中任务');
+      return;
+    }
+    batchCancelTasks(activeSelectedIds);
+    setSelectedTaskIds(new Set());
+    setSelectionMode(false);
+    MessagePlugin.success(`已停止 ${activeSelectedIds.length} 个任务`);
   };
 
   const handleDownload = async (taskId: string) => {
@@ -411,7 +515,19 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
               className="task-queue-panel__search-input"
             />
 
-            {failedTasks.length > 0 && (
+            {/* Selection mode toggle button */}
+            <Tooltip content={selectionMode ? "退出多选" : "多选"} theme="light">
+              <Button
+                size="small"
+                variant={selectionMode ? "base" : "text"}
+                theme={selectionMode ? "primary" : "default"}
+                icon={<CheckIcon />}
+                data-track="task_click_toggle_selection"
+                onClick={handleToggleSelectionMode}
+              />
+            </Tooltip>
+
+            {failedTasks.length > 0 && !selectionMode && (
               <Tooltip content="清除失败" theme="light">
                 <Button
                   size="small"
@@ -429,6 +545,56 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
           </div>
         )}
       </div>
+
+      {/* Batch action bar - shown when in selection mode */}
+      {selectionMode && !isCharacterView && (
+        <div className="task-queue-panel__batch-actions">
+          <div className="task-queue-panel__batch-select">
+            <Checkbox
+              checked={selectedTaskIds.size === filteredTasks.length && filteredTasks.length > 0}
+              indeterminate={selectedTaskIds.size > 0 && selectedTaskIds.size < filteredTasks.length}
+              onChange={(checked) => checked ? handleSelectAll() : handleDeselectAll()}
+            />
+            <span className="task-queue-panel__batch-count">
+              已选 {selectedTaskIds.size} / {filteredTasks.length}
+            </span>
+          </div>
+          <div className="task-queue-panel__batch-buttons">
+            {selectedFailedCount > 0 && (
+              <Button
+                size="small"
+                variant="outline"
+                theme="warning"
+                icon={<RefreshIcon />}
+                data-track="task_click_batch_retry"
+                onClick={handleBatchRetry}
+              >
+                重试 ({selectedFailedCount})
+              </Button>
+            )}
+            <Button
+              size="small"
+              variant="outline"
+              theme="danger"
+              icon={<DeleteIcon />}
+              data-track="task_click_batch_delete"
+              onClick={handleBatchDelete}
+              disabled={selectedTaskIds.size === 0}
+            >
+              删除 ({selectedTaskIds.size})
+            </Button>
+            <Button
+              size="small"
+              variant="text"
+              icon={<CloseIcon />}
+              data-track="task_click_exit_selection"
+              onClick={handleToggleSelectionMode}
+            >
+              取消
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 
@@ -468,6 +634,9 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
                 <TaskItem
                   key={task.id}
                   task={task}
+                  selectionMode={selectionMode}
+                  isSelected={selectedTaskIds.has(task.id)}
+                  onSelectionChange={handleSelectionChange}
                   onRetry={handleRetry}
                   onDelete={handleDelete}
                   onDownload={handleDownload}
@@ -502,6 +671,17 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
         onCancel={() => setShowDeleteConfirm(false)}
       >
         确定要删除此任务吗？此操作无法撤销。
+      </Dialog>
+
+      {/* Batch Delete Confirmation Dialog */}
+      <Dialog
+        visible={showBatchDeleteConfirm}
+        header="确认批量删除"
+        onClose={() => setShowBatchDeleteConfirm(false)}
+        onConfirm={confirmBatchDelete}
+        onCancel={() => setShowBatchDeleteConfirm(false)}
+      >
+        确定要删除选中的 {selectedTaskIds.size} 个任务吗？此操作无法撤销。
       </Dialog>
 
       {/* Unified Preview Dialog */}

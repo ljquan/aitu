@@ -56,6 +56,34 @@
     flex-shrink: 0;
   }
 
+  &__batch-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: var(--td-bg-color-container, #ffffff);
+    border-radius: 8px;
+    border: 1px solid var(--td-component-border, #e7e7e7);
+    margin-top: 8px;
+  }
+
+  &__batch-select {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  &__batch-count {
+    font-size: 13px;
+    color: var(--td-text-color-secondary, #757575);
+  }
+
+  &__batch-buttons {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
   &__content {
     padding: 16px 24px 24px 24px;
   }
@@ -88,9 +116,10 @@
   border-radius: 8px;
   padding: 16px;
   margin-bottom: 16px;
-  transition: box-shadow 0.2s ease;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
   display: flex;
   gap: 16px;
+  border: 2px solid transparent;
 
   // 最后一个任务项增加额外底部边距
   &:last-child {
@@ -99,6 +128,27 @@
 
   &:hover {
     box-shadow: var(--td-shadow-1, 0 1px 4px rgba(0, 0, 0, 0.06));
+  }
+
+  // Selection mode styles
+  &--selection-mode {
+    cursor: pointer;
+
+    &:hover {
+      border-color: var(--td-brand-color-light, #d9e1ff);
+    }
+  }
+
+  &--selected {
+    border-color: var(--td-brand-color, #0052d9);
+    background: var(--td-brand-color-light-hover, #f2f3ff);
+  }
+
+  &__checkbox {
+    display: flex;
+    align-items: flex-start;
+    padding-top: 2px;
+    flex-shrink: 0;
   }
 
   &__header {
