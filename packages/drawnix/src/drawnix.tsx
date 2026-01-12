@@ -556,11 +556,9 @@ export const Drawnix: React.FC<DrawnixProps> = ({
 
       const elementIds = selectedElements.map((el: any) => el.id).filter(Boolean);
 
-      // 只有当选中了元素时才更新lastSelectedElementIds
-      if (elementIds.length > 0) {
-        // console.log('Selection changed, saving element IDs:', elementIds);
-        updateAppState({ lastSelectedElementIds: elementIds });
-      }
+      // 更新lastSelectedElementIds（包括清空的情况）
+      // console.log('Selection changed, saving element IDs:', elementIds);
+      updateAppState({ lastSelectedElementIds: elementIds });
     }
 
     // 调用外部的onSelectionChange回调

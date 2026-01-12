@@ -14,7 +14,8 @@ import {
   getMergedPresetPrompts,
   savePromptToHistory as savePromptToHistoryUtil,
   VideoModelOptions,
-  MultiImageUpload,
+  ReferenceImageUpload,
+  type ReferenceImage,
   StoryboardEditor,
 } from './shared';
 import { geminiSettings } from '../../utils/settings-manager';
@@ -306,12 +307,39 @@ const AIVideoGeneration = ({
     window.dispatchEvent(new CustomEvent('ai-video-clear'));
   };
 
-  // 处理图片变化（用户手动上传/删除时同步更新原始图片列表）
-  const handleImagesChange = React.useCallback((newImages: UploadedVideoImage[]) => {
-    setUploadedImages(newImages);
-    // 同步更新原始图片列表（用户手动操作后，原始列表以当前显示的为准）
-    setAllSelectedImages(newImages);
+  // Convert ReferenceImage[] to UploadedVideoImage[]
+  const referenceImagesToUploadedImages = React.useCallback((
+    refImages: ReferenceImage[],
+    labels: string[]
+  ): UploadedVideoImage[] => {
+    return refImages.map((img, index) => ({
+      slot: index,
+      slotLabel: labels[index] || `参考图${index + 1}`,
+      url: img.url,
+      name: img.name,
+      file: img.file,
+    }));
   }, []);
+
+  // Convert UploadedVideoImage[] to ReferenceImage[]
+  const uploadedImagesToReferenceImages = React.useCallback((
+    uploadedImgs: UploadedVideoImage[]
+  ): ReferenceImage[] => {
+    return uploadedImgs.map(img => ({
+      url: img.url,
+      name: img.name,
+      file: img.file,
+    }));
+  }, []);
+
+  // 处理图片变化（用户手动上传/删除时同步更新原始图片列表）
+  const handleImagesChange = React.useCallback((newImages: ReferenceImage[]) => {
+    const labels = modelConfig.imageUpload.labels || [];
+    const convertedImages = referenceImagesToUploadedImages(newImages, labels);
+    setUploadedImages(convertedImages);
+    // 同步更新原始图片列表（用户手动操作后，原始列表以当前显示的为准）
+    setAllSelectedImages(convertedImages);
+  }, [modelConfig.imageUpload.labels, referenceImagesToUploadedImages]);
 
   // 使用useMemo优化性能，当videoHistory或language变化时重新计算
   const presetPrompts = React.useMemo(() =>
@@ -595,11 +623,19 @@ const AIVideoGeneration = ({
             />
 
             {/* Multi-image upload based on model config */}
-            <MultiImageUpload
-              config={modelConfig.imageUpload}
-              images={uploadedImages}
+            <ReferenceImageUpload
+              images={uploadedImagesToReferenceImages(uploadedImages)}
               onImagesChange={handleImagesChange}
+              language={language}
               disabled={isGenerating}
+              multiple={modelConfig.imageUpload.maxCount > 1}
+              maxCount={modelConfig.imageUpload.maxCount}
+              slotLabels={modelConfig.imageUpload.mode === 'frames' ? modelConfig.imageUpload.labels : undefined}
+              label={
+                modelConfig.imageUpload.mode === 'frames'
+                  ? (language === 'zh' ? '首尾帧图片 (可选)' : 'Start/End Frames (Optional)')
+                  : (language === 'zh' ? '参考图片 (可选)' : 'Reference Images (Optional)')
+              }
             />
 
             {/* Storyboard mode editor (only for supported models) */}

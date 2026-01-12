@@ -154,6 +154,9 @@ export class SWTaskQueueClient {
       duration: params.duration,
       model: params.model,
       style: params.style,
+      // Include batch info for concurrent generation
+      batchId: params.batchId,
+      batchIndex: params.batchIndex,
     };
     // Simple hash for fingerprint
     const str = JSON.stringify(data);

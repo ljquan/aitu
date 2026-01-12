@@ -171,7 +171,9 @@ components/
 │   ├── ai-image-generation.tsx    # 图片生成
 │   ├── ai-video-generation.tsx    # 视频生成
 │   ├── batch-image-generation.tsx # 批量图片生成
-│   └── mermaid-to-drawnix.tsx     # Mermaid 转换
+│   ├── mermaid-to-drawnix.tsx     # Mermaid 转换
+│   └── shared/                    # 共享组件
+│       └── ReferenceImageUpload.tsx # 统一参考图上传组件
 ├── settings-dialog/               # 设置对话框
 ├── project-drawer/                # 项目抽屉
 ├── task-queue/                    # 任务队列 UI
@@ -830,6 +832,76 @@ Service Worker 拦截请求
 **支持的字体**：
 - 系统字体：苹方、微软雅黑、黑体、宋体、楷体等
 - Google Fonts：Noto Sans SC、ZCOOL 系列、Ma Shan Zheng 等
+
+### 参考图上传组件 (ReferenceImageUpload)
+
+统一的参考图上传组件，用于 AI 图片生成和视频生成弹窗。
+
+**核心文件**：
+- `components/ttd-dialog/shared/ReferenceImageUpload.tsx` - 主组件
+- `components/ttd-dialog/shared/ReferenceImageUpload.scss` - 样式文件
+
+**功能特点**：
+- 本地文件上传：点击"本地"按钮选择文件
+- 素材库选择：点击"素材库"按钮从媒体库选择图片
+- 拖拽上传：支持将图片拖拽到上传区域
+- 粘贴板获取：支持 Ctrl+V / Cmd+V 粘贴图片
+- 多种模式：
+  - 单图模式 (`multiple=false`)
+  - 多图网格模式 (`multiple=true`)
+  - 插槽模式 (`slotLabels` 用于视频生成的首帧/尾帧)
+
+**使用示例**：
+```tsx
+// AI 图片生成中的使用
+<ReferenceImageUpload
+  images={uploadedImages}
+  onImagesChange={setUploadedImages}
+  language={language}
+  disabled={isGenerating}
+  multiple={true}
+  label="参考图片 (可选)"
+/>
+
+// AI 视频生成中的使用（首帧/尾帧模式）
+<ReferenceImageUpload
+  images={uploadedImages}
+  onImagesChange={handleImagesChange}
+  language={language}
+  disabled={isGenerating}
+  multiple={true}
+  maxCount={2}
+  slotLabels={['首帧', '尾帧']}
+  label="首尾帧图片 (可选)"
+/>
+```
+
+**类型定义**：
+```typescript
+interface ReferenceImage {
+  url: string;    // Base64 或 URL
+  name: string;   // 文件名
+  file?: File;    // 原始文件对象
+}
+
+interface ReferenceImageUploadProps {
+  images: ReferenceImage[];
+  onImagesChange: (images: ReferenceImage[]) => void;
+  language?: 'zh' | 'en';
+  disabled?: boolean;
+  multiple?: boolean;
+  maxCount?: number;
+  label?: string;
+  slotLabels?: string[];  // 插槽标签（如 ['首帧', '尾帧']）
+  onError?: (error: string | null) => void;
+}
+```
+
+**样式特点**：
+- 虚线边框的上传区域
+- 垂直排列的"本地"和"素材库"按钮
+- 拖拽时的视觉反馈
+- 统一的按钮样式（图标 16px，字体 13px，字重 400）
 
 ---
 

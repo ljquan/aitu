@@ -28,7 +28,7 @@ import {
 import { DUPLICATE_SUBMISSION_WINDOW } from '../constants/TASK_CONSTANTS';
 import { swTaskQueueClient } from './sw-client';
 import type { SWTask } from './sw-client';
-import { geminiSettings } from '../utils/settings-manager';
+import { geminiSettings, settingsManager } from '../utils/settings-manager';
 
 /**
  * Service Worker Task Queue Service
@@ -67,6 +67,9 @@ class SWTaskQueueService {
     if (this.initialized) return true;
 
     try {
+      // Wait for settings manager to finish decrypting sensitive data
+      await settingsManager.waitForInitialization();
+      
       const settings = geminiSettings.get();
       if (!settings.apiKey || !settings.baseUrl) {
         console.warn('[SWTaskQueueService] Gemini settings not configured');

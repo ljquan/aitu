@@ -13,10 +13,10 @@ import {
   useKeyboardShortcuts,
   ActionButtons,
   ErrorDisplay,
-  ImageUpload,
+  ReferenceImageUpload,
+  type ReferenceImage,
   PromptInput,
   AspectRatioSelector,
-  type ImageFile,
   getMergedPresetPrompts,
   savePromptToHistory as savePromptToHistoryUtil,
 } from './shared';
@@ -27,7 +27,7 @@ import { promptForApiKey } from '../../utils/gemini-api';
 
 interface AIImageGenerationProps {
   initialPrompt?: string;
-  initialImages?: ImageFile[];
+  initialImages?: ReferenceImage[];
   selectedElementIds?: string[];
   initialWidth?: number;
   initialHeight?: number;
@@ -51,7 +51,7 @@ const AIImageGeneration = ({
   const [height, setHeight] = useState<number | string>(initialHeight || 1024);
   const [aspectRatio, setAspectRatio] = useState<string>(DEFAULT_ASPECT_RATIO);
   const [error, setError] = useState<string | null>(null);
-  const [uploadedImages, setUploadedImages] = useState<ImageFile[]>(initialImages);
+  const [uploadedImages, setUploadedImages] = useState<ReferenceImage[]>(initialImages);
 
   // Use generation history from task queue
   const { imageHistory } = useGenerationHistory();
@@ -382,12 +382,13 @@ const AIImageGeneration = ({
           )}
 
           {/* 参考图片区域 */}
-          <ImageUpload
+          <ReferenceImageUpload
             images={uploadedImages}
             onImagesChange={setUploadedImages}
             language={language}
             disabled={isGenerating}
             multiple={true}
+            label={language === 'zh' ? '参考图片 (可选)' : 'Reference Images (Optional)'}
             onError={setError}
           />
 

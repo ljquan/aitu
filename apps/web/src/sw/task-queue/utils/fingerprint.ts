@@ -137,6 +137,9 @@ export class TaskFingerprint {
           model: params.model,
           // Include reference images if present
           referenceImages: params.referenceImages,
+          // Include batch info for concurrent generation
+          batchId: params.batchId,
+          batchIndex: params.batchIndex,
         };
 
       case TaskType.VIDEO:

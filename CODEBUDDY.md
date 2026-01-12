@@ -159,6 +159,28 @@ Full coding standards are documented in `docs/CODING_STANDARDS.md`. Key highligh
 - Avoid `any` - use specific types or generics
 - Strict TypeScript configuration is enforced
 
+#### Async Initialization Pattern
+**场景**: 使用 `settingsManager` 或其他需要异步初始化的服务时
+
+❌ **错误示例**:
+```typescript
+async initialize(): Promise<boolean> {
+  const settings = geminiSettings.get(); // 可能返回加密的 JSON！
+  await swTaskQueueClient.initialize({ apiKey: settings.apiKey });
+}
+```
+
+✅ **正确示例**:
+```typescript
+async initialize(): Promise<boolean> {
+  await settingsManager.waitForInitialization(); // 等待解密完成
+  const settings = geminiSettings.get(); // 现在返回解密后的值
+  await swTaskQueueClient.initialize({ apiKey: settings.apiKey });
+}
+```
+
+**原因**: `settingsManager` 使用异步方法 `decryptSensitiveDataForLoading()` 解密敏感数据（如 API Key）。如果在解密完成前调用 `geminiSettings.get()`，会返回加密的 JSON 对象而不是解密后的字符串，导致 API 请求失败。
+
 #### React Component Guidelines
 - Use functional components with Hooks
 - Destructure props with default values

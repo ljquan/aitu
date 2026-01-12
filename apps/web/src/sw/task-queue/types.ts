@@ -601,7 +601,7 @@ export interface TaskQueueConfig {
  * Default task queue configuration
  */
 export const DEFAULT_TASK_QUEUE_CONFIG: TaskQueueConfig = {
-  maxConcurrent: 3,
+  maxConcurrent: Infinity, // No concurrent limit for image/video generation
   maxRetries: 3,
   retryDelays: [
     1 * 60 * 1000,   // 1 minute
