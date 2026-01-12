@@ -695,7 +695,21 @@ export class SWTaskQueue {
         throw new Error(`No handler for task type: ${task.type}`);
       }
 
-      const result = await handler.execute(task, handlerConfig);
+      // Get timeout for this task type
+      const taskTimeout = this.config.timeouts[task.type] || 10 * 60 * 1000; // Default 10 minutes
+
+      // Execute with timeout
+      const result = await Promise.race([
+        handler.execute(task, handlerConfig),
+        new Promise<never>((_, reject) => {
+          setTimeout(() => {
+            // Cancel the handler when timeout occurs
+            handler.cancel?.(task.id);
+            reject(new Error(`Task timeout after ${Math.round(taskTimeout / 60000)} minutes`));
+          }, taskTimeout);
+        }),
+      ]);
+
       await this.handleTaskSuccess(task.id, result);
     } catch (error) {
       await this.handleTaskError(task.id, error);
