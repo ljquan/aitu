@@ -167,8 +167,15 @@ class SWTaskQueueService {
   }
 
   deleteTask(taskId: string): void {
-    if (!this.tasks.has(taskId)) return;
+    // Always send delete request to SW, even if task is not in local cache
+    // SW is the source of truth and will handle the deletion
     swTaskQueueClient.deleteTask(taskId);
+    // Also remove from local cache immediately for responsive UI
+    if (this.tasks.has(taskId)) {
+      const task = this.tasks.get(taskId)!;
+      this.tasks.delete(taskId);
+      this.emitEvent('taskDeleted', task);
+    }
   }
 
   clearCompletedTasks(): void {
