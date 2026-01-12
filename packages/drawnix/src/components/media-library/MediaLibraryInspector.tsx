@@ -26,7 +26,7 @@ export function MediaLibraryInspector({
   onDownload,
   onSelect,
   showSelectButton,
-  selectButtonText = '使用到画板',
+  selectButtonText = '使用',
 }: MediaLibraryInspectorProps) {
   const [isRenaming, setIsRenaming] = useState(false);
   const [newName, setNewName] = useState('');

@@ -3,6 +3,10 @@ import {
   type ImageHistoryItem,
   type VideoHistoryItem
 } from '../../generation-history';
+import {
+  addVideoPromptHistory,
+  getVideoPromptHistoryContents
+} from '../../../services/prompt-storage-service';
 import { PRESET_PROMPTS_LIMIT, USER_PROMPTS_LIMIT } from './size-constants';
 
 export type PromptType = 'image' | 'video';
@@ -20,6 +24,11 @@ function extractUserPromptsFromHistory(historyItems: HistoryItem[]): string[] {
 
 /**
  * 获取合并的预设提示词（用户历史 + 默认预设）
+ *
+ * 对于视频类型，会合并三个来源：
+ * 1. 本地存储的视频描述历史（提交时立即保存）
+ * 2. 任务队列中已完成任务的提示词
+ * 3. 默认预设提示词
  */
 export const getMergedPresetPrompts = (
   type: PromptType,
@@ -31,11 +40,23 @@ export const getMergedPresetPrompts = (
     ? getImagePrompts(language)
     : getVideoPrompts(language);
 
-  // 提取用户历史提示词
-  const userPrompts = extractUserPromptsFromHistory(historyItems).slice(0, USER_PROMPTS_LIMIT);
+  // 提取用户历史提示词（来自任务队列的已完成任务）
+  const taskQueuePrompts = extractUserPromptsFromHistory(historyItems);
+
+  // 对于视频类型，还需要获取本地存储的历史记录
+  let localStoragePrompts: string[] = [];
+  if (type === 'video') {
+    localStoragePrompts = getVideoPromptHistoryContents();
+  }
+
+  // 合并所有来源的提示词（本地存储优先，因为包含最新提交的）
+  // 顺序：本地存储历史 -> 任务队列历史 -> 默认预设
+  const allUserPrompts = [...localStoragePrompts, ...taskQueuePrompts]
+    .filter((prompt, index, arr) => arr.indexOf(prompt) === index) // 去重
+    .slice(0, USER_PROMPTS_LIMIT);
 
   // 合并：用户历史提示词在前，默认预设在后，总数不超过限制
-  const merged = [...userPrompts, ...defaultPrompts]
+  const merged = [...allUserPrompts, ...defaultPrompts]
     .filter((prompt, index, arr) => arr.indexOf(prompt) === index) // 再次去重，避免用户历史与默认重复
     .slice(0, PRESET_PROMPTS_LIMIT); // 限制总数
 
@@ -44,9 +65,16 @@ export const getMergedPresetPrompts = (
 
 /**
  * 保存提示词到历史记录（去重）
- * 注意：现在提示词会随任务自动保存，此函数保留为空实现以保持兼容性
+ *
+ * 对于视频类型，会立即保存到本地存储，这样即使任务还在执行中，
+ * 用户也可以在预设列表中看到刚刚使用的提示词。
  */
 export const savePromptToHistory = (type: PromptType, promptText: string, dimensions?: { width: number; height: number }) => {
-  // 不再需要手动保存，提示词会随任务自动保存到任务队列
-  // 保留此函数以避免破坏现有调用
+  if (!promptText || !promptText.trim()) return;
+
+  if (type === 'video') {
+    // 视频描述保存到本地存储
+    addVideoPromptHistory(promptText.trim());
+  }
+  // 图片类型暂时不需要额外保存，因为任务完成后会自动出现在历史记录中
 };

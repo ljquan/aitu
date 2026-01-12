@@ -116,7 +116,7 @@ export function MediaLibraryModal({
     [onSelect, onClose],
   );
 
-  // 处理"使用到画板"按钮点击
+  // 处理"使用"按钮点击
   const handleUseAsset = useCallback(
     (asset: Asset) => {
       if (onSelect) {

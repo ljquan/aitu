@@ -11,6 +11,10 @@ const MAX_HISTORY_COUNT = 20;
 // 预设提示词设置的存储 key
 const PRESET_SETTINGS_KEY = 'aitu-prompt-preset-settings';
 
+// 视频描述历史记录的存储 key
+const VIDEO_PROMPT_HISTORY_KEY = 'aitu_video_prompt_history';
+const MAX_VIDEO_PROMPT_HISTORY = 20;
+
 export interface PromptHistoryItem {
   id: string;
   content: string;
@@ -152,6 +156,96 @@ export function togglePinPrompt(id: string): boolean {
     console.error('Failed to toggle pin prompt:', error);
     return false;
   }
+}
+
+// ============================================
+// 视频描述历史记录功能（用于 AI 视频生成弹窗）
+// ============================================
+
+export interface VideoPromptHistoryItem {
+  id: string;
+  content: string;
+  timestamp: number;
+}
+
+/**
+ * 获取视频描述历史记录
+ * 返回按时间倒序排列的列表
+ */
+export function getVideoPromptHistory(): VideoPromptHistoryItem[] {
+  try {
+    const data = localStorage.getItem(VIDEO_PROMPT_HISTORY_KEY);
+    if (!data) return [];
+    const history = JSON.parse(data) as VideoPromptHistoryItem[];
+    return history.sort((a, b) => b.timestamp - a.timestamp);
+  } catch (error) {
+    console.error('Failed to get video prompt history:', error);
+    return [];
+  }
+}
+
+/**
+ * 添加视频描述到历史记录
+ * 自动去重，新记录插入头部，限制最大数量
+ */
+export function addVideoPromptHistory(content: string): void {
+  if (!content || !content.trim()) return;
+
+  const trimmedContent = content.trim();
+
+  try {
+    let history = getVideoPromptHistory();
+
+    // 检查是否已存在相同内容
+    const existingIndex = history.findIndex(item => item.content === trimmedContent);
+
+    if (existingIndex >= 0) {
+      // 已存在：更新时间戳并移到最前面
+      const existingItem = history[existingIndex];
+      existingItem.timestamp = Date.now();
+      history.splice(existingIndex, 1);
+      history.unshift(existingItem);
+      localStorage.setItem(VIDEO_PROMPT_HISTORY_KEY, JSON.stringify(history));
+      return;
+    }
+
+    // 新记录插入头部
+    const newItem: VideoPromptHistoryItem = {
+      id: `video_prompt_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+      content: trimmedContent,
+      timestamp: Date.now(),
+    };
+    history.unshift(newItem);
+
+    // 限制最大数量
+    if (history.length > MAX_VIDEO_PROMPT_HISTORY) {
+      history = history.slice(0, MAX_VIDEO_PROMPT_HISTORY);
+    }
+
+    localStorage.setItem(VIDEO_PROMPT_HISTORY_KEY, JSON.stringify(history));
+  } catch (error) {
+    console.error('Failed to add video prompt history:', error);
+  }
+}
+
+/**
+ * 删除指定视频描述历史记录
+ */
+export function removeVideoPromptHistory(id: string): void {
+  try {
+    let history = getVideoPromptHistory();
+    history = history.filter(item => item.id !== id);
+    localStorage.setItem(VIDEO_PROMPT_HISTORY_KEY, JSON.stringify(history));
+  } catch (error) {
+    console.error('Failed to remove video prompt history:', error);
+  }
+}
+
+/**
+ * 获取视频描述历史记录的提示词列表（仅内容）
+ */
+export function getVideoPromptHistoryContents(): string[] {
+  return getVideoPromptHistory().map(item => item.content);
 }
 
 // ============================================
@@ -323,7 +417,7 @@ export const promptStorageService = {
   removeHistory: removePromptHistory,
   clearHistory: clearPromptHistory,
   togglePin: togglePinPrompt,
-  
+
   // 预设提示词设置功能（用于 AI 图片/视频生成弹窗）
   getPresetSettings,
   pinPrompt: pinPresetPrompt,
@@ -331,4 +425,10 @@ export const promptStorageService = {
   isPinned: isPresetPinned,
   deletePrompt: deletePresetPrompt,
   sortPrompts: sortPresetPrompts,
+
+  // 视频描述历史记录功能
+  getVideoPromptHistory,
+  addVideoPromptHistory,
+  removeVideoPromptHistory,
+  getVideoPromptHistoryContents,
 };

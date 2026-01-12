@@ -940,6 +940,95 @@ interface ReferenceImageUploadProps {
 - **文件大小限制**: 单个文件不超过 500 行
 - **文档语言**: 规格文档使用中文
 
+### 异步初始化模式
+
+**场景**: 使用 `settingsManager` 或其他需要异步初始化的服务时
+
+❌ **错误示例**:
+```typescript
+async initialize(): Promise<boolean> {
+  const settings = geminiSettings.get(); // 可能返回加密的 JSON！
+  await swTaskQueueClient.initialize({ apiKey: settings.apiKey });
+}
+```
+
+✅ **正确示例**:
+```typescript
+async initialize(): Promise<boolean> {
+  await settingsManager.waitForInitialization(); // 等待解密完成
+  const settings = geminiSettings.get(); // 现在返回解密后的值
+  await swTaskQueueClient.initialize({ apiKey: settings.apiKey });
+}
+```
+
+**原因**: `settingsManager` 使用异步方法 `decryptSensitiveDataForLoading()` 解密敏感数据（如 API Key）。如果在解密完成前调用 `geminiSettings.get()`，会返回加密的 JSON 对象而不是解密后的字符串，导致 API 请求失败。
+
+### Z-Index 管理规范
+
+**规范文档**: 参考 `docs/Z_INDEX_GUIDE.md` 获取完整规范
+
+**核心原则**:
+- 使用预定义的层级常量，禁止硬编码魔术数字
+- TypeScript: 从 `constants/z-index.ts` 导入 `Z_INDEX`
+- SCSS: 从 `styles/z-index.scss` 导入并使用 `$z-*` 变量或 `z()` 函数
+
+**层级结构** (每层预留100单位):
+```
+Layer 0 (0-999):     Base & Canvas Internal
+Layer 1 (1000-1999): Canvas Elements & Decorations
+Layer 2 (2000-2999): Toolbars (unified-toolbar: 2000, popovers: 3000)
+Layer 3 (3000-3999): Popovers & Tooltips
+Layer 4 (4000-4999): Drawers & Panels (task-queue, chat-drawer)
+Layer 5 (5000-5999): Modals & Dialogs (AI dialogs: 5100+)
+Layer 6 (6000-6999): Notifications (active-task-warning: 6000)
+Layer 7 (7000-7999): Auth Dialogs
+Layer 8 (8000-8999): Image Viewer
+Layer 9 (9000+):     Critical Overlays (loading, system-error)
+```
+
+**使用示例**:
+```typescript
+// TypeScript/TSX
+import { Z_INDEX } from '@/constants/z-index';
+<Rnd style={{ zIndex: Z_INDEX.DIALOG_AI_IMAGE }}>
+```
+
+```scss
+// SCSS
+@import 'styles/z-index';
+.my-toolbar {
+  z-index: $z-unified-toolbar;  // 或 z-index: z('unified-toolbar');
+}
+```
+
+**禁止事项**:
+- ❌ 禁止使用随意的数字 (如 9999, 10000, 10001)
+- ❌ 禁止在同一层级随意 +1/-1
+- ❌ 临时修复必须在完成后转换为规范用法
+
+### 验证命令
+
+修改代码后必须执行以下验证命令：
+
+```bash
+nx typecheck drawnix    # 类型检查
+nx lint drawnix         # 代码规范
+nx test drawnix         # 单元测试
+pnpm run build          # 构建验证
+```
+
+### 性能指南
+- 使用 `React.lazy` 对大型组件进行代码分割
+- 对图片实现懒加载和预加载
+- 避免在 render 中创建新对象/函数
+- 对长列表考虑使用虚拟化
+
+### 安全指南
+- 验证和清理所有用户输入
+- 永远不要硬编码敏感信息（API keys 等）
+- 对 API 调用使用适当的错误处理
+- 在日志中过滤敏感信息
+
 ---
 
 ## 品牌设计规范
@@ -1283,6 +1372,7 @@ trimTransparentBorders(imageData: ImageData, strict: boolean = true)
 
 - `/docs/CODING_STANDARDS.md` - 完整编码规范
 - `/docs/VERSION_CONTROL.md` - 版本控制
+- `/docs/Z_INDEX_GUIDE.md` - Z-Index 层级管理规范
 - `/docs/CFPAGE-DEPLOY.md` - Cloudflare 部署指南
 - `/docs/PWA_ICONS.md` - PWA 配置
 - `/docs/POSTHOG_MONITORING.md` - 监控配置

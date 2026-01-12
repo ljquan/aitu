@@ -136,6 +136,9 @@ const AIVideoGeneration = ({
   // Use generation history from task queue
   const { videoHistory } = useGenerationHistory();
 
+  // 用于触发 presetPrompts 重新计算的计数器
+  const [promptHistoryVersion, setPromptHistoryVersion] = useState(0);
+
   const { isGenerating } = useGenerationState('video');
 
   const { language } = useI18n();
@@ -341,15 +344,17 @@ const AIVideoGeneration = ({
     setAllSelectedImages(convertedImages);
   }, [modelConfig.imageUpload.labels, referenceImagesToUploadedImages]);
 
-  // 使用useMemo优化性能，当videoHistory或language变化时重新计算
+  // 使用useMemo优化性能，当videoHistory、language或promptHistoryVersion变化时重新计算
   const presetPrompts = React.useMemo(() =>
     getMergedPresetPrompts('video', language as Language, videoHistory),
-    [videoHistory, language]
+    [videoHistory, language, promptHistoryVersion]
   );
 
   // 保存提示词到历史记录（去重）
   const savePromptToHistory = (promptText: string) => {
     savePromptToHistoryUtil('video', promptText, { width: 1280, height: 720 });
+    // 触发 presetPrompts 重新计算
+    setPromptHistoryVersion(v => v + 1);
   };
 
   // 处理任务编辑（从弹窗内的任务列表点击编辑）
