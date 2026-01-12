@@ -807,8 +807,8 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
           .filter((item) => item.type === 'video' && item.url)
           .map((item) => item.url!),
         graphics: graphicsItems.map((item) => item.url!),
-        // 添加图片尺寸信息（如果有）
-        imageDimensions: imageDimensions.length > 0 ? imageDimensions : undefined,
+        // 添加图片尺寸信息（始终传递数组，避免下游处理 undefined）
+        imageDimensions: imageDimensions,
       };
 
       // 解析输入内容，使用选中的模型和尺寸
