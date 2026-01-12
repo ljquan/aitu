@@ -698,6 +698,31 @@ window.dispatchEvent(new CustomEvent('ai-generation-complete', {
 - 点击模版自动填充提示词到输入框
 - 提供"提示词"快捷按钮，可打开香蕉提示词工具
 
+**数据加载状态管理 (`isDataReady`)**：
+
+为了避免在画布数据加载完成前误判画布为空（导致灵感板闪烁），项目使用 `isDataReady` 状态来标识数据是否已准备好。
+
+**数据流**：
+```
+app.tsx (isDataReady state)
+  ↓ setValue 完成后 setIsDataReady(true)
+  ↓ prop
+drawnix.tsx (isDataReady prop)
+  ↓ prop
+DrawnixContent (isDataReady prop)
+  ↓ prop
+AIInputBar (isDataReady prop)
+  ↓ prop
+SelectionWatcher (isDataReady prop)
+  ↓
+只有 isDataReady=true 时才检查画布是否为空
+```
+
+**关键逻辑**：
+- `app.tsx`：初始 `isDataReady = false`，在 `setValue` 完成后（`finally` 块中）设置为 `true`
+- `SelectionWatcher`：只有当 `isDataReady` 为 `true` 时才开始检查画布是否为空
+- 避免在数据加载前误判画布为空，防止灵感板闪烁
+
 ### 历史提示词功能
 
 支持记录和管理用户的历史提示词，方便快速复用。

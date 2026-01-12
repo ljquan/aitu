@@ -823,15 +823,20 @@ sw.addEventListener('fetch', (event: FetchEvent) => {
   }
 
   // Handle static file requests with cache-first strategy
-  // Exclude XHR/fetch API requests - only handle navigation and static resources
-  if (!isDevelopment &&
-    event.request.method === 'GET' &&
-    event.request.destination !== '') {
-
-    event.respondWith(
-      handleStaticRequest(event.request)
-    );
-    return;
+  // Handle navigation requests and static resources (JS, CSS, images, fonts, etc.)
+  // Note: For navigation requests, destination might be empty or 'document'
+  // In development mode, we still need to handle requests when offline
+  if (event.request.method === 'GET') {
+    const isNavigationRequest = event.request.mode === 'navigate';
+    const isStaticResource = event.request.destination !== '';
+    
+    // Handle both navigation requests and static resources
+    if (isNavigationRequest || isStaticResource) {
+      event.respondWith(
+        handleStaticRequest(event.request)
+      );
+      return;
+    }
   }
 
   // 对于其他请求（如 XHR/API 请求），不拦截，让浏览器直接处理
@@ -905,7 +910,8 @@ async function handleFontRequest(request: Request): Promise<Response> {
 }
 
 // Utility function to perform fetch with retries
-async function fetchWithRetry(request: Request, maxRetries = 2, fetchOptions: any = {}): Promise<Response> {
+// skipRetryOnNetworkError: if true, don't retry on network errors (for offline scenarios)
+async function fetchWithRetry(request: Request, maxRetries = 2, fetchOptions: any = {}, skipRetryOnNetworkError = false): Promise<Response> {
   let lastError;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -931,6 +937,22 @@ async function fetchWithRetry(request: Request, maxRetries = 2, fetchOptions: an
       // console.warn(`Fetch attempt ${attempt + 1} failed:`, error.message);
       lastError = error;
 
+      // For network errors (offline), don't retry - fail fast
+      if (skipRetryOnNetworkError) {
+        throw lastError;
+      }
+
+      // Check if it's a connection refused error - don't retry these
+      const isConnectionError = error.message?.includes('ERR_CONNECTION_REFUSED') ||
+        error.message?.includes('ERR_NETWORK') ||
+        error.message?.includes('Failed to fetch') ||
+        error.message?.includes('NetworkError');
+      
+      if (isConnectionError) {
+        // Connection refused means server is down, no point retrying
+        throw lastError;
+      }
+
       if (attempt < maxRetries) {
         // Wait before retrying (exponential backoff: 1s, 2s, 4s...)
         await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
@@ -939,6 +961,11 @@ async function fetchWithRetry(request: Request, maxRetries = 2, fetchOptions: an
   }
 
   throw lastError;
+}
+
+// Quick fetch without retries - for cache-first scenarios
+async function fetchQuick(request: Request, fetchOptions: any = {}): Promise<Response> {
+  return fetch(request, fetchOptions);
 }
 
 // 处理缓存 URL 请求 (/__aitu_cache__/video/{taskId}.mp4)
@@ -1301,94 +1328,182 @@ function createVideoResponse(videoBlob: Blob, rangeHeader: string | null, reques
 }
 
 async function handleStaticRequest(request: Request): Promise<Response> {
-  try {
-    // In development mode, always fetch from network first with retry logic
-    if (isDevelopment) {
-      // console.log('Development mode: fetching from network', request.url);
-      return await fetchWithRetry(request);
-    }
+  const url = new URL(request.url);
+  const isHtmlRequest = request.mode === 'navigate' || url.pathname.endsWith('.html');
+  const cache = await caches.open(STATIC_CACHE_NAME);
 
-    const url = new URL(request.url);
-    const isHtmlRequest = request.mode === 'navigate' || url.pathname.endsWith('.html');
-
-    // For HTML files: ALWAYS use network-first strategy to prevent version mismatch
-    if (isHtmlRequest) {
-      // console.log('HTML request: using network-first strategy', request.url);
-      try {
-        // Use 'reload' to bypass browser HTTP cache and force network request
-        const fetchOptions = { cache: 'reload' };
-        const response = await fetchWithRetry(request, 2, fetchOptions);
-
-        // Cache the new HTML for offline use only
-        if (response && response.status === 200) {
-          const cache = await caches.open(STATIC_CACHE_NAME);
-          // Only cache http/https requests
-          if (request.url.startsWith('http')) {
-            cache.put(request, response.clone());
-          }
-        }
-
-        return response;
-      } catch (networkError) {
-        console.warn('Network request failed for HTML, trying cache:', networkError);
-        const cachedResponse = await caches.match(request);
-        if (cachedResponse) {
-          console.warn('WARNING: Using cached HTML which may be outdated');
-          return cachedResponse;
-        }
-        throw networkError;
+  // ===========================================
+  // Development Mode: Network First (for hot reload / live updates)
+  // Still caches for offline testing, but always tries network first
+  // ===========================================
+  if (isDevelopment) {
+    try {
+      const response = await fetchQuick(request);
+      
+      // Cache successful responses for offline testing
+      if (response && response.status === 200 && request.url.startsWith('http')) {
+        cache.put(request, response.clone());
       }
+      
+      return response;
+    } catch (networkError) {
+      // Network failed (server stopped) - fall back to cache
+      // console.warn('Dev mode: Network failed, trying cache');
+      
+      let cachedResponse = await cache.match(request);
+      
+      // For SPA navigation, fall back to index.html
+      if (!cachedResponse && isHtmlRequest) {
+        cachedResponse = await cache.match('/');
+        if (!cachedResponse) {
+          cachedResponse = await cache.match('/index.html');
+        }
+      }
+      
+      if (cachedResponse) {
+        return cachedResponse;
+      }
+      
+      // No cache available
+      if (isHtmlRequest) {
+        return createOfflinePage();
+      }
+      return new Response('Resource unavailable', { status: 503 });
     }
+  }
 
-    // For non-HTML static files: use cache-first strategy
-    const cachedResponse = await caches.match(request);
-    if (cachedResponse) {
-      // console.log('Returning cached static resource:', request.url);
-      return cachedResponse;
+  // ===========================================
+  // Production Mode: Optimized strategies
+  // ===========================================
+
+  // Strategy 1: HTML/Navigation - Network First with fast fallback
+  if (isHtmlRequest) {
+    try {
+      // Try network first (no retries for connection errors - fail fast)
+      const response = await fetchQuick(request, { cache: 'reload' as RequestCache });
+
+      // Cache successful responses
+      if (response && response.status === 200 && request.url.startsWith('http')) {
+        cache.put(request, response.clone());
+      }
+
+      return response;
+    } catch (networkError) {
+      // Network failed - immediately try cache (no waiting)
+      let cachedResponse = await cache.match(request);
+      
+      // For SPA, any route should fall back to index.html
+      if (!cachedResponse) {
+        cachedResponse = await cache.match('/');
+      }
+      if (!cachedResponse) {
+        cachedResponse = await cache.match('/index.html');
+      }
+      
+      if (cachedResponse) {
+        return cachedResponse;
+      }
+      
+      // No cache - return offline page
+      return createOfflinePage();
     }
+  }
 
-    // Fetch from network with retry logic and cache for future use
-    const response = await fetchWithRetry(request);
+  // Strategy 2: Static Resources - Cache First (fast offline)
+  const cachedResponse = await cache.match(request);
+  if (cachedResponse) {
+    return cachedResponse;
+  }
 
-    // Check if we got an invalid HTML response for a static asset (SPA fallback 404)
+  // Cache miss - try network
+  try {
+    const response = await fetchQuick(request);
+
+    // Validate response - don't cache HTML responses for static assets (SPA 404 fallback)
     const contentType = response.headers.get('Content-Type');
     const isInvalidResponse = response.status === 200 &&
-      contentType &&
-      contentType.includes('text/html') &&
-      (url.pathname.match(/\.(js|css|png|jpg|jpeg|gif|webp|svg|json)$/i) ||
+      contentType?.includes('text/html') &&
+      (url.pathname.match(/\.(js|css|png|jpg|jpeg|gif|webp|svg|json|woff|woff2|ttf)$/i) ||
         request.destination === 'script' ||
         request.destination === 'style' ||
-        request.destination === 'image');
+        request.destination === 'image' ||
+        request.destination === 'font');
 
     if (isInvalidResponse) {
-      console.warn('Service Worker: Detected HTML response for static resource (likely 404), not caching and returning 404:', request.url);
+      console.warn('Service Worker: HTML response for static resource (404):', request.url);
       return new Response('Resource not found', { status: 404, statusText: 'Not Found' });
     }
 
     // Cache successful responses
-    if (response && response.status === 200) {
-      const cache = await caches.open(STATIC_CACHE_NAME);
-      // Only cache http/https requests
-      if (request.url.startsWith('http')) {
-        cache.put(request, response.clone());
-      }
+    if (response && response.status === 200 && request.url.startsWith('http')) {
+      cache.put(request, response.clone());
     }
 
     return response;
-  } catch (error) {
-    console.error('Static request failed after retries:', error);
+  } catch (networkError) {
+    console.error('Static resource unavailable:', request.url);
+    return new Response('Resource unavailable offline', {
+      status: 503,
+      statusText: 'Service Unavailable',
+      headers: { 'Content-Type': 'text/plain' }
+    });
+  }
+}
 
-    // Try to return a cached version if available (only in production)
-    if (!isDevelopment) {
-      const cachedResponse = await caches.match(request);
-      if (cachedResponse) {
-        console.warn('Using cached fallback for failed request:', request.url);
-        return cachedResponse;
+// Create offline fallback page
+function createOfflinePage(): Response {
+  return new Response(
+    `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>离线 - aitu</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      text-align: center;
+      padding: 20px;
+    }
+    h1 { font-size: 2rem; margin-bottom: 1rem; }
+    p { font-size: 1.1rem; opacity: 0.9; max-width: 400px; }
+    button {
+      margin-top: 2rem;
+      padding: 12px 24px;
+      font-size: 1rem;
+      border: none;
+      border-radius: 8px;
+      background: white;
+      color: #667eea;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    button:hover { transform: scale(1.05); }
+  </style>
+</head>
+<body>
+  <h1>📡 无法连接到服务器</h1>
+  <p>请检查您的网络连接，或稍后再试。</p>
+  <button onclick="location.reload()">重试</button>
+</body>
+</html>`,
+    {
+      status: 503,
+      statusText: 'Service Unavailable',
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Cache-Control': 'no-store'
       }
     }
-
-    throw error;
-  }
+  );
 }
 
 // 图片请求超时时间（毫秒）

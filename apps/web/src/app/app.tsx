@@ -14,6 +14,7 @@ let appInitialized = false;
 
 export function App() {
   const [isLoading, setIsLoading] = useState(true);
+  const [isDataReady, setIsDataReady] = useState(false);
   const [value, setValue] = useState<{
     children: PlaitElement[];
     viewport?: Viewport;
@@ -54,22 +55,9 @@ export function App() {
 
         // If no current board and no boards exist, create default board with initializeData
         if (!currentBoard && !workspaceService.hasBoards()) {
-          let initialElements: PlaitElement[] = [];
-          try {
-            const response = await fetch(
-              `/init.json?v=${import.meta.env.VITE_APP_VERSION}`
-            );
-            if (response.ok) {
-              const data = await response.json();
-              initialElements = data.elements || [];
-            }
-          } catch (error) {
-            console.error('[App] Failed to load initial data:', error);
-          }
-
           const board = await workspaceService.createBoard({
-            name: '默认画板',
-            elements: initialElements,
+            name: '我的画板1',
+            elements: [],
           });
 
           if (board) {
@@ -106,6 +94,7 @@ export function App() {
       } catch (error) {
         console.error('[App] Initialization failed:', error);
       } finally {
+        setIsDataReady(true);
         setIsLoading(false);
       }
     };
@@ -162,6 +151,7 @@ export function App() {
         theme={value.theme}
         onChange={handleBoardChange}
         onBoardSwitch={handleBoardSwitch}
+        isDataReady={isDataReady}
         afterInit={(board) => {
           (
             window as unknown as {

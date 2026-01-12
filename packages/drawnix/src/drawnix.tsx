@@ -80,6 +80,8 @@ export type DrawnixProps = {
   afterInit?: (board: PlaitBoard) => void;
   /** Called when board is switched */
   onBoardSwitch?: (board: WorkspaceBoard) => void;
+  /** 数据是否已准备好（用于判断画布是否为空） */
+  isDataReady?: boolean;
 } & Omit<React.HTMLAttributes<HTMLDivElement>, 'onChange'>;
 
 export const Drawnix: React.FC<DrawnixProps> = ({
@@ -93,6 +95,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
   onValueChange,
   afterInit,
   onBoardSwitch,
+  isDataReady = false,
 }) => {
   const options: PlaitBoardOptions = {
     readonly: false,
@@ -607,6 +610,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
                     setToolboxDrawerOpen={setToolboxDrawerOpen}
                     setMediaLibraryOpen={setMediaLibraryOpen}
                     handleBeforeSwitch={handleBeforeSwitch}
+                    isDataReady={isDataReady}
                   />
                   <Suspense fallback={null}>
                     <MediaLibraryModal
@@ -653,6 +657,7 @@ interface DrawnixContentProps {
   setToolboxDrawerOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setMediaLibraryOpen: React.Dispatch<React.SetStateAction<boolean>>;
   handleBeforeSwitch: () => Promise<void>;
+  isDataReady: boolean;
 }
 
 const DrawnixContent: React.FC<DrawnixContentProps> = ({
@@ -681,6 +686,7 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
   setProjectDrawerOpen,
   setToolboxDrawerOpen,
   handleBeforeSwitch,
+  isDataReady,
 }) => {
   const { chatDrawerRef } = useChatDrawer();
 
@@ -804,7 +810,7 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
             onClose={() => setQuickToolbarVisible(false)}
           />
           {/* AI Input Bar - 底部 AI 输入框 */}
-          <AIInputBar />
+          <AIInputBar isDataReady={isDataReady} />
           {/* Version Update Prompt - 顶部右上角升级提示 */}
           <VersionUpdatePrompt />
         </Wrapper>

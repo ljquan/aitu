@@ -135,6 +135,8 @@ function isVideoUrl(url: string): boolean {
 
 interface AIInputBarProps {
   className?: string;
+  /** 数据是否已准备好（用于判断画布是否为空） */
+  isDataReady?: boolean;
 }
 
 /**
@@ -148,7 +150,9 @@ const SelectionWatcher: React.FC<{
   externalBoardRef?: React.MutableRefObject<any>;
   /** 画板空状态变化回调 */
   onCanvasEmptyChange?: (isEmpty: boolean) => void;
-}> = React.memo(({ language, onSelectionChange, externalBoardRef, onCanvasEmptyChange }) => {
+  /** 数据是否已准备好 */
+  isDataReady?: boolean;
+}> = React.memo(({ language, onSelectionChange, externalBoardRef, onCanvasEmptyChange, isDataReady }) => {
   const board = useBoard();
   const boardRef = useRef(board);
   boardRef.current = board;
@@ -181,24 +185,26 @@ const SelectionWatcher: React.FC<{
   useEffect(() => {
     if (!board || !onCanvasEmptyChangeRef.current) return;
 
-    // 初始检查
+    // 只有在数据准备好后才检查是否为空
+    if (!isDataReady) {
+      return;
+    }
+
+    // 检查画布是否为空
     const checkEmpty = () => {
       const elements = board.children || [];
       onCanvasEmptyChangeRef.current?.(elements.length === 0);
     };
 
-    checkEmpty();
 
-    // 监听 board 变化
-    const observer = new MutationObserver(checkEmpty);
-    // 简单方案：定期检查（因为 Plait 的数据变化可能不会触发 DOM 变化）
+
+    // 定期检查（因为 Plait 的数据变化可能不会触发 DOM 变化）
     const interval = setInterval(checkEmpty, 500);
 
     return () => {
-      observer.disconnect();
       clearInterval(interval);
     };
-  }, [board]);
+  }, [board, isDataReady]);
 
   const onSelectionChangeRef = useRef(onSelectionChange);
   onSelectionChangeRef.current = onSelectionChange;
@@ -275,7 +281,7 @@ const SelectionWatcher: React.FC<{
 
 SelectionWatcher.displayName = 'SelectionWatcher';
 
-export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) => {
+export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, isDataReady }) => {
   // console.log('[AIInputBar] Component rendering');
 
   const { language } = useI18n();
@@ -311,7 +317,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
   const [isSubmitting, setIsSubmitting] = useState(false); // 防止快速重复点击（3秒防抖）
   const submitCooldownRef = useRef<NodeJS.Timeout | null>(null); // 提交冷却定时器
   const [isFocused, setIsFocused] = useState(false);
-  const [isCanvasEmpty, setIsCanvasEmpty] = useState(false); // 画板是否为空，默认 false 避免初始闪烁
+  const [isCanvasEmpty, setIsCanvasEmpty] = useState<boolean | null>(null); // null=加载中, true=空, false=有内容
   // 当前选中的图片模型（通过环境变量或默认值初始化）
   const [selectedModel, setSelectedModel] = useState(getDefaultImageModel);
   // 当前选中的尺寸（默认为模型的默认尺寸）
@@ -357,7 +363,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
   // 监听 AI 生成完成事件（思维导图、流程图等同步操作）
   useEffect(() => {
     const handleGenerationComplete = (event: CustomEvent) => {
-      console.log('[AIInputBar] ai-generation-complete event received:', event.detail);
+      // console.log('[AIInputBar] ai-generation-complete event received:', event.detail);
       // 立即重置提交状态，允许用户继续输入
       if (submitCooldownRef.current) {
         clearTimeout(submitCooldownRef.current);
@@ -1651,8 +1657,8 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
 
   const canGenerate = prompt.trim().length > 0 || allContent.length > 0;
 
-  // 是否显示灵感板（画布为空时显示）
-  const showInspirationBoard = isCanvasEmpty;
+  // 是否显示灵感板（画布数据加载完成且为空时显示，加载中不显示避免闪烁）
+  const showInspirationBoard = isCanvasEmpty === true;
 
   return (
     <div
@@ -1667,11 +1673,12 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
         onSelectionChange={handleSelectionChange}
         externalBoardRef={SelectionWatcherBoardRef}
         onCanvasEmptyChange={setIsCanvasEmpty}
+        isDataReady={isDataReady}
       />
 
-      {/* 灵感创意板块：画板为空时显示 */}
+      {/* 灵感创意板块：画板确定为空且聚焦时显示 */}
       <InspirationBoard
-        isCanvasEmpty={isCanvasEmpty}
+        isCanvasEmpty={showInspirationBoard}
         onSelectPrompt={handleSelectInspirationPrompt}
         onOpenPromptTool={handleOpenPromptTool}
       />
