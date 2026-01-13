@@ -1131,6 +1131,34 @@ async initialize(): Promise<boolean> {
 
 **原因**: `settingsManager` 使用异步方法 `decryptSensitiveDataForLoading()` 解密敏感数据（如 API Key）。如果在解密完成前调用 `geminiSettings.get()`，会返回加密的 JSON 对象而不是解密后的字符串，导致 API 请求失败。
 
+### Service Worker 初始化时序
+
+**场景**: 提交工作流到 Service Worker 执行前
+
+❌ **错误示例**:
+```typescript
+// 错误：直接提交工作流，SW 可能还未初始化
+const submitToSW = async (workflow) => {
+  await workflowSubmissionService.submit(swWorkflow);
+  // 如果 SW 的 workflowHandler 未初始化，工作流会被暂存
+  // 步骤状态永远停留在 pending（"待开始"）
+};
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：先确保 SW 已初始化
+const submitToSW = async (workflow) => {
+  // 确保 SW 任务队列已初始化（发送 TASK_QUEUE_INIT 消息）
+  const { swTaskQueueService } = await import('../services/sw-task-queue-service');
+  await swTaskQueueService.initialize();
+  
+  await workflowSubmissionService.submit(swWorkflow);
+};
+```
+
+**原因**: Service Worker 的 `workflowHandler` 需要收到 `TASK_QUEUE_INIT` 消息后才会初始化。如果在 SW 初始化前提交工作流，消息会被暂存到 `pendingWorkflowMessages`，等待配置到达。若配置永远不到达（如 `swTaskQueueService.initialize()` 未被调用），工作流就永远不会开始执行，步骤状态保持 `pending`。
+
 ### Z-Index 管理规范
 
 **规范文档**: 参考 `docs/Z_INDEX_GUIDE.md` 获取完整规范
