@@ -369,3 +369,50 @@ await fetch(`${baseUrl}/videos/${characterId}`);
 ```
 
 **原因**: Sora-2 角色 API 复用视频接口 `/v1/videos`，不存在独立的 `/characters` 端点。创建角色时必须使用 `character_from_task` 参数（非 `video_id`）和 FormData 格式。参考 `character-api-service.ts` 的实现。
+
+#### Base64 编码膨胀问题
+**场景**: 压缩图片后转换为 base64 传给 AI API 时
+
+❌ **错误示例**:
+```typescript
+// 错误：目标 Blob 大小设为 1MB，但 base64 编码后会膨胀约 33%
+const MAX_SIZE = 1 * 1024 * 1024; // 1MB
+const compressedBlob = await compressImage(blob, MAX_SIZE);
+const base64 = await blobToBase64(compressedBlob);
+// base64 实际大小约 1.33MB，超过限制！
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：考虑 base64 膨胀，目标 Blob 大小设为 750KB
+const MAX_SIZE = 750 * 1024; // 750KB，base64 后约 1MB
+const compressedBlob = await compressImage(blob, MAX_SIZE);
+const base64 = await blobToBase64(compressedBlob);
+// base64 实际大小约 1MB，符合限制
+```
+
+**原因**: Base64 编码将每 3 字节转换为 4 字符，导致数据大小增加约 33%（4/3 倍）。如果目标是 base64 < 1MB，Blob 应该压缩到 ~750KB。
+
+#### Cache API 时间戳刷新问题
+**场景**: 在 Service Worker 中判断缓存图片是否过期时
+
+❌ **错误示例**:
+```typescript
+// 错误：sw-cache-date 会在每次访问时被刷新，永远不会"过期"
+const cachedResponse = await cache.match(url);
+const cacheDate = cachedResponse.headers.get('sw-cache-date');
+const cacheTime = parseInt(cacheDate, 10);
+const isExpired = Date.now() - cacheTime > 12 * 60 * 60 * 1000;
+// isExpired 永远是 false，因为每次访问都会刷新 sw-cache-date
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：从 IndexedDB 获取原始缓存时间（不会被刷新）
+const originalCacheTime = await getOriginalCacheTimeFromIndexedDB(url);
+const fallbackCacheTime = parseInt(cachedResponse.headers.get('sw-cache-date') || '0', 10);
+const cacheTime = originalCacheTime ?? fallbackCacheTime;
+const isExpired = Date.now() - cacheTime > 12 * 60 * 60 * 1000;
+```
+
+**原因**: 本项目的 Service Worker 在每次访问缓存图片时会更新 `sw-cache-date` 以延长缓存时间（见 `sw/index.ts` 第 1732 行）。如果需要判断"原始缓存时间"，应该从 IndexedDB (`drawnix-unified-cache`) 的 `cachedAt` 字段获取，该字段不会因访问而更新。

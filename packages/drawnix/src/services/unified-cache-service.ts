@@ -833,8 +833,11 @@ class UnifiedCacheService {
    */
   async getCachedBlob(url: string): Promise<Blob | null> {
     try {
-      // 如果是 taskId（不是完整 URL），直接从 Cache API 获取
-      if (!url.startsWith('http') && !url.startsWith('blob:') && !url.startsWith('/')) {
+      // 检查是否为虚拟 URL（素材库本地 URL 或缓存 URL）
+      const isVirtualUrl = url.startsWith('/asset-library/') || url.startsWith('/__aitu_cache__/');
+
+      // 如果是 taskId（不是完整 URL）或虚拟 URL，直接从 Cache API 获取
+      if (isVirtualUrl || (!url.startsWith('http') && !url.startsWith('blob:') && !url.startsWith('/'))) {
         if (typeof caches !== 'undefined') {
           const cache = await caches.open(IMAGE_CACHE_NAME);
           const response = await cache.match(url);

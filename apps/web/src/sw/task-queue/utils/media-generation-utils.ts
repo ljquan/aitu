@@ -423,8 +423,8 @@ export async function blobToBase64(blob: Blob): Promise<string> {
   });
 }
 
-/** 图片压缩目标大小（考虑 base64 编码膨胀约 33%，目标 Blob 大小为 750KB，确保 base64 < 1MB） */
-const MAX_IMAGE_SIZE_BYTES = 750 * 1024;
+/** 图片压缩目标大小（确保 base64 < 1MB） */
+const MAX_IMAGE_SIZE_BYTES = 1024 * 1024;
 
 /** 最小压缩质量 */
 const MIN_QUALITY = 0.1;

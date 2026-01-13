@@ -777,3 +777,14 @@ export const PropertySettingsIcon = createIcon(
     </g>
   </svg>
 );
+
+// 备份恢复图标
+export const BackupRestoreIcon = createIcon(
+  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor">
+    <g strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 2v4m0 12v4M2 12h4m12 0h4" />
+      <path d="M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83" />
+      <circle cx="12" cy="12" r="3" />
+    </g>
+  </svg>
+);

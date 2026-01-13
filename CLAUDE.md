@@ -198,11 +198,13 @@ services/
 ├── chat-storage-service.ts        # 聊天持久化
 ├── character-api-service.ts       # 角色 API
 ├── asset-storage-service.ts       # 资产存储
+├── unified-cache-service.ts       # 统一缓存服务（协调 SW Cache + IndexedDB）
 ├── media-cache-service.ts         # 媒体缓存 (IndexedDB)
 ├── url-cache-service.ts           # URL 缓存
 ├── toolbar-config-service.ts      # 工具栏配置
 ├── prompt-storage-service.ts      # 历史提示词存储
 ├── font-manager-service.ts        # 字体管理服务（加载和缓存）
+├── backup-restore-service.ts      # 备份恢复服务
 ├── sw-capabilities/               # SW 能力处理
 │   └── handler.ts                 # 思维导图/流程图生成处理
 ├── tracking/                      # 追踪服务
@@ -903,6 +905,72 @@ interface ReferenceImageUploadProps {
 - 拖拽时的视觉反馈
 - 统一的按钮样式（图标 16px，字体 13px，字重 400）
 
+### 备份恢复功能 (Backup & Restore)
+
+支持将用户数据（提示词、项目、素材）导出为 ZIP 文件，并从 ZIP 文件恢复数据。
+
+**核心文件**：
+- `services/backup-restore-service.ts` - 备份恢复服务
+- `components/backup-restore/backup-restore-dialog.tsx` - UI 对话框
+
+**功能特点**：
+- 导出提示词历史（图片/视频提示词）
+- 导出项目数据（文件夹和画板）
+- 导出素材库（本地上传 + AI 生成的缓存媒体）
+- 增量导入（自动去重，不覆盖已有数据）
+- 支持进度显示
+
+**ZIP 文件结构**：
+```
+aitu_backup_xxx.zip
+├── manifest.json              # 备份元信息
+├── prompts.json               # 提示词数据
+├── projects/                  # 项目文件
+│   ├── 文件夹名/
+│   │   └── 画板名.drawnix     # 画板数据
+│   └── 画板名.drawnix         # 根目录画板
+└── assets/                    # 素材文件
+    ├── xxx.meta.json          # 素材元数据
+    └── xxx.jpg/.mp4           # 媒体文件
+```
+
+**数据来源**：
+```
+导出素材：
+├── 本地素材库 ← localforage (asset-storage-service)
+└── AI 生成缓存 ← unified-cache-service (drawnix-unified-cache)
+
+导入素材：
+├── 本地素材 → localforage + unified-cache
+└── AI 生成素材 (source: 'AI_GENERATED') → 仅 unified-cache
+```
+
+**关键 API**：
+```typescript
+// 导出
+const blob = await backupRestoreService.exportToZip({
+  includePrompts: true,
+  includeProjects: true,
+  includeAssets: true,
+}, onProgress);
+backupRestoreService.downloadZip(blob);
+
+// 导入
+const result = await backupRestoreService.importFromZip(file, onProgress);
+// result: { success, prompts, projects, assets, errors }
+```
+
+**缓存刷新机制**：
+导入数据后需要刷新内存缓存才能生效：
+- `resetPromptStorageCache()` - 刷新提示词缓存
+- `workspaceService.reload()` - 刷新工作区缓存
+
+**技术要点**：
+- 使用 JSZip 处理 ZIP 文件
+- 媒体文件通过 `unifiedCacheService.getCachedBlob()` 获取
+- 虚拟 URL（`/asset-library/`）从 Cache API 获取
+- 导入时区分本地素材和 AI 生成素材，存储位置不同
+
 ---
 
 ## 开发规范
@@ -1409,7 +1477,9 @@ pnpm start
 - AI 服务: `packages/drawnix/src/services/generation-api-service.ts`
 - 任务队列: `packages/drawnix/src/services/task-queue-service.ts`
 - 字体管理: `packages/drawnix/src/services/font-manager-service.ts`
-- service worker源码：'apps/web/src/sw/index.ts'
+- 备份恢复: `packages/drawnix/src/services/backup-restore-service.ts`
+- 统一缓存: `packages/drawnix/src/services/unified-cache-service.ts`
+- service worker源码：`apps/web/src/sw/index.ts`
 
 ### 重要 Context
 - `DrawnixContext` - 编辑器状态

@@ -5,6 +5,7 @@ import {
   SaveFileIcon,
   TrashIcon,
   GithubIcon,
+  BackupRestoreIcon,
 } from '../../icons';
 import { useBoard, useListRender } from '@plait-board/react-board';
 import {
@@ -180,6 +181,25 @@ export const CleanBoard = () => {
   );
 };
 CleanBoard.displayName = 'CleanBoard';
+
+export const BackupRestore = ({
+  onOpenBackupRestore,
+}: {
+  onOpenBackupRestore: () => void;
+}) => {
+  const { t } = useI18n();
+  return (
+    <MenuItem
+      icon={BackupRestoreIcon}
+      data-track="toolbar_click_menu_backup"
+      onSelect={onOpenBackupRestore}
+      aria-label={t('menu.backupRestore')}
+    >
+      {t('menu.backupRestore')}
+    </MenuItem>
+  );
+};
+BackupRestore.displayName = 'BackupRestore';
 
 export const Settings = () => {
   const { appState, setAppState } = useDrawnix();

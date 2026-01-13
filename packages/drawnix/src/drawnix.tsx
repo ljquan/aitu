@@ -67,6 +67,7 @@ const SettingsDialog = lazy(() => import('./components/settings-dialog/settings-
 const ProjectDrawer = lazy(() => import('./components/project-drawer').then(module => ({ default: module.ProjectDrawer })));
 const ToolboxDrawer = lazy(() => import('./components/toolbox-drawer/ToolboxDrawer').then(module => ({ default: module.ToolboxDrawer })));
 const MediaLibraryModal = lazy(() => import('./components/media-library').then(module => ({ default: module.MediaLibraryModal })));
+const BackupRestoreDialog = lazy(() => import('./components/backup-restore').then(module => ({ default: module.BackupRestoreDialog })));
 
 export type DrawnixProps = {
   value: PlaitElement[];
@@ -123,6 +124,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
   const [toolboxDrawerOpen, setToolboxDrawerOpen] = useState(false);
   const [taskPanelExpanded, setTaskPanelExpanded] = useState(false);
   const [mediaLibraryOpen, setMediaLibraryOpen] = useState(false);
+  const [backupRestoreOpen, setBackupRestoreOpen] = useState(false);
 
   // 使用 ref 来保存 board 的最新引用,避免 useCallback 依赖问题
   const boardRef = useRef<DrawnixBoard | null>(null);
@@ -594,6 +596,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
                     toolboxDrawerOpen={toolboxDrawerOpen}
                     taskPanelExpanded={taskPanelExpanded}
                     mediaLibraryOpen={mediaLibraryOpen}
+                    backupRestoreOpen={backupRestoreOpen}
                     onChange={onChange}
                     onSelectionChange={handleSelectionChange}
                     onViewportChange={onViewportChange}
@@ -607,6 +610,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
                     setProjectDrawerOpen={setProjectDrawerOpen}
                     setToolboxDrawerOpen={setToolboxDrawerOpen}
                     setMediaLibraryOpen={setMediaLibraryOpen}
+                    setBackupRestoreOpen={setBackupRestoreOpen}
                     handleBeforeSwitch={handleBeforeSwitch}
                     isDataReady={isDataReady}
                   />
@@ -641,6 +645,7 @@ interface DrawnixContentProps {
   toolboxDrawerOpen: boolean;
   taskPanelExpanded: boolean;
   mediaLibraryOpen: boolean;
+  backupRestoreOpen: boolean;
   onChange?: (value: BoardChangeData) => void;
   onSelectionChange: (selection: Selection | null) => void;
   onViewportChange?: (value: Viewport) => void;
@@ -654,6 +659,7 @@ interface DrawnixContentProps {
   setProjectDrawerOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setToolboxDrawerOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setMediaLibraryOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  setBackupRestoreOpen: React.Dispatch<React.SetStateAction<boolean>>;
   handleBeforeSwitch: () => Promise<void>;
   isDataReady: boolean;
 }
@@ -671,6 +677,7 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
   projectDrawerOpen,
   toolboxDrawerOpen,
   taskPanelExpanded,
+  backupRestoreOpen,
   onChange,
   onSelectionChange,
   onViewportChange,
@@ -683,6 +690,7 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
   handleTaskPanelToggle,
   setProjectDrawerOpen,
   setToolboxDrawerOpen,
+  setBackupRestoreOpen,
   handleBeforeSwitch,
   isDataReady,
 }) => {
@@ -785,6 +793,7 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
             onToolboxDrawerToggle={handleToolboxDrawerToggle}
             taskPanelExpanded={taskPanelExpanded}
             onTaskPanelToggle={handleTaskPanelToggle}
+            onOpenBackupRestore={() => setBackupRestoreOpen(true)}
           />
 
           <PopupToolbar></PopupToolbar>
@@ -799,6 +808,15 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
           {appState.openSettings && (
             <Suspense fallback={null}>
               <SettingsDialog container={containerRef.current}></SettingsDialog>
+            </Suspense>
+          )}
+          {backupRestoreOpen && (
+            <Suspense fallback={null}>
+              <BackupRestoreDialog
+                open={backupRestoreOpen}
+                onOpenChange={setBackupRestoreOpen}
+                container={containerRef.current}
+              />
             </Suspense>
           )}
           {/* Quick Creation Toolbar - 双击空白区域显示的快捷工具栏 */}

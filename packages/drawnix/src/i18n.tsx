@@ -60,6 +60,7 @@ export interface Translations {
   'menu.cleanMissingAssets.error': string;
   'menu.github': string;
   'menu.settings': string;
+  'menu.backupRestore': string;
   
   // Dialog translations
   'dialog.mermaid.title': string;
@@ -207,6 +208,7 @@ const translations: Record<Language, Translations> = {
     'menu.cleanMissingAssets.error': '清理失败，请稍后重试',
     'menu.github': 'GitHub',
     'menu.settings': '设置',
+    'menu.backupRestore': '备份 / 恢复',
     
     // Dialog translations
     'dialog.mermaid.title': 'Mermaid 转 Drawnix',
@@ -351,6 +353,7 @@ const translations: Record<Language, Translations> = {
     'menu.cleanMissingAssets.error': 'Cleanup failed, please try again',
     'menu.github': 'GitHub',
     'menu.settings': 'Settings',
+    'menu.backupRestore': 'Backup / Restore',
     
     // Dialog translations
     'dialog.mermaid.title': 'Mermaid to Drawnix',

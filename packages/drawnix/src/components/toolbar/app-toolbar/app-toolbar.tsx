@@ -14,7 +14,7 @@ import {
 import { Island } from '../../island';
 import { Popover, PopoverContent, PopoverTrigger } from '../../popover/popover';
 import { useState } from 'react';
-import { CleanBoard, CleanMissingAssets, OpenFile, SaveAsImage, SaveToFile, Settings } from './app-menu-items';
+import { CleanBoard, CleanMissingAssets, OpenFile, SaveAsImage, SaveToFile, Settings, BackupRestore } from './app-menu-items';
 import { GithubIcon } from '../../icons';
 import { LanguageSwitcherMenu } from './language-switcher-menu';
 import Menu from '../../menu/menu';
@@ -25,9 +25,14 @@ import { ToolbarSectionProps } from '../toolbar.types';
 import { useToolbarConfig } from '../../../hooks/use-toolbar-config';
 import { ToolbarContextMenu } from '../toolbar-context-menu';
 
-export const AppToolbar: React.FC<ToolbarSectionProps> = ({
+export interface AppToolbarProps extends ToolbarSectionProps {
+  onOpenBackupRestore?: () => void;
+}
+
+export const AppToolbar: React.FC<AppToolbarProps> = ({
   embedded = false,
-  iconMode = false
+  iconMode = false,
+  onOpenBackupRestore,
 }) => {
   const board = useBoard();
   const { t } = useI18n();
@@ -84,6 +89,10 @@ export const AppToolbar: React.FC<ToolbarSectionProps> = ({
               <CleanMissingAssets></CleanMissingAssets>
               <MenuSeparator />
               <LanguageSwitcherMenu />
+              <BackupRestore onOpenBackupRestore={() => {
+                setAppMenuOpen(false);
+                onOpenBackupRestore?.();
+              }} />
               <Settings />
             </Menu>
           </PopoverContent>

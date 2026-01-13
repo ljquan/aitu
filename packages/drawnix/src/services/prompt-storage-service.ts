@@ -17,6 +17,9 @@ const PRESET_SETTINGS_KEY = LS_KEYS_TO_MIGRATE.PRESET_SETTINGS;
 // 视频描述历史记录的存储 key
 const VIDEO_PROMPT_HISTORY_KEY = LS_KEYS_TO_MIGRATE.VIDEO_PROMPT_HISTORY;
 
+// 图片描述历史记录的存储 key
+const IMAGE_PROMPT_HISTORY_KEY = LS_KEYS_TO_MIGRATE.IMAGE_PROMPT_HISTORY;
+
 export interface PromptHistoryItem {
   id: string;
   content: string;
@@ -40,6 +43,7 @@ function generateId(): string {
 
 let promptHistoryCache: PromptHistoryItem[] | null = null;
 let videoPromptHistoryCache: VideoPromptHistoryItem[] | null = null;
+let imagePromptHistoryCache: ImagePromptHistoryItem[] | null = null;
 let presetDataCache: PresetStorageData | null = null;
 let cacheInitialized = false;
 
@@ -48,17 +52,21 @@ let cacheInitialized = false;
  * 应在应用启动时调用
  */
 export async function initPromptStorageCache(): Promise<void> {
-  if (cacheInitialized) return;
+  if (cacheInitialized) {
+    return;
+  }
 
   try {
-    const [promptHistory, videoHistory, presetSettings] = await Promise.all([
+    const [promptHistory, videoHistory, imageHistory, presetSettings] = await Promise.all([
       kvStorageService.get<PromptHistoryItem[]>(STORAGE_KEY),
       kvStorageService.get<VideoPromptHistoryItem[]>(VIDEO_PROMPT_HISTORY_KEY),
+      kvStorageService.get<ImagePromptHistoryItem[]>(IMAGE_PROMPT_HISTORY_KEY),
       kvStorageService.get<PresetStorageData>(PRESET_SETTINGS_KEY),
     ]);
 
     promptHistoryCache = promptHistory || [];
     videoPromptHistoryCache = videoHistory || [];
+    imagePromptHistoryCache = imageHistory || [];
     presetDataCache = presetSettings || {
       image: { pinnedPrompts: [], deletedPrompts: [] },
       video: { pinnedPrompts: [], deletedPrompts: [] },
@@ -70,12 +78,42 @@ export async function initPromptStorageCache(): Promise<void> {
     // 初始化为空数据
     promptHistoryCache = [];
     videoPromptHistoryCache = [];
+    imagePromptHistoryCache = [];
     presetDataCache = {
       image: { pinnedPrompts: [], deletedPrompts: [] },
       video: { pinnedPrompts: [], deletedPrompts: [] },
     };
     cacheInitialized = true;
   }
+}
+
+/**
+ * 重置缓存（强制从 IndexedDB 重新加载数据）
+ * 用于数据导入后刷新内存缓存
+ */
+export async function resetPromptStorageCache(): Promise<void> {
+  cacheInitialized = false;
+  promptHistoryCache = null;
+  videoPromptHistoryCache = null;
+  imagePromptHistoryCache = null;
+  presetDataCache = null;
+  await initPromptStorageCache();
+}
+
+/**
+ * 检查缓存是否已初始化
+ */
+export function isPromptCacheInitialized(): boolean {
+  return cacheInitialized;
+}
+
+/**
+ * 等待缓存初始化完成
+ * 如果已初始化则立即返回，否则等待初始化
+ */
+export async function waitForPromptCacheInit(): Promise<void> {
+  if (cacheInitialized) return;
+  await initPromptStorageCache();
 }
 
 /**
@@ -86,6 +124,7 @@ function ensureCacheInitialized(): void {
     // 如果缓存未初始化，使用空数据
     promptHistoryCache = promptHistoryCache || [];
     videoPromptHistoryCache = videoPromptHistoryCache || [];
+    imagePromptHistoryCache = imagePromptHistoryCache || [];
     presetDataCache = presetDataCache || {
       image: { pinnedPrompts: [], deletedPrompts: [] },
       video: { pinnedPrompts: [], deletedPrompts: [] },
@@ -100,6 +139,16 @@ function savePromptHistory(): void {
   if (promptHistoryCache === null) return;
   kvStorageService.set(STORAGE_KEY, promptHistoryCache).catch((error) => {
     console.error('[PromptStorageService] Failed to save prompt history:', error);
+  });
+}
+
+/**
+ * 保存图片提示词历史到 IndexedDB（异步）
+ */
+function saveImagePromptHistory(): void {
+  if (imagePromptHistoryCache === null) return;
+  kvStorageService.set(IMAGE_PROMPT_HISTORY_KEY, imagePromptHistoryCache).catch((error) => {
+    console.error('[PromptStorageService] Failed to save image prompt history:', error);
   });
 }
 
@@ -303,6 +352,82 @@ export function getVideoPromptHistoryContents(): string[] {
 }
 
 // ============================================
+// 图片描述历史记录功能（用于 AI 图片生成弹窗）
+// ============================================
+
+export interface ImagePromptHistoryItem {
+  id: string;
+  content: string;
+  timestamp: number;
+}
+
+/**
+ * 获取图片描述历史记录
+ * 返回按时间倒序排列的列表
+ */
+export function getImagePromptHistory(): ImagePromptHistoryItem[] {
+  ensureCacheInitialized();
+  const history = imagePromptHistoryCache || [];
+  return [...history].sort((a, b) => b.timestamp - a.timestamp);
+}
+
+/**
+ * 添加图片描述到历史记录
+ * 自动去重，新记录插入头部
+ */
+export function addImagePromptHistory(content: string): void {
+  if (!content || !content.trim()) return;
+
+  const trimmedContent = content.trim();
+  ensureCacheInitialized();
+
+  let history = imagePromptHistoryCache || [];
+
+  // 检查是否已存在相同内容
+  const existingIndex = history.findIndex((item) => item.content === trimmedContent);
+
+  if (existingIndex >= 0) {
+    // 已存在：更新时间戳并移到最前面
+    const existingItem = history[existingIndex];
+    existingItem.timestamp = Date.now();
+    history.splice(existingIndex, 1);
+    history.unshift(existingItem);
+    imagePromptHistoryCache = history;
+    saveImagePromptHistory();
+    return;
+  }
+
+  // 新记录插入头部
+  const newItem: ImagePromptHistoryItem = {
+    id: `image_prompt_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+    content: trimmedContent,
+    timestamp: Date.now(),
+  };
+  history.unshift(newItem);
+
+  imagePromptHistoryCache = history;
+  saveImagePromptHistory();
+}
+
+/**
+ * 删除指定图片描述历史记录
+ */
+export function removeImagePromptHistory(id: string): void {
+  ensureCacheInitialized();
+  imagePromptHistoryCache = (imagePromptHistoryCache || []).filter(
+    (item) => item.id !== id
+  );
+  saveImagePromptHistory();
+}
+
+/**
+ * 获取图片描述历史记录的提示词列表（仅内容）
+ */
+export function getImagePromptHistoryContents(): string[] {
+  return getImagePromptHistory().map((item) => item.content);
+}
+
+// ============================================
 // 预设提示词设置功能（用于 AI 图片/视频生成弹窗）
 // ============================================
 
@@ -449,6 +574,9 @@ function sortPresetPrompts(type: PromptType, prompts: string[]): string[] {
 export const promptStorageService = {
   // 初始化
   initCache: initPromptStorageCache,
+  resetCache: resetPromptStorageCache,
+  isInitialized: isPromptCacheInitialized,
+  waitForInit: waitForPromptCacheInit,
 
   // 历史记录功能（用于 AI 输入框）
   getHistory: getPromptHistory,

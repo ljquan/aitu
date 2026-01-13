@@ -641,6 +641,31 @@ class WorkspaceService {
   hasBoards(): boolean {
     return this.boards.size > 0;
   }
+
+  /**
+   * 重新加载工作区数据（从 IndexedDB 重新加载）
+   * 用于数据导入后刷新内存缓存
+   */
+  async reload(): Promise<void> {
+    try {
+      // 重新加载所有数据
+      const [folders, boards, state] = await Promise.all([
+        workspaceStorageService.loadAllFolders(),
+        workspaceStorageService.loadAllBoards(),
+        workspaceStorageService.loadState(),
+      ]);
+
+      this.folders = new Map(folders.map((f) => [f.id, f]));
+      this.boards = new Map(boards.map((b) => [b.id, b]));
+      this.state = state;
+
+      // 触发更新事件
+      this.emit('tree-changed');
+    } catch (error) {
+      console.error('[WorkspaceService] Failed to reload:', error);
+      throw error;
+    }
+  }
 }
 
 export { WorkspaceService };

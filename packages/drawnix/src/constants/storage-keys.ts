@@ -70,6 +70,8 @@ export const LS_KEYS_TO_MIGRATE = {
   PROMPT_HISTORY: 'aitu_prompt_history',
   /** 视频描述历史记录（无限制条数） */
   VIDEO_PROMPT_HISTORY: 'aitu_video_prompt_history',
+  /** 图片描述历史记录（无限制条数） */
+  IMAGE_PROMPT_HISTORY: 'aitu_image_prompt_history',
   /** 预设提示词设置（置顶/删除状态） */
   PRESET_SETTINGS: 'aitu-prompt-preset-settings',
   /** 批量图片生成缓存（包含任务列表和图片数据） */
