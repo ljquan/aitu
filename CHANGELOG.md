@@ -1,3 +1,83 @@
+## 0.5.0 (2026-01-13)
+
+### 🚀 Features
+
+- 添加备份恢复功能支持导出导入提示词、项目和素材 ([ee8f66f](https://github.com/ljquan/aitu/commit/ee8f66f))
+- 添加参考图片智能处理和压缩功能 ([250cd1b](https://github.com/ljquan/aitu/commit/250cd1b))
+- 集成 Sentry 错误监控并修复角色 API ([dc4c81e](https://github.com/ljquan/aitu/commit/dc4c81e))
+- 优化图层控制面板和任务队列交互 ([2d4bb28](https://github.com/ljquan/aitu/commit/2d4bb28))
+- 添加任务多选和批量操作功能 ([85ead4c](https://github.com/ljquan/aitu/commit/85ead4c))
+- 增强批量出图功能和任务超时机制 ([2f26597](https://github.com/ljquan/aitu/commit/2f26597))
+- 实现视频提示词即时保存到预设列表 ([275a7ff](https://github.com/ljquan/aitu/commit/275a7ff))
+- 添加 isDataReady 状态防止灵感板闪烁 ([c615c27](https://github.com/ljquan/aitu/commit/c615c27))
+- 添加 Claude Code 工作流自动化斜杠命令 ([3353665](https://github.com/ljquan/aitu/commit/3353665))
+- 添加提示词预设置顶和删除功能 ([06e7ba9](https://github.com/ljquan/aitu/commit/06e7ba9))
+- 完善 Service Worker 任务队列和工作流执行 ([b99f452](https://github.com/ljquan/aitu/commit/b99f452))
+- 添加阴影颜色设置并加宽面板 ([765ed7d](https://github.com/ljquan/aitu/commit/765ed7d))
+- 完善文本属性面板和字体管理系统 ([057fdef](https://github.com/ljquan/aitu/commit/057fdef))
+- 添加智能文本粘贴功能和文档更新命令 ([334dfd0](https://github.com/ljquan/aitu/commit/334dfd0))
+- 增强图片合并功能，支持图形、线条、手绘等元素 ([2c769d5](https://github.com/ljquan/aitu/commit/2c769d5))
+- 增强视频缓存持久化和素材库 URL 支持 ([8d45cb8](https://github.com/ljquan/aitu/commit/8d45cb8))
+- 增强图片尺寸感知和智能缓存处理 ([740f953](https://github.com/ljquan/aitu/commit/740f953))
+- 实现合并视频的 Service Worker 缓存方案 ([e058f92](https://github.com/ljquan/aitu/commit/e058f92))
+- 添加提示词工具快捷入口 ([c2ff40a](https://github.com/ljquan/aitu/commit/c2ff40a))
+- 添加历史提示词功能支持置顶 ([bb52bc6](https://github.com/ljquan/aitu/commit/bb52bc6))
+- 实现统一图片缓存系统 ([e8bd3ca](https://github.com/ljquan/aitu/commit/e8bd3ca))
+- 添加 SizeDropdown 组件优化生图模型尺寸参数适配 ([8b49477](https://github.com/ljquan/aitu/commit/8b49477))
+- 实现工作区缩放和左对齐插入位置功能 ([0b4516c](https://github.com/ljquan/aitu/commit/0b4516c))
+- 新增共享工具函数库并重构相关代码 ([a34e2eb](https://github.com/ljquan/aitu/commit/a34e2eb))
+- 添加灵感板组件和内容上传功能 ([531e612](https://github.com/ljquan/aitu/commit/531e612))
+
+### 🩹 Fixes
+
+- 优化尺寸参数优先级策略 ([650b9c5](https://github.com/ljquan/aitu/commit/650b9c5))
+- 修复任务删除和视频并发生成问题 ([906e0d6](https://github.com/ljquan/aitu/commit/906e0d6))
+- 修复 API Key 加密问题和参考图残留问题 ([d11752e](https://github.com/ljquan/aitu/commit/d11752e))
+- 修复 z-index 层级和双击事件穿透问题 ([cea2642](https://github.com/ljquan/aitu/commit/cea2642))
+- 修复工作流重复提交和发送按钮状态问题 ([6ce9690](https://github.com/ljquan/aitu/commit/6ce9690))
+- 修复多行 console.log 注释导致的语法错误 ([124b5dd](https://github.com/ljquan/aitu/commit/124b5dd))
+- 修复画板初始状态闪烁问题并优化视频恢复逻辑 ([0a1aa0c](https://github.com/ljquan/aitu/commit/0a1aa0c))
+- 改进LLM响应解析的健壮性 ([dd7c0d9](https://github.com/ljquan/aitu/commit/dd7c0d9))
+- 修正示例1中图片生成提示词过于扩展的问题 ([6d2ffd6](https://github.com/ljquan/aitu/commit/6d2ffd6))
+- 移除手动分包让Vite自动处理避免循环依赖 ([d9cfe7d](https://github.com/ljquan/aitu/commit/d9cfe7d))
+- 更新CSP策略添加us-assets.i.posthog.com域名 feat(sw): 添加对非http/https请求的过滤 docs: 更新文档添加service worker源码路径 chore: 更新构建时间和版本信息 ([6b011de](https://github.com/ljquan/aitu/commit/6b011de))
+- 仅缓存HTTP请求的响应以避免错误 ([f6c022a](https://github.com/ljquan/aitu/commit/f6c022a))
+
+### 🔧 Chores
+
+- 注释掉所有 console.log/debug/info 日志 ([9fe03cf](https://github.com/ljquan/aitu/commit/9fe03cf))
+- 更新版本号至0.4.3并优化vite分包配置 ([3349854](https://github.com/ljquan/aitu/commit/3349854))
+- 更新构建命令和版本文件时间戳 ([9ec3837](https://github.com/ljquan/aitu/commit/9ec3837))
+- deps: 移除 @sentry/react 并升级 typescript ([155d05e](https://github.com/ljquan/aitu/commit/155d05e))
+- 优化导出 ([7b9d2eb](https://github.com/ljquan/aitu/commit/7b9d2eb))
+- perf(image): 优化图片压缩算法使用二分查找 ([596a689](https://github.com/ljquan/aitu/commit/596a689))
+- 迁移存储 ([0608b09](https://github.com/ljquan/aitu/commit/0608b09))
+- docs(codebuddy): 添加 Sora-2 角色 API 约定文档 ([f25a09d](https://github.com/ljquan/aitu/commit/f25a09d))
+- 完善命令 ([866c87a](https://github.com/ljquan/aitu/commit/866c87a))
+- 优化提示词 ([a54ce64](https://github.com/ljquan/aitu/commit/a54ce64))
+- 更新Claude.md ([bf34c5c](https://github.com/ljquan/aitu/commit/bf34c5c))
+- 优化 ([574e17e](https://github.com/ljquan/aitu/commit/574e17e))
+- 优化插入位置 ([70ee8f9](https://github.com/ljquan/aitu/commit/70ee8f9))
+-  优化 ([0ab27b1](https://github.com/ljquan/aitu/commit/0ab27b1))
+- 优化素材库展示 ([0a876a0](https://github.com/ljquan/aitu/commit/0a876a0))
+- 优化图片上传到素材库 ([ff7a07d](https://github.com/ljquan/aitu/commit/ff7a07d))
+- 优化缓存 ([7b65b7c](https://github.com/ljquan/aitu/commit/7b65b7c))
+- style(ai-input-bar): 优化灵感板与输入框的无缝连接UI ([767f8c8](https://github.com/ljquan/aitu/commit/767f8c8))
+- docs: 更新 CLAUDE.md 文档，添加新功能说明 ([fcfe109](https://github.com/ljquan/aitu/commit/fcfe109))
+- docs(agent): 更新系统提示以明确JSON响应格式要求 ([b01ddf5](https://github.com/ljquan/aitu/commit/b01ddf5))
+- refactor(vite配置): 简化分包策略让Vite自动处理依赖 ([05c1b37](https://github.com/ljquan/aitu/commit/05c1b37))
+- refactor(vite配置): 移除mermaid手动分包改为自动处理 ([0b0cd48](https://github.com/ljquan/aitu/commit/0b0cd48))
+- refactor(vite): 简化mermaid打包配置以避免循环依赖问题 ([f5c1ff5](https://github.com/ljquan/aitu/commit/f5c1ff5))
+- build: 更新构建配置和依赖项 ([216f157](https://github.com/ljquan/aitu/commit/216f157))
+- refactor(utils): 重构工具模块并迁移共享代码到独立包 ([69233dd](https://github.com/ljquan/aitu/commit/69233dd))
+- perf(vite): 优化手动分块策略以按需加载依赖 ([5055de6](https://github.com/ljquan/aitu/commit/5055de6))
+
+### ❤️  Thank You
+
+- liquidliang <ljquan@qq.com>
+- gongchengtu <1817063960@qq.com>
+- liquid <ljquan@qq.com>
+
 ## 0.4.2 (2026-01-07)
 
 ### 🩹 Fixes
