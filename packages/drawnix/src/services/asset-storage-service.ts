@@ -176,40 +176,31 @@ class AssetStorageService {
 
   /**
    * 迁移旧版数据
-   * 1. 删除 AI 生成的素材（现在从任务队列读取）
-   * 2. 将本地上传的旧版 Blob 数据迁移到统一缓存
+   * 将旧版 Blob 数据迁移到统一缓存（包括 AI 生成的素材和本地上传的素材）
+   * 注意：不再删除 AI 生成的素材，因为任务队列迁移可能失败
    */
   private async migrateOldData(): Promise<void> {
     if (this.migrationDone || !this.store) return;
 
-    const migrationKey = 'drawnix_asset_migration_v3'; // 更新版本号
+    const migrationKey = 'drawnix_asset_migration_v4'; // 更新版本号，重新迁移
     const migrated = localStorage.getItem(migrationKey);
     if (migrated === 'done') {
       this.migrationDone = true;
       return;
     }
 
-    // console.log('[AssetStorageService] Starting data migration v3...');
+    console.log('[AssetStorageService] Starting data migration v4...');
 
     try {
       const keys = await this.store.keys();
       let migratedCount = 0;
-      let deletedAiCount = 0;
 
       for (const key of keys) {
         try {
           const item = await this.store.getItem(key) as any;
           if (!item) continue;
 
-          // 删除 AI 生成的素材（现在从任务队列读取）
-          if (item.source === 'AI_GENERATED') {
-            await this.store.removeItem(key);
-            deletedAiCount++;
-            // console.log(`[AssetStorageService] Deleted AI asset ${item.id}`);
-            continue;
-          }
-
-          // 迁移本地上传的旧版数据
+          // 迁移旧版数据（包含 blobData 的格式）
           if (this.isLegacyFormat(item)) {
             // 生成新的 URL
             const assetUrl = this.generateAssetUrl(item.id, item.mimeType);
@@ -218,6 +209,8 @@ class AssetStorageService {
             const cacheType = item.type === 'IMAGE' ? 'image' : 'video';
             await unifiedCacheService.cacheMediaFromBlob(assetUrl, item.blobData, cacheType, {
               taskId: item.id,
+              prompt: item.prompt,
+              model: item.modelName,
             });
 
             // 更新为新格式（不含 blobData）
@@ -230,11 +223,13 @@ class AssetStorageService {
               mimeType: item.mimeType,
               createdAt: item.createdAt,
               size: item.size,
+              prompt: item.prompt,
+              modelName: item.modelName,
             };
 
             await this.store.setItem(key, newStoredAsset);
             migratedCount++;
-            // console.log(`[AssetStorageService] Migrated local asset ${item.id}`);
+            console.log(`[AssetStorageService] Migrated asset ${item.id} (${item.source})`);
           }
         } catch (error) {
           console.error(`[AssetStorageService] Failed to process asset ${key}:`, error);
@@ -243,7 +238,7 @@ class AssetStorageService {
 
       localStorage.setItem(migrationKey, 'done');
       this.migrationDone = true;
-      // console.log(`[AssetStorageService] Migration v3 completed: migrated ${migratedCount} local assets, deleted ${deletedAiCount} AI assets`);
+      console.log(`[AssetStorageService] Migration v4 completed: migrated ${migratedCount} assets`);
     } catch (error) {
       console.error('[AssetStorageService] Migration failed:', error);
     }

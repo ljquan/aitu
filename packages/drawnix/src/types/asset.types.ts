@@ -54,7 +54,7 @@ export interface Asset {
 /**
  * Stored Asset Interface
  * 存储的素材接口 - IndexedDB中的数据结构
- * 注意：只存储本地上传的素材，AI 生成的素材从任务队列读取
+ * 支持本地上传和 AI 生成的素材
  */
 export interface StoredAsset {
   id: string;
@@ -66,6 +66,8 @@ export interface StoredAsset {
   createdAt: number;
   size?: number;
   contentHash?: string; // 文件内容哈希，用于去重
+  prompt?: string; // AI 生成的提示词（仅 AI_GENERATED）
+  modelName?: string; // 生成模型名称（仅 AI_GENERATED）
 }
 
 /**
