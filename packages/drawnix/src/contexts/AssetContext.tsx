@@ -3,8 +3,9 @@
  * 素材Context - 状态管理
  *
  * 素材库数据来源：
- * 1. 本地上传的素材：存储在 IndexedDB 中
+ * 1. 本地上传的素材：存储在 IndexedDB (aitu-assets) 中
  * 2. AI 生成的素材：直接从任务队列获取已完成的任务
+ * 3. 缓存中的素材：从 drawnix-unified-cache 获取，去重后合并展示
  */
 
 import {
@@ -19,6 +20,7 @@ import {
 import { MessagePlugin } from 'tdesign-react';
 import { assetStorageService } from '../services/asset-storage-service';
 import { taskQueueService } from '../services/task-queue';
+import { unifiedCacheService, type CachedMedia } from '../services/unified-cache-service';
 import { getStorageStatus } from '../utils/storage-quota';
 import { getAssetSizeFromCache } from '../hooks/useAssetSize';
 import type {
@@ -108,9 +110,41 @@ export function AssetProvider({ children }: AssetProviderProps) {
   }, []);
 
   /**
+   * Convert cached media to Asset
+   * 将缓存媒体转换为素材
+   * 根据 URL 是否以 http 开头判断来源（http 开头为 AI 生成）
+   * 根据文件后缀区分视频或图片
+   */
+  const cachedMediaToAsset = useCallback((cached: CachedMedia): Asset => {
+    // 根据 URL 判断来源：http 开头为 AI 生成
+    const isAIGenerated = cached.url.startsWith('http');
+    
+    // 根据后缀或 mimeType 判断类型
+    const urlLower = cached.url.toLowerCase();
+    const isVideo = urlLower.endsWith('.mp4') || 
+                    urlLower.endsWith('.webm') || 
+                    urlLower.endsWith('.mov') ||
+                    cached.mimeType?.startsWith('video/') ||
+                    cached.type === 'video';
+    
+    return {
+      id: `cache-${cached.url}`,
+      type: isVideo ? AssetTypeEnum.VIDEO : AssetTypeEnum.IMAGE,
+      source: isAIGenerated ? AssetSourceEnum.AI_GENERATED : AssetSourceEnum.LOCAL,
+      url: cached.url,
+      name: cached.metadata?.prompt?.substring(0, 30) || '缓存媒体',
+      mimeType: cached.mimeType || (isVideo ? 'video/mp4' : 'image/png'),
+      createdAt: cached.cachedAt,
+      size: cached.size,
+      prompt: cached.metadata?.prompt,
+      modelName: cached.metadata?.model,
+    };
+  }, []);
+
+  /**
    * Load Assets
    * 加载所有素材
-   * 合并本地上传的素材和任务队列中已完成的 AI 生成任务
+   * 合并本地上传的素材、任务队列中已完成的 AI 生成任务、以及缓存中的媒体
    */
   const loadAssets = useCallback(async () => {
     setLoading(true);
@@ -129,14 +163,28 @@ export function AssetProvider({ children }: AssetProviderProps) {
         )
         .map(taskToAsset);
 
-      // 3. 合并两个来源的素材，按创建时间倒序排列
-      const allAssets = [...localAssets, ...aiAssets].sort(
+      // 3. 从 drawnix-unified-cache 获取所有缓存媒体
+      const cachedMediaList = await unifiedCacheService.getAllCacheMetadata();
+      
+      // 4. 收集已有素材的 URL 用于去重
+      const existingUrls = new Set<string>([
+        ...localAssets.map(a => a.url),
+        ...aiAssets.map(a => a.url),
+      ]);
+      
+      // 5. 过滤掉已存在于 localAssets 和 aiAssets 中的缓存项，转换为 Asset
+      const cacheAssets = cachedMediaList
+        .filter(cached => !existingUrls.has(cached.url))
+        .map(cachedMediaToAsset);
+
+      // 6. 合并三个来源的素材，按创建时间倒序排列
+      const allAssets = [...localAssets, ...aiAssets, ...cacheAssets].sort(
         (a, b) => b.createdAt - a.createdAt
       );
 
       setAssets(allAssets);
 
-      // 4. 异步填充缺失的文件大小（从缓存获取）
+      // 7. 异步填充缺失的文件大小（从缓存获取）
       const assetsNeedingSize = allAssets.filter(a => !a.size || a.size === 0);
       if (assetsNeedingSize.length > 0) {
         // 并行获取所有缺失的文件大小
@@ -174,7 +222,7 @@ export function AssetProvider({ children }: AssetProviderProps) {
     } finally {
       setLoading(false);
     }
-  }, [taskToAsset]);
+  }, [taskToAsset, cachedMediaToAsset]);
 
   /**
    * Add Asset
@@ -297,6 +345,7 @@ export function AssetProvider({ children }: AssetProviderProps) {
    * 删除素材
    * 本地素材：从 IndexedDB 删除
    * AI 生成素材：从任务队列删除
+   * 缓存素材：从 unified-cache 删除
    */
   const removeAsset = useCallback(async (id: string): Promise<void> => {
     setLoading(true);
@@ -306,7 +355,11 @@ export function AssetProvider({ children }: AssetProviderProps) {
       // 查找素材来源
       const asset = assets.find(a => a.id === id);
 
-      if (asset?.source === AssetSourceEnum.AI_GENERATED) {
+      if (id.startsWith('cache-')) {
+        // 缓存素材：从 unified-cache 删除
+        const url = id.replace('cache-', '');
+        await unifiedCacheService.deleteCache(url);
+      } else if (asset?.source === AssetSourceEnum.AI_GENERATED) {
         // AI 生成的素材：从任务队列删除
         taskQueueService.deleteTask(id);
       } else {
@@ -351,7 +404,7 @@ export function AssetProvider({ children }: AssetProviderProps) {
 
   /**
    * Remove Multiple Assets (Batch Delete)
-   * 批量删除素材 - 区分本地素材和 AI 生成素材
+   * 批量删除素材 - 区分本地素材、AI 生成素材和缓存素材
    */
   const removeAssets = useCallback(async (ids: string[]): Promise<void> => {
     if (ids.length === 0) return;
@@ -363,16 +416,33 @@ export function AssetProvider({ children }: AssetProviderProps) {
       const successIds: string[] = [];
       const errors: { id: string; error: any }[] = [];
 
-      // 区分本地素材和 AI 生成素材
+      // 区分本地素材、AI 生成素材和缓存素材
       const localIds: string[] = [];
       const aiIds: string[] = [];
+      const cacheIds: string[] = [];
 
       for (const id of ids) {
-        const asset = assets.find(a => a.id === id);
-        if (asset?.source === AssetSourceEnum.AI_GENERATED) {
-          aiIds.push(id);
+        if (id.startsWith('cache-')) {
+          cacheIds.push(id);
         } else {
-          localIds.push(id);
+          const asset = assets.find(a => a.id === id);
+          if (asset?.source === AssetSourceEnum.AI_GENERATED) {
+            aiIds.push(id);
+          } else {
+            localIds.push(id);
+          }
+        }
+      }
+
+      // 删除缓存素材（从 unified-cache）
+      for (const id of cacheIds) {
+        try {
+          const url = id.replace('cache-', '');
+          await unifiedCacheService.deleteCache(url);
+          successIds.push(id);
+        } catch (err) {
+          console.error(`Failed to remove cache asset ${id}:`, err);
+          errors.push({ id, error: err });
         }
       }
 
