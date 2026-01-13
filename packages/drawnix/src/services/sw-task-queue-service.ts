@@ -162,7 +162,7 @@ class SWTaskQueueService {
 
   retryTask(taskId: string): void {
     const task = this.tasks.get(taskId);
-    if (!task || task.status !== TaskStatus.FAILED) return;
+    if (!task || (task.status !== TaskStatus.FAILED && task.status !== TaskStatus.CANCELLED)) return;
     swTaskQueueClient.retryTask(taskId);
   }
 

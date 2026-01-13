@@ -25,6 +25,8 @@ export const PopupLayerControlButton: React.FC<PopupLayerControlButtonProps> = (
 }) => {
   const { language } = useI18n();
   const [isOpen, setIsOpen] = useState(false);
+  // 用于强制刷新 layerInfo
+  const [refreshKey, setRefreshKey] = useState(0);
   const container = PlaitBoard.getBoardContainer(board);
 
   // 获取图层信息
@@ -34,27 +36,28 @@ export const PopupLayerControlButton: React.FC<PopupLayerControlButtonProps> = (
 
     const element = selectedElements[0];
     return LayerTransforms.getLayerInfo(board, element.id);
-  }, [board]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [board, refreshKey]);
 
-  // 图层操作
+  // 图层操作 - 操作后刷新状态，不关闭面板
   const handleBringToFront = useCallback(() => {
     LayerTransforms.bringToFront(board);
-    setIsOpen(false);
+    setRefreshKey((k) => k + 1);
   }, [board]);
 
   const handleBringForward = useCallback(() => {
     LayerTransforms.bringForward(board);
-    setIsOpen(false);
+    setRefreshKey((k) => k + 1);
   }, [board]);
 
   const handleSendBackward = useCallback(() => {
     LayerTransforms.sendBackward(board);
-    setIsOpen(false);
+    setRefreshKey((k) => k + 1);
   }, [board]);
 
   const handleSendToBack = useCallback(() => {
     LayerTransforms.sendToBack(board);
-    setIsOpen(false);
+    setRefreshKey((k) => k + 1);
   }, [board]);
 
   const canMoveUp = layerInfo?.canMoveUp ?? false;
@@ -63,9 +66,10 @@ export const PopupLayerControlButton: React.FC<PopupLayerControlButtonProps> = (
   return (
     <Popover
       sideOffset={12}
+      crossAxisOffset={-100}
       open={isOpen}
       onOpenChange={setIsOpen}
-      placement="top"
+      placement="top-start"
     >
       <PopoverTrigger asChild>
         <ToolButton
@@ -80,18 +84,7 @@ export const PopupLayerControlButton: React.FC<PopupLayerControlButtonProps> = (
         />
       </PopoverTrigger>
       <PopoverContent container={container}>
-        <Island padding={4} className={classNames(ATTACHED_ELEMENT_CLASS_NAME, 'layer-control-panel')}>
-          <div className="layer-panel-header">
-            <span className="panel-title">
-              {language === 'zh' ? '图层顺序' : 'Layer Order'}
-            </span>
-            {layerInfo && (
-              <span className="layer-info">
-                {layerInfo.index + 1} / {layerInfo.total}
-              </span>
-            )}
-          </div>
-          
+        <Island padding={1} className={classNames(ATTACHED_ELEMENT_CLASS_NAME, 'layer-control-panel')}>
           <div className="layer-actions">
             <button
               className={classNames('layer-action-btn', { disabled: !canMoveUp })}
@@ -132,39 +125,13 @@ export const PopupLayerControlButton: React.FC<PopupLayerControlButtonProps> = (
               {SendToBackIcon}
               <span>{language === 'zh' ? '置底' : 'Back'}</span>
             </button>
-          </div>
 
-          {/* 图层可视化指示 */}
-          {layerInfo && (
-            <div className="layer-visual">
-              <div className="layer-stack">
-                {Array.from({ length: Math.min(layerInfo.total, 5) }).map((_, i) => {
-                  const isCurrentLayer = i === Math.min(layerInfo.index, 4);
-                  const layerIndex = layerInfo.total - 1 - i;
-                  return (
-                    <div
-                      key={i}
-                      className={classNames('layer-item', {
-                        'layer-item--current': isCurrentLayer,
-                        'layer-item--above': layerIndex > layerInfo.index,
-                        'layer-item--below': layerIndex < layerInfo.index,
-                      })}
-                      style={{
-                        transform: `translateY(${i * 4}px)`,
-                        zIndex: 10 - i,
-                      }}
-                    />
-                  );
-                })}
-              </div>
-              <div className="layer-label">
-                {language === 'zh' 
-                  ? `第 ${layerInfo.index + 1} 层（共 ${layerInfo.total} 层）`
-                  : `Layer ${layerInfo.index + 1} of ${layerInfo.total}`
-                }
-              </div>
-            </div>
-          )}
+            {layerInfo && (
+              <span className="layer-info">
+                {layerInfo.index + 1}/{layerInfo.total}
+              </span>
+            )}
+          </div>
         </Island>
       </PopoverContent>
     </Popover>

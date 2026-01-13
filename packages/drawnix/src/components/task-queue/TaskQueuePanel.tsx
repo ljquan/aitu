@@ -7,7 +7,7 @@
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Button, Tabs, Dialog, MessagePlugin, Input, Radio, Tooltip, Checkbox } from 'tdesign-react';
-import { DeleteIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon, UserIcon, RefreshIcon, CheckIcon, CloseIcon, PauseCircleIcon } from 'tdesign-icons-react';
+import { DeleteIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon, UserIcon, RefreshIcon, CloseIcon, PauseCircleIcon, CheckDoubleIcon } from 'tdesign-icons-react';
 import { TaskItem } from './TaskItem';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
 import { Task, TaskType, TaskStatus } from '../../types/task.types';
@@ -26,6 +26,34 @@ import './task-queue.scss';
 
 const { TabPanel } = Tabs;
 const RadioGroup = Radio.Group;
+
+// Storage key for drawer width
+const DRAWER_WIDTH_KEY = 'task-queue-drawer-width';
+
+// Get cached drawer width
+const getCachedWidth = (): number | undefined => {
+  try {
+    const cached = localStorage.getItem(DRAWER_WIDTH_KEY);
+    if (cached) {
+      const width = parseInt(cached, 10);
+      if (!isNaN(width) && width >= 320 && width <= 1024) {
+        return width;
+      }
+    }
+  } catch {
+    // Ignore localStorage errors
+  }
+  return undefined;
+};
+
+// Save drawer width to cache
+const saveCachedWidth = (width: number) => {
+  try {
+    localStorage.setItem(DRAWER_WIDTH_KEY, String(width));
+  } catch {
+    // Ignore localStorage errors
+  }
+};
 
 export interface TaskQueuePanelProps {
   /** Whether the panel is expanded */
@@ -79,6 +107,14 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
   onClose,
   onTaskAction,
 }) => {
+  // Drawer width state with cache
+  const [drawerWidth, setDrawerWidth] = useState<number | undefined>(getCachedWidth);
+
+  const handleWidthChange = useCallback((width: number) => {
+    setDrawerWidth(width);
+    saveCachedWidth(width);
+  }, []);
+
   const {
     tasks,
     activeTasks,
@@ -243,26 +279,26 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
   };
 
   const handleBatchRetry = () => {
-    // Only retry failed tasks
-    const failedSelectedIds = Array.from(selectedTaskIds).filter(id => {
+    // Retry failed and cancelled tasks
+    const retryableSelectedIds = Array.from(selectedTaskIds).filter(id => {
       const task = tasks.find(t => t.id === id);
-      return task?.status === TaskStatus.FAILED;
+      return task?.status === TaskStatus.FAILED || task?.status === TaskStatus.CANCELLED;
     });
-    if (failedSelectedIds.length === 0) {
-      MessagePlugin.warning('没有可重试的失败任务');
+    if (retryableSelectedIds.length === 0) {
+      MessagePlugin.warning('没有可重试的任务');
       return;
     }
-    batchRetryTasks(failedSelectedIds);
+    batchRetryTasks(retryableSelectedIds);
     setSelectedTaskIds(new Set());
     setSelectionMode(false);
-    MessagePlugin.success(`已重试 ${failedSelectedIds.length} 个任务`);
+    MessagePlugin.success(`已重试 ${retryableSelectedIds.length} 个任务`);
   };
 
-  // Count selected failed tasks for retry button
-  const selectedFailedCount = useMemo(() => {
+  // Count selected failed/cancelled tasks for retry button
+  const selectedRetryableCount = useMemo(() => {
     return Array.from(selectedTaskIds).filter(id => {
       const task = tasks.find(t => t.id === id);
-      return task?.status === TaskStatus.FAILED;
+      return task?.status === TaskStatus.FAILED || task?.status === TaskStatus.CANCELLED;
     }).length;
   }, [selectedTaskIds, tasks]);
 
@@ -285,13 +321,13 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
              task?.status === TaskStatus.RETRYING;
     });
     if (activeSelectedIds.length === 0) {
-      MessagePlugin.warning('没有可停止的进行中任务');
+      MessagePlugin.warning('没有可取消的进行中任务');
       return;
     }
     batchCancelTasks(activeSelectedIds);
     setSelectedTaskIds(new Set());
     setSelectionMode(false);
-    MessagePlugin.success(`已停止 ${activeSelectedIds.length} 个任务`);
+    MessagePlugin.success(`已取消 ${activeSelectedIds.length} 个任务`);
   };
 
   const handleDownload = async (taskId: string) => {
@@ -516,15 +552,17 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
             />
 
             {/* Selection mode toggle button */}
-            <Tooltip content={selectionMode ? "退出多选" : "多选"} theme="light">
+            <Tooltip content={selectionMode ? "退出多选" : "批量操作"} theme="light">
               <Button
                 size="small"
-                variant={selectionMode ? "base" : "text"}
+                variant={selectionMode ? "base" : "outline"}
                 theme={selectionMode ? "primary" : "default"}
-                icon={<CheckIcon />}
+                icon={<CheckDoubleIcon />}
                 data-track="task_click_toggle_selection"
                 onClick={handleToggleSelectionMode}
-              />
+              >
+                {selectionMode ? "退出" : "多选"}
+              </Button>
             </Tooltip>
 
             {failedTasks.length > 0 && !selectionMode && (
@@ -560,16 +598,27 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
             </span>
           </div>
           <div className="task-queue-panel__batch-buttons">
-            {selectedFailedCount > 0 && (
+            {selectedActiveCount > 0 && (
               <Button
                 size="small"
                 variant="outline"
                 theme="warning"
+                icon={<PauseCircleIcon />}
+                data-track="task_click_batch_cancel"
+                onClick={handleBatchCancel}
+              >
+                取消 ({selectedActiveCount})
+              </Button>
+            )}
+            {selectedRetryableCount > 0 && (
+              <Button
+                size="small"
+                theme="primary"
                 icon={<RefreshIcon />}
                 data-track="task_click_batch_retry"
                 onClick={handleBatchRetry}
               >
-                重试 ({selectedFailedCount})
+                重试 ({selectedRetryableCount})
               </Button>
             )}
             <Button
@@ -583,15 +632,7 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
             >
               删除 ({selectedTaskIds.size})
             </Button>
-            <Button
-              size="small"
-              variant="text"
-              icon={<CloseIcon />}
-              data-track="task_click_exit_selection"
-              onClick={handleToggleSelectionMode}
-            >
-              取消
-            </Button>
+
           </div>
         </div>
       )}
@@ -607,11 +648,16 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
         filterSection={filterSection}
         position="toolbar-right"
         width="responsive"
+        customWidth={drawerWidth}
         showBackdrop={false}
         closeOnEsc={false}
         showCloseButton={true}
         className="task-queue-panel"
         contentClassName="task-queue-panel__content"
+        resizable={true}
+        minWidth={320}
+        maxWidth={1024}
+        onWidthChange={handleWidthChange}
       >
         {isCharacterView ? (
           /* Character List View */

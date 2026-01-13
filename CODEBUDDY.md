@@ -189,6 +189,39 @@ async initialize(): Promise<boolean> {
 - Use `useEffect` with complete dependency arrays
 - Hook order in components: state hooks → effect hooks → event handlers → render logic
 
+#### Force Refresh useMemo Pattern
+**场景**: 当 `useMemo` 依赖的对象引用没变，但对象内部状态已改变时（如 `board.children` 被修改）
+
+❌ **错误示例**:
+```typescript
+// 操作后 board.children 变了，但 board 引用没变，useMemo 不会重新计算
+const layerInfo = useMemo(() => {
+  return getLayerInfo(board, elementId);
+}, [board]);
+
+const handleMoveUp = () => {
+  moveElementUp(board);  // 修改了 board.children
+  // layerInfo 不会更新！按钮状态不会变化
+};
+```
+
+✅ **正确示例**:
+```typescript
+const [refreshKey, setRefreshKey] = useState(0);
+
+const layerInfo = useMemo(() => {
+  return getLayerInfo(board, elementId);
+// eslint-disable-next-line react-hooks/exhaustive-deps
+}, [board, refreshKey]);
+
+const handleMoveUp = () => {
+  moveElementUp(board);
+  setRefreshKey((k) => k + 1);  // 强制刷新 useMemo
+};
+```
+
+**原因**: React 的 `useMemo` 只比较依赖项的引用。当外部库（如 Plait）直接修改对象内部状态而不改变引用时，需要使用 `refreshKey` 模式强制触发重新计算。
+
 #### CSS/SCSS Guidelines
 - Use BEM naming convention
 - Prefer design system CSS variables (see Brand Guidelines below)

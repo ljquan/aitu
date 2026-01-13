@@ -25,6 +25,7 @@ import { useContext } from 'react';
 import { MenuContentPropsContext } from '../../menu/common';
 import { EVENT } from '../../../constants';
 import { cleanupMissingAssets } from '../../../utils/asset-cleanup';
+import { MessagePlugin } from 'tdesign-react';
 
 export const SaveToFile = () => {
   const board = useBoard();
@@ -139,19 +140,19 @@ export const CleanMissingAssets = () => {
       onSelect={async () => {
         try {
           const removedCount = await cleanupMissingAssets(board);
-          // if (removedCount > 0) {
-          //   console.log(`[CleanMissingAssets] Removed ${removedCount} elements with missing assets`);
-          //   // 可以在这里添加用户通知
-          // } else {
-          //   console.log('[CleanMissingAssets] No missing assets found');
-          // }
+          if (removedCount > 0) {
+            MessagePlugin.success(t('menu.cleanMissingAssets.success', { count: removedCount }));
+          } else {
+            MessagePlugin.info(t('menu.cleanMissingAssets.noAssets'));
+          }
         } catch (error) {
           console.error('[CleanMissingAssets] Failed to cleanup missing assets:', error);
+          MessagePlugin.error(t('menu.cleanMissingAssets.error'));
         }
       }}
-      aria-label={t('menu.cleanMissingAssets', '清理无效资源')}
+      aria-label={t('menu.cleanMissingAssets')}
     >
-      {t('menu.cleanMissingAssets', '清理无效资源')}
+      {t('menu.cleanMissingAssets')}
     </MenuItem>
   );
 };

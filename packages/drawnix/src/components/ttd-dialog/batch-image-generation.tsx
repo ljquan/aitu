@@ -872,9 +872,12 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
             const count = parseInt(String(row['数量'] || row['count'] || row['Count'] || '1')) || 1;
             
             // 解析参考图（支持换行分隔的多张图片URL）
+            // 过滤掉占位符（如 [本地图片1]、[已截断] 等）
             const imagesStr = (row['参考图'] || row['images'] || row['Images'] || '') as string;
             const images = imagesStr
-              ? imagesStr.split('\n').map(s => s.trim()).filter(s => s.length > 0)
+              ? imagesStr.split('\n')
+                  .map(s => s.trim())
+                  .filter(s => s.length > 0 && !s.startsWith('[') && !s.endsWith(']'))
               : [];
 
             return {

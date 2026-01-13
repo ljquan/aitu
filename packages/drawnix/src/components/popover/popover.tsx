@@ -21,6 +21,7 @@ interface PopoverOptions {
   modal?: boolean;
   open?: boolean;
   sideOffset?: number;
+  crossAxisOffset?: number;
   onOpenChange?: (open: boolean) => void;
 }
 
@@ -29,6 +30,7 @@ export function usePopover({
   placement = 'bottom',
   modal,
   sideOffset,
+  crossAxisOffset,
   open: controlledOpen,
   onOpenChange: setControlledOpen,
 }: PopoverOptions = {}) {
@@ -47,7 +49,10 @@ export function usePopover({
     onOpenChange: setOpen,
     whileElementsMounted: autoUpdate,
     middleware: [
-      offset(sideOffset || 4),
+      offset({
+        mainAxis: sideOffset || 4,
+        crossAxis: crossAxisOffset || 0,
+      }),
       flip({
         crossAxis: placement.includes('-'),
         fallbackAxisSideDirection: 'end',

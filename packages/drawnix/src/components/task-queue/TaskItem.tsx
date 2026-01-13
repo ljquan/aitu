@@ -176,8 +176,20 @@ export const TaskItem: React.FC<TaskItemProps> = ({
     );
   };
 
+  // Handle click on task item to toggle selection
+  const handleItemClick = (e: React.MouseEvent) => {
+    if (!selectionMode) return;
+    // Don't toggle if clicking on buttons or checkbox
+    const target = e.target as HTMLElement;
+    if (target.closest('button') || target.closest('.t-checkbox')) return;
+    onSelectionChange?.(task.id, !isSelected);
+  };
+
   return (
-    <div className={`task-item ${selectionMode ? 'task-item--selection-mode' : ''} ${isSelected ? 'task-item--selected' : ''}`}>
+    <div
+      className={`task-item ${selectionMode ? 'task-item--selection-mode' : ''} ${isSelected ? 'task-item--selected' : ''}`}
+      onClick={handleItemClick}
+    >
         {/* Selection checkbox */}
         {selectionMode && (
           <div className="task-item__checkbox">

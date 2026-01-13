@@ -14,7 +14,8 @@ import {
 import { Island } from '../../island';
 import { Popover, PopoverContent, PopoverTrigger } from '../../popover/popover';
 import { useState } from 'react';
-import { CleanBoard, CleanMissingAssets, OpenFile, SaveAsImage, SaveToFile, Settings, GitHubLink } from './app-menu-items';
+import { CleanBoard, CleanMissingAssets, OpenFile, SaveAsImage, SaveToFile, Settings } from './app-menu-items';
+import { GithubIcon } from '../../icons';
 import { LanguageSwitcherMenu } from './language-switcher-menu';
 import Menu from '../../menu/menu';
 import MenuSeparator from '../../menu/menu-separator';
@@ -84,8 +85,6 @@ export const AppToolbar: React.FC<ToolbarSectionProps> = ({
               <MenuSeparator />
               <LanguageSwitcherMenu />
               <Settings />
-              <MenuSeparator />
-              <GitHubLink />
             </Menu>
           </PopoverContent>
         </Popover>
@@ -142,6 +141,18 @@ export const AppToolbar: React.FC<ToolbarSectionProps> = ({
         'app-toolbar--icon-only': iconMode,
       })}>
         {content}
+        <ToolButton
+          type="icon"
+          icon={GithubIcon}
+          visible={true}
+          title={t('menu.github')}
+          tooltipPlacement="right"
+          aria-label={t('menu.github')}
+          data-track="toolbar_click_github"
+          onPointerUp={() => {
+            window.open('https://github.com/ljquan/aitu', '_blank');
+          }}
+        />
       </div>
     );
   }

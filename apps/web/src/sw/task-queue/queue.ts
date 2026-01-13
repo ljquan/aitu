@@ -385,11 +385,11 @@ export class SWTaskQueue {
   }
 
   /**
-   * Retry a failed task
+   * Retry a failed or cancelled task
    */
   async retryTask(taskId: string): Promise<void> {
     const task = this.tasks.get(taskId);
-    if (!task || task.status !== TaskStatus.FAILED) return;
+    if (!task || (task.status !== TaskStatus.FAILED && task.status !== TaskStatus.CANCELLED)) return;
 
     task.status = TaskStatus.PENDING;
     task.retryCount = 0;

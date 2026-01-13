@@ -2,7 +2,10 @@
   "permissions": {
     "allow": [
       "Bash(find:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(nx typecheck:*)",
+      "Bash(pnpm exec nx typecheck:*)",
+      "Bash(pnpm exec tsc:*)"
     ]
   }
 }
