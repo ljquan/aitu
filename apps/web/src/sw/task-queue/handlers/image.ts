@@ -16,6 +16,7 @@ import {
   extractUrlsFromUploadedImages,
   buildImageGenerationRequestBody,
   parseImageGenerationResponse,
+  processReferenceImages,
 } from '../utils/media-generation-utils';
 
 /**
@@ -69,7 +70,17 @@ export class ImageHandler implements TaskHandler {
     const { params } = task;
 
     // 合并参考图片来源
-    const refImages = (params.referenceImages as string[] | undefined) || extractUrlsFromUploadedImages(params.uploadedImages);
+    const rawRefImages = (params.referenceImages as string[] | undefined) || extractUrlsFromUploadedImages(params.uploadedImages);
+
+    // 处理参考图片：本地图片转 base64，远程图片检查缓存时间
+    let processedRefImages: string[] | undefined;
+    if (rawRefImages && rawRefImages.length > 0) {
+      console.log(`[ImageHandler] Processing ${rawRefImages.length} reference images:`, rawRefImages.map(u => u.substring(0, 60)));
+      processedRefImages = await processReferenceImages(rawRefImages, signal);
+      console.log(`[ImageHandler] Processed reference images:`, processedRefImages.map(u => 
+        u.startsWith('data:') ? `base64 (${u.length} chars)` : u.substring(0, 60)
+      ));
+    }
 
     // 使用通用函数构建请求体
     const requestBody = buildImageGenerationRequestBody(
@@ -77,7 +88,7 @@ export class ImageHandler implements TaskHandler {
         prompt: params.prompt,
         model: params.model,
         size: params.size,
-        referenceImages: refImages,
+        referenceImages: processedRefImages,
         isInspirationBoard: params.isInspirationBoard as boolean | undefined,
         inspirationBoardImageCount: params.inspirationBoardImageCount as number | undefined,
       },
