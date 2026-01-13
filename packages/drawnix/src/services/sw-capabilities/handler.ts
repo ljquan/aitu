@@ -108,8 +108,8 @@ export class SWCapabilitiesHandler {
    */
   private findWorkZoneForMCP(board: PlaitBoard, mcpTool: string): PlaitWorkZone | null {
     const allWorkZones = WorkZoneTransforms.getAllWorkZones(board);
-    console.log('[SWCapabilities] findWorkZoneForMCP:', mcpTool, 'total WorkZones:', allWorkZones.length);
-    
+    // console.log('[SWCapabilities] findWorkZoneForMCP:', mcpTool, 'total WorkZones:', allWorkZones.length);
+
     if (allWorkZones.length === 0) {
       return null;
     }
@@ -118,14 +118,14 @@ export class SWCapabilitiesHandler {
     for (const workzone of allWorkZones) {
       const hasMatchingStep = workzone.workflow.steps?.some(step => step.mcp === mcpTool);
       if (hasMatchingStep) {
-        console.log('[SWCapabilities] Found WorkZone with matching MCP step:', workzone.id);
+        // console.log('[SWCapabilities] Found WorkZone with matching MCP step:', workzone.id);
         return workzone;
       }
     }
 
     // Fallback: return the most recent WorkZone
     const sortedWorkZones = allWorkZones.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-    console.log('[SWCapabilities] Using most recent WorkZone:', sortedWorkZones[0]?.id);
+    // console.log('[SWCapabilities] Using most recent WorkZone:', sortedWorkZones[0]?.id);
     return sortedWorkZones[0] || null;
   }
 
@@ -209,7 +209,7 @@ export class SWCapabilitiesHandler {
       return { success: false, error: '缺少 mermaid 参数', type: 'error' };
     }
 
-    console.log('[SWCapabilities] handleMermaid called, mermaid length:', mermaid.length);
+    // console.log('[SWCapabilities] handleMermaid called, mermaid length:', mermaid.length);
 
     try {
       // Dynamic import mermaid-to-drawnix
@@ -217,7 +217,7 @@ export class SWCapabilitiesHandler {
 
       // Extract mermaid code from markdown code block if present
       const mermaidCode = this.extractCodeBlock(mermaid, 'mermaid');
-      console.log('[SWCapabilities] Extracted mermaid code length:', mermaidCode.length);
+      // console.log('[SWCapabilities] Extracted mermaid code length:', mermaidCode.length);
 
       // Parse mermaid to drawnix elements
       let result;
@@ -235,15 +235,15 @@ export class SWCapabilitiesHandler {
 
       // Find WorkZone associated with this mermaid operation
       const targetWorkZone = this.findWorkZoneForMCP(board, 'insert_mermaid');
-      console.log('[SWCapabilities] Target WorkZone:', targetWorkZone?.id, 'expectedInsertPosition:', targetWorkZone?.expectedInsertPosition);
+      // console.log('[SWCapabilities] Target WorkZone:', targetWorkZone?.id, 'expectedInsertPosition:', targetWorkZone?.expectedInsertPosition);
 
       // Get viewport center as insertion point for better centering
       const viewportCenter = this.getViewportCenter(board);
-      console.log('[SWCapabilities] Viewport center:', viewportCenter);
+      // console.log('[SWCapabilities] Viewport center:', viewportCenter);
 
       // Insert elements to canvas at viewport center
       const insertResult = this.insertElementsToCanvasAtPoint(board, elements, viewportCenter);
-      console.log('[SWCapabilities] Insert result:', insertResult);
+      // console.log('[SWCapabilities] Insert result:', insertResult);
 
       if (insertResult.success) {
         // Center the inserted elements in viewport after a short delay
@@ -253,10 +253,10 @@ export class SWCapabilitiesHandler {
 
         if (targetWorkZone) {
           // Remove the WorkZone after successful insertion
-          console.log('[SWCapabilities] Removing WorkZone:', targetWorkZone.id);
+          // console.log('[SWCapabilities] Removing WorkZone:', targetWorkZone.id);
           setTimeout(() => {
             WorkZoneTransforms.removeWorkZone(board, targetWorkZone!.id);
-            console.log('[SWCapabilities] WorkZone removed successfully');
+            // console.log('[SWCapabilities] WorkZone removed successfully');
             
             // Dispatch event to notify AI input bar that generation is complete
             window.dispatchEvent(new CustomEvent('ai-generation-complete', {
@@ -296,7 +296,7 @@ export class SWCapabilitiesHandler {
       return { success: false, error: '缺少 markdown 参数', type: 'error' };
     }
 
-    console.log('[SWCapabilities] handleMindmap called, markdown length:', markdown.length);
+    // console.log('[SWCapabilities] handleMindmap called, markdown length:', markdown.length);
 
     try {
       // Dynamic import markdown-to-drawnix
@@ -304,7 +304,7 @@ export class SWCapabilitiesHandler {
 
       // Extract markdown code
       const markdownCode = this.extractCodeBlock(markdown, 'markdown');
-      console.log('[SWCapabilities] Extracted markdown code length:', markdownCode.length);
+      // console.log('[SWCapabilities] Extracted markdown code length:', markdownCode.length);
 
       // Parse markdown to mindmap element
       let mindElement;
@@ -323,15 +323,15 @@ export class SWCapabilitiesHandler {
 
       // Find WorkZone associated with this mindmap operation
       const targetWorkZone = this.findWorkZoneForMCP(board, 'insert_mindmap');
-      console.log('[SWCapabilities] Target WorkZone:', targetWorkZone?.id, 'expectedInsertPosition:', targetWorkZone?.expectedInsertPosition);
+      // console.log('[SWCapabilities] Target WorkZone:', targetWorkZone?.id, 'expectedInsertPosition:', targetWorkZone?.expectedInsertPosition);
 
       // Get viewport center as insertion point for better centering
       const viewportCenter = this.getViewportCenter(board);
-      console.log('[SWCapabilities] Viewport center:', viewportCenter);
+      // console.log('[SWCapabilities] Viewport center:', viewportCenter);
 
       // Insert to canvas at viewport center
       const insertResult = this.insertElementsToCanvasAtPoint(board, [mindElement], viewportCenter);
-      console.log('[SWCapabilities] Insert result:', insertResult);
+      // console.log('[SWCapabilities] Insert result:', insertResult);
 
       if (insertResult.success) {
         // Center the inserted mindmap in viewport after a short delay
@@ -341,10 +341,10 @@ export class SWCapabilitiesHandler {
 
         if (targetWorkZone) {
           // Remove the WorkZone after successful insertion
-          console.log('[SWCapabilities] Removing WorkZone:', targetWorkZone.id);
+          // console.log('[SWCapabilities] Removing WorkZone:', targetWorkZone.id);
           setTimeout(() => {
             WorkZoneTransforms.removeWorkZone(board, targetWorkZone!.id);
-            console.log('[SWCapabilities] WorkZone removed successfully');
+            // console.log('[SWCapabilities] WorkZone removed successfully');
             
             // Dispatch event to notify AI input bar that generation is complete
             window.dispatchEvent(new CustomEvent('ai-generation-complete', {
@@ -744,7 +744,7 @@ export class SWCapabilitiesHandler {
     insertPoint: Point
   ): { success: boolean; elementsCount?: number; error?: string } {
     try {
-      console.log('[SWCapabilities] insertElementsToCanvasAtPoint called, point:', insertPoint, 'elements count:', elements.length);
+      // console.log('[SWCapabilities] insertElementsToCanvasAtPoint called, point:', insertPoint, 'elements count:', elements.length);
 
       // Use board.insertFragment to correctly insert elements
       // This handles element positioning and ID generation properly
@@ -759,7 +759,7 @@ export class SWCapabilitiesHandler {
         scrollToPointIfNeeded(board, insertPoint);
       });
 
-      console.log('[SWCapabilities] Elements inserted successfully at point:', insertPoint);
+      // console.log('[SWCapabilities] Elements inserted successfully at point:', insertPoint);
       return { success: true, elementsCount: elements.length };
     } catch (error: any) {
       console.error('[SWCapabilities] insertElementsToCanvasAtPoint failed:', error);
@@ -786,7 +786,7 @@ export class SWCapabilitiesHandler {
       const centerX = origination[0] + containerRect.width / (2 * zoom);
       const centerY = origination[1] + containerRect.height / (2 * zoom);
 
-      console.log('[SWCapabilities] getViewportCenter:', { centerX, centerY, zoom, origination });
+      // console.log('[SWCapabilities] getViewportCenter:', { centerX, centerY, zoom, origination });
       return [centerX, centerY];
     } catch (error) {
       console.warn('[SWCapabilities] Error getting viewport center:', error);
@@ -811,7 +811,7 @@ export class SWCapabilitiesHandler {
 
       // Calculate the bounding rectangle of all inserted elements
       const boundingRect = getRectangleByElements(board, insertedElements as any[], false);
-      console.log('[SWCapabilities] Inserted elements bounding rect:', boundingRect);
+      // console.log('[SWCapabilities] Inserted elements bounding rect:', boundingRect);
 
       // Get viewport dimensions
       const boardContainer = PlaitBoardUtils.getBoardContainer(board);
@@ -831,14 +831,14 @@ export class SWCapabilitiesHandler {
       // Don't zoom in too much if elements are small
       optimalZoom = Math.min(Math.max(optimalZoom, 0.2), 1.5);
 
-      console.log('[SWCapabilities] Calculated optimal zoom:', {
-        boundingRect,
-        availableWidth,
-        availableHeight,
-        zoomX,
-        zoomY,
-        optimalZoom,
-      });
+      // console.log('[SWCapabilities] Calculated optimal zoom:', {
+      //   boundingRect,
+      //   availableWidth,
+      //   availableHeight,
+      //   zoomX,
+      //   zoomY,
+      //   optimalZoom,
+      // });
 
       // Calculate the center of the inserted elements
       const elementsCenterX = boundingRect.x + boundingRect.width / 2;
@@ -848,11 +848,11 @@ export class SWCapabilitiesHandler {
       const newOriginationX = elementsCenterX - containerRect.width / (2 * optimalZoom);
       const newOriginationY = elementsCenterY - containerRect.height / (2 * optimalZoom);
 
-      console.log('[SWCapabilities] Centering and fitting elements in viewport:', {
-        elementsCenter: [elementsCenterX, elementsCenterY],
-        newOrigination: [newOriginationX, newOriginationY],
-        optimalZoom,
-      });
+      // console.log('[SWCapabilities] Centering and fitting elements in viewport:', {
+      //   elementsCenter: [elementsCenterX, elementsCenterY],
+      //   newOrigination: [newOriginationX, newOriginationY],
+      //   optimalZoom,
+      // });
 
       // Update viewport with optimal zoom and centered position
       BoardTransforms.updateViewport(board, [newOriginationX, newOriginationY], optimalZoom);

@@ -522,6 +522,14 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
       if (event.type === 'postProcessingCompleted') {
         const position = event.result.firstElementPosition;
 
+        // 立即重置提交状态，允许用户继续输入
+        // console.log('[AIInputBar] postProcessingCompleted: resetting isSubmitting');
+        if (submitCooldownRef.current) {
+          clearTimeout(submitCooldownRef.current);
+          submitCooldownRef.current = null;
+        }
+        setIsSubmitting(false);
+
         // 关闭 ChatDrawer（如果是由 AIInputBar 触发的对话）
         // 注意：这里使用 setTimeout 确保消息更新后再关闭
         setTimeout(() => {
@@ -829,8 +837,12 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
   // Handle generation
   const handleGenerate = useCallback(async () => {
     if (!prompt.trim() && allContent.length === 0) return;
-    if (isSubmitting) return; // 仅防止快速重复点击
+    if (isSubmitting) {
+      // console.log('[AIInputBar] handleGenerate blocked: isSubmitting=true');
+      return; // 仅防止快速重复点击
+    }
 
+    // console.log('[AIInputBar] handleGenerate: setting isSubmitting=true');
     setIsSubmitting(true);
 
     try {
@@ -1056,12 +1068,22 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
             const hasSelection = allContent.length > 0;
             addPromptHistory(prompt.trim(), hasSelection);
           }
-          // 清空输入并关闭面板
+          // 清空输入，保持面板打开以便用户继续创作
           setPrompt('');
           setSelectedContent([]);
           setUploadedContent([]);
-          setIsFocused(false);
-          inputRef.current?.blur();
+          
+          // 启动 1 秒冷却定时器，之后允许用户继续输入
+          if (submitCooldownRef.current) {
+            clearTimeout(submitCooldownRef.current);
+          }
+          console.log('[AIInputBar] SW execution success, starting 1s cooldown timer');
+          submitCooldownRef.current = setTimeout(() => {
+            console.log('[AIInputBar] 1s cooldown expired: setting isSubmitting=false');
+            setIsSubmitting(false);
+            submitCooldownRef.current = null;
+          }, 1000);
+          
           return; // 提前返回
         }
       } catch (swError) {
@@ -1294,13 +1316,11 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
         }
       }
 
-      // 清空输入并关闭面板
+      // 清空输入，保持面板打开以便用户继续创作
       setPrompt('');
       setSelectedContent([]);
       setUploadedContent([]); // 同时清空用户上传内容
-      setIsFocused(false);
-      // 让输入框失去焦点
-      inputRef.current?.blur();
+      // 不关闭面板，让用户可以继续输入
     } catch (error) {
       console.error('Failed to create generation task:', error);
       // 中止工作流
@@ -1308,15 +1328,17 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
       // 出错时立即允许重试
       setIsSubmitting(false);
     }
-    // 成功提交后，3秒内不允许重复提交（防止误操作双击）
+    // 成功提交后，1秒内不允许重复提交（防止误操作双击）
     // 清除之前的定时器
     if (submitCooldownRef.current) {
       clearTimeout(submitCooldownRef.current);
     }
+    console.log('[AIInputBar] Starting 1s cooldown timer');
     submitCooldownRef.current = setTimeout(() => {
+      console.log('[AIInputBar] 1s cooldown expired: setting isSubmitting=false');
       setIsSubmitting(false);
       submitCooldownRef.current = null;
-    }, 3000);
+    }, 1000);
   }, [prompt, allContent, isSubmitting, selectedModel, workflowControl, submitWorkflowToSW, addPromptHistory, selectedSize]);
 
   // 处理工作流重试（从指定步骤开始）

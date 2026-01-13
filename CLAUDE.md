@@ -10,7 +10,7 @@
 
 **项目信息：**
 - **名称**: Aitu (爱图) - AI 图片与视频创作工具
-- **版本**: 0.4.0
+- **版本**: 0.5.0
 - **许可证**: MIT
 - **标语**: 爱上图片，爱上创作
 - **官网**: https://aitu.tu-zi.com
@@ -125,7 +125,7 @@ packages/drawnix/
 │   ├── components/                # UI 组件 (43个子目录)
 │   ├── services/                  # 业务逻辑服务 (32个服务)
 │   ├── plugins/                   # 功能插件 (15个插件)
-│   ├── hooks/                     # React Hooks (24个)
+│   ├── hooks/                     # React Hooks (27个)
 │   ├── useWorkflowSubmission.ts  # 工作流提交（核心）
 │   ├── useAutoInsertToCanvas.ts  # 自动插入画布
 │   ├── utils/                     # 工具函数 (33个模块)
@@ -177,6 +177,9 @@ components/
 ├── settings-dialog/               # 设置对话框
 ├── project-drawer/                # 项目抽屉
 ├── task-queue/                    # 任务队列 UI
+│   └── VirtualTaskList.tsx        # 虚拟任务列表（支持分页和虚拟滚动）
+├── lazy-image/                    # 懒加载图片组件
+│   └── LazyImage.tsx              # 基于 IntersectionObserver 的图片懒加载
 ├── video-frame-selector/          # 视频帧选择器
 ├── generation-history/            # 生成历史
 ├── minimap/                       # 小地图
@@ -254,6 +257,9 @@ hooks/
 ├── useMention.ts                  # @提及功能
 ├── useMediaCache.ts               # 媒体缓存
 ├── useViewportScale.ts            # 视口缩放
+├── useInfinitePagination.ts       # 无限滚动分页
+├── useVirtualList.ts              # 虚拟列表（封装 @tanstack/react-virtual）
+├── useImageLazyLoad.ts            # 图片懒加载
 └── ...其他 Hooks
 ```
 
@@ -970,6 +976,100 @@ const result = await backupRestoreService.importFromZip(file, onProgress);
 - 媒体文件通过 `unifiedCacheService.getCachedBlob()` 获取
 - 虚拟 URL（`/asset-library/`）从 Cache API 获取
 - 导入时区分本地素材和 AI 生成素材，存储位置不同
+
+### 分页加载与虚拟滚动
+
+支持任务队列和素材库的分页加载与虚拟滚动，优化大数据量场景下的性能。
+
+**核心文件**：
+- `hooks/useInfinitePagination.ts` - 无限滚动分页 Hook
+- `hooks/useVirtualList.ts` - 虚拟列表 Hook（封装 @tanstack/react-virtual）
+- `hooks/useImageLazyLoad.ts` - 图片懒加载 Hook
+- `components/lazy-image/LazyImage.tsx` - 懒加载图片组件
+- `components/task-queue/VirtualTaskList.tsx` - 虚拟任务列表组件
+- `components/media-library/VirtualAssetGrid.tsx` - 虚拟素材网格组件
+- `apps/web/src/sw/task-queue/storage.ts` - IndexedDB 游标分页查询
+
+**功能特点**：
+- IndexedDB 游标分页：支持大数据量的高效分页查询
+- 无限滚动：滚动到底部自动加载更多数据
+- 虚拟滚动：只渲染可见区域的元素，大幅减少 DOM 节点
+- 图片懒加载：基于 IntersectionObserver，进入视口才加载图片
+- 实时更新：支持 `prependItems`、`updateItem`、`removeItem` 操作
+
+**使用示例**：
+```typescript
+// 无限滚动分页
+const {
+  items,
+  isLoading,
+  isLoadingMore,
+  hasMore,
+  loadMore,
+  reset,
+} = useInfinitePagination({
+  fetcher: async ({ offset, limit }) => {
+    const result = await swTaskQueueClient.requestPaginatedTasks({
+      offset,
+      limit,
+      status: filterStatus,
+    });
+    return {
+      items: result.tasks,
+      total: result.total,
+      hasMore: result.hasMore,
+    };
+  },
+  pageSize: 50,
+  getItemKey: (task) => task.id,
+  deps: [filterStatus],
+});
+
+// 虚拟列表
+const { parentRef, virtualItems, totalSize, getItem } = useVirtualList({
+  items: tasks,
+  estimateSize: 200,
+  overscan: 3,
+});
+```
+
+**IndexedDB 分页查询**：
+```typescript
+// Service Worker 中的游标分页实现
+async getPaginatedTasks(params: PaginationParams): Promise<PaginatedResult> {
+  const { offset = 0, limit = 50, status } = params;
+  const db = await this.getDB();
+  const tx = db.transaction('tasks', 'readonly');
+  const store = tx.objectStore('tasks');
+  const index = store.index('by-createdAt');
+
+  let cursor = await index.openCursor(null, 'prev');
+  let skipped = 0;
+  const items: Task[] = [];
+
+  while (cursor && items.length < limit) {
+    if (status && cursor.value.status !== status) {
+      cursor = await cursor.continue();
+      continue;
+    }
+    if (skipped < offset) {
+      skipped++;
+      cursor = await cursor.continue();
+      continue;
+    }
+    items.push(cursor.value);
+    cursor = await cursor.continue();
+  }
+
+  return { items, total, hasMore: offset + items.length < total };
+}
+```
+
+**性能优化**：
+- 默认每页 50 条数据
+- 虚拟列表 overscan 设置为 3-5 个元素
+- 图片懒加载 rootMargin 设置为 200px（提前加载）
+- 使用 `getItemKey` 进行去重，避免重复数据
 
 ---
 

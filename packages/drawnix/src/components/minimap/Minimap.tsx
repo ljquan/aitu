@@ -77,6 +77,8 @@ export const Minimap: React.FC<MinimapProps> = ({
     offsetX: board.viewport.offsetX,
     offsetY: board.viewport.offsetY,
   });
+  // 是否已完成初始化（跳过首次 viewport 变化检测，避免页面加载时误触发）
+  const initializedRef = useRef<boolean>(false);
 
   /**
    * 获取所有元素的边界
@@ -179,6 +181,13 @@ export const Minimap: React.FC<MinimapProps> = ({
           offsetX: current.offsetX,
           offsetY: current.offsetY,
         };
+
+        // 首次检测到变化时，只更新 ref，不展开小地图（跳过初始化阶段的 viewport 变化）
+        if (!initializedRef.current) {
+          initializedRef.current = true;
+          return;
+        }
+
         lastInteractionRef.current = Date.now();
 
         // 有交互时自动展开小地图

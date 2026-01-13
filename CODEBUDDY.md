@@ -314,6 +314,68 @@ useEffect(() => {
 
 **原因**: 事件处理中的清理操作（如删除 UI 元素）通常通过 ref 引用，不依赖于事件携带的数据。如果在检查事件数据有效性时过早 `return`，会导致清理逻辑被跳过，造成 UI 残留（如 WorkZone 面板未关闭）。应该将独立的操作分离，确保关键清理逻辑总能执行。
 
+#### 多分支函数中提前 return 导致共享逻辑未执行
+**场景**: 异步函数有多个执行路径（如 SW 执行和主线程 fallback），每个分支都需要执行某些共享逻辑（如重置状态、启动定时器）
+
+❌ **错误示例**:
+```typescript
+const handleGenerate = async () => {
+  setIsSubmitting(true);
+  
+  try {
+    const { usedSW } = await submitWorkflowToSW(params);
+    if (usedSW) {
+      // SW 执行成功
+      setPrompt('');
+      return;  // ❌ 提前返回，跳过了冷却定时器
+    }
+  } catch (error) {
+    // fallback to main thread
+  }
+  
+  // 主线程执行...
+  await executeInMainThread();
+  
+  // 启动冷却定时器（只有主线程路径能执行到这里）
+  submitCooldownRef.current = setTimeout(() => {
+    setIsSubmitting(false);  // ❌ SW 路径永远不会重置！
+  }, 1000);
+};
+```
+
+✅ **正确示例**:
+```typescript
+const handleGenerate = async () => {
+  setIsSubmitting(true);
+  
+  try {
+    const { usedSW } = await submitWorkflowToSW(params);
+    if (usedSW) {
+      // SW 执行成功
+      setPrompt('');
+      
+      // ✅ 在 return 前执行共享逻辑
+      submitCooldownRef.current = setTimeout(() => {
+        setIsSubmitting(false);
+      }, 1000);
+      return;
+    }
+  } catch (error) {
+    // fallback to main thread
+  }
+  
+  // 主线程执行...
+  await executeInMainThread();
+  
+  // 主线程路径也执行相同的冷却逻辑
+  submitCooldownRef.current = setTimeout(() => {
+    setIsSubmitting(false);
+  }, 1000);
+};
+```
+
+**原因**: 当函数有多个执行路径时，每个路径都可能需要执行某些共享逻辑（如重置状态）。如果在某个分支中提前 `return` 而忘记执行共享逻辑，会导致状态不一致（如 `isSubmitting` 永远为 `true`，输入框被禁用）。解决方案：1) 在每个 `return` 前确保执行共享逻辑；2) 或将共享逻辑提取到 `finally` 块中。
+
 #### CSS/SCSS Guidelines
 - Use BEM naming convention
 - Prefer design system CSS variables (see Brand Guidelines below)

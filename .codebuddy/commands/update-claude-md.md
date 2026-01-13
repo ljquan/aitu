@@ -1,10 +1,10 @@
-# Update CODEBUDDY.md
+# Update CLAUDE.md
 
-分析代码审查反馈或开发过程中发现的问题，提取通用规则并更新 CODEBUDDY.md。
+分析代码审查反馈或开发过程中发现的问题，提取通用规则并更新 CLAUDE.md。
 
 ## 说明
 
-这个命令实现了 Boris Cherny 第 5 条技巧：Code Review 自动更新规则到 CODEBUDDY.md，让 AI 越来越懂你的项目。形成知识沉淀的飞轮效应。
+这个命令实现了 Boris Cherny 第 5 条技巧：Code Review 自动更新规则到 CLAUDE.md，让 AI 越来越懂你的项目。形成知识沉淀的飞轮效应。
 
 ## 参数
 
@@ -55,7 +55,7 @@
 
 ### 4. 定位更新位置
 
-读取 CODEBUDDY.md，确定规则应该添加到哪个章节:
+读取 CLAUDE.md，确定规则应该添加到哪个章节:
 
 - 开发规范相关 → `### Development Rules`
 - 编码标准相关 → `### Coding Standards`
@@ -76,7 +76,7 @@
 
 ### 6. 更新文件
 
-使用 Edit 工具更新 CODEBUDDY.md:
+使用 Edit 工具更新 CLAUDE.md:
 - 保持现有格式
 - 在适当位置插入新规则
 - 如果需要，创建新章节
@@ -85,7 +85,7 @@
 
 显示更新内容摘要:
 ```markdown
-## 已更新 CODEBUDDY.md
+## 已更新 CLAUDE.md
 
 ### 新增规则
 

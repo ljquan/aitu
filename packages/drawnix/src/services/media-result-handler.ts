@@ -116,6 +116,7 @@ export async function handleSplitAndInsertTask(
     const insertionPoint = config.insertionPoint || getDefaultInsertionPoint();
 
     if (result.success) {
+      console.log(`[MediaResultHandler] Split success, calling completePostProcessing for task ${taskId}`);
       workflowCompletionService.completePostProcessing(
         taskId,
         result.count,
@@ -128,6 +129,7 @@ export async function handleSplitAndInsertTask(
 
       const insertResult = await insertImageGroup([url], insertionPoint);
       if (insertResult.success) {
+        console.log(`[MediaResultHandler] Fallback insert success, calling completePostProcessing for task ${taskId}`);
         workflowCompletionService.completePostProcessing(taskId, 1, insertionPoint);
         return { success: true, count: 1 };
       } else {

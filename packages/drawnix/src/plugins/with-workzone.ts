@@ -322,7 +322,7 @@ export const WorkZoneTransforms = {
       Transforms.insertNode(board, workzoneElement, [board.children.length]);
     });
 
-    console.log('[WorkZone] Inserted (without history):', workzoneElement.id);
+    // console.log('[WorkZone] Inserted (without history):', workzoneElement.id);
     return workzoneElement;
   },
 
@@ -352,7 +352,7 @@ export const WorkZoneTransforms = {
       PlaitHistoryBoard.withoutSaving(board, () => {
         Transforms.removeNode(board, [index]);
       });
-      console.log('[WorkZone] Removed (without history):', elementId);
+      // console.log('[WorkZone] Removed (without history):', elementId);
     }
   },
 
