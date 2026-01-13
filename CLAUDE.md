@@ -275,9 +275,9 @@ utils/
 │   └── types.ts                   # 类型定义
 ├── settings-manager.ts            # 设置管理
 ├── image-splitter.ts              # 图片分割（支持透明边框严格裁剪）
-├── image-border-utils.ts          # 图片边框检测工具
+├── image-border-utils.ts          # 图片边框检测和裁剪工具
 ├── photo-wall-splitter.ts         # 灵感图分割器
-├── selection-utils.ts             # 选择工具
+├── selection-utils.ts             # 选择工具（含元素转图片）
 ├── model-parser.ts                # 模型解析
 ├── download-utils.ts              # 下载工具
 ├── ai-input-parser.ts             # AI 输入解析
@@ -1201,6 +1201,61 @@ import { Z_INDEX } from '@/constants/z-index';
 - ❌ 禁止使用随意的数字 (如 9999, 10000, 10001)
 - ❌ 禁止在同一层级随意 +1/-1
 - ❌ 临时修复必须在完成后转换为规范用法
+
+### 图像处理工具复用规范
+
+**场景**: 需要对图片进行边框检测、去白边、裁剪等处理时
+
+**核心工具文件**: `utils/image-border-utils.ts`
+
+**可用的公共方法**:
+
+| 方法 | 用途 | 返回值 |
+|------|------|--------|
+| `trimCanvasWhiteAndTransparentBorder` | 去除 Canvas 白边和透明边 | `HTMLCanvasElement` |
+| `trimCanvasWhiteAndTransparentBorderWithInfo` | 去除边框并返回偏移信息 | `{ canvas, left, top, trimmedWidth, trimmedHeight, wasTrimmed }` |
+| `trimImageWhiteAndTransparentBorder` | 去除图片 URL 的白边 | `Promise<string>` (data URL) |
+| `trimCanvasBorders` | 去除 Canvas 边框（灰色+白色） | `HTMLCanvasElement \| null` |
+| `removeWhiteBorder` | 去除图片白边（激进模式） | `Promise<string>` |
+
+❌ **错误示例**:
+```typescript
+// 错误：在组件中重复实现去白边逻辑
+const trimWhiteBorder = (canvas: HTMLCanvasElement) => {
+  const ctx = canvas.getContext('2d');
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  // ... 50+ 行重复代码
+};
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：使用公共工具方法
+import { 
+  trimCanvasWhiteAndTransparentBorder,
+  trimCanvasWhiteAndTransparentBorderWithInfo,
+  trimImageWhiteAndTransparentBorder 
+} from '../utils/image-border-utils';
+
+// 只需要裁剪后的 Canvas
+const trimmedCanvas = trimCanvasWhiteAndTransparentBorder(canvas);
+
+// 需要知道裁剪偏移量（如计算插入位置）
+const { canvas: trimmedCanvas, left, top } = trimCanvasWhiteAndTransparentBorderWithInfo(canvas);
+
+// 处理图片 URL
+const trimmedUrl = await trimImageWhiteAndTransparentBorder(imageDataUrl);
+```
+
+**使用场景**:
+- 合并图片后去白边 → `trimCanvasWhiteAndTransparentBorderWithInfo`（需要偏移量）
+- 生成预览图去白边 → `trimImageWhiteAndTransparentBorder`（异步处理 URL）
+- 图片分割时去边框 → `trimCanvasBorders`（检测灰色+白色）
+
+**原因**: 图像处理逻辑（像素遍历、边界检测）容易出错且代码量大。使用统一的公共方法可以：
+1. 避免重复代码
+2. 确保一致的处理行为
+3. 便于统一优化和修复 bug
 
 ### 验证命令
 

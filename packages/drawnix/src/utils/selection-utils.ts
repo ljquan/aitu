@@ -4,6 +4,7 @@ import { PlaitDrawElement } from '@plait/draw';
 import { Node } from 'slate';
 import { Freehand } from '../plugins/freehand/type';
 import { SAME_ROW_THRESHOLD } from '../components/ttd-dialog/shared/size-constants';
+import { trimImageWhiteAndTransparentBorder } from './image-border-utils';
 
 /**
  * 从图片 URL 获取原始尺寸
@@ -470,14 +471,17 @@ export const convertElementsToImage = async (board: PlaitBoard, elements: PlaitE
     if (imageDataUrl) {
       // console.log(`Successfully converted elements to image using native Plait rendering`);
       
+      // 使用公共方法去除白边
+      const trimmedImageUrl = await trimImageWhiteAndTransparentBorder(imageDataUrl);
+      
       // Compress the image to max 512x512px for AI image generation
       try {
-        const compressedImageUrl = await compressImageUrl(imageDataUrl, 512, 512, 0.8);
+        const compressedImageUrl = await compressImageUrl(trimmedImageUrl, 512, 512, 0.8);
         // console.log('Image compressed successfully for AI image generation');
         return compressedImageUrl;
       } catch (compressError) {
         // console.warn('Failed to compress converted image, using original:', compressError);
-        return imageDataUrl;
+        return trimmedImageUrl;
       }
     } else {
       // console.warn('Plait toImage returned null');

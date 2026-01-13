@@ -60,6 +60,7 @@ import { isToolElement } from '../../../plugins/with-tool';
 import { isWorkZoneElement } from '../../../plugins/with-workzone';
 import { splitAndInsertImages } from '../../../utils/image-splitter';
 import { smartDownload, BatchDownloadItem } from '../../../utils/download-utils';
+import { trimCanvasWhiteAndTransparentBorderWithInfo } from '../../../utils/image-border-utils';
 import { MessagePlugin } from 'tdesign-react';
 import { mergeVideos } from '../../../services/video-merge-webcodecs';
 
@@ -719,66 +720,9 @@ export const PopupToolbar = () => {
                     // 绘制图片到 canvas
                     ctx.drawImage(img, 0, 0);
 
-                    // 获取图片数据
-                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-
-                    // 裁剪透明边框（严格模式：只裁剪完全透明的边缘）
-                    const { data, width, height } = imageData;
-                    const alphaThreshold = 0; // 严格模式
-
-                    // 检测一行是否完全透明
-                    const isRowTransparent = (y: number): boolean => {
-                      for (let x = 0; x < width; x++) {
-                        const idx = (y * width + x) * 4;
-                        if (data[idx + 3] > alphaThreshold) return false;
-                      }
-                      return true;
-                    };
-
-                    // 检测一列是否完全透明
-                    const isColTransparent = (x: number): boolean => {
-                      for (let y = 0; y < height; y++) {
-                        const idx = (y * width + x) * 4;
-                        if (data[idx + 3] > alphaThreshold) return false;
-                      }
-                      return true;
-                    };
-
-                    // 从顶部向下扫描
-                    let top = 0;
-                    while (top < height && isRowTransparent(top)) top++;
-
-                    // 从底部向上扫描
-                    let bottom = height - 1;
-                    while (bottom > top && isRowTransparent(bottom)) bottom--;
-
-                    // 从左边向右扫描
-                    let left = 0;
-                    while (left < width && isColTransparent(left)) left++;
-
-                    // 从右边向左扫描
-                    let right = width - 1;
-                    while (right > left && isColTransparent(right)) right--;
-
-                    // 计算裁剪后的尺寸
-                    const trimmedWidth = right - left + 1;
-                    const trimmedHeight = bottom - top + 1;
-
-                    // 创建裁剪后的 canvas
-                    const trimmedCanvas = document.createElement('canvas');
-                    trimmedCanvas.width = trimmedWidth;
-                    trimmedCanvas.height = trimmedHeight;
-                    const trimmedCtx = trimmedCanvas.getContext('2d');
-                    if (!trimmedCtx) {
-                      throw new Error('Failed to get trimmed canvas context');
-                    }
-
-                    // 绘制裁剪后的图片
-                    trimmedCtx.drawImage(
-                      canvas,
-                      left, top, trimmedWidth, trimmedHeight,
-                      0, 0, trimmedWidth, trimmedHeight
-                    );
+                    // 使用公共方法去除白边和透明边，同时获取裁剪偏移信息
+                    const trimResult = trimCanvasWhiteAndTransparentBorderWithInfo(canvas);
+                    const { canvas: trimmedCanvas, left, top, trimmedWidth, trimmedHeight } = trimResult;
 
                     // 转换为 data URL
                     const trimmedImageDataUrl = trimmedCanvas.toDataURL('image/png');

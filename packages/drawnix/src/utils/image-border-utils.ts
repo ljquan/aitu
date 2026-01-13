@@ -378,3 +378,197 @@ export function extractAndTrimRegion(
     height: trimmedCanvas.height,
   };
 }
+
+/**
+ * 去除 Canvas 四周的白边和透明边（返回详细信息）
+ * 用于需要知道裁剪偏移量的场景（如合并图片后精确定位）
+ *
+ * @param canvas - 原始 Canvas
+ * @param options - 配置选项
+ * @returns 裁剪结果，包含裁剪后的 Canvas 和偏移信息
+ */
+export function trimCanvasWhiteAndTransparentBorderWithInfo(
+  canvas: HTMLCanvasElement,
+  options: {
+    /** 白色阈值，RGB 都大于此值视为白色（默认 240） */
+    whiteThreshold?: number;
+    /** 透明度阈值，alpha 小于此值视为透明（默认 10） */
+    alphaThreshold?: number;
+    /** 裁剪后最小尺寸（默认 10） */
+    minSize?: number;
+  } = {}
+): {
+  canvas: HTMLCanvasElement;
+  left: number;
+  top: number;
+  trimmedWidth: number;
+  trimmedHeight: number;
+  wasTrimmed: boolean;
+} {
+  const {
+    whiteThreshold = 240,
+    alphaThreshold = 10,
+    minSize = 10,
+  } = options;
+
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) {
+    return { canvas, left: 0, top: 0, trimmedWidth: canvas.width, trimmedHeight: canvas.height, wasTrimmed: false };
+  }
+
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const { data, width, height } = imageData;
+
+  // 检测像素是否为边框色（透明或白色/浅灰色）
+  const isBorderPixel = (idx: number): boolean => {
+    const r = data[idx];
+    const g = data[idx + 1];
+    const b = data[idx + 2];
+    const alpha = data[idx + 3];
+
+    // 透明像素
+    if (alpha < alphaThreshold) return true;
+
+    // 白色或浅灰色
+    if (r >= whiteThreshold && g >= whiteThreshold && b >= whiteThreshold) return true;
+
+    return false;
+  };
+
+  // 检测一行是否为边框行
+  const isRowBorder = (y: number): boolean => {
+    for (let x = 0; x < width; x++) {
+      const idx = (y * width + x) * 4;
+      if (!isBorderPixel(idx)) return false;
+    }
+    return true;
+  };
+
+  // 检测一列是否为边框列
+  const isColBorder = (x: number): boolean => {
+    for (let y = 0; y < height; y++) {
+      const idx = (y * width + x) * 4;
+      if (!isBorderPixel(idx)) return false;
+    }
+    return true;
+  };
+
+  // 从四个方向扫描
+  let top = 0;
+  while (top < height && isRowBorder(top)) top++;
+
+  let bottom = height - 1;
+  while (bottom > top && isRowBorder(bottom)) bottom--;
+
+  let left = 0;
+  while (left < width && isColBorder(left)) left++;
+
+  let right = width - 1;
+  while (right > left && isColBorder(right)) right--;
+
+  // 计算裁剪后的尺寸
+  const trimmedWidth = right - left + 1;
+  const trimmedHeight = bottom - top + 1;
+
+  // 如果没有需要裁剪的（尺寸相同），返回原 Canvas
+  if (trimmedWidth === width && trimmedHeight === height) {
+    return { canvas, left: 0, top: 0, trimmedWidth: width, trimmedHeight: height, wasTrimmed: false };
+  }
+
+  // 确保裁剪后有有效内容
+  if (trimmedWidth <= minSize || trimmedHeight <= minSize) {
+    return { canvas, left: 0, top: 0, trimmedWidth: canvas.width, trimmedHeight: canvas.height, wasTrimmed: false };
+  }
+
+  // 创建裁剪后的 Canvas
+  const trimmedCanvas = document.createElement('canvas');
+  trimmedCanvas.width = trimmedWidth;
+  trimmedCanvas.height = trimmedHeight;
+  const trimmedCtx = trimmedCanvas.getContext('2d');
+
+  if (!trimmedCtx) {
+    return { canvas, left: 0, top: 0, trimmedWidth: canvas.width, trimmedHeight: canvas.height, wasTrimmed: false };
+  }
+
+  trimmedCtx.drawImage(
+    canvas,
+    left, top, trimmedWidth, trimmedHeight,
+    0, 0, trimmedWidth, trimmedHeight
+  );
+
+  return { canvas: trimmedCanvas, left, top, trimmedWidth, trimmedHeight, wasTrimmed: true };
+}
+
+/**
+ * 去除 Canvas 四周的白边和透明边
+ * 用于合并图片、生成预览图等场景
+ *
+ * @param canvas - 原始 Canvas
+ * @param options - 配置选项
+ * @returns 裁剪后的 Canvas，如果无需裁剪或裁剪后太小则返回原 Canvas
+ */
+export function trimCanvasWhiteAndTransparentBorder(
+  canvas: HTMLCanvasElement,
+  options: {
+    /** 白色阈值，RGB 都大于此值视为白色（默认 240） */
+    whiteThreshold?: number;
+    /** 透明度阈值，alpha 小于此值视为透明（默认 10） */
+    alphaThreshold?: number;
+    /** 裁剪后最小尺寸（默认 10） */
+    minSize?: number;
+  } = {}
+): HTMLCanvasElement {
+  return trimCanvasWhiteAndTransparentBorderWithInfo(canvas, options).canvas;
+}
+
+/**
+ * 去除图片 URL 四周的白边和透明边
+ * 用于合并图片、生成预览图等场景
+ *
+ * @param imageUrl - 图片 URL 或 data URL
+ * @param options - 配置选项
+ * @returns 去除白边后的 data URL，如果失败返回原 URL
+ */
+export async function trimImageWhiteAndTransparentBorder(
+  imageUrl: string,
+  options: {
+    /** 白色阈值，RGB 都大于此值视为白色（默认 240） */
+    whiteThreshold?: number;
+    /** 透明度阈值，alpha 小于此值视为透明（默认 10） */
+    alphaThreshold?: number;
+    /** 输出格式（默认 'image/jpeg'） */
+    outputFormat?: 'image/jpeg' | 'image/png';
+    /** 输出质量（默认 0.92） */
+    outputQuality?: number;
+  } = {}
+): Promise<string> {
+  const {
+    outputFormat = 'image/jpeg',
+    outputQuality = 0.92,
+    ...trimOptions
+  } = options;
+
+  try {
+    const img = await loadImage(imageUrl);
+    const canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext('2d');
+
+    if (!ctx) return imageUrl;
+
+    ctx.drawImage(img, 0, 0);
+
+    const trimmedCanvas = trimCanvasWhiteAndTransparentBorder(canvas, trimOptions);
+
+    // 如果是同一个 Canvas（没有裁剪），返回原 URL
+    if (trimmedCanvas === canvas) {
+      return imageUrl;
+    }
+
+    return trimmedCanvas.toDataURL(outputFormat, outputQuality);
+  } catch (error) {
+    console.error('[trimImageWhiteAndTransparentBorder] Error:', error);
+    return imageUrl;
+  }
+}
