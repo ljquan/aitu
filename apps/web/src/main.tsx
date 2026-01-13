@@ -1,6 +1,31 @@
 import { StrictMode } from 'react';
 import * as ReactDOM from 'react-dom/client';
+import * as Sentry from '@sentry/react';
 import App from './app/app';
+
+// ===== 初始化 Sentry 错误监控 =====
+// 必须在其他代码之前初始化，以捕获所有错误
+Sentry.init({
+    dsn: "https://a18e755345995baaa0e1972c4cf24497@o4510700882296832.ingest.us.sentry.io/4510700883869696",
+  // Setting this option to true will send default PII data to Sentry.
+  // For example, automatic IP address collection on events
+  sendDefaultPii: true
+  // dsn: 'https://a18e755345995baaa0e1972c4cf24497@o4510700882296832.ingest.us.sentry.io/4510700883869696',
+  // // 发送默认 PII 数据（如 IP 地址）
+  // sendDefaultPii: true,
+  // // 仅在生产环境启用
+  // enabled: import.meta.env.PROD,
+  // // 集成配置
+  // integrations: [
+  //   Sentry.browserTracingIntegration(),
+  //   Sentry.replayIntegration(),
+  // ],
+  // // 性能监控采样率
+  // tracesSampleRate: 0.1,
+  // // Session Replay 采样率
+  // replaysSessionSampleRate: 0.1,
+  // replaysOnErrorSampleRate: 1.0,
+});
 
 // 修复权限策略违规警告
 import './utils/permissions-policy-fix';

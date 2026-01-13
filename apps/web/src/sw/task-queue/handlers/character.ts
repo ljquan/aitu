@@ -104,6 +104,7 @@ export class CharacterHandler implements TaskHandler {
 
   /**
    * Create character via API
+   * Uses /v1/videos endpoint with FormData (character_from_task parameter)
    */
   private async createCharacter(
     task: SWTask,
@@ -116,25 +117,23 @@ export class CharacterHandler implements TaskHandler {
     // Determine character model based on source video model
     const characterModel = this.getCharacterModel(params.model);
 
-    // Build request body
-    const requestBody: Record<string, string> = {
-      model: characterModel,
-      video_id: params.sourceVideoTaskId || '',
-    };
+    // Build FormData request body (API requires multipart/form-data)
+    const formData = new FormData();
+    formData.append('character_from_task', params.sourceVideoTaskId || '');
+    formData.append('model', characterModel);
 
     if (params.characterTimestamps) {
-      requestBody.character_timestamps = params.characterTimestamps;
+      formData.append('character_timestamps', params.characterTimestamps);
     }
 
-    const response = await fetch(`${videoConfig.baseUrl}/characters`, {
+    const response = await fetch(`${videoConfig.baseUrl}/videos`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
         ...(videoConfig.apiKey
           ? { Authorization: `Bearer ${videoConfig.apiKey}` }
           : {}),
       },
-      body: JSON.stringify(requestBody),
+      body: formData,
       signal,
     });
 
@@ -220,13 +219,14 @@ export class CharacterHandler implements TaskHandler {
 
   /**
    * Query character status
+   * Uses /v1/videos endpoint (same as video query)
    */
   private async queryCharacter(
     characterId: string,
     videoConfig: { baseUrl: string; apiKey?: string },
     signal: AbortSignal
   ): Promise<CharacterQueryResponse> {
-    const response = await fetch(`${videoConfig.baseUrl}/characters/${characterId}`, {
+    const response = await fetch(`${videoConfig.baseUrl}/videos/${characterId}`, {
       method: 'GET',
       headers: videoConfig.apiKey
         ? { Authorization: `Bearer ${videoConfig.apiKey}` }
