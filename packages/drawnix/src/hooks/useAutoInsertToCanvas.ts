@@ -314,11 +314,20 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
       if (!url) {
         console.error('[AutoInsert] Split task has no result URL');
         workflowCompletionService.failPostProcessing(task.id, 'No result URL');
+        // 更新步骤状态为失败
+        updateWorkflowStepForTask(task.id, 'failed', undefined, 'No result URL');
         return;
       }
 
       const params = task.params as TaskParams;
-      await handleSplitAndInsertTask(task.id, url, params, { scrollToResult: true });
+      const result = await handleSplitAndInsertTask(task.id, url, params, { scrollToResult: true });
+      
+      // 拆分完成后更新步骤状态
+      if (result.success) {
+        updateWorkflowStepForTask(task.id, 'completed', { url });
+      } else {
+        updateWorkflowStepForTask(task.id, 'failed', undefined, result.error || '拆分失败');
+      }
     };
 
     /**
@@ -366,9 +375,6 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
 
       // console.log(`[AutoInsert] Task ${task.id} passed all checks, will be inserted`);
 
-      // 更新关联的工作流步骤状态为 completed
-      updateWorkflowStepForTask(task.id, 'completed', { url: task.result.url });
-
       // 标记为已处理（内存）
       insertedTaskIds.add(task.id);
 
@@ -381,6 +387,7 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
       // 检查是否为灵感图任务（需要在宫格图之前检查）
       if (checkInspirationBoardTask(params)) {
         // console.log(`[AutoInsert] Task ${task.id} is inspiration board task, handling split`);
+        // 对于需要拆分的任务，先不更新步骤状态，等拆分完成后再更新
         handleSplitTask(task);
         return;
       }
@@ -388,9 +395,13 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
       // 检查是否为宫格图任务
       if (checkGridImageTask(params)) {
         // console.log(`[AutoInsert] Task ${task.id} is grid image task, handling split`);
+        // 对于需要拆分的任务，先不更新步骤状态，等拆分完成后再更新
         handleSplitTask(task);
         return;
       }
+
+      // 更新关联的工作流步骤状态为 completed（仅对普通图片/视频任务）
+      updateWorkflowStepForTask(task.id, 'completed', { url: task.result.url });
 
       // 获取 Prompt 作为分组 key
       const promptKey = task.params.prompt || 'unknown';

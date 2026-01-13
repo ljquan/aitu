@@ -2001,9 +2001,9 @@ async function handleImageRequestInternal(originalRequest: Request, requestUrl: 
       // console.log(`Service Worker: Image size: ${imageSizeMB.toFixed(2)}MB`);
 
       // 如果图片超过5MB，记录警告但仍尝试缓存
-      if (imageSizeMB > 5) {
-        console.warn(`Service Worker: Large image detected (${imageSizeMB.toFixed(2)}MB), 可能影响缓存性能`);
-      }
+      // if (imageSizeMB > 5) {
+      //   console.warn(`Service Worker: Large image detected (${imageSizeMB.toFixed(2)}MB), 可能影响缓存性能`);
+      // }
 
       const corsResponse = new Response(blob, {
         status: 200,

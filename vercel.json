@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npm run build:web",
+  "buildCommand": "NODE_OPTIONS='--max-old-space-size=4096' npm run build:web",
   "outputDirectory": "dist/apps/web",
   "installCommand": "npm install",
   "framework": null,

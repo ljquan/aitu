@@ -466,15 +466,12 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
   useEffect(() => {
     const subscription = workflowCompletionService.observeCompletionEvents().subscribe((event) => {
       const workflow = workflowControl.getWorkflow();
-      if (!workflow) return;
-
-      // 查找与此任务关联的步骤
-      const step = workflow.steps.find((s) => {
+      
+      // 查找与此任务关联的步骤（即使 workflow 为 null 也继续处理 postProcessingCompleted）
+      const step = workflow?.steps.find((s) => {
         const result = s.result as { taskId?: string } | undefined;
         return result?.taskId === event.taskId;
       });
-
-      if (!step) return;
 
       // 更新后处理状态
       let newPostProcessingStatus: PostProcessingStatus | undefined;
@@ -499,26 +496,29 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
         insertedCountRef.current = (insertedCountRef.current || 0) + newInsertedCount;
       }
 
-      // 同步更新 ChatDrawer 中的工作流消息
-      const updatedWorkflow = workflowControl.getWorkflow();
-      if (updatedWorkflow) {
-        const workflowData = toWorkflowMessageData(
-          updatedWorkflow,
-          currentRetryContextRef.current || undefined,
-          newPostProcessingStatus,
-          insertedCountRef.current
-        );
-        updateWorkflowMessageRef.current(workflowData);
+      // 同步更新 ChatDrawer 中的工作流消息（仅当 workflow 和 step 都存在时）
+      if (workflow && step) {
+        const updatedWorkflow = workflowControl.getWorkflow();
+        if (updatedWorkflow) {
+          const workflowData = toWorkflowMessageData(
+            updatedWorkflow,
+            currentRetryContextRef.current || undefined,
+            newPostProcessingStatus,
+            insertedCountRef.current
+          );
+          updateWorkflowMessageRef.current(workflowData);
 
-        // 同步更新 WorkZone（如果存在）
-        const workZoneId = currentWorkZoneIdRef.current;
-        const board = SelectionWatcherBoardRef.current;
-        if (workZoneId && board) {
-          WorkZoneTransforms.updateWorkflow(board, workZoneId, workflowData);
+          // 同步更新 WorkZone（如果存在）
+          const workZoneId = currentWorkZoneIdRef.current;
+          const board = SelectionWatcherBoardRef.current;
+          if (workZoneId && board) {
+            WorkZoneTransforms.updateWorkflow(board, workZoneId, workflowData);
+          }
         }
       }
 
       // 如果后处理完成，执行后续操作
+      // 注意：即使找不到 workflow 或 step，也要删除 WorkZone（通过 currentWorkZoneIdRef）
       if (event.type === 'postProcessingCompleted') {
         const position = event.result.firstElementPosition;
 
@@ -863,19 +863,11 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
       // 解析输入内容，使用选中的模型和尺寸
       const parsedParams = parseAIInput(prompt, selection, { modelId: selectedModel, size: selectedSize });
 
-      // console.log('[AIInputBar] Parsed params:', parsedParams);
-      // console.log('[AIInputBar] Key params - model:', parsedParams.modelId, 'count:', parsedParams.count, 'size:', parsedParams.size);
-
       // 收集所有参考媒体（图片 + 图形 + 视频）
       const referenceImages = [...selection.images, ...selection.graphics];
 
-      // console.log('[AIInputBar] Final prompt:', parsedParams.prompt);
-      // console.log('[AIInputBar] User instruction:', parsedParams.userInstruction);
-      // console.log('[AIInputBar] Scenario:', parsedParams.scenario);
-
       // 创建工作流定义（仅用于 WorkZone 显示，实际工作流由 submitWorkflowToSW 创建）
       const workflow = convertToWorkflow(parsedParams, referenceImages);
-      // console.log('[AIInputBar] Created workflow:', workflow);
 
       // 注意：不在这里调用 workflowControl.startWorkflow，由 submitWorkflowToSW 统一处理
       // 避免重复创建工作流导致多次请求

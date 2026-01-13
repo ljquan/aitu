@@ -546,7 +546,6 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
     const handleSendWorkflowMessage = useCallback(
       async (params: WorkflowMessageParams) => {
         const { context, workflow, textModel, autoOpen = true } = params;
-
         // 根据 autoOpen 参数决定是否打开抽屉
         if (autoOpen) {
           setIsOpen(true);

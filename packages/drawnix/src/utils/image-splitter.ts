@@ -655,68 +655,93 @@ function isUniformGridLayout(detection: GridDetectionResult, width: number, heig
 }
 
 /**
- * 严格去白边：只裁剪100%纯白的边缘行/列
+ * 严格去白边：只裁剪边缘每个像素都是浅色或透明的行/列
  * 用于宫格图分割后的子图处理，避免误裁人物内容
+ *
+ * 算法：从四边向内扫描，只有当整行/整列的每个像素都是浅色或透明时才裁剪
+ * 浅色定义：RGB 三通道都 >= 阈值，且颜色接近（避免裁掉彩色内容）
  *
  * @param ctx - Canvas 2D 上下文
  * @param width - 图片宽度
  * @param height - 图片高度
- * @param threshold - 白色阈值（默认 250，非常严格）
+ * @param lightnessThreshold - 亮度阈值（默认 220，RGB >= 此值认为是浅色）
+ * @param alphaThreshold - 透明阈值（默认 30，alpha <= 此值认为透明）
  * @returns 裁剪后的边界
  */
 function getStrictWhiteBorders(
   ctx: CanvasRenderingContext2D,
   width: number,
   height: number,
-  threshold: number = 250
+  lightnessThreshold: number = 220,
+  alphaThreshold: number = 30
 ): { top: number; right: number; bottom: number; left: number } {
   const imageData = ctx.getImageData(0, 0, width, height);
   const data = imageData.data;
 
-  // 检查像素是否为纯白
-  const isWhitePixel = (idx: number): boolean => {
-    return data[idx] >= threshold && data[idx + 1] >= threshold && data[idx + 2] >= threshold;
+  // 检查像素是否为浅色或透明
+  // 浅色：RGB 三通道都 >= lightnessThreshold，且颜色差异不大（排除彩色）
+  // 透明：alpha <= alphaThreshold
+  const isLightOrTransparentPixel = (idx: number): boolean => {
+    const r = data[idx];
+    const g = data[idx + 1];
+    const b = data[idx + 2];
+    const a = data[idx + 3];
+
+    // 透明像素
+    if (a <= alphaThreshold) {
+      return true;
+    }
+
+    // 检查是否为浅色（RGB 都要足够高）
+    if (r < lightnessThreshold || g < lightnessThreshold || b < lightnessThreshold) {
+      return false;
+    }
+
+    // 检查颜色是否接近（排除鲜艳的彩色，如浅粉、浅蓝等可能是内容）
+    // 允许一定的色差（如米黄色 RGB 差值约 30）
+    const maxDiff = Math.max(r, g, b) - Math.min(r, g, b);
+    return maxDiff <= 40;
   };
 
-  // 检查整行是否100%为白色
-  const isRowAllWhite = (y: number): boolean => {
+  // 检查整行是否每个像素都是浅色或透明
+  const isRowAllLightOrTransparent = (y: number): boolean => {
     for (let x = 0; x < width; x++) {
       const idx = (y * width + x) * 4;
-      if (!isWhitePixel(idx)) return false;
+      if (!isLightOrTransparentPixel(idx)) return false;
     }
     return true;
   };
 
-  // 检查整列是否100%为白色
-  const isColAllWhite = (x: number): boolean => {
+  // 检查整列是否每个像素都是浅色或透明
+  const isColAllLightOrTransparent = (x: number): boolean => {
     for (let y = 0; y < height; y++) {
       const idx = (y * width + x) * 4;
-      if (!isWhitePixel(idx)) return false;
+      if (!isLightOrTransparentPixel(idx)) return false;
     }
     return true;
   };
 
   // 从顶部向下扫描
   let top = 0;
-  while (top < height && isRowAllWhite(top)) {
+  while (top < height && isRowAllLightOrTransparent(top)) {
     top++;
   }
 
   // 从底部向上扫描
   let bottom = height - 1;
-  while (bottom > top && isRowAllWhite(bottom)) {
+  while (bottom > top && isRowAllLightOrTransparent(bottom)) {
     bottom--;
   }
 
   // 从左边向右扫描
   let left = 0;
-  while (left < width && isColAllWhite(left)) {
+  while (left < width && isColAllLightOrTransparent(left)) {
     left++;
   }
 
   // 从右边向左扫描
   let right = width - 1;
-  while (right > left && isColAllWhite(right)) {
+  while (right > left && isColAllLightOrTransparent(right)) {
     right--;
   }
 

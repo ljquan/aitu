@@ -84,21 +84,27 @@ export async function analyzeWithAI(
         if (generationTools.includes(toolCall.name)) {
           const specifiedModel = toolArgs.model as string | undefined;
           const isVideoTool = toolCall.name === 'generate_video';
+          const settings = geminiSettings.get();
+
+          // 获取用户设置的默认模型
+          const defaultImageModel = settings.imageModelName || IMAGE_MODELS[0]?.id || 'gemini-2.5-flash-image-vip';
+          const defaultVideoModel = settings.videoModelName || 'veo3';
 
           if (specifiedModel) {
+            // AI 指定了模型，检查类型是否匹配
             const modelType = getModelType(specifiedModel);
             const needsCorrection = isVideoTool
               ? modelType !== 'video'
               : modelType !== 'image';
 
             if (needsCorrection) {
-              const settings = geminiSettings.get();
-              const correctModel = isVideoTool
-                ? settings.videoModelName || 'veo3'
-                : settings.imageModelName || IMAGE_MODELS[0]?.id || 'gemini-2.5-flash-image-vip';
-
+              const correctModel = isVideoTool ? defaultVideoModel : defaultImageModel;
               toolArgs.model = correctModel;
             }
+          } else {
+            // AI 没有指定模型，使用用户设置的默认模型
+            const defaultModel = isVideoTool ? defaultVideoModel : defaultImageModel;
+            toolArgs.model = defaultModel;
           }
         }
 

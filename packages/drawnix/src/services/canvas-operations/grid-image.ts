@@ -67,6 +67,9 @@ export function createGridImageTask(
     model,
   } = params;
 
+  // 获取实际使用的模型
+  const actualModel = model || getCurrentImageModel();
+
   if (!theme || typeof theme !== 'string') {
     return {
       success: false,
@@ -107,7 +110,7 @@ export function createGridImageTask(
         {
           prompt,
           size: imageSize,
-          model: model || getCurrentImageModel(),
+          model: actualModel,
           uploadedImages: uploadedImages && uploadedImages.length > 0 ? uploadedImages : undefined,
           // 宫格图特有参数
           gridImageRows: validRows,

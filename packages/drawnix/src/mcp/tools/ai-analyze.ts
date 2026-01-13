@@ -103,35 +103,33 @@ export const aiAnalyzeTool: MCPTool = {
           // console.log('[AIAnalyzeTool] Tool call:', toolCall.name);
 
           // 注入模型参数到工具参数中
-          // 只有当 AI 指定了错误类型的模型时才需要注入
-          // 如果 AI 没有指定模型，让 MCP 工具使用自己的默认模型
           const toolArgs = { ...toolCall.arguments };
           const generationTools = ['generate_image', 'generate_video', 'generate_grid_image', 'generate_photo_wall'];
           if (generationTools.includes(toolCall.name)) {
             const specifiedModel = toolArgs.model as string | undefined;
             const isVideoTool = toolCall.name === 'generate_video';
+            const settings = geminiSettings.get();
 
-            // 只有指定了模型且类型不匹配时才需要注入
+            // 获取用户设置的默认模型
+            const defaultImageModel = settings.imageModelName || IMAGE_MODELS[0]?.id || 'gemini-2.5-flash-image-vip';
+            const defaultVideoModel = settings.videoModelName || 'veo3';
+
             if (specifiedModel) {
+              // AI 指定了模型，检查类型是否匹配
               const modelType = getModelType(specifiedModel);
-
-              // 检查模型类型是否与工具类型匹配
               const needsCorrection = isVideoTool
                 ? modelType !== 'video'
                 : modelType !== 'image';
 
               if (needsCorrection) {
-                // 从设置中获取正确的模型
-                const settings = geminiSettings.get();
-                const correctModel = isVideoTool
-                  ? settings.videoModelName || 'veo3'
-                  : settings.imageModelName || IMAGE_MODELS[0]?.id || 'gemini-2.5-flash-image-vip';
-
+                const correctModel = isVideoTool ? defaultVideoModel : defaultImageModel;
                 toolArgs.model = correctModel;
-                // console.log(`[AIAnalyzeTool] Corrected model '${specifiedModel}' -> '${correctModel}' for ${toolCall.name}`);
               }
+            } else {
+              // AI 没有指定模型，使用用户设置的默认模型
+              const defaultModel = isVideoTool ? defaultVideoModel : defaultImageModel;
+              toolArgs.model = defaultModel;
             }
-            // 如果没有指定模型，不注入，让 MCP 工具使用默认模型
           }
 
           // 创建新的工作流步骤

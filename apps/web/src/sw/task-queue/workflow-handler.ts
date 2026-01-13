@@ -68,7 +68,8 @@ export function initWorkflowHandler(
     geminiConfig,
     videoConfig,
     broadcast: (message) => broadcastToClients(message),
-    requestMainThreadTool: async (chatId, toolCallId, toolName, args) => {
+    sendToClient: (clientId, message) => sendToClient(clientId, message),
+    requestMainThreadTool: async (clientId, chatId, toolCallId, toolName, args) => {
       // Send request to main thread and wait for response
       const requestId = `chat_tool_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
 
@@ -101,6 +102,7 @@ export function initWorkflowHandler(
             toolCallId,
             toolName,
             args,
+            clientId,
           },
           timeout,
         });
@@ -113,10 +115,11 @@ export function initWorkflowHandler(
           toolName,
           args,
           createdAt: Date.now(),
+          clientId,
         });
 
-        // Send request to main thread
-        broadcastToClients({
+        // Send request to specific client only (not broadcast)
+        sendToClient(clientId, {
           type: 'MAIN_THREAD_TOOL_REQUEST',
           requestId,
           workflowId: chatId,
@@ -142,6 +145,7 @@ interface PendingChatToolRequest {
     toolCallId: string;
     toolName: string;
     args: Record<string, unknown>;
+    clientId: string;
   };
   timeout: ReturnType<typeof setTimeout>;
 }
@@ -206,13 +210,13 @@ export function isWorkflowMessage(data: unknown): boolean {
  */
 export function handleWorkflowMessage(
   message: WorkflowMainToSWMessage | ChatWorkflowMainToSWMessage,
-  _clientId: string
+  clientId: string
 ): void {
   // console.log('[WorkflowHandler] ◀ Received message:', message.type);
 
   // Handle chat workflow messages
   if (message.type.startsWith('CHAT_WORKFLOW_')) {
-    handleChatWorkflowMessage(message as ChatWorkflowMainToSWMessage);
+    handleChatWorkflowMessage(message as ChatWorkflowMainToSWMessage, clientId);
     return;
   }
 
@@ -261,7 +265,7 @@ export function handleWorkflowMessage(
 /**
  * Handle chat workflow message
  */
-function handleChatWorkflowMessage(message: ChatWorkflowMainToSWMessage): void {
+function handleChatWorkflowMessage(message: ChatWorkflowMainToSWMessage, clientId: string): void {
   if (!chatWorkflowHandler) {
     console.error('[WorkflowHandler] ✗ Chat workflow handler not initialized');
     return;
@@ -269,7 +273,7 @@ function handleChatWorkflowMessage(message: ChatWorkflowMainToSWMessage): void {
 
   switch (message.type) {
     case 'CHAT_WORKFLOW_START':
-      chatWorkflowHandler.startWorkflow(message.chatId, message.params);
+      chatWorkflowHandler.startWorkflow(message.chatId, message.params, clientId);
       break;
 
     case 'CHAT_WORKFLOW_CANCEL':
@@ -347,8 +351,8 @@ export function resendPendingToolRequests(): void {
   for (const [, pending] of pendingChatToolRequests) {
     const { requestInfo } = pending;
 
-    // Re-broadcast the request to new client
-    broadcastToClients({
+    // Re-send the request to the specific client (or broadcast if client not found)
+    sendToClient(requestInfo.clientId, {
       type: 'MAIN_THREAD_TOOL_REQUEST',
       requestId: requestInfo.requestId,
       workflowId: requestInfo.chatId,
@@ -377,6 +381,32 @@ async function broadcastToClients(
     }
   } catch (error) {
     console.error('[WorkflowHandler] Failed to broadcast:', error);
+  }
+}
+
+/**
+ * Send message to a specific client
+ */
+async function sendToClient(
+  clientId: string,
+  message: WorkflowSWToMainMessage | SWToMainMessage | CanvasOperationRequestMessage | MainThreadToolRequestMessage | ChatWorkflowSWToMainMessage
+): Promise<void> {
+  if (!swGlobal) {
+    console.warn('[WorkflowHandler] SW global not set');
+    return;
+  }
+
+  try {
+    const client = await swGlobal.clients.get(clientId);
+    if (client) {
+      client.postMessage(message);
+    } else {
+      console.warn('[WorkflowHandler] Client not found:', clientId);
+      // Fallback to broadcast if client not found (e.g., page refreshed)
+      await broadcastToClients(message);
+    }
+  } catch (error) {
+    console.error('[WorkflowHandler] Failed to send to client:', error);
   }
 }
 

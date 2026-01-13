@@ -66,6 +66,9 @@ function executeQueue(params: GridImageToolParams, options: MCPExecuteOptions): 
     model,
   } = params;
 
+  // 获取实际使用的模型
+  const actualModel = model || getCurrentImageModel();
+
   if (!theme || typeof theme !== 'string') {
     return {
       success: false,
@@ -117,7 +120,7 @@ function executeQueue(params: GridImageToolParams, options: MCPExecuteOptions): 
         {
           prompt,
           size: imageSize,
-          model: model || getCurrentImageModel(),
+          model: actualModel,
           // 参考图片
           uploadedImages: uploadedImages && uploadedImages.length > 0 ? uploadedImages : undefined,
           // 宫格图特有参数，用于任务完成后的处理
@@ -228,6 +231,10 @@ ${getLayoutStyleDescription()}
         items: {
           type: 'string',
         },
+      },
+      model: {
+        type: 'string',
+        description: '图片生成模型名称（可选，默认使用当前设置的模型）',
       },
     },
     required: ['theme'],

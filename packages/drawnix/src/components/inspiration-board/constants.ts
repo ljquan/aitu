@@ -18,8 +18,8 @@ export const INSPIRATION_TEMPLATES: InspirationTemplate[] = [
   {
     id: 'grid-emoji',
     title: '智能拆分宫格图',
-    description: '生成 16 宫格系列表情包，风格统一',
-    prompt: '生成一张 16 宫格可爱猫咪表情包，包含开心、难过、惊讶、愤怒、困惑、得意、害羞、无聊、期待等表情，扁平化卡通风格',
+    description: '宫格图，风格统一',
+    prompt: '生成16宫格猫咪表情包',
     category: InspirationCategory.GRID,
     imageUrl: 'https://tuziphoto.codernote.club/aitu/gonggetu.jpg',
     badgeColor: 'badge--grid',

@@ -40,8 +40,11 @@ export interface ChatWorkflowHandlerConfig {
   videoConfig: VideoAPIConfig;
   /** Broadcast message to all clients */
   broadcast: (message: ChatWorkflowSWToMainMessage) => void;
+  /** Send message to a specific client */
+  sendToClient: (clientId: string, message: ChatWorkflowSWToMainMessage) => void;
   /** Request main thread to execute a tool */
   requestMainThreadTool: (
+    clientId: string,
     chatId: string,
     toolCallId: string,
     toolName: string,
@@ -55,6 +58,8 @@ export interface ChatWorkflowHandlerConfig {
 export class ChatWorkflowHandler {
   private workflows: Map<string, ChatWorkflow> = new Map();
   private abortControllers: Map<string, AbortController> = new Map();
+  /** Map of chatId to clientId that initiated the workflow */
+  private workflowClients: Map<string, string> = new Map();
   private config: ChatWorkflowHandlerConfig;
   /** Pending main thread tool requests */
   private pendingToolRequests: Map<string, {
@@ -160,8 +165,11 @@ export class ChatWorkflowHandler {
 
   /**
    * Start a chat workflow
+   * @param chatId Unique chat ID
+   * @param params Chat parameters
+   * @param clientId ID of the client that initiated the workflow
    */
-  async startWorkflow(chatId: string, params: ChatParams): Promise<void> {
+  async startWorkflow(chatId: string, params: ChatParams, clientId: string): Promise<void> {
     // Check for duplicate
     const existing = this.workflows.get(chatId);
     if (existing) {
@@ -174,6 +182,9 @@ export class ChatWorkflowHandler {
       this.broadcastStatus(existing);
       return;
     }
+
+    // Store the client ID that initiated this workflow
+    this.workflowClients.set(chatId, clientId);
 
     // Create workflow
     const workflow: ChatWorkflow = {
@@ -473,6 +484,9 @@ export class ChatWorkflowHandler {
     workflow: ChatWorkflow,
     signal: AbortSignal
   ): Promise<void> {
+    // Get the client ID that initiated this workflow
+    const clientId = this.workflowClients.get(workflow.id);
+
     for (const toolCall of workflow.toolCalls) {
       if (signal.aborted) {
         throw new Error('Workflow cancelled');
@@ -492,8 +506,13 @@ export class ChatWorkflowHandler {
 
         // Check if tool needs main thread
         if (requiresMainThread(toolCall.name) || !getSWMCPTool(toolCall.name)) {
-          // Delegate to main thread
-          const response = await this.requestMainThreadTool(
+          // Delegate to main thread - only send to the client that initiated the workflow
+          if (!clientId) {
+            throw new Error('No client ID found for workflow');
+          }
+
+          const response = await this.config.requestMainThreadTool(
+            clientId,
             workflow.id,
             toolCall.id,
             toolCall.name,
@@ -559,23 +578,6 @@ export class ChatWorkflowHandler {
         });
       }
     }
-  }
-
-  /**
-   * Request main thread to execute a tool
-   */
-  private async requestMainThreadTool(
-    chatId: string,
-    toolCallId: string,
-    toolName: string,
-    args: Record<string, unknown>
-  ): Promise<MainThreadToolResponseMessage> {
-    // Use config handler if provided
-    if (this.config.requestMainThreadTool) {
-      return this.config.requestMainThreadTool(chatId, toolCallId, toolName, args);
-    }
-
-    throw new Error('Main thread tool execution not configured');
   }
 
   /**

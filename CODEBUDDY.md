@@ -257,6 +257,63 @@ const MyComponent: React.FC<Props> = ({
 
 **原因**: 在函数参数中使用 `= new Set()` 或 `= []` 作为默认值，每次组件渲染时都会创建新的对象引用。这会导致：1) 依赖该 prop 的 `useMemo`/`useEffect` 每次都重新执行；2) 使用 `@tanstack/react-virtual` 等库时可能触发无限渲染循环；3) 子组件的 `React.memo` 优化失效。
 
+#### 事件处理中避免过早返回阻塞清理逻辑
+**场景**: 在 useEffect 订阅事件时，事件处理函数中有多个操作，部分操作依赖前置条件，部分操作（如清理 UI）不依赖
+
+❌ **错误示例**:
+```typescript
+// 错误：过早返回导致清理 WorkZone 的逻辑永远不会执行
+useEffect(() => {
+  const subscription = completionService.observe().subscribe((event) => {
+    const workflow = workflowControl.getWorkflow();
+    if (!workflow) return;  // ❌ 过早返回
+
+    const step = workflow.steps.find(s => s.taskId === event.taskId);
+    if (!step) return;  // ❌ 过早返回
+
+    // 更新 UI 状态...
+    updateWorkflowMessage(workflow);
+
+    // 清理 WorkZone（通过 ref，不依赖 workflow/step）
+    if (event.type === 'completed') {
+      const workZoneId = currentWorkZoneIdRef.current;
+      if (workZoneId) {
+        removeWorkZone(workZoneId);  // ❌ 永远不会执行！
+      }
+    }
+  });
+  return () => subscription.unsubscribe();
+}, []);
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：将不依赖前置条件的操作移到条件检查之外
+useEffect(() => {
+  const subscription = completionService.observe().subscribe((event) => {
+    const workflow = workflowControl.getWorkflow();
+    const step = workflow?.steps.find(s => s.taskId === event.taskId);
+
+    // 依赖 workflow/step 的操作放在条件内
+    if (workflow && step) {
+      updateWorkflowMessage(workflow);
+    }
+
+    // 不依赖 workflow/step 的清理操作放在条件外
+    if (event.type === 'completed') {
+      const workZoneId = currentWorkZoneIdRef.current;
+      if (workZoneId) {
+        removeWorkZone(workZoneId);  // ✅ 总是能执行
+        currentWorkZoneIdRef.current = null;
+      }
+    }
+  });
+  return () => subscription.unsubscribe();
+}, []);
+```
+
+**原因**: 事件处理中的清理操作（如删除 UI 元素）通常通过 ref 引用，不依赖于事件携带的数据。如果在检查事件数据有效性时过早 `return`，会导致清理逻辑被跳过，造成 UI 残留（如 WorkZone 面板未关闭）。应该将独立的操作分离，确保关键清理逻辑总能执行。
+
 #### CSS/SCSS Guidelines
 - Use BEM naming convention
 - Prefer design system CSS variables (see Brand Guidelines below)

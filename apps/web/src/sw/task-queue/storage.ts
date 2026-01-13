@@ -33,6 +33,8 @@ export interface StoredPendingToolRequest {
   toolName: string;
   args: Record<string, unknown>;
   createdAt: number;
+  /** ID of the client that initiated the request */
+  clientId?: string;
 }
 
 /**
