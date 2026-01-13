@@ -185,7 +185,7 @@ async function runMigration(): Promise<MigrationResult[]> {
     return [];
   }
 
-  console.log('[StorageMigration] Starting migration...');
+  // console.log('[StorageMigration] Starting migration...');
 
   const results: MigrationResult[] = [];
 
@@ -204,9 +204,9 @@ async function runMigration(): Promise<MigrationResult[]> {
   const successCount = results.filter((r) => r.success).length;
   const failCount = results.filter((r) => !r.success).length;
 
-  console.log(
-    `[StorageMigration] Migration complete: ${successCount} success, ${failCount} failed`
-  );
+  // console.log(
+  //   `[StorageMigration] Migration complete: ${successCount} success, ${failCount} failed`
+  // );
 
   // 只有全部成功才标记迁移完成
   if (failCount === 0) {
@@ -222,7 +222,7 @@ async function runMigration(): Promise<MigrationResult[]> {
 function resetMigration(): void {
   try {
     localStorage.removeItem(LS_KEYS.LS_TO_IDB_MIGRATION_DONE);
-    console.log('[StorageMigration] Migration status reset');
+    // console.log('[StorageMigration] Migration status reset');
   } catch (error) {
     console.error('[StorageMigration] Failed to reset migration status:', error);
   }

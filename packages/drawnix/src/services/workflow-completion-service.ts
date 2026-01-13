@@ -163,7 +163,7 @@ class WorkflowCompletionService {
 
     this.postProcessingResults.set(taskId, result);
 
-    console.log(`[WorkflowCompletion] Emitting postProcessingCompleted event for task ${taskId}`);
+    // console.log(`[WorkflowCompletion] Emitting postProcessingCompleted event for task ${taskId}`);
     this.completionEvents$.next({
       taskId,
       batchId: this.taskToBatch.get(taskId),

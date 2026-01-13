@@ -334,7 +334,7 @@ export const getTextCustomMarks = (board: PlaitBoard): Record<string, any> => {
       // 确保有选区，否则 Editor.marks 会返回 null
       setSelection(editor);
       const marks = Editor.marks(editor);
-      console.log('[getTextCustomMarks] editor.selection:', editor.selection, 'marks:', marks);
+      // console.log('[getTextCustomMarks] editor.selection:', editor.selection, 'marks:', marks);
       return marks || {};
     } catch (error) {
       console.error('Failed to get text marks:', error);

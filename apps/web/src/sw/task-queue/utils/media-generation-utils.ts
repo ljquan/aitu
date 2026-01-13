@@ -446,11 +446,11 @@ export async function compressImageBlob(
 ): Promise<Blob> {
   // 如果已经小于目标大小，直接返回
   if (blob.size <= maxSizeBytes) {
-    console.log(`[MediaUtils] Image already small enough: ${(blob.size / 1024).toFixed(1)}KB <= ${(maxSizeBytes / 1024).toFixed(1)}KB`);
+    // console.log(`[MediaUtils] Image already small enough: ${(blob.size / 1024).toFixed(1)}KB <= ${(maxSizeBytes / 1024).toFixed(1)}KB`);
     return blob;
   }
 
-  console.log(`[MediaUtils] Compressing image: ${(blob.size / 1024).toFixed(1)}KB -> target ${(maxSizeBytes / 1024).toFixed(1)}KB`);
+    // console.log(`[MediaUtils] Compressing image: ${(blob.size / 1024).toFixed(1)}KB -> target ${(maxSizeBytes / 1024).toFixed(1)}KB`);
 
   try {
     // 创建 ImageBitmap
@@ -463,7 +463,7 @@ export async function compressImageBlob(
       const scale = Math.min(MAX_DIMENSION / width, MAX_DIMENSION / height);
       width = Math.round(width * scale);
       height = Math.round(height * scale);
-      console.log(`[MediaUtils] Resizing from ${originalDimensions.width}x${originalDimensions.height} to ${width}x${height}`);
+    // console.log(`[MediaUtils] Resizing from ${originalDimensions.width}x${originalDimensions.height} to ${width}x${height}`);
     }
 
     // 创建 OffscreenCanvas
@@ -492,7 +492,7 @@ export async function compressImageBlob(
         quality: midQuality,
       });
 
-      console.log(`[MediaUtils] Binary search #${i + 1}: quality=${midQuality.toFixed(3)}, size=${(testBlob.size / 1024).toFixed(1)}KB`);
+    // console.log(`[MediaUtils] Binary search #${i + 1}: quality=${midQuality.toFixed(3)}, size=${(testBlob.size / 1024).toFixed(1)}KB`);
 
       if (testBlob.size <= maxSizeBytes) {
         // 符合条件，记录并尝试更高质量
@@ -511,12 +511,12 @@ export async function compressImageBlob(
     }
 
     if (bestBlob) {
-      console.log(`[MediaUtils] Compression successful: quality=${bestQuality.toFixed(3)}, size=${(bestBlob.size / 1024).toFixed(1)}KB`);
+    // console.log(`[MediaUtils] Compression successful: quality=${bestQuality.toFixed(3)}, size=${(bestBlob.size / 1024).toFixed(1)}KB`);
       return bestBlob;
     }
 
     // 如果最低质量仍然超过大小限制，尝试进一步缩小尺寸
-    console.log(`[MediaUtils] Min quality not enough, trying to reduce dimensions...`);
+    // console.log(`[MediaUtils] Min quality not enough, trying to reduce dimensions...`);
     let compressedBlob = await canvas.convertToBlob({ type: 'image/jpeg', quality: MIN_QUALITY });
     
     let scale = 0.8;
@@ -553,17 +553,17 @@ export async function compressImageBlob(
       }
 
       if (smallBest) {
-        console.log(`[MediaUtils] Scale ${scale.toFixed(1)} (${newWidth}x${newHeight}): ${(smallBest.size / 1024).toFixed(1)}KB`);
+    // console.log(`[MediaUtils] Scale ${scale.toFixed(1)} (${newWidth}x${newHeight}): ${(smallBest.size / 1024).toFixed(1)}KB`);
         return smallBest;
       }
 
       compressedBlob = await smallerCanvas.convertToBlob({ type: 'image/jpeg', quality: MIN_QUALITY });
-      console.log(`[MediaUtils] Scale ${scale.toFixed(1)} (${newWidth}x${newHeight}): ${(compressedBlob.size / 1024).toFixed(1)}KB (min quality)`);
+    // console.log(`[MediaUtils] Scale ${scale.toFixed(1)} (${newWidth}x${newHeight}): ${(compressedBlob.size / 1024).toFixed(1)}KB (min quality)`);
       
       scale -= 0.1;
     }
 
-    console.log(`[MediaUtils] Final compressed size: ${(compressedBlob.size / 1024).toFixed(1)}KB`);
+    // console.log(`[MediaUtils] Final compressed size: ${(compressedBlob.size / 1024).toFixed(1)}KB`);
     return compressedBlob;
   } catch (err) {
     console.warn('[MediaUtils] Image compression failed, returning original:', err);
@@ -647,21 +647,12 @@ export async function processReferenceImage(
 
     // 远程图片：http/https
     if (url.startsWith('http://') || url.startsWith('https://')) {
-      console.log(`[MediaUtils] Processing remote image: ${url.substring(0, 80)}...`);
+    // console.log(`[MediaUtils] Processing remote image: ${url.substring(0, 80)}...`);
       
       // 使用 ignoreVary 确保匹配时不考虑 Vary header
       const cachedResponse = await cache.match(url, { ignoreVary: true });
       
-      // 如果没找到，尝试列出缓存中的所有 keys 来调试
-      if (!cachedResponse) {
-        const allKeys = await cache.keys();
-        const matchingKeys = allKeys.filter(req => req.url === url);
-        console.log(`[MediaUtils] Cache miss for ${url.substring(0, 50)}...`, {
-          totalCacheEntries: allKeys.length,
-          exactUrlMatches: matchingKeys.length,
-          sampleKeys: allKeys.slice(0, 5).map(r => r.url.substring(0, 60)),
-        });
-      }
+      
 
       if (cachedResponse) {
         // 优先从 IndexedDB 获取原始缓存时间（不会因访问而刷新）
@@ -677,33 +668,33 @@ export async function processReferenceImage(
         const age = cacheTime ? now - cacheTime : Infinity;
         const ageHours = age / (60 * 60 * 1000);
 
-        console.log(`[MediaUtils] Cache found for ${url.substring(0, 50)}...`, {
-          originalCacheTime,
-          fallbackCacheTime,
-          cacheTimeUsed: cacheTime,
-          now,
-          ageMs: age,
-          ageHours: ageHours.toFixed(2),
-          ttlHours: (REMOTE_IMAGE_CACHE_TTL / (60 * 60 * 1000)).toFixed(2),
-          isWithinTTL: cacheTime > 0 && age < REMOTE_IMAGE_CACHE_TTL,
-        });
+    // console.log(`[MediaUtils] Cache found for ${url.substring(0, 50)}...`, {
+        //   originalCacheTime,
+        //   fallbackCacheTime,
+        //   cacheTimeUsed: cacheTime,
+        //   now,
+        //   ageMs: age,
+        //   ageHours: ageHours.toFixed(2),
+        //   ttlHours: (REMOTE_IMAGE_CACHE_TTL / (60 * 60 * 1000)).toFixed(2),
+        //   isWithinTTL: cacheTime > 0 && age < REMOTE_IMAGE_CACHE_TTL,
+        // });
 
         if (cacheTime > 0 && age < REMOTE_IMAGE_CACHE_TTL) {
           // 缓存在 12 小时内，直接使用 URL
-          console.log(`[MediaUtils] Using cached URL (within TTL): ${url.substring(0, 50)}...`);
+    // console.log(`[MediaUtils] Using cached URL (within TTL): ${url.substring(0, 50)}...`);
           return { originalUrl: url, value: url, isBase64: false };
         }
 
         // 缓存超过 12 小时或没有缓存时间，压缩并转换为 base64
-        console.log(`[MediaUtils] Cache expired or no cache date, converting to base64: ${url.substring(0, 50)}...`);
+    // console.log(`[MediaUtils] Cache expired or no cache date, converting to base64: ${url.substring(0, 50)}...`);
         const blob = await cachedResponse.blob();
         const base64 = await blobToCompressedBase64(blob);
-        console.log(`[MediaUtils] Converted to base64, length: ${base64.length}`);
+    // console.log(`[MediaUtils] Converted to base64, length: ${base64.length}`);
         return { originalUrl: url, value: base64, isBase64: true };
       }
 
       // 缓存中没有，从网络获取并转换为 base64
-      console.log(`[MediaUtils] No cache found, fetching from network: ${url.substring(0, 50)}...`);
+    // console.log(`[MediaUtils] No cache found, fetching from network: ${url.substring(0, 50)}...`);
       const response = await fetch(url, { signal });
       if (response.ok) {
         const blob = await response.blob();

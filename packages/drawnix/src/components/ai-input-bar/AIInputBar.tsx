@@ -1077,9 +1077,9 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
           if (submitCooldownRef.current) {
             clearTimeout(submitCooldownRef.current);
           }
-          console.log('[AIInputBar] SW execution success, starting 1s cooldown timer');
+          // console.log('[AIInputBar] SW execution success, starting 1s cooldown timer');
           submitCooldownRef.current = setTimeout(() => {
-            console.log('[AIInputBar] 1s cooldown expired: setting isSubmitting=false');
+            // console.log('[AIInputBar] 1s cooldown expired: setting isSubmitting=false');
             setIsSubmitting(false);
             submitCooldownRef.current = null;
           }, 1000);
@@ -1333,9 +1333,9 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
     if (submitCooldownRef.current) {
       clearTimeout(submitCooldownRef.current);
     }
-    console.log('[AIInputBar] Starting 1s cooldown timer');
+    // console.log('[AIInputBar] Starting 1s cooldown timer');
     submitCooldownRef.current = setTimeout(() => {
-      console.log('[AIInputBar] 1s cooldown expired: setting isSubmitting=false');
+      // console.log('[AIInputBar] 1s cooldown expired: setting isSubmitting=false');
       setIsSubmitting(false);
       submitCooldownRef.current = null;
     }, 1000);
