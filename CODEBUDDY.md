@@ -333,3 +333,39 @@ import { Z_INDEX } from '@/constants/z-index';
 - Task management: Async queue with retry logic (`task-queue-service.ts`)
 - Media caching: IndexedDB-based cache (`media-cache-service.ts`)
 - All services use RxJS for reactive state management
+
+#### Sora-2 Character API Convention
+**场景**: 创建或查询 Sora-2 角色时
+
+❌ **错误示例**:
+```typescript
+// 错误：使用不存在的 /characters 接口
+const response = await fetch(`${baseUrl}/characters`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ video_id: taskId, model: 'sora-2-character' }),
+});
+
+// 错误：查询时使用 /characters 路径
+await fetch(`${baseUrl}/characters/${characterId}`);
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：使用 /v1/videos 接口 + FormData + character_from_task 参数
+const formData = new FormData();
+formData.append('character_from_task', 'sora-2-pro:task_xxx');
+formData.append('model', 'sora-2-character');
+formData.append('character_timestamps', '0,3');
+
+const response = await fetch(`${baseUrl}/videos`, {
+  method: 'POST',
+  headers: { Authorization: `Bearer ${apiKey}` },
+  body: formData,
+});
+
+// 正确：查询时使用 /v1/videos 路径
+await fetch(`${baseUrl}/videos/${characterId}`);
+```
+
+**原因**: Sora-2 角色 API 复用视频接口 `/v1/videos`，不存在独立的 `/characters` 端点。创建角色时必须使用 `character_from_task` 参数（非 `video_id`）和 FormData 格式。参考 `character-api-service.ts` 的实现。
