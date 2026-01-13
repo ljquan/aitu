@@ -33,7 +33,7 @@ import {
   getImagePromptHistory,
 } from './prompt-storage-service';
 import { swTaskQueueService } from './sw-task-queue-service';
-import { TaskType, TaskStatus } from '../types/task.types';
+import { TaskType, TaskStatus, Task } from '../types/task.types';
 import type { Folder, Board } from '../types/workspace.types';
 import type { StoredAsset } from '../types/asset.types';
 import { LS_KEYS_TO_MIGRATE } from '../constants/storage-keys';
@@ -90,6 +90,7 @@ interface BackupManifest {
     folderCount: number;
     boardCount: number;
     assetCount: number;
+    taskCount: number;
   };
 }
 
@@ -154,6 +155,10 @@ export interface ImportResult {
     skipped: number;
   };
   assets: {
+    imported: number;
+    skipped: number;
+  };
+  tasks: {
     imported: number;
     skipped: number;
   };
@@ -226,6 +231,7 @@ class BackupRestoreService {
         folderCount: 0,
         boardCount: 0,
         assetCount: 0,
+        taskCount: 0,
       },
     };
 
@@ -486,6 +492,22 @@ class BackupRestoreService {
     }
 
     manifest.stats.assetCount = exportedCount;
+
+    // 3. 导出任务数据（用于素材库展示）
+    onProgress?.(75, '正在导出任务数据...');
+    const allTasks = swTaskQueueService.getAllTasks();
+    // 只导出已完成的图片/视频任务（素材库需要的）
+    const completedMediaTasks = allTasks.filter(
+      task =>
+        task.status === TaskStatus.COMPLETED &&
+        (task.type === TaskType.IMAGE || task.type === TaskType.VIDEO) &&
+        task.result?.url
+    );
+    
+    if (completedMediaTasks.length > 0) {
+      zip.file('tasks.json', JSON.stringify(completedMediaTasks, null, 2));
+      manifest.stats.taskCount = completedMediaTasks.length;
+    }
   }
 
   /**
@@ -514,6 +536,7 @@ class BackupRestoreService {
       prompts: { imported: 0, skipped: 0 },
       projects: { folders: 0, boards: 0, skipped: 0 },
       assets: { imported: 0, skipped: 0 },
+      tasks: { imported: 0, skipped: 0 },
       errors: [],
     };
 
@@ -557,6 +580,10 @@ class BackupRestoreService {
       if (manifest.includes.assets) {
         onProgress?.(60, '正在导入素材...');
         result.assets = await this.importAssets(zip, onProgress);
+
+        // 导入任务数据（素材库展示需要）
+        onProgress?.(85, '正在导入任务数据...');
+        result.tasks = await this.importTasks(zip);
       }
 
       // 如果导入了项目，刷新工作区缓存
@@ -1078,6 +1105,55 @@ class BackupRestoreService {
         const progress = 60 + Math.round(((i + 1) / metaFiles.length) * 35);
         onProgress(progress, `正在导入素材 (${i + 1}/${metaFiles.length})...`);
       }
+    }
+
+    return { imported, skipped };
+  }
+
+  /**
+   * 导入任务数据
+   * 用于恢复素材库中 AI 生成素材的展示
+   */
+  private async importTasks(
+    zip: JSZip
+  ): Promise<{ imported: number; skipped: number }> {
+    let imported = 0;
+    let skipped = 0;
+
+    const tasksFile = zip.file('tasks.json');
+    if (!tasksFile) {
+      // 旧版备份文件可能没有 tasks.json，这是正常的
+      return { imported: 0, skipped: 0 };
+    }
+
+    try {
+      const tasksContent = await tasksFile.async('string');
+      const tasks: Task[] = JSON.parse(tasksContent);
+
+      if (!Array.isArray(tasks) || tasks.length === 0) {
+        return { imported: 0, skipped: 0 };
+      }
+
+      // 获取现有任务 ID
+      const existingTasks = swTaskQueueService.getAllTasks();
+      const existingTaskIds = new Set(existingTasks.map(t => t.id));
+
+      // 过滤出需要导入的任务（去重）
+      const tasksToImport = tasks.filter(task => {
+        if (existingTaskIds.has(task.id)) {
+          skipped++;
+          return false;
+        }
+        return true;
+      });
+
+      if (tasksToImport.length > 0) {
+        // 使用 restoreTasks 方法恢复任务
+        await swTaskQueueService.restoreTasks(tasksToImport);
+        imported = tasksToImport.length;
+      }
+    } catch (error) {
+      console.warn('[BackupRestore] Failed to import tasks:', error);
     }
 
     return { imported, skipped };
