@@ -416,3 +416,55 @@ const isExpired = Date.now() - cacheTime > 12 * 60 * 60 * 1000;
 ```
 
 **原因**: 本项目的 Service Worker 在每次访问缓存图片时会更新 `sw-cache-date` 以延长缓存时间（见 `sw/index.ts` 第 1732 行）。如果需要判断"原始缓存时间"，应该从 IndexedDB (`drawnix-unified-cache`) 的 `cachedAt` 字段获取，该字段不会因访问而更新。
+
+#### 素材库数据来源与备份恢复
+**场景**: 实现备份导出/导入功能时，需要考虑素材库的数据来源
+
+素材库（`AssetContext`）展示的素材来自两个来源：
+1. **本地上传的素材**：存储在 IndexedDB (`aitu-assets`) 中
+2. **AI 生成的素材**：从任务队列 (`taskQueueService.getTasksByStatus(COMPLETED)`) 动态获取
+
+❌ **错误示例**:
+```typescript
+// 错误：只导出媒体文件，没有导出任务数据
+async exportAssets(zip: JSZip) {
+  const cachedMedia = await unifiedCacheService.getAllCacheMetadata();
+  for (const item of cachedMedia) {
+    const blob = await unifiedCacheService.getCachedBlob(item.url);
+    zip.file(`assets/${item.id}.jpg`, blob);
+  }
+  // 导入后素材库无法展示 AI 生成的素材！
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：同时导出任务数据
+async exportAssets(zip: JSZip) {
+  // 1. 导出媒体文件
+  const cachedMedia = await unifiedCacheService.getAllCacheMetadata();
+  for (const item of cachedMedia) {
+    const blob = await unifiedCacheService.getCachedBlob(item.url);
+    zip.file(`assets/${item.id}.jpg`, blob);
+  }
+  
+  // 2. 导出任务数据（素材库展示需要）
+  const completedTasks = swTaskQueueService.getTasksByStatus(TaskStatus.COMPLETED)
+    .filter(t => t.type === TaskType.IMAGE || t.type === TaskType.VIDEO);
+  zip.file('tasks.json', JSON.stringify(completedTasks));
+}
+
+// 导入时恢复任务数据
+async importAssets(zip: JSZip) {
+  // ... 导入媒体文件 ...
+  
+  // 恢复任务数据
+  const tasksFile = zip.file('tasks.json');
+  if (tasksFile) {
+    const tasks = JSON.parse(await tasksFile.async('string'));
+    await swTaskQueueService.restoreTasks(tasks);
+  }
+}
+```
+
+**原因**: 素材库通过 `AssetContext.loadAssets()` 加载素材时，会调用 `taskQueueService.getTasksByStatus(TaskStatus.COMPLETED)` 获取 AI 生成的素材。如果只导出媒体文件而不导出任务数据，导入后任务队列为空，素材库就无法展示这些 AI 生成的素材。

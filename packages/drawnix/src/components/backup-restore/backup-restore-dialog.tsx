@@ -43,13 +43,19 @@ export const BackupRestoreDialog = ({
 
   const handleClose = useCallback(() => {
     if (!isProcessing) {
+      // 如果有导入结果且导入了任务数据，刷新页面以确保任务队列生效
+      if (importResult && importResult.tasks && importResult.tasks.imported > 0) {
+        window.location.reload();
+        return;
+      }
+      
       onOpenChange(false);
       // 重置状态
       setProgress(0);
       setProgressMessage('');
       setImportResult(null);
     }
-  }, [isProcessing, onOpenChange]);
+  }, [isProcessing, onOpenChange, importResult]);
 
   const handleBackup = useCallback(async () => {
     // 检查是否至少选择了一项
@@ -276,6 +282,11 @@ export const BackupRestoreDialog = ({
                       素材：导入 {importResult.assets.imported} 个，跳过 {importResult.assets.skipped} 个
                     </li>
                   )}
+                  {importResult.tasks && (importResult.tasks.imported > 0 || importResult.tasks.skipped > 0) && (
+                    <li>
+                      任务：导入 {importResult.tasks.imported} 个，跳过 {importResult.tasks.skipped} 个
+                    </li>
+                  )}
                 </ul>
                 {importResult.errors.length > 0 && (
                   <div className="backup-restore-dialog__result-errors">
@@ -296,7 +307,9 @@ export const BackupRestoreDialog = ({
                 onClick={handleClose}
                 disabled={isProcessing}
               >
-                {importResult ? '完成' : '取消'}
+                {importResult 
+                  ? (importResult.tasks?.imported > 0 ? '完成并刷新' : '完成')
+                  : '取消'}
               </button>
             </div>
           </div>
