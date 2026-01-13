@@ -218,8 +218,8 @@ Closes #123
 ## 品牌指南集成
 
 ### 视觉识别
-- **品牌名称**：Aitu（爱图）- AI 图像与视频创作工具
-- **标语**：爱上图像，爱上创作（Love Images, Love Creation）
+- **品牌名称**：Aitu（爱图）- AI 图片与视频创作工具
+- **标语**：爱上图片，爱上创作（Love Images, Love Creation）
 
 ### 色彩系统
 ```scss

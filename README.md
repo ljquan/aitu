@@ -20,10 +20,10 @@
 ## 特性
 
 ### AI 创作能力 🔥
-- **AI 图像生成** - 支持多种图像生成模型
+- **AI 图片生成** - 支持多种图片生成模型
   - gemini-2.5-flash-image (nano-banana) - 快速生图
   - gemini-3-pro-image-preview (nano-banana-2) - 高质量生图，支持 HD/2K/4K 分辨率
-  - 支持文本转图像、图像参考生成、批量生成
+  - 支持文本转图片、图片参考生成、批量生成
 - **AI 视频生成** - 支持多种视频生成模型
   - Veo3 / Veo3 Pro - 高质量视频生成
   - Veo3.1 / Veo3.1 Pro - 支持首尾帧控制，多图参考
@@ -54,11 +54,11 @@
 <div align="center">
   <figure>
     <a href="./apps/web/public/product_showcase/aitu-01.png" target="_blank" rel="noopener">
-      <img src="./apps/web/public/product_showcase/aitu-01.png" alt="提示词图像概率" width="100%" />
+      <img src="./apps/web/public/product_showcase/aitu-01.png" alt="提示词图片概率" width="100%" />
     </a>
     <figcaption>
       <p align="center">
-        提示词 + 图像 概括一体
+        提示词 + 图片 概括一体
       </p>
     </figcaption>
   </figure>
@@ -504,7 +504,7 @@ nx lint drawnix
 - ✅ 自由绘画和图片插入
 - ✅ Markdown/Mermaid 转换
 - ✅ 移动端适配
-- ✅ AI 图像生成（多模型支持）
+- ✅ AI 图片生成（多模型支持）
 - ✅ AI 视频生成（Veo3/Sora-2）
 - ✅ 任务队列与批量生成
 - ✅ 媒体缓存功能

@@ -63,7 +63,7 @@ async function getLegacyBoardData(): Promise<LegacyBoardData | null> {
     // Try IndexedDB format first
     const newData = await legacyStore.getItem<LegacyBoardData>(LEGACY_MAIN_BOARD_KEY);
     if (newData && newData.children && newData.children.length > 0) {
-      console.log('[WorkspaceMigration] Found legacy data in IndexedDB');
+      // console.log('[WorkspaceMigration] Found legacy data in IndexedDB');
       return newData;
     }
 
@@ -72,7 +72,7 @@ async function getLegacyBoardData(): Promise<LegacyBoardData | null> {
     if (oldDataString) {
       const oldData = JSON.parse(oldDataString);
       if (Array.isArray(oldData) && oldData.length > 0) {
-        console.log('[WorkspaceMigration] Found legacy data in localStorage');
+        // console.log('[WorkspaceMigration] Found legacy data in localStorage');
         return { children: oldData };
       }
     }
@@ -93,19 +93,19 @@ export async function migrateToWorkspace(): Promise<string | null> {
     // Check if already migrated
     const migrated = await isWorkspaceMigrationCompleted();
     if (migrated) {
-      console.log('[WorkspaceMigration] Already migrated, skipping');
+      // console.log('[WorkspaceMigration] Already migrated, skipping');
       return null;
     }
 
     // Get legacy data
     const legacyData = await getLegacyBoardData();
     if (!legacyData || !legacyData.children || legacyData.children.length === 0) {
-      console.log('[WorkspaceMigration] No legacy data to migrate');
+      // console.log('[WorkspaceMigration] No legacy data to migrate');
       await markMigrationCompleted();
       return null;
     }
 
-    console.log('[WorkspaceMigration] Found legacy data, migrating...', legacyData.children.length, 'elements');
+    // console.log('[WorkspaceMigration] Found legacy data, migrating...', legacyData.children.length, 'elements');
 
     // Initialize workspace service
     const workspaceService = WorkspaceService.getInstance();
@@ -133,7 +133,7 @@ export async function migrateToWorkspace(): Promise<string | null> {
     // Clear legacy data to prevent duplicate migrations
     await clearLegacyData();
 
-    console.log('[WorkspaceMigration] Migration completed, board:', board.id);
+    // console.log('[WorkspaceMigration] Migration completed, board:', board.id);
     return board.id;
   } catch (error) {
     console.error('[WorkspaceMigration] Migration failed:', error);
@@ -149,7 +149,7 @@ export async function clearLegacyData(): Promise<void> {
   try {
     await legacyStore.removeItem(LEGACY_MAIN_BOARD_KEY);
     localStorage.removeItem(OLD_DRAWNIX_LOCAL_DATA_KEY);
-    console.log('[WorkspaceMigration] Legacy data cleared');
+    // console.log('[WorkspaceMigration] Legacy data cleared');
   } catch (error) {
     console.error('[WorkspaceMigration] Failed to clear legacy data:', error);
   }

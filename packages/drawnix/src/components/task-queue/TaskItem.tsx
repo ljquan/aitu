@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Button, Tag, Tooltip } from 'tdesign-react';
+import { Button, Tag, Tooltip, Checkbox } from 'tdesign-react';
 import { ImageIcon, VideoIcon, DeleteIcon, RefreshIcon, DownloadIcon, EditIcon, UserIcon, CheckCircleFilledIcon } from 'tdesign-icons-react';
 import { Task, TaskStatus, TaskType } from '../../types/task.types';
 import { formatDateTime, formatTaskDuration } from '../../utils/task-utils';
@@ -19,6 +19,12 @@ import './task-queue.scss';
 export interface TaskItemProps {
   /** The task to display */
   task: Task;
+  /** Whether selection mode is active */
+  selectionMode?: boolean;
+  /** Whether this task is selected */
+  isSelected?: boolean;
+  /** Callback when selection changes */
+  onSelectionChange?: (taskId: string, selected: boolean) => void;
   /** Callback when retry button is clicked */
   onRetry?: (taskId: string) => void;
   /** Callback when delete button is clicked */
@@ -84,6 +90,9 @@ function getStatusLabel(status: TaskStatus): string {
  */
 export const TaskItem: React.FC<TaskItemProps> = ({
   task,
+  selectionMode = false,
+  isSelected = false,
+  onSelectionChange,
   onRetry,
   onDelete,
   onDownload,
@@ -167,8 +176,29 @@ export const TaskItem: React.FC<TaskItemProps> = ({
     );
   };
 
+  // Handle click on task item to toggle selection
+  const handleItemClick = (e: React.MouseEvent) => {
+    if (!selectionMode) return;
+    // Don't toggle if clicking on buttons or checkbox
+    const target = e.target as HTMLElement;
+    if (target.closest('button') || target.closest('.t-checkbox')) return;
+    onSelectionChange?.(task.id, !isSelected);
+  };
+
   return (
-    <div className="task-item">
+    <div
+      className={`task-item ${selectionMode ? 'task-item--selection-mode' : ''} ${isSelected ? 'task-item--selected' : ''}`}
+      onClick={handleItemClick}
+    >
+        {/* Selection checkbox */}
+        {selectionMode && (
+          <div className="task-item__checkbox">
+            <Checkbox
+              checked={isSelected}
+              onChange={(checked) => onSelectionChange?.(task.id, checked as boolean)}
+            />
+          </div>
+        )}
         <div className="task-item__header">
           <div className="task-item__info">
             {/* Title - Always visible */}

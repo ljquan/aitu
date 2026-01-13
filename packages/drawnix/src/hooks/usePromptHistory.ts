@@ -1,6 +1,6 @@
 /**
  * usePromptHistory Hook
- * 
+ *
  * 管理历史提示词的 React Hook
  * 提供历史记录的增删查改能力
  */
@@ -38,9 +38,23 @@ export function usePromptHistory(): UsePromptHistoryReturn {
     setHistory(data);
   }, []);
 
-  // 初始化加载
+  // 初始化加载 - 等待缓存初始化完成
   useEffect(() => {
-    refreshHistory();
+    let mounted = true;
+
+    const init = async () => {
+      // 等待缓存初始化完成
+      await promptStorageService.waitForInit();
+      if (mounted) {
+        refreshHistory();
+      }
+    };
+
+    init();
+
+    return () => {
+      mounted = false;
+    };
   }, [refreshHistory]);
 
   // 添加历史记录

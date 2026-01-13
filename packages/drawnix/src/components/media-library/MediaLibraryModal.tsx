@@ -116,7 +116,7 @@ export function MediaLibraryModal({
     [onSelect, onClose],
   );
 
-  // 处理"使用到画板"按钮点击
+  // 处理"使用"按钮点击
   const handleUseAsset = useCallback(
     (asset: Asset) => {
       if (onSelect) {
@@ -130,9 +130,9 @@ export function MediaLibraryModal({
   // 处理文件上传
   const handleFileUpload = useCallback(
     async (files: FileList) => {
-      console.log('[MediaLibrary] handleFileUpload called with files:', files);
+      // console.log('[MediaLibrary] handleFileUpload called with files:', files);
       if (!files || files.length === 0) {
-        console.log('[MediaLibrary] No files provided');
+        // console.log('[MediaLibrary] No files provided');
         return;
       }
 
@@ -140,11 +140,11 @@ export function MediaLibraryModal({
       const validFiles: File[] = [];
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        console.log(`[MediaLibrary] Processing file ${i + 1}:`, {
-          name: file.name,
-          type: file.type,
-          size: file.size,
-        });
+        // console.log(`[MediaLibrary] Processing file ${i + 1}:`, {
+        //   name: file.name,
+        //   type: file.type,
+        //   size: file.size,
+        // });
 
         // 检查文件类型
         const isImage = file.type.startsWith('image/');
@@ -164,43 +164,43 @@ export function MediaLibraryModal({
           continue;
         }
 
-        console.log(`[MediaLibrary] File validation passed:`, {
-          isImage,
-          isVideo,
-          type: isImage ? 'IMAGE' : 'VIDEO',
-        });
+        // console.log(`[MediaLibrary] File validation passed:`, {
+        //   isImage,
+        //   isVideo,
+        //   type: isImage ? 'IMAGE' : 'VIDEO',
+        // });
         validFiles.push(file);
       }
 
       if (validFiles.length === 0) {
-        console.log('[MediaLibrary] No valid files to upload');
+        // console.log('[MediaLibrary] No valid files to upload');
         return;
       }
 
-      console.log(`[MediaLibrary] Uploading ${validFiles.length} valid file(s)`);
+      // console.log(`[MediaLibrary] Uploading ${validFiles.length} valid file(s)`);
 
       // 上传文件
       try {
         for (const file of validFiles) {
           const isImage = file.type.startsWith('image/');
           const type = isImage ? AssetType.IMAGE : AssetType.VIDEO;
-          console.log(`[MediaLibrary] Calling addAsset for:`, {
-            fileName: file.name,
-            type,
-            source: AssetSource.LOCAL,
-          });
+          // console.log(`[MediaLibrary] Calling addAsset for:`, {
+          //   fileName: file.name,
+          //   type,
+          //   source: AssetSource.LOCAL,
+          // });
 
           const asset = await addAsset(file, type, AssetSource.LOCAL);
-          console.log(`[MediaLibrary] Asset added successfully:`, asset);
+          // console.log(`[MediaLibrary] Asset added successfully:`, asset);
         }
 
         MessagePlugin.success(`成功上传 ${validFiles.length} 个文件`);
-        console.log('[MediaLibrary] All files uploaded successfully');
+        // console.log('[MediaLibrary] All files uploaded successfully');
 
         // 重新加载资产列表
-        console.log('[MediaLibrary] Reloading assets...');
+        // console.log('[MediaLibrary] Reloading assets...');
         await loadAssets();
-        console.log('[MediaLibrary] Assets reloaded');
+        // console.log('[MediaLibrary] Assets reloaded');
       } catch (error) {
         console.error('[MediaLibrary] File upload error:', error);
         // 错误信息已经在 AssetContext 中处理
@@ -239,9 +239,9 @@ export function MediaLibraryModal({
     // 先删除画布上使用该素材的元素
     if (board) {
       const removedCount = removeElementsByAssetId(board, assetId);
-      if (removedCount > 0) {
-        console.log(`[MediaLibrary] Removed ${removedCount} canvas elements using asset: ${assetId}`);
-      }
+      // if (removedCount > 0) {
+      //   console.log(`[MediaLibrary] Removed ${removedCount} canvas elements using asset: ${assetId}`);
+      // }
     }
     
     // 然后删除素材本身

@@ -64,10 +64,10 @@ export function removeElementFromBoard(board: PlaitBoard, element: PlaitElement)
     const elementToRemove = board.children.find((child: any) => child.id === element.id);
     if (elementToRemove) {
       CoreTransforms.removeElements(board, [elementToRemove]);
-      console.log(`[AssetCleanup] Successfully removed element: ${element.id}`);
+      // console.log(`[AssetCleanup] Successfully removed element: ${element.id}`);
       return true;
     } else {
-      console.warn(`[AssetCleanup] Element not found in board: ${element.id}`);
+      // console.warn(`[AssetCleanup] Element not found in board: ${element.id}`);
       return false;
     }
   } catch (error) {
@@ -123,7 +123,7 @@ export function removeElementsByAssetId(board: PlaitBoard, assetId: string): num
   if (elementsToRemove.length > 0) {
     try {
       CoreTransforms.removeElements(board, elementsToRemove);
-      console.log(`[AssetCleanup] Removed ${elementsToRemove.length} elements using asset: ${assetId}`);
+      // console.log(`[AssetCleanup] Removed ${elementsToRemove.length} elements using asset: ${assetId}`);
     } catch (error) {
       console.error('[AssetCleanup] Failed to remove elements:', error);
       return 0;
@@ -169,7 +169,7 @@ export function removeElementsByAssetIds(board: PlaitBoard, assetIds: string[]):
   if (elementsToRemove.length > 0) {
     try {
       CoreTransforms.removeElements(board, elementsToRemove);
-      console.log(`[AssetCleanup] Batch removed ${elementsToRemove.length} elements using ${assetIds.length} assets`);
+      // console.log(`[AssetCleanup] Batch removed ${elementsToRemove.length} elements using ${assetIds.length} assets`);
     } catch (error) {
       console.error('[AssetCleanup] Failed to batch remove elements:', error);
       return 0;
@@ -215,7 +215,7 @@ export async function cleanupMissingAssets(board: PlaitBoard): Promise<number> {
   if (elementsToRemove.length > 0) {
     try {
       CoreTransforms.removeElements(board, elementsToRemove);
-      console.log(`[AssetCleanup] Removed ${elementsToRemove.length} elements with missing assets`);
+      // console.log(`[AssetCleanup] Removed ${elementsToRemove.length} elements with missing assets`);
     } catch (error) {
       console.error('[AssetCleanup] Failed to remove elements:', error);
     }

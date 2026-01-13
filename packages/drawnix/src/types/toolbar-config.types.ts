@@ -34,14 +34,14 @@ export const TOOLBAR_CONFIG_VERSION = 3;
 
 /**
  * 默认显示的按钮
- * 顺序: 手形、选择、文本、素材库、图片上传、AI图像、AI视频
+ * 顺序: 手形、选择、文本、图片上传、素材库、AI图片、AI视频
  */
 export const DEFAULT_VISIBLE_BUTTONS = [
   'hand',
   'selection',
   'text',
-  'media-library',
   'image',
+  'media-library',
   'ai-image',
   'ai-video',
 ];
@@ -54,8 +54,8 @@ export const ALL_BUTTON_IDS = [
   'hand',
   'selection',
   'text',
-  'media-library',
   'image',
+  'media-library',
   'ai-image',
   'ai-video',
   // 默认收起的按钮（放在更多工具里）

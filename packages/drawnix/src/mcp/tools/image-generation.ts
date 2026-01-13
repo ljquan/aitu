@@ -9,7 +9,7 @@
 
 import type { MCPTool, MCPResult, MCPExecuteOptions, MCPTaskResult } from '../types';
 import { defaultGeminiClient } from '../../utils/gemini-api';
-import { taskQueueService } from '../../services/task-queue-service';
+import { taskQueueService } from '../../services/task-queue';
 import { TaskType } from '../../types/task.types';
 import { getDefaultImageModel, IMAGE_PARAMS } from '../../constants/model-config';
 import { geminiSettings } from '../../utils/settings-manager';
@@ -64,12 +64,12 @@ async function executeAsync(params: ImageGenerationParams): Promise<MCPResult> {
   }
 
   try {
-    console.log('[ImageGenerationTool] Generating image with params:', {
-      prompt: prompt.substring(0, 100) + (prompt.length > 100 ? '...' : ''),
-      size,
-      referenceImages: referenceImages?.length || 0,
-      quality,
-    });
+    // console.log('[ImageGenerationTool] Generating image with params:', {
+    //   prompt: prompt.substring(0, 100) + (prompt.length > 100 ? '...' : ''),
+    //   size,
+    //   referenceImages: referenceImages?.length || 0,
+    //   quality,
+    // });
 
     // 调用 Gemini 图片生成 API
     const result = await defaultGeminiClient.generateImage(prompt, {
@@ -79,7 +79,7 @@ async function executeAsync(params: ImageGenerationParams): Promise<MCPResult> {
       quality: quality || '1k',
     });
 
-    console.log('[ImageGenerationTool] Generation response:', result);
+    // console.log('[ImageGenerationTool] Generation response:', result);
 
     // 解析响应
     if (result.data && Array.isArray(result.data) && result.data.length > 0) {
@@ -163,7 +163,7 @@ function executeQueue(params: ImageGenerationParams, options: MCPExecuteOptions)
 
     // 如果是重试，复用原有任务
     if (options.retryTaskId) {
-      console.log('[ImageGenerationTool] Retrying existing task:', options.retryTaskId);
+      // console.log('[ImageGenerationTool] Retrying existing task:', options.retryTaskId);
       taskQueueService.retryTask(options.retryTaskId);
       const task = taskQueueService.getTask(options.retryTaskId);
       if (!task) {
@@ -184,11 +184,13 @@ function executeQueue(params: ImageGenerationParams, options: MCPExecuteOptions)
             batchIndex: i + 1,
             batchTotal: actualCount,
             globalIndex: options.globalIndex ? options.globalIndex + i : i + 1,
+            // 自动插入画布
+            autoInsertToCanvas: true,
           },
           TaskType.IMAGE
         );
         createdTasks.push(task);
-        console.log(`[ImageGenerationTool] Created task ${i + 1}/${actualCount}:`, task.id);
+        // console.log(`[ImageGenerationTool] Created task ${i + 1}/${actualCount}:`, task.id);
       }
     }
 
@@ -336,12 +338,13 @@ export async function generateImage(params: ImageGenerationParams): Promise<MCPR
 /**
  * 便捷方法：创建图片生成任务（queue 模式）
  */
-export function createImageTask(
+export async function createImageTask(
   params: ImageGenerationParams,
   options?: Omit<MCPExecuteOptions, 'mode'>
-): MCPTaskResult {
-  return imageGenerationTool.execute(params as unknown as Record<string, unknown>, {
+): Promise<MCPTaskResult> {
+  const result = await imageGenerationTool.execute(params as unknown as Record<string, unknown>, {
     ...options,
     mode: 'queue',
-  }) as unknown as MCPTaskResult;
+  });
+  return result as MCPTaskResult;
 }

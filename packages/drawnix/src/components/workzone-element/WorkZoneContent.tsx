@@ -95,12 +95,12 @@ export const WorkZoneContent: React.FC<WorkZoneContentProps> = ({
             className="workzone-content__delete-btn"
             onPointerDown={(e) => {
               // 必须在 pointerdown 阶段阻止事件冒泡，否则 Plait 会拦截
-              console.log('[WorkZoneContent] Delete button pointerdown - stopping propagation');
+              // console.log('[WorkZoneContent] Delete button pointerdown - stopping propagation');
               e.stopPropagation();
               e.preventDefault();
             }}
             onPointerUp={(e) => {
-              console.log('[WorkZoneContent] Delete button pointerup - triggering delete');
+              // console.log('[WorkZoneContent] Delete button pointerup - triggering delete');
               e.stopPropagation();
               e.preventDefault();
               onDelete();
@@ -162,7 +162,7 @@ export const WorkZoneContent: React.FC<WorkZoneContentProps> = ({
       {/* 失败提示 */}
       {workflowStatus.status === 'failed' && (
         <div className="workzone-content__error">
-          ❌ 执行失败
+          ❌ {workflow.steps.find(s => s.status === 'failed')?.error || '执行失败'}
         </div>
       )}
 

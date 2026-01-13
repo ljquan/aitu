@@ -161,7 +161,7 @@ export function useTextSelection(
         if (selectedText) {
           // 使用 Clipboard API 复制
           navigator.clipboard.writeText(selectedText).then(() => {
-            console.log(`Text ${isCutShortcut ? 'cut' : 'copied'} via keyboard shortcut:`, selectedText);
+            // console.log(`Text ${isCutShortcut ? 'cut' : 'copied'} via keyboard shortcut:`, selectedText);
           }).catch(err => {
             console.error('Failed to copy text:', err);
             // 降级：使用 document.execCommand (已废弃但仍然有效)
@@ -191,7 +191,7 @@ export function useTextSelection(
         if (selectedText && e.clipboardData) {
           e.clipboardData.setData('text/plain', selectedText);
           e.preventDefault(); // 阻止默认行为，使用我们自己的复制逻辑
-          console.log('Text copied via context menu:', selectedText);
+          // console.log('Text copied via context menu:', selectedText);
         }
       }
 
@@ -208,7 +208,7 @@ export function useTextSelection(
 
         if (selectedText && e.clipboardData) {
           e.clipboardData.setData('text/plain', selectedText);
-          console.log('Text cut via context menu:', selectedText);
+          // console.log('Text cut via context menu:', selectedText);
           // 不阻止默认行为，让浏览器删除选中的文本
         }
       }

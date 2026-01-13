@@ -50,9 +50,9 @@ export class TrackingDebouncer {
       newMap.set(eventName, now);
       this.debounceMap.set(element, newMap);
       this.globalDebounceMap.set(eventName, now);
-      if (devMode) {
-        console.log(`[Tracking] ✅ New element: ${eventName}`);
-      }
+      // if (devMode) {
+      //   console.log(`[Tracking] ✅ New element: ${eventName}`);
+      // }
       return true;
     }
 
@@ -61,9 +61,9 @@ export class TrackingDebouncer {
       // Outside debounce window, track it
       eventMap.set(eventName, now);
       this.globalDebounceMap.set(eventName, now);
-      if (devMode) {
-        console.log(`[Tracking] ✅ Track: ${eventName}`);
-      }
+      // if (devMode) {
+      //   console.log(`[Tracking] ✅ Track: ${eventName}`);
+      // }
       return true;
     }
 

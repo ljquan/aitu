@@ -98,10 +98,14 @@ export interface WorkflowDefinition {
 }
 
 /**
- * 生成唯一 ID
+ * 生成唯一的工作流 ID
+ * 
+ * 注意：之前使用基于内容哈希的 ID 来实现幂等性，但这会导致用户无法用相同提示词重复生成。
+ * 防重复逻辑应该在 AI 输入框层面做（让用户确认），而不是在 SW 层面静默跳过。
+ * 现在改为使用时间戳 + 随机字符串，确保每次提交都是唯一的工作流。
  */
-function generateId(): string {
-  return `${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+function generateWorkflowId(): string {
+  return `wf-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
 }
 
 /**
@@ -129,12 +133,15 @@ export function convertDirectGenerationToWorkflow(
 
   const steps: WorkflowStep[] = [];
 
+  // 使用唯一 ID（每次提交都是新的工作流）
+  const workflowId = generateWorkflowId();
+
   // 生成批次 ID（用于区分同一批次中的不同任务）
-  const batchId = `workflow_${Date.now()}`;
+  const batchId = `wf_batch_${workflowId}`;
 
   // 根据数量创建多个生成步骤
   for (let i = 0; i < count; i++) {
-    const stepId = `step-${i + 1}`;
+    const stepId = `${workflowId}-step-${i + 1}`;
 
     // 通用的执行选项
     const options: WorkflowStepOptions = {
@@ -192,7 +199,7 @@ export function convertDirectGenerationToWorkflow(
   }
 
   return {
-    id: generateId(),
+    id: workflowId,
     name: generationType === 'image' ? '图片生成' : '视频生成',
     description: `使用 ${modelId} 模型${count > 1 ? `生成 ${count} 个` : '生成'}${generationType === 'image' ? '图片' : '视频'}`,
     scenarioType: 'direct_generation',
@@ -238,6 +245,9 @@ export function convertAgentFlowToWorkflow(
     selection,
   } = params;
 
+  // 使用唯一 ID（每次提交都是新的工作流）
+  const workflowId = generateWorkflowId();
+
   // 构建 Agent 执行上下文（与 AgentExecutionContext 类型一致）
   const agentContext = {
     userInstruction,
@@ -260,7 +270,7 @@ export function convertAgentFlowToWorkflow(
   // 后续步骤会在 AI 分析后动态添加
   const steps: WorkflowStep[] = [
     {
-      id: 'step-analyze',
+      id: `${workflowId}-step-analyze`,
       mcp: 'ai_analyze',
       args: {
         context: agentContext,
@@ -275,7 +285,7 @@ export function convertAgentFlowToWorkflow(
   ];
 
   return {
-    id: generateId(),
+    id: workflowId,
     name: 'AI 智能生成',
     description: 'AI 分析用户请求并执行相应操作',
     scenarioType: 'agent_flow',

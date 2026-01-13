@@ -132,14 +132,14 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
       // 1. 优先从本地 IndexedDB 缓存获取
       const cachedBlob = await unifiedCacheService.getCachedBlob(task.result.url);
       if (cachedBlob) {
-        console.log('[Download] Using cached blob for task:', taskId);
+        // console.log('[Download] Using cached blob for task:', taskId);
         downloadFromBlob(cachedBlob, filename);
         MessagePlugin.success('下载成功');
         return;
       }
 
       // 2. 缓存不存在，从 URL 下载（带重试，SW 会自动去重）
-      console.log('[Download] No cache, fetching from URL:', task.result.url);
+      // console.log('[Download] No cache, fetching from URL:', task.result.url);
       const result = await downloadMediaFile(
         task.result.url,
         task.params.prompt,
@@ -216,11 +216,11 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
         initialImages: task.params.uploadedImages,  // 传递上传的图片（多图片格式）
         initialResultUrl: task.result?.url,  // 传递结果URL用于预览
       };
-      console.log('DialogTaskList - handleEdit VIDEO task:', {
-        taskId,
-        taskParams: task.params,
-        initialData
-      });
+      // console.log('DialogTaskList - handleEdit VIDEO task:', {
+      //   taskId,
+      //   taskParams: task.params,
+      //   initialData
+      // });
       openDialog(DialogType.aiVideoGeneration, initialData);
     }
   };
@@ -419,7 +419,7 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
         task={characterDialogTask}
         onClose={() => setCharacterDialogTask(null)}
         onCreateComplete={(characterId) => {
-          console.log('Character created:', characterId);
+          // console.log('Character created:', characterId);
           setCharacterDialogTask(null);
         }}
       />

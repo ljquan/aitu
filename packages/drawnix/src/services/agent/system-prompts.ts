@@ -42,7 +42,7 @@ export function generateSystemPrompt(): string {
   const toolsDescription = mcpRegistry.generateToolsDescription();
 
   return `# 角色定义
-你是一个专门执行图像和视频生成任务的工具调用器。
+你是一个专门执行图片和视频生成任务的工具调用器。
 
 ## 立即示例（按此格式响应）
 

@@ -9,8 +9,12 @@ import {
 } from '@drawnix/drawnix';
 import { PlaitBoard, PlaitElement, PlaitTheme, Viewport } from '@plait/core';
 
+// Global flag to prevent duplicate initialization in StrictMode
+let appInitialized = false;
+
 export function App() {
   const [isLoading, setIsLoading] = useState(true);
+  const [isDataReady, setIsDataReady] = useState(false);
   const [value, setValue] = useState<{
     children: PlaitElement[];
     viewport?: Viewport;
@@ -20,6 +24,22 @@ export function App() {
   // Initialize workspace and handle migration
   useEffect(() => {
     const initialize = async () => {
+      // Prevent duplicate initialization in StrictMode
+      if (appInitialized) {
+        const workspaceService = WorkspaceService.getInstance();
+        const currentBoard = workspaceService.getCurrentBoard();
+        if (currentBoard) {
+          setValue({
+            children: currentBoard.elements || [],
+            viewport: currentBoard.viewport,
+            theme: currentBoard.theme,
+          });
+        }
+        setIsLoading(false);
+        return;
+      }
+      appInitialized = true;
+
       try {
         const workspaceService = WorkspaceService.getInstance();
         await workspaceService.initialize();
@@ -35,22 +55,9 @@ export function App() {
 
         // If no current board and no boards exist, create default board with initializeData
         if (!currentBoard && !workspaceService.hasBoards()) {
-          let initialElements: PlaitElement[] = [];
-          try {
-            const response = await fetch(
-              `/init.json?v=${import.meta.env.VITE_APP_VERSION}`
-            );
-            if (response.ok) {
-              const data = await response.json();
-              initialElements = data.elements || [];
-            }
-          } catch (error) {
-            console.error('[App] Failed to load initial data:', error);
-          }
-
           const board = await workspaceService.createBoard({
-            name: '默认画板',
-            elements: initialElements,
+            name: '我的画板1',
+            elements: [],
           });
 
           if (board) {
@@ -87,6 +94,7 @@ export function App() {
       } catch (error) {
         console.error('[App] Initialization failed:', error);
       } finally {
+        setIsDataReady(true);
         setIsLoading(false);
       }
     };
@@ -143,6 +151,7 @@ export function App() {
         theme={value.theme}
         onChange={handleBoardChange}
         onBoardSwitch={handleBoardSwitch}
+        isDataReady={isDataReady}
         afterInit={(board) => {
           (
             window as unknown as {
@@ -200,7 +209,7 @@ async function recoverVideoUrlsInElements(
 
         // 转换为新格式的稳定 URL（带 .mp4 后缀）
         const newUrl = `/__aitu_cache__/video/${taskId}.mp4`;
-        console.log(`[App] Migrating video URL: ${taskId}`);
+        // console.log(`[App] Migrating video URL: ${taskId}`);
         return { ...element, url: newUrl };
       }
     }

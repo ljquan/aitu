@@ -92,7 +92,6 @@ $drawer-width-wide: min(1024px, 50vw);
     align-items: center;
     justify-content: space-between;
     padding: $spacing-lg $spacing-md;
-    border-bottom: 1px solid var(--td-component-border);
     flex-shrink: 0;
   }
 
@@ -137,7 +136,7 @@ $drawer-width-wide: min(1024px, 50vw);
   // ========================================
 
   &__filter {
-    padding: $spacing-md;
+    padding: 0 $spacing-md $spacing-md;
     border-bottom: 1px solid var(--td-component-border);
     flex-shrink: 0;
   }
@@ -197,5 +196,52 @@ $drawer-width-wide: min(1024px, 50vw);
     background: rgba(0, 0, 0, 0.3);
     z-index: $z-task-queue-panel - 1;
     cursor: pointer;
+  }
+
+  // ========================================
+  // Resize Handle
+  // ========================================
+
+  &__resize-handle {
+    position: absolute;
+    top: 0;
+    right: -4px;
+    width: 8px;
+    height: 100%;
+    cursor: ew-resize;
+    background: transparent;
+    z-index: 10;
+
+    &::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 4px;
+      height: 40px;
+      background: var(--td-component-border, #e7e7e7);
+      border-radius: 2px;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+
+    &:hover::after {
+      opacity: 1;
+      background: #F39C12;
+    }
+  }
+
+  &--resizable {
+    // 拖拽时覆盖宽度预设
+    &.side-drawer--dragging {
+      transition: none;
+      user-select: none;
+    }
+  }
+
+  &--dragging &__resize-handle::after {
+    opacity: 1;
+    background: #F39C12;
   }
 }

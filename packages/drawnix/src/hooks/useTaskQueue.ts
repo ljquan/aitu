@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { taskQueueService } from '../services/task-queue-service';
+import { taskQueueService } from '../services/task-queue';
 import { Task, TaskStatus, TaskType, GenerationParams } from '../types/task.types';
 
 /**
@@ -37,6 +37,12 @@ export interface UseTaskQueueReturn {
   clearFailed: () => void;
   /** Gets a specific task by ID */
   getTask: (taskId: string) => Task | undefined;
+  /** Batch delete multiple tasks */
+  batchDeleteTasks: (taskIds: string[]) => void;
+  /** Batch retry multiple failed tasks */
+  batchRetryTasks: (taskIds: string[]) => void;
+  /** Batch cancel multiple active tasks */
+  batchCancelTasks: (taskIds: string[]) => void;
 }
 
 /**
@@ -136,6 +142,24 @@ export function useTaskQueue(): UseTaskQueueReturn {
     return taskQueueService.getTask(taskId);
   }, [updateCounter]); // Re-create when tasks update
 
+  const batchDeleteTasks = useCallback((taskIds: string[]) => {
+    taskIds.forEach(taskId => {
+      taskQueueService.deleteTask(taskId);
+    });
+  }, []);
+
+  const batchRetryTasks = useCallback((taskIds: string[]) => {
+    taskIds.forEach(taskId => {
+      taskQueueService.retryTask(taskId);
+    });
+  }, []);
+
+  const batchCancelTasks = useCallback((taskIds: string[]) => {
+    taskIds.forEach(taskId => {
+      taskQueueService.cancelTask(taskId);
+    });
+  }, []);
+
   return {
     tasks,
     activeTasks,
@@ -149,5 +173,8 @@ export function useTaskQueue(): UseTaskQueueReturn {
     clearCompleted,
     clearFailed,
     getTask,
+    batchDeleteTasks,
+    batchRetryTasks,
+    batchCancelTasks,
   };
 }

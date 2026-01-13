@@ -2,9 +2,11 @@
  * MCP 工具注册中心
  * 
  * 管理所有 MCP 工具的注册、查询和执行
+ * 工具执行委托给 Service Worker 处理
  */
 
 import type { MCPTool, MCPResult, ToolCall, MCPExecuteOptions } from './types';
+import { swTaskQueueClient } from '../services/sw-client';
 
 /**
  * MCP 工具注册中心
@@ -12,6 +14,8 @@ import type { MCPTool, MCPResult, ToolCall, MCPExecuteOptions } from './types';
 class MCPRegistry {
   private tools: Map<string, MCPTool> = new Map();
   private static instance: MCPRegistry;
+  /** 是否使用 SW 执行工具（默认 true，可通过 setUseSW 切换） */
+  private useSW = true;
 
   private constructor() {}
 
@@ -33,7 +37,7 @@ class MCPRegistry {
       console.warn(`[MCPRegistry] Tool "${tool.name}" already registered, overwriting...`);
     }
     this.tools.set(tool.name, tool);
-    console.log(`[MCPRegistry] Tool "${tool.name}" registered`);
+    // console.log(`[MCPRegistry] Tool "${tool.name}" registered`);
   }
 
   /**
@@ -48,9 +52,9 @@ class MCPRegistry {
    */
   unregister(name: string): boolean {
     const result = this.tools.delete(name);
-    if (result) {
-      console.log(`[MCPRegistry] Tool "${name}" unregistered`);
-    }
+    // if (result) {
+    //   console.log(`[MCPRegistry] Tool "${name}" unregistered`);
+    // }
     return result;
   }
 
@@ -83,7 +87,16 @@ class MCPRegistry {
   }
 
   /**
+   * 设置是否使用 SW 执行工具
+   * @param useSW - true 使用 SW，false 使用本地执行
+   */
+  setUseSW(useSW: boolean): void {
+    this.useSW = useSW;
+  }
+
+  /**
    * 执行工具调用
+   * 优先委托给 Service Worker 执行，如果 SW 不可用则回退到本地执行
    * @param toolCall - 工具调用信息
    * @param options - 执行选项（可选，用于指定执行模式等）
    */
@@ -98,10 +111,50 @@ class MCPRegistry {
       };
     }
 
+    // 尝试使用 SW 执行（仅适用于可在 SW 中执行的工具）
+    if (this.useSW && swTaskQueueClient.isInitialized()) {
+      try {
+        const result = await swTaskQueueClient.executeMCPTool(
+          toolCall.name,
+          toolCall.arguments,
+          {
+            mode: options?.mode,
+            batchId: options?.batchId,
+            batchIndex: options?.batchIndex,
+            batchTotal: options?.batchTotal,
+            timeoutMs: 120000, // 2 minutes timeout
+          }
+        );
+
+        // 如果 SW 返回成功，直接返回结果
+        if (result.success) {
+          return {
+            success: true,
+            data: result.data,
+            type: result.type,
+          };
+        }
+
+        // 如果 SW 返回 "requires main thread" 错误，回退到本地执行
+        if (result.error?.includes('requires main thread')) {
+          // Fall through to local execution
+        } else {
+          // 其他错误直接返回
+          return {
+            success: false,
+            error: result.error,
+            type: result.type,
+          };
+        }
+      } catch (error: any) {
+        console.warn(`[MCPRegistry] SW execution failed, falling back to local: ${error.message}`);
+        // Fall through to local execution
+      }
+    }
+
+    // 回退到本地执行
     try {
-      console.log(`[MCPRegistry] Executing tool "${toolCall.name}" with args:`, toolCall.arguments, 'options:', options);
       const result = await tool.execute(toolCall.arguments, options);
-      console.log(`[MCPRegistry] Tool "${toolCall.name}" execution completed:`, result.success);
       return result;
     } catch (error: any) {
       console.error(`[MCPRegistry] Tool "${toolCall.name}" execution failed:`, error);
@@ -232,7 +285,7 @@ ${paramDescriptions || '  无参数'}`;
    */
   clear(): void {
     this.tools.clear();
-    console.log('[MCPRegistry] All tools cleared');
+    // console.log('[MCPRegistry] All tools cleared');
   }
 }
 

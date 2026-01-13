@@ -58,7 +58,7 @@ async function executeSplit(
     };
   }
 
-  console.log('[SplitImageTool] Executing split with smart detection');
+  // console.log('[SplitImageTool] Executing split with smart detection');
 
   try {
     // 使用统一的 splitAndInsertImages 函数

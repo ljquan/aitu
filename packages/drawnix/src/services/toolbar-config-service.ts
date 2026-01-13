@@ -1,9 +1,11 @@
 /**
  * 工具栏配置存储服务
  * 管理工具栏按钮顺序和显示状态的持久化
+ * 使用 IndexedDB 进行存储（通过 kvStorageService）
  */
 
-import { TOOLBAR_CONFIG_KEY } from '../constants/storage';
+import { LS_KEYS_TO_MIGRATE } from '../constants/storage-keys';
+import { kvStorageService } from './kv-storage-service';
 import {
   ToolbarConfig,
   ToolbarButtonConfig,
@@ -15,6 +17,8 @@ import {
   moveButtonToVisible,
   moveButtonToHidden,
 } from '../types/toolbar-config.types';
+
+const STORAGE_KEY = LS_KEYS_TO_MIGRATE.TOOLBAR_CONFIG;
 
 // 旧版默认布局，用于迁移判断
 const LEGACY_ALL_BUTTON_IDS = [
@@ -52,23 +56,63 @@ const LEGACY_DEFAULT_VISIBLE_BUTTONS = [
 class ToolbarConfigService {
   private config: ToolbarConfig | null = null;
   private initialized = false;
+  private initPromise: Promise<ToolbarConfig> | null = null;
 
   /**
-   * 初始化服务
+   * 异步初始化服务（从 IndexedDB 加载）
+   */
+  async initializeAsync(): Promise<ToolbarConfig> {
+    if (this.initialized && this.config) {
+      return this.config;
+    }
+
+    // 防止重复初始化
+    if (this.initPromise) {
+      return this.initPromise;
+    }
+
+    this.initPromise = this.doInitialize();
+    return this.initPromise;
+  }
+
+  private async doInitialize(): Promise<ToolbarConfig> {
+    try {
+      const savedConfig = await kvStorageService.get<ToolbarConfig>(STORAGE_KEY);
+      if (savedConfig) {
+        this.config = this.migrateConfig(savedConfig);
+      } else {
+        // 无配置，使用默认配置
+        this.config = getDefaultToolbarConfig();
+        await this.saveToStorageAsync(this.config);
+      }
+    } catch (error) {
+      console.warn('[ToolbarConfigService] Failed to load from IndexedDB:', error);
+      this.config = getDefaultToolbarConfig();
+    }
+
+    this.initialized = true;
+    return this.config;
+  }
+
+  /**
+   * 同步初始化服务（使用默认配置，后台异步加载）
+   * 用于兼容现有同步调用
    */
   initialize(): ToolbarConfig {
     if (this.initialized && this.config) {
       return this.config;
     }
 
-    // 尝试加载已保存的配置
-    const savedConfig = this.loadFromStorage();
-    if (savedConfig) {
-      this.config = this.migrateConfig(savedConfig);
-    } else {
-      // 无配置，使用默认配置
+    // 如果尚未初始化，先使用默认配置
+    if (!this.config) {
       this.config = getDefaultToolbarConfig();
-      this.saveToStorage(this.config);
+      // 后台异步加载真实配置
+      this.initializeAsync().then((loadedConfig) => {
+        // 只有在用户没有修改过的情况下才更新
+        if (this.config && loadedConfig) {
+          this.config = loadedConfig;
+        }
+      });
     }
 
     this.initialized = true;
@@ -168,27 +212,20 @@ class ToolbarConfigService {
   }
 
   /**
-   * 从 localStorage 加载配置
+   * 保存配置到 IndexedDB（异步，不阻塞）
    */
-  private loadFromStorage(): ToolbarConfig | null {
-    try {
-      const stored = localStorage.getItem(TOOLBAR_CONFIG_KEY);
-      if (!stored) {
-        return null;
-      }
-      return JSON.parse(stored) as ToolbarConfig;
-    } catch (error) {
-      console.warn('[ToolbarConfigService] Failed to load config:', error);
-      return null;
-    }
+  private saveToStorage(config: ToolbarConfig): void {
+    kvStorageService.set(STORAGE_KEY, config).catch((error) => {
+      console.error('[ToolbarConfigService] Failed to save config:', error);
+    });
   }
 
   /**
-   * 保存配置到 localStorage
+   * 保存配置到 IndexedDB（异步，等待完成）
    */
-  private saveToStorage(config: ToolbarConfig): void {
+  private async saveToStorageAsync(config: ToolbarConfig): Promise<void> {
     try {
-      localStorage.setItem(TOOLBAR_CONFIG_KEY, JSON.stringify(config));
+      await kvStorageService.set(STORAGE_KEY, config);
     } catch (error) {
       console.error('[ToolbarConfigService] Failed to save config:', error);
     }
@@ -206,7 +243,7 @@ class ToolbarConfigService {
     const existingIds = new Set(config.buttons.map((btn) => btn.id));
     const newButtons: ToolbarButtonConfig[] = [];
 
-    ALL_BUTTON_IDS.forEach((id, index) => {
+    ALL_BUTTON_IDS.forEach((id) => {
       if (!existingIds.has(id)) {
         // 新按钮默认隐藏，放在最后
         newButtons.push({

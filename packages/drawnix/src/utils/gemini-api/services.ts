@@ -2,16 +2,58 @@
  * Gemini API 服务函数
  */
 
-import { GeminiConfig, ImageInput, GeminiMessage, VideoGenerationOptions, ProcessedContent, GeminiResponse } from './types';
+import { ImageInput, GeminiMessage, VideoGenerationOptions, ProcessedContent, GeminiResponse } from './types';
 import { DEFAULT_CONFIG, VIDEO_DEFAULT_CONFIG, shouldUseNonStreamMode } from './config';
 import { prepareImageData, processMixedContent } from './utils';
 import { callApiWithRetry, callApiStreamRaw, callVideoApiStreamRaw } from './apiCalls';
 import { geminiSettings, settingsManager } from '../settings-manager';
 import { validateAndEnsureConfig } from './auth';
+import { shouldUseSWTaskQueue } from '../../services/task-queue';
+import { swTaskQueueClient } from '../../services/sw-client';
+import { TaskType, TaskResult, TaskError } from '../../types/task.types';
+import { firstValueFrom, merge, map, take } from 'rxjs';
+
+/**
+ * 确保 SW 客户端已初始化
+ */
+async function ensureSWInitialized(): Promise<boolean> {
+  if (!shouldUseSWTaskQueue()) {
+    return false;
+  }
+  
+  if (swTaskQueueClient.isInitialized()) {
+    return true;
+  }
+  
+  const settings = geminiSettings.get();
+  if (!settings.apiKey || !settings.baseUrl) {
+    // console.log('[ImageAPI] Missing apiKey or baseUrl, cannot initialize SW');
+    return false;
+  }
+  
+  try {
+    const success = await swTaskQueueClient.initialize(
+      {
+        apiKey: settings.apiKey,
+        baseUrl: settings.baseUrl,
+        modelName: settings.imageModelName,
+      },
+      {
+        baseUrl: settings.baseUrl,
+      }
+    );
+    // console.log('[ImageAPI] SW client initialization result:', success);
+    return success;
+  } catch (error) {
+    console.error('[ImageAPI] SW client initialization failed:', error);
+    return false;
+  }
+}
 
 /**
  * 调用 Gemini API 进行图像生成
  * 使用专用的 /v1/images/generations 接口
+ * 优先使用 Service Worker 发送请求
  */
 export async function generateImageWithGemini(
   prompt: string,
@@ -31,7 +73,111 @@ export async function generateImageWithGemini(
   const globalSettings = geminiSettings.get();
   
   // 优先使用传入的 model 参数，其次使用全局设置
-  const modelName = options.model || globalSettings.imageModelName || DEFAULT_CONFIG.modelName;
+  const modelName = options.model || globalSettings.imageModelName || DEFAULT_CONFIG.modelName || 'gemini-3-pro-image-preview-vip';
+
+  // 尝试使用 SW 模式
+  const useSW = await ensureSWInitialized();
+  
+  if (useSW) {
+    // console.log('[ImageAPI] Using SW mode for image generation');
+    return generateImageViaSW(prompt, options, modelName);
+  }
+  
+  // console.log('[ImageAPI] Using direct fetch for image generation');
+  return generateImageDirect(prompt, options, modelName);
+}
+
+/**
+ * 通过 Service Worker 生成图片
+ */
+async function generateImageViaSW(
+  prompt: string,
+  options: {
+    n?: number;
+    size?: string;
+    image?: string | string[];
+    response_format?: 'url' | 'b64_json';
+    quality?: '1k' | '2k' | '4k';
+    model?: string;
+  },
+  modelName: string
+): Promise<any> {
+  const taskId = `img_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+  
+  // 构建参考图片数组
+  let referenceImages: string[] | undefined;
+  if (options.image) {
+    referenceImages = Array.isArray(options.image) ? options.image : [options.image];
+  }
+  
+  // console.log('[ImageAPI/SW] Submitting image task with params:', {
+  //   taskId,
+  //   prompt: prompt.substring(0, 100) + (prompt.length > 100 ? '...' : ''),
+  //   size: options.size,
+  //   referenceImages: referenceImages?.length || 0,
+  //   referenceImageUrls: referenceImages,
+  //   model: modelName,
+  // });
+  
+  // 创建完成和失败的 Observable
+  const completion$ = swTaskQueueClient.observeTaskCompletion(taskId).pipe(
+    map((result: TaskResult) => ({ type: 'completed' as const, result }))
+  );
+  
+  const failure$ = swTaskQueueClient.observeTaskFailure(taskId).pipe(
+    map((data: { error: TaskError; retryCount: number; nextRetryAt?: number }) => ({ type: 'failed' as const, error: data.error }))
+  );
+  
+  // 提交任务到 SW
+  swTaskQueueClient.submitTask(
+    taskId,
+    TaskType.IMAGE,
+    {
+      prompt: `Generate an image: ${prompt}`,
+      size: options.size,
+      referenceImages,
+      model: modelName,
+    }
+  );
+  
+  // 等待完成或失败
+  const result = await firstValueFrom(
+    merge(completion$, failure$).pipe(take(1))
+  );
+  
+  if (result.type === 'failed') {
+    console.error('[ImageAPI/SW] Image generation failed:', result.error);
+    const err = new Error(result.error.message || '图片生成失败');
+    (err as any).apiErrorBody = result.error.details;
+    throw err;
+  }
+  
+  // console.log('[ImageAPI/SW] Image generation completed:', result.result);
+  
+  // 将 SW 结果转换为 API 响应格式
+  return {
+    data: [{
+      url: result.result.url,
+    }],
+  };
+}
+
+/**
+ * 直接使用 fetch 生成图片（降级模式）
+ */
+async function generateImageDirect(
+  prompt: string,
+  options: {
+    n?: number;
+    size?: string;
+    image?: string | string[];
+    response_format?: 'url' | 'b64_json';
+    quality?: '1k' | '2k' | '4k';
+    model?: string;
+  },
+  modelName: string
+): Promise<any> {
+  const globalSettings = geminiSettings.get();
   
   const config = {
     ...DEFAULT_CONFIG,
@@ -120,7 +266,7 @@ export async function generateVideoWithGemini(
   let imageContent;
   if (image) {
     try {
-      console.log('处理视频生成源图片...');
+      // console.log('处理视频生成源图片...');
       const imageData = await prepareImageData(image);
       imageContent = {
         type: 'image_url' as const,
@@ -128,13 +274,13 @@ export async function generateVideoWithGemini(
           url: imageData,
         },
       };
-      console.log('视频生成源图片处理完成');
+      // console.log('视频生成源图片处理完成');
     } catch (error) {
       console.error('处理源图片时出错:', error);
       throw error;
     }
   } else {
-    console.log('无源图片，使用纯文本生成视频');
+    // console.log('无源图片，使用纯文本生成视频');
   }
 
   // 构建视频生成专用的提示词（根据是否有图片使用不同提示词）
@@ -159,7 +305,7 @@ export async function generateVideoWithGemini(
     },
   ];
 
-  console.log('开始调用视频生成API...');
+  // console.log('开始调用视频生成API...');
 
   // 使用专用的视频生成流式调用
   const response = await callVideoApiStreamRaw(validatedConfig, messages, options);
@@ -201,7 +347,7 @@ export async function chatWithGemini(
   const imageContents = [];
   for (let i = 0; i < images.length; i++) {
     try {
-      console.log(`处理第 ${i + 1} 张图片...`);
+      // console.log(`处理第 ${i + 1} 张图片...`);
       const imageData = await prepareImageData(images[i]);
       imageContents.push({
         type: 'image_url' as const,
@@ -228,7 +374,7 @@ export async function chatWithGemini(
     },
   ];
 
-  console.log(`共发送 ${imageContents.length} 张图片到 Gemini API`);
+  // console.log(`共发送 ${imageContents.length} 张图片到 Gemini API`);
 
   // 根据模型选择流式或非流式调用
   let response: GeminiResponse;
@@ -236,7 +382,7 @@ export async function chatWithGemini(
 
   if (shouldUseNonStreamMode(modelName)) {
     // 某些模型（如 seedream）在流式模式下可能返回不完整响应，使用非流式调用
-    console.log(`模型 ${modelName} 使用非流式调用确保响应完整`);
+    // console.log(`模型 ${modelName} 使用非流式调用确保响应完整`);
     response = await callApiWithRetry(validatedConfig, messages);
     // Non-stream mode simulates one chunk at the end if callback is provided
     if (onChunk && response.choices[0]?.message?.content) {
@@ -244,7 +390,7 @@ export async function chatWithGemini(
     }
   } else if (images.length > 0 || onChunk) {
     // 其他模型：图文混合或明确要求流式（提供了 onChunk）使用流式调用
-    console.log('使用流式调用');
+    // console.log('使用流式调用');
     response = await callApiStreamRaw(validatedConfig, messages, onChunk);
   } else {
     // 纯文本且无流式回调，可以使用非流式调用

@@ -202,7 +202,7 @@ export function findNonOverlappingPosition(
 
     if (!hasOverlapWithAny(newBox, existingBoxes, padding)) {
       // 找到不重叠的位置
-      console.log('[InsertUtils] Found non-overlapping position after', iterations, 'iterations:', currentPoint);
+      // console.log('[InsertUtils] Found non-overlapping position after', iterations, 'iterations:', currentPoint);
       return currentPoint;
     }
 
@@ -377,7 +377,7 @@ export function moveElement(board: PlaitBoard, element: PlaitElement, deltaX: nu
     ] as Point);
 
     Transforms.setNode(board, { points: newPoints }, [path]);
-    console.log('[InsertUtils] Moved element', element.id, 'by', deltaX, deltaY);
+    // console.log('[InsertUtils] Moved element', element.id, 'by', deltaX, deltaY);
     return true;
   } catch (error) {
     console.error('[InsertUtils] Failed to move element:', error);
@@ -468,7 +468,7 @@ export function adjustOverlappingElements(board: PlaitBoard, newElementIds: Set<
       continue;
     }
 
-    console.log('[InsertUtils] Detected overlap for element:', elementId, 'at', newElementBox);
+    // console.log('[InsertUtils] Detected overlap for element:', elementId, 'at', newElementBox);
 
     // 查找不重叠的位置
     const nonOverlapPoint = findNonOverlappingPosition(
@@ -486,7 +486,7 @@ export function adjustOverlappingElements(board: PlaitBoard, newElementIds: Set<
     if (deltaX !== 0 || deltaY !== 0) {
       if (moveElement(board, element, deltaX, deltaY)) {
         adjusted = true;
-        console.log('[InsertUtils] Adjusted element position:', elementId, 'delta:', deltaX, deltaY);
+        // console.log('[InsertUtils] Adjusted element position:', elementId, 'delta:', deltaX, deltaY);
       }
     }
   }
@@ -537,7 +537,7 @@ export function insertElementsToCanvas(
       WritableClipboardOperationType.paste
     );
 
-    console.log('[InsertUtils] Inserted', elements.length, 'elements to canvas at', point);
+    // console.log('[InsertUtils] Inserted', elements.length, 'elements to canvas at', point);
 
     // 4. 找出新插入的元素 ID
     const newElementIds = new Set<string>();
@@ -548,7 +548,7 @@ export function insertElementsToCanvas(
       }
     }
 
-    console.log('[InsertUtils] New element IDs:', Array.from(newElementIds));
+    // console.log('[InsertUtils] New element IDs:', Array.from(newElementIds));
 
     // 5. 插入后重叠检测并调整位置
     if (newElementIds.size > 0) {
@@ -556,7 +556,7 @@ export function insertElementsToCanvas(
       requestAnimationFrame(() => {
         const adjusted = adjustOverlappingElements(board, newElementIds);
         if (adjusted) {
-          console.log('[InsertUtils] Adjusted overlapping elements');
+          // console.log('[InsertUtils] Adjusted overlapping elements');
         }
 
         // 6. 滚动视口到新元素位置（如果不在视口内）

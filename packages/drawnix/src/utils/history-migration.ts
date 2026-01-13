@@ -115,7 +115,7 @@ async function migrateImageHistory(): Promise<Task[]> {
       return [];
     }
 
-    console.log(`[HistoryMigration] Found ${legacyItems.length} legacy image history items`);
+    // console.log(`[HistoryMigration] Found ${legacyItems.length} legacy image history items`);
 
     // Convert each history item to task format
     const tasks = legacyItems.map(convertImageHistoryToTask);
@@ -126,7 +126,7 @@ async function migrateImageHistory(): Promise<Task[]> {
     // Delete legacy data from localStorage
     localStorage.removeItem(AI_IMAGE_GENERATION_HISTORY_KEY);
 
-    console.log(`[HistoryMigration] Migrated ${tasks.length} image history items`);
+    // console.log(`[HistoryMigration] Migrated ${tasks.length} image history items`);
     return tasks;
   } catch (error) {
     console.error('[HistoryMigration] Failed to migrate image history:', error);
@@ -149,7 +149,7 @@ async function migrateVideoHistory(): Promise<Task[]> {
       return [];
     }
 
-    console.log(`[HistoryMigration] Found ${legacyItems.length} legacy video history items`);
+    // console.log(`[HistoryMigration] Found ${legacyItems.length} legacy video history items`);
 
     // Convert each history item to task format
     const tasks = legacyItems.map(convertVideoHistoryToTask);
@@ -160,7 +160,7 @@ async function migrateVideoHistory(): Promise<Task[]> {
     // Delete legacy data from localStorage
     localStorage.removeItem(AI_VIDEO_GENERATION_HISTORY_KEY);
 
-    console.log(`[HistoryMigration] Migrated ${tasks.length} video history items`);
+    // console.log(`[HistoryMigration] Migrated ${tasks.length} video history items`);
     return tasks;
   } catch (error) {
     console.error('[HistoryMigration] Failed to migrate video history:', error);
@@ -176,7 +176,7 @@ async function migrateVideoHistory(): Promise<Task[]> {
  * along with other tasks during normal initialization.
  */
 export async function migrateLegacyHistory(): Promise<void> {
-  console.log('[HistoryMigration] Starting legacy history migration...');
+  // console.log('[HistoryMigration] Starting legacy history migration...');
 
   try {
     const imageTasks = await migrateImageHistory();
@@ -185,9 +185,9 @@ export async function migrateLegacyHistory(): Promise<void> {
     const totalMigrated = imageTasks.length + videoTasks.length;
 
     if (totalMigrated > 0) {
-      console.log(`[HistoryMigration] ✅ Migration completed! Migrated ${totalMigrated} items (${imageTasks.length} images, ${videoTasks.length} videos)`);
+      // console.log(`[HistoryMigration] ✅ Migration completed! Migrated ${totalMigrated} items (${imageTasks.length} images, ${videoTasks.length} videos)`);
     } else {
-      console.log('[HistoryMigration] No legacy history data found, skipping migration');
+      // console.log('[HistoryMigration] No legacy history data found, skipping migration');
     }
   } catch (error) {
     console.error('[HistoryMigration] Migration failed:', error);

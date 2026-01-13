@@ -139,7 +139,7 @@ class WorkflowCompletionService {
       timestamp: Date.now(),
     });
 
-    console.log(`[WorkflowCompletion] Post-processing started for task ${taskId}, type: ${type}`);
+    // console.log(`[WorkflowCompletion] Post-processing started for task ${taskId}, type: ${type}`);
   }
 
   /**
@@ -171,7 +171,7 @@ class WorkflowCompletionService {
       timestamp: Date.now(),
     });
 
-    console.log(`[WorkflowCompletion] Post-processing completed for task ${taskId}, inserted: ${insertedCount}`);
+    // console.log(`[WorkflowCompletion] Post-processing completed for task ${taskId}, inserted: ${insertedCount}`);
 
     // 检查批次是否全部完成
     this.checkBatchCompletion(taskId);
@@ -202,7 +202,7 @@ class WorkflowCompletionService {
       timestamp: Date.now(),
     });
 
-    console.log(`[WorkflowCompletion] Post-processing failed for task ${taskId}: ${error}`);
+    // console.log(`[WorkflowCompletion] Post-processing failed for task ${taskId}: ${error}`);
 
     // 检查批次是否全部完成
     this.checkBatchCompletion(taskId);
@@ -246,7 +246,7 @@ class WorkflowCompletionService {
 
     this.batchCompletionEvents$.next(batchEvent);
 
-    console.log(`[WorkflowCompletion] Batch ${batchId} completed, success: ${allSuccess}, total inserted: ${totalInsertedCount}`);
+    // console.log(`[WorkflowCompletion] Batch ${batchId} completed, success: ${allSuccess}, total inserted: ${totalInsertedCount}`);
   }
 
   /**

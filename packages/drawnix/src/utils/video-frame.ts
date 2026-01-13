@@ -28,7 +28,7 @@ export const insertVideoFrame = async (
       videoRect.y + videoRect.height + 20 // 底下20px间距
     ];
     
-    console.log('Inserting video frame at position:', insertionPoint, 'timestamp:', timestamp);
+    // console.log('Inserting video frame at position:', insertionPoint, 'timestamp:', timestamp);
     
     // 获取帧图片的原始尺寸
     const img = new Image();
@@ -57,7 +57,7 @@ export const insertVideoFrame = async (
     // 插入图片元素
     DrawTransforms.insertImage(board, frameImageElement, insertionPoint);
     
-    console.log('Video frame inserted successfully');
+    // console.log('Video frame inserted successfully');
     
   } catch (error) {
     console.error('Failed to insert video frame:', error);

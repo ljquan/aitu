@@ -53,12 +53,64 @@ export function cleanLLMResponse(response: string): string {
 }
 
 /**
+ * 检查响应是否可能是完整的工作流 JSON
+ * 用于流式传输时避免对不完整数据进行解析
+ */
+function isLikelyCompleteWorkflowJson(response: string): boolean {
+  const trimmed = response.trim();
+
+  // 必须以 { 开头，以 } 结尾
+  if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) {
+    return false;
+  }
+
+  // 必须包含 content 和 next 字段
+  if (!trimmed.includes('"content"') || !trimmed.includes('"next"')) {
+    return false;
+  }
+
+  // 检查括号是否平衡（简单检查）
+  let braceCount = 0;
+  let bracketCount = 0;
+  let inString = false;
+  let escape = false;
+
+  for (const char of trimmed) {
+    if (escape) {
+      escape = false;
+      continue;
+    }
+    if (char === '\\') {
+      escape = true;
+      continue;
+    }
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+
+    if (char === '{') braceCount++;
+    else if (char === '}') braceCount--;
+    else if (char === '[') bracketCount++;
+    else if (char === ']') bracketCount--;
+  }
+
+  return braceCount === 0 && bracketCount === 0;
+}
+
+/**
  * 解析新格式的工作流 JSON 响应
  * 格式: {"content": "...", "next": [{"mcp": "tool_name", "args": {...}}]}
  */
 export function parseWorkflowJson(response: string): WorkflowJsonResponse | null {
   // 清理响应文本
   const cleaned = cleanLLMResponse(response);
+
+  // 快速检查：如果响应明显不完整，直接返回 null（不打印警告）
+  if (!isLikelyCompleteWorkflowJson(cleaned)) {
+    return null;
+  }
 
   // 先尝试直接解析整个响应
   let parsed = tryParseJson(cleaned);
@@ -82,13 +134,13 @@ export function parseWorkflowJson(response: string): WorkflowJsonResponse | null
   }
 
   if (!parsed) {
-    console.warn('[ToolParser] Failed to parse workflow JSON from response');
+    // 只有在看起来完整但解析失败时才打印警告
+    // 流式传输中的不完整数据已在上面被过滤
     return null;
   }
 
   // 验证格式
   if (typeof parsed.content !== 'string') {
-    console.warn('[ToolParser] Invalid workflow JSON: missing or invalid content field');
     return null;
   }
 
@@ -136,7 +188,7 @@ export function parseToolCalls(response: string): ToolCall[] {
   // 首先尝试新的工作流 JSON 格式
   const workflowJson = parseWorkflowJson(response);
   if (workflowJson && workflowJson.next.length > 0) {
-    console.log('[ToolParser] Parsed workflow JSON format');
+    // console.log('[ToolParser] Parsed workflow JSON format');
     return extractToolCallsFromWorkflowJson(workflowJson);
   }
 

@@ -162,7 +162,7 @@ export const PopupToolbar = () => {
       isVideoElement(selectedElements[0]) &&
       !PlaitBoard.hasBeenTextEditing(board);
 
-    // AI图像生成按钮：排除视频元素和工具元素(内嵌网页)
+    // AI图片生成按钮：排除视频元素和工具元素(内嵌网页)
     const hasAIImage = !hasVideoSelected && !hasToolSelected && !PlaitBoard.hasBeenTextEditing(board);
 
     // 拆图按钮：只在选中单个图片元素且检测到分割线时显示
@@ -475,8 +475,8 @@ export const PopupToolbar = () => {
                 type="icon"
                 icon={AIImageIcon}
                 visible={true}
-                title={language === 'zh' ? 'AI图像生成' : 'AI Image Generation'}
-                aria-label={language === 'zh' ? 'AI图像生成' : 'AI Image Generation'}
+                title={language === 'zh' ? 'AI图片生成' : 'AI Image Generation'}
+                aria-label={language === 'zh' ? 'AI图片生成' : 'AI Image Generation'}
                 data-track="toolbar_click_ai_image"
                 onPointerUp={() => {
                   openDialog(DialogType.aiImageGeneration);
@@ -607,7 +607,7 @@ export const PopupToolbar = () => {
                         const hashIndex = item.url.indexOf('#');
                         const taskId = hashIndex > 0 ? item.url.substring(hashIndex + 1) : null;
 
-                        console.log('[Download] Processing blob URL:', { url: item.url, taskId });
+                        // console.log('[Download] Processing blob URL:', { url: item.url, taskId });
 
                         if (taskId && taskId.startsWith('merged-video-')) {
                           // 从 IndexedDB 获取缓存的视频
@@ -618,7 +618,7 @@ export const PopupToolbar = () => {
                                        mimeType.startsWith('video/webm') ? 'webm' : 'bin';
                             const filename = `merged-video-${Date.now()}.${ext}`;
 
-                            console.log('[Download] Downloading from IndexedDB cache:', { taskId, ext, size: cachedBlob.size });
+                            // console.log('[Download] Downloading from IndexedDB cache:', { taskId, ext, size: cachedBlob.size });
                             downloadFromBlob(cachedBlob, filename);
                             continue;
                           } else {
@@ -628,7 +628,7 @@ export const PopupToolbar = () => {
 
                         // 如果没有 taskId 或缓存不存在，尝试直接 fetch blob URL
                         try {
-                          console.log('[Download] Fetching blob URL directly');
+                          // console.log('[Download] Fetching blob URL directly');
                           const response = await fetch(item.url);
                           const blob = await response.blob();
                           const ext = blob.type.startsWith('video/mp4') ? 'mp4' :
@@ -862,24 +862,24 @@ export const PopupToolbar = () => {
                         encoding: language === 'zh' ? '编码视频...' : 'Encoding videos...',
                         finalizing: language === 'zh' ? '生成文件中...' : 'Finalizing...',
                       };
-                      console.log(`[VideoMerge] ${stageText[stage]} ${Math.round(progress)}%`);
+                      // console.log(`[VideoMerge] ${stageText[stage]} ${Math.round(progress)}%`);
                     });
 
                     MessagePlugin.close(loadingInstance);
 
-                    console.log('[VideoMerge] Merge result:', {
-                      blobType: result.blob.type,
-                      blobSize: result.blob.size,
-                      url: result.url,
-                      duration: result.duration,
-                      urlType: result.url.startsWith('blob:') ? 'blob' : 'other'
-                    });
+                    // console.log('[VideoMerge] Merge result:', {
+                    //   blobType: result.blob.type,
+                    //   blobSize: result.blob.size,
+                    //   url: result.url,
+                    //   duration: result.duration,
+                    //   urlType: result.url.startsWith('blob:') ? 'blob' : 'other'
+                    // });
 
                     // 插入合成后的视频到画布（而不是下载）
                     try {
                       // 导入插入视频的工具
                       const { quickInsert } = await import('../../../mcp/tools/canvas-insertion');
-                      console.log('[VideoMerge] Attempting to insert video with URL:', result.url);
+                      // console.log('[VideoMerge] Attempting to insert video with URL:', result.url);
                       await quickInsert('video', result.url);
 
                       MessagePlugin.success(
@@ -894,12 +894,12 @@ export const PopupToolbar = () => {
                       const mimeType = result.blob.type || 'video/webm';
                       const extension = mimeType.startsWith('video/mp4') ? 'mp4' : 'webm';
 
-                      console.log('[VideoMerge] Fallback download:', {
-                        mimeType,
-                        extension,
-                        blobSize: result.blob.size,
-                        url: result.url
-                      });
+                      // console.log('[VideoMerge] Fallback download:', {
+                      //   mimeType,
+                      //   extension,
+                      //   blobSize: result.blob.size,
+                      //   url: result.url
+                      // });
 
                       // 创建一个新的 Blob URL 确保 MIME 类型正确
                       const downloadBlob = new Blob([result.blob], { type: mimeType });

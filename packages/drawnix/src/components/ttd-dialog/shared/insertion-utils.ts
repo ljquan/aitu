@@ -36,7 +36,7 @@ export const calculateInsertionPointFromIds = (
     // 计算底部Y坐标 + 偏移
     const insertionY = boundingRect.y + boundingRect.height + INSERTION_OFFSET;
     
-    console.log('Calculated insertion point from saved selection:', { centerX, insertionY, boundingRect });
+    // console.log('Calculated insertion point from saved selection:', { centerX, insertionY, boundingRect });
     
     return [centerX, insertionY] as Point;
   } catch (error) {
@@ -88,10 +88,10 @@ export const getReferenceDimensionsFromIds = (
     // 计算边界矩形
     const boundingRect = getRectangleByElements(board, elements, false);
 
-    console.log('Calculated reference dimensions from saved selection:', {
-      width: boundingRect.width,
-      height: boundingRect.height
-    });
+    // console.log('Calculated reference dimensions from saved selection:', {
+    //   width: boundingRect.width,
+    //   height: boundingRect.height
+    // });
 
     return {
       width: boundingRect.width,

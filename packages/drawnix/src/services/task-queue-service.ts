@@ -88,7 +88,7 @@ class TaskQueueService {
     // Emit event
     this.emitEvent('taskCreated', task);
 
-    console.log(`[TaskQueueService] Created task ${task.id} (${type})`);
+    // console.log(`[TaskQueueService] Created task ${task.id} (${type})`);
     return task;
   }
 
@@ -131,7 +131,7 @@ class TaskQueueService {
     this.tasks.set(taskId, updatedTask);
     this.emitEvent('taskUpdated', updatedTask);
 
-    console.log(`[TaskQueueService] Updated task ${taskId} to ${status}`);
+    // console.log(`[TaskQueueService] Updated task ${taskId} to ${status}`);
   }
 
   /**
@@ -213,7 +213,7 @@ class TaskQueueService {
     }
 
     this.updateTaskStatus(taskId, TaskStatus.CANCELLED);
-    console.log(`[TaskQueueService] Cancelled task ${taskId}`);
+    // console.log(`[TaskQueueService] Cancelled task ${taskId}`);
   }
 
   /**
@@ -245,7 +245,7 @@ class TaskQueueService {
       progress: task.type === TaskType.VIDEO ? 0 : undefined, // Reset progress for video
     });
 
-    console.log(`[TaskQueueService] Retrying task ${taskId}`);
+    // console.log(`[TaskQueueService] Retrying task ${taskId}`);
   }
 
   /**
@@ -263,7 +263,7 @@ class TaskQueueService {
     this.tasks.delete(taskId);
     this.emitEvent('taskDeleted', task);
 
-    console.log(`[TaskQueueService] Deleted task ${taskId}`);
+    // console.log(`[TaskQueueService] Deleted task ${taskId}`);
   }
 
   /**
@@ -272,7 +272,7 @@ class TaskQueueService {
   clearCompletedTasks(): void {
     const completedTasks = this.getTasksByStatus(TaskStatus.COMPLETED);
     completedTasks.forEach(task => this.deleteTask(task.id));
-    console.log(`[TaskQueueService] Cleared ${completedTasks.length} completed tasks`);
+    // console.log(`[TaskQueueService] Cleared ${completedTasks.length} completed tasks`);
   }
 
   /**
@@ -281,7 +281,7 @@ class TaskQueueService {
   clearFailedTasks(): void {
     const failedTasks = this.getTasksByStatus(TaskStatus.FAILED);
     failedTasks.forEach(task => this.deleteTask(task.id));
-    console.log(`[TaskQueueService] Cleared ${failedTasks.length} failed tasks`);
+    // console.log(`[TaskQueueService] Cleared ${failedTasks.length} failed tasks`);
   }
 
   /**
@@ -301,7 +301,7 @@ class TaskQueueService {
       // Emit event for each restored task so subscribers can update UI
       this.emitEvent('taskCreated', restoredTask);
     });
-    console.log(`[TaskQueueService] Restored ${tasks.length} tasks`);
+    // console.log(`[TaskQueueService] Restored ${tasks.length} tasks`);
   }
 
   /**
@@ -330,7 +330,23 @@ class TaskQueueService {
       savedToLibrary: true,
     });
 
-    console.log(`[TaskQueueService] Marked task ${taskId} as saved to library`);
+    // console.log(`[TaskQueueService] Marked task ${taskId} as saved to library`);
+  }
+
+  /**
+   * Marks a task as inserted to canvas
+   * @param taskId - The task ID to mark as inserted
+   */
+  markAsInserted(taskId: string): void {
+    const task = this.tasks.get(taskId);
+    if (!task) {
+      console.warn(`[TaskQueueService] Task ${taskId} not found`);
+      return;
+    }
+
+    this.updateTaskStatus(taskId, task.status, {
+      insertedToCanvas: true,
+    });
   }
 
   /**

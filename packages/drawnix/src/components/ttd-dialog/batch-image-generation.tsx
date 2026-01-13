@@ -6,6 +6,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { MessagePlugin, Select, Dialog, Tooltip, DialogPlugin } from 'tdesign-react';
+import { Image, LayoutGrid } from 'lucide-react';
 import { useI18n } from '../../i18n';
 import { smartDownload } from '../../utils/download-utils';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
@@ -14,8 +15,15 @@ import { geminiSettings } from '../../utils/settings-manager';
 import { promptForApiKey } from '../../utils/gemini-api';
 import { IMAGE_MODEL_GROUPED_OPTIONS } from '../settings-dialog/settings-dialog';
 import { useAssets } from '../../contexts/AssetContext';
-import { AssetType, AssetSource } from '../../types/asset.types';
+import { AssetType, AssetSource, SelectionMode } from '../../types/asset.types';
+import type { Asset } from '../../types/asset.types';
+import { MediaLibraryModal } from '../media-library/MediaLibraryModal';
+import { LS_KEYS_TO_MIGRATE } from '../../constants/storage-keys';
+import { kvStorageService } from '../../services/kv-storage-service';
 import './batch-image-generation.scss';
+
+// 本地缓存 key
+const BATCH_IMAGE_CACHE_KEY = LS_KEYS_TO_MIGRATE.BATCH_IMAGE_CACHE;
 
 // 任务行数据
 interface TaskRow {
@@ -55,8 +63,21 @@ const SIZE_LABELS: Record<string, string> = {
 // 可编辑列
 const EDITABLE_COLS = ['prompt', 'size', 'images', 'count', 'preview'];
 
-// 本地缓存 key
-const BATCH_IMAGE_CACHE_KEY = 'batch-image-generation-cache';
+// 默认初始任务
+function getDefaultTasks(): TaskRow[] {
+  const initialTasks: TaskRow[] = [];
+  for (let i = 0; i < 5; i++) {
+    initialTasks.push({
+      id: i + 1,
+      prompt: '',
+      size: 'auto',
+      images: [],
+      count: 1,
+      taskIds: []
+    });
+  }
+  return initialTasks;
+}
 
 interface BatchImageGenerationProps {
   onSwitchToSingle?: () => void;
@@ -65,51 +86,42 @@ interface BatchImageGenerationProps {
 const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToSingle }) => {
   const { language } = useI18n();
   const { createTask, tasks: queueTasks } = useTaskQueue();
-  const { addAsset } = useAssets();
+  const { addAsset, assets: libraryAssets, loadAssets } = useAssets();
 
-  // 任务数据 - 从本地缓存加载
-  const [tasks, setTasks] = useState<TaskRow[]>(() => {
-    try {
-      const cached = localStorage.getItem(BATCH_IMAGE_CACHE_KEY);
-      if (cached) {
-        const data = JSON.parse(cached);
-        if (data.tasks && Array.isArray(data.tasks) && data.tasks.length > 0) {
-          return data.tasks;
-        }
-      }
-    } catch (e) {
-      console.warn('Failed to load batch image cache:', e);
-    }
-    // 默认初始化 5 行
-    const initialTasks: TaskRow[] = [];
-    for (let i = 0; i < 5; i++) {
-      initialTasks.push({
-        id: i + 1,
-        prompt: '',
-        size: 'auto',
-        images: [],
-        count: 1,
-        taskIds: []
-      });
-    }
-    return initialTasks;
-  });
+  // 过滤出图片类型的素材
+  const imageAssets = libraryAssets.filter(asset => asset.type === AssetType.IMAGE);
 
-  const [taskIdCounter, setTaskIdCounter] = useState<number>(() => {
-    try {
-      const cached = localStorage.getItem(BATCH_IMAGE_CACHE_KEY);
-      if (cached) {
-        const data = JSON.parse(cached);
-        if (data.taskIdCounter) {
-          return data.taskIdCounter;
-        }
-      }
-    } catch (e) {
-      // ignore
-    }
-    return 6;
-  });
+  // 组件初始化时加载素材库数据
+  useEffect(() => {
+    loadAssets();
+  }, [loadAssets]);
+
+  // 任务数据 - 初始化为默认值，异步从 IndexedDB 加载
+  const [tasks, setTasks] = useState<TaskRow[]>(getDefaultTasks);
+  const [taskIdCounter, setTaskIdCounter] = useState<number>(6);
+  const [cacheLoaded, setCacheLoaded] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // 从 IndexedDB 加载缓存
+  useEffect(() => {
+    let mounted = true;
+    kvStorageService.get<{ tasks: TaskRow[]; taskIdCounter: number }>(BATCH_IMAGE_CACHE_KEY)
+      .then((cached) => {
+        if (!mounted) return;
+        if (cached && cached.tasks && Array.isArray(cached.tasks) && cached.tasks.length > 0) {
+          setTasks(cached.tasks);
+          if (cached.taskIdCounter) {
+            setTaskIdCounter(cached.taskIdCounter);
+          }
+        }
+        setCacheLoaded(true);
+      })
+      .catch((e) => {
+        console.warn('Failed to load batch image cache:', e);
+        if (mounted) setCacheLoaded(true);
+      });
+    return () => { mounted = false; };
+  }, []);
 
   // 选中状态
   const [activeCell, setActiveCell] = useState<CellPosition | null>(null);
@@ -123,22 +135,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
   const historyIndexRef = useRef<number>(-1);
   const isUndoRedoRef = useRef<boolean>(false); // 标记是否正在撤销/重做，避免重复记录历史
 
-  // 图片库 - 从本地缓存加载
-  const [imageLibrary, setImageLibrary] = useState<string[]>(() => {
-    try {
-      const cached = localStorage.getItem(BATCH_IMAGE_CACHE_KEY);
-      if (cached) {
-        const data = JSON.parse(cached);
-        if (data.imageLibrary && Array.isArray(data.imageLibrary)) {
-          return data.imageLibrary;
-        }
-      }
-    } catch (e) {
-      console.warn('Failed to load image library from cache:', e);
-    }
-    return [];
-  });
-  const [isLibraryCollapsed, setIsLibraryCollapsed] = useState(true); // 默认收纳
+  const [isLibraryCollapsed, setIsLibraryCollapsed] = useState(false); // 默认展开
 
   // 填充拖拽
   const [isDraggingFill, setIsDraggingFill] = useState(false);
@@ -175,27 +172,32 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
   const [showAddRowsModal, setShowAddRowsModal] = useState(false);
   const [addRowsCount, setAddRowsCount] = useState(5);
 
+  // 素材库弹窗（用于参考图选择）
+  const [showMediaLibrary, setShowMediaLibrary] = useState(false);
+  const [mediaLibraryTargetRow, setMediaLibraryTargetRow] = useState<number | null>(null);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const batchImportInputRef = useRef<HTMLInputElement>(null);
   const excelImportInputRef = useRef<HTMLInputElement>(null);
   const rowImageInputRef = useRef<HTMLInputElement>(null); // 行内图片上传
-  const lastSelectedRowRef = useRef<number | null>(null); // 上次选择的行，用于 Shift 多选
+  const lastSelectedRowRef = useRef<number | null>(null); // 上次选择的行（单元格），用于单元格 Shift 多选
+  const lastCheckedRowRef = useRef<number | null>(null); // 上次勾选的行（checkbox），用于 checkbox Shift 多选
   const uploadTargetRowRef = useRef<number | null>(null); // 正在上传图片的目标行
 
-  // 保存到本地缓存
+  // 保存到 IndexedDB（异步）
   useEffect(() => {
-    try {
-      const cacheData = {
-        tasks,
-        taskIdCounter,
-        imageLibrary,
-        timestamp: Date.now()
-      };
-      localStorage.setItem(BATCH_IMAGE_CACHE_KEY, JSON.stringify(cacheData));
-    } catch (e) {
+    // 等待缓存加载完成后再保存，避免覆盖
+    if (!cacheLoaded) return;
+    
+    const cacheData = {
+      tasks,
+      taskIdCounter,
+      timestamp: Date.now()
+    };
+    kvStorageService.set(BATCH_IMAGE_CACHE_KEY, cacheData).catch((e) => {
       console.warn('Failed to save batch image cache:', e);
-    }
-  }, [tasks, taskIdCounter, imageLibrary]);
+    });
+  }, [tasks, taskIdCounter, cacheLoaded]);
 
   // 记录历史（用于撤销/重做）
   const saveHistory = useCallback((newTasks: TaskRow[]) => {
@@ -309,14 +311,28 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
   // 处理单元格点击
   const handleCellClick = useCallback((e: React.MouseEvent, row: number, col: string) => {
     if (e.shiftKey && activeCell) {
-      // Shift + 点击：选择范围
+      // Shift + 点击：选择范围内的行（checkbox）
       const minRow = Math.min(activeCell.row, row);
       const maxRow = Math.max(activeCell.row, row);
+      
+      // 同时勾选范围内所有行的checkbox
+      setSelectedRows(prev => {
+        const newSet = new Set(prev);
+        for (let r = minRow; r <= maxRow; r++) {
+          newSet.add(r);
+        }
+        return newSet;
+      });
+      
+      // 同时选择单元格范围
       const newSelected: CellPosition[] = [];
       for (let r = minRow; r <= maxRow; r++) {
         newSelected.push({ row: r, col: activeCell.col });
       }
       setSelectedCells(newSelected);
+      
+      // 记录最后选择的行
+      lastSelectedRowRef.current = row;
     } else if (e.ctrlKey || e.metaKey) {
       // Ctrl + 点击：添加到选区
       setSelectedCells(prev => {
@@ -328,6 +344,8 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
       });
     } else {
       selectCell(row, col);
+      // 记录最后选择的行（用于后续Shift选择）
+      lastSelectedRowRef.current = row;
     }
   }, [activeCell, selectCell]);
 
@@ -459,7 +477,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
     setSelectStartCell(null);
   }, [isDraggingFill, fillStartCell, fillEndRow, tasks, language]);
 
-  // 处理图片上传
+  // 处理图片上传到素材库
   const handleImageUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
@@ -467,17 +485,10 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
     Array.from(files).forEach(file => {
       if (!file.type.startsWith('image/')) return;
 
-      // Add to asset library (async, don't block UI)
+      // 添加到素材库
       addAsset(file, AssetType.IMAGE, AssetSource.LOCAL, file.name).catch((err) => {
         console.warn('[BatchImageGeneration] Failed to add asset to library:', err);
       });
-
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const dataUrl = ev.target?.result as string;
-        setImageLibrary(prev => [...prev, dataUrl]);
-      };
-      reader.readAsDataURL(file);
     });
 
     if (fileInputRef.current) {
@@ -485,13 +496,17 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
     }
   }, [addAsset]);
 
-  // 从图片库添加图片到选中行（支持 checkbox 选中或当前活动单元格所在行）
+  // 从图片库添加图片到选中行（支持 checkbox 选中、单元格选中或当前活动单元格所在行）
   const addImageToSelectedRows = useCallback((imageUrl: string) => {
-    // 优先使用 checkbox 选中的行，否则使用当前活动单元格所在行
+    // 优先使用 checkbox 选中的行
     let rowIndices: number[] = [];
     if (selectedRows.size > 0) {
       rowIndices = [...selectedRows];
+    } else if (selectedCells.length > 0) {
+      // 其次使用单元格选中的行（去重）
+      rowIndices = [...new Set(selectedCells.map(c => c.row))];
     } else if (activeCell) {
+      // 最后使用当前活动单元格所在行
       rowIndices = [activeCell.row];
     }
 
@@ -512,7 +527,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
       });
       return newTasks;
     });
-  }, [selectedRows, activeCell, language]);
+  }, [selectedRows, selectedCells, activeCell, language]);
 
   // 添加图片到指定行
   const addImageToRow = useCallback((rowIndex: number, imageUrl: string) => {
@@ -542,11 +557,6 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
     });
   }, []);
 
-  // 删除图片库中的图片
-  const deleteLibraryImage = useCallback((index: number) => {
-    setImageLibrary(prev => prev.filter((_, i) => i !== index));
-  }, []);
-
   // 处理行内图片上传（点击 + 按钮触发）
   const handleRowImageUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -556,17 +566,15 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
     Array.from(files).forEach(file => {
       if (!file.type.startsWith('image/')) return;
 
-      // Add to asset library (async, don't block UI)
+      // 添加到素材库
       addAsset(file, AssetType.IMAGE, AssetSource.LOCAL, file.name).catch((err) => {
         console.warn('[BatchImageGeneration] Failed to add asset to library:', err);
       });
 
+      // 读取并添加到目标行
       const reader = new FileReader();
       reader.onload = (ev) => {
         const dataUrl = ev.target?.result as string;
-        // 添加到图片库
-        setImageLibrary(prev => [...prev, dataUrl]);
-        // 添加到目标行
         addImageToRow(targetRow, dataUrl);
       };
       reader.readAsDataURL(file);
@@ -585,6 +593,24 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
     setIsLibraryCollapsed(false); // 展开图片库
     rowImageInputRef.current?.click(); // 打开文件选择
   }, []);
+
+  // 打开素材库选择图片
+  const openMediaLibraryForRow = useCallback((rowIndex: number) => {
+    setMediaLibraryTargetRow(rowIndex);
+    setShowMediaLibrary(true);
+  }, []);
+
+  // 处理素材库选择
+  const handleMediaLibrarySelect = useCallback((asset: Asset) => {
+    if (mediaLibraryTargetRow === null) return;
+    
+    if (asset.url) {
+      addImageToRow(mediaLibraryTargetRow, asset.url);
+    }
+    
+    setShowMediaLibrary(false);
+    setMediaLibraryTargetRow(null);
+  }, [mediaLibraryTargetRow, addImageToRow]);
 
   // 处理行拖放
   const handleRowDragOver = useCallback((e: React.DragEvent<HTMLTableRowElement>, rowIndex: number) => {
@@ -625,17 +651,15 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
     Array.from(files).forEach(file => {
       if (!file.type.startsWith('image/')) return;
 
-      // Add to asset library (async, don't block UI)
+      // 添加到素材库
       addAsset(file, AssetType.IMAGE, AssetSource.LOCAL, file.name).catch((err) => {
         console.warn('[BatchImageGeneration] Failed to add asset to library:', err);
       });
 
+      // 读取并添加到目标行
       const reader = new FileReader();
       reader.onload = (ev) => {
         const dataUrl = ev.target?.result as string;
-        // 添加到图片库
-        setImageLibrary(prev => [...prev, dataUrl]);
-        // 添加到目标行
         addImageToRow(rowIndex, dataUrl);
       };
       reader.readAsDataURL(file);
@@ -753,9 +777,6 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
       setTaskIdCounter(prev => prev + newRowsCreated);
     }
 
-    // 同时添加到图片库
-    setImageLibrary(prev => [...prev, ...imageDataUrls]);
-
     // 清理状态
     setPendingImportFiles([]);
     setShowBatchImportModal(false);
@@ -851,12 +872,21 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
             const prompt = (row['提示词'] || row['prompt'] || row['Prompt'] || '') as string;
             const size = (row['尺寸'] || row['size'] || row['Size'] || '1x1') as string;
             const count = parseInt(String(row['数量'] || row['count'] || row['Count'] || '1')) || 1;
+            
+            // 解析参考图（支持换行分隔的多张图片URL）
+            // 过滤掉占位符（如 [本地图片1]、[已截断] 等）
+            const imagesStr = (row['参考图'] || row['images'] || row['Images'] || '') as string;
+            const images = imagesStr
+              ? imagesStr.split('\n')
+                  .map(s => s.trim())
+                  .filter(s => s.length > 0 && !s.startsWith('[') && !s.endsWith(']'))
+              : [];
 
             return {
               id: taskIdCounter + index,
               prompt: String(prompt).trim(),
               size: SIZE_OPTIONS.includes(size) ? size : '1x1',
-              images: [],
+              images,
               count: Math.max(1, count),
               taskIds: []
             };
@@ -931,6 +961,93 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
     return { status, tasks: relatedTasks, completedCount, failedCount };
   }, [queueTasks]);
 
+  // 导出 Excel（包含参考图和预览图）
+  const exportToExcel = useCallback(async () => {
+    try {
+      const XLSX = await import('xlsx');
+
+      // Excel单元格最大字符数限制
+      const MAX_CELL_LENGTH = 32000;
+
+      // 处理图片URL：base64转为标记，HTTP URL保留，超长截断
+      const processImageUrls = (urls: string[]): string => {
+        const processed = urls.map((url, idx) => {
+          if (url.startsWith('data:')) {
+            // base64数据无法存储到Excel，标记为本地图片
+            return `[本地图片${idx + 1}]`;
+          }
+          return url;
+        });
+        const result = processed.join('\n');
+        // 截断超长内容
+        if (result.length > MAX_CELL_LENGTH) {
+          return result.substring(0, MAX_CELL_LENGTH - 20) + '\n...[已截断]';
+        }
+        return result;
+      };
+
+      // 构建导出数据
+      const exportData = tasks.map((task) => {
+        const rowInfo = getRowTasksInfo(task);
+        // 获取已完成任务的预览图URL
+        const previewUrls = rowInfo.tasks
+          .filter(t => t.status === TaskStatus.COMPLETED && t.result?.url)
+          .map(t => t.result!.url);
+
+        return {
+          '提示词': task.prompt,
+          '尺寸': task.size,
+          '参考图': processImageUrls(task.images),
+          '数量': task.count,
+          '预览图': processImageUrls(previewUrls),
+          '状态': rowInfo.status === 'idle' ? '未生成' :
+                  rowInfo.status === 'generating' ? '生成中' :
+                  rowInfo.status === 'completed' ? '已完成' :
+                  rowInfo.status === 'failed' ? '失败' :
+                  rowInfo.status === 'partial' ? '部分完成' : ''
+        };
+      });
+
+      // 创建工作簿和工作表
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(exportData);
+
+      // 设置列宽
+      ws['!cols'] = [
+        { wch: 60 },  // 提示词
+        { wch: 10 },  // 尺寸
+        { wch: 80 },  // 参考图
+        { wch: 8 },   // 数量
+        { wch: 80 },  // 预览图
+        { wch: 12 },  // 状态
+      ];
+
+      XLSX.utils.book_append_sheet(wb, ws, '批量出图数据');
+
+      // 生成文件名
+      const now = new Date();
+      const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+      const timeStr = `${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
+      const filename = `batch-image-export_${dateStr}_${timeStr}.xlsx`;
+
+      // 导出文件
+      XLSX.writeFile(wb, filename);
+
+      MessagePlugin.success(
+        language === 'zh'
+          ? `已导出 ${tasks.length} 行数据`
+          : `Exported ${tasks.length} rows`
+      );
+    } catch (error) {
+      console.error('Excel export error:', error);
+      MessagePlugin.error(
+        language === 'zh'
+          ? '导出失败，请稍后重试'
+          : 'Export failed, please try again'
+      );
+    }
+  }, [tasks, getRowTasksInfo, language]);
+
   // 选择失败的行
   const selectFailedRows = useCallback(() => {
     const failedRowIndices: number[] = [];
@@ -995,10 +1112,10 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
     setSelectedRows(prev => {
       const newSet = new Set(prev);
 
-      if (shiftKey && lastSelectedRowRef.current !== null) {
+      if (shiftKey && lastCheckedRowRef.current !== null) {
         // Shift + 点击：选择范围内的所有行
-        const start = Math.min(lastSelectedRowRef.current, rowIndex);
-        const end = Math.max(lastSelectedRowRef.current, rowIndex);
+        const start = Math.min(lastCheckedRowRef.current, rowIndex);
+        const end = Math.max(lastCheckedRowRef.current, rowIndex);
         for (let i = start; i <= end; i++) {
           newSet.add(i);
         }
@@ -1013,8 +1130,8 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
 
       return newSet;
     });
-    // 记录本次选择的行
-    lastSelectedRowRef.current = rowIndex;
+    // 记录本次勾选的行（用于 checkbox Shift 多选）
+    lastCheckedRowRef.current = rowIndex;
   }, []);
 
   // 全选/取消全选（checkbox）
@@ -1135,7 +1252,8 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
           batchId,
           batchIndex: i + 1,
           batchTotal: generateCount,
-          globalIndex: subTaskCounter
+          globalIndex: subTaskCounter,
+          autoInsertToCanvas: true,
         };
 
         const createdTask = createTask(taskParams, TaskType.IMAGE);
@@ -1359,39 +1477,72 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
         return;
       }
 
-      // Ctrl+V 粘贴（支持多行）
+      // Ctrl+V 粘贴（支持多选单元格粘贴相同值）
       if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
         e.preventDefault();
+        
+        // 获取要粘贴的目标单元格列表
+        const targetCells = selectedCells.length > 0 ? selectedCells : [{ row, col }];
+        
         // 优先使用内部复制的单元格数据
         const copiedCells = (window as any).__copiedCells as Array<{row: number, col: string, value: any}> | undefined;
 
-        if (copiedCells && copiedCells.length > 0 && copiedCells[0].col === col) {
-          // 从当前活动单元格开始粘贴多行
-          copiedCells.forEach((copied, index) => {
-            const targetRow = row + index;
-            if (targetRow < tasks.length) {
-              updateCellValue(targetRow, col, copied.value);
-            }
-          });
-        } else {
-          // 从系统剪贴板粘贴文本（支持多行）
-          navigator.clipboard.readText().then(text => {
-            const lines = text.split('\n');
-            lines.forEach((line, index) => {
-              const targetRow = row + index;
-              if (targetRow >= tasks.length) return;
-
-              if (col === 'prompt') {
-                updateCellValue(targetRow, col, line);
-              } else if (col === 'count') {
-                const num = parseInt(line);
-                if (!isNaN(num) && num >= 1) {
-                  updateCellValue(targetRow, col, num);
-                }
-              } else if (col === 'size' && SIZE_OPTIONS.includes(line)) {
-                updateCellValue(targetRow, col, line);
+        if (copiedCells && copiedCells.length > 0) {
+          // 如果只复制了一个值，粘贴到所有选中单元格
+          if (copiedCells.length === 1) {
+            const copied = copiedCells[0];
+            targetCells.forEach(cell => {
+              if (cell.col === copied.col) {
+                updateCellValue(cell.row, cell.col, copied.value);
               }
             });
+          } else {
+            // 多个值按顺序粘贴
+            copiedCells.forEach((copied, index) => {
+              const targetRow = row + index;
+              if (targetRow < tasks.length) {
+                updateCellValue(targetRow, col, copied.value);
+              }
+            });
+          }
+        } else {
+          // 从系统剪贴板粘贴文本
+          navigator.clipboard.readText().then(text => {
+            const lines = text.split('\n').filter(l => l.trim());
+            
+            // 如果只有一行或选中了多个单元格，粘贴相同值到所有选中单元格
+            if (lines.length === 1 || targetCells.length > 1) {
+              const value = lines[0];
+              targetCells.forEach(cell => {
+                if (cell.col === 'prompt') {
+                  updateCellValue(cell.row, cell.col, value);
+                } else if (cell.col === 'count') {
+                  const num = parseInt(value);
+                  if (!isNaN(num) && num >= 1) {
+                    updateCellValue(cell.row, cell.col, num);
+                  }
+                } else if (cell.col === 'size' && SIZE_OPTIONS.includes(value)) {
+                  updateCellValue(cell.row, cell.col, value);
+                }
+              });
+            } else {
+              // 多行文本按顺序粘贴
+              lines.forEach((line, index) => {
+                const targetRow = row + index;
+                if (targetRow >= tasks.length) return;
+
+                if (col === 'prompt') {
+                  updateCellValue(targetRow, col, line);
+                } else if (col === 'count') {
+                  const num = parseInt(line);
+                  if (!isNaN(num) && num >= 1) {
+                    updateCellValue(targetRow, col, num);
+                  }
+                } else if (col === 'size' && SIZE_OPTIONS.includes(line)) {
+                  updateCellValue(targetRow, col, line);
+                }
+              });
+            }
           });
         }
         return;
@@ -1445,15 +1596,19 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
         case 'Delete':
         case 'Backspace':
           e.preventDefault();
-          // 删除键清空单元格内容
-          if (col === 'prompt') {
-            updateCellValue(row, col, '');
-          } else if (col === 'count') {
-            updateCellValue(row, col, 1);
-          } else if (col === 'images') {
-            // 清空图片参考
-            updateCellValue(row, col, []);
-          }
+          // 删除键清空所有选中单元格内容
+          const cellsToClear = selectedCells.length > 0 ? selectedCells : [{ row, col }];
+          cellsToClear.forEach(cell => {
+            if (cell.col === 'prompt') {
+              updateCellValue(cell.row, cell.col, '');
+            } else if (cell.col === 'count') {
+              updateCellValue(cell.row, cell.col, 1);
+            } else if (cell.col === 'images') {
+              updateCellValue(cell.row, cell.col, []);
+            } else if (cell.col === 'size') {
+              updateCellValue(cell.row, cell.col, 'auto');
+            }
+          });
           break;
       }
     };
@@ -1621,15 +1776,32 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
                   >×</button>
                 </div>
               ))}
-              <button
-                className="add-image-btn"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  selectCell(rowIndex, col);
-                  triggerRowImageUpload(rowIndex);
-                }}
-                title={language === 'zh' ? '上传图片' : 'Upload image'}
-              >+</button>
+              <div className="add-image-buttons">
+                <button
+                  className="add-image-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    selectCell(rowIndex, col);
+                    triggerRowImageUpload(rowIndex);
+                  }}
+                  title={language === 'zh' ? '上传图片' : 'Upload image'}
+                  data-track="batch_row_upload_image_click"
+                >
+                  <Image size={14} />
+                </button>
+                <button
+                  className="add-image-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    selectCell(rowIndex, col);
+                    openMediaLibraryForRow(rowIndex);
+                  }}
+                  title={language === 'zh' ? '从素材库选择' : 'Select from library'}
+                  data-track="batch_row_select_from_library_click"
+                >
+                  <LayoutGrid size={14} />
+                </button>
+              </div>
             </div>
             {isActive && <div className="fill-handle" onMouseDown={(e) => { e.stopPropagation(); startFillDrag(rowIndex, col); }} />}
           </div>
@@ -1872,62 +2044,107 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
   return (
     <div className="batch-image-generation">
       <div className="batch-main-content">
-        {/* 工具栏 */}
+        {/* 工具栏 - 按用户动线排列：导入数据 → 选择操作 → 删除 → 下载 */}
         <div className="batch-toolbar">
+          {/* 隐藏的文件输入 */}
+          <input
+            ref={batchImportInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={handleBatchImportSelect}
+            style={{ display: 'none' }}
+          />
+          <input
+            ref={rowImageInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={handleRowImageUpload}
+            style={{ display: 'none' }}
+          />
+          <input
+            ref={excelImportInputRef}
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            onChange={handleExcelImport}
+            style={{ display: 'none' }}
+          />
+
           <div className="toolbar-left">
-            <button className="btn btn-secondary" onClick={deleteSelected}>
-              {language === 'zh' ? '删除选中' : 'Delete Selected'}
+            {/* 1. 数据导入区 - 先下载模板 → 导入Excel → 批量导入图片 */}
+            <button
+              className="btn btn-secondary"
+              onClick={downloadExcelTemplate}
+              data-track="batch_download_template_click"
+            >
+              {language === 'zh' ? '⬇️ 下载模板' : '⬇️ Template'}
             </button>
+            <button
+              className="btn btn-secondary"
+              onClick={() => excelImportInputRef.current?.click()}
+              data-track="batch_import_excel_click"
+            >
+              {language === 'zh' ? '📋 导入Excel' : '📋 Import Excel'}
+            </button>
+            <button
+              className="btn btn-secondary"
+              onClick={() => batchImportInputRef.current?.click()}
+              data-track="batch_import_images_click"
+              data-track-params={JSON.stringify({ source: 'toolbar' })}
+            >
+              {language === 'zh' ? '🖼️ 批量导入图片' : '🖼️ Batch Import'}
+            </button>
+
             <span className="toolbar-divider">|</span>
-            <button className="btn btn-secondary" onClick={selectFailedRows}>
+
+            {/* 2. 选择操作区 - 导入后选择要处理的行 */}
+            <button
+              className="btn btn-secondary"
+              onClick={selectFailedRows}
+              data-track="batch_select_failed_click"
+            >
               {language === 'zh' ? '选择失败行' : 'Select Failed'}
             </button>
-            <button className="btn btn-secondary" onClick={invertSelection}>
+            <button
+              className="btn btn-secondary"
+              onClick={invertSelection}
+              data-track="batch_invert_selection_click"
+            >
               {language === 'zh' ? '反选' : 'Invert'}
             </button>
+
             <span className="toolbar-divider">|</span>
-            <input
-              ref={batchImportInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={handleBatchImportSelect}
-              style={{ display: 'none' }}
-            />
-            {/* 行内图片上传 input */}
-            <input
-              ref={rowImageInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={handleRowImageUpload}
-              style={{ display: 'none' }}
-            />
-            <button className="btn btn-secondary" onClick={() => batchImportInputRef.current?.click()}>
-              {language === 'zh' ? '📥 批量导入图片' : '📥 Batch Import Images'}
+
+            {/* 3. 删除操作 - 清理不需要的行 */}
+            <button
+              className="btn btn-secondary"
+              onClick={deleteSelected}
+              data-track="batch_delete_selected_click"
+              data-track-params={JSON.stringify({ count: selectedRows.size })}
+            >
+              {language === 'zh' ? '删除选中' : 'Delete Selected'}
             </button>
+
             <span className="toolbar-divider">|</span>
-            <input
-              ref={excelImportInputRef}
-              type="file"
-              accept=".xlsx,.xls,.csv"
-              onChange={handleExcelImport}
-              style={{ display: 'none' }}
-            />
-            <button className="btn btn-secondary" onClick={() => excelImportInputRef.current?.click()}>
-              {language === 'zh' ? '📄 导入Excel' : '📄 Import Excel'}
-            </button>
-            <button className="btn btn-secondary" onClick={downloadExcelTemplate}>
-              {language === 'zh' ? '📥 下载模板' : '📥 Template'}
-            </button>
-            <span className="toolbar-divider">|</span>
-            <button className="btn btn-secondary" onClick={downloadSelectedImages}>
-              {language === 'zh' ? '💾 下载选中图片' : '💾 Download Images'}
+
+            {/* 4. 下载结果 - 生成完成后下载 */}
+            <button
+              className="btn btn-secondary"
+              onClick={downloadSelectedImages}
+              data-track="batch_download_images_click"
+              data-track-params={JSON.stringify({ count: selectedRows.size })}
+            >
+              {language === 'zh' ? '💾 下载选中图片' : '💾 Download'}
             </button>
           </div>
+
           <div className="toolbar-right">
             {/* 模型选择器 */}
-            <div className="model-selector-wrapper">
+            <div
+              className="model-selector-wrapper"
+              data-track="batch_model_select"
+            >
               <Select
                 value={selectedModel}
                 onChange={(value) => setSelectedModel(value as string)}
@@ -1939,11 +2156,17 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
                 disabled={isSubmitting}
               />
             </div>
+
             {onSwitchToSingle && (
-              <button className="btn btn-text" onClick={onSwitchToSingle}>
+              <button
+                className="btn btn-text"
+                onClick={onSwitchToSingle}
+                data-track="batch_switch_to_single_click"
+              >
                 {language === 'zh' ? '← 返回单图模式' : '← Back to Single'}
               </button>
             )}
+
             {/* 选中任务统计 - 只计算有提示词的行 */}
             {(() => {
               const validSelectedRows = [...selectedRows].filter(idx => {
@@ -1963,10 +2186,16 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
                 </span>
               ) : null;
             })()}
+
             <button
               className="btn btn-primary"
               onClick={submitToQueue}
               disabled={isSubmitting}
+              data-track="batch_generate_click"
+              data-track-params={JSON.stringify({
+                selectedRows: selectedRows.size,
+                model: selectedModel
+              })}
             >
               {isSubmitting
                 ? (language === 'zh' ? '提交中...' : 'Submitting...')
@@ -1998,25 +2227,45 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
                 <th className="col-prompt">
                   <div className="th-content">
                     {language === 'zh' ? '提示词' : 'Prompt'}
-                    <button className="column-fill-btn" onClick={() => fillColumn('prompt')}>⬇</button>
+                    <button
+                      className="column-fill-btn"
+                      onClick={() => fillColumn('prompt')}
+                      data-track="batch_fill_column_click"
+                      data-track-params={JSON.stringify({ column: 'prompt' })}
+                    >⬇</button>
                   </div>
                 </th>
                 <th className="col-size">
                   <div className="th-content">
                     {language === 'zh' ? '尺寸' : 'Size'}
-                    <button className="column-fill-btn" onClick={() => fillColumn('size')}>⬇</button>
+                    <button
+                      className="column-fill-btn"
+                      onClick={() => fillColumn('size')}
+                      data-track="batch_fill_column_click"
+                      data-track-params={JSON.stringify({ column: 'size' })}
+                    >⬇</button>
                   </div>
                 </th>
                 <th className="col-images">
                   <div className="th-content">
                     {language === 'zh' ? '参考图片' : 'Ref Images'}
-                    <button className="column-fill-btn" onClick={() => fillColumn('images')}>⬇</button>
+                    <button
+                      className="column-fill-btn"
+                      onClick={() => fillColumn('images')}
+                      data-track="batch_fill_column_click"
+                      data-track-params={JSON.stringify({ column: 'images' })}
+                    >⬇</button>
                   </div>
                 </th>
                 <th className="col-count">
                   <div className="th-content">
                     {language === 'zh' ? '数量' : 'Count'}
-                    <button className="column-fill-btn" onClick={() => fillColumn('count')}>⬇</button>
+                    <button
+                      className="column-fill-btn"
+                      onClick={() => fillColumn('count')}
+                      data-track="batch_fill_column_click"
+                      data-track-params={JSON.stringify({ column: 'count' })}
+                    >⬇</button>
                   </div>
                 </th>
                 <th className="col-preview">
@@ -2036,7 +2285,15 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
                   onDragLeave={handleRowDragLeave}
                   onDrop={(e) => handleRowDrop(e, rowIndex)}
                 >
-                  <td className="col-checkbox">
+                  <td 
+                    className="col-checkbox"
+                    onClick={(e) => {
+                      // 点击整个 checkbox 列区域都可以触发选择
+                      if ((e.target as HTMLElement).tagName !== 'INPUT') {
+                        toggleRowSelection(rowIndex, e.shiftKey);
+                      }
+                    }}
+                  >
                     <input
                       type="checkbox"
                       checked={selectedRows.has(rowIndex)}
@@ -2047,7 +2304,13 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
                       onChange={() => {}} // 由 onClick 处理
                     />
                   </td>
-                  <td className="row-number">{rowIndex + 1}</td>
+                  <td 
+                    className="row-number"
+                    onClick={(e) => toggleRowSelection(rowIndex, e.shiftKey)}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    {rowIndex + 1}
+                  </td>
                   <td>{renderCellContent(task, rowIndex, 'prompt')}</td>
                   <td>{renderCellContent(task, rowIndex, 'size')}</td>
                   <td>{renderCellContent(task, rowIndex, 'images')}</td>
@@ -2058,14 +2321,23 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
             </tbody>
           </table>
 
-          {/* 添加行按钮 */}
+          {/* 添加行按钮和导出按钮 */}
           <div className="add-rows-section">
             <button
               className="add-rows-btn"
               onClick={() => setShowAddRowsModal(true)}
               title={language === 'zh' ? '添加行' : 'Add Rows'}
+              data-track="batch_add_rows_click"
             >
               <span className="add-icon">+</span>
+            </button>
+            <button
+              className="btn btn-secondary export-excel-btn"
+              onClick={exportToExcel}
+              data-track="batch_export_excel_click"
+              data-track-params={JSON.stringify({ rowCount: tasks.length })}
+            >
+              {language === 'zh' ? '📊 导出Excel' : '📊 Export Excel'}
             </button>
           </div>
         </div>
@@ -2078,11 +2350,16 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
         </p>
       </div>
 
-      {/* 图片库侧栏 */}
+      {/* 素材库侧栏 */}
       <div className={`image-library-sidebar ${isLibraryCollapsed ? 'collapsed' : ''}`}>
         <div className="library-header">
-          <h3>{language === 'zh' ? '图片库' : 'Image Library'}</h3>
-          <button className="toggle-btn" onClick={() => setIsLibraryCollapsed(!isLibraryCollapsed)}>
+          <h3>{language === 'zh' ? '素材库' : 'Library'}</h3>
+          <button
+            className="toggle-btn"
+            onClick={() => setIsLibraryCollapsed(!isLibraryCollapsed)}
+            data-track="batch_library_toggle_click"
+            data-track-params={JSON.stringify({ collapsed: !isLibraryCollapsed })}
+          >
             {isLibraryCollapsed ? '▶' : '◀'}
           </button>
         </div>
@@ -2097,33 +2374,31 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
                 onChange={handleImageUpload}
                 style={{ display: 'none' }}
               />
-              <button className="upload-btn" onClick={() => fileInputRef.current?.click()}>
+              <button
+                className="upload-btn"
+                onClick={() => fileInputRef.current?.click()}
+                data-track="batch_library_upload_click"
+              >
                 {language === 'zh' ? '📤 上传图片' : '📤 Upload'}
               </button>
             </div>
             <div className="library-grid">
-              {imageLibrary.length === 0 ? (
+              {imageAssets.length === 0 ? (
                 <div className="empty-library">
                   {language === 'zh' ? '暂无图片，请上传' : 'No images, please upload'}
                 </div>
               ) : (
-                imageLibrary.map((url, index) => (
+                imageAssets.map((asset) => (
                   <div
-                    key={index}
+                    key={asset.id}
                     className="library-image"
-                    onClick={() => addImageToSelectedRows(url)}
+                    onClick={() => addImageToSelectedRows(asset.url)}
                     draggable
-                    onDragStart={(e) => handleLibraryImageDragStart(e, url)}
+                    onDragStart={(e) => handleLibraryImageDragStart(e, asset.url)}
                     title={language === 'zh' ? '点击添加到选中行，或拖拽到指定行' : 'Click to add to selected rows, or drag to a specific row'}
+                    data-track="batch_library_image_click"
                   >
-                    <img src={url} alt="" draggable={false} />
-                    <button
-                      className="delete-btn"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        deleteLibraryImage(index);
-                      }}
-                    >×</button>
+                    <img src={asset.url} alt={asset.name} draggable={false} />
                   </div>
                 ))
               )}
@@ -2202,10 +2477,23 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
               </div>
             </div>
             <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={cancelBatchImport}>
+              <button
+                className="btn btn-secondary"
+                onClick={cancelBatchImport}
+                data-track="batch_import_modal_cancel_click"
+              >
                 {language === 'zh' ? '取消' : 'Cancel'}
               </button>
-              <button className="btn btn-primary" onClick={executeBatchImport}>
+              <button
+                className="btn btn-primary"
+                onClick={executeBatchImport}
+                data-track="batch_import_modal_confirm_click"
+                data-track-params={JSON.stringify({
+                  imageCount: pendingImportFiles.length,
+                  imagesPerRow,
+                  startRow: importStartRow
+                })}
+              >
                 {language === 'zh' ? '确认导入' : 'Import'}
               </button>
             </div>
@@ -2369,6 +2657,18 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
           );
         })()}
       </Dialog>
+
+      {/* 素材库选择弹窗 */}
+      <MediaLibraryModal
+        isOpen={showMediaLibrary}
+        onClose={() => {
+          setShowMediaLibrary(false);
+          setMediaLibraryTargetRow(null);
+        }}
+        mode={SelectionMode.SELECT}
+        filterType={AssetType.IMAGE}
+        onSelect={handleMediaLibrarySelect}
+      />
     </div>
   );
 };

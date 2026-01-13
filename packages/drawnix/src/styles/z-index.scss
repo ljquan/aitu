@@ -45,6 +45,7 @@ $z-popover-app: 4500;
 // Layer 4: Drawers/Panels (4000-4999)
 // ==========================================
 $z-task-queue-panel: 4000;
+$z-minimap: 4005; // Minimap 应该在抽屉面板下方，避免挡住 ChatDrawer 的输入框
 $z-chat-drawer: 4010;
 $z-chat-drawer-trigger: 4011;
 $z-generation-history: 4020;
@@ -106,6 +107,7 @@ $z-index-map: (
   'popover-app': $z-popover-app,
   'tooltip': $z-tooltip,
   'task-queue-panel': $z-task-queue-panel,
+  'minimap': $z-minimap,
   'chat-drawer': $z-chat-drawer,
   'chat-drawer-trigger': $z-chat-drawer-trigger,
   'generation-history': $z-generation-history,

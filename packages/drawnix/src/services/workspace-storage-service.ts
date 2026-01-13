@@ -18,7 +18,7 @@ import {
  */
 const WORKSPACE_DB_CONFIG = {
   DATABASE_NAME: 'aitu-workspace',
-  DATABASE_VERSION: 4,
+  DATABASE_VERSION: 6,
   STORES: {
     FOLDERS: 'folders',
     BOARDS: 'boards',

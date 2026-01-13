@@ -83,18 +83,18 @@ class VideoAPIService {
     }
 
     // Log request parameters
-    console.log('[VideoAPI] ========== Video Generation Request ==========');
-    console.log('[VideoAPI] Request params:', {
-      model: params.model,
-      prompt: params.prompt,
-      seconds: params.seconds,
-      size: params.size,
-      inputReferencesCount: params.inputReferences?.length || 0,
-      hasLegacyInputReference: !!params.inputReference,
-    });
-    console.log('[VideoAPI] Full prompt:');
-    console.log(params.prompt);
-    console.log('[VideoAPI] ===============================================');
+    // console.log('[VideoAPI] ========== Video Generation Request ==========');
+    // console.log('[VideoAPI] Request params:', {
+    //   model: params.model,
+    //   prompt: params.prompt,
+    //   seconds: params.seconds,
+    //   size: params.size,
+    //   inputReferencesCount: params.inputReferences?.length || 0,
+    //   hasLegacyInputReference: !!params.inputReference,
+    // });
+    // console.log('[VideoAPI] Full prompt:');
+    // console.log(params.prompt);
+    // console.log('[VideoAPI] ===============================================');
 
     const formData = new FormData();
     formData.append('model', params.model);
@@ -110,45 +110,45 @@ class VideoAPIService {
 
     // Handle multiple images - all models use input_reference
     // For veo3.1, multiple images can be passed with same field name (first frame, last frame)
-    console.log('[VideoAPI] Processing inputReferences:', params.inputReferences);
+    // console.log('[VideoAPI] Processing inputReferences:', params.inputReferences);
     if (params.inputReferences && params.inputReferences.length > 0) {
       // Sort by slot to ensure correct order (slot 0 = first frame, slot 1 = last frame)
       const sortedImages = [...params.inputReferences].sort((a, b) => a.slot - b.slot);
 
       for (const imageRef of sortedImages) {
-        console.log('[VideoAPI] Processing image:', { slot: imageRef.slot, url: imageRef.url?.substring(0, 50), name: imageRef.name });
+        // console.log('[VideoAPI] Processing image:', { slot: imageRef.slot, url: imageRef.url?.substring(0, 50), name: imageRef.name });
 
         if (!imageRef.url) {
-          console.log('[VideoAPI] Skipping image - no URL');
+          // console.log('[VideoAPI] Skipping image - no URL');
           continue;
         }
 
         const fieldName = 'input_reference';
-        console.log('[VideoAPI] Using field name:', fieldName, 'for model:', params.model, 'slot:', imageRef.slot);
+        // console.log('[VideoAPI] Using field name:', fieldName, 'for model:', params.model, 'slot:', imageRef.slot);
 
         // 检查缓存时间，超过1天的图片转为base64
         let processedUrl = imageRef.url;
         if (imageRef.url.startsWith('http')) {
           const imageData = await unifiedCacheService.getImageForAI(imageRef.url);
           processedUrl = imageData.value;
-          console.log(`[VideoAPI] Image processed: ${imageData.type === 'base64' ? 'converted to base64' : 'using URL'}`);
+          // console.log(`[VideoAPI] Image processed: ${imageData.type === 'base64' ? 'converted to base64' : 'using URL'}`);
         }
 
         // Convert to blob and append
         if (processedUrl.startsWith('data:')) {
-          console.log('[VideoAPI] Converting data URL to blob...');
+          // console.log('[VideoAPI] Converting data URL to blob...');
           const response = await fetch(processedUrl);
           const blob = await response.blob();
-          console.log('[VideoAPI] Appending blob:', { fieldName, blobSize: blob.size, fileName: imageRef.name || 'image.png' });
+          // console.log('[VideoAPI] Appending blob:', { fieldName, blobSize: blob.size, fileName: imageRef.name || 'image.png' });
           formData.append(fieldName, blob, imageRef.name || 'image.png');
         } else if (processedUrl.startsWith('http')) {
-          console.log('[VideoAPI] Fetching remote URL...');
+          // console.log('[VideoAPI] Fetching remote URL...');
           const response = await fetch(processedUrl);
           const blob = await response.blob();
-          console.log('[VideoAPI] Appending blob:', { fieldName, blobSize: blob.size, fileName: imageRef.name || 'image.png' });
+          // console.log('[VideoAPI] Appending blob:', { fieldName, blobSize: blob.size, fileName: imageRef.name || 'image.png' });
           formData.append(fieldName, blob, imageRef.name || 'image.png');
         } else {
-          console.log('[VideoAPI] Unknown URL format, skipping');
+          // console.log('[VideoAPI] Unknown URL format, skipping');
         }
       }
     }
@@ -159,7 +159,7 @@ class VideoAPIService {
       if (params.inputReference.startsWith('http')) {
         const imageData = await unifiedCacheService.getImageForAI(params.inputReference);
         processedUrl = imageData.value;
-        console.log(`[VideoAPI] Legacy image processed: ${imageData.type === 'base64' ? 'converted to base64' : 'using URL'}`);
+        // console.log(`[VideoAPI] Legacy image processed: ${imageData.type === 'base64' ? 'converted to base64' : 'using URL'}`);
       }
 
       if (processedUrl.startsWith('data:')) {
@@ -174,7 +174,7 @@ class VideoAPIService {
     }
 
     // Log FormData summary before sending
-    console.log('[VideoAPI] FormData summary:');
+    // console.log('[VideoAPI] FormData summary:');
     const formDataEntries: Record<string, string> = {};
     formData.forEach((value, key) => {
       if (value instanceof Blob) {
@@ -183,8 +183,8 @@ class VideoAPIService {
         formDataEntries[key] = String(value);
       }
     });
-    console.log('[VideoAPI] FormData entries:', formDataEntries);
-    console.log('[VideoAPI] Sending request to:', `${this.baseUrl}/v1/videos`);
+    // console.log('[VideoAPI] FormData entries:', formDataEntries);
+    // console.log('[VideoAPI] Sending request to:', `${this.baseUrl}/v1/videos`);
 
     const response = await fetch(`${this.baseUrl}/v1/videos`, {
       method: 'POST',
@@ -204,7 +204,7 @@ class VideoAPIService {
     }
 
     const result = await response.json();
-    console.log('[VideoAPI] Submit response:', JSON.stringify(result, null, 2));
+    // console.log('[VideoAPI] Submit response:', JSON.stringify(result, null, 2));
     return result;
   }
 
@@ -242,7 +242,7 @@ class VideoAPIService {
         }
 
         const result = await response.json();
-        console.log('[VideoAPI] Query response:', JSON.stringify(result, null, 2));
+        // console.log('[VideoAPI] Query response:', JSON.stringify(result, null, 2));
         return result;
       } catch (error) {
         lastError = error as Error;
@@ -280,9 +280,9 @@ class VideoAPIService {
     } = options;
 
     // Submit video generation task
-    console.log('[VideoAPI] Submitting video generation task...');
+    // console.log('[VideoAPI] Submitting video generation task...');
     const submitResponse = await this.submitVideoGeneration(params);
-    console.log('[VideoAPI] Task submitted:', submitResponse.id, 'Status:', submitResponse.status);
+    // console.log('[VideoAPI] Task submitted:', submitResponse.id, 'Status:', submitResponse.status);
 
     // Notify that video has been submitted (for saving remoteId)
     if (onSubmitted) {
@@ -319,16 +319,16 @@ class VideoAPIService {
     videoId: string,
     options: PollingOptions = {}
   ): Promise<VideoQueryResponse> {
-    console.log('[VideoAPI] Resuming polling for video:', videoId);
+    // console.log('[VideoAPI] Resuming polling for video:', videoId);
 
     const { onProgress } = options;
 
     // For resumed tasks, check status immediately first (video may already be completed)
-    console.log('[VideoAPI] Checking status immediately for resumed task...');
+    // console.log('[VideoAPI] Checking status immediately for resumed task...');
     const immediateStatus = await this.queryVideoStatus(videoId);
     const immediateProgress = immediateStatus.progress ??
       (immediateStatus.status === 'failed' ? 100 : (immediateStatus.status === 'completed' ? 100 : 0));
-    console.log(`[VideoAPI] Immediate check: Status=${immediateStatus.status}, Progress=${immediateProgress}%`);
+    // console.log(`[VideoAPI] Immediate check: Status=${immediateStatus.status}, Progress=${immediateProgress}%`);
 
     // Report progress
     if (onProgress) {
@@ -337,7 +337,7 @@ class VideoAPIService {
 
     // If already completed, return immediately
     if (immediateStatus.status === 'completed') {
-      console.log('[VideoAPI] Video already completed:', immediateStatus.video_url || immediateStatus.url);
+      // console.log('[VideoAPI] Video already completed:', immediateStatus.video_url || immediateStatus.url);
       return immediateStatus;
     }
 
@@ -385,7 +385,7 @@ class VideoAPIService {
       // - If status is 'failed', show 100% to indicate task has ended
       // - Otherwise default to 0 (e.g., when status is 'queued')
       const progress = status.progress ?? (status.status === 'failed' ? 100 : 0);
-      console.log(`[VideoAPI] Poll ${attempts}: Status=${status.status}, Progress=${progress}%`);
+      // console.log(`[VideoAPI] Poll ${attempts}: Status=${status.status}, Progress=${progress}%`);
 
       // Report progress
       if (onProgress) {
@@ -393,7 +393,7 @@ class VideoAPIService {
       }
 
       if (status.status === 'completed') {
-        console.log('[VideoAPI] Video generation completed:', status.video_url || status.url);
+        // console.log('[VideoAPI] Video generation completed:', status.video_url || status.url);
         return status;
       }
 

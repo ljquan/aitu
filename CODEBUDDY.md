@@ -159,6 +159,28 @@ Full coding standards are documented in `docs/CODING_STANDARDS.md`. Key highligh
 - Avoid `any` - use specific types or generics
 - Strict TypeScript configuration is enforced
 
+#### Async Initialization Pattern
+**场景**: 使用 `settingsManager` 或其他需要异步初始化的服务时
+
+❌ **错误示例**:
+```typescript
+async initialize(): Promise<boolean> {
+  const settings = geminiSettings.get(); // 可能返回加密的 JSON！
+  await swTaskQueueClient.initialize({ apiKey: settings.apiKey });
+}
+```
+
+✅ **正确示例**:
+```typescript
+async initialize(): Promise<boolean> {
+  await settingsManager.waitForInitialization(); // 等待解密完成
+  const settings = geminiSettings.get(); // 现在返回解密后的值
+  await swTaskQueueClient.initialize({ apiKey: settings.apiKey });
+}
+```
+
+**原因**: `settingsManager` 使用异步方法 `decryptSensitiveDataForLoading()` 解密敏感数据（如 API Key）。如果在解密完成前调用 `geminiSettings.get()`，会返回加密的 JSON 对象而不是解密后的字符串，导致 API 请求失败。
+
 #### React Component Guidelines
 - Use functional components with Hooks
 - Destructure props with default values
@@ -166,6 +188,39 @@ Full coding standards are documented in `docs/CODING_STANDARDS.md`. Key highligh
 - Wrap event handlers with `useCallback`
 - Use `useEffect` with complete dependency arrays
 - Hook order in components: state hooks → effect hooks → event handlers → render logic
+
+#### Force Refresh useMemo Pattern
+**场景**: 当 `useMemo` 依赖的对象引用没变，但对象内部状态已改变时（如 `board.children` 被修改）
+
+❌ **错误示例**:
+```typescript
+// 操作后 board.children 变了，但 board 引用没变，useMemo 不会重新计算
+const layerInfo = useMemo(() => {
+  return getLayerInfo(board, elementId);
+}, [board]);
+
+const handleMoveUp = () => {
+  moveElementUp(board);  // 修改了 board.children
+  // layerInfo 不会更新！按钮状态不会变化
+};
+```
+
+✅ **正确示例**:
+```typescript
+const [refreshKey, setRefreshKey] = useState(0);
+
+const layerInfo = useMemo(() => {
+  return getLayerInfo(board, elementId);
+// eslint-disable-next-line react-hooks/exhaustive-deps
+}, [board, refreshKey]);
+
+const handleMoveUp = () => {
+  moveElementUp(board);
+  setRefreshKey((k) => k + 1);  // 强制刷新 useMemo
+};
+```
+
+**原因**: React 的 `useMemo` 只比较依赖项的引用。当外部库（如 Plait）直接修改对象内部状态而不改变引用时，需要使用 `refreshKey` 模式强制触发重新计算。
 
 #### CSS/SCSS Guidelines
 - Use BEM naming convention
@@ -236,7 +291,7 @@ import { Z_INDEX } from '@/constants/z-index';
 
 **Brand Identity:**
 - Name: aitu (爱图) - AI Image & Video Creation Tool
-- Tagline: 爱上图像，爱上创作 (Love Images, Love Creation)
+- Tagline: 爱上图片，爱上创作 (Love Images, Love Creation)
 
 **Color System:**
 - Primary Colors:
@@ -278,3 +333,138 @@ import { Z_INDEX } from '@/constants/z-index';
 - Task management: Async queue with retry logic (`task-queue-service.ts`)
 - Media caching: IndexedDB-based cache (`media-cache-service.ts`)
 - All services use RxJS for reactive state management
+
+#### Sora-2 Character API Convention
+**场景**: 创建或查询 Sora-2 角色时
+
+❌ **错误示例**:
+```typescript
+// 错误：使用不存在的 /characters 接口
+const response = await fetch(`${baseUrl}/characters`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ video_id: taskId, model: 'sora-2-character' }),
+});
+
+// 错误：查询时使用 /characters 路径
+await fetch(`${baseUrl}/characters/${characterId}`);
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：使用 /v1/videos 接口 + FormData + character_from_task 参数
+const formData = new FormData();
+formData.append('character_from_task', 'sora-2-pro:task_xxx');
+formData.append('model', 'sora-2-character');
+formData.append('character_timestamps', '0,3');
+
+const response = await fetch(`${baseUrl}/videos`, {
+  method: 'POST',
+  headers: { Authorization: `Bearer ${apiKey}` },
+  body: formData,
+});
+
+// 正确：查询时使用 /v1/videos 路径
+await fetch(`${baseUrl}/videos/${characterId}`);
+```
+
+**原因**: Sora-2 角色 API 复用视频接口 `/v1/videos`，不存在独立的 `/characters` 端点。创建角色时必须使用 `character_from_task` 参数（非 `video_id`）和 FormData 格式。参考 `character-api-service.ts` 的实现。
+
+#### Base64 编码膨胀问题
+**场景**: 压缩图片后转换为 base64 传给 AI API 时
+
+❌ **错误示例**:
+```typescript
+// 错误：目标 Blob 大小设为 1MB，但 base64 编码后会膨胀约 33%
+const MAX_SIZE = 1 * 1024 * 1024; // 1MB
+const compressedBlob = await compressImage(blob, MAX_SIZE);
+const base64 = await blobToBase64(compressedBlob);
+// base64 实际大小约 1.33MB，超过限制！
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：考虑 base64 膨胀，目标 Blob 大小设为 750KB
+const MAX_SIZE = 750 * 1024; // 750KB，base64 后约 1MB
+const compressedBlob = await compressImage(blob, MAX_SIZE);
+const base64 = await blobToBase64(compressedBlob);
+// base64 实际大小约 1MB，符合限制
+```
+
+**原因**: Base64 编码将每 3 字节转换为 4 字符，导致数据大小增加约 33%（4/3 倍）。如果目标是 base64 < 1MB，Blob 应该压缩到 ~750KB。
+
+#### Cache API 时间戳刷新问题
+**场景**: 在 Service Worker 中判断缓存图片是否过期时
+
+❌ **错误示例**:
+```typescript
+// 错误：sw-cache-date 会在每次访问时被刷新，永远不会"过期"
+const cachedResponse = await cache.match(url);
+const cacheDate = cachedResponse.headers.get('sw-cache-date');
+const cacheTime = parseInt(cacheDate, 10);
+const isExpired = Date.now() - cacheTime > 12 * 60 * 60 * 1000;
+// isExpired 永远是 false，因为每次访问都会刷新 sw-cache-date
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：从 IndexedDB 获取原始缓存时间（不会被刷新）
+const originalCacheTime = await getOriginalCacheTimeFromIndexedDB(url);
+const fallbackCacheTime = parseInt(cachedResponse.headers.get('sw-cache-date') || '0', 10);
+const cacheTime = originalCacheTime ?? fallbackCacheTime;
+const isExpired = Date.now() - cacheTime > 12 * 60 * 60 * 1000;
+```
+
+**原因**: 本项目的 Service Worker 在每次访问缓存图片时会更新 `sw-cache-date` 以延长缓存时间（见 `sw/index.ts` 第 1732 行）。如果需要判断"原始缓存时间"，应该从 IndexedDB (`drawnix-unified-cache`) 的 `cachedAt` 字段获取，该字段不会因访问而更新。
+
+#### 素材库数据来源与备份恢复
+**场景**: 实现备份导出/导入功能时，需要考虑素材库的数据来源
+
+素材库（`AssetContext`）展示的素材来自两个来源：
+1. **本地上传的素材**：存储在 IndexedDB (`aitu-assets`) 中
+2. **AI 生成的素材**：从任务队列 (`taskQueueService.getTasksByStatus(COMPLETED)`) 动态获取
+
+❌ **错误示例**:
+```typescript
+// 错误：只导出媒体文件，没有导出任务数据
+async exportAssets(zip: JSZip) {
+  const cachedMedia = await unifiedCacheService.getAllCacheMetadata();
+  for (const item of cachedMedia) {
+    const blob = await unifiedCacheService.getCachedBlob(item.url);
+    zip.file(`assets/${item.id}.jpg`, blob);
+  }
+  // 导入后素材库无法展示 AI 生成的素材！
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：同时导出任务数据
+async exportAssets(zip: JSZip) {
+  // 1. 导出媒体文件
+  const cachedMedia = await unifiedCacheService.getAllCacheMetadata();
+  for (const item of cachedMedia) {
+    const blob = await unifiedCacheService.getCachedBlob(item.url);
+    zip.file(`assets/${item.id}.jpg`, blob);
+  }
+  
+  // 2. 导出任务数据（素材库展示需要）
+  const completedTasks = swTaskQueueService.getTasksByStatus(TaskStatus.COMPLETED)
+    .filter(t => t.type === TaskType.IMAGE || t.type === TaskType.VIDEO);
+  zip.file('tasks.json', JSON.stringify(completedTasks));
+}
+
+// 导入时恢复任务数据
+async importAssets(zip: JSZip) {
+  // ... 导入媒体文件 ...
+  
+  // 恢复任务数据
+  const tasksFile = zip.file('tasks.json');
+  if (tasksFile) {
+    const tasks = JSON.parse(await tasksFile.async('string'));
+    await swTaskQueueService.restoreTasks(tasks);
+  }
+}
+```
+
+**原因**: 素材库通过 `AssetContext.loadAssets()` 加载素材时，会调用 `taskQueueService.getTasksByStatus(TaskStatus.COMPLETED)` 获取 AI 生成的素材。如果只导出媒体文件而不导出任务数据，导入后任务队列为空，素材库就无法展示这些 AI 生成的素材。

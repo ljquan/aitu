@@ -170,7 +170,7 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
         }>>,
         aiAnalysis?: string
       ) => {
-        console.log('[ChatDrawer] Tool calls received:', toolCalls.length, 'aiAnalysis:', aiAnalysis?.substring(0, 50));
+        // console.log('[ChatDrawer] Tool calls received:', toolCalls.length, 'aiAnalysis:', aiAnalysis?.substring(0, 50));
 
         // 创建工作流数据
         const workflowId = `workflow-${Date.now()}`;
@@ -233,7 +233,7 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
             return newMap;
           });
 
-          console.log('[ChatDrawer] Tools executed:', results.length);
+          // console.log('[ChatDrawer] Tools executed:', results.length);
         } catch (error: any) {
           console.error('[ChatDrawer] Tool execution failed:', error);
           // 标记所有步骤失败
@@ -268,6 +268,10 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
       temporaryModel: sessionModel, // 传递临时模型
       onToolCalls: handleToolCalls, // 传递工具调用回调
     });
+
+    // 使用 ref 存储 sendMessage 函数，避免 useEffect 依赖 chatHandler 导致重复执行
+    const sendMessageRef = useRef(chatHandler.sendMessage);
+    sendMessageRef.current = chatHandler.sendMessage;
 
     // Load initial sessions and active session
     useEffect(() => {
@@ -327,10 +331,10 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
         pendingMessageRef.current = null;
         // Use setTimeout to ensure handler is updated
         setTimeout(() => {
-          chatHandler.sendMessage(msg);
+          sendMessageRef.current(msg);
         }, 100);
       }
-    }, [activeSessionId, chatHandler]);
+    }, [activeSessionId]);
 
     // Send pending message when API key is configured and settings dialog closes
     useEffect(() => {
@@ -352,12 +356,12 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
           } else {
             // Send immediately if session exists
             setTimeout(() => {
-              chatHandler.sendMessage(msg);
+              sendMessageRef.current(msg);
             }, 100);
           }
         }
       }
-    }, [appState.openSettings, activeSessionId, chatHandler]);
+    }, [appState.openSettings, activeSessionId]);
 
     // Handle Escape key to close drawer
     useEffect(() => {

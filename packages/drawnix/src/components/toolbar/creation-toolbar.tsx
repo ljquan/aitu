@@ -107,6 +107,36 @@ export const BUTTONS: AppToolButtonProps[] = [
     visibilityKey: 'text',
   },
   {
+    icon: ImageIcon,
+    titleKey: 'toolbar.image',
+    key: 'image',
+    visibilityKey: 'image',
+  },
+  {
+    icon: MediaLibraryIcon,
+    titleKey: 'toolbar.mediaLibrary',
+    key: 'media-library',
+    visibilityKey: 'media-library',
+  },
+  {
+    icon: AIImageIcon,
+    titleKey: 'toolbar.aiImage',
+    key: 'ai-image',
+    visibilityKey: 'ai-image',
+  },
+  {
+    icon: AIVideoIcon,
+    titleKey: 'toolbar.aiVideo',
+    key: 'ai-video',
+    visibilityKey: 'ai-video',
+  },
+  {
+    icon: MindIcon,
+    pointer: MindPointerType.mind,
+    titleKey: 'toolbar.mind',
+    visibilityKey: 'mind',
+  },
+  {
     icon: FeltTipPenIcon,
     pointer: FreehandShape.feltTipPen,
     titleKey: 'toolbar.pen',
@@ -126,30 +156,6 @@ export const BUTTONS: AppToolButtonProps[] = [
     key: PopupKey.shape,
     pointer: BasicShapes.rectangle,
     visibilityKey: 'shape',
-  },
-  {
-    icon: MediaLibraryIcon,
-    titleKey: 'toolbar.mediaLibrary',
-    key: 'media-library',
-    visibilityKey: 'media-library',
-  },
-  {
-    icon: ImageIcon,
-    titleKey: 'toolbar.image',
-    key: 'image',
-    visibilityKey: 'image',
-  },
-  {
-    icon: AIImageIcon,
-    titleKey: 'toolbar.aiImage',
-    key: 'ai-image',
-    visibilityKey: 'ai-image',
-  },
-  {
-    icon: AIVideoIcon,
-    titleKey: 'toolbar.aiVideo',
-    key: 'ai-video',
-    visibilityKey: 'ai-video',
   },
   {
     icon: ThemeIcon,

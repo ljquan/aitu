@@ -94,6 +94,7 @@ export const SettingsDialog = ({
             </div>
             <input
               type="password"
+              id="apiKeyInput"
               className="settings-dialog__input"
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}

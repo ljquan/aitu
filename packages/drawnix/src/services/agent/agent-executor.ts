@@ -144,8 +144,8 @@ function replaceToolCallPlaceholders(
   const newArgs: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(toolCall.arguments)) {
-    if (key === 'referenceImages' && Array.isArray(value)) {
-      // referenceImages 数组，将占位符替换为真实 URL
+    if ((key === 'referenceImages' || key === 'inputReferences') && Array.isArray(value)) {
+      // referenceImages 或 inputReferences 数组，将占位符替换为真实 URL
       const replacedUrls = value
         .map(item => {
           if (typeof item === 'string') {
@@ -161,12 +161,26 @@ function replaceToolCallPlaceholders(
             }
             // 不是占位符，可能已经是 URL
             return item;
+          } else if (item && typeof item === 'object' && (item as any).url) {
+            // 如果是对象格式 { url: '[图片1]' }，也进行替换
+            const url = (item as any).url;
+            if (typeof url === 'string') {
+              const zhMatch = url.match(/^\[图片(\d+)\]$/);
+              const enMatch = url.match(/^\[Image\s*(\d+)\]$/i);
+              const match = zhMatch || enMatch;
+              if (match) {
+                const index = parseInt(match[1], 10) - 1;
+                if (index >= 0 && index < imageUrls.length) {
+                  return { ...item, url: imageUrls[index] };
+                }
+              }
+            }
           }
           return item;
         })
         .filter(Boolean);
-      newArgs[key] = replacedUrls.length > 0 ? replacedUrls : imageUrls;
-    } else if (typeof value === 'string') {
+      newArgs[key] = replacedUrls.length > 0 ? (key === 'referenceImages' ? replacedUrls.map(u => typeof u === 'string' ? u : (u as any).url) : replacedUrls) : imageUrls;
+    } else if ((key === 'referenceImage' || key === 'inputReference') && typeof value === 'string') {
       // 字符串参数，替换占位符
       newArgs[key] = replacePlaceholdersWithUrls(value, imageUrls);
     } else if (Array.isArray(value)) {
@@ -179,9 +193,14 @@ function replaceToolCallPlaceholders(
     }
   }
 
-  // 如果参数中没有 referenceImages 但有图片 URL，自动添加
-  if (!newArgs.referenceImages && imageUrls.length > 0) {
+  // 如果参数中没有 referenceImages 或 inputReferences 但有图片 URL，自动添加
+  if (!newArgs.referenceImages && !newArgs.inputReferences && imageUrls.length > 0) {
+    // 同时也为视频接口提供参数兼容性
     newArgs.referenceImages = imageUrls;
+    newArgs.inputReferences = imageUrls.map(url => ({ url }));
+  } else if (newArgs.referenceImages && !newArgs.inputReferences) {
+    // 保持同步
+    newArgs.inputReferences = (newArgs.referenceImages as string[]).map(url => ({ url }));
   }
 
   return {
@@ -224,10 +243,16 @@ class AgentExecutor {
     } = options;
 
     try {
-      console.log('[AgentExecutor] Starting execution with context:', context.userInstruction.substring(0, 100));
+      // console.log('[AgentExecutor] Starting execution with context:', context.userInstruction.substring(0, 100));
 
       // 收集所有参考图片 URL
       const allReferenceImages = [...context.selection.images, ...context.selection.graphics];
+      
+      // console.log('[AgentExecutor] Reference images collected:', {
+        // fromImages: context.selection.images.length,
+        // fromGraphics: context.selection.graphics.length,
+        // total: allReferenceImages.length,
+      // });
 
       // 生成系统提示词（自动从 registry 获取工具描述）
       let systemPrompt = generateSystemPrompt();
@@ -242,7 +267,7 @@ class AgentExecutor {
 
       // 构建结构化用户消息
       const userMessage = buildStructuredUserMessage(context);
-      console.log('[AgentExecutor] Structured user message:\n', userMessage);
+      // console.log('[AgentExecutor] Structured user message:\n', userMessage);
 
       // 构建消息（不传递实际图片给文本大模型）
       const messages: GeminiMessage[] = [
@@ -267,19 +292,20 @@ class AgentExecutor {
       // 获取全局设置的文本模型
       const globalSettings = geminiSettings.get();
       const textModel = globalSettings.textModelName;
-      console.log('[AgentExecutor] Using text model from global settings:', textModel);
+      // console.log('[AgentExecutor] Using text model from global settings:', textModel);
 
       while (iterations < maxIterations) {
         iterations++;
-        console.log(`[AgentExecutor] Iteration ${iterations}/${maxIterations}`);
+        // console.log(`[AgentExecutor] Iteration ${iterations}/${maxIterations}`);
 
         // 调用 LLM，使用全局设置的文本模型
         let fullResponse = '';
         const response = await defaultGeminiClient.sendChat(
           messages,
-          (chunk) => {
-            fullResponse += chunk;
-            onChunk?.(chunk);
+          (accumulatedContent) => {
+            // accumulatedContent 已经是累积的完整内容
+            fullResponse = accumulatedContent;
+            onChunk?.(accumulatedContent);
           },
           signal,
           textModel // 使用全局设置的文本模型
@@ -290,7 +316,7 @@ class AgentExecutor {
           fullResponse = response.choices[0].message.content || fullResponse;
         }
 
-        console.log('[AgentExecutor] LLM response:', fullResponse.substring(0, 200));
+        // console.log('[AgentExecutor] LLM response:', fullResponse.substring(0, 200));
 
         // 解析工具调用
         const toolCalls = parseToolCalls(fullResponse);
@@ -311,7 +337,7 @@ class AgentExecutor {
             ? replaceToolCallPlaceholders(rawToolCall, allReferenceImages)
             : rawToolCall;
 
-          console.log(`[AgentExecutor] Reporting tool call: ${toolCall.name}`, toolCall.arguments);
+          // console.log(`[AgentExecutor] Reporting tool call: ${toolCall.name}`, toolCall.arguments);
           onToolCall?.(toolCall);
         }
 

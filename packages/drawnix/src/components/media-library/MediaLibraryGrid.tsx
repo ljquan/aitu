@@ -180,9 +180,9 @@ export function MediaLibraryGrid({
       // 先删除画布上使用这些素材的元素
       if (board) {
         const removedCount = removeElementsByAssetIds(board, idsToDelete);
-        if (removedCount > 0) {
-          console.log(`[MediaLibraryGrid] Removed ${removedCount} canvas elements using ${idsToDelete.length} assets`);
-        }
+        // if (removedCount > 0) {
+        //   console.log(`[MediaLibraryGrid] Removed ${removedCount} canvas elements using ${idsToDelete.length} assets`);
+        // }
       }
       
       // 然后删除素材本身

@@ -8,7 +8,7 @@
 import type { MCPTool, MCPResult, MCPExecuteOptions, MCPTaskResult } from '../types';
 import type { LayoutStyle, GridConfig } from '../../types/photo-wall.types';
 import { LAYOUT_STYLES, GRID_IMAGE_DEFAULTS, GRID_IMAGE_PROMPT_TEMPLATE } from '../../types/photo-wall.types';
-import { taskQueueService } from '../../services/task-queue-service';
+import { taskQueueService } from '../../services/task-queue';
 import { TaskType } from '../../types/task.types';
 import { getCurrentImageModel } from './image-generation';
 
@@ -90,21 +90,21 @@ function executeQueue(params: GridImageToolParams, options: MCPExecuteOptions): 
     name: `reference-${index + 1}`,
   }));
 
-  console.log('[GridImageTool] Creating grid image task with params:', {
-    theme,
-    gridConfig,
-    layoutStyle,
-    imageSize,
-    imageQuality,
-    referenceImages: referenceImages?.length || 0,
-  });
+  // console.log('[GridImageTool] Creating grid image task with params:', {
+  //   theme,
+  //   gridConfig,
+  //   layoutStyle,
+  //   imageSize,
+  //   imageQuality,
+  //   referenceImages: referenceImages?.length || 0,
+  // });
 
   try {
     let task;
 
     // 如果是重试，复用原有任务
     if (options.retryTaskId) {
-      console.log('[GridImageTool] Retrying existing task:', options.retryTaskId);
+      // console.log('[GridImageTool] Retrying existing task:', options.retryTaskId);
       taskQueueService.retryTask(options.retryTaskId);
       task = taskQueueService.getTask(options.retryTaskId);
       if (!task) {
@@ -129,12 +129,14 @@ function executeQueue(params: GridImageToolParams, options: MCPExecuteOptions): 
           // 批量参数
           batchId: options.batchId,
           globalIndex: options.globalIndex || 1,
+          // 自动插入画布
+          autoInsertToCanvas: true,
         },
         TaskType.IMAGE
       );
     }
 
-    console.log('[GridImageTool] Created/retried grid image task:', task.id);
+    // console.log('[GridImageTool] Created/retried grid image task:', task.id);
 
     return {
       success: true,

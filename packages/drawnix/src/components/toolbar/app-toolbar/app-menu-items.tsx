@@ -5,6 +5,7 @@ import {
   SaveFileIcon,
   TrashIcon,
   GithubIcon,
+  BackupRestoreIcon,
 } from '../../icons';
 import { useBoard, useListRender } from '@plait-board/react-board';
 import {
@@ -25,6 +26,7 @@ import { useContext } from 'react';
 import { MenuContentPropsContext } from '../../menu/common';
 import { EVENT } from '../../../constants';
 import { cleanupMissingAssets } from '../../../utils/asset-cleanup';
+import { MessagePlugin } from 'tdesign-react';
 
 export const SaveToFile = () => {
   const board = useBoard();
@@ -140,18 +142,18 @@ export const CleanMissingAssets = () => {
         try {
           const removedCount = await cleanupMissingAssets(board);
           if (removedCount > 0) {
-            console.log(`[CleanMissingAssets] Removed ${removedCount} elements with missing assets`);
-            // 可以在这里添加用户通知
+            MessagePlugin.success(t('menu.cleanMissingAssets.success', { count: removedCount }));
           } else {
-            console.log('[CleanMissingAssets] No missing assets found');
+            MessagePlugin.info(t('menu.cleanMissingAssets.noAssets'));
           }
         } catch (error) {
           console.error('[CleanMissingAssets] Failed to cleanup missing assets:', error);
+          MessagePlugin.error(t('menu.cleanMissingAssets.error'));
         }
       }}
-      aria-label={t('menu.cleanMissingAssets', '清理无效资源')}
+      aria-label={t('menu.cleanMissingAssets')}
     >
-      {t('menu.cleanMissingAssets', '清理无效资源')}
+      {t('menu.cleanMissingAssets')}
     </MenuItem>
   );
 };
@@ -179,6 +181,25 @@ export const CleanBoard = () => {
   );
 };
 CleanBoard.displayName = 'CleanBoard';
+
+export const BackupRestore = ({
+  onOpenBackupRestore,
+}: {
+  onOpenBackupRestore: () => void;
+}) => {
+  const { t } = useI18n();
+  return (
+    <MenuItem
+      icon={BackupRestoreIcon}
+      data-track="toolbar_click_menu_backup"
+      onSelect={onOpenBackupRestore}
+      aria-label={t('menu.backupRestore')}
+    >
+      {t('menu.backupRestore')}
+    </MenuItem>
+  );
+};
+BackupRestore.displayName = 'BackupRestore';
 
 export const Settings = () => {
   const { appState, setAppState } = useDrawnix();

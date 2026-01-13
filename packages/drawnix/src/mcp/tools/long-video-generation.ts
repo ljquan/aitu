@@ -9,7 +9,7 @@
  */
 
 import type { MCPTool, MCPResult, MCPExecuteOptions, MCPTaskResult } from '../types';
-import { taskQueueService } from '../../services/task-queue-service';
+import { taskQueueService } from '../../services/task-queue';
 import { TaskType } from '../../types/task.types';
 import type { VideoModel } from '../../types/video.types';
 import { VIDEO_MODEL_CONFIGS } from '../../constants/video-model-config';
@@ -185,7 +185,7 @@ async function generateVideoScript(
     fullResponse = response.choices[0].message.content || fullResponse;
   }
 
-  console.log('[LongVideo] Script generation response:', fullResponse);
+  // console.log('[LongVideo] Script generation response:', fullResponse);
 
   return parseVideoScript(fullResponse);
 }
@@ -229,7 +229,7 @@ export function createLongVideoSegmentTask(
     TaskType.VIDEO
   );
 
-  console.log(`[LongVideo] Created task ${segment.index}/${meta.totalSegments}:`, task.id);
+  // console.log(`[LongVideo] Created task ${segment.index}/${meta.totalSegments}:`, task.id);
   return task;
 }
 
@@ -268,7 +268,7 @@ async function executeLongVideoGeneration(
     // 计算需要多少个片段
     const segmentCount = Math.ceil(totalDuration / segmentDuration);
 
-    console.log(`[LongVideo] Generating ${segmentCount} segments for ${totalDuration}s video`);
+    // console.log(`[LongVideo] Generating ${segmentCount} segments for ${totalDuration}s video`);
 
     // 通知 AI 分析阶段开始
     options.onChunk?.(`正在为您规划 ${totalDuration} 秒的长视频，分为 ${segmentCount} 个片段...\n\n`);

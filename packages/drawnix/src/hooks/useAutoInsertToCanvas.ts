@@ -13,14 +13,19 @@
 
 import { useEffect, useRef } from 'react';
 import type { Point } from '@plait/core';
-import { taskQueueService } from '../services/task-queue-service';
+import { getTaskQueueService } from '../services/task-queue';
 import { workflowCompletionService } from '../services/workflow-completion-service';
 import { Task, TaskStatus, TaskType } from '../types/task.types';
-import { getCanvasBoard, insertAIFlow, insertImageGroup } from '../mcp';
+import { getCanvasBoard, insertAIFlow, insertImageGroup, parseSizeToPixels, quickInsert } from '../services/canvas-operations';
 import { getInsertionPointBelowBottommostElement } from '../utils/selection-utils';
-import { splitAndInsertImages } from '../utils/image-splitter';
 import { WorkZoneTransforms } from '../plugins/with-workzone';
 import type { PlaitWorkZone } from '../types/workzone.types';
+import {
+  isGridImageTask as checkGridImageTask,
+  isInspirationBoardTask as checkInspirationBoardTask,
+  handleSplitAndInsertTask,
+  type TaskParams,
+} from '../services/media-result-handler';
 
 /**
  * 配置项
@@ -72,6 +77,68 @@ function findWorkZoneForTask(taskId: string): PlaitWorkZone | null {
 }
 
 /**
+ * 更新 WorkZone 中与任务关联的步骤状态
+ * @param taskId 任务 ID
+ * @param status 新状态
+ * @param result 任务结果（可选）
+ * @param error 错误信息（可选）
+ */
+function updateWorkflowStepForTask(
+  taskId: string,
+  status: 'completed' | 'failed',
+  result?: { url?: string },
+  error?: string
+): void {
+  const board = getCanvasBoard();
+  if (!board) return;
+
+  const workzone = findWorkZoneForTask(taskId);
+  if (!workzone) return;
+
+  // 找到包含此 taskId 的步骤并更新状态
+  const updatedSteps = workzone.workflow.steps?.map(step => {
+    const stepResult = step.result as { taskId?: string } | undefined;
+    if (stepResult?.taskId === taskId) {
+      const existingResult = typeof step.result === 'object' && step.result !== null ? step.result : {};
+      return {
+        ...step,
+        status,
+        result: result ? {
+          ...existingResult,
+          url: result.url,
+          success: status === 'completed',
+        } : step.result,
+        error: error,
+      };
+    }
+    return step;
+  });
+
+  if (updatedSteps) {
+    WorkZoneTransforms.updateWorkflow(board, workzone.id, {
+      steps: updatedSteps,
+    });
+
+    // 检查是否所有步骤都已完成或失败
+    const allStepsFinished = updatedSteps.every(
+      step => step.status === 'completed' || step.status === 'failed' || step.status === 'skipped'
+    );
+
+    if (allStepsFinished) {
+      // 延迟删除 WorkZone，让用户有时间看到完成状态
+      setTimeout(() => {
+        WorkZoneTransforms.removeWorkZone(board, workzone.id);
+        
+        // 触发事件通知 AI 输入框生成完成
+        window.dispatchEvent(new CustomEvent('ai-generation-complete', {
+          detail: { type: 'image', success: true, workzoneId: workzone.id }
+        }));
+      }, 1500);
+    }
+  }
+}
+
+/**
  * 待插入任务的缓冲区，用于分组
  */
 interface PendingInsert {
@@ -96,11 +163,20 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
      * 执行批量插入
      */
     const flushPendingInserts = async () => {
+      // console.log('[AutoInsert] flushPendingInserts called');
       const board = getCanvasBoard();
-      if (!board || !isActive) return;
+      if (!board || !isActive) {
+        // console.log(`[AutoInsert] flushPendingInserts aborted: board=${!!board}, isActive=${isActive}`);
+        return;
+      }
 
       const pendingMap = pendingInsertsRef.current;
-      if (pendingMap.size === 0) return;
+      if (pendingMap.size === 0) {
+        // console.log('[AutoInsert] flushPendingInserts: no pending tasks');
+        return;
+      }
+
+      // console.log(`[AutoInsert] flushPendingInserts: ${pendingMap.size} prompt groups to insert`);
 
       // 复制并清空待插入列表
       const toInsert = new Map(pendingMap);
@@ -114,18 +190,20 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
         const workzone = findWorkZoneForTask(firstTask.id);
         if (workzone?.expectedInsertPosition) {
           insertionPoint = workzone.expectedInsertPosition;
-          console.log('[AutoInsert] Using WorkZone expected insert position:', insertionPoint);
         }
       }
 
       // 如果没有找到 WorkZone 或没有预期位置，回退到原来的逻辑
       if (!insertionPoint) {
-        insertionPoint = getInsertionPointBelowBottommostElement(board, 800);
-        console.log('[AutoInsert] Using default insertion point:', insertionPoint);
+        insertionPoint = getInsertionPointBelowBottommostElement(board);
       }
+
+      // console.log(`[AutoInsert] Insertion point:`, insertionPoint);
 
       for (const [promptKey, inserts] of toInsert) {
         if (!isActive) break;
+
+        // console.log(`[AutoInsert] Processing prompt group "${promptKey.substring(0, 30)}..." with ${inserts.length} tasks`);
 
         // 注册所有任务
         for (const { task } of inserts) {
@@ -143,27 +221,27 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
             const { task } = inserts[0];
             const url = task.result?.url;
             if (!url) {
+              // console.log(`[AutoInsert] Task ${task.id} has no result URL, skipping`);
               workflowCompletionService.failPostProcessing(task.id, 'No result URL');
               continue;
             }
 
             const type = task.type === TaskType.VIDEO ? 'video' : 'image';
+            const dimensions = parseSizeToPixels(task.params.size);
+
+            // console.log(`[AutoInsert] Inserting single ${type} for task ${task.id}, url: ${url.substring(0, 80)}...`);
+            // console.log(`[AutoInsert] dimensions:`, dimensions, `insertionPoint:`, insertionPoint);
 
             if (mergedConfig.insertPrompt) {
-              // 插入 Prompt + 结果
-              await insertAIFlow(task.params.prompt, [{ type, url }], insertionPoint);
+              const result = await insertAIFlow(task.params.prompt, [{ type, url, dimensions }], insertionPoint);
+              // console.log(`[AutoInsert] insertAIFlow result:`, result);
             } else {
-              // 只插入结果
-              const { quickInsert } = await import('../mcp');
-              await quickInsert(type, url, insertionPoint);
+              const result = await quickInsert(type, url, insertionPoint, dimensions);
+              // console.log(`[AutoInsert] quickInsert result:`, result);
             }
 
-            console.log(`[AutoInsert] Inserted ${type} for task ${task.id} at position:`, insertionPoint);
-            workflowCompletionService.completePostProcessing(
-              task.id,
-              1,
-              insertionPoint
-            );
+            // console.log(`[AutoInsert] Successfully inserted ${type} for task ${task.id}`);
+            workflowCompletionService.completePostProcessing(task.id, 1, insertionPoint);
           } else {
             // 多个同 Prompt 任务，水平排列
             const urls = inserts
@@ -171,49 +249,44 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
               .filter((url): url is string => !!url);
 
             if (urls.length === 0) {
+              // console.log(`[AutoInsert] No valid URLs in group, skipping`);
               for (const { task } of inserts) {
                 workflowCompletionService.failPostProcessing(task.id, 'No result URL');
               }
               continue;
             }
 
-            const firstTask = inserts[0].task;
-            const type = firstTask.type === TaskType.VIDEO ? 'video' : 'image';
+            const firstInsertTask = inserts[0].task;
+            const type = firstInsertTask.type === TaskType.VIDEO ? 'video' : 'image';
+            const dimensions = parseSizeToPixels(firstInsertTask.params.size);
+
+            // console.log(`[AutoInsert] Inserting group of ${urls.length} ${type}s`);
 
             if (mergedConfig.insertPrompt) {
-              // 插入 Prompt + 多个结果（水平排列）
               await insertAIFlow(
-                firstTask.params.prompt,
-                urls.map(url => ({ type, url })),
+                firstInsertTask.params.prompt,
+                urls.map(url => ({ type, url, dimensions })),
                 insertionPoint
               );
             } else {
-              // 只插入多个结果（水平排列）
               if (type === 'image') {
-                await insertImageGroup(urls, insertionPoint);
+                await insertImageGroup(urls, insertionPoint, dimensions);
               } else {
-                // 视频也可以用类似的方式
                 for (const url of urls) {
-                  const { quickInsert } = await import('../mcp');
-                  await quickInsert('video', url, insertionPoint);
+                  await quickInsert('video', url, insertionPoint, dimensions);
                 }
               }
             }
 
-            console.log(`[AutoInsert] Inserted ${urls.length} ${type}s for prompt: ${promptKey.substring(0, 50)}... at position:`, insertionPoint);
+            // console.log(`[AutoInsert] Successfully inserted group of ${urls.length} ${type}s`);
 
             // 标记所有任务完成
             for (const { task } of inserts) {
-              workflowCompletionService.completePostProcessing(
-                task.id,
-                1,
-                insertionPoint
-              );
+              workflowCompletionService.completePostProcessing(task.id, 1, insertionPoint);
             }
           }
         } catch (error) {
           console.error(`[AutoInsert] Failed to insert for prompt ${promptKey}:`, error);
-          // 标记所有任务失败
           for (const { task } of inserts) {
             workflowCompletionService.failPostProcessing(task.id, String(error));
           }
@@ -234,154 +307,54 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
     };
 
     /**
-     * 检查是否为宫格图任务
+     * 处理宫格图/灵感图任务：使用统一的媒体结果处理服务
      */
-    const isGridImageTask = (task: Task): boolean => {
-      const params = task.params as Record<string, unknown>;
-      return !!(params.gridImageRows && params.gridImageCols);
-    };
-
-    /**
-     * 检查是否为灵感图任务
-     */
-    const isInspirationBoardTask = (task: Task): boolean => {
-      const params = task.params as Record<string, unknown>;
-      return !!(params.isInspirationBoard && params.inspirationBoardLayoutStyle === 'inspiration-board');
-    };
-
-    /**
-     * 处理宫格图任务：拆分并插入
-     *
-     * 使用 splitAndInsertImages 进行智能检测和拆分，包括：
-     * - 自动去除四周白边
-     * - 智能检测网格分割线
-     * - 对每个子图进行白边清理
-     * - 自动滚动到插入位置
-     */
-    const handleGridImageTask = async (task: Task) => {
-      const board = getCanvasBoard();
-      if (!board) {
-        console.error('[AutoInsert] Board not available for grid image task');
-        workflowCompletionService.failPostProcessing(task.id, 'Board not available');
-        return;
-      }
-
-      const params = task.params as Record<string, unknown>;
-      const userRows = params.gridImageRows as number;
-      const userCols = params.gridImageCols as number;
+    const handleSplitTask = async (task: Task) => {
       const url = task.result?.url;
-
       if (!url) {
-        console.error('[AutoInsert] Grid image task has no result URL');
+        console.error('[AutoInsert] Split task has no result URL');
         workflowCompletionService.failPostProcessing(task.id, 'No result URL');
         return;
       }
 
-      console.log(`[AutoInsert] Processing grid image task ${task.id}: user specified ${userRows}x${userCols}`);
-
-      // 注册任务并开始后处理
-      const batchId = params.batchId as string | undefined;
-      workflowCompletionService.registerTask(task.id, batchId);
-      workflowCompletionService.startPostProcessing(task.id, 'split_and_insert');
-
-      try {
-        // 使用统一的 splitAndInsertImages 函数
-        // 该函数会自动检测网格、去除白边、清理子图白边并滚动到结果位置
-        const result = await splitAndInsertImages(board, url, {
-          scrollToResult: true,
-        });
-
-        // 获取插入位置用于 workflow completion tracking
-        const insertionPoint = getInsertionPointBelowBottommostElement(board, 800);
-
-        if (result.success) {
-          console.log(`[AutoInsert] Grid image split into ${result.count} images (user specified: ${userRows}x${userCols})`);
-          workflowCompletionService.completePostProcessing(
-            task.id,
-            result.count,
-            insertionPoint
-          );
-        } else {
-          console.error(`[AutoInsert] Grid image split failed: ${result.error}`);
-          workflowCompletionService.failPostProcessing(task.id, result.error || 'Split failed');
-        }
-      } catch (error) {
-        console.error('[AutoInsert] Grid image processing error:', error);
-        workflowCompletionService.failPostProcessing(task.id, String(error));
-      }
-    };
-
-    /**
-     * 处理灵感图任务：智能检测分割线并拆分，以网格布局插入
-     *
-     * 使用 splitAndInsertImages 进行智能检测和拆分，包括：
-     * - 自动去除四周白边
-     * - 智能检测网格分割线或灵感图格式
-     * - 对每个子图进行白边清理
-     * - 自动滚动到插入位置
-     */
-    const handleInspirationBoardTask = async (task: Task) => {
-      const board = getCanvasBoard();
-      if (!board) {
-        console.error('[AutoInsert] Board not available for inspiration board task');
-        workflowCompletionService.failPostProcessing(task.id, 'Board not available');
-        return;
-      }
-
-      const params = task.params as Record<string, unknown>;
-      const url = task.result?.url;
-
-      if (!url) {
-        console.error('[AutoInsert] Inspiration board task has no result URL');
-        workflowCompletionService.failPostProcessing(task.id, 'No result URL');
-        return;
-      }
-
-      console.log(`[AutoInsert] Processing inspiration board task ${task.id}`);
-
-      // 注册任务并开始后处理
-      const batchId = params.batchId as string | undefined;
-      workflowCompletionService.registerTask(task.id, batchId);
-      workflowCompletionService.startPostProcessing(task.id, 'split_and_insert');
-
-      try {
-        // 使用统一的 splitAndInsertImages 函数
-        // 该函数会自动检测网格或灵感图格式、去除白边、清理子图白边并滚动到结果位置
-        const result = await splitAndInsertImages(board, url, {
-          scrollToResult: true,
-        });
-
-        // 获取插入位置用于 workflow completion tracking
-        const insertionPoint = getInsertionPointBelowBottommostElement(board, 800);
-
-        if (result.success) {
-          console.log(`[AutoInsert] Inspiration board split into ${result.count} images`);
-          workflowCompletionService.completePostProcessing(
-            task.id,
-            result.count,
-            insertionPoint
-          );
-        } else {
-          console.error(`[AutoInsert] Inspiration board split failed: ${result.error}`);
-          workflowCompletionService.failPostProcessing(task.id, result.error || 'Split failed');
-        }
-      } catch (error) {
-        console.error('[AutoInsert] Inspiration board processing error:', error);
-        workflowCompletionService.failPostProcessing(task.id, String(error));
-      }
+      const params = task.params as TaskParams;
+      await handleSplitAndInsertTask(task.id, url, params, { scrollToResult: true });
     };
 
     /**
      * 处理任务完成事件
      */
     const handleTaskCompleted = (task: Task) => {
-      // 检查是否已经插入过
+      // console.log(`[AutoInsert] handleTaskCompleted called for task ${task.id}, type: ${task.type}, status: ${task.status}`);
+      // console.log(`[AutoInsert] Task params:`, {
+      //   autoInsertToCanvas: task.params.autoInsertToCanvas,
+      //   prompt: task.params.prompt?.substring(0, 50),
+      //   hasResult: !!task.result,
+      //   resultUrl: task.result?.url?.substring(0, 100),
+      // });
+
+      // 检查任务是否配置了自动插入画布
+      if (!task.params.autoInsertToCanvas) {
+        // console.log(`[AutoInsert] Task ${task.id} skipped: autoInsertToCanvas is false/undefined`);
+        return;
+      }
+
+      // 检查是否已经插入过（内存中的记录）
       if (insertedTaskIds.has(task.id)) {
+        // console.log(`[AutoInsert] Task ${task.id} skipped: already in insertedTaskIds (memory)`);
+        return;
+      }
+
+      // 检查是否已经插入过（持久化的标记）
+      if (task.insertedToCanvas) {
+        // console.log(`[AutoInsert] Task ${task.id} skipped: insertedToCanvas flag is true (persisted)`);
+        insertedTaskIds.add(task.id);
         return;
       }
 
       // 只处理图片和视频任务
       if (task.type !== TaskType.IMAGE && task.type !== TaskType.VIDEO) {
+        // console.log(`[AutoInsert] Task ${task.id} skipped: type is ${task.type}, not IMAGE or VIDEO`);
         return;
       }
 
@@ -391,46 +364,81 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
         return;
       }
 
-      // 标记为已处理
+      // console.log(`[AutoInsert] Task ${task.id} passed all checks, will be inserted`);
+
+      // 更新关联的工作流步骤状态为 completed
+      updateWorkflowStepForTask(task.id, 'completed', { url: task.result.url });
+
+      // 标记为已处理（内存）
       insertedTaskIds.add(task.id);
 
+      // 标记为已插入（持久化到 SW）
+      const taskQueueService = getTaskQueueService();
+      taskQueueService.markAsInserted(task.id);
+
+      const params = task.params as TaskParams;
+
       // 检查是否为灵感图任务（需要在宫格图之前检查）
-      if (isInspirationBoardTask(task)) {
-        handleInspirationBoardTask(task);
+      if (checkInspirationBoardTask(params)) {
+        // console.log(`[AutoInsert] Task ${task.id} is inspiration board task, handling split`);
+        handleSplitTask(task);
         return;
       }
 
       // 检查是否为宫格图任务
-      if (isGridImageTask(task)) {
-        handleGridImageTask(task);
+      if (checkGridImageTask(params)) {
+        // console.log(`[AutoInsert] Task ${task.id} is grid image task, handling split`);
+        handleSplitTask(task);
         return;
       }
 
       // 获取 Prompt 作为分组 key
       const promptKey = task.params.prompt || 'unknown';
+      // console.log(`[AutoInsert] Task ${task.id} added to pending inserts with promptKey: ${promptKey.substring(0, 30)}`);
 
       // 添加到待插入列表
       const pendingList = pendingInsertsRef.current.get(promptKey) || [];
       pendingList.push({ task, completedAt: Date.now() });
       pendingInsertsRef.current.set(promptKey, pendingList);
 
-      console.log(`[AutoInsert] Queued task ${task.id} for insertion`);
-
       // 调度 flush
       if (mergedConfig.groupSimilarTasks) {
+        // console.log(`[AutoInsert] Scheduling flush in ${mergedConfig.groupTimeWindow}ms`);
         scheduleFlush();
       } else {
-        // 不分组，立即插入
+        // console.log(`[AutoInsert] Flushing immediately`);
         flushPendingInserts();
       }
     };
 
-    // 订阅任务更新事件
-    const subscription = taskQueueService.observeTaskUpdates().subscribe(event => {
-      if (!isActive) return;
+    /**
+     * 处理任务失败事件
+     */
+    const handleTaskFailed = (task: Task) => {
+      updateWorkflowStepForTask(task.id, 'failed', undefined, task.error?.message || '任务执行失败');
+    };
 
-      if (event.type === 'taskUpdated' && event.task.status === TaskStatus.COMPLETED) {
-        handleTaskCompleted(event.task);
+    // 订阅任务更新事件
+    const taskQueueService = getTaskQueueService();
+    // console.log('[AutoInsert] Subscribing to task updates');
+    const subscription = taskQueueService.observeTaskUpdates().subscribe(event => {
+      if (!isActive) {
+        // console.log('[AutoInsert] Received event but hook is inactive, ignoring');
+        return;
+      }
+
+      // console.log(`[AutoInsert] Received event: ${event.type}, task: ${event.task.id}, status: ${event.task.status}`);
+
+      if (event.type === 'taskUpdated') {
+        if (event.task.status === TaskStatus.COMPLETED) {
+          handleTaskCompleted(event.task);
+        } else if (event.task.status === TaskStatus.FAILED) {
+          handleTaskFailed(event.task);
+        }
+      } else if (event.type === 'taskSynced') {
+        if (event.task.status === TaskStatus.COMPLETED) {
+          handleTaskCompleted(event.task);
+        }
       }
     });
 

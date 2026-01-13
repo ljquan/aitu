@@ -46,7 +46,7 @@ class PostHogAnalytics {
   /** Track a custom event */
   track(eventName: string, eventData?: Record<string, any>): void {
     if (!window.posthog) {
-      console.debug('[Analytics] PostHog not loaded:', eventName);
+      // console.debug('[Analytics] PostHog not loaded:', eventName);
       return;
     }
     try {

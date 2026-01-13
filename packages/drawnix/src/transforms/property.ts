@@ -22,7 +22,7 @@ import {
 } from '../utils/property';
 import { TextTransforms, FontSizes, setSelection } from '@plait/text-plugins';
 import { getTextEditors } from '@plait/common';
-import { Editor, Transforms } from 'slate';
+import { Editor, Transforms as SlateTransforms } from 'slate';
 
 export const setFillColorOpacity = (board: PlaitBoard, fillOpacity: number) => {
   PropertyTransforms.setFillColor(board, null, {
@@ -177,21 +177,21 @@ export const setTextFontSize = (
  */
 export const setTextFontFamily = (board: PlaitBoard, fontFamily: string) => {
   const textEditors = getTextEditors(board);
-  console.log('[setTextFontFamily] textEditors:', textEditors, 'fontFamily:', fontFamily);
+  // console.log('[setTextFontFamily] textEditors:', textEditors, 'fontFamily:', fontFamily);
   if (textEditors && textEditors.length > 0) {
     textEditors.forEach((editor) => {
       try {
         // 确保有选区
         setSelection(editor);
-        console.log('[setTextFontFamily] Adding mark to editor, selection:', editor.selection);
+        // console.log('[setTextFontFamily] Adding mark to editor, selection:', editor.selection);
         Editor.addMark(editor, 'font-family', fontFamily);
-        console.log('[setTextFontFamily] Mark added successfully');
+        // console.log('[setTextFontFamily] Mark added successfully');
       } catch (error) {
         console.error('Failed to set font family:', error);
       }
     });
   } else {
-    console.warn('[setTextFontFamily] No text editors found');
+    // console.warn('[setTextFontFamily] No text editors found');
   }
 };
 
@@ -200,7 +200,7 @@ export const setTextFontFamily = (board: PlaitBoard, fontFamily: string) => {
  */
 export const setTextShadow = (board: PlaitBoard, shadow: string | null) => {
   const textEditors = getTextEditors(board);
-  console.log('[setTextShadow] textEditors:', textEditors, 'shadow:', shadow);
+  // console.log('[setTextShadow] textEditors:', textEditors, 'shadow:', shadow);
   if (textEditors && textEditors.length > 0) {
     textEditors.forEach((editor) => {
       try {
@@ -216,7 +216,7 @@ export const setTextShadow = (board: PlaitBoard, shadow: string | null) => {
       }
     });
   } else {
-    console.warn('[setTextShadow] No text editors found');
+    // console.warn('[setTextShadow] No text editors found');
   }
 };
 
@@ -226,7 +226,7 @@ export const setTextShadow = (board: PlaitBoard, shadow: string | null) => {
  */
 export const setTextGradient = (board: PlaitBoard, gradient: string | null) => {
   const textEditors = getTextEditors(board);
-  console.log('[setTextGradient] textEditors:', textEditors, 'gradient:', gradient);
+  // console.log('[setTextGradient] textEditors:', textEditors, 'gradient:', gradient);
   if (textEditors && textEditors.length > 0) {
     textEditors.forEach((editor) => {
       try {
@@ -244,7 +244,7 @@ export const setTextGradient = (board: PlaitBoard, gradient: string | null) => {
       }
     });
   } else {
-    console.warn('[setTextGradient] No text editors found');
+    // console.warn('[setTextGradient] No text editors found');
   }
 };
 

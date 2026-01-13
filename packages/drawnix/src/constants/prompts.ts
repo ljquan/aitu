@@ -2,7 +2,7 @@
  * AI 的默认提示词常量
  */
 
-// AI 图像默认提示词
+// AI 图片默认提示词
 export const AI_IMAGE_PROMPTS = {
   zh: [
     `一张写实的半身人像，一位身穿水蓝色连身裙的年轻韩国亚洲女人走进旅馆大厅，女人脸上带着温暖的微笑，左手拿着白色棒球帽，右手拉着黄色行李箱。
@@ -281,7 +281,7 @@ export const AI_COLD_START_SUGGESTIONS: Record<'zh' | 'en', ColdStartSuggestion[
 // 类型定义
 export type Language = 'zh' | 'en';
 
-// 获取图像提示词的辅助函数
+// 获取图片提示词的辅助函数
 export const getImagePrompts = (language: Language): readonly string[] => {
   return AI_IMAGE_PROMPTS[language];
 };

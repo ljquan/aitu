@@ -38,10 +38,10 @@ export function generateAssetName(task: Task): string {
  * 注意：不再需要自动保存逻辑，因为 AI 生成的素材直接从任务队列读取
  */
 export function initializeAssetIntegration(): () => void {
-  console.log('[AssetIntegration] Asset integration initialized (no-op, AI assets read from task queue)');
+  // console.log('[AssetIntegration] Asset integration initialized (no-op, AI assets read from task queue)');
 
   // Return cleanup function
   return () => {
-    console.log('[AssetIntegration] Asset integration cleanup');
+    // console.log('[AssetIntegration] Asset integration cleanup');
   };
 }

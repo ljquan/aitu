@@ -319,7 +319,7 @@
     display: flex;
     gap: 4px;
     flex-wrap: wrap;
-    align-items: flex-start;
+    align-items: center;
     width: 100%;
   }
 
@@ -359,19 +359,25 @@
     }
   }
 
+  .add-image-buttons {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+
   .add-image-btn {
-    width: 36px;
-    height: 36px;
-    border: 2px dashed #ccc;
+    width: 28px;
+    height: 28px;
+    border: 1px solid #ddd;
     border-radius: 4px;
     background: #f9f9f9;
-    color: #999;
-    font-size: 18px;
+    color: #666;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     flex-shrink: 0;
+    transition: all 0.15s;
 
     &:hover {
       border-color: #F39C12;
@@ -522,10 +528,6 @@
         display: none;
         align-items: center;
         justify-content: center;
-      }
-
-      &:hover .delete-btn {
-        display: flex;
       }
     }
   }
@@ -1033,6 +1035,8 @@
 .add-rows-section {
   display: flex;
   justify-content: center;
+  align-items: center;
+  gap: 16px;
   padding: 12px 0;
   border-top: 1px dashed #e0e0e0;
   margin-top: 4px;
@@ -1064,6 +1068,11 @@
         color: var(--brand-primary, #F39C12);
       }
     }
+  }
+
+  .export-excel-btn {
+    padding: 6px 12px;
+    font-size: 12px;
   }
 }
 

@@ -1,3 +1,5 @@
+@import '../../styles/z-index.scss';
+
 // AI Image Generation Container
 .ai-image-generation-container {
   display: flex;
@@ -52,6 +54,7 @@
 
 .ai-image-generation-section {
   flex: 2;
+  min-width: 320px; // 确保表单区域有足够的最小宽度
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -114,6 +117,7 @@
 
 .task-sidebar {
   flex: 3;
+  min-width: 280px; // 确保任务列表区域有足够的最小宽度
   height: 100%;
   overflow-y: auto;
   background: var(--color-bg-container, #fff);
@@ -665,21 +669,14 @@
     }
 
     .preset-tooltip {
-       position: absolute;
-       bottom: 100%;
-       top: auto;
-       right: 0;
-       left: auto;
-       margin-bottom: 4px;
        border: 1px solid var(--color-border, #d9d9d9);
        border-radius: 6px;
        background: var(--color-bg-container, #fff);
-       box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1);
+       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
        max-height: 280px;
        overflow-y: auto;
        min-width: 280px;
        max-width: 320px;
-       z-index: 1000;
        
        /* 优化滚动条 */
        scrollbar-width: thin;

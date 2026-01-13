@@ -1,6 +1,6 @@
 # Gemini API 前端工具
 
-基于原始 Python 版本 `gemini.py` 改写的 TypeScript 前端工具，支持在浏览器环境中调用 Gemini AI 进行图像生成和处理。
+基于原始 Python 版本 `gemini.py` 改写的 TypeScript 前端工具，支持在浏览器环境中调用 Gemini AI 进行图片生成和处理。
 
 ## 功能特性
 
@@ -40,7 +40,7 @@ const config: GeminiConfig = {
 const client = new GeminiClient(config);
 ```
 
-### 2. 基础图像生成
+### 2. 基础图片生成
 
 ```typescript
 // 使用文件输入
@@ -49,7 +49,7 @@ const file = fileInput.files?.[0];
 
 if (file) {
   const images = [{ file }];
-  const prompt = '请分析这张图片并生成一个类似风格的新图像';
+  const prompt = '请分析这张图片并生成一个类似风格的新图片';
   
   try {
     const result = await client.generateImage(prompt, images);
@@ -99,7 +99,7 @@ function MyComponent() {
   return (
     <div>
       <button onClick={handleGenerate} disabled={isLoading}>
-        {isLoading ? '生成中...' : '生成图像'}
+        {isLoading ? '生成中...' : '生成图片'}
       </button>
       {error && <div>错误: {error}</div>}
       {result && <div>生成成功！</div>}
@@ -119,7 +119,7 @@ new GeminiClient(config: GeminiConfig)
 
 #### 方法
 
-- `generateImage(prompt: string, images?: ImageInput[])`: 生成图像
+- `generateImage(prompt: string, images?: ImageInput[])`: 生成图片
 - `updateConfig(newConfig: Partial<GeminiConfig>)`: 更新配置
 - `getConfig()`: 获取当前配置
 

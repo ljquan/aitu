@@ -78,7 +78,7 @@ class ToolboxService {
         // 验证版本兼容性
         if (this.isCompatibleVersion(storage.version)) {
           this.customTools = storage.tools;
-          console.log(`[Toolbox] Loaded ${this.customTools.length} custom tools`);
+          // console.log(`[Toolbox] Loaded ${this.customTools.length} custom tools`);
         } else {
           console.warn('[Toolbox] Incompatible version, resetting custom tools');
           await this.resetCustomTools();
@@ -103,7 +103,7 @@ class ToolboxService {
       };
 
       await localforage.setItem(ToolboxService.STORAGE_KEY, storage);
-      console.log(`[Toolbox] Saved ${this.customTools.length} custom tools`);
+      // console.log(`[Toolbox] Saved ${this.customTools.length} custom tools`);
     } catch (error) {
       console.error('[Toolbox] Failed to save custom tools:', error);
       throw error;

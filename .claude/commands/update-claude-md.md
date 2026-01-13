@@ -141,6 +141,32 @@ When a new text paste plugin is added:
 4. Add `/docs/TEXT_PASTE_FEATURE.md` to related docs
 5. Update `with-common.tsx` description to note it registers both plugins
 
+## Post-Development Cleanup
+
+**在需求开发完成后，必须执行以下清理步骤：**
+
+### 注释掉所有 console 日志
+
+开发完成后，需要注释掉项目中所有的 `console.log`、`console.debug`、`console.info` 日志（保留 `console.warn` 和 `console.error`）。
+
+**执行命令：**
+```bash
+# 批量注释 console.log/debug/info
+find packages/ apps/web/src/ -type f \( -name "*.ts" -o -name "*.tsx" \) \
+  ! -name "*.test.*" ! -path "*/node_modules/*" \
+  -exec sed -i '' 's/^\([[:space:]]*\)\(console\.\(log\|debug\|info\)\)/\1\/\/ \2/g' {} \;
+```
+
+**排除的文件：**
+- `packages/utils/src/logger/index.ts` - 日志工具本身
+- `packages/utils/src/async/index.ts` - 文档注释中的示例
+- 测试文件 (`*.test.*`)
+
+**注意事项：**
+- 保留 `console.warn` 和 `console.error`（这些是有意义的警告和错误）
+- 对于在语句中间的 console（如 `isDev && console.log`），需要手动处理
+- 处理完后运行 TypeScript 检查确保没有语法错误
+
 ## Safety Checks
 
 - Read CLAUDE.md before making changes
@@ -148,3 +174,4 @@ When a new text paste plugin is added:
 - Check for existing documentation of similar features
 - Ensure updates don't break existing cross-references
 - Preview changes mentally before writing
+- **开发完成后，确保所有 console 日志已被注释**

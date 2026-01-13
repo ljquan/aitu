@@ -39,7 +39,7 @@ export class GeminiClient {
   }
 
   /**
-   * 生成图像
+   * 生成图片
    */
   async generateImage(
     prompt: string,

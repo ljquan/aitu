@@ -74,8 +74,8 @@ export class ToolComponent
     super.initialize();
     this.initializeGenerator();
 
-    console.log('ToolComponent initialize - element:', this.element);
-    console.log('ToolComponent initialize - points:', this.element.points);
+    // console.log('ToolComponent initialize - element:', this.element);
+    // console.log('ToolComponent initialize - points:', this.element.points);
 
     // 检查是否可以绘制
     if (!this.toolGenerator.canDraw(this.element)) {
@@ -91,7 +91,7 @@ export class ToolComponent
     const elementG = this.getElementG();
     elementG.appendChild(g);
 
-    console.log('ToolComponent initialized:', this.element.id);
+    // console.log('ToolComponent initialized:', this.element.id);
   }
 
   /**
@@ -178,6 +178,6 @@ export class ToolComponent
       this.toolGenerator.destroy();
     }
     this.renderedG = undefined;
-    console.log('ToolComponent destroyed');
+    // console.log('ToolComponent destroyed');
   }
 }

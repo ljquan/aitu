@@ -1,0 +1,277 @@
+/**
+ * ReferenceImageUpload Styles
+ *
+ * A unified reference image upload component with:
+ * - Dashed border upload area
+ * - Local and Library buttons (vertical layout)
+ * - Drag and drop support
+ * - Clipboard paste support
+ */
+
+.reference-image-upload {
+  outline: none;
+
+  &--disabled {
+    opacity: 0.6;
+    pointer-events: none;
+  }
+
+  &__label {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--td-text-color-primary, #333);
+    margin-bottom: 8px;
+  }
+
+  &__input {
+    display: none;
+  }
+
+  // Upload placeholder - dashed border area with buttons
+  &__placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100px;
+    padding: 16px;
+    border: 2px dashed var(--td-component-border, #dcdcdc);
+    border-radius: 8px;
+    background: var(--td-bg-color-container, #fff);
+    transition: all 0.2s ease;
+    cursor: default;
+
+    &:hover {
+      border-color: var(--td-brand-color-hover, #4787f0);
+      background: var(--td-bg-color-container-hover, #f9f9f9);
+    }
+
+    &--dragging {
+      border-color: var(--td-brand-color, #0052d9);
+      background: var(--td-brand-color-light, #e6f4ff);
+      border-style: solid;
+    }
+  }
+
+  // Buttons container - vertical layout
+  &__buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+    max-width: 120px;
+  }
+
+  // Unified button styles - ensure consistent icon size, font size, and font weight
+  &__btn,
+  &__slot-btn {
+    width: 100%;
+    justify-content: center;
+    height: 32px;
+    border-width: 1px;
+
+    // Force consistent font styles
+    font-size: 13px !important;
+    font-weight: 400 !important;
+    font-family: inherit !important;
+
+    // Force consistent icon size
+    svg {
+      width: 16px !important;
+      height: 16px !important;
+      flex-shrink: 0;
+    }
+
+    &:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 2px 8px rgba(0, 82, 217, 0.15);
+    }
+
+    &:active:not(:disabled) {
+      transform: translateY(0);
+    }
+  }
+
+  // Grid mode for multiple images
+  &__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 8px;
+  }
+
+  // Single mode
+  &__single {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  &__replace {
+    flex: 1;
+    min-width: 120px;
+  }
+
+  // Image preview
+  &__preview {
+    position: relative;
+    width: 100px;
+    height: 100px;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--td-component-border, #e7e7e7);
+    background: var(--td-bg-color-secondarycontainer, #f5f5f5);
+
+    &:hover .reference-image-upload__remove {
+      opacity: 1;
+    }
+  }
+
+  &__image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  &__remove {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 22px;
+    height: 22px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.6);
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: all 0.2s ease;
+
+    &:hover:not(:disabled) {
+      background: var(--td-error-color, #e34d59);
+      transform: scale(1.1);
+    }
+
+    &:disabled {
+      cursor: not-allowed;
+    }
+  }
+
+  // Slot mode for video generation (首帧/尾帧)
+  &__slots {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  &__slot {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1;
+    min-width: 120px;
+    max-width: 160px;
+  }
+
+  &__slot-title {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--td-text-color-secondary, #666);
+    text-align: center;
+  }
+
+  &__slot-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100px;
+    padding: 12px;
+    border: 2px dashed var(--td-component-border, #dcdcdc);
+    border-radius: 8px;
+    background: var(--td-bg-color-container, #fff);
+    transition: all 0.2s ease;
+
+    &:hover {
+      border-color: var(--td-brand-color-hover, #4787f0);
+      background: var(--td-bg-color-container-hover, #f9f9f9);
+    }
+
+    &--dragging {
+      border-color: var(--td-brand-color, #0052d9);
+      background: var(--td-brand-color-light, #e6f4ff);
+      border-style: solid;
+    }
+  }
+
+  &__slot-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+  }
+
+  &__slot-label {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 4px;
+    background: rgba(0, 0, 0, 0.6);
+    color: white;
+    font-size: 11px;
+    text-align: center;
+  }
+}
+
+// Force light theme
+.reference-image-upload {
+  color-scheme: light;
+
+  * {
+    color-scheme: light;
+  }
+
+  &__label {
+    color: #333 !important;
+  }
+
+  &__placeholder {
+    background: #fff !important;
+    border-color: #dcdcdc !important;
+
+    &:hover {
+      border-color: #4787f0 !important;
+      background: #f9f9f9 !important;
+    }
+
+    &--dragging {
+      border-color: #0052d9 !important;
+      background: #e6f4ff !important;
+    }
+  }
+
+  &__slot-placeholder {
+    background: #fff !important;
+    border-color: #dcdcdc !important;
+
+    &:hover {
+      border-color: #4787f0 !important;
+      background: #f9f9f9 !important;
+    }
+
+    &--dragging {
+      border-color: #0052d9 !important;
+      background: #e6f4ff !important;
+    }
+  }
+
+  &__slot-title {
+    color: #666 !important;
+  }
+
+  &__preview {
+    border-color: #e7e7e7 !important;
+    background: #f5f5f5 !important;
+  }
+}

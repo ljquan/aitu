@@ -4,6 +4,7 @@
  * An image component that automatically retries loading on failure.
  * Features:
  * - Retries up to 5 times with exponential backoff
+ * - Automatically bypasses Service Worker on timeout or repeated failures
  * - Shows skeleton loading state during download
  * - Smooth fade-in animation when loaded
  * - Lazy loading and async decoding for performance
@@ -28,6 +29,8 @@ export interface RetryImageProps extends React.ImgHTMLAttributes<HTMLImageElemen
   fallback?: React.ReactNode;
   /** Show skeleton loading state (default: true) */
   showSkeleton?: boolean;
+  /** Number of retries before bypassing SW (default: 2) */
+  bypassSWAfterRetries?: number;
 }
 
 /**
@@ -61,6 +64,24 @@ const ImageSkeleton: React.FC<{ className?: string; style?: React.CSSProperties 
 );
 
 /**
+ * Add bypass_sw parameter to URL to skip Service Worker interception
+ */
+function addBypassSWParam(url: string): string {
+  try {
+    const urlObj = new URL(url, window.location.origin);
+    // 避免重复添加
+    if (!urlObj.searchParams.has('bypass_sw')) {
+      urlObj.searchParams.set('bypass_sw', '1');
+    }
+    return urlObj.toString();
+  } catch {
+    // 如果 URL 解析失败，直接拼接
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}bypass_sw=1`;
+  }
+}
+
+/**
  * RetryImage component - displays an image with automatic retry on load failure
  */
 export const RetryImage: React.FC<RetryImageProps> = ({
@@ -72,12 +93,14 @@ export const RetryImage: React.FC<RetryImageProps> = ({
   onLoadFailure,
   fallback,
   showSkeleton = true,
+  bypassSWAfterRetries = 2,
   ...imgProps
 }) => {
   const [imageSrc, setImageSrc] = useState<string>(src);
   const [retryCount, setRetryCount] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [hasError, setHasError] = useState<boolean>(false);
+  const [bypassSW, setBypassSW] = useState<boolean>(false);
   const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Calculate exponential backoff delay
@@ -99,12 +122,33 @@ export const RetryImage: React.FC<RetryImageProps> = ({
   const handleError = useCallback(() => {
     if (retryCount < maxRetries) {
       const delay = getRetryDelay(retryCount);
+      const nextRetryCount = retryCount + 1;
+      
+      // 检查是否应该绕过 SW
+      const shouldBypassSW = nextRetryCount >= bypassSWAfterRetries && !bypassSW;
+      
+      if (shouldBypassSW) {
+        // console.log(`[RetryImage] 重试 ${nextRetryCount} 次后绕过 SW:`, src);
+        setBypassSW(true);
+      }
       
       // Schedule retry
       retryTimeoutRef.current = setTimeout(() => {
-        setRetryCount((prev) => prev + 1);
-        // Force reload by appending timestamp
-        setImageSrc(`${src}${src.includes('?') ? '&' : '?'}_retry=${Date.now()}`);
+        setRetryCount(nextRetryCount);
+        
+        // 构建重试 URL
+        let retryUrl = src;
+        
+        // 如果需要绕过 SW，添加 bypass_sw 参数
+        if (shouldBypassSW || bypassSW) {
+          retryUrl = addBypassSWParam(retryUrl);
+        }
+        
+        // 添加时间戳强制刷新
+        const separator = retryUrl.includes('?') ? '&' : '?';
+        retryUrl = `${retryUrl}${separator}_retry=${Date.now()}`;
+        
+        setImageSrc(retryUrl);
       }, delay);
     } else {
       // All retries exhausted
@@ -113,7 +157,7 @@ export const RetryImage: React.FC<RetryImageProps> = ({
       const error = new Error(`Failed to load image after ${maxRetries} retries`);
       onLoadFailure?.(error);
     }
-  }, [retryCount, maxRetries, src, getRetryDelay, onLoadFailure]);
+  }, [retryCount, maxRetries, src, getRetryDelay, onLoadFailure, bypassSW, bypassSWAfterRetries]);
 
   // Reset state when src changes
   useEffect(() => {
@@ -121,6 +165,7 @@ export const RetryImage: React.FC<RetryImageProps> = ({
     setRetryCount(0);
     setIsLoading(true);
     setHasError(false);
+    setBypassSW(false);
     
     // Clear any pending retry timeouts
     return () => {

@@ -59,15 +59,15 @@ export class GridImageService {
       imageQuality = DEFAULTS.imageQuality,
     } = params;
 
-    console.log('[GridImageService] Starting generation with params:', params);
+    // console.log('[GridImageService] Starting generation with params:', params);
 
     try {
       // 1. 生成拼贴图提示词
       const prompt = this.buildPrompt(theme, gridConfig);
-      console.log('[GridImageService] Generated prompt:', prompt);
+      // console.log('[GridImageService] Generated prompt:', prompt);
       
       // 2. 调用 AI 生成拼贴图
-      console.log('[GridImageService] Calling AI to generate collage image...');
+      // console.log('[GridImageService] Calling AI to generate collage image...');
       const imageResult = await defaultGeminiClient.generateImage(prompt, {
         size: imageSize,
         quality: imageQuality,
@@ -83,20 +83,20 @@ export class GridImageService {
         throw new Error('AI 生成图片失败：未返回图片 URL');
       }
       
-      console.log('[GridImageService] Got original image URL');
+      // console.log('[GridImageService] Got original image URL');
       
       // 3. 将图片转换为 base64（确保可以被 Canvas 处理）
       const imageData = await unifiedCacheService.getImageForAI(originalImageUrl);
       const imageDataUrl = imageData.type === 'base64' ? imageData.value : originalImageUrl;
       
       // 4. 分割图片
-      console.log('[GridImageService] Splitting image into grid...');
+      // console.log('[GridImageService] Splitting image into grid...');
       const splitElements = await gridSplitter.split(imageDataUrl, gridConfig);
-      console.log(`[GridImageService] Split into ${splitElements.length} elements`);
+      // console.log(`[GridImageService] Split into ${splitElements.length} elements`);
       
       // 5. 计算布局
       const layoutParams = this.calculateLayoutParams(splitElements);
-      console.log('[GridImageService] Calculating layout with style:', layoutStyle);
+      // console.log('[GridImageService] Calculating layout with style:', layoutStyle);
       
       const positionedElements = layoutEngine.calculate(
         splitElements,
@@ -104,8 +104,8 @@ export class GridImageService {
         layoutParams
       );
       
-      console.log('[GridImageService] Layout calculated, ready to insert');
-      
+      //       // console.log('[GridImageService] Layout calculated, ready to insert');
+
       return {
         success: true,
         originalImageUrl,
@@ -134,7 +134,7 @@ export class GridImageService {
     gridConfig: GridConfig,
     layoutStyle: LayoutStyle = 'scattered'
   ): Promise<GridImageResult> {
-    console.log('[GridImageService] Processing existing image with config:', { gridConfig, layoutStyle });
+    // console.log('[GridImageService] Processing existing image with config:', { gridConfig, layoutStyle });
 
     try {
       // 1. 将图片转换为 base64（确保可以被 Canvas 处理）
@@ -142,13 +142,13 @@ export class GridImageService {
       const imageDataUrl = imageData.type === 'base64' ? imageData.value : imageUrl;
 
       // 2. 分割图片
-      console.log('[GridImageService] Splitting image into grid...');
+      // console.log('[GridImageService] Splitting image into grid...');
       const splitElements = await gridSplitter.split(imageDataUrl, gridConfig);
-      console.log(`[GridImageService] Split into ${splitElements.length} elements`);
+      // console.log(`[GridImageService] Split into ${splitElements.length} elements`);
 
       // 3. 计算布局
       const layoutParams = this.calculateLayoutParams(splitElements);
-      console.log('[GridImageService] Calculating layout with style:', layoutStyle);
+      // console.log('[GridImageService] Calculating layout with style:', layoutStyle);
 
       const positionedElements = layoutEngine.calculate(
         splitElements,
@@ -156,7 +156,7 @@ export class GridImageService {
         layoutParams
       );
 
-      console.log('[GridImageService] Layout calculated, ready to insert');
+      // console.log('[GridImageService] Layout calculated, ready to insert');
 
       return {
         success: true,
@@ -197,7 +197,7 @@ export class GridImageService {
       baseX = bottomPoint?.[0] ?? baseX;
     }
     
-    console.log(`[GridImageService] Inserting ${elements.length} elements at (${baseX}, ${baseY})`);
+    // console.log(`[GridImageService] Inserting ${elements.length} elements at (${baseX}, ${baseY})`);
     
     // 按 zIndex 排序，确保正确的层叠顺序
     const sortedElements = [...elements].sort((a, b) => a.zIndex - b.zIndex);
@@ -223,7 +223,7 @@ export class GridImageService {
       );
     }
     
-    console.log('[GridImageService] All elements inserted successfully');
+    // console.log('[GridImageService] All elements inserted successfully');
   }
   
   /**

@@ -184,7 +184,7 @@ export const GithubIcon = createIcon(
   </svg>
 );
 
-// AI 图像图标 - 图片图标 + 右上角 AI 文字（偏红主题色）
+// AI 图片图标 - 图片图标 + 右上角 AI 文字（偏红主题色）
 export const AIImageIcon = createIcon(
   <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="none" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
     {/* 图片图标主体 - 浅红背景 + 红色描边 */}
@@ -774,6 +774,17 @@ export const PropertySettingsIcon = createIcon(
       <circle cx="5" cy="4" r="1.5" fill="currentColor" />
       <circle cx="11" cy="8" r="1.5" fill="currentColor" />
       <circle cx="7" cy="12" r="1.5" fill="currentColor" />
+    </g>
+  </svg>
+);
+
+// 备份恢复图标
+export const BackupRestoreIcon = createIcon(
+  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor">
+    <g strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 2v4m0 12v4M2 12h4m12 0h4" />
+      <path d="M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83" />
+      <circle cx="12" cy="12" r="3" />
     </g>
   </svg>
 );

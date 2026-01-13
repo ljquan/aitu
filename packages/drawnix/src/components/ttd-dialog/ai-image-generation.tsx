@@ -13,10 +13,10 @@ import {
   useKeyboardShortcuts,
   ActionButtons,
   ErrorDisplay,
-  ImageUpload,
+  ReferenceImageUpload,
+  type ReferenceImage,
   PromptInput,
   AspectRatioSelector,
-  type ImageFile,
   getMergedPresetPrompts,
   savePromptToHistory as savePromptToHistoryUtil,
 } from './shared';
@@ -27,7 +27,7 @@ import { promptForApiKey } from '../../utils/gemini-api';
 
 interface AIImageGenerationProps {
   initialPrompt?: string;
-  initialImages?: ImageFile[];
+  initialImages?: ReferenceImage[];
   selectedElementIds?: string[];
   initialWidth?: number;
   initialHeight?: number;
@@ -51,7 +51,7 @@ const AIImageGeneration = ({
   const [height, setHeight] = useState<number | string>(initialHeight || 1024);
   const [aspectRatio, setAspectRatio] = useState<string>(DEFAULT_ASPECT_RATIO);
   const [error, setError] = useState<string | null>(null);
-  const [uploadedImages, setUploadedImages] = useState<ImageFile[]>(initialImages);
+  const [uploadedImages, setUploadedImages] = useState<ReferenceImage[]>(initialImages);
 
   // Use generation history from task queue
   const { imageHistory } = useGenerationHistory();
@@ -67,7 +67,7 @@ const AIImageGeneration = ({
   useEffect(() => {
     // Skip if we're in manual edit mode (user clicked edit in task list)
     if (isManualEdit) {
-      console.log('AIImageGeneration - skipping props update in manual edit mode');
+      // console.log('AIImageGeneration - skipping props update in manual edit mode');
       return;
     }
     
@@ -83,11 +83,11 @@ const AIImageGeneration = ({
     
     // Skip if we've already processed these exact props
     if (processedPropsRef.current === propsKey) {
-      console.log('AIImageGeneration - skipping duplicate props processing');
+      // console.log('AIImageGeneration - skipping duplicate props processing');
       return;
     }
     
-    console.log('AIImageGeneration - processing new props:', { propsKey });
+    // console.log('AIImageGeneration - processing new props:', { propsKey });
     processedPropsRef.current = propsKey;
     
     setPrompt(initialPrompt);
@@ -142,7 +142,7 @@ const AIImageGeneration = ({
 
   // 处理任务编辑（从弹窗内的任务列表点击编辑）
   const handleEditTask = (task: any) => {
-    console.log('Image handleEditTask - task params:', task.params);
+    // console.log('Image handleEditTask - task params:', task.params);
 
     // 标记为手动编辑模式,防止 props 的 useEffect 覆盖我们的更改
     setIsManualEdit(true);
@@ -154,7 +154,7 @@ const AIImageGeneration = ({
 
     // 更新上传的图片 - 确保格式正确
     if (task.params.uploadedImages && task.params.uploadedImages.length > 0) {
-      console.log('Setting uploadedImages:', task.params.uploadedImages);
+      // console.log('Setting uploadedImages:', task.params.uploadedImages);
       setUploadedImages(task.params.uploadedImages);
     } else {
       setUploadedImages([]);
@@ -162,19 +162,19 @@ const AIImageGeneration = ({
 
     // 更新模型选择（通过全局设置）
     if (task.params.model) {
-      console.log('Updating image model to:', task.params.model);
+      // console.log('Updating image model to:', task.params.model);
       const settings = geminiSettings.get();
-      console.log('Current settings:', settings);
+      // console.log('Current settings:', settings);
       geminiSettings.update({
         ...settings,
         imageModelName: task.params.model
       });
-      console.log('Updated settings:', geminiSettings.get());
+      // console.log('Updated settings:', geminiSettings.get());
     }
 
     // 更新宽高比（如果有）
     if (task.params.aspectRatio) {
-      console.log('Setting aspectRatio to:', task.params.aspectRatio);
+      // console.log('Setting aspectRatio to:', task.params.aspectRatio);
       setAspectRatio(task.params.aspectRatio);
     }
 
@@ -251,7 +251,8 @@ const AIImageGeneration = ({
             uploadedImages: convertedImages,
             batchId,
             batchIndex: i + 1,
-            batchTotal: count
+            batchTotal: count,
+            autoInsertToCanvas: true,
           };
 
           const task = createTask(taskParams, TaskType.IMAGE);
@@ -295,7 +296,8 @@ const AIImageGeneration = ({
         aspectRatio,
         model: currentImageModel,
         // 保存上传的图片（已转换为可序列化的格式）
-        uploadedImages: convertedImages
+        uploadedImages: convertedImages,
+        autoInsertToCanvas: true,
       };
 
       // 创建任务并添加到队列
@@ -357,7 +359,7 @@ const AIImageGeneration = ({
   return (
     <div className="ai-image-generation-container">
       <div className="main-content">
-        {/* AI 图像生成表单 */}
+        {/* AI 图片生成表单 */}
         <div className="ai-image-generation-section">
           <div className="ai-image-generation-form">
 
@@ -380,12 +382,13 @@ const AIImageGeneration = ({
           )}
 
           {/* 参考图片区域 */}
-          <ImageUpload
+          <ReferenceImageUpload
             images={uploadedImages}
             onImagesChange={setUploadedImages}
             language={language}
             disabled={isGenerating}
             multiple={true}
+            label={language === 'zh' ? '参考图片 (可选)' : 'Reference Images (Optional)'}
             onError={setError}
           />
 

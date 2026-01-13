@@ -20,7 +20,7 @@ export async function recoverExpiredVideoUrls(board: PlaitBoard | null): Promise
     return 0;
   }
 
-  console.log('[VideoRecovery] Starting video URL recovery...');
+  // console.log('[VideoRecovery] Starting video URL recovery...');
 
   let recoveredCount = 0;
 
@@ -41,7 +41,7 @@ export async function recoverExpiredVideoUrls(board: PlaitBoard | null): Promise
         ? afterHash.substring(0, nextHashIndex) // 截取到下一个 # 之前
         : afterHash; // 如果没有下一个 #，就取全部
 
-      console.log('[VideoRecovery] Found merged video URL:', { url, taskId });
+      // console.log('[VideoRecovery] Found merged video URL:', { url, taskId });
 
       // 对于合并视频，刷新后 Blob URL 一定会失效，直接恢复即可
       // 从 IndexedDB 恢复
@@ -56,12 +56,12 @@ export async function recoverExpiredVideoUrls(board: PlaitBoard | null): Promise
           Transforms.setNode(board, { url: newUrl } as any, [elementIndex]);
           recoveredCount++;
 
-          console.log('[VideoRecovery] Video URL recovered:', {
-            taskId,
-            oldUrl: url,
-            newUrl,
-            size: cachedBlob.size,
-          });
+          // console.log('[VideoRecovery] Video URL recovered:', {
+          //   taskId,
+          //   oldUrl: url,
+          //   newUrl,
+          //   size: cachedBlob.size,
+          // });
         } else {
           console.warn('[VideoRecovery] Cache not found for taskId:', taskId);
         }
@@ -72,10 +72,10 @@ export async function recoverExpiredVideoUrls(board: PlaitBoard | null): Promise
   }
 
   if (recoveredCount > 0) {
-    console.log(`[VideoRecovery] Recovery complete: ${recoveredCount} video(s) recovered`);
+    // console.log(`[VideoRecovery] Recovery complete: ${recoveredCount} video(s) recovered`);
     // Transforms.setNode 会自动触发重新渲染，不需要手动更新 board.children
   } else {
-    console.log('[VideoRecovery] No videos needed recovery');
+    // console.log('[VideoRecovery] No videos needed recovery');
   }
 
   return recoveredCount;
@@ -90,7 +90,7 @@ export async function recoverExpiredVideoUrls(board: PlaitBoard | null): Promise
 export function initVideoRecoveryService(board: PlaitBoard | null): void {
   if (!board) return;
 
-  console.log('[VideoRecovery] Initializing video recovery service...');
+  // console.log('[VideoRecovery] Initializing video recovery service...');
 
   // 立即执行恢复，避免视频元素加载失败
   // 使用 requestAnimationFrame 确保DOM已更新

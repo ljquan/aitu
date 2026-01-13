@@ -65,8 +65,8 @@ export class GridSplitter {
     const cellWidth = Math.floor(sourceWidth / cols);
     const cellHeight = Math.floor(sourceHeight / rows);
     
-    console.log(`[GridSplitter] Splitting ${sourceWidth}x${sourceHeight} image into ${rows}x${cols} grid`);
-    console.log(`[GridSplitter] Cell size: ${cellWidth}x${cellHeight}`);
+    // console.log(`[GridSplitter] Splitting ${sourceWidth}x${sourceHeight} image into ${rows}x${cols} grid`);
+    // console.log(`[GridSplitter] Cell size: ${cellWidth}x${cellHeight}`);
     
     const elements: ImageElement[] = [];
     
@@ -109,7 +109,7 @@ export class GridSplitter {
       }
     }
     
-    console.log(`[GridSplitter] Successfully split into ${elements.length} elements`);
+    // console.log(`[GridSplitter] Successfully split into ${elements.length} elements`);
     
     return elements;
   }

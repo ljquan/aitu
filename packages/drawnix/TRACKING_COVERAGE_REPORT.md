@@ -130,7 +130,7 @@
 ## 五、新增功能组件 (New Feature Components) - 32 events
 
 ### 1. Popup Toolbar (popup-toolbar.tsx)
-- `toolbar_click_ai_image` - AI 图像生成
+- `toolbar_click_ai_image` - AI 图片生成
 - `toolbar_click_delete` - 删除
 - `toolbar_click_layer_up` - 上移一层
 - `toolbar_click_layer_down` - 下移一层

@@ -6,13 +6,13 @@
 
 ## 项目概述
 
-**Aitu (爱图)** 是一个基于 Plait 框架构建的开源白板应用。支持思维导图、流程图、自由绘画、图片插入，以及 AI 驱动的内容生成（通过 Gemini 生成图像，通过 Veo3/Sora-2 生成视频）。项目采用插件架构，使用 React 组件，并使用 Nx 作为 monorepo 管理工具。
+**Aitu (爱图)** 是一个基于 Plait 框架构建的开源白板应用。支持思维导图、流程图、自由绘画、图片插入，以及 AI 驱动的内容生成（通过 Gemini 生成图片，通过 Veo3/Sora-2 生成视频）。项目采用插件架构，使用 React 组件，并使用 Nx 作为 monorepo 管理工具。
 
 **项目信息：**
-- **名称**: Aitu (爱图) - AI 图像与视频创作工具
+- **名称**: Aitu (爱图) - AI 图片与视频创作工具
 - **版本**: 0.4.0
 - **许可证**: MIT
-- **标语**: 爱上图像，爱上创作
+- **标语**: 爱上图片，爱上创作
 - **官网**: https://aitu.tu-zi.com
 
 ---
@@ -126,6 +126,8 @@ packages/drawnix/
 │   ├── services/                  # 业务逻辑服务 (32个服务)
 │   ├── plugins/                   # 功能插件 (15个插件)
 │   ├── hooks/                     # React Hooks (24个)
+│   ├── useWorkflowSubmission.ts  # 工作流提交（核心）
+│   ├── useAutoInsertToCanvas.ts  # 自动插入画布
 │   ├── utils/                     # 工具函数 (33个模块)
 │   ├── types/                     # TypeScript 类型定义 (14个)
 │   ├── constants/                 # 常量定义 (13个)
@@ -166,10 +168,12 @@ components/
 │   ├── PopupToolbar/              # 上下文弹出工具
 │   └── ClosePencilToolbar/        # 铅笔模式工具栏
 ├── ttd-dialog/                    # AI 生成对话框
-│   ├── ai-image-generation.tsx    # 图像生成
+│   ├── ai-image-generation.tsx    # 图片生成
 │   ├── ai-video-generation.tsx    # 视频生成
-│   ├── batch-image-generation.tsx # 批量图像生成
-│   └── mermaid-to-drawnix.tsx     # Mermaid 转换
+│   ├── batch-image-generation.tsx # 批量图片生成
+│   ├── mermaid-to-drawnix.tsx     # Mermaid 转换
+│   └── shared/                    # 共享组件
+│       └── ReferenceImageUpload.tsx # 统一参考图上传组件
 ├── settings-dialog/               # 设置对话框
 ├── project-drawer/                # 项目抽屉
 ├── task-queue/                    # 任务队列 UI
@@ -187,17 +191,22 @@ services/
 ├── generation-api-service.ts      # AI 生成 API 服务 (Gemini)
 ├── video-api-service.ts           # 视频 API 服务 (Veo3/Sora-2)
 ├── task-queue-service.ts          # 任务队列管理
+├── workflow-submission-service.ts # 工作流提交服务
 ├── workspace-service.ts           # 工作空间管理
 ├── storage-service.ts             # 存储服务
 ├── chat-service.ts                # 聊天服务
 ├── chat-storage-service.ts        # 聊天持久化
 ├── character-api-service.ts       # 角色 API
 ├── asset-storage-service.ts       # 资产存储
+├── unified-cache-service.ts       # 统一缓存服务（协调 SW Cache + IndexedDB）
 ├── media-cache-service.ts         # 媒体缓存 (IndexedDB)
 ├── url-cache-service.ts           # URL 缓存
 ├── toolbar-config-service.ts      # 工具栏配置
 ├── prompt-storage-service.ts      # 历史提示词存储
 ├── font-manager-service.ts        # 字体管理服务（加载和缓存）
+├── backup-restore-service.ts      # 备份恢复服务
+├── sw-capabilities/               # SW 能力处理
+│   └── handler.ts                 # 思维导图/流程图生成处理
 ├── tracking/                      # 追踪服务
 └── ...其他服务
 ```
@@ -211,7 +220,7 @@ plugins/
 ├── with-tool.ts                   # 工具基础插件
 ├── with-hotkey.ts                 # 快捷键处理
 ├── with-pencil.ts                 # 铅笔/橡皮模式
-├── with-image.tsx                 # 图像插件
+├── with-image.tsx                 # 图片插件
 ├── with-text-paste.ts             # 文本粘贴插件（自动换行）
 ├── with-video.ts                  # 视频支持
 ├── with-workzone.ts               # WorkZone 画布元素插件
@@ -230,9 +239,10 @@ plugins/
 ```
 hooks/
 ├── useWorkspace.ts                # 工作空间管理
+├── useWorkflowSubmission.ts       # 工作流提交（核心）
 ├── useTaskExecutor.ts             # 任务执行器 (核心)
 ├── useChatHandler.ts              # 聊天处理
-├── useAutoInsertToCanvas.ts       # 自动插入画布
+├── useAutoInsertToCanvas.ts       # 自动插入画布（更新工作流步骤状态）
 ├── useTextSelection.ts            # 文本选择
 ├── useTaskQueue.ts                # 任务队列
 ├── useTaskStorage.ts              # 任务存储
@@ -258,8 +268,8 @@ utils/
 │   ├── config.ts                  # 配置
 │   └── types.ts                   # 类型定义
 ├── settings-manager.ts            # 设置管理
-├── image-splitter.ts              # 图像分割（支持透明边框严格裁剪）
-├── image-border-utils.ts          # 图像边框检测工具
+├── image-splitter.ts              # 图片分割（支持透明边框严格裁剪）
+├── image-border-utils.ts          # 图片边框检测工具
 ├── photo-wall-splitter.ts         # 灵感图分割器
 ├── selection-utils.ts             # 选择工具
 ├── model-parser.ts                # 模型解析
@@ -295,7 +305,7 @@ constants/
 ├── CHAT_MODELS.ts                 # 聊天模型配置
 ├── model-config.ts                # 模型配置
 ├── video-model-config.ts          # 视频模型配置
-├── image-aspect-ratios.ts         # 图像宽高比
+├── image-aspect-ratios.ts         # 图片宽高比
 ├── built-in-tools.ts              # 内置工具
 ├── prompts.ts                     # 提示词
 └── storage.ts                     # 存储常量
@@ -366,7 +376,7 @@ packages/react-text/
 - **Mermaid**: ^11.12.2 (图表渲染)
 
 ### AI 与 API
-- **Google Gemini API**: 图像生成
+- **Google Gemini API**: 图片生成
 - **视频生成**: Veo3, Sora-2
 - **LlamaIndex**: ^0.6.1
 
@@ -437,23 +447,126 @@ packages/react-text/
 
 ## 核心功能流程
 
-### AI 生成流程
+### AI 生成流程（Service Worker 模式）
+
+项目使用 Service Worker 作为后台任务执行器，实现页面刷新不影响任务执行。
+
 ```
 用户输入
   ↓
 AIInputBar (输入组件)
   ↓
-TTDDialog (对话框)
-  ↓
-GenerationAPIService (API 调用)
-  ↓
-Gemini API / 视频 API
-  ↓
-TaskQueueService (任务管理)
-  ↓
-TaskExecutor Hook (执行逻辑)
+swTaskQueueService.createTask() (应用层)
+  ↓ postMessage
+Service Worker (后台)
+  ├── SWTaskQueue.submitTask() (任务管理)
+  ├── ImageHandler / VideoHandler (执行器)
+  └── taskQueueStorage (IndexedDB 持久化)
+  ↓ broadcastToClients
+应用层接收状态更新
   ↓
 Canvas 插入 / 媒体库缓存
+```
+
+**核心特性**：
+- **页面刷新恢复**：任务状态持久化到 IndexedDB，刷新后自动恢复
+- **多标签页同步**：通过 `broadcastToClients` 向所有标签页广播状态
+- **视频任务恢复**：通过 `remoteId` 恢复轮询，继续等待视频生成完成
+
+### Service Worker 任务队列架构
+
+```
+apps/web/src/sw/
+├── index.ts                       # SW 主入口
+└── task-queue/
+    ├── queue.ts                   # 任务队列核心 (SWTaskQueue)
+    ├── storage.ts                 # IndexedDB 存储 (TaskQueueStorage)
+    ├── types.ts                   # 类型定义
+    ├── handlers/                  # 任务处理器
+    │   ├── image.ts               # 图片生成处理器
+    │   ├── video.ts               # 视频生成处理器
+    │   ├── character.ts           # 角色生成处理器
+    │   └── chat.ts                # 聊天处理器
+    ├── workflow-executor.ts       # 工作流执行器
+    ├── workflow-types.ts          # 工作流类型
+    ├── chat-workflow/             # 聊天工作流
+    │   ├── executor.ts            # 聊天工作流执行器
+    │   └── types.ts               # 聊天工作流类型
+    ├── mcp/                       # MCP 工具系统
+    │   ├── tools.ts               # 工具注册
+    │   └── executor.ts            # 工具执行器
+    └── utils/
+        ├── fingerprint.ts         # 任务指纹（去重）
+        └── lock.ts                # 任务锁（防并发）
+```
+
+**应用层服务**：
+```
+packages/drawnix/src/services/
+├── sw-client/
+│   ├── client.ts                  # SW 通信客户端 (SWTaskQueueClient)
+│   ├── types.ts                   # 消息类型定义
+│   └── index.ts                   # 导出
+├── sw-task-queue-service.ts       # SW 任务队列服务
+├── sw-chat-service.ts             # SW 聊天服务
+├── sw-chat-workflow-service.ts    # SW 聊天工作流服务
+└── task-queue/
+    └── index.ts                   # 任务队列入口（自动选择 SW/传统模式）
+```
+
+**通信协议**：
+```typescript
+// 应用层 → Service Worker
+type MainToSWMessage =
+  | { type: 'TASK_QUEUE_INIT'; geminiConfig; videoConfig }
+  | { type: 'TASK_SUBMIT'; taskId; taskType; params }
+  | { type: 'TASK_CANCEL'; taskId }
+  | { type: 'TASK_RETRY'; taskId }
+  | { type: 'TASK_GET_ALL' }
+  | { type: 'CHAT_START'; chatId; params }
+  | { type: 'WORKFLOW_SUBMIT'; workflow }
+  // ...
+
+// Service Worker → 应用层
+type SWToMainMessage =
+  | { type: 'TASK_CREATED'; task }
+  | { type: 'TASK_STATUS'; taskId; status; progress }
+  | { type: 'TASK_COMPLETED'; taskId; result }
+  | { type: 'TASK_FAILED'; taskId; error; retryCount }
+  | { type: 'WORKFLOW_STEP_STATUS'; workflowId; stepId; status }
+  // ...
+```
+
+**IndexedDB 存储结构**：
+- `tasks` - 任务数据（图片/视频/角色生成）
+- `config` - API 配置（apiKey, baseUrl）
+- `workflows` - 工作流数据
+- `chat-workflows` - 聊天工作流数据
+- `pending-tool-requests` - 待处理的主线程工具请求
+
+**任务生命周期**：
+```
+PENDING → PROCESSING → COMPLETED
+                    ↘ FAILED → RETRYING → PENDING (重试)
+                    ↘ CANCELLED
+```
+
+**使用示例**：
+```typescript
+import { taskQueueService } from '../services/task-queue';
+
+// 创建任务
+const task = taskQueueService.createTask(
+  { prompt: '生成一张日落图片', size: '1:1' },
+  TaskType.IMAGE
+);
+
+// 监听任务更新
+taskQueueService.observeTaskUpdates().subscribe((event) => {
+  if (event.type === 'taskUpdated' && event.task.status === TaskStatus.COMPLETED) {
+    console.log('任务完成:', event.task.result?.url);
+  }
+});
 ```
 
 ### 编辑器插件系统
@@ -472,6 +585,45 @@ Drawnix (主编辑器)
       ├── withVideo (视频支持)
       ├── withWorkZone (工作流进度)
       └── ...
+```
+
+### 工作流提交机制
+
+项目使用统一的工作流提交机制，避免重复创建工作流导致的问题。
+
+**核心文件**：
+- `hooks/useWorkflowSubmission.ts` - 工作流提交 Hook
+- `components/ai-input-bar/workflow-converter.ts` - 工作流转换器
+- `services/workflow-submission-service.ts` - 工作流提交服务
+
+**工作流程**：
+```
+AIInputBar 创建工作流
+  ↓
+convertToWorkflow() - 创建 LegacyWorkflowDefinition（唯一 ID）
+  ↓
+submitWorkflowToSW(parsedParams, referenceImages, retryContext, existingWorkflow)
+  ↓
+useWorkflowSubmission.submitWorkflow() - 复用已有工作流，避免重复创建
+  ↓
+workflowSubmissionService.submit() - 提交到 SW
+  ↓
+SW WorkflowExecutor 执行
+```
+
+**关键设计**：
+- `submitWorkflow` 接受可选的 `existingWorkflow` 参数
+- 如果传入 `existingWorkflow`，直接使用而不重新创建
+- 避免因重复调用 `convertToWorkflow` 导致不同 ID 的工作流
+
+**API 签名**：
+```typescript
+submitWorkflow: (
+  parsedInput: ParsedGenerationParams,
+  referenceImages: string[],
+  retryContext?: WorkflowRetryContext,
+  existingWorkflow?: LegacyWorkflowDefinition
+) => Promise<{ workflowId: string; usedSW: boolean }>
 ```
 
 ### WorkZone 画布元素
@@ -500,6 +652,17 @@ WorkZoneContent 组件响应更新，显示进度
 - `WorkZoneTransforms.insertWorkZone(board, options)` - 创建 WorkZone
 - `WorkZoneTransforms.updateWorkflow(board, id, workflow)` - 更新工作流状态
 - `WorkZoneTransforms.removeWorkZone(board, id)` - 删除 WorkZone
+
+**AI 生成完成事件**：
+当所有工作流步骤完成后，会触发 `ai-generation-complete` 事件：
+```typescript
+window.dispatchEvent(new CustomEvent('ai-generation-complete', {
+  detail: { type: 'image' | 'mind' | 'flowchart', success: boolean, workzoneId: string }
+}));
+```
+- 思维导图/流程图：在 `sw-capabilities/handler.ts` 中触发
+- 图片生成：在 `useAutoInsertToCanvas.ts` 的 `updateWorkflowStepForTask` 中触发
+- `AIInputBar` 监听此事件来重置 `isSubmitting` 状态
 
 **技术要点**：
 - 使用 SVG `foreignObject` 在画布中嵌入 React 组件
@@ -539,6 +702,31 @@ WorkZoneContent 组件响应更新，显示进度
 - 点击模版自动填充提示词到输入框
 - 提供"提示词"快捷按钮，可打开香蕉提示词工具
 
+**数据加载状态管理 (`isDataReady`)**：
+
+为了避免在画布数据加载完成前误判画布为空（导致灵感板闪烁），项目使用 `isDataReady` 状态来标识数据是否已准备好。
+
+**数据流**：
+```
+app.tsx (isDataReady state)
+  ↓ setValue 完成后 setIsDataReady(true)
+  ↓ prop
+drawnix.tsx (isDataReady prop)
+  ↓ prop
+DrawnixContent (isDataReady prop)
+  ↓ prop
+AIInputBar (isDataReady prop)
+  ↓ prop
+SelectionWatcher (isDataReady prop)
+  ↓
+只有 isDataReady=true 时才检查画布是否为空
+```
+
+**关键逻辑**：
+- `app.tsx`：初始 `isDataReady = false`，在 `setValue` 完成后（`finally` 块中）设置为 `true`
+- `SelectionWatcher`：只有当 `isDataReady` 为 `true` 时才开始检查画布是否为空
+- 避免在数据加载前误判画布为空，防止灵感板闪烁
+
 ### 历史提示词功能
 
 支持记录和管理用户的历史提示词，方便快速复用。
@@ -549,7 +737,7 @@ WorkZoneContent 组件响应更新，显示进度
 - `components/ai-input-bar/PromptHistoryPopover.tsx` - UI 组件
 
 **功能特点**：
-- 自动保存用户发送的提示词（最多 20 条）
+- 自动保存用户发送的提示词（无数量限制，使用 IndexedDB 存储）
 - 支持置顶/取消置顶常用提示词
 - 鼠标悬浮三点图标显示历史列表
 - 点击历史提示词回填到输入框
@@ -647,6 +835,142 @@ Service Worker 拦截请求
 - 系统字体：苹方、微软雅黑、黑体、宋体、楷体等
 - Google Fonts：Noto Sans SC、ZCOOL 系列、Ma Shan Zheng 等
 
+### 参考图上传组件 (ReferenceImageUpload)
+
+统一的参考图上传组件，用于 AI 图片生成和视频生成弹窗。
+
+**核心文件**：
+- `components/ttd-dialog/shared/ReferenceImageUpload.tsx` - 主组件
+- `components/ttd-dialog/shared/ReferenceImageUpload.scss` - 样式文件
+
+**功能特点**：
+- 本地文件上传：点击"本地"按钮选择文件
+- 素材库选择：点击"素材库"按钮从媒体库选择图片
+- 拖拽上传：支持将图片拖拽到上传区域
+- 粘贴板获取：支持 Ctrl+V / Cmd+V 粘贴图片
+- 多种模式：
+  - 单图模式 (`multiple=false`)
+  - 多图网格模式 (`multiple=true`)
+  - 插槽模式 (`slotLabels` 用于视频生成的首帧/尾帧)
+
+**使用示例**：
+```tsx
+// AI 图片生成中的使用
+<ReferenceImageUpload
+  images={uploadedImages}
+  onImagesChange={setUploadedImages}
+  language={language}
+  disabled={isGenerating}
+  multiple={true}
+  label="参考图片 (可选)"
+/>
+
+// AI 视频生成中的使用（首帧/尾帧模式）
+<ReferenceImageUpload
+  images={uploadedImages}
+  onImagesChange={handleImagesChange}
+  language={language}
+  disabled={isGenerating}
+  multiple={true}
+  maxCount={2}
+  slotLabels={['首帧', '尾帧']}
+  label="首尾帧图片 (可选)"
+/>
+```
+
+**类型定义**：
+```typescript
+interface ReferenceImage {
+  url: string;    // Base64 或 URL
+  name: string;   // 文件名
+  file?: File;    // 原始文件对象
+}
+
+interface ReferenceImageUploadProps {
+  images: ReferenceImage[];
+  onImagesChange: (images: ReferenceImage[]) => void;
+  language?: 'zh' | 'en';
+  disabled?: boolean;
+  multiple?: boolean;
+  maxCount?: number;
+  label?: string;
+  slotLabels?: string[];  // 插槽标签（如 ['首帧', '尾帧']）
+  onError?: (error: string | null) => void;
+}
+```
+
+**样式特点**：
+- 虚线边框的上传区域
+- 垂直排列的"本地"和"素材库"按钮
+- 拖拽时的视觉反馈
+- 统一的按钮样式（图标 16px，字体 13px，字重 400）
+
+### 备份恢复功能 (Backup & Restore)
+
+支持将用户数据（提示词、项目、素材）导出为 ZIP 文件，并从 ZIP 文件恢复数据。
+
+**核心文件**：
+- `services/backup-restore-service.ts` - 备份恢复服务
+- `components/backup-restore/backup-restore-dialog.tsx` - UI 对话框
+
+**功能特点**：
+- 导出提示词历史（图片/视频提示词）
+- 导出项目数据（文件夹和画板）
+- 导出素材库（本地上传 + AI 生成的缓存媒体）
+- 增量导入（自动去重，不覆盖已有数据）
+- 支持进度显示
+
+**ZIP 文件结构**：
+```
+aitu_backup_xxx.zip
+├── manifest.json              # 备份元信息
+├── prompts.json               # 提示词数据
+├── projects/                  # 项目文件
+│   ├── 文件夹名/
+│   │   └── 画板名.drawnix     # 画板数据
+│   └── 画板名.drawnix         # 根目录画板
+└── assets/                    # 素材文件
+    ├── xxx.meta.json          # 素材元数据
+    └── xxx.jpg/.mp4           # 媒体文件
+```
+
+**数据来源**：
+```
+导出素材：
+├── 本地素材库 ← localforage (asset-storage-service)
+└── AI 生成缓存 ← unified-cache-service (drawnix-unified-cache)
+
+导入素材：
+├── 本地素材 → localforage + unified-cache
+└── AI 生成素材 (source: 'AI_GENERATED') → 仅 unified-cache
+```
+
+**关键 API**：
+```typescript
+// 导出
+const blob = await backupRestoreService.exportToZip({
+  includePrompts: true,
+  includeProjects: true,
+  includeAssets: true,
+}, onProgress);
+backupRestoreService.downloadZip(blob);
+
+// 导入
+const result = await backupRestoreService.importFromZip(file, onProgress);
+// result: { success, prompts, projects, assets, errors }
+```
+
+**缓存刷新机制**：
+导入数据后需要刷新内存缓存才能生效：
+- `resetPromptStorageCache()` - 刷新提示词缓存
+- `workspaceService.reload()` - 刷新工作区缓存
+
+**技术要点**：
+- 使用 JSZip 处理 ZIP 文件
+- 媒体文件通过 `unifiedCacheService.getCachedBlob()` 获取
+- 虚拟 URL（`/asset-library/`）从 Cache API 获取
+- 导入时区分本地素材和 AI 生成素材，存储位置不同
+
 ---
 
 ## 开发规范
@@ -684,6 +1008,95 @@ Service Worker 拦截请求
 - **文件大小限制**: 单个文件不超过 500 行
 - **文档语言**: 规格文档使用中文
 
+### 异步初始化模式
+
+**场景**: 使用 `settingsManager` 或其他需要异步初始化的服务时
+
+❌ **错误示例**:
+```typescript
+async initialize(): Promise<boolean> {
+  const settings = geminiSettings.get(); // 可能返回加密的 JSON！
+  await swTaskQueueClient.initialize({ apiKey: settings.apiKey });
+}
+```
+
+✅ **正确示例**:
+```typescript
+async initialize(): Promise<boolean> {
+  await settingsManager.waitForInitialization(); // 等待解密完成
+  const settings = geminiSettings.get(); // 现在返回解密后的值
+  await swTaskQueueClient.initialize({ apiKey: settings.apiKey });
+}
+```
+
+**原因**: `settingsManager` 使用异步方法 `decryptSensitiveDataForLoading()` 解密敏感数据（如 API Key）。如果在解密完成前调用 `geminiSettings.get()`，会返回加密的 JSON 对象而不是解密后的字符串，导致 API 请求失败。
+
+### Z-Index 管理规范
+
+**规范文档**: 参考 `docs/Z_INDEX_GUIDE.md` 获取完整规范
+
+**核心原则**:
+- 使用预定义的层级常量，禁止硬编码魔术数字
+- TypeScript: 从 `constants/z-index.ts` 导入 `Z_INDEX`
+- SCSS: 从 `styles/z-index.scss` 导入并使用 `$z-*` 变量或 `z()` 函数
+
+**层级结构** (每层预留100单位):
+```
+Layer 0 (0-999):     Base & Canvas Internal
+Layer 1 (1000-1999): Canvas Elements & Decorations
+Layer 2 (2000-2999): Toolbars (unified-toolbar: 2000, popovers: 3000)
+Layer 3 (3000-3999): Popovers & Tooltips
+Layer 4 (4000-4999): Drawers & Panels (task-queue, chat-drawer)
+Layer 5 (5000-5999): Modals & Dialogs (AI dialogs: 5100+)
+Layer 6 (6000-6999): Notifications (active-task-warning: 6000)
+Layer 7 (7000-7999): Auth Dialogs
+Layer 8 (8000-8999): Image Viewer
+Layer 9 (9000+):     Critical Overlays (loading, system-error)
+```
+
+**使用示例**:
+```typescript
+// TypeScript/TSX
+import { Z_INDEX } from '@/constants/z-index';
+<Rnd style={{ zIndex: Z_INDEX.DIALOG_AI_IMAGE }}>
+```
+
+```scss
+// SCSS
+@import 'styles/z-index';
+.my-toolbar {
+  z-index: $z-unified-toolbar;  // 或 z-index: z('unified-toolbar');
+}
+```
+
+**禁止事项**:
+- ❌ 禁止使用随意的数字 (如 9999, 10000, 10001)
+- ❌ 禁止在同一层级随意 +1/-1
+- ❌ 临时修复必须在完成后转换为规范用法
+
+### 验证命令
+
+修改代码后必须执行以下验证命令：
+
+```bash
+nx typecheck drawnix    # 类型检查
+nx lint drawnix         # 代码规范
+nx test drawnix         # 单元测试
+pnpm run build          # 构建验证
+```
+
+### 性能指南
+- 使用 `React.lazy` 对大型组件进行代码分割
+- 对图片实现懒加载和预加载
+- 避免在 render 中创建新对象/函数
+- 对长列表考虑使用虚拟化
+
+### 安全指南
+- 验证和清理所有用户输入
+- 永远不要硬编码敏感信息（API keys 等）
+- 对 API 调用使用适当的错误处理
+- 在日志中过滤敏感信息
+
 ---
 
 ## 品牌设计规范
@@ -718,7 +1131,7 @@ Service Worker 拦截请求
 
 **核心工具**:
 - `ai_analyze` - AI 分析 (Gemini 文本模型)
-- `generate_image` - 图像生成 (Gemini Imagen)
+- `generate_image` - 图片生成 (Gemini Imagen)
 - `generate_video` - 视频生成 (Veo3, Sora-2)
 - `canvas_insert` - 插入内容到画布
 
@@ -901,11 +1314,11 @@ const insertY = boundingRect.y + (top / scale);
 
 ---
 
-## 图像分割系统
+## 图片分割系统
 
 ### 概述
 
-项目支持智能图像分割功能，可以自动检测并拆分包含多个子图的图片。
+项目支持智能图片分割功能，可以自动检测并拆分包含多个子图的图片。
 
 **核心文件**：
 - `utils/image-splitter.ts` - 主分割器（支持网格分割线和透明分割线）
@@ -1027,6 +1440,7 @@ trimTransparentBorders(imageData: ImageData, strict: boolean = true)
 
 - `/docs/CODING_STANDARDS.md` - 完整编码规范
 - `/docs/VERSION_CONTROL.md` - 版本控制
+- `/docs/Z_INDEX_GUIDE.md` - Z-Index 层级管理规范
 - `/docs/CFPAGE-DEPLOY.md` - Cloudflare 部署指南
 - `/docs/PWA_ICONS.md` - PWA 配置
 - `/docs/POSTHOG_MONITORING.md` - 监控配置
@@ -1063,7 +1477,9 @@ pnpm start
 - AI 服务: `packages/drawnix/src/services/generation-api-service.ts`
 - 任务队列: `packages/drawnix/src/services/task-queue-service.ts`
 - 字体管理: `packages/drawnix/src/services/font-manager-service.ts`
-- service worker源码：'apps/web/src/sw/index.ts'
+- 备份恢复: `packages/drawnix/src/services/backup-restore-service.ts`
+- 统一缓存: `packages/drawnix/src/services/unified-cache-service.ts`
+- service worker源码：`apps/web/src/sw/index.ts`
 
 ### 重要 Context
 - `DrawnixContext` - 编辑器状态

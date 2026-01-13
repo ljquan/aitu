@@ -22,7 +22,7 @@ import { SelectedContentPreview } from '../shared/SelectedContentPreview';
 import { getSelectedElements, ATTACHED_ELEMENT_CLASS_NAME, getRectangleByElements, PlaitBoard, getViewportOrigination, PlaitElement } from '@plait/core';
 import { useI18n } from '../../i18n';
 import { TaskStatus } from '../../types/task.types';
-import { taskQueueService } from '../../services/task-queue-service';
+import { taskQueueService } from '../../services/task-queue';
 import { processSelectedContentForAI, scrollToPointIfNeeded } from '../../utils/selection-utils';
 import { useTextSelection } from '../../hooks/useTextSelection';
 import { useChatDrawerControl } from '../../contexts/ChatDrawerContext';
@@ -34,7 +34,10 @@ import { PromptHistoryPopover } from './PromptHistoryPopover';
 import { usePromptHistory } from '../../hooks/usePromptHistory';
 import { getDefaultImageModel, IMAGE_MODELS, getModelConfig, getDefaultSizeForModel } from '../../constants/model-config';
 import { BUILT_IN_TOOLS, DEFAULT_TOOL_CONFIG } from '../../constants/built-in-tools';
-import { initializeMCP, setCanvasBoard, setBoard, mcpRegistry } from '../../mcp';
+import { initializeMCP, mcpRegistry } from '../../mcp';
+import { setCanvasBoard } from '../../services/canvas-operations/canvas-insertion';
+import { setBoard } from '../../mcp/tools/shared';
+import { setCapabilitiesBoard } from '../../services/sw-capabilities/handler';
 import { initializeLongVideoChainService } from '../../services/long-video-chain-service';
 import { gridImageService } from '../../services/photo-wall';
 import type { MCPTaskResult } from '../../mcp/types';
@@ -54,6 +57,7 @@ import { BoardTransforms } from '@plait/core';
 import { WorkZoneTransforms } from '../../plugins/with-workzone';
 import { ToolTransforms } from '../../plugins/with-tool';
 import type { PlaitWorkZone } from '../../types/workzone.types';
+import { useWorkflowSubmission } from '../../hooks/useWorkflowSubmission';
 
 /**
  * 将 WorkflowDefinition 转换为 WorkflowMessageData
@@ -131,6 +135,8 @@ function isVideoUrl(url: string): boolean {
 
 interface AIInputBarProps {
   className?: string;
+  /** 数据是否已准备好（用于判断画布是否为空） */
+  isDataReady?: boolean;
 }
 
 /**
@@ -144,7 +150,9 @@ const SelectionWatcher: React.FC<{
   externalBoardRef?: React.MutableRefObject<any>;
   /** 画板空状态变化回调 */
   onCanvasEmptyChange?: (isEmpty: boolean) => void;
-}> = React.memo(({ language, onSelectionChange, externalBoardRef, onCanvasEmptyChange }) => {
+  /** 数据是否已准备好 */
+  isDataReady?: boolean;
+}> = React.memo(({ language, onSelectionChange, externalBoardRef, onCanvasEmptyChange, isDataReady }) => {
   const board = useBoard();
   const boardRef = useRef(board);
   boardRef.current = board;
@@ -153,6 +161,7 @@ const SelectionWatcher: React.FC<{
   useEffect(() => {
     setCanvasBoard(board);
     setBoard(board);
+    setCapabilitiesBoard(board);
     gridImageService.setBoard(board);
     // 同时设置外部 ref
     if (externalBoardRef) {
@@ -161,6 +170,7 @@ const SelectionWatcher: React.FC<{
     return () => {
       setCanvasBoard(null);
       setBoard(null);
+      setCapabilitiesBoard(null);
       gridImageService.setBoard(null);
       if (externalBoardRef) {
         externalBoardRef.current = null;
@@ -175,24 +185,26 @@ const SelectionWatcher: React.FC<{
   useEffect(() => {
     if (!board || !onCanvasEmptyChangeRef.current) return;
 
-    // 初始检查
+    // 只有在数据准备好后才检查是否为空
+    if (!isDataReady) {
+      return;
+    }
+
+    // 检查画布是否为空
     const checkEmpty = () => {
       const elements = board.children || [];
       onCanvasEmptyChangeRef.current?.(elements.length === 0);
     };
 
-    checkEmpty();
 
-    // 监听 board 变化
-    const observer = new MutationObserver(checkEmpty);
-    // 简单方案：定期检查（因为 Plait 的数据变化可能不会触发 DOM 变化）
+
+    // 定期检查（因为 Plait 的数据变化可能不会触发 DOM 变化）
     const interval = setInterval(checkEmpty, 500);
 
     return () => {
-      observer.disconnect();
       clearInterval(interval);
     };
-  }, [board]);
+  }, [board, isDataReady]);
 
   const onSelectionChangeRef = useRef(onSelectionChange);
   onSelectionChangeRef.current = onSelectionChange;
@@ -269,7 +281,7 @@ const SelectionWatcher: React.FC<{
 
 SelectionWatcher.displayName = 'SelectionWatcher';
 
-export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) => {
+export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, isDataReady }) => {
   // console.log('[AIInputBar] Component rendering');
 
   const { language } = useI18n();
@@ -302,9 +314,10 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
   const [prompt, setPrompt] = useState('');
   const [selectedContent, setSelectedContent] = useState<SelectedContent[]>([]); // 画布选中内容
   const [uploadedContent, setUploadedContent] = useState<SelectedContent[]>([]); // 用户上传内容
-  const [isSubmitting, setIsSubmitting] = useState(false); // 仅用于防止重复点击，不阻止并行任务
+  const [isSubmitting, setIsSubmitting] = useState(false); // 防止快速重复点击（3秒防抖）
+  const submitCooldownRef = useRef<NodeJS.Timeout | null>(null); // 提交冷却定时器
   const [isFocused, setIsFocused] = useState(false);
-  const [isCanvasEmpty, setIsCanvasEmpty] = useState(false); // 画板是否为空，默认 false 避免初始闪烁
+  const [isCanvasEmpty, setIsCanvasEmpty] = useState<boolean | null>(null); // null=加载中, true=空, false=有内容
   // 当前选中的图片模型（通过环境变量或默认值初始化）
   const [selectedModel, setSelectedModel] = useState(getDefaultImageModel);
   // 当前选中的尺寸（默认为模型的默认尺寸）
@@ -337,6 +350,33 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isFocused]);
+
+  // 清理提交冷却定时器
+  useEffect(() => {
+    return () => {
+      if (submitCooldownRef.current) {
+        clearTimeout(submitCooldownRef.current);
+      }
+    };
+  }, []);
+
+  // 监听 AI 生成完成事件（思维导图、流程图等同步操作）
+  useEffect(() => {
+    const handleGenerationComplete = (event: CustomEvent) => {
+      // console.log('[AIInputBar] ai-generation-complete event received:', event.detail);
+      // 立即重置提交状态，允许用户继续输入
+      if (submitCooldownRef.current) {
+        clearTimeout(submitCooldownRef.current);
+        submitCooldownRef.current = null;
+      }
+      setIsSubmitting(false);
+    };
+
+    window.addEventListener('ai-generation-complete', handleGenerationComplete as EventListener);
+    return () => {
+      window.removeEventListener('ai-generation-complete', handleGenerationComplete as EventListener);
+    };
+  }, []);
 
   // 监听任务状态变化，同步更新工作流步骤状态
   useEffect(() => {
@@ -493,7 +533,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
           if (workZoneId && board) {
             WorkZoneTransforms.removeWorkZone(board, workZoneId);
             currentWorkZoneIdRef.current = null;
-            console.log('[AIInputBar] Removed WorkZone after completion:', workZoneId);
+            // console.log('[AIInputBar] Removed WorkZone after completion:', workZoneId);
           }
 
           // 滚动画布到插入元素的位置
@@ -522,6 +562,15 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
 
   // 保存 board 引用供后处理完成后使用
   const SelectionWatcherBoardRef = useRef<any>(null);
+
+  // 使用 SW 工作流提交 Hook
+  const {
+    submitWorkflow: submitWorkflowToSW,
+  } = useWorkflowSubmission({
+    boardRef: SelectionWatcherBoardRef,
+    workZoneIdRef: currentWorkZoneIdRef,
+    useSWExecution: true, // 启用 SW 执行
+  });
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -589,7 +638,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
       }
     );
 
-    console.log('[AIInputBar] Prompt tool inserted to canvas');
+    // console.log('[AIInputBar] Prompt tool inserted to canvas');
   }, []);
 
   // 处理上传按钮点击
@@ -814,26 +863,26 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
       // 解析输入内容，使用选中的模型和尺寸
       const parsedParams = parseAIInput(prompt, selection, { modelId: selectedModel, size: selectedSize });
 
-      console.log('[AIInputBar] Parsed params:', parsedParams);
-      console.log('[AIInputBar] Key params - model:', parsedParams.modelId, 'count:', parsedParams.count, 'size:', parsedParams.size);
+      // console.log('[AIInputBar] Parsed params:', parsedParams);
+      // console.log('[AIInputBar] Key params - model:', parsedParams.modelId, 'count:', parsedParams.count, 'size:', parsedParams.size);
 
       // 收集所有参考媒体（图片 + 图形 + 视频）
       const referenceImages = [...selection.images, ...selection.graphics];
 
-      console.log('[AIInputBar] Final prompt:', parsedParams.prompt);
-      console.log('[AIInputBar] User instruction:', parsedParams.userInstruction);
-      console.log('[AIInputBar] Scenario:', parsedParams.scenario);
+      // console.log('[AIInputBar] Final prompt:', parsedParams.prompt);
+      // console.log('[AIInputBar] User instruction:', parsedParams.userInstruction);
+      // console.log('[AIInputBar] Scenario:', parsedParams.scenario);
 
-      // 创建工作流定义
+      // 创建工作流定义（仅用于 WorkZone 显示，实际工作流由 submitWorkflowToSW 创建）
       const workflow = convertToWorkflow(parsedParams, referenceImages);
-      console.log('[AIInputBar] Created workflow:', workflow);
+      // console.log('[AIInputBar] Created workflow:', workflow);
 
-      // 启动工作流（内部状态管理）
-      workflowControl.startWorkflow(workflow);
+      // 注意：不在这里调用 workflowControl.startWorkflow，由 submitWorkflowToSW 统一处理
+      // 避免重复创建工作流导致多次请求
 
       // 在画布上创建 WorkZone 显示工作流进度
       const board = SelectionWatcherBoardRef.current;
-      console.log('[AIInputBar] Board ref:', board ? 'exists' : 'null');
+      // console.log('[AIInputBar] Board ref:', board ? 'exists' : 'null');
       if (board) {
         // WorkZone 固定尺寸（画布坐标）
         // 因为容器已经应用了 scale(1/zoom)，所以这里不需要除以 zoom
@@ -872,10 +921,10 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
               const selectedRect = getRectangleByElements(board, selectedElements, false);
               const selectedBottomY = selectedRect.y + selectedRect.height;
 
-              console.log('[AIInputBar] === Strategy 1: Below Selected Elements ===');
-              console.log('[AIInputBar] Selected elements count:', selectedElements.length);
-              console.log('[AIInputBar] Selected rect:', selectedRect);
-              console.log('[AIInputBar] Selected bottom Y:', selectedBottomY);
+              // console.log('[AIInputBar] === Strategy 1: Below Selected Elements ===');
+              // console.log('[AIInputBar] Selected elements count:', selectedElements.length);
+              // console.log('[AIInputBar] Selected rect:', selectedRect);
+              // console.log('[AIInputBar] Selected bottom Y:', selectedBottomY);
 
               // 直接放在选中元素下方，不检查视口空间
               // 因为我们有滚动功能，可以滚动到 WorkZone 位置
@@ -886,18 +935,18 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
               positionStrategy = 'below-selected';
               positionCalculated = true;
 
-              console.log('[AIInputBar] ✓ Using strategy: below selected elements');
-              console.log('[AIInputBar] WorkZone will be at:', [workzoneX, workzoneY]);
+              // console.log('[AIInputBar] ✓ Using strategy: below selected elements');
+              // console.log('[AIInputBar] WorkZone will be at:', [workzoneX, workzoneY]);
             } catch (error) {
               console.warn('[AIInputBar] Failed to calculate position for selected elements:', error);
             }
           } else {
-            console.log('[AIInputBar] No selected elements, will use strategy 2');
+            // console.log('[AIInputBar] No selected elements, will use strategy 2');
           }
 
           // 策略2: 如果策略1未成功，放在最底部元素下方
           if (!positionCalculated) {
-            console.log('[AIInputBar] === Strategy 2: Below Bottommost Element ===');
+            // console.log('[AIInputBar] === Strategy 2: Below Bottommost Element ===');
 
             let bottommostElement: PlaitElement | null = null;
             let maxBottomY = -Infinity;
@@ -923,16 +972,16 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
               workzoneY = expectedInsertY;
               positionStrategy = 'below-bottommost';
 
-              console.log('[AIInputBar] ✓ Using strategy: below bottommost element');
-              console.log('[AIInputBar] Bottommost rect:', bottommostRect);
-              console.log('[AIInputBar] WorkZone will be at:', [workzoneX, workzoneY]);
+              // console.log('[AIInputBar] ✓ Using strategy: below bottommost element');
+              // console.log('[AIInputBar] Bottommost rect:', bottommostRect);
+              // console.log('[AIInputBar] WorkZone will be at:', [workzoneX, workzoneY]);
             } else {
-              console.log('[AIInputBar] ✗ No valid elements found, using viewport center');
+              // console.log('[AIInputBar] ✗ No valid elements found, using viewport center');
             }
           }
         } else {
           // 画布为空，使用默认值（视口中心）
-          console.log('[AIInputBar] ✓ Using strategy: viewport center (empty canvas)');
+          // console.log('[AIInputBar] ✓ Using strategy: viewport center (empty canvas)');
         }
 
         // 创建 WorkZone
@@ -947,12 +996,12 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
 
         // 保存 WorkZone ID 用于后续更新
         currentWorkZoneIdRef.current = workzoneElement.id;
-        console.log('[AIInputBar] Created WorkZone:', workzoneElement.id);
-        console.log('[AIInputBar] WorkZone position (left-top):', [workzoneX, workzoneY]);
-        console.log('[AIInputBar] WorkZone size:', [WORKZONE_WIDTH, WORKZONE_HEIGHT]);
-        console.log('[AIInputBar] Expected insert position (leftX, topY):', [expectedInsertLeftX, expectedInsertY]);
-        console.log('[AIInputBar] Position strategy:', positionStrategy);
-        console.log('[AIInputBar] Zoom:', zoom);
+        // console.log('[AIInputBar] Created WorkZone:', workzoneElement.id);
+        // console.log('[AIInputBar] WorkZone position (left-top):', [workzoneX, workzoneY]);
+        // console.log('[AIInputBar] WorkZone size:', [WORKZONE_WIDTH, WORKZONE_HEIGHT]);
+        // console.log('[AIInputBar] Expected insert position (leftX, topY):', [expectedInsertLeftX, expectedInsertY]);
+        // console.log('[AIInputBar] Position strategy:', positionStrategy);
+        // console.log('[AIInputBar] Zoom:', zoom);
 
         // 延迟滚动到 WorkZone 位置，确保 DOM 已渲染
         setTimeout(() => {
@@ -962,7 +1011,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
 
           // 使用现有的滚动工具函数，如果 WorkZone 不在视口内则滚动
           scrollToPointIfNeeded(board, [workzoneCenterX, workzoneCenterY], 100);
-          console.log('[AIInputBar] Scroll check completed for WorkZone center:', [workzoneCenterX, workzoneCenterY]);
+          // console.log('[AIInputBar] Scroll check completed for WorkZone center:', [workzoneCenterX, workzoneCenterY]);
         }, 100);
       } else {
         console.warn('[AIInputBar] Board not available, skipping WorkZone creation');
@@ -999,17 +1048,37 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
       // 保存到 ref，用于后续更新时保持 retryContext
       currentRetryContextRef.current = retryContext;
 
-      // 发送工作流消息到 ChatDrawer（创建新对话但不自动展开）
-      const workflowMessageData = toWorkflowMessageData(workflow, retryContext);
-      await sendWorkflowMessageRef.current({
-        context: aiContext,
-        workflow: workflowMessageData,
-        textModel, // 传递全局文本模型
-        autoOpen: false, // 不自动展开 ChatDrawer，避免干扰工作
-      });
+      // 注意：不在这里发送 ChatDrawer 消息，由 submitWorkflowToSW 统一处理
+      // 避免重复发送消息导致多次请求
 
-      // 统一处理：遍历工作流步骤，通过 MCP Registry 执行
-      console.log(`[AIInputBar] Executing workflow: ${workflow.steps.length} steps, scenario: ${parsedParams.scenario}`);
+      // 所有工作流都通过 SW 执行
+      // SW 会根据工具类型决定是在 SW 中执行还是委托给主线程
+      try {
+        // 传递已创建的 workflow，避免重复创建导致 ID 不一致
+        const { usedSW } = await submitWorkflowToSW(parsedParams, referenceImages, retryContext, workflow);
+        if (usedSW) {
+          // console.log('[AIInputBar] Workflow submitted to SW');
+          // SW 执行成功
+          // 保存提示词到历史记录
+          if (prompt.trim()) {
+            const hasSelection = allContent.length > 0;
+            addPromptHistory(prompt.trim(), hasSelection);
+          }
+          // 清空输入并关闭面板
+          setPrompt('');
+          setSelectedContent([]);
+          setUploadedContent([]);
+          setIsFocused(false);
+          inputRef.current?.blur();
+          return; // 提前返回
+        }
+      } catch (swError) {
+        console.warn('[AIInputBar] SW execution failed, falling back to main thread:', swError);
+        // SW 执行失败，继续使用主线程执行（fallback）
+      }
+
+      // Fallback: 主线程执行（仅当 SW 不可用时）
+      // console.log(`[AIInputBar] Fallback: Executing workflow in main thread: ${workflow.steps.length} steps`);
 
       const createdTaskIds: string[] = [];
 
@@ -1168,12 +1237,12 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
 
       // 执行动态添加的步骤（由 ai_analyze 通过 onAddSteps 添加）
       if (!workflowFailed && pendingNewSteps.length > 0) {
-        console.log(`[AIInputBar] Executing ${pendingNewSteps.length} dynamically added steps`);
+        // console.log(`[AIInputBar] Executing ${pendingNewSteps.length} dynamically added steps`);
 
         // 获取当前工作流状态用于调试
         const currentWorkflow = workflowControl.getWorkflow();
-        console.log(`[AIInputBar] Current workflow steps:`, currentWorkflow?.steps.map(s => ({ id: s.id, mcp: s.mcp, status: s.status })));
-        console.log(`[AIInputBar] Pending steps to execute:`, pendingNewSteps.map(s => ({ id: s.id, mcp: s.mcp })));
+        // console.log(`[AIInputBar] Current workflow steps:`, currentWorkflow?.steps.map(s => ({ id: s.id, mcp: s.mcp, status: s.status })));
+        // console.log(`[AIInputBar] Pending steps to execute:`, pendingNewSteps.map(s => ({ id: s.id, mcp: s.mcp })));
 
         for (const newStep of pendingNewSteps) {
           if (workflowFailed) {
@@ -1184,7 +1253,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
 
           // 从 workflowControl 获取完整的步骤信息
           const fullStep = workflowControl.getWorkflow()?.steps.find(s => s.id === newStep.id);
-          console.log(`[AIInputBar] Looking for step ${newStep.id}, found:`, fullStep ? 'yes' : 'no', 'status:', fullStep?.status);
+          // console.log(`[AIInputBar] Looking for step ${newStep.id}, found:`, fullStep ? 'yes' : 'no', 'status:', fullStep?.status);
 
           if (!fullStep) {
             console.warn(`[AIInputBar] Step ${newStep.id} not found in workflow!`);
@@ -1193,11 +1262,11 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
 
           // 如果步骤已标记为 completed（如 long-video-generation 预创建的任务），跳过执行
           if (fullStep.status === 'completed') {
-            console.log(`[AIInputBar] Skipping already completed step: ${fullStep.mcp}`);
+            // console.log(`[AIInputBar] Skipping already completed step: ${fullStep.mcp}`);
             continue;
           }
 
-          console.log(`[AIInputBar] Executing dynamic step: ${fullStep.mcp}`, fullStep.args);
+          // console.log(`[AIInputBar] Executing dynamic step: ${fullStep.mcp}`, fullStep.args);
           const success = await executeStep(fullStep);
           if (!success) {
             workflowFailed = true;
@@ -1211,6 +1280,28 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
         addPromptHistory(prompt.trim(), hasSelection);
       }
 
+      // 检查工作流是否已完成（所有步骤都是 completed 或 failed/skipped）
+      // 如果没有创建任务（createdTaskIds 为空），则立即删除 WorkZone
+      const finalWorkflow = workflowControl.getWorkflow();
+      const allStepsFinished = finalWorkflow?.steps.every(
+        s => s.status === 'completed' || s.status === 'failed' || s.status === 'skipped'
+      );
+      const hasCreatedTasks = createdTaskIds.length > 0;
+
+      if (allStepsFinished && !hasCreatedTasks) {
+        // 所有步骤都已完成且没有创建任务，立即删除 WorkZone
+        const workZoneId = currentWorkZoneIdRef.current;
+        const board = SelectionWatcherBoardRef.current;
+        if (workZoneId && board) {
+          // 延迟删除，让用户看到完成状态
+          setTimeout(() => {
+            WorkZoneTransforms.removeWorkZone(board, workZoneId);
+            currentWorkZoneIdRef.current = null;
+            // console.log('[AIInputBar] Removed WorkZone after all steps completed (no tasks):', workZoneId);
+          }, 1500);
+        }
+      }
+
       // 清空输入并关闭面板
       setPrompt('');
       setSelectedContent([]);
@@ -1222,10 +1313,19 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
       console.error('Failed to create generation task:', error);
       // 中止工作流
       workflowControl.abortWorkflow();
-    } finally {
+      // 出错时立即允许重试
       setIsSubmitting(false);
     }
-  }, [prompt, allContent, isSubmitting, selectedModel, workflowControl]);
+    // 成功提交后，3秒内不允许重复提交（防止误操作双击）
+    // 清除之前的定时器
+    if (submitCooldownRef.current) {
+      clearTimeout(submitCooldownRef.current);
+    }
+    submitCooldownRef.current = setTimeout(() => {
+      setIsSubmitting(false);
+      submitCooldownRef.current = null;
+    }, 3000);
+  }, [prompt, allContent, isSubmitting, selectedModel, workflowControl, submitWorkflowToSW, addPromptHistory, selectedSize]);
 
   // 处理工作流重试（从指定步骤开始）
   const handleWorkflowRetry = useCallback(async (
@@ -1238,7 +1338,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
       return;
     }
 
-    console.log(`[AIInputBar] Retrying workflow from step ${startStepIndex}`, workflowMessageData);
+    // console.log(`[AIInputBar] Retrying workflow from step ${startStepIndex}`, workflowMessageData);
 
     // 将 WorkflowMessageData 转换为 WorkflowDefinition（用于内部状态管理）
     const workflowDefinition: WorkflowDefinition = {
@@ -1411,7 +1511,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
 
     // 执行动态添加的步骤
     if (!workflowFailed && pendingNewStepsForRetry.length > 0) {
-      console.log(`[AIInputBar] Executing ${pendingNewStepsForRetry.length} dynamically added steps during retry`);
+      // console.log(`[AIInputBar] Executing ${pendingNewStepsForRetry.length} dynamically added steps during retry`);
       for (const newStep of pendingNewStepsForRetry) {
         if (workflowFailed) {
           workflowControl.updateStep(newStep.id, 'skipped');
@@ -1424,7 +1524,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
         }
         // 如果步骤已标记为 completed（如 long-video-generation 预创建的任务），跳过执行
         if (fullStep.status === 'completed') {
-          console.log(`[AIInputBar] Skipping already completed step during retry: ${fullStep.mcp}`);
+          // console.log(`[AIInputBar] Skipping already completed step during retry: ${fullStep.mcp}`);
           continue;
         }
         const success = await executeStep(fullStep);
@@ -1434,7 +1534,31 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
       }
     }
 
-    console.log('[AIInputBar] Retry workflow completed, failed:', workflowFailed);
+    // 检查工作流是否已完成（所有步骤都是 completed 或 failed/skipped）
+    // 如果没有创建任务，则立即删除 WorkZone
+    const finalWorkflow = workflowControl.getWorkflow();
+    const allStepsFinished = finalWorkflow?.steps.every(
+      s => s.status === 'completed' || s.status === 'failed' || s.status === 'skipped'
+    );
+    // 检查是否有任何步骤创建了任务（通过检查 result.taskId）
+    const hasCreatedTasks = finalWorkflow?.steps.some(
+      s => (s.result as { taskId?: string })?.taskId
+    );
+
+    if (allStepsFinished && !hasCreatedTasks) {
+      // 所有步骤都已完成且没有创建任务，立即删除 WorkZone
+      const workZoneId = currentWorkZoneIdRef.current;
+      const board = SelectionWatcherBoardRef.current;
+      if (workZoneId && board) {
+        // 延迟删除，让用户看到完成状态
+        setTimeout(() => {
+          WorkZoneTransforms.removeWorkZone(board, workZoneId);
+          currentWorkZoneIdRef.current = null;
+        }, 1500);
+      }
+    }
+
+    // console.log('[AIInputBar] Retry workflow completed, failed:', workflowFailed);
   }, [workflowControl]);
 
   // 注册重试处理器
@@ -1533,8 +1657,8 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
 
   const canGenerate = prompt.trim().length > 0 || allContent.length > 0;
 
-  // 是否显示灵感板（画布为空时显示）
-  const showInspirationBoard = isCanvasEmpty;
+  // 是否显示灵感板（画布数据加载完成且为空时显示，加载中不显示避免闪烁）
+  const showInspirationBoard = isCanvasEmpty === true;
 
   return (
     <div
@@ -1549,11 +1673,12 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className }) 
         onSelectionChange={handleSelectionChange}
         externalBoardRef={SelectionWatcherBoardRef}
         onCanvasEmptyChange={setIsCanvasEmpty}
+        isDataReady={isDataReady}
       />
 
-      {/* 灵感创意板块：画板为空时显示 */}
+      {/* 灵感创意板块：画板确定为空且聚焦时显示 */}
       <InspirationBoard
-        isCanvasEmpty={isCanvasEmpty}
+        isCanvasEmpty={showInspirationBoard}
         onSelectPrompt={handleSelectInspirationPrompt}
         onOpenPromptTool={handleOpenPromptTool}
       />

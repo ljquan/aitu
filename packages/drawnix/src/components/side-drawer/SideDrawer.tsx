@@ -5,7 +5,7 @@
  * 用于统一 ProjectDrawer、ToolboxDrawer、TaskQueuePanel 等抽屉组件的基础结构
  */
 
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect, useState, useRef } from 'react';
 import { Button } from 'tdesign-react';
 import { CloseIcon } from 'tdesign-icons-react';
 import './side-drawer.scss';
@@ -56,6 +56,14 @@ export interface SideDrawerProps {
   showCloseButton?: boolean;
   /** 关闭按钮大小 */
   closeButtonSize?: 'small' | 'medium' | 'large';
+  /** 是否可拖拽调整宽度 */
+  resizable?: boolean;
+  /** 最小宽度 */
+  minWidth?: number;
+  /** 最大宽度 */
+  maxWidth?: number;
+  /** 宽度变化回调 */
+  onWidthChange?: (width: number) => void;
 }
 
 /**
@@ -83,7 +91,18 @@ export const SideDrawer: React.FC<SideDrawerProps> = ({
   footerClassName = '',
   showCloseButton = true,
   closeButtonSize = 'small',
+  resizable = false,
+  minWidth = 280,
+  maxWidth = 800,
+  onWidthChange,
 }) => {
+  // 拖拽调整宽度状态
+  const [draggingWidth, setDraggingWidth] = useState<number | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const drawerRef = useRef<HTMLDivElement>(null);
+  const startXRef = useRef(0);
+  const startWidthRef = useRef(0);
+
   // ESC 键关闭
   useEffect(() => {
     if (!isOpen || !closeOnEsc) return;
@@ -106,12 +125,50 @@ export const SideDrawer: React.FC<SideDrawerProps> = ({
     }
   }, [closeOnBackdropClick, onClose]);
 
+  // 开始拖拽
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!drawerRef.current) return;
+
+    setIsDragging(true);
+    startXRef.current = e.clientX;
+    startWidthRef.current = drawerRef.current.offsetWidth;
+  }, []);
+
+  // 拖拽中
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const deltaX = e.clientX - startXRef.current;
+      const newWidth = Math.min(maxWidth, Math.max(minWidth, startWidthRef.current + deltaX));
+      setDraggingWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      if (draggingWidth !== null) {
+        onWidthChange?.(draggingWidth);
+      }
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging, draggingWidth, minWidth, maxWidth, onWidthChange]);
+
   // 构建类名
   const drawerClassName = [
     'side-drawer',
     `side-drawer--${position}`,
     `side-drawer--${width}`,
     isOpen ? 'side-drawer--open' : '',
+    isDragging ? 'side-drawer--dragging' : '',
+    resizable ? 'side-drawer--resizable' : '',
     className,
   ]
     .filter(Boolean)
@@ -119,7 +176,9 @@ export const SideDrawer: React.FC<SideDrawerProps> = ({
 
   // 构建样式
   const drawerStyle: React.CSSProperties = {};
-  if (customWidth) {
+  if (draggingWidth !== null) {
+    drawerStyle.width = `${draggingWidth}px`;
+  } else if (customWidth) {
     drawerStyle.width = typeof customWidth === 'number' ? `${customWidth}px` : customWidth;
   }
   if (zIndex !== undefined) {
@@ -129,7 +188,7 @@ export const SideDrawer: React.FC<SideDrawerProps> = ({
   return (
     <>
       {/* 抽屉主体 */}
-      <div className={drawerClassName} style={drawerStyle}>
+      <div ref={drawerRef} className={drawerClassName} style={drawerStyle}>
         {/* Header */}
         <div className={`side-drawer__header ${headerClassName}`}>
           <div className="side-drawer__header-left">
@@ -162,6 +221,14 @@ export const SideDrawer: React.FC<SideDrawerProps> = ({
         {/* Footer (optional) */}
         {footer && (
           <div className={`side-drawer__footer ${footerClassName}`}>{footer}</div>
+        )}
+
+        {/* Resize Handle */}
+        {resizable && (
+          <div
+            className="side-drawer__resize-handle"
+            onMouseDown={handleResizeStart}
+          />
         )}
       </div>
 

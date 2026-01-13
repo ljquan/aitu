@@ -178,7 +178,7 @@ class UnifiedCacheService {
 
       request.onsuccess = () => {
         this.db = request.result;
-        console.log('[UnifiedCache] Database opened successfully');
+        // console.log('[UnifiedCache] Database opened successfully');
         resolve(this.db);
       };
 
@@ -190,7 +190,7 @@ class UnifiedCacheService {
           store.createIndex('cachedAt', 'cachedAt', { unique: false });
           store.createIndex('lastUsed', 'lastUsed', { unique: false });
           store.createIndex('type', 'type', { unique: false });
-          console.log('[UnifiedCache] Object store created with indexes');
+          // console.log('[UnifiedCache] Object store created with indexes');
         }
       };
     });
@@ -340,7 +340,7 @@ class UnifiedCacheService {
       this.cachedUrls.add(url);
       this.notifyListeners();
 
-      console.log('[UnifiedCache] Image metadata updated:', url);
+      // console.log('[UnifiedCache] Image metadata updated:', url);
     } catch (error) {
       console.error('[UnifiedCache] Failed to handle IMAGE_CACHED:', error);
     }
@@ -393,7 +393,7 @@ class UnifiedCacheService {
       this.cachedUrls.add(url);
       this.notifyListeners();
 
-      console.log('[UnifiedCache] Image metadata registered:', { url, taskId: metadata.taskId });
+      // console.log('[UnifiedCache] Image metadata registered:', { url, taskId: metadata.taskId });
     } catch (error) {
       this.handleQuotaError(error);
       console.error('[UnifiedCache] Failed to register metadata:', error);
@@ -426,10 +426,10 @@ class UnifiedCacheService {
       if (!info.isCached || !info.cachedAt) {
         // 虚拟 URL 必须从缓存获取，如果没有缓存则尝试 fetch
         if (isVirtualUrl) {
-          console.log('[UnifiedCache] Virtual URL not in metadata, trying to fetch from Cache API');
+          // console.log('[UnifiedCache] Virtual URL not in metadata, trying to fetch from Cache API');
           // 继续执行下面的 fetch 逻辑
         } else {
-          console.log('[UnifiedCache] Image not cached or age unknown, using URL');
+          // console.log('[UnifiedCache] Image not cached or age unknown, using URL');
           return { type: 'url', value: url };
         }
       } else {
@@ -438,7 +438,7 @@ class UnifiedCacheService {
 
         // 4. 如果缓存时间在阈值内，且不是虚拟 URL，返回 URL
         if (age < maxAge && !isVirtualUrl) {
-          console.log(`[UnifiedCache] Image is fresh (age: ${Math.round(age / 1000 / 60)}min), using URL`);
+          // console.log(`[UnifiedCache] Image is fresh (age: ${Math.round(age / 1000 / 60)}min), using URL`);
           // 更新最后使用时间
           this.touch(url);
           return { type: 'url', value: url };
@@ -446,9 +446,9 @@ class UnifiedCacheService {
 
         // 5. 缓存时间超过阈值或是虚拟 URL，需要转换为 base64
         if (isVirtualUrl) {
-          console.log(`[UnifiedCache] Virtual URL detected, converting to base64`);
+          // console.log(`[UnifiedCache] Virtual URL detected, converting to base64`);
         } else {
-          console.log(`[UnifiedCache] Image is old (age: ${Math.round(age / 1000 / 60 / 60)}h), converting to base64`);
+          // console.log(`[UnifiedCache] Image is old (age: ${Math.round(age / 1000 / 60 / 60)}h), converting to base64`);
         }
       }
 
@@ -462,9 +462,9 @@ class UnifiedCacheService {
 
       // 7. 如果图片过大，进行压缩
       if (blob.size > maxSize && blob.type.startsWith('image/')) {
-        console.log(`[UnifiedCache] Image too large (${(blob.size / 1024 / 1024).toFixed(2)}MB), compressing...`);
+        // console.log(`[UnifiedCache] Image too large (${(blob.size / 1024 / 1024).toFixed(2)}MB), compressing...`);
         blob = await this.compressImage(blob, quality);
-        console.log(`[UnifiedCache] Compressed to ${(blob.size / 1024 / 1024).toFixed(2)}MB`);
+        // console.log(`[UnifiedCache] Compressed to ${(blob.size / 1024 / 1024).toFixed(2)}MB`);
       }
 
       // 8. 转换为 base64
@@ -538,11 +538,11 @@ class UnifiedCacheService {
 
           isInCacheAPI = !!response;
 
-          console.log('[UnifiedCache] Cache API check:', {
-            url: url.substring(0, 80) + '...',
-            found: isInCacheAPI,
-            cacheName: IMAGE_CACHE_NAME
-          });
+          // console.log('[UnifiedCache] Cache API check:', {
+          //   url: url.substring(0, 80) + '...',
+          //   found: isInCacheAPI,
+          //   cacheName: IMAGE_CACHE_NAME
+          // });
         } catch (error) {
           console.warn('[UnifiedCache] Failed to check Cache API:', error);
           // Cache API 检查失败，降级为只检查 IndexedDB
@@ -556,7 +556,7 @@ class UnifiedCacheService {
       // 3. 只有在 IndexedDB 和 Cache API 都有时，才返回 isCached: true
       if (!isInCacheAPI) {
         // IndexedDB 有记录但 Cache API 没有，清理 IndexedDB 记录
-        console.log('[UnifiedCache] Found orphaned metadata, cleaning up:', url);
+        // console.log('[UnifiedCache] Found orphaned metadata, cleaning up:', url);
         await this.deleteItem(url);
         this.cachedUrls.delete(url);
         return { isCached: false };
@@ -611,7 +611,7 @@ class UnifiedCacheService {
       this.cachedUrls.add(url);
       this.notifyListeners();
 
-      console.log('[UnifiedCache] Image cached manually:', url);
+      // console.log('[UnifiedCache] Image cached manually:', url);
       return true;
     } catch (error) {
       this.handleQuotaError(error);
@@ -633,7 +633,7 @@ class UnifiedCacheService {
       await this.sendMessageToSW({ type: 'DELETE_CACHE', url });
 
       this.notifyListeners();
-      console.log('[UnifiedCache] Cache deleted:', url);
+      // console.log('[UnifiedCache] Cache deleted:', url);
     } catch (error) {
       console.error('[UnifiedCache] Failed to delete cache:', error);
       throw error;
@@ -670,7 +670,7 @@ class UnifiedCacheService {
       await this.sendMessageToSW({ type: 'DELETE_CACHE_BATCH', urls });
 
       this.notifyListeners();
-      console.log(`[UnifiedCache] Batch deleted ${deletedCount} caches`);
+      // console.log(`[UnifiedCache] Batch deleted ${deletedCount} caches`);
     } catch (error) {
       console.error('[UnifiedCache] Failed to batch delete caches:', error);
     }
@@ -760,7 +760,7 @@ class UnifiedCacheService {
       await this.sendMessageToSW({ type: 'CLEAR_ALL_CACHE' });
       this.notifyListeners();
 
-      console.log('[UnifiedCache] All cache cleared');
+      // console.log('[UnifiedCache] All cache cleared');
     } catch (error) {
       console.error('[UnifiedCache] Failed to clear all cache:', error);
       throw error;
@@ -818,7 +818,7 @@ class UnifiedCacheService {
       this.cachedUrls.add(url);
       this.notifyListeners();
 
-      console.log('[UnifiedCache] Media cached from blob:', { url, type, size: blob.size });
+      // console.log('[UnifiedCache] Media cached from blob:', { url, type, size: blob.size });
       return url;
     } catch (error) {
       this.handleQuotaError(error);
@@ -833,8 +833,11 @@ class UnifiedCacheService {
    */
   async getCachedBlob(url: string): Promise<Blob | null> {
     try {
-      // 如果是 taskId（不是完整 URL），直接从 Cache API 获取
-      if (!url.startsWith('http') && !url.startsWith('blob:') && !url.startsWith('/')) {
+      // 检查是否为虚拟 URL（素材库本地 URL 或缓存 URL）
+      const isVirtualUrl = url.startsWith('/asset-library/') || url.startsWith('/__aitu_cache__/');
+
+      // 如果是 taskId（不是完整 URL）或虚拟 URL，直接从 Cache API 获取
+      if (isVirtualUrl || (!url.startsWith('http') && !url.startsWith('blob:') && !url.startsWith('/'))) {
         if (typeof caches !== 'undefined') {
           const cache = await caches.open(IMAGE_CACHE_NAME);
           const response = await cache.match(url);
@@ -940,13 +943,13 @@ class UnifiedCacheService {
     // 检查迁移标记
     const migrated = localStorage.getItem('drawnix_cache_migrated');
     if (migrated === 'true') {
-      console.log('[UnifiedCache] Migration already completed');
+      // console.log('[UnifiedCache] Migration already completed');
       return;
     }
 
     this.migrationPromise = (async () => {
       try {
-        console.log('[UnifiedCache] Starting migration from legacy databases...');
+        // console.log('[UnifiedCache] Starting migration from legacy databases...');
 
         // 迁移 Media Cache
         await this.migrateFromMediaCache();
@@ -959,7 +962,7 @@ class UnifiedCacheService {
 
         // 设置迁移标记
         localStorage.setItem('drawnix_cache_migrated', 'true');
-        console.log('[UnifiedCache] Migration completed successfully');
+        // console.log('[UnifiedCache] Migration completed successfully');
 
         // 通知所有订阅者更新
         this.notifyListeners();
@@ -979,7 +982,7 @@ class UnifiedCacheService {
       const exists = await this.checkDBExists(LEGACY_DB_NAMES.MEDIA_CACHE);
       if (!exists) return;
 
-      console.log('[UnifiedCache] Migrating from aitu-media-cache...');
+      // console.log('[UnifiedCache] Migrating from aitu-media-cache...');
 
       const oldDB = await this.openLegacyDB(LEGACY_DB_NAMES.MEDIA_CACHE);
 
@@ -1025,7 +1028,7 @@ class UnifiedCacheService {
       }
 
       await this.deleteLegacyDB(LEGACY_DB_NAMES.MEDIA_CACHE);
-      console.log(`[UnifiedCache] Migrated ${migratedCount} items from media-cache`);
+      // console.log(`[UnifiedCache] Migrated ${migratedCount} items from media-cache`);
     } catch (error) {
       console.error('[UnifiedCache] Failed to migrate from media-cache:', error);
     }
@@ -1039,7 +1042,7 @@ class UnifiedCacheService {
       const exists = await this.checkDBExists(LEGACY_DB_NAMES.URL_CACHE);
       if (!exists) return;
 
-      console.log('[UnifiedCache] Migrating from aitu-url-cache...');
+      // console.log('[UnifiedCache] Migrating from aitu-url-cache...');
 
       const oldDB = await this.openLegacyDB(LEGACY_DB_NAMES.URL_CACHE);
 
@@ -1082,7 +1085,7 @@ class UnifiedCacheService {
 
             await this.putItem(merged);
             skippedCount++;
-            console.log(`[UnifiedCache] Merged url-cache item with existing: ${url.substring(0, 50)}...`);
+            // console.log(`[UnifiedCache] Merged url-cache item with existing: ${url.substring(0, 50)}...`);
           } else {
             // 不存在，创建新条目
             const newEntry: CachedMedia = {
@@ -1106,7 +1109,7 @@ class UnifiedCacheService {
       }
 
       await this.deleteLegacyDB(LEGACY_DB_NAMES.URL_CACHE);
-      console.log(`[UnifiedCache] Migrated ${migratedCount} items, merged ${skippedCount} items from url-cache`);
+      // console.log(`[UnifiedCache] Migrated ${migratedCount} items, merged ${skippedCount} items from url-cache`);
     } catch (error) {
       console.error('[UnifiedCache] Failed to migrate from url-cache:', error);
     }
@@ -1157,7 +1160,7 @@ class UnifiedCacheService {
     return new Promise((resolve, reject) => {
       const request = indexedDB.deleteDatabase(dbName);
       request.onsuccess = () => {
-        console.log(`[UnifiedCache] Deleted legacy database: ${dbName}`);
+        // console.log(`[UnifiedCache] Deleted legacy database: ${dbName}`);
         resolve();
       };
       request.onerror = () => {
