@@ -5,8 +5,8 @@
  * Used within AI generation dialogs to show only tasks created in that dialog.
  */
 
-import React, { useMemo, useState, useEffect } from 'react';
-import { TaskItem } from './TaskItem';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
+import { VirtualTaskList } from './VirtualTaskList';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
 import { Task, TaskType, TaskStatus } from '../../types/task.types';
 import { useDrawnix, DialogType } from '../../hooks/use-drawnix';
@@ -14,11 +14,11 @@ import { insertImageFromUrl } from '../../data/image';
 import { insertVideoFromUrl } from '../../data/video';
 import { MessagePlugin, Dialog, Button, Input } from 'tdesign-react';
 import { ChevronLeftIcon, ChevronRightIcon, SearchIcon } from 'tdesign-icons-react';
-import { downloadMediaFile, downloadFromBlob, sanitizeFilename } from '../../utils/download-utils';
-import { mediaCacheService } from '../../services/media-cache-service';
+import { sanitizeFilename } from '@aitu/utils';
+import { downloadMediaFile, downloadFromBlob } from '../../utils/download-utils';
+import { unifiedCacheService } from '../../services/unified-cache-service';
 import { useMediaUrl } from '../../hooks/useMediaCache';
 import { CharacterCreateDialog } from '../character/CharacterCreateDialog';
-import { supportsCharacterExtraction, isSora2VideoId } from '../../types/character.types';
 import './dialog-task-list.scss';
 
 export interface DialogTaskListProps {
@@ -130,16 +130,16 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
 
     try {
       // 1. 优先从本地 IndexedDB 缓存获取
-      const cachedMedia = await mediaCacheService.getCachedMedia(taskId);
-      if (cachedMedia?.blob) {
-        console.log('[Download] Using cached blob for task:', taskId);
-        downloadFromBlob(cachedMedia.blob, filename);
+      const cachedBlob = await unifiedCacheService.getCachedBlob(task.result.url);
+      if (cachedBlob) {
+        // console.log('[Download] Using cached blob for task:', taskId);
+        downloadFromBlob(cachedBlob, filename);
         MessagePlugin.success('下载成功');
         return;
       }
 
       // 2. 缓存不存在，从 URL 下载（带重试，SW 会自动去重）
-      console.log('[Download] No cache, fetching from URL:', task.result.url);
+      // console.log('[Download] No cache, fetching from URL:', task.result.url);
       const result = await downloadMediaFile(
         task.result.url,
         task.params.prompt,
@@ -167,6 +167,7 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
 
     try {
       if (task.type === TaskType.IMAGE) {
+        // 直接插入原始生成的图片（包括宫格图和普通图片）
         await insertImageFromUrl(board, task.result.url);
         MessagePlugin.success('图片已插入到白板');
       } else if (task.type === TaskType.VIDEO) {
@@ -215,11 +216,11 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
         initialImages: task.params.uploadedImages,  // 传递上传的图片（多图片格式）
         initialResultUrl: task.result?.url,  // 传递结果URL用于预览
       };
-      console.log('DialogTaskList - handleEdit VIDEO task:', {
-        taskId,
-        taskParams: task.params,
-        initialData
-      });
+      // console.log('DialogTaskList - handleEdit VIDEO task:', {
+      //   taskId,
+      //   taskParams: task.params,
+      //   initialData
+      // });
       openDialog(DialogType.aiVideoGeneration, initialData);
     }
   };
@@ -329,8 +330,17 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
             />
           </div>
         </div>
-        <div className="dialog-task-list__content">
-          {filteredTasks.length === 0 ? (
+        <VirtualTaskList
+          tasks={filteredTasks}
+          onRetry={handleRetry}
+          onDelete={handleDelete}
+          onDownload={handleDownload}
+          onInsert={handleInsert}
+          onEdit={handleEdit}
+          onPreviewOpen={handlePreviewOpen}
+          onExtractCharacter={handleExtractCharacter}
+          className="dialog-task-list__content"
+          emptyContent={
             <div className="dialog-task-list__empty">
               {hasSearchNoMatch ? (
                 <p>未找到匹配的任务</p>
@@ -338,22 +348,8 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
                 <p>暂无生成任务</p>
               )}
             </div>
-          ) : (
-            filteredTasks.map(task => (
-              <TaskItem
-                key={task.id}
-                task={task}
-                onRetry={handleRetry}
-                onDelete={handleDelete}
-                onDownload={handleDownload}
-                onInsert={handleInsert}
-                onEdit={handleEdit}
-                onPreviewOpen={() => handlePreviewOpen(task.id)}
-                onExtractCharacter={handleExtractCharacter}
-              />
-            ))
-          )}
-        </div>
+          }
+        />
       </div>
 
       {/* Delete Confirmation Dialog */}
@@ -418,7 +414,7 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
         task={characterDialogTask}
         onClose={() => setCharacterDialogTask(null)}
         onCreateComplete={(characterId) => {
-          console.log('Character created:', characterId);
+          // console.log('Character created:', characterId);
           setCharacterDialogTask(null);
         }}
       />

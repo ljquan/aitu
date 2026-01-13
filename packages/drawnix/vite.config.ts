@@ -17,7 +17,7 @@ try {
     const versionJson = JSON.parse(versionContent);
     if (versionJson.version) {
       appVersion = versionJson.version;
-      console.log(`[Drawnix] Loaded version from shared version.json: ${appVersion}`);
+      // console.log(`[Drawnix] Loaded version from shared version.json: ${appVersion}`);
     }
   }
 } catch (e) {
@@ -68,7 +68,21 @@ export default defineConfig({
     },
     rollupOptions: {
       // External packages that should not be bundled into your library.
-      external: ['react', 'react-dom', 'react/jsx-runtime', '@plait-board/react-board', '@plait-board/mermaid-to-drawnix', 'classnames', 'open-color', 'mobile-detect', '@floating-ui/react', '@plait/core', '@plait/common', '@plait/draw', '@plait/mind', '@plait/mind', 'roughjs/bin/core', '@plait/text-plugins', 'lodash'],
+      external: ['react', 'react-dom', 'react/jsx-runtime', '@plait-board/react-board', '@plait-board/mermaid-to-drawnix', 'classnames', 'open-color', 'mobile-detect', '@floating-ui/react', '@plait/core', '@plait/common', '@plait/draw', '@plait/mind', '@plait/mind', 'roughjs/bin/core', '@plait/text-plugins'],
+    },
+  },
+
+  test: {
+    globals: true,
+    cache: {
+      dir: '../../node_modules/.vitest',
+    },
+    environment: 'jsdom',
+    include: ['src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
+    reporters: ['default'],
+    coverage: {
+      reportsDirectory: '../../coverage/packages/drawnix',
+      provider: 'v8',
     },
   },
 });

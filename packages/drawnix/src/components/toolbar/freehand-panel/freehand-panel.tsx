@@ -11,7 +11,7 @@ import React from 'react';
 import { BoardCreationMode, setCreationMode } from '@plait/common';
 import { FreehandShape } from '../../../plugins/freehand/type';
 import { useBoard } from '@plait-board/react-board';
-import { splitRows } from '../../../utils/common';
+import { splitRows } from '@aitu/utils';
 import {
     DrawnixPointerType,
 } from '../../../hooks/use-drawnix';

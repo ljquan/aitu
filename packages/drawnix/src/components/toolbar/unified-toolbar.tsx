@@ -30,7 +30,8 @@ export const UnifiedToolbar: React.FC<UnifiedToolbarProps> = React.memo(({
   toolboxDrawerOpen = false,
   onToolboxDrawerToggle,
   taskPanelExpanded = false,
-  onTaskPanelToggle
+  onTaskPanelToggle,
+  onOpenBackupRestore,
 }) => {
   const [isIconMode, setIsIconMode] = useState(false);
   const hasEverExpanded = useRef(false);
@@ -100,7 +101,7 @@ export const UnifiedToolbar: React.FC<UnifiedToolbarProps> = React.memo(({
       >
         {/* 顶部固定区域 - 应用工具分区（菜单、撤销、重做） */}
         <div className="unified-toolbar__section unified-toolbar__section--fixed-top">
-          <AppToolbar embedded={true} iconMode={isIconMode} />
+          <AppToolbar embedded={true} iconMode={isIconMode} onOpenBackupRestore={onOpenBackupRestore} />
         </div>
 
         {/* 可滚动的工具栏内容区 */}

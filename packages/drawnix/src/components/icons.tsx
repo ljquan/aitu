@@ -184,7 +184,7 @@ export const GithubIcon = createIcon(
   </svg>
 );
 
-// AI 图像图标 - 图片图标 + 右上角 AI 文字（偏红主题色）
+// AI 图片图标 - 图片图标 + 右上角 AI 文字（偏红主题色）
 export const AIImageIcon = createIcon(
   <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="none" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
     {/* 图片图标主体 - 浅红背景 + 红色描边 */}
@@ -597,6 +597,194 @@ export const MoreIcon = createIcon(
       <circle cx="12" cy="12" r="1" fill="currentColor"/>
       <circle cx="12" cy="5" r="1" fill="currentColor"/>
       <circle cx="12" cy="19" r="1" fill="currentColor"/>
+    </g>
+  </svg>
+);
+
+// 拆图图标 - 表示将一张图片分割成多个
+export const SplitImageIcon = createIcon(
+  <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="none">
+    {/* 外框 */}
+    <rect x="1" y="1" width="14" height="14" rx="1.5" stroke="currentColor" strokeWidth="1.2" fill="none"/>
+    {/* 垂直分割线 */}
+    <line x1="5.5" y1="1" x2="5.5" y2="15" stroke="currentColor" strokeWidth="1" strokeDasharray="2,1"/>
+    <line x1="10.5" y1="1" x2="10.5" y2="15" stroke="currentColor" strokeWidth="1" strokeDasharray="2,1"/>
+    {/* 水平分割线 */}
+    <line x1="1" y1="5.5" x2="15" y2="5.5" stroke="currentColor" strokeWidth="1" strokeDasharray="2,1"/>
+    <line x1="1" y1="10.5" x2="15" y2="10.5" stroke="currentColor" strokeWidth="1" strokeDasharray="2,1"/>
+    {/* 分散箭头表示拆开 */}
+    <path d="M3 3L2 2M13 3L14 2M3 13L2 14M13 13L14 14" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+  </svg>
+);
+
+// 下载图标 - 与其他图标风格一致
+export const DownloadIcon = createIcon(
+  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <g strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
+      {/* 向下箭头 */}
+      <path d="M10 3.333v9.167" />
+      <path d="M6.667 9.167L10 12.5l3.333-3.333" />
+      {/* 底部托盘 */}
+      <path d="M3.333 12.5v2.5c0 .92.747 1.667 1.667 1.667h10c.92 0 1.667-.747 1.667-1.667v-2.5" />
+    </g>
+  </svg>
+);
+
+// 合并图标 - 表示将多个元素合并成一张图片
+export const MergeIcon = createIcon(
+  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <g strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
+      {/* 左上角小框 */}
+      <rect x="2.5" y="2.5" width="5" height="5" rx="1" />
+      {/* 右上角小框 */}
+      <rect x="12.5" y="2.5" width="5" height="5" rx="1" />
+      {/* 左下角小框 */}
+      <rect x="2.5" y="12.5" width="5" height="5" rx="1" />
+      {/* 中心合并目标框 */}
+      <rect x="9" y="9" width="8" height="8" rx="1.5" strokeWidth="1.5" />
+      {/* 合并箭头 */}
+      <path d="M7.5 5L9 6.5" />
+      <path d="M12.5 5L11 6.5" />
+      <path d="M5 7.5L6.5 9" />
+    </g>
+  </svg>
+);
+
+// 视频合成图标 - 表示将多个视频片段合成为一个视频
+export const VideoMergeIcon = createIcon(
+  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <g strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
+      {/* 左侧视频片段 */}
+      <rect x="1.5" y="5" width="5" height="4" rx="0.5" />
+      <path d="M5.5 6.5L7 7L5.5 7.5" fill="currentColor" stroke="none" />
+      {/* 右侧视频片段 */}
+      <rect x="1.5" y="11" width="5" height="4" rx="0.5" />
+      <path d="M5.5 12.5L7 13L5.5 13.5" fill="currentColor" stroke="none" />
+      {/* 合并箭头 */}
+      <path d="M8 7L10 10L8 13" />
+      {/* 合成后的视频 */}
+      <rect x="11" y="4" width="7.5" height="12" rx="1" strokeWidth="1.5" />
+      {/* 播放按钮 */}
+      <path d="M13.5 10L16.5 10" strokeWidth="1.5" />
+      <path d="M15 8.5L15 11.5" strokeWidth="1.5" />
+    </g>
+  </svg>
+);
+
+// ============ 文本特效图标 ============
+
+// 字体选择图标
+export const FontFamilyIcon = createIcon(
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <g strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 12.5L8 3L13 12.5" />
+      <path d="M4.5 10H11.5" />
+      <path d="M2 14.5H6" />
+      <path d="M10 14.5H14" />
+    </g>
+  </svg>
+);
+
+// 阴影效果图标
+export const ShadowEffectIcon = createIcon(
+  <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <g strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="2" width="9" height="9" rx="1.5" stroke="currentColor" fill="none" />
+      <rect x="5" y="5" width="9" height="9" rx="1.5" stroke="currentColor" fill="none" opacity="0.4" />
+    </g>
+  </svg>
+);
+
+// 渐变图标
+export const GradientIcon = createIcon(
+  <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="gradientIconFill" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#FFD700" />
+        <stop offset="100%" stopColor="#FF4500" />
+      </linearGradient>
+    </defs>
+    <rect x="2" y="2" width="12" height="12" rx="2" fill="url(#gradientIconFill)" />
+    <rect x="2" y="2" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1" fill="none" opacity="0.5" />
+  </svg>
+);
+
+// 图层图标
+export const LayerIcon = createIcon(
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <g strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 2L14 5.5L8 9L2 5.5L8 2Z" />
+      <path d="M2 8L8 11.5L14 8" />
+      <path d="M2 10.5L8 14L14 10.5" />
+    </g>
+  </svg>
+);
+
+// 置顶图标
+export const BringToFrontIcon = createIcon(
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <g strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="5" y="1" width="6" height="6" rx="1" fill="currentColor" opacity="0.3" />
+      <rect x="2" y="5" width="6" height="6" rx="1" fill="none" />
+      <rect x="8" y="9" width="6" height="6" rx="1" fill="none" />
+      <path d="M8 4V1M8 1L6 3M8 1L10 3" />
+    </g>
+  </svg>
+);
+
+// 上移一层图标
+export const BringForwardIcon = createIcon(
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <g strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="4" y="2" width="8" height="5" rx="1" fill="currentColor" opacity="0.3" />
+      <rect x="4" y="9" width="8" height="5" rx="1" fill="none" />
+      <path d="M8 7V4M8 4L6 6M8 4L10 6" />
+    </g>
+  </svg>
+);
+
+// 下移一层图标
+export const SendBackwardIcon = createIcon(
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <g strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="4" y="2" width="8" height="5" rx="1" fill="none" />
+      <rect x="4" y="9" width="8" height="5" rx="1" fill="currentColor" opacity="0.3" />
+      <path d="M8 9V12M8 12L6 10M8 12L10 10" />
+    </g>
+  </svg>
+);
+
+// 置底图标
+export const SendToBackIcon = createIcon(
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <g strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="1" width="6" height="6" rx="1" fill="none" />
+      <rect x="8" y="5" width="6" height="6" rx="1" fill="none" />
+      <rect x="5" y="9" width="6" height="6" rx="1" fill="currentColor" opacity="0.3" />
+      <path d="M8 12V15M8 15L6 13M8 15L10 13" />
+    </g>
+  </svg>
+);
+
+// 属性设置图标
+export const PropertySettingsIcon = createIcon(
+  <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
+    <g strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 4h12M2 8h12M2 12h8" stroke="currentColor" fill="none" />
+      <circle cx="5" cy="4" r="1.5" fill="currentColor" />
+      <circle cx="11" cy="8" r="1.5" fill="currentColor" />
+      <circle cx="7" cy="12" r="1.5" fill="currentColor" />
+    </g>
+  </svg>
+);
+
+// 备份恢复图标
+export const BackupRestoreIcon = createIcon(
+  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor">
+    <g strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 2v4m0 12v4M2 12h4m12 0h4" />
+      <path d="M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83" />
+      <circle cx="12" cy="12" r="3" />
     </g>
   </svg>
 );

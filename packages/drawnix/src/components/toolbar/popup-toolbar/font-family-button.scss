@@ -1,0 +1,215 @@
+/**
+ * 字体选择器样式
+ * Font Family Selector Styles
+ */
+
+.font-family-panel {
+  width: 280px;
+  max-height: 400px;
+  display: flex;
+  flex-direction: column;
+  background: #1F2937;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.font-tabs {
+  display: flex;
+  border-bottom: 1px solid #374151;
+  padding: 0 8px;
+  flex-shrink: 0;
+}
+
+.font-tab {
+  flex: 1;
+  padding: 10px 8px;
+  background: transparent;
+  border: none;
+  color: #9CA3AF;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+
+  &:hover {
+    color: #F9FAFB;
+  }
+
+  &.active {
+    color: #6366F1;
+
+    &::after {
+      content: '';
+      position: absolute;
+      bottom: -1px;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, #6366F1, #8B5CF6);
+      border-radius: 1px;
+    }
+  }
+}
+
+.font-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+
+  &::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: #374151;
+    border-radius: 2px;
+  }
+}
+
+.font-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.font-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 10px 12px;
+  background: #374151;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: 100%;
+  text-align: left;
+
+  &:hover {
+    background: #4B5563;
+    border-color: #6366F1;
+  }
+
+  &--selected {
+    background: rgba(99, 102, 241, 0.2);
+    border-color: #6366F1;
+  }
+
+  &--loading {
+    opacity: 0.6;
+    cursor: wait;
+  }
+}
+
+.font-preview {
+  font-size: 18px;
+  color: #F9FAFB;
+  margin-bottom: 4px;
+  line-height: 1.3;
+}
+
+.font-name {
+  font-size: 11px;
+  color: #9CA3AF;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.font-loading {
+  font-size: 11px;
+  color: #6366F1;
+  margin-left: auto;
+}
+
+// 自定义字体列表
+.custom-font-list {
+  .custom-font-item {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    padding: 0;
+    background: transparent;
+    border: none;
+
+    .font-item-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      padding: 10px 12px;
+      background: #374151;
+      border: 1px solid transparent;
+      border-radius: 6px 0 0 6px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-align: left;
+
+      &:hover {
+        background: #4B5563;
+      }
+
+      &.font-item--selected {
+        background: rgba(99, 102, 241, 0.2);
+        border-color: #6366F1;
+      }
+    }
+  }
+
+  .font-delete-btn {
+    padding: 10px 12px;
+    background: #374151;
+    border: 1px solid transparent;
+    border-left: none;
+    border-radius: 0 6px 6px 0;
+    color: #9CA3AF;
+    font-size: 16px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    height: 100%;
+    display: flex;
+    align-items: center;
+
+    &:hover {
+      background: #EF4444;
+      color: #FFFFFF;
+    }
+  }
+}
+
+.empty-state {
+  padding: 24px;
+  text-align: center;
+  color: #6B7280;
+  font-size: 13px;
+}
+
+.upload-font-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  background: transparent;
+  border: 2px dashed #374151;
+  border-radius: 6px;
+  color: #9CA3AF;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: 8px;
+
+  &:hover {
+    border-color: #6366F1;
+    color: #6366F1;
+    background: rgba(99, 102, 241, 0.1);
+  }
+
+  .upload-icon {
+    font-size: 18px;
+    font-weight: 300;
+  }
+}

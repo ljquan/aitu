@@ -2,20 +2,11 @@
  * Download Utilities
  *
  * Centralized download logic for images, videos, and other media files
+ * Supports single file download and batch download as ZIP
  */
 
-/**
- * Check if a URL is from Volces (火山引擎) domains
- * These domains don't support CORS, so we need special handling
- */
-export function isVolcesDomain(url: string): boolean {
-  try {
-    const hostname = new URL(url).hostname;
-    return hostname.endsWith('.volces.com') || hostname.endsWith('.volccdn.com');
-  } catch {
-    return false;
-  }
-}
+import JSZip from 'jszip';
+import { sanitizeFilename, isVolcesDomain, getFileExtension } from '@aitu/utils';
 
 /**
  * Open URL in new tab (fallback for CORS-restricted domains)
@@ -26,19 +17,6 @@ export function openInNewTab(url: string): void {
 }
 
 /**
- * Sanitize a string to be used as a filename
- * - Removes special characters except Chinese, English, numbers, spaces, and dashes
- * - Replaces spaces with dashes
- * - Truncates to specified max length
- */
-export function sanitizeFilename(text: string, maxLength: number = 50): string {
-  return text
-    .replace(/[^a-zA-Z0-9\u4e00-\u9fa5\s-]/g, '') // Remove special chars, keep Chinese
-    .replace(/\s+/g, '-') // Replace spaces with dashes
-    .substring(0, maxLength); // Limit length
-}
-
-/**
  * Download from an existing Blob directly
  * Useful when we already have the blob cached locally
  *
@@ -46,6 +24,7 @@ export function sanitizeFilename(text: string, maxLength: number = 50): string {
  * @param filename - The filename to save as
  */
 export function downloadFromBlob(blob: Blob, filename: string): void {
+  // 确保 Blob 有正确的 MIME 类型
   const blobUrl = URL.createObjectURL(blob);
 
   const link = document.createElement('a');
@@ -55,8 +34,8 @@ export function downloadFromBlob(blob: Blob, filename: string): void {
   link.click();
   document.body.removeChild(link);
 
-  // Clean up blob URL
-  URL.revokeObjectURL(blobUrl);
+  // 延迟释放 URL，确保下载完成
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
 }
 
 /**
@@ -78,7 +57,7 @@ export async function downloadFile(
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
-      console.log(`[Download] Attempt ${attempt + 1}/${maxRetries} for:`, url);
+      // console.log(`[Download] Attempt ${attempt + 1}/${maxRetries} for:`, url);
 
       // Fetch the file as blob to handle cross-origin URLs
       const response = await fetch(url);
@@ -97,22 +76,22 @@ export async function downloadFile(
 
       // Use downloadFromBlob to trigger download
       downloadFromBlob(blob, finalFilename);
-      console.log('[Download] Success');
+      // console.log('[Download] Success');
       return;
     } catch (error) {
-      console.warn(`[Download] Attempt ${attempt + 1} failed:`, error);
+      // console.warn(`[Download] Attempt ${attempt + 1} failed:`, error);
       lastError = error as Error;
 
       // Wait before retrying (exponential backoff: 2s, 4s, 6s)
       if (attempt < maxRetries - 1) {
         const delay = 2000 * (attempt + 1);
-        console.log(`[Download] Retrying in ${delay}ms...`);
+        // console.log(`[Download] Retrying in ${delay}ms...`);
         await new Promise(r => setTimeout(r, delay));
       }
     }
   }
 
-  console.error('[Download] All attempts failed');
+  // console.error('[Download] All attempts failed');
   throw lastError || new Error('Download failed after all retries');
 }
 
@@ -143,31 +122,82 @@ export async function downloadMediaFile(
   return downloadFile(url, filename);
 }
 
+// getFileExtension is now re-exported from @aitu/utils above
+
 /**
- * Get file extension from URL or MIME type
+ * 批量下载项接口
  */
-export function getFileExtension(url: string, mimeType?: string): string {
-  // Try to get extension from URL
-  const urlPath = new URL(url).pathname;
-  const urlExtension = urlPath.substring(urlPath.lastIndexOf('.') + 1).toLowerCase();
+export interface BatchDownloadItem {
+  /** 文件 URL */
+  url: string;
+  /** 文件类型 */
+  type: 'image' | 'video';
+  /** 可选文件名 */
+  filename?: string;
+}
 
-  if (urlExtension && urlExtension.length <= 5) {
-    return urlExtension;
+/**
+ * 批量下载为 ZIP 文件
+ *
+ * @param items - 下载项数组
+ * @param zipFilename - 可选的 ZIP 文件名
+ * @returns Promise
+ */
+export async function downloadAsZip(items: BatchDownloadItem[], zipFilename?: string): Promise<void> {
+  if (items.length === 0) {
+    throw new Error('No files to download');
   }
 
-  // Fallback to MIME type
-  if (mimeType) {
-    const mimeToExt: Record<string, string> = {
-      'image/png': 'png',
-      'image/jpeg': 'jpg',
-      'image/jpg': 'jpg',
-      'image/webp': 'webp',
-      'image/gif': 'gif',
-      'video/mp4': 'mp4',
-      'video/webm': 'webm',
-    };
-    return mimeToExt[mimeType] || 'bin';
+  const zip = new JSZip();
+  const timestamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
+  const finalZipName = zipFilename || `aitu_download_${timestamp}.zip`;
+
+  // 添加文件到 ZIP 根目录
+  await Promise.all(
+    items.map(async (item, index) => {
+      try {
+        const response = await fetch(item.url);
+        if (!response.ok) {
+          console.warn(`Failed to fetch ${item.url}: ${response.status}`);
+          return;
+        }
+        const blob = await response.blob();
+        const ext = getFileExtension(item.url, blob.type);
+
+        const prefix = item.type === 'image' ? 'image' : 'video';
+        const filename = item.filename || `${prefix}_${index + 1}.${ext}`;
+
+        zip.file(filename, blob);
+      } catch (error) {
+        console.error(`Failed to add file to zip:`, error);
+      }
+    })
+  );
+
+  // 生成 ZIP 并下载
+  const content = await zip.generateAsync({ type: 'blob' });
+  downloadFromBlob(content, finalZipName);
+}
+
+/**
+ * 智能下载：单个直接下载，多个打包为 ZIP
+ *
+ * @param items - 下载项数组
+ * @param zipFilename - 可选的 ZIP 文件名（仅在多文件时使用）
+ * @returns Promise
+ */
+export async function smartDownload(items: BatchDownloadItem[], zipFilename?: string): Promise<void> {
+  if (items.length === 0) {
+    throw new Error('No files to download');
   }
 
-  return 'bin';
+  if (items.length === 1) {
+    const item = items[0];
+    // Use getFileExtension to detect correct extension (handles SVG, PNG, etc.)
+    const ext = getFileExtension(item.url) || (item.type === 'image' ? 'png' : 'mp4');
+    const filename = item.filename || `${item.type}_download.${ext}`;
+    await downloadFile(item.url, filename);
+  } else {
+    await downloadAsZip(items, zipFilename);
+  }
 }

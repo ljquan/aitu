@@ -1,3 +1,5 @@
+@import '../../styles/z-index.scss';
+
 // AI Image Generation Container
 .ai-image-generation-container {
   display: flex;
@@ -47,14 +49,39 @@
   height: 100%;
   align-items: stretch;
   flex: 1;
+  overflow: hidden;
 }
 
 .ai-image-generation-section {
   flex: 2;
+  min-width: 320px; // 确保表单区域有足够的最小宽度
   display: flex;
   flex-direction: column;
   gap: 16px;
   height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  
+  /* 隐藏滚动条但保持滚动功能 */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
+  
+  &::-webkit-scrollbar {
+    width: 4px;
+  }
+  
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  &::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 2px;
+    
+    &:hover {
+      background: rgba(0, 0, 0, 0.25);
+    }
+  }
 }
 
 .preview-section {
@@ -90,6 +117,7 @@
 
 .task-sidebar {
   flex: 3;
+  min-width: 280px; // 确保任务列表区域有足够的最小宽度
   height: 100%;
   overflow-y: auto;
   background: var(--color-bg-container, #fff);
@@ -97,6 +125,27 @@
   border-radius: 10px;
   padding: 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  
+  /* 优化滚动条样式 */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
+  
+  &::-webkit-scrollbar {
+    width: 4px;
+  }
+  
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  &::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 2px;
+    
+    &:hover {
+      background: rgba(0, 0, 0, 0.25);
+    }
+  }
 }
 
 // 表单头部行 - 模型选择 + 批量切换按钮
@@ -620,17 +669,31 @@
     }
 
     .preset-tooltip {
-       position: absolute;
-       top: 100%;
-       margin-top: 4px;
        border: 1px solid var(--color-border, #d9d9d9);
        border-radius: 6px;
        background: var(--color-bg-container, #fff);
-       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-       max-height: 300px;
+       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+       max-height: 280px;
        overflow-y: auto;
        min-width: 280px;
-       z-index: 1000;
+       max-width: 320px;
+       
+       /* 优化滚动条 */
+       scrollbar-width: thin;
+       scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
+       
+       &::-webkit-scrollbar {
+         width: 4px;
+       }
+       
+       &::-webkit-scrollbar-track {
+         background: transparent;
+       }
+       
+       &::-webkit-scrollbar-thumb {
+         background: rgba(0, 0, 0, 0.15);
+         border-radius: 2px;
+       }
      }
 
     .preset-header {

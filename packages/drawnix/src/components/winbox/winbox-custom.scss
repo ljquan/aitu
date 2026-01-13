@@ -194,7 +194,7 @@
 
 // AI 生成弹窗通用样式
 .winbox-ai-generation {
-  z-index: $z-dialog-ai-image !important; // Layer 5: AI 图像/视频生成弹窗
+  z-index: $z-dialog-ai-image !important; // Layer 5: AI 图片/视频生成弹窗
 
   // 白底灰黑色 header 样式
   .wb-header {
@@ -241,7 +241,7 @@
     padding: 16px 20px;
   }
 
-  // AI 图像/视频生成容器
+  // AI 图片/视频生成容器
   .ai-image-generation-container,
   .ai-video-generation-container {
     flex: 1;
@@ -318,7 +318,7 @@
   }
 }
 
-// 图像生成弹窗 - 有模式切换时隐藏标题
+// 图片生成弹窗 - 有模式切换时隐藏标题
 .winbox-ai-image-generation {
   .wb-title {
     display: none !important;

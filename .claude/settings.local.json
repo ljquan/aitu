@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find:*)",
+      "Bash(cat:*)",
+      "Bash(nx typecheck:*)",
+      "Bash(pnpm exec nx typecheck:*)",
+      "Bash(pnpm exec tsc:*)",
+      "Bash(pnpm nx typecheck:*)",
+      "Bash(pnpm run build)",
+      "Bash(git commit:*)"
+    ]
+  }
+}

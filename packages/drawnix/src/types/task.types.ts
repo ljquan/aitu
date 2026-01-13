@@ -1,10 +1,28 @@
 /**
  * Task Queue System Type Definitions
- * 
+ *
  * Defines all TypeScript types and interfaces for the task queue system.
  * These types form the foundation for task management, state tracking, and
  * integration with the generation API.
  */
+
+/**
+ * Chat tool call interface
+ * Represents a tool call made during AI chat/analysis
+ */
+export interface ChatToolCall {
+  /** Tool name (e.g., 'generate_image', 'generate_video') */
+  name: string;
+  /** Tool arguments */
+  arguments: Record<string, unknown>;
+  /** Tool call result */
+  result?: {
+    success: boolean;
+    taskId?: string;
+    error?: string;
+    data?: unknown;
+  };
+}
 
 /**
  * Task status enumeration
@@ -35,7 +53,11 @@ export enum TaskType {
   /** Video generation task */
   VIDEO = 'video',
   /** Character extraction task */
-  CHARACTER = 'character'
+  CHARACTER = 'character',
+  /** Inspiration board generation task (image + split + layout) */
+  INSPIRATION_BOARD = 'inspiration_board',
+  /** Chat/AI analysis task (text model streaming) */
+  CHAT = 'chat',
 }
 
 /**
@@ -49,6 +71,8 @@ export interface GenerationParams {
   width?: number;
   /** Image/video height in pixels */
   height?: number;
+  /** Size parameter for API (e.g., '16x9', '1x1') */
+  size?: string;
   /** Video duration in seconds (video only) */
   duration?: number;
   /** Style or model to use for generation */
@@ -63,6 +87,20 @@ export interface GenerationParams {
   characterTimestamps?: string;
   /** Local task ID of source video */
   sourceLocalTaskId?: string;
+  /** Grid image grid rows (grid_image only) */
+  gridImageRows?: number;
+  /** Grid image grid columns (grid_image only) */
+  gridImageCols?: number;
+  /** Grid image layout style (grid_image only) */
+  gridImageLayoutStyle?: 'scattered' | 'grid' | 'circular';
+  /** Inspiration board layout style (inspiration_board only) */
+  inspirationBoardLayoutStyle?: 'inspiration-board';
+  /** Whether this is an inspiration board task */
+  isInspirationBoard?: boolean;
+  /** Inspiration board image count */
+  inspirationBoardImageCount?: number;
+  /** Whether to auto-insert the result to canvas when task completes */
+  autoInsertToCanvas?: boolean;
   /** Additional parameters for specific generation types */
   [key: string]: any;
 }
@@ -92,6 +130,10 @@ export interface TaskResult {
   characterProfileUrl?: string;
   /** Character permalink (character only) */
   characterPermalink?: string;
+  /** Chat response content (chat only) */
+  chatResponse?: string;
+  /** Tool calls made during chat (chat only) */
+  toolCalls?: ChatToolCall[];
 }
 
 /**
@@ -172,6 +214,8 @@ export interface Task {
   executionPhase?: TaskExecutionPhase;
   /** Whether the task result has been saved to the media library */
   savedToLibrary?: boolean;
+  /** Whether the task result has been inserted to canvas */
+  insertedToCanvas?: boolean;
 }
 
 /**
@@ -191,7 +235,7 @@ export interface TaskQueueState {
  */
 export interface TaskEvent {
   /** Event type */
-  type: 'taskCreated' | 'taskUpdated' | 'taskDeleted';
+  type: 'taskCreated' | 'taskUpdated' | 'taskDeleted' | 'taskSynced';
   /** The task that triggered the event */
   task: Task;
   /** Timestamp when the event occurred */

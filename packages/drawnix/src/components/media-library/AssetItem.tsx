@@ -8,6 +8,8 @@ import { memo, useCallback } from 'react';
 import { Image as ImageIcon, Video as VideoIcon } from 'lucide-react';
 import { Checkbox } from 'tdesign-react';
 import { formatDate, formatFileSize } from '../../utils/asset-utils';
+import { useAssetSize } from '../../hooks/useAssetSize';
+import { LazyImage } from '../lazy-image';
 import type { Asset, ViewMode } from '../../types/asset.types';
 import './AssetItem.scss';
 
@@ -22,6 +24,9 @@ export interface AssetItemProps {
 
 export const AssetItem = memo<AssetItemProps>(
   ({ asset, viewMode, isSelected, onSelect, onDoubleClick, isInSelectionMode }) => {
+    // 获取实际文件大小（支持从缓存获取）
+    const displaySize = useAssetSize(asset.id, asset.url, asset.size);
+
     const handleClick = useCallback(() => {
       onSelect(asset.id);
     }, [asset.id, onSelect]);
@@ -73,14 +78,11 @@ export const AssetItem = memo<AssetItemProps>(
         {/* 缩略图容器 - 所有模式共享，切换时不销毁 */}
         <div className="asset-item__thumbnail">
           {asset.type === 'IMAGE' ? (
-            <img
+            <LazyImage
               src={asset.url}
               alt={asset.name}
               className="asset-item__image"
-              loading="lazy"
-              decoding="async"
-              // 限制渲染尺寸，减少内存占用
-              sizes={isCompactMode ? '80px' : isListMode ? '48px' : '200px'}
+              rootMargin="100px"
             />
           ) : (
             <video
@@ -136,8 +138,8 @@ export const AssetItem = memo<AssetItemProps>(
                 {asset.type === 'IMAGE' ? <ImageIcon size={12} /> : <VideoIcon size={12} />}
                 {asset.type === 'IMAGE' ? '图片' : '视频'}
               </span>
-              {asset.size && (
-                <span className="asset-item__size">{formatFileSize(asset.size)}</span>
+              {displaySize && (
+                <span className="asset-item__size">{formatFileSize(displaySize)}</span>
               )}
               <span className="asset-item__date">{formatDate(asset.createdAt)}</span>
             </div>

@@ -1,0 +1,1390 @@
+/**
+ * AI Input Bar Styles
+ *
+ * Floating input bar at the bottom center of the canvas
+ * Orange theme with single row horizontal layout
+ */
+
+@import '../../styles/z-index.scss';
+
+// Color variables
+$orange-primary: #F59E0B;
+$orange-dark: #D97706;
+$gray-light: #F3F4F6;
+$gray-medium: #9CA3AF;
+$gray-dark: #6B7280;
+$text-dark: #1F2937;
+
+.ai-input-bar {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: $z-canvas-internal;
+  width: 100%;
+  max-width: 720px;
+  padding: 0 16px;
+  box-sizing: border-box;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+
+  // 当有灵感板时，移除 gap 实现无缝连接，并添加统一阴影
+  &--with-inspiration {
+    gap: 0;
+
+    // 使用伪元素为整个组合添加统一的阴影和圆角边框
+    &::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 16px; // 与 padding 对应
+      right: 16px;
+      bottom: 0;
+      background: var(--island-bg-color, #fff);
+      border-radius: 24px;
+      box-shadow: 0 2px 16px rgba(0, 0, 0, 0.1);
+      z-index: -1;
+      pointer-events: none;
+    }
+  }
+
+  // Selected content preview - first row in container
+  &__content-preview {
+    pointer-events: auto;
+    display: flex;
+    flex-wrap: wrap; // 允许换行
+    gap: 8px;
+    padding: 0;
+    padding-left: 12px; // 与下方输入框文字对齐（输入框 padding-left: 12px）
+    background: transparent;
+    border-radius: 0;
+    box-shadow: none;
+    width: 100%; // 占满第一行
+    flex-shrink: 0;
+    box-sizing: border-box;
+  }
+
+  &__processing {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 16px;
+    color: $gray-medium;
+    font-size: 13px;
+  }
+
+  &__content-item {
+    position: relative;
+    width: 36px; // 参考截图尺寸
+    height: 36px;
+    border-radius: 4px; // 更圆润
+    overflow: hidden;
+    background: $gray-light;
+    flex-shrink: 0;
+    cursor: pointer;
+    transition: transform 0.15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    &:hover {
+      transform: scale(1.05);
+    }
+
+    img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      background: $gray-light;
+    }
+
+    &--graphics {
+      border: 1px solid $orange-primary;
+    }
+
+    &--video {
+      border: 2px solid #3B82F6;
+    }
+
+    &--text {
+      width: auto;
+      height: auto; // 不继承固定高度
+      min-width: 64px;
+      max-width: 180px; // 增大文本框宽度
+      padding: 8px 12px;
+      background: #EFF6FF;
+      border: 1px solid #BFDBFE;
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+    }
+  }
+
+  // Hover preview - large content on hover
+  &__hover-preview {
+    position: fixed;
+    z-index: 99999;
+    pointer-events: none;
+    border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+    overflow: hidden;
+    background: var(--island-bg-color, #fff);
+    padding: 4px;
+    animation: fadeIn 0.15s ease;
+
+    img {
+      max-width: 300px;
+      max-height: 300px;
+      width: auto;
+      height: auto;
+      object-fit: contain;
+      display: block;
+    }
+
+    // Text preview variant
+    &--text {
+      padding: 12px;
+      max-width: 400px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    // Video preview variant
+    &--video {
+      padding: 4px;
+      max-width: 400px;
+      max-height: 300px;
+    }
+  }
+
+  // Hover video preview
+  &__hover-video {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #000;
+    border-radius: 4px;
+    overflow: hidden;
+
+    video {
+      max-width: 400px;
+      max-height: 300px;
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+  }
+
+  // Hover text preview
+  &__hover-text {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  &__hover-text-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid $gray-light;
+    color: #3B82F6;
+    font-size: 14px;
+    font-weight: 500;
+  }
+
+  &__hover-text-content {
+    font-size: 13px;
+    line-height: 1.6;
+    color: $text-dark;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 240px;
+    overflow-y: auto;
+  }
+
+  // Video overlay with play icon
+  &__video-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.3);
+    pointer-events: none;
+
+    svg {
+      color: white;
+      filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
+    }
+  }
+
+  // Video placeholder when thumbnail generation fails
+  &__video-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+  }
+
+  // Text preview styles
+  &__text-preview {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+  }
+
+  &__text-icon {
+    color: #3B82F6;
+    flex-shrink: 0;
+  }
+
+  &__text-content {
+    font-size: 12px;
+    color: $text-dark;
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__content-remove {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.6);
+    border: none;
+    border-radius: 50%;
+    color: #fff;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+
+    .ai-input-bar__content-item:hover & {
+      opacity: 1;
+    }
+
+    &:hover {
+      background: rgba(0, 0, 0, 0.8);
+    }
+  }
+
+  &__content-label {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(245, 158, 11, 0.9);
+    color: #fff;
+    font-size: 10px;
+    text-align: center;
+
+    &--video {
+      background: rgba(59, 130, 246, 0.9); // Blue for video
+    }
+  }
+
+  // Legacy: Keep old class names for compatibility
+  &__images-preview {
+    @extend .ai-input-bar__content-preview;
+  }
+
+  &__image-item {
+    @extend .ai-input-bar__content-item;
+  }
+
+  &__image-remove {
+    @extend .ai-input-bar__content-remove;
+  }
+
+  // Main container - flex-column-reverse for upward expansion
+  &__container {
+    position: relative; // 作为提示词面板的定位基准
+    pointer-events: auto;
+    display: flex;
+    flex-direction: column-reverse; // 倒序排列，底部栏在下，输入区向上扩展
+    width: 100%;
+    background: var(--island-bg-color, #fff);
+    border-radius: 24px;
+    padding: 8px 12px;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+    transition: all 0.2s ease;
+
+    // 展开状态（聚焦或有选中内容时）
+    &--expanded {
+      border-radius: 16px;
+      padding: 12px;
+    }
+
+    // 当有灵感板时，上边缘直角与灵感板连接
+    .ai-input-bar--with-inspiration & {
+      border-radius: 0 0 24px 24px;
+      box-shadow: none; // 移除阴影，由灵感板统一处理
+
+      &--expanded {
+        border-radius: 0 0 16px 16px;
+      }
+    }
+  }
+
+  // 底部固定栏 - 模型选择器 + 发送按钮
+  &__bottom-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    flex-shrink: 0;
+  }
+
+  // 底部栏中间的弹性空间
+  &__bottom-spacer {
+    flex: 1;
+  }
+
+  // 输入区域 - 向上扩展
+  &__input-area {
+    position: relative; // 用于 PromptHistoryPopover 绝对定位
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 8px;
+    width: 100%; // 确保输入区域占满宽度
+    transition: max-height 0.2s ease;
+
+    // 展开状态
+    &--expanded {
+      max-height: 200px; // 最大高度限制
+    }
+  }
+
+  // Left tools area
+  &__tools {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+
+  // Generation type toggle (image/video)
+  &__type-toggle {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+
+  &__type-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border: 1px solid $gray-light;
+    background: transparent;
+    border-radius: 8px;
+    color: $gray-dark;
+    cursor: pointer;
+    transition: all 0.15s ease;
+
+    &:hover {
+      color: $text-dark;
+      background: $gray-light;
+    }
+
+    &.active {
+      background: $orange-primary;
+      border-color: $orange-primary;
+      color: #fff;
+
+      &:hover {
+        background: $orange-dark;
+        border-color: $orange-dark;
+      }
+    }
+  }
+
+  // Model selector
+  &__model-selector {
+    position: relative;
+  }
+
+  &__model-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 12px;
+    border: none;
+    background: transparent;
+    font-size: 14px;
+    font-weight: 500;
+    color: $text-dark;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+
+    &:hover {
+      color: $orange-primary;
+    }
+
+    svg {
+      transition: transform 0.2s ease;
+      color: $gray-medium;
+
+      &.rotated {
+        transform: rotate(180deg);
+      }
+    }
+  }
+
+  &__model-menu {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 0;
+    min-width: 220px;
+    background: var(--island-bg-color, #fff);
+    border: 1px solid $gray-light;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+    padding: 6px;
+    z-index: 10;
+    animation: menuSlideUp 0.15s ease;
+  }
+
+  &__model-option {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    width: 100%;
+    padding: 10px 12px;
+    border: none;
+    background: transparent;
+    border-radius: 8px;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.15s ease;
+
+    &:hover {
+      background: $gray-light;
+    }
+
+    &.active {
+      background: rgba(245, 158, 11, 0.1);
+
+      .model-name {
+        color: $orange-primary;
+      }
+    }
+
+    .model-name {
+      font-size: 14px;
+      font-weight: 500;
+      color: $text-dark;
+    }
+
+    .model-desc {
+      font-size: 12px;
+      color: $gray-medium;
+      margin-top: 2px;
+    }
+  }
+
+  // Upload button
+  &__upload-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border: 1px solid $gray-light;
+    background: transparent;
+    border-radius: 8px;
+    color: $gray-dark;
+    cursor: pointer;
+    transition: all 0.15s ease;
+
+    &:hover {
+      color: $text-dark;
+      background: $gray-light;
+      border-color: $gray-medium;
+    }
+  }
+
+  // Rich input wrapper - contains textarea and formatted overlay
+  &__rich-input {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    width: 100%;
+  }
+
+  // 高亮背景层 - 在 textarea 下方显示模型标签的背景色块
+  // 新方案：不改变文字颜色，只添加背景高亮，避免光标偏移问题
+  &__highlight-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 6px 12px;
+    padding-right: 20px;
+    font-size: 15px;
+    line-height: 1.5;
+    letter-spacing: normal;
+    word-spacing: normal;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    word-break: break-word;
+    overflow-wrap: break-word;
+    pointer-events: none;
+    font-family: 'PingFang SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    overflow: hidden;
+    z-index: 1;
+    box-sizing: border-box;
+    border: 1px solid transparent;
+    margin: 0;
+  }
+
+  // 高亮层中的普通文本 - 完全透明，只占位
+  &__highlight-text {
+    color: transparent;
+  }
+
+  // 高亮层中的模型标签 - 显示背景色块，文字透明
+  &__highlight-tag {
+    color: transparent;
+    border-radius: 3px;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+    // 添加左右 padding 确保背景完全覆盖文字
+    padding: 0 2px;
+    margin: 0 -2px;
+
+    // 图片模型标签 - 红色背景 #E53935
+    &--image {
+      background: rgba(229, 57, 53, 0.15);
+    }
+
+    // 视频模型标签 - 橙色背景 #FF9800
+    &--video {
+      background: rgba(255, 152, 0, 0.15);
+    }
+
+    // 参数标签 - 紫色背景 #9C27B0
+    &--param {
+      background: rgba(156, 39, 176, 0.15);
+    }
+
+    // 个数标签 - 蓝色背景 #2196F3
+    &--count {
+      background: rgba(33, 150, 243, 0.15);
+    }
+  }
+
+  // Text input (textarea)
+  &__input {
+    width: 100%;
+    border: none;
+    background: transparent;
+    font-size: 15px;
+    line-height: 1.5;
+    letter-spacing: normal;
+    word-spacing: normal;
+    text-rendering: auto;
+    -webkit-font-smoothing: auto;
+    color: $text-dark;
+    resize: none;
+    outline: none;
+    min-height: 24px;
+    max-height: 120px;
+    overflow-y: auto;
+    padding: 6px 12px;
+    padding-right: 20px;
+    margin: 0;
+    font-family: 'PingFang SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    transition: all 0.2s ease;
+    position: relative;
+    z-index: 2;
+    box-sizing: border-box;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    word-break: break-word;
+    overflow-wrap: break-word;
+
+    // Custom scrollbar
+    &::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 4px;
+
+      &:hover {
+        background: rgba(0, 0, 0, 0.35);
+      }
+    }
+
+    &::placeholder {
+      color: $gray-medium;
+    }
+
+    &:focus {
+      outline: none;
+      border: none!important;
+      box-shadow: none;
+    }
+
+    &:hover {
+      outline: none;
+      border: none!important;
+      box-shadow: none;
+    }
+    
+    &:disabled {
+      opacity: 0.6;
+    }
+
+    // When focused, expand height smoothly (controlled by parent container max-height)
+    &--focused {
+      min-height: 80px; // 约 3-4 行
+      max-height: 160px; // 最大高度限制
+    }
+  }
+
+  // Upload button
+  &__upload-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: transparent;
+    border-radius: 8px;
+    color: $gray-dark;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+
+    &:hover {
+      background: $gray-light;
+      color: $orange-primary;
+    }
+
+    &:active {
+      transform: scale(0.95);
+    }
+  }
+
+  // Send button
+  &__send-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border: none;
+    background: $gray-light;
+    border-radius: 50%;
+    color: $gray-medium;
+    cursor: not-allowed;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+
+    &.active {
+      background: $orange-primary;
+      color: #fff;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(245, 158, 11, 0.4);
+
+      &:hover {
+        background: $orange-dark;
+        transform: scale(1.05);
+      }
+    }
+
+    &.loading {
+      background: rgba(245, 158, 11, 0.6);
+      cursor: wait;
+      animation: pulse 1.5s infinite;
+    }
+
+    &:disabled {
+      pointer-events: none;
+    }
+  }
+}
+
+// Animations
+@keyframes menuSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+// Dark mode support
+:root[data-theme='dark'] {
+  .ai-input-bar {
+    &__content-preview {
+      background: var(--color-surface-high, #2a2a2a);
+    }
+
+    &__content-item {
+      background: var(--color-surface-mid, #333);
+
+      &--text {
+        background: rgba(59, 130, 246, 0.15);
+        border-color: rgba(59, 130, 246, 0.3);
+      }
+    }
+
+    &__text-content {
+      color: var(--color-gray-20, #ccc);
+    }
+
+    &__hover-preview {
+      background: var(--color-surface-high, #2a2a2a);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    }
+
+    &__hover-text-header {
+      border-bottom-color: var(--color-border, #444);
+      color: #60A5FA; // Lighter blue for dark mode
+    }
+
+    &__hover-text-content {
+      color: var(--color-gray-20, #ccc);
+    }
+
+    &__processing {
+      color: var(--color-gray-50, #999);
+    }
+
+    &__container {
+      background: var(--color-surface-high, #2a2a2a);
+      border-color: var(--color-border, #444);
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
+    }
+
+    &__type-btn {
+      border-color: var(--color-border, #444);
+      color: var(--color-gray-50, #999);
+
+      &:hover {
+        color: var(--color-gray-20, #ccc);
+        background: var(--color-surface-mid, #333);
+      }
+
+      &.active {
+        background: $orange-primary;
+        border-color: $orange-primary;
+        color: #fff;
+      }
+    }
+
+    &__model-btn {
+      color: var(--color-gray-20, #ccc);
+
+      &:hover {
+        color: $orange-primary;
+      }
+
+      svg {
+        color: var(--color-gray-50, #999);
+      }
+    }
+
+    &__model-menu {
+      background: var(--color-surface-high, #2a2a2a);
+      border-color: var(--color-border, #444);
+    }
+
+    &__model-option {
+      &:hover {
+        background: var(--color-surface-mid, #333);
+      }
+
+      &.active {
+        background: rgba(245, 158, 11, 0.15);
+      }
+
+      .model-name {
+        color: var(--color-gray-20, #ccc);
+      }
+
+      .model-desc {
+        color: var(--color-gray-50, #999);
+      }
+    }
+
+    &__upload-btn {
+      border-color: var(--color-border, #444);
+      color: var(--color-gray-50, #999);
+
+      &:hover {
+        color: var(--color-gray-20, #ccc);
+        background: var(--color-surface-mid, #333);
+      }
+    }
+
+    // 高亮背景层 - 深色模式下使用更亮的背景色
+    &__highlight-tag {
+      &--image {
+        background: rgba(229, 57, 53, 0.2);
+      }
+
+      &--video {
+        background: rgba(255, 152, 0, 0.2);
+      }
+
+      &--param {
+        background: rgba(156, 39, 176, 0.2);
+      }
+
+      &--count {
+        background: rgba(33, 150, 243, 0.2);
+      }
+    }
+
+    &__input {
+      color: var(--color-gray-20, #ccc);
+
+      &::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.2);
+
+        &:hover {
+          background: rgba(255, 255, 255, 0.3);
+        }
+      }
+
+      &::placeholder {
+        color: var(--color-gray-60, #666);
+      }
+    }
+
+    &__send-btn {
+      background: var(--color-surface-mid, #333);
+      color: var(--color-gray-60, #666);
+
+      &.active {
+        background: $orange-primary;
+        color: #fff;
+      }
+    }
+  }
+}
+
+// Prompt Suggestion Panel Styles
+.prompt-suggestion-panel {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  background: var(--island-bg-color, #fff);
+  border-radius: 16px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+  animation: panelSlideUp 0.2s ease;
+  max-height: 320px;
+  display: flex;
+  flex-direction: column;
+  pointer-events: auto; // 覆盖父容器的 pointer-events: none，启用点击和滚动
+
+  &--empty {
+    max-height: auto;
+  }
+
+  &__content {
+    overflow-y: auto;
+    padding: 8px;
+
+    // Custom scrollbar
+    &::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: rgba(0, 0, 0, 0.15);
+      border-radius: 3px;
+
+      &:hover {
+        background: rgba(0, 0, 0, 0.25);
+      }
+    }
+  }
+
+  &__empty {
+    padding: 24px 16px;
+    text-align: center;
+    color: $gray-medium;
+    font-size: 14px;
+  }
+
+  &__section {
+    &:not(:last-child) {
+      margin-bottom: 12px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid $gray-light;
+    }
+  }
+
+  &__section-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px 8px;
+    font-size: 12px;
+    font-weight: 500;
+    color: $gray-medium;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+
+    svg {
+      opacity: 0.7;
+    }
+  }
+
+  &__list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  &__item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    background: transparent;
+
+    &:hover,
+    &--highlighted {
+      background: $gray-light;
+    }
+
+    &--history {
+      &:hover,
+      &.prompt-suggestion-panel__item--highlighted {
+        .prompt-suggestion-panel__item-delete {
+          opacity: 1;
+        }
+      }
+    }
+  }
+
+  &__item-text {
+    flex: 1;
+    font-size: 14px;
+    line-height: 1.4;
+    color: $text-dark;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding-right: 8px;
+  }
+
+  &__item-delete {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border: none;
+    background: transparent;
+    border-radius: 4px;
+    color: $gray-medium;
+    cursor: pointer;
+    opacity: 0;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+
+    &:hover {
+      background: rgba(239, 68, 68, 0.1);
+      color: #EF4444;
+    }
+  }
+}
+
+@keyframes panelSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+// Dark mode for prompt suggestion panel
+:root[data-theme='dark'] {
+  .prompt-suggestion-panel {
+    background: var(--color-surface-high, #2a2a2a);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+
+    &__content {
+      &::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.15);
+
+        &:hover {
+          background: rgba(255, 255, 255, 0.25);
+        }
+      }
+    }
+
+    &__empty {
+      color: var(--color-gray-50, #999);
+    }
+
+    &__section {
+      &:not(:last-child) {
+        border-bottom-color: var(--color-border, #444);
+      }
+    }
+
+    &__section-header {
+      color: var(--color-gray-50, #999);
+    }
+
+    &__item {
+      &:hover {
+        background: var(--color-surface-mid, #333);
+      }
+    }
+
+    &__item-text {
+      color: var(--color-gray-20, #ccc);
+    }
+
+    &__item-delete {
+      color: var(--color-gray-50, #999);
+
+      &:hover {
+        background: rgba(239, 68, 68, 0.15);
+        color: #F87171;
+      }
+    }
+  }
+}
+
+// Mobile responsive
+@media (max-width: 640px) {
+  .ai-input-bar {
+    bottom: 16px;
+    padding: 0 12px;
+
+    &__content-preview {
+      gap: 6px;
+    }
+
+    &__content-item {
+
+      &--text {
+        height: auto; // 移动端也使用自动高度
+        min-width: 56px;
+        max-width: 140px;
+      }
+    }
+
+    &__hover-preview {
+      max-width: 250px;
+      max-height: 250px;
+
+      &--text {
+        max-width: 280px;
+      }
+
+      &--video {
+        max-width: 280px;
+      }
+    }
+
+    &__hover-video video {
+      max-width: 280px;
+      max-height: 250px;
+    }
+
+    &__container {
+      padding: 4px 6px 4px 4px;
+      gap: 4px;
+    }
+
+    &__type-btn {
+      width: 32px;
+      height: 32px;
+    }
+
+    &__model-btn {
+      padding: 6px 8px;
+      font-size: 13px;
+    }
+
+    &__upload-btn {
+      width: 32px;
+      height: 32px;
+    }
+
+    &__highlight-layer {
+      font-size: 14px;
+      padding: 4px 6px;
+    }
+
+    &__input {
+      font-size: 14px;
+      padding: 4px 6px;
+    }
+
+    &__send-btn {
+      width: 36px;
+      height: 36px;
+    }
+
+    &__send-logo {
+      width: 18px;
+      height: 18px;
+    }
+  }
+}
+
+// @ 触发模型建议面板样式
+.ai-input-bar {
+  &__at-suggestion {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 0;
+    min-width: 280px;
+    max-width: 400px;
+    max-height: 320px;
+    background: var(--island-bg-color, #fff);
+    border: 1px solid #E5E7EB;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    overflow: hidden;
+    z-index: 1000;
+    animation: atSuggestionFadeIn 0.15s ease;
+  }
+
+  &__at-suggestion-header {
+    padding: 10px 12px;
+    font-size: 12px;
+    font-weight: 500;
+    color: $gray-dark;
+    border-bottom: 1px solid #F3F4F6;
+    background: #FAFAFA;
+  }
+
+  &__at-suggestion-list {
+    max-height: 260px;
+    overflow-y: auto;
+    padding: 4px;
+
+    &::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: #E5E7EB;
+      border-radius: 2px;
+    }
+  }
+
+  &__at-suggestion-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.1s ease;
+
+    &:hover,
+    &--highlighted {
+      background: $gray-light;
+    }
+
+    &--selected {
+      background: rgba($orange-primary, 0.08);
+
+      &:hover,
+      &.ai-input-bar__at-suggestion-item--highlighted {
+        background: rgba($orange-primary, 0.12);
+      }
+
+      .ai-input-bar__at-suggestion-item-label {
+        color: $orange-dark;
+        font-weight: 500;
+      }
+
+      .ai-input-bar__at-suggestion-item-code {
+        color: $orange-primary;
+      }
+    }
+  }
+
+  &__at-suggestion-item-content {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__at-suggestion-item-name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  &__at-suggestion-item-code {
+    font-size: 12px;
+    font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
+    color: $gray-medium;
+    flex-shrink: 0;
+  }
+
+  &__at-suggestion-item-label {
+    font-size: 13px;
+    color: $text-dark;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__at-suggestion-item-vip {
+    font-size: 10px;
+    font-weight: 600;
+    color: #fff;
+    background: linear-gradient(135deg, #E91E63 0%, #FF6B9D 100%);
+    padding: 1px 4px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+
+  &__at-suggestion-item-desc {
+    font-size: 11px;
+    color: $gray-medium;
+    margin-top: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__at-suggestion-item-check {
+    flex-shrink: 0;
+    color: $orange-primary;
+    margin-left: 8px;
+  }
+}
+
+@keyframes atSuggestionFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+// Dark mode for @ suggestion panel
+:root[data-theme='dark'] {
+  .ai-input-bar {
+    &__at-suggestion {
+      background: var(--color-surface-high, #2a2a2a);
+      border-color: var(--color-border, #444);
+    }
+
+    &__at-suggestion-header {
+      background: var(--color-surface-mid, #333);
+      border-bottom-color: var(--color-border, #444);
+      color: var(--color-gray-50, #999);
+    }
+
+    &__at-suggestion-list {
+      &::-webkit-scrollbar-thumb {
+        background: var(--color-border, #444);
+      }
+    }
+
+    &__at-suggestion-item {
+      &:hover,
+      &--highlighted {
+        background: var(--color-surface-mid, #333);
+      }
+
+      &--selected {
+        background: rgba($orange-primary, 0.12);
+
+        &:hover,
+        &.ai-input-bar__at-suggestion-item--highlighted {
+          background: rgba($orange-primary, 0.18);
+        }
+      }
+    }
+
+    &__at-suggestion-item-code {
+      color: var(--color-gray-50, #999);
+    }
+
+    &__at-suggestion-item-label {
+      color: var(--color-gray-20, #ccc);
+    }
+
+    &__at-suggestion-item-desc {
+      color: var(--color-gray-50, #999);
+    }
+  }
+}

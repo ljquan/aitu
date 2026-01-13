@@ -71,17 +71,79 @@ function updateServiceWorkerVersion(version) {
   console.log(`✅ Service Worker 版本已更新到 ${version}`);
 }
 
+// 计算两个字符串的相似度 (Jaccard Index based on characters)
+function calculateSimilarity(str1, str2) {
+  const set1 = new Set(str1.split(''));
+  const set2 = new Set(str2.split(''));
+  
+  const intersection = new Set([...set1].filter(x => set2.has(x)));
+  const union = new Set([...set1, ...set2]);
+  
+  return intersection.size / union.size;
+}
+
 // 创建版本信息文件
-function createVersionFile(version) {
+function createVersionFile(version, commits) {
+  let changelog = [];
+  if (commits) {
+    // 过滤掉用户无感的提交类型 (docs, test, style, refactor, ci, build, revert)
+    const irrelevantRegex = /^(docs|test|style|refactor|ci|build|revert|chore)(\(.*?\))?:/i;
+    const relevantOthers = commits.others.filter(c => !c.message.match(irrelevantRegex));
+
+    const allCommits = [
+      ...commits.features,
+      ...commits.fixes,
+      // ...commits.chores, // 排除 chores
+      ...relevantOthers
+    ];
+    
+    // 1. 过滤出包含大于5个汉字的提交消息
+    const filteredCommits = allCommits
+      .filter(c => {
+        const chineseChars = c.message.match(/[\u4e00-\u9fa5]/g) || [];
+        return chineseChars.length > 5;
+      })
+      .map(c => c.message);
+
+    // 2. 按长度降序排序（文字多的优先级高）
+    filteredCommits.sort((a, b) => b.length - a.length);
+
+    // 3. 去重和过滤相似消息
+    const uniqueChangelog = [];
+    for (const msg of filteredCommits) {
+      let isSimilar = false;
+      for (const existingMsg of uniqueChangelog) {
+        // 如果包含关系（忽略大小写和空格）
+        if (existingMsg.toLowerCase().replace(/\s/g, '').includes(msg.toLowerCase().replace(/\s/g, ''))) {
+          isSimilar = true;
+          break;
+        }
+        
+        // 如果相似度超过 0.6 (60% 相似)
+        if (calculateSimilarity(msg, existingMsg) > 0.6) {
+          isSimilar = true;
+          break;
+        }
+      }
+      
+      if (!isSimilar) {
+        uniqueChangelog.push(msg);
+      }
+    }
+
+    changelog = uniqueChangelog;
+  }
+
   const versionInfo = {
     version: version,
     buildTime: new Date().toISOString(),
-    gitCommit: process.env.GITHUB_SHA || 'unknown'
+    gitCommit: process.env.GITHUB_SHA || 'unknown',
+    changelog: changelog
   };
 
   const versionPath = path.join(__dirname, '../apps/web/public/version.json');
   fs.writeFileSync(versionPath, JSON.stringify(versionInfo, null, 2));
-  console.log(`✅ 版本信息文件已创建: ${version}`);
+  console.log(`✅ 版本信息文件已创建: ${version} (包含 ${changelog.length} 条更新日志)`);
 }
 
 // 获取上一个版本号
@@ -236,14 +298,15 @@ function main() {
     // 更新 Service Worker 版本
     updateServiceWorkerVersion(nextVersion);
 
-    // 创建版本信息文件
-    createVersionFile(nextVersion);
-
     // 获取并更新 CHANGELOG
     const previousVersion = getPreviousVersion(currentVersion);
     console.log(`📝 从版本 ${previousVersion || '开始'} 收集提交记录...`);
 
     const commits = getCommitsSinceLastVersion(previousVersion);
+
+    // 创建版本信息文件
+    createVersionFile(nextVersion, commits);
+
     if (commits && (commits.features.length > 0 || commits.fixes.length > 0 || commits.chores.length > 0 || commits.others.length > 0)) {
       updateChangelog(nextVersion, commits);
     } else {

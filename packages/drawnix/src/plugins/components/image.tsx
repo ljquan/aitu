@@ -1,6 +1,8 @@
 import type { ImageProps } from '@plait/common';
 import classNames from 'classnames';
 import { Video } from './video';
+import { useCallback } from 'react';
+import { handleVirtualUrlImageError } from '../../utils/asset-cleanup';
 
 // 检查是否为视频元素（通过URL标识、扩展名或元数据）
 const isVideoElement = (imageItem: any): boolean => {
@@ -12,8 +14,8 @@ const isVideoElement = (imageItem: any): boolean => {
   const url = imageItem.url || '';
 
   // 检查 URL hash 标识符（用于 ObjectURL 的视频识别）
-  // 格式：blob:http://...#video
-  if (url.includes('#video')) {
+  // 格式：blob:http://...#video 或 blob:http://...#merged-video-{timestamp}
+  if (url.includes('#video') || url.includes('#merged-video-')) {
     return true;
   }
 
@@ -23,6 +25,11 @@ const isVideoElement = (imageItem: any): boolean => {
 };
 
 export const Image: React.FC<ImageProps> = (props: ImageProps) => {
+  // 处理图片加载失败
+  const handleImageError = useCallback(() => {
+    handleVirtualUrlImageError(props.board, props.element, props.imageItem.url);
+  }, [props.board, props.element, props.imageItem.url]);
+
   // 如果是视频元素，使用视频组件渲染
   if (isVideoElement(props.imageItem)) {
     return (
@@ -54,6 +61,7 @@ export const Image: React.FC<ImageProps> = (props: ImageProps) => {
         className={classNames('image-origin', {
           'image-origin--focus': props.isFocus,
         })}
+        onError={handleImageError}
       />
     </div>
   );

@@ -67,7 +67,7 @@ export function useDragSort<T>({
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', id);
       
-      // 设置拖拽图像（可选）
+      // 设置拖拽图片（可选）
       const target = e.currentTarget as HTMLElement;
       if (target) {
         e.dataTransfer.setDragImage(target, target.offsetWidth / 2, target.offsetHeight / 2);
@@ -75,7 +75,7 @@ export function useDragSort<T>({
 
       dragIndexRef.current = index;
       
-      // 延迟设置状态，避免拖拽图像问题
+      // 延迟设置状态，避免拖拽图片问题
       requestAnimationFrame(() => {
         setDragState({
           draggingId: id,

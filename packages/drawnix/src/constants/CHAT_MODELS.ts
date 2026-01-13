@@ -41,7 +41,7 @@ export const CHAT_MODELS: ChatModel[] = [
   {
     id: 'gpt-image-1.5',
     name: 'GPT Image 1.5',
-    description: 'OpenAI 最新图像生成模型',
+    description: 'OpenAI 最新图片生成模型',
     provider: ModelProvider.OPENAI,
     badges: ['NEW', 'Multimodal'],
     maxTokens: 128000,
@@ -50,7 +50,7 @@ export const CHAT_MODELS: ChatModel[] = [
   {
     id: 'gpt-4o-image',
     name: 'GPT-4o Image',
-    description: 'OpenAI 多模态图像模型',
+    description: 'OpenAI 多模态图片模型',
     provider: ModelProvider.OPENAI,
     badges: ['Multimodal'],
     maxTokens: 128000,
@@ -111,7 +111,7 @@ export const CHAT_MODELS: ChatModel[] = [
   {
     id: 'gemini-3-pro-image-preview-2k',
     name: 'Gemini 3 Pro Image Preview 2K',
-    description: 'Google 图像生成模型 (2K分辨率)',
+    description: 'Google 图片生成模型 (2K分辨率)',
     provider: ModelProvider.GOOGLE,
     badges: ['NEW', 'Multimodal'],
     maxTokens: 2000000,
@@ -120,7 +120,7 @@ export const CHAT_MODELS: ChatModel[] = [
   {
     id: 'gemini-3-pro-image-preview',
     name: 'Gemini 3 Pro Image Preview',
-    description: 'Google 图像生成模型',
+    description: 'Google 图片生成模型',
     provider: ModelProvider.GOOGLE,
     badges: ['NEW', 'Multimodal'],
     maxTokens: 2000000,

@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { mediaCacheService, CacheStatus } from '../services/media-cache-service';
+import { unifiedCacheService, CacheStatus } from '../services/unified-cache-service';
 
 interface UseMediaCacheResult {
   /** Cache status for the task */
@@ -39,49 +39,57 @@ export function useMediaCache(
   // Check initial cache status
   useEffect(() => {
     const checkCacheStatus = async () => {
-      const cached = await mediaCacheService.isCached(taskId);
+      if (!originalUrl) {
+        setCacheStatus('none');
+        return;
+      }
+      const cached = await unifiedCacheService.isCached(originalUrl);
       setCacheStatus(cached ? 'cached' : 'none');
     };
     checkCacheStatus();
 
     // Subscribe to cache status changes
-    const unsubscribe = mediaCacheService.subscribe(() => {
-      const status = mediaCacheService.getCacheStatus(taskId);
-      setCacheStatus(status);
+    const unsubscribe = unifiedCacheService.subscribe(() => {
+      if (originalUrl) {
+        const status = unifiedCacheService.getCacheStatus(originalUrl);
+        setCacheStatus(status);
+      }
     });
 
     return unsubscribe;
-  }, [taskId]);
+  }, [taskId, originalUrl]);
 
   // Cache media
   const cacheMedia = useCallback(async () => {
     if (!originalUrl) return false;
 
     setCacheProgress(0);
-    const success = await mediaCacheService.cacheMedia(
+    const success = await unifiedCacheService.cacheImage(originalUrl, {
       taskId,
-      originalUrl,
-      type,
       prompt,
-      (progress) => setCacheProgress(progress)
-    );
+    });
+    setCacheProgress(100);
 
     return success;
-  }, [taskId, originalUrl, type, prompt]);
+  }, [taskId, originalUrl, prompt]);
 
   // Delete cache
   const deleteCache = useCallback(async () => {
-    const success = await mediaCacheService.deleteCache(taskId);
-    if (success) {
+    if (!originalUrl) return false;
+    try {
+      await unifiedCacheService.deleteCache(originalUrl);
       setCacheStatus('none');
+      return true;
+    } catch {
+      return false;
     }
-    return success;
-  }, [taskId]);
+  }, [originalUrl]);
 
   // Get cached URL
   const getCachedUrl = useCallback(async () => {
-    return mediaCacheService.getCachedUrl(taskId);
-  }, [taskId]);
+    if (!originalUrl) return null;
+    return unifiedCacheService.getCachedUrl(originalUrl);
+  }, [originalUrl]);
 
   return {
     cacheStatus,
@@ -114,8 +122,15 @@ export function useMediaUrl(
   const loadUrl = useCallback(async () => {
     setIsLoading(true);
 
+    if (!originalUrl) {
+      setUrl(null);
+      setIsFromCache(false);
+      setIsLoading(false);
+      return;
+    }
+
     // First try to get cached URL
-    const cachedUrl = await mediaCacheService.getCachedUrl(taskId);
+    const cachedUrl = await unifiedCacheService.getCachedUrl(originalUrl);
 
     if (cachedUrl) {
       // Revoke old blob URL if exists
@@ -134,19 +149,23 @@ export function useMediaUrl(
     }
 
     setIsLoading(false);
-  }, [taskId, originalUrl, blobUrl]);
+  }, [originalUrl, blobUrl]);
 
   // Initial load
   useEffect(() => {
     loadUrl();
     // Initialize last status
-    lastStatusRef.current = mediaCacheService.getCacheStatus(taskId);
+    if (originalUrl) {
+      lastStatusRef.current = unifiedCacheService.getCacheStatus(originalUrl);
+    }
   }, [taskId, originalUrl]);
 
   // Subscribe to cache status changes - only react to THIS task's changes
   useEffect(() => {
-    const unsubscribe = mediaCacheService.subscribe(() => {
-      const currentStatus = mediaCacheService.getCacheStatus(taskId);
+    const unsubscribe = unifiedCacheService.subscribe(() => {
+      if (!originalUrl) return;
+      
+      const currentStatus = unifiedCacheService.getCacheStatus(originalUrl);
       const previousStatus = lastStatusRef.current;
 
       // Only reload if THIS task's status actually changed
@@ -161,7 +180,7 @@ export function useMediaUrl(
     });
 
     return unsubscribe;
-  }, [taskId, loadUrl]);
+  }, [originalUrl, loadUrl]);
 
   // Cleanup blob URL on unmount
   useEffect(() => {
@@ -184,22 +203,22 @@ export function useCacheStats() {
 
   useEffect(() => {
     const loadStats = async () => {
-      const size = await mediaCacheService.getTotalCacheSize();
-      const ids = await mediaCacheService.getAllCachedTaskIds();
-      setTotalSize(size);
-      setCachedCount(ids.length);
+      const usage = await unifiedCacheService.getStorageUsage();
+      const urls = await unifiedCacheService.getAllCachedUrls();
+      setTotalSize(usage.usage);
+      setCachedCount(urls.length);
     };
 
     loadStats();
 
     // Subscribe to changes
-    const unsubscribe = mediaCacheService.subscribe(loadStats);
+    const unsubscribe = unifiedCacheService.subscribe(loadStats);
     return unsubscribe;
   }, []);
 
   return {
     totalSize,
     cachedCount,
-    formattedSize: mediaCacheService.formatSize(totalSize),
+    formattedSize: unifiedCacheService.formatSize(totalSize),
   };
 }

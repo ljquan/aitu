@@ -26,7 +26,7 @@ window.addEventListener = function(
   // 对于 beforeunload，保存引用并使用原生方法
   if (type === 'beforeunload') {
     beforeUnloadHandler = listener;
-    console.log('[Permissions Policy] Registering beforeunload with native method');
+    // console.log('[Permissions Policy] Registering beforeunload with native method');
     return originalAddEventListener.call(window, type, listener, options);
   }
 
@@ -49,7 +49,7 @@ window.removeEventListener = function(
 
 // 暴露调试函数
 (window as any).__checkBeforeUnload = () => {
-  console.log('[Permissions Policy] beforeUnloadHandler registered:', !!beforeUnloadHandler);
+  // console.log('[Permissions Policy] beforeUnloadHandler registered:', !!beforeUnloadHandler);
   return !!beforeUnloadHandler;
 };
 

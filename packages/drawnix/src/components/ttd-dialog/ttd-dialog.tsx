@@ -46,13 +46,13 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
   // 监听设置变化,同步更新模型选择器
   useEffect(() => {
     const handleSettingsChange = (newSettings: any) => {
-      console.log('TTDDialog - settings changed:', newSettings);
+      // console.log('TTDDialog - settings changed:', newSettings);
       if (newSettings.imageModelName) {
-        console.log('Updating selectedImageModel to:', newSettings.imageModelName);
+        // console.log('Updating selectedImageModel to:', newSettings.imageModelName);
         setSelectedImageModel(newSettings.imageModelName);
       }
       if (newSettings.videoModelName) {
-        console.log('Updating selectedVideoModel to:', newSettings.videoModelName);
+        // console.log('Updating selectedVideoModel to:', newSettings.videoModelName);
         setSelectedVideoModel(newSettings.videoModelName);
       }
     };
@@ -80,7 +80,7 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
     });
   };
 
-  // AI 图像生成的初始数据
+  // AI 图片生成的初始数据
   const [aiImageData, setAiImageData] = useState<{
     initialPrompt: string;
     initialImages: (File | { url: string; name: string })[];
@@ -106,10 +106,10 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
     initialImage: undefined
   });
 
-  // 图像生成窗口是否需要最大化（批量模式时自动最大化）
+  // 图片生成窗口是否需要最大化（批量模式时自动最大化）
   const [imageDialogAutoMaximize, setImageDialogAutoMaximize] = useState(false);
 
-  // 图像生成模式状态（单图 / 批量）
+  // 图片生成模式状态（单图 / 批量）
   const [imageGenerationMode, setImageGenerationMode] = useState<ImageGenerationMode>(() => {
     try {
       const savedMode = localStorage.getItem(AI_IMAGE_MODE_CACHE_KEY);
@@ -119,7 +119,7 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
     }
   });
 
-  // 处理图像生成模式变化
+  // 处理图片生成模式变化
   const handleImageModeChange = useCallback((mode: ImageGenerationMode) => {
     setImageGenerationMode(mode);
     setImageDialogAutoMaximize(mode === 'batch');
@@ -156,7 +156,7 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
   // 使用 useRef 来跟踪上一次的 openDialogType，避免不必要的处理
   const prevOpenDialogTypeRef = useRef<typeof appState.openDialogType>(null);
   
-  // 当 AI 图像生成对话框打开时，处理选中内容
+  // 当 AI 图片生成对话框打开时，处理选中内容
   useEffect(() => {
     // 确保board存在并且弹窗确实要打开
     if (!board || !appState.openDialogType) {
@@ -166,13 +166,13 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
     
     // 检查是否真的是新的对话框打开，而不是重复触发
     if (prevOpenDialogTypeRef.current === appState.openDialogType) {
-      console.log('Dialog type unchanged, skipping processing...');
+      // console.log('Dialog type unchanged, skipping processing...');
       return;
     }
     
     // 防止多次并发处理
     if (isProcessingRef.current) {
-      console.log('Already processing content, skipping...');
+      // console.log('Already processing content, skipping...');
       return;
     }
     
@@ -206,7 +206,7 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
 
           // 使用保存在appState中的最近选中元素IDs
           const selectedElementIds = appState.lastSelectedElementIds || [];
-          console.log('Using saved selected element IDs for AI image generation:', selectedElementIds);
+          // console.log('Using saved selected element IDs for AI image generation:', selectedElementIds);
 
           // 使用新的处理逻辑来处理选中的内容,传入保存的元素IDs
           const processedContent = await processSelectedContentForAI(board, selectedElementIds);
@@ -230,7 +230,7 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
             });
           }
 
-          // 设置 AI 图像生成的初始数据
+          // 设置 AI 图片生成的初始数据
           setAiImageData({
             initialPrompt: processedContent.remainingText || '',
             initialImages: imageItems,
@@ -282,7 +282,7 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
         try {
           // 如果有初始数据（从任务编辑传入），直接使用
           if (appState.dialogInitialData) {
-            console.log('Video generation - dialogInitialData:', appState.dialogInitialData);
+            // console.log('Video generation - dialogInitialData:', appState.dialogInitialData);
             const videoData = {
               initialPrompt: appState.dialogInitialData.initialPrompt || appState.dialogInitialData.prompt || '',
               initialImage: appState.dialogInitialData.initialImage || appState.dialogInitialData.uploadedImage,
@@ -292,14 +292,14 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
               initialSize: appState.dialogInitialData.initialSize || appState.dialogInitialData.size,
               initialResultUrl: appState.dialogInitialData.initialResultUrl || appState.dialogInitialData.resultUrl
             };
-            console.log('Video generation - setting aiVideoData:', videoData);
+            // console.log('Video generation - setting aiVideoData:', videoData);
             setAiVideoData(videoData);
             return;
           }
 
           // 使用保存在appState中的最近选中元素IDs
           const selectedElementIds = appState.lastSelectedElementIds || [];
-          console.log('Using saved selected element IDs for AI video generation:', selectedElementIds);
+          // console.log('Using saved selected element IDs for AI video generation:', selectedElementIds);
 
           // 使用新的处理逻辑来处理选中的内容,传入保存的元素IDs
           const processedContent = await processSelectedContentForAI(board, selectedElementIds);
@@ -377,7 +377,7 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
 
   // WinBox 关闭回调
   const handleImageDialogClose = useCallback(() => {
-    // 在关闭前保存AI图像生成的缓存
+    // 在关闭前保存AI图片生成的缓存
     const cached = localStorage.getItem(AI_IMAGE_GENERATION_PREVIEW_CACHE_KEY);
     if (cached) {
       try {
@@ -388,12 +388,12 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
         console.warn('Failed to update cache timestamp:', error);
       }
     }
-    console.log('Image dialog closing - selection should be preserved');
-    setAppState({
-      ...appState,
+    // console.log('Image dialog closing - selection should be preserved');
+    setAppState(prev => ({
+      ...prev,
       openDialogType: null,
-    });
-  }, [appState, setAppState]);
+    }));
+  }, [setAppState]);
 
   const handleVideoDialogClose = useCallback(() => {
     // 在关闭前保存AI视频生成的缓存
@@ -407,12 +407,12 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
         console.warn('Failed to update cache timestamp:', error);
       }
     }
-    console.log('Video dialog closing - selection should be preserved');
-    setAppState({
-      ...appState,
+    // console.log('Video dialog closing - selection should be preserved');
+    setAppState(prev => ({
+      ...prev,
       openDialogType: null,
-    });
-  }, [appState, setAppState]);
+    }));
+  }, [setAppState]);
 
   return (
     <>
@@ -442,12 +442,12 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
           <MarkdownToDrawnix></MarkdownToDrawnix>
         </DialogContent>
       </Dialog>
-      {/* AI 图像生成窗口 - 使用 WinBox */}
+      {/* AI 图片生成窗口 - 使用 WinBox */}
       <WinBoxWindow
         visible={appState.openDialogType === DialogType.aiImageGeneration}
         title={imageGenerationMode === 'batch'
           ? (language === 'zh' ? '批量出图' : 'Batch Generation')
-          : (language === 'zh' ? 'AI 图像生成' : 'AI Image Generation')
+          : (language === 'zh' ? 'AI 图片生成' : 'AI Image Generation')
         }
         headerContent={
           <div className="image-generation-mode-tabs">
@@ -455,7 +455,7 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
               className={`mode-tab ${imageGenerationMode === 'single' ? 'active' : ''}`}
               onClick={() => handleImageModeChange('single')}
             >
-              {language === 'zh' ? 'AI 图像生成' : 'AI Image'}
+              {language === 'zh' ? 'AI 图片生成' : 'AI Image'}
             </button>
             <button
               className={`mode-tab ${imageGenerationMode === 'batch' ? 'active' : ''}`}
@@ -466,9 +466,9 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
           </div>
         }
         onClose={handleImageDialogClose}
-        width="60%"
+        width="80%"
         height="60%"
-        minWidth={800}
+        minWidth={1024}
         minHeight={500}
         x="center"
         y="center"

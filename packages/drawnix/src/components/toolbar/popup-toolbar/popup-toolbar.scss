@@ -1,4 +1,7 @@
+@import '../../../styles/z-index.scss';
+
 .popup-toolbar {
+    z-index: $z-popup-toolbar;
     .property-button {
         height: var(--lg-button-size);
         width: var(--lg-button-size);

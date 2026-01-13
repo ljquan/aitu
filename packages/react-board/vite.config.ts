@@ -46,4 +46,18 @@ export default defineConfig({
       external: ['react', 'react-dom', 'react/jsx-runtime', '@plait/common', '@plait/core', '@plait/draw', '@plait/layouts', '@plait/mind', '@plait/text-plugins', 'ahooks', 'classnames', '@plait-board/react-text', 'roughjs/bin/rough', 'slate-react'],
     },
   },
+
+  test: {
+    globals: true,
+    cache: {
+      dir: '../../node_modules/.vitest',
+    },
+    environment: 'jsdom',
+    include: ['src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
+    reporters: ['default'],
+    coverage: {
+      reportsDirectory: '../../coverage/packages/react-board',
+      provider: 'v8',
+    },
+  },
 });

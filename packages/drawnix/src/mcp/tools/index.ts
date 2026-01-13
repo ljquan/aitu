@@ -1,0 +1,23 @@
+/**
+ * MCP 工具统一导出
+ */
+
+export { imageGenerationTool, generateImage, createImageTask } from './image-generation';
+export type { ImageGenerationParams } from './image-generation';
+
+export { videoGenerationTool, generateVideo, createVideoTask } from './video-generation';
+export type { VideoGenerationParams } from './video-generation';
+
+export { aiAnalyzeTool, analyzeWithAI } from './ai-analyze';
+export type { AIAnalyzeParams, AIAnalyzeResult } from './ai-analyze';
+
+export { mermaidTool, insertMermaid, setMermaidBoard, getMermaidBoard } from './mermaid-tool';
+export type { MermaidToolParams } from './mermaid-tool';
+
+export { mindmapTool, insertMindmap } from './mindmap-tool';
+export type { MindmapToolParams } from './mindmap-tool';
+
+// 共享模块导出
+export { setBoard, getBoard, isBoardAvailable, requireBoard } from './shared';
+export { extractCodeBlock, getInsertionPoint, insertElementsToCanvas } from './shared';
+export type { CodeBlockResult, InsertResult } from './shared';

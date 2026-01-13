@@ -8,10 +8,13 @@ import {
   BoardChangeData,
 } from '@drawnix/drawnix';
 import { PlaitBoard, PlaitElement, PlaitTheme, Viewport } from '@plait/core';
-import { initializeData } from './initialize-data';
+
+// Global flag to prevent duplicate initialization in StrictMode
+let appInitialized = false;
 
 export function App() {
   const [isLoading, setIsLoading] = useState(true);
+  const [isDataReady, setIsDataReady] = useState(false);
   const [value, setValue] = useState<{
     children: PlaitElement[];
     viewport?: Viewport;
@@ -21,37 +24,10 @@ export function App() {
   // Initialize workspace and handle migration
   useEffect(() => {
     const initialize = async () => {
-      try {
+      // Prevent duplicate initialization in StrictMode
+      if (appInitialized) {
         const workspaceService = WorkspaceService.getInstance();
-        await workspaceService.initialize();
-
-        // Check and perform migration if needed
-        const migrated = await isWorkspaceMigrationCompleted();
-        if (!migrated) {
-          const boardId = await migrateToWorkspace();
-          if (boardId) {
-            console.log('[App] Migrated legacy data to workspace, board:', boardId);
-          }
-        }
-
-        // Load current board data if available
-        let currentBoard = workspaceService.getCurrentBoard();
-
-        // If no current board and no boards exist, create default board with initializeData
-        if (!currentBoard && !workspaceService.hasBoards()) {
-          console.log('[App] First visit, creating default board with initial data');
-          const board = await workspaceService.createBoard({
-            name: '默认画板',
-            elements: initializeData,
-          });
-
-          if (board) {
-            const switchedBoard = await workspaceService.switchBoard(board.id);
-            currentBoard = switchedBoard;
-            console.log('[App] Created default board:', board.name);
-          }
-        }
-
+        const currentBoard = workspaceService.getCurrentBoard();
         if (currentBoard) {
           setValue({
             children: currentBoard.elements || [],
@@ -59,9 +35,66 @@ export function App() {
             theme: currentBoard.theme,
           });
         }
+        setIsLoading(false);
+        return;
+      }
+      appInitialized = true;
+
+      try {
+        const workspaceService = WorkspaceService.getInstance();
+        await workspaceService.initialize();
+
+        // Check and perform migration if needed
+        const migrated = await isWorkspaceMigrationCompleted();
+        if (!migrated) {
+          await migrateToWorkspace();
+        }
+
+        // Load current board data if available
+        let currentBoard = workspaceService.getCurrentBoard();
+
+        // If no current board and no boards exist, create default board with initializeData
+        if (!currentBoard && !workspaceService.hasBoards()) {
+          const board = await workspaceService.createBoard({
+            name: '我的画板1',
+            elements: [],
+          });
+
+          if (board) {
+            const switchedBoard = await workspaceService.switchBoard(board.id);
+            currentBoard = switchedBoard;
+          }
+        }
+
+        if (currentBoard) {
+          const elements = currentBoard.elements || [];
+
+          // 先设置原始元素，让页面先渲染
+          setValue({
+            children: elements,
+            viewport: currentBoard.viewport,
+            theme: currentBoard.theme,
+          });
+
+          // 异步恢复视频 URL，不阻塞页面加载
+          recoverVideoUrlsInElements(elements)
+            .then((recoveredElements) => {
+              // 只有当有元素被恢复时才更新
+              if (recoveredElements !== elements) {
+                setValue((prev) => ({
+                  ...prev,
+                  children: recoveredElements,
+                }));
+              }
+            })
+            .catch((error) => {
+              console.error('[App] Video URL recovery failed:', error);
+            });
+        }
       } catch (error) {
         console.error('[App] Initialization failed:', error);
       } finally {
+        setIsDataReady(true);
         setIsLoading(false);
       }
     };
@@ -70,10 +103,12 @@ export function App() {
   }, []);
 
   // Handle board switching
-  const handleBoardSwitch = useCallback((board: Board) => {
-    console.log('[App] Board switched:', board.name);
+  const handleBoardSwitch = useCallback(async (board: Board) => {
+    // 在设置 state 之前，预先恢复失效的视频 URL
+    const elements = await recoverVideoUrlsInElements(board.elements || []);
+
     setValue({
-      children: board.elements || [],
+      children: elements,
       viewport: board.viewport,
       theme: board.theme,
     });
@@ -116,11 +151,8 @@ export function App() {
         theme={value.theme}
         onChange={handleBoardChange}
         onBoardSwitch={handleBoardSwitch}
+        isDataReady={isDataReady}
         afterInit={(board) => {
-          console.log('board initialized');
-          console.log(
-            `add __drawnix__web__debug_log to window, so you can call add log anywhere, like: window.__drawnix__web__console('some thing')`
-          );
           (
             window as unknown as {
               __drawnix__web__console: (value: string) => void;
@@ -148,5 +180,42 @@ const addDebugLog = (board: PlaitBoard, value: string) => {
   div.innerHTML = value;
   consoleContainer.append(div);
 };
+
+/**
+ * 迁移元素数组中的视频 URL 格式
+ * 新格式 (/__aitu_cache__/video/...) 是稳定的，由 Service Worker 直接从 Cache API 返回
+ * 旧格式 (blob:...#merged-video-xxx) 需要迁移到新格式
+ */
+async function recoverVideoUrlsInElements(
+  elements: PlaitElement[]
+): Promise<PlaitElement[]> {
+  return elements.map((element) => {
+    const url = (element as any).url as string | undefined;
+
+    // 新格式：稳定 URL，无需处理
+    if (url?.startsWith('/__aitu_cache__/video/')) {
+      return element;
+    }
+
+    // 旧格式：blob URL + #merged-video-xxx
+    // 提取 taskId，转换为新格式
+    if (url?.startsWith('blob:') && url.includes('#merged-video-')) {
+      const hashIndex = url.indexOf('#merged-video-');
+      if (hashIndex !== -1) {
+        const afterHash = url.substring(hashIndex + 1);
+        const nextHashIndex = afterHash.indexOf('#', 1);
+        const taskId =
+          nextHashIndex > 0 ? afterHash.substring(0, nextHashIndex) : afterHash;
+
+        // 转换为新格式的稳定 URL（带 .mp4 后缀）
+        const newUrl = `/__aitu_cache__/video/${taskId}.mp4`;
+        // console.log(`[App] Migrating video URL: ${taskId}`);
+        return { ...element, url: newUrl };
+      }
+    }
+
+    return element;
+  });
+}
 
 export default App;

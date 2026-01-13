@@ -5,7 +5,7 @@
  * Displays folder tree with boards, supports drag-drop and copy.
  */
 
-import React, { useState, useCallback, useMemo, useRef, DragEvent } from 'react';
+import React, { useState, useCallback, useMemo, useRef, useEffect, DragEvent } from 'react';
 import { Button, Input, Dropdown, Dialog, MessagePlugin, Loading } from 'tdesign-react';
 import {
   AddIcon,
@@ -68,6 +68,10 @@ const ProjectDrawerContent: React.FC<{
   onMoveBoard: (id: string, targetFolderId: string | null, targetId?: string, position?: 'before' | 'after') => void;
   onMoveFolder: (id: string, targetParentId: string | null, targetId?: string, position?: 'before' | 'after') => void;
   toggleFolderExpanded: (id: string) => void;
+  /** 新建画板后自动进入编辑状态的画板 ID */
+  autoEditBoardId?: string | null;
+  /** 清除自动编辑状态 */
+  onAutoEditDone?: () => void;
 }> = ({
   tree,
   currentBoard,
@@ -80,9 +84,20 @@ const ProjectDrawerContent: React.FC<{
   onMoveBoard,
   onMoveFolder,
   toggleFolderExpanded,
+  autoEditBoardId,
+  onAutoEditDone,
 }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
+
+  // 当有新建画板时自动进入编辑状态
+  useEffect(() => {
+    if (autoEditBoardId) {
+      setEditingId(autoEditBoardId);
+      setEditingName(WORKSPACE_DEFAULTS.DEFAULT_BOARD_NAME);
+      onAutoEditDone?.();
+    }
+  }, [autoEditBoardId, onAutoEditDone]);
   
   // Drag state
   const [dragData, setDragData] = useState<DragData | null>(null);
@@ -489,6 +504,7 @@ export const ProjectDrawer: React.FC<ProjectDrawerProps> = ({
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [importProgress, setImportProgress] = useState({ progress: 0, message: '' });
   const [exportProgress, setExportProgress] = useState({ progress: 0, message: '' });
+  const [autoEditBoardId, setAutoEditBoardId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Handle close
@@ -498,14 +514,27 @@ export const ProjectDrawer: React.FC<ProjectDrawerProps> = ({
 
   // Handle creating new board
   const handleCreateBoard = useCallback(async (folderId?: string) => {
+    // Save current before creating/switching
+    if (onBeforeSwitch) {
+      await onBeforeSwitch();
+    }
+
     const board = await createBoard({
       name: WORKSPACE_DEFAULTS.DEFAULT_BOARD_NAME,
       folderId: folderId || null,
     });
     if (board) {
+      // 自动切换到新建的画板
+      const switched = await switchBoard(board.id);
+      // 通知父组件更新画布数据
+      if (switched && onBoardSwitch) {
+        onBoardSwitch(switched);
+      }
+      // 自动进入重命名状态
+      setAutoEditBoardId(board.id);
       MessagePlugin.success('画板已创建');
     }
-  }, [createBoard]);
+  }, [createBoard, switchBoard, onBeforeSwitch, onBoardSwitch]);
 
   // Handle creating new folder
   const handleCreateFolder = useCallback(async (parentId?: string) => {
@@ -847,6 +876,8 @@ export const ProjectDrawer: React.FC<ProjectDrawerProps> = ({
             onMoveBoard={handleMoveBoard}
             onMoveFolder={handleMoveFolder}
             toggleFolderExpanded={toggleFolderExpanded}
+            autoEditBoardId={autoEditBoardId}
+            onAutoEditDone={() => setAutoEditBoardId(null)}
           />
         )}
       </SideDrawer>

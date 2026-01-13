@@ -54,11 +54,11 @@ class CharacterAvatarCacheService {
       // Check if already cached
       const existing = await this.getCachedAvatar(characterId);
       if (existing) {
-        console.log('[AvatarCache] Avatar already cached for:', characterId);
+        // console.log('[AvatarCache] Avatar already cached for:', characterId);
         return true;
       }
 
-      console.log('[AvatarCache] Caching avatar for:', characterId);
+      // console.log('[AvatarCache] Caching avatar for:', characterId);
 
       // Use Image + Canvas approach to handle CORS issues
       const blob = await this.fetchImageAsBlob(url);
@@ -79,7 +79,7 @@ class CharacterAvatarCacheService {
       };
 
       await avatarStore.setItem(`${STORAGE_PREFIX}${characterId}`, cachedAvatar);
-      console.log('[AvatarCache] Avatar cached successfully:', characterId, `(${blob.size} bytes)`);
+      // console.log('[AvatarCache] Avatar cached successfully:', characterId, `(${blob.size} bytes)`);
 
       return true;
     } catch (error) {
@@ -216,7 +216,7 @@ class CharacterAvatarCacheService {
       }
 
       await avatarStore.removeItem(`${STORAGE_PREFIX}${characterId}`);
-      console.log('[AvatarCache] Avatar cache deleted:', characterId);
+      // console.log('[AvatarCache] Avatar cache deleted:', characterId);
       return true;
     } catch (error) {
       console.error('[AvatarCache] Failed to delete avatar cache:', characterId, error);
@@ -237,7 +237,7 @@ class CharacterAvatarCacheService {
       this.objectUrlCache.clear();
 
       await avatarStore.clear();
-      console.log('[AvatarCache] All avatar caches cleared');
+      // console.log('[AvatarCache] All avatar caches cleared');
       return true;
     } catch (error) {
       console.error('[AvatarCache] Failed to clear all caches:', error);

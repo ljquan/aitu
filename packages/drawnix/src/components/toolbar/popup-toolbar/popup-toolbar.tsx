@@ -1,5 +1,5 @@
 import Stack from '../../stack';
-import { FontColorIcon } from '../../icons';
+import { FontColorIcon, PropertySettingsIcon } from '../../icons';
 import {
   ATTACHED_ELEMENT_CLASS_NAME,
   getRectangleByElements,
@@ -14,6 +14,9 @@ import {
   toScreenPointFromHostPoint,
   duplicateElements,
   deleteFragment,
+  toImage,
+  addSelectedElement,
+  clearSelectedElement,
 } from '@plait/core';
 import { useEffect, useRef, useState } from 'react';
 import { useBoard } from '@plait-board/react-board';
@@ -31,6 +34,7 @@ import {
   isClosedDrawElement,
   isDrawElementsIncludeText,
   PlaitDrawElement,
+  DrawTransforms,
 } from '@plait/draw';
 import { CustomText } from '@plait/common';
 import { getTextMarksByElement } from '@plait/text-plugins';
@@ -38,11 +42,13 @@ import { PopupFontColorButton } from './font-color-button';
 import { PopupFontSizeButton } from './font-size-button';
 import { PopupStrokeButton } from './stroke-button';
 import { PopupFillButton } from './fill-button';
-import { isWhite, removeHexAlpha } from '../../../utils/color';
-import { NO_COLOR } from '../../../constants/color';
+import { isWhite, removeHexAlpha, NO_COLOR } from '@aitu/utils';
 import { Freehand } from '../../../plugins/freehand/type';
 import { PopupLinkButton } from './link-button';
-import { AIImageIcon, AIVideoIcon, VideoFrameIcon, DuplicateIcon, TrashIcon } from '../../icons';
+import { PopupPromptButton } from './prompt-button';
+import { PopupLayerControlButton } from './layer-control-button';
+import { TextPropertyPanel } from './text-property-panel';
+import { AIImageIcon, AIVideoIcon, VideoFrameIcon, DuplicateIcon, TrashIcon, SplitImageIcon, DownloadIcon, MergeIcon, VideoMergeIcon } from '../../icons';
 import { useDrawnix, DialogType } from '../../../hooks/use-drawnix';
 import { useI18n } from '../../../i18n';
 import { ToolButton } from '../../tool-button';
@@ -51,10 +57,19 @@ import { isVideoElement } from '../../../plugins/with-video';
 import { VideoFrameSelector } from '../../video-frame-selector/video-frame-selector';
 import { insertVideoFrame } from '../../../utils/video-frame';
 import { isToolElement } from '../../../plugins/with-tool';
+import { isWorkZoneElement } from '../../../plugins/with-workzone';
+import { splitAndInsertImages } from '../../../utils/image-splitter';
+import { smartDownload, BatchDownloadItem } from '../../../utils/download-utils';
+import { MessagePlugin } from 'tdesign-react';
+import { mergeVideos } from '../../../services/video-merge-webcodecs';
 
 export const PopupToolbar = () => {
   const board = useBoard();
-  const selectedElements = getSelectedElements(board);
+  // 过滤掉 WorkZone 元素，避免点击 WorkZone 时弹出 popup-toolbar
+  const allSelectedElements = getSelectedElements(board);
+  const selectedElements = allSelectedElements.filter(
+    element => !isWorkZoneElement(element)
+  );
   const { openDialog } = useDrawnix();
   const { language, t } = useI18n();
   const [movingOrDragging, setMovingOrDragging] = useState(false);
@@ -64,8 +79,19 @@ export const PopupToolbar = () => {
   const [showVideoFrameSelector, setShowVideoFrameSelector] = useState(false);
   const [selectedVideoElement, setSelectedVideoElement] = useState<PlaitElement | null>(null);
 
+  // 属性面板状态
+  const [showPropertyPanel, setShowPropertyPanel] = useState(false);
+  const propertyPanelOpenRef = useRef(false);
+
+  // 保存 toolbar 和选中元素的位置信息，用于定位属性面板
+  const [toolbarRect, setToolbarRect] = useState<{ top: number; left: number; width: number; height: number } | undefined>();
+  const [selectionRect, setSelectionRect] = useState<{ top: number; left: number; right: number; bottom: number; width: number; height: number } | undefined>();
+  const toolbarRef = useRef<HTMLDivElement>(null);
+
   // 初始化全局鼠标位置跟踪
   useGlobalMousePosition();
+
+  // popup-toolbar 的显示逻辑
   const open =
     selectedElements.length > 0 &&
     !isSelectionMoving(board);
@@ -93,6 +119,10 @@ export const PopupToolbar = () => {
     hasAIImage?: boolean; // 是否显示AI图像生成按钮
     hasAIVideo?: boolean; // 是否显示AI视频生成按钮
     hasVideoFrame?: boolean; // 是否显示视频帧选择按钮
+    hasSplitImage?: boolean; // 是否显示拆图按钮
+    hasDownloadable?: boolean; // 是否显示下载按钮
+    hasMergeable?: boolean; // 是否显示合并按钮
+    hasVideoMergeable?: boolean; // 是否显示视频合成按钮
   } = {
     fill: 'red',
   };
@@ -132,9 +162,69 @@ export const PopupToolbar = () => {
       isVideoElement(selectedElements[0]) &&
       !PlaitBoard.hasBeenTextEditing(board);
 
-    // AI图像生成按钮：排除视频元素和工具元素(内嵌网页)
+    // AI图片生成按钮：排除视频元素和工具元素(内嵌网页)
     const hasAIImage = !hasVideoSelected && !hasToolSelected && !PlaitBoard.hasBeenTextEditing(board);
-    
+
+    // 拆图按钮：只在选中单个图片元素且检测到分割线时显示
+    // 排除SVG图片（SVG不能被智能拆分）
+    const imageElement = selectedElements[0];
+    const isSvgImage = PlaitDrawElement.isDrawElement(imageElement) &&
+      PlaitDrawElement.isImage(imageElement) &&
+      imageElement.url?.startsWith('data:image/svg+xml');
+
+    const isImageSelected =
+      selectedElements.length === 1 &&
+      !hasVideoSelected &&
+      !hasToolSelected &&
+      PlaitDrawElement.isDrawElement(selectedElements[0]) &&
+      PlaitDrawElement.isImage(selectedElements[0]) &&
+      !isSvgImage && // 排除SVG图片
+      !PlaitBoard.hasBeenTextEditing(board);
+
+    // 只有检测到分割线时才显示拆图按钮
+    const hasSplitImage = isImageSelected;
+
+    // 下载按钮：选中图片或视频时显示
+    const hasDownloadable =
+      selectedElements.length > 0 &&
+      !hasToolSelected &&
+      selectedElements.some(element =>
+        (PlaitDrawElement.isDrawElement(element) && PlaitDrawElement.isImage(element)) ||
+        isVideoElement(element)
+      ) &&
+      !PlaitBoard.hasBeenTextEditing(board);
+
+    // 合并按钮：选中多个元素，支持图片、文字、图形、线条、手绘等（排除视频和工具元素）
+    const hasMergeable =
+      selectedElements.length > 1 &&
+      !hasVideoSelected &&
+      !hasToolSelected &&
+      selectedElements.every(element =>
+        // 图片元素
+        (PlaitDrawElement.isDrawElement(element) && PlaitDrawElement.isImage(element)) ||
+        // 包含文字的绘图元素
+        (PlaitDrawElement.isDrawElement(element) && isDrawElementsIncludeText([element])) ||
+        // 图形元素（矩形、圆形等，排除图片和纯文本）
+        (PlaitDrawElement.isDrawElement(element) && PlaitDrawElement.isShapeElement(element) && !PlaitDrawElement.isImage(element)) ||
+        // 箭头线
+        (PlaitDrawElement.isDrawElement(element) && PlaitDrawElement.isArrowLine(element)) ||
+        // 矢量线
+        (PlaitDrawElement.isDrawElement(element) && PlaitDrawElement.isVectorLine(element)) ||
+        // 表格
+        (PlaitDrawElement.isDrawElement(element) && PlaitDrawElement.isTable(element)) ||
+        // 手绘元素
+        Freehand.isFreehand(element) ||
+        // 思维导图元素
+        MindElement.isMindElement(board, element)
+      ) &&
+      !PlaitBoard.hasBeenTextEditing(board);
+
+    // 视频合成按钮：选中多个视频元素（超过1个）
+    const videoElements = selectedElements.filter(element => isVideoElement(element));
+    const hasVideoMergeable =
+      videoElements.length > 1 &&
+      !PlaitBoard.hasBeenTextEditing(board);
+
     state = {
       ...getElementState(board),
       hasFill,
@@ -146,6 +236,10 @@ export const PopupToolbar = () => {
       hasAIImage,
       hasAIVideo,
       hasVideoFrame,
+      hasSplitImage,
+      hasDownloadable,
+      hasMergeable,
+      hasVideoMergeable,
     };
   }
   useEffect(() => {
@@ -189,6 +283,59 @@ export const PopupToolbar = () => {
     }
   }, [viewport, selection, children, movingOrDragging]);
 
+  // 更新 toolbar 和选中元素的位置信息，用于定位属性面板
+  useEffect(() => {
+    if (open && !movingOrDragging && toolbarRef.current) {
+      const rect = toolbarRef.current.getBoundingClientRect();
+      setToolbarRect({
+        top: rect.top,
+        left: rect.left,
+        width: rect.width,
+        height: rect.height,
+      });
+
+      // 计算选中元素的屏幕坐标
+      const elements = getSelectedElements(board);
+      if (elements.length > 0) {
+        const rectangle = getRectangleByElements(board, elements, false);
+        const [start, end] = RectangleClient.getPoints(rectangle);
+        const screenStart = toScreenPointFromHostPoint(
+          board,
+          toHostPointFromViewBoxPoint(board, start)
+        );
+        const screenEnd = toScreenPointFromHostPoint(
+          board,
+          toHostPointFromViewBoxPoint(board, end)
+        );
+
+        setSelectionRect({
+          top: screenStart[1],
+          left: screenStart[0],
+          right: screenEnd[0],
+          bottom: screenEnd[1],
+          width: screenEnd[0] - screenStart[0],
+          height: screenEnd[1] - screenStart[1],
+        });
+      }
+    }
+  }, [open, movingOrDragging, floatingStyles, board]);
+
+  // 同步 ref 和 state
+  useEffect(() => {
+    propertyPanelOpenRef.current = showPropertyPanel;
+  }, [showPropertyPanel]);
+
+  // 当选中元素完全清空时，延迟关闭属性面板（避免因修改属性导致的短暂重新渲染）
+  useEffect(() => {
+    if (selectedElements.length === 0 && !movingOrDragging) {
+      // 延迟关闭，给重新渲染留出时间
+      const timer = setTimeout(() => {
+        setShowPropertyPanel(false);
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [selectedElements.length, movingOrDragging]);
+
   useEffect(() => {
     movingOrDraggingRef.current = movingOrDragging;
   }, [movingOrDragging]);
@@ -228,7 +375,10 @@ export const PopupToolbar = () => {
         <Island
           padding={1}
           className={classNames('popup-toolbar', ATTACHED_ELEMENT_CLASS_NAME)}
-          ref={refs.setFloating}
+          ref={(node) => {
+            refs.setFloating(node);
+            (toolbarRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+          }}
           style={floatingStyles}
         >
           <Stack.Row gap={1}>
@@ -288,6 +438,36 @@ export const PopupToolbar = () => {
                 title={`Link`}
               ></PopupLinkButton>
             )}
+            {state.hasText && (
+              <PopupPromptButton
+                board={board}
+                key={'prompt'}
+                language={language as 'zh' | 'en'}
+                title={language === 'zh' ? '提示词' : 'Prompts'}
+              />
+            )}
+            <PopupLayerControlButton
+              board={board}
+              key={'layer-control'}
+              title={t('textEffect.layer')}
+            />
+            {/* 属性设置按钮 - 仅在选中包含文本的元素时显示 */}
+            {state.hasText && (
+              <ToolButton
+                className="property-settings"
+                key={'property-settings'}
+                type="icon"
+                icon={PropertySettingsIcon}
+                visible={true}
+                selected={showPropertyPanel}
+                title={t('propertyPanel.title')}
+                aria-label={t('propertyPanel.title')}
+                data-track="toolbar_click_property_settings"
+                onPointerUp={() => {
+                  setShowPropertyPanel(!showPropertyPanel);
+                }}
+              />
+            )}
             {state.hasAIImage && (
               <ToolButton
                 className="ai-image"
@@ -295,8 +475,9 @@ export const PopupToolbar = () => {
                 type="icon"
                 icon={AIImageIcon}
                 visible={true}
-                title={language === 'zh' ? 'AI图像生成' : 'AI Image Generation'}
-                aria-label={language === 'zh' ? 'AI图像生成' : 'AI Image Generation'}
+                title={language === 'zh' ? 'AI图片生成' : 'AI Image Generation'}
+                aria-label={language === 'zh' ? 'AI图片生成' : 'AI Image Generation'}
+                data-track="toolbar_click_ai_image"
                 onPointerUp={() => {
                   openDialog(DialogType.aiImageGeneration);
                 }}
@@ -311,6 +492,7 @@ export const PopupToolbar = () => {
                 visible={true}
                 title={language === 'zh' ? 'AI视频生成' : 'AI Video Generation'}
                 aria-label={language === 'zh' ? 'AI视频生成' : 'AI Video Generation'}
+                data-track="toolbar_click_ai_video"
                 onPointerUp={() => {
                   openDialog(DialogType.aiVideoGeneration);
                 }}
@@ -325,12 +507,423 @@ export const PopupToolbar = () => {
                 visible={true}
                 title={language === 'zh' ? '视频帧选择' : 'Video Frame Selection'}
                 aria-label={language === 'zh' ? '视频帧选择' : 'Video Frame Selection'}
+                data-track="toolbar_click_video_frame"
                 onPointerUp={() => {
                   // 找到选中的视频元素
                   const videoElement = selectedElements.find(element => isVideoElement(element));
                   if (videoElement) {
                     setSelectedVideoElement(videoElement);
                     setShowVideoFrameSelector(true);
+                  }
+                }}
+              />
+            )}
+            {state.hasSplitImage && (
+              <ToolButton
+                className="split-image"
+                key="split-image"
+                type="icon"
+                icon={SplitImageIcon}
+                visible={true}
+                title={language === 'zh' ? '智能拆图' : 'Smart Split'}
+                aria-label={language === 'zh' ? '智能拆图' : 'Smart Split'}
+                data-track="toolbar_click_split_image"
+                onPointerUp={async () => {
+                  // 获取选中的图片元素
+                  const imageElement = selectedElements[0] as PlaitDrawElement;
+                  if (PlaitDrawElement.isImage(imageElement) && imageElement.url) {
+                    const loadingInstance = MessagePlugin.loading(language === 'zh' ? '正在分析图片...' : 'Analyzing image...', 0);
+                    try {
+                      // 获取源图片的位置信息
+                      const sourceRect = getRectangleByElements(board, [imageElement], false);
+                      const result = await splitAndInsertImages(board, imageElement.url, {
+                        sourceRect: {
+                          x: sourceRect.x,
+                          y: sourceRect.y,
+                          width: sourceRect.width,
+                          height: sourceRect.height,
+                        },
+                        scrollToResult: true,
+                      });
+                      MessagePlugin.close(loadingInstance);
+                      if (result.success) {
+                        MessagePlugin.success(
+                          language === 'zh'
+                            ? `成功拆分为 ${result.count} 张图片`
+                            : `Split into ${result.count} images`
+                        );
+                      } else {
+                        MessagePlugin.warning(result.error || (language === 'zh' ? '拆图失败' : 'Split failed'));
+                      }
+                    } catch (error: any) {
+                      MessagePlugin.close(loadingInstance);
+                      MessagePlugin.error(error.message || (language === 'zh' ? '拆图失败' : 'Split failed'));
+                    }
+                  }
+                }}
+              />
+            )}
+            {state.hasDownloadable && (
+              <ToolButton
+                className="download"
+                key="download"
+                type="icon"
+                icon={DownloadIcon}
+                visible={true}
+                title={language === 'zh' ? '下载' : 'Download'}
+                aria-label={language === 'zh' ? '下载' : 'Download'}
+                data-track="toolbar_click_download"
+                onPointerUp={async () => {
+                  // 收集可下载的元素
+                  const downloadItems: BatchDownloadItem[] = [];
+                  for (const element of selectedElements) {
+                    if (PlaitDrawElement.isDrawElement(element) && PlaitDrawElement.isImage(element) && element.url) {
+                      downloadItems.push({ url: element.url, type: 'image' });
+                    } else if (isVideoElement(element) && (element as any).url) {
+                      downloadItems.push({ url: (element as any).url, type: 'video' });
+                    }
+                  }
+
+                  if (downloadItems.length === 0) {
+                    MessagePlugin.warning(language === 'zh' ? '没有可下载的内容' : 'No downloadable content');
+                    return;
+                  }
+
+                  const loadingMsg = downloadItems.length > 1
+                    ? (language === 'zh' ? '正在打包下载...' : 'Packaging download...')
+                    : (language === 'zh' ? '正在下载...' : 'Downloading...');
+
+                  const loadingInstance = MessagePlugin.loading(loadingMsg, 0);
+                  try {
+                    // 特殊处理 blob: URL（可能是从IndexedDB缓存的视频）
+                    const { unifiedCacheService } = await import('../../../services/unified-cache-service');
+                    const { downloadFromBlob } = await import('../../../utils/download-utils');
+
+                    const processedItems: BatchDownloadItem[] = [];
+
+                    for (const item of downloadItems) {
+                      if (item.url.startsWith('blob:')) {
+                        // 从 URL fragment 提取 taskId (格式: blob:http://...#merged-video-{timestamp})
+                        const hashIndex = item.url.indexOf('#');
+                        const taskId = hashIndex > 0 ? item.url.substring(hashIndex + 1) : null;
+
+                        // console.log('[Download] Processing blob URL:', { url: item.url, taskId });
+
+                        if (taskId && taskId.startsWith('merged-video-')) {
+                          // 从 IndexedDB 获取缓存的视频
+                          const cachedBlob = await unifiedCacheService.getCachedBlob(taskId);
+                          if (cachedBlob) {
+                            const mimeType = cachedBlob.type || 'video/webm';
+                            const ext = mimeType.startsWith('video/mp4') ? 'mp4' :
+                                       mimeType.startsWith('video/webm') ? 'webm' : 'bin';
+                            const filename = `merged-video-${Date.now()}.${ext}`;
+
+                            // console.log('[Download] Downloading from IndexedDB cache:', { taskId, ext, size: cachedBlob.size });
+                            downloadFromBlob(cachedBlob, filename);
+                            continue;
+                          } else {
+                            console.warn('[Download] Cache not found for taskId:', taskId);
+                          }
+                        }
+
+                        // 如果没有 taskId 或缓存不存在，尝试直接 fetch blob URL
+                        try {
+                          // console.log('[Download] Fetching blob URL directly');
+                          const response = await fetch(item.url);
+                          const blob = await response.blob();
+                          const ext = blob.type.startsWith('video/mp4') ? 'mp4' :
+                                     blob.type.startsWith('video/webm') ? 'webm' :
+                                     blob.type.startsWith('image/') ? 'png' : 'bin';
+                          const filename = `${item.type}_${Date.now()}.${ext}`;
+                          downloadFromBlob(blob, filename);
+                        } catch (fetchError) {
+                          console.error('[Download] Failed to fetch blob URL:', fetchError);
+                          throw new Error(`Failed to download ${item.type}: Blob URL inaccessible`);
+                        }
+                      } else {
+                        // 普通 URL，添加到待处理列表
+                        processedItems.push(item);
+                      }
+                    }
+
+                    // 下载普通 URL
+                    if (processedItems.length > 0) {
+                      await smartDownload(processedItems);
+                    }
+
+                    MessagePlugin.close(loadingInstance);
+                    MessagePlugin.success(
+                      downloadItems.length > 1
+                        ? (language === 'zh' ? `已下载 ${downloadItems.length} 个文件` : `Downloaded ${downloadItems.length} files`)
+                        : (language === 'zh' ? '下载成功' : 'Download complete')
+                    );
+                  } catch (error: any) {
+                    MessagePlugin.close(loadingInstance);
+                    MessagePlugin.error(error.message || (language === 'zh' ? '下载失败' : 'Download failed'));
+                  }
+                }}
+              />
+            )}
+            {state.hasMergeable && (
+              <ToolButton
+                className="merge"
+                key="merge"
+                type="icon"
+                icon={MergeIcon}
+                visible={true}
+                title={language === 'zh' ? '合并为图片' : 'Merge to Image'}
+                aria-label={language === 'zh' ? '合并为图片' : 'Merge to Image'}
+                data-track="toolbar_click_merge"
+                onPointerUp={async () => {
+                  const loadingInstance = MessagePlugin.loading(language === 'zh' ? '正在合并...' : 'Merging...', 0);
+                  try {
+                    // 获取选中元素的边界矩形
+                    const boundingRect = getRectangleByElements(board, selectedElements, false);
+
+                    // 按照元素在画布中的顺序排序，保持层级
+                    const sortedElements = [...selectedElements].sort((a, b) => {
+                      const indexA = board.children.findIndex(child => child.id === a.id);
+                      const indexB = board.children.findIndex(child => child.id === b.id);
+                      return indexA - indexB;
+                    });
+
+                    // 使用 toImage 将选中元素转换为图片
+                    const imageDataUrl = await toImage(board, {
+                      elements: sortedElements,
+                      fillStyle: 'transparent',
+                      inlineStyleClassNames: '.extend,.emojis,.text',
+                      ratio: 2, // 2x 清晰度
+                    });
+
+                    if (!imageDataUrl) {
+                      throw new Error(language === 'zh' ? '合并失败：无法生成图片' : 'Merge failed: Unable to generate image');
+                    }
+
+                    // 创建图片并裁剪透明边框
+                    const img = new Image();
+                    await new Promise<void>((resolve, reject) => {
+                      img.onload = () => resolve();
+                      img.onerror = () => reject(new Error('Failed to load merged image'));
+                      img.src = imageDataUrl;
+                    });
+
+                    // 创建 canvas 裁剪透明边框
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    const ctx = canvas.getContext('2d');
+                    if (!ctx) {
+                      throw new Error('Failed to get canvas context');
+                    }
+
+                    // 绘制图片到 canvas
+                    ctx.drawImage(img, 0, 0);
+
+                    // 获取图片数据
+                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+                    // 裁剪透明边框（严格模式：只裁剪完全透明的边缘）
+                    const { data, width, height } = imageData;
+                    const alphaThreshold = 0; // 严格模式
+
+                    // 检测一行是否完全透明
+                    const isRowTransparent = (y: number): boolean => {
+                      for (let x = 0; x < width; x++) {
+                        const idx = (y * width + x) * 4;
+                        if (data[idx + 3] > alphaThreshold) return false;
+                      }
+                      return true;
+                    };
+
+                    // 检测一列是否完全透明
+                    const isColTransparent = (x: number): boolean => {
+                      for (let y = 0; y < height; y++) {
+                        const idx = (y * width + x) * 4;
+                        if (data[idx + 3] > alphaThreshold) return false;
+                      }
+                      return true;
+                    };
+
+                    // 从顶部向下扫描
+                    let top = 0;
+                    while (top < height && isRowTransparent(top)) top++;
+
+                    // 从底部向上扫描
+                    let bottom = height - 1;
+                    while (bottom > top && isRowTransparent(bottom)) bottom--;
+
+                    // 从左边向右扫描
+                    let left = 0;
+                    while (left < width && isColTransparent(left)) left++;
+
+                    // 从右边向左扫描
+                    let right = width - 1;
+                    while (right > left && isColTransparent(right)) right--;
+
+                    // 计算裁剪后的尺寸
+                    const trimmedWidth = right - left + 1;
+                    const trimmedHeight = bottom - top + 1;
+
+                    // 创建裁剪后的 canvas
+                    const trimmedCanvas = document.createElement('canvas');
+                    trimmedCanvas.width = trimmedWidth;
+                    trimmedCanvas.height = trimmedHeight;
+                    const trimmedCtx = trimmedCanvas.getContext('2d');
+                    if (!trimmedCtx) {
+                      throw new Error('Failed to get trimmed canvas context');
+                    }
+
+                    // 绘制裁剪后的图片
+                    trimmedCtx.drawImage(
+                      canvas,
+                      left, top, trimmedWidth, trimmedHeight,
+                      0, 0, trimmedWidth, trimmedHeight
+                    );
+
+                    // 转换为 data URL
+                    const trimmedImageDataUrl = trimmedCanvas.toDataURL('image/png');
+
+                    // 计算插入位置（考虑裁剪偏移）
+                    // 原始边界矩形是基于 ratio=2 的，所以需要除以 2
+                    const scale = 2; // ratio 参数
+                    const insertX = boundingRect.x + (left / scale);
+                    const insertY = boundingRect.y + (top / scale);
+                    const insertWidth = trimmedWidth / scale;
+                    const insertHeight = trimmedHeight / scale;
+
+                    // 删除原元素
+                    deleteFragment(board);
+
+                    // 记录插入前的元素数量
+                    const childrenCountBefore = board.children.length;
+
+                    // 插入裁剪后的图片
+                    const imageItem = {
+                      url: trimmedImageDataUrl,
+                      width: insertWidth,
+                      height: insertHeight,
+                    };
+                    DrawTransforms.insertImage(board, imageItem, [insertX, insertY]);
+
+                    // 选中新插入的图片元素
+                    const newElement = board.children[childrenCountBefore];
+                    if (newElement) {
+                      clearSelectedElement(board);
+                      addSelectedElement(board, newElement);
+                    }
+
+                    MessagePlugin.close(loadingInstance);
+                    MessagePlugin.success(
+                      language === 'zh'
+                        ? `已将 ${selectedElements.length} 个元素合并为图片`
+                        : `Merged ${selectedElements.length} elements into image`
+                    );
+                  } catch (error: any) {
+                    MessagePlugin.close(loadingInstance);
+                    MessagePlugin.error(error.message || (language === 'zh' ? '合并失败' : 'Merge failed'));
+                  }
+                }}
+              />
+            )}
+            {state.hasVideoMergeable && (
+              <ToolButton
+                className="video-merge"
+                key="video-merge"
+                type="icon"
+                icon={VideoMergeIcon}
+                visible={true}
+                title={language === 'zh' ? '合成视频' : 'Merge Videos'}
+                aria-label={language === 'zh' ? '合成视频' : 'Merge Videos'}
+                data-track="toolbar_click_video_merge"
+                onPointerUp={async () => {
+                  // 收集所有视频元素的 URL
+                  const videoUrls: string[] = [];
+                  for (const element of selectedElements) {
+                    if (isVideoElement(element) && (element as any).url) {
+                      videoUrls.push((element as any).url);
+                    }
+                  }
+
+                  if (videoUrls.length < 2) {
+                    MessagePlugin.warning(language === 'zh' ? '请选择至少2个视频' : 'Please select at least 2 videos');
+                    return;
+                  }
+
+                  const loadingInstance = MessagePlugin.loading(
+                    language === 'zh' ? '正在合成视频...' : 'Merging videos...',
+                    0
+                  );
+
+                  try {
+                    const result = await mergeVideos(videoUrls, (progress, stage) => {
+                      const stageText = {
+                        downloading: language === 'zh' ? '下载视频...' : 'Downloading videos...',
+                        decoding: language === 'zh' ? '解码视频...' : 'Decoding videos...',
+                        encoding: language === 'zh' ? '编码视频...' : 'Encoding videos...',
+                        finalizing: language === 'zh' ? '生成文件中...' : 'Finalizing...',
+                      };
+                      // console.log(`[VideoMerge] ${stageText[stage]} ${Math.round(progress)}%`);
+                    });
+
+                    MessagePlugin.close(loadingInstance);
+
+                    // console.log('[VideoMerge] Merge result:', {
+                    //   blobType: result.blob.type,
+                    //   blobSize: result.blob.size,
+                    //   url: result.url,
+                    //   duration: result.duration,
+                    //   urlType: result.url.startsWith('blob:') ? 'blob' : 'other'
+                    // });
+
+                    // 插入合成后的视频到画布（而不是下载）
+                    try {
+                      // 导入插入视频的工具
+                      const { quickInsert } = await import('../../../mcp/tools/canvas-insertion');
+                      // console.log('[VideoMerge] Attempting to insert video with URL:', result.url);
+                      await quickInsert('video', result.url);
+
+                      MessagePlugin.success(
+                        language === 'zh'
+                          ? `已合成并插入 ${videoUrls.length} 个视频`
+                          : `Merged and inserted ${videoUrls.length} videos`
+                      );
+                    } catch (insertError) {
+                      console.error('[VideoMerge] Failed to insert video:', insertError);
+                      // 如果插入失败，回退到下载
+                      // 根据 Blob 类型确定文件扩展名
+                      const mimeType = result.blob.type || 'video/webm';
+                      const extension = mimeType.startsWith('video/mp4') ? 'mp4' : 'webm';
+
+                      // console.log('[VideoMerge] Fallback download:', {
+                      //   mimeType,
+                      //   extension,
+                      //   blobSize: result.blob.size,
+                      //   url: result.url
+                      // });
+
+                      // 创建一个新的 Blob URL 确保 MIME 类型正确
+                      const downloadBlob = new Blob([result.blob], { type: mimeType });
+                      const downloadUrl = URL.createObjectURL(downloadBlob);
+
+                      const link = document.createElement('a');
+                      link.href = downloadUrl;
+                      link.download = `merged-video-${Date.now()}.${extension}`;
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+
+                      // 延迟释放 URL
+                      setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
+
+                      MessagePlugin.warning(
+                        language === 'zh'
+                          ? `视频已合成，但插入失败，已自动下载 (${extension.toUpperCase()})`
+                          : `Video merged but failed to insert, downloaded as ${extension.toUpperCase()}`
+                      );
+                    }
+                  } catch (error: any) {
+                    MessagePlugin.close(loadingInstance);
+                    MessagePlugin.error(error.message || (language === 'zh' ? '视频合成失败' : 'Video merge failed'));
                   }
                 }}
               />
@@ -343,6 +936,7 @@ export const PopupToolbar = () => {
               visible={true}
               title={t('general.duplicate')}
               aria-label={t('general.duplicate')}
+              data-track="toolbar_click_duplicate"
               onPointerUp={() => {
                 duplicateElements(board);
               }}
@@ -355,6 +949,7 @@ export const PopupToolbar = () => {
               visible={true}
               title={t('general.delete')}
               aria-label={t('general.delete')}
+              data-track="toolbar_click_delete"
               onPointerUp={() => {
                 deleteFragment(board);
               }}
@@ -382,6 +977,20 @@ export const PopupToolbar = () => {
               // 可以在这里添加错误提示
             }
           }}
+        />
+      )}
+
+      {/* 文本属性设置面板 */}
+      {state.hasText && (
+        <TextPropertyPanel
+          board={board}
+          isOpen={showPropertyPanel}
+          onClose={() => setShowPropertyPanel(false)}
+          currentFontSize={state.fontSize}
+          currentFontFamily={state.marks?.['font-family']}
+          currentColor={state.marks?.color}
+          toolbarRect={toolbarRect}
+          selectionRect={selectionRect}
         />
       )}
     </>

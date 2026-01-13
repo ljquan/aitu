@@ -1,9 +1,43 @@
-import { getSelectedElements, PlaitBoard, PlaitElement, getRectangleByElements, RectangleClient, toImage, Point } from '@plait/core';
+import { getSelectedElements, PlaitBoard, PlaitElement, getRectangleByElements, RectangleClient, toImage, Point, BoardTransforms, getViewportOrigination } from '@plait/core';
 import { MindElement } from '@plait/mind';
 import { PlaitDrawElement } from '@plait/draw';
 import { Node } from 'slate';
 import { Freehand } from '../plugins/freehand/type';
 import { SAME_ROW_THRESHOLD } from '../components/ttd-dialog/shared/size-constants';
+
+/**
+ * 从图片 URL 获取原始尺寸
+ * @param url 图片 URL（支持 http/https/data URL）
+ * @returns Promise<{ width: number; height: number } | null>
+ */
+export const getImageDimensionsFromUrl = (url: string): Promise<{ width: number; height: number } | null> => {
+  return new Promise((resolve) => {
+    if (!url) {
+      resolve(null);
+      return;
+    }
+    
+    const img = new Image();
+    // 对于非 data URL，设置 crossOrigin
+    if (!url.startsWith('data:')) {
+      img.crossOrigin = 'anonymous';
+      img.referrerPolicy = 'no-referrer';
+    }
+    
+    img.onload = () => {
+      resolve({
+        width: img.naturalWidth,
+        height: img.naturalHeight,
+      });
+    };
+    
+    img.onerror = () => {
+      resolve(null);
+    };
+    
+    img.src = url;
+  });
+};
 
 /**
  * 压缩图像URL（用于生成的图像）
@@ -51,7 +85,7 @@ export const compressImageUrl = (imageUrl: string, maxWidth: number = 512, maxHe
         return;
       }
       
-      // 绘制图像
+      // 绘制图片
       ctx.drawImage(img, 0, 0, width, height);
       
       // 转换为data URL
@@ -70,13 +104,15 @@ export const compressImageUrl = (imageUrl: string, maxWidth: number = 512, maxHe
 
 export interface ExtractedContent {
   text: string;
-  images: { url: string; name?: string }[];
+  images: { url: string; name?: string; width?: number; height?: number }[];
 }
 
 export interface ProcessedContent {
-  remainingImages: { url: string; name?: string }[];
+  remainingImages: { url: string; name?: string; width?: number; height?: number }[];
   remainingText: string;
   graphicsImage?: string;
+  /** 图形图片的尺寸（如果有） */
+  graphicsImageDimensions?: { width: number; height: number };
 }
 
 /**
@@ -128,7 +164,7 @@ export const sortElementsByPosition = (board: PlaitBoard, elements: PlaitElement
       return a.centerY - b.centerY; // 按Y坐标从上到下排序
     });
 
-    console.log('Elements sorted by position with layer preservation');
+    // console.log('Elements sorted by position with layer preservation');
     // Return sorted elements
     return elementsWithPosition.map(item => item.element);
   } catch (error) {
@@ -238,7 +274,7 @@ export const isImageElement = (board: PlaitBoard, element: PlaitElement): boolea
 export const isTextElement = (board: PlaitBoard, element: PlaitElement): boolean => {
   // PlaitText elements (these are text-specific geometry elements)
   if (PlaitDrawElement.isText && PlaitDrawElement.isText(element)) {
-    console.log('Element classified as PlaitText element');
+    // console.log('Element classified as PlaitText element');
     return true;
   }
   
@@ -246,14 +282,14 @@ export const isTextElement = (board: PlaitBoard, element: PlaitElement): boolean
   if (('text' in element && element.text) || ('textContent' in element && element.textContent)) {
     // Don't classify mind elements as text-only since they're now graphics
     if (MindElement.isMindElement(board, element)) {
-      console.log('Element is mind element, treating as graphics not text');
+      // console.log('Element is mind element, treating as graphics not text');
       return false;
     }
-    console.log('Element classified as text element (fallback)');
+    // console.log('Element classified as text element (fallback)');
     return true;
   }
   
-  console.log('Element not classified as text element, type:', element.type);
+  // console.log('Element not classified as text element, type:', element.type);
   return false;
 };
 
@@ -263,13 +299,13 @@ export const isTextElement = (board: PlaitBoard, element: PlaitElement): boolean
 export const isGraphicsElement = (board: PlaitBoard, element: PlaitElement): boolean => {
   // Mind maps/mind elements should be treated as graphics (like freehand)
   if (MindElement.isMindElement(board, element)) {
-    console.log('Element classified as mind element graphics');
+    // console.log('Element classified as mind element graphics');
     return true;
   }
   
   // Freehand drawings
   if (Freehand.isFreehand(element)) {
-    console.log('Element classified as freehand graphics');
+    // console.log('Element classified as freehand graphics');
     return true;
   }
   
@@ -277,27 +313,27 @@ export const isGraphicsElement = (board: PlaitBoard, element: PlaitElement): boo
   if (PlaitDrawElement.isGeometry && PlaitDrawElement.isGeometry(element)) {
     // Double-check it's not a text element, since PlaitText extends PlaitGeometry
     if (PlaitDrawElement.isText && PlaitDrawElement.isText(element)) {
-      console.log('Element is geometry but also text, excluding from graphics');
+      // console.log('Element is geometry but also text, excluding from graphics');
       return false;
     }
-    console.log('Element classified as geometry graphics');
+    // console.log('Element classified as geometry graphics');
     return true;
   }
   
   // Lines and arrows (flowchart elements)
   if (PlaitDrawElement.isArrowLine && PlaitDrawElement.isArrowLine(element)) {
-    console.log('Element classified as arrow line graphics');
+    // console.log('Element classified as arrow line graphics');
     return true;
   }
   
   if (PlaitDrawElement.isVectorLine && PlaitDrawElement.isVectorLine(element)) {
-    console.log('Element classified as vector line graphics');
+    // console.log('Element classified as vector line graphics');
     return true;
   }
   
   // Tables and swimlanes (these are considered graphics for composition purposes)
   if (PlaitDrawElement.isTable && PlaitDrawElement.isTable(element)) {
-    console.log('Element classified as table graphics');
+    // console.log('Element classified as table graphics');
     return true;
   }
   
@@ -308,14 +344,14 @@ export const isGraphicsElement = (board: PlaitBoard, element: PlaitElement): boo
     const isTextElement = PlaitDrawElement.isText && PlaitDrawElement.isText(element);
     
     if (!isImageElement && !isTextElement) {
-      console.log('Element classified as other draw graphics');
+      // console.log('Element classified as other draw graphics');
       return true;
     }
   }
   
   // Check if it's a pure image element - if so, it's NOT graphics
   if (isImageElement(board, element)) {
-    console.log('Element excluded from graphics (is image)');
+    // console.log('Element excluded from graphics (is image)');
     return false;
   }
   
@@ -330,16 +366,16 @@ export const detectElementOverlap = (board: PlaitBoard, element1: PlaitElement, 
     const rect1 = getRectangleByElements(board, [element1], false);
     const rect2 = getRectangleByElements(board, [element2], false);
     
-    console.log(`Overlap check: ${element1.id} (${element1.type}) vs ${element2.id} (${element2.type})`);
-    console.log('  Rect1:', rect1);
-    console.log('  Rect2:', rect2);
+    // console.log(`Overlap check: ${element1.id} (${element1.type}) vs ${element2.id} (${element2.type})`);
+    // console.log('  Rect1:', rect1);
+    // console.log('  Rect2:', rect2);
     
     const overlaps = RectangleClient.isHit(rect1, rect2);
-    console.log('  Overlaps:', overlaps);
+    // console.log('  Overlaps:', overlaps);
     
     return overlaps;
   } catch (error) {
-    console.warn('Error detecting element overlap:', error, 'Elements:', element1.id, element2.id);
+    // console.warn('Error detecting element overlap:', error, 'Elements:', element1.id, element2.id);
     return false;
   }
 };
@@ -351,43 +387,43 @@ export const findElementsOverlappingWithGraphics = (board: PlaitBoard, elements:
   graphicsElements: PlaitElement[];
   overlappingElements: PlaitElement[];
 } => {
-  console.log('findElementsOverlappingWithGraphics: Processing', elements.length, 'elements');
+  // console.log('findElementsOverlappingWithGraphics: Processing', elements.length, 'elements');
   
   const graphicsElements = elements.filter(el => {
     const isGraphics = isGraphicsElement(board, el);
-    if (isGraphics) {
-      console.log('Found graphics element:', el.id, 'type:', el.type);
-    }
+    // if (isGraphics) {
+    //   console.log('Found graphics element:', el.id, 'type:', el.type);
+    // }
     return isGraphics;
   });
   
   const nonGraphicsElements = elements.filter(el => {
     const isGraphics = isGraphicsElement(board, el);
-    if (!isGraphics) {
-      const isImage = isImageElement(board, el);
-      const isText = isTextElement(board, el);
-      console.log('Found non-graphics element:', el.id, 'type:', el.type, 'isImage:', isImage, 'isText:', isText);
-    }
+    // if (!isGraphics) {
+    //   const isImage = isImageElement(board, el);
+    //   const isText = isTextElement(board, el);
+    //   console.log('Found non-graphics element:', el.id, 'type:', el.type, 'isImage:', isImage, 'isText:', isText);
+    // }
     return !isGraphics;
   });
   
-  console.log('Graphics elements:', graphicsElements.length, 'Non-graphics elements:', nonGraphicsElements.length);
+  // console.log('Graphics elements:', graphicsElements.length, 'Non-graphics elements:', nonGraphicsElements.length);
   
   const overlappingElements: PlaitElement[] = [];
   
   for (const graphicsEl of graphicsElements) {
-    console.log('Checking overlaps for graphics element:', graphicsEl.id);
+    // console.log('Checking overlaps for graphics element:', graphicsEl.id);
     for (const otherEl of nonGraphicsElements) {
       const overlaps = detectElementOverlap(board, graphicsEl, otherEl);
-      console.log('  Overlap check with', otherEl.id, ':', overlaps);
+      // console.log('  Overlap check with', otherEl.id, ':', overlaps);
       if (overlaps && !overlappingElements.includes(otherEl)) {
         overlappingElements.push(otherEl);
-        console.log('  Added overlapping element:', otherEl.id);
+        // console.log('  Added overlapping element:', otherEl.id);
       }
     }
   }
   
-  console.log('Final result - Graphics:', graphicsElements.length, 'Overlapping:', overlappingElements.length);
+  // console.log('Final result - Graphics:', graphicsElements.length, 'Overlapping:', overlappingElements.length);
   return { graphicsElements, overlappingElements };
 };
 
@@ -402,7 +438,7 @@ export const convertElementsToImage = async (board: PlaitBoard, elements: PlaitE
       return null;
     }
 
-    console.log(`Converting ${elements.length} elements to image using Plait's native toImage function`);
+    // console.log(`Converting ${elements.length} elements to image using Plait's native toImage function`);
     
     // Sort elements by their original order in the board to maintain layer hierarchy
     // Elements that appear later in the board.children array should be on top
@@ -418,8 +454,8 @@ export const convertElementsToImage = async (board: PlaitBoard, elements: PlaitE
       return indexA - indexB; // 保持原始顺序，早出现的在底层，晚出现的在顶层
     });
     
-    console.log('Elements sorted by board hierarchy for image conversion:', 
-      sortedElements.map(el => `${el.id}:${board.children.findIndex(child => child.id === el.id)}`));
+    // console.log('Elements sorted by board hierarchy for image conversion:', 
+    //   sortedElements.map(el => `${el.id}:${board.children.findIndex(child => child.id === el.id)}`));
     
     // Use Plait's native toImage function with the same options as export
     // This ensures all colors, styles, and rendering are preserved exactly
@@ -432,19 +468,19 @@ export const convertElementsToImage = async (board: PlaitBoard, elements: PlaitE
     });
 
     if (imageDataUrl) {
-      console.log(`Successfully converted elements to image using native Plait rendering`);
+      // console.log(`Successfully converted elements to image using native Plait rendering`);
       
       // Compress the image to max 512x512px for AI image generation
       try {
         const compressedImageUrl = await compressImageUrl(imageDataUrl, 512, 512, 0.8);
-        console.log('Image compressed successfully for AI image generation');
+        // console.log('Image compressed successfully for AI image generation');
         return compressedImageUrl;
       } catch (compressError) {
-        console.warn('Failed to compress converted image, using original:', compressError);
+        // console.warn('Failed to compress converted image, using original:', compressError);
         return imageDataUrl;
       }
     } else {
-      console.warn('Plait toImage returned null');
+      // console.warn('Plait toImage returned null');
       return null;
     }
 
@@ -457,33 +493,46 @@ export const convertElementsToImage = async (board: PlaitBoard, elements: PlaitE
 /**
  * Extract image URLs from a Plait element
  */
-export const extractImagesFromElement = (element: PlaitElement, board?: PlaitBoard): { url: string; name?: string }[] => {
-  const images: { url: string; name?: string }[] = [];
+export const extractImagesFromElement = (element: PlaitElement, board?: PlaitBoard): { url: string; name?: string; width?: number; height?: number }[] => {
+  const images: { url: string; name?: string; width?: number; height?: number }[] = [];
   
   // Handle MindElement with images
   if (board && MindElement.isMindElement(board, element)) {
     const mindElement = element as MindElement;
     if (mindElement.image && mindElement.image.url) {
+      // MindElement 的 image 可能有 width 和 height
+      const imgWidth = (mindElement.image as any).width;
+      const imgHeight = (mindElement.image as any).height;
       images.push({ 
         url: mindElement.image.url,
-        name: `mind-image-${Date.now()}`
+        name: `mind-image-${Date.now()}`,
+        width: imgWidth,
+        height: imgHeight,
       });
     }
   }
   
   // Handle DrawImage elements (assuming they have url property)
   if ('url' in element && typeof element.url === 'string') {
+    // 尝试从元素中获取尺寸
+    const elemWidth = (element as any).width;
+    const elemHeight = (element as any).height;
     images.push({ 
       url: element.url,
-      name: `draw-image-${Date.now()}`
+      name: `draw-image-${Date.now()}`,
+      width: elemWidth,
+      height: elemHeight,
     });
   }
   
   // Handle elements with image property
   if ('image' in element && element.image && typeof element.image === 'object' && 'url' in element.image) {
+    const imgObj = element.image as any;
     images.push({ 
-      url: element.image.url as string,
-      name: `element-image-${Date.now()}`
+      url: imgObj.url as string,
+      name: `element-image-${Date.now()}`,
+      width: imgObj.width,
+      height: imgObj.height,
     });
   }
   
@@ -500,7 +549,7 @@ export const extractSelectedContent = (board: PlaitBoard): ExtractedContent => {
   const sortedElements = sortElementsByPosition(board, selectedElements);
   
   const texts: string[] = [];
-  const images: { url: string; name?: string }[] = [];
+  const images: { url: string; name?: string; width?: number; height?: number }[] = [];
   
   for (const element of sortedElements) {
     // Extract text
@@ -537,32 +586,32 @@ export const processSelectedContentForAI = async (
     selectedElements = selectedElementIds
       .map(id => board.children.find((el: any) => el.id === id))
       .filter(Boolean) as PlaitElement[];
-    console.log('processSelectedContentForAI: Using provided element IDs, found elements:', selectedElements.length);
+    // console.log('processSelectedContentForAI: Using provided element IDs, found elements:', selectedElements.length);
   } else {
     // 回退到当前选中的元素
     selectedElements = getSelectedElements(board);
-    console.log('processSelectedContentForAI: Using currently selected elements:', selectedElements.length);
+    // console.log('processSelectedContentForAI: Using currently selected elements:', selectedElements.length);
   }
 
   // Sort elements by position (left to right, top to bottom)
   const sortedElements = sortElementsByPosition(board, selectedElements);
-  console.log('Elements sorted by position');
+  // console.log('Elements sorted by position');
   
   // Debug: Log each selected element's details (using sorted elements)
-  sortedElements.forEach((el, index) => {
-    console.log(`Element ${index} (sorted):`, {
-      id: el.id,
-      type: el.type,
-      isImage: isImageElement(board, el),
-      isText: isTextElement(board, el),
-      isGraphics: isGraphicsElement(board, el),
-      element: el
-    });
-  });
+  // sortedElements.forEach((el, index) => {
+  //   console.log(`Element ${index} (sorted):`, {
+  //     id: el.id,
+  //     type: el.type,
+  //     isImage: isImageElement(board, el),
+  //     isText: isTextElement(board, el),
+  //     isGraphics: isGraphicsElement(board, el),
+  //     element: el
+  //   });
+  // });
   
   // Step 1: Find graphics elements and their overlapping elements (using sorted elements)
   const { graphicsElements, overlappingElements } = findElementsOverlappingWithGraphics(board, sortedElements);
-  console.log('Graphics elements:', graphicsElements.length, 'Overlapping elements:', overlappingElements.length);
+  // console.log('Graphics elements:', graphicsElements.length, 'Overlapping elements:', overlappingElements.length);
   
   // Step 2: Combine graphics elements with overlapping elements, preserving sorted order
   const allGraphicsRelatedElementsSet = new Set([...graphicsElements, ...overlappingElements]);
@@ -572,27 +621,27 @@ export const processSelectedContentForAI = async (
   const remainingElements = sortedElements.filter(
     el => !allGraphicsRelatedElements.includes(el)
   );
-  console.log('Remaining elements count:', remainingElements.length);
+  // console.log('Remaining elements count:', remainingElements.length);
   
   // Step 4: Generate image from graphics-related elements
   let graphicsImage: string | undefined;
   if (allGraphicsRelatedElements.length > 0) {
-    console.log('Converting graphics-related elements to image, count:', allGraphicsRelatedElements.length);
+    // console.log('Converting graphics-related elements to image, count:', allGraphicsRelatedElements.length);
     try {
       const imageUrl = await convertElementsToImage(board, allGraphicsRelatedElements);
-      console.log('convertElementsToImage returned:', imageUrl ? 'success' : 'null');
+      // console.log('convertElementsToImage returned:', imageUrl ? 'success' : 'null');
       if (imageUrl) {
         graphicsImage = imageUrl;
       }
     } catch (error) {
-      console.warn('Failed to convert graphics elements to image:', error);
+      // console.warn('Failed to convert graphics elements to image:', error);
     }
   } else {
-    console.log('No graphics-related elements to convert to image');
+    // console.log('No graphics-related elements to convert to image');
   }
   
   // Step 5: Extract images and text from remaining elements
-  const remainingImages: { url: string; name?: string }[] = [];
+  const remainingImages: { url: string; name?: string; width?: number; height?: number }[] = [];
   const remainingTexts: string[] = [];
   
   for (const element of remainingElements) {
@@ -600,24 +649,50 @@ export const processSelectedContentForAI = async (
     const elementText = extractTextFromElement(element, board);
     if (elementText) {
       remainingTexts.push(elementText);
-      console.log('Found text from element:', elementText.substring(0, 50));
+      // console.log('Found text from element:', elementText.substring(0, 50));
     }
     
     // Extract images
     const elementImages = extractImagesFromElement(element, board);
     if (elementImages.length > 0) {
       remainingImages.push(...elementImages);
-      console.log('Found images from element:', elementImages.length);
+      // console.log('Found images from element:', elementImages.length);
+    }
+  }
+  
+  // Step 6: 异步获取缺失的图片尺寸
+  const imagesWithDimensions = await Promise.all(
+    remainingImages.map(async (img) => {
+      // 如果已有有效尺寸，直接返回
+      if (img.width && img.height && img.width > 0 && img.height > 0) {
+        return img;
+      }
+      // 否则从 URL 获取尺寸
+      const dimensions = await getImageDimensionsFromUrl(img.url);
+      if (dimensions) {
+        return { ...img, width: dimensions.width, height: dimensions.height };
+      }
+      return img;
+    })
+  );
+  
+  // 同样获取 graphicsImage 的尺寸
+  let graphicsImageDimensions: { width: number; height: number } | undefined;
+  if (graphicsImage) {
+    const dims = await getImageDimensionsFromUrl(graphicsImage);
+    if (dims) {
+      graphicsImageDimensions = dims;
     }
   }
   
   const result = {
-    remainingImages,
+    remainingImages: imagesWithDimensions,
     remainingText: remainingTexts.join('\n'),
-    graphicsImage
+    graphicsImage,
+    graphicsImageDimensions,
   };
   
-  console.log('Final result - Images:', result.remainingImages.length, 'Text length:', result.remainingText.length, 'Graphics image:', !!result.graphicsImage);
+  // console.log('Final result - Images:', result.remainingImages.length, 'Text length:', result.remainingText.length, 'Graphics image:', !!result.graphicsImage);
   
   return result;
 };
@@ -662,7 +737,7 @@ export const getInsertionPointForSelectedElements = (board: PlaitBoard): Point |
     // Calculate the bottom Y coordinate + 20px offset
     const insertionY = boundingRect.y + boundingRect.height + 50;
     
-    console.log('Insertion point calculated:', { centerX, insertionY, boundingRect });
+    // console.log('Insertion point calculated:', { centerX, insertionY, boundingRect });
     
     return [centerX, insertionY] as Point;
   } catch (error) {
@@ -675,12 +750,12 @@ export const getInsertionPointForSelectedElements = (board: PlaitBoard): Point |
  * Calculate insertion point at the bottom of the bottommost element on the board
  * Used when no elements are selected - prevents overlapping with existing content
  * @param board - The PlaitBoard instance
- * @param imageWidth - Width of the image to be inserted (for horizontal centering)
- * @returns Point below the bottommost element, horizontally centered relative to it
+ * @param _imageWidth - Deprecated, kept for backward compatibility (no longer used)
+ * @returns Point below the bottommost element, left-aligned with it
  */
-export const getInsertionPointBelowBottommostElement = (board: PlaitBoard, imageWidth: number): Point | undefined => {
+export const getInsertionPointBelowBottommostElement = (board: PlaitBoard, _imageWidth?: number): Point | undefined => {
   if (!board.children || board.children.length === 0) {
-    console.log('No elements on board, no default insertion point');
+    // console.log('No elements on board, no default insertion point');
     return undefined;
   }
   
@@ -704,26 +779,25 @@ export const getInsertionPointBelowBottommostElement = (board: PlaitBoard, image
     }
     
     if (!bottommostElement) {
-      console.warn('Could not find any valid element on board');
+      // console.warn('Could not find any valid element on board');
       return undefined;
     }
     
-    // Calculate insertion point below the bottommost element
+    // Calculate insertion point below the bottommost element (left-aligned)
     const bottommostRect = getRectangleByElements(board, [bottommostElement], false);
-    const centerX = bottommostRect.x + bottommostRect.width / 2;
+    const leftX = bottommostRect.x; // 左对齐，使用最底部元素的左边缘 X 坐标
     const insertionY = bottommostRect.y + bottommostRect.height + 50; // 50px gap
     
-    console.log('Insertion point below bottommost element:', {
-      centerX,
-      insertionY,
-      bottommostRect,
-      imageWidth,
-    });
+    // console.log('Insertion point below bottommost element:', {
+    //   leftX,
+    //   insertionY,
+    //   bottommostRect,
+    // });
     
-    // Adjust X coordinate to center the image horizontally relative to the bottommost element
-    return [centerX - imageWidth / 2, insertionY] as Point;
+    // Return left-aligned position
+    return [leftX, insertionY] as Point;
   } catch (error) {
-    console.warn('Error calculating insertion point below bottommost element:', error);
+    // console.warn('Error calculating insertion point below bottommost element:', error);
     return undefined;
   }
 };
@@ -736,4 +810,81 @@ export const getInsertionPointBelowBottommostElement = (board: PlaitBoard, image
 export const getSmartInsertionPoint = (board: PlaitBoard, defaultPoint?: Point): Point | undefined => {
   const calculatedPoint = getInsertionPointForSelectedElements(board);
   return calculatedPoint || defaultPoint;
+};
+
+/**
+ * 检查一个点是否在当前视口内可见
+ * @param board - PlaitBoard 实例
+ * @param point - 要检查的点坐标
+ * @param margin - 边距，点距离视口边缘的最小距离（默认 50px）
+ * @returns 如果点在视口内可见则返回 true
+ */
+export const isPointInViewport = (board: PlaitBoard, point: Point, margin: number = 50): boolean => {
+  try {
+    const boardContainer = PlaitBoard.getBoardContainer(board);
+    const containerRect = boardContainer.getBoundingClientRect();
+    const zoom = board.viewport.zoom;
+    const origination = getViewportOrigination(board);
+
+    if (!origination) {
+      return false;
+    }
+
+    // 计算视口的画布坐标范围
+    const viewportLeft = origination[0] + margin / zoom;
+    const viewportTop = origination[1] + margin / zoom;
+    const viewportRight = origination[0] + (containerRect.width - margin) / zoom;
+    const viewportBottom = origination[1] + (containerRect.height - margin) / zoom;
+
+    // 检查点是否在视口范围内
+    return (
+      point[0] >= viewportLeft &&
+      point[0] <= viewportRight &&
+      point[1] >= viewportTop &&
+      point[1] <= viewportBottom
+    );
+  } catch (error) {
+    console.warn('Error checking if point is in viewport:', error);
+    return false;
+  }
+};
+
+/**
+ * 滚动视口使指定点居中显示
+ * @param board - PlaitBoard 实例
+ * @param point - 目标点坐标（画布坐标系）
+ */
+export const scrollToPoint = (board: PlaitBoard, point: Point): void => {
+  try {
+    const boardContainer = PlaitBoard.getBoardContainer(board);
+    const containerRect = boardContainer.getBoundingClientRect();
+    const zoom = board.viewport.zoom;
+
+    // 计算新的视口原点，使目标点居中
+    const newOriginationX = point[0] - containerRect.width / (2 * zoom);
+    const newOriginationY = point[1] - containerRect.height / (2 * zoom);
+
+    // console.log('[scrollToPoint] Scrolling to point:', {
+    //   targetPoint: point,
+    //   currentZoom: zoom,
+    //   newOrigination: [newOriginationX, newOriginationY],
+    // });
+
+    // 使用 BoardTransforms 更新视口位置，保持当前缩放不变
+    BoardTransforms.updateViewport(board, [newOriginationX, newOriginationY], zoom);
+  } catch (error) {
+    console.warn('Error scrolling to point:', error);
+  }
+};
+
+/**
+ * 如果点不在当前视口内，则滚动视口使其可见（居中显示）
+ * @param board - PlaitBoard 实例
+ * @param point - 目标点坐标（画布坐标系）
+ * @param margin - 边距检查值（默认 100px）
+ */
+export const scrollToPointIfNeeded = (board: PlaitBoard, point: Point, margin: number = 100): void => {
+  if (!isPointInViewport(board, point, margin)) {
+    scrollToPoint(board, point);
+  }
 };

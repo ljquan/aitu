@@ -1,0 +1,236 @@
+.backup-restore-dialog {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  width: 480px;
+  max-width: 90vw;
+
+  &__title {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0 0 20px;
+    color: #1a1a1a;
+  }
+
+  &__tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    padding: 4px;
+    background: #f5f5f5;
+    border-radius: 8px;
+  }
+
+  &__tab {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 16px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    font-size: 14px;
+    font-weight: 500;
+    color: #666;
+    cursor: pointer;
+    transition: all 0.2s;
+
+    &:hover:not(:disabled) {
+      background: rgba(0, 0, 0, 0.04);
+    }
+
+    &--active {
+      background: white;
+      color: #1890ff;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+
+    svg {
+      font-size: 16px;
+    }
+  }
+
+  &__panel {
+    min-height: 200px;
+  }
+
+  &__description {
+    font-size: 14px;
+    color: #666;
+    margin: 0 0 16px;
+    line-height: 1.5;
+  }
+
+  &__options {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 20px;
+
+    .t-checkbox {
+      padding: 12px;
+      border: 1px solid #e8e8e8;
+      border-radius: 8px;
+      transition: all 0.2s;
+
+      &:hover {
+        border-color: #1890ff;
+        background: rgba(24, 144, 255, 0.02);
+      }
+    }
+
+    .t-checkbox__label {
+      flex: 1;
+    }
+  }
+
+  &__option-content {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  &__option-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: #1a1a1a;
+  }
+
+  &__option-desc {
+    font-size: 12px;
+    color: #999;
+  }
+
+  &__dropzone {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 40px 20px;
+    border: 2px dashed #d9d9d9;
+    border-radius: 8px;
+    background: #fafafa;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-bottom: 20px;
+
+    &:hover {
+      border-color: #1890ff;
+      background: rgba(24, 144, 255, 0.02);
+    }
+  }
+
+  &__dropzone-icon {
+    font-size: 32px;
+    color: #999;
+  }
+
+  &__dropzone-text {
+    font-size: 14px;
+    color: #666;
+  }
+
+  &__progress {
+    margin-bottom: 20px;
+
+    // 覆盖 TDesign Progress 默认样式，增强对比度
+    .t-progress__bar {
+      background-color: #e8e8e8;
+    }
+
+    .t-progress__inner {
+      background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
+    }
+  }
+
+  &__progress-text {
+    display: block;
+    font-size: 12px;
+    color: #666;
+    margin-top: 8px;
+    text-align: center;
+  }
+
+  &__result {
+    padding: 16px;
+    background: #f6ffed;
+    border: 1px solid #b7eb8f;
+    border-radius: 8px;
+    margin-bottom: 20px;
+  }
+
+  &__result-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: #52c41a;
+    margin: 0 0 12px;
+  }
+
+  &__result-list {
+    margin: 0;
+    padding-left: 20px;
+    font-size: 13px;
+    color: #333;
+    line-height: 1.8;
+  }
+
+  &__result-errors {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #b7eb8f;
+    font-size: 12px;
+    color: #ff4d4f;
+
+    ul {
+      margin: 4px 0 0;
+      padding-left: 16px;
+    }
+  }
+
+  &__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  &__button {
+    padding: 8px 20px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+
+    &--cancel {
+      background: #f5f5f5;
+      color: #333;
+
+      &:hover:not(:disabled) {
+        background: #e8e8e8;
+      }
+    }
+
+    &--primary {
+      background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
+      color: white;
+
+      &:hover:not(:disabled) {
+        background: linear-gradient(135deg, #40a9ff 0%, #1890ff 100%);
+      }
+    }
+  }
+}

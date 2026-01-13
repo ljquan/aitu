@@ -3,14 +3,18 @@
  *
  * Manages automatic synchronization between task queue state and IndexedDB storage.
  * Handles loading tasks on mount and debounced saving on updates.
+ *
+ * In SW mode: Tasks are managed by Service Worker's IndexedDB, this hook only
+ * handles saving updates to local storage for backup/caching purposes.
  */
 
-import { useEffect, useRef } from 'react';
-import { taskQueueService } from '../services/task-queue-service';
+import { useEffect } from 'react';
+import { taskQueueService, shouldUseSWTaskQueue } from '../services/task-queue';
 import { storageService } from '../services/storage-service';
 import { UPDATE_INTERVALS } from '../constants/TASK_CONSTANTS';
 import { migrateLegacyHistory } from '../utils/history-migration';
-import { TaskType, TaskStatus, TaskExecutionPhase } from '../types/task.types';
+import { Task, TaskType, TaskStatus, TaskExecutionPhase } from '../types/task.types';
+import { debounce } from '@aitu/utils';
 
 // Global flag to prevent multiple initializations (persists across HMR)
 let globalInitialized = false;
@@ -31,19 +35,21 @@ let globalInitialized = false;
  * }
  */
 export function useTaskStorage(): void {
-  const saveTimerRef = useRef<NodeJS.Timeout | null>(null);
-
   useEffect(() => {
     let subscriptionActive = true;
+    const usingSW = shouldUseSWTaskQueue();
 
     // Initialize storage and load tasks
     const initializeStorage = async () => {
       if (globalInitialized) {
-        console.log('[useTaskStorage] Already initialized, skipping');
+        // console.log('[useTaskStorage] Already initialized, skipping');
         return;
       }
 
-      console.log('[useTaskStorage] Starting initialization...');
+      // Set flag immediately to prevent concurrent initialization
+      globalInitialized = true;
+
+      // console.log('[useTaskStorage] Starting initialization...');
 
       try {
         // Initialize storage service
@@ -52,29 +58,59 @@ export function useTaskStorage(): void {
         // Migrate legacy history data from localStorage to task queue
         await migrateLegacyHistory();
 
-        // Load tasks from storage (including migrated history)
+        // In SW mode, tasks are managed by Service Worker's IndexedDB
+        // Initialize SW service and sync tasks from SW
+        if (usingSW) {
+          // console.log('[useTaskStorage] SW mode: initializing and syncing tasks from Service Worker');
+
+          // Import and initialize SW task queue service
+          const { swTaskQueueService } = await import('../services/sw-task-queue-service');
+          await swTaskQueueService.initialize();
+
+          // Migrate legacy tasks from old storage to SW (one-time migration)
+          const legacyTasks = await storageService.loadTasks();
+          if (legacyTasks.length > 0) {
+            // console.log(`[useTaskStorage] Migrating ${legacyTasks.length} legacy tasks to SW`);
+
+            // Restore legacy tasks to SW service (which will sync to SW)
+            await swTaskQueueService.restoreTasks(legacyTasks);
+
+            // Clear legacy storage after successful migration
+            for (const task of legacyTasks) {
+              await storageService.deleteTask(task.id);
+            }
+            // console.log('[useTaskStorage] Legacy tasks migrated and cleared');
+          }
+
+          // Sync tasks from SW to local state
+          await swTaskQueueService.syncTasksFromSW();
+
+          return;
+        }
+
+        // Legacy mode: Load tasks from storage (including migrated history)
         const storedTasks = await storageService.loadTasks();
-        console.log(`[useTaskStorage] Loaded ${storedTasks.length} tasks from IndexedDB`);
+        // console.log(`[useTaskStorage] Loaded ${storedTasks.length} tasks from IndexedDB`);
 
         if (storedTasks.length > 0 && subscriptionActive) {
           taskQueueService.restoreTasks(storedTasks);
-          console.log(`[useTaskStorage] Restored ${storedTasks.length} tasks from storage`);
+          // console.log(`[useTaskStorage] Restored ${storedTasks.length} tasks from storage`);
 
           // Handle interrupted processing tasks based on task type and remoteId
           const processingTasks = storedTasks.filter(task => task.status === 'processing');
 
           if (processingTasks.length > 0) {
-            console.log(`[useTaskStorage] Found ${processingTasks.length} interrupted processing tasks`);
+            // console.log(`[useTaskStorage] Found ${processingTasks.length} interrupted processing tasks`);
 
             processingTasks.forEach(task => {
               // Video tasks with remoteId can be resumed (polling can continue)
               if (task.type === TaskType.VIDEO && task.remoteId) {
-                console.log(`[useTaskStorage] Video task ${task.id} can resume polling (remoteId: ${task.remoteId})`);
+                // console.log(`[useTaskStorage] Video task ${task.id} can resume polling (remoteId: ${task.remoteId})`);
                 // Keep as processing, useTaskExecutor will handle resumption
               } else {
                 // Image tasks or video tasks without remoteId cannot be resumed
                 // Mark as failed and let user decide to retry
-                console.log(`[useTaskStorage] Task ${task.id} (${task.type}) cannot be resumed, marking as failed`);
+                // console.log(`[useTaskStorage] Task ${task.id} (${task.type}) cannot be resumed, marking as failed`);
 
                 // Provide more specific error message based on execution phase
                 let errorMessage = '任务被中断（页面刷新）';
@@ -113,15 +149,25 @@ export function useTaskStorage(): void {
 
           if (incompleteTasks.length > 0 || resumableTasks.length > 0) {
             const totalIncomplete = incompleteTasks.length + resumableTasks.length;
-            console.log(`[useTaskStorage] Total ${totalIncomplete} incomplete tasks ready for execution`);
+            // console.log(`[useTaskStorage] Total ${totalIncomplete} incomplete tasks ready for execution`);
           }
         }
-
-        globalInitialized = true;
       } catch (error) {
+        // Reset flag on error so retry is possible
+        globalInitialized = false;
         console.error('[useTaskStorage] Failed to initialize storage:', error);
       }
     };
+
+    // Create a debounced save function
+    const debouncedSave = debounce(async (task: Task) => {
+      try {
+        await storageService.saveTask(task);
+        // console.log(`[useTaskStorage] Saved task ${task.id} to storage`);
+      } catch (error) {
+        console.error('[useTaskStorage] Failed to save task:', error);
+      }
+    }, UPDATE_INTERVALS.STORAGE_SYNC);
 
     // Subscribe to task updates
     const subscription = taskQueueService.observeTaskUpdates().subscribe(event => {
@@ -137,18 +183,7 @@ export function useTaskStorage(): void {
         });
       } else {
         // Debounce save operation for created/updated tasks
-        if (saveTimerRef.current) {
-          clearTimeout(saveTimerRef.current);
-        }
-
-        saveTimerRef.current = setTimeout(async () => {
-          try {
-            await storageService.saveTask(event.task);
-            console.log(`[useTaskStorage] Saved task ${event.task.id} to storage`);
-          } catch (error) {
-            console.error('[useTaskStorage] Failed to save task:', error);
-          }
-        }, UPDATE_INTERVALS.STORAGE_SYNC);
+        debouncedSave(event.task);
       }
     });
 
@@ -159,10 +194,6 @@ export function useTaskStorage(): void {
     return () => {
       subscriptionActive = false;
       subscription.unsubscribe();
-      
-      if (saveTimerRef.current) {
-        clearTimeout(saveTimerRef.current);
-      }
     };
   }, []);
 }

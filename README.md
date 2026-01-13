@@ -9,9 +9,12 @@
     思维导图 · 流程图 · 自由画 · AI生图 · AI生视频
   </p>
   <p>
-    <a href="https://github.com/ljquan/aitu/releases"><img src="https://img.shields.io/badge/version-0.0.11-blue.svg" alt="Version"></a>
     <a href="https://github.com/ljquan/aitu/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
     <a href="https://aitu.tu-zi.com"><img src="https://img.shields.io/badge/demo-online-brightgreen.svg" alt="Demo"></a>
+  </p>
+  <p>
+    <a href="https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fljquan%2Faitu&project-name=aitu&repository-name=aitu"><img src="https://vercel.com/button" alt="Deploy with Vercel"/></a>
+    <a href="https://app.netlify.com/start/deploy?repository=https://github.com/ljquan/aitu"><img src="https://www.netlify.com/img/deploy/button.svg" alt="Deploy to Netlify"/></a>
   </p>
 </div>
 
@@ -20,10 +23,10 @@
 ## 特性
 
 ### AI 创作能力 🔥
-- **AI 图像生成** - 支持多种图像生成模型
+- **AI 图片生成** - 支持多种图片生成模型
   - gemini-2.5-flash-image (nano-banana) - 快速生图
   - gemini-3-pro-image-preview (nano-banana-2) - 高质量生图，支持 HD/2K/4K 分辨率
-  - 支持文本转图像、图像参考生成、批量生成
+  - 支持文本转图片、图片参考生成、批量生成
 - **AI 视频生成** - 支持多种视频生成模型
   - Veo3 / Veo3 Pro - 高质量视频生成
   - Veo3.1 / Veo3.1 Pro - 支持首尾帧控制，多图参考
@@ -54,11 +57,11 @@
 <div align="center">
   <figure>
     <a href="./apps/web/public/product_showcase/aitu-01.png" target="_blank" rel="noopener">
-      <img src="./apps/web/public/product_showcase/aitu-01.png" alt="提示词图像概率" width="100%" />
+      <img src="./apps/web/public/product_showcase/aitu-01.png" alt="提示词图片概率" width="100%" />
     </a>
     <figcaption>
       <p align="center">
-        提示词 + 图像 概括一体
+        提示词 + 图片 概括一体
       </p>
     </figcaption>
   </figure>
@@ -228,6 +231,15 @@ aitu/
 
 ### 在线体验
 直接访问 [aitu.tu-zi.com](https://aitu.tu-zi.com) 立即开始使用，无需安装任何软件。
+
+### 一键部署
+
+点击下方按钮，即可将 Aitu 部署到你自己的服务器：
+
+| 平台 | 一键部署 |
+| :--- | :--- |
+| Vercel | [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fljquan%2Faitu&project-name=aitu&repository-name=aitu) |
+| Netlify | [![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/ljquan/aitu) |
 
 ### 本地开发
 
@@ -504,7 +516,7 @@ nx lint drawnix
 - ✅ 自由绘画和图片插入
 - ✅ Markdown/Mermaid 转换
 - ✅ 移动端适配
-- ✅ AI 图像生成（多模型支持）
+- ✅ AI 图片生成（多模型支持）
 - ✅ AI 视频生成（Veo3/Sora-2）
 - ✅ 任务队列与批量生成
 - ✅ 媒体缓存功能

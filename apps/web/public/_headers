@@ -3,7 +3,7 @@
 # 首页和HTML文件 - 允许iframe嵌入，禁用缓存
 /
   Cache-Control: public, max-age=0, must-revalidate
-  Content-Security-Policy: frame-ancestors 'self' localhost:* 127.0.0.1:* *.localhost:* https://api.tu-zi.com
+  Content-Security-Policy: default-src 'self' https: data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com https://us.i.posthog.com https://wiki.tu-zi.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https: wss: data:; frame-ancestors 'self' localhost:* 127.0.0.1:* *.localhost:* https://api.tu-zi.com;
   X-Frame-Options: SAMEORIGIN
   X-Content-Type-Options: nosniff
   Referrer-Policy: origin-when-cross-origin
@@ -30,10 +30,17 @@
   Cache-Control: public, max-age=31536000, immutable
   Content-Security-Policy: frame-ancestors 'self' localhost:* 127.0.0.1:* *.localhost:* https://api.tu-zi.com
 
+# 图片资源
 /*.png
   Cache-Control: public, max-age=31536000, immutable
 
 /*.jpg
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.jpeg
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.webp
   Cache-Control: public, max-age=31536000, immutable
 
 /*.svg
@@ -42,7 +49,36 @@
 /*.ico
   Cache-Control: public, max-age=31536000, immutable
 
-# Service Worker
+# 字体资源 - 长期缓存 + CORS
+/*.woff
+  Cache-Control: public, max-age=31536000, immutable
+  Access-Control-Allow-Origin: *
+
+/*.woff2
+  Cache-Control: public, max-age=31536000, immutable
+  Access-Control-Allow-Origin: *
+
+/*.ttf
+  Cache-Control: public, max-age=31536000, immutable
+  Access-Control-Allow-Origin: *
+
+/*.otf
+  Cache-Control: public, max-age=31536000, immutable
+  Access-Control-Allow-Origin: *
+
+/*.eot
+  Cache-Control: public, max-age=31536000, immutable
+  Access-Control-Allow-Origin: *
+
+# Service Worker - 不缓存，确保总是获取最新版本
 /sw.js
   Cache-Control: public, max-age=0, must-revalidate
   Content-Security-Policy: frame-ancestors 'self' localhost:* 127.0.0.1:* *.localhost:* https://api.tu-zi.com
+
+# Manifest 文件 - 短缓存
+/manifest.json
+  Cache-Control: public, max-age=3600, must-revalidate
+
+# 版本信息 - 不缓存
+/version.json
+  Cache-Control: public, max-age=0, must-revalidate

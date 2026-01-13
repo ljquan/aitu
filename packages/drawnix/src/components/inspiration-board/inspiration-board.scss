@@ -1,0 +1,261 @@
+/**
+ * Inspiration Board Styles
+ *
+ * 灵感创意板块样式
+ */
+
+@import '../../styles/common-variables';
+
+// ============================================================================
+// Variables
+// ============================================================================
+
+$card-border-radius: 12px;
+$card-gap: 12px;
+$animation-duration: 0.3s;
+
+// ============================================================================
+// Inspiration Board Container
+// ============================================================================
+
+.inspiration-board {
+  padding: $spacing-md;
+  padding-bottom: $spacing-md; // 底部内边距
+  background: var(--island-bg-color, #fff);
+  border: none;
+  border-radius: 24px 24px 0 0; // 上圆角，下直角与输入框连接
+  backdrop-filter: blur(10px);
+  box-shadow: none; // 移除阴影，由父容器统一处理
+  animation: slideUp $animation-duration ease-out;
+  pointer-events: auto; // 覆盖父容器 ai-input-bar 的 pointer-events: none
+
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: $spacing-sm;
+  }
+
+  &__title {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--td-text-color-primary);
+    flex: 1; // 占据剩余空间，把右侧按钮推到最右边
+  }
+
+  // 提示词工具按钮
+  &__prompt-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+
+    font-size: 12px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    margin-right: 8px;
+
+
+
+    &:active {
+      transform: scale(0.97);
+    }
+
+    svg {
+      flex-shrink: 0;
+    }
+  }
+
+  &__pagination {
+    display: flex;
+    align-items: center;
+    gap: $spacing-xs;
+  }
+
+  &__page-indicator {
+    font-size: 11px;
+    color: var(--td-text-color-placeholder);
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__nav-buttons {
+    display: flex;
+    gap: 2px;
+  }
+
+  &__nav-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    background: #fff;
+    border: 1px solid var(--td-component-border);
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--td-text-color-secondary);
+    transition: all 0.2s ease;
+
+    &:hover {
+      background: var(--td-bg-color-container-hover);
+      color: var(--td-text-color-primary);
+      border-color: var(--td-brand-color-light);
+    }
+
+    &:active {
+      transform: scale(0.95);
+    }
+  }
+
+  &__grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: $card-gap;
+  }
+}
+
+// ============================================================================
+// Inspiration Card
+// ============================================================================
+
+.inspiration-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid var(--td-component-border);
+  border-radius: $card-border-radius;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    border-color: var(--td-brand-color-light);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    transform: translateY(-2px);
+
+    .inspiration-card__image {
+      transform: scale(1.05);
+    }
+
+    .inspiration-card__hover-overlay {
+      opacity: 1;
+    }
+
+    .inspiration-card__arrow {
+      transform: translateY(0);
+    }
+
+    .inspiration-card__title {
+      color: var(--td-brand-color);
+    }
+  }
+
+  &--placeholder {
+    visibility: hidden;
+  }
+
+  // 图片区域
+  &__image-wrapper {
+    position: relative;
+    aspect-ratio: 1 / 1;
+    overflow: hidden;
+    background: var(--td-bg-color-container);
+  }
+
+  &__image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.5s ease;
+  }
+
+  // 分类标签
+  &__badge {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    padding: 2px 8px;
+    font-size: 10px;
+    font-weight: 600;
+    border-radius: 4px;
+    backdrop-filter: blur(4px);
+    background-color: rgba(255, 255, 255, 0.95);
+  }
+
+  // 悬停遮罩
+  &__hover-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.1);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+  }
+
+  &__arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 50%;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    color: var(--td-text-color-primary);
+    transform: translateY(8px);
+    transition: transform 0.2s ease;
+  }
+
+  // 文本内容
+  &__content {
+    padding: $spacing-sm;
+  }
+
+  &__title {
+    margin: 0 0 4px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--td-text-color-primary);
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transition: color 0.2s ease;
+  }
+
+  &__description {
+    margin: 0;
+    font-size: 11px;
+    color: var(--td-text-color-secondary);
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    height: 32px;
+  }
+}
+
+// ============================================================================
+// Animations
+// ============================================================================
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

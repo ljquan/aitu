@@ -43,7 +43,7 @@ class CharacterStorageService {
       const characters = await this.loadFromStorage();
       this.characters$.next(characters);
       this.initialized = true;
-      console.log('[CharacterStorage] Initialized with', characters.length, 'characters');
+      // console.log('[CharacterStorage] Initialized with', characters.length, 'characters');
     } catch (error) {
       console.error('[CharacterStorage] Failed to initialize:', error);
       this.characters$.next([]);
@@ -103,7 +103,7 @@ class CharacterStorageService {
 
     await this.saveToStorage(characters);
     this.characters$.next([...characters]);
-    console.log('[CharacterStorage] Character saved:', character.id);
+    // console.log('[CharacterStorage] Character saved:', character.id);
 
     // Cache avatar if character is completed and has profile picture
     if (character.status === 'completed' && character.profilePictureUrl) {
@@ -132,7 +132,7 @@ class CharacterStorageService {
 
     await this.saveToStorage(characters);
     this.characters$.next([...characters]);
-    console.log('[CharacterStorage] Character updated:', id);
+    // console.log('[CharacterStorage] Character updated:', id);
 
     // Cache avatar if character becomes completed and has profile picture
     if (updatedCharacter.status === 'completed' && updatedCharacter.profilePictureUrl) {
@@ -180,7 +180,7 @@ class CharacterStorageService {
 
     await this.saveToStorage(characters);
     this.characters$.next([...characters]);
-    console.log('[CharacterStorage] Character deleted:', id);
+    // console.log('[CharacterStorage] Character deleted:', id);
 
     // Clean up avatar cache
     characterAvatarCacheService.deleteCache(id)
@@ -205,7 +205,7 @@ class CharacterStorageService {
     this.characters$.next(filtered);
 
     const deletedCount = originalLength - filtered.length;
-    console.log('[CharacterStorage] Deleted', deletedCount, 'characters from task:', taskId);
+    // console.log('[CharacterStorage] Deleted', deletedCount, 'characters from task:', taskId);
 
     return deletedCount;
   }
@@ -216,7 +216,7 @@ class CharacterStorageService {
   async clearAll(): Promise<void> {
     await this.saveToStorage([]);
     this.characters$.next([]);
-    console.log('[CharacterStorage] All characters cleared');
+    // console.log('[CharacterStorage] All characters cleared');
   }
 
   /**

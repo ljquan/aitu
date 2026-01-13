@@ -1,0 +1,35 @@
+
+.version-update-prompt {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 1000;
+  background-color: var(--td-bg-color-container);
+  border: 1px solid var(--td-border-level-2-color);
+  border-radius: var(--td-radius-medium);
+  box-shadow: var(--td-shadow-2);
+  padding: 8px 12px;
+  animation: slideIn 0.3s ease-out;
+
+  &__content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  &__text {
+    font-size: 14px;
+    color: var(--td-text-color-primary);
+  }
+
+  @keyframes slideIn {
+    from {
+      opacity: 0;
+      transform: translateY(-20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}

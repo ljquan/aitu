@@ -54,9 +54,25 @@ export interface Asset {
 /**
  * Stored Asset Interface
  * 存储的素材接口 - IndexedDB中的数据结构
+ * 注意：只存储本地上传的素材，AI 生成的素材从任务队列读取
  */
 export interface StoredAsset {
-  // 基础Asset字段（除了url）
+  id: string;
+  type: AssetType;
+  source: AssetSource;
+  url: string; // 统一缓存中的 URL
+  name: string;
+  mimeType: string;
+  createdAt: number;
+  size?: number;
+  contentHash?: string; // 文件内容哈希，用于去重
+}
+
+/**
+ * Legacy Stored Asset Interface
+ * 旧版存储的素材接口 - 用于数据迁移
+ */
+export interface LegacyStoredAsset {
   id: string;
   type: AssetType;
   source: AssetSource;
@@ -66,9 +82,7 @@ export interface StoredAsset {
   size?: number;
   prompt?: string;
   modelName?: string;
-
-  // 存储字段
-  blobData: Blob; // 实际文件数据
+  blobData: Blob; // 旧版存储的 Blob 数据
 }
 
 /**
@@ -101,7 +115,7 @@ export type AssetSourceFilter = 'ALL' | 'LOCAL' | 'AI';
  * Sort Option
  * 排序选项
  */
-export type SortOption = 'DATE_DESC' | 'DATE_ASC' | 'NAME_ASC';
+export type SortOption = 'DATE_DESC' | 'DATE_ASC' | 'NAME_ASC' | 'SIZE_DESC';
 
 /**
  * View Mode
@@ -347,24 +361,17 @@ export function createAsset(params: {
 /**
  * Stored Asset to Asset Conversion
  * 将存储的素材转换为运行时素材
+ * 新版：直接使用存储的 URL（统一缓存服务管理）
  */
 export function storedAssetToAsset(stored: StoredAsset): Asset {
-  const url = URL.createObjectURL(stored.blobData);
-  const { blobData, ...assetData } = stored;
-  return {
-    ...assetData,
-    url,
-  };
+  return { ...stored };
 }
 
 /**
  * Asset to Stored Asset Conversion
  * 将运行时素材转换为存储素材
+ * 新版：不再存储 Blob 数据
  */
-export function assetToStoredAsset(asset: Asset, blob: Blob): StoredAsset {
-  const { url, ...assetData } = asset;
-  return {
-    ...assetData,
-    blobData: blob,
-  };
+export function assetToStoredAsset(asset: Asset): StoredAsset {
+  return { ...asset };
 }

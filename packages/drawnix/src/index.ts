@@ -11,3 +11,7 @@ export * from './hooks/useWorkspace';
 export * from './services/workspace-service';
 export * from './services/workspace-migration';
 export * from './types/workspace.types';
+
+// Export unified cache service
+export { unifiedCacheService } from './services/unified-cache-service';
+export type { CachedMedia, CacheStatus } from './services/unified-cache-service';

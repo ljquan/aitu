@@ -12,7 +12,19 @@ $toolbar-width: 48px;
 $animation-duration: 300ms;
 
 // Spacing
+$spacing-xs: 4px;
 $spacing-sm: 8px;
 $spacing-md: 12px;
 $spacing-lg: 16px;
 $spacing-xl: 24px;
+
+// Border Radius
+$border-radius-sm: 4px;
+$border-radius-md: 8px;
+$border-radius-lg: 12px;
+$border-radius-xl: 16px;
+
+// Colors
+$primary-color: #ff6b35;
+$primary-color-light: #ff8c5a;
+$primary-color-dark: #e55a2b;

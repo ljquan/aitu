@@ -9,7 +9,7 @@ import {
   isFullyTransparent,
   isWhite,
   removeHexAlpha,
-} from '../../../utils/color';
+} from '@aitu/utils';
 import {
   StrokeIcon,
   StrokeStyleDashedIcon,

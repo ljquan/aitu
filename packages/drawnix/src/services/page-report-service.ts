@@ -171,7 +171,7 @@ function collectPagePerformanceData(): PagePerformanceData | null {
  */
 export function trackPageView(): void {
   if (!analytics.isAnalyticsEnabled()) {
-    console.debug('[Page Report] PostHog not available, skipping page view');
+    // console.debug('[Page Report] PostHog not available, skipping page view');
     return;
   }
 
@@ -182,11 +182,11 @@ export function trackPageView(): void {
     ...pageViewData,
   });
 
-  console.log('[Page Report] Page view tracked:', {
-    path: pageViewData.page_path,
-    title: pageViewData.page_title,
-    device: pageViewData.device_type,
-  });
+  // console.log('[Page Report] Page view tracked:', {
+  //   path: pageViewData.page_path,
+  //   title: pageViewData.page_title,
+  //   device: pageViewData.device_type,
+  // });
 }
 
 /**
@@ -195,7 +195,7 @@ export function trackPageView(): void {
  */
 export function trackPagePerformance(): void {
   if (!analytics.isAnalyticsEnabled()) {
-    console.debug('[Page Report] PostHog not available, skipping performance');
+    // console.debug('[Page Report] PostHog not available, skipping performance');
     return;
   }
 
@@ -210,11 +210,11 @@ export function trackPagePerformance(): void {
     ...performanceData,
   });
 
-  console.log('[Page Report] Page performance tracked:', {
-    load_time: performanceData.load_time,
-    dom_complete_time: performanceData.dom_complete_time,
-    total_resources: performanceData.total_resources,
-  });
+  // console.log('[Page Report] Page performance tracked:', {
+  //   load_time: performanceData.load_time,
+  //   dom_complete_time: performanceData.dom_complete_time,
+  //   total_resources: performanceData.total_resources,
+  // });
 }
 
 /**
@@ -309,7 +309,7 @@ export function initPageReport(): void {
       }, 100);
     };
 
-    console.log('[Page Report] Monitoring initialized successfully');
+    // console.log('[Page Report] Monitoring initialized successfully');
   } catch (error) {
     console.error('[Page Report] Failed to initialize monitoring:', error);
   }
@@ -319,7 +319,7 @@ export function initPageReport(): void {
  * Stop Page Report monitoring (for cleanup if needed)
  */
 export function stopPageReport(): void {
-  console.log('[Page Report] Monitoring stopped');
+  // console.log('[Page Report] Monitoring stopped');
   // Note: Event listeners will be removed when page unloads
   // If you need explicit cleanup, you would need to store listener references
 }

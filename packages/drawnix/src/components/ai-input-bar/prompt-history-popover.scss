@@ -1,0 +1,41 @@
+/**
+ * PromptHistoryPopover 样式
+ */
+
+.prompt-history-popover {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+
+  // 触发按钮
+  &__trigger {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--td-text-color-secondary, #666);
+    cursor: pointer;
+    transition: all 0.2s ease;
+
+    &:hover {
+      background: var(--td-bg-color-container-hover, rgba(0, 0, 0, 0.04));
+      color: var(--td-text-color-primary, #333);
+    }
+  }
+
+  // 面板容器
+  &__panel-wrapper {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    right: 0;
+    z-index: 1000;
+  }
+}

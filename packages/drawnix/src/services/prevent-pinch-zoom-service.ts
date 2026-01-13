@@ -12,7 +12,7 @@ export function initPreventPinchZoom(): () => void {
     return () => {};
   }
 
-  console.log('[PreventPinchZoom] Initializing');
+  // console.log('[PreventPinchZoom] Initializing');
 
   // 阻止多点触摸
   const handleTouch = (event: TouchEvent) => {
@@ -44,7 +44,7 @@ export function initPreventPinchZoom(): () => void {
   document.addEventListener('gestureend', handleGesture, { passive: false, capture: true });
   window.addEventListener('wheel', handleWheel, { passive: false });
 
-  console.log('[PreventPinchZoom] Event listeners added');
+  // console.log('[PreventPinchZoom] Event listeners added');
 
   // 返回清理函数
   return () => {
@@ -55,6 +55,6 @@ export function initPreventPinchZoom(): () => void {
     document.removeEventListener('gesturechange', handleGesture, true);
     document.removeEventListener('gestureend', handleGesture, true);
     window.removeEventListener('wheel', handleWheel);
-    console.log('[PreventPinchZoom] Cleaned up');
+    // console.log('[PreventPinchZoom] Cleaned up');
   };
 }

@@ -14,7 +14,8 @@ import {
 import { Island } from '../../island';
 import { Popover, PopoverContent, PopoverTrigger } from '../../popover/popover';
 import { useState } from 'react';
-import { CleanBoard, OpenFile, SaveAsImage, SaveToFile, Settings, GitHubLink } from './app-menu-items';
+import { CleanBoard, CleanMissingAssets, OpenFile, SaveAsImage, SaveToFile, Settings, BackupRestore } from './app-menu-items';
+import { GithubIcon } from '../../icons';
 import { LanguageSwitcherMenu } from './language-switcher-menu';
 import Menu from '../../menu/menu';
 import MenuSeparator from '../../menu/menu-separator';
@@ -24,9 +25,14 @@ import { ToolbarSectionProps } from '../toolbar.types';
 import { useToolbarConfig } from '../../../hooks/use-toolbar-config';
 import { ToolbarContextMenu } from '../toolbar-context-menu';
 
-export const AppToolbar: React.FC<ToolbarSectionProps> = ({
+export interface AppToolbarProps extends ToolbarSectionProps {
+  onOpenBackupRestore?: () => void;
+}
+
+export const AppToolbar: React.FC<AppToolbarProps> = ({
   embedded = false,
-  iconMode = false
+  iconMode = false,
+  onOpenBackupRestore,
 }) => {
   const board = useBoard();
   const { t } = useI18n();
@@ -61,7 +67,7 @@ export const AppToolbar: React.FC<ToolbarSectionProps> = ({
               visible={true}
               selected={appMenuOpen}
               icon={MenuIcon}
-              title={t('general.menu')}
+              title={appMenuOpen ? undefined : t('general.menu')}
               tooltipPlacement={embedded ? 'right' : 'bottom'}
               aria-label={t('general.menu')}
               data-track="toolbar_click_menu"
@@ -80,11 +86,14 @@ export const AppToolbar: React.FC<ToolbarSectionProps> = ({
               <SaveToFile></SaveToFile>
               <SaveAsImage></SaveAsImage>
               <CleanBoard></CleanBoard>
+              <CleanMissingAssets></CleanMissingAssets>
               <MenuSeparator />
               <LanguageSwitcherMenu />
+              <BackupRestore onOpenBackupRestore={() => {
+                setAppMenuOpen(false);
+                onOpenBackupRestore?.();
+              }} />
               <Settings />
-              <MenuSeparator />
-              <GitHubLink />
             </Menu>
           </PopoverContent>
         </Popover>
@@ -141,6 +150,18 @@ export const AppToolbar: React.FC<ToolbarSectionProps> = ({
         'app-toolbar--icon-only': iconMode,
       })}>
         {content}
+        <ToolButton
+          type="icon"
+          icon={GithubIcon}
+          visible={true}
+          title={t('menu.github')}
+          tooltipPlacement="right"
+          aria-label={t('menu.github')}
+          data-track="toolbar_click_github"
+          onPointerUp={() => {
+            window.open('https://github.com/ljquan/aitu', '_blank');
+          }}
+        />
       </div>
     );
   }

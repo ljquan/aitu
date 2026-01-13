@@ -1,0 +1,74 @@
+/**
+ * 图层控制面板样式
+ * Layer Control Panel Styles
+ */
+
+.layer-control-panel {
+  display: flex;
+  background: #fff;
+  border-radius: 8px;
+  padding: 4px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.layer-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.layer-action-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 6px 8px;
+  background: #f5f5f5;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  svg {
+    width: 16px;
+    height: 16px;
+    color: #5A4FCF;
+  }
+
+  span {
+    font-size: 10px;
+    color: #666;
+    line-height: 1;
+  }
+
+  &:hover:not(.disabled) {
+    background: #5A4FCF;
+
+    svg, span {
+      color: #fff;
+    }
+  }
+
+  &:active:not(.disabled) {
+    transform: scale(0.96);
+  }
+
+  &.disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+}
+
+.layer-info {
+  font-size: 11px;
+  font-weight: 600;
+  color: #5A4FCF;
+  font-family: 'SF Mono', Monaco, monospace;
+  background: rgba(90, 79, 207, 0.1);
+  padding: 4px 8px;
+  border-radius: 12px;
+  margin-left: 2px;
+  white-space: nowrap;
+}

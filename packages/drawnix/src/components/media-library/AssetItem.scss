@@ -114,9 +114,7 @@
       top: 8px;
       right: 8px;
       z-index: 3;
-      background: rgba(255, 255, 255, 0.95);
       border-radius: 6px;
-      padding: 4px;
       backdrop-filter: blur(4px);
       box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.1);
     }
@@ -247,7 +245,6 @@
     .asset-item__checkbox--overlay {
       top: 4px;
       right: 4px;
-      padding: 2px;
       border-radius: 4px;
     }
   }

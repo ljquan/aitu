@@ -64,7 +64,7 @@ export function useCharacters(): UseCharactersReturn {
   useEffect(() => {
     const resumePendingCharacters = async () => {
       const pending = characterStorageService.getPendingCharacters();
-      console.log('[useCharacters] Found', pending.length, 'pending characters to resume');
+      // console.log('[useCharacters] Found', pending.length, 'pending characters to resume');
 
       for (const character of pending) {
         if (!pollingRef.current.get(character.id)) {
@@ -84,12 +84,12 @@ export function useCharacters(): UseCharactersReturn {
    */
   const resumePollingForCharacter = useCallback(async (character: SoraCharacter) => {
     if (pollingRef.current.get(character.id)) {
-      console.log('[useCharacters] Already polling for:', character.id);
+      // console.log('[useCharacters] Already polling for:', character.id);
       return;
     }
 
     pollingRef.current.set(character.id, true);
-    console.log('[useCharacters] Resuming polling for:', character.id);
+    // console.log('[useCharacters] Resuming polling for:', character.id);
 
     try {
       const result = await characterAPIService.resumePolling(character.id, {
@@ -107,7 +107,7 @@ export function useCharacters(): UseCharactersReturn {
         completedAt: Date.now(),
       });
 
-      console.log('[useCharacters] Character completed:', result.username);
+      // console.log('[useCharacters] Character completed:', result.username);
     } catch (error) {
       console.error('[useCharacters] Character polling failed:', error);
       await characterStorageService.updateCharacterStatus(
@@ -127,7 +127,7 @@ export function useCharacters(): UseCharactersReturn {
     params: CreateCharacterParams
   ): Promise<SoraCharacter | null> => {
     try {
-      console.log('[useCharacters] Creating character from:', params.videoTaskId);
+      // console.log('[useCharacters] Creating character from:', params.videoTaskId);
 
       // Create character via API
       const createResponse = await characterAPIService.createCharacter(params);
@@ -165,7 +165,7 @@ export function useCharacters(): UseCharactersReturn {
           status: 'completed' as CharacterStatus,
           completedAt: Date.now(),
         });
-        console.log('[useCharacters] Character completed:', result.username);
+        //         // console.log('[useCharacters] Character completed:', result.username);
       }).catch(async (error) => {
         console.error('[useCharacters] Character creation failed:', error);
         await characterStorageService.updateCharacterStatus(

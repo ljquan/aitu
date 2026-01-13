@@ -17,6 +17,7 @@ export interface GeminiSettings {
   chatModel?: string;
   imageModelName?: string;
   videoModelName?: string;
+  textModelName?: string;
 }
 
 export interface AppSettings {
@@ -32,6 +33,7 @@ const DEFAULT_SETTINGS: AppSettings = {
     chatModel: 'gpt-5',
     imageModelName: 'gemini-3-pro-image-preview-vip',
     videoModelName: 'veo3',
+    textModelName:  'deepseek-v3.2',
   },
 };
 
@@ -74,7 +76,7 @@ class SettingsManager {
       // 加密功能初始化完成后，解密已加载的敏感数据
       await this.decryptSensitiveDataForLoading(this.settings);
       this.initializeFromUrl();
-      console.log('SettingsManager initialization completed');
+      // console.log('SettingsManager initialization completed');
     } catch (error) {
       console.error('SettingsManager initialization failed:', error);
     }
@@ -193,7 +195,7 @@ class SettingsManager {
           if (decryptedValue !== value) {
             // 只有当解密成功时才更新设置
             this.setNestedValue(settings, fieldPath, decryptedValue);
-            console.log(`Decrypted sensitive field: ${fieldPath}`);
+            // console.log(`Decrypted sensitive field: ${fieldPath}`);
           }
         } catch (error) {
           console.warn(`Failed to decrypt field ${fieldPath} during loading:`, error);
@@ -295,7 +297,7 @@ class SettingsManager {
           if (encryptedValue !== value) {
             // 只有当加密成功时才更新存储副本
             this.setNestedValue(settings, fieldPath, encryptedValue);
-            console.log(`Encrypted sensitive field for storage: ${fieldPath}`);
+            // console.log(`Encrypted sensitive field for storage: ${fieldPath}`);
           }
         } catch (error) {
           console.warn(`Failed to encrypt field ${fieldPath} for storage:`, error);
@@ -357,7 +359,7 @@ class SettingsManager {
     // 通知监听器
     this.notifyListeners(path, newValue, oldValue);
     
-    console.log(`Setting updated: ${path} =`, newValue);
+    // console.log(`Setting updated: ${path} =`, newValue);
   }
 
   /**
@@ -375,7 +377,7 @@ class SettingsManager {
     // 为每个更新的路径通知监听器
     this.notifySettingsChange(oldSettings, this.settings, '');
     
-    console.log('Settings batch updated:', updates);
+    // console.log('Settings batch updated:', updates);
   }
 
   /**
@@ -461,7 +463,7 @@ class SettingsManager {
     this.settings = { ...DEFAULT_SETTINGS };
     await this.saveToStorage();
     this.notifySettingsChange(oldSettings, this.settings, '');
-    console.log('Settings reset to default');
+    // console.log('Settings reset to default');
   }
 
   /**

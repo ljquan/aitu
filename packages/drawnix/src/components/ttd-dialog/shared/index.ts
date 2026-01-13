@@ -12,3 +12,4 @@ export * from './VideoModelOptions';
 export * from './MultiImageUpload';
 export * from './AspectRatioSelector';
 export * from './StoryboardEditor';
+export * from './ReferenceImageUpload';

@@ -35,6 +35,10 @@ export interface UnifiedToolbarProps {
    * (可选) 任务面板展开/关闭切换回调
    */
   onTaskPanelToggle?: () => void;
+  /**
+   * (可选) 备份恢复对话框打开回调
+   */
+  onOpenBackupRestore?: () => void;
 }
 
 /**
