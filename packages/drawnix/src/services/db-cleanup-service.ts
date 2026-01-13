@@ -1,9 +1,9 @@
 /**
  * Database Cleanup Service
  *
- * Cleans up legacy/redundant IndexedDB databases that are no longer needed.
- * This service runs once on app startup and removes old databases after
- * data has been migrated to new storage locations.
+ * Cleans up legacy/redundant IndexedDB databases and LocalStorage data
+ * that are no longer needed. This service runs once on app startup and
+ * removes old data after migration to new storage locations.
  *
  * Legacy databases to clean:
  * - Drawnix: Old localforage default database
@@ -12,20 +12,22 @@
  * - aitu-task-queue: Old task queue (migrated to sw-task-queue)
  * - aitu-media-cache: Old media cache (migrated to drawnix-unified-cache)
  * - aitu-url-cache: Old URL cache (migrated to drawnix-unified-cache)
+ *
+ * Legacy LocalStorage keys to clean:
+ * - aitu-recent-colors-shadow: Orphaned data
  */
 
-// Storage key to track if cleanup has been performed
-const CLEANUP_DONE_KEY = 'db-cleanup-v1-done';
+import {
+  LS_KEYS,
+  LS_KEYS_DEPRECATED,
+  IDB_LEGACY_DATABASES,
+} from '../constants/storage-keys';
 
-// List of legacy databases to delete
-const LEGACY_DATABASES = [
-  'Drawnix',           // Old localforage default
-  'drawnix',           // Old board data
-  'localforage',       // localforage default
-  'aitu-task-queue',   // Old task queue (migrated to sw-task-queue)
-  'aitu-media-cache',  // Old media cache (migrated to unified-cache)
-  'aitu-url-cache',    // Old URL cache (migrated to unified-cache)
-];
+// Storage key to track if cleanup has been performed
+const CLEANUP_DONE_KEY = LS_KEYS.DB_CLEANUP_DONE;
+
+// List of legacy databases to delete (use from constants)
+const LEGACY_DATABASES = [...IDB_LEGACY_DATABASES];
 
 /**
  * Check if a database exists
@@ -93,6 +95,26 @@ async function deleteDatabase(dbName: string): Promise<boolean> {
 }
 
 /**
+ * Clean up deprecated LocalStorage keys
+ */
+function cleanupDeprecatedLocalStorage(): number {
+  let cleanedCount = 0;
+
+  for (const key of LS_KEYS_DEPRECATED) {
+    try {
+      if (localStorage.getItem(key) !== null) {
+        localStorage.removeItem(key);
+        cleanedCount++;
+      }
+    } catch (error) {
+      console.warn(`[DBCleanup] Failed to remove LocalStorage key ${key}:`, error);
+    }
+  }
+
+  return cleanedCount;
+}
+
+/**
  * Run database cleanup
  * This should be called once on app startup
  */
@@ -107,6 +129,7 @@ export async function runDatabaseCleanup(): Promise<void> {
   let deletedCount = 0;
   let skippedCount = 0;
 
+  // Clean up legacy IndexedDB databases
   for (const dbName of LEGACY_DATABASES) {
     try {
       const exists = await checkDBExists(dbName);
@@ -125,13 +148,16 @@ export async function runDatabaseCleanup(): Promise<void> {
     }
   }
 
+  // Clean up deprecated LocalStorage keys
+  const lsCleanedCount = cleanupDeprecatedLocalStorage();
+
   // Mark cleanup as done
   localStorage.setItem(CLEANUP_DONE_KEY, Date.now().toString());
 
-  if (deletedCount > 0 || skippedCount > 0) {
-    // console.log(`[DBCleanup] Cleanup complete: deleted ${deletedCount}, skipped ${skippedCount}`);
+  if (deletedCount > 0 || skippedCount > 0 || lsCleanedCount > 0) {
+    // console.log(`[DBCleanup] Cleanup complete: IDB deleted ${deletedCount}, IDB skipped ${skippedCount}, LS cleaned ${lsCleanedCount}`);
   } else {
-    // console.log('[DBCleanup] No legacy databases found');
+    // console.log('[DBCleanup] No legacy data found');
   }
 }
 
@@ -145,11 +171,13 @@ export function resetCleanupFlag(): void {
 
 // Export for debugging
 if (typeof window !== 'undefined') {
-  (window as any).__dbCleanup = {
+  (window as unknown as Record<string, unknown>).__dbCleanup = {
     run: runDatabaseCleanup,
     reset: resetCleanupFlag,
     checkDB: checkDBExists,
     deleteDB: deleteDatabase,
+    cleanupLS: cleanupDeprecatedLocalStorage,
     LEGACY_DATABASES,
+    LS_KEYS_DEPRECATED,
   };
 }

@@ -1,19 +1,21 @@
 /**
  * Prompt Storage Service
  *
- * 管理用户历史提示词的本地存储
- * 使用 localStorage 进行持久化存储
+ * 管理用户历史提示词的存储
+ * 使用 IndexedDB 进行持久化存储（通过 kvStorageService）
+ * 支持从 LocalStorage 迁移的向下兼容
  */
 
-const STORAGE_KEY = 'aitu_prompt_history';
-const MAX_HISTORY_COUNT = 20;
+import { LS_KEYS_TO_MIGRATE } from '../constants/storage-keys';
+import { kvStorageService } from './kv-storage-service';
+
+const STORAGE_KEY = LS_KEYS_TO_MIGRATE.PROMPT_HISTORY;
 
 // 预设提示词设置的存储 key
-const PRESET_SETTINGS_KEY = 'aitu-prompt-preset-settings';
+const PRESET_SETTINGS_KEY = LS_KEYS_TO_MIGRATE.PRESET_SETTINGS;
 
 // 视频描述历史记录的存储 key
-const VIDEO_PROMPT_HISTORY_KEY = 'aitu_video_prompt_history';
-const MAX_VIDEO_PROMPT_HISTORY = 20;
+const VIDEO_PROMPT_HISTORY_KEY = LS_KEYS_TO_MIGRATE.VIDEO_PROMPT_HISTORY;
 
 export interface PromptHistoryItem {
   id: string;
@@ -32,25 +34,112 @@ function generateId(): string {
   return `prompt_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 }
 
+// ============================================
+// 内存缓存（用于同步读取，异步更新）
+// ============================================
+
+let promptHistoryCache: PromptHistoryItem[] | null = null;
+let videoPromptHistoryCache: VideoPromptHistoryItem[] | null = null;
+let presetDataCache: PresetStorageData | null = null;
+let cacheInitialized = false;
+
+/**
+ * 初始化缓存（从 IndexedDB 加载数据）
+ * 应在应用启动时调用
+ */
+export async function initPromptStorageCache(): Promise<void> {
+  if (cacheInitialized) return;
+
+  try {
+    const [promptHistory, videoHistory, presetSettings] = await Promise.all([
+      kvStorageService.get<PromptHistoryItem[]>(STORAGE_KEY),
+      kvStorageService.get<VideoPromptHistoryItem[]>(VIDEO_PROMPT_HISTORY_KEY),
+      kvStorageService.get<PresetStorageData>(PRESET_SETTINGS_KEY),
+    ]);
+
+    promptHistoryCache = promptHistory || [];
+    videoPromptHistoryCache = videoHistory || [];
+    presetDataCache = presetSettings || {
+      image: { pinnedPrompts: [], deletedPrompts: [] },
+      video: { pinnedPrompts: [], deletedPrompts: [] },
+    };
+
+    cacheInitialized = true;
+  } catch (error) {
+    console.error('[PromptStorageService] Failed to initialize cache:', error);
+    // 初始化为空数据
+    promptHistoryCache = [];
+    videoPromptHistoryCache = [];
+    presetDataCache = {
+      image: { pinnedPrompts: [], deletedPrompts: [] },
+      video: { pinnedPrompts: [], deletedPrompts: [] },
+    };
+    cacheInitialized = true;
+  }
+}
+
+/**
+ * 确保缓存已初始化
+ */
+function ensureCacheInitialized(): void {
+  if (!cacheInitialized) {
+    // 如果缓存未初始化，使用空数据
+    promptHistoryCache = promptHistoryCache || [];
+    videoPromptHistoryCache = videoPromptHistoryCache || [];
+    presetDataCache = presetDataCache || {
+      image: { pinnedPrompts: [], deletedPrompts: [] },
+      video: { pinnedPrompts: [], deletedPrompts: [] },
+    };
+  }
+}
+
+/**
+ * 保存提示词历史到 IndexedDB（异步）
+ */
+function savePromptHistory(): void {
+  if (promptHistoryCache === null) return;
+  kvStorageService.set(STORAGE_KEY, promptHistoryCache).catch((error) => {
+    console.error('[PromptStorageService] Failed to save prompt history:', error);
+  });
+}
+
+/**
+ * 保存视频提示词历史到 IndexedDB（异步）
+ */
+function saveVideoPromptHistory(): void {
+  if (videoPromptHistoryCache === null) return;
+  kvStorageService.set(VIDEO_PROMPT_HISTORY_KEY, videoPromptHistoryCache).catch((error) => {
+    console.error('[PromptStorageService] Failed to save video prompt history:', error);
+  });
+}
+
+/**
+ * 保存预设数据到 IndexedDB（异步）
+ */
+function savePresetData(): void {
+  if (presetDataCache === null) return;
+  kvStorageService.set(PRESET_SETTINGS_KEY, presetDataCache).catch((error) => {
+    console.error('[PromptStorageService] Failed to save preset data:', error);
+  });
+}
+
+// ============================================
+// 提示词历史记录功能
+// ============================================
+
 /**
  * 获取所有历史提示词
  * 返回排序后的列表：置顶的在前面，非置顶的按时间倒序
  */
 export function getPromptHistory(): PromptHistoryItem[] {
-  try {
-    const data = localStorage.getItem(STORAGE_KEY);
-    if (!data) return [];
-    const history = JSON.parse(data) as PromptHistoryItem[];
-    // 排序：置顶的在前，非置顶的按时间倒序
-    return history.sort((a, b) => {
-      if (a.pinned && !b.pinned) return -1;
-      if (!a.pinned && b.pinned) return 1;
-      return b.timestamp - a.timestamp;
-    });
-  } catch (error) {
-    console.error('Failed to get prompt history:', error);
-    return [];
-  }
+  ensureCacheInitialized();
+  const history = promptHistoryCache || [];
+  // 排序：置顶的在前，非置顶的按时间倒序
+  return [...history].sort((a, b) => {
+    if (a.pinned && !b.pinned) return -1;
+    if (!a.pinned && b.pinned) return 1;
+    return b.timestamp - a.timestamp;
+  });
 }
 
 /**
@@ -64,72 +153,56 @@ export function addPromptHistory(content: string, hasSelection?: boolean): void 
   if (!content || !content.trim()) return;
 
   const trimmedContent = content.trim();
+  ensureCacheInitialized();
 
-  try {
-    let history = getPromptHistory();
+  let history = promptHistoryCache || [];
 
-    // 检查是否已存在相同内容
-    const existingIndex = history.findIndex(item => item.content === trimmedContent);
+  // 检查是否已存在相同内容
+  const existingIndex = history.findIndex((item) => item.content === trimmedContent);
 
-    if (existingIndex >= 0) {
-      const existingItem = history[existingIndex];
-      if (existingItem.pinned) {
-        // 已置顶的提示词：只更新时间戳，保持置顶状态
-        existingItem.timestamp = Date.now();
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
-        return;
-      }
-      // 未置顶的：移除旧记录，后面会添加新的
-      history = history.filter(item => item.content !== trimmedContent);
+  if (existingIndex >= 0) {
+    const existingItem = history[existingIndex];
+    if (existingItem.pinned) {
+      // 已置顶的提示词：只更新时间戳，保持置顶状态
+      existingItem.timestamp = Date.now();
+      promptHistoryCache = history;
+      savePromptHistory();
+      return;
     }
-
-    // 新记录插入头部
-    const newItem: PromptHistoryItem = {
-      id: generateId(),
-      content: trimmedContent,
-      timestamp: Date.now(),
-      hasSelection,
-    };
-    history.unshift(newItem);
-
-    // 限制最大数量（优先保留置顶的）
-    if (history.length > MAX_HISTORY_COUNT) {
-      // 分离置顶和非置顶
-      const pinned = history.filter(item => item.pinned);
-      const unpinned = history.filter(item => !item.pinned);
-      // 保留所有置顶 + 尽可能多的非置顶
-      const maxUnpinned = MAX_HISTORY_COUNT - pinned.length;
-      history = [...pinned, ...unpinned.slice(0, Math.max(0, maxUnpinned))];
-    }
-
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
-  } catch (error) {
-    console.error('Failed to add prompt history:', error);
+    // 未置顶的：移除旧记录，后面会添加新的
+    history = history.filter((item) => item.content !== trimmedContent);
   }
+
+  // 新记录插入头部
+  const newItem: PromptHistoryItem = {
+    id: generateId(),
+    content: trimmedContent,
+    timestamp: Date.now(),
+    hasSelection,
+  };
+  history.unshift(newItem);
+
+  // 不再限制最大数量，使用 IndexedDB 可存储无限条记录
+
+  promptHistoryCache = history;
+  savePromptHistory();
 }
 
 /**
  * 删除指定历史提示词
  */
 export function removePromptHistory(id: string): void {
-  try {
-    let history = getPromptHistory();
-    history = history.filter(item => item.id !== id);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
-  } catch (error) {
-    console.error('Failed to remove prompt history:', error);
-  }
+  ensureCacheInitialized();
+  promptHistoryCache = (promptHistoryCache || []).filter((item) => item.id !== id);
+  savePromptHistory();
 }
 
 /**
  * 清空所有历史提示词
  */
 export function clearPromptHistory(): void {
-  try {
-    localStorage.removeItem(STORAGE_KEY);
-  } catch (error) {
-    console.error('Failed to clear prompt history:', error);
-  }
+  promptHistoryCache = [];
+  savePromptHistory();
 }
 
 /**
@@ -138,24 +211,17 @@ export function clearPromptHistory(): void {
  * @returns 切换后的置顶状态
  */
 export function togglePinPrompt(id: string): boolean {
-  try {
-    const data = localStorage.getItem(STORAGE_KEY);
-    if (!data) return false;
+  ensureCacheInitialized();
+  const history = promptHistoryCache || [];
+  const item = history.find((item) => item.id === id);
 
-    const history = JSON.parse(data) as PromptHistoryItem[];
-    const item = history.find(item => item.id === id);
+  if (!item) return false;
 
-    if (!item) return false;
+  // 切换置顶状态
+  item.pinned = !item.pinned;
+  savePromptHistory();
 
-    // 切换置顶状态
-    item.pinned = !item.pinned;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
-
-    return item.pinned;
-  } catch (error) {
-    console.error('Failed to toggle pin prompt:', error);
-    return false;
-  }
+  return item.pinned;
 }
 
 // ============================================
@@ -173,15 +239,9 @@ export interface VideoPromptHistoryItem {
  * 返回按时间倒序排列的列表
  */
 export function getVideoPromptHistory(): VideoPromptHistoryItem[] {
-  try {
-    const data = localStorage.getItem(VIDEO_PROMPT_HISTORY_KEY);
-    if (!data) return [];
-    const history = JSON.parse(data) as VideoPromptHistoryItem[];
-    return history.sort((a, b) => b.timestamp - a.timestamp);
-  } catch (error) {
-    console.error('Failed to get video prompt history:', error);
-    return [];
-  }
+  ensureCacheInitialized();
+  const history = videoPromptHistoryCache || [];
+  return [...history].sort((a, b) => b.timestamp - a.timestamp);
 }
 
 /**
@@ -192,60 +252,54 @@ export function addVideoPromptHistory(content: string): void {
   if (!content || !content.trim()) return;
 
   const trimmedContent = content.trim();
+  ensureCacheInitialized();
 
-  try {
-    let history = getVideoPromptHistory();
+  let history = videoPromptHistoryCache || [];
 
-    // 检查是否已存在相同内容
-    const existingIndex = history.findIndex(item => item.content === trimmedContent);
+  // 检查是否已存在相同内容
+  const existingIndex = history.findIndex((item) => item.content === trimmedContent);
 
-    if (existingIndex >= 0) {
-      // 已存在：更新时间戳并移到最前面
-      const existingItem = history[existingIndex];
-      existingItem.timestamp = Date.now();
-      history.splice(existingIndex, 1);
-      history.unshift(existingItem);
-      localStorage.setItem(VIDEO_PROMPT_HISTORY_KEY, JSON.stringify(history));
-      return;
-    }
-
-    // 新记录插入头部
-    const newItem: VideoPromptHistoryItem = {
-      id: `video_prompt_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-      content: trimmedContent,
-      timestamp: Date.now(),
-    };
-    history.unshift(newItem);
-
-    // 限制最大数量
-    if (history.length > MAX_VIDEO_PROMPT_HISTORY) {
-      history = history.slice(0, MAX_VIDEO_PROMPT_HISTORY);
-    }
-
-    localStorage.setItem(VIDEO_PROMPT_HISTORY_KEY, JSON.stringify(history));
-  } catch (error) {
-    console.error('Failed to add video prompt history:', error);
+  if (existingIndex >= 0) {
+    // 已存在：更新时间戳并移到最前面
+    const existingItem = history[existingIndex];
+    existingItem.timestamp = Date.now();
+    history.splice(existingIndex, 1);
+    history.unshift(existingItem);
+    videoPromptHistoryCache = history;
+    saveVideoPromptHistory();
+    return;
   }
+
+  // 新记录插入头部
+  const newItem: VideoPromptHistoryItem = {
+    id: `video_prompt_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+    content: trimmedContent,
+    timestamp: Date.now(),
+  };
+  history.unshift(newItem);
+
+  // 不再限制最大数量，使用 IndexedDB 可存储无限条记录
+
+  videoPromptHistoryCache = history;
+  saveVideoPromptHistory();
 }
 
 /**
  * 删除指定视频描述历史记录
  */
 export function removeVideoPromptHistory(id: string): void {
-  try {
-    let history = getVideoPromptHistory();
-    history = history.filter(item => item.id !== id);
-    localStorage.setItem(VIDEO_PROMPT_HISTORY_KEY, JSON.stringify(history));
-  } catch (error) {
-    console.error('Failed to remove video prompt history:', error);
-  }
+  ensureCacheInitialized();
+  videoPromptHistoryCache = (videoPromptHistoryCache || []).filter(
+    (item) => item.id !== id
+  );
+  saveVideoPromptHistory();
 }
 
 /**
  * 获取视频描述历史记录的提示词列表（仅内容）
  */
 export function getVideoPromptHistoryContents(): string[] {
-  return getVideoPromptHistory().map(item => item.content);
+  return getVideoPromptHistory().map((item) => item.content);
 }
 
 // ============================================
@@ -271,35 +325,14 @@ const defaultPresetSettings: PresetPromptSettings = {
   deletedPrompts: [],
 };
 
-let presetData: PresetStorageData | null = null;
-
 function loadPresetData(): PresetStorageData {
-  if (presetData) return presetData;
-
-  try {
-    const stored = localStorage.getItem(PRESET_SETTINGS_KEY);
-    if (stored) {
-      presetData = JSON.parse(stored);
-      return presetData!;
+  ensureCacheInitialized();
+  return (
+    presetDataCache || {
+      image: { ...defaultPresetSettings },
+      video: { ...defaultPresetSettings },
     }
-  } catch (error) {
-    console.warn('[PromptStorageService] Failed to load preset data:', error);
-  }
-
-  presetData = {
-    image: { ...defaultPresetSettings },
-    video: { ...defaultPresetSettings },
-  };
-  return presetData;
-}
-
-function savePresetData(): void {
-  if (!presetData) return;
-  try {
-    localStorage.setItem(PRESET_SETTINGS_KEY, JSON.stringify(presetData));
-  } catch (error) {
-    console.warn('[PromptStorageService] Failed to save preset data:', error);
-  }
+  );
 }
 
 /**
@@ -332,6 +365,7 @@ function pinPresetPrompt(type: PromptType, prompt: string): void {
     settings.deletedPrompts.splice(deletedIndex, 1);
   }
 
+  presetDataCache = data;
   savePresetData();
 }
 
@@ -345,6 +379,7 @@ function unpinPresetPrompt(type: PromptType, prompt: string): void {
   const index = settings.pinnedPrompts.indexOf(prompt);
   if (index > -1) {
     settings.pinnedPrompts.splice(index, 1);
+    presetDataCache = data;
     savePresetData();
   }
 }
@@ -375,6 +410,7 @@ function deletePresetPrompt(type: PromptType, prompt: string): void {
     settings.deletedPrompts.push(prompt);
   }
 
+  presetDataCache = data;
   savePresetData();
 }
 
@@ -385,7 +421,7 @@ function sortPresetPrompts(type: PromptType, prompts: string[]): string[] {
   const settings = getPresetSettings(type);
 
   // 过滤掉已删除的
-  const filtered = prompts.filter(p => !settings.deletedPrompts.includes(p));
+  const filtered = prompts.filter((p) => !settings.deletedPrompts.includes(p));
 
   // 分离置顶和非置顶
   const pinned: string[] = [];
@@ -411,6 +447,9 @@ function sortPresetPrompts(type: PromptType, prompts: string[]): string[] {
  * 导出 prompt storage service 对象
  */
 export const promptStorageService = {
+  // 初始化
+  initCache: initPromptStorageCache,
+
   // 历史记录功能（用于 AI 输入框）
   getHistory: getPromptHistory,
   addHistory: addPromptHistory,

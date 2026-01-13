@@ -35,6 +35,9 @@ import { initWebVitals } from '../../../packages/drawnix/src/services/web-vitals
 import { initPageReport } from '../../../packages/drawnix/src/services/page-report-service';
 import { initPreventPinchZoom } from '../../../packages/drawnix/src/services/prevent-pinch-zoom-service';
 import { runDatabaseCleanup } from '../../../packages/drawnix/src/services/db-cleanup-service';
+import { storageMigrationService } from '../../../packages/drawnix/src/services/storage-migration-service';
+import { initPromptStorageCache } from '../../../packages/drawnix/src/services/prompt-storage-service';
+import { toolbarConfigService } from '../../../packages/drawnix/src/services/toolbar-config-service';
 
 // ===== 立即初始化防止双指缩放 =====
 // 必须在任何其他代码之前执行，确保事件监听器最先注册
@@ -46,6 +49,17 @@ if (typeof window !== 'undefined') {
   // 清理旧的冗余数据库（异步执行，不阻塞启动）
   runDatabaseCleanup().catch(error => {
     console.warn('[Main] Database cleanup failed:', error);
+  });
+
+  // 执行 LocalStorage 到 IndexedDB 的数据迁移（异步执行，不阻塞启动）
+  storageMigrationService.runMigration().then(() => {
+    // 迁移完成后初始化各服务的缓存
+    return Promise.all([
+      initPromptStorageCache(),
+      toolbarConfigService.initializeAsync(),
+    ]);
+  }).catch(error => {
+    console.warn('[Main] Storage migration/init failed:', error);
   });
 }
 

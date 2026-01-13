@@ -18,7 +18,12 @@ import { useAssets } from '../../contexts/AssetContext';
 import { AssetType, AssetSource, SelectionMode } from '../../types/asset.types';
 import type { Asset } from '../../types/asset.types';
 import { MediaLibraryModal } from '../media-library/MediaLibraryModal';
+import { LS_KEYS_TO_MIGRATE } from '../../constants/storage-keys';
+import { kvStorageService } from '../../services/kv-storage-service';
 import './batch-image-generation.scss';
+
+// 本地缓存 key
+const BATCH_IMAGE_CACHE_KEY = LS_KEYS_TO_MIGRATE.BATCH_IMAGE_CACHE;
 
 // 任务行数据
 interface TaskRow {
@@ -58,8 +63,21 @@ const SIZE_LABELS: Record<string, string> = {
 // 可编辑列
 const EDITABLE_COLS = ['prompt', 'size', 'images', 'count', 'preview'];
 
-// 本地缓存 key
-const BATCH_IMAGE_CACHE_KEY = 'batch-image-generation-cache';
+// 默认初始任务
+function getDefaultTasks(): TaskRow[] {
+  const initialTasks: TaskRow[] = [];
+  for (let i = 0; i < 5; i++) {
+    initialTasks.push({
+      id: i + 1,
+      prompt: '',
+      size: 'auto',
+      images: [],
+      count: 1,
+      taskIds: []
+    });
+  }
+  return initialTasks;
+}
 
 interface BatchImageGenerationProps {
   onSwitchToSingle?: () => void;
@@ -78,49 +96,32 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
     loadAssets();
   }, [loadAssets]);
 
-  // 任务数据 - 从本地缓存加载
-  const [tasks, setTasks] = useState<TaskRow[]>(() => {
-    try {
-      const cached = localStorage.getItem(BATCH_IMAGE_CACHE_KEY);
-      if (cached) {
-        const data = JSON.parse(cached);
-        if (data.tasks && Array.isArray(data.tasks) && data.tasks.length > 0) {
-          return data.tasks;
-        }
-      }
-    } catch (e) {
-      console.warn('Failed to load batch image cache:', e);
-    }
-    // 默认初始化 5 行
-    const initialTasks: TaskRow[] = [];
-    for (let i = 0; i < 5; i++) {
-      initialTasks.push({
-        id: i + 1,
-        prompt: '',
-        size: 'auto',
-        images: [],
-        count: 1,
-        taskIds: []
-      });
-    }
-    return initialTasks;
-  });
-
-  const [taskIdCounter, setTaskIdCounter] = useState<number>(() => {
-    try {
-      const cached = localStorage.getItem(BATCH_IMAGE_CACHE_KEY);
-      if (cached) {
-        const data = JSON.parse(cached);
-        if (data.taskIdCounter) {
-          return data.taskIdCounter;
-        }
-      }
-    } catch (e) {
-      // ignore
-    }
-    return 6;
-  });
+  // 任务数据 - 初始化为默认值，异步从 IndexedDB 加载
+  const [tasks, setTasks] = useState<TaskRow[]>(getDefaultTasks);
+  const [taskIdCounter, setTaskIdCounter] = useState<number>(6);
+  const [cacheLoaded, setCacheLoaded] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // 从 IndexedDB 加载缓存
+  useEffect(() => {
+    let mounted = true;
+    kvStorageService.get<{ tasks: TaskRow[]; taskIdCounter: number }>(BATCH_IMAGE_CACHE_KEY)
+      .then((cached) => {
+        if (!mounted) return;
+        if (cached && cached.tasks && Array.isArray(cached.tasks) && cached.tasks.length > 0) {
+          setTasks(cached.tasks);
+          if (cached.taskIdCounter) {
+            setTaskIdCounter(cached.taskIdCounter);
+          }
+        }
+        setCacheLoaded(true);
+      })
+      .catch((e) => {
+        console.warn('Failed to load batch image cache:', e);
+        if (mounted) setCacheLoaded(true);
+      });
+    return () => { mounted = false; };
+  }, []);
 
   // 选中状态
   const [activeCell, setActiveCell] = useState<CellPosition | null>(null);
@@ -183,19 +184,20 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
   const lastCheckedRowRef = useRef<number | null>(null); // 上次勾选的行（checkbox），用于 checkbox Shift 多选
   const uploadTargetRowRef = useRef<number | null>(null); // 正在上传图片的目标行
 
-  // 保存到本地缓存
+  // 保存到 IndexedDB（异步）
   useEffect(() => {
-    try {
-      const cacheData = {
-        tasks,
-        taskIdCounter,
-        timestamp: Date.now()
-      };
-      localStorage.setItem(BATCH_IMAGE_CACHE_KEY, JSON.stringify(cacheData));
-    } catch (e) {
+    // 等待缓存加载完成后再保存，避免覆盖
+    if (!cacheLoaded) return;
+    
+    const cacheData = {
+      tasks,
+      taskIdCounter,
+      timestamp: Date.now()
+    };
+    kvStorageService.set(BATCH_IMAGE_CACHE_KEY, cacheData).catch((e) => {
       console.warn('Failed to save batch image cache:', e);
-    }
-  }, [tasks, taskIdCounter]);
+    });
+  }, [tasks, taskIdCounter, cacheLoaded]);
 
   // 记录历史（用于撤销/重做）
   const saveHistory = useCallback((newTasks: TaskRow[]) => {

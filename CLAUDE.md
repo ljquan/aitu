@@ -735,7 +735,7 @@ SelectionWatcher (isDataReady prop)
 - `components/ai-input-bar/PromptHistoryPopover.tsx` - UI 组件
 
 **功能特点**：
-- 自动保存用户发送的提示词（最多 20 条）
+- 自动保存用户发送的提示词（无数量限制，使用 IndexedDB 存储）
 - 支持置顶/取消置顶常用提示词
 - 鼠标悬浮三点图标显示历史列表
 - 点击历史提示词回填到输入框

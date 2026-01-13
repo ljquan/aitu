@@ -32,7 +32,12 @@ import {
 import type { FontConfig, TextShadowConfig, GradientConfig } from '../../../types/text-effects.types';
 import { generateTextShadowCSS, generateGradientCSS } from '../../../utils/text-effects-utils';
 import { fontManagerService } from '../../../services/font-manager-service';
+import { LS_KEYS_TO_MIGRATE } from '../../../constants/storage-keys';
+import { kvStorageService } from '../../../services/kv-storage-service';
 import './text-property-panel.scss';
+
+const RECENT_COLORS_KEY = LS_KEYS_TO_MIGRATE.RECENT_TEXT_COLORS;
+const CUSTOM_GRADIENTS_KEY = LS_KEYS_TO_MIGRATE.CUSTOM_GRADIENTS;
 
 export interface TextPropertyPanelProps {
   board: PlaitBoard;
@@ -94,27 +99,29 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({
   const [showGradientEditor, setShowGradientEditor] = useState(false);
   
   // 自定义渐变预设
-  const [customGradients, setCustomGradients] = useState<Array<{ id: string; css: string }>>(() => {
-    try {
-      const saved = localStorage.getItem('aitu-custom-gradients');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [customGradients, setCustomGradients] = useState<Array<{ id: string; css: string }>>([]);
   
   // 颜色状态 - 用于受控的 ColorPickerPanel
   const [colorValue, setColorValue] = useState(currentColor || '#000000');
   
   // 最近使用的颜色
-  const [recentColors, setRecentColors] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem('aitu-recent-text-colors');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [recentColors, setRecentColors] = useState<string[]>([]);
+
+  // 从 IndexedDB 加载颜色和渐变数据
+  useEffect(() => {
+    let mounted = true;
+    Promise.all([
+      kvStorageService.get<string[]>(RECENT_COLORS_KEY),
+      kvStorageService.get<Array<{ id: string; css: string }>>(CUSTOM_GRADIENTS_KEY),
+    ]).then(([colors, gradients]) => {
+      if (!mounted) return;
+      if (colors) setRecentColors(colors);
+      if (gradients) setCustomGradients(gradients);
+    }).catch((e) => {
+      console.warn('Failed to load color/gradient data:', e);
+    });
+    return () => { mounted = false; };
+  }, []);
 
   // 面板打开时,从文本 marks 中读取当前样式进行反显
   useEffect(() => {
@@ -292,12 +299,10 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({
       const filtered = prev.filter(c => c.toLowerCase().replace(/\s/g, '') !== normalizedColor);
       // 添加到开头，最多保存 10 个
       const updated = [color, ...filtered].slice(0, 10);
-      // 保存到 localStorage
-      try {
-        localStorage.setItem('aitu-recent-text-colors', JSON.stringify(updated));
-      } catch (e) {
+      // 保存到 IndexedDB
+      kvStorageService.set(RECENT_COLORS_KEY, updated).catch((e) => {
         console.warn('Failed to save recent colors:', e);
-      }
+      });
       return updated;
     });
   }, []);
@@ -386,22 +391,18 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({
     };
     const updated = [newGradient, ...customGradients].slice(0, 8);
     setCustomGradients(updated);
-    try {
-      localStorage.setItem('aitu-custom-gradients', JSON.stringify(updated));
-    } catch (e) {
+    kvStorageService.set(CUSTOM_GRADIENTS_KEY, updated).catch((e) => {
       console.warn('Failed to save custom gradients:', e);
-    }
+    });
   }, [gradientAngle, gradientStops, customGradients]);
 
   // 删除自定义渐变
   const deleteCustomGradient = useCallback((id: string) => {
     const updated = customGradients.filter(g => g.id !== id);
     setCustomGradients(updated);
-    try {
-      localStorage.setItem('aitu-custom-gradients', JSON.stringify(updated));
-    } catch (e) {
+    kvStorageService.set(CUSTOM_GRADIENTS_KEY, updated).catch((e) => {
       console.warn('Failed to save custom gradients:', e);
-    }
+    });
   }, [customGradients]);
 
   // 切换阴影开关
@@ -777,11 +778,9 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({
                 recentColors={recentColors}
                 onRecentColorsChange={(colors: string[]) => {
                   setRecentColors(colors);
-                  try {
-                    localStorage.setItem('aitu-recent-text-colors', JSON.stringify(colors));
-                  } catch (e) {
+                  kvStorageService.set(RECENT_COLORS_KEY, colors).catch((e) => {
                     console.warn('Failed to save recent colors:', e);
-                  }
+                  });
                 }}
                 swatchColors={null}
               />
