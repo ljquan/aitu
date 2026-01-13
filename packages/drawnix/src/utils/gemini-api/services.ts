@@ -10,11 +10,12 @@ import { geminiSettings, settingsManager } from '../settings-manager';
 import { validateAndEnsureConfig } from './auth';
 import { shouldUseSWTaskQueue } from '../../services/task-queue';
 import { swTaskQueueClient } from '../../services/sw-client';
+import { swTaskQueueService } from '../../services/sw-task-queue-service';
 import { TaskType, TaskResult, TaskError } from '../../types/task.types';
 import { firstValueFrom, merge, map, take } from 'rxjs';
 
 /**
- * 确保 SW 客户端已初始化
+ * 确保 SW 客户端已初始化（使用统一服务）
  */
 async function ensureSWInitialized(): Promise<boolean> {
   if (!shouldUseSWTaskQueue()) {
@@ -25,29 +26,8 @@ async function ensureSWInitialized(): Promise<boolean> {
     return true;
   }
   
-  const settings = geminiSettings.get();
-  if (!settings.apiKey || !settings.baseUrl) {
-    // console.log('[ImageAPI] Missing apiKey or baseUrl, cannot initialize SW');
-    return false;
-  }
-  
-  try {
-    const success = await swTaskQueueClient.initialize(
-      {
-        apiKey: settings.apiKey,
-        baseUrl: settings.baseUrl,
-        modelName: settings.imageModelName,
-      },
-      {
-        baseUrl: settings.baseUrl,
-      }
-    );
-    // console.log('[ImageAPI] SW client initialization result:', success);
-    return success;
-  } catch (error) {
-    console.error('[ImageAPI] SW client initialization failed:', error);
-    return false;
-  }
+  // 使用统一的初始化服务
+  return swTaskQueueService.initialize();
 }
 
 /**

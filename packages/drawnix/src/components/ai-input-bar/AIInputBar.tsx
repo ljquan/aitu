@@ -57,44 +57,7 @@ import { BoardTransforms } from '@plait/core';
 import { WorkZoneTransforms } from '../../plugins/with-workzone';
 import { ToolTransforms } from '../../plugins/with-tool';
 import type { PlaitWorkZone } from '../../types/workzone.types';
-import { useWorkflowSubmission } from '../../hooks/useWorkflowSubmission';
-
-/**
- * 将 WorkflowDefinition 转换为 WorkflowMessageData
- * @param workflow 工作流定义
- * @param retryContext 可选的重试上下文
- * @param postProcessingStatus 后处理状态
- * @param insertedCount 插入数量
- */
-function toWorkflowMessageData(
-  workflow: WorkflowDefinition,
-  retryContext?: WorkflowRetryContext,
-  postProcessingStatus?: PostProcessingStatus,
-  insertedCount?: number
-): WorkflowMessageData {
-  return {
-    id: workflow.id,
-    name: workflow.name,
-    generationType: workflow.generationType,
-    prompt: workflow.metadata.prompt,
-    aiAnalysis: workflow.aiAnalysis,
-    count: workflow.metadata.count,
-    steps: workflow.steps.map(step => ({
-      id: step.id,
-      description: step.description,
-      status: step.status,
-      mcp: step.mcp,
-      args: step.args,
-      result: step.result,
-      error: step.error,
-      duration: step.duration,
-      options: step.options,
-    })),
-    retryContext,
-    postProcessingStatus,
-    insertedCount,
-  };
-}
+import { useWorkflowSubmission, toWorkflowMessageData } from '../../hooks/useWorkflowSubmission';
 
 // 初始化 MCP 模块和长视频链服务
 let mcpInitialized = false;
@@ -577,7 +540,6 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
   } = useWorkflowSubmission({
     boardRef: SelectionWatcherBoardRef,
     workZoneIdRef: currentWorkZoneIdRef,
-    useSWExecution: true, // 启用 SW 执行
   });
 
   const inputRef = useRef<HTMLTextAreaElement>(null);

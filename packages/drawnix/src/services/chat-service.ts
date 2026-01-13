@@ -13,8 +13,8 @@ import { MessageRole } from '../types/chat.types';
 import { analytics } from '../utils/posthog-analytics';
 import { shouldUseSWTaskQueue } from './task-queue';
 import { swTaskQueueClient } from './sw-client';
+import { swTaskQueueService } from './sw-task-queue-service';
 import type { ChatParams, ChatMessage as SWChatMessage, ChatAttachment } from './sw-client/types';
-import { geminiSettings } from '../utils/settings-manager';
 
 // Current abort controller for cancellation
 let currentAbortController: AbortController | null = null;
@@ -191,42 +191,18 @@ export async function sendChatMessage(
 ): Promise<string> {
   // Check if we should use SW mode
   if (shouldUseSWTaskQueue()) {
-    // console.log('[ChatService] SW mode available, checking initialization...');
-    
-    // Ensure SW client is initialized before using
-    if (!swTaskQueueClient.isInitialized()) {
-      // console.log('[ChatService] SW client not initialized, initializing...');
-      const settings = geminiSettings.get();
-      if (settings.apiKey && settings.baseUrl) {
-        try {
-          const success = await swTaskQueueClient.initialize(
-            {
-              apiKey: settings.apiKey,
-              baseUrl: settings.baseUrl,
-              modelName: settings.chatModel,
-            },
-            {
-              baseUrl: settings.baseUrl,
-            }
-          );
-          // console.log('[ChatService] SW client initialization result:', success);
-        } catch (error) {
-          console.error('[ChatService] SW client initialization failed:', error);
-        }
-      } else {
-        // console.log('[ChatService] Missing apiKey or baseUrl, skipping SW initialization');
-      }
+    // Ensure SW is initialized via unified service
+    if (!swTaskQueueService.isInitialized()) {
+      await swTaskQueueService.initialize();
     }
     
     // Use SW mode if initialized successfully
     if (swTaskQueueClient.isInitialized()) {
-      // console.log('[ChatService] Using SW mode for chat');
       return sendChatMessageViaSW(messages, newContent, attachments, onStream, temporaryModel, systemPrompt);
     }
   }
   
   // Fallback to direct mode
-  // console.log('[ChatService] Using direct mode for chat');
   return sendChatMessageDirect(messages, newContent, attachments, onStream, temporaryModel, systemPrompt);
 }
 

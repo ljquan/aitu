@@ -99,6 +99,21 @@ class SWTaskQueueService {
   }
 
   /**
+   * Check if Service Worker is available and supported
+   */
+  isSWAvailable(): boolean {
+    return swTaskQueueClient.isServiceWorkerSupported() && 
+           !!(navigator.serviceWorker && navigator.serviceWorker.controller);
+  }
+
+  /**
+   * Check if the service is initialized
+   */
+  isInitialized(): boolean {
+    return this.initialized;
+  }
+
+  /**
    * Creates a new task and submits it to the Service Worker
    */
   createTask(params: GenerationParams, type: TaskType): Task {

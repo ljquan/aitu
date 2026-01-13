@@ -10,11 +10,11 @@ import { isQuotaExceededError, isTimeoutError } from './utils';
 import { analytics } from '../posthog-analytics';
 import { shouldUseSWTaskQueue } from '../../services/task-queue';
 import { swTaskQueueClient } from '../../services/sw-client';
-import { geminiSettings } from '../settings-manager';
+import { swTaskQueueService } from '../../services/sw-task-queue-service';
 import type { ChatParams, ChatMessage as SWChatMessage } from '../../services/sw-client/types';
 
 /**
- * 确保 SW 客户端已初始化
+ * 确保 SW 客户端已初始化（使用统一服务）
  */
 async function ensureSWInitialized(): Promise<boolean> {
   if (!shouldUseSWTaskQueue()) {
@@ -25,29 +25,8 @@ async function ensureSWInitialized(): Promise<boolean> {
     return true;
   }
   
-  const settings = geminiSettings.get();
-  if (!settings.apiKey || !settings.baseUrl) {
-    // console.log('[ApiCalls] Missing apiKey or baseUrl, cannot initialize SW');
-    return false;
-  }
-  
-  try {
-    const success = await swTaskQueueClient.initialize(
-      {
-        apiKey: settings.apiKey,
-        baseUrl: settings.baseUrl,
-        modelName: settings.chatModel,
-      },
-      {
-        baseUrl: settings.baseUrl,
-      }
-    );
-    // console.log('[ApiCalls] SW client initialization result:', success);
-    return success;
-  } catch (error) {
-    console.error('[ApiCalls] SW client initialization failed:', error);
-    return false;
-  }
+  // 使用统一的初始化服务
+  return swTaskQueueService.initialize();
 }
 
 /**

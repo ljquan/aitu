@@ -1,17 +1,23 @@
 /**
  * Workflow Submission Service
  *
- * Simplified service for submitting workflows to Service Worker.
- * This replaces the complex workflow execution logic in AIInputBar.
+ * Unified service for submitting workflows to Service Worker.
+ * Handles the complete workflow lifecycle:
+ * - Build workflow definition
+ * - Submit to SW
+ * - Listen for updates and sync to UI
  *
  * Architecture:
- * - Application layer: Build workflow definition → Submit to SW → Listen for updates
- * - Service Worker: Execute workflow → Call MCP tools → Broadcast status updates
+ * - AIInputBar → workflowSubmissionService.submitWorkflow() → SW
+ * - SW → events → UI updates (via callbacks)
  */
 
 import { Subject, Observable, Subscription } from 'rxjs';
 import { filter } from 'rxjs/operators';
 import type { ParsedGenerationParams } from '../utils/ai-input-parser';
+import type { WorkflowMessageData, WorkflowRetryContext, PostProcessingStatus } from '../types/chat.types';
+import { convertToWorkflow, type WorkflowDefinition as LegacyWorkflowDefinition } from '../components/ai-input-bar/workflow-converter';
+import { geminiSettings } from '../utils/settings-manager';
 
 // ============================================================================
 // Types
@@ -641,7 +647,199 @@ class WorkflowSubmissionService {
     const registration = await navigator.serviceWorker.ready;
     return registration.active;
   }
+
+  // ============================================================================
+  // High-Level API (replaces useWorkflowSubmission hook logic)
+  // ============================================================================
+
+  /**
+   * Check if Service Worker is available and ready
+   */
+  isSWAvailable(): boolean {
+    return !!(navigator.serviceWorker && navigator.serviceWorker.controller);
+  }
+
+  /**
+   * Ensure SW task queue is initialized before submitting workflow
+   */
+  private async ensureSWInitialized(): Promise<void> {
+    // Dynamically import to avoid circular dependencies
+    const { swTaskQueueService } = await import('./sw-task-queue-service');
+    const success = await swTaskQueueService.initialize();
+    if (!success) {
+      throw new Error('Failed to initialize SW task queue');
+    }
+  }
+
+  /**
+   * Convert legacy workflow to SW workflow format
+   */
+  private convertToSWWorkflow(
+    legacyWorkflow: LegacyWorkflowDefinition,
+    parsedInput: ParsedGenerationParams,
+    referenceImages: string[]
+  ): WorkflowDefinition {
+    return {
+      id: legacyWorkflow.id,
+      name: legacyWorkflow.name,
+      steps: legacyWorkflow.steps.map(step => ({
+        id: step.id,
+        mcp: step.mcp,
+        args: step.args,
+        description: step.description,
+        status: step.status as WorkflowStepStatus,
+      })),
+      status: 'pending',
+      createdAt: legacyWorkflow.createdAt,
+      updatedAt: Date.now(),
+      context: {
+        userInput: parsedInput.userInstruction,
+        model: parsedInput.modelId,
+        params: {
+          count: parsedInput.count,
+          size: parsedInput.size,
+          duration: parsedInput.duration,
+        },
+        referenceImages,
+      },
+    };
+  }
+
+  /**
+   * Convert legacy workflow to WorkflowMessageData for ChatDrawer
+   */
+  toWorkflowMessageData(
+    workflow: LegacyWorkflowDefinition,
+    retryContext?: WorkflowRetryContext,
+    postProcessingStatus?: PostProcessingStatus,
+    insertedCount?: number
+  ): WorkflowMessageData {
+    return {
+      id: workflow.id,
+      name: workflow.name,
+      generationType: workflow.generationType,
+      prompt: workflow.metadata.prompt,
+      aiAnalysis: workflow.aiAnalysis,
+      count: workflow.metadata.count,
+      steps: workflow.steps.map(step => ({
+        id: step.id,
+        description: step.description,
+        status: step.status,
+        mcp: step.mcp,
+        args: step.args,
+        result: step.result,
+        error: step.error,
+        duration: step.duration,
+        options: step.options,
+      })),
+      retryContext,
+      postProcessingStatus,
+      insertedCount,
+    };
+  }
+
+  /**
+   * Build retry context from parsed input
+   */
+  buildRetryContext(
+    parsedInput: ParsedGenerationParams,
+    referenceImages: string[],
+    existingRetryContext?: WorkflowRetryContext
+  ): WorkflowRetryContext {
+    if (existingRetryContext) {
+      return existingRetryContext;
+    }
+
+    const globalSettings = geminiSettings.get();
+    const textModel = globalSettings.textModelName;
+
+    return {
+      aiContext: {
+        rawInput: parsedInput.rawInput || parsedInput.userInstruction,
+        userInstruction: parsedInput.userInstruction,
+        model: {
+          id: parsedInput.modelId,
+          type: parsedInput.generationType,
+          isExplicit: parsedInput.isModelExplicit,
+        },
+        params: {
+          count: parsedInput.count,
+          size: parsedInput.size,
+          duration: parsedInput.duration,
+        },
+        selection: parsedInput.selection || { texts: [], images: [], videos: [], graphics: [] },
+        finalPrompt: parsedInput.prompt,
+      },
+      referenceImages,
+      textModel,
+    };
+  }
+
+  /**
+   * Submit a workflow for execution (high-level API)
+   *
+   * This is the main entry point for workflow submission.
+   * It handles:
+   * 1. Creating workflow definition
+   * 2. Ensuring SW is initialized
+   * 3. Submitting to SW
+   * 4. Returning subscription for event handling
+   *
+   * @param parsedInput - Parsed AI input parameters
+   * @param referenceImages - Reference images for generation
+   * @param retryContext - Optional retry context
+   * @param existingWorkflow - Optional existing workflow (for retry)
+   * @returns Workflow ID, subscription, and helper data
+   */
+  async submitWorkflow(
+    parsedInput: ParsedGenerationParams,
+    referenceImages: string[],
+    retryContext?: WorkflowRetryContext,
+    existingWorkflow?: LegacyWorkflowDefinition
+  ): Promise<{
+    workflowId: string;
+    workflow: LegacyWorkflowDefinition;
+    retryContext: WorkflowRetryContext;
+    subscription: Subscription;
+    usedSW: boolean;
+  }> {
+    // Check SW availability
+    if (!this.isSWAvailable()) {
+      throw new Error('Service Worker not available');
+    }
+
+    // Create workflow if not provided
+    const legacyWorkflow = existingWorkflow || convertToWorkflow(parsedInput, referenceImages);
+
+    // Build retry context
+    const finalRetryContext = this.buildRetryContext(parsedInput, referenceImages, retryContext);
+
+    // Ensure SW is initialized
+    await this.ensureSWInitialized();
+
+    // Convert to SW format
+    const swWorkflow = this.convertToSWWorkflow(legacyWorkflow, parsedInput, referenceImages);
+
+    // Subscribe to workflow events before submitting
+    const subscription = this.subscribeToWorkflow(swWorkflow.id, () => {
+      // Events will be handled by the caller via subscription
+    });
+
+    // Submit to SW
+    await this.submit(swWorkflow);
+
+    return {
+      workflowId: legacyWorkflow.id,
+      workflow: legacyWorkflow,
+      retryContext: finalRetryContext,
+      subscription,
+      usedSW: true,
+    };
+  }
 }
 
 // Export singleton instance
 export const workflowSubmissionService = new WorkflowSubmissionService();
+
+// Re-export types for convenience
+export type { WorkflowRetryContext, WorkflowMessageData, PostProcessingStatus };
