@@ -9,7 +9,7 @@
  */
 
 import { useEffect } from 'react';
-import { taskQueueService, shouldUseSWTaskQueue } from '../services/task-queue';
+import { taskQueueService, shouldUseSWTaskQueue, legacyTaskQueueService } from '../services/task-queue';
 import { storageService } from '../services/storage-service';
 import { UPDATE_INTERVALS } from '../constants/TASK_CONSTANTS';
 import { migrateLegacyHistory } from '../utils/history-migration';
@@ -70,7 +70,7 @@ export function useTaskStorage(): void {
           // Migrate legacy tasks from old storage to SW (one-time migration)
           const legacyTasks = await storageService.loadTasks();
           if (legacyTasks.length > 0) {
-            // console.log(`[useTaskStorage] Migrating ${legacyTasks.length} legacy tasks to SW`);
+            console.log(`[useTaskStorage] Migrating ${legacyTasks.length} legacy tasks to SW`);
 
             // Restore legacy tasks to SW service (which will sync to SW)
             await swTaskQueueService.restoreTasks(legacyTasks);
@@ -79,7 +79,7 @@ export function useTaskStorage(): void {
             for (const task of legacyTasks) {
               await storageService.deleteTask(task.id);
             }
-            // console.log('[useTaskStorage] Legacy tasks migrated and cleared');
+            console.log('[useTaskStorage] Legacy tasks migrated and cleared');
           }
 
           // Sync tasks from SW to local state
@@ -122,7 +122,8 @@ export function useTaskStorage(): void {
                   errorCode = 'INTERRUPTED_DURING_SUBMISSION';
                 }
 
-                taskQueueService.updateTaskStatus(task.id, TaskStatus.FAILED, {
+                // Use legacy service directly since this code only runs in legacy mode
+                legacyTaskQueueService.updateTaskStatus(task.id, TaskStatus.FAILED, {
                   startedAt: undefined,
                   executionPhase: undefined, // Clear execution phase
                   error: {

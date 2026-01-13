@@ -1,17 +1,11 @@
 /**
  * Database Cleanup Service
  *
- * Cleans up legacy/redundant IndexedDB databases and LocalStorage data
- * that are no longer needed. This service runs once on app startup and
- * removes old data after migration to new storage locations.
+ * Cleans up deprecated LocalStorage data that is no longer needed.
+ * This service runs once on app startup.
  *
- * Legacy databases to clean:
- * - Drawnix: Old localforage default database
- * - drawnix: Old board data (migrated to aitu-workspace)
- * - localforage: localforage default database
- * - aitu-task-queue: Old task queue (migrated to sw-task-queue)
- * - aitu-media-cache: Old media cache (migrated to drawnix-unified-cache)
- * - aitu-url-cache: Old URL cache (migrated to drawnix-unified-cache)
+ * Note: IndexedDB database cleanup has been removed as it's a dangerous operation.
+ * Data migration is handled by individual services (e.g., useTaskStorage, asset-storage-service).
  *
  * Legacy LocalStorage keys to clean:
  * - aitu-recent-colors-shadow: Orphaned data
@@ -20,79 +14,10 @@
 import {
   LS_KEYS,
   LS_KEYS_DEPRECATED,
-  IDB_LEGACY_DATABASES,
 } from '../constants/storage-keys';
 
 // Storage key to track if cleanup has been performed
 const CLEANUP_DONE_KEY = LS_KEYS.DB_CLEANUP_DONE;
-
-// List of legacy databases to delete (use from constants)
-const LEGACY_DATABASES = [...IDB_LEGACY_DATABASES];
-
-/**
- * Check if a database exists
- */
-async function checkDBExists(dbName: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    try {
-      const request = indexedDB.open(dbName);
-      let existed = false;
-
-      request.onupgradeneeded = () => {
-        // Database didn't exist, was just created
-        existed = false;
-      };
-
-      request.onsuccess = () => {
-        const db = request.result;
-        // Check if it has any object stores (empty DB means it was just created)
-        existed = db.objectStoreNames.length > 0;
-        db.close();
-
-        // If we just created an empty DB, delete it
-        if (!existed) {
-          indexedDB.deleteDatabase(dbName);
-        }
-
-        resolve(existed);
-      };
-
-      request.onerror = () => {
-        resolve(false);
-      };
-    } catch {
-      resolve(false);
-    }
-  });
-}
-
-/**
- * Delete a database
- */
-async function deleteDatabase(dbName: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    try {
-      const request = indexedDB.deleteDatabase(dbName);
-
-      request.onsuccess = () => {
-        // console.log(`[DBCleanup] Deleted database: ${dbName}`);
-        resolve(true);
-      };
-
-      request.onerror = () => {
-        console.warn(`[DBCleanup] Failed to delete database: ${dbName}`);
-        resolve(false);
-      };
-
-      request.onblocked = () => {
-        console.warn(`[DBCleanup] Database deletion blocked: ${dbName}`);
-        resolve(false);
-      };
-    } catch {
-      resolve(false);
-    }
-  });
-}
 
 /**
  * Clean up deprecated LocalStorage keys
@@ -124,40 +49,14 @@ export async function runDatabaseCleanup(): Promise<void> {
     return;
   }
 
-  // console.log('[DBCleanup] Starting legacy database cleanup...');
-
-  let deletedCount = 0;
-  let skippedCount = 0;
-
-  // Clean up legacy IndexedDB databases
-  for (const dbName of LEGACY_DATABASES) {
-    try {
-      const exists = await checkDBExists(dbName);
-
-      if (exists) {
-        const deleted = await deleteDatabase(dbName);
-        if (deleted) {
-          deletedCount++;
-        } else {
-          skippedCount++;
-        }
-      }
-    } catch (error) {
-      console.warn(`[DBCleanup] Error processing database ${dbName}:`, error);
-      skippedCount++;
-    }
-  }
-
   // Clean up deprecated LocalStorage keys
   const lsCleanedCount = cleanupDeprecatedLocalStorage();
 
   // Mark cleanup as done
   localStorage.setItem(CLEANUP_DONE_KEY, Date.now().toString());
 
-  if (deletedCount > 0 || skippedCount > 0 || lsCleanedCount > 0) {
-    // console.log(`[DBCleanup] Cleanup complete: IDB deleted ${deletedCount}, IDB skipped ${skippedCount}, LS cleaned ${lsCleanedCount}`);
-  } else {
-    // console.log('[DBCleanup] No legacy data found');
+  if (lsCleanedCount > 0) {
+    // console.log(`[DBCleanup] Cleanup complete: LS cleaned ${lsCleanedCount}`);
   }
 }
 
@@ -174,10 +73,7 @@ if (typeof window !== 'undefined') {
   (window as unknown as Record<string, unknown>).__dbCleanup = {
     run: runDatabaseCleanup,
     reset: resetCleanupFlag,
-    checkDB: checkDBExists,
-    deleteDB: deleteDatabase,
     cleanupLS: cleanupDeprecatedLocalStorage,
-    LEGACY_DATABASES,
     LS_KEYS_DEPRECATED,
   };
 }
