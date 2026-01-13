@@ -43,22 +43,6 @@ function replacePlaceholdersWithUrls(
 }
 
 /**
- * 检测用户指令中是否包含明确的尺寸描述
- * 如果包含，AI 应该使用用户指令中的尺寸，忽略配置中的尺寸参数
- *
- * @param text 用户指令文本
- * @returns 是否包含明确的尺寸描述
- */
-function hasExplicitSizeInInstruction(text: string): boolean {
-  // 匹配明确的尺寸格式：16:9, 1:1, 9:16, 1920x1080 等
-  const patterns = [
-    /\d+:\d+/,              // 16:9, 1:1, 9:16
-    /\d+x\d+/i,             // 1920x1080, 1024x768
-  ];
-  return patterns.some(pattern => pattern.test(text));
-}
-
-/**
  * 构建结构化的用户消息
  * 使用 Markdown 格式清晰展示所有上下文信息
  */
@@ -72,10 +56,10 @@ function buildStructuredUserMessage(context: AgentExecutionContext): string {
   parts.push(`- **模型**: ${context.model.id} ${modelStatus}`);
   parts.push(`- **类型**: ${context.model.type === 'image' ? '图片生成' : '视频生成'}`);
   parts.push(`- **数量**: ${context.params.count}`);
-  // 只有当用户指令中没有明确尺寸描述时，才传递配置中的尺寸参数
-  // 这样 AI 会优先使用用户指令中的尺寸
-  if (context.params.size && !hasExplicitSizeInInstruction(context.userInstruction || '')) {
-    parts.push(`- **尺寸**: ${context.params.size}`);
+  // 始终传递配置的尺寸，但标注为默认值，让 AI 判断是否使用
+  // 优先级：用户指令中的尺寸描述 > 下拉框选择的尺寸 > 模型默认尺寸
+  if (context.params.size) {
+    parts.push(`- **尺寸**: ${context.params.size}（默认值，如用户指令中有尺寸描述则优先使用用户的）`);
   }
   if (context.params.duration) {
     parts.push(`- **时长**: ${context.params.duration}秒`);
