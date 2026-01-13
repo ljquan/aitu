@@ -426,21 +426,18 @@ export async function blobToBase64(blob: Blob): Promise<string> {
 /** 图片压缩目标大小（考虑 base64 编码膨胀约 33%，目标 Blob 大小为 750KB，确保 base64 < 1MB） */
 const MAX_IMAGE_SIZE_BYTES = 750 * 1024;
 
-/** 压缩质量步进 */
-const QUALITY_STEP = 0.1;
-
 /** 最小压缩质量 */
-const MIN_QUALITY = 0.3;
+const MIN_QUALITY = 0.1;
 
 /** 最大尺寸（宽或高） */
 const MAX_DIMENSION = 2048;
 
 /**
  * 压缩图片 Blob 到指定大小以内
- * 使用 OffscreenCanvas 进行压缩（Service Worker 环境）
+ * 使用二分查找找到最接近目标大小的最高质量
  * 
  * @param blob 原始图片 Blob
- * @param maxSizeBytes 最大字节数，默认 1MB
+ * @param maxSizeBytes 最大字节数，默认 750KB
  * @returns 压缩后的 Blob
  */
 export async function compressImageBlob(
@@ -481,28 +478,47 @@ export async function compressImageBlob(
     ctx.drawImage(imageBitmap, 0, 0, width, height);
     imageBitmap.close();
 
-    // 尝试不同质量级别进行压缩
-    let quality = 0.9;
-    let compressedBlob: Blob = blob;
+    // 使用二分查找找到最接近目标大小的最高质量
+    let lowQuality = MIN_QUALITY;
+    let highQuality = 0.95;
+    let bestBlob: Blob | null = null;
+    let bestQuality = 0;
+    const maxIterations = 8; // 最多 8 次迭代
 
-    while (quality >= MIN_QUALITY) {
-      compressedBlob = await canvas.convertToBlob({
+    for (let i = 0; i < maxIterations; i++) {
+      const midQuality = (lowQuality + highQuality) / 2;
+      const testBlob = await canvas.convertToBlob({
         type: 'image/jpeg',
-        quality,
+        quality: midQuality,
       });
 
-      console.log(`[MediaUtils] Quality ${quality.toFixed(1)}: ${(compressedBlob.size / 1024).toFixed(1)}KB`);
+      console.log(`[MediaUtils] Binary search #${i + 1}: quality=${midQuality.toFixed(3)}, size=${(testBlob.size / 1024).toFixed(1)}KB`);
 
-      if (compressedBlob.size <= maxSizeBytes) {
-        console.log(`[MediaUtils] Compression successful at quality ${quality.toFixed(1)}`);
-        return compressedBlob;
+      if (testBlob.size <= maxSizeBytes) {
+        // 符合条件，记录并尝试更高质量
+        bestBlob = testBlob;
+        bestQuality = midQuality;
+        lowQuality = midQuality;
+      } else {
+        // 太大，降低质量
+        highQuality = midQuality;
       }
 
-      quality -= QUALITY_STEP;
+      // 如果质量差距已经很小，停止搜索
+      if (highQuality - lowQuality < 0.02) {
+        break;
+      }
+    }
+
+    if (bestBlob) {
+      console.log(`[MediaUtils] Compression successful: quality=${bestQuality.toFixed(3)}, size=${(bestBlob.size / 1024).toFixed(1)}KB`);
+      return bestBlob;
     }
 
     // 如果最低质量仍然超过大小限制，尝试进一步缩小尺寸
     console.log(`[MediaUtils] Min quality not enough, trying to reduce dimensions...`);
+    let compressedBlob = await canvas.convertToBlob({ type: 'image/jpeg', quality: MIN_QUALITY });
+    
     let scale = 0.8;
     while (scale >= 0.3 && compressedBlob.size > maxSizeBytes) {
       const newWidth = Math.round(width * scale);
@@ -512,18 +528,38 @@ export async function compressImageBlob(
       const smallerCtx = smallerCanvas.getContext('2d');
       if (!smallerCtx) break;
 
-      // 重新创建 ImageBitmap 从当前压缩的 blob
-      const tempBitmap = await createImageBitmap(compressedBlob);
+      // 重新创建 ImageBitmap 从原始 blob
+      const tempBitmap = await createImageBitmap(blob);
       smallerCtx.drawImage(tempBitmap, 0, 0, newWidth, newHeight);
       tempBitmap.close();
 
-      compressedBlob = await smallerCanvas.convertToBlob({
-        type: 'image/jpeg',
-        quality: MIN_QUALITY,
-      });
+      // 对缩小后的图片再次使用二分查找
+      let smallLow = MIN_QUALITY;
+      let smallHigh = 0.95;
+      let smallBest: Blob | null = null;
 
-      console.log(`[MediaUtils] Scale ${scale.toFixed(1)} (${newWidth}x${newHeight}): ${(compressedBlob.size / 1024).toFixed(1)}KB`);
+      for (let i = 0; i < 6; i++) {
+        const midQ = (smallLow + smallHigh) / 2;
+        const testBlob = await smallerCanvas.convertToBlob({ type: 'image/jpeg', quality: midQ });
+        
+        if (testBlob.size <= maxSizeBytes) {
+          smallBest = testBlob;
+          smallLow = midQ;
+        } else {
+          smallHigh = midQ;
+        }
+        
+        if (smallHigh - smallLow < 0.02) break;
+      }
 
+      if (smallBest) {
+        console.log(`[MediaUtils] Scale ${scale.toFixed(1)} (${newWidth}x${newHeight}): ${(smallBest.size / 1024).toFixed(1)}KB`);
+        return smallBest;
+      }
+
+      compressedBlob = await smallerCanvas.convertToBlob({ type: 'image/jpeg', quality: MIN_QUALITY });
+      console.log(`[MediaUtils] Scale ${scale.toFixed(1)} (${newWidth}x${newHeight}): ${(compressedBlob.size / 1024).toFixed(1)}KB (min quality)`);
+      
       scale -= 0.1;
     }
 
