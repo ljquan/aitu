@@ -9,50 +9,58 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { AssetItem } from './AssetItem';
 import type { Asset, ViewMode } from '../../types/asset.types';
 
-// 视图模式配置
+// 视图模式配置 - 使用固定最大尺寸，列数自动计算
 const VIEW_CONFIG: Record<ViewMode, {
-  columns: number;
+  maxItemSize: number;  // 最大项目尺寸
+  minItemSize: number;  // 最小项目尺寸
   gap: number;
-  itemHeight: number;
   padding: number;
 }> = {
   grid: {
-    columns: 5,
+    maxItemSize: 180,   // 最大 180px
+    minItemSize: 120,   // 最小 120px
     gap: 16,
-    itemHeight: 200, // 正方形 + 一些额外空间
     padding: 20,
   },
   compact: {
-    columns: 9,
+    maxItemSize: 80,
+    minItemSize: 60,
     gap: 4,
-    itemHeight: 80,
     padding: 12,
   },
   list: {
-    columns: 1,
+    maxItemSize: 68,    // 列表模式高度固定
+    minItemSize: 68,
     gap: 8,
-    itemHeight: 68, // 48px 缩略图 + padding
     padding: 16,
   },
 };
 
-// 响应式列数配置
-const getResponsiveColumns = (viewMode: ViewMode, containerWidth: number): number => {
-  if (viewMode === 'list') return 1;
-
-  if (viewMode === 'compact') {
-    if (containerWidth >= 1920) return 10;
-    if (containerWidth >= 1280) return 8;
-    if (containerWidth >= 768) return 7;
-    if (containerWidth >= 480) return 6;
-    return 5;
+// 根据容器宽度和最大尺寸计算列数和实际尺寸
+const calculateGridLayout = (
+  viewMode: ViewMode,
+  containerWidth: number,
+  config: typeof VIEW_CONFIG[ViewMode]
+): { columns: number; itemSize: number } => {
+  if (viewMode === 'list') {
+    return { columns: 1, itemSize: config.maxItemSize };
   }
 
-  // grid mode - 增加列数让图片更紧凑
-  if (containerWidth >= 1920) return 6;
-  if (containerWidth >= 1280) return 5;
-  if (containerWidth >= 768) return 4;
-  return 3;
+  const availableWidth = containerWidth - config.padding * 2;
+
+  // 计算最大尺寸下能放多少列
+  const columnsAtMaxSize = Math.floor((availableWidth + config.gap) / (config.maxItemSize + config.gap));
+
+  // 至少1列
+  const columns = Math.max(1, columnsAtMaxSize);
+
+  // 计算实际尺寸（均分可用空间）
+  const itemSize = Math.floor((availableWidth - config.gap * (columns - 1)) / columns);
+
+  // 确保尺寸在合理范围内
+  const clampedSize = Math.max(config.minItemSize, Math.min(config.maxItemSize, itemSize));
+
+  return { columns, itemSize: clampedSize };
 };
 
 interface VirtualAssetGridProps {
@@ -99,21 +107,21 @@ export function VirtualAssetGrid({
     };
   }, []);
 
-  // 计算响应式列数
-  const columns = useMemo(() => {
-    return getResponsiveColumns(viewMode, containerWidth);
-  }, [viewMode, containerWidth]);
+  // 计算布局（列数和尺寸）
+  const layout = useMemo(() => {
+    return calculateGridLayout(viewMode, containerWidth, config);
+  }, [viewMode, containerWidth, config]);
+
+  const columns = layout.columns;
 
   // 计算每个 item 的尺寸
   const itemSize = useMemo(() => {
     if (viewMode === 'list') {
-      return { width: containerWidth - config.padding * 2, height: config.itemHeight };
+      return { width: containerWidth - config.padding * 2, height: layout.itemSize };
     }
     // 网格模式：正方形
-    const availableWidth = containerWidth - config.padding * 2 - config.gap * (columns - 1);
-    const width = Math.floor(availableWidth / columns);
-    return { width, height: width }; // 正方形
-  }, [viewMode, containerWidth, columns, config]);
+    return { width: layout.itemSize, height: layout.itemSize };
+  }, [viewMode, containerWidth, config.padding, layout.itemSize]);
 
   // 计算行数
   const rowCount = useMemo(() => {

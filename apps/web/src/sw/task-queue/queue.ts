@@ -582,6 +582,40 @@ export class SWTaskQueue {
     });
   }
 
+  /**
+   * Get tasks with pagination
+   * @param options Pagination options
+   */
+  async getTasksPaginated(options: {
+    offset: number;
+    limit: number;
+    status?: string;
+    type?: string;
+    sortOrder?: 'asc' | 'desc';
+  }): Promise<{ tasks: SWTask[]; total: number; hasMore: boolean }> {
+    return taskQueueStorage.getTasksPaginated(options);
+  }
+
+  /**
+   * Sync paginated tasks to clients
+   */
+  async syncPaginatedTasksToClients(options: {
+    offset: number;
+    limit: number;
+    status?: string;
+    type?: string;
+    sortOrder?: 'asc' | 'desc';
+  }): Promise<void> {
+    const result = await this.getTasksPaginated(options);
+    this.broadcastToClients({
+      type: 'TASK_PAGINATED_RESPONSE',
+      tasks: result.tasks,
+      total: result.total,
+      offset: options.offset,
+      hasMore: result.hasMore,
+    });
+  }
+
   // ============================================================================
   // Private Methods
   // ============================================================================
@@ -1009,6 +1043,17 @@ export function handleTaskQueueMessage(
 
     case 'TASK_GET_ALL': {
       queue?.syncTasksToClients();
+      break;
+    }
+
+    case 'TASK_GET_PAGINATED': {
+      queue?.syncPaginatedTasksToClients({
+        offset: message.offset,
+        limit: message.limit,
+        status: message.filters?.status,
+        type: message.filters?.type,
+        sortOrder: message.sortOrder,
+      });
       break;
     }
 

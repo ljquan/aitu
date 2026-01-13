@@ -5,8 +5,8 @@
  * Used within AI generation dialogs to show only tasks created in that dialog.
  */
 
-import React, { useMemo, useState, useEffect } from 'react';
-import { TaskItem } from './TaskItem';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
+import { VirtualTaskList } from './VirtualTaskList';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
 import { Task, TaskType, TaskStatus } from '../../types/task.types';
 import { useDrawnix, DialogType } from '../../hooks/use-drawnix';
@@ -330,8 +330,17 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
             />
           </div>
         </div>
-        <div className="dialog-task-list__content">
-          {filteredTasks.length === 0 ? (
+        <VirtualTaskList
+          tasks={filteredTasks}
+          onRetry={handleRetry}
+          onDelete={handleDelete}
+          onDownload={handleDownload}
+          onInsert={handleInsert}
+          onEdit={handleEdit}
+          onPreviewOpen={handlePreviewOpen}
+          onExtractCharacter={handleExtractCharacter}
+          className="dialog-task-list__content"
+          emptyContent={
             <div className="dialog-task-list__empty">
               {hasSearchNoMatch ? (
                 <p>未找到匹配的任务</p>
@@ -339,22 +348,8 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
                 <p>暂无生成任务</p>
               )}
             </div>
-          ) : (
-            filteredTasks.map(task => (
-              <TaskItem
-                key={task.id}
-                task={task}
-                onRetry={handleRetry}
-                onDelete={handleDelete}
-                onDownload={handleDownload}
-                onInsert={handleInsert}
-                onEdit={handleEdit}
-                onPreviewOpen={() => handlePreviewOpen(task.id)}
-                onExtractCharacter={handleExtractCharacter}
-              />
-            ))
-          )}
-        </div>
+          }
+        />
       </div>
 
       {/* Delete Confirmation Dialog */}

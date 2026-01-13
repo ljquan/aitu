@@ -222,6 +222,41 @@ const handleMoveUp = () => {
 
 **原因**: React 的 `useMemo` 只比较依赖项的引用。当外部库（如 Plait）直接修改对象内部状态而不改变引用时，需要使用 `refreshKey` 模式强制触发重新计算。
 
+#### Props 默认值避免创建新对象
+**场景**: 在函数组件参数中为对象类型的 props 设置默认值时
+
+❌ **错误示例**:
+```typescript
+// 每次渲染都创建新的 Set/Array/Object，导致子组件重渲染或无限循环
+const MyComponent: React.FC<Props> = ({
+  selectedIds = new Set(),      // ❌ 每次渲染创建新 Set
+  items = [],                   // ❌ 每次渲染创建新数组
+  config = { enabled: true },   // ❌ 每次渲染创建新对象
+}) => { ... };
+```
+
+✅ **正确示例**:
+```typescript
+// 在模块顶层定义单例常量
+const EMPTY_SET = new Set<string>();
+const EMPTY_ARRAY: Item[] = [];
+const DEFAULT_CONFIG = { enabled: true };
+
+const MyComponent: React.FC<Props> = ({
+  selectedIds,
+  items,
+  config,
+}) => {
+  // 在组件内部使用 nullish coalescing
+  const stableSelectedIds = selectedIds ?? EMPTY_SET;
+  const stableItems = items ?? EMPTY_ARRAY;
+  const stableConfig = config ?? DEFAULT_CONFIG;
+  ...
+};
+```
+
+**原因**: 在函数参数中使用 `= new Set()` 或 `= []` 作为默认值，每次组件渲染时都会创建新的对象引用。这会导致：1) 依赖该 prop 的 `useMemo`/`useEffect` 每次都重新执行；2) 使用 `@tanstack/react-virtual` 等库时可能触发无限渲染循环；3) 子组件的 `React.memo` 优化失效。
+
 #### CSS/SCSS Guidelines
 - Use BEM naming convention
 - Prefer design system CSS variables (see Brand Guidelines below)

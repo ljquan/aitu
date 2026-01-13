@@ -153,6 +153,17 @@ export interface TaskGetAllMessage {
   type: 'TASK_GET_ALL';
 }
 
+export interface TaskGetPaginatedMessage {
+  type: 'TASK_GET_PAGINATED';
+  offset: number;
+  limit: number;
+  filters?: {
+    status?: TaskStatus;
+    type?: TaskType;
+  };
+  sortOrder?: 'asc' | 'desc';
+}
+
 export interface TaskDeleteMessage {
   type: 'TASK_DELETE';
   taskId: string;
@@ -219,6 +230,7 @@ export type MainToSWMessage =
   | TaskResumeMessage
   | TaskGetStatusMessage
   | TaskGetAllMessage
+  | TaskGetPaginatedMessage
   | TaskDeleteMessage
   | ChatStartMessage
   | ChatStopMessage
@@ -294,6 +306,14 @@ export interface TaskAllResponseMessage {
   tasks: SWTask[];
 }
 
+export interface TaskPaginatedResponseMessage {
+  type: 'TASK_PAGINATED_RESPONSE';
+  tasks: SWTask[];
+  total: number;
+  offset: number;
+  hasMore: boolean;
+}
+
 export interface ChatChunkMessage {
   type: 'CHAT_CHUNK';
   chatId: string;
@@ -345,6 +365,7 @@ export type SWToMainMessage =
   | TaskDeletedMessage
   | TaskStatusResponseMessage
   | TaskAllResponseMessage
+  | TaskPaginatedResponseMessage
   | ChatChunkMessage
   | ChatDoneMessage
   | ChatErrorMessage

@@ -194,6 +194,85 @@ export class TaskQueueStorage {
   }
 
   /**
+   * Get tasks with pagination using cursor
+   * @param options Pagination options
+   * @returns Paginated tasks and metadata
+   */
+  async getTasksPaginated(options: {
+    offset: number;
+    limit: number;
+    status?: string;
+    type?: string;
+    sortOrder?: 'asc' | 'desc';
+  }): Promise<{ tasks: SWTask[]; total: number; hasMore: boolean }> {
+    const { offset, limit, status, type, sortOrder = 'desc' } = options;
+
+    try {
+      const db = await this.getDB();
+
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(TASKS_STORE, 'readonly');
+        const store = transaction.objectStore(TASKS_STORE);
+        const index = store.index('createdAt');
+
+        // First, get total count with filters
+        const countRequest = store.count();
+        let total = 0;
+
+        countRequest.onsuccess = () => {
+          total = countRequest.result;
+        };
+
+        // Use cursor to iterate with pagination
+        const direction: IDBCursorDirection = sortOrder === 'desc' ? 'prev' : 'next';
+        const cursorRequest = index.openCursor(null, direction);
+
+        const tasks: SWTask[] = [];
+        let skipped = 0;
+        let filteredTotal = 0;
+
+        cursorRequest.onerror = () => reject(cursorRequest.error);
+        cursorRequest.onsuccess = (event) => {
+          const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result;
+
+          if (!cursor) {
+            // No more entries
+            resolve({
+              tasks,
+              total: filteredTotal,
+              hasMore: filteredTotal > offset + tasks.length,
+            });
+            return;
+          }
+
+          const task = cursor.value as SWTask;
+
+          // Apply filters
+          const matchesStatus = !status || task.status === status;
+          const matchesType = !type || task.type === type;
+
+          if (matchesStatus && matchesType) {
+            filteredTotal++;
+
+            if (skipped < offset) {
+              // Skip items before offset
+              skipped++;
+            } else if (tasks.length < limit) {
+              // Collect items within limit
+              tasks.push(task);
+            }
+          }
+
+          cursor.continue();
+        };
+      });
+    } catch (error) {
+      console.error('[SWStorage] Failed to get paginated tasks:', error);
+      return { tasks: [], total: 0, hasMore: false };
+    }
+  }
+
+  /**
    * Delete a task
    */
   async deleteTask(taskId: string): Promise<void> {

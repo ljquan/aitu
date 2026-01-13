@@ -526,6 +526,58 @@ export class SWTaskQueueClient {
   }
 
   /**
+   * Request paginated tasks from SW
+   * @param options Pagination options
+   * @returns Paginated tasks with metadata
+   */
+  async requestPaginatedTasks(options: {
+    offset: number;
+    limit: number;
+    status?: TaskStatus;
+    type?: TaskType;
+    sortOrder?: 'asc' | 'desc';
+  }): Promise<{
+    tasks: SWTask[];
+    total: number;
+    offset: number;
+    hasMore: boolean;
+  }> {
+    await this.postMessage({
+      type: 'TASK_GET_PAGINATED',
+      offset: options.offset,
+      limit: options.limit,
+      filters: {
+        status: options.status,
+        type: options.type,
+      },
+      sortOrder: options.sortOrder,
+    });
+
+    try {
+      const response = await firstValueFrom(
+        this.messageSubject.pipe(
+          filter((msg) => msg.type === 'TASK_PAGINATED_RESPONSE'),
+          take(1),
+          timeout(5000)
+        )
+      );
+
+      if (response.type === 'TASK_PAGINATED_RESPONSE') {
+        return {
+          tasks: response.tasks,
+          total: response.total,
+          offset: response.offset,
+          hasMore: response.hasMore,
+        };
+      }
+      return { tasks: [], total: 0, offset: 0, hasMore: false };
+    } catch {
+      console.warn('[SWClient] Timeout waiting for paginated tasks response');
+      return { tasks: [], total: 0, offset: 0, hasMore: false };
+    }
+  }
+
+  /**
    * Observe tasks sync from SW
    */
   observeTasks(): Observable<SWTask[]> {
@@ -639,6 +691,7 @@ export class SWTaskQueueClient {
       'TASK_DELETED',
       'TASK_STATUS_RESPONSE',
       'TASK_ALL_RESPONSE',
+      'TASK_PAGINATED_RESPONSE',
       'CHAT_CHUNK',
       'CHAT_DONE',
       'CHAT_ERROR',

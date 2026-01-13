@@ -305,6 +305,24 @@ export interface TaskGetAllMessage {
 }
 
 /**
+ * Get tasks with pagination
+ */
+export interface TaskGetPaginatedMessage {
+  type: 'TASK_GET_PAGINATED';
+  /** Number of items to skip */
+  offset: number;
+  /** Maximum number of items to return */
+  limit: number;
+  /** Optional filters */
+  filters?: {
+    status?: TaskStatus;
+    type?: TaskType;
+  };
+  /** Sort order (default: desc by createdAt) */
+  sortOrder?: 'asc' | 'desc';
+}
+
+/**
  * Delete a task
  */
 export interface TaskDeleteMessage {
@@ -373,6 +391,7 @@ export type MainToSWMessage =
   | TaskResumeMessage
   | TaskGetStatusMessage
   | TaskGetAllMessage
+  | TaskGetPaginatedMessage
   | TaskDeleteMessage
   | ChatStartMessage
   | ChatStopMessage
@@ -478,6 +497,20 @@ export interface TaskAllResponseMessage {
 }
 
 /**
+ * Response to TASK_GET_PAGINATED
+ */
+export interface TaskPaginatedResponseMessage {
+  type: 'TASK_PAGINATED_RESPONSE';
+  tasks: SWTask[];
+  /** Total count of tasks matching the filters */
+  total: number;
+  /** Current offset */
+  offset: number;
+  /** Whether there are more items */
+  hasMore: boolean;
+}
+
+/**
  * Chat stream chunk
  */
 export interface ChatChunkMessage {
@@ -531,6 +564,7 @@ export type SWToMainMessage =
   | TaskDeletedMessage
   | TaskStatusResponseMessage
   | TaskAllResponseMessage
+  | TaskPaginatedResponseMessage
   | ChatChunkMessage
   | ChatDoneMessage
   | ChatErrorMessage

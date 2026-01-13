@@ -7,8 +7,8 @@
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Button, Tabs, Dialog, MessagePlugin, Input, Radio, Tooltip, Checkbox } from 'tdesign-react';
-import { DeleteIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon, UserIcon, RefreshIcon, CloseIcon, PauseCircleIcon, CheckDoubleIcon } from 'tdesign-icons-react';
-import { TaskItem } from './TaskItem';
+import { DeleteIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon, UserIcon, RefreshIcon, PauseCircleIcon, CheckDoubleIcon } from 'tdesign-icons-react';
+import { VirtualTaskList } from './VirtualTaskList';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
 import { Task, TaskType, TaskStatus } from '../../types/task.types';
 import { useMediaUrl } from '../../hooks/useMediaCache';
@@ -666,34 +666,29 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
             title=""
           />
         ) : (
-          /* Task List View */
-          filteredTasks.length === 0 ? (
-            <div className="task-queue-panel__empty">
-              <div className="task-queue-panel__empty-icon">📋</div>
-              <div className="task-queue-panel__empty-text">
-                {activeTab === 'all' ? '暂无任务' : `暂无${activeTab === 'active' ? '生成中' : activeTab === 'completed' ? '已完成' : activeTab === 'failed' ? '失败' : '已取消'}任务`}
+          /* Task List View with Virtual Scrolling */
+          <VirtualTaskList
+            tasks={filteredTasks}
+            selectionMode={selectionMode}
+            selectedTaskIds={selectedTaskIds}
+            onSelectionChange={handleSelectionChange}
+            onRetry={handleRetry}
+            onDelete={handleDelete}
+            onDownload={handleDownload}
+            onInsert={handleInsert}
+            onEdit={handleEdit}
+            onPreviewOpen={handlePreviewOpen}
+            onExtractCharacter={handleExtractCharacter}
+            className="task-queue-panel__list"
+            emptyContent={
+              <div className="task-queue-panel__empty">
+                <div className="task-queue-panel__empty-icon">📋</div>
+                <div className="task-queue-panel__empty-text">
+                  {activeTab === 'all' ? '暂无任务' : `暂无${activeTab === 'active' ? '生成中' : activeTab === 'completed' ? '已完成' : activeTab === 'failed' ? '失败' : '已取消'}任务`}
+                </div>
               </div>
-            </div>
-          ) : (
-            <div className="task-queue-panel__list">
-              {filteredTasks.map(task => (
-                <TaskItem
-                  key={task.id}
-                  task={task}
-                  selectionMode={selectionMode}
-                  isSelected={selectedTaskIds.has(task.id)}
-                  onSelectionChange={handleSelectionChange}
-                  onRetry={handleRetry}
-                  onDelete={handleDelete}
-                  onDownload={handleDownload}
-                  onInsert={handleInsert}
-                  onEdit={handleEdit}
-                  onPreviewOpen={() => handlePreviewOpen(task.id)}
-                  onExtractCharacter={handleExtractCharacter}
-                />
-              ))}
-            </div>
-          )
+            }
+          />
         )}
       </SideDrawer>
 
