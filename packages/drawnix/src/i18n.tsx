@@ -24,6 +24,9 @@ export interface Translations {
   'toolbar.strokeColor': string;
   'toolbar.strokeWidth': string;
   'toolbar.eraserSize': string;
+  'toolbar.fillColor': string;
+  'toolbar.fontColor': string;
+  'toolbar.fontSize': string;
 
   // Zoom controls
   'zoom.in': string;
@@ -176,6 +179,9 @@ const translations: Record<Language, Translations> = {
     'toolbar.strokeColor': '画笔颜色',
     'toolbar.strokeWidth': '画笔大小',
     'toolbar.eraserSize': '橡皮擦大小',
+    'toolbar.fillColor': '填充颜色',
+    'toolbar.fontColor': '字体颜色',
+    'toolbar.fontSize': '字号',
 
     // Zoom controls
     'zoom.in': '放大 — Cmd++',
@@ -325,6 +331,9 @@ const translations: Record<Language, Translations> = {
     'toolbar.strokeColor': 'Pen Color',
     'toolbar.strokeWidth': 'Pen Size',
     'toolbar.eraserSize': 'Eraser Size',
+    'toolbar.fillColor': 'Fill Color',
+    'toolbar.fontColor': 'Font Color',
+    'toolbar.fontSize': 'Font Size',
 
     // Zoom controls
     'zoom.in': 'Zoom In — Cmd++',

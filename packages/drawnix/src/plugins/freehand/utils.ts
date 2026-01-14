@@ -23,6 +23,25 @@ export function getFreehandPointers() {
   return [FreehandShape.feltTipPen, FreehandShape.eraser];
 }
 
+/**
+ * 获取手绘元素的边界框（考虑 strokeWidth）
+ * @param element 手绘元素
+ * @returns 扩展后的边界框
+ */
+export function getFreehandRectangle(element: Freehand): RectangleClient {
+  const baseRect = RectangleClient.getRectangleByPoints(element.points);
+  // 获取 strokeWidth，默认值为 2
+  const strokeWidth = (element as any).strokeWidth ?? 2;
+  // 边界框需要向外扩展 strokeWidth / 2
+  const padding = strokeWidth / 2;
+  return {
+    x: baseRect.x - padding,
+    y: baseRect.y - padding,
+    width: baseRect.width + strokeWidth,
+    height: baseRect.height + strokeWidth,
+  };
+}
+
 export interface CreateFreehandOptions {
   strokeWidth?: number;
   strokeColor?: string;

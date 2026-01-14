@@ -76,11 +76,18 @@ export const UnifiedColorPicker: React.FC<UnifiedColorPickerProps> = ({
   // 使用的预设颜色
   const displayPresetColors = presetColors || CLASSIC_COLORS;
 
-  // 通知颜色变化
-  const notifyChange = useCallback((hex: string, newAlpha: number) => {
+  // 上一次的透明度值，用于检测透明度是否真的变化了
+  const prevAlphaRef = React.useRef(initialAlpha);
+
+  // 通知颜色变化（只在透明度真正变化时调用 onOpacityChange）
+  const notifyChange = useCallback((hex: string, newAlpha: number, forceOpacityChange = false) => {
     const fullColor = newAlpha < 100 ? setAlphaToHex(hex, newAlpha) : hex;
     onChange?.(fullColor);
-    onOpacityChange?.(newAlpha);
+    // 只在透明度真正变化时调用 onOpacityChange
+    if (forceOpacityChange || newAlpha !== prevAlphaRef.current) {
+      onOpacityChange?.(newAlpha);
+      prevAlphaRef.current = newAlpha;
+    }
   }, [onChange, onOpacityChange]);
 
   // 处理饱和度/明度变化
@@ -102,7 +109,7 @@ export const UnifiedColorPicker: React.FC<UnifiedColorPickerProps> = ({
   // 处理透明度变化
   const handleAlphaChange = useCallback((newAlpha: number) => {
     setAlpha(newAlpha);
-    notifyChange(currentHex, newAlpha);
+    notifyChange(currentHex, newAlpha, true); // 强制调用 onOpacityChange
   }, [currentHex, notifyChange]);
 
   // 处理 HEX 输入变化

@@ -56,12 +56,8 @@ export const EraserSettingsToolbar: React.FC = () => {
 
   // 处理橡皮擦大小变化
   const handleSizeChange = useCallback((size: number) => {
-    console.log('[EraserToolbar] handleSizeChange:', size);
     setEraserSize(size);
     setEraserWidth(board, size);
-    // 验证设置是否生效
-    const newSettings = getFreehandSettings(board);
-    console.log('[EraserToolbar] After setEraserWidth, settings:', newSettings);
     // 更新光标
     updateEraserCursor(board);
   }, [board]);

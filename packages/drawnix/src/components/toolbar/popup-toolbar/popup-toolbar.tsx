@@ -44,6 +44,7 @@ import { PopupStrokeButton } from './stroke-button';
 import { PopupFillButton } from './fill-button';
 import { isWhite, removeHexAlpha, NO_COLOR } from '@aitu/utils';
 import { Freehand } from '../../../plugins/freehand/type';
+import { getStrokeColorByElement as getStrokeColorByFreehandElement } from '../../../plugins/freehand/utils';
 import { PopupLinkButton } from './link-button';
 import { PopupPromptButton } from './prompt-button';
 import { PopupLayerControlButton } from './layer-control-button';
@@ -388,7 +389,7 @@ export const PopupToolbar = () => {
                 board={board}
                 key={0}
                 currentColor={state.marks?.color}
-                title={`Font Color`}
+                title={t('toolbar.fontColor')}
                 fontColorIcon={
                   <FontColorIcon currentColor={state.marks?.color} />
                 }
@@ -399,7 +400,7 @@ export const PopupToolbar = () => {
                 board={board}
                 key={1}
                 currentFontSize={state.fontSize}
-                title={`Font Size`}
+                title={t('toolbar.fontSize')}
               ></PopupFontSizeButton>
             )}
             {state.hasStroke && (
@@ -407,7 +408,7 @@ export const PopupToolbar = () => {
                 board={board}
                 key={2}
                 currentColor={state.strokeColor}
-                title={`Stroke`}
+                title={t('toolbar.stroke')}
                 hasStrokeStyle={state.hasStrokeStyle || false}
               >
                 <label
@@ -421,7 +422,7 @@ export const PopupToolbar = () => {
                 board={board}
                 key={3}
                 currentColor={state.fill}
-                title={`Fill Color`}
+                title={t('toolbar.fillColor')}
               >
                 <label
                   className={classNames('fill-label', 'color-label', {
@@ -972,7 +973,20 @@ export const getElementState = (board: PlaitBoard) => {
   if (MindElement.isMindElement(board, selectedElement)) {
     return getMindElementState(board, selectedElement);
   }
+  if (Freehand.isFreehand(selectedElement)) {
+    return getFreehandElementState(board, selectedElement);
+  }
   return getDrawElementState(board, selectedElement as PlaitDrawElement);
+};
+
+export const getFreehandElementState = (
+  board: PlaitBoard,
+  element: Freehand
+) => {
+  return {
+    fill: element.fill,
+    strokeColor: getStrokeColorByFreehandElement(board, element),
+  };
 };
 
 export const hasFillProperty = (board: PlaitBoard, element: PlaitElement) => {

@@ -28,13 +28,6 @@ export const withFreehandErase = (board: PlaitBoard) => {
         // 光标显示时会乘以 zoom 缩小，擦除范围也会因为视图缩放而在屏幕上显示得更小
         // 所以 hitRadius 直接使用 eraserWidth / 2，不需要额外的 zoom 转换
         const hitRadius = settings.eraserWidth / 2;
-        
-        console.log('[Eraser] checkAndMarkFreehandElementsForDeletion:', {
-            eraserWidth: settings.eraserWidth,
-            zoom: board.viewport?.zoom,
-            hitRadius,
-            viewBoxPoint,
-        });
 
         const freehandElements = board.children.filter((element) =>
             Freehand.isFreehand(element)
@@ -42,7 +35,6 @@ export const withFreehandErase = (board: PlaitBoard) => {
 
         freehandElements.forEach((element) => {
             if (!elementsToDelete.has(element.id) && isHitFreehandWithRadius(board, element, viewBoxPoint, hitRadius)) {
-                console.log('[Eraser] Hit element:', element.id);
                 PlaitElement.getElementG(element).style.opacity = '0.2';
                 elementsToDelete.add(element.id);
             }

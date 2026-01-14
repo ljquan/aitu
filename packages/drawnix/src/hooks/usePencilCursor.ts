@@ -55,9 +55,7 @@ function isPencilPointer(pointer: string): boolean {
  * 检查当前指针是否为橡皮擦
  */
 function isEraserPointer(pointer: string): boolean {
-  const result = pointer === FreehandShape.eraser;
-  console.log('[Cursor] isEraserPointer check:', { pointer, expected: FreehandShape.eraser, result });
-  return result;
+  return pointer === FreehandShape.eraser;
 }
 
 /**
@@ -68,31 +66,20 @@ function applyCursorStyle(board: PlaitBoard, pointer: string) {
   const hostSvg = boardContainer?.querySelector('.board-host-svg') as HTMLElement | null;
   
   if (!hostSvg) {
-    console.log('[Cursor] hostSvg not found');
     return;
   }
   
   const settings = getFreehandSettings(board);
   const zoom = board.viewport?.zoom || 1;
   
-  console.log('[Cursor] applyCursorStyle:', {
-    pointer,
-    isPencil: isPencilPointer(pointer),
-    isEraser: isEraserPointer(pointer),
-    settings,
-    zoom,
-  });
-  
   if (isPencilPointer(pointer)) {
     // 画笔光标
     const scaledSize = settings.strokeWidth * zoom;
-    console.log('[Cursor] Pencil scaledSize:', scaledSize);
     const cursorStyle = generateCircleCursorSvg(settings.strokeColor, scaledSize);
     hostSvg.style.cursor = cursorStyle;
   } else if (isEraserPointer(pointer)) {
     // 橡皮擦光标
     const scaledSize = settings.eraserWidth * zoom;
-    console.log('[Cursor] Eraser scaledSize:', scaledSize, 'eraserWidth:', settings.eraserWidth);
     const cursorStyle = generateCircleCursorSvg(ERASER_COLOR, scaledSize);
     hostSvg.style.cursor = cursorStyle;
   } else {
@@ -111,7 +98,6 @@ export function usePencilCursor({ board, pointer }: UsePencilCursorOptions) {
 
   // 应用光标样式到画布
   useEffect(() => {
-    console.log('[Cursor] usePencilCursor useEffect triggered:', { board: !!board, pointer });
     if (!board) return;
 
     applyCursorStyle(board, pointer);

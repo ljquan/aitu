@@ -14,6 +14,11 @@ import {
   getStrokeColorByElement as getStrokeColorByDrawElement,
 } from '@plait/draw';
 import { getTextMarksByElement } from '@plait/text-plugins';
+import { Freehand } from '../plugins/freehand/type';
+import {
+  getStrokeColorByElement as getStrokeColorByFreehandElement,
+  getFillByElement as getFillByFreehandElement,
+} from '../plugins/freehand/utils';
 
 export const isClosedElement = (board: PlaitBoard, element: PlaitElement) => {
   return (
@@ -29,7 +34,9 @@ export const getCurrentFill = (board: PlaitBoard, element: PlaitElement) => {
     if (MindElement.isMindElement(board, element)) {
       currentFill = getFillByElement(board, element);
     }
-    if (
+    if (Freehand.isFreehand(element)) {
+      currentFill = getFillByFreehandElement(board, element);
+    } else if (
       PlaitDrawElement.isDrawElement(element) ||
       PlaitDrawElement.isCustomGeometryElement(board, element)
     ) {
@@ -48,7 +55,9 @@ export const getCurrentStrokeColor = (
     if (MindElement.isMindElement(board, element)) {
       strokeColor = getStrokeColorByElement(board, element);
     }
-    if (
+    if (Freehand.isFreehand(element)) {
+      strokeColor = getStrokeColorByFreehandElement(board, element);
+    } else if (
       PlaitDrawElement.isDrawElement(element) ||
       PlaitDrawElement.isCustomGeometryElement(board, element)
     ) {

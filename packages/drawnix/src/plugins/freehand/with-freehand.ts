@@ -3,13 +3,12 @@ import {
   PlaitElement,
   PlaitOptionsBoard,
   PlaitPluginElementContext,
-  RectangleClient,
   Selection,
 } from '@plait/core';
 import { Freehand, FREEHAND_TYPE } from './type';
 import { FreehandComponent } from './freehand.component';
 import { withFreehandCreate } from './with-freehand-create';
-import { isHitFreehand, isRectangleHitFreehand } from './utils';
+import { isHitFreehand, isRectangleHitFreehand, getFreehandRectangle } from './utils';
 import { withFreehandFragment } from './with-freehand-fragment';
 import {
   getHitDrawElement,
@@ -38,7 +37,7 @@ export const withFreehand = (board: PlaitBoard) => {
 
   board.getRectangle = (element: PlaitElement) => {
     if (Freehand.isFreehand(element)) {
-      return RectangleClient.getRectangleByPoints(element.points);
+      return getFreehandRectangle(element);
     }
     return getRectangle(element);
   };
