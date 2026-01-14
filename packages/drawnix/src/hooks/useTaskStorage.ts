@@ -70,8 +70,6 @@ export function useTaskStorage(): void {
           // Migrate legacy tasks from old storage to SW (one-time migration)
           const legacyTasks = await storageService.loadTasks();
           if (legacyTasks.length > 0) {
-            console.log(`[useTaskStorage] Migrating ${legacyTasks.length} legacy tasks to SW`);
-
             // Restore legacy tasks to SW service (which will sync to SW)
             await swTaskQueueService.restoreTasks(legacyTasks);
 
@@ -79,7 +77,6 @@ export function useTaskStorage(): void {
             for (const task of legacyTasks) {
               await storageService.deleteTask(task.id);
             }
-            console.log('[useTaskStorage] Legacy tasks migrated and cleared');
           }
 
           // Sync tasks from SW to local state

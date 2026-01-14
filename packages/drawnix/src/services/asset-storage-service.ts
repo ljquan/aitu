@@ -189,8 +189,6 @@ class AssetStorageService {
       return;
     }
 
-    console.log('[AssetStorageService] Starting data migration v4...');
-
     try {
       const keys = await this.store.keys();
       let migratedCount = 0;
@@ -229,7 +227,6 @@ class AssetStorageService {
 
             await this.store.setItem(key, newStoredAsset);
             migratedCount++;
-            console.log(`[AssetStorageService] Migrated asset ${item.id} (${item.source})`);
           }
         } catch (error) {
           console.error(`[AssetStorageService] Failed to process asset ${key}:`, error);
@@ -238,7 +235,6 @@ class AssetStorageService {
 
       localStorage.setItem(migrationKey, 'done');
       this.migrationDone = true;
-      console.log(`[AssetStorageService] Migration v4 completed: migrated ${migratedCount} assets`);
     } catch (error) {
       console.error('[AssetStorageService] Migration failed:', error);
     }

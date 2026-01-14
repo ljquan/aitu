@@ -251,19 +251,13 @@ export function countElementsByAssetUrl(board: PlaitBoard, assetUrl: string): nu
  * @returns 删除的元素数量
  */
 export function removeElementsByAssetUrl(board: PlaitBoard, assetUrl: string): number {
-  console.log('[AssetCleanup] removeElementsByAssetUrl called:', { assetUrl });
-  
   if (!board.children || board.children.length === 0) {
-    console.log('[AssetCleanup] No children on board');
     return 0;
   }
 
-  console.log('[AssetCleanup] Scanning', board.children.length, 'elements');
-  
   // 提取缓存路径用于匹配
   const targetCachePath = extractCachePath(assetUrl);
-  console.log('[AssetCleanup] Target cache path:', targetCachePath);
-  
+
   const elementsToRemove: PlaitElement[] = [];
 
   for (const element of board.children) {
@@ -274,30 +268,23 @@ export function removeElementsByAssetUrl(board: PlaitBoard, assetUrl: string): n
 
     // 支持完整 URL 和相对路径的匹配
     const elementCachePath = extractCachePath(url);
-    const isMatch = url === assetUrl || 
+    const isMatch = url === assetUrl ||
                     (targetCachePath && elementCachePath && targetCachePath === elementCachePath);
-    
-    console.log('[AssetCleanup] Element URL:', url, '| Cache path:', elementCachePath, '| Match:', isMatch);
-    
+
     if (isMatch) {
       // 检查是否为图片或视频元素
       const isImage = PlaitDrawElement.isDrawElement(element) && PlaitDrawElement.isImage(element);
       const isVideo = (element as any).type === 'video' || (element as any).isVideo;
-      
-      console.log('[AssetCleanup] Element check:', { id: (element as any).id, isImage, isVideo, type: (element as any).type });
-      
+
       if (isImage || isVideo) {
         elementsToRemove.push(element);
       }
     }
   }
 
-  console.log('[AssetCleanup] Found', elementsToRemove.length, 'elements to remove');
-
   if (elementsToRemove.length > 0) {
     try {
       CoreTransforms.removeElements(board, elementsToRemove);
-      console.log('[AssetCleanup] Successfully removed', elementsToRemove.length, 'elements');
     } catch (error) {
       console.error('[AssetCleanup] Failed to remove elements by URL:', error);
       return 0;

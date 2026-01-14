@@ -96,9 +96,18 @@ export function isVolcesDomain(url: string): boolean {
  * ```
  */
 export function getFileExtension(url: string, mimeType?: string): string {
-  // Try to get extension from URL
+  // Try to get extension from URL path
+  // Support both absolute URLs and relative paths (e.g., /__aitu_cache__/image/xxx.png)
   try {
-    const urlPath = new URL(url).pathname;
+    let urlPath: string;
+    
+    // For relative paths, use the URL directly
+    if (url.startsWith('/') || !url.includes('://')) {
+      urlPath = url;
+    } else {
+      urlPath = new URL(url).pathname;
+    }
+    
     const lastDotIndex = urlPath.lastIndexOf('.');
 
     // Check if there's a dot and it's not at the start or end

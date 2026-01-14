@@ -238,25 +238,19 @@ export function MediaLibraryModal({
   const handleRemoveAsset = useCallback(async (assetId: string) => {
     // 查找素材信息
     const asset = assets.find(a => a.id === assetId);
-    console.log('[MediaLibrary] handleRemoveAsset:', { assetId, asset, board: !!board });
-    
+
     // 删除画布上使用该素材的元素
     if (board && asset) {
       // 缓存类型素材使用 URL 匹配，其他类型使用 ID 匹配
       const isCacheAsset = isCacheUrl(asset.url);
-      console.log('[MediaLibrary] Asset type check:', { url: asset.url, isCacheAsset });
-      
+
       if (isCacheAsset) {
-        const removedCount = removeElementsByAssetUrl(board, asset.url);
-        console.log('[MediaLibrary] Removed by URL:', removedCount);
+        removeElementsByAssetUrl(board, asset.url);
       } else {
-        const removedCount = removeElementsByAssetId(board, assetId);
-        console.log('[MediaLibrary] Removed by ID:', removedCount);
+        removeElementsByAssetId(board, assetId);
       }
-    } else {
-      console.warn('[MediaLibrary] Cannot remove elements: board or asset missing');
     }
-    
+
     // 然后删除素材本身
     await removeAsset(assetId);
   }, [board, removeAsset, assets]);

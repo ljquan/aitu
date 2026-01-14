@@ -978,23 +978,17 @@ async function handleCacheUrlRequest(request: Request): Promise<Response> {
   // 通过路径或扩展名判断是否为视频
   const isVideo = url.pathname.includes('/video/') || /\.(mp4|webm|ogg|mov)$/i.test(url.pathname);
 
-  console.log(`Service Worker: Handling cache URL request:`, { fullUrl: request.url, pathname: url.pathname, isVideo });
-
   try {
     // 从 Cache API 获取
     const cache = await caches.open(IMAGE_CACHE_NAME);
-    
+
     // 优先使用完整 URL 匹配，没找到再用 pathname 匹配
     // 兼容两种缓存 key 格式（完整 URL 和相对路径）
     let cachedResponse = await cache.match(request.url);
-    let matchedKey = request.url;
-    
+
     if (!cachedResponse) {
       cachedResponse = await cache.match(url.pathname);
-      matchedKey = url.pathname;
     }
-
-    console.log(`Service Worker: Cache lookup result:`, { matchedKey, found: !!cachedResponse });
 
     if (cachedResponse) {
       const blob = await cachedResponse.blob();
