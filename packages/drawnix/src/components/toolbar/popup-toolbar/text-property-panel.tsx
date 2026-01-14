@@ -899,7 +899,7 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({
               
               {gradientEnabled && (
                 <>
-                  {/* 渐变预设 */}
+                  {/* 渐变预设和自定义渐变放一起 */}
                   <div className="effect-presets">
                     {GRADIENT_PRESETS.slice(0, 8).map((preset) => (
                       <div
@@ -912,36 +912,28 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({
                         style={{ background: generateGradientCSS(preset.config) }}
                       />
                     ))}
-                  </div>
-                  
-                  {/* 自定义渐变 */}
-                  {customGradients.length > 0 && (
-                    <div className="effect-presets effect-presets--custom">
-                      <span className="effect-presets__label">{language === 'zh' ? '自定义' : 'Custom'}</span>
-                      <div className="effect-presets__list">
-                        {customGradients.map((gradient) => (
-                          <div
-                            key={gradient.id}
-                            className={classNames('effect-presets__item effect-presets__item--gradient effect-presets__item--deletable', {
-                              'is-active': selectedGradientPreset === `custom-${gradient.id}`,
-                            })}
-                            onClick={() => handleCustomGradientSelect(gradient.css, gradient.id)}
-                            style={{ background: gradient.css }}
-                          >
-                            <button
-                              className="effect-presets__delete"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                deleteCustomGradient(gradient.id);
-                              }}
-                            >
-                              ×
-                            </button>
-                          </div>
-                        ))}
+                    {/* 自定义渐变 */}
+                    {customGradients.map((gradient) => (
+                      <div
+                        key={gradient.id}
+                        className={classNames('effect-presets__item effect-presets__item--gradient effect-presets__item--deletable', {
+                          'is-active': selectedGradientPreset === `custom-${gradient.id}`,
+                        })}
+                        onClick={() => handleCustomGradientSelect(gradient.css, gradient.id)}
+                        style={{ background: gradient.css }}
+                      >
+                        <button
+                          className="effect-presets__delete"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteCustomGradient(gradient.id);
+                          }}
+                        >
+                          ×
+                        </button>
                       </div>
-                    </div>
-                  )}
+                    ))}
+                  </div>
                   
                   {/* 渐变编辑器切换 */}
                   <button
