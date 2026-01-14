@@ -55,12 +55,8 @@ export function useChatSessions(): UseChatSessionsReturn {
     // Update drawer state
     chatStorageService.setDrawerState({ activeSessionId: newSession.id });
 
-    // Prune old sessions if exceeding limit
-    if (sessions.length >= CHAT_CONSTANTS.MAX_SESSIONS) {
-      await chatStorageService.pruneOldSessions(CHAT_CONSTANTS.MAX_SESSIONS);
-      const updatedSessions = await chatStorageService.getAllSessions();
-      setSessions(updatedSessions);
-    }
+    // NOTE: Removed automatic pruning of old sessions
+    // Users should manually manage their chat history
 
     return newSession;
   }, [sessions.length]);

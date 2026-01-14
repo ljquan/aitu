@@ -145,8 +145,8 @@ export class SWTaskQueue {
         }
       }
 
-      // Cleanup old completed tasks
-      taskQueueStorage.cleanupOldTasks();
+      // NOTE: Removed automatic cleanup of old tasks
+      // Tasks are needed for asset library display, do not auto-delete
     } catch (error) {
       console.error('[SWTaskQueue] Failed to restore from storage:', error);
     }

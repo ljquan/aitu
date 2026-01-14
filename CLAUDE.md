@@ -1159,6 +1159,64 @@ const submitToSW = async (workflow) => {
 
 **原因**: Service Worker 的 `workflowHandler` 需要收到 `TASK_QUEUE_INIT` 消息后才会初始化。如果在 SW 初始化前提交工作流，消息会被暂存到 `pendingWorkflowMessages`，等待配置到达。若配置永远不到达（如 `swTaskQueueService.initialize()` 未被调用），工作流就永远不会开始执行，步骤状态保持 `pending`。
 
+### 禁止自动删除用户数据
+
+**场景**: 添加定时清理、自动裁剪、过期删除等"优化"逻辑时
+
+❌ **错误示例**:
+```typescript
+// 错误：自动删除超过 24 小时的已完成任务
+async restoreFromStorage() {
+  // ... 恢复任务
+  taskQueueStorage.cleanupOldTasks(); // 会删除素材库依赖的任务数据！
+}
+
+// 错误：创建新会话时自动删除旧会话
+const createSession = async () => {
+  if (sessions.length >= MAX_SESSIONS) {
+    await pruneOldSessions(MAX_SESSIONS); // 会删除用户的聊天历史！
+  }
+};
+
+// 错误：定期清理"过期"的工作流数据
+setInterval(() => cleanupOldWorkflows(), 24 * 60 * 60 * 1000);
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：不自动删除任务数据
+async restoreFromStorage() {
+  // ... 恢复任务
+  // NOTE: 不调用 cleanupOldTasks()，任务数据是素材库的数据来源
+}
+
+// 正确：不限制会话数量，让用户手动管理
+const createSession = async () => {
+  const newSession = await chatStorageService.createSession();
+  // 不自动删除旧会话，用户可以手动删除
+};
+
+// 正确：只清理临时数据，不清理用户数据
+setInterval(() => {
+  cleanupRecentSubmissions(); // ✅ 清理内存中的去重缓存（临时数据）
+  cleanupStaleRequests();     // ✅ 清理过期的请求状态（临时数据）
+}, 60000);
+```
+
+**可以自动清理的数据**:
+- 内存中的临时状态（去重缓存、请求状态、锁）
+- 追踪事件缓存（临时数据）
+- 存储空间不足时的 LRU 缓存淘汰（用户会收到提示）
+
+**禁止自动清理的数据**:
+- 任务数据（素材库依赖）
+- 聊天会话和消息
+- 工作流数据
+- 用户上传的素材
+- 项目和画板数据
+
+**原因**: 本项目的素材库通过 `taskQueueService.getTasksByStatus(COMPLETED)` 获取 AI 生成的素材。如果自动删除已完成的任务，素材库就无法展示这些 AI 生成的图片/视频。类似地，聊天历史、工作流数据都是用户的重要数据，不应被自动删除。
+
 ### Z-Index 管理规范
 
 **规范文档**: 参考 `docs/Z_INDEX_GUIDE.md` 获取完整规范

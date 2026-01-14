@@ -366,24 +366,13 @@ export class TaskQueueStorage {
   }
 
   /**
+   * @deprecated Do not use - tasks are needed for asset library display
    * Clear all completed/cancelled tasks older than specified time
    */
-  async cleanupOldTasks(maxAgeMs: number = 24 * 60 * 60 * 1000): Promise<void> {
-    try {
-      const tasks = await this.getAllTasks();
-      const cutoff = Date.now() - maxAgeMs;
-
-      for (const task of tasks) {
-        if (
-          (task.status === 'completed' || task.status === 'cancelled') &&
-          task.updatedAt < cutoff
-        ) {
-          await this.deleteTask(task.id);
-        }
-      }
-    } catch (error) {
-      console.error('[SWStorage] Failed to cleanup old tasks:', error);
-    }
+  async cleanupOldTasks(_maxAgeMs: number = 24 * 60 * 60 * 1000): Promise<void> {
+    // NOTE: Disabled - tasks should not be auto-deleted as they are needed
+    // for asset library to display AI-generated images/videos
+    console.warn('[SWStorage] cleanupOldTasks is deprecated and disabled');
   }
 
   // ============================================================================
@@ -490,24 +479,12 @@ export class TaskQueueStorage {
   }
 
   /**
+   * @deprecated Do not use - workflows should not be auto-deleted
    * Clear old completed/failed workflows
    */
-  async cleanupOldWorkflows(maxAgeMs: number = 24 * 60 * 60 * 1000): Promise<void> {
-    try {
-      const workflows = await this.getAllWorkflows();
-      const cutoff = Date.now() - maxAgeMs;
-
-      for (const workflow of workflows) {
-        if (
-          (workflow.status === 'completed' || workflow.status === 'failed' || workflow.status === 'cancelled') &&
-          workflow.updatedAt < cutoff
-        ) {
-          await this.deleteWorkflow(workflow.id);
-        }
-      }
-    } catch (error) {
-      console.error('[SWStorage] Failed to cleanup old workflows:', error);
-    }
+  async cleanupOldWorkflows(_maxAgeMs: number = 24 * 60 * 60 * 1000): Promise<void> {
+    // NOTE: Disabled - workflows should not be auto-deleted
+    console.warn('[SWStorage] cleanupOldWorkflows is deprecated and disabled');
   }
 
   // ============================================================================
@@ -614,24 +591,12 @@ export class TaskQueueStorage {
   }
 
   /**
+   * @deprecated Do not use - chat workflows should not be auto-deleted
    * Clear old completed/failed chat workflows
    */
-  async cleanupOldChatWorkflows(maxAgeMs: number = 24 * 60 * 60 * 1000): Promise<void> {
-    try {
-      const workflows = await this.getAllChatWorkflows();
-      const cutoff = Date.now() - maxAgeMs;
-
-      for (const workflow of workflows) {
-        if (
-          (workflow.status === 'completed' || workflow.status === 'failed' || workflow.status === 'cancelled') &&
-          workflow.updatedAt < cutoff
-        ) {
-          await this.deleteChatWorkflow(workflow.id);
-        }
-      }
-    } catch (error) {
-      console.error('[SWStorage] Failed to cleanup old chat workflows:', error);
-    }
+  async cleanupOldChatWorkflows(_maxAgeMs: number = 24 * 60 * 60 * 1000): Promise<void> {
+    // NOTE: Disabled - chat workflows should not be auto-deleted
+    console.warn('[SWStorage] cleanupOldChatWorkflows is deprecated and disabled');
   }
 
   // ============================================================================
