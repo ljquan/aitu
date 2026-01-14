@@ -725,8 +725,23 @@ export const PopupToolbar = () => {
                     const trimResult = trimCanvasWhiteAndTransparentBorderWithInfo(canvas);
                     const { canvas: trimmedCanvas, left, top, trimmedWidth, trimmedHeight } = trimResult;
 
-                    // 转换为 data URL
-                    const trimmedImageDataUrl = trimmedCanvas.toDataURL('image/png');
+                    // 转换为 Blob
+                    const blob = await new Promise<Blob>((resolve, reject) => {
+                      trimmedCanvas.toBlob((b) => {
+                        if (b) resolve(b);
+                        else reject(new Error('Failed to convert canvas to blob'));
+                      }, 'image/png');
+                    });
+
+                    // 使用虚拟路径 URL（由 Service Worker 拦截返回缓存内容）
+                    // 避免 @plait/core 的 toImage 对 data: URL 发起 fetch 请求（会被 CSP 阻止）
+                    const { unifiedCacheService } = await import('../../../services/unified-cache-service');
+                    const taskId = `merged-image-${Date.now()}`;
+                    const stableUrl = `/__aitu_cache__/image/${taskId}.png`;
+                    const cacheKey = `${location.origin}${stableUrl}`;
+
+                    // 缓存到 Cache API
+                    await unifiedCacheService.cacheMediaFromBlob(cacheKey, blob, 'image', { taskId });
 
                     // 计算插入位置（考虑裁剪偏移）
                     // 原始边界矩形是基于 ratio=2 的，所以需要除以 2
@@ -742,9 +757,9 @@ export const PopupToolbar = () => {
                     // 记录插入前的元素数量
                     const childrenCountBefore = board.children.length;
 
-                    // 插入裁剪后的图片
+                    // 插入裁剪后的图片（使用虚拟路径 URL）
                     const imageItem = {
-                      url: trimmedImageDataUrl,
+                      url: stableUrl,
                       width: insertWidth,
                       height: insertHeight,
                     };

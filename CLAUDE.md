@@ -1297,6 +1297,58 @@ import { Z_INDEX } from '@/constants/z-index';
 - ❌ 禁止在同一层级随意 +1/-1
 - ❌ 临时修复必须在完成后转换为规范用法
 
+### 媒体 URL 处理规范（避免 CSP 和生命周期问题）
+
+**场景**: 需要在画布中引用动态生成的图片/视频（如合并图片、AI 生成结果）
+
+❌ **错误示例 1: 使用 data: URL**
+```typescript
+// 错误：data: URL 会被 CSP 的 connect-src 阻止 fetch
+const dataUrl = canvas.toDataURL('image/png');
+DrawTransforms.insertImage(board, { url: dataUrl, ... });
+// @plait/core 的 convertImageToBase64 会对所有 URL 发起 fetch
+// 生产环境 CSP connect-src 不包含 data: 会报错！
+```
+
+❌ **错误示例 2: 使用 blob: URL**
+```typescript
+// 错误：blob: URL 在页面刷新后失效
+const blob = await fetch(imageUrl).then(r => r.blob());
+const blobUrl = URL.createObjectURL(blob);
+DrawTransforms.insertImage(board, { url: blobUrl, ... });
+// 页面刷新后，blob: URL 失效，图片无法显示！
+```
+
+✅ **正确示例: 使用虚拟路径 + Service Worker 拦截**
+```typescript
+// 1. 生成 Blob 并缓存到 Cache API
+const blob = await new Promise<Blob>((resolve, reject) => {
+  canvas.toBlob((b) => b ? resolve(b) : reject(new Error('Failed')), 'image/png');
+});
+
+// 2. 使用虚拟路径 URL（由 Service Worker 拦截返回缓存内容）
+const taskId = `merged-image-${Date.now()}`;
+const stableUrl = `/__aitu_cache__/image/${taskId}.png`;
+const cacheKey = `${location.origin}${stableUrl}`;
+
+// 3. 缓存到 Cache API
+await unifiedCacheService.cacheMediaFromBlob(cacheKey, blob, 'image', { taskId });
+
+// 4. 使用虚拟路径插入图片
+DrawTransforms.insertImage(board, { url: stableUrl, ... });
+```
+
+**虚拟路径规范**:
+- 统一前缀: `/__aitu_cache__/`
+- 图片路径: `/__aitu_cache__/image/{taskId}.{ext}`
+- 视频路径: `/__aitu_cache__/video/{taskId}.{ext}`
+- Service Worker 通过路径或扩展名区分类型
+
+**原因**:
+1. `data: URL` 被 CSP 的 `connect-src` 阻止（生产环境）
+2. `blob: URL` 生命周期与页面绑定，刷新后失效
+3. 虚拟路径 + Cache API 持久化，刷新后仍可访问
+
 ### 图像处理工具复用规范
 
 **场景**: 需要对图片进行边框检测、去白边、裁剪等处理时

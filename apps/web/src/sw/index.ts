@@ -33,8 +33,8 @@ const IMAGE_CACHE_NAME = `drawnix-images`;
 const STATIC_CACHE_NAME = `drawnix-static-v${APP_VERSION}`;
 const FONT_CACHE_NAME = `drawnix-fonts`;
 
-// 缓存 URL 前缀 - 用于合并视频等本地缓存资源
-const CACHE_URL_PREFIX = '/__aitu_cache__/video/';
+// 缓存 URL 前缀 - 用于合并视频、图片等本地缓存资源
+const CACHE_URL_PREFIX = '/__aitu_cache__/';
 
 // 素材库 URL 前缀 - 用于素材库媒体资源
 const ASSET_LIBRARY_PREFIX = '/asset-library/';
@@ -747,7 +747,7 @@ sw.addEventListener('fetch', (event: FetchEvent) => {
     return;
   }
 
-  // 拦截缓存 URL 请求 (/__aitu_cache__/video/{taskId}.mp4)
+  // 拦截缓存 URL 请求 (/__aitu_cache__/{type}/{taskId}.{ext})
   if (url.pathname.startsWith(CACHE_URL_PREFIX)) {
     // console.log('Service Worker: Intercepting cache URL request:', event.request.url);
 
@@ -968,14 +968,18 @@ async function fetchQuick(request: Request, fetchOptions: any = {}): Promise<Res
   return fetch(request, fetchOptions);
 }
 
-// 处理缓存 URL 请求 (/__aitu_cache__/video/{taskId}.mp4)
-// 从 Cache API 获取合并视频并返回，支持 Range 请求
+// 处理缓存 URL 请求 (/__aitu_cache__/{type}/{taskId}.{ext})
+// 从 Cache API 获取合并媒体并返回，视频支持 Range 请求
 async function handleCacheUrlRequest(request: Request): Promise<Response> {
   const requestId = Math.random().toString(36).substring(2, 10);
+  const url = new URL(request.url);
   const rangeHeader = request.headers.get('range');
 
   // 使用完整 URL 作为缓存 key（与主线程保持一致）
   const cacheKey = request.url;
+
+  // 通过路径或扩展名判断是否为视频
+  const isVideo = url.pathname.includes('/video/') || /\.(mp4|webm|ogg|mov)$/i.test(url.pathname);
 
   // console.log(`Service Worker [Cache-${requestId}]: Handling cache URL request:`, cacheKey);
 
@@ -985,14 +989,30 @@ async function handleCacheUrlRequest(request: Request): Promise<Response> {
     const cachedResponse = await cache.match(cacheKey);
 
     if (cachedResponse) {
-      // console.log(`Service Worker [Cache-${requestId}]: Found cached video:`, cacheKey);
+      // console.log(`Service Worker [Cache-${requestId}]: Found cached media:`, cacheKey);
       const blob = await cachedResponse.blob();
-      return createVideoResponse(blob, rangeHeader, requestId);
+
+      if (isVideo) {
+        // 视频请求支持 Range
+        return createVideoResponse(blob, rangeHeader, requestId);
+      }
+
+      // 图片请求 - 直接返回完整响应
+      return new Response(blob, {
+        status: 200,
+        statusText: 'OK',
+        headers: {
+          'Content-Type': blob.type || 'image/png',
+          'Content-Length': blob.size.toString(),
+          'Access-Control-Allow-Origin': '*',
+          'Cache-Control': 'max-age=31536000' // 1年
+        }
+      });
     }
 
     // 如果 Cache API 没有，返回 404
-    console.error(`Service Worker [Cache-${requestId}]: Video not found in cache:`, cacheKey);
-    return new Response('Video not found', {
+    console.error(`Service Worker [Cache-${requestId}]: Media not found in cache:`, cacheKey);
+    return new Response('Media not found', {
       status: 404,
       statusText: 'Not Found',
       headers: {
