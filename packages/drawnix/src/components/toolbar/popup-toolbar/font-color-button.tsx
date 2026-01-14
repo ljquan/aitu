@@ -1,5 +1,5 @@
-import React, { ReactNode, useState } from 'react';
-import { ColorPicker } from '../../color-picker';
+import React, { useState, useCallback } from 'react';
+import { UnifiedColorPicker } from '../../unified-color-picker';
 import { ToolButton } from '../../tool-button';
 import classNames from 'classnames';
 import { Island } from '../../island';
@@ -9,6 +9,7 @@ import {
   setTextColor,
   setTextColorOpacity,
 } from '../../../transforms/property';
+import type { ReactNode } from 'react';
 
 export type PopupFontColorButtonProps = {
   board: PlaitBoard;
@@ -25,6 +26,20 @@ export const PopupFontColorButton: React.FC<PopupFontColorButtonProps> = ({
 }) => {
   const [isFontColorPropertyOpen, setIsFontColorPropertyOpen] = useState(false);
   const container = PlaitBoard.getBoardContainer(board);
+
+  const handleColorChange = useCallback((color: string) => {
+    setTextColor(
+      board,
+      currentColor ? currentColor : color,
+      color
+    );
+  }, [board, currentColor]);
+
+  const handleOpacityChange = useCallback((opacity: number) => {
+    if (currentColor) {
+      setTextColorOpacity(board, currentColor, opacity);
+    }
+  }, [board, currentColor]);
 
   return (
     <Popover
@@ -54,21 +69,11 @@ export const PopupFontColorButton: React.FC<PopupFontColorButtonProps> = ({
           padding={4}
           className={classNames(`${ATTACHED_ELEMENT_CLASS_NAME}`)}
         >
-          <ColorPicker
-            onColorChange={(selectedColor: string) => {
-              setTextColor(
-                board,
-                currentColor ? currentColor : selectedColor,
-                selectedColor
-              );
-            }}
-            onOpacityChange={(opacity: number) => {
-              if (currentColor) {
-                setTextColorOpacity(board, currentColor, opacity);
-              }
-            }}
-            currentColor={currentColor}
-          ></ColorPicker>
+          <UnifiedColorPicker
+            value={currentColor}
+            onChange={handleColorChange}
+            onOpacityChange={handleOpacityChange}
+          />
         </Island>
       </PopoverContent>
     </Popover>

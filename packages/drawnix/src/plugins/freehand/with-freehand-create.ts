@@ -11,6 +11,7 @@ import { createFreehandElement, getFreehandPointers } from './utils';
 import { Freehand, FreehandShape } from './type';
 import { FreehandGenerator } from './freehand.generator';
 import { FreehandSmoother } from './smoother';
+import { getFreehandSettings } from './freehand-settings';
 
 export const withFreehandCreate = (board: PlaitBoard) => {
   const { pointerDown, pointerMove, pointerUp, globalPointerUp } = board;
@@ -32,13 +33,23 @@ export const withFreehandCreate = (board: PlaitBoard) => {
 
   let temporaryElement: Freehand | null = null;
 
+  // 获取当前画笔设置
+  const getCurrentSettings = () => {
+    const settings = getFreehandSettings(board);
+    return {
+      strokeWidth: settings.strokeWidth,
+      strokeColor: settings.strokeColor,
+    };
+  };
+
   const complete = (cancel?: boolean) => {
     if (isDrawing) {
       const pointer = PlaitBoard.getPointer(board) as FreehandShape;
       if (isSnappingStartAndEnd) {
         points.push(points[0]);
       }
-      temporaryElement = createFreehandElement(pointer, points);
+      const settings = getCurrentSettings();
+      temporaryElement = createFreehandElement(pointer, points, settings);
     }
     if (temporaryElement && !cancel) {
       Transforms.insertNode(board, temporaryElement, [board.children.length]);
@@ -91,7 +102,8 @@ export const withFreehandCreate = (board: PlaitBoard) => {
         );
         points.push(newPoint);
         const pointer = PlaitBoard.getPointer(board) as FreehandShape;
-        temporaryElement = createFreehandElement(pointer, points);
+        const settings = getCurrentSettings();
+        temporaryElement = createFreehandElement(pointer, points, settings);
         generator.processDrawing(
           temporaryElement,
           PlaitBoard.getElementTopHost(board)

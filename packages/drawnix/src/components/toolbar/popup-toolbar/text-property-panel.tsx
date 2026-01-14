@@ -10,7 +10,7 @@ import classNames from 'classnames';
 import { PlaitBoard } from '@plait/core';
 import { FontSizes, TextTransforms } from '@plait/text-plugins';
 import { useI18n } from '../../../i18n';
-import { ColorPickerPanel } from 'tdesign-react';
+import { UnifiedColorPicker } from '../../unified-color-picker';
 import {
   setTextFontSize,
   setTextFontFamily,
@@ -36,7 +36,6 @@ import { LS_KEYS_TO_MIGRATE } from '../../../constants/storage-keys';
 import { kvStorageService } from '../../../services/kv-storage-service';
 import './text-property-panel.scss';
 
-const RECENT_COLORS_KEY = LS_KEYS_TO_MIGRATE.RECENT_TEXT_COLORS;
 const CUSTOM_GRADIENTS_KEY = LS_KEYS_TO_MIGRATE.CUSTOM_GRADIENTS;
 
 export interface TextPropertyPanelProps {
@@ -101,25 +100,20 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({
   // 自定义渐变预设
   const [customGradients, setCustomGradients] = useState<Array<{ id: string; css: string }>>([]);
   
-  // 颜色状态 - 用于受控的 ColorPickerPanel
+  // 颜色状态 - 用于受控的 UnifiedColorPicker
   const [colorValue, setColorValue] = useState(currentColor || '#000000');
-  
-  // 最近使用的颜色
-  const [recentColors, setRecentColors] = useState<string[]>([]);
 
-  // 从 IndexedDB 加载颜色和渐变数据
+  // 从 IndexedDB 加载渐变数据
   useEffect(() => {
     let mounted = true;
-    Promise.all([
-      kvStorageService.get<string[]>(RECENT_COLORS_KEY),
-      kvStorageService.get<Array<{ id: string; css: string }>>(CUSTOM_GRADIENTS_KEY),
-    ]).then(([colors, gradients]) => {
-      if (!mounted) return;
-      if (colors) setRecentColors(colors);
-      if (gradients) setCustomGradients(gradients);
-    }).catch((e) => {
-      console.warn('Failed to load color/gradient data:', e);
-    });
+    kvStorageService.get<Array<{ id: string; css: string }>>(CUSTOM_GRADIENTS_KEY)
+      .then((gradients) => {
+        if (!mounted) return;
+        if (gradients) setCustomGradients(gradients);
+      })
+      .catch((e) => {
+        console.warn('Failed to load gradient data:', e);
+      });
     return () => { mounted = false; };
   }, []);
 
@@ -289,36 +283,8 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({
     }
   }, [currentColor]);
 
-  // 添加颜色到最近使用列表（去重，最多保存 10 个）
-  const addToRecentColors = useCallback((color: string) => {
-    if (!color) return;
-    // 标准化颜色格式（移除空格，转小写）
-    const normalizedColor = color.toLowerCase().replace(/\s/g, '');
-    setRecentColors(prev => {
-      // 去重：移除已存在的相同颜色
-      const filtered = prev.filter(c => c.toLowerCase().replace(/\s/g, '') !== normalizedColor);
-      // 添加到开头，最多保存 10 个
-      const updated = [color, ...filtered].slice(0, 10);
-      // 保存到 IndexedDB
-      kvStorageService.set(RECENT_COLORS_KEY, updated).catch((e) => {
-        console.warn('Failed to save recent colors:', e);
-      });
-      return updated;
-    });
-  }, []);
-
-  // 面板关闭时，保存当前颜色到最近使用列表
-  useEffect(() => {
-    if (!isOpen && colorValue && colorValue !== '#000000') {
-      addToRecentColors(colorValue);
-    }
-  }, [isOpen, colorValue, addToRecentColors]);
-
   // 处理颜色变更
   const handleColorChange = useCallback((color: string) => {
-    // console.log('[handleColorChange] color:', color);
-    // TDesign ColorPickerPanel 返回的颜色已包含透明度信息
-    // 直接应用颜色，无需额外处理透明度
     setColorValue(color);
     TextTransforms.setTextColor(board, color);
   }, [board]);
@@ -742,47 +708,16 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({
           <div className="text-property-panel__section">
             <div className="text-property-panel__section-title">
               {t('propertyPanel.textColor')}
-              {/* 拾色器按钮 */}
-              {'EyeDropper' in window && (
-                <button
-                  className="eyedropper-btn"
-                  onClick={async () => {
-                    try {
-                      // @ts-ignore - EyeDropper API
-                      const eyeDropper = new window.EyeDropper();
-                      const result = await eyeDropper.open();
-                      if (result?.sRGBHex) {
-                        handleColorChange(result.sRGBHex);
-                        addToRecentColors(result.sRGBHex);
-                      }
-                    } catch (e) {
-                      // console.log('EyeDropper cancelled or failed:', e);
-                    }
-                  }}
-                  title={language === 'zh' ? '拾取屏幕颜色' : 'Pick screen color'}
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M20.71 5.63l-2.34-2.34a1 1 0 0 0-1.41 0l-3.12 3.12-1.42-1.42-1.41 1.42 1.41 1.41-8.42 8.42V20h3.75l8.42-8.42 1.41 1.41 1.42-1.41-1.42-1.42 3.12-3.12a1 1 0 0 0 .01-1.41zM6.92 18H5v-1.92l8.42-8.42 1.92 1.92L6.92 18z"/>
-                  </svg>
-                </button>
-              )}
             </div>
             <div className="text-property-panel__section-content text-color-picker">
-              <ColorPickerPanel
+              <UnifiedColorPicker
                 value={colorValue}
-                onChange={(color: string) => handleColorChange(color)}
-                colorModes={['monochrome']}
-                format="HEX"
-                enableAlpha={true}
-                showPrimaryColorPreview={false}
-                recentColors={recentColors}
-                onRecentColorsChange={(colors: string[]) => {
-                  setRecentColors(colors);
-                  kvStorageService.set(RECENT_COLORS_KEY, colors).catch((e) => {
-                    console.warn('Failed to save recent colors:', e);
-                  });
-                }}
-                swatchColors={null}
+                onChange={handleColorChange}
+                showAlpha={true}
+                showEyeDropper={true}
+                showPresets={true}
+                showRecentColors={true}
+                showHexInput={true}
               />
             </div>
           </div>

@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { ToolButton } from '../../tool-button';
 import classNames from 'classnames';
 import { ATTACHED_ELEMENT_CLASS_NAME, PlaitBoard } from '@plait/core';
 import { Island } from '../../island';
-import { ColorPicker } from '../../color-picker';
+import { UnifiedColorPicker } from '../../unified-color-picker';
 import {
   hexAlphaToOpacity,
   isFullyTransparent,
@@ -36,6 +36,14 @@ export const PopupFillButton: React.FC<PopupFillButtonProps> = ({
   const icon =
     !hexColor || isFullyTransparent(opacity) ? BackgroundColorIcon : undefined;
 
+  const handleColorChange = useCallback((color: string) => {
+    setFillColor(board, color);
+  }, [board]);
+
+  const handleOpacityChange = useCallback((opacity: number) => {
+    setFillColorOpacity(board, opacity);
+  }, [board]);
+
   return (
     <Popover
       sideOffset={12}
@@ -65,15 +73,11 @@ export const PopupFillButton: React.FC<PopupFillButtonProps> = ({
           padding={4}
           className={classNames(`${ATTACHED_ELEMENT_CLASS_NAME}`)}
         >
-          <ColorPicker
-            onColorChange={(selectedColor: string) => {
-              setFillColor(board, selectedColor);
-            }}
-            onOpacityChange={(opacity: number) => {
-              setFillColorOpacity(board, opacity);
-            }}
-            currentColor={currentColor}
-          ></ColorPicker>
+          <UnifiedColorPicker
+            value={currentColor}
+            onChange={handleColorChange}
+            onOpacityChange={handleOpacityChange}
+          />
         </Island>
       </PopoverContent>
     </Popover>

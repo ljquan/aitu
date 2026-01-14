@@ -1326,6 +1326,49 @@ nx test drawnix         # 单元测试
 pnpm run build          # 构建验证
 ```
 
+### CSS !important 覆盖 JavaScript 动态样式
+
+**场景**: 需要通过 JavaScript 动态设置元素样式（如光标、颜色、尺寸），但 CSS 中存在 `!important` 规则
+
+❌ **错误示例**:
+```scss
+// SCSS 中使用 !important 固定光标样式
+.plait-board-container {
+  &.pointer-eraser {
+    .board-host-svg {
+      cursor: url('data:image/svg+xml;base64,...') 10 10, crosshair !important;
+    }
+  }
+}
+```
+```typescript
+// JavaScript 动态设置光标被 CSS !important 覆盖，无效
+function applyCursorStyle(board: PlaitBoard, size: number) {
+  const hostSvg = document.querySelector('.board-host-svg');
+  hostSvg.style.cursor = generateCursorSvg(size); // 被 !important 覆盖！
+}
+```
+
+✅ **正确示例**:
+```scss
+// SCSS 中不使用 !important，或完全移除静态规则
+.plait-board-container {
+  // 光标由 JavaScript 动态设置（usePencilCursor hook）
+  // 不再使用固定大小的 CSS 光标
+}
+```
+```typescript
+// JavaScript 动态设置光标正常生效
+function applyCursorStyle(board: PlaitBoard, size: number) {
+  const hostSvg = document.querySelector('.board-host-svg');
+  hostSvg.style.cursor = generateCursorSvg(size); // 正常生效
+}
+```
+
+**原因**: CSS 的 `!important` 规则优先级高于 JavaScript 设置的内联样式。当需要动态控制样式时（如根据用户设置调整光标大小），必须移除 CSS 中的 `!important` 规则，否则 JavaScript 的样式设置会被完全覆盖。
+
+**检查方法**: 如果 JavaScript 设置的样式不生效，在浏览器开发者工具中检查元素样式，查看是否有 `!important` 规则覆盖。
+
 ### 性能指南
 - 使用 `React.lazy` 对大型组件进行代码分割
 - 对图片实现懒加载和预加载

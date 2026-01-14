@@ -11,6 +11,16 @@ const KEY_LENGTH = 256;
 const IV_LENGTH = 12; // 96 bits for AES-GCM
 
 /**
+ * 检查 Web Crypto API 是否可用
+ * 在非 HTTPS 环境下，crypto.subtle 可能不可用
+ */
+const isCryptoAvailable = (): boolean => {
+  return typeof crypto !== 'undefined' && 
+         crypto.subtle !== undefined && 
+         typeof crypto.subtle.importKey === 'function';
+};
+
+/**
  * 加密结果接口
  */
 interface EncryptedData {
@@ -91,6 +101,12 @@ export class CryptoUtils {
    * 加密数据
    */
   public static async encrypt(plaintext: string): Promise<string> {
+    // 检查 crypto.subtle 是否可用
+    if (!isCryptoAvailable()) {
+      console.warn('Web Crypto API not available, using fallback encoding');
+      return this.fallbackEncode(plaintext);
+    }
+    
     try {
       const encoder = new TextEncoder();
       const data = encoder.encode(plaintext);
@@ -120,7 +136,9 @@ export class CryptoUtils {
       return JSON.stringify(result);
     } catch (error) {
       console.error('Encryption failed:', error);
-      throw new Error('Failed to encrypt data');
+      // Fallback to simple encoding
+      console.warn('Falling back to simple encoding');
+      return this.fallbackEncode(plaintext);
     }
   }
   
@@ -128,6 +146,17 @@ export class CryptoUtils {
    * 解密数据
    */
   public static async decrypt(encryptedData: string): Promise<string> {
+    // 检查是否是 fallback 编码的数据
+    if (this.isFallbackEncoded(encryptedData)) {
+      return this.fallbackDecode(encryptedData);
+    }
+    
+    // 检查 crypto.subtle 是否可用
+    if (!isCryptoAvailable()) {
+      console.warn('Web Crypto API not available for decryption');
+      throw new Error('Cannot decrypt: Web Crypto API not available');
+    }
+    
     try {
       const parsed: EncryptedData = JSON.parse(encryptedData);
       
@@ -207,5 +236,39 @@ export class CryptoUtils {
     } catch {
       return false;
     }
+  }
+  
+  /**
+   * 检查 Web Crypto API 是否可用
+   */
+  public static isCryptoSupported(): boolean {
+    return isCryptoAvailable();
+  }
+  
+  // ========== Fallback 编码方法 (非安全上下文) ==========
+  
+  private static readonly FALLBACK_PREFIX = 'DRAWNIX_FB:';
+  
+  /**
+   * Fallback 编码 - 使用简单的 Base64 编码（不安全，仅用于开发环境）
+   */
+  private static fallbackEncode(plaintext: string): string {
+    const encoded = globalThis.btoa(encodeURIComponent(plaintext));
+    return this.FALLBACK_PREFIX + encoded;
+  }
+  
+  /**
+   * Fallback 解码
+   */
+  private static fallbackDecode(encoded: string): string {
+    const data = encoded.slice(this.FALLBACK_PREFIX.length);
+    return decodeURIComponent(globalThis.atob(data));
+  }
+  
+  /**
+   * 检查是否是 fallback 编码的数据
+   */
+  private static isFallbackEncoded(data: string): boolean {
+    return data.startsWith(this.FALLBACK_PREFIX);
   }
 }

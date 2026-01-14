@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { ToolButton } from '../../tool-button';
 import classNames from 'classnames';
 import { ATTACHED_ELEMENT_CLASS_NAME, PlaitBoard } from '@plait/core';
 import { Island } from '../../island';
-import { ColorPicker } from '../../color-picker';
+import { UnifiedColorPicker } from '../../unified-color-picker';
 import {
   hexAlphaToOpacity,
   isFullyTransparent,
@@ -55,6 +55,14 @@ export const PopupStrokeButton: React.FC<PopupStrokeButtonProps> = ({
   const setStrokeStyle = (style: StrokeStyle) => {
     PropertyTransforms.setStrokeStyle(board, style, { getMemorizeKey });
   };
+
+  const handleColorChange = useCallback((color: string) => {
+    setStrokeColor(board, color);
+  }, [board]);
+
+  const handleOpacityChange = useCallback((opacity: number) => {
+    setStrokeColorOpacity(board, opacity);
+  }, [board]);
 
   return (
     <Popover
@@ -124,15 +132,11 @@ export const PopupStrokeButton: React.FC<PopupStrokeButtonProps> = ({
                 ></ToolButton>
               </Stack.Row>
             )}
-            <ColorPicker
-              onColorChange={(selectedColor: string) => {
-                setStrokeColor(board, selectedColor);
-              }}
-              onOpacityChange={(opacity: number) => {
-                setStrokeColorOpacity(board, opacity);
-              }}
-              currentColor={currentColor}
-            ></ColorPicker>
+            <UnifiedColorPicker
+              value={currentColor}
+              onChange={handleColorChange}
+              onOpacityChange={handleOpacityChange}
+            />
           </Stack.Col>
         </Island>
       </PopoverContent>
