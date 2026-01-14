@@ -1399,6 +1399,41 @@ function findElements(assetUrl: string) {
 - 画布元素可能使用相对路径（由 Service Worker 拦截）
 - 同一资源的两种 URL 形式必须能相互匹配
 
+### Cache API 缓存 key 一致性规范
+
+**场景**: 主线程缓存媒体到 Cache API，Service Worker 需要读取该缓存
+
+❌ **错误示例: 使用 location.origin 拼接完整 URL**
+```typescript
+// 主线程缓存时
+const stableUrl = `/__aitu_cache__/image/${taskId}.png`;
+const cacheKey = `${location.origin}${stableUrl}`;  // http://localhost:7200/...
+await cache.put(cacheKey, response);
+
+// SW 读取时（代理场景下 origin 不同）
+const cacheKey = request.url;  // https://ai-tu.netlify.app/...
+const cached = await cache.match(cacheKey);  // ❌ 找不到！
+```
+
+✅ **正确示例: 使用相对路径作为缓存 key + 多 key 回退查找**
+```typescript
+// 主线程缓存时 - 使用相对路径
+const stableUrl = `/__aitu_cache__/image/${taskId}.png`;
+const cacheKey = stableUrl;  // /__aitu_cache__/image/xxx.png
+await cache.put(cacheKey, response);
+
+// SW 读取时 - 优先完整 URL，回退到相对路径
+let cachedResponse = await cache.match(request.url);  // 完整 URL
+if (!cachedResponse) {
+  cachedResponse = await cache.match(url.pathname);   // 相对路径回退
+}
+```
+
+**原因**:
+- 使用 `location.origin` 会在代理场景下导致 key 不一致（本地 vs 线上域名）
+- 推荐使用相对路径作为缓存 key，确保一致性
+- SW 端采用多 key 回退策略，兼容历史数据和不同场景
+
 ### Service Worker 内部处理虚拟路径 URL
 
 **场景**: 在 Service Worker 内部需要获取 `/__aitu_cache__/` 或 `/asset-library/` 等虚拟路径的资源时
