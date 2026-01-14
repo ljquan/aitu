@@ -1434,6 +1434,57 @@ if (!cachedResponse) {
 - 推荐使用相对路径作为缓存 key，确保一致性
 - SW 端采用多 key 回退策略，兼容历史数据和不同场景
 
+### 相对路径 URL 解析规范
+
+**场景**: 需要从 URL 中提取文件扩展名、路径等信息时（如下载文件时确定文件名）
+
+❌ **错误示例: 直接使用 new URL() 解析**
+```typescript
+// 错误：相对路径无法被 new URL() 解析，会抛异常
+function getFileExtension(url: string): string {
+  try {
+    const urlPath = new URL(url).pathname;  // ❌ 相对路径会抛 TypeError
+    const ext = urlPath.substring(urlPath.lastIndexOf('.') + 1);
+    return ext;
+  } catch {
+    return 'bin';  // 回退到错误的扩展名
+  }
+}
+
+// 下载合并图片时：
+// url = '/__aitu_cache__/image/merged-image-xxx.png'
+// 结果：下载文件扩展名变成 .bin
+```
+
+✅ **正确示例: 先判断是否为相对路径**
+```typescript
+function getFileExtension(url: string): string {
+  try {
+    let urlPath: string;
+    
+    // 相对路径直接使用，不需要 URL 解析
+    if (url.startsWith('/') || !url.includes('://')) {
+      urlPath = url;
+    } else {
+      urlPath = new URL(url).pathname;
+    }
+    
+    const lastDotIndex = urlPath.lastIndexOf('.');
+    if (lastDotIndex > 0 && lastDotIndex < urlPath.length - 1) {
+      return urlPath.substring(lastDotIndex + 1).toLowerCase();
+    }
+  } catch {
+    // URL 解析失败
+  }
+  return 'bin';
+}
+```
+
+**原因**:
+- `new URL(path)` 要求完整 URL 或提供 base URL，相对路径会抛 `TypeError: Invalid URL`
+- 虚拟路径如 `/__aitu_cache__/xxx` 是相对路径，需要特殊处理
+- 判断 `startsWith('/')` 或不包含 `://` 可以识别相对路径
+
 ### Service Worker 内部处理虚拟路径 URL
 
 **场景**: 在 Service Worker 内部需要获取 `/__aitu_cache__/` 或 `/asset-library/` 等虚拟路径的资源时
