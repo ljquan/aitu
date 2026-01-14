@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useCallback } from 'react';
+import { Slider } from 'tdesign-react';
 import classNames from 'classnames';
 import { PlaitBoard } from '@plait/core';
 import { Island } from '../../island';
@@ -55,13 +56,6 @@ export const SizePicker: React.FC<SizePickerProps> = ({
   React.useEffect(() => {
     setInputValue(String(size));
   }, [size]);
-
-  // 处理预设选择
-  const handlePresetSelect = useCallback((preset: number) => {
-    setInputValue(String(preset));
-    onSizeChange(preset);
-    setIsOpen(false);
-  }, [onSizeChange]);
 
   // 处理输入框变化
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -115,29 +109,21 @@ export const SizePicker: React.FC<SizePickerProps> = ({
             padding={4}
             className={classNames('size-picker-popover')}
           >
-            <Stack.Col gap={2}>
+            <Stack.Col gap={4}>
               <div className="size-picker-title">{title}</div>
-              <div className="size-picker-presets">
-                {presets.map((preset) => (
-                  <div key={preset} className="size-picker-preset-item">
-                    <button
-                      className={classNames('size-picker-preset', {
-                        active: size === preset,
-                      })}
-                      onClick={() => handlePresetSelect(preset)}
-                      title={`${preset}px`}
-                    >
-                      <div
-                        className="size-picker-preview-line"
-                        style={{ 
-                          height: Math.min(preset, 12), 
-                          backgroundColor: previewColor,
-                        }}
-                      />
-                    </button>
-                    <span className="size-picker-preset-label">{preset}px</span>
-                  </div>
-                ))}
+              <div className="size-picker-slider-wrapper" style={{ padding: '0 8px 12px' }}>
+                <Slider
+                  value={size}
+                  min={1}
+                  max={Math.max(256, ...presets)}
+                  step={1}
+                  onChange={(val) => {
+                    const newSize = val as number;
+                    setInputValue(String(newSize));
+                    onSizeChange(newSize);
+                  }}
+                  label={true}
+                />
               </div>
             </Stack.Col>
           </Island>

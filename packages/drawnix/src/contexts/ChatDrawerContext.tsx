@@ -31,6 +31,14 @@ interface ChatDrawerContextValue {
   selectedContent: SelectedContentItem[];
   /** 设置选中内容 */
   setSelectedContent: (content: SelectedContentItem[]) => void;
+  /** 抽屉是否打开（响应式状态） */
+  isDrawerOpen: boolean;
+  /** 设置抽屉打开状态 */
+  setIsDrawerOpen: (open: boolean) => void;
+  /** 抽屉宽度 */
+  drawerWidth: number;
+  /** 设置抽屉宽度 */
+  setDrawerWidth: (width: number) => void;
 }
 
 const ChatDrawerContext = createContext<ChatDrawerContextValue | null>(null);
@@ -38,6 +46,11 @@ const ChatDrawerContext = createContext<ChatDrawerContextValue | null>(null);
 export interface ChatDrawerProviderProps {
   children: React.ReactNode;
 }
+
+// 默认抽屉宽度
+const DEFAULT_DRAWER_WIDTH = typeof window !== 'undefined' 
+  ? Math.max(375, window.innerWidth * 0.5) 
+  : 600;
 
 /**
  * ChatDrawer Provider
@@ -47,6 +60,8 @@ export const ChatDrawerProvider: React.FC<ChatDrawerProviderProps> = ({ children
   const chatDrawerRef = useRef<ChatDrawerRef>(null);
   const retryHandlerRef = useRef<RetryHandler | null>(null);
   const [selectedContent, setSelectedContent] = useState<SelectedContentItem[]>([]);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [drawerWidth, setDrawerWidth] = useState(DEFAULT_DRAWER_WIDTH);
 
   const registerRetryHandler = useCallback((handler: RetryHandler) => {
     retryHandlerRef.current = handler;
@@ -61,7 +76,17 @@ export const ChatDrawerProvider: React.FC<ChatDrawerProviderProps> = ({ children
   }, []);
 
   return (
-    <ChatDrawerContext.Provider value={{ chatDrawerRef, registerRetryHandler, executeRetry, selectedContent, setSelectedContent }}>
+    <ChatDrawerContext.Provider value={{ 
+      chatDrawerRef, 
+      registerRetryHandler, 
+      executeRetry, 
+      selectedContent, 
+      setSelectedContent,
+      isDrawerOpen,
+      setIsDrawerOpen,
+      drawerWidth,
+      setDrawerWidth,
+    }}>
       {children}
     </ChatDrawerContext.Provider>
   );
@@ -83,7 +108,17 @@ export function useChatDrawer(): ChatDrawerContextValue {
  * 提供便捷的方法来控制 ChatDrawer
  */
 export function useChatDrawerControl() {
-  const { chatDrawerRef, registerRetryHandler, executeRetry, selectedContent, setSelectedContent } = useChatDrawer();
+  const { 
+    chatDrawerRef, 
+    registerRetryHandler, 
+    executeRetry, 
+    selectedContent, 
+    setSelectedContent,
+    isDrawerOpen,
+    setIsDrawerOpen,
+    drawerWidth,
+    setDrawerWidth,
+  } = useChatDrawer();
 
   return {
     /** 打开 ChatDrawer */
@@ -122,6 +157,14 @@ export function useChatDrawerControl() {
     isChatDrawerOpen: () => {
       return chatDrawerRef.current?.isOpen() ?? false;
     },
+    /** 抽屉是否打开（响应式状态） */
+    isDrawerOpen,
+    /** 设置抽屉打开状态 */
+    setIsDrawerOpen,
+    /** 抽屉宽度 */
+    drawerWidth,
+    /** 设置抽屉宽度 */
+    setDrawerWidth,
     /** 注册重试处理器 */
     registerRetryHandler,
     /** 从失败步骤重试工作流 */

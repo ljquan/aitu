@@ -148,7 +148,7 @@
 // 大小选择器弹出层（公共）
 .stroke-width-picker,
 .size-picker-popover {
-  min-width: 280px;
+  min-width: 240px;
   background: #ffffff;
   
   .stroke-width-title,
@@ -156,59 +156,6 @@
     font-size: 14px;
     font-weight: 500;
     color: var(--color-on-surface);
-    margin-bottom: 8px;
-  }
-  
-  .stroke-width-presets,
-  .size-picker-presets {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-  
-  .stroke-width-preset-item,
-  .size-picker-preset-item {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
-  }
-  
-  .stroke-width-preset,
-  .size-picker-preset {
-    width: 32px;
-    height: 32px;
-    border-radius: 6px;
-    border: 1px solid var(--color-gray-30);
-    background: #ffffff;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.15s ease;
-    padding: 0;
-    
-    &:hover {
-      border-color: var(--color-primary);
-      background: var(--color-surface-mid);
-    }
-    
-    &.active {
-      border-color: var(--color-primary);
-      background: var(--color-primary-light);
-    }
-    
-    .stroke-width-preview-line,
-    .size-picker-preview-line {
-      width: 20px;
-      border-radius: 2px;
-      min-height: 2px;
-    }
-  }
-  
-  .stroke-width-preset-label,
-  .size-picker-preset-label {
-    font-size: 10px;
-    color: var(--color-gray-50, #999);
+    margin-bottom: 12px;
   }
 }

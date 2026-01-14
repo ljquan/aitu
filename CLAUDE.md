@@ -1093,6 +1093,57 @@ async getPaginatedTasks(params: PaginationParams): Promise<PaginatedResult> {
 - 事件处理器使用 `useCallback` 包装
 - Hook 顺序：状态 hooks → 副作用 hooks → 事件处理器 → 渲染逻辑
 
+### 新增 UI 组件需同步更新全局事件排除列表
+
+**场景**: 添加新的浮层/覆盖层 UI 组件（如工具栏、导航、面板等）时，需要将其排除在全局事件处理之外
+
+❌ **错误示例**:
+```typescript
+// drawnix.tsx 中的双击事件处理
+const handleDoubleClick = (event: MouseEvent) => {
+  const target = event.target as HTMLElement;
+  
+  const isInsideOverlay = target.closest('.chat-drawer') ||
+                          target.closest('.minimap') ||
+                          target.closest('.ai-input-bar');
+                          // ❌ 忘记添加新组件 .view-navigation
+  
+  if (isInsideOverlay) return;
+  
+  // 双击空白区域触发 quick-creation-toolbar
+  setQuickToolbarVisible(true);
+};
+
+// 结果：双击 view-navigation 会意外触发 quick-creation-toolbar
+```
+
+✅ **正确示例**:
+```typescript
+// 添加新组件后，同步更新排除列表
+const handleDoubleClick = (event: MouseEvent) => {
+  const target = event.target as HTMLElement;
+  
+  const isInsideOverlay = target.closest('.chat-drawer') ||
+                          target.closest('.minimap') ||
+                          target.closest('.ai-input-bar') ||
+                          target.closest('.view-navigation'); // ✅ 新增组件
+  
+  if (isInsideOverlay) return;
+  
+  setQuickToolbarVisible(true);
+};
+```
+
+**需要排除的组件类型**:
+- 浮层面板：`.chat-drawer`, `.project-drawer`, `.toolbox-drawer`
+- 工具栏：`.view-navigation`, `.unified-toolbar`, `.ai-input-bar`
+- 弹窗：`.t-dialog`, `.settings-dialog`
+- 其他 UI：`.minimap`, `.task-queue-panel`
+
+**检查位置**: `drawnix.tsx` 中的 `handleDoubleClick` 函数（约第 715-730 行）
+
+**原因**: 全局事件处理（如双击显示快捷工具栏）会捕获整个容器内的事件。如果不排除新添加的 UI 组件，用户在这些组件上的操作会触发意外的全局行为（如在缩放按钮上双击却弹出了创建工具栏）。
+
 ### CSS/SCSS 规范
 - 使用 BEM 命名规范
 - 优先使用设计系统 CSS 变量

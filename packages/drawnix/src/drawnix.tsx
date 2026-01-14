@@ -54,7 +54,7 @@ import { WorkflowProvider } from './contexts/WorkflowContext';
 import { useWorkspace } from './hooks/useWorkspace';
 import { Board as WorkspaceBoard } from './types/workspace.types';
 import { toolTestHelper } from './utils/tool-test-helper';
-import { Minimap } from './components/minimap';
+import { ViewNavigation } from './components/view-navigation';
 import { AssetProvider } from './contexts/AssetContext';
 import { initializeAssetIntegration } from './services/asset-integration-service';
 import { ToolbarConfigProvider } from './hooks/use-toolbar-config';
@@ -839,6 +839,8 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
           <AIInputBar isDataReady={isDataReady} />
           {/* Version Update Prompt - 顶部右上角升级提示 */}
           <VersionUpdatePrompt />
+          {/* ViewNavigation - 视图导航（缩放 + 小地图） */}
+          <ViewNavigation />
         </Wrapper>
         <ActiveTaskWarning />
         <ChatDrawer ref={chatDrawerRef} />
@@ -856,8 +858,6 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
             onOpenChange={setToolboxDrawerOpen}
           />
         </Suspense>
-        {/* Minimap - 小地图 */}
-        {board && <Minimap board={board} />}
       </div>
     </div>
   );

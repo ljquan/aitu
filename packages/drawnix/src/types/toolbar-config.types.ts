@@ -29,8 +29,9 @@ export interface ToolbarConfig {
 
 /**
  * 当前配置版本
+ * v5: 移除 zoom 按钮（已移至视图导航组件）
  */
-export const TOOLBAR_CONFIG_VERSION = 4;
+export const TOOLBAR_CONFIG_VERSION = 5;
 
 /**
  * 默认显示的按钮
@@ -49,6 +50,7 @@ export const DEFAULT_VISIBLE_BUTTONS = [
 
 /**
  * 所有按钮的默认顺序
+ * 注意: zoom 按钮已移至视图导航组件（ViewNavigation）
  */
 export const ALL_BUTTON_IDS = [
   // 默认显示的按钮
@@ -70,7 +72,6 @@ export const ALL_BUTTON_IDS = [
   // 操作类按钮（默认收起）
   'undo',
   'redo',
-  'zoom', // 缩放工具栏作为整体
 ];
 
 /**

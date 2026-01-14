@@ -25,15 +25,13 @@ import { useI18n } from '../../../i18n';
 import { useViewportScale } from '../../../hooks/useViewportScale';
 import { updatePencilCursor } from '../../../hooks/usePencilCursor';
 import { StrokeStyle } from '@plait/common';
+import { Slider } from 'tdesign-react';
 import {
   StrokeStyleNormalIcon,
   StrokeStyleDashedIcon,
   StrokeStyleDotedIcon,
 } from '../../icons';
 import './pencil-settings-toolbar.scss';
-
-// 预设画笔大小
-const STROKE_WIDTH_PRESETS = [1, 2, 4, 6, 8, 12, 16, 20];
 
 // 模拟光标预览组件
 const CursorPreview: React.FC<{ color: string; size: number; zoom: number }> = ({ color, size, zoom }) => {
@@ -90,16 +88,6 @@ export const PencilSettingsToolbar: React.FC = () => {
     setInputValue(String(newSettings.strokeWidth));
   }, [board, appState.pointer]);
 
-  // 处理画笔大小变化（从预设选择）
-  const handleStrokeWidthPreset = useCallback((width: number) => {
-    setStrokeWidth(width);
-    setInputValue(String(width));
-    setFreehandStrokeWidth(board, width);
-    setIsWidthPickerOpen(false);
-    // 更新光标
-    updatePencilCursor(board, appState.pointer);
-  }, [board, appState.pointer]);
-
   // 处理输入框值变化
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setInputValue(e.target.value);
@@ -108,7 +96,7 @@ export const PencilSettingsToolbar: React.FC = () => {
   // 处理输入框失焦或回车确认
   const handleInputConfirm = useCallback(() => {
     const value = parseInt(inputValue, 10);
-    if (!isNaN(value) && value >= 1) {
+    if (!isNaN(value) && value >= 1 && value <= 100) {
       setStrokeWidth(value);
       setFreehandStrokeWidth(board, value);
       // 更新光标
@@ -263,26 +251,23 @@ export const PencilSettingsToolbar: React.FC = () => {
               padding={4}
               className={classNames('stroke-width-picker')}
             >
-              <Stack.Col gap={2}>
+              <Stack.Col gap={4}>
                 <div className="stroke-width-title">{t('toolbar.strokeWidth')}</div>
-                <div className="stroke-width-presets">
-                  {STROKE_WIDTH_PRESETS.map((width) => (
-                    <div key={width} className="stroke-width-preset-item">
-                      <button
-                        className={classNames('stroke-width-preset', {
-                          active: strokeWidth === width,
-                        })}
-                        onClick={() => handleStrokeWidthPreset(width)}
-                        title={`${width}px`}
-                      >
-                        <div
-                          className="stroke-width-preview-line"
-                          style={{ height: Math.min(width, 12), backgroundColor: strokeColor || DEFAULT_COLOR }}
-                        />
-                      </button>
-                      <span className="stroke-width-preset-label">{width}px</span>
-                    </div>
-                  ))}
+                <div className="stroke-width-slider-wrapper" style={{ padding: '0 8px 12px' }}>
+                  <Slider
+                    value={strokeWidth}
+                    min={1}
+                    max={100}
+                    step={1}
+                    onChange={(val) => {
+                      const width = val as number;
+                      setStrokeWidth(width);
+                      setInputValue(String(width));
+                      setFreehandStrokeWidth(board, width);
+                      updatePencilCursor(board, appState.pointer);
+                    }}
+                    label={true}
+                  />
                 </div>
               </Stack.Col>
             </Island>

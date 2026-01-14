@@ -97,8 +97,23 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
     // 正在重试的工作流 ID
     const [retryingWorkflowId, setRetryingWorkflowId] = useState<string | null>(null);
 
-    // 获取重试执行器和选中内容（从 Context）
-    const { executeRetry, selectedContent } = useChatDrawer();
+    // 获取重试执行器和选中内容（从 Context），以及状态同步方法
+    const { 
+      executeRetry, 
+      selectedContent,
+      setIsDrawerOpen: setContextIsOpen,
+      setDrawerWidth: setContextDrawerWidth,
+    } = useChatDrawer();
+
+    // 同步抽屉状态到 Context（用于视图导航联动）
+    useEffect(() => {
+      setContextIsOpen(isOpen);
+    }, [isOpen, setContextIsOpen]);
+
+    // 同步抽屉宽度到 Context
+    useEffect(() => {
+      setContextDrawerWidth(drawerWidth);
+    }, [drawerWidth, setContextDrawerWidth]);
 
     // Refs for click outside detection
     const sessionListRef = React.useRef<HTMLDivElement>(null);

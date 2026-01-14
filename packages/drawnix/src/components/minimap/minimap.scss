@@ -111,22 +111,3 @@
     }
   }
 }
-
-// 暗色主题支持（可选）
-@media (prefers-color-scheme: dark) {
-  .minimap {
-    &__content {
-      background: rgba(30, 30, 30, 0.95);
-      border-color: rgba(255, 255, 255, 0.1);
-    }
-
-    &__toggle {
-      background: rgba(30, 30, 30, 0.9);
-      border-color: rgba(255, 255, 255, 0.1);
-
-      svg {
-        color: #ccc;
-      }
-    }
-  }
-}
