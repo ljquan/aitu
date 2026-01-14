@@ -789,6 +789,7 @@ class UnifiedCacheService {
     type: CacheMediaType,
     metadata?: { taskId?: string; prompt?: string; model?: string }
   ): Promise<string> {
+    console.log('[UnifiedCache] cacheMediaFromBlob called:', { url, type, blobSize: blob.size, blobType: blob.type });
     try {
       // 1. 将 blob 放入 Cache API（通过创建 Response）
       if (typeof caches !== 'undefined') {
@@ -800,6 +801,9 @@ class UnifiedCacheService {
           },
         });
         await cache.put(url, response);
+        console.log('[UnifiedCache] Blob cached to Cache API:', { url, cacheName: IMAGE_CACHE_NAME });
+      } else {
+        console.warn('[UnifiedCache] caches API not available');
       }
 
       // 2. 存储元数据到 IndexedDB
