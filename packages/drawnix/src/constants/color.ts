@@ -2,7 +2,7 @@ import { DEFAULT_COLOR } from '@plait/core';
 import { NO_COLOR, WHITE } from '@aitu/utils';
 
 export const CLASSIC_COLORS = [
-  { name: 'Topic Color', value: NO_COLOR },
+  { name: '无色', value: NO_COLOR },
   { name: 'Basic Black', value: DEFAULT_COLOR },
   { name: 'White', value: WHITE },
   { name: 'Gray', value: '#808080' },

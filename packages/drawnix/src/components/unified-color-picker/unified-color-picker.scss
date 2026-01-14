@@ -1,0 +1,368 @@
+/**
+ * UnifiedColorPicker 统一取色器样式
+ */
+
+// 变量 - 优化紧凑布局
+$ucp-panel-min-width: 200px;
+$ucp-panel-height: 140px;
+$ucp-slider-height: 10px;
+$ucp-indicator-size: 12px;
+$ucp-preset-size: 22px;
+$ucp-recent-size: 22px;
+$ucp-border-radius: 6px;
+$ucp-gap: 8px;
+
+// 棋盘格背景（用于透明度展示）
+$checkerboard-bg: repeating-conic-gradient(
+  #e0e0e0 0% 25%,
+  #ffffff 0% 50%
+) 50% / 8px 8px;
+
+.unified-color-picker {
+  display: flex;
+  flex-direction: column;
+  gap: $ucp-gap;
+  width: 100%;
+  min-width: $ucp-panel-min-width;
+  padding: 8px;
+  background: var(--color-surface, #ffffff);
+  border-radius: $ucp-border-radius;
+  user-select: none;
+  box-sizing: border-box;
+
+  &.disabled {
+    opacity: 0.6;
+    pointer-events: none;
+  }
+}
+
+// 色相/饱和度面板
+.ucp-hs-panel {
+  position: relative;
+  width: 100%;
+  height: $ucp-panel-height;
+  border-radius: $ucp-border-radius;
+  cursor: crosshair;
+  overflow: hidden;
+
+  &__white-gradient {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to right, #ffffff 0%, transparent 100%);
+  }
+
+  &__black-gradient {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to bottom, transparent 0%, #000000 100%);
+  }
+
+  &__indicator {
+    position: absolute;
+    width: $ucp-indicator-size;
+    height: $ucp-indicator-size;
+    border: 2px solid #ffffff;
+    border-radius: 50%;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3), 0 2px 4px rgba(0, 0, 0, 0.2);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+  }
+}
+
+// 色相条
+.ucp-hue-slider {
+  position: relative;
+  width: 100%;
+  height: $ucp-slider-height;
+  border-radius: $ucp-slider-height / 2;
+  cursor: pointer;
+  overflow: hidden;
+
+  &__track {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      to right,
+      hsl(0, 100%, 50%) 0%,
+      hsl(60, 100%, 50%) 17%,
+      hsl(120, 100%, 50%) 33%,
+      hsl(180, 100%, 50%) 50%,
+      hsl(240, 100%, 50%) 67%,
+      hsl(300, 100%, 50%) 83%,
+      hsl(360, 100%, 50%) 100%
+    );
+    border-radius: inherit;
+  }
+
+  &__indicator {
+    position: absolute;
+    top: 50%;
+    width: $ucp-indicator-size;
+    height: $ucp-indicator-size;
+    background: #ffffff;
+    border: 2px solid #ffffff;
+    border-radius: 50%;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.2), 0 2px 4px rgba(0, 0, 0, 0.15);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+  }
+}
+
+// 透明度条
+.ucp-alpha-slider {
+  position: relative;
+  width: 100%;
+  height: $ucp-slider-height;
+  border-radius: $ucp-slider-height / 2;
+  cursor: pointer;
+  overflow: hidden;
+
+  &__checkerboard {
+    position: absolute;
+    inset: 0;
+    background: $checkerboard-bg;
+    border-radius: inherit;
+  }
+
+  &__gradient {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+  }
+
+  &__indicator {
+    position: absolute;
+    top: 50%;
+    width: $ucp-indicator-size;
+    height: $ucp-indicator-size;
+    background: #ffffff;
+    border: 2px solid #ffffff;
+    border-radius: 50%;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.2), 0 2px 4px rgba(0, 0, 0, 0.15);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+  }
+}
+
+// 预设颜色
+.ucp-preset-colors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+
+  &__item {
+    width: $ucp-preset-size;
+    height: $ucp-preset-size;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+
+    &:hover:not(:disabled) {
+      transform: scale(1.1);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    }
+
+    &--selected {
+      box-shadow: 0 0 0 2px var(--color-primary, #1890ff);
+    }
+
+    &--no-color {
+      background: $checkerboard-bg !important;
+      border: 1px solid rgba(0, 0, 0, 0.15);
+    }
+
+    &--light {
+      border: 1px solid rgba(0, 0, 0, 0.15);
+    }
+  }
+
+  &__no-color-icon {
+    width: 14px;
+    height: 14px;
+    color: #ff4d4f;
+  }
+
+  &__check-icon {
+    width: 12px;
+    height: 12px;
+    color: #ffffff;
+
+    .ucp-preset-colors__item--light & {
+      color: #333333;
+    }
+  }
+}
+
+// 最近使用颜色
+.unified-color-picker__recent {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  &-label {
+    font-size: 11px;
+    color: var(--color-text-secondary, #666666);
+  }
+
+  &-colors {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 4px;
+    height: $ucp-recent-size;
+    overflow: hidden;
+  }
+
+  &-item {
+    flex-shrink: 0;
+    width: $ucp-recent-size;
+    height: $ucp-recent-size;
+    padding: 0;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: transform 0.15s ease;
+
+    &:hover:not(:disabled) {
+      transform: scale(1.1);
+    }
+
+    &--selected {
+      box-shadow: 0 0 0 2px var(--color-primary, #1890ff);
+    }
+
+    &--light {
+      border: 1px solid rgba(0, 0, 0, 0.15);
+    }
+  }
+}
+
+// 底部工具栏
+.unified-color-picker__footer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+// 吸管工具
+.ucp-eyedropper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: var(--color-bg-secondary, #f5f5f5);
+  border: 1px solid var(--color-border, #e0e0e0);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+
+  &:hover:not(:disabled) {
+    background: var(--color-bg-hover, #e8e8e8);
+    border-color: var(--color-border-hover, #d0d0d0);
+  }
+
+  &--picking {
+    background: var(--color-primary-light, #e6f7ff);
+    border-color: var(--color-primary, #1890ff);
+  }
+
+  &__icon {
+    width: 16px;
+    height: 16px;
+    color: var(--color-text, #333333);
+  }
+}
+
+// HEX 输入
+.ucp-hex-input {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+
+  &__hex-group {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    height: 28px;
+    padding: 0 6px;
+    background: var(--color-bg-secondary, #f5f5f5);
+    border: 1px solid var(--color-border, #e0e0e0);
+    border-radius: 4px;
+    transition: border-color 0.15s ease;
+
+    &:focus-within {
+      border-color: var(--color-primary, #1890ff);
+    }
+  }
+
+  &__prefix {
+    font-size: 12px;
+    color: var(--color-text-secondary, #666666);
+    margin-right: 2px;
+  }
+
+  &__input {
+    flex: 1;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    border: none;
+    background: transparent;
+    font-size: 12px;
+    font-family: 'SF Mono', Monaco, 'Consolas', monospace;
+    color: var(--color-text, #333333);
+    outline: none;
+    text-transform: uppercase;
+
+    &::placeholder {
+      color: var(--color-text-tertiary, #999999);
+    }
+  }
+
+  &__alpha-group {
+    display: flex;
+    align-items: center;
+    width: 50px;
+    height: 28px;
+    padding: 0 6px;
+    background: var(--color-bg-secondary, #f5f5f5);
+    border: 1px solid var(--color-border, #e0e0e0);
+    border-radius: 4px;
+    transition: border-color 0.15s ease;
+
+    &:focus-within {
+      border-color: var(--color-primary, #1890ff);
+    }
+  }
+
+  &__alpha-input {
+    flex: 1;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    border: none;
+    background: transparent;
+    font-size: 12px;
+    font-family: 'SF Mono', Monaco, 'Consolas', monospace;
+    color: var(--color-text, #333333);
+    outline: none;
+    text-align: right;
+
+    &::placeholder {
+      color: var(--color-text-tertiary, #999999);
+    }
+  }
+
+  &__suffix {
+    font-size: 12px;
+    color: var(--color-text-secondary, #666666);
+    margin-left: 1px;
+  }
+}

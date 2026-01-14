@@ -20,6 +20,13 @@ export interface Translations {
   'toolbar.aiVideo': string;
   'toolbar.tasks': string;
   'toolbar.theme': string;
+  'toolbar.stroke': string;
+  'toolbar.strokeColor': string;
+  'toolbar.strokeWidth': string;
+  'toolbar.eraserSize': string;
+  'toolbar.fillColor': string;
+  'toolbar.fontColor': string;
+  'toolbar.fontSize': string;
 
   // Zoom controls
   'zoom.in': string;
@@ -168,6 +175,13 @@ const translations: Record<Language, Translations> = {
     'toolbar.aiVideo': 'AI 视频生成',
     'toolbar.tasks': '任务',
     'toolbar.theme': '主题色',
+    'toolbar.stroke': '描边',
+    'toolbar.strokeColor': '画笔颜色',
+    'toolbar.strokeWidth': '画笔大小',
+    'toolbar.eraserSize': '橡皮擦大小',
+    'toolbar.fillColor': '填充颜色',
+    'toolbar.fontColor': '字体颜色',
+    'toolbar.fontSize': '字号',
 
     // Zoom controls
     'zoom.in': '放大 — Cmd++',
@@ -313,6 +327,13 @@ const translations: Record<Language, Translations> = {
     'toolbar.aiVideo': 'AI Video Generation',
     'toolbar.tasks': 'Tasks',
     'toolbar.theme': 'Theme',
+    'toolbar.stroke': 'Stroke',
+    'toolbar.strokeColor': 'Pen Color',
+    'toolbar.strokeWidth': 'Pen Size',
+    'toolbar.eraserSize': 'Eraser Size',
+    'toolbar.fillColor': 'Fill Color',
+    'toolbar.fontColor': 'Font Color',
+    'toolbar.fontSize': 'Font Size',
 
     // Zoom controls
     'zoom.in': 'Zoom In — Cmd++',

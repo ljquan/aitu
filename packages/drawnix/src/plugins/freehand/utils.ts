@@ -18,20 +18,50 @@ import {
   isHitPolyLine,
   isRectangleHitRotatedPoints,
 } from '@plait/draw';
+import { StrokeStyle } from '@plait/common';
 
 export function getFreehandPointers() {
   return [FreehandShape.feltTipPen, FreehandShape.eraser];
 }
 
+/**
+ * 获取手绘元素的边界框（考虑 strokeWidth）
+ * @param element 手绘元素
+ * @returns 扩展后的边界框
+ */
+export function getFreehandRectangle(element: Freehand): RectangleClient {
+  const baseRect = RectangleClient.getRectangleByPoints(element.points);
+  // 获取 strokeWidth，默认值为 2
+  const strokeWidth = (element as any).strokeWidth ?? 2;
+  // 边界框需要向外扩展 strokeWidth / 2
+  const padding = strokeWidth / 2;
+  return {
+    x: baseRect.x - padding,
+    y: baseRect.y - padding,
+    width: baseRect.width + strokeWidth,
+    height: baseRect.height + strokeWidth,
+  };
+}
+
+export interface CreateFreehandOptions {
+  strokeWidth?: number;
+  strokeColor?: string;
+  strokeStyle?: StrokeStyle;
+}
+
 export const createFreehandElement = (
   shape: FreehandShape,
-  points: Point[]
+  points: Point[],
+  options?: CreateFreehandOptions
 ): Freehand => {
   const element: Freehand = {
     id: idCreator(),
     type: 'freehand',
     shape,
     points,
+    ...(options?.strokeWidth !== undefined && { strokeWidth: options.strokeWidth }),
+    ...(options?.strokeColor !== undefined && { strokeColor: options.strokeColor }),
+    ...(options?.strokeStyle !== undefined && { strokeStyle: options.strokeStyle }),
   };
   return element;
 };
@@ -49,6 +79,84 @@ export const isHitFreehand = (
     );
   } else {
     return isHitPolyLine(points, antiPoint);
+  }
+};
+
+/**
+ * 计算点到线段的最短距离
+ */
+function distanceToSegment(point: Point, segStart: Point, segEnd: Point): number {
+  const [px, py] = point;
+  const [x1, y1] = segStart;
+  const [x2, y2] = segEnd;
+  
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const lengthSquared = dx * dx + dy * dy;
+  
+  if (lengthSquared === 0) {
+    // 线段退化为点
+    return Math.sqrt((px - x1) ** 2 + (py - y1) ** 2);
+  }
+  
+  // 计算投影参数 t
+  let t = ((px - x1) * dx + (py - y1) * dy) / lengthSquared;
+  t = Math.max(0, Math.min(1, t));
+  
+  // 计算最近点
+  const nearestX = x1 + t * dx;
+  const nearestY = y1 + t * dy;
+  
+  return Math.sqrt((px - nearestX) ** 2 + (py - nearestY) ** 2);
+}
+
+/**
+ * 检测点是否在折线的指定半径范围内
+ */
+function isPointNearPolyLine(pathPoints: Point[], point: Point, radius: number): boolean {
+  if (pathPoints.length < 2) {
+    if (pathPoints.length === 1) {
+      const [px, py] = point;
+      const [x, y] = pathPoints[0];
+      return Math.sqrt((px - x) ** 2 + (py - y) ** 2) <= radius;
+    }
+    return false;
+  }
+  
+  for (let i = 0; i < pathPoints.length - 1; i++) {
+    const distance = distanceToSegment(point, pathPoints[i], pathPoints[i + 1]);
+    if (distance <= radius) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * 带半径的命中检测（用于橡皮擦）
+ * @param board 画板
+ * @param element 手绘元素
+ * @param point 检测点
+ * @param hitRadius 命中半径（橡皮擦大小的一半）
+ */
+export const isHitFreehandWithRadius = (
+  board: PlaitBoard,
+  element: Freehand,
+  point: Point,
+  hitRadius: number
+) => {
+  const antiPoint = rotateAntiPointsByElement(board, point, element) || point;
+  const points = element.points;
+  
+  if (isClosedPoints(element.points)) {
+    // 闭合路径：检测是否在多边形内或在边界半径范围内
+    return (
+      isPointInPolygon(antiPoint, points) || 
+      isPointNearPolyLine(points, antiPoint, hitRadius)
+    );
+  } else {
+    // 非闭合路径：检测是否在线段半径范围内
+    return isPointNearPolyLine(points, antiPoint, hitRadius);
   }
 };
 
@@ -84,6 +192,10 @@ export const getStrokeColorByElement = (
   board: PlaitBoard,
   element: PlaitElement
 ) => {
+  // 如果明确设置为 'none'，返回 'none'（无色）
+  if (element.strokeColor === 'none') {
+    return 'none';
+  }
   const defaultColor = getFreehandDefaultStrokeColor(
     board.theme.themeColorMode
   );
@@ -92,6 +204,10 @@ export const getStrokeColorByElement = (
 };
 
 export const getFillByElement = (board: PlaitBoard, element: PlaitElement) => {
+  // 如果明确设置为 'none'，返回 'none'（无色）
+  if (element.fill === 'none') {
+    return 'none';
+  }
   const defaultFill =
     Freehand.isFreehand(element) && isClosedCustomGeometry(board, element)
       ? getFreehandDefaultFill(board.theme.themeColorMode)

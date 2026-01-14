@@ -31,6 +31,7 @@ import {
   DrawnixState,
 } from './hooks/use-drawnix';
 import { ClosePencilToolbar } from './components/toolbar/pencil-mode-toolbar';
+import { PencilSettingsToolbar, EraserSettingsToolbar } from './components/toolbar/pencil-settings-toolbar';
 import { CleanConfirm } from './components/clean-confirm/clean-confirm';
 import { buildTextLinkPlugin } from './plugins/with-text-link';
 import { LinkPopup } from './components/popup/link-popup/link-popup';
@@ -61,6 +62,8 @@ import { AIInputBar } from './components/ai-input-bar';
 import { VersionUpdatePrompt } from './components/version-update/version-update-prompt';
 import { QuickCreationToolbar } from './components/toolbar/quick-creation-toolbar/quick-creation-toolbar';
 import { CacheQuotaProvider } from './components/cache-quota-provider/CacheQuotaProvider';
+import { RecentColorsProvider } from './components/unified-color-picker';
+import { usePencilCursor } from './hooks/usePencilCursor';
 
 const TTDDialog = lazy(() => import('./components/ttd-dialog/ttd-dialog').then(module => ({ default: module.TTDDialog })));
 const SettingsDialog = lazy(() => import('./components/settings-dialog/settings-dialog').then(module => ({ default: module.SettingsDialog })));
@@ -576,56 +579,58 @@ export const Drawnix: React.FC<DrawnixProps> = ({
 
   return (
     <I18nProvider>
-      <AssetProvider>
-        <ToolbarConfigProvider>
-          <CacheQuotaProvider onOpenMediaLibrary={handleOpenMediaLibrary}>
-            <ChatDrawerProvider>
-              <WorkflowProvider>
-                <DrawnixContext.Provider value={contextValue}>
-                  <DrawnixContent
-                    value={value}
-                    viewport={viewport}
-                    theme={theme}
-                    options={options}
-                    plugins={plugins}
-                    containerRef={containerRef}
-                    appState={appState}
-                    board={board}
-                    setBoard={setBoard}
-                    projectDrawerOpen={projectDrawerOpen}
-                    toolboxDrawerOpen={toolboxDrawerOpen}
-                    taskPanelExpanded={taskPanelExpanded}
-                    mediaLibraryOpen={mediaLibraryOpen}
-                    backupRestoreOpen={backupRestoreOpen}
-                    onChange={onChange}
-                    onSelectionChange={handleSelectionChange}
-                    onViewportChange={onViewportChange}
-                    onThemeChange={onThemeChange}
-                    onValueChange={onValueChange}
-                    afterInit={afterInit}
-                    onBoardSwitch={onBoardSwitch}
-                    handleProjectDrawerToggle={handleProjectDrawerToggle}
-                    handleToolboxDrawerToggle={handleToolboxDrawerToggle}
-                    handleTaskPanelToggle={handleTaskPanelToggle}
-                    setProjectDrawerOpen={setProjectDrawerOpen}
-                    setToolboxDrawerOpen={setToolboxDrawerOpen}
-                    setMediaLibraryOpen={setMediaLibraryOpen}
-                    setBackupRestoreOpen={setBackupRestoreOpen}
-                    handleBeforeSwitch={handleBeforeSwitch}
-                    isDataReady={isDataReady}
-                  />
-                  <Suspense fallback={null}>
-                    <MediaLibraryModal
-                      isOpen={mediaLibraryOpen}
-                      onClose={() => setMediaLibraryOpen(false)}
+      <RecentColorsProvider>
+        <AssetProvider>
+          <ToolbarConfigProvider>
+            <CacheQuotaProvider onOpenMediaLibrary={handleOpenMediaLibrary}>
+              <ChatDrawerProvider>
+                <WorkflowProvider>
+                  <DrawnixContext.Provider value={contextValue}>
+                    <DrawnixContent
+                      value={value}
+                      viewport={viewport}
+                      theme={theme}
+                      options={options}
+                      plugins={plugins}
+                      containerRef={containerRef}
+                      appState={appState}
+                      board={board}
+                      setBoard={setBoard}
+                      projectDrawerOpen={projectDrawerOpen}
+                      toolboxDrawerOpen={toolboxDrawerOpen}
+                      taskPanelExpanded={taskPanelExpanded}
+                      mediaLibraryOpen={mediaLibraryOpen}
+                      backupRestoreOpen={backupRestoreOpen}
+                      onChange={onChange}
+                      onSelectionChange={handleSelectionChange}
+                      onViewportChange={onViewportChange}
+                      onThemeChange={onThemeChange}
+                      onValueChange={onValueChange}
+                      afterInit={afterInit}
+                      onBoardSwitch={onBoardSwitch}
+                      handleProjectDrawerToggle={handleProjectDrawerToggle}
+                      handleToolboxDrawerToggle={handleToolboxDrawerToggle}
+                      handleTaskPanelToggle={handleTaskPanelToggle}
+                      setProjectDrawerOpen={setProjectDrawerOpen}
+                      setToolboxDrawerOpen={setToolboxDrawerOpen}
+                      setMediaLibraryOpen={setMediaLibraryOpen}
+                      setBackupRestoreOpen={setBackupRestoreOpen}
+                      handleBeforeSwitch={handleBeforeSwitch}
+                      isDataReady={isDataReady}
                     />
-                  </Suspense>
-                </DrawnixContext.Provider>
-              </WorkflowProvider>
-            </ChatDrawerProvider>
-          </CacheQuotaProvider>
-        </ToolbarConfigProvider>
-      </AssetProvider>
+                    <Suspense fallback={null}>
+                      <MediaLibraryModal
+                        isOpen={mediaLibraryOpen}
+                        onClose={() => setMediaLibraryOpen(false)}
+                      />
+                    </Suspense>
+                  </DrawnixContext.Provider>
+                </WorkflowProvider>
+              </ChatDrawerProvider>
+            </CacheQuotaProvider>
+          </ToolbarConfigProvider>
+        </AssetProvider>
+      </RecentColorsProvider>
     </I18nProvider>
   );
 };
@@ -695,6 +700,9 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
   isDataReady,
 }) => {
   const { chatDrawerRef } = useChatDrawer();
+
+  // 画笔自定义光标
+  usePencilCursor({ board, pointer: appState.pointer });
 
   // 快捷工具栏状态
   const [quickToolbarVisible, setQuickToolbarVisible] = useState(false);
@@ -799,6 +807,8 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
           <PopupToolbar></PopupToolbar>
           <LinkPopup></LinkPopup>
           <ClosePencilToolbar></ClosePencilToolbar>
+          <PencilSettingsToolbar></PencilSettingsToolbar>
+          <EraserSettingsToolbar></EraserSettingsToolbar>
           {appState.openDialogType && (
             <Suspense fallback={null}>
               <TTDDialog container={containerRef.current}></TTDDialog>

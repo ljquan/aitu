@@ -1,177 +1,150 @@
 # Update CLAUDE.md
 
-Intelligently update the CLAUDE.md documentation file when new features, plugins, or significant changes are added to the project.
+分析代码审查反馈或开发过程中发现的问题，提取通用规则并更新 CLAUDE.md。
 
-## Instructions
+## 说明
 
-You are tasked with updating the CLAUDE.md documentation to reflect new features or changes. Follow these steps:
+这个命令实现了 Boris Cherny 第 5 条技巧：Code Review 自动更新规则到 CLAUDE.md，让 AI 越来越懂你的项目。形成知识沉淀的飞轮效应。
 
-1. **Understand the change**:
-   - Identify what was added/modified (new plugin, feature, component, etc.)
-   - Determine the scope and impact of the change
-   - Locate relevant documentation files (if any)
+## 参数
 
-2. **Read CLAUDE.md structure**:
-   - Read the entire CLAUDE.md file to understand its structure
-   - Identify which sections need to be updated
-   - Note the existing documentation style and format
+- `$ARGUMENTS`: 描述发现的问题或规则（可选）
 
-3. **Update relevant sections**:
+## 工作流程
 
-   **For new plugins** (`packages/drawnix/src/plugins/`):
-   - Add to the plugin list in "功能插件 (plugins/)" section
-   - Add to the "编辑器插件系统" flow diagram
-   - Create a dedicated subsection under "核心功能流程" if it's a major feature
-   - Update the plugin count if mentioned
+### 1. 收集信息
 
-   **For new components** (`packages/drawnix/src/components/`):
-   - Add to the appropriate component category
-   - Include file path and brief description
-   - Add subsection if it's a major UI component
+如果提供了 `$ARGUMENTS`:
+- 解析用户描述的问题或规则
 
-   **For new hooks** (`packages/drawnix/src/hooks/`):
-   - Add to the "React Hooks" section
-   - Include brief description of purpose
+如果没有提供参数:
+- 询问用户发现了什么问题
+- 或检查最近的 git diff 和 commit 信息
+- 或查看是否有 PR review 评论
 
-   **For new utilities** (`packages/drawnix/src/utils/`):
-   - Add to the "工具函数" section
-   - Group with related utilities
+### 2. 分析问题
 
-   **For new documentation**:
-   - Add link to "相关文档" section
-   - Use format: `- /path/to/doc.md - Brief description`
+判断问题是否值得记录:
+- ✅ 会重复出现的模式
+- ✅ 项目特定的约定
+- ✅ 常见的错误类型
+- ❌ 一次性的拼写错误
+- ❌ 过于具体的业务逻辑
 
-4. **Create feature documentation section** (if major feature):
-   - Add a new subsection under "核心功能流程"
-   - Include:
-     - Brief overview
-     - Core files (with paths)
-     - Key features (bullet points)
-     - Usage example or workflow
-     - Configuration (if applicable)
-     - Link to detailed documentation
+### 3. 格式化规则
 
-   Example structure:
-   ```markdown
-   ### Feature Name
+使用统一的格式:
 
-   Brief description of what this feature does.
+```markdown
+### 错误 N: [问题标题]
 
-   **核心文件**：
-   - `path/to/file.ts` - Description
-   - `path/to/component.tsx` - Description
+**场景**: [何时会出现这个问题]
 
-   **功能特点**：
-   - Feature 1
-   - Feature 2
-   - Feature 3
+❌ **错误示例**:
+\`\`\`typescript
+// 错误的代码
+\`\`\`
 
-   **使用方法**：
-   1. Step 1
-   2. Step 2
-   3. Step 3
+✅ **正确示例**:
+\`\`\`typescript
+// 正确的代码
+\`\`\`
 
-   **配置参数** (if applicable):
-   ```typescript
-   const CONFIG = {
-     PARAM1: value,
-     PARAM2: value,
-   };
-   ```
-
-   详细文档：`/docs/FEATURE_NAME.md`
-   ```
-
-5. **Maintain consistency**:
-   - Follow existing formatting and style
-   - Use Chinese for descriptions (project uses Chinese documentation)
-   - Keep code examples in English
-   - Maintain alphabetical or logical ordering
-   - Use consistent indentation and spacing
-   - Preserve existing section structure
-
-6. **Verify updates**:
-   - Ensure all cross-references are correct
-   - Check that file paths are accurate
-   - Verify that the documentation is clear and complete
-   - Make sure no duplicate entries exist
-
-## Documentation Style Guidelines
-
-- **Language**: Use Chinese for descriptions, English for code
-- **File paths**: Use relative paths from project root
-- **Code blocks**: Use triple backticks with language identifier
-- **Lists**: Use `-` for unordered lists, numbers for ordered lists
-- **Emphasis**: Use `**bold**` for section headers, `code` for file/function names
-- **Structure**: Follow the existing hierarchy and organization
-
-## Common Update Patterns
-
-### Adding a Plugin
-1. Update `plugins/` directory listing
-2. Add to plugin flow diagram
-3. Create feature section if major
-4. Add to related documentation list
-
-### Adding a Component
-1. Update appropriate component category
-2. Add file path and description
-3. Create subsection if it's a major UI feature
-
-### Adding Documentation
-1. Add to "相关文档" section
-2. Link from relevant feature sections
-3. Ensure consistent formatting
-
-## Important Notes
-
-- NEVER remove existing content unless explicitly asked
-- ALWAYS preserve the existing structure and formatting
-- DO NOT add content that is not directly related to the change
-- Keep descriptions concise but informative
-- Use the same terminology as existing documentation
-- Verify all file paths are correct before updating
-
-## Example Usage
-
-When a new text paste plugin is added:
-1. Add `with-text-paste.ts` to plugins list
-2. Update plugin flow diagram
-3. Create "文本粘贴功能" subsection
-4. Add `/docs/TEXT_PASTE_FEATURE.md` to related docs
-5. Update `with-common.tsx` description to note it registers both plugins
-
-## Post-Development Cleanup
-
-**在需求开发完成后，必须执行以下清理步骤：**
-
-### 注释掉所有 console 日志
-
-开发完成后，需要注释掉项目中所有的 `console.log`、`console.debug`、`console.info` 日志（保留 `console.warn` 和 `console.error`）。
-
-**执行命令：**
-```bash
-# 批量注释 console.log/debug/info
-find packages/ apps/web/src/ -type f \( -name "*.ts" -o -name "*.tsx" \) \
-  ! -name "*.test.*" ! -path "*/node_modules/*" \
-  -exec sed -i '' 's/^\([[:space:]]*\)\(console\.\(log\|debug\|info\)\)/\1\/\/ \2/g' {} \;
+**原因**: [为什么这样做是错误的/正确的]
 ```
 
-**排除的文件：**
-- `packages/utils/src/logger/index.ts` - 日志工具本身
-- `packages/utils/src/async/index.ts` - 文档注释中的示例
-- 测试文件 (`*.test.*`)
+### 4. 定位更新位置
 
-**注意事项：**
-- 保留 `console.warn` 和 `console.error`（这些是有意义的警告和错误）
-- 对于在语句中间的 console（如 `isDev && console.log`），需要手动处理
-- 处理完后运行 TypeScript 检查确保没有语法错误
+读取 CLAUDE.md，确定规则应该添加到哪个章节:
 
-## Safety Checks
+- 开发规范相关 → `### Development Rules`
+- 编码标准相关 → `### Coding Standards`
+- TypeScript 相关 → `#### TypeScript Guidelines`
+- React 相关 → `#### React Component Guidelines`
+- 样式相关 → `#### CSS/SCSS Guidelines`
+- 性能相关 → `#### Performance Guidelines`
+- 安全相关 → `#### Security Guidelines`
+- Z-Index 相关 → `#### Z-Index Management`
 
-- Read CLAUDE.md before making changes
-- Verify the change is significant enough to document
-- Check for existing documentation of similar features
-- Ensure updates don't break existing cross-references
-- Preview changes mentally before writing
-- **开发完成后，确保所有 console 日志已被注释**
+如果没有合适的章节，考虑创建新章节或添加到通用的 `### Common Mistakes` 章节。
+
+### 5. 检查重复
+
+确认类似规则是否已存在:
+- 如果已存在，询问是否需要补充
+- 如果不存在，添加新规则
+
+### 6. 更新文件
+
+使用 Edit 工具更新 CLAUDE.md:
+- 保持现有格式
+- 在适当位置插入新规则
+- 如果需要，创建新章节
+
+### 7. 确认更新
+
+显示更新内容摘要:
+```markdown
+## 已更新 CLAUDE.md
+
+### 新增规则
+
+**位置**: `### Coding Standards > #### TypeScript Guidelines`
+
+**规则**: 避免在 useEffect 中直接调用异步函数
+
+**示例**:
+❌ useEffect(async () => { await fetch(...) }, [])
+✅ useEffect(() => { fetchData().catch(console.error) }, [])
+```
+
+### 8. 提交并推送到远程仓库
+
+将 CLAUDE.md 的更新提交并推送到远程仓库:
+
+```bash
+# 添加 CLAUDE.md 到暂存区
+git add CLAUDE.md
+
+# 提交更改
+git commit -m "docs(claude): 添加新规则 - [规则名称]"
+
+# 推送到远程仓库
+git push
+```
+
+**提交信息格式**:
+- `docs(claude): 添加新规则 - [规则名称]`
+- `docs(claude): 更新规则 - [规则名称]`
+- `docs(claude): 删除过时规则 - [规则名称]`
+
+## 示例用法
+
+```bash
+# 描述发现的问题
+/update-claude-md 发现 Claude 经常忘记给 TDesign 的 Tooltip 添加 theme='light'
+
+# 不带参数，交互式收集
+/update-claude-md
+```
+
+## 规则分类建议
+
+| 类型 | 示例 | 章节 |
+|------|------|------|
+| UI 组件 | Tooltip theme | Development Rules |
+| 类型定义 | 避免 any | TypeScript Guidelines |
+| Hooks 使用 | useEffect 依赖 | React Component Guidelines |
+| 样式规范 | BEM 命名 | CSS/SCSS Guidelines |
+| 性能优化 | React.memo | Performance Guidelines |
+| 安全问题 | XSS 防护 | Security Guidelines |
+| 层级管理 | z-index | Z-Index Management |
+
+## 注意事项
+
+- 规则应该简洁明了
+- 必须包含错误和正确示例
+- 解释原因帮助理解
+- 避免过于冗长的描述
+- 定期审查并清理过时规则
+- 提交前确认规则内容正确无误

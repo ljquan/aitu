@@ -12,6 +12,7 @@
 @import '../components/toolbox-drawer/toolbox-drawer.scss';
 @import '../components/minimap/minimap.scss';
 @import '../components/ai-input-bar/ai-input-bar.scss'; // AI 输入框
+@import '../components/toolbar/pencil-settings-toolbar/pencil-settings-toolbar.scss'; // 画笔设置工具栏
 
 .t-dialog__ctx.t-dialog__ctx--fixed{
     z-index: $z-dialog !important;
@@ -42,6 +43,16 @@
             padding: 0 8px;
             background-color: var(--color-surface-mid);
         }
+    }
+    .pencil-settings-toolbar {
+        position: absolute;
+        top: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: $z-unified-toolbar;
+        background: var(--color-surface-high);
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
     }
     .draw-toolbar {
         cursor: default;
@@ -438,11 +449,8 @@
 }
 
 .plait-board-container {
-    &.pointer-eraser {
-        .board-host-svg {
-            cursor: url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHZpZXdCb3g9IjAgMCAyMCAyMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMTAiIGN5PSIxMCIgcj0iNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjNjY2IiBzdHJva2Utd2lkdGg9IjEuNSIvPgo8L3N2Zz4=') 10 10, crosshair !important;
-        } 
-    }
+    // 橡皮擦光标由 JavaScript 动态设置（usePencilCursor hook）
+    // 不再使用固定大小的 CSS 光标
     .slate-editable-container {
         cursor: inherit !important;
     }

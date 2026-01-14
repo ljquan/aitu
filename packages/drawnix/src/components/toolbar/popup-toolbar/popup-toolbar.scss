@@ -37,8 +37,31 @@
     &.has-stroke-style {
         padding-top: 8px !important;
     }
-    .stroke-style-picker {
-        justify-content: space-between;
+    .stroke-style-section {
+        display: flex;
+        align-items: center;
+        gap: 8px;
         padding: 0 8px;
+        margin-bottom: 8px;
+    }
+    .stroke-style-label {
+        font-size: 12px;
+        color: #666;
+        white-space: nowrap;
+    }
+    .stroke-style-picker {
+        justify-content: flex-start;
+        gap: 4px;
+    }
+    // 限制拾色器宽度与文字设置面板一致
+    .unified-color-picker {
+        width: 280px;
+    }
+}
+
+// 填充拾色器宽度限制
+.fill-setting {
+    .unified-color-picker {
+        width: 280px;
     }
 }

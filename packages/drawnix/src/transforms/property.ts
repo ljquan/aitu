@@ -1,4 +1,4 @@
-import { PropertyTransforms, Alignment } from '@plait/common';
+import { PropertyTransforms, Alignment, StrokeStyle } from '@plait/common';
 import {
   isNullOrUndefined,
   Path,
@@ -54,7 +54,7 @@ export const setFillColor = (board: PlaitBoard, fillColor: string) => {
       const currentFill = getCurrentFill(board, element);
       const currentOpacity = hexAlphaToOpacity(currentFill);
       if (isNoColor(fillColor)) {
-        Transforms.setNode(board, { fill: null }, path);
+        Transforms.setNode(board, { fill: 'none' }, path);
       } else {
         if (
           isNullOrUndefined(currentOpacity) ||
@@ -97,7 +97,7 @@ export const setStrokeColor = (board: PlaitBoard, newColor: string) => {
       const currentStrokeColor = getCurrentStrokeColor(board, element);
       const currentOpacity = hexAlphaToOpacity(currentStrokeColor);
       if (isNoColor(newColor)) {
-        Transforms.setNode(board, { strokeColor: null }, path);
+        Transforms.setNode(board, { strokeColor: 'none' }, path);
       } else {
         if (
           isNullOrUndefined(currentOpacity) ||
@@ -112,6 +112,15 @@ export const setStrokeColor = (board: PlaitBoard, newColor: string) => {
           );
         }
       }
+    },
+  });
+};
+
+export const setStrokeStyle = (board: PlaitBoard, strokeStyle: StrokeStyle) => {
+  PropertyTransforms.setStrokeStyle(board, strokeStyle, {
+    getMemorizeKey,
+    callback: (element: PlaitElement, path: Path) => {
+      Transforms.setNode(board, { strokeStyle }, path);
     },
   });
 };

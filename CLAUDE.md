@@ -1217,6 +1217,43 @@ setInterval(() => {
 
 **原因**: 本项目的素材库通过 `taskQueueService.getTasksByStatus(COMPLETED)` 获取 AI 生成的素材。如果自动删除已完成的任务，素材库就无法展示这些 AI 生成的图片/视频。类似地，聊天历史、工作流数据都是用户的重要数据，不应被自动删除。
 
+### 调试日志清理规范
+
+**场景**: 开发功能时添加 `console.log` 调试日志
+
+❌ **错误示例**:
+```typescript
+// 开发时添加了大量调试日志，提交时忘记删除
+function handleClick(event: PointerEvent) {
+  console.log('[MyComponent] handleClick:', event);
+  console.log('[MyComponent] current state:', state);
+  // 业务逻辑...
+  console.log('[MyComponent] result:', result);
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 提交前删除所有调试日志
+function handleClick(event: PointerEvent) {
+  // 业务逻辑...
+}
+
+// 如果确实需要保留日志，使用注释形式
+function complexFunction() {
+  // console.log('[Debug] intermediate value:', value);
+  // 业务逻辑...
+}
+```
+
+**提交前检查命令**:
+```bash
+# 检查 staged 更改中是否有新增的 console.log
+git diff --cached | grep -E "^\+.*console\.(log|debug|info)" | head -20
+```
+
+**原因**: 调试日志会污染控制台输出，影响生产环境的日志分析，也会增加代码体积。开发时可以自由添加日志，但提交前必须清理。如果某些日志对生产调试有价值，应使用注释形式保留或使用专门的日志服务。
+
 ### Z-Index 管理规范
 
 **规范文档**: 参考 `docs/Z_INDEX_GUIDE.md` 获取完整规范
@@ -1325,6 +1362,76 @@ nx lint drawnix         # 代码规范
 nx test drawnix         # 单元测试
 pnpm run build          # 构建验证
 ```
+
+### CSS !important 覆盖 JavaScript 动态样式
+
+**场景**: 需要通过 JavaScript 动态设置元素样式（如光标、颜色、尺寸），但 CSS 中存在 `!important` 规则
+
+❌ **错误示例**:
+```scss
+// SCSS 中使用 !important 固定光标样式
+.plait-board-container {
+  &.pointer-eraser {
+    .board-host-svg {
+      cursor: url('data:image/svg+xml;base64,...') 10 10, crosshair !important;
+    }
+  }
+}
+```
+```typescript
+// JavaScript 动态设置光标被 CSS !important 覆盖，无效
+function applyCursorStyle(board: PlaitBoard, size: number) {
+  const hostSvg = document.querySelector('.board-host-svg');
+  hostSvg.style.cursor = generateCursorSvg(size); // 被 !important 覆盖！
+}
+```
+
+✅ **正确示例**:
+```scss
+// SCSS 中不使用 !important，或完全移除静态规则
+.plait-board-container {
+  // 光标由 JavaScript 动态设置（usePencilCursor hook）
+  // 不再使用固定大小的 CSS 光标
+}
+```
+```typescript
+// JavaScript 动态设置光标正常生效
+function applyCursorStyle(board: PlaitBoard, size: number) {
+  const hostSvg = document.querySelector('.board-host-svg');
+  hostSvg.style.cursor = generateCursorSvg(size); // 正常生效
+}
+```
+
+**原因**: CSS 的 `!important` 规则优先级高于 JavaScript 设置的内联样式。当需要动态控制样式时（如根据用户设置调整光标大小），必须移除 CSS 中的 `!important` 规则，否则 JavaScript 的样式设置会被完全覆盖。
+
+**检查方法**: 如果 JavaScript 设置的样式不生效，在浏览器开发者工具中检查元素样式，查看是否有 `!important` 规则覆盖。
+
+### Freehand 元素属性设置需要自定义 callback
+
+**场景**: 修改 Freehand（手绘线条）元素的属性（如 strokeStyle、strokeColor）时
+
+❌ **错误示例**:
+```typescript
+// 错误：直接使用 PropertyTransforms，Freehand 元素可能不被正确处理
+const setStrokeStyle = (style: StrokeStyle) => {
+  PropertyTransforms.setStrokeStyle(board, style, { getMemorizeKey });
+};
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：使用 callback 确保所有选中元素都被处理
+export const setStrokeStyle = (board: PlaitBoard, strokeStyle: StrokeStyle) => {
+  PropertyTransforms.setStrokeStyle(board, strokeStyle, {
+    getMemorizeKey,
+    callback: (element: PlaitElement, path: Path) => {
+      Transforms.setNode(board, { strokeStyle }, path);
+    },
+  });
+};
+```
+
+**原因**: `PropertyTransforms` 的默认行为可能不会处理所有类型的元素（如自定义的 Freehand 元素）。通过提供 `callback` 函数，可以确保对所有选中的元素执行属性设置操作。颜色设置（`setStrokeColor`、`setFillColor`）也使用了相同的模式。
 
 ### 性能指南
 - 使用 `React.lazy` 对大型组件进行代码分割
