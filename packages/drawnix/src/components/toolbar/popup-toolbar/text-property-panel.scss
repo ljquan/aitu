@@ -1073,9 +1073,9 @@
   }
 }
 
-// 颜色选择器弹出层
+// 颜色选择器弹出层 - 与设置面板同宽
 .color-picker-popover {
-  min-width: 240px;
+  width: 320px;
   background: #ffffff;
   border-radius: 8px;
 }
