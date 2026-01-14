@@ -738,7 +738,8 @@ export const PopupToolbar = () => {
                     const { unifiedCacheService } = await import('../../../services/unified-cache-service');
                     const taskId = `merged-image-${Date.now()}`;
                     const stableUrl = `/__aitu_cache__/image/${taskId}.png`;
-                    const cacheKey = `${location.origin}${stableUrl}`;
+                    // 使用相对路径作为缓存 key，避免代理场景下 origin 不一致导致缓存查找失败
+                    const cacheKey = stableUrl;
 
                     // 缓存到 Cache API
                     await unifiedCacheService.cacheMediaFromBlob(cacheKey, blob, 'image', { taskId });

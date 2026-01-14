@@ -312,8 +312,8 @@ async function mergeVideosWithMediaRecorder(
     // 格式: /__aitu_cache__/video/{taskId}.mp4
     const stableUrl = `/__aitu_cache__/video/${taskId}.mp4`;
 
-    // 使用完整 URL 作为缓存 key，确保主线程和 Service Worker 使用相同的 key
-    const cacheKey = `${location.origin}${stableUrl}`;
+    // 使用相对路径作为缓存 key，避免代理场景下 origin 不一致导致缓存查找失败
+    const cacheKey = stableUrl;
 
     // 缓存 blob
     await unifiedCacheService.cacheMediaFromBlob(

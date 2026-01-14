@@ -975,20 +975,26 @@ async function handleCacheUrlRequest(request: Request): Promise<Response> {
   const url = new URL(request.url);
   const rangeHeader = request.headers.get('range');
 
-  // 使用完整 URL 作为缓存 key（与主线程保持一致）
-  const cacheKey = request.url;
-
   // 通过路径或扩展名判断是否为视频
   const isVideo = url.pathname.includes('/video/') || /\.(mp4|webm|ogg|mov)$/i.test(url.pathname);
 
-  console.log(`Service Worker: Handling cache URL request:`, { cacheKey, pathname: url.pathname, isVideo });
+  console.log(`Service Worker: Handling cache URL request:`, { fullUrl: request.url, pathname: url.pathname, isVideo });
 
   try {
     // 从 Cache API 获取
     const cache = await caches.open(IMAGE_CACHE_NAME);
-    const cachedResponse = await cache.match(cacheKey);
+    
+    // 优先使用完整 URL 匹配，没找到再用 pathname 匹配
+    // 兼容两种缓存 key 格式（完整 URL 和相对路径）
+    let cachedResponse = await cache.match(request.url);
+    let matchedKey = request.url;
+    
+    if (!cachedResponse) {
+      cachedResponse = await cache.match(url.pathname);
+      matchedKey = url.pathname;
+    }
 
-    console.log(`Service Worker: Cache lookup result:`, { cacheKey, found: !!cachedResponse });
+    console.log(`Service Worker: Cache lookup result:`, { matchedKey, found: !!cachedResponse });
 
     if (cachedResponse) {
       const blob = await cachedResponse.blob();
@@ -1012,7 +1018,7 @@ async function handleCacheUrlRequest(request: Request): Promise<Response> {
     }
 
     // 如果 Cache API 没有，返回 404
-    console.error(`Service Worker: Media not found in cache:`, cacheKey);
+    console.error(`Service Worker: Media not found in cache:`, { fullUrl: request.url, pathname: url.pathname });
     return new Response('Media not found', {
       status: 404,
       statusText: 'Not Found',
