@@ -1399,6 +1399,45 @@ function findElements(assetUrl: string) {
 - 画布元素可能使用相对路径（由 Service Worker 拦截）
 - 同一资源的两种 URL 形式必须能相互匹配
 
+### Service Worker 内部处理虚拟路径 URL
+
+**场景**: 在 Service Worker 内部需要获取 `/__aitu_cache__/` 或 `/asset-library/` 等虚拟路径的资源时
+
+❌ **错误示例: 使用 fetch 获取虚拟路径**
+```typescript
+// 错误：SW 内部的 fetch 不会触发 SW 的 fetch 事件拦截
+async function processReferenceImage(url: string) {
+  if (url.startsWith('/__aitu_cache__/')) {
+    const response = await fetch(url);  // ❌ 这个请求不会被 SW 拦截！
+    const blob = await response.blob();  // 会失败或返回 404
+    return blobToBase64(blob);
+  }
+}
+```
+
+✅ **正确示例: 直接从 Cache API 获取**
+```typescript
+// 正确：直接从 Cache API 获取，绕过 fetch
+async function processReferenceImage(url: string) {
+  if (url.startsWith('/__aitu_cache__/')) {
+    const cache = await caches.open(IMAGE_CACHE_NAME);
+    // 缓存 key 是完整 URL（包含 origin）
+    const cacheKey = `${self.location.origin}${url}`;
+    const cachedResponse = await cache.match(cacheKey);
+    if (cachedResponse) {
+      const blob = await cachedResponse.blob();
+      return blobToBase64(blob);
+    }
+  }
+}
+```
+
+**原因**:
+- Service Worker 的 fetch 事件只拦截来自页面（客户端）的请求
+- SW 内部发起的 fetch 请求不会触发自身的 fetch 事件（避免无限循环）
+- 因此必须直接从 Cache API 获取，而不是通过 fetch
+- 注意缓存 key 是完整 URL，需要用 `self.location.origin` 构造
+
 ### 图像处理工具复用规范
 
 **场景**: 需要对图片进行边框检测、去白边、裁剪等处理时
