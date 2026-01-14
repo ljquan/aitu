@@ -39,6 +39,7 @@ export const withFreehandCreate = (board: PlaitBoard) => {
     return {
       strokeWidth: settings.strokeWidth,
       strokeColor: settings.strokeColor,
+      strokeStyle: settings.strokeStyle,
     };
   };
 

@@ -17,12 +17,19 @@ import {
   getFreehandSettings,
   setFreehandStrokeWidth,
   setFreehandStrokeColor,
+  setFreehandStrokeStyle,
 } from '../../../plugins/freehand/freehand-settings';
 import { FreehandShape } from '../../../plugins/freehand/type';
 import { getFreehandPointers } from '../../../plugins/freehand/utils';
 import { useI18n } from '../../../i18n';
 import { useViewportScale } from '../../../hooks/useViewportScale';
 import { updatePencilCursor } from '../../../hooks/usePencilCursor';
+import { StrokeStyle } from '@plait/common';
+import {
+  StrokeStyleNormalIcon,
+  StrokeStyleDashedIcon,
+  StrokeStyleDotedIcon,
+} from '../../icons';
 import './pencil-settings-toolbar.scss';
 
 // 预设画笔大小
@@ -62,6 +69,7 @@ export const PencilSettingsToolbar: React.FC = () => {
   const settings = getFreehandSettings(board);
   const [strokeWidth, setStrokeWidth] = useState(settings.strokeWidth);
   const [strokeColor, setStrokeColor] = useState(settings.strokeColor);
+  const [strokeStyle, setStrokeStyleState] = useState(settings.strokeStyle);
   const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
   const [isWidthPickerOpen, setIsWidthPickerOpen] = useState(false);
   const [inputValue, setInputValue] = useState(String(settings.strokeWidth));
@@ -78,6 +86,7 @@ export const PencilSettingsToolbar: React.FC = () => {
     const newSettings = getFreehandSettings(board);
     setStrokeWidth(newSettings.strokeWidth);
     setStrokeColor(newSettings.strokeColor);
+    setStrokeStyleState(newSettings.strokeStyle);
     setInputValue(String(newSettings.strokeWidth));
   }, [board, appState.pointer]);
 
@@ -128,6 +137,12 @@ export const PencilSettingsToolbar: React.FC = () => {
     // 更新光标
     updatePencilCursor(board, appState.pointer);
   }, [board, appState.pointer]);
+
+  // 处理描边样式变化
+  const handleStrokeStyleChange = useCallback((style: StrokeStyle) => {
+    setStrokeStyleState(style);
+    setFreehandStrokeStyle(board, style);
+  }, [board]);
 
   // 只在选择画笔指针时显示（不包括橡皮擦）
   if (!isPencilPointer) {
@@ -188,6 +203,37 @@ export const PencilSettingsToolbar: React.FC = () => {
               </Island>
             </PopoverContent>
         </Popover>
+
+        {/* 描边样式选择 */}
+        <div className="pencil-stroke-style-picker">
+          <ToolButton
+            className={classNames('pencil-stroke-style-button', { active: strokeStyle === StrokeStyle.solid })}
+            type="button"
+            visible={true}
+            icon={StrokeStyleNormalIcon}
+            title="实线"
+            aria-label="实线"
+            onPointerUp={() => handleStrokeStyleChange(StrokeStyle.solid)}
+          />
+          <ToolButton
+            className={classNames('pencil-stroke-style-button', { active: strokeStyle === StrokeStyle.dashed })}
+            type="button"
+            visible={true}
+            icon={StrokeStyleDashedIcon}
+            title="虚线"
+            aria-label="虚线"
+            onPointerUp={() => handleStrokeStyleChange(StrokeStyle.dashed)}
+          />
+          <ToolButton
+            className={classNames('pencil-stroke-style-button', { active: strokeStyle === StrokeStyle.dotted })}
+            type="button"
+            visible={true}
+            icon={StrokeStyleDotedIcon}
+            title="点线"
+            aria-label="点线"
+            onPointerUp={() => handleStrokeStyleChange(StrokeStyle.dotted)}
+          />
+        </div>
 
         {/* 画笔大小选择 */}
         <Popover

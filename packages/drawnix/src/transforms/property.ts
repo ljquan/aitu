@@ -1,4 +1,4 @@
-import { PropertyTransforms, Alignment } from '@plait/common';
+import { PropertyTransforms, Alignment, StrokeStyle } from '@plait/common';
 import {
   isNullOrUndefined,
   Path,
@@ -112,6 +112,15 @@ export const setStrokeColor = (board: PlaitBoard, newColor: string) => {
           );
         }
       }
+    },
+  });
+};
+
+export const setStrokeStyle = (board: PlaitBoard, strokeStyle: StrokeStyle) => {
+  PropertyTransforms.setStrokeStyle(board, strokeStyle, {
+    getMemorizeKey,
+    callback: (element: PlaitElement, path: Path) => {
+      Transforms.setNode(board, { strokeStyle }, path);
     },
   });
 };

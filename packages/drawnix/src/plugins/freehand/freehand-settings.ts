@@ -1,14 +1,16 @@
 /**
  * 画笔设置状态管理
- * 管理画笔的 strokeWidth 和 strokeColor
+ * 管理画笔的 strokeWidth、strokeColor 和 strokeStyle
  * 管理橡皮擦的 eraserWidth
  */
 
 import { PlaitBoard, DEFAULT_COLOR } from '@plait/core';
+import { StrokeStyle } from '@plait/common';
 
 export interface FreehandSettings {
   strokeWidth: number;
   strokeColor: string;
+  strokeStyle: StrokeStyle;
   eraserWidth: number;
 }
 
@@ -16,6 +18,7 @@ export interface FreehandSettings {
 const DEFAULT_FREEHAND_SETTINGS: FreehandSettings = {
   strokeWidth: 2,
   strokeColor: DEFAULT_COLOR,
+  strokeStyle: StrokeStyle.solid,
   eraserWidth: 20,
 };
 
@@ -43,6 +46,14 @@ export const setFreehandStrokeWidth = (board: PlaitBoard, strokeWidth: number) =
 export const setFreehandStrokeColor = (board: PlaitBoard, strokeColor: string) => {
   const current = getFreehandSettings(board);
   FREEHAND_SETTINGS.set(board, { ...current, strokeColor });
+};
+
+/**
+ * 设置画笔描边样式
+ */
+export const setFreehandStrokeStyle = (board: PlaitBoard, strokeStyle: StrokeStyle) => {
+  const current = getFreehandSettings(board);
+  FREEHAND_SETTINGS.set(board, { ...current, strokeStyle });
 };
 
 /**

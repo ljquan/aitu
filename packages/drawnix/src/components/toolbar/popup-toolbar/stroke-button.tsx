@@ -19,11 +19,11 @@ import {
 } from '../../icons';
 import { Popover, PopoverContent, PopoverTrigger } from '../../popover/popover';
 import Stack from '../../stack';
-import { PropertyTransforms, StrokeStyle } from '@plait/common';
-import { getMemorizeKey } from '@plait/draw';
+import { StrokeStyle } from '@plait/common';
 import {
   setStrokeColor,
   setStrokeColorOpacity,
+  setStrokeStyle as setStrokeStyleTransform,
 } from '../../../transforms/property';
 
 export type PopupStrokeButtonProps = {
@@ -53,7 +53,7 @@ export const PopupStrokeButton: React.FC<PopupStrokeButtonProps> = ({
     : undefined;
 
   const setStrokeStyle = (style: StrokeStyle) => {
-    PropertyTransforms.setStrokeStyle(board, style, { getMemorizeKey });
+    setStrokeStyleTransform(board, style);
   };
 
   const handleColorChange = useCallback((color: string) => {
@@ -99,38 +99,35 @@ export const PopupStrokeButton: React.FC<PopupStrokeButtonProps> = ({
         >
           <Stack.Col>
             {hasStrokeStyle && (
-              <Stack.Row className={classNames('stroke-style-picker')}>
-                <ToolButton
-                  visible={true}
-                  icon={StrokeStyleNormalIcon}
-                  type="button"
-                  title={title}
-                  aria-label={title}
-                  onPointerUp={() => {
-                    setStrokeStyle(StrokeStyle.solid);
-                  }}
-                ></ToolButton>
-                <ToolButton
-                  visible={true}
-                  icon={StrokeStyleDashedIcon}
-                  type="button"
-                  title={title}
-                  aria-label={title}
-                  onPointerUp={() => {
-                    setStrokeStyle(StrokeStyle.dashed);
-                  }}
-                ></ToolButton>
-                <ToolButton
-                  visible={true}
-                  icon={StrokeStyleDotedIcon}
-                  type="button"
-                  title={title}
-                  aria-label={title}
-                  onPointerUp={() => {
-                    setStrokeStyle(StrokeStyle.dotted);
-                  }}
-                ></ToolButton>
-              </Stack.Row>
+              <div className="stroke-style-section">
+                <span className="stroke-style-label">样式：</span>
+                <Stack.Row className={classNames('stroke-style-picker')}>
+                  <ToolButton
+                    visible={true}
+                    icon={StrokeStyleNormalIcon}
+                    type="button"
+                    title="实线"
+                    aria-label="实线"
+                    onPointerUp={() => setStrokeStyle(StrokeStyle.solid)}
+                  ></ToolButton>
+                  <ToolButton
+                    visible={true}
+                    icon={StrokeStyleDashedIcon}
+                    type="button"
+                    title="虚线"
+                    aria-label="虚线"
+                    onPointerUp={() => setStrokeStyle(StrokeStyle.dashed)}
+                  ></ToolButton>
+                  <ToolButton
+                    visible={true}
+                    icon={StrokeStyleDotedIcon}
+                    type="button"
+                    title="点线"
+                    aria-label="点线"
+                    onPointerUp={() => setStrokeStyle(StrokeStyle.dotted)}
+                  ></ToolButton>
+                </Stack.Row>
+              </div>
             )}
             <UnifiedColorPicker
               value={currentColor}

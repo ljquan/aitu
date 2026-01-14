@@ -30,15 +30,16 @@ export interface ToolbarConfig {
 /**
  * 当前配置版本
  */
-export const TOOLBAR_CONFIG_VERSION = 3;
+export const TOOLBAR_CONFIG_VERSION = 4;
 
 /**
  * 默认显示的按钮
- * 顺序: 手形、选择、文本、图片上传、素材库、AI图片、AI视频
+ * 顺序: 手形、选择、画笔、文本、图片上传、素材库、AI图片、AI视频
  */
 export const DEFAULT_VISIBLE_BUTTONS = [
   'hand',
   'selection',
+  'freehand',
   'text',
   'image',
   'media-library',
@@ -53,6 +54,7 @@ export const ALL_BUTTON_IDS = [
   // 默认显示的按钮
   'hand',
   'selection',
+  'freehand',
   'text',
   'image',
   'media-library',
@@ -60,7 +62,6 @@ export const ALL_BUTTON_IDS = [
   'ai-video',
   // 默认收起的按钮（放在更多工具里）
   'mind',
-  'freehand',
   'arrow',
   'shape',
   'theme',
