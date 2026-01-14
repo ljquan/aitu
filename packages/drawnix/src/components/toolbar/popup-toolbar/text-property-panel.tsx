@@ -11,6 +11,8 @@ import { PlaitBoard } from '@plait/core';
 import { FontSizes, TextTransforms } from '@plait/text-plugins';
 import { useI18n } from '../../../i18n';
 import { UnifiedColorPicker } from '../../unified-color-picker';
+import { Popover, PopoverContent, PopoverTrigger } from '../../popover/popover';
+import { Island } from '../../island';
 import {
   setTextFontSize,
   setTextFontFamily,
@@ -102,6 +104,12 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({
   
   // 颜色状态 - 用于受控的 UnifiedColorPicker
   const [colorValue, setColorValue] = useState(currentColor || '#000000');
+
+  // 阴影颜色选择器 Popover 状态
+  const [shadowColorPickerOpen, setShadowColorPickerOpen] = useState(false);
+  
+  // 渐变色标颜色选择器 Popover 状态
+  const [gradientStopColorPickerOpen, setGradientStopColorPickerOpen] = useState<number | null>(null);
 
   // 从 IndexedDB 加载渐变数据
   useEffect(() => {
@@ -758,24 +766,46 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({
                     <div className="inline-control">
                       <label className="inline-control__label">{language === 'zh' ? '颜色' : 'Color'}</label>
                       <div className="inline-control__color-group">
-                        <input
-                          type="color"
-                          className="inline-control__color-input"
-                          value={shadowConfig.color.startsWith('rgba') 
-                            ? `#${shadowConfig.color.match(/\d+/g)?.slice(0, 3).map(n => parseInt(n).toString(16).padStart(2, '0')).join('') || '000000'}`
-                            : shadowConfig.color}
-                          onChange={(e) => {
-                            // 转换为 rgba 格式，保留当前透明度
-                            const hex = e.target.value;
-                            const r = parseInt(hex.slice(1, 3), 16);
-                            const g = parseInt(hex.slice(3, 5), 16);
-                            const b = parseInt(hex.slice(5, 7), 16);
-                            // 从当前 color 提取 alpha
-                            const alphaMatch = shadowConfig.color.match(/[\d.]+\)$/);
-                            const alpha = alphaMatch ? parseFloat(alphaMatch[0]) : 0.5;
-                            handleShadowConfigChange('color', `rgba(${r}, ${g}, ${b}, ${alpha})`);
-                          }}
-                        />
+                        <Popover
+                          open={shadowColorPickerOpen}
+                          onOpenChange={setShadowColorPickerOpen}
+                          placement="bottom"
+                          sideOffset={8}
+                        >
+                          <PopoverTrigger asChild>
+                            <button
+                              className="inline-control__color-trigger"
+                              style={{
+                                backgroundColor: shadowConfig.color.startsWith('rgba') 
+                                  ? `#${shadowConfig.color.match(/\d+/g)?.slice(0, 3).map(n => parseInt(n).toString(16).padStart(2, '0')).join('') || '000000'}`
+                                  : shadowConfig.color
+                              }}
+                              onClick={() => setShadowColorPickerOpen(!shadowColorPickerOpen)}
+                            />
+                          </PopoverTrigger>
+                          <PopoverContent>
+                            <Island padding={4} className="color-picker-popover">
+                              <UnifiedColorPicker
+                                value={shadowConfig.color.startsWith('rgba') 
+                                  ? `#${shadowConfig.color.match(/\d+/g)?.slice(0, 3).map(n => parseInt(n).toString(16).padStart(2, '0')).join('') || '000000'}`
+                                  : shadowConfig.color}
+                                onChange={(hex) => {
+                                  const r = parseInt(hex.slice(1, 3), 16);
+                                  const g = parseInt(hex.slice(3, 5), 16);
+                                  const b = parseInt(hex.slice(5, 7), 16);
+                                  const alphaMatch = shadowConfig.color.match(/[\d.]+\)$/);
+                                  const alpha = alphaMatch ? parseFloat(alphaMatch[0]) : 0.5;
+                                  handleShadowConfigChange('color', `rgba(${r}, ${g}, ${b}, ${alpha})`);
+                                }}
+                                showAlpha={false}
+                                showEyeDropper={true}
+                                showPresets={true}
+                                showRecentColors={true}
+                                showHexInput={true}
+                              />
+                            </Island>
+                          </PopoverContent>
+                        </Popover>
                         <input
                           type="range"
                           className="inline-control__slider inline-control__slider--short"
@@ -789,7 +819,6 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({
                           title={language === 'zh' ? '透明度' : 'Opacity'}
                           onChange={(e) => {
                             const alpha = Number(e.target.value) / 100;
-                            // 从当前 color 提取 RGB
                             const rgbMatch = shadowConfig.color.match(/\d+/g);
                             if (rgbMatch && rgbMatch.length >= 3) {
                               const [r, g, b] = rgbMatch.slice(0, 3);
@@ -967,18 +996,39 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({
                       <div className="gradient-editor__stops">
                         {gradientStops.map((stop, index) => (
                           <div key={index} className="gradient-editor__stop">
-                            <input
-                              type="color"
-                              className="gradient-editor__stop-color"
-                              value={stop.color}
-                              onChange={(e) => {
-                                const newStops = [...gradientStops];
-                                newStops[index] = { ...stop, color: e.target.value };
-                                setGradientStops(newStops);
-                                setSelectedGradientPreset(null);
-                                setTimeout(applyGradientConfig, 100);
-                              }}
-                            />
+                            <Popover
+                              open={gradientStopColorPickerOpen === index}
+                              onOpenChange={(open) => setGradientStopColorPickerOpen(open ? index : null)}
+                              placement="bottom"
+                              sideOffset={8}
+                            >
+                              <PopoverTrigger asChild>
+                                <button
+                                  className="gradient-editor__stop-color-trigger"
+                                  style={{ backgroundColor: stop.color }}
+                                  onClick={() => setGradientStopColorPickerOpen(gradientStopColorPickerOpen === index ? null : index)}
+                                />
+                              </PopoverTrigger>
+                              <PopoverContent>
+                                <Island padding={4} className="color-picker-popover">
+                                  <UnifiedColorPicker
+                                    value={stop.color}
+                                    onChange={(color) => {
+                                      const newStops = [...gradientStops];
+                                      newStops[index] = { ...stop, color };
+                                      setGradientStops(newStops);
+                                      setSelectedGradientPreset(null);
+                                      setTimeout(applyGradientConfig, 100);
+                                    }}
+                                    showAlpha={false}
+                                    showEyeDropper={true}
+                                    showPresets={true}
+                                    showRecentColors={true}
+                                    showHexInput={true}
+                                  />
+                                </Island>
+                              </PopoverContent>
+                            </Popover>
                             <input
                               type="range"
                               className="gradient-editor__stop-position"

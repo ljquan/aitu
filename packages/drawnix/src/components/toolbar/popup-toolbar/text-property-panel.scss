@@ -597,6 +597,27 @@
       }
     }
 
+    &__color-trigger {
+      width: 28px;
+      height: 28px;
+      border: 1px solid #e5e7eb;
+      border-radius: 4px;
+      cursor: pointer;
+      padding: 0;
+      flex-shrink: 0;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+
+      &:hover {
+        border-color: #3b82f6;
+      }
+
+      &:focus {
+        outline: none;
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+      }
+    }
+
     &__slider--short {
       max-width: 80px;
     }
@@ -926,6 +947,27 @@
         }
       }
 
+      &-color-trigger {
+        width: 28px;
+        height: 28px;
+        border: 1px solid #e5e7eb;
+        border-radius: 4px;
+        cursor: pointer;
+        padding: 0;
+        flex-shrink: 0;
+        transition: border-color 0.15s ease, box-shadow 0.15s ease;
+
+        &:hover {
+          border-color: #3b82f6;
+        }
+
+        &:focus {
+          outline: none;
+          border-color: #3b82f6;
+          box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+        }
+      }
+
       &-position {
         flex: 1;
         height: 4px;
@@ -1029,4 +1071,11 @@
       transform: translateX(14px);
     }
   }
+}
+
+// 颜色选择器弹出层
+.color-picker-popover {
+  min-width: 240px;
+  background: #ffffff;
+  border-radius: 8px;
 }
