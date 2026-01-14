@@ -251,9 +251,11 @@ export const PencilSettingsToolbar: React.FC = () => {
               padding={4}
               className={classNames('stroke-width-picker')}
             >
-              <Stack.Col gap={4}>
-                <div className="stroke-width-title">{t('toolbar.strokeWidth')}</div>
-                <div className="stroke-width-slider-wrapper" style={{ padding: '0 8px 12px' }}>
+              <Stack.Row gap={3} align="center" style={{ padding: '4px 8px' }}>
+                <div className="stroke-width-value" style={{ minWidth: '40px', fontSize: '13px', fontWeight: 500, color: 'var(--color-on-surface)' }}>
+                  {strokeWidth}px
+                </div>
+                <div className="stroke-width-slider-wrapper" style={{ flex: 1, minWidth: '160px' }}>
                   <Slider
                     value={strokeWidth}
                     min={1}
@@ -266,10 +268,10 @@ export const PencilSettingsToolbar: React.FC = () => {
                       setFreehandStrokeWidth(board, width);
                       updatePencilCursor(board, appState.pointer);
                     }}
-                    label={true}
+                    label={false}
                   />
                 </div>
-              </Stack.Col>
+              </Stack.Row>
             </Island>
           </PopoverContent>
         </Popover>

@@ -66,6 +66,16 @@ export const Minimap: React.FC<MinimapProps> = ({
     startPoint: null,
   });
 
+  // Hover 预览状态
+  const previewCanvasRef = useRef<HTMLCanvasElement>(null);
+  const [hoverPosition, setHoverPosition] = useState<{ x: number; y: number } | null>(null);
+  const hoverPositionRef = useRef<{ x: number; y: number } | null>(null);
+  const [previewVisible, setPreviewVisible] = useState(false);
+  
+  // 预览配置
+  const PREVIEW_SIZE = 120; // 预览框大小
+  const PREVIEW_ZOOM = 3; // 放大倍数
+
   // 记录上次交互时间和视口状态
   const lastInteractionRef = useRef<number>(0);
   const lastViewportRef = useRef<{
@@ -417,6 +427,23 @@ export const Minimap: React.FC<MinimapProps> = ({
     ctx.fillRect(vx, vy + vh - cornerSize, 2, cornerSize);
     ctx.fillRect(vx + vw - cornerSize, vy + vh - 2, cornerSize, 2);
     ctx.fillRect(vx + vw - 2, vy + vh - cornerSize, 2, cornerSize);
+
+    // 绘制 hover 预览区域指示框（橙色）- 大小与视口框相同
+    const hoverPos = hoverPositionRef.current;
+    if (hoverPos) {
+      // 橙色框以鼠标位置为中心，大小与视口框相同
+      const indicatorX = hoverPos.x - vw / 2;
+      const indicatorY = hoverPos.y - vh / 2;
+      
+      // 橙色填充
+      ctx.fillStyle = 'rgba(243, 156, 18, 0.15)';
+      ctx.fillRect(indicatorX, indicatorY, vw, vh);
+      
+      // 橙色边框
+      ctx.strokeStyle = 'rgba(243, 156, 18, 0.8)';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(indicatorX, indicatorY, vw, vh);
+    }
   }, [
     board,
     config,
@@ -500,6 +527,149 @@ export const Minimap: React.FC<MinimapProps> = ({
     setState((prev) => ({ ...prev, dragging: false }));
   }, []);
 
+  /**
+   * 渲染 hover 预览 - 显示真实画布内容（与视口大小相同的区域）
+   */
+  const renderPreview = useCallback((minimapX: number, minimapY: number) => {
+    const previewCanvas = previewCanvasRef.current;
+    if (!previewCanvas || !contentBoundsRef.current) return;
+
+    const ctx = previewCanvas.getContext('2d');
+    if (!ctx) return;
+
+    // 将 minimap 坐标转换为画布坐标
+    const [canvasX, canvasY] = minimapToCanvasCoords(
+      minimapX,
+      minimapY,
+      contentBoundsRef.current,
+      scaleRef.current
+    );
+
+    // 获取当前视口大小（在画布坐标系中）
+    const viewportBounds = getViewportBounds();
+    const viewportWidth = viewportBounds.width;
+    const viewportHeight = viewportBounds.height;
+
+    // 预览区域与视口大小相同
+    const previewCanvasWidth = viewportWidth;
+    const previewCanvasHeight = viewportHeight;
+
+    // 清空预览画布
+    ctx.clearRect(0, 0, PREVIEW_SIZE, PREVIEW_SIZE);
+
+    // 绘制白色背景
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, PREVIEW_SIZE, PREVIEW_SIZE);
+
+    // 计算裁剪区域（以鼠标位置为中心）
+    const clipX = canvasX - previewCanvasWidth / 2;
+    const clipY = canvasY - previewCanvasHeight / 2;
+    
+    // 计算渲染缩放比例（保持宽高比，使用较小的缩放比）
+    const scaleX = PREVIEW_SIZE / previewCanvasWidth;
+    const scaleY = PREVIEW_SIZE / previewCanvasHeight;
+    const renderScale = Math.min(scaleX, scaleY);
+    
+    // 计算渲染偏移（居中显示）
+    const renderOffsetX = (PREVIEW_SIZE - previewCanvasWidth * renderScale) / 2;
+    const renderOffsetY = (PREVIEW_SIZE - previewCanvasHeight * renderScale) / 2;
+
+    // 遍历所有元素并绘制
+    const elements = getAllElementBounds();
+
+    elements.forEach((element) => {
+      const { bounds } = element;
+      // 检查元素是否在预览区域内
+      if (
+        bounds.x + bounds.width >= clipX &&
+        bounds.x <= clipX + previewCanvasWidth &&
+        bounds.y + bounds.height >= clipY &&
+        bounds.y <= clipY + previewCanvasHeight
+      ) {
+        // 将画布坐标转换为预览坐标
+        const previewX = (bounds.x - clipX) * renderScale + renderOffsetX;
+        const previewY = (bounds.y - clipY) * renderScale + renderOffsetY;
+        const previewW = bounds.width * renderScale;
+        const previewH = bounds.height * renderScale;
+
+        // 绘制元素的简化表示
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+        ctx.fillRect(previewX, previewY, previewW, previewH);
+      }
+    });
+
+    // 绘制中心十字准星
+    ctx.strokeStyle = 'rgba(90, 79, 207, 0.6)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    
+    // 水平线
+    ctx.beginPath();
+    ctx.moveTo(0, PREVIEW_SIZE / 2);
+    ctx.lineTo(PREVIEW_SIZE, PREVIEW_SIZE / 2);
+    ctx.stroke();
+    
+    // 垂直线
+    ctx.beginPath();
+    ctx.moveTo(PREVIEW_SIZE / 2, 0);
+    ctx.lineTo(PREVIEW_SIZE / 2, PREVIEW_SIZE);
+    ctx.stroke();
+    
+    ctx.setLineDash([]);
+
+    // 绘制边框
+    ctx.strokeStyle = 'rgba(90, 79, 207, 0.3)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(0, 0, PREVIEW_SIZE, PREVIEW_SIZE);
+  }, [getAllElementBounds, getViewportBounds, minimapToCanvasCoords]);
+
+  /**
+   * 处理鼠标进入 minimap
+   */
+  const handleMouseEnter = useCallback(() => {
+    if (!state.dragging) {
+      setPreviewVisible(true);
+    }
+  }, [state.dragging]);
+
+  /**
+   * 处理鼠标离开 minimap
+   */
+  const handleMouseLeave = useCallback(() => {
+    setPreviewVisible(false);
+    setHoverPosition(null);
+    hoverPositionRef.current = null;
+  }, []);
+
+  /**
+   * 处理鼠标在 minimap 上移动（更新预览位置）
+   */
+  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (state.dragging) {
+      setPreviewVisible(false);
+      hoverPositionRef.current = null;
+      return;
+    }
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const minimapX = e.clientX - rect.left;
+    const minimapY = e.clientY - rect.top;
+
+    const pos = { x: minimapX, y: minimapY };
+    setHoverPosition(pos);
+    hoverPositionRef.current = pos;
+    setPreviewVisible(true);
+
+    // 渲染预览
+    renderPreview(minimapX, minimapY);
+    
+    // 触发 minimap 重绘以显示预览区域指示框
+    render();
+  }, [state.dragging, renderPreview, render]);
+
   useEffect(() => {
     if (!state.expanded) return;
 
@@ -534,6 +704,20 @@ export const Minimap: React.FC<MinimapProps> = ({
     left: config.position.includes('left') ? config.margin : undefined,
   };
 
+  // 计算预览框位置（在 minimap 左侧）
+  const previewStyle: React.CSSProperties = hoverPosition ? {
+    position: 'absolute',
+    right: config.width + 8, // 在 minimap 左侧
+    top: Math.max(0, Math.min(hoverPosition.y - PREVIEW_SIZE / 2, config.height - PREVIEW_SIZE)),
+    width: PREVIEW_SIZE,
+    height: PREVIEW_SIZE,
+    opacity: previewVisible && !state.dragging ? 1 : 0,
+    pointerEvents: 'none',
+    transition: 'opacity 0.15s ease-out, top 0.1s ease-out',
+  } : {
+    display: 'none',
+  };
+
   return (
     <div
       ref={containerRef}
@@ -554,10 +738,23 @@ export const Minimap: React.FC<MinimapProps> = ({
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
             onPointerLeave={handlePointerUp}
+            onMouseEnter={handleMouseEnter}
+            onMouseLeave={handleMouseLeave}
+            onMouseMove={handleMouseMove}
             style={{
               cursor: state.dragging ? 'grabbing' : 'pointer',
             }}
           />
+          
+          {/* Hover 放大预览 */}
+          <div className="minimap__preview" style={previewStyle}>
+            <canvas
+              ref={previewCanvasRef}
+              width={PREVIEW_SIZE}
+              height={PREVIEW_SIZE}
+              className="minimap__preview-canvas"
+            />
+          </div>
         </div>
       )}
 

@@ -724,7 +724,8 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
                               target.closest('.t-dialog') ||
                               target.closest('.settings-dialog') ||
                               target.closest('.minimap') ||
-                              target.closest('.ai-input-bar');
+                              target.closest('.ai-input-bar') ||
+                              target.closest('.view-navigation');
       
       if (isInsideOverlay) {
         return; // 不处理浮层内的双击事件

@@ -109,9 +109,11 @@ export const SizePicker: React.FC<SizePickerProps> = ({
             padding={4}
             className={classNames('size-picker-popover')}
           >
-            <Stack.Col gap={4}>
-              <div className="size-picker-title">{title}</div>
-              <div className="size-picker-slider-wrapper" style={{ padding: '0 8px 12px' }}>
+            <Stack.Row gap={3} align="center" style={{ padding: '4px 8px' }}>
+              <div className="size-picker-value" style={{ minWidth: '40px', fontSize: '13px', fontWeight: 500, color: 'var(--color-on-surface)' }}>
+                {size}px
+              </div>
+              <div className="size-picker-slider-wrapper" style={{ flex: 1, minWidth: '160px' }}>
                 <Slider
                   value={size}
                   min={1}
@@ -122,10 +124,10 @@ export const SizePicker: React.FC<SizePickerProps> = ({
                     setInputValue(String(newSize));
                     onSizeChange(newSize);
                   }}
-                  label={true}
+                  label={false}
                 />
               </div>
-            </Stack.Col>
+            </Stack.Row>
           </Island>
         </PopoverContent>
       </Popover>

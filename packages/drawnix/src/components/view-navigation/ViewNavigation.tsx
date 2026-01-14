@@ -12,8 +12,6 @@ import { useBoard } from '@plait-board/react-board';
 import { Minimap } from '../minimap/Minimap';
 import { useChatDrawerControl } from '../../contexts/ChatDrawerContext';
 import { Popover, PopoverContent, PopoverTrigger } from '../popover/popover';
-import Menu from '../menu/menu';
-import MenuItem from '../menu/menu-item';
 import { Z_INDEX } from '../../constants/z-index';
 import { useI18n } from '../../i18n';
 import './view-navigation.scss';
@@ -227,24 +225,24 @@ export const ViewNavigation: React.FC<ViewNavigationProps> = ({
             </button>
           </PopoverTrigger>
           <PopoverContent container={container} style={{ zIndex: Z_INDEX.POPOVER }}>
-            <Menu onSelect={() => setZoomMenuOpen(false)}>
-              <MenuItem
+            <div className="view-navigation-zoom-menu">
+              <button
+                className="zoom-menu-item"
+                onClick={handleFitViewport}
                 data-track="view_nav_zoom_fit"
-                onSelect={handleFitViewport}
-                aria-label={t('zoom.fit')}
-                shortcut="Cmd+Shift+="
               >
-                {t('zoom.fit')}
-              </MenuItem>
-              <MenuItem
+                <span className="zoom-menu-item__label">{t('zoom.fit')}</span>
+                <span className="zoom-menu-item__shortcut">⌘⇧=</span>
+              </button>
+              <button
+                className="zoom-menu-item"
+                onClick={handleZoom100}
                 data-track="view_nav_zoom_100"
-                onSelect={handleZoom100}
-                aria-label={t('zoom.100')}
-                shortcut="Cmd+0"
               >
-                {t('zoom.100')}
-              </MenuItem>
-            </Menu>
+                <span className="zoom-menu-item__label">{t('zoom.100')}</span>
+                <span className="zoom-menu-item__shortcut">⌘0</span>
+              </button>
+            </div>
           </PopoverContent>
         </Popover>
 

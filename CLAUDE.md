@@ -1149,6 +1149,44 @@ const handleDoubleClick = (event: MouseEvent) => {
 - 优先使用设计系统 CSS 变量
 - 属性顺序：定位 → 盒模型 → 外观 → 排版 → 动画
 
+#### 绝对定位子元素需要正确的父容器设置
+
+**场景**: 在容器内添加绝对定位的浮层/预览框等元素时
+
+❌ **错误示例**:
+```scss
+.container {
+  // 缺少 position: relative，子元素的绝对定位相对于更上层的定位元素
+  overflow: hidden; // 会裁切溢出的绝对定位子元素
+  
+  .floating-preview {
+    position: absolute;
+    right: 100%; // 想要显示在容器左侧
+    // 结果：1) 定位参照物可能不对 2) 被 overflow: hidden 裁切掉
+  }
+}
+```
+
+✅ **正确示例**:
+```scss
+.container {
+  position: relative; // 作为绝对定位子元素的参照物
+  overflow: visible;  // 允许子元素溢出显示
+  
+  .floating-preview {
+    position: absolute;
+    right: 100%; // 正确显示在容器左侧
+  }
+}
+```
+
+**检查清单**:
+- 父容器需要 `position: relative`（或其他非 static 的定位）
+- 如果子元素需要溢出显示，父容器需要 `overflow: visible`
+- 多层嵌套时，确认绝对定位的参照元素是正确的
+
+**原因**: `position: absolute` 的元素相对于最近的非 static 定位祖先元素定位。如果父容器没有设置定位，子元素会相对于更上层的元素定位，导致位置错误。同时 `overflow: hidden` 会裁切超出容器边界的内容，包括绝对定位的子元素。
+
 ### Git 提交规范
 - 格式: `<type>(<scope>): <subject>`
 - 类型: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`, `perf`, `ci`

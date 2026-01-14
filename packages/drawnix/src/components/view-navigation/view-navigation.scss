@@ -122,6 +122,7 @@
   // Minimap 容器
   &__minimap {
     animation: slideDown 0.2s ease-out;
+    position: relative;
 
     // 重置 minimap 的默认定位，让它跟随父容器
     .minimap {
@@ -137,6 +138,54 @@
       background: #fff !important;
       border: 1px solid rgba(0, 0, 0, 0.08) !important;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+      position: relative;
+    }
+
+    // 预览框样式
+    .minimap__preview {
+      background: #fff;
+      border: 1px solid rgba(0, 0, 0, 0.1);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    }
+  }
+}
+
+// 缩放菜单样式（Portal 渲染到 body，需要全局样式）
+.view-navigation-zoom-menu {
+  background: #fff;
+  border-radius: 8px;
+  padding: 4px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  min-width: 140px;
+
+  .zoom-menu-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    border: none;
+    background: transparent;
+    border-radius: 6px;
+    cursor: pointer;
+    width: 100%;
+    font-size: 14px;
+    color: #333;
+    transition: all 0.15s ease;
+
+    &:hover {
+      background: rgba(90, 79, 207, 0.08);
+      color: #5a4fcf;
+    }
+
+    .zoom-menu-item__label {
+      flex: 1;
+      text-align: left;
+    }
+
+    .zoom-menu-item__shortcut {
+      font-size: 12px;
+      color: #999;
+      margin-left: 16px;
     }
   }
 }

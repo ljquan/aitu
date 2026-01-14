@@ -148,14 +148,30 @@
 // 大小选择器弹出层（公共）
 .stroke-width-picker,
 .size-picker-popover {
-  min-width: 240px;
+  min-width: 200px;
   background: #ffffff;
-  
-  .stroke-width-title,
-  .size-picker-title {
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--color-on-surface);
-    margin-bottom: 12px;
+  border-radius: 8px;
+
+  .stroke-width-value,
+  .size-picker-value {
+    font-variant-numeric: tabular-nums;
+    font-family: var(--font-family-mono, monospace);
+    background: rgba(0, 0, 0, 0.04);
+    padding: 2px 6px;
+    border-radius: 4px;
+    text-align: center;
+  }
+
+  .stroke-width-slider-wrapper,
+  .size-picker-slider-wrapper {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    min-width: 140px;
+  }
+
+  // Slider 容器微调
+  .t-slider {
+    padding: 0 4px !important;
   }
 }

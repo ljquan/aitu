@@ -35,12 +35,13 @@
 
   // 内容区域
   &__content {
+    position: relative; // 用于预览框绝对定位
     background: var(--minimap-bg, rgba(255, 255, 255, 0.95));
     border: 1px solid var(--minimap-border, rgba(0, 0, 0, 0.1));
     border-radius: 8px;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
     padding: 0;
-    overflow: hidden;
+    overflow: visible; // 允许预览框溢出
     transition: all 0.3s ease-out;
     backdrop-filter: blur(10px);
   }
@@ -54,6 +55,20 @@
     &:active {
       cursor: grabbing !important;
     }
+  }
+
+  // Hover 放大预览
+  &__preview {
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    overflow: hidden;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+  }
+
+  &__preview-canvas {
+    display: block;
+    border-radius: 7px;
   }
 
   // 折叠/展开按钮

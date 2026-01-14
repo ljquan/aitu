@@ -100,7 +100,7 @@ export const DEFAULT_MINIMAP_CONFIG: MinimapConfig = {
   backgroundColor: 'rgba(255, 255, 255, 0.95)',
   borderColor: 'rgba(0, 0, 0, 0.1)',
   viewportColor: 'rgba(90, 79, 207, 0.3)',
-  elementColor: 'rgba(0, 0, 0, 0.2)',
+  elementColor: 'rgba(0, 0, 0, 0.5)', // 加深元素颜色，增加对比度
 };
 
 /**
