@@ -10,11 +10,22 @@ import { PlaitDrawElement } from '@plait/draw';
 /** 素材库 URL 前缀 */
 const ASSET_URL_PREFIX = '/asset-library/';
 
+/** 缓存 URL 前缀（合并图片/视频） */
+const CACHE_URL_PREFIX = '/__aitu_cache__/';
+
 /**
  * 检查是否为虚拟URL（素材库本地URL）
  */
 export function isVirtualUrl(url: string): boolean {
   return url.startsWith('/asset-library/') || url.startsWith('/__aitu_cache__/');
+}
+
+/**
+ * 检查是否为缓存URL（合并图片/视频，删除后画布中的图片也会丢失）
+ * 支持相对路径 (/__aitu_cache__/...) 和完整 URL (http://xxx/__aitu_cache__/...)
+ */
+export function isCacheUrl(url: string): boolean {
+  return url.startsWith(CACHE_URL_PREFIX) || url.includes(CACHE_URL_PREFIX);
 }
 
 /**
@@ -172,6 +183,123 @@ export function removeElementsByAssetIds(board: PlaitBoard, assetIds: string[]):
       // console.log(`[AssetCleanup] Batch removed ${elementsToRemove.length} elements using ${assetIds.length} assets`);
     } catch (error) {
       console.error('[AssetCleanup] Failed to batch remove elements:', error);
+      return 0;
+    }
+  }
+
+  return elementsToRemove.length;
+}
+
+/**
+ * 从完整 URL 或相对路径中提取缓存路径部分
+ * 例如: http://localhost:7200/__aitu_cache__/image/xxx.png -> /__aitu_cache__/image/xxx.png
+ *       /__aitu_cache__/image/xxx.png -> /__aitu_cache__/image/xxx.png
+ */
+function extractCachePath(url: string): string | null {
+  const cacheIndex = url.indexOf(CACHE_URL_PREFIX);
+  if (cacheIndex === -1) {
+    return null;
+  }
+  return url.slice(cacheIndex);
+}
+
+/**
+ * 根据素材 URL 查找画布上使用该素材的元素数量
+ * @param board - 画布实例
+ * @param assetUrl - 素材 URL
+ * @returns 使用该素材的元素数量
+ */
+export function countElementsByAssetUrl(board: PlaitBoard, assetUrl: string): number {
+  if (!board.children || board.children.length === 0) {
+    return 0;
+  }
+
+  // 提取缓存路径用于匹配
+  const targetCachePath = extractCachePath(assetUrl);
+  
+  let count = 0;
+
+  for (const element of board.children) {
+    const url = (element as any).url;
+    if (!url || typeof url !== 'string') {
+      continue;
+    }
+
+    // 支持完整 URL 和相对路径的匹配
+    const elementCachePath = extractCachePath(url);
+    const isMatch = url === assetUrl || 
+                    (targetCachePath && elementCachePath && targetCachePath === elementCachePath);
+    
+    if (isMatch) {
+      // 检查是否为图片或视频元素
+      const isImage = PlaitDrawElement.isDrawElement(element) && PlaitDrawElement.isImage(element);
+      const isVideo = (element as any).type === 'video' || (element as any).isVideo;
+      
+      if (isImage || isVideo) {
+        count++;
+      }
+    }
+  }
+
+  return count;
+}
+
+/**
+ * 根据素材 URL 删除画布上使用该素材的所有元素
+ * @param board - 画布实例
+ * @param assetUrl - 素材 URL
+ * @returns 删除的元素数量
+ */
+export function removeElementsByAssetUrl(board: PlaitBoard, assetUrl: string): number {
+  console.log('[AssetCleanup] removeElementsByAssetUrl called:', { assetUrl });
+  
+  if (!board.children || board.children.length === 0) {
+    console.log('[AssetCleanup] No children on board');
+    return 0;
+  }
+
+  console.log('[AssetCleanup] Scanning', board.children.length, 'elements');
+  
+  // 提取缓存路径用于匹配
+  const targetCachePath = extractCachePath(assetUrl);
+  console.log('[AssetCleanup] Target cache path:', targetCachePath);
+  
+  const elementsToRemove: PlaitElement[] = [];
+
+  for (const element of board.children) {
+    const url = (element as any).url;
+    if (!url || typeof url !== 'string') {
+      continue;
+    }
+
+    // 支持完整 URL 和相对路径的匹配
+    const elementCachePath = extractCachePath(url);
+    const isMatch = url === assetUrl || 
+                    (targetCachePath && elementCachePath && targetCachePath === elementCachePath);
+    
+    console.log('[AssetCleanup] Element URL:', url, '| Cache path:', elementCachePath, '| Match:', isMatch);
+    
+    if (isMatch) {
+      // 检查是否为图片或视频元素
+      const isImage = PlaitDrawElement.isDrawElement(element) && PlaitDrawElement.isImage(element);
+      const isVideo = (element as any).type === 'video' || (element as any).isVideo;
+      
+      console.log('[AssetCleanup] Element check:', { id: (element as any).id, isImage, isVideo, type: (element as any).type });
+      
+      if (isImage || isVideo) {
+        elementsToRemove.push(element);
+      }
+    }
+  }
+
+  console.log('[AssetCleanup] Found', elementsToRemove.length, 'elements to remove');
+
+  if (elementsToRemove.length > 0) {
+    try {
+      CoreTransforms.removeElements(board, elementsToRemove);
+      console.log('[AssetCleanup] Successfully removed', elementsToRemove.length, 'elements');
+    } catch (error) {
+      console.error('[AssetCleanup] Failed to remove elements by URL:', error);
       return 0;
     }
   }

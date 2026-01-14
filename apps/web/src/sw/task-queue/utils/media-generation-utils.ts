@@ -600,9 +600,10 @@ export interface ProcessedReferenceImage {
 /**
  * 处理单个参考图片
  * - 本地图片（/asset-library/...）：从缓存获取并转换为 base64（压缩到 1M 以内）
+ * - 虚拟缓存路径（/__aitu_cache__/...）：从缓存获取并转换为 base64（压缩到 1M 以内）
  * - 远程图片（http/https）：检查缓存时间，12小时内直接使用 URL，超过则转换为 base64
  * - data: URL：检查大小，超过 1M 则压缩
- * 
+ *
  * @param url 图片 URL
  * @param signal 取消信号
  * @returns 处理后的图片信息
@@ -642,6 +643,24 @@ export async function processReferenceImage(
       }
       // 缓存中没有，返回原始 URL（可能会失败，但让 API 层处理）
       console.warn(`[MediaUtils] Asset library image not found in cache: ${url}`);
+      return { originalUrl: url, value: url, isBase64: false };
+    }
+
+    // 虚拟缓存路径：/__aitu_cache__/image/xxx.png 或 /__aitu_cache__/video/xxx.mp4
+    // 这些 URL 由 SW 拦截返回缓存内容，但在 SW 内部 fetch 不会触发拦截
+    // 需要直接从 Cache API 获取
+    if (url.startsWith('/__aitu_cache__/')) {
+      // 缓存 key 是完整 URL（包含 origin）
+      const cacheKey = `${self.location.origin}${url}`;
+      const cachedResponse = await cache.match(cacheKey);
+      if (cachedResponse) {
+        const blob = await cachedResponse.blob();
+        // 压缩并转换为 base64
+        const base64 = await blobToCompressedBase64(blob);
+        return { originalUrl: url, value: base64, isBase64: true };
+      }
+      // 缓存中没有，返回原始 URL（可能会失败，但让 API 层处理）
+      console.warn(`[MediaUtils] Cache URL not found in cache: ${url}`);
       return { originalUrl: url, value: url, isBase64: false };
     }
 

@@ -13,7 +13,7 @@ import { MediaLibraryEmpty } from './MediaLibraryEmpty';
 import { ViewModeToggle } from './ViewModeToggle';
 import type { MediaLibraryGridProps, ViewMode } from '../../types/asset.types';
 import { useDrawnix } from '../../hooks/use-drawnix';
-import { removeElementsByAssetIds } from '../../utils/asset-cleanup';
+import { removeElementsByAssetIds, removeElementsByAssetUrl, isCacheUrl, countElementsByAssetUrl } from '../../utils/asset-cleanup';
 import './MediaLibraryGrid.scss';
 import './VirtualAssetGrid.scss';
 
@@ -177,12 +177,25 @@ export function MediaLibraryGrid({
   const handleBatchDelete = useCallback(async () => {
     const idsToDelete = Array.from(selectedAssetIds);
     try {
-      // 先删除画布上使用这些素材的元素
+      // 删除画布上使用这些素材的元素
       if (board) {
-        const removedCount = removeElementsByAssetIds(board, idsToDelete);
-        // if (removedCount > 0) {
-        //   console.log(`[MediaLibraryGrid] Removed ${removedCount} canvas elements using ${idsToDelete.length} assets`);
-        // }
+        // 分离缓存类型素材和普通素材
+        const cacheAssets = filteredResult.assets.filter(
+          a => selectedAssetIds.has(a.id) && isCacheUrl(a.url)
+        );
+        const normalAssetIds = idsToDelete.filter(
+          id => !cacheAssets.some(a => a.id === id)
+        );
+        
+        // 缓存类型素材使用 URL 匹配删除
+        for (const asset of cacheAssets) {
+          removeElementsByAssetUrl(board, asset.url);
+        }
+        
+        // 普通素材使用 ID 匹配删除
+        if (normalAssetIds.length > 0) {
+          removeElementsByAssetIds(board, normalAssetIds);
+        }
       }
       
       // 然后删除素材本身
@@ -192,7 +205,25 @@ export function MediaLibraryGrid({
     } catch (error) {
       console.error('[MediaLibraryGrid] Batch delete failed:', error);
     }
-  }, [selectedAssetIds, removeAssets, board]);
+  }, [selectedAssetIds, removeAssets, board, filteredResult.assets]);
+  
+  // 计算批量删除时会影响的画布元素数量
+  const batchDeleteWarningInfo = useMemo(() => {
+    if (!board || selectedAssetIds.size === 0) {
+      return { hasCacheAssets: false, affectedCount: 0 };
+    }
+    
+    let affectedCount = 0;
+    const cacheAssets = filteredResult.assets.filter(
+      a => selectedAssetIds.has(a.id) && isCacheUrl(a.url)
+    );
+    
+    for (const asset of cacheAssets) {
+      affectedCount += countElementsByAssetUrl(board, asset.url);
+    }
+    
+    return { hasCacheAssets: cacheAssets.length > 0, affectedCount };
+  }, [board, selectedAssetIds, filteredResult.assets]);
 
   if (loading && assets.length === 0) {
     return (
@@ -234,7 +265,16 @@ export function MediaLibraryGrid({
                 已选 {selectedAssetIds.size} 个
               </span>
               <Popconfirm
-                content={`确定要删除选中的 ${selectedAssetIds.size} 个素材吗？`}
+                content={
+                  <div>
+                    <p>确定要删除选中的 {selectedAssetIds.size} 个素材吗？</p>
+                    {batchDeleteWarningInfo.hasCacheAssets && batchDeleteWarningInfo.affectedCount > 0 && (
+                      <p style={{ marginTop: '8px', color: 'var(--td-error-color)' }}>
+                        ⚠️ 画布中有 <strong>{batchDeleteWarningInfo.affectedCount}</strong> 个元素正在使用这些素材，删除后将被一并移除！
+                      </p>
+                    )}
+                  </div>
+                }
                 onConfirm={handleBatchDelete}
                 theme="warning"
               >

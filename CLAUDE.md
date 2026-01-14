@@ -1349,6 +1349,56 @@ DrawTransforms.insertImage(board, { url: stableUrl, ... });
 2. `blob: URL` 生命周期与页面绑定，刷新后失效
 3. 虚拟路径 + Cache API 持久化，刷新后仍可访问
 
+### 虚拟路径 URL 匹配规范
+
+**场景**: 需要根据素材 URL 查找或删除画布中的元素时（如删除素材时同步删除画布元素）
+
+❌ **错误示例: 使用精确匹配或 startsWith**
+```typescript
+// 错误：素材 URL 可能是完整 URL，画布元素可能是相对路径
+function isCacheUrl(url: string): boolean {
+  return url.startsWith('/__aitu_cache__/');  // 无法匹配 http://localhost/__aitu_cache__/...
+}
+
+function findElement(assetUrl: string) {
+  return board.children.find(el => el.url === assetUrl);  // 精确匹配会失败
+}
+// 素材 URL: http://localhost:7200/__aitu_cache__/image/xxx.png
+// 元素 URL: /__aitu_cache__/image/xxx.png
+// 结果：无法匹配！
+```
+
+✅ **正确示例: 提取路径部分进行匹配**
+```typescript
+const CACHE_URL_PREFIX = '/__aitu_cache__/';
+
+// 检查是否为缓存 URL（支持完整 URL 和相对路径）
+function isCacheUrl(url: string): boolean {
+  return url.includes(CACHE_URL_PREFIX);  // ✅ 使用 includes
+}
+
+// 提取缓存路径部分用于匹配
+function extractCachePath(url: string): string | null {
+  const cacheIndex = url.indexOf(CACHE_URL_PREFIX);
+  if (cacheIndex === -1) return null;
+  return url.slice(cacheIndex);  // 返回 /__aitu_cache__/... 部分
+}
+
+// 匹配时使用路径部分比较
+function findElements(assetUrl: string) {
+  const targetPath = extractCachePath(assetUrl);
+  return board.children.filter(el => {
+    const elPath = extractCachePath(el.url);
+    return el.url === assetUrl || (targetPath && elPath && targetPath === elPath);
+  });
+}
+```
+
+**原因**:
+- 素材存储时可能使用完整 URL（含 origin）
+- 画布元素可能使用相对路径（由 Service Worker 拦截）
+- 同一资源的两种 URL 形式必须能相互匹配
+
 ### 图像处理工具复用规范
 
 **场景**: 需要对图片进行边框检测、去白边、裁剪等处理时

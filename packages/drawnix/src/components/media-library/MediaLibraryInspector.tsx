@@ -3,7 +3,7 @@
  * 素材库详情面板组件
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { Button, Input, Dialog, MessagePlugin } from 'tdesign-react';
 import {
   Download,
@@ -16,6 +16,8 @@ import {
 } from 'lucide-react';
 import { formatDate, formatFileSize } from '../../utils/asset-utils';
 import { useAssetSize } from '../../hooks/useAssetSize';
+import { isCacheUrl, countElementsByAssetUrl } from '../../utils/asset-cleanup';
+import { useDrawnix } from '../../hooks/use-drawnix';
 import type { MediaLibraryInspectorProps } from '../../types/asset.types';
 import './MediaLibraryInspector.scss';
 
@@ -31,9 +33,20 @@ export function MediaLibraryInspector({
   const [isRenaming, setIsRenaming] = useState(false);
   const [newName, setNewName] = useState('');
   const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
+  const { board } = useDrawnix();
 
   // 获取实际文件大小（支持从缓存获取）
   const displaySize = useAssetSize(asset?.id, asset?.url, asset?.size);
+
+  // 检查素材是否为缓存类型（合并图片/视频），并统计画布中使用该素材的元素数量
+  const { isCacheAsset, canvasElementCount } = useMemo(() => {
+    if (!asset || !board) {
+      return { isCacheAsset: false, canvasElementCount: 0 };
+    }
+    const isCache = isCacheUrl(asset.url);
+    const count = isCache ? countElementsByAssetUrl(board, asset.url) : 0;
+    return { isCacheAsset: isCache, canvasElementCount: count };
+  }, [asset, board]);
 
   // 开始重命名
   const handleStartRename = useCallback(() => {
@@ -278,6 +291,11 @@ export function MediaLibraryInspector({
         <p style={{ marginTop: '8px', color: 'var(--td-text-color-secondary)' }}>
           素材名称: <strong>{asset.name}</strong>
         </p>
+        {isCacheAsset && canvasElementCount > 0 && (
+          <p style={{ marginTop: '8px', color: 'var(--td-error-color)' }}>
+            ⚠️ 画布中有 <strong>{canvasElementCount}</strong> 个元素正在使用此素材，删除后这些元素也将被移除！
+          </p>
+        )}
       </Dialog>
     </div>
   );
