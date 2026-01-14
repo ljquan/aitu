@@ -44,7 +44,17 @@ export const RecentColorsProvider: React.FC<RecentColorsProviderProps> = ({ chil
     kvStorageService.get<string[]>(RECENT_COLORS_KEY)
       .then((colors) => {
         if (colors && Array.isArray(colors)) {
-          setRecentColors(colors);
+          // 去重：使用 Set 并标准化颜色格式
+          const seen = new Set<string>();
+          const uniqueColors = colors.filter((color) => {
+            const normalized = color.toUpperCase().replace(/\s/g, '');
+            if (seen.has(normalized)) {
+              return false;
+            }
+            seen.add(normalized);
+            return true;
+          });
+          setRecentColors(uniqueColors);
         }
       })
       .catch((error) => {

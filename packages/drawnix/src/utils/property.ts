@@ -24,7 +24,8 @@ export const isClosedElement = (board: PlaitBoard, element: PlaitElement) => {
   return (
     MindElement.isMindElement(board, element) ||
     (PlaitDrawElement.isDrawElement(element) && isClosedDrawElement(element)) ||
-    isClosedCustomGeometry(board, element)
+    isClosedCustomGeometry(board, element) ||
+    Freehand.isFreehand(element)
   );
 };
 

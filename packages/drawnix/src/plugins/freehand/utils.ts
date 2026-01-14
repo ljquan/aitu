@@ -189,6 +189,10 @@ export const getStrokeColorByElement = (
   board: PlaitBoard,
   element: PlaitElement
 ) => {
+  // 如果明确设置为 'none'，返回 'none'（无色）
+  if (element.strokeColor === 'none') {
+    return 'none';
+  }
   const defaultColor = getFreehandDefaultStrokeColor(
     board.theme.themeColorMode
   );
@@ -197,6 +201,10 @@ export const getStrokeColorByElement = (
 };
 
 export const getFillByElement = (board: PlaitBoard, element: PlaitElement) => {
+  // 如果明确设置为 'none'，返回 'none'（无色）
+  if (element.fill === 'none') {
+    return 'none';
+  }
   const defaultFill =
     Freehand.isFreehand(element) && isClosedCustomGeometry(board, element)
       ? getFreehandDefaultFill(board.theme.themeColorMode)

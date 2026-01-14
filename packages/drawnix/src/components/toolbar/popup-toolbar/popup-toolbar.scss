@@ -41,4 +41,15 @@
         justify-content: space-between;
         padding: 0 8px;
     }
+    // 限制拾色器宽度与文字设置面板一致
+    .unified-color-picker {
+        width: 280px;
+    }
+}
+
+// 填充拾色器宽度限制
+.fill-setting {
+    .unified-color-picker {
+        width: 280px;
+    }
 }

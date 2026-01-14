@@ -3,7 +3,7 @@
  */
 
 // 变量 - 优化紧凑布局
-$ucp-panel-width: 220px;
+$ucp-panel-min-width: 200px;
 $ucp-panel-height: 140px;
 $ucp-slider-height: 10px;
 $ucp-indicator-size: 12px;
@@ -22,11 +22,13 @@ $checkerboard-bg: repeating-conic-gradient(
   display: flex;
   flex-direction: column;
   gap: $ucp-gap;
-  width: $ucp-panel-width;
+  width: 100%;
+  min-width: $ucp-panel-min-width;
   padding: 8px;
   background: var(--color-surface, #ffffff);
   border-radius: $ucp-border-radius;
   user-select: none;
+  box-sizing: border-box;
 
   &.disabled {
     opacity: 0.6;
@@ -173,6 +175,10 @@ $checkerboard-bg: repeating-conic-gradient(
       background: $checkerboard-bg !important;
       border: 1px solid rgba(0, 0, 0, 0.15);
     }
+
+    &--light {
+      border: 1px solid rgba(0, 0, 0, 0.15);
+    }
   }
 
   &__no-color-icon {
@@ -207,10 +213,12 @@ $checkerboard-bg: repeating-conic-gradient(
     display: flex;
     flex-wrap: nowrap;
     gap: 4px;
+    height: $ucp-recent-size;
     overflow: hidden;
   }
 
   &-item {
+    flex-shrink: 0;
     width: $ucp-recent-size;
     height: $ucp-recent-size;
     padding: 0;
@@ -225,6 +233,10 @@ $checkerboard-bg: repeating-conic-gradient(
 
     &--selected {
       box-shadow: 0 0 0 2px var(--color-primary, #1890ff);
+    }
+
+    &--light {
+      border: 1px solid rgba(0, 0, 0, 0.15);
     }
   }
 }

@@ -1406,6 +1406,33 @@ function applyCursorStyle(board: PlaitBoard, size: number) {
 
 **检查方法**: 如果 JavaScript 设置的样式不生效，在浏览器开发者工具中检查元素样式，查看是否有 `!important` 规则覆盖。
 
+### Freehand 元素属性设置需要自定义 callback
+
+**场景**: 修改 Freehand（手绘线条）元素的属性（如 strokeStyle、strokeColor）时
+
+❌ **错误示例**:
+```typescript
+// 错误：直接使用 PropertyTransforms，Freehand 元素可能不被正确处理
+const setStrokeStyle = (style: StrokeStyle) => {
+  PropertyTransforms.setStrokeStyle(board, style, { getMemorizeKey });
+};
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：使用 callback 确保所有选中元素都被处理
+export const setStrokeStyle = (board: PlaitBoard, strokeStyle: StrokeStyle) => {
+  PropertyTransforms.setStrokeStyle(board, strokeStyle, {
+    getMemorizeKey,
+    callback: (element: PlaitElement, path: Path) => {
+      Transforms.setNode(board, { strokeStyle }, path);
+    },
+  });
+};
+```
+
+**原因**: `PropertyTransforms` 的默认行为可能不会处理所有类型的元素（如自定义的 Freehand 元素）。通过提供 `callback` 函数，可以确保对所有选中的元素执行属性设置操作。颜色设置（`setStrokeColor`、`setFillColor`）也使用了相同的模式。
+
 ### 性能指南
 - 使用 `React.lazy` 对大型组件进行代码分割
 - 对图片实现懒加载和预加载

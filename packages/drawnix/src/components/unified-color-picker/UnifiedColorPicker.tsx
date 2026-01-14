@@ -21,6 +21,7 @@ import {
   setAlphaToHex,
   removeAlphaFromHex,
   isValidHex,
+  isLightColor,
 } from './utils';
 import './unified-color-picker.scss';
 
@@ -42,6 +43,9 @@ export const UnifiedColorPicker: React.FC<UnifiedColorPickerProps> = ({
 }) => {
   // 最近使用颜色
   const { recentColors, addRecentColor } = useRecentColors();
+  
+  // 缓存首次渲染时的最近使用颜色，避免选择颜色时顺序变化
+  const [initialRecentColors] = useState(() => [...recentColors]);
 
   // 解析初始颜色
   const initialColor = value && isValidHex(value) ? value : DEFAULT_COLOR;
@@ -201,23 +205,27 @@ export const UnifiedColorPicker: React.FC<UnifiedColorPickerProps> = ({
       )}
 
       {/* 最近使用颜色 */}
-      {showRecentColors && recentColors.length > 0 && (
+      {showRecentColors && initialRecentColors.length > 0 && (
         <div className="unified-color-picker__recent">
           <div className="unified-color-picker__recent-label">最近使用</div>
           <div className="unified-color-picker__recent-colors">
-            {recentColors.map((color, index) => (
-              <button
-                key={`${color}-${index}`}
-                className={classNames('unified-color-picker__recent-item', {
-                  'unified-color-picker__recent-item--selected':
-                    removeAlphaFromHex(color).toUpperCase() === currentHex.toUpperCase(),
-                })}
-                style={{ backgroundColor: color }}
-                onClick={() => handleRecentSelect(color)}
-                disabled={disabled}
-                title={color}
-              />
-            ))}
+            {initialRecentColors.map((color, index) => {
+              const isLight = isLightColor(color);
+              return (
+                <button
+                  key={`${color}-${index}`}
+                  className={classNames('unified-color-picker__recent-item', {
+                    'unified-color-picker__recent-item--selected':
+                      removeAlphaFromHex(color).toUpperCase() === currentHex.toUpperCase(),
+                    'unified-color-picker__recent-item--light': isLight,
+                  })}
+                  style={{ backgroundColor: color }}
+                  onClick={() => handleRecentSelect(color)}
+                  disabled={disabled}
+                  title={color}
+                />
+              );
+            })}
           </div>
         </div>
       )}

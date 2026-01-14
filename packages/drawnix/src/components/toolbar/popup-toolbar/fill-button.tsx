@@ -71,7 +71,7 @@ export const PopupFillButton: React.FC<PopupFillButtonProps> = ({
       <PopoverContent container={container}>
         <Island
           padding={4}
-          className={classNames(`${ATTACHED_ELEMENT_CLASS_NAME}`)}
+          className={classNames(`${ATTACHED_ELEMENT_CLASS_NAME}`, 'fill-setting')}
         >
           <UnifiedColorPicker
             value={currentColor}
