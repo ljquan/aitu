@@ -98,6 +98,26 @@
 ✅ useEffect(() => { fetchData().catch(console.error) }, [])
 ```
 
+### 8. 提交并推送到远程仓库
+
+将 CLAUDE.md 的更新提交并推送到远程仓库:
+
+```bash
+# 添加 CLAUDE.md 到暂存区
+git add CLAUDE.md
+
+# 提交更改
+git commit -m "docs(claude): 添加新规则 - [规则名称]"
+
+# 推送到远程仓库
+git push
+```
+
+**提交信息格式**:
+- `docs(claude): 添加新规则 - [规则名称]`
+- `docs(claude): 更新规则 - [规则名称]`
+- `docs(claude): 删除过时规则 - [规则名称]`
+
 ## 示例用法
 
 ```bash
@@ -127,3 +147,4 @@
 - 解释原因帮助理解
 - 避免过于冗长的描述
 - 定期审查并清理过时规则
+- 提交前确认规则内容正确无误

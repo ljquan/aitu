@@ -1217,6 +1217,43 @@ setInterval(() => {
 
 **原因**: 本项目的素材库通过 `taskQueueService.getTasksByStatus(COMPLETED)` 获取 AI 生成的素材。如果自动删除已完成的任务，素材库就无法展示这些 AI 生成的图片/视频。类似地，聊天历史、工作流数据都是用户的重要数据，不应被自动删除。
 
+### 调试日志清理规范
+
+**场景**: 开发功能时添加 `console.log` 调试日志
+
+❌ **错误示例**:
+```typescript
+// 开发时添加了大量调试日志，提交时忘记删除
+function handleClick(event: PointerEvent) {
+  console.log('[MyComponent] handleClick:', event);
+  console.log('[MyComponent] current state:', state);
+  // 业务逻辑...
+  console.log('[MyComponent] result:', result);
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 提交前删除所有调试日志
+function handleClick(event: PointerEvent) {
+  // 业务逻辑...
+}
+
+// 如果确实需要保留日志，使用注释形式
+function complexFunction() {
+  // console.log('[Debug] intermediate value:', value);
+  // 业务逻辑...
+}
+```
+
+**提交前检查命令**:
+```bash
+# 检查 staged 更改中是否有新增的 console.log
+git diff --cached | grep -E "^\+.*console\.(log|debug|info)" | head -20
+```
+
+**原因**: 调试日志会污染控制台输出，影响生产环境的日志分析，也会增加代码体积。开发时可以自由添加日志，但提交前必须清理。如果某些日志对生产调试有价值，应使用注释形式保留或使用专门的日志服务。
+
 ### Z-Index 管理规范
 
 **规范文档**: 参考 `docs/Z_INDEX_GUIDE.md` 获取完整规范
