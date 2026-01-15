@@ -71,6 +71,8 @@ import { withArrowLineAutoCompleteExtend } from './plugins/with-arrow-line-auto-
 import { AutoCompleteShapePicker } from './components/auto-complete-shape-picker';
 import { useAutoCompleteShapePicker } from './hooks/useAutoCompleteShapePicker';
 import { withDefaultFill } from './plugins/with-default-fill';
+import { API_AUTH_ERROR_EVENT, ApiAuthErrorDetail } from './utils/api-auth-error-event';
+import { MessagePlugin } from 'tdesign-react';
 
 const TTDDialog = lazy(() => import('./components/ttd-dialog/ttd-dialog').then(module => ({ default: module.TTDDialog })));
 const SettingsDialog = lazy(() => import('./components/settings-dialog/settings-dialog').then(module => ({ default: module.SettingsDialog })));
@@ -223,6 +225,30 @@ export const Drawnix: React.FC<DrawnixProps> = ({
       });
     }
   }, [board]);
+
+  // 监听 API 认证错误事件，自动打开设置对话框
+  useEffect(() => {
+    const handleApiAuthError = (event: Event) => {
+      const customEvent = event as CustomEvent<ApiAuthErrorDetail>;
+      const { message } = customEvent.detail;
+      
+      // 显示错误提示
+      MessagePlugin.error({
+        content: 'API Key 无效或已过期，请重新配置',
+        duration: 5000,
+      });
+      
+      console.error('[Drawnix] API auth error:', message);
+      
+      // 打开设置对话框
+      setAppState(prev => ({ ...prev, openSettings: true }));
+    };
+
+    window.addEventListener(API_AUTH_ERROR_EVENT, handleApiAuthError);
+    return () => {
+      window.removeEventListener(API_AUTH_ERROR_EVENT, handleApiAuthError);
+    };
+  }, []);
 
   // Handle interrupted WorkZone elements after page refresh
   // Query task status from Service Worker and restore workflow state

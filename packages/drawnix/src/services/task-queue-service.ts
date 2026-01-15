@@ -8,9 +8,8 @@
 import { Subject, Observable } from 'rxjs';
 import { Task, TaskStatus, TaskType, TaskEvent, GenerationParams } from '../types/task.types';
 import { generateTaskId, isTaskActive } from '../utils/task-utils';
-import { validateGenerationParams, generateParamsHash, sanitizeGenerationParams } from '../utils/validation-utils';
+import { validateGenerationParams, sanitizeGenerationParams } from '../utils/validation-utils';
 import { getNextRetryTime } from '../utils/retry-utils';
-import { DUPLICATE_SUBMISSION_WINDOW } from '../constants/TASK_CONSTANTS';
 
 /**
  * Task Queue Service
@@ -20,15 +19,10 @@ class TaskQueueService {
   private static instance: TaskQueueService;
   private tasks: Map<string, Task>;
   private taskUpdates$: Subject<TaskEvent>;
-  private recentSubmissions: Map<string, number>; // hash -> timestamp
 
   private constructor() {
     this.tasks = new Map();
     this.taskUpdates$ = new Subject();
-    this.recentSubmissions = new Map();
-
-    // Clean up old submissions periodically
-    setInterval(() => this.cleanupRecentSubmissions(), 60000); // Every minute
   }
 
   /**
@@ -47,7 +41,7 @@ class TaskQueueService {
    * @param params - Generation parameters
    * @param type - Task type (image or video)
    * @returns The created task
-   * @throws Error if validation fails or duplicate submission detected
+   * @throws Error if validation fails
    */
   createTask(params: GenerationParams, type: TaskType): Task {
     // Validate parameters
@@ -58,12 +52,6 @@ class TaskQueueService {
 
     // Sanitize parameters
     const sanitizedParams = sanitizeGenerationParams(params);
-
-    // Check for duplicate submission
-    const paramsHash = generateParamsHash(sanitizedParams, type);
-    if (this.isDuplicateSubmission(paramsHash)) {
-      throw new Error('Duplicate submission detected. Please wait before submitting the same task again.');
-    }
 
     // Create new task
     const now = Date.now();
@@ -81,9 +69,6 @@ class TaskQueueService {
 
     // Add to queue
     this.tasks.set(task.id, task);
-    
-    // Track recent submission
-    this.recentSubmissions.set(paramsHash, now);
 
     // Emit event
     this.emitEvent('taskCreated', task);
@@ -347,37 +332,6 @@ class TaskQueueService {
     this.updateTaskStatus(taskId, task.status, {
       insertedToCanvas: true,
     });
-  }
-
-  /**
-   * Checks if a submission is a duplicate
-   * @private
-   */
-  private isDuplicateSubmission(paramsHash: string): boolean {
-    const lastSubmission = this.recentSubmissions.get(paramsHash);
-    if (!lastSubmission) {
-      return false;
-    }
-
-    const elapsed = Date.now() - lastSubmission;
-    return elapsed < DUPLICATE_SUBMISSION_WINDOW;
-  }
-
-  /**
-   * Cleans up old submission tracking data
-   * @private
-   */
-  private cleanupRecentSubmissions(): void {
-    const now = Date.now();
-    const toDelete: string[] = [];
-
-    this.recentSubmissions.forEach((timestamp, hash) => {
-      if (now - timestamp > DUPLICATE_SUBMISSION_WINDOW) {
-        toDelete.push(hash);
-      }
-    });
-
-    toDelete.forEach(hash => this.recentSubmissions.delete(hash));
   }
 
   /**

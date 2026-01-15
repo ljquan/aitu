@@ -121,6 +121,15 @@ class StorageService {
         }
       });
 
+      // Wait for browser idle time after IndexedDB operation
+      await new Promise<void>(resolve => {
+        if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+          (window as Window).requestIdleCallback(() => resolve(), { timeout: 50 });
+        } else {
+          setTimeout(resolve, 0);
+        }
+      });
+
       // console.log(`[StorageService] Loaded ${tasks.length} tasks`);
       return tasks;
     } catch (error) {

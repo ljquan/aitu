@@ -104,6 +104,12 @@ function openDB(): Promise<IDBDatabase> {
  */
 export class TaskQueueStorage {
   private dbPromise: Promise<IDBDatabase> | null = null;
+  
+  // Batch save optimization to reduce IndexedDB transaction overhead
+  private pendingTaskSaves: Map<string, SWTask> = new Map();
+  private batchSaveTimer: ReturnType<typeof setTimeout> | null = null;
+  private batchSavePromises: Map<string, { resolve: () => void; reject: (err: unknown) => void }> = new Map();
+  private readonly BATCH_SAVE_DELAY = 50; // ms - batch saves within this window
 
   /**
    * Get database connection
@@ -116,12 +122,82 @@ export class TaskQueueStorage {
   }
 
   /**
-   * Save a task to IndexedDB
+   * Flush pending task saves immediately
    */
-  async saveTask(task: SWTask): Promise<void> {
+  private async flushPendingTaskSaves(): Promise<void> {
+    if (this.batchSaveTimer) {
+      clearTimeout(this.batchSaveTimer);
+      this.batchSaveTimer = null;
+    }
+
+    const tasksToSave = Array.from(this.pendingTaskSaves.values());
+    const promisesToResolve = new Map(this.batchSavePromises);
+    
+    this.pendingTaskSaves.clear();
+    this.batchSavePromises.clear();
+
+    if (tasksToSave.length === 0) return;
+
     try {
       const db = await this.getDB();
-      return new Promise((resolve, reject) => {
+      await new Promise<void>((resolve, reject) => {
+        const transaction = db.transaction(TASKS_STORE, 'readwrite');
+        const store = transaction.objectStore(TASKS_STORE);
+
+        // Put all tasks in a single transaction
+        for (const task of tasksToSave) {
+          store.put(task);
+        }
+
+        transaction.oncomplete = () => {
+          // Resolve all pending promises
+          promisesToResolve.forEach(({ resolve }) => resolve());
+          resolve();
+        };
+        transaction.onerror = () => {
+          const error = transaction.error;
+          promisesToResolve.forEach(({ reject }) => reject(error));
+          reject(error);
+        };
+      });
+    } catch (error) {
+      console.error('[SWStorage] Failed to batch save tasks:', error);
+      promisesToResolve.forEach(({ reject }) => reject(error));
+    }
+  }
+
+  /**
+   * Save a task to IndexedDB (batched for performance)
+   */
+  async saveTask(task: SWTask): Promise<void> {
+    return new Promise((resolve, reject) => {
+      // Add to pending saves
+      this.pendingTaskSaves.set(task.id, task);
+      this.batchSavePromises.set(task.id, { resolve, reject });
+
+      // Schedule batch save
+      if (!this.batchSaveTimer) {
+        this.batchSaveTimer = setTimeout(() => {
+          this.flushPendingTaskSaves();
+        }, this.BATCH_SAVE_DELAY);
+      }
+    });
+  }
+
+  /**
+   * Save a task immediately without batching (for critical saves)
+   */
+  async saveTaskImmediate(task: SWTask): Promise<void> {
+    // First, remove from pending batch if present
+    this.pendingTaskSaves.delete(task.id);
+    const pendingPromise = this.batchSavePromises.get(task.id);
+    if (pendingPromise) {
+      this.batchSavePromises.delete(task.id);
+    }
+
+    try {
+      const db = await this.getDB();
+      await new Promise<void>((resolve, reject) => {
         const transaction = db.transaction(TASKS_STORE, 'readwrite');
         const store = transaction.objectStore(TASKS_STORE);
         const request = store.put(task);
@@ -129,8 +205,17 @@ export class TaskQueueStorage {
         request.onerror = () => reject(request.error);
         request.onsuccess = () => resolve();
       });
+      
+      // Resolve the pending promise if it existed
+      if (pendingPromise) {
+        pendingPromise.resolve();
+      }
     } catch (error) {
       console.error('[SWStorage] Failed to save task:', error);
+      if (pendingPromise) {
+        pendingPromise.reject(error);
+      }
+      throw error;
     }
   }
 

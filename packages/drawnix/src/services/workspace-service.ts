@@ -68,12 +68,21 @@ class WorkspaceService {
     try {
       await workspaceStorageService.initialize();
 
-      // Load all data
+      // Load all data in parallel
       const [folders, boards, state] = await Promise.all([
         workspaceStorageService.loadAllFolders(),
         workspaceStorageService.loadAllBoards(),
         workspaceStorageService.loadState(),
       ]);
+
+      // Use requestIdleCallback to yield to main thread before processing data
+      await new Promise<void>(resolve => {
+        if ('requestIdleCallback' in window) {
+          (window as Window).requestIdleCallback(() => resolve(), { timeout: 50 });
+        } else {
+          setTimeout(resolve, 0);
+        }
+      });
 
       this.folders = new Map(folders.map((f) => [f.id, f]));
       this.boards = new Map(boards.map((b) => [b.id, b]));

@@ -39,60 +39,35 @@ export function downloadFromBlob(blob: Blob, filename: string): void {
 }
 
 /**
- * Download a file from URL with retry support
+ * Download a file from URL
  * Handles cross-origin URLs by fetching as blob first
  * SW will deduplicate concurrent requests to the same URL
  *
  * @param url - The URL of the file to download
  * @param filename - Optional filename (will be sanitized if provided)
- * @param maxRetries - Maximum number of retry attempts (default: 3)
  * @returns Promise that resolves when download is complete
  */
 export async function downloadFile(
   url: string,
-  filename?: string,
-  maxRetries: number = 3
+  filename?: string
 ): Promise<void> {
-  let lastError: Error | null = null;
+  // Fetch the file as blob to handle cross-origin URLs
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  const blob = await response.blob();
 
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    try {
-      // console.log(`[Download] Attempt ${attempt + 1}/${maxRetries} for:`, url);
-
-      // Fetch the file as blob to handle cross-origin URLs
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const blob = await response.blob();
-
-      // Determine filename
-      let finalFilename = filename;
-      if (!finalFilename) {
-        // Try to extract filename from URL
-        const urlPath = new URL(url).pathname;
-        finalFilename = urlPath.substring(urlPath.lastIndexOf('/') + 1) || 'download';
-      }
-
-      // Use downloadFromBlob to trigger download
-      downloadFromBlob(blob, finalFilename);
-      // console.log('[Download] Success');
-      return;
-    } catch (error) {
-      // console.warn(`[Download] Attempt ${attempt + 1} failed:`, error);
-      lastError = error as Error;
-
-      // Wait before retrying (exponential backoff: 2s, 4s, 6s)
-      if (attempt < maxRetries - 1) {
-        const delay = 2000 * (attempt + 1);
-        // console.log(`[Download] Retrying in ${delay}ms...`);
-        await new Promise(r => setTimeout(r, delay));
-      }
-    }
+  // Determine filename
+  let finalFilename = filename;
+  if (!finalFilename) {
+    // Try to extract filename from URL
+    const urlPath = new URL(url).pathname;
+    finalFilename = urlPath.substring(urlPath.lastIndexOf('/') + 1) || 'download';
   }
 
-  // console.error('[Download] All attempts failed');
-  throw lastError || new Error('Download failed after all retries');
+  // Use downloadFromBlob to trigger download
+  downloadFromBlob(blob, finalFilename);
 }
 
 /**

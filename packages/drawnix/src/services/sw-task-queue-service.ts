@@ -22,10 +22,8 @@ import {
 import { generateTaskId } from '../utils/task-utils';
 import {
   validateGenerationParams,
-  generateParamsHash,
   sanitizeGenerationParams,
 } from '../utils/validation-utils';
-import { DUPLICATE_SUBMISSION_WINDOW } from '../constants/TASK_CONSTANTS';
 import { swTaskQueueClient } from './sw-client';
 import type { SWTask } from './sw-client';
 import { geminiSettings, settingsManager } from '../utils/settings-manager';
@@ -38,16 +36,11 @@ class SWTaskQueueService {
   /** Read-only view of SW's task state, updated via SW push */
   private tasks: Map<string, Task>;
   private taskUpdates$: Subject<TaskEvent>;
-  private recentSubmissions: Map<string, number>;
   private initialized = false;
 
   private constructor() {
     this.tasks = new Map();
     this.taskUpdates$ = new Subject();
-    this.recentSubmissions = new Map();
-
-    // Clean up old submissions periodically
-    setInterval(() => this.cleanupRecentSubmissions(), 60000);
 
     // Setup SW client handlers
     this.setupSWClientHandlers();
@@ -108,13 +101,6 @@ class SWTaskQueueService {
     }
 
     const sanitizedParams = sanitizeGenerationParams(params);
-    const paramsHash = generateParamsHash(sanitizedParams, type);
-
-    if (this.isDuplicateSubmission(paramsHash)) {
-      throw new Error(
-        'Duplicate submission detected. Please wait before submitting the same task again.'
-      );
-    }
 
     // Create task locally for immediate UI feedback
     const now = Date.now();
@@ -130,7 +116,6 @@ class SWTaskQueueService {
     };
 
     this.tasks.set(task.id, task);
-    this.recentSubmissions.set(paramsHash, now);
     this.emitEvent('taskCreated', task);
 
     // Submit to SW (SW will broadcast TASK_CREATED to confirm)
@@ -487,21 +472,6 @@ class SWTaskQueueService {
     this.tasks.set(taskId, updatedTask);
     // console.log(`[SWTaskQueueService] Emitting taskUpdated for ${taskId}, status: ${status}, autoInsertToCanvas: ${updatedTask.params?.autoInsertToCanvas}`);
     this.emitEvent('taskUpdated', updatedTask);
-  }
-
-  private isDuplicateSubmission(paramsHash: string): boolean {
-    const lastSubmission = this.recentSubmissions.get(paramsHash);
-    if (!lastSubmission) return false;
-    return Date.now() - lastSubmission < DUPLICATE_SUBMISSION_WINDOW;
-  }
-
-  private cleanupRecentSubmissions(): void {
-    const now = Date.now();
-    for (const [hash, timestamp] of this.recentSubmissions) {
-      if (now - timestamp > DUPLICATE_SUBMISSION_WINDOW * 2) {
-        this.recentSubmissions.delete(hash);
-      }
-    }
   }
 
   private emitEvent(type: 'taskCreated' | 'taskUpdated' | 'taskDeleted' | 'taskSynced', task: Task): void {
