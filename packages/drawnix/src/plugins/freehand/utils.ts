@@ -47,6 +47,7 @@ export interface CreateFreehandOptions {
   strokeWidth?: number;
   strokeColor?: string;
   strokeStyle?: StrokeStyle;
+  pressures?: number[];
 }
 
 export const createFreehandElement = (
@@ -62,6 +63,7 @@ export const createFreehandElement = (
     ...(options?.strokeWidth !== undefined && { strokeWidth: options.strokeWidth }),
     ...(options?.strokeColor !== undefined && { strokeColor: options.strokeColor }),
     ...(options?.strokeStyle !== undefined && { strokeStyle: options.strokeStyle }),
+    ...(options?.pressures !== undefined && options.pressures.length > 0 && { pressures: options.pressures }),
   };
   return element;
 };

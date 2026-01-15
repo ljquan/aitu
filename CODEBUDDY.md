@@ -415,6 +415,40 @@ const handleGenerate = async () => {
 - Avoid creating new objects/functions in render
 - Consider virtualization for long lists
 
+#### PointerEvent 压力感应兼容性
+**场景**: 实现画笔/手写功能需要根据压力调整笔迹粗细时
+
+❌ **错误示例**:
+```typescript
+// 错误：直接使用 pressure，鼠标/触控板永远返回 0.5
+const handlePointerMove = (event: PointerEvent) => {
+  const pressure = event.pressure; // MacBook 触控板: 永远 0.5
+  const strokeWidth = baseWidth * pressure;
+};
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：检测设备类型，使用速度模拟压力
+const handlePointerMove = (event: PointerEvent) => {
+  // 只有 pointerType === 'pen' 才有真实压力值
+  const hasPenPressure = event.pointerType === 'pen' && 
+                         event.pressure > 0 && 
+                         event.pressure !== 0.5;
+  
+  if (hasPenPressure) {
+    return event.pressure; // 使用真实压力
+  }
+  
+  // 鼠标/触控板：用速度模拟（慢=粗，快=细）
+  const velocity = distance / timeDiff;
+  const pressure = 1 - Math.min(velocity / threshold, 1) * 0.8;
+  return pressure;
+};
+```
+
+**原因**: `PointerEvent.pressure` 只有压感笔（Apple Pencil、Wacom）才提供真实值（0-1）。鼠标点击固定返回 0.5，触控板也是 0.5。对于不支持压力的设备，应使用绘制速度模拟：慢速 → 高压力（粗），快速 → 低压力（细）。
+
 #### Security Guidelines
 - Validate and sanitize all user input
 - Never hardcode sensitive information (API keys, etc.)

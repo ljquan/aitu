@@ -138,6 +138,15 @@
       margin-left: 4px;
     }
   }
+
+  // 压力感应开关
+  .pencil-pressure-switch {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 8px;
+    flex-shrink: 0;
+  }
 }
 
 // 颜色选择器弹出层

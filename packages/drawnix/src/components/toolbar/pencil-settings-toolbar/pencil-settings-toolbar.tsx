@@ -18,6 +18,7 @@ import {
   setFreehandStrokeWidth,
   setFreehandStrokeColor,
   setFreehandStrokeStyle,
+  setFreehandPressureEnabled,
 } from '../../../plugins/freehand/freehand-settings';
 import { FreehandShape } from '../../../plugins/freehand/type';
 import { getFreehandPointers } from '../../../plugins/freehand/utils';
@@ -25,7 +26,7 @@ import { useI18n } from '../../../i18n';
 import { useViewportScale } from '../../../hooks/useViewportScale';
 import { updatePencilCursor } from '../../../hooks/usePencilCursor';
 import { StrokeStyle } from '@plait/common';
-import { Slider } from 'tdesign-react';
+import { Slider, Switch, Tooltip } from 'tdesign-react';
 import {
   StrokeStyleNormalIcon,
   StrokeStyleDashedIcon,
@@ -68,6 +69,7 @@ export const PencilSettingsToolbar: React.FC = () => {
   const [strokeWidth, setStrokeWidth] = useState(settings.strokeWidth);
   const [strokeColor, setStrokeColor] = useState(settings.strokeColor);
   const [strokeStyle, setStrokeStyleState] = useState(settings.strokeStyle);
+  const [pressureEnabled, setPressureEnabled] = useState(settings.pressureEnabled);
   const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
   const [isWidthPickerOpen, setIsWidthPickerOpen] = useState(false);
   const [inputValue, setInputValue] = useState(String(settings.strokeWidth));
@@ -85,6 +87,7 @@ export const PencilSettingsToolbar: React.FC = () => {
     setStrokeWidth(newSettings.strokeWidth);
     setStrokeColor(newSettings.strokeColor);
     setStrokeStyleState(newSettings.strokeStyle);
+    setPressureEnabled(newSettings.pressureEnabled);
     setInputValue(String(newSettings.strokeWidth));
   }, [board, appState.pointer]);
 
@@ -130,6 +133,12 @@ export const PencilSettingsToolbar: React.FC = () => {
   const handleStrokeStyleChange = useCallback((style: StrokeStyle) => {
     setStrokeStyleState(style);
     setFreehandStrokeStyle(board, style);
+  }, [board]);
+
+  // 处理压力感应开关变化
+  const handlePressureChange = useCallback((enabled: boolean) => {
+    setPressureEnabled(enabled);
+    setFreehandPressureEnabled(board, enabled);
   }, [board]);
 
   // 只在选择画笔指针时显示（不包括橡皮擦）
@@ -290,6 +299,17 @@ export const PencilSettingsToolbar: React.FC = () => {
           />
           <span className="pencil-width-input-unit">px</span>
         </div>
+
+        {/* 压力感应开关 */}
+        <Tooltip content="压力感应：支持压感笔；鼠标/触控板使用速度模拟（慢=粗，快=细）" theme="light">
+          <div className="pencil-pressure-switch">
+            <Switch
+              size="small"
+              value={pressureEnabled}
+              onChange={handlePressureChange}
+            />
+          </div>
+        </Tooltip>
       </Stack.Row>
     </Island>
     </div>

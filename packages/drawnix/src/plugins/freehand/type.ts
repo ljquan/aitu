@@ -38,7 +38,20 @@ export enum FreehandShape {
 
 export const FREEHAND_TYPE = 'freehand';
 
-export type Freehand = PlaitCustomGeometry<typeof FREEHAND_TYPE, Point[], FreehandShape>
+/**
+ * 带压力信息的点
+ */
+export interface PressurePoint {
+  point: Point;
+  pressure: number; // 0-1 范围的压力值
+}
+
+export type Freehand = PlaitCustomGeometry<typeof FREEHAND_TYPE, Point[], FreehandShape> & {
+  /** 压力数据（与 points 一一对应） */
+  pressures?: number[];
+  /** 基准线宽 */
+  strokeWidth?: number;
+};
 
 export const Freehand = {
   isFreehand: (value: any): value is Freehand => {

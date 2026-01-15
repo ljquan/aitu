@@ -12,6 +12,7 @@ export interface FreehandSettings {
   strokeColor: string;
   strokeStyle: StrokeStyle;
   eraserWidth: number;
+  pressureEnabled: boolean;
 }
 
 // 默认画笔设置
@@ -20,6 +21,7 @@ const DEFAULT_FREEHAND_SETTINGS: FreehandSettings = {
   strokeColor: DEFAULT_COLOR,
   strokeStyle: StrokeStyle.solid,
   eraserWidth: 20,
+  pressureEnabled: false,
 };
 
 // 使用 WeakMap 存储每个 board 的画笔设置
@@ -62,6 +64,14 @@ export const setFreehandStrokeStyle = (board: PlaitBoard, strokeStyle: StrokeSty
 export const setEraserWidth = (board: PlaitBoard, eraserWidth: number) => {
   const current = getFreehandSettings(board);
   FREEHAND_SETTINGS.set(board, { ...current, eraserWidth });
+};
+
+/**
+ * 设置压力感应开关
+ */
+export const setFreehandPressureEnabled = (board: PlaitBoard, pressureEnabled: boolean) => {
+  const current = getFreehandSettings(board);
+  FREEHAND_SETTINGS.set(board, { ...current, pressureEnabled });
 };
 
 /**
