@@ -20,6 +20,20 @@ import { debounce } from '@aitu/utils';
 let globalInitialized = false;
 
 /**
+ * Wait for browser idle time to execute heavy operations
+ * Falls back to setTimeout if requestIdleCallback is not available
+ */
+function waitForIdle(timeout = 100): Promise<void> {
+  return new Promise(resolve => {
+    if ('requestIdleCallback' in window) {
+      (window as Window).requestIdleCallback(() => resolve(), { timeout });
+    } else {
+      setTimeout(resolve, 0);
+    }
+  });
+}
+
+/**
  * Hook for automatic task storage synchronization
  * 
  * Responsibilities:
@@ -39,7 +53,7 @@ export function useTaskStorage(): void {
     let subscriptionActive = true;
     const usingSW = shouldUseSWTaskQueue();
 
-    // Initialize storage and load tasks
+    // Initialize storage and load tasks (deferred to browser idle time)
     const initializeStorage = async () => {
       if (globalInitialized) {
         // console.log('[useTaskStorage] Already initialized, skipping');
@@ -49,11 +63,17 @@ export function useTaskStorage(): void {
       // Set flag immediately to prevent concurrent initialization
       globalInitialized = true;
 
+      // Wait for browser idle time to avoid blocking page load
+      await waitForIdle(50);
+
       // console.log('[useTaskStorage] Starting initialization...');
 
       try {
         // Initialize storage service
         await storageService.initialize();
+
+        // Wait for browser idle between heavy operations
+        await waitForIdle(50);
 
         // Migrate legacy history data from localStorage to task queue
         await migrateLegacyHistory();
@@ -66,6 +86,9 @@ export function useTaskStorage(): void {
           // Import and initialize SW task queue service
           const { swTaskQueueService } = await import('../services/sw-task-queue-service');
           await swTaskQueueService.initialize();
+
+          // Wait for browser idle
+          await waitForIdle(50);
 
           // Migrate legacy tasks from old storage to SW (one-time migration)
           const legacyTasks = await storageService.loadTasks();

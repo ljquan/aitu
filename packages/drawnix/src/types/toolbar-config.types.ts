@@ -29,18 +29,19 @@ export interface ToolbarConfig {
 
 /**
  * 当前配置版本
- * v5: 移除 zoom 按钮（已移至视图导航组件）
+ * v6: 将 shape 按钮移至默认显示（位于 freehand 之后）
  */
-export const TOOLBAR_CONFIG_VERSION = 5;
+export const TOOLBAR_CONFIG_VERSION = 6;
 
 /**
  * 默认显示的按钮
- * 顺序: 手形、选择、画笔、文本、图片上传、素材库、AI图片、AI视频
+ * 顺序: 手形、选择、画笔、形状、文本、图片上传、素材库、AI图片、AI视频
  */
 export const DEFAULT_VISIBLE_BUTTONS = [
   'hand',
   'selection',
   'freehand',
+  'shape',
   'text',
   'image',
   'media-library',
@@ -57,6 +58,7 @@ export const ALL_BUTTON_IDS = [
   'hand',
   'selection',
   'freehand',
+  'shape',
   'text',
   'image',
   'media-library',
@@ -65,7 +67,6 @@ export const ALL_BUTTON_IDS = [
   // 默认收起的按钮（放在更多工具里）
   'mind',
   'arrow',
-  'shape',
   'theme',
   'mermaid-to-drawnix',
   'markdown-to-drawnix',

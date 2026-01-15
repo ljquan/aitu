@@ -183,6 +183,39 @@ await cacheService.cacheMediaFromBlob(url, blob, 'image', {
 
 **原因**: TypeScript 的严格对象字面量检查会禁止传递未知属性。如果需要额外信息：1) 使用现有字段组合表达（如 `taskId: 'imported-xxx'`）；2) 或修改类型定义扩展接口。
 
+#### 扩展外部库的枚举类型
+**场景**: 需要在外部库的枚举（如 `@plait/common` 的 `StrokeStyle`）基础上添加新值时
+
+❌ **错误示例**:
+```typescript
+// 错误：直接修改外部库的枚举（无法做到）或使用魔术字符串
+import { StrokeStyle } from '@plait/common';
+
+const strokeStyle = 'hollow';  // ❌ 类型不匹配
+setStrokeStyle(board, strokeStyle);  // 错误：类型 'string' 不能赋给 StrokeStyle
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：创建扩展类型，同时保持与原始枚举的兼容性
+import { StrokeStyle } from '@plait/common';
+
+// 1. 使用联合类型扩展
+export type FreehandStrokeStyle = StrokeStyle | 'hollow';
+
+// 2. 创建同名常量对象，合并原始枚举值
+export const FreehandStrokeStyle = {
+  ...StrokeStyle,
+  hollow: 'hollow' as const,
+};
+
+// 使用时可以访问所有值
+const style1 = FreehandStrokeStyle.solid;   // ✅ 原始值
+const style2 = FreehandStrokeStyle.hollow;  // ✅ 扩展值
+```
+
+**原因**: TypeScript 的枚举是封闭的，无法在外部添加新成员。通过 "类型 + 同名常量对象" 模式，可以：1) 保持与原始枚举的完全兼容；2) 类型安全地添加新值；3) 在运行时和编译时都能正确使用。
+
 #### Async Initialization Pattern
 **场景**: 使用 `settingsManager` 或其他需要异步初始化的服务时
 
@@ -231,6 +264,47 @@ const submitToSW = async (workflow) => {
 ```
 
 **原因**: Service Worker 的 `workflowHandler` 需要收到 `TASK_QUEUE_INIT` 消息后才会初始化。如果在 SW 初始化前提交工作流，消息会被暂存到 `pendingWorkflowMessages`，等待配置到达。若配置永远不到达，工作流就永远不会开始执行。
+
+#### 重复提交检测应由 UI 层处理
+**场景**: 实现防重复提交功能时
+
+❌ **错误示例**:
+```typescript
+// 错误：在服务层基于参数哈希进行去重
+class TaskQueueService {
+  private recentSubmissions: Map<string, number>;
+
+  createTask(params: GenerationParams, type: TaskType): Task {
+    const paramsHash = generateParamsHash(params, type);
+    if (this.isDuplicateSubmission(paramsHash)) {
+      throw new Error('Duplicate submission detected');
+    }
+    this.recentSubmissions.set(paramsHash, Date.now());
+  }
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：服务层只检查 taskId 重复，UI 层通过按钮防抖处理重复提交
+class TaskQueueService {
+  createTask(params: GenerationParams, type: TaskType): Task {
+    const taskId = generateTaskId(); // UUID v4，每次不同
+    // 不做参数去重
+  }
+}
+
+// UI 层
+const [isSubmitting, setIsSubmitting] = useState(false);
+const handleSubmit = async () => {
+  if (isSubmitting) return;
+  setIsSubmitting(true);
+  try { await taskQueueService.createTask(params, type); }
+  finally { setTimeout(() => setIsSubmitting(false), 1000); }
+};
+```
+
+**原因**: 用户可能故意连续提交相同参数（想生成多张图）。防重复点击是 UI 交互问题，应由 UI 层解决，服务层不应基于参数内容去重。
 
 #### React Component Guidelines
 - Use functional components with Hooks

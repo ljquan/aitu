@@ -6,8 +6,6 @@ export interface GeminiConfig {
   apiKey: string;
   baseUrl: string;
   modelName?: string;
-  maxRetries?: number;
-  retryDelay?: number;
   timeout?: number;
 }
 

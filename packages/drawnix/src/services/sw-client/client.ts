@@ -35,12 +35,8 @@ export class SWTaskQueueClient {
   private chatHandlers: Map<string, ChatEventHandlers> = new Map();
   private tasksSubject = new Subject<SWTask[]>();
 
-  // Local task cache for fast interception
+  // Local task cache for fast access
   private localTaskCache: Map<string, SWTask> = new Map();
-  // Fingerprint cache for deduplication
-  private fingerprintCache: Map<string, string> = new Map(); // fingerprint -> taskId
-  // Pending submissions to prevent duplicate requests
-  private pendingSubmissions: Set<string> = new Set();
 
   // Store last config for re-sending when SW requests it
   private lastGeminiConfig: GeminiConfig | null = null;
@@ -142,79 +138,14 @@ export class SWTaskQueueClient {
   }
 
   /**
-   * Generate task fingerprint for deduplication
-   */
-  private generateFingerprint(taskType: TaskType, params: GenerationParams): string {
-    const data = {
-      type: taskType,
-      prompt: params.prompt?.trim().toLowerCase() || '',
-      width: params.width,
-      height: params.height,
-      size: params.size,
-      duration: params.duration,
-      model: params.model,
-      style: params.style,
-      // Include batch info for concurrent generation
-      batchId: params.batchId,
-      batchIndex: params.batchIndex,
-    };
-    // Simple hash for fingerprint
-    const str = JSON.stringify(data);
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      const char = str.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash;
-    }
-    return hash.toString(16);
-  }
-
-  /**
-   * Check if a task with similar parameters already exists (local fast check)
-   */
-  checkDuplicateLocally(taskType: TaskType, params: GenerationParams): SWTask | null {
-    const fingerprint = this.generateFingerprint(taskType, params);
-    const existingTaskId = this.fingerprintCache.get(fingerprint);
-    if (existingTaskId) {
-      const task = this.localTaskCache.get(existingTaskId);
-      // Only return if task is still active
-      if (task && task.status !== 'completed' && task.status !== 'failed' && task.status !== 'cancelled') {
-        return task;
-      }
-      // Clean up stale fingerprint
-      this.fingerprintCache.delete(fingerprint);
-    }
-    return null;
-  }
-
-  /**
-   * Submit a new task with local fast interception
+   * Submit a new task
    */
   submitTask(
     taskId: string,
     taskType: TaskType,
     params: GenerationParams
   ): void {
-    // Fast local check for duplicate
-    const existingTask = this.checkDuplicateLocally(taskType, params);
-    if (existingTask) {
-      console.warn(`[SWClient] Duplicate task detected locally, existing task: ${existingTask.id}`);
-      // Notify handlers about the existing task
-      this.taskHandlers.onCreated?.(existingTask);
-      return;
-    }
-
-    // Check if submission is already pending
-    const fingerprint = this.generateFingerprint(taskType, params);
-    if (this.pendingSubmissions.has(fingerprint)) {
-      console.warn(`[SWClient] Task submission already pending for fingerprint: ${fingerprint}`);
-      return;
-    }
-
-    // Mark as pending
-    this.pendingSubmissions.add(fingerprint);
-
-    // Add to local cache immediately for fast subsequent checks
+    // Add to local cache immediately
     const now = Date.now();
     const pendingTask: SWTask = {
       id: taskId,
@@ -226,7 +157,6 @@ export class SWTaskQueueClient {
       retryCount: 0,
     };
     this.localTaskCache.set(taskId, pendingTask);
-    this.fingerprintCache.set(fingerprint, taskId);
 
     // Submit to SW
     this.postMessage({
@@ -235,11 +165,6 @@ export class SWTaskQueueClient {
       taskType,
       params,
     });
-
-    // Clear pending flag after a short delay (SW should respond quickly)
-    setTimeout(() => {
-      this.pendingSubmissions.delete(fingerprint);
-    }, 5000);
   }
 
   /**
@@ -647,17 +572,11 @@ export class SWTaskQueueClient {
    * Sync local cache with tasks from SW
    */
   private syncLocalCache(tasks: SWTask[]): void {
-    // Clear and rebuild caches
+    // Clear and rebuild cache
     this.localTaskCache.clear();
-    this.fingerprintCache.clear();
 
     for (const task of tasks) {
       this.localTaskCache.set(task.id, task);
-      // Only cache fingerprints for active tasks
-      if (task.status !== 'completed' && task.status !== 'failed' && task.status !== 'cancelled') {
-        const fingerprint = this.generateFingerprint(task.type, task.params);
-        this.fingerprintCache.set(fingerprint, task.id);
-      }
     }
   }
 
@@ -666,14 +585,6 @@ export class SWTaskQueueClient {
    */
   private updateLocalCache(task: SWTask): void {
     this.localTaskCache.set(task.id, task);
-    const fingerprint = this.generateFingerprint(task.type, task.params);
-
-    if (task.status === 'completed' || task.status === 'failed' || task.status === 'cancelled') {
-      // Remove from fingerprint cache when task is terminal
-      this.fingerprintCache.delete(fingerprint);
-    } else {
-      this.fingerprintCache.set(fingerprint, task.id);
-    }
   }
 
   /**
@@ -779,12 +690,7 @@ export class SWTaskQueueClient {
 
       case 'TASK_DELETED': {
         // Remove from local cache
-        const deletedTask = this.localTaskCache.get(message.taskId);
-        if (deletedTask) {
-          const fingerprint = this.generateFingerprint(deletedTask.type, deletedTask.params);
-          this.fingerprintCache.delete(fingerprint);
-          this.localTaskCache.delete(message.taskId);
-        }
+        this.localTaskCache.delete(message.taskId);
         this.taskHandlers.onDeleted?.(message.taskId);
         break;
       }

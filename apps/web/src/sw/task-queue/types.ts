@@ -621,8 +621,6 @@ export interface ChatHandler {
  * Task queue configuration
  */
 export interface TaskQueueConfig {
-  /** Maximum concurrent tasks */
-  maxConcurrent: number;
   /** Maximum retry count */
   maxRetries: number;
   /** Retry delays in milliseconds (exponential backoff) */
@@ -635,13 +633,8 @@ export interface TaskQueueConfig {
  * Default task queue configuration
  */
 export const DEFAULT_TASK_QUEUE_CONFIG: TaskQueueConfig = {
-  maxConcurrent: Infinity, // No concurrent limit for image/video generation
-  maxRetries: 3,
-  retryDelays: [
-    1 * 60 * 1000,   // 1 minute
-    5 * 60 * 1000,   // 5 minutes
-    15 * 60 * 1000,  // 15 minutes
-  ],
+  maxRetries: 0, // 不重试
+  retryDelays: [],
   timeouts: {
     [TaskType.IMAGE]: 10 * 60 * 1000,             // 10 minutes for image
     [TaskType.VIDEO]: 20 * 60 * 1000,             // 20 minutes for video

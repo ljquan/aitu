@@ -1,0 +1,31 @@
+@import '../../styles/z-index';
+
+.auto-complete-shape-picker {
+  position: fixed;
+  z-index: $z-popover;
+  animation: fadeIn 0.15s ease-out;
+
+  .shape-button {
+    transition: all 0.15s ease;
+
+    &.is-current {
+      background: var(--color-primary-light, #e3f2fd);
+      border-color: var(--color-primary, #5A4FCF);
+    }
+
+    &:hover {
+      transform: scale(1.05);
+    }
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

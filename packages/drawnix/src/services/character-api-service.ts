@@ -103,55 +103,33 @@ class CharacterAPIService {
       throw new Error('API Key 未配置');
     }
 
-    const maxRetries = 3;
-    const retryDelay = 2000;
-    let lastError: Error | null = null;
+    const response = await fetch(`${this.baseUrl}/v1/videos/${characterId}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+      },
+    });
 
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        const response = await fetch(`${this.baseUrl}/v1/videos/${characterId}`, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-          },
-        });
+    if (!response.ok) {
+      const errorText = await response.text();
+      log.error('Query failed:', response.status, errorText);
 
-        if (!response.ok) {
-          const errorText = await response.text();
-          log.error('Query failed:', response.status, errorText);
-
-          // Check if character is still being processed:
-          // - 202 Accepted: Request received, processing in background
-          // - 404 Not Found: Character not ready yet (API returns 404 during processing)
-          if (response.status === HTTP_STATUS.NOT_FOUND || response.status === HTTP_STATUS.ACCEPTED) {
-            throw new Error('CHARACTER_PROCESSING');
-          }
-
-          const error = new Error(`角色查询失败: ${response.status} - ${errorText}`);
-          (error as any).apiErrorBody = errorText;
-          (error as any).httpStatus = response.status;
-          throw error;
-        }
-
-        const result = await response.json();
-        log.debug('Character query result:', result);
-        return result;
-      } catch (error) {
-        lastError = error as Error;
-        const isNetworkError = error instanceof TypeError &&
-          (error.message.includes('Failed to fetch') || error.message.includes('network'));
-
-        if (isNetworkError && attempt < maxRetries) {
-          log.warn(`Network error on attempt ${attempt}/${maxRetries}, retrying...`);
-          await this.sleep(retryDelay);
-          continue;
-        }
-
-        throw error;
+      // Check if character is still being processed:
+      // - 202 Accepted: Request received, processing in background
+      // - 404 Not Found: Character not ready yet (API returns 404 during processing)
+      if (response.status === HTTP_STATUS.NOT_FOUND || response.status === HTTP_STATUS.ACCEPTED) {
+        throw new Error('CHARACTER_PROCESSING');
       }
+
+      const error = new Error(`角色查询失败: ${response.status} - ${errorText}`);
+      (error as any).apiErrorBody = errorText;
+      (error as any).httpStatus = response.status;
+      throw error;
     }
 
-    throw lastError || new Error('角色查询失败');
+    const result = await response.json();
+    log.debug('Character query result:', result);
+    return result;
   }
 
   /**

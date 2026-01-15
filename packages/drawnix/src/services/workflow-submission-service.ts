@@ -12,6 +12,7 @@
 import { Subject, Observable, Subscription } from 'rxjs';
 import { filter } from 'rxjs/operators';
 import type { ParsedGenerationParams } from '../utils/ai-input-parser';
+import { isAuthError, dispatchApiAuthError } from '../utils/api-auth-error-event';
 
 // ============================================================================
 // Types
@@ -568,6 +569,11 @@ class WorkflowSubmissionService {
     if (workflow) {
       workflow.status = 'failed';
       workflow.error = data.error;
+    }
+
+    // 检测 401 认证错误，触发打开设置对话框
+    if (data.error && isAuthError(data.error)) {
+      dispatchApiAuthError({ message: data.error, source: 'workflow' });
     }
 
     this.events$.next({

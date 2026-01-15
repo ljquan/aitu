@@ -29,6 +29,19 @@ const WORKSPACE_DB_CONFIG = {
 const STATE_KEY = 'workspace_state';
 
 /**
+ * Helper to wait for browser idle time
+ */
+function waitForIdle(timeout = 50): Promise<void> {
+  return new Promise(resolve => {
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+      (window as Window).requestIdleCallback(() => resolve(), { timeout });
+    } else {
+      setTimeout(resolve, 0);
+    }
+  });
+}
+
+/**
  * Workspace storage service for managing data persistence
  */
 class WorkspaceStorageService {
@@ -100,6 +113,8 @@ class WorkspaceStorageService {
     await this.foldersStore.iterate<Folder, void>((value) => {
       if (value && value.id) folders.push(value);
     });
+    // Wait for browser idle time after IndexedDB operation
+    await waitForIdle();
     return folders.sort((a, b) => a.order - b.order);
   }
 
@@ -126,6 +141,8 @@ class WorkspaceStorageService {
     await this.boardsStore.iterate<Board, void>((value) => {
       if (value && value.id) boards.push(value);
     });
+    // Wait for browser idle time after IndexedDB operation
+    await waitForIdle();
     return boards.sort((a, b) => a.order - b.order);
   }
 
@@ -137,6 +154,8 @@ class WorkspaceStorageService {
         boards.push(value);
       }
     });
+    // Wait for browser idle time after IndexedDB operation
+    await waitForIdle();
     return boards.sort((a, b) => a.order - b.order);
   }
 
