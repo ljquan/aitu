@@ -44,6 +44,7 @@ import { PopupStrokeButton } from './stroke-button';
 import { PopupFillButton } from './fill-button';
 import { isWhite, removeHexAlpha, NO_COLOR } from '@aitu/utils';
 import { Freehand } from '../../../plugins/freehand/type';
+import { PenPath } from '../../../plugins/pen/type';
 import { getStrokeColorByElement as getStrokeColorByFreehandElement } from '../../../plugins/freehand/utils';
 import { PopupLinkButton } from './link-button';
 import { PopupPromptButton } from './prompt-button';
@@ -216,6 +217,8 @@ export const PopupToolbar = () => {
         (PlaitDrawElement.isDrawElement(element) && PlaitDrawElement.isTable(element)) ||
         // 手绘元素
         Freehand.isFreehand(element) ||
+        // 钢笔路径
+        PenPath.isPenPath(element) ||
         // 思维导图元素
         MindElement.isMindElement(board, element)
       ) &&
@@ -992,6 +995,9 @@ export const getElementState = (board: PlaitBoard) => {
   if (Freehand.isFreehand(selectedElement)) {
     return getFreehandElementState(board, selectedElement);
   }
+  if (PenPath.isPenPath(selectedElement)) {
+    return getPenPathElementState(board, selectedElement);
+  }
   return getDrawElementState(board, selectedElement as PlaitDrawElement);
 };
 
@@ -1002,6 +1008,16 @@ export const getFreehandElementState = (
   return {
     fill: element.fill,
     strokeColor: getStrokeColorByFreehandElement(board, element),
+  };
+};
+
+export const getPenPathElementState = (
+  board: PlaitBoard,
+  element: PenPath
+) => {
+  return {
+    fill: element.fill,
+    strokeColor: element.strokeColor,
   };
 };
 
@@ -1028,6 +1044,9 @@ export const hasStrokeProperty = (board: PlaitBoard, element: PlaitElement) => {
     return true;
   }
   if (Freehand.isFreehand(element)) {
+    return true;
+  }
+  if (PenPath.isPenPath(element)) {
     return true;
   }
   if (PlaitDrawElement.isDrawElement(element)) {

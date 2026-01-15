@@ -15,6 +15,7 @@ import {
 } from '@plait/draw';
 import { getTextMarksByElement } from '@plait/text-plugins';
 import { Freehand } from '../plugins/freehand/type';
+import { PenPath } from '../plugins/pen/type';
 import {
   getStrokeColorByElement as getStrokeColorByFreehandElement,
   getFillByElement as getFillByFreehandElement,
@@ -25,7 +26,8 @@ export const isClosedElement = (board: PlaitBoard, element: PlaitElement) => {
     MindElement.isMindElement(board, element) ||
     (PlaitDrawElement.isDrawElement(element) && isClosedDrawElement(element)) ||
     isClosedCustomGeometry(board, element) ||
-    Freehand.isFreehand(element)
+    Freehand.isFreehand(element) ||
+    (PenPath.isPenPath(element) && element.closed)
   );
 };
 

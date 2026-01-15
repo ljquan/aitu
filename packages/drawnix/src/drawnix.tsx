@@ -27,6 +27,7 @@ import classNames from 'classnames';
 import './styles/index.scss';
 import { buildDrawnixHotkeyPlugin } from './plugins/with-hotkey';
 import { withFreehand } from './plugins/freehand/with-freehand';
+import { withPen } from './plugins/pen/with-pen';
 import { buildPencilPlugin } from './plugins/with-pencil';
 import {
   DrawnixBoard,
@@ -35,6 +36,7 @@ import {
 } from './hooks/use-drawnix';
 import { ClosePencilToolbar } from './components/toolbar/pencil-mode-toolbar';
 import { PencilSettingsToolbar, EraserSettingsToolbar } from './components/toolbar/pencil-settings-toolbar';
+import { PenSettingsToolbar } from './components/toolbar/pen-settings-toolbar';
 import { CleanConfirm } from './components/clean-confirm/clean-confirm';
 import { buildTextLinkPlugin } from './plugins/with-text-link';
 import { LinkPopup } from './components/popup/link-popup/link-popup';
@@ -519,6 +521,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
     withCommonPlugin,
     buildDrawnixHotkeyPlugin(updateAppState),
     withFreehand,
+    withPen,
     buildPencilPlugin(updateAppState),
     buildTextLinkPlugin(updateAppState),
     withVideo,
@@ -821,6 +824,7 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
           <LinkPopup></LinkPopup>
           <ClosePencilToolbar></ClosePencilToolbar>
           <PencilSettingsToolbar></PencilSettingsToolbar>
+          <PenSettingsToolbar></PenSettingsToolbar>
           <EraserSettingsToolbar></EraserSettingsToolbar>
           {appState.openDialogType && (
             <Suspense fallback={null}>

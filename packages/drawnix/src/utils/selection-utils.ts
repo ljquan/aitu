@@ -3,6 +3,7 @@ import { MindElement } from '@plait/mind';
 import { PlaitDrawElement } from '@plait/draw';
 import { Node } from 'slate';
 import { Freehand } from '../plugins/freehand/type';
+import { PenPath } from '../plugins/pen/type';
 import { SAME_ROW_THRESHOLD } from '../components/ttd-dialog/shared/size-constants';
 import { trimImageWhiteAndTransparentBorder } from './image-border-utils';
 
@@ -307,6 +308,12 @@ export const isGraphicsElement = (board: PlaitBoard, element: PlaitElement): boo
   // Freehand drawings
   if (Freehand.isFreehand(element)) {
     // console.log('Element classified as freehand graphics');
+    return true;
+  }
+  
+  // Pen paths (vector paths created with pen tool)
+  if (PenPath.isPenPath(element)) {
+    // console.log('Element classified as pen path graphics');
     return true;
   }
   
