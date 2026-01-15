@@ -10,6 +10,9 @@ import {
   ThemeColorMode,
   Viewport,
   getSelectedElements,
+  getHitElementByPoint,
+  toHostPoint,
+  toViewBoxPoint,
 } from '@plait/core';
 import React, { useState, useRef, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
 import { withGroup } from '@plait/common';
@@ -67,6 +70,7 @@ import { usePencilCursor } from './hooks/usePencilCursor';
 import { withArrowLineAutoCompleteExtend } from './plugins/with-arrow-line-auto-complete-extend';
 import { AutoCompleteShapePicker } from './components/auto-complete-shape-picker';
 import { useAutoCompleteShapePicker } from './hooks/useAutoCompleteShapePicker';
+import { withDefaultFill } from './plugins/with-default-fill';
 
 const TTDDialog = lazy(() => import('./components/ttd-dialog/ttd-dialog').then(module => ({ default: module.TTDDialog })));
 const SettingsDialog = lazy(() => import('./components/settings-dialog/settings-dialog').then(module => ({ default: module.SettingsDialog })));
@@ -523,6 +527,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
     withToolFocus, // 工具焦点管理 - 双击编辑
     withWorkZone, // 工作区元素 - 在画布上显示工作流进度
     withArrowLineAutoCompleteExtend, // 自动完成形状选择 - hover 中点时选择下一个节点形状
+    withDefaultFill, // 默认填充 - 让新创建的图形有白色填充，方便双击编辑
     withTracking,
   ];
 
@@ -725,28 +730,24 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
 
     const handleDoubleClick = (event: MouseEvent) => {
       const target = event.target as HTMLElement;
-      
-      // 检查是否双击在浮层组件内部（ChatDrawer、抽屉面板、弹窗等）
-      // 这些组件不应该触发画布的快捷工具栏
-      const isInsideOverlay = target.closest('.chat-drawer') ||
-                              target.closest('.project-drawer') ||
-                              target.closest('.toolbox-drawer') ||
-                              target.closest('.task-queue-panel') ||
-                              target.closest('.t-dialog') ||
-                              target.closest('.settings-dialog') ||
-                              target.closest('.minimap') ||
-                              target.closest('.ai-input-bar') ||
-                              target.closest('.view-navigation');
-      
-      if (isInsideOverlay) {
-        return; // 不处理浮层内的双击事件
-      }
-      
-      // 检查是否双击在空白区域（没有选中任何元素）
-      const selectedElements = getSelectedElements(board);
 
-      if (selectedElements.length === 0) {
-        // 获取双击位置（屏幕坐标）
+      // 只处理画布区域内的双击（正向判断，避免维护浮层组件列表）
+      const isInsideCanvas = target.closest('.board-host-svg') ||
+                             target.closest('.plait-board-container');
+
+      if (!isInsideCanvas) {
+        return;
+      }
+
+      // 检查双击位置是否命中了画布上的元素
+      // 使用 getHitElementByPoint 直接检测，而不是依赖 selectedElements
+      // 因为双击事件触发时，元素可能还没被选中
+      const viewBoxPoint = toViewBoxPoint(board, toHostPoint(board, event.clientX, event.clientY));
+      const hitElement = getHitElementByPoint(board, viewBoxPoint);
+
+      // 只有双击空白区域时才显示快速创建工具栏
+      // 双击图形元素应该由 Plait 框架处理（进入文本编辑模式）
+      if (!hitElement) {
         const position: [number, number] = [event.clientX, event.clientY];
         setQuickToolbarPosition(position);
         setQuickToolbarVisible(true);

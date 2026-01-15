@@ -1121,56 +1121,59 @@ createShape(board, points, shapeType);
 - 事件处理器使用 `useCallback` 包装
 - Hook 顺序：状态 hooks → 副作用 hooks → 事件处理器 → 渲染逻辑
 
-### 新增 UI 组件需同步更新全局事件排除列表
+#### Hover 延迟操作需要正确的计时器清理
 
-**场景**: 添加新的浮层/覆盖层 UI 组件（如工具栏、导航、面板等）时，需要将其排除在全局事件处理之外
+**场景**: 实现 hover 延迟展开/显示等交互效果时（如工具栏 Popover 延迟展开）
 
 ❌ **错误示例**:
 ```typescript
-// drawnix.tsx 中的双击事件处理
-const handleDoubleClick = (event: MouseEvent) => {
-  const target = event.target as HTMLElement;
-  
-  const isInsideOverlay = target.closest('.chat-drawer') ||
-                          target.closest('.minimap') ||
-                          target.closest('.ai-input-bar');
-                          // ❌ 忘记添加新组件 .view-navigation
-  
-  if (isInsideOverlay) return;
-  
-  // 双击空白区域触发 quick-creation-toolbar
-  setQuickToolbarVisible(true);
-};
+// 错误：没有清理计时器，可能导致内存泄漏和意外行为
+const [open, setOpen] = useState(false);
 
-// 结果：双击 view-navigation 会意外触发 quick-creation-toolbar
+<div
+  onPointerEnter={() => {
+    setTimeout(() => setOpen(true), 300);  // 计时器没有被追踪
+  }}
+>
 ```
 
 ✅ **正确示例**:
 ```typescript
-// 添加新组件后，同步更新排除列表
-const handleDoubleClick = (event: MouseEvent) => {
-  const target = event.target as HTMLElement;
-  
-  const isInsideOverlay = target.closest('.chat-drawer') ||
-                          target.closest('.minimap') ||
-                          target.closest('.ai-input-bar') ||
-                          target.closest('.view-navigation'); // ✅ 新增组件
-  
-  if (isInsideOverlay) return;
-  
-  setQuickToolbarVisible(true);
-};
+// 正确：使用 ref 追踪计时器，在离开和卸载时清理
+const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+const clearHoverTimeout = useCallback(() => {
+  if (hoverTimeoutRef.current) {
+    clearTimeout(hoverTimeoutRef.current);
+    hoverTimeoutRef.current = null;
+  }
+}, []);
+
+// 组件卸载时清理
+useEffect(() => {
+  return () => clearHoverTimeout();
+}, [clearHoverTimeout]);
+
+<div
+  onPointerEnter={() => {
+    clearHoverTimeout();  // 先清除之前的计时器
+    hoverTimeoutRef.current = setTimeout(() => setOpen(true), 300);
+  }}
+  onPointerLeave={() => {
+    clearHoverTimeout();  // 离开时取消延迟操作
+  }}
+  onPointerDown={() => {
+    clearHoverTimeout();  // 点击时立即响应，取消延迟
+    setOpen(true);
+  }}
+>
 ```
 
-**需要排除的组件类型**:
-- 浮层面板：`.chat-drawer`, `.project-drawer`, `.toolbox-drawer`
-- 工具栏：`.view-navigation`, `.unified-toolbar`, `.ai-input-bar`
-- 弹窗：`.t-dialog`, `.settings-dialog`
-- 其他 UI：`.minimap`, `.task-queue-panel`
-
-**检查位置**: `drawnix.tsx` 中的 `handleDoubleClick` 函数（约第 715-730 行）
-
-**原因**: 全局事件处理（如双击显示快捷工具栏）会捕获整个容器内的事件。如果不排除新添加的 UI 组件，用户在这些组件上的操作会触发意外的全局行为（如在缩放按钮上双击却弹出了创建工具栏）。
+**关键点**:
+- 使用 `useRef` 存储计时器 ID（不用 state，避免不必要的重渲染）
+- `onPointerLeave` 清除计时器（用户离开后取消待执行的操作）
+- `onPointerDown` 清除计时器（点击时立即响应，不等待延迟）
+- `useEffect` 清理函数确保组件卸载时清除计时器
 
 ### CSS/SCSS 规范
 - 使用 BEM 命名规范

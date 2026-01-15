@@ -8,6 +8,7 @@ import {
   setAutoCompleteState,
   resetAutoCompleteState,
   createAutoCompleteElements,
+  createShapeForArrowLine,
 } from '../plugins/with-arrow-line-auto-complete-extend';
 
 const initialState: AutoCompleteShapeState = {
@@ -17,6 +18,7 @@ const initialState: AutoCompleteShapeState = {
   currentShape: null,
   hitIndex: -1,
   hitPoint: null,
+  mode: 'hover',
 };
 
 /**
@@ -48,17 +50,29 @@ export function useAutoCompleteShapePicker(board: PlaitBoard | null) {
     
     const currentState = getAutoCompleteState(board);
     
-    if (currentState.sourceElement && 
-        currentState.hitPoint && 
-        currentState.hitIndex >= 0) {
-      // 创建并插入连接线和新形状
-      createAutoCompleteElements(
-        board,
-        currentState.sourceElement as PlaitDrawElement,
-        currentState.hitIndex,
-        currentState.hitPoint,
-        shape
-      );
+    if (currentState.mode === 'arrowLine') {
+      // 箭头线模式：为已存在的箭头线创建形状
+      if (currentState.arrowLineElement && currentState.arrowLineEndPoint) {
+        createShapeForArrowLine(
+          board,
+          currentState.arrowLineElement,
+          currentState.arrowLineEndPoint,
+          shape
+        );
+      }
+    } else {
+      // hover 模式：创建并插入连接线和新形状
+      if (currentState.sourceElement && 
+          currentState.hitPoint && 
+          currentState.hitIndex >= 0) {
+        createAutoCompleteElements(
+          board,
+          currentState.sourceElement as PlaitDrawElement,
+          currentState.hitIndex,
+          currentState.hitPoint,
+          shape
+        );
+      }
     }
     
     // 关闭选择器（createAutoCompleteElements 内部已经会重置状态）

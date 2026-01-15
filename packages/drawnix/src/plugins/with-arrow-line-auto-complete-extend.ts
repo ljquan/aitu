@@ -1,12 +1,17 @@
 import {
   PlaitBoard,
   PlaitElement,
+  PlaitPointerType,
+  BoardTransforms,
   rotateAntiPointsByElement,
   toActivePoint,
   Transforms,
   Direction,
   rotatePointsByElement,
   RectangleClient,
+  clearSelectedElement,
+  addSelectedElement,
+  Point,
 } from '@plait/core';
 import {
   BasicShapes,
@@ -41,6 +46,12 @@ export interface AutoCompleteShapeState {
   hitIndex: number;
   /** hover 的连接点坐标 (viewBox 坐标，用于创建元素) */
   hitPoint: [number, number] | null;
+  /** 模式：hover 表示 hover 连接点触发，arrowLine 表示箭头线创建完成触发 */
+  mode: 'hover' | 'arrowLine';
+  /** 箭头线模式下的箭头线元素 */
+  arrowLineElement?: PlaitElement | null;
+  /** 箭头线模式下的终点位置 */
+  arrowLineEndPoint?: Point | null;
 }
 
 const initialState: AutoCompleteShapeState = {
@@ -50,6 +61,9 @@ const initialState: AutoCompleteShapeState = {
   currentShape: null,
   hitIndex: -1,
   hitPoint: null,
+  mode: 'hover',
+  arrowLineElement: null,
+  arrowLineEndPoint: null,
 };
 
 // WeakMap 存储每个 board 的状态
@@ -163,6 +177,9 @@ export function createAutoCompleteElements(
   // 创建新形状
   const newShapeElement = createDefaultGeometry(board, newShapePoints, targetShape as GeometryShapes);
   
+  // 设置默认白色填充（让图形中间可点击，方便双击编辑文字）
+  newShapeElement.fill = '#ffffff';
+  
   // 复制源元素的样式（仅对 ShapeElement）
   if (PlaitDrawElement.isShapeElement(sourceElement) && !PlaitDrawElement.isText(sourceElement)) {
     const typedSource = sourceElement as PlaitDrawElement & {
@@ -174,7 +191,10 @@ export function createAutoCompleteElements(
     };
     
     if (typedSource.angle !== undefined) newShapeElement.angle = typedSource.angle;
-    if (typedSource.fill !== undefined) newShapeElement.fill = typedSource.fill;
+    // 复制源元素的填充色（如果有）
+    if (typedSource.fill && typedSource.fill !== 'none') {
+      newShapeElement.fill = typedSource.fill;
+    }
     if (typedSource.strokeColor !== undefined) newShapeElement.strokeColor = typedSource.strokeColor;
     if (typedSource.strokeStyle !== undefined) {
       (newShapeElement as typeof typedSource).strokeStyle = typedSource.strokeStyle;
@@ -237,9 +257,131 @@ export function createAutoCompleteElements(
   // 插入元素
   Transforms.insertNode(board, arrowLineElement, [board.children.length]);
   insertElement(board, newShapeElement);
+
+  // 重置状态
+  resetAutoCompleteState(board);
+
+  // 延迟选中新插入的形状元素
+  const newElementId = newShapeElement.id;
+  setTimeout(() => {
+    // 从 board 中查找实际插入的元素（因为插入后引用可能变化）
+    const insertedElement = board.children.find(el => el.id === newElementId);
+    if (insertedElement) {
+      clearSelectedElement(board);
+      addSelectedElement(board, insertedElement);
+      // 切换到选择模式，触发 UI 更新
+      BoardTransforms.updatePointerType(board, PlaitPointerType.selection);
+    }
+  }, 500);
+}
+
+/**
+ * 为已存在的箭头线创建连接的形状
+ * 用于箭头线拖拽完成后，在终点位置创建形状
+ */
+export function createShapeForArrowLine(
+  board: PlaitBoard,
+  arrowLineElement: PlaitElement,
+  endPoint: Point,
+  targetShape: DrawPointerType
+): void {
+  // 默认形状尺寸（当找不到源元素时使用）
+  let shapeWidth = 100;
+  let shapeHeight = 100;
+  
+  // 尝试从箭头线的源元素获取尺寸
+  const arrowLine = arrowLineElement as PlaitElement & {
+    source?: { boundId?: string };
+    target?: { boundId?: string };
+    points?: Point[];
+  };
+  
+  const sourceBoundId = arrowLine.source?.boundId;
+  if (sourceBoundId) {
+    // 找到源元素
+    const sourceElement = board.children.find(el => el.id === sourceBoundId) as PlaitDrawElement | undefined;
+    if (sourceElement && PlaitDrawElement.isShapeElement(sourceElement)) {
+      // 使用源元素的尺寸
+      const sourceRect = RectangleClient.getRectangleByPoints(sourceElement.points);
+      shapeWidth = sourceRect.width;
+      shapeHeight = sourceRect.height;
+    }
+  }
+  
+  // 计算新形状的位置（以终点为中心）
+  const newShapePoints: [[number, number], [number, number]] = [
+    [endPoint[0] - shapeWidth / 2, endPoint[1] - shapeHeight / 2],
+    [endPoint[0] + shapeWidth / 2, endPoint[1] + shapeHeight / 2],
+  ];
+  
+  // 创建新形状
+  const newShapeElement = createDefaultGeometry(board, newShapePoints, targetShape as GeometryShapes);
+  
+  // 设置默认白色填充
+  newShapeElement.fill = '#ffffff';
+  
+  // 计算连接点
+  const newShapeRect = RectangleClient.getRectangleByPoints(newShapeElement.points);
+  const targetEdgeCenterPoints = RectangleClient.getEdgeCenterPoints(newShapeRect);
+  
+  // 根据箭头线的方向确定连接点
+  const arrowPoints = arrowLine.points || [];
+  
+  if (arrowPoints.length >= 2) {
+    const startPoint = arrowPoints[0];
+    const lineEndPoint = arrowPoints[arrowPoints.length - 1];
+    
+    // 计算箭头线的方向
+    const dx = lineEndPoint[0] - startPoint[0];
+    const dy = lineEndPoint[1] - startPoint[1];
+    
+    // 根据方向选择最近的连接点
+    let targetHitIndex: number;
+    if (Math.abs(dx) > Math.abs(dy)) {
+      // 水平方向为主
+      targetHitIndex = dx > 0 ? 3 : 1; // 从右边来连左边，从左边来连右边
+    } else {
+      // 垂直方向为主
+      targetHitIndex = dy > 0 ? 0 : 2; // 从下边来连上边，从上边来连下边
+    }
+    
+    const connectionPoint = targetEdgeCenterPoints[targetHitIndex];
+    const targetConnection = getHitConnection(board, connectionPoint, newShapeElement);
+    
+    // 更新箭头线的终点连接
+    const arrowLineIndex = board.children.findIndex(el => el.id === arrowLineElement.id);
+    if (arrowLineIndex !== -1) {
+      // 更新箭头线的 target 属性
+      Transforms.setNode(
+        board,
+        {
+          target: {
+            marker: ArrowLineMarkerType.arrow,
+            connection: targetConnection,
+            boundId: newShapeElement.id,
+          },
+          points: [startPoint, connectionPoint],
+        },
+        [arrowLineIndex]
+      );
+    }
+  }
+  
+  // 插入新形状
+  insertElement(board, newShapeElement);
   
   // 重置状态
   resetAutoCompleteState(board);
+  
+  // 延迟选中新插入的形状元素
+  const newElementId = newShapeElement.id;
+  setTimeout(() => {
+    const insertedElement = board.children.find(el => el.id === newElementId);
+    if (insertedElement) {
+      clearSelectedElement(board);
+      addSelectedElement(board, insertedElement);
+    }
+  }, 100);
 }
 
 /**
@@ -249,14 +391,23 @@ export function createAutoCompleteElements(
  * 1. 在 hover 到连接点时显示形状选择器
  * 2. 允许用户选择下一个节点的形状类型
  * 3. 默认使用同类形状
+ * 4. 在箭头线拖拽完成后，如果终点未连接形状，显示形状选择器
  */
 export const withArrowLineAutoCompleteExtend = (board: PlaitBoard) => {
-  const { pointerMove, pointerLeave } = board;
+  const { pointerMove, pointerLeave, globalPointerUp } = board;
   
   let hoverTimeout: ReturnType<typeof setTimeout> | null = null;
   let lastHitIndex = -1;
+  
+  // 记录上一次 children 的长度，用于检测新插入的箭头线
+  let lastChildrenLength = board.children.length;
+  // 记录鼠标位置
+  let lastMousePosition = { x: 0, y: 0 };
 
   board.pointerMove = (event: PointerEvent) => {
+    // 记录鼠标位置
+    lastMousePosition = { x: event.clientX, y: event.clientY };
+    
     // 清除之前的延迟
     if (hoverTimeout) {
       clearTimeout(hoverTimeout);
@@ -270,7 +421,7 @@ export const withArrowLineAutoCompleteExtend = (board: PlaitBoard) => {
     if (!originElement || 
         !PlaitDrawElement.isShapeElement(originElement) || 
         PlaitDrawElement.isText(originElement)) {
-      if (currentState.visible) {
+      if (currentState.visible && currentState.mode === 'hover') {
         setAutoCompleteState(board, { ...initialState });
       }
       lastHitIndex = -1;
@@ -308,16 +459,17 @@ export const withArrowLineAutoCompleteExtend = (board: PlaitBoard) => {
             currentShape: shape,
             hitIndex,
             hitPoint,
+            mode: 'hover',
           });
-        }, 200); // 200ms 延迟，避免快速移动时频繁触发
+        }, 50); // 50ms 延迟，避免快速移动时频繁触发
       }
     } else {
       lastHitIndex = -1;
-      if (currentState.visible) {
+      if (currentState.visible && currentState.mode === 'hover') {
         // 延迟隐藏，给用户时间移动到选择器
         hoverTimeout = setTimeout(() => {
           const state = getAutoCompleteState(board);
-          if (state.visible) {
+          if (state.visible && state.mode === 'hover') {
             setAutoCompleteState(board, { ...initialState });
           }
         }, 300);
@@ -334,6 +486,55 @@ export const withArrowLineAutoCompleteExtend = (board: PlaitBoard) => {
     }
     // 不立即关闭，让用户有机会移动到选择器
     pointerLeave(event);
+  };
+  
+  board.globalPointerUp = (event: PointerEvent) => {
+    // 先调用原始的 globalPointerUp
+    globalPointerUp(event);
+    
+    // 检查是否有新插入的箭头线
+    const currentChildrenLength = board.children.length;
+    if (currentChildrenLength > lastChildrenLength) {
+      // 获取新插入的元素（最后一个）
+      const newElement = board.children[currentChildrenLength - 1];
+      
+      // 检查是否是箭头线
+      if (PlaitDrawElement.isArrowLine(newElement)) {
+        const arrowLine = newElement as PlaitElement & {
+          target?: { boundId?: string };
+          points?: Point[];
+        };
+        
+        // 检查箭头线的终点是否连接到了形状
+        const targetBoundId = arrowLine.target?.boundId;
+        
+        if (!targetBoundId) {
+          // 终点未连接形状，显示形状选择器
+          const arrowPoints = arrowLine.points || [];
+          if (arrowPoints.length >= 2) {
+            const endPoint = arrowPoints[arrowPoints.length - 1];
+            
+            // 使用延迟确保 UI 状态已更新
+            setTimeout(() => {
+              setAutoCompleteState(board, {
+                visible: true,
+                position: { x: lastMousePosition.x - 140, y: lastMousePosition.y + 20 },
+                sourceElement: null,
+                currentShape: BasicShapes.rectangle,
+                hitIndex: -1,
+                hitPoint: null,
+                mode: 'arrowLine',
+                arrowLineElement: newElement,
+                arrowLineEndPoint: endPoint,
+              });
+            }, 50);
+          }
+        }
+      }
+    }
+    
+    // 更新记录的长度
+    lastChildrenLength = board.children.length;
   };
 
   return board;

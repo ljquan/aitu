@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import classNames from 'classnames';
+import { ATTACHED_ELEMENT_CLASS_NAME } from '@plait/core';
 import { BasicShapes, DrawPointerType, FlowchartSymbols } from '@plait/draw';
 import { Island } from '../island';
 import Stack from '../stack';
@@ -113,7 +114,7 @@ export const AutoCompleteShapePicker: React.FC<AutoCompleteShapePickerProps> = (
   const content = (
     <div
       ref={pickerRef}
-      className="auto-complete-shape-picker"
+      className={classNames('auto-complete-shape-picker', ATTACHED_ELEMENT_CLASS_NAME)}
       style={{
         left: adjustedPosition.x,
         top: adjustedPosition.y,
