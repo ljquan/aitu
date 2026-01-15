@@ -256,23 +256,27 @@ export function createAutoCompleteElements(
   
   // 插入元素
   Transforms.insertNode(board, arrowLineElement, [board.children.length]);
+  // insertElement 内部会自动选中新元素并切换到选择模式
   insertElement(board, newShapeElement);
 
   // 重置状态
   resetAutoCompleteState(board);
-
-  // 延迟选中新插入的形状元素
+  
+  // 延迟再次确保选中并触发渲染（防止后续事件覆盖选中状态）
   const newElementId = newShapeElement.id;
   setTimeout(() => {
-    // 从 board 中查找实际插入的元素（因为插入后引用可能变化）
-    const insertedElement = board.children.find(el => el.id === newElementId);
+    const insertedElementIndex = board.children.findIndex(el => el.id === newElementId);
+    const insertedElement = insertedElementIndex >= 0 ? board.children[insertedElementIndex] : null;
     if (insertedElement) {
       clearSelectedElement(board);
       addSelectedElement(board, insertedElement);
-      // 切换到选择模式，触发 UI 更新
       BoardTransforms.updatePointerType(board, PlaitPointerType.selection);
+      // 使用 Transforms.setNode 设置临时标记来触发 board.apply() 从而触发渲染
+      // 先设置一个临时标记，然后立即删除它
+      Transforms.setNode(board, { _forceRender: Date.now() } as any, [insertedElementIndex]);
+      Transforms.setNode(board, { _forceRender: undefined } as any, [insertedElementIndex]);
     }
-  }, 500);
+  }, 50);
 }
 
 /**
@@ -367,21 +371,27 @@ export function createShapeForArrowLine(
     }
   }
   
-  // 插入新形状
+  // 插入新形状（insertElement 内部会自动选中新元素并切换到选择模式）
   insertElement(board, newShapeElement);
   
   // 重置状态
   resetAutoCompleteState(board);
   
-  // 延迟选中新插入的形状元素
+  // 延迟再次确保选中并触发渲染（防止后续事件覆盖选中状态）
   const newElementId = newShapeElement.id;
   setTimeout(() => {
-    const insertedElement = board.children.find(el => el.id === newElementId);
+    const insertedElementIndex = board.children.findIndex(el => el.id === newElementId);
+    const insertedElement = insertedElementIndex >= 0 ? board.children[insertedElementIndex] : null;
     if (insertedElement) {
       clearSelectedElement(board);
       addSelectedElement(board, insertedElement);
+      BoardTransforms.updatePointerType(board, PlaitPointerType.selection);
+      // 使用 Transforms.setNode 设置临时标记来触发 board.apply() 从而触发渲染
+      // 先设置一个临时标记，然后立即删除它
+      Transforms.setNode(board, { _forceRender: Date.now() } as any, [insertedElementIndex]);
+      Transforms.setNode(board, { _forceRender: undefined } as any, [insertedElementIndex]);
     }
-  }, 100);
+  }, 50);
 }
 
 /**

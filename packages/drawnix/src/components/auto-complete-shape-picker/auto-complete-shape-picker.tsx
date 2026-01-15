@@ -88,9 +88,9 @@ export const AutoCompleteShapePicker: React.FC<AutoCompleteShapePickerProps> = (
   }, [visible, onClose]);
 
   const handleShapeSelect = useCallback((shape: DrawPointerType) => {
+    // onSelectShape 内部会重置状态（visible=false），无需再调用 onClose
     onSelectShape(shape);
-    onClose();
-  }, [onSelectShape, onClose]);
+  }, [onSelectShape]);
 
   if (!visible) return null;
 

@@ -5,7 +5,6 @@ import {
   AutoCompleteShapeState,
   getAutoCompleteState,
   registerAutoCompleteStateCallback,
-  setAutoCompleteState,
   resetAutoCompleteState,
   createAutoCompleteElements,
   createShapeForArrowLine,
@@ -74,9 +73,7 @@ export function useAutoCompleteShapePicker(board: PlaitBoard | null) {
         );
       }
     }
-    
-    // 关闭选择器（createAutoCompleteElements 内部已经会重置状态）
-    setAutoCompleteState(board, { ...initialState });
+    // 状态重置已在 createAutoCompleteElements/createShapeForArrowLine 内部完成
   }, [board]);
 
   // 关闭选择器
