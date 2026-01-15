@@ -1,3 +1,67 @@
+## 0.5.1 (2026-01-15)
+
+### 🚀 Features
+
+- 当 API 返回 401 错误时自动打开设置对话框 ([ec60835](https://github.com/ljquan/aitu/commit/ec60835))
+- 优化工具栏交互体验 ([3077f76](https://github.com/ljquan/aitu/commit/3077f76))
+- 支持保存文件时嵌入媒体数据 ([cb2fcac](https://github.com/ljquan/aitu/commit/cb2fcac))
+- 使用统一拾色器替换阴影和渐变的颜色选择器 ([5c2b5d8](https://github.com/ljquan/aitu/commit/5c2b5d8))
+- 添加画笔描边样式设置并将画笔工具移至工具栏 ([9651a75](https://github.com/ljquan/aitu/commit/9651a75))
+- 优化画笔和橡皮擦功能 ([79e1edf](https://github.com/ljquan/aitu/commit/79e1edf))
+- 实现画笔和橡皮擦设置工具栏 ([1d5ceea](https://github.com/ljquan/aitu/commit/1d5ceea))
+- 素材库增加 unified-cache 数据源 ([e0d23fa](https://github.com/ljquan/aitu/commit/e0d23fa))
+
+### 🩹 Fixes
+
+- use pnpm instead of npm for Vercel deployment ([315fd5d](https://github.com/ljquan/aitu/commit/315fd5d))
+- 移除自动删除用户数据的逻辑 ([0942aa5](https://github.com/ljquan/aitu/commit/0942aa5))
+- 修复 agent_flow 工作流卡在"待开始"状态的问题 ([718c644](https://github.com/ljquan/aitu/commit/718c644))
+- 修复页面加载时小地图自动展开的问题 ([9cd009d](https://github.com/ljquan/aitu/commit/9cd009d))
+- 修复宫格图生成时未使用选择的图像模型 ([2d88b98](https://github.com/ljquan/aitu/commit/2d88b98))
+
+### 🔧 Chores
+
+- 清理 console.log 调试日志 ([77340d8](https://github.com/ljquan/aitu/commit/77340d8))
+- 发布版本 0.5.0 ([d2befb1](https://github.com/ljquan/aitu/commit/d2befb1))
+- refactor(task-queue): 移除重复提交检测并优化存储性能 ([e1785a8](https://github.com/ljquan/aitu/commit/e1785a8))
+- docs(claude): 添加新规则 - 重复提交检测应由 UI 层处理 ([c2e367f](https://github.com/ljquan/aitu/commit/c2e367f))
+- docs(claude): 添加新规则 - API 请求禁止重试 ([b564930](https://github.com/ljquan/aitu/commit/b564930))
+- refactor(api): 移除 API 重试逻辑简化错误处理 ([4ba9774](https://github.com/ljquan/aitu/commit/4ba9774))
+- docs(claude): 添加新规则 - 扩展外部库的枚举类型 ([156668e](https://github.com/ljquan/aitu/commit/156668e))
+- docs(claude): 添加新规则 - Plait 选中状态渲染触发 ([34db489](https://github.com/ljquan/aitu/commit/34db489))
+- docs(claude): 添加新规则 - Hover 延迟操作计时器清理 ([ebe979f](https://github.com/ljquan/aitu/commit/ebe979f))
+- docs(claude): 添加新规则 - 元组类型 vs 数组类型 ([82f9d7a](https://github.com/ljquan/aitu/commit/82f9d7a))
+- 优化形状 ([ceff394](https://github.com/ljquan/aitu/commit/ceff394))
+- docs(claude): 添加新规则 - 对象字面量只能指定已知属性 ([378a512](https://github.com/ljquan/aitu/commit/378a512))
+- docs(claude): 添加新规则 - 高频事件处理性能优化 ([1cfe7b4](https://github.com/ljquan/aitu/commit/1cfe7b4))
+- docs(claude): 添加新规则 - PointerEvent 压力感应兼容性 ([70f325e](https://github.com/ljquan/aitu/commit/70f325e))
+- 优化滑块位置 ([fec0f9b](https://github.com/ljquan/aitu/commit/fec0f9b))
+- docs(claude): 添加新规则 - 绝对定位子元素需要正确的父容器设置 ([babc0f9](https://github.com/ljquan/aitu/commit/babc0f9))
+- docs(claude): 添加新规则 - 新增 UI 组件需同步更新全局事件排除列表 ([4876bc8](https://github.com/ljquan/aitu/commit/4876bc8))
+- docs(claude): 添加新规则 - 相对路径 URL 解析规范 ([1c988de](https://github.com/ljquan/aitu/commit/1c988de))
+- 优化缓存获取 ([dbafcc4](https://github.com/ljquan/aitu/commit/dbafcc4))
+- docs(claude): 添加新规则 - Cache API 缓存 key 一致性规范 ([bb22cae](https://github.com/ljquan/aitu/commit/bb22cae))
+- 添加调试日志 ([4a5675b](https://github.com/ljquan/aitu/commit/4a5675b))
+- docs(claude): 添加新规则 - Service Worker 内部处理虚拟路径 URL ([fceb939](https://github.com/ljquan/aitu/commit/fceb939))
+- docs(claude): 添加新规则 - 虚拟路径 URL 匹配规范 ([91c1f65](https://github.com/ljquan/aitu/commit/91c1f65))
+- docs(claude): 添加新规则 - 媒体 URL 处理规范（避免 CSP 和生命周期问题） ([f8272b4](https://github.com/ljquan/aitu/commit/f8272b4))
+- style(text-property): 自定义渐变和预设渐变放在同一行展示 ([004cd48](https://github.com/ljquan/aitu/commit/004cd48))
+- style(text-property): 调整阴影渐变拾色器宽度与设置面板一致 ([588b2ea](https://github.com/ljquan/aitu/commit/588b2ea))
+- docs(claude): 添加新规则 - Freehand 元素属性设置需要自定义 callback ([e27bf28](https://github.com/ljquan/aitu/commit/e27bf28))
+- docs(claude): 添加调试日志清理规范 ([3ad8400](https://github.com/ljquan/aitu/commit/3ad8400))
+- refactor(image): extract shared border trimming utilities and update development guidelines ([90fad36](https://github.com/ljquan/aitu/commit/90fad36))
+- docs: 添加 Service Worker 初始化时序规则 ([3dfa4d1](https://github.com/ljquan/aitu/commit/3dfa4d1))
+- 去掉删除遗留db问题 ([c86ebba](https://github.com/ljquan/aitu/commit/c86ebba))
+- 注释掉调试日志 ([898b77b](https://github.com/ljquan/aitu/commit/898b77b))
+- perf(media-library): 实现任务队列和素材库的分页加载与虚拟滚动 ([5ace768](https://github.com/ljquan/aitu/commit/5ace768))
+- docs(readme): 添加 Vercel 和 Netlify 一键部署按钮 ([424b1b8](https://github.com/ljquan/aitu/commit/424b1b8))
+
+### ❤️  Thank You
+
+- liquidliang <ljquan@qq.com>
+- liquid <ljquan@qq.com>
+- gongchengtu <1817063960@qq.com>
+
 ## 0.5.0 (2026-01-13)
 
 ### 🚀 Features
