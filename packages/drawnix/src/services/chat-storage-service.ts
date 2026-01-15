@@ -60,6 +60,14 @@ export async function getAllSessions(): Promise<ChatSession[]> {
   await sessionsStore.iterate<ChatSession, void>((value) => {
     sessions.push(value);
   });
+  // Wait for browser idle time before sorting to avoid blocking
+  await new Promise<void>(resolve => {
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+      (window as Window).requestIdleCallback(() => resolve(), { timeout: 50 });
+    } else {
+      setTimeout(resolve, 0);
+    }
+  });
   // Sort by updatedAt descending (newest first)
   return sessions.sort((a, b) => b.updatedAt - a.updatedAt);
 }

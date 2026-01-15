@@ -31,10 +31,6 @@ import { VideoHandler } from './handlers/video';
 import { CharacterHandler } from './handlers/character';
 import { ChatHandler } from './handlers/chat';
 
-// Utility imports
-import { TaskFingerprint } from './utils/fingerprint';
-import { TaskLock, getTaskLock } from './utils/lock';
-
 /**
  * Task Queue Manager for Service Worker
  */
@@ -52,13 +48,13 @@ export class SWTaskQueue {
   private characterHandler: CharacterHandler;
   private chatHandler: ChatHandler;
 
-  // Utilities
-  private taskLock: TaskLock;
-
   // Reference to SW global scope
   private sw: ServiceWorkerGlobalScope;
 
   private onTaskStatusChange?: (taskId: string, status: 'completed' | 'failed', result?: any, error?: string) => void;
+
+  // Track storage restoration completion
+  private storageRestorePromise: Promise<void>;
 
   constructor(sw: ServiceWorkerGlobalScope, config?: Partial<TaskQueueConfig>) {
     this.sw = sw;
@@ -70,11 +66,8 @@ export class SWTaskQueue {
     this.characterHandler = new CharacterHandler();
     this.chatHandler = new ChatHandler();
 
-    // Initialize utilities
-    this.taskLock = getTaskLock();
-
-    // Auto-restore on construction
-    this.restoreFromStorage();
+    // Auto-restore on construction and track the promise
+    this.storageRestorePromise = this.restoreFromStorage();
   }
 
   /**
@@ -234,6 +227,9 @@ export class SWTaskQueue {
    * Initialize with API configurations
    */
   async initialize(geminiConfig: GeminiConfig, videoConfig: VideoAPIConfig): Promise<void> {
+    // Wait for storage restoration to complete first
+    await this.storageRestorePromise;
+
     this.geminiConfig = geminiConfig;
     this.videoConfig = videoConfig;
     this.initialized = true;
@@ -270,7 +266,7 @@ export class SWTaskQueue {
   }
 
   /**
-   * Submit a new task with fingerprint deduplication and lock mechanism
+   * Submit a new task
    */
   async submitTask(
     taskId: string,
@@ -278,83 +274,36 @@ export class SWTaskQueue {
     params: SWTask['params'],
     _clientId: string // clientId is no longer used for targeting
   ): Promise<void> {
-    // Check for duplicate by taskId
+    // Check for duplicate by taskId only
     if (this.tasks.has(taskId)) {
       console.warn(`[SWTaskQueue] Task ${taskId} already exists`);
       return;
     }
 
-    // Generate fingerprint for content-level deduplication
-    const fingerprint = TaskFingerprint.generate(taskType, params);
+    const now = Date.now();
+    const task: SWTask = {
+      id: taskId,
+      type: taskType,
+      status: TaskStatus.PENDING,
+      params,
+      createdAt: now,
+      updatedAt: now,
+      retryCount: 0,
+    };
 
-    // Check for duplicate by fingerprint (only for active tasks)
-    const existingTask = TaskFingerprint.findDuplicate(fingerprint, this.tasks);
-    if (existingTask) {
-      console.warn(`[SWTaskQueue] Duplicate task detected by fingerprint, existing task: ${existingTask.id}`);
-      // Notify client about the existing task instead
-      this.broadcastToClients({
-        type: 'TASK_CREATED',
-        task: existingTask,
-      });
-      return;
-    }
+    this.tasks.set(taskId, task);
 
-    // Acquire creation lock to prevent concurrent creation
-    const lockAcquired = await this.taskLock.acquire(fingerprint, {
-      timeout: 10000, // 10 seconds lock timeout
-      owner: taskId,
+    // Persist to IndexedDB
+    await taskQueueStorage.saveTask(task);
+
+    // Broadcast task created to all clients
+    this.broadcastToClients({
+      type: 'TASK_CREATED',
+      task,
     });
 
-    if (!lockAcquired) {
-      console.warn(`[SWTaskQueue] Failed to acquire lock for task ${taskId}, creation in progress`);
-      return;
-    }
-
-    try {
-      // Double-check after acquiring lock
-      if (this.tasks.has(taskId)) {
-        console.warn(`[SWTaskQueue] Task ${taskId} already exists (after lock)`);
-        return;
-      }
-
-      const duplicateAfterLock = TaskFingerprint.findDuplicate(fingerprint, this.tasks);
-      if (duplicateAfterLock) {
-        console.warn(`[SWTaskQueue] Duplicate task detected after lock, existing task: ${duplicateAfterLock.id}`);
-        this.broadcastToClients({
-          type: 'TASK_CREATED',
-          task: duplicateAfterLock,
-        });
-        return;
-      }
-
-      const now = Date.now();
-      const task: SWTask = {
-        id: taskId,
-        type: taskType,
-        status: TaskStatus.PENDING,
-        params,
-        createdAt: now,
-        updatedAt: now,
-        retryCount: 0,
-      };
-
-      this.tasks.set(taskId, task);
-
-      // Persist to IndexedDB
-      await taskQueueStorage.saveTask(task);
-
-      // Broadcast task created to all clients
-      this.broadcastToClients({
-        type: 'TASK_CREATED',
-        task,
-      });
-
-      // console.log(`[SWTaskQueue] Task submitted: ${taskId}`);
-      this.processQueue();
-    } finally {
-      // Always release the lock
-      this.taskLock.release(fingerprint, taskId);
-    }
+    // console.log(`[SWTaskQueue] Task submitted: ${taskId}`);
+    this.processQueue();
   }
 
   /**
@@ -634,13 +583,8 @@ export class SWTaskQueue {
       .filter((t) => t.status === TaskStatus.PENDING)
       .sort((a, b) => a.createdAt - b.createdAt);
 
-    // Check concurrent limit
-    const availableSlots = this.config.maxConcurrent - this.runningTasks.size;
-    if (availableSlots <= 0) return;
-
-    // Execute tasks
-    const tasksToRun = pendingTasks.slice(0, availableSlots);
-    for (const task of tasksToRun) {
+    // Execute all pending tasks immediately (no concurrent limit)
+    for (const task of pendingTasks) {
       this.executeTask(task);
     }
   }
@@ -649,7 +593,10 @@ export class SWTaskQueue {
    * Execute a single task
    */
   private async executeTask(task: SWTask): Promise<void> {
-    if (!this.geminiConfig || !this.videoConfig) return;
+    if (!this.geminiConfig || !this.videoConfig) {
+      console.warn('[SWTaskQueue] Config not set, cannot execute task:', task.id);
+      return;
+    }
 
     this.runningTasks.add(task.id);
 
