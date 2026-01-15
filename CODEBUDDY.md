@@ -415,6 +415,54 @@ const handleGenerate = async () => {
 - Avoid creating new objects/functions in render
 - Consider virtualization for long lists
 
+#### 高频事件处理性能优化
+**场景**: 处理 `pointerMove`、`mousemove`、`scroll` 等高频事件时
+
+❌ **错误示例**:
+```typescript
+// 错误：每次 pointerMove 都读取配置、创建大量 DOM 元素
+board.pointerMove = (event: PointerEvent) => {
+  const settings = getSettings(board);  // 每次都读取
+  
+  // 为每个点创建单独的 SVG 元素
+  for (let i = 0; i < points.length - 1; i++) {
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    g.appendChild(line);  // 大量 DOM 操作
+  }
+};
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：缓存配置，减少 DOM 操作
+let cachedSettings: Settings | null = null;
+
+const getSettings = (forceRefresh = false) => {
+  if (!cachedSettings || forceRefresh) {
+    cachedSettings = readSettings(board);
+  }
+  return cachedSettings;
+};
+
+board.pointerDown = (event: PointerEvent) => {
+  cachedSettings = getSettings(true);  // 仅在开始时刷新
+};
+
+board.pointerMove = (event: PointerEvent) => {
+  const settings = getSettings();  // 使用缓存
+  
+  // 使用单个 path 元素而非多个 line
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('d', generatePathData(points));  // 一次性设置
+};
+
+board.pointerUp = () => {
+  cachedSettings = null;  // 结束时清除缓存
+};
+```
+
+**原因**: 高频事件（如绘图时的 pointerMove）每秒可触发 60+ 次。每次都读取配置或创建大量 DOM 元素会导致明显卡顿。应该：1) 在事件序列开始时缓存配置；2) 使用单个 SVG path 替代多个 line 元素；3) 使用 `performance.now()` 代替 `Date.now()` 获取更精确的时间戳。
+
 #### PointerEvent 压力感应兼容性
 **场景**: 实现画笔/手写功能需要根据压力调整笔迹粗细时
 

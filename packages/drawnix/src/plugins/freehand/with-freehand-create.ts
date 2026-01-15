@@ -6,7 +6,7 @@ import {
   toHostPoint,
   toViewBoxPoint,
 } from '@plait/core';
-import { isDrawingMode } from '@plait/common';
+import { isDrawingMode, StrokeStyle } from '@plait/common';
 import { createFreehandElement, getFreehandPointers } from './utils';
 import { Freehand, FreehandShape } from './type';
 import { FreehandGenerator } from './freehand.generator';
@@ -36,19 +36,30 @@ export const withFreehandCreate = (board: PlaitBoard) => {
 
   let temporaryElement: Freehand | null = null;
 
+  // 缓存当前绘制期间的设置，避免频繁读取
+  let cachedSettings: {
+    strokeWidth: number;
+    strokeColor: string;
+    strokeStyle: StrokeStyle;
+    pressureEnabled: boolean;
+  } | null = null;
+
   // 用于计算速度的上一个点和时间
   let lastPoint: Point | null = null;
   let lastTime: number = 0;
 
-  // 获取当前画笔设置
-  const getCurrentSettings = () => {
-    const settings = getFreehandSettings(board);
-    return {
-      strokeWidth: settings.strokeWidth,
-      strokeColor: settings.strokeColor,
-      strokeStyle: settings.strokeStyle,
-      pressureEnabled: settings.pressureEnabled,
-    };
+  // 获取当前画笔设置（带缓存）
+  const getCurrentSettings = (forceRefresh = false): NonNullable<typeof cachedSettings> => {
+    if (!cachedSettings || forceRefresh) {
+      const settings = getFreehandSettings(board);
+      cachedSettings = {
+        strokeWidth: settings.strokeWidth,
+        strokeColor: settings.strokeColor,
+        strokeStyle: settings.strokeStyle,
+        pressureEnabled: settings.pressureEnabled,
+      };
+    }
+    return cachedSettings!;
   };
 
   /**
@@ -72,7 +83,7 @@ export const withFreehandCreate = (board: PlaitBoard) => {
     
     // 对于鼠标/触控板，使用速度模拟压力
     const currentPoint: Point = [event.x, event.y];
-    const currentTime = Date.now();
+    const currentTime = performance.now(); // 使用 performance.now() 更精确
     
     if (lastPoint && lastTime > 0) {
       const dx = currentPoint[0] - lastPoint[0];
@@ -85,11 +96,9 @@ export const withFreehandCreate = (board: PlaitBoard) => {
         const velocity = distance / timeDiff;
         
         // 速度映射到压力：速度越慢压力越大
-        // 速度范围大约 0-2 像素/毫秒
-        // 映射到压力 0.2-1.0
         const minPressure = 0.2;
         const maxPressure = 1.0;
-        const velocityThreshold = 1.5; // 速度阈值
+        const velocityThreshold = 1.5;
         
         // 慢速 -> 高压力，快速 -> 低压力
         const normalizedVelocity = Math.min(velocity / velocityThreshold, 1);
@@ -134,6 +143,7 @@ export const withFreehandCreate = (board: PlaitBoard) => {
     pressures = [];
     lastPoint = null;
     lastTime = 0;
+    cachedSettings = null; // 清除缓存
     smoother.reset();
   };
 
@@ -142,6 +152,8 @@ export const withFreehandCreate = (board: PlaitBoard) => {
     const isFreehandPointer = PlaitBoard.isInPointer(board, freehandPointers);
     if (isFreehandPointer && isDrawingMode(board)) {
       isDrawing = true;
+      // 在绘制开始时刷新缓存设置
+      const settings = getCurrentSettings(true);
       originScreenPoint = [event.x, event.y];
       const smoothingPoint = smoother.process(originScreenPoint) as Point;
       const point = toViewBoxPoint(
@@ -151,7 +163,6 @@ export const withFreehandCreate = (board: PlaitBoard) => {
       points.push(point);
       
       // 收集压力数据
-      const settings = getCurrentSettings();
       pressures.push(getPressure(event, settings.pressureEnabled));
     }
     pointerDown(event);
@@ -182,7 +193,7 @@ export const withFreehandCreate = (board: PlaitBoard) => {
         );
         points.push(newPoint);
         
-        // 收集压力数据
+        // 使用缓存的设置
         const settings = getCurrentSettings();
         pressures.push(getPressure(event, settings.pressureEnabled));
         
