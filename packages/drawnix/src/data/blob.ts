@@ -3,13 +3,63 @@ import { isValidDrawnixData } from './json';
 import { IMAGE_MIME_TYPES, MIME_TYPES } from '../constants';
 import { ValueOf } from '@aitu/utils';
 import { DataURL } from '../types';
+import { DrawnixExportedData, EmbeddedMediaItem } from './types';
+import { unifiedCacheService } from '../services/unified-cache-service';
+
+/**
+ * 将 Base64 字符串转换为 Blob
+ */
+const base64ToBlob = (base64: string, mimeType: string): Blob => {
+  const byteCharacters = atob(base64);
+  const byteNumbers = new Array(byteCharacters.length);
+  for (let i = 0; i < byteCharacters.length; i++) {
+    byteNumbers[i] = byteCharacters.charCodeAt(i);
+  }
+  const byteArray = new Uint8Array(byteNumbers);
+  return new Blob([byteArray], { type: mimeType });
+};
+
+/**
+ * 恢复嵌入的媒体数据到缓存中
+ */
+const restoreEmbeddedMedia = async (
+  embeddedMedia: EmbeddedMediaItem[]
+): Promise<void> => {
+  for (const item of embeddedMedia) {
+    try {
+      // 检查是否已经存在
+      const exists = await unifiedCacheService.isCached(item.url);
+      if (exists) {
+        // console.log(`[restoreEmbeddedMedia] 媒体已存在，跳过: ${item.url}`);
+        continue;
+      }
+
+      // 将 Base64 转换为 Blob
+      const blob = base64ToBlob(item.data, item.mimeType);
+
+      // 缓存到 unifiedCacheService
+      // 使用 taskId 标识导入来源
+      await unifiedCacheService.cacheMediaFromBlob(item.url, blob, item.type, {
+        taskId: `imported-${Date.now()}`,
+      });
+
+      // console.log(`[restoreEmbeddedMedia] 已恢复媒体: ${item.url}`);
+    } catch (error) {
+      console.error(`[restoreEmbeddedMedia] 恢复媒体失败: ${item.url}`, error);
+    }
+  }
+};
 
 export const loadFromBlob = async (board: PlaitBoard, blob: Blob | File) => {
   const contents = await parseFileContents(blob);
-  let data;
+  let data: DrawnixExportedData;
   try {
     data = JSON.parse(contents);
     if (isValidDrawnixData(data)) {
+      // 如果存在嵌入的媒体数据，先恢复它们
+      if (data.embeddedMedia && data.embeddedMedia.length > 0) {
+        await restoreEmbeddedMedia(data.embeddedMedia);
+      }
       return data;
     }
     throw new Error('Error: invalid file');
