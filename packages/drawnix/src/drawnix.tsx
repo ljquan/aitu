@@ -64,6 +64,9 @@ import { QuickCreationToolbar } from './components/toolbar/quick-creation-toolba
 import { CacheQuotaProvider } from './components/cache-quota-provider/CacheQuotaProvider';
 import { RecentColorsProvider } from './components/unified-color-picker';
 import { usePencilCursor } from './hooks/usePencilCursor';
+import { withArrowLineAutoCompleteExtend } from './plugins/with-arrow-line-auto-complete-extend';
+import { AutoCompleteShapePicker } from './components/auto-complete-shape-picker';
+import { useAutoCompleteShapePicker } from './hooks/useAutoCompleteShapePicker';
 
 const TTDDialog = lazy(() => import('./components/ttd-dialog/ttd-dialog').then(module => ({ default: module.TTDDialog })));
 const SettingsDialog = lazy(() => import('./components/settings-dialog/settings-dialog').then(module => ({ default: module.SettingsDialog })));
@@ -519,6 +522,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
     withToolResize, // 工具缩放功能 - 拖拽缩放手柄
     withToolFocus, // 工具焦点管理 - 双击编辑
     withWorkZone, // 工作区元素 - 在画布上显示工作流进度
+    withArrowLineAutoCompleteExtend, // 自动完成形状选择 - hover 中点时选择下一个节点形状
     withTracking,
   ];
 
@@ -708,6 +712,13 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
   const [quickToolbarVisible, setQuickToolbarVisible] = useState(false);
   const [quickToolbarPosition, setQuickToolbarPosition] = useState<[number, number] | null>(null);
 
+  // 自动完成形状选择器状态
+  const {
+    state: autoCompleteState,
+    selectShape: selectAutoCompleteShape,
+    closePicker: closeAutoCompletePicker,
+  } = useAutoCompleteShapePicker(board);
+
   // 监听双击空白区域事件
   useEffect(() => {
     if (!board) return;
@@ -835,6 +846,15 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
             position={quickToolbarPosition}
             visible={quickToolbarVisible}
             onClose={() => setQuickToolbarVisible(false)}
+          />
+          {/* Auto Complete Shape Picker - 自动完成形状选择器 */}
+          <AutoCompleteShapePicker
+            visible={autoCompleteState.visible}
+            position={autoCompleteState.position}
+            currentShape={autoCompleteState.currentShape || undefined}
+            onSelectShape={selectAutoCompleteShape}
+            onClose={closeAutoCompletePicker}
+            container={containerRef.current}
           />
           {/* AI Input Bar - 底部 AI 输入框 */}
           <AIInputBar isDataReady={isDataReady} />
