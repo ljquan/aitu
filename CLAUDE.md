@@ -1087,6 +1087,34 @@ async getPaginatedTasks(params: PaginationParams): Promise<PaginatedResult> {
 - 所有组件 Props 必须有类型定义
 - 避免使用 `any`，使用具体类型或泛型
 
+#### 元组类型 vs 数组类型
+
+**场景**: 当函数参数期望固定长度的元组（如 `[Point, Point]`）时
+
+❌ **错误示例**:
+```typescript
+// 错误：使用数组类型，TypeScript 无法确定长度
+const points: [number, number][] = [
+  [x1, y1],
+  [x2, y2],
+];
+// 类型错误：类型"[number, number][]"不能赋给类型"[Point, Point]"
+// 目标仅允许 2 个元素，但源中的元素可能不够
+createShape(board, points, shapeType);
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：显式声明为元组类型
+const points: [[number, number], [number, number]] = [
+  [x1, y1],
+  [x2, y2],
+];
+createShape(board, points, shapeType);
+```
+
+**原因**: `[T, T][]` 表示"T 的二元组的数组（长度不定）"，而 `[[T, T], [T, T]]` 表示"恰好包含两个 T 二元组的元组"。当 API 期望固定数量的点（如矩形的左上角和右下角）时，必须使用精确的元组类型，否则 TypeScript 无法保证数组长度符合要求。
+
 ### React 组件规范
 - 使用函数组件和 Hooks
 - 使用 `React.memo` 优化重渲染

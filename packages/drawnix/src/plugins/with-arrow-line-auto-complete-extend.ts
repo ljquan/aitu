@@ -5,8 +5,8 @@ import {
   toActivePoint,
   Transforms,
   Direction,
-  isHorizontalDirection,
   rotatePointsByElement,
+  RectangleClient,
 } from '@plait/core';
 import {
   BasicShapes,
@@ -21,7 +21,7 @@ import {
   ArrowLineShape,
   ArrowLineMarkerType,
   getHitConnection,
-  getConnectionPoint,
+  GeometryShapes,
 } from '@plait/draw';
 import { getDirectionByIndex } from '@plait/common';
 
@@ -39,7 +39,7 @@ export interface AutoCompleteShapeState {
   currentShape: DrawPointerType | null;
   /** hover 的连接点索引 */
   hitIndex: number;
-  /** hover 的连接点坐标 (viewBox 坐标) */
+  /** hover 的连接点坐标 (viewBox 坐标，用于创建元素) */
   hitPoint: [number, number] | null;
 }
 
@@ -94,13 +94,12 @@ export function resetAutoCompleteState(board: PlaitBoard): void {
   setAutoCompleteState(board, initialState);
 }
 
-// 新形状与源元素的默认距离
+// 新形状与源元素的默认距离（viewBox 坐标系中的距离）
 const AUTO_COMPLETE_DISTANCE = 100;
-// 新形状的默认大小
-const DEFAULT_SHAPE_SIZE = 100;
 
 /**
  * 创建并插入连接线和新形状
+ * 参考 @plait/draw 原生 withArrowLineAutoComplete 实现
  */
 export function createAutoCompleteElements(
   board: PlaitBoard,
@@ -112,90 +111,115 @@ export function createAutoCompleteElements(
   // 获取方向（0: 右, 1: 下, 2: 左, 3: 上）
   const direction = getDirectionByIndex(hitIndex);
   
-  // 计算新形状的位置
-  let offsetX = 0;
-  let offsetY = 0;
+  // 使用源元素的尺寸来计算新形状的大小（与源元素保持一致）
+  const sourceRect = RectangleClient.getRectangleByPoints(sourceElement.points);
+  const sourceWidth = sourceRect.width;
+  const sourceHeight = sourceRect.height;
+  const sourceCenterX = sourceRect.x + sourceWidth / 2;
+  const sourceCenterY = sourceRect.y + sourceHeight / 2;
+  
+  // 获取源元素边缘中心点作为箭头线起点（viewBox 坐标）
+  const sourceEdgeCenterPoints = RectangleClient.getEdgeCenterPoints(sourceRect);
+  const arrowLineStartPoint = sourceEdgeCenterPoints[hitIndex];
+  
+  // 计算新形状的中心位置（基于源形状中心对齐）
+  // 水平方向：新形状与源形状垂直居中对齐
+  // 垂直方向：新形状与源形状水平居中对齐
+  let newCenterX: number;
+  let newCenterY: number;
   
   switch (direction) {
     case Direction.right:
-      offsetX = AUTO_COMPLETE_DISTANCE;
+      // 新形状在源元素右侧，垂直居中
+      newCenterX = sourceCenterX + sourceWidth / 2 + AUTO_COMPLETE_DISTANCE + sourceWidth / 2;
+      newCenterY = sourceCenterY;
       break;
     case Direction.bottom:
-      offsetY = AUTO_COMPLETE_DISTANCE;
+      // 新形状在源元素下方，水平居中
+      newCenterX = sourceCenterX;
+      newCenterY = sourceCenterY + sourceHeight / 2 + AUTO_COMPLETE_DISTANCE + sourceHeight / 2;
       break;
     case Direction.left:
-      offsetX = -AUTO_COMPLETE_DISTANCE - DEFAULT_SHAPE_SIZE;
+      // 新形状在源元素左侧，垂直居中
+      newCenterX = sourceCenterX - sourceWidth / 2 - AUTO_COMPLETE_DISTANCE - sourceWidth / 2;
+      newCenterY = sourceCenterY;
       break;
     case Direction.top:
-      offsetY = -AUTO_COMPLETE_DISTANCE - DEFAULT_SHAPE_SIZE;
+      // 新形状在源元素上方，水平居中
+      newCenterX = sourceCenterX;
+      newCenterY = sourceCenterY - sourceHeight / 2 - AUTO_COMPLETE_DISTANCE - sourceHeight / 2;
       break;
+    default:
+      newCenterX = sourceCenterX + sourceWidth / 2 + AUTO_COMPLETE_DISTANCE + sourceWidth / 2;
+      newCenterY = sourceCenterY;
   }
   
-  // 计算新形状的点（左上角和右下角）
-  const newShapePoints: [number, number][] = [
-    [hitPoint[0] + offsetX, hitPoint[1] + offsetY - DEFAULT_SHAPE_SIZE / 2],
-    [hitPoint[0] + offsetX + DEFAULT_SHAPE_SIZE, hitPoint[1] + offsetY + DEFAULT_SHAPE_SIZE / 2],
+  // 基于新中心点创建新形状的 points（左上角和右下角）
+  const newShapePoints: [[number, number], [number, number]] = [
+    [newCenterX - sourceWidth / 2, newCenterY - sourceHeight / 2],
+    [newCenterX + sourceWidth / 2, newCenterY + sourceHeight / 2],
   ];
   
-  // 根据方向调整位置
-  if (isHorizontalDirection(direction)) {
-    newShapePoints[0][1] = hitPoint[1] - DEFAULT_SHAPE_SIZE / 2;
-    newShapePoints[1][1] = hitPoint[1] + DEFAULT_SHAPE_SIZE / 2;
-  } else {
-    newShapePoints[0][0] = hitPoint[0] - DEFAULT_SHAPE_SIZE / 2;
-    newShapePoints[1][0] = hitPoint[0] + DEFAULT_SHAPE_SIZE / 2;
+  // 创建新形状
+  const newShapeElement = createDefaultGeometry(board, newShapePoints, targetShape as GeometryShapes);
+  
+  // 复制源元素的样式（仅对 ShapeElement）
+  if (PlaitDrawElement.isShapeElement(sourceElement) && !PlaitDrawElement.isText(sourceElement)) {
+    const typedSource = sourceElement as PlaitDrawElement & {
+      angle?: number;
+      fill?: string;
+      strokeColor?: string;
+      strokeStyle?: unknown;
+      strokeWidth?: number;
+    };
+    
+    if (typedSource.angle !== undefined) newShapeElement.angle = typedSource.angle;
+    if (typedSource.fill !== undefined) newShapeElement.fill = typedSource.fill;
+    if (typedSource.strokeColor !== undefined) newShapeElement.strokeColor = typedSource.strokeColor;
+    if (typedSource.strokeStyle !== undefined) {
+      (newShapeElement as typeof typedSource).strokeStyle = typedSource.strokeStyle;
+    }
+    if (typedSource.strokeWidth !== undefined) newShapeElement.strokeWidth = typedSource.strokeWidth;
   }
   
-  // 创建新形状
-  const newShapeElement = createDefaultGeometry(board, newShapePoints, targetShape);
-  
-  // 复制源元素的样式
-  const typedSource = sourceElement as PlaitDrawElement & {
-    angle?: number;
-    fill?: string;
-    strokeColor?: string;
-    strokeStyle?: string;
-    strokeWidth?: number;
-    groupId?: string;
-  };
-  
-  if (typedSource.angle !== undefined) newShapeElement.angle = typedSource.angle;
-  if (typedSource.fill !== undefined) newShapeElement.fill = typedSource.fill;
-  if (typedSource.strokeColor !== undefined) newShapeElement.strokeColor = typedSource.strokeColor;
-  if (typedSource.strokeStyle !== undefined) newShapeElement.strokeStyle = typedSource.strokeStyle;
-  if (typedSource.strokeWidth !== undefined) newShapeElement.strokeWidth = typedSource.strokeWidth;
-  
-  // 计算连接点
-  const sourceConnectionPoint = rotatePointsByElement(hitPoint, sourceElement) || hitPoint;
-  const sourceConnection = getHitConnection(board, sourceConnectionPoint, sourceElement);
+  // 计算连接点（使用 viewBox 坐标）
+  const rotatedArrowLineStartPoint = rotatePointsByElement(arrowLineStartPoint, sourceElement) || arrowLineStartPoint;
+  // 使用类型断言确保 sourceElement 是 ShapeElement
+  const sourceConnection = PlaitDrawElement.isShapeElement(sourceElement) 
+    ? getHitConnection(board, rotatedArrowLineStartPoint, sourceElement as Parameters<typeof getHitConnection>[2])
+    : undefined;
   
   // 计算目标连接点（新形状面向源的那个点）
+  // getEdgeCenterPoints 返回顺序: 0=上, 1=右, 2=下, 3=左
   let targetHitIndex: number;
   switch (direction) {
     case Direction.right:
-      targetHitIndex = 2; // 左边
+      targetHitIndex = 3; // 新形状在右侧，连接点在左边
       break;
     case Direction.bottom:
-      targetHitIndex = 3; // 上边
+      targetHitIndex = 0; // 新形状在下方，连接点在上边
       break;
     case Direction.left:
-      targetHitIndex = 0; // 右边
+      targetHitIndex = 1; // 新形状在左侧，连接点在右边
       break;
     case Direction.top:
-      targetHitIndex = 1; // 下边
+      targetHitIndex = 2; // 新形状在上方，连接点在下边
       break;
     default:
-      targetHitIndex = 2;
+      targetHitIndex = 3;
   }
   
-  const targetConnectionPoints = getAutoCompletePoints(board, newShapeElement, false);
-  const targetPoint = targetConnectionPoints[targetHitIndex] || targetConnectionPoints[0];
-  const targetConnection = getHitConnection(board, targetPoint, newShapeElement);
+  // 获取新形状的边缘中心点（viewBox 坐标）
+  const newShapeRect = RectangleClient.getRectangleByPoints(newShapeElement.points);
+  const targetEdgeCenterPoints = RectangleClient.getEdgeCenterPoints(newShapeRect);
+  const arrowLineEndPoint = targetEdgeCenterPoints[targetHitIndex];
+  const rotatedArrowLineEndPoint = rotatePointsByElement(arrowLineEndPoint, newShapeElement) || arrowLineEndPoint;
+  const targetConnection = getHitConnection(board, rotatedArrowLineEndPoint, newShapeElement);
   
-  // 创建箭头线
+  // 创建箭头线（使用直线而非折线）
   const arrowLineElement = createArrowLineElement(
-    ArrowLineShape.elbow,
-    [sourceConnectionPoint, targetPoint],
+    ArrowLineShape.straight,
+    [rotatedArrowLineStartPoint, rotatedArrowLineEndPoint],
     {
       marker: ArrowLineMarkerType.none,
       connection: sourceConnection,
