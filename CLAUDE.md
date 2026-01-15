@@ -1279,6 +1279,40 @@ const submitToSW = async (workflow) => {
 
 **原因**: Service Worker 的 `workflowHandler` 需要收到 `TASK_QUEUE_INIT` 消息后才会初始化。如果在 SW 初始化前提交工作流，消息会被暂存到 `pendingWorkflowMessages`，等待配置到达。若配置永远不到达（如 `swTaskQueueService.initialize()` 未被调用），工作流就永远不会开始执行，步骤状态保持 `pending`。
 
+### Plait 选中状态渲染触发
+
+**场景**: 在异步回调（如 `setTimeout`）中使用 `addSelectedElement` 选中元素时
+
+❌ **错误示例**:
+```typescript
+// 错误：addSelectedElement 只更新 WeakMap 缓存，不触发渲染
+setTimeout(() => {
+  const element = board.children.find(el => el.id === elementId);
+  clearSelectedElement(board);
+  addSelectedElement(board, element);  // 选中状态已更新，但 UI 不会刷新
+  BoardTransforms.updatePointerType(board, PlaitPointerType.selection);
+}, 50);
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：使用 Transforms.setNode 触发 board.apply() 从而触发渲染
+setTimeout(() => {
+  const elementIndex = board.children.findIndex(el => el.id === elementId);
+  const element = elementIndex >= 0 ? board.children[elementIndex] : null;
+  if (element) {
+    clearSelectedElement(board);
+    addSelectedElement(board, element);
+    BoardTransforms.updatePointerType(board, PlaitPointerType.selection);
+    // 设置临时属性触发渲染，然后立即删除
+    Transforms.setNode(board, { _forceRender: Date.now() } as any, [elementIndex]);
+    Transforms.setNode(board, { _forceRender: undefined } as any, [elementIndex]);
+  }
+}, 50);
+```
+
+**原因**: Plait 的 `addSelectedElement` 只是将元素存入 `BOARD_TO_SELECTED_ELEMENT` WeakMap 缓存，不会触发任何渲染。在同步流程中（如 `insertElement` 内部），`Transforms.insertNode` 已经触发了 `board.apply()` 和渲染链，所以选中状态能正常显示。但在异步回调中单独调用时，需要手动触发一次 `board.apply()` 来刷新渲染。`Transforms.setNode` 会调用 `board.apply()`，从而触发完整的渲染链。
+
 ### 禁止自动删除用户数据
 
 **场景**: 添加定时清理、自动裁剪、过期删除等"优化"逻辑时
