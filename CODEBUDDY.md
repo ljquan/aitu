@@ -265,6 +265,47 @@ const submitToSW = async (workflow) => {
 
 **原因**: Service Worker 的 `workflowHandler` 需要收到 `TASK_QUEUE_INIT` 消息后才会初始化。如果在 SW 初始化前提交工作流，消息会被暂存到 `pendingWorkflowMessages`，等待配置到达。若配置永远不到达，工作流就永远不会开始执行。
 
+#### 重复提交检测应由 UI 层处理
+**场景**: 实现防重复提交功能时
+
+❌ **错误示例**:
+```typescript
+// 错误：在服务层基于参数哈希进行去重
+class TaskQueueService {
+  private recentSubmissions: Map<string, number>;
+
+  createTask(params: GenerationParams, type: TaskType): Task {
+    const paramsHash = generateParamsHash(params, type);
+    if (this.isDuplicateSubmission(paramsHash)) {
+      throw new Error('Duplicate submission detected');
+    }
+    this.recentSubmissions.set(paramsHash, Date.now());
+  }
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：服务层只检查 taskId 重复，UI 层通过按钮防抖处理重复提交
+class TaskQueueService {
+  createTask(params: GenerationParams, type: TaskType): Task {
+    const taskId = generateTaskId(); // UUID v4，每次不同
+    // 不做参数去重
+  }
+}
+
+// UI 层
+const [isSubmitting, setIsSubmitting] = useState(false);
+const handleSubmit = async () => {
+  if (isSubmitting) return;
+  setIsSubmitting(true);
+  try { await taskQueueService.createTask(params, type); }
+  finally { setTimeout(() => setIsSubmitting(false), 1000); }
+};
+```
+
+**原因**: 用户可能故意连续提交相同参数（想生成多张图）。防重复点击是 UI 交互问题，应由 UI 层解决，服务层不应基于参数内容去重。
+
 #### React Component Guidelines
 - Use functional components with Hooks
 - Destructure props with default values

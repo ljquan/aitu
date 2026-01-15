@@ -502,8 +502,7 @@ apps/web/src/sw/
     │   ├── tools.ts               # 工具注册
     │   └── executor.ts            # 工具执行器
     └── utils/
-        ├── fingerprint.ts         # 任务指纹（去重）
-        └── lock.ts                # 任务锁（防并发）
+        └── index.ts               # 工具函数导出
 ```
 
 **应用层服务**：
@@ -1320,6 +1319,75 @@ const submitToSW = async (workflow) => {
 ```
 
 **原因**: Service Worker 的 `workflowHandler` 需要收到 `TASK_QUEUE_INIT` 消息后才会初始化。如果在 SW 初始化前提交工作流，消息会被暂存到 `pendingWorkflowMessages`，等待配置到达。若配置永远不到达（如 `swTaskQueueService.initialize()` 未被调用），工作流就永远不会开始执行，步骤状态保持 `pending`。
+
+### 重复提交检测应由 UI 层处理
+
+**场景**: 实现防重复提交功能时
+
+❌ **错误示例**:
+```typescript
+// 错误：在服务层基于参数哈希进行去重
+class TaskQueueService {
+  private recentSubmissions: Map<string, number>;
+
+  createTask(params: GenerationParams, type: TaskType): Task {
+    const paramsHash = generateParamsHash(params, type);
+    
+    // 服务层拦截"相同参数"的任务
+    if (this.isDuplicateSubmission(paramsHash)) {
+      throw new Error('Duplicate submission detected');
+    }
+    
+    this.recentSubmissions.set(paramsHash, Date.now());
+    // ... 创建任务
+  }
+
+  private isDuplicateSubmission(hash: string): boolean {
+    const lastSubmission = this.recentSubmissions.get(hash);
+    return lastSubmission && Date.now() - lastSubmission < 5000;
+  }
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：服务层只检查 taskId 重复（防止同一任务被提交两次）
+class TaskQueueService {
+  createTask(params: GenerationParams, type: TaskType): Task {
+    const taskId = generateTaskId(); // UUID v4，每次不同
+    
+    if (this.tasks.has(taskId)) {
+      console.warn(`Task ${taskId} already exists`);
+      return;
+    }
+    
+    // ... 创建任务，不做参数去重
+  }
+}
+
+// UI 层通过按钮防抖和状态管理处理重复提交
+const AIInputBar = () => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  const handleSubmit = async () => {
+    if (isSubmitting) return; // 防止重复点击
+    
+    setIsSubmitting(true);
+    try {
+      await taskQueueService.createTask(params, type);
+    } finally {
+      // 使用冷却时间防止快速连续提交
+      setTimeout(() => setIsSubmitting(false), 1000);
+    }
+  };
+};
+```
+
+**原因**: 
+1. **用户意图不同**: 用户连续提交相同参数可能是故意的（想生成多张相同提示词的图片）
+2. **去重规则复杂**: "相同参数"的定义不清晰（图片 base64 是否算相同？时间戳呢？）
+3. **职责分离**: 防重复点击是 UI 交互问题，应由 UI 层解决
+4. **调试困难**: 服务层拦截导致的错误不易排查，用户不知道为什么提交失败
 
 ### API 请求禁止重试
 
