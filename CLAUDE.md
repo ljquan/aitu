@@ -1087,62 +1087,135 @@ async getPaginatedTasks(params: PaginationParams): Promise<PaginatedResult> {
 - 所有组件 Props 必须有类型定义
 - 避免使用 `any`，使用具体类型或泛型
 
+#### 元组类型 vs 数组类型
+
+**场景**: 当函数参数期望固定长度的元组（如 `[Point, Point]`）时
+
+❌ **错误示例**:
+```typescript
+// 错误：使用数组类型，TypeScript 无法确定长度
+const points: [number, number][] = [
+  [x1, y1],
+  [x2, y2],
+];
+// 类型错误：类型"[number, number][]"不能赋给类型"[Point, Point]"
+// 目标仅允许 2 个元素，但源中的元素可能不够
+createShape(board, points, shapeType);
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：显式声明为元组类型
+const points: [[number, number], [number, number]] = [
+  [x1, y1],
+  [x2, y2],
+];
+createShape(board, points, shapeType);
+```
+
+**原因**: `[T, T][]` 表示"T 的二元组的数组（长度不定）"，而 `[[T, T], [T, T]]` 表示"恰好包含两个 T 二元组的元组"。当 API 期望固定数量的点（如矩形的左上角和右下角）时，必须使用精确的元组类型，否则 TypeScript 无法保证数组长度符合要求。
+
+#### 扩展外部库的枚举类型
+
+**场景**: 需要在外部库的枚举（如 `@plait/common` 的 `StrokeStyle`）基础上添加新值时
+
+❌ **错误示例**:
+```typescript
+// 错误：直接修改外部库的枚举（无法做到）或使用魔术字符串
+import { StrokeStyle } from '@plait/common';
+
+// 无法向 StrokeStyle 添加 'hollow' 值
+// 使用字符串字面量会导致类型不兼容
+const strokeStyle = 'hollow';  // ❌ 类型不匹配
+setStrokeStyle(board, strokeStyle);  // 错误：类型 'string' 不能赋给 StrokeStyle
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：创建扩展类型，同时保持与原始枚举的兼容性
+import { StrokeStyle } from '@plait/common';
+
+// 1. 使用联合类型扩展
+export type FreehandStrokeStyle = StrokeStyle | 'hollow';
+
+// 2. 创建同名常量对象，合并原始枚举值
+export const FreehandStrokeStyle = {
+  ...StrokeStyle,
+  hollow: 'hollow' as const,
+};
+
+// 使用时可以访问所有值
+const style1 = FreehandStrokeStyle.solid;   // ✅ 原始值
+const style2 = FreehandStrokeStyle.hollow;  // ✅ 扩展值
+
+// 函数参数使用扩展类型
+export const setFreehandStrokeStyle = (
+  board: PlaitBoard, 
+  strokeStyle: FreehandStrokeStyle  // ✅ 接受原始值和扩展值
+) => { ... };
+```
+
+**原因**: TypeScript 的枚举是封闭的，无法在外部添加新成员。通过 "类型 + 同名常量对象" 模式，可以：1) 保持与原始枚举的完全兼容；2) 类型安全地添加新值；3) 在运行时和编译时都能正确使用。这是扩展第三方库类型的标准模式。
+
 ### React 组件规范
 - 使用函数组件和 Hooks
 - 使用 `React.memo` 优化重渲染
 - 事件处理器使用 `useCallback` 包装
 - Hook 顺序：状态 hooks → 副作用 hooks → 事件处理器 → 渲染逻辑
 
-### 新增 UI 组件需同步更新全局事件排除列表
+#### Hover 延迟操作需要正确的计时器清理
 
-**场景**: 添加新的浮层/覆盖层 UI 组件（如工具栏、导航、面板等）时，需要将其排除在全局事件处理之外
+**场景**: 实现 hover 延迟展开/显示等交互效果时（如工具栏 Popover 延迟展开）
 
 ❌ **错误示例**:
 ```typescript
-// drawnix.tsx 中的双击事件处理
-const handleDoubleClick = (event: MouseEvent) => {
-  const target = event.target as HTMLElement;
-  
-  const isInsideOverlay = target.closest('.chat-drawer') ||
-                          target.closest('.minimap') ||
-                          target.closest('.ai-input-bar');
-                          // ❌ 忘记添加新组件 .view-navigation
-  
-  if (isInsideOverlay) return;
-  
-  // 双击空白区域触发 quick-creation-toolbar
-  setQuickToolbarVisible(true);
-};
+// 错误：没有清理计时器，可能导致内存泄漏和意外行为
+const [open, setOpen] = useState(false);
 
-// 结果：双击 view-navigation 会意外触发 quick-creation-toolbar
+<div
+  onPointerEnter={() => {
+    setTimeout(() => setOpen(true), 300);  // 计时器没有被追踪
+  }}
+>
 ```
 
 ✅ **正确示例**:
 ```typescript
-// 添加新组件后，同步更新排除列表
-const handleDoubleClick = (event: MouseEvent) => {
-  const target = event.target as HTMLElement;
-  
-  const isInsideOverlay = target.closest('.chat-drawer') ||
-                          target.closest('.minimap') ||
-                          target.closest('.ai-input-bar') ||
-                          target.closest('.view-navigation'); // ✅ 新增组件
-  
-  if (isInsideOverlay) return;
-  
-  setQuickToolbarVisible(true);
-};
+// 正确：使用 ref 追踪计时器，在离开和卸载时清理
+const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+const clearHoverTimeout = useCallback(() => {
+  if (hoverTimeoutRef.current) {
+    clearTimeout(hoverTimeoutRef.current);
+    hoverTimeoutRef.current = null;
+  }
+}, []);
+
+// 组件卸载时清理
+useEffect(() => {
+  return () => clearHoverTimeout();
+}, [clearHoverTimeout]);
+
+<div
+  onPointerEnter={() => {
+    clearHoverTimeout();  // 先清除之前的计时器
+    hoverTimeoutRef.current = setTimeout(() => setOpen(true), 300);
+  }}
+  onPointerLeave={() => {
+    clearHoverTimeout();  // 离开时取消延迟操作
+  }}
+  onPointerDown={() => {
+    clearHoverTimeout();  // 点击时立即响应，取消延迟
+    setOpen(true);
+  }}
+>
 ```
 
-**需要排除的组件类型**:
-- 浮层面板：`.chat-drawer`, `.project-drawer`, `.toolbox-drawer`
-- 工具栏：`.view-navigation`, `.unified-toolbar`, `.ai-input-bar`
-- 弹窗：`.t-dialog`, `.settings-dialog`
-- 其他 UI：`.minimap`, `.task-queue-panel`
-
-**检查位置**: `drawnix.tsx` 中的 `handleDoubleClick` 函数（约第 715-730 行）
-
-**原因**: 全局事件处理（如双击显示快捷工具栏）会捕获整个容器内的事件。如果不排除新添加的 UI 组件，用户在这些组件上的操作会触发意外的全局行为（如在缩放按钮上双击却弹出了创建工具栏）。
+**关键点**:
+- 使用 `useRef` 存储计时器 ID（不用 state，避免不必要的重渲染）
+- `onPointerLeave` 清除计时器（用户离开后取消待执行的操作）
+- `onPointerDown` 清除计时器（点击时立即响应，不等待延迟）
+- `useEffect` 清理函数确保组件卸载时清除计时器
 
 ### CSS/SCSS 规范
 - 使用 BEM 命名规范
@@ -1247,6 +1320,40 @@ const submitToSW = async (workflow) => {
 ```
 
 **原因**: Service Worker 的 `workflowHandler` 需要收到 `TASK_QUEUE_INIT` 消息后才会初始化。如果在 SW 初始化前提交工作流，消息会被暂存到 `pendingWorkflowMessages`，等待配置到达。若配置永远不到达（如 `swTaskQueueService.initialize()` 未被调用），工作流就永远不会开始执行，步骤状态保持 `pending`。
+
+### Plait 选中状态渲染触发
+
+**场景**: 在异步回调（如 `setTimeout`）中使用 `addSelectedElement` 选中元素时
+
+❌ **错误示例**:
+```typescript
+// 错误：addSelectedElement 只更新 WeakMap 缓存，不触发渲染
+setTimeout(() => {
+  const element = board.children.find(el => el.id === elementId);
+  clearSelectedElement(board);
+  addSelectedElement(board, element);  // 选中状态已更新，但 UI 不会刷新
+  BoardTransforms.updatePointerType(board, PlaitPointerType.selection);
+}, 50);
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：使用 Transforms.setNode 触发 board.apply() 从而触发渲染
+setTimeout(() => {
+  const elementIndex = board.children.findIndex(el => el.id === elementId);
+  const element = elementIndex >= 0 ? board.children[elementIndex] : null;
+  if (element) {
+    clearSelectedElement(board);
+    addSelectedElement(board, element);
+    BoardTransforms.updatePointerType(board, PlaitPointerType.selection);
+    // 设置临时属性触发渲染，然后立即删除
+    Transforms.setNode(board, { _forceRender: Date.now() } as any, [elementIndex]);
+    Transforms.setNode(board, { _forceRender: undefined } as any, [elementIndex]);
+  }
+}, 50);
+```
+
+**原因**: Plait 的 `addSelectedElement` 只是将元素存入 `BOARD_TO_SELECTED_ELEMENT` WeakMap 缓存，不会触发任何渲染。在同步流程中（如 `insertElement` 内部），`Transforms.insertNode` 已经触发了 `board.apply()` 和渲染链，所以选中状态能正常显示。但在异步回调中单独调用时，需要手动触发一次 `board.apply()` 来刷新渲染。`Transforms.setNode` 会调用 `board.apply()`，从而触发完整的渲染链。
 
 ### 禁止自动删除用户数据
 

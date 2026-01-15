@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useBoard } from '@plait-board/react-board';
 import { flip, offset, shift, useFloating } from '@floating-ui/react';
 import { Island } from '../../island';
@@ -189,6 +189,25 @@ export const QuickCreationToolbar: React.FC<QuickCreationToolbarProps> = ({
   // 保存最后选择的画笔类型
   const [lastFreehandPointer, setLastFreehandPointer] = useState<DrawnixPointerType>(FreehandShape.feltTipPen);
 
+  // Hover 展开延迟计时器
+  const HOVER_DELAY = 300; // 毫秒
+  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 清除 hover 计时器
+  const clearHoverTimeout = useCallback(() => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
+    }
+  }, []);
+
+  // 组件卸载时清除计时器
+  useEffect(() => {
+    return () => {
+      clearHoverTimeout();
+    };
+  }, [clearHoverTimeout]);
+
   // 渲染带 Popover 的按钮
   const renderPopoverButton = (
     icon: React.ReactNode,
@@ -208,7 +227,20 @@ export const QuickCreationToolbar: React.FC<QuickCreationToolbarProps> = ({
         placement="bottom"
       >
         <PopoverTrigger asChild>
-          <div>
+          <div
+            onPointerEnter={() => {
+              // 清除之前的计时器
+              clearHoverTimeout();
+              // 设置延迟展开
+              hoverTimeoutRef.current = setTimeout(() => {
+                showPopover(popupKey);
+              }, HOVER_DELAY);
+            }}
+            onPointerLeave={() => {
+              // 离开时清除计时器（如果还没触发）
+              clearHoverTimeout();
+            }}
+          >
             <ToolButton
               type="icon"
               visible={true}
@@ -218,6 +250,8 @@ export const QuickCreationToolbar: React.FC<QuickCreationToolbarProps> = ({
               aria-label={title}
               data-track={`quick_toolbar_click_${popupKey}`}
               onPointerDown={() => {
+                // 点击时立即展开，清除 hover 计时器
+                clearHoverTimeout();
                 showPopover(popupKey);
                 // 画笔工具需要特殊处理：按下时设置 dnd 模式
                 if (popupKey === PopupKey.freehand) {
