@@ -11,6 +11,7 @@ import { shouldUseSWTaskQueue } from '../../services/task-queue';
 import { swTaskQueueClient } from '../../services/sw-client';
 import { geminiSettings } from '../settings-manager';
 import type { ChatParams, ChatMessage as SWChatMessage } from '../../services/sw-client/types';
+import { isAuthError, dispatchApiAuthError } from '../api-auth-error-event';
 
 /**
  * 确保 SW 客户端已初始化
@@ -302,6 +303,11 @@ async function callApiStreamViaSW(
         
         const duration = Date.now() - startTime;
         console.error('[ApiCalls/SW] Stream error:', error);
+        
+        // 检测 401 认证错误，触发打开设置对话框
+        if (isAuthError(error)) {
+          dispatchApiAuthError({ message: error, source: 'chat' });
+        }
         
         analytics.trackAPICallFailure({
           endpoint,
