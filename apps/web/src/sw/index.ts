@@ -909,59 +909,6 @@ async function handleFontRequest(request: Request): Promise<Response> {
   }
 }
 
-// Utility function to perform fetch with retries
-// skipRetryOnNetworkError: if true, don't retry on network errors (for offline scenarios)
-async function fetchWithRetry(request: Request, maxRetries = 2, fetchOptions: any = {}, skipRetryOnNetworkError = false): Promise<Response> {
-  let lastError;
-
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      // console.log(`Fetch attempt ${attempt + 1}/${maxRetries + 1} for:`, request.url);
-      const response = await fetch(request, fetchOptions);
-
-      if (response.ok || response.status < 500) {
-        // Consider 4xx errors as final (don't retry), only retry on 5xx or network errors
-        return response;
-      }
-
-      if (attempt < maxRetries) {
-        // console.warn(`Fetch attempt ${attempt + 1} failed with status ${response.status}, retrying...`);
-        lastError = new Error(`HTTP ${response.status}: ${response.statusText}`);
-        // Wait before retrying (exponential backoff)
-        await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
-        continue;
-      }
-
-      return response;
-    } catch (error: any) {
-      // console.warn(`Fetch attempt ${attempt + 1} failed:`, error.message);
-      lastError = error;
-
-      // For network errors (offline), don't retry - fail fast
-      if (skipRetryOnNetworkError) {
-        throw lastError;
-      }
-
-      // Check if it's a connection refused error - don't retry these
-      const isConnectionError = error.message?.includes('ERR_CONNECTION_REFUSED') ||
-        error.message?.includes('ERR_NETWORK') ||
-        error.message?.includes('Failed to fetch') ||
-        error.message?.includes('NetworkError');
-      
-      if (isConnectionError) {
-        // Connection refused means server is down, no point retrying
-        throw lastError;
-      }
-
-      if (attempt < maxRetries) {
-        // Wait before retrying (exponential backoff: 1s, 2s, 4s...)
-        await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
-      }
-    }
-  }
-
-  throw lastError;
-}
 
 // Quick fetch without retries - for cache-first scenarios
 async function fetchQuick(request: Request, fetchOptions: any = {}): Promise<Response> {

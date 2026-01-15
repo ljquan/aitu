@@ -857,58 +857,24 @@ export class SWTaskQueue {
       },
     };
 
-    // Check if should retry
-    if (task.retryCount < this.config.maxRetries) {
-      task.status = TaskStatus.RETRYING;
-      task.retryCount += 1;
-      task.error = taskError;
-      task.nextRetryAt =
-        Date.now() + (this.config.retryDelays[task.retryCount - 1] || 60000);
-      task.updatedAt = Date.now();
-      this.tasks.set(taskId, task);
+    // 不再重试，直接标记为失败
+    task.status = TaskStatus.FAILED;
+    task.error = taskError;
+    task.updatedAt = Date.now();
+    this.tasks.set(taskId, task);
 
-      // Persist retry state
-      await taskQueueStorage.saveTask(task);
+    // Persist failure
+    await taskQueueStorage.saveTask(task);
 
-      // Schedule retry
-      setTimeout(() => {
-        const t = this.tasks.get(taskId);
-        if (t && t.status === TaskStatus.RETRYING) {
-          t.status = TaskStatus.PENDING;
-          t.updatedAt = Date.now();
-          this.tasks.set(taskId, t);
-          taskQueueStorage.saveTask(t);
-          this.processQueue();
-        }
-      }, task.nextRetryAt - Date.now());
+    this.broadcastToClients({
+      type: 'TASK_FAILED',
+      taskId,
+      error: taskError,
+      retryCount: task.retryCount,
+    });
 
-      this.broadcastToClients({
-        type: 'TASK_FAILED',
-        taskId,
-        error: taskError,
-        retryCount: task.retryCount,
-        nextRetryAt: task.nextRetryAt,
-      });
-    } else {
-      // Max retries exceeded
-      task.status = TaskStatus.FAILED;
-      task.error = taskError;
-      task.updatedAt = Date.now();
-      this.tasks.set(taskId, task);
-
-      // Persist failure
-      await taskQueueStorage.saveTask(task);
-
-      this.broadcastToClients({
-        type: 'TASK_FAILED',
-        taskId,
-        error: taskError,
-        retryCount: task.retryCount,
-      });
-
-      // Notify internal listeners
-      this.onTaskStatusChange?.(taskId, 'failed', undefined, taskError.message);
-    }
+    // Notify internal listeners
+    this.onTaskStatusChange?.(taskId, 'failed', undefined, taskError.message);
 
     // Process next task
     this.processQueue();

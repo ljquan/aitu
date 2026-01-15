@@ -6,7 +6,6 @@
 
 import { GeminiConfig, GeminiMessage, GeminiResponse, VideoGenerationOptions } from './types';
 import { DEFAULT_CONFIG, VIDEO_DEFAULT_CONFIG } from './config';
-import { isQuotaExceededError, isTimeoutError } from './utils';
 import { analytics } from '../posthog-analytics';
 import { shouldUseSWTaskQueue } from '../../services/task-queue';
 import { swTaskQueueClient } from '../../services/sw-client';
@@ -674,54 +673,12 @@ export async function callVideoApiStreamRaw(
 }
 
 /**
- * 带重试功能的 API 调用
+ * API 调用（不再重试）
  */
 export async function callApiWithRetry(
   config: GeminiConfig,
   messages: GeminiMessage[],
 ): Promise<GeminiResponse> {
-  const maxRetries = config.maxRetries || DEFAULT_CONFIG.maxRetries!;
-  const retryDelay = config.retryDelay || DEFAULT_CONFIG.retryDelay!;
-  const model = config.modelName || 'gemini-3-pro-image-preview-vip';
-  const endpoint = '/chat/completions';
-
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    try {
-      // console.log(`第 ${attempt + 1} 次尝试调用 Gemini API...`);
-      const response = await callApiRaw(config, messages);
-      // console.log('API 调用成功！');
-      return response;
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error(`API 调用失败: ${errorMessage}`);
-
-      // 检查是否为配额超出错误或超时错误
-      if (isQuotaExceededError(errorMessage) || isTimeoutError(errorMessage)) {
-        if (attempt < maxRetries - 1) {
-          // Track retry
-          analytics.trackAPICallRetry({
-            endpoint,
-            model,
-            attempt: attempt + 1,
-            reason: isQuotaExceededError(errorMessage) ? 'QUOTA_EXCEEDED' : 'TIMEOUT',
-          });
-
-          if (retryDelay > 0) {
-            // console.log(`将在 ${retryDelay}ms 后进行第 ${attempt + 2} 次重试...`);
-            await new Promise(resolve => setTimeout(resolve, retryDelay));
-          } else {
-            // console.log(`立即进行第 ${attempt + 2} 次重试...`);
-          }
-          continue;
-        } else {
-          throw new Error(`经过 ${maxRetries} 次重试后仍然失败: ${errorMessage}`);
-        }
-      } else {
-        // 非配额/超时错误，直接抛出
-        throw error;
-      }
-    }
-  }
-
-  throw new Error(`经过 ${maxRetries} 次重试后仍然失败`);
+  // 直接调用，不再重试
+  return callApiRaw(config, messages);
 }

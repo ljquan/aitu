@@ -41,28 +41,6 @@ export async function prepareImageData(image: ImageInput): Promise<string> {
 }
 
 /**
- * 检查是否为配额超出错误
- */
-export function isQuotaExceededError(errorMessage: string): boolean {
-  const quotaKeywords = [
-    'exceeded your current quota',
-    'quota exceeded',
-    'billing details',
-    'plan and billing'
-  ];
-  const errorStr = errorMessage.toLowerCase();
-  return quotaKeywords.some(keyword => errorStr.includes(keyword));
-}
-
-/**
- * 检查是否为超时错误
- */
-export function isTimeoutError(errorMessage: string): boolean {
-  const errorStr = errorMessage.toLowerCase();
-  return errorStr.includes('timeout') || errorStr.includes('timed out');
-}
-
-/**
  * 将 base64 数据转换为 Blob URL
  */
 export function base64ToBlobUrl(base64Data: string, mimeType: string = 'image/png'): string {
