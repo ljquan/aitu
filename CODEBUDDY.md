@@ -183,6 +183,39 @@ await cacheService.cacheMediaFromBlob(url, blob, 'image', {
 
 **原因**: TypeScript 的严格对象字面量检查会禁止传递未知属性。如果需要额外信息：1) 使用现有字段组合表达（如 `taskId: 'imported-xxx'`）；2) 或修改类型定义扩展接口。
 
+#### 扩展外部库的枚举类型
+**场景**: 需要在外部库的枚举（如 `@plait/common` 的 `StrokeStyle`）基础上添加新值时
+
+❌ **错误示例**:
+```typescript
+// 错误：直接修改外部库的枚举（无法做到）或使用魔术字符串
+import { StrokeStyle } from '@plait/common';
+
+const strokeStyle = 'hollow';  // ❌ 类型不匹配
+setStrokeStyle(board, strokeStyle);  // 错误：类型 'string' 不能赋给 StrokeStyle
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：创建扩展类型，同时保持与原始枚举的兼容性
+import { StrokeStyle } from '@plait/common';
+
+// 1. 使用联合类型扩展
+export type FreehandStrokeStyle = StrokeStyle | 'hollow';
+
+// 2. 创建同名常量对象，合并原始枚举值
+export const FreehandStrokeStyle = {
+  ...StrokeStyle,
+  hollow: 'hollow' as const,
+};
+
+// 使用时可以访问所有值
+const style1 = FreehandStrokeStyle.solid;   // ✅ 原始值
+const style2 = FreehandStrokeStyle.hollow;  // ✅ 扩展值
+```
+
+**原因**: TypeScript 的枚举是封闭的，无法在外部添加新成员。通过 "类型 + 同名常量对象" 模式，可以：1) 保持与原始枚举的完全兼容；2) 类型安全地添加新值；3) 在运行时和编译时都能正确使用。
+
 #### Async Initialization Pattern
 **场景**: 使用 `settingsManager` 或其他需要异步初始化的服务时
 

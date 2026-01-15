@@ -1115,6 +1115,48 @@ createShape(board, points, shapeType);
 
 **原因**: `[T, T][]` 表示"T 的二元组的数组（长度不定）"，而 `[[T, T], [T, T]]` 表示"恰好包含两个 T 二元组的元组"。当 API 期望固定数量的点（如矩形的左上角和右下角）时，必须使用精确的元组类型，否则 TypeScript 无法保证数组长度符合要求。
 
+#### 扩展外部库的枚举类型
+
+**场景**: 需要在外部库的枚举（如 `@plait/common` 的 `StrokeStyle`）基础上添加新值时
+
+❌ **错误示例**:
+```typescript
+// 错误：直接修改外部库的枚举（无法做到）或使用魔术字符串
+import { StrokeStyle } from '@plait/common';
+
+// 无法向 StrokeStyle 添加 'hollow' 值
+// 使用字符串字面量会导致类型不兼容
+const strokeStyle = 'hollow';  // ❌ 类型不匹配
+setStrokeStyle(board, strokeStyle);  // 错误：类型 'string' 不能赋给 StrokeStyle
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：创建扩展类型，同时保持与原始枚举的兼容性
+import { StrokeStyle } from '@plait/common';
+
+// 1. 使用联合类型扩展
+export type FreehandStrokeStyle = StrokeStyle | 'hollow';
+
+// 2. 创建同名常量对象，合并原始枚举值
+export const FreehandStrokeStyle = {
+  ...StrokeStyle,
+  hollow: 'hollow' as const,
+};
+
+// 使用时可以访问所有值
+const style1 = FreehandStrokeStyle.solid;   // ✅ 原始值
+const style2 = FreehandStrokeStyle.hollow;  // ✅ 扩展值
+
+// 函数参数使用扩展类型
+export const setFreehandStrokeStyle = (
+  board: PlaitBoard, 
+  strokeStyle: FreehandStrokeStyle  // ✅ 接受原始值和扩展值
+) => { ... };
+```
+
+**原因**: TypeScript 的枚举是封闭的，无法在外部添加新成员。通过 "类型 + 同名常量对象" 模式，可以：1) 保持与原始枚举的完全兼容；2) 类型安全地添加新值；3) 在运行时和编译时都能正确使用。这是扩展第三方库类型的标准模式。
+
 ### React 组件规范
 - 使用函数组件和 Hooks
 - 使用 `React.memo` 优化重渲染
