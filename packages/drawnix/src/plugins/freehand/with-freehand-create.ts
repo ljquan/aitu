@@ -155,15 +155,17 @@ export const withFreehandCreate = (board: PlaitBoard) => {
       // 在绘制开始时刷新缓存设置
       const settings = getCurrentSettings(true);
       originScreenPoint = [event.x, event.y];
-      const smoothingPoint = smoother.process(originScreenPoint) as Point;
-      const point = toViewBoxPoint(
-        board,
-        toHostPoint(board, smoothingPoint[0], smoothingPoint[1])
-      );
-      points.push(point);
-      
-      // 收集压力数据
-      pressures.push(getPressure(event, settings.pressureEnabled));
+      const smoothingPoint = smoother.process(originScreenPoint);
+      if (smoothingPoint) {
+        const point = toViewBoxPoint(
+          board,
+          toHostPoint(board, smoothingPoint[0], smoothingPoint[1])
+        );
+        points.push(point);
+        
+        // 收集压力数据
+        pressures.push(getPressure(event, settings.pressureEnabled));
+      }
     }
     pointerDown(event);
   };

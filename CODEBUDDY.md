@@ -159,6 +159,30 @@ Full coding standards are documented in `docs/CODING_STANDARDS.md`. Key highligh
 - Avoid `any` - use specific types or generics
 - Strict TypeScript configuration is enforced
 
+#### 对象字面量只能指定已知属性
+**场景**: 向函数传递 metadata/options 对象时
+
+❌ **错误示例**:
+```typescript
+// 错误：传递了类型定义中不存在的属性
+await cacheService.cacheMediaFromBlob(url, blob, 'image', {
+  source: 'imported',      // ❌ 类型中没有 source
+  importedAt: Date.now(),  // ❌ 类型中没有 importedAt
+});
+
+// 类型定义：{ taskId?: string; prompt?: string; model?: string }
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：只使用类型定义中存在的属性
+await cacheService.cacheMediaFromBlob(url, blob, 'image', {
+  taskId: `imported-${Date.now()}`,  // ✅ 利用现有字段传递信息
+});
+```
+
+**原因**: TypeScript 的严格对象字面量检查会禁止传递未知属性。如果需要额外信息：1) 使用现有字段组合表达（如 `taskId: 'imported-xxx'`）；2) 或修改类型定义扩展接口。
+
 #### Async Initialization Pattern
 **场景**: 使用 `settingsManager` 或其他需要异步初始化的服务时
 

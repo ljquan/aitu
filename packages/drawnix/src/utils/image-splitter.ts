@@ -1617,6 +1617,9 @@ export async function splitAndInsertImages(
     let firstInsertPoint: Point | undefined;
     let firstElementSize: { width: number; height: number } | undefined;
 
+    // 动态导入 unifiedCacheService
+    const { unifiedCacheService } = await import('../services/unified-cache-service');
+
     for (let i = 0; i < elements.length; i++) {
       const element = elements[i];
 
@@ -1638,8 +1641,20 @@ export async function splitAndInsertImages(
         firstElementSize = { width: scaledWidth, height: scaledHeight };
       }
 
+      // 将 base64 DataURL 转换为 Blob 并缓存到 __aitu_cache__
+      const imageFormat = element.hasTransparency ? 'png' : 'jpg';
+      const taskId = `split-image-${Date.now()}-${i}`;
+      const stableUrl = `/__aitu_cache__/image/${taskId}.${imageFormat}`;
+
+      // 将 DataURL 转换为 Blob
+      const response = await fetch(element.imageData);
+      const blob = await response.blob();
+
+      // 缓存到 Cache API
+      await unifiedCacheService.cacheMediaFromBlob(stableUrl, blob, 'image', { taskId });
+
       const imageItem = {
-        url: element.imageData,
+        url: stableUrl,
         width: scaledWidth,
         height: scaledHeight,
       };
