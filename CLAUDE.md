@@ -1321,6 +1321,51 @@ const submitToSW = async (workflow) => {
 
 **原因**: Service Worker 的 `workflowHandler` 需要收到 `TASK_QUEUE_INIT` 消息后才会初始化。如果在 SW 初始化前提交工作流，消息会被暂存到 `pendingWorkflowMessages`，等待配置到达。若配置永远不到达（如 `swTaskQueueService.initialize()` 未被调用），工作流就永远不会开始执行，步骤状态保持 `pending`。
 
+### API 请求禁止重试
+
+**场景**: 实现 API 调用（图片生成、视频生成、聊天等）时
+
+❌ **错误示例**:
+```typescript
+// 错误：添加重试逻辑
+const maxRetries = 3;
+for (let attempt = 0; attempt < maxRetries; attempt++) {
+  try {
+    const response = await fetch(apiUrl, options);
+    if (response.ok) return response.json();
+  } catch (error) {
+    if (attempt < maxRetries - 1) {
+      await sleep(retryDelay);
+      continue;
+    }
+    throw error;
+  }
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：直接请求，失败则抛出错误
+const response = await fetch(apiUrl, options);
+if (!response.ok) {
+  const error = new Error(`HTTP ${response.status}`);
+  throw error;
+}
+return response.json();
+```
+
+**禁止重试的请求类型**:
+- AI 生成 API（图片、视频、角色）
+- 聊天 API
+- 任务队列中的任务执行
+- Service Worker 中的 fetch 请求
+
+**原因**: 
+1. AI 生成请求成本高（时间和费用），重试会导致重复消耗
+2. 失败通常是由于内容策略、配额限制或 API 问题，重试无法解决
+3. 用户可以手动重试失败的任务
+4. 重试会延长错误反馈时间，影响用户体验
+
 ### Plait 选中状态渲染触发
 
 **场景**: 在异步回调（如 `setTimeout`）中使用 `addSelectedElement` 选中元素时
