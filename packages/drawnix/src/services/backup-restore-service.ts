@@ -131,7 +131,7 @@ interface DrawnixFileData {
   source: string;
   elements: PlaitElement[];
   viewport: Viewport;
-  theme?: string;
+  theme?: PlaitTheme;
   boardMeta?: {
     id: string;
     name: string;
@@ -155,6 +155,19 @@ interface PlaitElement {
   videoAssetId?: string;
   children?: PlaitElement[];
   [key: string]: unknown;
+}
+
+/**
+ * 确保所有元素都有 id（为没有 id 的元素生成一个）
+ * 返回类型兼容 @plait/core 的 PlaitElement[]
+ */
+function ensureElementIds(elements: PlaitElement[]): CorePlaitElement[] {
+  return elements.map(el => {
+    if (!el.id) {
+      return { ...el, id: `imported-${Date.now()}-${Math.random().toString(36).slice(2, 9)}` } as CorePlaitElement;
+    }
+    return el as CorePlaitElement;
+  });
 }
 
 /**
@@ -987,9 +1000,10 @@ class BackupRestoreService {
               );
               
               // 合并后的元素：现有元素 + 备份中新增的元素
+              // 使用 ensureElementIds 确保新元素都有 id
               const mergedElements = [
                 ...(existingBoard.elements || []),
-                ...newElements,
+                ...ensureElementIds(newElements),
               ];
 
               // 合并画板数据
@@ -1016,7 +1030,7 @@ class BackupRestoreService {
             name: boardName,
             folderId,
             order: boardMeta?.order ?? i,
-            elements: drawnixData.elements || [],
+            elements: ensureElementIds(drawnixData.elements || []),
             viewport: drawnixData.viewport,
             theme: drawnixData.theme,
             createdAt: boardMeta?.createdAt || Date.now(),
