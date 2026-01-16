@@ -36,6 +36,7 @@ import { swTaskQueueService } from './sw-task-queue-service';
 import { TaskType, TaskStatus, Task } from '../types/task.types';
 import type { Folder, Board } from '../types/workspace.types';
 import type { StoredAsset } from '../types/asset.types';
+import type { PlaitTheme, PlaitElement as CorePlaitElement } from '@plait/core';
 import { LS_KEYS_TO_MIGRATE } from '../constants/storage-keys';
 import { DrawnixExportedType } from '../data/types';
 import { VERSIONS } from '../constants';
@@ -72,6 +73,21 @@ export interface BackupOptions {
 }
 
 /**
+ * 备份时的工作区状态
+ */
+export interface BackupWorkspaceState {
+  /** 当前画板ID */
+  currentBoardId: string | null;
+  /** 当前画板名称（用于显示） */
+  currentBoardName?: string;
+  /** 当前视图状态（使用 origination 格式，与 @plait/core 保持一致） */
+  viewport?: {
+    zoom: number;
+    origination?: [number, number];
+  };
+}
+
+/**
  * 备份清单（manifest.json）
  */
 interface BackupManifest {
@@ -92,6 +108,8 @@ interface BackupManifest {
     assetCount: number;
     taskCount: number;
   };
+  /** 备份时的工作区状态 */
+  workspaceState?: BackupWorkspaceState;
 }
 
 /**
@@ -126,8 +144,7 @@ interface DrawnixFileData {
 
 interface Viewport {
   zoom: number;
-  offsetX?: number;
-  offsetY?: number;
+  origination?: [number, number];
 }
 
 interface PlaitElement {
@@ -152,6 +169,8 @@ export interface ImportResult {
   projects: {
     folders: number;
     boards: number;
+    /** 合并的画板数量（相同ID的画板） */
+    merged: number;
     skipped: number;
   };
   assets: {
@@ -163,6 +182,8 @@ export interface ImportResult {
     skipped: number;
   };
   errors: string[];
+  /** 备份时的工作区状态（用于恢复画布位置） */
+  workspaceState?: BackupWorkspaceState;
 }
 
 /**
@@ -215,6 +236,14 @@ class BackupRestoreService {
 
     onProgress?.(5, '正在准备数据...');
 
+    // 获取当前工作区状态
+    const currentBoard = workspaceService.getCurrentBoard();
+    const workspaceState: BackupWorkspaceState = {
+      currentBoardId: currentBoard?.id || null,
+      currentBoardName: currentBoard?.name,
+      viewport: currentBoard?.viewport,
+    };
+
     const manifest: BackupManifest = {
       signature: BACKUP_SIGNATURE,
       version: BACKUP_VERSION,
@@ -233,6 +262,7 @@ class BackupRestoreService {
         assetCount: 0,
         taskCount: 0,
       },
+      workspaceState,
     };
 
     // 导出提示词
@@ -534,7 +564,7 @@ class BackupRestoreService {
     const result: ImportResult = {
       success: false,
       prompts: { imported: 0, skipped: 0 },
-      projects: { folders: 0, boards: 0, skipped: 0 },
+      projects: { folders: 0, boards: 0, merged: 0, skipped: 0 },
       assets: { imported: 0, skipped: 0 },
       tasks: { imported: 0, skipped: 0 },
       errors: [],
@@ -589,6 +619,11 @@ class BackupRestoreService {
       // 如果导入了项目，刷新工作区缓存
       if (result.projects.folders > 0 || result.projects.boards > 0) {
         await workspaceService.reload();
+      }
+
+      // 返回备份时的工作区状态（用于恢复画布位置）
+      if (manifest.workspaceState) {
+        result.workspaceState = manifest.workspaceState;
       }
 
       result.success = result.errors.length === 0;
@@ -827,9 +862,10 @@ class BackupRestoreService {
   private async importProjects(
     zip: JSZip,
     onProgress?: ProgressCallback
-  ): Promise<{ folders: number; boards: number; skipped: number }> {
+  ): Promise<{ folders: number; boards: number; merged: number; skipped: number }> {
     let foldersImported = 0;
     let boardsImported = 0;
+    let boardsMerged = 0;
     let skipped = 0;
 
     // 获取现有数据
@@ -846,7 +882,7 @@ class BackupRestoreService {
     );
 
     if (drawnixFiles.length === 0) {
-      return { folders: 0, boards: 0, skipped: 0 };
+      return { folders: 0, boards: 0, merged: 0, skipped: 0 };
     }
 
     // 从目录结构推断文件夹
@@ -918,12 +954,6 @@ class BackupRestoreService {
 
           const boardMeta = drawnixData.boardMeta;
 
-          // 检查是否已存在
-          if (boardMeta?.id && existingBoardIds.has(boardMeta.id)) {
-            skipped++;
-            continue;
-          }
-
           // 推断文件夹 ID
           const relativePath = filePath.replace(/^projects\//, '');
           const parts = relativePath.split('/');
@@ -935,6 +965,51 @@ class BackupRestoreService {
 
           const fileName = parts[parts.length - 1] || 'unnamed.drawnix';
           const boardName = boardMeta?.name || fileName.replace('.drawnix', '');
+
+          // 检查是否已存在相同 ID 的画板
+          if (boardMeta?.id && existingBoardIds.has(boardMeta.id)) {
+            // 找到现有画板进行合并
+            const existingBoard = existingBoards.find(b => b.id === boardMeta.id);
+            if (existingBoard) {
+              // 合并元素：保留现有元素，添加备份中新增的元素（基于ID去重）
+              const existingElementIds = new Set(
+                (existingBoard.elements || [])
+                  .map(el => el.id)
+                  .filter((id): id is string => !!id)
+              );
+              
+              const backupElements = drawnixData.elements || [];
+              // 过滤出备份中的新元素：
+              // - 有 ID 的元素：只保留现有画板中不存在的
+              // - 无 ID 的元素：全部保留（不会与现有元素冲突）
+              const newElements = backupElements.filter(el => 
+                el.id ? !existingElementIds.has(el.id) : true
+              );
+              
+              // 合并后的元素：现有元素 + 备份中新增的元素
+              const mergedElements = [
+                ...(existingBoard.elements || []),
+                ...newElements,
+              ];
+
+              // 合并画板数据
+              const mergedBoard: Board = {
+                ...existingBoard,
+                // 合并后的元素（图形可以多，但不能少）
+                elements: mergedElements,
+                // 使用备份的 viewport（恢复视图位置）
+                viewport: drawnixData.viewport || existingBoard.viewport,
+                // 使用备份的 theme
+                theme: drawnixData.theme || existingBoard.theme,
+                // 更新时间
+                updatedAt: Date.now(),
+              };
+              
+              await workspaceStorageService.saveBoard(mergedBoard);
+              boardsMerged++;
+              continue;
+            }
+          }
 
           const board: Board = {
             id: boardMeta?.id || this.generateId(),
@@ -967,7 +1042,7 @@ class BackupRestoreService {
       }
     }
 
-    return { folders: foldersImported, boards: boardsImported, skipped };
+    return { folders: foldersImported, boards: boardsImported, merged: boardsMerged, skipped };
   }
 
   /**

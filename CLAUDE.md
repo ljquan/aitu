@@ -2320,6 +2320,52 @@ trimTransparentBorders(imageData: ImageData, strict: boolean = true)
 
 ---
 
+## 开发规范
+
+### 生产代码禁止保留调试日志
+
+**场景**: 开发调试时添加的 `console.log` 语句未在提交前清理
+
+❌ **错误示例**:
+```typescript
+// 调试日志遗留在生产代码中
+const handleZoomPercentClick = useCallback(() => {
+  console.log('[ViewNavigation] Zoom percent clicked, current state:', zoomMenuOpen);
+  setZoomMenuOpen((prev) => !prev);
+}, [zoomMenuOpen]);
+
+// Popover 中的调试日志
+<Popover
+  onOpenChange={(open) => {
+    console.log('[Popover] onOpenChange:', open);
+    setZoomMenuOpen(open);
+  }}
+>
+```
+
+✅ **正确示例**:
+```typescript
+// 清理调试日志，保持代码简洁
+const handleZoomPercentClick = useCallback(() => {
+  setZoomMenuOpen((prev) => !prev);
+}, []);
+
+// 直接传递 setter 函数
+<Popover onOpenChange={setZoomMenuOpen}>
+```
+
+**原因**:
+1. 调试日志会污染用户控制台，影响体验
+2. 暴露内部实现细节，存在安全隐患
+3. 增加打包体积和运行时开销
+4. 代码 Review 时容易被忽略，形成技术债
+
+**例外情况**:
+- `console.error` / `console.warn` 用于记录真正的错误/警告是允许的
+- 带有 `[DEBUG]` 前缀且通过环境变量控制的日志可以保留
+
+---
+
 ## 相关文档
 
 - `/docs/CODING_STANDARDS.md` - 完整编码规范
