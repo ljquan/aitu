@@ -67,7 +67,20 @@ export function usePopover({
   const click = useClick(context, {
     enabled: controlledOpen == null,
   });
-  const dismiss = useDismiss(context);
+  const dismiss = useDismiss(context, {
+    // 自定义外部点击判断，排除 TDesign Dialog 和其他弹出层
+    outsidePress: (event) => {
+      const target = event.target as HTMLElement;
+      // 检查点击目标是否在 TDesign Dialog 内部
+      // TDesign Dialog 使用 .t-dialog 类名
+      const isInTDesignDialog = target.closest('.t-dialog__ctx') || 
+                                target.closest('.t-dialog') ||
+                                target.closest('.t-popup') ||
+                                target.closest('.t-drawer');
+      // 如果点击在 TDesign 弹出层内部，不关闭 Popover
+      return !isInTDesignDialog;
+    },
+  });
   const role = useRole(context);
 
   const interactions = useInteractions([click, dismiss, role]);

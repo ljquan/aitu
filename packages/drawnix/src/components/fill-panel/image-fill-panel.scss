@@ -1,0 +1,289 @@
+/**
+ * 图片填充面板样式
+ * Image Fill Panel Styles
+ */
+
+.image-fill-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  background: var(--color-surface, #ffffff);
+}
+
+// 图片选择区域
+.ifp-image-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ifp-image-container {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 2px dashed var(--color-border, #e5e7eb);
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+
+  &:hover {
+    border-color: var(--color-primary, #3b82f6);
+  }
+}
+
+.ifp-image-preview {
+  position: relative;
+  width: 100%;
+  height: 100%;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .ifp-image-remove {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.6);
+    border: none;
+    border-radius: 50%;
+    color: #ffffff;
+    font-size: 14px;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+
+    &:hover {
+      background: rgba(239, 68, 68, 0.9);
+    }
+  }
+
+  &:hover .ifp-image-remove {
+    opacity: 1;
+  }
+}
+
+.ifp-image-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 8px;
+  background: var(--color-bg-secondary, #f9fafb);
+
+  .ifp-placeholder-icon {
+    color: var(--color-text-tertiary, #9ca3af);
+  }
+
+  .ifp-placeholder-text {
+    font-size: 12px;
+    color: var(--color-text-secondary, #6b7280);
+  }
+}
+
+// 图片操作按钮
+.ifp-image-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.ifp-action-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 12px;
+  background: var(--color-bg-secondary, #f3f4f6);
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 8px;
+  color: var(--color-text-secondary, #6b7280);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: var(--color-bg-hover, #e5e7eb);
+    color: var(--color-text, #111827);
+  }
+
+  &--primary {
+    background: var(--color-primary, #3b82f6);
+    border-color: var(--color-primary, #3b82f6);
+    color: #ffffff;
+
+    &:hover {
+      background: var(--color-primary-dark, #2563eb);
+      border-color: var(--color-primary-dark, #2563eb);
+      color: #ffffff;
+    }
+  }
+}
+
+// 控制区域
+.ifp-control-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ifp-section-title {
+  font-size: 12px;
+  color: var(--color-text-secondary, #6b7280);
+  font-weight: 500;
+}
+
+// 平铺模式按钮
+.ifp-mode-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.ifp-mode-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 8px;
+  background: var(--color-bg-secondary, #f3f4f6);
+  border: 2px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: var(--color-bg-hover, #e5e7eb);
+  }
+
+  &.active {
+    background: rgba(59, 130, 246, 0.1);
+    border-color: var(--color-primary, #3b82f6);
+  }
+
+  .ifp-mode-icon {
+    font-size: 18px;
+    color: var(--color-text-secondary, #6b7280);
+  }
+
+  .ifp-mode-label {
+    font-size: 11px;
+    color: var(--color-text-secondary, #6b7280);
+  }
+
+  &.active {
+    .ifp-mode-icon,
+    .ifp-mode-label {
+      color: var(--color-primary, #3b82f6);
+    }
+  }
+}
+
+// 高级设置
+.ifp-advanced-section {
+  border-top: 1px solid var(--color-border, #e5e7eb);
+  padding-top: 12px;
+}
+
+.ifp-advanced-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 0;
+  background: transparent;
+  border: none;
+  color: var(--color-text-secondary, #6b7280);
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 0.2s ease;
+
+  &:hover {
+    color: var(--color-text, #111827);
+  }
+}
+
+.ifp-advanced-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 12px;
+}
+
+// 控制行
+.ifp-control-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ifp-control-label {
+  flex-shrink: 0;
+  width: 50px;
+  font-size: 11px;
+  color: var(--color-text-tertiary, #9ca3af);
+}
+
+.ifp-control-input {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ifp-slider {
+  flex: 1;
+  height: 4px;
+  appearance: none;
+  background: var(--color-border, #e5e7eb);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+
+  &::-webkit-slider-thumb {
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    background: var(--color-primary, #3b82f6);
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  }
+}
+
+.ifp-control-value {
+  flex-shrink: 0;
+  width: 40px;
+  font-size: 11px;
+  color: var(--color-text-secondary, #6b7280);
+  font-family: 'SF Mono', Monaco, monospace;
+  text-align: right;
+}
+
+// 重置按钮
+.ifp-reset-btn {
+  align-self: flex-end;
+  padding: 6px 12px;
+  background: var(--color-bg-secondary, #f3f4f6);
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 6px;
+  color: var(--color-text-secondary, #6b7280);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: var(--color-bg-hover, #e5e7eb);
+    color: var(--color-text, #111827);
+  }
+}

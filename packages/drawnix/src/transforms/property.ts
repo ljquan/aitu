@@ -23,6 +23,30 @@ import {
 import { TextTransforms, FontSizes, setSelection } from '@plait/text-plugins';
 import { getTextEditors } from '@plait/common';
 import { Editor, Transforms as SlateTransforms } from 'slate';
+import type {
+  FillConfig,
+  FillType,
+  GradientFillConfig,
+  ImageFillConfig,
+} from '../types/fill.types';
+import { isFillConfig } from '../types/fill.types';
+
+/**
+ * 从填充值中提取颜色字符串
+ * 支持字符串和 FillConfig 对象
+ */
+const extractColorFromFill = (fill: string | FillConfig | null | undefined): string | null => {
+  if (!fill) return null;
+  if (typeof fill === 'string') return fill;
+  if (isFillConfig(fill)) {
+    if (fill.type === 'solid' && fill.solid) {
+      return fill.solid.color;
+    }
+    // 渐变和图片填充不返回颜色
+    return null;
+  }
+  return null;
+};
 
 export const setFillColorOpacity = (board: PlaitBoard, fillOpacity: number) => {
   PropertyTransforms.setFillColor(board, null, {
@@ -31,7 +55,9 @@ export const setFillColorOpacity = (board: PlaitBoard, fillOpacity: number) => {
       if (!isClosedElement(board, element)) {
         return;
       }
-      const currentFill = getCurrentFill(board, element);
+      // 直接从 element.fill 获取，可能是 FillConfig
+      const rawFill = element.fill;
+      const currentFill = extractColorFromFill(rawFill as string | FillConfig) || getCurrentFill(board, element);
       if (!isValidColor(currentFill)) {
         return;
       }
@@ -51,8 +77,10 @@ export const setFillColor = (board: PlaitBoard, fillColor: string) => {
       if (!isClosedElement(board, element)) {
         return;
       }
-      const currentFill = getCurrentFill(board, element);
-      const currentOpacity = hexAlphaToOpacity(currentFill);
+      // 直接从 element.fill 获取，可能是 FillConfig
+      const rawFill = element.fill;
+      const currentFillStr = extractColorFromFill(rawFill as string | FillConfig) || getCurrentFill(board, element);
+      const currentOpacity = typeof currentFillStr === 'string' ? hexAlphaToOpacity(currentFillStr) : undefined;
       if (isNoColor(fillColor)) {
         Transforms.setNode(board, { fill: 'none' }, path);
       } else {
@@ -406,4 +434,126 @@ export const getTextAlign = (board: PlaitBoard): 'left' | 'center' | 'right' => 
     }
   }
   return 'left';
+};
+
+// ============ 填充类型相关 Transform ============
+
+/**
+ * 设置渐变填充
+ */
+export const setGradientFill = (board: PlaitBoard, gradientConfig: GradientFillConfig) => {
+  PropertyTransforms.setFillColor(board, null, {
+    getMemorizeKey,
+    callback: (element: PlaitElement, path: Path) => {
+      if (!isClosedElement(board, element)) {
+        return;
+      }
+      const fillConfig: FillConfig = {
+        type: 'gradient',
+        gradient: gradientConfig,
+      };
+      Transforms.setNode(board, { fill: fillConfig }, path);
+    },
+  });
+};
+
+/**
+ * 设置图片填充
+ */
+export const setImageFill = (board: PlaitBoard, imageConfig: ImageFillConfig) => {
+  PropertyTransforms.setFillColor(board, null, {
+    getMemorizeKey,
+    callback: (element: PlaitElement, path: Path) => {
+      if (!isClosedElement(board, element)) {
+        return;
+      }
+      const fillConfig: FillConfig = {
+        type: 'image',
+        image: imageConfig,
+      };
+      Transforms.setNode(board, { fill: fillConfig }, path);
+    },
+  });
+};
+
+/**
+ * 设置填充类型（切换纯色/渐变/图片）
+ * 当切换类型时，保留当前类型的配置
+ */
+export const setFillType = (board: PlaitBoard, fillType: FillType) => {
+  PropertyTransforms.setFillColor(board, null, {
+    getMemorizeKey,
+    callback: (element: PlaitElement, path: Path) => {
+      if (!isClosedElement(board, element)) {
+        return;
+      }
+      
+      const currentFill = element.fill;
+      
+      // 如果当前是 FillConfig 且类型相同，不做任何操作
+      if (typeof currentFill === 'object' && currentFill?.type === fillType) {
+        return;
+      }
+      
+      // 根据目标类型创建新的配置
+      let newFillConfig: FillConfig;
+      
+      switch (fillType) {
+        case 'solid':
+          // 切换到纯色：如果当前是 FillConfig，尝试获取纯色配置
+          let solidColor = '#FFFFFF';
+          if (typeof currentFill === 'string') {
+            solidColor = currentFill;
+          } else if (typeof currentFill === 'object' && currentFill?.solid) {
+            solidColor = currentFill.solid.color;
+          }
+          newFillConfig = {
+            type: 'solid',
+            solid: { color: solidColor },
+          };
+          break;
+          
+        case 'gradient':
+          newFillConfig = {
+            type: 'gradient',
+            gradient: {
+              type: 'linear',
+              angle: 90,
+              stops: [
+                { offset: 0, color: '#FFFFFF' },
+                { offset: 1, color: '#000000' },
+              ],
+            },
+          };
+          // 如果当前是 FillConfig 且有渐变配置，保留它
+          if (typeof currentFill === 'object' && currentFill?.gradient) {
+            newFillConfig.gradient = currentFill.gradient;
+          }
+          break;
+          
+        case 'image':
+          newFillConfig = {
+            type: 'image',
+            image: {
+              imageUrl: '',
+              mode: 'stretch',
+              scale: 1,
+              offsetX: 0,
+              offsetY: 0,
+              rotation: 0,
+            },
+          };
+          // 如果当前是 FillConfig 且有图片配置，保留它
+          if (typeof currentFill === 'object' && currentFill?.image) {
+            newFillConfig.image = currentFill.image;
+          }
+          break;
+          
+        default:
+          return;
+      }
+      
+      Transforms.setNode(board, { fill: newFillConfig }, path);
+    },
+  });
 };

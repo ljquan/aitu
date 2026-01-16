@@ -76,6 +76,7 @@ import { withArrowLineAutoCompleteExtend } from './plugins/with-arrow-line-auto-
 import { AutoCompleteShapePicker } from './components/auto-complete-shape-picker';
 import { useAutoCompleteShapePicker } from './hooks/useAutoCompleteShapePicker';
 import { withDefaultFill } from './plugins/with-default-fill';
+import { withGradientFill } from './plugins/with-gradient-fill';
 import { API_AUTH_ERROR_EVENT, ApiAuthErrorDetail } from './utils/api-auth-error-event';
 import { MessagePlugin } from 'tdesign-react';
 
@@ -561,6 +562,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
     withWorkZone, // 工作区元素 - 在画布上显示工作流进度
     withArrowLineAutoCompleteExtend, // 自动完成形状选择 - hover 中点时选择下一个节点形状
     withDefaultFill, // 默认填充 - 让新创建的图形有白色填充，方便双击编辑
+    withGradientFill, // 渐变填充 - 支持渐变和图片填充渲染
     withTracking,
   ];
 
