@@ -87,6 +87,13 @@ export interface FillConfig {
   gradient?: GradientFillConfig;
   /** 图片配置 (type='image' 时使用) */
   image?: ImageFillConfig;
+  /**
+   * 回退颜色 (用于渐变/图片填充的首次渲染)
+   * 在 SVG defs 准备好之前，使用此颜色作为占位显示
+   * 对于渐变，通常是第一个色标的颜色
+   * 对于图片，通常是 #FFFFFF 或主色调
+   */
+  fallbackColor?: string;
 }
 
 // ============ 辅助类型和常量 ============
@@ -304,6 +311,48 @@ export function isSolidFill(fill: string | FillConfig | undefined): fill is stri
 }
 
 /**
+ * 从渐变配置中提取主色调（第一个色标的颜色）
+ */
+export function getGradientPrimaryColor(config: GradientFillConfig): string {
+  if (config.stops && config.stops.length > 0) {
+    return config.stops[0].color;
+  }
+  return '#FFFFFF';
+}
+
+/**
+ * 计算 FillConfig 的 fallbackColor
+ * 用于在渐变/图片填充的 SVG defs 准备好之前显示
+ */
+export function computeFallbackColor(config: FillConfig): string {
+  switch (config.type) {
+    case 'solid':
+      return config.solid?.color || '#FFFFFF';
+    case 'gradient':
+      return config.gradient ? getGradientPrimaryColor(config.gradient) : '#FFFFFF';
+    case 'image':
+      // 图片填充使用白色作为回退
+      return '#FFFFFF';
+    default:
+      return '#FFFFFF';
+  }
+}
+
+/**
+ * 确保 FillConfig 有 fallbackColor
+ * 如果没有，自动计算并添加
+ */
+export function ensureFallbackColor(config: FillConfig): FillConfig {
+  if (config.fallbackColor) {
+    return config;
+  }
+  return {
+    ...config,
+    fallbackColor: computeFallbackColor(config),
+  };
+}
+
+/**
  * 判断是否为 FillConfig 对象
  */
 export function isFillConfig(fill: string | FillConfig | undefined): fill is FillConfig {
@@ -333,8 +382,148 @@ export function fillConfigToRenderValue(fill: FillConfig): string | null {
 }
 
 /**
+ * 获取 FillConfig 的初始渲染颜色
+ * 用于 Generator 在初次渲染时使用，避免黑色闪烁
+ * 对于纯色返回实际颜色，对于渐变/图片返回 fallbackColor
+ */
+export function getFillRenderColor(fill: string | FillConfig | undefined | null): string {
+  if (!fill) {
+    return 'none';
+  }
+  if (typeof fill === 'string') {
+    return fill;
+  }
+  if (isFillConfig(fill)) {
+    // 优先使用 fallbackColor
+    if (fill.fallbackColor) {
+      return fill.fallbackColor;
+    }
+    // 纯色直接返回
+    if (fill.type === 'solid' && fill.solid) {
+      return fill.solid.color;
+    }
+    // 渐变和图片计算 fallbackColor
+    return computeFallbackColor(fill);
+  }
+  return 'none';
+}
+
+/**
+ * 从元素获取 FillConfig
+ * 支持新数据结构（element.fillConfig）和旧数据结构（element.fill 是 FillConfig）
+ * 
+ * @param element - PlaitElement 或包含 fill/fillConfig 的对象
+ * @returns FillConfig 或 null
+ */
+export function getElementFillConfig(element: Record<string, any> | undefined | null): FillConfig | null {
+  if (!element) return null;
+  
+  // 优先使用新的 fillConfig 属性
+  if (element.fillConfig && isFillConfig(element.fillConfig)) {
+    return element.fillConfig;
+  }
+  
+  // 兼容旧数据：element.fill 是 FillConfig 对象的情况
+  if (element.fill && isFillConfig(element.fill)) {
+    return element.fill;
+  }
+  
+  return null;
+}
+
+/**
+ * 获取元素的填充值（供 UI 显示使用）
+ * 返回 FillConfig 或字符串或 undefined
+ */
+export function getElementFillValue(element: Record<string, any> | undefined | null): FillConfig | string | undefined {
+  if (!element) return undefined;
+  
+  // 如果有 fillConfig，返回它
+  const fillConfig = getElementFillConfig(element);
+  if (fillConfig) {
+    return fillConfig;
+  }
+  
+  // 否则返回 fill 字符串
+  if (typeof element.fill === 'string') {
+    return element.fill;
+  }
+  
+  return undefined;
+}
+
+/**
  * 生成唯一的 SVG 定义 ID
  */
 export function generateFillDefId(elementId: string, fillType: FillType): string {
   return `fill-${fillType}-${elementId}`;
+}
+
+// ============ 数据迁移 ============
+
+/**
+ * 迁移单个元素的 fill 数据格式
+ * 旧格式：element.fill 是 FillConfig 对象
+ * 新格式：element.fill 是字符串（fallbackColor），element.fillConfig 是 FillConfig 对象
+ * 
+ * @param element - 元素对象
+ * @returns 迁移后的元素（如果无需迁移返回原对象）
+ */
+export function migrateElementFillData<T extends Record<string, any>>(element: T): T {
+  // 如果 fill 不是 FillConfig 对象，无需迁移
+  if (!element.fill || !isFillConfig(element.fill)) {
+    return element;
+  }
+  
+  const fillConfig = element.fill as FillConfig;
+  
+  // 只迁移渐变和图片类型，纯色不需要迁移
+  if (fillConfig.type !== 'gradient' && fillConfig.type !== 'image') {
+    // 纯色类型：直接提取颜色字符串
+    if (fillConfig.type === 'solid' && fillConfig.solid) {
+      return {
+        ...element,
+        fill: fillConfig.solid.color,
+        fillConfig: undefined, // 纯色不需要 fillConfig
+      };
+    }
+    return element;
+  }
+  
+  // 计算 fallbackColor
+  const fallbackColor = fillConfig.fallbackColor || computeFallbackColor(fillConfig);
+  
+  // 确保 FillConfig 包含 fallbackColor
+  const migratedFillConfig: FillConfig = {
+    ...fillConfig,
+    fallbackColor,
+  };
+  
+  return {
+    ...element,
+    fill: fallbackColor, // 设置为字符串，供 Plait 直接渲染
+    fillConfig: migratedFillConfig, // 保存完整配置，供插件使用
+  };
+}
+
+/**
+ * 迁移元素数组的 fill 数据格式
+ * 在数据加载时调用，确保传入 Plait 的数据是正确格式
+ * 
+ * @param elements - 元素数组
+ * @returns 迁移后的元素数组（如果无需迁移返回原数组）
+ */
+export function migrateElementsFillData<T extends Record<string, any>>(elements: T[]): T[] {
+  let hasMigration = false;
+  
+  const migratedElements = elements.map((element) => {
+    const migrated = migrateElementFillData(element);
+    if (migrated !== element) {
+      hasMigration = true;
+    }
+    return migrated;
+  });
+  
+  // 如果没有任何迁移，返回原数组以保持引用稳定
+  return hasMigration ? migratedElements : elements;
 }

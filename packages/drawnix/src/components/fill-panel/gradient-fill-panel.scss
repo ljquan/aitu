@@ -1,13 +1,12 @@
 /**
  * 渐变填充面板样式
- * Gradient Fill Panel Styles
+ * Gradient Fill Panel Styles - 紧凑版
  */
 
 .gradient-fill-panel {
   display: flex;
   flex-direction: column;
   width: 100%;
-  background: var(--color-surface, #ffffff);
 }
 
 // 标签页
@@ -19,14 +18,14 @@
 
 .gfp-tab {
   flex: 1;
-  padding: 8px 12px;
+  padding: 6px 10px;
   background: transparent;
   border: none;
   color: var(--color-text-secondary, #6b7280);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
   position: relative;
 
   &:hover {
@@ -52,7 +51,7 @@
 .gfp-content {
   flex: 1;
   overflow-y: auto;
-  padding: 12px 0;
+  padding: 8px 0;
 
   &::-webkit-scrollbar {
     width: 4px;
@@ -72,32 +71,32 @@
 .gfp-presets-panel {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
 }
 
 .gfp-preset-category {
   .gfp-category-title {
-    font-size: 11px;
+    font-size: 10px;
     color: var(--color-text-tertiary, #9ca3af);
-    margin-bottom: 8px;
+    margin-bottom: 6px;
     padding-left: 2px;
   }
 }
 
 .gfp-preset-grid {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 6px;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
 }
 
 .gfp-preset-item {
   aspect-ratio: 1;
   padding: 0;
   background: transparent;
-  border: 2px solid transparent;
+  border: 1.5px solid transparent;
   border-radius: 50%;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
   overflow: hidden;
 
   &:hover {
@@ -116,13 +115,13 @@
 .gfp-custom-editor {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 10px;
 }
 
 .gfp-control-section {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .gfp-section-header {
@@ -132,19 +131,19 @@
 }
 
 .gfp-section-title {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--color-text-secondary, #6b7280);
   font-weight: 500;
 }
 
 .gfp-stop-actions {
   display: flex;
-  gap: 4px;
+  gap: 3px;
 }
 
 .gfp-action-btn {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -152,7 +151,7 @@
   border: 1px solid var(--color-border, #e5e7eb);
   border-radius: 4px;
   color: var(--color-text-secondary, #6b7280);
-  font-size: 16px;
+  font-size: 14px;
   line-height: 1;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -171,19 +170,19 @@
 // 类型按钮
 .gfp-type-buttons {
   display: flex;
-  gap: 8px;
+  gap: 6px;
 }
 
 .gfp-type-btn {
   flex: 1;
-  padding: 8px 12px;
+  padding: 5px 8px;
   background: var(--color-bg-secondary, #f3f4f6);
   border: 1px solid var(--color-border, #e5e7eb);
-  border-radius: 20px;
+  border-radius: 14px;
   color: var(--color-text-secondary, #6b7280);
-  font-size: 12px;
+  font-size: 11px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
 
   &:hover {
     background: var(--color-bg-hover, #e5e7eb);
@@ -200,32 +199,32 @@
 // 渐变条和色标
 .gfp-gradient-bar-container {
   position: relative;
-  padding-bottom: 20px;
+  padding-bottom: 16px;
 }
 
 .gfp-gradient-bar {
-  height: 24px;
-  border-radius: 6px;
+  height: 20px;
+  border-radius: 5px;
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1);
 }
 
 .gfp-stops-track {
   position: absolute;
-  top: 28px;
+  top: 22px;
   left: 0;
   right: 0;
-  height: 16px;
+  height: 14px;
 }
 
 .gfp-stop-handle {
   position: absolute;
-  width: 16px;
-  height: 16px;
-  border: 3px solid #ffffff;
+  width: 14px;
+  height: 14px;
+  border: 2px solid #ffffff;
   border-radius: 50%;
   transform: translateX(-50%);
   cursor: pointer;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.08);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 
   &:hover {
@@ -233,7 +232,7 @@
   }
 
   &.selected {
-    box-shadow: 0 0 0 2px var(--color-primary, #3b82f6), 0 2px 6px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 0 0 2px var(--color-primary, #3b82f6), 0 1px 3px rgba(0, 0, 0, 0.25);
     z-index: 1;
   }
 }
@@ -242,22 +241,22 @@
 .gfp-stop-editor {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 8px;
+  gap: 8px;
+  padding: 6px;
   background: var(--color-bg-secondary, #f3f4f6);
-  border-radius: 8px;
+  border-radius: 6px;
 }
 
 .gfp-stop-color {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 
   .gfp-color-input {
-    width: 32px;
-    height: 32px;
+    width: 26px;
+    height: 26px;
     padding: 0;
-    border: 2px solid var(--color-border, #e5e7eb);
+    border: 1.5px solid var(--color-border, #e5e7eb);
     border-radius: 50%;
     cursor: pointer;
     background: transparent;
@@ -274,7 +273,7 @@
   }
 
   .gfp-color-value {
-    font-size: 11px;
+    font-size: 10px;
     color: var(--color-text-secondary, #6b7280);
     font-family: 'SF Mono', Monaco, monospace;
   }
@@ -285,7 +284,7 @@
 
   .gfp-position-slider {
     width: 100%;
-    height: 4px;
+    height: 3px;
     appearance: none;
     background: var(--color-border, #e5e7eb);
     border-radius: 2px;
@@ -294,12 +293,12 @@
 
     &::-webkit-slider-thumb {
       appearance: none;
-      width: 14px;
-      height: 14px;
+      width: 12px;
+      height: 12px;
       background: var(--color-primary, #3b82f6);
       border-radius: 50%;
       cursor: pointer;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
     }
   }
 }
@@ -308,19 +307,19 @@
 .gfp-angle-input-wrapper {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
+  gap: 3px;
+  padding: 3px 6px;
   background: var(--color-bg-secondary, #f3f4f6);
   border: 1px solid var(--color-border, #e5e7eb);
-  border-radius: 6px;
+  border-radius: 5px;
 }
 
 .gfp-angle-input {
-  width: 40px;
+  width: 36px;
   padding: 0;
   border: none;
   background: transparent;
-  font-size: 12px;
+  font-size: 11px;
   font-family: 'SF Mono', Monaco, monospace;
   color: var(--color-text, #111827);
   text-align: center;
@@ -335,7 +334,7 @@
 
 .gfp-angle-slider {
   width: 100%;
-  height: 4px;
+  height: 3px;
   appearance: none;
   background: var(--color-border, #e5e7eb);
   border-radius: 2px;
@@ -344,12 +343,12 @@
 
   &::-webkit-slider-thumb {
     appearance: none;
-    width: 14px;
-    height: 14px;
+    width: 12px;
+    height: 12px;
     background: var(--color-primary, #3b82f6);
     border-radius: 50%;
     cursor: pointer;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
   }
 }
 
@@ -357,23 +356,23 @@
 .gfp-center-controls {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .gfp-center-control {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 
   label {
-    font-size: 11px;
+    font-size: 10px;
     color: var(--color-text-tertiary, #9ca3af);
-    width: 16px;
+    width: 14px;
   }
 
   .gfp-center-slider {
     flex: 1;
-    height: 4px;
+    height: 3px;
     appearance: none;
     background: var(--color-border, #e5e7eb);
     border-radius: 2px;
@@ -382,8 +381,8 @@
 
     &::-webkit-slider-thumb {
       appearance: none;
-      width: 12px;
-      height: 12px;
+      width: 10px;
+      height: 10px;
       background: var(--color-primary, #3b82f6);
       border-radius: 50%;
       cursor: pointer;
@@ -391,10 +390,10 @@
   }
 
   .gfp-center-value {
-    font-size: 11px;
+    font-size: 10px;
     color: var(--color-text-secondary, #6b7280);
     font-family: 'SF Mono', Monaco, monospace;
-    min-width: 32px;
+    min-width: 28px;
     text-align: right;
   }
 }

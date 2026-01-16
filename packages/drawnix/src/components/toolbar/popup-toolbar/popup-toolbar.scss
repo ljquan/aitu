@@ -14,8 +14,9 @@
             width: var(--popup-label-size);
             height: var(--popup-label-size);
             border-radius: 50%;
+            box-sizing: border-box;
             &.color-white {
-                border: 1px solid var(--color-gray-30);
+                border: 1px solid #c0c0c0;
             }
             &.color-mixed {
                 background: conic-gradient(

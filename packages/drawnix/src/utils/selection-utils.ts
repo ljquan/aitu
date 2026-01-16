@@ -6,6 +6,8 @@ import { Freehand } from '../plugins/freehand/type';
 import { PenPath } from '../plugins/pen/type';
 import { SAME_ROW_THRESHOLD } from '../components/ttd-dialog/shared/size-constants';
 import { trimImageWhiteAndTransparentBorder } from './image-border-utils';
+import { isFillConfig, ImageFillConfig } from '../types/fill.types';
+import { generateFillDefId } from './fill-renderer';
 
 /**
  * 从图片 URL 获取原始尺寸
@@ -436,6 +438,147 @@ export const findElementsOverlappingWithGraphics = (board: PlaitBoard, elements:
 };
 
 /**
+ * 为 toImage 创建使用 userSpaceOnUse 坐标的图片填充 pattern
+ * 因为原始 pattern 使用 objectBoundingBox，在克隆时坐标系会出问题
+ */
+const createUserSpacePatternForToImage = (
+  config: ImageFillConfig,
+  id: string,
+  elementRect: RectangleClient
+): SVGPatternElement => {
+  const pattern = document.createElementNS('http://www.w3.org/2000/svg', 'pattern');
+  pattern.setAttribute('id', id);
+  // 使用 userSpaceOnUse 以绝对坐标定义 pattern
+  pattern.setAttribute('patternUnits', 'userSpaceOnUse');
+
+  const scale = config.scale ?? 1;
+  const rotation = config.rotation ?? 0;
+  const offsetX = config.offsetX ?? 0;
+  const offsetY = config.offsetY ?? 0;
+
+  const { x, y, width: elementWidth, height: elementHeight } = elementRect;
+
+  // 创建 image 元素
+  const image = document.createElementNS('http://www.w3.org/2000/svg', 'image');
+  image.setAttribute('href', config.imageUrl);
+  image.setAttribute('preserveAspectRatio', 'none');
+
+  switch (config.mode) {
+    case 'stretch':
+      // 拉伸模式：pattern 覆盖整个元素
+      pattern.setAttribute('x', String(x + offsetX * elementWidth));
+      pattern.setAttribute('y', String(y + offsetY * elementHeight));
+      pattern.setAttribute('width', String(elementWidth));
+      pattern.setAttribute('height', String(elementHeight));
+      image.setAttribute('width', String(elementWidth * scale));
+      image.setAttribute('height', String(elementHeight * scale));
+      break;
+
+    case 'tile': {
+      // 平铺模式：使用原始图片尺寸
+      const tileSize = 100 * scale;
+      pattern.setAttribute('x', String(x + offsetX * tileSize));
+      pattern.setAttribute('y', String(y + offsetY * tileSize));
+      pattern.setAttribute('width', String(tileSize));
+      pattern.setAttribute('height', String(tileSize));
+      image.setAttribute('width', String(tileSize));
+      image.setAttribute('height', String(tileSize));
+      break;
+    }
+
+    case 'fit':
+      // 适应模式：pattern 覆盖整个元素，图片保持比例
+      pattern.setAttribute('x', String(x + offsetX * elementWidth));
+      pattern.setAttribute('y', String(y + offsetY * elementHeight));
+      pattern.setAttribute('width', String(elementWidth));
+      pattern.setAttribute('height', String(elementHeight));
+      image.setAttribute('width', String(elementWidth * scale));
+      image.setAttribute('height', String(elementHeight * scale));
+      image.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+      break;
+  }
+
+  // 应用旋转变换
+  if (rotation !== 0) {
+    const cx = x + elementWidth / 2;
+    const cy = y + elementHeight / 2;
+    pattern.setAttribute('patternTransform', `rotate(${rotation} ${cx} ${cy})`);
+  }
+
+  pattern.appendChild(image);
+  return pattern;
+};
+
+/**
+ * 将渐变和图片填充定义复制到元素 G 内部，以便 toImage 克隆时能包含填充
+ * 对于图片填充，需要转换为 userSpaceOnUse 坐标系
+ * 返回清理函数
+ */
+const copyFillDefsToElements = (board: PlaitBoard, elements: PlaitElement[]): (() => void) => {
+  const host = PlaitBoard.getHost(board);
+  const defs = host?.querySelector('defs');
+  if (!defs) return () => {};
+
+  const addedDefs: { element: Element; defsClone: Element }[] = [];
+
+  elements.forEach((element) => {
+    // 检查元素是否使用渐变或图片填充
+    const fillConfig = (element as any).fillConfig;
+    if (!fillConfig || !isFillConfig(fillConfig)) {
+      return;
+    }
+
+    // 只处理渐变和图片填充
+    if (fillConfig.type !== 'gradient' && fillConfig.type !== 'image') {
+      return;
+    }
+
+    // 获取元素的 G 节点
+    let elementG: Element | null = null;
+    try {
+      elementG = PlaitElement.getElementG(element);
+    } catch {
+      // 忽略
+    }
+    if (!elementG) return;
+
+    // 根据填充类型获取定义 ID
+    const defType = fillConfig.type === 'gradient' ? 'gradient' : 'pattern';
+    const defId = generateFillDefId(element.id, defType);
+    const fillDef = defs.querySelector(`#${defId}`);
+    if (!fillDef) return;
+
+    // 创建一个 defs 容器
+    const defsClone = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+
+    if (fillConfig.type === 'image' && fillConfig.image) {
+      // 对于图片填充，需要重新创建使用 userSpaceOnUse 坐标的 pattern
+      // 因为 objectBoundingBox 在 toImage 克隆时坐标系会出问题
+      const elementRect = getRectangleByElements(board, [element], false);
+      const newPattern = createUserSpacePatternForToImage(
+        fillConfig.image,
+        defId,
+        elementRect
+      );
+      defsClone.appendChild(newPattern);
+    } else {
+      // 渐变填充直接克隆
+      defsClone.appendChild(fillDef.cloneNode(true));
+    }
+
+    elementG.insertBefore(defsClone, elementG.firstChild);
+    addedDefs.push({ element: elementG, defsClone });
+  });
+
+  // 返回清理函数
+  return () => {
+    addedDefs.forEach(({ element, defsClone }) => {
+      element.removeChild(defsClone);
+    });
+  };
+};
+
+/**
  * Convert elements to image using Plait's native toImage function
  * This preserves all styling, colors, and rendering exactly as they appear
  * The resulting image is compressed to maximum 512x512px for AI image generation
@@ -447,40 +590,50 @@ export const convertElementsToImage = async (board: PlaitBoard, elements: PlaitE
     }
 
     // console.log(`Converting ${elements.length} elements to image using Plait's native toImage function`);
-    
+
     // Sort elements by their original order in the board to maintain layer hierarchy
     // Elements that appear later in the board.children array should be on top
     const sortedElements = elements.slice().sort((a, b) => {
       const indexA = board.children.findIndex(child => child.id === a.id);
       const indexB = board.children.findIndex(child => child.id === b.id);
-      
+
       // If either element is not found in board.children, maintain original order
       if (indexA === -1 && indexB === -1) return 0;
       if (indexA === -1) return 1;
       if (indexB === -1) return -1;
-      
+
       return indexA - indexB; // 保持原始顺序，早出现的在底层，晚出现的在顶层
     });
-    
-    // console.log('Elements sorted by board hierarchy for image conversion:', 
+
+    // console.log('Elements sorted by board hierarchy for image conversion:',
     //   sortedElements.map(el => `${el.id}:${board.children.findIndex(child => child.id === el.id)}`));
-    
-    // Use Plait's native toImage function with the same options as export
-    // This ensures all colors, styles, and rendering are preserved exactly
-    const imageDataUrl = await toImage(board, {
-      elements: sortedElements, // Use sorted elements to maintain layer order
-      fillStyle: 'white', // White background for AI image generation
-      inlineStyleClassNames: '.extend,.emojis,.text', // Include style classes for proper rendering
-      padding: 20, // Add padding around elements
-      ratio: 2, // Higher resolution for better quality (reduced from 4 to avoid too large images)
-    });
+
+    // 将渐变和图片填充定义复制到元素 G 内部，以便 toImage 克隆时能包含填充
+    // Plait 的 cloneSvg 使用浅拷贝 SVG 根元素，不包含 <defs>，导致渐变/图片填充丢失
+    const cleanupFillDefs = copyFillDefsToElements(board, sortedElements);
+
+    let imageDataUrl: string | undefined;
+    try {
+      // Use Plait's native toImage function with the same options as export
+      // This ensures all colors, styles, and rendering are preserved exactly
+      imageDataUrl = await toImage(board, {
+        elements: sortedElements, // Use sorted elements to maintain layer order
+        fillStyle: 'white', // White background for AI image generation
+        inlineStyleClassNames: '.extend,.emojis,.text', // Include style classes for proper rendering
+        padding: 20, // Add padding around elements
+        ratio: 2, // Higher resolution for better quality (reduced from 4 to avoid too large images)
+      });
+    } finally {
+      // 清理添加的填充定义（确保即使异常也会清理）
+      cleanupFillDefs();
+    }
 
     if (imageDataUrl) {
       // console.log(`Successfully converted elements to image using native Plait rendering`);
-      
+
       // 使用公共方法去除白边
       const trimmedImageUrl = await trimImageWhiteAndTransparentBorder(imageDataUrl);
-      
+
       // Compress the image to max 512x512px for AI image generation
       try {
         const compressedImageUrl = await compressImageUrl(trimmedImageUrl, 512, 512, 0.8);

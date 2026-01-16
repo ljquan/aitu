@@ -29,7 +29,7 @@ import type {
   GradientFillConfig,
   ImageFillConfig,
 } from '../types/fill.types';
-import { isFillConfig } from '../types/fill.types';
+import { isFillConfig, computeFallbackColor, getGradientPrimaryColor } from '../types/fill.types';
 
 /**
  * 从填充值中提取颜色字符串
@@ -440,6 +440,12 @@ export const getTextAlign = (board: PlaitBoard): 'left' | 'center' | 'right' => 
 
 /**
  * 设置渐变填充
+ * 
+ * 数据存储策略：
+ * - element.fill: 存储 fallbackColor（渐变第一个色标颜色），供 Plait 渲染使用
+ * - element.fillConfig: 存储完整的 FillConfig 对象，供渐变插件使用
+ * 
+ * 这样 Plait 库渲染时会正确显示颜色，而不是黑色
  */
 export const setGradientFill = (board: PlaitBoard, gradientConfig: GradientFillConfig) => {
   PropertyTransforms.setFillColor(board, null, {
@@ -448,11 +454,17 @@ export const setGradientFill = (board: PlaitBoard, gradientConfig: GradientFillC
       if (!isClosedElement(board, element)) {
         return;
       }
+      const fallbackColor = getGradientPrimaryColor(gradientConfig);
       const fillConfig: FillConfig = {
         type: 'gradient',
         gradient: gradientConfig,
+        fallbackColor,
       };
-      Transforms.setNode(board, { fill: fillConfig }, path);
+      // fill 存储字符串供 Plait 使用，fillConfig 存储完整配置供插件使用
+      Transforms.setNode(board, { 
+        fill: fallbackColor, 
+        fillConfig 
+      }, path);
     },
   });
 };
@@ -467,11 +479,17 @@ export const setImageFill = (board: PlaitBoard, imageConfig: ImageFillConfig) =>
       if (!isClosedElement(board, element)) {
         return;
       }
+      const fallbackColor = '#FFFFFF';
       const fillConfig: FillConfig = {
         type: 'image',
         image: imageConfig,
+        fallbackColor,
       };
-      Transforms.setNode(board, { fill: fillConfig }, path);
+      // fill 存储字符串供 Plait 使用，fillConfig 存储完整配置供插件使用
+      Transforms.setNode(board, { 
+        fill: fallbackColor, 
+        fillConfig 
+      }, path);
     },
   });
 };
@@ -488,72 +506,82 @@ export const setFillType = (board: PlaitBoard, fillType: FillType) => {
         return;
       }
       
+      // 获取当前的 fillConfig（如果有）
+      const currentFillConfig = (element as any).fillConfig as FillConfig | undefined;
       const currentFill = element.fill;
       
-      // 如果当前是 FillConfig 且类型相同，不做任何操作
-      if (typeof currentFill === 'object' && currentFill?.type === fillType) {
+      // 如果当前是相同类型，不做操作
+      if (currentFillConfig?.type === fillType) {
         return;
       }
       
       // 根据目标类型创建新的配置
-      let newFillConfig: FillConfig;
-      
       switch (fillType) {
-        case 'solid':
-          // 切换到纯色：如果当前是 FillConfig，尝试获取纯色配置
+        case 'solid': {
+          // 切换到纯色：清除 fillConfig，只保留 fill 字符串
           let solidColor = '#FFFFFF';
-          if (typeof currentFill === 'string') {
+          if (typeof currentFill === 'string' && currentFill !== 'none') {
             solidColor = currentFill;
-          } else if (typeof currentFill === 'object' && currentFill?.solid) {
-            solidColor = currentFill.solid.color;
+          } else if (currentFillConfig?.solid) {
+            solidColor = currentFillConfig.solid.color;
           }
-          newFillConfig = {
-            type: 'solid',
-            solid: { color: solidColor },
-          };
+          // 纯色不需要 fillConfig
+          Transforms.setNode(board, { 
+            fill: solidColor, 
+            fillConfig: undefined 
+          }, path);
           break;
+        }
           
-        case 'gradient':
-          newFillConfig = {
+        case 'gradient': {
+          const defaultGradient: GradientFillConfig = {
+            type: 'linear',
+            angle: 90,
+            stops: [
+              { offset: 0, color: '#FFFFFF' },
+              { offset: 1, color: '#000000' },
+            ],
+          };
+          // 如果当前有渐变配置，保留它
+          const gradientToUse = currentFillConfig?.gradient || defaultGradient;
+          const fallbackColor = getGradientPrimaryColor(gradientToUse);
+          const newFillConfig: FillConfig = {
             type: 'gradient',
-            gradient: {
-              type: 'linear',
-              angle: 90,
-              stops: [
-                { offset: 0, color: '#FFFFFF' },
-                { offset: 1, color: '#000000' },
-              ],
-            },
+            gradient: gradientToUse,
+            fallbackColor,
           };
-          // 如果当前是 FillConfig 且有渐变配置，保留它
-          if (typeof currentFill === 'object' && currentFill?.gradient) {
-            newFillConfig.gradient = currentFill.gradient;
-          }
+          Transforms.setNode(board, { 
+            fill: fallbackColor, 
+            fillConfig: newFillConfig 
+          }, path);
           break;
+        }
           
-        case 'image':
-          newFillConfig = {
-            type: 'image',
-            image: {
-              imageUrl: '',
-              mode: 'stretch',
-              scale: 1,
-              offsetX: 0,
-              offsetY: 0,
-              rotation: 0,
-            },
+        case 'image': {
+          const defaultImage: ImageFillConfig = {
+            imageUrl: '',
+            mode: 'stretch',
+            scale: 1,
+            offsetX: 0,
+            offsetY: 0,
+            rotation: 0,
           };
-          // 如果当前是 FillConfig 且有图片配置，保留它
-          if (typeof currentFill === 'object' && currentFill?.image) {
-            newFillConfig.image = currentFill.image;
-          }
+          const fallbackColor = '#FFFFFF';
+          const newFillConfig: FillConfig = {
+            type: 'image',
+            image: currentFillConfig?.image || defaultImage,
+            fallbackColor,
+          };
+          Transforms.setNode(board, { 
+            fill: fallbackColor, 
+            fillConfig: newFillConfig 
+          }, path);
           break;
+        }
           
         default:
           return;
       }
-      
-      Transforms.setNode(board, { fill: newFillConfig }, path);
     },
   });
 };

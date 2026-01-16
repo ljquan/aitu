@@ -96,6 +96,19 @@ export const FillPanel: React.FC<FillPanelProps> = ({
     currentConfig.image || DEFAULT_IMAGE_FILL
   );
 
+  // 同步外部值变化到渐变和图片配置状态
+  useEffect(() => {
+    if (currentConfig.gradient) {
+      setGradientConfig(currentConfig.gradient);
+    }
+  }, [currentConfig.gradient]);
+
+  useEffect(() => {
+    if (currentConfig.image) {
+      setImageConfig(currentConfig.image);
+    }
+  }, [currentConfig.image]);
+
   // 切换标签
   const handleTabChange = useCallback(
     (tab: TabType) => {

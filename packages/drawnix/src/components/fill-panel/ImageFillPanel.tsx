@@ -3,7 +3,7 @@
  * Image Fill Panel Component
  */
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import classNames from 'classnames';
 import { useI18n } from '../../i18n';
 import { MessagePlugin } from 'tdesign-react';
@@ -14,6 +14,20 @@ import { MediaLibraryModal } from '../media-library/MediaLibraryModal';
 import { AssetType, SelectionMode } from '../../types/asset.types';
 import type { Asset } from '../../types/asset.types';
 import './image-fill-panel.scss';
+
+// 简单的防抖函数
+function debounce<T extends (...args: any[]) => void>(fn: T, delay: number): T {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  return ((...args: Parameters<T>) => {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+    timeoutId = setTimeout(() => {
+      fn(...args);
+      timeoutId = null;
+    }, delay);
+  }) as T;
+}
 
 export interface ImageFillPanelProps {
   value?: ImageFillConfig;
@@ -42,16 +56,12 @@ export const ImageFillPanel: React.FC<ImageFillPanelProps> = ({
   const [showAdvanced, setShowAdvanced] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 打开素材库的处理函数
-  const handleOpenMediaLibrary = useCallback(() => {
-    if (externalMediaLibraryControl && onOpenMediaLibrary) {
-      // 使用外部控制时，调用外部回调
-      onOpenMediaLibrary();
-    } else {
-      // 内部控制
-      setShowMediaLibrary(true);
+  // 同步外部 value 到内部 config 状态
+  useEffect(() => {
+    if (value) {
+      setConfig(value);
     }
-  }, [externalMediaLibraryControl, onOpenMediaLibrary]);
+  }, [value]);
 
   // 更新配置
   const updateConfig = useCallback(
@@ -61,6 +71,25 @@ export const ImageFillPanel: React.FC<ImageFillPanelProps> = ({
       onChange?.(newConfig);
     },
     [config, onChange]
+  );
+
+  // 防抖版本的 onChange，用于滑块拖动时减少更新频率
+  // 注意：只防抖外部回调，内部状态立即更新以保持 UI 响应
+  const debouncedOnChange = useMemo(
+    () => debounce((newConfig: ImageFillConfig) => {
+      onChange?.(newConfig);
+    }, 50), // 50ms 防抖，平衡响应性和性能
+    [onChange]
+  );
+
+  // 滑块专用的更新函数：立即更新 UI，防抖触发外部回调
+  const updateConfigDebounced = useCallback(
+    (updates: Partial<ImageFillConfig>) => {
+      const newConfig = { ...config, ...updates };
+      setConfig(newConfig);
+      debouncedOnChange(newConfig);
+    },
+    [config, debouncedOnChange]
   );
 
   // 处理从素材库选择
@@ -110,6 +139,17 @@ export const ImageFillPanel: React.FC<ImageFillPanelProps> = ({
   const handleUploadClick = useCallback(() => {
     fileInputRef.current?.click();
   }, []);
+
+  // 打开素材库的处理函数
+  const handleOpenMediaLibrary = useCallback(() => {
+    if (externalMediaLibraryControl && onOpenMediaLibrary) {
+      // 使用外部控制时，调用外部回调
+      onOpenMediaLibrary();
+    } else {
+      // 内部控制
+      setShowMediaLibrary(true);
+    }
+  }, [externalMediaLibraryControl, onOpenMediaLibrary]);
 
   // 渲染图片预览或占位符
   const renderImagePreview = () => {
@@ -215,7 +255,7 @@ export const ImageFillPanel: React.FC<ImageFillPanelProps> = ({
                       min={50}
                       max={200}
                       value={(config.scale ?? 1) * 100}
-                      onChange={(e) => updateConfig({ scale: Number(e.target.value) / 100 })}
+                      onChange={(e) => updateConfigDebounced({ scale: Number(e.target.value) / 100 })}
                       className="ifp-slider"
                     />
                     <span className="ifp-control-value">
@@ -235,7 +275,7 @@ export const ImageFillPanel: React.FC<ImageFillPanelProps> = ({
                       min={-100}
                       max={100}
                       value={(config.offsetX ?? 0) * 100}
-                      onChange={(e) => updateConfig({ offsetX: Number(e.target.value) / 100 })}
+                      onChange={(e) => updateConfigDebounced({ offsetX: Number(e.target.value) / 100 })}
                       className="ifp-slider"
                     />
                     <span className="ifp-control-value">
@@ -255,7 +295,7 @@ export const ImageFillPanel: React.FC<ImageFillPanelProps> = ({
                       min={-100}
                       max={100}
                       value={(config.offsetY ?? 0) * 100}
-                      onChange={(e) => updateConfig({ offsetY: Number(e.target.value) / 100 })}
+                      onChange={(e) => updateConfigDebounced({ offsetY: Number(e.target.value) / 100 })}
                       className="ifp-slider"
                     />
                     <span className="ifp-control-value">
@@ -275,7 +315,7 @@ export const ImageFillPanel: React.FC<ImageFillPanelProps> = ({
                       min={0}
                       max={360}
                       value={config.rotation ?? 0}
-                      onChange={(e) => updateConfig({ rotation: Number(e.target.value) })}
+                      onChange={(e) => updateConfigDebounced({ rotation: Number(e.target.value) })}
                       className="ifp-slider"
                     />
                     <span className="ifp-control-value">{config.rotation ?? 0}°</span>

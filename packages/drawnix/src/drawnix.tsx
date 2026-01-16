@@ -839,6 +839,13 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
               }
 
               afterInit && afterInit(board);
+
+              // 手动触发 afterChange 以初始化渐变填充等插件
+              // listRender.initialize() 不会触发 afterChange，
+              // 需要确保 withGradientFill 等依赖 afterChange 的插件逻辑被执行
+              if (board.afterChange) {
+                board.afterChange();
+              }
             }}
           ></Board>
           {/* 多选时的缩放控制点 */}

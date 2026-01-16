@@ -72,13 +72,29 @@ export function usePopover({
     outsidePress: (event) => {
       const target = event.target as HTMLElement;
       // 检查点击目标是否在 TDesign Dialog 内部
-      // TDesign Dialog 使用 .t-dialog 类名
-      const isInTDesignDialog = target.closest('.t-dialog__ctx') || 
-                                target.closest('.t-dialog') ||
-                                target.closest('.t-popup') ||
-                                target.closest('.t-drawer');
-      // 如果点击在 TDesign 弹出层内部，不关闭 Popover
-      return !isInTDesignDialog;
+      // TDesign Dialog 使用多层包装结构，需要检查所有可能的类名
+      // 也排除素材库弹窗（.media-library-modal）和 Plait 附属元素
+      // 以及 ReferenceImageUpload 组件内部的按钮
+      const isInAttachedElement = target.closest('.plait-board-attached') ||
+                                  target.closest('.t-dialog__ctx') ||
+                                  target.closest('.t-dialog') ||
+                                  target.closest('.t-dialog__wrap') ||
+                                  target.closest('.t-dialog__position') ||
+                                  target.closest('.t-dialog__modal') ||
+                                  target.closest('.t-popup') ||
+                                  target.closest('.t-drawer') ||
+                                  target.closest('.media-library-modal') ||
+                                  target.closest('.reference-image-upload') ||
+                                  target.closest('.fill-panel') ||
+                                  target.closest('[class*="t-dialog"]');
+
+      // 额外检查：如果文档中有打开的 TDesign Dialog，也不关闭 Popover
+      // 这是为了处理事件目标不在 Dialog DOM 树中但 Dialog 实际可见的情况
+      const hasOpenDialog = document.querySelector('.t-dialog__ctx') !== null ||
+                            document.querySelector('.media-library-modal') !== null;
+
+      // 如果点击在附属元素或弹出层内部，或有打开的弹窗，不关闭 Popover
+      return !isInAttachedElement && !hasOpenDialog;
     },
   });
   const role = useRole(context);

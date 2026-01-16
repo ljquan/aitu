@@ -124,6 +124,9 @@ export function createGradientDef(
 
 /**
  * 创建图片填充 pattern 定义
+ * 
+ * 使用 objectBoundingBox 作为 patternUnits，使 pattern 相对于元素边界框定位
+ * 这样当元素移动时，填充图片会跟着一起移动
  */
 export function createImagePatternDef(
   config: ImageFillConfig,
@@ -137,12 +140,15 @@ export function createImagePatternDef(
   );
 
   pattern.setAttribute('id', id);
-  pattern.setAttribute('patternUnits', 'userSpaceOnUse');
+  // 使用 objectBoundingBox 使 pattern 相对于元素定位，元素移动时填充跟随
+  pattern.setAttribute('patternUnits', 'objectBoundingBox');
+  // patternContentUnits 使用 userSpaceOnUse 以便使用像素单位定义内容
+  pattern.setAttribute('patternContentUnits', 'userSpaceOnUse');
 
   const scale = config.scale ?? 1;
   const rotation = config.rotation ?? 0;
-  const offsetX = (config.offsetX ?? 0) * elementWidth;
-  const offsetY = (config.offsetY ?? 0) * elementHeight;
+  const offsetX = config.offsetX ?? 0;
+  const offsetY = config.offsetY ?? 0;
 
   // 创建 image 元素
   const image = document.createElementNS(
@@ -153,32 +159,38 @@ export function createImagePatternDef(
   image.setAttribute('preserveAspectRatio', 'none');
 
   // 根据模式设置 pattern 和 image 属性
+  // objectBoundingBox 坐标系统中，1 = 100% 元素尺寸
   switch (config.mode) {
     case 'stretch':
-      // 拉伸模式：pattern 覆盖整个元素
-      pattern.setAttribute('width', String(elementWidth));
-      pattern.setAttribute('height', String(elementHeight));
+      // 拉伸模式：pattern 覆盖整个元素 (1 = 100%)
+      pattern.setAttribute('width', '1');
+      pattern.setAttribute('height', '1');
       pattern.setAttribute('x', String(offsetX));
       pattern.setAttribute('y', String(offsetY));
+      // 内容尺寸使用实际像素
       image.setAttribute('width', String(elementWidth * scale));
       image.setAttribute('height', String(elementHeight * scale));
       break;
 
-    case 'tile':
-      // 平铺模式：使用原始图片尺寸（这里假设 100x100 作为基础）
+    case 'tile': {
+      // 平铺模式：pattern 尺寸为相对于元素的比例
       const tileSize = 100 * scale;
-      pattern.setAttribute('width', String(tileSize));
-      pattern.setAttribute('height', String(tileSize));
-      pattern.setAttribute('x', String(offsetX));
-      pattern.setAttribute('y', String(offsetY));
+      // 将像素尺寸转换为相对于元素的比例
+      const patternWidth = tileSize / elementWidth;
+      const patternHeight = tileSize / elementHeight;
+      pattern.setAttribute('width', String(patternWidth));
+      pattern.setAttribute('height', String(patternHeight));
+      pattern.setAttribute('x', String(offsetX * patternWidth));
+      pattern.setAttribute('y', String(offsetY * patternHeight));
       image.setAttribute('width', String(tileSize));
       image.setAttribute('height', String(tileSize));
       break;
+    }
 
     case 'fit':
-      // 适应模式：保持比例
-      pattern.setAttribute('width', String(elementWidth));
-      pattern.setAttribute('height', String(elementHeight));
+      // 适应模式：pattern 覆盖整个元素，图片保持比例
+      pattern.setAttribute('width', '1');
+      pattern.setAttribute('height', '1');
       pattern.setAttribute('x', String(offsetX));
       pattern.setAttribute('y', String(offsetY));
       image.setAttribute('width', String(elementWidth * scale));

@@ -51,16 +51,16 @@ export const PopupFillButton: React.FC<PopupFillButtonProps> = ({
   const [showMediaLibrary, setShowMediaLibrary] = useState(false);
 
   // 计算显示的颜色和透明度
-  const { hexColor, opacity, displayColor } = useMemo(() => {
+  const { hexColor, opacity } = useMemo(() => {
     if (!currentColor) {
-      return { hexColor: undefined, opacity: 100, displayColor: undefined };
+      return { hexColor: undefined, opacity: 100 };
     }
 
     // 纯色字符串
     if (isSolidFill(currentColor)) {
       const hex = removeHexAlpha(currentColor);
       const op = hexAlphaToOpacity(currentColor);
-      return { hexColor: hex, opacity: op, displayColor: currentColor };
+      return { hexColor: hex, opacity: op };
     }
 
     // FillConfig 对象
@@ -70,7 +70,7 @@ export const PopupFillButton: React.FC<PopupFillButtonProps> = ({
           if (currentColor.solid) {
             const hex = removeHexAlpha(currentColor.solid.color);
             const op = hexAlphaToOpacity(currentColor.solid.color);
-            return { hexColor: hex, opacity: op, displayColor: currentColor.solid.color };
+            return { hexColor: hex, opacity: op };
           }
           break;
         case 'gradient':
@@ -79,17 +79,16 @@ export const PopupFillButton: React.FC<PopupFillButtonProps> = ({
             return {
               hexColor: currentColor.gradient.stops[0].color,
               opacity: 100,
-              displayColor: currentColor.gradient.stops[0].color,
             };
           }
           break;
         case 'image':
           // 图片填充显示特殊标识
-          return { hexColor: '#888888', opacity: 100, displayColor: '#888888' };
+          return { hexColor: '#888888', opacity: 100 };
       }
     }
 
-    return { hexColor: undefined, opacity: 100, displayColor: undefined };
+    return { hexColor: undefined, opacity: 100 };
   }, [currentColor]);
 
   const icon =
@@ -168,6 +167,10 @@ export const PopupFillButton: React.FC<PopupFillButtonProps> = ({
       crossAxisOffset={40}
       open={isFillPropertyOpen}
       onOpenChange={(open) => {
+        // 如果素材库打开，不允许关闭填充面板
+        if (!open && showMediaLibrary) {
+          return;
+        }
         setIsFillPropertyOpen(open);
       }}
       placement={'left'}
@@ -206,7 +209,7 @@ export const PopupFillButton: React.FC<PopupFillButtonProps> = ({
           />
         </Island>
       </PopoverContent>
-      
+
       {/* 素材库弹窗 - 渲染在 Popover 外部，避免 Popover 关闭时被卸载 */}
       {showMediaLibrary && (
         <Suspense fallback={null}>

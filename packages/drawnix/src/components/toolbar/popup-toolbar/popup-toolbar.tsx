@@ -59,7 +59,7 @@ import { useI18n } from '../../../i18n';
 import { ToolButton } from '../../tool-button';
 import { useGlobalMousePosition } from '../../../hooks/use-global-mouse-position';
 import type { FillConfig } from '../../../types/fill.types';
-import { isSolidFill, isFillConfig } from '../../../types/fill.types';
+import { isSolidFill, isFillConfig, getElementFillValue } from '../../../types/fill.types';
 import { gradientToCSS } from '../../../utils/fill-renderer';
 import { isVideoElement } from '../../../plugins/with-video';
 import { VideoFrameSelector } from '../../video-frame-selector/video-frame-selector';
@@ -503,7 +503,9 @@ export const PopupToolbar = () => {
                           ? gradientToCSS(state.fill.gradient)
                           : state.fill.type === 'solid' && state.fill.solid
                             ? state.fill.solid.color
-                            : undefined
+                            : state.fill.type === 'image' && state.fill.image?.imageUrl
+                              ? `url(${state.fill.image.imageUrl}) center/cover no-repeat`
+                              : undefined
                         : undefined,
                   }}
                 ></label>
@@ -1055,7 +1057,8 @@ export const getMindElementState = (
 ) => {
   const marks = getTextMarksByElement(element);
   return {
-    fill: element.fill,
+    // 使用 getElementFillValue 获取完整的填充信息（支持渐变/图片填充）
+    fill: getElementFillValue(element),
     strokeColor: getStrokeColorByMindElement(board, element),
     fontSize: marks['font-size'],
     marks,
@@ -1068,7 +1071,8 @@ export const getDrawElementState = (
 ) => {
   const marks: Omit<CustomText, 'text'> = getTextMarksByElement(element);
   return {
-    fill: element.fill,
+    // 使用 getElementFillValue 获取完整的填充信息（支持渐变/图片填充）
+    fill: getElementFillValue(element),
     strokeColor: getStrokeColorByDrawElement(board, element),
     fontSize: marks['font-size'],
     marks,
@@ -1144,7 +1148,8 @@ export const getFreehandElementState = (
   element: Freehand
 ) => {
   return {
-    fill: element.fill,
+    // 使用 getElementFillValue 获取完整的填充信息（支持渐变/图片填充）
+    fill: getElementFillValue(element),
     strokeColor: getStrokeColorByFreehandElement(board, element),
   };
 };
@@ -1154,7 +1159,8 @@ export const getPenPathElementState = (
   element: PenPath
 ) => {
   return {
-    fill: element.fill,
+    // 使用 getElementFillValue 获取完整的填充信息（支持渐变/图片填充）
+    fill: getElementFillValue(element),
     strokeColor: element.strokeColor,
     cornerRadius: element.cornerRadius,
   };
