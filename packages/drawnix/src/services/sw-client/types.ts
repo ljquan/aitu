@@ -37,8 +37,6 @@ export interface SWTask {
   completedAt?: number;
   result?: TaskResult;
   error?: TaskError;
-  retryCount: number;
-  nextRetryAt?: number;
   progress?: number;
   remoteId?: string;
   executionPhase?: TaskExecutionPhase;
@@ -268,8 +266,6 @@ export interface TaskFailedMessage {
   type: 'TASK_FAILED';
   taskId: string;
   error: TaskError;
-  retryCount: number;
-  nextRetryAt?: number;
 }
 
 export interface TaskSubmittedMessage {
@@ -381,7 +377,7 @@ export interface TaskEventHandlers {
   onCreated?: (task: SWTask) => void;
   onStatus?: (taskId: string, status: TaskStatus, progress?: number, phase?: TaskExecutionPhase) => void;
   onCompleted?: (taskId: string, result: TaskResult) => void;
-  onFailed?: (taskId: string, error: TaskError, retryCount: number, nextRetryAt?: number) => void;
+  onFailed?: (taskId: string, error: TaskError) => void;
   onSubmitted?: (taskId: string, remoteId: string) => void;
   onCancelled?: (taskId: string) => void;
   onDeleted?: (taskId: string) => void;

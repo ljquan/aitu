@@ -23,8 +23,7 @@ export function useBeforeUnload(): void {
       const activeTasks = tasks.filter(
         task =>
           task.status === TaskStatus.PENDING ||
-          task.status === TaskStatus.PROCESSING ||
-          task.status === TaskStatus.RETRYING
+          task.status === TaskStatus.PROCESSING
       );
 
       if (activeTasks.length > 0) {

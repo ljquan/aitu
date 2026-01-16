@@ -130,6 +130,8 @@ export interface WorkflowMessageData {
   aiAnalysis?: string;
   /** 生成数量 */
   count: number;
+  /** 工作流状态 */
+  status?: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
   /** 步骤列表 */
   steps: WorkflowStepData[];
   /** Agent 执行日志（详细的执行过程） */
@@ -140,6 +142,8 @@ export interface WorkflowMessageData {
   postProcessingStatus?: PostProcessingStatus;
   /** 插入到画布的元素数量 */
   insertedCount?: number;
+  /** 错误信息 */
+  error?: string;
 }
 
 /** 对话消息接口 */

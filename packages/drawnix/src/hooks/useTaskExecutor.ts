@@ -19,7 +19,6 @@ import { unifiedCacheService } from '../services/unified-cache-service';
 import { Task, TaskStatus, TaskType } from '../types/task.types';
 import { CharacterStatus } from '../types/character.types';
 import { isTaskTimeout } from '../utils/task-utils';
-import { shouldRetry, getNextRetryTime } from '../utils/retry-utils';
 
 // Get the appropriate task queue service
 const taskQueueService = shouldUseSWTaskQueue() ? swTaskQueueService : legacyTaskQueueService;
@@ -214,6 +213,7 @@ export function useTaskExecutor(): void {
 
     // Legacy mode: Execute tasks in main thread
     // console.log('[TaskExecutor] Running in legacy mode - tasks executed in main thread');
+    // Use legacyTaskQueueService directly to avoid union type issues with updateTaskStatus
 
     // Function to resume a video task that has a remoteId
     const resumeVideoTask = async (task: Task) => {
@@ -236,7 +236,7 @@ export function useTaskExecutor(): void {
         if (!isActive) return;
 
         // Mark as completed with result
-        taskQueueService.updateTaskStatus(taskId, TaskStatus.COMPLETED, {
+        legacyTaskQueueService.updateTaskStatus(taskId, TaskStatus.COMPLETED, {
           result,
         });
 
@@ -261,7 +261,7 @@ export function useTaskExecutor(): void {
 
         console.error(`[TaskExecutor] Resumed task ${taskId} failed:`, error);
 
-        const updatedTask = taskQueueService.getTask(taskId);
+        const updatedTask = legacyTaskQueueService.getTask(taskId);
         if (!updatedTask) return;
 
         // Extract error details
@@ -274,46 +274,16 @@ export function useTaskExecutor(): void {
           timestamp: Date.now(),
         };
 
-        // Check if we should retry
-        if (shouldRetry(updatedTask)) {
-          const nextRetryAt = getNextRetryTime(updatedTask);
+        // Check if we should retry - disabled, mark as failed directly
+        legacyTaskQueueService.updateTaskStatus(taskId, TaskStatus.FAILED, {
+          error: {
+            code: errorCode,
+            message: errorMessage,
+            details: errorDetails,
+          },
+        });
 
-          taskQueueService.updateTaskStatus(taskId, TaskStatus.RETRYING, {
-            error: {
-              code: errorCode,
-              message: errorMessage,
-              details: errorDetails,
-            },
-          });
-
-          // console.log(
-          //   `[TaskExecutor] Resumed task ${taskId} will retry (attempt ${updatedTask.retryCount + 1}/3) at ${new Date(nextRetryAt!).toLocaleTimeString()}`
-          // );
-
-          // Schedule retry - for resumed tasks, we can retry the polling
-          if (nextRetryAt) {
-            const delay = nextRetryAt - Date.now();
-            setTimeout(() => {
-              if (!isActive) return;
-              const t = taskQueueService.getTask(taskId);
-              if (t && t.status === TaskStatus.RETRYING) {
-                // Keep remoteId and reset to processing to trigger resume
-                taskQueueService.updateTaskStatus(taskId, TaskStatus.PROCESSING);
-              }
-            }, delay);
-          }
-        } else {
-          // Mark as failed (no more retries)
-          taskQueueService.updateTaskStatus(taskId, TaskStatus.FAILED, {
-            error: {
-              code: errorCode,
-              message: errorMessage,
-              details: errorDetails,
-            },
-          });
-
-          // console.log(`[TaskExecutor] Resumed task ${taskId} failed permanently`);
-        }
+        // console.log(`[TaskExecutor] Resumed task ${taskId} failed`);
       } finally {
         executingTasksRef.current.delete(taskId);
       }
@@ -334,7 +304,7 @@ export function useTaskExecutor(): void {
 
       try {
         // Update status to processing
-        taskQueueService.updateTaskStatus(taskId, TaskStatus.PROCESSING);
+        legacyTaskQueueService.updateTaskStatus(taskId, TaskStatus.PROCESSING);
 
         const { sourceVideoTaskId, characterTimestamps, model, prompt } = task.params;
 
@@ -376,7 +346,7 @@ export function useTaskExecutor(): void {
         });
 
         // Mark task as completed with character info
-        taskQueueService.updateTaskStatus(taskId, TaskStatus.COMPLETED, {
+        legacyTaskQueueService.updateTaskStatus(taskId, TaskStatus.COMPLETED, {
           result: {
             url: result.profile_picture_url,
             format: 'character',
@@ -394,7 +364,7 @@ export function useTaskExecutor(): void {
 
         console.error(`[TaskExecutor] Character task ${taskId} failed:`, error);
 
-        const updatedTask = taskQueueService.getTask(taskId);
+        const updatedTask = legacyTaskQueueService.getTask(taskId);
         if (!updatedTask) return;
 
         const errorCode = error.httpStatus ? `HTTP_${error.httpStatus}` : (error.name || 'ERROR');
@@ -405,41 +375,16 @@ export function useTaskExecutor(): void {
           timestamp: Date.now(),
         };
 
-        // Check if we should retry
-        if (shouldRetry(updatedTask)) {
-          const nextRetryAt = getNextRetryTime(updatedTask);
+        // Check if we should retry - disabled, mark as failed directly
+        legacyTaskQueueService.updateTaskStatus(taskId, TaskStatus.FAILED, {
+          error: {
+            code: errorCode,
+            message: errorMessage,
+            details: errorDetails,
+          },
+        });
 
-          taskQueueService.updateTaskStatus(taskId, TaskStatus.RETRYING, {
-            error: {
-              code: errorCode,
-              message: errorMessage,
-              details: errorDetails,
-            },
-          });
-
-          // console.log(`[TaskExecutor] Character task ${taskId} will retry`);
-
-          if (nextRetryAt) {
-            const delay = nextRetryAt - Date.now();
-            setTimeout(() => {
-              if (!isActive) return;
-              const t = taskQueueService.getTask(taskId);
-              if (t && t.status === TaskStatus.RETRYING) {
-                taskQueueService.updateTaskStatus(taskId, TaskStatus.PENDING);
-              }
-            }, delay);
-          }
-        } else {
-          taskQueueService.updateTaskStatus(taskId, TaskStatus.FAILED, {
-            error: {
-              code: errorCode,
-              message: errorMessage,
-              details: errorDetails,
-            },
-          });
-
-          // console.log(`[TaskExecutor] Character task ${taskId} failed permanently`);
-        }
+        // console.log(`[TaskExecutor] Character task ${taskId} failed`);
       } finally {
         executingTasksRef.current.delete(taskId);
       }
@@ -470,7 +415,7 @@ export function useTaskExecutor(): void {
 
       try {
         // Update status to processing
-        taskQueueService.updateTaskStatus(taskId, TaskStatus.PROCESSING);
+        legacyTaskQueueService.updateTaskStatus(taskId, TaskStatus.PROCESSING);
 
         // Execute the generation
         const result = await generationAPIService.generate(
@@ -482,7 +427,7 @@ export function useTaskExecutor(): void {
         if (!isActive) return;
 
         // Mark as completed with result
-        taskQueueService.updateTaskStatus(taskId, TaskStatus.COMPLETED, {
+        legacyTaskQueueService.updateTaskStatus(taskId, TaskStatus.COMPLETED, {
           result,
         });
 
@@ -507,7 +452,7 @@ export function useTaskExecutor(): void {
 
         console.error(`[TaskExecutor] Task ${taskId} failed:`, error);
 
-        const updatedTask = taskQueueService.getTask(taskId);
+        const updatedTask = legacyTaskQueueService.getTask(taskId);
         if (!updatedTask) return;
 
         // Extract error details - 优先使用 API 返回的详细错误信息
@@ -520,46 +465,16 @@ export function useTaskExecutor(): void {
           timestamp: Date.now(),
         };
 
-        // Check if we should retry
-        if (shouldRetry(updatedTask)) {
-          const nextRetryAt = getNextRetryTime(updatedTask);
+        // Check if we should retry - disabled, mark as failed directly
+        legacyTaskQueueService.updateTaskStatus(taskId, TaskStatus.FAILED, {
+          error: {
+            code: errorCode,
+            message: errorMessage,
+            details: errorDetails,
+          },
+        });
 
-          taskQueueService.updateTaskStatus(taskId, TaskStatus.RETRYING, {
-            error: {
-              code: errorCode,
-              message: errorMessage,
-              details: errorDetails,
-            },
-          });
-
-          // console.log(
-          //   `[TaskExecutor] Task ${taskId} will retry (attempt ${updatedTask.retryCount + 1}/3) at ${new Date(nextRetryAt!).toLocaleTimeString()}`
-          // );
-
-          // Schedule retry
-          if (nextRetryAt) {
-            const delay = nextRetryAt - Date.now();
-            setTimeout(() => {
-              if (!isActive) return;
-              const task = taskQueueService.getTask(taskId);
-              if (task && task.status === TaskStatus.RETRYING) {
-                // Reset to pending to trigger re-execution
-                taskQueueService.updateTaskStatus(taskId, TaskStatus.PENDING);
-              }
-            }, delay);
-          }
-        } else {
-          // Mark as failed (no more retries)
-          taskQueueService.updateTaskStatus(taskId, TaskStatus.FAILED, {
-            error: {
-              code: errorCode,
-              message: errorMessage,
-              details: errorDetails,
-            },
-          });
-
-          // console.log(`[TaskExecutor] Task ${taskId} failed permanently`);
-        }
+        // console.log(`[TaskExecutor] Task ${taskId} failed`);
       } finally {
         executingTasksRef.current.delete(taskId);
       }
@@ -569,7 +484,7 @@ export function useTaskExecutor(): void {
     const processPendingTasks = () => {
       if (!isActive) return;
 
-      const tasks = taskQueueService.getAllTasks();
+      const tasks = legacyTaskQueueService.getAllTasks();
 
       // Process pending tasks
       const pendingTasks = tasks.filter(task => task.status === TaskStatus.PENDING);
@@ -593,7 +508,7 @@ export function useTaskExecutor(): void {
     const checkTimeouts = () => {
       if (!isActive) return;
 
-      const tasks = taskQueueService.getAllTasks();
+      const tasks = legacyTaskQueueService.getAllTasks();
       const processingTasks = tasks.filter(task => task.status === TaskStatus.PROCESSING);
 
       processingTasks.forEach(task => {
@@ -608,44 +523,20 @@ export function useTaskExecutor(): void {
             timestamp: Date.now(),
           };
 
-          // Check if we should retry
-          if (shouldRetry(task)) {
-            const nextRetryAt = getNextRetryTime(task);
-
-            taskQueueService.updateTaskStatus(task.id, TaskStatus.RETRYING, {
-              error: {
-                code: 'TIMEOUT',
-                message: '任务执行超时',
-                details: timeoutDetails,
-              },
-            });
-
-            // Schedule retry
-            if (nextRetryAt) {
-              const delay = nextRetryAt - Date.now();
-              setTimeout(() => {
-                if (!isActive) return;
-                const t = taskQueueService.getTask(task.id);
-                if (t && t.status === TaskStatus.RETRYING) {
-                  taskQueueService.updateTaskStatus(task.id, TaskStatus.PENDING);
-                }
-              }, delay);
-            }
-          } else {
-            taskQueueService.updateTaskStatus(task.id, TaskStatus.FAILED, {
-              error: {
-                code: 'TIMEOUT',
-                message: '任务执行超时，已达最大重试次数',
-                details: timeoutDetails,
-              },
-            });
-          }
+          // Check if we should retry - disabled, mark as failed directly
+          legacyTaskQueueService.updateTaskStatus(task.id, TaskStatus.FAILED, {
+            error: {
+              code: 'TIMEOUT',
+              message: '任务执行超时',
+              details: timeoutDetails,
+            },
+          });
         }
       });
     };
 
     // Subscribe to task updates to catch new pending tasks and resumable video tasks
-    const subscription = taskQueueService.observeTaskUpdates().subscribe(event => {
+    const subscription = legacyTaskQueueService.observeTaskUpdates().subscribe(event => {
       if (!isActive) return;
 
       if (event.type === 'taskCreated' || event.type === 'taskUpdated') {

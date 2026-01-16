@@ -394,7 +394,6 @@ export const Drawnix: React.FC<DrawnixProps> = ({
                 };
               case TaskStatus.PENDING:
               case TaskStatus.PROCESSING:
-              case TaskStatus.RETRYING:
                 // Task is still running, keep as running
                 return step;
               default:

@@ -59,7 +59,6 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
     const statusLabelMap: Record<TaskStatus, string> = {
       [TaskStatus.PENDING]: '待处理',
       [TaskStatus.PROCESSING]: '处理中',
-      [TaskStatus.RETRYING]: '重试中',
       [TaskStatus.COMPLETED]: '已完成',
       [TaskStatus.FAILED]: '失败',
       [TaskStatus.CANCELLED]: '已取消',

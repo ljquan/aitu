@@ -402,7 +402,6 @@ export function useChatWorkflowHandler(options: UseChatWorkflowHandlerOptions): 
         switch (task.status) {
           case TaskStatus.PENDING:
           case TaskStatus.PROCESSING:
-          case TaskStatus.RETRYING:
             newStatus = 'running';
             break;
           case TaskStatus.COMPLETED:

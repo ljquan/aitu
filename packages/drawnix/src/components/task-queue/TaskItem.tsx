@@ -10,7 +10,6 @@ import { Button, Tag, Tooltip, Checkbox } from 'tdesign-react';
 import { ImageIcon, VideoIcon, DeleteIcon, RefreshIcon, DownloadIcon, EditIcon, UserIcon, CheckCircleFilledIcon } from 'tdesign-icons-react';
 import { Task, TaskStatus, TaskType } from '../../types/task.types';
 import { formatDateTime, formatTaskDuration } from '../../utils/task-utils';
-import { formatRetryDelay } from '../../utils/retry-utils';
 import { useUnifiedCache } from '../../hooks/useUnifiedCache';
 import { supportsCharacterExtraction, isSora2VideoId } from '../../types/character.types';
 import { RetryImage } from '../retry-image';
@@ -50,8 +49,6 @@ function getStatusTagTheme(status: TaskStatus): 'default' | 'primary' | 'success
       return 'default';
     case TaskStatus.PROCESSING:
       return 'primary';
-    case TaskStatus.RETRYING:
-      return 'warning';
     case TaskStatus.COMPLETED:
       return 'success';
     case TaskStatus.FAILED:
@@ -72,8 +69,6 @@ function getStatusLabel(status: TaskStatus): string {
       return '待处理';
     case TaskStatus.PROCESSING:
       return '处理中';
-    case TaskStatus.RETRYING:
-      return '重试中';
     case TaskStatus.COMPLETED:
       return '已完成';
     case TaskStatus.FAILED:
@@ -363,15 +358,6 @@ export const TaskItem: React.FC<TaskItemProps> = ({
                     <span className="task-item__error-details-link">[详情]</span>
                   </Tooltip>
                 )}
-              </div>
-            </div>
-          )}
-
-          {/* Retry Info */}
-          {task.status === TaskStatus.RETRYING && task.nextRetryAt && (
-            <div className="task-item__retry-info">
-              <div className="task-item__retry-info-text">
-                重试 {task.retryCount + 1}/3 - 下次重试: {formatRetryDelay(task.retryCount)} 后
               </div>
             </div>
           )}
