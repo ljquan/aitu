@@ -1,0 +1,82 @@
+.size-input-container {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.size-input-group {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  background: var(--color-surface, #fafafa);
+  border: 1px solid var(--color-border, #e0e0e0);
+  border-radius: 4px;
+  padding: 1px 4px;
+  
+  &:focus-within {
+    border-color: var(--color-primary, #1890ff);
+  }
+}
+
+.size-input-label {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--color-on-surface-variant, #888);
+  user-select: none;
+  line-height: 1;
+}
+
+.size-input {
+  width: 36px;
+  height: 18px;
+  padding: 0 2px;
+  border: none;
+  background: transparent;
+  font-size: 11px;
+  text-align: right;
+  color: var(--color-on-surface, #333);
+  line-height: 18px;
+  
+  &:focus {
+    outline: none;
+  }
+  
+  // 隐藏数字输入框的上下箭头
+  &::-webkit-outer-spin-button,
+  &::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  &[type=number] {
+    -moz-appearance: textfield;
+  }
+}
+
+.size-lock-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-on-surface-variant, #999);
+  cursor: pointer;
+  border-radius: 3px;
+  transition: background-color 0.15s ease, color 0.15s ease;
+  
+  &:hover {
+    background: var(--color-surface-hover, rgba(0, 0, 0, 0.05));
+    color: var(--color-on-surface, #333);
+  }
+  
+  &.locked {
+    color: var(--color-primary, #1890ff);
+  }
+  
+  svg {
+    width: 12px;
+    height: 12px;
+  }
+}

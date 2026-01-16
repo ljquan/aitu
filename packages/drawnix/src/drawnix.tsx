@@ -27,6 +27,7 @@ import classNames from 'classnames';
 import './styles/index.scss';
 import { buildDrawnixHotkeyPlugin } from './plugins/with-hotkey';
 import { withFreehand } from './plugins/freehand/with-freehand';
+import { withPen } from './plugins/pen/with-pen';
 import { buildPencilPlugin } from './plugins/with-pencil';
 import {
   DrawnixBoard,
@@ -35,6 +36,7 @@ import {
 } from './hooks/use-drawnix';
 import { ClosePencilToolbar } from './components/toolbar/pencil-mode-toolbar';
 import { PencilSettingsToolbar, EraserSettingsToolbar } from './components/toolbar/pencil-settings-toolbar';
+import { PenSettingsToolbar } from './components/toolbar/pen-settings-toolbar';
 import { CleanConfirm } from './components/clean-confirm/clean-confirm';
 import { buildTextLinkPlugin } from './plugins/with-text-link';
 import { LinkPopup } from './components/popup/link-popup/link-popup';
@@ -44,7 +46,9 @@ import { withTracking } from './plugins/tracking';
 import { withTool } from './plugins/with-tool';
 import { withToolFocus } from './plugins/with-tool-focus';
 import { withToolResize } from './plugins/with-tool-resize';
+import { withMultiResize } from './plugins/with-multi-resize';
 import { withWorkZone } from './plugins/with-workzone';
+import { MultiSelectionHandles } from './components/multi-selection-handles';
 import { ActiveTaskWarning } from './components/task-queue/ActiveTaskWarning';
 import { useTaskStorage } from './hooks/useTaskStorage';
 import { useTaskExecutor } from './hooks/useTaskExecutor';
@@ -55,6 +59,7 @@ import { ChatDrawerProvider, useChatDrawer } from './contexts/ChatDrawerContext'
 import { fontManagerService } from './services/font-manager-service';
 import { WorkflowProvider } from './contexts/WorkflowContext';
 import { useWorkspace } from './hooks/useWorkspace';
+import { workspaceService } from './services/workspace-service';
 import { Board as WorkspaceBoard } from './types/workspace.types';
 import { toolTestHelper } from './utils/tool-test-helper';
 import { ViewNavigation } from './components/view-navigation';
@@ -545,6 +550,8 @@ export const Drawnix: React.FC<DrawnixProps> = ({
     withCommonPlugin,
     buildDrawnixHotkeyPlugin(updateAppState),
     withFreehand,
+    withPen,
+    withMultiResize, // 多选缩放 - 支持 Freehand 和 PenPath 的多选缩放
     buildPencilPlugin(updateAppState),
     buildTextLinkPlugin(updateAppState),
     withVideo,
@@ -832,6 +839,8 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
               afterInit && afterInit(board);
             }}
           ></Board>
+          {/* 多选时的缩放控制点 */}
+          <MultiSelectionHandles />
           {/* 统一左侧工具栏 (桌面端和移动端一致) */}
           <UnifiedToolbar
             projectDrawerOpen={projectDrawerOpen}
@@ -847,6 +856,7 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
           <LinkPopup></LinkPopup>
           <ClosePencilToolbar></ClosePencilToolbar>
           <PencilSettingsToolbar></PencilSettingsToolbar>
+          <PenSettingsToolbar></PenSettingsToolbar>
           <EraserSettingsToolbar></EraserSettingsToolbar>
           {appState.openDialogType && (
             <Suspense fallback={null}>
@@ -865,6 +875,27 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
                 open={backupRestoreOpen}
                 onOpenChange={setBackupRestoreOpen}
                 container={containerRef.current}
+                onBeforeImport={async () => {
+                  // 导入前先保存当前画板数据到 IndexedDB
+                  if (handleBeforeSwitch) {
+                    await handleBeforeSwitch();
+                  }
+                }}
+                onSwitchBoard={async (boardId, viewport) => {
+                  // 注意：这里不调用 handleBeforeSwitch
+                  // 因为在备份恢复时，onBeforeImport 已经保存了当前画板
+                  // 如果在这里再保存，会用旧的内存数据覆盖 IndexedDB 中刚合并的新数据
+                  
+                  // 切换到目标画板（使用已导入的 workspaceService 单例，确保数据一致性）
+                  const board = await workspaceService.switchBoard(boardId);
+                  if (board && onBoardSwitch) {
+                    // 如果有 viewport，合并到 board 中
+                    if (viewport) {
+                      board.viewport = viewport;
+                    }
+                    onBoardSwitch(board);
+                  }
+                }}
               />
             </Suspense>
           )}

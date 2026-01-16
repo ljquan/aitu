@@ -1,4 +1,5 @@
 @import '../../../styles/z-index.scss';
+@import './size-input.scss';
 
 .popup-toolbar {
     z-index: $z-popup-toolbar;
@@ -16,6 +17,17 @@
             &.color-white {
                 border: 1px solid var(--color-gray-30);
             }
+            &.color-mixed {
+                background: conic-gradient(
+                    from 0deg,
+                    #f87171 0deg 60deg,
+                    #fbbf24 60deg 120deg,
+                    #34d399 120deg 180deg,
+                    #60a5fa 180deg 240deg,
+                    #a78bfa 240deg 300deg,
+                    #f472b6 300deg 360deg
+                );
+            }
         }
         .stroke-label {
             border-radius: 50%;
@@ -23,6 +35,18 @@
             height: calc(var(--popup-label-size) - var(--border-radius-lg));
             border-width: var(--border-radius-sm);
             border-style: solid;
+            &.color-mixed {
+                border-color: transparent;
+                background: conic-gradient(
+                    from 0deg,
+                    #f87171 0deg 60deg,
+                    #fbbf24 60deg 120deg,
+                    #34d399 120deg 180deg,
+                    #60a5fa 180deg 240deg,
+                    #a78bfa 240deg 300deg,
+                    #f472b6 300deg 360deg
+                );
+            }
         }
         .tool-icon__icon {
             svg {
@@ -36,6 +60,60 @@
 .stroke-setting {
     &.has-stroke-style {
         padding-top: 8px !important;
+    }
+    .stroke-width-section {
+        padding: 0 8px;
+        
+        // 调整 TDesign Slider 样式
+        .t-slider {
+            height: 24px;
+            display: flex;
+            align-items: center;
+        }
+        .t-slider__container {
+            display: flex;
+            align-items: center;
+        }
+        .t-slider__rail {
+            height: 3px;
+            border-radius: 1.5px;
+        }
+        .t-slider__track {
+            height: 3px;
+            border-radius: 1.5px;
+        }
+        .t-slider__button {
+            width: 12px;
+            height: 12px;
+        }
+        
+        // 输入框样式
+        .stroke-width-input-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            flex-shrink: 0;
+        }
+        .stroke-width-input {
+            width: 32px;
+            height: 22px;
+            padding: 0 4px;
+            border: 1px solid var(--color-border, #e0e0e0);
+            border-radius: 4px;
+            font-size: 12px;
+            text-align: center;
+            color: var(--color-on-surface, #333);
+            background: var(--color-surface, #fafafa);
+            
+            &:focus {
+                outline: none;
+                border-color: var(--color-primary, #1890ff);
+            }
+        }
+        .stroke-width-input-unit {
+            font-size: 12px;
+            color: var(--color-on-surface, #666);
+        }
     }
     .stroke-style-section {
         display: flex;
@@ -63,5 +141,82 @@
 .fill-setting {
     .unified-color-picker {
         width: 280px;
+    }
+}
+
+// 紧凑型圆角设置面板
+.corner-radius-setting-compact {
+    padding: 4px 8px !important;
+    border-radius: 6px;
+    background: var(--color-surface-high, #fff);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+    
+    .corner-radius-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 24px;
+    }
+    
+    .corner-radius-label {
+        font-size: 12px;
+        color: var(--color-on-surface, #666);
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+    
+    .corner-radius-slider {
+        flex: 1;
+        min-width: 90px;
+        display: flex;
+        align-items: center;
+        
+        // 调整 TDesign Slider 样式使其垂直居中
+        .t-slider {
+            height: 24px;
+            display: flex;
+            align-items: center;
+        }
+        .t-slider__container {
+            display: flex;
+            align-items: center;
+        }
+        .t-slider__rail {
+            height: 3px;
+            border-radius: 1.5px;
+        }
+        .t-slider__track {
+            height: 3px;
+            border-radius: 1.5px;
+        }
+        .t-slider__button {
+            width: 12px;
+            height: 12px;
+        }
+    }
+    
+    .corner-radius-input {
+        width: 36px;
+        height: 22px;
+        padding: 0 4px;
+        border: 1px solid var(--color-border, #e0e0e0);
+        border-radius: 4px;
+        font-size: 12px;
+        text-align: center;
+        color: var(--color-on-surface, #333);
+        background: var(--color-surface, #fafafa);
+        flex-shrink: 0;
+        
+        &:focus {
+            outline: none;
+            border-color: var(--color-primary, #1890ff);
+        }
+    }
+    
+    .corner-radius-unit {
+        font-size: 12px;
+        color: var(--color-on-surface, #666);
+        flex-shrink: 0;
+        margin-left: -2px;
     }
 }

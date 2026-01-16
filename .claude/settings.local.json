@@ -8,7 +8,8 @@
       "Bash(pnpm exec tsc:*)",
       "Bash(pnpm nx typecheck:*)",
       "Bash(pnpm run build)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(grep:*)"
     ]
   }
 }

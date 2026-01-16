@@ -43,6 +43,8 @@ import { MindPointerType } from '@plait/mind';
 import { ArrowLineShape, BasicShapes, DrawPointerType } from '@plait/draw';
 import { BoardCreationMode, setCreationMode } from '@plait/common';
 import { FreehandShape } from '../../plugins/freehand/type';
+import { PenShape } from '../../plugins/pen/type';
+import { finishPenOnToolSwitch } from '../../plugins/pen/with-pen-create';
 import {
   DrawnixPointerType,
   DialogType,
@@ -337,6 +339,8 @@ const MoreToolsPanel: React.FC<MoreToolsPanelProps> = ({
 
   // 指针操作
   const onPointerDown = useCallback((pointer: DrawnixPointerType) => {
+    // 切换工具前，结束钢笔绘制
+    finishPenOnToolSwitch(board);
     setCreationMode(board, BoardCreationMode.dnd);
     BoardTransforms.updatePointerType(board, pointer);
     setPointer(pointer);
@@ -358,6 +362,9 @@ const MoreToolsPanel: React.FC<MoreToolsPanelProps> = ({
     }
 
     resetAllPopups();
+    
+    // 切换工具前，结束钢笔绘制
+    finishPenOnToolSwitch(board);
 
     // 指针类按钮
     if (meta.pointer) {

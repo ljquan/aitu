@@ -36,7 +36,8 @@ export const ViewNavigation: React.FC<ViewNavigationProps> = ({
   const { t } = useI18n();
   const { isDrawerOpen, drawerWidth } = useChatDrawerControl();
   const [zoomMenuOpen, setZoomMenuOpen] = useState(false);
-  const [minimapExpanded, setMinimapExpanded] = useState(false);
+  // 首次进入页面时默认展示 minimap
+  const [minimapExpanded, setMinimapExpanded] = useState(true);
   const [manuallyExpanded, setManuallyExpanded] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   
@@ -176,9 +177,8 @@ export const ViewNavigation: React.FC<ViewNavigationProps> = ({
 
   // 处理百分比按钮点击
   const handleZoomPercentClick = useCallback(() => {
-    console.log('[ViewNavigation] Zoom percent clicked, current state:', zoomMenuOpen);
     setZoomMenuOpen((prev) => !prev);
-  }, [zoomMenuOpen]);
+  }, []);
 
   // 当前缩放百分比
   const zoomPercentage = Math.round((board?.viewport?.zoom || 1) * 100);
@@ -207,10 +207,7 @@ export const ViewNavigation: React.FC<ViewNavigationProps> = ({
         <Popover
           sideOffset={8}
           open={zoomMenuOpen}
-          onOpenChange={(open) => {
-            console.log('[ViewNavigation] Popover onOpenChange:', open);
-            setZoomMenuOpen(open);
-          }}
+          onOpenChange={setZoomMenuOpen}
           placement="bottom"
         >
           <PopoverTrigger asChild>

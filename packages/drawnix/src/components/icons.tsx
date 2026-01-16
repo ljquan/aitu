@@ -398,6 +398,15 @@ export const StrokeStyleDotedIcon = createIcon(
   </svg>
 );
 
+export const StrokeStyleDoubleIcon = createIcon(
+  <svg viewBox="0 0 24 32" xmlns="http://www.w3.org/2000/svg">
+    <g transform="translate(0 12)" fillRule="evenodd" fill="none">
+      <path d="M0 0h24v2H0z" fill="currentColor"></path>
+      <path d="M0 4h24v2H0z" fill="currentColor"></path>
+    </g>
+  </svg>
+);
+
 export const FontColorIcon: React.FC<{ currentColor?: string }> = ({
   currentColor,
 }) => {
@@ -484,6 +493,69 @@ export const FeltTipPenIcon = createIcon(
     xmlns="http://www.w3.org/2000/svg"
   >
     <path d="M170.794667 896c3.456 0 6.912-0.426667 10.325333-1.28l170.666667-42.666667c7.509333-1.877333 14.378667-5.76 19.84-11.221333L896.128 316.330667c16.128-16.128 25.002667-37.546667 25.002667-60.330667s-8.874667-44.202667-25.002667-60.330667L828.458667 128c-32.256-32.256-88.405333-32.256-120.661334 0L183.296 652.501333a42.794667 42.794667 0 0 0-11.221333 19.797334l-42.666667 170.666666A42.666667 42.666667 0 0 0 170.794667 896z m597.333333-707.669333L835.797333 256l-67.669333 67.669333L700.458667 256l67.669333-67.669333zM251.989333 704.469333l388.138667-388.138666L707.797333 384l-388.181333 388.138667-90.197333 22.528 22.570666-90.197334z"></path>
+  </svg>
+);
+
+// 钢笔工具图标（矢量路径绘制）
+export const VectorPenIcon = createIcon(
+  <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+    <path d="M845.11 536.29c-22.08 0-42.83-8.6-58.45-24.22h-0.01L511.93 237.34c-32.23-32.23-32.23-84.66 0-116.89l32.27-32.28c32.24-32.23 84.67-32.24 116.9 0L935.83 362.9c32.23 32.23 32.23 84.67 0 116.89l-32.28 32.28c-15.61 15.61-36.37 24.22-58.44 24.22zM602.65 119.08c-7.06 0-14.11 2.68-19.49 8.06l-32.27 32.27c-10.75 10.74-10.75 28.22-0.01 38.97l274.73 274.73h0.01c10.39 10.41 28.54 10.41 38.95 0l32.29-32.28c10.74-10.74 10.74-28.22-0.01-38.97L622.14 127.13c-5.38-5.36-12.43-8.05-19.49-8.05z" fill="currentColor" />
+    <path d="M118.97 960c-14.29 0-28.18-5.62-38.76-16.2-15.21-15.21-20.17-37.24-12.94-57.5l193.01-540.41c7.48-20.95 23.39-38.24 43.63-47.45L525.13 197.9c10.46-4.74 22.76-2.52 30.88 5.6L820.5 468c8.13 8.12 10.35 20.43 5.6 30.88L725.56 720.09c-9.21 20.25-26.5 36.15-47.45 43.63l-540.4 193c-6.17 2.2-12.49 3.28-18.74 3.28z m411.58-704.04l-203.83 92.65c-6.75 3.07-12.05 8.83-14.55 15.82l-193 540.4 540.4-193c6.99-2.5 12.75-7.8 15.82-14.55l92.65-203.83-237.49-237.49z" fill="currentColor" />
+    <path d="M104.17 947.38c-7.05 0-14.1-2.69-19.48-8.07-10.73-10.73-10.76-28.1-0.09-38.87 0.03-0.03 0.06-0.07 0.09-0.09l278.06-278.07c10.75-10.76 28.2-10.76 38.96 0 10.76 10.76 10.76 28.2 0 38.96L123.66 939.31c-5.35 5.36-12.38 8.05-19.4 8.07h-0.09zM492.45 621.41c-23.02 0-46.04-8.76-63.57-26.28-35.04-35.06-35.04-92.09 0-127.13 35.04-35.06 92.09-35.06 127.13 0 35.04 35.04 35.04 92.07 0.01 127.12-0.01 0-0.01 0-0.01 0.01-17.52 17.51-40.55 26.28-63.56 26.28z m44.08-45.77h0.13-0.13z m-44.08-78.85c-8.91 0-17.82 3.39-24.61 10.17-13.56 13.57-13.56 35.64 0.01 49.2 13.55 13.56 35.62 13.56 49.2 0 13.56-13.57 13.56-35.64 0-49.2-6.79-6.78-15.69-10.17-24.6-10.17z" fill="currentColor" />
+  </svg>
+);
+
+// 角点锚点图标 - 控制柄可独立调整
+export const AnchorCornerIcon = createIcon(
+  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <g fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      {/* 左侧控制柄线 */}
+      <line x1="4" y1="18" x2="12" y2="12" strokeDasharray="2,2" />
+      {/* 右侧控制柄线 - 角度不同 */}
+      <line x1="12" y1="12" x2="20" y2="8" strokeDasharray="2,2" />
+      {/* 左侧控制点 */}
+      <circle cx="4" cy="18" r="2" fill="currentColor" />
+      {/* 右侧控制点 */}
+      <circle cx="20" cy="8" r="2" fill="currentColor" />
+      {/* 中心锚点 - 方形表示角点 */}
+      <rect x="9.5" y="9.5" width="5" height="5" fill="white" stroke="currentColor" strokeWidth="1.5" />
+    </g>
+  </svg>
+);
+
+// 平滑锚点图标 - 控制柄方向对称但长度可不同
+export const AnchorSmoothIcon = createIcon(
+  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <g fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      {/* 左侧控制柄线 - 较短 */}
+      <line x1="6" y1="16" x2="12" y2="12" strokeDasharray="2,2" />
+      {/* 右侧控制柄线 - 较长，方向对称 */}
+      <line x1="12" y1="12" x2="20" y2="6" strokeDasharray="2,2" />
+      {/* 左侧控制点 */}
+      <circle cx="6" cy="16" r="2" fill="currentColor" />
+      {/* 右侧控制点 */}
+      <circle cx="20" cy="6" r="2" fill="currentColor" />
+      {/* 中心锚点 - 圆形表示平滑 */}
+      <circle cx="12" cy="12" r="3" fill="white" stroke="currentColor" strokeWidth="1.5" />
+    </g>
+  </svg>
+);
+
+// 对称锚点图标 - 控制柄完全对称
+export const AnchorSymmetricIcon = createIcon(
+  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <g fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      {/* 左侧控制柄线 */}
+      <line x1="4" y1="16" x2="12" y2="12" strokeDasharray="2,2" />
+      {/* 右侧控制柄线 - 完全对称 */}
+      <line x1="12" y1="12" x2="20" y2="8" strokeDasharray="2,2" />
+      {/* 左侧控制点 */}
+      <circle cx="4" cy="16" r="2" fill="currentColor" />
+      {/* 右侧控制点 */}
+      <circle cx="20" cy="8" r="2" fill="currentColor" />
+      {/* 中心锚点 - 菱形表示对称 */}
+      <rect x="9" y="9" width="6" height="6" fill="white" stroke="currentColor" strokeWidth="1.5" transform="rotate(45 12 12)" />
+    </g>
   </svg>
 );
 
@@ -786,5 +858,20 @@ export const BackupRestoreIcon = createIcon(
       <path d="M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83" />
       <circle cx="12" cy="12" r="3" />
     </g>
+  </svg>
+);
+
+// 锁定/解锁图标（用于等比缩放）
+export const LockIcon = createIcon(
+  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+  </svg>
+);
+
+export const UnlockIcon = createIcon(
+  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+    <path d="M7 11V7a5 5 0 0 1 9.9-1" />
   </svg>
 );

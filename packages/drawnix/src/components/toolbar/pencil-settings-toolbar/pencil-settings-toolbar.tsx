@@ -19,18 +19,19 @@ import {
   setFreehandStrokeColor,
   setFreehandStrokeStyle,
   setFreehandPressureEnabled,
+  FreehandStrokeStyle,
 } from '../../../plugins/freehand/freehand-settings';
 import { FreehandShape } from '../../../plugins/freehand/type';
 import { getFreehandPointers } from '../../../plugins/freehand/utils';
 import { useI18n } from '../../../i18n';
 import { useViewportScale } from '../../../hooks/useViewportScale';
 import { updatePencilCursor } from '../../../hooks/usePencilCursor';
-import { StrokeStyle } from '@plait/common';
 import { Slider, Switch, Tooltip } from 'tdesign-react';
 import {
   StrokeStyleNormalIcon,
   StrokeStyleDashedIcon,
   StrokeStyleDotedIcon,
+  StrokeStyleDoubleIcon,
 } from '../../icons';
 import './pencil-settings-toolbar.scss';
 
@@ -130,7 +131,7 @@ export const PencilSettingsToolbar: React.FC = () => {
   }, [board, appState.pointer]);
 
   // 处理描边样式变化
-  const handleStrokeStyleChange = useCallback((style: StrokeStyle) => {
+  const handleStrokeStyleChange = useCallback((style: FreehandStrokeStyle) => {
     setStrokeStyleState(style);
     setFreehandStrokeStyle(board, style);
   }, [board]);
@@ -204,31 +205,40 @@ export const PencilSettingsToolbar: React.FC = () => {
         {/* 描边样式选择 */}
         <div className="pencil-stroke-style-picker">
           <ToolButton
-            className={classNames('pencil-stroke-style-button', { active: strokeStyle === StrokeStyle.solid })}
+            className={classNames('pencil-stroke-style-button', { active: strokeStyle === FreehandStrokeStyle.solid })}
             type="button"
             visible={true}
             icon={StrokeStyleNormalIcon}
             title="实线"
             aria-label="实线"
-            onPointerUp={() => handleStrokeStyleChange(StrokeStyle.solid)}
+            onPointerUp={() => handleStrokeStyleChange(FreehandStrokeStyle.solid)}
           />
           <ToolButton
-            className={classNames('pencil-stroke-style-button', { active: strokeStyle === StrokeStyle.dashed })}
+            className={classNames('pencil-stroke-style-button', { active: strokeStyle === FreehandStrokeStyle.dashed })}
             type="button"
             visible={true}
             icon={StrokeStyleDashedIcon}
             title="虚线"
             aria-label="虚线"
-            onPointerUp={() => handleStrokeStyleChange(StrokeStyle.dashed)}
+            onPointerUp={() => handleStrokeStyleChange(FreehandStrokeStyle.dashed)}
           />
           <ToolButton
-            className={classNames('pencil-stroke-style-button', { active: strokeStyle === StrokeStyle.dotted })}
+            className={classNames('pencil-stroke-style-button', { active: strokeStyle === FreehandStrokeStyle.dotted })}
             type="button"
             visible={true}
             icon={StrokeStyleDotedIcon}
             title="点线"
             aria-label="点线"
-            onPointerUp={() => handleStrokeStyleChange(StrokeStyle.dotted)}
+            onPointerUp={() => handleStrokeStyleChange(FreehandStrokeStyle.dotted)}
+          />
+          <ToolButton
+            className={classNames('pencil-stroke-style-button', { active: strokeStyle === FreehandStrokeStyle.double })}
+            type="button"
+            visible={true}
+            icon={StrokeStyleDoubleIcon}
+            title="双层线"
+            aria-label="双层线"
+            onPointerUp={() => handleStrokeStyleChange(FreehandStrokeStyle.double)}
           />
         </div>
 

@@ -21,6 +21,8 @@ import {
 } from '@plait/core';
 import { BasicShapes, ArrowLineShape, DrawPointerType } from '@plait/draw';
 import { FreehandShape } from '../../../plugins/freehand/type';
+import { PenShape } from '../../../plugins/pen/type';
+import { finishPenOnToolSwitch } from '../../../plugins/pen/with-pen-create';
 import { DrawnixPointerType, useSetPointer } from '../../../hooks/use-drawnix';
 import { addImage } from '../../../utils/image';
 import { useI18n } from '../../../i18n';
@@ -152,6 +154,8 @@ export const QuickCreationToolbar: React.FC<QuickCreationToolbarProps> = ({
   // 工具按钮处理函数
   const handleTextClick = () => {
     resetAllPopovers();
+    // 切换工具前，结束钢笔绘制
+    finishPenOnToolSwitch(board);
     // 设置创建模式为 drawing，允许在画布上点击创建文本
     setCreationMode(board, BoardCreationMode.drawing);
     BoardTransforms.updatePointerType(board, BasicShapes.text);
@@ -253,6 +257,8 @@ export const QuickCreationToolbar: React.FC<QuickCreationToolbarProps> = ({
                 // 点击时立即展开，清除 hover 计时器
                 clearHoverTimeout();
                 showPopover(popupKey);
+                // 切换工具前，结束钢笔绘制
+                finishPenOnToolSwitch(board);
                 // 画笔工具需要特殊处理：按下时设置 dnd 模式
                 if (popupKey === PopupKey.freehand) {
                   setCreationMode(board, BoardCreationMode.dnd);

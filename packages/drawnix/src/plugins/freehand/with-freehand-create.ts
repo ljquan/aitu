@@ -6,12 +6,12 @@ import {
   toHostPoint,
   toViewBoxPoint,
 } from '@plait/core';
-import { isDrawingMode, StrokeStyle } from '@plait/common';
+import { isDrawingMode } from '@plait/common';
 import { createFreehandElement, getFreehandPointers } from './utils';
 import { Freehand, FreehandShape } from './type';
 import { FreehandGenerator } from './freehand.generator';
 import { FreehandSmoother } from './smoother';
-import { getFreehandSettings } from './freehand-settings';
+import { getFreehandSettings, FreehandStrokeStyle } from './freehand-settings';
 
 export const withFreehandCreate = (board: PlaitBoard) => {
   const { pointerDown, pointerMove, pointerUp, globalPointerUp } = board;
@@ -40,7 +40,7 @@ export const withFreehandCreate = (board: PlaitBoard) => {
   let cachedSettings: {
     strokeWidth: number;
     strokeColor: string;
-    strokeStyle: StrokeStyle;
+    strokeStyle: FreehandStrokeStyle;
     pressureEnabled: boolean;
   } | null = null;
 

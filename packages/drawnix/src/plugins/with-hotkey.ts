@@ -11,6 +11,7 @@ import { DrawnixState } from '../hooks/use-drawnix';
 import { BoardCreationMode, setCreationMode } from '@plait/common';
 import { MindPointerType } from '@plait/mind';
 import { FreehandShape } from './freehand/type';
+import { PenShape } from './pen/type';
 import { ArrowLineShape, BasicShapes } from '@plait/draw';
 
 export const buildDrawnixHotkeyPlugin = (
@@ -76,9 +77,17 @@ export const buildDrawnixHotkeyPlugin = (
             updateAppState({ pointer: FreehandShape.eraser });
           }
           if (event.key === 'p') {
-            setCreationMode(board, BoardCreationMode.drawing);
-            BoardTransforms.updatePointerType(board, FreehandShape.feltTipPen);
-            updateAppState({ pointer: FreehandShape.feltTipPen });
+            if (event.shiftKey) {
+              // Shift+P for vector pen tool
+              setCreationMode(board, BoardCreationMode.drawing);
+              BoardTransforms.updatePointerType(board, PenShape.pen);
+              updateAppState({ pointer: PenShape.pen });
+            } else {
+              // P for freehand pen
+              setCreationMode(board, BoardCreationMode.drawing);
+              BoardTransforms.updatePointerType(board, FreehandShape.feltTipPen);
+              updateAppState({ pointer: FreehandShape.feltTipPen });
+            }
           }
           if (event.key === 'a' && !isHotkey(['mod+a'])(event)) {
             // will trigger editing text

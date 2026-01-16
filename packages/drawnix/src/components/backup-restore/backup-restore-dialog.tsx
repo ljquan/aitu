@@ -7,19 +7,25 @@
 
 import { Dialog, DialogContent } from '../dialog/dialog';
 import { useState, useRef, useCallback } from 'react';
-import { Checkbox, MessagePlugin, Progress } from 'tdesign-react';
+import { Checkbox, MessagePlugin, Progress, DialogPlugin } from 'tdesign-react';
 import { UploadIcon } from 'tdesign-icons-react';
 import {
   backupRestoreService,
   BackupOptions,
   ImportResult,
+  BackupWorkspaceState,
 } from '../../services/backup-restore-service';
+import { workspaceService } from '../../services/workspace-service';
 import './backup-restore-dialog.scss';
 
 export interface BackupRestoreDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   container: HTMLElement | null;
+  /** 切换画板的回调（用于恢复备份时的画布状态） */
+  onSwitchBoard?: (boardId: string, viewport?: BackupWorkspaceState['viewport']) => void;
+  /** 导入前的回调（用于保存当前画板数据到 IndexedDB） */
+  onBeforeImport?: () => Promise<void>;
 }
 
 type TabType = 'backup' | 'restore';
@@ -28,6 +34,8 @@ export const BackupRestoreDialog = ({
   open,
   onOpenChange,
   container,
+  onSwitchBoard,
+  onBeforeImport,
 }: BackupRestoreDialogProps) => {
   const [activeTab, setActiveTab] = useState<TabType>('backup');
   const [backupOptions, setBackupOptions] = useState<BackupOptions>({
@@ -39,10 +47,64 @@ export const BackupRestoreDialog = ({
   const [progress, setProgress] = useState(0);
   const [progressMessage, setProgressMessage] = useState('');
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  // 待恢复的工作区状态（用于延迟处理画布切换）
+  const [pendingWorkspaceState, setPendingWorkspaceState] = useState<BackupWorkspaceState | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleClose = useCallback(() => {
+  /**
+   * 处理画布切换逻辑
+   * - 如果当前是空白画布，自动切换到备份时的画布
+   * - 如果当前不是空白画布，弹窗询问用户
+   */
+  const handleWorkspaceRestore = useCallback(async (workspaceState: BackupWorkspaceState) => {
+    if (!workspaceState.currentBoardId || !onSwitchBoard) return;
+
+    // 检查备份的画板是否存在
+    const targetBoard = workspaceService.getBoard(workspaceState.currentBoardId);
+    if (!targetBoard) {
+      // 画板不存在，可能是增量导入时没有导入该画板
+      return;
+    }
+
+    // 获取当前画板
+    const currentBoard = workspaceService.getCurrentBoard();
+    
+    // 检查当前画布是否为空白（没有元素或只有默认元素）
+    const isCurrentBoardEmpty = !currentBoard || 
+      !currentBoard.elements || 
+      currentBoard.elements.length === 0;
+
+    if (isCurrentBoardEmpty) {
+      // 当前是空白画布，自动切换
+      await onSwitchBoard(workspaceState.currentBoardId, workspaceState.viewport);
+      MessagePlugin.success(`已切换到画板「${targetBoard.name}」`);
+    } else {
+      // 当前不是空白画布，弹窗询问
+      const dialogInstance = DialogPlugin.confirm({
+        header: '恢复画布状态',
+        body: `备份时正在编辑画板「${workspaceState.currentBoardName || targetBoard.name}」，是否切换到该画板？`,
+        confirmBtn: '切换',
+        cancelBtn: '取消',
+        onConfirm: async () => {
+          await onSwitchBoard(workspaceState.currentBoardId!, workspaceState.viewport);
+          MessagePlugin.success(`已切换到画板「${targetBoard.name}」`);
+          dialogInstance.destroy();
+        },
+        onCancel: () => {
+          dialogInstance.destroy();
+        },
+      });
+    }
+  }, [onSwitchBoard]);
+
+  const handleClose = useCallback(async () => {
     if (!isProcessing) {
+      // 如果有待恢复的工作区状态，处理画布切换（需要等待完成）
+      if (pendingWorkspaceState) {
+        await handleWorkspaceRestore(pendingWorkspaceState);
+        setPendingWorkspaceState(null);
+      }
+
       // 如果有导入结果且导入了任务数据，刷新页面以确保任务队列生效
       if (importResult && importResult.tasks && importResult.tasks.imported > 0) {
         window.location.reload();
@@ -55,7 +117,7 @@ export const BackupRestoreDialog = ({
       setProgressMessage('');
       setImportResult(null);
     }
-  }, [isProcessing, onOpenChange, importResult]);
+  }, [isProcessing, onOpenChange, importResult, pendingWorkspaceState, handleWorkspaceRestore]);
 
   const handleBackup = useCallback(async () => {
     // 检查是否至少选择了一项
@@ -104,10 +166,16 @@ export const BackupRestoreDialog = ({
 
     setIsProcessing(true);
     setProgress(0);
-    setProgressMessage('正在读取文件...');
+    setProgressMessage('正在保存当前画板...');
     setImportResult(null);
 
     try {
+      // 导入前先保存当前画板数据，确保合并时使用最新数据
+      if (onBeforeImport) {
+        await onBeforeImport();
+      }
+
+      setProgressMessage('正在读取文件...');
       const result = await backupRestoreService.importFromZip(
         file,
         (p, msg) => {
@@ -117,6 +185,11 @@ export const BackupRestoreDialog = ({
       );
 
       setImportResult(result);
+
+      // 保存工作区状态，关闭对话框时处理
+      if (result.workspaceState?.currentBoardId) {
+        setPendingWorkspaceState(result.workspaceState);
+      }
 
       if (result.success) {
         MessagePlugin.success('导入成功！');
@@ -133,7 +206,7 @@ export const BackupRestoreDialog = ({
         fileInputRef.current.value = '';
       }
     }
-  }, []);
+  }, [onBeforeImport]);
 
   const handleOptionChange = useCallback((key: keyof BackupOptions, checked: boolean) => {
     setBackupOptions((prev) => ({ ...prev, [key]: checked }));
@@ -272,9 +345,10 @@ export const BackupRestoreDialog = ({
                       提示词：导入 {importResult.prompts.imported} 条，跳过 {importResult.prompts.skipped} 条
                     </li>
                   )}
-                  {(importResult.projects.folders > 0 || importResult.projects.boards > 0) && (
+                  {(importResult.projects.folders > 0 || importResult.projects.boards > 0 || importResult.projects.merged > 0) && (
                     <li>
                       项目：导入 {importResult.projects.folders} 个文件夹，{importResult.projects.boards} 个画板
+                      {importResult.projects.merged > 0 && `，合并 ${importResult.projects.merged} 个画板`}
                     </li>
                   )}
                   {(importResult.assets.imported > 0 || importResult.assets.skipped > 0) && (

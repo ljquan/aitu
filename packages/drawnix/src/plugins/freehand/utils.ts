@@ -18,7 +18,7 @@ import {
   isHitPolyLine,
   isRectangleHitRotatedPoints,
 } from '@plait/draw';
-import { StrokeStyle } from '@plait/common';
+import { FreehandStrokeStyle } from './freehand-settings';
 
 export function getFreehandPointers() {
   return [FreehandShape.feltTipPen, FreehandShape.eraser];
@@ -46,7 +46,7 @@ export function getFreehandRectangle(element: Freehand): RectangleClient {
 export interface CreateFreehandOptions {
   strokeWidth?: number;
   strokeColor?: string;
-  strokeStyle?: StrokeStyle;
+  strokeStyle?: FreehandStrokeStyle;
   pressures?: number[];
 }
 
@@ -163,7 +163,7 @@ export const isHitFreehandWithRadius = (
 };
 
 export const isRectangleHitFreehand = (
-  board: PlaitBoard,
+  _board: PlaitBoard,
   element: Freehand,
   selection: Selection
 ) => {
@@ -171,9 +171,13 @@ export const isRectangleHitFreehand = (
     selection.anchor,
     selection.focus,
   ]);
+  // 获取元素的边界框
+  const elementRect = getFreehandRectangle(element);
+  // 获取边界框的四个角点（isRectangleHitRotatedPoints 期望的是角点，不是路径点）
+  const cornerPoints = RectangleClient.getCornerPoints(elementRect);
   return isRectangleHitRotatedPoints(
     rangeRectangle,
-    element.points,
+    cornerPoints,
     element.angle
   );
 };

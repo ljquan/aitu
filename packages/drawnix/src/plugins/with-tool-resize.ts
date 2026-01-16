@@ -23,19 +23,11 @@ import {
 } from '@plait/common';
 import { PlaitTool } from '../types/toolbox.types';
 import { isToolElement } from './with-tool';
-
-// ResizeHandle 枚举值 (从 @plait/common/constants/resize)
-// 由于 Vite 不支持深度导入，这里直接定义枚举值
-enum ResizeHandle {
-  NW = '0', // 左上
-  NE = '1', // 右上
-  SE = '2', // 右下
-  SW = '3', // 左下
-  N = '4',  // 上
-  E = '5',  // 右
-  S = '6',  // 下
-  W = '7',  // 左
-}
+import {
+  ResizeHandle,
+  calculateResizedRect,
+  getShiftKeyState,
+} from '../utils/resize-utils';
 
 /**
  * 命中测试辅助函数 - 检测点是否在缩放手柄上
@@ -160,78 +152,20 @@ function onResize(
   const dx = endPoint[0] - startPoint[0];
   const dy = endPoint[1] - startPoint[1];
 
-  // 从起始矩形计算新的矩形（startRectangle 是拖拽开始时的矩形）
-  let newX = startRectangle.x;
-  let newY = startRectangle.y;
-  let newWidth = startRectangle.width;
-  let newHeight = startRectangle.height;
-
-  // 根据手柄类型计算新尺寸
-  // ResizeHandle 枚举值: nw="0", n="4", ne="1", e="5", se="2", s="6", sw="3", w="7"
-  switch (handle) {
-    case ResizeHandle.NW: // "0" 左上角
-      newX = startRectangle.x + dx;
-      newY = startRectangle.y + dy;
-      newWidth = startRectangle.width - dx;
-      newHeight = startRectangle.height - dy;
-      break;
-    case ResizeHandle.NE: // "1" 右上角
-      newY = startRectangle.y + dy;
-      newWidth = startRectangle.width + dx;
-      newHeight = startRectangle.height - dy;
-      break;
-    case ResizeHandle.SE: // "2" 右下角
-      newWidth = startRectangle.width + dx;
-      newHeight = startRectangle.height + dy;
-      break;
-    case ResizeHandle.SW: // "3" 左下角
-      newX = startRectangle.x + dx;
-      newWidth = startRectangle.width - dx;
-      newHeight = startRectangle.height + dy;
-      break;
-    case ResizeHandle.N: // "4" 上边
-      newY = startRectangle.y + dy;
-      newHeight = startRectangle.height - dy;
-      break;
-    case ResizeHandle.E: // "5" 右边
-      newWidth = startRectangle.width + dx;
-      break;
-    case ResizeHandle.S: // "6" 下边
-      newHeight = startRectangle.height + dy;
-      break;
-    case ResizeHandle.W: // "7" 左边
-      newX = startRectangle.x + dx;
-      newWidth = startRectangle.width - dx;
-      break;
-  }
-
-  // 确保最小尺寸
-  const MIN_SIZE = 100;
-
-  // 处理宽度最小尺寸限制
-  if (newWidth < MIN_SIZE) {
-    // 根据手柄类型调整 x 坐标
-    if (handle === ResizeHandle.NW || handle === ResizeHandle.W || handle === ResizeHandle.SW) {
-      // 左侧手柄: 保持右边界不变
-      newX = startRectangle.x + startRectangle.width - MIN_SIZE;
-    }
-    newWidth = MIN_SIZE;
-  }
-
-  // 处理高度最小尺寸限制
-  if (newHeight < MIN_SIZE) {
-    // 根据手柄类型调整 y 坐标
-    if (handle === ResizeHandle.NW || handle === ResizeHandle.N || handle === ResizeHandle.NE) {
-      // 上侧手柄: 保持下边界不变
-      newY = startRectangle.y + startRectangle.height - MIN_SIZE;
-    }
-    newHeight = MIN_SIZE;
-  }
+  // 使用公共函数计算新矩形，支持 Shift 锁定比例
+  const newRect = calculateResizedRect(
+    startRectangle,
+    handle,
+    dx,
+    dy,
+    getShiftKeyState(), // Shift 键锁定比例
+    100 // 最小尺寸
+  );
 
   // 计算新的 points
   const newPoints: [Point, Point] = [
-    [newX, newY],
-    [newX + newWidth, newY + newHeight],
+    [newRect.x, newRect.y],
+    [newRect.x + newRect.width, newRect.y + newRect.height],
   ];
 
   // 查找元素路径

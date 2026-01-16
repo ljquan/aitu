@@ -125,6 +125,15 @@ export const setStrokeStyle = (board: PlaitBoard, strokeStyle: StrokeStyle) => {
   });
 };
 
+export const setStrokeWidth = (board: PlaitBoard, strokeWidth: number) => {
+  PropertyTransforms.setStrokeWidth(board, strokeWidth, {
+    getMemorizeKey,
+    callback: (element: PlaitElement, path: Path) => {
+      Transforms.setNode(board, { strokeWidth }, path);
+    },
+  });
+};
+
 export const setTextColor = (
   board: PlaitBoard,
   currentColor: string,

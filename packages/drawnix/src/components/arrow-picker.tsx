@@ -8,6 +8,7 @@ import { BoardTransforms } from '@plait/core';
 import React from 'react';
 import { BoardCreationMode, setCreationMode } from '@plait/common';
 import { ArrowLineShape, DrawPointerType } from '@plait/draw';
+import { finishPenOnToolSwitch } from '../plugins/pen/with-pen-create';
 
 export interface ArrowProps {
   icon: React.ReactNode;
@@ -54,6 +55,8 @@ export const ArrowPicker: React.FC<ArrowPickerProps> = ({ onPointerUp }) => {
               title={arrow.title}
               aria-label={arrow.title}
               onPointerDown={() => {
+                // 切换工具前，结束钢笔绘制
+                finishPenOnToolSwitch(board);
                 setCreationMode(board, BoardCreationMode.drawing);
                 BoardTransforms.updatePointerType(board, arrow.pointer);
               }}

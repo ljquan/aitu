@@ -47,6 +47,8 @@ import { insertImageFromUrl } from '../../data/image';
 import { insertVideoFromUrl } from '../../data/video';
 import { Popover, PopoverContent, PopoverTrigger } from '../popover/popover';
 import { FreehandShape } from '../../plugins/freehand/type';
+import { PenShape } from '../../plugins/pen/type';
+import { finishPenOnToolSwitch } from '../../plugins/pen/with-pen-create';
 import {
   DrawnixPointerType,
   DialogType,
@@ -369,6 +371,8 @@ export const CreationToolbar: React.FC<ToolbarSectionProps> = ({
   };
 
   const onPointerDown = (pointer: DrawnixPointerType) => {
+    // 切换工具前，结束钢笔绘制
+    finishPenOnToolSwitch(board);
     setCreationMode(board, BoardCreationMode.dnd);
     BoardTransforms.updatePointerType(board, pointer);
     setPointer(pointer);
@@ -390,12 +394,16 @@ export const CreationToolbar: React.FC<ToolbarSectionProps> = ({
     return PlaitBoard.isInPointer(board, [
       FreehandShape.feltTipPen,
       FreehandShape.eraser,
+      PenShape.pen,
     ]);
   };
 
   // 统一的按钮点击处理
   const handleButtonClick = (button: AppToolButtonProps) => {
     resetAllPopovers();
+    
+    // 切换工具前，结束钢笔绘制
+    finishPenOnToolSwitch(board);
 
     if (button.pointer && !isBasicPointer(button.pointer)) {
       onPointerUp();

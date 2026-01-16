@@ -1,0 +1,27 @@
+/**
+ * MultiSelectionHandles 样式
+ * 多选时在选区四角显示的缩放控制点
+ */
+
+.multi-selection-handles {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.multi-selection-handle {
+  position: absolute;
+  background-color: white;
+  border: 2px solid #6698FF;
+  border-radius: 50%;
+  pointer-events: auto;
+  box-sizing: border-box;
+
+  &:hover {
+    background-color: #6698FF;
+  }
+}

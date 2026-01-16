@@ -47,6 +47,7 @@ export const PopupFillButton: React.FC<PopupFillButtonProps> = ({
   return (
     <Popover
       sideOffset={12}
+      crossAxisOffset={40}
       open={isFillPropertyOpen}
       onOpenChange={(open) => {
         setIsFillPropertyOpen(open);

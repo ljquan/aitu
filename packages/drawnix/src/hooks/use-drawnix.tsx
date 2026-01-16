@@ -7,6 +7,7 @@ import { createContext, useContext } from 'react';
 import { MindPointerType } from '@plait/mind';
 import { DrawPointerType } from '@plait/draw';
 import { FreehandShape } from '../plugins/freehand/type';
+import { PenShape } from '../plugins/pen/type';
 import { Editor } from 'slate';
 import { LinkElement } from '@plait/common';
 
@@ -21,7 +22,8 @@ export type DrawnixPointerType =
   | PlaitPointerType
   | MindPointerType
   | DrawPointerType
-  | FreehandShape;
+  | FreehandShape
+  | PenShape;
 
 export interface DrawnixBoard extends PlaitBoard {
   appState: DrawnixState;
