@@ -12,6 +12,7 @@ export interface PenSettings {
   strokeColor: string;
   strokeStyle: StrokeStyle;
   defaultAnchorType: AnchorType;
+  cornerRadius: number;
 }
 
 // 默认钢笔设置
@@ -20,6 +21,7 @@ const DEFAULT_PEN_SETTINGS: PenSettings = {
   strokeColor: DEFAULT_COLOR,
   strokeStyle: StrokeStyle.solid,
   defaultAnchorType: 'smooth',
+  cornerRadius: 0,
 };
 
 // LocalStorage key
@@ -103,6 +105,16 @@ export const setPenStrokeStyle = (board: PlaitBoard, strokeStyle: StrokeStyle) =
 export const setPenDefaultAnchorType = (board: PlaitBoard, anchorType: AnchorType) => {
   const current = getPenSettings(board);
   const updated = { ...current, defaultAnchorType: anchorType };
+  PEN_SETTINGS.set(board, updated);
+  saveSettingsToStorage(updated);
+};
+
+/**
+ * 设置圆角半径
+ */
+export const setPenCornerRadius = (board: PlaitBoard, cornerRadius: number) => {
+  const current = getPenSettings(board);
+  const updated = { ...current, cornerRadius };
   PEN_SETTINGS.set(board, updated);
   saveSettingsToStorage(updated);
 };

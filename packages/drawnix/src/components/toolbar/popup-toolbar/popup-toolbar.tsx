@@ -32,6 +32,7 @@ import {
   getStrokeColorByElement as getStrokeColorByDrawElement,
   isClosedCustomGeometry,
   isClosedDrawElement,
+  isClosedPoints,
   isDrawElementsIncludeText,
   PlaitDrawElement,
   DrawTransforms,
@@ -42,6 +43,7 @@ import { PopupFontColorButton } from './font-color-button';
 import { PopupFontSizeButton } from './font-size-button';
 import { PopupStrokeButton } from './stroke-button';
 import { PopupFillButton } from './fill-button';
+import { PopupCornerRadiusButton } from './corner-radius-button';
 import { isWhite, removeHexAlpha, NO_COLOR } from '@aitu/utils';
 import { Freehand } from '../../../plugins/freehand/type';
 import { PenPath } from '../../../plugins/pen/type';
@@ -118,6 +120,8 @@ export const PopupToolbar = () => {
     hasFontSize?: boolean;
     hasStroke?: boolean;
     hasStrokeStyle?: boolean;
+    hasStrokeWidth?: boolean; // 是否显示线宽设置
+    strokeWidth?: number; // 当前线宽值
     marks?: Omit<CustomText, 'text'>;
     hasAIImage?: boolean; // 是否显示AI图像生成按钮
     hasAIVideo?: boolean; // 是否显示AI视频生成按钮
@@ -126,6 +130,8 @@ export const PopupToolbar = () => {
     hasDownloadable?: boolean; // 是否显示下载按钮
     hasMergeable?: boolean; // 是否显示合并按钮
     hasVideoMergeable?: boolean; // 是否显示视频合成按钮
+    hasCornerRadius?: boolean; // 是否显示圆角设置按钮
+    cornerRadius?: number; // 当前圆角值
   } = {
     fill: 'red',
   };
@@ -230,6 +236,38 @@ export const PopupToolbar = () => {
       videoElements.length > 1 &&
       !PlaitBoard.hasBeenTextEditing(board);
 
+    // 圆角设置按钮：选中 PenPath 元素时显示
+    const penPathElements = selectedElements.filter(element => PenPath.isPenPath(element)) as PenPath[];
+    const hasCornerRadius =
+      penPathElements.length > 0 &&
+      !PlaitBoard.hasBeenTextEditing(board);
+    
+    // 获取选中 PenPath 元素的圆角值（如果所有元素值相同则返回该值，否则返回 undefined）
+    let cornerRadius: number | undefined = undefined;
+    if (penPathElements.length > 0) {
+      const firstRadius = penPathElements[0].cornerRadius ?? 0;
+      const allSame = penPathElements.every(el => (el.cornerRadius ?? 0) === firstRadius);
+      cornerRadius = allSame ? firstRadius : undefined;
+    }
+
+    // 线宽设置：选中 PenPath 或 Freehand 元素时显示
+    const freehandElements = selectedElements.filter(element => Freehand.isFreehand(element)) as Freehand[];
+    const hasStrokeWidth =
+      (penPathElements.length > 0 || freehandElements.length > 0) &&
+      !PlaitBoard.hasBeenTextEditing(board);
+    
+    // 获取线宽值
+    let strokeWidth: number | undefined = undefined;
+    if (penPathElements.length > 0) {
+      const firstWidth = penPathElements[0].strokeWidth ?? 2;
+      const allSame = penPathElements.every(el => (el.strokeWidth ?? 2) === firstWidth);
+      strokeWidth = allSame ? firstWidth : undefined;
+    } else if (freehandElements.length > 0) {
+      const firstWidth = freehandElements[0].strokeWidth ?? 2;
+      const allSame = freehandElements.every(el => (el.strokeWidth ?? 2) === firstWidth);
+      strokeWidth = allSame ? firstWidth : undefined;
+    }
+
     state = {
       ...getElementState(board),
       hasFill,
@@ -237,6 +275,8 @@ export const PopupToolbar = () => {
       hasFontSize: hasText,
       hasStroke,
       hasStrokeStyle,
+      hasStrokeWidth,
+      strokeWidth,
       hasText,
       hasAIImage,
       hasAIVideo,
@@ -245,6 +285,8 @@ export const PopupToolbar = () => {
       hasDownloadable,
       hasMergeable,
       hasVideoMergeable,
+      hasCornerRadius,
+      cornerRadius,
     };
   }
   useEffect(() => {
@@ -413,9 +455,13 @@ export const PopupToolbar = () => {
                 currentColor={state.strokeColor}
                 title={t('toolbar.stroke')}
                 hasStrokeStyle={state.hasStrokeStyle || false}
+                hasStrokeWidth={state.hasStrokeWidth || false}
+                currentStrokeWidth={state.strokeWidth}
               >
                 <label
-                  className={classNames('stroke-label', 'color-label')}
+                  className={classNames('stroke-label', 'color-label', {
+                    'color-mixed': state.strokeColor === undefined,
+                  })}
                   style={{ borderColor: state.strokeColor }}
                 ></label>
               </PopupStrokeButton>
@@ -431,10 +477,20 @@ export const PopupToolbar = () => {
                   className={classNames('fill-label', 'color-label', {
                     'color-white':
                       state.fill && isWhite(removeHexAlpha(state.fill)),
+                    'color-mixed': state.fill === undefined,
                   })}
                   style={{ backgroundColor: state.fill }}
                 ></label>
               </PopupFillButton>
+            )}
+            {state.hasCornerRadius && (
+              <PopupCornerRadiusButton
+                board={board}
+                key="corner-radius"
+                currentRadius={state.cornerRadius}
+                title={t('toolbar.cornerRadius')}
+                selectionRect={selectionRect}
+              />
             )}
             {state.hasText && (
               <PopupLinkButton
@@ -988,17 +1044,67 @@ export const getDrawElementState = (
 };
 
 export const getElementState = (board: PlaitBoard) => {
-  const selectedElement = getSelectedElements(board)[0];
-  if (MindElement.isMindElement(board, selectedElement)) {
-    return getMindElementState(board, selectedElement);
+  const selectedElements = getSelectedElements(board);
+
+  // 没有选中元素时返回默认状态
+  if (selectedElements.length === 0) {
+    return { fill: undefined, strokeColor: undefined };
   }
-  if (Freehand.isFreehand(selectedElement)) {
-    return getFreehandElementState(board, selectedElement);
+
+  // 单选时使用原有逻辑
+  if (selectedElements.length === 1) {
+    const selectedElement = selectedElements[0];
+    if (MindElement.isMindElement(board, selectedElement)) {
+      return getMindElementState(board, selectedElement);
+    }
+    if (Freehand.isFreehand(selectedElement)) {
+      return getFreehandElementState(board, selectedElement);
+    }
+    if (PenPath.isPenPath(selectedElement)) {
+      return getPenPathElementState(board, selectedElement);
+    }
+    return getDrawElementState(board, selectedElement as PlaitDrawElement);
   }
-  if (PenPath.isPenPath(selectedElement)) {
-    return getPenPathElementState(board, selectedElement);
-  }
-  return getDrawElementState(board, selectedElement as PlaitDrawElement);
+
+  // 多选时计算混合状态
+  return getMultiSelectElementState(board, selectedElements);
+};
+
+/**
+ * 获取多选元素的混合状态
+ * 如果所有元素的某个属性值相同，则返回该值；否则返回 undefined（表示混合状态）
+ */
+const getMultiSelectElementState = (
+  board: PlaitBoard,
+  elements: PlaitElement[]
+) => {
+  const states = elements.map((element) => {
+    if (MindElement.isMindElement(board, element)) {
+      return getMindElementState(board, element);
+    }
+    if (Freehand.isFreehand(element)) {
+      return getFreehandElementState(board, element);
+    }
+    if (PenPath.isPenPath(element)) {
+      return getPenPathElementState(board, element);
+    }
+    if (PlaitDrawElement.isDrawElement(element)) {
+      return getDrawElementState(board, element);
+    }
+    return { fill: undefined, strokeColor: undefined };
+  });
+
+  // 计算混合状态：如果所有值相同则返回该值，否则返回 undefined
+  const fills = states.map((s) => s.fill);
+  const strokeColors = states.map((s) => s.strokeColor);
+
+  const allFillsSame = fills.every((f) => f === fills[0]);
+  const allStrokeColorsSame = strokeColors.every((c) => c === strokeColors[0]);
+
+  return {
+    fill: allFillsSame ? fills[0] : undefined,
+    strokeColor: allStrokeColorsSame ? strokeColors[0] : undefined,
+  };
 };
 
 export const getFreehandElementState = (
@@ -1012,12 +1118,13 @@ export const getFreehandElementState = (
 };
 
 export const getPenPathElementState = (
-  board: PlaitBoard,
+  _board: PlaitBoard,
   element: PenPath
 ) => {
   return {
     fill: element.fill,
     strokeColor: element.strokeColor,
+    cornerRadius: element.cornerRadius,
   };
 };
 
@@ -1027,6 +1134,14 @@ export const hasFillProperty = (board: PlaitBoard, element: PlaitElement) => {
   }
   if (isClosedCustomGeometry(board, element)) {
     return true;
+  }
+  // 画笔闭合图形支持填充（检测路径点是否闭合）
+  if (Freehand.isFreehand(element)) {
+    return isClosedPoints(element.points);
+  }
+  // 钢笔闭合图形支持填充
+  if (PenPath.isPenPath(element)) {
+    return element.closed;
   }
   if (PlaitDrawElement.isDrawElement(element)) {
     return (

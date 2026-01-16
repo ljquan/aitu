@@ -20,10 +20,12 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '../../popover/popover';
 import Stack from '../../stack';
 import { StrokeStyle } from '@plait/common';
+import { Slider } from 'tdesign-react';
 import {
   setStrokeColor,
   setStrokeColorOpacity,
   setStrokeStyle as setStrokeStyleTransform,
+  setStrokeWidth as setStrokeWidthTransform,
 } from '../../../transforms/property';
 
 export type PopupStrokeButtonProps = {
@@ -31,6 +33,8 @@ export type PopupStrokeButtonProps = {
   currentColor: string | undefined;
   title: string;
   hasStrokeStyle: boolean;
+  hasStrokeWidth?: boolean;
+  currentStrokeWidth?: number;
   children?: React.ReactNode;
 };
 
@@ -39,6 +43,8 @@ export const PopupStrokeButton: React.FC<PopupStrokeButtonProps> = ({
   currentColor,
   title,
   hasStrokeStyle,
+  hasStrokeWidth,
+  currentStrokeWidth,
   children,
 }) => {
   const [isStrokePropertyOpen, setIsStrokePropertyOpen] = useState(false);
@@ -64,9 +70,14 @@ export const PopupStrokeButton: React.FC<PopupStrokeButtonProps> = ({
     setStrokeColorOpacity(board, opacity);
   }, [board]);
 
+  const handleStrokeWidthChange = useCallback((width: number) => {
+    setStrokeWidthTransform(board, width);
+  }, [board]);
+
   return (
     <Popover
       sideOffset={12}
+      crossAxisOffset={40}
       open={isStrokePropertyOpen}
       onOpenChange={(open) => {
         setIsStrokePropertyOpen(open);
@@ -98,6 +109,26 @@ export const PopupStrokeButton: React.FC<PopupStrokeButtonProps> = ({
           )}
         >
           <Stack.Col>
+            {hasStrokeWidth && (
+              <div className="stroke-width-section" style={{ marginBottom: '8px' }}>
+                <Stack.Row gap={2} align="center">
+                  <span style={{ fontSize: '13px', color: 'var(--color-on-surface)', whiteSpace: 'nowrap' }}>线宽：</span>
+                  <div style={{ flex: 1, minWidth: '100px' }}>
+                    <Slider
+                      value={currentStrokeWidth || 2}
+                      min={1}
+                      max={20}
+                      step={1}
+                      onChange={(val) => handleStrokeWidthChange(val as number)}
+                      label={false}
+                    />
+                  </div>
+                  <span style={{ fontSize: '13px', color: 'var(--color-on-surface)', minWidth: '30px', textAlign: 'right' }}>
+                    {currentStrokeWidth || 2}px
+                  </span>
+                </Stack.Row>
+              </div>
+            )}
             {hasStrokeStyle && (
               <div className="stroke-style-section">
                 <span className="stroke-style-label">样式：</span>

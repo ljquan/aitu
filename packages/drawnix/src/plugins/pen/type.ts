@@ -8,7 +8,7 @@ import { StrokeStyle } from '@plait/common';
 export const PenThemeColors = {
   [ThemeColorMode.default]: {
     strokeColor: DEFAULT_COLOR,
-    fill: '#E8E8E8',
+    fill: '#FFFFFF',
   },
   [ThemeColorMode.colorful]: {
     strokeColor: '#06ADBF',
@@ -49,14 +49,14 @@ export type AnchorType = 'corner' | 'smooth' | 'symmetric';
 
 /**
  * 锚点数据结构
- * 采用绝对坐标存储，便于计算和渲染
+ * 采用相对坐标存储（相对于元素 points[0]），移动时只需更新 points
  */
 export interface PenAnchor {
-  /** 锚点位置（绝对坐标） */
+  /** 锚点位置（相对坐标，相对于 points[0]） */
   point: Point;
-  /** 入控制柄位置（绝对坐标，可选） */
+  /** 入控制柄位置（相对坐标，可选） */
   handleIn?: Point;
-  /** 出控制柄位置（绝对坐标，可选） */
+  /** 出控制柄位置（相对坐标，可选） */
   handleOut?: Point;
   /** 锚点类型 */
   type: AnchorType;
@@ -78,6 +78,8 @@ export type PenPath = PlaitCustomGeometry<typeof PEN_TYPE, Point[], PenShape> & 
   strokeStyle?: StrokeStyle;
   /** 填充色 */
   fill?: string;
+  /** 圆角半径百分比 (0-100%，100% 为最大圆角) */
+  cornerRadius?: number;
 };
 
 /**

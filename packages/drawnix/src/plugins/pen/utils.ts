@@ -1,4 +1,4 @@
-import { PlaitBoard, Point, RectangleClient, createG, idCreator, isPointInPolygon } from '@plait/core';
+import { PlaitBoard, Point, RectangleClient, createG, idCreator, isPointInPolygon, getSelectedElements } from '@plait/core';
 import {
   PenPath,
   PenAnchor,
@@ -18,7 +18,48 @@ import {
 import { getPenSettings } from './pen-settings';
 
 /**
+ * 将绝对坐标的锚点转换为相对坐标（相对于 origin）
+ */
+export function anchorsToRelative(anchors: PenAnchor[], origin: Point): PenAnchor[] {
+  return anchors.map(anchor => ({
+    ...anchor,
+    point: [anchor.point[0] - origin[0], anchor.point[1] - origin[1]] as Point,
+    handleIn: anchor.handleIn 
+      ? [anchor.handleIn[0] - origin[0], anchor.handleIn[1] - origin[1]] as Point 
+      : undefined,
+    handleOut: anchor.handleOut 
+      ? [anchor.handleOut[0] - origin[0], anchor.handleOut[1] - origin[1]] as Point 
+      : undefined,
+  }));
+}
+
+/**
+ * 将相对坐标的锚点转换为绝对坐标
+ */
+export function anchorsToAbsolute(anchors: PenAnchor[], origin: Point): PenAnchor[] {
+  return anchors.map(anchor => ({
+    ...anchor,
+    point: [anchor.point[0] + origin[0], anchor.point[1] + origin[1]] as Point,
+    handleIn: anchor.handleIn 
+      ? [anchor.handleIn[0] + origin[0], anchor.handleIn[1] + origin[1]] as Point 
+      : undefined,
+    handleOut: anchor.handleOut 
+      ? [anchor.handleOut[0] + origin[0], anchor.handleOut[1] + origin[1]] as Point 
+      : undefined,
+  }));
+}
+
+/**
+ * 获取元素的绝对坐标锚点（用于渲染和命中测试）
+ */
+export function getAbsoluteAnchors(element: PenPath): PenAnchor[] {
+  const origin = element.points[0];
+  return anchorsToAbsolute(element.anchors, origin);
+}
+
+/**
  * 创建新的钢笔路径元素
+ * 注意：传入的 anchors 应该是绝对坐标，函数会自动转换为相对坐标存储
  */
 export function createPenPath(
   board: PlaitBoard,
@@ -30,6 +71,7 @@ export function createPenPath(
   const strokeColor = settings.strokeColor;
   const strokeWidth = settings.strokeWidth;
   const strokeStyle = settings.strokeStyle;
+  const cornerRadius = settings.cornerRadius;
   
   // 获取填充色（仅闭合路径）
   const themeMode = board.theme.themeColorMode;
@@ -37,22 +79,27 @@ export function createPenPath(
 
   // 计算 points（用于 PlaitElement 的基本定位）
   const boundingBox = getPathBoundingBox(anchors, closed);
+  const origin: Point = [boundingBox.x, boundingBox.y];
   const points: [Point, Point] = [
-    [boundingBox.x, boundingBox.y],
+    origin,
     [boundingBox.x + boundingBox.width, boundingBox.y + boundingBox.height],
   ];
+  
+  // 将绝对坐标转换为相对坐标存储
+  const relativeAnchors = anchorsToRelative(anchors, origin);
 
   return {
     id: idCreator(),
     type: PEN_TYPE,
     shape: PenShape.pen,
     points,
-    anchors,
+    anchors: relativeAnchors,
     closed,
     strokeWidth,
     strokeColor,
     strokeStyle,
     fill,
+    cornerRadius,
   } as PenPath;
 }
 
@@ -60,7 +107,9 @@ export function createPenPath(
  * 获取钢笔路径的包围矩形
  */
 export function getPenPathRectangle(element: PenPath): RectangleClient {
-  const boundingBox = getPathBoundingBox(element.anchors, element.closed, 5);
+  // 使用绝对坐标计算包围盒
+  const absoluteAnchors = getAbsoluteAnchors(element);
+  const boundingBox = getPathBoundingBox(absoluteAnchors, element.closed, 5);
   return RectangleClient.getRectangleByCenterPoint(
     [boundingBox.x + boundingBox.width / 2, boundingBox.y + boundingBox.height / 2],
     boundingBox.width,
@@ -77,22 +126,37 @@ export function isHitPenPath(
   element: PenPath,
   point: Point
 ): boolean {
+  // 使用绝对坐标进行检测
+  const absoluteAnchors = getAbsoluteAnchors(element);
+  
   // 检测是否在路径线条附近
-  const distance = distanceToPath(point, element.anchors, element.closed);
+  const distance = distanceToPath(point, absoluteAnchors, element.closed);
   if (distance <= PATH_HIT_DISTANCE) {
     return true;
   }
 
   // 对于闭合路径，检测是否在填充区域内
-  if (element.closed && element.anchors.length >= 3) {
+  if (element.closed && absoluteAnchors.length >= 3) {
     // 获取路径上的采样点形成多边形
-    const polygonPoints = getPathSamplePoints(element.anchors, element.closed);
+    const polygonPoints = getPathSamplePoints(absoluteAnchors, element.closed);
     if (isPointInPolygon(point, polygonPoints)) {
       return true;
     }
   }
 
   return false;
+}
+
+/**
+ * 检测点是否在矩形内
+ */
+function isPointInRectangle(point: Point, rect: RectangleClient): boolean {
+  return (
+    point[0] >= rect.x &&
+    point[0] <= rect.x + rect.width &&
+    point[1] >= rect.y &&
+    point[1] <= rect.y + rect.height
+  );
 }
 
 /**
@@ -103,25 +167,32 @@ export function isRectangleHitPenPath(
   element: PenPath,
   selection: { anchor: Point; focus: Point }
 ): boolean {
-  const rectangle = RectangleClient.getRectangleByPoints([
+  const selectionRect = RectangleClient.getRectangleByPoints([
     selection.anchor,
     selection.focus,
   ]);
   
-  // 获取路径的采样点进行精确检测
-  const samplePoints = getPathSamplePoints(element.anchors, element.closed);
-  
-  // 检测选择框是否包含任意一个采样点
-  for (const point of samplePoints) {
-    if (RectangleClient.isHit(rectangle, point)) {
-      return true;
+  // 首先检测元素边界框是否与选择框相交
+  const elementRect = getPenPathRectangle(element);
+  if (RectangleClient.isHit(selectionRect, elementRect)) {
+    // 边界框相交，进一步检测路径上的点
+    const absoluteAnchors = getAbsoluteAnchors(element);
+    
+    // 获取路径的采样点进行精确检测
+    const samplePoints = getPathSamplePoints(absoluteAnchors, element.closed);
+    
+    // 检测选择框是否包含任意一个采样点
+    for (const point of samplePoints) {
+      if (isPointInRectangle(point, selectionRect)) {
+        return true;
+      }
     }
-  }
-  
-  // 同时检测锚点
-  for (const anchor of element.anchors) {
-    if (RectangleClient.isHit(rectangle, anchor.point)) {
-      return true;
+    
+    // 同时检测锚点
+    for (const anchor of absoluteAnchors) {
+      if (isPointInRectangle(anchor.point, selectionRect)) {
+        return true;
+      }
     }
   }
   
@@ -140,6 +211,7 @@ export interface AnchorHitResult {
 
 /**
  * 检测点击是否命中锚点或控制柄
+ * 注意：使用绝对坐标进行检测
  */
 export function hitTestAnchor(
   element: PenPath,
@@ -148,9 +220,12 @@ export function hitTestAnchor(
 ): AnchorHitResult {
   const anchorRadius = ANCHOR_HIT_RADIUS / scale;
   const handleRadius = HANDLE_HIT_RADIUS / scale;
+  
+  // 使用绝对坐标进行检测
+  const absoluteAnchors = getAbsoluteAnchors(element);
 
-  for (let i = 0; i < element.anchors.length; i++) {
-    const anchor = element.anchors[i];
+  for (let i = 0; i < absoluteAnchors.length; i++) {
+    const anchor = absoluteAnchors[i];
 
     // 检测控制柄（优先级高于锚点）
     if (anchor.handleIn) {
@@ -293,4 +368,11 @@ export function updatePenPathPoints(element: PenPath): Point[] {
     [boundingBox.x, boundingBox.y],
     [boundingBox.x + boundingBox.width, boundingBox.y + boundingBox.height],
   ];
+}
+
+/**
+ * 获取选中的钢笔路径元素
+ */
+export function getSelectedPenPathElements(board: PlaitBoard): PenPath[] {
+  return getSelectedElements(board).filter((ele) => PenPath.isPenPath(ele)) as PenPath[];
 }

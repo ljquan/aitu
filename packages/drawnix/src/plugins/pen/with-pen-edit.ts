@@ -14,8 +14,11 @@ import {
   updateAnchorPosition,
   updateHandlePosition,
   updatePenPathPoints,
+  getAbsoluteAnchors,
+  anchorsToRelative,
 } from './utils';
 import { isPenPointerType } from './with-pen-create';
+import { getPathBoundingBox } from './bezier-utils';
 
 /**
  * 钢笔编辑状态
@@ -114,22 +117,34 @@ export const withPenEdit = (board: PlaitBoard) => {
 
       const element = state.editingElement;
       const { anchorIndex, handleType } = state.dragging;
-      let newAnchors = [...element.anchors];
+      
+      // 将相对坐标转换为绝对坐标进行编辑
+      let absoluteAnchors = getAbsoluteAnchors(element);
 
       if (handleType === 'anchor') {
-        // 移动锚点
-        newAnchors = updateAnchorPosition(newAnchors, anchorIndex, point);
+        // 移动锚点（使用绝对坐标）
+        absoluteAnchors = updateAnchorPosition(absoluteAnchors, anchorIndex, point);
       } else if (handleType === 'handleIn' || handleType === 'handleOut') {
-        // 移动控制柄
-        newAnchors = updateHandlePosition(newAnchors, anchorIndex, handleType, point);
+        // 移动控制柄（使用绝对坐标）
+        absoluteAnchors = updateHandlePosition(absoluteAnchors, anchorIndex, handleType, point);
       }
+      
+      // 计算新的包围盒
+      const boundingBox = getPathBoundingBox(absoluteAnchors, element.closed);
+      const newOrigin: Point = [boundingBox.x, boundingBox.y];
+      const newPoints: Point[] = [
+        newOrigin,
+        [boundingBox.x + boundingBox.width, boundingBox.y + boundingBox.height],
+      ];
+      
+      // 转换回相对坐标存储
+      const newAnchors = anchorsToRelative(absoluteAnchors, newOrigin);
 
       // 更新元素
       const elementIndex = board.children.findIndex(
         (el) => el.id === element.id
       );
       if (elementIndex >= 0) {
-        const newPoints = updatePenPathPoints({ ...element, anchors: newAnchors });
         Transforms.setNode(
           board,
           { anchors: newAnchors, points: newPoints },

@@ -100,8 +100,11 @@ function isValidPoint(point: [number, number] | undefined): boolean {
 
 /**
  * 根据锚点数组生成 SVG 路径数据
+ * @param anchors 锚点数组
+ * @param closed 是否闭合
+ * @param cornerRadius 圆角半径 (0-100)
  */
-export function generatePathFromAnchors(anchors: PenAnchor[], closed: boolean): string {
+export function generatePathFromAnchors(anchors: PenAnchor[], closed: boolean, cornerRadius: number = 0): string {
   // 过滤掉无效的锚点
   const validAnchors = anchors.filter(anchor => isValidPoint(anchor.point));
   
@@ -112,6 +115,19 @@ export function generatePathFromAnchors(anchors: PenAnchor[], closed: boolean): 
     return `M ${p[0]} ${p[1]} L ${p[0]} ${p[1]}`;
   }
 
+  // 如果没有圆角，使用原有逻辑
+  if (cornerRadius <= 0) {
+    return generatePathWithoutCornerRadius(validAnchors, closed);
+  }
+
+  // 有圆角时使用圆角生成逻辑
+  return generatePathWithCornerRadius(validAnchors, closed, cornerRadius);
+}
+
+/**
+ * 生成不带圆角的路径（原有逻辑）
+ */
+function generatePathWithoutCornerRadius(validAnchors: PenAnchor[], closed: boolean): string {
   const parts: string[] = [];
 
   // 起点
@@ -133,6 +149,246 @@ export function generatePathFromAnchors(anchors: PenAnchor[], closed: boolean): 
   }
 
   return parts.join(' ');
+}
+
+/**
+ * 生成带圆角的路径
+ * 对所有锚点应用圆角效果
+ */
+function generatePathWithCornerRadius(validAnchors: PenAnchor[], closed: boolean, cornerRadius: number): string {
+  const parts: string[] = [];
+  const n = validAnchors.length;
+  
+  // 计算每个锚点的入边和出边方向
+  // 对于有控制柄的锚点，使用控制柄方向；否则使用相邻锚点方向
+  const getEdgeVectors = (index: number) => {
+    const curr = validAnchors[index];
+    const prev = validAnchors[(index - 1 + n) % n];
+    const next = validAnchors[(index + 1) % n];
+    
+    // 入边方向：
+    // - 如果当前锚点有 handleIn，方向是从 handleIn 到锚点
+    // - 如果前一个锚点有 handleOut，方向是从 handleOut 到当前锚点
+    // - 否则是从前一个锚点到当前锚点
+    let inDir: Point;
+    if (curr.handleIn) {
+      // 从 handleIn 到锚点的方向
+      inDir = [
+        curr.point[0] - curr.handleIn[0],
+        curr.point[1] - curr.handleIn[1]
+      ];
+    } else if (prev.handleOut) {
+      // 从前一个锚点的 handleOut 到当前锚点
+      inDir = [
+        curr.point[0] - prev.handleOut[0],
+        curr.point[1] - prev.handleOut[1]
+      ];
+    } else {
+      // 从前一个锚点到当前锚点
+      inDir = [
+        curr.point[0] - prev.point[0],
+        curr.point[1] - prev.point[1]
+      ];
+    }
+    const inLen = Math.sqrt(inDir[0] * inDir[0] + inDir[1] * inDir[1]);
+    
+    // 出边方向：
+    // - 如果当前锚点有 handleOut，方向是从锚点到 handleOut
+    // - 如果下一个锚点有 handleIn，方向是从当前锚点到 handleIn
+    // - 否则是从当前锚点到下一个锚点
+    let outDir: Point;
+    if (curr.handleOut) {
+      // 从锚点到 handleOut 的方向
+      outDir = [
+        curr.handleOut[0] - curr.point[0],
+        curr.handleOut[1] - curr.point[1]
+      ];
+    } else if (next.handleIn) {
+      // 从当前锚点到下一个锚点的 handleIn
+      outDir = [
+        next.handleIn[0] - curr.point[0],
+        next.handleIn[1] - curr.point[1]
+      ];
+    } else {
+      // 从当前锚点到下一个锚点
+      outDir = [
+        next.point[0] - curr.point[0],
+        next.point[1] - curr.point[1]
+      ];
+    }
+    const outLen = Math.sqrt(outDir[0] * outDir[0] + outDir[1] * outDir[1]);
+    
+    return { inDir, inLen, outDir, outLen };
+  };
+
+  // 计算圆角的起点和终点
+  const getCornerPoints = (index: number, radiusPercent: number) => {
+    const curr = validAnchors[index];
+    const { inDir, inLen, outDir, outLen } = getEdgeVectors(index);
+    
+    // 计算最大圆角半径（边长的一半）
+    const maxRadius = Math.min(inLen / 2, outLen / 2);
+    // 将百分比转换为实际像素值 (0% = 0, 100% = maxRadius)
+    const actualRadius = (radiusPercent / 100) * maxRadius;
+    
+    if (actualRadius <= 0 || inLen === 0 || outLen === 0) {
+      return { start: curr.point, end: curr.point, hasCorner: false };
+    }
+    
+    // 圆角起点：沿入边方向回退（反方向）
+    const start: Point = [
+      curr.point[0] - (inDir[0] / inLen) * actualRadius,
+      curr.point[1] - (inDir[1] / inLen) * actualRadius
+    ];
+    
+    // 圆角终点：沿出边方向前进
+    const end: Point = [
+      curr.point[0] + (outDir[0] / outLen) * actualRadius,
+      curr.point[1] + (outDir[1] / outLen) * actualRadius
+    ];
+    
+    return { start, end, hasCorner: true, center: curr.point };
+  };
+
+  // 先计算所有锚点的圆角信息
+  type CornerInfo = {
+    index: number;
+    anchor: PenAnchor;
+    hasCorner: boolean;
+    start: Point;
+    end: Point;
+    center: Point;
+  };
+  
+  const corners: CornerInfo[] = validAnchors.map((anchor, i) => {
+    // 第一个和最后一个锚点在非闭合路径中不需要圆角
+    const needsCorner = closed || (i > 0 && i < n - 1);
+    
+    if (!needsCorner) {
+      return {
+        index: i,
+        anchor,
+        hasCorner: false,
+        start: anchor.point,
+        end: anchor.point,
+        center: anchor.point,
+      };
+    }
+    
+    const result = getCornerPoints(i, cornerRadius);
+    return {
+      index: i,
+      anchor,
+      hasCorner: result.hasCorner,
+      start: result.start,
+      end: result.end,
+      center: anchor.point,
+    };
+  });
+
+  // 开始生成路径
+  const firstCorner = corners[0];
+  
+  // 起点
+  if (closed && firstCorner.hasCorner) {
+    // 闭合路径从第一个圆角的终点开始（因为我们最后会画回来）
+    parts.push(`M ${firstCorner.end[0]} ${firstCorner.end[1]}`);
+  } else {
+    parts.push(`M ${firstCorner.anchor.point[0]} ${firstCorner.anchor.point[1]}`);
+  }
+
+  // 绘制从第一个点到后续点的路径
+  for (let i = 1; i < n; i++) {
+    const prevCorner = corners[i - 1];
+    const currCorner = corners[i];
+    const prevAnchor = validAnchors[i - 1];
+    const currAnchor = validAnchors[i];
+    
+    // 确定这段路径的起点（上一个锚点的圆角终点或锚点本身）
+    const segmentStartPoint = prevCorner.hasCorner ? prevCorner.end : prevAnchor.point;
+    
+    if (currCorner.hasCorner) {
+      // 画到当前圆角的起点
+      parts.push(generateSegmentBetweenPoints(
+        segmentStartPoint,
+        prevAnchor.handleOut,
+        currAnchor.handleIn,
+        currCorner.start
+      ));
+      // 画圆角（二次贝塞尔曲线）
+      parts.push(`Q ${currCorner.center[0]} ${currCorner.center[1]}, ${currCorner.end[0]} ${currCorner.end[1]}`);
+    } else {
+      // 直接画到锚点
+      parts.push(generateSegmentBetweenPoints(
+        segmentStartPoint,
+        prevAnchor.handleOut,
+        currAnchor.handleIn,
+        currAnchor.point
+      ));
+    }
+  }
+
+  // 如果闭合，画回到第一个点
+  if (closed && n > 1) {
+    const lastCorner = corners[n - 1];
+    const lastAnchor = validAnchors[n - 1];
+    const firstAnchor = validAnchors[0];
+    
+    const segmentStartPoint = lastCorner.hasCorner ? lastCorner.end : lastAnchor.point;
+    
+    if (firstCorner.hasCorner) {
+      // 画到第一个圆角的起点
+      parts.push(generateSegmentBetweenPoints(
+        segmentStartPoint,
+        lastAnchor.handleOut,
+        firstAnchor.handleIn,
+        firstCorner.start
+      ));
+      // 画第一个点的圆角
+      parts.push(`Q ${firstCorner.center[0]} ${firstCorner.center[1]}, ${firstCorner.end[0]} ${firstCorner.end[1]}`);
+    } else {
+      // 直接画到第一个点
+      parts.push(generateSegmentBetweenPoints(
+        segmentStartPoint,
+        lastAnchor.handleOut,
+        firstAnchor.handleIn,
+        firstAnchor.point
+      ));
+    }
+    parts.push('Z');
+  }
+
+  return parts.join(' ');
+}
+
+/**
+ * 生成两个点之间的路径段，考虑控制柄
+ */
+function generateSegmentBetweenPoints(
+  startPoint: Point,
+  handleOut: Point | undefined,
+  handleIn: Point | undefined,
+  endPoint: Point
+): string {
+  // 检查是否有有效的控制柄
+  const hasHandleOut = handleOut && 
+    (handleOut[0] !== startPoint[0] || handleOut[1] !== startPoint[1]);
+  const hasHandleIn = handleIn && 
+    (handleIn[0] !== endPoint[0] || handleIn[1] !== endPoint[1]);
+  
+  if (!hasHandleOut && !hasHandleIn) {
+    // 直线
+    return `L ${endPoint[0]} ${endPoint[1]}`;
+  } else if (hasHandleOut && hasHandleIn) {
+    // 三次贝塞尔曲线
+    return `C ${handleOut![0]} ${handleOut![1]}, ${handleIn![0]} ${handleIn![1]}, ${endPoint[0]} ${endPoint[1]}`;
+  } else if (hasHandleOut) {
+    // 二次贝塞尔曲线（只有出控制柄）
+    return `Q ${handleOut![0]} ${handleOut![1]}, ${endPoint[0]} ${endPoint[1]}`;
+  } else {
+    // 二次贝塞尔曲线（只有入控制柄）
+    return `Q ${handleIn![0]} ${handleIn![1]}, ${endPoint[0]} ${endPoint[1]}`;
+  }
 }
 
 /**

@@ -15,7 +15,7 @@ import {
 } from '@plait/draw';
 import { getTextMarksByElement } from '@plait/text-plugins';
 import { Freehand } from '../plugins/freehand/type';
-import { PenPath } from '../plugins/pen/type';
+import { PenPath, PenThemeColors } from '../plugins/pen/type';
 import {
   getStrokeColorByElement as getStrokeColorByFreehandElement,
   getFillByElement as getFillByFreehandElement,
@@ -39,6 +39,10 @@ export const getCurrentFill = (board: PlaitBoard, element: PlaitElement) => {
     }
     if (Freehand.isFreehand(element)) {
       currentFill = getFillByFreehandElement(board, element);
+    } else if (PenPath.isPenPath(element)) {
+      // PenPath 使用主题默认填充色
+      const themeColors = PenThemeColors[board.theme.themeColorMode];
+      currentFill = element.fill || (element.closed ? themeColors?.fill : 'none') || '#FFFFFF';
     } else if (
       PlaitDrawElement.isDrawElement(element) ||
       PlaitDrawElement.isCustomGeometryElement(board, element)
@@ -60,6 +64,10 @@ export const getCurrentStrokeColor = (
     }
     if (Freehand.isFreehand(element)) {
       strokeColor = getStrokeColorByFreehandElement(board, element);
+    } else if (PenPath.isPenPath(element)) {
+      // PenPath 使用主题默认颜色
+      const themeColors = PenThemeColors[board.theme.themeColorMode];
+      strokeColor = element.strokeColor || themeColors?.strokeColor || '#000000';
     } else if (
       PlaitDrawElement.isDrawElement(element) ||
       PlaitDrawElement.isCustomGeometryElement(board, element)

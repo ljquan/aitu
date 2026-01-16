@@ -2,6 +2,7 @@ import { PlaitBoard, createG } from '@plait/core';
 import { Generator, StrokeStyle } from '@plait/common';
 import { PenPath, PenAnchor, ANCHOR_HIT_RADIUS, HANDLE_HIT_RADIUS } from './type';
 import { generatePathFromAnchors } from './bezier-utils';
+import { getAbsoluteAnchors } from './utils';
 
 /**
  * 获取 stroke-dasharray 值
@@ -46,8 +47,10 @@ export class PenGenerator extends Generator<PenPath> {
     const g = createG();
     g.classList.add('pen-path');
 
-    // 生成路径
-    const pathData = generatePathFromAnchors(element.anchors, element.closed);
+    // 使用绝对坐标生成路径（支持圆角）
+    const absoluteAnchors = getAbsoluteAnchors(element);
+    const cornerRadius = element.cornerRadius || 0;
+    const pathData = generatePathFromAnchors(absoluteAnchors, element.closed, cornerRadius);
     const strokeWidth = element.strokeWidth || 2;
 
     // 创建路径元素
@@ -84,7 +87,8 @@ export function drawPenEditOverlay(
   const g = createG();
   g.classList.add('pen-edit-overlay');
 
-  const anchors = element.anchors;
+  // 使用绝对坐标
+  const anchors = getAbsoluteAnchors(element);
 
   for (let i = 0; i < anchors.length; i++) {
     const anchor = anchors[i];
@@ -189,18 +193,104 @@ function createHandleLine(
 }
 
 /**
+ * 对齐信息接口
+ */
+interface AlignmentInfo {
+  horizontal: boolean;
+  vertical: boolean;
+  horizontalRefPoint?: [number, number] | null;
+  verticalRefPoint?: [number, number] | null;
+  referencePoint: [number, number] | null;
+}
+
+/** 辅助线延伸长度 */
+const GUIDE_LINE_EXTENSION = 2000;
+
+/**
+ * 绘制对齐辅助线
+ */
+function drawAlignmentGuides(
+  g: SVGGElement,
+  currentPoint: [number, number],
+  alignment: AlignmentInfo
+): void {
+  const guideColor = '#ff4d4f'; // 红色辅助线
+  const guideWidth = 1;
+
+  // 垂直对齐线（X 坐标相同）- 连接到垂直对齐的参考点
+  if (alignment.vertical && alignment.verticalRefPoint) {
+    const refPoint = alignment.verticalRefPoint;
+    const verticalLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    verticalLine.setAttribute('x1', String(currentPoint[0]));
+    verticalLine.setAttribute('y1', String(Math.min(currentPoint[1], refPoint[1]) - 50));
+    verticalLine.setAttribute('x2', String(currentPoint[0]));
+    verticalLine.setAttribute('y2', String(Math.max(currentPoint[1], refPoint[1]) + 50));
+    verticalLine.setAttribute('stroke', guideColor);
+    verticalLine.setAttribute('stroke-width', String(guideWidth));
+    verticalLine.setAttribute('stroke-dasharray', '4,4');
+    verticalLine.classList.add('pen-alignment-guide');
+    g.appendChild(verticalLine);
+
+    // 在参考点位置绘制小圆点标记
+    const refMarker = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    refMarker.setAttribute('cx', String(refPoint[0]));
+    refMarker.setAttribute('cy', String(refPoint[1]));
+    refMarker.setAttribute('r', '3');
+    refMarker.setAttribute('fill', guideColor);
+    refMarker.setAttribute('opacity', '0.6');
+    refMarker.classList.add('pen-alignment-marker');
+    g.appendChild(refMarker);
+  }
+
+  // 水平对齐线（Y 坐标相同）- 连接到水平对齐的参考点
+  if (alignment.horizontal && alignment.horizontalRefPoint) {
+    const refPoint = alignment.horizontalRefPoint;
+    const horizontalLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    horizontalLine.setAttribute('x1', String(Math.min(currentPoint[0], refPoint[0]) - 50));
+    horizontalLine.setAttribute('y1', String(currentPoint[1]));
+    horizontalLine.setAttribute('x2', String(Math.max(currentPoint[0], refPoint[0]) + 50));
+    horizontalLine.setAttribute('y2', String(currentPoint[1]));
+    horizontalLine.setAttribute('stroke', guideColor);
+    horizontalLine.setAttribute('stroke-width', String(guideWidth));
+    horizontalLine.setAttribute('stroke-dasharray', '4,4');
+    horizontalLine.classList.add('pen-alignment-guide');
+    g.appendChild(horizontalLine);
+
+    // 在参考点位置绘制小圆点标记（如果和垂直参考点不同）
+    if (!alignment.verticalRefPoint || 
+        alignment.horizontalRefPoint[0] !== alignment.verticalRefPoint[0] ||
+        alignment.horizontalRefPoint[1] !== alignment.verticalRefPoint[1]) {
+      const refMarker = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      refMarker.setAttribute('cx', String(refPoint[0]));
+      refMarker.setAttribute('cy', String(refPoint[1]));
+      refMarker.setAttribute('r', '3');
+      refMarker.setAttribute('fill', guideColor);
+      refMarker.setAttribute('opacity', '0.6');
+      refMarker.classList.add('pen-alignment-marker');
+      g.appendChild(refMarker);
+    }
+  }
+}
+
+/**
  * 绘制路径预览（创建过程中）
  */
 export function drawPenPreview(
   anchors: PenAnchor[],
   currentPoint: [number, number] | null,
   strokeColor: string = '#1890ff',
-  strokeWidth: number = 2
+  strokeWidth: number = 2,
+  alignment?: AlignmentInfo
 ): SVGGElement {
   const g = createG();
   g.classList.add('pen-preview');
 
   if (anchors.length === 0) return g;
+
+  // 绘制对齐辅助线（先绘制，在最底层）
+  if (currentPoint && isValidPoint(currentPoint) && alignment && (alignment.horizontal || alignment.vertical)) {
+    drawAlignmentGuides(g, currentPoint, alignment);
+  }
 
   // 绘制已确定的路径
   if (anchors.length > 0) {

@@ -31,6 +31,7 @@ export interface Translations {
   'toolbar.anchorCorner': string;
   'toolbar.anchorSmooth': string;
   'toolbar.anchorSymmetric': string;
+  'toolbar.cornerRadius': string;
 
   // Zoom controls
   'zoom.in': string;
@@ -175,6 +176,7 @@ const translations: Record<Language, Translations> = {
     'toolbar.anchorCorner': '角点',
     'toolbar.anchorSmooth': '平滑点',
     'toolbar.anchorSymmetric': '对称点',
+    'toolbar.cornerRadius': '圆角',
     'toolbar.arrow': '箭头 — A',
     'toolbar.shape': '形状',
     'toolbar.image': '图片 — Cmd+U',
@@ -331,6 +333,7 @@ const translations: Record<Language, Translations> = {
     'toolbar.anchorCorner': 'Corner',
     'toolbar.anchorSmooth': 'Smooth',
     'toolbar.anchorSymmetric': 'Symmetric',
+    'toolbar.cornerRadius': 'Corner Radius',
     'toolbar.arrow': 'Arrow — A',
     'toolbar.shape': 'Shape',
     'toolbar.image': 'Image — Cmd+U',
