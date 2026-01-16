@@ -42,6 +42,7 @@ class WorkspaceService {
   private state: WorkspaceState;
   private events$: Subject<WorkspaceEvent> = new Subject();
   private initialized: boolean = false;
+  private initializationPromise: Promise<void> | null = null;
 
   private constructor() {
     this.state = {
@@ -64,7 +65,17 @@ class WorkspaceService {
    */
   async initialize(): Promise<void> {
     if (this.initialized) return;
+    
+    // 如果正在初始化，等待完成
+    if (this.initializationPromise) {
+      return this.initializationPromise;
+    }
 
+    this.initializationPromise = this.doInitialize();
+    return this.initializationPromise;
+  }
+
+  private async doInitialize(): Promise<void> {
     try {
       await workspaceStorageService.initialize();
 
@@ -95,8 +106,21 @@ class WorkspaceService {
       // });
     } catch (error) {
       console.error('[WorkspaceService] Failed to initialize:', error);
+      this.initializationPromise = null;
       throw error;
     }
+  }
+
+  /**
+   * Wait for initialization to complete
+   */
+  async waitForInitialization(): Promise<void> {
+    if (this.initialized) return;
+    if (this.initializationPromise) {
+      return this.initializationPromise;
+    }
+    // 如果还没开始初始化，启动初始化
+    return this.initialize();
   }
 
   // ========== Folder Operations ==========
