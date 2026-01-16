@@ -5,6 +5,7 @@
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import classNames from 'classnames';
+import { debounce } from '@aitu/utils';
 import { useI18n } from '../../i18n';
 import { MessagePlugin } from 'tdesign-react';
 import { Image, Upload, Grid, ChevronDown, ChevronUp } from 'lucide-react';
@@ -14,20 +15,6 @@ import { MediaLibraryModal } from '../media-library/MediaLibraryModal';
 import { AssetType, SelectionMode } from '../../types/asset.types';
 import type { Asset } from '../../types/asset.types';
 import './image-fill-panel.scss';
-
-// 简单的防抖函数
-function debounce<T extends (...args: any[]) => void>(fn: T, delay: number): T {
-  let timeoutId: ReturnType<typeof setTimeout> | null = null;
-  return ((...args: Parameters<T>) => {
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-    }
-    timeoutId = setTimeout(() => {
-      fn(...args);
-      timeoutId = null;
-    }, delay);
-  }) as T;
-}
 
 export interface ImageFillPanelProps {
   value?: ImageFillConfig;
@@ -78,7 +65,7 @@ export const ImageFillPanel: React.FC<ImageFillPanelProps> = ({
   const debouncedOnChange = useMemo(
     () => debounce((newConfig: ImageFillConfig) => {
       onChange?.(newConfig);
-    }, 50), // 50ms 防抖，平衡响应性和性能
+    }, 16), // 16ms 防抖（约一帧），平衡实时性和性能
     [onChange]
   );
 

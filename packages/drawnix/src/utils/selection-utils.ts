@@ -438,13 +438,51 @@ export const findElementsOverlappingWithGraphics = (board: PlaitBoard, elements:
 };
 
 /**
+ * 将图片 URL 转换为 base64 数据 URL
+ * 支持普通 URL、虚拟路径（通过 fetch）和已有的 data URL
+ */
+const convertImageUrlToBase64 = async (imageUrl: string): Promise<string> => {
+  // 如果已经是 data URL，直接返回
+  if (imageUrl.startsWith('data:')) {
+    return imageUrl;
+  }
+
+  try {
+    // 通过 fetch 获取图片（会被 Service Worker 拦截处理虚拟路径）
+    const response = await fetch(imageUrl);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch image: ${response.status}`);
+    }
+    const blob = await response.blob();
+
+    // 转换为 base64
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result === 'string') {
+          resolve(reader.result);
+        } else {
+          reject(new Error('Failed to convert to base64'));
+        }
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch (error) {
+    // 转换失败时返回原 URL
+    return imageUrl;
+  }
+};
+
+/**
  * 为 toImage 创建使用 userSpaceOnUse 坐标的图片填充 pattern
  * 因为原始 pattern 使用 objectBoundingBox，在克隆时坐标系会出问题
  */
 const createUserSpacePatternForToImage = (
   config: ImageFillConfig,
   id: string,
-  elementRect: RectangleClient
+  elementRect: RectangleClient,
+  base64ImageUrl?: string
 ): SVGPatternElement => {
   const pattern = document.createElementNS('http://www.w3.org/2000/svg', 'pattern');
   pattern.setAttribute('id', id);
@@ -458,9 +496,9 @@ const createUserSpacePatternForToImage = (
 
   const { x, y, width: elementWidth, height: elementHeight } = elementRect;
 
-  // 创建 image 元素
+  // 创建 image 元素，优先使用转换后的 base64 URL
   const image = document.createElementNS('http://www.w3.org/2000/svg', 'image');
-  image.setAttribute('href', config.imageUrl);
+  image.setAttribute('href', base64ImageUrl || config.imageUrl);
   image.setAttribute('preserveAspectRatio', 'none');
 
   switch (config.mode) {
@@ -511,26 +549,35 @@ const createUserSpacePatternForToImage = (
 
 /**
  * 将渐变和图片填充定义复制到元素 G 内部，以便 toImage 克隆时能包含填充
- * 对于图片填充，需要转换为 userSpaceOnUse 坐标系
+ * 对于图片填充，需要转换为 userSpaceOnUse 坐标系，并将 URL 转为 base64
  * 返回清理函数
  */
-const copyFillDefsToElements = (board: PlaitBoard, elements: PlaitElement[]): (() => void) => {
+const copyFillDefsToElements = async (board: PlaitBoard, elements: PlaitElement[]): Promise<() => void> => {
   const host = PlaitBoard.getHost(board);
   const defs = host?.querySelector('defs');
   if (!defs) return () => {};
 
   const addedDefs: { element: Element; defsClone: Element }[] = [];
 
-  elements.forEach((element) => {
+  // 收集需要处理的图片填充元素及其 base64 URL
+  const imageFillTasks: {
+    element: PlaitElement;
+    fillConfig: any;
+    elementG: Element;
+    defId: string;
+  }[] = [];
+
+  // 第一遍：收集需要处理的元素
+  for (const element of elements) {
     // 检查元素是否使用渐变或图片填充
     const fillConfig = (element as any).fillConfig;
     if (!fillConfig || !isFillConfig(fillConfig)) {
-      return;
+      continue;
     }
 
     // 只处理渐变和图片填充
     if (fillConfig.type !== 'gradient' && fillConfig.type !== 'image') {
-      return;
+      continue;
     }
 
     // 获取元素的 G 节点
@@ -540,35 +587,47 @@ const copyFillDefsToElements = (board: PlaitBoard, elements: PlaitElement[]): ((
     } catch {
       // 忽略
     }
-    if (!elementG) return;
+    if (!elementG) continue;
 
     // 根据填充类型获取定义 ID
     const defType = fillConfig.type === 'gradient' ? 'gradient' : 'pattern';
     const defId = generateFillDefId(element.id, defType);
     const fillDef = defs.querySelector(`#${defId}`);
-    if (!fillDef) return;
-
-    // 创建一个 defs 容器
-    const defsClone = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+    if (!fillDef) continue;
 
     if (fillConfig.type === 'image' && fillConfig.image) {
-      // 对于图片填充，需要重新创建使用 userSpaceOnUse 坐标的 pattern
-      // 因为 objectBoundingBox 在 toImage 克隆时坐标系会出问题
+      // 图片填充需要异步处理
+      imageFillTasks.push({ element, fillConfig, elementG, defId });
+    } else {
+      // 渐变填充直接克隆
+      const defsClone = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+      defsClone.appendChild(fillDef.cloneNode(true));
+      elementG.insertBefore(defsClone, elementG.firstChild);
+      addedDefs.push({ element: elementG, defsClone });
+    }
+  }
+
+  // 第二遍：并行处理所有图片填充（转换 URL 为 base64）
+  await Promise.all(
+    imageFillTasks.map(async ({ element, fillConfig, elementG, defId }) => {
+      // 将图片 URL 转换为 base64（支持虚拟路径和外部 URL）
+      const base64Url = await convertImageUrlToBase64(fillConfig.image.imageUrl);
+
+      // 创建使用 userSpaceOnUse 坐标的 pattern
       const elementRect = getRectangleByElements(board, [element], false);
       const newPattern = createUserSpacePatternForToImage(
         fillConfig.image,
         defId,
-        elementRect
+        elementRect,
+        base64Url
       );
-      defsClone.appendChild(newPattern);
-    } else {
-      // 渐变填充直接克隆
-      defsClone.appendChild(fillDef.cloneNode(true));
-    }
 
-    elementG.insertBefore(defsClone, elementG.firstChild);
-    addedDefs.push({ element: elementG, defsClone });
-  });
+      const defsClone = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+      defsClone.appendChild(newPattern);
+      elementG.insertBefore(defsClone, elementG.firstChild);
+      addedDefs.push({ element: elementG, defsClone });
+    })
+  );
 
   // 返回清理函数
   return () => {
@@ -610,7 +669,8 @@ export const convertElementsToImage = async (board: PlaitBoard, elements: PlaitE
 
     // 将渐变和图片填充定义复制到元素 G 内部，以便 toImage 克隆时能包含填充
     // Plait 的 cloneSvg 使用浅拷贝 SVG 根元素，不包含 <defs>，导致渐变/图片填充丢失
-    const cleanupFillDefs = copyFillDefsToElements(board, sortedElements);
+    // 对于图片填充，需要将 URL 转换为 base64 以支持虚拟路径和外部 URL
+    const cleanupFillDefs = await copyFillDefsToElements(board, sortedElements);
 
     let imageDataUrl: string | undefined;
     try {

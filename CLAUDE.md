@@ -1216,6 +1216,80 @@ useEffect(() => {
 - `onPointerDown` 清除计时器（点击时立即响应，不等待延迟）
 - `useEffect` 清理函数确保组件卸载时清除计时器
 
+#### 优先使用项目已有的工具函数
+
+**场景**: 需要使用 debounce、throttle 等常见工具函数时
+
+❌ **错误示例**:
+```typescript
+// 错误：在组件内部自己实现 debounce
+function debounce<T extends (...args: any[]) => void>(fn: T, delay: number): T {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  return ((...args: Parameters<T>) => {
+    if (timeoutId) clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => fn(...args), delay);
+  }) as T;
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：使用 lodash 的 debounce/throttle
+import { debounce, throttle } from 'lodash';
+
+// 或使用项目的 @aitu/utils 包
+import { debounce } from '@aitu/utils';
+```
+
+**可用的工具函数来源**:
+- `lodash`: `debounce`, `throttle`, `cloneDeep`, `merge` 等
+- `@aitu/utils`: `debounce` 等项目共享工具函数
+
+**原因**: 重复实现常见工具函数会增加代码体积，且可能存在边界情况处理不完善的问题。项目已有的工具函数经过测试和优化，应优先使用。
+
+#### 滑块等连续输入控件的更新策略
+
+**场景**: 滑块拖动时触发昂贵操作（如 SVG pattern 重新生成、Canvas 重绘）
+
+❌ **错误示例**:
+```typescript
+// 错误：每次滑块变化都立即触发外部回调，导致频繁重绘和抖动
+const handleSliderChange = (value: number) => {
+  setConfig({ ...config, scale: value });
+  onChange?.({ ...config, scale: value }); // 每次都触发，造成性能问题
+};
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：内部状态立即更新保持 UI 响应，外部回调使用节流减少重绘
+import { throttle } from 'lodash';
+
+// 节流版本的 onChange，减少 SVG pattern 重新生成频率
+const throttledOnChange = useMemo(
+  () => throttle((newConfig: ImageFillConfig) => {
+    onChange?.(newConfig);
+  }, 150), // 150ms 节流，平衡实时性和性能
+  [onChange]
+);
+
+// 滑块专用的更新函数
+const updateConfigThrottled = useCallback(
+  (updates: Partial<ImageFillConfig>) => {
+    const newConfig = { ...config, ...updates };
+    setConfig(newConfig);        // 立即更新内部状态（UI 响应）
+    throttledOnChange(newConfig); // 节流触发外部回调（性能优化）
+  },
+  [config, throttledOnChange]
+);
+```
+
+**关键点**:
+- 内部状态 (`setConfig`) 立即更新，保证滑块 UI 的即时响应
+- 外部回调 (`onChange`) 使用 `throttle`（节流），减少昂贵操作的执行频率
+- 节流时间根据操作开销选择：轻量操作 50-100ms，重量操作（SVG/Canvas）100-200ms
+- 使用 `useMemo` 包装 throttle 函数，避免每次渲染创建新实例
+
 ### CSS/SCSS 规范
 - 使用 BEM 命名规范
 - 优先使用设计系统 CSS 变量
