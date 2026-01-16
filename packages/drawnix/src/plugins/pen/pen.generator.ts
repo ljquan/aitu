@@ -78,54 +78,6 @@ export class PenGenerator extends Generator<PenPath> {
 }
 
 /**
- * 绘制锚点和控制柄的编辑器覆盖层
- */
-export function drawPenEditOverlay(
-  element: PenPath,
-  selectedAnchorIndex: number = -1
-): SVGGElement {
-  const g = createG();
-  g.classList.add('pen-edit-overlay');
-
-  // 使用绝对坐标
-  const anchors = getAbsoluteAnchors(element);
-
-  for (let i = 0; i < anchors.length; i++) {
-    const anchor = anchors[i];
-    const isSelected = i === selectedAnchorIndex;
-
-    // 跳过无效锚点
-    if (!isValidPoint(anchor.point)) continue;
-
-    // 绘制控制柄连线
-    if (anchor.handleIn && isValidPoint(anchor.handleIn)) {
-      const line = createHandleLine(anchor.point, anchor.handleIn);
-      g.appendChild(line);
-    }
-    if (anchor.handleOut && isValidPoint(anchor.handleOut)) {
-      const line = createHandleLine(anchor.point, anchor.handleOut);
-      g.appendChild(line);
-    }
-
-    // 绘制控制柄点
-    if (anchor.handleIn && isValidPoint(anchor.handleIn)) {
-      const handle = createHandlePoint(anchor.handleIn);
-      g.appendChild(handle);
-    }
-    if (anchor.handleOut && isValidPoint(anchor.handleOut)) {
-      const handle = createHandlePoint(anchor.handleOut);
-      g.appendChild(handle);
-    }
-
-    // 绘制锚点
-    const anchorPoint = createAnchorPoint(anchor, isSelected);
-    g.appendChild(anchorPoint);
-  }
-
-  return g;
-}
-
-/**
  * 创建锚点图形
  */
 function createAnchorPoint(anchor: PenAnchor, isSelected: boolean): SVGElement {

@@ -1,13 +1,12 @@
 /**
- * With Tool Resize Plugin
+ * With Freehand Resize Plugin
  *
- * 实现工具元素的拖拽缩放功能
+ * 实现手绘元素的拖拽缩放功能
  * 使用 Plait 的 withResize API
  */
 
 import {
   PlaitBoard,
-  PlaitPlugin,
   Point,
   RectangleClient,
   getSelectedElements,
@@ -21,17 +20,16 @@ import {
   getRotatedResizeCursorClassByAngle,
   RESIZE_HANDLE_DIAMETER,
 } from '@plait/common';
-import { PlaitTool } from '../types/toolbox.types';
-import { isToolElement } from './with-tool';
+import { Freehand } from './type';
+import { getFreehandRectangle } from './utils';
 import {
   ResizeHandle,
   calculateResizedRect,
   getShiftKeyState,
-} from '../utils/resize-utils';
+} from '../../utils/resize-utils';
 
 /**
  * 命中测试辅助函数 - 检测点是否在缩放手柄上
- * 参考 @plait/draw 的 getHitRectangleResizeHandleRef 实现
  */
 function getHitRectangleResizeHandleRef(
   board: PlaitBoard,
@@ -46,7 +44,6 @@ function getHitRectangleResizeHandleRef(
   );
 
   if (angle) {
-    // 如果有旋转角度,需要将点旋转回去再进行碰撞检测
     const rotatedPoint = rotatePoint(point, centerPoint, -angle);
     let result = resizeHandleRefs.find((resizeHandleRef) => {
       return RectangleClient.isHit(
@@ -55,7 +52,6 @@ function getHitRectangleResizeHandleRef(
       );
     });
     if (result) {
-      // 根据旋转角度调整光标样式
       result.cursorClass = getRotatedResizeCursorClassByAngle(
         result.cursorClass,
         angle
@@ -73,7 +69,7 @@ function getHitRectangleResizeHandleRef(
 }
 
 /**
- * 旋转点 - 简化版实现
+ * 旋转点
  */
 function rotatePoint(point: Point, center: Point, angle: number): Point {
   const rad = (angle * Math.PI) / 180;
@@ -90,39 +86,40 @@ function rotatePoint(point: Point, center: Point, angle: number): Point {
 }
 
 /**
+ * 获取选中的单个 Freehand 元素
+ */
+function getSelectedFreehand(board: PlaitBoard): Freehand | null {
+  const selectedElements = getSelectedElements(board);
+  if (selectedElements.length === 1 && Freehand.isFreehand(selectedElements[0])) {
+    return selectedElements[0] as Freehand;
+  }
+  return null;
+}
+
+/**
  * 判断当前选中的元素是否可以缩放
  */
 function canResize(board: PlaitBoard): boolean {
-  const selectedElements = getSelectedElements(board);
-
-  // 只有当选中单个工具元素时才能缩放
-  if (selectedElements.length !== 1) {
-    return false;
-  }
-
-  return isToolElement(selectedElements[0]);
+  return getSelectedFreehand(board) !== null;
 }
 
 /**
  * 命中测试 - 检测鼠标是否点击到缩放手柄
  */
 function hitTest(board: PlaitBoard, point: Point) {
-  const selectedElements = getSelectedElements(board);
-
-  if (selectedElements.length !== 1 || !isToolElement(selectedElements[0])) {
+  const freehand = getSelectedFreehand(board);
+  if (!freehand) {
     return null;
   }
 
-  const toolElement = selectedElements[0] as PlaitTool;
-  const rectangle = RectangleClient.getRectangleByPoints(toolElement.points);
-  const angle = toolElement.angle || 0;
+  const rectangle = getFreehandRectangle(freehand);
+  const angle = freehand.angle || 0;
 
-  // 检测是否点击到缩放手柄
   const handleRef = getHitRectangleResizeHandleRef(board, rectangle, point, angle);
 
   if (handleRef) {
     return {
-      element: toolElement,
+      element: freehand,
       rectangle,
       handle: handleRef.handle,
       cursorClass: handleRef.cursorClass,
@@ -133,18 +130,40 @@ function hitTest(board: PlaitBoard, point: Point) {
 }
 
 /**
+ * 缩放路径点
+ */
+function scalePoints(
+  points: Point[],
+  originalRect: RectangleClient,
+  newRect: RectangleClient
+): Point[] {
+  const scaleX = newRect.width / originalRect.width;
+  const scaleY = newRect.height / originalRect.height;
+  
+  return points.map((p) => {
+    // 计算点相对于原始矩形左上角的相对位置
+    const relX = p[0] - originalRect.x;
+    const relY = p[1] - originalRect.y;
+    // 缩放并移动到新位置
+    return [
+      newRect.x + relX * scaleX,
+      newRect.y + relY * scaleY,
+    ] as Point;
+  });
+}
+
+/**
  * 缩放回调 - 当用户拖拽缩放手柄时调用
  */
 function onResize(
   board: PlaitBoard,
-  resizeRef: ResizeRef<PlaitTool, ResizeHandle>,
+  resizeRef: ResizeRef<Freehand, ResizeHandle>,
   resizeState: ResizeState
 ): void {
   const { element, rectangle: startRectangle, handle } = resizeRef;
   const { startPoint, endPoint } = resizeState;
 
   if (!startRectangle) {
-    console.warn('startRectangle is undefined');
     return;
   }
 
@@ -159,14 +178,11 @@ function onResize(
     dx,
     dy,
     getShiftKeyState(), // Shift 键锁定比例
-    100 // 最小尺寸
+    10 // 最小尺寸
   );
 
-  // 计算新的 points
-  const newPoints: [Point, Point] = [
-    [newRect.x, newRect.y],
-    [newRect.x + newRect.width, newRect.y + newRect.height],
-  ];
+  // 缩放路径点
+  const scaledPoints = scalePoints(element.points, startRectangle, newRect);
 
   // 查找元素路径
   const path = board.children.findIndex((el: any) => el.id === element.id);
@@ -176,26 +192,19 @@ function onResize(
     Transforms.setNode(
       board,
       {
-        points: newPoints,
-      } as Partial<PlaitTool>,
+        points: scaledPoints,
+      } as Partial<Freehand>,
       [path]
     );
   }
 }
 
 /**
- * 工具缩放插件
- *
- * 使用 Plait 的 withResize 高阶函数实现缩放功能
+ * 手绘元素缩放插件
  */
-export const withToolResize: PlaitPlugin = (board: PlaitBoard) => {
-  // 使用 Plait 的 withResize 高阶函数
-  // 它会自动处理:
-  // 1. 鼠标悬停时显示对应方向的光标
-  // 2. 拖拽时显示缩放预览
-  // 3. 缩放过程中的所有交互逻辑
-  return withResize<PlaitTool, ResizeHandle>(board, {
-    key: 'tool-elements',
+export const withFreehandResize = (board: PlaitBoard) => {
+  return withResize<Freehand, ResizeHandle>(board, {
+    key: 'freehand',
     canResize: () => canResize(board),
     hitTest: (point: Point) => hitTest(board, point),
     onResize: (resizeRef, resizeState) => onResize(board, resizeRef, resizeState),

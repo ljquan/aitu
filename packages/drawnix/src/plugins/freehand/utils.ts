@@ -18,7 +18,7 @@ import {
   isHitPolyLine,
   isRectangleHitRotatedPoints,
 } from '@plait/draw';
-import { StrokeStyle } from '@plait/common';
+import { FreehandStrokeStyle } from './freehand-settings';
 
 export function getFreehandPointers() {
   return [FreehandShape.feltTipPen, FreehandShape.eraser];
@@ -46,7 +46,7 @@ export function getFreehandRectangle(element: Freehand): RectangleClient {
 export interface CreateFreehandOptions {
   strokeWidth?: number;
   strokeColor?: string;
-  strokeStyle?: StrokeStyle;
+  strokeStyle?: FreehandStrokeStyle;
   pressures?: number[];
 }
 

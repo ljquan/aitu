@@ -398,6 +398,15 @@ export const StrokeStyleDotedIcon = createIcon(
   </svg>
 );
 
+export const StrokeStyleDoubleIcon = createIcon(
+  <svg viewBox="0 0 24 32" xmlns="http://www.w3.org/2000/svg">
+    <g transform="translate(0 12)" fillRule="evenodd" fill="none">
+      <path d="M0 0h24v2H0z" fill="currentColor"></path>
+      <path d="M0 4h24v2H0z" fill="currentColor"></path>
+    </g>
+  </svg>
+);
+
 export const FontColorIcon: React.FC<{ currentColor?: string }> = ({
   currentColor,
 }) => {
@@ -849,5 +858,20 @@ export const BackupRestoreIcon = createIcon(
       <path d="M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83" />
       <circle cx="12" cy="12" r="3" />
     </g>
+  </svg>
+);
+
+// 锁定/解锁图标（用于等比缩放）
+export const LockIcon = createIcon(
+  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+  </svg>
+);
+
+export const UnlockIcon = createIcon(
+  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+    <path d="M7 11V7a5 5 0 0 1 9.9-1" />
   </svg>
 );

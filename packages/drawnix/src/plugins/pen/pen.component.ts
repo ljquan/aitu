@@ -3,7 +3,6 @@ import {
   PlaitPluginElementContext,
   OnContextChanged,
   ACTIVE_STROKE_WIDTH,
-  isSelectionMoving,
 } from '@plait/core';
 import {
   ActiveGenerator,
@@ -12,7 +11,7 @@ import {
   hasResizeHandle,
 } from '@plait/common';
 import { PenPath } from './type';
-import { PenGenerator, drawPenEditOverlay } from './pen.generator';
+import { PenGenerator } from './pen.generator';
 import { getPenPathRectangle } from './utils';
 
 /**
@@ -32,7 +31,6 @@ export class PenPathComponent
 
   activeGenerator!: ActiveGenerator<PenPath>;
   generator!: PenGenerator;
-  editOverlayG: SVGGElement | null = null;
 
   initializeGenerator() {
     this.activeGenerator = createActiveGenerator(this.board, {
@@ -60,7 +58,6 @@ export class PenPathComponent
         PlaitBoard.getActiveHost(this.board),
         { selected: this.selected }
       );
-      this.updateEditOverlay();
     }
   }
 
@@ -68,9 +65,6 @@ export class PenPathComponent
     value: PlaitPluginElementContext<PenPath, PlaitBoard>,
     previous: PlaitPluginElementContext<PenPath, PlaitBoard>
   ) {
-    // 检查是否正在移动
-    const isMoving = isSelectionMoving(this.board);
-    
     // 检查元素或主题是否变化
     if (value.element !== previous.element || value.hasThemeChanged) {
       this.generator.processDrawing(this.element, this.getElementG());
@@ -79,13 +73,6 @@ export class PenPathComponent
         PlaitBoard.getActiveHost(this.board),
         { selected: this.selected }
       );
-      // 移动时不更新编辑覆盖层（避免性能问题）
-      if (!isMoving) {
-        this.updateEditOverlay();
-      } else {
-        // 移动时隐藏编辑覆盖层
-        this.hideEditOverlay();
-      }
     } else {
       const needUpdate = value.selected !== previous.selected;
       if (needUpdate || value.selected) {
@@ -94,47 +81,12 @@ export class PenPathComponent
           PlaitBoard.getActiveHost(this.board),
           { selected: this.selected }
         );
-        // 更新编辑覆盖层
-        if (!isMoving) {
-          this.updateEditOverlay();
-        }
       }
-    }
-  }
-
-  /**
-   * 隐藏编辑覆盖层
-   */
-  private hideEditOverlay() {
-    if (this.editOverlayG) {
-      this.editOverlayG.remove();
-      this.editOverlayG = null;
-    }
-  }
-
-  /**
-   * 更新编辑覆盖层（显示锚点和控制柄）
-   */
-  private updateEditOverlay() {
-    // 移除旧的覆盖层
-    if (this.editOverlayG) {
-      this.editOverlayG.remove();
-      this.editOverlayG = null;
-    }
-
-    // 如果选中，显示编辑覆盖层
-    if (this.selected) {
-      this.editOverlayG = drawPenEditOverlay(this.element);
-      PlaitBoard.getActiveHost(this.board).appendChild(this.editOverlayG);
     }
   }
 
   destroy(): void {
     super.destroy();
     this.activeGenerator?.destroy();
-    if (this.editOverlayG) {
-      this.editOverlayG.remove();
-      this.editOverlayG = null;
-    }
   }
 }

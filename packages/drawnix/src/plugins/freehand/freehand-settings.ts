@@ -7,10 +7,21 @@
 import { PlaitBoard, DEFAULT_COLOR } from '@plait/core';
 import { StrokeStyle } from '@plait/common';
 
+/**
+ * 扩展 StrokeStyle，添加双层线样式
+ * 使用"类型 + 同名常量对象"模式扩展外部库枚举
+ */
+export type FreehandStrokeStyle = StrokeStyle | 'double';
+
+export const FreehandStrokeStyle = {
+  ...StrokeStyle,
+  double: 'double' as const,
+};
+
 export interface FreehandSettings {
   strokeWidth: number;
   strokeColor: string;
-  strokeStyle: StrokeStyle;
+  strokeStyle: FreehandStrokeStyle;
   eraserWidth: number;
   pressureEnabled: boolean;
 }
@@ -53,7 +64,7 @@ export const setFreehandStrokeColor = (board: PlaitBoard, strokeColor: string) =
 /**
  * 设置画笔描边样式
  */
-export const setFreehandStrokeStyle = (board: PlaitBoard, strokeStyle: StrokeStyle) => {
+export const setFreehandStrokeStyle = (board: PlaitBoard, strokeStyle: FreehandStrokeStyle) => {
   const current = getFreehandSettings(board);
   FREEHAND_SETTINGS.set(board, { ...current, strokeStyle });
 };

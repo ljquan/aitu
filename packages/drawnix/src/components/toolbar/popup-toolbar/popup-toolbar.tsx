@@ -44,6 +44,7 @@ import { PopupFontSizeButton } from './font-size-button';
 import { PopupStrokeButton } from './stroke-button';
 import { PopupFillButton } from './fill-button';
 import { PopupCornerRadiusButton } from './corner-radius-button';
+import { SizeInput } from './size-input';
 import { isWhite, removeHexAlpha, NO_COLOR } from '@aitu/utils';
 import { Freehand } from '../../../plugins/freehand/type';
 import { PenPath } from '../../../plugins/pen/type';
@@ -132,6 +133,7 @@ export const PopupToolbar = () => {
     hasVideoMergeable?: boolean; // 是否显示视频合成按钮
     hasCornerRadius?: boolean; // 是否显示圆角设置按钮
     cornerRadius?: number; // 当前圆角值
+    hasSizeInput?: boolean; // 是否显示宽高输入
   } = {
     fill: 'red',
   };
@@ -268,6 +270,13 @@ export const PopupToolbar = () => {
       strokeWidth = allSame ? firstWidth : undefined;
     }
 
+    // 宽高输入：选中任何可缩放的元素时显示
+    // 排除视频、工具元素和正在编辑文本的情况
+    const hasSizeInput =
+      selectedElements.length > 0 &&
+      !hasToolSelected &&
+      !PlaitBoard.hasBeenTextEditing(board);
+
     state = {
       ...getElementState(board),
       hasFill,
@@ -287,6 +296,7 @@ export const PopupToolbar = () => {
       hasVideoMergeable,
       hasCornerRadius,
       cornerRadius,
+      hasSizeInput,
     };
   }
   useEffect(() => {
@@ -490,6 +500,12 @@ export const PopupToolbar = () => {
                 currentRadius={state.cornerRadius}
                 title={t('toolbar.cornerRadius')}
                 selectionRect={selectionRect}
+              />
+            )}
+            {state.hasSizeInput && (
+              <SizeInput
+                board={board}
+                key="size-input"
               />
             )}
             {state.hasText && (

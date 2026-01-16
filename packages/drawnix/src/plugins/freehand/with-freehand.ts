@@ -10,6 +10,7 @@ import { FreehandComponent } from './freehand.component';
 import { withFreehandCreate } from './with-freehand-create';
 import { isHitFreehand, isRectangleHitFreehand, getFreehandRectangle } from './utils';
 import { withFreehandFragment } from './with-freehand-fragment';
+import { withFreehandResize } from './with-freehand-resize';
 import {
   getHitDrawElement,
   WithDrawOptions,
@@ -83,5 +84,5 @@ export const withFreehand = (board: PlaitBoard) => {
     { customGeometryTypes: [FREEHAND_TYPE] }
   );
 
-  return withFreehandErase(withFreehandFragment(withFreehandCreate(board)));
+  return withFreehandResize(withFreehandErase(withFreehandFragment(withFreehandCreate(board))));
 };

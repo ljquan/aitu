@@ -46,7 +46,9 @@ import { withTracking } from './plugins/tracking';
 import { withTool } from './plugins/with-tool';
 import { withToolFocus } from './plugins/with-tool-focus';
 import { withToolResize } from './plugins/with-tool-resize';
+import { withMultiResize } from './plugins/with-multi-resize';
 import { withWorkZone } from './plugins/with-workzone';
+import { MultiSelectionHandles } from './components/multi-selection-handles';
 import { ActiveTaskWarning } from './components/task-queue/ActiveTaskWarning';
 import { useTaskStorage } from './hooks/useTaskStorage';
 import { useTaskExecutor } from './hooks/useTaskExecutor';
@@ -548,6 +550,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
     buildDrawnixHotkeyPlugin(updateAppState),
     withFreehand,
     withPen,
+    withMultiResize, // 多选缩放 - 支持 Freehand 和 PenPath 的多选缩放
     buildPencilPlugin(updateAppState),
     buildTextLinkPlugin(updateAppState),
     withVideo,
@@ -835,6 +838,8 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
               afterInit && afterInit(board);
             }}
           ></Board>
+          {/* 多选时的缩放控制点 */}
+          <MultiSelectionHandles />
           {/* 统一左侧工具栏 (桌面端和移动端一致) */}
           <UnifiedToolbar
             projectDrawerOpen={projectDrawerOpen}

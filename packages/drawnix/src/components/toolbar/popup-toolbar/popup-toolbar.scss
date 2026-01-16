@@ -1,4 +1,5 @@
 @import '../../../styles/z-index.scss';
+@import './size-input.scss';
 
 .popup-toolbar {
     z-index: $z-popup-toolbar;
@@ -59,6 +60,60 @@
 .stroke-setting {
     &.has-stroke-style {
         padding-top: 8px !important;
+    }
+    .stroke-width-section {
+        padding: 0 8px;
+        
+        // 调整 TDesign Slider 样式
+        .t-slider {
+            height: 24px;
+            display: flex;
+            align-items: center;
+        }
+        .t-slider__container {
+            display: flex;
+            align-items: center;
+        }
+        .t-slider__rail {
+            height: 3px;
+            border-radius: 1.5px;
+        }
+        .t-slider__track {
+            height: 3px;
+            border-radius: 1.5px;
+        }
+        .t-slider__button {
+            width: 12px;
+            height: 12px;
+        }
+        
+        // 输入框样式
+        .stroke-width-input-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            flex-shrink: 0;
+        }
+        .stroke-width-input {
+            width: 32px;
+            height: 22px;
+            padding: 0 4px;
+            border: 1px solid var(--color-border, #e0e0e0);
+            border-radius: 4px;
+            font-size: 12px;
+            text-align: center;
+            color: var(--color-on-surface, #333);
+            background: var(--color-surface, #fafafa);
+            
+            &:focus {
+                outline: none;
+                border-color: var(--color-primary, #1890ff);
+            }
+        }
+        .stroke-width-input-unit {
+            font-size: 12px;
+            color: var(--color-on-surface, #666);
+        }
     }
     .stroke-style-section {
         display: flex;

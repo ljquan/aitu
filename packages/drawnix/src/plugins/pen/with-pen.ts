@@ -10,6 +10,7 @@ import { PenPathComponent } from './pen.component';
 import { withPenCreate } from './with-pen-create';
 import { withPenEdit } from './with-pen-edit';
 import { withPenFragment } from './with-pen-fragment';
+import { withPenResize } from './with-pen-resize';
 import {
   isHitPenPath,
   isRectangleHitPenPath,
@@ -119,6 +120,6 @@ export const withPen = (board: PlaitBoard) => {
     { customGeometryTypes: [PEN_TYPE] }
   );
 
-  // 应用创建、编辑和剪贴板插件
-  return withPenFragment(withPenEdit(withPenCreate(board)));
+  // 应用创建、缩放和剪贴板插件
+  return withPenResize(withPenFragment(withPenEdit(withPenCreate(board))));
 };

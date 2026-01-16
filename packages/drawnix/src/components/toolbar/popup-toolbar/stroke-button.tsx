@@ -48,9 +48,15 @@ export const PopupStrokeButton: React.FC<PopupStrokeButtonProps> = ({
   children,
 }) => {
   const [isStrokePropertyOpen, setIsStrokePropertyOpen] = useState(false);
+  const [widthInputValue, setWidthInputValue] = useState(String(currentStrokeWidth || 2));
   const hexColor = currentColor && removeHexAlpha(currentColor);
   const opacity = currentColor ? hexAlphaToOpacity(currentColor) : 100;
   const container = PlaitBoard.getBoardContainer(board);
+
+  // 同步外部值变化
+  React.useEffect(() => {
+    setWidthInputValue(String(currentStrokeWidth || 2));
+  }, [currentStrokeWidth]);
 
   const icon = isFullyTransparent(opacity)
     ? StrokeIcon
@@ -72,7 +78,35 @@ export const PopupStrokeButton: React.FC<PopupStrokeButtonProps> = ({
 
   const handleStrokeWidthChange = useCallback((width: number) => {
     setStrokeWidthTransform(board, width);
+    setWidthInputValue(String(width));
   }, [board]);
+
+  // 处理输入框变化
+  const handleWidthInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setWidthInputValue(e.target.value);
+  }, []);
+
+  // 处理输入框确认
+  const handleWidthInputConfirm = useCallback(() => {
+    const value = parseInt(widthInputValue, 10);
+    if (!isNaN(value) && value >= 1 && value <= 100) {
+      setStrokeWidthTransform(board, value);
+    } else {
+      // 恢复为当前值
+      setWidthInputValue(String(currentStrokeWidth || 2));
+    }
+  }, [board, widthInputValue, currentStrokeWidth]);
+
+  // 处理输入框键盘事件
+  const handleWidthInputKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      handleWidthInputConfirm();
+      (e.target as HTMLInputElement).blur();
+    } else if (e.key === 'Escape') {
+      setWidthInputValue(String(currentStrokeWidth || 2));
+      (e.target as HTMLInputElement).blur();
+    }
+  }, [handleWidthInputConfirm, currentStrokeWidth]);
 
   return (
     <Popover
@@ -112,20 +146,30 @@ export const PopupStrokeButton: React.FC<PopupStrokeButtonProps> = ({
             {hasStrokeWidth && (
               <div className="stroke-width-section" style={{ marginBottom: '8px' }}>
                 <Stack.Row gap={2} align="center">
-                  <span style={{ fontSize: '13px', color: 'var(--color-on-surface)', whiteSpace: 'nowrap' }}>线宽：</span>
+                  <span style={{ fontSize: '12px', color: 'var(--color-on-surface)', whiteSpace: 'nowrap' }}>线宽：</span>
                   <div style={{ flex: 1, minWidth: '100px' }}>
                     <Slider
                       value={currentStrokeWidth || 2}
                       min={1}
-                      max={20}
+                      max={100}
                       step={1}
                       onChange={(val) => handleStrokeWidthChange(val as number)}
                       label={false}
                     />
                   </div>
-                  <span style={{ fontSize: '13px', color: 'var(--color-on-surface)', minWidth: '30px', textAlign: 'right' }}>
-                    {currentStrokeWidth || 2}px
-                  </span>
+                  <div className="stroke-width-input-wrapper">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={widthInputValue}
+                      onChange={handleWidthInputChange}
+                      onBlur={handleWidthInputConfirm}
+                      onKeyDown={handleWidthInputKeyDown}
+                      className="stroke-width-input"
+                    />
+                    <span className="stroke-width-input-unit">px</span>
+                  </div>
                 </Stack.Row>
               </div>
             )}

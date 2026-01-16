@@ -2,6 +2,7 @@ export * from './type';
 export * from './with-pen';
 export * from './with-pen-create';
 export * from './with-pen-edit';
+export * from './with-pen-resize';
 export * from './with-pen-fragment';
 export * from './pen.generator';
 export * from './pen.component';
