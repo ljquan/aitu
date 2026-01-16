@@ -256,15 +256,15 @@ export const PopupToolbar = () => {
       (penPathElements.length > 0 || freehandElements.length > 0) &&
       !PlaitBoard.hasBeenTextEditing(board);
     
-    // 获取线宽值
+    // 获取线宽值（同时检查 PenPath 和 Freehand 元素）
     let strokeWidth: number | undefined = undefined;
-    if (penPathElements.length > 0) {
-      const firstWidth = penPathElements[0].strokeWidth ?? 2;
-      const allSame = penPathElements.every(el => (el.strokeWidth ?? 2) === firstWidth);
-      strokeWidth = allSame ? firstWidth : undefined;
-    } else if (freehandElements.length > 0) {
-      const firstWidth = freehandElements[0].strokeWidth ?? 2;
-      const allSame = freehandElements.every(el => (el.strokeWidth ?? 2) === firstWidth);
+    const allStrokeWidthElements = [
+      ...penPathElements.map(el => el.strokeWidth ?? 2),
+      ...freehandElements.map(el => el.strokeWidth ?? 2),
+    ];
+    if (allStrokeWidthElements.length > 0) {
+      const firstWidth = allStrokeWidthElements[0];
+      const allSame = allStrokeWidthElements.every(w => w === firstWidth);
       strokeWidth = allSame ? firstWidth : undefined;
     }
 

@@ -61,11 +61,11 @@ export const FreehandPanel: React.FC<FreehandPickerProps> = ({
       <Stack.Row gap={1} align="center">
         {/* 绘图工具选择 */}
         <Stack.Row gap={1}>
-          {ROW_FREEHANDS.map((rowFreehands) => {
+          {ROW_FREEHANDS.map((rowFreehands, rowIndex) => {
             return rowFreehands.map((freehand, index) => {
               return (
                 <ToolButton
-                  key={index}
+                  key={`${rowIndex}-${index}`}
                   className={classNames({ fillable: false })}
                   selected={board.pointer === freehand.pointer}
                   type="icon"
