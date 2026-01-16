@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Drawnix,
   WorkspaceService,
@@ -8,6 +8,9 @@ import {
   BoardChangeData,
 } from '@drawnix/drawnix';
 import { PlaitBoard, PlaitElement, PlaitTheme, Viewport } from '@plait/core';
+
+// 节流保存 viewport 的间隔（毫秒）
+const VIEWPORT_SAVE_DEBOUNCE = 500;
 
 // Global flag to prevent duplicate initialization in StrictMode
 let appInitialized = false;
@@ -21,12 +24,19 @@ export function App() {
     theme?: PlaitTheme;
   }>({ children: [] });
 
+  // 存储最新的 viewport，用于页面关闭前保存
+  const latestViewportRef = useRef<Viewport | undefined>();
+  // 防抖定时器
+  const viewportSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   // Initialize workspace and handle migration
   useEffect(() => {
     const initialize = async () => {
       // Prevent duplicate initialization in StrictMode
       if (appInitialized) {
+        // 等待 workspaceService 完全初始化
         const workspaceService = WorkspaceService.getInstance();
+        await workspaceService.waitForInitialization();
         const currentBoard = workspaceService.getCurrentBoard();
         if (currentBoard) {
           setValue({
@@ -68,7 +78,7 @@ export function App() {
 
         if (currentBoard) {
           const elements = currentBoard.elements || [];
-
+          
           // 先设置原始元素，让页面先渲染
           setValue({
             children: elements,
@@ -118,6 +128,8 @@ export function App() {
   const handleBoardChange = useCallback(
     (data: BoardChangeData) => {
       setValue(data);
+      // 同步更新最新 viewport
+      latestViewportRef.current = data.viewport;
 
       // Save to current board
       const workspaceService = WorkspaceService.getInstance();
@@ -127,6 +139,88 @@ export function App() {
     },
     []
   );
+
+  // Handle viewport changes (pan/zoom) - 单独保存 viewport
+  const handleViewportChange = useCallback(
+    (viewport: Viewport) => {
+      // 更新最新 viewport
+      latestViewportRef.current = viewport;
+
+      // 防抖保存
+      if (viewportSaveTimerRef.current) {
+        clearTimeout(viewportSaveTimerRef.current);
+      }
+      viewportSaveTimerRef.current = setTimeout(() => {
+        const workspaceService = WorkspaceService.getInstance();
+        const currentBoard = workspaceService.getCurrentBoard();
+        if (currentBoard) {
+          // 只保存 viewport，不影响其他数据
+          workspaceService.saveCurrentBoard({
+            children: currentBoard.elements,
+            viewport: viewport,
+            theme: currentBoard.theme,
+          }).catch((err: Error) => {
+            console.error('[App] Failed to save viewport:', err);
+          });
+        }
+      }, VIEWPORT_SAVE_DEBOUNCE);
+    },
+    []
+  );
+
+  // 页面关闭/隐藏前保存 viewport
+  useEffect(() => {
+    // 立即保存 viewport 的函数
+    const saveViewportImmediately = () => {
+      // 清除防抖定时器
+      if (viewportSaveTimerRef.current) {
+        clearTimeout(viewportSaveTimerRef.current);
+        viewportSaveTimerRef.current = null;
+      }
+
+      // 同步保存最新的 viewport
+      const viewport = latestViewportRef.current;
+      if (viewport) {
+        const workspaceService = WorkspaceService.getInstance();
+        const currentBoard = workspaceService.getCurrentBoard();
+        if (currentBoard) {
+          // 直接更新内存中的 board 数据
+          currentBoard.viewport = viewport;
+          // 尝试保存
+          workspaceService.saveCurrentBoard({
+            children: currentBoard.elements,
+            viewport: viewport,
+            theme: currentBoard.theme,
+          }).catch(() => {
+            // 忽略错误
+          });
+        }
+      }
+    };
+
+    const handleBeforeUnload = () => {
+      saveViewportImmediately();
+    };
+
+    // 页面隐藏时也保存（处理移动端和标签页切换）
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        saveViewportImmediately();
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      // 清理定时器
+      if (viewportSaveTimerRef.current) {
+        clearTimeout(viewportSaveTimerRef.current);
+      }
+    };
+  }, []);
 
   if (isLoading) {
     return (
@@ -150,6 +244,7 @@ export function App() {
         viewport={value.viewport}
         theme={value.theme}
         onChange={handleBoardChange}
+        onViewportChange={handleViewportChange}
         onBoardSwitch={handleBoardSwitch}
         isDataReady={isDataReady}
         afterInit={(board) => {

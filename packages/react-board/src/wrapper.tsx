@@ -128,7 +128,7 @@ export const Wrapper: React.FC<WrapperProps> = ({
       board,
       listRender,
     }));
-  }, [board, onChange, onSelectionChange, onValueChange]);
+  }, [board, onChange, onSelectionChange, onValueChange, onViewportChange, onThemeChange]);
 
   useEffect(() => {
     BOARD_TO_ON_CHANGE.set(board, () => {
@@ -185,6 +185,30 @@ export const Wrapper: React.FC<WrapperProps> = ({
   }, [board]);
 
   const isFirstRender = useRef(true);
+  const prevViewportRef = useRef<Viewport | undefined>(viewport);
+
+  // 处理 viewport prop 变化（用于恢复保存的视图状态）
+  useEffect(() => {
+    const prevViewport = prevViewportRef.current;
+    prevViewportRef.current = viewport;
+
+    // 如果外部传入了有效的 viewport，且与当前不同，则应用它
+    if (viewport && !FLUSHING.get(board)) {
+      // 检查是否是从 undefined 变为有值，或者值发生了变化
+      const isNewViewport = !prevViewport;
+      const isDifferent = prevViewport && (
+        prevViewport.zoom !== viewport.zoom ||
+        prevViewport.offsetX !== viewport.offsetX ||
+        prevViewport.offsetY !== viewport.offsetY
+      );
+      
+      if (isNewViewport || isDifferent) {
+        board.viewport = viewport;
+        initializeViewBox(board);
+        updateViewportOffset(board);
+      }
+    }
+  }, [viewport, board]);
 
   useEffect(() => {
     if (isFirstRender.current) {
@@ -199,9 +223,13 @@ export const Wrapper: React.FC<WrapperProps> = ({
         parent: board,
         parentG: PlaitBoard.getElementHost(board),
       });
-      BoardTransforms.fitViewport(board);
+      // 只有当没有传入 viewport 时才自动适配视图
+      // 如果传入了 viewport，说明是恢复保存的视图，不应该重置
+      if (!viewport) {
+        BoardTransforms.fitViewport(board);
+      }
     }
-  }, [value]);
+  }, [value, viewport]);
 
   return (
     <BoardContext.Provider value={context}>{children}</BoardContext.Provider>

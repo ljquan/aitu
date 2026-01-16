@@ -59,6 +59,7 @@ import { ChatDrawerProvider, useChatDrawer } from './contexts/ChatDrawerContext'
 import { fontManagerService } from './services/font-manager-service';
 import { WorkflowProvider } from './contexts/WorkflowContext';
 import { useWorkspace } from './hooks/useWorkspace';
+import { workspaceService } from './services/workspace-service';
 import { Board as WorkspaceBoard } from './types/workspace.types';
 import { toolTestHelper } from './utils/tool-test-helper';
 import { ViewNavigation } from './components/view-navigation';
@@ -874,6 +875,27 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
                 open={backupRestoreOpen}
                 onOpenChange={setBackupRestoreOpen}
                 container={containerRef.current}
+                onBeforeImport={async () => {
+                  // 导入前先保存当前画板数据到 IndexedDB
+                  if (handleBeforeSwitch) {
+                    await handleBeforeSwitch();
+                  }
+                }}
+                onSwitchBoard={async (boardId, viewport) => {
+                  // 注意：这里不调用 handleBeforeSwitch
+                  // 因为在备份恢复时，onBeforeImport 已经保存了当前画板
+                  // 如果在这里再保存，会用旧的内存数据覆盖 IndexedDB 中刚合并的新数据
+                  
+                  // 切换到目标画板（使用已导入的 workspaceService 单例，确保数据一致性）
+                  const board = await workspaceService.switchBoard(boardId);
+                  if (board && onBoardSwitch) {
+                    // 如果有 viewport，合并到 board 中
+                    if (viewport) {
+                      board.viewport = viewport;
+                    }
+                    onBoardSwitch(board);
+                  }
+                }}
               />
             </Suspense>
           )}

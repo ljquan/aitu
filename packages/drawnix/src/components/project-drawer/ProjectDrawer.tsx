@@ -583,17 +583,48 @@ export const ProjectDrawer: React.FC<ProjectDrawerProps> = ({
     setDeleteTarget(null);
   }, [deleteTarget, deleteFolderWithContents]);
 
+  // Helper function to get the first available board from tree (excluding a specific id)
+  const getFirstBoardFromTree = useCallback((nodes: TreeNode[], excludeId?: string): Board | null => {
+    for (const node of nodes) {
+      if (node.type === 'board' && node.data.id !== excludeId) {
+        return node.data;
+      }
+      if (node.type === 'folder' && node.children) {
+        const board = getFirstBoardFromTree(node.children, excludeId);
+        if (board) return board;
+      }
+    }
+    return null;
+  }, []);
+
   // Handle delete (board)
   const handleDeleteBoard = useCallback(async () => {
     if (!deleteTarget || deleteTarget.type !== 'board') return;
 
+    const deletingCurrentBoard = deleteTarget.id === currentBoard?.id;
     const success = await deleteBoard(deleteTarget.id);
+    
     if (success) {
       MessagePlugin.success('删除成功');
+      
+      // If we deleted the current board, switch to the first available board
+      if (deletingCurrentBoard) {
+        const firstBoard = getFirstBoardFromTree(tree, deleteTarget.id);
+        if (firstBoard) {
+          // Save before switching (though current board is deleted, this ensures clean state)
+          if (onBeforeSwitch) {
+            await onBeforeSwitch();
+          }
+          const switched = await switchBoard(firstBoard.id);
+          if (switched && onBoardSwitch) {
+            onBoardSwitch(switched);
+          }
+        }
+      }
     }
     setShowDeleteDialog(false);
     setDeleteTarget(null);
-  }, [deleteTarget, deleteBoard]);
+  }, [deleteTarget, deleteBoard, currentBoard, tree, getFirstBoardFromTree, onBeforeSwitch, switchBoard, onBoardSwitch]);
 
   // Handle copy board
   const handleCopyBoard = useCallback(async (id: string) => {
