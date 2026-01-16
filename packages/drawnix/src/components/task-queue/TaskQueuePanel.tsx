@@ -307,8 +307,7 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
     return Array.from(selectedTaskIds).filter(id => {
       const task = tasks.find(t => t.id === id);
       return task?.status === TaskStatus.PENDING ||
-             task?.status === TaskStatus.PROCESSING ||
-             task?.status === TaskStatus.RETRYING;
+             task?.status === TaskStatus.PROCESSING;
     }).length;
   }, [selectedTaskIds, tasks]);
 
@@ -317,8 +316,7 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
     const activeSelectedIds = Array.from(selectedTaskIds).filter(id => {
       const task = tasks.find(t => t.id === id);
       return task?.status === TaskStatus.PENDING ||
-             task?.status === TaskStatus.PROCESSING ||
-             task?.status === TaskStatus.RETRYING;
+             task?.status === TaskStatus.PROCESSING;
     });
     if (activeSelectedIds.length === 0) {
       MessagePlugin.warning('没有可取消的进行中任务');

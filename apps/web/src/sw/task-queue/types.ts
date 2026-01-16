@@ -18,7 +18,6 @@
 export enum TaskStatus {
   PENDING = 'pending',
   PROCESSING = 'processing',
-  RETRYING = 'retrying',
   COMPLETED = 'completed',
   FAILED = 'failed',
   CANCELLED = 'cancelled',
@@ -136,10 +135,6 @@ export interface SWTask {
   result?: TaskResult;
   /** Error information (if failed) */
   error?: TaskError;
-  /** Number of retry attempts made */
-  retryCount: number;
-  /** Next scheduled retry timestamp (Unix milliseconds) */
-  nextRetryAt?: number;
   /** Task progress percentage (0-100) for video generation */
   progress?: number;
   /** Remote task ID from API (e.g., videoId for video generation) */
@@ -442,8 +437,6 @@ export interface TaskFailedMessage {
   type: 'TASK_FAILED';
   taskId: string;
   error: TaskError;
-  retryCount: number;
-  nextRetryAt?: number;
 }
 
 /**
@@ -621,10 +614,6 @@ export interface ChatHandler {
  * Task queue configuration
  */
 export interface TaskQueueConfig {
-  /** Maximum retry count */
-  maxRetries: number;
-  /** Retry delays in milliseconds (exponential backoff) */
-  retryDelays: number[];
   /** Task timeout in milliseconds by type */
   timeouts: Record<TaskType, number>;
 }
@@ -633,8 +622,6 @@ export interface TaskQueueConfig {
  * Default task queue configuration
  */
 export const DEFAULT_TASK_QUEUE_CONFIG: TaskQueueConfig = {
-  maxRetries: 0, // 不重试
-  retryDelays: [],
   timeouts: {
     [TaskType.IMAGE]: 10 * 60 * 1000,             // 10 minutes for image
     [TaskType.VIDEO]: 20 * 60 * 1000,             // 20 minutes for video

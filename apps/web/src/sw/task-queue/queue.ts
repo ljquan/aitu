@@ -155,11 +155,8 @@ export class SWTaskQueue {
       return false; // Will be handled separately to mark as failed
     }
 
-    // Resume tasks that were processing or retrying
-    if (
-      task.status === TaskStatus.PROCESSING ||
-      task.status === TaskStatus.RETRYING
-    ) {
+    // Resume tasks that were processing
+    if (task.status === TaskStatus.PROCESSING) {
       return true;
     }
 
@@ -288,7 +285,6 @@ export class SWTaskQueue {
       params,
       createdAt: now,
       updatedAt: now,
-      retryCount: 0,
     };
 
     this.tasks.set(taskId, task);
@@ -341,7 +337,6 @@ export class SWTaskQueue {
     if (!task || (task.status !== TaskStatus.FAILED && task.status !== TaskStatus.CANCELLED)) return;
 
     task.status = TaskStatus.PENDING;
-    task.retryCount = 0;
     task.error = undefined;
     task.updatedAt = Date.now();
     this.tasks.set(taskId, task);
@@ -381,7 +376,6 @@ export class SWTaskQueue {
         params: { prompt: '' },
         createdAt: now,
         updatedAt: now,
-        retryCount: 0,
         remoteId,
         executionPhase: TaskExecutionPhase.POLLING,
       };
@@ -817,7 +811,6 @@ export class SWTaskQueue {
       type: 'TASK_FAILED',
       taskId,
       error: taskError,
-      retryCount: task.retryCount,
     });
 
     // Notify internal listeners
@@ -846,7 +839,6 @@ export class SWTaskQueue {
       type: 'TASK_FAILED',
       taskId,
       error,
-      retryCount: task.retryCount,
     });
   }
 

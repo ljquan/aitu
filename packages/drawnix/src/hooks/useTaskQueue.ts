@@ -90,8 +90,7 @@ export function useTaskQueue(): UseTaskQueueReturn {
   const activeTasks = useMemo(() => {
     return tasks.filter(task => 
       task.status === TaskStatus.PENDING ||
-      task.status === TaskStatus.PROCESSING ||
-      task.status === TaskStatus.RETRYING
+      task.status === TaskStatus.PROCESSING
     );
   }, [tasks]);
 

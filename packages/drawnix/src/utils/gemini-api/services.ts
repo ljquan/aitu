@@ -125,7 +125,7 @@ async function generateImageViaSW(
   );
   
   const failure$ = swTaskQueueClient.observeTaskFailure(taskId).pipe(
-    map((data: { error: TaskError; retryCount: number; nextRetryAt?: number }) => ({ type: 'failed' as const, error: data.error }))
+    map((data: { error: TaskError }) => ({ type: 'failed' as const, error: data.error }))
   );
   
   // 提交任务到 SW

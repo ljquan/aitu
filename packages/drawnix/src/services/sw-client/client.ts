@@ -154,7 +154,6 @@ export class SWTaskQueueClient {
       params,
       createdAt: now,
       updatedAt: now,
-      retryCount: 0,
     };
     this.localTaskCache.set(taskId, pendingTask);
 
@@ -390,8 +389,6 @@ export class SWTaskQueueClient {
    */
   observeTaskFailure(taskId: string): Observable<{
     error: TaskError;
-    retryCount: number;
-    nextRetryAt?: number;
   }> {
     return this.messageSubject.pipe(
       filter(
@@ -402,8 +399,6 @@ export class SWTaskQueueClient {
         if (msg.type === 'TASK_FAILED') {
           return {
             error: msg.error,
-            retryCount: msg.retryCount,
-            nextRetryAt: msg.nextRetryAt,
           };
         }
         throw new Error('Unexpected message type');
@@ -661,14 +656,11 @@ export class SWTaskQueueClient {
         if (failedTask) {
           failedTask.status = 'failed' as TaskStatus;
           failedTask.error = message.error;
-          failedTask.retryCount = message.retryCount;
           this.updateLocalCache(failedTask);
         }
         this.taskHandlers.onFailed?.(
           message.taskId,
-          message.error,
-          message.retryCount,
-          message.nextRetryAt
+          message.error
         );
         break;
       }

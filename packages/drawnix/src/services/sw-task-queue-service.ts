@@ -111,7 +111,6 @@ class SWTaskQueueService {
       params: sanitizedParams,
       createdAt: now,
       updatedAt: now,
-      retryCount: 0,
       ...(type === TaskType.VIDEO && { progress: 0 }),
     };
 
@@ -185,10 +184,8 @@ class SWTaskQueueService {
       progress: task.progress,
       result: task.result,
       error: task.error,
-      retryCount: task.retryCount,
       remoteId: task.remoteId,
       executionPhase: task.executionPhase,
-      nextRetryAt: task.nextRetryAt,
       createdAt: task.createdAt,
       startedAt: task.startedAt,
       completedAt: task.completedAt,
@@ -221,10 +218,8 @@ class SWTaskQueueService {
           progress: swTask.progress || 0,
           result: swTask.result,
           error: swTask.error,
-          retryCount: swTask.retryCount || 0,
           remoteId: swTask.remoteId,
           executionPhase: swTask.executionPhase,
-          nextRetryAt: swTask.nextRetryAt,
           createdAt: swTask.createdAt,
           startedAt: swTask.startedAt,
           completedAt: swTask.completedAt,
@@ -291,7 +286,7 @@ class SWTaskQueueService {
       onCreated: (swTask) => this.handleSWTaskCreated(swTask),
       onStatus: (taskId, status, progress, phase) => this.handleSWStatus(taskId, status, progress, phase),
       onCompleted: (taskId, result) => this.handleSWCompleted(taskId, result),
-      onFailed: (taskId, error, retryCount, nextRetryAt) => this.handleSWFailed(taskId, error, retryCount, nextRetryAt),
+      onFailed: (taskId, error) => this.handleSWFailed(taskId, error),
       onSubmitted: (taskId, remoteId) => this.handleSWSubmitted(taskId, remoteId),
       onCancelled: (taskId) => this.handleSWCancelled(taskId),
       onDeleted: (taskId) => this.handleSWDeleted(taskId),
@@ -343,8 +338,6 @@ class SWTaskQueueService {
       completedAt: swTask.completedAt,
       result: swTask.result,
       error: swTask.error,
-      retryCount: swTask.retryCount,
-      nextRetryAt: swTask.nextRetryAt,
       progress: swTask.progress,
       remoteId: swTask.remoteId,
       executionPhase: swTask.executionPhase,
@@ -402,9 +395,7 @@ class SWTaskQueueService {
 
   private handleSWFailed(
     taskId: string,
-    error: TaskError,
-    retryCount: number,
-    nextRetryAt?: number
+    error: TaskError
   ): void {
     const task = this.tasks.get(taskId);
     if (!task) {
@@ -412,8 +403,7 @@ class SWTaskQueueService {
       return;
     }
 
-    const status = nextRetryAt !== undefined ? TaskStatus.RETRYING : TaskStatus.FAILED;
-    this.updateTaskStatus(taskId, status, { error, retryCount, nextRetryAt });
+    this.updateTaskStatus(taskId, TaskStatus.FAILED, { error });
   }
 
   private handleSWSubmitted(taskId: string, remoteId: string): void {

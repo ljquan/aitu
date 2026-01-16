@@ -33,11 +33,9 @@ export enum TaskStatus {
   PENDING = 'pending',
   /** Task is currently being processed */
   PROCESSING = 'processing',
-  /** Task failed and is waiting for retry */
-  RETRYING = 'retrying',
   /** Task completed successfully */
   COMPLETED = 'completed',
-  /** Task failed and will not be retried */
+  /** Task failed */
   FAILED = 'failed',
   /** Task was cancelled by the user */
   CANCELLED = 'cancelled'
@@ -200,10 +198,6 @@ export interface Task {
   result?: TaskResult;
   /** Error information (if failed) */
   error?: TaskError;
-  /** Number of retry attempts made */
-  retryCount: number;
-  /** Next scheduled retry timestamp (Unix milliseconds) */
-  nextRetryAt?: number;
   /** User identifier (reserved for multi-user support) */
   userId?: string;
   /** Task progress percentage (0-100) for video generation */

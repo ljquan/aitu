@@ -943,8 +943,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
     const failedCount = relatedTasks.filter(t => t.status === TaskStatus.FAILED).length;
     const processingCount = relatedTasks.filter(t =>
       t.status === TaskStatus.PENDING ||
-      t.status === TaskStatus.PROCESSING ||
-      t.status === TaskStatus.RETRYING
+      t.status === TaskStatus.PROCESSING
     ).length;
 
     let status: 'idle' | 'generating' | 'completed' | 'failed' | 'partial' = 'idle';
@@ -1930,8 +1929,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
               const isGenerating = rowInfo.status === 'generating';
               const processingCount = rowInfo.tasks.filter(t =>
                 t.status === TaskStatus.PENDING ||
-                t.status === TaskStatus.PROCESSING ||
-                t.status === TaskStatus.RETRYING
+                t.status === TaskStatus.PROCESSING
               ).length;
 
               // 没有已完成的图片，只显示生成中

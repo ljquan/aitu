@@ -24,7 +24,6 @@ export function createMockTask(overrides?: Partial<Task>): Task {
     },
     createdAt: now,
     updatedAt: now,
-    retryCount: 0,
     ...overrides,
   };
 }
@@ -77,23 +76,9 @@ export function createMockTasks(): Task[] {
       createdAt: now - 600000, // 10 minutes ago
       startedAt: now - 580000,
       completedAt: now - 500000,
-      retryCount: 3,
       error: {
         code: 'TIMEOUT',
         message: '视频生成超时，请稍后重试',
-      },
-    }),
-    
-    // Retrying task
-    createMockTask({
-      params: { prompt: '抽象艺术作品，色彩鲜艳', width: 1024, height: 1024 },
-      status: TaskStatus.RETRYING,
-      createdAt: now - 400000,
-      retryCount: 1,
-      nextRetryAt: now + 60000, // Next retry in 1 minute
-      error: {
-        code: 'API_ERROR',
-        message: 'API 暂时不可用',
       },
     }),
 
