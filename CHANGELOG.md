@@ -1,3 +1,14 @@
+## 0.5.3 (2026-01-16)
+
+### 🔧 Chores
+
+- 去掉重试逻辑 ([77391d8](https://github.com/ljquan/aitu/commit/77391d8))
+- v0.5.2 ([470742f](https://github.com/ljquan/aitu/commit/470742f))
+
+### ❤️  Thank You
+
+- liquidliang <ljquan@qq.com>
+
 ## 0.5.2 (2026-01-16)
 
 ### 🚀 Features
