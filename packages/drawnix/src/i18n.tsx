@@ -11,6 +11,7 @@ export interface Translations {
   'toolbar.mind': string;
   'toolbar.text': string;
   'toolbar.pen': string;
+  'toolbar.vectorPen': string;
   'toolbar.eraser': string;
   'toolbar.arrow': string;
   'toolbar.shape': string;
@@ -27,6 +28,10 @@ export interface Translations {
   'toolbar.fillColor': string;
   'toolbar.fontColor': string;
   'toolbar.fontSize': string;
+  'toolbar.anchorCorner': string;
+  'toolbar.anchorSmooth': string;
+  'toolbar.anchorSymmetric': string;
+  'toolbar.cornerRadius': string;
 
   // Zoom controls
   'zoom.in': string;
@@ -166,7 +171,12 @@ const translations: Record<Language, Translations> = {
     'toolbar.mind': '思维导图 — M',
     'toolbar.text': '文本 — T',
     'toolbar.pen': '画笔 — P',
+    'toolbar.vectorPen': '钢笔 — Shift+P',
     'toolbar.eraser': '橡皮擦 — E',
+    'toolbar.anchorCorner': '角点',
+    'toolbar.anchorSmooth': '平滑点',
+    'toolbar.anchorSymmetric': '对称点',
+    'toolbar.cornerRadius': '圆角',
     'toolbar.arrow': '箭头 — A',
     'toolbar.shape': '形状',
     'toolbar.image': '图片 — Cmd+U',
@@ -318,7 +328,12 @@ const translations: Record<Language, Translations> = {
     'toolbar.mind': 'Mind — M',
     'toolbar.text': 'Text — T',
     'toolbar.pen': 'Pen — P',
+    'toolbar.vectorPen': 'Vector Pen — Shift+P',
     'toolbar.eraser': 'Eraser — E',
+    'toolbar.anchorCorner': 'Corner',
+    'toolbar.anchorSmooth': 'Smooth',
+    'toolbar.anchorSymmetric': 'Symmetric',
+    'toolbar.cornerRadius': 'Corner Radius',
     'toolbar.arrow': 'Arrow — A',
     'toolbar.shape': 'Shape',
     'toolbar.image': 'Image — Cmd+U',

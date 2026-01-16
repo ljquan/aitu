@@ -13,6 +13,7 @@
 @import '../components/minimap/minimap.scss';
 @import '../components/ai-input-bar/ai-input-bar.scss'; // AI 输入框
 @import '../components/toolbar/pencil-settings-toolbar/pencil-settings-toolbar.scss'; // 画笔设置工具栏
+@import '../components/toolbar/pen-settings-toolbar/pen-settings-toolbar.scss'; // 钢笔设置工具栏
 
 .t-dialog__ctx.t-dialog__ctx--fixed{
     z-index: $z-dialog !important;
@@ -45,6 +46,16 @@
         }
     }
     .pencil-settings-toolbar {
+        position: absolute;
+        top: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: $z-unified-toolbar;
+        background: var(--color-surface-high);
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    }
+    .pen-settings-toolbar {
         position: absolute;
         top: 10px;
         left: 50%;
@@ -509,6 +520,14 @@
         background-color: var(--color-border, #e0e0e0);
         margin: 4px 0;
     }
+}
+
+// Freehand panel divider
+.freehand-panel-divider {
+    width: 1px;
+    height: 24px;
+    background: var(--color-border, #e0e0e0);
+    margin: 0 4px;
 }
 
 @keyframes toolbarContextMenuFadeIn {

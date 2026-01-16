@@ -17,6 +17,7 @@ import { BoardCreationMode, setCreationMode } from '@plait/common';
 import { BasicShapes, DrawPointerType, FlowchartSymbols } from '@plait/draw';
 import { useBoard } from '@plait-board/react-board';
 import { splitRows } from '@aitu/utils';
+import { finishPenOnToolSwitch } from '../plugins/pen/with-pen-create';
 
 export interface ShapeProps {
   icon: React.ReactNode;
@@ -90,6 +91,8 @@ export const ShapePicker: React.FC<ShapePickerProps> = ({
                     title={shape.title}
                     aria-label={shape.title}
                     onPointerDown={() => {
+                      // 切换工具前，结束钢笔绘制
+                      finishPenOnToolSwitch(board);
                       setCreationMode(board, BoardCreationMode.dnd);
                       BoardTransforms.updatePointerType(board, shape.pointer);
                     }}
