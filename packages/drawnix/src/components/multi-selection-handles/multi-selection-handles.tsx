@@ -32,14 +32,6 @@ function hasCustomResizableElements(elements: PlaitElement[]): boolean {
   const result = elements.some(
     (el) => Freehand.isFreehand(el) || PenPath.isPenPath(el)
   );
-  console.log('[MultiSelectionHandles] hasCustomResizableElements check:', 
-    elements.map(el => ({
-      type: (el as any).type,
-      isFreehand: Freehand.isFreehand(el),
-      isPenPath: PenPath.isPenPath(el)
-    })),
-    'result:', result
-  );
   return result;
 }
 
@@ -78,10 +70,7 @@ export const MultiSelectionHandles = () => {
   const [isInteracting, setIsInteracting] = useState(false);
   const isInteractingRef = useRef(false);
 
-  // 组件挂载日志
-  useEffect(() => {
-    console.log('[MultiSelectionHandles] Component mounted, board:', !!board);
-  }, []);
+
 
   const updateHandles = useCallback(() => {
     // 检查是否正在拖拽或移动
@@ -89,16 +78,11 @@ export const MultiSelectionHandles = () => {
     setIsInteracting(interacting);
 
     if (interacting) {
-      console.log('[MultiSelectionHandles] interacting, skip update');
       return;
     }
 
     const selectedElements = getSelectedElements(board);
-    console.log('[MultiSelectionHandles] selectedElements count:', selectedElements.length);
-    console.log('[MultiSelectionHandles] hasCustomResizableElements:', hasCustomResizableElements(selectedElements));
-
     const rectangle = getMultiSelectionInfo(board);
-    console.log('[MultiSelectionHandles] rectangle:', rectangle);
 
     if (!rectangle) {
       setVisible(false);
@@ -123,7 +107,6 @@ export const MultiSelectionHandles = () => {
       };
     });
 
-    console.log('[MultiSelectionHandles] hostCorners:', hostCorners);
     setHandles(hostCorners);
     setVisible(true);
   }, [board]);

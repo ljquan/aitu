@@ -18,7 +18,7 @@ import {
  */
 const WORKSPACE_DB_CONFIG = {
   DATABASE_NAME: 'aitu-workspace',
-  DATABASE_VERSION: 6,
+  MIN_DATABASE_VERSION: 8,
   STORES: {
     FOLDERS: 'folders',
     BOARDS: 'boards',
@@ -42,19 +42,55 @@ function waitForIdle(timeout = 50): Promise<void> {
 }
 
 /**
+ * Detect existing database version to avoid downgrade errors
+ */
+async function detectDatabaseVersion(dbName: string): Promise<number> {
+  return new Promise((resolve) => {
+    if (typeof indexedDB === 'undefined') {
+      resolve(WORKSPACE_DB_CONFIG.MIN_DATABASE_VERSION);
+      return;
+    }
+    
+    // Open without version to get current version
+    const request = indexedDB.open(dbName);
+    
+    request.onsuccess = () => {
+      const db = request.result;
+      const version = db.version;
+      db.close();
+      resolve(Math.max(version, WORKSPACE_DB_CONFIG.MIN_DATABASE_VERSION));
+    };
+    
+    request.onerror = () => {
+      resolve(WORKSPACE_DB_CONFIG.MIN_DATABASE_VERSION);
+    };
+  });
+}
+
+/**
  * Workspace storage service for managing data persistence
  */
 class WorkspaceStorageService {
-  private foldersStore: LocalForage;
-  private boardsStore: LocalForage;
-  private stateStore: LocalForage;
+  private foldersStore: LocalForage | null = null;
+  private boardsStore: LocalForage | null = null;
+  private stateStore: LocalForage | null = null;
   private initialized: boolean = false;
+  private initPromise: Promise<void> | null = null;
 
   constructor() {
+    // Defer store creation until initialization to detect version first
+  }
+
+  /**
+   * Create stores with the detected version
+   */
+  private async createStores(): Promise<void> {
+    const version = await detectDatabaseVersion(WORKSPACE_DB_CONFIG.DATABASE_NAME);
+    
     this.foldersStore = localforage.createInstance({
       driver: localforage.INDEXEDDB,
       name: WORKSPACE_DB_CONFIG.DATABASE_NAME,
-      version: WORKSPACE_DB_CONFIG.DATABASE_VERSION,
+      version: version,
       storeName: WORKSPACE_DB_CONFIG.STORES.FOLDERS,
       description: 'Workspace folders storage',
     });
@@ -62,7 +98,7 @@ class WorkspaceStorageService {
     this.boardsStore = localforage.createInstance({
       driver: localforage.INDEXEDDB,
       name: WORKSPACE_DB_CONFIG.DATABASE_NAME,
-      version: WORKSPACE_DB_CONFIG.DATABASE_VERSION,
+      version: version,
       storeName: WORKSPACE_DB_CONFIG.STORES.BOARDS,
       description: 'Workspace boards storage',
     });
@@ -70,7 +106,7 @@ class WorkspaceStorageService {
     this.stateStore = localforage.createInstance({
       driver: localforage.INDEXEDDB,
       name: WORKSPACE_DB_CONFIG.DATABASE_NAME,
-      version: WORKSPACE_DB_CONFIG.DATABASE_VERSION,
+      version: version,
       storeName: WORKSPACE_DB_CONFIG.STORES.STATE,
       description: 'Workspace state storage',
     });
@@ -81,12 +117,26 @@ class WorkspaceStorageService {
    */
   async initialize(): Promise<void> {
     if (this.initialized) return;
+    
+    // Ensure we only initialize once even if called concurrently
+    if (this.initPromise) {
+      await this.initPromise;
+      return;
+    }
 
+    this.initPromise = this.doInitialize();
+    await this.initPromise;
+  }
+
+  private async doInitialize(): Promise<void> {
     try {
+      // Create stores with detected version first
+      await this.createStores();
+      
       await Promise.all([
-        this.foldersStore.ready(),
-        this.boardsStore.ready(),
-        this.stateStore.ready(),
+        this.foldersStore!.ready(),
+        this.boardsStore!.ready(),
+        this.stateStore!.ready(),
       ]);
       this.initialized = true;
     } catch (error) {
@@ -95,22 +145,45 @@ class WorkspaceStorageService {
     }
   }
 
+  // ========== Private Store Getters (ensure initialized) ==========
+
+  private getFoldersStore(): LocalForage {
+    if (!this.foldersStore) {
+      throw new Error('WorkspaceStorage not initialized');
+    }
+    return this.foldersStore;
+  }
+
+  private getBoardsStore(): LocalForage {
+    if (!this.boardsStore) {
+      throw new Error('WorkspaceStorage not initialized');
+    }
+    return this.boardsStore;
+  }
+
+  private getStateStore(): LocalForage {
+    if (!this.stateStore) {
+      throw new Error('WorkspaceStorage not initialized');
+    }
+    return this.stateStore;
+  }
+
   // ========== Folder Operations ==========
 
   async saveFolder(folder: Folder): Promise<void> {
     await this.ensureInitialized();
-    await this.foldersStore.setItem(folder.id, folder);
+    await this.getFoldersStore().setItem(folder.id, folder);
   }
 
   async loadFolder(id: string): Promise<Folder | null> {
     await this.ensureInitialized();
-    return this.foldersStore.getItem<Folder>(id);
+    return this.getFoldersStore().getItem<Folder>(id);
   }
 
   async loadAllFolders(): Promise<Folder[]> {
     await this.ensureInitialized();
     const folders: Folder[] = [];
-    await this.foldersStore.iterate<Folder, void>((value) => {
+    await this.getFoldersStore().iterate<Folder, void>((value) => {
       if (value && value.id) folders.push(value);
     });
     // Wait for browser idle time after IndexedDB operation
@@ -120,25 +193,25 @@ class WorkspaceStorageService {
 
   async deleteFolder(id: string): Promise<void> {
     await this.ensureInitialized();
-    await this.foldersStore.removeItem(id);
+    await this.getFoldersStore().removeItem(id);
   }
 
   // ========== Board Operations ==========
 
   async saveBoard(board: Board): Promise<void> {
     await this.ensureInitialized();
-    await this.boardsStore.setItem(board.id, board);
+    await this.getBoardsStore().setItem(board.id, board);
   }
 
   async loadBoard(id: string): Promise<Board | null> {
     await this.ensureInitialized();
-    return this.boardsStore.getItem<Board>(id);
+    return this.getBoardsStore().getItem<Board>(id);
   }
 
   async loadAllBoards(): Promise<Board[]> {
     await this.ensureInitialized();
     const boards: Board[] = [];
-    await this.boardsStore.iterate<Board, void>((value) => {
+    await this.getBoardsStore().iterate<Board, void>((value) => {
       if (value && value.id) boards.push(value);
     });
     // Wait for browser idle time after IndexedDB operation
@@ -149,7 +222,7 @@ class WorkspaceStorageService {
   async loadFolderBoards(folderId: string | null): Promise<Board[]> {
     await this.ensureInitialized();
     const boards: Board[] = [];
-    await this.boardsStore.iterate<Board, void>((value) => {
+    await this.getBoardsStore().iterate<Board, void>((value) => {
       if (value && value.folderId === folderId) {
         boards.push(value);
       }
@@ -161,7 +234,7 @@ class WorkspaceStorageService {
 
   async deleteBoard(id: string): Promise<void> {
     await this.ensureInitialized();
-    await this.boardsStore.removeItem(id);
+    await this.getBoardsStore().removeItem(id);
   }
 
   async deleteFolderBoards(folderId: string): Promise<void> {
@@ -174,12 +247,12 @@ class WorkspaceStorageService {
 
   async saveState(state: WorkspaceState): Promise<void> {
     await this.ensureInitialized();
-    await this.stateStore.setItem(STATE_KEY, state);
+    await this.getStateStore().setItem(STATE_KEY, state);
   }
 
   async loadState(): Promise<WorkspaceState> {
     await this.ensureInitialized();
-    const state = await this.stateStore.getItem<WorkspaceState>(STATE_KEY);
+    const state = await this.getStateStore().getItem<WorkspaceState>(STATE_KEY);
     return (
       state || {
         currentBoardId: null,
@@ -194,15 +267,15 @@ class WorkspaceStorageService {
 
   async getBoardCount(): Promise<number> {
     await this.ensureInitialized();
-    return this.boardsStore.length();
+    return this.getBoardsStore().length();
   }
 
   async clearAll(): Promise<void> {
     await this.ensureInitialized();
     await Promise.all([
-      this.foldersStore.clear(),
-      this.boardsStore.clear(),
-      this.stateStore.clear(),
+      this.getFoldersStore().clear(),
+      this.getBoardsStore().clear(),
+      this.getStateStore().clear(),
     ]);
   }
 

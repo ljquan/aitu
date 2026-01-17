@@ -16,12 +16,21 @@ import type { Workflow } from './workflow-types';
 import type { ChatWorkflow } from './chat-workflow/types';
 
 const DB_NAME = 'sw-task-queue';
-const DB_VERSION = 2; // Upgraded from 1 to add workflow stores
+const MIN_DB_VERSION = 2; // Minimum required version (with workflow stores)
 const TASKS_STORE = 'tasks';
 const CONFIG_STORE = 'config';
 const WORKFLOWS_STORE = 'workflows';
 const CHAT_WORKFLOWS_STORE = 'chat-workflows';
 const PENDING_TOOL_REQUESTS_STORE = 'pending-tool-requests';
+
+// All required stores for integrity check
+const REQUIRED_STORES = [
+  TASKS_STORE,
+  CONFIG_STORE,
+  WORKFLOWS_STORE,
+  CHAT_WORKFLOWS_STORE,
+  PENDING_TOOL_REQUESTS_STORE,
+];
 
 /**
  * Pending tool request stored in IndexedDB
@@ -38,11 +47,113 @@ export interface StoredPendingToolRequest {
 }
 
 /**
- * Open IndexedDB connection
+ * Detect existing database version to avoid downgrade errors
  */
-function openDB(): Promise<IDBDatabase> {
+function detectDatabaseVersion(): Promise<number> {
+  return new Promise((resolve) => {
+    // Open without version to get current version
+    const request = indexedDB.open(DB_NAME);
+    
+    request.onsuccess = () => {
+      const db = request.result;
+      const version = db.version;
+      db.close();
+      resolve(Math.max(version, MIN_DB_VERSION));
+    };
+    
+    request.onerror = () => {
+      resolve(MIN_DB_VERSION);
+    };
+  });
+}
+
+/**
+ * Check if all required object stores exist
+ */
+function checkStoresIntegrity(db: IDBDatabase): string[] {
+  const missing: string[] = [];
+  for (const store of REQUIRED_STORES) {
+    if (!db.objectStoreNames.contains(store)) {
+      missing.push(store);
+    }
+  }
+  return missing;
+}
+
+/**
+ * Create missing object stores by incrementing version
+ */
+function repairDatabase(currentVersion: number): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    // Increment version to trigger onupgradeneeded
+    const newVersion = currentVersion + 1;
+    console.log(`[SWStorage] Repairing database: upgrading from v${currentVersion} to v${newVersion}`);
+    
+    const request = indexedDB.open(DB_NAME, newVersion);
+    
+    request.onerror = () => {
+      console.error('[SWStorage] Failed to repair DB:', request.error);
+      reject(request.error);
+    };
+    
+    request.onsuccess = () => {
+      resolve(request.result);
+    };
+    
+    request.onupgradeneeded = (event) => {
+      const db = (event.target as IDBOpenDBRequest).result;
+      createAllStores(db);
+    };
+  });
+}
+
+/**
+ * Create all required object stores if they don't exist
+ */
+function createAllStores(db: IDBDatabase): void {
+  // Create tasks store
+  if (!db.objectStoreNames.contains(TASKS_STORE)) {
+    const tasksStore = db.createObjectStore(TASKS_STORE, { keyPath: 'id' });
+    tasksStore.createIndex('status', 'status', { unique: false });
+    tasksStore.createIndex('type', 'type', { unique: false });
+    tasksStore.createIndex('createdAt', 'createdAt', { unique: false });
+  }
+
+  // Create config store
+  if (!db.objectStoreNames.contains(CONFIG_STORE)) {
+    db.createObjectStore(CONFIG_STORE, { keyPath: 'key' });
+  }
+
+  // Create workflows store
+  if (!db.objectStoreNames.contains(WORKFLOWS_STORE)) {
+    const workflowsStore = db.createObjectStore(WORKFLOWS_STORE, { keyPath: 'id' });
+    workflowsStore.createIndex('status', 'status', { unique: false });
+    workflowsStore.createIndex('createdAt', 'createdAt', { unique: false });
+  }
+
+  // Create chat workflows store
+  if (!db.objectStoreNames.contains(CHAT_WORKFLOWS_STORE)) {
+    const chatWorkflowsStore = db.createObjectStore(CHAT_WORKFLOWS_STORE, { keyPath: 'id' });
+    chatWorkflowsStore.createIndex('status', 'status', { unique: false });
+    chatWorkflowsStore.createIndex('createdAt', 'createdAt', { unique: false });
+  }
+
+  // Create pending tool requests store
+  if (!db.objectStoreNames.contains(PENDING_TOOL_REQUESTS_STORE)) {
+    const pendingRequestsStore = db.createObjectStore(PENDING_TOOL_REQUESTS_STORE, { keyPath: 'requestId' });
+    pendingRequestsStore.createIndex('workflowId', 'workflowId', { unique: false });
+  }
+}
+
+/**
+ * Open IndexedDB connection with dynamic version detection and auto-repair
+ */
+async function openDB(): Promise<IDBDatabase> {
+  // First, detect the current database version
+  const targetVersion = await detectDatabaseVersion();
+  
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, targetVersion);
 
     request.onerror = () => {
       console.error('[SWStorage] Failed to open DB:', request.error);
@@ -50,51 +161,27 @@ function openDB(): Promise<IDBDatabase> {
     };
 
     request.onsuccess = () => {
-      resolve(request.result);
+      const db = request.result;
+      
+      // Check if all stores exist
+      const missingStores = checkStoresIntegrity(db);
+      if (missingStores.length > 0) {
+        console.warn(`[SWStorage] Missing object stores: ${missingStores.join(', ')}. Repairing...`);
+        db.close();
+        
+        // Repair by incrementing version
+        repairDatabase(db.version)
+          .then(resolve)
+          .catch(reject);
+        return;
+      }
+      
+      resolve(db);
     };
 
     request.onupgradeneeded = (event) => {
       const db = (event.target as IDBOpenDBRequest).result;
-      const oldVersion = event.oldVersion;
-
-      // Version 1: tasks and config stores
-      if (oldVersion < 1) {
-        // Create tasks store
-        if (!db.objectStoreNames.contains(TASKS_STORE)) {
-          const tasksStore = db.createObjectStore(TASKS_STORE, { keyPath: 'id' });
-          tasksStore.createIndex('status', 'status', { unique: false });
-          tasksStore.createIndex('type', 'type', { unique: false });
-          tasksStore.createIndex('createdAt', 'createdAt', { unique: false });
-        }
-
-        // Create config store
-        if (!db.objectStoreNames.contains(CONFIG_STORE)) {
-          db.createObjectStore(CONFIG_STORE, { keyPath: 'key' });
-        }
-      }
-
-      // Version 2: workflow stores
-      if (oldVersion < 2) {
-        // Create workflows store
-        if (!db.objectStoreNames.contains(WORKFLOWS_STORE)) {
-          const workflowsStore = db.createObjectStore(WORKFLOWS_STORE, { keyPath: 'id' });
-          workflowsStore.createIndex('status', 'status', { unique: false });
-          workflowsStore.createIndex('createdAt', 'createdAt', { unique: false });
-        }
-
-        // Create chat workflows store
-        if (!db.objectStoreNames.contains(CHAT_WORKFLOWS_STORE)) {
-          const chatWorkflowsStore = db.createObjectStore(CHAT_WORKFLOWS_STORE, { keyPath: 'id' });
-          chatWorkflowsStore.createIndex('status', 'status', { unique: false });
-          chatWorkflowsStore.createIndex('createdAt', 'createdAt', { unique: false });
-        }
-
-        // Create pending tool requests store
-        if (!db.objectStoreNames.contains(PENDING_TOOL_REQUESTS_STORE)) {
-          const pendingRequestsStore = db.createObjectStore(PENDING_TOOL_REQUESTS_STORE, { keyPath: 'requestId' });
-          pendingRequestsStore.createIndex('workflowId', 'workflowId', { unique: false });
-        }
-      }
+      createAllStores(db);
     };
   });
 }
