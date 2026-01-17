@@ -670,6 +670,79 @@ export const Minimap: React.FC<MinimapProps> = ({
     render();
   }, [state.dragging, renderPreview, render]);
 
+  // 追踪是否正在触控（用于区分移动端和桌面端交互）
+  const isTouchingRef = useRef(false);
+
+  /**
+   * 处理触控开始 - 显示预览（移动端 hover 效果）
+   */
+  const handleTouchStart = useCallback((e: React.TouchEvent<HTMLCanvasElement>) => {
+    isTouchingRef.current = true;
+    
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const touch = e.touches[0];
+    const rect = canvas.getBoundingClientRect();
+    const minimapX = touch.clientX - rect.left;
+    const minimapY = touch.clientY - rect.top;
+
+    const pos = { x: minimapX, y: minimapY };
+    setHoverPosition(pos);
+    hoverPositionRef.current = pos;
+    setPreviewVisible(true);
+
+    // 渲染预览
+    renderPreview(minimapX, minimapY);
+    
+    // 触发 minimap 重绘以显示预览区域指示框
+    render();
+  }, [renderPreview, render]);
+
+  /**
+   * 处理触控移动 - 更新预览位置（移动端 hover 效果）
+   * 移动端触控时始终显示预览，不受拖拽状态影响
+   */
+  const handleTouchMove = useCallback((e: React.TouchEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const touch = e.touches[0];
+    const rect = canvas.getBoundingClientRect();
+    const minimapX = touch.clientX - rect.left;
+    const minimapY = touch.clientY - rect.top;
+
+    const pos = { x: minimapX, y: minimapY };
+    setHoverPosition(pos);
+    hoverPositionRef.current = pos;
+
+    // 移动端触控时始终显示预览（不管是否在拖拽）
+    setPreviewVisible(true);
+    // 渲染预览
+    renderPreview(minimapX, minimapY);
+    
+    // 触发 minimap 重绘以显示预览区域指示框
+    render();
+  }, [renderPreview, render]);
+
+  /**
+   * 处理触控结束 - 隐藏预览
+   */
+  const handleTouchEnd = useCallback(() => {
+    isTouchingRef.current = false;
+    
+    // 延迟隐藏预览，给用户一点时间看到最终位置
+    setTimeout(() => {
+      // 只有在不再触控时才隐藏
+      if (!isTouchingRef.current) {
+        setPreviewVisible(false);
+        setHoverPosition(null);
+        hoverPositionRef.current = null;
+        render();
+      }
+    }, 500); // 延长到 500ms，让用户更清楚看到最终位置
+  }, [render]);
+
   useEffect(() => {
     if (!state.expanded) return;
 
@@ -705,13 +778,15 @@ export const Minimap: React.FC<MinimapProps> = ({
   };
 
   // 计算预览框位置（在 minimap 左侧）
+  // 移动端触控时（isTouchingRef.current）即使拖拽也显示预览
+  const shouldShowPreview = previewVisible && (isTouchingRef.current || !state.dragging);
   const previewStyle: React.CSSProperties = hoverPosition ? {
     position: 'absolute',
     right: config.width + 8, // 在 minimap 左侧
     top: Math.max(0, Math.min(hoverPosition.y - PREVIEW_SIZE / 2, config.height - PREVIEW_SIZE)),
     width: PREVIEW_SIZE,
     height: PREVIEW_SIZE,
-    opacity: previewVisible && !state.dragging ? 1 : 0,
+    opacity: shouldShowPreview ? 1 : 0,
     pointerEvents: 'none',
     transition: 'opacity 0.15s ease-out, top 0.1s ease-out',
   } : {
@@ -741,6 +816,9 @@ export const Minimap: React.FC<MinimapProps> = ({
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
             onMouseMove={handleMouseMove}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
             style={{
               cursor: state.dragging ? 'grabbing' : 'pointer',
             }}
