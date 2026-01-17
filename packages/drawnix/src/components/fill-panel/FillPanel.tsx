@@ -109,39 +109,41 @@ export const FillPanel: React.FC<FillPanelProps> = ({
     }
   }, [currentConfig.image]);
 
-  // 切换标签
-  const handleTabChange = useCallback(
-    (tab: TabType) => {
-      setActiveTab(tab);
-      onFillTypeChange?.(tab);
-    },
-    [onFillTypeChange]
-  );
+  // 切换标签 - 只切换显示，不触发填充类型变更
+  // 只有在用户实际操作（选择颜色、渐变色或图片）时才触发变更
+  const handleTabChange = useCallback((tab: TabType) => {
+    setActiveTab(tab);
+  }, []);
 
-  // 处理纯色变更
+  // 处理纯色变更 - 用户实际操作时触发填充类型变更
   const handleSolidChange = useCallback(
     (color: string) => {
+      onFillTypeChange?.('solid');
       onSolidChange?.(color);
     },
-    [onSolidChange]
+    [onSolidChange, onFillTypeChange]
   );
 
-  // 处理渐变变更
+  // 处理渐变变更 - 用户实际操作时触发填充类型变更
   const handleGradientChange = useCallback(
     (config: GradientFillConfig) => {
       setGradientConfig(config);
+      // 先切换填充类型，再更新渐变配置
+      onFillTypeChange?.('gradient');
       onGradientChange?.(config);
     },
-    [onGradientChange]
+    [onGradientChange, onFillTypeChange]
   );
 
-  // 处理图片填充变更
+  // 处理图片填充变更 - 用户实际操作时触发填充类型变更
   const handleImageChange = useCallback(
     (config: ImageFillConfig) => {
       setImageConfig(config);
+      // 先切换填充类型，再更新图片配置
+      onFillTypeChange?.('image');
       onImageChange?.(config);
     },
-    [onImageChange]
+    [onImageChange, onFillTypeChange]
   );
 
   // 获取纯色值

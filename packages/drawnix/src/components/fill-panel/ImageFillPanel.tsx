@@ -5,7 +5,7 @@
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import classNames from 'classnames';
-import { debounce } from '@aitu/utils';
+import { throttle } from '@aitu/utils';
 import { useI18n } from '../../i18n';
 import { MessagePlugin } from 'tdesign-react';
 import { Image, Upload, Grid, ChevronDown, ChevronUp } from 'lucide-react';
@@ -60,23 +60,44 @@ export const ImageFillPanel: React.FC<ImageFillPanelProps> = ({
     [config, onChange]
   );
 
-  // 防抖版本的 onChange，用于滑块拖动时减少更新频率
-  // 注意：只防抖外部回调，内部状态立即更新以保持 UI 响应
-  const debouncedOnChange = useMemo(
-    () => debounce((newConfig: ImageFillConfig) => {
+  // 节流版本的 onChange，用于滑块拖动时减少更新频率
+  // 注意：只节流外部回调，内部状态立即更新以保持 UI 响应
+  const throttledOnChange = useMemo(
+    () => throttle((newConfig: ImageFillConfig) => {
       onChange?.(newConfig);
-    }, 16), // 16ms 防抖（约一帧），平衡实时性和性能
+    }, 300), // 100ms 节流，平衡响应速度和性能
     [onChange]
   );
 
-  // 滑块专用的更新函数：立即更新 UI，防抖触发外部回调
-  const updateConfigDebounced = useCallback(
+  // 滑块专用的更新函数：立即更新 UI，节流触发外部回调
+  const updateConfigThrottled = useCallback(
     (updates: Partial<ImageFillConfig>) => {
       const newConfig = { ...config, ...updates };
       setConfig(newConfig);
-      debouncedOnChange(newConfig);
+      throttledOnChange(newConfig);
     },
-    [config, debouncedOnChange]
+    [config, throttledOnChange]
+  );
+
+  // 输入框值变化处理（带范围限制）
+  const handleInputChange = useCallback(
+    (
+      field: 'scale' | 'offsetX' | 'offsetY' | 'rotation',
+      value: string,
+      min: number,
+      max: number,
+      divisor: number = 1
+    ) => {
+      const numValue = parseFloat(value);
+      if (isNaN(numValue)) return;
+      
+      // 限制在有效范围内
+      const clampedValue = Math.max(min, Math.min(max, numValue));
+      const finalValue = divisor === 1 ? clampedValue : clampedValue / divisor;
+      
+      updateConfig({ [field]: finalValue });
+    },
+    [updateConfig]
   );
 
   // 处理从素材库选择
@@ -242,12 +263,20 @@ export const ImageFillPanel: React.FC<ImageFillPanelProps> = ({
                       min={50}
                       max={200}
                       value={(config.scale ?? 1) * 100}
-                      onChange={(e) => updateConfigDebounced({ scale: Number(e.target.value) / 100 })}
+                      onChange={(e) => updateConfigThrottled({ scale: Number(e.target.value) / 100 })}
                       className="ifp-slider"
                     />
-                    <span className="ifp-control-value">
-                      {Math.round((config.scale ?? 1) * 100)}%
-                    </span>
+                    <div className="ifp-control-value-wrapper">
+                      <input
+                        type="number"
+                        className="ifp-control-value-input"
+                        value={Math.round((config.scale ?? 1) * 100)}
+                        min={50}
+                        max={200}
+                        onChange={(e) => handleInputChange('scale', e.target.value, 50, 200, 100)}
+                      />
+                      <span className="ifp-control-unit">%</span>
+                    </div>
                   </div>
                 </div>
 
@@ -262,12 +291,20 @@ export const ImageFillPanel: React.FC<ImageFillPanelProps> = ({
                       min={-100}
                       max={100}
                       value={(config.offsetX ?? 0) * 100}
-                      onChange={(e) => updateConfigDebounced({ offsetX: Number(e.target.value) / 100 })}
+                      onChange={(e) => updateConfigThrottled({ offsetX: Number(e.target.value) / 100 })}
                       className="ifp-slider"
                     />
-                    <span className="ifp-control-value">
-                      {Math.round((config.offsetX ?? 0) * 100)}%
-                    </span>
+                    <div className="ifp-control-value-wrapper">
+                      <input
+                        type="number"
+                        className="ifp-control-value-input"
+                        value={Math.round((config.offsetX ?? 0) * 100)}
+                        min={-100}
+                        max={100}
+                        onChange={(e) => handleInputChange('offsetX', e.target.value, -100, 100, 100)}
+                      />
+                      <span className="ifp-control-unit">%</span>
+                    </div>
                   </div>
                 </div>
 
@@ -282,12 +319,20 @@ export const ImageFillPanel: React.FC<ImageFillPanelProps> = ({
                       min={-100}
                       max={100}
                       value={(config.offsetY ?? 0) * 100}
-                      onChange={(e) => updateConfigDebounced({ offsetY: Number(e.target.value) / 100 })}
+                      onChange={(e) => updateConfigThrottled({ offsetY: Number(e.target.value) / 100 })}
                       className="ifp-slider"
                     />
-                    <span className="ifp-control-value">
-                      {Math.round((config.offsetY ?? 0) * 100)}%
-                    </span>
+                    <div className="ifp-control-value-wrapper">
+                      <input
+                        type="number"
+                        className="ifp-control-value-input"
+                        value={Math.round((config.offsetY ?? 0) * 100)}
+                        min={-100}
+                        max={100}
+                        onChange={(e) => handleInputChange('offsetY', e.target.value, -100, 100, 100)}
+                      />
+                      <span className="ifp-control-unit">%</span>
+                    </div>
                   </div>
                 </div>
 
@@ -302,10 +347,20 @@ export const ImageFillPanel: React.FC<ImageFillPanelProps> = ({
                       min={0}
                       max={360}
                       value={config.rotation ?? 0}
-                      onChange={(e) => updateConfigDebounced({ rotation: Number(e.target.value) })}
+                      onChange={(e) => updateConfigThrottled({ rotation: Number(e.target.value) })}
                       className="ifp-slider"
                     />
-                    <span className="ifp-control-value">{config.rotation ?? 0}°</span>
+                    <div className="ifp-control-value-wrapper">
+                      <input
+                        type="number"
+                        className="ifp-control-value-input"
+                        value={config.rotation ?? 0}
+                        min={0}
+                        max={360}
+                        onChange={(e) => handleInputChange('rotation', e.target.value, 0, 360, 1)}
+                      />
+                      <span className="ifp-control-unit">°</span>
+                    </div>
                   </div>
                 </div>
 
