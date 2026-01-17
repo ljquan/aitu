@@ -1,3 +1,19 @@
+## 0.5.5 (2026-01-17)
+
+### 🚀 Features
+
+- 添加双击重命名功能 ([e7968f1](https://github.com/ljquan/aitu/commit/e7968f1))
+
+### 🔧 Chores
+
+- bump version to 0.5.4 and update changelog ([9baf1a7](https://github.com/ljquan/aitu/commit/9baf1a7))
+- refactor(storage): enhance database version handling and integrity checks ([dcfd46a](https://github.com/ljquan/aitu/commit/dcfd46a))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+- Claude Code <claude@anthropic.com>
+
 ## 0.5.4 (2026-01-17)
 
 ### 🩹 Fixes
