@@ -107,6 +107,16 @@ const ProjectDrawerContent: React.FC<{
   // Click delay timer for distinguishing single/double click
   const clickTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Cleanup timer on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      if (clickTimerRef.current) {
+        clearTimeout(clickTimerRef.current);
+        clickTimerRef.current = null;
+      }
+    };
+  }, []);
+
   // Auto-select text when input is focused
   const handleInputFocus = useCallback((_value: string, context: { e: React.FocusEvent<HTMLInputElement> }) => {
     const input = context.e.target as HTMLInputElement;

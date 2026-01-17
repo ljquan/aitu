@@ -838,22 +838,11 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
 
   // Handle generation
   const handleGenerate = useCallback(async () => {
-    // Debug logging - track what triggers this function
-    console.log('[AIInputBar] handleGenerate triggered', {
-      prompt: prompt.substring(0, 50),
-      allContentCount: allContent.length,
-      isSubmitting,
-      timestamp: new Date().toISOString(),
-      stack: new Error().stack?.split('\n').slice(1, 5).join('\n'),
-    });
-    
     if (!prompt.trim() && allContent.length === 0) return;
     if (isSubmitting) {
-      console.log('[AIInputBar] handleGenerate blocked: isSubmitting=true');
       return; // 仅防止快速重复点击
     }
 
-    console.log('[AIInputBar] handleGenerate: setting isSubmitting=true');
     setIsSubmitting(true);
 
     try {
