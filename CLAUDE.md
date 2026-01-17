@@ -552,7 +552,7 @@ type SWToMainMessage =
 **任务生命周期**：
 ```
 PENDING → PROCESSING → COMPLETED
-                    ↘ FAILED → RETRYING → PENDING (重试)
+                    ↘ FAILED
                     ↘ CANCELLED
 ```
 
@@ -1215,6 +1215,75 @@ useEffect(() => {
 - `onPointerLeave` 清除计时器（用户离开后取消待执行的操作）
 - `onPointerDown` 清除计时器（点击时立即响应，不等待延迟）
 - `useEffect` 清理函数确保组件卸载时清除计时器
+
+#### 单击/双击区分场景的计时器清理
+
+**场景**: 使用 `setTimeout` 延迟单击操作以区分单击和双击时
+
+❌ **错误示例**:
+```typescript
+// 错误：没有在组件卸载时清理计时器
+const clickTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+// 单击延迟处理
+onClick={() => {
+  if (clickTimerRef.current) {
+    clearTimeout(clickTimerRef.current);
+  }
+  clickTimerRef.current = setTimeout(() => {
+    handleSingleClick(); // 组件卸载后仍可能执行，导致 state 更新到已卸载组件
+  }, 200);
+}}
+
+// 双击取消单击
+onDoubleClick={() => {
+  if (clickTimerRef.current) {
+    clearTimeout(clickTimerRef.current);
+    clickTimerRef.current = null;
+  }
+  handleDoubleClick();
+}}
+// ⚠️ 缺少 useEffect 清理！
+```
+
+✅ **正确示例**:
+```typescript
+const clickTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+// 组件卸载时清理计时器
+useEffect(() => {
+  return () => {
+    if (clickTimerRef.current) {
+      clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
+    }
+  };
+}, []);
+
+// 单击延迟处理
+onClick={() => {
+  if (clickTimerRef.current) {
+    clearTimeout(clickTimerRef.current);
+  }
+  clickTimerRef.current = setTimeout(() => {
+    handleSingleClick();
+  }, 200);
+}}
+
+// 双击取消单击
+onDoubleClick={() => {
+  if (clickTimerRef.current) {
+    clearTimeout(clickTimerRef.current);
+    clickTimerRef.current = null;
+  }
+  handleDoubleClick();
+}}
+```
+
+**原因**: 如果用户在计时器等待期间导航离开页面（组件卸载），计时器回调仍会执行，可能导致：
+1. 内存泄漏（闭包引用已卸载组件的状态）
+2. React 警告："Can't perform a React state update on an unmounted component"
+3. stale callback 访问过期的 props/state
 
 ### CSS/SCSS 规范
 - 使用 BEM 命名规范
