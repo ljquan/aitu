@@ -20,9 +20,117 @@ import {
   type WorkflowMainToSWMessage,
   type MainThreadToolResponseMessage,
 } from './task-queue';
+import { setDebugFetchBroadcast, getInternalFetchLogs, clearInternalFetchLogs, isDebugFetchEnabled } from './task-queue/debug-fetch';
+import {
+  logReceivedMessage,
+  getAllLogs as getAllPostMessageLogs,
+  clearLogs as clearPostMessageLogs,
+  getLogStats as getPostMessageLogStats,
+  isPostMessageLoggerDebugMode,
+  type PostMessageLogEntry,
+} from './task-queue/postmessage-logger';
+import {
+  initMessageSender,
+  setDebugMode as setMessageSenderDebugMode,
+  setBroadcastCallback,
+  sendToClient,
+  broadcastToAllClients,
+} from './task-queue/utils/message-bus';
 
 // Initialize task queue (instance used internally by handleTaskQueueMessage)
 initTaskQueue(sw);
+
+// Initialize message sender (will be fully configured later with debug mode)
+initMessageSender(sw);
+
+// ============================================================================
+// SW Console Log Capture (for debug mode)
+// Intercepts SW internal console.log/info calls and forwards to debug panel
+// ============================================================================
+const originalSWConsole = {
+  log: console.log.bind(console),
+  info: console.info.bind(console),
+  warn: console.warn.bind(console),
+  error: console.error.bind(console),
+};
+
+// Forward SW console logs to debug panel when debug mode is enabled
+function setupSWConsoleCapture() {
+  console.log = (...args: unknown[]) => {
+    originalSWConsole.log(...args);
+    if (isDebugFetchEnabled()) {
+      forwardSWConsoleLog('log', args);
+    }
+  };
+  
+  console.info = (...args: unknown[]) => {
+    originalSWConsole.info(...args);
+    if (isDebugFetchEnabled()) {
+      forwardSWConsoleLog('info', args);
+    }
+  };
+  
+  // warn and error are always forwarded
+  console.warn = (...args: unknown[]) => {
+    originalSWConsole.warn(...args);
+    forwardSWConsoleLog('warn', args);
+  };
+  
+  console.error = (...args: unknown[]) => {
+    originalSWConsole.error(...args);
+    forwardSWConsoleLog('error', args);
+  };
+}
+
+function forwardSWConsoleLog(level: 'log' | 'info' | 'warn' | 'error', args: unknown[]) {
+  const message = args.map(arg => {
+    if (typeof arg === 'object') {
+      try {
+        return JSON.stringify(arg);
+      } catch {
+        return String(arg);
+      }
+    }
+    return String(arg);
+  }).join(' ');
+  
+  // Add [SW] prefix only if not already present
+  const prefixedMessage = message.startsWith('[SW]') || message.startsWith('[SW-') 
+    ? message 
+    : `[SW] ${message}`;
+  
+  // Use the existing addConsoleLog function (defined later in this file)
+  // We'll call it after it's defined
+  if (typeof addConsoleLogLater === 'function') {
+    addConsoleLogLater({
+      logLevel: level,
+      logMessage: prefixedMessage,
+      logSource: 'service-worker',
+    });
+  }
+}
+
+// Placeholder - will be set after addConsoleLog is defined
+let addConsoleLogLater: typeof addConsoleLog | null = null;
+
+// Setup console capture immediately
+setupSWConsoleCapture();
+
+// Setup debug fetch broadcast to send SW internal API logs to debug panel
+setDebugFetchBroadcast((log) => {
+  // Broadcast as a special SW internal log type
+  sw.clients.matchAll().then(clients => {
+    clients.forEach(client => {
+      client.postMessage({
+        type: 'SW_DEBUG_LOG',
+        entry: {
+          ...log,
+          type: 'fetch',
+        }
+      });
+    });
+  });
+});
 
 // Service Worker for PWA functionality and handling CORS issues with external images
 // Version will be replaced during build process
@@ -118,6 +226,358 @@ const videoBlobCache = new Map<string, VideoCacheEntry>();
 
 // 域名故障标记：记录已知失败的域名
 const failedDomains = new Set<string>();
+
+// ==================== 调试功能相关 ====================
+
+// 调试日志条目接口
+interface DebugLogEntry {
+  id: string;
+  timestamp: number;
+  type: 'fetch' | 'cache' | 'message' | 'error' | 'console';
+  url?: string;
+  method?: string;
+  requestType?: string; // 'image' | 'video' | 'font' | 'static' | 'cache-url' | 'asset-library' | 'other'
+  status?: number;
+  statusText?: string;
+  responseType?: string;
+  cached?: boolean;
+  duration?: number;
+  error?: string;
+  headers?: Record<string, string>;
+  responseHeaders?: Record<string, string>;
+  size?: number;
+  details?: string;
+  // 控制台日志专用字段
+  logLevel?: 'log' | 'info' | 'warn' | 'error' | 'debug';
+  logMessage?: string;
+  logStack?: string;
+  logSource?: string;
+}
+
+// 控制台日志存储（内存缓存，用于实时广播）
+// 持久化存储在 IndexedDB，缓存 7 天
+const consoleLogs: DebugLogEntry[] = [];
+const CONSOLE_LOG_RETENTION_DAYS = 7;
+
+// 调试日志存储（最多保留 500 条）
+const debugLogs: DebugLogEntry[] = [];
+const MAX_DEBUG_LOGS = 500;
+
+// 调试模式开关
+let debugModeEnabled = false;
+
+// 心跳机制：用于检测调试页面是否存活
+let lastHeartbeatTime = 0;
+const HEARTBEAT_TIMEOUT = 15000; // 15秒无心跳则认为调试页面已关闭
+let heartbeatCheckTimer: ReturnType<typeof setTimeout> | null = null;
+
+// 检查心跳是否超时，如果超时则自动关闭调试模式
+function checkHeartbeatTimeout() {
+  if (!debugModeEnabled) return;
+  
+  const now = Date.now();
+  if (lastHeartbeatTime > 0 && now - lastHeartbeatTime > HEARTBEAT_TIMEOUT) {
+    // 心跳超时，关闭调试模式
+    originalSWConsole.log('Service Worker: Debug heartbeat timeout, auto-disabling debug mode');
+    debugModeEnabled = false;
+    lastHeartbeatTime = 0;
+    setMessageSenderDebugMode(false);
+    
+    // Sync debug mode to debugFetch
+    import('./task-queue/debug-fetch').then(({ setDebugFetchEnabled }) => {
+      setDebugFetchEnabled(false);
+    });
+    
+    // Broadcast to ALL clients
+    sw.clients.matchAll().then(clients => {
+      clients.forEach(client => {
+        client.postMessage({ type: 'SW_DEBUG_DISABLED' });
+      });
+    });
+    
+    if (heartbeatCheckTimer) {
+      clearTimeout(heartbeatCheckTimer);
+      heartbeatCheckTimer = null;
+    }
+  } else if (debugModeEnabled) {
+    // 继续检查
+    heartbeatCheckTimer = setTimeout(checkHeartbeatTimeout, 5000);
+  }
+}
+
+// 添加调试日志
+function addDebugLog(entry: Omit<DebugLogEntry, 'id' | 'timestamp'>): string {
+  if (!debugModeEnabled) return '';
+  
+  const id = Math.random().toString(36).substring(2, 10);
+  const logEntry: DebugLogEntry = {
+    ...entry,
+    id,
+    timestamp: Date.now(),
+  };
+  
+  debugLogs.unshift(logEntry);
+  
+  // 保持日志数量限制
+  if (debugLogs.length > MAX_DEBUG_LOGS) {
+    debugLogs.pop();
+  }
+  
+  // 广播日志到调试页面
+  broadcastDebugLog(logEntry);
+  
+  return id;
+}
+
+// 更新调试日志
+function updateDebugLog(id: string, updates: Partial<DebugLogEntry>): void {
+  if (!debugModeEnabled || !id) return;
+  
+  const entry = debugLogs.find(e => e.id === id);
+  if (entry) {
+    Object.assign(entry, updates);
+    broadcastDebugLog(entry);
+  }
+}
+
+// 广播调试日志到所有客户端
+async function broadcastDebugLog(entry: DebugLogEntry): Promise<void> {
+  try {
+    const clients = await sw.clients.matchAll();
+    clients.forEach(client => {
+      client.postMessage({
+        type: 'SW_DEBUG_LOG',
+        entry
+      });
+    });
+  } catch (error) {
+    // 忽略广播错误
+  }
+}
+
+// 获取控制台日志数据库连接
+function openConsoleLogDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('ConsoleLogDB', 1);
+    
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve(request.result);
+    
+    request.onupgradeneeded = (event: IDBVersionChangeEvent) => {
+      const db = (event.target as IDBOpenDBRequest).result;
+      if (!db.objectStoreNames.contains('logs')) {
+        const store = db.createObjectStore('logs', { keyPath: 'id' });
+        store.createIndex('timestamp', 'timestamp', { unique: false });
+        store.createIndex('logLevel', 'logLevel', { unique: false });
+      }
+    };
+  });
+}
+
+// 保存控制台日志到 IndexedDB
+async function saveConsoleLogToDB(logEntry: DebugLogEntry): Promise<void> {
+  try {
+    const db = await openConsoleLogDB();
+    const transaction = db.transaction(['logs'], 'readwrite');
+    const store = transaction.objectStore('logs');
+    store.add(logEntry);
+    
+    return new Promise((resolve, reject) => {
+      transaction.oncomplete = () => {
+        db.close();
+        resolve();
+      };
+      transaction.onerror = () => {
+        db.close();
+        reject(transaction.error);
+      };
+    });
+  } catch (error) {
+    console.warn('Service Worker: 无法保存控制台日志:', error);
+  }
+}
+
+// 从 IndexedDB 加载所有控制台日志
+async function loadConsoleLogsFromDB(): Promise<DebugLogEntry[]> {
+  try {
+    const db = await openConsoleLogDB();
+    const transaction = db.transaction(['logs'], 'readonly');
+    const store = transaction.objectStore('logs');
+    const index = store.index('timestamp');
+    
+    return new Promise((resolve, reject) => {
+      const request = index.openCursor(null, 'prev'); // 按时间倒序
+      const logs: DebugLogEntry[] = [];
+      
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (cursor) {
+          logs.push(cursor.value);
+          cursor.continue();
+        } else {
+          db.close();
+          resolve(logs);
+        }
+      };
+      
+      request.onerror = () => {
+        db.close();
+        reject(request.error);
+      };
+    });
+  } catch (error) {
+    console.warn('Service Worker: 无法加载控制台日志:', error);
+    return [];
+  }
+}
+
+// 清理过期的控制台日志（7 天前）
+async function cleanupExpiredConsoleLogs(): Promise<number> {
+  try {
+    const db = await openConsoleLogDB();
+    const transaction = db.transaction(['logs'], 'readwrite');
+    const store = transaction.objectStore('logs');
+    const index = store.index('timestamp');
+    
+    const expirationTime = Date.now() - CONSOLE_LOG_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+    const range = IDBKeyRange.upperBound(expirationTime);
+    
+    return new Promise((resolve, reject) => {
+      const request = index.openCursor(range);
+      let deletedCount = 0;
+      
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (cursor) {
+          cursor.delete();
+          deletedCount++;
+          cursor.continue();
+        } else {
+          db.close();
+          if (deletedCount > 0) {
+            console.log(`Service Worker: 清理了 ${deletedCount} 条过期控制台日志`);
+          }
+          resolve(deletedCount);
+        }
+      };
+      
+      request.onerror = () => {
+        db.close();
+        reject(request.error);
+      };
+    });
+  } catch (error) {
+    console.warn('Service Worker: 无法清理过期日志:', error);
+    return 0;
+  }
+}
+
+// 清空所有控制台日志
+async function clearAllConsoleLogs(): Promise<void> {
+  try {
+    const db = await openConsoleLogDB();
+    const transaction = db.transaction(['logs'], 'readwrite');
+    const store = transaction.objectStore('logs');
+    store.clear();
+    
+    return new Promise((resolve, reject) => {
+      transaction.oncomplete = () => {
+        db.close();
+        resolve();
+      };
+      transaction.onerror = () => {
+        db.close();
+        reject(transaction.error);
+      };
+    });
+  } catch (error) {
+    console.warn('Service Worker: 无法清空控制台日志:', error);
+  }
+}
+
+// 添加控制台日志
+// 注意：只有调试模式启用时才存储和广播日志
+// 这与主线程 sw-console-capture.ts 的设计一致：
+// - 主线程：warn/error 始终发送，log/info/debug 只在调试模式时发送
+// - SW 端：只有调试模式启用时才处理日志，避免不必要的存储和广播
+function addConsoleLog(entry: {
+  logLevel: 'log' | 'info' | 'warn' | 'error' | 'debug';
+  logMessage: string;
+  logStack?: string;
+  logSource?: string;
+  url?: string;
+}): void {
+  // 调试模式未启用时，不存储和广播日志
+  if (!debugModeEnabled) {
+    return;
+  }
+
+  const id = Math.random().toString(36).substring(2, 10);
+  const logEntry: DebugLogEntry = {
+    id,
+    timestamp: Date.now(),
+    type: 'console',
+    ...entry,
+  };
+
+  // 保存到内存（用于 getDebugStatus 统计）
+  consoleLogs.unshift(logEntry);
+
+  // 保存到 IndexedDB（异步，不阻塞）
+  saveConsoleLogToDB(logEntry);
+
+  // 广播日志到调试页面
+  broadcastConsoleLog(logEntry);
+}
+
+// Set the forward function now that addConsoleLog is defined
+addConsoleLogLater = addConsoleLog;
+
+// 广播控制台日志到所有客户端
+async function broadcastConsoleLog(entry: DebugLogEntry): Promise<void> {
+  try {
+    const clients = await sw.clients.matchAll();
+    clients.forEach(client => {
+      client.postMessage({
+        type: 'SW_CONSOLE_LOG',
+        entry
+      });
+    });
+  } catch (error) {
+    // 忽略广播错误
+  }
+}
+
+// 获取 SW 状态信息
+function getDebugStatus(): {
+  version: string;
+  cacheNames: string[];
+  pendingImageRequests: number;
+  pendingVideoRequests: number;
+  videoBlobCacheSize: number;
+  completedImageRequestsSize: number;
+  failedDomainsCount: number;
+  failedDomains: string[];
+  debugLogsCount: number;
+  consoleLogsCount: number;
+  debugModeEnabled: boolean;
+  workflowHandlerInitialized: boolean;
+} {
+  return {
+    version: APP_VERSION,
+    cacheNames: [CACHE_NAME, IMAGE_CACHE_NAME, STATIC_CACHE_NAME, FONT_CACHE_NAME],
+    pendingImageRequests: pendingImageRequests.size,
+    pendingVideoRequests: pendingVideoRequests.size,
+    videoBlobCacheSize: videoBlobCache.size,
+    completedImageRequestsSize: completedImageRequests.size,
+    failedDomainsCount: failedDomains.size,
+    failedDomains: Array.from(failedDomains),
+    debugLogsCount: debugLogs.length,
+    consoleLogsCount: consoleLogs.length,
+    debugModeEnabled,
+    workflowHandlerInitialized,
+  };
+}
 
 // 检查URL是否需要CORS处理
 function shouldHandleCORS(url: URL): CorsDomain | null {
@@ -457,6 +917,12 @@ sw.addEventListener('activate', (event: ExtendableEvent) => {
       }
 
       // console.log(`Service Worker v${APP_VERSION} activated`);
+      
+      // 清理过期的控制台日志（7 天前）
+      cleanupExpiredConsoleLogs().catch(err => {
+        console.warn('Failed to cleanup expired console logs:', err);
+      });
+      
       return sw.clients.claim();
     })
   );
@@ -476,6 +942,7 @@ const TASK_QUEUE_MESSAGE_TYPES = [
   'TASK_MARK_INSERTED',
   'CHAT_START',
   'CHAT_STOP',
+  'CHAT_GET_CACHED',
   'TASK_RESTORE',
 ];
 
@@ -500,8 +967,43 @@ interface PendingWorkflowMessage {
 }
 const pendingWorkflowMessages: PendingWorkflowMessage[] = [];
 
+// Helper function to broadcast PostMessage log to debug panel
+function broadcastPostMessageLog(entry: PostMessageLogEntry): void {
+  if (debugModeEnabled) {
+    // Use direct postMessage for debug logs to avoid infinite loop
+    sw.clients.matchAll().then(clients => {
+      clients.forEach(client => {
+        client.postMessage({
+          type: 'SW_POSTMESSAGE_LOG',
+          entry,
+        });
+      });
+    });
+  }
+}
+
+// Configure message sender with debug callback
+setBroadcastCallback(broadcastPostMessageLog);
+
 // Handle messages from main thread
 sw.addEventListener('message', (event: ExtendableMessageEvent) => {
+  const messageType = event.data?.type || 'unknown';
+  const clientId = (event.source as Client)?.id || '';
+  
+  // Log received message only if debug mode is enabled
+  // This ensures postMessage logging doesn't affect performance when debug mode is off
+  let logId = '';
+  if (isPostMessageLoggerDebugMode()) {
+    logId = logReceivedMessage(messageType, event.data, clientId);
+    if (logId && debugModeEnabled) {
+      const logs = getAllPostMessageLogs();
+      const entry = logs.find(l => l.id === logId);
+      if (entry) {
+        broadcastPostMessageLog(entry);
+      }
+    }
+  }
+
   // Handle task queue messages
   if (event.data && isTaskQueueMessage(event.data)) {
     const clientId = (event.source as Client)?.id || '';
@@ -547,11 +1049,20 @@ sw.addEventListener('message', (event: ExtendableMessageEvent) => {
 
   // Handle workflow messages
   if (event.data && isWorkflowMessage(event.data)) {
+    const wfClientId = (event.source as Client)?.id || '';
+    console.log('[SW] ◀ Workflow message received:', {
+      type: event.data.type,
+      workflowId: event.data.workflow?.id || event.data.workflowId || event.data.chatId,
+      clientId: wfClientId,
+      handlerInitialized: workflowHandlerInitialized,
+      timestamp: new Date().toISOString(),
+    });
+    
     // Lazy initialize workflow handler if not yet initialized
     if (!workflowHandlerInitialized && storedGeminiConfig && storedVideoConfig) {
       initWorkflowHandler(sw, storedGeminiConfig, storedVideoConfig);
       workflowHandlerInitialized = true;
-      // console.log('Service Worker: Workflow handler lazy initialized');
+      console.log('[SW] Workflow handler lazy initialized');
     }
     
     // If still not initialized, try to load config from storage
@@ -567,9 +1078,8 @@ sw.addEventListener('message', (event: ExtendableMessageEvent) => {
             workflowHandlerInitialized = true;
             // console.log('Service Worker: Workflow handler initialized from storage');
             
-            // Now handle the message
-            const clientId = (event.source as Client)?.id || '';
-            handleWorkflowMessage(event.data as WorkflowMainToSWMessage, clientId);
+            // Now handle the message (use wfClientId from outer scope)
+            handleWorkflowMessage(event.data as WorkflowMainToSWMessage, wfClientId);
           } else {
             // 配置不存在时，通知主线程需要重新发送配置
             console.warn('[SW] Cannot initialize workflow handler: no config in storage, requesting config from main thread');
@@ -587,7 +1097,7 @@ sw.addEventListener('message', (event: ExtendableMessageEvent) => {
             // 将消息暂存，等配置到达后再处理
             pendingWorkflowMessages.push({
               message: event.data as WorkflowMainToSWMessage,
-              clientId: (event.source as Client)?.id || '',
+              clientId: wfClientId,
             });
           }
         } catch (error) {
@@ -597,8 +1107,7 @@ sw.addEventListener('message', (event: ExtendableMessageEvent) => {
       return;
     }
     
-    const clientId = (event.source as Client)?.id || '';
-    handleWorkflowMessage(event.data as WorkflowMainToSWMessage, clientId);
+    handleWorkflowMessage(event.data as WorkflowMainToSWMessage, wfClientId);
     return;
   }
 
@@ -669,8 +1178,469 @@ sw.addEventListener('message', (event: ExtendableMessageEvent) => {
     }).catch(error => {
       console.error('Service Worker: Failed to clear all cache:', error);
     });
+  } else if (event.data && event.data.type === 'SW_DEBUG_ENABLE') {
+    // 启用调试模式
+    debugModeEnabled = true;
+    lastHeartbeatTime = Date.now(); // 初始化心跳时间
+    // Sync debug mode to debugFetch and message sender
+    import('./task-queue/debug-fetch').then(({ setDebugFetchEnabled }) => {
+      setDebugFetchEnabled(true);
+    });
+    setMessageSenderDebugMode(true);
+    originalSWConsole.log('Service Worker: Debug mode enabled');
+    // 启动心跳检测
+    if (heartbeatCheckTimer) {
+      clearTimeout(heartbeatCheckTimer);
+    }
+    heartbeatCheckTimer = setTimeout(checkHeartbeatTimeout, 5000);
+    // Broadcast to ALL clients (including app pages) so they can capture logs
+    sw.clients.matchAll().then(clients => {
+      clients.forEach(client => {
+        client.postMessage({ type: 'SW_DEBUG_ENABLED' });
+      });
+    });
+    event.source?.postMessage({
+      type: 'SW_DEBUG_STATUS',
+      status: getDebugStatus(),
+    });
+  } else if (event.data && event.data.type === 'SW_DEBUG_HEARTBEAT') {
+    // 调试页面心跳：更新心跳时间
+    if (debugModeEnabled) {
+      lastHeartbeatTime = Date.now();
+    }
+  } else if (event.data && event.data.type === 'SW_DEBUG_DISABLE') {
+    // 禁用调试模式
+    debugModeEnabled = false;
+    lastHeartbeatTime = 0;
+    if (heartbeatCheckTimer) {
+      clearTimeout(heartbeatCheckTimer);
+      heartbeatCheckTimer = null;
+    }
+    // Sync debug mode to debugFetch and message sender
+    import('./task-queue/debug-fetch').then(({ setDebugFetchEnabled }) => {
+      setDebugFetchEnabled(false);
+    });
+    setMessageSenderDebugMode(false);
+
+    // 禁用调试模式时清空所有日志（内存和 IndexedDB）
+    // 这样重新打开调试面板时不会显示旧日志
+    consoleLogs.length = 0;
+    debugLogs.length = 0;
+    clearAllConsoleLogs().catch(() => {
+      // 忽略 IndexedDB 清理失败
+    });
+
+    originalSWConsole.log('Service Worker: Debug mode disabled, logs cleared');
+    // Broadcast to ALL clients (including app pages) so they stop capturing verbose logs
+    sw.clients.matchAll().then(clients => {
+      clients.forEach(client => {
+        client.postMessage({ type: 'SW_DEBUG_DISABLED' });
+      });
+    });
+    event.source?.postMessage({
+      type: 'SW_DEBUG_STATUS',
+      status: getDebugStatus(),
+    });
+  } else if (event.data && event.data.type === 'SW_DEBUG_GET_STATUS') {
+    // 获取调试状态
+    (async () => {
+      const status = getDebugStatus();
+      // 获取缓存统计
+      const cacheStats = await getCacheStats();
+      event.source?.postMessage({
+        type: 'SW_DEBUG_STATUS',
+        status: { ...status, cacheStats },
+      });
+    })();
+  } else if (event.data && event.data.type === 'SW_DEBUG_GET_LOGS') {
+    // 获取调试日志 (合并 debugLogs 和 internalFetchLogs)
+    const { limit = 100, offset = 0, filter } = event.data;
+    
+    // Merge internal fetch logs with debug logs
+    const internalLogs = getInternalFetchLogs().map(log => ({
+      ...log,
+      type: 'fetch',
+    }));
+    
+    // Combine and deduplicate by ID (internal logs take priority as they're more up-to-date)
+    const logMap = new Map<string, any>();
+    for (const log of debugLogs) {
+      logMap.set(log.id, log);
+    }
+    for (const log of internalLogs) {
+      logMap.set(log.id, log);
+    }
+    
+    // Sort by timestamp descending
+    let logs = Array.from(logMap.values()).sort((a, b) => b.timestamp - a.timestamp);
+    
+    // 应用过滤器
+    if (filter) {
+      if (filter.type) {
+        logs = logs.filter(l => l.type === filter.type);
+      }
+      if (filter.requestType) {
+        logs = logs.filter(l => l.requestType === filter.requestType);
+      }
+      if (filter.url) {
+        logs = logs.filter(l => l.url?.includes(filter.url));
+      }
+      if (filter.status) {
+        logs = logs.filter(l => l.status === filter.status);
+      }
+    }
+    
+    const paginatedLogs = logs.slice(offset, offset + limit);
+    event.source?.postMessage({
+      type: 'SW_DEBUG_LOGS',
+      logs: paginatedLogs,
+      total: logs.length,
+      offset,
+      limit,
+    });
+  } else if (event.data && event.data.type === 'SW_DEBUG_CLEAR_LOGS') {
+    // 清空调试日志
+    debugLogs.length = 0;
+    event.source?.postMessage({
+      type: 'SW_DEBUG_LOGS_CLEARED',
+    });
+  } else if (event.data && event.data.type === 'SW_DEBUG_GET_CACHE_ENTRIES') {
+    // 获取缓存条目列表
+    const { cacheName, limit = 50, offset = 0 } = event.data;
+    (async () => {
+      try {
+        const cache = await caches.open(cacheName || IMAGE_CACHE_NAME);
+        const requests = await cache.keys();
+        const entries: { url: string; cacheDate?: number; size?: number }[] = [];
+        
+        for (let i = offset; i < Math.min(offset + limit, requests.length); i++) {
+          const request = requests[i];
+          const response = await cache.match(request);
+          if (response) {
+            const cacheDate = response.headers.get('sw-cache-date');
+            const size = response.headers.get('sw-image-size') || response.headers.get('content-length');
+            entries.push({
+              url: request.url,
+              cacheDate: cacheDate ? parseInt(cacheDate) : undefined,
+              size: size ? parseInt(size) : undefined,
+            });
+          }
+        }
+        
+        event.source?.postMessage({
+          type: 'SW_DEBUG_CACHE_ENTRIES',
+          cacheName: cacheName || IMAGE_CACHE_NAME,
+          entries,
+          total: requests.length,
+          offset,
+          limit,
+        });
+      } catch (error) {
+        event.source?.postMessage({
+          type: 'SW_DEBUG_CACHE_ENTRIES',
+          error: String(error),
+        });
+      }
+    })();
+  } else if (event.data && event.data.type === 'SW_CONSOLE_LOG_REPORT') {
+    // 接收来自主应用的控制台日志
+    const { logLevel, logMessage, logStack, logSource, url } = event.data;
+    addConsoleLog({
+      logLevel,
+      logMessage,
+      logStack,
+      logSource,
+      url,
+    });
+  } else if (event.data && event.data.type === 'SW_DEBUG_GET_CONSOLE_LOGS') {
+    // 从 IndexedDB 获取控制台日志
+    (async () => {
+      try {
+        const { limit = 500, offset = 0, filter } = event.data;
+        let logs = await loadConsoleLogsFromDB();
+        
+        // 应用过滤器
+        if (filter) {
+          if (filter.logLevel) {
+            logs = logs.filter(l => l.logLevel === filter.logLevel);
+          }
+          if (filter.search) {
+            const search = filter.search.toLowerCase();
+            logs = logs.filter(l => 
+              l.logMessage?.toLowerCase().includes(search) ||
+              l.logStack?.toLowerCase().includes(search)
+            );
+          }
+        }
+        
+        const paginatedLogs = logs.slice(offset, offset + limit);
+        event.source?.postMessage({
+          type: 'SW_DEBUG_CONSOLE_LOGS',
+          logs: paginatedLogs,
+          total: logs.length,
+          offset,
+          limit,
+        });
+      } catch (error) {
+        event.source?.postMessage({
+          type: 'SW_DEBUG_CONSOLE_LOGS',
+          logs: [],
+          total: 0,
+          error: String(error),
+        });
+      }
+    })();
+  } else if (event.data && event.data.type === 'SW_DEBUG_CLEAR_CONSOLE_LOGS') {
+    // 清空控制台日志（内存和 IndexedDB）
+    (async () => {
+      consoleLogs.length = 0;
+      await clearAllConsoleLogs();
+      event.source?.postMessage({
+        type: 'SW_DEBUG_CONSOLE_LOGS_CLEARED',
+      });
+    })();
+  } else if (event.data && event.data.type === 'SW_DEBUG_EXPORT_LOGS') {
+    // 导出所有日志（从 IndexedDB 读取）
+    (async () => {
+      const allConsoleLogs = await loadConsoleLogsFromDB();
+      const postmessageLogs = getAllPostMessageLogs();
+      const exportData = {
+        exportTime: new Date().toISOString(),
+        swVersion: APP_VERSION,
+        userAgent: '', // 将由调试页面填充
+        status: getDebugStatus(),
+        fetchLogs: debugLogs,
+        consoleLogs: allConsoleLogs,
+        postmessageLogs,
+      };
+      event.source?.postMessage({
+        type: 'SW_DEBUG_EXPORT_DATA',
+        data: exportData,
+      });
+    })();
+  } else if (event.data && event.data.type === 'SW_DEBUG_GET_POSTMESSAGE_LOGS') {
+    // 获取 PostMessage 日志
+    const { limit = 200, offset = 0, filter } = event.data;
+    let logs = getAllPostMessageLogs();
+    
+    // 应用过滤器
+    if (filter) {
+      if (filter.direction) {
+        logs = logs.filter(l => l.direction === filter.direction);
+      }
+      if (filter.messageType) {
+        const search = filter.messageType.toLowerCase();
+        logs = logs.filter(l => l.messageType?.toLowerCase().includes(search));
+      }
+    }
+    
+    const paginatedLogs = logs.slice(offset, offset + limit);
+    event.source?.postMessage({
+      type: 'SW_DEBUG_POSTMESSAGE_LOGS',
+      logs: paginatedLogs,
+      total: logs.length,
+      offset,
+      limit,
+      stats: getPostMessageLogStats(),
+    });
+  } else if (event.data && event.data.type === 'SW_DEBUG_CLEAR_POSTMESSAGE_LOGS') {
+    // 清空 PostMessage 日志
+    clearPostMessageLogs();
+    event.source?.postMessage({
+      type: 'SW_DEBUG_POSTMESSAGE_LOGS_CLEARED',
+    });
   }
 });
+
+// IndexedDB 数据库列表（用于统计）
+const INDEXEDDB_NAMES = [
+  'ConsoleLogDB',           // SW 控制台日志
+  'ServiceWorkerDB',        // SW 失败域名
+  'sw-task-queue',          // SW 任务队列
+  'aitu-workspace',         // 工作空间存储
+  'drawnix-unified-cache',  // 统一缓存（媒体、URL等）
+  'drawnix-kv-storage',     // KV 存储
+  'drawnix-prompts',        // 提示词存储
+  'drawnix-chat-db',        // 聊天存储
+];
+
+// 估算对象大小（字节）
+function estimateObjectSize(obj: unknown): number {
+  try {
+    const str = JSON.stringify(obj);
+    // UTF-8 编码，中文等字符可能占用更多字节
+    return new Blob([str]).size;
+  } catch {
+    return 0;
+  }
+}
+
+// 获取单个 IndexedDB 的统计信息（含大小估算）
+async function getIndexedDBStats(dbName: string): Promise<{ count: number; totalSize: number }> {
+  return new Promise((resolve) => {
+    try {
+      const request = indexedDB.open(dbName);
+      
+      request.onerror = () => resolve({ count: 0, totalSize: 0 });
+      
+      request.onsuccess = () => {
+        const db = request.result;
+        const storeNames = Array.from(db.objectStoreNames);
+        
+        if (storeNames.length === 0) {
+          db.close();
+          resolve({ count: 0, totalSize: 0 });
+          return;
+        }
+        
+        let totalCount = 0;
+        let totalSampledSize = 0;
+        let totalSampledCount = 0;
+        let completedStores = 0;
+        const SAMPLE_SIZE = 10; // 每个 store 采样数量
+        
+        try {
+          const transaction = db.transaction(storeNames, 'readonly');
+          
+          for (const storeName of storeNames) {
+            const store = transaction.objectStore(storeName);
+            const countRequest = store.count();
+            
+            countRequest.onsuccess = () => {
+              const storeCount = countRequest.result;
+              totalCount += storeCount;
+              
+              // 采样获取大小
+              if (storeCount > 0) {
+                const cursorRequest = store.openCursor();
+                let sampled = 0;
+                
+                cursorRequest.onsuccess = (e) => {
+                  const cursor = (e.target as IDBRequest<IDBCursorWithValue>).result;
+                  if (cursor && sampled < SAMPLE_SIZE) {
+                    totalSampledSize += estimateObjectSize(cursor.value);
+                    totalSampledCount++;
+                    sampled++;
+                    cursor.continue();
+                  } else {
+                    completedStores++;
+                    if (completedStores === storeNames.length) {
+                      db.close();
+                      // 估算总大小
+                      const avgSize = totalSampledCount > 0 ? totalSampledSize / totalSampledCount : 0;
+                      const estimatedTotal = Math.round(avgSize * totalCount);
+                      resolve({ count: totalCount, totalSize: estimatedTotal });
+                    }
+                  }
+                };
+                
+                cursorRequest.onerror = () => {
+                  completedStores++;
+                  if (completedStores === storeNames.length) {
+                    db.close();
+                    const avgSize = totalSampledCount > 0 ? totalSampledSize / totalSampledCount : 0;
+                    const estimatedTotal = Math.round(avgSize * totalCount);
+                    resolve({ count: totalCount, totalSize: estimatedTotal });
+                  }
+                };
+              } else {
+                completedStores++;
+                if (completedStores === storeNames.length) {
+                  db.close();
+                  resolve({ count: totalCount, totalSize: 0 });
+                }
+              }
+            };
+            
+            countRequest.onerror = () => {
+              completedStores++;
+              if (completedStores === storeNames.length) {
+                db.close();
+                const avgSize = totalSampledCount > 0 ? totalSampledSize / totalSampledCount : 0;
+                const estimatedTotal = Math.round(avgSize * totalCount);
+                resolve({ count: totalCount, totalSize: estimatedTotal });
+              }
+            };
+          }
+        } catch {
+          db.close();
+          resolve({ count: 0, totalSize: 0 });
+        }
+      };
+      
+      // 如果数据库不存在，onupgradeneeded 会被触发
+      request.onupgradeneeded = (event) => {
+        const db = (event.target as IDBOpenDBRequest).result;
+        db.close();
+        try {
+          indexedDB.deleteDatabase(dbName);
+        } catch {
+          // 忽略删除错误
+        }
+        resolve({ count: 0, totalSize: 0 });
+      };
+    } catch {
+      resolve({ count: 0, totalSize: 0 });
+    }
+  });
+}
+
+// 获取缓存统计信息（包括 Cache API 和 IndexedDB）
+async function getCacheStats(): Promise<{
+  [cacheName: string]: { count: number; totalSize: number; type?: string };
+}> {
+  const stats: { [cacheName: string]: { count: number; totalSize: number; type?: string } } = {};
+  
+  // 1. Cache API 统计
+  const cacheNames = [CACHE_NAME, IMAGE_CACHE_NAME, STATIC_CACHE_NAME, FONT_CACHE_NAME];
+  
+  for (const cacheName of cacheNames) {
+    try {
+      const cache = await caches.open(cacheName);
+      const requests = await cache.keys();
+      let totalSize = 0;
+      
+      // 只采样前 100 个条目来估算总大小（避免性能问题）
+      const sampleSize = Math.min(requests.length, 100);
+      let sampledSize = 0;
+      
+      for (let i = 0; i < sampleSize; i++) {
+        const response = await cache.match(requests[i]);
+        if (response) {
+          const size = response.headers.get('sw-image-size') || response.headers.get('content-length');
+          if (size) {
+            sampledSize += parseInt(size);
+          }
+        }
+      }
+      
+      // 估算总大小
+      if (sampleSize > 0 && requests.length > sampleSize) {
+        totalSize = Math.round((sampledSize / sampleSize) * requests.length);
+      } else {
+        totalSize = sampledSize;
+      }
+      
+      stats[cacheName] = { count: requests.length, totalSize, type: 'cache' };
+    } catch (error) {
+      stats[cacheName] = { count: 0, totalSize: 0, type: 'cache' };
+    }
+  }
+  
+  // 2. IndexedDB 统计
+  for (const dbName of INDEXEDDB_NAMES) {
+    try {
+      const dbStats = await getIndexedDBStats(dbName);
+      if (dbStats.count > 0) {
+        stats[`[IDB] ${dbName}`] = { ...dbStats, type: 'indexeddb' };
+      }
+    } catch {
+      // 忽略错误
+    }
+  }
+  
+  return stats;
+}
 
 
 // 删除单个缓存条目
@@ -771,18 +1741,62 @@ async function checkStorageQuota(): Promise<void> {
 
 sw.addEventListener('fetch', (event: FetchEvent) => {
   const url = new URL(event.request.url);
+  const startTime = Date.now();
+
+  // 辅助函数：确定请求类型
+  function getRequestType(): string {
+    if (url.pathname.startsWith(CACHE_URL_PREFIX)) return 'cache-url';
+    if (url.pathname.startsWith(ASSET_LIBRARY_PREFIX)) return 'asset-library';
+    if (isVideoRequest(url, event.request)) return 'video';
+    if (isFontRequest(url, event.request)) return 'font';
+    if (url.origin !== location.origin && isImageRequest(url, event.request)) return 'image';
+    if (event.request.mode === 'navigate') return 'navigation';
+    if (event.request.destination) return event.request.destination;
+    return 'other';
+  }
 
   // 只处理 http 和 https 协议的请求，忽略 chrome-extension、data、blob 等
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    addDebugLog({
+      type: 'fetch',
+      url: event.request.url,
+      method: event.request.method,
+      requestType: 'other',
+      details: `Skipped: non-http protocol (${url.protocol})`,
+      status: 0,
+      duration: 0,
+    });
     return;
   }
 
   // 拦截缓存 URL 请求 (/__aitu_cache__/{type}/{taskId}.{ext})
   if (url.pathname.startsWith(CACHE_URL_PREFIX)) {
     // console.log('Service Worker: Intercepting cache URL request:', event.request.url);
+    const debugId = addDebugLog({
+      type: 'fetch',
+      url: event.request.url,
+      method: event.request.method,
+      requestType: 'cache-url',
+      details: 'Intercepting cache URL request',
+    });
 
     event.respondWith(
-      handleCacheUrlRequest(event.request)
+      handleCacheUrlRequest(event.request).then(response => {
+        updateDebugLog(debugId, {
+          status: response.status,
+          statusText: response.statusText,
+          responseType: response.type,
+          duration: Date.now() - startTime,
+          cached: response.status === 200,
+        });
+        return response;
+      }).catch(error => {
+        updateDebugLog(debugId, {
+          error: String(error),
+          duration: Date.now() - startTime,
+        });
+        throw error;
+      })
     );
     return;
   }
@@ -790,9 +1804,31 @@ sw.addEventListener('fetch', (event: FetchEvent) => {
   // 拦截素材库 URL 请求 (/asset-library/{assetId}.{ext})
   if (url.pathname.startsWith(ASSET_LIBRARY_PREFIX)) {
     // console.log('Service Worker: Intercepting asset library request:', event.request.url);
+    const debugId = addDebugLog({
+      type: 'fetch',
+      url: event.request.url,
+      method: event.request.method,
+      requestType: 'asset-library',
+      details: 'Intercepting asset library request',
+    });
 
     event.respondWith(
-      handleAssetLibraryRequest(event.request)
+      handleAssetLibraryRequest(event.request).then(response => {
+        updateDebugLog(debugId, {
+          status: response.status,
+          statusText: response.statusText,
+          responseType: response.type,
+          duration: Date.now() - startTime,
+          cached: response.status === 200,
+        });
+        return response;
+      }).catch(error => {
+        updateDebugLog(debugId, {
+          error: String(error),
+          duration: Date.now() - startTime,
+        });
+        throw error;
+      })
     );
     return;
   }
@@ -804,6 +1840,15 @@ sw.addEventListener('fetch', (event: FetchEvent) => {
   // 完全不拦截备用域名，让浏览器直接处理
   if (url.hostname === 'cdn.i666.fun') {
     // console.log('Service Worker: 备用域名请求直接通过，不拦截:', url.href);
+    addDebugLog({
+      type: 'fetch',
+      url: event.request.url,
+      method: event.request.method,
+      requestType: 'passthrough',
+      details: 'Passthrough: cdn.i666.fun (fallback domain)',
+      status: 0,
+      duration: 0,
+    });
     return; // 直接返回，让浏览器处理
   }
 
@@ -811,12 +1856,30 @@ sw.addEventListener('fetch', (event: FetchEvent) => {
   // 这些域名不支持 CORS，但 <img> 标签可以直接加载
   if (url.hostname.endsWith('.volces.com') || url.hostname.endsWith('.volccdn.com')) {
     // console.log('Service Worker: 火山引擎域名请求直接通过，不拦截:', url.href);
+    addDebugLog({
+      type: 'fetch',
+      url: event.request.url,
+      method: event.request.method,
+      requestType: 'passthrough',
+      details: 'Passthrough: Volcengine domain (no CORS)',
+      status: 0,
+      duration: 0,
+    });
     return; // 直接返回，让浏览器处理
   }
 
   // 放行阿里云OSS域名，这些域名不支持CORS fetch，但<img>标签可以直接加载
   if (url.hostname.endsWith('.aliyuncs.com')) {
     // console.log('Service Worker: 阿里云OSS域名请求直接通过，不拦截:', url.href);
+    addDebugLog({
+      type: 'fetch',
+      url: event.request.url,
+      method: event.request.method,
+      requestType: 'passthrough',
+      details: 'Passthrough: Aliyun OSS domain (no CORS)',
+      status: 0,
+      duration: 0,
+    });
     return; // 直接返回，让浏览器处理
   }
 
@@ -825,9 +1888,38 @@ sw.addEventListener('fetch', (event: FetchEvent) => {
   // 拦截视频请求以支持 Range 请求
   if (isVideoRequest(url, event.request)) {
     // console.log('Service Worker: Intercepting video request:', url.href);
+    const startTime = Date.now();
+    const rangeHeader = event.request.headers.get('range');
+    const debugId = addDebugLog({
+      type: 'fetch',
+      url: event.request.url,
+      method: event.request.method,
+      requestType: 'video',
+      headers: rangeHeader ? { range: rangeHeader } : undefined,
+      details: rangeHeader ? `Video Range request: ${rangeHeader}` : 'Video request',
+    });
 
     event.respondWith(
-      handleVideoRequest(event.request)
+      handleVideoRequest(event.request).then(response => {
+        updateDebugLog(debugId, {
+          status: response.status,
+          statusText: response.statusText,
+          responseType: response.type,
+          duration: Date.now() - startTime,
+          responseHeaders: {
+            'content-type': response.headers.get('content-type') || '',
+            'content-length': response.headers.get('content-length') || '',
+            'content-range': response.headers.get('content-range') || '',
+          },
+        });
+        return response;
+      }).catch(error => {
+        updateDebugLog(debugId, {
+          error: String(error),
+          duration: Date.now() - startTime,
+        });
+        throw error;
+      })
     );
     return;
   }
@@ -835,9 +1927,32 @@ sw.addEventListener('fetch', (event: FetchEvent) => {
   // 拦截字体请求（Google Fonts CSS 和字体文件）
   if (isFontRequest(url, event.request)) {
     // console.log('Service Worker: Intercepting font request:', url.href);
+    const startTime = Date.now();
+    const debugId = addDebugLog({
+      type: 'fetch',
+      url: event.request.url,
+      method: event.request.method,
+      requestType: 'font',
+      details: 'Font request',
+    });
 
     event.respondWith(
-      handleFontRequest(event.request)
+      handleFontRequest(event.request).then(response => {
+        updateDebugLog(debugId, {
+          status: response.status,
+          statusText: response.statusText,
+          responseType: response.type,
+          duration: Date.now() - startTime,
+          cached: response.headers.has('sw-cache-date'),
+        });
+        return response;
+      }).catch(error => {
+        updateDebugLog(debugId, {
+          error: String(error),
+          duration: Date.now() - startTime,
+        });
+        throw error;
+      })
     );
     return;
   }
@@ -845,9 +1960,33 @@ sw.addEventListener('fetch', (event: FetchEvent) => {
   // 拦截外部图片请求（非同源且为图片格式）
   if (url.origin !== location.origin && isImageRequest(url, event.request)) {
     // console.log('Service Worker: Intercepting external image request:', url.href);
+    const startTime = Date.now();
+    const debugId = addDebugLog({
+      type: 'fetch',
+      url: event.request.url,
+      method: event.request.method,
+      requestType: 'image',
+      details: 'External image request',
+    });
 
     event.respondWith(
-      handleImageRequest(event.request)
+      handleImageRequest(event.request).then(response => {
+        updateDebugLog(debugId, {
+          status: response.status,
+          statusText: response.statusText,
+          responseType: response.type,
+          duration: Date.now() - startTime,
+          cached: response.headers.has('sw-cache-date'),
+          size: parseInt(response.headers.get('content-length') || '0'),
+        });
+        return response;
+      }).catch(error => {
+        updateDebugLog(debugId, {
+          error: String(error),
+          duration: Date.now() - startTime,
+        });
+        throw error;
+      })
     );
     return;
   }
@@ -862,16 +2001,147 @@ sw.addEventListener('fetch', (event: FetchEvent) => {
     
     // Handle both navigation requests and static resources
     if (isNavigationRequest || isStaticResource) {
+      const startTime = Date.now();
+      const debugId = addDebugLog({
+        type: 'fetch',
+        url: event.request.url,
+        method: event.request.method,
+        requestType: 'static',
+        details: isNavigationRequest ? 'Navigation request' : `Static resource (${event.request.destination})`,
+      });
+
       event.respondWith(
-        handleStaticRequest(event.request)
+        handleStaticRequest(event.request).then(response => {
+          updateDebugLog(debugId, {
+            status: response.status,
+            statusText: response.statusText,
+            responseType: response.type,
+            duration: Date.now() - startTime,
+          });
+          return response;
+        }).catch(error => {
+          updateDebugLog(debugId, {
+            error: String(error),
+            duration: Date.now() - startTime,
+          });
+          throw error;
+        })
       );
       return;
     }
   }
 
-  // 对于其他请求（如 XHR/API 请求），不拦截，让浏览器直接处理
-  // 这些请求不会被追踪，但通常它们很快完成
-  // SW 升级会在拦截的请求（图片、视频、静态资源）完成后进行
+  // 对于其他请求（如 XHR/API 请求），在调试模式下拦截以记录日志
+  // 非调试模式下让浏览器直接处理
+  if (debugModeEnabled) {
+    const debugId = addDebugLog({
+      type: 'fetch',
+      url: event.request.url,
+      method: event.request.method,
+      requestType: 'xhr',
+      details: `XHR/API request (${event.request.method})`,
+    });
+
+    event.respondWith(
+      (async () => {
+        try {
+          // 克隆请求以读取 body
+          const requestClone = event.request.clone();
+          let requestBody: string | undefined;
+          let requestHeaders: Record<string, string> = {};
+
+          // 提取请求头
+          event.request.headers.forEach((value, key) => {
+            requestHeaders[key] = value;
+          });
+
+          // 尝试读取请求体（仅限 POST/PUT/PATCH）
+          if (['POST', 'PUT', 'PATCH'].includes(event.request.method)) {
+            try {
+              const contentType = event.request.headers.get('content-type') || '';
+              if (contentType.includes('application/json')) {
+                requestBody = await requestClone.text();
+                // 限制长度，避免日志过大
+                if (requestBody.length > 2000) {
+                  requestBody = requestBody.substring(0, 2000) + '... (truncated)';
+                }
+              } else if (contentType.includes('application/x-www-form-urlencoded')) {
+                requestBody = await requestClone.text();
+                if (requestBody.length > 2000) {
+                  requestBody = requestBody.substring(0, 2000) + '... (truncated)';
+                }
+              } else {
+                requestBody = `[${contentType || 'binary data'}]`;
+              }
+            } catch {
+              requestBody = '[unable to read body]';
+            }
+          }
+
+          // 更新日志添加请求信息
+          updateDebugLog(debugId, {
+            headers: requestHeaders,
+            details: requestBody 
+              ? `XHR/API request (${event.request.method})\n\nRequest Body:\n${requestBody}`
+              : `XHR/API request (${event.request.method})`,
+          });
+
+          // 发起实际请求
+          const response = await fetch(event.request);
+          
+          // 克隆响应以读取 body
+          const responseClone = response.clone();
+          let responseBody: string | undefined;
+          let responseHeaders: Record<string, string> = {};
+
+          // 提取响应头
+          response.headers.forEach((value, key) => {
+            responseHeaders[key] = value;
+          });
+
+          // 尝试读取响应体
+          try {
+            const contentType = response.headers.get('content-type') || '';
+            if (contentType.includes('application/json') || contentType.includes('text/')) {
+              responseBody = await responseClone.text();
+              // 限制长度
+              if (responseBody.length > 5000) {
+                responseBody = responseBody.substring(0, 5000) + '... (truncated)';
+              }
+            } else {
+              responseBody = `[${contentType || 'binary data'}] (${response.headers.get('content-length') || 'unknown'} bytes)`;
+            }
+          } catch {
+            responseBody = '[unable to read response body]';
+          }
+
+          // 更新日志添加响应信息
+          updateDebugLog(debugId, {
+            status: response.status,
+            statusText: response.statusText,
+            responseType: response.type,
+            duration: Date.now() - startTime,
+            responseHeaders,
+            size: parseInt(response.headers.get('content-length') || '0'),
+            details: requestBody 
+              ? `XHR/API request (${event.request.method})\n\nRequest Body:\n${requestBody}\n\nResponse Body:\n${responseBody}`
+              : `XHR/API request (${event.request.method})\n\nResponse Body:\n${responseBody}`,
+          });
+
+          return response;
+        } catch (error) {
+          updateDebugLog(debugId, {
+            error: String(error),
+            duration: Date.now() - startTime,
+          });
+          throw error;
+        }
+      })()
+    );
+    return;
+  }
+
+  // 非调试模式下，XHR/API 请求不拦截，让浏览器直接处理
 });
 
 // 处理字体请求（Google Fonts CSS 和字体文件）

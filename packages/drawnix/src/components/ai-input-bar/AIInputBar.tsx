@@ -72,13 +72,16 @@ function toWorkflowMessageData(
   postProcessingStatus?: PostProcessingStatus,
   insertedCount?: number
 ): WorkflowMessageData {
+  // Safely access metadata with defaults
+  const metadata = workflow.metadata || {};
+  
   return {
     id: workflow.id,
     name: workflow.name,
     generationType: workflow.generationType,
-    prompt: workflow.metadata.prompt,
+    prompt: metadata.prompt || retryContext?.aiContext?.finalPrompt || '',
     aiAnalysis: workflow.aiAnalysis,
-    count: workflow.metadata.count,
+    count: metadata.count,
     steps: workflow.steps.map(step => ({
       id: step.id,
       description: step.description,
@@ -835,13 +838,22 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
 
   // Handle generation
   const handleGenerate = useCallback(async () => {
+    // Debug logging - track what triggers this function
+    console.log('[AIInputBar] handleGenerate triggered', {
+      prompt: prompt.substring(0, 50),
+      allContentCount: allContent.length,
+      isSubmitting,
+      timestamp: new Date().toISOString(),
+      stack: new Error().stack?.split('\n').slice(1, 5).join('\n'),
+    });
+    
     if (!prompt.trim() && allContent.length === 0) return;
     if (isSubmitting) {
-      // console.log('[AIInputBar] handleGenerate blocked: isSubmitting=true');
+      console.log('[AIInputBar] handleGenerate blocked: isSubmitting=true');
       return; // 仅防止快速重复点击
     }
 
-    // console.log('[AIInputBar] handleGenerate: setting isSubmitting=true');
+    console.log('[AIInputBar] handleGenerate: setting isSubmitting=true');
     setIsSubmitting(true);
 
     try {

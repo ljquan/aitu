@@ -24,12 +24,23 @@ import {
   DEFAULT_TASK_QUEUE_CONFIG,
 } from './types';
 import { taskQueueStorage } from './storage';
+import { sendToClient, sendToClientById } from './utils/message-bus';
 
 // Handler imports
 import { ImageHandler } from './handlers/image';
 import { VideoHandler } from './handlers/video';
 import { CharacterHandler } from './handlers/character';
 import { ChatHandler } from './handlers/chat';
+
+/**
+ * Chat result cache entry
+ */
+interface ChatResultCache {
+  chatId: string;
+  fullContent: string;
+  timestamp: number;
+  delivered: boolean;
+}
 
 /**
  * Task Queue Manager for Service Worker
@@ -41,6 +52,10 @@ export class SWTaskQueue {
   private geminiConfig: GeminiConfig | null = null;
   private videoConfig: VideoAPIConfig | null = null;
   private initialized = false;
+
+  // Chat result cache - stores recent chat results for recovery after page refresh
+  private chatResultCache: Map<string, ChatResultCache> = new Map();
+  private readonly CHAT_CACHE_TTL = 60 * 1000; // 1 minute TTL
 
   // Handlers
   private imageHandler: ImageHandler;
@@ -165,7 +180,54 @@ export class SWTaskQueue {
       return true;
     }
 
+    // Resume failed video/character tasks with remoteId that failed due to network errors
+    if (
+      (task.type === TaskType.VIDEO || task.type === TaskType.CHARACTER) &&
+      task.status === TaskStatus.FAILED &&
+      task.remoteId &&
+      this.isNetworkError(task)
+    ) {
+      return true;
+    }
+
     return false;
+  }
+
+  /**
+   * Check if task error is a network error that can be recovered
+   * Returns false for business failures (API returned explicit failure)
+   */
+  private isNetworkError(task: SWTask): boolean {
+    const errorMessage = task.error?.message || '';
+    const originalError = task.error?.details?.originalError || '';
+    const errorCode = task.error?.code || '';
+    const combinedError = `${errorMessage} ${originalError}`.toLowerCase();
+    
+    // Exclude business failures - these should not be retried
+    const isBusinessFailure = (
+      combinedError.includes('generation_failed') ||
+      combinedError.includes('invalid_argument') ||
+      combinedError.includes('prohibited') ||
+      combinedError.includes('content policy') ||
+      combinedError.includes('视频生成失败') ||
+      errorCode.includes('generation_failed') ||
+      errorCode.includes('INVALID')
+    );
+    
+    if (isBusinessFailure) {
+      return false;
+    }
+    
+    // Check for network-related errors
+    return (
+      combinedError.includes('failed to fetch') ||
+      combinedError.includes('network') ||
+      combinedError.includes('fetch') ||
+      combinedError.includes('timeout') ||
+      combinedError.includes('aborted') ||
+      combinedError.includes('connection') ||
+      combinedError.includes('status query failed')
+    );
   }
 
   /**
@@ -180,6 +242,18 @@ export class SWTaskQueue {
     // If task has remoteId, it was in polling phase - resume polling
     if (task.remoteId && (task.type === TaskType.VIDEO || task.type === TaskType.CHARACTER)) {
       // console.log(`[SWTaskQueue] Resuming polling for task: ${task.id}`);
+      
+      // If task was failed (network error recovery), reset status to processing
+      if (task.status === TaskStatus.FAILED) {
+        console.log(`[SWTaskQueue] Recovering failed task ${task.id} (network error, has remoteId)`);
+        task.status = TaskStatus.PROCESSING;
+        task.error = undefined; // Clear error
+        task.executionPhase = TaskExecutionPhase.POLLING;
+        task.updatedAt = Date.now();
+        this.tasks.set(task.id, task);
+        await taskQueueStorage.saveTask(task);
+      }
+      
       this.runningTasks.add(task.id);
 
       // Broadcast status update to clients
@@ -493,17 +567,61 @@ export class SWTaskQueue {
         }
       );
 
+      // Cache the result before broadcasting (for recovery after page refresh)
+      this.chatResultCache.set(chatId, {
+        chatId,
+        fullContent,
+        timestamp: Date.now(),
+        delivered: false,
+      });
+      console.log('[SWTaskQueue] Chat result cached:', chatId, 'content length:', fullContent.length);
+
       this.broadcastToClients({
         type: 'CHAT_DONE',
         chatId,
         fullContent,
       });
+
+      // Mark as delivered after broadcast
+      const cached = this.chatResultCache.get(chatId);
+      if (cached) {
+        cached.delivered = true;
+      }
+
+      // Clean up old cache entries
+      this.cleanupChatCache();
     } catch (error) {
       this.broadcastToClients({
         type: 'CHAT_ERROR',
         chatId,
         error: error instanceof Error ? error.message : String(error),
       });
+    }
+  }
+
+  /**
+   * Get cached chat result (for recovery after page refresh)
+   */
+  getCachedChatResult(chatId: string): ChatResultCache | undefined {
+    return this.chatResultCache.get(chatId);
+  }
+
+  /**
+   * Get all cached chat results
+   */
+  getAllCachedChatResults(): ChatResultCache[] {
+    return Array.from(this.chatResultCache.values());
+  }
+
+  /**
+   * Clean up expired chat cache entries
+   */
+  private cleanupChatCache(): void {
+    const now = Date.now();
+    for (const [chatId, entry] of this.chatResultCache.entries()) {
+      if (now - entry.timestamp > this.CHAT_CACHE_TTL) {
+        this.chatResultCache.delete(chatId);
+      }
     }
   }
 
@@ -869,7 +987,7 @@ export class SWTaskQueue {
     try {
       const clients = await this.sw.clients.matchAll({ type: 'window' });
       for (const client of clients) {
-        client.postMessage(message);
+        sendToClient(client, message);
       }
     } catch (error) {
       console.error('[SWTaskQueue] Failed to broadcast:', error);
@@ -918,6 +1036,8 @@ export function handleTaskQueueMessage(
       if (queue) {
         queue.initialize(message.geminiConfig, message.videoConfig);
       }
+      // System prompt is saved to IndexedDB by main thread
+      // ai_analyze is delegated to main thread for correct text model
       break;
 
     case 'TASK_QUEUE_UPDATE_CONFIG':
@@ -977,6 +1097,43 @@ export function handleTaskQueueMessage(
     case 'CHAT_STOP':
       queue?.stopChat(message.chatId);
       break;
+
+    case 'CHAT_GET_CACHED': {
+      // Return cached chat result for a specific chatId
+      const cached = queue?.getCachedChatResult(message.chatId);
+      console.log('[SWTaskQueue] CHAT_GET_CACHED:', {
+        chatId: message.chatId,
+        found: !!cached,
+        clientId,
+        cachedLength: cached?.fullContent?.length,
+      });
+      
+      if (cached) {
+        // Send the result to the requesting client
+        sendToClientById(clientId, {
+          type: 'CHAT_CACHED_RESULT',
+          chatId: message.chatId,
+          fullContent: cached.fullContent,
+          found: true,
+        }).then(sent => {
+          if (!sent) {
+            console.warn('[SWTaskQueue] Failed to send CHAT_CACHED_RESULT to client:', clientId);
+          }
+        });
+      } else {
+        // No cached result found
+        sendToClientById(clientId, {
+          type: 'CHAT_CACHED_RESULT',
+          chatId: message.chatId,
+          found: false,
+        }).then(sent => {
+          if (!sent) {
+            console.warn('[SWTaskQueue] Failed to send CHAT_CACHED_RESULT (not found) to client:', clientId);
+          }
+        });
+      }
+      break;
+    }
 
     case 'TASK_RESTORE':
       queue?.restoreTasks(message.tasks);

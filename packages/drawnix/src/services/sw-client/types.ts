@@ -176,6 +176,11 @@ export interface ChatStopMessage {
   chatId: string;
 }
 
+export interface ChatGetCachedMessage {
+  type: 'CHAT_GET_CACHED';
+  chatId: string;
+}
+
 export interface TaskRestoreMessage {
   type: 'TASK_RESTORE';
   tasks: SWTask[];
@@ -230,6 +235,7 @@ export type MainToSWMessage =
   | TaskDeleteMessage
   | ChatStartMessage
   | ChatStopMessage
+  | ChatGetCachedMessage
   | TaskRestoreMessage
   | TaskMarkInsertedMessage
   | MainThreadToolResponseMessage
@@ -326,6 +332,13 @@ export interface ChatErrorMessage {
   error: string;
 }
 
+export interface ChatCachedResultMessage {
+  type: 'CHAT_CACHED_RESULT';
+  chatId: string;
+  found: boolean;
+  fullContent?: string;
+}
+
 export interface MainThreadToolRequestMessage {
   type: 'MAIN_THREAD_TOOL_REQUEST';
   requestId: string;
@@ -363,6 +376,7 @@ export type SWToMainMessage =
   | ChatChunkMessage
   | ChatDoneMessage
   | ChatErrorMessage
+  | ChatCachedResultMessage
   | MainThreadToolRequestMessage
   | MCPToolResultMessage;
 

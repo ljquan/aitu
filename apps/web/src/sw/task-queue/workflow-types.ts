@@ -107,6 +107,10 @@ export interface WorkflowContext {
     images?: string[];
     videos?: string[];
   };
+  /** Reference images (actual URLs for [图片1], [图片2], etc.) */
+  referenceImages?: string[];
+  /** Text model used for AI analysis */
+  textModel?: string;
 }
 
 // ============================================================================
@@ -130,6 +134,14 @@ export interface MCPResult {
   taskId?: string;
   /** Multiple task IDs (for batch) */
   taskIds?: string[];
+  /** Additional workflow steps (for ai_analyze) */
+  addSteps?: Array<{
+    id: string;
+    mcp: string;
+    args: Record<string, unknown>;
+    description: string;
+    status: 'pending' | 'running' | 'completed' | 'failed';
+  }>;
 }
 
 /**
@@ -345,6 +357,21 @@ export interface WorkflowRecoveredMessage {
 }
 
 /**
+ * New steps added to workflow (from ai_analyze)
+ */
+export interface WorkflowStepsAddedMessage {
+  type: 'WORKFLOW_STEPS_ADDED';
+  workflowId: string;
+  steps: Array<{
+    id: string;
+    mcp: string;
+    args: Record<string, unknown>;
+    description: string;
+    status: WorkflowStepStatus;
+  }>;
+}
+
+/**
  * Union type for workflow-related messages from SW
  */
 export type WorkflowSWToMainMessage =
@@ -356,4 +383,5 @@ export type WorkflowSWToMainMessage =
   | MainThreadToolRequestMessage
   | WorkflowStatusResponseMessage
   | WorkflowAllResponseMessage
-  | WorkflowRecoveredMessage;
+  | WorkflowRecoveredMessage
+  | WorkflowStepsAddedMessage;

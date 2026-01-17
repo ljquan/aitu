@@ -747,12 +747,29 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
     // 更新当前工作流消息（同时持久化到本地存储）
     const handleUpdateWorkflowMessage = useCallback(
       async (workflow: WorkflowMessageData) => {
-        const msgId = currentWorkflowMsgIdRef.current;
-        if (!msgId) return;
+        let msgId = currentWorkflowMsgIdRef.current;
+        
+        // If no current msgId, try to find existing message by workflow ID
+        // This handles page refresh recovery case
+        if (!msgId) {
+          for (const [id, wf] of workflowMessages.entries()) {
+            if (wf.id === workflow.id) {
+              msgId = id;
+              currentWorkflowMsgIdRef.current = id;
+              // console.log('[ChatDrawer] Found existing message for workflow:', workflow.id, 'msgId:', id);
+              break;
+            }
+          }
+        }
+        
+        if (!msgId) {
+          // console.log('[ChatDrawer] No message ID found for workflow update, skipping:', workflow.id);
+          return;
+        }
 
         setWorkflowMessages((prev) => {
           const newMap = new Map(prev);
-          newMap.set(msgId, workflow);
+          newMap.set(msgId!, workflow);
           return newMap;
         });
 
@@ -762,7 +779,7 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
         // 同步更新 chatHandler 中的原始消息，确保多轮对话上下文正确
         chatHandler.updateRawMessageWorkflow?.(msgId, workflow);
       },
-      [activeSessionId, sessions, chatHandler]
+      [activeSessionId, sessions, chatHandler, workflowMessages]
     );
 
     // 追加 Agent 执行日志（同时持久化）

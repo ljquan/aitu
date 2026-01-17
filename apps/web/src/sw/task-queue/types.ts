@@ -343,6 +343,14 @@ export interface ChatStopMessage {
 }
 
 /**
+ * Get cached chat result (for recovery after page refresh)
+ */
+export interface ChatGetCachedMessage {
+  type: 'CHAT_GET_CACHED';
+  chatId: string;
+}
+
+/**
  * Restore tasks from storage (after SW activation)
  */
 export interface TaskRestoreMessage {
@@ -390,6 +398,7 @@ export type MainToSWMessage =
   | TaskDeleteMessage
   | ChatStartMessage
   | ChatStopMessage
+  | ChatGetCachedMessage
   | TaskRestoreMessage
   | TaskMarkInsertedMessage
   | MCPToolExecuteMessage;
@@ -531,6 +540,16 @@ export interface ChatErrorMessage {
 }
 
 /**
+ * Cached chat result response (for recovery after page refresh)
+ */
+export interface ChatCachedResultMessage {
+  type: 'CHAT_CACHED_RESULT';
+  chatId: string;
+  fullContent?: string;
+  found: boolean;
+}
+
+/**
  * MCP Tool Execute Result - SW returns tool execution result
  */
 export interface MCPToolResultMessage {
@@ -561,6 +580,7 @@ export type SWToMainMessage =
   | ChatChunkMessage
   | ChatDoneMessage
   | ChatErrorMessage
+  | ChatCachedResultMessage
   | MCPToolResultMessage;
 
 // ============================================================================

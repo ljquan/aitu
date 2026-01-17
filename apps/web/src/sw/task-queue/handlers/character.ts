@@ -126,7 +126,9 @@ export class CharacterHandler implements TaskHandler {
       formData.append('character_timestamps', params.characterTimestamps);
     }
 
-    const response = await fetch(`${videoConfig.baseUrl}/videos`, {
+    // Use debugFetch for logging
+    const { debugFetch } = await import('../debug-fetch');
+    const response = await debugFetch(`${videoConfig.baseUrl}/videos`, {
       method: 'POST',
       headers: {
         ...(videoConfig.apiKey
@@ -135,6 +137,9 @@ export class CharacterHandler implements TaskHandler {
       },
       body: formData,
       signal,
+    }, {
+      label: `👤 创建角色视频 (${characterModel})`,
+      logResponseBody: true,
     });
 
     if (!response.ok) {
@@ -226,12 +231,17 @@ export class CharacterHandler implements TaskHandler {
     videoConfig: { baseUrl: string; apiKey?: string },
     signal: AbortSignal
   ): Promise<CharacterQueryResponse> {
-    const response = await fetch(`${videoConfig.baseUrl}/videos/${characterId}`, {
+    // Use debugFetch for logging
+    const { debugFetch } = await import('../debug-fetch');
+    const response = await debugFetch(`${videoConfig.baseUrl}/videos/${characterId}`, {
       method: 'GET',
       headers: videoConfig.apiKey
         ? { Authorization: `Bearer ${videoConfig.apiKey}` }
         : undefined,
       signal,
+    }, {
+      label: `👤 查询角色状态`,
+      logResponseBody: true,
     });
 
     if (!response.ok) {
