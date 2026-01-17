@@ -180,10 +180,10 @@ export const VIDEO_MODEL_CONFIGS: Record<VideoModel, VideoModelConfig> = {
     ],
     defaultDuration: '8',
     sizeOptions: [
-      { label: '横屏 16:9', value: '1280x720', aspectRatio: '16:9' },
-      { label: '竖屏 9:16', value: '720x1280', aspectRatio: '9:16' },
+      { label: '4K横屏 16:9', value: '3840x2160', aspectRatio: '16:9' },
+      { label: '4K竖屏 9:16', value: '2160x3840', aspectRatio: '9:16' },
     ],
-    defaultSize: '1280x720',
+    defaultSize: '3840x2160',
     imageUpload: {
       maxCount: 2,
       mode: 'frames',
@@ -200,10 +200,10 @@ export const VIDEO_MODEL_CONFIGS: Record<VideoModel, VideoModelConfig> = {
     ],
     defaultDuration: '8',
     sizeOptions: [
-      { label: '横屏 16:9', value: '1280x720', aspectRatio: '16:9' },
-      { label: '竖屏 9:16', value: '720x1280', aspectRatio: '9:16' },
+      { label: '4K横屏 16:9', value: '3840x2160', aspectRatio: '16:9' },
+      { label: '4K竖屏 9:16', value: '2160x3840', aspectRatio: '9:16' },
     ],
-    defaultSize: '1280x720',
+    defaultSize: '3840x2160',
     imageUpload: {
       maxCount: 3,
       mode: 'components',
@@ -220,10 +220,10 @@ export const VIDEO_MODEL_CONFIGS: Record<VideoModel, VideoModelConfig> = {
     ],
     defaultDuration: '8',
     sizeOptions: [
-      { label: '横屏 16:9', value: '1280x720', aspectRatio: '16:9' },
-      { label: '竖屏 9:16', value: '720x1280', aspectRatio: '9:16' },
+      { label: '4K横屏 16:9', value: '3840x2160', aspectRatio: '16:9' },
+      { label: '4K竖屏 9:16', value: '2160x3840', aspectRatio: '9:16' },
     ],
-    defaultSize: '1280x720',
+    defaultSize: '3840x2160',
     imageUpload: {
       maxCount: 2,
       mode: 'frames',

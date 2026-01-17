@@ -263,6 +263,13 @@ const VEO_DEFAULT_PARAMS: VideoModelDefaults = {
   aspectRatio: '16:9',
 };
 
+/** Veo 4K 模型默认参数（8秒，4K分辨率） */
+const VEO_4K_DEFAULT_PARAMS: VideoModelDefaults = {
+  duration: '8',
+  size: '3840x2160',
+  aspectRatio: '16:9',
+};
+
 /** Sora 模型默认参数（10秒） */
 const SORA_DEFAULT_PARAMS: VideoModelDefaults = {
   duration: '10',
@@ -330,7 +337,7 @@ export const VIDEO_MODELS: ModelConfig[] = [
     description: '8秒4K模式，支持首尾帧',
     type: 'video',
     supportsTools: true,
-    videoDefaults: VEO_DEFAULT_PARAMS,
+    videoDefaults: VEO_4K_DEFAULT_PARAMS,
   },
   {
     id: 'veo3.1-components-4k',
@@ -338,7 +345,7 @@ export const VIDEO_MODELS: ModelConfig[] = [
     description: '8秒4K模式，支持3张参考图',
     type: 'video',
     supportsTools: true,
-    videoDefaults: VEO_DEFAULT_PARAMS,
+    videoDefaults: VEO_4K_DEFAULT_PARAMS,
   },
   {
     id: 'veo3.1-pro-4k',
@@ -346,7 +353,7 @@ export const VIDEO_MODELS: ModelConfig[] = [
     description: '8秒高质量4K模式，支持首尾帧',
     type: 'video',
     supportsTools: true,
-    videoDefaults: VEO_DEFAULT_PARAMS,
+    videoDefaults: VEO_4K_DEFAULT_PARAMS,
   },
   {
     id: 'sora-2-pro',
@@ -574,8 +581,14 @@ export const DEFAULT_TEXT_MODEL = 'deepseek-v3.2';
 // 参数配置（用于 SmartSuggestionPanel）
 // ============================================
 
-/** Veo 系列模型 ID（只支持 8 秒） */
-const VEO_MODEL_IDS = ['veo3', 'veo3-pro', 'veo3.1', 'veo3.1-pro', 'veo3.1-components', 'veo3.1-4k', 'veo3.1-components-4k', 'veo3.1-pro-4k'];
+/** Veo 系列模型 ID（标清，只支持 8 秒） */
+const VEO_MODEL_IDS = ['veo3', 'veo3-pro', 'veo3.1', 'veo3.1-pro', 'veo3.1-components'];
+
+/** Veo 4K 系列模型 ID（4K分辨率，只支持 8 秒） */
+const VEO_4K_MODEL_IDS = ['veo3.1-4k', 'veo3.1-components-4k', 'veo3.1-pro-4k'];
+
+/** 所有 Veo 模型 ID（用于时长参数） */
+const ALL_VEO_MODEL_IDS = [...VEO_MODEL_IDS, ...VEO_4K_MODEL_IDS];
 
 /** Sora 2 模型（支持 10/15 秒） */
 const SORA_2_MODEL_IDS = ['sora-2'];
@@ -599,7 +612,7 @@ const ALL_IMAGE_MODEL_IDS = IMAGE_MODELS.map(m => m.id);
  * 根据 video-model-config.ts 中各模型的实际参数配置
  */
 export const VIDEO_PARAMS: ParamConfig[] = [
-  // Veo 系列时长参数（只有 8 秒）
+  // Veo 系列时长参数（只有 8 秒，包括标清和 4K）
   {
     id: 'duration',
     label: '视频时长',
@@ -610,7 +623,7 @@ export const VIDEO_PARAMS: ParamConfig[] = [
       { value: '8', label: '8秒' },
     ],
     defaultValue: '8',
-    compatibleModels: VEO_MODEL_IDS,
+    compatibleModels: ALL_VEO_MODEL_IDS,
     modelType: 'video',
   },
   // Sora 2 时长参数（10/15 秒）
@@ -644,7 +657,7 @@ export const VIDEO_PARAMS: ParamConfig[] = [
     compatibleModels: SORA_2_PRO_MODEL_IDS,
     modelType: 'video',
   },
-  // Veo 和 Sora 2 尺寸参数（标清）
+  // Veo 标清和 Sora 2 尺寸参数（720p）
   {
     id: 'size',
     label: '视频尺寸',
@@ -657,6 +670,21 @@ export const VIDEO_PARAMS: ParamConfig[] = [
     ],
     defaultValue: '1280x720',
     compatibleModels: [...VEO_MODEL_IDS, ...SORA_2_MODEL_IDS],
+    modelType: 'video',
+  },
+  // Veo 4K 尺寸参数（4K 分辨率）
+  {
+    id: 'size',
+    label: '视频尺寸',
+    shortLabel: '尺寸',
+    description: '生成视频的分辨率',
+    valueType: 'enum',
+    options: [
+      { value: '3840x2160', label: '4K横屏 16:9 (3840x2160)' },
+      { value: '2160x3840', label: '4K竖屏 9:16 (2160x3840)' },
+    ],
+    defaultValue: '3840x2160',
+    compatibleModels: VEO_4K_MODEL_IDS,
     modelType: 'video',
   },
   // Sora 2 Pro 尺寸参数（含高清）

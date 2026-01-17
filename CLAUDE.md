@@ -1328,6 +1328,114 @@ onDoubleClick={() => {
 
 **原因**: `position: absolute` 的元素相对于最近的非 static 定位祖先元素定位。如果父容器没有设置定位，子元素会相对于更上层的元素定位，导致位置错误。同时 `overflow: hidden` 会裁切超出容器边界的内容，包括绝对定位的子元素。
 
+#### 移动端固定定位元素需要考虑工具栏遮挡
+
+**场景**: 移动端页面底部或顶部的固定定位元素（输入框、提示条等）需要避开左侧工具栏
+
+❌ **错误示例**:
+```scss
+// 直接居中，没有考虑左侧工具栏
+.ai-input-bar {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+@media (max-width: 640px) {
+  .ai-input-bar {
+    // 移动端仍然直接居中，会被工具栏遮挡
+    bottom: 16px;
+  }
+}
+```
+
+✅ **正确示例**:
+```scss
+.ai-input-bar {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+@media (max-width: 640px) {
+  .ai-input-bar {
+    bottom: 16px;
+    // 考虑左侧工具栏宽度 (48px)，偏移居中点
+    left: calc(50% + 24px); // 工具栏宽度的一半
+    max-width: calc(100% - 60px); // 左侧工具栏 + 右侧边距
+  }
+}
+```
+
+**检查清单**:
+- 移动端 (`@media max-width: 640px/768px`) 的固定定位元素
+- 是否会与左侧 unified-toolbar (48px) 重叠
+- 是否会与右上角缩放控件重叠
+- 使用 `$toolbar-width` 变量而非硬编码数值
+
+**相关变量**: `$toolbar-width: 48px` (定义在 `styles/_common-variables.scss`)
+
+#### 移动端触控需要 touch 事件实现 hover 效果
+
+**场景**: 桌面端的 hover 预览/提示在移动端没有效果，需要添加 touch 事件支持
+
+❌ **错误示例**:
+```tsx
+// 只有鼠标事件，移动端触控没有预览效果
+<canvas
+  onMouseEnter={() => setPreviewVisible(true)}
+  onMouseLeave={() => setPreviewVisible(false)}
+  onMouseMove={(e) => updatePreviewPosition(e)}
+/>
+```
+
+✅ **正确示例**:
+```tsx
+// 添加触控状态追踪
+const isTouchingRef = useRef(false);
+
+const handleTouchStart = (e: React.TouchEvent) => {
+  isTouchingRef.current = true;
+  const touch = e.touches[0];
+  updatePreviewPosition(touch.clientX, touch.clientY);
+  setPreviewVisible(true);
+};
+
+const handleTouchMove = (e: React.TouchEvent) => {
+  const touch = e.touches[0];
+  updatePreviewPosition(touch.clientX, touch.clientY);
+  // 触控移动时始终显示预览
+  setPreviewVisible(true);
+};
+
+const handleTouchEnd = () => {
+  isTouchingRef.current = false;
+  // 延迟隐藏，让用户看到最终位置
+  setTimeout(() => {
+    if (!isTouchingRef.current) {
+      setPreviewVisible(false);
+    }
+  }, 500);
+};
+
+<canvas
+  onMouseEnter={handleMouseEnter}
+  onMouseLeave={handleMouseLeave}
+  onMouseMove={handleMouseMove}
+  onTouchStart={handleTouchStart}
+  onTouchMove={handleTouchMove}
+  onTouchEnd={handleTouchEnd}
+/>
+```
+
+**注意事项**:
+- 触控时会同时触发 `pointerdown`，可能导致拖拽状态与预览状态冲突
+- 使用 `isTouchingRef` 区分移动端触控和桌面端鼠标拖拽
+- 触控结束后延迟隐藏预览，给用户时间查看结果
+- Canvas 元素需要设置 `touch-action: none` 防止默认滚动行为
+
 ### Git 提交规范
 - 格式: `<type>(<scope>): <subject>`
 - 类型: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`, `perf`, `ci`
@@ -2012,6 +2120,80 @@ function getFileExtension(url: string): string {
 - 虚拟路径如 `/__aitu_cache__/xxx` 是相对路径，需要特殊处理
 - 判断 `startsWith('/')` 或不包含 `://` 可以识别相对路径
 
+### Service Worker 架构设计：避免复杂的往返通信
+
+**场景**: 设计需要 Service Worker 执行的工具或任务时
+
+❌ **错误示例: 复杂的往返通信架构**
+```typescript
+// 错误：ai_analyze 被设计为需要主线程执行，但内部又通过 SW 发起 chat 请求
+// 形成了复杂的往返通信链，页面刷新时容易断链
+
+// 流程：
+// 1. 主线程发起工作流 → SW
+// 2. SW 发现 ai_analyze 需要主线程执行
+// 3. SW → 主线程 (MAIN_THREAD_TOOL_REQUEST)
+// 4. 主线程执行 ai_analyze，调用 agentExecutor
+// 5. agentExecutor 调用 callApiStreamViaSW
+// 6. 主线程 → SW (CHAT_START)  ← 又回到 SW！
+// 7. SW 执行 chat，通过 MessageChannel 返回结果
+// 8. 主线程收到结果，发送 MAIN_THREAD_TOOL_RESPONSE
+// 9. SW 继续工作流
+
+// 问题：刷新页面时，步骤 6-8 的通信链会断裂，导致工作流卡住
+
+export function requiresMainThread(toolName: string): boolean {
+  const delegatedTools = [
+    'ai_analyze',  // ❌ 内部又调用 SW，不应该委托给主线程
+    // ...
+  ];
+  return delegatedTools.includes(toolName);
+}
+```
+
+✅ **正确示例: 简化架构，避免往返通信**
+```typescript
+// 正确：如果操作最终在 SW 中执行，就应该直接在 SW 中实现
+
+// 简化后的流程：
+// 1. 主线程发起工作流 → SW
+// 2. SW 直接执行 ai_analyze（不委托给主线程）
+// 3. SW 内部调用 chat API
+// 4. SW 解析结果，添加后续步骤
+// 5. SW 继续执行后续步骤
+
+// 在 SW 中注册工具，直接执行
+export const swMCPTools: Map<string, SWMCPTool> = new Map([
+  ['generate_image', generateImageTool],
+  ['generate_video', generateVideoTool],
+  ['ai_analyze', aiAnalyzeTool],  // ✅ 直接在 SW 执行
+]);
+
+// 从委托列表中移除
+export function requiresMainThread(toolName: string): boolean {
+  const delegatedTools = [
+    'canvas_insert',  // 需要 DOM 操作，必须在主线程
+    'insert_mermaid', // 需要渲染，必须在主线程
+    // 'ai_analyze' - 不再委托，直接在 SW 执行
+  ];
+  return delegatedTools.includes(toolName);
+}
+```
+
+**原因**:
+1. 复杂的往返通信增加了故障点，页面刷新时容易断链
+2. Service Worker 是独立于页面的后台进程，刷新不影响 SW 执行
+3. 如果工具最终依赖 SW 执行（如 chat API），就应该直接在 SW 中实现
+4. 只有真正需要 DOM/Canvas 操作的工具才应该委托给主线程
+
+**判断标准**: 工具是否真正需要主线程
+- ✅ 需要委托：DOM 操作、Canvas 渲染、获取用户输入
+- ❌ 不需要委托：纯 API 调用、数据处理、文件操作
+
+**Service Worker 更新注意**: 修改 SW 代码后需要重新加载才能生效：
+1. Chrome DevTools → Application → Service Workers → 点击 "Update"
+2. 或关闭所有使用该 SW 的标签页，重新打开
+
 ### Service Worker 内部处理虚拟路径 URL
 
 **场景**: 在 Service Worker 内部需要获取 `/__aitu_cache__/` 或 `/asset-library/` 等虚拟路径的资源时
@@ -2539,6 +2721,129 @@ trimTransparentBorders(imageData: ImageData, strict: boolean = true)
 ---
 
 ## 开发规范
+
+### API 轮询与任务恢复规则
+
+**场景**: 视频生成等需要轮询的 API 调用，以及页面刷新后的任务恢复
+
+#### 错误 1: 轮询时不区分业务失败和网络错误
+
+❌ **错误示例**:
+```typescript
+// 所有错误都重试 - 错误！业务失败不应重试
+while (attempts < maxAttempts) {
+  try {
+    const response = await fetch(`${baseUrl}/videos/${videoId}`);
+    const data = await response.json();
+    
+    if (data.status === 'failed') {
+      throw new Error(data.error.message);  // 这个错误会被 catch 重试
+    }
+  } catch (err) {
+    // 所有错误都重试 - 业务失败也会重试！
+    consecutiveErrors++;
+    await sleep(backoffInterval);
+  }
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 区分业务失败和网络错误
+class VideoGenerationFailedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'VideoGenerationFailedError';
+  }
+}
+
+while (attempts < maxAttempts) {
+  try {
+    const response = await fetch(`${baseUrl}/videos/${videoId}`);
+    const data = await response.json();
+    
+    if (data.status === 'failed') {
+      // 使用特殊错误类型，不应重试
+      throw new VideoGenerationFailedError(data.error.message);
+    }
+  } catch (err) {
+    // 业务失败直接抛出，不重试
+    if (err instanceof VideoGenerationFailedError) {
+      throw err;
+    }
+    // 只有网络错误才重试
+    consecutiveErrors++;
+    await sleep(backoffInterval);
+  }
+}
+```
+
+**原因**: 业务失败（如 `generation_failed`、`INVALID_ARGUMENT`）是 API 明确返回的错误，重试也不会成功，只会浪费时间。网络错误是临时的，重试可能成功。
+
+---
+
+#### 错误 2: 页面刷新后自动恢复所有失败任务
+
+❌ **错误示例**:
+```typescript
+// 恢复所有有 remoteId 的失败任务 - 错误！
+const failedTasks = storedTasks.filter(task =>
+  task.status === 'failed' && task.remoteId
+);
+failedTasks.forEach(task => {
+  // 所有失败任务都恢复
+  taskService.updateStatus(task.id, 'processing');
+});
+```
+
+✅ **正确示例**:
+```typescript
+// 只恢复网络错误导致的失败任务
+const isNetworkError = (task: Task): boolean => {
+  const errorMsg = `${task.error?.message || ''} ${task.error?.details?.originalError || ''}`.toLowerCase();
+  
+  // 排除业务失败 - 这些不应该自动恢复
+  const isBusinessFailure = (
+    errorMsg.includes('generation_failed') ||
+    errorMsg.includes('invalid_argument') ||
+    errorMsg.includes('prohibited') ||
+    errorMsg.includes('content policy')
+  );
+  if (isBusinessFailure) return false;
+  
+  // 只有网络错误才恢复
+  return (
+    errorMsg.includes('failed to fetch') ||
+    errorMsg.includes('network') ||
+    errorMsg.includes('timeout')
+  );
+};
+
+// 只恢复视频/角色任务（图片任务不恢复，因为每次调用都扣费）
+const failedVideoTasks = storedTasks.filter(task =>
+  task.type === TaskType.VIDEO &&
+  task.status === 'failed' &&
+  task.remoteId &&
+  isNetworkError(task)
+);
+```
+
+**原因**:
+1. **业务失败不恢复**：API 返回的明确失败（如内容违规）重试也不会成功
+2. **图片任务不恢复**：图片生成是同步调用，每次重试都会扣费
+3. **视频任务可恢复**：视频有 `remoteId`，重新查询状态不会产生额外费用
+
+---
+
+#### 任务恢复决策表
+
+| 任务类型 | 错误类型 | 是否自动恢复 | 原因 |
+|---------|---------|-------------|------|
+| 视频/角色 | 网络错误 | ✅ 是 | 查询状态不扣费 |
+| 视频/角色 | 业务失败 | ❌ 否 | 重试也不会成功 |
+| 图片 | 任何错误 | ❌ 否 | 每次调用都扣费 |
+
+---
 
 ### 生产代码禁止保留调试日志
 
