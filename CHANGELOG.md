@@ -1,3 +1,25 @@
+## 0.5.9 (2026-01-17)
+
+### 🚀 Features
+
+- enhance fill options with gradient and image support ([206af04](https://github.com/ljquan/aitu/commit/206af04))
+
+### 🔧 Chores
+
+- bump version to 0.5.8 and update changelog ([8f5953b](https://github.com/ljquan/aitu/commit/8f5953b))
+- update version to 0.5.2 and enhance fill panel styles ([e2b4a84](https://github.com/ljquan/aitu/commit/e2b4a84))
+- feat： 调整4k配置 ([5bfcb9e](https://github.com/ljquan/aitu/commit/5bfcb9e))
+- docs(claude): 添加异步任务幂等性检查规则 ([e046e57](https://github.com/ljquan/aitu/commit/e046e57))
+- docs(claude): 添加单击/双击区分场景的计时器清理规则 ([079374c](https://github.com/ljquan/aitu/commit/079374c))
+- docs(claude): 添加 Service Worker 更新提示开发模式规则 ([9b8f79e](https://github.com/ljquan/aitu/commit/9b8f79e))
+- docs(claude): 更新规则 - 滑块节流和 Plait API 签名 ([2286e34](https://github.com/ljquan/aitu/commit/2286e34))
+- docs(claude): 添加工具函数使用和滑块更新策略规则 ([f51f914](https://github.com/ljquan/aitu/commit/f51f914))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+- liquidliang <ljquan@qq.com>
+
 ## 0.5.8 (2026-01-17)
 
 ### 🚀 Features
