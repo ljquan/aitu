@@ -13,6 +13,8 @@ interface WorkflowContextValue {
   state: WorkflowState;
   /** 开始执行工作流 */
   startWorkflow: (workflow: WorkflowDefinition) => void;
+  /** 恢复工作流（用于页面刷新后恢复状态，不触发执行） */
+  restoreWorkflow: (workflow: WorkflowDefinition) => void;
   /** 更新步骤状态 */
   updateStep: (
     stepId: string,
@@ -49,6 +51,7 @@ export const WorkflowProvider: React.FC<WorkflowProviderProps> = ({ children }) 
   const value = useMemo<WorkflowContextValue>(() => ({
     state: workflow.state,
     startWorkflow: workflow.startWorkflow,
+    restoreWorkflow: workflow.restoreWorkflow,
     updateStep: workflow.updateStep,
     addSteps: workflow.addSteps,
     addStepsFromAIResponse: workflow.addStepsFromAIResponse,
@@ -58,6 +61,7 @@ export const WorkflowProvider: React.FC<WorkflowProviderProps> = ({ children }) 
   }), [
     workflow.state,
     workflow.startWorkflow,
+    workflow.restoreWorkflow,
     workflow.updateStep,
     workflow.addSteps,
     workflow.addStepsFromAIResponse,
@@ -100,6 +104,7 @@ export function useWorkflowControl() {
   
   return {
     startWorkflow: context.startWorkflow,
+    restoreWorkflow: context.restoreWorkflow,
     updateStep: context.updateStep,
     addSteps: context.addSteps,
     addStepsFromAIResponse: context.addStepsFromAIResponse,

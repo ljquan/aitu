@@ -72,13 +72,16 @@ function toWorkflowMessageData(
   postProcessingStatus?: PostProcessingStatus,
   insertedCount?: number
 ): WorkflowMessageData {
+  // Safely access metadata with defaults
+  const metadata = workflow.metadata || {};
+  
   return {
     id: workflow.id,
     name: workflow.name,
     generationType: workflow.generationType,
-    prompt: workflow.metadata.prompt,
+    prompt: metadata.prompt || retryContext?.aiContext?.finalPrompt || '',
     aiAnalysis: workflow.aiAnalysis,
-    count: workflow.metadata.count,
+    count: metadata.count,
     steps: workflow.steps.map(step => ({
       id: step.id,
       description: step.description,
@@ -837,11 +840,9 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
   const handleGenerate = useCallback(async () => {
     if (!prompt.trim() && allContent.length === 0) return;
     if (isSubmitting) {
-      // console.log('[AIInputBar] handleGenerate blocked: isSubmitting=true');
       return; // 仅防止快速重复点击
     }
 
-    // console.log('[AIInputBar] handleGenerate: setting isSubmitting=true');
     setIsSubmitting(true);
 
     try {

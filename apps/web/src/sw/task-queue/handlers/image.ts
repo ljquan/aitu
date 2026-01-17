@@ -97,8 +97,9 @@ export class ImageHandler implements TaskHandler {
 
     config.onProgress(task.id, 10, TaskExecutionPhase.SUBMITTING);
 
-    // Make API request - note: baseUrl already includes /v1
-    const response = await fetch(`${geminiConfig.baseUrl}/images/generations`, {
+    // Make API request (using debugFetch for logging)
+    const { debugFetch } = await import('../debug-fetch');
+    const response = await debugFetch(`${geminiConfig.baseUrl}/images/generations`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -106,6 +107,10 @@ export class ImageHandler implements TaskHandler {
       },
       body: JSON.stringify(requestBody),
       signal,
+    }, {
+      label: `🎨 生成图片 (${geminiConfig.modelName})`,
+      logRequestBody: true,
+      logResponseBody: true,
     });
 
     if (!response.ok) {

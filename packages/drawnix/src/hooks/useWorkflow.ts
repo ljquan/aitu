@@ -36,6 +36,8 @@ export interface UseWorkflowReturn {
   state: WorkflowState;
   /** 开始执行工作流 */
   startWorkflow: (workflow: WorkflowDefinition) => void;
+  /** 恢复工作流（用于页面刷新后恢复状态，不触发执行） */
+  restoreWorkflow: (workflow: WorkflowDefinition) => void;
   /** 更新步骤状态 */
   updateStep: (
     stepId: string, 
@@ -89,6 +91,36 @@ export function useWorkflow(): UseWorkflowReturn {
       completedSteps: workflowStatus.completedSteps,
       totalSteps: workflowStatus.totalSteps,
       error: null,
+    });
+  }, []);
+
+  /**
+   * 恢复工作流（用于页面刷新后恢复状态，不触发执行）
+   * 与 startWorkflow 不同，这个只恢复 UI 状态
+   */
+  const restoreWorkflow = useCallback((workflow: WorkflowDefinition) => {
+    workflowRef.current = workflow;
+    abortedRef.current = false;
+    
+    const workflowStatus = getWorkflowStatus(workflow);
+    
+    // 根据工作流当前状态确定显示状态
+    let displayStatus: WorkflowState['status'] = 'running';
+    if (workflow.status === 'completed') {
+      displayStatus = 'completed';
+    } else if (workflow.status === 'failed') {
+      displayStatus = 'failed';
+    } else if (workflow.status === 'cancelled') {
+      displayStatus = 'failed';
+    }
+    
+    setState({
+      workflow,
+      status: displayStatus,
+      currentStep: workflowStatus.currentStep || null,
+      completedSteps: workflowStatus.completedSteps,
+      totalSteps: workflowStatus.totalSteps,
+      error: workflow.error || null,
     });
   }, []);
 
@@ -226,6 +258,7 @@ export function useWorkflow(): UseWorkflowReturn {
   return {
     state,
     startWorkflow,
+    restoreWorkflow,
     updateStep,
     addSteps,
     addStepsFromAIResponse,

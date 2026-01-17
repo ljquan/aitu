@@ -9,6 +9,7 @@
 import type { GeminiConfig, VideoAPIConfig, MCPToolResultMessage } from '../types';
 import type { MCPResult } from '../workflow-types';
 import { executeSWMCPTool, requiresMainThread } from './tools';
+import { sendToClientById } from '../utils/message-bus';
 
 /**
  * Execute an MCP tool in the Service Worker
@@ -75,7 +76,7 @@ function sendResult(
   requestId: string,
   result: MCPResult,
   clientId: string,
-  sw: ServiceWorkerGlobalScope
+  _sw: ServiceWorkerGlobalScope
 ): void {
   const message: MCPToolResultMessage = {
     type: 'MCP_TOOL_RESULT',
@@ -86,9 +87,5 @@ function sendResult(
     resultType: result.type,
   };
 
-  sw.clients.get(clientId).then((client) => {
-    if (client) {
-      client.postMessage(message);
-    }
-  });
+  sendToClientById(clientId, message);
 }

@@ -171,6 +171,17 @@ export interface VideoPollingOptions {
  * @param options 轮询配置
  * @returns 完成的视频状态响应
  */
+/**
+ * Custom error class for video generation business failures (not network errors)
+ * These should not be retried as they represent actual API failures
+ */
+class VideoGenerationFailedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'VideoGenerationFailedError';
+  }
+}
+
 export async function pollVideoUntilComplete(
   baseUrl: string,
   videoId: string,
@@ -185,45 +196,94 @@ export async function pollVideoUntilComplete(
   } = options;
 
   let attempts = 0;
+  let consecutiveErrors = 0;
+  const maxConsecutiveErrors = 10; // 连续错误超过此数才放弃
+
+  // Import debugFetch for logging
+  const { debugFetch } = await import('../debug-fetch');
 
   while (attempts < maxAttempts) {
     if (signal?.aborted) {
       throw new Error('Video generation cancelled');
     }
 
-    const response = await fetch(`${baseUrl}/videos/${videoId}`, {
-      headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
-      signal,
-    });
+    try {
+      // Log all polling requests with attempt number
+      const response = await debugFetch(`${baseUrl}/videos/${videoId}`, {
+        headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
+        signal,
+      }, {
+        label: `🔄 查询视频状态 #${attempts + 1}`,
+        logResponseBody: true,
+      });
 
-    if (!response.ok) {
-      throw new Error(`Failed to get video status: ${response.status}`);
+      if (!response.ok) {
+        // 轮询接口临时错误，增加间隔继续重试
+        consecutiveErrors++;
+        console.warn(`[VideoPolling] Status query failed (${response.status}), attempt ${consecutiveErrors}/${maxConsecutiveErrors}, will retry with longer interval`);
+        
+        if (consecutiveErrors >= maxConsecutiveErrors) {
+          throw new Error(`Failed to get video status after ${maxConsecutiveErrors} consecutive errors: ${response.status}`);
+        }
+        
+        // 根据连续错误次数增加等待时间（指数退避，最大 60 秒）
+        const backoffInterval = Math.min(interval * Math.pow(1.5, consecutiveErrors), 60000);
+        await new Promise((resolve) => setTimeout(resolve, backoffInterval));
+        attempts++;
+        continue;
+      }
+
+      // 请求成功，重置连续错误计数
+      consecutiveErrors = 0;
+
+      const data: VideoStatusResponse = await response.json();
+      const status = data.status?.toLowerCase() as VideoStatusResponse['status'];
+
+      // 更新进度
+      const progress = data.progress ?? Math.min(10 + attempts * 2, 90);
+      onProgress?.(progress, 'polling' as TaskExecutionPhase);
+
+      // 检查完成状态
+      if (status === 'completed' || status === 'succeeded') {
+        onProgress?.(100);
+        return data;
+      }
+
+      // 检查失败状态 - 使用特殊错误类型，不应重试
+      if (status === 'failed' || status === 'error') {
+        const errorMsg = typeof data.error === 'string'
+          ? data.error
+          : data.error?.message || data.message || 'Video generation failed';
+        throw new VideoGenerationFailedError(errorMsg);
+      }
+
+      // 等待下一次轮询
+      await new Promise((resolve) => setTimeout(resolve, interval));
+      attempts++;
+    } catch (err) {
+      // 如果是业务失败错误，直接抛出，不重试
+      if (err instanceof VideoGenerationFailedError) {
+        throw err;
+      }
+      
+      // 如果是取消信号，直接抛出
+      if (signal?.aborted) {
+        throw new Error('Video generation cancelled');
+      }
+      
+      // 网络错误等按照临时错误处理，可以重试
+      consecutiveErrors++;
+      console.warn(`[VideoPolling] Network error during status query, attempt ${consecutiveErrors}/${maxConsecutiveErrors}:`, err);
+      
+      if (consecutiveErrors >= maxConsecutiveErrors) {
+        throw err;
+      }
+      
+      // 根据连续错误次数增加等待时间
+      const backoffInterval = Math.min(interval * Math.pow(1.5, consecutiveErrors), 60000);
+      await new Promise((resolve) => setTimeout(resolve, backoffInterval));
+      attempts++;
     }
-
-    const data: VideoStatusResponse = await response.json();
-    const status = data.status?.toLowerCase() as VideoStatusResponse['status'];
-
-    // 更新进度
-    const progress = data.progress ?? Math.min(10 + attempts * 2, 90);
-    onProgress?.(progress, 'polling' as TaskExecutionPhase);
-
-    // 检查完成状态
-    if (status === 'completed' || status === 'succeeded') {
-      onProgress?.(100);
-      return data;
-    }
-
-    // 检查失败状态
-    if (status === 'failed' || status === 'error') {
-      const errorMsg = typeof data.error === 'string'
-        ? data.error
-        : data.error?.message || data.message || 'Video generation failed';
-      throw new Error(errorMsg);
-    }
-
-    // 等待下一次轮询
-    await new Promise((resolve) => setTimeout(resolve, interval));
-    attempts++;
   }
 
   throw new Error('Video generation timed out');
@@ -243,10 +303,15 @@ export async function queryVideoStatus(
   apiKey?: string,
   signal?: AbortSignal
 ): Promise<VideoStatusResponse> {
-  const response = await fetch(`${baseUrl}/videos/${videoId}`, {
+  // Use debugFetch for logging
+  const { debugFetch } = await import('../debug-fetch');
+  const response = await debugFetch(`${baseUrl}/videos/${videoId}`, {
     method: 'GET',
     headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : undefined,
     signal,
+  }, {
+    label: `🔍 单次查询视频状态`,
+    logResponseBody: true,
   });
 
   if (!response.ok) {

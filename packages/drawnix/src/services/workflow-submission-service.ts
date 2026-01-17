@@ -7,12 +7,19 @@
  * Architecture:
  * - Application layer: Build workflow definition → Submit to SW → Listen for updates
  * - Service Worker: Execute workflow → Call MCP tools → Broadcast status updates
+ * 
+ * Updated: Now integrates with DuplexBridge for improved communication and state recovery.
  */
 
 import { Subject, Observable, Subscription } from 'rxjs';
 import { filter } from 'rxjs/operators';
 import type { ParsedGenerationParams } from '../utils/ai-input-parser';
 import { isAuthError, dispatchApiAuthError } from '../utils/api-auth-error-event';
+import {
+  WorkflowBridge,
+  getWorkflowBridge,
+  type WorkflowEvent as BridgeWorkflowEvent,
+} from './duplex-communication/bridge';
 
 // ============================================================================
 // Types
@@ -143,6 +150,8 @@ class WorkflowSubmissionService {
   private workflows: Map<string, WorkflowDefinition> = new Map();
   private messageHandler: ((event: MessageEvent) => void) | null = null;
   private initialized = false;
+  private workflowBridge: WorkflowBridge | null = null;
+  private bridgeSubscription: Subscription | null = null;
 
   /**
    * Initialize the service (call once on app startup)
@@ -159,6 +168,13 @@ class WorkflowSubmissionService {
     };
 
     navigator.serviceWorker.addEventListener('message', this.messageHandler);
+    
+    // 初始化WorkflowBridge并订阅事件
+    this.workflowBridge = getWorkflowBridge();
+    this.bridgeSubscription = this.workflowBridge.events.subscribe((event: BridgeWorkflowEvent) => {
+      this.handleBridgeEvent(event);
+    });
+    
     this.initialized = true;
     // console.log('[WorkflowSubmissionService] Initialized');
   }
@@ -171,8 +187,66 @@ class WorkflowSubmissionService {
       navigator.serviceWorker?.removeEventListener('message', this.messageHandler);
       this.messageHandler = null;
     }
+    if (this.bridgeSubscription) {
+      this.bridgeSubscription.unsubscribe();
+      this.bridgeSubscription = null;
+    }
     this.events$.complete();
     this.initialized = false;
+  }
+
+  /**
+   * Handle events from WorkflowBridge (for state recovery)
+   */
+  private handleBridgeEvent(event: BridgeWorkflowEvent): void {
+    switch (event.type) {
+      case 'recovered':
+        // 工作流恢复事件 - 更新本地缓存并发送事件
+        if (event.workflow) {
+          this.workflows.set(event.workflowId, event.workflow as unknown as WorkflowDefinition);
+        }
+        this.events$.next({
+          type: 'recovered',
+          workflowId: event.workflowId,
+          workflow: event.workflow as unknown as WorkflowDefinition,
+        });
+        break;
+      // 其他事件由原有的消息处理器处理
+    }
+  }
+
+  /**
+   * Recover workflow states after page refresh
+   * Call this after initialization to restore running workflows
+   */
+  async recoverWorkflows(): Promise<WorkflowDefinition[]> {
+    if (!this.workflowBridge) {
+      console.warn('[WorkflowSubmissionService] WorkflowBridge not initialized');
+      return [];
+    }
+
+    try {
+      const workflows = await this.workflowBridge.recoverWorkflows();
+      
+      // 更新本地缓存
+      for (const workflow of workflows) {
+        this.workflows.set(workflow.id, workflow as unknown as WorkflowDefinition);
+      }
+      
+      console.log(`[WorkflowSubmissionService] Recovered ${workflows.length} workflows`);
+      return workflows as unknown as WorkflowDefinition[];
+    } catch (error) {
+      console.warn('[WorkflowSubmissionService] Failed to recover workflows:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get running workflows from cache
+   */
+  getRunningWorkflows(): WorkflowDefinition[] {
+    return Array.from(this.workflows.values())
+      .filter(w => w.status === 'running' || w.status === 'pending');
   }
 
   /**
@@ -241,6 +315,14 @@ class WorkflowSubmissionService {
    * Submit a workflow for execution
    */
   async submit(workflow: WorkflowDefinition): Promise<void> {
+    console.log('[WorkflowSubmissionService] submit() called:', {
+      workflowId: workflow.id,
+      stepsCount: workflow.steps.length,
+      hasContext: !!workflow.context,
+      referenceImagesCount: workflow.context?.referenceImages?.length || 0,
+      timestamp: new Date().toISOString(),
+    });
+    
     const sw = await this.getServiceWorker();
     if (!sw) {
       console.error('[WorkflowSubmissionService] ✗ Service Worker not available');
@@ -250,10 +332,7 @@ class WorkflowSubmissionService {
     // Store locally
     this.workflows.set(workflow.id, workflow);
 
-    // console.log('[WorkflowSubmissionService] ▶ Submitting workflow to SW');
-    // console.log('[WorkflowSubmissionService]   - Workflow ID:', workflow.id);
-    // console.log('[WorkflowSubmissionService]   - Steps:', workflow.steps.length);
-    // console.log('[WorkflowSubmissionService]   - Context:', workflow.context);
+    console.log('[WorkflowSubmissionService] ▶ Sending WORKFLOW_SUBMIT to SW:', workflow.id);
 
     // Send to SW
     sw.postMessage({
@@ -261,7 +340,7 @@ class WorkflowSubmissionService {
       workflow,
     });
 
-    // console.log('[WorkflowSubmissionService] Workflow submitted:', workflow.id);
+    console.log('[WorkflowSubmissionService] ✓ WORKFLOW_SUBMIT sent:', workflow.id);
   }
 
   /**
@@ -504,9 +583,29 @@ class WorkflowSubmissionService {
     }
   }
 
+  /**
+   * Clone a workflow to ensure mutability
+   */
+  private cloneWorkflow(workflow: WorkflowDefinition): WorkflowDefinition {
+    return JSON.parse(JSON.stringify(workflow));
+  }
+
+  /**
+   * Get or create a mutable workflow from cache
+   */
+  private getMutableWorkflow(workflowId: string): WorkflowDefinition | undefined {
+    const workflow = this.workflows.get(workflowId);
+    if (!workflow) return undefined;
+    
+    // Clone to ensure mutability
+    const mutableWorkflow = this.cloneWorkflow(workflow);
+    this.workflows.set(workflowId, mutableWorkflow);
+    return mutableWorkflow;
+  }
+
   private handleWorkflowStatus(data: any): void {
     // console.log('[WorkflowSubmissionService] Workflow status update:', data.workflowId, '->', data.status);
-    const workflow = this.workflows.get(data.workflowId);
+    const workflow = this.getMutableWorkflow(data.workflowId);
     if (workflow) {
       workflow.status = data.status;
       workflow.updatedAt = data.updatedAt || Date.now();
@@ -528,7 +627,7 @@ class WorkflowSubmissionService {
     //   console.log('[WorkflowSubmissionService]   - Result type:', data.result?.type);
     // }
 
-    const workflow = this.workflows.get(data.workflowId);
+    const workflow = this.getMutableWorkflow(data.workflowId);
     if (workflow) {
       const step = workflow.steps.find((s) => s.id === data.stepId);
       if (step) {
@@ -553,7 +652,8 @@ class WorkflowSubmissionService {
   private handleWorkflowCompleted(data: any): void {
     // console.log('[WorkflowSubmissionService] ✓ Workflow completed:', data.workflowId);
     if (data.workflow) {
-      this.workflows.set(data.workflowId, data.workflow);
+      // Clone to ensure mutability
+      this.workflows.set(data.workflowId, this.cloneWorkflow(data.workflow));
     }
 
     this.events$.next({
@@ -565,7 +665,7 @@ class WorkflowSubmissionService {
 
   private handleWorkflowFailed(data: any): void {
     console.error('[WorkflowSubmissionService] Workflow failed:', data.workflowId, '-', data.error);
-    const workflow = this.workflows.get(data.workflowId);
+    const workflow = this.getMutableWorkflow(data.workflowId);
     if (workflow) {
       workflow.status = 'failed';
       workflow.error = data.error;

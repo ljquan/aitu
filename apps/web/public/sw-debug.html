@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Service Worker 调试面板</title>
+  <link rel="stylesheet" href="/sw-debug/styles.css">
+</head>
+<body>
+  <header>
+    <h1>
+      <span class="icon">⚙️</span>
+      Service Worker 调试面板
+      <span id="swStatus" class="status-indicator inactive">
+        <span class="dot"></span>
+        <span class="text">未连接</span>
+      </span>
+    </h1>
+    <div class="header-actions">
+      <button id="toggleDebug" class="primary">
+        <span>▶</span> 启用调试
+      </button>
+      <div class="export-dropdown">
+        <button id="exportLogs" class="success">
+          <span>📥</span> 导出日志 <span class="dropdown-arrow">▼</span>
+        </button>
+        <div class="export-options" id="exportOptions">
+          <div class="export-section">
+            <div class="export-section-header">Fetch 请求日志</div>
+            <label class="export-checkbox">
+              <input type="checkbox" name="fetch" value="sw-internal" checked>
+              <span>SW 内部 API</span>
+            </label>
+            <label class="export-checkbox">
+              <input type="checkbox" name="fetch" value="xhr">
+              <span>XHR/API</span>
+            </label>
+            <label class="export-checkbox">
+              <input type="checkbox" name="fetch" value="image">
+              <span>图片</span>
+            </label>
+            <label class="export-checkbox">
+              <input type="checkbox" name="fetch" value="video">
+              <span>视频</span>
+            </label>
+            <label class="export-checkbox">
+              <input type="checkbox" name="fetch" value="font">
+              <span>字体</span>
+            </label>
+            <label class="export-checkbox">
+              <input type="checkbox" name="fetch" value="static">
+              <span>静态资源</span>
+            </label>
+            <label class="export-checkbox">
+              <input type="checkbox" name="fetch" value="cache-url">
+              <span>缓存 URL</span>
+            </label>
+            <label class="export-checkbox">
+              <input type="checkbox" name="fetch" value="asset-library">
+              <span>素材库</span>
+            </label>
+          </div>
+          <div class="export-section">
+            <div class="export-section-header">控制台日志</div>
+            <label class="export-checkbox">
+              <input type="checkbox" name="console" value="error" checked>
+              <span>Error</span>
+            </label>
+            <label class="export-checkbox">
+              <input type="checkbox" name="console" value="warn">
+              <span>Warn</span>
+            </label>
+            <label class="export-checkbox">
+              <input type="checkbox" name="console" value="info">
+              <span>Info</span>
+            </label>
+            <label class="export-checkbox">
+              <input type="checkbox" name="console" value="log">
+              <span>Log</span>
+            </label>
+            <label class="export-checkbox">
+              <input type="checkbox" name="console" value="debug">
+              <span>Debug</span>
+            </label>
+          </div>
+          <div class="export-section">
+            <div class="export-section-header">PostMessage 日志</div>
+            <label class="export-checkbox">
+              <input type="checkbox" name="postmessage" value="send">
+              <span>发送 → SW</span>
+            </label>
+            <label class="export-checkbox">
+              <input type="checkbox" name="postmessage" value="receive">
+              <span>接收 ← SW</span>
+            </label>
+          </div>
+          <div class="export-actions">
+            <button id="doExport" class="primary">确认导出</button>
+          </div>
+        </div>
+      </div>
+      <button id="clearLogs" class="danger">
+        <span>🗑</span> 清空日志
+      </button>
+      <button id="refreshStatus">
+        <span>🔄</span> 刷新状态
+      </button>
+    </div>
+  </header>
+
+  <div class="container">
+    <div class="panels">
+      <!-- Left Panel: Status & Cache -->
+      <div class="left-panel">
+        <div class="panel" style="margin-bottom: 20px;">
+          <div class="panel-header">
+            SW 状态信息
+          </div>
+          <div class="panel-content">
+            <div class="stat-grid" id="statusGrid">
+              <div class="stat-item">
+                <span class="label">版本</span>
+                <span class="value" id="swVersion">-</span>
+              </div>
+              <div class="stat-item">
+                <span class="label">调试模式</span>
+                <span class="value" id="debugMode">关闭</span>
+              </div>
+              <div class="stat-item">
+                <span class="label">Pending 图片请求</span>
+                <span class="value" id="pendingImages">0</span>
+              </div>
+              <div class="stat-item">
+                <span class="label">Pending 视频请求</span>
+                <span class="value" id="pendingVideos">0</span>
+              </div>
+              <div class="stat-item">
+                <span class="label">视频 Blob 缓存</span>
+                <span class="value" id="videoBlobCache">0</span>
+              </div>
+              <div class="stat-item">
+                <span class="label">已完成请求缓存</span>
+                <span class="value" id="completedRequests">0</span>
+              </div>
+              <div class="stat-item">
+                <span class="label">工作流处理器</span>
+                <span class="value" id="workflowHandler">未初始化</span>
+              </div>
+              <div class="stat-item">
+                <span class="label">调试日志数</span>
+                <span class="value" id="debugLogsCount">0</span>
+              </div>
+            </div>
+            
+            <div id="failedDomainsSection" style="margin-top: 16px; display: none;">
+              <div class="stat-item" style="flex-direction: column; align-items: flex-start;">
+                <span class="label">失败域名</span>
+                <div class="failed-domains" id="failedDomains"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            缓存统计
+            <button id="refreshCache" style="padding: 4px 10px; font-size: 12px;">刷新</button>
+          </div>
+          <div class="panel-content" style="padding: 0;">
+            <ul class="cache-list" id="cacheList">
+              <li class="cache-item">
+                <span class="name">加载中...</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Panel: Logs -->
+      <div class="panel logs-panel">
+        <div class="tabs">
+          <div class="tab active" data-tab="fetch">Fetch 请求日志</div>
+          <div class="tab" data-tab="console">控制台日志 <span id="consoleCount" style="opacity:0.6">(0)</span></div>
+          <div class="tab" data-tab="postmessage">PostMessage日志 <span id="postmessageCount" style="opacity:0.6">(0)</span></div>
+        </div>
+        
+        <!-- Fetch Logs Tab -->
+        <div class="tab-content active" id="fetchTab">
+          <div class="logs-toolbar">
+            <select id="filterType">
+              <option value="">全部类型</option>
+              <option value="xhr">XHR/API</option>
+              <option value="sw-internal" selected>SW内部API</option>
+              <option value="image">图片</option>
+              <option value="video">视频</option>
+              <option value="font">字体</option>
+              <option value="static">静态资源</option>
+              <option value="navigation">导航</option>
+              <option value="cache-url">缓存URL</option>
+              <option value="asset-library">素材库</option>
+              <option value="passthrough">放行</option>
+            </select>
+            <select id="filterStatus">
+              <option value="">全部状态</option>
+              <option value="200">200 OK</option>
+              <option value="206">206 Partial</option>
+              <option value="304">304 Not Modified</option>
+              <option value="404">404 Not Found</option>
+              <option value="500">5xx Error</option>
+            </select>
+            <input type="text" id="filterUrl" placeholder="搜索 URL...">
+            <label class="switch-toggle">
+              <span class="switch-label">自动滚动</span>
+              <input type="checkbox" id="autoScroll" checked>
+              <span class="switch-slider"></span>
+            </label>
+          </div>
+          <div class="logs-container" id="logsContainer">
+            <div class="empty-state">
+              <span class="icon">📋</span>
+              <p>暂无日志，请先启用调试模式</p>
+              <button id="enableDebugBtn" class="primary">启用调试</button>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Console Logs Tab -->
+        <div class="tab-content" id="consoleTab">
+          <div class="logs-toolbar">
+            <select id="filterConsoleLevel">
+              <option value="">全部级别</option>
+              <option value="error">Error</option>
+              <option value="warn">Warn</option>
+              <option value="info">Info</option>
+              <option value="log">Log</option>
+              <option value="debug">Debug</option>
+            </select>
+            <input type="text" id="filterConsoleText" placeholder="搜索日志内容...">
+            <button id="clearConsoleLogs" style="padding: 6px 12px; font-size: 12px;">清空</button>
+            <button id="copyConsoleLogs" style="padding: 6px 12px; font-size: 12px;">📋 复制</button>
+          </div>
+          <div class="logs-container" id="consoleContainer">
+            <div id="consoleLogsContainer">
+              <div class="empty-state">
+                <span class="icon">📝</span>
+                <p>暂无控制台日志</p>
+                <p style="font-size: 12px; opacity: 0.7;">warn/error 始终捕获；开启调试后也捕获 log/info/debug（仅在调试模式启用时完整记录）</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- PostMessage Logs Tab -->
+        <div class="tab-content" id="postmessageTab">
+          <div class="logs-toolbar">
+            <select id="filterMessageDirection">
+              <option value="">全部方向</option>
+              <option value="send">发送 → SW</option>
+              <option value="receive">接收 ← SW</option>
+            </select>
+            <input type="text" id="filterMessageType" placeholder="搜索消息类型...">
+            <button id="clearPostmessageLogs" style="padding: 6px 12px; font-size: 12px;">清空</button>
+            <button id="copyPostmessageLogs" style="padding: 6px 12px; font-size: 12px;">📋 复制</button>
+          </div>
+          <div class="logs-container" id="postmessageContainer">
+            <div id="postmessageLogsContainer">
+              <div class="empty-state">
+                <span class="icon">📨</span>
+                <p>暂无 PostMessage 日志</p>
+                <p style="font-size: 12px; opacity: 0.7;">记录主线程与 Service Worker 之间的消息通信（仅在调试模式启用时记录）</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/sw-debug/app.js"></script>
+</body>
+</html>

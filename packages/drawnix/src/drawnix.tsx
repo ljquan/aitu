@@ -298,9 +298,12 @@ export const Drawnix: React.FC<DrawnixProps> = ({
           );
 
           // If we found the workflow in SW, sync the steps list first (for dynamic steps and status)
+          // Create a mutable copy of workflow for local use
+          let currentWorkflow = { ...workzone.workflow, steps: [...workzone.workflow.steps] };
+          
           if (swWorkflow) {
-            const needsSync = swWorkflow.steps.length !== workzone.workflow.steps.length || 
-                             swWorkflow.status !== workzone.workflow.status;
+            const needsSync = swWorkflow.steps.length !== currentWorkflow.steps.length || 
+                             swWorkflow.status !== currentWorkflow.status;
             
             if (needsSync) {
               // console.log(`[Drawnix] Syncing workflow for WorkZone ${workzone.id}, SW status: ${swWorkflow.status}, steps: ${swWorkflow.steps.length}`);
@@ -309,9 +312,8 @@ export const Drawnix: React.FC<DrawnixProps> = ({
                 status: swWorkflow.status,
                 error: swWorkflow.error,
               });
-              // Update local workzone reference for the mapping logic below
-              workzone.workflow.steps = swWorkflow.steps;
-              workzone.workflow.status = swWorkflow.status;
+              // Update local reference for the mapping logic below
+              currentWorkflow = { ...currentWorkflow, steps: swWorkflow.steps, status: swWorkflow.status };
             }
           }
 
@@ -319,14 +321,14 @@ export const Drawnix: React.FC<DrawnixProps> = ({
 
           // Check if this workzone's workflow is still active in SW
           // For chat workflows, check activeChatWorkflowIds; for regular workflows, check activeWorkflowIds
-          const isChatWorkflowActive = activeChatWorkflowIds.has(workzone.workflow.id);
-          const isRegularWorkflowActive = activeWorkflowIds.has(workzone.workflow.id);
+          const isChatWorkflowActive = activeChatWorkflowIds.has(currentWorkflow.id);
+          const isRegularWorkflowActive = activeWorkflowIds.has(currentWorkflow.id);
           const isWorkflowActive = isChatWorkflowActive || isRegularWorkflowActive;
 
           // console.log('[Drawnix] Found interrupted WorkZone:', workzone.id, 'chatActive:', isChatWorkflowActive, 'regularActive:', isRegularWorkflowActive);
 
           // Update steps based on task queue status
-          const updatedSteps = workzone.workflow.steps.map(step => {
+          const updatedSteps = currentWorkflow.steps.map(step => {
             if (step.status !== 'running' && step.status !== 'pending') {
               return step;
             }
@@ -403,7 +405,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
 
           // Check if any steps were updated
           const hasChanges = updatedSteps.some((step, i) =>
-            step.status !== workzone.workflow.steps[i].status
+            step.status !== currentWorkflow.steps[i]?.status
           );
 
           if (hasChanges) {

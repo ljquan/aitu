@@ -157,13 +157,18 @@ export class VideoHandler implements TaskHandler {
       }
     }
 
-    const response = await fetch(`${videoConfig.baseUrl}/videos`, {
+    // Use debugFetch for logging
+    const { debugFetch } = await import('../debug-fetch');
+    const response = await debugFetch(`${videoConfig.baseUrl}/videos`, {
       method: 'POST',
       headers: videoConfig.apiKey
         ? { Authorization: `Bearer ${videoConfig.apiKey}` }
         : undefined,
       body: formData,
       signal,
+    }, {
+      label: `🎬 提交视频生成 (${params.model || 'veo3'})`,
+      logResponseBody: true,
     });
 
     if (!response.ok) {

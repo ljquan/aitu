@@ -1320,6 +1320,70 @@ const submitToSW = async (workflow) => {
 
 **原因**: Service Worker 的 `workflowHandler` 需要收到 `TASK_QUEUE_INIT` 消息后才会初始化。如果在 SW 初始化前提交工作流，消息会被暂存到 `pendingWorkflowMessages`，等待配置到达。若配置永远不到达（如 `swTaskQueueService.initialize()` 未被调用），工作流就永远不会开始执行，步骤状态保持 `pending`。
 
+### PostMessage 日志由调试模式完全控制
+
+**场景**: Service Worker 与主线程之间的通讯日志记录
+
+**关键原则**: PostMessage 日志记录必须完全由调试模式控制，避免影响未开启调试模式的应用性能。
+
+✅ **正确实现**:
+```typescript
+// 1. postmessage-logger.ts 中的日志记录检查
+function shouldLogMessage(messageType: string): boolean {
+  // 调试模式未启用时，立即返回 false，不进行任何记录操作
+  if (!isDebugModeActive()) {
+    return false;
+  }
+  return !EXCLUDED_MESSAGE_TYPES.includes(messageType);
+}
+
+// 2. message-bus.ts 中的日志记录
+export function sendToClient(client: Client, message: unknown): void {
+  // Only attempt to log if debug mode is enabled
+  let logId = '';
+  if (isPostMessageLoggerDebugMode()) {
+    const messageType = (message as { type?: string })?.type || 'unknown';
+    logId = logSentMessage(messageType, message, client.id);
+  }
+  
+  client.postMessage(message);
+  // ... 仅在调试模式启用时广播日志
+}
+
+// 3. Service Worker 中的日志记录
+sw.addEventListener('message', (event: ExtendableMessageEvent) => {
+  // Log received message only if debug mode is enabled
+  let logId = '';
+  if (isPostMessageLoggerDebugMode()) {
+    logId = logReceivedMessage(messageType, event.data, clientId);
+  }
+  
+  // ... 处理消息
+});
+
+// 4. 调试模式切换时的内存清理
+export function setPostMessageLoggerDebugMode(enabled: boolean): void {
+  const wasEnabled = debugModeEnabled;
+  debugModeEnabled = enabled;
+  
+  if (!enabled && wasEnabled) {
+    // 从启用变为禁用时，立即清空日志，释放内存
+    logs.length = 0;
+    pendingRequests.clear();
+  }
+}
+```
+
+**性能影响**:
+- **调试关闭**: 零日志记录开销，零内存占用，应用运行不受影响
+- **调试启用**: 完整的日志记录，实时显示在调试面板，可接受的性能开销仅在调试时产生
+
+**相关文件**:
+- `docs/SW_DEBUG_POSTMESSAGE_LOGGING.md` - 完整的实现文档
+- `apps/web/src/sw/task-queue/postmessage-logger.ts` - 日志记录模块
+- `apps/web/src/sw/task-queue/utils/message-bus.ts` - 消息总线模块
+- `apps/web/public/sw-debug.html` - 调试面板界面
+
 ### 重复提交检测应由 UI 层处理
 
 **场景**: 实现防重复提交功能时

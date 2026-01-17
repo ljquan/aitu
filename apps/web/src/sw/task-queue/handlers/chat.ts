@@ -205,6 +205,13 @@ export class ChatHandler implements IChatHandler, TaskHandler {
     onChunk?: (content: string) => void
   ): Promise<string> {
     const model = temporaryModel || config.modelName || 'gemini-2.5-flash';
+    
+    console.log('[SW-ChatHandler] streamChat called:', {
+      model,
+      messagesCount: messages.length,
+      hasSystemPrompt: !!systemPrompt,
+      timestamp: new Date().toISOString(),
+    });
 
     const requestBody = {
       model,
@@ -212,7 +219,9 @@ export class ChatHandler implements IChatHandler, TaskHandler {
       stream: true,
     };
 
-    const response = await fetch(`${config.baseUrl}/chat/completions`, {
+    // Use debugFetch for logging (stream response won't be fully captured)
+    const { debugFetch } = await import('../debug-fetch');
+    const response = await debugFetch(`${config.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -220,6 +229,10 @@ export class ChatHandler implements IChatHandler, TaskHandler {
       },
       body: JSON.stringify(requestBody),
       signal,
+    }, {
+      label: `💬 对话请求 (${model})`,
+      logRequestBody: true,
+      isStreaming: true,
     });
 
     if (!response.ok) {
@@ -292,6 +305,12 @@ export class ChatHandler implements IChatHandler, TaskHandler {
       }
     } finally {
       reader.releaseLock();
+    }
+
+    // Update debug log with final streaming content
+    if ((response as any).__debugLogId && fullContent) {
+      const { updateLogResponseBody } = await import('../debug-fetch');
+      updateLogResponseBody((response as any).__debugLogId, fullContent);
     }
 
     return fullContent;

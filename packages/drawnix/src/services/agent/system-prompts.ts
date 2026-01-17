@@ -3,7 +3,14 @@
  */
 
 import { mcpRegistry } from '../../mcp/registry';
-import type { ImageDimensions } from '../../mcp/types';
+
+/**
+ * 图片尺寸类型
+ */
+export interface ImageDimensions {
+  width: number;
+  height: number;
+}
 
 /**
  * 根据图片尺寸推断最佳生成尺寸

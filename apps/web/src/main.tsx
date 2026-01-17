@@ -38,6 +38,7 @@ import { runDatabaseCleanup } from '../../../packages/drawnix/src/services/db-cl
 import { storageMigrationService } from '../../../packages/drawnix/src/services/storage-migration-service';
 import { initPromptStorageCache } from '../../../packages/drawnix/src/services/prompt-storage-service';
 import { toolbarConfigService } from '../../../packages/drawnix/src/services/toolbar-config-service';
+import { initSWConsoleCapture } from './utils/sw-console-capture';
 
 // ===== 立即初始化防止双指缩放 =====
 // 必须在任何其他代码之前执行，确保事件监听器最先注册
@@ -98,6 +99,9 @@ if ('serviceWorker' in navigator) {
       .then(registration => {
         // console.log('Service Worker registered successfully:', registration);
         swRegistration = registration;
+        
+        // 初始化控制台日志捕获，发送到 SW 调试面板
+        initSWConsoleCapture();
         
         // 在开发模式下，强制检查更新并处理等待中的Worker
         if (isDevelopment) {

@@ -325,6 +325,30 @@ export const VIDEO_MODELS: ModelConfig[] = [
     videoDefaults: VEO_DEFAULT_PARAMS,
   },
   {
+    id: 'veo3.1-4k',
+    label: 'Veo 3.1 4K',
+    description: '8秒4K模式，支持首尾帧',
+    type: 'video',
+    supportsTools: true,
+    videoDefaults: VEO_DEFAULT_PARAMS,
+  },
+  {
+    id: 'veo3.1-components-4k',
+    label: 'Veo 3.1 Components 4K',
+    description: '8秒4K模式，支持3张参考图',
+    type: 'video',
+    supportsTools: true,
+    videoDefaults: VEO_DEFAULT_PARAMS,
+  },
+  {
+    id: 'veo3.1-pro-4k',
+    label: 'Veo 3.1 Pro 4K',
+    description: '8秒高质量4K模式，支持首尾帧',
+    type: 'video',
+    supportsTools: true,
+    videoDefaults: VEO_DEFAULT_PARAMS,
+  },
+  {
     id: 'sora-2-pro',
     label: 'Sora 2 Pro',
     description: '10s/15s/25s 高清，支持故事场景模式',
@@ -551,7 +575,7 @@ export const DEFAULT_TEXT_MODEL = 'deepseek-v3.2';
 // ============================================
 
 /** Veo 系列模型 ID（只支持 8 秒） */
-const VEO_MODEL_IDS = ['veo3', 'veo3-pro', 'veo3.1', 'veo3.1-pro', 'veo3.1-components'];
+const VEO_MODEL_IDS = ['veo3', 'veo3-pro', 'veo3.1', 'veo3.1-pro', 'veo3.1-components', 'veo3.1-4k', 'veo3.1-components-4k', 'veo3.1-pro-4k'];
 
 /** Sora 2 模型（支持 10/15 秒） */
 const SORA_2_MODEL_IDS = ['sora-2'];

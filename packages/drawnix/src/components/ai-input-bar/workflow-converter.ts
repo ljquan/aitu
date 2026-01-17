@@ -435,15 +435,23 @@ export function updateStepStatus(
 }
 
 /**
- * 向工作流添加新步骤
+ * 向工作流添加新步骤（自动去重）
  */
 export function addStepsToWorkflow(
   workflow: WorkflowDefinition,
   newSteps: WorkflowStep[]
 ): WorkflowDefinition {
+  // Filter out steps that already exist (by ID)
+  const existingIds = new Set(workflow.steps.map(s => s.id));
+  const uniqueNewSteps = newSteps.filter(step => !existingIds.has(step.id));
+  
+  if (uniqueNewSteps.length === 0) {
+    return workflow; // No new steps to add
+  }
+  
   return {
     ...workflow,
-    steps: [...workflow.steps, ...newSteps],
+    steps: [...workflow.steps, ...uniqueNewSteps],
   };
 }
 

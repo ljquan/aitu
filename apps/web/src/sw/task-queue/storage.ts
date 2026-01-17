@@ -548,6 +548,58 @@ export class TaskQueueStorage {
   }
 
   // ============================================================================
+  // MCP System Prompt Storage Methods
+  // ============================================================================
+
+  /**
+   * Save MCP system prompt to IndexedDB
+   * Called from main thread during initialization
+   */
+  async saveSystemPrompt(systemPrompt: string): Promise<void> {
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(CONFIG_STORE, 'readwrite');
+        const store = transaction.objectStore(CONFIG_STORE);
+        store.put({ 
+          key: 'systemPrompt', 
+          value: systemPrompt,
+          updatedAt: Date.now(),
+        });
+
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error);
+      });
+    } catch (error) {
+      console.error('[SWStorage] Failed to save system prompt:', error);
+    }
+  }
+
+  /**
+   * Get MCP system prompt from IndexedDB
+   * Called from SW during AI analysis
+   */
+  async getSystemPrompt(): Promise<string | null> {
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(CONFIG_STORE, 'readonly');
+        const store = transaction.objectStore(CONFIG_STORE);
+        const request = store.get('systemPrompt');
+
+        request.onsuccess = () => {
+          const result = request.result;
+          resolve(result?.value || null);
+        };
+        request.onerror = () => reject(request.error);
+      });
+    } catch (error) {
+      console.error('[SWStorage] Failed to get system prompt:', error);
+      return null;
+    }
+  }
+
+  // ============================================================================
   // Workflow Storage Methods
   // ============================================================================
 
@@ -832,6 +884,26 @@ export class TaskQueueStorage {
     } catch (error) {
       console.error('[SWStorage] Failed to get pending tool requests by workflow:', error);
       return [];
+    }
+  }
+
+  /**
+   * Get a pending tool request by requestId
+   */
+  async getPendingToolRequest(requestId: string): Promise<StoredPendingToolRequest | null> {
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(PENDING_TOOL_REQUESTS_STORE, 'readonly');
+        const store = transaction.objectStore(PENDING_TOOL_REQUESTS_STORE);
+        const request = store.get(requestId);
+
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result || null);
+      });
+    } catch (error) {
+      console.error('[SWStorage] Failed to get pending tool request:', error);
+      return null;
     }
   }
 

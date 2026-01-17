@@ -349,42 +349,72 @@ class VideoAPIService {
     } = options;
 
     let attempts = 0;
+    let consecutiveErrors = 0;
+    const maxConsecutiveErrors = 10; // 连续错误超过此数才放弃
 
     // Poll for completion
     while (attempts < maxAttempts) {
       await this.sleep(interval);
       attempts++;
 
-      const status = await this.queryVideoStatus(videoId);
-      // Determine progress based on status and API response
-      // - If API returns progress, use it
-      // - If status is 'failed', show 100% to indicate task has ended
-      // - Otherwise default to 0 (e.g., when status is 'queued')
-      const progress = status.progress ?? (status.status === 'failed' ? 100 : 0);
-      // console.log(`[VideoAPI] Poll ${attempts}: Status=${status.status}, Progress=${progress}%`);
+      // Flag to track if this is a business failure (should not retry)
+      let isBusinessFailure = false;
 
-      // Report progress
-      if (onProgress) {
-        onProgress(progress, status.status);
-      }
+      try {
+        const status = await this.queryVideoStatus(videoId);
+        
+        // 请求成功，重置连续错误计数
+        consecutiveErrors = 0;
+        
+        // Determine progress based on status and API response
+        // - If API returns progress, use it
+        // - If status is 'failed', show 100% to indicate task has ended
+        // - Otherwise default to 0 (e.g., when status is 'queued')
+        const progress = status.progress ?? (status.status === 'failed' ? 100 : 0);
+        // console.log(`[VideoAPI] Poll ${attempts}: Status=${status.status}, Progress=${progress}%`);
 
-      if (status.status === 'completed') {
-        // console.log('[VideoAPI] Video generation completed:', status.video_url || status.url);
-        return status;
-      }
-
-      if (status.status === 'failed') {
-        // Handle error - extract message if error is an object
-        let errorMessage = '视频生成失败';
-        if (status.error) {
-          if (typeof status.error === 'string') {
-            errorMessage = status.error;
-          } else if (typeof status.error === 'object') {
-            // Error is an object, extract message
-            errorMessage = (status.error as any).message || JSON.stringify(status.error);
-          }
+        // Report progress
+        if (onProgress) {
+          onProgress(progress, status.status);
         }
-        throw new Error(errorMessage);
+
+        if (status.status === 'completed') {
+          // console.log('[VideoAPI] Video generation completed:', status.video_url || status.url);
+          return status;
+        }
+
+        if (status.status === 'failed') {
+          // Handle error - extract message if error is an object
+          let errorMessage = '视频生成失败';
+          if (status.error) {
+            if (typeof status.error === 'string') {
+              errorMessage = status.error;
+            } else if (typeof status.error === 'object') {
+              // Error is an object, extract message
+              errorMessage = (status.error as any).message || JSON.stringify(status.error);
+            }
+          }
+          // Mark as business failure so it won't be retried
+          isBusinessFailure = true;
+          throw new Error(errorMessage);
+        }
+      } catch (err: any) {
+        // 业务失败（API 返回 status: failed）不应重试，直接抛出
+        if (isBusinessFailure) {
+          throw err;
+        }
+        
+        // 轮询接口临时错误（网络错误），增加间隔继续重试
+        consecutiveErrors++;
+        console.warn(`[VideoAPI] Status query failed, attempt ${consecutiveErrors}/${maxConsecutiveErrors}:`, err?.message || err);
+        
+        if (consecutiveErrors >= maxConsecutiveErrors) {
+          throw err;
+        }
+        
+        // 根据连续错误次数增加等待时间（指数退避，最大 60 秒）
+        const backoffInterval = Math.min(interval * Math.pow(1.5, consecutiveErrors), 60000);
+        await this.sleep(backoffInterval - interval); // 减去已等待的 interval
       }
     }
 
