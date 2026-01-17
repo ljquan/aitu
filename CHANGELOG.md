@@ -1,3 +1,18 @@
+## 0.5.7 (2026-01-17)
+
+### 🚀 Features
+
+- enhance postMessage logging and workflow recovery ([d76a0e9](https://github.com/ljquan/aitu/commit/d76a0e9))
+
+### 🔧 Chores
+
+- bump version to 0.5.6 and update changelog ([6855673](https://github.com/ljquan/aitu/commit/6855673))
+- refactor(ai-input-bar, project-drawer): remove debug logs and add cleanup effect ([b1f58f5](https://github.com/ljquan/aitu/commit/b1f58f5))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+
 ## 0.5.6 (2026-01-17)
 
 ### 🚀 Features
