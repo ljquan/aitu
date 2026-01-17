@@ -1320,6 +1320,50 @@ const submitToSW = async (workflow) => {
 
 **原因**: Service Worker 的 `workflowHandler` 需要收到 `TASK_QUEUE_INIT` 消息后才会初始化。如果在 SW 初始化前提交工作流，消息会被暂存到 `pendingWorkflowMessages`，等待配置到达。若配置永远不到达（如 `swTaskQueueService.initialize()` 未被调用），工作流就永远不会开始执行，步骤状态保持 `pending`。
 
+### Service Worker 更新提示在开发模式下被跳过
+
+**场景**: 在 localhost 本地测试 Service Worker 更新提示功能
+
+**现象**: 修改代码并构建后，在 localhost 环境下看不到版本更新提示
+
+**原因**: 项目在开发模式下（`localhost` 或 `127.0.0.1`）会自动跳过更新提示，直接激活新的 Service Worker。
+
+```typescript
+// apps/web/src/main.tsx 中的逻辑
+const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+  if (isDevelopment) {
+    // 开发模式：直接跳过 waiting，不显示提示
+    newWorker.postMessage({ type: 'SKIP_WAITING' });
+  } else {
+    // 生产模式：显示更新提示
+    window.dispatchEvent(new CustomEvent('sw-update-available', { ... }));
+  }
+}
+```
+
+**测试方法**:
+
+1. **在控制台手动触发更新提示（仅测试 UI）**:
+```javascript
+window.__debugTriggerUpdate('0.5.10')
+```
+
+2. **部署到生产环境测试**: 只有在非 localhost 环境下才会显示更新提示
+
+3. **正确的版本升级流程**:
+```bash
+pnpm run version:patch   # 升级版本号
+pnpm run build:web       # 重新构建
+# 部署到生产环境后会触发更新提示
+```
+
+**注意**: 
+- Service Worker 更新检测是基于 `sw.js` 文件内容的字节级比较
+- 只修改 `version.json` 不会触发 SW 更新，必须修改 `sw.js` 内容
+- 版本号通过 `__APP_VERSION__` 变量注入到 `sw.js` 中
+
 ### PostMessage 日志由调试模式完全控制
 
 **场景**: Service Worker 与主线程之间的通讯日志记录
