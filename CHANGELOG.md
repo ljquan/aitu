@@ -1,3 +1,17 @@
+## 0.5.4 (2026-01-17)
+
+### 🩹 Fixes
+
+- improve version update handling and error response caching ([eb8da7e](https://github.com/ljquan/aitu/commit/eb8da7e))
+
+### 🔧 Chores
+
+- bump version to 0.5.3 and update changelog ([d83ffc4](https://github.com/ljquan/aitu/commit/d83ffc4))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+
 ## 0.5.3 (2026-01-16)
 
 ### 🔧 Chores

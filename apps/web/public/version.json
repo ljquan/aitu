@@ -1,8 +1,6 @@
 {
-  "version": "0.5.3",
-  "buildTime": "2026-01-16T14:24:35.020Z",
+  "version": "0.5.4",
+  "buildTime": "2026-01-17T00:43:23.772Z",
   "gitCommit": "unknown",
-  "changelog": [
-    "去掉重试逻辑"
-  ]
+  "changelog": []
 }
