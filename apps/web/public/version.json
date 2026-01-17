@@ -1,8 +1,6 @@
 {
-  "version": "0.5.5",
-  "buildTime": "2026-01-17T01:37:23.768Z",
+  "version": "0.5.6",
+  "buildTime": "2026-01-17T02:03:55.362Z",
   "gitCommit": "unknown",
-  "changelog": [
-    "添加双击重命名功能"
-  ]
+  "changelog": []
 }

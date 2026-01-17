@@ -1,3 +1,18 @@
+## 0.5.6 (2026-01-17)
+
+### 🚀 Features
+
+- add touch support for mobile interactions ([d7a30ea](https://github.com/ljquan/aitu/commit/d7a30ea))
+
+### 🔧 Chores
+
+- bump version to 0.5.5 and update changelog ([e4b7c79](https://github.com/ljquan/aitu/commit/e4b7c79))
+- style(ai-input-bar, version-update-prompt): enhance responsiveness and positioning for mobile devices ([bbcd896](https://github.com/ljquan/aitu/commit/bbcd896))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+
 ## 0.5.5 (2026-01-17)
 
 ### 🚀 Features
