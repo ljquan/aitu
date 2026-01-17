@@ -1,3 +1,14 @@
+## 0.5.10 (2026-01-17)
+
+### 🔧 Chores
+
+- v0.5.9 ([c1c5d5b](https://github.com/ljquan/aitu/commit/c1c5d5b))
+- refactor(fill-panel): enhance fill panel functionality and styles ([160170b](https://github.com/ljquan/aitu/commit/160170b))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+
 ## 0.5.9 (2026-01-17)
 
 ### 🚀 Features
