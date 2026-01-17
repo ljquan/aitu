@@ -1,8 +1,9 @@
 
 .version-update-prompt {
-  position: absolute;
-  top: 16px;
-  right: 16px;
+  position: fixed;
+  top: 10px;
+  left: 90px;
+  right: auto;
   z-index: 1000;
   background-color: var(--td-bg-color-container);
   border: 1px solid var(--td-border-level-2-color);
@@ -25,11 +26,20 @@
   @keyframes slideIn {
     from {
       opacity: 0;
-      transform: translateY(-20px);
+      transform: translateX(-20px);
     }
     to {
       opacity: 1;
-      transform: translateY(0);
+      transform: translateX(0);
     }
+  }
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+  .version-update-prompt {
+    left: 16px;
+    top: auto;
+    bottom: 16px;
   }
 }

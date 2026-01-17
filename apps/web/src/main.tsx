@@ -215,10 +215,11 @@ if ('serviceWorker' in navigator) {
       return;
     }
     
-    // 如果都没有，尝试向所有 worker 广播（兜底）
-    if (navigator.serviceWorker.controller) {
-       navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' });
-    }
+    // 如果都没有 waiting worker，说明 SW 已经是最新的 active 状态
+    // 这种情况通常发生在首次安装后，SW 直接 activate 了
+    // 此时直接刷新页面即可加载最新资源
+    // console.log('Main: No waiting worker found, reloading page directly');
+    window.location.reload();
   });
   
   // 页面卸载前，不再自动触发升级，必须用户手动确认

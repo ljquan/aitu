@@ -236,8 +236,16 @@ async function saveFailedDomain(domain: string): Promise<void> {
 // ==================== 智能升级相关函数 ====================
 
 // 标记新版本已准备好，等待用户确认
-function markNewVersionReady() {
-  // console.log(`Service Worker: 新版本 v${APP_VERSION} 已准备好，等待用户确认...`);
+// isUpdate: 是否是版本更新（有旧版本存在）
+function markNewVersionReady(isUpdate: boolean) {
+  // console.log(`Service Worker: 新版本 v${APP_VERSION} 已准备好，isUpdate=${isUpdate}`);
+
+  // 只有在版本更新时才通知客户端显示升级提示
+  // 首次安装不需要显示，因为没有"旧版本"可更新
+  if (!isUpdate) {
+    // console.log('Service Worker: 首次安装，不显示更新提示');
+    return;
+  }
 
   // 通知客户端有新版本可用
   sw.clients.matchAll().then(clients => {
@@ -337,16 +345,38 @@ sw.addEventListener('install', (event: ExtendableEvent) => {
           // console.log('Caching static files for new version');
           return cache.addAll(STATIC_FILES);
         })
-        .catch(_err => {/* console.log('Cache pre-loading failed:', err) */})
+        .catch(err => {
+          console.warn('Service Worker: Cache pre-loading failed:', err);
+          // 预缓存失败不应该阻止 SW 安装
+        })
     );
   }
 
   event.waitUntil(
-    Promise.all(installPromises).then(() => {
+    Promise.all(installPromises).then(async () => {
       // console.log(`Service Worker v${APP_VERSION} installed, resources ready`);
+      
+      // 判断是否是版本更新的最可靠方式：检查是否存在旧版本的缓存
+      // 旧版本缓存名称包含版本号，只有在版本变化时才会不同
+      const cacheNames = await caches.keys();
+      const hasOldStaticCache = cacheNames.some(name => 
+        name.startsWith('drawnix-static-v') && name !== STATIC_CACHE_NAME
+      );
+      const hasOldAppCache = cacheNames.some(name =>
+        name.startsWith('drawnix-v') && 
+        name !== CACHE_NAME && 
+        name !== IMAGE_CACHE_NAME &&
+        !name.startsWith('drawnix-static-v')
+      );
+      
+      // 只有存在旧版本缓存时，才认为是版本更新
+      const isUpdate = hasOldStaticCache || hasOldAppCache;
+      
+      // console.log(`Service Worker: isUpdate=${isUpdate}, oldStatic=${hasOldStaticCache}, oldApp=${hasOldAppCache}`);
+      
       // 不立即调用 skipWaiting()，而是标记新版本已准备好
       // 等待合适的时机（没有活跃请求时）再升级
-      markNewVersionReady();
+      markNewVersionReady(isUpdate);
     })
   );
 });
@@ -1311,6 +1341,26 @@ async function handleStaticRequest(request: Request): Promise<Response> {
       // Cache successful responses for offline testing
       if (response && response.status === 200 && request.url.startsWith('http')) {
         cache.put(request, response.clone());
+        return response;
+      }
+      
+      // If server returns error response, try cache
+      if (!response.ok) {
+        let cachedResponse = await cache.match(request);
+        
+        if (!cachedResponse && isHtmlRequest) {
+          cachedResponse = await cache.match('/');
+          if (!cachedResponse) {
+            cachedResponse = await cache.match('/index.html');
+          }
+        }
+        
+        if (cachedResponse) {
+          return cachedResponse;
+        }
+        
+        // No cache, return the error response
+        return response;
       }
       
       return response;
@@ -1353,6 +1403,28 @@ async function handleStaticRequest(request: Request): Promise<Response> {
       // Cache successful responses
       if (response && response.status === 200 && request.url.startsWith('http')) {
         cache.put(request, response.clone());
+        return response;
+      }
+
+      // If server returns error response (4xx, 5xx), try cache first
+      if (!response.ok) {
+        // console.warn(`Service Worker: Server returned ${response.status} for ${request.url}, trying cache`);
+        let cachedResponse = await cache.match(request);
+        
+        // For SPA, any route should fall back to index.html
+        if (!cachedResponse) {
+          cachedResponse = await cache.match('/');
+        }
+        if (!cachedResponse) {
+          cachedResponse = await cache.match('/index.html');
+        }
+        
+        if (cachedResponse) {
+          return cachedResponse;
+        }
+        
+        // No cache available, return the error response
+        return response;
       }
 
       return response;
@@ -1407,9 +1479,49 @@ async function handleStaticRequest(request: Request): Promise<Response> {
       cache.put(request, response.clone());
     }
 
+    // If server returns error (5xx), try to find any cached version from old caches
+    if (response.status >= 500) {
+      // console.warn(`Service Worker: Server error ${response.status} for static resource:`, request.url);
+      
+      // Try to find the resource in any cache (including old version caches)
+      const allCacheNames = await caches.keys();
+      for (const cacheName of allCacheNames) {
+        if (cacheName.startsWith('drawnix-static-v')) {
+          try {
+            const oldCache = await caches.open(cacheName);
+            const oldCachedResponse = await oldCache.match(request);
+            if (oldCachedResponse) {
+              // console.log(`Service Worker: Found resource in ${cacheName}`);
+              return oldCachedResponse;
+            }
+          } catch (e) {
+            // Ignore cache errors
+          }
+        }
+      }
+    }
+
     return response;
   } catch (networkError) {
     console.error('Static resource unavailable:', request.url);
+    
+    // Try to find the resource in any cache (including old version caches)
+    const allCacheNames = await caches.keys();
+    for (const cacheName of allCacheNames) {
+      if (cacheName.startsWith('drawnix-static-v')) {
+        try {
+          const oldCache = await caches.open(cacheName);
+          const oldCachedResponse = await oldCache.match(request);
+          if (oldCachedResponse) {
+            // console.log(`Service Worker: Found resource in ${cacheName} after network failure`);
+            return oldCachedResponse;
+          }
+        } catch (e) {
+          // Ignore cache errors
+        }
+      }
+    }
+    
     return new Response('Resource unavailable offline', {
       status: 503,
       statusText: 'Service Unavailable',
