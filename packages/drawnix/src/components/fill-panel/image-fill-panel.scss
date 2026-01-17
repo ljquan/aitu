@@ -155,10 +155,11 @@
 .ifp-mode-btn {
   flex: 1;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 2px;
-  padding: 8px 4px;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 6px;
   background: var(--color-bg-secondary, #f3f4f6);
   border: 1.5px solid transparent;
   border-radius: 5px;
@@ -175,12 +176,17 @@
   }
 
   .ifp-mode-icon {
-    font-size: 14px;
+    font-size: 20px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    margin-top: -2px;
     color: var(--color-text-secondary, #6b7280);
   }
 
   .ifp-mode-label {
-    font-size: 10px;
+    font-size: 11px;
+    line-height: 1;
     color: var(--color-text-secondary, #6b7280);
   }
 
@@ -272,6 +278,50 @@
   color: var(--color-text-secondary, #6b7280);
   font-family: 'SF Mono', Monaco, monospace;
   text-align: right;
+}
+
+// 输入框包装器
+.ifp-control-value-wrapper {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 2px;
+}
+
+.ifp-control-value-input {
+  width: 40px;
+  padding: 2px 4px;
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 4px;
+  background: var(--color-bg, #ffffff);
+  color: var(--color-text-secondary, #6b7280);
+  font-size: 10px;
+  font-family: 'SF Mono', Monaco, monospace;
+  text-align: right;
+  outline: none;
+  transition: border-color 0.15s ease;
+
+  // 隐藏 number 输入框的上下箭头
+  -moz-appearance: textfield;
+  &::-webkit-outer-spin-button,
+  &::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  &:focus {
+    border-color: var(--color-primary, #3b82f6);
+  }
+
+  &:hover {
+    border-color: var(--color-border-hover, #d1d5db);
+  }
+}
+
+.ifp-control-unit {
+  font-size: 10px;
+  color: var(--color-text-tertiary, #9ca3af);
+  font-family: 'SF Mono', Monaco, monospace;
 }
 
 // 重置按钮

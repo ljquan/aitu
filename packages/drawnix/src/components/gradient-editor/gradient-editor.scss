@@ -1,0 +1,433 @@
+/**
+ * 公共渐变编辑器样式
+ * Common Gradient Editor Styles
+ */
+
+.gradient-editor {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+
+  &--compact {
+    .ge-custom-editor {
+      padding: 0;
+    }
+  }
+}
+
+// 标签页
+.ge-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 10px;
+  padding: 2px;
+  background: var(--color-bg-secondary, #f3f4f6);
+  border-radius: 6px;
+}
+
+.ge-tab {
+  flex: 1;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-text-secondary, #6b7280);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    color: var(--color-text, #111827);
+  }
+
+  &.active {
+    background: #ffffff;
+    color: var(--color-text, #111827);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  }
+}
+
+// 内容区域
+.ge-content {
+  flex: 1;
+}
+
+// ============ 预设面板 ============
+
+.ge-presets-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.ge-preset-category {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ge-category-title {
+  font-size: 10px;
+  color: var(--color-text-tertiary, #9ca3af);
+  font-weight: 500;
+}
+
+.ge-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.ge-preset-item {
+  aspect-ratio: 1;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  overflow: hidden;
+  transition: all 0.15s ease;
+
+  &:hover {
+    border-color: var(--color-primary, #3b82f6);
+    transform: scale(1.05);
+  }
+
+  .ge-preset-preview {
+    width: 100%;
+    height: 100%;
+    border-radius: 4px;
+  }
+}
+
+// ============ 历史记录面板 ============
+
+.ge-history-panel {
+  min-height: 60px;
+}
+
+.ge-history-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 60px;
+  color: var(--color-text-tertiary, #9ca3af);
+  font-size: 11px;
+}
+
+.ge-history-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.ge-history-item {
+  aspect-ratio: 1;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  overflow: hidden;
+  transition: all 0.15s ease;
+
+  &:hover {
+    border-color: var(--color-primary, #3b82f6);
+    transform: scale(1.05);
+  }
+
+  .ge-history-preview {
+    width: 100%;
+    height: 100%;
+    border-radius: 4px;
+  }
+}
+
+// ============ 自定义编辑器 ============
+
+.ge-custom-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ge-control-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ge-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ge-section-title {
+  font-size: 11px;
+  color: var(--color-text-secondary, #6b7280);
+  font-weight: 500;
+}
+
+// 渐变类型按钮
+.ge-type-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.ge-type-btn {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 5px;
+  background: var(--color-bg-secondary, #f3f4f6);
+  color: var(--color-text-secondary, #6b7280);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: var(--color-bg-hover, #e5e7eb);
+  }
+
+  &.active {
+    background: rgba(243, 156, 18, 0.1);
+    border-color: #F39C12;
+    color: #E67E22;
+  }
+}
+
+// 色标操作按钮
+.ge-stop-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.ge-action-btn {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 4px;
+  background: var(--color-bg-secondary, #f3f4f6);
+  color: var(--color-text-secondary, #6b7280);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover:not(:disabled) {
+    background: var(--color-bg-hover, #e5e7eb);
+    color: var(--color-text, #111827);
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+}
+
+// 渐变条
+.ge-gradient-bar-container {
+  position: relative;
+  margin: 4px 0;
+}
+
+.ge-gradient-bar {
+  height: 24px;
+  border-radius: 4px;
+  border: 1px solid var(--color-border, #e5e7eb);
+}
+
+.ge-stops-track {
+  position: relative;
+  height: 16px;
+  margin-top: 4px;
+}
+
+.ge-stop-handle {
+  position: absolute;
+  top: 0;
+  width: 16px;
+  height: 16px;
+  margin-left: -8px;
+  padding: 0;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: transform 0.1s ease;
+
+  &:hover {
+    transform: scale(1.1);
+  }
+
+  &.selected {
+    border-color: #F39C12;
+    box-shadow: 0 0 0 2px rgba(243, 156, 18, 0.3), 0 1px 3px rgba(0, 0, 0, 0.2);
+  }
+}
+
+// 色标编辑器
+.ge-stop-editor {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.ge-stop-color {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ge-color-input {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 4px;
+  cursor: pointer;
+  
+  &::-webkit-color-swatch-wrapper {
+    padding: 2px;
+  }
+  
+  &::-webkit-color-swatch {
+    border: none;
+    border-radius: 2px;
+  }
+}
+
+.ge-color-value {
+  font-size: 10px;
+  color: var(--color-text-secondary, #6b7280);
+  font-family: 'SF Mono', Monaco, monospace;
+}
+
+.ge-stop-position {
+  flex: 1;
+}
+
+.ge-position-slider {
+  width: 100%;
+  height: 3px;
+  appearance: none;
+  background: var(--color-border, #e5e7eb);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+
+  &::-webkit-slider-thumb {
+    appearance: none;
+    width: 12px;
+    height: 12px;
+    background: #F39C12;
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+  }
+}
+
+// 角度控制
+.ge-angle-input-wrapper {
+  display: flex;
+  align-items: center;
+}
+
+.ge-angle-input {
+  width: 50px;
+  padding: 3px 6px;
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 4px;
+  background: var(--color-bg, #ffffff);
+  color: var(--color-text-secondary, #6b7280);
+  font-size: 11px;
+  font-family: 'SF Mono', Monaco, monospace;
+  text-align: center;
+  outline: none;
+
+  // 隐藏 number 输入框的上下箭头
+  -moz-appearance: textfield;
+  &::-webkit-outer-spin-button,
+  &::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  &:focus {
+    border-color: var(--color-primary, #3b82f6);
+  }
+}
+
+.ge-angle-slider {
+  width: 100%;
+  height: 3px;
+  appearance: none;
+  background: var(--color-border, #e5e7eb);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+
+  &::-webkit-slider-thumb {
+    appearance: none;
+    width: 12px;
+    height: 12px;
+    background: #F39C12;
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+  }
+}
+
+// 中心点控制
+.ge-center-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ge-center-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  label {
+    width: 12px;
+    font-size: 10px;
+    color: var(--color-text-tertiary, #9ca3af);
+    font-weight: 500;
+  }
+}
+
+.ge-center-slider {
+  flex: 1;
+  height: 3px;
+  appearance: none;
+  background: var(--color-border, #e5e7eb);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+
+  &::-webkit-slider-thumb {
+    appearance: none;
+    width: 12px;
+    height: 12px;
+    background: #F39C12;
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+  }
+}
+
+.ge-center-value {
+  width: 32px;
+  font-size: 10px;
+  color: var(--color-text-secondary, #6b7280);
+  font-family: 'SF Mono', Monaco, monospace;
+  text-align: right;
+}
