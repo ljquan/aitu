@@ -1,3 +1,17 @@
+## 0.5.8 (2026-01-17)
+
+### 🚀 Features
+
+- add debug panel and logging enhancements ([12576ee](https://github.com/ljquan/aitu/commit/12576ee))
+
+### 🔧 Chores
+
+- bump version to 0.5.7 and update changelog ([b38a485](https://github.com/ljquan/aitu/commit/b38a485))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+
 ## 0.5.7 (2026-01-17)
 
 ### 🚀 Features
