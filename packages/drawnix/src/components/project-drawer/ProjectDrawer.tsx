@@ -98,11 +98,14 @@ const ProjectDrawerContent: React.FC<{
       onAutoEditDone?.();
     }
   }, [autoEditBoardId, onAutoEditDone]);
-  
+
   // Drag state
   const [dragData, setDragData] = useState<DragData | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
   const [dropPosition, setDropPosition] = useState<DropPosition>(null);
+
+  // Click delay timer for distinguishing single/double click
+  const clickTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Auto-select text when input is focused
   const handleInputFocus = useCallback((_value: string, context: { e: React.FocusEvent<HTMLInputElement> }) => {
@@ -286,7 +289,14 @@ const ProjectDrawerContent: React.FC<{
           draggable={!isEditing}
           onClick={() => {
             if (!isEditing) {
-              toggleFolderExpanded(folder.id);
+              // Clear any existing timer
+              if (clickTimerRef.current) {
+                clearTimeout(clickTimerRef.current);
+              }
+              // Delay folder toggle to allow double-click to work
+              clickTimerRef.current = setTimeout(() => {
+                toggleFolderExpanded(folder.id);
+              }, 200);
             }
           }}
           onDragStart={(e) => handleDragStart(e, 'folder', folder.id)}
@@ -324,7 +334,20 @@ const ProjectDrawerContent: React.FC<{
               }}
             />
           ) : (
-            <span className="project-drawer-node__label">{folder.name}</span>
+            <span
+              className="project-drawer-node__label"
+              onDoubleClick={(e) => {
+                e.stopPropagation();
+                // Clear single-click timer
+                if (clickTimerRef.current) {
+                  clearTimeout(clickTimerRef.current);
+                  clickTimerRef.current = null;
+                }
+                startEditing(folder.id, folder.name);
+              }}
+            >
+              {folder.name}
+            </span>
           )}
 
           <div className="project-drawer-node__actions" onClick={(e) => e.stopPropagation()}>
@@ -384,7 +407,14 @@ const ProjectDrawerContent: React.FC<{
           draggable={!isEditing}
           onClick={() => {
             if (!isEditing) {
-              onBoardClick(board);
+              // Clear any existing timer
+              if (clickTimerRef.current) {
+                clearTimeout(clickTimerRef.current);
+              }
+              // Delay board click to allow double-click to work
+              clickTimerRef.current = setTimeout(() => {
+                onBoardClick(board);
+              }, 200);
             }
           }}
           onDragStart={(e) => handleDragStart(e, 'board', board.id)}
@@ -417,7 +447,20 @@ const ProjectDrawerContent: React.FC<{
               }}
             />
           ) : (
-            <span className="project-drawer-node__label">{board.name}</span>
+            <span
+              className="project-drawer-node__label"
+              onDoubleClick={(e) => {
+                e.stopPropagation();
+                // Clear single-click timer
+                if (clickTimerRef.current) {
+                  clearTimeout(clickTimerRef.current);
+                  clickTimerRef.current = null;
+                }
+                startEditing(board.id, board.name);
+              }}
+            >
+              {board.name}
+            </span>
           )}
 
           <div className="project-drawer-node__actions" onClick={(e) => e.stopPropagation()}>

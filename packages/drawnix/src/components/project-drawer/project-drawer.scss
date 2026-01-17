@@ -185,6 +185,14 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     font-size: 14px;
+    cursor: text;
+    padding: 2px 4px;
+    border-radius: 3px;
+    transition: background-color 0.2s ease;
+
+    &:hover {
+      background: var(--td-bg-color-container-hover);
+    }
   }
 
   &__drag-count {
