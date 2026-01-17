@@ -1645,6 +1645,47 @@ setTimeout(() => {
 
 **原因**: Plait 的 `addSelectedElement` 只是将元素存入 `BOARD_TO_SELECTED_ELEMENT` WeakMap 缓存，不会触发任何渲染。在同步流程中（如 `insertElement` 内部），`Transforms.insertNode` 已经触发了 `board.apply()` 和渲染链，所以选中状态能正常显示。但在异步回调中单独调用时，需要手动触发一次 `board.apply()` 来刷新渲染。`Transforms.setNode` 会调用 `board.apply()`，从而触发完整的渲染链。
 
+### 异步任务幂等性检查应检查存在性而非完成状态
+
+**场景**: 实现防止任务重复执行的检查逻辑时（如页面刷新后恢复任务）
+
+❌ **错误示例**:
+```typescript
+// 错误：只检查 completed 状态，会导致 in_progress 的任务被重复执行
+async checkProcessedRequest(requestId: string): Promise<boolean> {
+  const result = await db.get('requests', requestId);
+  // 用户刷新页面时，in_progress 的任务会被再次执行！
+  if (result && result.status === 'completed' && result.response) {
+    return true;
+  }
+  return false;
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：检查任务是否存在，无论状态如何
+async checkProcessedRequest(requestId: string): Promise<boolean> {
+  const result = await db.get('requests', requestId);
+  // 存在即返回 true，防止重复执行
+  if (result) {
+    return true;
+  }
+  return false;
+}
+```
+
+**原因**: 
+- 当任务状态为 `in_progress` 时，说明任务已经开始执行
+- 如果只检查 `completed` 状态，用户刷新页面后会导致同一任务被重复执行
+- 正确的做法是检查任务记录是否存在，存在即视为"已处理"
+- 这符合幂等性原则：同一请求多次执行应该得到相同结果
+
+**适用场景**:
+- Service Worker 恢复任务
+- 页面刷新后的任务续接
+- 分布式系统中的请求去重
+
 ### 禁止自动删除用户数据
 
 **场景**: 添加定时清理、自动裁剪、过期删除等"优化"逻辑时
