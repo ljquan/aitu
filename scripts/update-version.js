@@ -30,17 +30,33 @@ function updateServiceWorkerVersion(version) {
   console.log(`✅ Service Worker updated to version ${version}`);
 }
 
-// 创建版本信息文件
+// 创建版本信息文件（保留现有的 changelog）
 function createVersionFile(version) {
+  const versionPath = path.join(__dirname, '../apps/web/public/version.json');
+  
+  // 读取现有的 version.json，保留 changelog
+  let existingChangelog = [];
+  if (fs.existsSync(versionPath)) {
+    try {
+      const existing = JSON.parse(fs.readFileSync(versionPath, 'utf8'));
+      // 只有当版本号相同时才保留 changelog
+      if (existing.version === version && Array.isArray(existing.changelog)) {
+        existingChangelog = existing.changelog;
+      }
+    } catch (e) {
+      // 忽略解析错误
+    }
+  }
+  
   const versionInfo = {
     version: version,
     buildTime: new Date().toISOString(),
-    gitCommit: process.env.GITHUB_SHA || 'unknown'
+    gitCommit: process.env.GITHUB_SHA || 'unknown',
+    changelog: existingChangelog
   };
   
-  const versionPath = path.join(__dirname, '../apps/web/public/version.json');
   fs.writeFileSync(versionPath, JSON.stringify(versionInfo, null, 2));
-  console.log(`✅ Version file created: ${version}`);
+  console.log(`✅ Version file created: ${version}${existingChangelog.length > 0 ? ` (保留 ${existingChangelog.length} 条更新日志)` : ''}`);
 }
 
 // 更新 HTML 文件，添加版本号到资源链接

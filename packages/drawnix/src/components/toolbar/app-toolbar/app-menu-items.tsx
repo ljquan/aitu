@@ -6,6 +6,7 @@ import {
   TrashIcon,
   GithubIcon,
   BackupRestoreIcon,
+  DebugLogIcon,
 } from '../../icons';
 import { useBoard, useListRender } from '@plait-board/react-board';
 import {
@@ -25,8 +26,6 @@ import Menu from '../../menu/menu';
 import { useContext } from 'react';
 import { MenuContentPropsContext } from '../../menu/common';
 import { EVENT } from '../../../constants';
-import { cleanupMissingAssets } from '../../../utils/asset-cleanup';
-import { MessagePlugin } from 'tdesign-react';
 
 export const SaveToFile = () => {
   const board = useBoard();
@@ -130,35 +129,6 @@ export const SaveAsImage = () => {
 };
 SaveAsImage.displayName = 'SaveAsImage';
 
-export const CleanMissingAssets = () => {
-  const board = useBoard();
-  const { t } = useI18n();
-  return (
-    <MenuItem
-      icon={TrashIcon}
-      data-testid="clean-assets-button"
-      data-track="toolbar_click_menu_clean_assets"
-      onSelect={async () => {
-        try {
-          const removedCount = await cleanupMissingAssets(board);
-          if (removedCount > 0) {
-            MessagePlugin.success(t('menu.cleanMissingAssets.success', { count: removedCount }));
-          } else {
-            MessagePlugin.info(t('menu.cleanMissingAssets.noAssets'));
-          }
-        } catch (error) {
-          console.error('[CleanMissingAssets] Failed to cleanup missing assets:', error);
-          MessagePlugin.error(t('menu.cleanMissingAssets.error'));
-        }
-      }}
-      aria-label={t('menu.cleanMissingAssets')}
-    >
-      {t('menu.cleanMissingAssets')}
-    </MenuItem>
-  );
-};
-CleanMissingAssets.displayName = 'CleanMissingAssets';
-
 export const CleanBoard = () => {
   const { appState, setAppState } = useDrawnix();
   const { t } = useI18n();
@@ -200,6 +170,23 @@ export const BackupRestore = ({
   );
 };
 BackupRestore.displayName = 'BackupRestore';
+
+export const DebugPanel = () => {
+  const { t } = useI18n();
+  return (
+    <MenuItem
+      icon={DebugLogIcon}
+      data-track="toolbar_click_menu_debug"
+      onSelect={() => {
+        window.open('/sw-debug.html', '_blank');
+      }}
+      aria-label={t('menu.debugPanel')}
+    >
+      {t('menu.debugPanel')}
+    </MenuItem>
+  );
+};
+DebugPanel.displayName = 'DebugPanel';
 
 export const Settings = () => {
   const { appState, setAppState } = useDrawnix();

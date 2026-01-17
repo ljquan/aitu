@@ -781,12 +781,13 @@ async function cleanOldCacheEntries(cache: Cache) {
 }
 
 // Files to cache for offline functionality (only in production)
+// NOTE: Only include files that definitely exist. Use relative paths from root.
 const STATIC_FILES = [
   '/',
   '/index.html',
   '/manifest.json',
   '/favicon.ico',
-  '/favicon-new.svg'
+  '/icons/favicon-new.svg'
 ];
 
 sw.addEventListener('install', (event: ExtendableEvent) => {
@@ -798,12 +799,32 @@ sw.addEventListener('install', (event: ExtendableEvent) => {
   installPromises.push(loadFailedDomains());
 
   // Only pre-cache static files in production
+  // Use individual caching instead of addAll to prevent one failure from blocking all
   if (!isDevelopment) {
     installPromises.push(
       caches.open(STATIC_CACHE_NAME)
-        .then(cache => {
+        .then(async cache => {
           // console.log('Caching static files for new version');
-          return cache.addAll(STATIC_FILES);
+          const results = await Promise.allSettled(
+            STATIC_FILES.map(async (url) => {
+              try {
+                const response = await fetch(url, { cache: 'reload' });
+                if (response.ok) {
+                  await cache.put(url, response);
+                  return { url, success: true };
+                }
+                return { url, success: false, status: response.status };
+              } catch (error) {
+                return { url, success: false, error: String(error) };
+              }
+            })
+          );
+          
+          // Log failures but don't block installation
+          const failures = results.filter(r => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.success));
+          if (failures.length > 0) {
+            console.warn('Service Worker: Some static files failed to cache:', failures.length);
+          }
         })
         .catch(err => {
           console.warn('Service Worker: Cache pre-loading failed:', err);

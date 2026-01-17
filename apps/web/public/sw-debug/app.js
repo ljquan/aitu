@@ -690,11 +690,22 @@ function setupMessageHandlers() {
     'SW_DEBUG_ENABLED': () => {
       state.debugEnabled = true;
       updateDebugButton(elements.toggleDebugBtn, true);
+      // Update status panel text to show "开启"
+      if (elements.debugMode) {
+        elements.debugMode.textContent = '开启';
+      }
       renderLogs(); // Refresh to remove "enable debug" button
+      // Refresh status after debug enabled to get latest state
+      // This ensures cache stats and other info are up-to-date
+      refreshStatus();
     },
     'SW_DEBUG_DISABLED': () => {
       state.debugEnabled = false;
       updateDebugButton(elements.toggleDebugBtn, false);
+      // Update status panel text to show "关闭"
+      if (elements.debugMode) {
+        elements.debugMode.textContent = '关闭';
+      }
       renderLogs(); // Refresh to show "enable debug" button
     },
     'SW_DEBUG_LOG': (data) => addOrUpdateLog(data.entry),
@@ -757,17 +768,17 @@ async function init() {
   setupMessageHandlers();
   setupEventListeners();
 
-  // Initial data fetch
-  refreshStatus();
-  loadConsoleLogs(); // Load console logs from IndexedDB
-  loadPostMessageLogs(); // Load PostMessage logs from SW
-  renderLogs();
+  // Auto-enable debug mode first when entering debug page
+  // The SW_DEBUG_ENABLED handler will then call refreshStatus() to get latest state
+  // This ensures proper state synchronization and avoids race conditions
+  console.log('[SW Debug] Auto-enabling debug mode');
+  enableDebug();
   
-  // Auto-enable debug mode when entering debug page
-  if (!state.debugEnabled) {
-    console.log('[SW Debug] Auto-enabling debug mode');
-    enableDebug();
-  }
+  // Load console logs from IndexedDB (independent of debug mode status)
+  loadConsoleLogs();
+  // Load PostMessage logs from SW
+  loadPostMessageLogs();
+  renderLogs();
   
   // Heartbeat mechanism to keep debug mode alive
   // This allows SW to detect when debug page is truly closed (no heartbeat for 15s)

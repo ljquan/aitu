@@ -205,25 +205,35 @@ if ('serviceWorker' in navigator) {
   
   // 监听用户确认升级事件
   window.addEventListener('user-confirmed-upgrade', () => {
-    // console.log('Main: User confirmed upgrade, triggering SKIP_WAITING');
+    console.log('[Main] User confirmed upgrade, checking for waiting worker...');
     
     // 优先使用 pendingWorker
     if (pendingWorker) {
+      console.log('[Main] Sending SKIP_WAITING to pendingWorker');
       pendingWorker.postMessage({ type: 'SKIP_WAITING' });
       return;
     }
     
     // 如果没有 pendingWorker，尝试查找 waiting 状态的 worker
     if (swRegistration && swRegistration.waiting) {
+      console.log('[Main] Sending SKIP_WAITING to swRegistration.waiting');
       swRegistration.waiting.postMessage({ type: 'SKIP_WAITING' });
       return;
     }
     
     // 如果都没有 waiting worker，说明 SW 已经是最新的 active 状态
     // 这种情况通常发生在首次安装后，SW 直接 activate 了
-    // 此时直接刷新页面即可加载最新资源
-    // console.log('Main: No waiting worker found, reloading page directly');
-    window.location.reload();
+    // 清除缓存并强制刷新
+    console.log('[Main] No waiting worker found, clearing caches and hard reload...');
+    
+    // 清除旧的静态资源缓存以确保获取最新资源
+    caches.keys().then(cacheNames => {
+      const staticCaches = cacheNames.filter(name => name.startsWith('drawnix-static-v'));
+      return Promise.all(staticCaches.map(name => caches.delete(name)));
+    }).finally(() => {
+      // 强制硬刷新（绕过缓存）
+      window.location.href = window.location.href.split('?')[0] + '?_t=' + Date.now();
+    });
   });
   
   // 页面卸载前，不再自动触发升级，必须用户手动确认

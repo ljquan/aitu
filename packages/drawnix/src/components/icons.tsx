@@ -875,3 +875,21 @@ export const UnlockIcon = createIcon(
     <path d="M7 11V7a5 5 0 0 1 9.9-1" />
   </svg>
 );
+
+// 调试日志图标 - 控制台/终端风格
+export const DebugLogIcon = createIcon(
+  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    {/* 终端窗口外框 */}
+    <rect x="2" y="3" width="20" height="18" rx="2" />
+    {/* 顶部栏 */}
+    <line x1="2" y1="7" x2="22" y2="7" />
+    {/* 顶部三个点 */}
+    <circle cx="5.5" cy="5" r="0.8" fill="currentColor" stroke="none" />
+    <circle cx="8.5" cy="5" r="0.8" fill="currentColor" stroke="none" />
+    <circle cx="11.5" cy="5" r="0.8" fill="currentColor" stroke="none" />
+    {/* 终端提示符和代码行 */}
+    <path d="M5 11l2 2-2 2" />
+    <line x1="9" y1="15" x2="14" y2="15" />
+    <line x1="9" y1="18" x2="18" y2="18" opacity="0.5" />
+  </svg>
+);

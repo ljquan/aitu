@@ -26,6 +26,7 @@
     "start": "nx serve web",
     "build": "node scripts/update-version.js && nx run-many -t=build",
     "build:web": "node scripts/update-version.js && nx build web",
+    "preview": "npx serve dist/apps/web -l 7288",
     "package": "node scripts/create-release-package.js",
     "test": "nx run-many -t=test",
     "size": "size-limit",

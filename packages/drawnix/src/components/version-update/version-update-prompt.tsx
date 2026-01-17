@@ -58,10 +58,12 @@ export const VersionUpdatePrompt: React.FC = () => {
   }, []);
 
   const handleUpdate = () => {
-    // console.log('[VersionUpdatePrompt] User confirmed update');
+    console.log('[VersionUpdatePrompt] User clicked update button');
+    // Hide the prompt immediately to provide visual feedback
+    setUpdateAvailable(null);
+    setShowChangelog(false);
     // Dispatch event to notify main.tsx to proceed with upgrade
     window.dispatchEvent(new CustomEvent('user-confirmed-upgrade'));
-    setShowChangelog(false);
   };
 
   // Only show if update is available AND no active tasks
