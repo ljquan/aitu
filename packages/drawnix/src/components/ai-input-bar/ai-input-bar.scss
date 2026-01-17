@@ -1123,6 +1123,9 @@ $text-dark: #1F2937;
   .ai-input-bar {
     bottom: 16px;
     padding: 0 12px;
+    // 移动端考虑左侧工具栏宽度，避免遮挡
+    left: calc(50% + 24px); // 工具栏宽度48px的一半，使输入框在工具栏右侧区域居中
+    max-width: calc(100% - 60px); // 左侧工具栏48px + 右侧边距12px
 
     &__content-preview {
       gap: 6px;

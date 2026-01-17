@@ -1,8 +1,9 @@
+@import '../../styles/common-variables';
 
 .version-update-prompt {
   position: fixed;
   top: 10px;
-  left: 90px;
+  left: calc(#{$toolbar-width} + 10px); // unified-toolbar 右侧 +10px
   right: auto;
   z-index: 1000;
   background-color: var(--td-bg-color-container);
@@ -35,11 +36,34 @@
   }
 }
 
-/* 响应式调整 */
+/* 响应式调整 - 移动端调整位置避免与缩放控件重叠 */
 @media (max-width: 768px) {
   .version-update-prompt {
-    left: 16px;
-    top: auto;
-    bottom: 16px;
+    // 移动端放在工具栏下方，距离顶部更远以避免与右上角缩放控件重叠
+    left: calc(#{$toolbar-width} + 8px);
+    top: 52px; // 缩放控件高度约40px + 间距
+    max-width: calc(100vw - #{$toolbar-width} - 100px); // 预留右侧缩放控件空间
+
+    &__content {
+      gap: 8px;
+    }
+
+    &__text {
+      font-size: 13px;
+    }
+  }
+}
+
+/* 更小屏幕 - 进一步压缩 */
+@media (max-width: 480px) {
+  .version-update-prompt {
+    left: calc(#{$toolbar-width} + 6px);
+    top: 52px;
+    padding: 6px 10px;
+    max-width: calc(100vw - #{$toolbar-width} - 80px);
+
+    &__text {
+      font-size: 12px;
+    }
   }
 }
