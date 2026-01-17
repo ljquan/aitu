@@ -58,6 +58,9 @@ import { useDrawnix, DialogType } from '../../../hooks/use-drawnix';
 import { useI18n } from '../../../i18n';
 import { ToolButton } from '../../tool-button';
 import { useGlobalMousePosition } from '../../../hooks/use-global-mouse-position';
+import type { FillConfig } from '../../../types/fill.types';
+import { isSolidFill, isFillConfig, getElementFillValue } from '../../../types/fill.types';
+import { gradientToCSS } from '../../../utils/fill-renderer';
 import { isVideoElement } from '../../../plugins/with-video';
 import { VideoFrameSelector } from '../../video-frame-selector/video-frame-selector';
 import { insertVideoFrame } from '../../../utils/video-frame';
@@ -111,7 +114,7 @@ export const PopupToolbar = () => {
     ],
   });
   let state: {
-    fill: string | undefined;
+    fill: string | FillConfig | undefined;
     strokeColor?: string;
     hasFill?: boolean;
     hasText?: boolean;
@@ -486,10 +489,25 @@ export const PopupToolbar = () => {
                 <label
                   className={classNames('fill-label', 'color-label', {
                     'color-white':
-                      state.fill && isWhite(removeHexAlpha(state.fill)),
+                      state.fill && isSolidFill(state.fill) && isWhite(removeHexAlpha(state.fill)),
                     'color-mixed': state.fill === undefined,
+                    'color-gradient': state.fill && isFillConfig(state.fill) && state.fill.type === 'gradient',
+                    'color-image': state.fill && isFillConfig(state.fill) && state.fill.type === 'image',
                   })}
-                  style={{ backgroundColor: state.fill }}
+                  style={{
+                    // 统一使用 background 属性，避免 backgroundColor 和 background 冲突
+                    background: state.fill && isSolidFill(state.fill)
+                      ? state.fill
+                      : state.fill && isFillConfig(state.fill)
+                        ? state.fill.type === 'gradient' && state.fill.gradient
+                          ? gradientToCSS(state.fill.gradient)
+                          : state.fill.type === 'solid' && state.fill.solid
+                            ? state.fill.solid.color
+                            : state.fill.type === 'image' && state.fill.image?.imageUrl
+                              ? `url(${state.fill.image.imageUrl}) center/cover no-repeat`
+                              : undefined
+                        : undefined,
+                  }}
                 ></label>
               </PopupFillButton>
             )}
@@ -1039,7 +1057,8 @@ export const getMindElementState = (
 ) => {
   const marks = getTextMarksByElement(element);
   return {
-    fill: element.fill,
+    // 使用 getElementFillValue 获取完整的填充信息（支持渐变/图片填充）
+    fill: getElementFillValue(element),
     strokeColor: getStrokeColorByMindElement(board, element),
     fontSize: marks['font-size'],
     marks,
@@ -1052,7 +1071,8 @@ export const getDrawElementState = (
 ) => {
   const marks: Omit<CustomText, 'text'> = getTextMarksByElement(element);
   return {
-    fill: element.fill,
+    // 使用 getElementFillValue 获取完整的填充信息（支持渐变/图片填充）
+    fill: getElementFillValue(element),
     strokeColor: getStrokeColorByDrawElement(board, element),
     fontSize: marks['font-size'],
     marks,
@@ -1128,7 +1148,8 @@ export const getFreehandElementState = (
   element: Freehand
 ) => {
   return {
-    fill: element.fill,
+    // 使用 getElementFillValue 获取完整的填充信息（支持渐变/图片填充）
+    fill: getElementFillValue(element),
     strokeColor: getStrokeColorByFreehandElement(board, element),
   };
 };
@@ -1138,7 +1159,8 @@ export const getPenPathElementState = (
   element: PenPath
 ) => {
   return {
-    fill: element.fill,
+    // 使用 getElementFillValue 获取完整的填充信息（支持渐变/图片填充）
+    fill: getElementFillValue(element),
     strokeColor: element.strokeColor,
     cornerRadius: element.cornerRadius,
   };

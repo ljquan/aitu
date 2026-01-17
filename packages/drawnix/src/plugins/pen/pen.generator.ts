@@ -3,6 +3,7 @@ import { Generator, StrokeStyle } from '@plait/common';
 import { PenPath, PenAnchor, ANCHOR_HIT_RADIUS, HANDLE_HIT_RADIUS } from './type';
 import { generatePathFromAnchors } from './bezier-utils';
 import { getAbsoluteAnchors } from './utils';
+import { getFillRenderColor } from '../../types/fill.types';
 
 /**
  * 获取 stroke-dasharray 值
@@ -59,7 +60,9 @@ export class PenGenerator extends Generator<PenPath> {
       'path'
     );
     pathElement.setAttribute('d', pathData);
-    pathElement.setAttribute('fill', element.fill || 'none');
+    // 使用 getFillRenderColor 获取初始填充色
+    // 对于渐变/图片填充，会使用 fallbackColor 避免黑色闪烁
+    pathElement.setAttribute('fill', getFillRenderColor(element.fill));
     pathElement.setAttribute('stroke', element.strokeColor || '#000000');
     pathElement.setAttribute('stroke-width', String(strokeWidth));
     pathElement.setAttribute('stroke-linecap', 'round');

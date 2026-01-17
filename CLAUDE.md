@@ -1244,6 +1244,20 @@ onDoubleClick={() => {
   handleDoubleClick();
 }}
 // ⚠️ 缺少 useEffect 清理！
+#### 优先使用项目已有的工具函数
+
+**场景**: 需要使用 debounce、throttle 等常见工具函数时
+
+❌ **错误示例**:
+```typescript
+// 错误：在组件内部自己实现 debounce
+function debounce<T extends (...args: any[]) => void>(fn: T, delay: number): T {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  return ((...args: Parameters<T>) => {
+    if (timeoutId) clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => fn(...args), delay);
+  }) as T;
+}
 ```
 
 ✅ **正确示例**:
@@ -1284,6 +1298,69 @@ onDoubleClick={() => {
 1. 内存泄漏（闭包引用已卸载组件的状态）
 2. React 警告："Can't perform a React state update on an unmounted component"
 3. stale callback 访问过期的 props/state
+// 正确：用项目的 @aitu/utils 包
+import { debounce } from '@aitu/utils';
+```
+
+**可用的工具函数来源**:
+- `@aitu/utils`: `debounce`、`throttle` 等项目共享工具函数
+
+**原因**: 重复实现常见工具函数会增加代码体积，且可能存在边界情况处理不完善的问题。项目已有的工具函数经过测试和优化，应优先使用。
+
+#### 滑块等连续输入控件的更新策略
+
+**场景**: 滑块拖动时触发昂贵操作（如 SVG pattern 重新生成、Canvas 重绘）
+
+❌ **错误示例**:
+```typescript
+// 错误 1：每次滑块变化都立即触发外部回调，导致频繁重绘和抖动
+const handleSliderChange = (value: number) => {
+  setConfig({ ...config, scale: value });
+  onChange?.({ ...config, scale: value }); // 每次都触发，造成性能问题
+};
+
+// 错误 2：使用 debounce（防抖），用户停止拖动后才更新，响应迟钝
+const debouncedOnChange = useMemo(
+  () => debounce((config) => onChange?.(config), 150),
+  [onChange]
+);
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：使用 throttle（节流），定时触发更新，平衡响应性和性能
+import { throttle } from '@aitu/utils';
+
+// 节流版本的外部回调
+const throttledOnChange = useMemo(
+  () => throttle((newConfig: Config) => {
+    onChange?.(newConfig);
+  }, 100), // 100ms 节流
+  [onChange]
+);
+
+// 滑块专用的更新函数：立即更新 UI，节流触发外部回调
+const updateConfigThrottled = useCallback(
+  (updates: Partial<Config>) => {
+    const newConfig = { ...config, ...updates };
+    setConfig(newConfig);        // 立即更新 UI
+    throttledOnChange(newConfig); // 节流触发外部回调
+  },
+  [config, throttledOnChange]
+);
+
+<input
+  type="range"
+  onChange={(e) => updateConfigThrottled({ scale: Number(e.target.value) })}
+/>
+```
+
+**关键点**:
+- 内部状态 (`setConfig`) 立即更新，保证滑块 UI 的即时响应
+- 外部回调 (`onChange`) 使用 `throttle`（节流），减少昂贵操作的执行频率
+- **防抖 vs 节流**: 防抖等用户停止操作后才触发（适合搜索框）；节流定时触发（适合滑块）
+- 节流时间根据操作开销选择：轻量操作 50-100ms，重量操作（SVG/Canvas）100-200ms
+- 使用 `useMemo` 包装 throttle 函数，避免每次渲染创建新实例
 
 ### CSS/SCSS 规范
 - 使用 BEM 命名规范
@@ -1768,6 +1845,15 @@ async checkProcessedRequest(requestId: string): Promise<boolean> {
   }
   return false;
 }
+### Plait API 函数签名注意事项
+
+**场景**: 调用 Plait 的工具函数（如 `getRectangleByElements`）时
+
+❌ **错误示例**:
+```typescript
+// 错误：漏掉 board 参数，导致 elements.forEach is not a function 错误
+const elementRect = getRectangleByElements([element], false);
+// getRectangleByElements 的第一个参数是 board，不是 elements！
 ```
 
 ✅ **正确示例**:
@@ -1793,6 +1879,16 @@ async checkProcessedRequest(requestId: string): Promise<boolean> {
 - Service Worker 恢复任务
 - 页面刷新后的任务续接
 - 分布式系统中的请求去重
+// 正确：board 作为第一个参数
+const elementRect = getRectangleByElements(board, [element], false);
+```
+
+**常见的需要 board 参数的 Plait 函数**:
+- `getRectangleByElements(board, elements, includePadding)`
+- `getSelectedElements(board)`
+- `PlaitElement.getElementG(element)` - 注意这个不需要 board
+
+**原因**: Plait 的大多数工具函数需要 board 作为上下文，用于访问视口、缩放比例等信息。漏掉 board 参数会导致运行时错误，且错误信息可能难以理解（如将 elements 数组误认为 board 对象导致的方法调用错误）。
 
 ### 禁止自动删除用户数据
 

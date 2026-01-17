@@ -12,6 +12,7 @@ import {
   WorkspaceState,
   WORKSPACE_DEFAULTS,
 } from '../types/workspace.types';
+import { migrateElementsFillData } from '../types/fill.types';
 
 /**
  * Database configuration
@@ -205,14 +206,25 @@ class WorkspaceStorageService {
 
   async loadBoard(id: string): Promise<Board | null> {
     await this.ensureInitialized();
-    return this.getBoardsStore().getItem<Board>(id);
+    const board = await this.getBoardsStore().getItem<Board>(id);
+    if (board && board.elements) {
+      // 迁移 fill 数据格式，确保渐变填充不会显示为黑色
+      board.elements = migrateElementsFillData(board.elements);
+    }
+    return board;
   }
 
   async loadAllBoards(): Promise<Board[]> {
     await this.ensureInitialized();
     const boards: Board[] = [];
     await this.getBoardsStore().iterate<Board, void>((value) => {
-      if (value && value.id) boards.push(value);
+      if (value && value.id) {
+        // 迁移 fill 数据格式，确保渐变填充不会显示为黑色
+        if (value.elements) {
+          value.elements = migrateElementsFillData(value.elements);
+        }
+        boards.push(value);
+      }
     });
     // Wait for browser idle time after IndexedDB operation
     await waitForIdle();
@@ -224,6 +236,10 @@ class WorkspaceStorageService {
     const boards: Board[] = [];
     await this.getBoardsStore().iterate<Board, void>((value) => {
       if (value && value.folderId === folderId) {
+        // 迁移 fill 数据格式，确保渐变填充不会显示为黑色
+        if (value.elements) {
+          value.elements = migrateElementsFillData(value.elements);
+        }
         boards.push(value);
       }
     });

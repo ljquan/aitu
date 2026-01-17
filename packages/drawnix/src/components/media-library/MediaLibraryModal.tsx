@@ -6,6 +6,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { Dialog, MessagePlugin, Drawer } from 'tdesign-react';
 import { Grid } from 'lucide-react';
+import { ATTACHED_ELEMENT_CLASS_NAME } from '@plait/core';
 import { useAssets } from '../../contexts/AssetContext';
 import { MediaLibraryGrid } from './MediaLibraryGrid';
 import { MediaLibrarySidebar } from './MediaLibrarySidebar';
@@ -273,7 +274,8 @@ export function MediaLibraryModal({
       attach="body"
       placement="center"
       destroyOnClose
-      className="media-library-modal"
+      zIndex={5200}
+      className={`media-library-modal ${ATTACHED_ELEMENT_CLASS_NAME}`}
       footer={null}
     >
       {/* 隐藏的文件输入 */}
