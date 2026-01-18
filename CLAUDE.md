@@ -2290,6 +2290,125 @@ export function requiresMainThread(toolName: string): boolean {
 1. Chrome DevTools → Application → Service Workers → 点击 "Update"
 2. 或关闭所有使用该 SW 的标签页，重新打开
 
+### Service Worker 更新后禁止自动刷新页面
+
+**场景**: Service Worker 更新检测和页面刷新逻辑
+
+❌ **错误示例**:
+```typescript
+// 错误：收到 SW 更新消息后自动刷新页面
+navigator.serviceWorker.addEventListener('message', (event) => {
+  if (event.data?.type === 'SW_UPDATED') {
+    window.location.reload();  // 自动刷新会打断用户操作！
+  }
+});
+
+navigator.serviceWorker.addEventListener('controllerchange', () => {
+  window.location.reload();  // 自动刷新会打断用户操作！
+});
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：使用标志位，只有用户确认后才刷新
+let userConfirmedUpgrade = false;
+
+// 监听 SW_UPDATED 消息
+navigator.serviceWorker.addEventListener('message', (event) => {
+  if (event.data?.type === 'SW_UPDATED') {
+    // 只有用户主动确认升级后才刷新页面
+    if (!userConfirmedUpgrade) {
+      return;  // 跳过自动刷新
+    }
+    setTimeout(() => window.location.reload(), 1000);
+  }
+});
+
+// 监听 controller 变化
+navigator.serviceWorker.addEventListener('controllerchange', () => {
+  if (!userConfirmedUpgrade) {
+    return;  // 跳过自动刷新
+  }
+  setTimeout(() => window.location.reload(), 1000);
+});
+
+// 监听用户确认升级事件
+window.addEventListener('user-confirmed-upgrade', () => {
+  userConfirmedUpgrade = true;
+  // 触发 SW 跳过等待
+  pendingWorker?.postMessage({ type: 'SKIP_WAITING' });
+});
+```
+
+**原因**: 
+- 自动刷新会打断用户正在进行的操作（编辑、生成任务等）
+- 用户可能有未保存的工作，强制刷新会导致数据丢失
+- 应该显示更新提示，让用户选择合适的时机刷新
+
+**相关文件**:
+- `apps/web/src/main.tsx` - Service Worker 注册和更新逻辑
+- `components/version-update/version-update-prompt.tsx` - 版本更新提示组件
+
+### 设置保存后需要主动更新 Service Worker 配置
+
+**场景**: 用户在设置面板修改配置（如 API Key、流式请求开关）并保存后
+
+❌ **错误示例**:
+```typescript
+// 错误：只保存到本地存储，不更新运行中的 SW 配置
+const handleSave = async () => {
+  geminiSettings.set({
+    apiKey,
+    baseUrl,
+    imageStreamEnabled,  // 新增的配置
+  });
+  // SW 使用的仍是初始化时的旧配置！
+};
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：保存后同时更新 SW 配置
+const handleSave = async () => {
+  // 1. 保存到本地存储
+  geminiSettings.set({
+    apiKey,
+    baseUrl,
+    imageStreamEnabled,
+  });
+
+  // 2. 主动推送配置到运行中的 SW
+  swTaskQueueClient.updateConfig({
+    geminiConfig: {
+      apiKey,
+      baseUrl,
+      imageStreamEnabled,
+    },
+  });
+};
+```
+
+**原因**: 
+- Service Worker 在初始化时接收配置（通过 `TASK_QUEUE_INIT` 消息）
+- 之后 SW 使用内存中的配置，不会重新读取本地存储
+- 如果用户修改设置后不调用 `updateConfig()`，SW 继续使用旧配置
+- 这会导致用户开启的功能（如流式请求）看似保存成功但实际未生效
+
+**通信协议**:
+```typescript
+// 主线程 → Service Worker
+swTaskQueueClient.updateConfig({
+  geminiConfig: { ... },  // 可选
+  videoConfig: { ... },   // 可选
+});
+
+// SW 内部处理
+case 'TASK_QUEUE_UPDATE_CONFIG':
+  Object.assign(this.geminiConfig, data.geminiConfig);
+  Object.assign(this.videoConfig, data.videoConfig);
+  break;
+```
+
 ### Service Worker 内部处理虚拟路径 URL
 
 **场景**: 在 Service Worker 内部需要获取 `/__aitu_cache__/` 或 `/asset-library/` 等虚拟路径的资源时
