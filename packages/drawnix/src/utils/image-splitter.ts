@@ -5,6 +5,7 @@
  */
 
 import { PlaitBoard, Point, getRectangleByElements, PlaitElement } from '@plait/core';
+import { trackMemory } from './common';
 import { DrawTransforms } from '@plait/draw';
 import { loadImage, trimBorders } from './image-border-utils';
 import { scrollToPointIfNeeded } from './selection-utils';
@@ -1451,6 +1452,7 @@ export async function splitAndInsertImages(
   imageUrl: string,
   options?: SplitAndInsertOptions
 ): Promise<{ success: boolean; count: number; error?: string }> {
+  const endTrack = trackMemory('图片分割');
   const { sourceRect, startPoint, scrollToResult = true } = options || {};
   try {
     let elements: SplitImageElement[] = [];
@@ -1673,11 +1675,13 @@ export async function splitAndInsertImages(
       });
     }
 
+    endTrack();
     return {
       success: true,
       count: elements.length,
     };
   } catch (error: any) {
+    endTrack();
     return {
       success: false,
       count: 0,

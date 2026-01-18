@@ -224,6 +224,12 @@ interface VideoCacheEntry {
 // 视频缓存：存储已下载的完整视频Blob，用于快速响应Range请求
 const videoBlobCache = new Map<string, VideoCacheEntry>();
 
+// ==================== 视频 Blob 缓存清理配置 ====================
+// 视频 Blob 缓存 TTL（5 分钟）- 超过此时间的视频 Blob 会被清理
+const VIDEO_BLOB_CACHE_TTL = 5 * 60 * 1000;
+// 视频 Blob 缓存最大数量 - 超过此数量时删除最老的
+const VIDEO_BLOB_CACHE_MAX_SIZE = 10;
+
 // 域名故障标记：记录已知失败的域名
 const failedDomains = new Set<string>();
 
@@ -548,6 +554,17 @@ async function broadcastConsoleLog(entry: DebugLogEntry): Promise<void> {
   }
 }
 
+// 估算 videoBlobCache 的总大小（字节）
+function estimateVideoBlobCacheSize(): number {
+  let totalSize = 0;
+  videoBlobCache.forEach((entry) => {
+    if (entry.blob) {
+      totalSize += entry.blob.size;
+    }
+  });
+  return totalSize;
+}
+
 // 获取 SW 状态信息
 function getDebugStatus(): {
   version: string;
@@ -555,6 +572,7 @@ function getDebugStatus(): {
   pendingImageRequests: number;
   pendingVideoRequests: number;
   videoBlobCacheSize: number;
+  videoBlobCacheTotalBytes: number;
   completedImageRequestsSize: number;
   failedDomainsCount: number;
   failedDomains: string[];
@@ -562,6 +580,14 @@ function getDebugStatus(): {
   consoleLogsCount: number;
   debugModeEnabled: boolean;
   workflowHandlerInitialized: boolean;
+  memoryStats: {
+    pendingRequestsMapSize: number;
+    completedRequestsMapSize: number;
+    videoBlobCacheMapSize: number;
+    failedDomainsSetSize: number;
+    debugLogsArraySize: number;
+    consoleLogsArraySize: number;
+  };
 } {
   return {
     version: APP_VERSION,
@@ -569,6 +595,7 @@ function getDebugStatus(): {
     pendingImageRequests: pendingImageRequests.size,
     pendingVideoRequests: pendingVideoRequests.size,
     videoBlobCacheSize: videoBlobCache.size,
+    videoBlobCacheTotalBytes: estimateVideoBlobCacheSize(),
     completedImageRequestsSize: completedImageRequests.size,
     failedDomainsCount: failedDomains.size,
     failedDomains: Array.from(failedDomains),
@@ -576,6 +603,15 @@ function getDebugStatus(): {
     consoleLogsCount: consoleLogs.length,
     debugModeEnabled,
     workflowHandlerInitialized,
+    // 运行时内存统计
+    memoryStats: {
+      pendingRequestsMapSize: pendingImageRequests.size,
+      completedRequestsMapSize: completedImageRequests.size,
+      videoBlobCacheMapSize: videoBlobCache.size,
+      failedDomainsSetSize: failedDomains.size,
+      debugLogsArraySize: debugLogs.length,
+      consoleLogsArraySize: consoleLogs.length,
+    },
   };
 }
 
@@ -1470,8 +1506,204 @@ sw.addEventListener('message', (event: ExtendableMessageEvent) => {
     event.source?.postMessage({
       type: 'SW_DEBUG_POSTMESSAGE_LOGS_CLEARED',
     });
+  } else if (event.data && event.data.type === 'CRASH_SNAPSHOT') {
+    // 保存崩溃快照到 IndexedDB
+    const snapshot = event.data.snapshot;
+    if (snapshot) {
+      saveCrashSnapshot(snapshot);
+    }
+  } else if (event.data && event.data.type === 'SW_DEBUG_GET_CRASH_SNAPSHOTS') {
+    // 获取崩溃快照列表
+    (async () => {
+      try {
+        const snapshots = await getCrashSnapshots();
+        event.source?.postMessage({
+          type: 'SW_DEBUG_CRASH_SNAPSHOTS',
+          snapshots,
+          total: snapshots.length,
+        });
+      } catch (error) {
+        event.source?.postMessage({
+          type: 'SW_DEBUG_CRASH_SNAPSHOTS',
+          snapshots: [],
+          total: 0,
+          error: String(error),
+        });
+      }
+    })();
+  } else if (event.data && event.data.type === 'SW_DEBUG_CLEAR_CRASH_SNAPSHOTS') {
+    // 清空崩溃快照
+    (async () => {
+      await clearCrashSnapshots();
+      event.source?.postMessage({
+        type: 'SW_DEBUG_CRASH_SNAPSHOTS_CLEARED',
+      });
+    })();
   }
 });
+
+// ==================== 崩溃快照存储 ====================
+
+const CRASH_SNAPSHOT_DB_NAME = 'MemorySnapshotDB';
+const CRASH_SNAPSHOT_STORE = 'snapshots';
+const MAX_CRASH_SNAPSHOTS = 50; // 最多保留 50 条
+
+interface CrashSnapshot {
+  id: string;
+  timestamp: number;
+  type: 'startup' | 'periodic' | 'error' | 'beforeunload';
+  memory?: {
+    usedJSHeapSize: number;
+    totalJSHeapSize: number;
+    jsHeapSizeLimit: number;
+  };
+  storage?: {
+    usage: number;
+    quota: number;
+  };
+  userAgent: string;
+  url: string;
+  error?: {
+    message: string;
+    stack?: string;
+    type: string;
+  };
+  customData?: Record<string, unknown>;
+}
+
+/**
+ * 打开崩溃快照数据库
+ */
+async function openMemorySnapshotDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(CRASH_SNAPSHOT_DB_NAME, 1);
+    
+    request.onerror = () => reject(request.error);
+    
+    request.onsuccess = () => resolve(request.result);
+    
+    request.onupgradeneeded = (event) => {
+      const db = (event.target as IDBOpenDBRequest).result;
+      if (!db.objectStoreNames.contains(CRASH_SNAPSHOT_STORE)) {
+        const store = db.createObjectStore(CRASH_SNAPSHOT_STORE, { keyPath: 'id' });
+        store.createIndex('timestamp', 'timestamp', { unique: false });
+        store.createIndex('type', 'type', { unique: false });
+      }
+    };
+  });
+}
+
+/**
+ * 保存崩溃快照
+ */
+async function saveCrashSnapshot(snapshot: CrashSnapshot): Promise<void> {
+  try {
+    const db = await openMemorySnapshotDB();
+    const transaction = db.transaction(CRASH_SNAPSHOT_STORE, 'readwrite');
+    const store = transaction.objectStore(CRASH_SNAPSHOT_STORE);
+    
+    // 添加新快照
+    store.put(snapshot);
+    
+    // 获取所有快照数量
+    const countRequest = store.count();
+    countRequest.onsuccess = () => {
+      const count = countRequest.result;
+      
+      // 如果超过最大数量，删除最老的
+      if (count > MAX_CRASH_SNAPSHOTS) {
+        const index = store.index('timestamp');
+        const cursorRequest = index.openCursor();
+        let deleted = 0;
+        const toDelete = count - MAX_CRASH_SNAPSHOTS;
+        
+        cursorRequest.onsuccess = (e) => {
+          const cursor = (e.target as IDBRequest<IDBCursorWithValue>).result;
+          if (cursor && deleted < toDelete) {
+            store.delete(cursor.value.id);
+            deleted++;
+            cursor.continue();
+          }
+        };
+      }
+    };
+    
+    await new Promise<void>((resolve, reject) => {
+      transaction.oncomplete = () => {
+        db.close();
+        resolve();
+      };
+      transaction.onerror = () => {
+        db.close();
+        reject(transaction.error);
+      };
+    });
+    
+    // console.log('[SW] Crash snapshot saved:', snapshot.id, snapshot.type);
+  } catch (error) {
+    console.warn('[SW] Failed to save crash snapshot:', error);
+  }
+}
+
+/**
+ * 获取所有崩溃快照
+ */
+async function getCrashSnapshots(): Promise<CrashSnapshot[]> {
+  try {
+    const db = await openMemorySnapshotDB();
+    const transaction = db.transaction(CRASH_SNAPSHOT_STORE, 'readonly');
+    const store = transaction.objectStore(CRASH_SNAPSHOT_STORE);
+    const index = store.index('timestamp');
+    
+    return new Promise((resolve, reject) => {
+      const request = index.getAll();
+      
+      request.onsuccess = () => {
+        db.close();
+        // 按时间倒序排列
+        const snapshots = (request.result as CrashSnapshot[]).sort(
+          (a, b) => b.timestamp - a.timestamp
+        );
+        resolve(snapshots);
+      };
+      
+      request.onerror = () => {
+        db.close();
+        reject(request.error);
+      };
+    });
+  } catch (error) {
+    console.warn('[SW] Failed to get crash snapshots:', error);
+    return [];
+  }
+}
+
+/**
+ * 清空崩溃快照
+ */
+async function clearCrashSnapshots(): Promise<void> {
+  try {
+    const db = await openMemorySnapshotDB();
+    const transaction = db.transaction(CRASH_SNAPSHOT_STORE, 'readwrite');
+    const store = transaction.objectStore(CRASH_SNAPSHOT_STORE);
+    store.clear();
+    
+    await new Promise<void>((resolve, reject) => {
+      transaction.oncomplete = () => {
+        db.close();
+        resolve();
+      };
+      transaction.onerror = () => {
+        db.close();
+        reject(transaction.error);
+      };
+    });
+    
+    console.log('[SW] Crash snapshots cleared');
+  } catch (error) {
+    console.warn('[SW] Failed to clear crash snapshots:', error);
+  }
+}
 
 // IndexedDB 数据库列表（用于统计）
 const INDEXEDDB_NAMES = [
@@ -1483,6 +1715,7 @@ const INDEXEDDB_NAMES = [
   'drawnix-kv-storage',     // KV 存储
   'drawnix-prompts',        // 提示词存储
   'drawnix-chat-db',        // 聊天存储
+  'MemorySnapshotDB',        // 崩溃快照存储
 ];
 
 // 估算对象大小（字节）
@@ -2893,6 +3126,37 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: 
   ]);
 }
 
+// 清理过期的视频 Blob 缓存
+function cleanupVideoBlobCache(): void {
+  const now = Date.now();
+  const staleKeys: string[] = [];
+  
+  // 1. 清理过期的视频（超过 TTL）
+  videoBlobCache.forEach((entry, key) => {
+    if (now - entry.timestamp > VIDEO_BLOB_CACHE_TTL) {
+      staleKeys.push(key);
+    }
+  });
+  
+  if (staleKeys.length > 0) {
+    // console.log(`Service Worker: 清理 ${staleKeys.length} 个过期的视频 Blob 缓存`);
+    staleKeys.forEach(key => videoBlobCache.delete(key));
+  }
+  
+  // 2. 如果仍超过最大数量，删除最老的
+  if (videoBlobCache.size > VIDEO_BLOB_CACHE_MAX_SIZE) {
+    const entries = Array.from(videoBlobCache.entries())
+      .sort((a, b) => a[1].timestamp - b[1].timestamp);
+    const toDeleteCount = videoBlobCache.size - VIDEO_BLOB_CACHE_MAX_SIZE;
+    const toDelete = entries.slice(0, toDeleteCount);
+    
+    if (toDelete.length > 0) {
+      // console.log(`Service Worker: 视频缓存超过上限，清理 ${toDelete.length} 个最老的缓存`);
+      toDelete.forEach(([key]) => videoBlobCache.delete(key));
+    }
+  }
+}
+
 // 清理过期的 pending 请求和已完成请求缓存
 function cleanupStaleRequests(): void {
   const now = Date.now();
@@ -2922,6 +3186,9 @@ function cleanupStaleRequests(): void {
     // console.log(`Service Worker: 清理 ${staleCompletedKeys.length} 个过期的已完成请求缓存`);
     staleCompletedKeys.forEach(key => completedImageRequests.delete(key));
   }
+  
+  // 清理过期的视频 Blob 缓存
+  cleanupVideoBlobCache();
 }
 
 async function handleImageRequest(request: Request): Promise<Response> {

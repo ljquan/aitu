@@ -4,7 +4,7 @@
  * 批量图片生成组件 - Excel 式批量 AI 图片生成
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { MessagePlugin, Select, Dialog, Tooltip, DialogPlugin } from 'tdesign-react';
 import { Image, LayoutGrid } from 'lucide-react';
 import { useI18n } from '../../i18n';
@@ -21,6 +21,7 @@ import { MediaLibraryModal } from '../media-library/MediaLibraryModal';
 import { LS_KEYS_TO_MIGRATE } from '../../constants/storage-keys';
 import { kvStorageService } from '../../services/kv-storage-service';
 import './batch-image-generation.scss';
+import { trackMemory } from '../../utils/common';
 
 // 本地缓存 key
 const BATCH_IMAGE_CACHE_KEY = LS_KEYS_TO_MIGRATE.BATCH_IMAGE_CACHE;
@@ -155,6 +156,18 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
   const [showBatchImportModal, setShowBatchImportModal] = useState(false);
   const [pendingImportFiles, setPendingImportFiles] = useState<File[]>([]);
   const [importStartRow, setImportStartRow] = useState<number>(1); // 从第几行开始插入（1-based）
+
+  // 创建预览图片的 Blob URL（防止渲染时重复创建导致内存泄漏）
+  const previewUrls = useMemo(() => {
+    return pendingImportFiles.slice(0, 12).map(file => URL.createObjectURL(file));
+  }, [pendingImportFiles]);
+
+  // 清理 Blob URL 防止内存泄漏
+  useEffect(() => {
+    return () => {
+      previewUrls.forEach(url => URL.revokeObjectURL(url));
+    };
+  }, [previewUrls]);
 
   // 模型选择
   const [selectedModel, setSelectedModel] = useState<string>(() => {
@@ -708,6 +721,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
   // 执行批量导入
   const executeBatchImport = useCallback(async () => {
     if (pendingImportFiles.length === 0) return;
+    const endTrack = trackMemory(`批量导入(${pendingImportFiles.length}张)`);
 
     const perRow = imagesPerRow;
     const totalImages = pendingImportFiles.length;
@@ -780,6 +794,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
     // 清理状态
     setPendingImportFiles([]);
     setShowBatchImportModal(false);
+    endTrack();
 
     const message = language === 'zh'
       ? `已导入 ${totalImages} 张图片，从第 ${importStartRow} 行开始`
@@ -2460,11 +2475,11 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
                 }
               </p>
 
-              {/* 图片预览 */}
+              {/* 图片预览（使用预创建的 Blob URL 避免内存泄漏） */}
               <div className="import-preview-grid">
-                {pendingImportFiles.slice(0, 12).map((file, index) => (
+                {previewUrls.map((url, index) => (
                   <div key={index} className="preview-item">
-                    <img src={URL.createObjectURL(file)} alt="" />
+                    <img src={url} alt="" />
                   </div>
                 ))}
                 {pendingImportFiles.length > 12 && (

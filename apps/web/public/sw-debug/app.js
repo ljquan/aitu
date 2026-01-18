@@ -54,12 +54,17 @@ const state = {
   logs: [],
   consoleLogs: [],
   postmessageLogs: [],
+  crashLogs: [], // Crash snapshots
   autoScroll: true,
   activeTab: 'fetch',
   expandedLogIds: new Set(), // Track expanded fetch log IDs
   expandedStackIds: new Set(), // Track expanded console stack IDs
   expandedPmIds: new Set(), // Track expanded postmessage log IDs
+  expandedCrashIds: new Set(), // Track expanded crash log IDs
 };
+
+// Memory monitoring interval
+let memoryMonitorInterval = null;
 
 // DOM Elements cache
 let elements = {};
@@ -111,6 +116,21 @@ function cacheElements() {
     // Export dropdown elements
     exportOptions: document.getElementById('exportOptions'),
     doExportBtn: document.getElementById('doExport'),
+    // Crash logs elements
+    crashCountEl: document.getElementById('crashCount'),
+    crashLogsContainer: document.getElementById('crashLogsContainer'),
+    filterCrashType: document.getElementById('filterCrashType'),
+    refreshCrashLogsBtn: document.getElementById('refreshCrashLogs'),
+    clearCrashLogsBtn: document.getElementById('clearCrashLogs'),
+    exportCrashLogsBtn: document.getElementById('exportCrashLogs'),
+    // Memory monitoring elements
+    memoryUsed: document.getElementById('memoryUsed'),
+    memoryTotal: document.getElementById('memoryTotal'),
+    memoryLimit: document.getElementById('memoryLimit'),
+    memoryPercent: document.getElementById('memoryPercent'),
+    memoryWarning: document.getElementById('memoryWarning'),
+    memoryNotSupported: document.getElementById('memoryNotSupported'),
+    memoryUpdateTime: document.getElementById('memoryUpdateTime'),
   };
 }
 
@@ -426,6 +446,297 @@ async function handleCopyPostmessageLogs() {
   }
 }
 
+// ==================== Memory Logs ====================
+
+/**
+ * Render crash logs
+ */
+function renderCrashLogs() {
+  const typeFilter = elements.filterCrashType?.value || '';
+
+  let filteredLogs = state.crashLogs;
+
+  if (typeFilter) {
+    filteredLogs = filteredLogs.filter(l => l.type === typeFilter);
+  }
+
+  // Update count
+  updateCrashCount();
+
+  if (filteredLogs.length === 0) {
+    elements.crashLogsContainer.innerHTML = `
+      <div class="empty-state">
+        <span class="icon">💥</span>
+        <p>暂无内存日志</p>
+        <p style="font-size: 12px; opacity: 0.7;">页面启动、内存超限、错误和关闭时的快照会自动记录</p>
+      </div>
+    `;
+    return;
+  }
+
+  elements.crashLogsContainer.innerHTML = '';
+  filteredLogs.forEach(log => {
+    const isExpanded = state.expandedCrashIds.has(log.id);
+    const entry = createCrashEntry(log, isExpanded, (id, expanded) => {
+      if (expanded) {
+        state.expandedCrashIds.add(id);
+      } else {
+        state.expandedCrashIds.delete(id);
+      }
+    });
+    elements.crashLogsContainer.appendChild(entry);
+  });
+}
+
+/**
+ * Create a crash log entry element
+ */
+function createCrashEntry(log, isExpanded, onToggle) {
+  const entry = document.createElement('div');
+  entry.className = 'log-entry crash-entry';
+  
+  const time = new Date(log.timestamp).toLocaleString('zh-CN', { 
+    hour12: false,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+  
+  const typeLabels = {
+    startup: '🚀 启动',
+    periodic: '⏱️ 定期',
+    error: '❌ 错误',
+    beforeunload: '👋 关闭'
+  };
+  
+  const typeLabel = typeLabels[log.type] || log.type;
+  const isError = log.type === 'error';
+  
+  // Memory info
+  let memoryInfo = '';
+  if (log.memory) {
+    const usedMB = (log.memory.usedJSHeapSize / (1024 * 1024)).toFixed(1);
+    const limitMB = (log.memory.jsHeapSizeLimit / (1024 * 1024)).toFixed(1);
+    const percent = ((log.memory.usedJSHeapSize / log.memory.jsHeapSizeLimit) * 100).toFixed(1);
+    memoryInfo = `${usedMB} MB / ${limitMB} MB (${percent}%)`;
+  }
+  
+  // Page stats info
+  let pageStatsInfo = '';
+  if (log.pageStats) {
+    const stats = log.pageStats;
+    const parts = [
+      `DOM:${stats.domNodeCount || 0}`,
+      `Canvas:${stats.canvasCount || 0}`,
+      `Img:${stats.imageCount || 0}`,
+      `Video:${stats.videoCount || 0}`,
+    ];
+    if (stats.plaitElementCount !== undefined) {
+      parts.push(`Plait:${stats.plaitElementCount}`);
+    }
+    pageStatsInfo = parts.join(' | ');
+  }
+  
+  // Error info
+  let errorInfo = '';
+  if (log.error) {
+    errorInfo = `<div class="crash-error" style="color: var(--error-color); margin-top: 4px;">
+      <strong>${log.error.type}:</strong> ${escapeHtml(log.error.message)}
+    </div>`;
+  }
+  
+  entry.innerHTML = `
+    <div class="log-header" style="cursor: pointer;">
+      <span class="log-time">${time}</span>
+      <span class="log-type ${isError ? 'error' : ''}" style="margin-left: 8px;">${typeLabel}</span>
+      ${memoryInfo ? `<span class="log-memory" style="margin-left: 12px; opacity: 0.8;">📊 ${memoryInfo}</span>` : ''}
+      ${pageStatsInfo ? `<span class="log-stats" style="margin-left: 12px; opacity: 0.6; font-size: 11px;">📄 ${pageStatsInfo}</span>` : ''}
+      <span class="expand-icon" style="margin-left: auto;">${isExpanded ? '▼' : '▶'}</span>
+    </div>
+    ${errorInfo}
+    <div class="log-details" style="display: ${isExpanded ? 'block' : 'none'}; margin-top: 8px; padding: 8px; background: rgba(0,0,0,0.05); border-radius: 4px; font-size: 12px;">
+      <div><strong>ID:</strong> ${log.id}</div>
+      <div><strong>URL:</strong> ${log.url || '-'}</div>
+      ${memoryInfo ? `<div><strong>内存:</strong> ${memoryInfo}</div>` : ''}
+      ${pageStatsInfo ? `<div><strong>页面统计:</strong> ${pageStatsInfo}</div>` : ''}
+      ${log.pageStats ? `<div style="margin-top: 4px; padding-left: 12px; opacity: 0.8;">
+        DOM节点: ${log.pageStats.domNodeCount || 0} | 
+        Canvas: ${log.pageStats.canvasCount || 0} | 
+        图片: ${log.pageStats.imageCount || 0} | 
+        视频: ${log.pageStats.videoCount || 0} | 
+        iframe: ${log.pageStats.iframeCount || 0}
+        ${log.pageStats.plaitElementCount !== undefined ? ` | Plait元素: ${log.pageStats.plaitElementCount}` : ''}
+      </div>` : ''}
+      ${log.error?.stack ? `<div style="margin-top: 8px;"><strong>Stack:</strong><pre style="margin: 4px 0; white-space: pre-wrap; word-break: break-all;">${escapeHtml(log.error.stack)}</pre></div>` : ''}
+      ${log.customData ? `<div style="margin-top: 8px;"><strong>自定义数据:</strong><pre style="margin: 4px 0;">${JSON.stringify(log.customData, null, 2)}</pre></div>` : ''}
+      <div style="margin-top: 8px; opacity: 0.6;"><strong>UA:</strong> ${log.userAgent || '-'}</div>
+    </div>
+  `;
+  
+  // Toggle expand on header click
+  const header = entry.querySelector('.log-header');
+  header.addEventListener('click', () => {
+    const details = entry.querySelector('.log-details');
+    const icon = entry.querySelector('.expand-icon');
+    const nowExpanded = details.style.display === 'none';
+    details.style.display = nowExpanded ? 'block' : 'none';
+    icon.textContent = nowExpanded ? '▼' : '▶';
+    onToggle(log.id, nowExpanded);
+  });
+  
+  return entry;
+}
+
+/**
+ * Escape HTML to prevent XSS
+ */
+function escapeHtml(str) {
+  if (!str) return '';
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+/**
+ * Update crash log count indicator
+ */
+function updateCrashCount() {
+  const errorCount = state.crashLogs.filter(l => l.type === 'error').length;
+  
+  if (errorCount > 0) {
+    elements.crashCountEl.innerHTML = `(<span style="color:var(--error-color)">${errorCount} errors</span>)`;
+  } else {
+    elements.crashCountEl.textContent = `(${state.crashLogs.length})`;
+  }
+}
+
+/**
+ * Load crash logs from SW
+ */
+function loadCrashLogs() {
+  if (navigator.serviceWorker?.controller) {
+    navigator.serviceWorker.controller.postMessage({
+      type: 'SW_DEBUG_GET_CRASH_SNAPSHOTS'
+    });
+  }
+}
+
+/**
+ * Clear crash logs
+ */
+function handleClearCrashLogs() {
+  if (navigator.serviceWorker?.controller) {
+    navigator.serviceWorker.controller.postMessage({
+      type: 'SW_DEBUG_CLEAR_CRASH_SNAPSHOTS'
+    });
+  }
+  state.crashLogs = [];
+  renderCrashLogs();
+}
+
+/**
+ * Export crash logs as JSON
+ */
+function handleExportCrashLogs() {
+  if (state.crashLogs.length === 0) {
+    alert('没有可导出的内存日志');
+    return;
+  }
+  
+  const exportData = {
+    exportTime: new Date().toISOString(),
+    userAgent: navigator.userAgent,
+    url: location.href,
+    memorySnapshots: state.crashLogs,
+  };
+  
+  const filename = `memory-logs-${new Date().toISOString().slice(0, 19).replace(/[:-]/g, '')}.json`;
+  downloadJson(exportData, filename);
+}
+
+// ==================== Memory Monitoring ====================
+
+/**
+ * Format bytes to human readable
+ */
+function formatBytes(bytes) {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
+/**
+ * Update memory display
+ */
+function updateMemoryDisplay() {
+  // Check for performance.memory (Chrome only)
+  if (typeof performance !== 'undefined' && 'memory' in performance) {
+    const mem = performance.memory;
+    const usedMB = (mem.usedJSHeapSize / (1024 * 1024)).toFixed(1);
+    const totalMB = (mem.totalJSHeapSize / (1024 * 1024)).toFixed(1);
+    const limitMB = (mem.jsHeapSizeLimit / (1024 * 1024)).toFixed(0);
+    const percent = ((mem.usedJSHeapSize / mem.jsHeapSizeLimit) * 100).toFixed(1);
+    
+    elements.memoryUsed.textContent = `${usedMB} MB`;
+    elements.memoryTotal.textContent = `${totalMB} MB`;
+    elements.memoryLimit.textContent = `${limitMB} MB`;
+    elements.memoryPercent.textContent = `${percent}%`;
+    
+    // Warning if usage is high
+    if (parseFloat(percent) > 70) {
+      elements.memoryWarning.style.display = 'block';
+      elements.memoryPercent.style.color = 'var(--error-color)';
+    } else {
+      elements.memoryWarning.style.display = 'none';
+      elements.memoryPercent.style.color = '';
+    }
+    
+    elements.memoryNotSupported.style.display = 'none';
+  } else {
+    elements.memoryUsed.textContent = '-';
+    elements.memoryTotal.textContent = '-';
+    elements.memoryLimit.textContent = '-';
+    elements.memoryPercent.textContent = '-';
+    elements.memoryNotSupported.style.display = 'block';
+  }
+  
+  // Update timestamp
+  const now = new Date();
+  elements.memoryUpdateTime.textContent = `更新: ${now.toLocaleTimeString('zh-CN', { hour12: false })}`;
+}
+
+/**
+ * Start memory monitoring
+ */
+function startMemoryMonitoring() {
+  // Initial update
+  updateMemoryDisplay();
+  
+  // Update every 2 seconds
+  if (memoryMonitorInterval) {
+    clearInterval(memoryMonitorInterval);
+  }
+  memoryMonitorInterval = setInterval(updateMemoryDisplay, 2000);
+}
+
+/**
+ * Stop memory monitoring
+ */
+function stopMemoryMonitoring() {
+  if (memoryMonitorInterval) {
+    clearInterval(memoryMonitorInterval);
+    memoryMonitorInterval = null;
+  }
+}
+
 /**
  * Toggle debug mode
  */
@@ -625,6 +936,8 @@ function switchTab(tabName) {
     renderConsoleLogs();
   } else if (tabName === 'postmessage') {
     renderPostmessageLogs();
+  } else if (tabName === 'crash') {
+    loadCrashLogs();
   }
 }
 
@@ -674,6 +987,12 @@ function setupEventListeners() {
   elements.filterMessageType?.addEventListener('input', renderPostmessageLogs);
   elements.clearPostmessageLogsBtn?.addEventListener('click', handleClearPostmessageLogs);
   elements.copyPostmessageLogsBtn?.addEventListener('click', handleCopyPostmessageLogs);
+
+  // Crash log event listeners
+  elements.filterCrashType?.addEventListener('change', renderCrashLogs);
+  elements.refreshCrashLogsBtn?.addEventListener('click', loadCrashLogs);
+  elements.clearCrashLogsBtn?.addEventListener('click', handleClearCrashLogs);
+  elements.exportCrashLogsBtn?.addEventListener('click', handleExportCrashLogs);
 
   // Tab switching
   document.querySelectorAll('.tab').forEach(tab => {
@@ -735,6 +1054,14 @@ function setupMessageHandlers() {
       state.postmessageLogs = [];
       renderPostmessageLogs();
     },
+    'SW_DEBUG_CRASH_SNAPSHOTS': (data) => {
+      state.crashLogs = data.snapshots || [];
+      renderCrashLogs();
+    },
+    'SW_DEBUG_CRASH_SNAPSHOTS_CLEARED': () => {
+      state.crashLogs = [];
+      renderCrashLogs();
+    },
     'SW_DEBUG_EXPORT_DATA': () => {
       // Handle export data from SW if needed
     },
@@ -778,7 +1105,12 @@ async function init() {
   loadConsoleLogs();
   // Load PostMessage logs from SW
   loadPostMessageLogs();
+  // Load crash logs
+  loadCrashLogs();
   renderLogs();
+  
+  // Start memory monitoring
+  startMemoryMonitoring();
   
   // Heartbeat mechanism to keep debug mode alive
   // This allows SW to detect when debug page is truly closed (no heartbeat for 15s)

@@ -174,6 +174,39 @@
             </ul>
           </div>
         </div>
+
+        <div class="panel" style="margin-top: 20px;">
+          <div class="panel-header">
+            内存监控
+            <span id="memoryUpdateTime" style="font-size: 11px; opacity: 0.6; margin-left: 10px;"></span>
+          </div>
+          <div class="panel-content">
+            <div class="stat-grid" id="memoryGrid">
+              <div class="stat-item">
+                <span class="label">JS 堆已使用</span>
+                <span class="value" id="memoryUsed">-</span>
+              </div>
+              <div class="stat-item">
+                <span class="label">JS 堆总大小</span>
+                <span class="value" id="memoryTotal">-</span>
+              </div>
+              <div class="stat-item">
+                <span class="label">JS 堆上限</span>
+                <span class="value" id="memoryLimit">-</span>
+              </div>
+              <div class="stat-item">
+                <span class="label">使用率</span>
+                <span class="value" id="memoryPercent">-</span>
+              </div>
+            </div>
+            <p id="memoryWarning" style="display: none; margin-top: 12px; padding: 8px; background: #fff3cd; border-radius: 4px; font-size: 12px; color: #856404;">
+              ⚠️ 内存使用率较高，可能导致页面崩溃
+            </p>
+            <p id="memoryNotSupported" style="display: none; margin-top: 8px; font-size: 11px; opacity: 0.6;">
+              注：performance.memory 仅 Chrome 支持
+            </p>
+          </div>
+        </div>
       </div>
 
       <!-- Right Panel: Logs -->
@@ -182,6 +215,7 @@
           <div class="tab active" data-tab="fetch">Fetch 请求日志</div>
           <div class="tab" data-tab="console">控制台日志 <span id="consoleCount" style="opacity:0.6">(0)</span></div>
           <div class="tab" data-tab="postmessage">PostMessage日志 <span id="postmessageCount" style="opacity:0.6">(0)</span></div>
+          <div class="tab" data-tab="crash">内存日志 <span id="crashCount" style="opacity:0.6">(0)</span></div>
         </div>
         
         <!-- Fetch Logs Tab -->
@@ -268,6 +302,31 @@
                 <span class="icon">📨</span>
                 <p>暂无 PostMessage 日志</p>
                 <p style="font-size: 12px; opacity: 0.7;">记录主线程与 Service Worker 之间的消息通信（仅在调试模式启用时记录）</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Crash Logs Tab -->
+        <div class="tab-content" id="crashTab">
+          <div class="logs-toolbar">
+            <select id="filterCrashType">
+              <option value="">全部类型</option>
+              <option value="startup">启动快照</option>
+              <option value="periodic">定期快照</option>
+              <option value="error">错误</option>
+              <option value="beforeunload">页面关闭</option>
+            </select>
+            <button id="refreshCrashLogs" style="padding: 6px 12px; font-size: 12px;">🔄 刷新</button>
+            <button id="clearCrashLogs" style="padding: 6px 12px; font-size: 12px;">清空</button>
+            <button id="exportCrashLogs" style="padding: 6px 12px; font-size: 12px;">📥 导出内存日志</button>
+          </div>
+          <div class="logs-container" id="crashContainer">
+            <div id="crashLogsContainer">
+              <div class="empty-state">
+                <span class="icon">💥</span>
+                <p>暂无内存日志</p>
+                <p style="font-size: 12px; opacity: 0.7;">页面启动、内存超限、错误和关闭时的快照会自动记录</p>
               </div>
             </div>
           </div>

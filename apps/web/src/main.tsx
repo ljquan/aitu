@@ -3,6 +3,11 @@ import * as ReactDOM from 'react-dom/client';
 import * as Sentry from '@sentry/react';
 import App from './app/app';
 
+// ===== 初始化崩溃日志系统 =====
+// 必须尽早初始化，以捕获启动阶段的内存状态和错误
+import { initCrashLogger } from './crash-logger';
+initCrashLogger();
+
 // ===== 初始化 Sentry 错误监控 =====
 // 必须在其他代码之前初始化，以捕获所有错误
 Sentry.init({

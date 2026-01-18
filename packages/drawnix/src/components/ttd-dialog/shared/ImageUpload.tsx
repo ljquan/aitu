@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Button } from 'tdesign-react';
 import { FolderOpen, HardDrive } from 'lucide-react';
 import { MediaLibraryModal } from '../../media-library/MediaLibraryModal';
@@ -77,8 +77,33 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
     onImagesChange(images.filter((_, i) => i !== index));
   };
 
-  const getImageSrc = (image: ImageFile) => {
-    return image.file ? URL.createObjectURL(image.file) : image.url || '';
+  // 创建并缓存图片预览 URL（防止渲染时重复创建导致内存泄漏）
+  const imageSrcMap = useMemo(() => {
+    const map = new Map<number, string>();
+    images.forEach((image, index) => {
+      if (image.file) {
+        map.set(index, URL.createObjectURL(image.file));
+      } else if (image.url) {
+        map.set(index, image.url);
+      }
+    });
+    return map;
+  }, [images]);
+
+  // 清理 Blob URL 防止内存泄漏
+  useEffect(() => {
+    return () => {
+      imageSrcMap.forEach((url, index) => {
+        // 只 revoke 由 File 创建的 Blob URL
+        if (images[index]?.file) {
+          URL.revokeObjectURL(url);
+        }
+      });
+    };
+  }, [imageSrcMap, images]);
+
+  const getImageSrc = (index: number) => {
+    return imageSrcMap.get(index) || '';
   };
 
   const handleMediaLibrarySelect = async (asset: Asset) => {
@@ -165,7 +190,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
           ) : (
             <>
               {images.map((image, index) => {
-              const src = getImageSrc(image);
+              const src = getImageSrc(index);
               return (
                 <div key={index} className="uploaded-image-item" data-tooltip={src}>
                   <div 

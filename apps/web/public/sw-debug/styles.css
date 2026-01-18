@@ -1196,3 +1196,75 @@ button.success:hover {
   width: 100%;
   justify-content: center;
 }
+
+/* Crash Log Entries */
+.crash-entry {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  margin-bottom: 8px;
+  padding: 12px;
+}
+
+.crash-entry .log-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.crash-entry .log-time {
+  font-family: 'SF Mono', Monaco, 'Consolas', monospace;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.crash-entry .log-type {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--bg-secondary);
+}
+
+.crash-entry .log-type.error {
+  background: rgba(248, 81, 73, 0.15);
+  color: var(--error-color);
+}
+
+.crash-entry .log-memory {
+  font-size: 12px;
+  font-family: 'SF Mono', Monaco, 'Consolas', monospace;
+}
+
+.crash-entry .expand-icon {
+  font-size: 10px;
+  color: var(--text-muted);
+  transition: transform 0.15s;
+}
+
+.crash-entry .crash-error {
+  font-size: 12px;
+  word-break: break-word;
+}
+
+.crash-entry .log-details {
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.crash-entry .log-details pre {
+  background: var(--bg-secondary);
+  padding: 8px;
+  border-radius: 4px;
+  overflow-x: auto;
+  font-size: 11px;
+}
+
+/* Memory Panel Styles */
+#memoryGrid .stat-item .value {
+  font-family: 'SF Mono', Monaco, 'Consolas', monospace;
+}
+
+#memoryWarning {
+  border: 1px solid #ffc107;
+}

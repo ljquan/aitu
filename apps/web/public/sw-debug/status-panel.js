@@ -30,7 +30,16 @@ export function updateStatusPanel(status, elements) {
   elements.debugMode.textContent = status.debugModeEnabled ? '开启' : '关闭';
   elements.pendingImages.textContent = status.pendingImageRequests || 0;
   elements.pendingVideos.textContent = status.pendingVideoRequests || 0;
-  elements.videoBlobCache.textContent = status.videoBlobCacheSize || 0;
+  
+  // Video blob cache with size info
+  const videoCacheCount = status.videoBlobCacheSize || 0;
+  const videoCacheBytes = status.videoBlobCacheTotalBytes || 0;
+  if (videoCacheBytes > 0) {
+    elements.videoBlobCache.textContent = `${videoCacheCount} (${formatSize(videoCacheBytes)})`;
+  } else {
+    elements.videoBlobCache.textContent = videoCacheCount;
+  }
+  
   elements.completedRequests.textContent = status.completedImageRequestsSize || 0;
   elements.workflowHandler.textContent = status.workflowHandlerInitialized ? '已初始化' : '未初始化';
   elements.debugLogsCount.textContent = status.debugLogsCount || 0;

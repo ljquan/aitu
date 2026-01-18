@@ -28,6 +28,7 @@ import {
   MindElement,
 } from '@plait/mind';
 import './popup-toolbar.scss';
+import { trackMemory } from '../../../utils/common';
 import {
   getStrokeColorByElement as getStrokeColorByDrawElement,
   isClosedCustomGeometry,
@@ -770,6 +771,7 @@ export const PopupToolbar = () => {
                 aria-label={language === 'zh' ? '合并为图片' : 'Merge to Image'}
                 data-track="toolbar_click_merge"
                 onPointerUp={async () => {
+                  const endTrack = trackMemory('图片合并');
                   const loadingInstance = MessagePlugin.loading(language === 'zh' ? '正在合并...' : 'Merging...', 0);
                   try {
                     // 获取选中元素的边界矩形
@@ -867,6 +869,7 @@ export const PopupToolbar = () => {
                     }
 
                     MessagePlugin.close(loadingInstance);
+                    endTrack();
                     MessagePlugin.success(
                       language === 'zh'
                         ? `已将 ${selectedElements.length} 个元素合并为图片`
@@ -874,6 +877,7 @@ export const PopupToolbar = () => {
                     );
                   } catch (error: any) {
                     MessagePlugin.close(loadingInstance);
+                    endTrack();
                     MessagePlugin.error(error.message || (language === 'zh' ? '合并失败' : 'Merge failed'));
                   }
                 }}
