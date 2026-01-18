@@ -225,3 +225,25 @@ export const GitHubLink = () => {
   );
 };
 GitHubLink.displayName = 'GitHubLink';
+
+export const VersionInfo = () => {
+  const { t } = useI18n();
+  // 从 HTML meta 标签获取版本号
+  const version = document.querySelector('meta[name="app-version"]')?.getAttribute('content') || '0.0.0';
+  
+  return (
+    <MenuItem
+      data-track="toolbar_click_menu_version"
+      onSelect={() => {
+        window.open('https://release.opentu.ai/', '_blank');
+      }}
+      aria-label={t('menu.version')}
+    >
+      <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+        <span style={{ color: '#666' }}>{t('menu.version')}：{version}</span>
+        <span style={{ color: '#1890ff' }}>{t('menu.more')}</span>
+      </span>
+    </MenuItem>
+  );
+};
+VersionInfo.displayName = 'VersionInfo';
