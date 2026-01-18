@@ -90,6 +90,8 @@ if ('serviceWorker' in navigator) {
   let newVersionReady = false;
   // 等待中的新 Worker
   let pendingWorker: ServiceWorker | null = null;
+  // 用户是否已确认升级（只有用户确认后才触发刷新）
+  let userConfirmedUpgrade = false;
   
   // Global reference to service worker registration
   let swRegistration: ServiceWorkerRegistration | null = null;
@@ -161,8 +163,12 @@ if ('serviceWorker' in navigator) {
   // 监听Service Worker消息
   navigator.serviceWorker.addEventListener('message', event => {
     if (event.data && event.data.type === 'SW_UPDATED') {
+      // 只有用户主动确认升级后才刷新页面
+      if (!userConfirmedUpgrade) {
+        // console.log('SW_UPDATED received but user has not confirmed upgrade, skipping reload');
+        return;
+      }
       // console.log('Service Worker updated, reloading page...');
-      
       // 等待一小段时间，确保新的Service Worker已经完全接管
       setTimeout(() => {
         window.location.reload();
@@ -187,12 +193,13 @@ if ('serviceWorker' in navigator) {
   });
   
   // 监听controller变化（新的Service Worker接管）
-  // 在开发模式下不自动刷新，避免 "Update on reload" 导致死循环
+  // 只有用户主动确认升级后才刷新页面
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     // console.log('Service Worker controller changed');
 
-    if (isDevelopment) {
-      // console.log('Development mode: skipping auto-reload on controller change');
+    // 只有用户主动确认升级后才刷新页面
+    if (!userConfirmedUpgrade) {
+      // console.log('Controller changed but user has not confirmed upgrade, skipping reload');
       return;
     }
 
@@ -206,6 +213,9 @@ if ('serviceWorker' in navigator) {
   // 监听用户确认升级事件
   window.addEventListener('user-confirmed-upgrade', () => {
     console.log('[Main] User confirmed upgrade, checking for waiting worker...');
+    
+    // 标记用户已确认升级，允许后续的 reload
+    userConfirmedUpgrade = true;
     
     // 优先使用 pendingWorker
     if (pendingWorker) {
