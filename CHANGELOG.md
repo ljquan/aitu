@@ -1,3 +1,27 @@
+## 0.5.11 (2026-01-18)
+
+### 🚀 Features
+
+- implement user confirmation for service worker upgrades ([f0571a7](https://github.com/ljquan/aitu/commit/f0571a7))
+- add memory monitoring and crash logging features ([19f54ec](https://github.com/ljquan/aitu/commit/19f54ec))
+
+### 🩹 Fixes
+
+- 修复 workflows Map 和 setInterval 内存泄漏 ([bfb7ed5](https://github.com/ljquan/aitu/commit/bfb7ed5))
+
+### 🔧 Chores
+
+- bump version to 0.5.10 and update changelog ([305b5d7](https://github.com/ljquan/aitu/commit/305b5d7))
+- 添加更多版本 ([c4c7e3d](https://github.com/ljquan/aitu/commit/c4c7e3d))
+- docs(claude): 添加内存泄漏预防规则 ([d1112d0](https://github.com/ljquan/aitu/commit/d1112d0))
+- docs(claude): 添加 SW 更新和配置同步规则 ([2fb1088](https://github.com/ljquan/aitu/commit/2fb1088))
+- docs(claude): 添加新规则 - navigator.storage.estimate() 返回浏览器配额而非磁盘空间 ([c823877](https://github.com/ljquan/aitu/commit/c823877))
+- 优化渐变 ([de86f2a](https://github.com/ljquan/aitu/commit/de86f2a))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+
 ## 0.5.10 (2026-01-17)
 
 ### 🔧 Chores
