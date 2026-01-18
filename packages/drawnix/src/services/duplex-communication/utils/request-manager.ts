@@ -26,6 +26,7 @@ export class RequestManager {
   private maxConcurrentRequests = 100;
   private defaultTimeout = DEFAULT_DUPLEX_CONFIG.defaultTimeout;
   private defaultRetryConfig = DEFAULT_DUPLEX_CONFIG.defaultRetryConfig;
+  private cleanupTimerId: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     private postMessage: (message: RequestMessage) => Promise<void>,
@@ -321,7 +322,10 @@ export class RequestManager {
    * 启动清理定时器
    */
   private startCleanupTimer(): void {
-    setInterval(() => {
+    if (this.cleanupTimerId) {
+      clearInterval(this.cleanupTimerId);
+    }
+    this.cleanupTimerId = setInterval(() => {
       this.cleanupExpiredRequests();
     }, 60000); // 每分钟清理一次
   }
@@ -339,6 +343,22 @@ export class RequestManager {
         this.cancelRequest(requestId);
       }
     }
+  }
+
+  /**
+   * 销毁请求管理器，清理所有资源
+   */
+  destroy(): void {
+    if (this.cleanupTimerId) {
+      clearInterval(this.cleanupTimerId);
+      this.cleanupTimerId = null;
+    }
+    // 取消所有待处理的请求
+    for (const requestId of this.pendingRequests.keys()) {
+      this.cancelRequest(requestId);
+    }
+    this.pendingRequests.clear();
+    this.responseSubject.complete();
   }
 }
 

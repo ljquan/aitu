@@ -181,12 +181,16 @@ export type WorkflowEvent =
 // Workflow Client
 // ============================================================================
 
+// Cleanup delay: 5 minutes after workflow completes/fails
+const WORKFLOW_CLEANUP_DELAY = 5 * 60 * 1000;
+
 /**
  * SW Workflow Client
  */
 class SWWorkflowClient {
   private events$ = new Subject<WorkflowEvent>();
   private workflows: Map<string, Workflow> = new Map();
+  private cleanupTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
   private messageHandler: ((event: MessageEvent) => void) | null = null;
   private initialized = false;
 
@@ -399,6 +403,9 @@ class SWWorkflowClient {
       workflowId: message.workflowId,
       workflow: message.workflow,
     });
+
+    // Schedule cleanup to prevent memory leak
+    this.scheduleWorkflowCleanup(message.workflowId);
   }
 
   private handleWorkflowFailed(message: WorkflowFailedMessage): void {
@@ -413,6 +420,9 @@ class SWWorkflowClient {
       workflowId: message.workflowId,
       error: message.error,
     });
+
+    // Schedule cleanup to prevent memory leak
+    this.scheduleWorkflowCleanup(message.workflowId);
   }
 
   private handleWorkflowRecovered(message: WorkflowRecoveredMessage): void {
@@ -461,6 +471,26 @@ class SWWorkflowClient {
 
     const registration = await navigator.serviceWorker.ready;
     return registration.active;
+  }
+
+  /**
+   * Schedule cleanup of a completed/failed workflow to prevent memory leak.
+   * Workflows are kept for a short period to allow UI to query them.
+   */
+  private scheduleWorkflowCleanup(workflowId: string): void {
+    // Clear any existing timer for this workflow
+    const existingTimer = this.cleanupTimers.get(workflowId);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
+
+    // Schedule new cleanup
+    const timer = setTimeout(() => {
+      this.workflows.delete(workflowId);
+      this.cleanupTimers.delete(workflowId);
+    }, WORKFLOW_CLEANUP_DELAY);
+
+    this.cleanupTimers.set(workflowId, timer);
   }
 }
 

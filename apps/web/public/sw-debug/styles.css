@@ -1115,36 +1115,7 @@ button.success:hover {
   font-style: italic;
 }
 
-/* Export Dropdown */
-.export-dropdown {
-  position: relative;
-}
-
-.export-dropdown .dropdown-arrow {
-  font-size: 10px;
-  margin-left: 4px;
-}
-
-.export-options {
-  display: none;
-  position: absolute;
-  top: 100%;
-  right: 0;
-  margin-top: 4px;
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-  z-index: 200;
-  min-width: 220px;
-  max-height: 70vh;
-  overflow-y: auto;
-}
-
-.export-options.show {
-  display: block;
-}
-
+/* Export Checkbox */
 .export-section {
   padding: 12px 16px;
   border-bottom: 1px solid var(--border-color);
@@ -1152,15 +1123,6 @@ button.success:hover {
 
 .export-section:last-child {
   border-bottom: none;
-}
-
-.export-section-header {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 8px;
 }
 
 .export-checkbox {
@@ -1197,6 +1159,164 @@ button.success:hover {
   justify-content: center;
 }
 
+/* Export Modal */
+.export-modal-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  justify-content: center;
+  align-items: center;
+}
+
+.export-modal-overlay.show {
+  display: flex;
+}
+
+.export-modal {
+  background: var(--bg-primary);
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  width: 90%;
+  max-width: 480px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  animation: modalSlideIn 0.2s ease-out;
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.export-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.export-modal-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.export-modal-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.export-modal-close:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.export-modal-body {
+  padding: 16px 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.export-select-all {
+  font-weight: 600;
+  padding: 12px 0;
+  margin-bottom: 8px;
+  border-bottom: 2px solid var(--accent-color);
+}
+
+.export-select-all span {
+  font-size: 14px;
+}
+
+.export-modal .export-section {
+  padding: 0;
+  margin-bottom: 16px;
+  border-bottom: none;
+}
+
+.export-modal .export-section-header {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-transform: none;
+  letter-spacing: 0;
+  margin-bottom: 4px;
+  padding: 8px 0;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+  padding-left: 8px;
+}
+
+.export-modal .export-section-header input {
+  width: 16px;
+  height: 16px;
+}
+
+.export-section-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  padding-left: 24px;
+  border-left: 2px solid var(--border-color);
+  margin-left: 8px;
+  margin-top: 4px;
+}
+
+.export-section-items .export-checkbox {
+  padding: 4px 0;
+  min-width: 100px;
+  flex-shrink: 0;
+}
+
+.export-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  border-radius: 0 0 12px 12px;
+}
+
+.export-modal-footer button {
+  min-width: 80px;
+}
+
+.export-modal-footer .secondary {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+
+.export-modal-footer .secondary:hover {
+  background: var(--bg-secondary);
+}
+
 /* Crash Log Entries */
 .crash-entry {
   background: var(--bg-primary);
@@ -1224,11 +1344,23 @@ button.success:hover {
   padding: 2px 8px;
   border-radius: 4px;
   background: var(--bg-secondary);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .crash-entry .log-type.error {
   background: rgba(248, 81, 73, 0.15);
   color: var(--error-color);
+}
+
+.crash-entry .log-type.warning {
+  background: rgba(230, 126, 34, 0.15);
+  color: #e67e22;
+}
+
+.crash-entry.freeze-entry,
+.crash-entry.whitescreen-entry {
+  border-left: 3px solid #e67e22;
 }
 
 .crash-entry .log-memory {

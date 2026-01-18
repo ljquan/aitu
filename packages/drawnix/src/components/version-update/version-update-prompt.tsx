@@ -58,7 +58,6 @@ export const VersionUpdatePrompt: React.FC = () => {
   }, []);
 
   const handleUpdate = () => {
-    console.log('[VersionUpdatePrompt] User clicked update button');
     // Hide the prompt immediately to provide visual feedback
     setUpdateAvailable(null);
     setShowChangelog(false);

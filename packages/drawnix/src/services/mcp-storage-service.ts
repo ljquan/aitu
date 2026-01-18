@@ -46,7 +46,6 @@ export async function saveMCPSystemPrompt(systemPrompt: string): Promise<void> {
       });
 
       transaction.oncomplete = () => {
-        console.log('[MCPStorage] System prompt saved to IndexedDB');
         db.close();
         resolve();
       };

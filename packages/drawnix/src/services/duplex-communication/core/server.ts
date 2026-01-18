@@ -76,6 +76,10 @@ export class DuplexServer {
   // 消息缓存 (用于离线客户端)
   private messageCache = new Map<string, PushMessage[]>();
   private maxCacheSize = 100;
+  
+  // 定时器 ID
+  private performanceMonitoringTimerId: ReturnType<typeof setInterval> | null = null;
+  private clientCleanupTimerId: ReturnType<typeof setInterval> | null = null;
 
   private constructor(config: Partial<DuplexConfig> = {}) {
     this.config = { ...DEFAULT_DUPLEX_CONFIG, ...config };
@@ -661,7 +665,10 @@ export class DuplexServer {
    * 启动性能监控
    */
   private startPerformanceMonitoring(): void {
-    setInterval(() => {
+    if (this.performanceMonitoringTimerId) {
+      clearInterval(this.performanceMonitoringTimerId);
+    }
+    this.performanceMonitoringTimerId = setInterval(() => {
       this.updatePerformanceMetrics();
     }, 5000); // 每5秒更新一次
   }
@@ -691,7 +698,10 @@ export class DuplexServer {
    * 启动客户端清理
    */
   private startClientCleanup(): void {
-    setInterval(() => {
+    if (this.clientCleanupTimerId) {
+      clearInterval(this.clientCleanupTimerId);
+    }
+    this.clientCleanupTimerId = setInterval(() => {
       this.cleanupInactiveClients();
     }, 60000); // 每分钟清理一次
   }
@@ -710,5 +720,22 @@ export class DuplexServer {
         this.messageCache.delete(clientId);
       }
     }
+  }
+
+  /**
+   * 销毁服务器，清理所有资源
+   */
+  destroy(): void {
+    if (this.performanceMonitoringTimerId) {
+      clearInterval(this.performanceMonitoringTimerId);
+      this.performanceMonitoringTimerId = null;
+    }
+    if (this.clientCleanupTimerId) {
+      clearInterval(this.clientCleanupTimerId);
+      this.clientCleanupTimerId = null;
+    }
+    this.clients.clear();
+    this.messageCache.clear();
+    DuplexServer.instance = null;
   }
 }

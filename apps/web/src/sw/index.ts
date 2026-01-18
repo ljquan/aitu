@@ -132,6 +132,20 @@ setDebugFetchBroadcast((log) => {
   });
 });
 
+// Setup LLM API log broadcast for real-time updates (always on, not affected by debug mode)
+import('./task-queue/llm-api-logger').then(({ setLLMApiLogBroadcast }) => {
+  setLLMApiLogBroadcast((log) => {
+    sw.clients.matchAll().then(clients => {
+      clients.forEach(client => {
+        client.postMessage({
+          type: 'SW_DEBUG_LLM_API_LOG',
+          log,
+        });
+      });
+    });
+  });
+});
+
 // Service Worker for PWA functionality and handling CORS issues with external images
 // Version will be replaced during build process
 declare const __APP_VERSION__: string;
@@ -1107,19 +1121,11 @@ sw.addEventListener('message', (event: ExtendableMessageEvent) => {
   // Handle workflow messages
   if (event.data && isWorkflowMessage(event.data)) {
     const wfClientId = (event.source as Client)?.id || '';
-    console.log('[SW] ◀ Workflow message received:', {
-      type: event.data.type,
-      workflowId: event.data.workflow?.id || event.data.workflowId || event.data.chatId,
-      clientId: wfClientId,
-      handlerInitialized: workflowHandlerInitialized,
-      timestamp: new Date().toISOString(),
-    });
     
     // Lazy initialize workflow handler if not yet initialized
     if (!workflowHandlerInitialized && storedGeminiConfig && storedVideoConfig) {
       initWorkflowHandler(sw, storedGeminiConfig, storedVideoConfig);
       workflowHandlerInitialized = true;
-      console.log('[SW] Workflow handler lazy initialized');
     }
     
     // If still not initialized, try to load config from storage
@@ -1511,6 +1517,15 @@ sw.addEventListener('message', (event: ExtendableMessageEvent) => {
     const snapshot = event.data.snapshot;
     if (snapshot) {
       saveCrashSnapshot(snapshot);
+      // 广播新快照到所有客户端（包括 sw-debug.html）
+      sw.clients.matchAll().then(clients => {
+        clients.forEach(client => {
+          client.postMessage({
+            type: 'SW_DEBUG_NEW_CRASH_SNAPSHOT',
+            snapshot,
+          });
+        });
+      });
     }
   } else if (event.data && event.data.type === 'SW_DEBUG_GET_CRASH_SNAPSHOTS') {
     // 获取崩溃快照列表
@@ -1539,6 +1554,35 @@ sw.addEventListener('message', (event: ExtendableMessageEvent) => {
         type: 'SW_DEBUG_CRASH_SNAPSHOTS_CLEARED',
       });
     })();
+  } else if (event.data && event.data.type === 'SW_DEBUG_GET_LLM_API_LOGS') {
+    // 获取 LLM API 日志列表
+    (async () => {
+      try {
+        const { getAllLLMApiLogs } = await import('./task-queue/llm-api-logger');
+        const logs = await getAllLLMApiLogs();
+        event.source?.postMessage({
+          type: 'SW_DEBUG_LLM_API_LOGS',
+          logs,
+          total: logs.length,
+        });
+      } catch (error) {
+        event.source?.postMessage({
+          type: 'SW_DEBUG_LLM_API_LOGS',
+          logs: [],
+          total: 0,
+          error: String(error),
+        });
+      }
+    })();
+  } else if (event.data && event.data.type === 'SW_DEBUG_CLEAR_LLM_API_LOGS') {
+    // 清空 LLM API 日志
+    (async () => {
+      const { clearAllLLMApiLogs } = await import('./task-queue/llm-api-logger');
+      await clearAllLLMApiLogs();
+      event.source?.postMessage({
+        type: 'SW_DEBUG_LLM_API_LOGS_CLEARED',
+      });
+    })();
   }
 });
 
@@ -1551,15 +1595,27 @@ const MAX_CRASH_SNAPSHOTS = 50; // 最多保留 50 条
 interface CrashSnapshot {
   id: string;
   timestamp: number;
-  type: 'startup' | 'periodic' | 'error' | 'beforeunload';
+  type: 'startup' | 'periodic' | 'error' | 'beforeunload' | 'freeze' | 'whitescreen' | 'longtask';
   memory?: {
     usedJSHeapSize: number;
     totalJSHeapSize: number;
     jsHeapSizeLimit: number;
   };
-  storage?: {
-    usage: number;
-    quota: number;
+  pageStats?: {
+    domNodeCount: number;
+    canvasCount: number;
+    imageCount: number;
+    videoCount: number;
+    iframeCount: number;
+    eventListenerCount?: number;
+    plaitBoardExists: boolean;
+    plaitElementCount?: number;
+  };
+  performance?: {
+    fps?: number;
+    longTaskDuration?: number;
+    freezeDuration?: number;
+    lastHeartbeat?: number;
   };
   userAgent: string;
   url: string;

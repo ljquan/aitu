@@ -97,8 +97,22 @@ export class ImageHandler implements TaskHandler {
 
     config.onProgress(task.id, 10, TaskExecutionPhase.SUBMITTING);
 
-    // Make API request (using debugFetch for logging)
+    // Import loggers
     const { debugFetch } = await import('../debug-fetch');
+    const { startLLMApiLog, completeLLMApiLog, failLLMApiLog } = await import('../llm-api-logger');
+    
+    const startTime = Date.now();
+    const logId = startLLMApiLog({
+      endpoint: '/images/generations',
+      model: geminiConfig.modelName || 'unknown',
+      taskType: 'image',
+      prompt: params.prompt as string,
+      hasReferenceImages: !!processedRefImages && processedRefImages.length > 0,
+      referenceImageCount: processedRefImages?.length,
+      taskId: task.id,
+    });
+
+    // Make API request (using debugFetch for logging)
     const response = await debugFetch(`${geminiConfig.baseUrl}/images/generations`, {
       method: 'POST',
       headers: {
@@ -115,15 +129,31 @@ export class ImageHandler implements TaskHandler {
 
     if (!response.ok) {
       const errorText = await response.text();
+      failLLMApiLog(logId, {
+        httpStatus: response.status,
+        duration: Date.now() - startTime,
+        errorMessage: errorText,
+        responseBody: errorText,
+      });
       throw new Error(`Image generation failed: ${response.status} - ${errorText}`);
     }
 
     config.onProgress(task.id, 80, TaskExecutionPhase.DOWNLOADING);
 
     const data = await response.json();
+    const responseBodyStr = JSON.stringify(data);
 
     // 使用通用函数解析响应
     const { url } = parseImageGenerationResponse(data);
+
+    completeLLMApiLog(logId, {
+      httpStatus: response.status,
+      duration: Date.now() - startTime,
+      resultType: 'image',
+      resultCount: 1,
+      resultUrl: url,
+      responseBody: responseBodyStr,
+    });
 
     config.onProgress(task.id, 100);
 

@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Service Worker 调试面板</title>
   <link rel="stylesheet" href="/sw-debug/styles.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body>
   <header>
@@ -20,81 +21,202 @@
       <button id="toggleDebug" class="primary">
         <span>▶</span> 启用调试
       </button>
-      <div class="export-dropdown">
-        <button id="exportLogs" class="success">
-          <span>📥</span> 导出日志 <span class="dropdown-arrow">▼</span>
-        </button>
-        <div class="export-options" id="exportOptions">
-          <div class="export-section">
-            <div class="export-section-header">Fetch 请求日志</div>
-            <label class="export-checkbox">
-              <input type="checkbox" name="fetch" value="sw-internal" checked>
-              <span>SW 内部 API</span>
-            </label>
-            <label class="export-checkbox">
-              <input type="checkbox" name="fetch" value="xhr">
-              <span>XHR/API</span>
-            </label>
-            <label class="export-checkbox">
-              <input type="checkbox" name="fetch" value="image">
-              <span>图片</span>
-            </label>
-            <label class="export-checkbox">
-              <input type="checkbox" name="fetch" value="video">
-              <span>视频</span>
-            </label>
-            <label class="export-checkbox">
-              <input type="checkbox" name="fetch" value="font">
-              <span>字体</span>
-            </label>
-            <label class="export-checkbox">
-              <input type="checkbox" name="fetch" value="static">
-              <span>静态资源</span>
-            </label>
-            <label class="export-checkbox">
-              <input type="checkbox" name="fetch" value="cache-url">
-              <span>缓存 URL</span>
-            </label>
-            <label class="export-checkbox">
-              <input type="checkbox" name="fetch" value="asset-library">
-              <span>素材库</span>
-            </label>
+      <button id="exportLogs" class="success">
+        <span>📥</span> 导出日志
+      </button>
+      
+      <!-- 导出日志弹窗 -->
+      <div class="export-modal-overlay" id="exportModalOverlay">
+        <div class="export-modal">
+          <div class="export-modal-header">
+            <h3>📥 导出日志</h3>
+            <button class="export-modal-close" id="closeExportModal">&times;</button>
           </div>
-          <div class="export-section">
-            <div class="export-section-header">控制台日志</div>
-            <label class="export-checkbox">
-              <input type="checkbox" name="console" value="error" checked>
-              <span>Error</span>
+          <div class="export-modal-body">
+            <!-- 全选 -->
+            <label class="export-checkbox export-select-all">
+              <input type="checkbox" id="selectAllExport">
+              <span>全选</span>
             </label>
-            <label class="export-checkbox">
-              <input type="checkbox" name="console" value="warn">
-              <span>Warn</span>
-            </label>
-            <label class="export-checkbox">
-              <input type="checkbox" name="console" value="info">
-              <span>Info</span>
-            </label>
-            <label class="export-checkbox">
-              <input type="checkbox" name="console" value="log">
-              <span>Log</span>
-            </label>
-            <label class="export-checkbox">
-              <input type="checkbox" name="console" value="debug">
-              <span>Debug</span>
-            </label>
+            
+            <!-- 基本信息 -->
+            <div class="export-section">
+              <label class="export-checkbox export-section-header">
+                <input type="checkbox" data-section="basic" checked>
+                <span>基本信息</span>
+              </label>
+              <div class="export-section-items">
+                <label class="export-checkbox">
+                  <input type="checkbox" name="basic" value="swStatus" checked>
+                  <span>SW 状态</span>
+                </label>
+                <label class="export-checkbox">
+                  <input type="checkbox" name="basic" value="memory" checked>
+                  <span>内存信息</span>
+                </label>
+                <label class="export-checkbox">
+                  <input type="checkbox" name="basic" value="cache" checked>
+                  <span>缓存信息</span>
+                </label>
+              </div>
+            </div>
+            
+            <!-- Fetch 请求日志 -->
+            <div class="export-section">
+              <label class="export-checkbox export-section-header">
+                <input type="checkbox" data-section="fetch">
+                <span>Fetch 请求日志</span>
+              </label>
+              <div class="export-section-items">
+                <label class="export-checkbox">
+                  <input type="checkbox" name="fetch" value="sw-internal">
+                  <span>SW 内部 API</span>
+                </label>
+                <label class="export-checkbox">
+                  <input type="checkbox" name="fetch" value="xhr">
+                  <span>XHR/API</span>
+                </label>
+                <label class="export-checkbox">
+                  <input type="checkbox" name="fetch" value="image">
+                  <span>图片</span>
+                </label>
+                <label class="export-checkbox">
+                  <input type="checkbox" name="fetch" value="video">
+                  <span>视频</span>
+                </label>
+                <label class="export-checkbox">
+                  <input type="checkbox" name="fetch" value="font">
+                  <span>字体</span>
+                </label>
+                <label class="export-checkbox">
+                  <input type="checkbox" name="fetch" value="static">
+                  <span>静态资源</span>
+                </label>
+                <label class="export-checkbox">
+                  <input type="checkbox" name="fetch" value="cache-url">
+                  <span>缓存 URL</span>
+                </label>
+                <label class="export-checkbox">
+                  <input type="checkbox" name="fetch" value="asset-library">
+                  <span>素材库</span>
+                </label>
+              </div>
+            </div>
+            
+            <!-- 控制台日志 -->
+            <div class="export-section">
+              <label class="export-checkbox export-section-header">
+                <input type="checkbox" data-section="console">
+                <span>控制台日志</span>
+              </label>
+              <div class="export-section-items">
+                <label class="export-checkbox">
+                  <input type="checkbox" name="console" value="error">
+                  <span>Error</span>
+                </label>
+                <label class="export-checkbox">
+                  <input type="checkbox" name="console" value="warn">
+                  <span>Warn</span>
+                </label>
+                <label class="export-checkbox">
+                  <input type="checkbox" name="console" value="info">
+                  <span>Info</span>
+                </label>
+                <label class="export-checkbox">
+                  <input type="checkbox" name="console" value="log">
+                  <span>Log</span>
+                </label>
+                <label class="export-checkbox">
+                  <input type="checkbox" name="console" value="debug">
+                  <span>Debug</span>
+                </label>
+              </div>
+            </div>
+            
+            <!-- PostMessage 日志 -->
+            <div class="export-section">
+              <label class="export-checkbox export-section-header">
+                <input type="checkbox" data-section="postmessage">
+                <span>PostMessage 日志</span>
+              </label>
+              <div class="export-section-items">
+                <label class="export-checkbox">
+                  <input type="checkbox" name="postmessage" value="send">
+                  <span>发送 → SW</span>
+                </label>
+                <label class="export-checkbox">
+                  <input type="checkbox" name="postmessage" value="receive">
+                  <span>接收 ← SW</span>
+                </label>
+              </div>
+            </div>
+            
+            <!-- LLM API 日志 -->
+            <div class="export-section">
+              <label class="export-checkbox export-section-header">
+                <input type="checkbox" data-section="llmapi" checked>
+                <span>LLM API 日志</span>
+              </label>
+              <div class="export-section-items">
+                <label class="export-checkbox">
+                  <input type="checkbox" name="llmapi" value="image" checked>
+                  <span>图片生成</span>
+                </label>
+                <label class="export-checkbox">
+                  <input type="checkbox" name="llmapi" value="video" checked>
+                  <span>视频生成</span>
+                </label>
+                <label class="export-checkbox">
+                  <input type="checkbox" name="llmapi" value="chat" checked>
+                  <span>对话</span>
+                </label>
+                <label class="export-checkbox">
+                  <input type="checkbox" name="llmapi" value="character" checked>
+                  <span>角色</span>
+                </label>
+              </div>
+            </div>
+            
+            <!-- 内存日志 -->
+            <div class="export-section">
+              <label class="export-checkbox export-section-header">
+                <input type="checkbox" data-section="memory">
+                <span>内存日志</span>
+              </label>
+              <div class="export-section-items">
+                <label class="export-checkbox">
+                  <input type="checkbox" name="memory" value="startup">
+                  <span>启动快照</span>
+                </label>
+                <label class="export-checkbox">
+                  <input type="checkbox" name="memory" value="periodic">
+                  <span>定期快照</span>
+                </label>
+                <label class="export-checkbox">
+                  <input type="checkbox" name="memory" value="error">
+                  <span>错误</span>
+                </label>
+                <label class="export-checkbox">
+                  <input type="checkbox" name="memory" value="freeze">
+                  <span>卡死</span>
+                </label>
+                <label class="export-checkbox">
+                  <input type="checkbox" name="memory" value="whitescreen">
+                  <span>白屏</span>
+                </label>
+                <label class="export-checkbox">
+                  <input type="checkbox" name="memory" value="longtask">
+                  <span>长任务</span>
+                </label>
+                <label class="export-checkbox">
+                  <input type="checkbox" name="memory" value="beforeunload">
+                  <span>页面关闭</span>
+                </label>
+              </div>
+            </div>
           </div>
-          <div class="export-section">
-            <div class="export-section-header">PostMessage 日志</div>
-            <label class="export-checkbox">
-              <input type="checkbox" name="postmessage" value="send">
-              <span>发送 → SW</span>
-            </label>
-            <label class="export-checkbox">
-              <input type="checkbox" name="postmessage" value="receive">
-              <span>接收 ← SW</span>
-            </label>
-          </div>
-          <div class="export-actions">
+          <div class="export-modal-footer">
+            <button id="cancelExport" class="secondary">取消</button>
             <button id="doExport" class="primary">确认导出</button>
           </div>
         </div>
@@ -215,6 +337,7 @@
           <div class="tab active" data-tab="fetch">Fetch 请求日志</div>
           <div class="tab" data-tab="console">控制台日志 <span id="consoleCount" style="opacity:0.6">(0)</span></div>
           <div class="tab" data-tab="postmessage">PostMessage日志 <span id="postmessageCount" style="opacity:0.6">(0)</span></div>
+          <div class="tab" data-tab="llmapi">LLM API</div>
           <div class="tab" data-tab="crash">内存日志 <span id="crashCount" style="opacity:0.6">(0)</span></div>
         </div>
         
@@ -307,6 +430,37 @@
           </div>
         </div>
 
+        <!-- LLM API Logs Tab -->
+        <div class="tab-content" id="llmapiTab">
+          <div class="logs-toolbar">
+            <select id="filterLLMApiType">
+              <option value="">全部类型</option>
+              <option value="image">图片生成</option>
+              <option value="video">视频生成</option>
+              <option value="chat">对话</option>
+              <option value="character">角色</option>
+            </select>
+            <select id="filterLLMApiStatus">
+              <option value="">全部状态</option>
+              <option value="success">成功</option>
+              <option value="error">失败</option>
+              <option value="pending">进行中</option>
+            </select>
+            <button id="refreshLLMApiLogs" style="padding: 6px 12px; font-size: 12px;">🔄 刷新</button>
+            <button id="exportLLMApiLogs" class="success" style="padding: 6px 12px; font-size: 12px;">📥 导出</button>
+            <button id="clearLLMApiLogs" style="padding: 6px 12px; font-size: 12px;">清空</button>
+          </div>
+          <div class="logs-container" id="llmapiContainer">
+            <div id="llmapiLogsContainer">
+              <div class="empty-state">
+                <span class="icon">🤖</span>
+                <p>暂无 LLM API 调用记录</p>
+                <p style="font-size: 12px; opacity: 0.7;">图片/视频/对话等 AI 接口调用会自动记录</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Crash Logs Tab -->
         <div class="tab-content" id="crashTab">
           <div class="logs-toolbar">
@@ -316,6 +470,9 @@
               <option value="periodic">定期快照</option>
               <option value="error">错误</option>
               <option value="beforeunload">页面关闭</option>
+              <option value="freeze">卡死</option>
+              <option value="whitescreen">白屏</option>
+              <option value="longtask">长任务</option>
             </select>
             <button id="refreshCrashLogs" style="padding: 6px 12px; font-size: 12px;">🔄 刷新</button>
             <button id="clearCrashLogs" style="padding: 6px 12px; font-size: 12px;">清空</button>

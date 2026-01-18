@@ -210,18 +210,14 @@ if ('serviceWorker' in navigator) {
   
   // 监听用户确认升级事件
   window.addEventListener('user-confirmed-upgrade', () => {
-    console.log('[Main] User confirmed upgrade, checking for waiting worker...');
-    
     // 优先使用 pendingWorker
     if (pendingWorker) {
-      console.log('[Main] Sending SKIP_WAITING to pendingWorker');
       pendingWorker.postMessage({ type: 'SKIP_WAITING' });
       return;
     }
     
     // 如果没有 pendingWorker，尝试查找 waiting 状态的 worker
     if (swRegistration && swRegistration.waiting) {
-      console.log('[Main] Sending SKIP_WAITING to swRegistration.waiting');
       swRegistration.waiting.postMessage({ type: 'SKIP_WAITING' });
       return;
     }
@@ -229,7 +225,6 @@ if ('serviceWorker' in navigator) {
     // 如果都没有 waiting worker，说明 SW 已经是最新的 active 状态
     // 这种情况通常发生在首次安装后，SW 直接 activate 了
     // 清除缓存并强制刷新
-    console.log('[Main] No waiting worker found, clearing caches and hard reload...');
     
     // 清除旧的静态资源缓存以确保获取最新资源
     caches.keys().then(cacheNames => {

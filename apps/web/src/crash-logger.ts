@@ -16,7 +16,7 @@
 export interface CrashSnapshot {
   id: string;
   timestamp: number;
-  type: 'startup' | 'periodic' | 'error' | 'beforeunload';
+  type: 'startup' | 'periodic' | 'error' | 'beforeunload' | 'freeze' | 'whitescreen' | 'longtask';
   memory?: {
     usedJSHeapSize: number;
     totalJSHeapSize: number;
@@ -36,6 +36,13 @@ export interface CrashSnapshot {
     // 画布相关
     plaitBoardExists: boolean;
     plaitElementCount?: number;
+  };
+  // 性能指标（卡死/长任务检测）
+  performance?: {
+    fps?: number;                    // 当前帧率
+    longTaskDuration?: number;       // 长任务持续时间（毫秒）
+    freezeDuration?: number;         // 卡死持续时间（毫秒）
+    lastHeartbeat?: number;          // 上次心跳时间戳
   };
   userAgent: string;
   url: string;
@@ -67,10 +74,77 @@ const LAST_SNAPSHOT_KEY = 'aitu_last_snapshot';
 /** 操作监控：内存变化超过此阈值才记录（MB） */
 const OPERATION_MEMORY_DELTA_THRESHOLD = 50;
 
+/** 心跳间隔（毫秒）- 用于检测主线程卡死 */
+const HEARTBEAT_INTERVAL = 3000; // 3 秒
+
+/** 心跳超时阈值（毫秒）- 超过此时间没有心跳认为卡死 */
+const HEARTBEAT_TIMEOUT = 10000; // 10 秒
+
+/** 长任务阈值（毫秒）- 超过此时间的任务被记录 */
+const LONG_TASK_THRESHOLD = 200; // 200ms（比默认的 50ms 高，减少噪音）
+
+/** FPS 检测间隔（毫秒） */
+const FPS_CHECK_INTERVAL = 5000; // 5 秒
+
+/** FPS 警告阈值 */
+const FPS_WARNING_THRESHOLD = 10; // 低于 10 FPS 时警告
+
+/** 白屏检测延迟（毫秒）- 页面加载后多久开始检测 */
+const WHITESCREEN_CHECK_DELAY = 5000; // 5 秒
+
+/** 用户操作轨迹最大记录数 */
+const MAX_USER_ACTIONS = 30;
+
+/** 控制台错误最大记录数 */
+const MAX_CONSOLE_ERRORS = 20;
+
+/** 网络错误最大记录数 */
+const MAX_NETWORK_ERRORS = 20;
+
+/** 点击事件节流间隔 (ms) */
+const CLICK_THROTTLE_INTERVAL = 100;
+
+/** FPS 采样帧数（每 N 帧计算一次，减少计算频率）*/
+const FPS_SAMPLE_FRAMES = 30;
+
 // ==================== 内部状态 ====================
 
 let snapshotInterval: number | null = null;
 let initialized = false;
+let heartbeatInterval: number | null = null;
+let fpsCheckInterval: number | null = null;
+let longTaskObserver: PerformanceObserver | null = null;
+let lastFrameTime = 0;
+let frameCount = 0;
+let currentFps = 60;
+let whitescreenReported = false;
+let pageWasHidden = false; // 跟踪页面是否曾在后台
+
+// 用户操作轨迹
+const userActions: Array<{
+  time: number;
+  action: string;
+  target?: string;
+  detail?: string;
+}> = [];
+
+// 控制台错误收集
+const consoleErrors: Array<{
+  time: number;
+  message: string;
+  stack?: string;
+}> = [];
+
+// 网络错误收集
+const networkErrors: Array<{
+  time: number;
+  url: string;
+  method?: string;
+  status?: number;
+  statusText?: string;
+  error?: string;
+  duration?: number;
+}> = [];
 
 // ==================== 操作监控 API ====================
 
@@ -203,24 +277,6 @@ function collectPageStats(): PageStats {
 }
 
 /**
- * 格式化页面统计信息为可读字符串
- */
-function formatPageStats(stats: PageStats): string {
-  const parts = [
-    `DOM:${stats.domNodeCount}`,
-    `Canvas:${stats.canvasCount}`,
-    `Img:${stats.imageCount}`,
-    `Video:${stats.videoCount}`,
-  ];
-  
-  if (stats.plaitElementCount !== undefined) {
-    parts.push(`Plait元素:${stats.plaitElementCount}`);
-  }
-  
-  return parts.join(' | ');
-}
-
-/**
  * 发送快照到 Service Worker 持久化
  */
 function sendSnapshotToSW(snapshot: CrashSnapshot): void {
@@ -341,12 +397,7 @@ export function startPeriodicSnapshots(): void {
 
       sendSnapshotToSW(snapshot);
       
-      // 精简日志：只在首次和有详细信息时输出
-      if (highMemoryCount === 1 || shouldCollectDetails) {
-        const deltaStr = lastUsedMB > 0 ? ` (${usedMB > lastUsedMB ? '+' : ''}${(usedMB - lastUsedMB).toFixed(0)} MB)` : '';
-        const statsStr = pageStats ? ` | ${formatPageStats(pageStats)}` : '';
-        console.warn(`[MemoryLog] High memory: ${usedMB.toFixed(0)} MB${deltaStr}${statsStr}`);
-      }
+      // 日志已发送到 SW，不再在控制台输出
     } else {
       // 内存恢复正常，重置计数
       highMemoryCount = 0;
@@ -384,6 +435,12 @@ export function setupErrorCapture(): void {
       memory: getMemoryInfo(),
       userAgent: navigator.userAgent,
       url: location.href,
+      customData: {
+        recentActions: userActions.slice(-10),
+        filename: event.filename,
+        lineno: event.lineno,
+        colno: event.colno,
+      },
     };
 
     sendSnapshotToSW(snapshot);
@@ -405,6 +462,9 @@ export function setupErrorCapture(): void {
       memory: getMemoryInfo(),
       userAgent: navigator.userAgent,
       url: location.href,
+      customData: {
+        recentActions: userActions.slice(-10),
+      },
     };
 
     sendSnapshotToSW(snapshot);
@@ -430,6 +490,531 @@ export function setupErrorCapture(): void {
       sendSnapshotToSW(snapshot);
     }
   });
+}
+
+// ==================== 卡死/白屏监控 ====================
+
+/**
+ * 设置心跳检测 - 检测主线程卡死
+ * 通过向 Service Worker 发送心跳，如果心跳超时说明主线程被阻塞
+ */
+export function setupHeartbeat(): void {
+  if (heartbeatInterval !== null) return;
+
+  let lastHeartbeatTime = Date.now();
+
+  // 监听页面可见性变化，标记页面是否进入过后台
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      pageWasHidden = true;
+    } else {
+      // 页面恢复可见时，重置心跳时间，避免误报
+      lastHeartbeatTime = Date.now();
+      // 延迟重置标记，确保下一次心跳不会误判
+      setTimeout(() => {
+        pageWasHidden = false;
+      }, HEARTBEAT_INTERVAL + 100);
+    }
+  });
+
+  // 定期发送心跳到 SW
+  heartbeatInterval = window.setInterval(() => {
+    const now = Date.now();
+    const gap = now - lastHeartbeatTime;
+
+    // 如果两次心跳间隔超过阈值，说明之前发生了卡死
+    // 但如果页面曾在后台，则不是真正的卡死，跳过
+    if (gap > HEARTBEAT_TIMEOUT && !pageWasHidden && !document.hidden) {
+      const snapshot: CrashSnapshot = {
+        id: `freeze-${Date.now()}`,
+        timestamp: Date.now(),
+        type: 'freeze',
+        memory: getMemoryInfo(),
+        pageStats: collectPageStats(),
+        performance: {
+          freezeDuration: gap,
+          lastHeartbeat: lastHeartbeatTime,
+          fps: currentFps,
+        },
+        userAgent: navigator.userAgent,
+        url: location.href,
+        customData: {
+          recentActions: userActions.slice(-10),
+          recentErrors: consoleErrors.slice(-5),
+          recentNetworkErrors: networkErrors.slice(-5),
+        },
+      };
+
+      sendSnapshotToSW(snapshot);
+      // 日志已发送到 SW，不再在控制台输出
+    }
+
+    lastHeartbeatTime = now;
+
+    // 发送心跳到 SW（用于 SW 端检测页面是否响应）
+    if (navigator.serviceWorker?.controller) {
+      navigator.serviceWorker.controller.postMessage({
+        type: 'HEARTBEAT',
+        timestamp: now,
+      });
+    }
+  }, HEARTBEAT_INTERVAL);
+}
+
+/**
+ * 设置长任务监控 - 使用 PerformanceObserver API
+ * 监控超过阈值的长任务
+ */
+export function setupLongTaskMonitoring(): void {
+  if (longTaskObserver !== null) return;
+
+  // 检查浏览器是否支持 PerformanceObserver 和 longtask
+  if (typeof PerformanceObserver === 'undefined') return;
+
+  try {
+    longTaskObserver = new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) {
+        // 只记录超过阈值的长任务
+        if (entry.duration > LONG_TASK_THRESHOLD) {
+          const snapshot: CrashSnapshot = {
+            id: `longtask-${Date.now()}`,
+            timestamp: Date.now(),
+            type: 'longtask',
+            memory: getMemoryInfo(),
+            performance: {
+              longTaskDuration: entry.duration,
+              fps: currentFps,
+            },
+            userAgent: navigator.userAgent,
+            url: location.href,
+            customData: {
+              taskName: entry.name,
+              startTime: entry.startTime,
+            },
+          };
+
+          sendSnapshotToSW(snapshot);
+          // 日志已发送到 SW，不再在控制台输出
+        }
+      }
+    });
+
+    longTaskObserver.observe({ entryTypes: ['longtask'] });
+  } catch {
+    // longtask 可能不被支持
+  }
+}
+
+/**
+ * 设置 FPS 监控 - 检测页面流畅度
+ * 优化：减少采样频率，降低性能开销
+ */
+export function setupFpsMonitoring(): void {
+  if (fpsCheckInterval !== null) return;
+
+  // 优化：使用采样帧数而非每帧计算，降低 RAF 回调频率
+  let sampleCount = 0;
+  
+  const measureFps = () => {
+    sampleCount++;
+    
+    // 每 N 帧才计算一次 FPS（减少计算频率）
+    if (sampleCount >= FPS_SAMPLE_FRAMES) {
+      const now = performance.now();
+      const elapsed = now - lastFrameTime;
+      
+      if (elapsed > 0) {
+        currentFps = Math.round((sampleCount * 1000) / elapsed);
+      }
+      
+      sampleCount = 0;
+      lastFrameTime = now;
+    }
+
+    requestAnimationFrame(measureFps);
+  };
+
+  lastFrameTime = performance.now();
+  requestAnimationFrame(measureFps);
+
+  // 定期检查 FPS 并在过低时记录
+  fpsCheckInterval = window.setInterval(() => {
+    if (currentFps < FPS_WARNING_THRESHOLD && currentFps > 0) {
+      const snapshot: CrashSnapshot = {
+        id: `lowfps-${Date.now()}`,
+        timestamp: Date.now(),
+        type: 'freeze',
+        memory: getMemoryInfo(),
+        performance: {
+          fps: currentFps,
+        },
+        userAgent: navigator.userAgent,
+        url: location.href,
+      };
+
+      sendSnapshotToSW(snapshot);
+      // 日志已发送到 SW，不再在控制台输出
+    }
+  }, FPS_CHECK_INTERVAL);
+}
+
+/**
+ * 设置白屏检测 - 检查关键 DOM 元素是否存在
+ */
+export function setupWhitescreenDetection(): void {
+  // 延迟检测，给页面加载时间
+  setTimeout(() => {
+    checkForWhitescreen();
+  }, WHITESCREEN_CHECK_DELAY);
+
+  // 监听页面可见性变化，切回页面时也检测
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && !whitescreenReported) {
+      setTimeout(checkForWhitescreen, 1000);
+    }
+  });
+}
+
+/**
+ * 检测白屏
+ */
+function checkForWhitescreen(): void {
+  if (whitescreenReported) return;
+
+  // 检查关键 DOM 元素
+  const root = document.getElementById('root');
+  const hasContent = root && root.children.length > 0;
+  const plaitBoard = document.querySelector('.plait-board-container');
+  const hasPlaitBoard = !!plaitBoard;
+
+  // 检查是否有可见内容
+  const bodyHasContent = document.body.children.length > 1; // 至少有 root 以外的元素
+
+  // 如果 root 存在但没有子元素，可能是白屏
+  if (root && !hasContent) {
+    whitescreenReported = true;
+    
+    const snapshot: CrashSnapshot = {
+      id: `whitescreen-${Date.now()}`,
+      timestamp: Date.now(),
+      type: 'whitescreen',
+      memory: getMemoryInfo(),
+      pageStats: {
+        domNodeCount: document.getElementsByTagName('*').length,
+        canvasCount: 0,
+        imageCount: 0,
+        videoCount: 0,
+        iframeCount: 0,
+        plaitBoardExists: hasPlaitBoard,
+      },
+      userAgent: navigator.userAgent,
+      url: location.href,
+      customData: {
+        rootExists: !!root,
+        rootChildCount: root?.children.length || 0,
+        bodyChildCount: document.body.children.length,
+        hasPlaitBoard,
+      },
+    };
+
+    sendSnapshotToSW(snapshot);
+    console.error('[MemoryLog] 白屏检测: React 未渲染内容');
+  }
+
+  // 如果应用已加载但画板不存在（且不是首页等非画板页面）
+  if (hasContent && !hasPlaitBoard && location.pathname === '/') {
+    // 给更多时间，画板可能还在加载
+    setTimeout(() => {
+      if (!document.querySelector('.plait-board-container') && !whitescreenReported) {
+        whitescreenReported = true;
+        
+        const snapshot: CrashSnapshot = {
+          id: `whitescreen-noboard-${Date.now()}`,
+          timestamp: Date.now(),
+          type: 'whitescreen',
+          memory: getMemoryInfo(),
+          pageStats: collectPageStats(),
+          userAgent: navigator.userAgent,
+          url: location.href,
+          customData: {
+            reason: '画板未加载',
+            rootChildCount: root?.children.length || 0,
+          },
+        };
+
+        sendSnapshotToSW(snapshot);
+        console.error('[MemoryLog] 白屏检测: 画板组件未加载');
+      }
+    }, 5000);
+  }
+}
+
+// ==================== 用户操作轨迹 ====================
+
+/**
+ * 记录用户操作
+ * 用于问题重现和分析
+ */
+function recordUserAction(action: string, target?: string, detail?: string): void {
+  userActions.push({
+    time: Date.now(),
+    action,
+    target,
+    detail,
+  });
+
+  // 保持数组大小在限制内
+  if (userActions.length > MAX_USER_ACTIONS) {
+    userActions.shift();
+  }
+}
+
+/**
+ * 设置用户操作轨迹监控
+ */
+export function setupUserActionTracking(): void {
+  let lastClickTime = 0;
+  
+  // 监听点击事件（节流处理）
+  document.addEventListener('click', (event) => {
+    const now = Date.now();
+    // 节流：100ms 内只记录一次点击
+    if (now - lastClickTime < CLICK_THROTTLE_INTERVAL) return;
+    lastClickTime = now;
+    
+    const target = event.target as HTMLElement;
+    if (!target) return;
+
+    // 使用 requestIdleCallback 延迟处理，不阻塞主线程
+    const processClick = () => {
+      let targetDesc = '';
+      
+      // 1. 优先使用 data-track 属性
+      const trackAttr = target.closest?.('[data-track]')?.getAttribute('data-track');
+      if (trackAttr) {
+        targetDesc = trackAttr;
+      } else if (target.tagName === 'BUTTON' || target.closest?.('button')) {
+        // 2. 按钮：获取文字或类名
+        const btn = (target.closest?.('button') || target) as HTMLButtonElement;
+        const text = btn.textContent?.trim().slice(0, 20);
+        const cls = btn.className?.split?.(' ')?.[0]?.slice(0, 20);
+        targetDesc = `btn:${text || cls || 'unknown'}`;
+      } else if (target.tagName === 'A') {
+        // 3. 链接
+        targetDesc = `link:${(target as HTMLAnchorElement).pathname?.slice(0, 30) || ''}`;
+      } else if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+        // 4. 输入框
+        const input = target as HTMLInputElement;
+        targetDesc = `input:${input.name || input.type || input.placeholder?.slice(0, 15) || ''}`;
+      } else if (target.id) {
+        // 5. 有 ID
+        targetDesc = `#${target.id}`;
+      } else {
+        // 6. 使用标签和类名
+        const cls = target.className?.split?.(' ')?.[0];
+        targetDesc = cls ? `.${cls.slice(0, 20)}` : target.tagName?.toLowerCase() || 'unknown';
+      }
+
+      recordUserAction('click', targetDesc);
+    };
+
+    // 使用 requestIdleCallback 或 setTimeout 延迟处理
+    if ('requestIdleCallback' in window) {
+      (window as any).requestIdleCallback(processClick, { timeout: 100 });
+    } else {
+      setTimeout(processClick, 0);
+    }
+  }, { capture: true, passive: true });
+
+  // 监听键盘快捷键
+  document.addEventListener('keydown', (event) => {
+    // 只记录快捷键组合
+    if (event.ctrlKey || event.metaKey || event.altKey) {
+      const keys = [];
+      if (event.ctrlKey || event.metaKey) keys.push('Cmd');
+      if (event.altKey) keys.push('Alt');
+      if (event.shiftKey) keys.push('Shift');
+      keys.push(event.key);
+      recordUserAction('shortcut', keys.join('+'));
+    }
+  }, { capture: true, passive: true });
+
+  // 监听路由变化
+  window.addEventListener('popstate', () => {
+    recordUserAction('navigate', location.pathname);
+  });
+
+  // 监听 hash 变化
+  window.addEventListener('hashchange', () => {
+    recordUserAction('navigate', location.hash);
+  });
+}
+
+// ==================== 网络错误监控 ====================
+
+/**
+ * 设置网络请求失败监控
+ * 优化：只在错误时处理，正常请求零开销
+ */
+export function setupNetworkErrorTracking(): void {
+  const originalFetch = window.fetch;
+  
+  window.fetch = async function(input, init) {
+    const startTime = Date.now();
+    
+    try {
+      const response = await originalFetch.call(this, input, init);
+      
+      // 只在失败时才处理（正常请求零开销）
+      if (!response.ok) {
+        const url = typeof input === 'string' ? input : (input as Request).url;
+        const duration = Date.now() - startTime;
+        
+        // 提取更多有用信息
+        networkErrors.push({
+          time: Date.now(),
+          url: url.slice(0, 300),
+          method: init?.method || 'GET',
+          status: response.status,
+          statusText: response.statusText,
+          duration,
+        } as typeof networkErrors[0]);
+        
+        if (networkErrors.length > MAX_NETWORK_ERRORS) {
+          networkErrors.shift();
+        }
+      }
+      
+      return response;
+    } catch (error) {
+      const url = typeof input === 'string' ? input : (input as Request).url;
+      const duration = Date.now() - startTime;
+      
+      networkErrors.push({
+        time: Date.now(),
+        url: url.slice(0, 300),
+        method: init?.method || 'GET',
+        error: (error as Error).message,
+        duration,
+      } as typeof networkErrors[0]);
+      
+      if (networkErrors.length > MAX_NETWORK_ERRORS) {
+        networkErrors.shift();
+      }
+      
+      throw error;
+    }
+  };
+}
+
+// ==================== 资源加载失败监控 ====================
+
+/**
+ * 设置资源加载失败监控
+ */
+export function setupResourceErrorTracking(): void {
+  // 监听资源加载失败
+  window.addEventListener('error', (event) => {
+    const target = event.target;
+    
+    // 只处理资源加载错误（img, script, link 等），排除 window 级别的错误
+    if (target && target !== window && target instanceof HTMLElement) {
+      if ('src' in target || 'href' in target) {
+        const url = (target as HTMLImageElement).src || (target as HTMLLinkElement).href;
+        const tagName = target.tagName?.toLowerCase();
+        
+        recordUserAction('resource_error', tagName, url?.slice(0, 100));
+      }
+    }
+  }, { capture: true });
+}
+
+// ==================== 控制台错误收集 ====================
+
+/**
+ * 设置控制台错误收集
+ * 优化：延迟处理，不阻塞主线程
+ */
+export function setupConsoleErrorTracking(): void {
+  const originalError = console.error;
+  
+  console.error = function(...args) {
+    // 先调用原始方法，确保不影响正常错误输出
+    originalError.apply(this, args);
+    
+    // 快速检查：排除自己的日志
+    const firstArg = args[0];
+    if (typeof firstArg === 'string' && firstArg.includes('[MemoryLog]')) {
+      return;
+    }
+    
+    // 捕获 args 快照用于延迟处理
+    const argsCopy = [...args];
+    
+    // 延迟处理，不阻塞主线程
+    setTimeout(() => {
+      let message = '';
+      let stack: string | undefined;
+      
+      for (let i = 0; i < Math.min(argsCopy.length, 5); i++) {
+        const arg = argsCopy[i];
+        if (typeof arg === 'string') {
+          message += arg + ' ';
+        } else if (typeof arg === 'number' || typeof arg === 'boolean') {
+          message += String(arg) + ' ';
+        } else if (arg instanceof Error) {
+          message += `Error: ${arg.message} `;
+          stack = arg.stack;
+        } else if (arg && typeof arg === 'object') {
+          // 安全的浅层序列化
+          try {
+            const keys = Object.keys(arg).slice(0, 5);
+            const preview = keys.map(k => {
+              const v = (arg as Record<string, unknown>)[k];
+              return `${k}:${typeof v === 'string' ? v.slice(0, 20) : typeof v}`;
+            }).join(',');
+            message += `{${preview}} `;
+          } catch {
+            message += `[${arg.constructor?.name || 'Object'}] `;
+          }
+        }
+      }
+      
+      consoleErrors.push({
+        time: Date.now(),
+        message: message.trim().slice(0, 500),
+        stack,
+      });
+      
+      if (consoleErrors.length > MAX_CONSOLE_ERRORS) {
+        consoleErrors.shift();
+      }
+    }, 0);
+  };
+}
+
+// ==================== 诊断数据导出 ====================
+
+/**
+ * 获取完整诊断数据
+ * 用于用户导出和问题分析
+ */
+export function getDiagnosticData(): {
+  userActions: typeof userActions;
+  consoleErrors: typeof consoleErrors;
+  networkErrors: typeof networkErrors;
+  memory: ReturnType<typeof getMemoryInfo>;
+  pageStats: ReturnType<typeof collectPageStats>;
+  fps: number;
+} {
+  return {
+    userActions: [...userActions],
+    consoleErrors: [...consoleErrors],
+    networkErrors: [...networkErrors],
+    memory: getMemoryInfo(),
+    pageStats: collectPageStats(),
+    fps: currentFps,
+  };
 }
 
 /**
@@ -515,7 +1100,40 @@ function exposeDebugTools(): void {
         url: location.href,
       };
       sendSnapshotToSW(snapshot);
-      console.log('[MemoryLog] 快照已保存');
+    },
+    
+    // 获取诊断数据
+    getDiagnostics: getDiagnosticData,
+    
+    // 查看用户操作轨迹
+    getActions: () => {
+      console.table(userActions.map(a => ({
+        time: new Date(a.time).toLocaleTimeString('zh-CN'),
+        action: a.action,
+        target: a.target,
+        detail: a.detail,
+      })));
+      return userActions;
+    },
+    
+    // 查看网络错误
+    getNetworkErrors: () => {
+      console.table(networkErrors.map(e => ({
+        time: new Date(e.time).toLocaleTimeString('zh-CN'),
+        url: e.url,
+        status: e.status,
+        error: e.error,
+      })));
+      return networkErrors;
+    },
+    
+    // 查看控制台错误
+    getConsoleErrors: () => {
+      console.table(consoleErrors.map(e => ({
+        time: new Date(e.time).toLocaleTimeString('zh-CN'),
+        message: e.message.slice(0, 100),
+      })));
+      return consoleErrors;
     },
   };
 }
@@ -539,10 +1157,22 @@ export function initCrashLogger(): void {
   // 3. 开始定期快照
   startPeriodicSnapshots();
 
-  // 4. 暴露调试工具
+  // 4. 设置卡死/白屏监控
+  setupHeartbeat();
+  setupLongTaskMonitoring();
+  setupFpsMonitoring();
+  setupWhitescreenDetection();
+
+  // 5. 设置用户操作和错误追踪
+  setupUserActionTracking();
+  setupNetworkErrorTracking();
+  setupResourceErrorTracking();
+  setupConsoleErrorTracking();
+
+  // 6. 暴露调试工具
   exposeDebugTools();
 
-  // 5. 检查并发送上次的 localStorage 快照（如果存在）
+  // 6. 检查并发送上次的 localStorage 快照（如果存在）
   const lastSnapshot = getLastSnapshotFromLocalStorage();
   if (lastSnapshot) {
     // 添加标记表示这是恢复的快照
@@ -553,8 +1183,5 @@ export function initCrashLogger(): void {
     };
     sendSnapshotToSW(lastSnapshot);
     clearLastSnapshotFromLocalStorage();
-    console.log('[MemoryLog] Recovered and sent last snapshot from localStorage');
   }
-
-  console.log('[MemoryLog] Initialized. Use __memoryLog.diagnose() for details');
 }

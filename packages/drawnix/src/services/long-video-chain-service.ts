@@ -251,8 +251,13 @@ class LongVideoChainService {
 
       batch.mergeCompleted = true;
       // console.log(`[LongVideoChain] Merged video inserted to canvas`);
+      
+      // 清理 batch 释放内存
+      this.cleanupBatch(batch.batchId);
     } catch (error) {
       console.error('[LongVideoChain] Merge failed:', error);
+      // 失败时也要清理，避免内存泄漏
+      this.cleanupBatch(batch.batchId);
     } finally {
       batch.isMerging = false;
     }
@@ -270,6 +275,20 @@ class LongVideoChainService {
       console.error('[LongVideoChain] Failed to insert video to canvas:', error);
       // 回退：输出视频URL供用户手动下载
       // console.log(`[LongVideoChain] Merged video URL: ${videoUrl}`);
+    }
+  }
+
+  /**
+   * 清理已完成的批次，释放内存
+   */
+  private cleanupBatch(batchId: string): void {
+    const batch = this.batches.get(batchId);
+    if (batch) {
+      // 清理内部 Map 和 Set
+      batch.completedSegments.clear();
+      batch.processedSegments.clear();
+      // 从 batches Map 中删除
+      this.batches.delete(batchId);
     }
   }
 

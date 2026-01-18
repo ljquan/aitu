@@ -29,6 +29,14 @@ interface VideoSubmitResponse {
 }
 
 /**
+ * Submit response with log ID for tracking
+ */
+interface SubmitResult {
+  response: VideoSubmitResponse;
+  logId: string;
+}
+
+/**
  * Video generation handler
  */
 export class VideoHandler implements TaskHandler {
@@ -46,7 +54,7 @@ export class VideoHandler implements TaskHandler {
       config.onProgress(task.id, 0, TaskExecutionPhase.SUBMITTING);
 
       // Submit video generation request
-      const submitResponse = await this.submitVideoGeneration(
+      const { response: submitResponse, logId } = await this.submitVideoGeneration(
         task,
         config,
         abortController.signal
@@ -61,7 +69,8 @@ export class VideoHandler implements TaskHandler {
         submitResponse.id,
         task.id,
         config,
-        abortController.signal
+        abortController.signal,
+        logId
       );
 
       return result;
@@ -81,6 +90,16 @@ export class VideoHandler implements TaskHandler {
     const abortController = new AbortController();
     this.abortControllers.set(task.id, abortController);
 
+    // 为恢复的任务创建新的日志条目
+    const { startLLMApiLog } = await import('../llm-api-logger');
+    const logId = startLLMApiLog({
+      endpoint: `/videos/${task.remoteId} (resumed)`,
+      model: (task.params?.model as string) || 'veo3',
+      taskType: 'video',
+      prompt: (task.params?.prompt as string) || '',
+      taskId: task.id,
+    });
+
     try {
       config.onProgress(task.id, task.progress || 0, TaskExecutionPhase.POLLING);
 
@@ -88,7 +107,8 @@ export class VideoHandler implements TaskHandler {
         task.remoteId,
         task.id,
         config,
-        abortController.signal
+        abortController.signal,
+        logId
       );
 
       return result;
@@ -111,7 +131,7 @@ export class VideoHandler implements TaskHandler {
     task: SWTask,
     config: HandlerConfig,
     signal: AbortSignal
-  ): Promise<VideoSubmitResponse> {
+  ): Promise<SubmitResult> {
     const { videoConfig } = config;
     const { params } = task;
 
@@ -157,8 +177,23 @@ export class VideoHandler implements TaskHandler {
       }
     }
 
-    // Use debugFetch for logging
+    // Import loggers
     const { debugFetch } = await import('../debug-fetch');
+    const { startLLMApiLog, completeLLMApiLog, failLLMApiLog } = await import('../llm-api-logger');
+    
+    const startTime = Date.now();
+    const model = (params.model as string) || 'veo3';
+    const logId = startLLMApiLog({
+      endpoint: '/videos',
+      model,
+      taskType: 'video',
+      prompt: params.prompt as string,
+      hasReferenceImages: refUrls.length > 0,
+      referenceImageCount: refUrls.length,
+      taskId: task.id,
+    });
+
+    // Use debugFetch for logging
     const response = await debugFetch(`${videoConfig.baseUrl}/videos`, {
       method: 'POST',
       headers: videoConfig.apiKey
@@ -167,16 +202,27 @@ export class VideoHandler implements TaskHandler {
       body: formData,
       signal,
     }, {
-      label: `🎬 提交视频生成 (${params.model || 'veo3'})`,
+      label: `🎬 提交视频生成 (${model})`,
       logResponseBody: true,
     });
 
     if (!response.ok) {
       const errorText = await response.text();
+      failLLMApiLog(logId, {
+        httpStatus: response.status,
+        duration: Date.now() - startTime,
+        errorMessage: errorText,
+        responseBody: errorText,
+      });
       throw new Error(`Video submission failed: ${response.status} - ${errorText}`);
     }
 
-    return response.json();
+    const data = await response.json();
+
+    // 注意：这里不调用 completeLLMApiLog，因为视频还在异步生成中
+    // 最终结果会在 pollUntilComplete 完成后更新
+
+    return { response: data, logId };
   }
 
   /**
@@ -187,38 +233,65 @@ export class VideoHandler implements TaskHandler {
     videoId: string,
     taskId: string,
     config: HandlerConfig,
-    signal: AbortSignal
+    signal: AbortSignal,
+    logId?: string
   ): Promise<TaskResult> {
     const { videoConfig } = config;
+    const startTime = Date.now();
 
-    // 使用通用轮询函数
-    const result = await pollVideoUntilComplete(
-      videoConfig.baseUrl,
-      videoId,
-      {
-        onProgress: (progress, phase) => {
-          config.onProgress(taskId, progress, phase);
-        },
-        signal,
-        apiKey: videoConfig.apiKey,
-        interval: 5000,
-        maxAttempts: 1080, // 90 minutes
+    try {
+      // 使用通用轮询函数
+      const result = await pollVideoUntilComplete(
+        videoConfig.baseUrl,
+        videoId,
+        {
+          onProgress: (progress, phase) => {
+            config.onProgress(taskId, progress, phase);
+          },
+          signal,
+          apiKey: videoConfig.apiKey,
+          interval: 5000,
+          maxAttempts: 1080, // 90 minutes
+        }
+      );
+
+      const videoUrl = result.video_url || result.url;
+      if (!videoUrl) {
+        throw new Error('No video URL in completed response');
       }
-    );
 
-    const videoUrl = result.video_url || result.url;
-    if (!videoUrl) {
-      throw new Error('No video URL in completed response');
+      // 更新 LLM API 日志，添加最终的视频 URL
+      if (logId) {
+        const { completeLLMApiLog } = await import('../llm-api-logger');
+        completeLLMApiLog(logId, {
+          httpStatus: 200,
+          duration: Date.now() - startTime,
+          resultType: 'video',
+          resultCount: 1,
+          resultUrl: videoUrl,
+          responseBody: JSON.stringify(result),
+        });
+      }
+
+      return {
+        url: videoUrl,
+        format: 'mp4',
+        size: 0,
+        width: result.width,
+        height: result.height,
+        duration: parseInt(result.seconds || '0') || 0,
+      };
+    } catch (error) {
+      // 更新 LLM API 日志，记录失败
+      if (logId) {
+        const { failLLMApiLog } = await import('../llm-api-logger');
+        failLLMApiLog(logId, {
+          duration: Date.now() - startTime,
+          errorMessage: error instanceof Error ? error.message : String(error),
+        });
+      }
+      throw error;
     }
-
-    return {
-      url: videoUrl,
-      format: 'mp4',
-      size: 0,
-      width: result.width,
-      height: result.height,
-      duration: parseInt(result.seconds || '0') || 0,
-    };
   }
 
   /**

@@ -205,9 +205,8 @@ export function useWorkflowSubmission(
     try {
       const recoveredWorkflows = await workflowSubmissionService.recoverWorkflows();
       
-      if (recoveredWorkflows.length > 0) {
-        console.log(`[useWorkflowSubmission] Recovered ${recoveredWorkflows.length} workflows from SW`);
-      }
+      // Silently recover workflows
+      void recoveredWorkflows;
     } catch (error) {
       console.warn('[useWorkflowSubmission] Failed to recover workflows:', error);
     }
@@ -223,8 +222,6 @@ export function useWorkflowSubmission(
     const recoveredWorkflow = event.workflow as unknown as LegacyWorkflowDefinition;
     const board = boardRef.current;
     const workZoneId = workZoneIdRef.current;
-
-    console.log('[useWorkflowSubmission] Recovered workflow:', recoveredWorkflow.id, recoveredWorkflow.status);
 
     // Only restore running/pending workflows to avoid showing stale data
     if (recoveredWorkflow.status !== 'running' && recoveredWorkflow.status !== 'pending') {
