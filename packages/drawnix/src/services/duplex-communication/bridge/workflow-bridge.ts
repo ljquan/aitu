@@ -159,7 +159,6 @@ export class WorkflowBridge {
       workflow,
     });
 
-    console.log('[WorkflowBridge] Workflow submitted:', workflow.id);
   }
 
   /**
@@ -288,7 +287,6 @@ export class WorkflowBridge {
         });
       }
 
-      console.log(`[WorkflowBridge] Recovered ${runningWorkflows.length} running workflows`);
       return workflows;
     } catch (error) {
       console.warn('[WorkflowBridge] Failed to recover workflows:', error);

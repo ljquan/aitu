@@ -205,13 +205,6 @@ export class ChatHandler implements IChatHandler, TaskHandler {
     onChunk?: (content: string) => void
   ): Promise<string> {
     const model = temporaryModel || config.modelName || 'gemini-2.5-flash';
-    
-    console.log('[SW-ChatHandler] streamChat called:', {
-      model,
-      messagesCount: messages.length,
-      hasSystemPrompt: !!systemPrompt,
-      timestamp: new Date().toISOString(),
-    });
 
     const requestBody = {
       model,
@@ -219,8 +212,24 @@ export class ChatHandler implements IChatHandler, TaskHandler {
       stream: true,
     };
 
-    // Use debugFetch for logging (stream response won't be fully captured)
+    // Import loggers
     const { debugFetch } = await import('../debug-fetch');
+    const { startLLMApiLog, completeLLMApiLog, failLLMApiLog } = await import('../llm-api-logger');
+    
+    const startTime = Date.now();
+    // 获取最后一条用户消息作为 prompt 预览
+    const lastUserMsg = messages.filter(m => m.role === 'user').pop();
+    const promptPreview = lastUserMsg?.content?.[0]?.text || '';
+    
+    const logId = startLLMApiLog({
+      endpoint: '/chat/completions',
+      model,
+      taskType: 'chat',
+      prompt: promptPreview,
+      requestBody: JSON.stringify(requestBody, null, 2),  // 完整请求体，不截断
+    });
+
+    // Use debugFetch for logging (stream response won't be fully captured)
     const response = await debugFetch(`${config.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
@@ -237,8 +246,17 @@ export class ChatHandler implements IChatHandler, TaskHandler {
 
     if (!response.ok) {
       const errorText = await response.text();
+      failLLMApiLog(logId, {
+        httpStatus: response.status,
+        duration: Date.now() - startTime,
+        errorMessage: errorText,
+      });
       throw new Error(`Chat request failed: ${response.status} - ${errorText}`);
     }
+    
+    // 标记开始时间用于完成时计算
+    const chatStartTime = startTime;
+    const chatLogId = logId;
 
     if (!response.body) {
       throw new Error('No response body');
@@ -312,6 +330,16 @@ export class ChatHandler implements IChatHandler, TaskHandler {
       const { updateLogResponseBody } = await import('../debug-fetch');
       updateLogResponseBody((response as any).__debugLogId, fullContent);
     }
+
+    // 完成 LLM API 日志
+    const { completeLLMApiLog: completeLog } = await import('../llm-api-logger');
+    completeLog(chatLogId, {
+      httpStatus: response.status,
+      duration: Date.now() - chatStartTime,
+      resultType: 'text',
+      resultCount: 1,
+      resultText: fullContent,
+    });
 
     return fullContent;
   }

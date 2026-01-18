@@ -117,28 +117,24 @@ export class SWTaskQueue {
    * Restore tasks and config from IndexedDB on SW startup
    */
   private async restoreFromStorage(): Promise<void> {
-    // console.log('[SWTaskQueue] Restoring from storage...');
-
     try {
       // Load saved config
       const { geminiConfig, videoConfig } = await taskQueueStorage.loadConfig();
+      
       if (geminiConfig && videoConfig) {
         this.geminiConfig = geminiConfig;
         this.videoConfig = videoConfig;
         this.initialized = true;
-        // console.log('[SWTaskQueue] Config restored from storage');
       }
 
       // Load all tasks
       const tasks = await taskQueueStorage.getAllTasks();
-      // console.log(`[SWTaskQueue] Found ${tasks.length} tasks in storage`);
 
       for (const task of tasks) {
         this.tasks.set(task.id, task);
 
         // Handle interrupted Chat tasks - mark as failed since streaming can't be resumed
         if (task.type === TaskType.CHAT && task.status === TaskStatus.PROCESSING) {
-          // console.log(`[SWTaskQueue] Marking interrupted chat task as failed: ${task.id}`);
           await this.markTaskFailed(task.id, {
             code: 'INTERRUPTED',
             message: 'Chat 请求被中断（页面刷新），请重试',
@@ -148,7 +144,6 @@ export class SWTaskQueue {
 
         // Resume active tasks
         if (this.shouldResumeTask(task)) {
-          // console.log(`[SWTaskQueue] Will resume task: ${task.id}`);
           this.resumeTaskExecution(task);
         }
       }
@@ -235,17 +230,14 @@ export class SWTaskQueue {
    */
   private async resumeTaskExecution(task: SWTask): Promise<void> {
     if (!this.initialized) {
-      // console.log(`[SWTaskQueue] Not initialized, marking task ${task.id} for later`);
       return;
     }
 
     // If task has remoteId, it was in polling phase - resume polling
     if (task.remoteId && (task.type === TaskType.VIDEO || task.type === TaskType.CHARACTER)) {
-      // console.log(`[SWTaskQueue] Resuming polling for task: ${task.id}`);
       
       // If task was failed (network error recovery), reset status to processing
       if (task.status === TaskStatus.FAILED) {
-        console.log(`[SWTaskQueue] Recovering failed task ${task.id} (network error, has remoteId)`);
         task.status = TaskStatus.PROCESSING;
         task.error = undefined; // Clear error
         task.executionPhase = TaskExecutionPhase.POLLING;
@@ -270,27 +262,69 @@ export class SWTaskQueue {
     } else if (task.status === TaskStatus.PENDING) {
       // Re-execute pending tasks
       this.processQueue();
-    } else {
-      // For other cases (image generation in progress), reset to pending and re-execute
-      // because image generation is synchronous and cannot be resumed mid-request
-      if (task.type === TaskType.IMAGE || task.type === TaskType.INSPIRATION_BOARD) {
-        // console.log(`[SWTaskQueue] Resetting image task ${task.id} to pending for re-execution`);
-        task.status = TaskStatus.PENDING;
-        task.error = undefined; // Clear any previous error
-        task.updatedAt = Date.now();
-        this.tasks.set(task.id, task);
-        await taskQueueStorage.saveTask(task);
-
-        // Broadcast status update to clients
-        this.broadcastToClients({
-          type: 'TASK_STATUS',
-          taskId: task.id,
-          status: TaskStatus.PENDING,
-          updatedAt: task.updatedAt,
+    } else if (
+      // Video/Character task in processing but no remoteId - try to recover from LLM API logs
+      (task.type === TaskType.VIDEO || task.type === TaskType.CHARACTER) &&
+      task.status === TaskStatus.PROCESSING &&
+      !task.remoteId
+    ) {
+      // Try to find completed result from LLM API logs
+      const { findSuccessLogByTaskId } = await import('./llm-api-logger');
+      const successLog = await findSuccessLogByTaskId(task.id);
+      
+      if (successLog && successLog.resultUrl) {
+        
+        // Parse response body for additional info
+        let width: number | undefined;
+        let height: number | undefined;
+        let duration: number | undefined;
+        
+        if (successLog.responseBody) {
+          try {
+            const responseData = JSON.parse(successLog.responseBody);
+            width = responseData.width;
+            height = responseData.height;
+            duration = parseInt(responseData.seconds || '0') || 0;
+          } catch {
+            // Ignore parse errors
+          }
+        }
+        
+        // Mark task as completed with the recovered result
+        await this.handleTaskSuccess(task.id, {
+          url: successLog.resultUrl,
+          format: task.type === TaskType.VIDEO ? 'mp4' : 'png',
+          size: 0,
+          width,
+          height,
+          duration,
         });
-
-        this.processQueue();
+        return;
       }
+      
+      // No success log found - mark as failed (don't re-submit to avoid extra cost)
+      await this.handleTaskError(task.id, new Error('任务中断且无法恢复（未找到已完成的结果）'));
+    } else if (
+      // Image/inspiration board task in processing - try to recover from LLM API logs
+      (task.type === TaskType.IMAGE || task.type === TaskType.INSPIRATION_BOARD) &&
+      task.status === TaskStatus.PROCESSING
+    ) {
+      // Try to find completed result from LLM API logs (same as video/character)
+      const { findSuccessLogByTaskId } = await import('./llm-api-logger');
+      const successLog = await findSuccessLogByTaskId(task.id);
+      
+      if (successLog && successLog.resultUrl) {
+        // Mark task as completed with the recovered result
+        await this.handleTaskSuccess(task.id, {
+          url: successLog.resultUrl,
+          format: 'png',
+          size: 0,
+        });
+        return;
+      }
+      
+      // No success log found - mark as failed (don't re-submit to avoid extra cost)
+      await this.handleTaskError(task.id, new Error('任务中断且无法恢复（未找到已完成的结果）'));
     }
   }
 
@@ -308,11 +342,18 @@ export class SWTaskQueue {
     // Save config to storage for persistence
     await taskQueueStorage.saveConfig(geminiConfig, videoConfig);
 
-    // console.log('[SWTaskQueue] Initialized with config');
     this.broadcastToClients({ type: 'TASK_QUEUE_INITIALIZED', success: true });
 
     // Push all current tasks to clients for initial sync
     this.syncTasksToClients();
+
+    // Resume processing tasks that have remoteId (video/character polling)
+    // This handles the case where restoreFromStorage ran before config was available
+    for (const task of this.tasks.values()) {
+      if (this.shouldResumeTask(task) && !this.runningTasks.has(task.id)) {
+        this.resumeTaskExecution(task);
+      }
+    }
 
     // Process any pending tasks
     this.processQueue();
@@ -574,7 +615,6 @@ export class SWTaskQueue {
         timestamp: Date.now(),
         delivered: false,
       });
-      console.log('[SWTaskQueue] Chat result cached:', chatId, 'content length:', fullContent.length);
 
       this.broadcastToClients({
         type: 'CHAT_DONE',
@@ -813,9 +853,9 @@ export class SWTaskQueue {
    * Execute task resumption
    */
   private async executeResume(task: SWTask, remoteId: string): Promise<void> {
-    if (!this.geminiConfig || !this.videoConfig) return;
-
-    // console.log(`[SWTaskQueue] Executing resume for task: ${task.id}`);
+    if (!this.geminiConfig || !this.videoConfig) {
+      return;
+    }
 
     const handlerConfig: HandlerConfig = {
       geminiConfig: this.geminiConfig,
@@ -859,6 +899,7 @@ export class SWTaskQueue {
       const result = await handler.resume(task, handlerConfig);
       await this.handleTaskSuccess(task.id, result);
     } catch (error) {
+      console.error(`[SWTaskQueue] executeResume: 任务 ${task.id} 恢复失败`, error);
       await this.handleTaskError(task.id, error);
     }
   }
@@ -1101,12 +1142,6 @@ export function handleTaskQueueMessage(
     case 'CHAT_GET_CACHED': {
       // Return cached chat result for a specific chatId
       const cached = queue?.getCachedChatResult(message.chatId);
-      console.log('[SWTaskQueue] CHAT_GET_CACHED:', {
-        chatId: message.chatId,
-        found: !!cached,
-        clientId,
-        cachedLength: cached?.fullContent?.length,
-      });
       
       if (cached) {
         // Send the result to the requesting client

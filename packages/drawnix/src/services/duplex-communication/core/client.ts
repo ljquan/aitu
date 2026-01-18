@@ -56,6 +56,7 @@ export class DuplexClient implements EventEmitter {
   // 调试和监控
   private debugEnabled = false;
   private debugLogger?: (message: DuplexMessage, direction: 'send' | 'receive') => void;
+  private performanceMonitoringTimerId: ReturnType<typeof setInterval> | null = null;
 
   private constructor(config: Partial<DuplexConfig> = {}) {
     this.config = { ...DEFAULT_DUPLEX_CONFIG, ...config };
@@ -605,7 +606,10 @@ export class DuplexClient implements EventEmitter {
    * 启动性能监控
    */
   private startPerformanceMonitoring(): void {
-    setInterval(() => {
+    if (this.performanceMonitoringTimerId) {
+      clearInterval(this.performanceMonitoringTimerId);
+    }
+    this.performanceMonitoringTimerId = setInterval(() => {
       this.updatePerformanceMetrics();
     }, 5000); // 每5秒更新一次
   }
@@ -632,5 +636,20 @@ export class DuplexClient implements EventEmitter {
     this.performanceMetrics.errorRate = totalMessages > 0 
       ? this.stats.failedMessages / totalMessages 
       : 0;
+  }
+
+  /**
+   * 销毁客户端，清理所有资源
+   */
+  destroy(): void {
+    if (this.performanceMonitoringTimerId) {
+      clearInterval(this.performanceMonitoringTimerId);
+      this.performanceMonitoringTimerId = null;
+    }
+    this.requestManager.destroy();
+    this.messageSubject.complete();
+    this.pushSubject.complete();
+    this.eventListeners.clear();
+    DuplexClient.instance = null;
   }
 }

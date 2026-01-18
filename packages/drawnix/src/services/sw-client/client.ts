@@ -136,7 +136,6 @@ export class SWTaskQueueClient {
         .subscribe(async (msg) => {
           clearTimeout(initTimeout);
           if (msg.type === 'TASK_QUEUE_INITIALIZED') {
-            console.log('[SWClient] Task queue initialized, checking pending responses...');
             this.initialized = msg.success;
             
             // After initialization, resend any pending tool responses
@@ -307,7 +306,7 @@ export class SWTaskQueueClient {
             ...existing,
             chatId, // Add chatId association
           });
-          console.log('[SWClient] ChatId associated with tool request:', requestId, chatId);
+          // Debug log removed
         }
       };
       
@@ -824,26 +823,22 @@ export class SWTaskQueueClient {
     
     // Check for duplicate request (already processed or in progress) - memory cache
     if (this.processedToolRequests.has(requestId)) {
-      console.log('[SWClient] Ignoring duplicate tool request (already processed in memory):', toolName, requestId);
       return;
     }
     
     if (this.inProgressToolRequests.has(requestId)) {
-      console.log('[SWClient] Ignoring duplicate tool request (in progress):', toolName, requestId);
       return;
     }
     
     // Check IndexedDB for persisted processed requests (survives page refresh)
     const isProcessedInDB = await this.checkProcessedRequestInDB(requestId);
     if (isProcessedInDB) {
-      console.log('[SWClient] Ignoring duplicate tool request (already processed in DB):', toolName, requestId);
       return;
     }
     
     // Mark as in progress (both in memory and IndexedDB)
     this.inProgressToolRequests.add(requestId);
     await this.saveInProgressRequestToDB(requestId, toolName, message.workflowId);
-    console.log('[SWClient] ◀ Received main thread tool request:', toolName, requestId);
     
     // Set current tool request ID for chat-workflow association
     this.currentToolRequestId = requestId;
@@ -885,7 +880,6 @@ export class SWTaskQueueClient {
         }
       }
 
-      console.log('[SWClient] ▶ Sending tool response:', toolName, result.success);
       // Send response back to SW
       await this.postMessage({
         type: 'MAIN_THREAD_TOOL_RESPONSE',
@@ -966,7 +960,6 @@ export class SWTaskQueueClient {
     taskId?: string;
     taskIds?: string[];
   }): Promise<void> {
-    console.log('[SWClient] Saving tool response to IndexedDB:', requestId, response?.success);
     try {
       const db = await this.openToolRequestDB();
       const tx = db.transaction('processedRequests', 'readwrite');
@@ -992,8 +985,6 @@ export class SWTaskQueueClient {
         tx.oncomplete = () => resolve();
         tx.onerror = () => reject(tx.error);
       });
-      console.log('[SWClient] ✓ Tool response saved to IndexedDB:', requestId);
-      
       // Clean up old entries (older than 1 hour) in a separate transaction
       const cleanupTx = db.transaction('processedRequests', 'readwrite');
       const cleanupStore = cleanupTx.objectStore('processedRequests');
@@ -1054,9 +1045,8 @@ export class SWTaskQueueClient {
         tx.oncomplete = () => resolve();
         tx.onerror = () => reject(tx.error);
       });
-      console.log('[SWClient] Tool request marked as in_progress:', requestId);
     } catch (error) {
-      console.warn('[SWClient] Failed to save in-progress request:', error);
+      // Silently handle error
     }
   }
   
@@ -1162,7 +1152,6 @@ export class SWTaskQueueClient {
   ): Promise<boolean> {
     // Track if we've already processed this to avoid duplicate execution
     if (this.processedToolRequests.has(requestId)) {
-      console.log('[SWClient] Request already processed:', requestId);
       return true;
     }
 
@@ -1170,11 +1159,8 @@ export class SWTaskQueueClient {
     // This handles the race condition where chat completed before we registered the listener
     const initialResult = await this.queryCachedChatResult(chatId);
     if (initialResult.found && initialResult.fullContent) {
-      console.log('[SWClient] ✓ Chat result found on initial query:', requestId);
       return this.sendRecoveredChatResponse(requestId, initialResult.fullContent);
     }
-
-    console.log('[SWClient] Chat result not cached yet, waiting for CHAT_DONE notification...');
 
     // Step 2: Wait for CHAT_DONE event with timeout
     return new Promise<boolean>((resolve) => {
@@ -1200,7 +1186,7 @@ export class SWTaskQueueClient {
         if (resolved) return;
         resolved = true;
         cleanup();
-        console.log('[SWClient] Chat recovery timed out after', maxWaitTime / 1000, 'seconds');
+        // Chat recovery timed out
         resolve(false);
       };
 
@@ -1211,7 +1197,6 @@ export class SWTaskQueueClient {
 
         // Listen for CHAT_DONE with our chatId
         if (data.type === 'CHAT_DONE' && data.chatId === chatId) {
-          console.log('[SWClient] ✓ Received CHAT_DONE notification for:', chatId);
           await handleSuccess(data.fullContent);
         }
       };
@@ -1233,7 +1218,6 @@ export class SWTaskQueueClient {
   ): Promise<boolean> {
     // Avoid duplicate processing
     if (this.processedToolRequests.has(requestId)) {
-      console.log('[SWClient] Skipping duplicate response for:', requestId);
       return true;
     }
 
@@ -1248,7 +1232,6 @@ export class SWTaskQueueClient {
 
     const workflowJson = parseWorkflowJson(fullContent);
     if (workflowJson && workflowJson.next.length > 0) {
-      console.log('[SWClient] Parsed workflow JSON, found', workflowJson.next.length, 'steps');
       // Use requestId as prefix to ensure uniqueness across requests
       addSteps = workflowJson.next.map((item, index) => ({
         id: `${requestId}-step-${index}`,
@@ -1279,7 +1262,6 @@ export class SWTaskQueueClient {
     // Save to IndexedDB
     await this.saveProcessedRequestToDB(requestId, response);
     
-    console.log('[SWClient] ✓ Chat result response sent:', requestId, addSteps ? `with ${addSteps.length} steps` : 'no steps');
     return true;
   }
   
@@ -1288,36 +1270,11 @@ export class SWTaskQueueClient {
    * This ensures workflow continues even after page refresh
    */
   async resendPendingResponses(): Promise<void> {
-    console.log('[SWClient] Checking for pending tool responses to resend...');
-    
-    // Debug: List all entries in IndexedDB
-    try {
-      const db = await this.openToolRequestDB();
-      const tx = db.transaction('processedRequests', 'readonly');
-      const store = tx.objectStore('processedRequests');
-      const allRequest = store.getAll();
-      allRequest.onsuccess = () => {
-        const all = allRequest.result || [];
-        console.log('[SWClient] IndexedDB entries:', all.length, all.map((r: any) => ({
-          id: r.id,
-          status: r.status,
-          hasResponse: !!r.response,
-          responseSent: r.responseSent,
-          toolName: r.toolName,
-        })));
-      };
-    } catch (e) {
-      console.warn('[SWClient] Failed to list IndexedDB entries:', e);
-    }
-    
     // First, check for completed but unsent responses
     const pending = await this.getPendingResponses();
     
     if (pending.length > 0) {
-      console.log('[SWClient] Resending pending tool responses:', pending.length);
-      
       for (const { requestId, response } of pending) {
-        console.log('[SWClient] ▶ Resending saved response:', requestId, response.success);
         
         await this.postMessage({
           type: 'MAIN_THREAD_TOOL_RESPONSE',
@@ -1332,7 +1289,6 @@ export class SWTaskQueueClient {
         
         // Mark as sent
         await this.markResponseSentToDB(requestId);
-        console.log('[SWClient] ✓ Response resent and marked:', requestId);
       }
     }
     
@@ -1340,28 +1296,16 @@ export class SWTaskQueueClient {
     const interrupted = await this.getInterruptedRequests();
     
     if (interrupted.length > 0) {
-      console.log('[SWClient] Found interrupted tool requests:', interrupted.length);
-      
       for (const { requestId, toolName, chatId } of interrupted) {
         // If there's an associated chatId, try to recover the result from SW cache
-        // Chat might still be in progress, so we retry a few times with delay
         if (chatId) {
-          console.log('[SWClient] ▶ Attempting to recover chat result for:', requestId, chatId);
-          
-          // Try hybrid approach: initial query + event notification + timeout
           const recovered = await this.recoverChatResultWithNotification(requestId, chatId);
-          
           if (recovered) {
-            continue; // Skip failure handling
+            continue;
           }
-          
-          console.log('[SWClient] Chat result not recovered for:', requestId);
         }
         
         // No cached result or no chatId - send failure response
-        console.log('[SWClient] ▶ Sending failure response for interrupted request:', requestId, toolName);
-        
-        // Send failure response to SW so workflow can continue (fail gracefully)
         await this.postMessage({
           type: 'MAIN_THREAD_TOOL_RESPONSE',
           requestId,
@@ -1374,12 +1318,7 @@ export class SWTaskQueueClient {
           success: false,
           error: '页面刷新导致工具执行中断',
         });
-        console.log('[SWClient] ✓ Interrupted request marked as failed:', requestId);
       }
-    }
-    
-    if (pending.length === 0 && interrupted.length === 0) {
-      console.log('[SWClient] No pending tool responses to resend');
     }
   }
   

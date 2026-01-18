@@ -155,6 +155,7 @@ export class MigrationManager {
   };
   
   private monitoringStartTime = Date.now();
+  private performanceMonitoringTimerId: ReturnType<typeof setInterval> | null = null;
 
   private constructor(config: Partial<MigrationConfig> = {}) {
     this.config = { ...DEFAULT_MIGRATION_CONFIG, ...config };
@@ -519,7 +520,10 @@ export class MigrationManager {
    * 启动性能监控
    */
   private startPerformanceMonitoring(): void {
-    setInterval(() => {
+    if (this.performanceMonitoringTimerId) {
+      clearInterval(this.performanceMonitoringTimerId);
+    }
+    this.performanceMonitoringTimerId = setInterval(() => {
       this.updatePerformanceMetrics();
       this.checkAutoFallback();
     }, 10000); // 每10秒检查一次
@@ -568,6 +572,20 @@ export class MigrationManager {
       errorStats: this.status.errorStats,
       performanceComparison: this.status.performanceComparison,
     });
+  }
+
+  /**
+   * 销毁迁移管理器，清理所有资源
+   */
+  destroy(): void {
+    if (this.performanceMonitoringTimerId) {
+      clearInterval(this.performanceMonitoringTimerId);
+      this.performanceMonitoringTimerId = null;
+    }
+    this.performanceMetrics.clear();
+    this.duplexClient?.destroy();
+    this.duplexServer?.destroy();
+    MigrationManager.instance = null;
   }
 }
 

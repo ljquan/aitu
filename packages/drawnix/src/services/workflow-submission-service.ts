@@ -145,9 +145,13 @@ export type WorkflowEvent =
 // Workflow Submission Service
 // ============================================================================
 
+// Cleanup delay: 5 minutes after workflow completes/fails
+const WORKFLOW_CLEANUP_DELAY = 5 * 60 * 1000;
+
 class WorkflowSubmissionService {
   private events$ = new Subject<WorkflowEvent>();
   private workflows: Map<string, WorkflowDefinition> = new Map();
+  private cleanupTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
   private messageHandler: ((event: MessageEvent) => void) | null = null;
   private initialized = false;
   private workflowBridge: WorkflowBridge | null = null;
@@ -233,7 +237,6 @@ class WorkflowSubmissionService {
         this.workflows.set(workflow.id, workflow as unknown as WorkflowDefinition);
       }
       
-      console.log(`[WorkflowSubmissionService] Recovered ${workflows.length} workflows`);
       return workflows as unknown as WorkflowDefinition[];
     } catch (error) {
       console.warn('[WorkflowSubmissionService] Failed to recover workflows:', error);
@@ -315,32 +318,19 @@ class WorkflowSubmissionService {
    * Submit a workflow for execution
    */
   async submit(workflow: WorkflowDefinition): Promise<void> {
-    console.log('[WorkflowSubmissionService] submit() called:', {
-      workflowId: workflow.id,
-      stepsCount: workflow.steps.length,
-      hasContext: !!workflow.context,
-      referenceImagesCount: workflow.context?.referenceImages?.length || 0,
-      timestamp: new Date().toISOString(),
-    });
-    
     const sw = await this.getServiceWorker();
     if (!sw) {
-      console.error('[WorkflowSubmissionService] ✗ Service Worker not available');
       throw new Error('Service Worker not available');
     }
 
     // Store locally
     this.workflows.set(workflow.id, workflow);
 
-    console.log('[WorkflowSubmissionService] ▶ Sending WORKFLOW_SUBMIT to SW:', workflow.id);
-
     // Send to SW
     sw.postMessage({
       type: 'WORKFLOW_SUBMIT',
       workflow,
     });
-
-    console.log('[WorkflowSubmissionService] ✓ WORKFLOW_SUBMIT sent:', workflow.id);
   }
 
   /**
@@ -661,6 +651,9 @@ class WorkflowSubmissionService {
       workflowId: data.workflowId,
       workflow: data.workflow,
     });
+
+    // Schedule cleanup to prevent memory leak (keep for 5 minutes for potential queries)
+    this.scheduleWorkflowCleanup(data.workflowId);
   }
 
   private handleWorkflowFailed(data: any): void {
@@ -681,6 +674,9 @@ class WorkflowSubmissionService {
       workflowId: data.workflowId,
       error: data.error,
     });
+
+    // Schedule cleanup to prevent memory leak
+    this.scheduleWorkflowCleanup(data.workflowId);
   }
 
   private handleCanvasOperation(data: any): void {
@@ -746,6 +742,26 @@ class WorkflowSubmissionService {
     if (!navigator.serviceWorker) return null;
     const registration = await navigator.serviceWorker.ready;
     return registration.active;
+  }
+
+  /**
+   * Schedule cleanup of a completed/failed workflow to prevent memory leak.
+   * Workflows are kept for a short period to allow UI to query them.
+   */
+  private scheduleWorkflowCleanup(workflowId: string): void {
+    // Clear any existing timer for this workflow
+    const existingTimer = this.cleanupTimers.get(workflowId);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
+
+    // Schedule new cleanup
+    const timer = setTimeout(() => {
+      this.workflows.delete(workflowId);
+      this.cleanupTimers.delete(workflowId);
+    }, WORKFLOW_CLEANUP_DELAY);
+
+    this.cleanupTimers.set(workflowId, timer);
   }
 }
 

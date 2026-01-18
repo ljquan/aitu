@@ -3,6 +3,11 @@ import * as ReactDOM from 'react-dom/client';
 import * as Sentry from '@sentry/react';
 import App from './app/app';
 
+// ===== 初始化崩溃日志系统 =====
+// 必须尽早初始化，以捕获启动阶段的内存状态和错误
+import { initCrashLogger } from './crash-logger';
+initCrashLogger();
+
 // ===== 初始化 Sentry 错误监控 =====
 // 必须在其他代码之前初始化，以捕获所有错误
 Sentry.init({
@@ -212,21 +217,17 @@ if ('serviceWorker' in navigator) {
   
   // 监听用户确认升级事件
   window.addEventListener('user-confirmed-upgrade', () => {
-    console.log('[Main] User confirmed upgrade, checking for waiting worker...');
-    
     // 标记用户已确认升级，允许后续的 reload
     userConfirmedUpgrade = true;
     
     // 优先使用 pendingWorker
     if (pendingWorker) {
-      console.log('[Main] Sending SKIP_WAITING to pendingWorker');
       pendingWorker.postMessage({ type: 'SKIP_WAITING' });
       return;
     }
     
     // 如果没有 pendingWorker，尝试查找 waiting 状态的 worker
     if (swRegistration && swRegistration.waiting) {
-      console.log('[Main] Sending SKIP_WAITING to swRegistration.waiting');
       swRegistration.waiting.postMessage({ type: 'SKIP_WAITING' });
       return;
     }
@@ -234,7 +235,6 @@ if ('serviceWorker' in navigator) {
     // 如果都没有 waiting worker，说明 SW 已经是最新的 active 状态
     // 这种情况通常发生在首次安装后，SW 直接 activate 了
     // 清除缓存并强制刷新
-    console.log('[Main] No waiting worker found, clearing caches and hard reload...');
     
     // 清除旧的静态资源缓存以确保获取最新资源
     caches.keys().then(cacheNames => {

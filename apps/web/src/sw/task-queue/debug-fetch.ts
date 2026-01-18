@@ -241,7 +241,9 @@ export async function debugFetch(
           (_, mimeType) => `[📷 image/${mimeType}]`
         );
         
-        requestBody = displayBody.length > 3000 
+        // 对于 chat/completions 接口，不截断请求体（用于调试和成本追踪）
+        const isChatEndpoint = url.includes('/chat/completions');
+        requestBody = !isChatEndpoint && displayBody.length > 3000 
           ? displayBody.substring(0, 3000) + '...(truncated)' 
           : displayBody;
       } catch {

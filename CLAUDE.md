@@ -1523,6 +1523,35 @@ const handleTouchEnd = () => {
 - **文件大小限制**: 单个文件不超过 500 行
 - **文档语言**: 规格文档使用中文
 
+### navigator.storage.estimate() 返回浏览器配额而非磁盘空间
+
+**场景**: 需要获取用户设备存储空间信息时
+
+❌ **错误示例**:
+```typescript
+// 错误：误以为 quota 是实际磁盘剩余空间
+const estimate = await navigator.storage.estimate();
+const diskFreeSpace = estimate.quota; // ❌ 这不是磁盘剩余空间！
+console.log(`磁盘剩余: ${diskFreeSpace / 1024 / 1024 / 1024} GB`); 
+// 可能显示 500+ GB，但实际磁盘只剩 10GB
+```
+
+✅ **正确示例**:
+```typescript
+// 正确理解：quota 是浏览器分配给该站点的配额上限
+const estimate = await navigator.storage.estimate();
+const usage = estimate.usage || 0;   // 该站点已使用的存储
+const quota = estimate.quota || 0;   // 浏览器分配的配额（通常是磁盘空间的某个比例）
+const usagePercent = quota > 0 ? (usage / quota) * 100 : 0;
+
+// 只用于判断站点存储使用率，不用于显示磁盘空间
+if (usagePercent > 80) {
+  console.warn('站点存储使用率较高');
+}
+```
+
+**原因**: `navigator.storage.estimate()` 返回的 `quota` 是浏览器为该源（origin）分配的存储配额，通常是磁盘可用空间的某个比例（如 50%），而非实际磁盘剩余空间。向用户展示这个值会造成误解。Web API 无法直接获取真实的磁盘剩余空间。
+
 ### 异步初始化模式
 
 **场景**: 使用 `settingsManager` 或其他需要异步初始化的服务时
@@ -1947,6 +1976,146 @@ setInterval(() => {
 - 项目和画板数据
 
 **原因**: 本项目的素材库通过 `taskQueueService.getTasksByStatus(COMPLETED)` 获取 AI 生成的素材。如果自动删除已完成的任务，素材库就无法展示这些 AI 生成的图片/视频。类似地，聊天历史、工作流数据都是用户的重要数据，不应被自动删除。
+
+### 类服务的 setInterval 必须保存 ID 并提供 destroy 方法
+
+**场景**: 在类（Service、Manager、Client）中使用 `setInterval` 进行定期任务（如清理、监控、心跳）
+
+❌ **错误示例**:
+```typescript
+class RequestManager {
+  constructor() {
+    // 错误：没有保存 interval ID，无法清理
+    setInterval(() => {
+      this.cleanupExpiredRequests();
+    }, 60000);
+  }
+  // 没有 destroy 方法！
+}
+
+class DuplexClient {
+  private startPerformanceMonitoring(): void {
+    // 错误：interval 一旦创建就永远运行
+    setInterval(() => {
+      this.updatePerformanceMetrics();
+    }, 5000);
+  }
+}
+```
+
+✅ **正确示例**:
+```typescript
+class RequestManager {
+  private cleanupTimerId: ReturnType<typeof setInterval> | null = null;
+
+  constructor() {
+    this.startCleanupTimer();
+  }
+
+  private startCleanupTimer(): void {
+    if (this.cleanupTimerId) {
+      clearInterval(this.cleanupTimerId);
+    }
+    this.cleanupTimerId = setInterval(() => {
+      this.cleanupExpiredRequests();
+    }, 60000);
+  }
+
+  destroy(): void {
+    if (this.cleanupTimerId) {
+      clearInterval(this.cleanupTimerId);
+      this.cleanupTimerId = null;
+    }
+    // 清理其他资源...
+  }
+}
+```
+
+**检查清单**:
+- 每个 `setInterval` 调用都保存返回的 ID 到类成员变量
+- 类必须提供 `destroy()` 方法用于清理定时器
+- 重复调用启动方法时先清理旧定时器
+- 单例模式的类在重新获取实例前也需要清理
+
+**原因**: 类服务通常是单例或长期存在的，但在某些场景下（如热更新、测试、页面切换）需要销毁重建。未清理的 `setInterval` 会导致：
+1. 内存泄漏（闭包持有整个类实例）
+2. 定时器累积（每次创建新实例都增加一个定时器）
+3. 回调执行在已销毁的实例上
+
+### Map/Set 需要清理机制防止无限增长
+
+**场景**: 使用 Map 或 Set 缓存数据（如工作流、请求、会话）
+
+❌ **错误示例**:
+```typescript
+class WorkflowService {
+  private workflows: Map<string, Workflow> = new Map();
+
+  submit(workflow: Workflow): void {
+    this.workflows.set(workflow.id, workflow);
+    // 只有 set，没有 delete！
+  }
+
+  handleCompleted(workflowId: string): void {
+    const workflow = this.workflows.get(workflowId);
+    workflow.status = 'completed';
+    // 完成后没有从 Map 中移除，导致无限增长
+  }
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 清理延迟：完成后保留 5 分钟供查询
+const CLEANUP_DELAY = 5 * 60 * 1000;
+
+class WorkflowService {
+  private workflows: Map<string, Workflow> = new Map();
+  private cleanupTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
+
+  handleCompleted(workflowId: string): void {
+    const workflow = this.workflows.get(workflowId);
+    if (workflow) {
+      workflow.status = 'completed';
+    }
+    // 调度延迟清理
+    this.scheduleCleanup(workflowId);
+  }
+
+  handleFailed(workflowId: string, error: string): void {
+    const workflow = this.workflows.get(workflowId);
+    if (workflow) {
+      workflow.status = 'failed';
+      workflow.error = error;
+    }
+    this.scheduleCleanup(workflowId);
+  }
+
+  private scheduleCleanup(workflowId: string): void {
+    // 清除已有的清理定时器
+    const existingTimer = this.cleanupTimers.get(workflowId);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
+
+    const timer = setTimeout(() => {
+      this.workflows.delete(workflowId);
+      this.cleanupTimers.delete(workflowId);
+    }, CLEANUP_DELAY);
+
+    this.cleanupTimers.set(workflowId, timer);
+  }
+}
+```
+
+**常见需要清理的 Map/Set**:
+- `workflows` - 工作流完成/失败后
+- `pendingRequests` - 请求超时或完成后
+- `sessions` - 会话过期后
+- `subscriptions` - 取消订阅后
+- `batches` - 批处理完成后
+
+**原因**: 没有清理机制的 Map/Set 会随着使用不断增长，最终导致内存溢出。即使单个条目很小，长期积累也会消耗大量内存。应该在数据不再需要时（完成、失败、超时、取消）及时清理。
 
 ### 调试日志清理规范
 

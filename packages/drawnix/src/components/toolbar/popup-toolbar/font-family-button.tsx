@@ -141,6 +141,12 @@ export const PopupFontFamilyButton: React.FC<PopupFontFamilyButtonProps> = ({
 
   // 删除自定义字体
   const handleDeleteCustomFont = useCallback((fontId: string) => {
+    // 找到要删除的字体并 revoke 其 Blob URL
+    const fontToDelete = customFonts.find((f) => f.id === fontId);
+    if (fontToDelete?.url?.startsWith('blob:')) {
+      URL.revokeObjectURL(fontToDelete.url);
+    }
+    
     const updatedFonts = customFonts.filter((f) => f.id !== fontId);
     setCustomFonts(updatedFonts);
     localStorage.setItem('custom-fonts', JSON.stringify(updatedFonts));
