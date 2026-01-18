@@ -1523,6 +1523,35 @@ const handleTouchEnd = () => {
 - **文件大小限制**: 单个文件不超过 500 行
 - **文档语言**: 规格文档使用中文
 
+### navigator.storage.estimate() 返回浏览器配额而非磁盘空间
+
+**场景**: 需要获取用户设备存储空间信息时
+
+❌ **错误示例**:
+```typescript
+// 错误：误以为 quota 是实际磁盘剩余空间
+const estimate = await navigator.storage.estimate();
+const diskFreeSpace = estimate.quota; // ❌ 这不是磁盘剩余空间！
+console.log(`磁盘剩余: ${diskFreeSpace / 1024 / 1024 / 1024} GB`); 
+// 可能显示 500+ GB，但实际磁盘只剩 10GB
+```
+
+✅ **正确示例**:
+```typescript
+// 正确理解：quota 是浏览器分配给该站点的配额上限
+const estimate = await navigator.storage.estimate();
+const usage = estimate.usage || 0;   // 该站点已使用的存储
+const quota = estimate.quota || 0;   // 浏览器分配的配额（通常是磁盘空间的某个比例）
+const usagePercent = quota > 0 ? (usage / quota) * 100 : 0;
+
+// 只用于判断站点存储使用率，不用于显示磁盘空间
+if (usagePercent > 80) {
+  console.warn('站点存储使用率较高');
+}
+```
+
+**原因**: `navigator.storage.estimate()` 返回的 `quota` 是浏览器为该源（origin）分配的存储配额，通常是磁盘可用空间的某个比例（如 50%），而非实际磁盘剩余空间。向用户展示这个值会造成误解。Web API 无法直接获取真实的磁盘剩余空间。
+
 ### 异步初始化模式
 
 **场景**: 使用 `settingsManager` 或其他需要异步初始化的服务时
