@@ -2849,6 +2849,51 @@ const trimmedUrl = await trimImageWhiteAndTransparentBorder(imageDataUrl);
 2. 确保一致的处理行为
 3. 便于统一优化和修复 bug
 
+### SSH 远程执行复杂 Shell 命令应使用 base64 编码
+
+**场景**: 通过 SSH 在远程服务器执行包含引号、变量替换等复杂 shell 脚本时
+
+❌ **错误示例**:
+```javascript
+// 错误：多层引号转义导致 shell 语法错误
+const remoteCommand = `bash -c '
+  VERSION=$(tar -xzf ${uploadsDir}/${tarName} -O web/version.json 2>/dev/null | grep '"'"'"version"'"'"' | sed '"'"'s/.*"version": "\\([^"]*\\)".*/\1/'"'"')
+  if [ -z "$VERSION" ]; then
+    echo "无法读取版本号"
+    exit 1
+  fi
+  // ... 更多命令
+'`;
+// 错误：/bin/sh: -c: line 1: unexpected EOF while looking for matching `)'
+```
+
+✅ **正确示例**:
+```javascript
+// 正确：使用 base64 编码避免引号转义问题
+const extractScript = `VERSION=$(tar -xzf ${uploadsDir}/${tarName} -O web/version.json 2>/dev/null | grep '"version"' | sed 's/.*"version": "\\([^"]*\\)".*/\\1/')
+if [ -z "$VERSION" ]; then
+  echo "无法读取版本号"
+  exit 1
+fi
+// ... 更多命令`;
+
+// 将脚本编码为 base64，避免引号转义问题
+const encodedScript = Buffer.from(extractScript).toString('base64');
+const remoteCommand = `echo ${encodedScript} | base64 -d | bash`;
+
+sshCommand += ` ${config.DEPLOY_USER}@${config.DEPLOY_HOST} "${remoteCommand}"`;
+```
+
+**原因**: 
+- SSH 命令需要经过多层引号转义（Node.js 字符串 → SSH 命令 → shell 执行），复杂的引号嵌套容易导致语法错误
+- base64 编码将脚本转换为纯 ASCII 字符串，避免了所有引号转义问题
+- 远程服务器通过 `base64 -d` 解码后执行，保持脚本原始格式
+
+**适用场景**:
+- 通过 SSH 执行多行 shell 脚本
+- 脚本中包含引号、变量替换、管道等复杂语法
+- 需要避免引号转义导致的语法错误
+
 ### 验证命令
 
 修改代码后必须执行以下验证命令：
