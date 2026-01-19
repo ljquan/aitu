@@ -2708,6 +2708,92 @@ async function processReferenceImage(url: string) {
 - 因此必须直接从 Cache API 获取，而不是通过 fetch
 - 注意缓存 key 是完整 URL，需要用 `self.location.origin` 构造
 
+### Service Worker 中 opaque 响应的处理
+
+**场景**: 使用 `no-cors` 模式获取外部图片时，会返回 opaque 响应
+
+❌ **错误示例**:
+```typescript
+// 错误：只检查 status !== 0，会把 opaque 响应当作失败
+for (let options of fetchOptions) {
+  response = await fetch(currentUrl, options);
+  if (response && response.status !== 0) {
+    break; // opaque 响应 status === 0，会被跳过！
+  }
+}
+
+// 错误：尝试读取 opaque 响应的 body
+if (response.type === 'opaque') {
+  const blob = await response.blob(); // blob 是空的！
+  const corsResponse = new Response(blob, { ... }); // 创建的是空响应
+  await cache.put(request, corsResponse); // 缓存了空响应
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：同时检查 status 和 type
+for (let options of fetchOptions) {
+  response = await fetch(currentUrl, options);
+  // opaque 响应 status === 0 但 type === 'opaque'，应该接受
+  if (response && (response.status !== 0 || response.type === 'opaque')) {
+    break;
+  }
+}
+
+// 正确：opaque 响应无法缓存，直接返回给浏览器
+if (response.type === 'opaque') {
+  // 标记域名，后续请求跳过 SW
+  markCorsFailedDomain(hostname);
+  // 直接返回，依赖浏览器 disk cache
+  return response;
+}
+```
+
+**原因**:
+- `no-cors` 模式返回的 opaque 响应，`status` 始终是 `0`，`type` 是 `'opaque'`
+- opaque 响应的 `body` 是安全锁定的，无法读取（返回空 Blob）
+- 浏览器可以用 opaque 响应显示图片，但 SW 无法读取或有效缓存
+- 对于 CORS 配置错误的服务器，应该依赖浏览器的 disk cache
+
+### Cache API 返回前必须验证响应有效性
+
+**场景**: 从 Cache API 返回缓存的响应时
+
+❌ **错误示例**:
+```typescript
+// 错误：直接返回缓存，没有验证内容是否有效
+const cachedResponse = await cache.match(request);
+if (cachedResponse) {
+  return cachedResponse; // 可能是之前错误缓存的空响应！
+}
+```
+
+✅ **正确示例**:
+```typescript
+const cachedResponse = await cache.match(request);
+if (cachedResponse) {
+  const responseClone = cachedResponse.clone();
+  const blob = await responseClone.blob();
+  
+  // 检查 blob 是否为空
+  if (blob.size === 0) {
+    console.warn('检测到空缓存，删除并重新获取');
+    await cache.delete(request);
+    // 继续执行网络请求逻辑...
+  } else {
+    // 缓存有效，返回响应
+    return cachedResponse;
+  }
+}
+```
+
+**原因**:
+- 之前的代码 bug（如尝试缓存 opaque 响应的空 body）可能导致空响应被缓存
+- 返回空响应会导致图片无法显示，用户体验差
+- 在返回前验证 `blob.size > 0` 可以自动修复历史问题
+- 删除无效缓存后重新获取，确保用户看到正确的内容
+
 ### 图像处理工具复用规范
 
 **场景**: 需要对图片进行边框检测、去白边、裁剪等处理时
