@@ -65,6 +65,7 @@ export const Z_INDEX = {
   // ==========================================
   // Layer 6: Notifications (6000-6999)
   // ==========================================
+  PERFORMANCE_PANEL: 5900, // 性能面板，低于通知但高于对话框
   ACTIVE_TASK_WARNING: 6000,
   TOAST: 6100,
   MESSAGE: 6200,

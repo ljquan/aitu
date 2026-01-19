@@ -428,16 +428,18 @@ packages/react-text/
 - 聊天会话和消息
 
 ### 素材库数据来源
-素材库（AssetContext）合并两个数据来源展示：
+素材库（AssetContext）合并三个数据来源展示（按优先级）：
 
-1. **本地上传的素材**：存储在 IndexedDB 中（通过 `asset-storage-service.ts`）
-2. **AI 生成的素材**：直接从任务队列读取已完成的任务（通过 `task-queue-service.ts`）
+1. **本地上传的素材**（优先级 1）：IndexedDB 元数据 + Cache Storage 实际数据
+2. **AI 生成的素材**（优先级 2）：直接从任务队列读取已完成的任务
+3. **Cache Storage 媒体**（优先级 3）：`/__aitu_cache__/` 和 `/asset-library/` 前缀的媒体文件
 
 **数据流**：
 ```
 素材库展示：
-├── 本地上传素材 ← IndexedDB (asset-storage-service)
-└── AI 生成素材 ← 任务队列 (task-queue-service) 已完成的任务
+├── 本地上传素材 ← IndexedDB 元数据（验证 Cache Storage 有数据）
+├── AI 生成素材 ← 任务队列已完成的任务
+└── Cache Storage 媒体 ← drawnix-images 缓存（用于补充，去重后）
 
 删除素材：
 ├── 本地素材 → assetStorageService.removeAsset()
@@ -445,9 +447,19 @@ packages/react-text/
 ```
 
 **设计原则**：
+- **Cache Storage 是唯一数据真相**：IndexedDB 只存元数据，实际数据在 Cache Storage
+- 本地上传素材会验证 Cache Storage 中有实际数据，否则不显示（避免 404）
 - AI 生成的素材不重复存储，直接使用任务结果中的原始 URL
 - 只有本地上传的素材才使用 `/asset-library/` 前缀的 URL
-- `loadAssets` 方法合并两个来源的数据，按创建时间倒序排列
+- `loadAssets` 方法合并三个来源的数据，按 URL 去重，按创建时间倒序排列
+
+**缓存策略区分**：
+| 数据类型 | Cache Storage | IndexedDB | 素材库显示 |
+|---------|---------------|-----------|-----------|
+| AI 生成图片/视频 | ✅ | ✅ 元数据 | ✅ 通过任务队列 |
+| 本地上传素材 | ✅ | ✅ 元数据 | ✅ |
+| 分割图片 | ✅ | ❌ | ✅ 通过 Cache Storage |
+| Base64 迁移图片 | ✅ | ❌ | ✅ 通过 Cache Storage |
 
 ---
 
@@ -3562,6 +3574,140 @@ function trimLogsWithPriority(maxLogs) {
 4. 正常记录
 
 **原因**: 正常请求通常不需要回溯，而问题请求是排查问题的关键依据。如果问题请求被正常请求挤掉，会大大增加问题定位难度。
+
+---
+
+### 批量加载与单个加载方法必须保持逻辑一致
+
+**场景**: 存在 `loadAll*()` 和 `load*()` 两种加载方法时
+
+❌ **错误示例**:
+```typescript
+// loadBoard 有迁移逻辑
+async loadBoard(id: string): Promise<Board | null> {
+  const board = await this.getBoardsStore().getItem(id);
+  if (board?.elements) {
+    await migrateElementsBase64Urls(board.elements);  // ✅ 有迁移
+  }
+  return board;
+}
+
+// loadAllBoards 缺少迁移逻辑
+async loadAllBoards(): Promise<Board[]> {
+  const boards: Board[] = [];
+  await this.getBoardsStore().iterate((value) => {
+    boards.push(value);  // ❌ 没有迁移！
+  });
+  return boards;
+}
+// 问题：应用初始化用 loadAllBoards()，迁移逻辑永远不会执行
+```
+
+✅ **正确示例**:
+```typescript
+async loadAllBoards(): Promise<Board[]> {
+  const boards: Board[] = [];
+  await this.getBoardsStore().iterate((value) => {
+    if (value.elements) {
+      value.elements = migrateElementsFillData(value.elements);
+    }
+    boards.push(value);
+  });
+  
+  // 迁移 Base64 图片 URL（与 loadBoard 保持一致）
+  for (const board of boards) {
+    if (board.elements) {
+      const migrated = await migrateElementsBase64Urls(board.elements);
+      if (migrated) await this.saveBoard(board);
+    }
+  }
+  
+  return boards;
+}
+```
+
+**原因**: 应用初始化通常使用批量加载方法（`loadAll*`），而开发时可能只在单个加载方法中添加新逻辑。这会导致新逻辑在实际运行时永远不会执行。
+
+---
+
+### IndexedDB 元数据必须验证 Cache Storage 实际数据
+
+**场景**: IndexedDB 存储元数据，Cache Storage 存储实际 Blob 数据
+
+❌ **错误示例**:
+```typescript
+// 只从 IndexedDB 读取元数据，不验证 Cache Storage
+async getAllAssets(): Promise<Asset[]> {
+  const keys = await this.store.keys();
+  return Promise.all(keys.map(async key => {
+    const stored = await this.store.getItem(key);
+    return storedAssetToAsset(stored);  // ❌ 不验证实际数据是否存在
+  }));
+}
+// 问题：IndexedDB 有记录但 Cache Storage 数据被清理，导致 404
+```
+
+✅ **正确示例**:
+```typescript
+async getAllAssets(): Promise<Asset[]> {
+  // 先获取 Cache Storage 中的有效 URL
+  const cache = await caches.open('drawnix-images');
+  const validUrls = new Set(
+    (await cache.keys()).map(req => new URL(req.url).pathname)
+  );
+  
+  const keys = await this.store.keys();
+  return Promise.all(keys.map(async key => {
+    const stored = await this.store.getItem(key);
+    
+    // 验证 Cache Storage 中有实际数据
+    if (stored.url.startsWith('/asset-library/')) {
+      if (!validUrls.has(stored.url)) {
+        console.warn('Asset not in Cache Storage, skipping:', stored.url);
+        return null;  // ✅ 跳过无效资源
+      }
+    }
+    
+    return storedAssetToAsset(stored);
+  }));
+}
+```
+
+**原因**: 
+- IndexedDB 和 Cache Storage 是独立的存储机制
+- Cache Storage 可能被浏览器清理（存储压力时）
+- 如果不验证，会显示实际无法加载的资源，导致 404 错误
+
+---
+
+### 本地缓存图片只存 Cache Storage，不存 IndexedDB
+
+**场景**: 缓存本地生成的图片（如分割图片、Base64 迁移、合并图片）
+
+❌ **错误示例**:
+```typescript
+// 本地图片也存入 IndexedDB 元数据
+const stableUrl = `/__aitu_cache__/image/${taskId}.png`;
+await unifiedCacheService.cacheMediaFromBlob(stableUrl, blob, 'image', { taskId });
+// 问题：IndexedDB 会堆积大量不需要的元数据
+```
+
+✅ **正确示例**:
+```typescript
+// 本地图片只存 Cache Storage
+const stableUrl = `/__aitu_cache__/image/${taskId}.png`;
+await unifiedCacheService.cacheToCacheStorageOnly(stableUrl, blob);
+// ✅ 只存实际数据，不存元数据
+```
+
+**适用场景**:
+- ✅ 只存 Cache Storage：分割图片、Base64 迁移图片、合并图片
+- ✅ 同时存 Cache Storage + IndexedDB：AI 生成图片、本地上传素材
+
+**原因**: 
+- 本地图片不需要在素材库单独显示（它们只是画布元素的缓存）
+- 减少 IndexedDB 存储压力
+- 避免 IndexedDB 和 Cache Storage 数据不一致
 
 ---
 

@@ -1,0 +1,219 @@
+/**
+ * PerformancePanel Styles
+ *
+ * 性能监控面板样式 - 精致竖条布局
+ */
+
+@import '../../styles/common-variables';
+
+.performance-panel {
+  position: fixed;
+  right: 16px;
+  bottom: 100px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px;
+  background: rgba(255, 255, 255, 0.96);
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08), 0 0 1px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(8px);
+  user-select: none;
+  transition: box-shadow 0.2s ease, transform 0.15s ease;
+  width: 36px;
+
+  &:hover {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12), 0 0 1px rgba(0, 0, 0, 0.1);
+  }
+
+  &--dragging {
+    cursor: grabbing;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+    transform: scale(1.02);
+  }
+
+  // 警告级别 - 微妙的边框提示
+  &--warning {
+    border: 1px solid rgba(245, 158, 11, 0.25);
+  }
+
+  &--critical {
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    background: rgba(254, 242, 242, 0.96);
+  }
+
+  // 分隔线
+  &__divider {
+    width: 20px;
+    height: 1px;
+    background: rgba(0, 0, 0, 0.06);
+    margin: 2px 0;
+  }
+
+  // 拖拽手柄
+  &__drag-handle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 12px;
+    color: #d1d5db;
+    cursor: grab;
+    border-radius: 4px;
+    transition: color 0.15s ease;
+
+    &:hover {
+      color: #9ca3af;
+    }
+
+    &:active {
+      cursor: grabbing;
+    }
+
+    svg {
+      width: 12px;
+      height: 12px;
+    }
+  }
+
+  // 主内容区域 - 竖向布局
+  &__content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    cursor: help;
+    padding: 4px 0;
+  }
+
+  &__icon {
+    font-size: 12px;
+    line-height: 1;
+  }
+
+  &__value {
+    font-size: 10px;
+    font-weight: 600;
+    color: #6b7280;
+    line-height: 1;
+    
+    .performance-panel--warning & {
+      color: #d97706;
+    }
+    
+    .performance-panel--critical & {
+      color: #dc2626;
+    }
+  }
+
+  // 统一按钮样式
+  &__btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    color: #9ca3af;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+
+    &:hover {
+      color: #6b7280;
+      background: rgba(0, 0, 0, 0.04);
+    }
+
+    &:active {
+      background: rgba(0, 0, 0, 0.06);
+    }
+
+    &:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    &--active {
+      color: #6b7280;
+      background: rgba(0, 0, 0, 0.06);
+
+      &:hover {
+        color: #4b5563;
+        background: rgba(0, 0, 0, 0.08);
+      }
+    }
+
+    &--primary {
+      color: #6b7280;
+      background: rgba(0, 0, 0, 0.04);
+      
+      &:hover {
+        color: #4b5563;
+        background: rgba(0, 0, 0, 0.08);
+      }
+    }
+
+    svg {
+      width: 14px;
+      height: 14px;
+    }
+  }
+
+  // Tooltip 内容
+  &__tooltip {
+    padding: 4px 2px;
+    max-width: 200px;
+  }
+
+  &__tooltip-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 6px;
+  }
+
+  &__tooltip-content {
+    font-size: 11px;
+    color: #6b7280;
+    line-height: 1.5;
+    margin-bottom: 6px;
+
+    > div {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+    }
+  }
+
+  &__tooltip-tip {
+    font-size: 10px;
+    color: #9ca3af;
+    line-height: 1.4;
+    padding-top: 6px;
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+    white-space: pre-line;
+  }
+}
+
+// 移动端适配
+@media (max-width: 640px) {
+  .performance-panel {
+    right: 8px;
+    bottom: 140px;
+    width: 32px;
+    padding: 4px;
+
+    &__btn {
+      width: 24px;
+      height: 24px;
+
+      svg {
+        width: 12px;
+        height: 12px;
+      }
+    }
+  }
+}

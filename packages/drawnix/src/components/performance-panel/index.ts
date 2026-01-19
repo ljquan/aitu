@@ -1,0 +1,1 @@
+export { PerformancePanel } from './PerformancePanel';

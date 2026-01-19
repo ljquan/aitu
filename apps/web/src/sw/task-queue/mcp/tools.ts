@@ -86,8 +86,8 @@ export const generateImageTool: SWMCPTool = {
 
       const data = await response.json();
 
-      // 使用通用函数解析响应
-      const { url, urls } = parseImageGenerationResponse(data);
+      // 使用通用函数解析响应（异步：Base64 会被缓存为虚拟路径 URL）
+      const { url, urls } = await parseImageGenerationResponse(data);
 
       onProgress?.(100);
 

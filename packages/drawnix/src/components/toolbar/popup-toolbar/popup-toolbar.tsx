@@ -138,6 +138,7 @@ export const PopupToolbar = () => {
     hasCornerRadius?: boolean; // 是否显示圆角设置按钮
     cornerRadius?: number; // 当前圆角值
     hasSizeInput?: boolean; // 是否显示宽高输入
+    isTextOnly?: boolean; // 是否只选中了纯文本元素
   } = {
     fill: 'red',
   };
@@ -147,6 +148,10 @@ export const PopupToolbar = () => {
       !PlaitBoard.hasBeenTextEditing(board);
     const hasText = selectedElements.some((value) =>
       hasTextProperty(board, value)
+    );
+    // 检查是否只选中了纯文本元素（用于提示词按钮）
+    const isTextOnly = selectedElements.length > 0 && selectedElements.every((element) =>
+      PlaitDrawElement.isDrawElement(element) && PlaitDrawElement.isText(element)
     );
     const hasStroke =
       selectedElements.some((value) => hasStrokeProperty(board, value)) &&
@@ -291,6 +296,7 @@ export const PopupToolbar = () => {
       hasStrokeWidth,
       strokeWidth,
       hasText,
+      isTextOnly,
       hasAIImage,
       hasAIVideo,
       hasVideoFrame,
@@ -534,7 +540,7 @@ export const PopupToolbar = () => {
                 title={`Link`}
               ></PopupLinkButton>
             )}
-            {state.hasText && (
+            {state.isTextOnly && (
               <PopupPromptButton
                 board={board}
                 key={'prompt'}

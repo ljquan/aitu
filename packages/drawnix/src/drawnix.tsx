@@ -68,6 +68,7 @@ import { initializeAssetIntegration } from './services/asset-integration-service
 import { ToolbarConfigProvider } from './hooks/use-toolbar-config';
 import { AIInputBar } from './components/ai-input-bar';
 import { VersionUpdatePrompt } from './components/version-update/version-update-prompt';
+import { PerformancePanel } from './components/performance-panel';
 import { QuickCreationToolbar } from './components/toolbar/quick-creation-toolbar/quick-creation-toolbar';
 import { CacheQuotaProvider } from './components/cache-quota-provider/CacheQuotaProvider';
 import { RecentColorsProvider } from './components/unified-color-picker';
@@ -582,7 +583,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
   useBeforeUnload();
 
   // Workspace management
-  const { saveBoard } = useWorkspace();
+  const { saveBoard, createBoard, switchBoard } = useWorkspace();
 
   // Handle saving before board switch
   const handleBeforeSwitch = useCallback(async () => {
@@ -596,6 +597,27 @@ export const Drawnix: React.FC<DrawnixProps> = ({
       await saveBoard(currentData);
     }
   }, [onChange, saveBoard]);
+
+  // 创建新项目并刷新页面（用于释放内存）
+  const handleCreateProjectForMemory = useCallback(async () => {
+    // 先保存当前画布
+    await handleBeforeSwitch();
+    
+    // 创建新画布
+    const newBoard = await createBoard({
+      name: '新画布',
+    });
+    
+    if (newBoard) {
+      // 切换到新画布
+      await switchBoard(newBoard.id);
+      
+      // 延迟刷新页面，让用户看到切换效果
+      setTimeout(() => {
+        window.location.reload();
+      }, 500);
+    }
+  }, [handleBeforeSwitch, createBoard, switchBoard]);
 
   // 处理选中状态变化,保存最近选中的元素IDs
   const handleSelectionChange = useCallback((selection: Selection | null) => {
@@ -662,6 +684,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
                       setBackupRestoreOpen={setBackupRestoreOpen}
                       handleBeforeSwitch={handleBeforeSwitch}
                       isDataReady={isDataReady}
+                      onCreateProjectForMemory={handleCreateProjectForMemory}
                     />
                     <Suspense fallback={null}>
                       <MediaLibraryModal
@@ -712,6 +735,7 @@ interface DrawnixContentProps {
   setBackupRestoreOpen: React.Dispatch<React.SetStateAction<boolean>>;
   handleBeforeSwitch: () => Promise<void>;
   isDataReady: boolean;
+  onCreateProjectForMemory: () => Promise<void>;
 }
 
 const DrawnixContent: React.FC<DrawnixContentProps> = ({
@@ -743,6 +767,7 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
   setBackupRestoreOpen,
   handleBeforeSwitch,
   isDataReady,
+  onCreateProjectForMemory,
 }) => {
   const { chatDrawerRef } = useChatDrawer();
 
@@ -932,6 +957,11 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
           <ViewNavigation />
         </Wrapper>
         <ActiveTaskWarning />
+        {/* Performance Panel - 性能监控面板 */}
+        <PerformancePanel 
+          container={containerRef.current} 
+          onCreateProject={onCreateProjectForMemory}
+        />
         <ChatDrawer ref={chatDrawerRef} />
         <Suspense fallback={null}>
           <ProjectDrawer

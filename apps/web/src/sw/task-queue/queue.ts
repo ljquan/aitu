@@ -25,6 +25,7 @@ import {
 } from './types';
 import { taskQueueStorage } from './storage';
 import { sendToClient, sendToClientById } from './utils/message-bus';
+import { migrateBase64UrlIfNeeded } from './utils/media-generation-utils';
 
 // Handler imports
 import { ImageHandler } from './handlers/image';
@@ -130,7 +131,25 @@ export class SWTaskQueue {
       // Load all tasks
       const tasks = await taskQueueStorage.getAllTasks();
 
+      // 迁移计数器
+      let migratedCount = 0;
+
       for (const task of tasks) {
+        // 迁移旧的 Base64 URL（已完成的图片/视频任务）
+        if (
+          task.status === TaskStatus.COMPLETED &&
+          task.result?.url &&
+          task.result.url.startsWith('data:image/')
+        ) {
+          const { url: newUrl, migrated } = await migrateBase64UrlIfNeeded(task.result.url);
+          if (migrated) {
+            task.result.url = newUrl;
+            // 更新存储
+            await taskQueueStorage.updateTask(task);
+            migratedCount++;
+          }
+        }
+
         this.tasks.set(task.id, task);
 
         // Handle interrupted Chat tasks - mark as failed since streaming can't be resumed
@@ -146,6 +165,10 @@ export class SWTaskQueue {
         if (this.shouldResumeTask(task)) {
           this.resumeTaskExecution(task);
         }
+      }
+
+      if (migratedCount > 0) {
+        console.log(`[SWTaskQueue] Migrated ${migratedCount} Base64 URLs to cache`);
       }
 
       // NOTE: Removed automatic cleanup of old tasks

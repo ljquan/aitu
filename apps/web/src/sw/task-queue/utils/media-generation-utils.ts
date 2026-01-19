@@ -941,21 +941,93 @@ export function buildVideoGenerationFormData(
 }
 
 /**
+ * 检测 URL 是否为 Base64 data URL
+ */
+function isBase64DataUrl(url: string): boolean {
+  return url.startsWith('data:image/') && url.includes(';base64,');
+}
+
+/**
+ * 从 Base64 data URL 中提取数据和 MIME 类型
+ */
+function parseBase64DataUrl(dataUrl: string): { base64: string; mimeType: string } | null {
+  const match = dataUrl.match(/^data:(image\/[^;]+);base64,(.+)$/);
+  if (!match) return null;
+  return { mimeType: match[1], base64: match[2] };
+}
+
+/**
+ * 将 Base64 图片缓存到 Cache API，返回虚拟路径 URL
+ * 这样可以避免将大量 Base64 字符串存储在 IndexedDB 和 JS 堆中
+ * 
+ * @param base64Data Base64 编码的图片数据（不含 data URL 前缀）
+ * @param mimeType 图片 MIME 类型
+ * @returns 虚拟路径 URL，如 /__aitu_cache__/image/{id}.png
+ */
+async function cacheBase64Image(base64Data: string, mimeType: string = 'image/png'): Promise<string> {
+  try {
+    // 将 Base64 转为 Blob
+    const binaryString = atob(base64Data);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    const blob = new Blob([bytes], { type: mimeType });
+
+    // 生成唯一 ID
+    const id = `img-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
+    const ext = mimeType.split('/')[1] || 'png';
+    const virtualPath = `/__aitu_cache__/image/${id}.${ext}`;
+
+    // 缓存到 Cache API
+    const cache = await caches.open(IMAGE_CACHE_NAME);
+    const response = new Response(blob, {
+      status: 200,
+      headers: {
+        'Content-Type': mimeType,
+        'Content-Length': blob.size.toString(),
+        'Cache-Control': 'max-age=31536000',
+      },
+    });
+    await cache.put(virtualPath, response);
+
+    return virtualPath;
+  } catch (error) {
+    console.error('[cacheBase64Image] Failed to cache image:', error);
+    // 如果缓存失败，回退到 data URL（不理想但保证功能可用）
+    return `data:${mimeType};base64,${base64Data}`;
+  }
+}
+
+/**
  * 解析图片生成响应
  * @param data API 响应数据
- * @returns 图片 URL 数组
+ * @param taskId 可选的任务 ID，用于生成更可追踪的缓存 key
+ * @returns 图片 URL 数组（Base64 会被转换为虚拟路径 URL）
  */
-export function parseImageGenerationResponse(data: any): {
+export async function parseImageGenerationResponse(data: any, taskId?: string): Promise<{
   url: string;
   urls?: string[];
-} {
+}> {
   if (!data.data || data.data.length === 0) {
     throw new Error('No image data in response');
   }
 
+  // 处理单个图片数据项
+  async function processImageData(d: any, index: number): Promise<string | null> {
+    if (d.url) {
+      // 已经是 URL，直接返回
+      return d.url;
+    }
+    if (d.b64_json) {
+      // Base64 数据，缓存后返回虚拟路径 URL
+      return await cacheBase64Image(d.b64_json, 'image/png');
+    }
+    return null;
+  }
+
   const imageData = data.data[0];
-  const url = imageData.url || 
-    (imageData.b64_json ? `data:image/png;base64,${imageData.b64_json}` : null);
+  const url = await processImageData(imageData, 0);
 
   if (!url) {
     // 检查是否包含违禁内容错误
@@ -965,13 +1037,39 @@ export function parseImageGenerationResponse(data: any): {
     throw new Error('No image URL in response');
   }
 
-  // 提取所有 URL
-  const urls = data.data
-    .map((d: any) => d.url || (d.b64_json ? `data:image/png;base64,${d.b64_json}` : null))
-    .filter(Boolean);
+  // 提取所有 URL（并行处理）
+  const urlPromises = data.data.map((d: any, i: number) => processImageData(d, i));
+  const allUrls = (await Promise.all(urlPromises)).filter(Boolean) as string[];
 
   return {
     url,
-    urls: urls.length > 1 ? urls : undefined,
+    urls: allUrls.length > 1 ? allUrls : undefined,
   };
+}
+
+/**
+ * 迁移旧的 Base64 URL 到虚拟路径 URL
+ * 用于在任务加载时自动转换旧数据
+ * 
+ * @param url 可能是 Base64 data URL 或普通 URL
+ * @returns 如果是 Base64 则返回转换后的虚拟路径 URL，否则返回原 URL
+ */
+export async function migrateBase64UrlIfNeeded(url: string): Promise<{ url: string; migrated: boolean }> {
+  if (!isBase64DataUrl(url)) {
+    return { url, migrated: false };
+  }
+
+  const parsed = parseBase64DataUrl(url);
+  if (!parsed) {
+    return { url, migrated: false };
+  }
+
+  try {
+    const virtualPath = await cacheBase64Image(parsed.base64, parsed.mimeType);
+    console.log(`[Migration] Converted Base64 (${Math.round(url.length / 1024)}KB) -> ${virtualPath}`);
+    return { url: virtualPath, migrated: true };
+  } catch (error) {
+    console.error('[Migration] Failed to migrate Base64 URL:', error);
+    return { url, migrated: false };
+  }
 }

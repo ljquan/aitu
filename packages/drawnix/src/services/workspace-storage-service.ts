@@ -13,6 +13,90 @@ import {
   WORKSPACE_DEFAULTS,
 } from '../types/workspace.types';
 import { migrateElementsFillData } from '../types/fill.types';
+import type { PlaitElement } from '@plait/core';
+
+/**
+ * Cache name for images (must match the one in sw/index.ts)
+ */
+const IMAGE_CACHE_NAME = 'drawnix-images';
+
+/**
+ * 检测 URL 是否为 Base64 data URL
+ */
+function isBase64ImageUrl(url: string): boolean {
+  return typeof url === 'string' && url.startsWith('data:image/') && url.includes(';base64,');
+}
+
+/**
+ * 将 Base64 图片缓存到 Cache API，返回虚拟路径 URL
+ */
+async function cacheBase64ImageToVirtualPath(dataUrl: string): Promise<string> {
+  const match = dataUrl.match(/^data:(image\/[^;]+);base64,(.+)$/);
+  if (!match) return dataUrl;
+
+  const [, mimeType, base64Data] = match;
+
+  try {
+    // 将 Base64 转为 Blob
+    const binaryString = atob(base64Data);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    const blob = new Blob([bytes], { type: mimeType });
+
+    // 生成唯一 ID
+    const id = `img-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
+    const ext = mimeType.split('/')[1] || 'png';
+    const virtualPath = `/__aitu_cache__/image/${id}.${ext}`;
+
+    // 缓存到 Cache API
+    const cache = await caches.open(IMAGE_CACHE_NAME);
+    const response = new Response(blob, {
+      status: 200,
+      headers: {
+        'Content-Type': mimeType,
+        'Content-Length': blob.size.toString(),
+        'Cache-Control': 'max-age=31536000',
+      },
+    });
+    await cache.put(virtualPath, response);
+
+    return virtualPath;
+  } catch (error) {
+    console.error('[Migration] Failed to cache Base64 image:', error);
+    return dataUrl;
+  }
+}
+
+/**
+ * 迁移画布元素中的 Base64 图片 URL 到虚拟路径
+ * 返回是否有元素被迁移
+ */
+async function migrateElementsBase64Urls(elements: PlaitElement[]): Promise<boolean> {
+  let migrated = false;
+
+  for (const element of elements) {
+    // 检查图片元素
+    if ((element as any).url && isBase64ImageUrl((element as any).url)) {
+      const originalSize = Math.round((element as any).url.length / 1024);
+      const newUrl = await cacheBase64ImageToVirtualPath((element as any).url);
+      if (newUrl !== (element as any).url) {
+        (element as any).url = newUrl;
+        migrated = true;
+        console.log(`[Migration] Element ${element.id}: Base64 (${originalSize}KB) -> ${newUrl}`);
+      }
+    }
+
+    // 递归处理子元素
+    if ((element as any).children && Array.isArray((element as any).children)) {
+      const childMigrated = await migrateElementsBase64Urls((element as any).children);
+      if (childMigrated) migrated = true;
+    }
+  }
+
+  return migrated;
+}
 
 /**
  * Database configuration
@@ -210,6 +294,18 @@ class WorkspaceStorageService {
     if (board && board.elements) {
       // 迁移 fill 数据格式，确保渐变填充不会显示为黑色
       board.elements = migrateElementsFillData(board.elements);
+      
+      // 迁移 Base64 图片 URL 到虚拟路径（同步等待，确保画布显示迁移后的数据）
+      try {
+        const migrated = await migrateElementsBase64Urls(board.elements);
+        if (migrated) {
+          // 保存迁移后的数据
+          await this.saveBoard(board);
+          console.log(`[Migration] Board ${id}: Base64 URLs migrated and saved`);
+        }
+      } catch (error) {
+        console.error(`[Migration] Board ${id}: Failed to migrate`, error);
+      }
     }
     return board;
   }
@@ -228,6 +324,22 @@ class WorkspaceStorageService {
     });
     // Wait for browser idle time after IndexedDB operation
     await waitForIdle();
+    
+    // 迁移 Base64 图片 URL 到虚拟路径
+    for (const board of boards) {
+      if (board.elements) {
+        try {
+          const migrated = await migrateElementsBase64Urls(board.elements);
+          if (migrated) {
+            await this.saveBoard(board);
+            console.log(`[Migration] Board ${board.id}: Base64 URLs migrated and saved`);
+          }
+        } catch (error) {
+          console.error(`[Migration] Board ${board.id}: Failed to migrate`, error);
+        }
+      }
+    }
+    
     return boards.sort((a, b) => a.order - b.order);
   }
 

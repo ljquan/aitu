@@ -65,6 +65,7 @@ $z-dialog-popover: 5500;
 // ==========================================
 // Layer 6: Notifications (6000-6999)
 // ==========================================
+$z-performance-panel: 5900; // 性能面板，低于通知但高于对话框
 $z-active-task-warning: 6000;
 $z-toast: 6100;
 $z-message: 6200;
@@ -119,6 +120,7 @@ $z-index-map: (
   'dialog-ai-video': $z-dialog-ai-video,
   'dialog-inner': $z-dialog-inner,
   'dialog-popover': $z-dialog-popover,
+  'performance-panel': $z-performance-panel,
   'active-task-warning': $z-active-task-warning,
   'toast': $z-toast,
   'message': $z-message,
