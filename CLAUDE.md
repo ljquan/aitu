@@ -3273,6 +3273,82 @@ const handleZoomPercentClick = useCallback(() => {
 
 ---
 
+### 组件空状态不应简单返回 null
+
+**场景**: 组件在没有数据时需要决定是否渲染
+
+❌ **错误示例**:
+```tsx
+// 错误：没有历史记录时直接隐藏整个组件，用户看不到预设提示词
+const PromptHistoryPopover = () => {
+  const { history } = usePromptHistory();
+  
+  // 没有历史记录就不显示按钮
+  if (history.length === 0) {
+    return null;
+  }
+  
+  return (
+    <button>提示词</button>
+    // ...
+  );
+};
+```
+
+✅ **正确示例**:
+```tsx
+// 正确：即使没有历史记录也显示按钮，展示预设提示词
+const PromptHistoryPopover = () => {
+  const { history } = usePromptHistory();
+  const presetPrompts = getPresetPrompts();
+  
+  // 合并历史记录和预设提示词
+  const allPrompts = [...history, ...presetPrompts];
+  
+  // 按钮始终显示
+  return (
+    <button>提示词</button>
+    // 面板中显示历史 + 预设
+  );
+};
+```
+
+**原因**: 
+1. 组件的核心功能（如提示词选择）不应该依赖于是否有历史数据
+2. 预设内容为新用户提供了引导，提升首次使用体验
+3. 隐藏入口会让用户不知道功能存在
+
+---
+
+### 文案应考虑所有使用场景
+
+**场景**: 为组件、按钮、标题等编写文案时
+
+❌ **错误示例**:
+```tsx
+// 错误：标题"历史提示词"在没有历史记录时不贴切
+<PromptListPanel
+  title={language === 'zh' ? '历史提示词' : 'Prompt History'}
+  items={promptItems}  // 可能包含历史记录 + 预设提示词
+/>
+```
+
+✅ **正确示例**:
+```tsx
+// 正确：使用更通用的标题"提示词"
+<PromptListPanel
+  title={language === 'zh' ? '提示词' : 'Prompts'}
+  items={promptItems}
+/>
+```
+
+**原因**:
+1. 文案过于具体会在某些场景下显得不准确
+2. 通用的文案能适应更多使用场景（有/无历史记录）
+3. 避免后续因场景变化而频繁修改文案
+
+---
+
 ## 相关文档
 
 - `/docs/CODING_STANDARDS.md` - 完整编码规范
