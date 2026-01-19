@@ -8,21 +8,28 @@
   --bg-tertiary: #f1f5f9;
   --bg-hover: #e2e8f0;
   --bg-card: #ffffff;
-  --text-primary: #0f172a;
-  --text-secondary: #475569;
+  --text-primary: #2D3436;
+  --text-secondary: #636E72;
   --text-muted: #94a3b8;
   --border-color: #e2e8f0;
   --border-light: #f1f5f9;
-  --primary-color: #3b82f6;
-  --primary-light: #eff6ff;
-  --accent-color: #3b82f6;
-  --success-color: #22c55e;
-  --success-light: #f0fdf4;
-  --warning-color: #f59e0b;
-  --warning-light: #fffbeb;
-  --error-color: #ef4444;
-  --error-light: #fef2f2;
-  --info-color: #3b82f6;
+  /* 主品牌色 - 橙金色系，与主应用保持一致 */
+  --primary-color: #F39C12;
+  --primary-hover: #E67E22;
+  --primary-active: #D35400;
+  --primary-light: #FEF5E7;
+  --accent-color: #F39C12;
+  /* 成功色 */
+  --success-color: #00B894;
+  --success-light: rgba(0, 184, 148, 0.1);
+  /* 警告色 */
+  --warning-color: #E67E22;
+  --warning-light: rgba(230, 126, 34, 0.1);
+  /* 错误色 - 玫红色系 */
+  --error-color: #E91E63;
+  --error-light: rgba(233, 30, 99, 0.1);
+  /* 信息色 - 蓝紫色系 */
+  --info-color: #5A4FCF;
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
@@ -34,26 +41,33 @@
 
 /* Dark theme */
 [data-theme="dark"] {
-  --bg-primary: #0f172a;
-  --bg-secondary: #1e293b;
-  --bg-tertiary: #334155;
-  --bg-hover: #475569;
-  --bg-card: #1e293b;
-  --text-primary: #f1f5f9;
-  --text-secondary: #cbd5e1;
-  --text-muted: #64748b;
-  --border-color: #334155;
-  --border-light: #1e293b;
-  --primary-color: #60a5fa;
-  --primary-light: rgba(96, 165, 250, 0.15);
-  --accent-color: #60a5fa;
-  --success-color: #4ade80;
-  --success-light: rgba(74, 222, 128, 0.15);
-  --warning-color: #fbbf24;
-  --warning-light: rgba(251, 191, 36, 0.15);
-  --error-color: #f87171;
-  --error-light: rgba(248, 113, 113, 0.15);
-  --info-color: #60a5fa;
+  --bg-primary: #1a1a1a;
+  --bg-secondary: #2d2d2d;
+  --bg-tertiary: #3d3d3d;
+  --bg-hover: #4d4d4d;
+  --bg-card: #2d2d2d;
+  --text-primary: #ffffff;
+  --text-secondary: #b3b3b3;
+  --text-muted: #808080;
+  --border-color: #404040;
+  --border-light: #333333;
+  /* 主品牌色 - 橙金色系 (暗色模式下稍亮) */
+  --primary-color: #FBBF24;
+  --primary-hover: #F39C12;
+  --primary-active: #E67E22;
+  --primary-light: rgba(251, 191, 36, 0.15);
+  --accent-color: #FBBF24;
+  /* 成功色 */
+  --success-color: #10B981;
+  --success-light: rgba(16, 185, 129, 0.15);
+  /* 警告色 */
+  --warning-color: #F59E0B;
+  --warning-light: rgba(245, 158, 11, 0.15);
+  /* 错误色 */
+  --error-color: #F06292;
+  --error-light: rgba(240, 98, 146, 0.15);
+  /* 信息色 */
+  --info-color: #7B68EE;
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4);
@@ -165,8 +179,8 @@ button.primary {
 }
 
 button.primary:hover {
-  background: #2563eb;
-  border-color: #2563eb;
+  background: var(--primary-hover, #E67E22);
+  border-color: var(--primary-hover, #E67E22);
 }
 
 button.danger {
@@ -186,8 +200,8 @@ button.success {
 }
 
 button.success:hover {
-  background: #16a34a;
-  border-color: #16a34a;
+  background: #00A085;
+  border-color: #00A085;
 }
 
 /* Icon in button */
@@ -937,7 +951,7 @@ button .icon-svg {
 }
 
 .base64-dimensions {
-  background: rgba(9, 105, 218, 0.1);
+  background: var(--primary-light);
   color: var(--primary-color);
   padding: 1px 4px;
   border-radius: 3px;
@@ -1981,11 +1995,11 @@ body, .panel, .logs-container, .log-entry, button, select, input {
 }
 
 .log-entry.selected {
-  background: rgba(9, 105, 218, 0.1);
+  background: var(--primary-light);
 }
 
 .log-entry.selected.bookmarked {
-  background: linear-gradient(to right, rgba(245, 158, 11, 0.1), rgba(9, 105, 218, 0.1));
+  background: linear-gradient(to right, rgba(245, 158, 11, 0.1), var(--primary-light));
 }
 
 /* Highlight animation for related request navigation */
@@ -1994,7 +2008,7 @@ body, .panel, .logs-container, .log-entry, button, select, input {
 }
 
 @keyframes highlightPulse {
-  0% { background: rgba(9, 105, 218, 0.3); }
+  0% { background: rgba(243, 156, 18, 0.3); }
   100% { background: transparent; }
 }
 

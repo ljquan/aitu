@@ -314,7 +314,8 @@ export class MessageBus {
       );
 
       if (focusedClient) {
-        focusedClient.postMessage(message);
+        // Use sendToClient to ensure message is logged
+        sendToClient(focusedClient, message);
         return true;
       }
 
@@ -324,7 +325,8 @@ export class MessageBus {
       );
 
       if (visibleClient) {
-        visibleClient.postMessage(message);
+        // Use sendToClient to ensure message is logged
+        sendToClient(visibleClient, message);
         return true;
       }
 

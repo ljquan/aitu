@@ -2982,9 +2982,10 @@ async function init() {
     }
   });
   
-  // Clean up on page unload (stop heartbeat timer)
+  // Clean up on page unload (stop heartbeat timer and memory monitoring)
   window.addEventListener('beforeunload', () => {
     clearInterval(heartbeatTimer);
+    stopMemoryMonitoring();
     // Don't send disable message here - let SW detect timeout instead
     // This allows refresh to work without disabling debug mode
   });
