@@ -1,3 +1,64 @@
+## 0.5.14 (2026-01-19)
+
+### 🚀 Features
+
+- implement CORS domain handling and cache validation ([de13297](https://github.com/ljquan/aitu/commit/de13297))
+- 封装函数不应被绕过、页面卸载清理定时器 ([f6bd3af](https://github.com/ljquan/aitu/commit/f6bd3af))
+- enhance prompt history management with preset prompts ([8e8738c](https://github.com/ljquan/aitu/commit/8e8738c))
+- implement user confirmation for service worker upgrades ([f0571a7](https://github.com/ljquan/aitu/commit/f0571a7))
+- add memory monitoring and crash logging features ([19f54ec](https://github.com/ljquan/aitu/commit/19f54ec))
+
+### 🩹 Fixes
+
+- 修复 workflows Map 和 setInterval 内存泄漏 ([bfb7ed5](https://github.com/ljquan/aitu/commit/bfb7ed5))
+
+### 🔧 Chores
+
+- bump version to 0.5.13 ([2edadb3](https://github.com/ljquan/aitu/commit/2edadb3))
+- bump version to 0.5.10 and update changelog ([305b5d7](https://github.com/ljquan/aitu/commit/305b5d7))
+- refactor(sw-debug): reorganize cache statistics panel and enhance LLM API log entry styles ([31f684f](https://github.com/ljquan/aitu/commit/31f684f))
+- docs(claude): 添加 Service Worker opaque 响应处理和缓存验证规则 ([bdbaff4](https://github.com/ljquan/aitu/commit/bdbaff4))
+- docs(claude): 添加缓存策略和数据一致性规则 ([310b7d0](https://github.com/ljquan/aitu/commit/310b7d0))
+- docs(claude): 添加新规则 - 封装函数不应被绕过、页面卸载清理定时器 ([06ae079](https://github.com/ljquan/aitu/commit/06ae079))
+- docs(claude): 添加独立页面配色一致性规则 ([7876471](https://github.com/ljquan/aitu/commit/7876471))
+- docs(claude): 添加 UI 重构信息完整性和日志保留优先级规则 ([d402148](https://github.com/ljquan/aitu/commit/d402148))
+- docs(claude): 添加组件空状态处理和文案通用性规则 ([d2c1569](https://github.com/ljquan/aitu/commit/d2c1569))
+- v0.5.11 ([f7e6f0b](https://github.com/ljquan/aitu/commit/f7e6f0b))
+- 添加更多版本 ([c4c7e3d](https://github.com/ljquan/aitu/commit/c4c7e3d))
+- docs(claude): 添加内存泄漏预防规则 ([d1112d0](https://github.com/ljquan/aitu/commit/d1112d0))
+- docs(claude): 添加 SW 更新和配置同步规则 ([2fb1088](https://github.com/ljquan/aitu/commit/2fb1088))
+- docs(claude): 添加新规则 - navigator.storage.estimate() 返回浏览器配额而非磁盘空间 ([c823877](https://github.com/ljquan/aitu/commit/c823877))
+- 优化渐变 ([de86f2a](https://github.com/ljquan/aitu/commit/de86f2a))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+- liquidliang <ljquan@qq.com>
+
+## 0.5.12 (2026-01-19)
+
+### 🚀 Features
+
+- implement CORS domain handling and cache validation ([de13297](https://github.com/ljquan/aitu/commit/de13297))
+- 封装函数不应被绕过、页面卸载清理定时器 ([f6bd3af](https://github.com/ljquan/aitu/commit/f6bd3af))
+- enhance prompt history management with preset prompts ([8e8738c](https://github.com/ljquan/aitu/commit/8e8738c))
+
+### 🔧 Chores
+
+- refactor(sw-debug): reorganize cache statistics panel and enhance LLM API log entry styles ([31f684f](https://github.com/ljquan/aitu/commit/31f684f))
+- docs(claude): 添加 Service Worker opaque 响应处理和缓存验证规则 ([bdbaff4](https://github.com/ljquan/aitu/commit/bdbaff4))
+- docs(claude): 添加缓存策略和数据一致性规则 ([310b7d0](https://github.com/ljquan/aitu/commit/310b7d0))
+- docs(claude): 添加新规则 - 封装函数不应被绕过、页面卸载清理定时器 ([06ae079](https://github.com/ljquan/aitu/commit/06ae079))
+- docs(claude): 添加独立页面配色一致性规则 ([7876471](https://github.com/ljquan/aitu/commit/7876471))
+- docs(claude): 添加 UI 重构信息完整性和日志保留优先级规则 ([d402148](https://github.com/ljquan/aitu/commit/d402148))
+- docs(claude): 添加组件空状态处理和文案通用性规则 ([d2c1569](https://github.com/ljquan/aitu/commit/d2c1569))
+- v0.5.11 ([f7e6f0b](https://github.com/ljquan/aitu/commit/f7e6f0b))
+
+### ❤️  Thank You
+
+- liquidliang <ljquan@qq.com>
+- liquid <ljquan@qq.com>
+
 ## 0.5.11 (2026-01-18)
 
 ### 🚀 Features

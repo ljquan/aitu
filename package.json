@@ -1,6 +1,6 @@
 {
   "name": "@aitu/source",
-  "version": "0.5.11",
+  "version": "0.5.14",
   "license": "MIT",
   "packageManager": "pnpm@10.21.0",
   "description": "Aitu - An open-source whiteboard tool with AI-powered image/video creation, mind mapping, flowcharts, and freehand drawing",
@@ -27,7 +27,7 @@
     "build": "node scripts/update-version.js && nx run-many -t=build",
     "build:web": "node scripts/update-version.js && nx build web",
     "preview": "npx serve dist/apps/web -l 7288",
-    "package": "node scripts/create-release-package.js",
+    "package": "npm run build && node scripts/create-deploy-package.js",
     "test": "nx run-many -t=test",
     "size": "size-limit",
     "size:why": "size-limit --why",
@@ -37,7 +37,9 @@
     "release": "npm run version:patch && npm run build && npm run package",
     "release:minor": "npm run version:minor && npm run build && npm run package",
     "release:major": "npm run version:major && npm run build && npm run package",
-    "pub": "npm run build && node scripts/publish.js"
+    "pub": "npm run build && node scripts/publish.js",
+    "deploy:upload-script": "node scripts/upload-deploy-script.js",
+    "deploy:upload": "node scripts/upload-and-deploy.js"
   },
   "private": true,
   "dependencies": {

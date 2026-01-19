@@ -7,27 +7,11 @@ function getCurrentVersion() {
   return packageJson.version;
 }
 
-// 更新 Service Worker 中的版本号
+// 更新 Service Worker 中的版本号（已废弃，sw.js 现在是构建产物）
 function updateServiceWorkerVersion(version) {
-  const swPath = path.join(__dirname, '../apps/web/public/sw.js');
-  let swContent = fs.readFileSync(swPath, 'utf8');
-
-  // 替换版本占位符或现有版本号
-  swContent = swContent.replace(
-    /const APP_VERSION = ['"]BUILD_VERSION_PLACEHOLDER['"];/,
-    `const APP_VERSION = '${version}';`
-  );
-
-  // 如果占位符不存在，尝试替换现有版本号
-  if (!swContent.includes(`const APP_VERSION = '${version}';`)) {
-    swContent = swContent.replace(
-      /const APP_VERSION = ['"][^'"]*['"];/,
-      `const APP_VERSION = '${version}';`
-    );
-  }
-
-  fs.writeFileSync(swPath, swContent);
-  console.log(`✅ Service Worker updated to version ${version}`);
+  // sw.js 现在是构建产物，不再需要手动更新
+  // 版本信息会通过 version.json 和构建过程自动处理
+  console.log(`ℹ️  Service Worker 版本将通过构建过程自动更新`);
 }
 
 // 创建版本信息文件（保留现有的 changelog）
