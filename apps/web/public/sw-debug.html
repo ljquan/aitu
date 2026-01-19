@@ -359,20 +359,6 @@
 
         <div class="panel">
           <div class="panel-header">
-            缓存统计
-            <button id="refreshCache">刷新</button>
-          </div>
-          <div class="panel-content">
-            <ul class="cache-list" id="cacheList">
-              <li class="cache-item">
-                <span class="name">加载中...</span>
-              </li>
-            </ul>
-          </div>
-        </div>
-
-        <div class="panel">
-          <div class="panel-header">
             内存监控
             <span id="memoryUpdateTime" style="font-size: 11px; opacity: 0.6; margin-left: 10px;"></span>
           </div>
@@ -401,6 +387,20 @@
             <p id="memoryNotSupported" style="display: none; margin-top: 8px; font-size: 11px; opacity: 0.6;">
               注：performance.memory 仅 Chrome 支持
             </p>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            缓存统计
+            <button id="refreshCache">刷新</button>
+          </div>
+          <div class="panel-content">
+            <ul class="cache-list" id="cacheList">
+              <li class="cache-item">
+                <span class="name">加载中...</span>
+              </li>
+            </ul>
           </div>
         </div>
       </div>

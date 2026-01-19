@@ -110,9 +110,28 @@ export function AssetProvider({ children }: AssetProviderProps) {
   }, []);
 
   /**
-   * 从 Cache Storage 获取媒体资源列表
-   * 获取 /__aitu_cache__/ 和 /asset-library/ 前缀的图片和视频
-   * 这确保只显示 Cache Storage 中实际存在的资源
+   * 从文件名中提取时间戳
+   */
+  const extractTimestampFromFilename = useCallback((filename: string): number => {
+    // 尝试从文件名中提取时间戳（格式：xxx-1234567890123.ext 或 xxx-1234567890123-xxx.ext）
+    const timestampMatch = filename.match(/[-_](\d{13})(?:[-_.]|$)/);
+    if (timestampMatch) {
+      return parseInt(timestampMatch[1], 10);
+    }
+    // 尝试匹配 10 位时间戳（秒级）
+    const shortTimestampMatch = filename.match(/[-_](\d{10})(?:[-_.]|$)/);
+    if (shortTimestampMatch) {
+      return parseInt(shortTimestampMatch[1], 10) * 1000;
+    }
+    return Date.now();
+  }, []);
+
+  /**
+   * 从 Cache Storage 和 IndexedDB 同步获取本地缓存的媒体资源
+   * 1. 从 Cache Storage 获取所有有效的 URL
+   * 2. 从 IndexedDB (unified-cache) 获取元数据
+   * 3. 过滤掉 IndexedDB 中无效的（Cache Storage 中没有的）
+   * 4. 为 Cache Storage 中有但 IndexedDB 中没有的创建元数据
    */
   const getAssetsFromCacheStorage = useCallback(async (): Promise<Asset[]> => {
     if (typeof caches === 'undefined') return [];
@@ -120,7 +139,16 @@ export function AssetProvider({ children }: AssetProviderProps) {
     try {
       const cache = await caches.open('drawnix-images');
       const requests = await cache.keys();
-      const assets: Asset[] = [];
+      
+      // 1. 收集 Cache Storage 中有效的 URL 及其信息
+      const cacheStorageMap = new Map<string, {
+        pathname: string;
+        isVideo: boolean;
+        size: number;
+        mimeType: string;
+        cachedAt: number;
+        filename: string;
+      }>();
       
       for (const request of requests) {
         const url = new URL(request.url);
@@ -144,24 +172,76 @@ export function AssetProvider({ children }: AssetProviderProps) {
         const response = await cache.match(request);
         if (!response) continue;
         
-        const size = parseInt(response.headers.get('Content-Length') || '0', 10);
+        const size = parseInt(response.headers.get('Content-Length') || response.headers.get('sw-image-size') || '0', 10);
         const mimeType = response.headers.get('Content-Type') || 
                         (isVideo ? 'video/mp4' : 'image/png');
-        
-        // 从 pathname 提取 ID 作为素材 ID
         const filename = pathname.split('/').pop() || '';
-        const id = `cache-storage-${filename}`;
         
-        assets.push({
-          id,
-          type: isVideo ? AssetTypeEnum.VIDEO : AssetTypeEnum.IMAGE,
-          source: AssetSourceEnum.LOCAL, // Cache Storage 中的视为本地
-          url: pathname, // 使用相对路径
-          name: filename,
-          mimeType,
-          createdAt: Date.now(), // Cache API 无法获取创建时间
+        // 从响应头获取缓存时间戳
+        const cacheDate = response.headers.get('sw-cache-date');
+        const cachedAt = cacheDate 
+          ? parseInt(cacheDate, 10) 
+          : extractTimestampFromFilename(filename);
+        
+        cacheStorageMap.set(pathname, {
+          pathname,
+          isVideo,
           size,
+          mimeType,
+          cachedAt,
+          filename,
         });
+      }
+      
+      // 2. 从 IndexedDB 获取元数据
+      const cachedMediaList = await unifiedCacheService.getAllCachedMedia();
+      const indexedDBMap = new Map<string, typeof cachedMediaList[0]>();
+      for (const item of cachedMediaList) {
+        // 统一使用 pathname 作为 key
+        const pathname = item.url.startsWith('/') ? item.url : new URL(item.url).pathname;
+        indexedDBMap.set(pathname, item);
+      }
+      
+      const assets: Asset[] = [];
+      
+      // 3. 遍历 Cache Storage，构建素材列表
+      for (const [pathname, cacheInfo] of cacheStorageMap) {
+        const indexedDBItem = indexedDBMap.get(pathname);
+        
+        if (indexedDBItem) {
+          // IndexedDB 中有元数据，使用它
+          assets.push({
+            id: `unified-cache-${cacheInfo.filename}`,
+            type: cacheInfo.isVideo ? AssetTypeEnum.VIDEO : AssetTypeEnum.IMAGE,
+            source: AssetSourceEnum.LOCAL,
+            url: pathname,
+            name: indexedDBItem.metadata?.name || cacheInfo.filename,
+            mimeType: indexedDBItem.mimeType || cacheInfo.mimeType,
+            createdAt: indexedDBItem.cachedAt || cacheInfo.cachedAt,
+            size: indexedDBItem.size || cacheInfo.size,
+          });
+        } else {
+          // Cache Storage 中有但 IndexedDB 中没有，创建元数据
+          await unifiedCacheService.createCachedMediaMetadata(
+            pathname,
+            cacheInfo.isVideo ? 'video' : 'image',
+            cacheInfo.mimeType,
+            cacheInfo.size,
+            cacheInfo.cachedAt,
+            { name: cacheInfo.filename }
+          );
+          
+          assets.push({
+            id: `unified-cache-${cacheInfo.filename}`,
+            type: cacheInfo.isVideo ? AssetTypeEnum.VIDEO : AssetTypeEnum.IMAGE,
+            source: AssetSourceEnum.LOCAL,
+            url: pathname,
+            name: cacheInfo.filename,
+            mimeType: cacheInfo.mimeType,
+            createdAt: cacheInfo.cachedAt,
+            size: cacheInfo.size,
+          });
+        }
       }
       
       return assets;
@@ -169,7 +249,7 @@ export function AssetProvider({ children }: AssetProviderProps) {
       console.error('[AssetContext] Failed to get assets from Cache Storage:', error);
       return [];
     }
-  }, []);
+  }, [extractTimestampFromFilename]);
 
   /**
    * Load Assets
@@ -554,6 +634,9 @@ export function AssetProvider({ children }: AssetProviderProps) {
   /**
    * Rename Asset
    * 重命名素材
+   * 支持两种来源的素材：
+   * - unified-cache-* ID：使用 unifiedCacheService 更新元数据
+   * - 其他 ID：使用 assetStorageService 更新
    */
   const renameAsset = useCallback(
     async (id: string, newName: string): Promise<void> => {
@@ -561,7 +644,22 @@ export function AssetProvider({ children }: AssetProviderProps) {
       setError(null);
 
       try {
-        await assetStorageService.renameAsset(id, newName);
+        // 根据 ID 前缀判断使用哪个服务
+        if (id.startsWith('unified-cache-')) {
+          // 从 unified-cache 获取的素材
+          const asset = assets.find(a => a.id === id);
+          if (asset) {
+            const success = await unifiedCacheService.updateCachedMedia(asset.url, {
+              metadata: { name: newName }
+            });
+            if (!success) {
+              throw new Error('更新缓存元数据失败');
+            }
+          }
+        } else {
+          // 从 assetStorageService 获取的素材
+          await assetStorageService.renameAsset(id, newName);
+        }
 
         // 更新状态
         setAssets((prev) =>
@@ -600,7 +698,7 @@ export function AssetProvider({ children }: AssetProviderProps) {
         setLoading(false);
       }
     },
-    [],
+    [assets],
   );
 
   /**

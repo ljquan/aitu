@@ -780,6 +780,56 @@ export const PopupToolbar = () => {
                   const endTrack = trackMemory('图片合并');
                   const loadingInstance = MessagePlugin.loading(language === 'zh' ? '正在合并...' : 'Merging...', 0);
                   try {
+                    // 检查是否有外部图片可能导致 CORS 问题
+                    const externalImageElements = selectedElements.filter((el: any) => {
+                      const url = el.url || el.imageUrl;
+                      if (!url) return false;
+                      // 跳过本地路径和缓存路径
+                      if (url.startsWith('/') || url.startsWith('data:') || url.startsWith('blob:')) return false;
+                      // 检查是否为外部 URL
+                      try {
+                        const urlObj = new URL(url);
+                        return urlObj.origin !== location.origin;
+                      } catch {
+                        return false;
+                      }
+                    });
+
+                    if (externalImageElements.length > 0) {
+                      // 尝试预检查外部图片是否可访问
+                      const corsCheckPromises = externalImageElements.map(async (el: any) => {
+                        const url = el.url || el.imageUrl;
+                        try {
+                          // 尝试 cors 模式 fetch（带超时）
+                          const controller = new AbortController();
+                          const timeoutId = setTimeout(() => controller.abort(), 3000);
+                          const response = await fetch(url, {
+                            method: 'HEAD',
+                            mode: 'cors',
+                            signal: controller.signal,
+                          });
+                          clearTimeout(timeoutId);
+                          return response.ok;
+                        } catch {
+                          return false;
+                        }
+                      });
+
+                      const corsResults = await Promise.all(corsCheckPromises);
+                      const hasCorsProblem = corsResults.some(ok => !ok);
+
+                      if (hasCorsProblem) {
+                        MessagePlugin.close(loadingInstance);
+                        MessagePlugin.warning(
+                          language === 'zh'
+                            ? '部分外部图片无法访问，请先下载到本地后再合并'
+                            : 'Some external images are inaccessible. Please download them locally first.'
+                        );
+                        endTrack();
+                        return;
+                      }
+                    }
+
                     // 获取选中元素的边界矩形
                     const boundingRect = getRectangleByElements(board, selectedElements, false);
 

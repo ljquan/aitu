@@ -157,6 +157,7 @@ export const AssetItem = memo<AssetItemProps>(
     // 自定义比较函数：只有关键属性变化时才重新渲染
     return (
       prevProps.asset.id === nextProps.asset.id &&
+      prevProps.asset.name === nextProps.asset.name && // 检查名称变化（重命名后更新）
       prevProps.viewMode === nextProps.viewMode &&
       prevProps.isSelected === nextProps.isSelected &&
       prevProps.isInSelectionMode === nextProps.isInSelectionMode

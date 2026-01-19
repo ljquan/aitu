@@ -49,7 +49,7 @@
   &__video {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain; // 显示完整图片，不裁剪
     // 图片加载优化
     image-rendering: -webkit-optimize-contrast;
   }

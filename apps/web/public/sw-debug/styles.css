@@ -2066,3 +2066,38 @@ body, .panel, .logs-container, .log-entry, button, select, input {
 .setting-group label:hover {
   color: var(--text-primary);
 }
+
+/* LLM API Log Styles */
+.llm-result-url {
+  cursor: pointer;
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.llm-result-url:hover {
+  color: var(--primary-hover) !important;
+  text-decoration: underline;
+}
+
+.copy-url-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 20px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+  color: var(--text-muted);
+  transition: all 0.15s ease;
+}
+
+.copy-url-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+.copy-url-btn:active {
+  transform: scale(0.95);
+}

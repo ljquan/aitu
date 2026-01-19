@@ -15,14 +15,30 @@ function generateId(): string {
 
 /**
  * 加载图片到 HTMLImageElement
+ * 对于外部图片，设置 crossOrigin 以支持 Canvas 操作
+ * 如果 CORS 失败，会提供友好的错误提示
  */
 async function loadImage(imageUrl: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
+    
+    // 检查是否为外部 URL
+    const isExternalUrl = imageUrl.startsWith('http') && !imageUrl.startsWith(location.origin);
+    
+    // 对于需要 Canvas 操作的图片，必须设置 crossOrigin
     img.crossOrigin = 'anonymous';
     
     img.onload = () => resolve(img);
-    img.onerror = (error) => reject(new Error(`Failed to load image: ${error}`));
+    img.onerror = () => {
+      // 提供更友好的错误信息
+      if (isExternalUrl) {
+        reject(new Error(
+          `无法加载外部图片，可能是跨域 (CORS) 限制。请先下载图片到本地后再操作。`
+        ));
+      } else {
+        reject(new Error(`图片加载失败，请检查图片是否有效`));
+      }
+    };
     
     // 处理 base64 和 URL
     img.src = imageUrl;

@@ -45,7 +45,7 @@ export const LazyImage = memo(function LazyImage({
   placeholder,
   className = '',
   style,
-  objectFit = 'cover',
+  objectFit = 'contain',
   rootMargin = '200px',
   showLoading = true,
   showError = true,

@@ -1596,21 +1596,21 @@ function renderLLMApiLogs() {
 
 /**
  * Create a LLM API log entry element
+ * Uses the same styles as Fetch logs for consistency
  */
 function createLLMApiEntry(log, isExpanded, onToggle) {
   const entry = document.createElement('div');
-  entry.className = 'log-entry crash-entry'; // Reuse crash-entry styles
+  entry.className = 'log-entry' + (isExpanded ? ' expanded' : '');
+  entry.dataset.id = log.id;
   
-  const time = new Date(log.timestamp).toLocaleString('zh-CN', { 
+  const time = new Date(log.timestamp).toLocaleTimeString('zh-CN', { 
     hour12: false,
-    month: '2-digit',
-    day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
   });
 
-  // Status badge
+  // Status badge - use log-status class like Fetch logs
   let statusClass = '';
   let statusText = '';
   switch (log.status) {
@@ -1623,108 +1623,181 @@ function createLLMApiEntry(log, isExpanded, onToggle) {
       statusText = '✗ 失败';
       break;
     case 'pending':
-      statusClass = 'warning';
+      statusClass = 'pending';
       statusText = '⋯ 进行中';
       break;
     default:
       statusText = log.status;
   }
 
-  // Task type emoji
-  const typeEmoji = {
-    'image': '🎨',
-    'video': '🎬',
-    'chat': '💬',
-    'character': '👤',
-    'other': '🔧',
-  }[log.taskType] || '🔧';
+  // Task type badge - use log-type-badge class like Fetch logs
+  const typeLabel = {
+    'image': '图片生成',
+    'video': '视频生成',
+    'chat': '对话',
+    'character': '角色',
+    'other': '其他',
+  }[log.taskType] || log.taskType;
 
-  // Duration format
+  // Duration format - use log-duration class like Fetch logs
+  const durationMs = log.duration || 0;
   const durationText = log.duration ? `${(log.duration / 1000).toFixed(1)}s` : '-';
+  const durationClass = durationMs >= 3000 ? 'very-slow' : (durationMs >= 1000 ? 'slow' : '');
+
+  // Truncate prompt for header display
+  const promptPreview = log.prompt 
+    ? (log.prompt.length > 60 ? log.prompt.substring(0, 60) + '...' : log.prompt)
+    : '-';
 
   entry.innerHTML = `
-    <div class="log-header" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-      <span class="log-time" style="font-family: monospace; font-size: 12px; color: var(--text-secondary);">${time}</span>
-      <span class="log-type ${statusClass}" style="font-size: 12px; font-weight: 500; padding: 2px 8px; border-radius: 4px; white-space: nowrap; flex-shrink: 0;">${statusText}</span>
-      <span style="font-size: 14px;">${typeEmoji}</span>
-      <span style="font-size: 12px; font-weight: 500;">${log.model}</span>
-      <span style="font-size: 12px; color: var(--text-muted); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${log.prompt || '-'}</span>
-      <span style="font-size: 11px; color: var(--text-muted); font-family: monospace;">${durationText}</span>
-      <span class="expand-icon" style="font-size: 10px; color: var(--text-muted); transition: transform 0.15s;">${isExpanded ? '▼' : '▶'}</span>
+    <div class="log-header">
+      <span class="log-toggle" title="展开/收起详情"><span class="arrow">▶</span></span>
+      <span class="log-time">${time}</span>
+      <span class="log-status ${statusClass}">${statusText}</span>
+      <span class="log-type-badge">${typeLabel}</span>
+      <span class="log-type-badge sw-internal">${log.model}</span>
+      <span class="log-url" title="${escapeHtml(log.prompt || '')}">${escapeHtml(promptPreview)}</span>
+      <span class="log-duration ${durationClass}">${durationText}</span>
     </div>
-    <div class="log-details" style="display: ${isExpanded ? 'block' : 'none'}; margin-top: 8px; padding: 8px; background: var(--bg-secondary); border-radius: 4px; font-size: 12px;">
-      <div style="display: grid; grid-template-columns: 120px 1fr; gap: 4px 12px;">
-        <span style="color: var(--text-muted);">ID:</span>
-        <span style="font-family: monospace;">${log.id}</span>
-        <span style="color: var(--text-muted);">Endpoint:</span>
-        <span style="font-family: monospace;">${log.endpoint}</span>
-        <span style="color: var(--text-muted);">模型:</span>
-        <span>${log.model}</span>
-        <span style="color: var(--text-muted);">类型:</span>
-        <span>${log.taskType}</span>
-        <span style="color: var(--text-muted);">HTTP 状态:</span>
-        <span>${log.httpStatus || '-'}</span>
-        <span style="color: var(--text-muted);">耗时:</span>
-        <span>${durationText}</span>
-        ${log.hasReferenceImages ? `
-          <span style="color: var(--text-muted);">参考图:</span>
-          <span>${log.referenceImageCount || 0} 张</span>
-        ` : ''}
-        ${log.resultType ? `
-          <span style="color: var(--text-muted);">结果类型:</span>
-          <span>${log.resultType}</span>
-        ` : ''}
-        ${log.taskId ? `
-          <span style="color: var(--text-muted);">任务 ID:</span>
-          <span style="font-family: monospace; font-size: 11px;">${log.taskId}</span>
-        ` : ''}
-        ${log.resultUrl ? `
-          <span style="color: var(--text-muted);">结果 URL:</span>
-          <span style="font-family: monospace; font-size: 11px; word-break: break-all;"><a href="${log.resultUrl}" target="_blank" style="color: var(--primary-color);">${log.resultUrl.length > 80 ? log.resultUrl.substring(0, 80) + '...' : log.resultUrl}</a></span>
-        ` : ''}
-        ${log.errorMessage ? `
-          <span style="color: var(--text-muted);">错误信息:</span>
-          <span style="color: var(--error-color); word-break: break-word;">${log.errorMessage}</span>
-        ` : ''}
+    <div class="log-details">
+      <div class="detail-section">
+        <h4>基本信息</h4>
+        <table class="form-data-table">
+          <tbody>
+            <tr>
+              <td class="form-data-name">ID</td>
+              <td><span class="form-data-value" style="font-family: monospace; font-size: 11px;">${log.id}</span></td>
+            </tr>
+            <tr>
+              <td class="form-data-name">Endpoint</td>
+              <td><span class="form-data-value" style="font-family: monospace; font-size: 11px;">${log.endpoint}</span></td>
+            </tr>
+            <tr>
+              <td class="form-data-name">模型</td>
+              <td><span class="form-data-value">${log.model}</span></td>
+            </tr>
+            <tr>
+              <td class="form-data-name">类型</td>
+              <td><span class="form-data-value">${log.taskType}</span></td>
+            </tr>
+            <tr>
+              <td class="form-data-name">HTTP 状态</td>
+              <td><span class="form-data-value">${log.httpStatus || '-'}</span></td>
+            </tr>
+            <tr>
+              <td class="form-data-name">耗时</td>
+              <td><span class="form-data-value">${durationText}</span></td>
+            </tr>
+            ${log.hasReferenceImages ? `
+            <tr>
+              <td class="form-data-name">参考图</td>
+              <td><span class="form-data-value">${log.referenceImageCount || 0} 张</span></td>
+            </tr>
+            ` : ''}
+            ${log.resultType ? `
+            <tr>
+              <td class="form-data-name">结果类型</td>
+              <td><span class="form-data-value">${log.resultType}</span></td>
+            </tr>
+            ` : ''}
+            ${log.taskId ? `
+            <tr>
+              <td class="form-data-name">任务 ID</td>
+              <td><span class="form-data-value" style="font-family: monospace; font-size: 11px;">${log.taskId}</span></td>
+            </tr>
+            ` : ''}
+            ${log.resultUrl ? `
+            <tr>
+              <td class="form-data-name">结果 URL</td>
+              <td>
+                <span class="form-data-value" style="display: flex; align-items: center; gap: 8px;">
+                  <a href="${log.resultUrl}" target="_blank" class="llm-result-url" style="font-family: monospace; font-size: 11px; word-break: break-all; color: var(--primary-color); cursor: pointer;">${log.resultUrl.length > 80 ? log.resultUrl.substring(0, 80) + '...' : log.resultUrl}</a>
+                  <button class="copy-url-btn" data-url="${escapeHtml(log.resultUrl)}" title="复制 URL" style="padding: 2px 6px; font-size: 10px; cursor: pointer; flex-shrink: 0;">
+                    <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 12px; height: 12px;"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  </button>
+                </span>
+              </td>
+            </tr>
+            ` : ''}
+            ${log.errorMessage ? `
+            <tr>
+              <td class="form-data-name">错误信息</td>
+              <td><span class="form-data-value" style="color: var(--error-color); word-break: break-word;">${escapeHtml(log.errorMessage)}</span></td>
+            </tr>
+            ` : ''}
+          </tbody>
+        </table>
       </div>
       ${log.prompt ? `
-        <div style="margin-top: 8px;">
-          <span style="color: var(--text-muted);">提示词:</span>
-          <div style="margin-top: 4px; padding: 8px; background: var(--bg-tertiary); border-radius: 4px; word-break: break-word;">${escapeHtml(log.prompt)}</div>
+        <div class="detail-section">
+          <h4>提示词</h4>
+          <pre>${escapeHtml(log.prompt)}</pre>
         </div>
       ` : ''}
       ${log.requestBody ? `
-        <div style="margin-top: 8px;">
-          <span style="color: var(--text-muted);">请求体:</span>
-          <div style="margin-top: 4px; padding: 8px; background: var(--bg-tertiary); border-radius: 4px; word-break: break-word; white-space: pre-wrap; max-height: 400px; overflow-y: auto; font-family: monospace; font-size: 11px;">${escapeHtml(log.requestBody)}</div>
+        <div class="detail-section">
+          <h4>请求体 (Request Body)</h4>
+          <pre>${escapeHtml(log.requestBody)}</pre>
         </div>
       ` : ''}
       ${log.resultText ? `
-        <div style="margin-top: 8px;">
-          <span style="color: var(--text-muted);">响应文本:</span>
-          <div style="margin-top: 4px; padding: 8px; background: var(--bg-tertiary); border-radius: 4px; word-break: break-word; white-space: pre-wrap; max-height: 300px; overflow-y: auto;">${escapeHtml(log.resultText)}</div>
+        <div class="detail-section">
+          <h4>响应文本</h4>
+          <pre>${escapeHtml(log.resultText)}</pre>
         </div>
       ` : ''}
       ${log.responseBody ? `
-        <div style="margin-top: 8px;">
-          <span style="color: var(--text-muted);">响应体:</span>
-          <div style="margin-top: 4px; padding: 8px; background: var(--bg-tertiary); border-radius: 4px; word-break: break-word; white-space: pre-wrap; max-height: 200px; overflow-y: auto; font-family: monospace; font-size: 11px;">${escapeHtml(log.responseBody)}</div>
+        <div class="detail-section">
+          <h4>响应体 (Response Body)</h4>
+          <pre>${escapeHtml(log.responseBody)}</pre>
         </div>
       ` : ''}
     </div>
   `;
 
-  // Add click handler to toggle expansion
-  entry.querySelector('.log-header').addEventListener('click', () => {
-    const details = entry.querySelector('.log-details');
-    const icon = entry.querySelector('.expand-icon');
-    const newExpanded = !isExpanded;
-    
-    details.style.display = newExpanded ? 'block' : 'none';
-    icon.textContent = newExpanded ? '▼' : '▶';
-    
-    onToggle(log.id, newExpanded);
+  // Toggle function - same as Fetch logs
+  const toggleExpand = () => {
+    const isNowExpanded = entry.classList.toggle('expanded');
+    if (onToggle) {
+      onToggle(log.id, isNowExpanded);
+    }
+  };
+
+  // Toggle expand/collapse on button click
+  const toggleBtn = entry.querySelector('.log-toggle');
+  toggleBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleExpand();
   });
+
+  // Toggle on header click (except toggle button)
+  const header = entry.querySelector('.log-header');
+  header.addEventListener('click', (e) => {
+    if (e.target.closest('.log-toggle')) return;
+    toggleExpand();
+  });
+
+  // Copy URL button click handler
+  const copyUrlBtn = entry.querySelector('.copy-url-btn');
+  if (copyUrlBtn) {
+    copyUrlBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const url = copyUrlBtn.dataset.url;
+      try {
+        await navigator.clipboard.writeText(url);
+        // Show feedback
+        const originalHtml = copyUrlBtn.innerHTML;
+        copyUrlBtn.innerHTML = '✓';
+        copyUrlBtn.style.color = 'var(--success-color)';
+        setTimeout(() => {
+          copyUrlBtn.innerHTML = originalHtml;
+          copyUrlBtn.style.color = '';
+        }, 1500);
+      } catch (err) {
+        console.error('Failed to copy URL:', err);
+      }
+    });
+  }
 
   return entry;
 }
