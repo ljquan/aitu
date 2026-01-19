@@ -283,9 +283,9 @@ function parseBodySections(log) {
  * @param {Function} onToggle - Callback when expand state changes (id, expanded)
  * @returns {HTMLElement}
  */
-export function createLogEntry(log, isExpanded = false, onToggle = null) {
+export function createLogEntry(log, isExpanded = false, onToggle = null, isBookmarked = false, onBookmark = null, isSelectMode = false, isSelected = false, onSelect = null) {
   const entry = document.createElement('div');
-  entry.className = 'log-entry' + (isExpanded ? ' expanded' : '');
+  entry.className = 'log-entry' + (isExpanded ? ' expanded' : '') + (isBookmarked ? ' bookmarked' : '') + (isSelected ? ' selected' : '');
   entry.dataset.id = log.id;
 
   const statusClass = getStatusClass(log.status);
@@ -323,8 +323,15 @@ export function createLogEntry(log, isExpanded = false, onToggle = null) {
     statusDisplay = '<span class="log-status pending">...</span>';
   }
 
+  const bookmarkIcon = isBookmarked ? '⭐' : '☆';
+  const selectCheckbox = isSelectMode 
+    ? `<input type="checkbox" class="log-select-checkbox" data-id="${log.id}" ${isSelected ? 'checked' : ''} style="margin-right: 6px; cursor: pointer;">` 
+    : '';
+  
   entry.innerHTML = `
     <div class="log-header">
+      ${selectCheckbox}
+      <span class="log-bookmark" title="收藏/取消收藏" data-id="${log.id}">${bookmarkIcon}</span>
       <span class="log-toggle" title="展开/收起详情"><span class="arrow">▶</span></span>
       <span class="log-time">${formatTime(log.timestamp)}</span>
       <span class="log-method">${log.method || 'GET'}</span>
@@ -332,7 +339,7 @@ export function createLogEntry(log, isExpanded = false, onToggle = null) {
       ${streamingBadge}
       ${purposeLabel}
       <span class="log-url" title="${log.url || ''}">${displayUrl}</span>
-      <span class="log-duration">${formatDuration(log.duration)}</span>
+      <span class="log-duration ${log.duration >= 3000 ? 'very-slow' : (log.duration >= 1000 ? 'slow' : '')}">${formatDuration(log.duration)}</span>
       ${cachedBadge}
     </div>
     <div class="log-details">
@@ -375,6 +382,7 @@ export function createLogEntry(log, isExpanded = false, onToggle = null) {
           <pre>${log.details}</pre>
         </div>
       ` : ''}
+      <div class="related-requests-placeholder" data-log-id="${log.id}"></div>
     </div>
   `;
 
@@ -383,6 +391,28 @@ export function createLogEntry(log, isExpanded = false, onToggle = null) {
     const isNowExpanded = entry.classList.toggle('expanded');
     if (onToggle) {
       onToggle(log.id, isNowExpanded);
+    }
+    
+    // Lazy load related requests when expanding
+    if (isNowExpanded && window.renderRelatedRequests) {
+      const placeholder = entry.querySelector('.related-requests-placeholder');
+      if (placeholder && !placeholder.dataset.loaded) {
+        placeholder.innerHTML = window.renderRelatedRequests(log);
+        placeholder.dataset.loaded = 'true';
+        
+        // Add click handler for related requests
+        placeholder.querySelectorAll('.related-request').forEach(el => {
+          el.addEventListener('click', () => {
+            const targetId = el.dataset.id;
+            const targetEntry = document.querySelector(`.log-entry[data-id="${targetId}"]`);
+            if (targetEntry) {
+              targetEntry.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              targetEntry.classList.add('highlight');
+              setTimeout(() => targetEntry.classList.remove('highlight'), 2000);
+            }
+          });
+        });
+      }
     }
   };
 
@@ -393,10 +423,28 @@ export function createLogEntry(log, isExpanded = false, onToggle = null) {
     toggleExpand();
   });
 
-  // Toggle on header click (except toggle button)
+  // Bookmark button click
+  const bookmarkBtn = entry.querySelector('.log-bookmark');
+  if (bookmarkBtn && onBookmark) {
+    bookmarkBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      onBookmark(log.id);
+    });
+  }
+
+  // Selection checkbox click
+  const selectCheckboxEl = entry.querySelector('.log-select-checkbox');
+  if (selectCheckboxEl && onSelect) {
+    selectCheckboxEl.addEventListener('change', (e) => {
+      e.stopPropagation();
+      onSelect(log.id);
+    });
+  }
+
+  // Toggle on header click (except toggle button, bookmark, and checkbox)
   const header = entry.querySelector('.log-header');
   header.addEventListener('click', (e) => {
-    if (e.target.closest('.log-toggle')) return;
+    if (e.target.closest('.log-toggle') || e.target.closest('.log-bookmark') || e.target.closest('.log-select-checkbox')) return;
     toggleExpand();
   });
 

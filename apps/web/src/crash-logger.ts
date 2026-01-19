@@ -576,6 +576,23 @@ export function setupLongTaskMonitoring(): void {
       for (const entry of list.getEntries()) {
         // 只记录超过阈值的长任务
         if (entry.duration > LONG_TASK_THRESHOLD) {
+          // 提取 attribution 信息（如果有的话）
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const longTaskEntry = entry as any;
+          const attribution = longTaskEntry.attribution;
+          let attributionInfo: Record<string, unknown> | undefined;
+          
+          if (attribution && attribution.length > 0) {
+            const attr = attribution[0];
+            attributionInfo = {
+              name: attr.name,
+              containerType: attr.containerType,
+              containerSrc: attr.containerSrc,
+              containerId: attr.containerId,
+              containerName: attr.containerName,
+            };
+          }
+
           const snapshot: CrashSnapshot = {
             id: `longtask-${Date.now()}`,
             timestamp: Date.now(),
@@ -590,6 +607,9 @@ export function setupLongTaskMonitoring(): void {
             customData: {
               taskName: entry.name,
               startTime: entry.startTime,
+              attribution: attributionInfo,
+              // 提示：Long Task API 无法获取调用栈，需要使用 DevTools Performance 面板
+              debugTip: 'Use Chrome DevTools Performance panel to record and analyze the call stack',
             },
           };
 

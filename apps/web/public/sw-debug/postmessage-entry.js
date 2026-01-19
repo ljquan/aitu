@@ -54,7 +54,8 @@ function getDataPreview(data) {
 export function createPostMessageEntry(log, isExpanded = false, onToggle = null) {
   const entry = document.createElement('div');
   const directionClass = log.direction === 'send' ? 'send' : 'receive';
-  entry.className = `pm-entry ${directionClass}${isExpanded ? ' expanded' : ''}`;
+  // 使用 log-entry 作为基础类，与 Fetch 日志统一
+  entry.className = `log-entry pm-entry${isExpanded ? ' expanded' : ''}`;
   entry.dataset.id = log.id;
 
   const directionIcon = log.direction === 'send' ? '→' : '←';
@@ -65,56 +66,46 @@ export function createPostMessageEntry(log, isExpanded = false, onToggle = null)
   const dataPreview = getDataPreview(log.data);
 
   entry.innerHTML = `
-    <div class="pm-header">
-      <span class="pm-toggle">
-        <span class="arrow">▶</span>
-      </span>
-      <span class="pm-time">${formatTime(log.timestamp)}</span>
+    <div class="log-header pm-header">
+      <span class="log-toggle"><span class="arrow">▶</span></span>
+      <span class="log-time pm-time">${formatTime(log.timestamp)}</span>
       <span class="pm-direction ${directionClass}">
-        <span class="pm-direction-icon">${directionIcon}</span>
-        ${directionLabel}
+        <span class="pm-direction-icon">${directionIcon}</span>${directionLabel}
       </span>
       <span class="pm-type">${escapeHtml(messageType)}</span>
-      <span class="pm-preview">${dataPreview}</span>
+      <span class="log-url pm-preview">${dataPreview}</span>
     </div>
-    <div class="pm-details">
-      <div class="pm-detail-section">
-        <div class="pm-detail-header">
-          <span class="pm-detail-label">方向</span>
-          <span class="pm-detail-value">${directionLabel} ${directionTarget}</span>
-        </div>
-        <div class="pm-detail-header">
-          <span class="pm-detail-label">消息类型</span>
-          <span class="pm-detail-value pm-type-value">${escapeHtml(messageType)}</span>
-        </div>
-        <div class="pm-detail-header">
-          <span class="pm-detail-label">时间</span>
-          <span class="pm-detail-value">${new Date(log.timestamp).toLocaleString('zh-CN')}</span>
-        </div>
+    <div class="log-details pm-details">
+      <div class="detail-section">
+        <h4>基本信息</h4>
+        <pre>方向: ${directionLabel} ${directionTarget}
+消息类型: ${messageType}
+时间: ${new Date(log.timestamp).toLocaleString('zh-CN')}</pre>
       </div>
-      <div class="pm-detail-section">
-        <div class="pm-detail-label">消息数据</div>
-        <pre class="pm-data">${formatData(log.data)}</pre>
+      <div class="detail-section">
+        <h4>消息数据</h4>
+        <pre>${formatData(log.data)}</pre>
       </div>
       ${log.response !== undefined ? `
-        <div class="pm-detail-section">
-          <div class="pm-detail-label">响应数据</div>
-          <pre class="pm-data pm-response">${formatData(log.response)}</pre>
+        <div class="detail-section">
+          <h4>响应数据</h4>
+          <pre style="border-left: 3px solid var(--success-color);">${formatData(log.response)}</pre>
         </div>
       ` : ''}
       ${log.error ? `
-        <div class="pm-detail-section">
-          <div class="pm-detail-label">错误信息</div>
-          <pre class="pm-data pm-error">${escapeHtml(log.error)}</pre>
+        <div class="detail-section">
+          <h4>错误信息</h4>
+          <pre style="color: var(--error-color);">${escapeHtml(log.error)}</pre>
         </div>
       ` : ''}
     </div>
   `;
 
-  // Add toggle functionality
-  const header = entry.querySelector('.pm-header');
-  if (header) {
-    header.addEventListener('click', () => {
+  // Toggle expand on toggle button click
+  const toggleBtn = entry.querySelector('.log-toggle');
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
       const isNowExpanded = entry.classList.toggle('expanded');
       if (onToggle) {
         onToggle(log.id, isNowExpanded);

@@ -15,3 +15,13 @@ export * from './types/workspace.types';
 // Export unified cache service
 export { unifiedCacheService } from './services/unified-cache-service';
 export type { CachedMedia, CacheStatus } from './services/unified-cache-service';
+
+// Export initialization services (for main.tsx)
+export { initWebVitals } from './services/web-vitals-service';
+export { initPageReport } from './services/page-report-service';
+export { initPreventPinchZoom } from './services/prevent-pinch-zoom-service';
+export { runDatabaseCleanup } from './services/db-cleanup-service';
+export { storageMigrationService } from './services/storage-migration-service';
+export { initPromptStorageCache } from './services/prompt-storage-service';
+export { toolbarConfigService } from './services/toolbar-config-service';
+export { memoryMonitorService } from './services/memory-monitor-service';

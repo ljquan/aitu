@@ -3349,6 +3349,100 @@ const PromptHistoryPopover = () => {
 
 ---
 
+### UI 重构时必须保持信息完整性
+
+**场景**: 重构 UI 样式（如简化布局、统一风格）时
+
+❌ **错误示例**:
+```typescript
+// 重构前：显示完整的性能信息
+entry.innerHTML = `
+  <span class="log-perf">⚡ 任务时长: ${duration}ms | FPS: ${fps}</span>
+  <span class="log-memory">📊 ${usedMB} MB / ${limitMB} MB (${percent}%)</span>
+`;
+
+// 重构后：为了"简化"只显示时长徽章，丢失了 FPS 和内存信息
+let perfBadge = '';
+if (log.performance?.longTaskDuration) {
+  perfBadge = `<span class="log-duration">${duration}ms</span>`;
+}
+// ❌ FPS、内存信息没有了！
+```
+
+✅ **正确示例**:
+```typescript
+// 重构后：样式简化但信息完整
+let perfText = '';
+if (log.performance) {
+  const parts = [];
+  if (log.performance.longTaskDuration) {
+    parts.push(`任务时长: ${log.performance.longTaskDuration.toFixed(0)}ms`);
+  }
+  if (log.performance.fps !== undefined) {
+    parts.push(`FPS: ${log.performance.fps}`);
+  }
+  perfText = parts.join(' | ');
+}
+// ✅ 所有原有信息都保留
+```
+
+**检查清单**:
+- 重构前列出所有显示的信息项
+- 重构后逐一核对是否都有展示
+- 用真实数据测试，确认信息完整
+
+**原因**: 样式重构的目的是优化视觉呈现，而不是删减功能。用户依赖这些信息进行问题诊断，丢失信息会影响使用体验。
+
+---
+
+### 日志/数据保留应优先保留问题记录
+
+**场景**: 实现日志、任务历史等有容量上限的列表时
+
+❌ **错误示例**:
+```typescript
+// 简单 FIFO，新日志进来就删除最旧的
+state.logs.unshift(newLog);
+if (state.logs.length > MAX_LOGS) {
+  state.logs.pop();  // ❌ 可能删掉重要的错误日志
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 优先保留问题记录
+function isProblemLog(log) {
+  if (log.status >= 400 || log.error) return true;  // 错误请求
+  if (log.duration >= 1000) return true;  // 慢请求
+  return false;
+}
+
+function trimLogsWithPriority(maxLogs) {
+  // 分类
+  const bookmarked = logs.filter(l => isBookmarked(l.id));
+  const problems = logs.filter(l => !isBookmarked(l.id) && isProblemLog(l));
+  const normal = logs.filter(l => !isBookmarked(l.id) && !isProblemLog(l));
+  
+  // 优先保留：收藏 > 问题 > 正常
+  const mustKeep = bookmarked.length + problems.length;
+  if (mustKeep >= maxLogs) {
+    state.logs = [...bookmarked, ...problems.slice(0, maxLogs - bookmarked.length)];
+  } else {
+    state.logs = [...bookmarked, ...problems, ...normal.slice(0, maxLogs - mustKeep)];
+  }
+}
+```
+
+**保留优先级**:
+1. 用户收藏/标记的记录
+2. 错误记录（状态码 >= 400、有 error 字段）
+3. 慢请求（耗时 >= 1s）
+4. 正常记录
+
+**原因**: 正常请求通常不需要回溯，而问题请求是排查问题的关键依据。如果问题请求被正常请求挤掉，会大大增加问题定位难度。
+
+---
+
 ## 相关文档
 
 - `/docs/CODING_STANDARDS.md` - 完整编码规范

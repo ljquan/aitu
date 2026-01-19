@@ -2,10 +2,22 @@ import { StrictMode } from 'react';
 import * as ReactDOM from 'react-dom/client';
 import * as Sentry from '@sentry/react';
 import App from './app/app';
+import { initCrashLogger } from './crash-logger';
+import './utils/permissions-policy-fix';
+import {
+  initWebVitals,
+  initPageReport,
+  initPreventPinchZoom,
+  runDatabaseCleanup,
+  storageMigrationService,
+  initPromptStorageCache,
+  toolbarConfigService,
+  memoryMonitorService,
+} from '@drawnix/drawnix';
+import { initSWConsoleCapture } from './utils/sw-console-capture';
 
 // ===== 初始化崩溃日志系统 =====
 // 必须尽早初始化，以捕获启动阶段的内存状态和错误
-import { initCrashLogger } from './crash-logger';
 initCrashLogger();
 
 // ===== 初始化 Sentry 错误监控 =====
@@ -32,24 +44,10 @@ Sentry.init({
   // replaysOnErrorSampleRate: 1.0,
 });
 
-// 修复权限策略违规警告
-import './utils/permissions-policy-fix';
-
-// 初始化 Web Vitals 和 Page Report 监控
-import { initWebVitals } from '../../../packages/drawnix/src/services/web-vitals-service';
-import { initPageReport } from '../../../packages/drawnix/src/services/page-report-service';
-import { initPreventPinchZoom } from '../../../packages/drawnix/src/services/prevent-pinch-zoom-service';
-import { runDatabaseCleanup } from '../../../packages/drawnix/src/services/db-cleanup-service';
-import { storageMigrationService } from '../../../packages/drawnix/src/services/storage-migration-service';
-import { initPromptStorageCache } from '../../../packages/drawnix/src/services/prompt-storage-service';
-import { toolbarConfigService } from '../../../packages/drawnix/src/services/toolbar-config-service';
-import { initSWConsoleCapture } from './utils/sw-console-capture';
-
 // ===== 立即初始化防止双指缩放 =====
 // 必须在任何其他代码之前执行，确保事件监听器最先注册
-let cleanupPinchZoom: (() => void) | undefined;
 if (typeof window !== 'undefined') {
-  cleanupPinchZoom = initPreventPinchZoom();
+  initPreventPinchZoom();
   // console.log('[Main] Pinch zoom prevention initialized immediately');
 
   // 清理旧的冗余数据库（异步执行，不阻塞启动）
@@ -71,6 +69,13 @@ if (typeof window !== 'undefined') {
 
 // 初始化性能监控
 if (typeof window !== 'undefined') {
+  // 启动内存监控（延迟启动，避免影响首屏加载）
+  setTimeout(() => {
+    memoryMonitorService.start();
+    // 打印初始内存状态
+    memoryMonitorService.logMemoryStatus();
+  }, 5000);
+
   // 等待 PostHog 加载完成后初始化监控
   const initMonitoring = () => {
     if (window.posthog) {

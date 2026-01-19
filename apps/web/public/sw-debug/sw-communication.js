@@ -64,15 +64,18 @@ function logPostMessage(direction, messageType, data, response, error) {
 
 /**
  * Send message to Service Worker
+ * Uses controller if available, otherwise uses registration.active
  * @param {string} type
  * @param {object} data
  */
 export function sendToSW(type, data = {}) {
-  if (navigator.serviceWorker.controller) {
+  const sw = getActiveSW();
+  if (sw) {
     const message = { type, ...data };
-    navigator.serviceWorker.controller.postMessage(message);
-    // Log the outgoing message
+    sw.postMessage(message);
     logPostMessage('send', type, data);
+  } else {
+    console.warn('[SW Debug] No active SW to send message to');
   }
 }
 
@@ -139,16 +142,40 @@ export function clearPostMessageLogs() {
   sendToSW('SW_DEBUG_CLEAR_POSTMESSAGE_LOGS');
 }
 
+/** @type {ServiceWorkerRegistration|null} */
+let cachedRegistration = null;
+
 /**
  * Check if SW is available and ready
+ * Returns true if SW is active (even without controller - we can use registration.active)
  * @returns {Promise<boolean>}
  */
 export async function checkSwReady() {
   if (!('serviceWorker' in navigator)) {
     return false;
   }
-  await navigator.serviceWorker.ready;
-  return !!navigator.serviceWorker.controller;
+  
+  const registration = await navigator.serviceWorker.ready;
+  cachedRegistration = registration;
+  
+  // If SW is active, we can communicate with it
+  // (controller might be null on hard refresh, but registration.active works)
+  return !!registration.active;
+}
+
+/**
+ * Get the active SW to send messages to
+ * Prefers controller, falls back to registration.active
+ * @returns {ServiceWorker|null}
+ */
+export function getActiveSW() {
+  if (navigator.serviceWorker.controller) {
+    return navigator.serviceWorker.controller;
+  }
+  if (cachedRegistration?.active) {
+    return cachedRegistration.active;
+  }
+  return null;
 }
 
 /**
