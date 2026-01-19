@@ -20,7 +20,7 @@ import {
 import { MessagePlugin } from 'tdesign-react';
 import { assetStorageService } from '../services/asset-storage-service';
 import { taskQueueService } from '../services/task-queue';
-import { unifiedCacheService, type CachedMedia } from '../services/unified-cache-service';
+import { unifiedCacheService } from '../services/unified-cache-service';
 import { getStorageStatus } from '../utils/storage-quota';
 import { getAssetSizeFromCache } from '../hooks/useAssetSize';
 import type {
@@ -110,41 +110,71 @@ export function AssetProvider({ children }: AssetProviderProps) {
   }, []);
 
   /**
-   * Convert cached media to Asset
-   * 将缓存媒体转换为素材
-   * 根据 URL 是否以 http 开头判断来源（http 开头为 AI 生成）
-   * 根据文件后缀区分视频或图片
+   * 从 Cache Storage 获取媒体资源列表
+   * 获取 /__aitu_cache__/ 和 /asset-library/ 前缀的图片和视频
+   * 这确保只显示 Cache Storage 中实际存在的资源
    */
-  const cachedMediaToAsset = useCallback((cached: CachedMedia): Asset => {
-    // 根据 URL 判断来源：http 开头为 AI 生成
-    const isAIGenerated = cached.url.startsWith('http');
+  const getAssetsFromCacheStorage = useCallback(async (): Promise<Asset[]> => {
+    if (typeof caches === 'undefined') return [];
     
-    // 根据后缀或 mimeType 判断类型
-    const urlLower = cached.url.toLowerCase();
-    const isVideo = urlLower.endsWith('.mp4') || 
-                    urlLower.endsWith('.webm') || 
-                    urlLower.endsWith('.mov') ||
-                    cached.mimeType?.startsWith('video/') ||
-                    cached.type === 'video';
-    
-    return {
-      id: `cache-${cached.url}`,
-      type: isVideo ? AssetTypeEnum.VIDEO : AssetTypeEnum.IMAGE,
-      source: isAIGenerated ? AssetSourceEnum.AI_GENERATED : AssetSourceEnum.LOCAL,
-      url: cached.url,
-      name: cached.metadata?.prompt?.substring(0, 30) || '缓存媒体',
-      mimeType: cached.mimeType || (isVideo ? 'video/mp4' : 'image/png'),
-      createdAt: cached.cachedAt,
-      size: cached.size,
-      prompt: cached.metadata?.prompt,
-      modelName: cached.metadata?.model,
-    };
+    try {
+      const cache = await caches.open('drawnix-images');
+      const requests = await cache.keys();
+      const assets: Asset[] = [];
+      
+      for (const request of requests) {
+        const url = new URL(request.url);
+        const pathname = url.pathname;
+        
+        // 处理 /__aitu_cache__/ 和 /asset-library/ 前缀的资源
+        const isAituCache = pathname.startsWith('/__aitu_cache__/');
+        const isAssetLibrary = pathname.startsWith('/asset-library/');
+        
+        if (!isAituCache && !isAssetLibrary) continue;
+        
+        // 判断媒体类型
+        const isVideo = pathname.includes('/video/') || 
+                        /\.(mp4|webm|mov)$/i.test(pathname);
+        const isImage = pathname.includes('/image/') || 
+                        /\.(jpg|jpeg|png|gif|webp)$/i.test(pathname);
+        
+        if (!isVideo && !isImage) continue;
+        
+        // 获取响应以读取大小和时间
+        const response = await cache.match(request);
+        if (!response) continue;
+        
+        const size = parseInt(response.headers.get('Content-Length') || '0', 10);
+        const mimeType = response.headers.get('Content-Type') || 
+                        (isVideo ? 'video/mp4' : 'image/png');
+        
+        // 从 pathname 提取 ID 作为素材 ID
+        const filename = pathname.split('/').pop() || '';
+        const id = `cache-storage-${filename}`;
+        
+        assets.push({
+          id,
+          type: isVideo ? AssetTypeEnum.VIDEO : AssetTypeEnum.IMAGE,
+          source: AssetSourceEnum.LOCAL, // Cache Storage 中的视为本地
+          url: pathname, // 使用相对路径
+          name: filename,
+          mimeType,
+          createdAt: Date.now(), // Cache API 无法获取创建时间
+          size,
+        });
+      }
+      
+      return assets;
+    } catch (error) {
+      console.error('[AssetContext] Failed to get assets from Cache Storage:', error);
+      return [];
+    }
   }, []);
 
   /**
    * Load Assets
    * 加载所有素材
-   * 合并本地上传的素材、任务队列中已完成的 AI 生成任务、以及缓存中的媒体
+   * 合并本地上传的素材、任务队列中已完成的 AI 生成任务、以及 Cache Storage 中的媒体
    */
   const loadAssets = useCallback(async () => {
     setLoading(true);
@@ -163,22 +193,34 @@ export function AssetProvider({ children }: AssetProviderProps) {
         )
         .map(taskToAsset);
 
-      // 3. 从 drawnix-unified-cache 获取所有缓存媒体
-      const cachedMediaList = await unifiedCacheService.getAllCacheMetadata();
+      // 3. 从 Cache Storage 获取媒体（优先级最低，用于补充）
+      const cacheStorageAssets = await getAssetsFromCacheStorage();
       
-      // 4. 收集已有素材的 URL 用于去重
+      // 4. 收集已有素材的 URL 用于去重（提取路径部分进行比较）
+      const extractPath = (url: string): string => {
+        // 如果是完整 URL，提取 pathname
+        if (url.startsWith('http')) {
+          try {
+            return new URL(url).pathname;
+          } catch {
+            return url;
+          }
+        }
+        return url;
+      };
+      
       const existingUrls = new Set<string>([
-        ...localAssets.map(a => a.url),
-        ...aiAssets.map(a => a.url),
+        ...localAssets.map(a => extractPath(a.url)),
+        ...aiAssets.map(a => extractPath(a.url)),
       ]);
       
-      // 5. 过滤掉已存在于 localAssets 和 aiAssets 中的缓存项，转换为 Asset
-      const cacheAssets = cachedMediaList
-        .filter(cached => !existingUrls.has(cached.url))
-        .map(cachedMediaToAsset);
+      // 5. 过滤掉已存在的 Cache Storage 素材
+      const uniqueCacheAssets = cacheStorageAssets.filter(
+        asset => !existingUrls.has(extractPath(asset.url))
+      );
 
       // 6. 合并三个来源的素材，按创建时间倒序排列
-      const allAssets = [...localAssets, ...aiAssets, ...cacheAssets].sort(
+      const allAssets = [...localAssets, ...aiAssets, ...uniqueCacheAssets].sort(
         (a, b) => b.createdAt - a.createdAt
       );
 
@@ -222,7 +264,7 @@ export function AssetProvider({ children }: AssetProviderProps) {
     } finally {
       setLoading(false);
     }
-  }, [taskToAsset, cachedMediaToAsset]);
+  }, [taskToAsset, getAssetsFromCacheStorage]);
 
   /**
    * Add Asset

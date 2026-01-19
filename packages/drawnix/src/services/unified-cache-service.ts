@@ -781,7 +781,36 @@ class UnifiedCacheService {
   // ==================== 兼容旧 API ====================
 
   /**
+   * 仅将 Blob 存入 Cache Storage（不存 IndexedDB 元数据）
+   */
+  async cacheToCacheStorageOnly(
+    url: string,
+    blob: Blob
+  ): Promise<boolean> {
+    try {
+      if (typeof caches === 'undefined') {
+        console.warn('[UnifiedCache] caches API not available');
+        return false;
+      }
+      const cache = await caches.open(IMAGE_CACHE_NAME);
+      const response = new Response(blob, {
+        headers: {
+          'Content-Type': blob.type || 'application/octet-stream',
+          'Content-Length': blob.size.toString(),
+        },
+      });
+      await cache.put(url, response);
+      return true;
+    } catch (error) {
+      console.error('[UnifiedCache] Failed to cache to storage only:', error);
+      return false;
+    }
+  }
+
+  /**
    * 从 Blob 缓存媒体（兼容 mediaCacheService.cacheMediaFromBlob）
+   * 同时存入 Cache Storage 和 IndexedDB 元数据
+   * 用于 AI 生成的媒体，需要在素材库中显示
    */
   async cacheMediaFromBlob(
     url: string,

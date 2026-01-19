@@ -1652,8 +1652,8 @@ export async function splitAndInsertImages(
       const response = await fetch(element.imageData);
       const blob = await response.blob();
 
-      // 缓存到 Cache API
-      await unifiedCacheService.cacheMediaFromBlob(stableUrl, blob, 'image', { taskId });
+      // 仅缓存到 Cache Storage（不存 IndexedDB 元数据，分割图片不需要在素材库显示）
+      await unifiedCacheService.cacheToCacheStorageOnly(stableUrl, blob);
 
       const imageItem = {
         url: stableUrl,

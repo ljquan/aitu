@@ -247,6 +247,37 @@ const VIDEO_BLOB_CACHE_MAX_SIZE = 10;
 // 域名故障标记：记录已知失败的域名
 const failedDomains = new Set<string>();
 
+// CORS 问题域名：记录返回错误 CORS 头的域名，SW 将跳过这些域名让浏览器直接处理
+const corsFailedDomains = new Set<string>();
+// CORS 失败域名缓存过期时间（1小时后重试）
+const CORS_FAILED_DOMAIN_TTL = 60 * 60 * 1000;
+const corsFailedDomainTimestamps = new Map<string, number>();
+
+/**
+ * 标记域名存在 CORS 问题
+ */
+function markCorsFailedDomain(hostname: string): void {
+  corsFailedDomains.add(hostname);
+  corsFailedDomainTimestamps.set(hostname, Date.now());
+  console.warn(`Service Worker: 标记 ${hostname} 为 CORS 问题域名，后续请求将跳过 SW`);
+}
+
+/**
+ * 检查域名是否存在 CORS 问题（考虑过期时间）
+ */
+function isCorsFailedDomain(hostname: string): boolean {
+  if (!corsFailedDomains.has(hostname)) return false;
+  
+  const timestamp = corsFailedDomainTimestamps.get(hostname);
+  if (timestamp && Date.now() - timestamp > CORS_FAILED_DOMAIN_TTL) {
+    // 超过 TTL，移除标记，允许重试
+    corsFailedDomains.delete(hostname);
+    corsFailedDomainTimestamps.delete(hostname);
+    return false;
+  }
+  return true;
+}
+
 // ==================== 调试功能相关 ====================
 
 // 调试日志条目接口
@@ -590,6 +621,8 @@ function getDebugStatus(): {
   completedImageRequestsSize: number;
   failedDomainsCount: number;
   failedDomains: string[];
+  corsFailedDomainsCount: number;
+  corsFailedDomains: string[];
   debugLogsCount: number;
   consoleLogsCount: number;
   debugModeEnabled: boolean;
@@ -599,6 +632,7 @@ function getDebugStatus(): {
     completedRequestsMapSize: number;
     videoBlobCacheMapSize: number;
     failedDomainsSetSize: number;
+    corsFailedDomainsSetSize: number;
     debugLogsArraySize: number;
     consoleLogsArraySize: number;
   };
@@ -613,6 +647,8 @@ function getDebugStatus(): {
     completedImageRequestsSize: completedImageRequests.size,
     failedDomainsCount: failedDomains.size,
     failedDomains: Array.from(failedDomains),
+    corsFailedDomainsCount: corsFailedDomains.size,
+    corsFailedDomains: Array.from(corsFailedDomains),
     debugLogsCount: debugLogs.length,
     consoleLogsCount: consoleLogs.length,
     debugModeEnabled,
@@ -623,6 +659,7 @@ function getDebugStatus(): {
       completedRequestsMapSize: completedImageRequests.size,
       videoBlobCacheMapSize: videoBlobCache.size,
       failedDomainsSetSize: failedDomains.size,
+      corsFailedDomainsSetSize: corsFailedDomains.size,
       debugLogsArraySize: debugLogs.length,
       consoleLogsArraySize: consoleLogs.length,
     },
@@ -2193,6 +2230,20 @@ sw.addEventListener('fetch', (event: FetchEvent) => {
     return; // 直接返回，让浏览器处理
   }
 
+  // 智能跳过：检查域名是否被标记为 CORS 问题域名
+  if (isCorsFailedDomain(url.hostname)) {
+    addDebugLog({
+      type: 'fetch',
+      url: event.request.url,
+      method: event.request.method,
+      requestType: 'passthrough',
+      details: `Passthrough: ${url.hostname} (CORS failed domain, auto-detected)`,
+      status: 0,
+      duration: 0,
+    });
+    return; // 直接返回，让浏览器处理
+  }
+
 
 
   // 拦截视频请求以支持 Range 请求
@@ -3410,47 +3461,52 @@ async function handleImageRequestInternal(originalRequest: Request, requestUrl: 
       const cachedResponse = await cache.match(originalRequest);
 
       if (cachedResponse) {
-        const cacheDate = cachedResponse.headers.get('sw-cache-date');
-        if (cacheDate) {
-          const now = Date.now();
-
-          // 再次访问时延长缓存时间 - 创建新的响应并更新缓存
-          const responseClone = cachedResponse.clone();
-          const blob = await responseClone.blob();
-
-          const refreshedResponse = new Response(blob, {
-            status: cachedResponse.status,
-            statusText: cachedResponse.statusText,
-            headers: {
-              ...Object.fromEntries((cachedResponse.headers as any).entries()),
-              'sw-cache-date': now.toString() // 更新访问时间为当前时间
-            }
-          });
-
-          // 用新时间戳重新缓存（使用原始URL作为键）
-          if (originalRequest.url.startsWith('http')) {
-            await cache.put(originalRequest, refreshedResponse.clone());
-          }
-          return refreshedResponse;
+        // 检查缓存的响应是否有效（blob 不为空）
+        const responseClone = cachedResponse.clone();
+        const blob = await responseClone.blob();
+        
+        // 如果 blob 为空，说明是之前错误缓存的空响应，删除并重新获取
+        if (blob.size === 0) {
+          console.warn(`Service Worker [${requestId}]: 检测到空缓存，删除并重新获取:`, requestUrl);
+          await cache.delete(originalRequest);
+          // 继续执行后面的网络请求逻辑
         } else {
-          // 旧的缓存没有时间戳，为其添加时间戳并延长
-          // console.log(`Service Worker [${requestId}]: Adding timestamp to legacy cached image:`, requestUrl);
-          const responseClone = cachedResponse.clone();
-          const blob = await responseClone.blob();
+          const cacheDate = cachedResponse.headers.get('sw-cache-date');
+          if (cacheDate) {
+            const now = Date.now();
 
-          const refreshedResponse = new Response(blob, {
-            status: cachedResponse.status,
-            statusText: cachedResponse.statusText,
-            headers: {
-              ...Object.fromEntries((cachedResponse.headers as any).entries()),
-              'sw-cache-date': Date.now().toString()
+            // 再次访问时延长缓存时间 - 创建新的响应并更新缓存
+            const refreshedResponse = new Response(blob, {
+              status: cachedResponse.status,
+              statusText: cachedResponse.statusText,
+              headers: {
+                ...Object.fromEntries((cachedResponse.headers as any).entries()),
+                'sw-cache-date': now.toString() // 更新访问时间为当前时间
+              }
+            });
+
+            // 用新时间戳重新缓存（使用原始URL作为键）
+            if (originalRequest.url.startsWith('http')) {
+              await cache.put(originalRequest, refreshedResponse.clone());
             }
-          });
+            return refreshedResponse;
+          } else {
+            // 旧的缓存没有时间戳，为其添加时间戳并延长
+            // console.log(`Service Worker [${requestId}]: Adding timestamp to legacy cached image:`, requestUrl);
+            const refreshedResponse = new Response(blob, {
+              status: cachedResponse.status,
+              statusText: cachedResponse.statusText,
+              headers: {
+                ...Object.fromEntries((cachedResponse.headers as any).entries()),
+                'sw-cache-date': Date.now().toString()
+              }
+            });
 
-          if (originalRequest.url.startsWith('http')) {
-            await cache.put(originalRequest, refreshedResponse.clone());
+            if (originalRequest.url.startsWith('http')) {
+              await cache.put(originalRequest, refreshedResponse.clone());
+            }
+            return refreshedResponse;
           }
-          return refreshedResponse;
         }
       }
     } else {
@@ -3538,8 +3594,9 @@ async function handleImageRequestInternal(originalRequest: Request, requestUrl: 
               // console.log(`Service Worker [${requestId}]: Fetch attempt ${attempt + 1}/3 with options on ${isUsingFallback ? 'fallback' : 'original'} URL`);
               response = await fetch(currentUrl, options);
 
-              if (response && response.status !== 0) {
-                // console.log(`Service Worker [${requestId}]: Fetch successful with status: ${response.status} from ${isUsingFallback ? 'fallback' : 'original'} URL`);
+              // 成功条件：status !== 0 或者是 opaque 响应（no-cors 模式）
+              if (response && (response.status !== 0 || response.type === 'opaque')) {
+                // console.log(`Service Worker [${requestId}]: Fetch successful with status: ${response.status}, type: ${response.type} from ${isUsingFallback ? 'fallback' : 'original'} URL`);
                 break;
               }
             } catch (fetchError: any) {
@@ -3566,22 +3623,42 @@ async function handleImageRequestInternal(originalRequest: Request, requestUrl: 
             }
           }
 
-          // 如果是CORS错误，返回特殊响应让前端直接用img标签加载
+          // 如果是CORS错误，标记域名并尝试 no-cors 模式获取 opaque 响应
           if (isCORSError) {
-            // console.log(`Service Worker [${requestId}]: CORS错误，返回特殊响应提示前端直接加载`);
-            // 返回一个特殊的响应，前端可以根据这个响应决定直接用img标签加载
-            return new Response('CORS error - use img tag directly', {
-              status: 403,
-              statusText: 'CORS Error',
+            // 标记该域名存在 CORS 问题，后续请求将跳过 SW
+            const problemHostname = new URL(currentUrl).hostname;
+            markCorsFailedDomain(problemHostname);
+            
+            console.log(`Service Worker [${requestId}]: CORS 错误，尝试 no-cors 模式获取图片:`, requestUrl);
+            
+            try {
+              // 使用 no-cors 模式获取 opaque 响应，图片可以显示但 SW 无法读取内容
+              const opaqueResponse = await fetch(requestUrl, {
+                mode: 'no-cors',
+                credentials: 'omit',
+                referrerPolicy: 'no-referrer',
+              });
+              
+              if (opaqueResponse.type === 'opaque') {
+                console.log(`Service Worker [${requestId}]: no-cors 模式成功获取 opaque 响应`);
+                return opaqueResponse;
+              }
+            } catch (noCorsError) {
+              console.warn(`Service Worker [${requestId}]: no-cors 模式也失败:`, noCorsError);
+            }
+            
+            // 如果 no-cors 也失败，返回空响应让浏览器重试
+            return new Response(null, {
+              status: 200,
               headers: {
-                'Content-Type': 'text/plain',
-                'X-SW-CORS-Error': 'true',
-                'Access-Control-Allow-Origin': '*'
+                'Content-Type': 'image/png',
+                'X-SW-CORS-Bypass': 'true',
               }
             });
           }
 
-          if (response && response.status !== 0) {
+          // 成功条件：status !== 0 或者是 opaque 响应（no-cors 模式）
+          if (response && (response.status !== 0 || response.type === 'opaque')) {
             break;
           }
 
@@ -3597,7 +3674,8 @@ async function handleImageRequestInternal(originalRequest: Request, requestUrl: 
       }
 
       // 如果当前URL成功获取到响应，跳出URL循环
-      if (response && response.status !== 0) {
+      // 成功条件：status !== 0 或者是 opaque 响应（no-cors 模式）
+      if (response && (response.status !== 0 || response.type === 'opaque')) {
         break;
       } else {
         // 如果是配置的域名且是第一次尝试（原始URL），标记为失败域名
@@ -3612,7 +3690,8 @@ async function handleImageRequestInternal(originalRequest: Request, requestUrl: 
       }
     }
 
-    if (!response || response.status === 0) {
+    // 检查是否获取失败（排除 opaque 响应，那是 no-cors 模式的正常结果）
+    if (!response || (response.status === 0 && response.type !== 'opaque')) {
       let errorMessage = 'All fetch attempts failed';
 
       if (domainConfig && domainConfig.fallbackDomain) {
@@ -3641,8 +3720,18 @@ async function handleImageRequestInternal(originalRequest: Request, requestUrl: 
 
     // 处理no-cors模式的opaque响应
     if (response.type === 'opaque') {
-      // console.log('Got opaque response, creating transparent CORS response');
-      // 对于opaque响应，我们创建一个透明的CORS响应
+      // opaque 响应的 body 无法读取（安全限制），无法转换为普通响应
+      // 直接返回 opaque 响应，让浏览器显示图片
+      // 缓存由浏览器的 disk cache 处理（基于 HTTP 缓存头）
+      console.log(`Service Worker [${requestId}]: 返回 opaque 响应，依赖浏览器 disk cache`);
+      
+      // 标记该域名存在 CORS 问题，后续请求将跳过 SW
+      const problemHostname = new URL(requestUrl).hostname;
+      markCorsFailedDomain(problemHostname);
+      
+      return response;
+      
+      /* 注释掉无效的缓存逻辑 - opaque 响应的 body 是 null
       const corsResponse = new Response(response.body, {
         status: 200,
         statusText: 'OK',
@@ -3651,38 +3740,19 @@ async function handleImageRequestInternal(originalRequest: Request, requestUrl: 
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'GET',
           'Access-Control-Allow-Headers': '*',
-          'Cache-Control': 'max-age=3153600000', // 100年
-          'sw-cache-date': Date.now().toString() // 添加缓存时间戳
+          'Cache-Control': 'max-age=3153600000',
+          'sw-cache-date': Date.now().toString()
         }
       });
-
-      // 尝试缓存响应，处理存储限制错误
+      
       try {
         if (originalRequest.url.startsWith('http')) {
           await cache.put(originalRequest, corsResponse.clone());
-          // console.log('Service Worker: Opaque response cached with 30-day expiry and timestamp');
-          // 通知主线程图片已缓存
           await notifyImageCached(requestUrl, 0, 'image/png');
-          // 检查存储配额
           await checkStorageQuota();
         }
       } catch (cacheError) {
-        console.warn('Service Worker: Failed to cache opaque response (可能超出存储限制):', cacheError);
-        // 尝试清理一些旧缓存后重试
-        await cleanOldCacheEntries(cache);
-        try {
-          if (originalRequest.url.startsWith('http')) {
-            await cache.put(originalRequest, corsResponse.clone());
-            // console.log('Service Worker: Opaque response cached after cleanup');
-            // 通知主线程图片已缓存
-            await notifyImageCached(requestUrl, 0, 'image/png');
-          }
-        } catch (retryError) {
-          console.error('Service Worker: Still failed to cache after cleanup:', retryError);
-        }
-      }
-
-      return corsResponse;
+        // 旧的 opaque 缓存逻辑结束 */
     }
 
     // 处理正常响应

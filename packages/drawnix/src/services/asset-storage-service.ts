@@ -357,6 +357,7 @@ class AssetStorageService {
   /**
    * Get All Assets
    * 获取所有素材 - 使用并行加载优化性能
+   * 只返回 Cache Storage 中实际存在的素材
    */
   async getAllAssets(): Promise<Asset[]> {
     // console.log('[AssetStorageService] getAllAssets called');
@@ -370,11 +371,35 @@ class AssetStorageService {
         return [];
       }
 
+      // 获取 Cache Storage 中的有效 URL 集合
+      let validCacheUrls: Set<string> = new Set();
+      if (typeof caches !== 'undefined') {
+        try {
+          const cache = await caches.open('drawnix-images');
+          const requests = await cache.keys();
+          validCacheUrls = new Set(
+            requests.map(req => new URL(req.url).pathname)
+          );
+        } catch (cacheError) {
+          console.warn('[AssetStorageService] Failed to read Cache Storage:', cacheError);
+        }
+      }
+
       // 并行加载所有素材
       const loadPromises = keys.map(async (key) => {
         try {
           const stored = (await this.store!.getItem(key)) as StoredAsset | null;
           if (!stored) return null;
+
+          // 验证 Cache Storage 中是否有实际数据
+          // 只检查 /asset-library/ 前缀的本地上传素材
+          if (stored.url.startsWith('/asset-library/')) {
+            if (validCacheUrls.size > 0 && !validCacheUrls.has(stored.url)) {
+              // Cache Storage 中没有实际数据，跳过此素材
+              console.warn(`[AssetStorageService] Asset not in Cache Storage, skipping: ${stored.url}`);
+              return null;
+            }
+          }
 
           // 直接使用存储的 URL
           return storedAssetToAsset(stored);

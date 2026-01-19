@@ -22,9 +22,14 @@ export const getImageDimensionsFromUrl = (url: string): Promise<{ width: number;
     }
     
     const img = new Image();
-    // 对于非 data URL，设置 crossOrigin
-    if (!url.startsWith('data:')) {
-      img.crossOrigin = 'anonymous';
+    
+    // 对于外部 URL，不设置 crossOrigin（只获取尺寸不需要 CORS）
+    // 这样可以避免服务器 CORS 配置错误（如返回 *, *）导致的加载失败
+    // 注意：如果后续需要读取像素数据，需要单独处理 CORS
+    if (url.startsWith('data:') || url.startsWith('blob:') || url.startsWith('/')) {
+      // 本地资源不需要设置
+    } else {
+      // 外部 URL 设置 referrerPolicy 防止 referer 泄露，但不设置 crossOrigin
       img.referrerPolicy = 'no-referrer';
     }
     
