@@ -2987,6 +2987,75 @@ export const setStrokeStyle = (board: PlaitBoard, strokeStyle: StrokeStyle) => {
 - 对 API 调用使用适当的错误处理
 - 在日志中过滤敏感信息
 
+#### 部署脚本安全实践
+
+**场景**: 创建部署脚本（上传文件、执行远程命令等）时
+
+❌ **错误示例**:
+```javascript
+// 错误：在代码中硬编码密码
+const password = 'my-secret-password';
+const sshCommand = `sshpass -p "${password}" ssh user@host`;
+
+// 错误：.env 文件未在 .gitignore 中，可能被提交到 Git
+// .env 文件包含敏感信息但被提交了
+
+// 错误：使用密码认证，密码会出现在进程列表中
+const scpCommand = `sshpass -p "${config.DEPLOY_SSH_PASSWORD}" scp ...`;
+```
+
+✅ **正确示例**:
+```javascript
+// 正确：从 .env 文件读取配置（确保 .env 在 .gitignore 中）
+const config = loadEnvConfig(); // 从 .env 读取
+
+// 正确：优先使用 SSH 密钥认证
+if (config.DEPLOY_SSH_KEY) {
+  sshCommand = `ssh -i "${sshKeyPath}" ...`;
+} else if (config.DEPLOY_SSH_PASSWORD) {
+  // 如果必须使用密码，使用环境变量而不是命令行参数
+  process.env.SSHPASS = config.DEPLOY_SSH_PASSWORD;
+  sshCommand = 'sshpass -e ssh ...'; // -e 从环境变量读取
+}
+
+// 正确：配置免密 sudo，而不是在脚本中传递 sudo 密码
+// 在服务器上：sudo visudo
+// 添加：username ALL=(ALL) NOPASSWD: /bin/cp, /usr/sbin/nginx
+```
+
+**安全最佳实践**:
+1. **SSH 密钥认证**（强烈推荐）：
+   - 生成密钥对：`ssh-keygen -t ed25519`
+   - 将公钥添加到服务器：`ssh-copy-id user@host`
+   - 在 `.env` 中配置：`DEPLOY_SSH_KEY=~/.ssh/id_ed25519`
+
+2. **.env 文件管理**：
+   - ✅ 确保 `.env` 在 `.gitignore` 中
+   - ✅ 创建 `.env.example` 作为模板（不包含真实密码）
+   - ❌ 永远不要将 `.env` 提交到版本控制
+
+3. **Sudo 权限**：
+   - ✅ 配置免密 sudo（更安全）：`sudo visudo` 添加 `NOPASSWD` 规则
+   - ⚠️ 如果必须使用密码，使用 `sudo -S` 从标准输入读取（但仍不安全）
+
+4. **密码传递**：
+   - ❌ 避免在命令行中传递密码（`sshpass -p "password"`）
+   - ✅ 使用环境变量：`sshpass -e` 从 `SSHPASS` 环境变量读取
+   - ✅ 优先使用 SSH 密钥，完全避免密码
+
+**原因**:
+- 密码在命令行参数中会出现在进程列表中（`ps aux`），容易被其他用户看到
+- `.env` 文件如果被提交到 Git，所有敏感信息都会泄露
+- 使用 SSH 密钥认证更安全，且不需要每次输入密码
+- 免密 sudo 避免了在脚本中存储 sudo 密码的风险
+
+**检查清单**:
+- [ ] `.env` 文件在 `.gitignore` 中
+- [ ] 创建了 `.env.example` 模板文件
+- [ ] 脚本中没有硬编码的密码或服务器地址
+- [ ] 优先使用 SSH 密钥认证
+- [ ] 配置了免密 sudo（如果需要）
+
 ---
 
 ## 品牌设计规范
