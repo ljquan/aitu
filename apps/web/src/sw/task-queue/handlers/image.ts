@@ -5,18 +5,14 @@
  * 使用通用的媒体生成工具函数来减少重复代码
  */
 
-import type {
-  SWTask,
-  TaskResult,
-  HandlerConfig,
-  TaskHandler,
-} from '../types';
+import type { SWTask, TaskResult, HandlerConfig, TaskHandler } from '../types';
 import { TaskExecutionPhase } from '../types';
 import {
   extractUrlsFromUploadedImages,
   buildImageGenerationRequestBody,
   parseImageGenerationResponse,
   processReferenceImages,
+  convertAspectRatioToSize,
 } from '../utils/media-generation-utils';
 
 /**
@@ -70,7 +66,9 @@ export class ImageHandler implements TaskHandler {
     const { params } = task;
 
     // 合并参考图片来源
-    const rawRefImages = (params.referenceImages as string[] | undefined) || extractUrlsFromUploadedImages(params.uploadedImages);
+    const rawRefImages =
+      (params.referenceImages as string[] | undefined) ||
+      extractUrlsFromUploadedImages(params.uploadedImages);
 
     // 处理参考图片：本地图片转 base64，远程图片检查缓存时间
     let processedRefImages: string[] | undefined;
@@ -82,15 +80,21 @@ export class ImageHandler implements TaskHandler {
       // ));
     }
 
+    const resolvedSize =
+      params.size ||
+      convertAspectRatioToSize(params.aspectRatio as string | undefined);
+
     // 使用通用函数构建请求体
     const requestBody = buildImageGenerationRequestBody(
       {
         prompt: params.prompt,
         model: params.model,
-        size: params.size,
+        size: resolvedSize,
         referenceImages: processedRefImages,
         isInspirationBoard: params.isInspirationBoard as boolean | undefined,
-        inspirationBoardImageCount: params.inspirationBoardImageCount as number | undefined,
+        inspirationBoardImageCount: params.inspirationBoardImageCount as
+          | number
+          | undefined,
       },
       geminiConfig.modelName
     );
@@ -99,8 +103,10 @@ export class ImageHandler implements TaskHandler {
 
     // Import loggers
     const { debugFetch } = await import('../debug-fetch');
-    const { startLLMApiLog, completeLLMApiLog, failLLMApiLog } = await import('../llm-api-logger');
-    
+    const { startLLMApiLog, completeLLMApiLog, failLLMApiLog } = await import(
+      '../llm-api-logger'
+    );
+
     const startTime = Date.now();
     const logId = startLLMApiLog({
       endpoint: '/images/generations',
@@ -113,19 +119,23 @@ export class ImageHandler implements TaskHandler {
     });
 
     // Make API request (using debugFetch for logging)
-    const response = await debugFetch(`${geminiConfig.baseUrl}/images/generations`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${geminiConfig.apiKey}`,
+    const response = await debugFetch(
+      `${geminiConfig.baseUrl}/images/generations`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${geminiConfig.apiKey}`,
+        },
+        body: JSON.stringify(requestBody),
+        signal,
       },
-      body: JSON.stringify(requestBody),
-      signal,
-    }, {
-      label: `🎨 生成图片 (${geminiConfig.modelName})`,
-      logRequestBody: true,
-      logResponseBody: true,
-    });
+      {
+        label: `🎨 生成图片 (${geminiConfig.modelName})`,
+        logRequestBody: true,
+        logResponseBody: true,
+      }
+    );
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -135,7 +145,9 @@ export class ImageHandler implements TaskHandler {
         errorMessage: errorText,
         responseBody: errorText,
       });
-      throw new Error(`Image generation failed: ${response.status} - ${errorText}`);
+      throw new Error(
+        `Image generation failed: ${response.status} - ${errorText}`
+      );
     }
 
     config.onProgress(task.id, 80, TaskExecutionPhase.DOWNLOADING);

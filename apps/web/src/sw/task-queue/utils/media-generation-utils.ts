@@ -26,6 +26,9 @@ const ASPECT_RATIO_TO_SIZE: Record<string, string> = {
   '3x4': '1152x1536',
   '3x2': '1536x1024',
   '2x3': '1024x1536',
+  '4x5': '1024x1280',
+  '5x4': '1280x1024',
+  '21x9': '1792x768',
 };
 
 /**
@@ -33,8 +36,29 @@ const ASPECT_RATIO_TO_SIZE: Record<string, string> = {
  * @param aspectRatio 宽高比字符串，如 '1x1', '16x9'
  * @returns 像素尺寸字符串，如 '1024x1024'
  */
-export function convertAspectRatioToSize(aspectRatio: string): string {
-  return ASPECT_RATIO_TO_SIZE[aspectRatio] || aspectRatio;
+export function convertAspectRatioToSize(
+  aspectRatio?: string
+): string | undefined {
+  if (!aspectRatio || aspectRatio === 'auto') {
+    return undefined;
+  }
+
+  const ratioMap: Record<string, string> = {
+    '1:1': '1x1',
+    '2:3': '2x3',
+    '3:2': '3x2',
+    '3:4': '3x4',
+    '4:3': '4x3',
+    '4:5': '4x5',
+    '5:4': '5x4',
+    '9:16': '9x16',
+    '16:9': '16x9',
+    '21:9': '21x9',
+  };
+
+  return (
+    ratioMap[aspectRatio] || ASPECT_RATIO_TO_SIZE[aspectRatio] || aspectRatio
+  );
 }
 
 // ============================================================================
@@ -71,8 +95,11 @@ export function extractUrlsFromUploadedImages(
   }
 
   const urls = uploadedImages
-    .filter((img): img is UploadedImage => 
-      img && typeof img === 'object' && typeof (img as UploadedImage).url === 'string'
+    .filter(
+      (img): img is UploadedImage =>
+        img &&
+        typeof img === 'object' &&
+        typeof (img as UploadedImage).url === 'string'
     )
     .map((img) => img.url as string);
 
@@ -137,7 +164,13 @@ export function mergeReferenceImages(params: {
  */
 export interface VideoStatusResponse {
   id: string;
-  status: 'queued' | 'in_progress' | 'completed' | 'failed' | 'succeeded' | 'error';
+  status:
+    | 'queued'
+    | 'in_progress'
+    | 'completed'
+    | 'failed'
+    | 'succeeded'
+    | 'error';
   progress?: number;
   video_url?: string;
   url?: string;
@@ -209,25 +242,36 @@ export async function pollVideoUntilComplete(
 
     try {
       // Log all polling requests with attempt number
-      const response = await debugFetch(`${baseUrl}/videos/${videoId}`, {
-        headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
-        signal,
-      }, {
-        label: `🔄 查询视频状态 #${attempts + 1}`,
-        logResponseBody: true,
-      });
+      const response = await debugFetch(
+        `${baseUrl}/videos/${videoId}`,
+        {
+          headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
+          signal,
+        },
+        {
+          label: `🔄 查询视频状态 #${attempts + 1}`,
+          logResponseBody: true,
+        }
+      );
 
       if (!response.ok) {
         // 轮询接口临时错误，增加间隔继续重试
         consecutiveErrors++;
-        console.warn(`[VideoPolling] Status query failed (${response.status}), attempt ${consecutiveErrors}/${maxConsecutiveErrors}, will retry with longer interval`);
-        
+        console.warn(
+          `[VideoPolling] Status query failed (${response.status}), attempt ${consecutiveErrors}/${maxConsecutiveErrors}, will retry with longer interval`
+        );
+
         if (consecutiveErrors >= maxConsecutiveErrors) {
-          throw new Error(`Failed to get video status after ${maxConsecutiveErrors} consecutive errors: ${response.status}`);
+          throw new Error(
+            `Failed to get video status after ${maxConsecutiveErrors} consecutive errors: ${response.status}`
+          );
         }
-        
+
         // 根据连续错误次数增加等待时间（指数退避，最大 60 秒）
-        const backoffInterval = Math.min(interval * Math.pow(1.5, consecutiveErrors), 60000);
+        const backoffInterval = Math.min(
+          interval * Math.pow(1.5, consecutiveErrors),
+          60000
+        );
         await new Promise((resolve) => setTimeout(resolve, backoffInterval));
         attempts++;
         continue;
@@ -237,7 +281,8 @@ export async function pollVideoUntilComplete(
       consecutiveErrors = 0;
 
       const data: VideoStatusResponse = await response.json();
-      const status = data.status?.toLowerCase() as VideoStatusResponse['status'];
+      const status =
+        data.status?.toLowerCase() as VideoStatusResponse['status'];
 
       // 更新进度
       const progress = data.progress ?? Math.min(10 + attempts * 2, 90);
@@ -251,9 +296,10 @@ export async function pollVideoUntilComplete(
 
       // 检查失败状态 - 使用特殊错误类型，不应重试
       if (status === 'failed' || status === 'error') {
-        const errorMsg = typeof data.error === 'string'
-          ? data.error
-          : data.error?.message || data.message || 'Video generation failed';
+        const errorMsg =
+          typeof data.error === 'string'
+            ? data.error
+            : data.error?.message || data.message || 'Video generation failed';
         throw new VideoGenerationFailedError(errorMsg);
       }
 
@@ -265,22 +311,28 @@ export async function pollVideoUntilComplete(
       if (err instanceof VideoGenerationFailedError) {
         throw err;
       }
-      
+
       // 如果是取消信号，直接抛出
       if (signal?.aborted) {
         throw new Error('Video generation cancelled');
       }
-      
+
       // 网络错误等按照临时错误处理，可以重试
       consecutiveErrors++;
-      console.warn(`[VideoPolling] Network error during status query, attempt ${consecutiveErrors}/${maxConsecutiveErrors}:`, err);
-      
+      console.warn(
+        `[VideoPolling] Network error during status query, attempt ${consecutiveErrors}/${maxConsecutiveErrors}:`,
+        err
+      );
+
       if (consecutiveErrors >= maxConsecutiveErrors) {
         throw err;
       }
-      
+
       // 根据连续错误次数增加等待时间
-      const backoffInterval = Math.min(interval * Math.pow(1.5, consecutiveErrors), 60000);
+      const backoffInterval = Math.min(
+        interval * Math.pow(1.5, consecutiveErrors),
+        60000
+      );
       await new Promise((resolve) => setTimeout(resolve, backoffInterval));
       attempts++;
     }
@@ -305,14 +357,18 @@ export async function queryVideoStatus(
 ): Promise<VideoStatusResponse> {
   // Use debugFetch for logging
   const { debugFetch } = await import('../debug-fetch');
-  const response = await debugFetch(`${baseUrl}/videos/${videoId}`, {
-    method: 'GET',
-    headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : undefined,
-    signal,
-  }, {
-    label: `🔍 单次查询视频状态`,
-    logResponseBody: true,
-  });
+  const response = await debugFetch(
+    `${baseUrl}/videos/${videoId}`,
+    {
+      method: 'GET',
+      headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : undefined,
+      signal,
+    },
+    {
+      label: `🔍 单次查询视频状态`,
+      logResponseBody: true,
+    }
+  );
 
   if (!response.ok) {
     throw new Error(`Video status query failed: ${response.status}`);
@@ -338,7 +394,7 @@ const UNIFIED_STORE_NAME = 'media';
  * 从 IndexedDB 获取图片的原始缓存时间
  * 注意：Cache API 中的 sw-cache-date 会在每次访问时刷新，
  * 而 IndexedDB 中的 cachedAt 是原始缓存时间，不会被刷新
- * 
+ *
  * @param url 图片 URL
  * @returns 原始缓存时间戳，如果没有则返回 null
  */
@@ -346,27 +402,27 @@ async function getOriginalCacheTime(url: string): Promise<number | null> {
   return new Promise((resolve) => {
     try {
       const request = indexedDB.open(UNIFIED_DB_NAME);
-      
+
       request.onerror = () => {
         console.warn('[MediaUtils] Failed to open IndexedDB:', request.error);
         resolve(null);
       };
-      
+
       request.onsuccess = () => {
         try {
           const db = request.result;
-          
+
           // 检查 store 是否存在
           if (!db.objectStoreNames.contains(UNIFIED_STORE_NAME)) {
             db.close();
             resolve(null);
             return;
           }
-          
+
           const transaction = db.transaction(UNIFIED_STORE_NAME, 'readonly');
           const store = transaction.objectStore(UNIFIED_STORE_NAME);
           const getRequest = store.get(url);
-          
+
           getRequest.onsuccess = () => {
             const item = getRequest.result;
             db.close();
@@ -376,7 +432,7 @@ async function getOriginalCacheTime(url: string): Promise<number | null> {
               resolve(null);
             }
           };
-          
+
           getRequest.onerror = () => {
             db.close();
             resolve(null);
@@ -435,15 +491,24 @@ export async function fetchImageWithCache(
         });
         await cache.put(url, cacheResponse);
       } catch (cacheErr) {
-        console.warn(`[MediaUtils] Failed to cache image: ${url.substring(0, 50)}...`, cacheErr);
+        console.warn(
+          `[MediaUtils] Failed to cache image: ${url.substring(0, 50)}...`,
+          cacheErr
+        );
       }
       return blob;
     }
 
-    console.warn(`[MediaUtils] Network fetch failed: ${url.substring(0, 50)}...`, response.status);
+    console.warn(
+      `[MediaUtils] Network fetch failed: ${url.substring(0, 50)}...`,
+      response.status
+    );
     return null;
   } catch (err) {
-    console.warn(`[MediaUtils] Error in fetchImageWithCache: ${url.substring(0, 50)}...`, err);
+    console.warn(
+      `[MediaUtils] Error in fetchImageWithCache: ${url.substring(0, 50)}...`,
+      err
+    );
     return null;
   }
 }
@@ -500,7 +565,7 @@ const MAX_DIMENSION = 2048;
 /**
  * 压缩图片 Blob 到指定大小以内
  * 使用二分查找找到最接近目标大小的最高质量
- * 
+ *
  * @param blob 原始图片 Blob
  * @param maxSizeBytes 最大字节数，默认 750KB
  * @returns 压缩后的 Blob
@@ -515,7 +580,7 @@ export async function compressImageBlob(
     return blob;
   }
 
-    // console.log(`[MediaUtils] Compressing image: ${(blob.size / 1024).toFixed(1)}KB -> target ${(maxSizeBytes / 1024).toFixed(1)}KB`);
+  // console.log(`[MediaUtils] Compressing image: ${(blob.size / 1024).toFixed(1)}KB -> target ${(maxSizeBytes / 1024).toFixed(1)}KB`);
 
   try {
     // 创建 ImageBitmap
@@ -528,14 +593,16 @@ export async function compressImageBlob(
       const scale = Math.min(MAX_DIMENSION / width, MAX_DIMENSION / height);
       width = Math.round(width * scale);
       height = Math.round(height * scale);
-    // console.log(`[MediaUtils] Resizing from ${originalDimensions.width}x${originalDimensions.height} to ${width}x${height}`);
+      // console.log(`[MediaUtils] Resizing from ${originalDimensions.width}x${originalDimensions.height} to ${width}x${height}`);
     }
 
     // 创建 OffscreenCanvas
     const canvas = new OffscreenCanvas(width, height);
     const ctx = canvas.getContext('2d');
     if (!ctx) {
-      console.warn('[MediaUtils] Failed to get 2d context from OffscreenCanvas');
+      console.warn(
+        '[MediaUtils] Failed to get 2d context from OffscreenCanvas'
+      );
       return blob;
     }
 
@@ -557,7 +624,7 @@ export async function compressImageBlob(
         quality: midQuality,
       });
 
-    // console.log(`[MediaUtils] Binary search #${i + 1}: quality=${midQuality.toFixed(3)}, size=${(testBlob.size / 1024).toFixed(1)}KB`);
+      // console.log(`[MediaUtils] Binary search #${i + 1}: quality=${midQuality.toFixed(3)}, size=${(testBlob.size / 1024).toFixed(1)}KB`);
 
       if (testBlob.size <= maxSizeBytes) {
         // 符合条件，记录并尝试更高质量
@@ -576,19 +643,22 @@ export async function compressImageBlob(
     }
 
     if (bestBlob) {
-    // console.log(`[MediaUtils] Compression successful: quality=${bestQuality.toFixed(3)}, size=${(bestBlob.size / 1024).toFixed(1)}KB`);
+      // console.log(`[MediaUtils] Compression successful: quality=${bestQuality.toFixed(3)}, size=${(bestBlob.size / 1024).toFixed(1)}KB`);
       return bestBlob;
     }
 
     // 如果最低质量仍然超过大小限制，尝试进一步缩小尺寸
     // console.log(`[MediaUtils] Min quality not enough, trying to reduce dimensions...`);
-    let compressedBlob = await canvas.convertToBlob({ type: 'image/jpeg', quality: MIN_QUALITY });
-    
+    let compressedBlob = await canvas.convertToBlob({
+      type: 'image/jpeg',
+      quality: MIN_QUALITY,
+    });
+
     let scale = 0.8;
     while (scale >= 0.3 && compressedBlob.size > maxSizeBytes) {
       const newWidth = Math.round(width * scale);
       const newHeight = Math.round(height * scale);
-      
+
       const smallerCanvas = new OffscreenCanvas(newWidth, newHeight);
       const smallerCtx = smallerCanvas.getContext('2d');
       if (!smallerCtx) break;
@@ -605,33 +675,42 @@ export async function compressImageBlob(
 
       for (let i = 0; i < 6; i++) {
         const midQ = (smallLow + smallHigh) / 2;
-        const testBlob = await smallerCanvas.convertToBlob({ type: 'image/jpeg', quality: midQ });
-        
+        const testBlob = await smallerCanvas.convertToBlob({
+          type: 'image/jpeg',
+          quality: midQ,
+        });
+
         if (testBlob.size <= maxSizeBytes) {
           smallBest = testBlob;
           smallLow = midQ;
         } else {
           smallHigh = midQ;
         }
-        
+
         if (smallHigh - smallLow < 0.02) break;
       }
 
       if (smallBest) {
-    // console.log(`[MediaUtils] Scale ${scale.toFixed(1)} (${newWidth}x${newHeight}): ${(smallBest.size / 1024).toFixed(1)}KB`);
+        // console.log(`[MediaUtils] Scale ${scale.toFixed(1)} (${newWidth}x${newHeight}): ${(smallBest.size / 1024).toFixed(1)}KB`);
         return smallBest;
       }
 
-      compressedBlob = await smallerCanvas.convertToBlob({ type: 'image/jpeg', quality: MIN_QUALITY });
-    // console.log(`[MediaUtils] Scale ${scale.toFixed(1)} (${newWidth}x${newHeight}): ${(compressedBlob.size / 1024).toFixed(1)}KB (min quality)`);
-      
+      compressedBlob = await smallerCanvas.convertToBlob({
+        type: 'image/jpeg',
+        quality: MIN_QUALITY,
+      });
+      // console.log(`[MediaUtils] Scale ${scale.toFixed(1)} (${newWidth}x${newHeight}): ${(compressedBlob.size / 1024).toFixed(1)}KB (min quality)`);
+
       scale -= 0.1;
     }
 
     // console.log(`[MediaUtils] Final compressed size: ${(compressedBlob.size / 1024).toFixed(1)}KB`);
     return compressedBlob;
   } catch (err) {
-    console.warn('[MediaUtils] Image compression failed, returning original:', err);
+    console.warn(
+      '[MediaUtils] Image compression failed, returning original:',
+      err
+    );
     return blob;
   }
 }
@@ -682,7 +761,7 @@ export async function processReferenceImage(
     // 估算 base64 大小（base64 编码后约为原始大小的 4/3）
     const base64Part = url.split(',')[1] || '';
     const estimatedSize = (base64Part.length * 3) / 4;
-    
+
     if (estimatedSize > MAX_IMAGE_SIZE_BYTES) {
       // 需要压缩
       const blob = dataUrlToBlob(url);
@@ -707,7 +786,9 @@ export async function processReferenceImage(
         return { originalUrl: url, value: base64, isBase64: true };
       }
       // 缓存中没有，返回原始 URL（可能会失败，但让 API 层处理）
-      console.warn(`[MediaUtils] Asset library image not found in cache: ${url}`);
+      console.warn(
+        `[MediaUtils] Asset library image not found in cache: ${url}`
+      );
       return { originalUrl: url, value: url, isBase64: false };
     }
 
@@ -731,28 +812,26 @@ export async function processReferenceImage(
 
     // 远程图片：http/https
     if (url.startsWith('http://') || url.startsWith('https://')) {
-    // console.log(`[MediaUtils] Processing remote image: ${url.substring(0, 80)}...`);
-      
+      // console.log(`[MediaUtils] Processing remote image: ${url.substring(0, 80)}...`);
+
       // 使用 ignoreVary 确保匹配时不考虑 Vary header
       const cachedResponse = await cache.match(url, { ignoreVary: true });
-      
-      
 
       if (cachedResponse) {
         // 优先从 IndexedDB 获取原始缓存时间（不会因访问而刷新）
         // Cache API 中的 sw-cache-date 会在每次访问时更新，不适合判断过期
         const originalCacheTime = await getOriginalCacheTime(url);
-        
+
         // 如果 IndexedDB 中没有，回退到 Cache API 的 sw-cache-date
         const cacheDate = cachedResponse.headers.get('sw-cache-date');
         const fallbackCacheTime = cacheDate ? parseInt(cacheDate, 10) : 0;
-        
+
         const cacheTime = originalCacheTime ?? fallbackCacheTime;
         const now = Date.now();
         const age = cacheTime ? now - cacheTime : Infinity;
         const ageHours = age / (60 * 60 * 1000);
 
-    // console.log(`[MediaUtils] Cache found for ${url.substring(0, 50)}...`, {
+        // console.log(`[MediaUtils] Cache found for ${url.substring(0, 50)}...`, {
         //   originalCacheTime,
         //   fallbackCacheTime,
         //   cacheTimeUsed: cacheTime,
@@ -765,24 +844,24 @@ export async function processReferenceImage(
 
         if (cacheTime > 0 && age < REMOTE_IMAGE_CACHE_TTL) {
           // 缓存在 12 小时内，直接使用 URL
-    // console.log(`[MediaUtils] Using cached URL (within TTL): ${url.substring(0, 50)}...`);
+          // console.log(`[MediaUtils] Using cached URL (within TTL): ${url.substring(0, 50)}...`);
           return { originalUrl: url, value: url, isBase64: false };
         }
 
         // 缓存超过 12 小时或没有缓存时间，压缩并转换为 base64
-    // console.log(`[MediaUtils] Cache expired or no cache date, converting to base64: ${url.substring(0, 50)}...`);
+        // console.log(`[MediaUtils] Cache expired or no cache date, converting to base64: ${url.substring(0, 50)}...`);
         const blob = await cachedResponse.blob();
         const base64 = await blobToCompressedBase64(blob);
-    // console.log(`[MediaUtils] Converted to base64, length: ${base64.length}`);
+        // console.log(`[MediaUtils] Converted to base64, length: ${base64.length}`);
         return { originalUrl: url, value: base64, isBase64: true };
       }
 
       // 缓存中没有，从网络获取并转换为 base64
-    // console.log(`[MediaUtils] No cache found, fetching from network: ${url.substring(0, 50)}...`);
+      // console.log(`[MediaUtils] No cache found, fetching from network: ${url.substring(0, 50)}...`);
       const response = await fetch(url, { signal });
       if (response.ok) {
         const blob = await response.blob();
-        
+
         // 存入缓存
         try {
           const cacheResponse = new Response(blob.slice(), {
@@ -793,7 +872,10 @@ export async function processReferenceImage(
           });
           await cache.put(url, cacheResponse);
         } catch (cacheErr) {
-          console.warn(`[MediaUtils] Failed to cache image: ${url.substring(0, 50)}...`, cacheErr);
+          console.warn(
+            `[MediaUtils] Failed to cache image: ${url.substring(0, 50)}...`,
+            cacheErr
+          );
         }
 
         // 新获取的图片，压缩并转换为 base64（因为 URL 可能很快失效）
@@ -801,14 +883,22 @@ export async function processReferenceImage(
         return { originalUrl: url, value: base64, isBase64: true };
       }
 
-      console.warn(`[MediaUtils] Failed to fetch remote image: ${url.substring(0, 50)}...`);
+      console.warn(
+        `[MediaUtils] Failed to fetch remote image: ${url.substring(0, 50)}...`
+      );
       return { originalUrl: url, value: url, isBase64: false };
     }
 
     // 其他类型的 URL，直接返回
     return { originalUrl: url, value: url, isBase64: false };
   } catch (err) {
-    console.warn(`[MediaUtils] Error processing reference image: ${url.substring(0, 50)}...`, err);
+    console.warn(
+      `[MediaUtils] Error processing reference image: ${url.substring(
+        0,
+        50
+      )}...`,
+      err
+    );
     return { originalUrl: url, value: url, isBase64: false };
   }
 }
@@ -828,10 +918,10 @@ export async function processReferenceImages(
   }
 
   const results = await Promise.all(
-    urls.map(url => processReferenceImage(url, signal))
+    urls.map((url) => processReferenceImage(url, signal))
   );
 
-  return results.map(r => r.value);
+  return results.map((r) => r.value);
 }
 
 // ============================================================================
@@ -911,10 +1001,12 @@ export interface VideoGenerationParams {
  */
 export function buildVideoGenerationFormData(
   params: VideoGenerationParams,
-  referenceBlobs?: Array<{ blob: Blob; index: number } | { url: string; index: number }>
+  referenceBlobs?: Array<
+    { blob: Blob; index: number } | { url: string; index: number }
+  >
 ): FormData {
   const formData = new FormData();
-  
+
   formData.append('model', params.model || 'veo3');
   formData.append('prompt', params.prompt);
 
@@ -930,7 +1022,11 @@ export function buildVideoGenerationFormData(
   if (referenceBlobs && referenceBlobs.length > 0) {
     for (const item of referenceBlobs) {
       if ('blob' in item) {
-        formData.append('input_reference', item.blob, `reference-${item.index + 1}.png`);
+        formData.append(
+          'input_reference',
+          item.blob,
+          `reference-${item.index + 1}.png`
+        );
       } else {
         formData.append('input_reference', item.url);
       }
@@ -954,7 +1050,8 @@ export function parseImageGenerationResponse(data: any): {
   }
 
   const imageData = data.data[0];
-  const url = imageData.url || 
+  const url =
+    imageData.url ||
     (imageData.b64_json ? `data:image/png;base64,${imageData.b64_json}` : null);
 
   if (!url) {
@@ -967,7 +1064,10 @@ export function parseImageGenerationResponse(data: any): {
 
   // 提取所有 URL
   const urls = data.data
-    .map((d: any) => d.url || (d.b64_json ? `data:image/png;base64,${d.b64_json}` : null))
+    .map(
+      (d: any) =>
+        d.url || (d.b64_json ? `data:image/png;base64,${d.b64_json}` : null)
+    )
     .filter(Boolean);
 
   return {

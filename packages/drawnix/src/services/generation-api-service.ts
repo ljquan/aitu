@@ -1,12 +1,21 @@
 /**
  * Generation API Service
- * 
+ *
  * Wraps the AI generation API calls for images and videos.
  * Handles timeouts, cancellation, and error handling.
  */
 
-import { GenerationParams, TaskType, TaskResult, TaskExecutionPhase } from '../types/task.types';
-import { GenerationRequest, GenerationResponse, GenerationError } from '../types/generation.types';
+import {
+  GenerationParams,
+  TaskType,
+  TaskResult,
+  TaskExecutionPhase,
+} from '../types/task.types';
+import {
+  GenerationRequest,
+  GenerationResponse,
+  GenerationError,
+} from '../types/generation.types';
 import { defaultGeminiClient } from '../utils/gemini-api';
 import { videoAPIService, VideoModel } from './video-api-service';
 import { TASK_TIMEOUT } from '../constants/TASK_CONSTANTS';
@@ -14,6 +23,7 @@ import { analytics } from '../utils/posthog-analytics';
 import { legacyTaskQueueService as taskQueueService } from './task-queue';
 import { geminiSettings } from '../utils/settings-manager';
 import { unifiedCacheService } from './unified-cache-service';
+import { convertAspectRatioToSize } from '../constants/image-aspect-ratios';
 
 /**
  * Generation API Service
@@ -28,7 +38,7 @@ class GenerationAPIService {
 
   /**
    * Generates content (image or video) based on task parameters
-   * 
+   *
    * @param taskId - Unique task identifier
    * @param params - Generation parameters
    * @param type - Content type (image or video)
@@ -52,7 +62,8 @@ class GenerationAPIService {
       taskType,
       model: taskType === 'image' ? 'gemini-image' : 'gemini-video',
       promptLength: params.prompt.length,
-      hasUploadedImage: !!(params as any).uploadedImage || !!(params as any).uploadedImages,
+      hasUploadedImage:
+        !!(params as any).uploadedImage || !!(params as any).uploadedImages,
       startTime,
     });
 
@@ -60,7 +71,8 @@ class GenerationAPIService {
       // console.log(`[GenerationAPI] Starting generation for task ${taskId} (${type})`);
 
       // Get timeout for this task type
-      const timeout = TASK_TIMEOUT[type.toUpperCase() as keyof typeof TASK_TIMEOUT];
+      const timeout =
+        TASK_TIMEOUT[type.toUpperCase() as keyof typeof TASK_TIMEOUT];
 
       // Create timeout promise
       const timeoutPromise = new Promise<never>((_, reject) => {
@@ -70,9 +82,10 @@ class GenerationAPIService {
       });
 
       // Create generation promise
-      const generationPromise = type === TaskType.IMAGE
-        ? this.generateImage(params, abortController.signal)
-        : this.generateVideo(taskId, params, abortController.signal);
+      const generationPromise =
+        type === TaskType.IMAGE
+          ? this.generateImage(params, abortController.signal)
+          : this.generateVideo(taskId, params, abortController.signal);
 
       // Race between generation and timeout
       const result = await Promise.race([generationPromise, timeoutPromise]);
@@ -92,7 +105,10 @@ class GenerationAPIService {
       return result;
     } catch (error: any) {
       const duration = Date.now() - startTime;
-      console.error(`[GenerationAPI] Generation failed for task ${taskId}:`, error);
+      console.error(
+        `[GenerationAPI] Generation failed for task ${taskId}:`,
+        error
+      );
 
       if (error.message === 'TIMEOUT') {
         // Track timeout failure
@@ -137,25 +153,7 @@ class GenerationAPIService {
    * @private
    */
   private convertAspectRatioToSize(aspectRatio?: string): string | undefined {
-    if (!aspectRatio || aspectRatio === 'auto') {
-      return undefined; // 让 API 自动决定
-    }
-
-    // 映射 aspectRatio 到 size 枚举值
-    const ratioMap: Record<string, string> = {
-      '1:1': '1x1',
-      '2:3': '2x3',
-      '3:2': '3x2',
-      '3:4': '3x4',
-      '4:3': '4x3',
-      '4:5': '4x5',
-      '5:4': '5x4',
-      '9:16': '9x16',
-      '16:9': '16x9',
-      '21:9': '21x9',
-    };
-
-    return ratioMap[aspectRatio];
+    return convertAspectRatioToSize(aspectRatio);
   }
 
   /**
@@ -180,7 +178,7 @@ class GenerationAPIService {
       if ((params as any).uploadedImages) {
         const uploadedImages = (params as any).uploadedImages;
         const processedUrls: string[] = [];
-        
+
         for (const img of uploadedImages) {
           if (img.type === 'url' && img.url) {
             // 使用智能图片传递：检查缓存时间，超过1天自动转为base64
@@ -189,7 +187,7 @@ class GenerationAPIService {
             // console.log(`[GenerationAPI] Image processed: ${imageData.type === 'base64' ? 'converted to base64' : 'using URL'}`);
           }
         }
-        
+
         if (processedUrls.length > 0) {
           imageUrls = processedUrls;
         }
@@ -242,14 +240,21 @@ class GenerationAPIService {
         } else {
           // Check if there's an error message in revised_prompt (e.g., PROHIBITED_CONTENT)
           const revisedPrompt = imageData.revised_prompt || '';
-          if (revisedPrompt.includes('PROHIBITED_CONTENT') || revisedPrompt.includes('has been blocked')) {
+          if (
+            revisedPrompt.includes('PROHIBITED_CONTENT') ||
+            revisedPrompt.includes('has been blocked')
+          ) {
             // Extract the error message - look for the blocked reason
-            const blockedMatch = revisedPrompt.match(/your request has been blocked[^:]*:\s*([^.]+)/i);
+            const blockedMatch = revisedPrompt.match(
+              /your request has been blocked[^:]*:\s*([^.]+)/i
+            );
             if (blockedMatch) {
               throw new Error(blockedMatch[0]);
             }
             // Fallback: extract everything after the last occurrence of "blocked"
-            const lastBlockedIndex = revisedPrompt.toLowerCase().lastIndexOf('blocked');
+            const lastBlockedIndex = revisedPrompt
+              .toLowerCase()
+              .lastIndexOf('blocked');
             if (lastBlockedIndex !== -1) {
               const errorPart = revisedPrompt.slice(lastBlockedIndex - 20);
               throw new Error(errorPart.trim());
@@ -322,7 +327,10 @@ class GenerationAPIService {
       let inputReferences: any[] | undefined;
       let inputReference: string | undefined;
 
-      if ((params as any).uploadedImages && (params as any).uploadedImages.length > 0) {
+      if (
+        (params as any).uploadedImages &&
+        (params as any).uploadedImages.length > 0
+      ) {
         // New multi-image format
         inputReferences = (params as any).uploadedImages;
       } else if ((params as any).uploadedImage) {
@@ -335,7 +343,10 @@ class GenerationAPIService {
 
       // Get model from params, settings, or use default
       const settings = geminiSettings.get();
-      const model: VideoModel = (params as any).model || (settings.videoModelName as VideoModel) || 'veo3';
+      const model: VideoModel =
+        (params as any).model ||
+        (settings.videoModelName as VideoModel) ||
+        'veo3';
 
       // Get duration from params (new format uses 'seconds' string)
       let seconds: string | undefined;
@@ -487,7 +498,10 @@ class GenerationAPIService {
       };
     } catch (error: any) {
       const duration = Date.now() - startTime;
-      console.error(`[GenerationAPI] Resumed video generation failed for task ${taskId}:`, error);
+      console.error(
+        `[GenerationAPI] Resumed video generation failed for task ${taskId}:`,
+        error
+      );
 
       // Track failure
       analytics.trackModelFailure({
@@ -504,7 +518,7 @@ class GenerationAPIService {
 
   /**
    * Cancels an ongoing generation request
-   * 
+   *
    * @param taskId - Task identifier to cancel
    */
   cancelRequest(taskId: string): void {
@@ -518,7 +532,7 @@ class GenerationAPIService {
 
   /**
    * Checks if a task has an active request
-   * 
+   *
    * @param taskId - Task identifier
    * @returns True if the task has an active request
    */

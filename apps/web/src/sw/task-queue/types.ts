@@ -8,6 +8,8 @@
  * Keep in sync with packages/drawnix/src/types/task.types.ts
  */
 
+import type { ChatToolCall } from './chat-workflow/types';
+
 // ============================================================================
 // Task Enums and Core Types (mirrored from task.types.ts)
 // ============================================================================
@@ -66,6 +68,8 @@ export interface GenerationParams {
   inspirationBoardImageCount?: number;
   /** Whether to auto-insert the result to canvas when task completes */
   autoInsertToCanvas?: boolean;
+  /** image aspect ratio token (e.g. 16:9) */
+  aspectRatio?: string;
   [key: string]: unknown;
 }
 
@@ -606,7 +610,11 @@ export interface HandlerConfig {
   geminiConfig: GeminiConfig;
   videoConfig: VideoAPIConfig;
   /** Callback to send progress updates */
-  onProgress: (taskId: string, progress: number, phase?: TaskExecutionPhase) => void;
+  onProgress: (
+    taskId: string,
+    progress: number,
+    phase?: TaskExecutionPhase
+  ) => void;
   /** Callback when remote ID is received */
   onRemoteId: (taskId: string, remoteId: string) => void;
 }
@@ -643,10 +651,10 @@ export interface TaskQueueConfig {
  */
 export const DEFAULT_TASK_QUEUE_CONFIG: TaskQueueConfig = {
   timeouts: {
-    [TaskType.IMAGE]: 10 * 60 * 1000,             // 10 minutes for image
-    [TaskType.VIDEO]: 20 * 60 * 1000,             // 20 minutes for video
-    [TaskType.CHARACTER]: 10 * 60 * 1000,         // 10 minutes
+    [TaskType.IMAGE]: 10 * 60 * 1000, // 10 minutes for image
+    [TaskType.VIDEO]: 20 * 60 * 1000, // 20 minutes for video
+    [TaskType.CHARACTER]: 10 * 60 * 1000, // 10 minutes
     [TaskType.INSPIRATION_BOARD]: 10 * 60 * 1000, // 10 minutes (same as image)
-    [TaskType.CHAT]: 10 * 60 * 1000,              // 10 minutes
+    [TaskType.CHAT]: 10 * 60 * 1000, // 10 minutes
   },
 };
