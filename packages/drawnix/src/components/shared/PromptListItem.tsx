@@ -5,10 +5,11 @@
  * - 支持置顶/取消置顶
  * - 支持删除
  * - 悬停时显示操作按钮
+ * - 支持预设标识
  */
 
 import React from 'react';
-import { Pin, PinOff, X } from 'lucide-react';
+import { Pin, PinOff, X, Lightbulb } from 'lucide-react';
 import './prompt-list-item.scss';
 
 export interface PromptListItemProps {
@@ -16,6 +17,8 @@ export interface PromptListItemProps {
   content: string;
   /** 是否已置顶 */
   pinned?: boolean;
+  /** 是否是预设提示词 */
+  isPreset?: boolean;
   /** 点击提示词的回调 */
   onClick?: () => void;
   /** 置顶/取消置顶的回调 */
@@ -31,6 +34,7 @@ export interface PromptListItemProps {
 export const PromptListItem: React.FC<PromptListItemProps> = ({
   content,
   pinned = false,
+  isPreset = false,
   onClick,
   onTogglePin,
   onDelete,
@@ -49,7 +53,7 @@ export const PromptListItem: React.FC<PromptListItemProps> = ({
 
   return (
     <div
-      className={`prompt-list-item ${pinned ? 'prompt-list-item--pinned' : ''} ${disabled ? 'prompt-list-item--disabled' : ''}`}
+      className={`prompt-list-item ${pinned ? 'prompt-list-item--pinned' : ''} ${isPreset ? 'prompt-list-item--preset' : ''} ${disabled ? 'prompt-list-item--disabled' : ''}`}
       onClick={disabled ? undefined : onClick}
       title={content}
     >
@@ -57,6 +61,13 @@ export const PromptListItem: React.FC<PromptListItemProps> = ({
       {pinned && (
         <div className="prompt-list-item__pin-badge">
           <Pin size={10} />
+        </div>
+      )}
+
+      {/* 预设标识 */}
+      {isPreset && (
+        <div className="prompt-list-item__preset-badge">
+          <Lightbulb size={10} />
         </div>
       )}
       

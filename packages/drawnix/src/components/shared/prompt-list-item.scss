@@ -24,6 +24,14 @@
     // 可以根据需要添加置顶项的特殊样式
   }
 
+  // 预设提示词样式
+  &--preset {
+    // 预设提示词可以有轻微的视觉区分
+    .prompt-list-item__text {
+      color: var(--td-text-color-secondary, #666);
+    }
+  }
+
   // 禁用状态
   &--disabled {
     opacity: 0.6;
@@ -39,6 +47,18 @@
     height: 16px;
     margin-right: 8px;
     color: var(--td-brand-color, #0052d9);
+    flex-shrink: 0;
+  }
+
+  // 预设标识
+  &__preset-badge {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    margin-right: 8px;
+    color: #F59E0B;
     flex-shrink: 0;
   }
 

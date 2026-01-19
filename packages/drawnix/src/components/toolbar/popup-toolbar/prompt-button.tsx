@@ -3,10 +3,16 @@
  * 
  * 在文本元素的 popup-toolbar 上显示提示词选择按钮
  * 点击后展开提示词选择面板，选择后将提示词填入文本内容
+ * 
+ * 整合多个来源的历史记录：
+ * - AI输入框历史 (ai-input)
+ * - 图片描述历史 (image)
+ * - 视频描述历史 (video)
+ * - 预设提示词 (preset)
  */
 
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
-import { Lightbulb, History, X } from 'lucide-react';
+import { Lightbulb, History, X, Image, Video, MessageSquare } from 'lucide-react';
 import { PlaitBoard, getSelectedElements, Transforms, ATTACHED_ELEMENT_CLASS_NAME, Point } from '@plait/core';
 import { MindElement } from '@plait/mind';
 import { PlaitDrawElement, isDrawElementsIncludeText } from '@plait/draw';
@@ -14,6 +20,12 @@ import { Popover, PopoverTrigger, PopoverContent } from '../../popover/popover';
 import { ToolButton } from '../../tool-button';
 import { AI_IMAGE_PROMPTS } from '../../../constants/prompts';
 import { usePromptHistory } from '../../../hooks/usePromptHistory';
+import {
+  getImagePromptHistory,
+  getVideoPromptHistory,
+  type ImagePromptHistoryItem,
+  type VideoPromptHistoryItem,
+} from '../../../services/prompt-storage-service';
 import './prompt-button.scss';
 
 // 文本尺寸计算常量
@@ -116,12 +128,50 @@ interface PopupPromptButtonProps {
   title?: string;
 }
 
+/**
+ * 提示词来源类型
+ * - ai-input: AI输入框历史
+ * - image: 图片描述历史
+ * - video: 视频描述历史
+ * - preset: 预设提示词
+ */
+type PromptSource = 'ai-input' | 'image' | 'video' | 'preset';
+
 interface PromptItem {
   id: string;
   content: string;
   scene?: string;
-  source: 'preset' | 'history';
+  source: PromptSource;
   timestamp?: number;
+}
+
+/**
+ * 获取来源对应的图标组件
+ */
+function getSourceIcon(source: PromptSource): React.ReactNode {
+  switch (source) {
+    case 'ai-input':
+      return <MessageSquare size={12} />;
+    case 'image':
+      return <Image size={12} />;
+    case 'video':
+      return <Video size={12} />;
+    default:
+      return null;
+  }
+}
+
+/**
+ * 获取来源对应的标签文字
+ */
+function getSourceLabel(source: PromptSource, language: 'zh' | 'en'): string {
+  const labels: Record<PromptSource, Record<'zh' | 'en', string>> = {
+    'ai-input': { zh: 'AI输入', en: 'AI Input' },
+    image: { zh: '图片', en: 'Image' },
+    video: { zh: '视频', en: 'Video' },
+    preset: { zh: '预设', en: 'Preset' },
+  };
+  return labels[source][language];
 }
 
 export const PopupPromptButton: React.FC<PopupPromptButtonProps> = ({
@@ -131,31 +181,85 @@ export const PopupPromptButton: React.FC<PopupPromptButtonProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
-  const { history, addHistory, removeHistory } = usePromptHistory();
+  // 禁用预设去重，因为文本组件内部有自己的去重逻辑
+  const { history: aiInputHistory, addHistory, removeHistory } = usePromptHistory({
+    deduplicateWithPresets: false,
+  });
   const listRef = useRef<HTMLDivElement>(null);
 
-  // 合并预设提示词和历史提示词
+  // 获取图片和视频描述历史记录
+  const [imageHistory, setImageHistory] = useState<ImagePromptHistoryItem[]>([]);
+  const [videoHistory, setVideoHistory] = useState<VideoPromptHistoryItem[]>([]);
+
+  // 刷新图片和视频历史记录
+  useEffect(() => {
+    if (isOpen) {
+      setImageHistory(getImagePromptHistory());
+      setVideoHistory(getVideoPromptHistory());
+    }
+  }, [isOpen]);
+
+  // 合并所有来源的历史记录和预设提示词
   const allPrompts = useMemo((): PromptItem[] => {
-    // AI_IMAGE_PROMPTS 现在是字符串数组
+    // 1. 预设提示词
     const presetPrompts: PromptItem[] = AI_IMAGE_PROMPTS[language].map((content, index) => ({
       id: `preset_${index}`,
       content: content,
       source: 'preset' as const,
     }));
 
-    const historyPrompts: PromptItem[] = history.map(item => ({
+    // 2. AI输入框历史
+    const aiInputPrompts: PromptItem[] = aiInputHistory.map(item => ({
       id: item.id,
       content: item.content,
-      source: 'history' as const,
+      source: 'ai-input' as const,
       timestamp: item.timestamp,
     }));
 
-    return [...historyPrompts, ...presetPrompts];
-  }, [language, history]);
+    // 3. 图片描述历史
+    const imagePrompts: PromptItem[] = imageHistory.map(item => ({
+      id: item.id,
+      content: item.content,
+      source: 'image' as const,
+      timestamp: item.timestamp,
+    }));
+
+    // 4. 视频描述历史
+    const videoPrompts: PromptItem[] = videoHistory.map(item => ({
+      id: item.id,
+      content: item.content,
+      source: 'video' as const,
+      timestamp: item.timestamp,
+    }));
+
+    // 合并所有历史记录
+    const allHistoryPrompts = [...aiInputPrompts, ...imagePrompts, ...videoPrompts];
+
+    // 按时间倒序排序
+    allHistoryPrompts.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+    // 去重：同一内容只保留最新的一条（保留时间戳最大的）
+    const seenContents = new Set<string>();
+    const deduplicatedHistory: PromptItem[] = [];
+    for (const prompt of allHistoryPrompts) {
+      const normalizedContent = prompt.content.trim();
+      if (!seenContents.has(normalizedContent)) {
+        seenContents.add(normalizedContent);
+        deduplicatedHistory.push(prompt);
+      }
+    }
+
+    // 预设提示词去重：排除已在历史记录中存在的
+    const deduplicatedPresets = presetPrompts.filter(
+      preset => !seenContents.has(preset.content.trim())
+    );
+
+    return [...deduplicatedHistory, ...deduplicatedPresets];
+  }, [language, aiInputHistory, imageHistory, videoHistory]);
 
   // 分组提示词
   const { historyPrompts, presetPrompts } = useMemo(() => {
-    const historyItems = allPrompts.filter(p => p.source === 'history');
+    const historyItems = allPrompts.filter(p => p.source !== 'preset');
     const presetItems = allPrompts.filter(p => p.source === 'preset');
     return { historyPrompts: historyItems, presetPrompts: presetItems };
   }, [allPrompts]);
@@ -395,16 +499,26 @@ export const PopupPromptButton: React.FC<PopupPromptButtonProps> = ({
                     onClick={() => handleSelectPrompt(item)}
                     onMouseEnter={() => setHighlightedIndex(getGlobalIndex('history', index))}
                   >
-                    <span className="popup-prompt-panel__item-text">
-                      {item.content}
-                    </span>
-                    <button
-                      className="popup-prompt-panel__item-delete"
-                      onClick={(e) => handleDeleteHistory(e, item.id)}
-                      title={language === 'zh' ? '删除' : 'Delete'}
-                    >
-                      <X size={12} />
-                    </button>
+                    <div className="popup-prompt-panel__item-content">
+                      <span className="popup-prompt-panel__item-text">
+                        {item.content}
+                      </span>
+                      {/* 显示来源标签 */}
+                      <span className={`popup-prompt-panel__item-source popup-prompt-panel__item-source--${item.source}`}>
+                        {getSourceIcon(item.source)}
+                        <span>{getSourceLabel(item.source, language)}</span>
+                      </span>
+                    </div>
+                    {/* 只有AI输入框的历史可以删除 */}
+                    {item.source === 'ai-input' && (
+                      <button
+                        className="popup-prompt-panel__item-delete"
+                        onClick={(e) => handleDeleteHistory(e, item.id)}
+                        title={language === 'zh' ? '删除' : 'Delete'}
+                      >
+                        <X size={12} />
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>

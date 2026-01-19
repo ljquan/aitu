@@ -17,6 +17,8 @@ export interface PromptItem {
   content: string;
   /** 是否已置顶 */
   pinned?: boolean;
+  /** 是否是预设提示词（预设不允许删除和置顶） */
+  isPreset?: boolean;
 }
 
 export interface PromptListPanelProps {
@@ -68,9 +70,10 @@ export const PromptListPanel: React.FC<PromptListPanelProps> = ({
             key={item.id}
             content={item.content}
             pinned={item.pinned}
+            isPreset={item.isPreset}
             onClick={() => onSelect?.(item.content)}
-            onTogglePin={onTogglePin ? () => onTogglePin(item.id) : undefined}
-            onDelete={onDelete ? () => onDelete(item.id) : undefined}
+            onTogglePin={onTogglePin && !item.isPreset ? () => onTogglePin(item.id) : undefined}
+            onDelete={onDelete && !item.isPreset ? () => onDelete(item.id) : undefined}
             language={language}
             disabled={disabled}
           />
