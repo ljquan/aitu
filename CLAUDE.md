@@ -2789,6 +2789,49 @@ export const setStrokeStyle = (board: PlaitBoard, strokeStyle: StrokeStyle) => {
 - **输入框**: 8px 圆角，浅色背景，2px 聚焦边框
 - **动画**: 150-300ms 过渡，ease-out 曲线
 
+### 独立页面配色一致性
+
+**场景**: 创建独立的 HTML 页面（如调试面板、工具页面）时
+
+独立页面应使用与主应用一致的品牌配色，而不是使用默认的蓝色系或其他配色。
+
+**品牌色 CSS 变量模板**:
+```css
+:root {
+  /* 主品牌色 - 橙金色系 */
+  --primary-color: #F39C12;
+  --primary-hover: #E67E22;
+  --primary-active: #D35400;
+  --primary-light: #FEF5E7;
+  /* 成功色 */
+  --success-color: #00B894;
+  --success-light: rgba(0, 184, 148, 0.1);
+  /* 警告色 */
+  --warning-color: #E67E22;
+  --warning-light: rgba(230, 126, 34, 0.1);
+  /* 错误色 - 玫红色系 */
+  --error-color: #E91E63;
+  --error-light: rgba(233, 30, 99, 0.1);
+  /* 信息色 - 蓝紫色系 */
+  --info-color: #5A4FCF;
+}
+
+/* 深色模式 */
+[data-theme="dark"] {
+  --primary-color: #FBBF24;
+  --primary-hover: #F39C12;
+  --primary-active: #E67E22;
+  --primary-light: rgba(251, 191, 36, 0.15);
+  --success-color: #10B981;
+  --error-color: #F06292;
+  --info-color: #7B68EE;
+}
+```
+
+**适用页面**:
+- `apps/web/public/sw-debug.html` - Service Worker 调试面板
+- 其他独立工具页面
+
 ---
 
 ## MCP 工具系统
