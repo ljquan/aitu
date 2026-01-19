@@ -2117,6 +2117,85 @@ class WorkflowService {
 
 **原因**: 没有清理机制的 Map/Set 会随着使用不断增长，最终导致内存溢出。即使单个条目很小，长期积累也会消耗大量内存。应该在数据不再需要时（完成、失败、超时、取消）及时清理。
 
+### 不要绕过封装函数直接调用底层 API
+
+**场景**: 项目中有封装好的函数处理额外逻辑（如日志记录、状态追踪、错误处理）
+
+❌ **错误示例**:
+```typescript
+// 错误：直接调用 postMessage，绕过了日志记录系统
+async sendToFocused(message: Message): Promise<boolean> {
+  const focusedClient = await this.findFocusedClient();
+  if (focusedClient) {
+    focusedClient.postMessage(message); // 绕过了 sendToClient 的日志记录
+    return true;
+  }
+  return false;
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：使用封装函数，确保日志被记录
+async sendToFocused(message: Message): Promise<boolean> {
+  const focusedClient = await this.findFocusedClient();
+  if (focusedClient) {
+    sendToClient(focusedClient, message); // 通过封装函数发送，会记录日志
+    return true;
+  }
+  return false;
+}
+```
+
+**常见场景**:
+- `sendToClient()` vs 直接 `client.postMessage()`
+- `fetchWithRetry()` vs 直接 `fetch()`
+- `logError()` vs 直接 `console.error()`
+- `cacheService.set()` vs 直接 `localStorage.setItem()`
+
+**原因**: 封装函数通常包含重要的附加逻辑（日志记录、错误处理、监控上报等）。直接调用底层 API 会绕过这些逻辑，导致功能不完整或难以调试。在添加新代码时，应检查是否有现成的封装函数可用。
+
+### 页面卸载时必须清理所有定时器资源
+
+**场景**: 页面使用多个 `setInterval` 进行定时任务（如心跳、监控、轮询）
+
+❌ **错误示例**:
+```javascript
+// 启动多个定时器
+const heartbeatTimer = setInterval(sendHeartbeat, 5000);
+startMemoryMonitoring(); // 内部也创建了 memoryMonitorInterval
+
+// 卸载时只清理了部分定时器
+window.addEventListener('beforeunload', () => {
+  clearInterval(heartbeatTimer);
+  // 遗漏了 memoryMonitorInterval！
+});
+```
+
+✅ **正确示例**:
+```javascript
+// 启动多个定时器
+const heartbeatTimer = setInterval(sendHeartbeat, 5000);
+startMemoryMonitoring();
+
+// 卸载时清理所有定时器
+window.addEventListener('beforeunload', () => {
+  clearInterval(heartbeatTimer);
+  stopMemoryMonitoring(); // 确保清理所有定时器
+});
+```
+
+**检查清单**:
+- 列出页面中所有的 `setInterval` 调用
+- 确保 `beforeunload` 或 `unload` 事件中清理每一个定时器
+- 封装在函数中的定时器需要提供对应的 `stop` 函数
+- 考虑使用统一的资源管理器来追踪所有需要清理的资源
+
+**原因**: 遗漏的定时器会在页面卸载后继续运行（特别是在 SPA 或 iframe 场景），导致：
+1. 资源泄漏（回调函数持有的闭包无法释放）
+2. 不必要的 CPU 占用
+3. 可能访问已销毁的 DOM 或状态
+
 ### 调试日志清理规范
 
 **场景**: 开发功能时添加 `console.log` 调试日志
