@@ -47,7 +47,7 @@ Aitu (爱图) is an open-source whiteboard application built on the Plait framew
 ## Architecture
 
 ### Monorepo Structure
-- `apps/web/` - Main web application (aitu.chat)
+- `apps/web/` - Main web application (opentu.ai)
 - `packages/drawnix/` - Core whiteboard library with UI components and plugins
 - `packages/react-board/` - React wrapper for Plait board functionality
 - `packages/react-text/` - Text rendering and editing components

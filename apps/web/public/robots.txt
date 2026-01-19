@@ -10,4 +10,4 @@ content: |-
   Disallow: /private/
   
   # 站点地图
-  Sitemap: https://aitu.chat/sitemap.xml
+  Sitemap: https://opentu.ai/sitemap.xml

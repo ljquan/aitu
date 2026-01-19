@@ -48,7 +48,7 @@ Content-Type: application/json
     "data": {
       // 自定义事件属性
       "version": "1.0.0",
-      "url": "https://aitu.chat/editor",
+      "url": "https://opentu.ai/editor",
       "param1": "value1"
     }
   }
@@ -107,7 +107,7 @@ interface UmamiEventPayload {
   "name": "button_click_save",
   "data": {
     "version": "1.2.3",
-    "url": "https://aitu.chat/editor?id=abc123",
+    "url": "https://opentu.ai/editor?id=abc123",
     "buttonId": "save-btn",
     "context": "editor"
   }

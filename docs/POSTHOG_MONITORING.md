@@ -115,7 +115,7 @@ setTimeout(initMonitoring, 1000);
   metric_id: 'v3-1234567890',
   metric_delta: 123.45,
   navigation_type: 'navigate',
-  page_url: 'https://aitu.chat/',
+  page_url: 'https://opentu.ai/',
   page_path: '/',
   referrer: 'https://google.com',
   user_agent: 'Mozilla/5.0...',
@@ -129,7 +129,7 @@ setTimeout(initMonitoring, 1000);
 {
   eventName: 'page_view',
   category: 'page_report',
-  page_url: 'https://aitu.chat/',
+  page_url: 'https://opentu.ai/',
   page_path: '/',
   page_title: '爱图 - AI图片视频创作',
   referrer: 'https://google.com',
@@ -150,7 +150,7 @@ setTimeout(initMonitoring, 1000);
 {
   eventName: 'page_performance',
   category: 'page_report',
-  page_url: 'https://aitu.chat/',
+  page_url: 'https://opentu.ai/',
   page_path: '/',
   dns_time: 45.2,
   tcp_time: 102.3,
