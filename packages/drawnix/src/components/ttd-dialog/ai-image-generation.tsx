@@ -20,7 +20,10 @@ import {
   getMergedPresetPrompts,
   savePromptToHistory as savePromptToHistoryUtil,
 } from './shared';
-import { DEFAULT_ASPECT_RATIO } from '../../constants/image-aspect-ratios';
+import {
+  DEFAULT_ASPECT_RATIO,
+  convertAspectRatioToSize,
+} from '../../constants/image-aspect-ratios';
 import { DialogTaskList } from '../task-queue/DialogTaskList';
 import { geminiSettings } from '../../utils/settings-manager';
 import { promptForApiKey } from '../../utils/gemini-api';
@@ -51,7 +54,8 @@ const AIImageGeneration = ({
   const [height, setHeight] = useState<number | string>(initialHeight || 1024);
   const [aspectRatio, setAspectRatio] = useState<string>(DEFAULT_ASPECT_RATIO);
   const [error, setError] = useState<string | null>(null);
-  const [uploadedImages, setUploadedImages] = useState<ReferenceImage[]>(initialImages);
+  const [uploadedImages, setUploadedImages] =
+    useState<ReferenceImage[]>(initialImages);
 
   // Use generation history from task queue
   const { imageHistory } = useGenerationHistory();
@@ -70,32 +74,40 @@ const AIImageGeneration = ({
       // console.log('AIImageGeneration - skipping props update in manual edit mode');
       return;
     }
-    
+
     // Create a unique key from all initial props to detect real changes
     const propsKey = JSON.stringify({
       prompt: initialPrompt,
-      images: initialImages?.map(img => img.url),
+      images: initialImages?.map((img) => img.url),
       elementIds: initialSelectedElementIds,
       width: initialWidth,
       height: initialHeight,
-      result: initialResultUrl
+      result: initialResultUrl,
     });
-    
+
     // Skip if we've already processed these exact props
     if (processedPropsRef.current === propsKey) {
       // console.log('AIImageGeneration - skipping duplicate props processing');
       return;
     }
-    
+
     // console.log('AIImageGeneration - processing new props:', { propsKey });
     processedPropsRef.current = propsKey;
-    
+
     setPrompt(initialPrompt);
     // 使用 initialImages 的值,如果是 undefined 则使用空数组(确保清空)
     setUploadedImages(initialImages || []);
     if (initialWidth) setWidth(initialWidth);
     if (initialHeight) setHeight(initialHeight);
-  }, [initialPrompt, initialImages, initialSelectedElementIds, initialWidth, initialHeight, initialResultUrl, isManualEdit]);
+  }, [
+    initialPrompt,
+    initialImages,
+    initialSelectedElementIds,
+    initialWidth,
+    initialHeight,
+    initialResultUrl,
+    isManualEdit,
+  ]);
 
   // 清除错误状态当组件挂载时（对话框打开时）
   useEffect(() => {
@@ -120,14 +132,9 @@ const AIImageGeneration = ({
     window.dispatchEvent(new CustomEvent('ai-image-clear'));
   };
 
-
-
-
-
-
   // 使用useMemo优化性能，当imageHistory或language变化时重新计算
-  const presetPrompts = React.useMemo(() =>
-    getMergedPresetPrompts('image', language as Language, imageHistory),
+  const presetPrompts = React.useMemo(
+    () => getMergedPresetPrompts('image', language as Language, imageHistory),
     [imageHistory, language]
   );
 
@@ -135,7 +142,7 @@ const AIImageGeneration = ({
   const savePromptToHistory = (promptText: string) => {
     const dimensions = {
       width: typeof width === 'string' ? parseInt(width) || 1024 : width,
-      height: typeof height === 'string' ? parseInt(height) || 1024 : height
+      height: typeof height === 'string' ? parseInt(height) || 1024 : height,
     };
     savePromptToHistoryUtil('image', promptText, dimensions);
   };
@@ -167,7 +174,7 @@ const AIImageGeneration = ({
       // console.log('Current settings:', settings);
       geminiSettings.update({
         ...settings,
-        imageModelName: task.params.model
+        imageModelName: task.params.model,
       });
       // console.log('Updated settings:', geminiSettings.get());
     }
@@ -186,18 +193,20 @@ const AIImageGeneration = ({
     return Promise.all(
       uploadedImages.map(async (img) => {
         if (img.file) {
-          return new Promise<{ type: 'url'; url: string; name: string }>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => {
-              resolve({
-                type: 'url',
-                url: reader.result as string,
-                name: img.name
-              });
-            };
-            reader.onerror = reject;
-            reader.readAsDataURL(img.file!);
-          });
+          return new Promise<{ type: 'url'; url: string; name: string }>(
+            (resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => {
+                resolve({
+                  type: 'url',
+                  url: reader.result as string,
+                  name: img.name,
+                });
+              };
+              reader.onerror = reject;
+              reader.readAsDataURL(img.file!);
+            }
+          );
         } else if (img.url) {
           return { type: 'url', url: img.url, name: img.name };
         }
@@ -208,7 +217,9 @@ const AIImageGeneration = ({
 
   const handleGenerate = async (count: number = 1) => {
     if (!prompt.trim()) {
-      setError(language === 'zh' ? '请输入图像描述' : 'Please enter image description');
+      setError(
+        language === 'zh' ? '请输入图像描述' : 'Please enter image description'
+      );
       return;
     }
 
@@ -227,8 +238,10 @@ const AIImageGeneration = ({
     }
 
     try {
-      const finalWidth = typeof width === 'string' ? (parseInt(width) || 1024) : width;
-      const finalHeight = typeof height === 'string' ? (parseInt(height) || 1024) : height;
+      const finalWidth =
+        typeof width === 'string' ? parseInt(width) || 1024 : width;
+      const finalHeight =
+        typeof height === 'string' ? parseInt(height) || 1024 : height;
       // Convert File objects to base64 data URLs for serialization
       const convertedImages = await convertImagesToSerializable();
 
@@ -239,7 +252,8 @@ const AIImageGeneration = ({
 
         // Get current image model from settings
         const settings = geminiSettings.get();
-        const currentImageModel = settings.imageModelName || 'gemini-3-pro-image-preview-vip';
+        const currentImageModel =
+          settings.imageModelName || 'gemini-3-pro-image-preview-vip';
 
         for (let i = 0; i < count; i++) {
           const taskParams = {
@@ -247,6 +261,7 @@ const AIImageGeneration = ({
             width: finalWidth,
             height: finalHeight,
             aspectRatio,
+            size: convertAspectRatioToSize(aspectRatio),
             model: currentImageModel,
             uploadedImages: convertedImages,
             batchId,
@@ -286,7 +301,8 @@ const AIImageGeneration = ({
 
       // Get current image model from settings
       const settings = geminiSettings.get();
-      const currentImageModel = settings.imageModelName || 'gemini-2.5-flash-image-vip';
+      const currentImageModel =
+        settings.imageModelName || 'gemini-2.5-flash-image-vip';
 
       // 创建任务参数
       const taskParams = {
@@ -294,6 +310,7 @@ const AIImageGeneration = ({
         width: finalWidth,
         height: finalHeight,
         aspectRatio,
+        size: convertAspectRatioToSize(aspectRatio),
         model: currentImageModel,
         // 保存上传的图片（已转换为可序列化的格式）
         uploadedImages: convertedImages,
@@ -330,23 +347,27 @@ const AIImageGeneration = ({
       console.error('Failed to create task:', err);
 
       // 提取更友好的错误信息
-      let errorMessage = language === 'zh'
-        ? '任务创建失败，请检查参数或稍后重试'
-        : 'Failed to create task, please check parameters or try again later';
+      let errorMessage =
+        language === 'zh'
+          ? '任务创建失败，请检查参数或稍后重试'
+          : 'Failed to create task, please check parameters or try again later';
 
       if (err.message) {
         if (err.message.includes('exceed 5000 characters')) {
-          errorMessage = language === 'zh'
-            ? '提示词不能超过 5000 字符'
-            : 'Prompt must not exceed 5000 characters';
+          errorMessage =
+            language === 'zh'
+              ? '提示词不能超过 5000 字符'
+              : 'Prompt must not exceed 5000 characters';
         } else if (err.message.includes('Duplicate submission')) {
-          errorMessage = language === 'zh'
-            ? '请勿重复提交，请等待 5 秒后再试'
-            : 'Duplicate submission. Please wait 5 seconds.';
+          errorMessage =
+            language === 'zh'
+              ? '请勿重复提交，请等待 5 秒后再试'
+              : 'Duplicate submission. Please wait 5 seconds.';
         } else if (err.message.includes('Invalid parameters')) {
-          errorMessage = language === 'zh'
-            ? `参数错误: ${err.message.replace('Invalid parameters: ', '')}`
-            : err.message;
+          errorMessage =
+            language === 'zh'
+              ? `参数错误: ${err.message.replace('Invalid parameters: ', '')}`
+              : err.message;
         }
       }
 
@@ -362,45 +383,50 @@ const AIImageGeneration = ({
         {/* AI 图片生成表单 */}
         <div className="ai-image-generation-section">
           <div className="ai-image-generation-form">
-
-          {/* 模型选择器 */}
-          {selectedModel !== undefined && onModelChange && (
-            <div className="form-header-row">
-              <div className="model-selector-wrapper">
-                <Select
-                  value={selectedModel}
-                  onChange={(value) => onModelChange(value as string)}
-                  options={IMAGE_MODEL_GROUPED_OPTIONS}
-                  size="small"
-                  placeholder={language === 'zh' ? '选择图片模型' : 'Select Image Model'}
-                  filterable
-                  creatable
-                  disabled={isGenerating}
-                />
+            {/* 模型选择器 */}
+            {selectedModel !== undefined && onModelChange && (
+              <div className="form-header-row">
+                <div className="model-selector-wrapper">
+                  <Select
+                    value={selectedModel}
+                    onChange={(value) => onModelChange(value as string)}
+                    options={IMAGE_MODEL_GROUPED_OPTIONS}
+                    size="small"
+                    placeholder={
+                      language === 'zh' ? '选择图片模型' : 'Select Image Model'
+                    }
+                    filterable
+                    creatable
+                    disabled={isGenerating}
+                  />
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* 参考图片区域 */}
-          <ReferenceImageUpload
-            images={uploadedImages}
-            onImagesChange={setUploadedImages}
-            language={language}
-            disabled={isGenerating}
-            multiple={true}
-            label={language === 'zh' ? '参考图片 (可选)' : 'Reference Images (Optional)'}
-            onError={setError}
-          />
+            {/* 参考图片区域 */}
+            <ReferenceImageUpload
+              images={uploadedImages}
+              onImagesChange={setUploadedImages}
+              language={language}
+              disabled={isGenerating}
+              multiple={true}
+              label={
+                language === 'zh'
+                  ? '参考图片 (可选)'
+                  : 'Reference Images (Optional)'
+              }
+              onError={setError}
+            />
 
-          <PromptInput
-            prompt={prompt}
-            onPromptChange={setPrompt}
-            presetPrompts={presetPrompts}
-            language={language}
-            type="image"
-            disabled={isGenerating}
-            onError={setError}
-          />
+            <PromptInput
+              prompt={prompt}
+              onPromptChange={setPrompt}
+              presetPrompts={presetPrompts}
+              language={language}
+              type="image"
+              disabled={isGenerating}
+              onError={setError}
+            />
 
             <ErrorDisplay error={error} />
           </div>
@@ -421,16 +447,16 @@ const AIImageGeneration = ({
               />
             }
           />
-
         </div>
 
         {/* 任务列表侧栏 */}
         <div className="task-sidebar">
-          <DialogTaskList taskType={TaskType.IMAGE} onEditTask={handleEditTask} />
+          <DialogTaskList
+            taskType={TaskType.IMAGE}
+            onEditTask={handleEditTask}
+          />
         </div>
       </div>
-
-
     </div>
   );
 };
