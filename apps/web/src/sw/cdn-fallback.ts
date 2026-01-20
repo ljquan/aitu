@@ -234,9 +234,13 @@ export async function fetchFromCDNWithFallback(
       const response = await fetchWithTimeout(url);
       
       if (response.ok) {
-        // 验证响应类型，防止把 404 页面当作 JS 执行
+        // ============================================
+        // 多重验证：确保 CDN 返回的是有效资源
+        // ============================================
+        
+        // 1. Content-Type 验证
         const contentType = response.headers.get('Content-Type') || '';
-        const isValidResponse = 
+        const isValidContentType = 
           contentType.includes('javascript') ||
           contentType.includes('css') ||
           contentType.includes('json') ||
@@ -245,10 +249,38 @@ export async function fetchFromCDNWithFallback(
           contentType.includes('woff') ||
           contentType.includes('application/octet-stream');
         
-        if (!isValidResponse) {
-          console.warn(`[CDN Fallback] ${cdn.name} returned invalid Content-Type: ${contentType}`);
+        if (!isValidContentType) {
+          console.warn(`[CDN Fallback] ${cdn.name} invalid Content-Type: ${contentType}`);
           markCDNFailure(cdn.name);
-          continue; // 尝试下一个 CDN
+          continue;
+        }
+        
+        // 2. Content-Length 验证（JS/CSS 文件不应该太小）
+        const contentLength = parseInt(response.headers.get('Content-Length') || '0', 10);
+        const isTextResource = contentType.includes('javascript') || contentType.includes('css') || contentType.includes('json');
+        if (isTextResource && contentLength > 0 && contentLength < 50) {
+          console.warn(`[CDN Fallback] ${cdn.name} response too small: ${contentLength} bytes`);
+          markCDNFailure(cdn.name);
+          continue;
+        }
+        
+        // 3. 内容采样验证（检测 HTML 错误页面）
+        const clonedResponse = response.clone();
+        try {
+          const textSample = await clonedResponse.text().then(t => t.slice(0, 200));
+          const looksLikeHtml = textSample.includes('<!DOCTYPE') || 
+                               textSample.includes('<html') || 
+                               textSample.includes('<HTML') ||
+                               textSample.includes('Not Found') ||
+                               textSample.includes('404');
+          
+          if (isTextResource && looksLikeHtml) {
+            console.warn(`[CDN Fallback] ${cdn.name} returned HTML instead of ${contentType}`);
+            markCDNFailure(cdn.name);
+            continue;
+          }
+        } catch (sampleError) {
+          // 采样失败不阻止使用（可能是二进制文件）
         }
         
         markCDNSuccess(cdn.name);

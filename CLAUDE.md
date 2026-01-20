@@ -2795,6 +2795,78 @@ if (cachedResponse) {
 - 在返回前验证 `blob.size > 0` 可以自动修复历史问题
 - 删除无效缓存后重新获取，确保用户看到正确的内容
 
+### CDN 响应必须多重验证后才能缓存
+
+**场景**: Service Worker 从 CDN 获取静态资源并缓存时
+
+❌ **错误示例**:
+```typescript
+// 错误：只检查 response.ok，可能缓存 CDN 返回的 HTML 错误页面
+const response = await fetch(cdnUrl);
+if (response.ok) {
+  cache.put(request, response.clone());
+  return response; // 可能是 404 页面被当作 JS 执行！
+}
+```
+
+✅ **正确示例**:
+```typescript
+const response = await fetch(cdnUrl);
+if (response.ok) {
+  // 1. Content-Type 验证
+  const contentType = response.headers.get('Content-Type') || '';
+  const isValidType = contentType.includes('javascript') || 
+                      contentType.includes('css') || 
+                      contentType.includes('json');
+  if (!isValidType) continue; // 尝试下一个源
+  
+  // 2. Content-Length 验证（排除空响应）
+  const length = parseInt(response.headers.get('Content-Length') || '0', 10);
+  if (length > 0 && length < 50) continue;
+  
+  // 3. 内容采样验证（检测 HTML 错误页面）
+  const sample = await response.clone().text().then(t => t.slice(0, 200));
+  if (sample.includes('<!DOCTYPE') || sample.includes('Not Found')) {
+    continue; // CDN 返回了 HTML 错误页面
+  }
+  
+  cache.put(request, response.clone());
+  return response;
+}
+```
+
+**原因**:
+- CDN 可能返回 404 但 HTTP 状态码仍是 200（某些 CDN 的行为）
+- npm 包不存在时，CDN 返回 HTML 错误页面
+- 错误页面被当作 JS 执行会导致 React 多实例冲突，应用崩溃
+- 多重验证确保只缓存真正有效的资源
+
+### CDN 请求应设置短超时快速回退
+
+**场景**: Service Worker 实现 CDN 优先加载策略时
+
+❌ **错误示例**:
+```typescript
+// 错误：超时太长，CDN 回源慢时用户等待时间过长
+const CDN_CONFIG = {
+  fetchTimeout: 10000, // 10 秒超时
+};
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：短超时，CDN 缓存命中很快（<200ms），超时说明在回源
+const CDN_CONFIG = {
+  fetchTimeout: 1500, // 1.5 秒超时，快速回退到服务器
+};
+```
+
+**原因**:
+- CDN 缓存命中通常 < 200ms，1.5s 足够
+- CDN 回源（首次请求）可能需要 3-5 秒，等待太久影响用户体验
+- 短超时后快速回退到服务器，保证首次加载速度
+- 用户请求会触发 CDN 缓存，后续访问自动加速
+
 ### 图像处理工具复用规范
 
 **场景**: 需要对图片进行边框检测、去白边、裁剪等处理时
