@@ -1,3 +1,51 @@
+## 0.5.30 (2026-01-20)
+
+### 🚀 Features
+
+- enhance split and restore functionality for WinBoxWindow ([a53c0b8](https://github.com/ljquan/aitu/commit/a53c0b8))
+- 优化批量出图 UI 和交互体验 ([94e2e05](https://github.com/ljquan/aitu/commit/94e2e05))
+- add reference image handling in LLM API logs and enhance task recovery mechanisms ([c94b032](https://github.com/ljquan/aitu/commit/c94b032))
+- implement model dropdown component with search functionality and update AI input bar to use # for model selection ([6aa6267](https://github.com/ljquan/aitu/commit/6aa6267))
+- enhance performance panel with image count tracking and updated memory thresholds ([5ec5172](https://github.com/ljquan/aitu/commit/5ec5172))
+- 优化素材库 UI 交互、缩放缓存、Grid 布局及空间效率 ([c64e4a7](https://github.com/ljquan/aitu/commit/c64e4a7))
+
+### 🩹 Fixes
+
+- keep auto-insert aspect ratio ([1457f27](https://github.com/ljquan/aitu/commit/1457f27))
+- preserve image ratio in payload ([614fc8b](https://github.com/ljquan/aitu/commit/614fc8b))
+
+### 🔧 Chores
+
+- update app version to 0.5.29 and adjust build time ([4a0edf6](https://github.com/ljquan/aitu/commit/4a0edf6))
+- bump version to 0.5.29 ([9adb98a](https://github.com/ljquan/aitu/commit/9adb98a))
+- bump version to 0.5.28 ([9fca109](https://github.com/ljquan/aitu/commit/9fca109))
+- bump version to 0.5.27 ([0b3c40b](https://github.com/ljquan/aitu/commit/0b3c40b))
+- bump version to 0.5.26 ([10b2b16](https://github.com/ljquan/aitu/commit/10b2b16))
+- enhance CDN response validation and update version to 0.5.25 ([155ec00](https://github.com/ljquan/aitu/commit/155ec00))
+- bump version to 0.5.25 ([8bd7f30](https://github.com/ljquan/aitu/commit/8bd7f30))
+- bump version to 0.5.22 ([5571d3f](https://github.com/ljquan/aitu/commit/5571d3f))
+- bump version to 0.5.21 ([55ad29c](https://github.com/ljquan/aitu/commit/55ad29c))
+- bump version to 0.5.20 ([8bfc191](https://github.com/ljquan/aitu/commit/8bfc191))
+- bump version to 0.5.19 ([8707a5b](https://github.com/ljquan/aitu/commit/8707a5b))
+- bump version to 0.5.18 ([88c0dfd](https://github.com/ljquan/aitu/commit/88c0dfd))
+- bump version to 0.5.17 ([91799c9](https://github.com/ljquan/aitu/commit/91799c9))
+- bump version to 0.5.17 and update build time in version.json ([51b5f3f](https://github.com/ljquan/aitu/commit/51b5f3f))
+- bump version to 0.5.17 ([c41c9bd](https://github.com/ljquan/aitu/commit/c41c9bd))
+- update paths for CDN compatibility and add npm publish scripts ([e4cdca4](https://github.com/ljquan/aitu/commit/e4cdca4))
+- docs(claude): 添加新规则 - 独立的 React 树缺少上下文环境 ([eac542f](https://github.com/ljquan/aitu/commit/eac542f))
+- docs(claude): 添加新规则 - 传递给第三方库的回调无法获取最新 React state ([306ac42](https://github.com/ljquan/aitu/commit/306ac42))
+- docs(claude): 添加新规则 - 点击外部关闭应使用全局事件监听而非透明遮罩层 ([36785f1](https://github.com/ljquan/aitu/commit/36785f1))
+- docs(claude): 添加新规则 - React Context 回调中必须使用函数式更新 ([3b89eb2](https://github.com/ljquan/aitu/commit/3b89eb2))
+- docs(claude): 添加异步任务重试与恢复规范 ([a7b61a0](https://github.com/ljquan/aitu/commit/a7b61a0))
+- docs(claude): 更新调试日志处理和命令行工具使用说明，添加后台清理任务日志记录示例 ([30cf458](https://github.com/ljquan/aitu/commit/30cf458))
+- docs(claude): 添加 React 事件委托、筛选逻辑、Grid 布局及 UI 高度统一规则 ([dcabd75](https://github.com/ljquan/aitu/commit/dcabd75))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+- liquidliang <ljquan@qq.com>
+- gongchengtu <1817063960@qq.com>
+
 ## 0.5.29 (2026-01-20)
 
 ### 🚀 Features

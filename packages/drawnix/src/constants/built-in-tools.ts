@@ -5,6 +5,7 @@
  */
 
 import { ToolDefinition, ToolCategory } from '../types/toolbox.types';
+import { AIImageIcon, AIVideoIcon } from '../components/icons';
 
 /**
  * 内置工具列表
@@ -55,7 +56,26 @@ export const BUILT_IN_TOOLS: ToolDefinition[] = [
     component: 'batch-image',
     defaultWidth: 1200,
     defaultHeight: 800,
-    permissions: ['allow-scripts', 'allow-same-origin', 'allow-forms', 'allow-modals'],
+  } as ToolDefinition,
+  {
+    id: 'ai-image',
+    name: 'AI 图片生成（单图）',
+    description: '专业 AI 图片创作工具，支持参考图、历史记录和多模型切换',
+    icon: AIImageIcon,
+    category: ToolCategory.AI_TOOLS,
+    component: 'ai-image',
+    defaultWidth: 1000,
+    defaultHeight: 700,
+  } as ToolDefinition,
+  {
+    id: 'ai-video',
+    name: 'AI 视频生成',
+    description: 'AI 驱动的短视频创作，支持分镜描述、参考图和多种视频模型',
+    icon: AIVideoIcon,
+    category: ToolCategory.AI_TOOLS,
+    component: 'ai-video',
+    defaultWidth: 1100,
+    defaultHeight: 800,
   } as ToolDefinition
 ];
 

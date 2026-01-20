@@ -21,8 +21,8 @@ export type ToolDefinition = {
   /** 工具描述 */
   description?: string;
 
-  /** 图标（emoji 或 icon name） */
-  icon?: string;
+  /** 图标（emoji 或 icon name 或 React 组件） */
+  icon?: string | React.ReactNode;
 
   /** 分类 */
   category?: string;
