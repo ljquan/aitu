@@ -326,11 +326,35 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
   // 当前选中的尺寸（默认为模型的默认尺寸）
   const [selectedSize, setSelectedSize] = useState(() => getDefaultSizeForModel(getDefaultImageModel()));
 
-  // @ 触发模型选择相关状态
-  const [showAtSuggestion, setShowAtSuggestion] = useState(false);
-  const [atQuery, setAtQuery] = useState(''); // @ 后面的查询文本
-  const [atHighlightIndex, setAtHighlightIndex] = useState(0); // 当前高亮的选项索引
-  const atSuggestionRef = useRef<HTMLDivElement>(null);
+  // # 触发模型选择相关状态
+  const [showHashSuggestion, setShowHashSuggestion] = useState(false);
+  const [hashQuery, setHashQuery] = useState(''); // # 后面的查询文本
+  const [hashHighlightIndex, setHashHighlightIndex] = useState(0); // 当前高亮的选项索引
+  const hashSuggestionRef = useRef<HTMLDivElement>(null);
+  const hashSuggestionListRef = useRef<HTMLDivElement>(null);
+
+  // 确保 # 建议面板高亮项可见
+  useEffect(() => {
+    if (showHashSuggestion && hashSuggestionListRef.current) {
+      const highlightedElement = hashSuggestionListRef.current.children[hashHighlightIndex] as HTMLElement;
+      if (highlightedElement) {
+        const listContainer = hashSuggestionListRef.current;
+        const itemTop = highlightedElement.offsetTop;
+        const itemHeight = highlightedElement.offsetHeight;
+        const containerScrollTop = listContainer.scrollTop;
+        const containerHeight = listContainer.offsetHeight;
+        const padding = 4; // 列表内边距
+
+        if (hashHighlightIndex === 0) {
+          listContainer.scrollTop = 0;
+        } else if (itemTop - padding < containerScrollTop) {
+          listContainer.scrollTop = itemTop - padding;
+        } else if (itemTop + itemHeight > containerScrollTop + containerHeight) {
+          listContainer.scrollTop = itemTop + itemHeight - containerHeight + padding;
+        }
+      }
+    }
+  }, [hashHighlightIndex, showHashSuggestion]);
 
   // 合并画布选中内容和用户上传内容
   const allContent = useMemo(() => {
@@ -754,41 +778,41 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
     setSelectedModel(modelId);
   }, []);
 
-  // 过滤模型列表（根据 @ 后的查询文本）
+  // 过滤模型列表（根据 # 后的查询文本）
   const filteredModels = useMemo(() => {
-    if (!atQuery) return IMAGE_MODELS;
-    const query = atQuery.toLowerCase();
+    if (!hashQuery) return IMAGE_MODELS;
+    const query = hashQuery.toLowerCase();
     return IMAGE_MODELS.filter(model =>
       (model.shortCode?.toLowerCase().includes(query)) ||
       (model.shortLabel?.toLowerCase().includes(query)) ||
       (model.label.toLowerCase().includes(query))
     );
-  }, [atQuery]);
+  }, [hashQuery]);
 
-  // 检测输入中的 @ 触发
-  const detectAtTrigger = useCallback((text: string, cursorPos: number) => {
-    // 从光标位置往前找 @
-    let atPos = -1;
+  // 检测输入中的 # 触发
+  const detectHashTrigger = useCallback((text: string, cursorPos: number) => {
+    // 从光标位置往前找 #
+    let hashPos = -1;
     for (let i = cursorPos - 1; i >= 0; i--) {
       const char = text[i];
       // 遇到空格或换行，停止搜索
       if (char === ' ' || char === '\n') break;
-      // 找到 @
-      if (char === '@') {
-        atPos = i;
+      // 找到 #
+      if (char === '#') {
+        hashPos = i;
         break;
       }
     }
 
-    if (atPos >= 0) {
-      // 提取 @ 后面的查询文本
-      const query = text.slice(atPos + 1, cursorPos);
-      setAtQuery(query);
-      setShowAtSuggestion(true);
-      setAtHighlightIndex(0);
+    if (hashPos >= 0) {
+      // 提取 # 后面的查询文本
+      const query = text.slice(hashPos + 1, cursorPos);
+      setHashQuery(query);
+      setShowHashSuggestion(true);
+      setHashHighlightIndex(0);
     } else {
-      setShowAtSuggestion(false);
-      setAtQuery('');
+      setShowHashSuggestion(false);
+      setHashQuery('');
     }
   }, []);
 
@@ -797,40 +821,40 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
     const newValue = e.target.value;
     setPrompt(newValue);
 
-    // 检测 @ 触发
+    // 检测 # 触发
     const cursorPos = e.target.selectionStart || 0;
-    detectAtTrigger(newValue, cursorPos);
-  }, [detectAtTrigger]);
+    detectHashTrigger(newValue, cursorPos);
+  }, [detectHashTrigger]);
 
-  // 处理 @ 选择模型
-  const handleAtSelectModel = useCallback((modelId: string) => {
-    // 从 prompt 中移除 @query
+  // 处理 # 选择模型
+  const handleHashSelectModel = useCallback((modelId: string) => {
+    // 从 prompt 中移除 #query
     const textarea = inputRef.current;
     if (!textarea) return;
 
     const cursorPos = textarea.selectionStart || 0;
     const text = prompt;
 
-    // 找到 @ 的位置
-    let atPos = -1;
+    // 找到 # 的位置
+    let hashPos = -1;
     for (let i = cursorPos - 1; i >= 0; i--) {
-      if (text[i] === '@') {
-        atPos = i;
+      if (text[i] === '#') {
+        hashPos = i;
         break;
       }
       if (text[i] === ' ' || text[i] === '\n') break;
     }
 
-    if (atPos >= 0) {
-      // 移除 @query 部分
-      const newText = text.slice(0, atPos) + text.slice(cursorPos);
+    if (hashPos >= 0) {
+      // 移除 #query 部分
+      const newText = text.slice(0, hashPos) + text.slice(cursorPos);
       setPrompt(newText);
     }
 
     // 选择模型
     setSelectedModel(modelId);
-    setShowAtSuggestion(false);
-    setAtQuery('');
+    setShowHashSuggestion(false);
+    setHashQuery('');
 
     // 保持焦点在输入框
     textarea.focus();
@@ -1589,19 +1613,19 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
         return;
       }
 
-      // @ 建议面板打开时的键盘处理
-      if (showAtSuggestion && filteredModels.length > 0) {
+      // # 建议面板打开时的键盘处理
+      if (showHashSuggestion && filteredModels.length > 0) {
         // 上下箭头导航
         if (event.key === 'ArrowDown') {
           event.preventDefault();
-          setAtHighlightIndex(prev =>
+          setHashHighlightIndex(prev =>
             prev < filteredModels.length - 1 ? prev + 1 : 0
           );
           return;
         }
         if (event.key === 'ArrowUp') {
           event.preventDefault();
-          setAtHighlightIndex(prev =>
+          setHashHighlightIndex(prev =>
             prev > 0 ? prev - 1 : filteredModels.length - 1
           );
           return;
@@ -1609,20 +1633,20 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
         // Tab 或 Enter 选择当前高亮项
         if (event.key === 'Tab' || event.key === 'Enter') {
           event.preventDefault();
-          const selectedModelItem = filteredModels[atHighlightIndex];
+          const selectedModelItem = filteredModels[hashHighlightIndex];
           if (selectedModelItem) {
-            analytics.track('ai_input_select_model_at_keyboard', {
+            analytics.track('ai_input_select_model_hash_keyboard', {
               model: selectedModelItem.id
             });
-            handleAtSelectModel(selectedModelItem.id);
+            handleHashSelectModel(selectedModelItem.id);
           }
           return;
         }
         // Escape 关闭建议面板
         if (event.key === 'Escape') {
           event.preventDefault();
-          setShowAtSuggestion(false);
-          setAtQuery('');
+          setShowHashSuggestion(false);
+          setHashQuery('');
           return;
         }
       }
@@ -1647,7 +1671,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
         return;
       }
     },
-    [handleGenerate, showAtSuggestion, filteredModels, atHighlightIndex, handleAtSelectModel]
+    [handleGenerate, showHashSuggestion, filteredModels, hashHighlightIndex, handleHashSelectModel]
   );
 
   // Handle input focus
@@ -1795,25 +1819,25 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
               onKeyDown={handleKeyDown}
               onFocus={handleFocus}
               onBlur={handleBlur}
-              placeholder={language === 'zh' ? '描述你想要创建什么，输入 @ 选择模型' : 'Describe what you want to create, type @ to select model'}
+              placeholder={language === 'zh' ? '描述你想要创建什么，输入 # 选择模型' : 'Describe what you want to create, type # to select model'}
               rows={isFocused ? 4 : 1}
               disabled={isSubmitting}
             />
 
-            {/* @ 触发的模型建议面板 */}
-            {showAtSuggestion && filteredModels.length > 0 && (
+            {/* # 触发的模型建议面板 */}
+            {showHashSuggestion && filteredModels.length > 0 && (
               <div
                 className="ai-input-bar__at-suggestion"
-                ref={atSuggestionRef}
+                ref={hashSuggestionRef}
                 role="listbox"
                 aria-label={language === 'zh' ? '选择模型' : 'Select Model'}
               >
                 <div className="ai-input-bar__at-suggestion-header">
-                  {language === 'zh' ? '选择图片模型' : 'Select Image Model'}
+                  {language === 'zh' ? '选择图片模型（tab键确认）' : 'Select Image Model (tab to confirm)'}
                 </div>
-                <div className="ai-input-bar__at-suggestion-list">
+                <div className="ai-input-bar__at-suggestion-list" ref={hashSuggestionListRef}>
                   {filteredModels.map((model, index) => {
-                    const isHighlighted = index === atHighlightIndex;
+                    const isHighlighted = index === hashHighlightIndex;
                     const isSelected = model.id === selectedModel;
                     return (
                       <div
@@ -1822,14 +1846,14 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
                           'ai-input-bar__at-suggestion-item--highlighted': isHighlighted,
                           'ai-input-bar__at-suggestion-item--selected': isSelected,
                         })}
-                        onClick={() => handleAtSelectModel(model.id)}
-                        onMouseEnter={() => setAtHighlightIndex(index)}
+                        onClick={() => handleHashSelectModel(model.id)}
+                        onMouseEnter={() => setHashHighlightIndex(index)}
                         role="option"
                         aria-selected={isSelected}
                       >
                         <div className="ai-input-bar__at-suggestion-item-content">
                           <div className="ai-input-bar__at-suggestion-item-name">
-                            <span className="ai-input-bar__at-suggestion-item-code">@{model.shortCode}</span>
+                            <span className="ai-input-bar__at-suggestion-item-code">#{model.shortCode}</span>
                             <span className="ai-input-bar__at-suggestion-item-label">
                               {model.shortLabel || model.label}
                             </span>

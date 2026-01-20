@@ -21,16 +21,17 @@ import {
 import { geminiSettings } from '../../utils/settings-manager';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
 import { TaskType } from '../../types/task.types';
-import { MessagePlugin, Select } from 'tdesign-react';
+import { MessagePlugin } from 'tdesign-react';
 import { DialogTaskList } from '../task-queue/DialogTaskList';
 import type { VideoModel, UploadedVideoImage, StoryboardScene } from '../../types/video.types';
+import { ModelDropdown } from '../ai-input-bar/ModelDropdown';
+import { VIDEO_MODELS } from '../../constants/model-config';
 import {
   getVideoModelConfig,
   getDefaultModelParams,
   supportsStoryboardMode,
   getStoryboardModeConfig,
 } from '../../constants/video-model-config';
-import { VIDEO_MODEL_OPTIONS } from '../settings-dialog/settings-dialog';
 import {
   formatStoryboardPrompt,
   parseStoryboardPrompt,
@@ -601,17 +602,14 @@ const AIVideoGeneration = ({
             {/* 模型选择器 */}
             {selectedModel !== undefined && onModelChange && (
               <div className="model-selector-wrapper">
-                {/* <label className="model-selector-label">
-                  {language === 'zh' ? '视频模型' : 'Video Model'}
-                </label> */}
-                <Select
-                  value={selectedModel}
-                  onChange={(value) => onModelChange(value as string)}
-                  options={VIDEO_MODEL_OPTIONS}
-                  size="small"
+                <ModelDropdown
+                  selectedModel={selectedModel}
+                  onSelect={(value) => onModelChange(value)}
+                  language={language}
+                  models={VIDEO_MODELS}
+                  placement="down"
+                  variant="form"
                   placeholder={language === 'zh' ? '选择视频模型' : 'Select Video Model'}
-                  filterable
-                  creatable
                   disabled={isGenerating}
                 />
               </div>

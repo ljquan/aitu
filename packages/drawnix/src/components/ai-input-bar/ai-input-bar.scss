@@ -14,6 +14,7 @@ $gray-light: #F3F4F6;
 $gray-medium: #9CA3AF;
 $gray-dark: #6B7280;
 $text-dark: #1F2937;
+$vip-color: #E91E63;
 
 .ai-input-bar {
   position: fixed;
@@ -1231,6 +1232,7 @@ $text-dark: #1F2937;
     max-height: 260px;
     overflow-y: auto;
     padding: 4px;
+    position: relative; // 确保 offsetTop 相对于此列表容器计算
 
     &::-webkit-scrollbar {
       width: 4px;
@@ -1308,9 +1310,10 @@ $text-dark: #1F2937;
   &__at-suggestion-item-vip {
     font-size: 10px;
     font-weight: 600;
-    color: #fff;
-    background: linear-gradient(135deg, #E91E63 0%, #FF6B9D 100%);
-    padding: 1px 4px;
+    color: $vip-color;
+    background: rgba($vip-color, 0.1);
+    border: 1px solid rgba($vip-color, 0.2);
+    padding: 0 4px;
     border-radius: 3px;
     flex-shrink: 0;
   }
@@ -1388,6 +1391,11 @@ $text-dark: #1F2937;
 
     &__at-suggestion-item-desc {
       color: var(--color-gray-50, #999);
+    }
+
+    &__at-suggestion-item-vip {
+      background: rgba($vip-color, 0.15);
+      border-color: rgba($vip-color, 0.3);
     }
   }
 }

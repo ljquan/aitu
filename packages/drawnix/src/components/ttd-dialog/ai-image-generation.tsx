@@ -5,9 +5,9 @@ import { useI18n } from '../../i18n';
 import { type Language } from '../../constants/prompts';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
 import { TaskType } from '../../types/task.types';
-import { MessagePlugin, Select } from 'tdesign-react';
+import { MessagePlugin } from 'tdesign-react';
 import { useGenerationHistory } from '../../hooks/useGenerationHistory';
-import { IMAGE_MODEL_GROUPED_OPTIONS } from '../settings-dialog/settings-dialog';
+import { ModelDropdown } from '../ai-input-bar/ModelDropdown';
 import {
   useGenerationState,
   useKeyboardShortcuts,
@@ -367,14 +367,12 @@ const AIImageGeneration = ({
           {selectedModel !== undefined && onModelChange && (
             <div className="form-header-row">
               <div className="model-selector-wrapper">
-                <Select
-                  value={selectedModel}
-                  onChange={(value) => onModelChange(value as string)}
-                  options={IMAGE_MODEL_GROUPED_OPTIONS}
-                  size="small"
-                  placeholder={language === 'zh' ? '选择图片模型' : 'Select Image Model'}
-                  filterable
-                  creatable
+                <ModelDropdown
+                  selectedModel={selectedModel}
+                  onSelect={(value) => onModelChange(value)}
+                  language={language}
+                  placement="down"
+                  variant="form"
                   disabled={isGenerating}
                 />
               </div>

@@ -4,8 +4,9 @@ import './settings-dialog.scss';
 import { useI18n } from '../../i18n';
 import { useState, useEffect } from 'react';
 import { geminiSettings } from '../../utils/settings-manager';
-import { Tooltip, Select } from 'tdesign-react';
+import { Tooltip } from 'tdesign-react';
 import { InfoCircleIcon } from 'tdesign-icons-react';
+import { ModelDropdown } from '../ai-input-bar/ModelDropdown';
 import {
   IMAGE_MODEL_GROUPED_SELECT_OPTIONS,
   VIDEO_MODEL_SELECT_OPTIONS,
@@ -13,6 +14,8 @@ import {
   getDefaultImageModel,
   DEFAULT_VIDEO_MODEL,
   DEFAULT_TEXT_MODEL,
+  VIDEO_MODELS,
+  TEXT_MODELS,
 } from '../../constants/model-config';
 
 // 为了向后兼容，重新导出这些常量
@@ -113,39 +116,41 @@ export const SettingsDialog = ({
           </div>
           <div className="settings-dialog__field">
             <label className="settings-dialog__label">图片模型名称</label>
-            <Select
-              className="settings-dialog__select"
-              value={imageModelName}
-              onChange={(value) => setImageModelName(value as string)}
-              options={IMAGE_MODEL_GROUPED_SELECT_OPTIONS}
-              filterable
-              creatable
-              placeholder={getDefaultImageModel()}
-            />
+            <div className="settings-dialog__model-dropdown-container">
+              <ModelDropdown
+                selectedModel={imageModelName}
+                onSelect={(value) => setImageModelName(value)}
+                language={t('language') === 'zh' ? 'zh' : 'en'}
+                placement="down"
+                variant="form"
+              />
+            </div>
           </div>
           <div className="settings-dialog__field">
             <label className="settings-dialog__label">视频模型名称</label>
-            <Select
-              className="settings-dialog__select"
-              value={videoModelName}
-              onChange={(value) => setVideoModelName(value as string)}
-              options={VIDEO_MODEL_SELECT_OPTIONS}
-              filterable
-              creatable
-              placeholder={DEFAULT_VIDEO_MODEL}
-            />
+            <div className="settings-dialog__model-dropdown-container">
+              <ModelDropdown
+                selectedModel={videoModelName}
+                onSelect={(value) => setVideoModelName(value)}
+                language={t('language') === 'zh' ? 'zh' : 'en'}
+                models={VIDEO_MODELS}
+                placement="down"
+                variant="form"
+              />
+            </div>
           </div>
           <div className="settings-dialog__field">
             <label className="settings-dialog__label">文本模型名称</label>
-            <Select
-              className="settings-dialog__select"
-              value={textModelName}
-              onChange={(value) => setTextModelName(value as string)}
-              options={TEXT_MODEL_SELECT_OPTIONS}
-              filterable
-              creatable
-              placeholder={DEFAULT_TEXT_MODEL}
-            />
+            <div className="settings-dialog__model-dropdown-container">
+              <ModelDropdown
+                selectedModel={textModelName}
+                onSelect={(value) => setTextModelName(value)}
+                language={t('language') === 'zh' ? 'zh' : 'en'}
+                models={TEXT_MODELS}
+                placement="up"
+                variant="form"
+              />
+            </div>
           </div>
         </div>
         <div className="settings-dialog__actions">
