@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { MessagePlugin, Select, Dialog, Tooltip, DialogPlugin } from 'tdesign-react';
+import { MessagePlugin, Dialog, Tooltip, DialogPlugin } from 'tdesign-react';
 import { Image, LayoutGrid } from 'lucide-react';
 import { useI18n } from '../../i18n';
 import { smartDownload } from '../../utils/download-utils';
@@ -13,7 +13,7 @@ import { useTaskQueue } from '../../hooks/useTaskQueue';
 import { TaskType, TaskStatus, Task } from '../../types/task.types';
 import { geminiSettings } from '../../utils/settings-manager';
 import { promptForApiKey } from '../../utils/gemini-api';
-import { IMAGE_MODEL_GROUPED_OPTIONS } from '../settings-dialog/settings-dialog';
+import { ModelDropdown } from '../ai-input-bar/ModelDropdown';
 import { useAssets } from '../../contexts/AssetContext';
 import { AssetType, AssetSource, SelectionMode } from '../../types/asset.types';
 import type { Asset } from '../../types/asset.types';
@@ -2158,14 +2158,12 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
               className="model-selector-wrapper"
               data-track="batch_model_select"
             >
-              <Select
-                value={selectedModel}
-                onChange={(value) => setSelectedModel(value as string)}
-                options={IMAGE_MODEL_GROUPED_OPTIONS}
-                size="small"
-                placeholder={language === 'zh' ? '选择图片模型' : 'Select Image Model'}
-                filterable
-                creatable
+              <ModelDropdown
+                selectedModel={selectedModel}
+                onSelect={(value) => setSelectedModel(value)}
+                language={language}
+                placement="down"
+                variant="form"
                 disabled={isSubmitting}
               />
             </div>
