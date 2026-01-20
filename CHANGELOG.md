@@ -1,3 +1,28 @@
+## 0.5.29 (2026-01-20)
+
+### 🚀 Features
+
+- add reference image handling in LLM API logs and enhance task recovery mechanisms ([c94b032](https://github.com/ljquan/aitu/commit/c94b032))
+- implement model dropdown component with search functionality and update AI input bar to use # for model selection ([6aa6267](https://github.com/ljquan/aitu/commit/6aa6267))
+- enhance performance panel with image count tracking and updated memory thresholds ([5ec5172](https://github.com/ljquan/aitu/commit/5ec5172))
+
+### 🩹 Fixes
+
+- keep auto-insert aspect ratio ([1457f27](https://github.com/ljquan/aitu/commit/1457f27))
+- preserve image ratio in payload ([614fc8b](https://github.com/ljquan/aitu/commit/614fc8b))
+
+### 🔧 Chores
+
+- bump version to 0.5.28 ([9fca109](https://github.com/ljquan/aitu/commit/9fca109))
+- bump version to 0.5.27 ([0b3c40b](https://github.com/ljquan/aitu/commit/0b3c40b))
+- bump version to 0.5.26 ([10b2b16](https://github.com/ljquan/aitu/commit/10b2b16))
+- enhance CDN response validation and update version to 0.5.25 ([155ec00](https://github.com/ljquan/aitu/commit/155ec00))
+
+### ❤️  Thank You
+
+- gongchengtu <1817063960@qq.com>
+- liquidliang <ljquan@qq.com>
+
 ## 0.5.26 (2026-01-20)
 
 ### 🚀 Features
