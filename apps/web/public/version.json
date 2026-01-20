@@ -1,6 +1,6 @@
 {
-  "version": "0.5.21",
-  "buildTime": "2026-01-20T04:06:58.343Z",
+  "version": "0.5.22",
+  "buildTime": "2026-01-20T04:55:16.014Z",
   "gitCommit": "unknown",
   "changelog": [
     "优化素材库 UI 交互、缩放缓存、Grid 布局及空间效率",
