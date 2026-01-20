@@ -1375,6 +1375,62 @@ const updateConfigThrottled = useCallback(
 - 节流时间根据操作开销选择：轻量操作 50-100ms，重量操作（SVG/Canvas）100-200ms
 - 使用 `useMemo` 包装 throttle 函数，避免每次渲染创建新实例
 
+#### React Context 回调中必须使用函数式更新
+
+**场景**: 在 Context 提供的回调函数（如 `openDialog`, `closeDialog`）中更新状态时
+
+❌ **错误示例**:
+```typescript
+// 错误：使用闭包中的 context.appState，可能是过期的引用
+const closeDialog = (dialogType: DialogType) => {
+  const newOpenDialogTypes = new Set(context.appState.openDialogTypes);
+  newOpenDialogTypes.delete(dialogType);
+  context.setAppState({
+    ...context.appState,  // 闭包中的旧状态！
+    openDialogTypes: newOpenDialogTypes,
+  });
+};
+
+// 问题场景：
+// 1. 打开弹窗 A：openDialogTypes = { A }
+// 2. 打开弹窗 B：openDialogTypes = { A, B }
+// 3. 关闭弹窗 A 时，closeDialog 中的 context.appState 可能仍是 { A }
+// 4. 结果：openDialogTypes 变成 {}，弹窗 B 也被关闭了！
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：使用函数式更新，确保始终使用最新的状态
+const closeDialog = (dialogType: DialogType) => {
+  context.setAppState((prevState) => {
+    const newOpenDialogTypes = new Set(prevState.openDialogTypes);
+    newOpenDialogTypes.delete(dialogType);
+    return {
+      ...prevState,
+      openDialogTypes: newOpenDialogTypes,
+    };
+  });
+};
+
+// 同样适用于 openDialog
+const openDialog = (dialogType: DialogType) => {
+  context.setAppState((prevState) => {
+    const newOpenDialogTypes = new Set(prevState.openDialogTypes);
+    newOpenDialogTypes.add(dialogType);
+    return {
+      ...prevState,
+      openDialogTypes: newOpenDialogTypes,
+    };
+  });
+};
+```
+
+**原因**: 
+- Context 的回调函数可能被旧的事件处理器或 useCallback 缓存调用
+- 闭包中的 `context.appState` 是创建回调时的快照，不是最新状态
+- 函数式更新 `setState(prev => ...)` 保证 `prev` 始终是最新状态
+- 这个问题在多个弹窗/抽屉同时打开时特别容易出现
+
 ### CSS/SCSS 规范
 - 使用 BEM 命名规范
 - 优先使用设计系统 CSS 变量

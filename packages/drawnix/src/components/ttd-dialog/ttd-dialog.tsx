@@ -24,7 +24,7 @@ const BatchImageGeneration = lazy(() => import('./batch-image-generation'));
 type ImageGenerationMode = 'single' | 'batch';
 
 const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) => {
-  const { appState, setAppState } = useDrawnix();
+  const { appState, setAppState, openDialog, closeDialog } = useDrawnix();
   const { language } = useI18n();
   const board = useBoard();
 
@@ -133,7 +133,7 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
   // 当对话框将要打开时，预先计算是否需要自动放大
   // 这需要在 WinBox 组件渲染前确定，且逻辑需要与 AIImageGeneration 的模式判断一致
   useEffect(() => {
-    if (appState.openDialogType === DialogType.aiImageGeneration) {
+    if (appState.openDialogTypes.has(DialogType.aiImageGeneration)) {
       // 如果有初始图片或初始提示词，说明是带内容进入，不自动放大（强制单图模式）
       const hasInitialContent =
         (aiImageData.initialImages && aiImageData.initialImages.length > 0) ||
@@ -151,35 +151,38 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
         setImageDialogAutoMaximize(false);
       }
     }
-  }, [appState.openDialogType, aiImageData.initialImages, aiImageData.initialPrompt]);
+  }, [appState.openDialogTypes, aiImageData.initialImages, aiImageData.initialPrompt]);
 
-  // 使用 useRef 来跟踪上一次的 openDialogType，避免不必要的处理
-  const prevOpenDialogTypeRef = useRef<typeof appState.openDialogType>(null);
+  // 使用 useRef 来跟踪上一次打开的弹窗类型，避免不必要的处理
+  const prevOpenDialogsRef = useRef<Set<DialogType>>(new Set());
   
   // 当 AI 图片生成对话框打开时，处理选中内容
   useEffect(() => {
-    // 确保board存在并且弹窗确实要打开
-    if (!board || !appState.openDialogType) {
-      prevOpenDialogTypeRef.current = appState.openDialogType;
+    // 确保board存在
+    if (!board) {
       return;
     }
     
-    // 检查是否真的是新的对话框打开，而不是重复触发
-    if (prevOpenDialogTypeRef.current === appState.openDialogType) {
-      // console.log('Dialog type unchanged, skipping processing...');
-      return;
-    }
+    const currentDialogs = appState.openDialogTypes;
+    const prevDialogs = prevOpenDialogsRef.current;
+    
+    // 检查是否有新打开的图片生成弹窗
+    const isImageDialogNewlyOpened = currentDialogs.has(DialogType.aiImageGeneration) && 
+      !prevDialogs.has(DialogType.aiImageGeneration);
+    
+    // 检查是否有新打开的视频生成弹窗
+    const isVideoDialogNewlyOpened = currentDialogs.has(DialogType.aiVideoGeneration) && 
+      !prevDialogs.has(DialogType.aiVideoGeneration);
+    
+    // 更新上一次的状态
+    prevOpenDialogsRef.current = new Set(currentDialogs);
     
     // 防止多次并发处理
     if (isProcessingRef.current) {
-      // console.log('Already processing content, skipping...');
       return;
     }
     
-    // 更新上一次的状态
-    prevOpenDialogTypeRef.current = appState.openDialogType;
-    
-    if (appState.openDialogType === DialogType.aiImageGeneration) {
+    if (isImageDialogNewlyOpened) {
       const processSelection = async () => {
         isProcessingRef.current = true;
         
@@ -266,7 +269,7 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
     }
 
     // 处理 AI 视频生成的选中内容
-    if (appState.openDialogType === DialogType.aiVideoGeneration) {
+    if (isVideoDialogNewlyOpened) {
       const processVideoSelection = async () => {
         isProcessingRef.current = true;
         
@@ -365,15 +368,15 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
 
       processVideoSelection();
     }
-  }, [appState.openDialogType]); // Remove board dependency to prevent recursive updates
+  }, [appState.openDialogTypes]); // Remove board dependency to prevent recursive updates
   
-  // 清理处理状态当弹窗关闭时
+  // 清理处理状态当所有弹窗关闭时
   useEffect(() => {
-    if (!appState.openDialogType) {
+    if (appState.openDialogTypes.size === 0) {
       isProcessingRef.current = false;
-      prevOpenDialogTypeRef.current = null;
+      prevOpenDialogsRef.current = new Set();
     }
-  }, [appState.openDialogType]);
+  }, [appState.openDialogTypes]);
 
   // WinBox 关闭回调
   const handleImageDialogClose = useCallback(() => {
@@ -388,12 +391,8 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
         console.warn('Failed to update cache timestamp:', error);
       }
     }
-    // console.log('Image dialog closing - selection should be preserved');
-    setAppState(prev => ({
-      ...prev,
-      openDialogType: null,
-    }));
-  }, [setAppState]);
+    closeDialog(DialogType.aiImageGeneration);
+  }, [closeDialog]);
 
   const handleVideoDialogClose = useCallback(() => {
     // 在关闭前保存AI视频生成的缓存
@@ -407,22 +406,19 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
         console.warn('Failed to update cache timestamp:', error);
       }
     }
-    // console.log('Video dialog closing - selection should be preserved');
-    setAppState(prev => ({
-      ...prev,
-      openDialogType: null,
-    }));
-  }, [setAppState]);
+    closeDialog(DialogType.aiVideoGeneration);
+  }, [closeDialog]);
 
   return (
     <>
       <Dialog
-        open={appState.openDialogType === DialogType.mermaidToDrawnix}
+        open={appState.openDialogTypes.has(DialogType.mermaidToDrawnix)}
         onOpenChange={(open) => {
-          setAppState({
-            ...appState,
-            openDialogType: open ? DialogType.mermaidToDrawnix : null,
-          });
+          if (open) {
+            openDialog(DialogType.mermaidToDrawnix);
+          } else {
+            closeDialog(DialogType.mermaidToDrawnix);
+          }
         }}
       >
         <DialogContent className="Dialog ttd-dialog" container={container}>
@@ -430,12 +426,13 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
         </DialogContent>
       </Dialog>
       <Dialog
-        open={appState.openDialogType === DialogType.markdownToDrawnix}
+        open={appState.openDialogTypes.has(DialogType.markdownToDrawnix)}
         onOpenChange={(open) => {
-          setAppState({
-            ...appState,
-            openDialogType: open ? DialogType.markdownToDrawnix : null,
-          });
+          if (open) {
+            openDialog(DialogType.markdownToDrawnix);
+          } else {
+            closeDialog(DialogType.markdownToDrawnix);
+          }
         }}
       >
         <DialogContent className="Dialog ttd-dialog" container={container}>
@@ -444,7 +441,7 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
       </Dialog>
       {/* AI 图片生成窗口 - 使用 WinBox */}
       <WinBoxWindow
-        visible={appState.openDialogType === DialogType.aiImageGeneration}
+        visible={appState.openDialogTypes.has(DialogType.aiImageGeneration)}
         title={imageGenerationMode === 'batch'
           ? (language === 'zh' ? '批量出图' : 'Batch Generation')
           : (language === 'zh' ? 'AI 图片生成' : 'AI Image Generation')
@@ -468,7 +465,7 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
         onClose={handleImageDialogClose}
         width="80%"
         height="60%"
-        minWidth={1024}
+        minWidth={800}
         minHeight={500}
         x="center"
         y="center"
@@ -478,7 +475,7 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
         container={container}
         autoMaximize={imageDialogAutoMaximize}
       >
-        {appState.openDialogType === DialogType.aiImageGeneration && (
+        {appState.openDialogTypes.has(DialogType.aiImageGeneration) && (
           imageGenerationMode === 'batch' ? (
             <Suspense fallback={<div className="loading-fallback">{language === 'zh' ? '加载中...' : 'Loading...'}</div>}>
               <BatchImageGeneration onSwitchToSingle={() => handleImageModeChange('single')} />
@@ -499,7 +496,7 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
       </WinBoxWindow>
       {/* AI 视频生成窗口 - 使用 WinBox */}
       <WinBoxWindow
-        visible={appState.openDialogType === DialogType.aiVideoGeneration}
+        visible={appState.openDialogTypes.has(DialogType.aiVideoGeneration)}
         title={language === 'zh' ? 'AI 视频生成' : 'AI Video Generation'}
         onClose={handleVideoDialogClose}
         width="70%"
@@ -513,7 +510,7 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
         className="winbox-ai-generation winbox-ai-video-generation"
         container={container}
       >
-        {appState.openDialogType === DialogType.aiVideoGeneration && (
+        {appState.openDialogTypes.has(DialogType.aiVideoGeneration) && (
           <AIVideoGeneration
             initialPrompt={aiVideoData.initialPrompt}
             initialImage={aiVideoData.initialImage}
