@@ -3336,6 +3336,54 @@ useEffect(() => {
 
 **原因**: 透明遮罩层方案依赖正确的 z-index 层级，在有多个浮层组件的复杂页面中容易失效。全局 document 事件监听在事件捕获阶段工作，不受 DOM 层级和 z-index 影响，是更可靠的方案。同时代码也更简洁，无需维护额外的遮罩层元素和样式。
 
+### 错误 9: 传递给第三方库的回调无法获取最新 React state
+
+**场景**: 将 `useCallback` 创建的回调函数传递给第三方库（如 WinBox 的 `addControl`、图表库的事件处理器等）时
+
+❌ **错误示例**:
+```tsx
+// 错误：回调中直接使用 state，第三方库保存的是旧回调引用
+const [splitSide, setSplitSide] = useState<'left' | 'right' | null>(null);
+
+const handleSplit = useCallback(() => {
+  // splitSide 永远是创建回调时的值（通常是初始值 null）
+  if (splitSide === 'right') {
+    doSomething(); // 永远不会执行！
+  }
+}, [splitSide]); // 即使加了依赖，第三方库保存的仍是旧回调
+
+useEffect(() => {
+  winbox.addControl({ click: handleSplit }); // WinBox 保存了这个引用
+}, []);
+```
+
+✅ **正确示例**:
+```tsx
+// 正确：使用 ref 保存状态，回调中读取 ref.current 获取最新值
+const [splitSide, _setSplitSide] = useState<'left' | 'right' | null>(null);
+const splitSideRef = useRef<'left' | 'right' | null>(null);
+
+// 同步更新 state 和 ref
+const setSplitSide = useCallback((side: 'left' | 'right' | null) => {
+  _setSplitSide(side);
+  splitSideRef.current = side;
+}, []);
+
+const handleSplit = useCallback(() => {
+  // 使用 ref 获取最新值
+  const currentSplitSide = splitSideRef.current;
+  if (currentSplitSide === 'right') {
+    doSomething(); // 正确执行
+  }
+}, []); // 依赖数组可以为空，因为读取的是 ref
+
+useEffect(() => {
+  winbox.addControl({ click: handleSplit });
+}, []);
+```
+
+**原因**: 第三方库（如 WinBox、ECharts、D3 等）在初始化时保存回调函数的引用，之后不会自动更新。当 React 重新渲染创建新的 `useCallback` 实例时，第三方库内部保存的仍然是旧引用。旧回调中的闭包捕获的是创建时的 state 值，导致永远获取不到最新状态。使用 `useRef` 保存状态可以绕过闭包问题，因为 ref 对象本身不变，只是 `.current` 属性的值在变化。
+
 ---
 
 ### 性能指南
