@@ -114,294 +114,295 @@
 
 // Task Item Component
 .task-item {
-  background: var(--td-bg-color-secondarycontainer, #f8f8f8);
-  border-radius: 10px;
+  display: grid;
+  gap: 4px 12px;
+  background: var(--td-bg-color-container, #ffffff);
+  border: 1px solid var(--td-component-border, #e7e7e7);
+  border-radius: 12px;
   padding: 12px;
   margin-bottom: 12px;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  display: flex;
-  gap: 12px;
-  border: 1px solid var(--td-component-border, #e7e7e7);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
-
-  // 最后一个任务项增加额外底部边距
-  &:last-child {
-    margin-bottom: 20px;
-  }
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 
   &:hover {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-    border-color: rgba(243, 156, 18, 0.2);
-    background: #fff;
-  }
-
-  // Selection mode styles
-  &--selection-mode {
-    cursor: pointer;
-
-    &:hover {
-      border-color: rgba(243, 156, 18, 0.5);
-    }
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+    border-color: rgba(243, 156, 18, 0.4);
   }
 
   &--selected {
     border-color: #F39C12;
-    background: rgba(243, 156, 18, 0.08);
+    background: rgba(243, 156, 18, 0.04);
+  }
 
-    &:hover {
-      border-color: #F39C12;
+  &--failed {
+    border-left: 3px solid var(--td-error-color, #e34d59);
+  }
+
+  &--processing {
+    .task-item__status-tag {
+      background-color: rgba(90, 79, 207, 0.08) !important;
+      color: #5A4FCF !important;
+      border: 1px solid rgba(90, 79, 207, 0.15) !important;
+    }
+  }
+
+  // ==========================================
+  // 宽布局模式：提示词和信息都在图片右侧
+  // ==========================================
+  &--wide {
+    grid-template-columns: auto 120px 1fr;
+    grid-template-areas: 
+      "checkbox preview body";
+
+    .task-item__checkbox {
+      grid-area: checkbox;
+    }
+
+    .task-item__preview-wrapper {
+      grid-area: preview;
+    }
+
+    .task-item__body {
+      grid-area: body;
+    }
+  }
+
+  // ==========================================
+  // 紧凑布局模式：信息区域移到图片下方全宽展示
+  // ==========================================
+  &--compact {
+    grid-template-columns: auto 100px 1fr;
+    grid-template-areas: 
+      "checkbox preview prompt"
+      "info     info    info";
+
+    .task-item__checkbox {
+      grid-area: checkbox;
+    }
+
+    .task-item__preview-wrapper {
+      grid-area: preview;
+      width: 100px;
+      height: 75px;
+    }
+
+    .task-item__body {
+      display: contents; // 让子元素直接参与 Grid 布局
+    }
+
+    .task-item__prompt-area {
+      grid-area: prompt;
+    }
+
+    .task-item__info-area {
+      grid-area: info;
+      margin-top: 4px;
+    }
+
+    .task-item__content-row {
+      align-items: center;
     }
   }
 
   &__checkbox {
     display: flex;
     align-items: flex-start;
-    padding-top: 2px;
-    flex-shrink: 0;
+    padding-top: 4px;
   }
 
-  &__header {
-    flex: 1;
+  &__preview-wrapper {
+    width: 120px;
+    height: 90px;
+    flex-shrink: 0;
+    align-self: start;
+  }
+
+  &__preview {
+    width: 100%;
+    height: 100%;
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--td-bg-color-secondarycontainer, #f3f3f3);
+    border: 1px solid var(--td-component-border, #e7e7e7);
+    cursor: pointer;
+    position: relative;
+
+    img, video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    &-placeholder {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      color: var(--td-text-color-placeholder, #999);
+      font-size: 11px;
+    }
+  }
+
+  &__body {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  &__prompt-area {
     min-width: 0;
     display: flex;
     flex-direction: column;
   }
 
-  &__info {
-    flex: 1;
+  &__prompt {
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 1.5;
+    color: var(--td-text-color-primary, #1d1d1f);
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    word-break: break-word;
+  }
+
+  &__info-area {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
     min-width: 0;
   }
 
-  &__title {
+  &__content-row {
     display: flex;
-    align-items: center;
-    gap: 8px;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 8px 12px;
+    margin-top: 4px;
     width: 100%;
   }
 
-  &__type-icon {
-    font-size: 18px;
-    color: var(--td-brand-color, #0052d9);
-    flex-shrink: 0;
+  &__actions {
     display: flex;
     align-items: center;
-    justify-content: center;
-    height: 24px;
-    width: 24px;
+    gap: 8px;
+    flex-shrink: 0;
+    margin-left: auto;
   }
 
-  &__prompt {
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--td-text-color-primary, #333);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    white-space: normal;
-    flex: 1;
-    min-width: 0;
-    line-height: 1.4;
+  &__primary-action {
+    font-weight: 500 !important;
+    height: 26px !important;
+    padding: 0 10px !important;
+    border-radius: 13px !important;
+    font-size: 12px !important;
+    background: #f39c12 !important;
+    border: none !important;
+    color: white !important;
+
+    &:hover {
+      background: #e67e22 !important;
+    }
+
+    .t-icon {
+      font-size: 14px;
+    }
+  }
+
+  &__secondary-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+
+    .t-button {
+      color: var(--td-text-color-placeholder, #999) !important;
+      padding: 4px !important;
+      height: 24px !important;
+      width: 24px !important;
+      min-width: 0 !important;
+
+      &:hover {
+        color: var(--td-text-color-primary, #333) !important;
+        background: var(--td-bg-color-secondarycontainer, #f3f3f3) !important;
+      }
+    }
+  }
+
+  &__delete-btn {
+    &:hover {
+      color: var(--td-error-color, #e34d59) !important;
+    }
   }
 
   &__meta {
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    font-size: 12px;
-    color: var(--td-text-color-secondary, #757575);
+    gap: 4px;
+    margin-top: 2px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
 
     .t-tag {
-      font-size: 11px !important;
+      font-size: 10px !important;
       height: 18px !important;
-      line-height: 16px !important;
-      padding: 0 6px !important;
-      border-radius: 3px !important;
+      border-radius: 4px !important;
+      padding: 0 4px !important;
+      color: var(--td-text-color-secondary, #666);
+      background: var(--td-bg-color-secondarycontainer, #f3f3f3);
+      border: none;
+    }
+
+    .task-item__status-tag {
+      font-weight: 500;
     }
   }
 
-  &__meta-row {
+  &__details {
+    font-size: 11px;
+    color: var(--td-text-color-placeholder, #999);
     display: flex;
-    align-items: center;
-    gap: 12px;
     flex-wrap: wrap;
-  }
-
-  &__meta-item {
-    display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
+    line-height: 1.4;
   }
 
   &__link {
     color: var(--td-brand-color, #0052d9);
     text-decoration: none;
-    cursor: pointer;
-    font-size: 12px;
-
-    &:hover {
-      text-decoration: underline;
-      color: var(--td-brand-color-hover, #0045b3);
-    }
-  }
-
-  &__details {
-    margin: 12px 0;
-  }
-
-  &__section {
-    margin-bottom: 12px;
-    padding: 12px;
-    background: var(--td-bg-color-container, #ffffff);
-    border-radius: 4px;
-
-    &:last-child {
-      margin-bottom: 0;
-    }
-  }
-
-  &__section-title {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--td-text-color-primary, #000000);
-    margin-bottom: 8px;
-    padding-bottom: 6px;
-    border-bottom: 1px solid var(--td-component-border, #e7e7e7);
-  }
-
-  &__section-content {
-    font-size: 13px;
-    line-height: 1.6;
-    color: var(--td-text-color-secondary, #757575);
-
-    div {
-      margin-bottom: 4px;
-
-      &:last-child {
-        margin-bottom: 0;
-      }
-    }
-
-    strong {
-      color: var(--td-text-color-primary, #000000);
-      margin-right: 4px;
-    }
+    &:hover { text-decoration: underline; }
   }
 
   &__error {
-    padding: 8px 12px;
-    background: var(--td-error-color-1, #fef0f0);
-    border-left: 3px solid var(--td-error-color, #e34d59);
-    border-radius: 4px;
-    margin-bottom: 12px;
-
+    background: #FFF1F0;
+    border-radius: 6px;
+    padding: 6px 10px;
+    margin-top: 4px;
+    
     &-message {
-      font-size: 13px;
-      color: var(--td-error-color-7, #8e353c);
+      color: #E34D59;
+      font-size: 11px;
+      line-height: 1.4;
     }
 
     &-details-link {
-      color: var(--td-brand-color, #0052d9);
+      color: #0052d9;
       cursor: pointer;
-      margin-left: 8px;
-      font-size: 12px;
       text-decoration: underline;
-
-      &:hover {
-        color: var(--td-brand-color-hover, #0066ff);
-      }
-    }
-
-    &-details-tooltip {
-      max-width: min(600px, 80vw);
-      padding: 12px;
-    }
-
-    &-details-title {
-      font-weight: 600;
-      margin-bottom: 8px;
-      color: var(--td-text-color-primary, #333);
-      font-size: 13px;
-    }
-
-    &-details-content {
-      font-size: 12px;
-      color: var(--td-text-color-secondary, #666);
-      word-break: break-word;
-      white-space: pre-wrap;
-      max-height: min(400px, 50vh);
-      overflow-y: auto;
-      line-height: 1.5;
-      font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
-      background: var(--td-bg-color-secondarycontainer, #f5f5f5);
-      padding: 8px;
-      border-radius: 4px;
-
-      // 自定义滚动条样式
-      &::-webkit-scrollbar {
-        width: 6px;
-      }
-
-      &::-webkit-scrollbar-track {
-        background: transparent;
-      }
-
-      &::-webkit-scrollbar-thumb {
-        background: var(--td-bg-color-component, #d0d0d0);
-        border-radius: 3px;
-
-        &:hover {
-          background: var(--td-bg-color-component-hover, #bbb);
-        }
-      }
-    }
-  }
-
-  &__retry-info {
-    padding: 8px 12px;
-    background: var(--td-warning-color-1, #fef9f0);
-    border-left: 3px solid var(--td-warning-color, #ff9800);
-    border-radius: 4px;
-    margin-bottom: 12px;
-
-    &-text {
-      font-size: 13px;
-      color: var(--td-warning-color-7, #8e5929);
-    }
-  }
-
-  &__preview {
-    width: 140px;
-    height: 105px;
-    border-radius: 6px;
-    overflow: hidden;
-    flex-shrink: 0;
-    cursor: pointer;
-    position: relative;
-    background: var(--td-bg-color-container, #ffffff);
-    border: 1px solid var(--td-component-border, #e7e7e7);
-    transition: transform 0.2s ease;
-
-    &:hover {
-      transform: scale(1.02);
-    }
-
-    img, video {
-      width: 100%;
-      height: 100%;
-      display: block;
-      object-fit: cover;
-    }
-
-    &:hover::after {
-      content: '🔍';
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      font-size: 32px;
-      opacity: 0.9;
+      margin-left: 4px;
     }
   }
 
@@ -409,150 +410,21 @@
     position: absolute;
     bottom: 4px;
     left: 4px;
+    background: rgba(0, 168, 112, 0.85);
+    color: white;
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 9px;
     display: flex;
     align-items: center;
     gap: 2px;
-    padding: 2px 6px;
-    background: rgba(0, 168, 112, 0.9);
-    color: white;
-    border-radius: 4px;
-    font-size: 10px;
-    font-weight: 500;
+    z-index: 1;
 
-    svg {
-      width: 12px;
-      height: 12px;
-    }
-  }
-
-  &__actions {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    flex-shrink: 0;
-    justify-content: flex-start;
-
-    // 重试按钮样式 - 使用橙色，更醒目
-    .t-button--theme-primary.t-button--variant-outline {
-      background: #FFF7E6 !important;
-      border: 2px solid #F39C12 !important;
-      color: #E67E22 !important;
-      font-weight: 600;
-
-      &:hover {
-        background: linear-gradient(135deg, #F39C12 0%, #E67E22 100%) !important;
-        border-color: #E67E22 !important;
-        color: white !important;
-      }
-    }
-  }
-
-  &__action-btn--subtle {
-    color: var(--td-text-color-secondary, #757575) !important;
-    font-size: 13px !important;
-    padding: 2px 8px !important;
-    height: 24px !important;
-    opacity: 0.8;
-    
-    &:hover {
-      background: var(--td-bg-color-container, #ffffff) !important;
-      color: #F39C12 !important;
-      opacity: 1;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.05);
-    }
-  }
-
-  &__action-btn--delete {
-    color: var(--td-text-color-placeholder, #bbbbbb) !important;
-    font-size: 12px !important;
-    padding: 2px 8px !important;
-    height: 24px !important;
-    margin-top: 4px;
-    opacity: 0.6;
-
-    &:hover {
-      background: #FFF1F0 !important;
-      color: #E34D59 !important;
-      opacity: 1;
-    }
-  }
-
-  // Progress bar styles - horizontal layout, full width in its row
-  &__progress {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    gap: 8px;
-    width: 100%;
-    max-width: 400px; // Max width for readability
-  }
-
-  &__progress-label {
-    font-size: 12px;
-    color: var(--td-text-color-secondary, #757575);
-    font-weight: 500;
-    flex-shrink: 0;
-    white-space: nowrap;
-  }
-
-  &__progress-percent {
-    font-size: 12px;
-    color: var(--td-text-color-secondary, #757575);
-    font-weight: 500;
-    width: 36px; // Fixed width for percentage display
-    text-align: right;
-    flex-shrink: 0;
-    white-space: nowrap;
-  }
-
-  &__progress-bar {
-    flex: 1;
-    min-width: 100px;
-    height: 6px;
-    background: var(--td-bg-color-component, #e7e7e7);
-    border-radius: 3px;
-    overflow: hidden;
-    position: relative;
-  }
-
-  &__progress-fill {
-    height: 100%;
-    border-radius: 3px;
-    transition: width 0.3s ease, background-color 0.3s ease;
-
-    // Processing - blue/brand color
-    &--processing {
-      background: var(--td-brand-color, #0052d9);
-    }
-
-    // Completed - green
-    &--completed {
-      background: var(--td-success-color, #52c41a);
-    }
-
-    // Failed - red
-    &--failed {
-      background: var(--td-error-color, #ff4d4f);
-    }
-
-    // Pending/Queued - gray
-    &--pending {
-      background: var(--td-gray-color-6, #d9d9d9);
-    }
-
-    // Retrying - orange
-    &--retrying {
-      background: var(--td-warning-color, #faad14);
-    }
-
-    // Cancelled - gray (same as pending)
-    &--cancelled {
-      background: var(--td-gray-color-6, #d9d9d9);
-    }
+    svg { width: 10px; height: 10px; }
   }
 }
 
-// Responsive Design
+// Responsive Design for Panel
 @media (max-width: 1200px) {
   .task-queue-panel {
     width: 100%; // 移动端占满宽度
@@ -579,53 +451,6 @@
 
     &__content {
       padding: 12px 16px 24px 16px;
-    }
-  }
-
-  .task-item {
-    flex-direction: column;
-    padding: 12px;
-    gap: 12px;
-
-    &__header {
-      width: 100%;
-    }
-
-    &__meta {
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 6px;
-    }
-
-    &__meta-row {
-      flex-wrap: wrap;
-      gap: 6px;
-    }
-
-    &__progress {
-      width: 100%;
-      max-width: none;
-    }
-
-    &__preview {
-      width: 100%;
-      max-height: 200px;
-
-      img, video {
-        object-fit: contain;
-      }
-    }
-
-    &__actions {
-      flex-direction: row;
-      flex-wrap: wrap;
-      gap: 8px;
-      width: 100%;
-
-      button {
-        flex: 1;
-        min-width: calc(50% - 4px);
-      }
     }
   }
 }

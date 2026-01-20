@@ -1431,6 +1431,81 @@ const openDialog = (dialogType: DialogType) => {
 - 函数式更新 `setState(prev => ...)` 保证 `prev` 始终是最新状态
 - 这个问题在多个弹窗/抽屉同时打开时特别容易出现
 
+#### 使用 ResizeObserver 实现组件级别的响应式布局
+
+**场景**: 当组件位于可调整大小的侧边栏、抽屉或面板中时，使用基于视口宽度的媒体查询 (`@media`) 无法准确反映组件的实际可用空间。
+
+❌ **错误示例**:
+```scss
+// 仅依赖视口宽度的媒体查询
+@media (max-width: 1200px) {
+  .task-item {
+    grid-template-areas: "preview prompt" "info info";
+  }
+}
+```
+
+✅ **正确示例**:
+```typescript
+// TaskItem.tsx
+const [isCompactLayout, setIsCompactLayout] = useState(false);
+const containerRef = useRef<HTMLDivElement>(null);
+
+useEffect(() => {
+  const container = containerRef.current;
+  if (!container) return;
+
+  const resizeObserver = new ResizeObserver((entries) => {
+    for (const entry of entries) {
+      // 根据组件实际宽度切换布局
+      setIsCompactLayout(entry.contentRect.width < 500);
+    }
+  });
+
+  resizeObserver.observe(container);
+  return () => resizeObserver.disconnect();
+}, []);
+
+return (
+  <div ref={containerRef} className={classNames('task-item', { 'task-item--compact': isCompactLayout })}>
+    {/* ... */}
+  </div>
+);
+```
+
+**原因**: 本项目大量使用可拖拽调整宽度的抽屉（如任务队列、聊天侧栏）。组件的布局应取决于其父容器的宽度，而非整个浏览器的宽度。`ResizeObserver` 提供了精确的容器级别响应式控制。
+
+#### 避免在子组件中重写布局样式以保持 Grid 一致性
+
+**场景**: 当多个组件（如 `TaskQueuePanel` 和 `DialogTaskList`）复用同一个基础组件（如 `TaskItem`）时。
+
+❌ **错误示例**:
+```scss
+// dialog-task-list.scss
+.dialog-task-list {
+  .task-item {
+    // ❌ 错误：在外部强行修改基础组件的布局
+    display: flex; 
+    flex-direction: row;
+    // ... 大量覆盖样式
+  }
+}
+```
+
+✅ **正确示例**:
+```scss
+// dialog-task-list.scss
+.dialog-task-list {
+  .task-item {
+    // ✅ 正确：只调整尺寸和细节，复用基础组件自带的响应式布局
+    padding: 10px;
+    &__preview-wrapper { width: 100px; }
+  }
+}
+```
+
+**原因**: 基础组件（如 `TaskItem`）已经包含了完善的响应式 Grid 布局逻辑。在子组件容器中强行覆盖布局（如从 Grid 改为 Flex）会导致维护困难、布局不一致，并破坏基础组件原有的响应式能力。应优先通过微调尺寸或传递 Props 让基础组件自我调整。
+
 ### CSS/SCSS 规范
 - 使用 BEM 命名规范
 - 优先使用设计系统 CSS 变量
@@ -1589,6 +1664,9 @@ const handleTouchEnd = () => {
 ### 重要规则
 - **UI 框架**: 使用 TDesign React，配置浅色主题
 - **Tooltips**: 始终使用 `theme='light'`
+- **品牌色一致性**: 覆盖第三方组件（如 TDesign Tag）的默认颜色以符合 AITU 品牌视觉
+  - **示例**: 处理中状态使用蓝紫色系 (`#5A4FCF`)
+  - **CSS**: `.t-tag--theme-primary { background-color: rgba(90, 79, 207, 0.08); color: #5A4FCF; }`
 - **文件大小限制**: 单个文件不超过 500 行
 - **文档语言**: 规格文档使用中文
 
