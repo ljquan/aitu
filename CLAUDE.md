@@ -2867,6 +2867,56 @@ const CDN_CONFIG = {
 - 短超时后快速回退到服务器，保证首次加载速度
 - 用户请求会触发 CDN 缓存，后续访问自动加速
 
+### Service Worker 静态资源回退应尝试所有版本缓存
+
+**场景**: 用户使用旧版本 HTML，但服务器已部署新版本删除了旧静态资源
+
+❌ **错误示例**:
+```typescript
+// 错误：只尝试当前版本缓存，服务器 404 时直接返回错误
+const cachedResponse = await cache.match(request);
+if (cachedResponse) {
+  return cachedResponse;
+}
+
+const response = await fetch(request);
+if (!response.ok) {
+  return new Response('Not found', { status: 404 });
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：服务器返回 4xx/5xx 或 HTML 回退时，尝试所有版本缓存
+const response = await fetch(request);
+
+// 检测服务器返回 HTML 错误页面（SPA 404 回退）
+const contentType = response.headers.get('Content-Type');
+const isHtmlFallback = response.ok && contentType?.includes('text/html') && 
+  request.destination === 'script';
+
+// 服务器错误或 HTML 回退时，尝试旧版本缓存
+if (response.status >= 400 || isHtmlFallback) {
+  const allCacheNames = await caches.keys();
+  for (const cacheName of allCacheNames) {
+    if (cacheName.startsWith('drawnix-static-v')) {
+      const oldCache = await caches.open(cacheName);
+      const oldResponse = await oldCache.match(request);
+      if (oldResponse) {
+        console.log(`Found resource in ${cacheName}`);
+        return oldResponse;
+      }
+    }
+  }
+}
+```
+
+**原因**:
+- 用户可能缓存了旧版本 HTML，但新部署删除了旧静态资源
+- 旧 HTML 请求旧资源，服务器返回 404 或 HTML 错误页面
+- 尝试旧版本缓存可以找到用户需要的资源，避免白屏
+- 这是 PWA 的重要容错机制，确保版本升级平滑过渡
+
 ### 图像处理工具复用规范
 
 **场景**: 需要对图片进行边框检测、去白边、裁剪等处理时
@@ -3733,7 +3783,10 @@ const isNetworkError = (task: Task): boolean => {
     errorMsg.includes('prohibited') ||
     errorMsg.includes('content policy')
   );
-  if (isBusinessFailure) return false;
+  if (isBusinessFailure) {
+    // 429 限流属于可恢复的临时业务错误
+    return errorMsg.includes('429') || errorMsg.includes('too many requests');
+  }
   
   // 只有网络错误才恢复
   return (
@@ -3759,11 +3812,77 @@ const failedVideoTasks = storedTasks.filter(task =>
 
 ---
 
+#### 错误 3: 计费任务重试时重复调用生成接口
+
+**场景**: 视频生成、角色提取等长耗时且按次计费的异步任务。
+
+❌ **错误示例**:
+```typescript
+// 错误：无论是否已有 remoteId，重试都重新提交生成请求
+async retryTask(task) {
+  task.status = 'pending';
+  // 重新进入流程，导致重新调用 POST /videos
+  this.processQueue(); 
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：如果已有 remoteId，直接进入轮询阶段，跳过提交
+async executeTask(task) {
+  if (task.remoteId && (task.type === 'video' || task.type === 'character')) {
+    task.executionPhase = 'polling';
+    return this.executeResume(task, task.remoteId);
+  }
+  // 正常提交逻辑...
+}
+```
+
+**原因**: AI 厂商的生成接口通常较贵。一旦任务 ID (`remoteId`) 已成功返回，该任务就在云端排队生成。此时任何重试或恢复操作都应仅限于查询进度，严禁再次点击生成接口导致重复扣费和资源浪费。
+
+---
+
+#### 错误 4: 异步任务 ID 找回逻辑不完整
+
+**场景**: 任务提交成功但在 `remoteId` 保存到数据库前发生页面刷新或 Service Worker 重启。
+
+❌ **错误示例**:
+```typescript
+// 错误：仅检查已完成的任务结果
+async resumeTask(task) {
+  if (!task.remoteId) {
+    // 如果还没完成，就直接报错提示无法恢复
+    const successLog = await findSuccessLog(task.id);
+    if (!successLog) throw new Error('无法恢复');
+  }
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：通过 API 日志系统尝试找回丢失的任务 ID（哪怕任务还没完成）
+async resumeTask(task) {
+  if (!task.remoteId) {
+    // 从日志中找回 remoteId 或解析响应体
+    const latestLog = await findLatestLogByTaskId(task.id);
+    const recoveredId = latestLog?.remoteId || parseIdFromBody(latestLog?.responseBody);
+    if (recoveredId) {
+      task.remoteId = recoveredId;
+      return this.resumePolling(task); // 继续轮询进度
+    }
+  }
+}
+```
+
+**原因**: 状态更新的持久化可能因崩溃而丢失。利用独立的日志系统记录每一次 API 响应，可以在主状态丢失时找回关键的任务 ID，实现任务进度的无缝衔接。
+
+---
+
 #### 任务恢复决策表
 
 | 任务类型 | 错误类型 | 是否自动恢复 | 原因 |
 |---------|---------|-------------|------|
-| 视频/角色 | 网络错误 | ✅ 是 | 查询状态不扣费 |
+| 视频/角色 | 网络/限流错误 | ✅ 是 | 查询状态不扣费 |
 | 视频/角色 | 业务失败 | ❌ 否 | 重试也不会成功 |
 | 图片 | 任何错误 | ❌ 否 | 每次调用都扣费 |
 
