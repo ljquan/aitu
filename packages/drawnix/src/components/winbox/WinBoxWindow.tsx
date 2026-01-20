@@ -200,61 +200,51 @@ export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
     return sides;
   }, []);
 
-  const handleSplit = useCallback(() => {
-    const wb = winboxRef.current;
-    // 安全检查：确保 WinBox 实例和其 DOM 元素都存在
+  // 恢复居中显示
+  const restoreCenter = useCallback((wb: any) => {
     if (!wb || !wb.window) return;
-
+    
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
-    const occupied = getOccupiedSides();
-
-    let targetSide: 'left' | 'right';
-
-    // 逻辑：如果已经分屏，切换到另一边
-    if (splitSide === 'left') targetSide = 'right';
-    else if (splitSide === 'right') targetSide = 'left';
-    else {
-      // 第一次分屏逻辑
-      const centerX = wb.x + wb.width / 2;
-      const screenMid = viewportWidth / 2;
-
-      if (occupied.left && !occupied.right) {
-        targetSide = 'right';
-      } else if (!occupied.left && occupied.right) {
-        targetSide = 'left';
-      } else {
-        // 根据位置判断：靠近哪边去哪边，中间默认去右边
-        if (centerX < screenMid) {
-          targetSide = 'left';
-        } else {
-          targetSide = 'right';
-        }
-      }
-    }
-
-    // 保存原始 minWidth，并临时设置为较小的值以允许半屏
-    if (originalMinWidthRef.current === null) {
-      originalMinWidthRef.current = wb.minwidth;
+    
+    // 恢复原始 minWidth
+    if (originalMinWidthRef.current !== null) {
+      wb.minwidth = originalMinWidthRef.current;
+      originalMinWidthRef.current = null;
     }
     
-    const halfWidth = Math.floor(viewportWidth / 2);
+    // 重置边界
+    wb.left = 0;
+    wb.right = 0;
+    wb.top = 0;
+    wb.bottom = 0;
     
-    // 分屏时强制设置 minwidth 为一个足够小的值，确保可以缩小到半屏
-    wb.minwidth = Math.min(200, halfWidth);
-
-    // 执行分屏：先重置最大化状态
-    if (wb.max) {
-      wb.restore();
-      // restore 后需要等待一帧让 WinBox 完成状态更新
-      requestAnimationFrame(() => {
-        if (!wb || !wb.window) return;
-        performSplit(wb, targetSide, halfWidth, viewportWidth, viewportHeight);
-      });
+    // 计算居中位置和尺寸（使用初始设置的 80% 或更合理的尺寸）
+    let targetWidth: number;
+    let targetHeight: number;
+    
+    if (typeof width === 'string' && width.endsWith('%')) {
+      targetWidth = Math.floor(viewportWidth * parseInt(width) / 100);
     } else {
-      performSplit(wb, targetSide, halfWidth, viewportWidth, viewportHeight);
+      targetWidth = typeof width === 'number' ? width : Math.floor(viewportWidth * 0.8);
     }
-  }, [getOccupiedSides, splitSide, setSplitSide]);
+    
+    if (typeof height === 'string' && height.endsWith('%')) {
+      targetHeight = Math.floor(viewportHeight * parseInt(height) / 100);
+    } else {
+      targetHeight = typeof height === 'number' ? height : Math.floor(viewportHeight * 0.8);
+    }
+    
+    // 确保尺寸不超过最小宽高
+    targetWidth = Math.max(targetWidth, minWidth);
+    targetHeight = Math.max(targetHeight, minHeight);
+    
+    const centerX = Math.floor((viewportWidth - targetWidth) / 2);
+    const centerY = Math.floor((viewportHeight - targetHeight) / 2);
+    
+    wb.resize(targetWidth, targetHeight).move(centerX, centerY);
+    setSplitSide(null);
+  }, [width, height, minWidth, minHeight, setSplitSide]);
 
   // 执行实际的分屏操作
   const performSplit = useCallback((wb: any, targetSide: 'left' | 'right', halfWidth: number, viewportWidth: number, viewportHeight: number) => {
@@ -275,6 +265,100 @@ export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
       setSplitSide('right');
     }
   }, [setSplitSide]);
+
+  const handleSplit = useCallback(() => {
+    const wb = winboxRef.current;
+    // 使用 ref 获取最新的分屏状态，避免闭包捕获旧值
+    const currentSplitSide = splitSideRef.current;
+    console.log('[WinBox Split] handleSplit called, currentSplitSide:', currentSplitSide);
+    
+    // 安全检查：确保 WinBox 实例和其 DOM 元素都存在
+    if (!wb || !wb.window) {
+      console.log('[WinBox Split] wb or wb.window is null, returning');
+      return;
+    }
+
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const occupied = getOccupiedSides();
+    const halfWidth = Math.floor(viewportWidth / 2);
+    
+    console.log('[WinBox Split] occupied:', occupied, 'viewportWidth:', viewportWidth);
+
+    // 辅助函数：执行分屏到指定方向
+    const doSplit = (targetSide: 'left' | 'right') => {
+      console.log('[WinBox Split] doSplit called, targetSide:', targetSide);
+      // 保存原始 minWidth，并临时设置为较小的值以允许半屏
+      if (originalMinWidthRef.current === null) {
+        originalMinWidthRef.current = wb.minwidth;
+      }
+      
+      // 分屏时强制设置 minwidth 为一个足够小的值，确保可以缩小到半屏
+      wb.minwidth = Math.min(200, halfWidth);
+
+      // 执行分屏：先重置最大化状态
+      if (wb.max) {
+        wb.restore();
+        requestAnimationFrame(() => {
+          if (!wb || !wb.window) return;
+          performSplit(wb, targetSide, halfWidth, viewportWidth, viewportHeight);
+        });
+      } else {
+        performSplit(wb, targetSide, halfWidth, viewportWidth, viewportHeight);
+      }
+    };
+
+    // 辅助函数：恢复居中
+    const doRestoreCenter = () => {
+      console.log('[WinBox Split] doRestoreCenter called');
+      if (wb.max) {
+        wb.restore();
+        requestAnimationFrame(() => {
+          if (!wb || !wb.window) return;
+          restoreCenter(wb);
+        });
+      } else {
+        restoreCenter(wb);
+      }
+    };
+
+    // 新逻辑：
+    // 1. 没有分屏 -> 优先贴右半屏，如果右边被占用则贴左半屏
+    // 2. 在右半屏 -> 如果左边没被占用则贴左半屏，否则恢复居中
+    // 3. 在左半屏 -> 恢复居中
+    
+    if (currentSplitSide === 'left') {
+      console.log('[WinBox Split] currentSplitSide is left, restoring center');
+      // 在左半屏，恢复居中
+      doRestoreCenter();
+      return;
+    }
+    
+    if (currentSplitSide === 'right') {
+      console.log('[WinBox Split] currentSplitSide is right, occupied.left:', occupied.left);
+      // 在右半屏
+      if (occupied.left) {
+        // 左边有其他窗口，恢复居中
+        console.log('[WinBox Split] left is occupied, restoring center');
+        doRestoreCenter();
+      } else {
+        // 左边没有窗口，贴左半屏
+        console.log('[WinBox Split] left is free, splitting to left');
+        doSplit('left');
+      }
+      return;
+    }
+    
+    console.log('[WinBox Split] no split side, checking occupied');
+    // 没有分屏：优先贴右半屏，如果右边被占用则贴左半屏
+    if (occupied.right && !occupied.left) {
+      console.log('[WinBox Split] right is occupied, splitting to left');
+      doSplit('left');
+    } else {
+      console.log('[WinBox Split] splitting to right');
+      doSplit('right');
+    }
+  }, [getOccupiedSides, restoreCenter, performSplit]);
 
   // 应用 viewport scale 以确保缩放时窗口位置和大小不变
   // 注意：分屏或最大化时禁用缩放补偿，防止超出屏幕
