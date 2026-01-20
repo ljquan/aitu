@@ -1,3 +1,26 @@
+## 0.5.26 (2026-01-20)
+
+### 🚀 Features
+
+- add reference image handling in LLM API logs and enhance task recovery mechanisms ([c94b032](https://github.com/ljquan/aitu/commit/c94b032))
+- implement model dropdown component with search functionality and update AI input bar to use # for model selection ([6aa6267](https://github.com/ljquan/aitu/commit/6aa6267))
+- enhance performance panel with image count tracking and updated memory thresholds ([5ec5172](https://github.com/ljquan/aitu/commit/5ec5172))
+
+### 🔧 Chores
+
+- enhance CDN response validation and update version to 0.5.25 ([155ec00](https://github.com/ljquan/aitu/commit/155ec00))
+- bump version to 0.5.25 ([8bd7f30](https://github.com/ljquan/aitu/commit/8bd7f30))
+- bump version to 0.5.22 ([5571d3f](https://github.com/ljquan/aitu/commit/5571d3f))
+- bump version to 0.5.21 ([55ad29c](https://github.com/ljquan/aitu/commit/55ad29c))
+- bump version to 0.5.20 ([8bfc191](https://github.com/ljquan/aitu/commit/8bfc191))
+- bump version to 0.5.19 ([8707a5b](https://github.com/ljquan/aitu/commit/8707a5b))
+- bump version to 0.5.18 ([88c0dfd](https://github.com/ljquan/aitu/commit/88c0dfd))
+- bump version to 0.5.17 ([91799c9](https://github.com/ljquan/aitu/commit/91799c9))
+
+### ❤️  Thank You
+
+- liquidliang <ljquan@qq.com>
+
 ## 0.5.23 (2026-01-20)
 
 ### 🚀 Features
