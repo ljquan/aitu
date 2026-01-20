@@ -1,16 +1,16 @@
 /**
  * Media Library Modal
- * 素材库弹窗容器组件
+ * 素材库弹窗容器组件 - 使用 WinBox 窗口
  */
 
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { Dialog, MessagePlugin, Drawer } from 'tdesign-react';
-import { Grid } from 'lucide-react';
-import { ATTACHED_ELEMENT_CLASS_NAME } from '@plait/core';
+import { MessagePlugin, Drawer } from 'tdesign-react';
+import { Images } from 'lucide-react';
 import { useAssets } from '../../contexts/AssetContext';
 import { MediaLibraryGrid } from './MediaLibraryGrid';
 import { MediaLibrarySidebar } from './MediaLibrarySidebar';
 import { MediaLibraryInspector } from './MediaLibraryInspector';
+import { WinBoxWindow } from '../winbox/WinBoxWindow';
 import type {
   MediaLibraryModalProps,
   Asset,
@@ -257,77 +257,80 @@ export function MediaLibraryModal({
   }, [board, removeAsset, assets]);
 
   return (
-    <Dialog
-      visible={isOpen}
-      onClose={onClose}
-      header={
-        <div className="media-library-modal__header">
-          <div className="media-library-modal__header-title">
-            <div className="media-library-modal__header-title-icon">
-              <Grid size={16} />
-            </div>
-            <span>素材库</span>
+    <>
+      <WinBoxWindow
+        visible={isOpen}
+        title="素材库"
+        onClose={onClose}
+        width="85%"
+        height="85%"
+        minWidth={800}
+        minHeight={500}
+        x="center"
+        y="center"
+        maximizable={true}
+        minimizable={false}
+        resizable={true}
+        movable={true}
+        modal={false}
+        className="winbox-media-library"
+        headerContent={
+          <div className="media-library-header-content">
+            <Images size={18} />
           </div>
-        </div>
-      }
-      width="80vw"
-      attach="body"
-      placement="center"
-      destroyOnClose
-      zIndex={5200}
-      className={`media-library-modal ${ATTACHED_ELEMENT_CLASS_NAME}`}
-      footer={null}
-    >
-      {/* 隐藏的文件输入 */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*,video/*"
-        multiple
-        style={{ display: 'none' }}
-        onChange={handleFileInputChange}
-      />
+        }
+      >
+        {/* 隐藏的文件输入 */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*,video/*"
+          multiple
+          style={{ display: 'none' }}
+          onChange={handleFileInputChange}
+        />
 
-      <div className="media-library-layout">
-        {/* 左侧筛选侧边栏 */}
-        <div className="media-library-layout__sidebar">
-          <MediaLibrarySidebar
-            filters={filters}
-            assetCount={assets.length}
-            storageStatus={storageStatus}
-            onFilterChange={setFilters}
-          />
-        </div>
-
-        {/* 中间网格区域 */}
-        <div className="media-library-layout__main">
-          <MediaLibraryGrid
-            filterType={filterType}
-            selectedAssetId={localSelectedAssetId}
-            onSelectAsset={handleSelectAsset}
-            onDoubleClick={handleDoubleClick}
-            onFileUpload={handleFileUpload}
-            onUploadClick={handleUploadClick}
-          />
-        </div>
-
-        {/* 右侧详情面板 - 仅桌面端显示 */}
-        {!isMobile && (
-          <div className="media-library-layout__inspector">
-            <MediaLibraryInspector
-              asset={selectedAsset}
-              onRename={renameAsset}
-              onDelete={handleRemoveAsset}
-              onDownload={(asset) => {
-                downloadFile(asset.url, asset.name);
-              }}
-              onSelect={showSelectButton ? handleUseAsset : undefined}
-              showSelectButton={showSelectButton}
-              selectButtonText={selectButtonText}
+        <div className="media-library-layout">
+          {/* 左侧筛选侧边栏 */}
+          <div className="media-library-layout__sidebar">
+            <MediaLibrarySidebar
+              filters={filters}
+              assetCount={assets.length}
+              storageStatus={storageStatus}
+              onFilterChange={setFilters}
             />
           </div>
-        )}
-      </div>
+
+          {/* 中间网格区域 */}
+          <div className="media-library-layout__main">
+            <MediaLibraryGrid
+              filterType={filterType}
+              selectedAssetId={localSelectedAssetId}
+              onSelectAsset={handleSelectAsset}
+              onDoubleClick={handleDoubleClick}
+              onFileUpload={handleFileUpload}
+              onUploadClick={handleUploadClick}
+            />
+          </div>
+
+          {/* 右侧详情面板 - 仅桌面端显示 */}
+          {!isMobile && (
+            <div className="media-library-layout__inspector">
+              <MediaLibraryInspector
+                asset={selectedAsset}
+                onRename={renameAsset}
+                onDelete={handleRemoveAsset}
+                onDownload={(asset) => {
+                  downloadFile(asset.url, asset.name);
+                }}
+                onSelect={showSelectButton ? handleUseAsset : undefined}
+                showSelectButton={showSelectButton}
+                selectButtonText={selectButtonText}
+              />
+            </div>
+          )}
+        </div>
+      </WinBoxWindow>
 
       {/* 移动端详情抽屉 */}
       {isMobile && (
@@ -353,6 +356,6 @@ export function MediaLibraryModal({
           />
         </Drawer>
       )}
-    </Dialog>
+    </>
   );
 }

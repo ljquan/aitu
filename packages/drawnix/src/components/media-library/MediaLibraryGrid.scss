@@ -1,14 +1,24 @@
 /**
  * Media Library Grid Styles
- * 素材库网格视图样式 - Tailwind-inspired design
+ * 素材库网格视图样式 - 简洁素雅风格
  */
+
+// ========================================
+// 品牌色变量（仅用于强调）
+// ========================================
+$brand-orange: #F39C12;
+$brand-orange-light: #FBBF24;
+$brand-orange-dark: #E67E22;
 
 .media-library-grid {
   display: flex;
   flex-direction: column;
+  flex: 1;
   height: 100%;
+  min-height: 0; // 重要：允许 flex 子元素收缩
   overflow: hidden;
   position: relative;
+  background: #ffffff;
 
   &--dragging {
     .media-library-grid__container {
@@ -16,50 +26,57 @@
     }
   }
 
+  // ========== 拖放遮罩 ==========
   &__drop-overlay {
     position: absolute;
     inset: 16px;
-    background: rgba(99, 102, 241, 0.05);
-    border: 4px dashed #6366f1;
-    border-radius: 16px;
+    background: rgba($brand-orange, 0.05);
+    border: 4px dashed $brand-orange;
+    border-radius: 20px;
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 100;
     pointer-events: none;
+    backdrop-filter: blur(4px);
   }
 
   &__drop-message {
-    padding: 40px 64px;
+    padding: 48px 72px;
     background: white;
-    border-radius: 16px;
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-    border: 1px solid #e0e7ff;
+    border-radius: 20px;
+    box-shadow: 
+      0 25px 50px -12px rgba(0, 0, 0, 0.15),
+      0 0 0 1px rgba($brand-orange, 0.1);
+    border: none;
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 16px;
 
     &-icon {
-      width: 64px;
-      height: 64px;
-      background: #eef2ff;
+      width: 72px;
+      height: 72px;
+      background: rgba($brand-orange, 0.06);
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      color: #6366f1;
+      color: $brand-orange;
+      box-shadow: 0 8px 24px -8px rgba($brand-orange, 0.3);
     }
 
     &-title {
-      font-size: 20px;
+      font-size: 22px;
       font-weight: 700;
-      color: #111827;
+      color: #1e293b;
+      margin: 0;
     }
 
     &-description {
       font-size: 14px;
-      color: #6b7280;
+      color: #64748b;
+      margin: 0;
     }
   }
 
@@ -68,13 +85,14 @@
     align-items: center;
     justify-content: center;
     height: 100%;
+    background: #f8fafc;
   }
 
-  // 骨架屏遮盖层 - 视图切换时显示
+  // ========== 骨架屏遮盖层 ==========
   &__skeleton-overlay {
     position: absolute;
     inset: 0;
-    background: #fafbfc;
+    background: #f8fafc;
     z-index: 10;
     display: flex;
     flex-wrap: wrap;
@@ -93,48 +111,122 @@
     }
   }
 
+  // ========== 头部工具栏 ==========
   &__header {
-    padding: 12px 20px;
-    border-bottom: 1px solid #e5e7eb;
-    background: white;
+    padding: 14px 20px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    background: linear-gradient(180deg, #ffffff 0%, #fafbfc 100%);
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
+    gap: 16px;
   }
 
   &__header-actions {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 14px;
   }
 
   &__search {
     flex: 1;
-    max-width: 350px;
+    max-width: 380px;
+
+    .t-input {
+      border-radius: 10px;
+      border-color: rgba(0, 0, 0, 0.08);
+      background: #f8fafc;
+      transition: all 0.2s ease;
+
+      &:hover {
+        border-color: rgba($brand-orange, 0.3);
+        background: #ffffff;
+      }
+
+      &:focus,
+      &.t-is-focused {
+        border-color: $brand-orange;
+        background: #ffffff;
+        box-shadow: 0 0 0 3px rgba($brand-orange, 0.12);
+      }
+    }
   }
 
   &__count {
     font-size: 13px;
     font-weight: 500;
-    color: #6b7280;
+    color: #64748b;
     white-space: nowrap;
   }
 
   &__selection-count {
     font-size: 13px;
-    font-weight: 600;
-    color: #6366f1;
+    font-weight: 700;
+    color: $brand-orange;
     white-space: nowrap;
+    padding: 4px 10px;
+    background: rgba($brand-orange, 0.1);
+    border-radius: 6px;
   }
 
+  // ========== 按钮样式覆盖 ==========
+  .t-button--theme-primary {
+    background: $brand-orange !important;
+    border: none !important;
+    border-radius: 8px !important;
+    font-weight: 600;
+    box-shadow: none;
+    transition: all 0.2s ease;
+
+    &:hover {
+      background: $brand-orange-dark !important;
+    }
+  }
+
+  .t-button--variant-outline {
+    border-radius: 10px !important;
+    font-weight: 500;
+    border-color: rgba(0, 0, 0, 0.1);
+    color: #475569;
+    transition: all 0.2s ease;
+
+    &:hover {
+      border-color: rgba($brand-orange, 0.3);
+      color: $brand-orange;
+      background: rgba($brand-orange, 0.04);
+    }
+  }
+
+  .t-button--theme-danger {
+    border-radius: 8px !important;
+
+    &.t-button--variant-base {
+      background: #dc3545 !important;
+      border: none !important;
+      box-shadow: none;
+      
+      &:hover {
+        background: #c82333 !important;
+      }
+    }
+  }
+
+  // ========== 内容容器 ==========
   &__container {
     flex: 1;
-    overflow: hidden;
-    background: #fafbfc;
+    min-height: 0; // 重要：允许 flex 子元素收缩
+    overflow: auto; // 改为 auto 允许滚动
+    background: #f8fafc;
     position: relative;
+    display: flex;
+    flex-direction: column;
 
-    // 过渡状态 - 内容淡出
+    // 确保虚拟网格填满容器
+    .virtual-asset-grid {
+      flex: 1;
+      min-height: 0;
+    }
+
     &--transitioning {
       .virtual-asset-grid {
         opacity: 0.3;
@@ -143,29 +235,38 @@
     }
   }
 
-
+  // ========== 底部状态栏 ==========
   &__footer {
-    height: 36px;
-    border-top: 1px solid #e5e7eb;
-    background: white;
+    height: 40px;
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+    background: linear-gradient(180deg, #fafbfc 0%, #ffffff 100%);
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 0 20px;
     font-size: 12px;
     font-weight: 500;
-    color: #6b7280;
+    color: #64748b;
 
     &-hint {
-      color: #6366f1;
+      color: $brand-orange;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+
+      &::before {
+        content: '⚡';
+        font-size: 11px;
+      }
     }
   }
 
-  // 移动端优化
+  // ========== 移动端优化 ==========
   @media (max-width: 768px) {
     &__header {
-      padding: 10px 12px;
-      gap: 8px;
+      padding: 12px 14px;
+      gap: 10px;
       flex-wrap: wrap;
     }
 
@@ -188,17 +289,18 @@
     }
 
     &__footer {
-      padding: 0 12px;
+      padding: 0 14px;
       font-size: 11px;
-      height: 32px;
+      height: 36px;
     }
 
     &__drop-message {
-      padding: 32px 48px;
+      padding: 36px 48px;
+      border-radius: 16px;
 
       &-icon {
-        width: 56px;
-        height: 56px;
+        width: 60px;
+        height: 60px;
       }
 
       &-title {
@@ -213,15 +315,16 @@
 
   @media (max-width: 480px) {
     &__header {
-      padding: 8px 10px;
+      padding: 10px 12px;
     }
 
     &__drop-message {
-      padding: 24px 32px;
+      padding: 28px 36px;
+      border-radius: 14px;
 
       &-icon {
-        width: 48px;
-        height: 48px;
+        width: 52px;
+        height: 52px;
       }
 
       &-title {
@@ -235,7 +338,7 @@
   }
 }
 
-// 空状态样式
+// ========== 空状态 ==========
 .media-library-empty {
   display: flex;
   flex-direction: column;
@@ -244,30 +347,34 @@
   height: 100%;
   padding: 48px 24px;
   text-align: center;
+  background: #f8fafc;
 
   &__icon {
-    width: 80px;
-    height: 80px;
-    background: #f3f4f6;
+    width: 88px;
+    height: 88px;
+    background: white;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #d1d5db;
-    margin-bottom: 24px;
+    color: #cbd5e1;
+    margin-bottom: 28px;
+    box-shadow: 
+      0 8px 24px -8px rgba(0, 0, 0, 0.08),
+      0 0 0 1px rgba(0, 0, 0, 0.04);
   }
 
   &__title {
-    font-size: 18px;
+    font-size: 20px;
     font-weight: 700;
-    color: #111827;
-    margin-bottom: 8px;
+    color: #1e293b;
+    margin-bottom: 10px;
   }
 
   &__description {
     font-size: 14px;
-    color: #6b7280;
+    color: #64748b;
     max-width: 400px;
-    line-height: 1.5;
+    line-height: 1.6;
   }
 }

@@ -625,8 +625,9 @@ button .icon-svg {
 
 .log-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 6px;
+  flex-wrap: wrap;
 }
 
 .log-time {
@@ -642,8 +643,9 @@ button .icon-svg {
   border-radius: 3px;
   font-size: 10px;
   font-weight: 600;
-  background: var(--primary-color);
-  color: #fff;
+  background: var(--primary-light);
+  color: var(--primary-color);
+  border: 1px solid var(--primary-color);
   letter-spacing: 0.02em;
 }
 
@@ -652,26 +654,31 @@ button .icon-svg {
   border-radius: 3px;
   font-size: 10px;
   font-weight: 600;
+  border: 1px solid;
 }
 
 .log-status.success {
   background: var(--success-light);
   color: var(--success-color);
+  border-color: var(--success-color);
 }
 
 .log-status.redirect {
   background: var(--warning-light);
   color: var(--warning-color);
+  border-color: var(--warning-color);
 }
 
 .log-status.error {
   background: var(--error-light);
   color: var(--error-color);
+  border-color: var(--error-color);
 }
 
 .log-status.network-error {
   background: var(--error-light);
   color: var(--error-color);
+  border-color: var(--error-color);
   font-size: 9px;
   padding: 2px 5px;
   max-width: 120px;
@@ -682,36 +689,40 @@ button .icon-svg {
 }
 
 .log-status.pending {
-  background: rgba(139, 92, 246, 0.15);
-  color: #8b5cf6;
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
+  border-color: var(--border-color);
   font-style: italic;
 }
 
+/* 统一的类型标签样式 */
 .log-type-badge {
   padding: 1px 6px;
   border-radius: 3px;
   font-size: 10px;
-  background: var(--bg-primary);
+  font-weight: 500;
+  background: var(--bg-tertiary);
   color: var(--text-secondary);
   border: 1px solid var(--border-color);
+  white-space: nowrap;
 }
 
 .log-type-badge.xhr {
-  background: var(--accent-color);
-  color: #fff;
-  border: none;
+  background: var(--primary-light);
+  color: var(--primary-color);
+  border-color: var(--primary-color);
 }
 
 .log-type-badge.sw-internal {
-  background: #8250df;
-  color: #fff;
-  border: none;
+  background: rgba(90, 79, 207, 0.1);
+  color: var(--info-color);
+  border-color: var(--info-color);
 }
 
 .log-type-badge.passthrough {
-  background: var(--text-muted);
-  color: #fff;
-  border: none;
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
+  border-color: var(--border-color);
 }
 
 .log-purpose {
@@ -722,13 +733,13 @@ button .icon-svg {
 
 .log-url {
   flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-width: 0;
   color: var(--text-secondary);
   font-family: 'SF Mono', Monaco, Consolas, monospace;
   font-size: 11px;
   transition: color 0.1s ease;
+  word-break: break-word;
+  line-height: 1.4;
 }
 
 .log-entry:hover .log-url {
@@ -751,15 +762,17 @@ button .icon-svg {
   font-weight: 600;
   background: var(--success-light);
   color: var(--success-color);
+  border: 1px solid var(--success-color);
 }
 
 .log-streaming {
   padding: 1px 4px;
   border-radius: 3px;
   font-size: 9px;
-  background: rgba(139, 92, 246, 0.15);
-  color: #8b5cf6;
   font-weight: 600;
+  background: rgba(90, 79, 207, 0.1);
+  color: var(--info-color);
+  border: 1px solid var(--info-color);
 }
 
 /* Log Toggle */
@@ -966,22 +979,15 @@ button .icon-svg {
   background: repeating-conic-gradient(#f0f0f0 0% 25%, #fff 0% 50%) 50% / 16px 16px;
 }
 
-/* Console Entry */
-.console-entry {
-  padding: 8px 16px;
-  border-bottom: 1px solid var(--border-color);
-  font-family: 'SF Mono', Monaco, Consolas, monospace;
-  font-size: 12px;
-}
-
+/* Console Entry - 继承 log-entry 样式，添加左侧边框指示日志级别 */
 .console-entry.warn {
-  background: rgba(210, 153, 34, 0.1);
   border-left: 3px solid var(--warning-color);
+  background: var(--warning-light);
 }
 
 .console-entry.error {
-  background: rgba(248, 81, 73, 0.1);
   border-left: 3px solid var(--error-color);
+  background: var(--error-light);
 }
 
 .console-entry.info {
@@ -993,54 +999,8 @@ button .icon-svg {
 }
 
 .console-entry.debug {
-  border-left: 3px solid #8250df;
-  background: rgba(130, 80, 223, 0.05);
-}
-
-.console-header {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-}
-
-.console-level {
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  flex-shrink: 0;
-}
-
-.console-level.warn {
-  background: var(--warning-color);
-  color: #fff;
-}
-
-.console-level.error {
-  background: var(--error-color);
-  color: #fff;
-}
-
-.console-level.info {
-  background: var(--info-color);
-  color: #fff;
-}
-
-.console-level.log {
-  background: var(--text-muted);
-  color: #fff;
-}
-
-.console-level.debug {
-  background: #8250df;
-  color: #fff;
-}
-
-.console-message {
-  flex: 1;
-  white-space: pre-wrap;
-  word-break: break-all;
+  border-left: 3px solid var(--info-color);
+  background: rgba(90, 79, 207, 0.05);
 }
 
 .console-source {
@@ -1262,9 +1222,10 @@ button .icon-svg {
 
 .pm-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 6px;
   cursor: pointer;
+  flex-wrap: wrap;
 }
 
 /* 复用 .log-toggle 样式 */
@@ -1317,16 +1278,19 @@ button .icon-svg {
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.02em;
+  border: 1px solid;
 }
 
 .pm-direction.send {
-  background: var(--primary-color);
-  color: #fff;
+  background: var(--primary-light);
+  color: var(--primary-color);
+  border-color: var(--primary-color);
 }
 
 .pm-direction.receive {
-  background: var(--success-color);
-  color: #fff;
+  background: var(--success-light);
+  color: var(--success-color);
+  border-color: var(--success-color);
 }
 
 .pm-direction-icon {
@@ -1346,14 +1310,12 @@ button .icon-svg {
 
 .pm-preview {
   flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--text-secondary);
+  min-width: 0;
+  color: var(--text-muted);
   font-family: 'SF Mono', Monaco, Consolas, monospace;
   font-size: 11px;
-  color: var(--text-muted);
-  font-size: 11px;
+  word-break: break-word;
+  line-height: 1.4;
 }
 
 .pm-details {
@@ -1589,32 +1551,22 @@ button .icon-svg {
   /* 继承 .log-entry 的基础样式，不需要额外边框 */
 }
 
-.memory-entry .log-type-badge {
-  padding: 2px 6px;
-  border-radius: 3px;
-  font-size: 10px;
-  font-weight: 600;
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
-  border: 1px solid var(--border-color);
-  white-space: nowrap;
-}
-
 .memory-entry .log-type-badge.error {
   background: var(--error-light);
   color: var(--error-color);
-  border-color: transparent;
+  border-color: var(--error-color);
 }
 
 .memory-entry .log-type-badge.warning {
   background: var(--warning-light);
   color: var(--warning-color);
-  border-color: transparent;
+  border-color: var(--warning-color);
 }
 
 .memory-entry .log-type-badge.normal {
   background: var(--bg-tertiary);
   color: var(--text-secondary);
+  border-color: var(--border-color);
 }
 
 /* 内存使用徽章 */
@@ -1624,21 +1576,25 @@ button .icon-svg {
   font-size: 10px;
   font-weight: 600;
   font-family: 'SF Mono', Monaco, Consolas, monospace;
+  border: 1px solid;
 }
 
 .log-memory-badge.normal {
   background: var(--success-light);
   color: var(--success-color);
+  border-color: var(--success-color);
 }
 
 .log-memory-badge.warning {
   background: var(--warning-light);
   color: var(--warning-color);
+  border-color: var(--warning-color);
 }
 
 .log-memory-badge.critical {
   background: var(--error-light);
   color: var(--error-color);
+  border-color: var(--error-color);
 }
 
 /* 内存日志行内信息 */

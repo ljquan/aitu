@@ -116,6 +116,9 @@ export interface WinBoxWindowProps {
 /**
  * WinBox 窗口 React 封装组件
  * 提供可拖拽、可调整大小、可最小化/最大化的浮动窗口体验
+ * 
+ * 重要：使用 React Portal 渲染内容到 WinBox 的 .wb-body 中，
+ * 而不是使用 WinBox 的 mount 选项，以保持 React 事件系统正常工作。
  */
 export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
   visible,
@@ -148,9 +151,9 @@ export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
   autoMaximize = false,
 }) => {
   const winboxRef = useRef<any>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
   const winboxElementRef = useRef<HTMLDivElement | null>(null); // WinBox 窗口的 DOM 元素
   const [headerPortalContainer, setHeaderPortalContainer] = useState<HTMLElement | null>(null);
+  const [bodyPortalContainer, setBodyPortalContainer] = useState<HTMLElement | null>(null);
   const [isReady, setIsReady] = useState(false);
   const [winboxLoaded, setWinboxLoaded] = useState(!!WinBoxConstructor);
 
@@ -189,13 +192,14 @@ export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
         winboxRef.current = null;
         winboxElementRef.current = null; // 清空 DOM 元素引用
         setHeaderPortalContainer(null);
+        setBodyPortalContainer(null);
         setIsReady(false);
       }
       return;
     }
     
     // 当 visible 变为 true 且窗口不存在时，创建窗口
-    if (visible && !winboxRef.current && contentRef.current) {
+    if (visible && !winboxRef.current) {
       // 构建 class 列表
       const classList: string[] = ['winbox-react'];
       if (!maximizable) classList.push('no-max');
@@ -206,11 +210,11 @@ export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
       classList.push('no-full');
       if (className) classList.push(className);
 
-      // 创建 WinBox 实例
+      // 创建 WinBox 实例 - 不使用 mount 选项，改用 Portal
       const wb = new WinBoxConstructor({
         id,
         title,
-        mount: contentRef.current,
+        // 不使用 mount，改用 React Portal 渲染内容
         width,
         height,
         minwidth: minWidth,
@@ -240,6 +244,12 @@ export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
         requestAnimationFrame(() => {
           refreshViewportScale();
         });
+        
+        // 获取 .wb-body 元素作为内容的 Portal 容器
+        const wbBody = wb.window.querySelector('.wb-body');
+        if (wbBody) {
+          setBodyPortalContainer(wbBody as HTMLElement);
+        }
       }
 
       // 如果有自定义标题栏内容，创建 portal 容器
@@ -316,24 +326,17 @@ export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
     }
   }, [autoMaximize]);
 
-  // 渲染内容容器（WinBox 会挂载这个元素）
+  // 使用 Portal 渲染内容到 WinBox 的 .wb-body 中
+  // 这样可以保持 React 事件系统正常工作
   return (
     <>
-      {/* 
-        创建一个持久的占位容器 div。
-        当 WinBox.mount() 把 contentRef 移走时，这个占位容器仍然留在原来的 DOM 位置。
-        这样 React 在进行兄弟节点插入（如 insertBefore）时，仍然能找到正确的参考节点，
-        避免 "The node before which the new node is to be inserted is not a child of this node" 错误。
-      */}
-      <div style={{ display: 'none' }} data-winbox-placeholder="true">
-        <div
-          ref={contentRef}
-          className="winbox-content-wrapper"
-          style={{ display: visible ? 'block' : 'none' }}
-        >
+      {/* 内容通过 Portal 渲染到 WinBox 的 .wb-body */}
+      {isReady && bodyPortalContainer && createPortal(
+        <div className="winbox-content-wrapper">
           {children}
-        </div>
-      </div>
+        </div>,
+        bodyPortalContainer
+      )}
       {/* 自定义标题栏内容通过 Portal 渲染 */}
       {isReady && headerContent && headerPortalContainer && 
         createPortal(headerContent, headerPortalContainer)

@@ -26,7 +26,7 @@ function formatData(data, maxLength = 500) {
 }
 
 /**
- * Get a short preview of the message data
+ * Get a preview of the message data (will wrap if needed via CSS)
  * @param {any} data
  * @returns {string}
  */
@@ -35,8 +35,9 @@ function getDataPreview(data) {
 
   try {
     const str = JSON.stringify(data);
-    if (str.length > 60) {
-      return escapeHtml(str.slice(0, 60)) + '...';
+    // Show more content, let CSS handle overflow
+    if (str.length > 200) {
+      return escapeHtml(str.slice(0, 200)) + '...';
     }
     return escapeHtml(str);
   } catch {

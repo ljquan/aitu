@@ -1,133 +1,152 @@
 /**
  * Media Library Modal Styles
- * 素材库弹窗样式 - Tailwind-inspired design
+ * 素材库弹窗样式 - WinBox 窗口 + 简洁素雅主题
  */
 
-// TDesign Dialog 样式覆盖 - 使用全局选择器确保生效
-.media-library-modal {
-  &.t-dialog__ctx {
-    .t-dialog__body {
-      padding: 0 !important;
-      margin: 0 !important;
-      height: 75vh;
-      max-height: 75vh;
-      background: white;
+@import '../../styles/z-index.scss';
 
-      // 移动端适配
-      @media (max-width: 768px) {
-        height: 85vh;
-        max-height: 85vh;
-      }
-    }
+// ========================================
+// 品牌色变量（仅用于强调元素）
+// ========================================
+$brand-orange: #F39C12;
+$brand-orange-light: #FBBF24;
+$brand-orange-dark: #E67E22;
 
-    .t-dialog__wrap {
-      background: rgba(17, 24, 39, 0.6);
-      backdrop-filter: blur(4px);
-    }
+// ========================================
+// WinBox 素材库专用样式 - 素雅风格
+// ========================================
+.winbox-media-library {
+  z-index: $z-dialog-ai-image !important;
+  border-radius: 12px !important;
+  overflow: hidden;
+  box-shadow: 
+    0 25px 50px -12px rgba(0, 0, 0, 0.25),
+    0 0 0 1px rgba(0, 0, 0, 0.05) !important;
 
-    .t-dialog {
-      border-radius: 16px;
-      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-      border: 1px solid rgba(229, 231, 235, 0.5);
-      overflow: hidden;
-      background: white;
-      padding: 0 !important;
-
-      // 移动端适配
-      @media (max-width: 768px) {
-        width: 95vw !important;
-        max-width: 95vw;
-        border-radius: 12px;
-      }
-    }
-
-    .t-dialog__header {
-      background: white;
-      border-bottom: 1px solid #e5e7eb;
-      padding: 12px 16px !important;
-      margin: 0 !important;
-    }
+  // 标题栏 - 白色简洁风格
+  .wb-header {
+    background: #ffffff !important;
+    border-radius: 12px 12px 0 0;
+    height: 44px;
+    border-bottom: 1px solid #e5e5e5;
   }
 
-  &__header {
+  // 标题文字
+  .wb-title {
+    font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    color: #333333;
+    padding: 0 8px 0 12px;
+  }
+
+  // 标题栏图标区域
+  .wb-header-custom {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    width: 100%;
-    gap: 12px;
+    margin-left: 4px;
+  }
 
-    @media (max-width: 768px) {
-      gap: 8px;
-    }
+  // 控制按钮 - 灰黑色风格
+  .wb-min,
+  .wb-max,
+  .wb-full,
+  .wb-close {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    background-size: 14px;
+    filter: invert(1) brightness(0.3);
+    transition: all 0.15s ease-out;
 
-    &-title {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 18px;
-      font-weight: 700;
-      color: #111827;
-
-      @media (max-width: 768px) {
-        font-size: 16px;
-        gap: 6px;
-      }
-
-      &-icon {
-        width: 32px;
-        height: 32px;
-        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-        border-radius: 8px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: white;
-
-        @media (max-width: 768px) {
-          width: 28px;
-          height: 28px;
-          border-radius: 6px;
-
-          svg {
-            width: 14px;
-            height: 14px;
-          }
-        }
-      }
+    &:hover {
+      background-color: rgba(0, 0, 0, 0.08);
+      filter: invert(1) brightness(0.2);
     }
   }
-}
 
-// 移动端详情抽屉样式
-.media-library-mobile-drawer {
-  .t-drawer__body {
+  .wb-close:hover {
+    background-color: rgba(255, 59, 48, 0.15);
+    filter: invert(1) brightness(0.2);
+  }
+
+  // 窗口主体
+  .wb-body {
+    background: #ffffff;
+    border-radius: 0 0 12px 12px;
+    overflow: hidden;
     padding: 0;
-    background: #f9fafb;
+    display: flex;
+    flex-direction: column;
   }
 
-  .t-drawer__header {
-    border-bottom: 1px solid #e5e7eb;
-    padding: 16px 20px;
-    background: white;
+  // 内容包装器
+  .winbox-content-wrapper {
+    padding: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    overflow: hidden !important;
+    background: #f8fafc !important;
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 1 !important;
+  }
+
+  // 聚焦状态
+  &.focus {
+    box-shadow: 
+      0 25px 50px -12px rgba(0, 0, 0, 0.25),
+      0 0 0 1px rgba(0, 0, 0, 0.1) !important;
+  }
+
+  // 最大化状态
+  &.max {
+    border-radius: 0 !important;
+    
+    .wb-header {
+      border-radius: 0;
+    }
+    
+    .wb-body {
+      border-radius: 0;
+    }
   }
 }
 
+// 标题栏内容
+.media-library-header-content {
+  display: flex;
+  align-items: center;
+  color: #666666;
+  
+  svg {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+// ========================================
+// 布局容器
+// ========================================
 .media-library-layout {
   display: flex;
+  flex: 1;
   height: 100%;
-  background: white;
+  min-height: 0; // 重要：允许 flex 子元素收缩
+  background: #f8fafc;
+  overflow: hidden;
 
   &__sidebar {
     width: 220px;
-    border-right: 1px solid #e5e7eb;
-    background: #f9fafb;
+    border-right: 1px solid rgba(0, 0, 0, 0.06);
+    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
     display: flex;
     flex-direction: column;
-    padding: 14px;
-    overflow-y: auto; // 改回auto，允许滚动
-    flex-shrink: 0; // 防止被压缩
+    padding: 16px;
+    overflow-y: auto;
+    flex-shrink: 0;
 
-    // 自定义滚动条样式
+    // 自定义滚动条
     &::-webkit-scrollbar {
       width: 6px;
     }
@@ -137,11 +156,11 @@
     }
 
     &::-webkit-scrollbar-thumb {
-      background: #d1d5db;
+      background: #e2e8f0;
       border-radius: 3px;
 
       &:hover {
-        background: #9ca3af;
+        background: #cbd5e1;
       }
     }
   }
@@ -151,20 +170,20 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    background: white;
+    background: #ffffff;
     min-width: 0;
   }
 
   &__inspector {
-    width: 280px;
-    border-left: 1px solid #e5e7eb;
-    background: #f9fafb;
+    width: 300px;
+    border-left: 1px solid rgba(0, 0, 0, 0.06);
+    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
     display: flex;
     flex-direction: column;
-    overflow-y: auto; // 改回auto，允许滚动
-    flex-shrink: 0; // 防止被压缩
+    overflow-y: auto;
+    flex-shrink: 0;
 
-    // 自定义滚动条样式
+    // 自定义滚动条
     &::-webkit-scrollbar {
       width: 6px;
     }
@@ -174,11 +193,11 @@
     }
 
     &::-webkit-scrollbar-thumb {
-      background: #d1d5db;
+      background: #e2e8f0;
       border-radius: 3px;
 
       &:hover {
-        background: #9ca3af;
+        background: #cbd5e1;
       }
     }
   }
@@ -187,10 +206,11 @@
   @media (max-width: 1024px) {
     &__sidebar {
       width: 200px;
+      padding: 12px;
     }
 
     &__inspector {
-      width: 260px;
+      width: 280px;
     }
   }
 
@@ -200,39 +220,84 @@
     &__sidebar {
       width: 100%;
       height: auto;
-      max-height: 120px; // 减小高度，给图片区域更多空间
+      max-height: 100px;
       border-right: none;
-      border-bottom: 1px solid #e5e7eb;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.06);
       padding: 10px;
-      overflow-y: auto; // 允许滚动查看所有筛选项
+      overflow-y: auto;
     }
 
     &__main {
       flex: 1;
       min-height: 0;
-      // 确保主区域获得足够空间
     }
 
     &__inspector {
-      display: none; // 移动端隐藏详情面板，节省空间
-      // 或者改为可折叠的形式
+      display: none;
       width: 100%;
       height: auto;
       max-height: 40vh;
       border-left: none;
-      border-top: 1px solid #e5e7eb;
+      border-top: 1px solid rgba(0, 0, 0, 0.06);
       min-width: auto;
     }
   }
 
   @media (max-width: 480px) {
     &__sidebar {
-      max-height: 100px; // 更小屏幕进一步减小
+      max-height: 90px;
       padding: 8px;
     }
+  }
+}
 
-    &__inspector {
-      max-height: 35vh; // 如果显示的话，也减小高度
+// ========================================
+// 移动端详情抽屉
+// ========================================
+.media-library-mobile-drawer {
+  .t-drawer__body {
+    padding: 0;
+    background: #f8fafc;
+  }
+
+  .t-drawer__header {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    padding: 16px 20px;
+    background: white;
+    font-weight: 600;
+    color: #1e293b;
+  }
+
+  .t-drawer {
+    border-radius: 20px 20px 0 0;
+  }
+}
+
+// ========================================
+// 响应式 WinBox 调整
+// ========================================
+@media (max-width: 768px) {
+  .winbox-media-library {
+    .wb-header {
+      height: 44px;
+    }
+
+    .wb-title {
+      font-size: 14px;
+    }
+
+    .wb-min,
+    .wb-max,
+    .wb-full,
+    .wb-close {
+      width: 30px;
+      height: 30px;
+      background-size: 12px;
+    }
+
+    .media-library-header-content svg {
+      width: 16px;
+      height: 16px;
     }
   }
 }

@@ -21,6 +21,7 @@ function formatStack(stack) {
 
 /**
  * Create a console log entry DOM element
+ * Uses the same styles as Fetch logs for consistency
  * @param {object} log 
  * @param {boolean} isExpanded - Initial expanded state for stack
  * @param {Function} onToggle - Callback when expand state changes (id, expanded)
@@ -28,45 +29,86 @@ function formatStack(stack) {
  */
 export function createConsoleEntry(log, isExpanded = false, onToggle = null) {
   const entry = document.createElement('div');
-  entry.className = `console-entry ${log.logLevel || 'log'}`;
+  const level = log.logLevel || 'log';
+  entry.className = `log-entry console-entry ${level}` + (isExpanded ? ' expanded' : '');
   entry.dataset.id = log.id;
   
   const hasStack = log.logStack && log.logStack.trim();
-  const stackToggle = hasStack 
-    ? `<span class="stack-toggle" title="展开/收起堆栈"><span class="arrow">▶</span> 堆栈</span>` 
-    : '';
+
+  // Map log level to status class
+  const levelStatusClass = {
+    'error': 'error',
+    'warn': 'redirect',
+    'info': 'success',
+    'log': 'pending',
+    'debug': 'pending',
+  }[level] || 'pending';
+
+  // Show full message in header (will wrap if needed)
+  const messagePreview = log.logMessage || '-';
 
   entry.innerHTML = `
-    <div class="console-header">
+    <div class="log-header">
+      ${hasStack ? `<span class="log-toggle" title="展开/收起详情"><span class="arrow">▶</span></span>` : '<span style="width: 16px; display: inline-block;"></span>'}
       <span class="log-time">${formatTime(log.timestamp)}</span>
-      <span class="console-level ${log.logLevel || 'log'}">${(log.logLevel || 'log').toUpperCase()}</span>
-      <span class="console-message">${escapeHtml(log.logMessage || '')}</span>
+      <span class="log-status ${levelStatusClass}">${level.toUpperCase()}</span>
+      <span class="log-url" title="${escapeHtml(log.logMessage || '')}">${escapeHtml(messagePreview)}</span>
     </div>
-    ${log.logSource ? `<div class="console-source">${escapeHtml(log.logSource)}</div>` : ''}
-    ${log.url ? `<div class="console-source">页面: ${escapeHtml(log.url)}</div>` : ''}
-    ${hasStack ? `
-      <div class="console-stack-container${isExpanded ? ' expanded' : ''}">
-        ${stackToggle}
-        <pre class="console-stack">${formatStack(log.logStack)}</pre>
+    ${hasStack || log.logSource || log.url ? `
+      <div class="log-details">
+        ${log.logMessage ? `
+          <div class="detail-section">
+            <h4>完整消息</h4>
+            <pre>${escapeHtml(log.logMessage)}</pre>
+          </div>
+        ` : ''}
+        ${log.logSource ? `
+          <div class="detail-section">
+            <h4>来源</h4>
+            <pre>${escapeHtml(log.logSource)}</pre>
+          </div>
+        ` : ''}
+        ${log.url ? `
+          <div class="detail-section">
+            <h4>页面</h4>
+            <pre>${escapeHtml(log.url)}</pre>
+          </div>
+        ` : ''}
+        ${hasStack ? `
+          <div class="detail-section">
+            <h4>堆栈</h4>
+            <pre style="color: var(--error-color);">${formatStack(log.logStack)}</pre>
+          </div>
+        ` : ''}
       </div>
     ` : ''}
   `;
 
-  // Add toggle functionality for stack
-  if (hasStack) {
-    const stackContainer = entry.querySelector('.console-stack-container');
-    const toggle = entry.querySelector('.stack-toggle');
-    
-    if (toggle && stackContainer) {
-      toggle.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const isNowExpanded = stackContainer.classList.toggle('expanded');
-        if (onToggle) {
-          onToggle(log.id, isNowExpanded);
-        }
-      });
+  // Toggle function - same as Fetch logs
+  const toggleExpand = () => {
+    const isNowExpanded = entry.classList.toggle('expanded');
+    if (onToggle) {
+      onToggle(log.id, isNowExpanded);
     }
+  };
+
+  // Toggle expand/collapse on button click
+  const toggleBtn = entry.querySelector('.log-toggle');
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleExpand();
+    });
   }
+
+  // Toggle on header click (except toggle button)
+  const header = entry.querySelector('.log-header');
+  header.addEventListener('click', (e) => {
+    if (e.target.closest('.log-toggle')) return;
+    if (hasStack || log.logSource || log.url) {
+      toggleExpand();
+    }
+  });
 
   return entry;
 }

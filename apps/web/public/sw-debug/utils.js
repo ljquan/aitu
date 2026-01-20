@@ -80,15 +80,12 @@ export function formatJsonOrText(text) {
  * @param {number} maxLength 
  * @returns {string}
  */
-export function extractDisplayUrl(url, maxLength = 80) {
+export function extractDisplayUrl(url) {
   if (!url) return '-';
   try {
     const urlObj = new URL(url);
-    let displayUrl = urlObj.pathname + urlObj.search;
-    if (displayUrl.length > maxLength) {
-      displayUrl = displayUrl.substring(0, maxLength) + '...';
-    }
-    return displayUrl;
+    // Return full path without truncation (CSS will handle overflow)
+    return urlObj.pathname + urlObj.search;
   } catch {
     return url;
   }

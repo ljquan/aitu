@@ -2975,6 +2975,115 @@ export const setStrokeStyle = (board: PlaitBoard, strokeStyle: StrokeStyle) => {
 
 **原因**: `PropertyTransforms` 的默认行为可能不会处理所有类型的元素（如自定义的 Freehand 元素）。通过提供 `callback` 函数，可以确保对所有选中的元素执行属性设置操作。颜色设置（`setStrokeColor`、`setFillColor`）也使用了相同的模式。
 
+### 错误 3: 第三方窗口/弹窗组件破坏 React 事件委托
+
+**场景**: 使用 `WinBox.js` 或其他直接操作 DOM 的第三方窗口库包装 React 组件时
+
+❌ **错误示例**:
+```typescript
+// 错误：使用 mount 选项将 React 渲染的 DOM 移动到外部，会破坏 React 的事件冒泡链
+new WinBox({
+  mount: containerRef.current, // 导致 onClick/onDoubleClick 无响应
+  // ...
+});
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：使用 React.createPortal 将内容渲染到第三方组件提供的 DOM 容器中
+const WinBoxWindow = ({ children }) => {
+  const [contentRef, setContentRef] = useState<HTMLElement | null>(null);
+  
+  useEffect(() => {
+    const winbox = new WinBox({
+      oncreate: () => {
+        setContentRef(winbox.body); // 获取 WinBox 提供的容器
+      }
+    });
+  }, []);
+
+  return contentRef ? createPortal(children, contentRef) : null;
+};
+```
+
+**原因**: React 使用事件委托机制在 `root` 节点监听事件。如果第三方库通过 `appendChild` 等原生 API 将 DOM 节点移出 React 的 root 树，事件将无法正常冒泡到 React 的监听器。`createPortal` 允许在物理上移动 DOM 的同时，在逻辑上保持 React 的组件树和事件流完整。
+
+### 错误 4: 筛选逻辑中“全部”选项处理不当
+
+**场景**: 实现带有“全部（ALL）”选项的多重过滤逻辑时
+
+❌ **错误示例**:
+```typescript
+// 错误：未处理 undefined 情况，导致多条件组合时结果意外为空
+const matchesType = filters.activeType === 'ALL' || asset.type === filters.activeType;
+// 如果 activeType 是 undefined (初始状态)，(undefined === 'ALL') 为 false，逻辑失效
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：显式处理 undefined 和 'ALL'，确保逻辑鲁棒
+const matchesType = 
+  !filters.activeType || 
+  filters.activeType === 'ALL' || 
+  asset.type === filters.activeType;
+```
+
+**原因**: 初始状态或重置状态下，筛选变量可能是 `undefined` 或 `null`。在进行比较前必须先进行存在性检查，否则会导致筛选结果不符合预期（通常表现为只有单独筛选有效，组合筛选失效）。
+
+### 错误 5: 动态缩放网格布局出现间隙或重叠
+
+**场景**: 实现支持用户调整元素显示尺寸（放大/缩小）的网格列表时
+
+❌ **错误示例**:
+```scss
+// 错误：使用 Flex 布局配合动态计算的百分比宽度，容易产生像素计算偏差
+.grid-row {
+  display: flex;
+  .item {
+    width: 18.523%; // 计算出的宽度，容易在右侧留下缝隙
+  }
+}
+```
+
+✅ **正确示例**:
+```scss
+// 正确：使用 CSS Grid 布局配合 1fr，确保完美平铺和对齐
+.grid-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); // 或动态设置列数
+  gap: 16px;
+  .item {
+    width: 100%;
+    height: 100%;
+  }
+}
+```
+
+**原因**: Flex 布局在处理非整数像素的列宽时，浏览器舍入误差会导致右侧出现白边或元素重叠。CSS Grid 的 `1fr` 单元由浏览器底层引擎处理自动分配，能确保每一列都精准对齐容器边界，尤其适合需要频繁变动尺寸的素材预览场景。
+
+### 错误 6: UI 元素高度不统一导致视觉错位
+
+**场景**: 搜索框、按钮、已选计数条等多个组件并排排列时
+
+❌ **错误示例**:
+```scss
+.search-input { height: 36px; }
+.action-button { height: 32px; }
+// 导致并排排列时基准线不齐，视觉凌乱
+```
+
+✅ **正确示例**:
+```scss
+// 正确：统一锁定核心高度（如 32px），并在组件库样式上使用 !important 覆盖
+.t-input { height: 32px !important; }
+.t-button { height: 32px !important; }
+.counter-tag { height: 32px; display: flex; align-items: center; }
+```
+
+**原因**: “素雅”和“专业”感来自于严格的视觉对齐。在紧凑的工具栏布局中，即便只有 2-4px 的高度差也会被用户感知。应选定一个标准高度并强制执行，消除视觉噪音。
+
+---
+
 ### 性能指南
 - 使用 `React.lazy` 对大型组件进行代码分割
 - 对图片实现懒加载和预加载

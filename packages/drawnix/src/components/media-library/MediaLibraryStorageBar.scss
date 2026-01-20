@@ -1,17 +1,20 @@
 /**
  * Storage Bar Styles
- * 存储空间进度条样式
+ * 存储空间进度条样式 - 简洁素雅风格
  */
+
+// 品牌色变量（仅用于强调）
+$brand-orange: #F39C12;
 
 .storage-bar {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 12px 16px;
+  gap: 8px;
+  padding: 14px 16px;
   background: white;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
-  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.04);
+  box-shadow: 0 2px 8px 0 rgba(0, 0, 0, 0.03);
 
   &__header {
     display: flex;
@@ -22,25 +25,30 @@
   &__header-left {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
   }
 
   &__icon {
     flex-shrink: 0;
-    color: #6b7280;
+    color: $brand-orange;
+    width: 16px;
+    height: 16px;
   }
 
   &__title {
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
-    color: #111827;
+    color: #1e293b;
   }
 
   &__count {
-    color: #6b7280;
+    color: #64748b;
     font-weight: 500;
     font-size: 11px;
     white-space: nowrap;
+    background: rgba($brand-orange, 0.08);
+    padding: 2px 8px;
+    border-radius: 4px;
   }
 
   &__usage {
@@ -50,45 +58,62 @@
   }
 
   &__usage-value {
-    font-size: 12px;
-    color: #111827;
+    font-size: 13px;
+    color: #1e293b;
     font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
     letter-spacing: -0.5px;
+    font-weight: 600;
   }
 
   // 进度条容器样式调整
   .t-progress {
     margin: 0;
 
-    // 自定义进度条百分比显示样式
+    // 进度条轨道
+    .t-progress__bar {
+      background: #f1f5f9;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    // 进度条填充 - 单色
+    .t-progress__inner {
+      background: $brand-orange !important;
+      border-radius: 6px;
+      transition: width 0.3s ease;
+    }
+
+    // 百分比显示
     &__info {
       font-size: 11px;
-      font-weight: 600;
-      color: #111827;
+      font-weight: 700;
+      color: $brand-orange;
       font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
     }
   }
 
   // 移动端优化
   @media (max-width: 768px) {
-    padding: 10px 14px;
+    padding: 12px 14px;
     gap: 6px;
+    border-radius: 10px;
 
     &__icon {
-      width: 12px;
-      height: 12px;
+      width: 14px;
+      height: 14px;
     }
 
     &__title {
-      font-size: 10px;
+      font-size: 11px;
     }
 
     &__count {
       font-size: 10px;
+      padding: 2px 6px;
     }
 
     &__usage-value {
-      font-size: 16px;
+      font-size: 12px;
     }
   }
 }

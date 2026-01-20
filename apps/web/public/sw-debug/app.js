@@ -682,10 +682,11 @@ function renderRelatedRequests(log) {
     const status = r.status || '...';
     const statusClass = r.status >= 200 && r.status < 400 ? 'success' : (r.status >= 400 ? 'error' : '');
     const duration = r.duration ? `${r.duration}ms` : '-';
-    const displayUrl = r.url?.substring(0, 60) + (r.url?.length > 60 ? '...' : '');
+    // Show full URL, let CSS handle wrapping
+    const displayUrl = r.url || '-';
     
     return `
-      <div class="related-request" data-id="${r.id}" style="padding: 4px 8px; cursor: pointer; border-radius: 4px; margin-bottom: 4px; background: var(--bg-tertiary);">
+      <div class="related-request" data-id="${r.id}" style="padding: 4px 8px; cursor: pointer; border-radius: 4px; margin-bottom: 4px; background: var(--bg-tertiary); word-break: break-word;">
         <span style="color: var(--text-muted); font-size: 11px;">${time}</span>
         <span class="log-status ${statusClass}" style="font-size: 11px; margin-left: 8px;">${status}</span>
         <span style="margin-left: 8px; font-size: 12px;">${displayUrl}</span>
@@ -1644,10 +1645,8 @@ function createLLMApiEntry(log, isExpanded, onToggle) {
   const durationText = log.duration ? `${(log.duration / 1000).toFixed(1)}s` : '-';
   const durationClass = durationMs >= 3000 ? 'very-slow' : (durationMs >= 1000 ? 'slow' : '');
 
-  // Truncate prompt for header display
-  const promptPreview = log.prompt 
-    ? (log.prompt.length > 60 ? log.prompt.substring(0, 60) + '...' : log.prompt)
-    : '-';
+  // Show full prompt in header (will wrap if needed)
+  const promptPreview = log.prompt || '-';
 
   entry.innerHTML = `
     <div class="log-header">
@@ -2106,11 +2105,10 @@ function createCrashEntry(log, isExpanded, onToggle) {
     }
   }
   
-  // Error preview
+  // Error preview - show full message (will wrap if needed)
   let errorPreview = '';
   if (log.error) {
-    const shortError = (log.error.message || '').substring(0, 50);
-    errorPreview = `<span class="log-url" style="color: var(--error-color);">${escapeHtml(shortError)}${log.error.message?.length > 50 ? '...' : ''}</span>`;
+    errorPreview = `<span class="log-url" style="color: var(--error-color);">${escapeHtml(log.error.message || '')}</span>`;
   }
   
   // 完整内存显示
