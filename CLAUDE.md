@@ -3489,6 +3489,39 @@ root.render(
 
 **原因**: 独立的 React 树不会继承父级树的 Context。在 Aitu 中，画布元素是通过 SVG `foreignObject` 独立挂载的，必须通过 `ToolProviderWrapper` 显式重新提供 `I18nProvider`、`AssetProvider`、`WorkflowProvider` 和 `DrawnixContext` 等核心上下文，才能保证内部组件功能正常。
 
+### 错误 11: 获取第三方组件位置使用其内部属性而非 DOM API
+
+**场景**: 需要获取第三方弹窗/组件的屏幕位置进行坐标转换时（如 WinBox、Modal 等）
+
+❌ **错误示例**:
+```typescript
+// 错误：使用 WinBox 的内部属性，可能与实际视口坐标不一致
+const wb = winboxRef.current;
+const rect = {
+  x: wb.x,      // 可能是相对于 root 容器的坐标
+  y: wb.y,      // 不一定等于视口坐标
+  width: wb.width,
+  height: wb.height,
+};
+// 与 getBoundingClientRect() 的坐标系不匹配，导致位置计算偏差
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：使用 DOM 的 getBoundingClientRect() 获取准确的视口坐标
+const wbWindow = wb.window as HTMLElement;
+const domRect = wbWindow.getBoundingClientRect();
+const rect = {
+  x: domRect.left,   // 相对于视口的 X 坐标
+  y: domRect.top,    // 相对于视口的 Y 坐标
+  width: domRect.width,
+  height: domRect.height,
+};
+// 与其他元素的 getBoundingClientRect() 使用相同坐标系，计算准确
+```
+
+**原因**: 第三方组件库（如 WinBox、Dialog 等）的内部位置属性可能使用不同的坐标系统（相对于 root 容器、相对于父元素等），与浏览器的视口坐标不一致。而 `getBoundingClientRect()` 始终返回元素相对于视口的准确位置，是进行坐标转换的可靠来源。当需要将一个元素的位置映射到另一个坐标系（如画布坐标）时，应统一使用 `getBoundingClientRect()` 获取两者的视口坐标，再进行转换。
+
 ---
 
 ### 性能指南
