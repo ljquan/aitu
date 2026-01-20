@@ -3229,6 +3229,57 @@ if (deletedCount > 0) {
 
 **原因**: 后台任务通常是用户无感知的，过度记录调试信息会干扰正常开发。应汇总结果并优先使用分级日志（推荐注释掉或仅在调试模式显示）。
 
+### 错误 8: 点击外部关闭下拉菜单使用透明遮罩层
+
+**场景**: 实现自定义下拉菜单、弹出面板等需要"点击外部关闭"功能时
+
+❌ **错误示例**:
+```tsx
+// 错误：使用透明遮罩层检测点击，在复杂 z-index 场景下会失效
+{isOpen && (
+  <>
+    <div 
+      className="dropdown-overlay"  // position: fixed; z-index: 999
+      onClick={() => setIsOpen(false)}
+    />
+    <div className="dropdown-menu" style={{ zIndex: 1000 }}>
+      {/* 菜单内容 */}
+    </div>
+  </>
+)}
+// 问题：页面上其他高 z-index 元素（工具栏、弹窗等）会遮挡遮罩层，
+// 导致点击这些区域无法触发关闭
+```
+
+✅ **正确示例**:
+```tsx
+// 正确：使用全局 document 事件监听，不受 z-index 影响
+useEffect(() => {
+  if (!isOpen) return;
+
+  const handleClickOutside = (e: MouseEvent) => {
+    const target = e.target as HTMLElement;
+    // 检查点击是否在下拉组件内部
+    if (target.closest('.dropdown-menu')) return;
+    // 点击在外部，关闭下拉
+    setIsOpen(false);
+  };
+
+  // 使用 mousedown 响应更快
+  document.addEventListener('mousedown', handleClickOutside);
+  return () => document.removeEventListener('mousedown', handleClickOutside);
+}, [isOpen]);
+
+// 组件只渲染下拉菜单，无需遮罩层
+{isOpen && (
+  <div className="dropdown-menu">
+    {/* 菜单内容 */}
+  </div>
+)}
+```
+
+**原因**: 透明遮罩层方案依赖正确的 z-index 层级，在有多个浮层组件的复杂页面中容易失效。全局 document 事件监听在事件捕获阶段工作，不受 DOM 层级和 z-index 影响，是更可靠的方案。同时代码也更简洁，无需维护额外的遮罩层元素和样式。
+
 ---
 
 ### 性能指南
