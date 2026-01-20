@@ -231,11 +231,22 @@ export const VersionInfo = () => {
   // 从 HTML meta 标签获取版本号
   const version = document.querySelector('meta[name="app-version"]')?.getAttribute('content') || '0.0.0';
   
+  // 根据域名决定跳转地址
+  const getVersionsUrl = () => {
+    const hostname = window.location.hostname;
+    // unpkg.com 或 cdn.jsdelivr.net 域名使用内置版本选择页面
+    if (hostname.includes('unpkg.com') || hostname.includes('jsdelivr.net')) {
+      return './versions.html';
+    }
+    // 其他域名跳转到官方发布页面
+    return 'https://release.opentu.ai/';
+  };
+  
   return (
     <MenuItem
       data-track="toolbar_click_menu_version"
       onSelect={() => {
-        window.open('https://release.opentu.ai/', '_blank');
+        window.open(getVersionsUrl(), '_blank');
       }}
       aria-label={t('menu.version')}
     >

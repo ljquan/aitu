@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>爱图 - 版本选择</title>
+  <style>
+    :root {
+      --primary-color: #F39C12;
+      --primary-hover: #E67E22;
+      --bg-color: #f5f5f5;
+      --card-bg: #ffffff;
+      --text-color: #333;
+      --text-secondary: #666;
+      --border-color: #e0e0e0;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg-color: #1a1a1a;
+        --card-bg: #2d2d2d;
+        --text-color: #e0e0e0;
+        --text-secondary: #999;
+        --border-color: #444;
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: var(--bg-color);
+      color: var(--text-color);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    h1 {
+      font-size: 28px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    h1 .icon {
+      font-size: 32px;
+    }
+
+    .subtitle {
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+
+    .current-info {
+      background: var(--card-bg);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+      border: 1px solid var(--border-color);
+    }
+
+    .current-info h2 {
+      font-size: 16px;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+    }
+
+    .current-version {
+      font-size: 24px;
+      font-weight: bold;
+      color: var(--primary-color);
+    }
+
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: var(--text-secondary);
+    }
+
+    .loading .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid var(--border-color);
+      border-top-color: var(--primary-color);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 15px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .error {
+      background: #fff0f0;
+      border: 1px solid #ffccc7;
+      color: #cf1322;
+      padding: 20px;
+      border-radius: 12px;
+      text-align: center;
+    }
+
+    .version-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .version-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: all 0.2s ease;
+      cursor: pointer;
+      text-decoration: none;
+      color: inherit;
+    }
+
+    .version-card:hover {
+      border-color: var(--primary-color);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .version-card.current {
+      border-color: var(--primary-color);
+      background: linear-gradient(135deg, rgba(243, 156, 18, 0.1) 0%, rgba(230, 126, 34, 0.05) 100%);
+    }
+
+    .version-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .version-number {
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .version-tag {
+      font-size: 12px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      background: var(--primary-color);
+      color: white;
+    }
+
+    .version-tag.latest {
+      background: #52c41a;
+    }
+
+    .version-tag.current {
+      background: var(--primary-color);
+    }
+
+    .version-action {
+      color: var(--primary-color);
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .version-action svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .footer {
+      margin-top: 30px;
+      text-align: center;
+      color: var(--text-secondary);
+      font-size: 13px;
+    }
+
+    .footer a {
+      color: var(--primary-color);
+      text-decoration: none;
+    }
+
+    .footer a:hover {
+      text-decoration: underline;
+    }
+
+    .cdn-links {
+      margin-top: 20px;
+      padding: 15px;
+      background: var(--card-bg);
+      border-radius: 12px;
+      border: 1px solid var(--border-color);
+    }
+
+    .cdn-links h3 {
+      font-size: 14px;
+      color: var(--text-secondary);
+      margin-bottom: 10px;
+    }
+
+    .cdn-link {
+      display: block;
+      padding: 8px 12px;
+      background: var(--bg-color);
+      border-radius: 6px;
+      margin-bottom: 8px;
+      font-family: monospace;
+      font-size: 13px;
+      word-break: break-all;
+      color: var(--text-color);
+      text-decoration: none;
+    }
+
+    .cdn-link:hover {
+      background: rgba(243, 156, 18, 0.1);
+    }
+
+    .cdn-link:last-child {
+      margin-bottom: 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>
+        <span class="icon">🎨</span>
+        爱图 - 版本选择
+      </h1>
+      <p class="subtitle">选择要使用的版本</p>
+    </header>
+
+    <div class="current-info">
+      <h2>当前版本</h2>
+      <div class="current-version" id="currentVersion">加载中...</div>
+    </div>
+
+    <div id="versionList" class="loading">
+      <div class="spinner"></div>
+      <p>正在加载版本列表...</p>
+    </div>
+
+    <div class="cdn-links">
+      <h3>CDN 访问链接</h3>
+      <a class="cdn-link" id="unpkgLink" href="#" target="_blank">unpkg: 加载中...</a>
+      <a class="cdn-link" id="jsdelivrLink" href="#" target="_blank">jsdelivr: 加载中...</a>
+    </div>
+
+    <footer class="footer">
+      <p>
+        <a href="https://github.com/ljquan/aitu" target="_blank">GitHub</a> · 
+        <a href="https://opentu.ai" target="_blank">官网</a> · 
+        <a href="https://release.opentu.ai" target="_blank">更多版本</a>
+      </p>
+    </footer>
+  </div>
+
+  <script>
+    const PACKAGE_NAME = 'aitu-app';
+    const NPM_REGISTRY = 'https://registry.npmjs.org';
+    
+    // 获取当前版本
+    function getCurrentVersion() {
+      // 从 URL 路径中提取版本号
+      const match = window.location.pathname.match(/@([^/]+)/);
+      if (match) {
+        return match[1];
+      }
+      // 从 meta 标签获取
+      const meta = document.querySelector('meta[name="app-version"]');
+      if (meta) {
+        return meta.getAttribute('content');
+      }
+      return null;
+    }
+
+    // 获取当前 CDN 类型
+    function getCdnType() {
+      const hostname = window.location.hostname;
+      if (hostname.includes('unpkg.com')) return 'unpkg';
+      if (hostname.includes('jsdelivr.net')) return 'jsdelivr';
+      return 'unpkg'; // 默认
+    }
+
+    // 生成版本链接
+    function getVersionUrl(version, cdnType) {
+      if (cdnType === 'jsdelivr') {
+        return `https://cdn.jsdelivr.net/npm/${PACKAGE_NAME}@${version}/index.html`;
+      }
+      return `https://unpkg.com/${PACKAGE_NAME}@${version}/index.html`;
+    }
+
+    // 获取版本列表
+    async function fetchVersions() {
+      try {
+        const response = await fetch(`${NPM_REGISTRY}/${PACKAGE_NAME}`);
+        if (!response.ok) {
+          throw new Error('Failed to fetch package info');
+        }
+        const data = await response.json();
+        return {
+          versions: Object.keys(data.versions).reverse(),
+          latest: data['dist-tags']?.latest || Object.keys(data.versions).pop()
+        };
+      } catch (error) {
+        console.error('Error fetching versions:', error);
+        throw error;
+      }
+    }
+
+    // 渲染版本列表
+    function renderVersionList(versions, latestVersion, currentVersion, cdnType) {
+      const container = document.getElementById('versionList');
+      
+      // 只显示最近 20 个版本
+      const displayVersions = versions.slice(0, 20);
+      
+      const html = displayVersions.map(version => {
+        const isCurrent = version === currentVersion;
+        const isLatest = version === latestVersion;
+        const url = getVersionUrl(version, cdnType);
+        
+        let tags = '';
+        if (isLatest) {
+          tags += '<span class="version-tag latest">最新</span>';
+        }
+        if (isCurrent) {
+          tags += '<span class="version-tag current">当前</span>';
+        }
+        
+        return `
+          <a href="${url}" class="version-card ${isCurrent ? 'current' : ''}" ${isCurrent ? '' : ''}>
+            <div class="version-info">
+              <span class="version-number">v${version}</span>
+              ${tags}
+            </div>
+            <div class="version-action">
+              ${isCurrent ? '当前版本' : '使用此版本'}
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M9 18l6-6-6-6"/>
+              </svg>
+            </div>
+          </a>
+        `;
+      }).join('');
+      
+      container.innerHTML = `<div class="version-list">${html}</div>`;
+    }
+
+    // 更新 CDN 链接
+    function updateCdnLinks(latestVersion) {
+      const unpkgLink = document.getElementById('unpkgLink');
+      const jsdelivrLink = document.getElementById('jsdelivrLink');
+      
+      unpkgLink.href = `https://unpkg.com/${PACKAGE_NAME}@${latestVersion}/index.html`;
+      unpkgLink.textContent = `unpkg: https://unpkg.com/${PACKAGE_NAME}@${latestVersion}/`;
+      
+      jsdelivrLink.href = `https://cdn.jsdelivr.net/npm/${PACKAGE_NAME}@${latestVersion}/index.html`;
+      jsdelivrLink.textContent = `jsdelivr: https://cdn.jsdelivr.net/npm/${PACKAGE_NAME}@${latestVersion}/`;
+    }
+
+    // 初始化
+    async function init() {
+      const currentVersion = getCurrentVersion();
+      const cdnType = getCdnType();
+      
+      // 显示当前版本
+      document.getElementById('currentVersion').textContent = currentVersion ? `v${currentVersion}` : '未知';
+      
+      try {
+        const { versions, latest } = await fetchVersions();
+        renderVersionList(versions, latest, currentVersion, cdnType);
+        updateCdnLinks(latest);
+      } catch (error) {
+        document.getElementById('versionList').innerHTML = `
+          <div class="error">
+            <p>加载版本列表失败</p>
+            <p style="margin-top: 10px; font-size: 13px;">请检查网络连接或访问 
+              <a href="https://www.npmjs.com/package/${PACKAGE_NAME}?activeTab=versions" target="_blank">npm</a> 
+              查看所有版本
+            </p>
+          </div>
+        `;
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>
