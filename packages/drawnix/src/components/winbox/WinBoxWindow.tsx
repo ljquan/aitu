@@ -111,6 +111,8 @@ export interface WinBoxWindowProps {
   onResize?: (width: number, height: number) => void;
   /** 是否自动最大化 */
   autoMaximize?: boolean;
+  /** 允许窗口移出视口时，至少保留在屏幕内的像素数（默认 50） */
+  minVisiblePixels?: number;
 }
 
 /**
@@ -149,6 +151,7 @@ export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
   onMove,
   onResize,
   autoMaximize = false,
+  minVisiblePixels = 50,
 }) => {
   const winboxRef = useRef<any>(null);
   const winboxElementRef = useRef<HTMLDivElement | null>(null); // WinBox 窗口的 DOM 元素
@@ -157,11 +160,127 @@ export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
   const [isReady, setIsReady] = useState(false);
   const [winboxLoaded, setWinboxLoaded] = useState(!!WinBoxConstructor);
 
+  // 跟踪分屏状态 (使用 state 以便触发 hook 重新计算)
+  const [splitSide, _setSplitSide] = useState<'left' | 'right' | null>(null);
+  const splitSideRef = useRef<'left' | 'right' | null>(null);
+  // 保存原始 minWidth 以便分屏后恢复
+  const originalMinWidthRef = useRef<number | null>(null);
+  
+  const setSplitSide = useCallback((side: 'left' | 'right' | null) => {
+    _setSplitSide(side);
+    splitSideRef.current = side;
+    
+    // 退出分屏时恢复原始 minWidth
+    if (side === null && originalMinWidthRef.current !== null && winboxRef.current) {
+      winboxRef.current.minwidth = originalMinWidthRef.current;
+      originalMinWidthRef.current = null;
+    }
+  }, []);
+
+  // 静态跟踪全局分屏占用情况
+  const getOccupiedSides = useCallback(() => {
+    const sides = { left: false, right: false };
+    if (typeof window === 'undefined' || !(window as any).WinBox) return sides;
+
+    // 直接从 WinBox 栈中获取实例，避免受 CSS transform 影响
+    const WinBox = (window as any).WinBox;
+    const allBoxes = WinBox.stack();
+    const viewportWidth = window.innerWidth;
+
+    allBoxes.forEach((wb: any) => {
+      // 忽略当前正在操作的窗口
+      if (wb === winboxRef.current) return;
+
+      const isHalfWidth = Math.abs(wb.width - viewportWidth / 2) < 20;
+      if (isHalfWidth) {
+        if (wb.x < 20) sides.left = true;
+        if (Math.abs((wb.x + wb.width) - viewportWidth) < 20) sides.right = true;
+      }
+    });
+    return sides;
+  }, []);
+
+  const handleSplit = useCallback(() => {
+    const wb = winboxRef.current;
+    // 安全检查：确保 WinBox 实例和其 DOM 元素都存在
+    if (!wb || !wb.window) return;
+
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const occupied = getOccupiedSides();
+
+    let targetSide: 'left' | 'right';
+
+    // 逻辑：如果已经分屏，切换到另一边
+    if (splitSide === 'left') targetSide = 'right';
+    else if (splitSide === 'right') targetSide = 'left';
+    else {
+      // 第一次分屏逻辑
+      const centerX = wb.x + wb.width / 2;
+      const screenMid = viewportWidth / 2;
+
+      if (occupied.left && !occupied.right) {
+        targetSide = 'right';
+      } else if (!occupied.left && occupied.right) {
+        targetSide = 'left';
+      } else {
+        // 根据位置判断：靠近哪边去哪边，中间默认去右边
+        if (centerX < screenMid) {
+          targetSide = 'left';
+        } else {
+          targetSide = 'right';
+        }
+      }
+    }
+
+    // 保存原始 minWidth，并临时设置为较小的值以允许半屏
+    if (originalMinWidthRef.current === null) {
+      originalMinWidthRef.current = wb.minwidth;
+    }
+    
+    const halfWidth = Math.floor(viewportWidth / 2);
+    
+    // 分屏时强制设置 minwidth 为一个足够小的值，确保可以缩小到半屏
+    wb.minwidth = Math.min(200, halfWidth);
+
+    // 执行分屏：先重置最大化状态
+    if (wb.max) {
+      wb.restore();
+      // restore 后需要等待一帧让 WinBox 完成状态更新
+      requestAnimationFrame(() => {
+        if (!wb || !wb.window) return;
+        performSplit(wb, targetSide, halfWidth, viewportWidth, viewportHeight);
+      });
+    } else {
+      performSplit(wb, targetSide, halfWidth, viewportWidth, viewportHeight);
+    }
+  }, [getOccupiedSides, splitSide, setSplitSide]);
+
+  // 执行实际的分屏操作
+  const performSplit = useCallback((wb: any, targetSide: 'left' | 'right', halfWidth: number, viewportWidth: number, viewportHeight: number) => {
+    if (!wb || !wb.window) return;
+    
+    // 关键：分屏前必须重置边界，否则 resize 会加上负边界的宽度
+    wb.left = 0;
+    wb.right = 0;
+    wb.top = 0;
+    wb.bottom = 0;
+
+    if (targetSide === 'left') {
+      wb.resize(halfWidth, viewportHeight).move(0, 0);
+      setSplitSide('left');
+    } else {
+      // 使用 viewportWidth - halfWidth 确保精准靠右
+      wb.resize(halfWidth, viewportHeight).move(viewportWidth - halfWidth, 0);
+      setSplitSide('right');
+    }
+  }, [setSplitSide]);
+
   // 应用 viewport scale 以确保缩放时窗口位置和大小不变
-  // 注意：WinBox 使用 fixed 定位，所以不需要 enablePositionTracking
+  // 注意：分屏或最大化时禁用缩放补偿，防止超出屏幕
   const refreshViewportScale = useViewportScale(winboxElementRef, {
-    enablePositionTracking: false, // WinBox 使用 fixed 定位
-    enableScaleCompensation: true, // 启用反向缩放保持大小不变
+    enablePositionTracking: false,
+    enableScaleCompensation: !splitSide && !winboxRef.current?.max,
   });
 
   // 加载 WinBox
@@ -171,6 +290,8 @@ export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
     }
   }, [winboxLoaded]);
 
+  const isMovingRef = useRef(false);
+  
   // 处理窗口关闭
   const handleClose = useCallback(() => {
     onClose?.();
@@ -224,6 +345,7 @@ export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
         modal,
         background,
         border,
+        overflow: true, // 允许内容移出视口
         class: classList,
         root: container || document.body,
         onclose: handleClose,
@@ -231,11 +353,59 @@ export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
         onrestore: onRestore,
         onfocus: onFocus,
         onblur: onBlur,
-        onmove: onMove,
+        onmove: function (this: any, x: number, y: number) {
+          if (this.max || this.min || isMovingRef.current) return;
+
+          const viewportWidth = window.innerWidth;
+          const viewportHeight = window.innerHeight;
+          const wbWidth = this.width;
+          const wbHeight = this.height;
+          const minVisible = minVisiblePixels;
+
+          // 如果是手动移动（不是由 handleSplit 触发的移动），且位移较大，则退出分屏状态
+          if (splitSideRef.current) {
+            const expectedX = splitSideRef.current === 'left' ? 0 : viewportWidth - wbWidth;
+            if (Math.abs(x - expectedX) > 50) {
+              setSplitSide(null);
+            }
+          }
+
+          let newX = x;
+          let newY = y;
+
+          // X 轴约束：左侧至少留 50px，右侧至少留 50px
+          if (x < minVisible - wbWidth) newX = minVisible - wbWidth;
+          if (x > viewportWidth - minVisible) newX = viewportWidth - minVisible;
+
+          // Y 轴约束：顶部不能出 (确保标题栏可见)，底部至少留 50px
+          if (y < 0) newY = 0;
+          if (y > viewportHeight - minVisible) newY = viewportHeight - minVisible;
+
+          if (newX !== x || newY !== y) {
+            isMovingRef.current = true;
+            this.move(newX, newY);
+            isMovingRef.current = false;
+          }
+
+          onMove?.(newX, newY);
+        },
         onresize: onResize,
       });
 
       winboxRef.current = wb;
+
+      // 添加分屏按钮
+      wb.addControl({
+        index: 0, // 在最大化按钮左边（WinBox 默认按钮索引从右往左是 0:close, 1:full, 2:max, 3:min）
+        // 但 WinBox 的 addControl 是往左添加，所以 index 影响排序
+        class: 'wb-split',
+        image: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9ImN1cnJlbnRDb2xvciIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiPjxyZWN0IHg9IjMiIHk9IjMiIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgcng9IjIiIHJ5PSIyIj48L3JlY3Q+PGxpbmUgeDE9IjEyIiB5MT0iMyIgeDI9IjEyIiB5Mj0iMjEiPjwvbGluZT48L3N2Zz4=',
+        click: (event: Event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          handleSplit();
+        }
+      });
 
       // 保存 WinBox 窗口的 DOM 元素引用，用于应用 viewport scale
       if (wb.window) {
@@ -273,6 +443,7 @@ export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
         // 使用 setTimeout 确保窗口完全创建后再最大化
         setTimeout(() => {
           if (winboxRef.current) {
+            setStrictBoundaries();
             winboxRef.current.maximize();
           }
         }, 100);

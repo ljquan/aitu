@@ -6,7 +6,7 @@ import { TTDDialogPanel } from './ttd-dialog-panel';
 import { TTDDialogInput } from './ttd-dialog-input';
 import { TTDDialogOutput } from './ttd-dialog-output';
 import { TTDDialogSubmitShortcut } from './ttd-dialog-submit-shortcut';
-import { useDrawnix } from '../../hooks/use-drawnix';
+import { useDrawnix, DialogType } from '../../hooks/use-drawnix';
 import { useI18n } from '../../i18n';
 import { useBoard } from '@plait-board/react-board';
 import {
@@ -36,7 +36,7 @@ const MERMAID_EXAMPLE =
   'flowchart TD\n A[Christmas] -->|Get money| B(Go shopping)\n B --> C{Let me think}\n C -->|One| D[Laptop]\n C -->|Two| E[iPhone]\n C -->|Three| F[Car]';
 
 const MermaidToDrawnix = () => {
-  const { appState, setAppState } = useDrawnix();
+  const { appState, setAppState, closeDialog } = useDrawnix();
   const { t, language } = useI18n();
   const [mermaidToDrawnixLib, setMermaidToDrawnixLib] =
     useState<MermaidToDrawnixLibProps>({
@@ -141,7 +141,7 @@ const MermaidToDrawnix = () => {
       });
     }
 
-    setAppState({ ...appState, openDialogType: null });
+    closeDialog(DialogType.mermaidToDrawnix);
   };
 
   return (

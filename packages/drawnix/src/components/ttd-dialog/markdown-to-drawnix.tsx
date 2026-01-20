@@ -6,7 +6,7 @@ import { TTDDialogPanel } from './ttd-dialog-panel';
 import { TTDDialogInput } from './ttd-dialog-input';
 import { TTDDialogOutput } from './ttd-dialog-output';
 import { TTDDialogSubmitShortcut } from './ttd-dialog-submit-shortcut';
-import { useDrawnix } from '../../hooks/use-drawnix';
+import { useDrawnix, DialogType } from '../../hooks/use-drawnix';
 import { useI18n } from '../../i18n';
 import { useBoard } from '@plait-board/react-board';
 import {
@@ -75,7 +75,7 @@ const getMarkdownExample = (language: 'zh' | 'en') => {
 
 
 const MarkdownToDrawnix = () => {
-  const { appState, setAppState } = useDrawnix();
+  const { appState, setAppState, closeDialog } = useDrawnix();
   const { t, language } = useI18n();
   const [markdownToDrawnixLib, setMarkdownToDrawnixLib] =
     useState<MarkdownToDrawnixLibProps>({
@@ -178,7 +178,7 @@ const MarkdownToDrawnix = () => {
       });
     }
 
-    setAppState({ ...appState, openDialogType: null });
+    closeDialog(DialogType.markdownToDrawnix);
   };
 
   return (

@@ -131,7 +131,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
       pointer: PlaitPointerType.hand,
       isMobile: md.mobile() !== null,
       isPencilMode: false,
-      openDialogType: null,
+      openDialogTypes: new Set(),
       dialogInitialData: null,
       openCleanConfirm: false,
       openSettings: false,
@@ -186,9 +186,13 @@ export const Drawnix: React.FC<DrawnixProps> = ({
     setMediaLibraryOpen(true);
   }, [closeAllDrawers]);
 
-  // 使用 useCallback 稳定 setAppState 函数引用
-  const stableSetAppState = useCallback((newAppState: DrawnixState) => {
-    setAppState(newAppState);
+  // 使用 useCallback 稳定 setAppState 函数引用，支持函数式更新
+  const stableSetAppState = useCallback((newAppState: DrawnixState | ((prev: DrawnixState) => DrawnixState)) => {
+    if (typeof newAppState === 'function') {
+      setAppState(newAppState);
+    } else {
+      setAppState(newAppState);
+    }
   }, []);
 
   const updateAppState = useCallback((newAppState: Partial<DrawnixState>) => {
@@ -893,7 +897,7 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
           <PencilSettingsToolbar></PencilSettingsToolbar>
           <PenSettingsToolbar></PenSettingsToolbar>
           <EraserSettingsToolbar></EraserSettingsToolbar>
-          {appState.openDialogType && (
+          {appState.openDialogTypes.size > 0 && (
             <Suspense fallback={null}>
               <TTDDialog container={containerRef.current}></TTDDialog>
             </Suspense>

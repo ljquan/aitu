@@ -4,8 +4,16 @@
 @import '../../styles/z-index.scss';
 
 // WinBox 容器全局 z-index
+// 使用 !important 确保层级高于工具栏和 AI 输入框
+// 通过 .focus 类区分激活/非激活窗口
 .winbox {
-  z-index: $z-dialog-ai-image !important; // Layer 5: Modals, 确保在 unified-toolbar 之上
+  // 非激活窗口的 z-index
+  z-index: $z-dialog-ai-image !important;
+  
+  // 激活窗口的 z-index 更高
+  &.focus {
+    z-index: ($z-dialog-ai-image + 100) !important;
+  }
 }
 
 .winbox-react {
@@ -82,6 +90,7 @@
   .wb-min,
   .wb-max,
   .wb-full,
+  .wb-split,
   .wb-close {
     width: 32px;
     height: 32px;
@@ -97,6 +106,11 @@
       opacity: 1;
       background-color: rgba(255, 255, 255, 0.2);
     }
+  }
+
+  // 分屏按钮特殊大小（如果需要微调）
+  .wb-split {
+    background-size: 16px;
   }
 
   // 关闭按钮特殊样式
@@ -194,7 +208,7 @@
 
 // AI 生成弹窗通用样式
 .winbox-ai-generation {
-  z-index: $z-dialog-ai-image !important; // Layer 5: AI 图片/视频生成弹窗
+  // 不使用 !important，让 WinBox 可以管理聚焦窗口的 z-index
 
   // 白底灰黑色 header 样式
   .wb-header {
@@ -212,6 +226,7 @@
   .wb-min,
   .wb-max,
   .wb-full,
+  .wb-split,
   .wb-close {
     filter: invert(1) brightness(0.3);
 
@@ -410,6 +425,7 @@
     .wb-min,
     .wb-max,
     .wb-full,
+    .wb-split,
     .wb-close {
       width: 28px;
       height: 28px;
