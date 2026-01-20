@@ -11,6 +11,7 @@ import { CloseIcon, MoveIcon, PinIcon, PinFilledIcon, RefreshIcon, AddIcon } fro
 import { memoryMonitorService, MemoryStats } from '../../services/memory-monitor-service';
 import { Z_INDEX } from '../../constants/z-index';
 import { useI18n } from '../../i18n';
+import { PlaitElement } from '@plait/core';
 import './performance-panel.scss';
 
 // 存储键 - 只保存位置和固定状态，dismissed 不持久化
@@ -20,8 +21,9 @@ const STORAGE_KEY = 'drawnix_performance_panel_settings';
 const DEFAULT_POSITION = { x: -1, y: -1 }; // -1 表示使用默认位置
 
 // 内存阈值
-const WARNING_THRESHOLD = 60; // 60% 显示警告
-const CRITICAL_THRESHOLD = 80; // 80% 显示严重警告
+const WARNING_THRESHOLD = 85; // 85% 显示警告
+const CRITICAL_THRESHOLD = 95; // 95% 显示严重警告
+const IMAGE_COUNT_THRESHOLD = 100; // 图片元素超过 100 个显示警告
 
 // 持久化设置（保存到 localStorage）
 interface PersistedSettings {
@@ -39,14 +41,23 @@ interface PerformancePanelProps {
   container?: HTMLElement | null;
   /** 创建新项目的回调 */
   onCreateProject?: () => Promise<void>;
+  /** 画布元素 */
+  elements?: PlaitElement[];
 }
 
 export const PerformancePanel: React.FC<PerformancePanelProps> = ({
   container,
   onCreateProject,
+  elements = [],
 }) => {
   const { language } = useI18n();
   const [memoryStats, setMemoryStats] = useState<MemoryStats | null>(null);
+
+  // 计算图片元素数量
+  const imageCount = useMemo(() => {
+    if (!elements || elements.length === 0) return 0;
+    return elements.filter((el) => el.type === 'image').length;
+  }, [elements]);
   
   // 持久化设置（位置和固定状态）
   const [persistedSettings, setPersistedSettings] = useState<PersistedSettings>(() => {
@@ -114,16 +125,28 @@ export const PerformancePanel: React.FC<PerformancePanelProps> = ({
     if (!memoryStats) return false;
     if (persistedSettings.pinned) return true;
     if (runtimeState.dismissed) return false;
-    return memoryStats.usagePercent >= WARNING_THRESHOLD;
-  }, [memoryStats, persistedSettings.pinned, runtimeState.dismissed]);
+    
+    // 内存占用超过 85% 或图片元素超过一定数量
+    const isMemoryWarning = memoryStats.usagePercent >= WARNING_THRESHOLD;
+    const isImageWarning = imageCount >= IMAGE_COUNT_THRESHOLD;
+    
+    return isMemoryWarning || isImageWarning;
+  }, [memoryStats, imageCount, persistedSettings.pinned, runtimeState.dismissed]);
 
   // 计算警告级别
   const warningLevel = useMemo(() => {
     if (!memoryStats) return 'normal';
+    
+    // 优先检查内存严重警告
     if (memoryStats.usagePercent >= CRITICAL_THRESHOLD) return 'critical';
-    if (memoryStats.usagePercent >= WARNING_THRESHOLD) return 'warning';
+    
+    // 检查内存警告或图片数量警告
+    if (memoryStats.usagePercent >= WARNING_THRESHOLD || imageCount >= IMAGE_COUNT_THRESHOLD) {
+      return 'warning';
+    }
+    
     return 'normal';
-  }, [memoryStats]);
+  }, [memoryStats, imageCount]);
 
   // 计算面板位置
   const panelStyle = useMemo(() => {
@@ -239,11 +262,18 @@ export const PerformancePanel: React.FC<PerformancePanelProps> = ({
           {language === 'zh' ? '已使用' : 'Used'}: {memoryStats?.formatted.used}
         </div>
         <div>
-          {language === 'zh' ? '总计' : 'Total'}: {memoryStats?.formatted.total}
-        </div>
-        <div>
           {language === 'zh' ? '限制' : 'Limit'}: {memoryStats?.formatted.limit}
         </div>
+        {imageCount > 0 && (
+          <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+            {language === 'zh' ? '图片数量' : 'Image Count'}: {imageCount}
+            {imageCount >= IMAGE_COUNT_THRESHOLD && (
+              <span style={{ color: '#E67E22', marginLeft: '4px' }}>
+                ({language === 'zh' ? '建议清理' : 'Recommend cleaning'})
+              </span>
+            )}
+          </div>
+        )}
       </div>
       <div className="performance-panel__tooltip-tip">
         {language === 'zh'

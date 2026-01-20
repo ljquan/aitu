@@ -961,6 +961,7 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
         <PerformancePanel 
           container={containerRef.current} 
           onCreateProject={onCreateProjectForMemory}
+          elements={board?.children || value}
         />
         <ChatDrawer ref={chatDrawerRef} />
         <Suspense fallback={null}>
