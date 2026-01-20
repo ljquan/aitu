@@ -263,6 +263,17 @@ export async function pollVideoUntilComplete(
     } catch (err) {
       // 如果是业务失败错误，直接抛出，不重试
       if (err instanceof VideoGenerationFailedError) {
+        // 如果错误信息包含 429 或 Too Many Requests，说明是频率限制，应允许重试
+        const isRateLimit = err.message.includes('429') || err.message.toLowerCase().includes('too many requests');
+        if (isRateLimit && consecutiveErrors < maxConsecutiveErrors) {
+          consecutiveErrors++;
+          console.warn(`[VideoPolling] Business error looks like rate limit (#${consecutiveErrors}): ${err.message}, retrying...`);
+          // 根据连续错误次数增加等待时间（指数退避，最大 60 秒）
+          const backoffInterval = Math.min(interval * Math.pow(1.5, consecutiveErrors), 60000);
+          await new Promise((resolve) => setTimeout(resolve, backoffInterval));
+          attempts++;
+          continue;
+        }
         throw err;
       }
       
@@ -648,6 +659,47 @@ export async function blobToCompressedBase64(
 ): Promise<string> {
   const compressedBlob = await compressImageBlob(blob, maxSizeBytes);
   return blobToBase64(compressedBlob);
+}
+
+/**
+ * 获取图片详细信息 (尺寸和大小)
+ * @param urlOrBlob 图片 URL 或 Blob
+ * @param signal 取消信号
+ * @returns 图片详细信息
+ */
+export async function getImageInfo(
+  urlOrBlob: string | Blob,
+  signal?: AbortSignal
+): Promise<{ width: number; height: number; size: number; url: string }> {
+  let blob: Blob | null = null;
+  let url = '';
+
+  if (typeof urlOrBlob === 'string') {
+    url = urlOrBlob;
+    blob = await fetchImageWithCache(urlOrBlob, signal);
+  } else {
+    blob = urlOrBlob;
+    // 如果是 Blob，暂时不生成 URL，除非需要 preview
+  }
+
+  if (!blob) {
+    throw new Error('Failed to fetch image for info');
+  }
+
+  const size = blob.size;
+  const imageBitmap = await createImageBitmap(blob);
+  const width = imageBitmap.width;
+  const height = imageBitmap.height;
+  imageBitmap.close();
+
+  // 如果传入的是 Blob，我们可能需要一个 preview URL
+  if (!url) {
+    // 这里我们不生成 object URL，因为是在 SW 中，
+    // 我们通常会将其转换为 base64 或虚拟路径
+    url = await blobToCompressedBase64(blob, 200 * 1024); // 预览图压缩小一点
+  }
+
+  return { width, height, size, url };
 }
 
 /**

@@ -18,6 +18,7 @@ import {
   parseImageGenerationResponse,
   processReferenceImages,
 } from '../utils/media-generation-utils';
+import type { LLMReferenceImage } from '../llm-api-logger';
 
 /**
  * Image generation handler
@@ -74,12 +75,39 @@ export class ImageHandler implements TaskHandler {
 
     // 处理参考图片：本地图片转 base64，远程图片检查缓存时间
     let processedRefImages: string[] | undefined;
+    const { getImageInfo } = await import('../utils/media-generation-utils');
+    const { startLLMApiLog, completeLLMApiLog, failLLMApiLog } = await import('../llm-api-logger');
+    let referenceImageInfos: LLMReferenceImage[] | undefined;
+
     if (rawRefImages && rawRefImages.length > 0) {
       // console.log(`[ImageHandler] Processing ${rawRefImages.length} reference images:`, rawRefImages.map(u => u.substring(0, 60)));
       processedRefImages = await processReferenceImages(rawRefImages, signal);
       // console.log(`[ImageHandler] Processed reference images:`, processedRefImages.map(u =>
       //   u.startsWith('data:') ? `base64 (${u.length} chars)` : u.substring(0, 60)
       // ));
+
+      // 获取参考图片详情用于日志
+      referenceImageInfos = await Promise.all(
+        rawRefImages.map(async (url) => {
+          try {
+            const info = await getImageInfo(url, signal);
+            return {
+              url: info.url,
+              size: info.size,
+              width: info.width,
+              height: info.height,
+            };
+          } catch (err) {
+            console.warn(`[ImageHandler] Failed to get image info for log: ${url}`, err);
+            return {
+              url,
+              size: 0,
+              width: 0,
+              height: 0,
+            };
+          }
+        })
+      );
     }
 
     // 使用通用函数构建请求体
@@ -109,6 +137,7 @@ export class ImageHandler implements TaskHandler {
       prompt: params.prompt as string,
       hasReferenceImages: !!processedRefImages && processedRefImages.length > 0,
       referenceImageCount: processedRefImages?.length,
+      referenceImages: referenceImageInfos,
       taskId: task.id,
     });
 

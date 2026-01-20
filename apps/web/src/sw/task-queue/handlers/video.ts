@@ -17,6 +17,7 @@ import {
   pollVideoUntilComplete,
   fetchImageWithCache,
 } from '../utils/media-generation-utils';
+import type { LLMReferenceImage } from '../llm-api-logger';
 
 /**
  * Video generation response types
@@ -156,6 +157,30 @@ export class VideoHandler implements TaskHandler {
       inputReferences: params.inputReferences as any[] | undefined,
     });
 
+    // 获取参考图片详情用于日志
+    const { getImageInfo } = await import('../utils/media-generation-utils');
+    const referenceImageInfos: LLMReferenceImage[] = await Promise.all(
+      refUrls.map(async (url) => {
+        try {
+          const info = await getImageInfo(url, signal);
+          return {
+            url: info.url,
+            size: info.size,
+            width: info.width,
+            height: info.height,
+          };
+        } catch (err) {
+          console.warn(`[VideoHandler] Failed to get image info for log: ${url}`, err);
+          return {
+            url,
+            size: 0,
+            width: 0,
+            height: 0,
+          };
+        }
+      })
+    );
+
     // 处理参考图片：获取 Blob 或回退到 URL
     if (refUrls.length > 0) {
       for (let i = 0; i < refUrls.length; i++) {
@@ -190,6 +215,7 @@ export class VideoHandler implements TaskHandler {
       prompt: params.prompt as string,
       hasReferenceImages: refUrls.length > 0,
       referenceImageCount: refUrls.length,
+      referenceImages: referenceImageInfos,
       taskId: task.id,
     });
 
@@ -218,6 +244,16 @@ export class VideoHandler implements TaskHandler {
     }
 
     const data = await response.json();
+
+    // 记录 remoteId 到日志，以便在 SW 重启时恢复
+    if (data.id) {
+      const { updateLLMApiLogMetadata } = await import('../llm-api-logger');
+      updateLLMApiLogMetadata(logId, {
+        remoteId: data.id,
+        responseBody: JSON.stringify(data),
+        httpStatus: response.status,
+      });
+    }
 
     // 注意：这里不调用 completeLLMApiLog，因为视频还在异步生成中
     // 最终结果会在 pollUntilComplete 完成后更新

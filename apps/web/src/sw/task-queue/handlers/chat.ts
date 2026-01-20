@@ -14,6 +14,7 @@ import type {
   HandlerConfig,
   TaskResult,
 } from '../types';
+import type { LLMReferenceImage } from '../llm-api-logger';
 
 /**
  * Gemini message format
@@ -221,12 +222,44 @@ export class ChatHandler implements IChatHandler, TaskHandler {
     const lastUserMsg = messages.filter(m => m.role === 'user').pop();
     const promptPreview = lastUserMsg?.content?.[0]?.text || '';
     
+    // 提取消息中的图片作为参考图详情
+    const { getImageInfo } = await import('../utils/media-generation-utils');
+    const referenceImageInfos: LLMReferenceImage[] = [];
+    for (const msg of messages) {
+      if (msg.role === 'user' && msg.content) {
+        for (const content of msg.content) {
+          if (content.type === 'image_url' && content.image_url?.url) {
+            try {
+              const info = await getImageInfo(content.image_url.url, signal);
+              referenceImageInfos.push({
+                url: info.url,
+                size: info.size,
+                width: info.width,
+                height: info.height,
+              });
+            } catch (err) {
+              console.warn('[ChatHandler] Failed to get image info for log', err);
+              referenceImageInfos.push({
+                url: content.image_url.url,
+                size: 0,
+                width: 0,
+                height: 0,
+              });
+            }
+          }
+        }
+      }
+    }
+
     const logId = startLLMApiLog({
       endpoint: '/chat/completions',
       model,
       taskType: 'chat',
       prompt: promptPreview,
       requestBody: JSON.stringify(requestBody, null, 2),  // 完整请求体，不截断
+      hasReferenceImages: referenceImageInfos.length > 0,
+      referenceImageCount: referenceImageInfos.length,
+      referenceImages: referenceImageInfos,
     });
 
     // Use debugFetch for logging (stream response won't be fully captured)

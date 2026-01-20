@@ -186,6 +186,16 @@ export class CharacterHandler implements TaskHandler {
 
     const data = await response.json();
 
+    // 记录 remoteId 到日志，以便在 SW 重启时恢复
+    if (data.id) {
+      const { updateLLMApiLogMetadata } = await import('../llm-api-logger');
+      updateLLMApiLogMetadata(logId, {
+        remoteId: data.id,
+        responseBody: JSON.stringify(data),
+        httpStatus: response.status,
+      });
+    }
+
     // 注意：这里不调用 completeLLMApiLog，因为角色还在异步处理中
     // 最终结果会在 pollUntilComplete 完成后更新
 

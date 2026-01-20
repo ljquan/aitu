@@ -1648,6 +1648,35 @@ function createLLMApiEntry(log, isExpanded, onToggle) {
   // Show full prompt in header (will wrap if needed)
   const promptPreview = log.prompt || '-';
 
+  // Render reference images preview
+  let referenceImagesHtml = '';
+  if (log.referenceImages && log.referenceImages.length > 0) {
+    const imagesList = log.referenceImages.map(img => {
+      const sizeText = img.size ? formatBytes(img.size) : '-';
+      const dimensions = img.width && img.height ? `${img.width}x${img.height}` : '-';
+      return `
+        <div class="reference-image-item" style="display: inline-flex; flex-direction: column; gap: 4px; border: 1px solid var(--border-color); border-radius: 4px; padding: 4px; background: var(--bg-secondary);">
+          <div style="width: 120px; height: 120px; display: flex; align-items: center; justify-content: center; overflow: hidden; background: #000; border-radius: 2px;">
+            <img src="${img.url}" style="max-width: 100%; max-height: 100%; object-fit: contain; cursor: pointer;" onclick="window.open('${img.url}')" title="点击查看原图">
+          </div>
+          <div style="font-size: 10px; color: var(--text-muted); display: flex; justify-content: space-between; padding: 0 2px;">
+            <span>${sizeText}</span>
+            <span>${dimensions}</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+    
+    referenceImagesHtml = `
+      <div class="detail-section">
+        <h4>参考图详情</h4>
+        <div class="reference-images-preview" style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px;">
+          ${imagesList}
+        </div>
+      </div>
+    `;
+  }
+
   entry.innerHTML = `
     <div class="log-header">
       <span class="log-toggle" title="展开/收起详情"><span class="arrow">▶</span></span>
@@ -1727,6 +1756,7 @@ function createLLMApiEntry(log, isExpanded, onToggle) {
           </tbody>
         </table>
       </div>
+      ${referenceImagesHtml}
       ${log.prompt ? `
         <div class="detail-section">
           <h4>提示词</h4>

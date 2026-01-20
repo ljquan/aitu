@@ -145,7 +145,7 @@ export class SWTaskQueue {
           if (migrated) {
             task.result.url = newUrl;
             // 更新存储
-            await taskQueueStorage.updateTask(task);
+            await taskQueueStorage.saveTask(task);
             migratedCount++;
           }
         }
@@ -244,7 +244,9 @@ export class SWTaskQueue {
       combinedError.includes('timeout') ||
       combinedError.includes('aborted') ||
       combinedError.includes('connection') ||
-      combinedError.includes('status query failed')
+      combinedError.includes('status query failed') ||
+      combinedError.includes('429') ||
+      combinedError.includes('too many requests')
     );
   }
 
@@ -292,7 +294,7 @@ export class SWTaskQueue {
       !task.remoteId
     ) {
       // Try to find completed result from LLM API logs
-      const { findSuccessLogByTaskId } = await import('./llm-api-logger');
+      const { findSuccessLogByTaskId, findLatestLogByTaskId } = await import('./llm-api-logger');
       const successLog = await findSuccessLogByTaskId(task.id);
       
       if (successLog && successLog.resultUrl) {
@@ -324,8 +326,36 @@ export class SWTaskQueue {
         });
         return;
       }
+
+      // If not completed, try to find the remoteId from any log to resume polling
+      const latestLog = await findLatestLogByTaskId(task.id);
+      let recoveredRemoteId = latestLog?.remoteId;
+
+      // If no explicit remoteId, try to parse from responseBody if it was captured
+      if (!recoveredRemoteId && latestLog?.responseBody) {
+        try {
+          const data = JSON.parse(latestLog.responseBody);
+          if (data.id) {
+            recoveredRemoteId = data.id;
+          }
+        } catch {
+          // Ignore
+        }
+      }
+
+      if (recoveredRemoteId) {
+        // Recover the remoteId and resume polling
+        task.remoteId = recoveredRemoteId;
+        task.executionPhase = TaskExecutionPhase.POLLING;
+        task.updatedAt = Date.now();
+        this.tasks.set(task.id, task);
+        await taskQueueStorage.saveTask(task);
+        
+        this.resumeTaskExecution(task); // Re-call with remoteId
+        return;
+      }
       
-      // No success log found - mark as failed (don't re-submit to avoid extra cost)
+      // No success log or remoteId found - mark as failed (don't re-submit to avoid extra cost)
       await this.handleTaskError(task.id, new Error('任务中断且无法恢复（未找到已完成的结果）'));
     } else if (
       // Image/inspiration board task in processing - try to recover from LLM API logs
@@ -473,6 +503,22 @@ export class SWTaskQueue {
   async retryTask(taskId: string): Promise<void> {
     const task = this.tasks.get(taskId);
     if (!task || (task.status !== TaskStatus.FAILED && task.status !== TaskStatus.CANCELLED)) return;
+
+    // 对于视频/角色任务，尝试从日志恢复 remoteId，确保重试时不会重新提交（避免重复计费）
+    if (!task.remoteId && (task.type === TaskType.VIDEO || task.type === TaskType.CHARACTER)) {
+      try {
+        const { findLatestLogByTaskId } = await import('./llm-api-logger');
+        const latestLog = await findLatestLogByTaskId(task.id);
+        if (latestLog?.remoteId) {
+          task.remoteId = latestLog.remoteId;
+        } else if (latestLog?.responseBody) {
+          const data = JSON.parse(latestLog.responseBody);
+          if (data.id) task.remoteId = data.id;
+        }
+      } catch (e) {
+        console.warn(`[SWTaskQueue] Failed to recover remoteId for retry: ${task.id}`, e);
+      }
+    }
 
     task.status = TaskStatus.PENDING;
     task.error = undefined;
@@ -793,6 +839,23 @@ export class SWTaskQueue {
       updatedAt: task.updatedAt,
     });
 
+    // 如果任务已经有 remoteId（视频/角色），则直接进入恢复流程，跳过提交阶段，只重试获取进度的接口
+    if (task.remoteId && (task.type === TaskType.VIDEO || task.type === TaskType.CHARACTER)) {
+      task.executionPhase = TaskExecutionPhase.POLLING;
+      // 更新存储
+      await taskQueueStorage.saveTask(task);
+      
+      this.broadcastToClients({
+        type: 'TASK_STATUS',
+        taskId: task.id,
+        status: task.status,
+        phase: task.executionPhase,
+        updatedAt: task.updatedAt,
+      });
+      this.executeResume(task, task.remoteId);
+      return;
+    }
+
     const handlerConfig: HandlerConfig = {
       geminiConfig: this.geminiConfig,
       videoConfig: this.videoConfig,
@@ -914,12 +977,12 @@ export class SWTaskQueue {
 
     try {
       const handler = this.getHandler(task.type);
-      if (!handler?.resume) {
+      if (!handler || typeof (handler as any).resume !== 'function') {
         throw new Error(`Handler does not support resume: ${task.type}`);
       }
 
       task.remoteId = remoteId;
-      const result = await handler.resume(task, handlerConfig);
+      const result = await (handler as any).resume(task, handlerConfig);
       await this.handleTaskSuccess(task.id, result);
     } catch (error) {
       console.error(`[SWTaskQueue] executeResume: 任务 ${task.id} 恢复失败`, error);
