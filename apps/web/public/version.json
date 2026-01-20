@@ -1,6 +1,8 @@
 {
-  "version": "0.5.16",
-  "buildTime": "2026-01-20T01:27:16.526Z",
+  "version": "0.5.17",
+  "buildTime": "2026-01-20T03:37:42.762Z",
   "gitCommit": "unknown",
-  "changelog": []
+  "changelog": [
+    "封装函数不应被绕过、页面卸载清理定时器"
+  ]
 }
