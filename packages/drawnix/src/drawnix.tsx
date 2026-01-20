@@ -76,6 +76,7 @@ import { usePencilCursor } from './hooks/usePencilCursor';
 import { withArrowLineAutoCompleteExtend } from './plugins/with-arrow-line-auto-complete-extend';
 import { AutoCompleteShapePicker } from './components/auto-complete-shape-picker';
 import { useAutoCompleteShapePicker } from './hooks/useAutoCompleteShapePicker';
+import { ToolWinBoxManager } from './components/toolbox-drawer/ToolWinBoxManager';
 import { withDefaultFill } from './plugins/with-default-fill';
 import { withGradientFill } from './plugins/with-gradient-fill';
 import { API_AUTH_ERROR_EVENT, ApiAuthErrorDetail } from './utils/api-auth-error-event';
@@ -959,6 +960,7 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
           <VersionUpdatePrompt />
           {/* ViewNavigation - 视图导航（缩放 + 小地图） */}
           <ViewNavigation />
+          <ToolWinBoxManager />
         </Wrapper>
         <ActiveTaskWarning />
         {/* Performance Panel - 性能监控面板 */}

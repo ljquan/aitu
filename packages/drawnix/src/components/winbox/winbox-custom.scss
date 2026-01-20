@@ -354,6 +354,13 @@
   }
 }
 
+// 工具窗口样式 - 移除内容边距，使 iframe 铺满
+.winbox-tool-window {
+  .winbox-content-wrapper {
+    padding: 0 !important;
+  }
+}
+
 // TDesign Select 组件在标题栏中的样式调整
 .winbox-react {
   .wb-header-custom {

@@ -84,18 +84,27 @@ export const CustomToolDialog: React.FC<CustomToolDialogProps> = ({
       return '工具名称不能超过 50 个字符';
     }
 
-    if (!formData.url || formData.url.trim().length === 0) {
-      return '请输入工具 URL';
+    const hasUrl = !!(formData.url && formData.url.trim().length > 0);
+    const hasComponent = !!(formData.component && formData.component.trim().length > 0);
+
+    if (!hasUrl && !hasComponent) {
+      return '请输入工具 URL 或内部组件标识';
+    }
+
+    if (hasUrl && hasComponent) {
+      return 'URL 和内部组件标识只能填写其中之一';
     }
 
     // URL 格式验证
-    try {
-      const url = new URL(formData.url);
-      if (!['https:', 'http:'].includes(url.protocol)) {
-        return '只允许使用 HTTP/HTTPS 协议';
+    if (hasUrl) {
+      try {
+        const url = new URL(formData.url!);
+        if (!['https:', 'http:'].includes(url.protocol)) {
+          return '只允许使用 HTTP/HTTPS 协议';
+        }
+      } catch (e) {
+        return 'URL 格式不正确';
       }
-    } catch (e) {
-      return 'URL 格式不正确';
     }
 
     if (formData.description && formData.description.length > 200) {
@@ -179,11 +188,27 @@ export const CustomToolDialog: React.FC<CustomToolDialogProps> = ({
           />
         </FormItem>
 
-        <FormItem label="工具 URL *">
+        <FormItem label="工具 URL">
           <Input
             value={formData.url}
-            onChange={(value) => updateField('url', value)}
+            onChange={(value) => {
+              updateField('url', value);
+              if (value) updateField('component', undefined);
+            }}
             placeholder="https://example.com"
+            disabled={!!formData.component}
+          />
+        </FormItem>
+
+        <FormItem label="内部组件">
+          <Input
+            value={formData.component}
+            onChange={(value) => {
+              updateField('component', value);
+              if (value) updateField('url', undefined);
+            }}
+            placeholder="例如：batch-image"
+            disabled={!!formData.url}
           />
         </FormItem>
 

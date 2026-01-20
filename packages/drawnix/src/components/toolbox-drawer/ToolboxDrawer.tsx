@@ -12,6 +12,7 @@ import { PlaitBoard, getViewportOrigination } from '@plait/core';
 import { useDrawnix } from '../../hooks/use-drawnix';
 import { ToolTransforms } from '../../plugins/with-tool';
 import { toolboxService } from '../../services/toolbox-service';
+import { toolWindowService } from '../../services/tool-window-service';
 import { ToolDefinition } from '../../types/toolbox.types';
 import { DEFAULT_TOOL_CONFIG, TOOL_CATEGORY_LABELS } from '../../constants/built-in-tools';
 import { ToolList } from './ToolList';
@@ -47,9 +48,9 @@ export const ToolboxDrawer: React.FC<ToolboxDrawerProps> = ({
   }, [onOpenChange]);
 
   /**
-   * 处理工具点击 - 插入到画布中心
+   * 处理工具插入到画布
    */
-  const handleToolClick = useCallback(
+  const handleToolInsert = useCallback(
     (tool: ToolDefinition) => {
       if (!board) {
         console.warn('Board not ready');
@@ -74,25 +75,40 @@ export const ToolboxDrawer: React.FC<ToolboxDrawerProps> = ({
       const height = tool.defaultHeight || DEFAULT_TOOL_CONFIG.defaultHeight;
 
       // 插入到画布（中心对齐）
-      ToolTransforms.insertTool(
-        board,
-        tool.id,
-        tool.url,
-        [centerX - width / 2, centerY - height / 2],
-        { width, height },
-        {
-          name: tool.name,
-          category: tool.category,
-          permissions: tool.permissions,
-        }
-      );
-
-      // console.log(`Tool "${tool.name}" inserted to canvas`);
+      if (tool.url || tool.component) {
+        ToolTransforms.insertTool(
+          board,
+          tool.id,
+          (tool as any).url, // url 可能为 undefined，insertTool 已支持
+          [centerX - width / 2, centerY - height / 2],
+          { width, height },
+          {
+            name: tool.name,
+            category: tool.category,
+            permissions: tool.permissions,
+            component: (tool as any).component,
+          }
+        );
+      } else {
+        MessagePlugin.warning('该工具未定义内容（URL 或组件）');
+      }
 
       // 插入后关闭抽屉
       handleClose();
     },
     [board, handleClose]
+  );
+
+  /**
+   * 处理在窗口中打开工具
+   */
+  const handleToolOpenWindow = useCallback(
+    (tool: ToolDefinition) => {
+      toolWindowService.openTool(tool);
+      // 在窗口打开后，可以选择关闭抽屉，也可以保持打开
+      handleClose();
+    },
+    [handleClose]
   );
 
   /**
@@ -267,7 +283,8 @@ export const ToolboxDrawer: React.FC<ToolboxDrawerProps> = ({
         ) : (
           <ToolList
             toolsByCategory={toolsByCategory}
-            onToolClick={handleToolClick}
+            onToolInsert={handleToolInsert}
+            onToolOpenWindow={handleToolOpenWindow}
             onToolDelete={handleDeleteTool}
           />
         )}

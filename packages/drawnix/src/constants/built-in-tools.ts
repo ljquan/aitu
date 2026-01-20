@@ -49,14 +49,14 @@ export const BUILT_IN_TOOLS: ToolDefinition[] = [
   {
     id: 'batch-image',
     name: '批量出图工具',
-    description: 'Excel式批量AI图片生成，支持批量编辑和快速生成',
+    description: 'Excel式批量AI图片生成，支持批量编辑、图片参考和历史追踪',
     icon: '🎨',
     category: ToolCategory.AI_TOOLS,
-    url: '/batch-image.html',
+    component: 'batch-image',
     defaultWidth: 1200,
     defaultHeight: 800,
     permissions: ['allow-scripts', 'allow-same-origin', 'allow-forms', 'allow-modals'],
-  }
+  } as ToolDefinition
 ];
 
 /**

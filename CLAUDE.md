@@ -3377,12 +3377,39 @@ const handleSplit = useCallback(() => {
   }
 }, []); // 依赖数组可以为空，因为读取的是 ref
 
-useEffect(() => {
-  winbox.addControl({ click: handleSplit });
-}, []);
-```
+  useEffect(() => {
+    winbox.addControl({ click: handleSplit });
+  }, []);
+  ```
 
 **原因**: 第三方库（如 WinBox、ECharts、D3 等）在初始化时保存回调函数的引用，之后不会自动更新。当 React 重新渲染创建新的 `useCallback` 实例时，第三方库内部保存的仍然是旧引用。旧回调中的闭包捕获的是创建时的 state 值，导致永远获取不到最新状态。使用 `useRef` 保存状态可以绕过闭包问题，因为 ref 对象本身不变，只是 `.current` 属性的值在变化。
+
+### 错误 10: 独立的 React 树缺少上下文环境
+
+**场景**: 在使用 `createRoot` 或 `render` 手动挂载组件（如画布元素 `ToolGenerator`、`WorkZone` 或第三方窗口内部）时
+
+❌ **错误示例**:
+```tsx
+// 错误：直接渲染组件，导致新 React 树与主应用树脱节，无法访问全局 Context
+const root = createRoot(container);
+root.render(<MyComponent />);
+// 报错：Uncaught Error: useI18n must be used within I18nProvider
+```
+
+✅ **正确示例**:
+```tsx
+// 正确：使用项目提供的提供者包装器，重新注入必要的上下文
+import { ToolProviderWrapper } from '../toolbox-drawer/ToolProviderWrapper';
+
+const root = createRoot(container);
+root.render(
+  <ToolProviderWrapper board={board}>
+    <MyComponent />
+  </ToolProviderWrapper>
+);
+```
+
+**原因**: 独立的 React 树不会继承父级树的 Context。在 Aitu 中，画布元素是通过 SVG `foreignObject` 独立挂载的，必须通过 `ToolProviderWrapper` 显式重新提供 `I18nProvider`、`AssetProvider`、`WorkflowProvider` 和 `DrawnixContext` 等核心上下文，才能保证内部组件功能正常。
 
 ---
 

@@ -5,16 +5,18 @@
  */
 
 import React, { useState, useCallback } from 'react';
-import { Button } from 'tdesign-react';
-import { DeleteIcon } from 'tdesign-icons-react';
+import { Button, Tooltip } from 'tdesign-react';
+import { DeleteIcon, AddIcon, JumpIcon } from 'tdesign-icons-react';
 import { ToolDefinition } from '../../types/toolbox.types';
 import { BUILT_IN_TOOLS } from '../../constants/built-in-tools';
 
 export interface ToolItemProps {
   /** 工具定义 */
   tool: ToolDefinition;
-  /** 点击回调 */
-  onClick: () => void;
+  /** 插入到画布回调 */
+  onInsert: (tool: ToolDefinition) => void;
+  /** 在窗口中打开回调 */
+  onOpenWindow: (tool: ToolDefinition) => void;
   /** 删除回调（仅自定义工具） */
   onDelete?: (tool: ToolDefinition) => void;
 }
@@ -24,7 +26,8 @@ export interface ToolItemProps {
  */
 export const ToolItem: React.FC<ToolItemProps> = ({
   tool,
-  onClick,
+  onInsert,
+  onOpenWindow,
   onDelete
 }) => {
   const [hovered, setHovered] = useState(false);
@@ -82,10 +85,26 @@ export const ToolItem: React.FC<ToolItemProps> = ({
   }, [showActions]);
 
   /**
-   * 处理工具项点击
+   * 处理插入到画布按钮点击
+   */
+  const handleInsert = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    onInsert(tool);
+  }, [tool, onInsert]);
+
+  /**
+   * 处理在窗口中打开按钮点击
+   */
+  const handleOpenWindow = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    onOpenWindow(tool);
+  }, [tool, onOpenWindow]);
+
+  /**
+   * 处理工具项点击 - 默认为插入到画布
    */
   const handleClick = useCallback((e: React.MouseEvent | React.TouchEvent) => {
-    // 如果操作按钮已显示（移动端），先隐藏操作按钮，不触发插入
+    // 如果操作按钮已显示（移动端），先隐藏操作按钮，不触发动作
     if (showActions) {
       e.preventDefault();
       e.stopPropagation();
@@ -93,9 +112,9 @@ export const ToolItem: React.FC<ToolItemProps> = ({
       return;
     }
 
-    // 否则正常触发插入
-    onClick();
-  }, [showActions, onClick]);
+    // 否则正常触发插入到画布（默认行为）
+    onInsert(tool);
+  }, [showActions, tool, onInsert]);
 
   // 清理定时器
   React.useEffect(() => {
@@ -107,7 +126,8 @@ export const ToolItem: React.FC<ToolItemProps> = ({
   }, []);
 
   // 决定是否显示操作按钮（PC 悬停 或 移动端长按）
-  const shouldShowActions = isCustomTool && (hovered || showActions);
+    // 现在所有工具都有操作按钮（插入/窗口），不仅仅是自定义工具
+  const shouldShowActions = hovered || showActions;
 
   return (
     <div
@@ -129,17 +149,38 @@ export const ToolItem: React.FC<ToolItemProps> = ({
         )}
       </div>
 
-      {/* 删除按钮（PC 悬停显示 / 移动端长按显示） */}
-      {shouldShowActions && (
+      {/* 操作按钮（PC 悬停显示 / 移动端长按显示） */}
+      {(hovered || showActions) && (
         <div className="tool-item__actions">
-          <Button
-            variant="text"
-            size="small"
-            icon={<DeleteIcon />}
-            onClick={handleDelete}
-            title="删除工具"
-            data-track="toolbox_click_delete_tool"
-          />
+          <Tooltip content="插入到画布">
+            <Button
+              variant="text"
+              size="small"
+              icon={<AddIcon />}
+              onClick={handleInsert}
+              data-track="toolbox_click_insert_tool"
+            />
+          </Tooltip>
+          <Tooltip content="在窗口中打开">
+            <Button
+              variant="text"
+              size="small"
+              icon={<JumpIcon />}
+              onClick={handleOpenWindow}
+              data-track="toolbox_click_open_window_tool"
+            />
+          </Tooltip>
+          {isCustomTool && onDelete && (
+            <Tooltip content="删除工具">
+              <Button
+                variant="text"
+                size="small"
+                icon={<DeleteIcon />}
+                onClick={handleDelete}
+                data-track="toolbox_click_delete_tool"
+              />
+            </Tooltip>
+          )}
         </div>
       )}
     </div>

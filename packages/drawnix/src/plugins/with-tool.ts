@@ -451,7 +451,7 @@ export const ToolTransforms = {
    *
    * @param board - Plait 画板实例
    * @param toolId - 工具定义 ID
-   * @param url - iframe URL
+   * @param url - iframe URL (可选)
    * @param position - 插入位置（画布坐标）
    * @param size - 工具尺寸
    * @param metadata - 可选元数据
@@ -460,7 +460,7 @@ export const ToolTransforms = {
   insertTool(
     board: PlaitBoard,
     toolId: string,
-    url: string,
+    url: string | undefined,
     position: Point,
     size: { width: number; height: number },
     metadata?: PlaitTool['metadata']
@@ -481,14 +481,15 @@ export const ToolTransforms = {
       id: generateId(),
       type: 'tool',
       toolId,
-      url,
+      url: url as any,
+      component: metadata?.component as any,
       points: [
         position,
         [position[0] + size.width, position[1] + size.height],
       ],
       angle: 0,
       metadata,
-    };
+    } as any;
 
     // console.log('Tool element created:', toolElement);
 
