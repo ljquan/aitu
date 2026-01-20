@@ -77,6 +77,7 @@ export class ImageHandler implements TaskHandler {
     let processedRefImages: string[] | undefined;
     const { getImageInfo } = await import('../utils/media-generation-utils');
     const { startLLMApiLog, completeLLMApiLog, failLLMApiLog } = await import('../llm-api-logger');
+    const { debugFetch } = await import('../debug-fetch');
     let referenceImageInfos: LLMReferenceImage[] | undefined;
 
     if (rawRefImages && rawRefImages.length > 0) {
@@ -125,10 +126,6 @@ export class ImageHandler implements TaskHandler {
 
     config.onProgress(task.id, 10, TaskExecutionPhase.SUBMITTING);
 
-    // Import loggers
-    const { debugFetch } = await import('../debug-fetch');
-    const { startLLMApiLog, completeLLMApiLog, failLLMApiLog } = await import('../llm-api-logger');
-    
     const startTime = Date.now();
     const logId = startLLMApiLog({
       endpoint: '/images/generations',

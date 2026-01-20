@@ -3075,6 +3075,25 @@ async function handleStaticRequest(request: Request): Promise<Response> {
           cachedResponse = await cache.match('/index.html');
         }
         
+        // If not in current cache, try older static caches
+        if (!cachedResponse) {
+          const allCacheNames = await caches.keys();
+          for (const cacheName of allCacheNames) {
+            if (cacheName.startsWith('drawnix-static-v')) {
+              try {
+                const oldCache = await caches.open(cacheName);
+                cachedResponse = await oldCache.match(request) || await oldCache.match('/') || await oldCache.match('/index.html');
+                if (cachedResponse) {
+                  // console.log(`Service Worker: Found navigation fallback in ${cacheName}`);
+                  break;
+                }
+              } catch (e) {
+                // Ignore
+              }
+            }
+          }
+        }
+        
         if (cachedResponse) {
           return cachedResponse;
         }
@@ -3094,6 +3113,25 @@ async function handleStaticRequest(request: Request): Promise<Response> {
       }
       if (!cachedResponse) {
         cachedResponse = await cache.match('/index.html');
+      }
+      
+      // If not in current cache, try older static caches
+      if (!cachedResponse) {
+        const allCacheNames = await caches.keys();
+        for (const cacheName of allCacheNames) {
+          if (cacheName.startsWith('drawnix-static-v')) {
+            try {
+              const oldCache = await caches.open(cacheName);
+              cachedResponse = await oldCache.match(request) || await oldCache.match('/') || await oldCache.match('/index.html');
+              if (cachedResponse) {
+                // console.log(`Service Worker: Found navigation fallback in ${cacheName} after network failure`);
+                break;
+              }
+            } catch (e) {
+              // Ignore
+            }
+          }
+        }
       }
       
       if (cachedResponse) {
@@ -3161,7 +3199,25 @@ async function handleStaticRequest(request: Request): Promise<Response> {
         request.destination === 'font');
 
     if (isInvalidResponse) {
-      console.warn('Service Worker: HTML response for static resource (404):', request.url);
+      console.warn('Service Worker: HTML response for static resource (404 fallback), trying old caches:', request.url);
+      
+      // Try to find the resource in any cache (including old version caches)
+      const allCacheNames = await caches.keys();
+      for (const cacheName of allCacheNames) {
+        if (cacheName.startsWith('drawnix-static-v')) {
+          try {
+            const oldCache = await caches.open(cacheName);
+            const oldCachedResponse = await oldCache.match(request);
+            if (oldCachedResponse) {
+              console.log(`Service Worker: Found resource in ${cacheName} after invalid HTML response`);
+              return oldCachedResponse;
+            }
+          } catch (e) {
+            // Ignore cache errors
+          }
+        }
+      }
+      
       return new Response('Resource not found', { status: 404, statusText: 'Not Found' });
     }
 
@@ -3170,8 +3226,9 @@ async function handleStaticRequest(request: Request): Promise<Response> {
       cache.put(request, response.clone());
     }
 
-    // If server returns error (5xx), try to find any cached version from old caches
-    if (response.status >= 500) {
+    // If server returns error (4xx, 5xx), try to find any cached version from old caches
+    // This is particularly useful if the static directory was deleted or server is misconfigured
+    if (response.status >= 400) {
       // console.warn(`Service Worker: Server error ${response.status} for static resource:`, request.url);
       
       // Try to find the resource in any cache (including old version caches)

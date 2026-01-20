@@ -528,21 +528,22 @@ $brand-orange-dark: #E67E22;
   height: 100%;
   padding: 48px 24px;
   text-align: center;
-  background: #f8fafc;
+  background: white; // Changed from #f8fafc to white
 
-  &__icon {
-    width: 88px;
-    height: 88px;
-    background: white;
+  &__icon-container {
+    width: 96px; // Slightly smaller
+    height: 96px;
+    background: #f1f5f9; // Light gray background for the circle
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #cbd5e1;
-    margin-bottom: 28px;
-    box-shadow: 
-      0 8px 24px -8px rgba(0, 0, 0, 0.08),
-      0 0 0 1px rgba(0, 0, 0, 0.04);
+    margin-bottom: 32px;
+  }
+
+  &__icon {
+    color: #94a3b8; // Slightly darker gray for the icon
+    stroke-width: 1.5;
   }
 
   &__title {
