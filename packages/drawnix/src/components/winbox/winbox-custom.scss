@@ -91,6 +91,7 @@
   .wb-max,
   .wb-full,
   .wb-split,
+  .wb-insert-canvas,
   .wb-close {
     width: 32px;
     height: 32px;
@@ -108,9 +109,40 @@
     }
   }
 
-  // 分屏按钮特殊大小（如果需要微调）
-  .wb-split {
+  // 分屏按钮和插入画布按钮特殊大小
+  .wb-split,
+  .wb-insert-canvas {
     background-size: 16px;
+  }
+
+  // 插入画布按钮特殊样式 - 鼠标悬浮时显示提示（显示在按钮上方）
+  .wb-insert-canvas {
+    position: relative;
+    
+    &::after {
+      content: '插入到画布';
+      position: absolute;
+      top: 100%;
+      margin-top: 6px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 4px 8px;
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      font-size: 12px;
+      border-radius: 4px;
+      white-space: nowrap;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.2s, visibility 0.2s;
+      pointer-events: none;
+      z-index: 1000;
+    }
+    
+    &:hover::after {
+      opacity: 1;
+      visibility: visible;
+    }
   }
 
   // 关闭按钮特殊样式
@@ -227,6 +259,7 @@
   .wb-max,
   .wb-full,
   .wb-split,
+  .wb-insert-canvas,
   .wb-close {
     filter: invert(1) brightness(0.3);
 
@@ -440,6 +473,7 @@
     .wb-max,
     .wb-full,
     .wb-split,
+    .wb-insert-canvas,
     .wb-close {
       width: 28px;
       height: 28px;

@@ -6,12 +6,15 @@
  */
 
 import { PlaitBoard, RectangleClient } from '@plait/core';
-import { PlaitTool } from '../../types/toolbox.types';
+import { PlaitTool, ToolDefinition } from '../../types/toolbox.types';
 import { ToolLoadState, ToolErrorType, ToolErrorEventDetail } from '../../types/tool-error.types';
 import { createRoot, Root } from 'react-dom/client';
 import React, { Suspense } from 'react';
 import { InternalToolComponents } from '../toolbox-drawer/InternalToolComponents';
 import { ToolProviderWrapper } from '../toolbox-drawer/ToolProviderWrapper';
+import { ToolTransforms } from '../../plugins/with-tool';
+import { toolWindowService } from '../../services/tool-window-service';
+import { BUILT_IN_TOOLS } from '../../constants/built-in-tools';
 
 /**
  * 工具元素渲染生成器
@@ -340,21 +343,22 @@ export class ToolGenerator {
       gap: 4px;
     `;
 
-    // 刷新按钮
-    const refreshBtn = this.createTitleButton('↻', '刷新', () => {
-      const iframe = this.iframeCache.get(element.id);
-      if (iframe) {
-        iframe.src = iframe.src; // 重新加载
-      }
+    // 刷新按钮（仅 iframe 工具显示）
+    if (!element.component) {
+      const refreshBtn = this.createTitleButton('↻', '刷新', () => {
+        const iframe = this.iframeCache.get(element.id);
+        if (iframe) {
+          iframe.src = iframe.src; // 重新加载
+        }
+      });
+      titleRight.appendChild(refreshBtn);
+    }
+
+    // 打开为弹窗按钮
+    const popoutBtn = this.createTitleButton('⧉', '打开为弹窗', () => {
+      this.openAsPopup(element);
     });
-
-    // 最小化/最大化按钮（暂时隐藏，未来可实现）
-    // const minimizeBtn = this.createTitleButton('−', '最小化', () => {
-    //   console.log('Minimize tool:', element.id);
-    // });
-
-    titleRight.appendChild(refreshBtn);
-    // titleRight.appendChild(minimizeBtn);
+    titleRight.appendChild(popoutBtn);
 
     titleBar.appendChild(titleLeft);
     titleBar.appendChild(titleRight);
@@ -761,6 +765,52 @@ export class ToolGenerator {
         }, 100);
       }
     }
+  }
+
+  /**
+   * 打开为弹窗
+   * 从画布移除工具元素，以 WinBox 弹窗形式打开
+   */
+  private openAsPopup(element: PlaitTool): void {
+    // 查找对应的工具定义
+    const toolDefinition = this.findToolDefinition(element);
+    if (!toolDefinition) {
+      console.warn('Tool definition not found for:', element.toolId);
+      return;
+    }
+
+    // 先从画布移除该元素
+    ToolTransforms.removeTool(this.board, element.id);
+
+    // 以弹窗形式打开
+    toolWindowService.openTool(toolDefinition);
+  }
+
+  /**
+   * 查找工具定义
+   */
+  private findToolDefinition(element: PlaitTool): ToolDefinition | undefined {
+    // 首先从内置工具中查找
+    const builtInTool = BUILT_IN_TOOLS.find(t => t.id === element.toolId);
+    if (builtInTool) {
+      return builtInTool;
+    }
+
+    // 如果不是内置工具，根据元素信息构建工具定义
+    if (element.url || element.component) {
+      return {
+        id: element.toolId,
+        name: element.metadata?.name || '工具',
+        description: '',
+        icon: '🔧',
+        category: element.metadata?.category,
+        ...(element.url ? { url: element.url } : {}),
+        ...(element.component ? { component: element.component } : {}),
+        permissions: element.metadata?.permissions,
+      } as ToolDefinition;
+    }
+
+    return undefined;
   }
 
   /**

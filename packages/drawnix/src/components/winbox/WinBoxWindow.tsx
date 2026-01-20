@@ -113,6 +113,8 @@ export interface WinBoxWindowProps {
   autoMaximize?: boolean;
   /** 允许窗口移出视口时，至少保留在屏幕内的像素数（默认 50） */
   minVisiblePixels?: number;
+  /** 插入到画布的回调，如果提供则显示"插入到画布"按钮，参数为弹窗当前位置和尺寸 */
+  onInsertToCanvas?: (rect: { x: number; y: number; width: number; height: number }) => void;
 }
 
 /**
@@ -152,6 +154,7 @@ export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
   onResize,
   autoMaximize = false,
   minVisiblePixels = 50,
+  onInsertToCanvas,
 }) => {
   const winboxRef = useRef<any>(null);
   const winboxElementRef = useRef<HTMLDivElement | null>(null); // WinBox 窗口的 DOM 元素
@@ -490,6 +493,41 @@ export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
           handleSplit();
         }
       });
+
+      // 添加"插入到画布"按钮（如果提供了回调）
+      if (onInsertToCanvas) {
+        wb.addControl({
+          index: 0,
+          class: 'wb-insert-canvas',
+          // 画布/画板图标 SVG (base64 encoded)
+          image: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9ImN1cnJlbnRDb2xvciIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiPjxyZWN0IHg9IjMiIHk9IjMiIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgcng9IjIiIHJ5PSIyIj48L3JlY3Q+PGxpbmUgeDE9IjEyIiB5MT0iOCIgeDI9IjEyIiB5Mj0iMTYiPjwvbGluZT48bGluZSB4MT0iOCIgeTE9IjEyIiB4Mj0iMTYiIHkyPSIxMiI+PC9saW5lPjwvc3ZnPg==',
+          click: (event: Event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            // 使用 getBoundingClientRect 获取弹窗在视口中的准确位置
+            const wbWindow = wb.window as HTMLElement;
+            if (wbWindow) {
+              const domRect = wbWindow.getBoundingClientRect();
+              const rect = {
+                x: domRect.left,
+                y: domRect.top,
+                width: domRect.width,
+                height: domRect.height,
+              };
+              onInsertToCanvas(rect);
+            } else {
+              // 回退到 WinBox 属性
+              const rect = {
+                x: wb.x || 0,
+                y: wb.y || 0,
+                width: wb.width || 800,
+                height: wb.height || 600,
+              };
+              onInsertToCanvas(rect);
+            }
+          }
+        });
+      }
 
       // 保存 WinBox 窗口的 DOM 元素引用，用于应用 viewport scale
       if (wb.window) {

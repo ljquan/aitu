@@ -57,7 +57,8 @@ export const ToolList: React.FC<ToolListProps> = ({
                 <ToolItem
                   key={tool.id}
                   tool={tool}
-                  onClick={() => onToolClick(tool)}
+                  onInsert={() => onToolInsert(tool)}
+                  onOpenWindow={() => onToolOpenWindow(tool)}
                   onDelete={onToolDelete}
                 />
               ))}

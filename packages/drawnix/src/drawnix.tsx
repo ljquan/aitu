@@ -806,14 +806,16 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
       }
 
       // 检查双击位置是否命中了画布上的元素
-      // 使用 getHitElementByPoint 直接检测，而不是依赖 selectedElements
-      // 因为双击事件触发时，元素可能还没被选中
       const viewBoxPoint = toViewBoxPoint(board, toHostPoint(board, event.clientX, event.clientY));
       const hitElement = getHitElementByPoint(board, viewBoxPoint);
 
+      // 如果命中了 Plait 元素，或者双击的是工具容器内部（针对 foreignObject 元素）
+      const isInsideInteractive = target.closest('.plait-tool-container') || 
+                                   target.closest('.plait-workzone-container') ||
+                                   target.closest('foreignObject');
+
       // 只有双击空白区域时才显示快速创建工具栏
-      // 双击图形元素应该由 Plait 框架处理（进入文本编辑模式）
-      if (!hitElement) {
+      if (!hitElement && !isInsideInteractive) {
         const position: [number, number] = [event.clientX, event.clientY];
         setQuickToolbarPosition(position);
         setQuickToolbarVisible(true);

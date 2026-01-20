@@ -92,19 +92,23 @@
 // ============================================================================
 
 .tool-item {
-  position: relative;
   display: flex;
-  align-items: flex-start;
+  flex-direction: row; // 明确水平排列
+  align-items: center;
   gap: $spacing-md;
-  padding: $spacing-md;
+  padding: 12px;
   border-radius: 8px;
   background: var(--td-bg-color-container);
   border: 1px solid var(--td-component-border);
   cursor: pointer;
   transition: all 0.2s ease;
-  user-select: none; // 防止长按时选中文本
+  user-select: none;
   -webkit-user-select: none;
-  -webkit-touch-callout: none; // 禁用 iOS 长按菜单
+  -webkit-touch-callout: none;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 64px;
+  position: relative; // 仅作为参考，不应影响子元素流
 
   &:hover {
     background: var(--td-bg-color-container-hover);
@@ -118,12 +122,6 @@
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
   }
 
-  // 长按时的视觉反馈（移动端）
-  &--long-pressing {
-    background: var(--td-bg-color-container-active);
-    border-color: var(--brand-primary, #f39c12);
-  }
-
   &__icon {
     flex-shrink: 0;
     width: 40px;
@@ -134,6 +132,14 @@
     font-size: 24px;
     background: linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%);
     border-radius: 8px;
+    
+    // 限制 SVG 图标的尺寸，与 emoji 保持一致
+    svg {
+      width: 24px;
+      height: 24px;
+      max-width: 24px;
+      max-height: 24px;
+    }
   }
 
   &__content {
@@ -141,7 +147,8 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 2px;
+    overflow: hidden;
   }
 
   &__name {
@@ -149,6 +156,9 @@
     font-weight: 500;
     color: var(--td-text-color-primary);
     line-height: 1.4;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   &__description {
@@ -162,36 +172,39 @@
     -webkit-box-orient: vertical;
   }
 
-  // 操作按钮容器（编辑和删除）
+  // 操作按钮容器 - 严格非绝对定位
   &__actions {
-    position: absolute;
-    top: 50%;
-    right: $spacing-sm;
-    transform: translateY(-50%); // 垂直居中
+    position: static !important; // 强制覆盖任何可能的绝对定位
+    flex-shrink: 0;
     display: flex;
-    gap: 4px;
-    padding: 4px;
-    background: var(--td-bg-color-container);
-    border-radius: 6px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
-    z-index: 1;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    margin-left: 8px;
 
     .t-button {
-      opacity: 0.7;
-      transition: opacity 0.2s ease;
+      opacity: 0.8;
+      transition: all 0.2s ease;
+      background: transparent !important;
+      height: 28px;
+      width: 28px;
+      min-width: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
 
       &:hover {
         opacity: 1;
+        background: var(--td-bg-color-container-hover) !important;
+        transform: scale(1.1);
       }
 
-      // Edit button color
-      &:first-child:hover {
-        color: var(--brand-primary, #5a4fcf);
-      }
-
-      // Delete button color
-      &:last-child:hover {
-        color: var(--td-error-color, #e34d59);
+      .t-icon {
+        font-size: 16px;
       }
     }
   }
@@ -201,7 +214,6 @@
 // Responsive Design
 // ============================================================================
 
-// 平板端适配
 @media (max-width: 768px) {
   .toolbox-drawer {
     width: 100%;
@@ -209,7 +221,6 @@
   }
 }
 
-// 移动端适配
 @media (max-width: 480px) {
   .toolbox-drawer {
     &__search {
@@ -231,6 +242,13 @@
       width: 36px;
       height: 36px;
       font-size: 20px;
+      
+      svg {
+        width: 20px;
+        height: 20px;
+        max-width: 20px;
+        max-height: 20px;
+      }
     }
   }
 }
@@ -256,6 +274,12 @@
 
     &__icon {
       background: linear-gradient(135deg, #3a3a3a 0%, #2a2a2a 100%);
+    }
+
+    &__actions {
+      .t-button:hover {
+        background: rgba(255, 255, 255, 0.1) !important;
+      }
     }
   }
 }
