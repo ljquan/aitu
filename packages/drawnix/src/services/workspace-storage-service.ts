@@ -132,6 +132,7 @@ function waitForIdle(timeout = 50): Promise<void> {
 async function detectDatabaseVersion(dbName: string): Promise<number> {
   return new Promise((resolve) => {
     if (typeof indexedDB === 'undefined') {
+      console.warn('[WorkspaceStorage] IndexedDB not available, using min version');
       resolve(WORKSPACE_DB_CONFIG.MIN_DATABASE_VERSION);
       return;
     }
@@ -143,11 +144,22 @@ async function detectDatabaseVersion(dbName: string): Promise<number> {
       const db = request.result;
       const version = db.version;
       db.close();
-      resolve(Math.max(version, WORKSPACE_DB_CONFIG.MIN_DATABASE_VERSION));
+      const targetVersion = Math.max(version, WORKSPACE_DB_CONFIG.MIN_DATABASE_VERSION);
+      console.log(`[WorkspaceStorage] Detected DB version: ${version}, using: ${targetVersion}`);
+      resolve(targetVersion);
     };
     
-    request.onerror = () => {
-      resolve(WORKSPACE_DB_CONFIG.MIN_DATABASE_VERSION);
+    request.onerror = (event) => {
+      // Try to get version from error event or use a safe high version
+      console.error('[WorkspaceStorage] Error detecting DB version:', event);
+      // Use a higher version to avoid downgrade - version 10 should be safe
+      resolve(10);
+    };
+    
+    request.onblocked = () => {
+      // Database is blocked by another connection, use a safe high version
+      console.warn('[WorkspaceStorage] DB blocked, using safe version 10');
+      resolve(10);
     };
   });
 }
@@ -226,8 +238,58 @@ class WorkspaceStorageService {
       this.initialized = true;
     } catch (error) {
       console.error('[WorkspaceStorage] Failed to initialize:', error);
+      
+      // Check if it's a version downgrade error
+      const errorMsg = String(error);
+      if (errorMsg.includes("can't be downgraded") || errorMsg.includes('version')) {
+        console.warn('[WorkspaceStorage] Version conflict detected, attempting recovery...');
+        
+        // Try to delete the database and reinitialize
+        try {
+          await this.deleteDatabase();
+          await this.createStores();
+          await Promise.all([
+            this.foldersStore!.ready(),
+            this.boardsStore!.ready(),
+            this.stateStore!.ready(),
+          ]);
+          this.initialized = true;
+          console.log('[WorkspaceStorage] Recovery successful, database recreated');
+          return;
+        } catch (recoveryError) {
+          console.error('[WorkspaceStorage] Recovery failed:', recoveryError);
+        }
+      }
+      
       throw new Error('Workspace storage initialization failed');
     }
+  }
+
+  /**
+   * Delete the database (for recovery from version conflicts)
+   */
+  private async deleteDatabase(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (typeof indexedDB === 'undefined') {
+        resolve();
+        return;
+      }
+      
+      const request = indexedDB.deleteDatabase(WORKSPACE_DB_CONFIG.DATABASE_NAME);
+      request.onsuccess = () => {
+        console.log('[WorkspaceStorage] Database deleted successfully');
+        resolve();
+      };
+      request.onerror = () => {
+        console.error('[WorkspaceStorage] Failed to delete database');
+        reject(new Error('Failed to delete database'));
+      };
+      request.onblocked = () => {
+        console.warn('[WorkspaceStorage] Database deletion blocked');
+        // Still resolve after a timeout
+        setTimeout(resolve, 1000);
+      };
+    });
   }
 
   // ========== Private Store Getters (ensure initialized) ==========

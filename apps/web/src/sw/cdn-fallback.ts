@@ -52,8 +52,10 @@ const CDN_CONFIG = {
   degradeTimeout: 60 * 1000,
   // 连续失败次数阈值
   failThreshold: 3,
-  // 请求超时（毫秒）
-  fetchTimeout: 10000,
+  // 请求超时（毫秒）- 短超时策略：
+  // CDN 缓存命中通常 < 200ms，设置 1.5s 超时
+  // 超时后快速回退到服务器，避免 CDN 回源慢影响用户体验
+  fetchTimeout: 1500,
 };
 
 // CDN 源列表（按优先级排序）

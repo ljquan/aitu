@@ -1,3 +1,26 @@
+## 0.5.23 (2026-01-20)
+
+### 🚀 Features
+
+- 优化素材库 UI 交互、缩放缓存、Grid 布局及空间效率 ([c64e4a7](https://github.com/ljquan/aitu/commit/c64e4a7))
+
+### 🔧 Chores
+
+- bump version to 0.5.22 ([5571d3f](https://github.com/ljquan/aitu/commit/5571d3f))
+- bump version to 0.5.21 ([55ad29c](https://github.com/ljquan/aitu/commit/55ad29c))
+- bump version to 0.5.20 ([8bfc191](https://github.com/ljquan/aitu/commit/8bfc191))
+- bump version to 0.5.19 ([8707a5b](https://github.com/ljquan/aitu/commit/8707a5b))
+- bump version to 0.5.18 ([88c0dfd](https://github.com/ljquan/aitu/commit/88c0dfd))
+- bump version to 0.5.17 ([91799c9](https://github.com/ljquan/aitu/commit/91799c9))
+- bump version to 0.5.17 and update build time in version.json ([51b5f3f](https://github.com/ljquan/aitu/commit/51b5f3f))
+- bump version to 0.5.17 ([c41c9bd](https://github.com/ljquan/aitu/commit/c41c9bd))
+- docs(claude): 更新调试日志处理和命令行工具使用说明，添加后台清理任务日志记录示例 ([30cf458](https://github.com/ljquan/aitu/commit/30cf458))
+- docs(claude): 添加 React 事件委托、筛选逻辑、Grid 布局及 UI 高度统一规则 ([dcabd75](https://github.com/ljquan/aitu/commit/dcabd75))
+
+### ❤️  Thank You
+
+- liquidliang <ljquan@qq.com>
+
 ## 0.5.17 (2026-01-20)
 
 ### 🚀 Features

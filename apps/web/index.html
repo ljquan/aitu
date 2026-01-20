@@ -61,7 +61,7 @@
     </script>
     <!-- base href 由构建工具处理，CDN 模式下使用相对路径 -->
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-    <meta name="app-version" content="0.5.17" />
+    <meta name="app-version" content="0.5.24" />
 
     <link rel="icon" type="image/svg+xml" sizes="16x16" href="./icons/favicon-16x16.svg" />
     <link rel="icon" type="image/svg+xml" sizes="32x32" href="./icons/favicon-32x32.svg" />
@@ -88,6 +88,9 @@
     <meta name="msapplication-square310x310logo" content="./icons/icon-512x512.svg" />
     
     <link rel="stylesheet" href="./src/styles.scss" />
+    
+    <!-- CDN 智能选择器（可选，用于提前检测最佳 CDN） -->
+    <script src="./cdn-config.js" defer></script>
   </head>
   <body>
     <div id="root"></div>

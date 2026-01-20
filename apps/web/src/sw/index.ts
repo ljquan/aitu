@@ -1,10 +1,6 @@
 /// <reference lib="webworker" />
 /* eslint-disable no-restricted-globals */
 
-// fix: self redeclaration error and type casting
-const sw = self as unknown as ServiceWorkerGlobalScope;
-export { }; // Make this a module
-
 // Import task queue module
 import {
   initTaskQueue,
@@ -33,9 +29,17 @@ import {
   initMessageSender,
   setDebugMode as setMessageSenderDebugMode,
   setBroadcastCallback,
-  sendToClient,
-  broadcastToAllClients,
 } from './task-queue/utils/message-bus';
+import {
+  fetchFromCDNWithFallback,
+  getCDNStatusReport,
+  resetCDNStatus,
+  performHealthCheck,
+} from './cdn-fallback';
+
+// fix: self redeclaration error and type casting
+const sw = self as unknown as ServiceWorkerGlobalScope;
+export { }; // Make this a module
 
 // Initialize task queue (instance used internally by handleTaskQueueMessage)
 initTaskQueue(sw);
@@ -1404,6 +1408,27 @@ sw.addEventListener('message', (event: ExtendableMessageEvent) => {
     event.source?.postMessage({
       type: 'SW_DEBUG_LOGS_CLEARED',
     });
+  } else if (event.data && event.data.type === 'SW_CDN_GET_STATUS') {
+    // 获取 CDN 状态
+    event.source?.postMessage({
+      type: 'SW_CDN_STATUS',
+      status: getCDNStatusReport(),
+    });
+  } else if (event.data && event.data.type === 'SW_CDN_RESET_STATUS') {
+    // 重置 CDN 状态
+    resetCDNStatus();
+    event.source?.postMessage({
+      type: 'SW_CDN_STATUS_RESET',
+    });
+  } else if (event.data && event.data.type === 'SW_CDN_HEALTH_CHECK') {
+    // 执行 CDN 健康检查
+    (async () => {
+      const results = await performHealthCheck(APP_VERSION);
+      event.source?.postMessage({
+        type: 'SW_CDN_HEALTH_CHECK_RESULT',
+        results: Object.fromEntries(results),
+      });
+    })();
   } else if (event.data && event.data.type === 'SW_DEBUG_GET_CACHE_ENTRIES') {
     // 获取缓存条目列表
     const { cacheName, limit = 50, offset = 0 } = event.data;
@@ -3086,7 +3111,42 @@ async function handleStaticRequest(request: Request): Promise<Response> {
     return cachedResponse;
   }
 
-  // Cache miss - try network
+  // Cache miss - determine if this is a CDN-cacheable static resource
+  const resourcePath = url.pathname;
+  const isStaticResource = !isDevelopment && (
+    resourcePath.match(/\.(js|css|png|jpg|jpeg|gif|webp|svg|woff|woff2|ttf|eot|json|ico)$/i) ||
+    request.destination === 'script' ||
+    request.destination === 'style' ||
+    request.destination === 'image' ||
+    request.destination === 'font'
+  );
+
+  // ============================================
+  // CDN 优先策略：暂时禁用，等 npm 包发布后再启用
+  // TODO: npm publish aitu-app 后取消注释下面的代码
+  // ============================================
+  // if (isStaticResource) {
+  //   try {
+  //     console.log(`[SW CDN] Trying CDN first for: ${resourcePath}`);
+  //     const cdnResult = await fetchFromCDNWithFallback(
+  //       resourcePath,
+  //       APP_VERSION,
+  //       location.origin
+  //     );
+  //
+  //     if (cdnResult && cdnResult.response.ok) {
+  //       console.log(`[SW CDN] Success from ${cdnResult.source}: ${resourcePath}`);
+  //       // 缓存成功的响应
+  //       const responseToCache = cdnResult.response.clone();
+  //       cache.put(request, responseToCache);
+  //       return cdnResult.response;
+  //     }
+  //   } catch (cdnError) {
+  //     console.warn('[SW CDN] CDN sources failed, trying local server:', cdnError);
+  //   }
+  // }
+
+  // 回退到本地服务器（开发模式或 CDN 失败）
   try {
     const response = await fetchQuick(request);
 
@@ -3134,7 +3194,7 @@ async function handleStaticRequest(request: Request): Promise<Response> {
 
     return response;
   } catch (networkError) {
-    console.error('Static resource unavailable:', request.url);
+    console.warn('[SW] Network failed, trying old caches:', request.url);
     
     // Try to find the resource in any cache (including old version caches)
     const allCacheNames = await caches.keys();
@@ -3144,7 +3204,7 @@ async function handleStaticRequest(request: Request): Promise<Response> {
           const oldCache = await caches.open(cacheName);
           const oldCachedResponse = await oldCache.match(request);
           if (oldCachedResponse) {
-            // console.log(`Service Worker: Found resource in ${cacheName} after network failure`);
+            console.log(`[SW] Found resource in ${cacheName} after network failure`);
             return oldCachedResponse;
           }
         } catch (e) {
@@ -3153,6 +3213,7 @@ async function handleStaticRequest(request: Request): Promise<Response> {
       }
     }
     
+    // 所有来源都失败了
     return new Response('Resource unavailable offline', {
       status: 503,
       statusText: 'Service Unavailable',
