@@ -25,9 +25,10 @@ pnpm start              # 启动开发服务器 (localhost:7200)
 pnpm run build          # 构建所有包
 pnpm run build:web      # 仅构建 Web 应用
 pnpm test               # 运行所有测试
-nx test <项目名>        # 运行特定项目的测试
-nx lint <项目名>        # 检查特定项目的代码规范
-nx typecheck <项目名>   # 类型检查特定项目
+pnpm nx test <项目名>    # 运行特定项目的测试
+pnpm nx lint <项目名>    # 检查特定项目的代码规范
+# 类型检查 (以 drawnix 为例)
+cd packages/drawnix && npx tsc --noEmit
 ```
 
 ### 版本与发布
@@ -2225,25 +2226,25 @@ function handleClick(event: PointerEvent) {
 
 ✅ **正确示例**:
 ```typescript
-// 提交前删除所有调试日志
+// 1. 提交前删除所有 console.log 或将其注释掉
 function handleClick(event: PointerEvent) {
   // 业务逻辑...
 }
 
-// 如果确实需要保留日志，使用注释形式
+// 2. 使用分级日志记录高价值调试信息
 function complexFunction() {
-  // console.log('[Debug] intermediate value:', value);
+  // console.info('[System] Initializing component'); // 高级生命周期事件
+  // console.debug('[Debug] Trace data:', data);      // 详细数据追踪
   // 业务逻辑...
 }
 ```
 
-**提交前检查命令**:
-```bash
-# 检查 staged 更改中是否有新增的 console.log
-git diff --cached | grep -E "^\+.*console\.(log|debug|info)" | head -20
-```
+**原因**: 调试日志会污染控制台输出，影响生产环境的日志分析，也会增加代码体积。开发时可以自由添加日志，但提交前必须清理。如果某些日志对生产调试有价值，应使用注释形式保留或使用分级的 `console.debug/info` (但需确保不会导致性能问题)。
 
-**原因**: 调试日志会污染控制台输出，影响生产环境的日志分析，也会增加代码体积。开发时可以自由添加日志，但提交前必须清理。如果某些日志对生产调试有价值，应使用注释形式保留或使用专门的日志服务。
+**Exceptions**:
+- `console.error` / `console.warn` 用于记录真正的错误/警告是允许的
+- 带有 `[DEBUG]` 前缀且通过环境变量控制的日志可以保留
+- 关键系统启动或成功标志日志 (如 `Initialized successfully`) 推荐保留一份但需保持简洁。
 
 ### Z-Index 管理规范
 
@@ -2899,10 +2900,14 @@ sshCommand += ` ${config.DEPLOY_USER}@${config.DEPLOY_HOST} "${remoteCommand}"`;
 修改代码后必须执行以下验证命令：
 
 ```bash
-nx typecheck drawnix    # 类型检查
-nx lint drawnix         # 代码规范
-nx test drawnix         # 单元测试
-pnpm run build          # 构建验证
+# 类型检查 (以 drawnix 为例)
+cd packages/drawnix && npx tsc --noEmit
+# 代码规范
+pnpm nx lint drawnix
+# 单元测试
+pnpm nx test drawnix
+# 构建验证
+pnpm run build
 ```
 
 ### CSS !important 覆盖 JavaScript 动态样式
@@ -3081,6 +3086,26 @@ const matchesType =
 ```
 
 **原因**: “素雅”和“专业”感来自于严格的视觉对齐。在紧凑的工具栏布局中，即便只有 2-4px 的高度差也会被用户感知。应选定一个标准高度并强制执行，消除视觉噪音。
+
+### 错误 7: 后台清理任务过度记录日志
+
+**场景**: Service Worker 或后台定时器定期清理过期日志、缓存或任务时
+
+❌ **错误示例**:
+```typescript
+// 错误：逐条记录清理项，导致控制台瞬间被淹没
+expiredLogs.forEach(log => console.log(`Deleted expired log: ${log.id}`));
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：仅记录清理结果摘要
+if (deletedCount > 0) {
+  // console.log(`Service Worker: 清理了 ${deletedCount} 条过期控制台日志`);
+}
+```
+
+**原因**: 后台任务通常是用户无感知的，过度记录调试信息会干扰正常开发。应汇总结果并优先使用分级日志（推荐注释掉或仅在调试模式显示）。
 
 ---
 
