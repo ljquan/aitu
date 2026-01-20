@@ -504,15 +504,15 @@ export function useWorkflowSubmission(
     subscriptionsRef.current.push(workflowSub);
 
     // Submit to SW
-    console.log('[WorkflowSubmit] Submitting to SW:', {
-      workflowId: swWorkflow.id,
-      stepsCount: swWorkflow.steps.length,
-      timestamp: new Date().toISOString(),
-    });
+    // console.log('[WorkflowSubmit] Submitting to SW:', {
+    //   workflowId: swWorkflow.id,
+    //   stepsCount: swWorkflow.steps.length,
+    //   timestamp: new Date().toISOString(),
+    // });
     
     await workflowSubmissionService.submit(swWorkflow);
 
-    console.log('[WorkflowSubmit] ✓ Submitted to SW:', swWorkflow.id);
+    // console.log('[WorkflowSubmit] ✓ Submitted to SW:', swWorkflow.id);
     return swWorkflow.id;
   }, [handleWorkflowEvent]);
 
@@ -526,23 +526,23 @@ export function useWorkflowSubmission(
     existingWorkflow?: LegacyWorkflowDefinition
   ): Promise<{ workflowId: string; usedSW: boolean }> => {
     // Debug logging for workflow submission (visible when debug mode enabled)
-    console.log('[WorkflowSubmit] ▶ submitWorkflow called', {
-      scenario: parsedInput.scenario,
-      generationType: parsedInput.generationType,
-      useSWExecution,
-      swAvailable: checkSWAvailable(),
-      existingWorkflowId: existingWorkflow?.id,
-      timestamp: new Date().toISOString(),
-    });
+    // console.log('[WorkflowSubmit] ▶ submitWorkflow called', {
+    //   scenario: parsedInput.scenario,
+    //   generationType: parsedInput.generationType,
+    //   useSWExecution,
+    //   swAvailable: checkSWAvailable(),
+    //   existingWorkflowId: existingWorkflow?.id,
+    //   timestamp: new Date().toISOString(),
+    // });
 
     // Use existing workflow if provided, otherwise create a new one
     const legacyWorkflow = existingWorkflow || convertToWorkflow(parsedInput, referenceImages);
     
-    console.log('[WorkflowSubmit] Created/using workflow:', {
-      workflowId: legacyWorkflow.id,
-      name: legacyWorkflow.name,
-      stepsCount: legacyWorkflow.steps.length,
-    });
+    // console.log('[WorkflowSubmit] Created/using workflow:', {
+    //   workflowId: legacyWorkflow.id,
+    //   name: legacyWorkflow.name,
+    //   stepsCount: legacyWorkflow.steps.length,
+    // });
 
     // Start workflow in WorkflowContext
     workflowControl.startWorkflow(legacyWorkflow);

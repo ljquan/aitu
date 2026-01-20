@@ -203,7 +203,7 @@ export function useTaskStorage(): void {
 
             failedVideoTasks.forEach(task => {
               if (isNetworkError(task)) {
-                console.log(`[useTaskStorage] Recovering failed video task ${task.id} (network error, has remoteId: ${task.remoteId})`);
+                // console.log(`[useTaskStorage] Recovering failed video task ${task.id} (network error, has remoteId: ${task.remoteId})`);
                 
                 // Reset to processing status so useTaskExecutor can resume polling
                 legacyTaskQueueService.updateTaskStatus(task.id, TaskStatus.PROCESSING, {

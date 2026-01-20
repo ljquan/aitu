@@ -218,7 +218,7 @@ export class MigrationManager {
       // 启动性能监控
       this.startPerformanceMonitoring();
       
-      console.log('[MigrationManager] Initialized successfully');
+      // console.log('[MigrationManager] Initialized successfully');
       return true;
       
     } catch (error) {
@@ -408,7 +408,7 @@ export class MigrationManager {
         this.debugIntegration.enableDebugLogging();
       }
       
-      console.log('[MigrationManager] Duplex components initialized');
+      // console.log('[MigrationManager] Duplex components initialized');
       
     } catch (error) {
       console.error('[MigrationManager] Failed to initialize duplex components:', error);
@@ -477,7 +477,7 @@ export class MigrationManager {
         break;
     }
     
-    console.log(`[MigrationManager] Applied migration mode: ${mode}`, this.status.featureStatus);
+    // console.log(`[MigrationManager] Applied migration mode: ${mode}`, this.status.featureStatus);
   }
 
   /**

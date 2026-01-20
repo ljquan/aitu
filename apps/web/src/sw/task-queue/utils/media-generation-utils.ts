@@ -1066,7 +1066,7 @@ export async function migrateBase64UrlIfNeeded(url: string): Promise<{ url: stri
 
   try {
     const virtualPath = await cacheBase64Image(parsed.base64, parsed.mimeType);
-    console.log(`[Migration] Converted Base64 (${Math.round(url.length / 1024)}KB) -> ${virtualPath}`);
+    // console.log(`[Migration] Converted Base64 (${Math.round(url.length / 1024)}KB) -> ${virtualPath}`);
     return { url: virtualPath, migrated: true };
   } catch (error) {
     console.error('[Migration] Failed to migrate Base64 URL:', error);

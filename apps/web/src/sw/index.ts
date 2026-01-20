@@ -506,7 +506,7 @@ async function cleanupExpiredConsoleLogs(): Promise<number> {
         } else {
           db.close();
           if (deletedCount > 0) {
-            console.log(`Service Worker: 清理了 ${deletedCount} 条过期控制台日志`);
+            // console.log(`Service Worker: 清理了 ${deletedCount} 条过期控制台日志`);
           }
           resolve(deletedCount);
         }
@@ -1792,7 +1792,7 @@ async function clearCrashSnapshots(): Promise<void> {
       };
     });
     
-    console.log('[SW] Crash snapshots cleared');
+    // console.log('[SW] Crash snapshots cleared');
   } catch (error) {
     console.warn('[SW] Failed to clear crash snapshots:', error);
   }
@@ -3629,7 +3629,7 @@ async function handleImageRequestInternal(originalRequest: Request, requestUrl: 
             const problemHostname = new URL(currentUrl).hostname;
             markCorsFailedDomain(problemHostname);
             
-            console.log(`Service Worker [${requestId}]: CORS 错误，尝试 no-cors 模式获取图片:`, requestUrl);
+            // console.log(`Service Worker [${requestId}]: CORS 错误，尝试 no-cors 模式获取图片:`, requestUrl);
             
             try {
               // 使用 no-cors 模式获取 opaque 响应，图片可以显示但 SW 无法读取内容
@@ -3640,7 +3640,7 @@ async function handleImageRequestInternal(originalRequest: Request, requestUrl: 
               });
               
               if (opaqueResponse.type === 'opaque') {
-                console.log(`Service Worker [${requestId}]: no-cors 模式成功获取 opaque 响应`);
+                // console.log(`Service Worker [${requestId}]: no-cors 模式成功获取 opaque 响应`);
                 return opaqueResponse;
               }
             } catch (noCorsError) {
@@ -3723,7 +3723,7 @@ async function handleImageRequestInternal(originalRequest: Request, requestUrl: 
       // opaque 响应的 body 无法读取（安全限制），无法转换为普通响应
       // 直接返回 opaque 响应，让浏览器显示图片
       // 缓存由浏览器的 disk cache 处理（基于 HTTP 缓存头）
-      console.log(`Service Worker [${requestId}]: 返回 opaque 响应，依赖浏览器 disk cache`);
+      // console.log(`Service Worker [${requestId}]: 返回 opaque 响应，依赖浏览器 disk cache`);
       
       // 标记该域名存在 CORS 问题，后续请求将跳过 SW
       const problemHostname = new URL(requestUrl).hostname;

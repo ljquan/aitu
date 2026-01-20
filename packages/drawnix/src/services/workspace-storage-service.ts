@@ -84,7 +84,7 @@ async function migrateElementsBase64Urls(elements: PlaitElement[]): Promise<bool
       if (newUrl !== (element as any).url) {
         (element as any).url = newUrl;
         migrated = true;
-        console.log(`[Migration] Element ${element.id}: Base64 (${originalSize}KB) -> ${newUrl}`);
+        // console.log(`[Migration] Element ${element.id}: Base64 (${originalSize}KB) -> ${newUrl}`);
       }
     }
 
@@ -301,7 +301,7 @@ class WorkspaceStorageService {
         if (migrated) {
           // 保存迁移后的数据
           await this.saveBoard(board);
-          console.log(`[Migration] Board ${id}: Base64 URLs migrated and saved`);
+          // console.log(`[Migration] Board ${id}: Base64 URLs migrated and saved`);
         }
       } catch (error) {
         console.error(`[Migration] Board ${id}: Failed to migrate`, error);
@@ -332,7 +332,7 @@ class WorkspaceStorageService {
           const migrated = await migrateElementsBase64Urls(board.elements);
           if (migrated) {
             await this.saveBoard(board);
-            console.log(`[Migration] Board ${board.id}: Base64 URLs migrated and saved`);
+            // console.log(`[Migration] Board ${board.id}: Base64 URLs migrated and saved`);
           }
         } catch (error) {
           console.error(`[Migration] Board ${board.id}: Failed to migrate`, error);

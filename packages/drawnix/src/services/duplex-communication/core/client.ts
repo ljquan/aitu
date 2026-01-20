@@ -148,7 +148,7 @@ export class DuplexClient implements EventEmitter {
         timestamp: Date.now(),
       });
 
-      console.log('[DuplexClient] Initialized successfully');
+      // console.log('[DuplexClient] Initialized successfully');
       return true;
       
     } catch (error) {
@@ -465,7 +465,7 @@ export class DuplexClient implements EventEmitter {
 
     // 监听 Service Worker 控制器变化
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-      console.log('[DuplexClient] Service Worker controller changed');
+      // console.log('[DuplexClient] Service Worker controller changed');
       this.serviceWorkerReady = false;
       
       // 重新初始化

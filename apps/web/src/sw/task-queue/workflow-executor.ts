@@ -147,35 +147,35 @@ export class WorkflowExecutor {
    * Handle response from main thread tool execution
    */
   async handleMainThreadToolResponse(response: MainThreadToolResponseMessage): Promise<void> {
-    console.log('[SW-WorkflowExecutor] ◀ Received tool response:', {
-      requestId: response.requestId,
-      success: response.success,
-      hasPending: this.pendingToolRequests.has(response.requestId),
-      hasAddSteps: !!(response as any).addSteps?.length,
-      timestamp: new Date().toISOString(),
-    });
+    // console.log('[SW-WorkflowExecutor] ◀ Received tool response:', {
+    //   requestId: response.requestId,
+    //   success: response.success,
+    //   hasPending: this.pendingToolRequests.has(response.requestId),
+    //   hasAddSteps: !!(response as any).addSteps?.length,
+    //   timestamp: new Date().toISOString(),
+    // });
     
     const pending = this.pendingToolRequests.get(response.requestId);
     if (pending) {
-      console.log('[SW-WorkflowExecutor] ✓ Resolving pending tool request:', response.requestId);
+      // console.log('[SW-WorkflowExecutor] ✓ Resolving pending tool request:', response.requestId);
       this.pendingToolRequests.delete(response.requestId);
       pending.resolve(response);
     } else {
       // Response came after SW restart - need to recover and continue workflow
-      console.log('[SW-WorkflowExecutor] Tool response received after SW restart, attempting recovery:', response.requestId);
+      // console.log('[SW-WorkflowExecutor] Tool response received after SW restart, attempting recovery:', response.requestId);
       
       // Get the pending request info from IndexedDB
       const storedRequest = await taskQueueStorage.getPendingToolRequest(response.requestId);
       if (!storedRequest) {
-        console.log('[SW-WorkflowExecutor] No stored request found for:', response.requestId);
+        // console.log('[SW-WorkflowExecutor] No stored request found for:', response.requestId);
         return;
       }
       
-      console.log('[SW-WorkflowExecutor] Found stored request:', {
-        workflowId: storedRequest.workflowId,
-        stepId: storedRequest.stepId,
-        toolName: storedRequest.toolName,
-      });
+      // console.log('[SW-WorkflowExecutor] Found stored request:', {
+      //   workflowId: storedRequest.workflowId,
+      //   stepId: storedRequest.stepId,
+      //   toolName: storedRequest.toolName,
+      // });
       
       // Get the workflow
       let workflow = this.workflows.get(storedRequest.workflowId);
@@ -188,7 +188,7 @@ export class WorkflowExecutor {
       }
       
       if (!workflow) {
-        console.log('[SW-WorkflowExecutor] Workflow not found:', storedRequest.workflowId);
+        // console.log('[SW-WorkflowExecutor] Workflow not found:', storedRequest.workflowId);
         await taskQueueStorage.deletePendingToolRequest(response.requestId);
         return;
       }
@@ -196,7 +196,7 @@ export class WorkflowExecutor {
       // Find the step
       const step = workflow.steps.find(s => s.id === storedRequest.stepId);
       if (!step) {
-        console.log('[SW-WorkflowExecutor] Step not found:', storedRequest.stepId);
+        // console.log('[SW-WorkflowExecutor] Step not found:', storedRequest.stepId);
         await taskQueueStorage.deletePendingToolRequest(response.requestId);
         return;
       }
@@ -213,7 +213,7 @@ export class WorkflowExecutor {
         // Handle addSteps (with deduplication)
         const addSteps = (response as any).addSteps;
         if (addSteps && addSteps.length > 0) {
-          console.log('[SW-WorkflowExecutor] Adding', addSteps.length, 'new steps from recovered response');
+          // console.log('[SW-WorkflowExecutor] Adding', addSteps.length, 'new steps from recovered response');
           
           const actuallyAddedSteps: typeof addSteps = [];
           for (const newStep of addSteps) {
@@ -283,7 +283,7 @@ export class WorkflowExecutor {
       await taskQueueStorage.deletePendingToolRequest(response.requestId);
       
       // Continue executing remaining steps
-      console.log('[SW-WorkflowExecutor] Continuing workflow execution after recovery:', workflow.id);
+      // console.log('[SW-WorkflowExecutor] Continuing workflow execution after recovery:', workflow.id);
       await this.executeWorkflow(workflow);
     }
   }
@@ -372,25 +372,25 @@ export class WorkflowExecutor {
     // Note: ai_analyze now runs directly in SW, so it doesn't need special handling
     const noResendTools: string[] = [];
 
-    console.log('[SW-WorkflowExecutor] resendPendingToolRequests:', {
-      pendingCount: this.pendingToolRequests.size,
-      pendingTools: Array.from(this.pendingToolRequests.values()).map(p => ({
-        toolName: p.requestInfo.toolName,
-        workflowId: p.requestInfo.workflowId,
-      })),
-      timestamp: new Date().toISOString(),
-    });
+    // console.log('[SW-WorkflowExecutor] resendPendingToolRequests:', {
+    //   pendingCount: this.pendingToolRequests.size,
+    //   pendingTools: Array.from(this.pendingToolRequests.values()).map(p => ({
+    //     toolName: p.requestInfo.toolName,
+    //     workflowId: p.requestInfo.workflowId,
+    //   })),
+    //   timestamp: new Date().toISOString(),
+    // });
     
     for (const [, pending] of this.pendingToolRequests) {
       const { requestInfo } = pending;
 
       // For tools that shouldn't be re-sent, skip (workflow continues waiting for original response)
       if (noResendTools.includes(requestInfo.toolName)) {
-        console.log('[SW-WorkflowExecutor] Skipping resend for tool (already in progress):', {
-          toolName: requestInfo.toolName,
-          workflowId: requestInfo.workflowId,
-          requestId: requestInfo.requestId,
-        });
+        // console.log('[SW-WorkflowExecutor] Skipping resend for tool (already in progress):', {
+        //   toolName: requestInfo.toolName,
+        //   workflowId: requestInfo.workflowId,
+        //   requestId: requestInfo.requestId,
+        // });
         continue;
       }
 
@@ -424,19 +424,19 @@ export class WorkflowExecutor {
    * Submit a workflow for execution
    */
   async submitWorkflow(workflow: Workflow): Promise<void> {
-    console.log('[SW-WorkflowExecutor] submitWorkflow:', {
-      workflowId: workflow.id,
-      existingWorkflowsCount: this.workflows.size,
-      hasContext: !!workflow.context,
-      referenceImagesCount: workflow.context?.referenceImages?.length || 0,
-      timestamp: new Date().toISOString(),
-    });
+    // console.log('[SW-WorkflowExecutor] submitWorkflow:', {
+    //   workflowId: workflow.id,
+    //   existingWorkflowsCount: this.workflows.size,
+    //   hasContext: !!workflow.context,
+    //   referenceImagesCount: workflow.context?.referenceImages?.length || 0,
+    //   timestamp: new Date().toISOString(),
+    // });
     
     // Check for duplicate
     const existing = this.workflows.get(workflow.id);
     if (existing) {
       if (existing.status === 'running' || existing.status === 'pending') {
-        console.log(`[SW-WorkflowExecutor] Re-claiming active workflow ${workflow.id}, status: ${existing.status}`);
+        // console.log(`[SW-WorkflowExecutor] Re-claiming active workflow ${workflow.id}, status: ${existing.status}`);
         // Already running, just broadcast current status to sync the new client
         this.broadcastWorkflowStatus(existing);
         // Also broadcast individual steps to ensure UI is fully populated
@@ -451,7 +451,7 @@ export class WorkflowExecutor {
       return;
     }
 
-    console.log('[SW-WorkflowExecutor] ✓ New workflow, starting execution:', workflow.id);
+    // console.log('[SW-WorkflowExecutor] ✓ New workflow, starting execution:', workflow.id);
     
     // Store workflow
     workflow.status = 'pending';
@@ -511,10 +511,10 @@ export class WorkflowExecutor {
    * Execute a workflow
    */
   private async executeWorkflow(workflowId: string): Promise<void> {
-    console.log('[SW-WorkflowExecutor] executeWorkflow called:', {
-      workflowId,
-      timestamp: new Date().toISOString(),
-    });
+    // console.log('[SW-WorkflowExecutor] executeWorkflow called:', {
+    //   workflowId,
+    //   timestamp: new Date().toISOString(),
+    // });
     
     const workflow = this.workflows.get(workflowId);
     if (!workflow) {
@@ -524,12 +524,12 @@ export class WorkflowExecutor {
 
     // Check if already running
     if (this.runningWorkflows.has(workflowId)) {
-      console.warn(`[SW-WorkflowExecutor] Workflow ${workflowId} is already running, skipping duplicate execution`);
+      // console.warn(`[SW-WorkflowExecutor] Workflow ${workflowId} is already running, skipping duplicate execution`);
       return;
     }
 
     this.runningWorkflows.add(workflowId);
-    console.log(`[SW-WorkflowExecutor] ▶ Starting workflow execution: ${workflowId}`);
+    // console.log(`[SW-WorkflowExecutor] ▶ Starting workflow execution: ${workflowId}`);
 
     // Create abort controller
     const abortController = new AbortController();
@@ -710,14 +710,14 @@ export class WorkflowExecutor {
     step: WorkflowStep,
     signal: AbortSignal
   ): Promise<void> {
-    console.log('[SW-WorkflowExecutor] executeStep:', {
-      workflowId: workflow.id,
-      stepId: step.id,
-      mcp: step.mcp,
-      hasContext: !!workflow.context,
-      referenceImagesCount: workflow.context?.referenceImages?.length || 0,
-      timestamp: new Date().toISOString(),
-    });
+    // console.log('[SW-WorkflowExecutor] executeStep:', {
+    //   workflowId: workflow.id,
+    //   stepId: step.id,
+    //   mcp: step.mcp,
+    //   hasContext: !!workflow.context,
+    //   referenceImagesCount: workflow.context?.referenceImages?.length || 0,
+    //   timestamp: new Date().toISOString(),
+    // });
     
     const startTime = Date.now();
 
@@ -726,12 +726,12 @@ export class WorkflowExecutor {
     
     // Debug: log args before processing
     if (step.mcp === 'generate_image' || step.mcp === 'generate_video') {
-      console.log('[SW-WorkflowExecutor] Image/Video step args before processing:', {
-        stepId: step.id,
-        referenceImagesInContext: referenceImages.length,
-        referenceImagesValues: referenceImages.slice(0, 2).map(url => url.substring(0, 50) + '...'),
-        argsReferenceImages: (step.args as any).referenceImages,
-      });
+      // console.log('[SW-WorkflowExecutor] Image/Video step args before processing:', {
+      //   stepId: step.id,
+      //   referenceImagesInContext: referenceImages.length,
+      //   referenceImagesValues: referenceImages.slice(0, 2).map(url => url.substring(0, 50) + '...'),
+      //   argsReferenceImages: (step.args as any).referenceImages,
+      // });
     }
     
     const processedArgs = this.replaceImagePlaceholders(step.args, referenceImages);
@@ -740,17 +740,17 @@ export class WorkflowExecutor {
     const argsStr = JSON.stringify(step.args);
     const processedStr = JSON.stringify(processedArgs);
     if (argsStr !== processedStr) {
-      console.log('[SW-WorkflowExecutor] ✓ Replaced image placeholders:', {
-        stepId: step.id,
-        referenceImagesCount: referenceImages.length,
-      });
+      // console.log('[SW-WorkflowExecutor] ✓ Replaced image placeholders:', {
+      //   stepId: step.id,
+      //   referenceImagesCount: referenceImages.length,
+      // });
       // Update step args with processed values
       step.args = processedArgs;
     } else if (referenceImages.length > 0 && (step.mcp === 'generate_image' || step.mcp === 'generate_video')) {
-      console.log('[SW-WorkflowExecutor] No placeholders replaced (args unchanged):', {
-        stepId: step.id,
-        referenceImagesCount: referenceImages.length,
-      });
+      // console.log('[SW-WorkflowExecutor] No placeholders replaced (args unchanged):', {
+      //   stepId: step.id,
+      //   referenceImagesCount: referenceImages.length,
+      // });
     }
 
     // Update step status to running
@@ -918,7 +918,7 @@ export class WorkflowExecutor {
 
         // Handle additional steps (from ai_analyze executed in SW) with deduplication
         if (result.addSteps && result.addSteps.length > 0) {
-          console.log(`[SW-WorkflowExecutor] Adding ${result.addSteps.length} new steps from ${step.mcp}`);
+          // console.log(`[SW-WorkflowExecutor] Adding ${result.addSteps.length} new steps from ${step.mcp}`);
           const actuallyAddedSteps: typeof result.addSteps = [];
           for (const newStep of result.addSteps) {
             if (!workflow.steps.find(s => s.id === newStep.id)) {

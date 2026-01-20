@@ -92,7 +92,7 @@ export class MessageRouter implements IMessageRouter {
       this.wildcardHandlers.sort((a, b) => (b.priority || 0) - (a.priority || 0));
     }
 
-    console.log(`[MessageRouter] Registered handler: ${handler.name} for types: ${handler.supportedTypes.join(', ')}`);
+    // console.log(`[MessageRouter] Registered handler: ${handler.name} for types: ${handler.supportedTypes.join(', ')}`);
   }
 
   /**
@@ -114,7 +114,7 @@ export class MessageRouter implements IMessageRouter {
       this.wildcardHandlers.splice(wildcardIndex, 1);
     }
 
-    console.log(`[MessageRouter] Unregistered handler: ${handlerName}`);
+    // console.log(`[MessageRouter] Unregistered handler: ${handlerName}`);
   }
 
   /**
@@ -365,10 +365,10 @@ export function createLoggingMiddleware(
     
     switch (logLevel) {
       case 'debug':
-        console.debug('[MessageRouter] Processing message:', logData);
+        // console.debug('[MessageRouter] Processing message:', logData);
         break;
       case 'info':
-        console.info('[MessageRouter] Processing message:', logData);
+        // console.info('[MessageRouter] Processing message:', logData);
         break;
       case 'warn':
         console.warn('[MessageRouter] Processing message:', logData);
@@ -452,7 +452,7 @@ export function createRetryErrorHandler(
     
     if (shouldRetry(error) && currentRetries < maxRetries) {
       retryCount.set(messageId, currentRetries + 1);
-      console.warn(`[MessageRouter] Retrying message ${messageId} (attempt ${currentRetries + 1}/${maxRetries})`);
+      // console.warn(`[MessageRouter] Retrying message ${messageId} (attempt ${currentRetries + 1}/${maxRetries})`);
       
       // 这里可以重新路由消息，但需要小心避免无限循环
       // 暂时只记录重试信息

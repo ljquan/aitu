@@ -234,11 +234,11 @@ export function handleWorkflowMessage(
 
   switch (workflowMessage.type) {
     case 'WORKFLOW_SUBMIT':
-      console.log('[SW-WorkflowHandler] ▶ WORKFLOW_SUBMIT received:', {
-        workflowId: workflowMessage.workflow.id,
-        clientId,
-        timestamp: new Date().toISOString(),
-      });
+      // console.log('[SW-WorkflowHandler] ▶ WORKFLOW_SUBMIT received:', {
+      //   workflowId: workflowMessage.workflow.id,
+      //   clientId,
+      //   timestamp: new Date().toISOString(),
+      // });
       workflowExecutor.submitWorkflow(workflowMessage.workflow);
       break;
 
@@ -282,12 +282,12 @@ function handleChatWorkflowMessage(message: ChatWorkflowMainToSWMessage, clientI
 
   switch (message.type) {
     case 'CHAT_WORKFLOW_START':
-      console.log('[SW-Workflow] ▶ CHAT_WORKFLOW_START received:', {
-        chatId: message.chatId,
-        clientId,
-        stepsCount: message.params.steps?.length,
-        timestamp: new Date().toISOString(),
-      });
+      // console.log('[SW-Workflow] ▶ CHAT_WORKFLOW_START received:', {
+      //   chatId: message.chatId,
+      //   clientId,
+      //   stepsCount: message.params.steps?.length,
+      //   timestamp: new Date().toISOString(),
+      // });
       chatWorkflowHandler.startWorkflow(message.chatId, message.params, clientId);
       break;
 

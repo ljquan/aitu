@@ -170,21 +170,21 @@ export class ChatWorkflowHandler {
    * @param clientId ID of the client that initiated the workflow
    */
   async startWorkflow(chatId: string, params: ChatParams, clientId: string): Promise<void> {
-    console.log('[SW-ChatWorkflow] ▶ startWorkflow:', {
-      chatId,
-      clientId,
-      existingWorkflows: this.workflows.size,
-      timestamp: new Date().toISOString(),
-    });
+    // console.log('[SW-ChatWorkflow] ▶ startWorkflow:', {
+    //   chatId,
+    //   clientId,
+    //   existingWorkflows: this.workflows.size,
+    //   timestamp: new Date().toISOString(),
+    // });
     
     // Check for duplicate
     const existing = this.workflows.get(chatId);
     if (existing) {
       if (existing.status === 'streaming' || existing.status === 'pending' || existing.status === 'executing_tools') {
-        console.log('[SW-ChatWorkflow] Re-claiming active workflow:', {
-          chatId,
-          status: existing.status,
-        });
+        // console.log('[SW-ChatWorkflow] Re-claiming active workflow:', {
+        //   chatId,
+        //   status: existing.status,
+        // });
         this.broadcastStatus(existing);
         return;
       }
@@ -392,12 +392,12 @@ export class ChatWorkflowHandler {
 
     const model = params.temporaryModel || geminiConfig.modelName || 'gemini-2.5-flash';
     
-    console.log('[SW-ChatWorkflow] streamChat called:', {
-      workflowId: workflow.id,
-      model,
-      messagesCount: messages.length,
-      timestamp: new Date().toISOString(),
-    });
+    // console.log('[SW-ChatWorkflow] streamChat called:', {
+    //   workflowId: workflow.id,
+    //   model,
+    //   messagesCount: messages.length,
+    //   timestamp: new Date().toISOString(),
+    // });
 
     const requestBody = {
       model,

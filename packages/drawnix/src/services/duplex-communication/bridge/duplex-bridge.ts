@@ -387,7 +387,7 @@ export class DuplexBridge {
     if (!this.isServiceWorkerSupported()) return;
 
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-      console.log('[DuplexBridge] Service Worker controller changed');
+      // console.log('[DuplexBridge] Service Worker controller changed');
       // 重新初始化
       if (this.storedGeminiConfig && this.storedVideoConfig) {
         this.initialized = false;
@@ -472,7 +472,7 @@ export class DuplexBridge {
     if (this.config.debugLogger) {
       this.config.debugLogger(entry);
     } else {
-      console.log(`[DuplexBridge] ${direction === 'send' ? '→' : '←'} ${messageType}`, data);
+      // console.log(`[DuplexBridge] ${direction === 'send' ? '→' : '←'} ${messageType}`, data);
     }
   }
 

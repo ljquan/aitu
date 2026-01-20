@@ -116,11 +116,11 @@ class MemoryMonitorService {
     
     // 检查冷却时间
     if (!force && now - this.lastCleanupTime < this.cleanupCooldown) {
-      console.log('[MemoryMonitor] Cleanup skipped (cooldown)');
+      // console.log('[MemoryMonitor] Cleanup skipped (cooldown)');
       return;
     }
 
-    console.log('[MemoryMonitor] Starting memory cleanup...');
+    // console.log('[MemoryMonitor] Starting memory cleanup...');
     this.lastCleanupTime = now;
 
     const beforeStats = this.getMemoryStats();
@@ -128,7 +128,7 @@ class MemoryMonitorService {
     // 执行所有清理处理器
     for (const handler of this.cleanupHandlers) {
       try {
-        console.log(`[MemoryMonitor] Running cleanup: ${handler.name}`);
+        // console.log(`[MemoryMonitor] Running cleanup: ${handler.name}`);
         await handler.cleanup();
       } catch (error) {
         console.error(`[MemoryMonitor] Cleanup failed: ${handler.name}`, error);
@@ -143,7 +143,7 @@ class MemoryMonitorService {
     const afterStats = this.getMemoryStats();
     if (beforeStats && afterStats) {
       const freed = beforeStats.usedJSHeapSize - afterStats.usedJSHeapSize;
-      console.log(`[MemoryMonitor] Cleanup complete. Freed: ${this.formatBytes(freed)}`);
+      // console.log(`[MemoryMonitor] Cleanup complete. Freed: ${this.formatBytes(freed)}`);
     }
   }
 
@@ -177,11 +177,11 @@ class MemoryMonitorService {
     // 检查浏览器是否支持内存 API
     const stats = this.getMemoryStats();
     if (!stats) {
-      console.log('[MemoryMonitor] Memory API not available');
+      // console.log('[MemoryMonitor] Memory API not available');
       return;
     }
 
-    console.log('[MemoryMonitor] Starting memory monitor');
+    // console.log('[MemoryMonitor] Starting memory monitor');
     this.checkTimer = setInterval(() => this.checkMemory(), CHECK_INTERVAL);
 
     // 立即检查一次
@@ -195,7 +195,7 @@ class MemoryMonitorService {
     if (this.checkTimer) {
       clearInterval(this.checkTimer);
       this.checkTimer = null;
-      console.log('[MemoryMonitor] Memory monitor stopped');
+      // console.log('[MemoryMonitor] Memory monitor stopped');
     }
   }
 
@@ -205,17 +205,17 @@ class MemoryMonitorService {
   logMemoryStatus(): void {
     const stats = this.getMemoryStats();
     if (!stats) {
-      console.log('[MemoryMonitor] Memory API not available');
+      // console.log('[MemoryMonitor] Memory API not available');
       return;
     }
 
-    console.log('[MemoryMonitor] Memory Status:', {
-      used: stats.formatted.used,
-      total: stats.formatted.total,
-      limit: stats.formatted.limit,
-      usage: `${stats.usagePercent.toFixed(1)}%`,
-      pressure: stats.isUnderPressure ? 'YES' : 'NO',
-    });
+    // console.log('[MemoryMonitor] Memory Status:', {
+    //   used: stats.formatted.used,
+    //   total: stats.formatted.total,
+    //   limit: stats.formatted.limit,
+    //   usage: `${stats.usagePercent.toFixed(1)}%`,
+    //   pressure: stats.isUnderPressure ? 'YES' : 'NO',
+    // });
   }
 }
 

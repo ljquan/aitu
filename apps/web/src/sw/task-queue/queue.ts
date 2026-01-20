@@ -168,7 +168,7 @@ export class SWTaskQueue {
       }
 
       if (migratedCount > 0) {
-        console.log(`[SWTaskQueue] Migrated ${migratedCount} Base64 URLs to cache`);
+        // console.log(`[SWTaskQueue] Migrated ${migratedCount} Base64 URLs to cache`);
       }
 
       // NOTE: Removed automatic cleanup of old tasks

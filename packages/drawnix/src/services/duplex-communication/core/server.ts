@@ -295,7 +295,7 @@ export class DuplexServer {
   enableDebug(logger?: (message: DuplexMessage, direction: 'send' | 'receive', clientId?: string) => void): void {
     this.debugEnabled = true;
     this.debugLogger = logger;
-    console.log('[DuplexServer] Debug mode enabled');
+    // console.log('[DuplexServer] Debug mode enabled');
   }
 
   /**
@@ -304,7 +304,7 @@ export class DuplexServer {
   disableDebug(): void {
     this.debugEnabled = false;
     this.debugLogger = undefined;
-    console.log('[DuplexServer] Debug mode disabled');
+    // console.log('[DuplexServer] Debug mode disabled');
   }
 
   // ============================================================================
@@ -446,7 +446,7 @@ export class DuplexServer {
       };
       
       this.clients.set(clientId, connection);
-      console.log(`[DuplexServer] New client connected: ${clientId}`);
+      // console.log(`[DuplexServer] New client connected: ${clientId}`);
       
       // 发送缓存的消息
       this.sendCachedMessages(clientId);
@@ -505,7 +505,7 @@ export class DuplexServer {
       return;
     }
     
-    console.log(`[DuplexServer] Sending ${cache.length} cached messages to client ${clientId}`);
+    // console.log(`[DuplexServer] Sending ${cache.length} cached messages to client ${clientId}`);
     
     for (const message of cache) {
       await this.sendMessageToClient(connection, message);
@@ -541,7 +541,7 @@ export class DuplexServer {
       canHandle: (type) => type === MESSAGE_TYPES.SYSTEM.CONNECT,
       handle: async (message) => {
         const clientId = message.metadata?.sender || 'unknown';
-        console.log(`[DuplexServer] Client ${clientId} connected`);
+        // console.log(`[DuplexServer] Client ${clientId} connected`);
         return { status: 'connected', timestamp: Date.now() };
       },
     });
@@ -555,7 +555,7 @@ export class DuplexServer {
         const clientId = message.metadata?.sender || 'unknown';
         this.clients.delete(clientId);
         this.messageCache.delete(clientId);
-        console.log(`[DuplexServer] Client ${clientId} disconnected`);
+        // console.log(`[DuplexServer] Client ${clientId} disconnected`);
         return { status: 'disconnected', timestamp: Date.now() };
       },
     });
@@ -585,7 +585,7 @@ export class DuplexServer {
         if (connection) {
           connection.debugEnabled = true;
         }
-        console.log(`[DuplexServer] Debug enabled for client ${clientId}`);
+        // console.log(`[DuplexServer] Debug enabled for client ${clientId}`);
         return { status: 'debug_enabled', timestamp: Date.now() };
       },
     });
@@ -601,7 +601,7 @@ export class DuplexServer {
         if (connection) {
           connection.debugEnabled = false;
         }
-        console.log(`[DuplexServer] Debug disabled for client ${clientId}`);
+        // console.log(`[DuplexServer] Debug disabled for client ${clientId}`);
         return { status: 'debug_disabled', timestamp: Date.now() };
       },
     });
@@ -715,7 +715,7 @@ export class DuplexServer {
     
     for (const [clientId, connection] of this.clients.entries()) {
       if (now - connection.lastActiveAt > maxInactiveTime) {
-        console.log(`[DuplexServer] Removing inactive client: ${clientId}`);
+        // console.log(`[DuplexServer] Removing inactive client: ${clientId}`);
         this.clients.delete(clientId);
         this.messageCache.delete(clientId);
       }
