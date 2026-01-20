@@ -8,7 +8,7 @@
   gap: 16px;
   padding: 16px;
   background: #f5f5f5;
-  overflow: hidden;
+  overflow: visible; // 允许下拉菜单溢出
 
   .batch-main-content {
     flex: 1;
@@ -16,9 +16,11 @@
     flex-direction: column;
     min-width: 0;
     background: white;
-    border-radius: 8px;
+    border-radius: 12px;
     padding: 16px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+    border: 1px solid #eee;
+    overflow: visible; // 关键：允许内部下拉菜单溢出显示
   }
 
   // 工具栏
@@ -26,38 +28,40 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 16px;
-    flex-wrap: wrap;
-    gap: 8px;
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #f0f0f0;
+    flex-wrap: wrap; // 允许换行，但在大多数情况下通过 gap 和 min-width 控制
+    gap: 12px;
+    position: relative;
+    z-index: 100; // 确保工具栏在内容之上，方便下拉菜单显示
+    overflow: visible; // 必须为 visible，否则下拉菜单会被遮挡
 
     .toolbar-left,
     .toolbar-right {
       display: flex;
       gap: 8px;
       align-items: center;
+      flex-wrap: wrap; // 允许内部按钮换行，防止窄屏幕溢出
+    }
+
+    .toolbar-divider {
+      width: 1px;
+      height: 20px;
+      background: #eee;
+      margin: 0 4px;
+      flex-shrink: 0; // 防止分割线被压缩成 0
     }
   }
 
-  // 按钮样式
-  .btn {
-    padding: 8px 16px;
-    border: none;
-    border-radius: 6px;
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s;
+  .batch-generate-btn {
+    background: linear-gradient(135deg, #F39C12 0%, #E67E22 100%) !important;
+    border: none !important;
+    font-weight: 600 !important;
+    padding: 0 20px !important;
+    height: 32px !important;
     white-space: nowrap;
-
-    &:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-  }
-
-  .btn-primary {
-    background: linear-gradient(135deg, #F39C12 0%, #E67E22 100%);
-    color: white;
+    color: white !important;
 
     &:hover:not(:disabled) {
       transform: translateY(-1px);
@@ -65,32 +69,35 @@
     }
   }
 
-  .btn-secondary {
-    background: white;
-    color: #666;
-    border: 1px solid #ddd;
-
-    &:hover:not(:disabled) {
-      background: #f5f5f5;
+  .batch-delete-btn {
+    color: #888 !important;
+    font-weight: 400 !important;
+    
+    &:hover {
+      color: #ff4d4f !important;
+      background: #f5f5f5 !important;
     }
   }
 
-  .btn-text {
-    background: none;
-    color: #666;
-    padding: 8px 12px;
-
-    &:hover {
-      color: #F39C12;
-    }
+  .batch-download-btn {
+    // 采用与上传按钮一致的样式
   }
 
   // 表格容器
   .excel-table-container {
     flex: 1;
     overflow: auto;
-    border: 1px solid #e0e0e0;
-    border-radius: 6px;
+    border: 1px solid #eee;
+    border-radius: 8px;
+    background: #fff;
+    
+    &.is-filling {
+      cursor: crosshair;
+    }
+    
+    &.is-selecting {
+      cursor: cell;
+    }
   }
 
   // 表格
@@ -101,34 +108,38 @@
     table-layout: fixed;
 
     th, td {
-      border: 1px solid #e0e0e0;
+      border: 1px solid #f0f0f0;
       padding: 0;
       vertical-align: top;
-      height: 1px; // 让 td 高度由内容撑开，同时允许子元素 height: 100% 生效
+      height: 1px;
     }
 
     th {
-      background: #f5f5f5;
+      background: #fafafa;
       font-weight: 600;
-      font-size: 13px;
-      color: #666;
+      font-size: 12px;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
       text-align: center;
       position: sticky;
       top: 0;
       z-index: 10;
+      height: 40px;
     }
 
     .row-number {
-      width: 50px;
-      min-width: 50px;
+      width: 40px;
+      min-width: 40px;
       text-align: center;
-      background: #f5f5f5;
-      font-weight: 600;
-      color: #666;
+      background: #fafafa;
+      font-weight: 500;
+      color: #999;
       padding: 8px;
       position: sticky;
       left: 0;
       z-index: 5;
+      font-size: 11px;
     }
 
     th.row-number {
@@ -139,65 +150,65 @@
       width: 40px;
       min-width: 40px;
       text-align: center;
-      vertical-align: middle; // 垂直居中
+      vertical-align: middle;
 
-      input[type="checkbox"] {
-        width: 16px;
-        height: 16px;
-        cursor: pointer;
-        accent-color: #F39C12;
+      .checkbox-wrapper {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: 100%;
+
+        // 覆盖 TDesign Checkbox 的默认样式以符合素雅风格
+        :global(.t-checkbox) {
+          margin-right: 0;
+          
+          .t-checkbox__input {
+            border-radius: 4px;
+            transition: all 0.2s;
+          }
+
+          &.t-is-checked .t-checkbox__input {
+            background-color: #F39C12;
+            border-color: #F39C12;
+          }
+
+          // 减弱黑色的感觉，使用更柔和的阴影或边框
+          &:hover .t-checkbox__input {
+            border-color: #F39C12;
+          }
+        }
       }
     }
 
-    // 行号列垂直居中
     td.row-number {
       vertical-align: middle;
     }
-    .col-prompt { width: 35%; min-width: 200px; }
-    .col-size { width: 80px; min-width: 80px; }
-    .col-images { width: 150px; min-width: 150px; }
-    .col-count { width: 60px; min-width: 60px; }
-    .col-preview { width: 150px; min-width: 150px; }
+    .col-prompt { width: 40%; min-width: 250px; }
+    .col-size { width: 90px; min-width: 90px; }
+    .col-images { width: 160px; min-width: 160px; }
+    .col-count { width: 70px; min-width: 70px; }
+    .col-preview { width: 180px; min-width: 180px; }
 
-    // 选中行高亮
-    tr.row-selected {
-      td {
-        background: rgba(243, 156, 18, 0.08);
-      }
+    tr.row-selected td {
+      background: #fff9f0 !important;
     }
 
-    // 拖放目标行高亮
     tr {
-      transition: background 0.15s;
-
-      &:hover {
-        td {
-          background: rgba(243, 156, 18, 0.03);
-        }
+      transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      &:hover td {
+        background: #fafafa;
       }
 
-      // 拖拽悬停时的高亮
-      &.row-drag-over {
-        td {
-          background: rgba(243, 156, 18, 0.15) !important;
-          border-top: 2px solid #F39C12;
-          border-bottom: 2px solid #F39C12;
-        }
-
-        td:first-child {
-          border-left: 2px solid #F39C12;
-        }
+      &.row-drag-over td {
+        background: rgba(243, 156, 18, 0.1) !important;
+        border-top: 2px solid #F39C12 !important;
+        border-bottom: 2px solid #F39C12 !important;
       }
 
-      // 填充预览行
-      &.fill-preview {
-        td {
-          background: rgba(24, 144, 255, 0.1) !important;
-        }
-
-        td:last-child {
-          border-right: 2px solid #F39C12;
-        }
+      // 填充预览时，整行的高亮效果
+      &.fill-preview td {
+        background: rgba(243, 156, 18, 0.05) !important;
       }
     }
 
@@ -205,833 +216,502 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 4px;
-      padding: 8px;
+      padding: 0 8px;
+      height: 100%;
+      position: relative;
+      white-space: nowrap;
+
+      // 确保 Tooltip 包装器不影响对齐
+      .t-tooltip {
+        display: inline-flex;
+        align-items: center;
+      }
     }
 
     .column-fill-btn {
-      background: linear-gradient(135deg, #F39C12 0%, #E67E22 100%);
-      color: white;
-      border: none;
-      border-radius: 4px;
-      padding: 2px 6px;
-      font-size: 11px;
-      cursor: pointer;
+      margin-left: 6px; // 稍微减小间距，因为有了 Tooltip 包装
+      opacity: 0.6;
       transition: all 0.2s;
-
+      color: #999 !important; 
+      background: #f5f5f5 !important;
+      border: 1px solid #e0e0e0 !important;
+      width: 18px !important;
+      height: 18px !important;
+      min-height: 18px !important;
+      padding: 0 !important;
+      display: flex !important;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px !important;
+      flex-shrink: 0;
+      cursor: pointer;
+      
       &:hover {
-        transform: scale(1.05);
-        box-shadow: 0 2px 8px rgba(243, 156, 18, 0.4);
+        opacity: 1;
+        color: #F39C12 !important;
+        border-color: #F39C12 !important;
+        background: white !important;
+        transform: scale(1.1);
       }
+
+      .t-icon {
+        font-size: 10px;
+      }
+    }
+
+    th:hover .column-fill-btn {
+      opacity: 1;
     }
   }
 
   // 单元格
   .excel-cell {
-    min-height: 40px;
-    height: 100%; // 填满整个 td
-    padding: 8px;
+    min-height: 44px;
+    height: 100%;
+    padding: 8px 12px;
     cursor: cell;
     position: relative;
     display: flex;
-    align-items: center; // 垂直居中
-    user-select: none; // 禁用文本选择，防止浏览器原生选择干扰单元格选择
+    align-items: center;
+    user-select: none;
     box-sizing: border-box;
+    font-size: 13px;
+    color: #444;
+
+    // 针对提示词列进行特殊对齐处理，防止编辑态跳动
+    &.cell-prompt {
+      align-items: flex-start;
+      padding: 0; // 移除单元格内边距，交给内部元素控制
+
+      .cell-text,
+      .cell-textarea {
+        padding: 12px 12px !important; // 12+12+20 = 44px，完美契合单元格高度
+      }
+    }
 
     &.active {
-      background: white;
-      outline: 2px solid #F39C12;
-      outline-offset: -2px;
+      background: white !important;
+      box-shadow: inset 0 0 0 2px #F39C12;
       z-index: 2;
     }
 
-    &.selected {
-      background: rgba(243, 156, 18, 0.1);
-      outline: 2px solid #F39C12;
-      outline-offset: -2px;
+    &.selected:not(.active) {
+      background: #fff9f0 !important;
+      box-shadow: inset 0 0 0 1px #F39C12;
       z-index: 1;
+      
+      .is-selecting & {
+        background: rgba(243, 156, 18, 0.15) !important;
+        box-shadow: inset 0 0 0 1px #F39C12, 0 0 4px rgba(243, 156, 18, 0.2);
+      }
     }
 
-    &.active.selected {
-      z-index: 2;
+    &.filling {
+      background: rgba(243, 156, 18, 0.1) !important;
+      z-index: 5;
+      
+      &::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        border: 1px dashed #F39C12;
+        pointer-events: none;
+      }
     }
 
-    .cell-text {
+    .cell-text,
+    .cell-textarea {
+      width: 100%;
+      display: block;
+      font-family: inherit;
+      font-size: 13px;
+      line-height: 20px;
+      margin: 0 !important;
+      border: none !important;
+      background: transparent !important;
+      box-sizing: border-box;
       word-break: break-word;
       white-space: pre-wrap;
-      pointer-events: none; // 确保点击事件传递到父级 .excel-cell
-    }
-
-    input, textarea, select {
-      width: 100%;
-      border: none;
-      outline: none;
-      background: transparent;
-      font-size: 13px;
-      font-family: inherit;
-      padding: 0;
+      outline: none !important;
       resize: none;
-      user-select: text; // 编辑模式下允许文本选择
+      color: inherit;
+      vertical-align: top;
+      min-height: unset !important;
+      user-select: text;
     }
 
-    textarea {
-      min-height: 60px;
+    .cell-textarea {
+      overflow: hidden;
+      cursor: text;
+      
+      &:focus {
+        box-shadow: none !important;
+      }
+
+      &::placeholder {
+        color: #ccc;
+        font-weight: 400;
+      }
     }
 
+    // 针对数量列的数字输入框
     input[type="number"] {
+      width: 100%;
+      height: 32px;
+      border: none !important;
+      background: #f5f5f5 !important;
+      border-radius: 6px;
       text-align: center;
-      // 隐藏数字输入框的加减按钮
-      -moz-appearance: textfield;
-      &::-webkit-outer-spin-button,
-      &::-webkit-inner-spin-button {
+      font-weight: 600;
+      color: #F39C12;
+      font-family: inherit;
+      font-size: 13px;
+      outline: none !important;
+      transition: all 0.2s;
+
+      &:hover {
+        background: #fff !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+      }
+
+      &:focus {
+        background: #fff !important;
+        box-shadow: 0 0 0 2px rgba(243, 156, 18, 0.2);
+      }
+
+      // 隐藏原生 number 输入框的上下箭头
+      &::-webkit-inner-spin-button,
+      &::-webkit-outer-spin-button {
         -webkit-appearance: none;
         margin: 0;
       }
+      appearance: textfield;
     }
 
-    // 填充柄
-    .fill-handle {
-      position: absolute;
-      bottom: -4px;
-      right: -4px;
-      width: 10px;
-      height: 10px;
-      background: #F39C12;
-      border: 2px solid white;
-      cursor: crosshair;
-      z-index: 100;
-      display: none;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    // 自定义尺寸下拉组件
+    .custom-size-dropdown {
+      position: relative;
+      width: 100%;
 
-      &:hover {
-        transform: scale(1.2);
-        background: #E67E22;
+      .dropdown-trigger {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        height: 32px;
+        background: #f5f5f5;
+        border-radius: 6px;
+        padding: 0 8px;
+        font-weight: 600;
+        color: #F39C12;
+        font-size: 13px;
+        cursor: pointer;
+        transition: all 0.2s;
+
+        &:hover {
+          background: #fff;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        svg {
+          color: #F39C12;
+          flex-shrink: 0;
+        }
+      }
+
+      .dropdown-menu {
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 50%;
+        transform: translateX(-50%);
+        min-width: 100px;
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.05);
+        z-index: 1000;
+        padding: 4px;
+        max-height: 280px;
+        overflow-y: auto;
+
+        .dropdown-item {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          padding: 8px 12px;
+          font-size: 13px;
+          color: #333;
+          border-radius: 6px;
+          cursor: pointer;
+          transition: all 0.15s;
+          white-space: nowrap;
+
+          &:hover {
+            background: #fff8f0;
+            color: #F39C12;
+          }
+
+          &.selected {
+            background: linear-gradient(135deg, #FFF8F0 0%, #FFF3E0 100%);
+            color: #E67E22;
+            font-weight: 600;
+          }
+
+          .check-icon {
+            color: #F39C12;
+            font-size: 12px;
+            font-weight: bold;
+          }
+        }
       }
     }
 
-    &.active .fill-handle {
-      display: block;
+    .fill-handle {
+      position: absolute;
+      bottom: -3px;
+      right: -3px;
+      width: 7px;
+      height: 7px;
+      background: #F39C12;
+      border: 1.5px solid white;
+      cursor: crosshair;
+      z-index: 100;
+      display: none;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+      &:hover { transform: scale(1.4); }
     }
+
+    &.active .fill-handle { display: block; }
   }
 
   // 图片单元格
   .image-cell-content {
     display: flex;
-    gap: 4px;
+    gap: 6px; // 减少图片间的间距
     flex-wrap: wrap;
     align-items: center;
     width: 100%;
   }
 
+  .add-image-buttons {
+    display: flex;
+    gap: 8px; // 增加按钮间的间距
+    align-items: center;
+  }
+
   .cell-image-thumb {
     width: 36px;
     height: 36px;
-    border-radius: 4px;
+    border-radius: 6px;
     overflow: hidden;
     position: relative;
-    border: 1px solid #ddd;
+    border: 1px solid #eee;
     flex-shrink: 0;
-
-    img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    img { width: 100%; height: 100%; object-fit: cover; }
     .remove-btn {
       position: absolute;
-      top: 0;
-      right: 0;
-      background: rgba(220, 53, 69, 0.9);
+      top: -2px;
+      right: -2px;
+      background: rgba(0, 0, 0, 0.6);
       color: white;
       border: none;
-      width: 16px;
-      height: 16px;
+      width: 14px;
+      height: 14px;
       font-size: 10px;
-      line-height: 1;
+      border-radius: 50%;
       cursor: pointer;
       display: none;
       padding: 0;
+      z-index: 5;
+      &:hover { background: #ff4d4f; }
     }
-
-    &:hover .remove-btn {
-      display: block;
-    }
-  }
-
-  .add-image-buttons {
-    display: flex;
-    gap: 4px;
-    flex-shrink: 0;
+    &:hover .remove-btn { display: flex; align-items: center; justify-content: center; }
   }
 
   .add-image-btn {
-    width: 28px;
-    height: 28px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    background: #f9f9f9;
-    color: #666;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    flex-shrink: 0;
-    transition: all 0.15s;
-
+    width: 36px !important;
+    height: 36px !important;
+    background: #f5f5f5 !important;
+    color: #999 !important;
+    border-radius: 6px !important;
+    padding: 0 !important;
     &:hover {
-      border-color: #F39C12;
-      color: #F39C12;
-      background: white;
+      background: #fff !important;
+      color: #F39C12 !important;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.05);
     }
   }
 
-  // 提示文字
   .hint-text {
-    font-size: 12px;
-    color: #999;
+    font-size: 11px;
+    color: #bbb;
     margin-top: 12px;
     text-align: center;
   }
 
   // 图片库侧栏
   .image-library-sidebar {
-    width: 240px;
+    width: 280px;
     background: white;
-    border-radius: 8px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    border-radius: 12px;
+    border: 1px solid #eee;
     display: flex;
     flex-direction: column;
-    transition: width 0.3s;
     overflow: hidden;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.05);
+    flex-shrink: 0;
 
-    &.collapsed {
-      width: 48px;
-
-      .library-content {
-        display: none;
-      }
-
-      .library-header h3 {
-        display: none;
-      }
+    &.hidden {
+      display: none;
     }
 
     .library-header {
-      padding: 12px;
-      background: linear-gradient(135deg, #F39C12 0%, #E67E22 100%);
-      color: white;
+      padding: 12px 16px;
+      background: #fff;
+      border-bottom: 1px solid #f0f0f0;
       display: flex;
       align-items: center;
       justify-content: space-between;
-
-      h3 {
-        font-size: 14px;
-        font-weight: 600;
-        margin: 0;
-      }
-
-      .toggle-btn {
-        background: none;
-        border: none;
-        color: white;
-        cursor: pointer;
-        font-size: 14px;
-        padding: 4px;
+      h3 { font-size: 14px; font-weight: 600; margin: 0; color: #333; }
+      .close-btn {
+        color: #999 !important;
+        &:hover { color: #F39C12 !important; background: #f5f5f5 !important; }
       }
     }
 
     .library-content {
       flex: 1;
       overflow-y: auto;
-      padding: 12px;
+      padding: 16px;
       display: flex;
       flex-direction: column;
-      gap: 12px;
-    }
-
-    .upload-section {
-      padding-bottom: 12px;
-      border-bottom: 1px solid #eee;
-    }
-
-    .upload-btn {
-      width: 100%;
-      padding: 8px 12px;
-      background: linear-gradient(135deg, #F39C12 0%, #E67E22 100%);
-      color: white;
-      border: none;
-      border-radius: 6px;
-      font-size: 13px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.2s;
-
-      &:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(243, 156, 18, 0.3);
-      }
+      gap: 16px;
     }
 
     .library-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
-      gap: 8px;
-    }
-
-    .empty-library {
-      text-align: center;
-      padding: 20px;
-      color: #999;
-      font-size: 12px;
-      grid-column: 1 / -1;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
     }
 
     .library-image {
       aspect-ratio: 1;
-      border-radius: 4px;
+      border-radius: 8px;
       overflow: hidden;
       cursor: grab;
-      border: 2px solid transparent;
+      border: 1px solid #eee;
       transition: all 0.2s;
-      position: relative;
-
+      background: #f9f9f9;
       &:hover {
         border-color: #F39C12;
-        transform: scale(1.05);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
       }
-
-      &:active {
-        cursor: grabbing;
-      }
-
-      img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-        pointer-events: none; // 防止拖拽图片本身
-      }
-
-      .delete-btn {
-        position: absolute;
-        top: 2px;
-        right: 2px;
-        width: 18px;
-        height: 18px;
-        background: rgba(220, 53, 69, 0.9);
-        color: white;
-        border: none;
-        border-radius: 50%;
-        font-size: 12px;
-        line-height: 1;
-        cursor: pointer;
-        display: none;
-        align-items: center;
-        justify-content: center;
-      }
+      img { width: 100%; height: 100%; object-fit: cover; }
     }
-  }
-
-  // 工具栏分隔符
-  .toolbar-divider {
-    color: #ddd;
-    margin: 0 4px;
-  }
-
-  // 任务统计标签
-  .task-count-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 4px 10px;
-    background: #e8f4fd;
-    color: #1890ff;
-    font-size: 12px;
-    font-weight: 500;
-    border-radius: 12px;
-    white-space: nowrap;
   }
 
   // 预览列样式
   .preview-cell {
     min-height: 50px;
-
-    &.preview-idle {
-      .preview-idle {
-        color: #999;
-        font-size: 14px;
-      }
-    }
-
+    padding: 4px 8px !important;
+    &.preview-idle .preview-idle { color: #ccc; font-size: 14px; }
     &.preview-generating {
+      background: #fff9f0;
       .preview-generating {
         display: flex;
         align-items: center;
         gap: 6px;
         color: #F39C12;
         font-size: 12px;
+        font-weight: 500;
       }
     }
-
-    &.preview-completed {
-      background: rgba(82, 196, 26, 0.05);
-    }
-
-    &.preview-failed {
-      background: rgba(255, 77, 79, 0.05);
-    }
-
-    &.preview-partial {
-      background: rgba(250, 173, 20, 0.05);
-    }
+    &.preview-completed { background: #f6ffed; }
+    &.preview-failed { background: #fff1f0; }
+    &.preview-partial { background: #fffbe6; }
   }
 
-  .preview-images {
-    display: flex;
-    gap: 4px;
-    flex-wrap: wrap;
-    align-items: center;
-  }
-
+  .preview-images { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
   .preview-thumb {
-    width: 40px;
-    height: 40px;
-    border-radius: 4px;
+    width: 36px;
+    height: 36px;
+    border-radius: 6px;
     overflow: hidden;
-    border: 1px solid #ddd;
+    border: 1px solid #eee;
     flex-shrink: 0;
-
-    img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-
+    background: #fff;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    img { width: 100%; height: 100%; object-fit: cover; }
     &.clickable {
       cursor: pointer;
-      transition: transform 0.2s, box-shadow 0.2s;
-      position: relative;
-
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
       &:hover {
-        transform: scale(1.15);
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+        transform: scale(1.1);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         z-index: 10;
+        border-color: #F39C12;
       }
     }
   }
 
   .preview-more {
     font-size: 11px;
-    color: #666;
-    padding: 2px 4px;
+    color: #888;
+    padding: 2px 6px;
     background: #f0f0f0;
-    border-radius: 3px;
-
-    &.clickable {
-      cursor: pointer;
-      transition: all 0.2s;
-
-      &:hover {
-        background: #F39C12;
-        color: white;
-      }
-    }
+    border-radius: 4px;
+    font-weight: 600;
+    &.clickable:hover { background: #F39C12; color: white; }
   }
 
-  // 生成中状态（内联显示在已完成图片后面）
   .preview-generating-inline {
     display: inline-flex;
     align-items: center;
     gap: 4px;
     font-size: 11px;
-    color: #1890ff;
+    color: #F39C12;
     padding: 2px 6px;
-    background: rgba(24, 144, 255, 0.1);
-    border-radius: 3px;
+    background: #fff9f0;
+    border-radius: 4px;
     white-space: nowrap;
-
-    .loading-spinner {
-      width: 12px;
-      height: 12px;
-      border: 2px solid #1890ff;
-      border-top-color: transparent;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-    }
+    font-weight: 600;
+    .loading-spinner { width: 10px; height: 10px; border: 1.5px solid #F39C12; border-top-color: transparent; }
   }
 
   .preview-error {
     display: flex;
     align-items: center;
     gap: 4px;
-    font-size: 12px;
-    flex-wrap: wrap;
-
-    .preview-error-message {
-      color: #ff4d4f;
-    }
-
-    .preview-error-details-link {
-      color: #1890ff;
-      cursor: pointer;
-      text-decoration: underline;
-      font-size: 11px;
-
-      &:hover {
-        color: #40a9ff;
-      }
-    }
-  }
-
-  // 错误详情 tooltip
-  .error-details-tooltip {
-    max-width: 400px;
-    font-size: 12px;
-
-    .error-details-title {
-      font-weight: 600;
-      margin-bottom: 4px;
-      color: #333;
-    }
-
-    .error-details-content {
-      color: #666;
-      word-break: break-all;
-      white-space: pre-wrap;
-      max-height: 200px;
-      overflow-y: auto;
-    }
-  }
-
-  .preview-partial {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .preview-partial-info {
     font-size: 11px;
-    color: #faad14;
+    line-height: 1.2;
+    .preview-error-message { color: #ff4d4f; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .preview-error-details-link { color: #1890ff; cursor: pointer; font-weight: 500; &:hover { text-decoration: underline; } }
   }
+
+  .preview-partial-info { font-size: 10px; color: #faad14; font-weight: 600; margin-top: 2px; }
 
   .loading-spinner {
     width: 14px;
     height: 14px;
-    border: 2px solid #f0f0f0;
+    border: 2px solid #eee;
     border-top: 2px solid #F39C12;
     border-radius: 50%;
     animation: spin 1s linear infinite;
-    flex-shrink: 0;
   }
 
-  @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-  }
-
-  // 批量导入弹窗
-  .batch-import-modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-  }
-
-  .batch-import-modal {
-    background: white;
-    border-radius: 12px;
-    width: 480px;
-    max-width: 90vw;
-    max-height: 80vh;
-    display: flex;
-    flex-direction: column;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-
-    .modal-header {
-      padding: 16px 20px;
-      border-bottom: 1px solid #eee;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-
-      h3 {
-        font-size: 16px;
-        font-weight: 600;
-        color: #333;
-        margin: 0;
-      }
-
-      .close-btn {
-        background: none;
-        border: none;
-        font-size: 20px;
-        color: #999;
-        cursor: pointer;
-        padding: 0;
-        width: 28px;
-        height: 28px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 4px;
-
-        &:hover {
-          background: #f5f5f5;
-          color: #666;
-        }
-      }
-    }
-
-    .modal-body {
-      padding: 20px;
-      flex: 1;
-      overflow-y: auto;
-    }
-
-    .import-info {
-      font-size: 14px;
-      color: #666;
-      margin: 0 0 16px 0;
-    }
-
-    .import-settings-row {
-      display: flex;
-      gap: 24px;
-      margin-bottom: 16px;
-    }
-
-    .import-setting-item {
-      flex: 1;
-
-      label {
-        display: block;
-        font-size: 14px;
-        font-weight: 500;
-        color: #333;
-        margin-bottom: 8px;
-      }
-
-      .start-row-input {
-        width: 80px;
-        height: 40px;
-        padding: 0 12px;
-        border: 2px solid #ddd;
-        border-radius: 8px;
-        font-size: 16px;
-        font-weight: 600;
-        color: #333;
-        text-align: center;
-        transition: all 0.2s;
-
-        &:focus {
-          outline: none;
-          border-color: #F39C12;
-        }
-
-        &::-webkit-inner-spin-button,
-        &::-webkit-outer-spin-button {
-          opacity: 1;
-        }
-      }
-
-      .per-row-options {
-        display: flex;
-        gap: 8px;
-      }
-
-      .per-row-btn {
-        width: 40px;
-        height: 40px;
-        border: 2px solid #ddd;
-        border-radius: 8px;
-        background: white;
-        font-size: 16px;
-        font-weight: 600;
-        color: #666;
-        cursor: pointer;
-        transition: all 0.2s;
-
-        &:hover {
-          border-color: #F39C12;
-          color: #F39C12;
-        }
-
-        &.active {
-          border-color: #F39C12;
-          background: linear-gradient(135deg, #F39C12 0%, #E67E22 100%);
-          color: white;
-        }
-      }
-    }
-
-    .import-preview {
-      font-size: 13px;
-      color: #F39C12;
-      background: #fff8e6;
-      padding: 10px 12px;
-      border-radius: 6px;
-      margin: 0 0 16px 0;
-    }
-
-    .import-preview-grid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 8px;
-
-      .preview-item {
-        aspect-ratio: 1;
-        border-radius: 6px;
-        overflow: hidden;
-        border: 1px solid #eee;
-
-        img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-        }
-      }
-
-      .preview-more {
-        aspect-ratio: 1;
-        border-radius: 6px;
-        background: #f5f5f5;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 14px;
-        font-weight: 500;
-        color: #999;
-      }
-    }
-
-    .modal-footer {
-      padding: 16px 20px;
-      border-top: 1px solid #eee;
-      display: flex;
-      justify-content: flex-end;
-      gap: 12px;
-    }
-  }
-
-  // 模型选择器
-  .model-selector-wrapper {
-    min-width: 200px;
-
-    .t-select {
-      width: 100%;
-    }
-  }
+  @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 }
 
-// 图片预览弹窗
+// 外部弹窗覆盖样式
 .image-preview-dialog {
-  // 强制居中显示（WinBox 内部需要覆盖 TDesign 默认定位）
-  &.t-dialog {
-    position: fixed !important;
-    top: 50% !important;
-    left: 50% !important;
-    transform: translate(-50%, -50%) !important;
-  }
-
-  .t-dialog__body {
-    padding: 16px;
-    max-height: 80vh;
-    overflow: auto;
-  }
-
-  .image-preview-content {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    width: 100%;
-    position: relative;
-    user-select: none;
-
-    img {
-      max-width: calc(100% - 100px); // 留出左右按钮空间
-      max-height: 70vh;
-      object-fit: contain;
-      border-radius: 8px;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-    }
-
-    // 左右切换按钮
-    .preview-nav-btn {
-      position: absolute;
-      top: 50%;
-      transform: translateY(-50%);
-      width: 44px;
-      height: 44px;
-      border: none;
-      border-radius: 50%;
-      background: rgba(0, 0, 0, 0.5);
-      color: white;
-      font-size: 28px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.2s;
-      z-index: 10;
-
-      &:hover {
-        background: rgba(0, 0, 0, 0.7);
-        transform: translateY(-50%) scale(1.1);
-      }
-
-      &:active {
-        transform: translateY(-50%) scale(0.95);
-      }
-    }
-
-    .preview-nav-prev {
-      left: 8px;
-    }
-
-    .preview-nav-next {
-      right: 8px;
-    }
-
-    // 底部指示器
-    .preview-indicators {
-      position: absolute;
-      bottom: 12px;
-      left: 50%;
-      transform: translateX(-50%);
-      display: flex;
-      gap: 8px;
-      padding: 6px 12px;
-      background: rgba(0, 0, 0, 0.4);
-      border-radius: 20px;
-
-      .preview-indicator {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background: rgba(255, 255, 255, 0.5);
-        cursor: pointer;
-        transition: all 0.2s;
-
-        &:hover {
-          background: rgba(255, 255, 255, 0.8);
-        }
-
-        &.active {
-          background: #F39C12;
-          transform: scale(1.2);
-        }
-      }
-    }
-  }
+  &.t-dialog { position: fixed !important; top: 50% !important; left: 50% !important; transform: translate(-50%, -50%) !important; }
+  .t-dialog__body { padding: 16px; max-height: 80vh; overflow: auto; }
 }
 
-// 添加行区域
 .add-rows-section {
   display: flex;
   justify-content: center;
@@ -1040,138 +720,15 @@
   padding: 12px 0;
   border-top: 1px dashed #e0e0e0;
   margin-top: 4px;
-
-  .add-rows-btn {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    border: 2px dashed #ccc;
-    background: #fafafa;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s;
-
-    .add-icon {
-      font-size: 20px;
-      font-weight: 300;
-      color: #999;
-      line-height: 1;
-    }
-
-    &:hover {
-      border-color: var(--brand-primary, #F39C12);
-      background: #fff;
-
-      .add-icon {
-        color: var(--brand-primary, #F39C12);
-      }
-    }
-  }
-
-  .export-excel-btn {
-    padding: 6px 12px;
-    font-size: 12px;
-  }
 }
 
-// 添加行弹窗
-.add-rows-dialog {
-  .add-rows-content {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 8px 0;
-
-    label {
-      font-size: 14px;
-      color: #333;
-      white-space: nowrap;
-    }
-
-    .add-rows-input {
-      flex: 1;
-      height: 36px;
-      padding: 0 12px;
-      border: 1px solid #ddd;
-      border-radius: 6px;
-      font-size: 14px;
-      outline: none;
-      transition: border-color 0.2s;
-
-      &:focus {
-        border-color: var(--brand-primary, #F39C12);
-      }
-    }
-  }
+.model-selector-wrapper {
+  min-width: 180px;
+  .t-select { width: 100%; }
 }
 
-// 行图片画廊弹窗
-.row-gallery-dialog {
-  // 强制居中显示
-  &.t-dialog {
-    position: fixed !important;
-    top: 50% !important;
-    left: 50% !important;
-    transform: translate(-50%, -50%) !important;
-  }
-
-  .t-dialog__body {
-    padding: 16px;
-    max-height: 70vh;
-    overflow: auto;
-  }
-
-  .row-gallery-content {
-    width: 100%;
-  }
-
-  .gallery-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    gap: 12px;
-  }
-
-  .gallery-item {
-    position: relative;
-    aspect-ratio: 1;
-    border-radius: 8px;
-    overflow: hidden;
-    cursor: pointer;
-    border: 2px solid transparent;
-    transition: all 0.2s;
-    background: #f5f5f5;
-
-    &:hover {
-      border-color: #F39C12;
-      transform: scale(1.02);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    }
-
-    img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-
-    .gallery-item-index {
-      position: absolute;
-      top: 6px;
-      left: 6px;
-      background: rgba(0, 0, 0, 0.6);
-      color: white;
-      font-size: 11px;
-      font-weight: 600;
-      padding: 2px 6px;
-      border-radius: 4px;
-    }
-  }
-
-  .gallery-empty {
-    text-align: center;
-    padding: 40px;
-    color: #999;
-    font-size: 14px;
-  }
+.library-toggle-active {
+  color: #F39C12 !important;
+  background: rgba(243, 156, 18, 0.1) !important;
+  border-color: rgba(243, 156, 18, 0.3) !important;
 }

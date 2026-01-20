@@ -416,32 +416,6 @@ export const TaskItem: React.FC<TaskItemProps> = ({
 
       {/* Right: Action Buttons (Vertical) */}
       <div className="task-item__actions">
-        {/* Delete button for all tasks */}
-        <Button
-          size="small"
-          variant="outline"
-          theme="danger"
-          icon={<DeleteIcon />}
-          data-track="task_click_delete"
-          onClick={() => onDelete?.(task.id)}
-        >
-          删除
-        </Button>
-
-        {/* Retry button for failed tasks */}
-        {isFailed && (
-          <Button
-            size="small"
-            variant="outline"
-            theme="primary"
-            icon={<RefreshIcon />}
-            data-track="task_click_retry"
-            onClick={() => onRetry?.(task.id)}
-          >
-            重试
-          </Button>
-        )}
-
         {/* Insert button for completed tasks (not for character tasks) */}
         {isCompleted && task.result?.url && !isCharacterTask && (
           <Button
@@ -449,52 +423,95 @@ export const TaskItem: React.FC<TaskItemProps> = ({
             theme="primary"
             data-track="task_click_insert"
             onClick={() => onInsert?.(task.id)}
+            style={{ 
+              background: 'linear-gradient(135deg, #f39c12 0%, #e67e22 100%)',
+              border: 'none',
+              fontWeight: 600
+            }}
           >
             插入
           </Button>
         )}
 
-        {/* Download button for completed tasks (not for character tasks) */}
-        {isCompleted && task.result?.url && !isCharacterTask && (
+        {/* Retry button for failed tasks */}
+        {isFailed && (
           <Button
             size="small"
-            variant="outline"
-            icon={<DownloadIcon />}
-            data-track="task_click_download"
-            onClick={() => onDownload?.(task.id)}
+            theme="primary"
+            icon={<RefreshIcon />}
+            data-track="task_click_retry"
+            onClick={() => onRetry?.(task.id)}
+            style={{ 
+              background: 'linear-gradient(135deg, #f39c12 0%, #e67e22 100%)',
+              border: 'none'
+            }}
           >
-            下载
+            重试
           </Button>
+        )}
+
+        {/* Download button for completed tasks (not for character tasks) */}
+        {isCompleted && task.result?.url && !isCharacterTask && (
+          <Tooltip content="下载到本地" theme="light">
+            <Button
+              size="small"
+              variant="text"
+              icon={<DownloadIcon />}
+              data-track="task_click_download"
+              onClick={() => onDownload?.(task.id)}
+              className="task-item__action-btn--subtle"
+            >
+              下载
+            </Button>
+          </Tooltip>
         )}
 
         {/* Edit button for image/video tasks (not for character tasks) */}
         {!isCharacterTask && (
-          <Button
-            size="small"
-            variant="outline"
-            icon={<EditIcon />}
-            data-track="task_click_edit"
-            onClick={() => onEdit?.(task.id)}
-          >
-            编辑
-          </Button>
+          <Tooltip content="回填到表单" theme="light">
+            <Button
+              size="small"
+              variant="text"
+              icon={<EditIcon />}
+              data-track="task_click_edit"
+              onClick={() => onEdit?.(task.id)}
+              className="task-item__action-btn--subtle"
+            >
+              编辑
+            </Button>
+          </Tooltip>
         )}
 
         {/* Extract character button for Sora-2 completed video tasks */}
         {canExtractCharacter && (
-          <Tooltip content="从视频中提取角色，用于后续视频生成">
+          <Tooltip content="从视频中提取角色" theme="light">
             <Button
               size="small"
-              variant="outline"
+              variant="text"
               theme="warning"
               icon={<UserIcon />}
               data-track="task_click_extract_character"
               onClick={() => onExtractCharacter?.(task.id)}
+              className="task-item__action-btn--subtle"
             >
               角色
             </Button>
           </Tooltip>
         )}
+
+        {/* Delete button for all tasks - Move to bottom and make subtle */}
+        <Tooltip content="删除任务" theme="light">
+          <Button
+            size="small"
+            variant="text"
+            icon={<DeleteIcon />}
+            data-track="task_click_delete"
+            onClick={() => onDelete?.(task.id)}
+            className="task-item__action-btn--delete"
+          >
+            删除
+          </Button>
+        </Tooltip>
       </div>
     </div>
   );

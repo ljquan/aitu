@@ -207,15 +207,15 @@ $vip-color: #E91E63;
   &__menu {
     position: absolute;
     min-width: 300px;
-    max-height: 360px;
+    max-height: 450px; // 增加最大高度
     background: #fff;
     border: 1px solid #E5E7EB;
     border-radius: 8px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15); // 增强阴影
     display: flex;
     flex-direction: column;
-    overflow: hidden;
-    z-index: 1000;
+    overflow: visible !important; // 关键：允许阴影和内部内容溢出
+    z-index: 10000; // 确保在最顶层
     animation: model-dropdown-fade-in 0.15s ease;
 
     &--up {

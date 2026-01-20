@@ -303,31 +303,38 @@
   .image-generation-mode-tabs {
     display: flex;
     align-items: center;
-    background: transparent;
-    padding: 0;
-    gap: 8px;
+    background: #f0f0f0;
+    padding: 3px;
+    gap: 4px;
+    border-radius: 8px;
+    margin-left: 8px;
 
     .mode-tab {
-      padding: 8px 16px;
-      font-size: 14px;
+      padding: 6px 16px;
+      font-size: 13px;
       font-weight: 500;
       color: #666666;
       background: transparent;
       border: none;
       border-radius: 6px;
       cursor: pointer;
-      transition: all 0.2s ease;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
       white-space: nowrap;
+      height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
 
       &:hover:not(.active) {
         color: #333333;
-        background: rgba(0, 0, 0, 0.04);
+        background: rgba(255, 255, 255, 0.5);
       }
 
       &.active {
         color: #F39C12;
         font-weight: 600;
-        background: transparent;
+        background: #ffffff;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
       }
     }
   }

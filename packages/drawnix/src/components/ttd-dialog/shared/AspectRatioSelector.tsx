@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { Tooltip } from 'tdesign-react';
+import { ChevronDownIcon } from 'tdesign-icons-react';
 import {
   ASPECT_RATIO_OPTIONS,
   AspectRatioOption,
@@ -56,21 +57,18 @@ export const AspectRatioSelector: React.FC<AspectRatioSelectorProps> = ({
   if (compact) {
     return (
       <div className="aspect-ratio-selector aspect-ratio-selector--compact" ref={containerRef}>
-        <div className="aspect-ratio-selector__label">
-          {language === 'zh' ? '比例' : 'Ratio'}
-        </div>
-        <div
-          className={`aspect-ratio-selector__trigger ${isOpen ? 'aspect-ratio-selector__trigger--open' : ''}`}
-          data-track="ai_click_ratio_toggle"
-          onClick={() => setIsOpen(!isOpen)}
-        >
-          <span className="aspect-ratio-selector__trigger-value">
-            {selectedOption?.label || value}
-          </span>
-          <span className={`aspect-ratio-selector__trigger-icon ${isOpen ? 'aspect-ratio-selector__trigger-icon--open' : ''}`}>
-            ▼
-          </span>
-        </div>
+        <Tooltip content={language === 'zh' ? '选择图片比例' : 'Select aspect ratio'} theme="light">
+          <div
+            className={`aspect-ratio-selector__trigger ${isOpen ? 'aspect-ratio-selector__trigger--open' : ''}`}
+            data-track="ai_click_ratio_toggle"
+            onClick={() => setIsOpen(!isOpen)}
+          >
+            <span className="aspect-ratio-selector__trigger-value">
+              {selectedOption?.label || value}
+            </span>
+            <ChevronDownIcon className={`aspect-ratio-selector__trigger-icon ${isOpen ? 'aspect-ratio-selector__trigger-icon--open' : ''}`} />
+          </div>
+        </Tooltip>
 
         {isOpen && (
           <div className="aspect-ratio-selector__dropdown">

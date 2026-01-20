@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { Lightbulb } from 'lucide-react';
 import { getPromptExample } from './ai-generation-utils';
 import { CharacterMentionPopup } from '../../character/CharacterMentionPopup';
 import { useMention } from '../../../hooks/useMention';
@@ -205,7 +206,7 @@ export const PromptInput: React.FC<PromptInputProps> = ({
             disabled={disabled}
             onClick={() => setIsPresetOpen(!isPresetOpen)}
           >
-            💡
+            <Lightbulb size={16} />
           </button>
           {renderTooltipContent()}
         </div>

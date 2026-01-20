@@ -122,7 +122,13 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
   // 处理图片生成模式变化
   const handleImageModeChange = useCallback((mode: ImageGenerationMode) => {
     setImageGenerationMode(mode);
-    setImageDialogAutoMaximize(mode === 'batch');
+    // 切换到批量模式时触发一次性全屏，切回时不调整尺寸（保持当前状态）
+    if (mode === 'batch') {
+      setImageDialogAutoMaximize(true);
+      // 瞬间重置标识位，使其成为一个“脉冲”触发信号
+      // 这样用户如果手动还原了窗口，再次点批量还能触发全屏
+      setTimeout(() => setImageDialogAutoMaximize(false), 50);
+    }
     try {
       localStorage.setItem(AI_IMAGE_MODE_CACHE_KEY, mode);
     } catch (e) {
@@ -146,7 +152,10 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
       // 否则读取 localStorage 中保存的模式
       try {
         const savedMode = localStorage.getItem(AI_IMAGE_MODE_CACHE_KEY);
-        setImageDialogAutoMaximize(savedMode === 'batch');
+        if (savedMode === 'batch') {
+          setImageDialogAutoMaximize(true);
+          setTimeout(() => setImageDialogAutoMaximize(false), 50);
+        }
       } catch (e) {
         setImageDialogAutoMaximize(false);
       }

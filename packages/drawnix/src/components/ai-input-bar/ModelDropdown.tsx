@@ -6,7 +6,8 @@
  * 2. form: 表单下拉框风格，支持输入搜索过滤
  */
 
-import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Check, ChevronDown, Search, X } from 'lucide-react';
 import {
   IMAGE_MODELS,
@@ -277,6 +278,118 @@ export const ModelDropdown: React.FC<ModelDropdownProps> = ({
     );
   };
 
+  const [portalPosition, setPortalPosition] = useState({ top: 0, left: 0, width: 0, bottom: 0 });
+
+  // 渲染菜单内容
+  const renderMenu = () => {
+    if (!isOpen) return null;
+
+    const isPortalled = variant === 'form' || placement === 'down' || placement === 'up';
+
+    const menu = (
+      <div
+        className={`model-dropdown__menu model-dropdown__menu--${placement} ${variant === 'form' ? 'model-dropdown__menu--form' : ''} ${isPortalled ? 'model-dropdown__menu--portalled' : ''}`}
+        ref={dropdownRef}
+        role="listbox"
+        aria-label={language === 'zh' ? '选择模型' : 'Select Model'}
+        onClick={(e) => e.stopPropagation()}
+        style={isPortalled ? {
+          position: 'fixed',
+          zIndex: 10000,
+          left: portalPosition.left,
+          width: variant === 'form' ? portalPosition.width : 'auto',
+          top: placement === 'down' ? portalPosition.bottom + 4 : 'auto',
+          bottom: placement === 'up' ? window.innerHeight - portalPosition.top + 4 : 'auto',
+          visibility: portalPosition.width === 0 ? 'hidden' : 'visible',
+        } : {
+          zIndex: 1000,
+        }}
+      >
+        {header && variant === 'minimal' && !searchQuery && (
+          <div className="model-dropdown__header">{header}</div>
+        )}
+
+        <div className="model-dropdown__list" ref={listRef}>
+          {filteredModels.length > 0 ? (
+            filteredModels.map((model, index) => {
+              const isSelected = model.id === selectedModel;
+              const isHighlighted = index === highlightedIndex;
+              return (
+                <div
+                  key={model.id}
+                  className={`model-dropdown__item ${isSelected ? 'model-dropdown__item--selected' : ''} ${isHighlighted ? 'model-dropdown__item--highlighted' : ''}`}
+                  onClick={() => handleSelect(model.id)}
+                  onMouseEnter={() => setHighlightedIndex(index)}
+                  role="option"
+                  aria-selected={isSelected}
+                >
+                  <div className="model-dropdown__item-content">
+                    <div className="model-dropdown__item-name">
+                      <span className="model-dropdown__item-code">#{model.shortCode}</span>
+                      <span className="model-dropdown__item-label">
+                        {model.shortLabel || model.label}
+                      </span>
+                      {model.isVip && (
+                        <span className="model-dropdown__item-vip">VIP</span>
+                      )}
+                    </div>
+                    {model.description && (
+                      <div className="model-dropdown__item-desc">
+                        {model.description}
+                      </div>
+                    )}
+                  </div>
+                  {isSelected && (
+                    <Check size={16} className="model-dropdown__item-check" />
+                  )}
+                </div>
+              );
+            })
+          ) : (
+            <div className="model-dropdown__empty">
+              {language === 'zh' ? '未找到匹配的模型' : 'No matching models'}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+
+    if (isPortalled) {
+      return createPortal(menu, document.body);
+    }
+
+    return menu;
+  };
+
+  // 计算菜单位置（仅当使用 Portal 时）
+  useLayoutEffect(() => {
+    if (isOpen && (variant === 'form' || placement === 'down')) {
+      const updatePosition = () => {
+        if (!containerRef.current) return;
+        const rect = containerRef.current.getBoundingClientRect();
+        setPortalPosition({
+          top: rect.top,
+          left: rect.left,
+          width: rect.width,
+          bottom: rect.bottom
+        });
+      };
+
+      updatePosition();
+      
+      // 监听窗口缩放和滚动，动态更新位置
+      window.addEventListener('resize', updatePosition);
+      window.addEventListener('scroll', updatePosition, true);
+      
+      return () => {
+        window.removeEventListener('resize', updatePosition);
+        window.removeEventListener('scroll', updatePosition, true);
+      };
+    } else {
+      setPortalPosition({ top: 0, left: 0, width: 0, bottom: 0 });
+    }
+  }, [isOpen, placement, variant]);
+
   return (
     <div 
       className={`model-dropdown model-dropdown--variant-${variant} ${disabled ? 'model-dropdown--disabled' : ''}`} 
@@ -284,63 +397,7 @@ export const ModelDropdown: React.FC<ModelDropdownProps> = ({
       onKeyDown={handleKeyDown}
     >
       {renderTrigger()}
-
-      {/* 下拉菜单 */}
-      {isOpen && (
-        <div
-          className={`model-dropdown__menu model-dropdown__menu--${placement}`}
-          ref={dropdownRef}
-          role="listbox"
-          aria-label={language === 'zh' ? '选择模型' : 'Select Model'}
-        >
-          {header && variant === 'minimal' && !searchQuery && (
-            <div className="model-dropdown__header">{header}</div>
-          )}
-
-          <div className="model-dropdown__list" ref={listRef}>
-            {filteredModels.length > 0 ? (
-              filteredModels.map((model, index) => {
-                const isSelected = model.id === selectedModel;
-                const isHighlighted = index === highlightedIndex;
-                return (
-                  <div
-                    key={model.id}
-                    className={`model-dropdown__item ${isSelected ? 'model-dropdown__item--selected' : ''} ${isHighlighted ? 'model-dropdown__item--highlighted' : ''}`}
-                    onClick={() => handleSelect(model.id)}
-                    onMouseEnter={() => setHighlightedIndex(index)}
-                    role="option"
-                    aria-selected={isSelected}
-                  >
-                    <div className="model-dropdown__item-content">
-                      <div className="model-dropdown__item-name">
-                        <span className="model-dropdown__item-code">#{model.shortCode}</span>
-                        <span className="model-dropdown__item-label">
-                          {model.shortLabel || model.label}
-                        </span>
-                        {model.isVip && (
-                          <span className="model-dropdown__item-vip">VIP</span>
-                        )}
-                      </div>
-                      {model.description && (
-                        <div className="model-dropdown__item-desc">
-                          {model.description}
-                        </div>
-                      )}
-                    </div>
-                    {isSelected && (
-                      <Check size={16} className="model-dropdown__item-check" />
-                    )}
-                  </div>
-                );
-              })
-            ) : (
-              <div className="model-dropdown__empty">
-                {language === 'zh' ? '未找到匹配的模型' : 'No matching models'}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      {renderMenu()}
     </div>
   );
 };
