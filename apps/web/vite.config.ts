@@ -27,6 +27,10 @@ export default defineConfig({
   root: __dirname,
   cacheDir: '../../node_modules/.vite/apps/web',
 
+  // 使用相对路径，支持 CDN 部署（如 unpkg、jsdelivr）
+  // 可通过环境变量 VITE_BASE_URL 自定义，默认使用相对路径
+  base: process.env.VITE_BASE_URL || './',
+
   define: {
     'import.meta.env.VITE_APP_VERSION': JSON.stringify(appVersion),
     __APP_VERSION__: JSON.stringify(appVersion),

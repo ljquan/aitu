@@ -59,17 +59,17 @@
           "license": "https://github.com/ljquan/aitu/blob/master/LICENSE"
         }
     </script>
-    <base href="/" />
+    <!-- base href 由构建工具处理，CDN 模式下使用相对路径 -->
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
     <meta name="app-version" content="0.5.14" />
 
-    <link rel="icon" type="image/svg+xml" sizes="16x16" href="/icons/favicon-16x16.svg" />
-    <link rel="icon" type="image/svg+xml" sizes="32x32" href="/icons/favicon-32x32.svg" />
-    <link rel="icon" type="image/svg+xml" href="/icons/favicon-new.svg" />
-    <link rel="icon" type="image/ico" href="/favicon.ico" />
+    <link rel="icon" type="image/svg+xml" sizes="16x16" href="./icons/favicon-16x16.svg" />
+    <link rel="icon" type="image/svg+xml" sizes="32x32" href="./icons/favicon-32x32.svg" />
+    <link rel="icon" type="image/svg+xml" href="./icons/favicon-new.svg" />
+    <link rel="icon" type="image/ico" href="./favicon.ico" />
 
     <!-- PWA Manifest -->
-    <link rel="manifest" href="/manifest.json?v=0.1.0" />
+    <link rel="manifest" href="./manifest.json?v=0.1.0" />
     
     <!-- PWA Meta Tags -->
     <meta name="theme-color" content="#ffffff" />
@@ -81,17 +81,17 @@
     <meta name="msapplication-tap-highlight" content="no" />
     
     <!-- Apple Touch Icons -->
-    <link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192x192.svg" />
+    <link rel="apple-touch-icon" sizes="192x192" href="./icons/icon-192x192.svg" />
     
     <!-- Windows Tiles -->
-    <meta name="msapplication-TileImage" content="/icons/icon-192x192.svg" />
-    <meta name="msapplication-square310x310logo" content="/icons/icon-512x512.svg" />
+    <meta name="msapplication-TileImage" content="./icons/icon-192x192.svg" />
+    <meta name="msapplication-square310x310logo" content="./icons/icon-512x512.svg" />
     
-    <link rel="stylesheet" href="/src/styles.scss" />
+    <link rel="stylesheet" href="./src/styles.scss" />
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <script type="module" src="./src/main.tsx"></script>
   </body>
   <!-- PostHog Analytics -->
   <script>

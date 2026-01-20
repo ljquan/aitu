@@ -1,3 +1,16 @@
+## 0.5.15 (2026-01-20)
+
+### 🔧 Chores
+
+- update project references from aitu.chat to opentu.ai ([345b0a9](https://github.com/ljquan/aitu/commit/345b0a9))
+- bump version to 0.5.14 ([305fa7f](https://github.com/ljquan/aitu/commit/305fa7f))
+- docs(claude): 添加部署脚本安全实践规则 ([ad9ef4d](https://github.com/ljquan/aitu/commit/ad9ef4d))
+- docs(claude): 添加新规则 - SSH 远程执行复杂 Shell 命令应使用 base64 编码 ([e37666f](https://github.com/ljquan/aitu/commit/e37666f))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+
 ## 0.5.14 (2026-01-19)
 
 ### 🚀 Features

@@ -1,10 +1,6 @@
 {
-  "version": "0.5.14",
-  "buildTime": "2026-01-19T14:30:19.492Z",
+  "version": "0.5.15",
+  "buildTime": "2026-01-20T01:07:22.382Z",
   "gitCommit": "unknown",
-  "changelog": [
-    "修复 workflows Map 和 setInterval 内存泄漏",
-    "封装函数不应被绕过、页面卸载清理定时器",
-    "添加更多版本"
-  ]
+  "changelog": []
 }

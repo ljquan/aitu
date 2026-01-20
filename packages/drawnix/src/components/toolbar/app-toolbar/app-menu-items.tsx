@@ -178,7 +178,7 @@ export const DebugPanel = () => {
       icon={DebugLogIcon}
       data-track="toolbar_click_menu_debug"
       onSelect={() => {
-        window.open('/sw-debug.html', '_blank');
+        window.open('./sw-debug.html', '_blank');
       }}
       aria-label={t('menu.debugPanel')}
     >
