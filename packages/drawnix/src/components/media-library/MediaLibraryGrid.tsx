@@ -4,14 +4,34 @@
  */
 
 import { useMemo, useState, useCallback, useRef, useEffect, useTransition } from 'react';
-import { Loading, Input, Button, Checkbox, Popconfirm } from 'tdesign-react';
-import { Upload as UploadIcon, Search, Trash2, CheckSquare, XSquare } from 'lucide-react';
+import { Loading, Input, Button, Checkbox, Popconfirm, Tooltip } from 'tdesign-react';
+import { 
+  Upload as UploadIcon, 
+  Search, 
+  Trash2, 
+  CheckSquare, 
+  XSquare, 
+  HardDrive,
+  Layers,
+  Image as ImageIcon,
+  Video as VideoIcon,
+  Globe,
+  User,
+  Sparkles,
+  Clock,
+  Calendar,
+  SortAsc,
+  ArrowDownWideNarrow,
+  Minus,
+  Plus
+} from 'lucide-react';
 import { useAssets } from '../../contexts/AssetContext';
-import { filterAssets } from '../../utils/asset-utils';
+import { filterAssets, formatFileSize } from '../../utils/asset-utils';
 import { VirtualAssetGrid } from './VirtualAssetGrid';
 import { MediaLibraryEmpty } from './MediaLibraryEmpty';
 import { ViewModeToggle } from './ViewModeToggle';
-import type { MediaLibraryGridProps, ViewMode } from '../../types/asset.types';
+import type { MediaLibraryGridProps, ViewMode, SortOption } from '../../types/asset.types';
+import { AssetType, AssetSource } from '../../types/asset.types';
 import { useDrawnix } from '../../hooks/use-drawnix';
 import { removeElementsByAssetIds, removeElementsByAssetUrl, isCacheUrl, countElementsByAssetUrl } from '../../utils/asset-cleanup';
 import './MediaLibraryGrid.scss';
@@ -20,8 +40,9 @@ import './VirtualAssetGrid.scss';
 // 视图切换防抖时间
 const VIEW_MODE_DEBOUNCE_MS = 150;
 
-// localStorage key
+// localStorage keys
 const VIEW_MODE_STORAGE_KEY = 'media-library-view-mode';
+const GRID_SIZE_STORAGE_KEY = 'media-library-grid-size';
 
 // 从 localStorage 读取视图模式
 const getStoredViewMode = (): ViewMode => {
@@ -36,6 +57,44 @@ const getStoredViewMode = (): ViewMode => {
   return 'grid';
 };
 
+// 从 localStorage 读取网格尺寸
+const getStoredGridSize = (): number => {
+  try {
+    const stored = localStorage.getItem(GRID_SIZE_STORAGE_KEY);
+    if (stored) {
+      const val = parseInt(stored, 10);
+      if (!isNaN(val) && val >= 80 && val <= 300) {
+        return val;
+      }
+    }
+  } catch {
+    // localStorage 不可用时忽略
+  }
+  return 180;
+};
+
+// 类型过滤选项
+const TYPE_OPTIONS = [
+  { value: 'ALL', label: '全部类型', icon: <Layers size={14} /> },
+  { value: AssetType.IMAGE, label: '图片', icon: <ImageIcon size={14} /> },
+  { value: AssetType.VIDEO, label: '视频', icon: <VideoIcon size={14} /> },
+];
+
+// 来源过滤选项
+const SOURCE_OPTIONS = [
+  { value: 'ALL', label: '全部来源', icon: <Globe size={14} /> },
+  { value: AssetSource.LOCAL, label: '本地上传', icon: <User size={14} /> },
+  { value: AssetSource.AI_GENERATED, label: 'AI生成', icon: <Sparkles size={14} /> },
+];
+
+// 排序选项
+const SORT_OPTIONS: { value: SortOption; label: string; icon: React.ReactNode }[] = [
+  { value: 'DATE_DESC', label: '最新优先', icon: <Clock size={14} /> },
+  { value: 'DATE_ASC', label: '最旧优先', icon: <Calendar size={14} /> },
+  { value: 'NAME_ASC', label: '名称 A-Z', icon: <SortAsc size={14} /> },
+  { value: 'SIZE_DESC', label: '大小优先', icon: <ArrowDownWideNarrow size={14} /> },
+];
+
 export function MediaLibraryGrid({
   filterType,
   selectedAssetId,
@@ -43,12 +102,19 @@ export function MediaLibraryGrid({
   onDoubleClick,
   onFileUpload,
   onUploadClick,
+  storageStatus,
 }: MediaLibraryGridProps) {
   const { assets, filters, loading, setFilters, removeAssets } = useAssets();
   const { board } = useDrawnix();
   const [isDragging, setIsDragging] = useState(false);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
+  const [gridSize, setGridSize] = useState<number>(getStoredGridSize); // 从缓存恢复网格尺寸
+
+  // 监听网格尺寸变化并缓存
+  useEffect(() => {
+    localStorage.setItem(GRID_SIZE_STORAGE_KEY, gridSize.toString());
+  }, [gridSize]);
 
   // 视图模式状态 - 使用两个状态实现平滑过渡，从 localStorage 恢复
   const [viewMode, setViewMode] = useState<ViewMode>(getStoredViewMode);
@@ -75,6 +141,14 @@ export function MediaLibraryGrid({
 
     // 立即更新按钮状态
     setPendingViewMode(mode);
+
+    // 根据模式自动调整滑块位置并同步缓存
+    let newSize = gridSize;
+    if (mode === 'grid') newSize = 180;
+    else if (mode === 'compact') newSize = 80;
+    
+    setGridSize(newSize);
+    localStorage.setItem(GRID_SIZE_STORAGE_KEY, newSize.toString());
 
     // 显示过渡状态
     setIsTransitioning(true);
@@ -241,92 +315,146 @@ export function MediaLibraryGrid({
       onDrop={handleDrop}
     >
       <div className="media-library-grid__header">
-        <Input
-          value={filters.searchQuery}
-          onChange={(value) => setFilters({ searchQuery: value as string })}
-          placeholder="搜索素材名称..."
-          prefixIcon={<Search size={16} />}
-          clearable
-          data-track="grid_search_input"
-          className="media-library-grid__search"
-        />
-        <div className="media-library-grid__header-actions">
-          {isSelectionMode ? (
-            <>
-              <Checkbox
-                checked={isAllSelected}
-                indeterminate={isPartialSelected}
-                onChange={toggleSelectAll}
-                data-track="grid_select_all"
-              >
-                全选
-              </Checkbox>
-              <span className="media-library-grid__selection-count">
-                已选 {selectedAssetIds.size} 个
-              </span>
-              <Popconfirm
-                content={
-                  <div>
-                    <p>确定要删除选中的 {selectedAssetIds.size} 个素材吗？</p>
-                    {batchDeleteWarningInfo.hasCacheAssets && batchDeleteWarningInfo.affectedCount > 0 && (
-                      <p style={{ marginTop: '8px', color: 'var(--td-error-color)' }}>
-                        ⚠️ 画布中有 <strong>{batchDeleteWarningInfo.affectedCount}</strong> 个元素正在使用这些素材，删除后将被一并移除！
-                      </p>
-                    )}
-                  </div>
-                }
-                onConfirm={handleBatchDelete}
-                theme="warning"
-              >
+        <div className="media-library-grid__header-top">
+          <Input
+            value={filters.searchQuery}
+            onChange={(value) => setFilters({ searchQuery: value as string })}
+            placeholder="搜索素材..."
+            prefixIcon={<Search size={16} />}
+            clearable
+            data-track="grid_search_input"
+            className="media-library-grid__search"
+          />
+          <div className="media-library-grid__header-right">
+            {isSelectionMode ? (
+              <>
+                <Checkbox
+                  checked={isAllSelected}
+                  indeterminate={isPartialSelected}
+                  onChange={toggleSelectAll}
+                  data-track="grid_select_all"
+                >
+                  全选
+                </Checkbox>
+                <span className="media-library-grid__selection-count">
+                  已选 {selectedAssetIds.size} 个
+                </span>
+                <Popconfirm
+                  content={
+                    <div>
+                      <p>确定要删除选中的 {selectedAssetIds.size} 个素材吗？</p>
+                      {batchDeleteWarningInfo.hasCacheAssets && batchDeleteWarningInfo.affectedCount > 0 && (
+                        <p style={{ marginTop: '8px', color: 'var(--td-error-color)' }}>
+                          ⚠️ 画布中有 <strong>{batchDeleteWarningInfo.affectedCount}</strong> 个元素正在使用这些素材，删除后将被一并移除！
+                        </p>
+                      )}
+                    </div>
+                  }
+                  onConfirm={handleBatchDelete}
+                  theme="warning"
+                >
+                  <Button
+                    variant="base"
+                    theme="danger"
+                    size="small"
+                    icon={<Trash2 size={16} />}
+                    disabled={selectedAssetIds.size === 0}
+                    data-track="grid_batch_delete"
+                  >
+                    删除
+                  </Button>
+                </Popconfirm>
+                <Button
+                  variant="outline"
+                  size="small"
+                  icon={<XSquare size={16} />}
+                  onClick={toggleSelectionMode}
+                  data-track="grid_cancel_selection"
+                >
+                  取消
+                </Button>
+              </>
+            ) : (
+              <>
+                <ViewModeToggle viewMode={pendingViewMode} onViewModeChange={handleViewModeChange} />
+                <Button
+                  variant="outline"
+                  size="small"
+                  icon={<CheckSquare size={16} />}
+                  onClick={toggleSelectionMode}
+                  data-track="grid_toggle_selection_mode"
+                >
+                  批量选择
+                </Button>
                 <Button
                   variant="base"
-                  theme="danger"
+                  theme="primary"
                   size="small"
-                  icon={<Trash2 size={16} />}
-                  disabled={selectedAssetIds.size === 0}
-                  data-track="grid_batch_delete"
+                  icon={<UploadIcon size={16} />}
+                  onClick={onUploadClick}
+                  data-track="grid_upload_click"
                 >
-                  删除选中
+                  上传
                 </Button>
-              </Popconfirm>
-              <Button
-                variant="outline"
-                size="small"
-                icon={<XSquare size={16} />}
-                onClick={toggleSelectionMode}
-                data-track="grid_cancel_selection"
-              >
-                取消
-              </Button>
-            </>
-          ) : (
-            <>
-              <ViewModeToggle viewMode={pendingViewMode} onViewModeChange={handleViewModeChange} />
-              <span className="media-library-grid__count">
-                共 {filteredResult.count} 个素材
-              </span>
-              <Button
-                variant="outline"
-                size="small"
-                icon={<CheckSquare size={16} />}
-                onClick={toggleSelectionMode}
-                data-track="grid_toggle_selection_mode"
-              >
-                批量选择
-              </Button>
-              <Button
-                variant="base"
-                theme="primary"
-                size="small"
-                icon={<UploadIcon size={16} />}
-                onClick={onUploadClick}
-                data-track="grid_upload_click"
-              >
-                上传
-              </Button>
-            </>
-          )}
+              </>
+            )}
+          </div>
         </div>
+        {!isSelectionMode && (
+          <div className="media-library-grid__header-bottom">
+            <div className="media-library-grid__filter-group">
+              <div className="media-library-grid__filter-item">
+                <span className="media-library-grid__filter-item-label">类型</span>
+                <div className="media-library-grid__filter-item-options">
+                  {TYPE_OPTIONS.map(opt => (
+                    <Tooltip key={opt.value} content={opt.label} placement="top" showArrow={false}>
+                      <div
+                        className={`media-library-grid__filter-item-option ${ (filters.activeType || 'ALL') === opt.value ? 'media-library-grid__filter-item-option--active' : ''}`}
+                        onClick={() => setFilters({ activeType: opt.value === 'ALL' ? undefined : opt.value as AssetType })}
+                      >
+                        {opt.icon}
+                      </div>
+                    </Tooltip>
+                  ))}
+                </div>
+              </div>
+
+              <div className="media-library-grid__filter-item">
+                <span className="media-library-grid__filter-item-label">来源</span>
+                <div className="media-library-grid__filter-item-options">
+                  {SOURCE_OPTIONS.map(opt => (
+                    <Tooltip key={opt.value} content={opt.label} placement="top" showArrow={false}>
+                      <div
+                        key={opt.value}
+                        className={`media-library-grid__filter-item-option ${ (filters.activeSource || 'ALL') === opt.value ? 'media-library-grid__filter-item-option--active' : ''}`}
+                        onClick={() => setFilters({ activeSource: opt.value === 'ALL' ? undefined : opt.value as AssetSource })}
+                      >
+                        {opt.icon}
+                      </div>
+                    </Tooltip>
+                  ))}
+                </div>
+              </div>
+
+              <div className="media-library-grid__filter-item">
+                <span className="media-library-grid__filter-item-label">排序</span>
+                <div className="media-library-grid__filter-item-options">
+                  {SORT_OPTIONS.map(opt => (
+                    <Tooltip key={opt.value} content={opt.label} placement="top" showArrow={false}>
+                      <div
+                        key={opt.value}
+                        className={`media-library-grid__filter-item-option ${ (filters.sortBy || 'DATE_DESC') === opt.value ? 'media-library-grid__filter-item-option--active' : ''}`}
+                        onClick={() => setFilters({ sortBy: opt.value as SortOption })}
+                      >
+                        {opt.icon}
+                      </div>
+                    </Tooltip>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {isDragging && (
@@ -350,6 +478,7 @@ export function MediaLibraryGrid({
             <VirtualAssetGrid
               assets={filteredResult.assets}
               viewMode={viewMode}
+              gridSize={gridSize}
               selectedAssetId={selectedAssetId}
               selectedAssetIds={selectedAssetIds}
               isSelectionMode={isSelectionMode}
@@ -359,8 +488,40 @@ export function MediaLibraryGrid({
           </div>
 
           <div className="media-library-grid__footer">
-            <span>共 {filteredResult.count} 个素材</span>
-            {!isSelectionMode && <span className="media-library-grid__footer-hint">双击插入</span>}
+            <div className="media-library-grid__footer-left">
+              {storageStatus ? (
+                <div className="media-library-grid__footer-storage">
+                  <HardDrive size={14} />
+                  <span>已用 {formatFileSize(storageStatus.quota.usage)}</span>
+                </div>
+              ) : (
+                <div className="media-library-grid__footer-storage">
+                  <HardDrive size={14} />
+                  <span>正在获取存储状态...</span>
+                </div>
+              )}
+              <span className="media-library-grid__footer-count">共 {filteredResult.count} 个素材</span>
+              {!isSelectionMode && <span className="media-library-grid__footer-hint">双击插入</span>}
+            </div>
+            
+            <div className="media-library-grid__footer-right">
+              {viewMode !== 'list' && (
+                <div className="media-library-grid__zoom-control">
+                  <Minus size={14} onClick={() => setGridSize(prev => Math.max(80, prev - 20))} />
+                  <input
+                    type="range"
+                    min="80"
+                    max="300"
+                    step="10"
+                    value={gridSize}
+                    onChange={(e) => setGridSize(Number(e.target.value))}
+                    className="media-library-grid__zoom-slider"
+                    data-track="grid_zoom_slider"
+                  />
+                  <Plus size={14} onClick={() => setGridSize(prev => Math.min(300, prev + 20))} />
+                </div>
+              )}
+            </div>
           </div>
         </>
       )}

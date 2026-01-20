@@ -66,6 +66,7 @@ const calculateGridLayout = (
 interface VirtualAssetGridProps {
   assets: Asset[];
   viewMode: ViewMode;
+  gridSize?: number;
   selectedAssetId?: string;
   selectedAssetIds: Set<string>;
   isSelectionMode: boolean;
@@ -76,6 +77,7 @@ interface VirtualAssetGridProps {
 export function VirtualAssetGrid({
   assets,
   viewMode,
+  gridSize = 180,
   selectedAssetId,
   selectedAssetIds,
   isSelectionMode,
@@ -83,7 +85,19 @@ export function VirtualAssetGrid({
   onDoubleClick,
 }: VirtualAssetGridProps) {
   const parentRef = useRef<HTMLDivElement>(null);
-  const config = VIEW_CONFIG[viewMode];
+  const config = useMemo(() => {
+    const baseConfig = VIEW_CONFIG[viewMode];
+    // 如果是网格或紧凑模式，允许通过 gridSize 覆盖尺寸
+    if (viewMode === 'grid' || viewMode === 'compact') {
+      return {
+        ...baseConfig,
+        maxItemSize: gridSize,
+        minItemSize: Math.min(gridSize, baseConfig.minItemSize)
+      };
+    }
+    return baseConfig;
+  }, [viewMode, gridSize]);
+
   const [containerWidth, setContainerWidth] = useState(800);
 
   // 监听容器尺寸变化
@@ -109,7 +123,15 @@ export function VirtualAssetGrid({
 
   // 计算布局（列数和尺寸）
   const layout = useMemo(() => {
-    return calculateGridLayout(viewMode, containerWidth, config);
+    if (viewMode === 'list') {
+      return { columns: 1, itemSize: config.maxItemSize };
+    }
+    const availableWidth = containerWidth - config.padding * 2;
+    // 计算能容纳的最大列数
+    const columns = Math.max(1, Math.floor((availableWidth + config.gap) / (config.maxItemSize + config.gap)));
+    // 实际尺寸计算（不再进行 Max 钳位，让其在当前列数下撑满）
+    const itemSize = Math.floor((availableWidth - config.gap * (columns - 1)) / columns);
+    return { columns, itemSize };
   }, [viewMode, containerWidth, config]);
 
   const columns = layout.columns;
@@ -150,7 +172,7 @@ export function VirtualAssetGrid({
       <div
         key={asset.id}
         style={{
-          width: itemSize.width,
+          width: '100%', // 在 Grid 下设为 100% 自动填充单元格
           height: itemSize.height,
         }}
       >
@@ -164,7 +186,7 @@ export function VirtualAssetGrid({
         />
       </div>
     ));
-  }, [assets, columns, viewMode, selectedAssetId, selectedAssetIds, isSelectionMode, onSelectAsset, onDoubleClick, itemSize]);
+  }, [assets, columns, viewMode, selectedAssetId, selectedAssetIds, isSelectionMode, onSelectAsset, onDoubleClick, itemSize.height]);
 
   const virtualItems = rowVirtualizer.getVirtualItems();
 
@@ -186,23 +208,24 @@ export function VirtualAssetGrid({
         }}
       >
         {virtualItems.map((virtualRow) => (
-          <div
-            key={virtualRow.key}
-            className={`virtual-asset-grid__row virtual-asset-grid__row--${viewMode}`}
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              width: '100%',
-              height: `${itemSize.height}px`,
-              transform: `translateY(${virtualRow.start}px)`,
-              display: viewMode === 'list' ? 'block' : 'flex',
-              gap: `${config.gap}px`,
-              padding: `0 ${config.padding}px`,
-            }}
-          >
-            {renderRow(virtualRow.index)}
-          </div>
+            <div
+              key={virtualRow.key}
+              className={`virtual-asset-grid__row virtual-asset-grid__row--${viewMode}`}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: `${itemSize.height}px`,
+                transform: `translateY(${virtualRow.start}px)`,
+                display: viewMode === 'list' ? 'block' : 'grid',
+                gridTemplateColumns: viewMode === 'list' ? 'none' : `repeat(${columns}, 1fr)`,
+                gap: `${config.gap}px`,
+                padding: `0 ${config.padding}px`,
+              }}
+            >
+              {renderRow(virtualRow.index)}
+            </div>
         ))}
       </div>
     </div>

@@ -74,19 +74,19 @@ export function filterAssets(
     .filter((asset) => {
       // Type filter
       const matchesType =
-        filters.activeType === 'ALL' || asset.type === filters.activeType;
+        !filters.activeType || 
+        filters.activeType === ('ALL' as any) || 
+        asset.type === filters.activeType;
 
       // Source filter
       const matchesSource =
-        filters.activeSource === 'ALL' ||
-        (filters.activeSource === 'AI' &&
-          asset.source === ('AI_GENERATED' as AssetSource)) ||
-        (filters.activeSource === 'LOCAL' &&
-          asset.source === ('LOCAL' as AssetSource));
+        !filters.activeSource ||
+        filters.activeSource === ('ALL' as any) ||
+        asset.source === (filters.activeSource as any);
 
       // Search filter
       const matchesSearch =
-        filters.searchQuery === '' ||
+        !filters.searchQuery ||
         asset.name.toLowerCase().includes(filters.searchQuery.toLowerCase());
 
       return matchesType && matchesSource && matchesSearch;

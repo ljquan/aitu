@@ -241,7 +241,7 @@ export function MediaLibraryInspector({
       )}
 
       {/* 操作按钮 */}
-      <div className="media-library-inspector__actions">
+      <div className={`media-library-inspector__actions ${showSelectButton && onSelect ? 'media-library-inspector__actions--with-select' : 'media-library-inspector__actions--no-select'}`}>
         {showSelectButton && onSelect && (
           <Button
             theme="primary"
@@ -249,6 +249,7 @@ export function MediaLibraryInspector({
             icon={<CheckCircle size={16} />}
             onClick={handleSelect}
             data-track="inspector_use_asset"
+            className="inspector-btn-select"
           >
             {selectButtonText}
           </Button>
@@ -259,6 +260,7 @@ export function MediaLibraryInspector({
           icon={<Download size={16} />}
           onClick={handleDownload}
           data-track="inspector_download"
+          className="inspector-btn-download"
         >
           下载
         </Button>
@@ -269,6 +271,7 @@ export function MediaLibraryInspector({
           icon={<Trash2 size={16} />}
           onClick={handleOpenDeleteDialog}
           data-track="inspector_delete"
+          className="inspector-btn-delete"
         >
           删除
         </Button>

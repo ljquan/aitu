@@ -10,6 +10,16 @@
   min-height: 0;
   height: 100%;
 
+  &__row {
+    display: grid;
+    align-items: stretch;
+    box-sizing: border-box;
+
+    &--list {
+      display: block;
+    }
+  }
+
   // 网格模式
   &--grid {
     .virtual-asset-grid__row {

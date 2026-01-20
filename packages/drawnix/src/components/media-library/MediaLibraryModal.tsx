@@ -8,7 +8,6 @@ import { MessagePlugin, Drawer } from 'tdesign-react';
 import { Images } from 'lucide-react';
 import { useAssets } from '../../contexts/AssetContext';
 import { MediaLibraryGrid } from './MediaLibraryGrid';
-import { MediaLibrarySidebar } from './MediaLibrarySidebar';
 import { MediaLibraryInspector } from './MediaLibraryInspector';
 import { WinBoxWindow } from '../winbox/WinBoxWindow';
 import type {
@@ -291,17 +290,7 @@ export function MediaLibraryModal({
         />
 
         <div className="media-library-layout">
-          {/* 左侧筛选侧边栏 */}
-          <div className="media-library-layout__sidebar">
-            <MediaLibrarySidebar
-              filters={filters}
-              assetCount={assets.length}
-              storageStatus={storageStatus}
-              onFilterChange={setFilters}
-            />
-          </div>
-
-          {/* 中间网格区域 */}
+          {/* 主网格区域 */}
           <div className="media-library-layout__main">
             <MediaLibraryGrid
               filterType={filterType}
@@ -310,6 +299,7 @@ export function MediaLibraryModal({
               onDoubleClick={handleDoubleClick}
               onFileUpload={handleFileUpload}
               onUploadClick={handleUploadClick}
+              storageStatus={storageStatus}
             />
           </div>
 
