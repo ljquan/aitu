@@ -4016,6 +4016,48 @@ const allCategories = useMemo(() => {
 - 对 API 调用使用适当的错误处理
 - 在日志中过滤敏感信息
 
+#### 敏感信息模板变量安全处理
+
+**场景**: 工具 URL 或配置中包含敏感信息（如 apiKey）时
+
+❌ **错误示例**:
+```typescript
+// 错误：在插入画布时就替换模板变量，导致实际 apiKey 被存储
+const executeToolInsert = (tool: ToolDefinition) => {
+  const { url } = processToolUrl(tool.url); // 替换 ${apiKey} 为实际值
+  ToolTransforms.insertTool(board, tool.id, url, ...); // 存储了实际 apiKey！
+};
+// 问题：导出/备份时会泄露敏感信息
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：存储原始模板 URL，渲染时才替换
+const executeToolInsert = (tool: ToolDefinition) => {
+  // 存储原始模板 URL（如 https://api.com?key=${apiKey}）
+  ToolTransforms.insertTool(board, tool.id, tool.url, ...);
+};
+
+// 在渲染 iframe 时动态替换
+private createIframe(element: PlaitTool): HTMLIFrameElement {
+  const { url: processedUrl } = processToolUrl(element.url);
+  iframe.src = processedUrl;
+  // 保存原始模板 URL，用于设置变化时重新替换
+  (iframe as any).__templateUrl = element.url;
+}
+
+// 监听设置变化，动态刷新 iframe
+window.addEventListener('gemini-settings-changed', () => {
+  this.refreshTemplateIframes();
+});
+```
+
+**原因**: 
+- 敏感信息（如 apiKey）应该使用模板变量形式（如 `${apiKey}`）存储在数据中
+- 只在渲染时动态替换为实际值
+- 这样可以确保导出/备份时不会泄露敏感信息
+- 用户更新设置后，已打开的工具可以自动刷新使用新的配置
+
 #### 部署脚本安全实践
 
 **场景**: 创建部署脚本（上传文件、执行远程命令等）时
