@@ -884,7 +884,7 @@ interface PrecacheManifest {
  */
 async function loadPrecacheManifest(): Promise<{ url: string; revision: string }[] | null> {
   try {
-    const response = await fetch('/precache-manifest.json', { cache: 'reload' });
+    const response = await fetch('./precache-manifest.json', { cache: 'reload' });
     if (!response.ok) {
       // 没有 manifest 文件，说明是开发模式，不需要预缓存
       console.log('Service Worker: No precache-manifest.json found (dev mode), skipping precache');
@@ -962,7 +962,9 @@ async function cacheFile(
         headers
       });
       
-      await cache.put(url, modifiedResponse);
+      // 使用完整 URL 作为缓存 key，确保与运行时请求匹配
+      const fullUrl = new URL(url, self.location.origin).href;
+      await cache.put(fullUrl, modifiedResponse);
       return { url, success: true, source };
     }
     return { url, success: false, status: response.status };

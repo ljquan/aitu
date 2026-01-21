@@ -144,9 +144,19 @@ if ('serviceWorker' in navigator) {
                   // 生产模式：新版本已安装，通知 UI 显示升级提示
                   // console.log('Production mode: New version installed, dispatching update event');
                   newVersionReady = true;
-                  window.dispatchEvent(new CustomEvent('sw-update-available', { 
-                    detail: { version: 'new' } 
-                  }));
+                  // 尝试获取新版本号，用于更新提示
+                  fetch(`/version.json?t=${Date.now()}`)
+                    .then(res => res.ok ? res.json() : null)
+                    .then(data => {
+                      window.dispatchEvent(new CustomEvent('sw-update-available', { 
+                        detail: { version: data?.version || 'new' } 
+                      }));
+                    })
+                    .catch(() => {
+                      window.dispatchEvent(new CustomEvent('sw-update-available', { 
+                        detail: { version: 'new' } 
+                      }));
+                    });
                 }
               }
             });

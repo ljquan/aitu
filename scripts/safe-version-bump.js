@@ -89,11 +89,14 @@ function createVersionFile(version, commits) {
       ...relevantOthers
     ];
     
-    // 1. 过滤出包含大于5个汉字的提交消息
+    // 1. 过滤出有意义的提交消息（汉字 > 5 个 或 英文单词 > 5 个）
     const filteredCommits = allCommits
       .filter(c => {
         const chineseChars = c.message.match(/[\u4e00-\u9fa5]/g) || [];
-        return chineseChars.length > 5;
+        // 提取英文单词（排除常见的 commit 前缀如 feat/fix/chore 等）
+        const cleanMessage = c.message.replace(/^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([^)]*\))?:\s*/i, '');
+        const englishWords = cleanMessage.match(/[a-zA-Z]{2,}/g) || [];
+        return chineseChars.length > 5 || englishWords.length > 5;
       })
       .map(c => c.message);
 
