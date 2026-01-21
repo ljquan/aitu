@@ -665,6 +665,59 @@ sw.addEventListener('install', (event) => {
 
 **结论**：首次访问正常加载，SW 在后台默默预缓存，下次访问秒开。
 
+**Service Worker 自动激活策略**：
+
+项目采用 **自动激活** 策略，确保用户总是使用最新版本：
+
+```typescript
+// sw/index.ts - install 事件
+sw.addEventListener('install', (event) => {
+  event.waitUntil(
+    (async () => {
+      await precacheStaticFiles(cache, files);
+      // 预缓存完成后，直接激活新 SW
+      sw.skipWaiting();
+    })()
+  );
+});
+
+// activate 事件
+sw.addEventListener('activate', (event) => {
+  event.waitUntil(
+    (async () => {
+      await sw.clients.claim(); // 接管所有页面
+      // 通知客户端 SW 已更新
+      const clients = await sw.clients.matchAll();
+      clients.forEach(client => {
+        client.postMessage({ type: 'SW_ACTIVATED', version: APP_VERSION });
+      });
+    })()
+  );
+});
+```
+
+**页面刷新策略**（区分主应用和调试页面）：
+
+| 页面类型 | SW 更新后行为 | 原因 |
+|---------|-------------|------|
+| 主应用 (React) | 显示更新提示，**不自动刷新** | 避免打断用户操作 |
+| sw-debug.html | **自动刷新** | 调试页面需要最新版本 |
+
+```typescript
+// main.tsx - 主应用只在用户确认后才刷新
+navigator.serviceWorker.addEventListener('controllerchange', () => {
+  if (!userConfirmedUpgrade) {
+    return; // 用户没确认就不刷新
+  }
+  window.location.reload();
+});
+
+// sw-debug/app.js - 调试页面自动刷新
+onControllerChange(() => {
+  window.location.reload();
+});
+```
+
 ### 编辑器插件系统
 ```
 Drawnix (主编辑器)
