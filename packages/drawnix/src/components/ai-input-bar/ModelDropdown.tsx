@@ -204,9 +204,13 @@ export const ModelDropdown: React.FC<ModelDropdownProps> = ({
     if (!isOpen) return;
 
     const handleClickOutside = (event: MouseEvent) => {
+      // 需要同时检查 containerRef 和 dropdownRef
+      // 因为菜单通过 Portal 渲染到 body，不在 containerRef 内部
       if (
         containerRef.current &&
-        !containerRef.current.contains(event.target as Node)
+        !containerRef.current.contains(event.target as Node) &&
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
       ) {
         setIsOpen(false);
       }
@@ -365,7 +369,7 @@ export const ModelDropdown: React.FC<ModelDropdownProps> = ({
 
   // 计算菜单位置（仅当使用 Portal 时）
   useLayoutEffect(() => {
-    if (isOpen && (variant === 'form' || placement === 'down')) {
+    if (isOpen && (variant === 'form' || placement === 'down' || placement === 'up')) {
       const updatePosition = () => {
         if (!containerRef.current) return;
         const rect = containerRef.current.getBoundingClientRect();
