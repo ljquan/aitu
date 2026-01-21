@@ -1,8 +1,6 @@
 {
-  "version": "0.5.31",
-  "buildTime": "2026-01-21T02:16:04.499Z",
+  "version": "0.5.32",
+  "buildTime": "2026-01-21T02:25:11.560Z",
   "gitCommit": "unknown",
-  "changelog": [
-    "优化批量出图 UI 和交互体验"
-  ]
+  "changelog": []
 }

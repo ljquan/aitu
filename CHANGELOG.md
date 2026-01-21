@@ -1,3 +1,13 @@
+## 0.5.32 (2026-01-21)
+
+### 🔧 Chores
+
+- docs(claude): 补充预缓存不阻塞首次访问的说明 ([d5ca154](https://github.com/ljquan/aitu/commit/d5ca154))
+
+### ❤️  Thank You
+
+- liquidliang <ljquan@qq.com>
+
 ## 0.5.31 (2026-01-21)
 
 ### 🚀 Features
