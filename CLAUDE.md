@@ -644,6 +644,27 @@ sw.addEventListener('install', (event) => {
 - `apps/web/src/sw/index.ts` - `loadPrecacheManifest()` 和 `precacheStaticFiles()`
 - `dist/apps/web/precache-manifest.json` - 构建产物
 
+**预缓存不阻塞首次访问**：
+
+这是一个常见误解 —— 很多开发者担心 `event.waitUntil()` 会阻塞页面加载。实际上：
+
+1. **页面加载和 SW 安装是并行的**：用户访问时页面正常从网络加载，SW 在后台安装
+2. **SW 在页面 load 后才注册**：`main.tsx` 中 `window.addEventListener('load', () => { navigator.serviceWorker.register(...) })`
+3. **`event.waitUntil()` 只影响 SW 生命周期**：它让 SW 等待预缓存完成后才激活，不影响主线程
+
+```
+时间 →
+[页面加载] ████████████ load 事件
+                         ↓
+[用户可用] ──────────────●──────────────── 用户已可使用
+                         
+[SW 注册]                ●────────
+[SW 预缓存]                   ████████████████
+[SW 激活]                                    ●────────
+```
+
+**结论**：首次访问正常加载，SW 在后台默默预缓存，下次访问秒开。
+
 ### 编辑器插件系统
 ```
 Drawnix (主编辑器)
