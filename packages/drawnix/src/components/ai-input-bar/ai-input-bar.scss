@@ -697,6 +697,11 @@ $vip-color: #E91E63;
     }
   }
 
+  // 素材库按钮
+  &__library-btn {
+    @extend .ai-input-bar__upload-btn;
+  }
+
   // Send button
   &__send-btn {
     display: flex;
@@ -862,7 +867,8 @@ $vip-color: #E91E63;
       }
     }
 
-    &__upload-btn {
+    &__upload-btn,
+    &__library-btn {
       border-color: var(--color-border, #444);
       color: var(--color-gray-50, #999);
 

@@ -19,6 +19,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Send, Check } from 'lucide-react';
 import {
   ImageUploadIcon,
+  MediaLibraryIcon,
 } from '../icons';
 import { useBoard } from '@plait-board/react-board';
 import { SelectedContentPreview } from '../shared/SelectedContentPreview';
@@ -30,7 +31,8 @@ import { processSelectedContentForAI, scrollToPointIfNeeded } from '../../utils/
 import { useTextSelection } from '../../hooks/useTextSelection';
 import { useChatDrawerControl } from '../../contexts/ChatDrawerContext';
 import { useAssets } from '../../contexts/AssetContext';
-import { AssetType, AssetSource } from '../../types/asset.types';
+import { AssetType, AssetSource, SelectionMode, Asset } from '../../types/asset.types';
+import { MediaLibraryModal } from '../media-library/MediaLibraryModal';
 import { ModelDropdown } from './ModelDropdown';
 import { ModelHealthBadge } from '../shared/ModelHealthBadge';
 import { SizeDropdown } from './SizeDropdown';
@@ -329,6 +331,9 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
   const [selectedModel, setSelectedModel] = useState(getDefaultImageModel);
   // 当前选中的尺寸（默认为模型的默认尺寸）
   const [selectedSize, setSelectedSize] = useState(() => getDefaultSizeForModel(getDefaultImageModel()));
+
+  // 素材库弹窗状态
+  const [showMediaLibrary, setShowMediaLibrary] = useState(false);
 
   // # 触发模型选择相关状态
   const [showHashSuggestion, setShowHashSuggestion] = useState(false);
@@ -677,6 +682,38 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
     );
 
     // console.log('[AIInputBar] Prompt tool inserted to canvas');
+  }, []);
+
+  // 处理素材库选择
+  const handleMediaLibrarySelect = useCallback(async (asset: Asset) => {
+    try {
+      // 创建 Image 对象获取尺寸
+      const img = new Image();
+      img.onload = () => {
+        const newContent: SelectedContent = {
+          type: 'image',
+          url: asset.url,
+          name: asset.name || `素材-${Date.now()}`,
+          width: img.naturalWidth || undefined,
+          height: img.naturalHeight || undefined,
+        };
+        setUploadedContent(prev => [...prev, newContent]);
+        setShowMediaLibrary(false);
+      };
+      img.onerror = () => {
+        const newContent: SelectedContent = {
+          type: 'image',
+          url: asset.url,
+          name: asset.name || `素材-${Date.now()}`,
+        };
+        setUploadedContent(prev => [...prev, newContent]);
+        setShowMediaLibrary(false);
+      };
+      img.src = asset.url;
+    } catch (error) {
+      console.error('Failed to select asset from library:', error);
+      setShowMediaLibrary(false);
+    }
   }, []);
 
   // 处理上传按钮点击
@@ -1755,6 +1792,20 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
             <ImageUploadIcon size={18} />
           </button>
 
+          {/* Media Library button */}
+          <button
+            className="ai-input-bar__library-btn"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+            onClick={() => setShowMediaLibrary(true)}
+            title={language === 'zh' ? '从素材库选择' : 'Select from library'}
+            data-track="ai_input_click_library"
+          >
+            <MediaLibraryIcon size={18} />
+          </button>
+
           {/* Left: Model dropdown selector */}
           <ModelDropdown
             selectedModel={selectedModel}
@@ -1884,6 +1935,15 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
           </div>
         </div>
       </div>
+
+      {/* 素材库弹窗 */}
+      <MediaLibraryModal
+        isOpen={showMediaLibrary}
+        onClose={() => setShowMediaLibrary(false)}
+        mode={SelectionMode.SELECT}
+        filterType={AssetType.IMAGE}
+        onSelect={handleMediaLibrarySelect}
+      />
     </div>
   );
 });
