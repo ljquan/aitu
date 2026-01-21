@@ -32,6 +32,7 @@ import { useChatDrawerControl } from '../../contexts/ChatDrawerContext';
 import { useAssets } from '../../contexts/AssetContext';
 import { AssetType, AssetSource } from '../../types/asset.types';
 import { ModelDropdown } from './ModelDropdown';
+import { ModelHealthBadge } from '../shared/ModelHealthBadge';
 import { SizeDropdown } from './SizeDropdown';
 import { PromptHistoryPopover } from './PromptHistoryPopover';
 import { usePromptHistory } from '../../hooks/usePromptHistory';
@@ -77,7 +78,7 @@ function toWorkflowMessageData(
 ): WorkflowMessageData {
   // Safely access metadata with defaults
   const metadata = workflow.metadata || {};
-  
+
   return {
     id: workflow.id,
     name: workflow.name,
@@ -128,12 +129,12 @@ interface SelectedContent {
 function isVideoUrl(url: string): boolean {
   if (!url) return false;
   const lowerUrl = url.toLowerCase();
-  
+
   // 检查 #video 标识符
   if (lowerUrl.includes('#video')) {
     return true;
   }
-  
+
   // 检查视频扩展名
   const videoExtensions = ['.mp4', '.webm', '.mov', '.avi', '.mkv', '.m4v', '.flv', '.wmv'];
   return videoExtensions.some(ext => lowerUrl.includes(ext));
@@ -219,9 +220,9 @@ const SelectionWatcher: React.FC<{
     const handleSelectionChange = async () => {
       const currentBoard = boardRef.current;
       if (!currentBoard) return;
-      
+
       const selectedElements = getSelectedElements(currentBoard);
-      
+
       if (selectedElements.length === 0) {
         onSelectionChangeRef.current([]);
         return;
@@ -245,7 +246,7 @@ const SelectionWatcher: React.FC<{
         for (const img of processedContent.remainingImages) {
           const imgUrl = img.url || '';
           const isVideo = isVideoUrl(imgUrl);
-          
+
           content.push({
             url: imgUrl,
             name: img.name || (isVideo ? `video-${Date.now()}` : `image-${Date.now()}`),
@@ -495,7 +496,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
   useEffect(() => {
     const subscription = workflowCompletionService.observeCompletionEvents().subscribe((event) => {
       const workflow = workflowControl.getWorkflow();
-      
+
       // 查找与此任务关联的步骤（即使 workflow 为 null 也继续处理 postProcessingCompleted）
       const step = workflow?.steps.find((s) => {
         const result = s.result as { taskId?: string } | undefined;
@@ -1099,7 +1100,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
           setPrompt('');
           setSelectedContent([]);
           setUploadedContent([]);
-          
+
           // 启动 1 秒冷却定时器，之后允许用户继续输入
           if (submitCooldownRef.current) {
             clearTimeout(submitCooldownRef.current);
@@ -1110,7 +1111,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
             setIsSubmitting(false);
             submitCooldownRef.current = null;
           }, 1000);
-          
+
           return; // 提前返回
         }
       } catch (swError) {
@@ -1505,7 +1506,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
       try {
         // 获取原始步骤的任务 ID（如果有的话，用于重试时复用任务）
         const retryTaskId = stepTaskIdMap.get(step.id);
-        
+
         const executeOptions = {
           ...step.options,
           ...createStepCallbacks(step, stepStartTime),
@@ -1863,6 +1864,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
                             {model.isVip && (
                               <span className="ai-input-bar__at-suggestion-item-vip">VIP</span>
                             )}
+                            <ModelHealthBadge modelId={model.id} />
                           </div>
                           {model.description && (
                             <div className="ai-input-bar__at-suggestion-item-desc">

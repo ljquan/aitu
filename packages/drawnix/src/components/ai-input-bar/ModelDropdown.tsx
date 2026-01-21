@@ -15,6 +15,7 @@ import {
   type ModelConfig,
 } from '../../constants/model-config';
 import './model-dropdown.scss';
+import { ModelHealthBadge } from '../shared/ModelHealthBadge';
 
 export interface ModelDropdownProps {
   /** 当前选中的模型 ID */
@@ -100,7 +101,7 @@ export const ModelDropdown: React.FC<ModelDropdownProps> = ({
   // 过滤模型列表
   const filteredModels = useMemo(() => {
     if (!searchQuery.trim()) return models;
-    
+
     // 如果输入内容与当前选中模型的标签完全一致，且菜单刚打开，则显示所有模型
     const currentLabel = currentModel?.label || selectedModel;
     if (searchQuery === currentLabel && isOpen && !triggerInputRef.current?.matches(':focus-visible')) {
@@ -108,7 +109,7 @@ export const ModelDropdown: React.FC<ModelDropdownProps> = ({
     }
 
     const query = searchQuery.toLowerCase().trim();
-    return models.filter(m => 
+    return models.filter(m =>
       m.id.toLowerCase().includes(query) ||
       m.label.toLowerCase().includes(query) ||
       m.shortLabel?.toLowerCase().includes(query) ||
@@ -174,14 +175,14 @@ export const ModelDropdown: React.FC<ModelDropdownProps> = ({
     if (event.key === 'ArrowDown') {
       event.preventDefault();
       if (filteredModels.length > 0) {
-        setHighlightedIndex(prev => 
+        setHighlightedIndex(prev =>
           prev < filteredModels.length - 1 ? prev + 1 : 0
         );
       }
     } else if (event.key === 'ArrowUp') {
       event.preventDefault();
       if (filteredModels.length > 0) {
-        setHighlightedIndex(prev => 
+        setHighlightedIndex(prev =>
           prev > 0 ? prev - 1 : filteredModels.length - 1
         );
       }
@@ -266,8 +267,8 @@ export const ModelDropdown: React.FC<ModelDropdownProps> = ({
             disabled={disabled}
           />
         </div>
-        <ChevronDown 
-          size={16} 
+        <ChevronDown
+          size={16}
           className={`model-dropdown__chevron ${isOpen ? 'model-dropdown__chevron--open' : ''}`}
           onClick={(e) => {
             e.stopPropagation();
@@ -332,6 +333,7 @@ export const ModelDropdown: React.FC<ModelDropdownProps> = ({
                       {model.isVip && (
                         <span className="model-dropdown__item-vip">VIP</span>
                       )}
+                      <ModelHealthBadge modelId={model.id} />
                     </div>
                     {model.description && (
                       <div className="model-dropdown__item-desc">
@@ -376,11 +378,11 @@ export const ModelDropdown: React.FC<ModelDropdownProps> = ({
       };
 
       updatePosition();
-      
+
       // 监听窗口缩放和滚动，动态更新位置
       window.addEventListener('resize', updatePosition);
       window.addEventListener('scroll', updatePosition, true);
-      
+
       return () => {
         window.removeEventListener('resize', updatePosition);
         window.removeEventListener('scroll', updatePosition, true);
@@ -391,8 +393,8 @@ export const ModelDropdown: React.FC<ModelDropdownProps> = ({
   }, [isOpen, placement, variant]);
 
   return (
-    <div 
-      className={`model-dropdown model-dropdown--variant-${variant} ${disabled ? 'model-dropdown--disabled' : ''}`} 
+    <div
+      className={`model-dropdown model-dropdown--variant-${variant} ${disabled ? 'model-dropdown--disabled' : ''}`}
       ref={containerRef}
       onKeyDown={handleKeyDown}
     >
