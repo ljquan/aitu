@@ -6,6 +6,7 @@
 
 import { CryptoUtils } from './crypto-utils';
 import { DRAWNIX_SETTINGS_KEY } from '../constants/storage';
+import { getSafeErrorMessage } from './sanitize-utils';
 
 // ====================================
 // 类型定义
@@ -59,7 +60,7 @@ class SettingsManager {
   private static instance: SettingsManager;
   private settings: AppSettings;
   private listeners: Map<string, Set<AnySettingsListener>> = new Map();
-  private cryptoAvailable: boolean = false;
+  private cryptoAvailable = false;
   private initializationPromise: Promise<void> | null = null;
 
   private constructor() {
@@ -426,7 +427,8 @@ class SettingsManager {
         try {
           listener(newValue, oldValue);
         } catch (error) {
-          console.error(`Error in settings listener for ${path}:`, error);
+          // 只记录错误类型，不记录详细信息（可能包含敏感设置值）
+          console.error(`Error in settings listener for ${path}:`, getSafeErrorMessage(error));
         }
       });
     }

@@ -36,6 +36,7 @@ import {
   resetCDNStatus,
   performHealthCheck,
 } from './cdn-fallback';
+import { getSafeErrorMessage } from './task-queue/utils/sanitize-utils';
 
 // fix: self redeclaration error and type casting
 const sw = self as unknown as ServiceWorkerGlobalScope;
@@ -1326,7 +1327,8 @@ sw.addEventListener('message', (event: ExtendableMessageEvent) => {
             });
           }
         } catch (error) {
-          console.error('[SW] Failed to load config from storage:', error);
+          // 只记录错误类型，不记录详细信息（可能包含敏感配置）
+          console.error('[SW] Failed to load config from storage:', getSafeErrorMessage(error));
         }
       })();
       return;
@@ -2599,7 +2601,7 @@ sw.addEventListener('fetch', (event: FetchEvent) => {
           // 克隆响应以读取 body
           const responseClone = response.clone();
           let responseBody: string | undefined;
-          let responseHeaders: Record<string, string> = {};
+          const responseHeaders: Record<string, string> = {};
 
           // 提取响应头
           response.headers.forEach((value, key) => {

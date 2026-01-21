@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { promptForApiKey } from '../../../utils/gemini-api';
 import { geminiSettings } from '../../../utils/settings-manager';
 import { CACHE_DURATION } from './size-constants';
+import { getSafeErrorMessage } from '../../../utils/sanitize-utils';
 
 export const isInvalidTokenError = (errorMessage: string): boolean => {
   const message = errorMessage.toLowerCase();
@@ -41,7 +42,8 @@ export const handleApiKeyError = async (errorMessage: string, language: 'zh' | '
         : 'Valid API Key is required to generate content';
     }
   } catch (apiKeyError) {
-    console.error('API Key setup error:', apiKeyError);
+    // 只记录错误类型，不记录详细信息（可能包含敏感数据）
+    console.error('API Key setup error:', getSafeErrorMessage(apiKeyError));
     return language === 'zh' 
       ? 'API Key设置失败，请稍后重试' 
       : 'API Key setup failed, please try again later';

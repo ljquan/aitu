@@ -3,7 +3,12 @@
  *
  * Provides type-safe event tracking for PostHog analytics.
  * Tracks model calls and API usage.
+ * 
+ * SECURITY: All event data is sanitized before being sent to PostHog
+ * to prevent accidental leakage of API keys and other sensitive information.
  */
+
+import { sanitizeObject } from './sanitize-utils';
 
 declare global {
   interface Window {
@@ -43,16 +48,23 @@ enum APICallEvent {
 
 /** Analytics utility class */
 class PostHogAnalytics {
-  /** Track a custom event */
+  /** 
+   * Track a custom event
+   * SECURITY: Event data is sanitized to remove sensitive information
+   */
   track(eventName: string, eventData?: Record<string, any>): void {
     if (!window.posthog) {
       // console.debug('[Analytics] PostHog not loaded:', eventName);
       return;
     }
     try {
-      window.posthog.capture(eventName, eventData);
+      // 对事件数据进行脱敏处理，防止敏感信息泄露
+      const sanitizedData = eventData 
+        ? sanitizeObject(eventData) as Record<string, any>
+        : undefined;
+      window.posthog.capture(eventName, sanitizedData);
     } catch (error) {
-      console.error('[Analytics] Failed to track event:', error);
+      console.error('[Analytics] Failed to track event');
     }
   }
 

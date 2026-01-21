@@ -1345,6 +1345,90 @@ export const setFreehandStrokeStyle = (
 
 **原因**: TypeScript 的枚举是封闭的，无法在外部添加新成员。通过 "类型 + 同名常量对象" 模式，可以：1) 保持与原始枚举的完全兼容；2) 类型安全地添加新值；3) 在运行时和编译时都能正确使用。这是扩展第三方库类型的标准模式。
 
+#### Import 语句必须放在文件顶部
+
+**场景**: 添加新的 import 语句时
+
+❌ **错误示例**:
+```typescript
+interface MyInterface {
+  name: string;
+}
+
+const MAX_SIZE = 100;
+
+// 错误：import 在变量声明之后
+import { someUtil } from './utils';
+```
+
+✅ **正确示例**:
+```typescript
+import { someUtil } from './utils';
+
+interface MyInterface {
+  name: string;
+}
+
+const MAX_SIZE = 100;
+```
+
+**原因**: ESLint 规则 `import/first` 要求所有 `import` 语句必须放在模块最顶部（JSDoc 注释之后），位于任何变量声明、类型定义或其他代码之前。这样做便于快速了解模块的依赖关系，保持代码结构清晰。
+
+#### 类型可推断时移除显式类型注解
+
+**场景**: 变量直接赋值为字面量时
+
+❌ **错误示例**:
+```typescript
+// 错误：类型可从字面量推断，显式声明是冗余的
+private isEnabled: boolean = false;
+private count: number = 0;
+private name: string = 'default';
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：让 TypeScript 自动推断类型
+private isEnabled = false;
+private count = 0;
+private name = 'default';
+
+// 注意：联合类型或复杂类型仍需显式声明
+private status: 'pending' | 'done' = 'pending';
+private config: Config | null = null;
+```
+
+**原因**: ESLint 规则 `@typescript-eslint/no-inferrable-types` 要求移除可从初始值推断的冗余类型注解，保持代码简洁。当变量赋值为 `false`、`true`、数字或字符串字面量时，TypeScript 能自动推断类型。
+
+#### Service Worker 与主线程模块不共享
+
+**场景**: 需要在 Service Worker 和主线程中使用相同逻辑时
+
+❌ **错误示例**:
+```typescript
+// apps/web/src/sw/index.ts
+// 错误：SW 中直接导入主线程包
+import { sanitizeObject } from '@drawnix/drawnix';
+// 会导致打包体积膨胀或循环依赖
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：SW 和主线程各自维护独立模块
+
+// 主线程版本：packages/drawnix/src/utils/sanitize-utils.ts
+export function sanitizeObject(data: unknown): unknown { ... }
+
+// SW 版本：apps/web/src/sw/task-queue/utils/sanitize-utils.ts
+export function sanitizeObject(obj: unknown): unknown { ... }
+```
+
+**原因**: Service Worker 和主线程是完全隔离的执行环境，有各自独立的打包入口。SW 无法直接 import `@drawnix/drawnix` 包，否则会将整个主线程代码打包进 SW，导致体积膨胀。相同逻辑需要在两个环境中分别维护独立的模块副本。
+
+**相关文件**:
+- 主线程：`packages/drawnix/src/utils/sanitize-utils.ts`
+- Service Worker：`apps/web/src/sw/task-queue/utils/sanitize-utils.ts`
+
 ### React 组件规范
 - 使用函数组件和 Hooks
 - 使用 `React.memo` 优化重渲染

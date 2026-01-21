@@ -14,6 +14,7 @@
 import type { SWTask, GeminiConfig, VideoAPIConfig } from './types';
 import type { Workflow } from './workflow-types';
 import type { ChatWorkflow } from './chat-workflow/types';
+import { getSafeErrorMessage } from './utils/sanitize-utils';
 
 const DB_NAME = 'sw-task-queue';
 const MIN_DB_VERSION = 2; // Minimum required version (with workflow stores)
@@ -489,7 +490,8 @@ export class TaskQueueStorage {
         transaction.onerror = () => reject(transaction.error);
       });
     } catch (error) {
-      console.error('[SWStorage] Failed to save config:', error);
+      // 只记录错误类型，不记录详细信息（可能包含敏感配置）
+      console.error('[SWStorage] Failed to save config:', getSafeErrorMessage(error));
     }
   }
 
@@ -532,7 +534,8 @@ export class TaskQueueStorage {
         transaction.onerror = () => reject(transaction.error);
       });
     } catch (error) {
-      console.error('[SWStorage] Failed to load config:', error);
+      // 只记录错误类型，不记录详细信息（可能包含敏感配置）
+      console.error('[SWStorage] Failed to load config:', getSafeErrorMessage(error));
       return { geminiConfig: null, videoConfig: null };
     }
   }

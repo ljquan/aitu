@@ -6,6 +6,8 @@
  * 数据持久化到 IndexedDB，可在 sw-debug.html 查看和导出。
  */
 
+import { sanitizeRequestBody } from './utils/sanitize-utils';
+
 export interface LLMReferenceImage {
   url: string;      // Base64 或虚拟路径 URL (用于预览)
   size: number;     // 大小 (字节)
@@ -313,7 +315,8 @@ export function startLLMApiLog(params: {
     model: params.model,
     taskType: params.taskType,
     prompt: params.prompt ? truncatePrompt(params.prompt) : undefined,
-    requestBody: params.requestBody,  // 完整保存，不截断
+    // 对请求体进行脱敏处理，过滤 API Key 等敏感信息
+    requestBody: params.requestBody ? sanitizeRequestBody(params.requestBody) : undefined,
     hasReferenceImages: params.hasReferenceImages,
     referenceImageCount: params.referenceImageCount,
     referenceImages: params.referenceImages,

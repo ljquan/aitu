@@ -5,6 +5,8 @@
  * we need to manually log them for debugging purposes.
  */
 
+import { sanitizeRequestBody } from './utils/sanitize-utils';
+
 interface FormDataField {
   name: string;
   value: string;
@@ -240,6 +242,9 @@ export async function debugFetch(
           /data:image\/([^;]+);base64,[A-Za-z0-9+/=]+/g,
           (_, mimeType) => `[📷 image/${mimeType}]`
         );
+        
+        // 对请求体进行脱敏处理，过滤 API Key 等敏感信息
+        displayBody = sanitizeRequestBody(displayBody);
         
         // 对于 chat/completions 接口，不截断请求体（用于调试和成本追踪）
         const isChatEndpoint = url.includes('/chat/completions');

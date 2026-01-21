@@ -11,6 +11,8 @@
  * 4. beforeunload 事件记录最后状态
  */
 
+import { sanitizeUrl } from '@drawnix/drawnix';
+
 // ==================== 类型定义 ====================
 
 export interface CrashSnapshot {
@@ -887,13 +889,16 @@ export function setupNetworkErrorTracking(): void {
       
       // 只在失败时才处理（正常请求零开销）
       if (!response.ok) {
-        const url = typeof input === 'string' ? input : (input as Request).url;
+        const rawUrl = typeof input === 'string' ? input : (input as Request).url;
         const duration = Date.now() - startTime;
+        
+        // 对 URL 进行脱敏处理，移除敏感参数
+        const url = sanitizeUrl(rawUrl).slice(0, 300);
         
         // 提取更多有用信息
         networkErrors.push({
           time: Date.now(),
-          url: url.slice(0, 300),
+          url,
           method: init?.method || 'GET',
           status: response.status,
           statusText: response.statusText,
@@ -907,12 +912,15 @@ export function setupNetworkErrorTracking(): void {
       
       return response;
     } catch (error) {
-      const url = typeof input === 'string' ? input : (input as Request).url;
+      const rawUrl = typeof input === 'string' ? input : (input as Request).url;
       const duration = Date.now() - startTime;
+      
+      // 对 URL 进行脱敏处理，移除敏感参数
+      const url = sanitizeUrl(rawUrl).slice(0, 300);
       
       networkErrors.push({
         time: Date.now(),
-        url: url.slice(0, 300),
+        url,
         method: init?.method || 'GET',
         error: (error as Error).message,
         duration,

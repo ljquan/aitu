@@ -13,6 +13,8 @@ import {
   initPromptStorageCache,
   toolbarConfigService,
   memoryMonitorService,
+  sanitizeObject,
+  sanitizeUrl,
 } from '@drawnix/drawnix';
 import { initSWConsoleCapture } from './utils/sw-console-capture';
 
@@ -23,25 +25,50 @@ initCrashLogger();
 // ===== 初始化 Sentry 错误监控 =====
 // 必须在其他代码之前初始化，以捕获所有错误
 Sentry.init({
-    dsn: "https://a18e755345995baaa0e1972c4cf24497@o4510700882296832.ingest.us.sentry.io/4510700883869696",
-  // Setting this option to true will send default PII data to Sentry.
-  // For example, automatic IP address collection on events
-  sendDefaultPii: true
-  // dsn: 'https://a18e755345995baaa0e1972c4cf24497@o4510700882296832.ingest.us.sentry.io/4510700883869696',
-  // // 发送默认 PII 数据（如 IP 地址）
-  // sendDefaultPii: true,
-  // // 仅在生产环境启用
-  // enabled: import.meta.env.PROD,
-  // // 集成配置
-  // integrations: [
-  //   Sentry.browserTracingIntegration(),
-  //   Sentry.replayIntegration(),
-  // ],
-  // // 性能监控采样率
-  // tracesSampleRate: 0.1,
-  // // Session Replay 采样率
-  // replaysSessionSampleRate: 0.1,
-  // replaysOnErrorSampleRate: 1.0,
+  dsn: "https://a18e755345995baaa0e1972c4cf24497@o4510700882296832.ingest.us.sentry.io/4510700883869696",
+  // 仅在生产环境启用
+  enabled: import.meta.env.PROD,
+  // 禁用自动 PII 收集，保护用户隐私
+  sendDefaultPii: false,
+  // 性能监控采样率（降低以减少数据量）
+  tracesSampleRate: 0.1,
+  // beforeSend 钩子：过滤敏感数据
+  beforeSend(event) {
+    // 过滤 extra 数据中的敏感信息
+    if (event.extra) {
+      event.extra = sanitizeObject(event.extra) as Record<string, unknown>;
+    }
+    
+    // 过滤 contexts 中的敏感信息
+    if (event.contexts) {
+      event.contexts = sanitizeObject(event.contexts) as typeof event.contexts;
+    }
+    
+    // 过滤 breadcrumbs 中的敏感信息
+    if (event.breadcrumbs) {
+      event.breadcrumbs = event.breadcrumbs.map(breadcrumb => ({
+        ...breadcrumb,
+        data: breadcrumb.data ? sanitizeObject(breadcrumb.data) as Record<string, unknown> : undefined,
+        message: breadcrumb.message ? String(sanitizeObject(breadcrumb.message)) : undefined,
+      }));
+    }
+    
+    // 过滤请求数据中的敏感信息
+    if (event.request) {
+      if (event.request.headers) {
+        event.request.headers = sanitizeObject(event.request.headers) as Record<string, string>;
+      }
+      if (event.request.data) {
+        event.request.data = sanitizeObject(event.request.data);
+      }
+      // 清理 URL 中可能的敏感参数
+      if (event.request.url) {
+        event.request.url = sanitizeUrl(event.request.url);
+      }
+    }
+    
+    return event;
+  },
 });
 
 // ===== 立即初始化防止双指缩放 =====
