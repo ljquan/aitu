@@ -1,3 +1,13 @@
+## 0.5.37 (2026-01-21)
+
+### 🔧 Chores
+
+- update app version to 0.5.36 and adjust build time in version.json ([b1cd461](https://github.com/ljquan/aitu/commit/b1cd461))
+
+### ❤️  Thank You
+
+- liquidliang <ljquan@qq.com>
+
 ## 0.5.36 (2026-01-21)
 
 ### 🚀 Features
