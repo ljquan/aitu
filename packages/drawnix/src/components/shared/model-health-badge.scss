@@ -1,0 +1,47 @@
+/**
+ * 模型健康状态徽章样式
+ * 固定大小的彩色方块
+ */
+
+.model-health-badge {
+    display: inline-block;
+    width: 8px;
+    height: 14px;
+    border-radius: 2px;
+    flex-shrink: 0;
+    cursor: help;
+
+    // 微弱的发光效果增加辨识度
+    box-shadow: 0 0 3px rgba(0, 0, 0, 0.15);
+}
+
+// 在 ModelDropdown 列表项中的位置
+.model-dropdown__item-name {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+
+    .model-health-badge {
+        margin-left: 4px;
+    }
+}
+
+// 在 ModelSelector 列表项中的位置
+.ai-model-selector__item-name {
+    .model-health-badge {
+        margin-left: 4px;
+    }
+}
+
+// 在 AIInputBar # 建议列表中的位置
+.ai-input-bar__at-suggestion-item-name {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+
+    .model-health-badge {
+        margin-left: 4px;
+    }
+}

@@ -184,6 +184,8 @@ components/
 ├── video-frame-selector/          # 视频帧选择器
 ├── generation-history/            # 生成历史
 ├── minimap/                       # 小地图
+├── shared/                        # 共享组件
+│   └── ModelHealthBadge.tsx       # 模型健康状态徽章
 ├── icons.tsx                      # 图标库
 └── ...其他组件
 ```
@@ -209,6 +211,7 @@ services/
 ├── prompt-storage-service.ts      # 历史提示词存储
 ├── font-manager-service.ts        # 字体管理服务（加载和缓存）
 ├── backup-restore-service.ts      # 备份恢复服务
+├── model-health-service.ts        # 模型健康状态服务（从 apistatus.tu-zi.com 获取）
 ├── sw-capabilities/               # SW 能力处理
 │   └── handler.ts                 # 思维导图/流程图生成处理
 ├── tracking/                      # 追踪服务
@@ -261,6 +264,7 @@ hooks/
 ├── useInfinitePagination.ts       # 无限滚动分页
 ├── useVirtualList.ts              # 虚拟列表（封装 @tanstack/react-virtual）
 ├── useImageLazyLoad.ts            # 图片懒加载
+├── useModelHealth.ts              # 模型健康状态 Hook
 └── ...其他 Hooks
 ```
 
@@ -939,6 +943,47 @@ return withTextPastePlugin(withImagePlugin(newBoard));
 ```
 
 详细文档：`/docs/TEXT_PASTE_FEATURE.md`
+
+### 模型健康状态功能
+
+在模型选择下拉菜单中显示实时健康状态，帮助用户了解模型的可用性。
+
+**核心文件**：
+- `services/model-health-service.ts` - 健康状态 API 服务
+- `hooks/useModelHealth.ts` - React Hook（带缓存和自动刷新）
+- `components/shared/ModelHealthBadge.tsx` - 健康状态徽章组件
+- `components/shared/model-health-badge.scss` - 样式文件
+
+**功能特点**：
+- 仅当 `baseUrl` 为 `api.tu-zi.com` 时才启用
+- 每 5 分钟自动刷新健康数据
+- 全局缓存避免重复请求
+- 彩色方块徽章显示状态，hover 显示状态文字
+- API 请求失败时静默处理，不显示健康状态
+
+**API 来源**：
+- 端点：`https://apistatus.tu-zi.com/api/history/aggregated`
+- 返回字段：`model_name`、`status_label`、`status_color`、`error_rate` 等
+
+**使用示例**：
+```typescript
+import { useModelHealth } from '../../hooks/useModelHealth';
+import { ModelHealthBadge } from '../shared/ModelHealthBadge';
+
+// 在组件中使用 Hook
+const { shouldShowHealth, getHealthStatus } = useModelHealth();
+
+// 获取特定模型的健康状态
+const status = getHealthStatus('gemini-2.0-flash-exp-image-generation');
+
+// 使用徽章组件
+<ModelHealthBadge modelId="gemini-2.0-flash-exp-image-generation" />
+```
+
+**显示规则**：
+- `shouldShowHealth` 为 `true` 时（baseUrl 包含 `api.tu-zi.com`）才显示徽章
+- 没有匹配模型的健康数据时不显示徽章
+- 徽章颜色由 API 返回的 `statusColor` 决定（绿/黄/红等）
 
 ### 字体管理与缓存
 
