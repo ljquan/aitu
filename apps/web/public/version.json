@@ -2,5 +2,8 @@
   "version": "0.5.37",
   "buildTime": "2026-01-21T08:48:23.142Z",
   "gitCommit": "unknown",
-  "changelog": []
+  "changelog": [
+    "修复 ModelDropdown Portal 模式下的位置计算和点击选择问题",
+    "添加模型健康状态功能并更新 CLAUDE.md 文档"
+  ]
 }
