@@ -1,6 +1,11 @@
 {
-  "version": "0.5.35",
-  "buildTime": "2026-01-21T02:57:34.207Z",
+  "version": "0.5.36",
+  "buildTime": "2026-01-21T08:39:13.112Z",
   "gitCommit": "unknown",
-  "changelog": []
+  "changelog": [
+    "implement precache manifest generation and update service worker activation strategy",
+    "修复 ModelDropdown Portal 模式下的位置计算和点击选择问题",
+    "添加模型健康状态功能并更新 CLAUDE.md 文档",
+    "优化批量出图 UI 和交互体验"
+  ]
 }

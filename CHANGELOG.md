@@ -1,3 +1,50 @@
+## 0.5.36 (2026-01-21)
+
+### 🚀 Features
+
+- 添加模型健康状态功能并更新 CLAUDE.md 文档 ([98f9319](https://github.com/ljquan/aitu/commit/98f9319))
+- implement precache manifest generation and update service worker activation strategy ([f44fea3](https://github.com/ljquan/aitu/commit/f44fea3))
+- implement responsive layout with ResizeObserver and improve styling consistency ([72057e9](https://github.com/ljquan/aitu/commit/72057e9))
+- enhance split and restore functionality for WinBoxWindow ([a53c0b8](https://github.com/ljquan/aitu/commit/a53c0b8))
+- 优化批量出图 UI 和交互体验 ([94e2e05](https://github.com/ljquan/aitu/commit/94e2e05))
+
+### 🩹 Fixes
+
+- 修复 ModelDropdown Portal 模式下的位置计算和点击选择问题 ([f075058](https://github.com/ljquan/aitu/commit/f075058))
+
+### 🔧 Chores
+
+- update app version to 0.5.35 and adjust build time in version.json ([7b8c32e](https://github.com/ljquan/aitu/commit/7b8c32e))
+- bump version to 0.5.35 ([cfa8949](https://github.com/ljquan/aitu/commit/cfa8949))
+- bump version to 0.5.34 ([2903d85](https://github.com/ljquan/aitu/commit/2903d85))
+- bump version to 0.5.33 ([e9cd0ec](https://github.com/ljquan/aitu/commit/e9cd0ec))
+- bump version to 0.5.32 ([f0ff19e](https://github.com/ljquan/aitu/commit/f0ff19e))
+- bump version to 0.5.31 ([8d4cb2d](https://github.com/ljquan/aitu/commit/8d4cb2d))
+- update app version to 0.5.30 and adjust build time in version.json ([1512fd7](https://github.com/ljquan/aitu/commit/1512fd7))
+- bump version to 0.5.30 ([5279f38](https://github.com/ljquan/aitu/commit/5279f38))
+- update app version to 0.5.29 and adjust build time ([4a0edf6](https://github.com/ljquan/aitu/commit/4a0edf6))
+- docs(claude): 添加关于批量操作按钮视觉层级和 URL 模板变量处理的新规则 ([1891b1e](https://github.com/ljquan/aitu/commit/1891b1e))
+- docs(claude): 添加关于 Tooltip 布局、筛选逻辑和 UI 设计原则的新规则 ([d7eaca8](https://github.com/ljquan/aitu/commit/d7eaca8))
+- docs(claude): 添加新规则 - 嵌套滚动容器和动态高度容器的滚动事件处理 ([7e6c26b](https://github.com/ljquan/aitu/commit/7e6c26b))
+- refactor: update HandIcon SVG paths for improved structure and clarity ([1741b5a](https://github.com/ljquan/aitu/commit/1741b5a))
+- docs(claude): 添加有关图标组件规范和筛选逻辑修复的新规则 ([0d35d22](https://github.com/ljquan/aitu/commit/0d35d22))
+- docs(claude): 添加新规则 - CustomEvent 传递硬编码占位符问题 ([4543793](https://github.com/ljquan/aitu/commit/4543793))
+- docs(claude): 添加 Service Worker 自动激活策略文档 ([a3983d7](https://github.com/ljquan/aitu/commit/a3983d7))
+- docs(claude): 补充预缓存不阻塞首次访问的说明 ([d5ca154](https://github.com/ljquan/aitu/commit/d5ca154))
+- docs(claude): 添加 Service Worker 预缓存机制文档 ([c26bd23](https://github.com/ljquan/aitu/commit/c26bd23))
+- docs(claude): 添加新规则 - 获取第三方组件位置应使用 getBoundingClientRect() ([082f274](https://github.com/ljquan/aitu/commit/082f274))
+- docs(claude): 添加新规则 - 独立的 React 树缺少上下文环境 ([eac542f](https://github.com/ljquan/aitu/commit/eac542f))
+- docs(claude): 添加新规则 - 传递给第三方库的回调无法获取最新 React state ([306ac42](https://github.com/ljquan/aitu/commit/306ac42))
+- docs(claude): 添加新规则 - 点击外部关闭应使用全局事件监听而非透明遮罩层 ([36785f1](https://github.com/ljquan/aitu/commit/36785f1))
+- docs(claude): 添加新规则 - React Context 回调中必须使用函数式更新 ([3b89eb2](https://github.com/ljquan/aitu/commit/3b89eb2))
+- docs(claude): 添加异步任务重试与恢复规范 ([a7b61a0](https://github.com/ljquan/aitu/commit/a7b61a0))
+
+### ❤️  Thank You
+
+- liquidliang <ljquan@qq.com>
+- gongchengtu <1817063960@qq.com>
+- liquid <ljquan@qq.com>
+
 ## 0.5.34 (2026-01-21)
 
 ### 🚀 Features
