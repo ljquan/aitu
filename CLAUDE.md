@@ -3975,6 +3975,35 @@ const allCategories = useMemo(() => {
 
 **原因**: 避免 Padding 与 Margin 的视觉累加，确保界面排版符合设计的网格预期。
 
+### UI 设计原则: 批量操作按钮视觉层级
+
+**场景**: 设计包含多个操作按钮的批量操作栏（如任务队列、文件管理器）时。
+
+❌ **错误示例**:
+```tsx
+// 所有按钮都使用主题色，视觉噪音过大
+<div className="batch-actions">
+  <Button theme="primary">重试 (3)</Button>
+  <Button theme="primary">删除 (6)</Button>
+  <Button theme="primary">导出 (6)</Button>
+</div>
+```
+
+✅ **正确示例**:
+```tsx
+// 主要正向操作使用主题色，危险/次要操作弱化
+<div className="batch-actions">
+  <Button theme="primary">重试 (3)</Button>           {/* 主要正向操作 - 主题色实心 */}
+  <Button variant="text" theme="default">删除 (6)</Button>  {/* 危险操作 - 弱化为文字按钮 */}
+</div>
+```
+
+**原因**: 
+- 过多的主题色按钮会造成视觉疲劳，用户难以快速识别主要操作
+- 危险操作（如删除）应该弱化，避免用户误操作
+- 按钮层级建议：主要正向操作 > 次要操作 > 危险操作
+- 视觉层级：`theme="primary"` 实心 > `variant="outline"` 描边 > `variant="text"` 文字
+
 ### 性能指南
 - 使用 `React.lazy` 对大型组件进行代码分割
 - 对图片实现懒加载和预加载

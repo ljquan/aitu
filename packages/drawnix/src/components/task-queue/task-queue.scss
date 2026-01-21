@@ -128,14 +128,13 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 0 0;
-    margin-top: 8px;
   }
 
   &__batch-select {
     display: flex;
     align-items: center;
     gap: 8px;
+    margin-left: 12px; // 与任务列表的 checkbox 左边对齐
   }
 
   &__batch-count {
@@ -254,13 +253,10 @@
   // 宽布局模式：提示词和信息都在图片右侧
   // ==========================================
   &--wide {
-    grid-template-columns: auto 120px 1fr;
+    // 默认：没有 checkbox 的情况（非选择模式）
+    grid-template-columns: 120px 1fr;
     grid-template-areas: 
-      "checkbox preview body";
-
-    .task-item__checkbox {
-      grid-area: checkbox;
-    }
+      "preview body";
 
     .task-item__preview-wrapper {
       grid-area: preview;
@@ -269,20 +265,28 @@
     .task-item__body {
       grid-area: body;
     }
+
+    // 选择模式：有 checkbox 的情况
+    &.task-item--selection-mode {
+      grid-template-columns: auto 120px 1fr;
+      grid-template-areas: 
+        "checkbox preview body";
+
+      .task-item__checkbox {
+        grid-area: checkbox;
+      }
+    }
   }
 
   // ==========================================
   // 紧凑布局模式：信息区域移到图片下方全宽展示
   // ==========================================
   &--compact {
-    grid-template-columns: auto 100px 1fr;
+    // 默认：没有 checkbox 的情况（非选择模式）
+    grid-template-columns: 100px 1fr;
     grid-template-areas: 
-      "checkbox preview prompt"
-      "info     info    info";
-
-    .task-item__checkbox {
-      grid-area: checkbox;
-    }
+      "preview prompt"
+      "info    info";
 
     .task-item__preview-wrapper {
       grid-area: preview;
@@ -306,12 +310,25 @@
     .task-item__content-row {
       align-items: center;
     }
+
+    // 选择模式：有 checkbox 的情况
+    &.task-item--selection-mode {
+      grid-template-columns: auto 100px 1fr;
+      grid-template-areas: 
+        "checkbox preview prompt"
+        "info     info    info";
+
+      .task-item__checkbox {
+        grid-area: checkbox;
+      }
+    }
   }
 
   &__checkbox {
     display: flex;
     align-items: flex-start;
     padding-top: 4px;
+    padding-left: 16px; // 避开失败任务的红色竖线，同时与全选 checkbox 对齐
   }
 
   &__preview-wrapper {

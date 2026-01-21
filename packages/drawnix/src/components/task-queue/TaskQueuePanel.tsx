@@ -626,8 +626,8 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
             )}
             <Button
               size="small"
-              variant="outline"
-              theme="danger"
+              variant="text"
+              theme="default"
               icon={<DeleteIcon />}
               data-track="task_click_batch_delete"
               onClick={handleBatchDelete}

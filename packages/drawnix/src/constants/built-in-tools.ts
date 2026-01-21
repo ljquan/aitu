@@ -4,6 +4,7 @@
  * 内置工具列表配置
  */
 
+import React from 'react';
 import { ToolDefinition, ToolCategory } from '../types/toolbox.types';
 import { AIImageIcon, AIVideoIcon } from '../components/icons';
 
@@ -48,6 +49,23 @@ export const BUILT_IN_TOOLS: ToolDefinition[] = [
     ],
   },
   {
+    id: 'chat-mj',
+    name: 'Chat-MJ',
+    description: 'ChatGPT Web 聊天界面，支持 Midjourney 绘图代理',
+    icon: '💬',
+    category: ToolCategory.AI_TOOLS,
+    url: 'https://chat.innk.cc/#/?settings={"key":"${apiKey}","url":"https://api.tu-zi.com"}',
+    defaultWidth: 1000,
+    defaultHeight: 700,
+    permissions: [
+      'allow-scripts',
+      'allow-same-origin',
+      'allow-popups',
+      'allow-forms',
+      'allow-top-navigation-by-user-activation'
+    ],
+  },
+  {
     id: 'batch-image',
     name: '批量出图工具',
     description: 'Excel式批量AI图片生成，支持批量编辑、图片参考和历史追踪',
@@ -61,7 +79,7 @@ export const BUILT_IN_TOOLS: ToolDefinition[] = [
     id: 'ai-image',
     name: 'AI 图片生成（单图）',
     description: '专业 AI 图片创作工具，支持参考图、历史记录和多模型切换',
-    icon: AIImageIcon,
+    icon: React.createElement(AIImageIcon),
     category: ToolCategory.AI_TOOLS,
     component: 'ai-image',
     defaultWidth: 1000,
@@ -71,12 +89,12 @@ export const BUILT_IN_TOOLS: ToolDefinition[] = [
     id: 'ai-video',
     name: 'AI 视频生成',
     description: 'AI 驱动的短视频创作，支持分镜描述、参考图和多种视频模型',
-    icon: AIVideoIcon,
+    icon: React.createElement(AIVideoIcon),
     category: ToolCategory.AI_TOOLS,
     component: 'ai-video',
     defaultWidth: 1100,
     defaultHeight: 800,
-  } as ToolDefinition
+  } as ToolDefinition,
 ];
 
 /**

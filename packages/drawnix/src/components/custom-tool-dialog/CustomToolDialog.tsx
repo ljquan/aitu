@@ -17,6 +17,7 @@ import {
 } from 'tdesign-react';
 import { ToolDefinition, ToolCategory } from '../../types/toolbox.types';
 import { toolboxService } from '../../services/toolbox-service';
+import { hasTemplateVariables } from '../../utils/url-template';
 import './custom-tool-dialog.scss';
 
 const { FormItem } = Form;
@@ -98,7 +99,13 @@ export const CustomToolDialog: React.FC<CustomToolDialogProps> = ({
     // URL 格式验证
     if (hasUrl) {
       try {
-        const url = new URL(formData.url!);
+        // 将模板变量替换为临时占位符来验证 URL 格式
+        // 例如: ${apiKey} -> placeholder_apiKey
+        let urlToValidate = formData.url!;
+        if (hasTemplateVariables(urlToValidate)) {
+          urlToValidate = urlToValidate.replace(/\$\{(\w+)\}/g, 'placeholder_$1');
+        }
+        const url = new URL(urlToValidate);
         if (!['https:', 'http:'].includes(url.protocol)) {
           return '只允许使用 HTTP/HTTPS 协议';
         }
@@ -197,6 +204,7 @@ export const CustomToolDialog: React.FC<CustomToolDialogProps> = ({
             }}
             placeholder="https://example.com"
             disabled={!!formData.component}
+            tips="支持模板变量：${apiKey}（设置中的 API Key）自行确保目标URL可靠，避免Key泄漏"
           />
         </FormItem>
 
