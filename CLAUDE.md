@@ -3653,6 +3653,41 @@ const rect = {
 
 **原因**: 第三方组件库（如 WinBox、Dialog 等）的内部位置属性可能使用不同的坐标系统（相对于 root 容器、相对于父元素等），与浏览器的视口坐标不一致。而 `getBoundingClientRect()` 始终返回元素相对于视口的准确位置，是进行坐标转换的可靠来源。当需要将一个元素的位置映射到另一个坐标系（如画布坐标）时，应统一使用 `getBoundingClientRect()` 获取两者的视口坐标，再进行转换。
 
+### 错误 12: CustomEvent 传递硬编码占位符而非实际值
+
+**场景**: 使用 CustomEvent 在组件/模块间传递数据时
+
+❌ **错误示例**:
+```typescript
+// 错误：使用硬编码占位符，UI 会显示 "vnew" 而非实际版本号
+window.dispatchEvent(new CustomEvent('sw-update-available', { 
+  detail: { version: 'new' }  // ❌ 硬编码的占位符
+}));
+
+// 结果：UI 显示 "新版本 vnew 已就绪"
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：先获取实际值再传递
+fetch(`/version.json?t=${Date.now()}`)
+  .then(res => res.ok ? res.json() : null)
+  .then(data => {
+    window.dispatchEvent(new CustomEvent('sw-update-available', { 
+      detail: { version: data?.version || 'unknown' }  // ✅ 实际版本号
+    }));
+  })
+  .catch(() => {
+    window.dispatchEvent(new CustomEvent('sw-update-available', { 
+      detail: { version: 'unknown' }  // ✅ 明确的回退值
+    }));
+  });
+
+// 结果：UI 显示 "新版本 v0.5.35 已就绪"
+```
+
+**原因**: CustomEvent 的 `detail` 数据会直接被消费者使用。如果传递硬编码的占位符（如 `'new'`、`'loading'`），接收方无法区分这是占位符还是真实数据，导致 UI 显示错误。应该先获取实际数据再发送事件，或使用明确的回退值（如 `'unknown'`）并在 UI 中特殊处理。
+
 ---
 
 ### 性能指南
