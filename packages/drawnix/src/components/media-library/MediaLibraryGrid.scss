@@ -145,15 +145,15 @@ $brand-orange-dark: #E67E22;
     display: flex;
     align-items: center;
     background: #f1f5f9;
-    padding: 2px;
+    padding: 3px;
     border-radius: 8px;
-    gap: 2px;
+    gap: 4px;
   }
 
   &__filter-group {
     display: flex;
     align-items: center;
-    gap: 2px;
+    gap: 4px;
   }
 
   &__filter-separator {
@@ -164,8 +164,8 @@ $brand-orange-dark: #E67E22;
   }
 
   &__filter-option {
-    width: 32px;
-    height: 28px;
+    padding: 0 8px;
+    height: 30px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -175,10 +175,11 @@ $brand-orange-dark: #E67E22;
     transition: all 0.15s ease;
     user-select: none;
     position: relative;
+    gap: 4px;
 
     svg {
-      width: 14px;
-      height: 14px;
+      width: 15px;
+      height: 15px;
       flex-shrink: 0;
       opacity: 0.8;
 
@@ -217,29 +218,25 @@ $brand-orange-dark: #E67E22;
   }
 
   &__filter-count {
-    position: absolute;
-    bottom: 2px;
-    right: 2px;
-    font-size: 9px;
+    font-size: 11px;
     font-weight: 600;
     color: #94a3b8;
     line-height: 1;
-    transform: scale(0.85);
-    transform-origin: bottom right;
     letter-spacing: -0.02em;
+    margin-bottom: -1px; // 对齐图标
   }
 
   &__sort-options {
     display: flex;
     align-items: center;
     background: #f1f5f9;
-    padding: 2px;
+    padding: 3px;
     border-radius: 8px;
-    gap: 2px;
+    gap: 4px;
 
     .media-library-grid__filter-option {
       padding: 0;
-      width: 28px;
+      width: 30px;
     }
   }
 

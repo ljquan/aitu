@@ -99,8 +99,12 @@ export function filterAssets(
           return a.createdAt - b.createdAt;
         case 'NAME_ASC':
           return a.name.localeCompare(b.name);
+        case 'NAME_DESC':
+          return b.name.localeCompare(a.name);
         case 'SIZE_DESC':
           return (b.size || 0) - (a.size || 0);
+        case 'SIZE_ASC':
+          return (a.size || 0) - (b.size || 0);
         default:
           return 0;
       }

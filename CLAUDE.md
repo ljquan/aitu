@@ -3935,6 +3935,59 @@ const allCategories = useMemo(() => {
 
 **原因**: 项目中的 `z-index` 有严格的分层规范（参见 `docs/Z_INDEX_GUIDE.md`）。工具栏位于 2000 层，而抽屉应该位于 4000 层及以上。硬编码低层级会破坏预留宽度的视觉预期。
 
+### 交互规范: 三段式循环排序模式
+
+**场景**: 实现包含正序、逆序且需要支持恢复默认状态的排序按钮时。
+
+❌ **错误示例**:
+使用多个独立按钮分别代表正序和逆序，或者简单的二段式切换（无法方便地回到默认排序）。
+
+✅ **正确示例**:
+使用单个按钮循环切换：`正序 -> 逆序 -> 恢复默认排序（如日期降序）`。
+```typescript
+const handleSortClick = () => {
+  if (currentSort === group.options.asc) {
+    setFilters({ sortBy: group.options.desc }); // 切换到逆序
+  } else if (currentSort === group.options.desc) {
+    setFilters({ sortBy: 'DATE_DESC' }); // 恢复默认
+  } else {
+    setFilters({ sortBy: group.options.asc }); // 切换到正序
+  }
+};
+```
+
+**原因**: 这种模式在节省 UI 空间的同时，能让用户在有限的点击次数内触达所有排序状态，且逻辑闭环。
+
+### 样式规范: 筛选岛（Island）组件的间距与对齐
+
+**场景**: 在紧凑的水平排列筛选组中显示图标和计数标签时。
+
+❌ **错误示例**:
+```scss
+.filter-option {
+  width: 32px; // 固定宽度在数字变长时会溢出
+  .count {
+    position: absolute; // 绝对定位容易导致与图标重叠
+    right: 2px;
+  }
+}
+```
+
+✅ **正确示例**:
+```scss
+.filter-option {
+  padding: 0 8px; // 使用 padding 适应不同宽度的数字
+  display: flex;
+  align-items: center;
+  gap: 4px; // 为图标和计数预留固定间距
+  .count {
+    font-size: 11px; // 保持精致感
+  }
+}
+```
+
+**原因**: 筛选组通常包含数量反馈，个位数和多位数占用的空间不同。使用弹性布局（Flex + gap）能确保在任何数据状态下 UI 都是对齐且易读的。
+
 ### UI 设计原则: 以影代框（Shadows Over Borders）
 
 **场景**: 为面板、卡片或容器定义边界时。

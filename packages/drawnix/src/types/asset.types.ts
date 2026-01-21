@@ -117,7 +117,7 @@ export type AssetSourceFilter = 'ALL' | AssetSource;
  * Sort Option
  * 排序选项
  */
-export type SortOption = 'DATE_DESC' | 'DATE_ASC' | 'NAME_ASC' | 'SIZE_DESC';
+export type SortOption = 'DATE_DESC' | 'DATE_ASC' | 'NAME_ASC' | 'NAME_DESC' | 'SIZE_ASC' | 'SIZE_DESC';
 
 /**
  * View Mode
