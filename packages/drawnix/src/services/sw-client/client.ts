@@ -599,8 +599,6 @@ export class SWTaskQueueClient {
             geminiConfig: this.lastGeminiConfig,
             videoConfig: this.lastVideoConfig,
           });
-        } else {
-          console.warn('[SWClient] Cannot re-send config: no stored config');
         }
         return;
       }

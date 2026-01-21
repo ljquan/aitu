@@ -65,7 +65,6 @@ class SWTaskQueueService {
       
       const settings = geminiSettings.get();
       if (!settings.apiKey || !settings.baseUrl) {
-        console.warn('[SWTaskQueueService] Gemini settings not configured');
         return false;
       }
 

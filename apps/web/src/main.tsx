@@ -196,6 +196,13 @@ if ('serviceWorker' in navigator) {
     } else if (event.data && event.data.type === 'SW_UPGRADING') {
       // Service Worker 正在升级
       // console.log(`Main: Service Worker upgrading to v${event.data.version}`);
+    } else if (event.data && event.data.type === 'SW_ACTIVATED') {
+      // 新 SW 已自动激活并接管页面
+      // 通知 UI 显示更新提示（用户可选择刷新以使用新功能）
+      console.log(`Service Worker v${event.data.version} 已激活`);
+      window.dispatchEvent(new CustomEvent('sw-update-available', { 
+        detail: { version: event.data.version, autoActivated: true } 
+      }));
     } else if (event.data && event.data.type === 'UPGRADE_STATUS') {
       // 升级状态响应
       // console.log('Main: Upgrade status:', event.data);

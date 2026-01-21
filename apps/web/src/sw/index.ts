@@ -871,62 +871,172 @@ async function cleanOldCacheEntries(cache: Cache) {
   }
 }
 
-// Files to cache for offline functionality (only in production)
-// NOTE: Only include files that definitely exist. Use relative paths from root.
-const STATIC_FILES = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/favicon.ico',
-  '/icons/favicon-new.svg'
-];
+// Precache manifest 类型定义
+interface PrecacheManifest {
+  version: string;
+  timestamp: string;
+  files: Array<{ url: string; revision: string }>;
+}
+
+/**
+ * 从 precache-manifest.json 加载预缓存文件列表
+ * 如果加载失败（开发模式没有此文件），返回 null 表示不需要预缓存
+ */
+async function loadPrecacheManifest(): Promise<{ url: string; revision: string }[] | null> {
+  try {
+    const response = await fetch('/precache-manifest.json', { cache: 'reload' });
+    if (!response.ok) {
+      // 没有 manifest 文件，说明是开发模式，不需要预缓存
+      console.log('Service Worker: No precache-manifest.json found (dev mode), skipping precache');
+      return null;
+    }
+    
+    const manifest: PrecacheManifest = await response.json();
+    console.log(`Service Worker: Loaded precache manifest v${manifest.version} with ${manifest.files.length} files`);
+    return manifest.files;
+  } catch (error) {
+    // 加载失败，不预缓存
+    console.log('Service Worker: Cannot load precache-manifest.json, skipping precache');
+    return null;
+  }
+}
+
+/**
+ * 缓存单个文件
+ * - HTML 文件从当前服务器获取（确保最新版本）
+ * - JS/CSS 等静态资源优先从 CDN 获取，失败后回退到服务器
+ */
+async function cacheFile(
+  cache: Cache,
+  url: string,
+  revision: string
+): Promise<{ url: string; success: boolean; skipped?: boolean; status?: number; error?: string; source?: string }> {
+  try {
+    // 检查缓存中是否已有相同 revision 的文件
+    const cachedResponse = await cache.match(url);
+    
+    if (cachedResponse) {
+      const cachedRevision = cachedResponse.headers.get('x-sw-revision');
+      if (cachedRevision === revision) {
+        // 文件未变化，跳过
+        return { url, success: true, skipped: true };
+      }
+    }
+    
+    // 判断是否是 HTML 文件（必须从当前服务器获取）
+    const isHtml = url.endsWith('.html') || url === '/';
+    
+    let response: Response | null = null;
+    let source = 'server';
+    
+    // 非 HTML 文件尝试从 CDN 获取
+    if (!isHtml) {
+      const cdnResult = await fetchFromCDNWithFallback(
+        url.startsWith('/') ? url.slice(1) : url,  // 移除开头的 /
+        APP_VERSION,
+        location.origin
+      );
+      
+      if (cdnResult && cdnResult.response.ok) {
+        response = cdnResult.response;
+        source = cdnResult.source;
+      }
+    }
+    
+    // 如果 CDN 失败或是 HTML 文件，从当前服务器获取
+    if (!response) {
+      response = await fetch(url, { cache: 'reload' });
+      source = 'server';
+    }
+    
+    if (response.ok) {
+      // 添加 revision 头用于后续比较
+      const headers = new Headers(response.headers);
+      headers.set('x-sw-revision', revision);
+      headers.set('x-sw-cached-at', new Date().toISOString());
+      headers.set('x-sw-source', source);
+      
+      const modifiedResponse = new Response(await response.blob(), {
+        status: response.status,
+        statusText: response.statusText,
+        headers
+      });
+      
+      await cache.put(url, modifiedResponse);
+      return { url, success: true, source };
+    }
+    return { url, success: false, status: response.status };
+  } catch (error) {
+    return { url, success: false, error: String(error) };
+  }
+}
+
+/**
+ * 预缓存静态资源
+ * 使用并发控制避免同时发起太多请求
+ * CDN 优先策略：JS/CSS 从 CDN 获取，HTML 从服务器获取
+ */
+async function precacheStaticFiles(cache: Cache, files: { url: string; revision: string }[]): Promise<void> {
+  const CONCURRENCY = 6; // 并发数
+  const allResults: { success: boolean; source?: string }[] = [];
+  
+  // 分批处理
+  for (let i = 0; i < files.length; i += CONCURRENCY) {
+    const batch = files.slice(i, i + CONCURRENCY);
+    const results = await Promise.allSettled(
+      batch.map(({ url, revision }) => cacheFile(cache, url, revision))
+    );
+    
+    // 收集结果
+    for (const result of results) {
+      if (result.status === 'fulfilled') {
+        allResults.push({ success: result.value.success, source: result.value.source });
+      } else {
+        allResults.push({ success: false });
+      }
+    }
+  }
+  
+  const successCount = allResults.filter(r => r.success).length;
+  const failCount = allResults.length - successCount;
+  const cdnCount = allResults.filter(r => r.success && r.source && r.source !== 'server').length;
+  const serverCount = allResults.filter(r => r.success && r.source === 'server').length;
+  
+  console.log(`Service Worker: Precached ${successCount}/${files.length} files (${failCount} failed)`);
+  if (cdnCount > 0) {
+    console.log(`Service Worker: Sources - CDN: ${cdnCount}, Server: ${serverCount}`);
+  }
+}
 
 sw.addEventListener('install', (event: ExtendableEvent) => {
-  // console.log(`Service Worker v${APP_VERSION} installing...`);
+  console.log(`Service Worker v${APP_VERSION} installing...`);
 
   const installPromises: Promise<any>[] = [];
 
   // Load failed domains from database
   installPromises.push(loadFailedDomains());
 
-  // Only pre-cache static files in production
-  // Use individual caching instead of addAll to prevent one failure from blocking all
-  if (!isDevelopment) {
-    installPromises.push(
-      caches.open(STATIC_CACHE_NAME)
-        .then(async cache => {
-          // console.log('Caching static files for new version');
-          const results = await Promise.allSettled(
-            STATIC_FILES.map(async (url) => {
-              try {
-                const response = await fetch(url, { cache: 'reload' });
-                if (response.ok) {
-                  await cache.put(url, response);
-                  return { url, success: true };
-                }
-                return { url, success: false, status: response.status };
-              } catch (error) {
-                return { url, success: false, error: String(error) };
-              }
-            })
-          );
-          
-          // Log failures but don't block installation
-          const failures = results.filter(r => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.success));
-          if (failures.length > 0) {
-            console.warn('Service Worker: Some static files failed to cache:', failures.length);
-          }
-        })
-        .catch(err => {
-          console.warn('Service Worker: Cache pre-loading failed:', err);
-          // 预缓存失败不应该阻止 SW 安装
-        })
-    );
-  }
+  // 预缓存静态资源（通过 manifest 文件是否存在来判断是否需要预缓存）
+  // - 构建产物有 precache-manifest.json → 预缓存
+  // - 开发模式没有此文件 → 跳过预缓存
+  installPromises.push(
+    (async () => {
+      try {
+        const files = await loadPrecacheManifest();
+        if (files && files.length > 0) {
+          const cache = await caches.open(STATIC_CACHE_NAME);
+          await precacheStaticFiles(cache, files);
+        }
+      } catch (err) {
+        console.warn('Service Worker: Precache failed:', err);
+        // 预缓存失败不应该阻止 SW 安装
+      }
+    })()
+  );
 
   event.waitUntil(
     Promise.all(installPromises).then(async () => {
-      // console.log(`Service Worker v${APP_VERSION} installed, resources ready`);
+      console.log(`Service Worker v${APP_VERSION} installed, resources ready`);
       
       // 判断是否是版本更新的最可靠方式：检查是否存在旧版本的缓存
       // 旧版本缓存名称包含版本号，只有在版本变化时才会不同
@@ -946,9 +1056,10 @@ sw.addEventListener('install', (event: ExtendableEvent) => {
       
       // console.log(`Service Worker: isUpdate=${isUpdate}, oldStatic=${hasOldStaticCache}, oldApp=${hasOldAppCache}`);
       
-      // 不立即调用 skipWaiting()，而是标记新版本已准备好
-      // 等待合适的时机（没有活跃请求时）再升级
-      markNewVersionReady(isUpdate);
+      // 预缓存完成后，直接激活新 SW，不等待用户确认
+      // 这样可以确保用户总是使用最新版本
+      // 注意：这不会强制刷新页面，只是让新 SW 接管控制权
+      sw.skipWaiting();
     })
   );
 });
@@ -1035,7 +1146,17 @@ sw.addEventListener('activate', (event: ExtendableEvent) => {
         console.warn('Failed to cleanup expired console logs:', err);
       });
       
-      return sw.clients.claim();
+      // 立即接管所有页面
+      await sw.clients.claim();
+      
+      // 通知所有客户端 SW 已更新（让 UI 知道可能需要刷新）
+      const clients = await sw.clients.matchAll();
+      clients.forEach(client => {
+        client.postMessage({ 
+          type: 'SW_ACTIVATED', 
+          version: APP_VERSION 
+        });
+      });
     })
   );
 });
@@ -1186,8 +1307,6 @@ sw.addEventListener('message', (event: ExtendableMessageEvent) => {
             handleWorkflowMessage(event.data as WorkflowMainToSWMessage, wfClientId);
           } else {
             // 配置不存在时，通知主线程需要重新发送配置
-            console.warn('[SW] Cannot initialize workflow handler: no config in storage, requesting config from main thread');
-            
             // 广播请求配置消息给所有客户端
             const clients = await sw.clients.matchAll({ type: 'window' });
             for (const client of clients) {

@@ -1,9 +1,10 @@
 /// <reference types='vitest' />
-import { defineConfig } from 'vite';
+import { defineConfig, Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { nxViteTsPaths } from '@nx/vite/plugins/nx-tsconfig-paths.plugin';
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import { visualizer } from 'rollup-plugin-visualizer';
 
 // Read version from public/version.json
@@ -21,6 +22,95 @@ try {
   }
 } catch (e) {
   console.error('[Vite] Failed to read version.json', e);
+}
+
+/**
+ * Vite 插件：生成 precache-manifest.json
+ * 在构建完成后扫描输出目录，生成需要预缓存的静态资源清单
+ */
+function precacheManifestPlugin(): Plugin {
+  return {
+    name: 'precache-manifest',
+    apply: 'build',
+    closeBundle: {
+      sequential: true,
+      order: 'post',
+      async handler() {
+        const outDir = path.resolve(__dirname, '../../dist/apps/web');
+        
+        // 需要预缓存的文件扩展名
+        const PRECACHE_EXTENSIONS = ['.js', '.css', '.html', '.json', '.svg', '.ico'];
+        // 排除的文件模式
+        const EXCLUDE_PATTERNS = [
+          /stats\.html$/,           // Vite visualizer
+          /\.map$/,                 // Source maps
+          /precache-manifest\.json$/, // 自身
+          /sw\.js$/,                // Service Worker 本身不需要预缓存
+        ];
+        // 总是包含的关键文件
+        const ALWAYS_INCLUDE = [
+          '/index.html',
+          '/manifest.json',
+          '/favicon.ico',
+        ];
+
+        const manifest: { url: string; revision: string }[] = [];
+
+        // 递归扫描目录
+        function scanDir(dir: string, base: string = '') {
+          if (!fs.existsSync(dir)) return;
+          
+          const entries = fs.readdirSync(dir, { withFileTypes: true });
+          for (const entry of entries) {
+            const fullPath = path.join(dir, entry.name);
+            const relativePath = path.join(base, entry.name).replace(/\\/g, '/');
+            
+            if (entry.isDirectory()) {
+              // 跳过 product_showcase 等大型资源目录
+              if (!['product_showcase', 'help_tooltips'].includes(entry.name)) {
+                scanDir(fullPath, relativePath);
+              }
+            } else if (entry.isFile()) {
+              const ext = path.extname(entry.name).toLowerCase();
+              const url = '/' + relativePath;
+              
+              // 检查是否应该排除
+              const shouldExclude = EXCLUDE_PATTERNS.some(pattern => pattern.test(url));
+              if (shouldExclude) continue;
+              
+              // 检查是否是需要预缓存的文件类型
+              const shouldInclude = PRECACHE_EXTENSIONS.includes(ext) || 
+                                   ALWAYS_INCLUDE.includes(url);
+              
+              if (shouldInclude) {
+                // 计算文件哈希作为 revision
+                const content = fs.readFileSync(fullPath);
+                const hash = crypto.createHash('md5').update(new Uint8Array(content)).digest('hex').substring(0, 8);
+                
+                manifest.push({ url, revision: hash });
+              }
+            }
+          }
+        }
+
+        scanDir(outDir);
+        
+        // 按 URL 排序，便于调试
+        manifest.sort((a, b) => a.url.localeCompare(b.url));
+
+        // 写入 manifest 文件
+        const manifestPath = path.join(outDir, 'precache-manifest.json');
+        const manifestContent = {
+          version: appVersion,
+          timestamp: new Date().toISOString(),
+          files: manifest,
+        };
+        
+        fs.writeFileSync(manifestPath, JSON.stringify(manifestContent, null, 2));
+        console.log(`[Precache] Generated manifest with ${manifest.length} files`);
+      }
+    }
+  };
 }
 
 export default defineConfig({
@@ -63,6 +153,7 @@ export default defineConfig({
       gzipSize: true,
       brotliSize: true,
     }),
+    precacheManifestPlugin(),
   ],
 
   // Uncomment this if you are using workers.

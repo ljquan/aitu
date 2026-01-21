@@ -3002,6 +3002,12 @@ function setupMessageHandlers() {
   onControllerChange(() => {
     updateSwStatus(elements.swStatus, true);
     refreshStatus();
+    
+    // 调试页面自动刷新，确保使用最新版本
+    console.log('Service Worker 已更新，调试页面将自动刷新...');
+    setTimeout(() => {
+      window.location.reload();
+    }, 1000);
   });
 }
 

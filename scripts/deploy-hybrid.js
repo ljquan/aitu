@@ -146,6 +146,134 @@ function shouldKeepOnServer(filename) {
   return CONFIG.serverOnlyFiles.some(f => filename === f || filename.endsWith(f));
 }
 
+/**
+ * 检查是否可以跳过构建
+ * 条件：
+ * 1. dist/deploy/cdn/precache-manifest.json 存在
+ * 2. 版本与当前要构建的版本一致
+ * 3. manifest 中的文件都存在于 dist/deploy/cdn 目录
+ * 
+ * @returns {{ canSkip: boolean, reason: string, details?: object }}
+ */
+function checkCanSkipBuild(currentVersion) {
+  const manifestPath = path.join(CONFIG.outputCDN, 'precache-manifest.json');
+  
+  // 检查 manifest 是否存在
+  if (!fs.existsSync(manifestPath)) {
+    return { canSkip: false, reason: 'precache-manifest.json 不存在' };
+  }
+  
+  // 读取 manifest
+  let manifest;
+  try {
+    manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+  } catch (error) {
+    return { canSkip: false, reason: `无法解析 precache-manifest.json: ${error.message}` };
+  }
+  
+  // 检查版本
+  if (manifest.version !== currentVersion) {
+    return { 
+      canSkip: false, 
+      reason: `版本不匹配 (现有: ${manifest.version}, 目标: ${currentVersion})` 
+    };
+  }
+  
+  // 检查所有文件是否存在（只检查应该在 CDN 的文件，排除 HTML 等）
+  const files = manifest.files || [];
+  if (files.length === 0) {
+    return { canSkip: false, reason: 'manifest 文件列表为空' };
+  }
+  
+  // 过滤出应该在 CDN 的文件
+  const cdnFiles = files.filter(file => {
+    const filename = path.basename(file.url);
+    return shouldUploadToCDN(filename);
+  });
+  
+  if (cdnFiles.length === 0) {
+    return { canSkip: false, reason: 'manifest 中没有 CDN 文件' };
+  }
+  
+  const missingFiles = [];
+  for (const file of cdnFiles) {
+    // url 格式如 "/assets/xxx.js"，需要去掉开头的 "/"
+    const relativePath = file.url.startsWith('/') ? file.url.slice(1) : file.url;
+    const filePath = path.join(CONFIG.outputCDN, relativePath);
+    
+    if (!fs.existsSync(filePath)) {
+      missingFiles.push(file.url);
+      // 只收集前5个缺失文件用于提示
+      if (missingFiles.length >= 5) {
+        break;
+      }
+    }
+  }
+  
+  if (missingFiles.length > 0) {
+    return { 
+      canSkip: false, 
+      reason: `CDN 目录缺少 ${missingFiles.length}+ 个文件`,
+      details: { missingFiles: missingFiles.slice(0, 5) }
+    };
+  }
+  
+  // 检查 server 目录的 manifest
+  const serverManifestPath = path.join(CONFIG.outputServer, 'precache-manifest.json');
+  if (!fs.existsSync(serverManifestPath)) {
+    return { canSkip: false, reason: 'server/precache-manifest.json 不存在' };
+  }
+  
+  // 读取 server manifest
+  let serverManifest;
+  try {
+    serverManifest = JSON.parse(fs.readFileSync(serverManifestPath, 'utf-8'));
+  } catch (error) {
+    return { canSkip: false, reason: `无法解析 server/precache-manifest.json: ${error.message}` };
+  }
+  
+  // 检查 server 版本
+  if (serverManifest.version !== currentVersion) {
+    return { 
+      canSkip: false, 
+      reason: `server 版本不匹配 (现有: ${serverManifest.version}, 目标: ${currentVersion})` 
+    };
+  }
+  
+  // 检查 server 文件是否齐全
+  const serverFiles = serverManifest.files || [];
+  const missingServerFiles = [];
+  for (const file of serverFiles) {
+    const relativePath = file.url.startsWith('/') ? file.url.slice(1) : file.url;
+    const filePath = path.join(CONFIG.outputServer, relativePath);
+    
+    if (!fs.existsSync(filePath)) {
+      missingServerFiles.push(file.url);
+      if (missingServerFiles.length >= 5) {
+        break;
+      }
+    }
+  }
+  
+  if (missingServerFiles.length > 0) {
+    return { 
+      canSkip: false, 
+      reason: `server 目录缺少 ${missingServerFiles.length}+ 个文件`,
+      details: { missingFiles: missingServerFiles.slice(0, 5) }
+    };
+  }
+  
+  return { 
+    canSkip: true, 
+    reason: `版本 ${currentVersion} 已构建完成`,
+    details: { 
+      cdnFileCount: cdnFiles.length,
+      serverFileCount: serverFiles.length,
+      timestamp: manifest.timestamp
+    }
+  };
+}
+
 // ============================================
 // 加载服务器配置
 // ============================================
@@ -189,12 +317,29 @@ function loadEnvConfig() {
 // 步骤 1: 构建项目
 // ============================================
 
-function stepBuild() {
+function stepBuild(version) {
   logStep(1, 5, '构建项目');
   
+  // 显式跳过
   if (skipBuild) {
-    logWarning('跳过构建（使用现有产物）');
+    logWarning('跳过构建（--skip-build 参数）');
     return true;
+  }
+  
+  // 智能跳过：检查现有构建产物
+  const buildCheck = checkCanSkipBuild(version);
+  if (buildCheck.canSkip) {
+    logSuccess(`跳过构建 - ${buildCheck.reason}`);
+    if (buildCheck.details) {
+      log(`    CDN: ${buildCheck.details.cdnFileCount} 个文件，Server: ${buildCheck.details.serverFileCount} 个文件`, 'gray');
+      log(`    构建时间: ${buildCheck.details.timestamp}`, 'gray');
+    }
+    return { skipped: true };
+  } else {
+    log(`    需要构建: ${buildCheck.reason}`, 'gray');
+    if (buildCheck.details?.missingFiles) {
+      log(`    缺失文件示例: ${buildCheck.details.missingFiles.join(', ')}`, 'gray');
+    }
   }
   
   if (!exec('pnpm run build:web', { cwd: path.resolve(__dirname, '..') })) {
@@ -210,8 +355,41 @@ function stepBuild() {
 // 步骤 2: 准备部署文件
 // ============================================
 
-function stepSeparateFiles(version, cdnBaseUrl) {
+function stepSeparateFiles(version, cdnBaseUrl, buildSkipped = false) {
   logStep(2, 5, '准备部署文件');
+  
+  // 如果构建被跳过，文件已经准备好了
+  if (buildSkipped) {
+    // 快速验证文件是否存在
+    const serverExists = fs.existsSync(CONFIG.outputServer);
+    const cdnExists = fs.existsSync(CONFIG.outputCDN);
+    
+    if (serverExists && cdnExists) {
+      // 统计文件数量
+      const countFiles = (dir) => {
+        let count = 0;
+        const entries = fs.readdirSync(dir, { withFileTypes: true });
+        for (const entry of entries) {
+          if (entry.isDirectory()) {
+            count += countFiles(path.join(dir, entry.name));
+          } else {
+            count++;
+          }
+        }
+        return count;
+      };
+      
+      const serverCount = countFiles(CONFIG.outputServer);
+      const cdnCount = countFiles(CONFIG.outputCDN);
+      
+      logSuccess(`跳过文件准备 - 使用现有产物`);
+      log(`    服务器: ${serverCount} 个文件`, 'gray');
+      log(`    CDN: ${cdnCount} 个文件`, 'gray');
+      return true;
+    }
+    
+    log(`    现有产物不完整，重新准备文件...`, 'yellow');
+  }
   
   // 检查构建产物
   if (!fs.existsSync(CONFIG.distDir)) {
@@ -434,10 +612,17 @@ async function main() {
   log(`\n📦 版本: ${version}`, 'cyan');
   log(`🌐 CDN:  ${cdnProvider}`, 'cyan');
   
-  // 执行步骤
+  // 步骤 1: 构建（可能被智能跳过）
+  const buildResult = stepBuild(version);
+  if (buildResult === false) {
+    log('\n❌ 部署失败\n', 'red');
+    process.exit(1);
+  }
+  const buildSkipped = buildResult && buildResult.skipped === true;
+  
+  // 步骤 2-5: 后续流程
   const steps = [
-    () => stepBuild(),
-    () => stepSeparateFiles(version, cdnBaseUrl),
+    () => stepSeparateFiles(version, cdnBaseUrl, buildSkipped),
     () => stepPublishNpm(version),
     () => stepDeployServer(version),
     () => stepVerify(version),
