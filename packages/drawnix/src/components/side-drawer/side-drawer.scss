@@ -150,18 +150,19 @@ $drawer-width-wide: min(1024px, 50vw);
     overflow-y: auto;
     overflow-x: hidden;
 
-    // 自定义滚动条样式
+    // 自定义滚动条样式 - 更窄更贴边
     &::-webkit-scrollbar {
-      width: 8px;
+      width: 6px;
     }
 
     &::-webkit-scrollbar-track {
-      background: var(--td-bg-color-container, #ffffff);
+      background: transparent;
+      margin: 4px 0; // 上下留一点间距
     }
 
     &::-webkit-scrollbar-thumb {
       background: var(--td-bg-color-component, #e7e7e7);
-      border-radius: 4px;
+      border-radius: 3px;
 
       &:hover {
         background: var(--td-bg-color-component-hover, #d0d0d0);

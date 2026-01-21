@@ -3688,6 +3688,138 @@ fetch(`/version.json?t=${Date.now()}`)
 
 **原因**: CustomEvent 的 `detail` 数据会直接被消费者使用。如果传递硬编码的占位符（如 `'new'`、`'loading'`），接收方无法区分这是占位符还是真实数据，导致 UI 显示错误。应该先获取实际数据再发送事件，或使用明确的回退值（如 `'unknown'`）并在 UI 中特殊处理。
 
+### 错误 13: 嵌套滚动容器中 scroll 事件绑定错误的元素
+
+**场景**: 在有多层可滚动容器（如 SideDrawer > VirtualTaskList）的嵌套布局中实现滚动相关功能（如回到顶部按钮）
+
+❌ **错误示例**:
+```typescript
+// 错误：直接在组件自身的容器上监听 scroll，但实际滚动可能发生在外层容器
+const containerRef = useRef<HTMLDivElement>(null);
+
+useEffect(() => {
+  const container = containerRef.current;
+  container?.addEventListener('scroll', handleScroll); // 可能永远不触发！
+}, []);
+
+// 问题：
+// - 外层容器 (.side-drawer__content) 设置了 overflow-y: auto
+// - 内层容器 (.virtual-task-list-scrollarea) 也设置了 overflow: auto
+// - 实际滚动可能发生在外层，内层的 scroll 事件永远不触发
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：向上查找实际的滚动容器
+const findScrollContainer = (element: HTMLElement | null): HTMLElement | null => {
+  let current = element;
+  while (current) {
+    const style = getComputedStyle(current);
+    const overflowY = style.overflowY;
+    if ((overflowY === 'auto' || overflowY === 'scroll') && 
+        current.scrollHeight > current.clientHeight) {
+      return current;
+    }
+    current = current.parentElement;
+  }
+  return null;
+};
+
+useEffect(() => {
+  const container = containerRef.current;
+  const actualScrollContainer = findScrollContainer(container);
+  actualScrollContainer?.addEventListener('scroll', handleScroll); // ✅ 正确的容器
+}, []);
+```
+
+**原因**: 当存在嵌套的 `overflow: auto/scroll` 容器时，滚动行为取决于哪个容器的内容先溢出。如果外层容器先溢出，滚动事件会在外层触发，内层容器上的监听器永远不会被调用。必须动态查找实际发生滚动的容器。
+
+### 错误 14: 在动态高度容器中使用 absolute 定位固定元素
+
+**场景**: 在可滚动列表底部放置固定按钮（如回到顶部、加载更多）
+
+❌ **错误示例**:
+```tsx
+// 错误：使用 position: absolute，按钮会被推到内容底部产生空白
+<div style={{ height: '100%', position: 'relative' }}>
+  <div style={{ overflow: 'auto' }}>
+    {/* 长列表内容 */}
+  </div>
+  <Button 
+    style={{ position: 'absolute', bottom: 16 }} // ❌ 会被推到内容底部！
+  />
+</div>
+// 问题：如果父容器的 height: 100% 没有生效（嵌套 flex 布局常见），
+// 容器高度会被内容撑开，按钮定位在这个很高的容器底部，产生大量空白
+```
+
+✅ **正确示例**:
+```tsx
+// 正确：使用 position: fixed + 动态计算位置
+const [buttonPosition, setButtonPosition] = useState<{ left: number; bottom: number } | null>(null);
+
+const updateButtonPosition = (scrollContainer: HTMLElement) => {
+  const rect = scrollContainer.getBoundingClientRect();
+  setButtonPosition({
+    left: rect.left + scrollContainer.clientWidth / 2,
+    bottom: window.innerHeight - rect.bottom + 16,
+  });
+};
+
+<Button 
+  style={{
+    position: 'fixed',
+    left: buttonPosition.left,
+    bottom: buttonPosition.bottom,
+    transform: 'translateX(-50%)',
+  }}
+/>
+```
+
+**原因**: `position: absolute; bottom: X` 是相对于最近的定位父元素的底部。如果该父元素的高度被内容撑开（而非受限于视口），按钮会出现在内容底部而非视口底部。使用 `position: fixed` 相对于视口定位，配合动态计算可以正确放置按钮。
+
+### 错误 15: ResizeObserver 监听错误的容器宽度
+
+**场景**: 在嵌套组件（如弹窗内的任务列表）中使用 ResizeObserver 检测宽度以切换响应式布局
+
+❌ **错误示例**:
+```typescript
+// 错误：只监听组件自身容器，但实际宽度由外层容器决定
+useEffect(() => {
+  const container = containerRef.current;
+  const resizeObserver = new ResizeObserver((entries) => {
+    const width = entries[0].contentRect.width;
+    setIsCompact(width < 500); // 可能检测到错误的宽度！
+  });
+  resizeObserver.observe(container);
+}, []);
+// 问题：组件容器可能设置了 flex: 1 或 100%，
+// 实际宽度由外层的抽屉/弹窗决定，应该监听外层容器
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：查找并监听正确的父容器
+useEffect(() => {
+  const container = containerRef.current;
+  if (!container) return;
+
+  // 查找合适的父容器（优先级：抽屉 > 弹窗 > 自身）
+  const drawerContent = container.closest('.side-drawer__content') as HTMLElement;
+  const dialogTaskList = container.closest('.dialog-task-list') as HTMLElement;
+  const dialogBody = container.closest('.t-dialog__body') as HTMLElement;
+  const targetElement = drawerContent || dialogTaskList || dialogBody || container;
+
+  const resizeObserver = new ResizeObserver((entries) => {
+    const width = entries[0].contentRect.width;
+    setIsCompact(width < 500); // ✅ 监听正确的容器
+  });
+  resizeObserver.observe(targetElement);
+}, []);
+```
+
+**原因**: 在嵌套布局中，组件自身的容器宽度可能由 CSS（如 `flex: 1`、`width: 100%`）动态计算。ResizeObserver 应该监听决定实际可视宽度的外层容器（如抽屉内容区域、弹窗主体），才能正确触发响应式布局切换。
+
 ---
 
 ### 性能指南

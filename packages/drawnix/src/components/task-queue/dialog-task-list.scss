@@ -36,8 +36,10 @@
     flex-direction: column;
     gap: 8px;
     flex: 1;
-    overflow-y: auto;
     min-height: 0;
+    // 注意：overflow 由内部的 .virtual-task-list-scrollarea 控制
+    // 这里不设置 overflow，避免双重滚动
+    overflow: visible;
   }
 
   &__empty {
@@ -60,7 +62,6 @@
   .task-item {
     padding: 10px;
     font-size: 12px;
-    margin-bottom: 8px;
 
     // 弹窗内预览图稍小
     &__preview-wrapper {
@@ -126,9 +127,38 @@
       gap: 6px;
     }
 
+    // 移动端强制使用紧凑布局
     .task-item {
       padding: 8px;
-      margin-bottom: 6px;
+      // 强制使用紧凑布局的 Grid 布局
+      grid-template-columns: 80px 1fr !important;
+      grid-template-areas: 
+        "preview prompt"
+        "info    info" !important;
+
+      // 隐藏 checkbox 列（移动端通常不需要）
+      &__checkbox {
+        display: none;
+      }
+
+      &__preview-wrapper {
+        grid-area: preview;
+        width: 80px !important;
+        height: 60px !important;
+      }
+
+      &__body {
+        display: contents;
+      }
+
+      &__prompt-area {
+        grid-area: prompt;
+      }
+
+      &__info-area {
+        grid-area: info;
+        margin-top: 4px;
+      }
     }
   }
 }
@@ -150,9 +180,52 @@
       gap: 4px;
     }
 
+    // 更小屏幕下的超紧凑布局
     .task-item {
       padding: 6px;
-      margin-bottom: 4px;
+      grid-template-columns: 70px 1fr !important;
+
+      &__preview-wrapper {
+        width: 70px !important;
+        height: 52px !important;
+      }
+
+      &__prompt {
+        font-size: 11px !important;
+        -webkit-line-clamp: 2 !important;
+      }
+
+      &__tags {
+        gap: 2px;
+        .t-tag {
+          font-size: 9px !important;
+          height: 14px !important;
+          padding: 0 3px !important;
+        }
+      }
+
+      &__details {
+        font-size: 9px;
+        flex-wrap: wrap;
+        gap: 2px 4px;
+      }
+
+      &__actions {
+        gap: 4px;
+      }
+
+      &__primary-action {
+        height: 22px !important;
+        padding: 0 6px !important;
+        font-size: 10px !important;
+      }
+
+      &__secondary-actions {
+        .t-button {
+          height: 20px !important;
+          width: 20px !important;
+        }
+      }
     }
   }
 }

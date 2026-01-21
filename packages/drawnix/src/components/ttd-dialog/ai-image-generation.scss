@@ -44,7 +44,7 @@
 
 .main-content {
   display: flex;
-  gap: 24px;
+  gap: 8px;
   min-height: 400px;
   height: 100%;
   align-items: stretch;
@@ -61,6 +61,8 @@
   height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
+  // 右侧内边距，避免滚动条遮挡内容，同时替代 main-content 的 gap
+  padding-right: 16px;
   
   /* 隐藏滚动条但保持滚动功能 */
   scrollbar-width: thin;

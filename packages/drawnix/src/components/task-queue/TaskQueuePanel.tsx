@@ -6,8 +6,8 @@
  */
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { Button, Tabs, Dialog, MessagePlugin, Input, Radio, Tooltip, Checkbox } from 'tdesign-react';
-import { DeleteIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon, UserIcon, RefreshIcon, PauseCircleIcon, CheckDoubleIcon } from 'tdesign-icons-react';
+import { Button, Tabs, Dialog, MessagePlugin, Input, Radio, Tooltip, Checkbox, Badge } from 'tdesign-react';
+import { DeleteIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon, UserIcon, RefreshIcon, PauseCircleIcon, CheckDoubleIcon, ImageIcon, VideoIcon, FilterIcon } from 'tdesign-icons-react';
 import { VirtualTaskList } from './VirtualTaskList';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
 import { Task, TaskType, TaskStatus } from '../../types/task.types';
@@ -311,6 +311,16 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
     }).length;
   }, [selectedTaskIds, tasks]);
 
+  // Type counts for filter buttons
+  const typeCounts = useMemo(() => {
+    return {
+      all: tasks.length,
+      image: tasks.filter(t => t.type === TaskType.IMAGE).length,
+      video: tasks.filter(t => t.type === TaskType.VIDEO).length,
+      character: characters.length,
+    };
+  }, [tasks, characters]);
+
   const handleBatchCancel = () => {
     // Only cancel active tasks
     const activeSelectedIds = Array.from(selectedTaskIds).filter(id => {
@@ -519,37 +529,67 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
       </Tabs>
 
       <div className="task-queue-panel__filters">
-        <RadioGroup
-          value={typeFilter}
-          onChange={(value) => setTypeFilter(value as 'all' | 'image' | 'video' | 'character')}
-          size="small"
-          variant="default-filled"
-        >
-          <Radio.Button value="all">全部</Radio.Button>
-          <Radio.Button value="image">图片</Radio.Button>
-          <Radio.Button value="video">视频</Radio.Button>
-          <Radio.Button value="character">
-            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <UserIcon size="14px" />
-              角色 ({characters.length})
-            </span>
-          </Radio.Button>
-        </RadioGroup>
-
-        {/* Hide search and actions when viewing characters */}
-        {!isCharacterView && (
-          <div className="task-queue-panel__search-row">
-            <Input
-              value={searchText}
-              onChange={(value) => setSearchText(value)}
-              placeholder="搜索 Prompt..."
-              clearable
-              prefixIcon={<SearchIcon />}
+        {/* Simplified Type Filters */}
+        <div className="task-queue-panel__type-filters">
+          <Tooltip content={`全部 (${typeCounts.all})`} theme="light">
+            <Button
               size="small"
-              className="task-queue-panel__search-input"
-            />
+              variant={typeFilter === 'all' ? 'base' : 'text'}
+              shape="square"
+              onClick={() => setTypeFilter('all')}
+              className={typeFilter === 'all' ? 'task-queue-panel__filter-btn--active' : ''}
+            >
+              <FilterIcon size="16px" />
+            </Button>
+          </Tooltip>
+          <Tooltip content={`图片 (${typeCounts.image})`} theme="light">
+            <Button
+              size="small"
+              variant={typeFilter === 'image' ? 'base' : 'text'}
+              shape="square"
+              onClick={() => setTypeFilter('image')}
+              className={typeFilter === 'image' ? 'task-queue-panel__filter-btn--active' : ''}
+            >
+              <ImageIcon size="16px" />
+            </Button>
+          </Tooltip>
+          <Tooltip content={`视频 (${typeCounts.video})`} theme="light">
+            <Button
+              size="small"
+              variant={typeFilter === 'video' ? 'base' : 'text'}
+              shape="square"
+              onClick={() => setTypeFilter('video')}
+              className={typeFilter === 'video' ? 'task-queue-panel__filter-btn--active' : ''}
+            >
+              <VideoIcon size="16px" />
+            </Button>
+          </Tooltip>
+          <Tooltip content={`角色 (${typeCounts.character})`} theme="light">
+            <Button
+              size="small"
+              variant={typeFilter === 'character' ? 'base' : 'text'}
+              shape="square"
+              onClick={() => setTypeFilter('character')}
+              className={typeFilter === 'character' ? 'task-queue-panel__filter-btn--active' : ''}
+            >
+              <UserIcon size="16px" />
+            </Button>
+          </Tooltip>
+        </div>
 
-            {/* Selection mode toggle button */}
+        {/* Search row integrated in the same line */}
+        <div className="task-queue-panel__search-row">
+          <Input
+            value={searchText}
+            onChange={(value) => setSearchText(value)}
+            placeholder="搜索..."
+            clearable
+            prefixIcon={<SearchIcon />}
+            size="small"
+            className="task-queue-panel__search-input"
+          />
+
+          <div className="task-queue-panel__filter-actions">
             <Tooltip content={selectionMode ? "退出多选" : "批量操作"} theme="light">
               <Button
                 size="small"
@@ -568,18 +608,16 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
                 <Button
                   size="small"
                   variant="text"
-                  theme="danger"
-                  icon={<DeleteIcon />}
+                  theme="default"
+                  icon={<DeleteIcon style={{ color: 'var(--td-text-color-placeholder)' }} />}
                   data-track="task_click_clear_failed"
                   onClick={() => handleClear('failed')}
                   className="task-queue-panel__clear-btn"
-                >
-                  <span className="task-queue-panel__clear-text">清除失败</span>
-                </Button>
+                />
               </Tooltip>
             )}
           </div>
-        )}
+        </div>
       </div>
 
       {/* Batch action bar - shown when in selection mode */}

@@ -26,6 +26,8 @@ export interface TaskItemProps {
   selectionMode?: boolean;
   /** Whether this task is selected */
   isSelected?: boolean;
+  /** Forced layout mode from parent */
+  isCompact?: boolean;
   /** Callback when selection changes */
   onSelectionChange?: (taskId: string, selected: boolean) => void;
   /** Callback when retry button is clicked */
@@ -87,10 +89,11 @@ function getStatusLabel(status: TaskStatus): string {
 /**
  * TaskItem component - displays a single task
  */
-export const TaskItem: React.FC<TaskItemProps> = ({
+export const TaskItem: React.FC<TaskItemProps> = React.memo(({
   task,
   selectionMode = false,
   isSelected = false,
+  isCompact: forcedIsCompact,
   onSelectionChange,
   onRetry,
   onDelete,
@@ -101,26 +104,31 @@ export const TaskItem: React.FC<TaskItemProps> = ({
   onExtractCharacter,
 }) => {
   const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
-  const [isCompactLayout, setIsCompactLayout] = useState(false);
+  const [internalIsCompact, setInternalIsCompact] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const isCompleted = task.status === TaskStatus.COMPLETED;
   const isFailed = task.status === TaskStatus.FAILED;
 
+  // 使用传入的布局模式，如果没有传入则使用内部的 ResizeObserver（兼容旧用法）
+  const isCompactLayout = forcedIsCompact !== undefined ? forcedIsCompact : internalIsCompact;
+
   // 使用 ResizeObserver 监听容器宽度，切换布局模式
   useEffect(() => {
+    if (forcedIsCompact !== undefined) return; // 如果有外部传入的模式，不需要内部观察
+
     const container = containerRef.current;
     if (!container) return;
 
     const resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
         const width = entry.contentRect.width;
-        setIsCompactLayout(width < COMPACT_LAYOUT_THRESHOLD);
+        setInternalIsCompact(width < COMPACT_LAYOUT_THRESHOLD);
       }
     });
 
     resizeObserver.observe(container);
     return () => resizeObserver.disconnect();
-  }, []);
+  }, [forcedIsCompact]);
 
   // Check if task supports character extraction (Sora-2 completed video tasks)
   // Note: Storyboard mode videos do not support character extraction
@@ -193,13 +201,17 @@ export const TaskItem: React.FC<TaskItemProps> = ({
     );
   };
 
-  // Handle click on task item to toggle selection
+  // Handle click on task item to toggle selection or open preview
   const handleItemClick = (e: React.MouseEvent) => {
-    if (!selectionMode) return;
-    // Don't toggle if clicking on buttons or checkbox
     const target = e.target as HTMLElement;
-    if (target.closest('button') || target.closest('.t-checkbox')) return;
-    onSelectionChange?.(task.id, !isSelected);
+    // 排除按钮、复选框、链接等交互元素的点击
+    if (target.closest('button') || target.closest('.t-checkbox') || target.closest('a')) return;
+    
+    if (selectionMode) {
+      onSelectionChange?.(task.id, !isSelected);
+    } else if (isCompleted && mediaUrl) {
+      onPreviewOpen?.();
+    }
   };
 
   return (
@@ -465,4 +477,12 @@ export const TaskItem: React.FC<TaskItemProps> = ({
 
     </div>
   );
-};
+}, (prev, next) => {
+  // 性能优化：仅在关键属性变化时重绘
+  return prev.task.id === next.task.id && 
+         prev.task.status === next.task.status &&
+         prev.task.progress === next.task.progress &&
+         prev.isSelected === next.isSelected &&
+         prev.selectionMode === next.selectionMode &&
+         prev.isCompact === next.isCompact;
+});
