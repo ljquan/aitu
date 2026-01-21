@@ -17,8 +17,10 @@ import {
   Sparkles,
   Clock,
   Calendar,
-  SortAsc,
+  ArrowUpAZ,
+  ArrowDownZA,
   ArrowDownWideNarrow,
+  ArrowUpNarrowWide,
   Minus,
   Plus
 } from 'lucide-react';
@@ -88,12 +90,29 @@ const SOURCE_OPTIONS = [
   { value: AssetSource.AI_GENERATED, label: 'AI生成', icon: Sparkles, countKey: 'ai' },
 ];
 
-// 排序选项
-const SORT_OPTIONS: { value: SortOption; label: string; icon: any }[] = [
-  { value: 'DATE_DESC', label: '最新优先', icon: Clock },
-  { value: 'DATE_ASC', label: '最旧优先', icon: Calendar },
-  { value: 'NAME_ASC', label: '名称 A-Z', icon: SortAsc },
-  { value: 'SIZE_DESC', label: '大小优先', icon: ArrowDownWideNarrow },
+// 排序组定义
+const SORT_GROUPS = [
+  { 
+    id: 'DATE', 
+    label: '时间', 
+    options: { asc: 'DATE_ASC' as SortOption, desc: 'DATE_DESC' as SortOption },
+    icons: { asc: Calendar, desc: Clock },
+    default: 'DATE_DESC' as SortOption
+  },
+  { 
+    id: 'NAME', 
+    label: '名称', 
+    options: { asc: 'NAME_ASC' as SortOption, desc: 'NAME_DESC' as SortOption },
+    icons: { asc: ArrowUpAZ, desc: ArrowDownZA },
+    default: 'NAME_ASC' as SortOption
+  },
+  { 
+    id: 'SIZE', 
+    label: '大小', 
+    options: { asc: 'SIZE_ASC' as SortOption, desc: 'SIZE_DESC' as SortOption },
+    icons: { asc: ArrowUpNarrowWide, desc: ArrowDownWideNarrow },
+    default: 'SIZE_DESC' as SortOption
+  },
 ];
 
 export function MediaLibraryGrid({
@@ -456,14 +475,43 @@ export function MediaLibraryGrid({
             <div className="media-library-grid__header-spacer" />
 
             <div className="media-library-grid__sort-options">
-              {SORT_OPTIONS.map(opt => {
-                const Icon = opt.icon;
-                const isActive = (filters.sortBy || 'DATE_DESC') === opt.value;
+              {SORT_GROUPS.map(group => {
+                const currentSort = filters.sortBy || 'DATE_DESC';
+                const isAsc = currentSort === group.options.asc;
+                const isDesc = currentSort === group.options.desc;
+                const isActive = isAsc || isDesc;
+                const Icon = isAsc ? group.icons.asc : group.icons.desc;
+                
+                const handleSortClick = () => {
+                  if (currentSort === group.options.asc) {
+                    // 当前是正序 -> 切换到逆序
+                    setFilters({ sortBy: group.options.desc });
+                  } else if (currentSort === group.options.desc) {
+                    // 当前是逆序
+                    if (currentSort === 'DATE_DESC' && group.id === 'DATE') {
+                      // 如果当前已经是默认的日期逆序，点一下进入日期正序
+                      setFilters({ sortBy: 'DATE_ASC' });
+                    } else {
+                      // 否则恢复默认排序 (DATE_DESC)
+                      setFilters({ sortBy: 'DATE_DESC' });
+                    }
+                  } else {
+                    // 当前不在该组 -> 切换到正序
+                    setFilters({ sortBy: group.options.asc });
+                  }
+                };
+
                 return (
-                  <Tooltip key={opt.value} content={opt.label} placement="top" theme="light" showArrow={false}>
+                  <Tooltip 
+                    key={group.id} 
+                    content={`${group.label}: ${isAsc ? '正序' : (isDesc ? '逆序' : '默认')}`} 
+                    placement="top" 
+                    theme="light" 
+                    showArrow={false}
+                  >
                     <div
                       className={`media-library-grid__filter-option ${isActive ? 'media-library-grid__filter-option--active' : ''}`}
-                      onClick={() => setFilters({ sortBy: opt.value as SortOption })}
+                      onClick={handleSortClick}
                     >
                       <Icon size={14} strokeWidth={1.5} />
                     </div>
