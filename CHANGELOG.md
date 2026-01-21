@@ -1,3 +1,19 @@
+## 0.5.38 (2026-01-21)
+
+### 🔧 Chores
+
+- bump version to 0.5.36 ([ab4d3e2](https://github.com/ljquan/aitu/commit/ab4d3e2))
+- update app version to 0.5.37 and enhance tool URL handling ([fba900c](https://github.com/ljquan/aitu/commit/fba900c))
+- bump version to 0.5.37 ([3a06964](https://github.com/ljquan/aitu/commit/3a06964))
+- update app version to 0.5.36 and adjust build time in version.json ([b1cd461](https://github.com/ljquan/aitu/commit/b1cd461))
+- bump version to 0.5.36 ([0c8c796](https://github.com/ljquan/aitu/commit/0c8c796))
+- docs(claude): 更新规则 - 图标组件渲染错误示例补充三元表达式场景 ([4116347](https://github.com/ljquan/aitu/commit/4116347))
+- docs(claude): 添加敏感信息模板变量安全处理规则 ([a206daa](https://github.com/ljquan/aitu/commit/a206daa))
+
+### ❤️  Thank You
+
+- liquidliang <ljquan@qq.com>
+
 ## 0.5.37 (2026-01-21)
 
 ### 🔧 Chores
