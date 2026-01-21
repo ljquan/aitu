@@ -3822,6 +3822,114 @@ useEffect(() => {
 
 ---
 
+### 错误 16: 垂直按钮列表中的 Tooltip 遮挡相邻元素
+
+**场景**: 当多个按钮垂直紧密排列时，默认的上方气泡（Tooltip）会遮挡上方的按钮。
+
+❌ **错误示例**:
+```tsx
+<div className="actions-list">
+  <Tooltip content="操作1">
+    <Button icon={<Icon1 />} />
+  </Tooltip>
+  <Tooltip content="操作2">
+    <Button icon={<Icon2 />} />
+  </Tooltip>
+</div>
+```
+
+✅ **正确示例**:
+```tsx
+<div className="actions-list">
+  <Tooltip content="操作1" placement="left" theme="light">
+    <Button icon={<Icon1 />} />
+  </Tooltip>
+  <Tooltip content="操作2" placement="left" theme="light">
+    <Button icon={<Icon2 />} />
+  </Tooltip>
+</div>
+```
+
+**原因**: 默认的 `top` 弹出位置会覆盖紧邻上方的交互元素。改用 `left` 或 `right` 弹出可以避开按钮排列轴向，确保所有按钮都可被顺畅点击。
+
+### 错误 17: 基于过滤结果动态生成筛选按钮
+
+**场景**: 实现分类筛选功能时，分类列表不应随当前选择而缩小。
+
+❌ **错误示例**:
+```typescript
+// 错误：分类按钮列表随 filteredTools 变化
+const categories = useMemo(() => {
+  return Array.from(new Set(filteredTools.map(t => t.category)));
+}, [filteredTools]);
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：分类按钮始终包含所有可用选项
+const allCategories = useMemo(() => {
+  return Array.from(new Set(allAvailableTools.map(t => t.category)));
+}, [allAvailableTools]);
+```
+
+**原因**: 如果筛选按钮是根据当前显示的结果动态生成的，一旦用户选定了一个分类，其它分类按钮就会因为结果中不存在而消失，导致用户无法直接切换到其它分类。
+
+### 错误 18: 抽屉组件 z-index 硬编码过低导致被工具栏遮挡
+
+**场景**: 侧边抽屉开启后，左边缘被工具栏覆盖，导致内边距看起来不对称或部分内容不可见。
+
+❌ **错误示例**:
+```tsx
+<BaseDrawer zIndex={12} ... /> // z-index 太低，会被 2000 级的工具栏挡住
+```
+
+✅ **正确示例**:
+```tsx
+<BaseDrawer ... /> // 使用默认规范定义的 z-index (4030)
+```
+
+**原因**: 项目中的 `z-index` 有严格的分层规范（参见 `docs/Z_INDEX_GUIDE.md`）。工具栏位于 2000 层，而抽屉应该位于 4000 层及以上。硬编码低层级会破坏预留宽度的视觉预期。
+
+### UI 设计原则: 以影代框（Shadows Over Borders）
+
+**场景**: 为面板、卡片或容器定义边界时。
+
+❌ **错误示例**:
+```scss
+.container {
+  border: 1px solid var(--td-component-border);
+}
+```
+
+✅ **正确示例**:
+```scss
+.container {
+  border: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+```
+
+**原因**: 过多的物理线条（Border）会增加页面的视觉复杂度和“噪音”，产生生硬的切割感。改用弥散的弱阴影（Shadow）可以自然地体现层级关系，使界面显得更加通透、轻量且具有现代感。
+
+### 样式规范: 消除容器与首个子元素边距叠加
+
+**场景**: 容器有内边距（Padding）且首个子元素有上外边距（Margin-top）时，会导致顶部间距过大。
+
+❌ **错误示例**:
+```scss
+.container { padding: 16px; }
+.title { margin-top: 16px; } // 结果顶部间距变成了 32px
+```
+
+✅ **正确示例**:
+```scss
+.container { padding: 16px; }
+.title { margin-top: 16px; }
+.title:first-child { margin-top: 0; } // 或在容器内指定首个标题 margin-top: 4px
+```
+
+**原因**: 避免 Padding 与 Margin 的视觉累加，确保界面排版符合设计的网格预期。
+
 ### 性能指南
 - 使用 `React.lazy` 对大型组件进行代码分割
 - 对图片实现懒加载和预加载

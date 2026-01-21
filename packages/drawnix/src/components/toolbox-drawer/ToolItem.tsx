@@ -24,6 +24,18 @@ export interface ToolItemProps {
 }
 
 /**
+ * 渲染图标组件，支持字符串和 React 组件
+ */
+const renderIcon = (icon: any) => {
+  if (!icon) return '🔧';
+  if (typeof icon === 'function') {
+    const IconComponent = icon;
+    return <IconComponent />;
+  }
+  return icon;
+};
+
+/**
  * 工具项组件
  */
 export const ToolItem: React.FC<ToolItemProps> = ({
@@ -83,7 +95,7 @@ export const ToolItem: React.FC<ToolItemProps> = ({
       data-track="toolbox_click_tool"
       data-tool-id={tool.id}
     >
-      <div className="tool-item__icon">{tool.icon || '🔧'}</div>
+      <div className="tool-item__icon">{renderIcon(tool.icon)}</div>
       <div className="tool-item__content">
         <div className="tool-item__name">{tool.name}</div>
         {tool.description && (
@@ -93,7 +105,7 @@ export const ToolItem: React.FC<ToolItemProps> = ({
 
       {/* 操作按钮 - 始终显示 */}
       <div className="tool-item__actions">
-        <Tooltip content="插入到画布">
+        <Tooltip content="插入到画布" theme="light" placement="left">
           <Button
             variant="text"
             size="small"
@@ -102,7 +114,7 @@ export const ToolItem: React.FC<ToolItemProps> = ({
             data-track="toolbox_click_insert_tool"
           />
         </Tooltip>
-        <Tooltip content="在窗口中打开">
+        <Tooltip content="在窗口中打开" theme="light" placement="left">
           <Button
             variant="text"
             size="small"
@@ -113,7 +125,7 @@ export const ToolItem: React.FC<ToolItemProps> = ({
           />
         </Tooltip>
         {isCustomTool && onDelete && (
-          <Tooltip content="删除工具">
+          <Tooltip content="删除工具" theme="light" placement="left">
             <Button
               variant="text"
               size="small"

@@ -31,7 +31,7 @@ import {
   Board,
   WORKSPACE_DEFAULTS,
 } from '../../types/workspace.types';
-import { SideDrawer } from '../side-drawer';
+import { BaseDrawer } from '../side-drawer';
 import { workspaceExportService } from '../../services/workspace-export-service';
 import './project-drawer.scss';
 
@@ -45,6 +45,9 @@ export interface ProjectDrawerProps {
   /** Called after board is switched */
   onBoardSwitch?: (board: Board) => void;
 }
+
+// Storage key for drawer width
+export const PROJECT_DRAWER_WIDTH_KEY = 'project-drawer-width';
 
 // Drag data interface
 interface DragData {
@@ -926,7 +929,7 @@ export const ProjectDrawer: React.FC<ProjectDrawerProps> = ({
 
   return (
     <>
-      <SideDrawer
+      <BaseDrawer
         isOpen={isOpen}
         onClose={handleClose}
         title="项目"
@@ -935,6 +938,8 @@ export const ProjectDrawer: React.FC<ProjectDrawerProps> = ({
         footer={footerSection}
         position="toolbar-right"
         width="narrow"
+        storageKey={PROJECT_DRAWER_WIDTH_KEY}
+        resizable={true}
         className="project-drawer"
         contentClassName="project-drawer__content"
       >
@@ -964,7 +969,7 @@ export const ProjectDrawer: React.FC<ProjectDrawerProps> = ({
             onAutoEditDone={() => setAutoEditBoardId(null)}
           />
         )}
-      </SideDrawer>
+      </BaseDrawer>
 
       {/* Delete confirmation dialog */}
       <Dialog

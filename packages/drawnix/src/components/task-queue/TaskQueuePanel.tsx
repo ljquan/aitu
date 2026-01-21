@@ -18,7 +18,7 @@ import { insertImageFromUrl } from '../../data/image';
 import { insertVideoFromUrl } from '../../data/video';
 import { sanitizeFilename } from '@aitu/utils';
 import { downloadMediaFile, downloadFromBlob } from '../../utils/download-utils';
-import { SideDrawer } from '../side-drawer';
+import { BaseDrawer } from '../side-drawer';
 import { CharacterCreateDialog } from '../character/CharacterCreateDialog';
 import { CharacterList } from '../character/CharacterList';
 import { useCharacters } from '../../hooks/useCharacters';
@@ -28,32 +28,7 @@ const { TabPanel } = Tabs;
 const RadioGroup = Radio.Group;
 
 // Storage key for drawer width
-const DRAWER_WIDTH_KEY = 'task-queue-drawer-width';
-
-// Get cached drawer width
-const getCachedWidth = (): number | undefined => {
-  try {
-    const cached = localStorage.getItem(DRAWER_WIDTH_KEY);
-    if (cached) {
-      const width = parseInt(cached, 10);
-      if (!isNaN(width) && width >= 320 && width <= 1024) {
-        return width;
-      }
-    }
-  } catch {
-    // Ignore localStorage errors
-  }
-  return undefined;
-};
-
-// Save drawer width to cache
-const saveCachedWidth = (width: number) => {
-  try {
-    localStorage.setItem(DRAWER_WIDTH_KEY, String(width));
-  } catch {
-    // Ignore localStorage errors
-  }
-};
+export const TASK_DRAWER_WIDTH_KEY = 'task-queue-drawer-width';
 
 export interface TaskQueuePanelProps {
   /** Whether the panel is expanded */
@@ -107,14 +82,6 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
   onClose,
   onTaskAction,
 }) => {
-  // Drawer width state with cache
-  const [drawerWidth, setDrawerWidth] = useState<number | undefined>(getCachedWidth);
-
-  const handleWidthChange = useCallback((width: number) => {
-    setDrawerWidth(width);
-    saveCachedWidth(width);
-  }, []);
-
   const {
     tasks,
     activeTasks,
@@ -677,14 +644,14 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
 
   return (
     <>
-      <SideDrawer
+      <BaseDrawer
         isOpen={expanded}
         onClose={handleClose}
         title="任务队列"
         filterSection={filterSection}
         position="toolbar-right"
         width="responsive"
-        customWidth={drawerWidth}
+        storageKey={TASK_DRAWER_WIDTH_KEY}
         showBackdrop={false}
         closeOnEsc={false}
         showCloseButton={true}
@@ -693,7 +660,6 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
         resizable={true}
         minWidth={320}
         maxWidth={1024}
-        onWidthChange={handleWidthChange}
       >
         {isCharacterView ? (
           /* Character List View */
@@ -726,7 +692,7 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
             }
           />
         )}
-      </SideDrawer>
+      </BaseDrawer>
 
       {/* Clear Confirmation Dialog */}
       <Dialog

@@ -25,9 +25,10 @@ $drawer-width-wide: min(1024px, 50vw);
   bottom: 0;
   display: flex;
   flex-direction: column;
-  background: var(--td-bg-color-container, #fff);
-  border-right: 1px solid var(--td-component-border);
-  box-shadow: 4px 0 16px rgba(0, 0, 0, 0.08);
+  background: var(--td-bg-color-container);
+  border-right: none; // 移除右侧边框，由阴影替代
+  box-shadow: 8px 0 32px rgba(0, 0, 0, 0.08); // 增强阴影
+  border-radius: 0 16px 16px 0; // 右侧增加圆角
   transition: transform $animation-duration cubic-bezier(0.4, 0, 0.2, 1);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
     'Helvetica Neue', Arial, sans-serif;
@@ -37,11 +38,11 @@ $drawer-width-wide: min(1024px, 50vw);
   // Position Variants
   // ========================================
 
-  // 工具栏右侧（ProjectDrawer, ToolboxDrawer）
   &--toolbar-right {
     left: $toolbar-width;
     z-index: $z-side-drawer;
     transform: translateX(calc(-100% - #{$toolbar-width}));
+    box-shadow: 16px 0 48px rgba(0, 0, 0, 0.08);
 
     &.side-drawer--open {
       transform: translateX(0);
@@ -53,6 +54,7 @@ $drawer-width-wide: min(1024px, 50vw);
     left: 0;
     z-index: $z-task-queue-panel;
     transform: translateX(-100%);
+    box-shadow: 8px 0 24px rgba(0, 0, 0, 0.06);
 
     &.side-drawer--open {
       transform: translateX(0);
@@ -93,6 +95,10 @@ $drawer-width-wide: min(1024px, 50vw);
     justify-content: space-between;
     padding: $spacing-lg $spacing-md;
     flex-shrink: 0;
+
+    .side-drawer--toolbar-right & {
+      padding-left: $spacing-lg; // 稍微多一点
+    }
   }
 
   &__header-left {
@@ -112,9 +118,10 @@ $drawer-width-wide: min(1024px, 50vw);
 
   &__title {
     margin: 0;
-    font-size: 16px;
-    font-weight: 600;
+    font-size: 20px; // 加大标题
+    font-weight: 700;
     color: var(--td-text-color-primary);
+    letter-spacing: -0.02em;
   }
 
   &__subtitle {
@@ -139,6 +146,28 @@ $drawer-width-wide: min(1024px, 50vw);
     padding: 0 $spacing-md $spacing-md;
     border-bottom: 1px solid var(--td-component-border);
     flex-shrink: 0;
+    background: transparent;
+
+    .side-drawer--toolbar-right & {
+      padding-left: $spacing-lg;
+    }
+
+    .t-input {
+      border-radius: 8px;
+      background: var(--td-bg-color-container); // 改为纯白背景，让边框更清晰
+      border: 1px solid var(--td-gray-color-4); // 使用更深的灰色边框
+      transition: all 0.2s ease;
+
+      &:hover {
+        border-color: var(--td-gray-color-6);
+      }
+
+      &:focus-within {
+        background: var(--td-bg-color-container);
+        border-color: var(--brand-primary, #f39c12);
+        box-shadow: 0 0 0 2px rgba(243, 156, 18, 0.1);
+      }
+    }
   }
 
   // ========================================
@@ -149,6 +178,10 @@ $drawer-width-wide: min(1024px, 50vw);
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
+
+    .side-drawer--toolbar-right & {
+      padding-left: $spacing-md;
+    }
 
     // 自定义滚动条样式 - 更窄更贴边
     &::-webkit-scrollbar {

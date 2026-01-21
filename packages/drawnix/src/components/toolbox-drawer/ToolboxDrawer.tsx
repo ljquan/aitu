@@ -17,7 +17,7 @@ import { ToolDefinition } from '../../types/toolbox.types';
 import { DEFAULT_TOOL_CONFIG, TOOL_CATEGORY_LABELS } from '../../constants/built-in-tools';
 import { ToolList } from './ToolList';
 import { CustomToolDialog } from '../custom-tool-dialog/CustomToolDialog';
-import { SideDrawer } from '../side-drawer';
+import { BaseDrawer } from '../side-drawer';
 import './toolbox-drawer.scss';
 
 export interface ToolboxDrawerProps {
@@ -26,6 +26,9 @@ export interface ToolboxDrawerProps {
   /** 抽屉打开状态变化回调 */
   onOpenChange: (open: boolean) => void;
 }
+
+// Storage key for drawer width
+export const TOOLBOX_DRAWER_WIDTH_KEY = 'toolbox-drawer-width';
 
 /**
  * 工具箱抽屉组件
@@ -129,6 +132,20 @@ export const ToolboxDrawer: React.FC<ToolboxDrawerProps> = ({
 
     return tools;
   }, [searchQuery, selectedCategory, refreshKey]);
+
+  /**
+   * 获取分类列表（应包含所有可用分类，不受当前筛选影响）
+   */
+  const allCategories = useMemo(() => {
+    const tools = toolboxService.getAvailableTools();
+    const cats = new Set<string>();
+    tools.forEach((tool) => {
+      if (tool.category) {
+        cats.add(tool.category);
+      }
+    });
+    return Array.from(cats);
+  }, [refreshKey]);
 
   /**
    * 按分类分组
@@ -247,7 +264,7 @@ export const ToolboxDrawer: React.FC<ToolboxDrawerProps> = ({
         >
           全部
         </Button>
-        {categories.map((category) => (
+        {allCategories.map((category) => (
           <Button
             key={category}
             variant={selectedCategory === category ? 'base' : 'outline'}
@@ -263,7 +280,7 @@ export const ToolboxDrawer: React.FC<ToolboxDrawerProps> = ({
 
   return (
     <>
-      <SideDrawer
+      <BaseDrawer
         isOpen={isOpen}
         onClose={handleClose}
         title="工具箱"
@@ -272,7 +289,8 @@ export const ToolboxDrawer: React.FC<ToolboxDrawerProps> = ({
         filterSection={filterSection}
         position="toolbar-right"
         width="narrow"
-        zIndex={12}
+        storageKey={TOOLBOX_DRAWER_WIDTH_KEY}
+        resizable={true}
         className="toolbox-drawer"
         contentClassName="toolbox-drawer__content"
       >
@@ -288,7 +306,7 @@ export const ToolboxDrawer: React.FC<ToolboxDrawerProps> = ({
             onToolDelete={handleDeleteTool}
           />
         )}
-      </SideDrawer>
+      </BaseDrawer>
 
       {/* Custom Tool Dialog */}
       <CustomToolDialog

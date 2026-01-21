@@ -15,8 +15,9 @@
   // Category Filter (在 filter section 内)
   &__categories {
     display: flex;
-    gap: $spacing-sm;
-    margin-top: $spacing-sm;
+    gap: 8px;
+    margin-top: 12px;
+    padding-bottom: 4px;
     overflow-x: auto;
     scrollbar-width: none;
     -ms-overflow-style: none;
@@ -28,12 +29,61 @@
     .t-button {
       flex-shrink: 0;
       white-space: nowrap;
+      border-radius: 6px;
+      font-weight: 500;
+      
+      &.t-button--variant-base {
+        background: var(--brand-primary, #f39c12);
+        color: #fff;
+        border: none;
+      }
+      
+      &.t-button--variant-outline {
+        border-color: var(--td-component-border);
+        color: var(--td-text-color-secondary);
+        
+        &:hover {
+          border-color: var(--brand-primary, #f39c12);
+          color: var(--brand-primary, #f39c12);
+          background: transparent;
+        }
+      }
     }
   }
 
   // Content
   &__content {
-    padding: $spacing-md;
+    padding: $spacing-md; // 进一步缩减 Padding
+    background: transparent;
+  }
+
+  &.side-drawer--toolbar-right {
+    .side-drawer__header {
+      padding-left: $spacing-md; // 对齐内容 Padding
+      padding-right: $spacing-md;
+    }
+    .side-drawer__filter {
+      padding-left: $spacing-md;
+      padding-right: $spacing-md;
+      padding-bottom: 0;
+      border-bottom: none;
+    }
+    .side-drawer__content {
+      padding-left: $spacing-md;
+      padding-right: $spacing-md;
+    }
+  }
+
+  // Header Button
+  .side-drawer__header-right .t-button {
+    border-radius: 6px;
+    font-weight: 500;
+    
+    &:hover {
+      border-color: var(--brand-primary, #f39c12);
+      color: var(--brand-primary, #f39c12);
+      background: rgba(243, 156, 18, 0.05);
+    }
   }
 
   // Empty State
@@ -54,21 +104,27 @@
 .tool-list {
   display: flex;
   flex-direction: column;
-  gap: $spacing-lg;
+  gap: $spacing-md; // 缩减分组间距
 
   &__category {
     display: flex;
     flex-direction: column;
-    gap: $spacing-sm;
+    gap: $spacing-xs; // 缩减分类内间距
   }
 
   &__category-title {
-    margin: 0;
-    font-size: 12px;
-    font-weight: 600;
+    margin: $spacing-md 0 $spacing-xs; // 顶部间距从 lg(16px) 减为 md(12px)
+    font-size: 13px;
+    font-weight: 700;
     color: var(--td-text-color-secondary);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  // 移除第一个分类标题的额外顶部边距，使其紧贴筛选区
+  &__category:first-child &__category-title {
+    margin-top: $spacing-xs;
   }
 
   &__items {
@@ -93,53 +149,62 @@
 
 .tool-item {
   display: flex;
-  flex-direction: row; // 明确水平排列
+  flex-direction: row;
   align-items: center;
   gap: $spacing-md;
-  padding: 12px;
-  border-radius: 8px;
+  padding: 12px; // 缩减内边距
+  border-radius: 12px;
   background: var(--td-bg-color-container);
-  border: 1px solid var(--td-component-border);
+  border: none; // 移除边框，减少线条感
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   user-select: none;
   -webkit-user-select: none;
-  -webkit-touch-callout: none;
   width: 100%;
   box-sizing: border-box;
-  min-height: 64px;
-  position: relative; // 仅作为参考，不应影响子元素流
+  min-height: 72px; // 压缩高度
+  position: relative;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04); // 使用阴影代替边框
 
   &:hover {
     background: var(--td-bg-color-container-hover);
-    border-color: var(--brand-primary, #f39c12);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+    // 移除了 transform: translateY，保持位置稳定
+  }
+
+  // 移除了之前的 ::before 渐变边框装饰，减少视觉干扰
+  &::before {
+    display: none;
   }
 
   &:active {
     transform: translateY(0);
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.06);
   }
 
   &__icon {
     flex-shrink: 0;
-    width: 40px;
-    height: 40px;
+    width: 52px; // 稍微再加大
+    height: 52px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 24px;
-    background: linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%);
-    border-radius: 8px;
+    font-size: 30px;
+    background: var(--td-bg-color-secondarycontainer);
+    border-radius: 14px;
+    transition: all 0.3s ease;
     
-    // 限制 SVG 图标的尺寸，与 emoji 保持一致
     svg {
-      width: 24px;
-      height: 24px;
-      max-width: 24px;
-      max-height: 24px;
+      width: 28px;
+      height: 28px;
+      max-width: 28px;
+      max-height: 28px;
     }
+  }
+
+  &:hover &__icon {
+    background: var(--td-bg-color-container);
+    transform: scale(1.05);
   }
 
   &__content {
@@ -152,24 +217,18 @@
   }
 
   &__name {
-    font-size: 14px;
-    font-weight: 500;
+    font-size: 15px;
+    font-weight: 600;
     color: var(--td-text-color-primary);
     line-height: 1.4;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    margin-bottom: 2px;
   }
 
   &__description {
-    font-size: 12px;
+    font-size: 13px;
     color: var(--td-text-color-secondary);
-    line-height: 1.4;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
+    line-height: 1.5;
+    opacity: 0.7; // 降低描述透明度，增加层次感
   }
 
   // 操作按钮容器 - 严格非绝对定位
@@ -186,26 +245,37 @@
     margin-left: 8px;
 
     .t-button {
-      opacity: 0.8;
+      opacity: 0.4; // 默认更淡一些，减少干扰
       transition: all 0.2s ease;
       background: transparent !important;
-      height: 28px;
-      width: 28px;
-      min-width: 28px;
+      height: 32px; // 稍微加大按钮点击区域
+      width: 32px;
+      min-width: 32px;
       display: flex;
       align-items: center;
       justify-content: center;
-      border-radius: 4px;
+      border-radius: 6px;
 
       &:hover {
         opacity: 1;
-        background: var(--td-bg-color-container-hover) !important;
+        background: var(--td-bg-color-secondarycontainer) !important;
         transform: scale(1.1);
+        color: var(--brand-primary, #f39c12) !important; // 悬浮图标时变色，引导关注
       }
 
       .t-icon {
-        font-size: 16px;
+        font-size: 18px; // 稍微加大图标
       }
+    }
+
+    // 当鼠标进入卡片时，按钮变得稍微清晰一点，但不刺眼
+    &:hover .t-button {
+      opacity: 0.8;
+    }
+    
+    // 专门针对具体按钮的悬浮引导
+    &:hover .t-button:hover {
+      opacity: 1;
     }
   }
 }
@@ -259,21 +329,21 @@
 
 [data-theme='dark'] {
   .toolbox-drawer {
-    background: var(--toolbox-bg);
-    border-right-color: var(--toolbox-border);
+    background: var(--td-bg-color-container);
+    border-right-color: var(--td-component-border);
   }
 
   .tool-item {
-    background: var(--tool-card-bg);
-    border-color: var(--tool-card-border);
+    background: var(--td-bg-color-secondarycontainer);
+    border-color: var(--td-component-border);
 
     &:hover {
-      background: var(--toolbox-hover-bg);
-      border-color: var(--tool-card-hover-border);
+      background: var(--td-bg-color-container);
+      border-color: transparent;
     }
 
     &__icon {
-      background: linear-gradient(135deg, #3a3a3a 0%, #2a2a2a 100%);
+      background: var(--td-bg-color-container);
     }
 
     &__actions {

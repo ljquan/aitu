@@ -422,7 +422,7 @@ export function MediaLibraryGrid({
                   const Icon = opt.icon;
                   const isActive = (filters.activeType || 'ALL') === opt.value;
                   return (
-                    <Tooltip key={opt.value} content={`${opt.label} (${count})`} placement="top" showArrow={false}>
+                    <Tooltip key={opt.value} content={`${opt.label} (${count})`} placement="top" theme="light" showArrow={false}>
                       <div
                         className={`media-library-grid__filter-option ${isActive ? 'media-library-grid__filter-option--active' : ''}`}
                         onClick={() => setFilters({ activeType: opt.value === 'ALL' ? undefined : opt.value as AssetType })}
@@ -439,7 +439,7 @@ export function MediaLibraryGrid({
                   const Icon = opt.icon;
                   const isActive = filters.activeSource === opt.value;
                   return (
-                    <Tooltip key={opt.value} content={`${opt.label} (${count})`} placement="top" showArrow={false}>
+                    <Tooltip key={opt.value} content={`${opt.label} (${count})`} placement="top" theme="light" showArrow={false}>
                       <div
                         className={`media-library-grid__filter-option ${isActive ? 'media-library-grid__filter-option--active' : ''}`}
                         onClick={() => setFilters({ activeSource: isActive ? undefined : opt.value as AssetSource })}
@@ -460,7 +460,7 @@ export function MediaLibraryGrid({
                 const Icon = opt.icon;
                 const isActive = (filters.sortBy || 'DATE_DESC') === opt.value;
                 return (
-                  <Tooltip key={opt.value} content={opt.label} placement="top" showArrow={false}>
+                  <Tooltip key={opt.value} content={opt.label} placement="top" theme="light" showArrow={false}>
                     <div
                       className={`media-library-grid__filter-option ${isActive ? 'media-library-grid__filter-option--active' : ''}`}
                       onClick={() => setFilters({ sortBy: opt.value as SortOption })}
