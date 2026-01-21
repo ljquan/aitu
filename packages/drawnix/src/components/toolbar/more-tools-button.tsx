@@ -510,8 +510,8 @@ const MoreToolsPanel: React.FC<MoreToolsPanelProps> = ({
   // 获取 freehand 按钮的图标
   const getFreehandIcon = useMemo(() => {
     const freehand = FREEHANDS.find(f => f.pointer === lastFreehandPointer);
-    const Icon = freehand?.icon || FeltTipPenIcon;
-    return <Icon />;
+    // freehand?.icon 已经是 JSX 元素，直接返回即可
+    return freehand?.icon || <FeltTipPenIcon />;
   }, [lastFreehandPointer]);
 
   // zoom 菜单状态

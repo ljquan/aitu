@@ -1,6 +1,6 @@
 {
   "version": "0.5.36",
-  "buildTime": "2026-01-21T08:39:13.112Z",
+  "buildTime": "2026-01-21T08:39:13.514Z",
   "gitCommit": "unknown",
   "changelog": [
     "implement precache manifest generation and update service worker activation strategy",
