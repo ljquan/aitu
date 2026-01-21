@@ -18,7 +18,7 @@ import { DEFAULT_TOOL_CONFIG, TOOL_CATEGORY_LABELS } from '../../constants/built
 import { ToolList } from './ToolList';
 import { CustomToolDialog } from '../custom-tool-dialog/CustomToolDialog';
 import { BaseDrawer } from '../side-drawer';
-import { processToolUrl, needsApiKeyConfiguration } from '../../utils/url-template';
+import { needsApiKeyConfiguration } from '../../utils/url-template';
 import { geminiSettings } from '../../utils/settings-manager';
 import './toolbox-drawer.scss';
 
@@ -110,19 +110,16 @@ export const ToolboxDrawer: React.FC<ToolboxDrawerProps> = ({
       const width = tool.defaultWidth || DEFAULT_TOOL_CONFIG.defaultWidth;
       const height = tool.defaultHeight || DEFAULT_TOOL_CONFIG.defaultHeight;
 
-      // 处理 URL 模板变量替换
-      let processedUrl = (tool as any).url;
-      if (processedUrl) {
-        const { url } = processToolUrl(processedUrl);
-        processedUrl = url;
-      }
+      // 获取工具 URL（保持模板形式，如 ${apiKey}）
+      // 模板变量会在渲染时由 ToolGenerator 动态替换
+      const toolUrl = (tool as any).url;
 
       // 插入到画布（中心对齐）
-      if (processedUrl || tool.component) {
+      if (toolUrl || tool.component) {
         ToolTransforms.insertTool(
           board,
           tool.id,
-          processedUrl, // 使用替换后的 URL
+          toolUrl, // 存储原始模板 URL，渲染时再替换
           [centerX - width / 2, centerY - height / 2],
           { width, height },
           {
@@ -168,15 +165,8 @@ export const ToolboxDrawer: React.FC<ToolboxDrawerProps> = ({
    */
   const executeToolOpenWindow = useCallback(
     (tool: ToolDefinition) => {
-      // 处理 URL 模板变量替换
-      let processedTool = tool;
-      const toolUrl = (tool as any).url;
-      if (toolUrl) {
-        const { url } = processToolUrl(toolUrl);
-        processedTool = { ...tool, url } as ToolDefinition;
-      }
-
-      toolWindowService.openTool(processedTool);
+      // 存储原始模板 URL，在渲染时由 ToolWinBoxManager 替换
+      toolWindowService.openTool(tool);
       // 在窗口打开后，可以选择关闭抽屉，也可以保持打开
       handleClose();
     },

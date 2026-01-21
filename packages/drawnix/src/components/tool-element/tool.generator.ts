@@ -15,6 +15,8 @@ import { ToolProviderWrapper } from '../toolbox-drawer/ToolProviderWrapper';
 import { ToolTransforms } from '../../plugins/with-tool';
 import { toolWindowService } from '../../services/tool-window-service';
 import { BUILT_IN_TOOLS } from '../../constants/built-in-tools';
+import { processToolUrl, hasTemplateVariables } from '../../utils/url-template';
+import { geminiSettings } from '../../utils/settings-manager';
 
 /**
  * 工具元素渲染生成器
@@ -26,6 +28,7 @@ export class ToolGenerator {
   private loadStates = new Map<string, ToolLoadState>();
   private loadTimeouts = new Map<string, NodeJS.Timeout>();
   private canvasClickHandler: ((e: MouseEvent) => void) | null = null;
+  private settingsChangeHandler: (() => void) | null = null;
 
   // 加载超时时间（毫秒）
   private static readonly LOAD_TIMEOUT = 10000; // 10 秒
@@ -35,6 +38,40 @@ export class ToolGenerator {
 
     // 监听画布点击事件，恢复所有 iframe 蒙层
     this.setupCanvasClickHandler();
+    
+    // 监听设置变化，刷新包含模板变量的 iframe
+    this.setupSettingsChangeHandler();
+  }
+  
+  /**
+   * 设置设置变化监听器
+   * 当 apiKey 等配置变化时，刷新包含模板变量的 iframe
+   */
+  private setupSettingsChangeHandler(): void {
+    this.settingsChangeHandler = () => {
+      this.refreshTemplateIframes();
+    };
+    
+    // 监听设置变化事件
+    window.addEventListener('gemini-settings-changed', this.settingsChangeHandler);
+  }
+  
+  /**
+   * 刷新所有包含模板变量的 iframe
+   */
+  private refreshTemplateIframes(): void {
+    this.iframeCache.forEach((iframe, elementId) => {
+      const templateUrl = (iframe as any).__templateUrl;
+      if (templateUrl && hasTemplateVariables(templateUrl)) {
+        // 重新处理模板变量
+        const { url: processedUrl } = processToolUrl(templateUrl);
+        const url = new URL(processedUrl, window.location.origin);
+        url.searchParams.set('toolId', elementId);
+        
+        // 更新 iframe src
+        iframe.src = url.toString();
+      }
+    });
   }
 
   /**
@@ -526,10 +563,20 @@ export class ToolGenerator {
     // 设置超时检测
     this.setupLoadTimeout(element.id);
 
+    // 处理模板变量（如 ${apiKey}），在渲染时动态替换
+    const { url: processedUrl, missingVariables } = processToolUrl(element.url);
+    
+    if (missingVariables.length > 0) {
+      console.warn(`[ToolGenerator] URL contains missing variables: ${missingVariables.join(', ')}`);
+    }
+
     // 设置 iframe URL，添加 toolId 参数用于通信
-    const url = new URL(element.url, window.location.origin);
+    const url = new URL(processedUrl, window.location.origin);
     url.searchParams.set('toolId', element.id);
     iframe.src = url.toString();
+    
+    // 保存原始模板 URL，用于设置变化时重新替换
+    (iframe as any).__templateUrl = element.url;
 
     // 关键修改：默认启用 iframe 的鼠标事件，因为拖动只在标题栏上
     // 这样 iframe 内的页面可以正常点击和滚动
@@ -821,6 +868,12 @@ export class ToolGenerator {
     if (this.canvasClickHandler) {
       document.removeEventListener('click', this.canvasClickHandler);
       this.canvasClickHandler = null;
+    }
+    
+    // 移除设置变化监听器
+    if (this.settingsChangeHandler) {
+      window.removeEventListener('gemini-settings-changed', this.settingsChangeHandler);
+      this.settingsChangeHandler = null;
     }
 
     // 清理所有超时定时器

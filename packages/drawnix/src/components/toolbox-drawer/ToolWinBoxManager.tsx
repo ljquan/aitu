@@ -14,6 +14,7 @@ import { InternalToolComponents } from './InternalToolComponents';
 import { useDrawnix } from '../../hooks/use-drawnix';
 import { ToolTransforms } from '../../plugins/with-tool';
 import { DEFAULT_TOOL_CONFIG } from '../../constants/built-in-tools';
+import { processToolUrl } from '../../utils/url-template';
 
 /**
  * 工具弹窗管理器组件
@@ -123,7 +124,7 @@ export const ToolWinBoxManager: React.FC = () => {
                 </Suspense>
               ) : tool.url ? (
                 <iframe
-                  src={tool.url}
+                  src={processToolUrl(tool.url).url}
                   title={tool.name}
                   style={{ width: '100%', height: '100%', border: 'none' }}
                   sandbox={tool.permissions?.join(' ') || 'allow-scripts allow-same-origin'}

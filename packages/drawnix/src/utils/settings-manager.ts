@@ -430,6 +430,14 @@ class SettingsManager {
         }
       });
     }
+    
+    // 触发全局事件，用于画布中的工具 URL 模板刷新
+    // 当 gemini 相关设置变化时（如 apiKey、baseUrl）
+    if (path.startsWith('gemini') && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gemini-settings-changed', {
+        detail: { path, newValue, oldValue }
+      }));
+    }
   }
 
   /**
