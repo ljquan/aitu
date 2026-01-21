@@ -1,3 +1,17 @@
+## 0.5.34 (2026-01-21)
+
+### 🚀 Features
+
+- implement precache manifest generation and update service worker activation strategy ([f44fea3](https://github.com/ljquan/aitu/commit/f44fea3))
+
+### 🔧 Chores
+
+- docs(claude): 添加 Service Worker 自动激活策略文档 ([a3983d7](https://github.com/ljquan/aitu/commit/a3983d7))
+
+### ❤️  Thank You
+
+- liquidliang <ljquan@qq.com>
+
 ## 0.5.32 (2026-01-21)
 
 ### 🔧 Chores
