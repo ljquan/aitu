@@ -4069,6 +4069,86 @@ const handleSortClick = () => {
 - 对 API 调用使用适当的错误处理
 - 在日志中过滤敏感信息
 
+#### 上报工具敏感信息过滤
+
+**场景**: 使用 PostHog、Sentry 等上报工具时，需要确保不泄露 API Key 等敏感信息
+
+❌ **错误示例**:
+```typescript
+// Sentry: 启用自动 PII 收集
+Sentry.init({
+  sendDefaultPii: true, // 会收集 IP 地址等
+  // 没有 beforeSend 过滤
+});
+
+// PostHog: 直接传递未过滤的数据
+window.posthog.capture(eventName, eventData); // eventData 可能包含敏感信息
+```
+
+✅ **正确示例**:
+```typescript
+// Sentry: 禁用 PII，添加 beforeSend 过滤
+import { sanitizeObject, sanitizeUrl } from '@drawnix/drawnix';
+
+Sentry.init({
+  sendDefaultPii: false,
+  beforeSend(event) {
+    if (event.extra) event.extra = sanitizeObject(event.extra);
+    if (event.request?.url) event.request.url = sanitizeUrl(event.request.url);
+    return event;
+  },
+});
+
+// PostHog: 使用 sanitizeObject 过滤敏感字段
+const sanitizedData = sanitizeObject(eventData);
+window.posthog.capture(eventName, sanitizedData);
+```
+
+**敏感字段列表**: `apikey`, `api_key`, `password`, `token`, `secret`, `authorization`, `bearer`, `credential`
+
+**相关工具模块**:
+- 主线程: `packages/drawnix/src/utils/sanitize-utils.ts`
+- Service Worker: `apps/web/src/sw/task-queue/utils/sanitize-utils.ts`
+
+#### Console 日志安全打印
+
+**场景**: 使用 console.error/warn 记录错误时
+
+❌ **错误示例**:
+```typescript
+// 错误：直接打印完整 error 对象，可能包含敏感信息
+try {
+  await loadConfig();
+} catch (error) {
+  console.error('Failed to load config:', error); // error 可能包含 API Key
+}
+```
+
+✅ **正确示例**:
+```typescript
+import { getSafeErrorMessage } from '@drawnix/drawnix';
+
+try {
+  await loadConfig();
+} catch (error) {
+  // 只记录错误类型，不记录详细信息
+  console.error('Failed to load config:', getSafeErrorMessage(error));
+}
+
+// getSafeErrorMessage 实现：
+function getSafeErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.name || 'Error';
+  }
+  return 'Unknown error';
+}
+```
+
+**原因**: 
+- 错误对象可能包含敏感的请求/响应数据
+- API 错误可能在 message 中包含 API Key 或其他敏感信息
+- 生产环境的 console 日志可能被监控工具收集
+
 #### 敏感信息模板变量安全处理
 
 **场景**: 工具 URL 或配置中包含敏感信息（如 apiKey）时
