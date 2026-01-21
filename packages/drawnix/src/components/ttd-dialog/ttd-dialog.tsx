@@ -4,6 +4,7 @@ import { DialogType, useDrawnix } from '../../hooks/use-drawnix';
 import MarkdownToDrawnix from './markdown-to-drawnix';
 import AIImageGeneration from './ai-image-generation';
 import AIVideoGeneration from './ai-video-generation';
+import type { ReferenceImage } from './shared/ReferenceImageUpload';
 import { useI18n } from '../../i18n';
 import { useBoard } from '@plait-board/react-board';
 import React, { useState, useEffect, useRef, memo, useCallback, lazy, Suspense } from 'react';
@@ -83,7 +84,7 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
   // AI 图片生成的初始数据
   const [aiImageData, setAiImageData] = useState<{
     initialPrompt: string;
-    initialImages: (File | { url: string; name: string })[];
+    initialImages: ReferenceImage[];
     selectedElementIds: string[]; // 保存选中元素的IDs
     initialResultUrl?: string; // 初始结果URL,用于显示预览
   }>({
@@ -224,7 +225,7 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
           const processedContent = await processSelectedContentForAI(board, selectedElementIds);
           
           // 准备图片列表
-          const imageItems: (File | { url: string; name: string })[] = [];
+          const imageItems: ReferenceImage[] = [];
           
           // 1. 先添加剩余的图片（非重叠的图片）
           processedContent.remainingImages.forEach(image => {

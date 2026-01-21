@@ -587,6 +587,63 @@ taskQueueService.observeTaskUpdates().subscribe((event) => {
 });
 ```
 
+### Service Worker 预缓存机制 (Precache Manifest)
+
+项目使用 **Precache Manifest** 机制确保版本更新时用户能快速加载新版本：
+
+**问题**：如果 SW 只预缓存少量基础文件（如 index.html），版本更新后用户首次访问需要从网络下载所有 JS/CSS，导致加载慢。
+
+**解决方案**：
+
+1. **构建时生成资源清单** (`vite.config.ts`)：
+```typescript
+// Vite 插件在构建完成后扫描 dist 目录
+function precacheManifestPlugin(): Plugin {
+  return {
+    name: 'precache-manifest',
+    closeBundle: {
+      async handler() {
+        // 扫描所有静态资源，生成 precache-manifest.json
+        // 包含 URL 和文件哈希（用于增量更新）
+        manifest.push({ url: '/assets/xxx.js', revision: 'a1b2c3d4' });
+      }
+    }
+  };
+}
+```
+
+2. **SW 安装时预缓存所有资源** (`sw/index.ts`)：
+```typescript
+sw.addEventListener('install', (event) => {
+  event.waitUntil(
+    (async () => {
+      const files = await loadPrecacheManifest(); // 读取 manifest
+      await precacheStaticFiles(cache, files);    // 并发预缓存
+    })()
+  );
+});
+```
+
+3. **增量更新**：通过 `x-sw-revision` 头比较文件哈希，跳过未变化的文件
+
+**工作流程**：
+```
+版本更新发布 → 用户访问 → 新 SW 安装
+                           ↓
+                    读取 precache-manifest.json
+                           ↓
+                    并发预缓存所有资源（6个并发）
+                           ↓
+                    预缓存完成 → 通知用户更新
+                           ↓
+                    用户确认 → 激活新 SW → 缓存优先秒开
+```
+
+**相关文件**：
+- `apps/web/vite.config.ts` - `precacheManifestPlugin()` 生成 manifest
+- `apps/web/src/sw/index.ts` - `loadPrecacheManifest()` 和 `precacheStaticFiles()`
+- `dist/apps/web/precache-manifest.json` - 构建产物
+
 ### 编辑器插件系统
 ```
 Drawnix (主编辑器)
