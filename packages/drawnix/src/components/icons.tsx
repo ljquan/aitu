@@ -16,10 +16,10 @@ export const HandIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number 
     height={size}
     {...props}
   >
-    <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v5" />
-    <path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v10" />
-    <path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8" />
-    <path d="M18 8a2 2 0 1 1 4 0v6a8 2 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" />
+    <path d="M7 11.5V5a2 2 0 0 1 2-2h0a2 2 0 0 1 2 2v7.5" />
+    <path d="M11 10.5V4a2 2 0 0 1 2-2h0a2 2 0 0 1 2 2v7.5" />
+    <path d="M15 11.5V5a2 2 0 0 1 2-2h0a2 2 0 0 1 2 2v7.5" />
+    <path d="M19 13.5V9a2 2 0 0 1 2-2h0a2 2 0 0 1 2 2v5.5a8 8 0 0 1-8 8h-2a8 8 0 0 1-8-8v-2a2 2 0 0 1 2-2h0a2 2 0 0 1 2 2v3.5" />
   </svg>
 );
 
