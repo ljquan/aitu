@@ -299,7 +299,7 @@ export const PopupGradientPickerButton: React.FC<PopupGradientPickerButtonProps>
           className={classNames('property-button', 'gradient-picker-button')}
           selected={isOpen}
           visible={true}
-          icon={GradientIcon}
+          icon={<GradientIcon />}
           type="button"
           title={title}
           aria-label={title}

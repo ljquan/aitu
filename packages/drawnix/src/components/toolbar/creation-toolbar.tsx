@@ -65,6 +65,7 @@ import Menu from '../menu/menu';
 import MenuItem from '../menu/menu-item';
 import { THEME_OPTIONS, CheckIcon, isBasicPointer, EmptyIcon } from './toolbar-shared';
 import { MoreToolsButton } from './more-tools-button';
+import { MinimizedToolsBar } from './minimized-tools-bar';
 
 export enum PopupKey {
   'shape' = 'shape',
@@ -753,6 +754,8 @@ export const CreationToolbar: React.FC<ToolbarSectionProps> = ({
           : renderButtonById(buttonConfig.id, index)
       )}
       <MoreToolsButton embedded={embedded} />
+      {/* 最小化工具栏 - 显示最小化和常驻的工具图标 */}
+      {embedded && <MinimizedToolsBar />}
     </Stack.Row>
   );
 

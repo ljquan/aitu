@@ -2,13 +2,14 @@
  * ToolWinBoxManager Component
  * 
  * 管理所有以 WinBox 弹窗形式打开的工具
+ * 支持最小化、常驻工具栏等功能
  */
 
 import React, { useEffect, useState, Suspense, useCallback } from 'react';
 import { PlaitBoard, getViewportOrigination } from '@plait/core';
 import { WinBoxWindow } from '../winbox';
 import { toolWindowService } from '../../services/tool-window-service';
-import { ToolDefinition } from '../../types/toolbox.types';
+import { ToolDefinition, ToolWindowState } from '../../types/toolbox.types';
 import { useI18n } from '../../i18n';
 import { InternalToolComponents } from './InternalToolComponents';
 import { useDrawnix } from '../../hooks/use-drawnix';
@@ -20,16 +21,55 @@ import { processToolUrl } from '../../utils/url-template';
  * 工具弹窗管理器组件
  */
 export const ToolWinBoxManager: React.FC = () => {
-  const [openTools, setOpenTools] = useState<ToolDefinition[]>([]);
+  const [toolStates, setToolStates] = useState<ToolWindowState[]>([]);
   const { language } = useI18n();
   const { board } = useDrawnix();
 
   useEffect(() => {
-    const subscription = toolWindowService.observeOpenTools().subscribe(tools => {
-      setOpenTools(tools);
+    const subscription = toolWindowService.observeToolStates().subscribe(states => {
+      console.log('[ToolWinBoxManager] toolStates updated', states.map(s => ({ 
+        id: s.tool.id, 
+        status: s.status 
+      })));
+      setToolStates(states);
     });
     
     return () => subscription.unsubscribe();
+  }, []);
+
+  /**
+   * 处理工具最小化
+   */
+  const handleMinimize = useCallback((
+    toolId: string,
+    position: { x: number; y: number },
+    size: { width: number; height: number }
+  ) => {
+    toolWindowService.minimizeTool(toolId, position, size);
+  }, []);
+
+  /**
+   * 处理窗口位置/尺寸变化
+   */
+  const handleMove = useCallback((toolId: string, x: number, y: number) => {
+    const state = toolWindowService.getToolState(toolId);
+    if (state) {
+      toolWindowService.updateToolPosition(toolId, { x, y }, state.size);
+    }
+  }, []);
+
+  /**
+   * 处理窗口调整大小
+   */
+  const handleResize = useCallback((toolId: string, width: number, height: number) => {
+    const state = toolWindowService.getToolState(toolId);
+    if (state) {
+      toolWindowService.updateToolPosition(
+        toolId,
+        state.position || { x: 0, y: 0 },
+        { width, height }
+      );
+    }
   }, []);
 
   /**
@@ -84,24 +124,46 @@ export const ToolWinBoxManager: React.FC = () => {
     }
   }, [board]);
 
-  if (openTools.length === 0) {
+  // 只渲染 open 或 minimized 状态的工具（minimized 状态需要保留实例但隐藏）
+  const activeStates = toolStates.filter(
+    state => state.status === 'open' || state.status === 'minimized'
+  );
+
+  if (activeStates.length === 0) {
     return null;
   }
 
   return (
     <>
-      {openTools.map(tool => {
+      {activeStates.map(state => {
+        const { tool, status, position, size } = state;
         const InternalComponent = tool.component ? InternalToolComponents[tool.component] : null;
+        
+        // 确定窗口是否可见
+        const isVisible = status === 'open';
+        console.log('[ToolWinBoxManager] rendering WinBoxWindow', { 
+          toolId: tool.id, 
+          status, 
+          isVisible,
+          position,
+          size 
+        });
         
         return (
           <WinBoxWindow
             key={tool.id}
             id={`tool-window-${tool.id}`}
-            visible={true}
+            visible={isVisible}
+            keepAlive={true}
             title={tool.name}
-            width={tool.defaultWidth || 800}
-            height={tool.defaultHeight || 600}
+            width={size?.width || tool.defaultWidth || 800}
+            height={size?.height || tool.defaultHeight || 600}
+            x={position?.x}
+            y={position?.y}
             onClose={() => toolWindowService.closeTool(tool.id)}
+            onMinimize={(pos, sz) => handleMinimize(tool.id, pos, sz)}
+            onMove={(x, y) => handleMove(tool.id, x, y)}
+            onResize={(w, h) => handleResize(tool.id, w, h)}
             onInsertToCanvas={(rect) => handleInsertToCanvas(tool, rect)}
             className="winbox-ai-generation winbox-tool-window"
             background="#ffffff"

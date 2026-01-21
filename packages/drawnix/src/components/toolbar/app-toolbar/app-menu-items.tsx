@@ -37,7 +37,7 @@ export const SaveToFile = () => {
       onSelect={() => {
         saveAsJSON(board);
       }}
-      icon={SaveFileIcon}
+      icon={<SaveFileIcon />}
       aria-label={t('menu.saveFile')}
       shortcut={`Cmd+S`}
     >{t('menu.saveFile')}</MenuItem>
@@ -73,7 +73,7 @@ export const OpenFile = () => {
           clearAndLoad(data.elements, data.viewport);
         });
       }}
-      icon={OpenFileIcon}
+      icon={<OpenFileIcon />}
       aria-label={t('menu.open')}
     >{t('menu.open')}</MenuItem>
   );
@@ -86,7 +86,7 @@ export const SaveAsImage = () => {
   const { t } = useI18n();
   return (
     <MenuItem
-      icon={ExportImageIcon}
+      icon={<ExportImageIcon />}
       data-testid="image-export-button"
       data-track="toolbar_click_menu_export"
       onSelect={() => {
@@ -134,7 +134,7 @@ export const CleanBoard = () => {
   const { t } = useI18n();
   return (
     <MenuItem
-      icon={TrashIcon}
+      icon={<TrashIcon />}
       data-testid="reset-button"
       data-track="toolbar_click_menu_clean"
       onSelect={() => {
@@ -160,7 +160,7 @@ export const BackupRestore = ({
   const { t } = useI18n();
   return (
     <MenuItem
-      icon={BackupRestoreIcon}
+      icon={<BackupRestoreIcon />}
       data-track="toolbar_click_menu_backup"
       onSelect={onOpenBackupRestore}
       aria-label={t('menu.backupRestore')}
@@ -175,7 +175,7 @@ export const DebugPanel = () => {
   const { t } = useI18n();
   return (
     <MenuItem
-      icon={DebugLogIcon}
+      icon={<DebugLogIcon />}
       data-track="toolbar_click_menu_debug"
       onSelect={() => {
         window.open('./sw-debug.html', '_blank');
@@ -193,7 +193,7 @@ export const Settings = () => {
   const { t } = useI18n();
   return (
     <MenuItem
-      icon={SettingsIcon}
+      icon={<SettingsIcon />}
       data-track="toolbar_click_menu_settings"
       onSelect={() => {
         setAppState({
@@ -213,7 +213,7 @@ export const GitHubLink = () => {
   const { t } = useI18n();
   return (
     <MenuItem
-      icon={GithubIcon}
+      icon={<GithubIcon />}
       data-track="toolbar_click_menu_github"
       onSelect={() => {
         window.open('https://github.com/ljquan/aitu', '_blank');

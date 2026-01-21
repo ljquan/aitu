@@ -1,0 +1,54 @@
+/**
+ * MinimizedToolsBar Styles
+ *
+ * 最小化工具栏样式
+ */
+
+.minimized-tools-bar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border-light, rgba(0, 0, 0, 0.05));
+  margin-top: 4px;
+
+  &__item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  &__indicator {
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    bottom: 2px;
+    right: 2px;
+    background: var(--td-brand-color, #0052d9);
+    border: 1.5px solid var(--color-background, #fff);
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0.6;
+
+    &--active {
+      background: var(--td-success-color, #00a870);
+      opacity: 1;
+      animation: pulse-indicator 2s infinite;
+    }
+  }
+}
+
+@keyframes pulse-indicator {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0.8;
+  }
+}

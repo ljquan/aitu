@@ -559,7 +559,7 @@ export const PopupToolbar = () => {
                 className="property-settings"
                 key={'property-settings'}
                 type="icon"
-                icon={PropertySettingsIcon}
+                icon={<PropertySettingsIcon />}
                 visible={true}
                 selected={showPropertyPanel}
                 title={t('propertyPanel.title')}
@@ -575,7 +575,7 @@ export const PopupToolbar = () => {
                 className="ai-image"
                 key={5}
                 type="icon"
-                icon={AIImageIcon}
+                icon={<AIImageIcon />}
                 visible={true}
                 title={language === 'zh' ? 'AI图片生成' : 'AI Image Generation'}
                 aria-label={language === 'zh' ? 'AI图片生成' : 'AI Image Generation'}
@@ -590,7 +590,7 @@ export const PopupToolbar = () => {
                 className="ai-video"
                 key={6}
                 type="icon"
-                icon={AIVideoIcon}
+                icon={<AIVideoIcon />}
                 visible={true}
                 title={language === 'zh' ? 'AI视频生成' : 'AI Video Generation'}
                 aria-label={language === 'zh' ? 'AI视频生成' : 'AI Video Generation'}
@@ -605,7 +605,7 @@ export const PopupToolbar = () => {
                 className="video-frame"
                 key={7}
                 type="icon"
-                icon={VideoFrameIcon}
+                icon={<VideoFrameIcon />}
                 visible={true}
                 title={language === 'zh' ? '视频帧选择' : 'Video Frame Selection'}
                 aria-label={language === 'zh' ? '视频帧选择' : 'Video Frame Selection'}
@@ -625,7 +625,7 @@ export const PopupToolbar = () => {
                 className="split-image"
                 key="split-image"
                 type="icon"
-                icon={SplitImageIcon}
+                icon={<SplitImageIcon />}
                 visible={true}
                 title={language === 'zh' ? '智能拆图' : 'Smart Split'}
                 aria-label={language === 'zh' ? '智能拆图' : 'Smart Split'}
@@ -670,7 +670,7 @@ export const PopupToolbar = () => {
                 className="download"
                 key="download"
                 type="icon"
-                icon={DownloadIcon}
+                icon={<DownloadIcon />}
                 visible={true}
                 title={language === 'zh' ? '下载' : 'Download'}
                 aria-label={language === 'zh' ? '下载' : 'Download'}
@@ -771,7 +771,7 @@ export const PopupToolbar = () => {
                 className="merge"
                 key="merge"
                 type="icon"
-                icon={MergeIcon}
+                icon={<MergeIcon />}
                 visible={true}
                 title={language === 'zh' ? '合并为图片' : 'Merge to Image'}
                 aria-label={language === 'zh' ? '合并为图片' : 'Merge to Image'}
@@ -944,7 +944,7 @@ export const PopupToolbar = () => {
                 className="video-merge"
                 key="video-merge"
                 type="icon"
-                icon={VideoMergeIcon}
+                icon={<VideoMergeIcon />}
                 visible={true}
                 title={language === 'zh' ? '合成视频' : 'Merge Videos'}
                 aria-label={language === 'zh' ? '合成视频' : 'Merge Videos'}
@@ -1046,7 +1046,7 @@ export const PopupToolbar = () => {
               className="duplicate"
               key={8}
               type="icon"
-              icon={DuplicateIcon}
+              icon={<DuplicateIcon />}
               visible={true}
               title={t('general.duplicate')}
               aria-label={t('general.duplicate')}
@@ -1059,7 +1059,7 @@ export const PopupToolbar = () => {
               className="trash"
               key={9}
               type="icon"
-              icon={TrashIcon}
+              icon={<TrashIcon />}
               visible={true}
               title={t('general.delete')}
               aria-label={t('general.delete')}

@@ -99,6 +99,8 @@ export interface WinBoxWindowProps {
   container?: HTMLElement | null;
   /** 窗口最大化回调 */
   onMaximize?: () => void;
+  /** 窗口最小化回调，返回窗口位置和尺寸 */
+  onMinimize?: (position: { x: number; y: number }, size: { width: number; height: number }) => void;
   /** 窗口恢复回调 */
   onRestore?: () => void;
   /** 窗口聚焦回调 */
@@ -115,6 +117,8 @@ export interface WinBoxWindowProps {
   minVisiblePixels?: number;
   /** 插入到画布的回调，如果提供则显示"插入到画布"按钮，参数为弹窗当前位置和尺寸 */
   onInsertToCanvas?: (rect: { x: number; y: number; width: number; height: number }) => void;
+  /** 是否保持窗口实例存活，设为 true 时 visible=false 只隐藏窗口而不销毁 */
+  keepAlive?: boolean;
 }
 
 /**
@@ -147,6 +151,7 @@ export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
   headerContent,
   container,
   onMaximize,
+  onMinimize,
   onRestore,
   onFocus,
   onBlur,
@@ -155,9 +160,14 @@ export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
   autoMaximize = false,
   minVisiblePixels = 50,
   onInsertToCanvas,
+  keepAlive = false,
 }) => {
   const winboxRef = useRef<any>(null);
   const winboxElementRef = useRef<HTMLDivElement | null>(null); // WinBox 窗口的 DOM 元素
+  // 保存最后的正常位置（非最小化/最大化状态），用于最小化恢复
+  const lastNormalPositionRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
+  // 标记是否正在进行最小化操作，用于阻止 onmove 更新位置
+  const isMinimizingRef = useRef(false);
   const [headerPortalContainer, setHeaderPortalContainer] = useState<HTMLElement | null>(null);
   const [bodyPortalContainer, setBodyPortalContainer] = useState<HTMLElement | null>(null);
   const [isReady, setIsReady] = useState(false);
@@ -389,20 +399,38 @@ export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
   useEffect(() => {
     if (!winboxLoaded || !WinBoxConstructor) return;
     
-    // 当 visible 变为 false 时，关闭并清理窗口
+    // 当 visible 变为 false 时
     if (!visible) {
       if (winboxRef.current) {
-        try {
-          winboxRef.current.close(true); // force close
-        } catch {
-          // 忽略关闭错误
+        if (keepAlive) {
+          // keepAlive 模式：只隐藏窗口，不销毁实例
+          winboxRef.current.hide();
+        } else {
+          // 非 keepAlive 模式：关闭并清理窗口
+          try {
+            winboxRef.current.close(true); // force close
+          } catch {
+            // 忽略关闭错误
+          }
+          winboxRef.current = null;
+          winboxElementRef.current = null; // 清空 DOM 元素引用
+          setHeaderPortalContainer(null);
+          setBodyPortalContainer(null);
+          setIsReady(false);
         }
-        winboxRef.current = null;
-        winboxElementRef.current = null; // 清空 DOM 元素引用
-        setHeaderPortalContainer(null);
-        setBodyPortalContainer(null);
-        setIsReady(false);
       }
+      return;
+    }
+    
+    // 当 visible 变为 true 时
+    if (visible && winboxRef.current) {
+      // 窗口已存在（keepAlive 模式），显示并聚焦
+      console.log('[WinBoxWindow] visible=true, showing existing window', { 
+        min: winboxRef.current.min,
+        hidden: winboxRef.current.hidden,
+      });
+      winboxRef.current.show();
+      winboxRef.current.focus();
       return;
     }
     
@@ -437,6 +465,31 @@ export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
         root: container || document.body,
         onclose: handleClose,
         onmaximize: onMaximize,
+        onminimize: function (this: any) {
+          // 标记正在最小化，阻止 onmove 更新位置
+          isMinimizingRef.current = true;
+          
+          // 使用保存的正常位置，而不是当前位置（当前位置可能已经是最小化后的位置）
+          const savedPosition = lastNormalPositionRef.current;
+          const position = savedPosition 
+            ? { x: savedPosition.x, y: savedPosition.y }
+            : { x: this.x || 0, y: this.y || 0 };
+          const size = savedPosition
+            ? { width: savedPosition.width, height: savedPosition.height }
+            : { width: this.width || 800, height: this.height || 600 };
+          console.log('[WinBoxWindow] onminimize called, hiding window', { 
+            position, 
+            size, 
+            savedPosition,
+            currentPos: { x: this.x, y: this.y },
+          });
+          // 立即隐藏窗口，覆盖默认的最小化行为
+          this.hide();
+          // 调用外部回调通知状态变化
+          onMinimize?.(position, size);
+          // 返回 true 阻止 WinBox 的默认最小化行为
+          return true;
+        },
         onrestore: onRestore,
         onfocus: onFocus,
         onblur: onBlur,
@@ -474,9 +527,38 @@ export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
             isMovingRef.current = false;
           }
 
+          // 保存正常状态下的位置（非最小化/最大化，且不在最小化过程中）
+          // 检测异常位置变化：如果 y 突然大幅增加，可能是最小化动画
+          const prevPos = lastNormalPositionRef.current;
+          const isLikelyMinimizeAnimation = prevPos && (newY - prevPos.y > 200);
+          
+          if (!this.min && !this.max && !isMinimizingRef.current && !isLikelyMinimizeAnimation) {
+            lastNormalPositionRef.current = {
+              x: newX,
+              y: newY,
+              width: this.width,
+              height: this.height,
+            };
+          }
+
           onMove?.(newX, newY);
         },
-        onresize: onResize,
+        onresize: function (this: any, w: number, h: number) {
+          // 保存正常状态下的尺寸（非最小化/最大化，且不在最小化过程中）
+          // 检测异常尺寸：如果尺寸突然变得很小，可能是最小化动画
+          const prevPos = lastNormalPositionRef.current;
+          const isLikelyMinimizeAnimation = prevPos && (h < 100 || (prevPos.height - h > 200));
+          
+          if (!this.min && !this.max && !isMinimizingRef.current && !isLikelyMinimizeAnimation) {
+            lastNormalPositionRef.current = {
+              x: this.x,
+              y: this.y,
+              width: w,
+              height: h,
+            };
+          }
+          onResize?.(w, h);
+        },
       });
 
       winboxRef.current = wb;
@@ -558,6 +640,17 @@ export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
         }
       }
 
+      // 保存初始位置
+      if (wb && !wb.min && !wb.max) {
+        lastNormalPositionRef.current = {
+          x: wb.x,
+          y: wb.y,
+          width: wb.width,
+          height: wb.height,
+        };
+        console.log('[WinBoxWindow] saved initial position', lastNormalPositionRef.current);
+      }
+
       setIsReady(true);
 
       // 如果设置了自动最大化，则在创建后最大化窗口
@@ -572,7 +665,7 @@ export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, winboxLoaded, autoMaximize]);
+  }, [visible, winboxLoaded, autoMaximize, keepAlive]);
   // 注意: handleClose 不在依赖中，因为它只在创建时使用一次，
   // 添加到依赖会导致 WinBox 实例频繁重建并触发关闭回调
   
@@ -603,7 +696,29 @@ export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
   // 控制显示/隐藏
   useEffect(() => {
     if (winboxRef.current) {
+      const savedPos = lastNormalPositionRef.current;
+      console.log('[WinBoxWindow] visible effect', { 
+        visible, 
+        min: winboxRef.current.min,
+        hidden: winboxRef.current.hidden,
+        savedPos,
+        propsXY: { x, y },
+      });
       if (visible) {
+        // 如果窗口处于最小化状态，需要先恢复
+        if (winboxRef.current.min) {
+          console.log('[WinBoxWindow] restoring from minimized state');
+          winboxRef.current.restore();
+          // restore() 后需要重新设置位置到保存的正常位置
+          // 使用内部保存的位置而不是 props，因为 props 可能被 onmove 污染
+          if (savedPos) {
+            console.log('[WinBoxWindow] re-applying saved position after restore', savedPos);
+            winboxRef.current.move(savedPos.x, savedPos.y);
+            winboxRef.current.resize(savedPos.width, savedPos.height);
+          }
+          // 重置最小化标记
+          isMinimizingRef.current = false;
+        }
         winboxRef.current.show();
         winboxRef.current.focus();
       } else {

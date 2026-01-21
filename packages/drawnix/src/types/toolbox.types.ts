@@ -124,3 +124,30 @@ export interface ToolboxState {
   /** 搜索关键词 */
   searchQuery?: string;
 }
+
+/**
+ * 工具窗口状态枚举
+ */
+export type ToolWindowStatus = 'open' | 'minimized' | 'closed';
+
+/**
+ * 工具窗口状态 - 管理弹窗形式打开的工具
+ *
+ * 用于跟踪工具弹窗的显示状态、位置和常驻设置
+ */
+export interface ToolWindowState {
+  /** 工具定义 */
+  tool: ToolDefinition;
+
+  /** 窗口状态 */
+  status: ToolWindowStatus;
+
+  /** 窗口位置（屏幕坐标） */
+  position?: { x: number; y: number };
+
+  /** 窗口尺寸 */
+  size?: { width: number; height: number };
+
+  /** 是否常驻工具栏 */
+  isPinned: boolean;
+}

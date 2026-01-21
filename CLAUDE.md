@@ -5053,21 +5053,29 @@ await unifiedCacheService.cacheToCacheStorageOnly(stableUrl, blob);
 
 ### 错误: 将图标组件作为 React 子元素直接渲染
 
-**场景**: 在 `ToolButton` 或类似组件的 `icon` 属性中传递图标时。
+**场景**: 在 `ToolButton` 或类似组件的 `icon` 属性中传递图标时，或在 JSX 中使用三元表达式选择图标时。
 
 ❌ **错误示例**:
 ```tsx
 // 报错：Functions are not valid as a React child
 <ToolButton icon={MediaLibraryIcon} />
+
+// 三元表达式中也是错误的
+<button>{locked ? LockIcon : UnlockIcon}</button>
 ```
 
 ✅ **正确示例**:
 ```tsx
 // 正确：实例化组件为 React 元素
 <ToolButton icon={<MediaLibraryIcon />} />
+
+// 三元表达式中也要实例化
+<button>{locked ? <LockIcon /> : <UnlockIcon />}</button>
 ```
 
 **原因**: `icon` 属性通常被直接渲染（如 `{props.icon}`）。在 React 中，你可以渲染元素（Element），但不能直接渲染组件函数（Component Function）。将组件改为函数式组件（`React.FC`）后，必须使用 JSX 语法 `<Icon />` 来实例化。
+
+**常见出错位置**: `popup-toolbar.tsx`、`size-input.tsx`、`link-button.tsx`、`app-menu-items.tsx` 等使用图标的组件。
 
 ---
 

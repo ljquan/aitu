@@ -22,7 +22,7 @@ export const PopupLinkButton: React.FC<PopupLinkButtonProps> = ({
     <ToolButton
       className={classNames(`property-button`)}
       visible={true}
-      icon={LinkIcon}
+      icon={<LinkIcon />}
       type="button"
       title={title}
       aria-label={title}

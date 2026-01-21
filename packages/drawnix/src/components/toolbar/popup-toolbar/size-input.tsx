@@ -264,7 +264,7 @@ export const SizeInput: React.FC<SizeInputProps> = ({ board }) => {
         onClick={() => setLocked(!locked)}
         title={locked ? '解锁比例' : '锁定比例'}
       >
-        {locked ? LockIcon : UnlockIcon}
+        {locked ? <LockIcon /> : <UnlockIcon />}
       </button>
       <div className="size-input-group">
         <span className="size-input-label">H</span>

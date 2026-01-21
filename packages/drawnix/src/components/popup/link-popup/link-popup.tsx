@@ -165,7 +165,7 @@ export const LinkPopup = () => {
               <ToolButton
                 type="icon"
                 visible={true}
-                icon={TrashIcon}
+                icon={<TrashIcon />}
                 title={`Delete link`}
                 aria-label={`Delete link`}
                 onPointerDown={() => {
@@ -197,7 +197,7 @@ export const LinkPopup = () => {
                 className="link-popup__edit"
                 type="icon"
                 visible={true}
-                icon={FeltTipPenIcon}
+                icon={<FeltTipPenIcon />}
                 title={`Edit link`}
                 aria-label={`Edit link`}
                 onPointerDown={({ event }) => {
@@ -215,7 +215,7 @@ export const LinkPopup = () => {
               <ToolButton
                 type="icon"
                 visible={true}
-                icon={TrashIcon}
+                icon={<TrashIcon />}
                 title={`Delete link`}
                 aria-label={`Delete link`}
                 onPointerDown={() => {
