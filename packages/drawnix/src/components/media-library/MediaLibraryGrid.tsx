@@ -6,14 +6,11 @@
 import { useMemo, useState, useCallback, useRef, useEffect, useTransition } from 'react';
 import { Loading, Input, Button, Checkbox, Popconfirm, Tooltip } from 'tdesign-react';
 import { 
-  Upload as UploadIcon, 
   Search, 
   Trash2, 
   CheckSquare, 
   XSquare, 
   HardDrive,
-  Layers,
-  Image as ImageIcon,
   Video as VideoIcon,
   Globe,
   User,
@@ -25,6 +22,10 @@ import {
   Minus,
   Plus
 } from 'lucide-react';
+import { 
+  ImageUploadIcon as ImageUploadIconComp,
+  MediaLibraryIcon,
+} from '../icons';
 import { useAssets } from '../../contexts/AssetContext';
 import { filterAssets, formatFileSize } from '../../utils/asset-utils';
 import { VirtualAssetGrid } from './VirtualAssetGrid';
@@ -75,24 +76,24 @@ const getStoredGridSize = (): number => {
 
 // 类型过滤选项
 const TYPE_OPTIONS = [
-  { value: 'ALL', label: '全部类型', icon: <Layers size={14} /> },
-  { value: AssetType.IMAGE, label: '图片', icon: <ImageIcon size={14} /> },
-  { value: AssetType.VIDEO, label: '视频', icon: <VideoIcon size={14} /> },
+  { value: 'ALL', label: '全部类型', icon: MediaLibraryIcon },
+  { value: AssetType.IMAGE, label: '图片', icon: ImageUploadIconComp },
+  { value: AssetType.VIDEO, label: '视频', icon: VideoIcon },
 ];
 
 // 来源过滤选项
 const SOURCE_OPTIONS = [
-  { value: 'ALL', label: '全部来源', icon: <Globe size={14} /> },
-  { value: AssetSource.LOCAL, label: '本地上传', icon: <User size={14} /> },
-  { value: AssetSource.AI_GENERATED, label: 'AI生成', icon: <Sparkles size={14} /> },
+  { value: 'ALL', label: '全部来源', icon: Globe, countKey: 'sourceAll' },
+  { value: AssetSource.LOCAL, label: '本地上传', icon: User, countKey: 'local' },
+  { value: AssetSource.AI_GENERATED, label: 'AI生成', icon: Sparkles, countKey: 'ai' },
 ];
 
 // 排序选项
-const SORT_OPTIONS: { value: SortOption; label: string; icon: React.ReactNode }[] = [
-  { value: 'DATE_DESC', label: '最新优先', icon: <Clock size={14} /> },
-  { value: 'DATE_ASC', label: '最旧优先', icon: <Calendar size={14} /> },
-  { value: 'NAME_ASC', label: '名称 A-Z', icon: <SortAsc size={14} /> },
-  { value: 'SIZE_DESC', label: '大小优先', icon: <ArrowDownWideNarrow size={14} /> },
+const SORT_OPTIONS: { value: SortOption; label: string; icon: any }[] = [
+  { value: 'DATE_DESC', label: '最新优先', icon: Clock },
+  { value: 'DATE_ASC', label: '最旧优先', icon: Calendar },
+  { value: 'NAME_ASC', label: '名称 A-Z', icon: SortAsc },
+  { value: 'SIZE_DESC', label: '大小优先', icon: ArrowDownWideNarrow },
 ];
 
 export function MediaLibraryGrid({
@@ -110,6 +111,18 @@ export function MediaLibraryGrid({
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
   const [gridSize, setGridSize] = useState<number>(getStoredGridSize); // 从缓存恢复网格尺寸
+
+  // 计算各类型的数量
+  const counts = useMemo(() => {
+    return {
+      all: assets.length,
+      image: assets.filter(a => a.type === AssetType.IMAGE).length,
+      video: assets.filter(a => a.type === AssetType.VIDEO).length,
+      local: assets.filter(a => a.source === AssetSource.LOCAL).length,
+      ai: assets.filter(a => a.source === AssetSource.AI_GENERATED).length,
+      sourceAll: assets.length,
+    };
+  }, [assets]);
 
   // 监听网格尺寸变化并缓存
   useEffect(() => {
@@ -390,7 +403,7 @@ export function MediaLibraryGrid({
                   variant="base"
                   theme="primary"
                   size="small"
-                  icon={<UploadIcon size={16} />}
+                  icon={<ImageUploadIconComp size={16} />}
                   onClick={onUploadClick}
                   data-track="grid_upload_click"
                 >
@@ -402,56 +415,61 @@ export function MediaLibraryGrid({
         </div>
         {!isSelectionMode && (
           <div className="media-library-grid__header-bottom">
-            <div className="media-library-grid__filter-group">
-              <div className="media-library-grid__filter-item">
-                <span className="media-library-grid__filter-item-label">类型</span>
-                <div className="media-library-grid__filter-item-options">
-                  {TYPE_OPTIONS.map(opt => (
-                    <Tooltip key={opt.value} content={opt.label} placement="top" showArrow={false}>
+            <div className="media-library-grid__filter-island">
+              <div className="media-library-grid__filter-group">
+                {TYPE_OPTIONS.map(opt => {
+                  const count = opt.value === 'ALL' ? counts.all : (opt.value === AssetType.IMAGE ? counts.image : counts.video);
+                  const Icon = opt.icon;
+                  const isActive = (filters.activeType || 'ALL') === opt.value;
+                  return (
+                    <Tooltip key={opt.value} content={`${opt.label} (${count})`} placement="top" showArrow={false}>
                       <div
-                        className={`media-library-grid__filter-item-option ${ (filters.activeType || 'ALL') === opt.value ? 'media-library-grid__filter-item-option--active' : ''}`}
+                        className={`media-library-grid__filter-option ${isActive ? 'media-library-grid__filter-option--active' : ''}`}
                         onClick={() => setFilters({ activeType: opt.value === 'ALL' ? undefined : opt.value as AssetType })}
                       >
-                        {opt.icon}
+                        <Icon size={14} strokeWidth={1.5} className={opt.value === 'ALL' ? 'icon-all' : ''} />
+                        <span className="media-library-grid__filter-count">{count}</span>
                       </div>
                     </Tooltip>
-                  ))}
-                </div>
-              </div>
-
-              <div className="media-library-grid__filter-item">
-                <span className="media-library-grid__filter-item-label">来源</span>
-                <div className="media-library-grid__filter-item-options">
-                  {SOURCE_OPTIONS.map(opt => (
-                    <Tooltip key={opt.value} content={opt.label} placement="top" showArrow={false}>
+                  );
+                })}
+                
+                {SOURCE_OPTIONS.filter(opt => opt.value !== 'ALL').map(opt => {
+                  const count = counts[opt.countKey as keyof typeof counts];
+                  const Icon = opt.icon;
+                  const isActive = filters.activeSource === opt.value;
+                  return (
+                    <Tooltip key={opt.value} content={`${opt.label} (${count})`} placement="top" showArrow={false}>
                       <div
-                        key={opt.value}
-                        className={`media-library-grid__filter-item-option ${ (filters.activeSource || 'ALL') === opt.value ? 'media-library-grid__filter-item-option--active' : ''}`}
-                        onClick={() => setFilters({ activeSource: opt.value === 'ALL' ? undefined : opt.value as AssetSource })}
+                        className={`media-library-grid__filter-option ${isActive ? 'media-library-grid__filter-option--active' : ''}`}
+                        onClick={() => setFilters({ activeSource: isActive ? undefined : opt.value as AssetSource })}
                       >
-                        {opt.icon}
+                        <Icon size={14} strokeWidth={1.5} />
+                        <span className="media-library-grid__filter-count">{count}</span>
                       </div>
                     </Tooltip>
-                  ))}
-                </div>
+                  );
+                })}
               </div>
+            </div>
 
-              <div className="media-library-grid__filter-item">
-                <span className="media-library-grid__filter-item-label">排序</span>
-                <div className="media-library-grid__filter-item-options">
-                  {SORT_OPTIONS.map(opt => (
-                    <Tooltip key={opt.value} content={opt.label} placement="top" showArrow={false}>
-                      <div
-                        key={opt.value}
-                        className={`media-library-grid__filter-item-option ${ (filters.sortBy || 'DATE_DESC') === opt.value ? 'media-library-grid__filter-item-option--active' : ''}`}
-                        onClick={() => setFilters({ sortBy: opt.value as SortOption })}
-                      >
-                        {opt.icon}
-                      </div>
-                    </Tooltip>
-                  ))}
-                </div>
-              </div>
+            <div className="media-library-grid__header-spacer" />
+
+            <div className="media-library-grid__sort-options">
+              {SORT_OPTIONS.map(opt => {
+                const Icon = opt.icon;
+                const isActive = (filters.sortBy || 'DATE_DESC') === opt.value;
+                return (
+                  <Tooltip key={opt.value} content={opt.label} placement="top" showArrow={false}>
+                    <div
+                      className={`media-library-grid__filter-option ${isActive ? 'media-library-grid__filter-option--active' : ''}`}
+                      onClick={() => setFilters({ sortBy: opt.value as SortOption })}
+                    >
+                      <Icon size={14} strokeWidth={1.5} />
+                    </div>
+                  </Tooltip>
+                );
+              })}
             </div>
           </div>
         )}
@@ -461,7 +479,7 @@ export function MediaLibraryGrid({
         <div className="media-library-grid__drop-overlay">
           <div className="media-library-grid__drop-message">
             <div className="media-library-grid__drop-message-icon">
-              <UploadIcon size={32} />
+              <ImageUploadIconComp size={32} />
             </div>
             <h3 className="media-library-grid__drop-message-title">拖放文件到这里</h3>
             <p className="media-library-grid__drop-message-description">支持 JPG、PNG、MP4 格式</p>

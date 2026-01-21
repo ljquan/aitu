@@ -66,7 +66,7 @@ export const AppToolbar: React.FC<AppToolbarProps> = ({
               type="icon"
               visible={true}
               selected={appMenuOpen}
-              icon={MenuIcon}
+              icon={<MenuIcon />}
               title={appMenuOpen ? undefined : t('general.menu')}
               tooltipPlacement={embedded ? 'right' : 'bottom'}
               aria-label={t('general.menu')}
@@ -108,7 +108,7 @@ export const AppToolbar: React.FC<AppToolbarProps> = ({
             <ToolButton
               key={1}
               type="icon"
-              icon={UndoIcon}
+              icon={<UndoIcon />}
               visible={true}
               title={t('general.undo')}
               tooltipPlacement={embedded ? 'right' : 'bottom'}
@@ -130,7 +130,7 @@ export const AppToolbar: React.FC<AppToolbarProps> = ({
             <ToolButton
               key={2}
               type="icon"
-              icon={RedoIcon}
+              icon={<RedoIcon />}
               visible={true}
               title={t('general.redo')}
               tooltipPlacement={embedded ? 'right' : 'bottom'}
@@ -154,7 +154,7 @@ export const AppToolbar: React.FC<AppToolbarProps> = ({
         {content}
         <ToolButton
           type="icon"
-          icon={GithubIcon}
+          icon={<GithubIcon />}
           visible={true}
           title={t('menu.github')}
           tooltipPlacement="right"

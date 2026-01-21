@@ -16,7 +16,10 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Send, Check, ImagePlus } from 'lucide-react';
+import { Send, Check } from 'lucide-react';
+import {
+  ImageUploadIcon,
+} from '../icons';
 import { useBoard } from '@plait-board/react-board';
 import { SelectedContentPreview } from '../shared/SelectedContentPreview';
 import { getSelectedElements, ATTACHED_ELEMENT_CLASS_NAME, getRectangleByElements, PlaitBoard, getViewportOrigination, PlaitElement } from '@plait/core';
@@ -1748,7 +1751,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
             title={language === 'zh' ? '上传图片' : 'Upload images'}
             data-track="ai_input_click_upload"
           >
-            <ImagePlus size={18} />
+            <ImageUploadIcon size={18} />
           </button>
 
           {/* Left: Model dropdown selector */}

@@ -4695,6 +4695,87 @@ await unifiedCacheService.cacheToCacheStorageOnly(stableUrl, blob);
 
 ---
 
+### 错误: 将图标组件作为 React 子元素直接渲染
+
+**场景**: 在 `ToolButton` 或类似组件的 `icon` 属性中传递图标时。
+
+❌ **错误示例**:
+```tsx
+// 报错：Functions are not valid as a React child
+<ToolButton icon={MediaLibraryIcon} />
+```
+
+✅ **正确示例**:
+```tsx
+// 正确：实例化组件为 React 元素
+<ToolButton icon={<MediaLibraryIcon />} />
+```
+
+**原因**: `icon` 属性通常被直接渲染（如 `{props.icon}`）。在 React 中，你可以渲染元素（Element），但不能直接渲染组件函数（Component Function）。将组件改为函数式组件（`React.FC`）后，必须使用 JSX 语法 `<Icon />` 来实例化。
+
+---
+
+### 图标组件规范: 使用 React.FC 支持 size 属性
+
+**场景**: 定义或更新 `icons.tsx` 中的图标时。
+
+❌ **错误示例**:
+```tsx
+export const MyIcon = createIcon(<svg>...</svg>);
+```
+
+✅ **正确示例**:
+```tsx
+export const MyIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
+  <svg width={size} height={size} {...props}>...</svg>
+);
+```
+
+**原因**: 统一使用 `React.FC` 定义图标组件，可以方便地通过 `size` 属性控制尺寸，同时通过解构 `{...props}` 支持透传 `className`、`style` 等 SVG 标准属性，增强了图标的灵活性和一致性。
+
+---
+
+### 错误: CSS 全局规则覆盖 SVG 特定颜色
+
+**场景**: 为图标设置特定品牌色（如 AI 工具的玫红/橙色）时。
+
+❌ **错误示例**:
+```scss
+// scss 文件中
+.tool-icon svg {
+  stroke: currentColor !important; // 覆盖了所有内联 stroke 属性
+}
+```
+
+✅ **正确示例**:
+```tsx
+// icons.tsx 中
+<path d="..." stroke="#E91E63" /> // 在路径级别设置颜色，避免被全局 CSS 轻易覆盖
+```
+
+**原因**: 全局的 `stroke: currentColor` 规则会强制图标跟随文字颜色，导致 AI 生成等需要强调色的图标变成灰色。应移除这类过于激进的全局样式，或在图标内部路径上显式指定颜色。
+
+---
+
+### 错误: 筛选逻辑中“全部 (ALL)”选项导致结果为空
+
+**场景**: 实现带有“全部 (ALL)”选项的素材库筛选逻辑时。
+
+❌ **错误示例**:
+```typescript
+const matchesSource = filters.activeSource === 'ALL' || asset.source === filters.activeSource;
+// 如果 filters.activeSource 初始值为 undefined，(undefined === 'ALL') 为 false，结果为空
+```
+
+✅ **正确示例**:
+```typescript
+const matchesSource = !filters.activeSource || filters.activeSource === 'ALL' || asset.source === filters.activeSource;
+```
+
+**原因**: 初始状态下筛选变量可能为 `undefined`。进行逻辑判断时，必须同时考虑 `undefined`、`null` 和 `'ALL'` 这几种代表“不筛选”的情况，否则会导致筛选结果意外为空。
+
+---
+
 ## 相关文档
 
 - `/docs/CODING_STANDARDS.md` - 完整编码规范

@@ -5,7 +5,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { MessagePlugin, Drawer } from 'tdesign-react';
-import { Images } from 'lucide-react';
+import { MediaLibraryIcon } from '../icons';
 import { useAssets } from '../../contexts/AssetContext';
 import { MediaLibraryGrid } from './MediaLibraryGrid';
 import { MediaLibraryInspector } from './MediaLibraryInspector';
@@ -275,7 +275,7 @@ export function MediaLibraryModal({
         className="winbox-media-library"
         headerContent={
           <div className="media-library-header-content">
-            <Images size={18} />
+            <MediaLibraryIcon size={18} />
           </div>
         }
       >

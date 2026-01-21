@@ -8,7 +8,11 @@ import classNames from 'classnames';
 import { throttle } from '@aitu/utils';
 import { useI18n } from '../../i18n';
 import { MessagePlugin } from 'tdesign-react';
-import { Image, Upload, Grid, ChevronDown, ChevronUp } from 'lucide-react';
+import { Image, ChevronDown, ChevronUp } from 'lucide-react';
+import { 
+  ImageUploadIcon,
+  MediaLibraryIcon,
+} from '../icons';
 import type { ImageFillConfig, ImageFillMode } from '../../types/fill.types';
 import { DEFAULT_IMAGE_FILL } from '../../types/fill.types';
 import { MediaLibraryModal } from '../media-library/MediaLibraryModal';
@@ -205,11 +209,11 @@ export const ImageFillPanel: React.FC<ImageFillPanelProps> = ({
 
         <div className="ifp-image-actions">
           <button className="ifp-action-btn ifp-action-btn--primary" onClick={handleOpenMediaLibrary}>
-            <Grid size={14} />
+            <MediaLibraryIcon size={14} />
             <span>{language === 'zh' ? '素材库' : 'Library'}</span>
           </button>
           <button className="ifp-action-btn" onClick={handleUploadClick}>
-            <Upload size={14} />
+            <ImageUploadIcon size={14} />
             <span>{language === 'zh' ? '上传' : 'Upload'}</span>
           </button>
         </div>

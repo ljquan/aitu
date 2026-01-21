@@ -16,7 +16,7 @@ import {
   FeltTipPenIcon,
   StraightArrowLineIcon,
   ShapeIcon,
-  ImageIcon,
+  ImageUploadIcon,
   MediaLibraryIcon,
   AIImageIcon,
   AIVideoIcon,
@@ -77,23 +77,23 @@ interface ButtonMeta {
 }
 
 const BUTTON_META_MAP: Record<string, ButtonMeta> = {
-  'hand': { icon: HandIcon, titleKey: 'toolbar.hand', pointer: PlaitPointerType.hand },
-  'selection': { icon: SelectionIcon, titleKey: 'toolbar.selection', pointer: PlaitPointerType.selection },
-  'mind': { icon: MindIcon, titleKey: 'toolbar.mind', pointer: MindPointerType.mind },
-  'text': { icon: TextIcon, titleKey: 'toolbar.text', pointer: BasicShapes.text },
-  'freehand': { icon: FeltTipPenIcon, titleKey: 'toolbar.pen', pointer: FreehandShape.feltTipPen, hasPopup: true, popupKey: 'freehand' },
-  'arrow': { icon: StraightArrowLineIcon, titleKey: 'toolbar.arrow', pointer: ArrowLineShape.straight, hasPopup: true, popupKey: 'arrow' },
-  'shape': { icon: ShapeIcon, titleKey: 'toolbar.shape', pointer: BasicShapes.rectangle, hasPopup: true, popupKey: 'shape' },
-  'image': { icon: ImageIcon, titleKey: 'toolbar.image' },
-  'media-library': { icon: MediaLibraryIcon, titleKey: 'toolbar.mediaLibrary' },
-  'ai-image': { icon: AIImageIcon, titleKey: 'toolbar.aiImage' },
-  'ai-video': { icon: AIVideoIcon, titleKey: 'toolbar.aiVideo' },
-  'theme': { icon: ThemeIcon, titleKey: 'toolbar.theme', hasPopup: true, popupKey: 'theme' },
-  'mermaid-to-drawnix': { icon: MermaidLogoIcon, titleKey: 'extraTools.mermaidToDrawnix' },
-  'markdown-to-drawnix': { icon: MarkdownLogoIcon, titleKey: 'extraTools.markdownToDrawnix' },
+  'hand': { icon: <HandIcon />, titleKey: 'toolbar.hand', pointer: PlaitPointerType.hand },
+  'selection': { icon: <SelectionIcon />, titleKey: 'toolbar.selection', pointer: PlaitPointerType.selection },
+  'mind': { icon: <MindIcon />, titleKey: 'toolbar.mind', pointer: MindPointerType.mind },
+  'text': { icon: <TextIcon />, titleKey: 'toolbar.text', pointer: BasicShapes.text },
+  'freehand': { icon: <FeltTipPenIcon />, titleKey: 'toolbar.pen', pointer: FreehandShape.feltTipPen, hasPopup: true, popupKey: 'freehand' },
+  'arrow': { icon: <StraightArrowLineIcon />, titleKey: 'toolbar.arrow', pointer: ArrowLineShape.straight, hasPopup: true, popupKey: 'arrow' },
+  'shape': { icon: <ShapeIcon />, titleKey: 'toolbar.shape', pointer: BasicShapes.rectangle, hasPopup: true, popupKey: 'shape' },
+  'image': { icon: <ImageUploadIcon size={24} />, titleKey: 'toolbar.image' },
+  'media-library': { icon: <MediaLibraryIcon size={24} />, titleKey: 'toolbar.mediaLibrary' },
+  'ai-image': { icon: <AIImageIcon />, titleKey: 'toolbar.aiImage' },
+  'ai-video': { icon: <AIVideoIcon />, titleKey: 'toolbar.aiVideo' },
+  'theme': { icon: <ThemeIcon />, titleKey: 'toolbar.theme', hasPopup: true, popupKey: 'theme' },
+  'mermaid-to-drawnix': { icon: <MermaidLogoIcon />, titleKey: 'extraTools.mermaidToDrawnix' },
+  'markdown-to-drawnix': { icon: <MarkdownLogoIcon />, titleKey: 'extraTools.markdownToDrawnix' },
   // 操作类按钮
-  'undo': { icon: UndoIcon, titleKey: 'general.undo' },
-  'redo': { icon: RedoIcon, titleKey: 'general.redo' },
+  'undo': { icon: <UndoIcon />, titleKey: 'general.undo' },
+  'redo': { icon: <RedoIcon />, titleKey: 'general.redo' },
   // zoom 使用特殊渲染，不在这里配置
 };
 
@@ -182,7 +182,7 @@ export const MoreToolsButton: React.FC<MoreToolsButtonProps> = ({
         >
           <ToolButton
             type="icon"
-            icon={MoreIcon}
+            icon={<MoreIcon />}
             title={isOpen ? undefined : t('toolbar.more')}
             tooltipPlacement={embedded ? 'right' : 'bottom'}
             aria-label={t('toolbar.more')}
@@ -510,7 +510,8 @@ const MoreToolsPanel: React.FC<MoreToolsPanelProps> = ({
   // 获取 freehand 按钮的图标
   const getFreehandIcon = useMemo(() => {
     const freehand = FREEHANDS.find(f => f.pointer === lastFreehandPointer);
-    return freehand?.icon || FeltTipPenIcon;
+    const Icon = freehand?.icon || FeltTipPenIcon;
+    return <Icon />;
   }, [lastFreehandPointer]);
 
   // zoom 菜单状态
@@ -527,7 +528,7 @@ const MoreToolsPanel: React.FC<MoreToolsPanelProps> = ({
         <Stack.Row gap={1}>
           <ToolButton
             type="button"
-            icon={ZoomOutIcon}
+            icon={<ZoomOutIcon />}
             visible={true}
             title={t('zoom.out')}
             tooltipPlacement="top"
@@ -586,7 +587,7 @@ const MoreToolsPanel: React.FC<MoreToolsPanelProps> = ({
           </Popover>
           <ToolButton
             type="button"
-            icon={ZoomInIcon}
+            icon={<ZoomInIcon />}
             visible={true}
             title={t('zoom.in')}
             tooltipPlacement="top"

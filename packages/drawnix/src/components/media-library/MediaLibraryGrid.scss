@@ -133,70 +133,113 @@ $brand-orange-dark: #E67E22;
     display: flex;
     flex-direction: row;
     align-items: center;
-    gap: 24px;
+    gap: 16px;
     padding-bottom: 2px;
+  }
+
+  &__header-spacer {
+    flex: 1;
+  }
+
+  &__filter-island {
+    display: flex;
+    align-items: center;
+    background: #f1f5f9;
+    padding: 2px;
+    border-radius: 8px;
+    gap: 2px;
   }
 
   &__filter-group {
     display: flex;
     align-items: center;
-    gap: 32px;
-    flex-wrap: nowrap; // 强制一行，因为现在是图标了
+    gap: 2px;
   }
 
-  &__filter-item {
+  &__filter-separator {
+    width: 1px;
+    height: 16px;
+    background: rgba(0, 0, 0, 0.06);
+    margin: 0 4px;
+  }
+
+  &__filter-option {
+    width: 32px;
+    height: 28px;
     display: flex;
     align-items: center;
-    gap: 8px;
+    justify-content: center;
+    color: #64748b;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: all 0.15s ease;
+    user-select: none;
+    position: relative;
 
-    &-label {
-      font-size: 11px;
-      font-weight: 700;
-      color: #94a3b8;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      user-select: none;
+    svg {
+      width: 14px;
+      height: 14px;
+      flex-shrink: 0;
+      opacity: 0.8;
+
+      &.icon-all {
+        color: $brand-orange;
+        opacity: 1;
+      }
     }
 
-    &-options {
-      display: flex;
-      align-items: center;
-      background: #f1f5f9;
-      padding: 2px;
-      border-radius: 6px;
-      gap: 1px;
-    }
-
-    &-option {
-      width: 28px;
-      height: 24px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: #64748b;
-      cursor: pointer;
-      border-radius: 4px;
-      transition: all 0.15s ease;
-      user-select: none;
-
+    &:hover:not(&--active) {
+      color: #1e293b;
+      background: rgba(0, 0, 0, 0.03);
+      
       svg {
-        width: 14px;
-        height: 14px;
+        opacity: 1;
+      }
+    }
+
+    &--active {
+      background: #ffffff;
+      color: #000;
+      font-weight: 600;
+      box-shadow: 
+        0 1px 3px 0 rgba(0, 0, 0, 0.1),
+        0 0 0 1px rgba(0, 0, 0, 0.02);
+      
+      svg {
+        opacity: 1;
       }
 
-      &:hover:not(&--active) {
-        color: #1e293b;
-        background: rgba(0, 0, 0, 0.03);
-      }
-
-      &--active {
-        background: #ffffff;
-        color: #000;
+      .media-library-grid__filter-count {
+        color: $brand-orange;
         font-weight: 700;
-        box-shadow: 
-          0 1px 2px 0 rgba(0, 0, 0, 0.08),
-          0 0 0 1px rgba(0, 0, 0, 0.04);
       }
+    }
+  }
+
+  &__filter-count {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    font-size: 9px;
+    font-weight: 600;
+    color: #94a3b8;
+    line-height: 1;
+    transform: scale(0.85);
+    transform-origin: bottom right;
+    letter-spacing: -0.02em;
+  }
+
+  &__sort-options {
+    display: flex;
+    align-items: center;
+    background: #f1f5f9;
+    padding: 2px;
+    border-radius: 8px;
+    gap: 2px;
+
+    .media-library-grid__filter-option {
+      padding: 0;
+      width: 28px;
     }
   }
 

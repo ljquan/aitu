@@ -5,13 +5,14 @@
 
 import { Button } from 'tdesign-react';
 import {
-  Grid,
-  Image as ImageIcon,
   Video as VideoIcon,
   HardDrive,
-  Cpu,
+  Globe,
+  User,
+  Sparkles,
   Layers,
 } from 'lucide-react';
+import { ImageUploadIcon, MediaLibraryIcon } from '../icons';
 import { AssetType } from '../../types/asset.types';
 import { MediaLibraryStorageBar } from './MediaLibraryStorageBar';
 import type { MediaLibrarySidebarProps } from '../../types/asset.types';
@@ -36,7 +37,7 @@ export function MediaLibrarySidebar({
             theme="default"
             data-track="sidebar_filter_type_all"
           >
-            <Grid size={16} />
+            <MediaLibraryIcon size={16} />
             <span>全部素材</span>
           </Button>
           <Button
@@ -46,7 +47,7 @@ export function MediaLibrarySidebar({
             theme="default"
             data-track="sidebar_filter_type_image"
           >
-            <ImageIcon size={16} />
+            <ImageUploadIcon size={16} />
             <span>图片</span>
           </Button>
           <Button
@@ -73,27 +74,27 @@ export function MediaLibrarySidebar({
             theme="default"
             data-track="sidebar_filter_source_all"
           >
-            <Layers size={16} />
+            <Globe size={16} />
             <span>全部来源</span>
           </Button>
           <Button
-            variant={filters.activeSource === 'LOCAL' ? 'base' : 'outline'}
-            onClick={() => onFilterChange({ activeSource: 'LOCAL' })}
+            variant={filters.activeSource === AssetSource.LOCAL ? 'base' : 'outline'}
+            onClick={() => onFilterChange({ activeSource: AssetSource.LOCAL })}
             block
             theme="default"
             data-track="sidebar_filter_source_local"
           >
-            <HardDrive size={16} />
+            <User size={16} />
             <span>本地上传</span>
           </Button>
           <Button
-            variant={filters.activeSource === 'AI' ? 'base' : 'outline'}
-            onClick={() => onFilterChange({ activeSource: 'AI' })}
+            variant={filters.activeSource === AssetSource.AI_GENERATED ? 'base' : 'outline'}
+            onClick={() => onFilterChange({ activeSource: AssetSource.AI_GENERATED })}
             block
             theme="default"
             data-track="sidebar_filter_source_ai"
           >
-            <Cpu size={16} />
+            <Sparkles size={16} />
             <span>AI生成</span>
           </Button>
         </div>

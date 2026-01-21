@@ -7,7 +7,11 @@
 
 import React, { useCallback, useState } from 'react';
 import { Upload, Button, MessagePlugin } from 'tdesign-react';
-import { AddIcon, DeleteIcon, FolderOpenIcon } from 'tdesign-icons-react';
+import { AddIcon, DeleteIcon } from 'tdesign-icons-react';
+import { 
+  ImageUploadIcon,
+  MediaLibraryIcon,
+} from '../../icons';
 import type { UploadedVideoImage, ImageUploadConfig } from '../../../types/video.types';
 import { MediaLibraryModal } from '../../media-library/MediaLibraryModal';
 import { SelectionMode, AssetType, AssetSource } from '../../../types/asset.types';
@@ -179,14 +183,14 @@ export const MultiImageUpload: React.FC<MultiImageUploadProps> = ({
               }}
             >
               <div className="multi-image-upload__placeholder">
-                <AddIcon className="multi-image-upload__add-icon" />
+                <ImageUploadIcon size={24} className="multi-image-upload__add-icon" />
                 <span className="multi-image-upload__add-text">上传{label}</span>
               </div>
             </Upload>
             <Button
               variant="text"
               size="small"
-              icon={<FolderOpenIcon />}
+              icon={<MediaLibraryIcon size={16} />}
               onClick={() => openMediaLibrary(slot)}
               disabled={disabled}
               data-track="ai_video_select_from_library"

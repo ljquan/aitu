@@ -28,17 +28,17 @@ export interface FreehandProps {
 
 export const FREEHANDS: FreehandProps[] = [
   {
-      icon: FeltTipPenIcon,
+      icon: <FeltTipPenIcon />,
       pointer: FreehandShape.feltTipPen,
       titleKey: 'toolbar.pen',
     },
     {
-      icon: VectorPenIcon,
+      icon: <VectorPenIcon />,
       pointer: PenShape.pen,
       titleKey: 'toolbar.vectorPen',
     },
     {
-      icon: EraseIcon,
+      icon: <EraseIcon />,
       pointer: FreehandShape.eraser,
       titleKey: 'toolbar.eraser',
     },

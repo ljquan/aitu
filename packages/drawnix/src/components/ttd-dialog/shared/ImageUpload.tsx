@@ -1,6 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Button } from 'tdesign-react';
-import { FolderOpen, HardDrive } from 'lucide-react';
+import { 
+  ImageUploadIcon,
+  MediaLibraryIcon,
+} from '../../icons';
 import { MediaLibraryModal } from '../../media-library/MediaLibraryModal';
 import type { Asset } from '../../../types/asset.types';
 import { SelectionMode, AssetType, AssetSource } from '../../../types/asset.types';
@@ -167,7 +170,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
               <div className="add-more-buttons">
                 <Button
                   variant="outline"
-                  icon={<HardDrive size={18} />}
+                  icon={<ImageUploadIcon size={18} />}
                   onClick={() => document.getElementById('image-upload')?.click()}
                   disabled={disabled}
                   data-track="image_upload_select_from_local"
@@ -175,16 +178,16 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
                 >
                   {language === 'zh' ? '本地' : 'Local'}
                 </Button>
-                <Button
-                  variant="outline"
-                  icon={<FolderOpen size={18} />}
-                  onClick={() => setShowMediaLibrary(true)}
-                  disabled={disabled}
-                  data-track="image_upload_select_from_library"
-                  className="add-more-btn"
-                >
-                  {language === 'zh' ? '素材库' : 'Library'}
-                </Button>
+                  <Button
+                    variant="outline"
+                    icon={<MediaLibraryIcon size={18} />}
+                    onClick={() => setShowMediaLibrary(true)}
+                    disabled={disabled}
+                    data-track="image_upload_select_from_library"
+                    className="add-more-btn"
+                  >
+                    {language === 'zh' ? '素材库' : 'Library'}
+                  </Button>
               </div>
             </div>
           ) : (
@@ -252,7 +255,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
                 <div className="add-more-buttons">
                   <Button
                     variant="outline"
-                    icon={<HardDrive size={18} />}
+                    icon={<ImageUploadIcon size={18} />}
                     onClick={() => document.getElementById('image-upload-more')?.click()}
                     disabled={disabled}
                     data-track="image_upload_select_from_local_more"
@@ -262,7 +265,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
                   </Button>
                   <Button
                     variant="outline"
-                    icon={<FolderOpen size={18} />}
+                    icon={<MediaLibraryIcon size={18} />}
                     onClick={() => setShowMediaLibrary(true)}
                     disabled={disabled}
                     data-track="image_upload_select_from_library_more"
@@ -287,7 +290,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
                 <div className="add-more-buttons">
                   <Button
                     variant="outline"
-                    icon={<HardDrive size={18} />}
+                    icon={<ImageUploadIcon size={18} />}
                     onClick={() => document.getElementById('image-replace')?.click()}
                     disabled={disabled}
                     data-track="image_upload_replace_from_local"
@@ -297,7 +300,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
                   </Button>
                   <Button
                     variant="outline"
-                    icon={<FolderOpen size={18} />}
+                    icon={<MediaLibraryIcon size={18} />}
                     onClick={() => setShowMediaLibrary(true)}
                     disabled={disabled}
                     data-track="image_upload_replace_from_library"

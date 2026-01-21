@@ -4,67 +4,197 @@ export const createIcon = (svg: React.ReactNode) => {
   return svg;
 };
 
-export const HandIcon = createIcon(
-  <svg viewBox="0 0 16 16" version="1.1" xmlns="http://www.w3.org/2000/svg">
-    <g id="Hand" stroke="none" fill="currentColor">
-      <path d="M8.44583468,0.500225887 C9.07406934,0.510185679 9.54739531,0.839591366 9.86192311,1.34305279 C9.89696656,1.39914649 9.92878401,1.45492964 9.9576026,1.50991157 L9.9576026,1.50991157 L10.0210033,1.64201027 L10.061978,1.62350755 C10.1972891,1.56834247 10.3444107,1.53218464 10.5027907,1.51755353 L10.5027907,1.51755353 L10.6649031,1.51019133 C11.4883708,1.51019133 12.0208782,1.99343346 12.3023042,2.66393278 C12.3903714,2.87392911 12.4344191,3.10047818 12.4339446,3.3257952 L12.4339446,3.3257952 L12.4360033,3.80501027 L12.5160535,3.78341501 C12.6124478,3.76124046 12.7138812,3.74739854 12.820201,3.74250274 L12.820201,3.74250274 L12.9833264,3.74194533 C13.6121166,3.7657478 14.0645887,4.0801724 14.3087062,4.56112689 C14.4521117,4.8436609 14.4987984,5.11349437 14.4999262,5.33449618 L14.4999262,5.33449618 L14.3922653,12.049414 C14.3784752,12.909177 14.0717787,13.7360948 13.5212406,14.3825228 C13.4055676,14.5183496 13.2843697,14.643961 13.1582361,14.7596335 C12.4634771,15.3967716 11.755103,15.6538706 11.1897396,15.7000055 L11.1897396,15.7000055 L7.4723083,15.6798158 C7.14276373,15.634268 6.81580098,15.5154267 6.49455235,15.3472501 C6.25643701,15.2225944 6.06881706,15.0975452 5.88705731,14.9494308 L5.88705731,14.9494308 L2.55198782,11.500873 C2.39559475,11.3769079 2.17626793,11.1748532 1.9548636,10.9139403 C1.57867502,10.4706225 1.33501976,10.0139923 1.30330257,9.52833025 C1.28093191,9.18578476 1.37200912,8.85641102 1.5826788,8.56872564 C1.82538833,8.23725279 2.12881965,8.02107162 2.47470569,7.92957033 C2.95807982,7.80169771 3.42705723,7.92468989 3.86509644,8.18731167 C4.04431391,8.29475961 4.1816109,8.40304483 4.26225571,8.47866867 L4.26225571,8.47866867 L4.61400328,8.79701027 L4.57247249,3.59275349 L4.57628524,3.46204923 C4.5897691,3.23444442 4.64087578,2.95701848 4.75937106,2.66961597 C5.01017272,2.06131302 5.49670227,1.64692543 6.21363856,1.60818786 C6.44223508,1.59583681 6.65042099,1.62176802 6.83696985,1.68057551 L6.83696985,1.68057551 L6.86400328,1.69001027 C6.88501862,1.63593052 6.90764242,1.58175442 6.9331867,1.52672633 L6.9331867,1.52672633 L7.01883595,1.35955614 C7.31549194,0.832047939 7.79476072,0.48993549 8.44583468,0.500225887 Z M8.42684173,1.70001476 C8.26825412,1.69756905 8.16339456,1.77242008 8.06478367,1.94776814 C8.03967773,1.99241107 8.01831703,2.03811495 8.00083464,2.07855067 L8.00083464,2.07855067 L7.94879157,2.2035905 L7.94354455,2.20731401 L7.943,3.161 L7.97170661,3.16123746 L7.97170661,7.60991883 L6.77170661,7.60991883 L6.771,3.338 L6.74362358,3.33880359 C6.74284189,3.29064626 6.73014163,3.20282206 6.7002616,3.11094408 L6.66446012,3.01903385 C6.58982025,2.85766739 6.49843292,2.79455071 6.27838133,2.80644008 C6.07001018,2.81769881 5.95642108,2.91444507 5.86877664,3.12702089 C5.79792279,3.29887224 5.77228127,3.48655908 5.77246879,3.58977183 L5.77246879,3.58977183 L5.83613619,11.5252021 L3.41863956,9.33477657 L3.31637296,9.25979571 L3.24805011,9.21651224 C3.06096922,9.10434987 2.89279975,9.06024641 2.78159879,9.0896637 C2.71007735,9.10858411 2.63607367,9.1613084 2.55086305,9.27768211 C2.51020424,9.33320478 2.49638061,9.38319687 2.50075171,9.4501283 C2.51206889,9.62341997 2.64503022,9.87260054 2.86983366,10.1375191 C3.03268834,10.3294345 3.19762053,10.4813781 3.35554956,10.6131022 L3.35554956,10.6131022 L6.68454317,14.0569073 C6.71106575,14.0773808 6.74806086,14.1037158 6.79369091,14.1335929 L6.79369091,14.1335929 L6.95464838,14.2315311 L7.05111031,14.2841211 C7.25978123,14.3933622 7.46253523,14.4670573 7.55685495,14.4854708 L7.55685495,14.4854708 L11.1407985,14.5022108 C11.1503576,14.5013899 11.1627905,14.4997539 11.1779002,14.4971772 L11.1779002,14.4971772 L11.2991076,14.4694224 C11.3491682,14.4557375 11.4083624,14.437284 11.4751158,14.4130563 C11.769383,14.3062543 12.066676,14.1324596 12.3471758,13.8752234 C12.4371203,13.7927386 12.5240597,13.7026333 12.607654,13.6044743 C12.9760464,13.1719172 13.183059,12.6137678 13.1924195,12.030173 L13.1924195,12.030173 L13.3000132,5.32832551 C13.2997939,5.29016685 13.2826117,5.19085946 13.2386527,5.10425262 C13.1843838,4.99733326 13.1129774,4.94771265 12.9379578,4.94108739 C12.6814739,4.93138871 12.534132,5.11189595 12.4756792,5.39480062 L12.4768718,7.52734922 L11.2768718,7.52734922 L11.276,5.688 L11.2462883,5.6883208 L11.2339541,3.32771285 C11.2341,3.2560396 11.2209054,3.18817621 11.1957482,3.12818892 C11.0820579,2.85732094 10.9199288,2.71019133 10.6649031,2.71019133 C10.456829,2.71019133 10.3197487,2.87378067 10.2524297,3.11264939 L10.2530225,7.512783 L9.05302254,7.512783 L9.053,3.288 L9.01554331,3.28724203 L8.98800328,2.29901027 L8.9629175,2.22263368 C8.94515567,2.17417174 8.92167756,2.11937748 8.8924232,2.06330056 L8.8924232,2.06330056 L8.84420197,1.9788544 C8.72758855,1.79219249 8.59915015,1.70280728 8.42684173,1.70001476 Z"></path>
-    </g>
+export const HandIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    width={size}
+    height={size}
+    {...props}
+  >
+    <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v5" />
+    <path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v10" />
+    <path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8" />
+    <path d="M18 8a2 2 0 1 1 4 0v6a8 2 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" />
   </svg>
 );
 
-export const SelectionIcon = createIcon(
-  <svg viewBox="0 0 16 16" version="1.1" xmlns="http://www.w3.org/2000/svg">
-    <g id="selection" stroke="none" fill="currentColor">
-      <path d="M1.38232686,2.38218266 L5.4143451,14.2246629 L5.45540179,14.3136477 C5.6738376,14.7029541 6.25143564,14.7273637 6.49230627,14.3232393 L8.11486037,11.5990854 L10.8833927,14.4351257 C11.1162256,14.673686 11.4988798,14.6767204 11.7354668,14.4418826 L14.1933351,12.0021862 L14.263123,11.9192708 C14.4260847,11.6858139 14.4039042,11.3621027 14.1959502,11.1531274 L11.3598604,8.30408543 L14.0003903,6.44278167 C14.4042341,6.15799031 14.3099422,5.5344405 13.8399491,5.38178897 L2.13023795,1.60291226 C1.65322163,1.44797961 1.20794286,1.91192855 1.38232686,2.38218266 Z M2.93689198,3.12556703 L12.3288604,6.15308543 L10.0883903,7.73315528 L10.0121747,7.79676991 C9.78025886,8.02517222 9.77056424,8.40723513 10.0088753,8.64671667 L12.9218604,11.5730854 L11.3198604,13.1630854 L8.42938714,10.2026992 L8.35682877,10.1391916 C8.07802132,9.93187508 7.66955488,10.0042813 7.48460396,10.3145856 L6.10286037,12.6310854 L2.93689198,3.12556703 Z"></path>
-    </g>
+export const SelectionIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    width={size}
+    height={size}
+    {...props}
+  >
+    <path d="m3 3 7.07 16.97 2.51-7.39 7.39-2.51L3 3z" />
+    <path d="m13 13 6 6" />
   </svg>
 );
 
-export const MindIcon = createIcon(
-  <svg viewBox="0 0 16 16" version="1.1" xmlns="http://www.w3.org/2000/svg">
-    <g id="Mind" stroke="none" fill="currentColor">
-      <path d="M14.5,1.5 C15.3284271,1.5 16,2.17157288 16,3 L16,4.5 C16,5.32842712 15.3284271,6 14.5,6 L10.5,6 C9.70541385,6 9.05512881,5.38217354 9.00332687,4.60070262 L7.75,4.6 C6.70187486,4.6 5.75693372,5.0417832 5.09122946,5.7492967 L5.5,5.75 C6.32842712,5.75 7,6.42157288 7,7.25 L7,8.75 C7,9.57842712 6.32842712,10.25 5.5,10.25 L4.69703093,10.2512226 C5.3493111,11.2442937 6.47308134,11.9 7.75,11.9 L9.004,11.9 L9.00686658,11.85554 C9.07955132,11.0948881 9.72030388,10.5 10.5,10.5 L14.5,10.5 C15.3284271,10.5 16,11.1715729 16,12 L16,13.5 C16,14.3284271 15.3284271,15 14.5,15 L10.5,15 C9.67157288,15 9,14.3284271 9,13.5 L9,13.1 L7.75,13.1 C5.78479628,13.1 4.09258608,11.9311758 3.33061658,10.2507745 L1.5,10.25 C0.671572875,10.25 0,9.57842712 0,8.75 L0,7.25 C0,6.42157288 0.671572875,5.75 1.5,5.75 L3.5932906,5.74973863 C4.44206161,4.34167555 5.98606075,3.4 7.75,3.4 L9,3.4 L9,3 C9,2.17157288 9.67157288,1.5 10.5,1.5 L14.5,1.5 Z M14.5,11.7 L10.5,11.7 C10.3343146,11.7 10.2,11.8343146 10.2,12 L10.2,13.5 C10.2,13.6656854 10.3343146,13.8 10.5,13.8 L14.5,13.8 C14.6656854,13.8 14.8,13.6656854 14.8,13.5 L14.8,12 C14.8,11.8343146 14.6656854,11.7 14.5,11.7 Z M5.5,6.95 L1.5,6.95 C1.33431458,6.95 1.2,7.08431458 1.2,7.25 L1.2,8.75 C1.2,8.91568542 1.33431458,9.05 1.5,9.05 L5.5,9.05 C5.66568542,9.05 5.8,8.91568542 5.8,8.75 L5.8,7.25 C5.8,7.08431458 5.66568542,6.95 5.5,6.95 Z M14.5,2.7 L10.5,2.7 C10.3343146,2.7 10.2,2.83431458 10.2,3 L10.2,4.5 C10.2,4.66568542 10.3343146,4.8 10.5,4.8 L14.5,4.8 C14.6656854,4.8 14.8,4.66568542 14.8,4.5 L14.8,3 C14.8,2.83431458 14.6656854,2.7 14.5,2.7 Z"></path>
-    </g>
+export const MindIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    width={size}
+    height={size}
+    {...props}
+  >
+    <circle cx="6" cy="12" r="3" />
+    <circle cx="18" cy="6" r="3" />
+    <circle cx="18" cy="18" r="3" />
+    <path d="M9 12h3c1 0 1-1 1-1V7c0-1 1-1 2-1h1" />
+    <path d="M9 12h3c1 0 1 1 1 1v5c0 1 1 1 2 1h1" />
   </svg>
 );
 
-export const ShapeIcon = createIcon(
-  <svg viewBox="0 0 16 16" version="1.1" xmlns="http://www.w3.org/2000/svg">
-    <g id="geometry" stroke="none" fill="currentColor">
-      <path d="M9.3,6.7 L1.7,6.7 L1.7,14.3 L9.3,14.3 L9.3,6.7 Z M10.5,9.8 C12.8748244,9.8 14.8,7.87482442 14.8,5.5 C14.8,3.12517558 12.8748244,1.2 10.5,1.2 C8.12517558,1.2 6.2,3.12517558 6.2,5.5 L9.5,5.5 C10.0522847,5.5 10.5,5.94771525 10.5,6.5 L10.5,9.8 Z M10.5,14.5 C10.5,15.0522847 10.0522847,15.5 9.5,15.5 L1.5,15.5 C0.94771525,15.5 0.5,15.0522847 0.5,14.5 L0.5,6.5 C0.5,5.94771525 0.94771525,5.5 1.5,5.5 L5,5.5 C5,2.46243388 7.46243388,0 10.5,0 C13.5375661,0 16,2.46243388 16,5.5 C16,8.53756612 13.5375661,11 10.5,11 L10.5,14.5 Z"></path>
-    </g>
+export const FolderIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    width={size}
+    height={size}
+    {...props}
+  >
+    <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
   </svg>
 );
 
-export const TextIcon = createIcon(
-  <svg viewBox="0 0 16 16" version="1.1" xmlns="http://www.w3.org/2000/svg">
-    <g id="font" stroke="none" fill="currentColor">
-      <path d="M4.75,14.5069828 C4.41862915,14.5069828 4.15,14.2383536 4.15,13.9069828 C4.15,13.5756119 4.41862915,13.3069828 4.75,13.3069828 L7.3993606,13.306 L7.3993606,2.7 L2.7113606,2.7 L2.7113606,4.10415313 C2.7113606,4.40238689 2.49377099,4.64979988 2.20868371,4.69630014 L2.1113606,4.70415313 C1.77998975,4.70415313 1.5113606,4.43552397 1.5113606,4.10415313 L1.5113606,2.1 C1.5113606,1.76862915 1.77998975,1.5 2.1113606,1.5 L13.8810378,1.5 C14.2124087,1.5 14.4810378,1.76862915 14.4810378,2.1 L14.4810378,4.10415313 C14.4810378,4.43552397 14.2124087,4.70415313 13.8810378,4.70415313 C13.549667,4.70415313 13.2810378,4.43552397 13.2810378,4.10415313 L13.2810378,2.7 L8.5993606,2.7 L8.5993606,13.306 L11.25,13.3069828 C11.5813708,13.3069828 11.85,13.5756119 11.85,13.9069828 C11.85,14.2383536 11.5813708,14.5069828 11.25,14.5069828 L4.75,14.5069828 Z"></path>
-    </g>
+export const ToolboxIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    width={size}
+    height={size}
+    {...props}
+  >
+    <path d="M14.5 7V5a1 1 0 0 0-1-1h-3a1 1 0 0 0-1 1v2" />
+    <rect width="20" height="13" x="2" y="7" rx="2" />
+    <path d="M2 13h20" />
+    <path d="M6 13v0" />
+    <path d="M18 13v0" />
   </svg>
 );
 
-export const EraseIcon = createIcon(
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path stroke="none" d="M0 0h24v24H0z" />
-    <path d="M19 20h-10.5l-4.21 -4.3a1 1 0 0 1 0 -1.41l10 -10a1 1 0 0 1 1.41 0l5 5a1 1 0 0 1 0 1.41l-9.2 9.3" /><path d="M18 13.3l-6.3 -6.3" />
+export const TaskIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    width={size}
+    height={size}
+    {...props}
+  >
+    <path d="M11 6h9" />
+    <path d="M11 12h9" />
+    <path d="M11 18h9" />
+    <path d="m3 7 2 2 4-4" />
+    <path d="m3 19 2 2 4-4" />
   </svg>
 );
 
-export const StraightArrowLineIcon = createIcon(
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" version="1.1">
-    <g id="straight-line" stroke="none" fill="currentColor">
-      <path
-        d="M8.55595221,-1.5261864 C8.88741773,-1.5261864 9.15621426,-1.25765205 9.15653772,-0.926186684 L9.16739175,10.3828136 L10.9946787,10.3836977 C11.2708211,10.3836977 11.4946787,10.6075553 11.4946787,10.8836977 C11.4946787,10.9607525 11.4768694,11.0367648 11.4426413,11.1058002 L8.8378495,16.3594519 C8.7642512,16.5078936 8.58425218,16.5685662 8.43581043,16.4949679 C8.37895485,16.4667786 8.33250284,16.4212859 8.30313336,16.3650308 L5.56226325,11.1150985 C5.43446412,10.8703088 5.52930372,10.5682659 5.77409341,10.4404667 C5.84552557,10.4031736 5.92491301,10.3836977 6.0054942,10.3836977 L7.96739175,10.3828136 L7.95653772,-0.926186684 C7.95621467,-1.25723416 8.22431979,-1.52586306 8.55536727,-1.52618611 Z"
-        id=""
-        transform="translate(8.500035, 7.500035) rotate(-135.000000) translate(-8.500035, -7.500035) "
-      />
-    </g>
+export const ShapeIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    width={size}
+    height={size}
+    {...props}
+  >
+    <rect x="3" y="3" width="10" height="10" rx="2" />
+    <circle cx="15" cy="15" r="6" />
   </svg>
 );
 
-export const RectangleIcon = createIcon(
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+export const TextIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    width={size}
+    height={size}
+    {...props}
+  >
+    <polyline points="4 7 4 4 20 4 20 7" />
+    <line x1="12" y1="4" x2="12" y2="20" />
+    <line x1="9" y1="20" x2="15" y2="20" />
+  </svg>
+);
+
+export const EraseIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    width={size}
+    height={size}
+    {...props}
+  >
+    <path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.9-9.9c1-1 2.5-1 3.4 0l4.4 4.4c1 1 1 2.5 0 3.4L10.5 21z" />
+    <path d="m11 7 4 4" />
+    <path d="m5 19 3 2" />
+    <path d="M13 19h7" />
+  </svg>
+);
+
+export const StraightArrowLineIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    width={size}
+    height={size}
+    {...props}
+  >
+    <path d="M5 12h14" />
+    <path d="m12 5 7 7-7 7" />
+  </svg>
+);
+
+export const RectangleIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
+  <svg 
+    xmlns="http://www.w3.org/2000/svg" 
+    viewBox="0 0 24 24"
+    width={size}
+    height={size}
+    {...props}
+  >
     <path
       d="M3 3h18v18H3z"
       stroke="currentColor"
@@ -74,32 +204,45 @@ export const RectangleIcon = createIcon(
   </svg>
 );
 
-export const TerminalIcon = createIcon(
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
+export const TerminalIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 16, ...props }) => (
+  <svg 
+    xmlns="http://www.w3.org/2000/svg" 
+    viewBox="0 0 16 16"
+    width={size}
+    height={size}
+    {...props}
+  >
     <g id="terminal" stroke="none" fill="currentColor">
       <path d="M11,3 C13.7614237,3 16,5.23857625 16,8 C16,10.7614237 13.7614237,13 11,13 L5,13 C2.23857625,13 0,10.7614237 0,8 C0,5.23857625 2.23857625,3 5,3 L11,3 Z M11,4.2 L5,4.2 C2.90131795,4.2 1.2,5.90131795 1.2,8 C1.2,10.0330982 2.79664702,11.6932796 4.8044525,11.7950555 L5,11.8 L11,11.8 C13.098682,11.8 14.8,10.098682 14.8,8 C14.8,5.96690176 13.203353,4.30672042 11.1955475,4.20494454 L11,4.2 Z" />
     </g>
   </svg>
 );
 
-export const EllipseIcon = createIcon(
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" version="1.1">
+export const EllipseIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 16, ...props }) => (
+  <svg 
+    xmlns="http://www.w3.org/2000/svg" 
+    viewBox="0 0 16 16" 
+    version="1.1"
+    width={size}
+    height={size}
+    {...props}
+  >
     <g id="ellipse" stroke="none" fill="currentColor">
       <path d="M8,1 C11.8659932,1 15,4.13400675 15,8 C15,11.8659932 11.8659932,15 8,15 C4.13400675,15 1,11.8659932 1,8 C1,4.13400675 4.13400675,1 8,1 Z M8,2.2 C4.79674845,2.2 2.2,4.79674845 2.2,8 C2.2,11.2032515 4.79674845,13.8 8,13.8 C11.2032515,13.8 13.8,11.2032515 13.8,8 C13.8,4.79674845 11.2032515,2.2 8,2.2 Z" />
     </g>
   </svg>
 );
 
-export const TriangleIcon = createIcon(
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" version="1.1">
+export const TriangleIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 16, ...props }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" version="1.1" width={size} height={size} {...props}>
     <g id="triangle" stroke="none" fill="currentColor">
       <path d="M8.23125547,1.21366135 C8.3114266,1.25857939 8.37766784,1.32472334 8.42270367,1.40482837 L15.6471754,14.2549655 C15.7825042,14.4956743 15.6970768,14.800513 15.456368,14.9358418 C15.3815505,14.977905 15.2971646,15 15.2113335,15 L0.787227066,15 C0.511084691,15 0.287227066,14.7761424 0.287227066,14.5 C0.287227066,14.414418 0.309194147,14.3302684 0.351025556,14.2556064 L7.55066033,1.40546924 C7.6856352,1.1645618 7.99034802,1.07868648 8.23125547,1.21366135 Z M7.98695902,3.07926294 L1.98095902,13.7992629 L14.014959,13.7992629 L7.98695902,3.07926294 Z" />
     </g>
   </svg>
 );
 
-export const DiamondIcon = createIcon(
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" version="1.1">
+export const DiamondIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 16, ...props }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" version="1.1" width={size} height={size} {...props}>
     <g stroke="none" fill="currentColor">
       <path
         d="M13.7636471,2.6449804 C13.7716713,2.69552516 13.7718878,2.74700226 13.7642892,2.79761274 L12.3875778,11.9671885 C12.3550099,12.1841069 12.184864,12.3544698 11.9679874,12.3873141 L2.78433018,13.7781116 C2.511301,13.8194599 2.25644773,13.6316454 2.21509947,13.3586162 C2.20737253,13.307594 2.20759072,13.2556831 2.21574631,13.2047277 L3.67471119,4.08923146 C3.70888725,3.87570215 3.87646006,3.70834166 4.09003253,3.67443635 L13.1914362,2.22955927 C13.4641633,2.18626298 13.7203508,2.37225335 13.7636471,2.6449804 Z M12.4355704,3.5645263 L4.77957044,4.7795263 L3.55157044,12.4485263 L11.2775704,11.2775263 L12.4355704,3.5645263 Z"
@@ -109,24 +252,24 @@ export const DiamondIcon = createIcon(
   </svg>
 );
 
-export const ParallelogramIcon = createIcon(
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" version="1.1">
+export const ParallelogramIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 16, ...props }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" version="1.1" width={size} height={size} {...props}>
     <g stroke="none" fill="currentColor">
       <path d="M15.3062871,3.5 C15.5824294,3.5 15.8062871,3.72385763 15.8062871,4 C15.8062871,4.05374105 15.7976231,4.10713065 15.7806287,4.15811388 L13.113962,12.1581139 C13.045905,12.362285 12.8548356,12.5 12.6396204,12.5 L0.693712943,12.5 C0.417570568,12.5 0.193712943,12.2761424 0.193712943,12 C0.193712943,11.946259 0.202376883,11.8928694 0.219371294,11.8418861 L2.88603796,3.84188612 C2.95409498,3.63771505 3.14516441,3.5 3.36037961,3.5 L15.3062871,3.5 Z M14.335,4.7 L3.864,4.7 L1.664,11.3 L12.134,11.3 L14.335,4.7 Z" />
     </g>
   </svg>
 );
 
-export const RoundRectangleIcon = createIcon(
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" version="1.1">
+export const RoundRectangleIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 16, ...props }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" version="1.1" width={size} height={size} {...props}>
     <g stroke="none" fill="currentColor">
       <path d="M11,3 C13.7614237,3 16,5.23857625 16,8 C16,10.7614237 13.7614237,13 11,13 L5,13 C2.23857625,13 0,10.7614237 0,8 C0,5.23857625 2.23857625,3 5,3 L11,3 Z M11,4.2 L5,4.2 C2.90131795,4.2 1.2,5.90131795 1.2,8 C1.2,10.0330982 2.79664702,11.6932796 4.8044525,11.7950555 L5,11.8 L11,11.8 C13.098682,11.8 14.8,10.098682 14.8,8 C14.8,5.96690176 13.203353,4.30672042 11.1955475,4.20494454 L11,4.2 Z" />
     </g>
   </svg>
 );
 
-export const StraightArrowIcon = createIcon(
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" version="1.1">
+export const StraightArrowIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 16, ...props }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" version="1.1" width={size} height={size} {...props}>
     <g stroke="none" fill="currentColor">
       <path
         d="M8.55595221,-1.5261864 C8.88741773,-1.5261864 9.15621426,-1.25765205 9.15653772,-0.926186684 L9.16739175,10.3828136 L10.9946787,10.3836977 C11.2708211,10.3836977 11.4946787,10.6075553 11.4946787,10.8836977 C11.4946787,10.9607525 11.4768694,11.0367648 11.4426413,11.1058002 L8.8378495,16.3594519 C8.7642512,16.5078936 8.58425218,16.5685662 8.43581043,16.4949679 C8.37895485,16.4667786 8.33250284,16.4212859 8.30313336,16.3650308 L5.56226325,11.1150985 C5.43446412,10.8703088 5.52930372,10.5682659 5.77409341,10.4404667 C5.84552557,10.4031736 5.92491301,10.3836977 6.0054942,10.3836977 L7.96739175,10.3828136 L7.95653772,-0.926186684 C7.95621467,-1.25723416 8.22431979,-1.52586306 8.55536727,-1.52618611 Z"
@@ -136,23 +279,23 @@ export const StraightArrowIcon = createIcon(
   </svg>
 );
 
-export const ElbowArrowIcon = createIcon(
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" version="1.1">
+export const ElbowArrowIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 16, ...props }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" version="1.1" width={size} height={size} {...props}>
     <g stroke="none" fill="currentColor">
       <path d="M10.0153197,2.75391207 C10.0923746,2.75391207 10.1683869,2.77172133 10.2374222,2.80594949 L15.4910739,5.41074126 C15.6395156,5.48433956 15.7001882,5.66433859 15.6265899,5.81278033 C15.5984006,5.86963592 15.5529079,5.91608792 15.4966529,5.9454574 L10.2467205,8.68632752 C10.0019308,8.81412664 9.69988791,8.71928704 9.57208878,8.47449735 C9.53479568,8.40306519 9.51531974,8.32367776 9.51531974,8.24309656 L9.51458753,6.62591207 L6.16858753,6.62651279 L6.16914066,12.0061269 C6.16914066,12.3043606 5.95155104,12.5517736 5.66646377,12.5982739 L5.56914066,12.6061269 L0.534587532,12.6061269 C0.203216682,12.6061269 -0.0654124678,12.3374977 -0.0654124678,12.0061269 C-0.0654124678,11.674756 0.203216682,11.4061269 0.534587532,11.4061269 L4.96858753,11.4055128 L4.96914066,6.02651279 C4.96914066,5.72827903 5.18673027,5.48086604 5.47181754,5.43436578 L5.56914066,5.42651279 L9.51458753,5.42591207 L9.51531974,3.25391207 C9.51531974,2.9777697 9.73917736,2.75391207 10.0153197,2.75391207 Z" />
     </g>
   </svg>
 );
 
-export const CurveArrowIcon = createIcon(
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" version="1.1">
+export const CurveArrowIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 16, ...props }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" version="1.1" width={size} height={size} {...props}>
     <g stroke="none" fill="currentColor">
       <path d="M10.0153197,2.75391207 C10.0923746,2.75391207 10.1683869,2.77172133 10.2374222,2.80594949 L15.4910739,5.41074126 C15.6395156,5.48433956 15.7001882,5.66433859 15.6265899,5.81278033 C15.5984006,5.86963592 15.5529079,5.91608792 15.4966529,5.9454574 L10.2467205,8.68632752 C10.0019308,8.81412664 9.69988791,8.71928704 9.57208878,8.47449735 C9.53479568,8.40306519 9.51531974,8.32367776 9.51531974,8.24309656 L9.51423005,6.39035523 C5.97984781,6.85936966 3.21691607,9.08498364 1.18879108,13.1285821 C1.04022695,13.4247836 0.679673152,13.5444674 0.383471635,13.3959033 C0.0872701176,13.2473391 -0.0324136308,12.8867853 0.116150501,12.5905838 C2.34388813,8.14900524 5.48945543,5.65776043 9.51468497,5.18078677 L9.51531974,3.25391207 C9.51531974,2.9777697 9.73917736,2.75391207 10.0153197,2.75391207 Z" />
     </g>
   </svg>
 );
 
-export const MenuIcon = createIcon(
+export const MenuIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
     strokeLinecap="round"
@@ -161,6 +304,9 @@ export const MenuIcon = createIcon(
     fill="none"
     stroke="currentColor"
     strokeWidth="2"
+    width={size}
+    height={size}
+    {...props}
   >
     <g strokeWidth="1.5">
       <path stroke="none" d="M0 0h24v24H0z"></path>
@@ -171,8 +317,8 @@ export const MenuIcon = createIcon(
   </svg>
 );
 
-export const GithubIcon = createIcon(
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+export const GithubIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 20, ...props }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width={size} height={size} {...props}>
     <path
       stroke="currentColor"
       strokeLinecap="round"
@@ -184,31 +330,49 @@ export const GithubIcon = createIcon(
   </svg>
 );
 
-// AI 图片图标 - 图片图标 + 右上角 AI 文字（偏红主题色）
-export const AIImageIcon = createIcon(
-  <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="none" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-    {/* 图片图标主体 - 浅红背景 + 红色描边 */}
-    <rect width="14" height="14" x="1" y="1" rx="2" ry="2" fill="#FFEBEE" stroke="#E53935" />
-    <circle cx="5" cy="5" r="1.5" stroke="#E53935" />
-    <path d="m15 11-3-3a2 2 0 0 0-2.8 0L3 15" stroke="#E53935" />
-    {/* 右上角 AI 文字 */}
-    <text x="11" y="6" textAnchor="middle" fontSize="5" fontWeight="bold" fontFamily="system-ui, sans-serif" fill="#E53935" stroke="none">AI</text>
+// AI 图片图标 - 玫红色主题
+export const AIImageIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    width={size}
+    height={size}
+    {...props}
+  >
+    <rect width="18" height="18" x="3" y="3" rx="3" ry="3" stroke="#E91E63" />
+    <circle cx="8.5" cy="8.5" r="1.5" stroke="#E91E63" />
+     <path d="m21 15-5-5a2 2 0 0 0-3 0l-9 10" stroke="#E91E63" />
   </svg>
 );
 
-// AI 视频图标 - 视频图标 + 中间 AI 文字（偏橙主题色）
-export const AIVideoIcon = createIcon(
-  <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="none" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-    {/* 视频图标主体 - 浅橙背景 + 橙色描边 */}
-    <path d="m13 10 2.5 1.8a.4.4 0 0 0 .6-.35V4.55a.4.4 0 0 0-.6-.35L13 6" stroke="#FF9800" strokeWidth="2" fill="#FFF3E0" />
-    <rect x="0.5" y="1.5" width="12.5" height="13" rx="2" fill="#FFF3E0" stroke="#FF9800" />
-    {/* 中间 AI 文字 */}
-    <text x="6.75" y="10.5" textAnchor="middle" fontSize="6" fontWeight="bold" fontFamily="system-ui, sans-serif" fill="#FF9800" stroke="none">AI</text>
+// AI 视频图标 - 橙色主题
+export const AIVideoIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    width={size}
+    height={size}
+    {...props}
+  >
+    <path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.934a.5.5 0 0 0-.777-.416L16 11" stroke="#FF9800" />
+    <rect x="2" y="6" width="14" height="12" rx="3" stroke="#FF9800" />
   </svg>
 );
 
-export const ExportImageIcon = createIcon(
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+export const ExportImageIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
+  <svg 
+    xmlns="http://www.w3.org/2000/svg" 
+    viewBox="0 0 24 24"
+    width={size}
+    height={size}
+    {...props}
+  >
     <g
       strokeWidth="1.25"
       stroke="currentColor"
@@ -227,8 +391,14 @@ export const ExportImageIcon = createIcon(
   </svg>
 );
 
-export const ZoomOutIcon = createIcon(
-  <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+export const ZoomOutIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 16, ...props }) => (
+  <svg
+    viewBox="0 0 16 16"
+    xmlns="http://www.w3.org/2000/svg"
+    width={size}
+    height={size}
+    {...props}
+  >
     <g id="zoom-out" stroke="none" fill="currentColor" strokeWidth="1">
       <path
         fillRule="nonzero"
@@ -238,8 +408,15 @@ export const ZoomOutIcon = createIcon(
   </svg>
 );
 
-export const ZoomInIcon = createIcon(
-  <svg viewBox="0 0 16 16" version="1.1" xmlns="http://www.w3.org/2000/svg">
+export const ZoomInIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 16, ...props }) => (
+  <svg
+    viewBox="0 0 16 16"
+    version="1.1"
+    xmlns="http://www.w3.org/2000/svg"
+    width={size}
+    height={size}
+    {...props}
+  >
     <g id="zoom-in" stroke="none" fill="currentColor" strokeWidth="1">
       <path
         fillRule="nonzero"
@@ -249,8 +426,8 @@ export const ZoomInIcon = createIcon(
   </svg>
 );
 
-export const SaveFileIcon = createIcon(
-  <svg viewBox="0 0 18 18" version="1.1" xmlns="http://www.w3.org/2000/svg">
+export const SaveFileIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 18, ...props }) => (
+  <svg viewBox="0 0 18 18" version="1.1" xmlns="http://www.w3.org/2000/svg" width={size} height={size} {...props}>
     <g id="save-file" stroke="none" fill="currentColor">
       <path
         fillRule="nonzero"
@@ -260,8 +437,8 @@ export const SaveFileIcon = createIcon(
   </svg>
 );
 
-export const OpenFileIcon = createIcon(
-  <svg viewBox="0 0 18 18" version="1.1" xmlns="http://www.w3.org/2000/svg">
+export const OpenFileIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 18, ...props }) => (
+  <svg viewBox="0 0 18 18" version="1.1" xmlns="http://www.w3.org/2000/svg" width={size} height={size} {...props}>
     <g id="save-file" stroke="currentColor" fill="none">
       <path
         d="m9.257 6.351.183.183H15.819c.34 0 .727.182 1.051.506.323.323.505.708.505 1.05v5.819c0 .316-.183.7-.52 1.035-.337.338-.723.522-1.037.522H4.182c-.352 0-.74-.181-1.058-.5-.318-.318-.499-.705-.499-1.057V5.182c0-.351.181-.736.5-1.054.32-.321.71-.503 1.057-.503H6.53l2.726 2.726Z"
@@ -271,11 +448,14 @@ export const OpenFileIcon = createIcon(
   </svg>
 );
 
-export const BackgroundColorIcon = createIcon(
+export const BackgroundColorIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
     viewBox="0 0 24 24"
     className="background-color-icon"
+    width={size}
+    height={size}
+    {...props}
   >
     <g transform="translate(1 1)" fillRule="evenodd" fill="#000" stroke="none">
       <circle fillOpacity=".04" r="11" cy="11" cx="11"></circle>
@@ -287,8 +467,8 @@ export const BackgroundColorIcon = createIcon(
   </svg>
 );
 
-export const NoColorIcon = createIcon(
-  <svg viewBox="0 0 32 32" className="no-color-icon">
+export const NoColorIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 32, ...props }) => (
+  <svg viewBox="0 0 32 32" className="no-color-icon" width={size} height={size} {...props}>
     <g
       xmlns="http://www.w3.org/2000/svg"
       fillRule="nonzero"
@@ -301,7 +481,7 @@ export const NoColorIcon = createIcon(
   </svg>
 );
 
-export const Check = createIcon(
+export const Check: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
   <svg
     className="selected-icon"
     xmlns="http://www.w3.org/2000/svg"
@@ -311,13 +491,16 @@ export const Check = createIcon(
     strokeWidth="2"
     strokeLinecap="round"
     strokeLinejoin="round"
+    width={size}
+    height={size}
+    {...props}
   >
     <polyline points="20 6 9 17 4 12"></polyline>
   </svg>
 );
 
-export const StrokeIcon = createIcon(
-  <svg viewBox="0 0 24 24" className="stroke-icon">
+export const StrokeIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
+  <svg viewBox="0 0 24 24" className="stroke-icon" width={size} height={size} {...props}>
     <g
       xmlns="http://www.w3.org/2000/svg"
       stroke="none"
@@ -337,8 +520,8 @@ export const StrokeIcon = createIcon(
   </svg>
 );
 
-export const StrokeWhiteIcon = createIcon(
-  <svg viewBox="0 0 24 24">
+export const StrokeWhiteIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} {...props}>
     <g
       xmlns="http://www.w3.org/2000/svg"
       id="icon-border-white"
@@ -364,8 +547,8 @@ export const StrokeWhiteIcon = createIcon(
   </svg>
 );
 
-export const StrokeStyleNormalIcon = createIcon(
-  <svg viewBox="0 0 24 32" xmlns="http://www.w3.org/2000/svg">
+export const StrokeStyleNormalIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
+  <svg viewBox="0 0 24 32" xmlns="http://www.w3.org/2000/svg" width={size} height={size} {...props}>
     <g transform="translate(0 14)" fillRule="evenodd" fill="none">
       <path d="M-18-19h60v40h-60z"></path>
       <path d="M0 0h24v2H0z" fill="currentColor"></path>
@@ -373,8 +556,8 @@ export const StrokeStyleNormalIcon = createIcon(
   </svg>
 );
 
-export const StrokeStyleDashedIcon = createIcon(
-  <svg viewBox="0 0 24 32" xmlns="http://www.w3.org/2000/svg">
+export const StrokeStyleDashedIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
+  <svg viewBox="0 0 24 32" xmlns="http://www.w3.org/2000/svg" width={size} height={size} {...props}>
     <g transform="translate(0 14)" fillRule="evenodd" fill="none">
       <g fill="currentColor">
         <path d="M0 0h6v2H0zM9 0h6v2H9zM18 0h6v2h-6z"></path>
@@ -383,8 +566,8 @@ export const StrokeStyleDashedIcon = createIcon(
   </svg>
 );
 
-export const StrokeStyleDotedIcon = createIcon(
-  <svg viewBox="0 0 24 32" xmlns="http://www.w3.org/2000/svg">
+export const StrokeStyleDotedIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
+  <svg viewBox="0 0 24 32" xmlns="http://www.w3.org/2000/svg" width={size} height={size} {...props}>
     <g transform="translate(0 14)" fillRule="evenodd" fill="none">
       <g fill="currentColor">
         <rect rx="1" height="2" width="2"></rect>
@@ -398,8 +581,8 @@ export const StrokeStyleDotedIcon = createIcon(
   </svg>
 );
 
-export const StrokeStyleDoubleIcon = createIcon(
-  <svg viewBox="0 0 24 32" xmlns="http://www.w3.org/2000/svg">
+export const StrokeStyleDoubleIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
+  <svg viewBox="0 0 24 32" xmlns="http://www.w3.org/2000/svg" width={size} height={size} {...props}>
     <g transform="translate(0 12)" fillRule="evenodd" fill="none">
       <path d="M0 0h24v2H0z" fill="currentColor"></path>
       <path d="M0 4h24v2H0z" fill="currentColor"></path>
@@ -437,8 +620,14 @@ export const FontColorIcon: React.FC<{ currentColor?: string }> = ({
   );
 };
 
-export const UndoIcon = createIcon(
-  <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+export const UndoIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 16, ...props }) => (
+  <svg
+    viewBox="0 0 16 16"
+    xmlns="http://www.w3.org/2000/svg"
+    width={size}
+    height={size}
+    {...props}
+  >
     <g stroke="none" fill="currentColor">
       <g id="undo-cion" transform="translate(1 1)">
         <path
@@ -450,8 +639,14 @@ export const UndoIcon = createIcon(
   </svg>
 );
 
-export const RedoIcon = createIcon(
-  <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+export const RedoIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 16, ...props }) => (
+  <svg
+    viewBox="0 0 16 16"
+    xmlns="http://www.w3.org/2000/svg"
+    width={size}
+    height={size}
+    {...props}
+  >
     <g stroke="none" fill="currentColor">
       <g id="redo-cion" transform="matrix(-1 0 0 1 15.015 1)">
         <path
@@ -463,8 +658,8 @@ export const RedoIcon = createIcon(
   </svg>
 );
 
-export const TrashIcon = createIcon(
-  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor">
+export const TrashIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 20, ...props }) => (
+  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" width={size} height={size} {...props}>
     <path
       strokeWidth="1.25"
       d="M3.333 5.833h13.334M8.333 9.167v5M11.667 9.167v5M4.167 5.833l.833 10c0 .92.746 1.667 1.667 1.667h6.666c.92 0 1.667-.746 1.667-1.667l.833-10M7.5 5.833v-2.5c0-.46.373-.833.833-.833h3.334c.46 0 .833.373.833.833v2.5"
@@ -472,12 +667,15 @@ export const TrashIcon = createIcon(
   </svg>
 );
 
-export const DuplicateIcon = createIcon(
+export const DuplicateIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 20, ...props }) => (
   <svg
     viewBox="0 0 20 20"
     fill="none"
     stroke="currentColor"
     xmlns="http://www.w3.org/2000/svg"
+    width={size}
+    height={size}
+    {...props}
   >
     <g strokeWidth="1.25">
       <path d="M14.375 6.458H8.958a2.5 2.5 0 0 0-2.5 2.5v5.417a2.5 2.5 0 0 0 2.5 2.5h5.417a2.5 2.5 0 0 0 2.5-2.5V8.958a2.5 2.5 0 0 0-2.5-2.5Z"></path>
@@ -486,28 +684,26 @@ export const DuplicateIcon = createIcon(
   </svg>
 );
 
-export const FeltTipPenIcon = createIcon(
-  <svg
-    viewBox="0 0 1024 1024"
-    fill="currentColor"
-    xmlns="http://www.w3.org/2000/svg"
-  >
-    <path d="M170.794667 896c3.456 0 6.912-0.426667 10.325333-1.28l170.666667-42.666667c7.509333-1.877333 14.378667-5.76 19.84-11.221333L896.128 316.330667c16.128-16.128 25.002667-37.546667 25.002667-60.330667s-8.874667-44.202667-25.002667-60.330667L828.458667 128c-32.256-32.256-88.405333-32.256-120.661334 0L183.296 652.501333a42.794667 42.794667 0 0 0-11.221333 19.797334l-42.666667 170.666666A42.666667 42.666667 0 0 0 170.794667 896z m597.333333-707.669333L835.797333 256l-67.669333 67.669333L700.458667 256l67.669333-67.669333zM251.989333 704.469333l388.138667-388.138666L707.797333 384l-388.181333 388.138667-90.197333 22.528 22.570666-90.197334z"></path>
+export const FeltTipPenIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" width={size} height={size} {...props}>
+    <path d="m13.4 2 6.6 6.6-13 13L2 22l.4-5z" />
+    <path d="m11 4 7 7" />
   </svg>
 );
 
 // 钢笔工具图标（矢量路径绘制）
-export const VectorPenIcon = createIcon(
-  <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
-    <path d="M845.11 536.29c-22.08 0-42.83-8.6-58.45-24.22h-0.01L511.93 237.34c-32.23-32.23-32.23-84.66 0-116.89l32.27-32.28c32.24-32.23 84.67-32.24 116.9 0L935.83 362.9c32.23 32.23 32.23 84.67 0 116.89l-32.28 32.28c-15.61 15.61-36.37 24.22-58.44 24.22zM602.65 119.08c-7.06 0-14.11 2.68-19.49 8.06l-32.27 32.27c-10.75 10.74-10.75 28.22-0.01 38.97l274.73 274.73h0.01c10.39 10.41 28.54 10.41 38.95 0l32.29-32.28c10.74-10.74 10.74-28.22-0.01-38.97L622.14 127.13c-5.38-5.36-12.43-8.05-19.49-8.05z" fill="currentColor" />
-    <path d="M118.97 960c-14.29 0-28.18-5.62-38.76-16.2-15.21-15.21-20.17-37.24-12.94-57.5l193.01-540.41c7.48-20.95 23.39-38.24 43.63-47.45L525.13 197.9c10.46-4.74 22.76-2.52 30.88 5.6L820.5 468c8.13 8.12 10.35 20.43 5.6 30.88L725.56 720.09c-9.21 20.25-26.5 36.15-47.45 43.63l-540.4 193c-6.17 2.2-12.49 3.28-18.74 3.28z m411.58-704.04l-203.83 92.65c-6.75 3.07-12.05 8.83-14.55 15.82l-193 540.4 540.4-193c6.99-2.5 12.75-7.8 15.82-14.55l92.65-203.83-237.49-237.49z" fill="currentColor" />
-    <path d="M104.17 947.38c-7.05 0-14.1-2.69-19.48-8.07-10.73-10.73-10.76-28.1-0.09-38.87 0.03-0.03 0.06-0.07 0.09-0.09l278.06-278.07c10.75-10.76 28.2-10.76 38.96 0 10.76 10.76 10.76 28.2 0 38.96L123.66 939.31c-5.35 5.36-12.38 8.05-19.4 8.07h-0.09zM492.45 621.41c-23.02 0-46.04-8.76-63.57-26.28-35.04-35.06-35.04-92.09 0-127.13 35.04-35.06 92.09-35.06 127.13 0 35.04 35.04 35.04 92.07 0.01 127.12-0.01 0-0.01 0-0.01 0.01-17.52 17.51-40.55 26.28-63.56 26.28z m44.08-45.77h0.13-0.13z m-44.08-78.85c-8.91 0-17.82 3.39-24.61 10.17-13.56 13.57-13.56 35.64 0.01 49.2 13.55 13.56 35.62 13.56 49.2 0 13.56-13.57 13.56-35.64 0-49.2-6.79-6.78-15.69-10.17-24.6-10.17z" fill="currentColor" />
+export const VectorPenIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" width={size} height={size} {...props}>
+    <path d="m12 19 7-7 3 3-7 7-3-3z" />
+    <path d="m18 13-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
+    <path d="m2 2 5 5" />
+    <path d="m8.5 8.5 1 1" />
   </svg>
 );
 
 // 角点锚点图标 - 控制柄可独立调整
-export const AnchorCornerIcon = createIcon(
-  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+export const AnchorCornerIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
+  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" width={size} height={size} {...props}>
     <g fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       {/* 左侧控制柄线 */}
       <line x1="4" y1="18" x2="12" y2="12" strokeDasharray="2,2" />
@@ -524,8 +720,8 @@ export const AnchorCornerIcon = createIcon(
 );
 
 // 平滑锚点图标 - 控制柄方向对称但长度可不同
-export const AnchorSmoothIcon = createIcon(
-  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+export const AnchorSmoothIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
+  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" width={size} height={size} {...props}>
     <g fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       {/* 左侧控制柄线 - 较短 */}
       <line x1="6" y1="16" x2="12" y2="12" strokeDasharray="2,2" />
@@ -542,8 +738,8 @@ export const AnchorSmoothIcon = createIcon(
 );
 
 // 对称锚点图标 - 控制柄完全对称
-export const AnchorSymmetricIcon = createIcon(
-  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+export const AnchorSymmetricIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
+  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" width={size} height={size} {...props}>
     <g fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       {/* 左侧控制柄线 */}
       <line x1="4" y1="16" x2="12" y2="12" strokeDasharray="2,2" />
@@ -559,38 +755,71 @@ export const AnchorSymmetricIcon = createIcon(
   </svg>
 );
 
-export const ImageIcon = createIcon(
-  <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
-    <g id="image" stroke="none" fill="currentColor">
-      <path d="M10.496 7c-.824 0-1.572-.675-1.498-1.5 0-.825.674-1.5 1.498-1.5.823 0 1.497.675 1.497 1.5S11.319 7 10.496 7zM13.8 9.476V2.2H2.2v5.432l.1-.078C3.132 6.904 4.029 6.5 5 6.5c.823 0 1.552.27 2.342.778.226.145.449.304.735.518.06.045.546.413.69.52 1.634 1.21 2.833 1.6 4.798 1.207l.235-.047zm0 1.523V10.7c-5 1-6.3-3-8.8-3-1.5 0-2.8 1.6-2.8 1.6v4.6h11.6V11zM14 1c.6 0 1 .536 1 1.071v11.784c0 .642-.4 1.071-1 1.071H2c-.6 0-1-.429-1-1.07V2.07c0-.535.4-1.07 1-1.07h12z"></path>
-    </g>
+export const ImageIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" width={size} height={size} {...props}>
+    <rect width="18" height="18" x="3" y="3" rx="3" ry="3" />
+    <circle cx="9" cy="9" r="2" />
+    <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
   </svg>
 );
 
-export const MermaidLogoIcon = createIcon(
+export const ImageUploadIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
+  <svg 
+    viewBox="0 0 24 24" 
+    fill="none" 
+    stroke="currentColor" 
+    strokeWidth="1.5" 
+    strokeLinecap="round" 
+    strokeLinejoin="round"
+    width={size}
+    height={size}
+    {...props}
+  >
+    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7" />
+    <line x1="16" y1="5" x2="22" y2="5" />
+    <line x1="19" y1="2" x2="19" y2="8" />
+    <circle cx="9" cy="9" r="2" />
+    <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+  </svg>
+);
+
+export const MermaidLogoIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
   <svg
     stroke="currentColor"
-    viewBox="0 0 512 512"
+    viewBox="0 0 24 24"
     xmlns="http://www.w3.org/2000/svg"
+    fill="none"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    width={size}
+    height={size}
+    {...props}
   >
-    <path
-      stroke="none"
-      fill="currentColor"
-      d="M407.48,111.18C335.587,108.103 269.573,152.338 245.08,220C220.587,152.338 154.573,108.103 82.68,111.18C80.285,168.229 107.577,222.632 154.74,254.82C178.908,271.419 193.35,298.951 193.27,328.27L193.27,379.13L296.9,379.13L296.9,328.27C296.816,298.953 311.255,271.42 335.42,254.82C382.596,222.644 409.892,168.233 407.48,111.18Z"
-    />
+    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
   </svg>
 );
 
-export const MarkdownLogoIcon = createIcon(
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" version="1.1">
-    <g stroke="none" fill="currentColor">
-      <path d="M14.85,2.5 C15.4851275,2.5 16,3.01487254 16,3.65 L16,12.35 C16,12.9851275 15.4851275,13.5 14.85,13.5 L1.15,13.5 C0.514872538,13.5 0,12.9851275 0,12.35 L0,3.65 C0,3.01487254 0.514872538,2.5 1.15,2.5 L14.85,2.5 Z M14.85,3.7 L1.15,3.7 C1.17735931,3.7 1.2,3.72264069 1.2,3.75 L1.2,12.25 C1.2,12.2773593 1.17735931,12.3 1.15,12.3 L14.85,12.3 C14.8226407,12.3 14.8,12.2773593 14.8,12.25 L14.8,3.75 C14.8,3.72264069 14.8226407,3.7 14.85,3.7 Z M3.5,10.5 L3.5,5.5 L5.25,5.5 L7,7.8 L8.75,5.5 L10.5,5.5 L10.5,10.5 L8.75,10.5 L8.75,7.5 L7,9.8 L5.25,7.5 L5.25,10.5 L3.5,10.5 Z M12.5,10.5 L11,8.5 L12.5,8.5 L12.5,5.5 L11,5.5 L12.5,5.5 L12.5,8.5 L14,8.5 L12.5,10.5 Z" />
-    </g>
+export const MarkdownLogoIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    width={size}
+    height={size}
+    {...props}
+  >
+    <rect width="20" height="16" x="2" y="4" rx="2" />
+    <path d="M7 15V9l3 3 3-3v6M17 15l2-2-2-2M19 13h-4" />
   </svg>
 );
 
-export const LinkIcon = createIcon(
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
+export const LinkIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 16, ...props }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width={size} height={size} {...props}>
     <g stroke="none" fill="currentColor">
       <path
         d="M12.253 4.13h-1.2v-1a2.8 2.8 0 0 0-5.6 0v4a2.8 2.8 0 0 0 2.8 2.8v1.2a4 4 0 0 1-4-4v-4a4 4 0 0 1 8 0v1zm-8 8h1.2v1a2.8 2.8 0 0 0 5.6 0v-4a2.8 2.8 0 0 0-2.8-2.8v-1.2a4 4 0 0 1 4 4v4a4 4 0 0 1-8 0v-1z"
@@ -600,8 +829,8 @@ export const LinkIcon = createIcon(
   </svg>
 );
 
-export const SettingsIcon = createIcon(
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+export const SettingsIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" width={size} height={size} {...props}>
     <g strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/>
       <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1Z"/>
@@ -609,8 +838,8 @@ export const SettingsIcon = createIcon(
   </svg>
 );
 
-export const VideoFrameIcon = createIcon(
-  <svg viewBox="0 0 16 16" version="1.1" xmlns="http://www.w3.org/2000/svg">
+export const VideoFrameIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 16, ...props }) => (
+  <svg viewBox="0 0 16 16" version="1.1" xmlns="http://www.w3.org/2000/svg" width={size} height={size} {...props}>
     <g id="video-frame" stroke="none" fill="currentColor">
       <rect x="1" y="3" width="14" height="10" rx="1" fill="none" stroke="currentColor" strokeWidth="1.2"/>
       <rect x="3" y="5" width="10" height="6" rx="0.5" fill="currentColor" opacity="0.6"/>
@@ -622,23 +851,28 @@ export const VideoFrameIcon = createIcon(
   </svg>
 );
 
-export const MediaLibraryIcon = createIcon(
-  <svg viewBox="0 0 16 16" version="1.1" xmlns="http://www.w3.org/2000/svg">
-    <g id="media-library" stroke="none" fill="currentColor">
-      {/* 网格图标表示素材库 */}
-      <rect x="1" y="1" width="6" height="6" rx="1" fill="none" stroke="currentColor" strokeWidth="1.2"/>
-      <rect x="9" y="1" width="6" height="6" rx="1" fill="none" stroke="currentColor" strokeWidth="1.2"/>
-      <rect x="1" y="9" width="6" height="6" rx="1" fill="none" stroke="currentColor" strokeWidth="1.2"/>
-      <rect x="9" y="9" width="6" height="6" rx="1" fill="none" stroke="currentColor" strokeWidth="1.2"/>
-      {/* 小图片图标 */}
-      <circle cx="3" cy="3" r="0.8" fill="currentColor"/>
-      <path d="M2 5.5L3.5 4L5.5 6" stroke="currentColor" strokeWidth="0.8" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-    </g>
+// 素材库图标 - 宫格 + 圆圈风格
+export const MediaLibraryIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    width={size}
+    height={size}
+    {...props}
+  >
+    <rect x="3" y="3" width="8" height="8" rx="1.5" />
+    <circle cx="17" cy="7" r="4" />
+    <rect x="3" y="13" width="8" height="8" rx="1.5" />
+    <rect x="13" y="13" width="8" height="8" rx="1.5" />
   </svg>
 );
 
-export const ViewIcon = createIcon(
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+export const ViewIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" width={size} height={size} {...props}>
     <g strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
       <circle cx="12" cy="12" r="3"/>
@@ -646,8 +880,16 @@ export const ViewIcon = createIcon(
   </svg>
 );
 
-export const ThemeIcon = createIcon(
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+export const ThemeIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    width={size}
+    height={size}
+    {...props}
+  >
     <g strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="10"/>
       <path d="M12 2a10 10 0 0 1 0 20"/>
@@ -656,15 +898,35 @@ export const ThemeIcon = createIcon(
   </svg>
 );
 
-export const WeComIcon = createIcon(
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" fill="currentColor">
-    <path d="M679.872 409.024c11.456 0 22.72 0.96 33.728 2.752-30.272-140.928-181.312-246.144-356.032-246.144C159.936 165.632 0 299.456 0 466.112c0 96.384 52.48 175.296 140.096 236.608l-35.008 105.216 122.304-61.248c43.84 8.768 78.912 17.536 122.752 17.536 10.944 0 21.76-0.512 32.512-1.408-6.848-23.232-10.752-47.616-10.752-72.896 0-154.176 136.512-280.896 307.968-280.896zM469.632 306.944c26.304 0 43.84 17.472 43.84 43.712 0 26.176-17.536 43.84-43.84 43.84-26.24 0-52.544-17.664-52.544-43.84 0-26.24 26.304-43.712 52.544-43.712z m-227.136 87.552c-26.304 0-52.608-17.664-52.608-43.84 0-26.24 26.304-43.712 52.608-43.712 26.24 0 43.776 17.472 43.776 43.712 0 26.176-17.536 43.84-43.776 43.84z" />
-    <path d="M1024 685.312c0-140.16-140.16-254.016-297.792-254.016-166.464 0-297.856 113.856-297.856 254.016 0 140.288 131.392 254.016 297.856 254.016 34.944 0 70.016-8.768 105.088-17.6l96.32 52.544-26.24-87.616c70.016-52.48 122.624-122.624 122.624-201.344z m-394.368-43.84c-17.472 0-35.072-17.472-35.072-35.008 0-17.472 17.6-35.008 35.072-35.008 26.304 0 43.84 17.536 43.84 35.008 0 17.536-17.536 35.008-43.84 35.008z m192.96 0c-17.472 0-34.944-17.472-34.944-35.008 0-17.472 17.472-35.008 34.944-35.008 26.24 0 43.84 17.536 43.84 35.008 0 17.536-17.6 35.008-43.84 35.008z" />
+export const WeComIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    width={size}
+    height={size}
+    {...props}
+  >
+    <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
+    <path d="M8 12h.01" />
+    <path d="M12 12h.01" />
+    <path d="M16 12h.01" />
   </svg>
 );
 
-export const MoreIcon = createIcon(
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+export const MoreIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    width={size}
+    height={size}
+    {...props}
+  >
     <g strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="1" fill="currentColor"/>
       <circle cx="12" cy="5" r="1" fill="currentColor"/>
@@ -673,9 +935,8 @@ export const MoreIcon = createIcon(
   </svg>
 );
 
-// 拆图图标 - 表示将一张图片分割成多个
-export const SplitImageIcon = createIcon(
-  <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="none">
+export const SplitImageIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 16, ...props }) => (
+  <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="none" width={size} height={size} {...props}>
     {/* 外框 */}
     <rect x="1" y="1" width="14" height="14" rx="1.5" stroke="currentColor" strokeWidth="1.2" fill="none"/>
     {/* 垂直分割线 */}
@@ -689,9 +950,8 @@ export const SplitImageIcon = createIcon(
   </svg>
 );
 
-// 下载图标 - 与其他图标风格一致
-export const DownloadIcon = createIcon(
-  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg">
+export const DownloadIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 20, ...props }) => (
+  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg" width={size} height={size} {...props}>
     <g strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
       {/* 向下箭头 */}
       <path d="M10 3.333v9.167" />
@@ -702,9 +962,8 @@ export const DownloadIcon = createIcon(
   </svg>
 );
 
-// 合并图标 - 表示将多个元素合并成一张图片
-export const MergeIcon = createIcon(
-  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg">
+export const MergeIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 20, ...props }) => (
+  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg" width={size} height={size} {...props}>
     <g strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
       {/* 左上角小框 */}
       <rect x="2.5" y="2.5" width="5" height="5" rx="1" />
@@ -722,9 +981,8 @@ export const MergeIcon = createIcon(
   </svg>
 );
 
-// 视频合成图标 - 表示将多个视频片段合成为一个视频
-export const VideoMergeIcon = createIcon(
-  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg">
+export const VideoMergeIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 20, ...props }) => (
+  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg" width={size} height={size} {...props}>
     <g strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
       {/* 左侧视频片段 */}
       <rect x="1.5" y="5" width="5" height="4" rx="0.5" />
@@ -746,8 +1004,8 @@ export const VideoMergeIcon = createIcon(
 // ============ 文本特效图标 ============
 
 // 字体选择图标
-export const FontFamilyIcon = createIcon(
-  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg">
+export const FontFamilyIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 16, ...props }) => (
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg" width={size} height={size} {...props}>
     <g strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M3 12.5L8 3L13 12.5" />
       <path d="M4.5 10H11.5" />
@@ -758,8 +1016,8 @@ export const FontFamilyIcon = createIcon(
 );
 
 // 阴影效果图标
-export const ShadowEffectIcon = createIcon(
-  <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+export const ShadowEffectIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 16, ...props }) => (
+  <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" width={size} height={size} {...props}>
     <g strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
       <rect x="2" y="2" width="9" height="9" rx="1.5" stroke="currentColor" fill="none" />
       <rect x="5" y="5" width="9" height="9" rx="1.5" stroke="currentColor" fill="none" opacity="0.4" />
@@ -768,8 +1026,8 @@ export const ShadowEffectIcon = createIcon(
 );
 
 // 渐变图标
-export const GradientIcon = createIcon(
-  <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+export const GradientIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 16, ...props }) => (
+  <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" width={size} height={size} {...props}>
     <defs>
       <linearGradient id="gradientIconFill" x1="0%" y1="0%" x2="100%" y2="100%">
         <stop offset="0%" stopColor="#FFD700" />
@@ -782,8 +1040,8 @@ export const GradientIcon = createIcon(
 );
 
 // 图层图标
-export const LayerIcon = createIcon(
-  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg">
+export const LayerIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 16, ...props }) => (
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg" width={size} height={size} {...props}>
     <g strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M8 2L14 5.5L8 9L2 5.5L8 2Z" />
       <path d="M2 8L8 11.5L14 8" />
@@ -793,8 +1051,8 @@ export const LayerIcon = createIcon(
 );
 
 // 置顶图标
-export const BringToFrontIcon = createIcon(
-  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg">
+export const BringToFrontIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 16, ...props }) => (
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg" width={size} height={size} {...props}>
     <g strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
       <rect x="5" y="1" width="6" height="6" rx="1" fill="currentColor" opacity="0.3" />
       <rect x="2" y="5" width="6" height="6" rx="1" fill="none" />
@@ -805,8 +1063,8 @@ export const BringToFrontIcon = createIcon(
 );
 
 // 上移一层图标
-export const BringForwardIcon = createIcon(
-  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg">
+export const BringForwardIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 16, ...props }) => (
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg" width={size} height={size} {...props}>
     <g strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
       <rect x="4" y="2" width="8" height="5" rx="1" fill="currentColor" opacity="0.3" />
       <rect x="4" y="9" width="8" height="5" rx="1" fill="none" />
@@ -816,8 +1074,8 @@ export const BringForwardIcon = createIcon(
 );
 
 // 下移一层图标
-export const SendBackwardIcon = createIcon(
-  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg">
+export const SendBackwardIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 16, ...props }) => (
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg" width={size} height={size} {...props}>
     <g strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
       <rect x="4" y="2" width="8" height="5" rx="1" fill="none" />
       <rect x="4" y="9" width="8" height="5" rx="1" fill="currentColor" opacity="0.3" />
@@ -827,8 +1085,8 @@ export const SendBackwardIcon = createIcon(
 );
 
 // 置底图标
-export const SendToBackIcon = createIcon(
-  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg">
+export const SendToBackIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 16, ...props }) => (
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg" width={size} height={size} {...props}>
     <g strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
       <rect x="2" y="1" width="6" height="6" rx="1" fill="none" />
       <rect x="8" y="5" width="6" height="6" rx="1" fill="none" />
@@ -839,8 +1097,8 @@ export const SendToBackIcon = createIcon(
 );
 
 // 属性设置图标
-export const PropertySettingsIcon = createIcon(
-  <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
+export const PropertySettingsIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 16, ...props }) => (
+  <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="currentColor" width={size} height={size} {...props}>
     <g strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M2 4h12M2 8h12M2 12h8" stroke="currentColor" fill="none" />
       <circle cx="5" cy="4" r="1.5" fill="currentColor" />
@@ -851,8 +1109,8 @@ export const PropertySettingsIcon = createIcon(
 );
 
 // 备份恢复图标
-export const BackupRestoreIcon = createIcon(
-  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor">
+export const BackupRestoreIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
+  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" width={size} height={size} {...props}>
     <g strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M12 2v4m0 12v4M2 12h4m12 0h4" />
       <path d="M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83" />
@@ -862,23 +1120,23 @@ export const BackupRestoreIcon = createIcon(
 );
 
 // 锁定/解锁图标（用于等比缩放）
-export const LockIcon = createIcon(
-  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+export const LockIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
+  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width={size} height={size} {...props}>
     <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
     <path d="M7 11V7a5 5 0 0 1 10 0v4" />
   </svg>
 );
 
-export const UnlockIcon = createIcon(
-  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+export const UnlockIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
+  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width={size} height={size} {...props}>
     <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
     <path d="M7 11V7a5 5 0 0 1 9.9-1" />
   </svg>
 );
 
 // 调试日志图标 - 控制台/终端风格
-export const DebugLogIcon = createIcon(
-  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+export const DebugLogIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
+  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" width={size} height={size} {...props}>
     {/* 终端窗口外框 */}
     <rect x="2" y="3" width="20" height="18" rx="2" />
     {/* 顶部栏 */}

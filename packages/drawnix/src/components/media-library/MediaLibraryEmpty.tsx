@@ -3,13 +3,13 @@
  * 素材库空状态组件
  */
 
-import { Images } from 'lucide-react';
+import { MediaLibraryIcon } from '../icons';
 
 export function MediaLibraryEmpty() {
   return (
     <div className="media-library-empty">
       <div className="media-library-empty__icon-container">
-        <Images size={48} className="media-library-empty__icon" />
+        <MediaLibraryIcon size={48} className="media-library-empty__icon" />
       </div>
       <h3 className="media-library-empty__title">暂无素材</h3>
       <p className="media-library-empty__description">

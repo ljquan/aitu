@@ -16,11 +16,13 @@ import {
   ChevronLeftIcon, 
   ChevronRightIcon, 
   ArrowDownIcon, 
-  UploadIcon, 
   ViewListIcon,
-  AddIcon,
-  AppIcon
+  AddIcon
 } from 'tdesign-icons-react';
+import { 
+  ImageUploadIcon,
+  MediaLibraryIcon,
+} from '../icons';
 import { useI18n } from '../../i18n';
 import { smartDownload } from '../../utils/download-utils';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
@@ -1938,7 +1940,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
                     triggerRowImageUpload(rowIndex);
                   }}
                   title={language === 'zh' ? '上传图片' : 'Upload image'}
-                  icon={<UploadIcon />}
+                  icon={<ImageUploadIcon size={16} />}
                   className="add-image-btn"
                   data-track="batch_row_upload_image_click"
                 />
@@ -1952,7 +1954,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
                     openMediaLibraryForRow(rowIndex);
                   }}
                   title={language === 'zh' ? '从素材库选择' : 'Select from library'}
-                  icon={<ViewListIcon />}
+                  icon={<MediaLibraryIcon size={16} />}
                   className="add-image-btn"
                   data-track="batch_row_select_from_library_click"
                 />
@@ -2319,7 +2321,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
                 <Button
                   variant="outline"
                   theme="default"
-                  icon={<AppIcon />}
+                  icon={<MediaLibraryIcon size={16} />}
                   onClick={() => setShowLibrary(true)}
                   data-track="batch_library_show_click"
                 />
@@ -2539,7 +2541,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
               block
               theme="default"
               variant="outline"
-              icon={<UploadIcon />}
+              icon={<ImageUploadIcon size={16} />}
               onClick={() => fileInputRef.current?.click()}
               data-track="batch_library_upload_click"
             >
