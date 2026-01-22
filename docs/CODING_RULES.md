@@ -689,6 +689,42 @@ const handleTouchEnd = () => {
 - **文档语言**: 规格文档使用中文
 - **概念术语一致性**: 使用 `/docs/CONCEPTS.md` 中定义的标准术语
 
+### TDesign Dropdown 的 popupProps 透传
+
+**场景**: 需要监听 TDesign Dropdown 组件的显示/隐藏状态变化时
+
+❌ **错误示例**:
+```tsx
+// 错误：Dropdown 没有直接的 onVisibleChange 属性
+<Dropdown
+  options={options}
+  trigger="context-menu"
+  onVisibleChange={(visible) => {  // ❌ 类型错误
+    setMenuOpen(visible);
+  }}
+>
+  <Button>触发器</Button>
+</Dropdown>
+```
+
+✅ **正确示例**:
+```tsx
+// 正确：通过 popupProps 透传给底层 Popup 组件
+<Dropdown
+  options={options}
+  trigger="context-menu"
+  popupProps={{
+    onVisibleChange: (visible) => {
+      setMenuOpen(visible);
+    }
+  }}
+>
+  <Button>触发器</Button>
+</Dropdown>
+```
+
+**原因**: TDesign 的 `Dropdown` 组件没有直接暴露 `onVisibleChange` 属性，需要通过 `popupProps` 透传给底层的 `Popup` 组件。这是 TDesign 的组合式 API 设计，很多底层能力需要通过 `xxxProps` 透传。
+
 ### 项目概念文档维护
 
 **场景**: 添加新功能、新类型或新概念时
