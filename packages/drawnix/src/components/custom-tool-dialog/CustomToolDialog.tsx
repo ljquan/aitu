@@ -86,14 +86,9 @@ export const CustomToolDialog: React.FC<CustomToolDialogProps> = ({
     }
 
     const hasUrl = !!(formData.url && formData.url.trim().length > 0);
-    const hasComponent = !!(formData.component && formData.component.trim().length > 0);
 
-    if (!hasUrl && !hasComponent) {
-      return '请输入工具 URL 或内部组件标识';
-    }
-
-    if (hasUrl && hasComponent) {
-      return 'URL 和内部组件标识只能填写其中之一';
+    if (!hasUrl) {
+      return '请输入工具 URL';
     }
 
     // URL 格式验证
@@ -195,28 +190,14 @@ export const CustomToolDialog: React.FC<CustomToolDialogProps> = ({
           />
         </FormItem>
 
-        <FormItem label="工具 URL">
+        <FormItem label="工具 URL *">
           <Input
             value={formData.url}
             onChange={(value) => {
               updateField('url', value);
-              if (value) updateField('component', undefined);
             }}
             placeholder="https://example.com"
-            disabled={!!formData.component}
             tips="支持模板变量：${apiKey}（设置中的 API Key）自行确保目标URL可靠，避免Key泄漏"
-          />
-        </FormItem>
-
-        <FormItem label="内部组件">
-          <Input
-            value={formData.component}
-            onChange={(value) => {
-              updateField('component', value);
-              if (value) updateField('url', undefined);
-            }}
-            placeholder="例如：batch-image"
-            disabled={!!formData.url}
           />
         </FormItem>
 

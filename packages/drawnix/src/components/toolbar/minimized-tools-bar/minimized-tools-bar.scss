@@ -23,21 +23,20 @@
 
   &__indicator {
     position: absolute;
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    bottom: 2px;
-    right: 2px;
-    background: var(--td-brand-color, #0052d9);
-    border: 1.5px solid var(--color-background, #fff);
+    width: 3px;
+    height: 12px;
+    border-radius: 2px;
+    left: -4px; // 放在图标左侧
+    top: 50%;
+    transform: translateY(-50%);
+    background: var(--td-gray-color-5, #c5c5c5);
     pointer-events: none;
     z-index: 1;
-    opacity: 0.6;
+    transition: all 0.2s ease;
 
     &--active {
-      background: var(--td-success-color, #00a870);
-      opacity: 1;
-      animation: pulse-indicator 2s infinite;
+      background: var(--brand-primary, #f39c12);
+      height: 18px; // 激活状态稍微加长
     }
   }
 }

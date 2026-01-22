@@ -147,11 +147,11 @@ class ToolWindowService {
 
   /**
    * 获取需要在工具栏显示图标的工具列表
-   * 包括：最小化的工具 + 已关闭但常驻的工具
+   * 包括：已打开的工具 + 最小化的工具 + 已关闭但常驻的工具
    */
   getToolbarTools(): ToolWindowState[] {
     return this.getToolStates().filter(
-      state => state.status === 'minimized' || (state.status === 'closed' && state.isPinned)
+      state => state.status !== 'closed' || state.isPinned
     );
   }
 

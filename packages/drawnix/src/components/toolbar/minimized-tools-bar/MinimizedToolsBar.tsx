@@ -12,6 +12,7 @@ import { toolWindowService } from '../../../services/tool-window-service';
 import { toolboxService } from '../../../services/toolbox-service';
 import { ToolWindowState } from '../../../types/toolbox.types';
 import { useI18n } from '../../../i18n';
+import classNames from 'classnames';
 import './minimized-tools-bar.scss';
 
 /**
@@ -34,6 +35,7 @@ const renderIcon = (icon: any, size = 20): React.ReactNode => {
  */
 export const MinimizedToolsBar: React.FC = () => {
   const [toolbarTools, setToolbarTools] = useState<ToolWindowState[]>([]);
+  const [contextMenuOpenId, setContextMenuOpenId] = useState<string | null>(null);
   const { language } = useI18n();
 
   useEffect(() => {
@@ -128,6 +130,11 @@ export const MinimizedToolsBar: React.FC = () => {
             key={tool.id}
             options={getContextMenuOptions(state)}
             trigger="context-menu"
+            popupProps={{
+              onVisibleChange: (visible) => {
+                setContextMenuOpenId(visible ? tool.id : null);
+              }
+            }}
             onClick={(data) => {
               handleContextMenuAction(tool.id, data.value as 'toggle-pin' | 'close');
             }}
@@ -145,13 +152,20 @@ export const MinimizedToolsBar: React.FC = () => {
               <ToolButton
                 type="icon"
                 visible={true}
-                selected={false}
+                selected={state.status === 'open'}
                 icon={renderIcon(fullTool.icon)}
-                title={fullTool.name}
+                title={contextMenuOpenId === tool.id ? undefined : fullTool.name}
                 aria-label={fullTool.name}
                 data-track="toolbar_click_minimized_tool"
                 data-tool-id={fullTool.id}
               />
+              {state.status !== 'closed' && (
+                <div 
+                  className={classNames('minimized-tools-bar__indicator', {
+                    'minimized-tools-bar__indicator--active': state.status === 'open'
+                  })} 
+                />
+              )}
             </div>
           </Dropdown>
         );

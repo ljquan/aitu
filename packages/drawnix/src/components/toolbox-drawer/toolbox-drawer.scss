@@ -155,8 +155,7 @@
   padding: 12px; // 缩减内边距
   border-radius: 12px;
   background: var(--td-bg-color-container);
-  border: none; // 移除边框，减少线条感
-  cursor: pointer;
+  border: 1px solid var(--td-component-border); // 添加细边框增加精致感
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   user-select: none;
   -webkit-user-select: none;
@@ -164,12 +163,12 @@
   box-sizing: border-box;
   min-height: 72px; // 压缩高度
   position: relative;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04); // 使用阴影代替边框
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
 
   &:hover {
-    background: var(--td-bg-color-container-hover);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
-    // 移除了 transform: translateY，保持位置稳定
+    background: var(--td-bg-color-container);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+    border-color: var(--td-border-level-2-color);
   }
 
   // 移除了之前的 ::before 渐变边框装饰，减少视觉干扰
@@ -177,34 +176,33 @@
     display: none;
   }
 
-  &:active {
-    transform: translateY(0);
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.06);
-  }
-
   &__icon {
     flex-shrink: 0;
-    width: 52px; // 稍微再加大
-    height: 52px;
+    width: 40px; // 缩小图标容器
+    height: 40px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 30px;
-    background: var(--td-bg-color-secondarycontainer);
-    border-radius: 14px;
+    font-size: 24px; // 缩小 Emoji 大小
+    background: var(--td-bg-color-container); // 使用更淡的背景
+    border: 1px solid var(--td-component-border); // 添加边框使其像一个按钮
+    border-radius: 8px; // 减小圆角，更显硬朗
     transition: all 0.3s ease;
+    color: var(--td-text-color-primary);
     
     svg {
-      width: 28px;
-      height: 28px;
-      max-width: 28px;
-      max-height: 28px;
+      width: 20px; // 统一 SVG 大小
+      height: 20px;
+      max-width: 20px;
+      max-height: 20px;
+      stroke-width: 1.5px;
     }
   }
 
+  // 移除了 hover 缩放效果，保持专业感
   &:hover &__icon {
-    background: var(--td-bg-color-container);
-    transform: scale(1.05);
+    border-color: var(--brand-primary, #f39c12);
+    color: var(--brand-primary, #f39c12);
   }
 
   &__content {
@@ -217,65 +215,86 @@
   }
 
   &__name {
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 600;
     color: var(--td-text-color-primary);
     line-height: 1.4;
-    margin-bottom: 2px;
   }
 
   &__description {
-    font-size: 13px;
+    font-size: 12px;
     color: var(--td-text-color-secondary);
     line-height: 1.5;
-    opacity: 0.7; // 降低描述透明度，增加层次感
+    opacity: 0.6;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
-  // 操作按钮容器 - 严格非绝对定位
+  // 操作按钮容器
   &__actions {
-    position: static !important; // 强制覆盖任何可能的绝对定位
     flex-shrink: 0;
     display: flex;
-    flex-direction: column;
+    flex-direction: row; // 改为横向排列，增加按钮间距
     align-items: center;
-    gap: 2px;
+    gap: 8px;
     padding: 0;
     background: transparent;
-    border: none;
-    margin-left: 8px;
+    margin-left: 12px;
 
     .t-button {
-      opacity: 0.4; // 默认更淡一些，减少干扰
       transition: all 0.2s ease;
-      background: transparent !important;
-      height: 32px; // 稍微加大按钮点击区域
+      height: 32px;
       width: 32px;
-      min-width: 32px;
       display: flex;
       align-items: center;
       justify-content: center;
-      border-radius: 6px;
+      border-radius: 8px;
+      color: var(--td-text-color-secondary);
 
       &:hover {
-        opacity: 1;
         background: var(--td-bg-color-secondarycontainer) !important;
-        transform: scale(1.1);
-        color: var(--brand-primary, #f39c12) !important; // 悬浮图标时变色，引导关注
+        transform: scale(1.05);
       }
 
       .t-icon {
-        font-size: 18px; // 稍微加大图标
+        font-size: 18px;
       }
     }
 
-    // 当鼠标进入卡片时，按钮变得稍微清晰一点，但不刺眼
-    &:hover .t-button {
-      opacity: 0.8;
+    // 强化“在窗口中打开”按钮
+    .tool-item__action-btn--open-window {
+      color: var(--brand-primary, #f39c12);
+      border-color: rgba(243, 156, 18, 0.3);
+      background: rgba(243, 156, 18, 0.05);
+      width: auto; // 允许宽度自适应（如果后续加文字）
+      padding: 0 8px;
+      width: 36px;
+      height: 36px;
+      
+      &:hover {
+        background: var(--brand-primary, #f39c12) !important;
+        color: #fff !important;
+        border-color: var(--brand-primary, #f39c12);
+      }
+
+      .t-icon {
+        font-size: 20px;
+      }
     }
-    
-    // 专门针对具体按钮的悬浮引导
-    &:hover .t-button:hover {
-      opacity: 1;
+
+    // 插入按钮样式
+    .tool-item__action-btn--insert {
+      &:hover {
+        color: var(--td-success-color, #2ba471) !important;
+      }
+    }
+
+    // 删除按钮样式
+    .tool-item__action-btn--delete {
+      &:hover {
+        color: var(--td-error-color, #e34d59) !important;
+      }
     }
   }
 }

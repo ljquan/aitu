@@ -330,11 +330,12 @@ export const GithubIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: numbe
   </svg>
 );
 
-// AI 图片图标 - 玫红色主题
+// AI 图片图标
 export const AIImageIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
   <svg
     viewBox="0 0 24 24"
     fill="none"
+    stroke="currentColor"
     strokeWidth="1.5"
     strokeLinecap="round"
     strokeLinejoin="round"
@@ -348,11 +349,12 @@ export const AIImageIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: numb
   </svg>
 );
 
-// AI 视频图标 - 橙色主题
+// AI 视频图标
 export const AIVideoIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
   <svg
     viewBox="0 0 24 24"
     fill="none"
+    stroke="currentColor"
     strokeWidth="1.5"
     strokeLinecap="round"
     strokeLinejoin="round"
@@ -1131,6 +1133,102 @@ export const UnlockIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: numbe
   <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width={size} height={size} {...props}>
     <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
     <path d="M7 11V7a5 5 0 0 1 9.9-1" />
+  </svg>
+);
+
+// 提示词图标
+export const PromptIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    width={size}
+    height={size}
+    {...props}
+  >
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    <path d="M8 9h8" />
+    <path d="M8 13h6" />
+  </svg>
+);
+
+// 姿态/人像图标
+export const PoseIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    width={size}
+    height={size}
+    {...props}
+  >
+    <circle cx="12" cy="7" r="4" />
+    <path d="M5 22v-3a7 7 0 0 1 14 0v3" />
+  </svg>
+);
+
+// 聊天图标
+export const MessageIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    width={size}
+    height={size}
+    {...props}
+  >
+    <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.38 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.38 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+  </svg>
+);
+
+// 批量/多选图标
+export const BatchIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    width={size}
+    height={size}
+    {...props}
+  >
+    <rect x="2" y="2" width="8" height="8" rx="2" />
+    <rect x="14" y="2" width="8" height="8" rx="2" />
+    <rect x="2" y="14" width="8" height="8" rx="2" />
+    <rect x="14" y="14" width="8" height="8" rx="2" />
+  </svg>
+);
+
+// 插入到画布图标 - 画框 + 中心加号
+export const InsertToCanvasIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
+  <svg
+    viewBox="0 0 24 24"
+    xmlns="http://www.w3.org/2000/svg"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    width={size}
+    height={size}
+    {...props}
+  >
+    {/* 画框 */}
+    <rect x="3" y="3" width="18" height="18" rx="2" />
+    {/* 中心加号 */}
+    <path d="M12 8v8" />
+    <path d="M8 12h8" />
   </svg>
 );
 

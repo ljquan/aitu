@@ -6,7 +6,7 @@
 
 import React from 'react';
 import { ToolDefinition, ToolCategory } from '../types/toolbox.types';
-import { AIImageIcon, AIVideoIcon } from '../components/icons';
+import { AIImageIcon, AIVideoIcon, PromptIcon, PoseIcon, MessageIcon, BatchIcon } from '../components/icons';
 
 /**
  * 内置工具列表
@@ -52,7 +52,7 @@ export const BUILT_IN_TOOLS: ToolDefinition[] = [
     id: 'chat-mj',
     name: 'Chat-MJ',
     description: 'ChatGPT Web 聊天界面，支持 Midjourney 绘图代理',
-    icon: '💬',
+    icon: React.createElement(MessageIcon),
     category: ToolCategory.AI_TOOLS,
     url: 'https://chat.innk.cc/#/?settings={"key":"${apiKey}","url":"https://api.tu-zi.com"}',
     defaultWidth: 1000,
@@ -69,7 +69,7 @@ export const BUILT_IN_TOOLS: ToolDefinition[] = [
     id: 'batch-image',
     name: '批量出图工具',
     description: 'Excel式批量AI图片生成，支持批量编辑、图片参考和历史追踪',
-    icon: '🎨',
+    icon: React.createElement(BatchIcon),
     category: ToolCategory.AI_TOOLS,
     component: 'batch-image',
     defaultWidth: 1200,
