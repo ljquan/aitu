@@ -725,6 +725,31 @@ const handleTouchEnd = () => {
 
 **原因**: TDesign 的 `Dropdown` 组件没有直接暴露 `onVisibleChange` 属性，需要通过 `popupProps` 透传给底层的 `Popup` 组件。这是 TDesign 的组合式 API 设计，很多底层能力需要通过 `xxxProps` 透传。
 
+### 强制重绘使用 void 前缀
+
+**场景**: 需要触发浏览器强制重绘（reflow）以确保 CSS 变更立即生效时
+
+❌ **错误示例**:
+```typescript
+// ESLint 报错：Expected an assignment or function call and instead saw an expression
+element.offsetHeight;
+```
+
+✅ **正确示例**:
+```typescript
+// 使用 void 运算符明确表示故意丢弃返回值
+void element.offsetHeight;
+```
+
+**原因**: 读取 `offsetHeight` 属性会触发浏览器回流（reflow），这是一种常见的强制重绘技巧。但 ESLint 会报错因为这是一个"无用"的表达式。添加 `void` 运算符可以：
+1. 消除 ESLint 警告
+2. 明确表示我们的意图是触发副作用而非使用返回值
+
+**常见使用场景**:
+- CSS 动画开始前重置状态
+- 确保 transition 属性变更后立即生效
+- 在设置初始样式和应用动画样式之间强制重绘
+
 ### 项目概念文档维护
 
 **场景**: 添加新功能、新类型或新概念时
