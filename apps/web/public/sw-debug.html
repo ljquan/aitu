@@ -10,19 +10,37 @@
   <header>
     <h1>
       <span class="icon">⚙️</span>
-      Service Worker 调试面板
+      <span id="panelTitle">Service Worker 调试面板</span>
       <span id="swStatus" class="status-indicator inactive">
         <span class="dot"></span>
         <span class="text">未连接</span>
       </span>
+      <span id="analysisModeIndicator" class="mode-indicator analysis-mode" style="display: none;">
+        <span class="icon">🔍</span>
+        <span class="text">分析模式</span>
+      </span>
     </h1>
     <div class="header-actions">
+      <!-- 模式切换按钮 -->
+      <button id="toggleAnalysisMode" class="icon-btn" title="切换到分析模式（导入用户日志）">
+        <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+        </svg>
+      </button>
+      <!-- 导入日志按钮 (分析模式下显示) -->
+      <button id="importLogs" style="display: none;">
+        <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+        </svg>
+        导入日志
+      </button>
+      <input type="file" id="importLogsInput" accept=".json" style="display: none;">
       <button id="toggleTheme" class="icon-btn" title="切换深色/浅色主题">
         <svg id="themeIcon" class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
         </svg>
       </button>
-      <button id="toggleDebug" class="danger">
+      <button id="toggleDebug" class="danger debug-mode-only">
         <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>
         </svg>
@@ -289,13 +307,13 @@
           </div>
         </div>
       </div>
-      <button id="clearLogs" class="danger">
+      <button id="clearLogs" class="danger debug-mode-only">
         <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
         </svg>
         清空日志
       </button>
-      <button id="refreshStatus">
+      <button id="refreshStatus" class="debug-mode-only">
         <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
         </svg>

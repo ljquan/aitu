@@ -2057,3 +2057,198 @@ body, .panel, .logs-container, .log-entry, button, select, input {
 .copy-url-btn:active {
   transform: scale(0.95);
 }
+
+/* ==================== Analysis Mode Styles ==================== */
+
+/* Mode indicator badge */
+.mode-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-left: 8px;
+}
+
+.mode-indicator.analysis-mode {
+  background: linear-gradient(135deg, rgba(90, 79, 207, 0.15), rgba(233, 30, 99, 0.15));
+  color: var(--info-color);
+  border: 1px solid var(--info-color);
+}
+
+.mode-indicator .icon {
+  font-size: 12px;
+}
+
+/* Analysis mode toggle button active state */
+.icon-btn.active {
+  background: var(--info-color) !important;
+  border-color: var(--info-color) !important;
+  color: #fff !important;
+}
+
+.icon-btn.active:hover {
+  background: #4a3fcf !important;
+  border-color: #4a3fcf !important;
+}
+
+/* Analysis mode body styling */
+body.analysis-mode {
+  /* Subtle gradient background to indicate different mode */
+}
+
+body.analysis-mode header {
+  background: linear-gradient(to right, var(--bg-card), rgba(90, 79, 207, 0.05));
+  border-bottom-color: var(--info-color);
+}
+
+/* Analysis mode empty state prompt */
+.analysis-mode-prompt {
+  background: linear-gradient(135deg, rgba(90, 79, 207, 0.05), rgba(233, 30, 99, 0.05));
+  border-radius: 12px;
+  margin: 20px;
+  padding: 60px 40px !important;
+}
+
+.analysis-mode-prompt h3 {
+  font-size: 18px;
+  color: var(--info-color);
+  margin-bottom: 12px;
+}
+
+.analysis-mode-prompt p {
+  color: var(--text-secondary);
+}
+
+/* Import notification toast */
+.import-notification {
+  position: fixed;
+  top: 70px;
+  right: 16px;
+  z-index: 1100;
+  animation: slideInRight 0.3s ease;
+}
+
+.import-notification.fade-out {
+  animation: fadeOutRight 0.3s ease forwards;
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes fadeOutRight {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+}
+
+.import-notification-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--success-color);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  box-shadow: var(--shadow-lg);
+  max-width: 400px;
+}
+
+.import-notification-content > .icon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.import-notification-content .info {
+  flex: 1;
+  min-width: 0;
+}
+
+.import-notification-content .info strong {
+  display: block;
+  font-size: 14px;
+  color: var(--success-color);
+  margin-bottom: 4px;
+}
+
+.import-notification-content .info p {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 2px 0;
+  word-break: break-word;
+}
+
+.import-notification-content .info .counts {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.import-notification-content .info .export-time {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.import-notification-content .close {
+  background: none;
+  border: none;
+  font-size: 18px;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.import-notification-content .close:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+/* Analysis mode specific log styling */
+body.analysis-mode .log-entry {
+  /* Optionally add visual distinction for imported logs */
+}
+
+/* Import logs button */
+#importLogs {
+  background: var(--info-color);
+  border-color: var(--info-color);
+  color: #fff;
+}
+
+#importLogs:hover {
+  background: #4a3fcf;
+  border-color: #4a3fcf;
+}
+
+/* Imported data indicator */
+.imported-data-badge {
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 600;
+  background: var(--info-color);
+  color: #fff;
+  margin-left: 8px;
+}

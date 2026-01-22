@@ -143,6 +143,7 @@ Service Worker (后台执行)
 2. 虚拟路径（`/__aitu_cache__/`）由 SW 拦截返回 Cache Storage 数据
 3. SW 内部获取缓存数据应直接读取 Cache API，不使用 fetch
 4. 更新后禁止自动刷新页面，需用户确认
+5. SW 枚举值使用小写（`'completed'`、`'image'`、`'video'`），读取 SW 数据时注意匹配
 
 ### 模块导入规则
 

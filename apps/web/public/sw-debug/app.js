@@ -324,6 +324,339 @@ function loadBookmarks() {
   }
 }
 
+// ==================== Analysis Mode ====================
+
+/**
+ * Toggle analysis mode (for analyzing user-provided logs)
+ * In analysis mode:
+ * - SW connection is disabled
+ * - Only imported log data is displayed
+ * - Debug-related buttons are hidden
+ */
+function toggleAnalysisMode() {
+  state.isAnalysisMode = !state.isAnalysisMode;
+  updateAnalysisModeUI();
+  
+  if (state.isAnalysisMode) {
+    // Clear all existing data when entering analysis mode
+    clearAllLogsForAnalysisMode();
+  } else {
+    // Restore normal mode - reconnect to SW
+    exitAnalysisMode();
+  }
+}
+
+/**
+ * Update UI based on analysis mode state
+ */
+function updateAnalysisModeUI() {
+  const isAnalysis = state.isAnalysisMode;
+  
+  // Update mode indicator
+  if (elements.analysisModeIndicator) {
+    elements.analysisModeIndicator.style.display = isAnalysis ? 'inline-flex' : 'none';
+  }
+  
+  // Update SW status indicator
+  if (elements.swStatus) {
+    elements.swStatus.style.display = isAnalysis ? 'none' : 'inline-flex';
+  }
+  
+  // Update title
+  if (elements.panelTitle) {
+    elements.panelTitle.textContent = isAnalysis ? '日志分析模式' : 'Service Worker 调试面板';
+  }
+  
+  // Show/hide import button
+  if (elements.importLogsBtn) {
+    elements.importLogsBtn.style.display = isAnalysis ? 'inline-flex' : 'none';
+  }
+  
+  // Update toggle button appearance
+  if (elements.toggleAnalysisModeBtn) {
+    if (isAnalysis) {
+      elements.toggleAnalysisModeBtn.classList.add('active');
+      elements.toggleAnalysisModeBtn.title = '退出分析模式，返回调试模式';
+    } else {
+      elements.toggleAnalysisModeBtn.classList.remove('active');
+      elements.toggleAnalysisModeBtn.title = '切换到分析模式（导入用户日志）';
+    }
+  }
+  
+  // Hide/show debug-mode-only buttons
+  document.querySelectorAll('.debug-mode-only').forEach(el => {
+    el.style.display = isAnalysis ? 'none' : '';
+  });
+  
+  // Hide/show left panel (SW status info) in analysis mode
+  const leftPanel = document.querySelector('.left-panel');
+  if (leftPanel) {
+    leftPanel.style.display = isAnalysis ? 'none' : '';
+  }
+  
+  // Adjust panels grid for analysis mode (full width logs panel)
+  const panels = document.querySelector('.panels');
+  if (panels) {
+    if (isAnalysis) {
+      panels.style.gridTemplateColumns = '1fr';
+    } else {
+      panels.style.gridTemplateColumns = '280px 1fr';
+    }
+  }
+  
+  // Add/remove body class for analysis mode styling
+  document.body.classList.toggle('analysis-mode', isAnalysis);
+}
+
+/**
+ * Clear all logs when entering analysis mode
+ */
+function clearAllLogsForAnalysisMode() {
+  state.logs = [];
+  state.consoleLogs = [];
+  state.postmessageLogs = [];
+  state.crashLogs = [];
+  state.llmapiLogs = [];
+  state.swStatus = null;
+  state.importedLogData = null;
+  
+  // Re-render all tabs
+  renderLogs();
+  renderConsoleLogs();
+  renderPostmessageLogs();
+  renderCrashLogs();
+  renderLLMApiLogs();
+  
+  // Show import prompt
+  showImportPrompt();
+}
+
+/**
+ * Show import prompt in logs container
+ */
+function showImportPrompt() {
+  if (elements.logsContainer) {
+    elements.logsContainer.innerHTML = `
+      <div class="empty-state analysis-mode-prompt">
+        <span class="icon">📁</span>
+        <h3>分析模式</h3>
+        <p>在此模式下，您可以导入用户提供的日志文件进行分析</p>
+        <p style="font-size: 12px; opacity: 0.7; margin-bottom: 20px;">
+          支持从"导出日志"功能生成的 JSON 文件
+        </p>
+        <button id="importPromptBtn" class="primary" style="margin-top: 10px;">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px; margin-right: 6px;">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+          </svg>
+          导入日志文件
+        </button>
+        <p style="font-size: 11px; opacity: 0.5; margin-top: 16px;">
+          点击右上角搜索图标可退出分析模式
+        </p>
+      </div>
+    `;
+    
+    // Attach event listener to the prompt button
+    const btn = document.getElementById('importPromptBtn');
+    if (btn) {
+      btn.addEventListener('click', triggerImportDialog);
+    }
+  }
+}
+
+/**
+ * Exit analysis mode and restore normal SW connection
+ */
+function exitAnalysisMode() {
+  state.importedLogData = null;
+  
+  // Clear imported data
+  state.logs = [];
+  state.consoleLogs = [];
+  state.postmessageLogs = [];
+  state.crashLogs = [];
+  state.llmapiLogs = [];
+  
+  // Re-render empty state
+  renderLogs();
+  renderConsoleLogs();
+  renderPostmessageLogs();
+  renderCrashLogs();
+  renderLLMApiLogs();
+  
+  // Reconnect to SW and refresh
+  if (navigator.serviceWorker?.controller) {
+    enableDebug();
+    refreshStatus();
+    loadConsoleLogs();
+    loadPostMessageLogs();
+    loadCrashLogs();
+    loadLLMApiLogs();
+  }
+}
+
+/**
+ * Trigger file import dialog
+ */
+function triggerImportDialog() {
+  if (elements.importLogsInput) {
+    elements.importLogsInput.click();
+  }
+}
+
+/**
+ * Handle imported log file
+ * @param {Event} event - File input change event
+ */
+async function handleLogImport(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+    
+    // Validate the imported data structure
+    if (!data || typeof data !== 'object') {
+      throw new Error('无效的日志文件格式');
+    }
+    
+    // Store imported data
+    state.importedLogData = data;
+    
+    // Parse and load logs from the imported data
+    loadImportedLogs(data);
+    
+    // Show success notification
+    showImportSuccessMessage(file.name, data);
+    
+  } catch (error) {
+    console.error('Failed to import log file:', error);
+    alert(`导入失败: ${error.message}`);
+  }
+  
+  // Reset file input so same file can be selected again
+  event.target.value = '';
+}
+
+/**
+ * Load logs from imported data
+ * @param {object} data - Imported log data
+ */
+function loadImportedLogs(data) {
+  // Load fetch logs
+  if (data.fetchLogs && Array.isArray(data.fetchLogs)) {
+    state.logs = data.fetchLogs.map(log => ({
+      ...log,
+      // Ensure required fields exist
+      id: log.id || `imported-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      timestamp: log.timestamp || Date.now(),
+    }));
+    renderLogs();
+  }
+  
+  // Load console logs
+  if (data.consoleLogs && Array.isArray(data.consoleLogs)) {
+    state.consoleLogs = data.consoleLogs.map(log => ({
+      ...log,
+      id: log.id || `console-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      timestamp: log.timestamp || Date.now(),
+    }));
+    renderConsoleLogs();
+  }
+  
+  // Load postmessage logs
+  if (data.postmessageLogs && Array.isArray(data.postmessageLogs)) {
+    state.postmessageLogs = data.postmessageLogs.map(log => ({
+      ...log,
+      id: log.id || `pm-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      timestamp: log.timestamp || Date.now(),
+    }));
+    updateMessageTypeOptions();
+    renderPostmessageLogs();
+  }
+  
+  // Load memory/crash logs
+  if (data.memoryLogs && Array.isArray(data.memoryLogs)) {
+    state.crashLogs = data.memoryLogs.map(log => ({
+      ...log,
+      id: log.id || `crash-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      timestamp: log.timestamp || Date.now(),
+    }));
+    renderCrashLogs();
+  }
+  
+  // Load LLM API logs
+  if (data.llmapiLogs && Array.isArray(data.llmapiLogs)) {
+    state.llmapiLogs = data.llmapiLogs.map(log => ({
+      ...log,
+      id: log.id || `llm-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      timestamp: log.timestamp || Date.now(),
+    }));
+    renderLLMApiLogs();
+  }
+  
+  // Store SW status from imported data for display
+  if (data.swStatus) {
+    state.swStatus = data.swStatus;
+  }
+  
+  // Update tab counts
+  updateConsoleCount();
+  updatePostmessageCount();
+  updateCrashCount();
+  updateErrorDots();
+}
+
+/**
+ * Show success message after importing logs
+ * @param {string} filename
+ * @param {object} data
+ */
+function showImportSuccessMessage(filename, data) {
+  const summary = data.summary || {};
+  const counts = {
+    fetch: summary.fetchLogs || (data.fetchLogs?.length || 0),
+    console: summary.consoleLogs || (data.consoleLogs?.length || 0),
+    postmessage: summary.postmessageLogs || (data.postmessageLogs?.length || 0),
+    memory: summary.memoryLogs || (data.memoryLogs?.length || 0),
+    llmapi: summary.llmapiLogs || (data.llmapiLogs?.length || 0),
+  };
+  
+  const totalLogs = counts.fetch + counts.console + counts.postmessage + counts.memory + counts.llmapi;
+  
+  // Create a temporary notification
+  const notification = document.createElement('div');
+  notification.className = 'import-notification';
+  notification.innerHTML = `
+    <div class="import-notification-content">
+      <span class="icon">✅</span>
+      <div class="info">
+        <strong>导入成功</strong>
+        <p>${filename}</p>
+        <p class="counts">
+          共 ${totalLogs} 条日志
+          ${counts.fetch > 0 ? `| Fetch: ${counts.fetch}` : ''}
+          ${counts.console > 0 ? `| 控制台: ${counts.console}` : ''}
+          ${counts.postmessage > 0 ? `| PostMessage: ${counts.postmessage}` : ''}
+          ${counts.memory > 0 ? `| 内存: ${counts.memory}` : ''}
+          ${counts.llmapi > 0 ? `| LLM API: ${counts.llmapi}` : ''}
+        </p>
+        ${data.exportTime ? `<p class="export-time">导出时间: ${new Date(data.exportTime).toLocaleString('zh-CN')}</p>` : ''}
+      </div>
+      <button class="close" onclick="this.parentElement.parentElement.remove()">×</button>
+    </div>
+  `;
+  
+  document.body.appendChild(notification);
+  
+  // Auto remove after 5 seconds
+  setTimeout(() => {
+    notification.classList.add('fade-out');
+    setTimeout(() => notification.remove(), 300);
+  }, 5000);
+}
+
 /**
  * Toggle theme between light and dark
  */
@@ -765,6 +1098,9 @@ const state = {
     keepBookmarks: true,
   },
   autoCleanTimerId: null,
+  // Analysis mode - for debugging user-provided logs without local SW connection
+  isAnalysisMode: false,
+  importedLogData: null, // Imported log data from user
 };
 
 // Memory monitoring interval
@@ -887,6 +1223,12 @@ function cacheElements() {
     memoryWarning: document.getElementById('memoryWarning'),
     memoryNotSupported: document.getElementById('memoryNotSupported'),
     memoryUpdateTime: document.getElementById('memoryUpdateTime'),
+    // Analysis mode elements
+    toggleAnalysisModeBtn: document.getElementById('toggleAnalysisMode'),
+    importLogsBtn: document.getElementById('importLogs'),
+    importLogsInput: document.getElementById('importLogsInput'),
+    analysisModeIndicator: document.getElementById('analysisModeIndicator'),
+    panelTitle: document.getElementById('panelTitle'),
   };
 }
 
@@ -2752,8 +3094,13 @@ function handleStatusUpdate(data) {
  * Setup event listeners
  */
 function setupEventListeners() {
-  elements.toggleDebugBtn.addEventListener('click', toggleDebug);
-  elements.exportLogsBtn.addEventListener('click', openExportModal);
+  // Analysis mode event listeners
+  elements.toggleAnalysisModeBtn?.addEventListener('click', toggleAnalysisMode);
+  elements.importLogsBtn?.addEventListener('click', triggerImportDialog);
+  elements.importLogsInput?.addEventListener('change', handleLogImport);
+  
+  elements.toggleDebugBtn?.addEventListener('click', toggleDebug);
+  elements.exportLogsBtn?.addEventListener('click', openExportModal);
   elements.doExportBtn?.addEventListener('click', exportLogs);
   elements.closeExportModalBtn?.addEventListener('click', closeExportModal);
   elements.cancelExportBtn?.addEventListener('click', closeExportModal);
@@ -3016,10 +3363,28 @@ function setupMessageHandlers() {
  */
 async function init() {
   cacheElements();
+  
+  // Load saved bookmarks, theme, and settings first (before any early returns)
+  loadBookmarks();
+  loadTheme();
+  loadSettings();
+  
+  // Setup event listeners (always needed, even in analysis mode)
+  setupEventListeners();
+  
+  // Check if analysis mode should be auto-enabled (e.g., via URL parameter)
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.has('analysis')) {
+    state.isAnalysisMode = true;
+    updateAnalysisModeUI();
+    showImportPrompt();
+    console.log('[SW Debug] Started in analysis mode');
+    return;
+  }
 
   // Check SW availability
   if (!('serviceWorker' in navigator)) {
-    alert('此浏览器不支持 Service Worker');
+    alert('此浏览器不支持 Service Worker\n\n提示：您可以使用分析模式导入用户日志进行分析');
     updateSwStatus(elements.swStatus, false);
     return;
   }
@@ -3027,7 +3392,16 @@ async function init() {
   const swReady = await checkSwReady();
   
   if (!swReady) {
-    alert('Service Worker 未注册或未激活\n\n请先访问主应用，然后刷新此页面');
+    // SW not ready - offer analysis mode as alternative
+    const useAnalysisMode = confirm('Service Worker 未注册或未激活\n\n您可以：\n1. 点击"取消"后访问主应用，然后刷新此页面\n2. 点击"确定"进入分析模式，导入用户日志进行分析');
+    
+    if (useAnalysisMode) {
+      state.isAnalysisMode = true;
+      updateAnalysisModeUI();
+      showImportPrompt();
+      return;
+    }
+    
     updateSwStatus(elements.swStatus, false);
     return;
   }
@@ -3036,16 +3410,10 @@ async function init() {
 
   updateSwStatus(elements.swStatus, true);
 
-  // Load saved bookmarks, theme, and settings
-  loadBookmarks();
-  loadTheme();
-  loadSettings();
-
   // Register PostMessage logging callback
   setPostMessageLogCallback(addPostmessageLog);
 
   setupMessageHandlers();
-  setupEventListeners();
 
   // Auto-enable debug mode first when entering debug page
   // The SW_DEBUG_ENABLED handler will then call refreshStatus() to get latest state

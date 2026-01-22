@@ -221,6 +221,49 @@ export function sanitizeObject(obj: unknown): unknown { ... }
 - 主线程：`packages/drawnix/src/utils/sanitize-utils.ts`
 - Service Worker：`apps/web/src/sw/task-queue/utils/sanitize-utils.ts`
 
+#### Service Worker 枚举值使用小写
+
+**场景**: 读取 SW 任务队列数据（如 `sw-task-queue` 数据库）进行过滤时
+
+❌ **错误示例**:
+```typescript
+// sw-debug 或其他外部模块读取 SW 数据
+const TaskStatus = {
+  COMPLETED: 'COMPLETED',  // ❌ 大写
+};
+const TaskType = {
+  IMAGE: 'IMAGE',  // ❌ 大写
+  VIDEO: 'VIDEO',
+};
+
+// 过滤已完成任务 - 永远匹配不到！
+const completedTasks = tasks.filter(
+  task => task.status === TaskStatus.COMPLETED  // 实际数据是 'completed'
+);
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：使用小写，与 SW 定义保持一致
+const TaskStatus = {
+  COMPLETED: 'completed',  // ✅ 小写
+};
+const TaskType = {
+  IMAGE: 'image',  // ✅ 小写
+  VIDEO: 'video',
+};
+
+// 正确匹配
+const completedTasks = tasks.filter(
+  task => task.status === TaskStatus.COMPLETED
+);
+```
+
+**原因**: SW 内部的枚举定义使用小写值（见 `apps/web/src/sw/task-queue/types.ts`），读取 SW 数据时必须使用相同的值进行匹配。大小写不一致会导致过滤或比较失败，但不会报错，难以调试。
+
+**相关文件**:
+- `apps/web/src/sw/task-queue/types.ts` - SW 枚举定义
+
 ### React 组件规范
 - 使用函数组件和 Hooks
 - 使用 `React.memo` 优化重渲染
