@@ -11,6 +11,7 @@ $gray-medium: #9CA3AF;
 $gray-dark: #6B7280;
 $text-dark: #1F2937;
 $vip-color: #E91E63;
+$green-health: #10B981;
 
 .model-dropdown {
   position: relative;
@@ -36,29 +37,24 @@ $vip-color: #E91E63;
     border: none;
     cursor: pointer;
     transition: all 0.15s ease;
-
-    &:focus {
-      outline: none;
-    }
-
-    &:disabled {
-      cursor: not-allowed;
-    }
+    position: relative;
 
     &--minimal {
-      gap: 1px;
+      gap: 4px;
       padding: 4px 8px;
       border-radius: 4px;
       font-size: 13px;
       font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
       white-space: nowrap;
 
-      &:hover:not(:disabled) {
-        background: rgba($orange-primary, 0.1);
+      .model-dropdown__at {
+        color: $orange-primary;
+        font-weight: 600;
       }
 
-      &.model-dropdown__trigger--open {
-        background: rgba($orange-primary, 0.15);
+      .model-dropdown__code {
+        color: $gray-dark;
+        font-weight: 500;
       }
     }
 
@@ -69,15 +65,21 @@ $vip-color: #E91E63;
       border: 1px solid #d9d9d9;
       border-radius: 6px;
       min-height: 36px;
+      gap: 8px;
 
-      &:hover:not(:disabled) {
-        border-color: $orange-primary;
+      .model-dropdown__form-content {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: 1;
+        min-width: 0;
       }
+    }
 
-      &.model-dropdown__trigger--open {
-        border-color: $orange-primary;
-        box-shadow: 0 0 0 2px rgba($orange-primary, 0.1);
-      }
+    // 触发器上的健康状态指示
+    .model-health-signal {
+      margin-left: -2px;
+      margin-right: 2px;
     }
   }
 

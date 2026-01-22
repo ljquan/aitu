@@ -2081,18 +2081,19 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
                   {rowInfo.tasks[0].error.message}
                 </span>
                 {rowInfo.tasks[0].error.details?.originalError && (
-                  <Tooltip
-                    content={
-                      <div className="error-details-tooltip">
-                        <div className="error-details-title">原始错误信息:</div>
-                        <div className="error-details-content">
-                          {rowInfo.tasks[0].error.details.originalError}
-                        </div>
+                <Tooltip
+                  content={
+                    <div className="error-details-tooltip">
+                      <div className="error-details-title">原始错误信息:</div>
+                      <div className="error-details-content">
+                        {rowInfo.tasks[0].error.details.originalError}
                       </div>
-                    }
-                    theme="light"
-                    placement="bottom"
-                  >
+                    </div>
+                  }
+                  theme="light"
+                  placement="bottom"
+                  showArrow={false}
+                >
                     <span className="preview-error-details-link">[详情]</span>
                   </Tooltip>
                 )}

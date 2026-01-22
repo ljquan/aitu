@@ -74,12 +74,13 @@ export const AspectRatioSelector: React.FC<AspectRatioSelectorProps> = ({
           <div className="aspect-ratio-selector__dropdown">
             <div className="aspect-ratio-selector__dropdown-grid">
               {ASPECT_RATIO_OPTIONS.map((option) => (
-                <Tooltip
-                  key={option.value}
-                  content={option.description}
-                  theme="light"
-                  placement="top"
-                >
+          <Tooltip
+            key={option.value}
+            content={option.description}
+            theme="light"
+            placement="top"
+            showArrow={false}
+          >
                   <div
                     className={`aspect-ratio-selector__dropdown-item ${
                       value === option.value ? 'aspect-ratio-selector__dropdown-item--selected' : ''
@@ -112,6 +113,7 @@ export const AspectRatioSelector: React.FC<AspectRatioSelectorProps> = ({
             content={option.description}
             theme="light"
             placement="top"
+            showArrow={false}
           >
             <div
               className={`aspect-ratio-selector__option ${

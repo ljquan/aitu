@@ -780,13 +780,13 @@ export function MediaLibraryGrid({
                 };
 
                 return (
-                  <Tooltip 
-                    key={group.id} 
-                    content={`${group.label}: ${isAsc ? '正序' : (isDesc ? '逆序' : '默认')}`} 
-                    placement="top" 
-                    theme="light" 
-                    showArrow={false}
-                  >
+          <Tooltip
+            key={group.id} 
+            content={`${group.label}: ${isAsc ? '正序' : (isDesc ? '逆序' : '默认')}`} 
+            placement="top" 
+            theme="light" 
+            showArrow={false}
+          >
                     <div
                       className={`media-library-grid__filter-option ${isActive ? 'media-library-grid__filter-option--active' : ''}`}
                       onClick={handleSortClick}

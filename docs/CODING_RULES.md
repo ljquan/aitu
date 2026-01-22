@@ -3936,6 +3936,63 @@ const matchesSource = !filters.activeSource || filters.activeSource === 'ALL' ||
 
 ## UI 交互规范
 
+#### Tooltip 样式统一规范
+
+**场景**: 在项目中使用 TDesign 的 `Tooltip` 组件时。
+
+❌ **错误示例**:
+```tsx
+<Tooltip content="提示文字">
+  <Button icon={<Icon />} />
+</Tooltip>
+```
+
+✅ **正确示例**:
+```tsx
+<Tooltip content="提示文字" theme="light" showArrow={false}>
+  <Button icon={<Icon />} />
+</Tooltip>
+```
+
+**原因**: 为了保持项目视觉风格的高度统一，所有 Tooltip 必须使用 `theme="light"`（白底黑字）。同时，为了界面更简洁，推荐在图标按钮或紧凑列表项上使用 `showArrow={false}` 隐藏箭头。
+
+#### 高层级容器中的 Tooltip 遮挡问题
+
+**场景**: 在使用 `createPortal` 渲染的弹窗、下拉菜单或设置了极高 `zIndex` 的容器内部使用 `Tooltip` 时。
+
+❌ **错误示例**:
+```tsx
+// 在 zIndex: 10000 的下拉菜单中
+<Tooltip content="状态提示">
+  <div className="status-dot" />
+</Tooltip>
+// 结果：Tooltip 被挡在下拉菜单下面，看不见
+```
+
+✅ **正确示例**:
+```tsx
+<Tooltip content="状态提示" theme="light" zIndex={20000}>
+  <div className="status-dot" />
+</Tooltip>
+```
+
+**原因**: 项目中部分浮层（如模型选择下拉）使用了 `createPortal` 且 `zIndex` 达到 10000。默认层级的 `Tooltip` 会被遮挡。在这种情况下，必须显式将 `Tooltip` 的 `zIndex` 提升到更高（如 20000）以确保可见。
+
+#### 信号/状态展示的量化表意
+
+**场景**: 展示模型健康度、网络信号等需要量化感知的状态时。
+
+❌ **错误示例**:
+使用单一圆点或方块，仅靠颜色区分。用户难以感知“程度”的差异。
+
+✅ **正确示例**:
+使用“信号格”或“进度条”设计，配合颜色变化。
+- 3 格绿色：极佳
+- 2 格橙色：一般
+- 1 格红色：极差
+
+**原因**: 相比单一的圆点，信号格能更直观地传达“量”的概念，符合用户的直觉认知（如手机信号、WiFi 强度）。
+
 ### 可点击容器模式：扩大交互区域
 
 **场景**: 当 checkbox、按钮等小型交互元素嵌套在容器中时，用户期望点击整个容器都能触发操作。

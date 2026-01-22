@@ -337,6 +337,7 @@ export const MediaViewport: React.FC<MediaViewportProps> = ({
               content={toolbarOrientation === 'horizontal' ? '切换为垂直布局' : '切换为水平布局'}
               theme="light"
               placement="top"
+              showArrow={false}
             >
               <button
                 type="button"

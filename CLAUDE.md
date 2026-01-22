@@ -194,7 +194,8 @@ import { quickInsert } from '../../../services/canvas-operations';
 
 ### UI 规范
 
-- **Tooltips**：始终使用 `theme='light'`
+- **Tooltips**：始终使用 `theme='light'`，高层级容器内需显式设置更高 `zIndex` (如 20000)
+- **状态表意**：优先使用量化组件（如信号格）而非单一颜色圆点来展示程度差异
 - **按钮圆角**：8px
 - **卡片圆角**：12px
 - **动画时长**：150-300ms，ease-out 曲线
