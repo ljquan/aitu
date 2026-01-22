@@ -22,6 +22,7 @@ $brand-orange-dark: #E67E22;
     border-color 0.15s ease,
     box-shadow 0.2s ease;
   contain: layout style;
+  user-select: none; // 防止 Shift 连选时文本被选中
 
   &:hover {
     transform: translateY(-2px);

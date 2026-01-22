@@ -135,6 +135,7 @@ export function MediaLibraryGrid({
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
   const [gridSize, setGridSize] = useState<number>(getStoredGridSize); // 从缓存恢复网格尺寸
+  const lastSelectedIdRef = useRef<string | null>(null); // 记录上次选中的素材ID，用于Shift连选
   
   // 预览状态
   const [previewVisible, setPreviewVisible] = useState(false);
@@ -286,7 +287,30 @@ export function MediaLibraryGrid({
     }
   }, [isAllSelected, filteredResult.assets]);
 
-  const toggleAssetSelection = useCallback((assetId: string) => {
+  const toggleAssetSelection = useCallback((assetId: string, event?: React.MouseEvent) => {
+    // Shift 键连选逻辑
+    if (event?.shiftKey && lastSelectedIdRef.current && lastSelectedIdRef.current !== assetId) {
+      const lastIndex = filteredResult.assets.findIndex(a => a.id === lastSelectedIdRef.current);
+      const currentIndex = filteredResult.assets.findIndex(a => a.id === assetId);
+      
+      if (lastIndex !== -1 && currentIndex !== -1) {
+        const start = Math.min(lastIndex, currentIndex);
+        const end = Math.max(lastIndex, currentIndex);
+        const rangeIds = filteredResult.assets.slice(start, end + 1).map(a => a.id);
+        
+        setSelectedAssetIds(prev => {
+          const newSet = new Set(prev);
+          rangeIds.forEach(id => newSet.add(id));
+          return newSet;
+        });
+        
+        // 更新右侧面板显示最近点击的素材
+        onSelectAsset(assetId);
+        return;
+      }
+    }
+    
+    // 普通点击切换选中状态
     setSelectedAssetIds(prev => {
       const newSet = new Set(prev);
       if (newSet.has(assetId)) {
@@ -296,7 +320,13 @@ export function MediaLibraryGrid({
       }
       return newSet;
     });
-  }, []);
+    
+    // 记录本次选中的 ID
+    lastSelectedIdRef.current = assetId;
+    
+    // 更新右侧面板显示最近点击的素材
+    onSelectAsset(assetId);
+  }, [filteredResult.assets, onSelectAsset]);
 
   // 批量删除处理（同时删除画布上使用这些素材的元素）
   // 只删除当前筛选结果中被选中的素材

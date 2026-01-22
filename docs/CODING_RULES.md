@@ -103,6 +103,40 @@ export const setFreehandStrokeStyle = (
 
 **原因**: TypeScript 的枚举是封闭的，无法在外部添加新成员。通过 "类型 + 同名常量对象" 模式，可以：1) 保持与原始枚举的完全兼容；2) 类型安全地添加新值；3) 在运行时和编译时都能正确使用。这是扩展第三方库类型的标准模式。
 
+#### Blob 对象的 MIME 类型获取
+
+**场景**: 处理 `File | Blob` 联合类型时获取文件的 MIME 类型
+
+❌ **错误示例**:
+```typescript
+// 错误：假设只有 File 有 type 属性，Blob 时使用默认值
+async function addAsset(file: File | Blob) {
+  const mimeType = file instanceof File 
+    ? file.type 
+    : 'application/octet-stream';  // ❌ 忽略了 Blob.type
+  
+  // 如果 Blob 是通过 new Blob([data], { type: 'image/png' }) 创建的
+  // 这里会错误地返回 'application/octet-stream'
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：Blob 也有 type 属性，优先使用
+async function addAsset(file: File | Blob) {
+  const mimeType = file instanceof File 
+    ? file.type 
+    : (file.type || 'application/octet-stream');  // ✅ 先检查 Blob.type
+}
+
+// 或更简洁的写法（File 继承自 Blob，都有 type）
+async function addAsset(file: File | Blob) {
+  const mimeType = file.type || 'application/octet-stream';
+}
+```
+
+**原因**: `Blob` 构造函数支持通过 `options.type` 设置 MIME 类型，如 `new Blob([data], { type: 'image/png' })`。在处理从 ZIP 解压的文件、Canvas 导出的图片等场景时，传入的是带有正确 `type` 的 `Blob` 对象。如果忽略 `Blob.type`，会导致文件类型验证失败。
+
 #### Import 语句必须放在文件顶部
 
 **场景**: 添加新的 import 语句时
@@ -3880,6 +3914,52 @@ const matchesSource = !filters.activeSource || filters.activeSource === 'ALL' ||
 - 父容器添加 `onClick`、`role="button"`、`tabIndex={0}` 和键盘支持
 - 子元素使用 `pointer-events: none` 禁用直接点击
 - 添加 `cursor: pointer` 和 `:active` 反馈
+
+---
+
+### Shift 连选时防止文本被选中
+
+**场景**: 实现列表/网格的多选功能时，用户使用 Shift 键连选会触发浏览器默认的文本选择行为。
+
+❌ **错误示例**:
+```scss
+.list-item {
+  cursor: pointer;
+  // 没有禁用文本选择，Shift+Click 时文字会被选中高亮
+}
+```
+
+```tsx
+// 用户 Shift+Click 连选时，列表项的文字被蓝色高亮选中
+const handleClick = (id: string, event: React.MouseEvent) => {
+  if (event.shiftKey) {
+    // 执行连选逻辑
+    selectRange(lastSelectedId, id);
+  }
+};
+```
+
+✅ **正确示例**:
+```scss
+.list-item {
+  cursor: pointer;
+  user-select: none; // 防止 Shift 连选时文本被选中
+}
+```
+
+```tsx
+// Shift+Click 时只执行连选逻辑，不会选中文字
+const handleClick = (id: string, event: React.MouseEvent) => {
+  if (event.shiftKey && lastSelectedId) {
+    selectRange(lastSelectedId, id);
+    return;
+  }
+  toggleSelection(id);
+  lastSelectedIdRef.current = id;
+};
+```
+
+**原因**: 浏览器默认行为是 Shift+Click 选中两次点击之间的所有文本。在实现自定义多选功能时，需要通过 `user-select: none` 禁用这一行为，否则用户会看到文本被选中的蓝色高亮，影响交互体验。
 
 ---
 

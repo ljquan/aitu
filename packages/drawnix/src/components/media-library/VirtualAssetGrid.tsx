@@ -70,7 +70,7 @@ interface VirtualAssetGridProps {
   selectedAssetId?: string;
   selectedAssetIds: Set<string>;
   isSelectionMode: boolean;
-  onSelectAsset: (assetId: string) => void;
+  onSelectAsset: (assetId: string, event?: React.MouseEvent) => void;
   onDoubleClick?: (asset: Asset) => void;
   onPreview?: (asset: Asset) => void;
 }

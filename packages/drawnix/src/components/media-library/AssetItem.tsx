@@ -17,7 +17,7 @@ export interface AssetItemProps {
   asset: Asset;
   viewMode: ViewMode;
   isSelected: boolean;
-  onSelect: (assetId: string) => void;
+  onSelect: (assetId: string, event?: React.MouseEvent) => void;
   onDoubleClick?: (asset: Asset) => void;
   onPreview?: (asset: Asset) => void;
   isInSelectionMode?: boolean;
@@ -29,8 +29,8 @@ export const AssetItem = memo<AssetItemProps>(
     const displaySize = useAssetSize(asset.id, asset.url, asset.size);
     const [isHovered, setIsHovered] = useState(false);
 
-    const handleClick = useCallback(() => {
-      onSelect(asset.id);
+    const handleClick = useCallback((e: React.MouseEvent) => {
+      onSelect(asset.id, e);
     }, [asset.id, onSelect]);
 
     const handleDoubleClick = useCallback(() => {

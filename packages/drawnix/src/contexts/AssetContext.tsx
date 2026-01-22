@@ -376,7 +376,7 @@ export function AssetProvider({ children }: AssetProviderProps) {
           (file instanceof File ? file.name : `asset-${Date.now()}`);
 
         const mimeType =
-          file instanceof File ? file.type : 'application/octet-stream';
+          file instanceof File ? file.type : (file.type || 'application/octet-stream');
 
         // console.log('[AssetContext] Calling assetStorageService.addAsset...');
         const asset = await assetStorageService.addAsset({
