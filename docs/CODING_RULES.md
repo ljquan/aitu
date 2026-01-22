@@ -526,6 +526,64 @@ const openDialog = (dialogType: DialogType) => {
 - 函数式更新 `setState(prev => ...)` 保证 `prev` 始终是最新状态
 - 这个问题在多个弹窗/抽屉同时打开时特别容易出现
 
+#### 传递 React 组件作为 prop 时必须实例化
+
+**场景**: 将 React 组件作为 `icon` 或其他 prop 传递给子组件时
+
+❌ **错误示例**:
+```typescript
+// 错误：传递组件函数本身，而不是 JSX 实例
+import { BackgroundColorIcon } from './icons';
+
+const icon = !hexColor ? BackgroundColorIcon : undefined;
+
+// 子组件中渲染时：
+// {icon} → React 警告 "Functions are not valid as a React child"
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：传递 JSX 实例
+import { BackgroundColorIcon } from './icons';
+
+const icon = !hexColor ? <BackgroundColorIcon /> : undefined;
+
+// 子组件中渲染时：
+// {icon} → 正常渲染
+```
+
+**原因**: React 组件本质上是函数，直接将函数作为子元素传递会导致 React 警告。需要调用组件（`<Component />`）生成 JSX 元素后再传递。
+
+#### 内联 style 的 undefined 值会覆盖 CSS 类样式
+
+**场景**: 当需要条件性地应用内联样式，同时使用 CSS 类作为备选样式时
+
+❌ **错误示例**:
+```typescript
+// 错误：style 对象中的 undefined 值会覆盖 CSS 类的 background
+<label
+  className={classNames('fill-label', { 'color-mixed': fill === undefined })}
+  style={{
+    background: fill ? fill : undefined,  // undefined 会覆盖 .color-mixed 的 background
+  }}
+/>
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：当需要 CSS 类生效时，不传递 style 对象
+<label
+  className={classNames('fill-label', { 'color-mixed': fill === undefined })}
+  style={
+    fill === undefined
+      ? undefined  // 不设置 style，让 CSS 类的 background 生效
+      : { background: fill }
+  }
+/>
+```
+
+**原因**: React 的内联 style 优先级高于 CSS 类。即使 `background: undefined`，React 仍会在元素上设置空的 style 属性，这可能干扰 CSS 类的样式应用。当需要 CSS 类完全控制样式时，应该不传递 style 对象（`style={undefined}`）。
+
 #### 使用 ResizeObserver 实现组件级别的响应式布局
 
 **场景**: 当组件位于可调整大小的侧边栏、抽屉或面板中时，使用基于视口宽度的媒体查询 (`@media`) 无法准确反映组件的实际可用空间。

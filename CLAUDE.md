@@ -174,6 +174,8 @@ import { quickInsert } from '../../../services/canvas-operations';
 2. Hover 延迟操作需要正确的计时器清理
 3. 第三方窗口需用 `createPortal` 保持 React 事件流
 4. 图标组件使用 `React.FC`，支持 `size` 属性
+5. 传递组件作为 prop 时必须实例化：`icon={<Icon />}` 而非 `icon={Icon}`
+6. 内联 style 的 `undefined` 值会覆盖 CSS 类，需要 CSS 类生效时传 `style={undefined}`
 
 ### 缓存规则
 

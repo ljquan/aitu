@@ -92,7 +92,7 @@ export const PopupFillButton: React.FC<PopupFillButtonProps> = ({
   }, [currentColor]);
 
   const icon =
-    !hexColor || isFullyTransparent(opacity) ? BackgroundColorIcon : undefined;
+    !hexColor || isFullyTransparent(opacity) ? <BackgroundColorIcon /> : undefined;
 
   // 处理纯色变更
   const handleSolidChange = useCallback(
