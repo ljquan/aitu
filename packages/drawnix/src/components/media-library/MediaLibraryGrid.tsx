@@ -41,7 +41,7 @@ import { AssetType, AssetSource } from '../../types/asset.types';
 import { useDrawnix } from '../../hooks/use-drawnix';
 import { removeElementsByAssetIds, removeElementsByAssetUrl, isCacheUrl, countElementsByAssetUrl } from '../../utils/asset-cleanup';
 import { insertImageFromUrl } from '../../data/image';
-import { insertVideo } from '../../data/video';
+import { insertVideoFromUrl } from '../../data/video';
 import './MediaLibraryGrid.scss';
 import './VirtualAssetGrid.scss';
 
@@ -514,7 +514,7 @@ export function MediaLibraryGrid({
     if (board) {
       try {
         if (item.type === 'video') {
-          await insertVideo(board, item.url);
+          await insertVideoFromUrl(board, item.url);
         } else {
           await insertImageFromUrl(board, item.url);
         }
