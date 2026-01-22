@@ -22,44 +22,11 @@
 
 ## 产品展示
 
-<div align="center">
-  <figure>
-    <a target="_blank" rel="noopener">
-      <img src="./apps/web/public/product_showcase/九宫格拆图.gif" alt="拆分图片" width="100%" />
-    </a>
-    <figcaption>
-      <p align="center">
-        语义理解 - 拆分图片
-      </p>
-    </figcaption>
-  </figure>
-</div>
+| 拆分图片 | 流程图 | 思维导图 |
+|---------|--------|----------|
+| ![](./apps/web/public/product_showcase/九宫格拆图.gif) | ![](./apps/web/public/product_showcase/流程图.gif) | ![](./apps/web/public/product_showcase/思维导图.gif) |
+| 语义理解 - 拆分图片 | 语义理解 - 流程图 | 语义理解 - 思维导图 |
 
-<div align="center">
-  <figure>
-    <a target="_blank" rel="noopener">
-      <img src="./apps/web/public/product_showcase/流程图.gif" alt="流程图" width="100%" />
-    </a>
-    <figcaption>
-      <p align="center">
-        语义理解 - 流程图
-      </p>
-    </figcaption>
-  </figure>
-</div>
-
-<div align="center">
-  <figure>
-    <a target="_blank" rel="noopener">
-      <img src="./apps/web/public/product_showcase/思维导图.gif" alt="思维导图" width="100%" />
-    </a>
-    <figcaption>
-      <p align="center">
-        语义理解 - 思维导图
-      </p>
-    </figcaption>
-  </figure>
-</div>
 
 ## 应用
 
