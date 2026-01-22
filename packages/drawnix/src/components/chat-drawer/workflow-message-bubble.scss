@@ -85,6 +85,9 @@
   &__progress-text {
     font-size: 12px;
     color: var(--td-text-color-placeholder);
+    font-variant-numeric: tabular-nums;
+    min-width: 2.5em;
+    text-align: right;
   }
 
   // 进度条

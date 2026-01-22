@@ -210,6 +210,7 @@ $brand-orange-dark: #E67E22;
     color: $brand-orange-dark;
     white-space: nowrap;
     min-width: 80px;
+    font-variant-numeric: tabular-nums;
   }
 
   &__header-spacer {

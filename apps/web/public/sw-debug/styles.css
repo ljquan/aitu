@@ -356,6 +356,9 @@ button .icon-svg {
   font-family: 'SF Mono', Monaco, Consolas, monospace;
   font-size: 12px;
   color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  min-width: 3em;
+  display: inline-block;
 }
 
 /* Cache List */
@@ -586,6 +589,14 @@ button .icon-svg {
   height: 2px;
   background: var(--primary-color);
   border-radius: 1px 1px 0 0;
+}
+
+/* Tab count badges - prevent layout shift when numbers change */
+.tab span[id$="Count"] {
+  display: inline-block;
+  min-width: 2.5em;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
 }
 
 .tab-content {
@@ -1785,6 +1796,9 @@ body, .panel, .logs-container, .log-entry, button, select, input {
   color: var(--text-primary);
   font-family: 'SF Mono', Monaco, Consolas, monospace;
   font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  min-width: 2em;
+  display: inline-block;
 }
 
 .stats-bar .stat-chart {
@@ -2251,4 +2265,96 @@ body.analysis-mode .log-entry {
   background: var(--info-color);
   color: #fff;
   margin-left: 8px;
+}
+
+/* Backup notification styling */
+.backup-notification .import-notification-content {
+  border-color: var(--success-color);
+}
+
+.backup-notification .import-notification-content > .icon {
+  color: var(--success-color);
+}
+
+.backup-notification .info strong {
+  color: var(--success-color);
+}
+
+/* Backup button */
+#backupData {
+  background: var(--success-color);
+  border-color: var(--success-color);
+  color: #fff;
+}
+
+#backupData:hover {
+  background: #00A085;
+  border-color: #00A085;
+}
+
+#backupData:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* Backup progress container */
+.backup-progress-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  animation: fadeIn 0.2s ease;
+}
+
+.backup-progress-content {
+  background: var(--bg-card);
+  border-radius: 12px;
+  padding: 24px 32px;
+  min-width: 320px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.backup-progress-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.backup-progress-icon {
+  font-size: 24px;
+}
+
+.backup-progress-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.backup-progress-bar {
+  height: 8px;
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.backup-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary-color) 0%, var(--success-color) 100%);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.backup-progress-text {
+  font-size: 13px;
+  color: var(--text-secondary);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }

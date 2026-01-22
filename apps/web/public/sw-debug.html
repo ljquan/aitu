@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Service Worker 调试面板</title>
   <link rel="stylesheet" href="./sw-debug/styles.css">
+  <!-- JSZip for backup functionality - local copy for reliability -->
+  <script src="./sw-debug/jszip.min.js"></script>
 </head>
 <body>
   <header>
@@ -35,6 +37,15 @@
         导入日志
       </button>
       <input type="file" id="importLogsInput" accept=".json" style="display: none;">
+      <!-- 数据备份按钮 -->
+      <button id="backupData" class="success" title="备份应用数据（提示词、项目、素材）">
+        <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+          <polyline points="17 21 17 13 7 13 7 21"/>
+          <polyline points="7 3 7 8 15 8"/>
+        </svg>
+        数据备份
+      </button>
       <button id="toggleTheme" class="icon-btn" title="切换深色/浅色主题">
         <svg id="themeIcon" class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
