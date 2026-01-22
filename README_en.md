@@ -11,7 +11,7 @@
   <p>
     <a href="https://github.com/ljquan/aitu/releases"><img src="https://img.shields.io/badge/version-0.0.11-blue.svg" alt="Version"></a>
     <a href="https://github.com/ljquan/aitu/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
-    <a href="https://aitu.tu-zi.com"><img src="https://img.shields.io/badge/demo-online-brightgreen.svg" alt="Demo"></a>
+    <a href="https://opentu.ai"><img src="https://img.shields.io/badge/demo-online-brightgreen.svg" alt="Demo"></a>
   </p>
 </div>
 
@@ -214,7 +214,7 @@ aitu/
 
 ## Try It Out
 
-[*https://aitu.tu-zi.com*](https://aitu.tu-zi.com) is the online application of *Aitu*.
+[*https://opentu.ai*](https://opentu.ai) is the online application of *Aitu*.
 
 We will be iterating frequently on application features to continuously optimize user experience.
 
@@ -222,7 +222,7 @@ We will be iterating frequently on application features to continuously optimize
 ## 🚀 Quick Start
 
 ### Online Experience
-Visit [aitu.tu-zi.com](https://aitu.tu-zi.com) directly to start using it immediately, no installation required.
+Visit [aitu.tu-zi.com](https://opentu.ai) directly to start using it immediately, no installation required.
 
 ### Local Development
 

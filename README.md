@@ -10,7 +10,7 @@
   </p>
   <p>
     <a href="https://github.com/ljquan/aitu/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
-    <a href="https://aitu.tu-zi.com"><img src="https://img.shields.io/badge/demo-online-brightgreen.svg" alt="Demo"></a>
+    <a href="https://opentu.ai"><img src="https://img.shields.io/badge/demo-online-brightgreen.svg" alt="Demo"></a>
   </p>
   <p>
     <a href="https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fljquan%2Faitu&project-name=aitu&repository-name=aitu"><img src="https://vercel.com/button" alt="Deploy with Vercel"/></a>
@@ -222,7 +222,7 @@ aitu/
 
 ## 应用
 
-[*https://aitu.tu-zi.com*](https://aitu.tu-zi.com) 是 *爱图* 的在线应用。
+[*https://opentu.ai*](https://opentu.ai) 是 *爱图* 的在线应用。
 
 近期会高频迭代应用功能，持续优化用户体验。
 
@@ -230,7 +230,7 @@ aitu/
 ## 🚀 快速开始
 
 ### 在线体验
-直接访问 [aitu.tu-zi.com](https://aitu.tu-zi.com) 立即开始使用，无需安装任何软件。
+直接访问 [aitu.tu-zi.com](https://opentu.ai) 立即开始使用，无需安装任何软件。
 
 ### 一键部署
 
