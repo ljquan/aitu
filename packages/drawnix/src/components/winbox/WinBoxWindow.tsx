@@ -119,6 +119,8 @@ export interface WinBoxWindowProps {
   onInsertToCanvas?: (rect: { x: number; y: number; width: number; height: number }) => void;
   /** 是否保持窗口实例存活，设为 true 时 visible=false 只隐藏窗口而不销毁 */
   keepAlive?: boolean;
+  /** 最小化动画目标元素选择器，如果提供则最小化时会播放缩放动画到目标位置 */
+  minimizeTargetSelector?: string;
 }
 
 /**
@@ -161,6 +163,7 @@ export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
   minVisiblePixels = 50,
   onInsertToCanvas,
   keepAlive = false,
+  minimizeTargetSelector,
 }) => {
   const winboxRef = useRef<any>(null);
   const winboxElementRef = useRef<HTMLDivElement | null>(null); // WinBox 窗口的 DOM 元素
@@ -477,15 +480,89 @@ export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
           const size = savedPosition
             ? { width: savedPosition.width, height: savedPosition.height }
             : { width: this.width || 800, height: this.height || 600 };
-          console.log('[WinBoxWindow] onminimize called, hiding window', { 
-            position, 
-            size, 
-            savedPosition,
-            currentPos: { x: this.x, y: this.y },
-          });
-          // 立即隐藏窗口，覆盖默认的最小化行为
+          
+          // 获取窗口 DOM 元素
+          const wbWindow = this.window as HTMLElement;
+          
+          // 如果提供了目标选择器，播放最小化动画
+          if (minimizeTargetSelector && wbWindow) {
+            const targetElement = document.querySelector(minimizeTargetSelector);
+            if (targetElement) {
+              // 立即重置 WinBox 可能已应用的任何变换，恢复到正常状态
+              wbWindow.style.transition = 'none';
+              wbWindow.style.transform = '';
+              wbWindow.style.opacity = '1';
+              // 如果 WinBox 已经开始移动窗口，恢复到保存的位置
+              if (savedPosition) {
+                wbWindow.style.left = `${savedPosition.x}px`;
+                wbWindow.style.top = `${savedPosition.y}px`;
+                wbWindow.style.width = `${savedPosition.width}px`;
+                wbWindow.style.height = `${savedPosition.height}px`;
+              }
+              
+              // 强制重绘，确保样式已应用
+              void wbWindow.offsetHeight;
+              
+              // 获取当前窗口位置（重置后的位置）
+              const windowRect = wbWindow.getBoundingClientRect();
+              const targetRect = targetElement.getBoundingClientRect();
+              
+              // 计算目标中心点
+              const targetCenterX = targetRect.left + targetRect.width / 2;
+              const targetCenterY = targetRect.top + targetRect.height / 2;
+              
+              // 计算窗口左边缘中心（因为工具栏在左边）
+              const windowLeftCenterX = windowRect.left;
+              const windowLeftCenterY = windowRect.top + windowRect.height / 2;
+              
+              // 计算偏移量（窗口左边缘到目标中心的距离）
+              const translateX = targetCenterX - windowLeftCenterX;
+              const translateY = targetCenterY - windowLeftCenterY;
+              
+              // 计算缩放比例
+              const scale = Math.min(targetRect.width / windowRect.width, targetRect.height / windowRect.height, 0.06);
+              
+              // 设置变换原点为左侧中心（朝向目标的方向）
+              wbWindow.style.transformOrigin = 'left center';
+              
+              // 添加透视容器样式（在父元素上，如果没有则在自身）
+              const parentEl = wbWindow.parentElement;
+              if (parentEl) {
+                parentEl.style.perspective = '1000px';
+                parentEl.style.perspectiveOrigin = 'left center';
+              }
+              
+              // 强制重绘
+              void wbWindow.offsetHeight;
+              
+              // 动画时长
+              const duration = 400;
+              
+              // 应用 Genie effect 动画
+              // 使用 rotateY 产生透视变形，让右侧看起来收缩更慢
+              wbWindow.style.transition = `transform ${duration}ms cubic-bezier(0.4, 0, 0.2, 1), opacity ${duration}ms ease-out`;
+              wbWindow.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale}) rotateY(-30deg)`;
+              wbWindow.style.opacity = '0';
+              
+              // 动画结束后隐藏窗口并清理
+              setTimeout(() => {
+                wbWindow.style.transition = 'none';
+                wbWindow.style.transform = '';
+                wbWindow.style.opacity = '';
+                if (parentEl) {
+                  parentEl.style.perspective = '';
+                  parentEl.style.perspectiveOrigin = '';
+                }
+                this.hide();
+                onMinimize?.(position, size);
+              }, duration);
+              
+              return true;
+            }
+          }
+          
+          // 没有目标选择器或找不到目标元素，直接隐藏
           this.hide();
-          // 调用外部回调通知状态变化
           onMinimize?.(position, size);
           // 返回 true 阻止 WinBox 的默认最小化行为
           return true;
@@ -706,6 +783,7 @@ export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
       });
       if (visible) {
         // 如果窗口处于最小化状态，需要先恢复
+        const wasMinimized = winboxRef.current.min || winboxRef.current.hidden;
         if (winboxRef.current.min) {
           console.log('[WinBoxWindow] restoring from minimized state');
           winboxRef.current.restore();
@@ -721,11 +799,80 @@ export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
         }
         winboxRef.current.show();
         winboxRef.current.focus();
+        
+        // 如果是从最小化恢复，播放展开动画
+        if (wasMinimized && minimizeTargetSelector) {
+          requestAnimationFrame(() => {
+            playRestoreAnimation();
+          });
+        }
       } else {
         winboxRef.current.hide();
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
+
+  // 从最小化恢复时播放展开动画
+  const playRestoreAnimation = useCallback(() => {
+    if (!minimizeTargetSelector || !winboxRef.current) return;
+    
+    const wbWindow = winboxRef.current.window as HTMLElement;
+    const targetElement = document.querySelector(minimizeTargetSelector);
+    
+    if (!wbWindow || !targetElement) return;
+    
+    const savedPos = lastNormalPositionRef.current;
+    if (!savedPos) return;
+    
+    const targetRect = targetElement.getBoundingClientRect();
+    
+    // 计算起始位置（从图标位置开始）
+    const targetCenterX = targetRect.left + targetRect.width / 2;
+    const targetCenterY = targetRect.top + targetRect.height / 2;
+    const windowLeftCenterX = savedPos.x;
+    const windowLeftCenterY = savedPos.y + savedPos.height / 2;
+    
+    // 计算偏移量
+    const translateX = targetCenterX - windowLeftCenterX;
+    const translateY = targetCenterY - windowLeftCenterY;
+    const scale = Math.min(targetRect.width / savedPos.width, targetRect.height / savedPos.height, 0.06);
+    
+    // 添加透视容器样式
+    const parentEl = wbWindow.parentElement;
+    if (parentEl) {
+      parentEl.style.perspective = '1000px';
+      parentEl.style.perspectiveOrigin = 'left center';
+    }
+    
+    // 设置初始状态（从图标位置缩小状态开始）
+    wbWindow.style.transition = 'none';
+    wbWindow.style.transformOrigin = 'left center';
+    wbWindow.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale}) rotateY(-30deg)`;
+    wbWindow.style.opacity = '0';
+    
+    // 强制重绘
+    void wbWindow.offsetHeight;
+    
+    // 动画时长
+    const duration = 350;
+    
+    // 播放展开动画
+    wbWindow.style.transition = `transform ${duration}ms cubic-bezier(0.2, 0, 0.4, 1), opacity ${duration * 0.6}ms ease-out`;
+    wbWindow.style.transform = '';
+    wbWindow.style.opacity = '1';
+    
+    // 动画结束后清理
+    setTimeout(() => {
+      wbWindow.style.transition = 'none';
+      wbWindow.style.transform = '';
+      wbWindow.style.transformOrigin = '';
+      if (parentEl) {
+        parentEl.style.perspective = '';
+        parentEl.style.perspectiveOrigin = '';
+      }
+    }, duration);
+  }, [minimizeTargetSelector]);
 
   // 监听 autoMaximize 变化，动态最大化窗口
   useEffect(() => {

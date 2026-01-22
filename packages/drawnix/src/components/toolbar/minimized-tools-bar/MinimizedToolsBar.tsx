@@ -141,6 +141,7 @@ export const MinimizedToolsBar: React.FC = () => {
           >
             <div 
               className="minimized-tools-bar__item"
+              data-minimize-target={tool.id}
               onClick={(e) => {
                 // 只响应左键
                 if (e.button === 0) {

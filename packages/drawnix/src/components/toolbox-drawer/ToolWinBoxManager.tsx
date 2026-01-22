@@ -165,6 +165,7 @@ export const ToolWinBoxManager: React.FC = () => {
             onMove={(x, y) => handleMove(tool.id, x, y)}
             onResize={(w, h) => handleResize(tool.id, w, h)}
             onInsertToCanvas={(rect) => handleInsertToCanvas(tool, rect)}
+            minimizeTargetSelector={`[data-minimize-target="${tool.id}"]`}
             className="winbox-ai-generation winbox-tool-window"
             background="#ffffff"
           >
