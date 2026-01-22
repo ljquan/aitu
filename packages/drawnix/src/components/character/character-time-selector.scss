@@ -90,12 +90,76 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: linear-gradient(
-      to bottom,
-      #2a2a2a 0%,
-      #1e1e1e 40%,
-      #1a1a1a 100%
-    );
+    background: linear-gradient(to bottom,
+        #2a2a2a 0%,
+        #1e1e1e 40%,
+        #1a1a1a 100%);
+  }
+
+  // Frame strip - video thumbnails like editing software
+  &__frame-strip {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    z-index: 0;
+    overflow: hidden;
+    background: #1a1a1a;
+
+    // Loading state
+    &--loading {
+      display: block;
+    }
+  }
+
+  // Shimmer loading animation
+  &__strip-shimmer {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg,
+        #1a1a1a 0%,
+        #2a2a2a 20%,
+        #3a3a3a 40%,
+        #2a2a2a 60%,
+        #1a1a1a 80%);
+    background-size: 200% 100%;
+    animation: frame-strip-shimmer 1.5s ease-in-out infinite;
+  }
+
+  @keyframes frame-strip-shimmer {
+    0% {
+      background-position: 200% 0;
+    }
+
+    100% {
+      background-position: -200% 0;
+    }
+  }
+
+  &__frame-thumb {
+    flex: 1;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0.65; // Slightly lower for better time marker visibility
+    pointer-events: none;
+    user-select: none;
+    animation: frame-fade-in 0.3s ease-out;
+
+    &:not(:last-child) {
+      border-right: 1px solid rgba(0, 0, 0, 0.5);
+    }
+  }
+
+  @keyframes frame-fade-in {
+    from {
+      opacity: 0;
+    }
+
+    to {
+      opacity: 0.65;
+    }
   }
 
   // Time markers
@@ -143,33 +207,27 @@
     top: 6px;
     bottom: 6px;
     z-index: 2;
-    background: linear-gradient(
-      to bottom,
-      rgba(59, 130, 246, 0.35) 0%,
-      rgba(59, 130, 246, 0.2) 100%
-    );
+    background: linear-gradient(to bottom,
+        rgba(59, 130, 246, 0.35) 0%,
+        rgba(59, 130, 246, 0.2) 100%);
     border-top: 2px solid #3b82f6;
     border-bottom: 2px solid #3b82f6;
     // Smooth transition for click-to-move
     transition: left 0.2s cubic-bezier(0.4, 0, 0.2, 1),
-                width 0.2s cubic-bezier(0.4, 0, 0.2, 1),
-                background 0.15s ease;
+      width 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+      background 0.15s ease;
     will-change: left, width;
 
     &:hover:not(.dragging) {
-      background: linear-gradient(
-        to bottom,
-        rgba(59, 130, 246, 0.45) 0%,
-        rgba(59, 130, 246, 0.3) 100%
-      );
+      background: linear-gradient(to bottom,
+          rgba(59, 130, 246, 0.45) 0%,
+          rgba(59, 130, 246, 0.3) 100%);
     }
 
     &.dragging {
-      background: linear-gradient(
-        to bottom,
-        rgba(59, 130, 246, 0.5) 0%,
-        rgba(59, 130, 246, 0.35) 100%
-      );
+      background: linear-gradient(to bottom,
+          rgba(59, 130, 246, 0.5) 0%,
+          rgba(59, 130, 246, 0.35) 100%);
       // Disable transitions during active drag
       transition: background 0.1s ease;
     }
@@ -185,8 +243,8 @@
     cursor: ew-resize;
     z-index: 3;
     transition: background 0.15s ease,
-                transform 0.15s cubic-bezier(0.4, 0, 0.2, 1),
-                box-shadow 0.15s ease;
+      transform 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+      box-shadow 0.15s ease;
 
     // Inner grip lines
     &::before {
@@ -200,7 +258,7 @@
       background: rgba(255, 255, 255, 0.7);
       border-radius: 1px;
       box-shadow: -3px 0 0 rgba(255, 255, 255, 0.3),
-                  3px 0 0 rgba(255, 255, 255, 0.3);
+        3px 0 0 rgba(255, 255, 255, 0.3);
     }
 
     &:hover {
@@ -284,6 +342,7 @@
   from {
     transform: rotate(0deg);
   }
+
   to {
     transform: rotate(360deg);
   }
