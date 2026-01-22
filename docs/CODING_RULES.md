@@ -2896,6 +2896,86 @@ const allCategories = useMemo(() => {
 
 **原因**: 项目中的 `z-index` 有严格的分层规范（参见 `docs/Z_INDEX_GUIDE.md`）。工具栏位于 2000 层，而抽屉应该位于 4000 层及以上。硬编码低层级会破坏预留宽度的视觉预期。
 
+### 错误 19: 初始化时重要元素不可见未自动滚动
+
+**场景**: 在高度受限的可滚动容器中，重要的操作按钮（如 AI 生成按钮）可能位于可视区域外，用户不知道功能存在。
+
+❌ **错误示例**:
+```tsx
+// 错误：不检查重要元素是否可见
+const ToolbarContainer = () => {
+  return (
+    <div className="scrollable-toolbar">
+      <HandButton />
+      <SelectButton />
+      {/* ... 更多按钮 */}
+      <AIImageButton /> {/* 屏幕小时可能不可见 */}
+      <AIVideoButton />
+    </div>
+  );
+};
+```
+
+✅ **正确示例**:
+```tsx
+const ToolbarContainer = () => {
+  const scrollableRef = useRef<HTMLDivElement>(null);
+  const hasScrolledToAI = useRef(false); // 防止重复执行
+
+  useEffect(() => {
+    // 只执行一次，避免死循环
+    if (hasScrolledToAI.current) return;
+    
+    const scrollable = scrollableRef.current;
+    if (!scrollable) return;
+
+    const checkAndScroll = () => {
+      hasScrolledToAI.current = true; // 标记为已执行
+      
+      // 查找目标按钮
+      const targetButton = scrollable.querySelector<HTMLElement>('[data-button-id="ai-image"]');
+      if (!targetButton) return;
+
+      // 检测是否可见
+      const scrollableRect = scrollable.getBoundingClientRect();
+      const buttonRect = targetButton.getBoundingClientRect();
+      const isVisible = buttonRect.bottom <= scrollableRect.bottom && 
+                        buttonRect.top >= scrollableRect.top;
+
+      // 不可见时滚动（检查高度 > 0 避免极端情况）
+      if (!isVisible && scrollableRect.height > 0) {
+        scrollable.scrollTop += buttonRect.top - scrollableRect.top;
+      }
+    };
+
+    // 延迟执行，确保 DOM 渲染完成
+    const timeoutId = setTimeout(() => {
+      requestAnimationFrame(checkAndScroll);
+    }, 100);
+
+    return () => clearTimeout(timeoutId);
+  }, []);
+
+  return (
+    <div ref={scrollableRef} className="scrollable-toolbar">
+      {/* 按钮需要添加 data-button-id 属性以便定位 */}
+      <HandButton />
+      <SelectButton />
+      <AIImageButton data-button-id="ai-image" />
+      <AIVideoButton data-button-id="ai-video" />
+    </div>
+  );
+};
+```
+
+**防止死循环的关键点**:
+1. 使用 `ref` 标志确保只执行一次
+2. 在执行前立即设置标志，而非执行后
+3. 检查容器高度 > 0，避免容器未渲染时的极端情况
+4. 不在滚动失败时重试
+
+**原因**: 屏幕尺寸多样化，重要功能按钮可能因容器高度不足而不可见。初始化时自动滚动到这些元素可以提升功能发现率，但必须确保只执行一次以避免死循环。
+
 ### 交互规范: 三段式循环排序模式
 
 **场景**: 实现包含正序、逆序且需要支持恢复默认状态的排序按钮时。
