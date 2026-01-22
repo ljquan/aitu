@@ -13,7 +13,7 @@
 - **版本**: 0.5.0
 - **许可证**: MIT
 - **标语**: 爱上图片，爱上创作
-- **官网**: https://aitu.tu-zi.com
+- **官网**: https://opentu.ai
 
 ---
 
@@ -1929,6 +1929,30 @@ const handleTouchEnd = () => {
   - **CSS**: `.t-tag--theme-primary { background-color: rgba(90, 79, 207, 0.08); color: #5A4FCF; }`
 - **文件大小限制**: 单个文件不超过 500 行
 - **文档语言**: 规格文档使用中文
+- **概念术语一致性**: 使用 `/docs/CONCEPTS.md` 中定义的标准术语
+
+### 项目概念文档维护
+
+**场景**: 添加新功能、新类型或新概念时
+
+**规则**: 项目使用 `/docs/CONCEPTS.md` 作为核心术语和概念的权威定义。添加新功能时应检查并更新概念文档。
+
+**需要更新概念文档的情况**:
+- 引入新的类型定义（如新的 TaskType、AssetSource 等）
+- 添加新的 React Context
+- 创建新的 Service 或核心服务
+- 添加新的 MCP 工具
+- 引入新的数据流模式
+- 添加新的虚拟路径前缀
+
+**概念文档结构**:
+- 术语表：中英文对照、定义、关键文件
+- 架构分层：应用层、核心库、适配层
+- 数据流：AI 生成流程、素材库数据流
+- 状态管理：Context 和持久化存储
+- 命名规范：文件、变量、事件
+
+**参考**: 查看 `/docs/CONCEPTS.md` 获取完整的术语定义和概念说明
 
 ### navigator.storage.estimate() 返回浏览器配额而非磁盘空间
 
@@ -5359,6 +5383,7 @@ const matchesSource = !filters.activeSource || filters.activeSource === 'ALL' ||
 
 ## 相关文档
 
+- `/docs/CONCEPTS.md` - **项目概念文档（核心术语和定义）**
 - `/docs/CODING_STANDARDS.md` - 完整编码规范
 - `/docs/VERSION_CONTROL.md` - 版本控制
 - `/docs/Z_INDEX_GUIDE.md` - Z-Index 层级管理规范
