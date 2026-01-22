@@ -1,3 +1,36 @@
+## 0.5.39 (2026-01-22)
+
+### 🚀 Features
+
+- 优化角色创建时间轴视频帧显示 ([2a927bc](https://github.com/ljquan/aitu/commit/2a927bc))
+- 添加工具窗口最小化/恢复动画 ([0cba6b1](https://github.com/ljquan/aitu/commit/0cba6b1))
+- 优化工具箱 UI 和工具栏交互 ([b866b85](https://github.com/ljquan/aitu/commit/b866b85))
+- 增强敏感信息处理和日志记录 ([70c83b6](https://github.com/ljquan/aitu/commit/70c83b6))
+- add media library button and functionality to AI input bar ([3ece148](https://github.com/ljquan/aitu/commit/3ece148))
+- 优化素材库筛选按钮间距并实现三段式循环排序模式 ([1264b42](https://github.com/ljquan/aitu/commit/1264b42))
+
+### 🩹 Fixes
+
+- 修复视频插入函数名错误 ([9593b02](https://github.com/ljquan/aitu/commit/9593b02))
+
+### 🔧 Chores
+
+- update app version to 0.5.38 and adjust build time in version.json ([47d1029](https://github.com/ljquan/aitu/commit/47d1029))
+- docs(rules): 添加 Blob MIME 类型获取和 Shift 连选防文本选中规则 ([c0e63d0](https://github.com/ljquan/aitu/commit/c0e63d0))
+- docs(claude): 添加新规则 - 同名模块的全局状态隔离问题 ([3d92dda](https://github.com/ljquan/aitu/commit/3d92dda))
+- docs: 添加 UI 交互规范 - 可点击容器、筛选联动、全局配色 ([1d8c77c](https://github.com/ljquan/aitu/commit/1d8c77c))
+- docs: 添加强制重绘 void 前缀规则 ([98b400f](https://github.com/ljquan/aitu/commit/98b400f))
+- docs: 添加 TDesign Dropdown popupProps 透传规则 ([14925fb](https://github.com/ljquan/aitu/commit/14925fb))
+- docs: 更新项目文档，修正在线应用链接并优化 CLAUDE.md 结构 ([dfef8c1](https://github.com/ljquan/aitu/commit/dfef8c1))
+- docs(claude): 添加项目概念文档和维护规则 ([70fddff](https://github.com/ljquan/aitu/commit/70fddff))
+- docs(claude): 添加敏感信息过滤相关安全规则 ([1156efc](https://github.com/ljquan/aitu/commit/1156efc))
+- docs(claude): 添加新交互和样式规则 - 三段式排序与筛选岛对齐 ([ec72cd5](https://github.com/ljquan/aitu/commit/ec72cd5))
+
+### ❤️  Thank You
+
+- liquidliang <ljquan@qq.com>
+- gongchengtu <1817063960@qq.com>
+
 ## 0.5.38 (2026-01-21)
 
 ### 🔧 Chores
