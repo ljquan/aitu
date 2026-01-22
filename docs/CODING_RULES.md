@@ -3819,3 +3819,164 @@ const matchesSource = !filters.activeSource || filters.activeSource === 'ALL' ||
 
 ---
 
+
+## UI 交互规范
+
+### 可点击容器模式：扩大交互区域
+
+**场景**: 当 checkbox、按钮等小型交互元素嵌套在容器中时，用户期望点击整个容器都能触发操作。
+
+❌ **错误示例**:
+```tsx
+// 只有点击 checkbox 本身才能触发
+<div className="selection-info">
+  <Checkbox checked={isAllSelected} onChange={toggleSelectAll} />
+  <span>{selectedCount}</span>
+</div>
+```
+
+```scss
+.selection-info {
+  // 没有任何点击相关样式
+}
+```
+
+✅ **正确示例**:
+```tsx
+// 点击整个容器都能触发
+<div
+  className="selection-info"
+  onClick={toggleSelectAll}
+  role="button"
+  tabIndex={0}
+  onKeyDown={(e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      toggleSelectAll();
+    }
+  }}
+>
+  <Checkbox checked={isAllSelected} />  {/* 移除 onChange，由父容器处理 */}
+  <span>{selectedCount}</span>
+</div>
+```
+
+```scss
+.selection-info {
+  cursor: pointer;
+  user-select: none;
+  
+  &:active {
+    background: #cbd5e1;  // 按压反馈
+  }
+  
+  .t-checkbox {
+    pointer-events: none;  // 禁用子元素直接点击，让父容器统一处理
+  }
+}
+```
+
+**关键点**:
+- 父容器添加 `onClick`、`role="button"`、`tabIndex={0}` 和键盘支持
+- 子元素使用 `pointer-events: none` 禁用直接点击
+- 添加 `cursor: pointer` 和 `:active` 反馈
+
+---
+
+### 筛选与选中状态联动
+
+**场景**: 实现带筛选功能的列表选择时，选中状态应与筛选结果联动。
+
+❌ **错误示例**:
+```tsx
+// 选中数量始终显示总选中数，不考虑筛选
+<span>{selectedAssetIds.size}</span>
+
+// 删除按钮也基于总选中数
+<Button disabled={selectedAssetIds.size === 0} />
+
+// 删除操作删除所有选中项，包括不在当前筛选结果中的
+const handleDelete = () => {
+  deleteAssets(Array.from(selectedAssetIds));
+};
+```
+
+✅ **正确示例**:
+```tsx
+// 计算当前筛选结果中被选中的数量
+const filteredSelectedCount = useMemo(() => {
+  return filteredResult.assets.filter(asset => selectedAssetIds.has(asset.id)).length;
+}, [filteredResult.assets, selectedAssetIds]);
+
+// 显示筛选后的选中数量
+<span>{filteredSelectedCount}</span>
+
+// 按钮状态基于筛选后的选中数量
+<Button disabled={filteredSelectedCount === 0} />
+
+// 操作只影响当前筛选结果中被选中的项
+const handleDelete = () => {
+  const filteredSelectedAssets = filteredResult.assets.filter(a => selectedAssetIds.has(a.id));
+  deleteAssets(filteredSelectedAssets.map(a => a.id));
+};
+```
+
+**核心原则**:
+- **显示**：选中计数基于筛选后的结果
+- **全选**：只选中/取消当前筛选结果
+- **操作**：删除、下载等只影响筛选后被选中的项
+- **按钮状态**：disabled 基于筛选后的选中数量
+
+---
+
+### 全局组件配色统一
+
+**场景**: 项目使用第三方 UI 库（如 TDesign）时，需要统一覆盖组件样式以符合品牌规范。
+
+❌ **错误示例**:
+```scss
+// 在多个组件文件中分散覆盖
+// AssetItem.scss
+.asset-item .t-checkbox.t-is-checked .t-checkbox__input {
+  background: $brand-orange;
+}
+
+// MediaLibraryGrid.scss
+.media-library-grid .t-checkbox.t-is-checked .t-checkbox__input {
+  background: $brand-orange;
+}
+
+// OtherComponent.scss
+.other .t-checkbox.t-is-checked .t-checkbox__input {
+  background: $brand-orange;  // 重复代码，且容易遗漏
+}
+```
+
+✅ **正确示例**:
+```scss
+// 在 tdesign-theme.scss 中集中覆盖
+/* 全局 Checkbox 样式覆盖 - 橙色背景 + 白色勾选图标 */
+.t-checkbox {
+  &.t-is-checked,
+  &.t-is-indeterminate {
+    .t-checkbox__input {
+      background-color: var(--td-brand-color) !important;
+      border-color: var(--td-brand-color) !important;
+    }
+  }
+
+  .t-checkbox__input {
+    &::after {
+      border-color: #fff !important;  // 确保勾选图标为白色
+    }
+  }
+}
+```
+
+**最佳实践**:
+- 在 `styles/tdesign-theme.scss` 中集中管理所有第三方组件的品牌色覆盖
+- 使用 CSS 变量（如 `--td-brand-color`）保持一致性
+- 组件级别的样式文件只处理布局和特殊场景，不重复颜色定义
+- 确保 checked、indeterminate、hover、active 等所有状态都被覆盖
+
+---

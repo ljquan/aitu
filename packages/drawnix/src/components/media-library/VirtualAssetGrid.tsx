@@ -29,9 +29,9 @@ const VIEW_CONFIG: Record<ViewMode, {
     padding: 12,
   },
   list: {
-    maxItemSize: 68,    // 列表模式高度固定
-    minItemSize: 68,
-    gap: 8,
+    maxItemSize: 76,    // 增加高度以包含间距
+    minItemSize: 76,
+    gap: 0,             // 间距由 AssetItem margin 控制
     padding: 16,
   },
 };
@@ -72,6 +72,7 @@ interface VirtualAssetGridProps {
   isSelectionMode: boolean;
   onSelectAsset: (assetId: string) => void;
   onDoubleClick?: (asset: Asset) => void;
+  onPreview?: (asset: Asset) => void;
 }
 
 export function VirtualAssetGrid({
@@ -83,6 +84,7 @@ export function VirtualAssetGrid({
   isSelectionMode,
   onSelectAsset,
   onDoubleClick,
+  onPreview,
 }: VirtualAssetGridProps) {
   const parentRef = useRef<HTMLDivElement>(null);
   const config = useMemo(() => {
@@ -182,11 +184,12 @@ export function VirtualAssetGrid({
           isSelected={isSelectionMode ? selectedAssetIds.has(asset.id) : selectedAssetId === asset.id}
           onSelect={onSelectAsset}
           onDoubleClick={onDoubleClick}
+          onPreview={onPreview}
           isInSelectionMode={isSelectionMode}
         />
       </div>
     ));
-  }, [assets, columns, viewMode, selectedAssetId, selectedAssetIds, isSelectionMode, onSelectAsset, onDoubleClick, itemSize.height]);
+  }, [assets, columns, viewMode, selectedAssetId, selectedAssetIds, isSelectionMode, onSelectAsset, onDoubleClick, onPreview, itemSize.height]);
 
   const virtualItems = rowVirtualizer.getVirtualItems();
 

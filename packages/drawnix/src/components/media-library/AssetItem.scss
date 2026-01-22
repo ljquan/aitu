@@ -30,8 +30,9 @@ $brand-orange-dark: #E67E22;
   }
 
   &--selected {
-    border-color: #333;
-    box-shadow: 0 0 0 1px #333;
+    border-color: rgba($brand-orange, 0.5);
+    background-color: rgba($brand-orange, 0.02);
+    z-index: 1; // 提升选中项层级，避免边框被覆盖
   }
 
   &--selection-mode {
@@ -140,24 +141,25 @@ $brand-orange-dark: #E67E22;
         
         .t-checkbox__input {
           border-radius: 4px;
-          border-color: rgba(0, 0, 0, 0.15);
-          background: #ffffff;
-          width: 20px;
-          height: 20px;
-          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+          border-color: rgba(255, 255, 255, 0.4);
+          background: rgba(0, 0, 0, 0.2);
+          backdrop-filter: blur(4px);
+          width: 18px; // 统一尺寸
+          height: 18px;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
           transition: all 0.2s ease;
         }
 
         &:hover .t-checkbox__input {
-          border-color: rgba(0, 0, 0, 0.3);
+          border-color: rgba(255, 255, 255, 0.8);
           transform: scale(1.05);
         }
 
         &.t-is-checked {
           .t-checkbox__input {
-            background: #000 !important;
-            border-color: #000 !important;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            background: $brand-orange !important;
+            border-color: $brand-orange !important;
+            box-shadow: 0 4px 12px rgba($brand-orange, 0.4);
           }
         }
       }
@@ -165,6 +167,63 @@ $brand-orange-dark: #E67E22;
 
     &--left {
       flex-shrink: 0;
+    }
+  }
+
+  // ========== 预览按钮 ==========
+  &__preview-btn {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    z-index: 4;
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 
+      0 2px 8px 0 rgba(0, 0, 0, 0.12),
+      0 0 0 1px rgba(255, 255, 255, 0.5);
+    transition: all 0.2s ease;
+    animation: fadeInScale 0.15s ease-out;
+
+    svg {
+      color: #333;
+      width: 16px;
+      height: 16px;
+    }
+
+    &:hover {
+      transform: scale(1.1);
+      background: #fff;
+      box-shadow: 
+        0 4px 12px 0 rgba(0, 0, 0, 0.15),
+        0 0 0 1px rgba(255, 255, 255, 0.8);
+
+      svg {
+        color: #000;
+      }
+    }
+
+    &:active {
+      transform: scale(0.95);
+    }
+  }
+
+  @keyframes fadeInScale {
+    from {
+      opacity: 0;
+      transform: scale(0.8);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
     }
   }
 
@@ -331,6 +390,19 @@ $brand-orange-dark: #E67E22;
       border-radius: 5px;
       font-size: 8px;
     }
+
+    .asset-item__preview-btn {
+      bottom: 6px;
+      right: 6px;
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+
+      svg {
+        width: 12px;
+        height: 12px;
+      }
+    }
   }
 
   // ========================================
@@ -340,30 +412,63 @@ $brand-orange-dark: #E67E22;
     display: flex;
     align-items: center;
     gap: 14px;
-    padding: 12px 14px;
-    border-radius: 12px;
-    border-width: 1px;
-    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+    padding: 12px 16px; // 调整内边距以对齐上方
+    border-radius: 8px; // 保持圆角，但减小间距
+    border: 1px solid #f1f5f9;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.02);
+    margin-bottom: 8px; // 增加间距避免重叠感，列表也可以有呼吸感
+    transition: all 0.2s ease;
 
     &:hover {
-      transform: translateX(4px);
-      background: rgba(0, 0, 0, 0.02);
-      border-color: rgba(0, 0, 0, 0.1);
-      box-shadow: none;
+      transform: translateX(2px);
+      background: #fff;
+      border-color: rgba($brand-orange, 0.2);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+      z-index: 1;
     }
 
     &.asset-item--selected {
-      background: rgba(0, 0, 0, 0.04);
-      border-color: #333;
-      box-shadow: none;
+      background: rgba($brand-orange, 0.03);
+      border-color: rgba($brand-orange, 0.5);
+      box-shadow: 0 0 0 1px rgba($brand-orange, 0.1);
+      z-index: 2;
+    }
+
+    .asset-item__checkbox--left {
+      margin-right: 2px;
     }
 
     .asset-item__thumbnail {
       flex-shrink: 0;
-      width: 52px;
-      height: 52px;
-      border-radius: 10px;
-      box-shadow: 0 2px 6px 0 rgba(0, 0, 0, 0.08);
+      width: 48px;
+      height: 48px;
+      border-radius: 8px;
+      background: #fff;
+      border: 1px solid #f1f5f9;
+    }
+
+    .asset-item__info {
+      gap: 2px;
+    }
+
+    .asset-item__name {
+      font-size: 13.5px;
+      color: #1e293b;
+    }
+
+    .asset-item__meta {
+      font-size: 11px;
+      color: #94a3b8;
+    }
+
+    .asset-item__preview-btn {
+      position: relative;
+      bottom: auto;
+      right: auto;
+      flex-shrink: 0;
+      width: 32px;
+      height: 32px;
+      margin-left: auto;
     }
   }
 

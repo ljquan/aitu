@@ -83,6 +83,7 @@
     "tdesign-icons-react": "^0.5.1",
     "tdesign-react": "^1.14.5",
     "tslib": "^2.3.0",
+    "viewerjs": "^1.11.7",
     "web-vitals": "^5.1.0",
     "winbox": "^0.2.82",
     "xlsx": "^0.18.5"

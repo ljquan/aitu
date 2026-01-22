@@ -7,7 +7,7 @@
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Button, Tabs, Dialog, MessagePlugin, Input, Radio, Tooltip, Checkbox, Badge } from 'tdesign-react';
-import { DeleteIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon, UserIcon, RefreshIcon, PauseCircleIcon, CheckDoubleIcon, ImageIcon, VideoIcon, FilterIcon } from 'tdesign-icons-react';
+import { DeleteIcon, SearchIcon, UserIcon, RefreshIcon, PauseCircleIcon, CheckDoubleIcon, ImageIcon, VideoIcon, FilterIcon } from 'tdesign-icons-react';
 import { VirtualTaskList } from './VirtualTaskList';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
 import { Task, TaskType, TaskStatus } from '../../types/task.types';
@@ -22,6 +22,8 @@ import { BaseDrawer } from '../side-drawer';
 import { CharacterCreateDialog } from '../character/CharacterCreateDialog';
 import { CharacterList } from '../character/CharacterList';
 import { useCharacters } from '../../hooks/useCharacters';
+import { MediaViewer, type MediaItem } from '../shared/MediaViewer';
+import { useMediaViewer } from '../../hooks/useMediaViewer';
 import './task-queue.scss';
 
 const { TabPanel } = Tabs;
@@ -421,64 +423,38 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
     );
   }, [filteredTasks]);
 
-  // Get current preview index and navigation info
-  const previewInfo = useMemo(() => {
-    if (!previewTaskId) return null;
-    const currentIndex = completedTasksWithResults.findIndex(t => t.id === previewTaskId);
-    if (currentIndex === -1) return null;
-    return {
-      currentIndex,
-      total: completedTasksWithResults.length,
-      hasPrevious: currentIndex > 0,
-      hasNext: currentIndex < completedTasksWithResults.length - 1,
-    };
-  }, [previewTaskId, completedTasksWithResults]);
+  // 使用 MediaViewer hook
+  const { openViewer, viewerProps } = useMediaViewer({
+    onClose: () => setPreviewTaskId(null),
+    onIndexChange: (index) => {
+      const task = completedTasksWithResults[index];
+      if (task) {
+        setPreviewTaskId(task.id);
+      }
+    },
+  });
+
+  // 将任务列表转换为 MediaItem 列表
+  const previewMediaItems: MediaItem[] = useMemo(() => {
+    return completedTasksWithResults.map(task => ({
+      url: task.result!.url,
+      type: task.type === TaskType.VIDEO ? 'video' as const : 'image' as const,
+      title: task.params.prompt?.substring(0, 50),
+    }));
+  }, [completedTasksWithResults]);
 
   // Preview navigation handlers
-  const handlePreviewOpen = (taskId: string) => {
+  const handlePreviewOpen = useCallback((taskId: string) => {
     setPreviewTaskId(taskId);
-  };
+    const index = completedTasksWithResults.findIndex(t => t.id === taskId);
+    if (index >= 0) {
+      openViewer(previewMediaItems, index);
+    }
+  }, [completedTasksWithResults, previewMediaItems, openViewer]);
 
-  const handlePreviewClose = () => {
+  const handlePreviewClose = useCallback(() => {
     setPreviewTaskId(null);
-  };
-
-  const handlePreviewPrevious = () => {
-    if (!previewInfo || !previewInfo.hasPrevious) return;
-    setPreviewTaskId(completedTasksWithResults[previewInfo.currentIndex - 1].id);
-  };
-
-  const handlePreviewNext = () => {
-    if (!previewInfo || !previewInfo.hasNext) return;
-    setPreviewTaskId(completedTasksWithResults[previewInfo.currentIndex + 1].id);
-  };
-
-  // Get current previewed task
-  const previewedTask = useMemo(() => {
-    if (!previewTaskId) return null;
-    return tasks.find(t => t.id === previewTaskId);
-  }, [previewTaskId, tasks]);
-
-  // Keyboard navigation for preview
-  useEffect(() => {
-    if (!previewTaskId) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
-        e.preventDefault();
-        handlePreviewPrevious();
-      } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
-        e.preventDefault();
-        handlePreviewNext();
-      } else if (e.key === 'Escape') {
-        e.preventDefault();
-        handlePreviewClose();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [previewTaskId, handlePreviewPrevious, handlePreviewNext]);
+  }, []);
 
   // Handle close
   const handleClose = useCallback(() => {
@@ -727,50 +703,8 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
         确定要删除选中的 {selectedTaskIds.size} 个任务吗？此操作无法撤销。
       </Dialog>
 
-      {/* Unified Preview Dialog */}
-      {previewedTask && previewedTask.result?.url && (
-        <Dialog
-          visible={!!previewTaskId}
-          onClose={handlePreviewClose}
-          width="90vw"
-          header={
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>{previewedTask.type === TaskType.IMAGE ? '图片预览' : previewedTask.type === TaskType.CHARACTER ? '角色预览' : '视频预览'}</span>
-              {previewInfo && (
-                <span style={{ fontSize: '14px', color: '#757575', fontWeight: 'normal' }}>
-                  {previewInfo.currentIndex + 1} / {previewInfo.total}
-                </span>
-              )}
-            </div>
-          }
-          footer={null}
-          className="task-preview-dialog"
-        >
-          <div className="task-preview-container">
-            <Button
-              className="task-preview-nav task-preview-nav--left"
-              icon={<ChevronLeftIcon />}
-              data-track="task_click_preview_previous"
-              onClick={handlePreviewPrevious}
-              size="large"
-              shape="circle"
-              variant="outline"
-              disabled={!previewInfo?.hasPrevious}
-            />
-            <PreviewContent task={previewedTask} />
-            <Button
-              className="task-preview-nav task-preview-nav--right"
-              icon={<ChevronRightIcon />}
-              data-track="task_click_preview_next"
-              onClick={handlePreviewNext}
-              size="large"
-              shape="circle"
-              variant="outline"
-              disabled={!previewInfo?.hasNext}
-            />
-          </div>
-        </Dialog>
-      )}
+      {/* 统一预览（使用 MediaViewer） */}
+      <MediaViewer {...viewerProps} />
 
       {/* Character Create Dialog */}
       <CharacterCreateDialog

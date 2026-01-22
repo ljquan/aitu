@@ -134,7 +134,82 @@ $brand-orange-dark: #E67E22;
     flex-direction: row;
     align-items: center;
     gap: 16px;
-    padding-bottom: 2px;
+    padding: 4px 8px 8px; // 这里的 8px + header 的 20px = 28px
+    border-bottom: 1px solid #f1f5f9;
+  }
+
+  &__selection-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 10px 3px 4px;
+    background: #f1f5f9;
+    border-radius: 8px;
+    height: 32px;
+    box-sizing: border-box;
+    transition: all 0.2s ease;
+    margin-left: 0;
+    cursor: pointer;
+    user-select: none;
+
+    &:hover {
+      background: #e2e8f0;
+    }
+
+    &:active {
+      background: #cbd5e1;
+    }
+
+    .t-checkbox {
+      display: flex;
+      align-items: center;
+      margin-left: 0;
+      pointer-events: none; // 让父容器统一处理点击
+    }
+  }
+
+  &__selection-count {
+    font-size: 11.5px;
+    font-weight: 700;
+    color: $brand-orange;
+    white-space: nowrap;
+    min-width: 24px;
+    text-align: center;
+    line-height: 1;
+    letter-spacing: -0.01em;
+  }
+
+  &__progress {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 16px;
+    background: linear-gradient(135deg, rgba($brand-orange, 0.05) 0%, rgba($brand-orange, 0.1) 100%);
+    border-radius: 8px;
+    margin-top: 8px;
+  }
+
+  &__progress-bar {
+    flex: 1;
+    height: 6px;
+    background: rgba(0, 0, 0, 0.08);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  &__progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, $brand-orange 0%, $brand-orange-light 100%);
+    border-radius: 3px;
+    transition: width 0.2s ease-out;
+  }
+
+  &__progress-text {
+    font-size: 12px;
+    font-weight: 500;
+    color: $brand-orange-dark;
+    white-space: nowrap;
+    min-width: 80px;
   }
 
   &__header-spacer {
@@ -276,14 +351,11 @@ $brand-orange-dark: #E67E22;
   &__selection-count {
     font-size: 12px;
     font-weight: 600;
-    color: #333;
+    min-width: 36px;
     white-space: nowrap;
-    padding: 0 10px;
-    height: 32px !important;
+    padding: 0 2px;
     display: flex;
     align-items: center;
-    background: #f1f5f9;
-    border-radius: 6px;
   }
 
   // ========== 按钮样式覆盖 ==========
@@ -293,32 +365,6 @@ $brand-orange-dark: #E67E22;
     padding: 0 12px !important;
     font-size: 13px !important;
     border-radius: 6px !important;
-  }
-
-  // ========== 复选框样式覆盖 (全选) ==========
-  .t-checkbox {
-    margin: 0;
-    
-    .t-checkbox__input {
-      border-radius: 4px;
-      border-color: rgba(0, 0, 0, 0.15);
-      background: #ffffff;
-      width: 18px;
-      height: 18px;
-      transition: all 0.2s ease;
-    }
-
-    &:hover .t-checkbox__input {
-      border-color: rgba(0, 0, 0, 0.3);
-    }
-
-    &.t-is-checked,
-    &.t-is-indeterminate {
-      .t-checkbox__input {
-        background: #000 !important;
-        border-color: #000 !important;
-      }
-    }
   }
 
   .t-button--theme-primary {

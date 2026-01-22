@@ -24,6 +24,8 @@ import {
   MediaLibraryIcon,
 } from '../icons';
 import { useI18n } from '../../i18n';
+import { MediaViewer } from '../shared/MediaViewer';
+import { useMediaViewer, urlsToMediaItems } from '../../hooks/useMediaViewer';
 import { smartDownload } from '../../utils/download-utils';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
 import { TaskType, TaskStatus, Task } from '../../types/task.types';
@@ -225,9 +227,8 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
     return settings.imageModelName || 'gemini-2.5-flash-image-vip';
   });
 
-  // 图片预览弹窗（支持左右切换）
-  const [previewImages, setPreviewImages] = useState<string[]>([]);
-  const [previewIndex, setPreviewIndex] = useState<number>(0);
+  // 图片预览（使用 MediaViewer）
+  const { openViewer, viewerProps } = useMediaViewer();
   // 行图片画廊弹窗（显示某行所有生成的图片）
   const [galleryRowIndex, setGalleryRowIndex] = useState<number | null>(null);
 
@@ -1203,27 +1204,10 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
     setSelectedRows(newSelectedRows);
   }, [tasks, selectedRows]);
 
-  // 打开图片预览（支持列表和索引）
+  // 打开图片预览（使用 MediaViewer）
   const openImagePreview = useCallback((images: string[], startIndex: number = 0) => {
-    setPreviewImages(images);
-    setPreviewIndex(startIndex);
-  }, []);
-
-  // 关闭图片预览
-  const closeImagePreview = useCallback(() => {
-    setPreviewImages([]);
-    setPreviewIndex(0);
-  }, []);
-
-  // 切换到上一张图片
-  const prevImage = useCallback(() => {
-    setPreviewIndex(prev => (prev > 0 ? prev - 1 : previewImages.length - 1));
-  }, [previewImages.length]);
-
-  // 切换到下一张图片
-  const nextImage = useCallback(() => {
-    setPreviewIndex(prev => (prev < previewImages.length - 1 ? prev + 1 : 0));
-  }, [previewImages.length]);
+    openViewer(urlsToMediaItems(images, 'image'), startIndex);
+  }, [openViewer]);
 
   // 切换单行选择（checkbox），支持 Shift 多选
   const toggleRowSelection = useCallback((rowIndex: number, shiftKey: boolean = false) => {
@@ -1507,25 +1491,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
   // 键盘导航和直接输入
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // 图片预览模式下的键盘处理
-      if (previewImages.length > 0) {
-        if (e.key === 'ArrowLeft') {
-          e.preventDefault();
-          prevImage();
-          return;
-        }
-        if (e.key === 'ArrowRight') {
-          e.preventDefault();
-          nextImage();
-          return;
-        }
-        if (e.key === 'Escape') {
-          e.preventDefault();
-          closeImagePreview();
-          return;
-        }
-        return; // 预览模式下不处理其他键盘事件
-      }
+      // 图片预览由 MediaViewer 自己处理键盘事件，无需在此处理
 
       if (!activeCell || editingCell) return;
 
@@ -1733,7 +1699,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [activeCell, editingCell, tasks, selectedCells, selectCell, enterEditMode, updateCellValue, undo, redo, previewImages, prevImage, nextImage, closeImagePreview]);
+  }, [activeCell, editingCell, tasks, selectedCells, selectCell, enterEditMode, updateCellValue, undo, redo]);
 
   // 全局鼠标释放监听 - 确保拖拽在任何地方释放都能结束
   useEffect(() => {
@@ -2668,82 +2634,8 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
         </div>
       )}
 
-      {/* 图片预览弹窗（支持左右切换） */}
-      <Dialog
-        visible={previewImages.length > 0}
-        onClose={closeImagePreview}
-        header={
-          previewImages.length > 1
-            ? `${language === 'zh' ? '图片预览' : 'Image Preview'} (${previewIndex + 1}/${previewImages.length})`
-            : (language === 'zh' ? '图片预览' : 'Image Preview')
-        }
-        footer={null}
-        width="80vw"
-        placement="center"
-        className="image-preview-dialog"
-        destroyOnClose
-      >
-        {previewImages.length > 0 && (
-          <div
-            className="image-preview-content"
-            onTouchStart={(e) => {
-              const touch = e.touches[0];
-              (e.currentTarget as any)._touchStartX = touch.clientX;
-            }}
-            onTouchEnd={(e) => {
-              const touchStartX = (e.currentTarget as any)._touchStartX;
-              if (touchStartX === undefined) return;
-              const touch = e.changedTouches[0];
-              const diffX = touch.clientX - touchStartX;
-              if (Math.abs(diffX) > 50) {
-                if (diffX > 0) {
-                  prevImage();
-                } else {
-                  nextImage();
-                }
-              }
-              delete (e.currentTarget as any)._touchStartX;
-            }}
-          >
-            {/* 左切换按钮 */}
-            {previewImages.length > 1 && (
-              <button
-                className="preview-nav-btn preview-nav-prev"
-                onClick={prevImage}
-                title={language === 'zh' ? '上一张' : 'Previous'}
-              >
-                ‹
-              </button>
-            )}
-
-            <img src={previewImages[previewIndex]} alt={`Preview ${previewIndex + 1}`} />
-
-            {/* 右切换按钮 */}
-            {previewImages.length > 1 && (
-              <button
-                className="preview-nav-btn preview-nav-next"
-                onClick={nextImage}
-                title={language === 'zh' ? '下一张' : 'Next'}
-              >
-                ›
-              </button>
-            )}
-
-            {/* 底部指示器 */}
-            {previewImages.length > 1 && (
-              <div className="preview-indicators">
-                {previewImages.map((_, idx) => (
-                  <span
-                    key={idx}
-                    className={`preview-indicator ${idx === previewIndex ? 'active' : ''}`}
-                    onClick={() => setPreviewIndex(idx)}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </Dialog>
+      {/* 图片预览（使用 MediaViewer） */}
+      <MediaViewer {...viewerProps} />
 
       {/* 添加行弹窗 */}
       <Dialog
