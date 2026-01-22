@@ -144,6 +144,29 @@ Service Worker (后台执行)
 3. SW 内部获取缓存数据应直接读取 Cache API，不使用 fetch
 4. 更新后禁止自动刷新页面，需用户确认
 
+### 模块导入规则
+
+#### 同名模块的全局状态隔离问题
+
+**场景**: 项目中存在多个同名模块（如 `canvas-insertion.ts`），各自维护独立的全局变量（如 `boardRef`）
+
+❌ **错误示例**:
+```typescript
+// MediaViewport.tsx - 错误：从 mcp/tools 导入
+import { quickInsert } from '../../../mcp/tools/canvas-insertion';
+// 但 boardRef 是在 services/canvas-operations 版本中被设置的
+// 导致 "画布未初始化" 错误
+```
+
+✅ **正确示例**:
+```typescript
+// MediaViewport.tsx - 正确：从 services/canvas-operations 导入
+import { quickInsert } from '../../../services/canvas-operations';
+// 与 AIInputBar.tsx 中 setCanvasBoard 设置的是同一个 boardRef
+```
+
+**原因**: 项目中 `mcp/tools/canvas-insertion.ts` 和 `services/canvas-operations/canvas-insertion.ts` 是两个独立模块，各自有独立的 `boardRef` 变量。`AIInputBar` 只设置了 `services` 版本的 `boardRef`，所以必须从 `services/canvas-operations` 导入才能正确访问已初始化的 board。
+
 ### React 规则
 
 1. Context 回调中必须使用函数式更新 `setState(prev => ...)`

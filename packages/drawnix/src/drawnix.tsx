@@ -41,7 +41,9 @@ import { CleanConfirm } from './components/clean-confirm/clean-confirm';
 import { buildTextLinkPlugin } from './plugins/with-text-link';
 import { LinkPopup } from './components/popup/link-popup/link-popup';
 import { I18nProvider } from './i18n';
-import { withVideo } from './plugins/with-video';
+import { withVideo, isVideoElement } from './plugins/with-video';
+import { UnifiedMediaViewer, type MediaItem as UnifiedMediaItem } from './components/shared/media-preview';
+import { PlaitDrawElement } from '@plait/draw';
 import { withTracking } from './plugins/tracking';
 import { withTool } from './plugins/with-tool';
 import { withToolFocus } from './plugins/with-tool-focus';
@@ -783,6 +785,59 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
   const [quickToolbarVisible, setQuickToolbarVisible] = useState(false);
   const [quickToolbarPosition, setQuickToolbarPosition] = useState<[number, number] | null>(null);
 
+  // 媒体预览状态
+  const [mediaPreviewVisible, setMediaPreviewVisible] = useState(false);
+  const [mediaPreviewItems, setMediaPreviewItems] = useState<UnifiedMediaItem[]>([]);
+  const [mediaPreviewInitialIndex, setMediaPreviewInitialIndex] = useState(0);
+
+  // 收集画布上所有图片和视频元素
+  const collectCanvasMediaItems = useCallback((): { items: UnifiedMediaItem[]; elementIds: string[] } => {
+    if (!board || !board.children) return { items: [], elementIds: [] };
+
+    const items: UnifiedMediaItem[] = [];
+    const elementIds: string[] = [];
+
+    for (const element of board.children) {
+      const url = (element as any).url;
+      if (!url || typeof url !== 'string') continue;
+
+      // 检查是否为图片元素
+      const isImage = PlaitDrawElement.isDrawElement(element) && PlaitDrawElement.isImage(element);
+      // 检查是否为视频元素
+      const isVideo = isVideoElement(element);
+
+      if (isImage || isVideo) {
+        items.push({
+          id: element.id,
+          url,
+          type: isVideo ? 'video' : 'image',
+          title: (element as any).name || undefined,
+        });
+        elementIds.push(element.id);
+      }
+    }
+
+    return { items, elementIds };
+  }, [board]);
+
+  // 打开媒体预览
+  const openMediaPreview = useCallback((targetElementId: string) => {
+    const { items, elementIds } = collectCanvasMediaItems();
+    if (items.length === 0) return;
+
+    const targetIndex = elementIds.indexOf(targetElementId);
+    if (targetIndex === -1) return;
+
+    setMediaPreviewItems(items);
+    setMediaPreviewInitialIndex(targetIndex);
+    setMediaPreviewVisible(true);
+  }, [collectCanvasMediaItems]);
+
+  // 关闭媒体预览
+  const closeMediaPreview = useCallback(() => {
+    setMediaPreviewVisible(false);
+  }, []);
+
   // 自动完成形状选择器状态
   const {
     state: autoCompleteState,
@@ -790,7 +845,7 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
     closePicker: closeAutoCompletePicker,
   } = useAutoCompleteShapePicker(board);
 
-  // 监听双击空白区域事件
+  // 监听双击事件 - 处理图片/视频预览和空白区域快捷工具栏
   useEffect(() => {
     if (!board) return;
 
@@ -808,6 +863,23 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
       // 检查双击位置是否命中了画布上的元素
       const viewBoxPoint = toViewBoxPoint(board, toHostPoint(board, event.clientX, event.clientY));
       const hitElement = getHitElementByPoint(board, viewBoxPoint);
+
+      // 如果双击了图片或视频元素，打开预览
+      if (hitElement) {
+        const url = (hitElement as any).url;
+        if (url && typeof url === 'string') {
+          const isImage = PlaitDrawElement.isDrawElement(hitElement) && PlaitDrawElement.isImage(hitElement);
+          const isVideo = isVideoElement(hitElement);
+
+          if (isImage || isVideo) {
+            // 打开媒体预览
+            openMediaPreview(hitElement.id);
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+          }
+        }
+      }
 
       // 如果命中了 Plait 元素，或者双击的是工具容器内部（针对 foreignObject 元素）
       const isInsideInteractive = target.closest('.plait-tool-container') || 
@@ -832,7 +904,7 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
         container.removeEventListener('dblclick', handleDoubleClick);
       }
     };
-  }, [board, containerRef]);
+  }, [board, containerRef, openMediaPreview]);
 
   return (
     <div
@@ -946,6 +1018,14 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
             position={quickToolbarPosition}
             visible={quickToolbarVisible}
             onClose={() => setQuickToolbarVisible(false)}
+          />
+          {/* Media Viewer - 画布图片/视频预览 */}
+          <UnifiedMediaViewer
+            visible={mediaPreviewVisible}
+            items={mediaPreviewItems}
+            initialIndex={mediaPreviewInitialIndex}
+            onClose={closeMediaPreview}
+            showThumbnails={true}
           />
           {/* Auto Complete Shape Picker - 自动完成形状选择器 */}
           <AutoCompleteShapePicker

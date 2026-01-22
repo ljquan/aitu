@@ -5,7 +5,7 @@
  */
 
 import { memo, useCallback, useState } from 'react';
-import { Image as ImageIcon, Video as VideoIcon, Eye } from 'lucide-react';
+import { Image as ImageIcon, Video as VideoIcon, Plus } from 'lucide-react';
 import { Checkbox, Tooltip } from 'tdesign-react';
 import { formatDate, formatFileSize } from '../../utils/asset-utils';
 import { useAssetSize } from '../../hooks/useAssetSize';
@@ -34,10 +34,11 @@ export const AssetItem = memo<AssetItemProps>(
     }, [asset.id, onSelect]);
 
     const handleDoubleClick = useCallback(() => {
-      if (onDoubleClick && !isInSelectionMode) {
-        onDoubleClick(asset);
+      // 双击预览
+      if (onPreview && !isInSelectionMode) {
+        onPreview(asset);
       }
-    }, [asset, onDoubleClick, isInSelectionMode]);
+    }, [asset, onPreview, isInSelectionMode]);
 
     const handleCheckboxChange = useCallback(() => {
       onSelect(asset.id);
@@ -47,11 +48,12 @@ export const AssetItem = memo<AssetItemProps>(
       e.stopPropagation();
     }, []);
 
-    const handlePreviewClick = useCallback((e: React.MouseEvent) => {
+    // 插入功能（原来的双击功能）
+    const handleInsertClick = useCallback((e: React.MouseEvent) => {
       e.stopPropagation();
       e.preventDefault();
-      onPreview?.(asset);
-    }, [asset, onPreview]);
+      onDoubleClick?.(asset);
+    }, [asset, onDoubleClick]);
 
     const handleMouseEnter = useCallback(() => {
       setIsHovered(true);
@@ -134,15 +136,15 @@ export const AssetItem = memo<AssetItemProps>(
             </div>
           )}
 
-          {/* 预览按钮 - hover 时显示（非列表模式） */}
-          {!isListMode && isHovered && !isInSelectionMode && onPreview && (
-            <Tooltip content="预览" theme="light" showArrow={false}>
+          {/* 插入按钮 - hover 时显示（非列表模式） */}
+          {!isListMode && isHovered && !isInSelectionMode && onDoubleClick && (
+            <Tooltip content="插入到画布" theme="light" showArrow={false}>
               <button
                 className="asset-item__preview-btn"
-                onClick={handlePreviewClick}
-                data-track="asset_item_preview"
+                onClick={handleInsertClick}
+                data-track="asset_item_insert"
               >
-                <Eye size={16} />
+                <Plus size={16} />
               </button>
             </Tooltip>
           )}
@@ -182,15 +184,15 @@ export const AssetItem = memo<AssetItemProps>(
           <div className="asset-item__ai-badge asset-item__ai-badge--list">AI</div>
         )}
 
-        {/* 列表模式：预览按钮 */}
-        {isListMode && isHovered && !isInSelectionMode && onPreview && (
-          <Tooltip content="预览" theme="light" showArrow={false}>
+        {/* 列表模式：插入按钮 */}
+        {isListMode && isHovered && !isInSelectionMode && onDoubleClick && (
+          <Tooltip content="插入到画布" theme="light" showArrow={false}>
             <button
               className="asset-item__preview-btn"
-              onClick={handlePreviewClick}
-              data-track="asset_item_preview"
+              onClick={handleInsertClick}
+              data-track="asset_item_insert"
             >
-              <Eye size={16} />
+              <Plus size={16} />
             </button>
           </Tooltip>
         )}
@@ -205,7 +207,7 @@ export const AssetItem = memo<AssetItemProps>(
       prevProps.viewMode === nextProps.viewMode &&
       prevProps.isSelected === nextProps.isSelected &&
       prevProps.isInSelectionMode === nextProps.isInSelectionMode &&
-      prevProps.onPreview === nextProps.onPreview
+      prevProps.onDoubleClick === nextProps.onDoubleClick
     );
   },
 );

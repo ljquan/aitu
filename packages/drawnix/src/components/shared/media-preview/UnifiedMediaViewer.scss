@@ -1,0 +1,181 @@
+/**
+ * UnifiedMediaViewer - 统一媒体预览器样式
+ */
+
+$brand-orange: #f39c12;
+
+.unified-viewer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.92);
+  animation: unified-viewer-fade-in 0.2s ease;
+
+  &--fullscreen {
+    background: #000;
+  }
+
+  &__container {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    max-width: 100vw;
+    max-height: 100vh;
+  }
+
+  &__content {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    padding: 16px;
+    /* 确保内容不会被缩略图队列遮挡 */
+    position: relative;
+    z-index: 1;
+  }
+
+  /* 单图模式 */
+  &__single {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    position: relative;
+
+    /* 单图模式下 MediaViewport 需要明确尺寸 */
+    .media-viewport {
+      width: 100%;
+      height: 100%;
+      max-width: 100%;
+      max-height: 100%;
+    }
+  }
+
+  /* 导航箭头 */
+  &__nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    background: rgba(0, 0, 0, 0.5);
+    border: none;
+    border-radius: 50%;
+    color: #fff;
+    cursor: pointer;
+    opacity: 0.6;
+    transition: opacity 0.2s ease, background 0.2s ease;
+
+    &:hover {
+      opacity: 1;
+      background: rgba(0, 0, 0, 0.7);
+    }
+
+    &--prev {
+      left: 24px;
+    }
+
+    &--next {
+      right: 24px;
+    }
+  }
+
+  /* 对比模式 */
+  &__compare {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    gap: 12px;
+
+    /* 水平布局 */
+    &.layout-horizontal {
+      flex-direction: row;
+
+      .media-viewport {
+        flex: 1;
+        min-width: 0;
+      }
+    }
+
+    /* 垂直布局 */
+    &.layout-vertical {
+      flex-direction: column;
+
+      .media-viewport {
+        flex: 1;
+        min-height: 0;
+      }
+    }
+
+    /* 网格布局 - 使用 CSS Grid 实现真正的田字格 */
+    &.layout-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr 1fr;
+
+      .media-viewport {
+        width: 100%;
+        height: 100%;
+        min-width: 0;
+        min-height: 0;
+      }
+    }
+  }
+}
+
+/* 动画 */
+@keyframes unified-viewer-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+  .unified-viewer {
+    &__content {
+      padding: 8px;
+    }
+
+    &__nav {
+      width: 36px;
+      height: 36px;
+
+      &--prev {
+        left: 8px;
+      }
+
+      &--next {
+        right: 8px;
+      }
+    }
+
+    &__compare {
+      gap: 8px;
+
+      /* 小屏幕下强制垂直布局 */
+      &.layout-horizontal {
+        flex-direction: column;
+      }
+
+      &.layout-grid {
+        grid-template-columns: 1fr;
+        grid-template-rows: repeat(4, 1fr);
+      }
+    }
+  }
+}

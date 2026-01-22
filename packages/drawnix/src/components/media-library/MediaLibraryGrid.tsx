@@ -35,11 +35,13 @@ import { filterAssets, formatFileSize } from '../../utils/asset-utils';
 import { VirtualAssetGrid } from './VirtualAssetGrid';
 import { MediaLibraryEmpty } from './MediaLibraryEmpty';
 import { ViewModeToggle } from './ViewModeToggle';
-import { MediaViewer, type MediaItem } from '../shared/MediaViewer';
+import { UnifiedMediaViewer, type MediaItem as UnifiedMediaItem } from '../shared/media-preview';
 import type { MediaLibraryGridProps, ViewMode, SortOption, Asset } from '../../types/asset.types';
 import { AssetType, AssetSource } from '../../types/asset.types';
 import { useDrawnix } from '../../hooks/use-drawnix';
 import { removeElementsByAssetIds, removeElementsByAssetUrl, isCacheUrl, countElementsByAssetUrl } from '../../utils/asset-cleanup';
+import { insertImageFromUrl } from '../../data/image';
+import { insertVideo } from '../../data/video';
 import './MediaLibraryGrid.scss';
 import './VirtualAssetGrid.scss';
 
@@ -136,7 +138,7 @@ export function MediaLibraryGrid({
   
   // 预览状态
   const [previewVisible, setPreviewVisible] = useState(false);
-  const [previewItems, setPreviewItems] = useState<MediaItem[]>([]);
+  const [previewItems, setPreviewItems] = useState<UnifiedMediaItem[]>([]);
   const [previewInitialIndex, setPreviewInitialIndex] = useState(0);
   const gridContainerRef = useRef<HTMLDivElement>(null);
   
@@ -473,8 +475,9 @@ export function MediaLibraryGrid({
   }, [selectedAssetIds, filteredResult.assets, isDownloading]);
 
   // 将素材转换为预览项
-  const convertToMediaItems = useCallback((assetList: Asset[]): MediaItem[] => {
+  const convertToMediaItems = useCallback((assetList: Asset[]): UnifiedMediaItem[] => {
     return assetList.map(asset => ({
+      id: asset.id,
       url: asset.url,
       type: asset.type === AssetType.VIDEO ? 'video' : 'image',
       title: asset.name,
@@ -495,6 +498,33 @@ export function MediaLibraryGrid({
   const handlePreviewClose = useCallback(() => {
     setPreviewVisible(false);
   }, []);
+
+  // 从预览器插入到画布
+  const handleInsertFromViewer = useCallback(async (item: UnifiedMediaItem) => {
+    // 优先使用外部回调（如果有）
+    if (onDoubleClick) {
+      const asset = filteredResult.assets.find(a => a.url === item.url);
+      if (asset) {
+        onDoubleClick(asset);
+        return;
+      }
+    }
+    
+    // 直接插入到画布
+    if (board) {
+      try {
+        if (item.type === 'video') {
+          await insertVideo(board, item.url);
+        } else {
+          await insertImageFromUrl(board, item.url);
+        }
+        // 插入成功后关闭预览
+        setPreviewVisible(false);
+      } catch (error) {
+        console.error('Failed to insert media to canvas:', error);
+      }
+    }
+  }, [filteredResult.assets, onDoubleClick, board]);
 
   // 键盘事件处理（空格键/回车键预览选中的素材）
   useEffect(() => {
@@ -800,7 +830,7 @@ export function MediaLibraryGrid({
                 </div>
               )}
               <span className="media-library-grid__footer-count">共 {filteredResult.count} 个素材</span>
-              {!isSelectionMode && <span className="media-library-grid__footer-hint">双击插入</span>}
+              {!isSelectionMode && <span className="media-library-grid__footer-hint">双击预览</span>}
             </div>
             
             <div className="media-library-grid__footer-right">
@@ -826,11 +856,13 @@ export function MediaLibraryGrid({
       )}
 
       {/* 媒体预览器 */}
-      <MediaViewer
+      <UnifiedMediaViewer
         visible={previewVisible}
         items={previewItems}
         initialIndex={previewInitialIndex}
         onClose={handlePreviewClose}
+        showThumbnails={true}
+        onInsertToCanvas={board ? handleInsertFromViewer : undefined}
       />
     </div>
   );
