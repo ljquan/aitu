@@ -1,20 +1,6 @@
 {
-  "version": "0.5.39",
-  "buildTime": "2026-01-22T16:38:09.601Z",
+  "version": "0.5.40",
+  "buildTime": "2026-01-22T16:49:53.807Z",
   "gitCommit": "unknown",
-  "changelog": [
-    "implement precache manifest generation and update service worker activation strategy",
-    "修复 ModelDropdown Portal 模式下的位置计算和点击选择问题",
-    "统一 Tooltip 样式并美化模型健康状态信号展示",
-    "添加模型健康状态功能并更新 CLAUDE.md 文档",
-    "优化素材库筛选按钮间距并实现三段式循环排序模式",
-    "初始化时自动滚动显示 AI 按钮",
-    "修复多选元素时填充色图标显示异常",
-    "优化工具箱 UI 和工具栏交互",
-    "优化角色创建时间轴视频帧显示",
-    "添加工具窗口最小化/恢复动画",
-    "添加数据备份功能和进度显示",
-    "增强敏感信息处理和日志记录",
-    "修复视频插入函数名错误"
-  ]
+  "changelog": []
 }
