@@ -4351,3 +4351,183 @@ const handleDelete = () => {
 - 确保 checked、indeterminate、hover、active 等所有状态都被覆盖
 
 ---
+
+### React 加载状态规范
+
+#### 避免 Suspense 导致的布局抖动
+
+**场景**: 使用 `React.lazy` 和 `Suspense` 加载组件时，如果 fallback 占位符的高度与加载后的真实内容差异巨大，会导致页面布局发生剧烈的跳动。
+
+❌ **错误示例**:
+```tsx
+// 错误：fallback 只有 16px 高，加载后内容有 500px 高
+<Suspense fallback={<div className="spinner" />}>
+  <ChatMessagesArea />
+</Suspense>
+```
+
+✅ **正确示例**:
+```tsx
+// 正确：使用撑满容器或固定高度的 fallback
+<Suspense fallback={
+  <div className="loading-container--full">
+    <div className="spinner" />
+  </div>
+}>
+  <ChatMessagesArea />
+</Suspense>
+
+// SCSS
+.loading-container--full {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+```
+
+**原因**: 布局抖动（Layout Shift）严重影响用户体验和视觉稳定性。Fallback 应尽可能模拟加载后的布局尺寸。
+
+---
+
+### API 与任务处理规范
+
+#### 优先使用结构化数据而非字符串解析
+
+**场景**: 在 UI 组件中展示复杂的业务数据（如 AI 生成消息中的模型、参数、上下文）时。
+
+❌ **错误示例**:
+```typescript
+// 错误：通过解析拼接后的字符串来提取参数
+const metaTags = textContent.split('\n').filter(line => line.startsWith('模型:'));
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：在数据模型中直接存储结构化对象
+interface ChatMessage {
+  id: string;
+  content: string;
+  aiContext?: {
+    model: string;
+    params: Record<string, any>;
+  };
+}
+
+// UI 渲染时优先读取结构化数据
+const model = message.aiContext?.model || parseFallback(message.content);
+```
+
+**原因**: 字符串解析极其脆弱，容易因文案微调、语言切换或历史数据格式不一而失效。结构化数据是唯一可靠的真相来源。
+
+---
+
+### UI 图标库规范
+
+#### 验证 TDesign 图标库导出名称
+
+**场景**: 使用 `tdesign-icons-react` 库中的图标时。
+
+❌ **错误示例**:
+```typescript
+import { RobotIcon, NumberIcon } from 'tdesign-icons-react'; 
+// 错误：这两个图标在库中并不存在，会导致运行时报错
+```
+
+✅ **正确示例**:
+```typescript
+import { ServiceIcon, BulletpointIcon } from 'tdesign-icons-react';
+// 正确：使用库中实际存在的相近图标
+```
+
+**原因**: `tdesign-icons-react` 的图标导出名称有时与直觉不符（例如没有 `RobotIcon` 而是 `ServiceIcon`）。在引入新图标前务必通过 IDE 补全功能验证其存在。
+
+---
+
+---
+
+### React 加载状态规范
+
+#### 避免 Suspense 导致的布局抖动
+
+**场景**: 使用 `React.lazy` 和 `Suspense` 加载组件时，如果 fallback 高度与实际内容差异巨大，会导致页面跳动。
+
+❌ **错误示例**:
+```tsx
+// 错误：fallback 只有一行文字高度，加载后容器瞬间撑开
+<Suspense fallback={<div>加载中...</div>}>
+  <ChatMessagesArea />
+</Suspense>
+```
+
+✅ **正确示例**:
+```tsx
+// 正确：fallback 撑满容器或具有固定高度
+<Suspense fallback={<div className="chat-loading--full"><Spinner /></div>}>
+  <ChatMessagesArea />
+</Suspense>
+
+// CSS
+.chat-loading--full {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+```
+
+**原因**: 布局抖动（Layout Shift）严重影响用户体验，通过为加载状态预留空间可以保持视觉稳定性。
+
+---
+
+### API 与任务处理规范
+
+#### 优先使用结构化数据而非字符串解析
+
+**场景**: 在 UI 层展示复杂信息（如 AI 生成参数）时。
+
+❌ **错误示例**:
+```typescript
+// 错误：通过正则或 split 解析拼接好的显示文本
+const parts = textContent.split(' 模型: ');
+const modelId = parts[1]?.trim();
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：在数据源头保留结构化 Context
+const userChatMsg = {
+  role: 'user',
+  textContent: '...',
+  aiContext: context, // 存储原始对象
+};
+
+// UI 直接读取
+const modelId = chatMessage.aiContext?.model?.id;
+```
+
+**原因**: 字符串解析极其脆弱，格式微调会导致解析失败；结构化数据提供类型安全且更易维护。
+
+---
+
+### UI 图标库规范
+
+#### 验证 TDesign 图标库导出名称
+
+**场景**: 使用 `tdesign-icons-react` 引入新图标时。
+
+❌ **错误示例**:
+```tsx
+import { NumberIcon, RobotIcon } from 'tdesign-icons-react'; 
+// ❌ 报错：这些名称在库中不存在，导致应用崩溃
+```
+
+✅ **正确示例**:
+```tsx
+import { BulletpointIcon, ServiceIcon } from 'tdesign-icons-react';
+// ✅ 使用前先验证库中实际存在的导出名称
+```
+
+**原因**: TDesign 图标库命名不一定符合直觉，使用不存在的导出名会触发 `SyntaxError` 导致白屏。

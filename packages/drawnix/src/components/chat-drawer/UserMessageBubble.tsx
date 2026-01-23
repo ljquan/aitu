@@ -6,7 +6,8 @@
  */
 
 import React, { useMemo, useRef, useEffect, useCallback } from 'react';
-import type { Message, MessagePart } from '@llamaindex/chat-ui';
+import type { Message } from '@llamaindex/chat-ui';
+import { ServiceIcon, LayersIcon, ImageIcon, BulletpointIcon } from 'tdesign-icons-react';
 import './user-message-bubble.scss';
 
 interface UserMessageBubbleProps {
@@ -19,6 +20,11 @@ interface ImageData {
   filename: string;
 }
 
+interface MetaItem {
+  label: string;
+  icon: React.ReactNode;
+}
+
 export const UserMessageBubble: React.FC<UserMessageBubbleProps> = ({
   message,
   className = '',
@@ -26,7 +32,7 @@ export const UserMessageBubble: React.FC<UserMessageBubbleProps> = ({
   const textRef = useRef<HTMLDivElement>(null);
 
   // 解析消息内容
-  const { text, images } = useMemo(() => {
+  const { text, meta, images } = useMemo(() => {
     let textContent = '';
     const imageList: ImageData[] = [];
 
@@ -44,8 +50,92 @@ export const UserMessageBubble: React.FC<UserMessageBubbleProps> = ({
       }
     }
 
-    return { text: textContent, images: imageList };
-  }, [message.parts]);
+    // 1. 优先使用消息中存储的 aiContext（结构化数据）
+    const chatMessage = message as any;
+    if (chatMessage.aiContext) {
+      const context = chatMessage.aiContext;
+      const metaItems: MetaItem[] = [];
+      
+      // 提取模型信息
+      if (context.model?.id) {
+        metaItems.push({ label: context.model.id, icon: <ServiceIcon size="12px" /> });
+      }
+      
+      // 提取数量信息
+      if (context.params?.count > 1) {
+        metaItems.push({ label: `${context.params.count} 张`, icon: <ImageIcon size="12px" /> });
+      }
+      
+      // 提取其他关键参数
+      if (context.params?.size) {
+        metaItems.push({ label: context.params.size, icon: <LayersIcon size="12px" /> });
+      }
+
+      // 如果有选中的文本
+      if (context.selection?.texts?.length > 0) {
+        metaItems.push({ label: `${context.selection.texts.length} 段文本`, icon: <BulletpointIcon size="12px" /> });
+      }
+
+      return {
+        text: context.userInstruction || context.finalPrompt || textContent,
+        meta: metaItems,
+        images: imageList
+      };
+    }
+
+    // 2. 兜底方案：解析文本内容（兼容历史数据）
+    let mainText = textContent;
+    const metaItems: MetaItem[] = [];
+
+    // 尝试匹配新格式的分隔符
+    if (mainText.includes('\n---\n')) {
+      const parts = mainText.split('\n---\n');
+      mainText = parts[0];
+      const metaContent = parts[1];
+      metaContent.split('  •  ').forEach(t => {
+        const label = t.replace(/模型:\s*/, '').replace(/数量:\s*/, '').replace(/尺寸:\s*/, '').trim();
+        if (label) {
+          let icon = <ServiceIcon size="12px" />;
+          if (t.includes('数量')) icon = <ImageIcon size="12px" />;
+          if (t.includes('尺寸')) icon = <LayersIcon size="12px" />;
+          metaItems.push({ label, icon });
+        }
+      });
+    } else {
+      // 兼容旧格式：按行解析并提取关键词
+      const lines = mainText.split('\n');
+      const remainingLines: string[] = [];
+
+      for (const line of lines) {
+        const trimmedLine = line.trim();
+        if (trimmedLine.startsWith('模型:') || trimmedLine.startsWith('数量:') || trimmedLine.startsWith('提示词:')) {
+          const label = trimmedLine.replace(/.*:\s*/, '').trim();
+          let icon = <ServiceIcon size="12px" />;
+          if (trimmedLine.includes('数量')) icon = <ImageIcon size="12px" />;
+          metaItems.push({ label, icon });
+        } else if (trimmedLine.startsWith('📝 选中的文本:')) {
+          metaItems.push({ label: trimmedLine.replace('📝 ', '').trim(), icon: <BulletpointIcon size="12px" /> });
+        } else if (trimmedLine && !trimmedLine.startsWith('💬 用户指令:')) {
+          remainingLines.push(line);
+        }
+      }
+      mainText = remainingLines.join('\n').trim();
+    }
+
+    // 如果清洗后 mainText 为空，但有 metaItems，说明可能是纯指令（如只有 #模型）
+    if (!mainText && metaItems.length > 0) {
+      const match = textContent.match(/💬 用户指令:\s*([\s\S]*?)(?=\n模型:|\n数量:|$)/);
+      if (match && match[1].trim()) {
+        mainText = match[1].trim();
+      }
+    }
+
+    return { 
+      text: mainText || textContent, 
+      meta: metaItems,
+      images: imageList 
+    };
+  }, [message.parts, (message as any).aiContext]);
 
   // 阻止事件冒泡，防止取消画布选中态
   const handleStopPropagation = useCallback((e: Event) => {
@@ -111,13 +201,25 @@ export const UserMessageBubble: React.FC<UserMessageBubbleProps> = ({
           </div>
         )}
 
-        {/* 文本内容 - 支持选择和复制 */}
+        {/* 文本内容 - 仅展示清洗后的用户输入 */}
         {text && (
           <div 
             ref={textRef}
             className="user-bubble__text user-bubble__text--selectable"
           >
             {text}
+          </div>
+        )}
+
+        {/* 元数据标签 - 独立节点展示 */}
+        {meta && meta.length > 0 && (
+          <div className="user-bubble__meta-tags">
+            {meta.map((item, index) => (
+              <div key={index} className="user-bubble__meta-tag">
+                <span className="user-bubble__meta-icon">{item.icon}</span>
+                <span className="user-bubble__meta-label">{item.label}</span>
+              </div>
+            ))}
           </div>
         )}
       </div>

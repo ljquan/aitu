@@ -158,6 +158,8 @@ export interface ChatMessage {
   error?: string;
   /** 工作流数据（当消息包含工作流时） */
   workflow?: WorkflowMessageData;
+  /** AI 输入上下文（用于用户消息展示） */
+  aiContext?: AIInputContext;
 }
 
 /** 对话会话接口 */

@@ -136,6 +136,12 @@ Service Worker (后台执行)
 5. **API 请求**：禁止重试，区分业务失败和网络错误
 6. **调试日志**：提交前必须清理 `console.log`
 7. **敏感信息**：永不硬编码 API Key，使用 `sanitizeObject` 过滤日志
+8. **布局抖动**：`Suspense` 的 fallback 应撑满容器或固定高度，防止加载时跳动
+9. **结构化数据**：复杂消息展示应优先使用 `aiContext` 等结构化数据而非字符串解析
+10. **图标验证**：使用 `tdesign-icons-react` 前需验证导出名称是否存在（如 `ServiceIcon`）
+8. **布局抖动**：`Suspense` 的 fallback 应撑满容器或固定高度，防止加载时跳动
+9. **结构化数据**：复杂消息展示应优先使用 `aiContext` 等结构化数据而非字符串解析
+10. **图标验证**：使用 `tdesign-icons-react` 前需验证导出名称是否存在（如 `ServiceIcon`）
 
 ### Service Worker 规则
 

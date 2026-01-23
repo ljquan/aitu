@@ -9,37 +9,37 @@
     max-width: 80%;
     display: flex;
     flex-direction: column;
-    gap: $spacing-sm;
+    gap: 0;
+    overflow: hidden;
+    border-radius: 12px 12px 4px 12px;
+    box-shadow: 0 2px 8px rgba(243, 156, 18, 0.15);
+    background: #ffffff;
+    border: 1px solid rgba(243, 156, 18, 0.1);
   }
 
   &__images {
     display: grid;
-    gap: $spacing-xs;
-    border-radius: $border-radius-md;
+    gap: 2px;
     overflow: hidden;
 
     // 单张图片
     &--1 {
       grid-template-columns: 1fr;
-      max-width: 300px;
     }
 
     // 两张图片
     &--2 {
       grid-template-columns: repeat(2, 1fr);
-      max-width: 400px;
     }
 
     // 三张图片
     &--3 {
       grid-template-columns: repeat(3, 1fr);
-      max-width: 450px;
     }
 
     // 四张及以上图片
     &--4 {
       grid-template-columns: repeat(2, 1fr);
-      max-width: 400px;
     }
   }
 
@@ -48,7 +48,6 @@
     aspect-ratio: 1;
     overflow: hidden;
     background-color: rgba(0, 0, 0, 0.05);
-    border-radius: $border-radius-sm;
   }
 
   &__image {
@@ -63,14 +62,14 @@
   }
 
   &__text {
-    padding: $spacing-sm $spacing-md;
-    background-color: $primary-color;
+    padding: $spacing-md $spacing-lg;
+    background: linear-gradient(135deg, #F39C12 0%, #E67E22 100%);
     color: white;
-    border-radius: $border-radius-lg;
-    border-bottom-right-radius: $border-radius-sm;
     word-break: break-word;
     white-space: pre-wrap;
     line-height: 1.5;
+    font-size: 14px;
+    font-weight: 500;
 
     // 支持文本选择
     &--selectable {
@@ -83,5 +82,56 @@
         color: white;
       }
     }
+  }
+
+  // 元数据标签容器
+  &__meta-tags {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: $spacing-sm;
+    padding: $spacing-xs $spacing-lg;
+    background: #fafafa;
+    border-top: 1px solid #f0f0f0;
+    min-height: 32px;
+  }
+
+  // 单个元数据标签
+  &__meta-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--td-text-color-placeholder);
+    font-size: 11px;
+    font-weight: 400;
+    transition: all 0.2s ease;
+
+    &:not(:last-child)::after {
+      content: '';
+      width: 1px;
+      height: 10px;
+      background: #e0e0e0;
+      margin-left: $spacing-sm;
+    }
+
+    &:hover {
+      color: var(--td-text-color-secondary);
+      
+      .user-bubble__meta-icon {
+        color: var(--td-brand-color);
+      }
+    }
+  }
+
+  &__meta-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--td-text-color-placeholder);
+    transition: color 0.2s ease;
+  }
+
+  &__meta-label {
+    white-space: nowrap;
   }
 }
