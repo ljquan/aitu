@@ -145,6 +145,54 @@ Service Worker (后台执行)
 4. 更新后禁止自动刷新页面，需用户确认
 5. SW 枚举值使用小写（`'completed'`、`'image'`、`'video'`），读取 SW 数据时注意匹配
 
+#### 无效配置下的数据不应被持久化或执行
+
+**场景**: 用户在未配置 API Key 时创建了任务，后来配置了 API Key，这些旧任务不应被执行
+
+❌ **错误示例**:
+```typescript
+// 错误：initialize 时直接恢复所有 PENDING 任务
+async initialize(config: Config): Promise<void> {
+  this.config = config;
+  this.initialized = true;
+  
+  // 恢复并执行所有 PENDING 任务（包括无效配置时创建的）
+  for (const task of this.tasks.values()) {
+    if (task.status === TaskStatus.PENDING) {
+      this.executeTask(task);  // ❌ 执行了"孤儿任务"
+    }
+  }
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：首次初始化时清除无效配置下创建的任务
+private hadSavedConfig = false;
+
+async restoreFromStorage(): Promise<void> {
+  const { config } = await storage.loadConfig();
+  if (config) {
+    this.hadSavedConfig = true;  // 标记有保存的配置
+  }
+}
+
+async initialize(config: Config): Promise<void> {
+  // 首次初始化时清除"孤儿任务"
+  if (!this.hadSavedConfig) {
+    for (const task of this.tasks.values()) {
+      if (task.status === TaskStatus.PENDING) {
+        await storage.deleteTask(task.id);  // ✅ 清除无效任务
+      }
+    }
+  }
+  this.hadSavedConfig = true;
+  // ... 继续正常初始化
+}
+```
+
+**原因**: 无效配置（如缺少 API Key）下创建的任务是"孤儿数据"，不应在后续有效配置时被执行。通过 `hadSavedConfig` 标志区分"首次初始化"和"恢复已有配置"，确保只有在有效配置下创建的任务才会被执行。
+
 ### 模块导入规则
 
 #### 同名模块的全局状态隔离问题

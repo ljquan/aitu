@@ -61,6 +61,7 @@ import { parseAIInput, type GenerationType } from '../../utils/ai-input-parser';
 import { convertToWorkflow, type WorkflowDefinition, type WorkflowStepOptions } from './workflow-converter';
 import { useWorkflowControl } from '../../contexts/WorkflowContext';
 import { geminiSettings } from '../../utils/settings-manager';
+import { promptForApiKey } from '../../utils/gemini-api/auth';
 import type { WorkflowMessageData } from '../../types/chat.types';
 import { analytics } from '../../utils/posthog-analytics';
 import classNames from 'classnames';
@@ -900,6 +901,16 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
     setIsSubmitting(true);
 
     try {
+      // 检查 API key，如果没有配置则弹窗获取
+      const globalSettings = geminiSettings.get();
+      if (!globalSettings.apiKey) {
+        const newApiKey = await promptForApiKey();
+        if (!newApiKey) {
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
       // 构建选中元素的分类信息（使用合并后的 allContent）
       // 收集图片和图形的尺寸信息（按顺序：先 images，后 graphics）
       const imageItems = allContent.filter((item) => item.type === 'image' && item.url);
@@ -1045,7 +1056,6 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
         finalPrompt: parsedParams.prompt,
       };
 
-      const globalSettings = geminiSettings.get();
       const textModel = globalSettings.textModelName;
 
       const retryContext: WorkflowRetryContext = {
