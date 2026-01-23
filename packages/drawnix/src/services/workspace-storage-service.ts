@@ -145,7 +145,6 @@ async function detectDatabaseVersion(dbName: string): Promise<number> {
       const version = db.version;
       db.close();
       const targetVersion = Math.max(version, WORKSPACE_DB_CONFIG.MIN_DATABASE_VERSION);
-      console.log(`[WorkspaceStorage] Detected DB version: ${version}, using: ${targetVersion}`);
       resolve(targetVersion);
     };
     
@@ -254,7 +253,6 @@ class WorkspaceStorageService {
             this.stateStore!.ready(),
           ]);
           this.initialized = true;
-          console.log('[WorkspaceStorage] Recovery successful, database recreated');
           return;
         } catch (recoveryError) {
           console.error('[WorkspaceStorage] Recovery failed:', recoveryError);
@@ -277,7 +275,6 @@ class WorkspaceStorageService {
       
       const request = indexedDB.deleteDatabase(WORKSPACE_DB_CONFIG.DATABASE_NAME);
       request.onsuccess = () => {
-        console.log('[WorkspaceStorage] Database deleted successfully');
         resolve();
       };
       request.onerror = () => {

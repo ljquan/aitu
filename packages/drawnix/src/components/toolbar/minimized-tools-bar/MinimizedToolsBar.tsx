@@ -55,7 +55,6 @@ export const MinimizedToolsBar: React.FC = () => {
    */
   const handleToolClick = useCallback((toolId: string) => {
     const state = toolWindowService.getToolState(toolId);
-    console.log('[MinimizedToolsBar] handleToolClick', { toolId, currentStatus: state?.status });
     
     // 如果是 closed 状态（常驻工具刷新后），需要从 toolboxService 获取完整的工具定义
     if (state?.status === 'closed') {

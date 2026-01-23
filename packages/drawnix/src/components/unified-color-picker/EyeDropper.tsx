@@ -38,9 +38,8 @@ export const EyeDropper: React.FC<EyeDropperProps> = ({
       if (result?.sRGBHex) {
         onPick(result.sRGBHex.toUpperCase());
       }
-    } catch (error) {
+    } catch {
       // 用户取消或其他错误，静默处理
-      console.debug('[EyeDropper] Cancelled or failed:', error);
     } finally {
       setIsPicking(false);
     }

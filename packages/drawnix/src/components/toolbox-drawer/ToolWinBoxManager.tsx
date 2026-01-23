@@ -27,10 +27,6 @@ export const ToolWinBoxManager: React.FC = () => {
 
   useEffect(() => {
     const subscription = toolWindowService.observeToolStates().subscribe(states => {
-      console.log('[ToolWinBoxManager] toolStates updated', states.map(s => ({ 
-        id: s.tool.id, 
-        status: s.status 
-      })));
       setToolStates(states);
     });
     
@@ -141,13 +137,6 @@ export const ToolWinBoxManager: React.FC = () => {
         
         // 确定窗口是否可见
         const isVisible = status === 'open';
-        console.log('[ToolWinBoxManager] rendering WinBoxWindow', { 
-          toolId: tool.id, 
-          status, 
-          isVisible,
-          position,
-          size 
-        });
         
         return (
           <WinBoxWindow

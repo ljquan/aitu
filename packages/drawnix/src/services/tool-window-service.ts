@@ -228,7 +228,6 @@ class ToolWindowService {
     const state = this.toolStates.get(toolId);
     if (!state) return;
 
-    console.log('[toolWindowService] minimizeTool', { toolId, position, size });
     state.status = 'minimized';
     if (position) {
       state.position = position;
@@ -247,7 +246,6 @@ class ToolWindowService {
     const state = this.toolStates.get(toolId);
     if (!state) return;
 
-    console.log('[toolWindowService] restoreTool', { toolId, previousStatus: state.status });
     state.status = 'open';
     this.notify();
   }

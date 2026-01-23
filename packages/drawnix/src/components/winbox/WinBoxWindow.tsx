@@ -286,11 +286,9 @@ export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
     const wb = winboxRef.current;
     // 使用 ref 获取最新的分屏状态，避免闭包捕获旧值
     const currentSplitSide = splitSideRef.current;
-    console.log('[WinBox Split] handleSplit called, currentSplitSide:', currentSplitSide);
     
     // 安全检查：确保 WinBox 实例和其 DOM 元素都存在
     if (!wb || !wb.window) {
-      console.log('[WinBox Split] wb or wb.window is null, returning');
       return;
     }
 
@@ -298,12 +296,9 @@ export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
     const viewportHeight = window.innerHeight;
     const occupied = getOccupiedSides();
     const halfWidth = Math.floor(viewportWidth / 2);
-    
-    console.log('[WinBox Split] occupied:', occupied, 'viewportWidth:', viewportWidth);
 
     // 辅助函数：执行分屏到指定方向
     const doSplit = (targetSide: 'left' | 'right') => {
-      console.log('[WinBox Split] doSplit called, targetSide:', targetSide);
       // 保存原始 minWidth，并临时设置为较小的值以允许半屏
       if (originalMinWidthRef.current === null) {
         originalMinWidthRef.current = wb.minwidth;
@@ -326,7 +321,6 @@ export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
 
     // 辅助函数：恢复居中
     const doRestoreCenter = () => {
-      console.log('[WinBox Split] doRestoreCenter called');
       if (wb.max) {
         wb.restore();
         requestAnimationFrame(() => {
@@ -344,34 +338,27 @@ export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
     // 3. 在左半屏 -> 恢复居中
     
     if (currentSplitSide === 'left') {
-      console.log('[WinBox Split] currentSplitSide is left, restoring center');
       // 在左半屏，恢复居中
       doRestoreCenter();
       return;
     }
     
     if (currentSplitSide === 'right') {
-      console.log('[WinBox Split] currentSplitSide is right, occupied.left:', occupied.left);
       // 在右半屏
       if (occupied.left) {
         // 左边有其他窗口，恢复居中
-        console.log('[WinBox Split] left is occupied, restoring center');
         doRestoreCenter();
       } else {
         // 左边没有窗口，贴左半屏
-        console.log('[WinBox Split] left is free, splitting to left');
         doSplit('left');
       }
       return;
     }
     
-    console.log('[WinBox Split] no split side, checking occupied');
     // 没有分屏：优先贴右半屏，如果右边被占用则贴左半屏
     if (occupied.right && !occupied.left) {
-      console.log('[WinBox Split] right is occupied, splitting to left');
       doSplit('left');
     } else {
-      console.log('[WinBox Split] splitting to right');
       doSplit('right');
     }
   }, [getOccupiedSides, restoreCenter, performSplit]);
@@ -428,10 +415,6 @@ export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
     // 当 visible 变为 true 时
     if (visible && winboxRef.current) {
       // 窗口已存在（keepAlive 模式），显示并聚焦
-      console.log('[WinBoxWindow] visible=true, showing existing window', { 
-        min: winboxRef.current.min,
-        hidden: winboxRef.current.hidden,
-      });
       winboxRef.current.show();
       winboxRef.current.focus();
       return;
@@ -725,7 +708,6 @@ export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
           width: wb.width,
           height: wb.height,
         };
-        console.log('[WinBoxWindow] saved initial position', lastNormalPositionRef.current);
       }
 
       setIsReady(true);
@@ -735,7 +717,6 @@ export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
         // 使用 setTimeout 确保窗口完全创建后再最大化
         setTimeout(() => {
           if (winboxRef.current) {
-            setStrictBoundaries();
             winboxRef.current.maximize();
           }
         }, 100);
@@ -774,23 +755,14 @@ export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
   useEffect(() => {
     if (winboxRef.current) {
       const savedPos = lastNormalPositionRef.current;
-      console.log('[WinBoxWindow] visible effect', { 
-        visible, 
-        min: winboxRef.current.min,
-        hidden: winboxRef.current.hidden,
-        savedPos,
-        propsXY: { x, y },
-      });
       if (visible) {
         // 如果窗口处于最小化状态，需要先恢复
         const wasMinimized = winboxRef.current.min || winboxRef.current.hidden;
         if (winboxRef.current.min) {
-          console.log('[WinBoxWindow] restoring from minimized state');
           winboxRef.current.restore();
           // restore() 后需要重新设置位置到保存的正常位置
           // 使用内部保存的位置而不是 props，因为 props 可能被 onmove 污染
           if (savedPos) {
-            console.log('[WinBoxWindow] re-applying saved position after restore', savedPos);
             winboxRef.current.move(savedPos.x, savedPos.y);
             winboxRef.current.resize(savedPos.width, savedPos.height);
           }
