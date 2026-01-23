@@ -46,6 +46,7 @@ function precacheManifestPlugin(): Plugin {
           /\.map$/,                 // Source maps
           /precache-manifest\.json$/, // 自身
           /sw\.js$/,                // Service Worker 本身不需要预缓存
+          /sw-debug\.html$/,        // 调试面板，仅在访问时加载
         ];
         // 总是包含的关键文件
         const ALWAYS_INCLUDE = [
@@ -66,8 +67,10 @@ function precacheManifestPlugin(): Plugin {
             const relativePath = path.join(base, entry.name).replace(/\\/g, '/');
             
             if (entry.isDirectory()) {
-              // 跳过 product_showcase 等大型资源目录
-              if (!['product_showcase', 'help_tooltips'].includes(entry.name)) {
+              // 跳过不需要预缓存的目录
+              // - product_showcase, help_tooltips: 大型资源目录
+              // - sw-debug: 调试面板，仅在访问 /sw-debug.html 时加载
+              if (!['product_showcase', 'help_tooltips', 'sw-debug'].includes(entry.name)) {
                 scanDir(fullPath, relativePath);
               }
             } else if (entry.isFile()) {

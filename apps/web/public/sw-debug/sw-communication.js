@@ -142,6 +142,13 @@ export function clearPostMessageLogs() {
   sendToSW('SW_DEBUG_CLEAR_POSTMESSAGE_LOGS');
 }
 
+/**
+ * Request cache stats from SW
+ */
+export function loadCacheStats() {
+  sendToSW('SW_DEBUG_GET_CACHE_STATS');
+}
+
 /** @type {ServiceWorkerRegistration|null} */
 let cachedRegistration = null;
 

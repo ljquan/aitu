@@ -3205,6 +3205,59 @@ const handleSortClick = () => {
 - 避免在 render 中创建新对象/函数
 - 对长列表考虑使用虚拟化
 
+#### 预缓存配置规范
+
+**场景**: 使用 Service Worker 预缓存静态资源时，需要合理配置排除列表
+
+❌ **错误示例**:
+```typescript
+// vite.config.ts - 错误：没有排除调试工具和大型资源
+function precacheManifestPlugin(): Plugin {
+  const EXCLUDE_PATTERNS = [
+    /stats\.html$/,
+    /\.map$/,
+  ];
+  // 扫描所有目录，包括 sw-debug/、product_showcase/ 等
+  scanDir(outDir);  // ❌ 会将所有文件加入预缓存
+}
+```
+
+✅ **正确示例**:
+```typescript
+// vite.config.ts - 正确：明确排除非核心资源
+function precacheManifestPlugin(): Plugin {
+  const EXCLUDE_PATTERNS = [
+    /stats\.html$/,
+    /\.map$/,
+    /sw-debug\.html$/,  // ✅ 排除调试面板入口
+  ];
+  
+  // 跳过不需要预缓存的目录
+  const SKIP_DIRECTORIES = [
+    'product_showcase',  // 大型展示资源
+    'help_tooltips',     // 帮助提示图片
+    'sw-debug',          // 调试面板（仅在访问时加载）
+  ];
+  
+  if (entry.isDirectory()) {
+    if (!SKIP_DIRECTORIES.includes(entry.name)) {
+      scanDir(fullPath, relativePath);
+    }
+  }
+}
+```
+
+**应该排除的资源类型**:
+1. **调试工具** - 如 `sw-debug/`，仅开发/排查时访问
+2. **大型展示资源** - 如 `product_showcase/`，非核心功能
+3. **帮助/文档资源** - 如 `help_tooltips/`，按需加载即可
+4. **Source Maps** - 生产环境不需要预缓存
+
+**原因**: 预缓存会在主应用启动时由 Service Worker 下载所有列表中的文件。如果包含非核心资源，会：
+- 增加首次加载时间和带宽消耗
+- 占用用户设备存储空间
+- 影响主应用的启动性能和用户体验
+
 ### 安全指南
 - 验证和清理所有用户输入
 - 永远不要硬编码敏感信息（API keys 等）
