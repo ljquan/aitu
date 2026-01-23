@@ -394,10 +394,11 @@ export const WorkflowMessageBubble: React.FC<WorkflowMessageBubbleProps> = ({
       }
 
       if (typeof result === 'object' && result !== null) {
-        const response = (result as { response?: unknown }).response;
-        if (typeof response === 'string') {
-          const text = response.trim();
-          if (text) return text;
+        const res = result as { response?: unknown; content?: unknown };
+        const text = (res.response || res.content) as string;
+        if (typeof text === 'string') {
+          const trimmed = text.trim();
+          if (trimmed) return trimmed;
         }
       }
     }
@@ -435,17 +436,21 @@ export const WorkflowMessageBubble: React.FC<WorkflowMessageBubbleProps> = ({
     const hasGenerated = parts.length > 0;
     const generatedText = hasGenerated ? `成功生成 ${parts.join('，')}` : '';
 
-    // 优先使用 AI 分析内容作为 markdown 显示
+    // 优先使用最后一个步骤返回的文本内容作为摘要
+    if (markdownResult) {
+      // 如果有生成内容，在结果后追加生成摘要
+      const markdown = hasGenerated
+        ? `${markdownResult}\n\n✨ ${generatedText}`
+        : markdownResult;
+      return { variant: 'markdown' as const, icon: '✨', markdown };
+    }
+
+    // 其次使用 AI 分析内容
     if (workflow.aiAnalysis) {
-      // 如果有生成内容，在 AI 分析后追加生成摘要
       const markdown = hasGenerated
         ? `${workflow.aiAnalysis}\n\n✨ ${generatedText}`
         : workflow.aiAnalysis;
       return { variant: 'markdown' as const, icon: '🤖', markdown };
-    }
-
-    if (!hasGenerated && markdownResult) {
-      return { variant: 'markdown' as const, icon: '📝', markdown: markdownResult };
     }
 
     if (!hasGenerated) {

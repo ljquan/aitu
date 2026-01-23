@@ -157,9 +157,9 @@ $green-health: #10B981;
 
   // 搜索框
   &__search {
-    padding: 8px;
-    border-bottom: 1px solid #F3F4F6;
-    background: #FAFAFA;
+    padding: 12px;
+    border-bottom: 1px solid #f3f4f6;
+    background: #ffffff;
   }
 
   &__search-input-wrapper {
@@ -170,38 +170,43 @@ $green-health: #10B981;
 
   &__search-icon {
     position: absolute;
-    left: 8px;
-    color: $gray-medium;
+    left: 10px;
+    color: var(--td-text-color-placeholder);
     pointer-events: none;
+    width: 14px;
+    height: 14px;
   }
 
   &__search-input {
     width: 100%;
-    padding: 6px 30px 6px 28px !important;
-    border: 1px solid #E5E7EB !important;
-    border-radius: 4px !important;
+    padding: 6px 30px 6px 32px !important;
+    border: 1px solid #e5e7eb !important;
+    border-radius: 8px !important;
     font-size: 13px !important;
-    background: #fff !important;
+    background: #ffffff !important;
     outline: none !important;
-    height: 30px !important;
+    height: 34px !important;
+    transition: all 0.2s ease;
 
     &:focus {
-      border-color: $orange-primary !important;
-      box-shadow: 0 0 0 2px rgba($orange-primary, 0.1) !important;
+      border-color: var(--td-brand-color) !important;
+      box-shadow: 0 0 0 2px rgba(var(--td-brand-color-rgb), 0.1) !important;
     }
   }
 
   &__search-clear {
     position: absolute;
-    right: 8px;
-    color: $gray-medium;
+    right: 10px;
+    color: var(--td-text-color-placeholder);
     cursor: pointer;
     padding: 2px;
     border-radius: 50%;
+    width: 14px;
+    height: 14px;
 
     &:hover {
-      background: #E5E7EB;
-      color: $gray-dark;
+      background: #f3f4f6;
+      color: var(--td-text-color-secondary);
     }
   }
 
@@ -209,16 +214,16 @@ $green-health: #10B981;
   &__menu {
     position: absolute;
     min-width: 300px;
-    max-height: 450px; // 增加最大高度
+    max-height: 450px;
     background: #fff;
-    border: 1px solid #E5E7EB;
-    border-radius: 8px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15); // 增强阴影
+    border: 1px solid #e5e7eb;
+    border-radius: 12px; // 统一为 12px
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
     display: flex;
     flex-direction: column;
-    overflow: visible !important; // 关键：允许阴影和内部内容溢出
-    z-index: 10000; // 确保在最顶层
-    animation: model-dropdown-fade-in 0.15s ease;
+    overflow: hidden; // 关键：确保内部内容不溢出圆角
+    z-index: 10000;
+    animation: model-dropdown-fade-in 0.15s cubic-bezier(0.16, 1, 0.3, 1);
 
     &--up {
       bottom: calc(100% + 4px);

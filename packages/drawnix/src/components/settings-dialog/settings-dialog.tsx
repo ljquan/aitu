@@ -7,6 +7,7 @@ import { geminiSettings } from '../../utils/settings-manager';
 import { Tooltip } from 'tdesign-react';
 import { InfoCircleIcon } from 'tdesign-icons-react';
 import { ModelDropdown } from '../ai-input-bar/ModelDropdown';
+import { ModelSelector as ChatModelSelector } from '../chat-drawer/ModelSelector';
 import {
   IMAGE_MODEL_GROUPED_SELECT_OPTIONS,
   VIDEO_MODEL_SELECT_OPTIONS,
@@ -143,12 +144,9 @@ export const SettingsDialog = ({
           <div className="settings-dialog__field">
             <label className="settings-dialog__label">文本模型名称</label>
             <div className="settings-dialog__model-dropdown-container">
-              <ModelDropdown
-                selectedModel={textModelName}
-                onSelect={(value) => setTextModelName(value)}
-                language={t('language') === 'zh' ? 'zh' : 'en'}
-                models={TEXT_MODELS}
-                placement="up"
+              <ChatModelSelector
+                value={textModelName}
+                onChange={(value) => setTextModelName(value)}
                 variant="form"
               />
             </div>
