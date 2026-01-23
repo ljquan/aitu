@@ -17,6 +17,20 @@
     border: 1px solid rgba(243, 156, 18, 0.1);
   }
 
+  // 纯文字消息的简化样式
+  &--text-only {
+    .user-bubble__content {
+      background: transparent;
+      border: none;
+      box-shadow: none;
+    }
+
+    .user-bubble__text {
+      border-radius: 16px 16px 4px 16px;
+      box-shadow: 0 2px 12px rgba(243, 156, 18, 0.2);
+    }
+  }
+
   &__images {
     display: grid;
     gap: 2px;

@@ -1120,7 +1120,7 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
                <EnhancedChatInput
                 selectedContent={selectedContent}
                 onSend={handleSendWrapper}
-                placeholder="输入消息... (可用 # 指定模型)"
+                placeholder="支持连续对话"
               />
             </div>
 

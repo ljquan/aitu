@@ -1,6 +1,6 @@
 <div align="center">
   <h1>
-    爱图 (Aitu)
+    Opentu (opentu.ai)
   </h1>
   <h3>
     AI图片视频创作（SaaS） + 一体化白板
@@ -20,9 +20,37 @@
 
 [*English README*](https://github.com/ljquan/aitu/blob/develop/README_en.md)
 
-## 特性
+## 产品展示
 
-### AI 创作能力 🔥
+| 拆分图片 | 流程图 | 思维导图 |
+|---------|--------|----------|
+| ![](./apps/web/public/product_showcase/九宫格拆图.gif) | ![](./apps/web/public/product_showcase/流程图.gif) | ![](./apps/web/public/product_showcase/思维导图.gif) |
+| 语义理解 - 拆分图片 | 语义理解 - 流程图 | 语义理解 - 思维导图 |
+
+
+## 应用
+
+[*https://opentu.ai*](https://opentu.ai) 是 *Opentu* 的在线应用。
+
+近期会高频迭代应用功能，持续优化用户体验。
+
+
+## 🚀 快速开始
+
+### 在线体验
+直接访问 [opentu.ai](https://opentu.ai) 立即开始使用，无需安装任何软件。
+
+### 一键部署
+
+点击下方按钮，即可将 Aitu 部署到你自己的服务器：
+
+| 平台 | 一键部署 |
+| :--- | :--- |
+| Vercel | [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fljquan%2Faitu&project-name=aitu&repository-name=aitu) |
+| Netlify | [![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/ljquan/aitu) |
+
+
+## AI 创作能力 🔥
 - **AI 图片生成** - 支持多种图片生成模型
   - gemini-2.5-flash-image (nano-banana) - 快速生图
   - gemini-3-pro-image-preview (nano-banana-2) - 高质量生图，支持 HD/2K/4K 分辨率
@@ -52,122 +80,24 @@
 - **主题模式** - 支持亮色/暗色主题切换
 - **移动端适配** - 完美支持移动设备使用
 
-## 产品展示
-
-<div align="center">
-  <figure>
-    <a href="./apps/web/public/product_showcase/aitu-01.png" target="_blank" rel="noopener">
-      <img src="./apps/web/public/product_showcase/aitu-01.png" alt="提示词图片概率" width="100%" />
-    </a>
-    <figcaption>
-      <p align="center">
-        提示词 + 图片 概括一体
-      </p>
-    </figcaption>
-  </figure>
-</div>
-
-<div align="center">
-  <figure>
-    <a href="./apps/web/public/product_showcase/aitu-02.png" target="_blank" rel="noopener">
-      <img src="./apps/web/public/product_showcase/aitu-02.png" alt="AI 图片生成" width="100%" />
-    </a>
-    <figcaption>
-      <p align="center">
-        AI 图片生成 - 质的创作飞跃
-      </p>
-    </figcaption>
-  </figure>
-</div>
-
-<div align="center">
-  <figure>
-    <a target="_blank" rel="noopener">
-      <img src="./apps/web/public/product_showcase/aitu-05.png" alt="AI 视频生成" width="100%" />
-    </a>
-    <figcaption>
-      <p align="center">
-        AI 视频生成 - 多模型选择，图生视频
-      </p>
-    </figcaption>
-  </figure>
-</div>
-
-<div align="center">
-  <figure>
-    <a target="_blank" rel="noopener">
-      <img src="./apps/web/public/product_showcase/aitu-06.png" alt="任务队列管理" width="100%" />
-    </a>
-    <figcaption>
-      <p align="center">
-        任务队列 - 进度追踪、批量管理、媒体缓存
-      </p>
-    </figcaption>
-  </figure>
-</div>
-
-<div align="center">
-  <figure>
-    <a target="_blank" rel="noopener">
-      <img src="./apps/web/public/product_showcase/aitu-03.png" alt="任务处理" width="100%" />
-    </a>
-    <figcaption>
-      <p align="center">
-        任务处理 - 批量生成
-      </p>
-    </figcaption>
-  </figure>
-</div>
-
-
-<div align="center">
-  <figure>
-    <a target="_blank" rel="noopener">
-      <img src="./apps/web/public/product_showcase/aitu-04.png" alt="效果展示" width="100%" />
-    </a>
-    <figcaption>
-      <p align="center">
-        效果展示
-      </p>
-    </figcaption>
-  </figure>
-</div>
-
-
-
-
-
-<div align="center">
-  <figure>
-    <a target="_blank" rel="noopener">
-      <img src="./apps/web/public/product_showcase/case-2.png" alt="流程图与自由画" width="100%" />
-    </a>
-    <figcaption>
-      <p align="center">
-        All in one 白板 - 流程图、自由画、图片等多种创作方式
-      </p>
-    </figcaption>
-  </figure>
-</div>
-
 
 ## 关于名称
 
-***爱图(Aitu)***  ，源于对创作的热爱与图形表达的追求。
+***Opentu(opentu.ai)***  ，源于对创作的热爱与图形表达的追求。
 
 *爱* 代表着对创作的热情与专注，*图* 象征着视觉表达的无限可能。在这里，每一次创作都是对美好的追求，每一笔绘画都是想象力的延伸。
 
-创意源于内心的热爱，而  ***爱图(Aitu)***  致力于成为每个创作者的得力助手。
+创意源于内心的热爱，而  ***Opentu(opentu.ai)***  致力于成为每个创作者的得力助手。
 
 *爱创作，图未来。*
 
 
 ## 与 Plait 画图框架
 
-*爱图(Aitu)* 的定位是一个开箱即用、开源、免费的工具产品，它的底层是 *Plait* 框架，*Plait* 是开源的画图框架，代表着在知识可视化产品上的重要技术积累。
+*Opentu(Aitu)* 的定位是一个开箱即用、开源、免费的工具产品，它的底层是 *Plait* 框架，*Plait* 是开源的画图框架，代表着在知识可视化产品上的重要技术积累。
 
 
-爱图 采用插件架构，虽然技术架构相对复杂，但插件架构也有其优势，比如能够支持多种 UI 框架（*Angular、React*），能够集成不同富文本框架（当前仅支持 *Slate* 框架），在开发上可以很好的实现业务的分层，开发各种细粒度的可复用插件，可以扩展更多的画板的应用场景。
+Opentu 采用插件架构，虽然技术架构相对复杂，但插件架构也有其优势，比如能够支持多种 UI 框架（*Angular、React*），能够集成不同富文本框架（当前仅支持 *Slate* 框架），在开发上可以很好的实现业务的分层，开发各种细粒度的可复用插件，可以扩展更多的画板的应用场景。
 
 
 ## 仓储结构
@@ -175,7 +105,7 @@
 ```
 aitu/
 ├── apps/
-│   └── web/                         # 爱图 Web 应用
+│   └── web/                         # Opentu Web 应用
 │       ├── src/                     # 应用源码
 │       ├── public/                  # 静态资源
 │       └── index.html               # 入口 HTML
@@ -230,7 +160,7 @@ aitu/
 ## 🚀 快速开始
 
 ### 在线体验
-直接访问 [aitu.tu-zi.com](https://opentu.ai) 立即开始使用，无需安装任何软件。
+直接访问 [opentu.ai](https://opentu.ai) 立即开始使用，无需安装任何软件。
 
 ### 一键部署
 
@@ -329,7 +259,7 @@ nx test react-board
 
 ### 🔧 插件开发
 
-爱图 基于插件架构，支持自定义扩展：
+Opentu 基于插件架构，支持自定义扩展：
 
 ```typescript
 import { withFreehand, withMind, withDraw } from '@aitu/core';

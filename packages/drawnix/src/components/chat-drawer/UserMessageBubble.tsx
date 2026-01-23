@@ -179,8 +179,11 @@ export const UserMessageBubble: React.FC<UserMessageBubbleProps> = ({
     };
   }, [handleStopPropagation, handleKeyDown]);
 
+  // 判断是否为纯文字消息（无图片、无元数据）
+  const isTextOnly = images.length === 0 && (!meta || meta.length === 0);
+
   return (
-    <div className={`user-bubble chat-message chat-message--user ${className}`}>
+    <div className={`user-bubble chat-message chat-message--user ${isTextOnly ? 'user-bubble--text-only' : ''} ${className}`}>
       <div className="chat-message-avatar">
         <span>👤</span>
       </div>
