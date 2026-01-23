@@ -31,6 +31,7 @@
 ## 应用
 
 [*https://opentu.ai*](https://opentu.ai) 是 *Opentu* 的在线应用。
+[*https://pr.opentu.ai*](https://pr.opentu.ai) 是 *Opentu* 的体验版应用。
 
 近期会高频迭代应用功能，持续优化用户体验。
 
@@ -39,6 +40,7 @@
 
 ### 在线体验
 直接访问 [opentu.ai](https://opentu.ai) 立即开始使用，无需安装任何软件。
+体验版会有更多新功能[pr.opentu.ai](https://pr.opentu.ai) 
 
 ### 一键部署
 
