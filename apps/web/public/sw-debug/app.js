@@ -667,7 +667,7 @@ async function performBackup() {
     const progressContainer = document.querySelector('.backup-progress-container');
     if (progressContainer) progressContainer.remove();
     
-    alert('备份失败: ' + error.message);
+    showToast('备份失败: ' + error.message, 'error', 5000);
     btn.innerHTML = originalText;
     btn.disabled = false;
   }
@@ -1017,6 +1017,41 @@ function showBackupProgress() {
 }
 
 /**
+ * 显示 Toast 通知
+ * @param {string} message - 通知消息
+ * @param {string} type - 类型: 'success' | 'error' | 'warning' | 'info'
+ * @param {number} duration - 持续时间（毫秒），默认 3000
+ */
+function showToast(message, type = 'success', duration = 3000) {
+  const icons = {
+    success: '✅',
+    error: '❌',
+    warning: '⚠️',
+    info: 'ℹ️'
+  };
+  
+  const notification = document.createElement('div');
+  notification.className = `import-notification toast-notification toast-${type}`;
+  notification.innerHTML = `
+    <div class="import-notification-content">
+      <span class="icon">${icons[type] || icons.info}</span>
+      <div class="info">
+        <p style="margin: 0; white-space: pre-line;">${escapeHtml(message)}</p>
+      </div>
+      <button class="close" onclick="this.parentElement.parentElement.remove()">×</button>
+    </div>
+  `;
+  
+  document.body.appendChild(notification);
+  
+  // 自动消失
+  setTimeout(() => {
+    notification.classList.add('fade-out');
+    setTimeout(() => notification.remove(), 300);
+  }, duration);
+}
+
+/**
  * 显示备份成功通知
  */
 function showBackupSuccessNotification({ filename, size, stats }) {
@@ -1115,20 +1150,25 @@ function updateAnalysisModeUI() {
     el.style.display = isAnalysis ? 'none' : '';
   });
   
-  // Hide/show left panel (SW status info) in analysis mode
+  // In analysis mode, left panel shows user info instead of SW status
+  // The panel is always visible, but content changes based on mode
   const leftPanel = document.querySelector('.left-panel');
   if (leftPanel) {
-    leftPanel.style.display = isAnalysis ? 'none' : '';
+    // Always show left panel, content will be different in analysis mode
+    leftPanel.style.display = '';
   }
   
-  // Adjust panels grid for analysis mode (full width logs panel)
+  // Adjust panels grid - always use two-column layout
   const panels = document.querySelector('.panels');
   if (panels) {
-    if (isAnalysis) {
-      panels.style.gridTemplateColumns = '1fr';
-    } else {
-      panels.style.gridTemplateColumns = '280px 1fr';
-    }
+    panels.style.gridTemplateColumns = '280px 1fr';
+  }
+  
+  // Update left panel content for analysis mode
+  if (isAnalysis) {
+    showAnalysisModeLeftPanel();
+  } else {
+    restoreDebugModeLeftPanel();
   }
   
   // Add/remove body class for analysis mode styling
@@ -1136,15 +1176,23 @@ function updateAnalysisModeUI() {
 }
 
 /**
- * Clear all logs when entering analysis mode
+ * Clear display logs when entering analysis mode
+ * Current logs are preserved in liveLogs buffer for restoration later
  */
 function clearAllLogsForAnalysisMode() {
+  // Save current logs to live buffer before clearing display
+  state.liveLogs.logs = [...state.logs];
+  state.liveLogs.consoleLogs = [...state.consoleLogs];
+  state.liveLogs.postmessageLogs = [...state.postmessageLogs];
+  state.liveLogs.crashLogs = [...state.crashLogs];
+  state.liveLogs.llmapiLogs = [...state.llmapiLogs];
+  
+  // Clear display state for imported logs
   state.logs = [];
   state.consoleLogs = [];
   state.postmessageLogs = [];
   state.crashLogs = [];
   state.llmapiLogs = [];
-  state.swStatus = null;
   state.importedLogData = null;
   
   // Re-render all tabs
@@ -1156,6 +1204,387 @@ function clearAllLogsForAnalysisMode() {
   
   // Show import prompt
   showImportPrompt();
+}
+
+/**
+ * Show analysis mode left panel (placeholder for user info)
+ */
+function showAnalysisModeLeftPanel() {
+  const leftPanel = document.querySelector('.left-panel');
+  if (!leftPanel) return;
+  
+  leftPanel.innerHTML = `
+    <div class="panel">
+      <div class="panel-header">
+        🔍 分析模式
+      </div>
+      <div class="panel-content">
+        <div class="empty-state" style="padding: 20px;">
+          <span class="icon" style="font-size: 32px;">📋</span>
+          <p style="margin-top: 12px; color: var(--text-secondary);">请导入用户日志文件</p>
+          <p style="font-size: 11px; opacity: 0.6; margin-top: 8px;">导入后将显示用户信息</p>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Restore debug mode left panel
+ */
+function restoreDebugModeLeftPanel() {
+  const leftPanel = document.querySelector('.left-panel');
+  if (!leftPanel) return;
+  
+  // Restore original HTML structure
+  leftPanel.innerHTML = `
+    <div class="panel">
+      <div class="panel-header">
+        SW 状态信息
+      </div>
+      <div class="panel-content">
+        <div class="stat-grid" id="statusGrid">
+          <div class="stat-item">
+            <span class="label">版本</span>
+            <span class="value" id="swVersion">-</span>
+          </div>
+          <div class="stat-item">
+            <span class="label">调试模式</span>
+            <span class="value" id="debugMode">关闭</span>
+          </div>
+          <div class="stat-item">
+            <span class="label">Pending 图片请求</span>
+            <span class="value" id="pendingImages">0</span>
+          </div>
+          <div class="stat-item">
+            <span class="label">Pending 视频请求</span>
+            <span class="value" id="pendingVideos">0</span>
+          </div>
+          <div class="stat-item">
+            <span class="label">视频 Blob 缓存</span>
+            <span class="value" id="videoBlobCache">0</span>
+          </div>
+          <div class="stat-item">
+            <span class="label">已完成请求缓存</span>
+            <span class="value" id="completedRequests">0</span>
+          </div>
+          <div class="stat-item">
+            <span class="label">工作流处理器</span>
+            <span class="value" id="workflowHandler">未初始化</span>
+          </div>
+          <div class="stat-item">
+            <span class="label">调试日志数</span>
+            <span class="value" id="debugLogsCount">0</span>
+          </div>
+        </div>
+        
+        <div id="failedDomainsSection" style="margin-top: 16px; display: none;">
+          <div class="stat-item" style="flex-direction: column; align-items: flex-start;">
+            <span class="label">失败域名</span>
+            <div class="failed-domains" id="failedDomains"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        内存监控
+        <span id="memoryUpdateTime" style="font-size: 11px; opacity: 0.6; margin-left: 10px;"></span>
+      </div>
+      <div class="panel-content">
+        <div class="stat-grid" id="memoryGrid">
+          <div class="stat-item">
+            <span class="label">JS 堆已使用</span>
+            <span class="value" id="memoryUsed">-</span>
+          </div>
+          <div class="stat-item">
+            <span class="label">JS 堆总大小</span>
+            <span class="value" id="memoryTotal">-</span>
+          </div>
+          <div class="stat-item">
+            <span class="label">JS 堆上限</span>
+            <span class="value" id="memoryLimit">-</span>
+          </div>
+          <div class="stat-item">
+            <span class="label">使用率</span>
+            <span class="value" id="memoryPercent">-</span>
+          </div>
+        </div>
+        <p id="memoryWarning" style="display: none; margin-top: 12px; padding: 8px; background: #fff3cd; border-radius: 4px; font-size: 12px; color: #856404;">
+          ⚠️ 内存使用率较高，可能导致页面崩溃
+        </p>
+        <p id="memoryNotSupported" style="display: none; margin-top: 8px; font-size: 11px; opacity: 0.6;">
+          注：performance.memory 仅 Chrome 支持
+        </p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        缓存统计
+        <button id="refreshCache">刷新</button>
+      </div>
+      <div class="panel-content">
+        <ul class="cache-list" id="cacheList">
+          <li class="cache-item">
+            <span class="name">加载中...</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+  `;
+  
+  // Re-cache elements and rebind refresh cache button
+  elements.swVersion = document.getElementById('swVersion');
+  elements.debugMode = document.getElementById('debugMode');
+  elements.pendingImages = document.getElementById('pendingImages');
+  elements.pendingVideos = document.getElementById('pendingVideos');
+  elements.videoBlobCache = document.getElementById('videoBlobCache');
+  elements.completedRequests = document.getElementById('completedRequests');
+  elements.workflowHandler = document.getElementById('workflowHandler');
+  elements.debugLogsCount = document.getElementById('debugLogsCount');
+  elements.failedDomains = document.getElementById('failedDomains');
+  elements.memoryUsed = document.getElementById('memoryUsed');
+  elements.memoryTotal = document.getElementById('memoryTotal');
+  elements.memoryLimit = document.getElementById('memoryLimit');
+  elements.memoryPercent = document.getElementById('memoryPercent');
+  elements.cacheList = document.getElementById('cacheList');
+  
+  const refreshCacheBtn = document.getElementById('refreshCache');
+  if (refreshCacheBtn) {
+    refreshCacheBtn.addEventListener('click', loadCacheStats);
+  }
+  
+  // Refresh data
+  refreshStatus();
+  loadCacheStats();
+  updateMemoryDisplay();
+}
+
+/**
+ * Show user info panel in analysis mode after importing logs
+ * @param {object} data - Imported log data
+ */
+function showUserInfoPanel(data) {
+  const leftPanel = document.querySelector('.left-panel');
+  if (!leftPanel) return;
+  
+  // Extract user info from imported data
+  const userAgent = data.userAgent || '未知';
+  const url = data.url || '未知';
+  const exportTime = data.exportTime ? new Date(data.exportTime).toLocaleString('zh-CN') : '未知';
+  const swStatus = data.swStatus || {};
+  const memory = data.memory || {};
+  const cacheStats = data.cacheStats || {};
+  
+  // Parse UA for display
+  const uaInfo = parseUserAgent(userAgent);
+  
+  // Calculate total logs
+  const summary = data.summary || {};
+  const logCounts = {
+    fetch: summary.fetchLogs || (data.fetchLogs?.length || 0),
+    console: summary.consoleLogs || (data.consoleLogs?.length || 0),
+    postmessage: summary.postmessageLogs || (data.postmessageLogs?.length || 0),
+    memory: summary.memoryLogs || (data.memoryLogs?.length || 0),
+    llmapi: summary.llmapiLogs || (data.llmapiLogs?.length || 0),
+  };
+  const totalLogs = Object.values(logCounts).reduce((a, b) => a + b, 0);
+  
+  leftPanel.innerHTML = `
+    <div class="panel">
+      <div class="panel-header">
+        👤 用户信息
+      </div>
+      <div class="panel-content">
+        <div class="stat-grid">
+          <div class="stat-item" style="grid-column: 1 / -1;">
+            <span class="label">访问地址</span>
+            <span class="value" style="font-size: 11px; word-break: break-all;" title="${escapeHtml(url)}">${escapeHtml(truncateUrl(url, 40))}</span>
+          </div>
+          <div class="stat-item">
+            <span class="label">浏览器</span>
+            <span class="value">${escapeHtml(uaInfo.browser)}</span>
+          </div>
+          <div class="stat-item">
+            <span class="label">系统</span>
+            <span class="value">${escapeHtml(uaInfo.os)}</span>
+          </div>
+          <div class="stat-item">
+            <span class="label">导出时间</span>
+            <span class="value" style="font-size: 11px;">${escapeHtml(exportTime)}</span>
+          </div>
+          <div class="stat-item">
+            <span class="label">日志总数</span>
+            <span class="value">${totalLogs}</span>
+          </div>
+        </div>
+        <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-color);">
+          <details style="font-size: 11px;">
+            <summary style="cursor: pointer; color: var(--text-secondary);">完整 User-Agent</summary>
+            <p style="margin-top: 8px; word-break: break-all; color: var(--text-secondary); line-height: 1.4;">${escapeHtml(userAgent)}</p>
+          </details>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        📊 导出时状态
+      </div>
+      <div class="panel-content">
+        <div class="stat-grid">
+          <div class="stat-item">
+            <span class="label">SW 版本</span>
+            <span class="value">${escapeHtml(swStatus.version || '-')}</span>
+          </div>
+          <div class="stat-item">
+            <span class="label">调试模式</span>
+            <span class="value">${swStatus.debugModeEnabled ? '开启' : '关闭'}</span>
+          </div>
+          <div class="stat-item">
+            <span class="label">工作流处理器</span>
+            <span class="value">${swStatus.workflowHandlerInitialized ? '已初始化' : '未初始化'}</span>
+          </div>
+          <div class="stat-item">
+            <span class="label">调试日志数</span>
+            <span class="value">${swStatus.debugLogsCount || 0}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    ${memory.usedMB ? `
+    <div class="panel">
+      <div class="panel-header">
+        💾 内存快照
+      </div>
+      <div class="panel-content">
+        <div class="stat-grid">
+          <div class="stat-item">
+            <span class="label">JS 堆已使用</span>
+            <span class="value">${memory.usedMB} MB</span>
+          </div>
+          <div class="stat-item">
+            <span class="label">JS 堆总大小</span>
+            <span class="value">${memory.totalMB} MB</span>
+          </div>
+          <div class="stat-item">
+            <span class="label">使用率</span>
+            <span class="value ${memory.usagePercent > 80 ? 'warning' : ''}">${memory.usagePercent}%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    ` : ''}
+
+    ${Object.keys(cacheStats).length > 0 ? `
+    <div class="panel">
+      <div class="panel-header">
+        📦 缓存快照
+      </div>
+      <div class="panel-content">
+        <ul class="cache-list">
+          ${Object.entries(cacheStats).map(([name, stats]) => `
+            <li class="cache-item">
+              <span class="name" title="${escapeHtml(name)}">${escapeHtml(truncateUrl(name, 25))}</span>
+              <span class="count">${stats.count} 项</span>
+              <span class="size">${formatBytes(stats.totalSize)}</span>
+            </li>
+          `).join('')}
+        </ul>
+      </div>
+    </div>
+    ` : ''}
+
+    <div class="panel">
+      <div class="panel-header">
+        📋 日志统计
+      </div>
+      <div class="panel-content">
+        <div class="stat-grid">
+          ${logCounts.fetch > 0 ? `<div class="stat-item"><span class="label">Fetch</span><span class="value">${logCounts.fetch}</span></div>` : ''}
+          ${logCounts.console > 0 ? `<div class="stat-item"><span class="label">控制台</span><span class="value">${logCounts.console}</span></div>` : ''}
+          ${logCounts.postmessage > 0 ? `<div class="stat-item"><span class="label">PostMessage</span><span class="value">${logCounts.postmessage}</span></div>` : ''}
+          ${logCounts.memory > 0 ? `<div class="stat-item"><span class="label">内存</span><span class="value">${logCounts.memory}</span></div>` : ''}
+          ${logCounts.llmapi > 0 ? `<div class="stat-item"><span class="label">LLM API</span><span class="value">${logCounts.llmapi}</span></div>` : ''}
+          ${totalLogs === 0 ? `<div class="stat-item" style="grid-column: 1 / -1;"><span class="label">无日志数据</span></div>` : ''}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Parse User-Agent string to extract browser and OS info
+ * @param {string} ua - User-Agent string
+ * @returns {{browser: string, os: string}}
+ */
+function parseUserAgent(ua) {
+  let browser = '未知';
+  let os = '未知';
+  
+  // Detect browser
+  if (ua.includes('Chrome') && !ua.includes('Edg')) {
+    const match = ua.match(/Chrome\/(\d+)/);
+    browser = match ? `Chrome ${match[1]}` : 'Chrome';
+  } else if (ua.includes('Edg')) {
+    const match = ua.match(/Edg\/(\d+)/);
+    browser = match ? `Edge ${match[1]}` : 'Edge';
+  } else if (ua.includes('Firefox')) {
+    const match = ua.match(/Firefox\/(\d+)/);
+    browser = match ? `Firefox ${match[1]}` : 'Firefox';
+  } else if (ua.includes('Safari') && !ua.includes('Chrome')) {
+    const match = ua.match(/Version\/(\d+)/);
+    browser = match ? `Safari ${match[1]}` : 'Safari';
+  }
+  
+  // Detect OS
+  if (ua.includes('Windows NT 10')) {
+    os = 'Windows 10/11';
+  } else if (ua.includes('Windows NT')) {
+    os = 'Windows';
+  } else if (ua.includes('Mac OS X')) {
+    const match = ua.match(/Mac OS X (\d+[._]\d+)/);
+    os = match ? `macOS ${match[1].replace('_', '.')}` : 'macOS';
+  } else if (ua.includes('Linux')) {
+    os = 'Linux';
+  } else if (ua.includes('Android')) {
+    const match = ua.match(/Android (\d+)/);
+    os = match ? `Android ${match[1]}` : 'Android';
+  } else if (ua.includes('iPhone') || ua.includes('iPad')) {
+    const match = ua.match(/OS (\d+)/);
+    os = match ? `iOS ${match[1]}` : 'iOS';
+  }
+  
+  return { browser, os };
+}
+
+/**
+ * Truncate URL for display
+ * @param {string} url 
+ * @param {number} maxLen 
+ * @returns {string}
+ */
+function truncateUrl(url, maxLen) {
+  if (url.length <= maxLen) return url;
+  return url.substring(0, maxLen - 3) + '...';
+}
+
+/**
+ * Escape HTML special characters
+ * @param {string} str 
+ * @returns {string}
+ */
+function escapeHtml(str) {
+  if (typeof str !== 'string') return String(str);
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
 /**
@@ -1197,24 +1626,32 @@ function showImportPrompt() {
 function exitAnalysisMode() {
   state.importedLogData = null;
   
-  // Clear imported data
-  state.logs = [];
-  state.consoleLogs = [];
-  state.postmessageLogs = [];
-  state.crashLogs = [];
-  state.llmapiLogs = [];
+  // Restore live logs that were collected during analysis mode
+  state.logs = state.liveLogs.logs;
+  state.consoleLogs = state.liveLogs.consoleLogs;
+  state.postmessageLogs = state.liveLogs.postmessageLogs;
+  state.crashLogs = state.liveLogs.crashLogs;
+  state.llmapiLogs = state.liveLogs.llmapiLogs;
   
-  // Re-render empty state
+  // Re-render with restored logs
   renderLogs();
   renderConsoleLogs();
+  updateMessageTypeOptions();
   renderPostmessageLogs();
   renderCrashLogs();
   renderLLMApiLogs();
   
-  // Reconnect to SW and refresh
+  // Update tab counts
+  updateConsoleCount();
+  updatePostmessageCount();
+  updateCrashCount();
+  updateErrorDots();
+  
+  // Reconnect to SW and refresh status
   if (navigator.serviceWorker?.controller) {
     enableDebug();
     refreshStatus();
+    // Re-fetch latest logs from SW (will merge with restored logs)
     loadConsoleLogs();
     loadPostMessageLogs();
     loadCrashLogs();
@@ -1259,7 +1696,7 @@ async function handleLogImport(event) {
     
   } catch (error) {
     console.error('Failed to import log file:', error);
-    alert(`导入失败: ${error.message}`);
+    showToast(`导入失败: ${error.message}`, 'error', 5000);
   }
   
   // Reset file input so same file can be selected again
@@ -1333,6 +1770,9 @@ function loadImportedLogs(data) {
   updatePostmessageCount();
   updateCrashCount();
   updateErrorDots();
+  
+  // Show user info panel in left sidebar
+  showUserInfoPanel(data);
 }
 
 /**
@@ -1828,6 +2268,15 @@ const state = {
   // Analysis mode - for debugging user-provided logs without local SW connection
   isAnalysisMode: false,
   importedLogData: null, // Imported log data from user
+  // Live logs buffer - stores incoming logs while in analysis mode
+  // So they can be restored when exiting analysis mode
+  liveLogs: {
+    logs: [],
+    consoleLogs: [],
+    postmessageLogs: [],
+    crashLogs: [],
+    llmapiLogs: [],
+  },
 };
 
 // Memory monitoring interval
@@ -2210,6 +2659,12 @@ function addOrUpdateLog(entry, skipRender = false) {
     return;
   }
 
+  // In analysis mode, save to liveLogs buffer instead of display state
+  if (state.isAnalysisMode) {
+    addOrUpdateLiveLog('logs', entry);
+    return;
+  }
+
   // If paused, add to pending queue
   if (state.isPaused && !skipRender) {
     state.pendingLogs.push(entry);
@@ -2244,6 +2699,19 @@ function addOrUpdateLog(entry, skipRender = false) {
  * @param {object} entry
  */
 function addConsoleLog(entry) {
+  // In analysis mode, save to liveLogs buffer instead of display state
+  if (state.isAnalysisMode) {
+    // Check for duplicates in liveLogs
+    if (state.liveLogs.consoleLogs.some(l => l.id === entry.id)) {
+      return;
+    }
+    state.liveLogs.consoleLogs.unshift(entry);
+    if (state.liveLogs.consoleLogs.length > 500) {
+      state.liveLogs.consoleLogs.pop();
+    }
+    return;
+  }
+
   // Check for duplicates (in case of race condition with initial load)
   if (state.consoleLogs.some(l => l.id === entry.id)) {
     return;
@@ -2352,6 +2820,19 @@ function updatePostmessageCount() {
  * @param {object} entry
  */
 function addPostmessageLog(entry) {
+  // In analysis mode, save to liveLogs buffer instead of display state
+  if (state.isAnalysisMode) {
+    // Check for duplicates in liveLogs
+    if (state.liveLogs.postmessageLogs.some(l => l.id === entry.id)) {
+      return;
+    }
+    state.liveLogs.postmessageLogs.unshift(entry);
+    if (state.liveLogs.postmessageLogs.length > 500) {
+      state.liveLogs.postmessageLogs.pop();
+    }
+    return;
+  }
+
   // Check for duplicates
   if (state.postmessageLogs.some(l => l.id === entry.id)) {
     return;
@@ -2582,7 +3063,7 @@ function getFilteredCrashLogs() {
 }
 
 /**
- * Copy filtered crash logs to clipboard
+ * Copy filtered crash logs to clipboard with all details
  */
 async function handleCopyCrashLogs() {
   const filteredLogs = getFilteredCrashLogs();
@@ -2592,19 +3073,106 @@ async function handleCopyCrashLogs() {
     return;
   }
 
-  // Format logs as text
+  const typeLabels = {
+    startup: '启动',
+    periodic: '定期',
+    error: '错误',
+    beforeunload: '关闭',
+    freeze: '卡死',
+    whitescreen: '白屏',
+    longtask: '长任务'
+  };
+
+  // Format logs as text with all details
   const logText = filteredLogs.map(log => {
     const time = new Date(log.timestamp).toLocaleString('zh-CN', { hour12: false });
     const type = log.type || 'unknown';
-    let memoryInfo = '';
+    const typeLabel = typeLabels[type] || type;
+    
+    const lines = [];
+    lines.push(`═══════════════════════════════════════════════════`);
+    lines.push(`${time} [${typeLabel}]`);
+    lines.push(`───────────────────────────────────────────────────`);
+    
+    // 基本信息
+    lines.push(`【基本信息】`);
+    lines.push(`  ID: ${log.id}`);
+    lines.push(`  时间: ${time}`);
+    if (log.url) {
+      lines.push(`  URL: ${log.url}`);
+    }
+    
+    // 内存信息
     if (log.memory) {
       const usedMB = (log.memory.usedJSHeapSize / (1024 * 1024)).toFixed(1);
+      const totalMB = (log.memory.totalJSHeapSize / (1024 * 1024)).toFixed(1);
       const limitMB = (log.memory.jsHeapSizeLimit / (1024 * 1024)).toFixed(1);
-      memoryInfo = ` | 内存: ${usedMB}/${limitMB} MB`;
+      const percent = ((log.memory.usedJSHeapSize / log.memory.jsHeapSizeLimit) * 100).toFixed(1);
+      lines.push(``);
+      lines.push(`【内存信息】`);
+      lines.push(`  已用: ${usedMB} MB`);
+      lines.push(`  总计: ${totalMB} MB`);
+      lines.push(`  限制: ${limitMB} MB`);
+      lines.push(`  使用率: ${percent}%`);
     }
-    const error = log.error ? `\n  错误: ${log.error.message}` : '';
-    const stack = log.error?.stack ? `\n  Stack: ${log.error.stack}` : '';
-    return `${time} [${type}]${memoryInfo}${error}${stack}`;
+    
+    // 页面统计
+    if (log.pageStats) {
+      const stats = log.pageStats;
+      lines.push(``);
+      lines.push(`【页面统计】`);
+      lines.push(`  DOM节点: ${stats.domNodeCount || 0}`);
+      lines.push(`  Canvas: ${stats.canvasCount || 0}`);
+      lines.push(`  图片: ${stats.imageCount || 0}`);
+      lines.push(`  视频: ${stats.videoCount || 0}`);
+      lines.push(`  iframe: ${stats.iframeCount || 0}`);
+      if (stats.plaitElementCount !== undefined) {
+        lines.push(`  Plait元素: ${stats.plaitElementCount}`);
+      }
+    }
+    
+    // 性能信息
+    if (log.performance) {
+      const perf = log.performance;
+      const perfParts = [];
+      if (perf.longTaskDuration) {
+        perfParts.push(`长任务时长: ${perf.longTaskDuration.toFixed(0)}ms`);
+      }
+      if (perf.freezeDuration) {
+        perfParts.push(`卡死时长: ${(perf.freezeDuration / 1000).toFixed(1)}s`);
+      }
+      if (perf.fps !== undefined) {
+        perfParts.push(`FPS: ${perf.fps}`);
+      }
+      if (perfParts.length > 0) {
+        lines.push(``);
+        lines.push(`【性能信息】`);
+        perfParts.forEach(p => lines.push(`  ${p}`));
+      }
+    }
+    
+    // 错误信息
+    if (log.error) {
+      lines.push(``);
+      lines.push(`【错误信息】`);
+      lines.push(`  类型: ${log.error.type || 'Error'}`);
+      lines.push(`  消息: ${log.error.message}`);
+      if (log.error.stack) {
+        lines.push(`  堆栈:`);
+        log.error.stack.split('\n').forEach(line => {
+          lines.push(`    ${line}`);
+        });
+      }
+    }
+    
+    // 自定义数据
+    if (log.customData) {
+      lines.push(``);
+      lines.push(`【自定义数据】`);
+      lines.push(`  ${JSON.stringify(log.customData, null, 2).split('\n').join('\n  ')}`);
+    }
+    
+    return lines.join('\n');
   }).join('\n\n');
 
   try {
@@ -3087,11 +3655,11 @@ async function handleExportLLMApiLogs() {
     
     // Show summary
     const sizeInMB = (zipBlob.size / 1024 / 1024).toFixed(2);
-    alert(`导出完成！\n\n日志数: ${state.llmapiLogs.length}\n媒体文件: ${downloadedCount} 成功, ${failedCount} 失败\n文件大小: ${sizeInMB} MB`);
+    showToast(`导出完成！\n日志数: ${state.llmapiLogs.length}\n媒体文件: ${downloadedCount} 成功, ${failedCount} 失败\n文件大小: ${sizeInMB} MB`, 'success', 5000);
     
   } catch (err) {
     console.error('Export failed:', err);
-    alert('导出失败: ' + err.message);
+    showToast('导出失败: ' + err.message, 'error', 5000);
   } finally {
     exportBtn.disabled = false;
     exportBtn.textContent = originalText;
@@ -3298,19 +3866,6 @@ iframe: ${log.pageStats.iframeCount || 0}${log.pageStats.plaitElementCount !== u
   });
   
   return entry;
-}
-
-/**
- * Escape HTML to prevent XSS
- */
-function escapeHtml(str) {
-  if (!str) return '';
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
 }
 
 /**
@@ -3522,14 +4077,16 @@ async function handleCopyConsoleLogs() {
     return;
   }
 
-  // Format logs as text
+  // Format logs as text with all details
   const logText = filteredLogs.map(log => {
     const time = new Date(log.timestamp).toLocaleTimeString('zh-CN', { hour12: false });
     const level = `[${log.logLevel.toUpperCase()}]`;
     const message = log.logMessage || '';
-    const stack = log.logStack ? `\n  Stack: ${log.logStack}` : '';
-    return `${time} ${level} ${message}${stack}`;
-  }).join('\n');
+    const source = log.logSource ? `\n  来源: ${log.logSource}` : '';
+    const url = log.url ? `\n  页面: ${log.url}` : '';
+    const stack = log.logStack ? `\n  堆栈:\n    ${log.logStack.split('\n').join('\n    ')}` : '';
+    return `${time} ${level} ${message}${source}${url}${stack}`;
+  }).join('\n\n');
 
   try {
     await navigator.clipboard.writeText(logText);
@@ -3975,6 +4532,8 @@ function setupEventListeners() {
 
 /**
  * Setup SW message handlers
+ * In analysis mode, live logs are stored separately (state.liveLogs) and not displayed.
+ * When exiting analysis mode, live logs are restored to the display state.
  */
 function setupMessageHandlers() {
   registerMessageHandlers({
@@ -3986,7 +4545,9 @@ function setupMessageHandlers() {
       if (elements.debugMode) {
         elements.debugMode.textContent = '开启';
       }
-      renderLogs(); // Refresh to remove "enable debug" button
+      if (!state.isAnalysisMode) {
+        renderLogs(); // Refresh to remove "enable debug" button
+      }
       // Refresh status after debug enabled to get latest state
       // This ensures cache stats and other info are up-to-date
       refreshStatus();
@@ -3998,80 +4559,154 @@ function setupMessageHandlers() {
       if (elements.debugMode) {
         elements.debugMode.textContent = '关闭';
       }
-      renderLogs(); // Refresh to show "enable debug" button
+      if (!state.isAnalysisMode) {
+        renderLogs(); // Refresh to show "enable debug" button
+      }
     },
-    'SW_DEBUG_LOG': (data) => addOrUpdateLog(data.entry),
+    'SW_DEBUG_LOG': (data) => {
+      if (state.isAnalysisMode) {
+        // Store in live logs buffer, don't display
+        addOrUpdateLiveLog('logs', data.entry);
+      } else {
+        addOrUpdateLog(data.entry);
+      }
+    },
     'SW_DEBUG_LOGS': (data) => {
-      state.logs = data.logs || [];
-      renderLogs();
+      if (state.isAnalysisMode) {
+        state.liveLogs.logs = data.logs || [];
+      } else {
+        state.logs = data.logs || [];
+        renderLogs();
+      }
     },
     'SW_DEBUG_LOGS_CLEARED': () => {
-      state.logs = [];
-      renderLogs();
+      if (state.isAnalysisMode) {
+        state.liveLogs.logs = [];
+      } else {
+        state.logs = [];
+        renderLogs();
+      }
     },
-    'SW_CONSOLE_LOG': (data) => addConsoleLog(data.entry),
+    'SW_CONSOLE_LOG': (data) => {
+      if (state.isAnalysisMode) {
+        addOrUpdateLiveLog('consoleLogs', data.entry);
+      } else {
+        addConsoleLog(data.entry);
+      }
+    },
     'SW_DEBUG_CONSOLE_LOGS': (data) => {
-      state.consoleLogs = data.logs || [];
-      renderConsoleLogs();
+      if (state.isAnalysisMode) {
+        state.liveLogs.consoleLogs = data.logs || [];
+      } else {
+        state.consoleLogs = data.logs || [];
+        renderConsoleLogs();
+      }
     },
     'SW_DEBUG_CONSOLE_LOGS_CLEARED': () => {
-      state.consoleLogs = [];
-      renderConsoleLogs();
+      if (state.isAnalysisMode) {
+        state.liveLogs.consoleLogs = [];
+      } else {
+        state.consoleLogs = [];
+        renderConsoleLogs();
+      }
     },
-    'SW_POSTMESSAGE_LOG': (data) => addPostmessageLog(data.entry),
+    'SW_POSTMESSAGE_LOG': (data) => {
+      if (state.isAnalysisMode) {
+        addOrUpdateLiveLog('postmessageLogs', data.entry);
+      } else {
+        addPostmessageLog(data.entry);
+      }
+    },
     'SW_DEBUG_POSTMESSAGE_LOGS': (data) => {
-      state.postmessageLogs = data.logs || [];
-      updateMessageTypeOptions();
-      renderPostmessageLogs();
+      if (state.isAnalysisMode) {
+        state.liveLogs.postmessageLogs = data.logs || [];
+      } else {
+        state.postmessageLogs = data.logs || [];
+        updateMessageTypeOptions();
+        renderPostmessageLogs();
+      }
     },
     'SW_DEBUG_POSTMESSAGE_LOGS_CLEARED': () => {
-      state.postmessageLogs = [];
-      renderPostmessageLogs();
+      if (state.isAnalysisMode) {
+        state.liveLogs.postmessageLogs = [];
+      } else {
+        state.postmessageLogs = [];
+        renderPostmessageLogs();
+      }
     },
     'SW_DEBUG_CRASH_SNAPSHOTS': (data) => {
-      state.crashLogs = data.snapshots || [];
-      renderCrashLogs();
-    },
-    'SW_DEBUG_NEW_CRASH_SNAPSHOT': (data) => {
-      // 实时接收新的内存快照
-      if (data.snapshot) {
-        // 添加到列表开头
-        state.crashLogs.unshift(data.snapshot);
-        // 限制数量
-        if (state.crashLogs.length > 100) {
-          state.crashLogs.pop();
-        }
+      if (state.isAnalysisMode) {
+        state.liveLogs.crashLogs = data.snapshots || [];
+      } else {
+        state.crashLogs = data.snapshots || [];
         renderCrashLogs();
       }
     },
+    'SW_DEBUG_NEW_CRASH_SNAPSHOT': (data) => {
+      if (data.snapshot) {
+        if (state.isAnalysisMode) {
+          state.liveLogs.crashLogs.unshift(data.snapshot);
+          if (state.liveLogs.crashLogs.length > 100) {
+            state.liveLogs.crashLogs.pop();
+          }
+        } else {
+          state.crashLogs.unshift(data.snapshot);
+          if (state.crashLogs.length > 100) {
+            state.crashLogs.pop();
+          }
+          renderCrashLogs();
+        }
+      }
+    },
     'SW_DEBUG_CRASH_SNAPSHOTS_CLEARED': () => {
-      state.crashLogs = [];
-      renderCrashLogs();
+      if (state.isAnalysisMode) {
+        state.liveLogs.crashLogs = [];
+      } else {
+        state.crashLogs = [];
+        renderCrashLogs();
+      }
     },
     'SW_DEBUG_LLM_API_LOGS': (data) => {
-      state.llmapiLogs = data.logs || [];
-      renderLLMApiLogs();
-    },
-    'SW_DEBUG_LLM_API_LOG': (data) => {
-      // 实时接收新的 LLM API 日志
-      if (data.log) {
-        // 检查是否是更新现有日志
-        const existingIndex = state.llmapiLogs.findIndex(l => l.id === data.log.id);
-        if (existingIndex >= 0) {
-          state.llmapiLogs[existingIndex] = data.log;
-        } else {
-          state.llmapiLogs.unshift(data.log);
-        }
-        // 限制数量
-        if (state.llmapiLogs.length > 200) {
-          state.llmapiLogs.pop();
-        }
+      if (state.isAnalysisMode) {
+        state.liveLogs.llmapiLogs = data.logs || [];
+      } else {
+        state.llmapiLogs = data.logs || [];
         renderLLMApiLogs();
       }
     },
+    'SW_DEBUG_LLM_API_LOG': (data) => {
+      if (data.log) {
+        if (state.isAnalysisMode) {
+          const existingIndex = state.liveLogs.llmapiLogs.findIndex(l => l.id === data.log.id);
+          if (existingIndex >= 0) {
+            state.liveLogs.llmapiLogs[existingIndex] = data.log;
+          } else {
+            state.liveLogs.llmapiLogs.unshift(data.log);
+          }
+          if (state.liveLogs.llmapiLogs.length > 200) {
+            state.liveLogs.llmapiLogs.pop();
+          }
+        } else {
+          const existingIndex = state.llmapiLogs.findIndex(l => l.id === data.log.id);
+          if (existingIndex >= 0) {
+            state.llmapiLogs[existingIndex] = data.log;
+          } else {
+            state.llmapiLogs.unshift(data.log);
+          }
+          if (state.llmapiLogs.length > 200) {
+            state.llmapiLogs.pop();
+          }
+          renderLLMApiLogs();
+        }
+      }
+    },
     'SW_DEBUG_LLM_API_LOGS_CLEARED': () => {
-      state.llmapiLogs = [];
-      renderLLMApiLogs();
+      if (state.isAnalysisMode) {
+        state.liveLogs.llmapiLogs = [];
+      } else {
+        state.llmapiLogs = [];
+        renderLLMApiLogs();
+      }
     },
     'SW_DEBUG_EXPORT_DATA': () => {
       // Handle export data from SW if needed
@@ -4088,6 +4723,23 @@ function setupMessageHandlers() {
       window.location.reload();
     }, 1000);
   });
+}
+
+/**
+ * Add or update a log entry in the live logs buffer (used in analysis mode)
+ * @param {string} logType - The type of log ('logs', 'consoleLogs', etc.)
+ * @param {object} entry - The log entry
+ */
+function addOrUpdateLiveLog(logType, entry) {
+  if (!state.liveLogs[logType]) {
+    state.liveLogs[logType] = [];
+  }
+  const existingIndex = state.liveLogs[logType].findIndex(l => l.id === entry.id);
+  if (existingIndex >= 0) {
+    state.liveLogs[logType][existingIndex] = { ...state.liveLogs[logType][existingIndex], ...entry };
+  } else {
+    state.liveLogs[logType].unshift(entry);
+  }
 }
 
 /**

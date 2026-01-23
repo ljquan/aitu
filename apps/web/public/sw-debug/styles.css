@@ -2267,6 +2267,49 @@ body.analysis-mode .log-entry {
   margin-left: 8px;
 }
 
+/* Toast notification styling */
+.toast-notification .import-notification-content {
+  min-width: 200px;
+  max-width: 400px;
+}
+
+.toast-notification .info p {
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.toast-success .import-notification-content {
+  border-color: var(--success-color);
+}
+
+.toast-success .icon {
+  color: var(--success-color);
+}
+
+.toast-error .import-notification-content {
+  border-color: var(--error-color);
+}
+
+.toast-error .icon {
+  color: var(--error-color);
+}
+
+.toast-warning .import-notification-content {
+  border-color: var(--warning-color);
+}
+
+.toast-warning .icon {
+  color: var(--warning-color);
+}
+
+.toast-info .import-notification-content {
+  border-color: var(--info-color);
+}
+
+.toast-info .icon {
+  color: var(--info-color);
+}
+
 /* Backup notification styling */
 .backup-notification .import-notification-content {
   border-color: var(--success-color);
