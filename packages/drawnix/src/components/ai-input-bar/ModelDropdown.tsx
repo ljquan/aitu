@@ -403,6 +403,7 @@ export const ModelDropdown: React.FC<ModelDropdownProps> = ({
       className={`model-dropdown model-dropdown--variant-${variant} ${disabled ? 'model-dropdown--disabled' : ''}`}
       ref={containerRef}
       onKeyDown={handleKeyDown}
+      data-testid="model-selector"
     >
       {renderTrigger()}
       {renderMenu()}

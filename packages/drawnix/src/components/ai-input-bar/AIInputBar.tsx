@@ -1745,6 +1745,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
       className={classNames('ai-input-bar', ATTACHED_ELEMENT_CLASS_NAME, className, {
         'ai-input-bar--with-inspiration': showInspirationBoard
       })}
+      data-testid="ai-input-bar"
     >
       {/* 独立的选择监听组件，隔离 useBoard 的 context 变化 */}
       <SelectionWatcher
@@ -1834,6 +1835,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
             onClick={handleGenerate}
             disabled={!canGenerate || isSubmitting}
             data-track="ai_input_click_send"
+            data-testid="ai-send-btn"
           >
             <Send size={18} />
           </button>
@@ -1877,6 +1879,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
               placeholder={language === 'zh' ? '描述你想要创建什么，输入 # 选择模型' : 'Describe what you want to create, type # to select model'}
               rows={isFocused ? 4 : 1}
               disabled={isSubmitting}
+              data-testid="ai-input-textarea"
             />
 
             {/* # 触发的模型建议面板 */}

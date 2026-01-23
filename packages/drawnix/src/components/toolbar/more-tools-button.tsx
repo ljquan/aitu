@@ -188,6 +188,7 @@ export const MoreToolsButton: React.FC<MoreToolsButtonProps> = ({
             aria-label={t('toolbar.more')}
             selected={isOpen}
             visible={true}
+            data-testid="toolbar-more"
             data-track="toolbar_click_more"
           />
         </div>
