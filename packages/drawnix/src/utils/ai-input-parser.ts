@@ -273,10 +273,25 @@ export function parseAIInput(
     scenario = hasExtraContent ? 'agent_flow' : 'direct_generation';
   }
   
-  // 生成提示词
-  let prompt = parseResult.cleanText.trim();
-  if (!prompt) {
-    prompt = generateDefaultPrompt(hasSelectedElements, selectedTexts, imageCount);
+  // 生成提示词：整合选中的文本元素内容和用户输入
+  const userInput = parseResult.cleanText.trim();
+  const selectedTextContent = selectedTexts.join('\n').trim();
+
+  let prompt: string;
+  if (selectedTextContent && userInput) {
+    // 同时有选中文本和用户输入：合并（选中文本在前，用户输入在后）
+    prompt = `${selectedTextContent}\n\n${userInput}`;
+  } else if (userInput) {
+    // 只有用户输入
+    prompt = userInput;
+  } else if (selectedTextContent) {
+    // 只有选中文本
+    prompt = selectedTextContent;
+  } else if (hasSelectedElements && imageCount > 0) {
+    // 只有图片，生成默认提示词
+    prompt = generateDefaultPrompt(hasSelectedElements, [], imageCount);
+  } else {
+    prompt = '';
   }
   
   // 获取数量（优先级：options.count > parseResult.selectedCount > 1）
