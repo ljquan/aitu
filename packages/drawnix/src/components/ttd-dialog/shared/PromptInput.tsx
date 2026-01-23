@@ -192,7 +192,7 @@ export const PromptInput: React.FC<PromptInputProps> = ({
   };
 
   return (
-    <div className="form-field">
+    <div className="form-field form-field--prompt">
       <div className="form-label-with-icon">
       <label className="form-label">
         {language === 'zh' ? `${type === 'image' ? '图片' : '视频'}描述` : `${type === 'image' ? 'Image' : 'Video'} Description`}

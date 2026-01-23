@@ -48,6 +48,28 @@
       background: rgba(0, 0, 0, 0.25);
     }
   }
+
+  // AI 视频生成表单 - 自适应布局
+  .ai-image-generation-form {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+
+    // 描述输入区域 - 自适应填充剩余空间，但保持最小高度
+    .form-field--prompt {
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      min-height: 150px; // 保证最小高度
+
+      .form-textarea {
+        flex: 1 1 auto;
+        min-height: 100px !important; // textarea 最小高度，确保不被压缩
+        height: auto;
+      }
+    }
+  }
 }
 
 .task-sidebar {
