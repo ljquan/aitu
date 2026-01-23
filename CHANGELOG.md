@@ -1,3 +1,13 @@
+## 0.5.44 (2026-01-23)
+
+### 🔧 Chores
+
+- update app version to 0.5.43 and adjust build time ([f0f1d52](https://github.com/ljquan/aitu/commit/f0f1d52))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+
 ## 0.5.43 (2026-01-23)
 
 ### 🚀 Features

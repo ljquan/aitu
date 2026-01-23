@@ -1,12 +1,6 @@
 {
-  "version": "0.5.43",
-  "buildTime": "2026-01-23T15:28:28.606Z",
+  "version": "0.5.44",
+  "buildTime": "2026-01-23T15:32:51.711Z",
   "gitCommit": "unknown",
-  "changelog": [
-    "Rename project to Opentu and update README",
-    "update OpenTu labels and model hints",
-    "点击画板自动关闭项目抽屉和工具箱抽屉",
-    "添加readme 的 git 图素材",
-    "修复图片覆盖保存时缩放比例计算错误"
-  ]
+  "changelog": []
 }
