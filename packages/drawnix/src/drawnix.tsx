@@ -799,6 +799,42 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
     };
   }, [board, containerRef]);
 
+  // 监听画板点击事件，关闭项目抽屉和工具箱抽屉
+  useEffect(() => {
+    if (!board) return;
+
+    const handleClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+
+      // 只处理画布区域内的点击
+      const isInsideCanvas = target.closest('.board-host-svg') ||
+                             target.closest('.plait-board-container');
+
+      if (!isInsideCanvas) {
+        return;
+      }
+
+      // 关闭项目抽屉和工具箱抽屉
+      if (projectDrawerOpen) {
+        setProjectDrawerOpen(false);
+      }
+      if (toolboxDrawerOpen) {
+        setToolboxDrawerOpen(false);
+      }
+    };
+
+    const container = containerRef.current;
+    if (container) {
+      container.addEventListener('click', handleClick);
+    }
+
+    return () => {
+      if (container) {
+        container.removeEventListener('click', handleClick);
+      }
+    };
+  }, [board, containerRef, projectDrawerOpen, toolboxDrawerOpen, setProjectDrawerOpen, setToolboxDrawerOpen]);
+
   return (
     <div
       className={classNames('drawnix', {

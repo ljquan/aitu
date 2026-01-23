@@ -760,8 +760,11 @@ export const ProjectDrawer: React.FC<ProjectDrawerProps> = ({
       if (switched && onBoardSwitch) {
         onBoardSwitch(switched);
       }
+
+      // Auto-close drawer after switching board
+      handleClose();
     },
-    [currentBoard, onBeforeSwitch, onBoardSwitch, switchBoard]
+    [currentBoard, onBeforeSwitch, onBoardSwitch, switchBoard, handleClose]
   );
 
   // Filter tree based on search query
