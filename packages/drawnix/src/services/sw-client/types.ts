@@ -295,6 +295,12 @@ export interface TaskDeletedMessage {
   taskId: string;
 }
 
+export interface TaskRejectedMessage {
+  type: 'TASK_REJECTED';
+  taskId: string;
+  reason: 'NO_API_KEY' | string;
+}
+
 export interface TaskStatusResponseMessage {
   type: 'TASK_STATUS_RESPONSE';
   taskId: string;
@@ -370,6 +376,7 @@ export type SWToMainMessage =
   | TaskCreatedMessage
   | TaskCancelledMessage
   | TaskDeletedMessage
+  | TaskRejectedMessage
   | TaskStatusResponseMessage
   | TaskAllResponseMessage
   | TaskPaginatedResponseMessage
@@ -395,6 +402,7 @@ export interface TaskEventHandlers {
   onSubmitted?: (taskId: string, remoteId: string) => void;
   onCancelled?: (taskId: string) => void;
   onDeleted?: (taskId: string) => void;
+  onRejected?: (taskId: string, reason: string) => void;
   onTasksSync?: (tasks: SWTask[]) => void;
 }
 

@@ -229,9 +229,11 @@ export interface TaskQueueState {
  */
 export interface TaskEvent {
   /** Event type */
-  type: 'taskCreated' | 'taskUpdated' | 'taskDeleted' | 'taskSynced';
+  type: 'taskCreated' | 'taskUpdated' | 'taskDeleted' | 'taskSynced' | 'taskRejected';
   /** The task that triggered the event */
   task: Task;
   /** Timestamp when the event occurred */
   timestamp: number;
+  /** Reason for rejection (only for taskRejected events) */
+  reason?: string;
 }

@@ -758,6 +758,14 @@ export class SWTaskQueueClient {
         break;
       }
 
+      case 'TASK_REJECTED': {
+        console.warn(`[SWClient] Task ${message.taskId} rejected: ${message.reason}`);
+        // Remove from local cache since task was not accepted
+        this.localTaskCache.delete(message.taskId);
+        this.taskHandlers.onRejected?.(message.taskId, message.reason);
+        break;
+      }
+
       case 'TASK_ALL_RESPONSE':
         // Emit tasks to subject for observers
         this.tasksSubject.next(message.tasks);

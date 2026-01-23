@@ -347,7 +347,14 @@ class SWTaskQueueService {
 
   private async submitToSW(task: Task): Promise<void> {
     if (!this.initialized) {
-      await this.initialize();
+      const success = await this.initialize();
+      if (!success) {
+        console.warn(`[SWTaskQueueService] Cannot submit task ${task.id}: not initialized (no API key)`);
+        // Remove from local tasks since it can't be submitted
+        this.tasks.delete(task.id);
+        this.emitEvent('taskRejected', task, 'NO_API_KEY');
+        return;
+      }
     }
     swTaskQueueClient.submitTask(task.id, task.type, task.params);
   }
@@ -463,8 +470,10 @@ class SWTaskQueueService {
     this.emitEvent('taskUpdated', updatedTask);
   }
 
-  private emitEvent(type: 'taskCreated' | 'taskUpdated' | 'taskDeleted' | 'taskSynced', task: Task): void {
-    this.taskUpdates$.next({ type, task, timestamp: Date.now() });
+  private emitEvent(type: 'taskCreated' | 'taskUpdated' | 'taskDeleted' | 'taskSynced', task: Task): void;
+  private emitEvent(type: 'taskRejected', task: Task, reason: string): void;
+  private emitEvent(type: 'taskCreated' | 'taskUpdated' | 'taskDeleted' | 'taskSynced' | 'taskRejected', task: Task, reason?: string): void {
+    this.taskUpdates$.next({ type, task, timestamp: Date.now(), reason });
   }
 }
 

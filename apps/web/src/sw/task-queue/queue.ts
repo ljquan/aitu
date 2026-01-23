@@ -72,6 +72,9 @@ export class SWTaskQueue {
   // Track storage restoration completion
   private storageRestorePromise: Promise<void>;
 
+  // Flag to indicate if config was restored from storage (not first-time setup)
+  private hadSavedConfig = false;
+
   constructor(sw: ServiceWorkerGlobalScope, config?: Partial<TaskQueueConfig>) {
     this.sw = sw;
     this.config = { ...DEFAULT_TASK_QUEUE_CONFIG, ...config };
@@ -126,6 +129,7 @@ export class SWTaskQueue {
         this.geminiConfig = geminiConfig;
         this.videoConfig = videoConfig;
         this.initialized = true;
+        this.hadSavedConfig = true; // Mark that we had valid config
       }
 
       // Load all tasks
@@ -388,9 +392,29 @@ export class SWTaskQueue {
     // Wait for storage restoration to complete first
     await this.storageRestorePromise;
 
+    // If this is first-time initialization (no saved config before),
+    // clear all PENDING tasks created without valid API key
+    if (!this.hadSavedConfig) {
+      const pendingTasksToRemove: string[] = [];
+      for (const task of this.tasks.values()) {
+        if (task.status === TaskStatus.PENDING) {
+          pendingTasksToRemove.push(task.id);
+        }
+      }
+      
+      if (pendingTasksToRemove.length > 0) {
+        console.log(`[SWTaskQueue] First-time init: clearing ${pendingTasksToRemove.length} orphan PENDING tasks created without API key`);
+        for (const taskId of pendingTasksToRemove) {
+          this.tasks.delete(taskId);
+          await taskQueueStorage.deleteTask(taskId);
+        }
+      }
+    }
+
     this.geminiConfig = geminiConfig;
     this.videoConfig = videoConfig;
     this.initialized = true;
+    this.hadSavedConfig = true; // Now we have valid config
 
     // Save config to storage for persistence
     await taskQueueStorage.saveConfig(geminiConfig, videoConfig);
@@ -432,6 +456,7 @@ export class SWTaskQueue {
 
   /**
    * Submit a new task
+   * Note: Will reject if queue is not initialized (no API key configured)
    */
   async submitTask(
     taskId: string,
@@ -439,6 +464,17 @@ export class SWTaskQueue {
     params: SWTask['params'],
     _clientId: string // clientId is no longer used for targeting
   ): Promise<void> {
+    // Reject task if not initialized (no API key)
+    if (!this.initialized) {
+      console.warn(`[SWTaskQueue] Cannot submit task ${taskId}: queue not initialized (no API key)`);
+      this.broadcastToClients({
+        type: 'TASK_REJECTED',
+        taskId,
+        reason: 'NO_API_KEY',
+      });
+      return;
+    }
+
     // Check for duplicate by taskId only
     if (this.tasks.has(taskId)) {
       console.warn(`[SWTaskQueue] Task ${taskId} already exists`);
