@@ -19,15 +19,19 @@
                 border: 1px solid #c0c0c0;
             }
             &.color-mixed {
-                background: conic-gradient(
-                    from 0deg,
-                    #f87171 0deg 60deg,
-                    #fbbf24 60deg 120deg,
-                    #34d399 120deg 180deg,
-                    #60a5fa 180deg 240deg,
-                    #a78bfa 240deg 300deg,
-                    #f472b6 300deg 360deg
-                );
+                // 使用环形渐变效果，与线条杂色表示方式一致
+                border: var(--border-radius-sm) solid transparent;
+                background: 
+                    linear-gradient(var(--color-surface, #fff), var(--color-surface, #fff)) padding-box,
+                    conic-gradient(
+                        from 0deg,
+                        #f87171 0deg 60deg,
+                        #fbbf24 60deg 120deg,
+                        #34d399 120deg 180deg,
+                        #60a5fa 180deg 240deg,
+                        #a78bfa 240deg 300deg,
+                        #f472b6 300deg 360deg
+                    ) border-box;
             }
         }
         .stroke-label {

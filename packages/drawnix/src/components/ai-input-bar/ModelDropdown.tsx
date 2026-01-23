@@ -242,6 +242,7 @@ export const ModelDropdown: React.FC<ModelDropdownProps> = ({
         >
           <span className="model-dropdown__at">#</span>
           <span className="model-dropdown__code">{shortCode}</span>
+          <ModelHealthBadge modelId={selectedModel} />
           <ChevronDown size={14} className={`model-dropdown__chevron ${isOpen ? 'model-dropdown__chevron--open' : ''}`} />
         </button>
       );
@@ -258,6 +259,7 @@ export const ModelDropdown: React.FC<ModelDropdownProps> = ({
         }}
       >
         <div className="model-dropdown__form-content">
+          <ModelHealthBadge modelId={selectedModel} />
           <input
             ref={triggerInputRef}
             type="text"

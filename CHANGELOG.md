@@ -2,20 +2,44 @@
 
 ### 🚀 Features
 
+- 添加数据备份功能和进度显示 ([cc74d29](https://github.com/ljquan/aitu/commit/cc74d29))
+- 统一 Tooltip 样式并美化模型健康状态信号展示 ([1076cb2](https://github.com/ljquan/aitu/commit/1076cb2))
+- 初始化时自动滚动显示 AI 按钮 ([f110657](https://github.com/ljquan/aitu/commit/f110657))
 - 优化角色创建时间轴视频帧显示 ([2a927bc](https://github.com/ljquan/aitu/commit/2a927bc))
 - 添加工具窗口最小化/恢复动画 ([0cba6b1](https://github.com/ljquan/aitu/commit/0cba6b1))
 - 优化工具箱 UI 和工具栏交互 ([b866b85](https://github.com/ljquan/aitu/commit/b866b85))
 - 增强敏感信息处理和日志记录 ([70c83b6](https://github.com/ljquan/aitu/commit/70c83b6))
 - add media library button and functionality to AI input bar ([3ece148](https://github.com/ljquan/aitu/commit/3ece148))
 - 优化素材库筛选按钮间距并实现三段式循环排序模式 ([1264b42](https://github.com/ljquan/aitu/commit/1264b42))
+- 添加模型健康状态功能并更新 CLAUDE.md 文档 ([98f9319](https://github.com/ljquan/aitu/commit/98f9319))
+- implement precache manifest generation and update service worker activation strategy ([f44fea3](https://github.com/ljquan/aitu/commit/f44fea3))
+- implement responsive layout with ResizeObserver and improve styling consistency ([72057e9](https://github.com/ljquan/aitu/commit/72057e9))
 
 ### 🩹 Fixes
 
+- 修复多选元素时填充色图标显示异常 ([bbfeaaa](https://github.com/ljquan/aitu/commit/bbfeaaa))
 - 修复视频插入函数名错误 ([9593b02](https://github.com/ljquan/aitu/commit/9593b02))
+- 修复 ModelDropdown Portal 模式下的位置计算和点击选择问题 ([f075058](https://github.com/ljquan/aitu/commit/f075058))
 
 ### 🔧 Chores
 
 - update app version to 0.5.38 and adjust build time in version.json ([47d1029](https://github.com/ljquan/aitu/commit/47d1029))
+- bump version to 0.5.38 ([ee623df](https://github.com/ljquan/aitu/commit/ee623df))
+- bump version to 0.5.36 ([ab4d3e2](https://github.com/ljquan/aitu/commit/ab4d3e2))
+- update app version to 0.5.37 and enhance tool URL handling ([fba900c](https://github.com/ljquan/aitu/commit/fba900c))
+- bump version to 0.5.37 ([3a06964](https://github.com/ljquan/aitu/commit/3a06964))
+- update app version to 0.5.36 and adjust build time in version.json ([b1cd461](https://github.com/ljquan/aitu/commit/b1cd461))
+- bump version to 0.5.36 ([0c8c796](https://github.com/ljquan/aitu/commit/0c8c796))
+- update app version to 0.5.35 and adjust build time in version.json ([7b8c32e](https://github.com/ljquan/aitu/commit/7b8c32e))
+- bump version to 0.5.35 ([cfa8949](https://github.com/ljquan/aitu/commit/cfa8949))
+- bump version to 0.5.34 ([2903d85](https://github.com/ljquan/aitu/commit/2903d85))
+- bump version to 0.5.33 ([e9cd0ec](https://github.com/ljquan/aitu/commit/e9cd0ec))
+- bump version to 0.5.32 ([f0ff19e](https://github.com/ljquan/aitu/commit/f0ff19e))
+- bump version to 0.5.31 ([8d4cb2d](https://github.com/ljquan/aitu/commit/8d4cb2d))
+- update app version to 0.5.30 and adjust build time in version.json ([1512fd7](https://github.com/ljquan/aitu/commit/1512fd7))
+- bump version to 0.5.30 ([5279f38](https://github.com/ljquan/aitu/commit/5279f38))
+- refactor(auto-complete-shape-picker): update shape icons to use JSX syntax ([5049f6e](https://github.com/ljquan/aitu/commit/5049f6e))
+- docs: 添加 SW 枚举值小写规则 ([dceb83a](https://github.com/ljquan/aitu/commit/dceb83a))
 - docs(rules): 添加 Blob MIME 类型获取和 Shift 连选防文本选中规则 ([c0e63d0](https://github.com/ljquan/aitu/commit/c0e63d0))
 - docs(claude): 添加新规则 - 同名模块的全局状态隔离问题 ([3d92dda](https://github.com/ljquan/aitu/commit/3d92dda))
 - docs: 添加 UI 交互规范 - 可点击容器、筛选联动、全局配色 ([1d8c77c](https://github.com/ljquan/aitu/commit/1d8c77c))
@@ -25,9 +49,22 @@
 - docs(claude): 添加项目概念文档和维护规则 ([70fddff](https://github.com/ljquan/aitu/commit/70fddff))
 - docs(claude): 添加敏感信息过滤相关安全规则 ([1156efc](https://github.com/ljquan/aitu/commit/1156efc))
 - docs(claude): 添加新交互和样式规则 - 三段式排序与筛选岛对齐 ([ec72cd5](https://github.com/ljquan/aitu/commit/ec72cd5))
+- docs(claude): 更新规则 - 图标组件渲染错误示例补充三元表达式场景 ([4116347](https://github.com/ljquan/aitu/commit/4116347))
+- docs(claude): 添加敏感信息模板变量安全处理规则 ([a206daa](https://github.com/ljquan/aitu/commit/a206daa))
+- docs(claude): 添加关于批量操作按钮视觉层级和 URL 模板变量处理的新规则 ([1891b1e](https://github.com/ljquan/aitu/commit/1891b1e))
+- docs(claude): 添加关于 Tooltip 布局、筛选逻辑和 UI 设计原则的新规则 ([d7eaca8](https://github.com/ljquan/aitu/commit/d7eaca8))
+- docs(claude): 添加新规则 - 嵌套滚动容器和动态高度容器的滚动事件处理 ([7e6c26b](https://github.com/ljquan/aitu/commit/7e6c26b))
+- refactor: update HandIcon SVG paths for improved structure and clarity ([1741b5a](https://github.com/ljquan/aitu/commit/1741b5a))
+- docs(claude): 添加有关图标组件规范和筛选逻辑修复的新规则 ([0d35d22](https://github.com/ljquan/aitu/commit/0d35d22))
+- docs(claude): 添加新规则 - CustomEvent 传递硬编码占位符问题 ([4543793](https://github.com/ljquan/aitu/commit/4543793))
+- docs(claude): 添加 Service Worker 自动激活策略文档 ([a3983d7](https://github.com/ljquan/aitu/commit/a3983d7))
+- docs(claude): 补充预缓存不阻塞首次访问的说明 ([d5ca154](https://github.com/ljquan/aitu/commit/d5ca154))
+- docs(claude): 添加 Service Worker 预缓存机制文档 ([c26bd23](https://github.com/ljquan/aitu/commit/c26bd23))
+- docs(claude): 添加新规则 - 获取第三方组件位置应使用 getBoundingClientRect() ([082f274](https://github.com/ljquan/aitu/commit/082f274))
 
 ### ❤️  Thank You
 
+- liquid <ljquan@qq.com>
 - liquidliang <ljquan@qq.com>
 - gongchengtu <1817063960@qq.com>
 

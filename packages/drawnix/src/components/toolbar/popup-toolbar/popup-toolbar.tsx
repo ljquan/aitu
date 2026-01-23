@@ -501,20 +501,25 @@ export const PopupToolbar = () => {
                     'color-gradient': state.fill && isFillConfig(state.fill) && state.fill.type === 'gradient',
                     'color-image': state.fill && isFillConfig(state.fill) && state.fill.type === 'image',
                   })}
-                  style={{
-                    // 统一使用 background 属性，避免 backgroundColor 和 background 冲突
-                    background: state.fill && isSolidFill(state.fill)
-                      ? state.fill
-                      : state.fill && isFillConfig(state.fill)
-                        ? state.fill.type === 'gradient' && state.fill.gradient
-                          ? gradientToCSS(state.fill.gradient)
-                          : state.fill.type === 'solid' && state.fill.solid
-                            ? state.fill.solid.color
-                            : state.fill.type === 'image' && state.fill.image?.imageUrl
-                              ? `url(${state.fill.image.imageUrl}) center/cover no-repeat`
-                              : undefined
-                        : undefined,
-                  }}
+                  style={
+                    // 当 fill 为 undefined 时（杂色状态），不设置内联 background，让 CSS 类生效
+                    state.fill === undefined
+                      ? undefined
+                      : {
+                          // 统一使用 background 属性，避免 backgroundColor 和 background 冲突
+                          background: isSolidFill(state.fill)
+                            ? state.fill
+                            : isFillConfig(state.fill)
+                              ? state.fill.type === 'gradient' && state.fill.gradient
+                                ? gradientToCSS(state.fill.gradient)
+                                : state.fill.type === 'solid' && state.fill.solid
+                                  ? state.fill.solid.color
+                                  : state.fill.type === 'image' && state.fill.image?.imageUrl
+                                    ? `url(${state.fill.image.imageUrl}) center/cover no-repeat`
+                                    : undefined
+                              : undefined,
+                        }
+                  }
                 ></label>
               </PopupFillButton>
             )}

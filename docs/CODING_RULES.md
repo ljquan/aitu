@@ -221,6 +221,49 @@ export function sanitizeObject(obj: unknown): unknown { ... }
 - 主线程：`packages/drawnix/src/utils/sanitize-utils.ts`
 - Service Worker：`apps/web/src/sw/task-queue/utils/sanitize-utils.ts`
 
+#### Service Worker 枚举值使用小写
+
+**场景**: 读取 SW 任务队列数据（如 `sw-task-queue` 数据库）进行过滤时
+
+❌ **错误示例**:
+```typescript
+// sw-debug 或其他外部模块读取 SW 数据
+const TaskStatus = {
+  COMPLETED: 'COMPLETED',  // ❌ 大写
+};
+const TaskType = {
+  IMAGE: 'IMAGE',  // ❌ 大写
+  VIDEO: 'VIDEO',
+};
+
+// 过滤已完成任务 - 永远匹配不到！
+const completedTasks = tasks.filter(
+  task => task.status === TaskStatus.COMPLETED  // 实际数据是 'completed'
+);
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：使用小写，与 SW 定义保持一致
+const TaskStatus = {
+  COMPLETED: 'completed',  // ✅ 小写
+};
+const TaskType = {
+  IMAGE: 'image',  // ✅ 小写
+  VIDEO: 'video',
+};
+
+// 正确匹配
+const completedTasks = tasks.filter(
+  task => task.status === TaskStatus.COMPLETED
+);
+```
+
+**原因**: SW 内部的枚举定义使用小写值（见 `apps/web/src/sw/task-queue/types.ts`），读取 SW 数据时必须使用相同的值进行匹配。大小写不一致会导致过滤或比较失败，但不会报错，难以调试。
+
+**相关文件**:
+- `apps/web/src/sw/task-queue/types.ts` - SW 枚举定义
+
 ### React 组件规范
 - 使用函数组件和 Hooks
 - 使用 `React.memo` 优化重渲染
@@ -482,6 +525,64 @@ const openDialog = (dialogType: DialogType) => {
 - 闭包中的 `context.appState` 是创建回调时的快照，不是最新状态
 - 函数式更新 `setState(prev => ...)` 保证 `prev` 始终是最新状态
 - 这个问题在多个弹窗/抽屉同时打开时特别容易出现
+
+#### 传递 React 组件作为 prop 时必须实例化
+
+**场景**: 将 React 组件作为 `icon` 或其他 prop 传递给子组件时
+
+❌ **错误示例**:
+```typescript
+// 错误：传递组件函数本身，而不是 JSX 实例
+import { BackgroundColorIcon } from './icons';
+
+const icon = !hexColor ? BackgroundColorIcon : undefined;
+
+// 子组件中渲染时：
+// {icon} → React 警告 "Functions are not valid as a React child"
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：传递 JSX 实例
+import { BackgroundColorIcon } from './icons';
+
+const icon = !hexColor ? <BackgroundColorIcon /> : undefined;
+
+// 子组件中渲染时：
+// {icon} → 正常渲染
+```
+
+**原因**: React 组件本质上是函数，直接将函数作为子元素传递会导致 React 警告。需要调用组件（`<Component />`）生成 JSX 元素后再传递。
+
+#### 内联 style 的 undefined 值会覆盖 CSS 类样式
+
+**场景**: 当需要条件性地应用内联样式，同时使用 CSS 类作为备选样式时
+
+❌ **错误示例**:
+```typescript
+// 错误：style 对象中的 undefined 值会覆盖 CSS 类的 background
+<label
+  className={classNames('fill-label', { 'color-mixed': fill === undefined })}
+  style={{
+    background: fill ? fill : undefined,  // undefined 会覆盖 .color-mixed 的 background
+  }}
+/>
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：当需要 CSS 类生效时，不传递 style 对象
+<label
+  className={classNames('fill-label', { 'color-mixed': fill === undefined })}
+  style={
+    fill === undefined
+      ? undefined  // 不设置 style，让 CSS 类的 background 生效
+      : { background: fill }
+  }
+/>
+```
+
+**原因**: React 的内联 style 优先级高于 CSS 类。即使 `background: undefined`，React 仍会在元素上设置空的 style 属性，这可能干扰 CSS 类的样式应用。当需要 CSS 类完全控制样式时，应该不传递 style 对象（`style={undefined}`）。
 
 #### 使用 ResizeObserver 实现组件级别的响应式布局
 
@@ -2896,6 +2997,86 @@ const allCategories = useMemo(() => {
 
 **原因**: 项目中的 `z-index` 有严格的分层规范（参见 `docs/Z_INDEX_GUIDE.md`）。工具栏位于 2000 层，而抽屉应该位于 4000 层及以上。硬编码低层级会破坏预留宽度的视觉预期。
 
+### 错误 19: 初始化时重要元素不可见未自动滚动
+
+**场景**: 在高度受限的可滚动容器中，重要的操作按钮（如 AI 生成按钮）可能位于可视区域外，用户不知道功能存在。
+
+❌ **错误示例**:
+```tsx
+// 错误：不检查重要元素是否可见
+const ToolbarContainer = () => {
+  return (
+    <div className="scrollable-toolbar">
+      <HandButton />
+      <SelectButton />
+      {/* ... 更多按钮 */}
+      <AIImageButton /> {/* 屏幕小时可能不可见 */}
+      <AIVideoButton />
+    </div>
+  );
+};
+```
+
+✅ **正确示例**:
+```tsx
+const ToolbarContainer = () => {
+  const scrollableRef = useRef<HTMLDivElement>(null);
+  const hasScrolledToAI = useRef(false); // 防止重复执行
+
+  useEffect(() => {
+    // 只执行一次，避免死循环
+    if (hasScrolledToAI.current) return;
+    
+    const scrollable = scrollableRef.current;
+    if (!scrollable) return;
+
+    const checkAndScroll = () => {
+      hasScrolledToAI.current = true; // 标记为已执行
+      
+      // 查找目标按钮
+      const targetButton = scrollable.querySelector<HTMLElement>('[data-button-id="ai-image"]');
+      if (!targetButton) return;
+
+      // 检测是否可见
+      const scrollableRect = scrollable.getBoundingClientRect();
+      const buttonRect = targetButton.getBoundingClientRect();
+      const isVisible = buttonRect.bottom <= scrollableRect.bottom && 
+                        buttonRect.top >= scrollableRect.top;
+
+      // 不可见时滚动（检查高度 > 0 避免极端情况）
+      if (!isVisible && scrollableRect.height > 0) {
+        scrollable.scrollTop += buttonRect.top - scrollableRect.top;
+      }
+    };
+
+    // 延迟执行，确保 DOM 渲染完成
+    const timeoutId = setTimeout(() => {
+      requestAnimationFrame(checkAndScroll);
+    }, 100);
+
+    return () => clearTimeout(timeoutId);
+  }, []);
+
+  return (
+    <div ref={scrollableRef} className="scrollable-toolbar">
+      {/* 按钮需要添加 data-button-id 属性以便定位 */}
+      <HandButton />
+      <SelectButton />
+      <AIImageButton data-button-id="ai-image" />
+      <AIVideoButton data-button-id="ai-video" />
+    </div>
+  );
+};
+```
+
+**防止死循环的关键点**:
+1. 使用 `ref` 标志确保只执行一次
+2. 在执行前立即设置标志，而非执行后
+3. 检查容器高度 > 0，避免容器未渲染时的极端情况
+4. 不在滚动失败时重试
+
+**原因**: 屏幕尺寸多样化，重要功能按钮可能因容器高度不足而不可见。初始化时自动滚动到这些元素可以提升功能发现率，但必须确保只执行一次以避免死循环。
+
 ### 交互规范: 三段式循环排序模式
 
 **场景**: 实现包含正序、逆序且需要支持恢复默认状态的排序按钮时。
@@ -3855,6 +4036,63 @@ const matchesSource = !filters.activeSource || filters.activeSource === 'ALL' ||
 
 
 ## UI 交互规范
+
+#### Tooltip 样式统一规范
+
+**场景**: 在项目中使用 TDesign 的 `Tooltip` 组件时。
+
+❌ **错误示例**:
+```tsx
+<Tooltip content="提示文字">
+  <Button icon={<Icon />} />
+</Tooltip>
+```
+
+✅ **正确示例**:
+```tsx
+<Tooltip content="提示文字" theme="light" showArrow={false}>
+  <Button icon={<Icon />} />
+</Tooltip>
+```
+
+**原因**: 为了保持项目视觉风格的高度统一，所有 Tooltip 必须使用 `theme="light"`（白底黑字）。同时，为了界面更简洁，推荐在图标按钮或紧凑列表项上使用 `showArrow={false}` 隐藏箭头。
+
+#### 高层级容器中的 Tooltip 遮挡问题
+
+**场景**: 在使用 `createPortal` 渲染的弹窗、下拉菜单或设置了极高 `zIndex` 的容器内部使用 `Tooltip` 时。
+
+❌ **错误示例**:
+```tsx
+// 在 zIndex: 10000 的下拉菜单中
+<Tooltip content="状态提示">
+  <div className="status-dot" />
+</Tooltip>
+// 结果：Tooltip 被挡在下拉菜单下面，看不见
+```
+
+✅ **正确示例**:
+```tsx
+<Tooltip content="状态提示" theme="light" zIndex={20000}>
+  <div className="status-dot" />
+</Tooltip>
+```
+
+**原因**: 项目中部分浮层（如模型选择下拉）使用了 `createPortal` 且 `zIndex` 达到 10000。默认层级的 `Tooltip` 会被遮挡。在这种情况下，必须显式将 `Tooltip` 的 `zIndex` 提升到更高（如 20000）以确保可见。
+
+#### 信号/状态展示的量化表意
+
+**场景**: 展示模型健康度、网络信号等需要量化感知的状态时。
+
+❌ **错误示例**:
+使用单一圆点或方块，仅靠颜色区分。用户难以感知“程度”的差异。
+
+✅ **正确示例**:
+使用“信号格”或“进度条”设计，配合颜色变化。
+- 3 格绿色：极佳
+- 2 格橙色：一般
+- 1 格红色：极差
+
+**原因**: 相比单一的圆点，信号格能更直观地传达“量”的概念，符合用户的直觉认知（如手机信号、WiFi 强度）。
 
 ### 可点击容器模式：扩大交互区域
 

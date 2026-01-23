@@ -65,6 +65,7 @@ export const ViewerToolbar: React.FC<ViewerToolbarProps> = ({
           theme="light"
           placement="bottom"
           zIndex={TOOLTIP_Z_INDEX}
+          showArrow={false}
         >
           <button
             className="viewer-toolbar__btn"
@@ -86,6 +87,7 @@ export const ViewerToolbar: React.FC<ViewerToolbarProps> = ({
         theme="light"
         placement="bottom"
         zIndex={TOOLTIP_Z_INDEX}
+        showArrow={false}
       >
         <button
           className="viewer-toolbar__btn"
@@ -108,6 +110,7 @@ export const ViewerToolbar: React.FC<ViewerToolbarProps> = ({
             theme="light"
             placement="bottom"
             zIndex={TOOLTIP_Z_INDEX}
+            showArrow={false}
           >
             <button
               className={`viewer-toolbar__btn viewer-toolbar__btn--small ${
@@ -130,6 +133,7 @@ export const ViewerToolbar: React.FC<ViewerToolbarProps> = ({
           theme="light"
           placement="bottom"
           zIndex={TOOLTIP_Z_INDEX}
+          showArrow={false}
         >
           <button
             className={`viewer-toolbar__btn ${
@@ -145,6 +149,7 @@ export const ViewerToolbar: React.FC<ViewerToolbarProps> = ({
           theme="light"
           placement="bottom"
           zIndex={TOOLTIP_Z_INDEX}
+          showArrow={false}
         >
           <button
             className={`viewer-toolbar__btn ${
@@ -160,6 +165,7 @@ export const ViewerToolbar: React.FC<ViewerToolbarProps> = ({
           theme="light"
           placement="bottom"
           zIndex={TOOLTIP_Z_INDEX}
+          showArrow={false}
         >
           <button
             className={`viewer-toolbar__btn ${
@@ -180,6 +186,7 @@ export const ViewerToolbar: React.FC<ViewerToolbarProps> = ({
         theme="light"
         placement="bottom"
         zIndex={TOOLTIP_Z_INDEX}
+        showArrow={false}
       >
         <button
           className={`viewer-toolbar__btn ${
@@ -198,6 +205,7 @@ export const ViewerToolbar: React.FC<ViewerToolbarProps> = ({
           theme="light"
           placement="bottom"
           zIndex={TOOLTIP_Z_INDEX}
+          showArrow={false}
         >
           <button className="viewer-toolbar__btn" onClick={onResetView}>
             <RotateCcw size={18} />
@@ -221,6 +229,7 @@ export const ViewerToolbar: React.FC<ViewerToolbarProps> = ({
             theme="light"
             placement="bottom"
             zIndex={TOOLTIP_Z_INDEX}
+            showArrow={false}
           >
             <button className="viewer-toolbar__btn" onClick={onFullscreen}>
               <Maximize2 size={18} />
@@ -234,6 +243,7 @@ export const ViewerToolbar: React.FC<ViewerToolbarProps> = ({
           theme="light"
           placement="bottom"
           zIndex={TOOLTIP_Z_INDEX}
+          showArrow={false}
         >
           <button
             className="viewer-toolbar__btn viewer-toolbar__btn--close"

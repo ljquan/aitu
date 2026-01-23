@@ -324,6 +324,1506 @@ function loadBookmarks() {
   }
 }
 
+// ==================== Data Backup ====================
+
+/**
+ * 备份签名和版本
+ */
+const BACKUP_SIGNATURE = 'aitu-backup';
+const BACKUP_VERSION = 2;
+
+/**
+ * IndexedDB 存储名称常量（与应用层 storage-keys.ts 保持一致）
+ */
+const IDB_STORES = {
+  // 工作区数据（文件夹、画板）
+  WORKSPACE: {
+    name: 'aitu-workspace',
+    stores: {
+      FOLDERS: 'folders',
+      BOARDS: 'boards',
+      STATE: 'state',
+    },
+  },
+  // 通用键值存储（提示词等）
+  KV: {
+    name: 'aitu-storage',
+    store: 'data',
+  },
+  // 素材库元数据
+  ASSETS: {
+    name: 'aitu-assets',
+    store: 'assets',
+  },
+  // 统一缓存（AI 生成的媒体元数据）
+  UNIFIED_CACHE: {
+    name: 'drawnix-unified-cache',
+    store: 'media',
+  },
+};
+
+/**
+ * KV 存储中的关键 key（与应用层 LS_KEYS_TO_MIGRATE 保持一致）
+ */
+const KV_KEYS = {
+  PROMPT_HISTORY: 'aitu_prompt_history',
+  VIDEO_PROMPT_HISTORY: 'aitu_video_prompt_history',
+  IMAGE_PROMPT_HISTORY: 'aitu_image_prompt_history',
+  PRESET_SETTINGS: 'aitu-prompt-preset-settings',
+};
+
+/**
+ * Cache Storage 名称
+ */
+const CACHE_NAMES = {
+  IMAGES: 'drawnix-images',
+};
+
+/**
+ * 任务队列数据库配置
+ */
+const SW_TASK_QUEUE_DB = {
+  name: 'sw-task-queue',
+  stores: {
+    TASKS: 'tasks',
+  },
+};
+
+/**
+ * 任务类型和状态常量（与 SW 中的枚举值保持一致，是小写）
+ */
+const TaskType = {
+  IMAGE: 'image',
+  VIDEO: 'video',
+};
+
+const TaskStatus = {
+  COMPLETED: 'completed',
+};
+
+/**
+ * 打开 IndexedDB 数据库
+ */
+function openIDB(dbName, storeName) {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(dbName);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(storeName)) {
+        db.close();
+        resolve(null);
+        return;
+      }
+      resolve(db);
+    };
+  });
+}
+
+/**
+ * 从 IndexedDB 读取所有数据
+ */
+async function readAllFromIDB(dbName, storeName) {
+  try {
+    const db = await openIDB(dbName, storeName);
+    if (!db) return [];
+    
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(storeName, 'readonly');
+      const store = transaction.objectStore(storeName);
+      const request = store.getAll();
+      
+      request.onerror = () => {
+        db.close();
+        reject(request.error);
+      };
+      request.onsuccess = () => {
+        db.close();
+        resolve(request.result || []);
+      };
+    });
+  } catch (error) {
+    return [];
+  }
+}
+
+/**
+ * 从 IndexedDB KV 存储读取指定 key
+ */
+async function readKVItem(key) {
+  const db = await openIDB(IDB_STORES.KV.name, IDB_STORES.KV.store);
+  if (!db) return null;
+  
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(IDB_STORES.KV.store, 'readonly');
+    const store = transaction.objectStore(IDB_STORES.KV.store);
+    const request = store.get(key);
+    
+    request.onerror = () => {
+      db.close();
+      reject(request.error);
+    };
+    request.onsuccess = () => {
+      db.close();
+      const result = request.result;
+      resolve(result?.value || null);
+    };
+  });
+}
+
+/**
+ * 获取文件扩展名
+ */
+function getExtensionFromMimeType(mimeType) {
+  const mimeToExt = {
+    'image/jpeg': '.jpg',
+    'image/jpg': '.jpg',
+    'image/png': '.png',
+    'image/gif': '.gif',
+    'image/webp': '.webp',
+    'image/svg+xml': '.svg',
+    'video/mp4': '.mp4',
+    'video/webm': '.webm',
+    'video/quicktime': '.mov',
+  };
+  return mimeToExt[mimeType] || '';
+}
+
+/**
+ * 清理文件/文件夹名称
+ */
+function sanitizeFileName(name) {
+  return (
+    name
+      .replace(/[<>:"/\\|?*]/g, '_')
+      .replace(/\s+/g, ' ')
+      .trim() || 'unnamed'
+  );
+}
+
+/**
+ * 等待 JSZip 加载完成
+ * @param {number} timeout - 超时时间（毫秒）
+ * @returns {Promise<boolean>}
+ */
+function waitForJSZip(timeout = 5000) {
+  return new Promise((resolve) => {
+    if (typeof JSZip !== 'undefined') {
+      resolve(true);
+      return;
+    }
+    
+    const startTime = Date.now();
+    const checkInterval = setInterval(() => {
+      if (typeof JSZip !== 'undefined') {
+        clearInterval(checkInterval);
+        resolve(true);
+      } else if (Date.now() - startTime > timeout) {
+        clearInterval(checkInterval);
+        resolve(false);
+      }
+    }, 100);
+  });
+}
+
+/**
+ * 执行数据备份
+ */
+async function performBackup() {
+  const btn = elements.backupDataBtn;
+  if (!btn) return;
+  
+  const originalText = btn.innerHTML;
+  
+  try {
+    btn.disabled = true;
+    btn.innerHTML = '⏳ 加载中...';
+    
+    // 等待 JSZip 加载
+    const jsZipLoaded = await waitForJSZip(5000);
+    
+    if (!jsZipLoaded) {
+      throw new Error('JSZip 库加载超时，请检查网络连接后重试');
+    }
+    
+    btn.innerHTML = '⏳ 准备中...';
+    
+    const zip = new JSZip();
+    
+    const manifest = {
+      signature: BACKUP_SIGNATURE,
+      version: BACKUP_VERSION,
+      createdAt: Date.now(),
+      source: 'sw-debug-panel',
+      includes: {
+        prompts: true,
+        projects: true,
+        assets: true,
+      },
+      stats: {
+        promptCount: 0,
+        videoPromptCount: 0,
+        imagePromptCount: 0,
+        folderCount: 0,
+        boardCount: 0,
+        assetCount: 0,
+        taskCount: 0,
+      },
+    };
+    
+    // 显示进度条
+    const progressContainer = showBackupProgress();
+    const updateProgress = (percent, text) => {
+      const progressBar = progressContainer.querySelector('.backup-progress-fill');
+      const progressText = progressContainer.querySelector('.backup-progress-text');
+      if (progressBar) progressBar.style.width = `${percent}%`;
+      if (progressText) progressText.textContent = text;
+    };
+    
+    // 0. 先收集任务数据（后面提示词收集需要用到）
+    updateProgress(5, '正在读取任务数据...');
+    const allTasks = await collectTasksData();
+    
+    // 1. 收集提示词数据（会从任务中提取提示词合并）
+    updateProgress(15, '正在备份提示词...');
+    const promptsData = await collectPromptsData(allTasks);
+    zip.file('prompts.json', JSON.stringify(promptsData, null, 2));
+    manifest.stats.promptCount = promptsData.promptHistory?.length || 0;
+    manifest.stats.videoPromptCount = promptsData.videoPromptHistory?.length || 0;
+    manifest.stats.imagePromptCount = promptsData.imagePromptHistory?.length || 0;
+    
+    // 2. 收集项目数据
+    updateProgress(25, '正在备份项目...');
+    const projectStats = await collectProjectsData(zip);
+    manifest.stats.folderCount = projectStats.folders;
+    manifest.stats.boardCount = projectStats.boards;
+    
+    // 3. 收集素材数据（进度回调）
+    updateProgress(35, '正在备份素材...');
+    const assetCount = await collectAssetsData(zip, (current, total) => {
+      const percent = 35 + Math.round((current / total) * 40);
+      updateProgress(percent, `正在备份素材 (${current}/${total})...`);
+    });
+    manifest.stats.assetCount = assetCount;
+    
+    // 4. 导出已完成的媒体任务数据（素材库展示需要）
+    updateProgress(80, '正在导出任务数据...');
+    const completedMediaTasks = allTasks.filter(
+      task => task.status === TaskStatus.COMPLETED &&
+              (task.type === TaskType.IMAGE || task.type === TaskType.VIDEO) &&
+              task.result?.url
+    );
+    if (completedMediaTasks.length > 0) {
+      zip.file('tasks.json', JSON.stringify(completedMediaTasks, null, 2));
+      manifest.stats.taskCount = completedMediaTasks.length;
+    }
+    
+    // 5. 写入清单文件
+    zip.file('manifest.json', JSON.stringify(manifest, null, 2));
+    
+    // 6. 生成并下载 ZIP 文件
+    updateProgress(85, '正在压缩文件...');
+    const blob = await zip.generateAsync({
+      type: 'blob',
+      compression: 'DEFLATE',
+      compressionOptions: { level: 6 },
+    }, (metadata) => {
+      const percent = 85 + Math.round(metadata.percent * 0.14);
+      updateProgress(percent, '正在压缩文件...');
+    });
+    
+    // 下载文件
+    updateProgress(100, '备份完成！');
+    const date = new Date();
+    const dateStr = date.toISOString().split('T')[0];
+    const timeStr = date.toTimeString().split(' ')[0].replace(/:/g, '');
+    const filename = `aitu_backup_${dateStr}_${timeStr}.zip`;
+    
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    // 关闭进度条，显示成功信息
+    setTimeout(() => {
+      progressContainer.remove();
+      const sizeInMB = (blob.size / 1024 / 1024).toFixed(2);
+      showBackupSuccessNotification({
+        filename,
+        size: sizeInMB,
+        stats: manifest.stats,
+      });
+    }, 500);
+    
+    btn.innerHTML = originalText;
+    btn.disabled = false;
+    
+  } catch (error) {
+    // 关闭进度条
+    const progressContainer = document.querySelector('.backup-progress-container');
+    if (progressContainer) progressContainer.remove();
+    
+    showToast('备份失败: ' + error.message, 'error', 5000);
+    btn.innerHTML = originalText;
+    btn.disabled = false;
+  }
+}
+
+/**
+ * 收集任务数据
+ * 从 sw-task-queue 数据库读取所有任务
+ */
+async function collectTasksData() {
+  try {
+    const tasks = await readAllFromIDB(SW_TASK_QUEUE_DB.name, SW_TASK_QUEUE_DB.stores.TASKS);
+    return tasks || [];
+  } catch (error) {
+    console.warn('[Backup] Failed to read tasks:', error);
+    return [];
+  }
+}
+
+/**
+ * 收集提示词数据
+ * 合并两个来源：
+ * 1. IndexedDB 中的提示词历史
+ * 2. 任务队列中已完成任务的提示词
+ */
+async function collectPromptsData(allTasks = []) {
+  const [promptHistory, videoPromptHistory, imagePromptHistory, presetSettings] = await Promise.all([
+    readKVItem(KV_KEYS.PROMPT_HISTORY),
+    readKVItem(KV_KEYS.VIDEO_PROMPT_HISTORY),
+    readKVItem(KV_KEYS.IMAGE_PROMPT_HISTORY),
+    readKVItem(KV_KEYS.PRESET_SETTINGS),
+  ]);
+  
+  let finalPromptHistory = promptHistory || [];
+  let finalVideoPromptHistory = videoPromptHistory || [];
+  let finalImagePromptHistory = imagePromptHistory || [];
+  
+  // 从已完成的任务中提取提示词
+  const completedTasks = allTasks.filter(task => task.status === TaskStatus.COMPLETED);
+  
+  // 提取图片任务的提示词
+  const imageTaskPrompts = completedTasks
+    .filter(task => task.type === TaskType.IMAGE && task.params?.prompt)
+    .map(task => ({
+      id: `task_${task.id}`,
+      content: task.params.prompt.trim(),
+      timestamp: task.completedAt || task.createdAt,
+    }))
+    .filter(item => item.content && item.content.length > 0);
+  
+  // 提取视频任务的提示词
+  const videoTaskPrompts = completedTasks
+    .filter(task => task.type === TaskType.VIDEO && task.params?.prompt)
+    .map(task => ({
+      id: `task_${task.id}`,
+      content: task.params.prompt.trim(),
+      timestamp: task.completedAt || task.createdAt,
+    }))
+    .filter(item => item.content && item.content.length > 0);
+  
+  // 合并图片提示词（去重）
+  const existingImageContents = new Set(finalImagePromptHistory.map(p => p.content));
+  const newImagePrompts = imageTaskPrompts.filter(p => !existingImageContents.has(p.content));
+  finalImagePromptHistory = [...finalImagePromptHistory, ...newImagePrompts];
+  
+  // 合并视频提示词（去重）
+  const existingVideoContents = new Set(finalVideoPromptHistory.map(p => p.content));
+  const newVideoPrompts = videoTaskPrompts.filter(p => !existingVideoContents.has(p.content));
+  finalVideoPromptHistory = [...finalVideoPromptHistory, ...newVideoPrompts];
+  
+  return {
+    promptHistory: finalPromptHistory,
+    videoPromptHistory: finalVideoPromptHistory,
+    imagePromptHistory: finalImagePromptHistory,
+    presetSettings: presetSettings || {
+      image: { pinnedPrompts: [], deletedPrompts: [] },
+      video: { pinnedPrompts: [], deletedPrompts: [] },
+    },
+  };
+}
+
+/**
+ * 收集项目数据
+ * 从 aitu-workspace 数据库的 folders 和 boards store 读取
+ */
+async function collectProjectsData(zip) {
+  const projectsFolder = zip.folder('projects');
+  
+  // 从独立的 store 读取，而不是 KV 存储
+  const [folders, boards] = await Promise.all([
+    readAllFromIDB(IDB_STORES.WORKSPACE.name, IDB_STORES.WORKSPACE.stores.FOLDERS),
+    readAllFromIDB(IDB_STORES.WORKSPACE.name, IDB_STORES.WORKSPACE.stores.BOARDS),
+  ]);
+  
+  const folderList = folders || [];
+  const boardList = boards || [];
+  
+  // 构建文件夹路径映射
+  const folderPathMap = new Map();
+  const folderMap = new Map();
+  
+  for (const folder of folderList) {
+    folderMap.set(folder.id, folder);
+  }
+  
+  const getPath = (folderId) => {
+    if (folderPathMap.has(folderId)) {
+      return folderPathMap.get(folderId);
+    }
+    
+    const folder = folderMap.get(folderId);
+    if (!folder) return '';
+    
+    const safeName = sanitizeFileName(folder.name);
+    if (folder.parentId) {
+      const parentPath = getPath(folder.parentId);
+      const fullPath = parentPath ? `${parentPath}/${safeName}` : safeName;
+      folderPathMap.set(folderId, fullPath);
+      return fullPath;
+    }
+    
+    folderPathMap.set(folderId, safeName);
+    return safeName;
+  };
+  
+  for (const folder of folderList) {
+    getPath(folder.id);
+  }
+  
+  // 创建文件夹结构
+  for (const folder of folderList) {
+    const path = folderPathMap.get(folder.id) || folder.name;
+    projectsFolder.folder(path);
+  }
+  
+  // 导出画板
+  for (const board of boardList) {
+    const folderPath = board.folderId ? folderPathMap.get(board.folderId) : null;
+    const safeName = sanitizeFileName(board.name);
+    const boardPath = folderPath
+      ? `${folderPath}/${safeName}.drawnix`
+      : `${safeName}.drawnix`;
+    
+    const drawnixData = {
+      type: 'drawnix',
+      version: 1,
+      source: 'backup',
+      elements: board.elements || [],
+      viewport: board.viewport || { zoom: 1 },
+      theme: board.theme,
+      boardMeta: {
+        id: board.id,
+        name: board.name,
+        folderId: board.folderId,
+        order: board.order,
+        createdAt: board.createdAt,
+        updatedAt: board.updatedAt,
+      },
+    };
+    
+    projectsFolder.file(boardPath, JSON.stringify(drawnixData, null, 2));
+  }
+  
+  return {
+    folders: folderList.length,
+    boards: boardList.length,
+  };
+}
+
+/**
+ * 从 URL 生成唯一 ID（与应用层保持一致）
+ */
+function generateIdFromUrl(url) {
+  let hash = 0;
+  for (let i = 0; i < url.length; i++) {
+    const char = url.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
+  }
+  return `cache-${Math.abs(hash).toString(36)}`;
+}
+
+/**
+ * 收集素材数据
+ * 三个数据源：
+ * 1. aitu-assets 数据库（本地素材库元数据）
+ * 2. drawnix-unified-cache 数据库（AI 生成媒体元数据）
+ * 3. drawnix-images Cache Storage（媒体二进制数据）
+ * @param {JSZip} zip - ZIP 实例
+ * @param {Function} onProgress - 进度回调 (current, total)
+ */
+async function collectAssetsData(zip, onProgress) {
+  const assetsFolder = zip.folder('assets');
+  let exportedCount = 0;
+  const exportedUrls = new Set();
+  
+  try {
+    // 打开 Cache Storage
+    const cache = await caches.open(CACHE_NAMES.IMAGES);
+    
+    // 1. 从 aitu-assets 数据库读取本地素材元数据
+    const assetMetaList = await readAllFromIDB(IDB_STORES.ASSETS.name, IDB_STORES.ASSETS.store);
+    
+    // 2. 从 drawnix-unified-cache 数据库读取 AI 生成媒体元数据
+    const unifiedCacheItems = await readAllFromIDB(IDB_STORES.UNIFIED_CACHE.name, IDB_STORES.UNIFIED_CACHE.store);
+    
+    // 3. 获取虚拟路径缓存
+    const cacheKeys = await cache.keys();
+    const virtualRequests = cacheKeys.filter(req => req.url.includes('/__aitu_cache__/'));
+    
+    // 计算总数用于进度显示
+    const totalItems = assetMetaList.length + unifiedCacheItems.length + virtualRequests.length;
+    let processedCount = 0;
+    
+    // 1. 导出本地素材
+    for (const asset of assetMetaList) {
+      try {
+        assetsFolder.file(`${asset.id}.meta.json`, JSON.stringify(asset, null, 2));
+        
+        if (asset.url) {
+          const response = await cache.match(asset.url);
+          if (response) {
+            const blob = await response.blob();
+            if (blob.size > 0) {
+              const ext = getExtensionFromMimeType(asset.mimeType || blob.type);
+              assetsFolder.file(`${asset.id}${ext}`, blob);
+              exportedUrls.add(asset.url);
+              exportedCount++;
+            }
+          }
+        }
+      } catch (err) {
+        // 静默处理错误
+      }
+      processedCount++;
+      if (onProgress) onProgress(processedCount, totalItems);
+    }
+    
+    // 2. 导出 unified-cache 中的素材
+    const newCacheItems = unifiedCacheItems.filter(item => !exportedUrls.has(item.url));
+    
+    for (const item of newCacheItems) {
+      try {
+        const itemId = item.metadata?.taskId || generateIdFromUrl(item.url);
+        
+        const metaData = {
+          id: itemId,
+          url: item.url,
+          type: item.type === 'video' ? 'VIDEO' : 'IMAGE',
+          mimeType: item.mimeType,
+          size: item.size,
+          source: 'AI_GENERATED',
+          createdAt: item.cachedAt,
+          updatedAt: item.lastUsed,
+          metadata: item.metadata,
+        };
+        assetsFolder.file(`${itemId}.meta.json`, JSON.stringify(metaData, null, 2));
+        
+        const response = await cache.match(item.url);
+        if (response) {
+          const blob = await response.blob();
+          if (blob.size > 0) {
+            const ext = getExtensionFromMimeType(item.mimeType);
+            assetsFolder.file(`${itemId}${ext}`, blob);
+            exportedUrls.add(item.url);
+            exportedCount++;
+          }
+        }
+      } catch (err) {
+        // 静默处理错误
+      }
+      processedCount++;
+      if (onProgress) onProgress(processedCount, totalItems);
+    }
+    
+    // 跳过已处理的 unified-cache items
+    processedCount += (unifiedCacheItems.length - newCacheItems.length);
+    
+    // 3. 导出虚拟路径缓存中的媒体（可能有些不在 unified-cache 中）
+    const pendingVirtualRequests = virtualRequests.filter(req => !exportedUrls.has(req.url));
+    
+    for (const request of pendingVirtualRequests) {
+      const url = request.url;
+      
+      try {
+        const response = await cache.match(request);
+        if (response) {
+          const blob = await response.blob();
+          if (blob.size > 0) {
+            const urlParts = url.split('/');
+            const filename = urlParts[urlParts.length - 1];
+            const id = filename.split('.')[0] || `cache-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+            
+            const contentType = response.headers.get('content-type') || blob.type;
+            const ext = getExtensionFromMimeType(contentType);
+            const type = contentType.startsWith('video/') ? 'VIDEO' : 'IMAGE';
+            
+            const metadata = {
+              id,
+              url,
+              type,
+              mimeType: contentType,
+              size: blob.size,
+              source: 'AI_GENERATED',
+              createdAt: Date.now(),
+            };
+            assetsFolder.file(`${id}.meta.json`, JSON.stringify(metadata, null, 2));
+            assetsFolder.file(`${id}${ext}`, blob);
+            exportedUrls.add(url);
+            exportedCount++;
+          }
+        }
+      } catch (err) {
+        // 静默处理错误
+      }
+      processedCount++;
+      if (onProgress) onProgress(processedCount, totalItems);
+    }
+    
+  } catch (error) {
+    // 静默处理错误
+  }
+  
+  return exportedCount;
+}
+
+/**
+ * 显示备份进度条
+ */
+function showBackupProgress() {
+  const container = document.createElement('div');
+  container.className = 'backup-progress-container';
+  container.innerHTML = `
+    <div class="backup-progress-content">
+      <div class="backup-progress-header">
+        <span class="backup-progress-icon">📦</span>
+        <span class="backup-progress-title">正在备份数据</span>
+      </div>
+      <div class="backup-progress-bar">
+        <div class="backup-progress-fill" style="width: 0%"></div>
+      </div>
+      <div class="backup-progress-text">准备中...</div>
+    </div>
+  `;
+  document.body.appendChild(container);
+  return container;
+}
+
+/**
+ * 显示 Toast 通知
+ * @param {string} message - 通知消息
+ * @param {string} type - 类型: 'success' | 'error' | 'warning' | 'info'
+ * @param {number} duration - 持续时间（毫秒），默认 3000
+ */
+function showToast(message, type = 'success', duration = 3000) {
+  const icons = {
+    success: '✅',
+    error: '❌',
+    warning: '⚠️',
+    info: 'ℹ️'
+  };
+  
+  const notification = document.createElement('div');
+  notification.className = `import-notification toast-notification toast-${type}`;
+  notification.innerHTML = `
+    <div class="import-notification-content">
+      <span class="icon">${icons[type] || icons.info}</span>
+      <div class="info">
+        <p style="margin: 0; white-space: pre-line;">${escapeHtml(message)}</p>
+      </div>
+      <button class="close" onclick="this.parentElement.parentElement.remove()">×</button>
+    </div>
+  `;
+  
+  document.body.appendChild(notification);
+  
+  // 自动消失
+  setTimeout(() => {
+    notification.classList.add('fade-out');
+    setTimeout(() => notification.remove(), 300);
+  }, duration);
+}
+
+/**
+ * 显示备份成功通知
+ */
+function showBackupSuccessNotification({ filename, size, stats }) {
+  const notification = document.createElement('div');
+  notification.className = 'import-notification backup-notification';
+  notification.innerHTML = `
+    <div class="import-notification-content">
+      <span class="icon">✅</span>
+      <div class="info">
+        <strong>备份成功</strong>
+        <p>${filename}</p>
+        <p class="counts">
+          文件大小: ${size} MB
+          ${stats.boardCount > 0 ? `| 画板: ${stats.boardCount}` : ''}
+          ${stats.folderCount > 0 ? `| 文件夹: ${stats.folderCount}` : ''}
+          ${stats.assetCount > 0 ? `| 素材: ${stats.assetCount}` : ''}
+          ${stats.taskCount > 0 ? `| 任务: ${stats.taskCount}` : ''}
+          ${stats.imagePromptCount > 0 ? `| 图片提示词: ${stats.imagePromptCount}` : ''}
+          ${stats.videoPromptCount > 0 ? `| 视频提示词: ${stats.videoPromptCount}` : ''}
+        </p>
+      </div>
+      <button class="close" onclick="this.parentElement.parentElement.remove()">×</button>
+    </div>
+  `;
+  
+  document.body.appendChild(notification);
+  
+  // 5 秒后自动消失
+  setTimeout(() => {
+    notification.classList.add('fade-out');
+    setTimeout(() => notification.remove(), 300);
+  }, 5000);
+}
+
+// ==================== Analysis Mode ====================
+
+/**
+ * Toggle analysis mode (for analyzing user-provided logs)
+ * In analysis mode:
+ * - SW connection is disabled
+ * - Only imported log data is displayed
+ * - Debug-related buttons are hidden
+ */
+function toggleAnalysisMode() {
+  state.isAnalysisMode = !state.isAnalysisMode;
+  updateAnalysisModeUI();
+  
+  if (state.isAnalysisMode) {
+    // Clear all existing data when entering analysis mode
+    clearAllLogsForAnalysisMode();
+  } else {
+    // Restore normal mode - reconnect to SW
+    exitAnalysisMode();
+  }
+}
+
+/**
+ * Update UI based on analysis mode state
+ */
+function updateAnalysisModeUI() {
+  const isAnalysis = state.isAnalysisMode;
+  
+  // Update mode indicator
+  if (elements.analysisModeIndicator) {
+    elements.analysisModeIndicator.style.display = isAnalysis ? 'inline-flex' : 'none';
+  }
+  
+  // Update SW status indicator
+  if (elements.swStatus) {
+    elements.swStatus.style.display = isAnalysis ? 'none' : 'inline-flex';
+  }
+  
+  // Update title
+  if (elements.panelTitle) {
+    elements.panelTitle.textContent = isAnalysis ? '日志分析模式' : 'Service Worker 调试面板';
+  }
+  
+  // Show/hide import button
+  if (elements.importLogsBtn) {
+    elements.importLogsBtn.style.display = isAnalysis ? 'inline-flex' : 'none';
+  }
+  
+  // Update toggle button appearance
+  if (elements.toggleAnalysisModeBtn) {
+    if (isAnalysis) {
+      elements.toggleAnalysisModeBtn.classList.add('active');
+      elements.toggleAnalysisModeBtn.title = '退出分析模式，返回调试模式';
+    } else {
+      elements.toggleAnalysisModeBtn.classList.remove('active');
+      elements.toggleAnalysisModeBtn.title = '切换到分析模式（导入用户日志）';
+    }
+  }
+  
+  // Hide/show debug-mode-only buttons
+  document.querySelectorAll('.debug-mode-only').forEach(el => {
+    el.style.display = isAnalysis ? 'none' : '';
+  });
+  
+  // In analysis mode, left panel shows user info instead of SW status
+  // The panel is always visible, but content changes based on mode
+  const leftPanel = document.querySelector('.left-panel');
+  if (leftPanel) {
+    // Always show left panel, content will be different in analysis mode
+    leftPanel.style.display = '';
+  }
+  
+  // Adjust panels grid - always use two-column layout
+  const panels = document.querySelector('.panels');
+  if (panels) {
+    panels.style.gridTemplateColumns = '280px 1fr';
+  }
+  
+  // Update left panel content for analysis mode
+  if (isAnalysis) {
+    showAnalysisModeLeftPanel();
+  } else {
+    restoreDebugModeLeftPanel();
+  }
+  
+  // Add/remove body class for analysis mode styling
+  document.body.classList.toggle('analysis-mode', isAnalysis);
+}
+
+/**
+ * Clear display logs when entering analysis mode
+ * Current logs are preserved in liveLogs buffer for restoration later
+ */
+function clearAllLogsForAnalysisMode() {
+  // Save current logs to live buffer before clearing display
+  state.liveLogs.logs = [...state.logs];
+  state.liveLogs.consoleLogs = [...state.consoleLogs];
+  state.liveLogs.postmessageLogs = [...state.postmessageLogs];
+  state.liveLogs.crashLogs = [...state.crashLogs];
+  state.liveLogs.llmapiLogs = [...state.llmapiLogs];
+  
+  // Clear display state for imported logs
+  state.logs = [];
+  state.consoleLogs = [];
+  state.postmessageLogs = [];
+  state.crashLogs = [];
+  state.llmapiLogs = [];
+  state.importedLogData = null;
+  
+  // Re-render all tabs
+  renderLogs();
+  renderConsoleLogs();
+  renderPostmessageLogs();
+  renderCrashLogs();
+  renderLLMApiLogs();
+  
+  // Show import prompt
+  showImportPrompt();
+}
+
+/**
+ * Show analysis mode left panel (placeholder for user info)
+ */
+function showAnalysisModeLeftPanel() {
+  const leftPanel = document.querySelector('.left-panel');
+  if (!leftPanel) return;
+  
+  leftPanel.innerHTML = `
+    <div class="panel">
+      <div class="panel-header">
+        🔍 分析模式
+      </div>
+      <div class="panel-content">
+        <div class="empty-state" style="padding: 20px;">
+          <span class="icon" style="font-size: 32px;">📋</span>
+          <p style="margin-top: 12px; color: var(--text-secondary);">请导入用户日志文件</p>
+          <p style="font-size: 11px; opacity: 0.6; margin-top: 8px;">导入后将显示用户信息</p>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Restore debug mode left panel
+ */
+function restoreDebugModeLeftPanel() {
+  const leftPanel = document.querySelector('.left-panel');
+  if (!leftPanel) return;
+  
+  // Restore original HTML structure
+  leftPanel.innerHTML = `
+    <div class="panel">
+      <div class="panel-header">
+        SW 状态信息
+      </div>
+      <div class="panel-content">
+        <div class="stat-grid" id="statusGrid">
+          <div class="stat-item">
+            <span class="label">版本</span>
+            <span class="value" id="swVersion">-</span>
+          </div>
+          <div class="stat-item">
+            <span class="label">调试模式</span>
+            <span class="value" id="debugMode">关闭</span>
+          </div>
+          <div class="stat-item">
+            <span class="label">Pending 图片请求</span>
+            <span class="value" id="pendingImages">0</span>
+          </div>
+          <div class="stat-item">
+            <span class="label">Pending 视频请求</span>
+            <span class="value" id="pendingVideos">0</span>
+          </div>
+          <div class="stat-item">
+            <span class="label">视频 Blob 缓存</span>
+            <span class="value" id="videoBlobCache">0</span>
+          </div>
+          <div class="stat-item">
+            <span class="label">已完成请求缓存</span>
+            <span class="value" id="completedRequests">0</span>
+          </div>
+          <div class="stat-item">
+            <span class="label">工作流处理器</span>
+            <span class="value" id="workflowHandler">未初始化</span>
+          </div>
+          <div class="stat-item">
+            <span class="label">调试日志数</span>
+            <span class="value" id="debugLogsCount">0</span>
+          </div>
+        </div>
+        
+        <div id="failedDomainsSection" style="margin-top: 16px; display: none;">
+          <div class="stat-item" style="flex-direction: column; align-items: flex-start;">
+            <span class="label">失败域名</span>
+            <div class="failed-domains" id="failedDomains"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        内存监控
+        <span id="memoryUpdateTime" style="font-size: 11px; opacity: 0.6; margin-left: 10px;"></span>
+      </div>
+      <div class="panel-content">
+        <div class="stat-grid" id="memoryGrid">
+          <div class="stat-item">
+            <span class="label">JS 堆已使用</span>
+            <span class="value" id="memoryUsed">-</span>
+          </div>
+          <div class="stat-item">
+            <span class="label">JS 堆总大小</span>
+            <span class="value" id="memoryTotal">-</span>
+          </div>
+          <div class="stat-item">
+            <span class="label">JS 堆上限</span>
+            <span class="value" id="memoryLimit">-</span>
+          </div>
+          <div class="stat-item">
+            <span class="label">使用率</span>
+            <span class="value" id="memoryPercent">-</span>
+          </div>
+        </div>
+        <p id="memoryWarning" style="display: none; margin-top: 12px; padding: 8px; background: #fff3cd; border-radius: 4px; font-size: 12px; color: #856404;">
+          ⚠️ 内存使用率较高，可能导致页面崩溃
+        </p>
+        <p id="memoryNotSupported" style="display: none; margin-top: 8px; font-size: 11px; opacity: 0.6;">
+          注：performance.memory 仅 Chrome 支持
+        </p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        缓存统计
+        <button id="refreshCache">刷新</button>
+      </div>
+      <div class="panel-content">
+        <ul class="cache-list" id="cacheList">
+          <li class="cache-item">
+            <span class="name">加载中...</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+  `;
+  
+  // Re-cache elements and rebind refresh cache button
+  elements.swVersion = document.getElementById('swVersion');
+  elements.debugMode = document.getElementById('debugMode');
+  elements.pendingImages = document.getElementById('pendingImages');
+  elements.pendingVideos = document.getElementById('pendingVideos');
+  elements.videoBlobCache = document.getElementById('videoBlobCache');
+  elements.completedRequests = document.getElementById('completedRequests');
+  elements.workflowHandler = document.getElementById('workflowHandler');
+  elements.debugLogsCount = document.getElementById('debugLogsCount');
+  elements.failedDomains = document.getElementById('failedDomains');
+  elements.memoryUsed = document.getElementById('memoryUsed');
+  elements.memoryTotal = document.getElementById('memoryTotal');
+  elements.memoryLimit = document.getElementById('memoryLimit');
+  elements.memoryPercent = document.getElementById('memoryPercent');
+  elements.cacheList = document.getElementById('cacheList');
+  
+  const refreshCacheBtn = document.getElementById('refreshCache');
+  if (refreshCacheBtn) {
+    refreshCacheBtn.addEventListener('click', loadCacheStats);
+  }
+  
+  // Refresh data
+  refreshStatus();
+  loadCacheStats();
+  updateMemoryDisplay();
+}
+
+/**
+ * Show user info panel in analysis mode after importing logs
+ * @param {object} data - Imported log data
+ */
+function showUserInfoPanel(data) {
+  const leftPanel = document.querySelector('.left-panel');
+  if (!leftPanel) return;
+  
+  // Extract user info from imported data
+  const userAgent = data.userAgent || '未知';
+  const url = data.url || '未知';
+  const exportTime = data.exportTime ? new Date(data.exportTime).toLocaleString('zh-CN') : '未知';
+  const swStatus = data.swStatus || {};
+  const memory = data.memory || {};
+  const cacheStats = data.cacheStats || {};
+  
+  // Parse UA for display
+  const uaInfo = parseUserAgent(userAgent);
+  
+  // Calculate total logs
+  const summary = data.summary || {};
+  const logCounts = {
+    fetch: summary.fetchLogs || (data.fetchLogs?.length || 0),
+    console: summary.consoleLogs || (data.consoleLogs?.length || 0),
+    postmessage: summary.postmessageLogs || (data.postmessageLogs?.length || 0),
+    memory: summary.memoryLogs || (data.memoryLogs?.length || 0),
+    llmapi: summary.llmapiLogs || (data.llmapiLogs?.length || 0),
+  };
+  const totalLogs = Object.values(logCounts).reduce((a, b) => a + b, 0);
+  
+  leftPanel.innerHTML = `
+    <div class="panel">
+      <div class="panel-header">
+        👤 用户信息
+      </div>
+      <div class="panel-content">
+        <div class="stat-grid">
+          <div class="stat-item" style="grid-column: 1 / -1;">
+            <span class="label">访问地址</span>
+            <span class="value" style="font-size: 11px; word-break: break-all;" title="${escapeHtml(url)}">${escapeHtml(truncateUrl(url, 40))}</span>
+          </div>
+          <div class="stat-item">
+            <span class="label">浏览器</span>
+            <span class="value">${escapeHtml(uaInfo.browser)}</span>
+          </div>
+          <div class="stat-item">
+            <span class="label">系统</span>
+            <span class="value">${escapeHtml(uaInfo.os)}</span>
+          </div>
+          <div class="stat-item">
+            <span class="label">导出时间</span>
+            <span class="value" style="font-size: 11px;">${escapeHtml(exportTime)}</span>
+          </div>
+          <div class="stat-item">
+            <span class="label">日志总数</span>
+            <span class="value">${totalLogs}</span>
+          </div>
+        </div>
+        <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-color);">
+          <details style="font-size: 11px;">
+            <summary style="cursor: pointer; color: var(--text-secondary);">完整 User-Agent</summary>
+            <p style="margin-top: 8px; word-break: break-all; color: var(--text-secondary); line-height: 1.4;">${escapeHtml(userAgent)}</p>
+          </details>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        📊 导出时状态
+      </div>
+      <div class="panel-content">
+        <div class="stat-grid">
+          <div class="stat-item">
+            <span class="label">SW 版本</span>
+            <span class="value">${escapeHtml(swStatus.version || '-')}</span>
+          </div>
+          <div class="stat-item">
+            <span class="label">调试模式</span>
+            <span class="value">${swStatus.debugModeEnabled ? '开启' : '关闭'}</span>
+          </div>
+          <div class="stat-item">
+            <span class="label">工作流处理器</span>
+            <span class="value">${swStatus.workflowHandlerInitialized ? '已初始化' : '未初始化'}</span>
+          </div>
+          <div class="stat-item">
+            <span class="label">调试日志数</span>
+            <span class="value">${swStatus.debugLogsCount || 0}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    ${memory.usedMB ? `
+    <div class="panel">
+      <div class="panel-header">
+        💾 内存快照
+      </div>
+      <div class="panel-content">
+        <div class="stat-grid">
+          <div class="stat-item">
+            <span class="label">JS 堆已使用</span>
+            <span class="value">${memory.usedMB} MB</span>
+          </div>
+          <div class="stat-item">
+            <span class="label">JS 堆总大小</span>
+            <span class="value">${memory.totalMB} MB</span>
+          </div>
+          <div class="stat-item">
+            <span class="label">使用率</span>
+            <span class="value ${memory.usagePercent > 80 ? 'warning' : ''}">${memory.usagePercent}%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    ` : ''}
+
+    ${Object.keys(cacheStats).length > 0 ? `
+    <div class="panel">
+      <div class="panel-header">
+        📦 缓存快照
+      </div>
+      <div class="panel-content">
+        <ul class="cache-list">
+          ${Object.entries(cacheStats).map(([name, stats]) => `
+            <li class="cache-item">
+              <span class="name" title="${escapeHtml(name)}">${escapeHtml(truncateUrl(name, 25))}</span>
+              <span class="count">${stats.count} 项</span>
+              <span class="size">${formatBytes(stats.totalSize)}</span>
+            </li>
+          `).join('')}
+        </ul>
+      </div>
+    </div>
+    ` : ''}
+
+    <div class="panel">
+      <div class="panel-header">
+        📋 日志统计
+      </div>
+      <div class="panel-content">
+        <div class="stat-grid">
+          ${logCounts.fetch > 0 ? `<div class="stat-item"><span class="label">Fetch</span><span class="value">${logCounts.fetch}</span></div>` : ''}
+          ${logCounts.console > 0 ? `<div class="stat-item"><span class="label">控制台</span><span class="value">${logCounts.console}</span></div>` : ''}
+          ${logCounts.postmessage > 0 ? `<div class="stat-item"><span class="label">PostMessage</span><span class="value">${logCounts.postmessage}</span></div>` : ''}
+          ${logCounts.memory > 0 ? `<div class="stat-item"><span class="label">内存</span><span class="value">${logCounts.memory}</span></div>` : ''}
+          ${logCounts.llmapi > 0 ? `<div class="stat-item"><span class="label">LLM API</span><span class="value">${logCounts.llmapi}</span></div>` : ''}
+          ${totalLogs === 0 ? `<div class="stat-item" style="grid-column: 1 / -1;"><span class="label">无日志数据</span></div>` : ''}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Parse User-Agent string to extract browser and OS info
+ * @param {string} ua - User-Agent string
+ * @returns {{browser: string, os: string}}
+ */
+function parseUserAgent(ua) {
+  let browser = '未知';
+  let os = '未知';
+  
+  // Detect browser
+  if (ua.includes('Chrome') && !ua.includes('Edg')) {
+    const match = ua.match(/Chrome\/(\d+)/);
+    browser = match ? `Chrome ${match[1]}` : 'Chrome';
+  } else if (ua.includes('Edg')) {
+    const match = ua.match(/Edg\/(\d+)/);
+    browser = match ? `Edge ${match[1]}` : 'Edge';
+  } else if (ua.includes('Firefox')) {
+    const match = ua.match(/Firefox\/(\d+)/);
+    browser = match ? `Firefox ${match[1]}` : 'Firefox';
+  } else if (ua.includes('Safari') && !ua.includes('Chrome')) {
+    const match = ua.match(/Version\/(\d+)/);
+    browser = match ? `Safari ${match[1]}` : 'Safari';
+  }
+  
+  // Detect OS
+  if (ua.includes('Windows NT 10')) {
+    os = 'Windows 10/11';
+  } else if (ua.includes('Windows NT')) {
+    os = 'Windows';
+  } else if (ua.includes('Mac OS X')) {
+    const match = ua.match(/Mac OS X (\d+[._]\d+)/);
+    os = match ? `macOS ${match[1].replace('_', '.')}` : 'macOS';
+  } else if (ua.includes('Linux')) {
+    os = 'Linux';
+  } else if (ua.includes('Android')) {
+    const match = ua.match(/Android (\d+)/);
+    os = match ? `Android ${match[1]}` : 'Android';
+  } else if (ua.includes('iPhone') || ua.includes('iPad')) {
+    const match = ua.match(/OS (\d+)/);
+    os = match ? `iOS ${match[1]}` : 'iOS';
+  }
+  
+  return { browser, os };
+}
+
+/**
+ * Truncate URL for display
+ * @param {string} url 
+ * @param {number} maxLen 
+ * @returns {string}
+ */
+function truncateUrl(url, maxLen) {
+  if (url.length <= maxLen) return url;
+  return url.substring(0, maxLen - 3) + '...';
+}
+
+/**
+ * Escape HTML special characters
+ * @param {string} str 
+ * @returns {string}
+ */
+function escapeHtml(str) {
+  if (typeof str !== 'string') return String(str);
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+/**
+ * Show import prompt in logs container
+ */
+function showImportPrompt() {
+  if (elements.logsContainer) {
+    elements.logsContainer.innerHTML = `
+      <div class="empty-state analysis-mode-prompt">
+        <span class="icon">📁</span>
+        <h3>分析模式</h3>
+        <p>在此模式下，您可以导入用户提供的日志文件进行分析</p>
+        <p style="font-size: 12px; opacity: 0.7; margin-bottom: 20px;">
+          支持从"导出日志"功能生成的 JSON 文件
+        </p>
+        <button id="importPromptBtn" class="primary" style="margin-top: 10px;">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px; margin-right: 6px;">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+          </svg>
+          导入日志文件
+        </button>
+        <p style="font-size: 11px; opacity: 0.5; margin-top: 16px;">
+          点击右上角搜索图标可退出分析模式
+        </p>
+      </div>
+    `;
+    
+    // Attach event listener to the prompt button
+    const btn = document.getElementById('importPromptBtn');
+    if (btn) {
+      btn.addEventListener('click', triggerImportDialog);
+    }
+  }
+}
+
+/**
+ * Exit analysis mode and restore normal SW connection
+ */
+function exitAnalysisMode() {
+  state.importedLogData = null;
+  
+  // Restore live logs that were collected during analysis mode
+  state.logs = state.liveLogs.logs;
+  state.consoleLogs = state.liveLogs.consoleLogs;
+  state.postmessageLogs = state.liveLogs.postmessageLogs;
+  state.crashLogs = state.liveLogs.crashLogs;
+  state.llmapiLogs = state.liveLogs.llmapiLogs;
+  
+  // Re-render with restored logs
+  renderLogs();
+  renderConsoleLogs();
+  updateMessageTypeOptions();
+  renderPostmessageLogs();
+  renderCrashLogs();
+  renderLLMApiLogs();
+  
+  // Update tab counts
+  updateConsoleCount();
+  updatePostmessageCount();
+  updateCrashCount();
+  updateErrorDots();
+  
+  // Reconnect to SW and refresh status
+  if (navigator.serviceWorker?.controller) {
+    enableDebug();
+    refreshStatus();
+    // Re-fetch latest logs from SW (will merge with restored logs)
+    loadConsoleLogs();
+    loadPostMessageLogs();
+    loadCrashLogs();
+    loadLLMApiLogs();
+  }
+}
+
+/**
+ * Trigger file import dialog
+ */
+function triggerImportDialog() {
+  if (elements.importLogsInput) {
+    elements.importLogsInput.click();
+  }
+}
+
+/**
+ * Handle imported log file
+ * @param {Event} event - File input change event
+ */
+async function handleLogImport(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+    
+    // Validate the imported data structure
+    if (!data || typeof data !== 'object') {
+      throw new Error('无效的日志文件格式');
+    }
+    
+    // Store imported data
+    state.importedLogData = data;
+    
+    // Parse and load logs from the imported data
+    loadImportedLogs(data);
+    
+    // Show success notification
+    showImportSuccessMessage(file.name, data);
+    
+  } catch (error) {
+    console.error('Failed to import log file:', error);
+    showToast(`导入失败: ${error.message}`, 'error', 5000);
+  }
+  
+  // Reset file input so same file can be selected again
+  event.target.value = '';
+}
+
+/**
+ * Load logs from imported data
+ * @param {object} data - Imported log data
+ */
+function loadImportedLogs(data) {
+  // Load fetch logs
+  if (data.fetchLogs && Array.isArray(data.fetchLogs)) {
+    state.logs = data.fetchLogs.map(log => ({
+      ...log,
+      // Ensure required fields exist
+      id: log.id || `imported-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      timestamp: log.timestamp || Date.now(),
+    }));
+    renderLogs();
+  }
+  
+  // Load console logs
+  if (data.consoleLogs && Array.isArray(data.consoleLogs)) {
+    state.consoleLogs = data.consoleLogs.map(log => ({
+      ...log,
+      id: log.id || `console-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      timestamp: log.timestamp || Date.now(),
+    }));
+    renderConsoleLogs();
+  }
+  
+  // Load postmessage logs
+  if (data.postmessageLogs && Array.isArray(data.postmessageLogs)) {
+    state.postmessageLogs = data.postmessageLogs.map(log => ({
+      ...log,
+      id: log.id || `pm-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      timestamp: log.timestamp || Date.now(),
+    }));
+    updateMessageTypeOptions();
+    renderPostmessageLogs();
+  }
+  
+  // Load memory/crash logs
+  if (data.memoryLogs && Array.isArray(data.memoryLogs)) {
+    state.crashLogs = data.memoryLogs.map(log => ({
+      ...log,
+      id: log.id || `crash-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      timestamp: log.timestamp || Date.now(),
+    }));
+    renderCrashLogs();
+  }
+  
+  // Load LLM API logs
+  if (data.llmapiLogs && Array.isArray(data.llmapiLogs)) {
+    state.llmapiLogs = data.llmapiLogs.map(log => ({
+      ...log,
+      id: log.id || `llm-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      timestamp: log.timestamp || Date.now(),
+    }));
+    renderLLMApiLogs();
+  }
+  
+  // Store SW status from imported data for display
+  if (data.swStatus) {
+    state.swStatus = data.swStatus;
+  }
+  
+  // Update tab counts
+  updateConsoleCount();
+  updatePostmessageCount();
+  updateCrashCount();
+  updateErrorDots();
+  
+  // Show user info panel in left sidebar
+  showUserInfoPanel(data);
+}
+
+/**
+ * Show success message after importing logs
+ * @param {string} filename
+ * @param {object} data
+ */
+function showImportSuccessMessage(filename, data) {
+  const summary = data.summary || {};
+  const counts = {
+    fetch: summary.fetchLogs || (data.fetchLogs?.length || 0),
+    console: summary.consoleLogs || (data.consoleLogs?.length || 0),
+    postmessage: summary.postmessageLogs || (data.postmessageLogs?.length || 0),
+    memory: summary.memoryLogs || (data.memoryLogs?.length || 0),
+    llmapi: summary.llmapiLogs || (data.llmapiLogs?.length || 0),
+  };
+  
+  const totalLogs = counts.fetch + counts.console + counts.postmessage + counts.memory + counts.llmapi;
+  
+  // Create a temporary notification
+  const notification = document.createElement('div');
+  notification.className = 'import-notification';
+  notification.innerHTML = `
+    <div class="import-notification-content">
+      <span class="icon">✅</span>
+      <div class="info">
+        <strong>导入成功</strong>
+        <p>${filename}</p>
+        <p class="counts">
+          共 ${totalLogs} 条日志
+          ${counts.fetch > 0 ? `| Fetch: ${counts.fetch}` : ''}
+          ${counts.console > 0 ? `| 控制台: ${counts.console}` : ''}
+          ${counts.postmessage > 0 ? `| PostMessage: ${counts.postmessage}` : ''}
+          ${counts.memory > 0 ? `| 内存: ${counts.memory}` : ''}
+          ${counts.llmapi > 0 ? `| LLM API: ${counts.llmapi}` : ''}
+        </p>
+        ${data.exportTime ? `<p class="export-time">导出时间: ${new Date(data.exportTime).toLocaleString('zh-CN')}</p>` : ''}
+      </div>
+      <button class="close" onclick="this.parentElement.parentElement.remove()">×</button>
+    </div>
+  `;
+  
+  document.body.appendChild(notification);
+  
+  // Auto remove after 5 seconds
+  setTimeout(() => {
+    notification.classList.add('fade-out');
+    setTimeout(() => notification.remove(), 300);
+  }, 5000);
+}
+
 /**
  * Toggle theme between light and dark
  */
@@ -765,6 +2265,18 @@ const state = {
     keepBookmarks: true,
   },
   autoCleanTimerId: null,
+  // Analysis mode - for debugging user-provided logs without local SW connection
+  isAnalysisMode: false,
+  importedLogData: null, // Imported log data from user
+  // Live logs buffer - stores incoming logs while in analysis mode
+  // So they can be restored when exiting analysis mode
+  liveLogs: {
+    logs: [],
+    consoleLogs: [],
+    postmessageLogs: [],
+    crashLogs: [],
+    llmapiLogs: [],
+  },
 };
 
 // Memory monitoring interval
@@ -887,6 +2399,14 @@ function cacheElements() {
     memoryWarning: document.getElementById('memoryWarning'),
     memoryNotSupported: document.getElementById('memoryNotSupported'),
     memoryUpdateTime: document.getElementById('memoryUpdateTime'),
+    // Analysis mode elements
+    toggleAnalysisModeBtn: document.getElementById('toggleAnalysisMode'),
+    importLogsBtn: document.getElementById('importLogs'),
+    importLogsInput: document.getElementById('importLogsInput'),
+    analysisModeIndicator: document.getElementById('analysisModeIndicator'),
+    panelTitle: document.getElementById('panelTitle'),
+    // Backup button
+    backupDataBtn: document.getElementById('backupData'),
   };
 }
 
@@ -1139,6 +2659,12 @@ function addOrUpdateLog(entry, skipRender = false) {
     return;
   }
 
+  // In analysis mode, save to liveLogs buffer instead of display state
+  if (state.isAnalysisMode) {
+    addOrUpdateLiveLog('logs', entry);
+    return;
+  }
+
   // If paused, add to pending queue
   if (state.isPaused && !skipRender) {
     state.pendingLogs.push(entry);
@@ -1173,6 +2699,19 @@ function addOrUpdateLog(entry, skipRender = false) {
  * @param {object} entry
  */
 function addConsoleLog(entry) {
+  // In analysis mode, save to liveLogs buffer instead of display state
+  if (state.isAnalysisMode) {
+    // Check for duplicates in liveLogs
+    if (state.liveLogs.consoleLogs.some(l => l.id === entry.id)) {
+      return;
+    }
+    state.liveLogs.consoleLogs.unshift(entry);
+    if (state.liveLogs.consoleLogs.length > 500) {
+      state.liveLogs.consoleLogs.pop();
+    }
+    return;
+  }
+
   // Check for duplicates (in case of race condition with initial load)
   if (state.consoleLogs.some(l => l.id === entry.id)) {
     return;
@@ -1281,6 +2820,19 @@ function updatePostmessageCount() {
  * @param {object} entry
  */
 function addPostmessageLog(entry) {
+  // In analysis mode, save to liveLogs buffer instead of display state
+  if (state.isAnalysisMode) {
+    // Check for duplicates in liveLogs
+    if (state.liveLogs.postmessageLogs.some(l => l.id === entry.id)) {
+      return;
+    }
+    state.liveLogs.postmessageLogs.unshift(entry);
+    if (state.liveLogs.postmessageLogs.length > 500) {
+      state.liveLogs.postmessageLogs.pop();
+    }
+    return;
+  }
+
   // Check for duplicates
   if (state.postmessageLogs.some(l => l.id === entry.id)) {
     return;
@@ -1511,7 +3063,7 @@ function getFilteredCrashLogs() {
 }
 
 /**
- * Copy filtered crash logs to clipboard
+ * Copy filtered crash logs to clipboard with all details
  */
 async function handleCopyCrashLogs() {
   const filteredLogs = getFilteredCrashLogs();
@@ -1521,19 +3073,106 @@ async function handleCopyCrashLogs() {
     return;
   }
 
-  // Format logs as text
+  const typeLabels = {
+    startup: '启动',
+    periodic: '定期',
+    error: '错误',
+    beforeunload: '关闭',
+    freeze: '卡死',
+    whitescreen: '白屏',
+    longtask: '长任务'
+  };
+
+  // Format logs as text with all details
   const logText = filteredLogs.map(log => {
     const time = new Date(log.timestamp).toLocaleString('zh-CN', { hour12: false });
     const type = log.type || 'unknown';
-    let memoryInfo = '';
+    const typeLabel = typeLabels[type] || type;
+    
+    const lines = [];
+    lines.push(`═══════════════════════════════════════════════════`);
+    lines.push(`${time} [${typeLabel}]`);
+    lines.push(`───────────────────────────────────────────────────`);
+    
+    // 基本信息
+    lines.push(`【基本信息】`);
+    lines.push(`  ID: ${log.id}`);
+    lines.push(`  时间: ${time}`);
+    if (log.url) {
+      lines.push(`  URL: ${log.url}`);
+    }
+    
+    // 内存信息
     if (log.memory) {
       const usedMB = (log.memory.usedJSHeapSize / (1024 * 1024)).toFixed(1);
+      const totalMB = (log.memory.totalJSHeapSize / (1024 * 1024)).toFixed(1);
       const limitMB = (log.memory.jsHeapSizeLimit / (1024 * 1024)).toFixed(1);
-      memoryInfo = ` | 内存: ${usedMB}/${limitMB} MB`;
+      const percent = ((log.memory.usedJSHeapSize / log.memory.jsHeapSizeLimit) * 100).toFixed(1);
+      lines.push(``);
+      lines.push(`【内存信息】`);
+      lines.push(`  已用: ${usedMB} MB`);
+      lines.push(`  总计: ${totalMB} MB`);
+      lines.push(`  限制: ${limitMB} MB`);
+      lines.push(`  使用率: ${percent}%`);
     }
-    const error = log.error ? `\n  错误: ${log.error.message}` : '';
-    const stack = log.error?.stack ? `\n  Stack: ${log.error.stack}` : '';
-    return `${time} [${type}]${memoryInfo}${error}${stack}`;
+    
+    // 页面统计
+    if (log.pageStats) {
+      const stats = log.pageStats;
+      lines.push(``);
+      lines.push(`【页面统计】`);
+      lines.push(`  DOM节点: ${stats.domNodeCount || 0}`);
+      lines.push(`  Canvas: ${stats.canvasCount || 0}`);
+      lines.push(`  图片: ${stats.imageCount || 0}`);
+      lines.push(`  视频: ${stats.videoCount || 0}`);
+      lines.push(`  iframe: ${stats.iframeCount || 0}`);
+      if (stats.plaitElementCount !== undefined) {
+        lines.push(`  Plait元素: ${stats.plaitElementCount}`);
+      }
+    }
+    
+    // 性能信息
+    if (log.performance) {
+      const perf = log.performance;
+      const perfParts = [];
+      if (perf.longTaskDuration) {
+        perfParts.push(`长任务时长: ${perf.longTaskDuration.toFixed(0)}ms`);
+      }
+      if (perf.freezeDuration) {
+        perfParts.push(`卡死时长: ${(perf.freezeDuration / 1000).toFixed(1)}s`);
+      }
+      if (perf.fps !== undefined) {
+        perfParts.push(`FPS: ${perf.fps}`);
+      }
+      if (perfParts.length > 0) {
+        lines.push(``);
+        lines.push(`【性能信息】`);
+        perfParts.forEach(p => lines.push(`  ${p}`));
+      }
+    }
+    
+    // 错误信息
+    if (log.error) {
+      lines.push(``);
+      lines.push(`【错误信息】`);
+      lines.push(`  类型: ${log.error.type || 'Error'}`);
+      lines.push(`  消息: ${log.error.message}`);
+      if (log.error.stack) {
+        lines.push(`  堆栈:`);
+        log.error.stack.split('\n').forEach(line => {
+          lines.push(`    ${line}`);
+        });
+      }
+    }
+    
+    // 自定义数据
+    if (log.customData) {
+      lines.push(``);
+      lines.push(`【自定义数据】`);
+      lines.push(`  ${JSON.stringify(log.customData, null, 2).split('\n').join('\n  ')}`);
+    }
+    
+    return lines.join('\n');
   }).join('\n\n');
 
   try {
@@ -2016,11 +3655,11 @@ async function handleExportLLMApiLogs() {
     
     // Show summary
     const sizeInMB = (zipBlob.size / 1024 / 1024).toFixed(2);
-    alert(`导出完成！\n\n日志数: ${state.llmapiLogs.length}\n媒体文件: ${downloadedCount} 成功, ${failedCount} 失败\n文件大小: ${sizeInMB} MB`);
+    showToast(`导出完成！\n日志数: ${state.llmapiLogs.length}\n媒体文件: ${downloadedCount} 成功, ${failedCount} 失败\n文件大小: ${sizeInMB} MB`, 'success', 5000);
     
   } catch (err) {
     console.error('Export failed:', err);
-    alert('导出失败: ' + err.message);
+    showToast('导出失败: ' + err.message, 'error', 5000);
   } finally {
     exportBtn.disabled = false;
     exportBtn.textContent = originalText;
@@ -2227,19 +3866,6 @@ iframe: ${log.pageStats.iframeCount || 0}${log.pageStats.plaitElementCount !== u
   });
   
   return entry;
-}
-
-/**
- * Escape HTML to prevent XSS
- */
-function escapeHtml(str) {
-  if (!str) return '';
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
 }
 
 /**
@@ -2451,14 +4077,16 @@ async function handleCopyConsoleLogs() {
     return;
   }
 
-  // Format logs as text
+  // Format logs as text with all details
   const logText = filteredLogs.map(log => {
     const time = new Date(log.timestamp).toLocaleTimeString('zh-CN', { hour12: false });
     const level = `[${log.logLevel.toUpperCase()}]`;
     const message = log.logMessage || '';
-    const stack = log.logStack ? `\n  Stack: ${log.logStack}` : '';
-    return `${time} ${level} ${message}${stack}`;
-  }).join('\n');
+    const source = log.logSource ? `\n  来源: ${log.logSource}` : '';
+    const url = log.url ? `\n  页面: ${log.url}` : '';
+    const stack = log.logStack ? `\n  堆栈:\n    ${log.logStack.split('\n').join('\n    ')}` : '';
+    return `${time} ${level} ${message}${source}${url}${stack}`;
+  }).join('\n\n');
 
   try {
     await navigator.clipboard.writeText(logText);
@@ -2752,8 +4380,16 @@ function handleStatusUpdate(data) {
  * Setup event listeners
  */
 function setupEventListeners() {
-  elements.toggleDebugBtn.addEventListener('click', toggleDebug);
-  elements.exportLogsBtn.addEventListener('click', openExportModal);
+  // Analysis mode event listeners
+  elements.toggleAnalysisModeBtn?.addEventListener('click', toggleAnalysisMode);
+  elements.importLogsBtn?.addEventListener('click', triggerImportDialog);
+  elements.importLogsInput?.addEventListener('change', handleLogImport);
+  
+  // Backup button event listener
+  elements.backupDataBtn?.addEventListener('click', performBackup);
+  
+  elements.toggleDebugBtn?.addEventListener('click', toggleDebug);
+  elements.exportLogsBtn?.addEventListener('click', openExportModal);
   elements.doExportBtn?.addEventListener('click', exportLogs);
   elements.closeExportModalBtn?.addEventListener('click', closeExportModal);
   elements.cancelExportBtn?.addEventListener('click', closeExportModal);
@@ -2896,6 +4532,8 @@ function setupEventListeners() {
 
 /**
  * Setup SW message handlers
+ * In analysis mode, live logs are stored separately (state.liveLogs) and not displayed.
+ * When exiting analysis mode, live logs are restored to the display state.
  */
 function setupMessageHandlers() {
   registerMessageHandlers({
@@ -2907,7 +4545,9 @@ function setupMessageHandlers() {
       if (elements.debugMode) {
         elements.debugMode.textContent = '开启';
       }
-      renderLogs(); // Refresh to remove "enable debug" button
+      if (!state.isAnalysisMode) {
+        renderLogs(); // Refresh to remove "enable debug" button
+      }
       // Refresh status after debug enabled to get latest state
       // This ensures cache stats and other info are up-to-date
       refreshStatus();
@@ -2919,80 +4559,154 @@ function setupMessageHandlers() {
       if (elements.debugMode) {
         elements.debugMode.textContent = '关闭';
       }
-      renderLogs(); // Refresh to show "enable debug" button
+      if (!state.isAnalysisMode) {
+        renderLogs(); // Refresh to show "enable debug" button
+      }
     },
-    'SW_DEBUG_LOG': (data) => addOrUpdateLog(data.entry),
+    'SW_DEBUG_LOG': (data) => {
+      if (state.isAnalysisMode) {
+        // Store in live logs buffer, don't display
+        addOrUpdateLiveLog('logs', data.entry);
+      } else {
+        addOrUpdateLog(data.entry);
+      }
+    },
     'SW_DEBUG_LOGS': (data) => {
-      state.logs = data.logs || [];
-      renderLogs();
+      if (state.isAnalysisMode) {
+        state.liveLogs.logs = data.logs || [];
+      } else {
+        state.logs = data.logs || [];
+        renderLogs();
+      }
     },
     'SW_DEBUG_LOGS_CLEARED': () => {
-      state.logs = [];
-      renderLogs();
+      if (state.isAnalysisMode) {
+        state.liveLogs.logs = [];
+      } else {
+        state.logs = [];
+        renderLogs();
+      }
     },
-    'SW_CONSOLE_LOG': (data) => addConsoleLog(data.entry),
+    'SW_CONSOLE_LOG': (data) => {
+      if (state.isAnalysisMode) {
+        addOrUpdateLiveLog('consoleLogs', data.entry);
+      } else {
+        addConsoleLog(data.entry);
+      }
+    },
     'SW_DEBUG_CONSOLE_LOGS': (data) => {
-      state.consoleLogs = data.logs || [];
-      renderConsoleLogs();
+      if (state.isAnalysisMode) {
+        state.liveLogs.consoleLogs = data.logs || [];
+      } else {
+        state.consoleLogs = data.logs || [];
+        renderConsoleLogs();
+      }
     },
     'SW_DEBUG_CONSOLE_LOGS_CLEARED': () => {
-      state.consoleLogs = [];
-      renderConsoleLogs();
+      if (state.isAnalysisMode) {
+        state.liveLogs.consoleLogs = [];
+      } else {
+        state.consoleLogs = [];
+        renderConsoleLogs();
+      }
     },
-    'SW_POSTMESSAGE_LOG': (data) => addPostmessageLog(data.entry),
+    'SW_POSTMESSAGE_LOG': (data) => {
+      if (state.isAnalysisMode) {
+        addOrUpdateLiveLog('postmessageLogs', data.entry);
+      } else {
+        addPostmessageLog(data.entry);
+      }
+    },
     'SW_DEBUG_POSTMESSAGE_LOGS': (data) => {
-      state.postmessageLogs = data.logs || [];
-      updateMessageTypeOptions();
-      renderPostmessageLogs();
+      if (state.isAnalysisMode) {
+        state.liveLogs.postmessageLogs = data.logs || [];
+      } else {
+        state.postmessageLogs = data.logs || [];
+        updateMessageTypeOptions();
+        renderPostmessageLogs();
+      }
     },
     'SW_DEBUG_POSTMESSAGE_LOGS_CLEARED': () => {
-      state.postmessageLogs = [];
-      renderPostmessageLogs();
+      if (state.isAnalysisMode) {
+        state.liveLogs.postmessageLogs = [];
+      } else {
+        state.postmessageLogs = [];
+        renderPostmessageLogs();
+      }
     },
     'SW_DEBUG_CRASH_SNAPSHOTS': (data) => {
-      state.crashLogs = data.snapshots || [];
-      renderCrashLogs();
-    },
-    'SW_DEBUG_NEW_CRASH_SNAPSHOT': (data) => {
-      // 实时接收新的内存快照
-      if (data.snapshot) {
-        // 添加到列表开头
-        state.crashLogs.unshift(data.snapshot);
-        // 限制数量
-        if (state.crashLogs.length > 100) {
-          state.crashLogs.pop();
-        }
+      if (state.isAnalysisMode) {
+        state.liveLogs.crashLogs = data.snapshots || [];
+      } else {
+        state.crashLogs = data.snapshots || [];
         renderCrashLogs();
       }
     },
+    'SW_DEBUG_NEW_CRASH_SNAPSHOT': (data) => {
+      if (data.snapshot) {
+        if (state.isAnalysisMode) {
+          state.liveLogs.crashLogs.unshift(data.snapshot);
+          if (state.liveLogs.crashLogs.length > 100) {
+            state.liveLogs.crashLogs.pop();
+          }
+        } else {
+          state.crashLogs.unshift(data.snapshot);
+          if (state.crashLogs.length > 100) {
+            state.crashLogs.pop();
+          }
+          renderCrashLogs();
+        }
+      }
+    },
     'SW_DEBUG_CRASH_SNAPSHOTS_CLEARED': () => {
-      state.crashLogs = [];
-      renderCrashLogs();
+      if (state.isAnalysisMode) {
+        state.liveLogs.crashLogs = [];
+      } else {
+        state.crashLogs = [];
+        renderCrashLogs();
+      }
     },
     'SW_DEBUG_LLM_API_LOGS': (data) => {
-      state.llmapiLogs = data.logs || [];
-      renderLLMApiLogs();
-    },
-    'SW_DEBUG_LLM_API_LOG': (data) => {
-      // 实时接收新的 LLM API 日志
-      if (data.log) {
-        // 检查是否是更新现有日志
-        const existingIndex = state.llmapiLogs.findIndex(l => l.id === data.log.id);
-        if (existingIndex >= 0) {
-          state.llmapiLogs[existingIndex] = data.log;
-        } else {
-          state.llmapiLogs.unshift(data.log);
-        }
-        // 限制数量
-        if (state.llmapiLogs.length > 200) {
-          state.llmapiLogs.pop();
-        }
+      if (state.isAnalysisMode) {
+        state.liveLogs.llmapiLogs = data.logs || [];
+      } else {
+        state.llmapiLogs = data.logs || [];
         renderLLMApiLogs();
       }
     },
+    'SW_DEBUG_LLM_API_LOG': (data) => {
+      if (data.log) {
+        if (state.isAnalysisMode) {
+          const existingIndex = state.liveLogs.llmapiLogs.findIndex(l => l.id === data.log.id);
+          if (existingIndex >= 0) {
+            state.liveLogs.llmapiLogs[existingIndex] = data.log;
+          } else {
+            state.liveLogs.llmapiLogs.unshift(data.log);
+          }
+          if (state.liveLogs.llmapiLogs.length > 200) {
+            state.liveLogs.llmapiLogs.pop();
+          }
+        } else {
+          const existingIndex = state.llmapiLogs.findIndex(l => l.id === data.log.id);
+          if (existingIndex >= 0) {
+            state.llmapiLogs[existingIndex] = data.log;
+          } else {
+            state.llmapiLogs.unshift(data.log);
+          }
+          if (state.llmapiLogs.length > 200) {
+            state.llmapiLogs.pop();
+          }
+          renderLLMApiLogs();
+        }
+      }
+    },
     'SW_DEBUG_LLM_API_LOGS_CLEARED': () => {
-      state.llmapiLogs = [];
-      renderLLMApiLogs();
+      if (state.isAnalysisMode) {
+        state.liveLogs.llmapiLogs = [];
+      } else {
+        state.llmapiLogs = [];
+        renderLLMApiLogs();
+      }
     },
     'SW_DEBUG_EXPORT_DATA': () => {
       // Handle export data from SW if needed
@@ -3012,14 +4726,49 @@ function setupMessageHandlers() {
 }
 
 /**
+ * Add or update a log entry in the live logs buffer (used in analysis mode)
+ * @param {string} logType - The type of log ('logs', 'consoleLogs', etc.)
+ * @param {object} entry - The log entry
+ */
+function addOrUpdateLiveLog(logType, entry) {
+  if (!state.liveLogs[logType]) {
+    state.liveLogs[logType] = [];
+  }
+  const existingIndex = state.liveLogs[logType].findIndex(l => l.id === entry.id);
+  if (existingIndex >= 0) {
+    state.liveLogs[logType][existingIndex] = { ...state.liveLogs[logType][existingIndex], ...entry };
+  } else {
+    state.liveLogs[logType].unshift(entry);
+  }
+}
+
+/**
  * Initialize the application
  */
 async function init() {
   cacheElements();
+  
+  // Load saved bookmarks, theme, and settings first (before any early returns)
+  loadBookmarks();
+  loadTheme();
+  loadSettings();
+  
+  // Setup event listeners (always needed, even in analysis mode)
+  setupEventListeners();
+  
+  // Check if analysis mode should be auto-enabled (e.g., via URL parameter)
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.has('analysis')) {
+    state.isAnalysisMode = true;
+    updateAnalysisModeUI();
+    showImportPrompt();
+    console.log('[SW Debug] Started in analysis mode');
+    return;
+  }
 
   // Check SW availability
   if (!('serviceWorker' in navigator)) {
-    alert('此浏览器不支持 Service Worker');
+    alert('此浏览器不支持 Service Worker\n\n提示：您可以使用分析模式导入用户日志进行分析');
     updateSwStatus(elements.swStatus, false);
     return;
   }
@@ -3027,7 +4776,16 @@ async function init() {
   const swReady = await checkSwReady();
   
   if (!swReady) {
-    alert('Service Worker 未注册或未激活\n\n请先访问主应用，然后刷新此页面');
+    // SW not ready - offer analysis mode as alternative
+    const useAnalysisMode = confirm('Service Worker 未注册或未激活\n\n您可以：\n1. 点击"取消"后访问主应用，然后刷新此页面\n2. 点击"确定"进入分析模式，导入用户日志进行分析');
+    
+    if (useAnalysisMode) {
+      state.isAnalysisMode = true;
+      updateAnalysisModeUI();
+      showImportPrompt();
+      return;
+    }
+    
     updateSwStatus(elements.swStatus, false);
     return;
   }
@@ -3036,16 +4794,10 @@ async function init() {
 
   updateSwStatus(elements.swStatus, true);
 
-  // Load saved bookmarks, theme, and settings
-  loadBookmarks();
-  loadTheme();
-  loadSettings();
-
   // Register PostMessage logging callback
   setPostMessageLogCallback(addPostmessageLog);
 
   setupMessageHandlers();
-  setupEventListeners();
 
   // Auto-enable debug mode first when entering debug page
   // The SW_DEBUG_ENABLED handler will then call refreshStatus() to get latest state

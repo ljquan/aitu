@@ -91,6 +91,7 @@ export const SettingsDialog = ({
                 }
                 placement="top"
                 theme='light'
+                showArrow={false}
               >
                 <InfoCircleIcon className="settings-dialog__tooltip-icon" />
               </Tooltip>

@@ -143,6 +143,7 @@ Service Worker (后台执行)
 2. 虚拟路径（`/__aitu_cache__/`）由 SW 拦截返回 Cache Storage 数据
 3. SW 内部获取缓存数据应直接读取 Cache API，不使用 fetch
 4. 更新后禁止自动刷新页面，需用户确认
+5. SW 枚举值使用小写（`'completed'`、`'image'`、`'video'`），读取 SW 数据时注意匹配
 
 ### 模块导入规则
 
@@ -173,6 +174,8 @@ import { quickInsert } from '../../../services/canvas-operations';
 2. Hover 延迟操作需要正确的计时器清理
 3. 第三方窗口需用 `createPortal` 保持 React 事件流
 4. 图标组件使用 `React.FC`，支持 `size` 属性
+5. 传递组件作为 prop 时必须实例化：`icon={<Icon />}` 而非 `icon={Icon}`
+6. 内联 style 的 `undefined` 值会覆盖 CSS 类，需要 CSS 类生效时传 `style={undefined}`
 
 ### 缓存规则
 
@@ -194,7 +197,8 @@ import { quickInsert } from '../../../services/canvas-operations';
 
 ### UI 规范
 
-- **Tooltips**：始终使用 `theme='light'`
+- **Tooltips**：始终使用 `theme='light'`，高层级容器内需显式设置更高 `zIndex` (如 20000)
+- **状态表意**：优先使用量化组件（如信号格）而非单一颜色圆点来展示程度差异
 - **按钮圆角**：8px
 - **卡片圆角**：12px
 - **动画时长**：150-300ms，ease-out 曲线

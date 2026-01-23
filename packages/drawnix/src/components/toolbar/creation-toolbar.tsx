@@ -737,6 +737,7 @@ export const CreationToolbar: React.FC<ToolbarSectionProps> = ({
             'toolbar-button-wrapper--drag-before': dragProps['data-drag-position'] === 'before',
             'toolbar-button-wrapper--drag-after': dragProps['data-drag-position'] === 'after',
           })}
+          data-button-id={buttonId}
           {...dragProps}
         >
           {buttonElement}

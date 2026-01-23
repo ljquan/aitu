@@ -1,6 +1,6 @@
 {
-  "version": "0.5.39",
-  "buildTime": "2026-01-22T10:45:44.365Z",
+  "version": "0.5.40",
+  "buildTime": "2026-01-23T00:42:48.379Z",
   "gitCommit": "unknown",
   "changelog": [
     "add media library button and functionality to AI input bar",

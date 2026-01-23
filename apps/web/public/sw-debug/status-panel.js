@@ -113,6 +113,8 @@ export function updateCacheList(cacheList, cacheStats) {
  * @param {boolean} enabled 
  */
 export function updateDebugButton(button, enabled) {
+  if (!button) return;
+  
   if (enabled) {
     button.innerHTML = '<span>⏸</span> 停止调试';
     button.classList.remove('primary');
