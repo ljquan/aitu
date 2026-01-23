@@ -6,7 +6,7 @@
  * 2. form: 表单下拉框风格，支持输入搜索过滤
  */
 
-import React, { useState, useCallback, useRef, useEffect, useMemo, useLayoutEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, ChevronDown, Search, X } from 'lucide-react';
 import {
@@ -14,8 +14,10 @@ import {
   getModelConfig,
   type ModelConfig,
 } from '../../constants/model-config';
+import { ATTACHED_ELEMENT_CLASS_NAME } from '@plait/core';
 import './model-dropdown.scss';
 import { ModelHealthBadge } from '../shared/ModelHealthBadge';
+import { KeyboardDropdown } from './KeyboardDropdown';
 
 export interface ModelDropdownProps {
   /** 当前选中的模型 ID */
@@ -36,6 +38,10 @@ export interface ModelDropdownProps {
   variant?: 'minimal' | 'form';
   /** 占位符 (仅用于 variant="form") */
   placeholder?: string;
+  /** 受控的打开状态 */
+  isOpen?: boolean;
+  /** 打开状态变化回调 */
+  onOpenChange?: (open: boolean) => void;
 }
 
 /**
@@ -51,12 +57,27 @@ export const ModelDropdown: React.FC<ModelDropdownProps> = ({
   disabled = false,
   variant = 'minimal',
   placeholder,
+  isOpen: controlledIsOpen,
+  onOpenChange,
 }) => {
-  const [isOpen, setIsOpen] = useState(false);
+  const [internalIsOpen, setInternalIsOpen] = useState(false);
+  // 支持受控和非受控模式
+  const isOpen = controlledIsOpen !== undefined ? controlledIsOpen : internalIsOpen;
+  const setIsOpen = useCallback((open: boolean | ((prev: boolean) => boolean)) => {
+    if (typeof open === 'function') {
+      // 函数式更新：需要使用当前状态计算新值
+      const currentIsOpen = controlledIsOpen !== undefined ? controlledIsOpen : internalIsOpen;
+      const newValue = open(currentIsOpen);
+      setInternalIsOpen(newValue);
+      onOpenChange?.(newValue);
+    } else {
+      setInternalIsOpen(open);
+      onOpenChange?.(open);
+    }
+  }, [controlledIsOpen, internalIsOpen, onOpenChange]);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [highlightedIndex, setHighlightedIndex] = useState(0);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
   const triggerInputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -124,22 +145,21 @@ export const ModelDropdown: React.FC<ModelDropdownProps> = ({
   }, [filteredModels]);
 
   // 切换下拉菜单
-  const handleToggle = useCallback(() => {
+  const handleToggle = useCallback((e?: React.MouseEvent) => {
+    e?.preventDefault(); // 阻止触发输入框失焦
     if (disabled) return;
-    setIsOpen(prev => {
-      const next = !prev;
-      if (variant === 'form') {
-        if (next) {
-          // 打开时清空搜索，展示全部模型
-          setSearchQuery('');
-        } else {
-          // 关闭时恢复当前模型标签
-          setSearchQuery(currentModel?.label || selectedModel);
-        }
+    const next = !isOpen;
+    if (variant === 'form') {
+      if (next) {
+        // 打开时清空搜索，展示全部模型
+        setSearchQuery('');
+      } else {
+        // 关闭时恢复当前模型标签
+        setSearchQuery(currentModel?.label || selectedModel);
       }
-      return next;
-    });
-  }, [disabled, variant, currentModel, selectedModel]);
+    }
+    setIsOpen(next);
+  }, [disabled, isOpen, setIsOpen, variant, currentModel, selectedModel]);
 
   // 选择模型
   const handleSelect = useCallback((modelId: string) => {
@@ -153,72 +173,48 @@ export const ModelDropdown: React.FC<ModelDropdownProps> = ({
     }
   }, [onSelect, variant]);
 
-  // 键盘导航
-  const handleKeyDown = useCallback((event: React.KeyboardEvent) => {
-    if (!isOpen) {
-      // 下拉框未打开时，按空格或回车打开
-      if (event.key === 'Enter' || event.key === ' ') {
-        event.preventDefault();
-        setIsOpen(true);
-      }
-      return;
-    }
-
-    if (event.key === 'Escape') {
+  const handleOpenKey = useCallback((key: string) => {
+    if (key === 'Escape') {
       setIsOpen(false);
       if (variant === 'form') {
         setSearchQuery(currentModel?.label || selectedModel);
       }
-      return;
+      return true;
     }
 
-    if (event.key === 'ArrowDown') {
-      event.preventDefault();
+    if (key === 'ArrowDown') {
       if (filteredModels.length > 0) {
         setHighlightedIndex(prev =>
           prev < filteredModels.length - 1 ? prev + 1 : 0
         );
       }
-    } else if (event.key === 'ArrowUp') {
-      event.preventDefault();
+      return true;
+    }
+
+    if (key === 'ArrowUp') {
       if (filteredModels.length > 0) {
         setHighlightedIndex(prev =>
           prev > 0 ? prev - 1 : filteredModels.length - 1
         );
       }
-    } else if (event.key === 'Enter' || event.key === 'Tab') {
+      return true;
+    }
+
+    if (key === 'Enter' || key === 'Tab') {
       const targetModel = filteredModels[highlightedIndex];
       if (targetModel) {
-        event.preventDefault();
         handleSelect(targetModel.id);
-      } else if (variant === 'form' && searchQuery.trim()) {
+        return true;
+      }
+      if (variant === 'form' && searchQuery.trim()) {
         // 如果是表单变体且有输入，但没有匹配的模型，则使用输入的内容
-        event.preventDefault();
         handleSelect(searchQuery.trim());
+        return true;
       }
     }
-  }, [isOpen, filteredModels, highlightedIndex, handleSelect, variant, currentModel, selectedModel, searchQuery]);
 
-  // 点击外部关闭下拉菜单
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const handleClickOutside = (event: MouseEvent) => {
-      // 需要同时检查 containerRef 和 dropdownRef
-      // 因为菜单通过 Portal 渲染到 body，不在 containerRef 内部
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(event.target as Node) &&
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node)
-      ) {
-        setIsOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isOpen]);
+    return false;
+  }, [filteredModels, highlightedIndex, handleSelect, variant, currentModel, selectedModel, searchQuery]);
 
   // 自动聚焦
   useEffect(() => {
@@ -228,16 +224,17 @@ export const ModelDropdown: React.FC<ModelDropdownProps> = ({
     }
   }, [isOpen, variant]);
 
-  const renderTrigger = () => {
+  const renderTrigger = (handleTriggerKeyDown: (event: React.KeyboardEvent) => void) => {
     if (variant === 'minimal') {
       return (
         <button
           className={`model-dropdown__trigger model-dropdown__trigger--minimal ${isOpen ? 'model-dropdown__trigger--open' : ''}`}
-          onClick={handleToggle}
+          onMouseDown={handleToggle}
+          onKeyDown={handleTriggerKeyDown}
           type="button"
           aria-haspopup="listbox"
           aria-expanded={isOpen}
-          title={currentModel?.shortLabel || currentModel?.label || selectedModel}
+          title={`${currentModel?.shortLabel || currentModel?.label || selectedModel} (↑↓ Tab)`}
           disabled={disabled}
         >
           <span className="model-dropdown__at">#</span>
@@ -251,7 +248,8 @@ export const ModelDropdown: React.FC<ModelDropdownProps> = ({
     return (
       <div
         className={`model-dropdown__trigger model-dropdown__trigger--form ${isOpen ? 'model-dropdown__trigger--open' : ''}`}
-        onClick={() => {
+        onMouseDown={(e) => {
+          e.preventDefault();
           if (!isOpen) {
             setIsOpen(true);
             setSearchQuery('');
@@ -276,7 +274,8 @@ export const ModelDropdown: React.FC<ModelDropdownProps> = ({
         <ChevronDown
           size={16}
           className={`model-dropdown__chevron ${isOpen ? 'model-dropdown__chevron--open' : ''}`}
-          onClick={(e) => {
+          onMouseDown={(e) => {
+            e.preventDefault();
             e.stopPropagation();
             handleToggle();
           }}
@@ -285,128 +284,100 @@ export const ModelDropdown: React.FC<ModelDropdownProps> = ({
     );
   };
 
-  const [portalPosition, setPortalPosition] = useState({ top: 0, left: 0, width: 0, bottom: 0 });
-
   // 渲染菜单内容
-  const renderMenu = () => {
-    if (!isOpen) return null;
-
-    const isPortalled = variant === 'form' || placement === 'down' || placement === 'up';
-
-    const menu = (
-      <div
-        className={`model-dropdown__menu model-dropdown__menu--${placement} ${variant === 'form' ? 'model-dropdown__menu--form' : ''} ${isPortalled ? 'model-dropdown__menu--portalled' : ''}`}
-        ref={dropdownRef}
-        role="listbox"
-        aria-label={language === 'zh' ? '选择模型' : 'Select Model'}
-        onClick={(e) => e.stopPropagation()}
-        style={isPortalled ? {
-          position: 'fixed',
-          zIndex: 10000,
-          left: portalPosition.left,
-          width: variant === 'form' ? portalPosition.width : 'auto',
-          top: placement === 'down' ? portalPosition.bottom + 4 : 'auto',
-          bottom: placement === 'up' ? window.innerHeight - portalPosition.top + 4 : 'auto',
-          visibility: portalPosition.width === 0 ? 'hidden' : 'visible',
-        } : {
-          zIndex: 1000,
-        }}
-      >
-        {header && variant === 'minimal' && !searchQuery && (
-          <div className="model-dropdown__header">{header}</div>
-        )}
-
-        <div className="model-dropdown__list" ref={listRef}>
-          {filteredModels.length > 0 ? (
-            filteredModels.map((model, index) => {
-              const isSelected = model.id === selectedModel;
-              const isHighlighted = index === highlightedIndex;
-              return (
-                <div
-                  key={model.id}
-                  className={`model-dropdown__item ${isSelected ? 'model-dropdown__item--selected' : ''} ${isHighlighted ? 'model-dropdown__item--highlighted' : ''}`}
-                  onClick={() => handleSelect(model.id)}
-                  onMouseEnter={() => setHighlightedIndex(index)}
-                  role="option"
-                  aria-selected={isSelected}
-                >
-                  <div className="model-dropdown__item-content">
-                    <div className="model-dropdown__item-name">
-                      <span className="model-dropdown__item-code">#{model.shortCode}</span>
-                      <span className="model-dropdown__item-label">
-                        {model.shortLabel || model.label}
-                      </span>
-                      {model.isVip && (
-                        <span className="model-dropdown__item-vip">VIP</span>
-                      )}
-                      <ModelHealthBadge modelId={model.id} />
-                    </div>
-                    {model.description && (
-                      <div className="model-dropdown__item-desc">
-                        {model.description}
-                      </div>
-                    )}
-                  </div>
-                  {isSelected && (
-                    <Check size={16} className="model-dropdown__item-check" />
-                  )}
-                </div>
-              );
-            })
-          ) : (
-            <div className="model-dropdown__empty">
-              {language === 'zh' ? '未找到匹配的模型' : 'No matching models'}
-            </div>
-          )}
-        </div>
-      </div>
-    );
-
-    if (isPortalled) {
-      return createPortal(menu, document.body);
-    }
-
-    return menu;
-  };
-
-  // 计算菜单位置（仅当使用 Portal 时）
-  useLayoutEffect(() => {
-    if (isOpen && (variant === 'form' || placement === 'down' || placement === 'up')) {
-      const updatePosition = () => {
-        if (!containerRef.current) return;
-        const rect = containerRef.current.getBoundingClientRect();
-        setPortalPosition({
-          top: rect.top,
-          left: rect.left,
-          width: rect.width,
-          bottom: rect.bottom
-        });
-      };
-
-      updatePosition();
-
-      // 监听窗口缩放和滚动，动态更新位置
-      window.addEventListener('resize', updatePosition);
-      window.addEventListener('scroll', updatePosition, true);
-
-      return () => {
-        window.removeEventListener('resize', updatePosition);
-        window.removeEventListener('scroll', updatePosition, true);
-      };
-    } else {
-      setPortalPosition({ top: 0, left: 0, width: 0, bottom: 0 });
-    }
-  }, [isOpen, placement, variant]);
-
   return (
-    <div
-      className={`model-dropdown model-dropdown--variant-${variant} ${disabled ? 'model-dropdown--disabled' : ''}`}
-      ref={containerRef}
-      onKeyDown={handleKeyDown}
+    <KeyboardDropdown
+      isOpen={isOpen}
+      setIsOpen={setIsOpen}
+      disabled={disabled}
+      openKeys={['Enter', ' ']}
+      onOpenKey={handleOpenKey}
+      trackPosition={variant === 'form' || placement === 'down' || placement === 'up'}
     >
-      {renderTrigger()}
-      {renderMenu()}
-    </div>
+      {({ containerRef, menuRef, portalPosition, handleTriggerKeyDown }) => {
+        const isPortalled = variant === 'form' || placement === 'down' || placement === 'up';
+
+        const menu = (
+          <div
+            className={`model-dropdown__menu model-dropdown__menu--${placement} ${variant === 'form' ? 'model-dropdown__menu--form' : ''} ${isPortalled ? 'model-dropdown__menu--portalled' : ''} ${ATTACHED_ELEMENT_CLASS_NAME}`}
+            ref={menuRef}
+            role="listbox"
+            aria-label={language === 'zh' ? '选择模型' : 'Select Model'}
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+            style={isPortalled ? {
+              position: 'fixed',
+              zIndex: 10000,
+              left: portalPosition.left,
+              width: variant === 'form' ? portalPosition.width : 'auto',
+              top: placement === 'down' ? portalPosition.bottom + 4 : 'auto',
+              bottom: placement === 'up' ? window.innerHeight - portalPosition.top + 4 : 'auto',
+              visibility: portalPosition.width === 0 ? 'hidden' : 'visible',
+            } : {
+              zIndex: 1000,
+            }}
+          >
+            {header && variant === 'minimal' && !searchQuery && (
+              <div className="model-dropdown__header">{header}</div>
+            )}
+
+            <div className="model-dropdown__list" ref={listRef}>
+              {filteredModels.length > 0 ? (
+                filteredModels.map((model, index) => {
+                  const isSelected = model.id === selectedModel;
+                  const isHighlighted = index === highlightedIndex;
+                  return (
+                    <div
+                      key={model.id}
+                      className={`model-dropdown__item ${isSelected ? 'model-dropdown__item--selected' : ''} ${isHighlighted ? 'model-dropdown__item--highlighted' : ''}`}
+                      onClick={() => handleSelect(model.id)}
+                      onMouseEnter={() => setHighlightedIndex(index)}
+                      role="option"
+                      aria-selected={isSelected}
+                    >
+                      <div className="model-dropdown__item-content">
+                        <div className="model-dropdown__item-name">
+                          <span className="model-dropdown__item-code">#{model.shortCode}</span>
+                          <span className="model-dropdown__item-label">
+                            {model.shortLabel || model.label}
+                          </span>
+                          {model.isVip && (
+                            <span className="model-dropdown__item-vip">VIP</span>
+                          )}
+                          <ModelHealthBadge modelId={model.id} />
+                        </div>
+                        {model.description && (
+                          <div className="model-dropdown__item-desc">
+                            {model.description}
+                          </div>
+                        )}
+                      </div>
+                      {isSelected && (
+                        <Check size={16} className="model-dropdown__item-check" />
+                      )}
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="model-dropdown__empty">
+                  {language === 'zh' ? '未找到匹配的模型' : 'No matching models'}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+
+        return (
+          <div
+            className={`model-dropdown model-dropdown--variant-${variant} ${disabled ? 'model-dropdown--disabled' : ''}`}
+            ref={containerRef}
+          >
+            {renderTrigger(handleTriggerKeyDown)}
+            {isOpen && (isPortalled ? createPortal(menu, document.body) : menu)}
+          </div>
+        );
+      }}
+    </KeyboardDropdown>
   );
 };
 

@@ -175,8 +175,8 @@ export interface ColdStartSuggestion {
   scene: string;
   /** 模型调用说明，介绍该命令会用到的模型概况 */
   tips: string;
-  /** 建议的模型类型，帮助用户快速选择 */
-  modelType?: 'image' | 'video' | 'grid-image' | 'inspiration-board' | 'svg' | 'long-video';
+  /** 生成类型：image(直接生图)、video(直接生视频)、agent(需要Agent分析) */
+  modelType?: 'image' | 'video' | 'agent';
 }
 
 export const AI_COLD_START_SUGGESTIONS: Record<'zh' | 'en', ColdStartSuggestion[]> = {
@@ -185,13 +185,13 @@ export const AI_COLD_START_SUGGESTIONS: Record<'zh' | 'en', ColdStartSuggestion[
       content: '灵感图：咖啡文化，16图',
       scene: '灵感图',
       tips: '调用1次文本模型 + 1次生图模型，一张图排布n张子图（最多16张）',
-      modelType: 'inspiration-board',
+      modelType: 'agent',
     },
     {
       content: '宫格图：可爱猫咪表情包，16宫格',
       scene: '宫格图',
       tips: '调用1次文本模型 + 1次生图模型，一张图排布n张正方形子图（最多16张）',
-      modelType: 'grid-image',
+      modelType: 'agent',
     },
     {
       content: '创作一个视频：樱花树下的少女，微风吹过，花瓣飘落',
@@ -203,29 +203,25 @@ export const AI_COLD_START_SUGGESTIONS: Record<'zh' | 'en', ColdStartSuggestion[
     //   content: '长视频：一只猫咪从早到晚的一天生活，1分钟',
     //   scene: '长视频',
     //   tips: '调用1次文本模型生成分段脚本 + 多次生视频模型，尾帧接首帧保证连贯',
-    //   modelType: 'long-video',
+    //   modelType: 'agent',
     // },
-    {
-      content: '长视频：一只猫咪从早到晚的一天生活，1分钟',
-      scene: '长视频',
-      tips: '调用1次文本模型生成分段脚本 + 多次生视频模型，尾帧接首帧保证连贯',
-      modelType: 'long-video',
-    },
     {
       content: '画一个AI工作流的流程图',
       scene: 'mermaid图',
       tips: '调用1次文本模型，支持流程图、泳道图、',
+      modelType: 'agent',
     },
     {
       content: '大模型发展趋势的思维导图',
       scene: '知识梳理',
       tips: '调用1次文本模型',
+      modelType: 'agent',
     },
     {
       content: '矢量图：一个简约风格的火箭作为公司logo',
       scene: 'SVG矢量图',
       tips: '调用1次文本模型生成SVG图标，可无损缩放',
-      modelType: 'svg',
+      modelType: 'agent',
     }
   ],
   en: [
@@ -233,13 +229,13 @@ export const AI_COLD_START_SUGGESTIONS: Record<'zh' | 'en', ColdStartSuggestion[
       content: 'inspiration board: Coffee culture mood board, beans, latte art, cafe scenes',
       scene: 'Inspiration board',
       tips: '1 text model + 1 image model',
-      modelType: 'inspiration-board',
+      modelType: 'agent',
     },
     {
       content: 'grid image: Cute cat emoji pack, 4x4 scattered layout',
       scene: 'Grid image',
       tips: '1 text model + 1 image model',
-      modelType: 'grid-image',
+      modelType: 'agent',
     },
     {
       content: 'a video: A girl under cherry blossom tree, petals falling in the breeze',
@@ -251,29 +247,25 @@ export const AI_COLD_START_SUGGESTIONS: Record<'zh' | 'en', ColdStartSuggestion[
     //   content: 'long video: A day in the life of a cat, 1 minute',
     //   scene: 'Long video',
     //   tips: '1 text model for script + multiple video models, last frame connects to first frame',
-    //   modelType: 'long-video',
+    //   modelType: 'agent',
     // },
-    {
-      content: 'long video: A day in the life of a cat, 1 minute',
-      scene: 'Long video',
-      tips: '1 text model for script + multiple video models, last frame connects to first frame',
-      modelType: 'long-video',
-    },
     {
       content: 'Draw a flowchart of AI workflow',
       scene: 'Tech docs',
       tips: '1 text model',
+      modelType: 'agent',
     },
     {
       content: 'Draw a mind map of LLM development trends',
       scene: 'Knowledge organization',
       tips: '1 text model',
+      modelType: 'agent',
     },
     {
       content: 'SVG: A minimalist rocket icon',
       scene: 'SVG vector',
       tips: '1 text model to generate SVG code, scalable and lossless',
-      modelType: 'svg',
+      modelType: 'agent',
     },
   ],
 };

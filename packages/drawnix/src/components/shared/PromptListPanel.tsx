@@ -19,6 +19,10 @@ export interface PromptItem {
   pinned?: boolean;
   /** 是否是预设提示词（预设不允许删除和置顶） */
   isPreset?: boolean;
+  /** 生成类型：image(直接生图)、video(直接生视频)、agent(需要Agent分析) */
+  modelType?: 'image' | 'video' | 'agent';
+  /** 场景描述（用于显示标签） */
+  scene?: string;
 }
 
 export interface PromptListPanelProps {
@@ -26,8 +30,8 @@ export interface PromptListPanelProps {
   title: string;
   /** 提示词列表 */
   items: PromptItem[];
-  /** 点击提示词的回调 */
-  onSelect?: (content: string) => void;
+  /** 点击提示词的回调（传递完整 item 信息） */
+  onSelect?: (item: PromptItem) => void;
   /** 置顶/取消置顶的回调 */
   onTogglePin?: (id: string) => void;
   /** 删除的回调 */
@@ -71,7 +75,9 @@ export const PromptListPanel: React.FC<PromptListPanelProps> = ({
             content={item.content}
             pinned={item.pinned}
             isPreset={item.isPreset}
-            onClick={() => onSelect?.(item.content)}
+            modelType={item.modelType}
+            scene={item.scene}
+            onClick={() => onSelect?.(item)}
             onTogglePin={onTogglePin && !item.isPreset ? () => onTogglePin(item.id) : undefined}
             onDelete={onDelete && !item.isPreset ? () => onDelete(item.id) : undefined}
             language={language}

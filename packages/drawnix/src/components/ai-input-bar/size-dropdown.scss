@@ -31,11 +31,11 @@ $text-dark: #1F2937;
     white-space: nowrap;
 
     &:hover {
-      background: rgba($gray-dark, 0.1);
+      background: rgba($orange-primary, 0.1);
     }
 
     &--open {
-      background: rgba($gray-dark, 0.15);
+      background: rgba($orange-primary, 0.15);
     }
 
     &:focus {
@@ -52,7 +52,7 @@ $text-dark: #1F2937;
     color: $gray-medium;
     transition: transform 0.15s ease;
 
-    .size-dropdown__trigger--open & {
+    &--open {
       transform: rotate(180deg);
     }
   }
@@ -111,14 +111,16 @@ $text-dark: #1F2937;
     cursor: pointer;
     transition: background 0.1s ease;
 
-    &:hover {
+    &:hover,
+    &--highlighted {
       background: $gray-light;
     }
 
     &--selected {
       background: rgba($orange-primary, 0.08);
 
-      &:hover {
+      &:hover,
+      &.size-dropdown__item--highlighted {
         background: rgba($orange-primary, 0.12);
       }
 
@@ -157,11 +159,11 @@ $text-dark: #1F2937;
   .size-dropdown {
     &__trigger {
       &:hover {
-        background: rgba(255, 255, 255, 0.1);
+        background: rgba($orange-primary, 0.15);
       }
 
       &--open {
-        background: rgba(255, 255, 255, 0.15);
+        background: rgba($orange-primary, 0.2);
       }
     }
 
@@ -191,14 +193,16 @@ $text-dark: #1F2937;
     }
 
     &__item {
-      &:hover {
+      &:hover,
+      &--highlighted {
         background: var(--color-surface-mid, #333);
       }
 
       &--selected {
         background: rgba($orange-primary, 0.12);
 
-        &:hover {
+        &:hover,
+        &.size-dropdown__item--highlighted {
           background: rgba($orange-primary, 0.18);
         }
       }

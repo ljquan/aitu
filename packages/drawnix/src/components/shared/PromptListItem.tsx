@@ -19,6 +19,10 @@ export interface PromptListItemProps {
   pinned?: boolean;
   /** 是否是预设提示词 */
   isPreset?: boolean;
+  /** 生成类型：image(直接生图)、video(直接生视频)、agent(需要Agent分析) */
+  modelType?: 'image' | 'video' | 'agent';
+  /** 场景描述（用于显示标签） */
+  scene?: string;
   /** 点击提示词的回调 */
   onClick?: () => void;
   /** 置顶/取消置顶的回调 */
@@ -31,10 +35,19 @@ export interface PromptListItemProps {
   disabled?: boolean;
 }
 
+// 生成类型对应的标签样式
+const MODEL_TYPE_STYLES: Record<string, string> = {
+  'image': 'prompt-list-item__tag--image',
+  'video': 'prompt-list-item__tag--video',
+  'agent': 'prompt-list-item__tag--agent',
+};
+
 export const PromptListItem: React.FC<PromptListItemProps> = ({
   content,
   pinned = false,
   isPreset = false,
+  modelType,
+  scene,
   onClick,
   onTogglePin,
   onDelete,
@@ -69,6 +82,13 @@ export const PromptListItem: React.FC<PromptListItemProps> = ({
         <div className="prompt-list-item__preset-badge">
           <Lightbulb size={10} />
         </div>
+      )}
+      
+      {/* 场景标签（使用 scene 显示，modelType 决定样式） */}
+      {scene && (
+        <span className={`prompt-list-item__tag ${modelType ? MODEL_TYPE_STYLES[modelType] || '' : ''}`}>
+          {scene}
+        </span>
       )}
       
       {/* 提示词内容 */}

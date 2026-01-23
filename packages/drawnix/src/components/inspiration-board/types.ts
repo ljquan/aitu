@@ -36,6 +36,13 @@ export interface InspirationTemplate {
   badgeColor: string;
 }
 
+/** 灵感模版选择回调参数 */
+export interface InspirationSelectInfo {
+  prompt: string;
+  /** 生成类型：灵感创意的模版都是 agent 类型 */
+  modelType: 'agent';
+}
+
 /**
  * InspirationBoard 组件属性
  */
@@ -43,7 +50,7 @@ export interface InspirationBoardProps {
   /** 画板是否为空 */
   isCanvasEmpty: boolean;
   /** 选择提示词回调 */
-  onSelectPrompt: (prompt: string) => void;
+  onSelectPrompt: (info: InspirationSelectInfo) => void;
   /** 打开提示词工具回调 */
   onOpenPromptTool?: () => void;
   /** 外部控制显示（可选） */
