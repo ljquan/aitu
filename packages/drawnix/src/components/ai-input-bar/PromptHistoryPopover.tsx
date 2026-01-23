@@ -16,9 +16,17 @@ import { PromptListPanel, type PromptItem } from '../shared';
 import { AI_COLD_START_SUGGESTIONS } from '../../constants/prompts';
 import './prompt-history-popover.scss';
 
+/** 选择提示词回调的参数类型 */
+export interface PromptSelectInfo {
+  content: string;
+  /** 生成类型：image(直接生图)、video(直接生视频)、agent(需要Agent分析) */
+  modelType?: 'image' | 'video' | 'agent';
+  scene?: string;
+}
+
 interface PromptHistoryPopoverProps {
   /** 选择提示词后的回调 */
-  onSelectPrompt: (content: string) => void;
+  onSelectPrompt: (info: PromptSelectInfo) => void;
   /** 语言 */
   language: 'zh' | 'en';
 }
@@ -43,6 +51,8 @@ export const PromptHistoryPopover: React.FC<PromptHistoryPopoverProps> = ({
       id: `preset_${index}`,
       content: s.content,
       isPreset: true,
+      modelType: s.modelType,
+      scene: s.scene,
     }));
   }, [language]);
 
@@ -66,6 +76,8 @@ export const PromptHistoryPopover: React.FC<PromptHistoryPopoverProps> = ({
         content: p.content,
         pinned: false,
         isPreset: true,
+        modelType: p.modelType,
+        scene: p.scene,
       }));
 
     return [...historyItems, ...filteredPresets];
@@ -108,8 +120,12 @@ export const PromptHistoryPopover: React.FC<PromptHistoryPopoverProps> = ({
   }, []);
 
   // 处理选择提示词
-  const handleSelectPrompt = useCallback((content: string) => {
-    onSelectPrompt(content);
+  const handleSelectPrompt = useCallback((item: PromptItem) => {
+    onSelectPrompt({
+      content: item.content,
+      modelType: item.modelType,
+      scene: item.scene,
+    });
     setIsOpen(false);
   }, [onSelectPrompt]);
 
