@@ -45,6 +45,130 @@ import './ImageEditorCore.scss';
 // Tooltip z-index 需要高于模态框
 const TOOLTIP_Z_INDEX = 10010;
 
+/**
+ * 检测图片白边的配置
+ */
+interface WhitespaceDetectionOptions {
+  /** 白色阈值 (0-255)，像素值高于此值被认为是白色，默认 250 */
+  threshold?: number;
+  /** 容差百分比 (0-1)，允许边缘有一定比例的非白色像素，默认 0.02 */
+  tolerance?: number;
+  /** 最小内容尺寸（像素），防止裁剪过度，默认 50 */
+  minContentSize?: number;
+}
+
+/**
+ * 检测图片白边并返回裁剪区域
+ * @param img 图片元素
+ * @param options 检测配置
+ * @returns 裁剪区域，如果没有检测到白边则返回 null
+ */
+function detectWhitespace(
+  img: HTMLImageElement,
+  options: WhitespaceDetectionOptions = {}
+): { x: number; y: number; width: number; height: number } | null {
+  const {
+    threshold = 250,
+    tolerance = 0.02,
+    minContentSize = 50,
+  } = options;
+
+  const width = img.naturalWidth;
+  const height = img.naturalHeight;
+
+  // 创建 canvas 读取像素数据
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+
+  ctx.drawImage(img, 0, 0);
+  const imageData = ctx.getImageData(0, 0, width, height);
+  const data = imageData.data;
+
+  /**
+   * 检查单个像素是否接近白色
+   */
+  const isWhitePixel = (index: number): boolean => {
+    const r = data[index];
+    const g = data[index + 1];
+    const b = data[index + 2];
+    const a = data[index + 3];
+    // 透明像素也视为白色
+    if (a < 10) return true;
+    // RGB 都接近白色
+    return r >= threshold && g >= threshold && b >= threshold;
+  };
+
+  /**
+   * 检查一行是否大部分是白色
+   */
+  const isRowWhite = (y: number): boolean => {
+    let whiteCount = 0;
+    for (let x = 0; x < width; x++) {
+      const index = (y * width + x) * 4;
+      if (isWhitePixel(index)) whiteCount++;
+    }
+    return whiteCount / width >= 1 - tolerance;
+  };
+
+  /**
+   * 检查一列是否大部分是白色
+   */
+  const isColWhite = (x: number): boolean => {
+    let whiteCount = 0;
+    for (let y = 0; y < height; y++) {
+      const index = (y * width + x) * 4;
+      if (isWhitePixel(index)) whiteCount++;
+    }
+    return whiteCount / height >= 1 - tolerance;
+  };
+
+  // 从上往下找第一行非白色
+  let top = 0;
+  while (top < height && isRowWhite(top)) {
+    top++;
+  }
+
+  // 从下往上找第一行非白色
+  let bottom = height - 1;
+  while (bottom > top && isRowWhite(bottom)) {
+    bottom--;
+  }
+
+  // 从左往右找第一列非白色
+  let left = 0;
+  while (left < width && isColWhite(left)) {
+    left++;
+  }
+
+  // 从右往左找第一列非白色
+  let right = width - 1;
+  while (right > left && isColWhite(right)) {
+    right--;
+  }
+
+  // 计算裁剪区域
+  const cropWidth = right - left + 1;
+  const cropHeight = bottom - top + 1;
+
+  // 检查是否有效裁剪（有白边且内容区域足够大）
+  const hasWhitespace = top > 0 || left > 0 || right < width - 1 || bottom < height - 1;
+  const contentSizeValid = cropWidth >= minContentSize && cropHeight >= minContentSize;
+
+  if (!hasWhitespace || !contentSizeValid) {
+    return null;
+  }
+
+  return {
+    x: left,
+    y: top,
+    width: cropWidth,
+    height: cropHeight,
+  };
+}
+
 export interface ImageEditorCoreProps {
   /** 图片 URL */
   imageUrl: string;
@@ -131,6 +255,9 @@ export const ImageEditorCore = forwardRef<ImageEditorCoreRef, ImageEditorCorePro
 
     // 已确认的裁剪区域（用于在其他模式下预览裁剪效果）
     const [confirmedCropArea, setConfirmedCropArea] = useState<CropArea | null>(null);
+
+    // 智能去白边检测中
+    const [isDetectingWhitespace, setIsDetectingWhitespace] = useState(false);
 
     // 历史记录（撤销/重做）
     const [history, setHistory] = useState<ImageEditState[]>([]);
@@ -617,6 +744,38 @@ export const ImageEditorCore = forwardRef<ImageEditorCoreRef, ImageEditorCorePro
       setMode('filter');
     }, [cropArea]);
 
+    // 智能去白边
+    const handleAutoTrimWhitespace = useCallback(() => {
+      const img = imageRef.current;
+      if (!img) {
+        MessagePlugin.warning('图片未加载完成');
+        return;
+      }
+
+      setIsDetectingWhitespace(true);
+
+      // 使用 requestAnimationFrame 避免阻塞 UI
+      requestAnimationFrame(() => {
+        try {
+          const detectedArea = detectWhitespace(img);
+          
+          if (detectedArea) {
+            // 清除固定比例，因为智能裁剪可能不符合预设比例
+            setAspectRatio(null);
+            // 设置裁剪区域
+            setCropArea(detectedArea);
+            MessagePlugin.success('已检测到白边，裁剪框已自动调整');
+          } else {
+            MessagePlugin.info('未检测到明显的白边');
+          }
+        } catch (error) {
+          MessagePlugin.error('检测白边失败');
+        } finally {
+          setIsDetectingWhitespace(false);
+        }
+      });
+    }, []);
+
     // 键盘快捷键监听
     useEffect(() => {
       const handleKeyDown = (e: KeyboardEvent) => {
@@ -889,6 +1048,8 @@ export const ImageEditorCore = forwardRef<ImageEditorCoreRef, ImageEditorCorePro
                   onFlipV={handleFlipV}
                   onConfirmCrop={handleConfirmCrop}
                   hasCropArea={!!cropArea}
+                  onAutoTrimWhitespace={handleAutoTrimWhitespace}
+                  isDetectingWhitespace={isDetectingWhitespace}
                 />
               ) : (
                 <FilterPanel

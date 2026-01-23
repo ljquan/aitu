@@ -5,6 +5,9 @@
 
 // 统一配色
 $accent-color: #ffb366;
+// 裁剪框颜色
+$crop-border-color: #4f46e5; // 深靛蓝色，用于边框线
+$crop-handle-color: #818cf8; // 浅靛蓝色，用于控制点
 $accent-hover: #ffc989;
 $text-primary: #fff;
 $text-secondary: rgba(255, 255, 255, 0.7);
@@ -457,6 +460,48 @@ $header-bg: rgba(30, 30, 30, 0.8);
     color: $text-muted;
   }
 
+  &__auto-trim-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    height: 40px;
+    border: 1px solid $panel-border;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    color: $text-secondary;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+
+    &:hover:not(:disabled) {
+      background: rgba($accent-color, 0.1);
+      border-color: rgba($accent-color, 0.5);
+      color: $accent-color;
+    }
+
+    &:disabled,
+    &.loading {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    &.loading {
+      svg {
+        animation: spin 1s linear infinite;
+      }
+    }
+  }
+
+  &__auto-trim-hint {
+    margin-top: 8px;
+    font-size: 11px;
+    color: $text-muted;
+    line-height: 1.4;
+  }
+
   &__confirm-btn {
     display: flex;
     align-items: center;
@@ -666,8 +711,9 @@ $header-bg: rgba(30, 30, 30, 0.8);
 
   &__crop-area {
     position: absolute;
-    border: 2px solid $accent-color;
-    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.6);
+    // 使用 box-shadow 模拟边框，这样边框画在元素外部，不影响实际裁剪区域
+    // 第一个 box-shadow 是边框（2px 青蓝色），第二个是遮罩层
+    box-shadow: 0 0 0 2px $crop-border-color, 0 0 0 9999px rgba(0, 0, 0, 0.6);
     cursor: move;
     z-index: 10;
   }
@@ -722,7 +768,7 @@ $header-bg: rgba(30, 30, 30, 0.8);
     width: 12px;
     height: 12px;
     background: #fff;
-    border: 2px solid $accent-color;
+    border: 2px solid $crop-handle-color;
     border-radius: 50%;
     box-shadow: 0 0 8px rgba(0, 0, 0, 0.5);
 
@@ -762,5 +808,15 @@ $header-bg: rgba(30, 30, 30, 0.8);
       top: 50%;
       transform: translateY(-50%);
     }
+  }
+}
+
+// 动画
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
   }
 }

@@ -3,7 +3,7 @@
  */
 
 import React from 'react';
-import { RotateCcw, RotateCw, FlipHorizontal, FlipVertical, Check } from 'lucide-react';
+import { RotateCcw, RotateCw, FlipHorizontal, FlipVertical, Check, Scan } from 'lucide-react';
 import { Tooltip } from 'tdesign-react';
 import { AspectRatioPreset } from './types';
 
@@ -19,6 +19,10 @@ interface CropPanelProps {
   onFlipV: () => void;
   onConfirmCrop?: () => void;
   hasCropArea?: boolean;
+  /** 智能去白边回调 */
+  onAutoTrimWhitespace?: () => void;
+  /** 是否正在检测白边 */
+  isDetectingWhitespace?: boolean;
 }
 
 export const CropPanel: React.FC<CropPanelProps> = ({
@@ -33,9 +37,30 @@ export const CropPanel: React.FC<CropPanelProps> = ({
   onFlipV,
   onConfirmCrop,
   hasCropArea = false,
+  onAutoTrimWhitespace,
+  isDetectingWhitespace = false,
 }) => {
   return (
     <div className="crop-panel">
+      {/* 智能去白边 */}
+      {onAutoTrimWhitespace && (
+        <div className="crop-panel__section">
+          <div className="crop-panel__section-title">智能裁剪</div>
+          <button
+            type="button"
+            className={`crop-panel__auto-trim-btn ${isDetectingWhitespace ? 'loading' : ''}`}
+            onClick={onAutoTrimWhitespace}
+            disabled={isDetectingWhitespace}
+          >
+            <Scan size={16} />
+            <span>{isDetectingWhitespace ? '检测中...' : '智能去白边'}</span>
+          </button>
+          <div className="crop-panel__auto-trim-hint">
+            自动检测并移除图片周围的白色边框
+          </div>
+        </div>
+      )}
+
       {/* 裁剪比例 */}
       <div className="crop-panel__section">
         <div className="crop-panel__section-title">裁剪比例</div>
