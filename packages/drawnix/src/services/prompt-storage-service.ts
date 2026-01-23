@@ -28,6 +28,8 @@ export interface PromptHistoryItem {
   hasSelection?: boolean;
   /** 是否置顶 */
   pinned?: boolean;
+  /** 生成类型：image(直接生图)、video(直接生视频)、agent(需要Agent分析) */
+  modelType?: 'image' | 'video' | 'agent';
 }
 
 /**
@@ -197,8 +199,13 @@ export function getPromptHistory(): PromptHistoryItem[] {
  * 注意：如果相同内容已被置顶，只更新时间戳，不会创建新记录
  * @param content 提示词内容
  * @param hasSelection 是否在有选中元素时输入的
+ * @param modelType 生成类型：image、video 或 agent
  */
-export function addPromptHistory(content: string, hasSelection?: boolean): void {
+export function addPromptHistory(
+  content: string,
+  hasSelection?: boolean,
+  modelType?: 'image' | 'video' | 'agent'
+): void {
   if (!content || !content.trim()) return;
 
   const trimmedContent = content.trim();
@@ -212,8 +219,11 @@ export function addPromptHistory(content: string, hasSelection?: boolean): void 
   if (existingIndex >= 0) {
     const existingItem = history[existingIndex];
     if (existingItem.pinned) {
-      // 已置顶的提示词：只更新时间戳，保持置顶状态
+      // 已置顶的提示词：更新时间戳和 modelType，保持置顶状态
       existingItem.timestamp = Date.now();
+      if (modelType) {
+        existingItem.modelType = modelType;
+      }
       promptHistoryCache = history;
       savePromptHistory();
       return;
@@ -228,6 +238,7 @@ export function addPromptHistory(content: string, hasSelection?: boolean): void 
     content: trimmedContent,
     timestamp: Date.now(),
     hasSelection,
+    modelType,
   };
   history.unshift(newItem);
 

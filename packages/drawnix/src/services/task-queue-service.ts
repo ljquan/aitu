@@ -9,7 +9,6 @@ import { Subject, Observable } from 'rxjs';
 import { Task, TaskStatus, TaskType, TaskEvent, GenerationParams } from '../types/task.types';
 import { generateTaskId, isTaskActive } from '../utils/task-utils';
 import { validateGenerationParams, sanitizeGenerationParams } from '../utils/validation-utils';
-import { getNextRetryTime } from '../utils/retry-utils';
 
 /**
  * Task Queue Service
@@ -62,7 +61,6 @@ class TaskQueueService {
       params: sanitizedParams,
       createdAt: now,
       updatedAt: now,
-      retryCount: 0,
       // Initialize progress for video tasks
       ...(type === TaskType.VIDEO && { progress: 0 }),
     };
@@ -108,9 +106,6 @@ class TaskQueueService {
       updatedTask.startedAt = now;
     } else if (status === TaskStatus.COMPLETED || status === TaskStatus.FAILED) {
       updatedTask.completedAt = now;
-    } else if (status === TaskStatus.RETRYING) {
-      updatedTask.retryCount = task.retryCount + 1;
-      updatedTask.nextRetryAt = getNextRetryTime(updatedTask) || undefined;
     }
 
     this.tasks.set(taskId, updatedTask);
@@ -220,9 +215,7 @@ class TaskQueueService {
 
     // Reset task for retry - clear timing fields to prevent immediate timeout
     this.updateTaskStatus(taskId, TaskStatus.PENDING, {
-      retryCount: 0,
       error: undefined,
-      nextRetryAt: undefined,
       startedAt: undefined,  // Reset start time so timeout is recalculated
       completedAt: undefined, // Clear completion time
       remoteId: undefined,   // Clear remote ID for fresh submission

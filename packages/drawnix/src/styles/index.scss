@@ -150,17 +150,22 @@
     // Unified Toolbar Container (统一左侧工具栏 - 桌面端和移动端通用)
     .unified-toolbar {
         position: absolute; // 使用 absolute 定位,通过 JS 动态调整位置跟随视口
-        left: 0;
-        top: 0;
+        left: 12px; // 稍微偏移边缘，不贴死
+        top: 12px;
         z-index: $z-unified-toolbar; // Layer 2: Toolbars (2000)
-        bottom: auto; // 允许通过 JS 动态调整 top
-        height: 100vh; // 使用视口高度
+        bottom: 12px; // 保持底部间距
+        height: calc(100vh - 24px); // 减去上下间距
         display: flex;
         flex-direction: column;
         gap: 0;
         width: fit-content;
         max-width: 80px;
-        overflow: hidden; // Prevent overflow
+        overflow: hidden;
+        border-radius: $border-radius-lg; // 更加圆润
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08); // 更加柔和的阴影
+        background: rgba(var(--island-bg-color-rgb, 255, 255, 255), 0.95); // 稍微透明感
+        backdrop-filter: blur(10px); // 毛玻璃效果
+        border: 1px solid var(--color-border-light, rgba(0, 0, 0, 0.05));
 
         // 可滚动内容区域
         &__scrollable {
@@ -168,64 +173,57 @@
             overflow-y: auto;
             display: flex;
             flex-direction: column;
-            gap: 0;
-            scrollbar-width: none; // Hide scrollbar for cleaner look
-            -ms-overflow-style: none;
+            gap: 4px; // 增加间距
+            padding: 8px 0;
+            scrollbar-width: none;
             &::-webkit-scrollbar {
                 display: none;
-            }
-
-            // 使用伪元素实现：内容少时居中，内容多时从顶部开始
-            &::before,
-            &::after {
-                content: '';
-                flex: 1;
             }
 
             // 滚动区域内第一个section不需要顶部边框
             .unified-toolbar__section:first-child {
                 border-top: none;
-                padding-top: 8px;
+                padding-top: 0;
             }
         }
 
         &__section {
-            // 分区之间添加分割线和间距
+            padding: 0 8px;
+            
+            // 分区之间添加更加微妙的分割线
             &:not(:first-child):not(&--fixed-top):not(&--fixed-bottom) {
-                border-top: 1px solid var(--color-border);
+                margin-top: 8px;
                 padding-top: 8px;
-            }
-            // Add padding to bottom to separate from next border
-            padding-bottom: 8px;
-
-            // First child only padding bottom (顶部固定区域已单独处理)
-            &:first-child:not(&--fixed-top) {
-                padding-top: 4px;
-            }
-            // Last child only padding top (already handled)
-            &:last-child {
-                padding-bottom: 4px;
+                position: relative;
+                
+                &::before {
+                    content: '';
+                    position: absolute;
+                    top: 0;
+                    left: 12px;
+                    right: 12px;
+                    height: 1px;
+                    background: var(--color-border-light, rgba(0, 0, 0, 0.05));
+                }
             }
 
             // 固定在底部的section (任务按钮)
             &--fixed-bottom {
                 flex-shrink: 0;
-                border-top: 1px solid var(--color-border);
-                padding-top: 8px;
-                padding-bottom: 4px;
+                padding: 12px 8px;
+                border-top: 1px solid var(--color-border-light, rgba(0, 0, 0, 0.05));
                 display: flex;
                 justify-content: center;
                 align-items: center;
-                position: relative;
-                // 继承父级z-index即可,无需单独设置
+                background: inherit;
             }
 
             // 固定在顶部的section (菜单)
             &--fixed-top {
                 flex-shrink: 0;
-                border-bottom: 1px solid var(--color-border);
-                padding-top: 4px;
-                padding-bottom: 8px;
+                padding: 12px 8px;
+                border-bottom: 1px solid var(--color-border-light, rgba(0, 0, 0, 0.05));
+                background: inherit;
             }
         }
 

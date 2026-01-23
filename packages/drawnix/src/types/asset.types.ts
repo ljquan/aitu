@@ -111,13 +111,13 @@ export type AssetTypeFilter = 'ALL' | AssetType;
  * Asset Source Filter
  * 素材来源筛选器
  */
-export type AssetSourceFilter = 'ALL' | 'LOCAL' | 'AI';
+export type AssetSourceFilter = 'ALL' | AssetSource;
 
 /**
  * Sort Option
  * 排序选项
  */
-export type SortOption = 'DATE_DESC' | 'DATE_ASC' | 'NAME_ASC' | 'SIZE_DESC';
+export type SortOption = 'DATE_DESC' | 'DATE_ASC' | 'NAME_ASC' | 'NAME_DESC' | 'SIZE_ASC' | 'SIZE_DESC';
 
 /**
  * View Mode
@@ -320,6 +320,7 @@ export interface MediaLibraryGridProps {
   onDoubleClick?: (asset: Asset) => void;
   onFileUpload?: (files: FileList) => void;
   onUploadClick?: () => void;
+  storageStatus?: StorageStatus | null;
 }
 
 export interface MediaLibraryStorageBarProps {

@@ -1,10 +1,22 @@
 # Update CLAUDE.md
 
-分析代码审查反馈或开发过程中发现的问题，提取通用规则并更新 CLAUDE.md。
+分析代码审查反馈或开发过程中发现的问题，提取通用规则并更新文档。
 
-## 说明
+## 核心原则
 
-这个命令实现了 Boris Cherny 第 5 条技巧：Code Review 自动更新规则到 CLAUDE.md，让 AI 越来越懂你的项目。形成知识沉淀的飞轮效应。
+**CLAUDE.md 必须保持精简！** 这是 Claude Code 最佳实践的核心要求。
+
+- **CLAUDE.md 行数上限**：300 行（当前约 224 行）
+- **核心规则上限**：20 条摘要规则
+- **详细规则放在**：`docs/CODING_RULES.md`
+
+## 文档分层策略
+
+| 文档 | 内容 | 行数限制 |
+|------|------|---------|
+| `CLAUDE.md` | 核心摘要规则（1-2 句话） | ≤ 300 行 |
+| `docs/CODING_RULES.md` | 详细规则 + 错误/正确示例 | 无限制 |
+| `docs/FEATURE_FLOWS.md` | 功能流程说明 | 无限制 |
 
 ## 参数
 
@@ -20,131 +32,154 @@
 如果没有提供参数:
 - 询问用户发现了什么问题
 - 或检查最近的 git diff 和 commit 信息
-- 或查看是否有 PR review 评论
 
-### 2. 分析问题
+### 2. 判断规则重要性
 
-判断问题是否值得记录:
-- ✅ 会重复出现的模式
-- ✅ 项目特定的约定
-- ✅ 常见的错误类型
+**高优先级（放入 CLAUDE.md 摘要）**:
+- ✅ 高频出现的错误模式
+- ✅ 会导致严重 bug 的问题
+- ✅ 项目核心约定
+
+**普通优先级（只放 CODING_RULES.md）**:
+- 📝 偶尔出现的问题
+- 📝 特定场景的细节规则
+- 📝 详细的代码示例
+
+**不记录**:
 - ❌ 一次性的拼写错误
 - ❌ 过于具体的业务逻辑
+- ❌ 已有类似规则覆盖
 
-### 3. 格式化规则
+### 3. 检查文档状态
 
-使用统一的格式:
+```bash
+# 检查 CLAUDE.md 当前行数
+wc -l CLAUDE.md
+
+# 如果超过 250 行，先进行清理
+# 提示用户是否有可以移除或合并的规则
+```
+
+### 4. 更新 docs/CODING_RULES.md（主要更新位置）
+
+使用详细格式添加到对应章节：
 
 ```markdown
-### 错误 N: [问题标题]
+### [问题标题]
 
 **场景**: [何时会出现这个问题]
 
 ❌ **错误示例**:
-\`\`\`typescript
+```typescript
 // 错误的代码
-\`\`\`
+```
 
 ✅ **正确示例**:
-\`\`\`typescript
+```typescript
 // 正确的代码
-\`\`\`
+```
 
 **原因**: [为什么这样做是错误的/正确的]
 ```
 
-### 4. 定位更新位置
+**章节分类**：
+- TypeScript 相关 → `### TypeScript 规范`
+- React 相关 → `### React 组件规范`
+- Service Worker → `### Service Worker 规范`
+- 缓存相关 → `### 缓存与存储规范`
+- API 相关 → `### API 与任务处理规范`
+- UI 相关 → `### UI 交互规范`
 
-读取 CLAUDE.md，确定规则应该添加到哪个章节:
+### 5. 更新 CLAUDE.md（仅高优先级规则）
 
-- 开发规范相关 → `### Development Rules`
-- 编码标准相关 → `### Coding Standards`
-- TypeScript 相关 → `#### TypeScript Guidelines`
-- React 相关 → `#### React Component Guidelines`
-- 样式相关 → `#### CSS/SCSS Guidelines`
-- 性能相关 → `#### Performance Guidelines`
-- 安全相关 → `#### Security Guidelines`
-- Z-Index 相关 → `#### Z-Index Management`
+**只添加 1-2 句话的摘要**，格式：
 
-如果没有合适的章节，考虑创建新章节或添加到通用的 `### Common Mistakes` 章节。
+```markdown
+N. **规则名称**：简短描述（1-2 句话）
+```
 
-### 5. 检查重复
+例如：
+```markdown
+8. **定时器清理**：`setInterval` 必须保存 ID，提供 `destroy()` 方法
+```
 
-确认类似规则是否已存在:
-- 如果已存在，询问是否需要补充
-- 如果不存在，添加新规则
+**添加位置**：`## 核心编码规则` 章节的对应子节
 
-### 6. 更新文件
+### 6. 检查重复
 
-使用 Edit 工具更新 CLAUDE.md:
-- 保持现有格式
-- 在适当位置插入新规则
-- 如果需要，创建新章节
+- 检查 CLAUDE.md 和 CODING_RULES.md 是否已有类似规则
+- 如果已存在，考虑补充而非新增
+- 避免规则重复造成文档膨胀
 
 ### 7. 确认更新
 
-显示更新内容摘要:
+显示更新摘要：
+
 ```markdown
-## 已更新 CLAUDE.md
+## 文档更新完成
 
-### 新增规则
+### docs/CODING_RULES.md
+- **位置**: `### React 组件规范`
+- **新增**: 避免在 useEffect 中直接调用异步函数
+- **包含**: 错误示例 + 正确示例 + 原因说明
 
-**位置**: `### Coding Standards > #### TypeScript Guidelines`
+### CLAUDE.md（可选）
+- **位置**: `### React 规则`
+- **新增摘要**: Context 回调中必须使用函数式更新
 
-**规则**: 避免在 useEffect 中直接调用异步函数
-
-**示例**:
-❌ useEffect(async () => { await fetch(...) }, [])
-✅ useEffect(() => { fetchData().catch(console.error) }, [])
+### 文档状态
+- CLAUDE.md: 224 行 (限制 300 行) ✅
+- CODING_RULES.md: 3780 行
 ```
 
-### 8. 提交并推送到远程仓库
-
-将 CLAUDE.md 的更新提交并推送到远程仓库:
+### 8. 提交更新
 
 ```bash
-# 添加 CLAUDE.md 到暂存区
-git add CLAUDE.md
+# 添加更新的文件
+git add CLAUDE.md docs/CODING_RULES.md
 
-# 提交更改
-git commit -m "docs(claude): 添加新规则 - [规则名称]"
+# 提交
+git commit -m "docs: 添加编码规则 - [规则名称]"
 
-# 推送到远程仓库
+# 推送
 git push
 ```
 
-**提交信息格式**:
-- `docs(claude): 添加新规则 - [规则名称]`
-- `docs(claude): 更新规则 - [规则名称]`
-- `docs(claude): 删除过时规则 - [规则名称]`
+## 定期清理检查
+
+当 CLAUDE.md 接近 300 行时，执行清理：
+
+1. **合并相似规则**：将多条相关规则合并为一条
+2. **移除过时规则**：删除不再适用的规则
+3. **降级详细规则**：将过于详细的规则移到 CODING_RULES.md
+4. **更新引用**：确保 CLAUDE.md 正确引用详细文档
 
 ## 示例用法
 
 ```bash
-# 描述发现的问题
+# 添加新规则
 /update-claude-md 发现 Claude 经常忘记给 TDesign 的 Tooltip 添加 theme='light'
 
-# 不带参数，交互式收集
+# 交互式
 /update-claude-md
 ```
 
-## 规则分类建议
+## 快速判断流程图
 
-| 类型 | 示例 | 章节 |
-|------|------|------|
-| UI 组件 | Tooltip theme | Development Rules |
-| 类型定义 | 避免 any | TypeScript Guidelines |
-| Hooks 使用 | useEffect 依赖 | React Component Guidelines |
-| 样式规范 | BEM 命名 | CSS/SCSS Guidelines |
-| 性能优化 | React.memo | Performance Guidelines |
-| 安全问题 | XSS 防护 | Security Guidelines |
-| 层级管理 | z-index | Z-Index Management |
+```
+发现问题
+    ↓
+是否高频/严重？ ──否──→ 只更新 CODING_RULES.md
+    ↓ 是
+CLAUDE.md < 280 行？ ──否──→ 先清理，再添加摘要
+    ↓ 是
+添加到 CLAUDE.md 摘要 + CODING_RULES.md 详情
+```
 
 ## 注意事项
 
-- 规则应该简洁明了
-- 必须包含错误和正确示例
-- 解释原因帮助理解
-- 避免过于冗长的描述
+- **CLAUDE.md 必须保持精简**：这是最重要的原则
+- 详细示例只放在 CODING_RULES.md
+- 摘要规则控制在 1-2 句话
 - 定期审查并清理过时规则
-- 提交前确认规则内容正确无误
+- 优先合并相似规则而非新增

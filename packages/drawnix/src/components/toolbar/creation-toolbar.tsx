@@ -11,7 +11,6 @@ import {
   TextIcon,
   StraightArrowLineIcon,
   FeltTipPenIcon,
-  ImageIcon,
   MediaLibraryIcon,
   AIImageIcon,
   AIVideoIcon,
@@ -20,6 +19,7 @@ import {
   MarkdownLogoIcon,
   ZoomInIcon,
   ZoomOutIcon,
+  ImageUploadIcon,
 } from '../icons';
 import { useBoard } from '@plait-board/react-board';
 import {
@@ -65,6 +65,7 @@ import Menu from '../menu/menu';
 import MenuItem from '../menu/menu-item';
 import { THEME_OPTIONS, CheckIcon, isBasicPointer, EmptyIcon } from './toolbar-shared';
 import { MoreToolsButton } from './more-tools-button';
+import { MinimizedToolsBar } from './minimized-tools-bar';
 
 export enum PopupKey {
   'shape' = 'shape',
@@ -85,94 +86,94 @@ type AppToolButtonProps = {
 
 export const BUTTONS: AppToolButtonProps[] = [
   {
-    icon: HandIcon,
+    icon: <HandIcon />,
     pointer: PlaitPointerType.hand,
     titleKey: 'toolbar.hand',
     visibilityKey: 'hand',
   },
   {
-    icon: SelectionIcon,
+    icon: <SelectionIcon />,
     pointer: PlaitPointerType.selection,
     titleKey: 'toolbar.selection',
     visibilityKey: 'selection',
   },
   {
-    icon: MindIcon,
+    icon: <MindIcon />,
     pointer: MindPointerType.mind,
     titleKey: 'toolbar.mind',
     visibilityKey: 'mind',
   },
   {
-    icon: TextIcon,
+    icon: <TextIcon />,
     pointer: BasicShapes.text,
     titleKey: 'toolbar.text',
     visibilityKey: 'text',
   },
   {
-    icon: ImageIcon,
+    icon: <ImageUploadIcon size={24} />,
     titleKey: 'toolbar.image',
     key: 'image',
     visibilityKey: 'image',
   },
   {
-    icon: MediaLibraryIcon,
+    icon: <MediaLibraryIcon size={24} />,
     titleKey: 'toolbar.mediaLibrary',
     key: 'media-library',
     visibilityKey: 'media-library',
   },
   {
-    icon: AIImageIcon,
+    icon: <AIImageIcon />,
     titleKey: 'toolbar.aiImage',
     key: 'ai-image',
     visibilityKey: 'ai-image',
   },
   {
-    icon: AIVideoIcon,
+    icon: <AIVideoIcon />,
     titleKey: 'toolbar.aiVideo',
     key: 'ai-video',
     visibilityKey: 'ai-video',
   },
   {
-    icon: MindIcon,
+    icon: <MindIcon />,
     pointer: MindPointerType.mind,
     titleKey: 'toolbar.mind',
     visibilityKey: 'mind',
   },
   {
-    icon: FeltTipPenIcon,
+    icon: <FeltTipPenIcon />,
     pointer: FreehandShape.feltTipPen,
     titleKey: 'toolbar.pen',
     key: PopupKey.freehand,
     visibilityKey: 'freehand',
   },
   {
-    icon: StraightArrowLineIcon,
+    icon: <StraightArrowLineIcon />,
     titleKey: 'toolbar.arrow',
     key: PopupKey.arrow,
     pointer: ArrowLineShape.straight,
     visibilityKey: 'arrow',
   },
   {
-    icon: ShapeIcon,
+    icon: <ShapeIcon />,
     titleKey: 'toolbar.shape',
     key: PopupKey.shape,
     pointer: BasicShapes.rectangle,
     visibilityKey: 'shape',
   },
   {
-    icon: ThemeIcon,
+    icon: <ThemeIcon />,
     titleKey: 'toolbar.theme',
     key: PopupKey.theme,
     visibilityKey: 'theme',
   },
   {
-    icon: MermaidLogoIcon,
+    icon: <MermaidLogoIcon />,
     titleKey: 'extraTools.mermaidToDrawnix',
     key: 'mermaid-to-drawnix',
     visibilityKey: 'mermaid-to-drawnix',
   },
   {
-    icon: MarkdownLogoIcon,
+    icon: <MarkdownLogoIcon />,
     titleKey: 'extraTools.markdownToDrawnix',
     key: 'markdown-to-drawnix',
     visibilityKey: 'markdown-to-drawnix',
@@ -616,7 +617,7 @@ export const CreationToolbar: React.FC<ToolbarSectionProps> = ({
         <StackComponent gap={0}>
           <ToolButton
             type="button"
-            icon={ZoomOutIcon}
+            icon={<ZoomOutIcon />}
             visible={true}
             title={t('zoom.out')}
             tooltipPlacement={embedded ? 'right' : 'bottom'}
@@ -675,7 +676,7 @@ export const CreationToolbar: React.FC<ToolbarSectionProps> = ({
           </Popover>
           <ToolButton
             type="button"
-            icon={ZoomInIcon}
+            icon={<ZoomInIcon />}
             visible={true}
             title={t('zoom.in')}
             tooltipPlacement={embedded ? 'right' : 'bottom'}
@@ -736,6 +737,7 @@ export const CreationToolbar: React.FC<ToolbarSectionProps> = ({
             'toolbar-button-wrapper--drag-before': dragProps['data-drag-position'] === 'before',
             'toolbar-button-wrapper--drag-after': dragProps['data-drag-position'] === 'after',
           })}
+          data-button-id={buttonId}
           {...dragProps}
         >
           {buttonElement}
@@ -753,6 +755,8 @@ export const CreationToolbar: React.FC<ToolbarSectionProps> = ({
           : renderButtonById(buttonConfig.id, index)
       )}
       <MoreToolsButton embedded={embedded} />
+      {/* 最小化工具栏 - 显示最小化和常驻的工具图标 */}
+      {embedded && <MinimizedToolsBar />}
     </Stack.Row>
   );
 

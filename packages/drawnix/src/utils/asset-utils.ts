@@ -74,19 +74,19 @@ export function filterAssets(
     .filter((asset) => {
       // Type filter
       const matchesType =
-        filters.activeType === 'ALL' || asset.type === filters.activeType;
+        !filters.activeType || 
+        filters.activeType === ('ALL' as any) || 
+        asset.type === filters.activeType;
 
       // Source filter
       const matchesSource =
-        filters.activeSource === 'ALL' ||
-        (filters.activeSource === 'AI' &&
-          asset.source === ('AI_GENERATED' as AssetSource)) ||
-        (filters.activeSource === 'LOCAL' &&
-          asset.source === ('LOCAL' as AssetSource));
+        !filters.activeSource ||
+        filters.activeSource === ('ALL' as any) ||
+        asset.source === (filters.activeSource as any);
 
       // Search filter
       const matchesSearch =
-        filters.searchQuery === '' ||
+        !filters.searchQuery ||
         asset.name.toLowerCase().includes(filters.searchQuery.toLowerCase());
 
       return matchesType && matchesSource && matchesSearch;
@@ -99,8 +99,12 @@ export function filterAssets(
           return a.createdAt - b.createdAt;
         case 'NAME_ASC':
           return a.name.localeCompare(b.name);
+        case 'NAME_DESC':
+          return b.name.localeCompare(a.name);
         case 'SIZE_DESC':
           return (b.size || 0) - (a.size || 0);
+        case 'SIZE_ASC':
+          return (a.size || 0) - (b.size || 0);
         default:
           return 0;
       }

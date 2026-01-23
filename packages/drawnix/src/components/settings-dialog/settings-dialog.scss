@@ -1,22 +1,33 @@
+// 品牌色变量
+$brand-orange: #F39C12;
+$brand-orange-hover: #E67E22;
+$brand-orange-light: rgba(243, 156, 18, 0.1);
+
 .settings-dialog {
   background: white;
-  border-radius: 8px;
+  border-radius: 12px;
   padding: 24px;
-  width: 400px;
+  width: 500px;
   max-width: 90vw;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
 
   &__title {
     font-size: 18px;
-    font-weight: 500;
+    font-weight: 600;
     margin: 0 0 20px;
+    color: #1f2937;
+    letter-spacing: -0.02em;
   }
 
   &__form {
-    margin-bottom: 24px;
+    margin-bottom: 20px;
   }
 
   &__field {
-    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
 
     &:last-child {
       margin-bottom: 0;
@@ -24,88 +35,117 @@
   }
 
   &__label {
-    display: block;
     font-size: 14px;
     font-weight: 500;
-    margin-bottom: 6px;
-    color: #333;
+    color: #374151;
+    white-space: nowrap;
+    flex-shrink: 0;
+    width: 90px;
+    text-align: right;
   }
 
   &__label-with-tooltip {
     display: flex;
     align-items: center;
-    gap: 6px;
-    margin-bottom: 6px;
+    justify-content: flex-end;
+    gap: 4px;
+    flex-shrink: 0;
+    width: 90px;
 
     .settings-dialog__label {
-      margin-bottom: 0;
+      width: auto;
+      text-align: right;
     }
   }
 
   &__tooltip-icon {
-    font-size: 14px;
+    font-size: 13px;
     cursor: pointer;
-    opacity: 0.7;
-    transition: opacity 0.2s;
+    color: #9ca3af;
+    transition: color 0.2s;
+    flex-shrink: 0;
 
     &:hover {
-      opacity: 1;
+      color: $brand-orange;
     }
   }
 
   &__input {
-    width: 100%;
+    flex: 1;
+    min-width: 0;
     padding: 8px 12px;
-    border: 1px solid #d9d9d9;
+    border: 1px solid #e5e7eb;
     border-radius: 6px;
     font-size: 14px;
-    transition: border-color 0.2s;
+    transition: all 0.2s ease;
     box-sizing: border-box;
+    background: #fff;
+
+    &:hover {
+      border-color: #d1d5db;
+    }
 
     &:focus {
       outline: none;
-      border-color: #1890ff;
-      box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
+      border-color: $brand-orange;
+      box-shadow: 0 0 0 2px $brand-orange-light;
     }
 
     &::placeholder {
-      color: #bfbfbf;
+      color: #9ca3af;
     }
   }
 
   &__select {
-    width: 100%;
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__model-dropdown-container {
+    flex: 1;
+    min-width: 0;
   }
 
   &__actions {
     display: flex;
     justify-content: flex-end;
-    gap: 8px;
+    gap: 10px;
+    padding-top: 16px;
+    border-top: 1px solid #f3f4f6;
   }
 
   &__button {
-    padding: 8px 16px;
+    padding: 8px 18px;
     border-radius: 6px;
     font-size: 14px;
+    font-weight: 500;
     cursor: pointer;
     border: none;
-    transition: all 0.2s;
+    transition: all 0.2s ease;
 
     &--cancel {
-      background: #f5f5f5;
-      color: #000;
-      
+      background: #f3f4f6;
+      color: #4b5563;
+
       &:hover {
-        background: #e8e8e8;
+        background: #e5e7eb;
+        color: #1f2937;
       }
     }
 
     &--save {
-      background: #1890ff;
+      background: $brand-orange;
       color: white;
-      
+      box-shadow: 0 2px 6px rgba(243, 156, 18, 0.3);
+
       &:hover {
-        background: #40a9ff;
+        background: $brand-orange-hover;
+        box-shadow: 0 3px 10px rgba(243, 156, 18, 0.4);
+        transform: translateY(-1px);
+      }
+
+      &:active {
+        transform: translateY(0);
       }
     }
   }

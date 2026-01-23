@@ -45,9 +45,9 @@ export const InspirationBoard: React.FC<InspirationBoardProps> = ({
     setCurrentPage((prev) => (prev + 1) % totalPages);
   }, [totalPages]);
 
-  // 选择模版
+  // 选择模版（灵感创意的模版都是 agent 类型）
   const handleSelectTemplate = useCallback((prompt: string) => {
-    onSelectPrompt(prompt);
+    onSelectPrompt({ prompt, modelType: 'agent' });
   }, [onSelectPrompt]);
 
   // 不显示的条件：画板不为空 或 外部控制隐藏

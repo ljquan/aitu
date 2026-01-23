@@ -10,7 +10,7 @@
 // Local Variables
 $drawer-min-width: 375px;
 $border-radius: 12px;
-$drawer-header-height: 93px;
+$drawer-header-height: 108px; // 增加了高度以适应新设计
 $drawer-input-height: 160px;
 
 // ============================================================================
@@ -32,6 +32,7 @@ $drawer-input-height: 160px;
   box-shadow: -4px 0 16px rgba(0, 0, 0, 0.08);
   transform: translateX(100%);
   transition: transform $animation-duration ease-out;
+  color-scheme: light; // 强制光照模式配色，防止紫色干扰
 
   &--open {
     transform: translateX(0);
@@ -85,10 +86,15 @@ $drawer-input-height: 160px;
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
-    padding: $spacing-sm $spacing-md;
-    border-bottom: 1px solid var(--td-component-border);
-    background: #ffffff;
-    gap: $spacing-xs;
+    padding: $spacing-md $spacing-lg;
+    border-bottom: 1px solid #f0f0f0;
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(12px);
+    gap: $spacing-md;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    min-width: 0; // 确保 header 也能收缩
   }
 
   &__header-top {
@@ -101,35 +107,45 @@ $drawer-input-height: 160px;
   &__header-bottom {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-start;
+    gap: $spacing-md;
+    padding: 6px 12px;
+    background: rgba(0, 0, 0, 0.03);
+    border-radius: 12px;
+    min-width: 0;
   }
 
   &__session-actions {
     display: flex;
     align-items: center;
-    gap: 2px;
+    gap: 4px;
+    padding-right: 4px;
+    flex-shrink: 0;
+    margin-left: auto; // 将操作按钮推向最右侧
   }
 
   &__title {
     margin: 0;
-    font-size: 15px;
-    font-weight: 600;
+    font-size: 16px;
+    font-weight: 700;
     color: var(--td-text-color-primary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     flex: 1;
     min-width: 0;
+    letter-spacing: -0.02em;
 
     &--editable {
       cursor: pointer;
-      border-radius: 4px;
-      padding: 2px 6px;
-      margin: -2px -6px;
-      transition: background 0.2s ease;
+      border-radius: 6px;
+      padding: 4px 8px;
+      margin: -4px -8px;
+      transition: all 0.2s ease;
 
       &:hover {
-        background: var(--td-bg-color-container-hover);
+        background: rgba(243, 156, 18, 0.05);
+        color: var(--td-brand-color);
       }
     }
   }
@@ -138,20 +154,16 @@ $drawer-input-height: 160px;
     flex: 1;
     min-width: 150px;
     width: 100%;
-    font-size: 15px;
-    font-weight: 600;
+    font-size: 16px;
+    font-weight: 700;
     color: var(--td-text-color-primary);
-    background: var(--td-bg-color-container);
-    border: 1px solid var(--td-brand-color);
-    border-radius: 4px;
-    padding: 2px 6px;
+    background: #ffffff;
+    border: 2px solid var(--td-brand-color);
+    border-radius: 8px;
+    padding: 4px 8px;
     outline: none;
     box-sizing: border-box;
-
-    &:focus {
-      border-color: var(--td-brand-color);
-      box-shadow: 0 0 0 2px rgba(0, 82, 217, 0.1);
-    }
+    box-shadow: 0 4px 12px rgba(243, 156, 18, 0.1);
   }
 
   &__actions {
@@ -168,22 +180,28 @@ $drawer-input-height: 160px;
   }
 
   &__close-btn {
-    padding: 6px;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     background: transparent;
     border: none;
-    border-radius: 6px;
+    border-radius: 50%;
     cursor: pointer;
-    color: var(--td-text-color-secondary);
-    transition: all 0.2s ease;
+    color: var(--td-text-color-placeholder);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 
     &:hover {
-      background: var(--td-bg-color-container-hover);
-      color: var(--td-text-color-primary);
+      background: rgba(243, 156, 18, 0.08);
+      color: var(--td-brand-color);
+      transform: rotate(90deg);
     }
 
     &--active {
-      background: var(--td-brand-color-light);
+      background: rgba(243, 156, 18, 0.1);
       color: var(--td-brand-color);
+      border: 1px solid rgba(243, 156, 18, 0.2);
     }
   }
 }
@@ -274,17 +292,20 @@ $drawer-input-height: 160px;
     flex-direction: row-reverse;
 
     .message-item__bubble {
-      background: var(--td-brand-color);
+      background: linear-gradient(135deg, #F39C12 0%, #E67E22 100%);
       color: white;
       border-radius: $border-radius $border-radius 4px $border-radius;
+      box-shadow: 0 4px 12px rgba(243, 156, 18, 0.2);
     }
   }
 
   &--assistant {
     .message-item__bubble {
-      background: var(--td-bg-color-secondarycontainer);
+      background: #ffffff;
       color: var(--td-text-color-primary);
       border-radius: $border-radius $border-radius $border-radius 4px;
+      border: 1px solid var(--td-component-border);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
     }
   }
 
@@ -418,7 +439,7 @@ $drawer-input-height: 160px;
     transition: all 0.2s ease;
 
     &:hover:not(:disabled) {
-      background: var(--td-bg-color-container-hover);
+      background: rgba(243, 156, 18, 0.1);
       color: var(--td-brand-color);
     }
 
@@ -428,11 +449,12 @@ $drawer-input-height: 160px;
     }
 
     &--send {
-      background: var(--td-brand-color);
+      background: linear-gradient(135deg, #F39C12 0%, #E67E22 100%);
       color: white;
 
       &:hover:not(:disabled) {
-        background: var(--td-brand-color-hover);
+        transform: scale(1.05);
+        box-shadow: 0 4px 12px rgba(243, 156, 18, 0.3);
         color: white;
       }
     }
@@ -530,26 +552,29 @@ $drawer-input-height: 160px;
     align-items: center;
     justify-content: space-between;
     padding: $spacing-sm $spacing-lg;
-    background: var(--td-bg-color-secondarycontainer);
+    background: #fafafa;
+    border-bottom: 1px solid #f0f0f0;
   }
 
   &__title {
     font-size: 12px;
-    font-weight: 500;
-    color: var(--td-text-color-secondary);
+    font-weight: 600;
+    color: var(--td-text-color-primary);
   }
 
   &__new-btn {
-    padding: 4px 8px;
+    padding: 4px 12px;
     font-size: 12px;
-    background: transparent;
-    border: 1px solid var(--td-component-border);
-    border-radius: 4px;
+    background: #ffffff;
+    border: 1px solid #d9d9d9;
+    border-radius: 6px;
     cursor: pointer;
     color: var(--td-text-color-secondary);
+    transition: all 0.2s ease;
 
     &:hover {
-      background: var(--td-bg-color-container-hover);
+      background: rgba(243, 156, 18, 0.05);
+      border-color: var(--td-brand-color);
       color: var(--td-brand-color);
     }
   }
@@ -585,9 +610,15 @@ $drawer-input-height: 160px;
 
   &--active {
     .session-item__title {
-      color: #ffffff;
+      color: var(--td-brand-color);
+      font-weight: 600;
     }
-    background: var(--td-brand-color-light);
+    .session-item__time {
+      color: var(--td-brand-color);
+      opacity: 0.7;
+    }
+    background: rgba(243, 156, 18, 0.1);
+    border: 1px solid rgba(243, 156, 18, 0.2);
   }
 
   &--editing {
@@ -649,7 +680,7 @@ $drawer-input-height: 160px;
   }
 
   &__edit:hover {
-    background: var(--td-brand-color-light);
+    background: rgba(243, 156, 18, 0.1);
     color: var(--td-brand-color);
   }
 
@@ -735,14 +766,24 @@ $drawer-input-height: 160px;
   &--user {
     flex-direction: row-reverse;
     align-self: flex-end;
+
+    .chat-message-content {
+      background: linear-gradient(135deg, #F39C12 0%, #E67E22 100%);
+      color: white;
+      border-radius: $border-radius $border-radius 4px $border-radius;
+      border: none;
+      box-shadow: 0 4px 12px rgba(243, 156, 18, 0.2);
+    }
   }
 
   &--assistant {
     align-self: flex-start;
 
     .chat-message-content {
-      background: var(--td-bg-color-secondarycontainer);
+      background: #ffffff;
       border-radius: $border-radius $border-radius $border-radius 4px;
+      border: 1px solid var(--td-component-border);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
     }
   }
 
@@ -888,6 +929,13 @@ $drawer-input-height: 160px;
   padding: $spacing-lg;
   color: var(--td-text-color-secondary);
   font-size: 14px;
+
+  &--full {
+    flex: 1;
+    height: 100%;
+    justify-content: center;
+    flex-direction: column;
+  }
 
   &__spinner {
     width: 16px;
@@ -1089,6 +1137,14 @@ $drawer-input-height: 160px;
     background: #ffffff;
     border-radius: 16px;
     padding: 8px;
+    border: 1px solid var(--td-component-border);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+    transition: all 0.3s ease;
+
+    &:focus-within {
+      border-color: var(--td-brand-color);
+      box-shadow: 0 4px 20px rgba(243, 156, 18, 0.15);
+    }
   }
 
   &__input-wrapper {
@@ -1344,11 +1400,13 @@ $drawer-input-height: 160px;
 
 .model-selector {
   position: relative;
+  min-width: 0;
 
   // Trigger button
   &__trigger {
     display: inline-flex;
     align-items: center;
+    justify-content: space-between;
     gap: 6px;
     padding: 4px 10px;
     background: #ffffff;
@@ -1360,17 +1418,110 @@ $drawer-input-height: 160px;
     cursor: pointer;
     transition: all 0.2s ease;
     outline: none;
+    width: auto;
+    flex-wrap: nowrap;
+    white-space: nowrap;
 
     &:hover {
       background: #f9fafb;
-      border-color: #d1d5db;
+      border-color: var(--td-brand-color);
       color: var(--td-text-color-primary);
     }
 
     &--active {
       border-color: var(--td-brand-color);
-      box-shadow: 0 0 0 2px rgba(243, 156, 18, 0.1);
+      box-shadow: 0 0 0 2px rgba(var(--td-brand-color-rgb), 0.1);
     }
+  }
+
+  &--variant-form {
+    width: 100%;
+    flex: none;
+
+    .model-selector__trigger {
+      display: flex;
+      align-items: center;
+      width: 100%;
+      max-width: 100%;
+      padding: 8px 12px;
+      border-radius: 6px;
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      min-height: 36px;
+      box-sizing: border-box;
+      justify-content: flex-start;
+      gap: 8px;
+
+      &:hover {
+        border-color: var(--td-brand-color);
+      }
+
+      &--active {
+        border-color: var(--td-brand-color);
+        box-shadow: 0 0 0 2px rgba(243, 156, 18, 0.1);
+      }
+    }
+
+    .model-selector__trigger-content {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .model-selector__trigger-health {
+      flex-shrink: 0;
+    }
+
+    .model-selector__trigger-text {
+      font-size: 14px;
+      color: var(--td-text-color-primary);
+      text-align: left;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .model-selector__trigger-icon {
+      flex-shrink: 0;
+      color: #9ca3af;
+    }
+  }
+
+  &--variant-capsule {
+    flex: none;
+    width: auto;
+
+    .model-selector__trigger {
+      width: auto;
+      max-width: none;
+      background: rgba(0, 0, 0, 0.04);
+      border: none;
+      padding: 4px 12px;
+      border-radius: 10px;
+      color: var(--td-text-color-primary);
+
+      &:hover {
+        background: rgba(0, 0, 0, 0.08);
+      }
+
+      &--active {
+        background: rgba(243, 156, 18, 0.1);
+        color: var(--td-brand-color);
+        box-shadow: none;
+      }
+    }
+  }
+
+  &__trigger-content {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    flex-wrap: nowrap; // 强制不换行
   }
 
   &__trigger-icon-provider {
@@ -1380,11 +1531,19 @@ $drawer-input-height: 160px;
     border-radius: 50%;
   }
 
+  &__trigger-health {
+    margin-left: -2px;
+    margin-right: 2px;
+    flex-shrink: 0;
+    display: inline-flex; // 确保不换行
+    align-items: center;
+  }
+
   &__trigger-text {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 120px;
+    flex: 1; // 文字部分占据剩余空间以实现截断
   }
 
   &__trigger-icon {
@@ -1429,11 +1588,11 @@ $drawer-input-height: 160px;
         font-size: 13px;
       }
 
-      // Remove focus state border color
+      // 使用主题色
       &:focus,
       &.t-is-focused {
-        border-color: #d1d5db;
-        box-shadow: none;
+        border-color: var(--td-brand-color);
+        box-shadow: 0 0 0 2px rgba(var(--td-brand-color-rgb), 0.1);
       }
     }
   }
@@ -1515,12 +1674,25 @@ $drawer-input-height: 160px;
     }
 
     &--active {
-      background: #ede9fe;
-      border-color: transparent;
+      background: rgba(243, 156, 18, 0.1); // 明确使用品牌橙色的透明版本，禁止任何紫色
+      border-color: rgba(243, 156, 18, 0.2);
 
       .model-selector__item-name {
-        color: var(--td-text-color-primary);
+        color: #D97706; // 深橙色，确保对比度
         font-weight: 600;
+      }
+
+      .model-selector__item-desc {
+        color: #D97706;
+        opacity: 0.7;
+      }
+
+      .model-selector__check {
+        color: #F39C12; // 品牌橙
+      }
+
+      .model-selector__item-icon {
+        border: 1px solid rgba(243, 156, 18, 0.3);
       }
     }
   }
@@ -1574,46 +1746,42 @@ $drawer-input-height: 160px;
     white-space: nowrap;
     letter-spacing: 0.2px;
 
-    &.badge-new {
-      background: #a855f7;
-      color: #fff;
+    &.badge-new, &.badge-pro {
+      background: rgba(243, 156, 18, 0.1);
+      color: #D97706;
+      border: 1px solid rgba(243, 156, 18, 0.2);
       text-transform: uppercase;
     }
 
     &.badge-fast {
-      background: #dbeafe;
-      color: #1d4ed8;
-      border: 1px solid #bfdbfe;
+      background: #ECFDF5;
+      color: #059669;
+      border: 1px solid #A7F3D0;
     }
 
     &.badge-multimodal {
-      background: #f3e8ff;
-      color: #7c3aed;
-      border: 1px solid #e9d5ff;
+      background: #EFF6FF;
+      color: #2563EB;
+      border: 1px solid #BFDBFE;
     }
 
     &.badge-reasoning {
-      background: #fed7aa;
-      color: #c2410c;
-      border: 1px solid #fdba74;
-    }
-
-    &.badge-pro {
-      background: #fb923c;
-      color: #fff;
+      background: #FFF7ED;
+      color: #EA580C;
+      border: 1px solid #FFEDD5;
     }
 
     &.badge-economic {
-      background: #d1fae5;
-      color: #047857;
-      border: 1px solid #a7f3d0;
+      background: #F0FDF4;
+      color: #16A34A;
+      border: 1px solid #BBF7D0;
     }
   }
 
   // Check icon
   &__check {
     flex-shrink: 0;
-    color: #7c3aed;
+    color: var(--td-brand-color);
     margin-left: auto;
   }
 }
@@ -1629,4 +1797,3 @@ $drawer-input-height: 160px;
     transform: translateY(0);
   }
 }
-

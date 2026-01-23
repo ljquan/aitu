@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Service Worker 调试面板</title>
+  <link rel="stylesheet" href="./sw-debug/styles.css">
+  <!-- JSZip for backup functionality - local copy for reliability -->
+  <script src="./sw-debug/jszip.min.js"></script>
+</head>
+<body>
+  <header>
+    <h1>
+      <span class="icon">⚙️</span>
+      <span id="panelTitle">Service Worker 调试面板</span>
+      <span id="swStatus" class="status-indicator inactive">
+        <span class="dot"></span>
+        <span class="text">未连接</span>
+      </span>
+      <span id="analysisModeIndicator" class="mode-indicator analysis-mode" style="display: none;">
+        <span class="icon">🔍</span>
+        <span class="text">分析模式</span>
+      </span>
+    </h1>
+    <div class="header-actions">
+      <!-- 模式切换按钮 -->
+      <button id="toggleAnalysisMode" class="icon-btn" title="切换到分析模式（导入用户日志）">
+        <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
+        </svg>
+      </button>
+      <!-- 导入日志按钮 (分析模式下显示) -->
+      <button id="importLogs" style="display: none;">
+        <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+        </svg>
+        导入日志
+      </button>
+      <input type="file" id="importLogsInput" accept=".json" style="display: none;">
+      <!-- 数据备份按钮 -->
+      <button id="backupData" class="success" title="备份应用数据（提示词、项目、素材）">
+        <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+          <polyline points="17 21 17 13 7 13 7 21"/>
+          <polyline points="7 3 7 8 15 8"/>
+        </svg>
+        数据备份
+      </button>
+      <button id="toggleTheme" class="icon-btn" title="切换深色/浅色主题">
+        <svg id="themeIcon" class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
+      </button>
+      <button id="toggleDebug" class="danger debug-mode-only">
+        <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>
+        </svg>
+        停止调试
+      </button>
+      <button id="exportLogs" class="success">
+        <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+        </svg>
+        导出日志
+      </button>
+      
+      <!-- 设置弹窗 -->
+      <div class="export-modal-overlay" id="settingsModalOverlay" style="display: none;">
+        <div class="export-modal" style="max-width: 450px;">
+          <div class="export-modal-header">
+            <h3>⚙️ 日志设置</h3>
+            <button class="close-btn" id="closeSettingsModal">&times;</button>
+          </div>
+          <div class="export-modal-content" style="padding: 16px;">
+            <div class="setting-group">
+              <label class="setting-label">日志最大保留条数</label>
+              <select id="settingMaxLogs" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border-color);">
+                <option value="200">200 条</option>
+                <option value="500" selected>500 条（默认）</option>
+                <option value="1000">1000 条</option>
+                <option value="2000">2000 条</option>
+              </select>
+            </div>
+            <div class="setting-group" style="margin-top: 16px;">
+              <label class="setting-label">自动清理超过指定时间的日志</label>
+              <select id="settingAutoClean" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border-color);">
+                <option value="0" selected>不自动清理</option>
+                <option value="30">30 分钟前</option>
+                <option value="60">1 小时前</option>
+                <option value="120">2 小时前</option>
+              </select>
+            </div>
+            <div class="setting-group" style="margin-top: 16px;">
+              <label style="display: flex; align-items: center; cursor: pointer;">
+                <input type="checkbox" id="settingKeepBookmarks" checked style="margin-right: 8px;">
+                自动清理时保留收藏的日志
+              </label>
+            </div>
+            <div style="margin-top: 20px; text-align: right;">
+              <button id="saveSettings" class="primary" style="padding: 8px 24px;">保存</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 快捷键帮助弹窗 -->
+      <div class="export-modal-overlay" id="shortcutsModalOverlay" style="display: none;">
+        <div class="export-modal" style="max-width: 400px;">
+          <div class="export-modal-header">
+            <h3>⌨️ 键盘快捷键</h3>
+            <button class="close-btn" id="closeShortcutsModal">&times;</button>
+          </div>
+          <div class="export-modal-content" style="padding: 16px;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+              <tr><td style="padding: 8px 0; width: 140px;"><kbd style="background:#e0e0e0;padding:2px 6px;border-radius:3px;">1</kbd> - <kbd style="background:#e0e0e0;padding:2px 6px;border-radius:3px;">5</kbd></td><td>切换 Tab</td></tr>
+              <tr><td style="padding: 8px 0;"><kbd style="background:#e0e0e0;padding:2px 6px;border-radius:3px;">Space</kbd></td><td>暂停/恢复实时日志</td></tr>
+              <tr><td style="padding: 8px 0;"><kbd style="background:#e0e0e0;padding:2px 6px;border-radius:3px;">Ctrl</kbd>+<kbd style="background:#e0e0e0;padding:2px 6px;border-radius:3px;">L</kbd></td><td>清空当前 Tab 日志</td></tr>
+              <tr><td style="padding: 8px 0;"><kbd style="background:#e0e0e0;padding:2px 6px;border-radius:3px;">Esc</kbd></td><td>关闭弹窗</td></tr>
+              <tr><td style="padding: 8px 0;"><kbd style="background:#e0e0e0;padding:2px 6px;border-radius:3px;">?</kbd></td><td>显示此帮助</td></tr>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- 导出日志弹窗 -->
+      <div class="export-modal-overlay" id="exportModalOverlay">
+        <div class="export-modal">
+          <div class="export-modal-header">
+            <h3>📥 导出日志</h3>
+            <button class="export-modal-close" id="closeExportModal">&times;</button>
+          </div>
+          <div class="export-modal-body">
+            <!-- 全选 -->
+            <label class="export-checkbox export-select-all">
+              <input type="checkbox" id="selectAllExport">
+              <span>全选</span>
+            </label>
+            
+            <!-- 基本信息 -->
+            <div class="export-section">
+              <label class="export-checkbox export-section-header">
+                <input type="checkbox" data-section="basic" checked>
+                <span>基本信息</span>
+              </label>
+              <div class="export-section-items">
+                <label class="export-checkbox">
+                  <input type="checkbox" name="basic" value="swStatus" checked>
+                  <span>SW 状态</span>
+                </label>
+                <label class="export-checkbox">
+                  <input type="checkbox" name="basic" value="memory" checked>
+                  <span>内存信息</span>
+                </label>
+                <label class="export-checkbox">
+                  <input type="checkbox" name="basic" value="cache" checked>
+                  <span>缓存信息</span>
+                </label>
+              </div>
+            </div>
+            
+            <!-- Fetch 请求日志 -->
+            <div class="export-section">
+              <label class="export-checkbox export-section-header">
+                <input type="checkbox" data-section="fetch">
+                <span>Fetch 请求日志</span>
+              </label>
+              <div class="export-section-items">
+                <label class="export-checkbox">
+                  <input type="checkbox" name="fetch" value="sw-internal">
+                  <span>SW 内部 API</span>
+                </label>
+                <label class="export-checkbox">
+                  <input type="checkbox" name="fetch" value="xhr">
+                  <span>XHR/API</span>
+                </label>
+                <label class="export-checkbox">
+                  <input type="checkbox" name="fetch" value="image">
+                  <span>图片</span>
+                </label>
+                <label class="export-checkbox">
+                  <input type="checkbox" name="fetch" value="video">
+                  <span>视频</span>
+                </label>
+                <label class="export-checkbox">
+                  <input type="checkbox" name="fetch" value="font">
+                  <span>字体</span>
+                </label>
+                <label class="export-checkbox">
+                  <input type="checkbox" name="fetch" value="static">
+                  <span>静态资源</span>
+                </label>
+                <label class="export-checkbox">
+                  <input type="checkbox" name="fetch" value="cache-url">
+                  <span>缓存 URL</span>
+                </label>
+                <label class="export-checkbox">
+                  <input type="checkbox" name="fetch" value="asset-library">
+                  <span>素材库</span>
+                </label>
+              </div>
+            </div>
+            
+            <!-- 控制台日志 -->
+            <div class="export-section">
+              <label class="export-checkbox export-section-header">
+                <input type="checkbox" data-section="console">
+                <span>控制台日志</span>
+              </label>
+              <div class="export-section-items">
+                <label class="export-checkbox">
+                  <input type="checkbox" name="console" value="error">
+                  <span>Error</span>
+                </label>
+                <label class="export-checkbox">
+                  <input type="checkbox" name="console" value="warn">
+                  <span>Warn</span>
+                </label>
+                <label class="export-checkbox">
+                  <input type="checkbox" name="console" value="info">
+                  <span>Info</span>
+                </label>
+                <label class="export-checkbox">
+                  <input type="checkbox" name="console" value="log">
+                  <span>Log</span>
+                </label>
+                <label class="export-checkbox">
+                  <input type="checkbox" name="console" value="debug">
+                  <span>Debug</span>
+                </label>
+              </div>
+            </div>
+            
+            <!-- PostMessage 日志 -->
+            <div class="export-section">
+              <label class="export-checkbox export-section-header">
+                <input type="checkbox" data-section="postmessage">
+                <span>PostMessage 日志</span>
+              </label>
+              <div class="export-section-items">
+                <label class="export-checkbox">
+                  <input type="checkbox" name="postmessage" value="send">
+                  <span>发送 → SW</span>
+                </label>
+                <label class="export-checkbox">
+                  <input type="checkbox" name="postmessage" value="receive">
+                  <span>接收 ← SW</span>
+                </label>
+              </div>
+            </div>
+            
+            <!-- LLM API 日志 -->
+            <div class="export-section">
+              <label class="export-checkbox export-section-header">
+                <input type="checkbox" data-section="llmapi" checked>
+                <span>LLM API 日志</span>
+              </label>
+              <div class="export-section-items">
+                <label class="export-checkbox">
+                  <input type="checkbox" name="llmapi" value="image" checked>
+                  <span>图片生成</span>
+                </label>
+                <label class="export-checkbox">
+                  <input type="checkbox" name="llmapi" value="video" checked>
+                  <span>视频生成</span>
+                </label>
+                <label class="export-checkbox">
+                  <input type="checkbox" name="llmapi" value="chat" checked>
+                  <span>对话</span>
+                </label>
+                <label class="export-checkbox">
+                  <input type="checkbox" name="llmapi" value="character" checked>
+                  <span>角色</span>
+                </label>
+              </div>
+            </div>
+            
+            <!-- 内存日志 -->
+            <div class="export-section">
+              <label class="export-checkbox export-section-header">
+                <input type="checkbox" data-section="memory">
+                <span>内存日志</span>
+              </label>
+              <div class="export-section-items">
+                <label class="export-checkbox">
+                  <input type="checkbox" name="memory" value="startup">
+                  <span>启动快照</span>
+                </label>
+                <label class="export-checkbox">
+                  <input type="checkbox" name="memory" value="periodic">
+                  <span>定期快照</span>
+                </label>
+                <label class="export-checkbox">
+                  <input type="checkbox" name="memory" value="error">
+                  <span>错误</span>
+                </label>
+                <label class="export-checkbox">
+                  <input type="checkbox" name="memory" value="freeze">
+                  <span>卡死</span>
+                </label>
+                <label class="export-checkbox">
+                  <input type="checkbox" name="memory" value="whitescreen">
+                  <span>白屏</span>
+                </label>
+                <label class="export-checkbox">
+                  <input type="checkbox" name="memory" value="longtask">
+                  <span>长任务</span>
+                </label>
+                <label class="export-checkbox">
+                  <input type="checkbox" name="memory" value="beforeunload">
+                  <span>页面关闭</span>
+                </label>
+              </div>
+            </div>
+          </div>
+          <div class="export-modal-footer">
+            <button id="cancelExport" class="secondary">取消</button>
+            <button id="doExport" class="primary">确认导出</button>
+          </div>
+        </div>
+      </div>
+      <button id="clearLogs" class="danger debug-mode-only">
+        <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+        </svg>
+        清空日志
+      </button>
+      <button id="refreshStatus" class="debug-mode-only">
+        <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+        </svg>
+        刷新状态
+      </button>
+    </div>
+  </header>
+
+  <div class="container">
+    <div class="panels">
+      <!-- Left Panel: Status & Cache -->
+      <div class="left-panel">
+        <div class="panel">
+          <div class="panel-header">
+            SW 状态信息
+          </div>
+          <div class="panel-content">
+            <div class="stat-grid" id="statusGrid">
+              <div class="stat-item">
+                <span class="label">版本</span>
+                <span class="value" id="swVersion">-</span>
+              </div>
+              <div class="stat-item">
+                <span class="label">调试模式</span>
+                <span class="value" id="debugMode">关闭</span>
+              </div>
+              <div class="stat-item">
+                <span class="label">Pending 图片请求</span>
+                <span class="value" id="pendingImages">0</span>
+              </div>
+              <div class="stat-item">
+                <span class="label">Pending 视频请求</span>
+                <span class="value" id="pendingVideos">0</span>
+              </div>
+              <div class="stat-item">
+                <span class="label">视频 Blob 缓存</span>
+                <span class="value" id="videoBlobCache">0</span>
+              </div>
+              <div class="stat-item">
+                <span class="label">已完成请求缓存</span>
+                <span class="value" id="completedRequests">0</span>
+              </div>
+              <div class="stat-item">
+                <span class="label">工作流处理器</span>
+                <span class="value" id="workflowHandler">未初始化</span>
+              </div>
+              <div class="stat-item">
+                <span class="label">调试日志数</span>
+                <span class="value" id="debugLogsCount">0</span>
+              </div>
+            </div>
+            
+            <div id="failedDomainsSection" style="margin-top: 16px; display: none;">
+              <div class="stat-item" style="flex-direction: column; align-items: flex-start;">
+                <span class="label">失败域名</span>
+                <div class="failed-domains" id="failedDomains"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            内存监控
+            <span id="memoryUpdateTime" style="font-size: 11px; opacity: 0.6; margin-left: 10px;"></span>
+          </div>
+          <div class="panel-content">
+            <div class="stat-grid" id="memoryGrid">
+              <div class="stat-item">
+                <span class="label">JS 堆已使用</span>
+                <span class="value" id="memoryUsed">-</span>
+              </div>
+              <div class="stat-item">
+                <span class="label">JS 堆总大小</span>
+                <span class="value" id="memoryTotal">-</span>
+              </div>
+              <div class="stat-item">
+                <span class="label">JS 堆上限</span>
+                <span class="value" id="memoryLimit">-</span>
+              </div>
+              <div class="stat-item">
+                <span class="label">使用率</span>
+                <span class="value" id="memoryPercent">-</span>
+              </div>
+            </div>
+            <p id="memoryWarning" style="display: none; margin-top: 12px; padding: 8px; background: #fff3cd; border-radius: 4px; font-size: 12px; color: #856404;">
+              ⚠️ 内存使用率较高，可能导致页面崩溃
+            </p>
+            <p id="memoryNotSupported" style="display: none; margin-top: 8px; font-size: 11px; opacity: 0.6;">
+              注：performance.memory 仅 Chrome 支持
+            </p>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            缓存统计
+            <button id="refreshCache">刷新</button>
+          </div>
+          <div class="panel-content">
+            <ul class="cache-list" id="cacheList">
+              <li class="cache-item">
+                <span class="name">加载中...</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Panel: Logs -->
+      <div class="panel logs-panel">
+        <div class="tabs">
+          <div class="tab active" data-tab="fetch">Fetch 请求日志 <span id="fetchCount" style="opacity:0.6"></span></div>
+          <div class="tab" data-tab="console">控制台日志 <span id="consoleCount" style="opacity:0.6">(0)</span><span id="consoleErrorDot" class="error-dot" style="display:none"></span></div>
+          <div class="tab" data-tab="postmessage">PostMessage日志 <span id="postmessageCount" style="opacity:0.6">(0)</span></div>
+          <div class="tab" data-tab="llmapi">LLM API <span id="llmapiErrorDot" class="error-dot" style="display:none"></span></div>
+          <div class="tab" data-tab="crash">内存日志 <span id="crashCount" style="opacity:0.6">(0)</span><span id="crashErrorDot" class="error-dot" style="display:none"></span></div>
+        </div>
+        
+        <!-- Fetch Logs Tab -->
+        <div class="tab-content active" id="fetchTab">
+          <div class="stats-bar" id="fetchStatsBar">
+            <div class="stat"><span>总请求:</span> <span class="stat-value" id="statTotalRequests">0</span></div>
+            <div class="stat"><span>成功率:</span> <span class="stat-value" id="statSuccessRate">-</span></div>
+            <div class="stat"><span>平均耗时:</span> <span class="stat-value" id="statAvgDuration">-</span></div>
+            <div class="stat"><span>缓存命中:</span> <span class="stat-value" id="statCacheHit">-</span></div>
+            <div class="stat stat-clickable" id="statSlowRequestsWrapper" title="点击过滤慢请求 (>1s)"><span>慢请求:</span> <span class="stat-value" id="statSlowRequests">0</span></div>
+            <div class="stat stat-chart" title="耗时分布: <100ms | 100-500ms | 500ms-1s | >1s">
+              <span>分布:</span>
+              <div class="duration-chart" id="durationChart">
+                <div class="chart-bar fast" id="chartFast" style="width: 0%"></div>
+                <div class="chart-bar medium" id="chartMedium" style="width: 0%"></div>
+                <div class="chart-bar slow" id="chartSlow" style="width: 0%"></div>
+                <div class="chart-bar very-slow" id="chartVerySlow" style="width: 0%"></div>
+              </div>
+            </div>
+          </div>
+          <div class="logs-toolbar">
+            <select id="filterType">
+              <option value="">全部类型</option>
+              <option value="xhr">XHR/API</option>
+              <option value="sw-internal" selected>SW内部API</option>
+              <option value="image">图片</option>
+              <option value="video">视频</option>
+              <option value="font">字体</option>
+              <option value="static">静态资源</option>
+              <option value="navigation">导航</option>
+              <option value="cache-url">缓存URL</option>
+              <option value="asset-library">素材库</option>
+              <option value="passthrough">放行</option>
+            </select>
+            <select id="filterStatus">
+              <option value="">全部状态</option>
+              <option value="error">❌ 失败请求</option>
+              <option value="200">200 OK</option>
+              <option value="206">206 Partial</option>
+              <option value="304">304 Not Modified</option>
+              <option value="404">404 Not Found</option>
+              <option value="500">5xx Error</option>
+              <option value="slow">慢请求 (>1s)</option>
+            </select>
+            <select id="filterTimeRange">
+              <option value="">全部时间</option>
+              <option value="5">最近 5 分钟</option>
+              <option value="15">最近 15 分钟</option>
+              <option value="30">最近 30 分钟</option>
+              <option value="60">最近 1 小时</option>
+            </select>
+            <input type="text" id="filterUrl" placeholder="搜索 URL...">
+            <label class="regex-toggle" title="启用正则表达式搜索">
+              <input type="checkbox" id="filterUrlRegex">
+              <span style="font-size: 11px; margin-left: 2px;">.*</span>
+            </label>
+            <button id="togglePause" title="暂停/恢复实时更新 (快捷键: Space)">
+              <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              实时
+            </button>
+            <button id="toggleSelectMode" title="批量选择模式">
+              <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+              选择
+            </button>
+            <div id="batchActions" class="batch-actions" style="display: none;">
+              <button id="selectAll">全选</button>
+              <button id="batchBookmark">
+                <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                收藏
+              </button>
+              <button id="batchDelete" class="danger">
+                <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                删除
+              </button>
+              <span id="selectedCount" class="selected-count">已选 0 条</span>
+            </div>
+            <button id="copyFetchLogs" title="复制日志">
+              <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              复制
+            </button>
+            <button id="exportFetchCSV" title="导出为 CSV">
+              <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+              CSV
+            </button>
+            <button id="showShortcuts" class="icon-btn" title="显示快捷键帮助">
+              <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h8M6 16h.01M18 16h.01M10 16h4"/></svg>
+            </button>
+            <button id="showSettings" class="icon-btn" title="日志设置">
+              <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            </button>
+            <label class="bookmark-toggle" title="只显示收藏的日志">
+              <input type="checkbox" id="showBookmarksOnly">
+              <span>⭐</span>
+            </label>
+            <label class="switch-toggle">
+              <span class="switch-label">自动滚动</span>
+              <input type="checkbox" id="autoScroll" checked>
+              <span class="switch-slider"></span>
+            </label>
+          </div>
+          <div class="logs-container" id="logsContainer">
+            <div class="empty-state">
+              <span class="icon">📋</span>
+              <p>暂无日志，请先启用调试模式</p>
+              <button id="enableDebugBtn" class="primary">启用调试</button>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Console Logs Tab -->
+        <div class="tab-content" id="consoleTab">
+          <div class="logs-toolbar">
+            <select id="filterConsoleLevel">
+              <option value="">全部级别</option>
+              <option value="error">Error</option>
+              <option value="warn">Warn</option>
+              <option value="info">Info</option>
+              <option value="log">Log</option>
+              <option value="debug">Debug</option>
+            </select>
+            <input type="text" id="filterConsoleText" placeholder="搜索日志内容...">
+            <button id="clearConsoleLogs">
+              <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              清空
+            </button>
+            <button id="copyConsoleLogs">
+              <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              复制
+            </button>
+          </div>
+          <div class="logs-container" id="consoleContainer">
+            <div id="consoleLogsContainer">
+              <div class="empty-state">
+                <span class="icon">📝</span>
+                <p>暂无控制台日志</p>
+                <p style="font-size: 12px; opacity: 0.7;">warn/error 始终捕获；开启调试后也捕获 log/info/debug（仅在调试模式启用时完整记录）</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- PostMessage Logs Tab -->
+        <div class="tab-content" id="postmessageTab">
+          <div class="logs-toolbar">
+            <select id="filterMessageDirection">
+              <option value="">全部方向</option>
+              <option value="send">发送 → SW</option>
+              <option value="receive">接收 ← SW</option>
+            </select>
+            <select id="filterMessageTypeSelect">
+              <option value="">全部消息类型</option>
+            </select>
+            <select id="filterPmTimeRange">
+              <option value="">全部时间</option>
+              <option value="5">最近 5 分钟</option>
+              <option value="15">最近 15 分钟</option>
+              <option value="30">最近 30 分钟</option>
+            </select>
+            <input type="text" id="filterMessageType" placeholder="搜索消息类型...">
+            <button id="clearPostmessageLogs">
+              <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              清空
+            </button>
+            <button id="copyPostmessageLogs">
+              <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              复制
+            </button>
+          </div>
+          <div class="logs-container" id="postmessageContainer">
+            <div id="postmessageLogsContainer">
+              <div class="empty-state">
+                <span class="icon">📨</span>
+                <p>暂无 PostMessage 日志</p>
+                <p style="font-size: 12px; opacity: 0.7;">记录主线程与 Service Worker 之间的消息通信（仅在调试模式启用时记录）</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- LLM API Logs Tab -->
+        <div class="tab-content" id="llmapiTab">
+          <div class="logs-toolbar">
+            <select id="filterLLMApiType">
+              <option value="">全部类型</option>
+              <option value="image">图片生成</option>
+              <option value="video">视频生成</option>
+              <option value="chat">对话</option>
+              <option value="character">角色</option>
+            </select>
+            <select id="filterLLMApiStatus">
+              <option value="">全部状态</option>
+              <option value="success">成功</option>
+              <option value="error">失败</option>
+              <option value="pending">进行中</option>
+            </select>
+            <button id="refreshLLMApiLogs">
+              <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+              刷新
+            </button>
+            <button id="copyLLMApiLogs">
+              <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              复制
+            </button>
+            <button id="exportLLMApiLogs" class="success">
+              <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+              导出
+            </button>
+            <button id="clearLLMApiLogs">
+              <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              清空
+            </button>
+          </div>
+          <div class="logs-container" id="llmapiContainer">
+            <div id="llmapiLogsContainer">
+              <div class="empty-state">
+                <span class="icon">🤖</span>
+                <p>暂无 LLM API 调用记录</p>
+                <p style="font-size: 12px; opacity: 0.7;">图片/视频/对话等 AI 接口调用会自动记录</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Crash Logs Tab -->
+        <div class="tab-content" id="crashTab">
+          <div class="logs-toolbar">
+            <select id="filterCrashType">
+              <option value="">全部类型</option>
+              <option value="startup">启动快照</option>
+              <option value="periodic">定期快照</option>
+              <option value="error">错误</option>
+              <option value="beforeunload">页面关闭</option>
+              <option value="freeze">卡死</option>
+              <option value="whitescreen">白屏</option>
+              <option value="longtask">长任务</option>
+            </select>
+            <button id="refreshCrashLogs">
+              <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+              刷新
+            </button>
+            <button id="copyCrashLogs">
+              <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              复制
+            </button>
+            <button id="clearCrashLogs">
+              <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              清空
+            </button>
+            <button id="exportCrashLogs">
+              <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+              导出
+            </button>
+          </div>
+          <div class="logs-container" id="crashContainer">
+            <div id="crashLogsContainer">
+              <div class="empty-state">
+                <span class="icon">💥</span>
+                <p>暂无内存日志</p>
+                <p style="font-size: 12px; opacity: 0.7;">页面启动、内存超限、错误和关闭时的快照会自动记录</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./sw-debug/app.js"></script>
+</body>
+</html>

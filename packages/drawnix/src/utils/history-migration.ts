@@ -65,7 +65,6 @@ function convertImageHistoryToTask(item: LegacyImageHistoryItem): Task {
     createdAt: item.timestamp,
     updatedAt: item.timestamp,
     completedAt: item.timestamp,
-    retryCount: 0,
   };
 }
 
@@ -96,7 +95,6 @@ function convertVideoHistoryToTask(item: LegacyVideoHistoryItem): Task {
     createdAt: item.timestamp,
     updatedAt: item.timestamp,
     completedAt: item.timestamp,
-    retryCount: 0,
   };
 }
 

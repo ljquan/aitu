@@ -44,3 +44,14 @@ export { swMCPTools, getSWMCPTool, executeSWMCPTool } from './mcp/tools';
 
 // Export chat workflow
 export { ChatWorkflowHandler } from './chat-workflow/handler';
+
+// Export message sender (from message-bus)
+export {
+  initMessageSender,
+  setDebugMode as setMessageSenderDebugMode,
+  setBroadcastCallback,
+  sendToClient,
+  broadcastToAllClients,
+  sendToClientById,
+  getSWGlobal,
+} from './utils/message-bus';

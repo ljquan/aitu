@@ -6,6 +6,7 @@ import {
   TrashIcon,
   GithubIcon,
   BackupRestoreIcon,
+  DebugLogIcon,
 } from '../../icons';
 import { useBoard, useListRender } from '@plait-board/react-board';
 import {
@@ -25,8 +26,6 @@ import Menu from '../../menu/menu';
 import { useContext } from 'react';
 import { MenuContentPropsContext } from '../../menu/common';
 import { EVENT } from '../../../constants';
-import { cleanupMissingAssets } from '../../../utils/asset-cleanup';
-import { MessagePlugin } from 'tdesign-react';
 
 export const SaveToFile = () => {
   const board = useBoard();
@@ -38,7 +37,7 @@ export const SaveToFile = () => {
       onSelect={() => {
         saveAsJSON(board);
       }}
-      icon={SaveFileIcon}
+      icon={<SaveFileIcon />}
       aria-label={t('menu.saveFile')}
       shortcut={`Cmd+S`}
     >{t('menu.saveFile')}</MenuItem>
@@ -74,7 +73,7 @@ export const OpenFile = () => {
           clearAndLoad(data.elements, data.viewport);
         });
       }}
-      icon={OpenFileIcon}
+      icon={<OpenFileIcon />}
       aria-label={t('menu.open')}
     >{t('menu.open')}</MenuItem>
   );
@@ -87,7 +86,7 @@ export const SaveAsImage = () => {
   const { t } = useI18n();
   return (
     <MenuItem
-      icon={ExportImageIcon}
+      icon={<ExportImageIcon />}
       data-testid="image-export-button"
       data-track="toolbar_click_menu_export"
       onSelect={() => {
@@ -130,41 +129,12 @@ export const SaveAsImage = () => {
 };
 SaveAsImage.displayName = 'SaveAsImage';
 
-export const CleanMissingAssets = () => {
-  const board = useBoard();
-  const { t } = useI18n();
-  return (
-    <MenuItem
-      icon={TrashIcon}
-      data-testid="clean-assets-button"
-      data-track="toolbar_click_menu_clean_assets"
-      onSelect={async () => {
-        try {
-          const removedCount = await cleanupMissingAssets(board);
-          if (removedCount > 0) {
-            MessagePlugin.success(t('menu.cleanMissingAssets.success', { count: removedCount }));
-          } else {
-            MessagePlugin.info(t('menu.cleanMissingAssets.noAssets'));
-          }
-        } catch (error) {
-          console.error('[CleanMissingAssets] Failed to cleanup missing assets:', error);
-          MessagePlugin.error(t('menu.cleanMissingAssets.error'));
-        }
-      }}
-      aria-label={t('menu.cleanMissingAssets')}
-    >
-      {t('menu.cleanMissingAssets')}
-    </MenuItem>
-  );
-};
-CleanMissingAssets.displayName = 'CleanMissingAssets';
-
 export const CleanBoard = () => {
   const { appState, setAppState } = useDrawnix();
   const { t } = useI18n();
   return (
     <MenuItem
-      icon={TrashIcon}
+      icon={<TrashIcon />}
       data-testid="reset-button"
       data-track="toolbar_click_menu_clean"
       onSelect={() => {
@@ -190,7 +160,7 @@ export const BackupRestore = ({
   const { t } = useI18n();
   return (
     <MenuItem
-      icon={BackupRestoreIcon}
+      icon={<BackupRestoreIcon />}
       data-track="toolbar_click_menu_backup"
       onSelect={onOpenBackupRestore}
       aria-label={t('menu.backupRestore')}
@@ -201,12 +171,29 @@ export const BackupRestore = ({
 };
 BackupRestore.displayName = 'BackupRestore';
 
+export const DebugPanel = () => {
+  const { t } = useI18n();
+  return (
+    <MenuItem
+      icon={<DebugLogIcon />}
+      data-track="toolbar_click_menu_debug"
+      onSelect={() => {
+        window.open('./sw-debug.html', '_blank');
+      }}
+      aria-label={t('menu.debugPanel')}
+    >
+      {t('menu.debugPanel')}
+    </MenuItem>
+  );
+};
+DebugPanel.displayName = 'DebugPanel';
+
 export const Settings = () => {
   const { appState, setAppState } = useDrawnix();
   const { t } = useI18n();
   return (
     <MenuItem
-      icon={SettingsIcon}
+      icon={<SettingsIcon />}
       data-track="toolbar_click_menu_settings"
       onSelect={() => {
         setAppState({
@@ -226,7 +213,7 @@ export const GitHubLink = () => {
   const { t } = useI18n();
   return (
     <MenuItem
-      icon={GithubIcon}
+      icon={<GithubIcon />}
       data-track="toolbar_click_menu_github"
       onSelect={() => {
         window.open('https://github.com/ljquan/aitu', '_blank');
@@ -238,3 +225,36 @@ export const GitHubLink = () => {
   );
 };
 GitHubLink.displayName = 'GitHubLink';
+
+export const VersionInfo = () => {
+  const { t } = useI18n();
+  // 从 HTML meta 标签获取版本号
+  const version = document.querySelector('meta[name="app-version"]')?.getAttribute('content') || '0.0.0';
+  
+  // 根据域名决定跳转地址
+  const getVersionsUrl = () => {
+    const hostname = window.location.hostname;
+    // unpkg.com 或 cdn.jsdelivr.net 域名使用内置版本选择页面
+    if (hostname.includes('unpkg.com') || hostname.includes('jsdelivr.net')) {
+      return './versions.html';
+    }
+    // 其他域名跳转到官方发布页面
+    return 'https://release.opentu.ai/';
+  };
+  
+  return (
+    <MenuItem
+      data-track="toolbar_click_menu_version"
+      onSelect={() => {
+        window.open(getVersionsUrl(), '_blank');
+      }}
+      aria-label={t('menu.version')}
+    >
+      <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+        <span style={{ color: '#666' }}>{t('menu.version')}：{version}</span>
+        <span style={{ color: '#1890ff' }}>{t('menu.more')}</span>
+      </span>
+    </MenuItem>
+  );
+};
+VersionInfo.displayName = 'VersionInfo';

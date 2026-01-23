@@ -1,0 +1,257 @@
+/**
+ * ParametersDropdown 样式
+ * 平铺展示所有参数和选项
+ */
+
+@import '../../styles/common-variables';
+
+$orange-primary: #F59E0B;
+$orange-dark: #D97706;
+$gray-light: #F3F4F6;
+$gray-medium: #9CA3AF;
+$gray-dark: #6B7280;
+$text-dark: #1F2937;
+
+.parameters-dropdown {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+
+  &__trigger {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 4px 8px;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    color: $text-dark;
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+    max-width: 160px;
+
+    &:hover:not(:disabled) {
+      background: rgba($orange-primary, 0.1);
+    }
+
+    &--open {
+      background: rgba($orange-primary, 0.15);
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  }
+
+  &__label {
+    color: $gray-dark;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__icon {
+    flex-shrink: 0;
+    color: $gray-medium;
+    transition: transform 0.2s ease;
+
+    &--open {
+      transform: rotate(180deg);
+    }
+  }
+
+  &__minus-icon {
+    flex-shrink: 0;
+    color: $orange-primary;
+  }
+
+  &__menu {
+    background: var(--island-bg-color, #ffffff);
+    border: 1px solid var(--color-border, #e5e5e5);
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+    min-width: 200px;
+    max-width: 320px;
+    overflow: hidden;
+    animation: paramDropdownFadeIn 0.15s ease-out;
+
+    &--flat {
+      padding-bottom: 8px;
+    }
+  }
+
+  @keyframes paramDropdownFadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  &__header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    background: var(--color-surface, #f9f9f9);
+    border-bottom: 1px solid var(--color-border, #e5e5e5);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text-secondary, #666);
+  }
+
+  // 平铺模式：参数分段
+  &__sections {
+    padding: 4px 8px;
+    max-height: 360px;
+    overflow-y: auto;
+  }
+
+  &__section {
+    padding: 8px 0;
+
+    &:not(:last-child) {
+      border-bottom: 1px solid var(--color-border, #eee);
+    }
+
+    &--highlighted {
+      background: rgba($orange-primary, 0.05);
+      border-radius: 6px;
+    }
+  }
+
+  &__section-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--color-text-tertiary, #888);
+    padding: 0 4px 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  // 选项按钮组（流式布局）
+  &__options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 0 4px;
+  }
+
+  &__option {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 10px;
+    background: var(--color-surface, #f5f5f5);
+    border: 1px solid transparent;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--color-text, #333);
+    transition: all 0.15s ease;
+    white-space: nowrap;
+
+    &:hover {
+      background: rgba($orange-primary, 0.1);
+      border-color: rgba($orange-primary, 0.3);
+    }
+
+    &--selected {
+      background: rgba($orange-primary, 0.15);
+      border-color: $orange-primary;
+      color: $orange-dark;
+      font-weight: 600;
+    }
+
+    &--highlighted {
+      background: rgba($orange-primary, 0.1);
+      border-color: rgba($orange-primary, 0.5);
+      box-shadow: 0 0 0 2px rgba($orange-primary, 0.2);
+    }
+
+    &--selected#{&}--highlighted {
+      box-shadow: 0 0 0 2px rgba($orange-primary, 0.3);
+    }
+
+    &-label {
+      line-height: 1.2;
+    }
+
+    &-check {
+      color: $orange-primary;
+      flex-shrink: 0;
+    }
+  }
+}
+
+// 暗色主题
+:root[data-theme='dark'] {
+  .parameters-dropdown {
+    &__trigger {
+      color: var(--color-gray-20, #ccc);
+      &:hover { background: rgba($orange-primary, 0.15); }
+      &--open { background: rgba($orange-primary, 0.2); }
+    }
+
+    &__label {
+      color: var(--color-gray-30, #bbb);
+    }
+
+    &__minus-icon {
+      color: $orange-primary;
+    }
+
+    &__menu {
+      background: var(--color-surface-high, #2a2a2a);
+      border-color: var(--color-border, #444);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    }
+
+    &__header {
+      background: var(--color-surface-mid, #333);
+      border-bottom-color: var(--color-border, #444);
+      color: var(--color-gray-50, #999);
+    }
+
+    &__section {
+      &:not(:last-child) {
+        border-bottom-color: var(--color-border, #444);
+      }
+
+      &--highlighted {
+        background: rgba($orange-primary, 0.1);
+      }
+    }
+
+    &__section-title {
+      color: var(--color-gray-50, #888);
+    }
+
+    &__option {
+      background: var(--color-surface-mid, #333);
+      color: var(--color-gray-20, #ccc);
+
+      &:hover {
+        background: rgba($orange-primary, 0.15);
+        border-color: rgba($orange-primary, 0.4);
+      }
+
+      &--selected {
+        background: rgba($orange-primary, 0.2);
+        border-color: $orange-primary;
+        color: $orange-primary;
+      }
+
+      &--highlighted {
+        background: rgba($orange-primary, 0.15);
+        border-color: rgba($orange-primary, 0.6);
+        box-shadow: 0 0 0 2px rgba($orange-primary, 0.25);
+      }
+
+      &--selected#{&}--highlighted {
+        box-shadow: 0 0 0 2px rgba($orange-primary, 0.35);
+      }
+    }
+  }
+}

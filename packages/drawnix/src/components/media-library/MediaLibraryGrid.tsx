@@ -4,24 +4,54 @@
  */
 
 import { useMemo, useState, useCallback, useRef, useEffect, useTransition } from 'react';
-import { Loading, Input, Button, Checkbox, Popconfirm } from 'tdesign-react';
-import { Upload as UploadIcon, Search, Trash2, CheckSquare, XSquare } from 'lucide-react';
+import { Loading, Input, Button, Checkbox, Popconfirm, Tooltip } from 'tdesign-react';
+import { 
+  Search, 
+  Trash2, 
+  CheckSquare, 
+  XSquare, 
+  HardDrive,
+  Video as VideoIcon,
+  Globe,
+  User,
+  Sparkles,
+  Clock,
+  Calendar,
+  ArrowUpAZ,
+  ArrowDownZA,
+  ArrowDownWideNarrow,
+  ArrowUpNarrowWide,
+  Minus,
+  Plus,
+  Download
+} from 'lucide-react';
+import JSZip from 'jszip';
+import { 
+  ImageUploadIcon as ImageUploadIconComp,
+  MediaLibraryIcon,
+} from '../icons';
 import { useAssets } from '../../contexts/AssetContext';
-import { filterAssets } from '../../utils/asset-utils';
+import { filterAssets, formatFileSize } from '../../utils/asset-utils';
 import { VirtualAssetGrid } from './VirtualAssetGrid';
 import { MediaLibraryEmpty } from './MediaLibraryEmpty';
 import { ViewModeToggle } from './ViewModeToggle';
-import type { MediaLibraryGridProps, ViewMode } from '../../types/asset.types';
+import { UnifiedMediaViewer, type MediaItem as UnifiedMediaItem } from '../shared/media-preview';
+import { ImageEditor } from '../image-editor';
+import type { MediaLibraryGridProps, ViewMode, SortOption, Asset } from '../../types/asset.types';
+import { AssetType, AssetSource } from '../../types/asset.types';
 import { useDrawnix } from '../../hooks/use-drawnix';
 import { removeElementsByAssetIds, removeElementsByAssetUrl, isCacheUrl, countElementsByAssetUrl } from '../../utils/asset-cleanup';
+import { insertImageFromUrl } from '../../data/image';
+import { insertVideoFromUrl } from '../../data/video';
 import './MediaLibraryGrid.scss';
 import './VirtualAssetGrid.scss';
 
 // 视图切换防抖时间
 const VIEW_MODE_DEBOUNCE_MS = 150;
 
-// localStorage key
+// localStorage keys
 const VIEW_MODE_STORAGE_KEY = 'media-library-view-mode';
+const GRID_SIZE_STORAGE_KEY = 'media-library-grid-size';
 
 // 从 localStorage 读取视图模式
 const getStoredViewMode = (): ViewMode => {
@@ -36,6 +66,61 @@ const getStoredViewMode = (): ViewMode => {
   return 'grid';
 };
 
+// 从 localStorage 读取网格尺寸
+const getStoredGridSize = (): number => {
+  try {
+    const stored = localStorage.getItem(GRID_SIZE_STORAGE_KEY);
+    if (stored) {
+      const val = parseInt(stored, 10);
+      if (!isNaN(val) && val >= 80 && val <= 300) {
+        return val;
+      }
+    }
+  } catch {
+    // localStorage 不可用时忽略
+  }
+  return 180;
+};
+
+// 类型过滤选项
+const TYPE_OPTIONS = [
+  { value: 'ALL', label: '全部类型', icon: MediaLibraryIcon },
+  { value: AssetType.IMAGE, label: '图片', icon: ImageUploadIconComp },
+  { value: AssetType.VIDEO, label: '视频', icon: VideoIcon },
+];
+
+// 来源过滤选项
+const SOURCE_OPTIONS = [
+  { value: 'ALL', label: '全部来源', icon: Globe, countKey: 'sourceAll' },
+  { value: AssetSource.LOCAL, label: '本地上传', icon: User, countKey: 'local' },
+  { value: AssetSource.AI_GENERATED, label: 'AI生成', icon: Sparkles, countKey: 'ai' },
+];
+
+// 排序组定义
+const SORT_GROUPS = [
+  { 
+    id: 'DATE', 
+    label: '时间', 
+    options: { asc: 'DATE_ASC' as SortOption, desc: 'DATE_DESC' as SortOption },
+    icons: { asc: Calendar, desc: Clock },
+    default: 'DATE_DESC' as SortOption
+  },
+  { 
+    id: 'NAME', 
+    label: '名称', 
+    options: { asc: 'NAME_ASC' as SortOption, desc: 'NAME_DESC' as SortOption },
+    icons: { asc: ArrowUpAZ, desc: ArrowDownZA },
+    default: 'NAME_ASC' as SortOption
+  },
+  { 
+    id: 'SIZE', 
+    label: '大小', 
+    options: { asc: 'SIZE_ASC' as SortOption, desc: 'SIZE_DESC' as SortOption },
+    icons: { asc: ArrowUpNarrowWide, desc: ArrowDownWideNarrow },
+    default: 'SIZE_DESC' as SortOption
+  },
+];
+
 export function MediaLibraryGrid({
   filterType,
   selectedAssetId,
@@ -43,12 +128,46 @@ export function MediaLibraryGrid({
   onDoubleClick,
   onFileUpload,
   onUploadClick,
+  storageStatus,
 }: MediaLibraryGridProps) {
   const { assets, filters, loading, setFilters, removeAssets } = useAssets();
   const { board } = useDrawnix();
   const [isDragging, setIsDragging] = useState(false);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
+  const [gridSize, setGridSize] = useState<number>(getStoredGridSize); // 从缓存恢复网格尺寸
+  const lastSelectedIdRef = useRef<string | null>(null); // 记录上次选中的素材ID，用于Shift连选
+  
+  // 预览状态
+  const [previewVisible, setPreviewVisible] = useState(false);
+  const [previewItems, setPreviewItems] = useState<UnifiedMediaItem[]>([]);
+  const [previewInitialIndex, setPreviewInitialIndex] = useState(0);
+  const gridContainerRef = useRef<HTMLDivElement>(null);
+  
+  // 图片编辑器状态
+  const [imageEditorVisible, setImageEditorVisible] = useState(false);
+  const [imageEditorUrl, setImageEditorUrl] = useState('');
+  
+  // 下载状态
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState(0); // 0-100
+
+  // 计算各类型的数量
+  const counts = useMemo(() => {
+    return {
+      all: assets.length,
+      image: assets.filter(a => a.type === AssetType.IMAGE).length,
+      video: assets.filter(a => a.type === AssetType.VIDEO).length,
+      local: assets.filter(a => a.source === AssetSource.LOCAL).length,
+      ai: assets.filter(a => a.source === AssetSource.AI_GENERATED).length,
+      sourceAll: assets.length,
+    };
+  }, [assets]);
+
+  // 监听网格尺寸变化并缓存
+  useEffect(() => {
+    localStorage.setItem(GRID_SIZE_STORAGE_KEY, gridSize.toString());
+  }, [gridSize]);
 
   // 视图模式状态 - 使用两个状态实现平滑过渡，从 localStorage 恢复
   const [viewMode, setViewMode] = useState<ViewMode>(getStoredViewMode);
@@ -75,6 +194,14 @@ export function MediaLibraryGrid({
 
     // 立即更新按钮状态
     setPendingViewMode(mode);
+
+    // 根据模式自动调整滑块位置并同步缓存
+    let newSize = gridSize;
+    if (mode === 'grid') newSize = 180;
+    else if (mode === 'compact') newSize = 80;
+    
+    setGridSize(newSize);
+    localStorage.setItem(GRID_SIZE_STORAGE_KEY, newSize.toString());
 
     // 显示过渡状态
     setIsTransitioning(true);
@@ -114,11 +241,15 @@ export function MediaLibraryGrid({
     return filteredResult.assets.every(asset => selectedAssetIds.has(asset.id));
   }, [filteredResult.assets, selectedAssetIds]);
 
+  // 当前筛选结果中被选中的数量
+  const filteredSelectedCount = useMemo(() => {
+    return filteredResult.assets.filter(asset => selectedAssetIds.has(asset.id)).length;
+  }, [filteredResult.assets, selectedAssetIds]);
+
   const isPartialSelected = useMemo(() => {
     if (filteredResult.assets.length === 0) return false;
-    const selectedCount = filteredResult.assets.filter(asset => selectedAssetIds.has(asset.id)).length;
-    return selectedCount > 0 && selectedCount < filteredResult.assets.length;
-  }, [filteredResult.assets, selectedAssetIds]);
+    return filteredSelectedCount > 0 && filteredSelectedCount < filteredResult.assets.length;
+  }, [filteredResult.assets.length, filteredSelectedCount]);
 
   // 拖放事件处理
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -161,7 +292,30 @@ export function MediaLibraryGrid({
     }
   }, [isAllSelected, filteredResult.assets]);
 
-  const toggleAssetSelection = useCallback((assetId: string) => {
+  const toggleAssetSelection = useCallback((assetId: string, event?: React.MouseEvent) => {
+    // Shift 键连选逻辑
+    if (event?.shiftKey && lastSelectedIdRef.current && lastSelectedIdRef.current !== assetId) {
+      const lastIndex = filteredResult.assets.findIndex(a => a.id === lastSelectedIdRef.current);
+      const currentIndex = filteredResult.assets.findIndex(a => a.id === assetId);
+      
+      if (lastIndex !== -1 && currentIndex !== -1) {
+        const start = Math.min(lastIndex, currentIndex);
+        const end = Math.max(lastIndex, currentIndex);
+        const rangeIds = filteredResult.assets.slice(start, end + 1).map(a => a.id);
+        
+        setSelectedAssetIds(prev => {
+          const newSet = new Set(prev);
+          rangeIds.forEach(id => newSet.add(id));
+          return newSet;
+        });
+        
+        // 更新右侧面板显示最近点击的素材
+        onSelectAsset(assetId);
+        return;
+      }
+    }
+    
+    // 普通点击切换选中状态
     setSelectedAssetIds(prev => {
       const newSet = new Set(prev);
       if (newSet.has(assetId)) {
@@ -171,18 +325,28 @@ export function MediaLibraryGrid({
       }
       return newSet;
     });
-  }, []);
+    
+    // 记录本次选中的 ID
+    lastSelectedIdRef.current = assetId;
+    
+    // 更新右侧面板显示最近点击的素材
+    onSelectAsset(assetId);
+  }, [filteredResult.assets, onSelectAsset]);
 
   // 批量删除处理（同时删除画布上使用这些素材的元素）
+  // 只删除当前筛选结果中被选中的素材
   const handleBatchDelete = useCallback(async () => {
-    const idsToDelete = Array.from(selectedAssetIds);
+    // 只获取筛选结果中被选中的素材
+    const filteredSelectedAssets = filteredResult.assets.filter(a => selectedAssetIds.has(a.id));
+    const idsToDelete = filteredSelectedAssets.map(a => a.id);
+    
+    if (idsToDelete.length === 0) return;
+    
     try {
       // 删除画布上使用这些素材的元素
       if (board) {
         // 分离缓存类型素材和普通素材
-        const cacheAssets = filteredResult.assets.filter(
-          a => selectedAssetIds.has(a.id) && isCacheUrl(a.url)
-        );
+        const cacheAssets = filteredSelectedAssets.filter(a => isCacheUrl(a.url));
         const normalAssetIds = idsToDelete.filter(
           id => !cacheAssets.some(a => a.id === id)
         );
@@ -200,23 +364,33 @@ export function MediaLibraryGrid({
       
       // 然后删除素材本身
       await removeAssets(idsToDelete);
-      setSelectedAssetIds(new Set()); // 清空选择
-      setIsSelectionMode(false); // 退出选择模式
+      // 从选中集合中移除已删除的项（保留其他筛选条件下的选中项）
+      setSelectedAssetIds(prev => {
+        const newSet = new Set(prev);
+        idsToDelete.forEach(id => newSet.delete(id));
+        return newSet;
+      });
+      // 如果没有剩余选中项，退出选择模式
+      if (selectedAssetIds.size - idsToDelete.length === 0) {
+        setIsSelectionMode(false);
+      }
     } catch (error) {
       console.error('[MediaLibraryGrid] Batch delete failed:', error);
     }
   }, [selectedAssetIds, removeAssets, board, filteredResult.assets]);
   
   // 计算批量删除时会影响的画布元素数量
+  // 只计算当前筛选结果中被选中的素材
   const batchDeleteWarningInfo = useMemo(() => {
-    if (!board || selectedAssetIds.size === 0) {
+    // 获取筛选后被选中的素材
+    const filteredSelectedAssets = filteredResult.assets.filter(a => selectedAssetIds.has(a.id));
+    
+    if (!board || filteredSelectedAssets.length === 0) {
       return { hasCacheAssets: false, affectedCount: 0 };
     }
     
     let affectedCount = 0;
-    const cacheAssets = filteredResult.assets.filter(
-      a => selectedAssetIds.has(a.id) && isCacheUrl(a.url)
-    );
+    const cacheAssets = filteredSelectedAssets.filter(a => isCacheUrl(a.url));
     
     for (const asset of cacheAssets) {
       affectedCount += countElementsByAssetUrl(board, asset.url);
@@ -224,6 +398,232 @@ export function MediaLibraryGrid({
     
     return { hasCacheAssets: cacheAssets.length > 0, affectedCount };
   }, [board, selectedAssetIds, filteredResult.assets]);
+
+  // 批量下载处理
+  // 只下载当前筛选结果中被选中的素材
+  const handleBatchDownload = useCallback(async () => {
+    // 只获取筛选结果中被选中的素材
+    const selectedAssets = filteredResult.assets.filter(a => selectedAssetIds.has(a.id));
+    const totalFiles = selectedAssets.length;
+    
+    if (totalFiles === 0 || isDownloading) return;
+    
+    setIsDownloading(true);
+    setDownloadProgress(0);
+    
+    try {
+      const zip = new JSZip();
+      let fetchedCount = 0;
+      
+      // 逐个获取文件并更新进度（0-50%）
+      const results: Array<{ fileName: string; blob: Blob } | null> = [];
+      
+      for (const asset of selectedAssets) {
+        try {
+          const response = await fetch(asset.url);
+          if (!response.ok) {
+            console.warn(`[MediaLibraryGrid] Failed to fetch ${asset.name}: ${response.status}`);
+            results.push(null);
+          } else {
+            const blob = await response.blob();
+            
+            // 获取文件扩展名
+            let ext = '';
+            if (asset.type === AssetType.IMAGE) {
+              ext = asset.name.match(/\.(jpg|jpeg|png|gif|webp|svg)$/i)?.[0] || '.png';
+            } else {
+              ext = asset.name.match(/\.(mp4|webm|mov|avi)$/i)?.[0] || '.mp4';
+            }
+            
+            // 确保文件名有扩展名
+            const fileName = asset.name.includes('.') ? asset.name : `${asset.name}${ext}`;
+            results.push({ fileName, blob });
+          }
+        } catch (err) {
+          console.warn(`[MediaLibraryGrid] Failed to fetch ${asset.name}:`, err);
+          results.push(null);
+        }
+        
+        fetchedCount++;
+        setDownloadProgress(Math.round((fetchedCount / totalFiles) * 50));
+      }
+      
+      // 添加成功获取的文件到 zip
+      let addedCount = 0;
+      const fileNames = new Map<string, number>();
+      
+      for (const result of results) {
+        if (result) {
+          // 处理重名文件
+          let fileName = result.fileName;
+          const count = fileNames.get(fileName) || 0;
+          if (count > 0) {
+            const dotIndex = fileName.lastIndexOf('.');
+            if (dotIndex > 0) {
+              fileName = `${fileName.slice(0, dotIndex)}_${count}${fileName.slice(dotIndex)}`;
+            } else {
+              fileName = `${fileName}_${count}`;
+            }
+          }
+          fileNames.set(result.fileName, count + 1);
+          
+          zip.file(fileName, result.blob);
+          addedCount++;
+        }
+      }
+      
+      if (addedCount === 0) {
+        console.error('[MediaLibraryGrid] No files were added to the zip');
+        return;
+      }
+      
+      // 生成 zip 文件（50-100%）
+      const zipBlob = await zip.generateAsync(
+        { 
+          type: 'blob',
+          compression: 'DEFLATE',
+          compressionOptions: { level: 6 }
+        },
+        (metadata) => {
+          // 压缩进度：50-100%
+          setDownloadProgress(50 + Math.round(metadata.percent / 2));
+        }
+      );
+      
+      setDownloadProgress(100);
+      
+      // 下载
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `素材_${new Date().toISOString().slice(0, 10)}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('[MediaLibraryGrid] Download failed:', error);
+    } finally {
+      setIsDownloading(false);
+      setDownloadProgress(0);
+    }
+  }, [selectedAssetIds, filteredResult.assets, isDownloading]);
+
+  // 将素材转换为预览项
+  const convertToMediaItems = useCallback((assetList: Asset[]): UnifiedMediaItem[] => {
+    return assetList.map(asset => ({
+      id: asset.id,
+      url: asset.url,
+      type: asset.type === AssetType.VIDEO ? 'video' : 'image',
+      title: asset.name,
+      alt: asset.name,
+    }));
+  }, []);
+
+  // 打开预览
+  const handlePreview = useCallback((asset: Asset) => {
+    const allMediaItems = convertToMediaItems(filteredResult.assets);
+    const index = filteredResult.assets.findIndex(a => a.id === asset.id);
+    setPreviewItems(allMediaItems);
+    setPreviewInitialIndex(index >= 0 ? index : 0);
+    setPreviewVisible(true);
+  }, [filteredResult.assets, convertToMediaItems]);
+
+  // 关闭预览
+  const handlePreviewClose = useCallback(() => {
+    setPreviewVisible(false);
+  }, []);
+
+  // 从预览器插入到画布
+  const handleInsertFromViewer = useCallback(async (item: UnifiedMediaItem) => {
+    // 优先使用外部回调（如果有）
+    if (onDoubleClick) {
+      const asset = filteredResult.assets.find(a => a.url === item.url);
+      if (asset) {
+        onDoubleClick(asset);
+        return;
+      }
+    }
+    
+    // 直接插入到画布
+    if (board) {
+      try {
+        if (item.type === 'video') {
+          await insertVideoFromUrl(board, item.url);
+        } else {
+          await insertImageFromUrl(board, item.url);
+        }
+        // 插入成功后关闭预览
+        setPreviewVisible(false);
+      } catch (error) {
+        console.error('Failed to insert media to canvas:', error);
+      }
+    }
+  }, [filteredResult.assets, onDoubleClick, board]);
+
+  // 处理图片编辑
+  const handleEditImage = useCallback((item: UnifiedMediaItem) => {
+    if (item.type !== 'image') return;
+    setImageEditorUrl(item.url);
+    setImageEditorVisible(true);
+    setPreviewVisible(false); // 关闭预览
+  }, []);
+
+  // 编辑后插入画布
+  const handleEditInsert = useCallback(async (editedImageUrl: string) => {
+    if (!board) return;
+    
+    try {
+      // 导入必要服务
+      const { unifiedCacheService } = await import('../../services/unified-cache-service');
+      
+      const taskId = `edited-image-${Date.now()}`;
+      const stableUrl = `/__aitu_cache__/image/${taskId}.png`;
+      
+      // 将 data URL 转换为 Blob
+      const response = await fetch(editedImageUrl);
+      const blob = await response.blob();
+      
+      // 缓存到 Cache API
+      await unifiedCacheService.cacheMediaFromBlob(stableUrl, blob, 'image', { taskId });
+      
+      // 插入到画布
+      await insertImageFromUrl(board, stableUrl);
+      
+      // 关闭编辑器
+      setImageEditorVisible(false);
+      setImageEditorUrl('');
+    } catch (error) {
+      console.error('Failed to insert edited image:', error);
+    }
+  }, [board]);
+
+  // 键盘事件处理（空格键/回车键预览选中的素材）
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // 只有在素材库容器获得焦点时才处理
+      if (!gridContainerRef.current?.contains(document.activeElement)) return;
+      
+      // 如果正在编辑输入框，不处理
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
+      
+      // 如果预览已打开，不处理（让 MediaViewer 处理）
+      if (previewVisible) return;
+
+      // 空格键或回车键预览选中的素材
+      if ((e.key === ' ' || e.key === 'Enter') && selectedAssetId) {
+        e.preventDefault();
+        const asset = filteredResult.assets.find(a => a.id === selectedAssetId);
+        if (asset) {
+          handlePreview(asset);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedAssetId, filteredResult.assets, handlePreview, previewVisible]);
 
   if (loading && assets.length === 0) {
     return (
@@ -235,105 +635,233 @@ export function MediaLibraryGrid({
 
   return (
     <div
+      ref={gridContainerRef}
       className={`media-library-grid ${isDragging ? 'media-library-grid--dragging' : ''}`}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
       <div className="media-library-grid__header">
-        <Input
-          value={filters.searchQuery}
-          onChange={(value) => setFilters({ searchQuery: value as string })}
-          placeholder="搜索素材名称..."
-          prefixIcon={<Search size={16} />}
-          clearable
-          data-track="grid_search_input"
-          className="media-library-grid__search"
-        />
-        <div className="media-library-grid__header-actions">
-          {isSelectionMode ? (
-            <>
+        <div className="media-library-grid__header-top">
+          <Input
+            value={filters.searchQuery}
+            onChange={(value) => setFilters({ searchQuery: value as string })}
+            placeholder="搜索素材..."
+            prefixIcon={<Search size={16} />}
+            clearable
+            data-track="grid_search_input"
+            className="media-library-grid__search"
+          />
+          <div className="media-library-grid__header-right">
+            <ViewModeToggle viewMode={pendingViewMode} onViewModeChange={handleViewModeChange} />
+            {isSelectionMode ? (
+              <>
+                <Popconfirm
+                  content={
+                    <div>
+                      <p>确定要删除选中的 {filteredSelectedCount} 个素材吗？</p>
+                      {batchDeleteWarningInfo.hasCacheAssets && batchDeleteWarningInfo.affectedCount > 0 && (
+                        <p style={{ marginTop: '8px', color: 'var(--td-error-color)' }}>
+                          ⚠️ 画布中有 <strong>{batchDeleteWarningInfo.affectedCount}</strong> 个元素正在使用这些素材，删除后将被一并移除！
+                        </p>
+                      )}
+                    </div>
+                  }
+                  onConfirm={handleBatchDelete}
+                  theme="warning"
+                >
+                  <Button
+                    variant="base"
+                    theme="danger"
+                    size="small"
+                    icon={<Trash2 size={16} />}
+                    disabled={filteredSelectedCount === 0}
+                    data-track="grid_batch_delete"
+                  >
+                    删除
+                  </Button>
+                </Popconfirm>
+                <Button
+                  variant="outline"
+                  size="small"
+                  icon={<XSquare size={16} />}
+                  onClick={toggleSelectionMode}
+                  data-track="grid_cancel_selection"
+                >
+                  取消
+                </Button>
+                <Button
+                  variant="base"
+                  theme="primary"
+                  size="small"
+                  icon={<Download size={16} />}
+                  disabled={filteredSelectedCount === 0 || isDownloading}
+                  loading={isDownloading}
+                  onClick={handleBatchDownload}
+                  data-track="grid_batch_download"
+                >
+                  下载
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  size="small"
+                  icon={<CheckSquare size={16} />}
+                  onClick={toggleSelectionMode}
+                  data-track="grid_toggle_selection_mode"
+                >
+                  批量选择
+                </Button>
+                <Button
+                  variant="base"
+                  theme="primary"
+                  size="small"
+                  icon={<ImageUploadIconComp size={16} />}
+                  onClick={onUploadClick}
+                  data-track="grid_upload_click"
+                >
+                  上传
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+        <div className="media-library-grid__header-bottom">
+          {/* 选择模式：全选和计数 */}
+          {isSelectionMode && (
+            <div
+              className="media-library-grid__selection-info"
+              onClick={toggleSelectAll}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  toggleSelectAll();
+                }
+              }}
+            >
               <Checkbox
                 checked={isAllSelected}
                 indeterminate={isPartialSelected}
-                onChange={toggleSelectAll}
                 data-track="grid_select_all"
-              >
-                全选
-              </Checkbox>
+              />
               <span className="media-library-grid__selection-count">
-                已选 {selectedAssetIds.size} 个
+                {filteredSelectedCount}
               </span>
-              <Popconfirm
-                content={
-                  <div>
-                    <p>确定要删除选中的 {selectedAssetIds.size} 个素材吗？</p>
-                    {batchDeleteWarningInfo.hasCacheAssets && batchDeleteWarningInfo.affectedCount > 0 && (
-                      <p style={{ marginTop: '8px', color: 'var(--td-error-color)' }}>
-                        ⚠️ 画布中有 <strong>{batchDeleteWarningInfo.affectedCount}</strong> 个元素正在使用这些素材，删除后将被一并移除！
-                      </p>
-                    )}
-                  </div>
-                }
-                onConfirm={handleBatchDelete}
-                theme="warning"
-              >
-                <Button
-                  variant="base"
-                  theme="danger"
-                  size="small"
-                  icon={<Trash2 size={16} />}
-                  disabled={selectedAssetIds.size === 0}
-                  data-track="grid_batch_delete"
-                >
-                  删除选中
-                </Button>
-              </Popconfirm>
-              <Button
-                variant="outline"
-                size="small"
-                icon={<XSquare size={16} />}
-                onClick={toggleSelectionMode}
-                data-track="grid_cancel_selection"
-              >
-                取消
-              </Button>
-            </>
-          ) : (
-            <>
-              <ViewModeToggle viewMode={pendingViewMode} onViewModeChange={handleViewModeChange} />
-              <span className="media-library-grid__count">
-                共 {filteredResult.count} 个素材
-              </span>
-              <Button
-                variant="outline"
-                size="small"
-                icon={<CheckSquare size={16} />}
-                onClick={toggleSelectionMode}
-                data-track="grid_toggle_selection_mode"
-              >
-                批量选择
-              </Button>
-              <Button
-                variant="base"
-                theme="primary"
-                size="small"
-                icon={<UploadIcon size={16} />}
-                onClick={onUploadClick}
-                data-track="grid_upload_click"
-              >
-                上传
-              </Button>
-            </>
+            </div>
           )}
+
+          <div className="media-library-grid__filter-island">
+            <div className="media-library-grid__filter-group">
+              {TYPE_OPTIONS.map(opt => {
+                  const count = opt.value === 'ALL' ? counts.all : (opt.value === AssetType.IMAGE ? counts.image : counts.video);
+                  const Icon = opt.icon;
+                  const isActive = (filters.activeType || 'ALL') === opt.value;
+                  return (
+                    <Tooltip key={opt.value} content={`${opt.label} (${count})`} placement="top" theme="light" showArrow={false}>
+                      <div
+                        className={`media-library-grid__filter-option ${isActive ? 'media-library-grid__filter-option--active' : ''}`}
+                        onClick={() => setFilters({ activeType: opt.value === 'ALL' ? undefined : opt.value as AssetType })}
+                      >
+                        <Icon size={14} strokeWidth={1.5} className={opt.value === 'ALL' ? 'icon-all' : ''} />
+                        <span className="media-library-grid__filter-count">{count}</span>
+                      </div>
+                    </Tooltip>
+                  );
+                })}
+                
+                {SOURCE_OPTIONS.filter(opt => opt.value !== 'ALL').map(opt => {
+                  const count = counts[opt.countKey as keyof typeof counts];
+                  const Icon = opt.icon;
+                  const isActive = filters.activeSource === opt.value;
+                  return (
+                    <Tooltip key={opt.value} content={`${opt.label} (${count})`} placement="top" theme="light" showArrow={false}>
+                      <div
+                        className={`media-library-grid__filter-option ${isActive ? 'media-library-grid__filter-option--active' : ''}`}
+                        onClick={() => setFilters({ activeSource: isActive ? undefined : opt.value as AssetSource })}
+                      >
+                        <Icon size={14} strokeWidth={1.5} />
+                        <span className="media-library-grid__filter-count">{count}</span>
+                      </div>
+                    </Tooltip>
+                  );
+                })}
+            </div>
+          </div>
+
+          <div className="media-library-grid__header-spacer" />
+
+          <div className="media-library-grid__sort-options">
+              {SORT_GROUPS.map(group => {
+                const currentSort = filters.sortBy || 'DATE_DESC';
+                const isAsc = currentSort === group.options.asc;
+                const isDesc = currentSort === group.options.desc;
+                const isActive = isAsc || isDesc;
+                const Icon = isAsc ? group.icons.asc : group.icons.desc;
+                
+                const handleSortClick = () => {
+                  if (currentSort === group.options.asc) {
+                    // 当前是正序 -> 切换到逆序
+                    setFilters({ sortBy: group.options.desc });
+                  } else if (currentSort === group.options.desc) {
+                    // 当前是逆序
+                    if (currentSort === 'DATE_DESC' && group.id === 'DATE') {
+                      // 如果当前已经是默认的日期逆序，点一下进入日期正序
+                      setFilters({ sortBy: 'DATE_ASC' });
+                    } else {
+                      // 否则恢复默认排序 (DATE_DESC)
+                      setFilters({ sortBy: 'DATE_DESC' });
+                    }
+                  } else {
+                    // 当前不在该组 -> 切换到正序
+                    setFilters({ sortBy: group.options.asc });
+                  }
+                };
+
+                return (
+          <Tooltip
+            key={group.id} 
+            content={`${group.label}: ${isAsc ? '正序' : (isDesc ? '逆序' : '默认')}`} 
+            placement="top" 
+            theme="light" 
+            showArrow={false}
+          >
+                    <div
+                      className={`media-library-grid__filter-option ${isActive ? 'media-library-grid__filter-option--active' : ''}`}
+                      onClick={handleSortClick}
+                    >
+                      <Icon size={14} strokeWidth={1.5} />
+                    </div>
+                  </Tooltip>
+                );
+            })}
+          </div>
         </div>
+
+        {/* 下载进度条 */}
+        {isDownloading && (
+          <div className="media-library-grid__progress">
+            <div className="media-library-grid__progress-bar">
+              <div 
+                className="media-library-grid__progress-fill"
+                style={{ width: `${downloadProgress}%` }}
+              />
+            </div>
+            <span className="media-library-grid__progress-text">
+              {downloadProgress < 50 ? '下载中' : '压缩中'} {downloadProgress}%
+            </span>
+          </div>
+        )}
       </div>
 
       {isDragging && (
         <div className="media-library-grid__drop-overlay">
           <div className="media-library-grid__drop-message">
             <div className="media-library-grid__drop-message-icon">
-              <UploadIcon size={32} />
+              <ImageUploadIconComp size={32} />
             </div>
             <h3 className="media-library-grid__drop-message-title">拖放文件到这里</h3>
             <p className="media-library-grid__drop-message-description">支持 JPG、PNG、MP4 格式</p>
@@ -350,19 +878,78 @@ export function MediaLibraryGrid({
             <VirtualAssetGrid
               assets={filteredResult.assets}
               viewMode={viewMode}
+              gridSize={gridSize}
               selectedAssetId={selectedAssetId}
               selectedAssetIds={selectedAssetIds}
               isSelectionMode={isSelectionMode}
               onSelectAsset={isSelectionMode ? toggleAssetSelection : onSelectAsset}
               onDoubleClick={onDoubleClick}
+              onPreview={handlePreview}
             />
           </div>
 
           <div className="media-library-grid__footer">
-            <span>共 {filteredResult.count} 个素材</span>
-            {!isSelectionMode && <span className="media-library-grid__footer-hint">双击插入</span>}
+            <div className="media-library-grid__footer-left">
+              {storageStatus ? (
+                <div className="media-library-grid__footer-storage">
+                  <HardDrive size={14} />
+                  <span>已用 {formatFileSize(storageStatus.quota.usage)}</span>
+                </div>
+              ) : (
+                <div className="media-library-grid__footer-storage">
+                  <HardDrive size={14} />
+                  <span>正在获取存储状态...</span>
+                </div>
+              )}
+              <span className="media-library-grid__footer-count">共 {filteredResult.count} 个素材</span>
+              {!isSelectionMode && <span className="media-library-grid__footer-hint">双击预览</span>}
+            </div>
+            
+            <div className="media-library-grid__footer-right">
+              {viewMode !== 'list' && (
+                <div className="media-library-grid__zoom-control">
+                  <Minus size={14} onClick={() => setGridSize(prev => Math.max(80, prev - 20))} />
+                  <input
+                    type="range"
+                    min="80"
+                    max="300"
+                    step="10"
+                    value={gridSize}
+                    onChange={(e) => setGridSize(Number(e.target.value))}
+                    className="media-library-grid__zoom-slider"
+                    data-track="grid_zoom_slider"
+                  />
+                  <Plus size={14} onClick={() => setGridSize(prev => Math.min(300, prev + 20))} />
+                </div>
+              )}
+            </div>
           </div>
         </>
+      )}
+
+      {/* 媒体预览器 */}
+      <UnifiedMediaViewer
+        visible={previewVisible}
+        items={previewItems}
+        initialIndex={previewInitialIndex}
+        onClose={handlePreviewClose}
+        showThumbnails={true}
+        onInsertToCanvas={board ? handleInsertFromViewer : undefined}
+        onEdit={handleEditImage}
+      />
+
+      {/* 图片编辑器 - 素材库场景只支持插入画布和下载 */}
+      {imageEditorVisible && imageEditorUrl && (
+        <ImageEditor
+          visible={imageEditorVisible}
+          imageUrl={imageEditorUrl}
+          showOverwrite={false}
+          onClose={() => {
+            setImageEditorVisible(false);
+            setImageEditorUrl('');
+          }}
+          onInsert={board ? handleEditInsert : undefined}
+        />
       )}
     </div>
   );

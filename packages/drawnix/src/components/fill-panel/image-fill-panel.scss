@@ -1,0 +1,343 @@
+/**
+ * 图片填充面板样式
+ * Image Fill Panel Styles - 紧凑版
+ */
+
+.image-fill-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+// 图片选择区域
+.ifp-image-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ifp-image-container {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  border: 1.5px dashed var(--color-border, #d1d5db);
+  border-radius: 6px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+
+  &:hover {
+    border-color: var(--color-primary, #3b82f6);
+  }
+}
+
+.ifp-image-preview {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-secondary, #f9fafb);
+
+  img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+  }
+
+  .ifp-image-remove {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.6);
+    border: none;
+    border-radius: 50%;
+    color: #ffffff;
+    font-size: 12px;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+
+    &:hover {
+      background: rgba(239, 68, 68, 0.9);
+    }
+  }
+
+  &:hover .ifp-image-remove {
+    opacity: 1;
+  }
+}
+
+.ifp-image-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 4px;
+  background: var(--color-bg-secondary, #f9fafb);
+
+  .ifp-placeholder-icon {
+    color: var(--color-text-tertiary, #9ca3af);
+  }
+
+  .ifp-placeholder-text {
+    font-size: 11px;
+    color: var(--color-text-secondary, #6b7280);
+  }
+}
+
+// 图片操作按钮
+.ifp-image-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.ifp-action-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 8px;
+  background: var(--color-bg-secondary, #f3f4f6);
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 5px;
+  color: var(--color-text-secondary, #6b7280);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: var(--color-bg-hover, #e5e7eb);
+    color: var(--color-text, #111827);
+  }
+
+  &--primary {
+    background: #F39C12;
+    border-color: #F39C12;
+    color: #ffffff;
+
+    &:hover {
+      background: #E67E22;
+      border-color: #E67E22;
+      color: #ffffff;
+    }
+  }
+}
+
+// 控制区域
+.ifp-control-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ifp-section-title {
+  font-size: 11px;
+  color: var(--color-text-secondary, #6b7280);
+  font-weight: 500;
+}
+
+// 平铺模式按钮
+.ifp-mode-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.ifp-mode-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 6px;
+  background: var(--color-bg-secondary, #f3f4f6);
+  border: 1.5px solid transparent;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: var(--color-bg-hover, #e5e7eb);
+  }
+
+  &.active {
+    background: rgba(243, 156, 18, 0.08);
+    border-color: #F39C12;
+  }
+
+  .ifp-mode-icon {
+    font-size: 20px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    margin-top: -2px;
+    color: var(--color-text-secondary, #6b7280);
+  }
+
+  .ifp-mode-label {
+    font-size: 11px;
+    line-height: 1;
+    color: var(--color-text-secondary, #6b7280);
+  }
+
+  &.active {
+    .ifp-mode-icon,
+    .ifp-mode-label {
+      color: #E67E22;
+    }
+  }
+}
+
+// 高级设置
+.ifp-advanced-section {
+  border-top: 1px solid var(--color-border, #e5e7eb);
+  padding-top: 8px;
+  margin-top: 2px;
+}
+
+.ifp-advanced-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 4px 0;
+  background: transparent;
+  border: none;
+  color: var(--color-text-secondary, #6b7280);
+  font-size: 11px;
+  cursor: pointer;
+  transition: color 0.15s ease;
+
+  &:hover {
+    color: var(--color-text, #111827);
+  }
+}
+
+.ifp-advanced-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+}
+
+// 控制行
+.ifp-control-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ifp-control-label {
+  flex-shrink: 0;
+  width: 42px;
+  font-size: 10px;
+  color: var(--color-text-tertiary, #9ca3af);
+}
+
+.ifp-control-input {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ifp-slider {
+  flex: 1;
+  height: 3px;
+  appearance: none;
+  background: var(--color-border, #e5e7eb);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+
+  &::-webkit-slider-thumb {
+    appearance: none;
+    width: 12px;
+    height: 12px;
+    background: var(--color-primary, #3b82f6);
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+  }
+}
+
+.ifp-control-value {
+  flex-shrink: 0;
+  width: 36px;
+  font-size: 10px;
+  color: var(--color-text-secondary, #6b7280);
+  font-family: 'SF Mono', Monaco, monospace;
+  text-align: right;
+}
+
+// 输入框包装器
+.ifp-control-value-wrapper {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 2px;
+}
+
+.ifp-control-value-input {
+  width: 40px;
+  padding: 2px 4px;
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 4px;
+  background: var(--color-bg, #ffffff);
+  color: var(--color-text-secondary, #6b7280);
+  font-size: 10px;
+  font-family: 'SF Mono', Monaco, monospace;
+  text-align: right;
+  outline: none;
+  transition: border-color 0.15s ease;
+
+  // 隐藏 number 输入框的上下箭头
+  -moz-appearance: textfield;
+  &::-webkit-outer-spin-button,
+  &::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  &:focus {
+    border-color: var(--color-primary, #3b82f6);
+  }
+
+  &:hover {
+    border-color: var(--color-border-hover, #d1d5db);
+  }
+}
+
+.ifp-control-unit {
+  font-size: 10px;
+  color: var(--color-text-tertiary, #9ca3af);
+  font-family: 'SF Mono', Monaco, monospace;
+}
+
+// 重置按钮
+.ifp-reset-btn {
+  align-self: flex-end;
+  padding: 4px 10px;
+  background: var(--color-bg-secondary, #f3f4f6);
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 4px;
+  color: var(--color-text-secondary, #6b7280);
+  font-size: 10px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: var(--color-bg-hover, #e5e7eb);
+    color: var(--color-text, #111827);
+  }
+}

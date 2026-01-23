@@ -78,13 +78,16 @@ export function toWorkflowMessageData(
   postProcessingStatus?: PostProcessingStatus,
   insertedCount?: number
 ): WorkflowMessageData {
+  // Safely access metadata with defaults
+  const metadata = workflow.metadata || {};
+  
   return {
     id: workflow.id,
     name: workflow.name,
     generationType: workflow.generationType,
-    prompt: workflow.metadata.prompt,
+    prompt: metadata.prompt || retryContext?.aiContext?.finalPrompt || '',
     aiAnalysis: workflow.aiAnalysis,
-    count: workflow.metadata.count,
+    count: metadata.count,
     steps: workflow.steps.map(step => ({
       id: step.id,
       description: step.description,
@@ -181,6 +184,94 @@ export function useWorkflowSubmission(
   // Active subscriptions
   const subscriptionsRef = useRef<Subscription[]>([]);
 
+  // Flag to track if we've already recovered workflows
+  const hasRecoveredRef = useRef(false);
+
+  // Ref to hold handleWorkflowEvent to avoid TDZ issues
+  const handleWorkflowEventRef = useRef<((
+    event: WorkflowEvent,
+    legacyWorkflow: LegacyWorkflowDefinition,
+    retryContext: WorkflowRetryContext
+  ) => Promise<void>) | null>(null);
+
+  /**
+   * Recover workflows on mount (after page refresh)
+   */
+  const recoverWorkflowsOnMount = useCallback(async () => {
+    // Only recover once
+    if (hasRecoveredRef.current) return;
+    hasRecoveredRef.current = true;
+
+    try {
+      const recoveredWorkflows = await workflowSubmissionService.recoverWorkflows();
+      
+      // Silently recover workflows
+      void recoveredWorkflows;
+    } catch (error) {
+      console.warn('[useWorkflowSubmission] Failed to recover workflows:', error);
+    }
+  }, []);
+
+  /**
+   * Handle a recovered workflow (from page refresh)
+   * This restores UI state without re-submitting to SW
+   */
+  const handleRecoveredWorkflow = useCallback((event: WorkflowEvent) => {
+    if (event.type !== 'recovered' || !event.workflow) return;
+
+    const recoveredWorkflow = event.workflow as unknown as LegacyWorkflowDefinition;
+    const board = boardRef.current;
+    const workZoneId = workZoneIdRef.current;
+
+    // Only restore running/pending workflows to avoid showing stale data
+    if (recoveredWorkflow.status !== 'running' && recoveredWorkflow.status !== 'pending') {
+      return;
+    }
+
+    // Restore workflow to WorkflowContext
+    workflowControl.restoreWorkflow?.(recoveredWorkflow);
+
+    // Build retry context from workflow context
+    const retryContext: WorkflowRetryContext = {
+      aiContext: {
+        rawInput: recoveredWorkflow.context?.userInput || '',
+        userInstruction: recoveredWorkflow.context?.userInput || '',
+        model: {
+          id: recoveredWorkflow.context?.model || '',
+          type: recoveredWorkflow.generationType === 'video' ? 'video' : 'image',
+          isExplicit: true,
+        },
+        params: {
+          count: recoveredWorkflow.metadata?.count,
+          size: recoveredWorkflow.metadata?.size,
+          duration: recoveredWorkflow.metadata?.duration,
+        },
+        selection: { texts: [], images: [], videos: [], graphics: [] },
+        finalPrompt: recoveredWorkflow.metadata?.prompt || '',
+      },
+      referenceImages: recoveredWorkflow.context?.referenceImages || [],
+      textModel: geminiSettings.get().textModelName,
+    };
+
+    // Update ChatDrawer with recovered workflow
+    const workflowData = toWorkflowMessageData(recoveredWorkflow, retryContext);
+    updateWorkflowMessageRef.current(workflowData);
+
+    // Update WorkZone if exists
+    if (workZoneId && board) {
+      WorkZoneTransforms.updateWorkflow(board, workZoneId, workflowData);
+    }
+
+    // Subscribe to future events for this workflow using ref
+    const workflowSub = workflowSubmissionService.subscribeToWorkflow(
+      recoveredWorkflow.id,
+      async (evt: WorkflowEvent) => {
+        await handleWorkflowEventRef.current?.(evt, recoveredWorkflow, retryContext);
+      }
+    );
+    subscriptionsRef.current.push(workflowSub);
+  }, [workflowControl, boardRef, workZoneIdRef]);
+
   // Initialize service on mount
   useEffect(() => {
     workflowSubmissionService.init();
@@ -196,6 +287,21 @@ export function useWorkflowSubmission(
     );
     subscriptionsRef.current.push(canvasSub);
 
+    // Subscribe to workflow recovery events
+    const recoverySub = workflowSubmissionService.subscribeToAllEvents(
+      (event: WorkflowEvent) => {
+        if (event.type === 'recovered') {
+          // Handle recovered workflow - update UI state without resubmitting
+          handleRecoveredWorkflow(event);
+        }
+      }
+    );
+    subscriptionsRef.current.push(recoverySub);
+
+    // Recover workflows after page refresh
+    // This will query SW for any running workflows and restore UI state
+    recoverWorkflowsOnMount();
+
     // Note: Main thread tool requests are now handled by SWTaskQueueClient.handleMainThreadToolRequest
     // which uses swCapabilitiesHandler. This avoids duplicate handling and race conditions.
     // The workflowSubmissionService.subscribeToToolRequests is no longer used.
@@ -209,7 +315,7 @@ export function useWorkflowSubmission(
   /**
    * Handle workflow events from SW
    */
-  const handleWorkflowEvent = useCallback((
+  const handleWorkflowEvent = useCallback(async (
     event: WorkflowEvent,
     legacyWorkflow: LegacyWorkflowDefinition,
     retryContext: WorkflowRetryContext
@@ -243,21 +349,27 @@ export function useWorkflowSubmission(
       }
 
       case 'completed': {
-        // console.log('[useWorkflowSubmission] ✓ Workflow completed:', event.workflowId);
+        console.log('[useWorkflowSubmission] ✓ Workflow completed:', event.workflowId);
 
         // Update steps to completed status, but skip steps with taskId (they're waiting for task completion)
         const currentWorkflow = workflowControl.getWorkflow();
+        let hasQueuedTasks = false;
+        
         if (currentWorkflow) {
           // Mark remaining steps as completed, except those with taskId (queue tasks)
           currentWorkflow.steps.forEach(step => {
-            if (step.status === 'running' || step.status === 'pending') {
-              // 如果步骤有 taskId，说明是队列任务，不要强制标记为 completed
-              // 等待任务真正完成后由 taskQueueService 更新状态
-              const stepResult = step.result as { taskId?: string } | undefined;
-              const hasTaskId = stepResult?.taskId;
-              if (!hasTaskId) {
-                workflowControl.updateStep(step.id, 'completed');
-              }
+            const stepResult = step.result as { taskId?: string } | undefined;
+            const hasTaskId = stepResult?.taskId;
+            
+            // 检查所有状态的步骤是否有 taskId
+            if (hasTaskId) {
+              hasQueuedTasks = true;
+              // console.log('[useWorkflowSubmission] Step has taskId:', step.id, step.mcp, 'taskId:', hasTaskId);
+            }
+            
+            // 只更新 running/pending 状态的步骤（如果没有 taskId 的话）
+            if ((step.status === 'running' || step.status === 'pending') && !hasTaskId) {
+              workflowControl.updateStep(step.id, 'completed');
             }
           });
         }
@@ -270,6 +382,38 @@ export function useWorkflowSubmission(
 
           if (workZoneId && board) {
             WorkZoneTransforms.updateWorkflow(board, workZoneId, workflowData);
+            
+            console.log('[useWorkflowSubmission] Checking removal for WorkZone:', workZoneId, 'hasQueuedTasks:', hasQueuedTasks);
+
+            // If no queued tasks (like generate_image), remove WorkZone after a delay
+            // Queued tasks will be handled by useAutoInsertToCanvas when they complete AND are inserted
+            if (!hasQueuedTasks) {
+              setTimeout(() => {
+                WorkZoneTransforms.removeWorkZone(board, workZoneId);
+                console.log('[useWorkflowSubmission] Removed WorkZone after completion:', workZoneId);
+              }, 1500);
+            } else {
+              // 检查是否所有队列任务的后处理已经完成（可能在工作流完成前就已经插入了）
+              const { workflowCompletionService } = await import('../services/workflow-completion-service');
+              const allPostProcessingFinished = completedWorkflow.steps.every(step => {
+                const stepResult = step.result as { taskId?: string } | undefined;
+                if (stepResult?.taskId) {
+                  const isCompleted = workflowCompletionService.isPostProcessingCompleted(stepResult.taskId);
+                  console.log(`[useWorkflowSubmission] Task ${stepResult.taskId} post-processing finished:`, isCompleted);
+                  return isCompleted;
+                }
+                return true;
+              });
+
+              if (allPostProcessingFinished) {
+                console.log('[useWorkflowSubmission] All post-processing finished, removing WorkZone:', workZoneId);
+                setTimeout(() => {
+                  WorkZoneTransforms.removeWorkZone(board, workZoneId);
+                }, 1500);
+              } else {
+                console.log('[useWorkflowSubmission] Post-processing still in progress, keeping WorkZone:', workZoneId);
+              }
+            }
           }
         }
         break;
@@ -330,6 +474,11 @@ export function useWorkflowSubmission(
     }
   }, [workflowControl, boardRef, workZoneIdRef]);
 
+  // Update ref when handleWorkflowEvent changes
+  useEffect(() => {
+    handleWorkflowEventRef.current = handleWorkflowEvent;
+  }, [handleWorkflowEvent]);
+
   /**
    * Submit a workflow using SW execution
    */
@@ -373,16 +522,22 @@ export function useWorkflowSubmission(
     // Subscribe to workflow events
     const workflowSub = workflowSubmissionService.subscribeToWorkflow(
       swWorkflow.id,
-      (event: WorkflowEvent) => {
-        handleWorkflowEvent(event, legacyWorkflow, retryContext);
+      async (event: WorkflowEvent) => {
+        await handleWorkflowEvent(event, legacyWorkflow, retryContext);
       }
     );
     subscriptionsRef.current.push(workflowSub);
 
     // Submit to SW
+    // console.log('[WorkflowSubmit] Submitting to SW:', {
+    //   workflowId: swWorkflow.id,
+    //   stepsCount: swWorkflow.steps.length,
+    //   timestamp: new Date().toISOString(),
+    // });
+    
     await workflowSubmissionService.submit(swWorkflow);
 
-    // console.log('[useWorkflowSubmission] Workflow submitted to SW:', swWorkflow.id);
+    // console.log('[WorkflowSubmit] ✓ Submitted to SW:', swWorkflow.id);
     return swWorkflow.id;
   }, [handleWorkflowEvent]);
 
@@ -395,15 +550,24 @@ export function useWorkflowSubmission(
     retryContext?: WorkflowRetryContext,
     existingWorkflow?: LegacyWorkflowDefinition
   ): Promise<{ workflowId: string; usedSW: boolean }> => {
-    // console.log('[useWorkflowSubmission] ▶ submitWorkflow called');
-    // console.log('[useWorkflowSubmission]   - Scenario:', parsedInput.scenario);
-    // console.log('[useWorkflowSubmission]   - Generation type:', parsedInput.generationType);
-    // console.log('[useWorkflowSubmission]   - useSWExecution option:', useSWExecution);
-    // console.log('[useWorkflowSubmission]   - SW available:', checkSWAvailable());
-    // console.log('[useWorkflowSubmission]   - existingWorkflow:', existingWorkflow?.id);
+    // Debug logging for workflow submission (visible when debug mode enabled)
+    // console.log('[WorkflowSubmit] ▶ submitWorkflow called', {
+    //   scenario: parsedInput.scenario,
+    //   generationType: parsedInput.generationType,
+    //   useSWExecution,
+    //   swAvailable: checkSWAvailable(),
+    //   existingWorkflowId: existingWorkflow?.id,
+    //   timestamp: new Date().toISOString(),
+    // });
 
     // Use existing workflow if provided, otherwise create a new one
     const legacyWorkflow = existingWorkflow || convertToWorkflow(parsedInput, referenceImages);
+    
+    // console.log('[WorkflowSubmit] Created/using workflow:', {
+    //   workflowId: legacyWorkflow.id,
+    //   name: legacyWorkflow.name,
+    //   stepsCount: legacyWorkflow.steps.length,
+    // });
 
     // Start workflow in WorkflowContext
     workflowControl.startWorkflow(legacyWorkflow);

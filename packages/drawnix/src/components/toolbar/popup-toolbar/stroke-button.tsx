@@ -179,7 +179,7 @@ export const PopupStrokeButton: React.FC<PopupStrokeButtonProps> = ({
                 <Stack.Row className={classNames('stroke-style-picker')}>
                   <ToolButton
                     visible={true}
-                    icon={StrokeStyleNormalIcon}
+                    icon={<StrokeStyleNormalIcon />}
                     type="button"
                     title="实线"
                     aria-label="实线"
@@ -187,7 +187,7 @@ export const PopupStrokeButton: React.FC<PopupStrokeButtonProps> = ({
                   ></ToolButton>
                   <ToolButton
                     visible={true}
-                    icon={StrokeStyleDashedIcon}
+                    icon={<StrokeStyleDashedIcon />}
                     type="button"
                     title="虚线"
                     aria-label="虚线"
@@ -195,7 +195,7 @@ export const PopupStrokeButton: React.FC<PopupStrokeButtonProps> = ({
                   ></ToolButton>
                   <ToolButton
                     visible={true}
-                    icon={StrokeStyleDotedIcon}
+                    icon={<StrokeStyleDotedIcon />}
                     type="button"
                     title="点线"
                     aria-label="点线"

@@ -60,8 +60,9 @@ export const generateImageTool: SWMCPTool = {
 
       onProgress?.(10, TaskExecutionPhase.SUBMITTING);
 
-      // Make API request
-      const response = await fetch(`${geminiConfig.baseUrl}/images/generations`, {
+      // Make API request (using debugFetch for logging)
+      const { debugFetch } = await import('../debug-fetch');
+      const response = await debugFetch(`${geminiConfig.baseUrl}/images/generations`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -69,6 +70,10 @@ export const generateImageTool: SWMCPTool = {
         },
         body: JSON.stringify(requestBody),
         signal,
+      }, {
+        label: `🎨 生成图片 (${geminiConfig.modelName})`,
+        logRequestBody: true,
+        logResponseBody: true,
       });
 
       if (!response.ok) {
@@ -81,8 +86,8 @@ export const generateImageTool: SWMCPTool = {
 
       const data = await response.json();
 
-      // 使用通用函数解析响应
-      const { url, urls } = parseImageGenerationResponse(data);
+      // 使用通用函数解析响应（异步：Base64 会被缓存为虚拟路径 URL）
+      const { url, urls } = await parseImageGenerationResponse(data);
 
       onProgress?.(100);
 
@@ -175,8 +180,9 @@ export const generateVideoTool: SWMCPTool = {
         }
       }
 
-      // Submit video generation request
-      const submitResponse = await fetch(`${videoConfig.baseUrl}/videos/generations`, {
+      // Submit video generation request (using debugFetch for logging)
+      const { debugFetch: debugFetchVideo } = await import('../debug-fetch');
+      const submitResponse = await debugFetchVideo(`${videoConfig.baseUrl}/videos/generations`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -184,6 +190,10 @@ export const generateVideoTool: SWMCPTool = {
         },
         body: JSON.stringify(requestBody),
         signal,
+      }, {
+        label: `🎬 提交视频生成 (${videoConfig.model || 'default'})`,
+        logRequestBody: true,
+        logResponseBody: true,
       });
 
       if (!submitResponse.ok) {
@@ -246,6 +256,8 @@ export const generateVideoTool: SWMCPTool = {
  * Note: Only tools that can be executed directly in SW are registered here.
  * Tools requiring main thread (DOM/Board access) are handled by requiresMainThread()
  * check in workflow-executor.ts, which delegates them to main thread directly.
+ *
+ * ai_analyze is delegated to main thread to use the correct text model.
  */
 export const swMCPTools: Map<string, SWMCPTool> = new Map([
   ['generate_image', generateImageTool],
@@ -286,6 +298,9 @@ export async function executeSWMCPTool(
  * - Task status tracking
  * - Workflow step status synchronization
  * - Task recovery on page reload
+ *
+ * ai_analyze is delegated to main thread to use the correct text model
+ * (geminiConfig contains image model, not text model)
  */
 export function requiresMainThread(toolName: string): boolean {
   const delegatedTools = [
@@ -294,7 +309,7 @@ export function requiresMainThread(toolName: string): boolean {
     'insert_mermaid',
     'insert_mindmap',
     'insert_svg',
-    'ai_analyze',
+    'ai_analyze',            // Delegate to main thread for correct text model
     'generate_image',        // Delegate to main thread for task queue integration
     'generate_video',        // Delegate to main thread for task queue integration
     'generate_grid_image',

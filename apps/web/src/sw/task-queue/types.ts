@@ -8,6 +8,8 @@
  * Keep in sync with packages/drawnix/src/types/task.types.ts
  */
 
+import type { ChatToolCall } from './chat-workflow/types';
+
 // ============================================================================
 // Task Enums and Core Types (mirrored from task.types.ts)
 // ============================================================================
@@ -18,7 +20,6 @@
 export enum TaskStatus {
   PENDING = 'pending',
   PROCESSING = 'processing',
-  RETRYING = 'retrying',
   COMPLETED = 'completed',
   FAILED = 'failed',
   CANCELLED = 'cancelled',
@@ -67,6 +68,8 @@ export interface GenerationParams {
   inspirationBoardImageCount?: number;
   /** Whether to auto-insert the result to canvas when task completes */
   autoInsertToCanvas?: boolean;
+  /** image aspect ratio token (e.g. 16:9) */
+  aspectRatio?: string;
   [key: string]: unknown;
 }
 
@@ -136,10 +139,6 @@ export interface SWTask {
   result?: TaskResult;
   /** Error information (if failed) */
   error?: TaskError;
-  /** Number of retry attempts made */
-  retryCount: number;
-  /** Next scheduled retry timestamp (Unix milliseconds) */
-  nextRetryAt?: number;
   /** Task progress percentage (0-100) for video generation */
   progress?: number;
   /** Remote task ID from API (e.g., videoId for video generation) */
@@ -348,6 +347,14 @@ export interface ChatStopMessage {
 }
 
 /**
+ * Get cached chat result (for recovery after page refresh)
+ */
+export interface ChatGetCachedMessage {
+  type: 'CHAT_GET_CACHED';
+  chatId: string;
+}
+
+/**
  * Restore tasks from storage (after SW activation)
  */
 export interface TaskRestoreMessage {
@@ -395,6 +402,7 @@ export type MainToSWMessage =
   | TaskDeleteMessage
   | ChatStartMessage
   | ChatStopMessage
+  | ChatGetCachedMessage
   | TaskRestoreMessage
   | TaskMarkInsertedMessage
   | MCPToolExecuteMessage;
@@ -442,8 +450,6 @@ export interface TaskFailedMessage {
   type: 'TASK_FAILED';
   taskId: string;
   error: TaskError;
-  retryCount: number;
-  nextRetryAt?: number;
 }
 
 /**
@@ -538,6 +544,16 @@ export interface ChatErrorMessage {
 }
 
 /**
+ * Cached chat result response (for recovery after page refresh)
+ */
+export interface ChatCachedResultMessage {
+  type: 'CHAT_CACHED_RESULT';
+  chatId: string;
+  fullContent?: string;
+  found: boolean;
+}
+
+/**
  * MCP Tool Execute Result - SW returns tool execution result
  */
 export interface MCPToolResultMessage {
@@ -568,6 +584,7 @@ export type SWToMainMessage =
   | ChatChunkMessage
   | ChatDoneMessage
   | ChatErrorMessage
+  | ChatCachedResultMessage
   | MCPToolResultMessage;
 
 // ============================================================================
@@ -593,7 +610,11 @@ export interface HandlerConfig {
   geminiConfig: GeminiConfig;
   videoConfig: VideoAPIConfig;
   /** Callback to send progress updates */
-  onProgress: (taskId: string, progress: number, phase?: TaskExecutionPhase) => void;
+  onProgress: (
+    taskId: string,
+    progress: number,
+    phase?: TaskExecutionPhase
+  ) => void;
   /** Callback when remote ID is received */
   onRemoteId: (taskId: string, remoteId: string) => void;
 }
@@ -621,10 +642,6 @@ export interface ChatHandler {
  * Task queue configuration
  */
 export interface TaskQueueConfig {
-  /** Maximum retry count */
-  maxRetries: number;
-  /** Retry delays in milliseconds (exponential backoff) */
-  retryDelays: number[];
   /** Task timeout in milliseconds by type */
   timeouts: Record<TaskType, number>;
 }
@@ -633,13 +650,11 @@ export interface TaskQueueConfig {
  * Default task queue configuration
  */
 export const DEFAULT_TASK_QUEUE_CONFIG: TaskQueueConfig = {
-  maxRetries: 0, // 不重试
-  retryDelays: [],
   timeouts: {
-    [TaskType.IMAGE]: 10 * 60 * 1000,             // 10 minutes for image
-    [TaskType.VIDEO]: 20 * 60 * 1000,             // 20 minutes for video
-    [TaskType.CHARACTER]: 10 * 60 * 1000,         // 10 minutes
+    [TaskType.IMAGE]: 10 * 60 * 1000, // 10 minutes for image
+    [TaskType.VIDEO]: 20 * 60 * 1000, // 20 minutes for video
+    [TaskType.CHARACTER]: 10 * 60 * 1000, // 10 minutes
     [TaskType.INSPIRATION_BOARD]: 10 * 60 * 1000, // 10 minutes (same as image)
-    [TaskType.CHAT]: 10 * 60 * 1000,              // 10 minutes
+    [TaskType.CHAT]: 10 * 60 * 1000, // 10 minutes
   },
 };

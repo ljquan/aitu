@@ -12,7 +12,10 @@ export type VideoModel =
   | 'veo3-pro'
   | 'veo3.1'
   | 'veo3.1-pro'
-  | 'veo3.1-components';
+  | 'veo3.1-components'
+  | 'veo3.1-4k'
+  | 'veo3.1-components-4k'
+  | 'veo3.1-pro-4k';
 
 // Video model provider
 export type VideoProvider = 'sora' | 'veo';

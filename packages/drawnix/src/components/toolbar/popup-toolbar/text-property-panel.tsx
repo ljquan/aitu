@@ -13,6 +13,8 @@ import { useI18n } from '../../../i18n';
 import { UnifiedColorPicker } from '../../unified-color-picker';
 import { Popover, PopoverContent, PopoverTrigger } from '../../popover/popover';
 import { Island } from '../../island';
+import { GradientEditor, generateGradientCSS as generateFillGradientCSS } from '../../gradient-editor';
+import type { GradientFillConfig } from '../../../types/fill.types';
 import {
   setTextFontSize,
   setTextFontFamily,
@@ -92,12 +94,14 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({
   // 渐变状态
   const [gradientEnabled, setGradientEnabled] = useState(false);
   const [selectedGradientPreset, setSelectedGradientPreset] = useState<string | null>(null);
-  const [gradientAngle, setGradientAngle] = useState(135);
-  const [gradientStops, setGradientStops] = useState([
-    { color: '#FF6B6B', position: 0 },
-    { color: '#4ECDC4', position: 100 },
-  ]);
-  const [showGradientEditor, setShowGradientEditor] = useState(false);
+  const [gradientConfig, setGradientConfig] = useState<GradientFillConfig>({
+    type: 'linear',
+    angle: 135,
+    stops: [
+      { color: '#FF6B6B', offset: 0 },
+      { color: '#4ECDC4', offset: 1 },
+    ],
+  });
   
   // 自定义渐变预设
   const [customGradients, setCustomGradients] = useState<Array<{ id: string; css: string }>>([]);
@@ -107,9 +111,6 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({
 
   // 阴影颜色选择器 Popover 状态
   const [shadowColorPickerOpen, setShadowColorPickerOpen] = useState(false);
-  
-  // 渐变色标颜色选择器 Popover 状态
-  const [gradientStopColorPickerOpen, setGradientStopColorPickerOpen] = useState<number | null>(null);
 
   // 从 IndexedDB 加载渐变数据
   useEffect(() => {
@@ -320,45 +321,18 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({
     setTextShadow(board, shadowCSS);
   }, [board, shadowConfig]);
 
-  // 处理渐变预设选择
-  const handleGradientPresetSelect = useCallback((presetKey: string, preset: GradientConfig) => {
-    setSelectedGradientPreset(presetKey);
-    setGradientEnabled(true);
-    setGradientAngle(preset.angle);
-    setGradientStops(preset.stops);
-    const gradientCSS = generateGradientCSS(preset);
-    setTextGradient(board, gradientCSS);
-  }, [board]);
-
-  // 处理自定义渐变选择
-  const handleCustomGradientSelect = useCallback((gradientCSS: string, id: string) => {
-    setSelectedGradientPreset(`custom-${id}`);
-    setGradientEnabled(true);
-    setTextGradient(board, gradientCSS);
-  }, [board]);
-
-  // 应用当前渐变配置
-  const applyGradientConfig = useCallback(() => {
-    const config: GradientConfig = {
-      type: 'linear',
-      angle: gradientAngle,
-      stops: gradientStops,
-      target: 'text',
-    };
-    const gradientCSS = generateGradientCSS(config);
-    setTextGradient(board, gradientCSS);
+  // 应用当前渐变配置（来自 GradientEditor 的变更）
+  const handleGradientConfigChange = useCallback((config: GradientFillConfig) => {
+    setGradientConfig(config);
     setSelectedGradientPreset(null);
-  }, [board, gradientAngle, gradientStops]);
+    // 生成 CSS 并应用
+    const gradientCSS = generateFillGradientCSS(config);
+    setTextGradient(board, gradientCSS);
+  }, [board]);
 
   // 保存当前渐变到快捷选择
   const saveCurrentGradient = useCallback(() => {
-    const config: GradientConfig = {
-      type: 'linear',
-      angle: gradientAngle,
-      stops: gradientStops,
-      target: 'text',
-    };
-    const gradientCSS = generateGradientCSS(config);
+    const gradientCSS = generateFillGradientCSS(gradientConfig);
     const newGradient = {
       id: `custom-${Date.now()}`,
       css: gradientCSS,
@@ -368,7 +342,7 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({
     kvStorageService.set(CUSTOM_GRADIENTS_KEY, updated).catch((e) => {
       console.warn('Failed to save custom gradients:', e);
     });
-  }, [gradientAngle, gradientStops, customGradients]);
+  }, [gradientConfig, customGradients]);
 
   // 删除自定义渐变
   const deleteCustomGradient = useCallback((id: string) => {
@@ -898,185 +872,23 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({
               </div>
               
               {gradientEnabled && (
-                <>
-                  {/* 渐变预设和自定义渐变放一起 */}
-                  <div className="effect-presets">
-                    {GRADIENT_PRESETS.slice(0, 8).map((preset) => (
-                      <div
-                        key={preset.id}
-                        className={classNames('effect-presets__item effect-presets__item--gradient', {
-                          'is-active': selectedGradientPreset === preset.id,
-                        })}
-                        onClick={() => handleGradientPresetSelect(preset.id, preset.config)}
-                        title={preset.nameZh || preset.name}
-                        style={{ background: generateGradientCSS(preset.config) }}
-                      />
-                    ))}
-                    {/* 自定义渐变 */}
-                    {customGradients.map((gradient) => (
-                      <div
-                        key={gradient.id}
-                        className={classNames('effect-presets__item effect-presets__item--gradient effect-presets__item--deletable', {
-                          'is-active': selectedGradientPreset === `custom-${gradient.id}`,
-                        })}
-                        onClick={() => handleCustomGradientSelect(gradient.css, gradient.id)}
-                        style={{ background: gradient.css }}
-                      >
-                        <button
-                          className="effect-presets__delete"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deleteCustomGradient(gradient.id);
-                          }}
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                  
-                  {/* 渐变编辑器切换 */}
-                  <button
-                    className="effect-editor-toggle"
-                    onClick={() => setShowGradientEditor(!showGradientEditor)}
-                  >
-                    {showGradientEditor 
-                      ? (language === 'zh' ? '收起编辑器' : 'Hide Editor')
-                      : (language === 'zh' ? '自定义渐变' : 'Custom Gradient')
-                    }
-                    <svg 
-                      className={classNames('effect-editor-toggle__arrow', { 'is-expanded': showGradientEditor })}
-                      width="12" height="12" viewBox="0 0 12 12" fill="none"
-                    >
-                      <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                    </svg>
-                  </button>
-                  
-                  {/* 渐变编辑器 */}
-                  {showGradientEditor && (
-                    <div className="gradient-editor">
-                      {/* 渐变预览 */}
-                      <div 
-                        className="gradient-editor__preview"
-                        style={{ 
-                          background: `linear-gradient(${gradientAngle}deg, ${gradientStops.map(s => `${s.color} ${s.position}%`).join(', ')})` 
-                        }}
-                      />
-                      
-                      {/* 角度 */}
-                      <div className="inline-control">
-                        <label className="inline-control__label">{language === 'zh' ? '角度' : 'Angle'}</label>
-                        <div className="inline-control__slider-group">
-                          <input
-                            type="range"
-                            className="inline-control__slider"
-                            value={gradientAngle}
-                            min={0}
-                            max={360}
-                            step={15}
-                            onChange={(e) => {
-                              setGradientAngle(Number(e.target.value));
-                              setSelectedGradientPreset(null);
-                            }}
-                            onMouseUp={applyGradientConfig}
-                          />
-                          <span className="inline-control__value">{gradientAngle}°</span>
-                        </div>
-                      </div>
-                      
-                      {/* 色标 */}
-                      <div className="gradient-editor__stops">
-                        {gradientStops.map((stop, index) => (
-                          <div key={index} className="gradient-editor__stop">
-                            <Popover
-                              open={gradientStopColorPickerOpen === index}
-                              onOpenChange={(open) => setGradientStopColorPickerOpen(open ? index : null)}
-                              placement="bottom"
-                              sideOffset={8}
-                            >
-                              <PopoverTrigger asChild>
-                                <button
-                                  className="gradient-editor__stop-color-trigger"
-                                  style={{ backgroundColor: stop.color }}
-                                  onClick={() => setGradientStopColorPickerOpen(gradientStopColorPickerOpen === index ? null : index)}
-                                />
-                              </PopoverTrigger>
-                              <PopoverContent>
-                                <Island padding={4} className="color-picker-popover">
-                                  <UnifiedColorPicker
-                                    value={stop.color}
-                                    onChange={(color) => {
-                                      const newStops = [...gradientStops];
-                                      newStops[index] = { ...stop, color };
-                                      setGradientStops(newStops);
-                                      setSelectedGradientPreset(null);
-                                      setTimeout(applyGradientConfig, 100);
-                                    }}
-                                    showAlpha={false}
-                                    showEyeDropper={true}
-                                    showPresets={true}
-                                    showRecentColors={true}
-                                    showHexInput={true}
-                                  />
-                                </Island>
-                              </PopoverContent>
-                            </Popover>
-                            <input
-                              type="range"
-                              className="gradient-editor__stop-position"
-                              value={stop.position}
-                              min={0}
-                              max={100}
-                              step={5}
-                              onChange={(e) => {
-                                const newStops = [...gradientStops];
-                                newStops[index] = { ...stop, position: Number(e.target.value) };
-                                setGradientStops(newStops);
-                                setSelectedGradientPreset(null);
-                              }}
-                              onMouseUp={applyGradientConfig}
-                            />
-                            <span className="gradient-editor__stop-value">{stop.position}%</span>
-                            {gradientStops.length > 2 && (
-                              <button
-                                className="gradient-editor__stop-delete"
-                                onClick={() => {
-                                  const newStops = gradientStops.filter((_, i) => i !== index);
-                                  setGradientStops(newStops);
-                                  setSelectedGradientPreset(null);
-                                  setTimeout(applyGradientConfig, 0);
-                                }}
-                              >
-                                ×
-                              </button>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                      
-                      {/* 操作按钮 */}
-                      <div className="gradient-editor__actions">
-                        <button
-                          className="gradient-editor__btn"
-                          onClick={() => {
-                            const lastStop = gradientStops[gradientStops.length - 1];
-                            const newPosition = Math.min(100, lastStop.position + 25);
-                            setGradientStops([...gradientStops, { color: '#FFFFFF', position: newPosition }]);
-                          }}
-                          disabled={gradientStops.length >= 5}
-                        >
-                          {language === 'zh' ? '添加色标' : 'Add Stop'}
-                        </button>
-                        <button
-                          className="gradient-editor__btn gradient-editor__btn--primary"
-                          onClick={saveCurrentGradient}
-                        >
-                          {language === 'zh' ? '保存渐变' : 'Save'}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </>
+                <div className="gradient-editor-wrapper">
+                  <GradientEditor
+                    value={gradientConfig}
+                    onChange={handleGradientConfigChange}
+                    showPresets={true}
+                    showHistory={false}
+                    inline={true}
+                    customPresets={customGradients.map((g) => g.css)}
+                    onSavePreset={saveCurrentGradient}
+                    onDeletePreset={(index) => {
+                      const gradient = customGradients[index];
+                      if (gradient) {
+                        deleteCustomGradient(gradient.id);
+                      }
+                    }}
+                  />
+                </div>
               )}
             </div>
           </div>

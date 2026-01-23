@@ -2,48 +2,79 @@ import { StrictMode } from 'react';
 import * as ReactDOM from 'react-dom/client';
 import * as Sentry from '@sentry/react';
 import App from './app/app';
+import { initCrashLogger } from './crash-logger';
+import './utils/permissions-policy-fix';
+import {
+  initWebVitals,
+  initPageReport,
+  initPreventPinchZoom,
+  runDatabaseCleanup,
+  storageMigrationService,
+  initPromptStorageCache,
+  toolbarConfigService,
+  memoryMonitorService,
+  sanitizeObject,
+  sanitizeUrl,
+} from '@drawnix/drawnix';
+import { initSWConsoleCapture } from './utils/sw-console-capture';
+
+// ===== 初始化崩溃日志系统 =====
+// 必须尽早初始化，以捕获启动阶段的内存状态和错误
+initCrashLogger();
 
 // ===== 初始化 Sentry 错误监控 =====
 // 必须在其他代码之前初始化，以捕获所有错误
 Sentry.init({
-    dsn: "https://a18e755345995baaa0e1972c4cf24497@o4510700882296832.ingest.us.sentry.io/4510700883869696",
-  // Setting this option to true will send default PII data to Sentry.
-  // For example, automatic IP address collection on events
-  sendDefaultPii: true
-  // dsn: 'https://a18e755345995baaa0e1972c4cf24497@o4510700882296832.ingest.us.sentry.io/4510700883869696',
-  // // 发送默认 PII 数据（如 IP 地址）
-  // sendDefaultPii: true,
-  // // 仅在生产环境启用
-  // enabled: import.meta.env.PROD,
-  // // 集成配置
-  // integrations: [
-  //   Sentry.browserTracingIntegration(),
-  //   Sentry.replayIntegration(),
-  // ],
-  // // 性能监控采样率
-  // tracesSampleRate: 0.1,
-  // // Session Replay 采样率
-  // replaysSessionSampleRate: 0.1,
-  // replaysOnErrorSampleRate: 1.0,
+  dsn: "https://a18e755345995baaa0e1972c4cf24497@o4510700882296832.ingest.us.sentry.io/4510700883869696",
+  // 仅在生产环境启用
+  enabled: import.meta.env.PROD,
+  // 禁用自动 PII 收集，保护用户隐私
+  sendDefaultPii: false,
+  // 性能监控采样率（降低以减少数据量）
+  tracesSampleRate: 0.1,
+  // beforeSend 钩子：过滤敏感数据
+  beforeSend(event) {
+    // 过滤 extra 数据中的敏感信息
+    if (event.extra) {
+      event.extra = sanitizeObject(event.extra) as Record<string, unknown>;
+    }
+    
+    // 过滤 contexts 中的敏感信息
+    if (event.contexts) {
+      event.contexts = sanitizeObject(event.contexts) as typeof event.contexts;
+    }
+    
+    // 过滤 breadcrumbs 中的敏感信息
+    if (event.breadcrumbs) {
+      event.breadcrumbs = event.breadcrumbs.map(breadcrumb => ({
+        ...breadcrumb,
+        data: breadcrumb.data ? sanitizeObject(breadcrumb.data) as Record<string, unknown> : undefined,
+        message: breadcrumb.message ? String(sanitizeObject(breadcrumb.message)) : undefined,
+      }));
+    }
+    
+    // 过滤请求数据中的敏感信息
+    if (event.request) {
+      if (event.request.headers) {
+        event.request.headers = sanitizeObject(event.request.headers) as Record<string, string>;
+      }
+      if (event.request.data) {
+        event.request.data = sanitizeObject(event.request.data);
+      }
+      // 清理 URL 中可能的敏感参数
+      if (event.request.url) {
+        event.request.url = sanitizeUrl(event.request.url);
+      }
+    }
+    
+    return event;
+  },
 });
-
-// 修复权限策略违规警告
-import './utils/permissions-policy-fix';
-
-// 初始化 Web Vitals 和 Page Report 监控
-import { initWebVitals } from '../../../packages/drawnix/src/services/web-vitals-service';
-import { initPageReport } from '../../../packages/drawnix/src/services/page-report-service';
-import { initPreventPinchZoom } from '../../../packages/drawnix/src/services/prevent-pinch-zoom-service';
-import { runDatabaseCleanup } from '../../../packages/drawnix/src/services/db-cleanup-service';
-import { storageMigrationService } from '../../../packages/drawnix/src/services/storage-migration-service';
-import { initPromptStorageCache } from '../../../packages/drawnix/src/services/prompt-storage-service';
-import { toolbarConfigService } from '../../../packages/drawnix/src/services/toolbar-config-service';
 
 // ===== 立即初始化防止双指缩放 =====
 // 必须在任何其他代码之前执行，确保事件监听器最先注册
-let cleanupPinchZoom: (() => void) | undefined;
 if (typeof window !== 'undefined') {
-  cleanupPinchZoom = initPreventPinchZoom();
+  initPreventPinchZoom();
   // console.log('[Main] Pinch zoom prevention initialized immediately');
 
   // 清理旧的冗余数据库（异步执行，不阻塞启动）
@@ -65,6 +96,13 @@ if (typeof window !== 'undefined') {
 
 // 初始化性能监控
 if (typeof window !== 'undefined') {
+  // 启动内存监控（延迟启动，避免影响首屏加载）
+  setTimeout(() => {
+    memoryMonitorService.start();
+    // 打印初始内存状态
+    memoryMonitorService.logMemoryStatus();
+  }, 5000);
+
   // 等待 PostHog 加载完成后初始化监控
   const initMonitoring = () => {
     if (window.posthog) {
@@ -89,6 +127,8 @@ if ('serviceWorker' in navigator) {
   let newVersionReady = false;
   // 等待中的新 Worker
   let pendingWorker: ServiceWorker | null = null;
+  // 用户是否已确认升级（只有用户确认后才触发刷新）
+  let userConfirmedUpgrade = false;
   
   // Global reference to service worker registration
   let swRegistration: ServiceWorkerRegistration | null = null;
@@ -98,6 +138,9 @@ if ('serviceWorker' in navigator) {
       .then(registration => {
         // console.log('Service Worker registered successfully:', registration);
         swRegistration = registration;
+        
+        // 初始化控制台日志捕获，发送到 SW 调试面板
+        initSWConsoleCapture();
         
         // 在开发模式下，强制检查更新并处理等待中的Worker
         if (isDevelopment) {
@@ -128,9 +171,19 @@ if ('serviceWorker' in navigator) {
                   // 生产模式：新版本已安装，通知 UI 显示升级提示
                   // console.log('Production mode: New version installed, dispatching update event');
                   newVersionReady = true;
-                  window.dispatchEvent(new CustomEvent('sw-update-available', { 
-                    detail: { version: 'new' } 
-                  }));
+                  // 尝试获取新版本号，用于更新提示
+                  fetch(`/version.json?t=${Date.now()}`)
+                    .then(res => res.ok ? res.json() : null)
+                    .then(data => {
+                      window.dispatchEvent(new CustomEvent('sw-update-available', { 
+                        detail: { version: data?.version || 'new' } 
+                      }));
+                    })
+                    .catch(() => {
+                      window.dispatchEvent(new CustomEvent('sw-update-available', { 
+                        detail: { version: 'new' } 
+                      }));
+                    });
                 }
               }
             });
@@ -157,8 +210,12 @@ if ('serviceWorker' in navigator) {
   // 监听Service Worker消息
   navigator.serviceWorker.addEventListener('message', event => {
     if (event.data && event.data.type === 'SW_UPDATED') {
+      // 只有用户主动确认升级后才刷新页面
+      if (!userConfirmedUpgrade) {
+        // console.log('SW_UPDATED received but user has not confirmed upgrade, skipping reload');
+        return;
+      }
       // console.log('Service Worker updated, reloading page...');
-      
       // 等待一小段时间，确保新的Service Worker已经完全接管
       setTimeout(() => {
         window.location.reload();
@@ -176,6 +233,13 @@ if ('serviceWorker' in navigator) {
     } else if (event.data && event.data.type === 'SW_UPGRADING') {
       // Service Worker 正在升级
       // console.log(`Main: Service Worker upgrading to v${event.data.version}`);
+    } else if (event.data && event.data.type === 'SW_ACTIVATED') {
+      // 新 SW 已自动激活并接管页面
+      // 通知 UI 显示更新提示（用户可选择刷新以使用新功能）
+      console.log(`Service Worker v${event.data.version} 已激活`);
+      window.dispatchEvent(new CustomEvent('sw-update-available', { 
+        detail: { version: event.data.version, autoActivated: true } 
+      }));
     } else if (event.data && event.data.type === 'UPGRADE_STATUS') {
       // 升级状态响应
       // console.log('Main: Upgrade status:', event.data);
@@ -183,12 +247,13 @@ if ('serviceWorker' in navigator) {
   });
   
   // 监听controller变化（新的Service Worker接管）
-  // 在开发模式下不自动刷新，避免 "Update on reload" 导致死循环
+  // 只有用户主动确认升级后才刷新页面
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     // console.log('Service Worker controller changed');
 
-    if (isDevelopment) {
-      // console.log('Development mode: skipping auto-reload on controller change');
+    // 只有用户主动确认升级后才刷新页面
+    if (!userConfirmedUpgrade) {
+      // console.log('Controller changed but user has not confirmed upgrade, skipping reload');
       return;
     }
 
@@ -201,7 +266,8 @@ if ('serviceWorker' in navigator) {
   
   // 监听用户确认升级事件
   window.addEventListener('user-confirmed-upgrade', () => {
-    // console.log('Main: User confirmed upgrade, triggering SKIP_WAITING');
+    // 标记用户已确认升级，允许后续的 reload
+    userConfirmedUpgrade = true;
     
     // 优先使用 pendingWorker
     if (pendingWorker) {
@@ -215,10 +281,18 @@ if ('serviceWorker' in navigator) {
       return;
     }
     
-    // 如果都没有，尝试向所有 worker 广播（兜底）
-    if (navigator.serviceWorker.controller) {
-       navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' });
-    }
+    // 如果都没有 waiting worker，说明 SW 已经是最新的 active 状态
+    // 这种情况通常发生在首次安装后，SW 直接 activate 了
+    // 清除缓存并强制刷新
+    
+    // 清除旧的静态资源缓存以确保获取最新资源
+    caches.keys().then(cacheNames => {
+      const staticCaches = cacheNames.filter(name => name.startsWith('drawnix-static-v'));
+      return Promise.all(staticCaches.map(name => caches.delete(name)));
+    }).finally(() => {
+      // 强制硬刷新（绕过缓存）
+      window.location.href = window.location.href.split('?')[0] + '?_t=' + Date.now();
+    });
   });
   
   // 页面卸载前，不再自动触发升级，必须用户手动确认

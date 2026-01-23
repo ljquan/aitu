@@ -17,6 +17,8 @@ import {
   toImage,
   addSelectedElement,
   clearSelectedElement,
+  Transforms,
+  getViewportOrigination,
 } from '@plait/core';
 import { useEffect, useRef, useState } from 'react';
 import { useBoard } from '@plait-board/react-board';
@@ -28,6 +30,7 @@ import {
   MindElement,
 } from '@plait/mind';
 import './popup-toolbar.scss';
+import { trackMemory } from '../../../utils/common';
 import {
   getStrokeColorByElement as getStrokeColorByDrawElement,
   isClosedCustomGeometry,
@@ -54,10 +57,14 @@ import { PopupPromptButton } from './prompt-button';
 import { PopupLayerControlButton } from './layer-control-button';
 import { TextPropertyPanel } from './text-property-panel';
 import { AIImageIcon, AIVideoIcon, VideoFrameIcon, DuplicateIcon, TrashIcon, SplitImageIcon, DownloadIcon, MergeIcon, VideoMergeIcon } from '../../icons';
+import { Pencil } from 'lucide-react';
 import { useDrawnix, DialogType } from '../../../hooks/use-drawnix';
 import { useI18n } from '../../../i18n';
 import { ToolButton } from '../../tool-button';
 import { useGlobalMousePosition } from '../../../hooks/use-global-mouse-position';
+import type { FillConfig } from '../../../types/fill.types';
+import { isSolidFill, isFillConfig, getElementFillValue } from '../../../types/fill.types';
+import { gradientToCSS } from '../../../utils/fill-renderer';
 import { isVideoElement } from '../../../plugins/with-video';
 import { VideoFrameSelector } from '../../video-frame-selector/video-frame-selector';
 import { insertVideoFrame } from '../../../utils/video-frame';
@@ -68,6 +75,9 @@ import { smartDownload, BatchDownloadItem } from '../../../utils/download-utils'
 import { trimCanvasWhiteAndTransparentBorderWithInfo } from '../../../utils/image-border-utils';
 import { MessagePlugin } from 'tdesign-react';
 import { mergeVideos } from '../../../services/video-merge-webcodecs';
+import { ImageEditor } from '../../image-editor';
+import { insertImageFromUrl } from '../../../data/image';
+import { calculateEditedImagePoints } from '../../../utils/image';
 
 export const PopupToolbar = () => {
   const board = useBoard();
@@ -84,6 +94,11 @@ export const PopupToolbar = () => {
   // 视频帧选择弹窗状态
   const [showVideoFrameSelector, setShowVideoFrameSelector] = useState(false);
   const [selectedVideoElement, setSelectedVideoElement] = useState<PlaitElement | null>(null);
+
+  // 图片编辑器状态
+  const [showImageEditor, setShowImageEditor] = useState(false);
+  const [editingImageUrl, setEditingImageUrl] = useState('');
+  const [editingImageElement, setEditingImageElement] = useState<PlaitDrawElement | null>(null);
 
   // 属性面板状态
   const [showPropertyPanel, setShowPropertyPanel] = useState(false);
@@ -111,7 +126,7 @@ export const PopupToolbar = () => {
     ],
   });
   let state: {
-    fill: string | undefined;
+    fill: string | FillConfig | undefined;
     strokeColor?: string;
     hasFill?: boolean;
     hasText?: boolean;
@@ -131,9 +146,11 @@ export const PopupToolbar = () => {
     hasDownloadable?: boolean; // 是否显示下载按钮
     hasMergeable?: boolean; // 是否显示合并按钮
     hasVideoMergeable?: boolean; // 是否显示视频合成按钮
+    hasImageEdit?: boolean; // 是否显示图片编辑按钮
     hasCornerRadius?: boolean; // 是否显示圆角设置按钮
     cornerRadius?: number; // 当前圆角值
     hasSizeInput?: boolean; // 是否显示宽高输入
+    isTextOnly?: boolean; // 是否只选中了纯文本元素
   } = {
     fill: 'red',
   };
@@ -143,6 +160,10 @@ export const PopupToolbar = () => {
       !PlaitBoard.hasBeenTextEditing(board);
     const hasText = selectedElements.some((value) =>
       hasTextProperty(board, value)
+    );
+    // 检查是否只选中了纯文本元素（用于提示词按钮）
+    const isTextOnly = selectedElements.length > 0 && selectedElements.every((element) =>
+      PlaitDrawElement.isDrawElement(element) && PlaitDrawElement.isText(element)
     );
     const hasStroke =
       selectedElements.some((value) => hasStrokeProperty(board, value)) &&
@@ -194,6 +215,9 @@ export const PopupToolbar = () => {
 
     // 只有检测到分割线时才显示拆图按钮
     const hasSplitImage = isImageSelected;
+
+    // 图片编辑按钮：选中单个非 SVG 图片时显示
+    const hasImageEdit = isImageSelected;
 
     // 下载按钮：选中图片或视频时显示
     const hasDownloadable =
@@ -287,10 +311,12 @@ export const PopupToolbar = () => {
       hasStrokeWidth,
       strokeWidth,
       hasText,
+      isTextOnly,
       hasAIImage,
       hasAIVideo,
       hasVideoFrame,
       hasSplitImage,
+      hasImageEdit,
       hasDownloadable,
       hasMergeable,
       hasVideoMergeable,
@@ -486,10 +512,30 @@ export const PopupToolbar = () => {
                 <label
                   className={classNames('fill-label', 'color-label', {
                     'color-white':
-                      state.fill && isWhite(removeHexAlpha(state.fill)),
+                      state.fill && isSolidFill(state.fill) && isWhite(removeHexAlpha(state.fill)),
                     'color-mixed': state.fill === undefined,
+                    'color-gradient': state.fill && isFillConfig(state.fill) && state.fill.type === 'gradient',
+                    'color-image': state.fill && isFillConfig(state.fill) && state.fill.type === 'image',
                   })}
-                  style={{ backgroundColor: state.fill }}
+                  style={
+                    // 当 fill 为 undefined 时（杂色状态），不设置内联 background，让 CSS 类生效
+                    state.fill === undefined
+                      ? undefined
+                      : {
+                          // 统一使用 background 属性，避免 backgroundColor 和 background 冲突
+                          background: isSolidFill(state.fill)
+                            ? state.fill
+                            : isFillConfig(state.fill)
+                              ? state.fill.type === 'gradient' && state.fill.gradient
+                                ? gradientToCSS(state.fill.gradient)
+                                : state.fill.type === 'solid' && state.fill.solid
+                                  ? state.fill.solid.color
+                                  : state.fill.type === 'image' && state.fill.image?.imageUrl
+                                    ? `url(${state.fill.image.imageUrl}) center/cover no-repeat`
+                                    : undefined
+                              : undefined,
+                        }
+                  }
                 ></label>
               </PopupFillButton>
             )}
@@ -515,7 +561,7 @@ export const PopupToolbar = () => {
                 title={`Link`}
               ></PopupLinkButton>
             )}
-            {state.hasText && (
+            {state.isTextOnly && (
               <PopupPromptButton
                 board={board}
                 key={'prompt'}
@@ -534,7 +580,7 @@ export const PopupToolbar = () => {
                 className="property-settings"
                 key={'property-settings'}
                 type="icon"
-                icon={PropertySettingsIcon}
+                icon={<PropertySettingsIcon />}
                 visible={true}
                 selected={showPropertyPanel}
                 title={t('propertyPanel.title')}
@@ -550,7 +596,7 @@ export const PopupToolbar = () => {
                 className="ai-image"
                 key={5}
                 type="icon"
-                icon={AIImageIcon}
+                icon={<AIImageIcon />}
                 visible={true}
                 title={language === 'zh' ? 'AI图片生成' : 'AI Image Generation'}
                 aria-label={language === 'zh' ? 'AI图片生成' : 'AI Image Generation'}
@@ -565,7 +611,7 @@ export const PopupToolbar = () => {
                 className="ai-video"
                 key={6}
                 type="icon"
-                icon={AIVideoIcon}
+                icon={<AIVideoIcon />}
                 visible={true}
                 title={language === 'zh' ? 'AI视频生成' : 'AI Video Generation'}
                 aria-label={language === 'zh' ? 'AI视频生成' : 'AI Video Generation'}
@@ -580,7 +626,7 @@ export const PopupToolbar = () => {
                 className="video-frame"
                 key={7}
                 type="icon"
-                icon={VideoFrameIcon}
+                icon={<VideoFrameIcon />}
                 visible={true}
                 title={language === 'zh' ? '视频帧选择' : 'Video Frame Selection'}
                 aria-label={language === 'zh' ? '视频帧选择' : 'Video Frame Selection'}
@@ -600,7 +646,7 @@ export const PopupToolbar = () => {
                 className="split-image"
                 key="split-image"
                 type="icon"
-                icon={SplitImageIcon}
+                icon={<SplitImageIcon />}
                 visible={true}
                 title={language === 'zh' ? '智能拆图' : 'Smart Split'}
                 aria-label={language === 'zh' ? '智能拆图' : 'Smart Split'}
@@ -640,12 +686,32 @@ export const PopupToolbar = () => {
                 }}
               />
             )}
+            {state.hasImageEdit && (
+              <ToolButton
+                className="image-edit"
+                key="image-edit"
+                type="icon"
+                icon={<Pencil size={15} />}
+                visible={true}
+                title={language === 'zh' ? '编辑图片' : 'Edit Image'}
+                aria-label={language === 'zh' ? '编辑图片' : 'Edit Image'}
+                data-track="toolbar_click_image_edit"
+                onPointerUp={() => {
+                  const imageElement = selectedElements[0] as PlaitDrawElement;
+                  if (PlaitDrawElement.isImage(imageElement) && imageElement.url) {
+                    setEditingImageUrl(imageElement.url);
+                    setEditingImageElement(imageElement);
+                    setShowImageEditor(true);
+                  }
+                }}
+              />
+            )}
             {state.hasDownloadable && (
               <ToolButton
                 className="download"
                 key="download"
                 type="icon"
-                icon={DownloadIcon}
+                icon={<DownloadIcon />}
                 visible={true}
                 title={language === 'zh' ? '下载' : 'Download'}
                 aria-label={language === 'zh' ? '下载' : 'Download'}
@@ -746,14 +812,65 @@ export const PopupToolbar = () => {
                 className="merge"
                 key="merge"
                 type="icon"
-                icon={MergeIcon}
+                icon={<MergeIcon />}
                 visible={true}
                 title={language === 'zh' ? '合并为图片' : 'Merge to Image'}
                 aria-label={language === 'zh' ? '合并为图片' : 'Merge to Image'}
                 data-track="toolbar_click_merge"
                 onPointerUp={async () => {
+                  const endTrack = trackMemory('图片合并');
                   const loadingInstance = MessagePlugin.loading(language === 'zh' ? '正在合并...' : 'Merging...', 0);
                   try {
+                    // 检查是否有外部图片可能导致 CORS 问题
+                    const externalImageElements = selectedElements.filter((el: any) => {
+                      const url = el.url || el.imageUrl;
+                      if (!url) return false;
+                      // 跳过本地路径和缓存路径
+                      if (url.startsWith('/') || url.startsWith('data:') || url.startsWith('blob:')) return false;
+                      // 检查是否为外部 URL
+                      try {
+                        const urlObj = new URL(url);
+                        return urlObj.origin !== location.origin;
+                      } catch {
+                        return false;
+                      }
+                    });
+
+                    if (externalImageElements.length > 0) {
+                      // 尝试预检查外部图片是否可访问
+                      const corsCheckPromises = externalImageElements.map(async (el: any) => {
+                        const url = el.url || el.imageUrl;
+                        try {
+                          // 尝试 cors 模式 fetch（带超时）
+                          const controller = new AbortController();
+                          const timeoutId = setTimeout(() => controller.abort(), 3000);
+                          const response = await fetch(url, {
+                            method: 'HEAD',
+                            mode: 'cors',
+                            signal: controller.signal,
+                          });
+                          clearTimeout(timeoutId);
+                          return response.ok;
+                        } catch {
+                          return false;
+                        }
+                      });
+
+                      const corsResults = await Promise.all(corsCheckPromises);
+                      const hasCorsProblem = corsResults.some(ok => !ok);
+
+                      if (hasCorsProblem) {
+                        MessagePlugin.close(loadingInstance);
+                        MessagePlugin.warning(
+                          language === 'zh'
+                            ? '部分外部图片无法访问，请先下载到本地后再合并'
+                            : 'Some external images are inaccessible. Please download them locally first.'
+                        );
+                        endTrack();
+                        return;
+                      }
+                    }
+
                     // 获取选中元素的边界矩形
                     const boundingRect = getRectangleByElements(board, selectedElements, false);
 
@@ -849,6 +966,7 @@ export const PopupToolbar = () => {
                     }
 
                     MessagePlugin.close(loadingInstance);
+                    endTrack();
                     MessagePlugin.success(
                       language === 'zh'
                         ? `已将 ${selectedElements.length} 个元素合并为图片`
@@ -856,6 +974,7 @@ export const PopupToolbar = () => {
                     );
                   } catch (error: any) {
                     MessagePlugin.close(loadingInstance);
+                    endTrack();
                     MessagePlugin.error(error.message || (language === 'zh' ? '合并失败' : 'Merge failed'));
                   }
                 }}
@@ -866,7 +985,7 @@ export const PopupToolbar = () => {
                 className="video-merge"
                 key="video-merge"
                 type="icon"
-                icon={VideoMergeIcon}
+                icon={<VideoMergeIcon />}
                 visible={true}
                 title={language === 'zh' ? '合成视频' : 'Merge Videos'}
                 aria-label={language === 'zh' ? '合成视频' : 'Merge Videos'}
@@ -968,7 +1087,7 @@ export const PopupToolbar = () => {
               className="duplicate"
               key={8}
               type="icon"
-              icon={DuplicateIcon}
+              icon={<DuplicateIcon />}
               visible={true}
               title={t('general.duplicate')}
               aria-label={t('general.duplicate')}
@@ -981,7 +1100,7 @@ export const PopupToolbar = () => {
               className="trash"
               key={9}
               type="icon"
-              icon={TrashIcon}
+              icon={<TrashIcon />}
               visible={true}
               title={t('general.delete')}
               aria-label={t('general.delete')}
@@ -1016,6 +1135,115 @@ export const PopupToolbar = () => {
         />
       )}
 
+      {/* 图片编辑器 */}
+      {showImageEditor && editingImageUrl && (
+        <ImageEditor
+          visible={showImageEditor}
+          imageUrl={editingImageUrl}
+          showOverwrite={!!editingImageElement}
+          onClose={() => {
+            setShowImageEditor(false);
+            setEditingImageUrl('');
+            setEditingImageElement(null);
+          }}
+          onOverwrite={async (editedImageUrl: string) => {
+            if (editingImageElement) {
+              try {
+                // 创建虚拟路径 URL 缓存编辑后的图片
+                const { unifiedCacheService } = await import('../../../services/unified-cache-service');
+                const taskId = `edited-image-${Date.now()}`;
+                const stableUrl = `/__aitu_cache__/image/${taskId}.png`;
+
+                // 将 data URL 转换为 Blob
+                const response = await fetch(editedImageUrl);
+                const blob = await response.blob();
+
+                // 缓存到 Cache API
+                await unifiedCacheService.cacheMediaFromBlob(stableUrl, blob, 'image', { taskId });
+
+                // 加载编辑后的图片获取其实际尺寸
+                const img = new Image();
+                await new Promise<void>((resolve, reject) => {
+                  img.onload = () => resolve();
+                  img.onerror = () => reject(new Error('Failed to load edited image'));
+                  img.src = editedImageUrl;
+                });
+
+                // 使用 Transforms.setNode 更新画布中的图片元素
+                const elementIndex = board.children.findIndex(child => child.id === editingImageElement.id);
+                if (elementIndex >= 0) {
+                  const element = board.children[elementIndex] as any;
+                  const { newPoints } = await calculateEditedImagePoints(
+                    {
+                      url: element.url,
+                      width: element.width,
+                      height: element.height,
+                      points: element.points || [[0, 0], [0, 0]],
+                    },
+                    img.naturalWidth,
+                    img.naturalHeight
+                  );
+                  
+                  Transforms.setNode(board, {
+                    url: stableUrl,
+                    width: img.naturalWidth,
+                    height: img.naturalHeight,
+                    points: newPoints,
+                  } as Partial<PlaitElement>, [elementIndex]);
+                }
+              } catch (error) {
+                console.error('Failed to update image:', error);
+                MessagePlugin.error(language === 'zh' ? '更新失败' : 'Update failed');
+              }
+            }
+          }}
+          onInsert={async (editedImageUrl: string) => {
+            try {
+              // 创建虚拟路径 URL 缓存编辑后的图片
+              const { unifiedCacheService } = await import('../../../services/unified-cache-service');
+              const taskId = `edited-image-${Date.now()}`;
+              const stableUrl = `/__aitu_cache__/image/${taskId}.png`;
+
+              // 将 data URL 转换为 Blob
+              const response = await fetch(editedImageUrl);
+              const blob = await response.blob();
+
+              // 缓存到 Cache API
+              await unifiedCacheService.cacheMediaFromBlob(stableUrl, blob, 'image', { taskId });
+
+              // 加载图片获取尺寸
+              const img = new Image();
+              await new Promise<void>((resolve, reject) => {
+                img.onload = () => resolve();
+                img.onerror = () => reject(new Error('Failed to load edited image'));
+                img.src = editedImageUrl;
+              });
+
+              // 在当前图片旁边插入新图片
+              const origination = getViewportOrigination(board);
+              const offsetX = editingImageElement ? (editingImageElement.points[1][0] - editingImageElement.points[0][0] + 20) : 0;
+              const baseX = editingImageElement ? editingImageElement.points[0][0] : (origination ? origination[0] + 100 : 100);
+              const baseY = editingImageElement ? editingImageElement.points[0][1] : (origination ? origination[1] + 100 : 100);
+
+              // 使用 insertImageFromUrl 插入图片
+              const insertPoint: [number, number] = [baseX + offsetX, baseY];
+              await insertImageFromUrl(
+                board,
+                stableUrl,
+                insertPoint,
+                false,
+                { width: img.naturalWidth, height: img.naturalHeight },
+                false,
+                true
+              );
+            } catch (error) {
+              console.error('Failed to insert image:', error);
+              MessagePlugin.error(language === 'zh' ? '插入失败' : 'Insert failed');
+            }
+          }}
+        />
+      )}
+
       {/* 文本属性设置面板 */}
       {state.hasText && (
         <TextPropertyPanel
@@ -1039,7 +1267,8 @@ export const getMindElementState = (
 ) => {
   const marks = getTextMarksByElement(element);
   return {
-    fill: element.fill,
+    // 使用 getElementFillValue 获取完整的填充信息（支持渐变/图片填充）
+    fill: getElementFillValue(element),
     strokeColor: getStrokeColorByMindElement(board, element),
     fontSize: marks['font-size'],
     marks,
@@ -1052,7 +1281,8 @@ export const getDrawElementState = (
 ) => {
   const marks: Omit<CustomText, 'text'> = getTextMarksByElement(element);
   return {
-    fill: element.fill,
+    // 使用 getElementFillValue 获取完整的填充信息（支持渐变/图片填充）
+    fill: getElementFillValue(element),
     strokeColor: getStrokeColorByDrawElement(board, element),
     fontSize: marks['font-size'],
     marks,
@@ -1128,7 +1358,8 @@ export const getFreehandElementState = (
   element: Freehand
 ) => {
   return {
-    fill: element.fill,
+    // 使用 getElementFillValue 获取完整的填充信息（支持渐变/图片填充）
+    fill: getElementFillValue(element),
     strokeColor: getStrokeColorByFreehandElement(board, element),
   };
 };
@@ -1138,7 +1369,8 @@ export const getPenPathElementState = (
   element: PenPath
 ) => {
   return {
-    fill: element.fill,
+    // 使用 getElementFillValue 获取完整的填充信息（支持渐变/图片填充）
+    fill: getElementFillValue(element),
     strokeColor: element.strokeColor,
     cornerRadius: element.cornerRadius,
   };

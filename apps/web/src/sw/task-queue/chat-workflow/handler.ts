@@ -170,15 +170,28 @@ export class ChatWorkflowHandler {
    * @param clientId ID of the client that initiated the workflow
    */
   async startWorkflow(chatId: string, params: ChatParams, clientId: string): Promise<void> {
+    // console.log('[SW-ChatWorkflow] ▶ startWorkflow:', {
+    //   chatId,
+    //   clientId,
+    //   existingWorkflows: this.workflows.size,
+    //   timestamp: new Date().toISOString(),
+    // });
+    
     // Check for duplicate
     const existing = this.workflows.get(chatId);
     if (existing) {
       if (existing.status === 'streaming' || existing.status === 'pending' || existing.status === 'executing_tools') {
-        // console.log(`[ChatWorkflowHandler] Re-claiming active chat workflow ${chatId}`);
+        // console.log('[SW-ChatWorkflow] Re-claiming active workflow:', {
+        //   chatId,
+        //   status: existing.status,
+        // });
         this.broadcastStatus(existing);
         return;
       }
-      console.warn(`[ChatWorkflowHandler] Chat Workflow ${chatId} already exists`);
+      console.warn('[SW-ChatWorkflow] Workflow already exists, skipping:', {
+        chatId,
+        status: existing.status,
+      });
       this.broadcastStatus(existing);
       return;
     }
@@ -378,6 +391,13 @@ export class ChatWorkflowHandler {
     const messages = this.convertToGeminiMessages(params);
 
     const model = params.temporaryModel || geminiConfig.modelName || 'gemini-2.5-flash';
+    
+    // console.log('[SW-ChatWorkflow] streamChat called:', {
+    //   workflowId: workflow.id,
+    //   model,
+    //   messagesCount: messages.length,
+    //   timestamp: new Date().toISOString(),
+    // });
 
     const requestBody = {
       model,
@@ -385,7 +405,9 @@ export class ChatWorkflowHandler {
       stream: true,
     };
 
-    const response = await fetch(`${geminiConfig.baseUrl}/chat/completions`, {
+    // Use debugFetch for logging (stream response won't be fully captured)
+    const { debugFetch } = await import('../debug-fetch');
+    const response = await debugFetch(`${geminiConfig.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -393,6 +415,10 @@ export class ChatWorkflowHandler {
       },
       body: JSON.stringify(requestBody),
       signal,
+    }, {
+      label: `💬 工作流对话 (${model})`,
+      logRequestBody: true,
+      isStreaming: true,
     });
 
     if (!response.ok) {
@@ -472,6 +498,12 @@ export class ChatWorkflowHandler {
       }
     } finally {
       reader.releaseLock();
+    }
+
+    // Update debug log with final streaming content
+    if ((response as any).__debugLogId && fullContent) {
+      const { updateLogResponseBody } = await import('../debug-fetch');
+      updateLogResponseBody((response as any).__debugLogId, fullContent);
     }
 
     return fullContent;

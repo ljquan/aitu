@@ -16,6 +16,7 @@ export const ASSET_CONSTANTS = {
   // 文件类型
   ALLOWED_IMAGE_TYPES: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
   ALLOWED_VIDEO_TYPES: ['video/mp4', 'video/webm', 'video/ogg'],
+  ALLOWED_ZIP_TYPES: ['application/zip', 'application/x-zip-compressed'],
 
   // UI配置
   GRID_COLUMNS_DESKTOP: 5,

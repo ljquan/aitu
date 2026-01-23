@@ -24,12 +24,24 @@ import {
   DEFAULT_TASK_QUEUE_CONFIG,
 } from './types';
 import { taskQueueStorage } from './storage';
+import { sendToClient, sendToClientById } from './utils/message-bus';
+import { migrateBase64UrlIfNeeded } from './utils/media-generation-utils';
 
 // Handler imports
 import { ImageHandler } from './handlers/image';
 import { VideoHandler } from './handlers/video';
 import { CharacterHandler } from './handlers/character';
 import { ChatHandler } from './handlers/chat';
+
+/**
+ * Chat result cache entry
+ */
+interface ChatResultCache {
+  chatId: string;
+  fullContent: string;
+  timestamp: number;
+  delivered: boolean;
+}
 
 /**
  * Task Queue Manager for Service Worker
@@ -41,6 +53,10 @@ export class SWTaskQueue {
   private geminiConfig: GeminiConfig | null = null;
   private videoConfig: VideoAPIConfig | null = null;
   private initialized = false;
+
+  // Chat result cache - stores recent chat results for recovery after page refresh
+  private chatResultCache: Map<string, ChatResultCache> = new Map();
+  private readonly CHAT_CACHE_TTL = 60 * 1000; // 1 minute TTL
 
   // Handlers
   private imageHandler: ImageHandler;
@@ -55,6 +71,9 @@ export class SWTaskQueue {
 
   // Track storage restoration completion
   private storageRestorePromise: Promise<void>;
+
+  // Flag to indicate if config was restored from storage (not first-time setup)
+  private hadSavedConfig = false;
 
   constructor(sw: ServiceWorkerGlobalScope, config?: Partial<TaskQueueConfig>) {
     this.sw = sw;
@@ -102,28 +121,43 @@ export class SWTaskQueue {
    * Restore tasks and config from IndexedDB on SW startup
    */
   private async restoreFromStorage(): Promise<void> {
-    // console.log('[SWTaskQueue] Restoring from storage...');
-
     try {
       // Load saved config
       const { geminiConfig, videoConfig } = await taskQueueStorage.loadConfig();
+      
       if (geminiConfig && videoConfig) {
         this.geminiConfig = geminiConfig;
         this.videoConfig = videoConfig;
         this.initialized = true;
-        // console.log('[SWTaskQueue] Config restored from storage');
+        this.hadSavedConfig = true; // Mark that we had valid config
       }
 
       // Load all tasks
       const tasks = await taskQueueStorage.getAllTasks();
-      // console.log(`[SWTaskQueue] Found ${tasks.length} tasks in storage`);
+
+      // 迁移计数器
+      let migratedCount = 0;
 
       for (const task of tasks) {
+        // 迁移旧的 Base64 URL（已完成的图片/视频任务）
+        if (
+          task.status === TaskStatus.COMPLETED &&
+          task.result?.url &&
+          task.result.url.startsWith('data:image/')
+        ) {
+          const { url: newUrl, migrated } = await migrateBase64UrlIfNeeded(task.result.url);
+          if (migrated) {
+            task.result.url = newUrl;
+            // 更新存储
+            await taskQueueStorage.saveTask(task);
+            migratedCount++;
+          }
+        }
+
         this.tasks.set(task.id, task);
 
         // Handle interrupted Chat tasks - mark as failed since streaming can't be resumed
         if (task.type === TaskType.CHAT && task.status === TaskStatus.PROCESSING) {
-          // console.log(`[SWTaskQueue] Marking interrupted chat task as failed: ${task.id}`);
           await this.markTaskFailed(task.id, {
             code: 'INTERRUPTED',
             message: 'Chat 请求被中断（页面刷新），请重试',
@@ -133,9 +167,12 @@ export class SWTaskQueue {
 
         // Resume active tasks
         if (this.shouldResumeTask(task)) {
-          // console.log(`[SWTaskQueue] Will resume task: ${task.id}`);
           this.resumeTaskExecution(task);
         }
+      }
+
+      if (migratedCount > 0) {
+        // console.log(`[SWTaskQueue] Migrated ${migratedCount} Base64 URLs to cache`);
       }
 
       // NOTE: Removed automatic cleanup of old tasks
@@ -155,11 +192,8 @@ export class SWTaskQueue {
       return false; // Will be handled separately to mark as failed
     }
 
-    // Resume tasks that were processing or retrying
-    if (
-      task.status === TaskStatus.PROCESSING ||
-      task.status === TaskStatus.RETRYING
-    ) {
+    // Resume tasks that were processing
+    if (task.status === TaskStatus.PROCESSING) {
       return true;
     }
 
@@ -168,7 +202,56 @@ export class SWTaskQueue {
       return true;
     }
 
+    // Resume failed video/character tasks with remoteId that failed due to network errors
+    if (
+      (task.type === TaskType.VIDEO || task.type === TaskType.CHARACTER) &&
+      task.status === TaskStatus.FAILED &&
+      task.remoteId &&
+      this.isNetworkError(task)
+    ) {
+      return true;
+    }
+
     return false;
+  }
+
+  /**
+   * Check if task error is a network error that can be recovered
+   * Returns false for business failures (API returned explicit failure)
+   */
+  private isNetworkError(task: SWTask): boolean {
+    const errorMessage = task.error?.message || '';
+    const originalError = task.error?.details?.originalError || '';
+    const errorCode = task.error?.code || '';
+    const combinedError = `${errorMessage} ${originalError}`.toLowerCase();
+    
+    // Exclude business failures - these should not be retried
+    const isBusinessFailure = (
+      combinedError.includes('generation_failed') ||
+      combinedError.includes('invalid_argument') ||
+      combinedError.includes('prohibited') ||
+      combinedError.includes('content policy') ||
+      combinedError.includes('视频生成失败') ||
+      errorCode.includes('generation_failed') ||
+      errorCode.includes('INVALID')
+    );
+    
+    if (isBusinessFailure) {
+      return false;
+    }
+    
+    // Check for network-related errors
+    return (
+      combinedError.includes('failed to fetch') ||
+      combinedError.includes('network') ||
+      combinedError.includes('fetch') ||
+      combinedError.includes('timeout') ||
+      combinedError.includes('aborted') ||
+      combinedError.includes('connection') ||
+      combinedError.includes('status query failed') ||
+      combinedError.includes('429') ||
+      combinedError.includes('too many requests')
+    );
   }
 
   /**
@@ -176,13 +259,22 @@ export class SWTaskQueue {
    */
   private async resumeTaskExecution(task: SWTask): Promise<void> {
     if (!this.initialized) {
-      // console.log(`[SWTaskQueue] Not initialized, marking task ${task.id} for later`);
       return;
     }
 
     // If task has remoteId, it was in polling phase - resume polling
     if (task.remoteId && (task.type === TaskType.VIDEO || task.type === TaskType.CHARACTER)) {
-      // console.log(`[SWTaskQueue] Resuming polling for task: ${task.id}`);
+      
+      // If task was failed (network error recovery), reset status to processing
+      if (task.status === TaskStatus.FAILED) {
+        task.status = TaskStatus.PROCESSING;
+        task.error = undefined; // Clear error
+        task.executionPhase = TaskExecutionPhase.POLLING;
+        task.updatedAt = Date.now();
+        this.tasks.set(task.id, task);
+        await taskQueueStorage.saveTask(task);
+      }
+      
       this.runningTasks.add(task.id);
 
       // Broadcast status update to clients
@@ -199,27 +291,97 @@ export class SWTaskQueue {
     } else if (task.status === TaskStatus.PENDING) {
       // Re-execute pending tasks
       this.processQueue();
-    } else {
-      // For other cases (image generation in progress), reset to pending and re-execute
-      // because image generation is synchronous and cannot be resumed mid-request
-      if (task.type === TaskType.IMAGE || task.type === TaskType.INSPIRATION_BOARD) {
-        // console.log(`[SWTaskQueue] Resetting image task ${task.id} to pending for re-execution`);
-        task.status = TaskStatus.PENDING;
-        task.error = undefined; // Clear any previous error
+    } else if (
+      // Video/Character task in processing but no remoteId - try to recover from LLM API logs
+      (task.type === TaskType.VIDEO || task.type === TaskType.CHARACTER) &&
+      task.status === TaskStatus.PROCESSING &&
+      !task.remoteId
+    ) {
+      // Try to find completed result from LLM API logs
+      const { findSuccessLogByTaskId, findLatestLogByTaskId } = await import('./llm-api-logger');
+      const successLog = await findSuccessLogByTaskId(task.id);
+      
+      if (successLog && successLog.resultUrl) {
+        
+        // Parse response body for additional info
+        let width: number | undefined;
+        let height: number | undefined;
+        let duration: number | undefined;
+        
+        if (successLog.responseBody) {
+          try {
+            const responseData = JSON.parse(successLog.responseBody);
+            width = responseData.width;
+            height = responseData.height;
+            duration = parseInt(responseData.seconds || '0') || 0;
+          } catch {
+            // Ignore parse errors
+          }
+        }
+        
+        // Mark task as completed with the recovered result
+        await this.handleTaskSuccess(task.id, {
+          url: successLog.resultUrl,
+          format: task.type === TaskType.VIDEO ? 'mp4' : 'png',
+          size: 0,
+          width,
+          height,
+          duration,
+        });
+        return;
+      }
+
+      // If not completed, try to find the remoteId from any log to resume polling
+      const latestLog = await findLatestLogByTaskId(task.id);
+      let recoveredRemoteId = latestLog?.remoteId;
+
+      // If no explicit remoteId, try to parse from responseBody if it was captured
+      if (!recoveredRemoteId && latestLog?.responseBody) {
+        try {
+          const data = JSON.parse(latestLog.responseBody);
+          if (data.id) {
+            recoveredRemoteId = data.id;
+          }
+        } catch {
+          // Ignore
+        }
+      }
+
+      if (recoveredRemoteId) {
+        // Recover the remoteId and resume polling
+        task.remoteId = recoveredRemoteId;
+        task.executionPhase = TaskExecutionPhase.POLLING;
         task.updatedAt = Date.now();
         this.tasks.set(task.id, task);
         await taskQueueStorage.saveTask(task);
-
-        // Broadcast status update to clients
-        this.broadcastToClients({
-          type: 'TASK_STATUS',
-          taskId: task.id,
-          status: TaskStatus.PENDING,
-          updatedAt: task.updatedAt,
-        });
-
-        this.processQueue();
+        
+        this.resumeTaskExecution(task); // Re-call with remoteId
+        return;
       }
+      
+      // No success log or remoteId found - mark as failed (don't re-submit to avoid extra cost)
+      await this.handleTaskError(task.id, new Error('任务中断且无法恢复（未找到已完成的结果）'));
+    } else if (
+      // Image/inspiration board task in processing - try to recover from LLM API logs
+      (task.type === TaskType.IMAGE || task.type === TaskType.INSPIRATION_BOARD) &&
+      task.status === TaskStatus.PROCESSING
+    ) {
+      // Try to find completed result from LLM API logs (same as video/character)
+      const { findSuccessLogByTaskId } = await import('./llm-api-logger');
+      const successLog = await findSuccessLogByTaskId(task.id);
+      
+      if (successLog && successLog.resultUrl) {
+        // Mark task as completed with the recovered result
+        await this.handleTaskSuccess(task.id, {
+          url: successLog.resultUrl,
+          format: 'png',
+          size: 0,
+        });
+        return;
+      }
+      
+      // No success log found - mark as failed (don't re-submit to avoid extra cost)
+      await this.handleTaskError(task.id, new Error('任务中断且无法恢复（未找到已完成的结果）'));
     }
   }
 
@@ -230,18 +392,45 @@ export class SWTaskQueue {
     // Wait for storage restoration to complete first
     await this.storageRestorePromise;
 
+    // If this is first-time initialization (no saved config before),
+    // clear all PENDING tasks created without valid API key
+    if (!this.hadSavedConfig) {
+      const pendingTasksToRemove: string[] = [];
+      for (const task of this.tasks.values()) {
+        if (task.status === TaskStatus.PENDING) {
+          pendingTasksToRemove.push(task.id);
+        }
+      }
+      
+      if (pendingTasksToRemove.length > 0) {
+        console.log(`[SWTaskQueue] First-time init: clearing ${pendingTasksToRemove.length} orphan PENDING tasks created without API key`);
+        for (const taskId of pendingTasksToRemove) {
+          this.tasks.delete(taskId);
+          await taskQueueStorage.deleteTask(taskId);
+        }
+      }
+    }
+
     this.geminiConfig = geminiConfig;
     this.videoConfig = videoConfig;
     this.initialized = true;
+    this.hadSavedConfig = true; // Now we have valid config
 
     // Save config to storage for persistence
     await taskQueueStorage.saveConfig(geminiConfig, videoConfig);
 
-    // console.log('[SWTaskQueue] Initialized with config');
     this.broadcastToClients({ type: 'TASK_QUEUE_INITIALIZED', success: true });
 
     // Push all current tasks to clients for initial sync
     this.syncTasksToClients();
+
+    // Resume processing tasks that have remoteId (video/character polling)
+    // This handles the case where restoreFromStorage ran before config was available
+    for (const task of this.tasks.values()) {
+      if (this.shouldResumeTask(task) && !this.runningTasks.has(task.id)) {
+        this.resumeTaskExecution(task);
+      }
+    }
 
     // Process any pending tasks
     this.processQueue();
@@ -267,6 +456,7 @@ export class SWTaskQueue {
 
   /**
    * Submit a new task
+   * Note: Will reject if queue is not initialized (no API key configured)
    */
   async submitTask(
     taskId: string,
@@ -274,6 +464,17 @@ export class SWTaskQueue {
     params: SWTask['params'],
     _clientId: string // clientId is no longer used for targeting
   ): Promise<void> {
+    // Reject task if not initialized (no API key)
+    if (!this.initialized) {
+      console.warn(`[SWTaskQueue] Cannot submit task ${taskId}: queue not initialized (no API key)`);
+      this.broadcastToClients({
+        type: 'TASK_REJECTED',
+        taskId,
+        reason: 'NO_API_KEY',
+      });
+      return;
+    }
+
     // Check for duplicate by taskId only
     if (this.tasks.has(taskId)) {
       console.warn(`[SWTaskQueue] Task ${taskId} already exists`);
@@ -288,7 +489,6 @@ export class SWTaskQueue {
       params,
       createdAt: now,
       updatedAt: now,
-      retryCount: 0,
     };
 
     this.tasks.set(taskId, task);
@@ -340,8 +540,23 @@ export class SWTaskQueue {
     const task = this.tasks.get(taskId);
     if (!task || (task.status !== TaskStatus.FAILED && task.status !== TaskStatus.CANCELLED)) return;
 
+    // 对于视频/角色任务，尝试从日志恢复 remoteId，确保重试时不会重新提交（避免重复计费）
+    if (!task.remoteId && (task.type === TaskType.VIDEO || task.type === TaskType.CHARACTER)) {
+      try {
+        const { findLatestLogByTaskId } = await import('./llm-api-logger');
+        const latestLog = await findLatestLogByTaskId(task.id);
+        if (latestLog?.remoteId) {
+          task.remoteId = latestLog.remoteId;
+        } else if (latestLog?.responseBody) {
+          const data = JSON.parse(latestLog.responseBody);
+          if (data.id) task.remoteId = data.id;
+        }
+      } catch (e) {
+        console.warn(`[SWTaskQueue] Failed to recover remoteId for retry: ${task.id}`, e);
+      }
+    }
+
     task.status = TaskStatus.PENDING;
-    task.retryCount = 0;
     task.error = undefined;
     task.updatedAt = Date.now();
     this.tasks.set(taskId, task);
@@ -381,7 +596,6 @@ export class SWTaskQueue {
         params: { prompt: '' },
         createdAt: now,
         updatedAt: now,
-        retryCount: 0,
         remoteId,
         executionPhase: TaskExecutionPhase.POLLING,
       };
@@ -499,17 +713,60 @@ export class SWTaskQueue {
         }
       );
 
+      // Cache the result before broadcasting (for recovery after page refresh)
+      this.chatResultCache.set(chatId, {
+        chatId,
+        fullContent,
+        timestamp: Date.now(),
+        delivered: false,
+      });
+
       this.broadcastToClients({
         type: 'CHAT_DONE',
         chatId,
         fullContent,
       });
+
+      // Mark as delivered after broadcast
+      const cached = this.chatResultCache.get(chatId);
+      if (cached) {
+        cached.delivered = true;
+      }
+
+      // Clean up old cache entries
+      this.cleanupChatCache();
     } catch (error) {
       this.broadcastToClients({
         type: 'CHAT_ERROR',
         chatId,
         error: error instanceof Error ? error.message : String(error),
       });
+    }
+  }
+
+  /**
+   * Get cached chat result (for recovery after page refresh)
+   */
+  getCachedChatResult(chatId: string): ChatResultCache | undefined {
+    return this.chatResultCache.get(chatId);
+  }
+
+  /**
+   * Get all cached chat results
+   */
+  getAllCachedChatResults(): ChatResultCache[] {
+    return Array.from(this.chatResultCache.values());
+  }
+
+  /**
+   * Clean up expired chat cache entries
+   */
+  private cleanupChatCache(): void {
+    const now = Date.now();
+    for (const [chatId, entry] of this.chatResultCache.entries()) {
+      if (now - entry.timestamp > this.CHAT_CACHE_TTL) {
+        this.chatResultCache.delete(chatId);
+      }
     }
   }
 
@@ -618,6 +875,23 @@ export class SWTaskQueue {
       updatedAt: task.updatedAt,
     });
 
+    // 如果任务已经有 remoteId（视频/角色），则直接进入恢复流程，跳过提交阶段，只重试获取进度的接口
+    if (task.remoteId && (task.type === TaskType.VIDEO || task.type === TaskType.CHARACTER)) {
+      task.executionPhase = TaskExecutionPhase.POLLING;
+      // 更新存储
+      await taskQueueStorage.saveTask(task);
+      
+      this.broadcastToClients({
+        type: 'TASK_STATUS',
+        taskId: task.id,
+        status: task.status,
+        phase: task.executionPhase,
+        updatedAt: task.updatedAt,
+      });
+      this.executeResume(task, task.remoteId);
+      return;
+    }
+
     const handlerConfig: HandlerConfig = {
       geminiConfig: this.geminiConfig,
       videoConfig: this.videoConfig,
@@ -701,9 +975,9 @@ export class SWTaskQueue {
    * Execute task resumption
    */
   private async executeResume(task: SWTask, remoteId: string): Promise<void> {
-    if (!this.geminiConfig || !this.videoConfig) return;
-
-    // console.log(`[SWTaskQueue] Executing resume for task: ${task.id}`);
+    if (!this.geminiConfig || !this.videoConfig) {
+      return;
+    }
 
     const handlerConfig: HandlerConfig = {
       geminiConfig: this.geminiConfig,
@@ -739,14 +1013,15 @@ export class SWTaskQueue {
 
     try {
       const handler = this.getHandler(task.type);
-      if (!handler?.resume) {
+      if (!handler || typeof (handler as any).resume !== 'function') {
         throw new Error(`Handler does not support resume: ${task.type}`);
       }
 
       task.remoteId = remoteId;
-      const result = await handler.resume(task, handlerConfig);
+      const result = await (handler as any).resume(task, handlerConfig);
       await this.handleTaskSuccess(task.id, result);
     } catch (error) {
+      console.error(`[SWTaskQueue] executeResume: 任务 ${task.id} 恢复失败`, error);
       await this.handleTaskError(task.id, error);
     }
   }
@@ -817,7 +1092,6 @@ export class SWTaskQueue {
       type: 'TASK_FAILED',
       taskId,
       error: taskError,
-      retryCount: task.retryCount,
     });
 
     // Notify internal listeners
@@ -846,7 +1120,6 @@ export class SWTaskQueue {
       type: 'TASK_FAILED',
       taskId,
       error,
-      retryCount: task.retryCount,
     });
   }
 
@@ -877,7 +1150,7 @@ export class SWTaskQueue {
     try {
       const clients = await this.sw.clients.matchAll({ type: 'window' });
       for (const client of clients) {
-        client.postMessage(message);
+        sendToClient(client, message);
       }
     } catch (error) {
       console.error('[SWTaskQueue] Failed to broadcast:', error);
@@ -926,6 +1199,8 @@ export function handleTaskQueueMessage(
       if (queue) {
         queue.initialize(message.geminiConfig, message.videoConfig);
       }
+      // System prompt is saved to IndexedDB by main thread
+      // ai_analyze is delegated to main thread for correct text model
       break;
 
     case 'TASK_QUEUE_UPDATE_CONFIG':
@@ -985,6 +1260,37 @@ export function handleTaskQueueMessage(
     case 'CHAT_STOP':
       queue?.stopChat(message.chatId);
       break;
+
+    case 'CHAT_GET_CACHED': {
+      // Return cached chat result for a specific chatId
+      const cached = queue?.getCachedChatResult(message.chatId);
+      
+      if (cached) {
+        // Send the result to the requesting client
+        sendToClientById(clientId, {
+          type: 'CHAT_CACHED_RESULT',
+          chatId: message.chatId,
+          fullContent: cached.fullContent,
+          found: true,
+        }).then(sent => {
+          if (!sent) {
+            console.warn('[SWTaskQueue] Failed to send CHAT_CACHED_RESULT to client:', clientId);
+          }
+        });
+      } else {
+        // No cached result found
+        sendToClientById(clientId, {
+          type: 'CHAT_CACHED_RESULT',
+          chatId: message.chatId,
+          found: false,
+        }).then(sent => {
+          if (!sent) {
+            console.warn('[SWTaskQueue] Failed to send CHAT_CACHED_RESULT (not found) to client:', clientId);
+          }
+        });
+      }
+      break;
+    }
 
     case 'TASK_RESTORE':
       queue?.restoreTasks(message.tasks);

@@ -263,6 +263,13 @@ const VEO_DEFAULT_PARAMS: VideoModelDefaults = {
   aspectRatio: '16:9',
 };
 
+/** Veo 4K 模型默认参数（8秒，4K分辨率） */
+const VEO_4K_DEFAULT_PARAMS: VideoModelDefaults = {
+  duration: '8',
+  size: '3840x2160',
+  aspectRatio: '16:9',
+};
+
 /** Sora 模型默认参数（10秒） */
 const SORA_DEFAULT_PARAMS: VideoModelDefaults = {
   duration: '10',
@@ -277,6 +284,7 @@ export const VIDEO_MODELS: ModelConfig[] = [
   {
     id: 'veo3.1',
     label: 'Veo 3.1',
+    shortCode: 'v31',
     description: '8秒快速模式，支持首尾帧',
     type: 'video',
     isVip: true,
@@ -286,6 +294,7 @@ export const VIDEO_MODELS: ModelConfig[] = [
   {
     id: 'sora-2',
     label: 'Sora 2',
+    shortCode: 's2',
     description: '10s/15s 默认标清，支持故事场景模式',
     type: 'video',
     isVip: true,
@@ -295,6 +304,7 @@ export const VIDEO_MODELS: ModelConfig[] = [
   {
     id: 'veo3',
     label: 'Veo 3',
+    shortCode: 'v3',
     description: '8秒视频',
     type: 'video',
     supportsTools: true,
@@ -303,6 +313,7 @@ export const VIDEO_MODELS: ModelConfig[] = [
   {
     id: 'veo3-pro',
     label: 'Veo 3 Pro',
+    shortCode: 'v3p',
     description: '8秒高质量视频',
     type: 'video',
     supportsTools: true,
@@ -311,6 +322,7 @@ export const VIDEO_MODELS: ModelConfig[] = [
   {
     id: 'veo3.1-pro',
     label: 'Veo 3.1 Pro',
+    shortCode: 'v31p',
     description: '8秒高质量模式，支持首尾帧',
     type: 'video',
     supportsTools: true,
@@ -319,14 +331,43 @@ export const VIDEO_MODELS: ModelConfig[] = [
   {
     id: 'veo3.1-components',
     label: 'Veo 3.1 Components',
+    shortCode: 'v31c',
     description: '8秒模式，支持3张参考图',
     type: 'video',
     supportsTools: true,
     videoDefaults: VEO_DEFAULT_PARAMS,
   },
   {
+    id: 'veo3.1-4k',
+    label: 'Veo 3.1 4K',
+    shortCode: 'v314k',
+    description: '8秒4K模式，支持首尾帧',
+    type: 'video',
+    supportsTools: true,
+    videoDefaults: VEO_4K_DEFAULT_PARAMS,
+  },
+  {
+    id: 'veo3.1-components-4k',
+    label: 'Veo 3.1 Components 4K',
+    shortCode: 'v31c4k',
+    description: '8秒4K模式，支持3张参考图',
+    type: 'video',
+    supportsTools: true,
+    videoDefaults: VEO_4K_DEFAULT_PARAMS,
+  },
+  {
+    id: 'veo3.1-pro-4k',
+    label: 'Veo 3.1 Pro 4K',
+    shortCode: 'v31p4k',
+    description: '8秒高质量4K模式，支持首尾帧',
+    type: 'video',
+    supportsTools: true,
+    videoDefaults: VEO_4K_DEFAULT_PARAMS,
+  },
+  {
     id: 'sora-2-pro',
     label: 'Sora 2 Pro',
+    shortCode: 's2p',
     description: '10s/15s/25s 高清，支持故事场景模式',
     type: 'video',
     supportsTools: true,
@@ -345,6 +386,7 @@ export const TEXT_MODELS: ModelConfig[] = [
   {
     id: 'deepseek-v3.2',
     label: 'DeepSeek V3.2',
+    shortCode: 'ds32',
     description: 'DeepSeek 最新大语言模型，性价比高',
     type: 'text',
     supportsTools: true,
@@ -352,6 +394,7 @@ export const TEXT_MODELS: ModelConfig[] = [
   {
     id: 'claude-opus-4-5-20251101',
     label: 'Claude Opus 4.5',
+    shortCode: 'op45',
     description: 'Anthropic 旗舰模型，推理能力最强',
     type: 'text',
     isVip: true,
@@ -360,6 +403,7 @@ export const TEXT_MODELS: ModelConfig[] = [
   {
     id: 'claude-sonnet-4-5-20250929',
     label: 'Claude Sonnet 4.5',
+    shortCode: 'sn45',
     description: 'Anthropic 均衡模型，性能与速度兼顾',
     type: 'text',
     isVip: true,
@@ -368,6 +412,7 @@ export const TEXT_MODELS: ModelConfig[] = [
   {
     id: 'gemini-2.5-flash',
     label: 'Gemini 2.5 Flash',
+    shortCode: 'g25f',
     description: 'Google 快速响应模型，适合日常任务',
     type: 'text',
     supportsTools: true,
@@ -375,6 +420,7 @@ export const TEXT_MODELS: ModelConfig[] = [
   {
     id: 'gemini-3-pro-preview',
     label: 'Gemini 3 Pro Preview',
+    shortCode: 'g3pp',
     description: 'Google 最新预览模型，能力强大',
     type: 'text',
     isVip: true,
@@ -537,21 +583,52 @@ export function getDefaultImageModel(): string {
 export const DEFAULT_IMAGE_MODEL = DEFAULT_IMAGE_MODEL_ID;
 
 /**
- * 默认视频模型
+ * 默认视频模型 ID
  */
-export const DEFAULT_VIDEO_MODEL = 'veo3';
+export const DEFAULT_VIDEO_MODEL_ID = 'veo3';
 
 /**
- * 默认文本模型
+ * 获取默认视频模型 ID（目前固定为 veo3）
  */
-export const DEFAULT_TEXT_MODEL = 'deepseek-v3.2';
+export function getDefaultVideoModel(): string {
+  return DEFAULT_VIDEO_MODEL_ID;
+}
+
+/**
+ * 默认视频模型（兼容旧代码）
+ * @deprecated 请使用 getDefaultVideoModel()
+ */
+export const DEFAULT_VIDEO_MODEL = DEFAULT_VIDEO_MODEL_ID;
+
+/**
+ * 默认文本模型 ID
+ */
+export const DEFAULT_TEXT_MODEL_ID = 'deepseek-v3.2';
+
+/**
+ * 获取默认文本模型 ID
+ */
+export function getDefaultTextModel(): string {
+  return DEFAULT_TEXT_MODEL_ID;
+}
+
+/**
+ * 默认文本模型（兼容旧代码）
+ */
+export const DEFAULT_TEXT_MODEL = DEFAULT_TEXT_MODEL_ID;
 
 // ============================================
 // 参数配置（用于 SmartSuggestionPanel）
 // ============================================
 
-/** Veo 系列模型 ID（只支持 8 秒） */
+/** Veo 系列模型 ID（标清，只支持 8 秒） */
 const VEO_MODEL_IDS = ['veo3', 'veo3-pro', 'veo3.1', 'veo3.1-pro', 'veo3.1-components'];
+
+/** Veo 4K 系列模型 ID（4K分辨率，只支持 8 秒） */
+const VEO_4K_MODEL_IDS = ['veo3.1-4k', 'veo3.1-components-4k', 'veo3.1-pro-4k'];
+
+/** 所有 Veo 模型 ID（用于时长参数） */
+const ALL_VEO_MODEL_IDS = [...VEO_MODEL_IDS, ...VEO_4K_MODEL_IDS];
 
 /** Sora 2 模型（支持 10/15 秒） */
 const SORA_2_MODEL_IDS = ['sora-2'];
@@ -575,7 +652,7 @@ const ALL_IMAGE_MODEL_IDS = IMAGE_MODELS.map(m => m.id);
  * 根据 video-model-config.ts 中各模型的实际参数配置
  */
 export const VIDEO_PARAMS: ParamConfig[] = [
-  // Veo 系列时长参数（只有 8 秒）
+  // Veo 系列时长参数（只有 8 秒，包括标清和 4K）
   {
     id: 'duration',
     label: '视频时长',
@@ -586,7 +663,7 @@ export const VIDEO_PARAMS: ParamConfig[] = [
       { value: '8', label: '8秒' },
     ],
     defaultValue: '8',
-    compatibleModels: VEO_MODEL_IDS,
+    compatibleModels: ALL_VEO_MODEL_IDS,
     modelType: 'video',
   },
   // Sora 2 时长参数（10/15 秒）
@@ -620,7 +697,7 @@ export const VIDEO_PARAMS: ParamConfig[] = [
     compatibleModels: SORA_2_PRO_MODEL_IDS,
     modelType: 'video',
   },
-  // Veo 和 Sora 2 尺寸参数（标清）
+  // Veo 标清和 Sora 2 尺寸参数（720p）
   {
     id: 'size',
     label: '视频尺寸',
@@ -633,6 +710,21 @@ export const VIDEO_PARAMS: ParamConfig[] = [
     ],
     defaultValue: '1280x720',
     compatibleModels: [...VEO_MODEL_IDS, ...SORA_2_MODEL_IDS],
+    modelType: 'video',
+  },
+  // Veo 4K 尺寸参数（4K 分辨率）
+  {
+    id: 'size',
+    label: '视频尺寸',
+    shortLabel: '尺寸',
+    description: '生成视频的分辨率',
+    valueType: 'enum',
+    options: [
+      { value: '3840x2160', label: '4K横屏 16:9 (3840x2160)' },
+      { value: '2160x3840', label: '4K竖屏 9:16 (2160x3840)' },
+    ],
+    defaultValue: '3840x2160',
+    compatibleModels: VEO_4K_MODEL_IDS,
     modelType: 'video',
   },
   // Sora 2 Pro 尺寸参数（含高清）

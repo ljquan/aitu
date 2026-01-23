@@ -154,7 +154,7 @@ Umami 服务器
 ```json
 {
   "version": "0.2.1",
-  "url": "https://aitu.chat/editor",
+  "url": "https://opentu.ai/editor",
   "timestamp": 1701849600000,
   "sessionId": "session-abc123",
   "eventType": "click",

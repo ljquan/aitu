@@ -2,19 +2,6 @@
  * FeedbackButton Styles
  */
 
-.feedback-button__icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-
-  svg {
-    width: 100%;
-    height: 100%;
-  }
-}
-
 .feedback-qrcode-content {
   display: flex;
   flex-direction: column;

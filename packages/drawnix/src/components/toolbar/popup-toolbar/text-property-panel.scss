@@ -903,7 +903,60 @@
     }
   }
 
-  // 渐变编辑器
+  // 渐变编辑器包装器（使用统一的 GradientEditor 组件）
+  .gradient-editor-wrapper {
+    margin-top: 12px;
+
+    .gradient-editor {
+      padding: 0;
+      border: none;
+      background: transparent;
+    }
+
+    .gradient-editor__actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid #eee;
+    }
+
+    .gradient-editor__btn {
+      flex: 1;
+      padding: 8px;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      background: #ffffff;
+      color: #4b5563;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+
+      &:hover:not(:disabled) {
+        border-color: #3b82f6;
+        color: #3b82f6;
+      }
+
+      &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      &--primary {
+        background: #3b82f6;
+        border-color: #3b82f6;
+        color: #ffffff;
+
+        &:hover:not(:disabled) {
+          background: #2563eb;
+          border-color: #2563eb;
+          color: #ffffff;
+        }
+      }
+    }
+  }
+
+  // 旧版渐变编辑器（保留用于向后兼容）
   .gradient-editor {
     margin-top: 12px;
     padding: 12px;

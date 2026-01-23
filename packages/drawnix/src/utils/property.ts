@@ -20,6 +20,7 @@ import {
   getStrokeColorByElement as getStrokeColorByFreehandElement,
   getFillByElement as getFillByFreehandElement,
 } from '../plugins/freehand/utils';
+import { getFillRenderColor, isFillConfig } from '../types/fill.types';
 
 export const isClosedElement = (board: PlaitBoard, element: PlaitElement) => {
   return (
@@ -32,23 +33,31 @@ export const isClosedElement = (board: PlaitBoard, element: PlaitElement) => {
 };
 
 export const getCurrentFill = (board: PlaitBoard, element: PlaitElement) => {
-  let currentFill: string | null = element.fill;
-  if (!currentFill) {
-    if (MindElement.isMindElement(board, element)) {
-      currentFill = getFillByElement(board, element);
+  // 处理 FillConfig 对象，返回可渲染的颜色值
+  if (element.fill) {
+    if (isFillConfig(element.fill)) {
+      return getFillRenderColor(element.fill);
     }
-    if (Freehand.isFreehand(element)) {
-      currentFill = getFillByFreehandElement(board, element);
-    } else if (PenPath.isPenPath(element)) {
-      // PenPath 使用主题默认填充色
-      const themeColors = PenThemeColors[board.theme.themeColorMode];
-      currentFill = element.fill || (element.closed ? themeColors?.fill : 'none') || '#FFFFFF';
-    } else if (
-      PlaitDrawElement.isDrawElement(element) ||
-      PlaitDrawElement.isCustomGeometryElement(board, element)
-    ) {
-      currentFill = getFillByDrawElement(board, element);
+    if (typeof element.fill === 'string') {
+      return element.fill;
     }
+  }
+  
+  // 无填充时获取默认值
+  let currentFill: string | null = null;
+  if (MindElement.isMindElement(board, element)) {
+    currentFill = getFillByElement(board, element);
+  } else if (Freehand.isFreehand(element)) {
+    currentFill = getFillByFreehandElement(board, element);
+  } else if (PenPath.isPenPath(element)) {
+    // PenPath 使用主题默认填充色
+    const themeColors = PenThemeColors[board.theme.themeColorMode];
+    currentFill = (element.closed ? themeColors?.fill : 'none') || '#FFFFFF';
+  } else if (
+    PlaitDrawElement.isDrawElement(element) ||
+    PlaitDrawElement.isCustomGeometryElement(board, element)
+  ) {
+    currentFill = getFillByDrawElement(board, element);
   }
   return currentFill as string;
 };

@@ -14,6 +14,7 @@ $gray-light: #F3F4F6;
 $gray-medium: #9CA3AF;
 $gray-dark: #6B7280;
 $text-dark: #1F2937;
+$vip-color: #E91E63;
 
 .ai-input-bar {
   position: fixed;
@@ -348,14 +349,19 @@ $text-dark: #1F2937;
   &__bottom-bar {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 4px; // 减小间距防止换行
     width: 100%;
     flex-shrink: 0;
+    flex-wrap: nowrap; // 强制不换行
+    overflow-x: auto; // 如果实在太长允许滚动（虽然最好不要）
+    scrollbar-width: none; // 隐藏滚动条
+    &::-webkit-scrollbar { display: none; }
   }
 
   // 底部栏中间的弹性空间
   &__bottom-spacer {
     flex: 1;
+    min-width: 8px; // 最小间距
   }
 
   // 输入区域 - 向上扩展
@@ -696,6 +702,204 @@ $text-dark: #1F2937;
     }
   }
 
+  // 素材库按钮
+  &__library-btn {
+    @extend .ai-input-bar__upload-btn;
+  }
+
+  // Generation Type Dropdown
+  .generation-type-dropdown {
+    position: relative;
+    display: inline-flex;
+    flex-shrink: 0;
+
+    &__trigger {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      padding: 4px 8px;
+      background: transparent;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      color: $text-dark;
+      font-size: 13px;
+      font-weight: 500;
+      white-space: nowrap;
+
+      &:hover:not(:disabled) {
+        background: rgba($orange-primary, 0.1);
+      }
+
+      &--open {
+        background: rgba($orange-primary, 0.15);
+      }
+    }
+
+    &__icon-prefix {
+      color: $orange-primary;
+      display: flex;
+      align-items: center;
+      font-weight: 600;
+      margin-right: 1px;
+    }
+
+    &__label {
+      color: $gray-dark;
+    }
+
+    &__chevron {
+      color: $gray-medium;
+      transition: transform 0.2s ease;
+      margin-left: 1px;
+
+      &--open {
+        transform: rotate(180deg);
+      }
+    }
+
+    &__menu {
+      position: absolute;
+      bottom: calc(100% + 8px);
+      left: 0;
+      background: var(--island-bg-color, #fff);
+      border: 1px solid $gray-light;
+      border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+      padding: 4px;
+      z-index: 100;
+      min-width: 100px;
+    }
+
+    &__item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.1s ease;
+      font-size: 13px;
+      white-space: nowrap;
+      color: $text-dark;
+
+      &:hover {
+        background: $gray-light;
+      }
+
+      &--selected {
+        background: rgba($orange-primary, 0.08);
+        color: $orange-primary;
+        font-weight: 500;
+      }
+    }
+
+    &__item-icon {
+      display: flex;
+      align-items: center;
+      color: $gray-medium;
+
+      .generation-type-dropdown__item--selected & {
+        color: $orange-primary;
+      }
+    }
+
+    &__item-check {
+      margin-left: auto;
+      color: $orange-primary;
+    }
+  }
+
+  // Count Dropdown
+  .count-dropdown {
+    position: relative;
+    display: inline-flex;
+    flex-shrink: 0;
+
+    &__trigger {
+      display: flex;
+      align-items: center;
+      gap: 1px;
+      padding: 4px 8px;
+      background: transparent;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      color: $text-dark;
+      font-size: 13px;
+      font-weight: 500;
+      white-space: nowrap;
+
+      &:hover:not(:disabled) {
+        background: rgba($orange-primary, 0.1);
+      }
+
+      &--open {
+        background: rgba($orange-primary, 0.15);
+      }
+    }
+
+    &__plus-icon {
+      color: $orange-primary;
+      flex-shrink: 0;
+    }
+
+    &__label {
+      color: $gray-dark;
+    }
+
+    &__chevron {
+      color: $gray-medium;
+      transition: transform 0.2s ease;
+      margin-left: 1px;
+
+      &--open {
+        transform: rotate(180deg);
+      }
+    }
+
+    &__menu {
+      position: absolute;
+      bottom: calc(100% + 8px);
+      left: 0;
+      background: var(--island-bg-color, #fff);
+      border: 1px solid $gray-light;
+      border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+      padding: 4px;
+      z-index: 100;
+      min-width: 80px;
+    }
+
+    &__item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.1s ease;
+      font-size: 13px;
+      color: $text-dark;
+
+      &:hover {
+        background: $gray-light;
+      }
+
+      &--selected {
+        background: rgba($orange-primary, 0.08);
+        color: $orange-primary;
+        font-weight: 500;
+      }
+    }
+
+    &__item-check {
+      color: $orange-primary;
+    }
+  }
+
   // Send button
   &__send-btn {
     display: flex;
@@ -861,13 +1065,59 @@ $text-dark: #1F2937;
       }
     }
 
-    &__upload-btn {
+    &__upload-btn,
+    &__library-btn {
       border-color: var(--color-border, #444);
       color: var(--color-gray-50, #999);
 
       &:hover {
         color: var(--color-gray-20, #ccc);
         background: var(--color-surface-mid, #333);
+      }
+    }
+
+    .generation-type-dropdown, .count-dropdown {
+      &__trigger {
+        color: var(--color-gray-20, #ccc);
+        
+        &:hover {
+          background: rgba($orange-primary, 0.15);
+        }
+
+        &--open {
+          background: rgba($orange-primary, 0.2);
+        }
+      }
+
+      &__icon-prefix, &__plus-icon {
+        color: $orange-primary;
+      }
+
+      &__label {
+        color: var(--color-gray-30, #bbb);
+      }
+
+      &__chevron {
+        color: var(--color-gray-50, #999);
+      }
+
+      &__menu {
+        background: var(--color-surface-high, #2a2a2a);
+        border-color: var(--color-border, #444);
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+      }
+
+      &__item {
+        color: var(--color-gray-20, #ccc);
+
+        &:hover {
+          background: var(--color-surface-mid, #333);
+        }
+
+        &--selected {
+          background: rgba($orange-primary, 0.15);
+          color: $orange-primary;
+        }
       }
     }
 
@@ -1123,6 +1373,9 @@ $text-dark: #1F2937;
   .ai-input-bar {
     bottom: 16px;
     padding: 0 12px;
+    // 移动端考虑左侧工具栏宽度，避免遮挡
+    left: calc(50% + 24px); // 工具栏宽度48px的一半，使输入框在工具栏右侧区域居中
+    max-width: calc(100% - 60px); // 左侧工具栏48px + 右侧边距12px
 
     &__content-preview {
       gap: 6px;
@@ -1228,6 +1481,7 @@ $text-dark: #1F2937;
     max-height: 260px;
     overflow-y: auto;
     padding: 4px;
+    position: relative; // 确保 offsetTop 相对于此列表容器计算
 
     &::-webkit-scrollbar {
       width: 4px;
@@ -1305,9 +1559,10 @@ $text-dark: #1F2937;
   &__at-suggestion-item-vip {
     font-size: 10px;
     font-weight: 600;
-    color: #fff;
-    background: linear-gradient(135deg, #E91E63 0%, #FF6B9D 100%);
-    padding: 1px 4px;
+    color: $vip-color;
+    background: rgba($vip-color, 0.1);
+    border: 1px solid rgba($vip-color, 0.2);
+    padding: 0 4px;
     border-radius: 3px;
     flex-shrink: 0;
   }
@@ -1385,6 +1640,189 @@ $text-dark: #1F2937;
 
     &__at-suggestion-item-desc {
       color: var(--color-gray-50, #999);
+    }
+
+    &__at-suggestion-item-vip {
+      background: rgba($vip-color, 0.15);
+      border-color: rgba($vip-color, 0.3);
+    }
+  }
+}
+
+// ============================================
+// Portal 渲染的下拉菜单样式（根级别，因为通过 createPortal 渲染到 document.body）
+// ============================================
+
+// Generation Type Dropdown Menu (portaled to body)
+.generation-type-dropdown__menu {
+  background: var(--island-bg-color, #fff);
+  border: 1px solid $gray-light;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  padding: 0;
+  min-width: 100px;
+  overflow: hidden;
+}
+
+.generation-type-dropdown__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: $gray-dark;
+  border-bottom: 1px solid $gray-light;
+  background: #FAFAFA;
+}
+
+.generation-type-dropdown__list {
+  padding: 4px;
+}
+
+.generation-type-dropdown__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.1s ease;
+  font-size: 13px;
+  white-space: nowrap;
+  color: $text-dark;
+
+  &:hover,
+  &--highlighted {
+    background: $gray-light;
+  }
+
+  &--selected {
+    background: rgba($orange-primary, 0.08);
+    color: $orange-primary;
+    font-weight: 500;
+
+    &:hover,
+    &.generation-type-dropdown__item--highlighted {
+      background: rgba($orange-primary, 0.12);
+    }
+  }
+}
+
+.generation-type-dropdown__item-icon {
+  display: flex;
+  align-items: center;
+  color: $gray-medium;
+
+  .generation-type-dropdown__item--selected & {
+    color: $orange-primary;
+  }
+}
+
+.generation-type-dropdown__item-label {
+  flex: 1;
+}
+
+.generation-type-dropdown__item-check {
+  margin-left: auto;
+  color: $orange-primary;
+}
+
+// Count Dropdown Menu (portaled to body)
+.count-dropdown__menu {
+  background: var(--island-bg-color, #fff);
+  border: 1px solid $gray-light;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  padding: 0;
+  min-width: 80px;
+  overflow: hidden;
+}
+
+.count-dropdown__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: $gray-dark;
+  border-bottom: 1px solid $gray-light;
+  background: #FAFAFA;
+}
+
+.count-dropdown__list {
+  padding: 4px;
+}
+
+.count-dropdown__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.1s ease;
+  font-size: 13px;
+  white-space: nowrap;
+  color: $text-dark;
+
+  &:hover,
+  &--highlighted {
+    background: $gray-light;
+  }
+
+  &--selected {
+    background: rgba($orange-primary, 0.08);
+    color: $orange-primary;
+    font-weight: 500;
+
+    &:hover,
+    &.count-dropdown__item--highlighted {
+      background: rgba($orange-primary, 0.12);
+    }
+  }
+}
+
+.count-dropdown__item-check {
+  margin-left: 8px;
+  color: $orange-primary;
+}
+
+// 深色模式下的 Portal 下拉菜单样式（使用应用级别主题检测，与其他组件一致）
+:root[data-theme='dark'] {
+  .generation-type-dropdown__menu,
+  .count-dropdown__menu {
+    background: var(--color-surface-high, #2a2a2a);
+    border-color: var(--color-border, #444);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  }
+
+  .generation-type-dropdown__header,
+  .count-dropdown__header {
+    background: var(--color-surface-mid, #333);
+    border-bottom-color: var(--color-border, #444);
+    color: var(--color-gray-50, #999);
+  }
+
+  .generation-type-dropdown__item,
+  .count-dropdown__item {
+    color: var(--color-gray-20, #ccc);
+
+    &:hover,
+    &--highlighted {
+      background: var(--color-surface-mid, #333);
+    }
+
+    &--selected {
+      background: rgba($orange-primary, 0.15);
+      color: $orange-primary;
+
+      &:hover,
+      &.generation-type-dropdown__item--highlighted,
+      &.count-dropdown__item--highlighted {
+        background: rgba($orange-primary, 0.2);
+      }
     }
   }
 }

@@ -25,6 +25,7 @@ import React from 'react';
 import type { PlaitWorkZone, WorkZoneCreateOptions } from '../types/workzone.types';
 import { DEFAULT_WORKZONE_SIZE } from '../types/workzone.types';
 import { WorkZoneContent } from '../components/workzone-element/WorkZoneContent';
+import { ToolProviderWrapper } from '../components/toolbox-drawer/ToolProviderWrapper';
 
 /**
  * 判断是否为 WorkZone 元素
@@ -136,10 +137,12 @@ export class WorkZoneComponent extends CommonElementFlavour<PlaitWorkZone, Plait
     // 创建 React root
     this.reactRoot = createRoot(this.container);
     this.reactRoot.render(
-      React.createElement(WorkZoneContent, {
-        workflow: this.element.workflow,
-        onDelete: this.handleDelete,
-      })
+      React.createElement(ToolProviderWrapper, { board: this.board },
+        React.createElement(WorkZoneContent, {
+          workflow: this.element.workflow,
+          onDelete: this.handleDelete,
+        })
+      )
     );
   }
 
@@ -170,10 +173,12 @@ export class WorkZoneComponent extends CommonElementFlavour<PlaitWorkZone, Plait
       // 重新渲染 React 内容（workflow 数据可能变化）
       if (this.reactRoot) {
         this.reactRoot.render(
-          React.createElement(WorkZoneContent, {
-            workflow: value.element.workflow,
-            onDelete: this.handleDelete,
-          })
+          React.createElement(ToolProviderWrapper, { board: this.board },
+            React.createElement(WorkZoneContent, {
+              workflow: value.element.workflow,
+              onDelete: this.handleDelete,
+            })
+          )
         );
       }
     }

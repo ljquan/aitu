@@ -1,10 +1,10 @@
 {
   "name": "@aitu/source",
-  "version": "0.5.2",
+  "version": "0.5.48",
   "license": "MIT",
   "packageManager": "pnpm@10.21.0",
   "description": "Aitu - An open-source whiteboard tool with AI-powered image/video creation, mind mapping, flowcharts, and freehand drawing",
-  "homepage": "https://aitu.chat",
+  "homepage": "https://opentu.ai",
   "repository": {
     "type": "git",
     "url": "https://github.com/ljquan/aitu.git"
@@ -26,17 +26,27 @@
     "start": "nx serve web",
     "build": "node scripts/update-version.js && nx run-many -t=build",
     "build:web": "node scripts/update-version.js && nx build web",
-    "package": "node scripts/create-release-package.js",
+    "preview": "npx serve dist/apps/web -l 7288",
+    "package": "npm run build && node scripts/create-deploy-package.js",
     "test": "nx run-many -t=test",
     "size": "size-limit",
     "size:why": "size-limit --why",
     "version:patch": "node scripts/safe-version-bump.js patch",
     "version:minor": "node scripts/safe-version-bump.js minor",
     "version:major": "node scripts/safe-version-bump.js major",
-    "release": "npm run version:patch && npm run build && npm run package",
-    "release:minor": "npm run version:minor && npm run build && npm run package",
-    "release:major": "npm run version:major && npm run build && npm run package",
-    "pub": "npm run build && node scripts/publish.js"
+    "release:skip": "node scripts/deploy-hybrid.js --skip-npm",
+    "release": "npm run version:patch && node scripts/deploy-hybrid.js",
+    "release:minor": "npm run version:minor && node scripts/deploy-hybrid.js",
+    "release:major": "npm run version:major && node scripts/deploy-hybrid.js",
+    "release:retry": "node scripts/deploy-hybrid.js",
+    "release:dry": "node scripts/deploy-hybrid.js --dry-run",
+    "pub": "npm run build && node scripts/publish.js",
+    "npm:publish": "node scripts/publish-npm.js",
+    "npm:publish:dry": "node scripts/publish-npm.js --dry-run",
+    "npm:publish:skip-build": "node scripts/publish-npm.js --skip-build",
+    "deploy:upload-script": "node scripts/upload-deploy-script.js",
+    "deploy:upload": "node scripts/upload-and-deploy.js",
+    "deploy:nginx": "node scripts/upload-nginx-config.js"
   },
   "private": true,
   "dependencies": {
@@ -73,6 +83,7 @@
     "tdesign-icons-react": "^0.5.1",
     "tdesign-react": "^1.14.5",
     "tslib": "^2.3.0",
+    "viewerjs": "^1.11.7",
     "web-vitals": "^5.1.0",
     "winbox": "^0.2.82",
     "xlsx": "^0.18.5"

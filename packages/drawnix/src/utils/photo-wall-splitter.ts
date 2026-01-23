@@ -28,6 +28,7 @@ import {
   isWhiteBorderPixel,
   removeWhiteBorder,
 } from './image-border-utils';
+import { mergeSplitLines } from './image-split-core';
 
 /** 检测时的最大尺寸，超过此尺寸会降采样（降低此值可提升性能） */
 const MAX_DETECTION_SIZE = 800;
@@ -110,8 +111,9 @@ function detectGridStructure(imageData: ImageData): GridDetectionResult {
   // console.log(`[GridDetection] Found ${verticalWhiteCols.length} vertical white cols`);
 
   // 合并连续的白线为单一分割线（取中点）
-  const horizontalLines = mergeConsecutiveLines(horizontalWhiteRows);
-  const verticalLines = mergeConsecutiveLines(verticalWhiteCols);
+  // 使用共享的 mergeSplitLines 函数，允许 3px 间隔
+  const horizontalLines = mergeSplitLines(horizontalWhiteRows, 3);
+  const verticalLines = mergeSplitLines(verticalWhiteCols, 3);
 
   // console.log(`[GridDetection] Merged to ${horizontalLines.length} horizontal lines:`, horizontalLines);
   // console.log(`[GridDetection] Merged to ${verticalLines.length} vertical lines:`, verticalLines);
@@ -150,33 +152,7 @@ function detectGridStructure(imageData: ImageData): GridDetectionResult {
   };
 }
 
-/**
- * 合并连续的行/列为单一分割线
- * 例如 [10, 11, 12, 50, 51] -> [11, 50.5]
- */
-function mergeConsecutiveLines(lines: number[]): number[] {
-  if (lines.length === 0) return [];
-
-  const merged: number[] = [];
-  let start = lines[0];
-  let end = lines[0];
-
-  for (let i = 1; i < lines.length; i++) {
-    if (lines[i] <= end + 3) {
-      // 连续或间隔很小（允许 3px 误差）
-      end = lines[i];
-    } else {
-      // 不连续，记录当前组的中点
-      merged.push(Math.floor((start + end) / 2));
-      start = lines[i];
-      end = lines[i];
-    }
-  }
-  // 记录最后一组
-  merged.push(Math.floor((start + end) / 2));
-
-  return merged;
-}
+// 使用 image-split-core.ts 中的 mergeSplitLines 函数
 
 /**
  * 根据网格结构生成区域
@@ -925,18 +901,21 @@ export async function detectPhotoWallRegions(
 /**
  * 递归拆分单个区域
  * 如果区域内还能检测到多个子区域，继续递归拆分
+ * @param imageUrl 当前区域的图片 URL
+ * @param depth 当前递归深度
+ * @param maxDepth 最大递归深度
+ * @param offsetX 当前区域相对于原始图片的 X 偏移量
+ * @param offsetY 当前区域相对于原始图片的 Y 偏移量
  */
 async function splitRegionRecursively(
   imageUrl: string,
-  depth: number = 0,
-  maxDepth: number = 5
+  depth = 0,
+  maxDepth = 5,
+  offsetX = 0,
+  offsetY = 0
 ): Promise<ImageElement[]> {
-  // const indent = '  '.repeat(depth);
-  // console.log(`${indent}[RecursiveSplit] Depth ${depth}, analyzing image...`);
-
   // 防止无限递归
   if (depth >= maxDepth) {
-    // console.log(`${indent}[RecursiveSplit] Max depth reached, returning as leaf`);
     const img = await loadImage(imageUrl);
     return [{
       id: `photo-wall-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
@@ -944,6 +923,8 @@ async function splitRegionRecursively(
       originalIndex: 0,
       width: img.naturalWidth,
       height: img.naturalHeight,
+      sourceX: offsetX,
+      sourceY: offsetY,
     }];
   }
 
@@ -952,7 +933,6 @@ async function splitRegionRecursively(
 
   // 如果检测到 0 或 1 个区域，说明无法继续拆分，返回当前图片
   if (detection.count <= 1) {
-    // console.log(`${indent}[RecursiveSplit] Found ${detection.count} region(s), this is a leaf image`);
 
     // 去白边后返回
     const trimmedImageData = await removeWhiteBorder(imageUrl, { borderRatio: 0.3 });
@@ -962,7 +942,6 @@ async function splitRegionRecursively(
 
     // 过滤太小的图片
     if (trimmedWidth < 50 || trimmedHeight < 50) {
-      // console.log(`${indent}[RecursiveSplit] Image too small (${trimmedWidth}x${trimmedHeight}), skipping`);
       return [];
     }
 
@@ -972,10 +951,10 @@ async function splitRegionRecursively(
       originalIndex: 0,
       width: trimmedWidth,
       height: trimmedHeight,
+      sourceX: offsetX,
+      sourceY: offsetY,
     }];
   }
-
-  // console.log(`${indent}[RecursiveSplit] Found ${detection.count} regions, splitting further...`);
 
   // 检测到多个区域，提取每个区域并递归处理
   const img = await loadImage(imageUrl);
@@ -1005,8 +984,14 @@ async function splitRegionRecursively(
 
     const regionImageUrl = regionCanvas.toDataURL('image/jpeg', 0.92);
 
-    // 递归拆分这个区域
-    const subElements = await splitRegionRecursively(regionImageUrl, depth + 1, maxDepth);
+    // 递归拆分这个区域，累积位置偏移
+    const subElements = await splitRegionRecursively(
+      regionImageUrl,
+      depth + 1,
+      maxDepth,
+      offsetX + region.x,  // 累积 X 偏移
+      offsetY + region.y   // 累积 Y 偏移
+    );
     allElements.push(...subElements);
   }
 
@@ -1018,8 +1003,6 @@ async function splitRegionRecursively(
  * 会递归拆分直到每个区域都无法再拆分为止
  */
 export async function splitPhotoWall(imageUrl: string): Promise<ImageElement[]> {
-  // console.log('[PhotoWallSplitter] Starting recursive split...');
-
   const elements = await splitRegionRecursively(imageUrl, 0, 5);
 
   // 重新分配 ID 和 index
@@ -1031,7 +1014,6 @@ export async function splitPhotoWall(imageUrl: string): Promise<ImageElement[]> 
 
   // 按面积降序排序（大图在前）
   finalElements.sort((a, b) => b.width * b.height - a.width * a.height);
-
-  // console.log(`[PhotoWallSplitter] Recursive split complete: ${finalElements.length} images`);
+  
   return finalElements;
 }

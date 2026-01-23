@@ -13,13 +13,18 @@
  * - Send button to trigger generation
  * - Integration with ChatDrawer for conversation display
  * - Agent mode: AI decides which MCP tool to use (image/video generation)
+ * - Smart Suggestion Panel for #model
  */
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Send, Check, ImagePlus } from 'lucide-react';
+import { Send, Check } from 'lucide-react';
+import {
+  ImageUploadIcon,
+  MediaLibraryIcon,
+} from '../icons';
 import { useBoard } from '@plait-board/react-board';
 import { SelectedContentPreview } from '../shared/SelectedContentPreview';
-import { getSelectedElements, ATTACHED_ELEMENT_CLASS_NAME, getRectangleByElements, PlaitBoard, getViewportOrigination, PlaitElement } from '@plait/core';
+import { getSelectedElements, ATTACHED_ELEMENT_CLASS_NAME, getRectangleByElements, PlaitBoard, PlaitElement } from '@plait/core';
 import { useI18n } from '../../i18n';
 import { TaskStatus } from '../../types/task.types';
 import { taskQueueService } from '../../services/task-queue';
@@ -27,13 +32,24 @@ import { processSelectedContentForAI, scrollToPointIfNeeded } from '../../utils/
 import { useTextSelection } from '../../hooks/useTextSelection';
 import { useChatDrawerControl } from '../../contexts/ChatDrawerContext';
 import { useAssets } from '../../contexts/AssetContext';
-import { AssetType, AssetSource } from '../../types/asset.types';
+import { AssetType, AssetSource, SelectionMode, Asset } from '../../types/asset.types';
+import { MediaLibraryModal } from '../media-library/MediaLibraryModal';
 import { ModelDropdown } from './ModelDropdown';
-import { SizeDropdown } from './SizeDropdown';
+import { ModelHealthBadge } from '../shared/ModelHealthBadge';
+import { ParametersDropdown } from './ParametersDropdown';
 import { PromptHistoryPopover } from './PromptHistoryPopover';
 import { usePromptHistory } from '../../hooks/usePromptHistory';
-import { getDefaultImageModel, IMAGE_MODELS, getModelConfig, getDefaultSizeForModel } from '../../constants/model-config';
-import { BUILT_IN_TOOLS, DEFAULT_TOOL_CONFIG } from '../../constants/built-in-tools';
+import {
+  getDefaultImageModel,
+  IMAGE_MODELS,
+  VIDEO_MODELS,
+  TEXT_MODELS,
+  getModelConfig,
+  getDefaultSizeForModel,
+  getDefaultVideoModel,
+  DEFAULT_TEXT_MODEL,
+} from '../../constants/model-config';
+import { BUILT_IN_TOOLS } from '../../constants/built-in-tools';
 import { initializeMCP, mcpRegistry } from '../../mcp';
 import { setCanvasBoard } from '../../services/canvas-operations/canvas-insertion';
 import { setBoard } from '../../mcp/tools/shared';
@@ -45,18 +61,21 @@ import { parseAIInput, type GenerationType } from '../../utils/ai-input-parser';
 import { convertToWorkflow, type WorkflowDefinition, type WorkflowStepOptions } from './workflow-converter';
 import { useWorkflowControl } from '../../contexts/WorkflowContext';
 import { geminiSettings } from '../../utils/settings-manager';
+import { promptForApiKey } from '../../utils/gemini-api/auth';
 import type { WorkflowMessageData } from '../../types/chat.types';
 import { analytics } from '../../utils/posthog-analytics';
 import classNames from 'classnames';
 import { InspirationBoard } from '../inspiration-board';
+import { GenerationTypeDropdown } from './GenerationTypeDropdown';
+import { CountDropdown } from './CountDropdown';
 import './ai-input-bar.scss';
 
 import type { WorkflowRetryContext, PostProcessingStatus } from '../../types/chat.types';
 import { workflowCompletionService } from '../../services/workflow-completion-service';
 import { BoardTransforms } from '@plait/core';
 import { WorkZoneTransforms } from '../../plugins/with-workzone';
-import { ToolTransforms } from '../../plugins/with-tool';
 import type { PlaitWorkZone } from '../../types/workzone.types';
+import { toolWindowService } from '../../services/tool-window-service';
 import { useWorkflowSubmission } from '../../hooks/useWorkflowSubmission';
 
 /**
@@ -72,13 +91,16 @@ function toWorkflowMessageData(
   postProcessingStatus?: PostProcessingStatus,
   insertedCount?: number
 ): WorkflowMessageData {
+  // Safely access metadata with defaults
+  const metadata = workflow.metadata || {};
+
   return {
     id: workflow.id,
     name: workflow.name,
     generationType: workflow.generationType,
-    prompt: workflow.metadata.prompt,
+    prompt: metadata.prompt || retryContext?.aiContext?.finalPrompt || '',
     aiAnalysis: workflow.aiAnalysis,
-    count: workflow.metadata.count,
+    count: metadata.count,
     steps: workflow.steps.map(step => ({
       id: step.id,
       description: step.description,
@@ -122,12 +144,12 @@ interface SelectedContent {
 function isVideoUrl(url: string): boolean {
   if (!url) return false;
   const lowerUrl = url.toLowerCase();
-  
+
   // 检查 #video 标识符
   if (lowerUrl.includes('#video')) {
     return true;
   }
-  
+
   // 检查视频扩展名
   const videoExtensions = ['.mp4', '.webm', '.mov', '.avi', '.mkv', '.m4v', '.flv', '.wmv'];
   return videoExtensions.some(ext => lowerUrl.includes(ext));
@@ -213,9 +235,9 @@ const SelectionWatcher: React.FC<{
     const handleSelectionChange = async () => {
       const currentBoard = boardRef.current;
       if (!currentBoard) return;
-      
+
       const selectedElements = getSelectedElements(currentBoard);
-      
+
       if (selectedElements.length === 0) {
         onSelectionChangeRef.current([]);
         return;
@@ -239,7 +261,7 @@ const SelectionWatcher: React.FC<{
         for (const img of processedContent.remainingImages) {
           const imgUrl = img.url || '';
           const isVideo = isVideoUrl(imgUrl);
-          
+
           content.push({
             url: imgUrl,
             name: img.name || (isVideo ? `video-${Date.now()}` : `image-${Date.now()}`),
@@ -288,7 +310,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
 
   const chatDrawerControl = useChatDrawerControl();
   const workflowControl = useWorkflowControl();
-  const { addHistory: addPromptHistory } = usePromptHistory();
+  const { addHistory: addPromptHistory, history: promptHistory, removeHistory: deletePromptHistory } = usePromptHistory();
   const { addAsset } = useAssets();
   // 使用 ref 存储，避免依赖变化
   const sendWorkflowMessageRef = useRef(chatDrawerControl.sendWorkflowMessage);
@@ -318,21 +340,73 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
   const submitCooldownRef = useRef<NodeJS.Timeout | null>(null); // 提交冷却定时器
   const [isFocused, setIsFocused] = useState(false);
   const [isCanvasEmpty, setIsCanvasEmpty] = useState<boolean | null>(null); // null=加载中, true=空, false=有内容
-  // 当前选中的图片模型（通过环境变量或默认值初始化）
+  // 当前选中的生成类型（图片、视频、Agent）
+  const [generationType, setGenerationType] = useState<GenerationType>('image');
+  // 当前选中的图片/视频/文本模型
   const [selectedModel, setSelectedModel] = useState(getDefaultImageModel);
-  // 当前选中的尺寸（默认为模型的默认尺寸）
-  const [selectedSize, setSelectedSize] = useState(() => getDefaultSizeForModel(getDefaultImageModel()));
+  // 当前选中的参数映射 (id -> value)
+  const [selectedParams, setSelectedParams] = useState<Record<string, string>>(() => ({
+    size: getDefaultSizeForModel(getDefaultImageModel())
+  }));
+  // 当前选中的生成数量
+  const [selectedCount, setSelectedCount] = useState(1);
 
-  // @ 触发模型选择相关状态
-  const [showAtSuggestion, setShowAtSuggestion] = useState(false);
-  const [atQuery, setAtQuery] = useState(''); // @ 后面的查询文本
-  const [atHighlightIndex, setAtHighlightIndex] = useState(0); // 当前高亮的选项索引
-  const atSuggestionRef = useRef<HTMLDivElement>(null);
+  // 下拉菜单的打开状态（用于特殊符号触发）
+  const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
+  const [paramsDropdownOpen, setParamsDropdownOpen] = useState(false);
+  const [countDropdownOpen, setCountDropdownOpen] = useState(false);
+  // 记录触发符号的位置，用于选择后清除
+  const triggerPositionRef = useRef<number | null>(null);
+
+  // 下拉菜单状态变化处理（关闭时清除触发位置）
+  const handleModelDropdownChange = useCallback((open: boolean) => {
+    setModelDropdownOpen(open);
+    if (!open) triggerPositionRef.current = null;
+  }, []);
+  const handleParamsDropdownChange = useCallback((open: boolean) => {
+    setParamsDropdownOpen(open);
+    if (!open) triggerPositionRef.current = null;
+  }, []);
+  const handleCountDropdownChange = useCallback((open: boolean) => {
+    setCountDropdownOpen(open);
+    if (!open) triggerPositionRef.current = null;
+  }, []);
+
+  // 素材库弹窗状态
+  const [showMediaLibrary, setShowMediaLibrary] = useState(false);
 
   // 合并画布选中内容和用户上传内容
   const allContent = useMemo(() => {
     return [...uploadedContent, ...selectedContent];
   }, [uploadedContent, selectedContent]);
+
+  // 监听生成类型变化，自动切换模型和尺寸
+  useEffect(() => {
+    let defaultModelId: string;
+    if (generationType === 'video') {
+      defaultModelId = getDefaultVideoModel();
+    } else if (generationType === 'text') {
+      defaultModelId = DEFAULT_TEXT_MODEL;
+    } else {
+      defaultModelId = getDefaultImageModel();
+    }
+    
+    setSelectedModel(defaultModelId);
+    setSelectedParams({
+      size: getDefaultSizeForModel(defaultModelId)
+    });
+    // Agent 模式通常只需要 1 个结果
+    if (generationType === 'text') {
+      setSelectedCount(1);
+    }
+  }, [generationType]);
+
+  // 根据当前生成类型获取模型列表
+  const currentModels = useMemo(() => {
+    if (generationType === 'video') return VIDEO_MODELS;
+    if (generationType === 'text') return TEXT_MODELS;
+    return IMAGE_MODELS;
+  }, [generationType]);
 
   // 点击外部关闭输入框的展开状态
   useEffect(() => {
@@ -402,7 +476,6 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
       switch (task.status) {
         case TaskStatus.PENDING:
         case TaskStatus.PROCESSING:
-        case TaskStatus.RETRYING:
           newStatus = 'running';
           break;
         case TaskStatus.COMPLETED:
@@ -466,7 +539,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
   useEffect(() => {
     const subscription = workflowCompletionService.observeCompletionEvents().subscribe((event) => {
       const workflow = workflowControl.getWorkflow();
-      
+
       // 查找与此任务关联的步骤（即使 workflow 为 null 也继续处理 postProcessingCompleted）
       const step = workflow?.steps.find((s) => {
         const result = s.result as { taskId?: string } | undefined;
@@ -532,16 +605,35 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
 
         // 关闭 ChatDrawer（如果是由 AIInputBar 触发的对话）
         // 注意：这里使用 setTimeout 确保消息更新后再关闭
-        setTimeout(() => {
+        setTimeout(async () => {
           chatDrawerControl.closeChatDrawer();
 
           // 删除 WorkZone（因为图片已经插入画布）
           const workZoneId = currentWorkZoneIdRef.current;
           const board = SelectionWatcherBoardRef.current;
           if (workZoneId && board) {
-            WorkZoneTransforms.removeWorkZone(board, workZoneId);
-            currentWorkZoneIdRef.current = null;
-            // console.log('[AIInputBar] Removed WorkZone after completion:', workZoneId);
+            // 只有当所有步骤都完成后才删除
+            const workflow = workflowControl.getWorkflow();
+            const allStepsFinished = workflow?.steps.every(
+              s => s.status === 'completed' || s.status === 'failed' || s.status === 'skipped'
+            );
+
+            if (allStepsFinished) {
+              const { workflowCompletionService } = await import('../../services/workflow-completion-service');
+              const allPostProcessingFinished = workflow?.steps.every(step => {
+                const stepResult = step.result as { taskId?: string } | undefined;
+                if (stepResult?.taskId) {
+                  return workflowCompletionService.isPostProcessingCompleted(stepResult.taskId);
+                }
+                return true;
+              });
+
+              if (allPostProcessingFinished) {
+                WorkZoneTransforms.removeWorkZone(board, workZoneId);
+                currentWorkZoneIdRef.current = null;
+                // console.log('[AIInputBar] Removed WorkZone after completion:', workZoneId);
+              }
+            }
           }
 
           // 滚动画布到插入元素的位置
@@ -590,26 +682,33 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
     stopPropagation: true,
   });
 
-  // 处理灵感模版选择：将提示词替换到输入框
-  const handleSelectInspirationPrompt = useCallback((inspirationPrompt: string) => {
-    setPrompt(inspirationPrompt);
+  // 处理灵感模版选择：将提示词替换到输入框并切换到 Agent 模式
+  const handleSelectInspirationPrompt = useCallback((info: { prompt: string; modelType: 'agent' }) => {
+    setPrompt(info.prompt);
+    setGenerationType('text'); // agent 对应 text 生成类型
     inputRef.current?.focus();
   }, []);
 
-  // 处理历史提示词选择：将提示词回填到输入框
-  const handleSelectHistoryPrompt = useCallback((content: string) => {
-    setPrompt(content);
-    inputRef.current?.focus();
-  }, []);
-
-  // 处理打开提示词工具（香蕉提示词）- 复用工具箱的逻辑
-  const handleOpenPromptTool = useCallback(() => {
-    const board = SelectionWatcherBoardRef.current;
-    if (!board) {
-      console.warn('[AIInputBar] Board not ready for prompt tool');
-      return;
+  // 处理历史提示词选择：将提示词回填到输入框并切换生成类型
+  const handleSelectHistoryPrompt = useCallback((info: { content: string; modelType?: 'image' | 'video' | 'agent' }) => {
+    setPrompt(info.content);
+    
+    // 根据 modelType 自动切换生成类型
+    if (info.modelType) {
+      if (info.modelType === 'image') {
+        setGenerationType('image');
+      } else if (info.modelType === 'video') {
+        setGenerationType('video');
+      } else if (info.modelType === 'agent') {
+        setGenerationType('text');
+      }
     }
+    
+    inputRef.current?.focus();
+  }, []);
 
+  // 处理打开提示词工具（香蕉提示词）- 通过 WinBox 弹窗方式打开
+  const handleOpenPromptTool = useCallback(() => {
     // 从内置工具列表中获取香蕉提示词工具配置
     const tool = BUILT_IN_TOOLS.find(t => t.id === 'banana-prompt');
     if (!tool) {
@@ -617,36 +716,40 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
       return;
     }
 
-    // 计算画布中心位置（与 ToolboxDrawer 相同的逻辑）
-    const boardContainerRect = PlaitBoard.getBoardContainer(board).getBoundingClientRect();
-    const focusPoint = [
-      boardContainerRect.width / 2,
-      boardContainerRect.height / 2,
-    ];
-    const zoom = board.viewport.zoom;
-    const origination = getViewportOrigination(board);
-    const centerX = origination![0] + focusPoint[0] / zoom;
-    const centerY = origination![1] + focusPoint[1] / zoom;
+    // 通过 toolWindowService 打开 WinBox 弹窗
+    toolWindowService.openTool(tool);
+  }, []);
 
-    // 工具尺寸
-    const width = tool.defaultWidth || DEFAULT_TOOL_CONFIG.defaultWidth;
-    const height = tool.defaultHeight || DEFAULT_TOOL_CONFIG.defaultHeight;
-
-    // 插入到画布（中心对齐）
-    ToolTransforms.insertTool(
-      board,
-      tool.id,
-      tool.url,
-      [centerX - width / 2, centerY - height / 2],
-      { width, height },
-      {
-        name: tool.name,
-        category: tool.category,
-        permissions: tool.permissions,
-      }
-    );
-
-    // console.log('[AIInputBar] Prompt tool inserted to canvas');
+  // 处理素材库选择
+  const handleMediaLibrarySelect = useCallback(async (asset: Asset) => {
+    try {
+      // 创建 Image 对象获取尺寸
+      const img = new Image();
+      img.onload = () => {
+        const newContent: SelectedContent = {
+          type: 'image',
+          url: asset.url,
+          name: asset.name || `素材-${Date.now()}`,
+          width: img.naturalWidth || undefined,
+          height: img.naturalHeight || undefined,
+        };
+        setUploadedContent(prev => [...prev, newContent]);
+        setShowMediaLibrary(false);
+      };
+      img.onerror = () => {
+        const newContent: SelectedContent = {
+          type: 'image',
+          url: asset.url,
+          name: asset.name || `素材-${Date.now()}`,
+        };
+        setUploadedContent(prev => [...prev, newContent]);
+        setShowMediaLibrary(false);
+      };
+      img.src = asset.url;
+    } catch (error) {
+      console.error('Failed to select asset from library:', error);
+      setShowMediaLibrary(false);
+    }
   }, []);
 
   // 处理上传按钮点击
@@ -746,106 +849,87 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
     })));
   }, [allContent]);
 
+  // 清除输入框中的触发符号
+  const clearTriggerSymbol = useCallback(() => {
+    if (triggerPositionRef.current !== null) {
+      const pos = triggerPositionRef.current;
+      setPrompt(prev => prev.substring(0, pos) + prev.substring(pos + 1));
+      triggerPositionRef.current = null;
+    }
+  }, []);
+
   // 处理模型选择（从下拉菜单）
   const handleModelSelect = useCallback((modelId: string) => {
-    analytics.track('ai_input_change_model_dropdown', { model: modelId });
+    const model = getModelConfig(modelId);
+    if (!model) return;
+
+    analytics.track('ai_input_change_model', { model: modelId, type: model.type });
+
+    // 清除触发符号
+    clearTriggerSymbol();
+
+    // 更新状态（反显到下方下拉框）
+    setGenerationType(model.type as GenerationType);
     setSelectedModel(modelId);
-  }, []);
+    setSelectedParams({
+      size: getDefaultSizeForModel(modelId)
+    });
 
-  // 过滤模型列表（根据 @ 后的查询文本）
-  const filteredModels = useMemo(() => {
-    if (!atQuery) return IMAGE_MODELS;
-    const query = atQuery.toLowerCase();
-    return IMAGE_MODELS.filter(model =>
-      (model.shortCode?.toLowerCase().includes(query)) ||
-      (model.shortLabel?.toLowerCase().includes(query)) ||
-      (model.label.toLowerCase().includes(query))
-    );
-  }, [atQuery]);
+    // 关闭下拉菜单并保持焦点
+    setModelDropdownOpen(false);
+    setTimeout(() => inputRef.current?.focus(), 0);
+  }, [clearTriggerSymbol]);
 
-  // 检测输入中的 @ 触发
-  const detectAtTrigger = useCallback((text: string, cursorPos: number) => {
-    // 从光标位置往前找 @
-    let atPos = -1;
-    for (let i = cursorPos - 1; i >= 0; i--) {
-      const char = text[i];
-      // 遇到空格或换行，停止搜索
-      if (char === ' ' || char === '\n') break;
-      // 找到 @
-      if (char === '@') {
-        atPos = i;
-        break;
-      }
+  // 处理参数选择
+  const handleParamSelect = useCallback((paramId: string, value?: string) => {
+    // 清除触发符号
+    clearTriggerSymbol();
+
+    // 更新参数对象
+    if (value) {
+      setSelectedParams(prev => ({
+        ...prev,
+        [paramId]: value
+      }));
     }
 
-    if (atPos >= 0) {
-      // 提取 @ 后面的查询文本
-      const query = text.slice(atPos + 1, cursorPos);
-      setAtQuery(query);
-      setShowAtSuggestion(true);
-      setAtHighlightIndex(0);
-    } else {
-      setShowAtSuggestion(false);
-      setAtQuery('');
-    }
-  }, []);
+    // 关闭下拉菜单并保持焦点
+    setParamsDropdownOpen(false);
+    setTimeout(() => inputRef.current?.focus(), 0);
+  }, [clearTriggerSymbol]);
 
-  // 处理输入变化
-  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const newValue = e.target.value;
-    setPrompt(newValue);
+  // 处理个数选择
+  const handleCountSelect = useCallback((count: number) => {
+    // 清除触发符号
+    clearTriggerSymbol();
 
-    // 检测 @ 触发
-    const cursorPos = e.target.selectionStart || 0;
-    detectAtTrigger(newValue, cursorPos);
-  }, [detectAtTrigger]);
+    setSelectedCount(count);
 
-  // 处理 @ 选择模型
-  const handleAtSelectModel = useCallback((modelId: string) => {
-    // 从 prompt 中移除 @query
-    const textarea = inputRef.current;
-    if (!textarea) return;
-
-    const cursorPos = textarea.selectionStart || 0;
-    const text = prompt;
-
-    // 找到 @ 的位置
-    let atPos = -1;
-    for (let i = cursorPos - 1; i >= 0; i--) {
-      if (text[i] === '@') {
-        atPos = i;
-        break;
-      }
-      if (text[i] === ' ' || text[i] === '\n') break;
-    }
-
-    if (atPos >= 0) {
-      // 移除 @query 部分
-      const newText = text.slice(0, atPos) + text.slice(cursorPos);
-      setPrompt(newText);
-    }
-
-    // 选择模型
-    setSelectedModel(modelId);
-    setShowAtSuggestion(false);
-    setAtQuery('');
-
-    // 保持焦点在输入框
-    textarea.focus();
-  }, [prompt]);
+    // 关闭下拉菜单并保持焦点
+    setCountDropdownOpen(false);
+    setTimeout(() => inputRef.current?.focus(), 0);
+  }, [clearTriggerSymbol]);
 
   // Handle generation
   const handleGenerate = useCallback(async () => {
     if (!prompt.trim() && allContent.length === 0) return;
     if (isSubmitting) {
-      // console.log('[AIInputBar] handleGenerate blocked: isSubmitting=true');
       return; // 仅防止快速重复点击
     }
 
-    // console.log('[AIInputBar] handleGenerate: setting isSubmitting=true');
     setIsSubmitting(true);
 
     try {
+      // 检查 API key，如果没有配置则弹窗获取
+      const globalSettings = geminiSettings.get();
+      if (!globalSettings.apiKey) {
+        const newApiKey = await promptForApiKey();
+        if (!newApiKey) {
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
       // 构建选中元素的分类信息（使用合并后的 allContent）
       // 收集图片和图形的尺寸信息（按顺序：先 images，后 graphics）
       const imageItems = allContent.filter((item) => item.type === 'image' && item.url);
@@ -873,7 +957,12 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
       };
 
       // 解析输入内容，使用选中的模型和尺寸
-      const parsedParams = parseAIInput(prompt, selection, { modelId: selectedModel, size: selectedSize });
+      const parsedParams = parseAIInput(prompt, selection, { 
+        modelId: selectedModel, 
+        params: selectedParams,
+        generationType: generationType,
+        count: selectedCount,
+      });
 
       // 收集所有参考媒体（图片 + 图形 + 视频）
       const referenceImages = [...selection.images, ...selection.graphics];
@@ -881,77 +970,50 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
       // 创建工作流定义（仅用于 WorkZone 显示，实际工作流由 submitWorkflowToSW 创建）
       const workflow = convertToWorkflow(parsedParams, referenceImages);
 
-      // 注意：不在这里调用 workflowControl.startWorkflow，由 submitWorkflowToSW 统一处理
-      // 避免重复创建工作流导致多次请求
-
       // 在画布上创建 WorkZone 显示工作流进度
       const board = SelectionWatcherBoardRef.current;
-      // console.log('[AIInputBar] Board ref:', board ? 'exists' : 'null');
       if (board) {
-        // WorkZone 固定尺寸（画布坐标）
-        // 因为容器已经应用了 scale(1/zoom)，所以这里不需要除以 zoom
+        // WorkZone 固定尺寸
         const WORKZONE_WIDTH = 360;
         const WORKZONE_HEIGHT = 240;
-        const GAP = 50; // 间距
+        const GAP = 50;
 
         const containerRect = board.host?.getBoundingClientRect();
         const zoom = board.viewport?.zoom || 1;
         const originX = board.viewport?.origination?.[0] || 0;
         const originY = board.viewport?.origination?.[1] || 0;
 
-        // 获取所有非 WorkZone 元素
         const allElements = board.children.filter(
           (el: { type?: string }) => el.type !== 'workzone'
         );
 
-        // 初始化默认值（视口中心）
         const viewportCenterX = originX + (containerRect?.width || 0) / 2 / zoom;
         const viewportCenterY = originY + (containerRect?.height || 0) / 2 / zoom;
 
-        let expectedInsertLeftX: number = viewportCenterX - 200; // 插入元素的左边缘X坐标（默认偏左一点）
+        let expectedInsertLeftX: number = viewportCenterX - 200;
         let expectedInsertY: number = viewportCenterY;
         let workzoneX: number = expectedInsertLeftX;
         let workzoneY: number = viewportCenterY - WORKZONE_HEIGHT / 2;
-        let positionStrategy = 'viewport-center'; // 用于日志
 
         if (allElements.length > 0) {
-          // 获取选中的元素
           const selectedElements = getSelectedElements(board);
           let positionCalculated = false;
 
-          // 策略1: 优先放在选中元素下方（如果有选中）
           if (selectedElements.length > 0) {
             try {
               const selectedRect = getRectangleByElements(board, selectedElements, false);
               const selectedBottomY = selectedRect.y + selectedRect.height;
-
-              // console.log('[AIInputBar] === Strategy 1: Below Selected Elements ===');
-              // console.log('[AIInputBar] Selected elements count:', selectedElements.length);
-              // console.log('[AIInputBar] Selected rect:', selectedRect);
-              // console.log('[AIInputBar] Selected bottom Y:', selectedBottomY);
-
-              // 直接放在选中元素下方，不检查视口空间
-              // 因为我们有滚动功能，可以滚动到 WorkZone 位置
-              expectedInsertLeftX = selectedRect.x; // 左对齐
+              expectedInsertLeftX = selectedRect.x;
               expectedInsertY = selectedBottomY + GAP;
               workzoneX = expectedInsertLeftX;
               workzoneY = expectedInsertY;
-              positionStrategy = 'below-selected';
               positionCalculated = true;
-
-              // console.log('[AIInputBar] ✓ Using strategy: below selected elements');
-              // console.log('[AIInputBar] WorkZone will be at:', [workzoneX, workzoneY]);
             } catch (error) {
               console.warn('[AIInputBar] Failed to calculate position for selected elements:', error);
             }
-          } else {
-            // console.log('[AIInputBar] No selected elements, will use strategy 2');
           }
 
-          // 策略2: 如果策略1未成功，放在最底部元素下方
           if (!positionCalculated) {
-            // console.log('[AIInputBar] === Strategy 2: Below Bottommost Element ===');
-
             let bottommostElement: PlaitElement | null = null;
             let maxBottomY = -Infinity;
 
@@ -974,21 +1036,10 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
               expectedInsertY = bottommostRect.y + bottommostRect.height + GAP;
               workzoneX = expectedInsertLeftX;
               workzoneY = expectedInsertY;
-              positionStrategy = 'below-bottommost';
-
-              // console.log('[AIInputBar] ✓ Using strategy: below bottommost element');
-              // console.log('[AIInputBar] Bottommost rect:', bottommostRect);
-              // console.log('[AIInputBar] WorkZone will be at:', [workzoneX, workzoneY]);
-            } else {
-              // console.log('[AIInputBar] ✗ No valid elements found, using viewport center');
             }
           }
-        } else {
-          // 画布为空，使用默认值（视口中心）
-          // console.log('[AIInputBar] ✓ Using strategy: viewport center (empty canvas)');
         }
 
-        // 创建 WorkZone
         const workflowMessageData = toWorkflowMessageData(workflow);
         const workzoneElement = WorkZoneTransforms.insertWorkZone(board, {
           workflow: workflowMessageData,
@@ -998,30 +1049,15 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
           zoom,
         });
 
-        // 保存 WorkZone ID 用于后续更新
         currentWorkZoneIdRef.current = workzoneElement.id;
-        // console.log('[AIInputBar] Created WorkZone:', workzoneElement.id);
-        // console.log('[AIInputBar] WorkZone position (left-top):', [workzoneX, workzoneY]);
-        // console.log('[AIInputBar] WorkZone size:', [WORKZONE_WIDTH, WORKZONE_HEIGHT]);
-        // console.log('[AIInputBar] Expected insert position (leftX, topY):', [expectedInsertLeftX, expectedInsertY]);
-        // console.log('[AIInputBar] Position strategy:', positionStrategy);
-        // console.log('[AIInputBar] Zoom:', zoom);
 
-        // 延迟滚动到 WorkZone 位置，确保 DOM 已渲染
         setTimeout(() => {
-          // 计算 WorkZone 中心点
           const workzoneCenterX = workzoneX + WORKZONE_WIDTH / 2;
           const workzoneCenterY = workzoneY + WORKZONE_HEIGHT / 2;
-
-          // 使用现有的滚动工具函数，如果 WorkZone 不在视口内则滚动
           scrollToPointIfNeeded(board, [workzoneCenterX, workzoneCenterY], 100);
-          // console.log('[AIInputBar] Scroll check completed for WorkZone center:', [workzoneCenterX, workzoneCenterY]);
         }, 100);
-      } else {
-        console.warn('[AIInputBar] Board not available, skipping WorkZone creation');
       }
 
-      // 构建完整的 AI 输入上下文
       const aiContext = {
         rawInput: prompt,
         userInstruction: parsedParams.userInstruction,
@@ -1039,56 +1075,40 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
         finalPrompt: parsedParams.prompt,
       };
 
-      // 获取全局设置的文本模型（用于 Agent 流程）
-      const globalSettings = geminiSettings.get();
       const textModel = globalSettings.textModelName;
 
-      // 创建重试上下文（保存用于重试的必要信息）
       const retryContext: WorkflowRetryContext = {
         aiContext,
         referenceImages,
         textModel,
       };
-      // 保存到 ref，用于后续更新时保持 retryContext
       currentRetryContextRef.current = retryContext;
 
-      // 注意：不在这里发送 ChatDrawer 消息，由 submitWorkflowToSW 统一处理
-      // 避免重复发送消息导致多次请求
-
-      // 所有工作流都通过 SW 执行
-      // SW 会根据工具类型决定是在 SW 中执行还是委托给主线程
       try {
-        // 传递已创建的 workflow，避免重复创建导致 ID 不一致
         const { usedSW } = await submitWorkflowToSW(parsedParams, referenceImages, retryContext, workflow);
         if (usedSW) {
-          // console.log('[AIInputBar] Workflow submitted to SW');
-          // SW 执行成功
-          // 保存提示词到历史记录
           if (prompt.trim()) {
             const hasSelection = allContent.length > 0;
-            addPromptHistory(prompt.trim(), hasSelection);
+            // 将 generationType 'text' 映射为 'agent' 用于历史记录
+            const modelType = generationType === 'text' ? 'agent' : generationType;
+            addPromptHistory(prompt.trim(), hasSelection, modelType);
           }
-          // 清空输入，保持面板打开以便用户继续创作
           setPrompt('');
           setSelectedContent([]);
           setUploadedContent([]);
-          
-          // 启动 1 秒冷却定时器，之后允许用户继续输入
+
           if (submitCooldownRef.current) {
             clearTimeout(submitCooldownRef.current);
           }
-          // console.log('[AIInputBar] SW execution success, starting 1s cooldown timer');
           submitCooldownRef.current = setTimeout(() => {
-            // console.log('[AIInputBar] 1s cooldown expired: setting isSubmitting=false');
             setIsSubmitting(false);
             submitCooldownRef.current = null;
           }, 1000);
-          
-          return; // 提前返回
+
+          return;
         }
       } catch (swError) {
         console.warn('[AIInputBar] SW execution failed, falling back to main thread:', swError);
-        // SW 执行失败，继续使用主线程执行（fallback）
       }
 
       // Fallback: 主线程执行（仅当 SW 不可用时）
@@ -1291,7 +1311,9 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
       // 保存提示词到历史记录（只保存有实际内容的提示词）
       if (prompt.trim()) {
         const hasSelection = allContent.length > 0;
-        addPromptHistory(prompt.trim(), hasSelection);
+        // 将 generationType 'text' 映射为 'agent' 用于历史记录
+        const modelTypeForHistory = generationType === 'text' ? 'agent' : generationType;
+        addPromptHistory(prompt.trim(), hasSelection, modelTypeForHistory);
       }
 
       // 检查工作流是否已完成（所有步骤都是 completed 或 failed/skipped）
@@ -1307,12 +1329,27 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
         const workZoneId = currentWorkZoneIdRef.current;
         const board = SelectionWatcherBoardRef.current;
         if (workZoneId && board) {
-          // 延迟删除，让用户看到完成状态
-          setTimeout(() => {
-            WorkZoneTransforms.removeWorkZone(board, workZoneId);
-            currentWorkZoneIdRef.current = null;
-            // console.log('[AIInputBar] Removed WorkZone after all steps completed (no tasks):', workZoneId);
-          }, 1500);
+          // 检查是否所有后处理都已完成
+          const allPostProcessingFinished = finalWorkflow?.steps.every(step => {
+            const stepResult = step.result as { taskId?: string } | undefined;
+            if (stepResult?.taskId) {
+              const isCompleted = workflowCompletionService.isPostProcessingCompleted(stepResult.taskId);
+              // console.log(`[AIInputBar] Task ${stepResult.taskId} post-processing finished:`, isCompleted);
+              return isCompleted;
+            }
+            return true;
+          });
+
+          // console.log(`[AIInputBar] WorkZone ${workZoneId} allStepsFinished: ${allStepsFinished}, hasCreatedTasks: ${hasCreatedTasks}, allPostProcessingFinished: ${allPostProcessingFinished}`);
+
+          if (allPostProcessingFinished) {
+            // 延迟删除，让用户看到完成状态
+            setTimeout(() => {
+              WorkZoneTransforms.removeWorkZone(board, workZoneId);
+              currentWorkZoneIdRef.current = null;
+              // console.log('[AIInputBar] Removed WorkZone after all steps completed (no tasks):', workZoneId);
+            }, 1500);
+          }
         }
       }
 
@@ -1321,25 +1358,13 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
       setSelectedContent([]);
       setUploadedContent([]); // 同时清空用户上传内容
       // 不关闭面板，让用户可以继续输入
+      setIsSubmitting(false);
     } catch (error) {
       console.error('Failed to create generation task:', error);
-      // 中止工作流
       workflowControl.abortWorkflow();
-      // 出错时立即允许重试
       setIsSubmitting(false);
     }
-    // 成功提交后，1秒内不允许重复提交（防止误操作双击）
-    // 清除之前的定时器
-    if (submitCooldownRef.current) {
-      clearTimeout(submitCooldownRef.current);
-    }
-    // console.log('[AIInputBar] Starting 1s cooldown timer');
-    submitCooldownRef.current = setTimeout(() => {
-      // console.log('[AIInputBar] 1s cooldown expired: setting isSubmitting=false');
-      setIsSubmitting(false);
-      submitCooldownRef.current = null;
-    }, 1000);
-  }, [prompt, allContent, isSubmitting, selectedModel, workflowControl, submitWorkflowToSW, addPromptHistory, selectedSize]);
+  }, [prompt, allContent, isSubmitting, selectedModel, workflowControl, submitWorkflowToSW, addPromptHistory, selectedParams, generationType, selectedCount]);
 
   // 处理工作流重试（从指定步骤开始）
   const handleWorkflowRetry = useCallback(async (
@@ -1404,6 +1429,8 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
 
     // 更新 ChatDrawer 显示
     updateWorkflowMessageRef.current(toWorkflowMessageData(workflowDefinition, retryContext));
+
+    const board = SelectionWatcherBoardRef.current;
 
     // 创建标准回调
     const createStepCallbacks = (currentStep: typeof workflowDefinition.steps[0], stepStartTime: number) => ({
@@ -1478,7 +1505,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
       try {
         // 获取原始步骤的任务 ID（如果有的话，用于重试时复用任务）
         const retryTaskId = stepTaskIdMap.get(step.id);
-        
+
         const executeOptions = {
           ...step.options,
           ...createStepCallbacks(step, stepStartTime),
@@ -1564,18 +1591,32 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
       const workZoneId = currentWorkZoneIdRef.current;
       const board = SelectionWatcherBoardRef.current;
       if (workZoneId && board) {
-        // 延迟删除，让用户看到完成状态
-        setTimeout(() => {
-          WorkZoneTransforms.removeWorkZone(board, workZoneId);
-          currentWorkZoneIdRef.current = null;
-        }, 1500);
+        // 检查是否所有后处理都已完成
+        const allPostProcessingFinished = finalWorkflow?.steps.every(step => {
+          const stepResult = step.result as { taskId?: string } | undefined;
+          if (stepResult?.taskId) {
+            const isCompleted = workflowCompletionService.isPostProcessingCompleted(stepResult.taskId);
+            // console.log(`[AIInputBar] Retry task ${stepResult.taskId} post-processing finished:`, isCompleted);
+            return isCompleted;
+          }
+          return true;
+        });
+
+        // console.log(`[AIInputBar] Retry WorkZone ${workZoneId} allStepsFinished: ${allStepsFinished}, hasCreatedTasks: ${hasCreatedTasks}, allPostProcessingFinished: ${allPostProcessingFinished}`);
+
+        if (allPostProcessingFinished) {
+          // 延迟删除，让用户看到完成状态
+          setTimeout(() => {
+            WorkZoneTransforms.removeWorkZone(board, workZoneId);
+            currentWorkZoneIdRef.current = null;
+          }, 1500);
+        }
       }
     }
 
     // console.log('[AIInputBar] Retry workflow completed, failed:', workflowFailed);
   }, [workflowControl]);
 
-  // 注册重试处理器
   useEffect(() => {
     registerRetryHandlerRef.current(handleWorkflowRetry);
   }, [handleWorkflowRetry]);
@@ -1583,56 +1624,23 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
   // Handle key press
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
-      // 检测 IME 组合输入状态（如中文拼音输入法）
-      // 在组合输入时按回车是确认拼音转换，不应触发发送
       if (event.nativeEvent.isComposing) {
         return;
       }
 
-      // @ 建议面板打开时的键盘处理
-      if (showAtSuggestion && filteredModels.length > 0) {
-        // 上下箭头导航
-        if (event.key === 'ArrowDown') {
-          event.preventDefault();
-          setAtHighlightIndex(prev =>
-            prev < filteredModels.length - 1 ? prev + 1 : 0
-          );
-          return;
-        }
-        if (event.key === 'ArrowUp') {
-          event.preventDefault();
-          setAtHighlightIndex(prev =>
-            prev > 0 ? prev - 1 : filteredModels.length - 1
-          );
-          return;
-        }
-        // Tab 或 Enter 选择当前高亮项
-        if (event.key === 'Tab' || event.key === 'Enter') {
-          event.preventDefault();
-          const selectedModelItem = filteredModels[atHighlightIndex];
-          if (selectedModelItem) {
-            analytics.track('ai_input_select_model_at_keyboard', {
-              model: selectedModelItem.id
-            });
-            handleAtSelectModel(selectedModelItem.id);
-          }
-          return;
-        }
-        // Escape 关闭建议面板
-        if (event.key === 'Escape') {
-          event.preventDefault();
-          setShowAtSuggestion(false);
-          setAtQuery('');
-          return;
-        }
-      }
-
-      // Shift+Enter, Alt/Option+Enter 换行
       if (event.key === 'Enter' && (event.shiftKey || event.altKey)) {
         return;
       }
 
-      // Enter 发送
+      if (
+        (modelDropdownOpen || paramsDropdownOpen || countDropdownOpen) &&
+        (event.key === 'Enter' || event.key === 'Tab')
+      ) {
+        // 下拉菜单打开时，回车交由菜单处理，避免触发表单提交
+        event.preventDefault();
+        return;
+      }
+
       if (event.key === 'Enter') {
         event.preventDefault();
         analytics.track('ai_input_submit_keyboard');
@@ -1640,38 +1648,50 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
         return;
       }
 
-      // Escape 关闭
       if (event.key === 'Escape') {
         setIsFocused(false);
         inputRef.current?.blur();
         return;
       }
     },
-    [handleGenerate, showAtSuggestion, filteredModels, atHighlightIndex, handleAtSelectModel]
+    [handleGenerate]
   );
 
   // Handle input focus
   const handleFocus = useCallback(() => {
     analytics.track('ai_input_focus_textarea');
-    setIsFocused(prev => {
-      if (prev) return prev; // 已经是 true，不触发更新
-      return true;
-    });
+    setIsFocused(true);
   }, []);
 
   // Handle input blur
   const handleBlur = useCallback(() => {
     analytics.track('ai_input_blur_textarea');
-    setIsFocused(prev => {
-      if (!prev) return prev; // 已经是 false，不触发更新
-      return false;
-    });
+    setIsFocused(false);
   }, []);
 
+  // 处理输入变化，检测特殊符号触发下拉菜单
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newValue = e.target.value;
+    const cursorPos = e.target.selectionStart || newValue.length;
+    setPrompt(newValue);
+
+    // 检测光标前最后一个字符
+    if (cursorPos > 0) {
+      const lastChar = newValue[cursorPos - 1];
+      // 检查前一个字符是否为空格或在行首（即符号前没有其他字母）
+      const charBefore = cursorPos > 1 ? newValue[cursorPos - 2] : ' ';
+      const isValidTrigger = charBefore === ' ' || charBefore === '\n' || cursorPos === 1;
+
+      if (lastChar === '#' && isValidTrigger) {
+        triggerPositionRef.current = cursorPos - 1;
+        setModelDropdownOpen(true);
+        setParamsDropdownOpen(false);
+        setCountDropdownOpen(false);
+      }
+    }
+  }, []);
 
   const canGenerate = prompt.trim().length > 0 || allContent.length > 0;
-
-  // 是否显示灵感板（画布数据加载完成且为空时显示，加载中不显示避免闪烁）
   const showInspirationBoard = isCanvasEmpty === true;
 
   return (
@@ -1681,7 +1701,6 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
         'ai-input-bar--with-inspiration': showInspirationBoard
       })}
     >
-      {/* 独立的选择监听组件，隔离 useBoard 的 context 变化 */}
       <SelectionWatcher
         language={language}
         onSelectionChange={handleSelectionChange}
@@ -1690,20 +1709,16 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
         isDataReady={isDataReady}
       />
 
-      {/* 灵感创意板块：画板确定为空且聚焦时显示 */}
       <InspirationBoard
         isCanvasEmpty={showInspirationBoard}
         onSelectPrompt={handleSelectInspirationPrompt}
         onOpenPromptTool={handleOpenPromptTool}
       />
 
-      {/* Main input container - flex-column-reverse to expand upward */}
       <div className={classNames('ai-input-bar__container', {
         'ai-input-bar__container--expanded': isFocused || allContent.length > 0
       })}>
-        {/* Bottom bar - fixed position with model selector and send button */}
         <div className="ai-input-bar__bottom-bar">
-          {/* Hidden file input for image upload */}
           <input
             ref={fileInputRef}
             type="file"
@@ -1713,7 +1728,6 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
             style={{ display: 'none' }}
           />
 
-          {/* Left: Upload button */}
           <button
             className="ai-input-bar__upload-btn"
             onMouseDown={(e) => {
@@ -1724,33 +1738,67 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
             title={language === 'zh' ? '上传图片' : 'Upload images'}
             data-track="ai_input_click_upload"
           >
-            <ImagePlus size={18} />
+            <ImageUploadIcon size={18} />
           </button>
 
-          {/* Left: Model dropdown selector */}
+          <button
+            className="ai-input-bar__library-btn"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+            onClick={() => setShowMediaLibrary(true)}
+            title={language === 'zh' ? '从素材库选择' : 'Select from library'}
+            data-track="ai_input_click_library"
+          >
+            <MediaLibraryIcon size={18} />
+          </button>
+
+          <GenerationTypeDropdown
+            value={generationType}
+            onSelect={setGenerationType}
+            disabled={isSubmitting}
+          />
+
           <ModelDropdown
             selectedModel={selectedModel}
             onSelect={handleModelSelect}
             language={language}
+            models={currentModels}
+            header={language === 'zh' ? '选择模型 (↑↓ Tab)' : 'Select model (↑↓ Tab)'}
+            isOpen={modelDropdownOpen}
+            onOpenChange={handleModelDropdownChange}
           />
 
-          {/* Size dropdown selector */}
-          <SizeDropdown
-            selectedSize={selectedSize}
-            onSelect={setSelectedSize}
-            modelId={selectedModel}
-            language={language}
-          />
+          {/* Parameters dropdown selector - Hidden for Agent mode */}
+          {generationType !== 'text' && (
+            <ParametersDropdown
+              selectedParams={selectedParams}
+              onParamChange={handleParamSelect}
+              modelId={selectedModel}
+              language={language}
+              isOpen={paramsDropdownOpen}
+              onOpenChange={handleParamsDropdownChange}
+            />
+          )}
 
-          {/* Spacer to push send button to the right */}
+          {generationType !== 'text' && (
+            <CountDropdown
+              value={selectedCount}
+              onSelect={handleCountSelect}
+              disabled={isSubmitting}
+              isOpen={countDropdownOpen}
+              onOpenChange={handleCountDropdownChange}
+            />
+          )}
+
           <div className="ai-input-bar__bottom-spacer" />
 
-          {/* Right: Send button */}
           <button
             className={`ai-input-bar__send-btn ${canGenerate ? 'active' : ''} ${isSubmitting ? 'loading' : ''}`}
             onMouseDown={(e) => {
-              e.preventDefault(); // 阻止点击按钮时输入框失焦
-              e.stopPropagation(); // 阻止事件冒泡到 document 监听器（避免触发 handleClickOutside）
+              e.preventDefault();
+              e.stopPropagation();
             }}
             onClick={handleGenerate}
             disabled={!canGenerate || isSubmitting}
@@ -1760,11 +1808,9 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
           </button>
         </div>
 
-        {/* Input area - expands upward */}
         <div className={classNames('ai-input-bar__input-area', {
           'ai-input-bar__input-area--expanded': isFocused
         })}>
-          {/* Selected content preview - using shared component */}
           {allContent.length > 0 && (
             <div className="ai-input-bar__content-preview">
               <SelectedContentPreview
@@ -1777,13 +1823,11 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
             </div>
           )}
 
-          {/* History prompt popover - top right corner */}
           <PromptHistoryPopover
             onSelectPrompt={handleSelectHistoryPrompt}
             language={language}
           />
 
-          {/* Text input */}
           <div className="ai-input-bar__rich-input">
             <textarea
               ref={inputRef}
@@ -1795,71 +1839,29 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
               onKeyDown={handleKeyDown}
               onFocus={handleFocus}
               onBlur={handleBlur}
-              placeholder={language === 'zh' ? '描述你想要创建什么，输入 @ 选择模型' : 'Describe what you want to create, type @ to select model'}
+              placeholder={
+                generationType === 'text'
+                  ? (language === 'zh' ? '输入指令，让 Agent 为你工作...' : 'Type instructions for Agent...')
+                  : (language === 'zh' ? `描述你想要创建的${generationType === 'image' ? '图片' : '视频'}` : `Describe the ${generationType === 'image' ? 'image' : 'video'} you want to create`)
+              }
               rows={isFocused ? 4 : 1}
               disabled={isSubmitting}
             />
-
-            {/* @ 触发的模型建议面板 */}
-            {showAtSuggestion && filteredModels.length > 0 && (
-              <div
-                className="ai-input-bar__at-suggestion"
-                ref={atSuggestionRef}
-                role="listbox"
-                aria-label={language === 'zh' ? '选择模型' : 'Select Model'}
-              >
-                <div className="ai-input-bar__at-suggestion-header">
-                  {language === 'zh' ? '选择图片模型' : 'Select Image Model'}
-                </div>
-                <div className="ai-input-bar__at-suggestion-list">
-                  {filteredModels.map((model, index) => {
-                    const isHighlighted = index === atHighlightIndex;
-                    const isSelected = model.id === selectedModel;
-                    return (
-                      <div
-                        key={model.id}
-                        className={classNames('ai-input-bar__at-suggestion-item', {
-                          'ai-input-bar__at-suggestion-item--highlighted': isHighlighted,
-                          'ai-input-bar__at-suggestion-item--selected': isSelected,
-                        })}
-                        onClick={() => handleAtSelectModel(model.id)}
-                        onMouseEnter={() => setAtHighlightIndex(index)}
-                        role="option"
-                        aria-selected={isSelected}
-                      >
-                        <div className="ai-input-bar__at-suggestion-item-content">
-                          <div className="ai-input-bar__at-suggestion-item-name">
-                            <span className="ai-input-bar__at-suggestion-item-code">@{model.shortCode}</span>
-                            <span className="ai-input-bar__at-suggestion-item-label">
-                              {model.shortLabel || model.label}
-                            </span>
-                            {model.isVip && (
-                              <span className="ai-input-bar__at-suggestion-item-vip">VIP</span>
-                            )}
-                          </div>
-                          {model.description && (
-                            <div className="ai-input-bar__at-suggestion-item-desc">
-                              {model.description}
-                            </div>
-                          )}
-                        </div>
-                        {isSelected && (
-                          <Check size={16} className="ai-input-bar__at-suggestion-item-check" />
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </div>
+
+      <MediaLibraryModal
+        isOpen={showMediaLibrary}
+        onClose={() => setShowMediaLibrary(false)}
+        mode={SelectionMode.SELECT}
+        filterType={AssetType.IMAGE}
+        onSelect={handleMediaLibrarySelect}
+      />
     </div>
   );
 });
 
-// 设置 displayName 便于调试
 AIInputBar.displayName = 'AIInputBar';
 
 export default AIInputBar;

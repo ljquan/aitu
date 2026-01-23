@@ -6,11 +6,11 @@
  */
 
 import React, { useCallback, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { Button, Tooltip, MessagePlugin, Loading, ImageViewer } from 'tdesign-react';
+import { Button, Tooltip, MessagePlugin, Loading } from 'tdesign-react';
 import { DeleteIcon, CopyIcon, UserIcon } from 'tdesign-icons-react';
 import type { SoraCharacter } from '../../types/character.types';
 import { CharacterAvatar } from './CharacterAvatar';
+import { MediaViewer } from '../shared/MediaViewer';
 import './character.scss';
 
 export interface CharacterCardProps {
@@ -183,16 +183,17 @@ export const CharacterCard: React.FC<CharacterCardProps> = ({
         </Tooltip>
       </div>
 
-      {/* Image Viewer for avatar - render in portal with high z-index to ensure it's on top */}
-      {character.profilePictureUrl && imageViewerVisible && createPortal(
-        <ImageViewer
+      {/* Image Viewer for avatar */}
+      {character.profilePictureUrl && (
+        <MediaViewer
           visible={imageViewerVisible}
           onClose={() => setImageViewerVisible(false)}
-          images={[character.profilePictureUrl]}
-          title={`@${character.username || 'Character'}`}
-          zIndex={8000}
-        />,
-        document.body
+          items={[{
+            url: character.profilePictureUrl,
+            type: 'image',
+            title: `@${character.username || 'Character'}`,
+          }]}
+        />
       )}
     </div>
   );

@@ -23,6 +23,11 @@ import type {
   ChatWorkflowSWToMainMessage,
 } from './chat-workflow/types';
 import { taskQueueStorage } from './storage';
+import {
+  sendToClient as sendToClientWithLogging,
+  broadcastToAllClients,
+  sendToClientById,
+} from './utils/message-bus';
 
 // Workflow executor instance
 let workflowExecutor: WorkflowExecutor | null = null;
@@ -229,7 +234,11 @@ export function handleWorkflowMessage(
 
   switch (workflowMessage.type) {
     case 'WORKFLOW_SUBMIT':
-      // console.log('[WorkflowHandler] Processing WORKFLOW_SUBMIT:', workflowMessage.workflow.id);
+      // console.log('[SW-WorkflowHandler] ▶ WORKFLOW_SUBMIT received:', {
+      //   workflowId: workflowMessage.workflow.id,
+      //   clientId,
+      //   timestamp: new Date().toISOString(),
+      // });
       workflowExecutor.submitWorkflow(workflowMessage.workflow);
       break;
 
@@ -273,6 +282,12 @@ function handleChatWorkflowMessage(message: ChatWorkflowMainToSWMessage, clientI
 
   switch (message.type) {
     case 'CHAT_WORKFLOW_START':
+      // console.log('[SW-Workflow] ▶ CHAT_WORKFLOW_START received:', {
+      //   chatId: message.chatId,
+      //   clientId,
+      //   stepsCount: message.params.steps?.length,
+      //   timestamp: new Date().toISOString(),
+      // });
       chatWorkflowHandler.startWorkflow(message.chatId, message.params, clientId);
       break;
 
@@ -364,49 +379,25 @@ export function resendPendingToolRequests(): void {
 }
 
 /**
- * Broadcast message to all clients
+ * Broadcast message to all clients (uses unified message sender with logging)
  */
-async function broadcastToClients(
+function broadcastToClients(
   message: WorkflowSWToMainMessage | SWToMainMessage | CanvasOperationRequestMessage | MainThreadToolRequestMessage | ChatWorkflowSWToMainMessage
-): Promise<void> {
-  if (!swGlobal) {
-    console.warn('[WorkflowHandler] SW global not set');
-    return;
-  }
-
-  try {
-    const clients = await swGlobal.clients.matchAll({ type: 'window' });
-    for (const client of clients) {
-      client.postMessage(message);
-    }
-  } catch (error) {
-    console.error('[WorkflowHandler] Failed to broadcast:', error);
-  }
+): void {
+  broadcastToAllClients(message);
 }
 
 /**
- * Send message to a specific client
+ * Send message to a specific client (uses unified message sender with logging)
  */
 async function sendToClient(
   clientId: string,
   message: WorkflowSWToMainMessage | SWToMainMessage | CanvasOperationRequestMessage | MainThreadToolRequestMessage | ChatWorkflowSWToMainMessage
 ): Promise<void> {
-  if (!swGlobal) {
-    console.warn('[WorkflowHandler] SW global not set');
-    return;
-  }
-
-  try {
-    const client = await swGlobal.clients.get(clientId);
-    if (client) {
-      client.postMessage(message);
-    } else {
-      console.warn('[WorkflowHandler] Client not found:', clientId);
-      // Fallback to broadcast if client not found (e.g., page refreshed)
-      await broadcastToClients(message);
-    }
-  } catch (error) {
-    console.error('[WorkflowHandler] Failed to send to client:', error);
+  const sent = await sendToClientById(clientId, message);
+  if (!sent) {
+    // Fallback to broadcast if client not found (e.g., page refreshed)
+    broadcastToAllClients(message);
   }
 }
 

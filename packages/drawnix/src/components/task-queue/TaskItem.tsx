@@ -5,16 +5,19 @@
  * Shows input parameters (prompt) and output results when completed.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Button, Tag, Tooltip, Checkbox } from 'tdesign-react';
-import { ImageIcon, VideoIcon, DeleteIcon, RefreshIcon, DownloadIcon, EditIcon, UserIcon, CheckCircleFilledIcon } from 'tdesign-icons-react';
+import { ImageIcon, VideoIcon, DeleteIcon, DownloadIcon, EditIcon, UserIcon, CheckCircleFilledIcon } from 'tdesign-icons-react';
 import { Task, TaskStatus, TaskType } from '../../types/task.types';
 import { formatDateTime, formatTaskDuration } from '../../utils/task-utils';
-import { formatRetryDelay } from '../../utils/retry-utils';
 import { useUnifiedCache } from '../../hooks/useUnifiedCache';
 import { supportsCharacterExtraction, isSora2VideoId } from '../../types/character.types';
 import { RetryImage } from '../retry-image';
 import './task-queue.scss';
+
+// 布局切换阈值：容器宽度小于此值时使用紧凑布局（info 在图片下方全宽）
+// 弹窗侧栏宽度约 280px-500px，任务队列面板宽度约 300px-600px
+const COMPACT_LAYOUT_THRESHOLD = 500;
 
 export interface TaskItemProps {
   /** The task to display */
@@ -23,6 +26,8 @@ export interface TaskItemProps {
   selectionMode?: boolean;
   /** Whether this task is selected */
   isSelected?: boolean;
+  /** Forced layout mode from parent */
+  isCompact?: boolean;
   /** Callback when selection changes */
   onSelectionChange?: (taskId: string, selected: boolean) => void;
   /** Callback when retry button is clicked */
@@ -50,8 +55,6 @@ function getStatusTagTheme(status: TaskStatus): 'default' | 'primary' | 'success
       return 'default';
     case TaskStatus.PROCESSING:
       return 'primary';
-    case TaskStatus.RETRYING:
-      return 'warning';
     case TaskStatus.COMPLETED:
       return 'success';
     case TaskStatus.FAILED:
@@ -72,8 +75,6 @@ function getStatusLabel(status: TaskStatus): string {
       return '待处理';
     case TaskStatus.PROCESSING:
       return '处理中';
-    case TaskStatus.RETRYING:
-      return '重试中';
     case TaskStatus.COMPLETED:
       return '已完成';
     case TaskStatus.FAILED:
@@ -88,10 +89,11 @@ function getStatusLabel(status: TaskStatus): string {
 /**
  * TaskItem component - displays a single task
  */
-export const TaskItem: React.FC<TaskItemProps> = ({
+export const TaskItem: React.FC<TaskItemProps> = React.memo(({
   task,
   selectionMode = false,
   isSelected = false,
+  isCompact: forcedIsCompact,
   onSelectionChange,
   onRetry,
   onDelete,
@@ -102,8 +104,31 @@ export const TaskItem: React.FC<TaskItemProps> = ({
   onExtractCharacter,
 }) => {
   const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
+  const [internalIsCompact, setInternalIsCompact] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
   const isCompleted = task.status === TaskStatus.COMPLETED;
   const isFailed = task.status === TaskStatus.FAILED;
+
+  // 使用传入的布局模式，如果没有传入则使用内部的 ResizeObserver（兼容旧用法）
+  const isCompactLayout = forcedIsCompact !== undefined ? forcedIsCompact : internalIsCompact;
+
+  // 使用 ResizeObserver 监听容器宽度，切换布局模式
+  useEffect(() => {
+    if (forcedIsCompact !== undefined) return; // 如果有外部传入的模式，不需要内部观察
+
+    const container = containerRef.current;
+    if (!container) return;
+
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const width = entry.contentRect.width;
+        setInternalIsCompact(width < COMPACT_LAYOUT_THRESHOLD);
+      }
+    });
+
+    resizeObserver.observe(container);
+    return () => resizeObserver.disconnect();
+  }, [forcedIsCompact]);
 
   // Check if task supports character extraction (Sora-2 completed video tasks)
   // Note: Storyboard mode videos do not support character extraction
@@ -176,21 +201,26 @@ export const TaskItem: React.FC<TaskItemProps> = ({
     );
   };
 
-  // Handle click on task item to toggle selection
+  // Handle click on task item to toggle selection or open preview
   const handleItemClick = (e: React.MouseEvent) => {
-    if (!selectionMode) return;
-    // Don't toggle if clicking on buttons or checkbox
     const target = e.target as HTMLElement;
-    if (target.closest('button') || target.closest('.t-checkbox')) return;
-    onSelectionChange?.(task.id, !isSelected);
+    // 排除按钮、复选框、链接等交互元素的点击
+    if (target.closest('button') || target.closest('.t-checkbox') || target.closest('a')) return;
+    
+    if (selectionMode) {
+      onSelectionChange?.(task.id, !isSelected);
+    } else if (isCompleted && mediaUrl) {
+      onPreviewOpen?.();
+    }
   };
 
   return (
     <div
-      className={`task-item ${selectionMode ? 'task-item--selection-mode' : ''} ${isSelected ? 'task-item--selected' : ''}`}
+      ref={containerRef}
+      className={`task-item ${selectionMode ? 'task-item--selection-mode' : ''} ${isSelected ? 'task-item--selected' : ''} ${isCompactLayout ? 'task-item--compact' : 'task-item--wide'} task-item--${task.status.toLowerCase()}`}
       onClick={handleItemClick}
     >
-        {/* Selection checkbox */}
+        {/* Selection checkbox - Move to an overlay or separate grid area */}
         {selectionMode && (
           <div className="task-item__checkbox">
             <Checkbox
@@ -199,106 +229,140 @@ export const TaskItem: React.FC<TaskItemProps> = ({
             />
           </div>
         )}
-        <div className="task-item__header">
-          <div className="task-item__info">
-            {/* Title - Always visible */}
-            <div className="task-item__title">
-              <div className="task-item__type-icon">
-                {task.type === TaskType.IMAGE ? <ImageIcon /> :
-                 task.type === TaskType.CHARACTER ? <UserIcon /> : <VideoIcon />}
-              </div>
-              <div className="task-item__prompt" title={task.params.prompt}>
-                {isCharacterTask ? (
-                  isCompleted && task.result?.characterUsername
-                    ? `@${task.result.characterUsername}`
-                    : '角色创建中...'
-                ) : task.params.prompt}
-              </div>
-            </div>
 
-            {/* Metadata */}
-          <div className="task-item__meta">
-            {/* First row: status + time info */}
-            <div className="task-item__meta-row">
-              {/* Image params: model */}
-              {task.type === TaskType.IMAGE && task.params.model && (
-                <Tag variant="outline">
-                  {task.params.model}
-                </Tag>
-              )}
-              {/* Video params: model, duration, size */}
-              {task.type === TaskType.VIDEO && (
-                <>
-                  {task.params.model && (
-                    <Tag variant="outline">
-                      {task.params.model}
-                    </Tag>
-                  )}
-                  {task.params.seconds && (
-                    <Tag variant="outline">
-                      {task.params.seconds}秒
-                    </Tag>
-                  )}
-                  {task.params.size && (
-                    <Tag variant="outline">
-                      {task.params.size}
-                    </Tag>
-                  )}
-                </>
-              )}
-              {/* Character params: model, video id, time range */}
-              {isCharacterTask && (
-                <>
-                  {task.params.model && (
-                    <Tag variant="outline">
-                      {task.params.model}
-                    </Tag>
-                  )}
-                  {task.params.sourceVideoTaskId && (
-                    <Tooltip content={task.params.sourceVideoTaskId}>
-                      <Tag variant="outline">
-                        {task.params.sourceVideoTaskId.length > 20
-                          ? `${task.params.sourceVideoTaskId.slice(0, 20)}...`
-                          : task.params.sourceVideoTaskId}
-                      </Tag>
-                    </Tooltip>
-                  )}
-                  {task.params.characterTimestamps && (
-                    <Tag variant="outline">
-                      {task.params.characterTimestamps}s
-                    </Tag>
-                  )}
-                </>
-              )}
-
-              {/* Status in same line */}
-              <Tag theme={getStatusTagTheme(task.status)} variant="light">
-                {getStatusLabel(task.status)}
-              </Tag>
-              {/* Batch info */}
-              {task.params.batchId && task.params.batchIndex && task.params.batchTotal && (
-                <Tag variant="outline">
-                  批量 {task.params.batchIndex}/{task.params.batchTotal}
-                </Tag>
-              )}
-              <div className="task-item__meta-item">
-                <span>创建时间:</span>
-                <span>{formatDateTime(task.createdAt)}</span>
+      {/* 1. Preview Area - Visual entry point */}
+      {(isCompleted || task.status === TaskStatus.PROCESSING) && (mediaUrl || isCharacterTask || task.type === TaskType.VIDEO) && (
+        <div className="task-item__preview-wrapper">
+          <div className="task-item__preview" data-track="task_click_preview" onClick={onPreviewOpen}>
+            {task.type === TaskType.IMAGE && mediaUrl ? (
+              <RetryImage
+                src={mediaUrl}
+                alt="Generated"
+                maxRetries={5}
+                fallback={
+                  <div className="task-item__preview-placeholder">
+                    <span>图片加载失败</span>
+                  </div>
+                }
+              />
+            ) : isCharacterTask && task.result?.characterProfileUrl ? (
+              <div className="task-item__character-preview">
+                <RetryImage
+                  src={task.result.characterProfileUrl}
+                  alt={`@${task.result.characterUsername}`}
+                  maxRetries={5}
+                  fallback={
+                    <div className="task-item__character-fallback">
+                      <UserIcon size="32px" />
+                    </div>
+                  }
+                />
               </div>
-              {task.startedAt && (
-                <div className="task-item__meta-item">
-                  <span>执行时长:</span>
-                  <span>{formatTaskDuration(
-                    (task.completedAt || Date.now()) - task.startedAt
-                  )}</span>
-                </div>
-              )}
-            {/* Second row: progress bar for video tasks */}
-            {task.type === TaskType.VIDEO && (
-              <div className="task-item__meta-row">
-                <div className="task-item__progress">
-                  <span className="task-item__progress-label">进度:</span>
-                  <span className="task-item__progress-percent">{task.progress ?? 0}%</span>
+            ) : mediaUrl ? (
+              <video src={mediaUrl} muted playsInline />
+            ) : task.type === TaskType.VIDEO && task.status === TaskStatus.PROCESSING ? (
+              <div className="task-item__preview-placeholder">
+                <VideoIcon size="24px" />
+                <span>生成中...</span>
+              </div>
+            ) : (
+              <div className="task-item__preview-placeholder">
+                {task.type === TaskType.IMAGE ? <ImageIcon size="24px" /> : <VideoIcon size="24px" />}
+              </div>
+            )}
+            
+            {/* Cache indicator */}
+            {isCached && !isCharacterTask && (
+              <div className="task-item__cache-badge">
+                <CheckCircleFilledIcon />
+                <span>已缓存</span>
+              </div>
+            )}
+            
+            {/* Progress overlay for processing videos */}
+            {task.status === TaskStatus.PROCESSING && task.type === TaskType.VIDEO && (
+              <div className="task-item__preview-progress">
+                <div className="task-item__preview-progress-text">{task.progress ?? 0}%</div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 2. Content Area (Prompt + Info) */}
+      <div className="task-item__body">
+        {/* Prompt Area */}
+        <div className="task-item__prompt-area">
+          <div className="task-item__prompt" title={task.params.prompt}>
+            {isCharacterTask ? (
+              isCompleted && task.result?.characterUsername
+                ? `@${task.result.characterUsername}`
+                : '角色创建中...'
+            ) : task.params.prompt}
+          </div>
+        </div>
+
+        {/* Info Area - Meta & Actions */}
+        <div className="task-item__info-area">
+          <div className="task-item__content-row">
+            <div className="task-item__meta">
+              <div className="task-item__tags">
+                {/* Status Tag */}
+                <Tag theme={getStatusTagTheme(task.status)} variant="light" className="task-item__status-tag">
+                  {getStatusLabel(task.status)}
+                </Tag>
+
+                {/* Model Tag */}
+                {task.params.model && (
+                  <Tag variant="outline" className="task-item__model-tag">
+                    {task.params.model}
+                  </Tag>
+                )}
+
+                {/* Video/Image specific meta as tags */}
+                {task.type === TaskType.VIDEO && task.params.seconds && (
+                  <Tag variant="outline">{task.params.seconds}s</Tag>
+                )}
+                {task.type === TaskType.VIDEO && task.params.size && (
+                  <Tag variant="outline">{task.params.size}</Tag>
+                )}
+                {task.params.batchId && task.params.batchIndex && (
+                  <Tag variant="outline">批量 {task.params.batchIndex}/{task.params.batchTotal}</Tag>
+                )}
+              </div>
+
+              <div className="task-item__details">
+                <span className="task-item__time">{formatDateTime(task.createdAt)}</span>
+                {task.startedAt && (
+                  <span className="task-item__duration">
+                    · {formatTaskDuration((task.completedAt || Date.now()) - task.startedAt)}
+                  </span>
+                )}
+                {(() => {
+                  const displayWidth = imageDimensions?.width || task.result?.width || task.params.width;
+                  const displayHeight = imageDimensions?.height || task.result?.height || task.params.height;
+                  if (displayWidth && displayHeight) {
+                    return <span className="task-item__size"> · {displayWidth}x{displayHeight}</span>;
+                  }
+                  return null;
+                })()}
+                {isCompleted && task.result?.url && (
+                  <a
+                    href={task.result.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="task-item__link"
+                    data-track="task_click_open_link"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    · 打开链接
+                  </a>
+                )}
+              </div>
+
+              {/* Progress bar for video tasks (outside tags) */}
+              {task.type === TaskType.VIDEO && task.status === TaskStatus.PROCESSING && (
+                <div className="task-item__progress-container">
                   <div className="task-item__progress-bar">
                     <div
                       className={`task-item__progress-fill task-item__progress-fill--${task.status}`}
@@ -306,52 +370,93 @@ export const TaskItem: React.FC<TaskItemProps> = ({
                     />
                   </div>
                 </div>
-              </div>
-            )}
-            {/* Display actual image dimensions or fallback to params */}
-            {(() => {
-              const displayWidth = imageDimensions?.width || task.result?.width || task.params.width;
-              const displayHeight = imageDimensions?.height || task.result?.height || task.params.height;
-
-              if (displayWidth && displayHeight) {
-                return (
-                  <div className="task-item__meta-item">
-                    <span>尺寸:</span>
-                    <span>{displayWidth}x{displayHeight}</span>
-                  </div>
-                );
-              }
-              return null;
-            })()}
-            {/* Display result URL link for completed tasks */}
-            {isCompleted && task.result?.url && (
-              <div className="task-item__meta-item">
-                <a
-                  href={task.result.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="task-item__link"
-                  data-track="task_click_open_link"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  打开链接
-                </a>
-              </div>
-            )}
+              )}
             </div>
 
+            <div className="task-item__actions">
+              {/* Secondary Actions - Simple icons */}
+              <div className="task-item__secondary-actions">
+                {isCompleted && task.result?.url && !isCharacterTask && (
+                  <Tooltip content="下载" theme="light">
+                    <Button
+                      size="small"
+                      variant="text"
+                      icon={<DownloadIcon />}
+                      onClick={(e) => { e.stopPropagation(); onDownload?.(task.id); }}
+                    />
+                  </Tooltip>
+                )}
+
+                {!isCharacterTask && (
+                  <Tooltip content="编辑" theme="light">
+                    <Button
+                      size="small"
+                      variant="text"
+                      icon={<EditIcon />}
+                      onClick={(e) => { e.stopPropagation(); onEdit?.(task.id); }}
+                    />
+                  </Tooltip>
+                )}
+
+                {canExtractCharacter && (
+                  <Tooltip content="角色" theme="light">
+                    <Button
+                      size="small"
+                      variant="text"
+                      icon={<UserIcon />}
+                      onClick={(e) => { e.stopPropagation(); onExtractCharacter?.(task.id); }}
+                    />
+                  </Tooltip>
+                )}
+
+                <Tooltip content="删除" theme="light">
+                  <Button
+                    size="small"
+                    variant="text"
+                    className="task-item__delete-btn"
+                    icon={<DeleteIcon />}
+                    onClick={(e) => { e.stopPropagation(); onDelete?.(task.id); }}
+                  />
+                </Tooltip>
+              </div>
+
+              {/* Primary Action Button (Insert/Retry) - Moved to far right */}
+              {isCompleted && task.result?.url && !isCharacterTask && (
+                <Button
+                  size="small"
+                  theme="primary"
+                  className="task-item__primary-action"
+                  data-track="task_click_insert"
+                  onClick={(e) => { e.stopPropagation(); onInsert?.(task.id); }}
+                >
+                  插入
+                </Button>
+              )}
+
+              {isFailed && (
+                <Button
+                  size="small"
+                  theme="primary"
+                  className="task-item__primary-action"
+                  data-track="task_click_retry"
+                  onClick={(e) => { e.stopPropagation(); onRetry?.(task.id); }}
+                >
+                  重试
+                </Button>
+              )}
+            </div>
           </div>
 
-          {/* Error Display */}
+          {/* Error Message */}
           {isFailed && task.error && (
             <div className="task-item__error">
               <div className="task-item__error-message">
-                <strong>错误:</strong> {task.error.message}
+                {task.error.message}
                 {task.error.details?.originalError && (
                   <Tooltip
                     content={
                       <div className="task-item__error-details-tooltip">
-                        <div className="task-item__error-details-title">原始错误信息:</div>
+                        <div className="task-item__error-details-title">详细错误:</div>
                         <div className="task-item__error-details-content">
                           {task.error.details.originalError}
                         </div>
@@ -359,6 +464,7 @@ export const TaskItem: React.FC<TaskItemProps> = ({
                     }
                     theme="light"
                     placement="bottom"
+                    onClick={(e) => e.stopPropagation()}
                   >
                     <span className="task-item__error-details-link">[详情]</span>
                   </Tooltip>
@@ -366,150 +472,17 @@ export const TaskItem: React.FC<TaskItemProps> = ({
               </div>
             </div>
           )}
-
-          {/* Retry Info */}
-          {task.status === TaskStatus.RETRYING && task.nextRetryAt && (
-            <div className="task-item__retry-info">
-              <div className="task-item__retry-info-text">
-                重试 {task.retryCount + 1}/3 - 下次重试: {formatRetryDelay(task.retryCount)} 后
-              </div>
-            </div>
-          )}
-
         </div>
-        </div>
-
-      {/* Center: Preview Image/Video/Character */}
-      {isCompleted && (mediaUrl || isCharacterTask) && (
-        <div className="task-item__preview" data-track="task_click_preview" onClick={onPreviewOpen}>
-          {task.type === TaskType.IMAGE && mediaUrl ? (
-            <RetryImage
-              src={mediaUrl}
-              alt="Generated"
-              maxRetries={5}
-              fallback={
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  minHeight: '100px',
-                  color: '#999',
-                  fontSize: '14px'
-                }}
-                src-value={mediaUrl}
-                >
-                  图片加载失败
-                </div>
-              }
-            />
-          ) : isCharacterTask && task.result?.characterProfileUrl ? (
-            <div className="task-item__character-preview">
-              <RetryImage
-                src={task.result.characterProfileUrl}
-                alt={`@${task.result.characterUsername}`}
-                maxRetries={5}
-                fallback={
-                  <div className="task-item__character-fallback">
-                    <UserIcon size="32px" />
-                  </div>
-                }
-              />
-            </div>
-          ) : mediaUrl ? (
-            <video src={mediaUrl} />
-          ) : null}
-          {/* Cache indicator */}
-          {isCached && !isCharacterTask && (
-            <div className="task-item__cache-badge">
-              <CheckCircleFilledIcon />
-              <span>已缓存</span>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Right: Action Buttons (Vertical) */}
-      <div className="task-item__actions">
-        {/* Delete button for all tasks */}
-        <Button
-          size="small"
-          variant="outline"
-          theme="danger"
-          icon={<DeleteIcon />}
-          data-track="task_click_delete"
-          onClick={() => onDelete?.(task.id)}
-        >
-          删除
-        </Button>
-
-        {/* Retry button for failed tasks */}
-        {isFailed && (
-          <Button
-            size="small"
-            variant="outline"
-            theme="primary"
-            icon={<RefreshIcon />}
-            data-track="task_click_retry"
-            onClick={() => onRetry?.(task.id)}
-          >
-            重试
-          </Button>
-        )}
-
-        {/* Insert button for completed tasks (not for character tasks) */}
-        {isCompleted && task.result?.url && !isCharacterTask && (
-          <Button
-            size="small"
-            theme="primary"
-            data-track="task_click_insert"
-            onClick={() => onInsert?.(task.id)}
-          >
-            插入
-          </Button>
-        )}
-
-        {/* Download button for completed tasks (not for character tasks) */}
-        {isCompleted && task.result?.url && !isCharacterTask && (
-          <Button
-            size="small"
-            variant="outline"
-            icon={<DownloadIcon />}
-            data-track="task_click_download"
-            onClick={() => onDownload?.(task.id)}
-          >
-            下载
-          </Button>
-        )}
-
-        {/* Edit button for image/video tasks (not for character tasks) */}
-        {!isCharacterTask && (
-          <Button
-            size="small"
-            variant="outline"
-            icon={<EditIcon />}
-            data-track="task_click_edit"
-            onClick={() => onEdit?.(task.id)}
-          >
-            编辑
-          </Button>
-        )}
-
-        {/* Extract character button for Sora-2 completed video tasks */}
-        {canExtractCharacter && (
-          <Tooltip content="从视频中提取角色，用于后续视频生成">
-            <Button
-              size="small"
-              variant="outline"
-              theme="warning"
-              icon={<UserIcon />}
-              data-track="task_click_extract_character"
-              onClick={() => onExtractCharacter?.(task.id)}
-            >
-              角色
-            </Button>
-          </Tooltip>
-        )}
       </div>
+
     </div>
   );
-};
+}, (prev, next) => {
+  // 性能优化：仅在关键属性变化时重绘
+  return prev.task.id === next.task.id && 
+         prev.task.status === next.task.status &&
+         prev.task.progress === next.task.progress &&
+         prev.isSelected === next.isSelected &&
+         prev.selectionMode === next.selectionMode &&
+         prev.isCompact === next.isCompact;
+});

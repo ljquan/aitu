@@ -778,10 +778,103 @@ class UnifiedCacheService {
     return !!item;
   }
 
+  /**
+   * 获取所有缓存的媒体元数据（从 IndexedDB）
+   * 用于素材库展示
+   */
+  async getAllCachedMedia(): Promise<CachedMedia[]> {
+    const db = await this.initDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(UNIFIED_STORE_NAME, 'readonly');
+      const store = transaction.objectStore(UNIFIED_STORE_NAME);
+      const request = store.getAll();
+      request.onsuccess = () => resolve(request.result || []);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  /**
+   * 更新缓存媒体的元数据（如重命名）
+   */
+  async updateCachedMedia(url: string, updates: Partial<Pick<CachedMedia, 'metadata'>>): Promise<boolean> {
+    try {
+      const item = await this.getItem(url);
+      if (!item) return false;
+      
+      if (updates.metadata) {
+        item.metadata = { ...item.metadata, ...updates.metadata };
+      }
+      item.lastUsed = Date.now();
+      
+      await this.putItem(item);
+      this.notifyListeners();
+      return true;
+    } catch (error) {
+      console.error('[UnifiedCache] Failed to update cached media:', error);
+      return false;
+    }
+  }
+
+  /**
+   * 创建缓存媒体元数据（用于同步 Cache Storage 中存在但 IndexedDB 中没有的条目）
+   */
+  async createCachedMediaMetadata(
+    url: string,
+    type: CacheMediaType,
+    mimeType: string,
+    size: number,
+    cachedAt: number,
+    metadata?: { name?: string; taskId?: string }
+  ): Promise<void> {
+    const item: CachedMedia = {
+      url,
+      type,
+      mimeType,
+      size,
+      cachedAt,
+      lastUsed: Date.now(),
+      metadata: metadata || {},
+    };
+    await this.putItem(item);
+    this.cachedUrls.add(url);
+  }
+
   // ==================== 兼容旧 API ====================
 
   /**
+   * 仅将 Blob 存入 Cache Storage（不存 IndexedDB 元数据）
+   * 设置 sw-cache-date 响应头用于记录添加时间
+   */
+  async cacheToCacheStorageOnly(
+    url: string,
+    blob: Blob
+  ): Promise<boolean> {
+    try {
+      if (typeof caches === 'undefined') {
+        console.warn('[UnifiedCache] caches API not available');
+        return false;
+      }
+      const cache = await caches.open(IMAGE_CACHE_NAME);
+      const response = new Response(blob, {
+        headers: {
+          'Content-Type': blob.type || 'application/octet-stream',
+          'Content-Length': blob.size.toString(),
+          'sw-cache-date': Date.now().toString(), // 记录添加时间，用于素材库排序
+          'sw-image-size': blob.size.toString(),
+        },
+      });
+      await cache.put(url, response);
+      return true;
+    } catch (error) {
+      console.error('[UnifiedCache] Failed to cache to storage only:', error);
+      return false;
+    }
+  }
+
+  /**
    * 从 Blob 缓存媒体（兼容 mediaCacheService.cacheMediaFromBlob）
+   * 同时存入 Cache Storage 和 IndexedDB 元数据
+   * 用于 AI 生成的媒体，需要在素材库中显示
    */
   async cacheMediaFromBlob(
     url: string,
@@ -797,6 +890,8 @@ class UnifiedCacheService {
           headers: {
             'Content-Type': blob.type || 'application/octet-stream',
             'Content-Length': blob.size.toString(),
+            'sw-cache-date': Date.now().toString(), // 记录添加时间，用于素材库排序
+            'sw-image-size': blob.size.toString(),
           },
         });
         await cache.put(url, response);

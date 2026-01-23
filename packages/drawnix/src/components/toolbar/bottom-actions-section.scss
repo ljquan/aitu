@@ -63,28 +63,6 @@
   }
 }
 
-// 任务图标 + 文字样式
-.drawnix {
-  .task-icon-with-label {
-    display: flex;
-    align-items: center;
-    gap: 6px;;
-    flex-direction: column;
-
-    svg {
-      flex-shrink: 0;
-    }
-
-    .task-icon-label {
-      font-size: 13px;
-      font-weight: 500;
-      line-height: 1;
-      white-space: nowrap;
-      user-select: none;
-    }
-  }
-}
-
 @keyframes pulse {
   0%, 100% {
     transform: scale(1);

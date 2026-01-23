@@ -13,6 +13,9 @@ import { useViewportScale } from '../../hooks/useViewportScale';
 // 基于四个分区的最小高度 + 分割线 + padding 计算得出
 const TOOLBAR_MIN_HEIGHT = 460;
 
+// AI 按钮 ID，用于初始化时滚动到可见位置
+const AI_BUTTON_IDS = ['ai-image', 'ai-video'];
+
 /**
  * UnifiedToolbar - 统一左侧工具栏容器
  *
@@ -36,6 +39,8 @@ export const UnifiedToolbar: React.FC<UnifiedToolbarProps> = React.memo(({
   const [isIconMode, setIsIconMode] = useState(false);
   const hasEverExpanded = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const scrollableRef = useRef<HTMLDivElement>(null);
+  const hasScrolledToAI = useRef(false);
 
   // 使用 viewport scale hook 确保缩放时工具栏保持在视口左上角且大小不变
   useViewportScale(containerRef, {
@@ -64,6 +69,56 @@ export const UnifiedToolbar: React.FC<UnifiedToolbarProps> = React.memo(({
       observer.disconnect();
     };
   }, [handleResize]);
+
+  // 初始化时检测 AI 按钮是否可见，如果不可见则滚动到可见位置
+  useEffect(() => {
+    // 只执行一次，避免重复滚动
+    if (hasScrolledToAI.current) return;
+
+    const scrollable = scrollableRef.current;
+    if (!scrollable) return;
+
+    // 使用 requestAnimationFrame 确保 DOM 已渲染完成
+    const checkAndScroll = () => {
+      // 标记为已执行，避免重复
+      hasScrolledToAI.current = true;
+
+      // 查找第一个 AI 按钮
+      let targetButton: HTMLElement | null = null;
+      for (const buttonId of AI_BUTTON_IDS) {
+        const button = scrollable.querySelector<HTMLElement>(`[data-button-id="${buttonId}"]`);
+        if (button) {
+          targetButton = button;
+          break;
+        }
+      }
+
+      if (!targetButton) return;
+
+      // 检查按钮是否在可滚动区域内可见
+      const scrollableRect = scrollable.getBoundingClientRect();
+      const buttonRect = targetButton.getBoundingClientRect();
+
+      // 如果按钮底部超出可滚动区域底部，需要滚动
+      const isButtonVisible = buttonRect.bottom <= scrollableRect.bottom && buttonRect.top >= scrollableRect.top;
+
+      if (!isButtonVisible && scrollableRect.height > 0) {
+        // 计算需要滚动的距离，使按钮显示在可滚动区域内
+        // 滚动到按钮顶部对齐可滚动区域顶部的位置
+        const scrollOffset = buttonRect.top - scrollableRect.top;
+        scrollable.scrollTop += scrollOffset;
+      }
+    };
+
+    // 延迟执行，确保按钮已渲染
+    const timeoutId = setTimeout(() => {
+      requestAnimationFrame(checkAndScroll);
+    }, 100);
+
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, []);
 
   // 任务面板切换处理
   const handleTaskPanelToggle = useCallback(() => {
@@ -97,7 +152,7 @@ export const UnifiedToolbar: React.FC<UnifiedToolbarProps> = React.memo(({
           },
           className
         )}
-        padding={1}
+        padding={0}
       >
         {/* 顶部固定区域 - 应用工具分区（菜单、撤销、重做） */}
         <div className="unified-toolbar__section unified-toolbar__section--fixed-top">
@@ -105,7 +160,7 @@ export const UnifiedToolbar: React.FC<UnifiedToolbarProps> = React.memo(({
         </div>
 
         {/* 可滚动的工具栏内容区 */}
-        <div className="unified-toolbar__scrollable">
+        <div ref={scrollableRef} className="unified-toolbar__scrollable">
           {/* 创作工具分区 - 手型、选择、思维导图、文本、画笔、箭头、形状、图片、AI工具、缩放 */}
           <div className="unified-toolbar__section">
             <CreationToolbar embedded={true} iconMode={isIconMode} />

@@ -6,8 +6,8 @@
  */
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { Button, Tabs, Dialog, MessagePlugin, Input, Radio, Tooltip, Checkbox } from 'tdesign-react';
-import { DeleteIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon, UserIcon, RefreshIcon, PauseCircleIcon, CheckDoubleIcon } from 'tdesign-icons-react';
+import { Button, Tabs, Dialog, MessagePlugin, Input, Radio, Tooltip, Checkbox, Badge } from 'tdesign-react';
+import { DeleteIcon, SearchIcon, UserIcon, RefreshIcon, PauseCircleIcon, CheckDoubleIcon, ImageIcon, VideoIcon, FilterIcon } from 'tdesign-icons-react';
 import { VirtualTaskList } from './VirtualTaskList';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
 import { Task, TaskType, TaskStatus } from '../../types/task.types';
@@ -18,42 +18,19 @@ import { insertImageFromUrl } from '../../data/image';
 import { insertVideoFromUrl } from '../../data/video';
 import { sanitizeFilename } from '@aitu/utils';
 import { downloadMediaFile, downloadFromBlob } from '../../utils/download-utils';
-import { SideDrawer } from '../side-drawer';
+import { BaseDrawer } from '../side-drawer';
 import { CharacterCreateDialog } from '../character/CharacterCreateDialog';
 import { CharacterList } from '../character/CharacterList';
 import { useCharacters } from '../../hooks/useCharacters';
+import { UnifiedMediaViewer, type MediaItem as UnifiedMediaItem } from '../shared/media-preview';
+import { ImageEditor } from '../image-editor';
 import './task-queue.scss';
 
 const { TabPanel } = Tabs;
 const RadioGroup = Radio.Group;
 
 // Storage key for drawer width
-const DRAWER_WIDTH_KEY = 'task-queue-drawer-width';
-
-// Get cached drawer width
-const getCachedWidth = (): number | undefined => {
-  try {
-    const cached = localStorage.getItem(DRAWER_WIDTH_KEY);
-    if (cached) {
-      const width = parseInt(cached, 10);
-      if (!isNaN(width) && width >= 320 && width <= 1024) {
-        return width;
-      }
-    }
-  } catch {
-    // Ignore localStorage errors
-  }
-  return undefined;
-};
-
-// Save drawer width to cache
-const saveCachedWidth = (width: number) => {
-  try {
-    localStorage.setItem(DRAWER_WIDTH_KEY, String(width));
-  } catch {
-    // Ignore localStorage errors
-  }
-};
+export const TASK_DRAWER_WIDTH_KEY = 'task-queue-drawer-width';
 
 export interface TaskQueuePanelProps {
   /** Whether the panel is expanded */
@@ -107,14 +84,6 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
   onClose,
   onTaskAction,
 }) => {
-  // Drawer width state with cache
-  const [drawerWidth, setDrawerWidth] = useState<number | undefined>(getCachedWidth);
-
-  const handleWidthChange = useCallback((width: number) => {
-    setDrawerWidth(width);
-    saveCachedWidth(width);
-  }, []);
-
   const {
     tasks,
     activeTasks,
@@ -138,6 +107,13 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
   const [searchText, setSearchText] = useState<string>('');
   const [typeFilter, setTypeFilter] = useState<'all' | 'image' | 'video' | 'character'>('all');
   const [previewTaskId, setPreviewTaskId] = useState<string | null>(null);
+  const [previewVisible, setPreviewVisible] = useState(false);
+  const [previewInitialIndex, setPreviewInitialIndex] = useState(0);
+  
+  // 图片编辑器状态
+  const [imageEditorVisible, setImageEditorVisible] = useState(false);
+  const [imageEditorUrl, setImageEditorUrl] = useState('');
+  
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState<string | null>(null);
   // Character extraction dialog state
@@ -307,18 +283,26 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
     return Array.from(selectedTaskIds).filter(id => {
       const task = tasks.find(t => t.id === id);
       return task?.status === TaskStatus.PENDING ||
-             task?.status === TaskStatus.PROCESSING ||
-             task?.status === TaskStatus.RETRYING;
+             task?.status === TaskStatus.PROCESSING;
     }).length;
   }, [selectedTaskIds, tasks]);
+
+  // Type counts for filter buttons
+  const typeCounts = useMemo(() => {
+    return {
+      all: tasks.length,
+      image: tasks.filter(t => t.type === TaskType.IMAGE).length,
+      video: tasks.filter(t => t.type === TaskType.VIDEO).length,
+      character: characters.length,
+    };
+  }, [tasks, characters]);
 
   const handleBatchCancel = () => {
     // Only cancel active tasks
     const activeSelectedIds = Array.from(selectedTaskIds).filter(id => {
       const task = tasks.find(t => t.id === id);
       return task?.status === TaskStatus.PENDING ||
-             task?.status === TaskStatus.PROCESSING ||
-             task?.status === TaskStatus.RETRYING;
+             task?.status === TaskStatus.PROCESSING;
     });
     if (activeSelectedIds.length === 0) {
       MessagePlugin.warning('没有可取消的进行中任务');
@@ -446,64 +430,64 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
     );
   }, [filteredTasks]);
 
-  // Get current preview index and navigation info
-  const previewInfo = useMemo(() => {
-    if (!previewTaskId) return null;
-    const currentIndex = completedTasksWithResults.findIndex(t => t.id === previewTaskId);
-    if (currentIndex === -1) return null;
-    return {
-      currentIndex,
-      total: completedTasksWithResults.length,
-      hasPrevious: currentIndex > 0,
-      hasNext: currentIndex < completedTasksWithResults.length - 1,
-    };
-  }, [previewTaskId, completedTasksWithResults]);
+  // 将任务列表转换为 MediaItem 列表
+  const previewMediaItems: UnifiedMediaItem[] = useMemo(() => {
+    return completedTasksWithResults.map(task => ({
+      id: task.id, // 任务 ID，不是画布元素 ID
+      url: task.result!.url,
+      type: task.type === TaskType.VIDEO ? 'video' as const : 'image' as const,
+      title: task.params.prompt?.substring(0, 50),
+    }));
+  }, [completedTasksWithResults]);
 
   // Preview navigation handlers
-  const handlePreviewOpen = (taskId: string) => {
+  const handlePreviewOpen = useCallback((taskId: string) => {
     setPreviewTaskId(taskId);
-  };
+    const index = completedTasksWithResults.findIndex(t => t.id === taskId);
+    if (index >= 0) {
+      setPreviewInitialIndex(index);
+      setPreviewVisible(true);
+    }
+  }, [completedTasksWithResults]);
 
-  const handlePreviewClose = () => {
+  const handlePreviewClose = useCallback(() => {
     setPreviewTaskId(null);
-  };
+    setPreviewVisible(false);
+  }, []);
 
-  const handlePreviewPrevious = () => {
-    if (!previewInfo || !previewInfo.hasPrevious) return;
-    setPreviewTaskId(completedTasksWithResults[previewInfo.currentIndex - 1].id);
-  };
+  // 处理图片编辑
+  const handlePreviewEdit = useCallback((item: UnifiedMediaItem) => {
+    if (item.type !== 'image') return;
+    setImageEditorUrl(item.url);
+    setImageEditorVisible(true);
+    setPreviewVisible(false); // 关闭预览
+  }, []);
 
-  const handlePreviewNext = () => {
-    if (!previewInfo || !previewInfo.hasNext) return;
-    setPreviewTaskId(completedTasksWithResults[previewInfo.currentIndex + 1].id);
-  };
-
-  // Get current previewed task
-  const previewedTask = useMemo(() => {
-    if (!previewTaskId) return null;
-    return tasks.find(t => t.id === previewTaskId);
-  }, [previewTaskId, tasks]);
-
-  // Keyboard navigation for preview
-  useEffect(() => {
-    if (!previewTaskId) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
-        e.preventDefault();
-        handlePreviewPrevious();
-      } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
-        e.preventDefault();
-        handlePreviewNext();
-      } else if (e.key === 'Escape') {
-        e.preventDefault();
-        handlePreviewClose();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [previewTaskId, handlePreviewPrevious, handlePreviewNext]);
+  // 编辑后插入画布
+  const handleEditInsert = useCallback(async (editedImageUrl: string) => {
+    if (!board) return;
+    
+    try {
+      const taskId = `edited-image-${Date.now()}`;
+      const stableUrl = `/__aitu_cache__/image/${taskId}.png`;
+      
+      // 将 data URL 转换为 Blob
+      const response = await fetch(editedImageUrl);
+      const blob = await response.blob();
+      
+      // 缓存到 Cache API
+      await unifiedCacheService.cacheMediaFromBlob(stableUrl, blob, 'image', { taskId });
+      
+      // 插入到画布
+      await insertImageFromUrl(board, stableUrl);
+      
+      // 关闭编辑器
+      setImageEditorVisible(false);
+      setImageEditorUrl('');
+    } catch (error) {
+      console.error('Failed to insert edited image:', error);
+    }
+  }, [board]);
 
   // Handle close
   const handleClose = useCallback(() => {
@@ -521,37 +505,67 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
       </Tabs>
 
       <div className="task-queue-panel__filters">
-        <RadioGroup
-          value={typeFilter}
-          onChange={(value) => setTypeFilter(value as 'all' | 'image' | 'video' | 'character')}
-          size="small"
-          variant="default-filled"
-        >
-          <Radio.Button value="all">全部</Radio.Button>
-          <Radio.Button value="image">图片</Radio.Button>
-          <Radio.Button value="video">视频</Radio.Button>
-          <Radio.Button value="character">
-            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <UserIcon size="14px" />
-              角色 ({characters.length})
-            </span>
-          </Radio.Button>
-        </RadioGroup>
-
-        {/* Hide search and actions when viewing characters */}
-        {!isCharacterView && (
-          <div className="task-queue-panel__search-row">
-            <Input
-              value={searchText}
-              onChange={(value) => setSearchText(value)}
-              placeholder="搜索 Prompt..."
-              clearable
-              prefixIcon={<SearchIcon />}
+        {/* Simplified Type Filters */}
+        <div className="task-queue-panel__type-filters">
+          <Tooltip content={`全部 (${typeCounts.all})`} theme="light">
+            <Button
               size="small"
-              className="task-queue-panel__search-input"
-            />
+              variant={typeFilter === 'all' ? 'base' : 'text'}
+              shape="square"
+              onClick={() => setTypeFilter('all')}
+              className={typeFilter === 'all' ? 'task-queue-panel__filter-btn--active' : ''}
+            >
+              <FilterIcon size="16px" />
+            </Button>
+          </Tooltip>
+          <Tooltip content={`图片 (${typeCounts.image})`} theme="light">
+            <Button
+              size="small"
+              variant={typeFilter === 'image' ? 'base' : 'text'}
+              shape="square"
+              onClick={() => setTypeFilter('image')}
+              className={typeFilter === 'image' ? 'task-queue-panel__filter-btn--active' : ''}
+            >
+              <ImageIcon size="16px" />
+            </Button>
+          </Tooltip>
+          <Tooltip content={`视频 (${typeCounts.video})`} theme="light">
+            <Button
+              size="small"
+              variant={typeFilter === 'video' ? 'base' : 'text'}
+              shape="square"
+              onClick={() => setTypeFilter('video')}
+              className={typeFilter === 'video' ? 'task-queue-panel__filter-btn--active' : ''}
+            >
+              <VideoIcon size="16px" />
+            </Button>
+          </Tooltip>
+          <Tooltip content={`角色 (${typeCounts.character})`} theme="light">
+            <Button
+              size="small"
+              variant={typeFilter === 'character' ? 'base' : 'text'}
+              shape="square"
+              onClick={() => setTypeFilter('character')}
+              className={typeFilter === 'character' ? 'task-queue-panel__filter-btn--active' : ''}
+            >
+              <UserIcon size="16px" />
+            </Button>
+          </Tooltip>
+        </div>
 
-            {/* Selection mode toggle button */}
+        {/* Search row integrated in the same line */}
+        <div className="task-queue-panel__search-row">
+          <Input
+            value={searchText}
+            onChange={(value) => setSearchText(value)}
+            placeholder="搜索..."
+            clearable
+            prefixIcon={<SearchIcon />}
+            size="small"
+            className="task-queue-panel__search-input"
+          />
+
+          <div className="task-queue-panel__filter-actions">
             <Tooltip content={selectionMode ? "退出多选" : "批量操作"} theme="light">
               <Button
                 size="small"
@@ -570,18 +584,16 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
                 <Button
                   size="small"
                   variant="text"
-                  theme="danger"
-                  icon={<DeleteIcon />}
+                  theme="default"
+                  icon={<DeleteIcon style={{ color: 'var(--td-text-color-placeholder)' }} />}
                   data-track="task_click_clear_failed"
                   onClick={() => handleClear('failed')}
                   className="task-queue-panel__clear-btn"
-                >
-                  <span className="task-queue-panel__clear-text">清除失败</span>
-                </Button>
+                />
               </Tooltip>
             )}
           </div>
-        )}
+        </div>
       </div>
 
       {/* Batch action bar - shown when in selection mode */}
@@ -623,8 +635,8 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
             )}
             <Button
               size="small"
-              variant="outline"
-              theme="danger"
+              variant="text"
+              theme="default"
               icon={<DeleteIcon />}
               data-track="task_click_batch_delete"
               onClick={handleBatchDelete}
@@ -641,14 +653,14 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
 
   return (
     <>
-      <SideDrawer
+      <BaseDrawer
         isOpen={expanded}
         onClose={handleClose}
         title="任务队列"
         filterSection={filterSection}
         position="toolbar-right"
         width="responsive"
-        customWidth={drawerWidth}
+        storageKey={TASK_DRAWER_WIDTH_KEY}
         showBackdrop={false}
         closeOnEsc={false}
         showCloseButton={true}
@@ -657,7 +669,6 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
         resizable={true}
         minWidth={320}
         maxWidth={1024}
-        onWidthChange={handleWidthChange}
       >
         {isCharacterView ? (
           /* Character List View */
@@ -690,7 +701,7 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
             }
           />
         )}
-      </SideDrawer>
+      </BaseDrawer>
 
       {/* Clear Confirmation Dialog */}
       <Dialog
@@ -725,49 +736,28 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
         确定要删除选中的 {selectedTaskIds.size} 个任务吗？此操作无法撤销。
       </Dialog>
 
-      {/* Unified Preview Dialog */}
-      {previewedTask && previewedTask.result?.url && (
-        <Dialog
-          visible={!!previewTaskId}
-          onClose={handlePreviewClose}
-          width="90vw"
-          header={
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>{previewedTask.type === TaskType.IMAGE ? '图片预览' : previewedTask.type === TaskType.CHARACTER ? '角色预览' : '视频预览'}</span>
-              {previewInfo && (
-                <span style={{ fontSize: '14px', color: '#757575', fontWeight: 'normal' }}>
-                  {previewInfo.currentIndex + 1} / {previewInfo.total}
-                </span>
-              )}
-            </div>
-          }
-          footer={null}
-          className="task-preview-dialog"
-        >
-          <div className="task-preview-container">
-            <Button
-              className="task-preview-nav task-preview-nav--left"
-              icon={<ChevronLeftIcon />}
-              data-track="task_click_preview_previous"
-              onClick={handlePreviewPrevious}
-              size="large"
-              shape="circle"
-              variant="outline"
-              disabled={!previewInfo?.hasPrevious}
-            />
-            <PreviewContent task={previewedTask} />
-            <Button
-              className="task-preview-nav task-preview-nav--right"
-              icon={<ChevronRightIcon />}
-              data-track="task_click_preview_next"
-              onClick={handlePreviewNext}
-              size="large"
-              shape="circle"
-              variant="outline"
-              disabled={!previewInfo?.hasNext}
-            />
-          </div>
-        </Dialog>
+      {/* 统一预览 */}
+      <UnifiedMediaViewer
+        visible={previewVisible}
+        items={previewMediaItems}
+        initialIndex={previewInitialIndex}
+        onClose={handlePreviewClose}
+        showThumbnails={true}
+        onEdit={handlePreviewEdit}
+      />
+
+      {/* 图片编辑器 - 任务场景只支持插入画布和下载 */}
+      {imageEditorVisible && imageEditorUrl && (
+        <ImageEditor
+          visible={imageEditorVisible}
+          imageUrl={imageEditorUrl}
+          showOverwrite={false}
+          onClose={() => {
+            setImageEditorVisible(false);
+            setImageEditorUrl('');
+          }}
+          onInsert={board ? handleEditInsert : undefined}
+        />
       )}
 
       {/* Character Create Dialog */}

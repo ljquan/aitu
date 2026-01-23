@@ -14,6 +14,7 @@ import type {
   HandlerConfig,
   TaskResult,
 } from '../types';
+import type { LLMReferenceImage } from '../llm-api-logger';
 
 /**
  * Gemini message format
@@ -212,7 +213,57 @@ export class ChatHandler implements IChatHandler, TaskHandler {
       stream: true,
     };
 
-    const response = await fetch(`${config.baseUrl}/chat/completions`, {
+    // Import loggers
+    const { debugFetch } = await import('../debug-fetch');
+    const { startLLMApiLog, completeLLMApiLog, failLLMApiLog } = await import('../llm-api-logger');
+    
+    const startTime = Date.now();
+    // 获取最后一条用户消息作为 prompt 预览
+    const lastUserMsg = messages.filter(m => m.role === 'user').pop();
+    const promptPreview = lastUserMsg?.content?.[0]?.text || '';
+    
+    // 提取消息中的图片作为参考图详情
+    const { getImageInfo } = await import('../utils/media-generation-utils');
+    const referenceImageInfos: LLMReferenceImage[] = [];
+    for (const msg of messages) {
+      if (msg.role === 'user' && msg.content) {
+        for (const content of msg.content) {
+          if (content.type === 'image_url' && content.image_url?.url) {
+            try {
+              const info = await getImageInfo(content.image_url.url, signal);
+              referenceImageInfos.push({
+                url: info.url,
+                size: info.size,
+                width: info.width,
+                height: info.height,
+              });
+            } catch (err) {
+              console.warn('[ChatHandler] Failed to get image info for log', err);
+              referenceImageInfos.push({
+                url: content.image_url.url,
+                size: 0,
+                width: 0,
+                height: 0,
+              });
+            }
+          }
+        }
+      }
+    }
+
+    const logId = startLLMApiLog({
+      endpoint: '/chat/completions',
+      model,
+      taskType: 'chat',
+      prompt: promptPreview,
+      requestBody: JSON.stringify(requestBody, null, 2),  // 完整请求体，不截断
+      hasReferenceImages: referenceImageInfos.length > 0,
+      referenceImageCount: referenceImageInfos.length,
+      referenceImages: referenceImageInfos,
+    });
+
+    // Use debugFetch for logging (stream response won't be fully captured)
+    const response = await debugFetch(`${config.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -220,12 +271,25 @@ export class ChatHandler implements IChatHandler, TaskHandler {
       },
       body: JSON.stringify(requestBody),
       signal,
+    }, {
+      label: `💬 对话请求 (${model})`,
+      logRequestBody: true,
+      isStreaming: true,
     });
 
     if (!response.ok) {
       const errorText = await response.text();
+      failLLMApiLog(logId, {
+        httpStatus: response.status,
+        duration: Date.now() - startTime,
+        errorMessage: errorText,
+      });
       throw new Error(`Chat request failed: ${response.status} - ${errorText}`);
     }
+    
+    // 标记开始时间用于完成时计算
+    const chatStartTime = startTime;
+    const chatLogId = logId;
 
     if (!response.body) {
       throw new Error('No response body');
@@ -293,6 +357,22 @@ export class ChatHandler implements IChatHandler, TaskHandler {
     } finally {
       reader.releaseLock();
     }
+
+    // Update debug log with final streaming content
+    if ((response as any).__debugLogId && fullContent) {
+      const { updateLogResponseBody } = await import('../debug-fetch');
+      updateLogResponseBody((response as any).__debugLogId, fullContent);
+    }
+
+    // 完成 LLM API 日志
+    const { completeLLMApiLog: completeLog } = await import('../llm-api-logger');
+    completeLog(chatLogId, {
+      httpStatus: response.status,
+      duration: Date.now() - chatStartTime,
+      resultType: 'text',
+      resultCount: 1,
+      resultText: fullContent,
+    });
 
     return fullContent;
   }

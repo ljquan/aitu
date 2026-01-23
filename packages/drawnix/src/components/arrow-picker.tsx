@@ -18,17 +18,17 @@ export interface ArrowProps {
 
 const ARROWS: ArrowProps[] = [
   {
-    icon: StraightArrowIcon,
+    icon: <StraightArrowIcon />,
     title: 'Straight Arrow Line',
     pointer: ArrowLineShape.straight,
   },
   {
-    icon: ElbowArrowIcon,
+    icon: <ElbowArrowIcon />,
     title: 'Elbow Arrow Line',
     pointer: ArrowLineShape.elbow,
   },
   {
-    icon: CurveArrowIcon,
+    icon: <CurveArrowIcon />,
     title: 'Curve Arrow Line',
     pointer: ArrowLineShape.curve,
   },

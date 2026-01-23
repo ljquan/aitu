@@ -66,13 +66,12 @@ export interface Translations {
   'menu.exportImage.png': string;
   'menu.exportImage.jpg': string;
   'menu.cleanBoard': string;
-  'menu.cleanMissingAssets': string;
-  'menu.cleanMissingAssets.success': string;
-  'menu.cleanMissingAssets.noAssets': string;
-  'menu.cleanMissingAssets.error': string;
   'menu.github': string;
   'menu.settings': string;
   'menu.backupRestore': string;
+  'menu.debugPanel': string;
+  'menu.version': string;
+  'menu.more': string;
   
   // Dialog translations
   'dialog.mermaid.title': string;
@@ -226,13 +225,12 @@ const translations: Record<Language, Translations> = {
     'menu.exportImage.png': 'PNG',
     'menu.exportImage.jpg': 'JPG',
     'menu.cleanBoard': '清除画布',
-    'menu.cleanMissingAssets': '清理无效资源',
-    'menu.cleanMissingAssets.success': '已清理 {{count}} 个无效资源',
-    'menu.cleanMissingAssets.noAssets': '没有发现无效资源',
-    'menu.cleanMissingAssets.error': '清理失败，请稍后重试',
     'menu.github': 'GitHub',
     'menu.settings': '设置',
     'menu.backupRestore': '备份 / 恢复',
+    'menu.debugPanel': '日志 / 调试',
+    'menu.version': '版本',
+    'menu.more': '更多',
     
     // Dialog translations
     'dialog.mermaid.title': 'Mermaid 转 Drawnix',
@@ -383,13 +381,12 @@ const translations: Record<Language, Translations> = {
     'menu.exportImage.png': 'PNG',
     'menu.exportImage.jpg': 'JPG',
     'menu.cleanBoard': 'Clear Board',
-    'menu.cleanMissingAssets': 'Clean Missing Assets',
-    'menu.cleanMissingAssets.success': 'Cleaned {{count}} missing assets',
-    'menu.cleanMissingAssets.noAssets': 'No missing assets found',
-    'menu.cleanMissingAssets.error': 'Cleanup failed, please try again',
     'menu.github': 'GitHub',
     'menu.settings': 'Settings',
     'menu.backupRestore': 'Backup / Restore',
+    'menu.debugPanel': 'Log / Debug',
+    'menu.version': 'Version',
+    'menu.more': 'More',
     
     // Dialog translations
     'dialog.mermaid.title': 'Mermaid to Drawnix',

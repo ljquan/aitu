@@ -1,15 +1,15 @@
 /**
  * Media Library Modal
- * 素材库弹窗容器组件
+ * 素材库弹窗容器组件 - 使用 WinBox 窗口
  */
 
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { Dialog, MessagePlugin, Drawer } from 'tdesign-react';
-import { Grid } from 'lucide-react';
+import { MessagePlugin, Drawer } from 'tdesign-react';
+import { MediaLibraryIcon } from '../icons';
 import { useAssets } from '../../contexts/AssetContext';
 import { MediaLibraryGrid } from './MediaLibraryGrid';
-import { MediaLibrarySidebar } from './MediaLibrarySidebar';
 import { MediaLibraryInspector } from './MediaLibraryInspector';
+import { WinBoxWindow } from '../winbox/WinBoxWindow';
 import type {
   MediaLibraryModalProps,
   Asset,
@@ -18,6 +18,7 @@ import { AssetType, AssetSource, SelectionMode } from '../../types/asset.types';
 import { downloadFile } from '../../utils/download-utils';
 import { useDrawnix } from '../../hooks/use-drawnix';
 import { removeElementsByAssetId, removeElementsByAssetUrl, isCacheUrl } from '../../utils/asset-cleanup';
+import { isZipFile, extractMediaFromZip } from '../../utils/zip-utils';
 import './MediaLibraryModal.scss';
 
 export function MediaLibraryModal({
@@ -130,23 +131,26 @@ export function MediaLibraryModal({
   // 处理文件上传
   const handleFileUpload = useCallback(
     async (files: FileList) => {
-      // console.log('[MediaLibrary] handleFileUpload called with files:', files);
       if (!files || files.length === 0) {
-        // console.log('[MediaLibrary] No files provided');
         return;
       }
 
-      // 验证文件
-      const validFiles: File[] = [];
+      // 分离 ZIP 文件和普通媒体文件
+      const zipFiles: File[] = [];
+      const mediaFiles: File[] = [];
+
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        // console.log(`[MediaLibrary] Processing file ${i + 1}:`, {
-        //   name: file.name,
-        //   type: file.type,
-        //   size: file.size,
-        // });
+        if (isZipFile(file)) {
+          zipFiles.push(file);
+        } else {
+          mediaFiles.push(file);
+        }
+      }
 
-        // 检查文件类型
+      // 处理普通媒体文件
+      const validFiles: File[] = [];
+      for (const file of mediaFiles) {
         const isImage = file.type.startsWith('image/');
         const isVideo = file.type.startsWith('video/');
 
@@ -156,7 +160,6 @@ export function MediaLibraryModal({
           continue;
         }
 
-        // 检查文件大小 (最大 100MB)
         const maxSize = 100 * 1024 * 1024;
         if (file.size > maxSize) {
           console.warn(`[MediaLibrary] File too large: ${file.size} bytes`);
@@ -164,46 +167,53 @@ export function MediaLibraryModal({
           continue;
         }
 
-        // console.log(`[MediaLibrary] File validation passed:`, {
-        //   isImage,
-        //   isVideo,
-        //   type: isImage ? 'IMAGE' : 'VIDEO',
-        // });
         validFiles.push(file);
       }
 
-      if (validFiles.length === 0) {
-        // console.log('[MediaLibrary] No valid files to upload');
-        return;
+      // 处理 ZIP 文件
+      let zipExtractedCount = 0;
+      for (const zipFile of zipFiles) {
+        try {
+          MessagePlugin.info(`正在解压 "${zipFile.name}"...`);
+          const result = await extractMediaFromZip(zipFile);
+
+          // 显示解压错误
+          if (result.errors.length > 0) {
+            result.errors.forEach((err) => MessagePlugin.warning(err));
+          }
+
+          // 上传解压出的文件
+          for (const extracted of result.files) {
+            const type = extracted.type === 'image' ? AssetType.IMAGE : AssetType.VIDEO;
+            await addAsset(extracted.blob, type, AssetSource.LOCAL, extracted.name);
+            zipExtractedCount++;
+          }
+
+          if (result.skippedCount > 0) {
+            MessagePlugin.info(`"${zipFile.name}" 中跳过了 ${result.skippedCount} 个不支持的文件`);
+          }
+        } catch (error) {
+          console.error('[MediaLibrary] ZIP extraction error:', error);
+          MessagePlugin.error(`解压 "${zipFile.name}" 失败`);
+        }
       }
 
-      // console.log(`[MediaLibrary] Uploading ${validFiles.length} valid file(s)`);
-
-      // 上传文件
+      // 上传普通媒体文件
       try {
         for (const file of validFiles) {
           const isImage = file.type.startsWith('image/');
           const type = isImage ? AssetType.IMAGE : AssetType.VIDEO;
-          // console.log(`[MediaLibrary] Calling addAsset for:`, {
-          //   fileName: file.name,
-          //   type,
-          //   source: AssetSource.LOCAL,
-          // });
-
-          const asset = await addAsset(file, type, AssetSource.LOCAL);
-          // console.log(`[MediaLibrary] Asset added successfully:`, asset);
+          await addAsset(file, type, AssetSource.LOCAL);
         }
 
-        MessagePlugin.success(`成功上传 ${validFiles.length} 个文件`);
-        // console.log('[MediaLibrary] All files uploaded successfully');
+        const totalCount = validFiles.length + zipExtractedCount;
+        if (totalCount > 0) {
+          MessagePlugin.success(`成功上传 ${totalCount} 个文件`);
+        }
 
-        // 重新加载资产列表
-        // console.log('[MediaLibrary] Reloading assets...');
         await loadAssets();
-        // console.log('[MediaLibrary] Assets reloaded');
       } catch (error) {
         console.error('[MediaLibrary] File upload error:', error);
-        // 错误信息已经在 AssetContext 中处理
       }
     },
     [addAsset, loadAssets],
@@ -256,76 +266,71 @@ export function MediaLibraryModal({
   }, [board, removeAsset, assets]);
 
   return (
-    <Dialog
-      visible={isOpen}
-      onClose={onClose}
-      header={
-        <div className="media-library-modal__header">
-          <div className="media-library-modal__header-title">
-            <div className="media-library-modal__header-title-icon">
-              <Grid size={16} />
-            </div>
-            <span>素材库</span>
+    <>
+      <WinBoxWindow
+        visible={isOpen}
+        title="素材库"
+        onClose={onClose}
+        width="85%"
+        height="85%"
+        minWidth={800}
+        minHeight={500}
+        x="center"
+        y="center"
+        maximizable={true}
+        minimizable={false}
+        resizable={true}
+        movable={true}
+        modal={false}
+        className="winbox-media-library"
+        headerContent={
+          <div className="media-library-header-content">
+            <MediaLibraryIcon size={18} />
           </div>
-        </div>
-      }
-      width="80vw"
-      attach="body"
-      placement="center"
-      destroyOnClose
-      className="media-library-modal"
-      footer={null}
-    >
-      {/* 隐藏的文件输入 */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*,video/*"
-        multiple
-        style={{ display: 'none' }}
-        onChange={handleFileInputChange}
-      />
+        }
+      >
+        {/* 隐藏的文件输入 */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*,video/*,.zip,application/zip,application/x-zip-compressed"
+          multiple
+          style={{ display: 'none' }}
+          onChange={handleFileInputChange}
+        />
 
-      <div className="media-library-layout">
-        {/* 左侧筛选侧边栏 */}
-        <div className="media-library-layout__sidebar">
-          <MediaLibrarySidebar
-            filters={filters}
-            assetCount={assets.length}
-            storageStatus={storageStatus}
-            onFilterChange={setFilters}
-          />
-        </div>
-
-        {/* 中间网格区域 */}
-        <div className="media-library-layout__main">
-          <MediaLibraryGrid
-            filterType={filterType}
-            selectedAssetId={localSelectedAssetId}
-            onSelectAsset={handleSelectAsset}
-            onDoubleClick={handleDoubleClick}
-            onFileUpload={handleFileUpload}
-            onUploadClick={handleUploadClick}
-          />
-        </div>
-
-        {/* 右侧详情面板 - 仅桌面端显示 */}
-        {!isMobile && (
-          <div className="media-library-layout__inspector">
-            <MediaLibraryInspector
-              asset={selectedAsset}
-              onRename={renameAsset}
-              onDelete={handleRemoveAsset}
-              onDownload={(asset) => {
-                downloadFile(asset.url, asset.name);
-              }}
-              onSelect={showSelectButton ? handleUseAsset : undefined}
-              showSelectButton={showSelectButton}
-              selectButtonText={selectButtonText}
+        <div className="media-library-layout">
+          {/* 主网格区域 */}
+          <div className="media-library-layout__main">
+            <MediaLibraryGrid
+              filterType={filterType}
+              selectedAssetId={localSelectedAssetId}
+              onSelectAsset={handleSelectAsset}
+              onDoubleClick={handleDoubleClick}
+              onFileUpload={handleFileUpload}
+              onUploadClick={handleUploadClick}
+              storageStatus={storageStatus}
             />
           </div>
-        )}
-      </div>
+
+          {/* 右侧详情面板 - 仅桌面端显示 */}
+          {!isMobile && (
+            <div className="media-library-layout__inspector">
+              <MediaLibraryInspector
+                asset={selectedAsset}
+                onRename={renameAsset}
+                onDelete={handleRemoveAsset}
+                onDownload={(asset) => {
+                  downloadFile(asset.url, asset.name);
+                }}
+                onSelect={showSelectButton ? handleUseAsset : undefined}
+                showSelectButton={showSelectButton}
+                selectButtonText={selectButtonText}
+              />
+            </div>
+          )}
+        </div>
+      </WinBoxWindow>
 
       {/* 移动端详情抽屉 */}
       {isMobile && (
@@ -351,6 +356,6 @@ export function MediaLibraryModal({
           />
         </Drawer>
       )}
-    </Dialog>
+    </>
   );
 }

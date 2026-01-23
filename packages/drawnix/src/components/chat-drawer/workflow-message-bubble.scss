@@ -1,7 +1,3 @@
-/**
- * 工作流消息气泡样式
- */
-
 @import '../../styles/common-variables';
 
 // ============================================================================
@@ -30,9 +26,10 @@
     flex: 1;
     min-width: 0;
     padding: $spacing-md $spacing-lg;
-    background: var(--td-bg-color-secondarycontainer);
+    background: #ffffff;
     border-radius: 12px 12px 12px 4px;
     border: 1px solid var(--td-component-border);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
   }
 
   // 头部
@@ -67,7 +64,7 @@
     }
 
     &--running {
-      background: var(--td-brand-color-light);
+      background: rgba(90, 79, 207, 0.1);
       color: var(--td-brand-color);
     }
 
@@ -85,6 +82,9 @@
   &__progress-text {
     font-size: 12px;
     color: var(--td-text-color-placeholder);
+    font-variant-numeric: tabular-nums;
+    min-width: 2.5em;
+    text-align: right;
   }
 
   // 进度条
@@ -143,26 +143,32 @@
     gap: $spacing-sm;
     margin-bottom: $spacing-md;
     padding: $spacing-sm $spacing-md;
-    background: var(--td-bg-color-container);
-    border-radius: 6px;
+    background: rgba(var(--td-brand-color-rgb), 0.02);
+    border-left: 2px solid var(--td-brand-color);
+    border-radius: 2px 6px 6px 2px;
     font-size: 13px;
   }
 
   &__label {
-    color: var(--td-text-color-secondary);
+    color: var(--td-text-color-placeholder);
+    font-weight: 500;
     flex-shrink: 0;
   }
 
   &__prompt-text {
-    color: var(--td-text-color-primary);
+    color: var(--td-text-color-secondary);
     word-break: break-word;
+    font-style: italic;
   }
 
   // 步骤列表
   &__steps {
     display: flex;
     flex-direction: column;
-    gap: $spacing-xs;
+    gap: 0;
+    border: 1px solid #f0f0f0;
+    border-radius: 8px;
+    overflow: hidden;
   }
 
   // 完成/失败摘要
@@ -172,28 +178,35 @@
     gap: $spacing-sm;
     margin-top: $spacing-md;
     padding: $spacing-sm $spacing-md;
-    border-radius: 6px;
+    border-radius: 8px;
     font-size: 13px;
     font-weight: 500;
+    border: 1px solid transparent;
 
     &--success {
       background: var(--td-success-color-1);
       color: var(--td-success-color-7);
+      border-color: var(--td-success-color-2);
     }
 
     &--info {
-      background: var(--td-bg-color-component);
+      background: var(--td-bg-color-secondarycontainer);
       color: var(--td-text-color-secondary);
+      border-color: var(--td-component-border);
     }
 
     &--error {
       background: var(--td-error-color-1);
       color: var(--td-error-color-7);
+      border-color: var(--td-error-color-2);
     }
 
     &--markdown {
       align-items: flex-start;
       font-weight: 400;
+      background: transparent;
+      padding: 0;
+      border: none;
     }
   }
 
@@ -255,19 +268,22 @@
 // ============================================================================
 
 .workflow-bubble-step {
-  border-radius: 6px;
-  overflow: hidden;
   transition: all 0.2s ease;
+  background: #ffffff;
+
+  &:not(:last-child) {
+    border-bottom: 1px solid #f5f5f5;
+  }
 
   &--current {
-    background: var(--td-brand-color-light);
+    background: rgba(var(--td-brand-color-rgb), 0.02);
   }
 
   &__main {
     display: flex;
     align-items: center;
     gap: $spacing-sm;
-    padding: $spacing-sm $spacing-md;
+    padding: $spacing-md;
     transition: background 0.2s ease;
 
     &:hover {
@@ -276,15 +292,15 @@
   }
 
   &__index {
-    width: 20px;
-    height: 20px;
+    width: 18px;
+    height: 18px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 600;
-    color: #fff;
-    background: var(--td-brand-color);
+    color: var(--td-text-color-placeholder);
+    background: var(--td-bg-color-secondarycontainer);
     border-radius: 50%;
     flex-shrink: 0;
   }
@@ -297,6 +313,7 @@
     justify-content: center;
     font-size: 12px;
     flex-shrink: 0;
+    line-height: 1;
 
     &--pending {
       color: var(--td-text-color-placeholder);
@@ -304,6 +321,8 @@
 
     &--running {
       color: var(--td-brand-color);
+      background: rgba(90, 79, 207, 0.1);
+      border-radius: 4px;
     }
 
     &--completed {
@@ -332,25 +351,35 @@
   &__content {
     flex: 1;
     min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
   }
 
   &__title {
     font-size: 13px;
-    color: var(--td-text-color-primary);
+    font-weight: 500;
+    color: var(--td-text-color-secondary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    line-height: 1.2;
   }
 
   &__status-text {
     font-size: 11px;
-    color: var(--td-text-color-secondary);
+    color: var(--td-text-color-placeholder);
+    line-height: 1;
   }
 
   &__expand {
     font-size: 10px;
     color: var(--td-text-color-placeholder);
     transition: transform 0.2s ease;
+    margin-left: auto;
+    display: flex;
+    align-items: center;
 
     &--open {
       transform: rotate(180deg);
@@ -359,17 +388,16 @@
 
   // 详情区域
   &__details {
-    padding: $spacing-sm $spacing-md $spacing-md;
-    padding-left: calc(20px + $spacing-sm + $spacing-md);
-    background: var(--td-bg-color-container);
-    border-top: 1px solid var(--td-component-border);
+    padding: 0 $spacing-md $spacing-md;
+    padding-left: $spacing-md; // 对齐到序号数字的左侧
+    background: transparent;
   }
 
   &__detail-row {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: $spacing-sm;
-    margin-bottom: $spacing-xs;
+    margin-bottom: $spacing-xs; // 减小行间距，使内容更紧凑
     font-size: 12px;
 
     &:last-child {
@@ -379,55 +407,50 @@
     &--block {
       flex-direction: column;
       align-items: flex-start;
+      gap: 4px; // 减小标签与内容块之间的间距
     }
   }
 
   &__label {
-    color: var(--td-text-color-secondary);
+    color: var(--td-text-color-placeholder);
+    font-weight: 500;
     flex-shrink: 0;
+    min-width: unset; // 移除固定最小宽度，避免挤压右侧
   }
 
   &__tool {
-    padding: 2px 6px;
-    background: var(--td-bg-color-page);
+    padding: 1px 6px;
+    background: var(--td-bg-color-secondarycontainer);
     border-radius: 4px;
     font-family: 'SF Mono', Monaco, monospace;
     font-size: 11px;
+    color: var(--td-text-color-secondary);
   }
 
-  &__args {
+  &__args,
+  &__result {
     width: 100%;
     margin: 0;
-    padding: $spacing-sm;
-    background: var(--td-bg-color-page);
-    border-radius: 4px;
+    padding: $spacing-sm $spacing-md;
+    background: #fafafa;
+    border: 1px solid #f0f0f0;
+    border-radius: 6px;
     font-size: 11px;
     font-family: 'SF Mono', Monaco, monospace;
     white-space: pre-wrap;
     word-break: break-all;
     max-height: 200px;
     overflow-y: auto;
-    color: var(--td-text-color-primary);
-  }
-
-  &__result {
-    width: 100%;
-    padding: $spacing-sm;
-    background: var(--td-bg-color-page);
-    border-radius: 4px;
-    font-size: 11px;
-    font-family: 'SF Mono', Monaco, monospace;
-    white-space: pre-wrap;
-    word-break: break-all;
-    max-height: 120px;
-    overflow-y: auto;
+    color: var(--td-text-color-secondary);
+    line-height: 1.6;
   }
 
   &__error {
     width: 100%;
-    padding: $spacing-sm;
+    padding: $spacing-sm $spacing-md;
     background: var(--td-error-color-1);
-    border-radius: 4px;
+    border: 1px solid var(--td-error-color-2);
+    border-radius: 6px;
     font-size: 12px;
     color: var(--td-error-color-7);
   }
@@ -472,10 +495,10 @@
 // ============================================================================
 
 .agent-log {
-  border-radius: 6px;
+  border-radius: 8px;
   overflow: hidden;
-  background: var(--td-bg-color-container);
-  border: 1px solid var(--td-component-border);
+  background: #ffffff;
+  border: 1px solid #f0f0f0;
 
   &__header {
     display: flex;
@@ -501,7 +524,7 @@
 
   &__title {
     flex: 1;
-    color: var(--td-text-color-primary);
+    color: var(--td-text-color-secondary);
     font-weight: 500;
   }
 
@@ -517,8 +540,8 @@
 
   &__content {
     padding: $spacing-sm $spacing-md;
-    border-top: 1px solid var(--td-component-border);
-    background: var(--td-bg-color-page);
+    border-top: 1px solid #f5f5f5;
+    background: #fafafa;
   }
 
   &__thinking-text {
@@ -551,13 +574,15 @@
     padding: $spacing-sm;
     font-size: 11px;
     font-family: 'SF Mono', Monaco, monospace;
-    background: var(--td-bg-color-container);
-    border-radius: 4px;
+    background: #ffffff;
+    border: 1px solid #f0f0f0;
+    border-radius: 6px;
     white-space: pre-wrap;
     word-break: break-all;
     max-height: 150px;
     overflow-y: auto;
-    color: var(--td-text-color-primary);
+    color: var(--td-text-color-secondary);
+    line-height: 1.5;
   }
 
   &__error {
@@ -565,7 +590,8 @@
     font-size: 12px;
     color: var(--td-error-color-7);
     background: var(--td-error-color-1);
-    border-radius: 4px;
+    border: 1px solid var(--td-error-color-2);
+    border-radius: 6px;
     margin-bottom: $spacing-xs;
   }
 

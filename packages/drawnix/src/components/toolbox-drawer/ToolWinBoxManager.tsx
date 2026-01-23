@@ -1,0 +1,197 @@
+/**
+ * ToolWinBoxManager Component
+ * 
+ * 管理所有以 WinBox 弹窗形式打开的工具
+ * 支持最小化、常驻工具栏等功能
+ */
+
+import React, { useEffect, useState, Suspense, useCallback } from 'react';
+import { PlaitBoard, getViewportOrigination } from '@plait/core';
+import { WinBoxWindow } from '../winbox';
+import { toolWindowService } from '../../services/tool-window-service';
+import { ToolDefinition, ToolWindowState } from '../../types/toolbox.types';
+import { useI18n } from '../../i18n';
+import { InternalToolComponents } from './InternalToolComponents';
+import { useDrawnix } from '../../hooks/use-drawnix';
+import { ToolTransforms } from '../../plugins/with-tool';
+import { DEFAULT_TOOL_CONFIG } from '../../constants/built-in-tools';
+import { processToolUrl } from '../../utils/url-template';
+
+/**
+ * 工具弹窗管理器组件
+ */
+export const ToolWinBoxManager: React.FC = () => {
+  const [toolStates, setToolStates] = useState<ToolWindowState[]>([]);
+  const { language } = useI18n();
+  const { board } = useDrawnix();
+
+  useEffect(() => {
+    const subscription = toolWindowService.observeToolStates().subscribe(states => {
+      setToolStates(states);
+    });
+    
+    return () => subscription.unsubscribe();
+  }, []);
+
+  /**
+   * 处理工具最小化
+   */
+  const handleMinimize = useCallback((
+    toolId: string,
+    position: { x: number; y: number },
+    size: { width: number; height: number }
+  ) => {
+    toolWindowService.minimizeTool(toolId, position, size);
+  }, []);
+
+  /**
+   * 处理窗口位置/尺寸变化
+   */
+  const handleMove = useCallback((toolId: string, x: number, y: number) => {
+    const state = toolWindowService.getToolState(toolId);
+    if (state) {
+      toolWindowService.updateToolPosition(toolId, { x, y }, state.size);
+    }
+  }, []);
+
+  /**
+   * 处理窗口调整大小
+   */
+  const handleResize = useCallback((toolId: string, width: number, height: number) => {
+    const state = toolWindowService.getToolState(toolId);
+    if (state) {
+      toolWindowService.updateToolPosition(
+        toolId,
+        state.position || { x: 0, y: 0 },
+        { width, height }
+      );
+    }
+  }, []);
+
+  /**
+   * 处理将工具插入到画布
+   * @param tool 工具定义
+   * @param rect 弹窗当前位置和尺寸（屏幕坐标）
+   */
+  const handleInsertToCanvas = useCallback((
+    tool: ToolDefinition,
+    rect: { x: number; y: number; width: number; height: number }
+  ) => {
+    if (!board) {
+      console.warn('Board not ready');
+      return;
+    }
+
+    // 先关闭弹窗
+    toolWindowService.closeTool(tool.id);
+
+    // 将屏幕坐标转换为画布坐标
+    const boardContainerRect = PlaitBoard.getBoardContainer(board).getBoundingClientRect();
+    const zoom = board.viewport.zoom;
+    const origination = getViewportOrigination(board);
+
+    // 弹窗位置相对于画布容器的偏移
+    const screenX = rect.x - boardContainerRect.left;
+    const screenY = rect.y - boardContainerRect.top;
+
+    // 转换为画布坐标
+    const canvasX = origination![0] + screenX / zoom;
+    const canvasY = origination![1] + screenY / zoom;
+
+    // 使用弹窗的尺寸
+    const width = rect.width;
+    const height = rect.height;
+
+    // 插入到画布（使用与 ToolboxDrawer 相同的调用方式）
+    if (tool.url || tool.component) {
+      ToolTransforms.insertTool(
+        board,
+        tool.id,
+        (tool as any).url, // url 可能为 undefined
+        [canvasX, canvasY],
+        { width, height },
+        {
+          name: tool.name,
+          category: tool.category,
+          permissions: tool.permissions,
+          component: (tool as any).component,
+        }
+      );
+    }
+  }, [board]);
+
+  // 只渲染 open 或 minimized 状态的工具（minimized 状态需要保留实例但隐藏）
+  const activeStates = toolStates.filter(
+    state => state.status === 'open' || state.status === 'minimized'
+  );
+
+  if (activeStates.length === 0) {
+    return null;
+  }
+
+  return (
+    <>
+      {activeStates.map(state => {
+        const { tool, status, position, size } = state;
+        const InternalComponent = tool.component ? InternalToolComponents[tool.component] : null;
+        
+        // 确定窗口是否可见
+        const isVisible = status === 'open';
+        
+        return (
+          <WinBoxWindow
+            key={tool.id}
+            id={`tool-window-${tool.id}`}
+            visible={isVisible}
+            keepAlive={true}
+            title={tool.name}
+            width={size?.width || tool.defaultWidth || 800}
+            height={size?.height || tool.defaultHeight || 600}
+            x={position?.x}
+            y={position?.y}
+            onClose={() => toolWindowService.closeTool(tool.id)}
+            onMinimize={(pos, sz) => handleMinimize(tool.id, pos, sz)}
+            onMove={(x, y) => handleMove(tool.id, x, y)}
+            onResize={(w, h) => handleResize(tool.id, w, h)}
+            onInsertToCanvas={(rect) => handleInsertToCanvas(tool, rect)}
+            minimizeTargetSelector={`[data-minimize-target="${tool.id}"]`}
+            className="winbox-ai-generation winbox-tool-window"
+            background="#ffffff"
+          >
+            <div className="tool-window-content" style={{ width: '100%', height: '100%', overflow: 'hidden' }}>
+              {InternalComponent ? (
+                <Suspense fallback={
+                  <div style={{ 
+                    padding: 20, 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center',
+                    height: '100%',
+                    color: '#666'
+                  }}>
+                    {language === 'zh' ? '加载中...' : 'Loading...'}
+                  </div>
+                }>
+                  <InternalComponent />
+                </Suspense>
+              ) : tool.url ? (
+                <iframe
+                  src={processToolUrl(tool.url).url}
+                  title={tool.name}
+                  style={{ width: '100%', height: '100%', border: 'none' }}
+                  sandbox={tool.permissions?.join(' ') || 'allow-scripts allow-same-origin'}
+                />
+              ) : (
+                <div style={{ padding: 20, textAlign: 'center', color: '#999' }}>
+                  {language === 'zh' ? '未定义的工具内容' : 'Undefined tool content'}
+                </div>
+              )}
+            </div>
+          </WinBoxWindow>
+        );
+      })}
+    </>
+  );
+};
+
+export default ToolWinBoxManager;

@@ -170,6 +170,66 @@ export const VIDEO_MODEL_CONFIGS: Record<VideoModel, VideoModelConfig> = {
       labels: ['参考图1', '参考图2', '参考图3'],
     },
   },
+  'veo3.1-4k': {
+    id: 'veo3.1-4k',
+    label: 'Veo 3.1 4K',
+    provider: 'veo',
+    description: '8秒4K模式，支持首尾帧',
+    durationOptions: [
+      { label: '8秒', value: '8' },
+    ],
+    defaultDuration: '8',
+    sizeOptions: [
+      { label: '4K横屏 16:9', value: '3840x2160', aspectRatio: '16:9' },
+      { label: '4K竖屏 9:16', value: '2160x3840', aspectRatio: '9:16' },
+    ],
+    defaultSize: '3840x2160',
+    imageUpload: {
+      maxCount: 2,
+      mode: 'frames',
+      labels: ['首帧', '尾帧'],
+    },
+  },
+  'veo3.1-components-4k': {
+    id: 'veo3.1-components-4k',
+    label: 'Veo 3.1 Components 4K',
+    provider: 'veo',
+    description: '8秒4K模式，支持3张参考图',
+    durationOptions: [
+      { label: '8秒', value: '8' },
+    ],
+    defaultDuration: '8',
+    sizeOptions: [
+      { label: '4K横屏 16:9', value: '3840x2160', aspectRatio: '16:9' },
+      { label: '4K竖屏 9:16', value: '2160x3840', aspectRatio: '9:16' },
+    ],
+    defaultSize: '3840x2160',
+    imageUpload: {
+      maxCount: 3,
+      mode: 'components',
+      labels: ['参考图1', '参考图2', '参考图3'],
+    },
+  },
+  'veo3.1-pro-4k': {
+    id: 'veo3.1-pro-4k',
+    label: 'Veo 3.1 Pro 4K',
+    provider: 'veo',
+    description: '8秒高质量4K模式，支持首尾帧',
+    durationOptions: [
+      { label: '8秒', value: '8' },
+    ],
+    defaultDuration: '8',
+    sizeOptions: [
+      { label: '4K横屏 16:9', value: '3840x2160', aspectRatio: '16:9' },
+      { label: '4K竖屏 9:16', value: '2160x3840', aspectRatio: '9:16' },
+    ],
+    defaultSize: '3840x2160',
+    imageUpload: {
+      maxCount: 2,
+      mode: 'frames',
+      labels: ['首帧', '尾帧'],
+    },
+  },
 };
 
 /**

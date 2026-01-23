@@ -7,7 +7,7 @@ import { ToolButton } from '../../tool-button';
 import {
   TextIcon,
   MediaLibraryIcon,
-  ImageIcon,
+  ImageUploadIcon,
   FeltTipPenIcon,
   StraightArrowLineIcon,
   ShapeIcon,
@@ -301,7 +301,7 @@ export const QuickCreationToolbar: React.FC<QuickCreationToolbarProps> = ({
           <ToolButton
             type="icon"
             visible={true}
-            icon={TextIcon}
+            icon={<TextIcon />}
             title="" // 不显示 tooltip
             aria-label={t('toolbar.text')}
             data-track="quick_toolbar_click_text"
@@ -312,7 +312,7 @@ export const QuickCreationToolbar: React.FC<QuickCreationToolbarProps> = ({
           <ToolButton
             type="icon"
             visible={true}
-            icon={ImageIcon}
+            icon={<ImageUploadIcon size={24} />}
             title="" // 不显示 tooltip
             aria-label={t('toolbar.image')}
             data-track="quick_toolbar_click_image"
@@ -323,7 +323,7 @@ export const QuickCreationToolbar: React.FC<QuickCreationToolbarProps> = ({
           <ToolButton
             type="icon"
             visible={true}
-            icon={MediaLibraryIcon}
+            icon={<MediaLibraryIcon />}
             title="" // 不显示 tooltip
             aria-label={t('toolbar.mediaLibrary')}
             data-track="quick_toolbar_click_media_library"
@@ -332,7 +332,7 @@ export const QuickCreationToolbar: React.FC<QuickCreationToolbarProps> = ({
 
           {/* 画笔 - 带 Popover */}
           {renderPopoverButton(
-            FeltTipPenIcon,
+            <FeltTipPenIcon />,
             PopupKey.freehand,
             t('toolbar.pen'),
             <FreehandPanel
@@ -350,7 +350,7 @@ export const QuickCreationToolbar: React.FC<QuickCreationToolbarProps> = ({
 
           {/* 箭头 - 带 Popover */}
           {renderPopoverButton(
-            StraightArrowLineIcon,
+            <StraightArrowLineIcon />,
             PopupKey.arrow,
             t('toolbar.arrow'),
             <ArrowPicker
@@ -365,7 +365,7 @@ export const QuickCreationToolbar: React.FC<QuickCreationToolbarProps> = ({
 
           {/* 形状 - 带 Popover */}
           {renderPopoverButton(
-            ShapeIcon,
+            <ShapeIcon />,
             PopupKey.shape,
             t('toolbar.shape'),
             <ShapePicker

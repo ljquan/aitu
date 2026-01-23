@@ -16,23 +16,38 @@ export const VersionUpdatePrompt: React.FC = () => {
     // Listen for custom event from main.tsx
     const handleUpdateAvailable = async (event: Event) => {
       const customEvent = event as CustomEvent;
-      // console.log('[VersionUpdatePrompt] Update available:', customEvent.detail);
       
-      const version = customEvent.detail?.version;
+      const newVersion = customEvent.detail?.version;
+      
+      // 获取当前运行的版本（从 HTML meta 标签）
+      const currentVersionMeta = document.querySelector('meta[name="app-version"]');
+      const currentVersion = currentVersionMeta?.getAttribute('content');
       
       try {
         // Fetch detailed version info (changelog)
         const res = await fetch(`/version.json?t=${Date.now()}`);
         if (res.ok) {
           const data = await res.json();
+          
+          // 如果当前版本已经是最新版本，不显示更新提示
+          if (currentVersion && data.version === currentVersion) {
+            // console.log('[VersionUpdatePrompt] Already on latest version, skipping prompt');
+            return;
+          }
+          
           // Use fetched data if versions match or if event didn't specify version
-          if (!version || data.version === version) {
+          if (!newVersion || data.version === newVersion) {
             setUpdateAvailable(data);
             return;
           }
         }
       } catch (error) {
         console.warn('Failed to fetch version.json:', error);
+      }
+
+      // 如果无法获取 version.json，但事件带了版本号，检查是否相同
+      if (currentVersion && newVersion && currentVersion === newVersion) {
+        return; // 已经是最新版本
       }
 
       // Fallback to event detail
@@ -58,10 +73,11 @@ export const VersionUpdatePrompt: React.FC = () => {
   }, []);
 
   const handleUpdate = () => {
-    // console.log('[VersionUpdatePrompt] User confirmed update');
+    // Hide the prompt immediately to provide visual feedback
+    setUpdateAvailable(null);
+    setShowChangelog(false);
     // Dispatch event to notify main.tsx to proceed with upgrade
     window.dispatchEvent(new CustomEvent('user-confirmed-upgrade'));
-    setShowChangelog(false);
   };
 
   // Only show if update is available AND no active tasks

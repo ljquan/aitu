@@ -11,7 +11,11 @@
 
 import React, { useCallback, useState, useRef, useEffect } from 'react';
 import { Button, MessagePlugin } from 'tdesign-react';
-import { HardDrive, FolderOpen, X } from 'lucide-react';
+import { X } from 'lucide-react';
+import { 
+  ImageUploadIcon,
+  MediaLibraryIcon,
+} from '../../icons';
 import { MediaLibraryModal } from '../../media-library/MediaLibraryModal';
 import type { Asset } from '../../../types/asset.types';
 import { SelectionMode, AssetType, AssetSource } from '../../../types/asset.types';
@@ -331,7 +335,7 @@ export const ReferenceImageUpload: React.FC<ReferenceImageUploadProps> = ({
       <div className="reference-image-upload__buttons">
         <Button
           variant="outline"
-          icon={<HardDrive size={16} />}
+          icon={<ImageUploadIcon size={16} />}
           onClick={() => openFileDialog(slot)}
           disabled={disabled}
           data-track="reference_image_upload_local"
@@ -341,7 +345,7 @@ export const ReferenceImageUpload: React.FC<ReferenceImageUploadProps> = ({
         </Button>
         <Button
           variant="outline"
-          icon={<FolderOpen size={16} />}
+          icon={<MediaLibraryIcon size={16} />}
           onClick={() => openMediaLibrary(slot)}
           disabled={disabled}
           data-track="reference_image_upload_library"
@@ -402,7 +406,7 @@ export const ReferenceImageUpload: React.FC<ReferenceImageUploadProps> = ({
                   <div className="reference-image-upload__slot-buttons">
                     <Button
                       variant="outline"
-                      icon={<HardDrive size={16} />}
+                      icon={<ImageUploadIcon size={16} />}
                       onClick={() => openFileDialog(index)}
                       disabled={disabled}
                       data-track="reference_image_upload_slot_local"
@@ -412,7 +416,7 @@ export const ReferenceImageUpload: React.FC<ReferenceImageUploadProps> = ({
                     </Button>
                     <Button
                       variant="outline"
-                      icon={<FolderOpen size={16} />}
+                      icon={<MediaLibraryIcon size={16} />}
                       onClick={() => openMediaLibrary(index)}
                       disabled={disabled}
                       data-track="reference_image_upload_slot_library"

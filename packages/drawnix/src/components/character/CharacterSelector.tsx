@@ -86,6 +86,7 @@ export const CharacterSelector: React.FC<CharacterSelectorProps> = ({
           <Tooltip
             content="从已完成的 Sora-2 视频中提取角色后可在此选择"
             theme="light"
+            showArrow={false}
           >
             <InfoCircleIcon style={{ marginLeft: 4, cursor: 'help' }} />
           </Tooltip>
@@ -111,6 +112,7 @@ export const CharacterSelector: React.FC<CharacterSelectorProps> = ({
             key={character.id}
             content={character.sourcePrompt || `@${character.username}`}
             theme="light"
+            showArrow={false}
           >
             <div
               className={`character-selector__chip ${selectedIds.includes(character.id) ? 'character-selector__chip--selected' : ''}`}
@@ -133,6 +135,7 @@ export const CharacterSelector: React.FC<CharacterSelectorProps> = ({
           <Tooltip
             content={`还有 ${completedCharacters.length - maxVisible} 个角色`}
             theme="light"
+            showArrow={false}
           >
             <div className="character-selector__chip">
               +{completedCharacters.length - maxVisible}

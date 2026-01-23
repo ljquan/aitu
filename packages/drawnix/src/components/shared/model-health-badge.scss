@@ -1,0 +1,62 @@
+/**
+ * 模型健康状态信号样式
+ * 3格信号塔设计
+ */
+
+$gray-light: #e5e7eb;
+
+.model-health-signal {
+    display: inline-flex;
+    align-items: flex-end;
+    gap: 1.5px;
+    height: 10px;
+    padding: 0 2px;
+    cursor: help;
+    flex-shrink: 0;
+
+    &__bar {
+        width: 2.5px;
+        background-color: $gray-light;
+        border-radius: 0.5px;
+        transition: all 0.2s ease;
+
+        &:nth-child(1) { height: 40%; }
+        &:nth-child(2) { height: 70%; }
+        &:nth-child(3) { height: 100%; }
+
+        &.active {
+            // 背景色由 inline style 控制
+        }
+    }
+}
+
+// 在 ModelDropdown 列表项中的位置
+.model-dropdown__item-name {
+    display: flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 6px;
+
+    .model-health-signal {
+        margin-left: 2px;
+    }
+}
+
+// 在 ModelSelector 列表项中的位置
+.ai-model-selector__item-name {
+    .model-health-signal {
+        margin-left: 4px;
+    }
+}
+
+// 在 AIInputBar # 建议列表中的位置
+.ai-input-bar__at-suggestion-item-name {
+    display: flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 6px;
+
+    .model-health-signal {
+        margin-left: 2px;
+    }
+}

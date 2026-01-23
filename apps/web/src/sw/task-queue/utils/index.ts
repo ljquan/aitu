@@ -5,3 +5,4 @@
  */
 
 export * from './media-generation-utils';
+export * from './sanitize-utils';

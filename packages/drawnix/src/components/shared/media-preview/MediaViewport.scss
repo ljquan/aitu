@@ -1,0 +1,290 @@
+/**
+ * MediaViewport - 媒体展示区样式
+ */
+
+.media-viewport {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.8);
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: grab;
+  transition: border-color 0.2s ease;
+
+  &:active {
+    cursor: grabbing;
+  }
+
+  &--focused {
+    border: 2px solid #f39c12;
+  }
+
+  &--empty {
+    border: 2px dashed rgba(255, 255, 255, 0.3);
+    cursor: pointer;
+
+    &:hover {
+      border-color: rgba(255, 255, 255, 0.5);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    // 空槽位选中态
+    &.media-viewport--focused {
+      border: 2px solid #f39c12;
+      background: rgba(243, 156, 18, 0.1);
+    }
+  }
+
+  &__placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 14px;
+  }
+
+  &__close-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 10;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.6);
+    border: none;
+    border-radius: 50%;
+    color: #fff;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.2s ease, background 0.2s ease;
+
+    &:hover {
+      background: rgba(231, 76, 60, 0.8);
+    }
+  }
+
+  &:hover &__close-btn {
+    opacity: 1;
+  }
+
+  &__content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    transition: transform 0.1s ease-out;
+    transform-origin: center center;
+  }
+
+  &__image {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    user-select: none;
+    pointer-events: none;
+  }
+
+  &__video {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    outline: none;
+  }
+
+  &__toolbar {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 12px;
+    background: rgba(0, 0, 0, 0.75);
+    border-radius: 24px;
+    z-index: 100;
+    backdrop-filter: blur(8px);
+    pointer-events: auto;
+    transition: border-radius 0.2s ease;
+    user-select: none;
+
+    button {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      background: transparent;
+      border: none;
+      border-radius: 50%;
+      color: #fff;
+      cursor: pointer;
+      transition: background 0.2s ease, color 0.2s ease;
+
+      &:hover {
+        background: rgba(255, 255, 255, 0.15);
+      }
+
+      &:active {
+        background: rgba(255, 255, 255, 0.25);
+      }
+
+      &.active {
+        background: rgba(243, 156, 18, 0.3);
+        color: #f39c12;
+      }
+    }
+
+    // 拖拽状态
+    &--dragging {
+      cursor: grabbing;
+      opacity: 0.9;
+    }
+
+    // 垂直布局
+    &--vertical {
+      flex-direction: column;
+      padding: 12px 6px;
+
+      .media-viewport__toolbar-group {
+        flex-direction: column;
+      }
+
+      .media-viewport__toolbar-divider {
+        width: 20px;
+        height: 1px;
+        margin: 6px 0;
+      }
+
+      .media-viewport__zoom-level {
+        min-width: auto;
+        padding: 4px 0;
+      }
+
+      .media-viewport__toolbar-handle {
+        transform: rotate(90deg);
+      }
+    }
+
+    // 紧凑模式 - 用于多图对比
+    &--compact {
+      padding: 4px 8px;
+      gap: 2px;
+      bottom: 8px;
+
+      button {
+        width: 28px;
+        height: 28px;
+      }
+
+      .media-viewport__toolbar-divider {
+        height: 16px;
+        margin: 0 4px;
+      }
+
+      .media-viewport__zoom-level {
+        min-width: 40px;
+        font-size: 11px;
+      }
+    }
+  }
+
+  &__toolbar-handle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    color: rgba(255, 255, 255, 0.5);
+    cursor: grab;
+    border-radius: 4px;
+    transition: color 0.2s ease, background 0.2s ease;
+
+    &:hover {
+      color: rgba(255, 255, 255, 0.8);
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    &:active {
+      cursor: grabbing;
+      color: #f39c12;
+    }
+  }
+
+  &__toolbar-orientation-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: transparent;
+    border: none;
+    border-radius: 50%;
+    color: #fff;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    &:active {
+      background: rgba(255, 255, 255, 0.25);
+    }
+  }
+
+  &__toolbar-group {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+
+  &__toolbar-divider {
+    width: 1px;
+    height: 20px;
+    background: rgba(255, 255, 255, 0.2);
+    margin: 0 6px;
+  }
+
+  &__zoom-level {
+    min-width: 48px;
+    text-align: center;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.8);
+  }
+
+  &__title {
+    position: absolute;
+    bottom: 70px;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: 80%;
+    padding: 4px 12px;
+    background: rgba(0, 0, 0, 0.6);
+    border-radius: 4px;
+    font-size: 13px;
+    color: #fff;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    z-index: 99;
+  }
+
+  &:hover &__title {
+    opacity: 1;
+  }
+}

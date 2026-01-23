@@ -54,16 +54,13 @@
 
   // Compact mode styles
   &--compact {
-    flex-direction: row;
+    display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 0;
     position: relative;
 
     .aspect-ratio-selector__label {
-      font-size: 13px;
-      font-weight: 500;
-      color: #666;
-      white-space: nowrap;
+      display: none;
     }
   }
 
@@ -72,12 +69,13 @@
     align-items: center;
     gap: 6px;
     padding: 6px 10px;
-    min-width: 70px;
+    min-width: 60px;
     border: 1px solid #dcdcdc;
     border-radius: 6px;
     background-color: #fff;
     cursor: pointer;
     transition: all 0.2s ease;
+    height: 36px;
 
     &:hover {
       border-color: #f39c12;

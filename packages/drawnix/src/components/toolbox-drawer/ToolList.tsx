@@ -12,8 +12,10 @@ import { ToolItem } from './ToolItem';
 export interface ToolListProps {
   /** 按分类分组的工具列表 */
   toolsByCategory: Record<string, ToolDefinition[]>;
-  /** 工具点击回调 */
-  onToolClick: (tool: ToolDefinition) => void;
+  /** 插入到画布回调 */
+  onToolInsert: (tool: ToolDefinition) => void;
+  /** 在窗口中打开回调 */
+  onToolOpenWindow: (tool: ToolDefinition) => void;
   /** 删除工具回调（仅自定义工具） */
   onToolDelete?: (tool: ToolDefinition) => void;
 }
@@ -23,7 +25,8 @@ export interface ToolListProps {
  */
 export const ToolList: React.FC<ToolListProps> = ({
   toolsByCategory,
-  onToolClick,
+  onToolInsert,
+  onToolOpenWindow,
   onToolDelete,
 }) => {
   const categories = Object.keys(toolsByCategory);
@@ -54,7 +57,8 @@ export const ToolList: React.FC<ToolListProps> = ({
                 <ToolItem
                   key={tool.id}
                   tool={tool}
-                  onClick={() => onToolClick(tool)}
+                  onInsert={() => onToolInsert(tool)}
+                  onOpenWindow={() => onToolOpenWindow(tool)}
                   onDelete={onToolDelete}
                 />
               ))}

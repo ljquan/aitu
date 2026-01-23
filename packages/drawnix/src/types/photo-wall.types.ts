@@ -80,6 +80,10 @@ export interface ImageElement {
   width: number;
   /** 原始高度 */
   height: number;
+  /** 在原图中的 X 坐标（用于按原图位置布局） */
+  sourceX?: number;
+  /** 在原图中的 Y 坐标（用于按原图位置布局） */
+  sourceY?: number;
 }
 
 /**

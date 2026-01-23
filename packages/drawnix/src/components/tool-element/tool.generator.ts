@@ -6,8 +6,17 @@
  */
 
 import { PlaitBoard, RectangleClient } from '@plait/core';
-import { PlaitTool } from '../../types/toolbox.types';
+import { PlaitTool, ToolDefinition } from '../../types/toolbox.types';
 import { ToolLoadState, ToolErrorType, ToolErrorEventDetail } from '../../types/tool-error.types';
+import { createRoot, Root } from 'react-dom/client';
+import React, { Suspense } from 'react';
+import { InternalToolComponents } from '../toolbox-drawer/InternalToolComponents';
+import { ToolProviderWrapper } from '../toolbox-drawer/ToolProviderWrapper';
+import { ToolTransforms } from '../../plugins/with-tool';
+import { toolWindowService } from '../../services/tool-window-service';
+import { BUILT_IN_TOOLS } from '../../constants/built-in-tools';
+import { processToolUrl, hasTemplateVariables } from '../../utils/url-template';
+import { geminiSettings } from '../../utils/settings-manager';
 
 /**
  * 工具元素渲染生成器
@@ -15,9 +24,11 @@ import { ToolLoadState, ToolErrorType, ToolErrorEventDetail } from '../../types/
 export class ToolGenerator {
   private board: PlaitBoard;
   private iframeCache = new Map<string, HTMLIFrameElement>();
+  private reactRoots = new Map<string, Root>();
   private loadStates = new Map<string, ToolLoadState>();
   private loadTimeouts = new Map<string, NodeJS.Timeout>();
   private canvasClickHandler: ((e: MouseEvent) => void) | null = null;
+  private settingsChangeHandler: (() => void) | null = null;
 
   // 加载超时时间（毫秒）
   private static readonly LOAD_TIMEOUT = 10000; // 10 秒
@@ -27,6 +38,40 @@ export class ToolGenerator {
 
     // 监听画布点击事件，恢复所有 iframe 蒙层
     this.setupCanvasClickHandler();
+    
+    // 监听设置变化，刷新包含模板变量的 iframe
+    this.setupSettingsChangeHandler();
+  }
+  
+  /**
+   * 设置设置变化监听器
+   * 当 apiKey 等配置变化时，刷新包含模板变量的 iframe
+   */
+  private setupSettingsChangeHandler(): void {
+    this.settingsChangeHandler = () => {
+      this.refreshTemplateIframes();
+    };
+    
+    // 监听设置变化事件
+    window.addEventListener('gemini-settings-changed', this.settingsChangeHandler);
+  }
+  
+  /**
+   * 刷新所有包含模板变量的 iframe
+   */
+  private refreshTemplateIframes(): void {
+    this.iframeCache.forEach((iframe, elementId) => {
+      const templateUrl = (iframe as any).__templateUrl;
+      if (templateUrl && hasTemplateVariables(templateUrl)) {
+        // 重新处理模板变量
+        const { url: processedUrl } = processToolUrl(templateUrl);
+        const url = new URL(processedUrl, window.location.origin);
+        url.searchParams.set('toolId', elementId);
+        
+        // 更新 iframe src
+        iframe.src = url.toString();
+      }
+    });
   }
 
   /**
@@ -40,7 +85,8 @@ export class ToolGenerator {
       if (target.tagName === 'IFRAME' ||
           target.closest('iframe') ||
           target.classList.contains('iframe-protection-overlay') ||
-          target.closest('.plait-tool-content')) {
+          target.closest('.plait-tool-content') ||
+          target.closest('.plait-tool-react-content')) {
         return;
       }
 
@@ -59,7 +105,7 @@ export class ToolGenerator {
    * 判断是否可以绘制该元素
    */
   canDraw(element: PlaitTool): boolean {
-    return !!(element && element.type === 'tool' && element.url);
+    return !!(element && element.type === 'tool' && (element.url || element.component));
   }
 
   /**
@@ -90,12 +136,19 @@ export class ToolGenerator {
     previous: PlaitTool,
     current: PlaitTool
   ): void {
-    // 如果 URL 变化，需要重新创建 iframe
-    if (previous.url !== current.url) {
-      nodeG.innerHTML = '';
-      const foreignObject = this.createForeignObject(current);
-      nodeG.appendChild(foreignObject);
-      this.applyRotation(nodeG, current);
+    // 如果是组件类型，检查 component 标识是否变化
+    if (current.component) {
+      if (previous.component !== current.component) {
+        this.recreateContent(nodeG, current);
+        return;
+      }
+      
+      // 更新 React 内容（如果需要的话，比如 props 变化，虽然目前 PlaitTool 没带业务 props）
+      this.renderReactContent(current);
+    } 
+    // 如果是 URL 类型，检查 URL 是否变化
+    else if (previous.url !== current.url) {
+      this.recreateContent(nodeG, current);
       return;
     }
 
@@ -111,6 +164,23 @@ export class ToolGenerator {
 
     // 更新旋转
     this.applyRotation(nodeG, current);
+  }
+
+  /**
+   * 重新创建整个内容
+   */
+  private recreateContent(nodeG: SVGGElement, element: PlaitTool): void {
+    // 清理旧的 React Root
+    const oldRoot = this.reactRoots.get(element.id);
+    if (oldRoot) {
+      oldRoot.unmount();
+      this.reactRoots.delete(element.id);
+    }
+
+    nodeG.innerHTML = '';
+    const foreignObject = this.createForeignObject(element);
+    nodeG.appendChild(foreignObject);
+    this.applyRotation(nodeG, element);
   }
 
   /**
@@ -154,43 +224,97 @@ export class ToolGenerator {
     const titleBar = this.createTitleBar(element);
     container.appendChild(titleBar);
 
-    // 创建内容区域（iframe 容器）
-    const contentArea = document.createElement('div');
-    contentArea.className = 'plait-tool-content';
-    contentArea.style.cssText = `
-      flex: 1;
-      position: relative;
-      overflow: hidden;
-      background: #fff;
-    `;
+    // 根据类型创建内容区域
+    if (element.component) {
+      // 创建 React 内容容器
+      const reactContentArea = document.createElementNS('http://www.w3.org/1999/xhtml', 'div');
+      (reactContentArea as HTMLElement).className = 'plait-tool-content plait-tool-react-content';
+      (reactContentArea as HTMLElement).style.cssText = `
+        flex: 1;
+        position: relative;
+        overflow: hidden;
+        background: #fff;
+      `;
+      container.appendChild(reactContentArea as HTMLElement);
+      
+      // 延迟渲染以确保 DOM 已挂载
+      setTimeout(() => this.renderReactContent(element, reactContentArea as HTMLElement), 0);
+    } else {
+      // 创建 iframe 内容区域
+      const contentArea = document.createElement('div');
+      contentArea.className = 'plait-tool-content';
+      contentArea.style.cssText = `
+        flex: 1;
+        position: relative;
+        overflow: hidden;
+        background: #fff;
+      `;
 
-    // 创建加载提示
-    const loader = this.createLoader();
-    contentArea.appendChild(loader);
+      // 创建加载提示
+      const loader = this.createLoader();
+      contentArea.appendChild(loader);
 
-    // 创建 iframe
-    const iframe = this.createIframe(element);
-    contentArea.appendChild(iframe);
+      // 创建 iframe
+      const iframe = this.createIframe(element);
+      contentArea.appendChild(iframe);
 
-    // 创建保护蒙层（防止 iframe 内缩放页面）
-    const overlay = this.createIframeOverlay();
-    contentArea.appendChild(overlay);
+      // 创建保护蒙层（防止 iframe 内缩放页面）
+      const overlay = this.createIframeOverlay();
+      contentArea.appendChild(overlay);
 
-    // iframe 加载完成后移除 loader
-    iframe.onload = () => {
-      loader.remove();
-    };
+      // iframe 加载完成后移除 loader
+      iframe.onload = () => {
+        loader.remove();
+      };
 
-    // iframe 加载失败处理
-    iframe.onerror = () => {
-      loader.textContent = '加载失败';
-      loader.style.color = '#f5222d';
-    };
+      // iframe 加载失败处理
+      iframe.onerror = () => {
+        loader.textContent = '加载失败';
+        loader.style.color = '#f5222d';
+      };
 
-    container.appendChild(contentArea);
+      container.appendChild(contentArea);
+    }
 
     foreignObject.appendChild(container);
     return foreignObject;
+  }
+
+  /**
+   * 渲染 React 内部组件内容
+   */
+  private renderReactContent(element: PlaitTool, container?: HTMLElement): void {
+    if (!element.component) return;
+
+    const Component = InternalToolComponents[element.component];
+    if (!Component) {
+      if (container) {
+        container.innerHTML = `<div style="padding: 20px; color: #f5222d;">未找到组件: ${element.component}</div>`;
+      }
+      return;
+    }
+
+    let root = this.reactRoots.get(element.id);
+    if (!root && container) {
+      root = createRoot(container);
+      this.reactRoots.set(element.id, root);
+    }
+
+    if (root) {
+      root.render(
+        React.createElement(ToolProviderWrapper, { board: this.board }, 
+          React.createElement(Suspense, {
+            fallback: React.createElement('div', { 
+              style: { padding: 20, textAlign: 'center', color: '#999' } 
+            }, '加载中...')
+          }, React.createElement(Component, { 
+            // 传递 board 和 element 供内部组件使用（如果需要）
+            board: this.board,
+            element: element
+          }))
+        )
+      );
+    }
   }
 
   /**
@@ -256,21 +380,22 @@ export class ToolGenerator {
       gap: 4px;
     `;
 
-    // 刷新按钮
-    const refreshBtn = this.createTitleButton('↻', '刷新', () => {
-      const iframe = this.iframeCache.get(element.id);
-      if (iframe) {
-        iframe.src = iframe.src; // 重新加载
-      }
+    // 刷新按钮（仅 iframe 工具显示）
+    if (!element.component) {
+      const refreshBtn = this.createTitleButton('↻', '刷新', () => {
+        const iframe = this.iframeCache.get(element.id);
+        if (iframe) {
+          iframe.src = iframe.src; // 重新加载
+        }
+      });
+      titleRight.appendChild(refreshBtn);
+    }
+
+    // 打开为弹窗按钮
+    const popoutBtn = this.createTitleButton('⧉', '打开为弹窗', () => {
+      this.openAsPopup(element);
     });
-
-    // 最小化/最大化按钮（暂时隐藏，未来可实现）
-    // const minimizeBtn = this.createTitleButton('−', '最小化', () => {
-    //   console.log('Minimize tool:', element.id);
-    // });
-
-    titleRight.appendChild(refreshBtn);
-    // titleRight.appendChild(minimizeBtn);
+    titleRight.appendChild(popoutBtn);
 
     titleBar.appendChild(titleLeft);
     titleBar.appendChild(titleRight);
@@ -438,10 +563,20 @@ export class ToolGenerator {
     // 设置超时检测
     this.setupLoadTimeout(element.id);
 
+    // 处理模板变量（如 ${apiKey}），在渲染时动态替换
+    const { url: processedUrl, missingVariables } = processToolUrl(element.url);
+    
+    if (missingVariables.length > 0) {
+      console.warn(`[ToolGenerator] URL contains missing variables: ${missingVariables.join(', ')}`);
+    }
+
     // 设置 iframe URL，添加 toolId 参数用于通信
-    const url = new URL(element.url, window.location.origin);
+    const url = new URL(processedUrl, window.location.origin);
     url.searchParams.set('toolId', element.id);
     iframe.src = url.toString();
+    
+    // 保存原始模板 URL，用于设置变化时重新替换
+    (iframe as any).__templateUrl = element.url;
 
     // 关键修改：默认启用 iframe 的鼠标事件，因为拖动只在标题栏上
     // 这样 iframe 内的页面可以正常点击和滚动
@@ -680,6 +815,52 @@ export class ToolGenerator {
   }
 
   /**
+   * 打开为弹窗
+   * 从画布移除工具元素，以 WinBox 弹窗形式打开
+   */
+  private openAsPopup(element: PlaitTool): void {
+    // 查找对应的工具定义
+    const toolDefinition = this.findToolDefinition(element);
+    if (!toolDefinition) {
+      console.warn('Tool definition not found for:', element.toolId);
+      return;
+    }
+
+    // 先从画布移除该元素
+    ToolTransforms.removeTool(this.board, element.id);
+
+    // 以弹窗形式打开
+    toolWindowService.openTool(toolDefinition);
+  }
+
+  /**
+   * 查找工具定义
+   */
+  private findToolDefinition(element: PlaitTool): ToolDefinition | undefined {
+    // 首先从内置工具中查找
+    const builtInTool = BUILT_IN_TOOLS.find(t => t.id === element.toolId);
+    if (builtInTool) {
+      return builtInTool;
+    }
+
+    // 如果不是内置工具，根据元素信息构建工具定义
+    if (element.url || element.component) {
+      return {
+        id: element.toolId,
+        name: element.metadata?.name || '工具',
+        description: '',
+        icon: '🔧',
+        category: element.metadata?.category,
+        ...(element.url ? { url: element.url } : {}),
+        ...(element.component ? { component: element.component } : {}),
+        permissions: element.metadata?.permissions,
+      } as ToolDefinition;
+    }
+
+    return undefined;
+  }
+
+  /**
    * 清理资源
    */
   destroy(): void {
@@ -687,6 +868,12 @@ export class ToolGenerator {
     if (this.canvasClickHandler) {
       document.removeEventListener('click', this.canvasClickHandler);
       this.canvasClickHandler = null;
+    }
+    
+    // 移除设置变化监听器
+    if (this.settingsChangeHandler) {
+      window.removeEventListener('gemini-settings-changed', this.settingsChangeHandler);
+      this.settingsChangeHandler = null;
     }
 
     // 清理所有超时定时器
@@ -701,6 +888,12 @@ export class ToolGenerator {
       iframe.src = 'about:blank';
     });
     this.iframeCache.clear();
+
+    // 清理所有 React Roots
+    this.reactRoots.forEach((root) => {
+      root.unmount();
+    });
+    this.reactRoots.clear();
 
     // 清理加载状态
     this.loadStates.clear();

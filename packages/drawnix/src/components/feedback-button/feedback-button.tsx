@@ -16,11 +16,6 @@ import './feedback-button.scss';
 
 const QR_CODE_URL = 'https://tuziai.oss-cn-shenzhen.aliyuncs.com/aitu/AiTu.png';
 
-// 企业微信图标组件
-const WeComIconComponent: React.FC = () => (
-  <span className="feedback-button__icon">{WeComIcon}</span>
-);
-
 export const FeedbackButton: React.FC = () => {
   const board = useBoard();
   const container = PlaitBoard.getBoardContainer(board);
@@ -37,7 +32,7 @@ export const FeedbackButton: React.FC = () => {
       <PopoverTrigger asChild>
         <ToolButton
           type="icon"
-          icon={<WeComIconComponent />}
+          icon={<WeComIcon />}
           aria-label="用户反馈群"
           title="用户反馈群"
           tooltipPlacement="right"

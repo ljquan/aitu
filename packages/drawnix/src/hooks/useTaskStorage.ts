@@ -159,10 +159,64 @@ export function useTaskStorage(): void {
             });
           }
 
+          // Check for failed video tasks that can be recovered (network errors with remoteId)
+          const failedVideoTasks = storedTasks.filter(task =>
+            task.type === TaskType.VIDEO &&
+            task.status === 'failed' &&
+            task.remoteId
+          );
+
+          if (failedVideoTasks.length > 0) {
+            // Helper function to check if error is a network error (not a business failure)
+            const isNetworkError = (task: Task): boolean => {
+              const errorMessage = task.error?.message || '';
+              const originalError = task.error?.details?.originalError || '';
+              const errorCode = task.error?.code || '';
+              const combinedError = `${errorMessage} ${originalError}`.toLowerCase();
+              
+              // Exclude business failures - these should not be retried
+              const isBusinessFailure = (
+                combinedError.includes('generation_failed') ||
+                combinedError.includes('invalid_argument') ||
+                combinedError.includes('prohibited') ||
+                combinedError.includes('content policy') ||
+                combinedError.includes('视频生成失败') ||
+                errorCode.includes('generation_failed') ||
+                errorCode.includes('INVALID')
+              );
+              
+              if (isBusinessFailure) {
+                return false;
+              }
+              
+              // Check for network-related errors
+              return (
+                combinedError.includes('failed to fetch') ||
+                combinedError.includes('network') ||
+                combinedError.includes('fetch') ||
+                combinedError.includes('timeout') ||
+                combinedError.includes('aborted') ||
+                combinedError.includes('connection') ||
+                combinedError.includes('status query failed')
+              );
+            };
+
+            failedVideoTasks.forEach(task => {
+              if (isNetworkError(task)) {
+                // console.log(`[useTaskStorage] Recovering failed video task ${task.id} (network error, has remoteId: ${task.remoteId})`);
+                
+                // Reset to processing status so useTaskExecutor can resume polling
+                legacyTaskQueueService.updateTaskStatus(task.id, TaskStatus.PROCESSING, {
+                  error: undefined, // Clear error
+                  executionPhase: TaskExecutionPhase.POLLING, // Set to polling phase
+                });
+              }
+            });
+          }
+
           // Count all incomplete tasks for logging
           const incompleteTasks = storedTasks.filter(task =>
-            task.status === 'pending' ||
-            task.status === 'retrying'
+            task.status === 'pending'
           );
           const resumableTasks = processingTasks.filter(
             task => task.type === TaskType.VIDEO && task.remoteId

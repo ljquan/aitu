@@ -56,19 +56,11 @@ function updatePackageVersion(newVersion) {
   fs.writeFileSync('package.json', JSON.stringify(packageJson, null, 2) + '\n');
 }
 
-// 更新 Service Worker 中的版本号
+// 更新 Service Worker 中的版本号（已废弃，sw.js 现在是构建产物）
 function updateServiceWorkerVersion(version) {
-  const swPath = path.join(__dirname, '../apps/web/public/sw.js');
-  let swContent = fs.readFileSync(swPath, 'utf8');
-
-  // 替换 APP_VERSION (无论是占位符还是具体版本号)
-  swContent = swContent.replace(
-    /const APP_VERSION = ['"][^'"]*['"];/,
-    `const APP_VERSION = '${version}';`
-  );
-
-  fs.writeFileSync(swPath, swContent);
-  console.log(`✅ Service Worker 版本已更新到 ${version}`);
+  // sw.js 现在是构建产物，不再需要手动更新
+  // 版本信息会通过 version.json 和构建过程自动处理
+  console.log(`ℹ️  Service Worker 版本将通过构建过程自动更新`);
 }
 
 // 计算两个字符串的相似度 (Jaccard Index based on characters)
@@ -97,11 +89,14 @@ function createVersionFile(version, commits) {
       ...relevantOthers
     ];
     
-    // 1. 过滤出包含大于5个汉字的提交消息
+    // 1. 过滤出有意义的提交消息（汉字 > 5 个 或 英文单词 > 5 个）
     const filteredCommits = allCommits
       .filter(c => {
         const chineseChars = c.message.match(/[\u4e00-\u9fa5]/g) || [];
-        return chineseChars.length > 5;
+        // 提取英文单词（排除常见的 commit 前缀如 feat/fix/chore 等）
+        const cleanMessage = c.message.replace(/^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([^)]*\))?:\s*/i, '');
+        const englishWords = cleanMessage.match(/[a-zA-Z]{2,}/g) || [];
+        return chineseChars.length > 5 || englishWords.length > 5;
       })
       .map(c => c.message);
 
@@ -315,7 +310,15 @@ function main() {
 
     // 提交更改
     try {
-      execSync('git add package.json package-lock.json apps/web/public/sw.js apps/web/public/version.json CHANGELOG.md', { stdio: 'inherit' });
+      // 检查是否存在 package-lock.json 或 pnpm-lock.yaml
+      const filesToAdd = ['package.json', 'apps/web/public/version.json', 'CHANGELOG.md'];
+      if (fs.existsSync('package-lock.json')) {
+        filesToAdd.push('package-lock.json');
+      } else if (fs.existsSync('pnpm-lock.yaml')) {
+        filesToAdd.push('pnpm-lock.yaml');
+      }
+      
+      execSync(`git add ${filesToAdd.join(' ')}`, { stdio: 'inherit' });
       execSync(`git commit -m "chore: bump version to ${nextVersion}"`, { stdio: 'inherit' });
       console.log(`✅ 版本更改已提交`);
     } catch (error) {

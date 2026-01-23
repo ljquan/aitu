@@ -13,6 +13,7 @@ import {
   getHitElementByPoint,
   toHostPoint,
   toViewBoxPoint,
+  getViewportOrigination,
 } from '@plait/core';
 import React, { useState, useRef, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
 import { withGroup } from '@plait/common';
@@ -41,7 +42,9 @@ import { CleanConfirm } from './components/clean-confirm/clean-confirm';
 import { buildTextLinkPlugin } from './plugins/with-text-link';
 import { LinkPopup } from './components/popup/link-popup/link-popup';
 import { I18nProvider } from './i18n';
-import { withVideo } from './plugins/with-video';
+import { withVideo, isVideoElement } from './plugins/with-video';
+import { UnifiedMediaViewer, type MediaItem as UnifiedMediaItem } from './components/shared/media-preview';
+import { PlaitDrawElement } from '@plait/draw';
 import { withTracking } from './plugins/tracking';
 import { withTool } from './plugins/with-tool';
 import { withToolFocus } from './plugins/with-tool-focus';
@@ -68,6 +71,7 @@ import { initializeAssetIntegration } from './services/asset-integration-service
 import { ToolbarConfigProvider } from './hooks/use-toolbar-config';
 import { AIInputBar } from './components/ai-input-bar';
 import { VersionUpdatePrompt } from './components/version-update/version-update-prompt';
+import { PerformancePanel } from './components/performance-panel';
 import { QuickCreationToolbar } from './components/toolbar/quick-creation-toolbar/quick-creation-toolbar';
 import { CacheQuotaProvider } from './components/cache-quota-provider/CacheQuotaProvider';
 import { RecentColorsProvider } from './components/unified-color-picker';
@@ -75,9 +79,12 @@ import { usePencilCursor } from './hooks/usePencilCursor';
 import { withArrowLineAutoCompleteExtend } from './plugins/with-arrow-line-auto-complete-extend';
 import { AutoCompleteShapePicker } from './components/auto-complete-shape-picker';
 import { useAutoCompleteShapePicker } from './hooks/useAutoCompleteShapePicker';
+import { ToolWinBoxManager } from './components/toolbox-drawer/ToolWinBoxManager';
 import { withDefaultFill } from './plugins/with-default-fill';
+import { withGradientFill } from './plugins/with-gradient-fill';
 import { API_AUTH_ERROR_EVENT, ApiAuthErrorDetail } from './utils/api-auth-error-event';
 import { MessagePlugin } from 'tdesign-react';
+import { calculateEditedImagePoints } from './utils/image';
 
 const TTDDialog = lazy(() => import('./components/ttd-dialog/ttd-dialog').then(module => ({ default: module.TTDDialog })));
 const SettingsDialog = lazy(() => import('./components/settings-dialog/settings-dialog').then(module => ({ default: module.SettingsDialog })));
@@ -129,7 +136,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
       pointer: PlaitPointerType.hand,
       isMobile: md.mobile() !== null,
       isPencilMode: false,
-      openDialogType: null,
+      openDialogTypes: new Set(),
       dialogInitialData: null,
       openCleanConfirm: false,
       openSettings: false,
@@ -184,9 +191,13 @@ export const Drawnix: React.FC<DrawnixProps> = ({
     setMediaLibraryOpen(true);
   }, [closeAllDrawers]);
 
-  // 使用 useCallback 稳定 setAppState 函数引用
-  const stableSetAppState = useCallback((newAppState: DrawnixState) => {
-    setAppState(newAppState);
+  // 使用 useCallback 稳定 setAppState 函数引用，支持函数式更新
+  const stableSetAppState = useCallback((newAppState: DrawnixState | ((prev: DrawnixState) => DrawnixState)) => {
+    if (typeof newAppState === 'function') {
+      setAppState(newAppState);
+    } else {
+      setAppState(newAppState);
+    }
   }, []);
 
   const updateAppState = useCallback((newAppState: Partial<DrawnixState>) => {
@@ -298,9 +309,12 @@ export const Drawnix: React.FC<DrawnixProps> = ({
           );
 
           // If we found the workflow in SW, sync the steps list first (for dynamic steps and status)
+          // Create a mutable copy of workflow for local use
+          let currentWorkflow = { ...workzone.workflow, steps: [...workzone.workflow.steps] };
+          
           if (swWorkflow) {
-            const needsSync = swWorkflow.steps.length !== workzone.workflow.steps.length || 
-                             swWorkflow.status !== workzone.workflow.status;
+            const needsSync = swWorkflow.steps.length !== currentWorkflow.steps.length || 
+                             swWorkflow.status !== currentWorkflow.status;
             
             if (needsSync) {
               // console.log(`[Drawnix] Syncing workflow for WorkZone ${workzone.id}, SW status: ${swWorkflow.status}, steps: ${swWorkflow.steps.length}`);
@@ -309,9 +323,8 @@ export const Drawnix: React.FC<DrawnixProps> = ({
                 status: swWorkflow.status,
                 error: swWorkflow.error,
               });
-              // Update local workzone reference for the mapping logic below
-              workzone.workflow.steps = swWorkflow.steps;
-              workzone.workflow.status = swWorkflow.status;
+              // Update local reference for the mapping logic below
+              currentWorkflow = { ...currentWorkflow, steps: swWorkflow.steps, status: swWorkflow.status };
             }
           }
 
@@ -319,14 +332,14 @@ export const Drawnix: React.FC<DrawnixProps> = ({
 
           // Check if this workzone's workflow is still active in SW
           // For chat workflows, check activeChatWorkflowIds; for regular workflows, check activeWorkflowIds
-          const isChatWorkflowActive = activeChatWorkflowIds.has(workzone.workflow.id);
-          const isRegularWorkflowActive = activeWorkflowIds.has(workzone.workflow.id);
+          const isChatWorkflowActive = activeChatWorkflowIds.has(currentWorkflow.id);
+          const isRegularWorkflowActive = activeWorkflowIds.has(currentWorkflow.id);
           const isWorkflowActive = isChatWorkflowActive || isRegularWorkflowActive;
 
           // console.log('[Drawnix] Found interrupted WorkZone:', workzone.id, 'chatActive:', isChatWorkflowActive, 'regularActive:', isRegularWorkflowActive);
 
           // Update steps based on task queue status
-          const updatedSteps = workzone.workflow.steps.map(step => {
+          const updatedSteps = currentWorkflow.steps.map(step => {
             if (step.status !== 'running' && step.status !== 'pending') {
               return step;
             }
@@ -394,7 +407,6 @@ export const Drawnix: React.FC<DrawnixProps> = ({
                 };
               case TaskStatus.PENDING:
               case TaskStatus.PROCESSING:
-              case TaskStatus.RETRYING:
                 // Task is still running, keep as running
                 return step;
               default:
@@ -404,7 +416,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
 
           // Check if any steps were updated
           const hasChanges = updatedSteps.some((step, i) =>
-            step.status !== workzone.workflow.steps[i].status
+            step.status !== currentWorkflow.steps[i]?.status
           );
 
           if (hasChanges) {
@@ -561,6 +573,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
     withWorkZone, // 工作区元素 - 在画布上显示工作流进度
     withArrowLineAutoCompleteExtend, // 自动完成形状选择 - hover 中点时选择下一个节点形状
     withDefaultFill, // 默认填充 - 让新创建的图形有白色填充，方便双击编辑
+    withGradientFill, // 渐变填充 - 支持渐变和图片填充渲染
     withTracking,
   ];
 
@@ -579,7 +592,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
   useBeforeUnload();
 
   // Workspace management
-  const { saveBoard } = useWorkspace();
+  const { saveBoard, createBoard, switchBoard } = useWorkspace();
 
   // Handle saving before board switch
   const handleBeforeSwitch = useCallback(async () => {
@@ -593,6 +606,27 @@ export const Drawnix: React.FC<DrawnixProps> = ({
       await saveBoard(currentData);
     }
   }, [onChange, saveBoard]);
+
+  // 创建新项目并刷新页面（用于释放内存）
+  const handleCreateProjectForMemory = useCallback(async () => {
+    // 先保存当前画布
+    await handleBeforeSwitch();
+    
+    // 创建新画布
+    const newBoard = await createBoard({
+      name: '新画布',
+    });
+    
+    if (newBoard) {
+      // 切换到新画布
+      await switchBoard(newBoard.id);
+      
+      // 延迟刷新页面，让用户看到切换效果
+      setTimeout(() => {
+        window.location.reload();
+      }, 500);
+    }
+  }, [handleBeforeSwitch, createBoard, switchBoard]);
 
   // 处理选中状态变化,保存最近选中的元素IDs
   const handleSelectionChange = useCallback((selection: Selection | null) => {
@@ -659,6 +693,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
                       setBackupRestoreOpen={setBackupRestoreOpen}
                       handleBeforeSwitch={handleBeforeSwitch}
                       isDataReady={isDataReady}
+                      onCreateProjectForMemory={handleCreateProjectForMemory}
                     />
                     <Suspense fallback={null}>
                       <MediaLibraryModal
@@ -709,6 +744,7 @@ interface DrawnixContentProps {
   setBackupRestoreOpen: React.Dispatch<React.SetStateAction<boolean>>;
   handleBeforeSwitch: () => Promise<void>;
   isDataReady: boolean;
+  onCreateProjectForMemory: () => Promise<void>;
 }
 
 const DrawnixContent: React.FC<DrawnixContentProps> = ({
@@ -740,6 +776,7 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
   setBackupRestoreOpen,
   handleBeforeSwitch,
   isDataReady,
+  onCreateProjectForMemory,
 }) => {
   const { chatDrawerRef } = useChatDrawer();
 
@@ -750,6 +787,164 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
   const [quickToolbarVisible, setQuickToolbarVisible] = useState(false);
   const [quickToolbarPosition, setQuickToolbarPosition] = useState<[number, number] | null>(null);
 
+  // 媒体预览状态
+  const [mediaPreviewVisible, setMediaPreviewVisible] = useState(false);
+  const [mediaPreviewItems, setMediaPreviewItems] = useState<UnifiedMediaItem[]>([]);
+  const [mediaPreviewInitialIndex, setMediaPreviewInitialIndex] = useState(0);
+
+  // 收集画布上所有图片和视频元素
+  const collectCanvasMediaItems = useCallback((): { items: UnifiedMediaItem[]; elementIds: string[] } => {
+    if (!board || !board.children) return { items: [], elementIds: [] };
+
+    const items: UnifiedMediaItem[] = [];
+    const elementIds: string[] = [];
+
+    for (const element of board.children) {
+      const url = (element as any).url;
+      if (!url || typeof url !== 'string') continue;
+
+      // 检查是否为图片元素
+      const isImage = PlaitDrawElement.isDrawElement(element) && PlaitDrawElement.isImage(element);
+      // 检查是否为视频元素
+      const isVideo = isVideoElement(element);
+
+      if (isImage || isVideo) {
+        items.push({
+          id: element.id,
+          url,
+          type: isVideo ? 'video' : 'image',
+          title: (element as any).name || undefined,
+        });
+        elementIds.push(element.id);
+      }
+    }
+
+    return { items, elementIds };
+  }, [board]);
+
+  // 打开媒体预览
+  const openMediaPreview = useCallback((targetElementId: string) => {
+    const { items, elementIds } = collectCanvasMediaItems();
+    if (items.length === 0) return;
+
+    const targetIndex = elementIds.indexOf(targetElementId);
+    if (targetIndex === -1) return;
+
+    setMediaPreviewItems(items);
+    setMediaPreviewInitialIndex(targetIndex);
+    setMediaPreviewVisible(true);
+  }, [collectCanvasMediaItems]);
+
+  // 关闭媒体预览
+  const closeMediaPreview = useCallback(() => {
+    setMediaPreviewVisible(false);
+  }, []);
+
+  // 处理图片编辑覆盖保存（内置编辑器回调）
+  const handleMediaEditorOverwrite = useCallback(async (editedImageUrl: string, originalItem: UnifiedMediaItem) => {
+    const elementId = originalItem.id;
+    if (!elementId || !board) return;
+    
+    try {
+      // 导入必要服务
+      const { unifiedCacheService } = await import('./services/unified-cache-service');
+      const { Transforms } = await import('@plait/core');
+      
+      const taskId = `edited-image-${Date.now()}`;
+      const stableUrl = `/__aitu_cache__/image/${taskId}.png`;
+      
+      // 将 data URL 转换为 Blob
+      const response = await fetch(editedImageUrl);
+      const blob = await response.blob();
+      
+      // 缓存到 Cache API
+      await unifiedCacheService.cacheMediaFromBlob(stableUrl, blob, 'image', { taskId });
+      
+      // 加载图片获取尺寸
+      const img = new Image();
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error('Failed to load edited image'));
+        img.src = editedImageUrl;
+      });
+      
+      // 找到元素并更新
+      const elementIndex = board.children.findIndex(child => child.id === elementId);
+      if (elementIndex >= 0) {
+        const element = board.children[elementIndex] as any;
+        const { newPoints } = await calculateEditedImagePoints(
+          {
+            url: element.url,
+            width: element.width,
+            height: element.height,
+            points: element.points || [[0, 0], [0, 0]],
+          },
+          img.naturalWidth,
+          img.naturalHeight
+        );
+        
+        Transforms.setNode(board, {
+          url: stableUrl,
+          width: img.naturalWidth,
+          height: img.naturalHeight,
+          points: newPoints,
+        } as any, [elementIndex]);
+      }
+    } catch (error) {
+      console.error('Failed to update image:', error);
+      MessagePlugin.error('更新失败');
+    }
+  }, [board]);
+
+  // 处理图片编辑插入到画布
+  const handleMediaEditorInsert = useCallback(async (editedImageUrl: string) => {
+    if (!board) return;
+    
+    try {
+      const { unifiedCacheService } = await import('./services/unified-cache-service');
+      const { insertImageFromUrl } = await import('./data/image');
+      const { PlaitBoard } = await import('@plait/core');
+      
+      const taskId = `edited-image-${Date.now()}`;
+      const stableUrl = `/__aitu_cache__/image/${taskId}.png`;
+      
+      // 将 data URL 转换为 Blob
+      const response = await fetch(editedImageUrl);
+      const blob = await response.blob();
+      
+      // 缓存到 Cache API
+      await unifiedCacheService.cacheMediaFromBlob(stableUrl, blob, 'image', { taskId });
+      
+      // 加载图片获取尺寸
+      const img = new Image();
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error('Failed to load edited image'));
+        img.src = editedImageUrl;
+      });
+      
+      // 在当前视口中心位置插入图片
+      const origination = getViewportOrigination(board);
+      const insertPoint: [number, number] = [
+        (origination?.[0] ?? 0) + 100,
+        (origination?.[1] ?? 0) + 100
+      ];
+      
+      await insertImageFromUrl(
+        board,
+        stableUrl,
+        insertPoint,
+        false,
+        { width: img.naturalWidth, height: img.naturalHeight },
+        false,
+        true
+      );
+    } catch (error) {
+      console.error('Failed to insert image:', error);
+      MessagePlugin.error('插入失败');
+    }
+  }, [board]);
+
   // 自动完成形状选择器状态
   const {
     state: autoCompleteState,
@@ -757,7 +952,7 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
     closePicker: closeAutoCompletePicker,
   } = useAutoCompleteShapePicker(board);
 
-  // 监听双击空白区域事件
+  // 监听双击事件 - 处理图片/视频预览和空白区域快捷工具栏
   useEffect(() => {
     if (!board) return;
 
@@ -773,14 +968,33 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
       }
 
       // 检查双击位置是否命中了画布上的元素
-      // 使用 getHitElementByPoint 直接检测，而不是依赖 selectedElements
-      // 因为双击事件触发时，元素可能还没被选中
       const viewBoxPoint = toViewBoxPoint(board, toHostPoint(board, event.clientX, event.clientY));
       const hitElement = getHitElementByPoint(board, viewBoxPoint);
 
+      // 如果双击了图片或视频元素，打开预览
+      if (hitElement) {
+        const url = (hitElement as any).url;
+        if (url && typeof url === 'string') {
+          const isImage = PlaitDrawElement.isDrawElement(hitElement) && PlaitDrawElement.isImage(hitElement);
+          const isVideo = isVideoElement(hitElement);
+
+          if (isImage || isVideo) {
+            // 打开媒体预览
+            openMediaPreview(hitElement.id);
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+          }
+        }
+      }
+
+      // 如果命中了 Plait 元素，或者双击的是工具容器内部（针对 foreignObject 元素）
+      const isInsideInteractive = target.closest('.plait-tool-container') || 
+                                   target.closest('.plait-workzone-container') ||
+                                   target.closest('foreignObject');
+
       // 只有双击空白区域时才显示快速创建工具栏
-      // 双击图形元素应该由 Plait 框架处理（进入文本编辑模式）
-      if (!hitElement) {
+      if (!hitElement && !isInsideInteractive) {
         const position: [number, number] = [event.clientX, event.clientY];
         setQuickToolbarPosition(position);
         setQuickToolbarVisible(true);
@@ -797,7 +1011,43 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
         container.removeEventListener('dblclick', handleDoubleClick);
       }
     };
-  }, [board, containerRef]);
+  }, [board, containerRef, openMediaPreview]);
+
+  // 监听画板点击事件，关闭项目抽屉和工具箱抽屉
+  useEffect(() => {
+    if (!board) return;
+
+    const handleClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+
+      // 只处理画布区域内的点击
+      const isInsideCanvas = target.closest('.board-host-svg') ||
+                             target.closest('.plait-board-container');
+
+      if (!isInsideCanvas) {
+        return;
+      }
+
+      // 关闭项目抽屉和工具箱抽屉
+      if (projectDrawerOpen) {
+        setProjectDrawerOpen(false);
+      }
+      if (toolboxDrawerOpen) {
+        setToolboxDrawerOpen(false);
+      }
+    };
+
+    const container = containerRef.current;
+    if (container) {
+      container.addEventListener('click', handleClick);
+    }
+
+    return () => {
+      if (container) {
+        container.removeEventListener('click', handleClick);
+      }
+    };
+  }, [board, containerRef, projectDrawerOpen, toolboxDrawerOpen, setProjectDrawerOpen, setToolboxDrawerOpen]);
 
   return (
     <div
@@ -837,6 +1087,13 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
               }
 
               afterInit && afterInit(board);
+
+              // 手动触发 afterChange 以初始化渐变填充等插件
+              // listRender.initialize() 不会触发 afterChange，
+              // 需要确保 withGradientFill 等依赖 afterChange 的插件逻辑被执行
+              if (board.afterChange) {
+                board.afterChange();
+              }
             }}
           ></Board>
           {/* 多选时的缩放控制点 */}
@@ -858,7 +1115,7 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
           <PencilSettingsToolbar></PencilSettingsToolbar>
           <PenSettingsToolbar></PenSettingsToolbar>
           <EraserSettingsToolbar></EraserSettingsToolbar>
-          {appState.openDialogType && (
+          {appState.openDialogTypes.size > 0 && (
             <Suspense fallback={null}>
               <TTDDialog container={containerRef.current}></TTDDialog>
             </Suspense>
@@ -905,6 +1162,18 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
             visible={quickToolbarVisible}
             onClose={() => setQuickToolbarVisible(false)}
           />
+          {/* Media Viewer - 画布图片/视频预览（支持内置编辑模式） */}
+          <UnifiedMediaViewer
+            visible={mediaPreviewVisible}
+            items={mediaPreviewItems}
+            initialIndex={mediaPreviewInitialIndex}
+            onClose={closeMediaPreview}
+            showThumbnails={true}
+            useBuiltInEditor={true}
+            showEditOverwrite={true}
+            onEditOverwrite={handleMediaEditorOverwrite}
+            onEditInsert={handleMediaEditorInsert}
+          />
           {/* Auto Complete Shape Picker - 自动完成形状选择器 */}
           <AutoCompleteShapePicker
             visible={autoCompleteState.visible}
@@ -920,8 +1189,15 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
           <VersionUpdatePrompt />
           {/* ViewNavigation - 视图导航（缩放 + 小地图） */}
           <ViewNavigation />
+          <ToolWinBoxManager />
         </Wrapper>
         <ActiveTaskWarning />
+        {/* Performance Panel - 性能监控面板 */}
+        <PerformancePanel 
+          container={containerRef.current} 
+          onCreateProject={onCreateProjectForMemory}
+          elements={board?.children || value}
+        />
         <ChatDrawer ref={chatDrawerRef} />
         <Suspense fallback={null}>
           <ProjectDrawer

@@ -4,34 +4,45 @@
  * 单个工具项组件 - 展示工具信息和图标
  */
 
-import React, { useState, useCallback } from 'react';
-import { Button } from 'tdesign-react';
-import { DeleteIcon } from 'tdesign-icons-react';
+import React, { useCallback } from 'react';
+import { Button, Tooltip } from 'tdesign-react';
+import { JumpIcon, DeleteIcon } from 'tdesign-icons-react';
+import { InsertToCanvasIcon } from '../icons';
 import { ToolDefinition } from '../../types/toolbox.types';
 import { BUILT_IN_TOOLS } from '../../constants/built-in-tools';
 
 export interface ToolItemProps {
   /** 工具定义 */
   tool: ToolDefinition;
-  /** 点击回调 */
-  onClick: () => void;
+  /** 插入到画布回调 */
+  onInsert?: (tool: ToolDefinition) => void;
+  /** 在窗口中打开回调 */
+  onOpenWindow?: (tool: ToolDefinition) => void;
   /** 删除回调（仅自定义工具） */
   onDelete?: (tool: ToolDefinition) => void;
 }
+
+/**
+ * 渲染图标组件，支持字符串和 React 组件
+ */
+const renderIcon = (icon: any) => {
+  if (!icon) return '🔧';
+  if (typeof icon === 'function') {
+    const IconComponent = icon;
+    return <IconComponent />;
+  }
+  return icon;
+};
 
 /**
  * 工具项组件
  */
 export const ToolItem: React.FC<ToolItemProps> = ({
   tool,
-  onClick,
+  onInsert,
+  onOpenWindow,
   onDelete
 }) => {
-  const [hovered, setHovered] = useState(false);
-  const [showActions, setShowActions] = useState(false); // 移动端长按后保持显示
-  const [isLongPressing, setIsLongPressing] = useState(false); // 长按中状态
-  const longPressTimerRef = React.useRef<NodeJS.Timeout | null>(null);
-
   // 判断是否为内置工具（内置工具不能编辑/删除）
   const isBuiltInTool = BUILT_IN_TOOLS.some(t => t.id === tool.id);
   const isCustomTool = !isBuiltInTool;
@@ -39,89 +50,31 @@ export const ToolItem: React.FC<ToolItemProps> = ({
   /**
    * 处理删除按钮点击
    */
-  const handleDelete = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation(); // 阻止冒泡
-    if (onDelete) {
-      onDelete(tool);
-    }
+  const handleDelete = useCallback(() => {
+    onDelete?.(tool);
   }, [tool, onDelete]);
 
   /**
-   * 处理触摸开始（长按）
+   * 处理插入到画布按钮点击
    */
-  const handleTouchStart = useCallback(() => {
-    if (!isCustomTool) return;
-
-    setIsLongPressing(true); // 开始长按视觉反馈
-
-    // 设置长按定时器（500ms）
-    longPressTimerRef.current = setTimeout(() => {
-      setShowActions(true);
-      setIsLongPressing(false); // 长按完成，取消反馈
-    }, 500);
-  }, [isCustomTool]);
+  const handleInsert = useCallback(() => {
+    onInsert?.(tool);
+  }, [tool, onInsert]);
 
   /**
-   * 处理触摸结束/取消
+   * 处理在窗口中打开按钮点击
    */
-  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
-    // 清除长按定时器
-    if (longPressTimerRef.current) {
-      clearTimeout(longPressTimerRef.current);
-      longPressTimerRef.current = null;
-    }
-
-    setIsLongPressing(false); // 停止长按反馈
-
-    // 如果操作按钮已显示，不触发点击事件
-    if (showActions) {
-      e.preventDefault();
-      e.stopPropagation();
-      return;
-    }
-  }, [showActions]);
-
-  /**
-   * 处理工具项点击
-   */
-  const handleClick = useCallback((e: React.MouseEvent | React.TouchEvent) => {
-    // 如果操作按钮已显示（移动端），先隐藏操作按钮，不触发插入
-    if (showActions) {
-      e.preventDefault();
-      e.stopPropagation();
-      setShowActions(false);
-      return;
-    }
-
-    // 否则正常触发插入
-    onClick();
-  }, [showActions, onClick]);
-
-  // 清理定时器
-  React.useEffect(() => {
-    return () => {
-      if (longPressTimerRef.current) {
-        clearTimeout(longPressTimerRef.current);
-      }
-    };
-  }, []);
-
-  // 决定是否显示操作按钮（PC 悬停 或 移动端长按）
-  const shouldShowActions = isCustomTool && (hovered || showActions);
+  const handleOpenWindow = useCallback(() => {
+    onOpenWindow?.(tool);
+  }, [tool, onOpenWindow]);
 
   return (
     <div
-      className={`tool-item ${isLongPressing ? 'tool-item--long-pressing' : ''}`}
-      onClick={handleClick}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
-      onTouchCancel={handleTouchEnd}
+      className="tool-item"
       data-track="toolbox_click_tool"
       data-tool-id={tool.id}
     >
-      <div className="tool-item__icon">{tool.icon || '🔧'}</div>
+      <div className="tool-item__icon">{renderIcon(tool.icon)}</div>
       <div className="tool-item__content">
         <div className="tool-item__name">{tool.name}</div>
         {tool.description && (
@@ -129,19 +82,44 @@ export const ToolItem: React.FC<ToolItemProps> = ({
         )}
       </div>
 
-      {/* 删除按钮（PC 悬停显示 / 移动端长按显示） */}
-      {shouldShowActions && (
-        <div className="tool-item__actions">
+      {/* 操作按钮 - 始终显示 */}
+      <div className="tool-item__actions">
+        {isCustomTool && onDelete && (
+          <Tooltip content="删除工具" theme="light" placement="left">
+            <Button
+              variant="text"
+              size="small"
+              shape="square"
+              icon={<DeleteIcon />}
+              onClick={handleDelete}
+              className="tool-item__action-btn tool-item__action-btn--delete"
+              data-track="toolbox_click_delete_tool"
+            />
+          </Tooltip>
+        )}
+        <Tooltip content="插入到画布" theme="light" placement="left">
           <Button
             variant="text"
             size="small"
-            icon={<DeleteIcon />}
-            onClick={handleDelete}
-            title="删除工具"
-            data-track="toolbox_click_delete_tool"
+            shape="square"
+            icon={<InsertToCanvasIcon size={16} />}
+            onClick={handleInsert}
+            className="tool-item__action-btn tool-item__action-btn--insert"
+            data-track="toolbox_click_insert_tool"
           />
-        </div>
-      )}
+        </Tooltip>
+        <Tooltip content="在窗口中打开" theme="light" placement="left">
+          <Button
+            variant="outline"
+            size="small"
+            shape="square"
+            icon={<JumpIcon />}
+            onClick={handleOpenWindow}
+            className="tool-item__action-btn tool-item__action-btn--open-window"
+            data-track="toolbox_click_open_window_tool"
+          />
+        </Tooltip>
+      </div>
     </div>
   );
 };

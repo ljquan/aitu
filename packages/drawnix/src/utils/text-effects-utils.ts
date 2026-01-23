@@ -11,6 +11,7 @@ import type {
   GlowConfig,
   ShadowEffectConfig,
 } from '../types/text-effects.types';
+import type { GradientFillConfig, GradientFillStop } from '../types/fill.types';
 
 // ============ 渐变 CSS 生成 ============
 
@@ -34,6 +35,111 @@ export function generateGradientCSS(config: GradientConfig): string {
     return `linear-gradient(${config.angle}deg, ${stopsStr})`;
   }
   return `radial-gradient(circle, ${stopsStr})`;
+}
+
+// ============ 类型转换函数 ============
+
+/**
+ * 将 GradientFillConfig (fill.types) 转换为 GradientConfig (text-effects.types)
+ * GradientFillConfig 使用 offset (0-1)
+ * GradientConfig 使用 position (0-100)
+ */
+export function fillConfigToTextConfig(
+  fillConfig: GradientFillConfig,
+  target: 'text' | 'fill' | 'stroke' = 'text'
+): GradientConfig {
+  return {
+    type: fillConfig.type,
+    angle: fillConfig.type === 'linear' ? fillConfig.angle : 90,
+    stops: fillConfig.stops.map((stop: GradientFillStop) => ({
+      color: stop.color,
+      position: Math.round(stop.offset * 100),
+    })),
+    target,
+  };
+}
+
+/**
+ * 将 GradientConfig (text-effects.types) 转换为 GradientFillConfig (fill.types)
+ * GradientConfig 使用 position (0-100)
+ * GradientFillConfig 使用 offset (0-1)
+ */
+export function textConfigToFillConfig(textConfig: GradientConfig): GradientFillConfig {
+  const stops: GradientFillStop[] = textConfig.stops.map((stop: GradientStop) => ({
+    color: stop.color,
+    offset: stop.position / 100,
+  }));
+
+  if (textConfig.type === 'radial') {
+    return {
+      type: 'radial',
+      centerX: 0.5,
+      centerY: 0.5,
+      stops,
+    };
+  }
+
+  return {
+    type: 'linear',
+    angle: textConfig.angle,
+    stops,
+  };
+}
+
+/**
+ * 从 CSS 渐变字符串解析出 GradientFillConfig
+ */
+export function parseGradientCSSToFillConfig(css: string): GradientFillConfig | null {
+  // 匹配线性渐变: linear-gradient(135deg, #color1 0%, #color2 100%)
+  const linearMatch = css.match(/linear-gradient\((\d+)deg,\s*(.+)\)/);
+  if (linearMatch) {
+    const angle = parseInt(linearMatch[1], 10);
+    const stopsStr = linearMatch[2];
+    const stops = parseGradientStops(stopsStr);
+    if (stops.length >= 2) {
+      return {
+        type: 'linear',
+        angle,
+        stops,
+      };
+    }
+  }
+
+  // 匹配径向渐变: radial-gradient(circle, #color1 0%, #color2 100%)
+  const radialMatch = css.match(/radial-gradient\((?:circle(?:\s+at\s+(\d+)%\s+(\d+)%)?)?(?:,)?\s*(.+)\)/);
+  if (radialMatch) {
+    const centerX = radialMatch[1] ? parseInt(radialMatch[1], 10) / 100 : 0.5;
+    const centerY = radialMatch[2] ? parseInt(radialMatch[2], 10) / 100 : 0.5;
+    const stopsStr = radialMatch[3];
+    const stops = parseGradientStops(stopsStr);
+    if (stops.length >= 2) {
+      return {
+        type: 'radial',
+        centerX,
+        centerY,
+        stops,
+      };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * 解析渐变色标字符串
+ */
+function parseGradientStops(stopsStr: string): GradientFillStop[] {
+  const stops: GradientFillStop[] = [];
+  // 匹配: #color 50% 或 rgb(r,g,b) 50% 或 rgba(r,g,b,a) 50%
+  const stopRegex = /(#[0-9a-fA-F]{3,8}|rgba?\([^)]+\))\s+(\d+)%/g;
+  let match;
+  while ((match = stopRegex.exec(stopsStr)) !== null) {
+    stops.push({
+      color: match[1],
+      offset: parseInt(match[2], 10) / 100,
+    });
+  }
+  return stops;
 }
 
 /**

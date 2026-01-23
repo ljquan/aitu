@@ -1,0 +1,221 @@
+/**
+ * ViewerToolbar - 工具栏样式
+ */
+
+$brand-orange: #f39c12;
+
+.viewer-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: rgba(0, 0, 0, 0.9);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  user-select: none;
+  position: relative;
+  z-index: 10;
+
+  &__left,
+  &__right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  &__group {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  &__label {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.6);
+    margin-right: 4px;
+  }
+
+  &__divider {
+    width: 1px;
+    height: 20px;
+    background: rgba(255, 255, 255, 0.2);
+    margin: 0 4px;
+  }
+
+  &__btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    min-width: 32px;
+    height: 32px;
+    padding: 0 8px;
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    color: rgba(255, 255, 255, 0.6);
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: #fff;
+    }
+
+    &--active {
+      background: rgba($brand-orange, 0.15);
+      color: $brand-orange;
+
+      &:hover {
+        background: rgba($brand-orange, 0.25);
+        color: $brand-orange;
+      }
+    }
+
+    &--small {
+      min-width: 28px;
+      height: 28px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    &--close {
+      margin-left: 8px;
+
+      &:hover {
+        background: rgba(231, 76, 60, 0.2);
+        color: #ff4d4f;
+      }
+    }
+
+    &--primary {
+      background: $brand-orange;
+      color: #000;
+      font-weight: 600;
+
+      &:hover {
+        background: lighten($brand-orange, 5%);
+        color: #000;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba($brand-orange, 0.3);
+      }
+
+      &:active {
+        transform: translateY(0);
+      }
+    }
+
+    &-text {
+      font-size: 13px;
+    }
+  }
+
+  &__title {
+    font-size: 14px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+  }
+
+  &__indicator {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 0 12px;
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.8);
+  }
+
+  &__current {
+    font-weight: 600;
+    color: #fff;
+  }
+
+  &__separator {
+    color: rgba(255, 255, 255, 0.4);
+    margin: 0 2px;
+  }
+
+  &__total {
+    color: rgba(255, 255, 255, 0.6);
+  }
+}
+
+/* 编辑模式简化版 - 只有左上角返回和右上角关闭 */
+.viewer-toolbar--edit-simplified {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  pointer-events: none;
+  z-index: 100;
+}
+
+.viewer-toolbar__corner-btn {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(10px);
+  border: none;
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  pointer-events: auto;
+
+  &:hover {
+    background: rgba(0, 0, 0, 0.8);
+    color: #fff;
+  }
+
+  &--left {
+    top: 16px;
+    left: 16px;
+  }
+
+  &--right {
+    top: 16px;
+    right: 16px;
+    padding: 10px;
+  }
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+  .viewer-toolbar {
+    padding: 6px 12px;
+
+    &__btn {
+      min-width: 28px;
+      height: 28px;
+
+      &-text {
+        display: none;
+      }
+    }
+
+    &__label {
+      display: none;
+    }
+  }
+
+  .viewer-toolbar__corner-btn {
+    padding: 8px 12px;
+    font-size: 13px;
+
+    &--left {
+      top: 12px;
+      left: 12px;
+    }
+
+    &--right {
+      top: 12px;
+      right: 12px;
+    }
+  }
+}

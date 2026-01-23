@@ -49,6 +49,9 @@ export const CharacterTimeRangeSelector: React.FC<CharacterTimeRangeSelectorProp
   const [frameImage, setFrameImage] = useState<string>('');
   const [isVideoReady, setIsVideoReady] = useState(false);
   const [dragType, setDragType] = useState<'left' | 'right' | 'center' | null>(null);
+  // Video frame strip for timeline background
+  const [frameStrip, setFrameStrip] = useState<string[]>([]);
+  const [isGeneratingStrip, setIsGeneratingStrip] = useState(false);
 
   // Calculate range (use raw values for smooth animation)
   const rangeDuration = endTime - startTime;
@@ -60,6 +63,7 @@ export const CharacterTimeRangeSelector: React.FC<CharacterTimeRangeSelectorProp
     if (videoUrl) {
       setIsLoading(true);
       setFrameImage('');
+      setFrameStrip([]);
       setIsVideoReady(false);
       setDragType(null);
     }
@@ -81,6 +85,77 @@ export const CharacterTimeRangeSelector: React.FC<CharacterTimeRangeSelectorProp
       setEndTime(Math.min(MAX_DURATION, actualDuration));
     }
   };
+
+  // Generate frame strip for timeline background (like video editing software)
+  const generateFrameStrip = useCallback(async () => {
+    const video = videoRef.current;
+    if (!video || !isVideoReady || duration <= 0 || isGeneratingStrip) return;
+
+    setIsGeneratingStrip(true);
+
+    try {
+      // Dynamic frame count: 2 frames per second for better alignment
+      const framesPerSecond = 2;
+      const frameCount = Math.max(4, Math.ceil(duration * framesPerSecond));
+      const interval = duration / frameCount;
+      const frames: string[] = [];
+
+      // Create a separate canvas for thumbnails
+      const thumbCanvas = document.createElement('canvas');
+      const ctx = thumbCanvas.getContext('2d');
+      if (!ctx) return;
+
+      // Use small thumbnail size for performance
+      const thumbHeight = 50;
+      const aspectRatio = video.videoWidth / video.videoHeight || 16 / 9;
+      const thumbWidth = Math.round(thumbHeight * aspectRatio);
+
+      thumbCanvas.width = thumbWidth;
+      thumbCanvas.height = thumbHeight;
+
+      // Extract frames at the CENTER of each interval for better visual alignment
+      // This way, when user clicks on a frame thumbnail, the preview shows a time close to that frame
+      for (let i = 0; i < frameCount; i++) {
+        // Frame i covers time range: [i * interval, (i+1) * interval]
+        // We capture at the CENTER: (i + 0.5) * interval
+        const time = Math.min((i + 0.5) * interval, duration - 0.01);
+
+        // Seek to the time and wait for seeked event
+        await new Promise<void>((resolve) => {
+          const onSeeked = () => {
+            video.removeEventListener('seeked', onSeeked);
+            resolve();
+          };
+          video.addEventListener('seeked', onSeeked);
+          video.currentTime = time;
+        });
+
+        // Draw and capture frame
+        ctx.drawImage(video, 0, 0, thumbWidth, thumbHeight);
+        frames.push(thumbCanvas.toDataURL('image/jpeg', 0.5));
+      }
+
+      setFrameStrip(frames);
+
+      // Reset video to start time for preview
+      video.currentTime = startTime;
+    } catch (error) {
+      console.warn('Failed to generate frame strip:', error);
+    } finally {
+      setIsGeneratingStrip(false);
+    }
+  }, [isVideoReady, duration, isGeneratingStrip, startTime]);
+
+  // Trigger frame strip generation when video is ready
+  useEffect(() => {
+    if (isVideoReady && duration > 0 && frameStrip.length === 0 && !isGeneratingStrip) {
+      // Small delay to ensure video is fully loaded
+      const timer = setTimeout(() => {
+        generateFrameStrip();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [isVideoReady, duration, frameStrip.length, isGeneratingStrip, generateFrameStrip]);
 
   // Generate frame image
   const generateFrameImage = useCallback(() => {
@@ -348,21 +423,26 @@ export const CharacterTimeRangeSelector: React.FC<CharacterTimeRangeSelectorProp
         ref={trackRef}
         onClick={handleTrackClick}
       >
-        {/* Background track */}
-        <div className="character-time-selector__timeline-bg" />
-
-        {/* Time markers */}
-        <div className="character-time-selector__markers">
-          {Array.from({ length: Math.ceil(duration) + 1 }, (_, i) => (
-            <div
-              key={i}
-              className="character-time-selector__marker"
-              style={{ left: `${(i / duration) * 100}%` }}
-            >
-              <span>{i}s</span>
-            </div>
-          ))}
-        </div>
+        {/* Frame strip background (like video editing software) */}
+        {frameStrip.length > 0 ? (
+          <div className="character-time-selector__frame-strip">
+            {frameStrip.map((frame, index) => (
+              <img
+                key={index}
+                src={frame}
+                alt=""
+                className="character-time-selector__frame-thumb"
+                draggable={false}
+              />
+            ))}
+          </div>
+        ) : isGeneratingStrip ? (
+          <div className="character-time-selector__frame-strip character-time-selector__frame-strip--loading">
+            <div className="character-time-selector__strip-shimmer" />
+          </div>
+        ) : (
+          <div className="character-time-selector__timeline-bg" />
+        )}
 
         {/* Draggable range */}
         <div

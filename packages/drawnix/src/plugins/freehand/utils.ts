@@ -19,6 +19,7 @@ import {
   isRectangleHitRotatedPoints,
 } from '@plait/draw';
 import { FreehandStrokeStyle } from './freehand-settings';
+import { getFillRenderColor } from '../../types/fill.types';
 
 export function getFreehandPointers() {
   return [FreehandShape.feltTipPen, FreehandShape.eraser];
@@ -214,12 +215,19 @@ export const getFillByElement = (board: PlaitBoard, element: PlaitElement) => {
   if (element.fill === 'none') {
     return 'none';
   }
+  
+  // 使用 getFillRenderColor 处理 FillConfig 对象
+  // 对于渐变/图片填充，会使用 fallbackColor 避免黑色闪烁
+  if (element.fill) {
+    return getFillRenderColor(element.fill);
+  }
+  
+  // 无填充时使用默认值
   const defaultFill =
     Freehand.isFreehand(element) && isClosedCustomGeometry(board, element)
       ? getFreehandDefaultFill(board.theme.themeColorMode)
       : DefaultDrawStyle.fill;
-  const fill = element.fill || defaultFill;
-  return fill;
+  return defaultFill;
 };
 
 export function gaussianWeight(x: number, sigma: number) {

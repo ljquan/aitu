@@ -9,8 +9,6 @@ import {
   Download,
   Trash2,
   Edit2,
-  Check,
-  X,
   CheckCircle,
   Copy,
 } from 'lucide-react';
@@ -56,23 +54,37 @@ export function MediaLibraryInspector({
     }
   }, [asset]);
 
-  // 确认重命名
+  // 确认重命名（blur 或 Enter 时触发）
   const handleConfirmRename = useCallback(async () => {
-    if (!asset || !newName.trim()) return;
+    if (!asset) {
+      setIsRenaming(false);
+      return;
+    }
+    
+    const trimmedName = newName.trim();
+    // 如果名称为空或没有变化，取消编辑
+    if (!trimmedName || trimmedName === asset.name) {
+      setIsRenaming(false);
+      setNewName('');
+      return;
+    }
 
     try {
-      await onRename(asset.id, newName.trim());
+      await onRename(asset.id, trimmedName);
       setIsRenaming(false);
-      MessagePlugin.success('重命名成功');
+      // Toast 已在 Context 中显示，这里不重复
     } catch (error) {
       // 错误已在Context中处理
+      setIsRenaming(false);
     }
   }, [asset, newName, onRename]);
 
-  // 取消重命名
-  const handleCancelRename = useCallback(() => {
-    setIsRenaming(false);
-    setNewName('');
+  // 处理键盘事件（Escape 取消）
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      setIsRenaming(false);
+      setNewName('');
+    }
   }, []);
 
   // 打开删除确认对话框
@@ -155,26 +167,11 @@ export function MediaLibraryInspector({
               value={newName}
               onChange={(value) => setNewName(value as string)}
               autofocus
-              size="small"
+              onBlur={handleConfirmRename}
               onEnter={handleConfirmRename}
+              onKeydown={handleKeyDown}
+              placeholder="输入名称，按 Enter 或点击外部保存"
             />
-            <div className="media-library-inspector__name-actions">
-              <Button
-                size="small"
-                variant="base"
-                theme="primary"
-                icon={<Check size={14} />}
-                onClick={handleConfirmRename}
-                data-track="inspector_rename_confirm"
-              />
-              <Button
-                size="small"
-                variant="outline"
-                icon={<X size={14} />}
-                onClick={handleCancelRename}
-                data-track="inspector_rename_cancel"
-              />
-            </div>
           </div>
         ) : (
           <div className="media-library-inspector__name-display">
@@ -244,7 +241,7 @@ export function MediaLibraryInspector({
       )}
 
       {/* 操作按钮 */}
-      <div className="media-library-inspector__actions">
+      <div className={`media-library-inspector__actions ${showSelectButton && onSelect ? 'media-library-inspector__actions--with-select' : 'media-library-inspector__actions--no-select'}`}>
         {showSelectButton && onSelect && (
           <Button
             theme="primary"
@@ -252,6 +249,7 @@ export function MediaLibraryInspector({
             icon={<CheckCircle size={16} />}
             onClick={handleSelect}
             data-track="inspector_use_asset"
+            className="inspector-btn-select"
           >
             {selectButtonText}
           </Button>
@@ -262,6 +260,7 @@ export function MediaLibraryInspector({
           icon={<Download size={16} />}
           onClick={handleDownload}
           data-track="inspector_download"
+          className="inspector-btn-download"
         >
           下载
         </Button>
@@ -272,6 +271,7 @@ export function MediaLibraryInspector({
           icon={<Trash2 size={16} />}
           onClick={handleOpenDeleteDialog}
           data-track="inspector_delete"
+          className="inspector-btn-delete"
         >
           删除
         </Button>

@@ -10,7 +10,7 @@ import { Badge } from 'tdesign-react';
 import './task-queue.scss';
 
 export interface TaskSummaryProps {
-  /** Number of active tasks (pending/processing/retrying) */
+  /** Number of active tasks (pending/processing) */
   activeCount: number;
   /** Number of completed tasks */
   completedCount: number;

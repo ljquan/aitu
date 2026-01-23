@@ -27,37 +27,37 @@ export interface ShapeProps {
 
 const SHAPES: ShapeProps[] = [
   {
-    icon: RectangleIcon,
+    icon: <RectangleIcon />,
     title: 'Rectangle — R',
     pointer: BasicShapes.rectangle,
   },
   {
-    icon: EllipseIcon,
+    icon: <EllipseIcon />,
     title: 'Ellipse — O',
     pointer: BasicShapes.ellipse,
   },
   {
-    icon: TriangleIcon,
+    icon: <TriangleIcon />,
     title: 'Triangle',
     pointer: BasicShapes.triangle,
   },
   {
-    icon: TerminalIcon,
+    icon: <TerminalIcon />,
     title: 'Terminal',
     pointer: FlowchartSymbols.terminal,
   },
   {
-    icon: DiamondIcon,
+    icon: <DiamondIcon />,
     title: 'Diamond',
     pointer: BasicShapes.diamond,
   },
   {
-    icon: ParallelogramIcon,
+    icon: <ParallelogramIcon />,
     title: 'Parallelogram',
     pointer: BasicShapes.parallelogram,
   },
   {
-    icon: RoundRectangleIcon,
+    icon: <RoundRectangleIcon />,
     title: 'RoundRectangle',
     pointer: BasicShapes.roundRectangle,
   },

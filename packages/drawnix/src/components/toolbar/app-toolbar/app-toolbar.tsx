@@ -14,7 +14,7 @@ import {
 import { Island } from '../../island';
 import { Popover, PopoverContent, PopoverTrigger } from '../../popover/popover';
 import { useState } from 'react';
-import { CleanBoard, CleanMissingAssets, OpenFile, SaveAsImage, SaveToFile, Settings, BackupRestore } from './app-menu-items';
+import { CleanBoard, OpenFile, SaveAsImage, SaveToFile, Settings, BackupRestore, DebugPanel, VersionInfo } from './app-menu-items';
 import { GithubIcon } from '../../icons';
 import { LanguageSwitcherMenu } from './language-switcher-menu';
 import Menu from '../../menu/menu';
@@ -66,7 +66,7 @@ export const AppToolbar: React.FC<AppToolbarProps> = ({
               type="icon"
               visible={true}
               selected={appMenuOpen}
-              icon={MenuIcon}
+              icon={<MenuIcon />}
               title={appMenuOpen ? undefined : t('general.menu')}
               tooltipPlacement={embedded ? 'right' : 'bottom'}
               aria-label={t('general.menu')}
@@ -86,14 +86,16 @@ export const AppToolbar: React.FC<AppToolbarProps> = ({
               <SaveToFile></SaveToFile>
               <SaveAsImage></SaveAsImage>
               <CleanBoard></CleanBoard>
-              <CleanMissingAssets></CleanMissingAssets>
               <MenuSeparator />
               <LanguageSwitcherMenu />
               <BackupRestore onOpenBackupRestore={() => {
                 setAppMenuOpen(false);
                 onOpenBackupRestore?.();
               }} />
+              <DebugPanel />
               <Settings />
+              <MenuSeparator />
+              <VersionInfo />
             </Menu>
           </PopoverContent>
         </Popover>
@@ -106,7 +108,7 @@ export const AppToolbar: React.FC<AppToolbarProps> = ({
             <ToolButton
               key={1}
               type="icon"
-              icon={UndoIcon}
+              icon={<UndoIcon />}
               visible={true}
               title={t('general.undo')}
               tooltipPlacement={embedded ? 'right' : 'bottom'}
@@ -128,7 +130,7 @@ export const AppToolbar: React.FC<AppToolbarProps> = ({
             <ToolButton
               key={2}
               type="icon"
-              icon={RedoIcon}
+              icon={<RedoIcon />}
               visible={true}
               title={t('general.redo')}
               tooltipPlacement={embedded ? 'right' : 'bottom'}
@@ -152,7 +154,7 @@ export const AppToolbar: React.FC<AppToolbarProps> = ({
         {content}
         <ToolButton
           type="icon"
-          icon={GithubIcon}
+          icon={<GithubIcon />}
           visible={true}
           title={t('menu.github')}
           tooltipPlacement="right"

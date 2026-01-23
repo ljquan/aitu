@@ -24,13 +24,13 @@ export interface ShapeOption {
 }
 
 const SHAPES: ShapeOption[] = [
-  { icon: RectangleIcon, title: 'Rectangle', pointer: BasicShapes.rectangle },
-  { icon: EllipseIcon, title: 'Ellipse', pointer: BasicShapes.ellipse },
-  { icon: TriangleIcon, title: 'Triangle', pointer: BasicShapes.triangle },
-  { icon: TerminalIcon, title: 'Terminal', pointer: FlowchartSymbols.terminal },
-  { icon: DiamondIcon, title: 'Diamond', pointer: BasicShapes.diamond },
-  { icon: ParallelogramIcon, title: 'Parallelogram', pointer: BasicShapes.parallelogram },
-  { icon: RoundRectangleIcon, title: 'RoundRectangle', pointer: BasicShapes.roundRectangle },
+  { icon: <RectangleIcon />, title: 'Rectangle', pointer: BasicShapes.rectangle },
+  { icon: <EllipseIcon />, title: 'Ellipse', pointer: BasicShapes.ellipse },
+  { icon: <TriangleIcon />, title: 'Triangle', pointer: BasicShapes.triangle },
+  { icon: <TerminalIcon />, title: 'Terminal', pointer: FlowchartSymbols.terminal },
+  { icon: <DiamondIcon />, title: 'Diamond', pointer: BasicShapes.diamond },
+  { icon: <ParallelogramIcon />, title: 'Parallelogram', pointer: BasicShapes.parallelogram },
+  { icon: <RoundRectangleIcon />, title: 'RoundRectangle', pointer: BasicShapes.roundRectangle },
 ];
 
 export interface AutoCompleteShapePickerProps {

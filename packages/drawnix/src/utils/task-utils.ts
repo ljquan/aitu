@@ -6,7 +6,7 @@
  */
 
 import { Task, TaskStatus, TaskType } from '../types/task.types';
-import { TASK_TIMEOUT, MAX_RETRY_COUNT } from '../constants/TASK_CONSTANTS';
+import { TASK_TIMEOUT } from '../constants/TASK_CONSTANTS';
 
 /**
  * Generates a unique task ID using UUID v4 algorithm
@@ -25,7 +25,7 @@ export function generateTaskId(): string {
 }
 
 /**
- * Checks if a task is in an active state (pending, processing, or retrying)
+ * Checks if a task is in an active state (pending or processing)
  * 
  * @param task - The task to check
  * @returns True if the task is active, false otherwise
@@ -36,8 +36,7 @@ export function generateTaskId(): string {
  */
 export function isTaskActive(task: Task): boolean {
   return task.status === TaskStatus.PENDING || 
-         task.status === TaskStatus.PROCESSING || 
-         task.status === TaskStatus.RETRYING;
+         task.status === TaskStatus.PROCESSING;
 }
 
 /**
@@ -73,17 +72,6 @@ export function isTaskTimeout(task: Task): boolean {
  */
 export function getTaskTimeout(taskType: TaskType): number {
   return TASK_TIMEOUT[taskType.toUpperCase() as keyof typeof TASK_TIMEOUT] || TASK_TIMEOUT.IMAGE;
-}
-
-/**
- * Checks if a task can be retried
- * 
- * @param task - The task to check
- * @returns True if the task can be retried, false otherwise
- */
-export function canRetry(task: Task): boolean {
-  return task.retryCount < MAX_RETRY_COUNT && 
-         (task.status === TaskStatus.FAILED || task.status === TaskStatus.RETRYING);
 }
 
 /**

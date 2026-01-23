@@ -241,19 +241,32 @@ class ToolboxService {
    */
   private validateToolDefinition(tool: Partial<ToolDefinition>): void {
     // 必填字段
-    if (!tool.name || !tool.url) {
-      throw new Error('Tool name and URL are required');
+    if (!tool.name) {
+      throw new Error('Tool name is required');
     }
 
-    // URL 格式验证
-    try {
-      const url = new URL(tool.url);
-      // 只允许 https 和 http
-      if (!['https:', 'http:'].includes(url.protocol)) {
-        throw new Error('Only HTTP/HTTPS URLs are allowed');
+    const hasUrl = !!tool.url;
+    const hasComponent = !!tool.component;
+
+    if (!hasUrl && !hasComponent) {
+      throw new Error('Tool must have either a URL or an internal component');
+    }
+
+    if (hasUrl && hasComponent) {
+      throw new Error('Tool cannot have both a URL and an internal component');
+    }
+
+    // URL 格式验证（如果提供了 URL）
+    if (tool.url && tool.url.startsWith('http')) {
+      try {
+        const url = new URL(tool.url);
+        // 只允许 https 和 http
+        if (!['https:', 'http:'].includes(url.protocol)) {
+          throw new Error('Only HTTP/HTTPS URLs are allowed');
+        }
+      } catch (e) {
+        throw new Error('Invalid URL format');
       }
-    } catch (e) {
-      throw new Error('Invalid URL format');
     }
 
     // 名称长度限制

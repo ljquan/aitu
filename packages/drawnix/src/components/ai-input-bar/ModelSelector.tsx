@@ -8,13 +8,14 @@
 
 import React, { useMemo, useCallback, useRef, useEffect, useState } from 'react';
 import { Bot, Check, Image, Video } from 'lucide-react';
-import { 
-  IMAGE_VIDEO_MODELS, 
+import {
+  IMAGE_VIDEO_MODELS,
   getModelConfig,
   type ModelType,
   type ModelConfig,
 } from '../../constants/model-config';
 import './model-selector.scss';
+import { ModelHealthBadge } from '../shared/ModelHealthBadge';
 
 export interface ModelSelectorProps {
   /** 是否可见 */
@@ -55,12 +56,12 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   // 过滤模型列表
   const filteredModels = useMemo(() => {
     const keyword = filterKeyword.toLowerCase().trim();
-    
+
     // 如果两种模型都已选择，返回空列表
     if (allModelsSelected) {
       return [];
     }
-    
+
     let models: ModelConfig[] = IMAGE_VIDEO_MODELS.filter(model => {
       // 过滤掉已选择类型的模型
       if (model.type === 'image' && selectedImageModel) {
@@ -74,7 +75,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 
     // 按关键词过滤
     if (keyword) {
-      models = models.filter(model => 
+      models = models.filter(model =>
         model.id.toLowerCase().includes(keyword) ||
         model.label.toLowerCase().includes(keyword) ||
         (model.shortLabel && model.shortLabel.toLowerCase().includes(keyword))
@@ -97,7 +98,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   // 全局键盘事件监听
   useEffect(() => {
     if (!visible) return;
-    
+
     // 如果所有模型都已选择，只处理 Escape 关闭，不拦截 Enter（让用户可以发送消息）
     if (allModelsSelected) {
       const handleKeyDown = (event: KeyboardEvent) => {
@@ -111,7 +112,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       document.addEventListener('keydown', handleKeyDown, true);
       return () => document.removeEventListener('keydown', handleKeyDown, true);
     }
-    
+
     // 如果没有可选模型，只处理 Escape
     if (filteredModels.length === 0) {
       const handleKeyDown = (event: KeyboardEvent) => {
@@ -179,7 +180,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     const highlightedElement = panelRef.current?.querySelector(
       `.ai-model-selector__item:nth-child(${highlightedIndex + 1})`
     );
-    
+
     if (highlightedElement) {
       highlightedElement.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
@@ -284,9 +285,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
           return (
             <div
               key={model.id}
-              className={`ai-model-selector__item ${
-                isSelected ? 'ai-model-selector__item--selected' : ''
-              } ${highlightedIndex === index ? 'ai-model-selector__item--highlighted' : ''}`}
+              className={`ai-model-selector__item ${isSelected ? 'ai-model-selector__item--selected' : ''
+                } ${highlightedIndex === index ? 'ai-model-selector__item--highlighted' : ''}`}
               onClick={() => handleSelect(model.id)}
               role="option"
               aria-selected={isSelected}
@@ -299,6 +299,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                     <TypeIcon type={model.type} />
                     {getTypeLabel(model.type)}
                   </span>
+                  <ModelHealthBadge modelId={model.id} />
                 </div>
                 <div className="ai-model-selector__item-desc">{model.description}</div>
               </div>

@@ -1,0 +1,26 @@
+/**
+ * 图片编辑器模态框样式
+ * 只包含模态框包装器的样式，核心编辑器样式在 ImageEditorCore.scss
+ */
+
+.image-editor {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  &__backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.92);
+  }
+
+  &__container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+}

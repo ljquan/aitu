@@ -3,9 +3,166 @@
  *
  * Unified message communication layer for Service Worker.
  * Handles broadcasting to all clients and sending to specific clients.
+ * Includes integrated message logging for debugging.
+ * 
+ * 注意：PostMessage 日志记录完全由调试模式控制，当调试模式关闭时
+ * 不会进行任何日志记录操作，避免对应用性能的影响。
  */
 
 import { SWToMainMessage } from '../types';
+import {
+  logSentMessage,
+  getAllLogs as getAllPostMessageLogs,
+  setPostMessageLoggerDebugMode,
+  isPostMessageLoggerDebugMode,
+  type PostMessageLogEntry,
+} from '../postmessage-logger';
+
+// Debug mode configuration
+let debugModeEnabled = false;
+let broadcastLogCallback: ((entry: PostMessageLogEntry) => void) | null = null;
+
+/**
+ * Configure debug mode for message logging
+ * Also updates postmessage-logger debug mode to control log collection
+ */
+export function setDebugMode(enabled: boolean): void {
+  debugModeEnabled = enabled;
+  // Sync debug mode to postmessage-logger
+  setPostMessageLoggerDebugMode(enabled);
+}
+
+/**
+ * Set callback for broadcasting debug logs
+ */
+export function setBroadcastCallback(
+  callback: ((entry: PostMessageLogEntry) => void) | null
+): void {
+  broadcastLogCallback = callback;
+}
+
+/**
+ * Send message to a client with logging
+ * 日志记录由调试模式控制，调试模式关闭时不会进行任何日志操作
+ */
+export function sendToClient(client: Client, message: unknown): void {
+  if (!client) {
+    console.warn('[MessageBus] No client provided');
+    return;
+  }
+
+  // Only attempt to log if debug mode is enabled
+  let logId = '';
+  if (isPostMessageLoggerDebugMode()) {
+    const messageType = (message as { type?: string })?.type || 'unknown';
+    logId = logSentMessage(messageType, message, client.id);
+  }
+
+  try {
+    client.postMessage(message);
+  } catch (error) {
+    console.warn('[MessageBus] Failed to postMessage to client:', client.id, error);
+    return;
+  }
+
+  // Broadcast to debug panel if enabled and logging is active
+  if (logId && debugModeEnabled && broadcastLogCallback) {
+    const logs = getAllPostMessageLogs();
+    const entry = logs.find((l) => l.id === logId);
+    if (entry) {
+      broadcastLogCallback(entry);
+    }
+  }
+}
+
+// Internal reference for use within MessageBus class to avoid name collision
+const sendToClientInternal = sendToClient;
+
+/**
+ * Broadcast message to all clients with logging
+ * 日志记录由调试模式控制，调试模式关闭时不会进行任何日志操作
+ */
+export function broadcastToAllClients(message: unknown): void {
+  const sw = self as unknown as ServiceWorkerGlobalScope;
+
+  const messageType = (message as { type?: string })?.type || 'unknown';
+
+  sw.clients.matchAll().then((clients) => {
+    clients.forEach((client) => {
+      // Only attempt to log if debug mode is enabled
+      let logId = '';
+      if (isPostMessageLoggerDebugMode()) {
+        logId = logSentMessage(messageType, message, client.id);
+      }
+
+      client.postMessage(message);
+
+      // Broadcast to debug panel if enabled and logging is active
+      if (logId && debugModeEnabled && broadcastLogCallback) {
+        const logs = getAllPostMessageLogs();
+        const entry = logs.find((l) => l.id === logId);
+        if (entry) {
+          broadcastLogCallback(entry);
+        }
+      }
+    });
+  });
+}
+
+/**
+ * Send message to client by ID with logging
+ */
+export async function sendToClientById(
+  clientId: string,
+  message: unknown
+): Promise<boolean> {
+  const sw = self as unknown as ServiceWorkerGlobalScope;
+
+  if (!clientId) {
+    console.warn('[MessageBus] No clientId provided');
+    return false;
+  }
+
+  try {
+    const client = await sw.clients.get(clientId);
+    if (client) {
+      sendToClient(client, message);
+      return true;
+    } else {
+      console.warn('[MessageBus] Client not found:', clientId);
+      return false;
+    }
+  } catch (error) {
+    console.warn('[MessageBus] Failed to send to client:', clientId, error);
+    return false;
+  }
+}
+
+/**
+ * Initialize message sender (for backwards compatibility)
+ * @deprecated Use setDebugMode and setBroadcastCallback directly
+ */
+export function initMessageSender(
+  _sw: ServiceWorkerGlobalScope,
+  options?: {
+    debugMode?: boolean;
+    onLogBroadcast?: (entry: PostMessageLogEntry) => void;
+  }
+): void {
+  const enabled = options?.debugMode ?? false;
+  debugModeEnabled = enabled;
+  // Sync debug mode to postmessage-logger
+  setPostMessageLoggerDebugMode(enabled);
+  broadcastLogCallback = options?.onLogBroadcast ?? null;
+}
+
+/**
+ * Get SW global scope (for backwards compatibility)
+ * @deprecated Access self directly instead
+ */
+export function getSWGlobal(): ServiceWorkerGlobalScope {
+  return self as unknown as ServiceWorkerGlobalScope;
+}
 
 /**
  * Message handler callback type
@@ -85,10 +242,10 @@ export class MessageBus {
         targetClients = targetClients.filter(client => !excludeClients.includes(client.id));
       }
 
-      // Send to all matching clients
+      // Send to all matching clients using integrated message sender
       for (const client of targetClients) {
         try {
-          client.postMessage(message);
+          sendToClient(client, message);
         } catch (error) {
           console.warn(`[MessageBus] Failed to send to client ${client.id}:`, error);
         }
@@ -131,7 +288,7 @@ export class MessageBus {
         return false;
       }
 
-      client.postMessage(message);
+      sendToClientInternal(client, message);
       return true;
     } catch (error) {
       console.error(`[MessageBus] Failed to send to client ${clientId}:`, error);
@@ -157,7 +314,8 @@ export class MessageBus {
       );
 
       if (focusedClient) {
-        focusedClient.postMessage(message);
+        // Use sendToClient to ensure message is logged
+        sendToClient(focusedClient, message);
         return true;
       }
 
@@ -167,7 +325,8 @@ export class MessageBus {
       );
 
       if (visibleClient) {
-        visibleClient.postMessage(message);
+        // Use sendToClient to ensure message is logged
+        sendToClient(visibleClient, message);
         return true;
       }
 

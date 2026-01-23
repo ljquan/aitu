@@ -114,10 +114,10 @@ export const IDB_DATABASES = {
     },
   },
 
-  /** 工作区数据（文件夹、画板、状态） */
+  /** 工作区数据（文件夹、画板、状态） - 版本由运行时动态检测 */
   WORKSPACE: {
     NAME: 'aitu-workspace',
-    VERSION: 6,
+    MIN_VERSION: 8,
     STORES: {
       FOLDERS: 'folders',
       BOARDS: 'boards',

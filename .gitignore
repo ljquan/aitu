@@ -51,3 +51,4 @@ Thumbs.db
 package-lock.json
 apps/web/public/sw.js
 apps/web/public/sw.js.map
+.pnpm-store

@@ -208,7 +208,7 @@ export const PencilSettingsToolbar: React.FC = () => {
             className={classNames('pencil-stroke-style-button', { active: strokeStyle === FreehandStrokeStyle.solid })}
             type="button"
             visible={true}
-            icon={StrokeStyleNormalIcon}
+            icon={<StrokeStyleNormalIcon />}
             title="实线"
             aria-label="实线"
             onPointerUp={() => handleStrokeStyleChange(FreehandStrokeStyle.solid)}
@@ -217,7 +217,7 @@ export const PencilSettingsToolbar: React.FC = () => {
             className={classNames('pencil-stroke-style-button', { active: strokeStyle === FreehandStrokeStyle.dashed })}
             type="button"
             visible={true}
-            icon={StrokeStyleDashedIcon}
+            icon={<StrokeStyleDashedIcon />}
             title="虚线"
             aria-label="虚线"
             onPointerUp={() => handleStrokeStyleChange(FreehandStrokeStyle.dashed)}
@@ -226,7 +226,7 @@ export const PencilSettingsToolbar: React.FC = () => {
             className={classNames('pencil-stroke-style-button', { active: strokeStyle === FreehandStrokeStyle.dotted })}
             type="button"
             visible={true}
-            icon={StrokeStyleDotedIcon}
+            icon={<StrokeStyleDotedIcon />}
             title="点线"
             aria-label="点线"
             onPointerUp={() => handleStrokeStyleChange(FreehandStrokeStyle.dotted)}
@@ -235,7 +235,7 @@ export const PencilSettingsToolbar: React.FC = () => {
             className={classNames('pencil-stroke-style-button', { active: strokeStyle === FreehandStrokeStyle.double })}
             type="button"
             visible={true}
-            icon={StrokeStyleDoubleIcon}
+            icon={<StrokeStyleDoubleIcon />}
             title="双层线"
             aria-label="双层线"
             onPointerUp={() => handleStrokeStyleChange(FreehandStrokeStyle.double)}

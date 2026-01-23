@@ -51,7 +51,10 @@ export type DrawnixState = {
   pointer: DrawnixPointerType;
   isMobile: boolean;
   isPencilMode: boolean;
-  openDialogType: DialogType | null;
+  /** @deprecated 使用 openDialogTypes 代替，保留用于向后兼容 */
+  openDialogType?: DialogType | null;
+  /** 当前打开的弹窗类型集合，支持同时打开多个弹窗 */
+  openDialogTypes: Set<DialogType>;
   dialogInitialData?: DialogInitialData | null;
   openCleanConfirm: boolean;
   openSettings: boolean;
@@ -61,15 +64,16 @@ export type DrawnixState = {
 
 export const DrawnixContext = createContext<{
   appState: DrawnixState;
-  setAppState: (appState: DrawnixState) => void;
+  setAppState: (appState: DrawnixState | ((prev: DrawnixState) => DrawnixState)) => void;
   board: DrawnixBoard | null;
 } | null>(null);
 
 export const useDrawnix = (): {
   appState: DrawnixState;
-  setAppState: (appState: DrawnixState) => void;
+  setAppState: (appState: DrawnixState | ((prev: DrawnixState) => DrawnixState)) => void;
   board: DrawnixBoard | null;
   openDialog: (dialogType: DialogType, initialData?: DialogInitialData) => void;
+  closeDialog: (dialogType: DialogType) => void;
 } => {
   const context = useContext(DrawnixContext);
 
@@ -80,14 +84,31 @@ export const useDrawnix = (): {
   }
 
   const openDialog = (dialogType: DialogType, initialData?: DialogInitialData) => {
-    context.setAppState({
-      ...context.appState,
-      openDialogType: dialogType,
-      dialogInitialData: initialData || null
+    // 使用函数式更新，确保始终使用最新的状态
+    context.setAppState((prevState) => {
+      const newOpenDialogTypes = new Set(prevState.openDialogTypes);
+      newOpenDialogTypes.add(dialogType);
+      return {
+        ...prevState,
+        openDialogTypes: newOpenDialogTypes,
+        dialogInitialData: initialData || null
+      };
     });
   };
 
-  return { ...context, openDialog };
+  const closeDialog = (dialogType: DialogType) => {
+    // 使用函数式更新，确保始终使用最新的状态
+    context.setAppState((prevState) => {
+      const newOpenDialogTypes = new Set(prevState.openDialogTypes);
+      newOpenDialogTypes.delete(dialogType);
+      return {
+        ...prevState,
+        openDialogTypes: newOpenDialogTypes,
+      };
+    });
+  };
+
+  return { ...context, openDialog, closeDialog };
 };
 
 export const useSetPointer = () => {

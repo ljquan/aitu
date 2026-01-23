@@ -11,38 +11,132 @@ $gray-medium: #9CA3AF;
 $gray-dark: #6B7280;
 $text-dark: #1F2937;
 $vip-color: #E91E63;
+$green-health: #10B981;
 
 .model-dropdown {
   position: relative;
   display: inline-flex;
   flex-shrink: 0;
 
-  // 触发按钮 - @shortCode 格式
+  &--disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
+  // 变体样式
+  &--variant-form {
+    width: 100%;
+  }
+
+  // 触发按钮
   &__trigger {
     display: flex;
     align-items: center;
-    gap: 1px;
-    padding: 4px 8px;
+    justify-content: space-between;
     background: transparent;
     border: none;
-    border-radius: 4px;
     cursor: pointer;
-    font-size: 13px;
-    font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
     transition: all 0.15s ease;
+    position: relative;
+
+    &--minimal {
+      gap: 4px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 13px;
+      font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
+      white-space: nowrap;
+
+      .model-dropdown__at {
+        color: $orange-primary;
+        font-weight: 600;
+      }
+
+      .model-dropdown__code {
+        color: $gray-dark;
+        font-weight: 500;
+      }
+    }
+
+    &--form {
+      width: 100%;
+      padding: 8px 12px;
+      background: #fff;
+      border: 1px solid #d9d9d9;
+      border-radius: 6px;
+      min-height: 36px;
+      gap: 8px;
+      box-sizing: border-box;
+
+      &:hover {
+        border-color: var(--td-brand-color);
+      }
+
+      .model-dropdown__form-content {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: 1;
+        min-width: 0;
+      }
+    }
+
+    // 触发器上的健康状态指示
+    .model-health-signal {
+      margin-left: -2px;
+      margin-right: 2px;
+    }
+  }
+
+  &__form-content {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__form-input {
+    width: 100%;
+    border: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    font-size: 14px !important;
+    color: $text-dark !important;
+    outline: none !important;
+    height: 100% !important;
+
+    &::placeholder {
+      color: $gray-medium;
+    }
+
+    &:disabled {
+      cursor: not-allowed;
+    }
+  }
+
+  &__form-code {
+    font-size: 12px;
+    font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
+    color: $gray-dark;
+    background: $gray-light;
+    padding: 1px 4px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+
+  &__form-label {
+    font-size: 14px;
+    color: $text-dark;
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
+  }
 
-    &:hover {
-      background: rgba($orange-primary, 0.1);
-    }
-
-    &--open {
-      background: rgba($orange-primary, 0.15);
-    }
-
-    &:focus {
-      outline: none;
-    }
+  &__form-placeholder {
+    font-size: 14px;
+    color: $gray-medium;
   }
 
   &__at {
@@ -55,20 +149,96 @@ $vip-color: #E91E63;
     font-weight: 500;
   }
 
+  &__chevron {
+    margin-left: 2px;
+    color: $gray-medium;
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+
+    &--open {
+      transform: rotate(180deg);
+    }
+  }
+
+  // 搜索框
+  &__search {
+    padding: 12px;
+    border-bottom: 1px solid #f3f4f6;
+    background: #ffffff;
+  }
+
+  &__search-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  &__search-icon {
+    position: absolute;
+    left: 10px;
+    color: var(--td-text-color-placeholder);
+    pointer-events: none;
+    width: 14px;
+    height: 14px;
+  }
+
+  &__search-input {
+    width: 100%;
+    padding: 6px 30px 6px 32px !important;
+    border: 1px solid #e5e7eb !important;
+    border-radius: 8px !important;
+    font-size: 13px !important;
+    background: #ffffff !important;
+    outline: none !important;
+    height: 34px !important;
+    transition: all 0.2s ease;
+
+    &:focus {
+      border-color: var(--td-brand-color) !important;
+      box-shadow: 0 0 0 2px rgba(var(--td-brand-color-rgb), 0.1) !important;
+    }
+  }
+
+  &__search-clear {
+    position: absolute;
+    right: 10px;
+    color: var(--td-text-color-placeholder);
+    cursor: pointer;
+    padding: 2px;
+    border-radius: 50%;
+    width: 14px;
+    height: 14px;
+
+    &:hover {
+      background: #f3f4f6;
+      color: var(--td-text-color-secondary);
+    }
+  }
+
   // 下拉菜单
   &__menu {
     position: absolute;
-    bottom: calc(100% + 4px);
-    left: 0;
-    min-width: 280px;
-    max-height: 320px;
+    min-width: 300px;
+    max-height: 450px;
     background: #fff;
-    border: 1px solid #E5E7EB;
-    border-radius: 8px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
-    overflow: hidden;
-    z-index: 1000;
-    animation: model-dropdown-fade-in 0.15s ease;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px; // 统一为 12px
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; // 关键：确保内部内容不溢出圆角
+    z-index: 10000;
+    animation: model-dropdown-fade-in 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+
+    &--up {
+      bottom: calc(100% + 4px);
+      left: 0;
+    }
+
+    &--down {
+      top: calc(100% + 4px);
+      left: 0;
+    }
   }
 
   &__header {
@@ -78,12 +248,14 @@ $vip-color: #E91E63;
     color: $gray-dark;
     border-bottom: 1px solid #F3F4F6;
     background: #FAFAFA;
+    flex-shrink: 0;
   }
 
   &__list {
-    max-height: 260px;
+    flex: 1;
     overflow-y: auto;
     padding: 4px;
+    position: relative; // 确保 offsetTop 是相对于列表容器的
 
     &::-webkit-scrollbar {
       width: 4px;
@@ -99,6 +271,13 @@ $vip-color: #E91E63;
     }
   }
 
+  &__empty {
+    padding: 20px;
+    text-align: center;
+    color: $gray-medium;
+    font-size: 13px;
+  }
+
   // 模型项
   &__item {
     display: flex;
@@ -109,24 +288,20 @@ $vip-color: #E91E63;
     cursor: pointer;
     transition: background 0.1s ease;
 
-    &:hover {
+    &:hover, &--highlighted {
       background: $gray-light;
     }
 
     &--selected {
-      background: rgba($orange-primary, 0.08);
-
-      &:hover {
-        background: rgba($orange-primary, 0.12);
-      }
+      background: rgba($orange-primary, 0.06);
 
       .model-dropdown__item-label {
         color: $orange-dark;
-        font-weight: 500;
+        font-weight: 600;
       }
 
       .model-dropdown__item-code {
-        color: $orange-primary;
+        color: rgba($orange-primary, 0.8);
       }
     }
   }
@@ -145,7 +320,7 @@ $vip-color: #E91E63;
   &__item-code {
     font-size: 12px;
     font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
-    color: $gray-medium;
+    color: $gray-dark;
     flex-shrink: 0;
   }
 
@@ -160,9 +335,10 @@ $vip-color: #E91E63;
   &__item-vip {
     font-size: 10px;
     font-weight: 600;
-    color: #fff;
-    background: linear-gradient(135deg, $vip-color 0%, #FF6B9D 100%);
-    padding: 1px 4px;
+    color: $vip-color;
+    background: rgba($vip-color, 0.1);
+    border: 1px solid rgba($vip-color, 0.2);
+    padding: 0 4px;
     border-radius: 3px;
     flex-shrink: 0;
   }
@@ -228,16 +404,55 @@ $vip-color: #E91E63;
       }
     }
 
+    &__search {
+      background: var(--color-surface-mid, #333);
+      border-bottom-color: var(--color-border, #444);
+    }
+
+    &__search-input {
+      background: var(--color-surface-high, #2a2a2a) !important;
+      border-color: var(--color-border, #444) !important;
+      color: var(--color-gray-20, #ccc) !important;
+
+      &:focus {
+        border-color: $orange-primary !important;
+      }
+    }
+
+    &__search-icon, &__search-clear {
+      color: var(--color-gray-50, #999);
+    }
+
+    &__trigger {
+      &--form {
+        background: var(--color-surface-high, #2a2a2a);
+        border-color: var(--color-border, #444);
+
+        .model-dropdown__form-label, .model-dropdown__form-input {
+          color: var(--color-gray-20, #ccc) !important;
+        }
+
+        .model-dropdown__form-code {
+          background: var(--color-surface-mid, #333);
+          color: var(--color-gray-40, #aaa);
+        }
+      }
+    }
+
     &__item {
-      &:hover {
+      &:hover, &--highlighted {
         background: var(--color-surface-mid, #333);
       }
 
       &--selected {
-        background: rgba($orange-primary, 0.12);
+        background: rgba($orange-primary, 0.1);
 
-        &:hover {
-          background: rgba($orange-primary, 0.18);
+        .model-dropdown__item-label {
+          color: $orange-primary;
+        }
+
+        .model-dropdown__item-code {
+          color: rgba($orange-primary, 0.9);
         }
       }
     }
@@ -252,6 +467,11 @@ $vip-color: #E91E63;
 
     &__item-desc {
       color: var(--color-gray-50, #999);
+    }
+
+    &__item-vip {
+      background: rgba($vip-color, 0.15);
+      border-color: rgba($vip-color, 0.3);
     }
   }
 }

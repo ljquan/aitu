@@ -5,18 +5,21 @@
  * 用户点击工具项后，将工具插入到画布中心
  */
 
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { Button, Input, DialogPlugin, MessagePlugin } from 'tdesign-react';
 import { SearchIcon, AddIcon } from 'tdesign-icons-react';
 import { PlaitBoard, getViewportOrigination } from '@plait/core';
 import { useDrawnix } from '../../hooks/use-drawnix';
 import { ToolTransforms } from '../../plugins/with-tool';
 import { toolboxService } from '../../services/toolbox-service';
+import { toolWindowService } from '../../services/tool-window-service';
 import { ToolDefinition } from '../../types/toolbox.types';
 import { DEFAULT_TOOL_CONFIG, TOOL_CATEGORY_LABELS } from '../../constants/built-in-tools';
 import { ToolList } from './ToolList';
 import { CustomToolDialog } from '../custom-tool-dialog/CustomToolDialog';
-import { SideDrawer } from '../side-drawer';
+import { BaseDrawer } from '../side-drawer';
+import { needsApiKeyConfiguration } from '../../utils/url-template';
+import { geminiSettings } from '../../utils/settings-manager';
 import './toolbox-drawer.scss';
 
 export interface ToolboxDrawerProps {
@@ -26,6 +29,9 @@ export interface ToolboxDrawerProps {
   onOpenChange: (open: boolean) => void;
 }
 
+// Storage key for drawer width
+export const TOOLBOX_DRAWER_WIDTH_KEY = 'toolbox-drawer-width';
+
 /**
  * 工具箱抽屉组件
  */
@@ -33,11 +39,17 @@ export const ToolboxDrawer: React.FC<ToolboxDrawerProps> = ({
   isOpen,
   onOpenChange,
 }) => {
-  const { board } = useDrawnix();
+  const { board, appState, setAppState } = useDrawnix();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [customToolDialogVisible, setCustomToolDialogVisible] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+
+  // 待处理的工具操作（等待 API Key 配置完成后继续）
+  const pendingToolRef = useRef<{
+    tool: ToolDefinition;
+    action: 'insert' | 'window';
+  } | null>(null);
 
   /**
    * 关闭抽屉
@@ -47,9 +59,34 @@ export const ToolboxDrawer: React.FC<ToolboxDrawerProps> = ({
   }, [onOpenChange]);
 
   /**
-   * 处理工具点击 - 插入到画布中心
+   * 监听设置弹窗关闭，如果有待处理的工具操作，检查 API Key 是否已配置
    */
-  const handleToolClick = useCallback(
+  useEffect(() => {
+    if (!appState.openSettings && pendingToolRef.current) {
+      const settings = geminiSettings.get();
+      if (settings?.apiKey) {
+        const { tool, action } = pendingToolRef.current;
+        pendingToolRef.current = null;
+
+        // 延迟执行，确保设置已保存
+        setTimeout(() => {
+          if (action === 'insert') {
+            executeToolInsert(tool);
+          } else if (action === 'window') {
+            executeToolOpenWindow(tool);
+          }
+        }, 100);
+      } else {
+        // 用户关闭了设置但没有配置 API Key，取消操作
+        pendingToolRef.current = null;
+      }
+    }
+  }, [appState.openSettings]);
+
+  /**
+   * 执行工具插入到画布（实际执行逻辑）
+   */
+  const executeToolInsert = useCallback(
     (tool: ToolDefinition) => {
       if (!board) {
         console.warn('Board not ready');
@@ -73,26 +110,88 @@ export const ToolboxDrawer: React.FC<ToolboxDrawerProps> = ({
       const width = tool.defaultWidth || DEFAULT_TOOL_CONFIG.defaultWidth;
       const height = tool.defaultHeight || DEFAULT_TOOL_CONFIG.defaultHeight;
 
-      // 插入到画布（中心对齐）
-      ToolTransforms.insertTool(
-        board,
-        tool.id,
-        tool.url,
-        [centerX - width / 2, centerY - height / 2],
-        { width, height },
-        {
-          name: tool.name,
-          category: tool.category,
-          permissions: tool.permissions,
-        }
-      );
+      // 获取工具 URL（保持模板形式，如 ${apiKey}）
+      // 模板变量会在渲染时由 ToolGenerator 动态替换
+      const toolUrl = (tool as any).url;
 
-      // console.log(`Tool "${tool.name}" inserted to canvas`);
+      // 插入到画布（中心对齐）
+      if (toolUrl || tool.component) {
+        ToolTransforms.insertTool(
+          board,
+          tool.id,
+          toolUrl, // 存储原始模板 URL，渲染时再替换
+          [centerX - width / 2, centerY - height / 2],
+          { width, height },
+          {
+            name: tool.name,
+            category: tool.category,
+            permissions: tool.permissions,
+            component: (tool as any).component,
+          }
+        );
+      } else {
+        MessagePlugin.warning('该工具未定义内容（URL 或组件）');
+      }
 
       // 插入后关闭抽屉
       handleClose();
     },
     [board, handleClose]
+  );
+
+  /**
+   * 处理工具插入到画布（入口，检查是否需要配置 API Key）
+   */
+  const handleToolInsert = useCallback(
+    (tool: ToolDefinition) => {
+      // 检查 URL 是否需要 API Key 配置
+      const toolUrl = (tool as any).url;
+      if (toolUrl && needsApiKeyConfiguration(toolUrl)) {
+        // 需要配置 API Key，保存待处理的操作并打开设置弹窗
+        pendingToolRef.current = { tool, action: 'insert' };
+        MessagePlugin.info('该工具需要配置 API Key，请先完成设置');
+        setAppState((prev) => ({ ...prev, openSettings: true }));
+        return;
+      }
+
+      // 直接执行插入
+      executeToolInsert(tool);
+    },
+    [executeToolInsert, setAppState]
+  );
+
+  /**
+   * 执行在窗口中打开工具（实际执行逻辑）
+   */
+  const executeToolOpenWindow = useCallback(
+    (tool: ToolDefinition) => {
+      // 存储原始模板 URL，在渲染时由 ToolWinBoxManager 替换
+      toolWindowService.openTool(tool);
+      // 在窗口打开后，可以选择关闭抽屉，也可以保持打开
+      handleClose();
+    },
+    [handleClose]
+  );
+
+  /**
+   * 处理在窗口中打开工具（入口，检查是否需要配置 API Key）
+   */
+  const handleToolOpenWindow = useCallback(
+    (tool: ToolDefinition) => {
+      // 检查 URL 是否需要 API Key 配置
+      const toolUrl = (tool as any).url;
+      if (toolUrl && needsApiKeyConfiguration(toolUrl)) {
+        // 需要配置 API Key，保存待处理的操作并打开设置弹窗
+        pendingToolRef.current = { tool, action: 'window' };
+        MessagePlugin.info('该工具需要配置 API Key，请先完成设置');
+        setAppState((prev) => ({ ...prev, openSettings: true }));
+        return;
+      }
+
+      // 直接执行打开窗口
+      executeToolOpenWindow(tool);
+    },
+    [executeToolOpenWindow, setAppState]
   );
 
   /**
@@ -113,6 +212,20 @@ export const ToolboxDrawer: React.FC<ToolboxDrawerProps> = ({
 
     return tools;
   }, [searchQuery, selectedCategory, refreshKey]);
+
+  /**
+   * 获取分类列表（应包含所有可用分类，不受当前筛选影响）
+   */
+  const allCategories = useMemo(() => {
+    const tools = toolboxService.getAvailableTools();
+    const cats = new Set<string>();
+    tools.forEach((tool) => {
+      if (tool.category) {
+        cats.add(tool.category);
+      }
+    });
+    return Array.from(cats);
+  }, [refreshKey]);
 
   /**
    * 按分类分组
@@ -231,7 +344,7 @@ export const ToolboxDrawer: React.FC<ToolboxDrawerProps> = ({
         >
           全部
         </Button>
-        {categories.map((category) => (
+        {allCategories.map((category) => (
           <Button
             key={category}
             variant={selectedCategory === category ? 'base' : 'outline'}
@@ -247,7 +360,7 @@ export const ToolboxDrawer: React.FC<ToolboxDrawerProps> = ({
 
   return (
     <>
-      <SideDrawer
+      <BaseDrawer
         isOpen={isOpen}
         onClose={handleClose}
         title="工具箱"
@@ -256,7 +369,8 @@ export const ToolboxDrawer: React.FC<ToolboxDrawerProps> = ({
         filterSection={filterSection}
         position="toolbar-right"
         width="narrow"
-        zIndex={12}
+        storageKey={TOOLBOX_DRAWER_WIDTH_KEY}
+        resizable={true}
         className="toolbox-drawer"
         contentClassName="toolbox-drawer__content"
       >
@@ -267,11 +381,12 @@ export const ToolboxDrawer: React.FC<ToolboxDrawerProps> = ({
         ) : (
           <ToolList
             toolsByCategory={toolsByCategory}
-            onToolClick={handleToolClick}
+            onToolInsert={handleToolInsert}
+            onToolOpenWindow={handleToolOpenWindow}
             onToolDelete={handleDeleteTool}
           />
         )}
-      </SideDrawer>
+      </BaseDrawer>
 
       {/* Custom Tool Dialog */}
       <CustomToolDialog

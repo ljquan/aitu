@@ -152,9 +152,28 @@ aitu/
 - **packages/react-board**: Plait 框架的 React 适配层
 - **packages/react-text**: 文本编辑和渲染组件
 
+## 应用
+
+[*https://opentu.ai*](https://opentu.ai) 是 *爱图* 的在线应用。
+
+近期会高频迭代应用功能，持续优化用户体验。
 
 
-## 本地开发
+## 🚀 快速开始
+
+### 在线体验
+直接访问 [opentu.ai](https://opentu.ai) 立即开始使用，无需安装任何软件。
+
+### 一键部署
+
+点击下方按钮，即可将 Aitu 部署到你自己的服务器：
+
+| 平台 | 一键部署 |
+| :--- | :--- |
+| Vercel | [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fljquan%2Faitu&project-name=aitu&repository-name=aitu) |
+| Netlify | [![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/ljquan/aitu) |
+
+### 本地开发
 
 #### 环境要求
 - Node.js >= 16.0.0

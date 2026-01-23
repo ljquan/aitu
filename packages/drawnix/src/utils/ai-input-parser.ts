@@ -1,6 +1,6 @@
 /**
  * AI 输入解析工具
- * 
+ *
  * 解析 AI 输入框的内容，判断发送场景：
  * 1. 只有选择元素，没有输入文字 -> 直接生成
  * 2. 输入内容有模型、参数 -> 解析后直接生成
@@ -8,11 +8,10 @@
  * 4. 输入内容包含其他内容 -> 走 Agent 流程
  */
 
-import { parseInput, type ParseResult } from '../components/ai-input-bar/smart-suggestion-panel';
 import { geminiSettings } from './settings-manager';
-import { 
-  getModelConfig, 
-  getImageModelDefaults, 
+import {
+  getModelConfig,
+  getImageModelDefaults,
   getVideoModelDefaults,
   getDefaultImageModel as getSystemDefaultImageModel,
   DEFAULT_VIDEO_MODEL,
@@ -21,6 +20,36 @@ import type { ImageDimensions } from '../mcp/types';
 
 // 重新导出 ImageDimensions 以便其他模块使用
 export type { ImageDimensions } from '../mcp/types';
+
+/**
+ * 解析结果类型（简化版，现在参数通过下拉菜单选择）
+ */
+export interface ParseResult {
+  /** 清理后的文本（移除特殊标记后） */
+  cleanText: string;
+  /** 选中的图片模型 */
+  selectedImageModel: string | null;
+  /** 选中的视频模型 */
+  selectedVideoModel: string | null;
+  /** 选中的参数列表 */
+  selectedParams: Array<{ id: string; value: string }>;
+  /** 选中的数量 */
+  selectedCount: number | null;
+}
+
+/**
+ * 简化的输入解析函数
+ * 现在模型/参数/数量都通过下拉菜单选择，不再从文本中解析
+ */
+function parseInput(text: string): ParseResult {
+  return {
+    cleanText: text,
+    selectedImageModel: null,
+    selectedVideoModel: null,
+    selectedParams: [],
+    selectedCount: null,
+  };
+}
 
 /**
  * 发送场景类型
@@ -165,6 +194,12 @@ export interface ParseAIInputOptions {
   modelId?: string;
   /** 指定使用的尺寸（来自尺寸选择器，'auto' 表示不传尺寸参数） */
   size?: string;
+  /** 指定生成类型（来自下拉选择器） */
+  generationType?: GenerationType;
+  /** 指定生成数量（来自下拉选择器） */
+  count?: number;
+  /** 指定其他参数（如 duration 等） */
+  params?: Record<string, string>;
 }
 
 export function parseAIInput(
@@ -184,21 +219,23 @@ export function parseAIInput(
   // 判断是否有额外内容（除了模型/参数/数量标记外的文字）
   const hasExtraContent = parseResult.cleanText.trim().length > 0;
 
-  // 确定发送场景
-  const scenario: SendScenario = hasExtraContent ? 'agent_flow' : 'direct_generation';
-
   // 确定生成类型和模型
-  let generationType: GenerationType = 'image';
+  let generationType: GenerationType = options?.generationType || 'image';
   let modelId: string;
   let isModelExplicit = false;
 
   // 优先使用 options 中传入的模型（来自下拉选择器）
   if (options?.modelId) {
     const modelConfig = getModelConfig(options.modelId);
-    if (modelConfig?.type === 'video') {
-      generationType = 'video';
-    } else {
-      generationType = 'image';
+    // 如果没有显式指定 generationType，则根据模型 ID 推断
+    if (!options.generationType) {
+      if (modelConfig?.type === 'video') {
+        generationType = 'video';
+      } else if (modelConfig?.type === 'text') {
+        generationType = 'text';
+      } else {
+        generationType = 'image';
+      }
     }
     modelId = options.modelId;
     isModelExplicit = true;
@@ -212,38 +249,71 @@ export function parseAIInput(
     generationType = 'image';
     modelId = parseResult.selectedImageModel;
     isModelExplicit = true;
-  } else if (!hasSelectedElements && hasExtraContent) {
-    // 没有选中元素、只有文字输入时，使用文本模型（Agent 流程）
+  } else if (!hasSelectedElements && hasExtraContent && !options?.generationType) {
+    // 没有选中元素、只有文字输入时，默认使用文本模型（Agent 流程）
     generationType = 'text';
     modelId = getDefaultTextModel();
   } else {
     // 有选中元素但没指定模型时，默认使用图片模型
-    modelId = getDefaultImageModel();
+    if (generationType === 'video') {
+      modelId = getDefaultVideoModel();
+    } else if (generationType === 'text') {
+      modelId = getDefaultTextModel();
+    } else {
+      modelId = getDefaultImageModel();
+    }
+  }
+
+  // 确定发送场景
+  // 如果显式指定了图片或视频生成类型，强制走 direct_generation
+  let scenario: SendScenario;
+  if (options?.generationType === 'image' || options?.generationType === 'video') {
+    scenario = 'direct_generation';
+  } else {
+    scenario = hasExtraContent ? 'agent_flow' : 'direct_generation';
   }
   
-  // 生成提示词
-  let prompt = parseResult.cleanText.trim();
-  if (!prompt) {
-    prompt = generateDefaultPrompt(hasSelectedElements, selectedTexts, imageCount);
+  // 生成提示词：整合选中的文本元素内容和用户输入
+  const userInput = parseResult.cleanText.trim();
+  const selectedTextContent = selectedTexts.join('\n').trim();
+
+  let prompt: string;
+  if (selectedTextContent && userInput) {
+    // 同时有选中文本和用户输入：合并（选中文本在前，用户输入在后）
+    prompt = `${selectedTextContent}\n\n${userInput}`;
+  } else if (userInput) {
+    // 只有用户输入
+    prompt = userInput;
+  } else if (selectedTextContent) {
+    // 只有选中文本
+    prompt = selectedTextContent;
+  } else if (hasSelectedElements && imageCount > 0) {
+    // 只有图片，生成默认提示词
+    prompt = generateDefaultPrompt(hasSelectedElements, [], imageCount);
+  } else {
+    prompt = '';
   }
   
-  // 获取数量（默认为 1）
-  const count = parseResult.selectedCount || 1;
+  // 获取数量（优先级：options.count > parseResult.selectedCount > 1）
+  const count = options?.count || parseResult.selectedCount || 1;
   
   // 解析参数
   let size: string | undefined;
   let duration: string | undefined;
 
-  // 尺寸优先级：
-  // 1. options.size（来自 SizeDropdown，'auto' 表示不指定尺寸）
-  // 2. parseResult.selectedParams 中的 -size=xxx
-  // 3. 模型默认值
+  // 1. 优先从 options.params 中读取（新逻辑，支持多参数对象）
+  if (options?.params) {
+    if (options.params.size) size = normalizeSize(options.params.size);
+    if (options.params.duration) duration = options.params.duration;
+  }
 
-  if (options?.size && options.size !== 'auto') {
-    // 使用 SizeDropdown 选择的尺寸
+  // 2. 兼容旧逻辑：options.size（来自单独的 size 参数）
+  if (!size && options?.size && options.size !== 'auto') {
     size = normalizeSize(options.size);
-  } else if (options?.size !== 'auto') {
-    // 从提示词中解析 -size=xxx
+  }
+
+  // 3. 从提示词中解析 -size=xxx 或 -duration=xxx
+  if (!size && options?.size !== 'auto') {
     for (const param of parseResult.selectedParams) {
       if (param.id === 'size') {
         size = normalizeSize(param.value);
@@ -251,12 +321,13 @@ export function parseAIInput(
       }
     }
   }
-  // 如果 options.size === 'auto'，不设置 size，让模型自动决定
-
-  // 解析 duration 参数
-  for (const param of parseResult.selectedParams) {
-    if (param.id === 'duration') {
-      duration = param.value;
+  
+  if (!duration) {
+    for (const param of parseResult.selectedParams) {
+      if (param.id === 'duration') {
+        duration = param.value;
+        break;
+      }
     }
   }
 

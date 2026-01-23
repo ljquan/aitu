@@ -37,8 +37,6 @@ export interface SWTask {
   completedAt?: number;
   result?: TaskResult;
   error?: TaskError;
-  retryCount: number;
-  nextRetryAt?: number;
   progress?: number;
   remoteId?: string;
   executionPhase?: TaskExecutionPhase;
@@ -178,6 +176,11 @@ export interface ChatStopMessage {
   chatId: string;
 }
 
+export interface ChatGetCachedMessage {
+  type: 'CHAT_GET_CACHED';
+  chatId: string;
+}
+
 export interface TaskRestoreMessage {
   type: 'TASK_RESTORE';
   tasks: SWTask[];
@@ -232,6 +235,7 @@ export type MainToSWMessage =
   | TaskDeleteMessage
   | ChatStartMessage
   | ChatStopMessage
+  | ChatGetCachedMessage
   | TaskRestoreMessage
   | TaskMarkInsertedMessage
   | MainThreadToolResponseMessage
@@ -268,8 +272,6 @@ export interface TaskFailedMessage {
   type: 'TASK_FAILED';
   taskId: string;
   error: TaskError;
-  retryCount: number;
-  nextRetryAt?: number;
 }
 
 export interface TaskSubmittedMessage {
@@ -291,6 +293,12 @@ export interface TaskCreatedMessage {
 export interface TaskDeletedMessage {
   type: 'TASK_DELETED';
   taskId: string;
+}
+
+export interface TaskRejectedMessage {
+  type: 'TASK_REJECTED';
+  taskId: string;
+  reason: 'NO_API_KEY' | string;
 }
 
 export interface TaskStatusResponseMessage {
@@ -330,6 +338,13 @@ export interface ChatErrorMessage {
   error: string;
 }
 
+export interface ChatCachedResultMessage {
+  type: 'CHAT_CACHED_RESULT';
+  chatId: string;
+  found: boolean;
+  fullContent?: string;
+}
+
 export interface MainThreadToolRequestMessage {
   type: 'MAIN_THREAD_TOOL_REQUEST';
   requestId: string;
@@ -361,12 +376,14 @@ export type SWToMainMessage =
   | TaskCreatedMessage
   | TaskCancelledMessage
   | TaskDeletedMessage
+  | TaskRejectedMessage
   | TaskStatusResponseMessage
   | TaskAllResponseMessage
   | TaskPaginatedResponseMessage
   | ChatChunkMessage
   | ChatDoneMessage
   | ChatErrorMessage
+  | ChatCachedResultMessage
   | MainThreadToolRequestMessage
   | MCPToolResultMessage;
 
@@ -381,10 +398,11 @@ export interface TaskEventHandlers {
   onCreated?: (task: SWTask) => void;
   onStatus?: (taskId: string, status: TaskStatus, progress?: number, phase?: TaskExecutionPhase) => void;
   onCompleted?: (taskId: string, result: TaskResult) => void;
-  onFailed?: (taskId: string, error: TaskError, retryCount: number, nextRetryAt?: number) => void;
+  onFailed?: (taskId: string, error: TaskError) => void;
   onSubmitted?: (taskId: string, remoteId: string) => void;
   onCancelled?: (taskId: string) => void;
   onDeleted?: (taskId: string) => void;
+  onRejected?: (taskId: string, reason: string) => void;
   onTasksSync?: (tasks: SWTask[]) => void;
 }
 

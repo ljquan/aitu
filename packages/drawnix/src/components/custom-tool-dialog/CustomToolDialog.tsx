@@ -17,6 +17,7 @@ import {
 } from 'tdesign-react';
 import { ToolDefinition, ToolCategory } from '../../types/toolbox.types';
 import { toolboxService } from '../../services/toolbox-service';
+import { hasTemplateVariables } from '../../utils/url-template';
 import './custom-tool-dialog.scss';
 
 const { FormItem } = Form;
@@ -84,18 +85,28 @@ export const CustomToolDialog: React.FC<CustomToolDialogProps> = ({
       return '工具名称不能超过 50 个字符';
     }
 
-    if (!formData.url || formData.url.trim().length === 0) {
+    const hasUrl = !!(formData.url && formData.url.trim().length > 0);
+
+    if (!hasUrl) {
       return '请输入工具 URL';
     }
 
     // URL 格式验证
-    try {
-      const url = new URL(formData.url);
-      if (!['https:', 'http:'].includes(url.protocol)) {
-        return '只允许使用 HTTP/HTTPS 协议';
+    if (hasUrl) {
+      try {
+        // 将模板变量替换为临时占位符来验证 URL 格式
+        // 例如: ${apiKey} -> placeholder_apiKey
+        let urlToValidate = formData.url!;
+        if (hasTemplateVariables(urlToValidate)) {
+          urlToValidate = urlToValidate.replace(/\$\{(\w+)\}/g, 'placeholder_$1');
+        }
+        const url = new URL(urlToValidate);
+        if (!['https:', 'http:'].includes(url.protocol)) {
+          return '只允许使用 HTTP/HTTPS 协议';
+        }
+      } catch (e) {
+        return 'URL 格式不正确';
       }
-    } catch (e) {
-      return 'URL 格式不正确';
     }
 
     if (formData.description && formData.description.length > 200) {
@@ -182,8 +193,11 @@ export const CustomToolDialog: React.FC<CustomToolDialogProps> = ({
         <FormItem label="工具 URL *">
           <Input
             value={formData.url}
-            onChange={(value) => updateField('url', value)}
+            onChange={(value) => {
+              updateField('url', value);
+            }}
             placeholder="https://example.com"
+            tips="支持模板变量：${apiKey}（设置中的 API Key）自行确保目标URL可靠，避免Key泄漏"
           />
         </FormItem>
 

@@ -8,7 +8,7 @@
 /**
  * Task timeout durations (in milliseconds)
  * Different timeouts for different content types
- * This is the total task timeout (including retries), not HTTP request timeout
+ * This is the total task timeout, not HTTP request timeout
  */
 export const TASK_TIMEOUT = {
   /** Image generation task timeout: 45 minutes */
@@ -16,22 +16,6 @@ export const TASK_TIMEOUT = {
   /** Video generation task timeout: 1.5 hours (90 minutes) */
   VIDEO: 90 * 60 * 1000,
 } as const;
-
-/**
- * Retry delay intervals for exponential backoff (in milliseconds)
- * Applied sequentially on each retry attempt
- */
-export const RETRY_DELAYS = [
-  1 * 60 * 1000,  // 1st retry: 1 minute
-  5 * 60 * 1000,  // 2nd retry: 5 minutes
-  15 * 60 * 1000, // 3rd retry: 15 minutes
-] as const;
-
-/**
- * Maximum number of retry attempts
- * After this many retries, the task is marked as failed
- */
-export const MAX_RETRY_COUNT = 3;
 
 /**
  * Duplicate submission prevention window (in milliseconds)

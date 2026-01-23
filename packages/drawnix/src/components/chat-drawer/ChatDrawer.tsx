@@ -579,29 +579,34 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
         // 区分：选中的文本元素（作为 prompt）vs 用户输入的指令（额外要求）
         const displayParts: string[] = [];
 
-
-        // 显示用户输入的指令（额外要求）
+        // 1. 显示用户输入的指令（额外要求）- 核心内容
         if (context.userInstruction) {
-          displayParts.push(`\n💬 用户指令:\n${context.userInstruction}`);
+          displayParts.push(context.userInstruction);
         }
 
-        // 如果两者都没有，显示 finalPrompt
+        // 2. 显示选中的文本元素（作为生成 prompt 的来源）
+        if (context.selection.texts.length > 0) {
+          displayParts.push(`\n📝 选中的文本:\n${context.selection.texts.join('\n')}`);
+        }
+
+        // 3. 如果两者都没有，显示 finalPrompt
         if (context.selection.texts.length === 0 && !context.userInstruction && context.finalPrompt) {
           displayParts.push(`\n提示词:\n${context.finalPrompt}`);
         }
-        // 显示模型和参数信息
+
+        // 4. 显示模型和参数信息 - 辅助信息，放在最后并用分隔线
+        const metaInfo: string[] = [];
         const modelInfo = context.model.isExplicit
           ? `模型: ${context.model.id}`
           : `模型: ${context.model.id} (默认)`;
-        displayParts.push(modelInfo);
+        metaInfo.push(modelInfo);
 
         if (context.params.count > 1) {
-          displayParts.push(`数量: ${context.params.count}`);
+          metaInfo.push(`数量: ${context.params.count}`);
         }
 
-        // 显示选中的文本元素（作为生成 prompt）
-        if (context.selection.texts.length > 0) {
-          displayParts.push(`\n📝 选中的文本:\n${context.selection.texts.join('\n')}`);
+        if (metaInfo.length > 0) {
+          displayParts.push(`\n---\n${metaInfo.join('  •  ')}`);
         }
 
         const userDisplayText = displayParts.join('\n');
@@ -699,6 +704,7 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
           content: userDisplayText,
           timestamp: Date.now(),
           status: MessageStatus.SUCCESS,
+          aiContext: context, // 保存完整的上下文信息
           attachments: allImages.length > 0 || context.selection.videos.length > 0
             ? [
                 ...allImages.map((url, i) => ({
@@ -747,12 +753,29 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
     // 更新当前工作流消息（同时持久化到本地存储）
     const handleUpdateWorkflowMessage = useCallback(
       async (workflow: WorkflowMessageData) => {
-        const msgId = currentWorkflowMsgIdRef.current;
-        if (!msgId) return;
+        let msgId = currentWorkflowMsgIdRef.current;
+        
+        // If no current msgId, try to find existing message by workflow ID
+        // This handles page refresh recovery case
+        if (!msgId) {
+          for (const [id, wf] of workflowMessages.entries()) {
+            if (wf.id === workflow.id) {
+              msgId = id;
+              currentWorkflowMsgIdRef.current = id;
+              // console.log('[ChatDrawer] Found existing message for workflow:', workflow.id, 'msgId:', id);
+              break;
+            }
+          }
+        }
+        
+        if (!msgId) {
+          // console.log('[ChatDrawer] No message ID found for workflow update, skipping:', workflow.id);
+          return;
+        }
 
         setWorkflowMessages((prev) => {
           const newMap = new Map(prev);
-          newMap.set(msgId, workflow);
+          newMap.set(msgId!, workflow);
           return newMap;
         });
 
@@ -762,7 +785,7 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
         // 同步更新 chatHandler 中的原始消息，确保多轮对话上下文正确
         chatHandler.updateRawMessageWorkflow?.(msgId, workflow);
       },
-      [activeSessionId, sessions, chatHandler]
+      [activeSessionId, sessions, chatHandler, workflowMessages]
     );
 
     // 追加 Agent 执行日志（同时持久化）
@@ -1008,6 +1031,16 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
           <div ref={domRef} className="chat-drawer__body">
             <div className="chat-drawer__header">
               <div className="chat-drawer__header-top">
+                <Tooltip content="关闭" theme="light">
+                  <button
+                    className="chat-drawer__close-btn"
+                    data-track="chat_click_drawer_close"
+                    onClick={handleClose}
+                    aria-label="关闭对话"
+                  >
+                    <CloseIcon size={16} />
+                  </button>
+                </Tooltip>
                 {isEditingTitle ? (
                   <input
                     ref={titleInputRef}
@@ -1027,16 +1060,6 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
                     {title}
                   </h2>
                 )}
-                <Tooltip content="关闭" theme="light">
-                  <button
-                    className="chat-drawer__close-btn"
-                    data-track="chat_click_drawer_close"
-                    onClick={handleClose}
-                    aria-label="关闭对话"
-                  >
-                    <CloseIcon size={16} />
-                  </button>
-                </Tooltip>
               </div>
               <div className="chat-drawer__header-bottom">
                 <ModelSelector
@@ -1084,7 +1107,7 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
 
             <div className="chat-drawer__content">
                {shouldRenderChat && (
-                 <Suspense fallback={<div className="chat-loading"><div className="chat-loading__spinner" /></div>}>
+                 <Suspense fallback={<div className="chat-loading chat-loading--full"><div className="chat-loading__spinner" /></div>}>
                    <ChatMessagesArea
                      handler={wrappedHandler}
                      workflowMessages={workflowMessages}
@@ -1097,7 +1120,7 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
                <EnhancedChatInput
                 selectedContent={selectedContent}
                 onSend={handleSendWrapper}
-                placeholder="输入消息... (可用 # 指定模型)"
+                placeholder="支持连续对话"
               />
             </div>
 

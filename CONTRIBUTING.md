@@ -236,6 +236,6 @@ docs: update installation guide
 ## 📞 联系我们
 
 - GitHub Issues: [https://github.com/ljquan/aitu/issues](https://github.com/ljquan/aitu/issues)
-- 项目网站: [https://aitu.chat](https://aitu.chat)
+- 项目网站: [https://opentu.ai](https://opentu.ai)
 
 再次感谢您的贡献！🎉

@@ -4,16 +4,34 @@
  * 批量图片生成组件 - Excel 式批量 AI 图片生成
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { MessagePlugin, Select, Dialog, Tooltip, DialogPlugin } from 'tdesign-react';
-import { Image, LayoutGrid } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { MessagePlugin, Dialog, Tooltip, DialogPlugin, Button, Checkbox } from 'tdesign-react';
+import { 
+  DownloadIcon, 
+  FilePasteIcon, 
+  ImageIcon, 
+  CheckRectangleIcon, 
+  SwapIcon, 
+  DeleteIcon, 
+  ChevronLeftIcon, 
+  ChevronRightIcon, 
+  ArrowDownIcon, 
+  ViewListIcon,
+  AddIcon
+} from 'tdesign-icons-react';
+import { 
+  ImageUploadIcon,
+  MediaLibraryIcon,
+} from '../icons';
 import { useI18n } from '../../i18n';
+import { MediaViewer } from '../shared/MediaViewer';
+import { useMediaViewer, urlsToMediaItems } from '../../hooks/useMediaViewer';
 import { smartDownload } from '../../utils/download-utils';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
 import { TaskType, TaskStatus, Task } from '../../types/task.types';
 import { geminiSettings } from '../../utils/settings-manager';
 import { promptForApiKey } from '../../utils/gemini-api';
-import { IMAGE_MODEL_GROUPED_OPTIONS } from '../settings-dialog/settings-dialog';
+import { ModelDropdown } from '../ai-input-bar/ModelDropdown';
 import { useAssets } from '../../contexts/AssetContext';
 import { AssetType, AssetSource, SelectionMode } from '../../types/asset.types';
 import type { Asset } from '../../types/asset.types';
@@ -21,6 +39,7 @@ import { MediaLibraryModal } from '../media-library/MediaLibraryModal';
 import { LS_KEYS_TO_MIGRATE } from '../../constants/storage-keys';
 import { kvStorageService } from '../../services/kv-storage-service';
 import './batch-image-generation.scss';
+import { trackMemory } from '../../utils/common';
 
 // 本地缓存 key
 const BATCH_IMAGE_CACHE_KEY = LS_KEYS_TO_MIGRATE.BATCH_IMAGE_CACHE;
@@ -130,12 +149,46 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
   // 独立的行选择状态（checkbox），与单元格选择分离
   const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
 
+  // 派生状态：选中任务统计
+  const { validSelectedRows, selectedTaskCount, selectedInfoText } = useMemo(() => {
+    const validRows = [...selectedRows].filter(idx => {
+      const task = tasks[idx];
+      return task && task.prompt && task.prompt.trim() !== '';
+    }).sort((a, b) => a - b);
+    
+    const count = validRows.reduce((sum, idx) => {
+      const task = tasks[idx];
+      return sum + (task?.count || 1);
+    }, 0);
+
+    const info = validRows.length > 0
+      ? (language === 'zh'
+          ? `已选 ${validRows.length} 行 / ${count} 任务`
+          : `${validRows.length} rows / ${count} tasks`)
+      : '';
+
+    return {
+      validSelectedRows: validRows,
+      selectedTaskCount: count,
+      selectedInfoText: info
+    };
+  }, [selectedRows, tasks, language]);
+
+  // 历史记录条目定义
+  interface HistoryEntry {
+    tasks: TaskRow[];
+    selectedCells: CellPosition[];
+    activeCell: CellPosition | null;
+    selectedRows: number[]; // Set 转换为数组存储
+  }
+
   // 撤销/重做历史
-  const historyRef = useRef<TaskRow[][]>([]);
+  const historyRef = useRef<HistoryEntry[]>([]);
   const historyIndexRef = useRef<number>(-1);
   const isUndoRedoRef = useRef<boolean>(false); // 标记是否正在撤销/重做，避免重复记录历史
 
-  const [isLibraryCollapsed, setIsLibraryCollapsed] = useState(false); // 默认展开
+  const [showLibrary, setShowLibrary] = useState(true); // 默认显示
+  const [selectionTooltipVisible, setSelectionTooltipVisible] = useState(false); // 选中统计气泡可见性
 
   // 填充拖拽
   const [isDraggingFill, setIsDraggingFill] = useState(false);
@@ -156,15 +209,26 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
   const [pendingImportFiles, setPendingImportFiles] = useState<File[]>([]);
   const [importStartRow, setImportStartRow] = useState<number>(1); // 从第几行开始插入（1-based）
 
+  // 创建预览图片的 Blob URL（防止渲染时重复创建导致内存泄漏）
+  const previewUrls = useMemo(() => {
+    return pendingImportFiles.slice(0, 12).map(file => URL.createObjectURL(file));
+  }, [pendingImportFiles]);
+
+  // 清理 Blob URL 防止内存泄漏
+  useEffect(() => {
+    return () => {
+      previewUrls.forEach(url => URL.revokeObjectURL(url));
+    };
+  }, [previewUrls]);
+
   // 模型选择
   const [selectedModel, setSelectedModel] = useState<string>(() => {
     const settings = geminiSettings.get();
     return settings.imageModelName || 'gemini-2.5-flash-image-vip';
   });
 
-  // 图片预览弹窗（支持左右切换）
-  const [previewImages, setPreviewImages] = useState<string[]>([]);
-  const [previewIndex, setPreviewIndex] = useState<number>(0);
+  // 图片预览（使用 MediaViewer）
+  const { openViewer, viewerProps } = useMediaViewer();
   // 行图片画廊弹窗（显示某行所有生成的图片）
   const [galleryRowIndex, setGalleryRowIndex] = useState<number | null>(null);
 
@@ -200,15 +264,29 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
   }, [tasks, taskIdCounter, cacheLoaded]);
 
   // 记录历史（用于撤销/重做）
-  const saveHistory = useCallback((newTasks: TaskRow[]) => {
+  const saveHistory = useCallback((
+    newTasks: TaskRow[], 
+    currentSelectedCells: CellPosition[], 
+    currentActiveCell: CellPosition | null, 
+    currentSelectedRows: Set<number>
+  ) => {
     if (isUndoRedoRef.current) {
       isUndoRedoRef.current = false;
       return;
     }
     // 截断当前位置之后的历史
     historyRef.current = historyRef.current.slice(0, historyIndexRef.current + 1);
-    // 添加新状态（深拷贝）
-    historyRef.current.push(JSON.parse(JSON.stringify(newTasks)));
+    
+    // 创建新状态条目
+    const newEntry: HistoryEntry = {
+      tasks: JSON.parse(JSON.stringify(newTasks)),
+      selectedCells: [...currentSelectedCells],
+      activeCell: currentActiveCell ? { ...currentActiveCell } : null,
+      selectedRows: Array.from(currentSelectedRows)
+    };
+
+    // 添加新状态
+    historyRef.current.push(newEntry);
     historyIndexRef.current = historyRef.current.length - 1;
     // 限制历史记录数量（最多50条）
     if (historyRef.current.length > 50) {
@@ -220,17 +298,38 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
   // 监听 tasks 变化，记录历史
   useEffect(() => {
     if (tasks.length > 0) {
-      saveHistory(tasks);
+      saveHistory(tasks, selectedCells, activeCell, selectedRows);
     }
   }, [tasks, saveHistory]);
+
+  // 当选中态变化时，实时更新当前历史记录中的选中状态（不产生新的历史条目）
+  // 这样在撤销时，能恢复到该任务状态下的最后一次选中态
+  useEffect(() => {
+    if (historyRef.current.length > 0 && historyIndexRef.current >= 0 && !isUndoRedoRef.current) {
+      const currentEntry = historyRef.current[historyIndexRef.current];
+      if (currentEntry) {
+        currentEntry.selectedCells = [...selectedCells];
+        currentEntry.activeCell = activeCell ? { ...activeCell } : null;
+        currentEntry.selectedRows = Array.from(selectedRows);
+      }
+    }
+  }, [selectedCells, activeCell, selectedRows]);
 
   // 撤销
   const undo = useCallback(() => {
     if (historyIndexRef.current > 0) {
       historyIndexRef.current--;
       isUndoRedoRef.current = true;
-      const previousState = JSON.parse(JSON.stringify(historyRef.current[historyIndexRef.current]));
-      setTasks(previousState);
+      const previousEntry = historyRef.current[historyIndexRef.current];
+      
+      // 恢复任务数据
+      setTasks(JSON.parse(JSON.stringify(previousEntry.tasks)));
+      
+      // 恢复选中态
+      setSelectedCells([...previousEntry.selectedCells]);
+      setActiveCell(previousEntry.activeCell ? { ...previousEntry.activeCell } : null);
+      setSelectedRows(new Set(previousEntry.selectedRows));
+      
       MessagePlugin.info(language === 'zh' ? '已撤销' : 'Undone');
     } else {
       MessagePlugin.warning(language === 'zh' ? '没有可撤销的操作' : 'Nothing to undo');
@@ -242,8 +341,16 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
     if (historyIndexRef.current < historyRef.current.length - 1) {
       historyIndexRef.current++;
       isUndoRedoRef.current = true;
-      const nextState = JSON.parse(JSON.stringify(historyRef.current[historyIndexRef.current]));
-      setTasks(nextState);
+      const nextEntry = historyRef.current[historyIndexRef.current];
+      
+      // 恢复任务数据
+      setTasks(JSON.parse(JSON.stringify(nextEntry.tasks)));
+      
+      // 恢复选中态
+      setSelectedCells([...nextEntry.selectedCells]);
+      setActiveCell(nextEntry.activeCell ? { ...nextEntry.activeCell } : null);
+      setSelectedRows(new Set(nextEntry.selectedRows));
+      
       MessagePlugin.info(language === 'zh' ? '已重做' : 'Redone');
     } else {
       MessagePlugin.warning(language === 'zh' ? '没有可重做的操作' : 'Nothing to redo');
@@ -300,10 +407,12 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
   // 更新单元格值
   const updateCellValue = useCallback((row: number, col: string, value: any) => {
     setTasks(prev => {
+      if (!prev[row]) return prev;
       const newTasks = [...prev];
-      if (newTasks[row]) {
-        (newTasks[row] as any)[col] = value;
-      }
+      newTasks[row] = {
+        ...newTasks[row],
+        [col]: value
+      };
       return newTasks;
     });
   }, []);
@@ -454,12 +563,21 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
         const newTasks = [...prev];
         for (let r = minRow; r <= maxRow; r++) {
           if (r !== startRow && newTasks[r]) {
-            (newTasks[r] as any)[fillStartCell.col] =
-              Array.isArray(sourceValue) ? [...sourceValue] : sourceValue;
+            newTasks[r] = {
+              ...newTasks[r],
+              [fillStartCell.col]: Array.isArray(sourceValue) ? [...sourceValue] : sourceValue
+            };
           }
         }
         return newTasks;
       });
+
+      // 扩展选中范围，对齐 Excel 交互
+      const newSelectedCells: CellPosition[] = [];
+      for (let r = minRow; r <= maxRow; r++) {
+        newSelectedCells.push({ row: r, col: fillStartCell.col });
+      }
+      setSelectedCells(newSelectedCells);
 
       MessagePlugin.success(
         language === 'zh'
@@ -590,7 +708,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
   // 触发行内图片上传
   const triggerRowImageUpload = useCallback((rowIndex: number) => {
     uploadTargetRowRef.current = rowIndex;
-    setIsLibraryCollapsed(false); // 展开图片库
+    setShowLibrary(true); // 展开图片库
     rowImageInputRef.current?.click(); // 打开文件选择
   }, []);
 
@@ -708,6 +826,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
   // 执行批量导入
   const executeBatchImport = useCallback(async () => {
     if (pendingImportFiles.length === 0) return;
+    const endTrack = trackMemory(`批量导入(${pendingImportFiles.length}张)`);
 
     const perRow = imagesPerRow;
     const totalImages = pendingImportFiles.length;
@@ -780,6 +899,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
     // 清理状态
     setPendingImportFiles([]);
     setShowBatchImportModal(false);
+    endTrack();
 
     const message = language === 'zh'
       ? `已导入 ${totalImages} 张图片，从第 ${importStartRow} 行开始`
@@ -943,8 +1063,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
     const failedCount = relatedTasks.filter(t => t.status === TaskStatus.FAILED).length;
     const processingCount = relatedTasks.filter(t =>
       t.status === TaskStatus.PENDING ||
-      t.status === TaskStatus.PROCESSING ||
-      t.status === TaskStatus.RETRYING
+      t.status === TaskStatus.PROCESSING
     ).length;
 
     let status: 'idle' | 'generating' | 'completed' | 'failed' | 'partial' = 'idle';
@@ -1085,27 +1204,10 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
     setSelectedRows(newSelectedRows);
   }, [tasks, selectedRows]);
 
-  // 打开图片预览（支持列表和索引）
+  // 打开图片预览（使用 MediaViewer）
   const openImagePreview = useCallback((images: string[], startIndex: number = 0) => {
-    setPreviewImages(images);
-    setPreviewIndex(startIndex);
-  }, []);
-
-  // 关闭图片预览
-  const closeImagePreview = useCallback(() => {
-    setPreviewImages([]);
-    setPreviewIndex(0);
-  }, []);
-
-  // 切换到上一张图片
-  const prevImage = useCallback(() => {
-    setPreviewIndex(prev => (prev > 0 ? prev - 1 : previewImages.length - 1));
-  }, [previewImages.length]);
-
-  // 切换到下一张图片
-  const nextImage = useCallback(() => {
-    setPreviewIndex(prev => (prev < previewImages.length - 1 ? prev + 1 : 0));
-  }, [previewImages.length]);
+    openViewer(urlsToMediaItems(images, 'image'), startIndex);
+  }, [openViewer]);
 
   // 切换单行选择（checkbox），支持 Shift 多选
   const toggleRowSelection = useCallback((rowIndex: number, shiftKey: boolean = false) => {
@@ -1389,25 +1491,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
   // 键盘导航和直接输入
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // 图片预览模式下的键盘处理
-      if (previewImages.length > 0) {
-        if (e.key === 'ArrowLeft') {
-          e.preventDefault();
-          prevImage();
-          return;
-        }
-        if (e.key === 'ArrowRight') {
-          e.preventDefault();
-          nextImage();
-          return;
-        }
-        if (e.key === 'Escape') {
-          e.preventDefault();
-          closeImagePreview();
-          return;
-        }
-        return; // 预览模式下不处理其他键盘事件
-      }
+      // 图片预览由 MediaViewer 自己处理键盘事件，无需在此处理
 
       if (!activeCell || editingCell) return;
 
@@ -1602,7 +1686,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
             if (cell.col === 'prompt') {
               updateCellValue(cell.row, cell.col, '');
             } else if (cell.col === 'count') {
-              updateCellValue(cell.row, cell.col, 1);
+              updateCellValue(cell.row, cell.col, 0);
             } else if (cell.col === 'images') {
               updateCellValue(cell.row, cell.col, []);
             } else if (cell.col === 'size') {
@@ -1615,7 +1699,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [activeCell, editingCell, tasks, selectedCells, selectCell, enterEditMode, updateCellValue, undo, redo, previewImages, prevImage, nextImage, closeImagePreview]);
+  }, [activeCell, editingCell, tasks, selectedCells, selectCell, enterEditMode, updateCellValue, undo, redo]);
 
   // 全局鼠标释放监听 - 确保拖拽在任何地方释放都能结束
   useEffect(() => {
@@ -1629,13 +1713,31 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
     return () => document.removeEventListener('mouseup', handleGlobalMouseUp);
   }, [isDraggingFill, isDraggingSelect, handleTableMouseUp]);
 
+  // 尺寸下拉菜单点击外部关闭
+  useEffect(() => {
+    if (!editingCell || editingCell.col !== 'size') return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      // 检查点击是否在下拉组件内部
+      if (target.closest('.custom-size-dropdown')) return;
+      // 点击在外部，关闭下拉
+      setEditingCell(null);
+    };
+
+    // 使用 mousedown 而不是 click，响应更快
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [editingCell]);
+
   // 渲染单元格内容
   const renderCellContent = (task: TaskRow, rowIndex: number, col: string) => {
     const isEditing = editingCell?.row === rowIndex && editingCell?.col === col;
     const isActive = activeCell?.row === rowIndex && activeCell?.col === col;
     const isSelected = selectedCells.some(c => c.row === rowIndex && c.col === col);
+    const isFilling = isDraggingFill && fillStartCell?.col === col && fillPreviewRows.includes(rowIndex);
 
-    const cellClassName = `excel-cell ${isActive ? 'active' : ''} ${isSelected ? 'selected' : ''}`;
+    const cellClassName = `excel-cell cell-${col} ${isActive ? 'active' : ''} ${isSelected ? 'selected' : ''} ${isFilling ? 'filling' : ''}`;
 
     switch (col) {
       case 'prompt':
@@ -1661,13 +1763,27 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
           >
             {isEditing ? (
               <textarea
+                className="cell-textarea"
                 autoFocus
                 value={task.prompt}
-                onChange={(e) => updateCellValue(rowIndex, col, e.target.value)}
+                placeholder={language === 'zh' ? '输入提示词...' : 'Enter prompt...'}
+                onChange={(e) => {
+                  updateCellValue(rowIndex, col, e.target.value);
+                }}
                 onFocus={(e) => {
                   // 光标移到末尾
                   const len = e.target.value.length;
                   e.target.setSelectionRange(len, len);
+                  
+                  // 自动调整高度
+                  e.target.style.height = 'auto';
+                  e.target.style.height = e.target.scrollHeight + 'px';
+                }}
+                onInput={(e) => {
+                  // 实时调整高度
+                  const target = e.target as HTMLTextAreaElement;
+                  target.style.height = 'auto';
+                  target.style.height = target.scrollHeight + 'px';
                 }}
                 onBlur={() => setEditingCell(null)}
                 onKeyDown={(e) => {
@@ -1728,28 +1844,31 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
             }}
           >
             {isEditing ? (
-              <select
-                autoFocus
-                value={task.size}
-                onChange={(e) => {
-                  updateCellValue(rowIndex, col, e.target.value);
-                  setEditingCell(null);
-                }}
-                onBlur={() => {
-                  // 延迟关闭，确保 onChange 先执行
-                  setTimeout(() => setEditingCell(null), 150);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Escape') {
-                    setEditingCell(null);
-                  }
-                }}
-                onClick={(e) => e.stopPropagation()}
-              >
-                {SIZE_OPTIONS.map(size => (
-                  <option key={size} value={size}>{SIZE_LABELS[size] || size}</option>
-                ))}
-              </select>
+              <div className="custom-size-dropdown">
+                <div className="dropdown-trigger">
+                  <span>{SIZE_LABELS[task.size] || task.size}</span>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="m6 9 6 6 6-6"/>
+                  </svg>
+                </div>
+                <div className="dropdown-menu">
+                  {SIZE_OPTIONS.map(size => (
+                    <div
+                      key={size}
+                      className={`dropdown-item ${task.size === size ? 'selected' : ''}`}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        updateCellValue(rowIndex, col, size);
+                        setEditingCell(null);
+                      }}
+                    >
+                      {task.size === size && <span className="check-icon">✓</span>}
+                      {SIZE_LABELS[size] || size}
+                    </div>
+                  ))}
+                </div>
+              </div>
             ) : (
               <span className="cell-text">{SIZE_LABELS[task.size] || task.size}</span>
             )}
@@ -1777,30 +1896,34 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
                 </div>
               ))}
               <div className="add-image-buttons">
-                <button
-                  className="add-image-btn"
+                <Button
+                  variant="text"
+                  shape="square"
+                  size="small"
                   onClick={(e) => {
                     e.stopPropagation();
                     selectCell(rowIndex, col);
                     triggerRowImageUpload(rowIndex);
                   }}
                   title={language === 'zh' ? '上传图片' : 'Upload image'}
-                  data-track="batch_row_upload_image_click"
-                >
-                  <Image size={14} />
-                </button>
-                <button
+                  icon={<ImageUploadIcon size={16} />}
                   className="add-image-btn"
+                  data-track="batch_row_upload_image_click"
+                />
+                <Button
+                  variant="text"
+                  shape="square"
+                  size="small"
                   onClick={(e) => {
                     e.stopPropagation();
                     selectCell(rowIndex, col);
                     openMediaLibraryForRow(rowIndex);
                   }}
                   title={language === 'zh' ? '从素材库选择' : 'Select from library'}
+                  icon={<MediaLibraryIcon size={16} />}
+                  className="add-image-btn"
                   data-track="batch_row_select_from_library_click"
-                >
-                  <LayoutGrid size={14} />
-                </button>
+                />
               </div>
             </div>
             {isActive && <div className="fill-handle" onMouseDown={(e) => { e.stopPropagation(); startFillDrag(rowIndex, col); }} />}
@@ -1831,65 +1954,35 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
                 type="number"
                 autoFocus
                 min={1}
+                max={10}
                 value={task.count === 0 ? '' : task.count}
+                className="cell-count-input"
                 onChange={(e) => {
-                  const inputVal = e.target.value;
-                  if (inputVal === '') {
+                  const valStr = e.target.value;
+                  if (valStr === '') {
                     updateCellValue(rowIndex, col, 0);
-                  } else {
-                    const val = Math.max(1, parseInt(inputVal) || 1);
+                    return;
+                  }
+                  const val = parseInt(valStr);
+                  if (!isNaN(val)) {
                     updateCellValue(rowIndex, col, val);
                   }
                 }}
-                onFocus={(e) => {
-                  // 光标移到末尾
-                  const input = e.target;
-                  const len = input.value.length;
-                  setTimeout(() => input.setSelectionRange(len, len), 0);
-                }}
                 onBlur={() => {
-                  if (task.count === 0) {
+                  if (!task.count || task.count < 1) {
                     updateCellValue(rowIndex, col, 1);
+                  } else if (task.count > 10) {
+                    updateCellValue(rowIndex, col, 10);
                   }
                   setEditingCell(null);
                 }}
                 onKeyDown={(e) => {
                   if (e.key === 'Escape') {
-                    if (task.count === 0) {
-                      updateCellValue(rowIndex, col, 1);
-                    }
                     setEditingCell(null);
                   } else if (e.key === 'Enter') {
-                    e.preventDefault();
-                    if (task.count === 0) {
-                      updateCellValue(rowIndex, col, 1);
-                    }
                     setEditingCell(null);
-                    // 移动到下一行
                     if (rowIndex < tasks.length - 1) {
                       selectCell(rowIndex + 1, col);
-                    }
-                  } else if (e.key === 'Tab') {
-                    e.preventDefault();
-                    if (task.count === 0) {
-                      updateCellValue(rowIndex, col, 1);
-                    }
-                    setEditingCell(null);
-                    const colIndex = EDITABLE_COLS.indexOf(col);
-                    if (e.shiftKey) {
-                      // Shift+Tab: 向前移动
-                      if (colIndex > 0) {
-                        selectCell(rowIndex, EDITABLE_COLS[colIndex - 1]);
-                      } else if (rowIndex > 0) {
-                        selectCell(rowIndex - 1, EDITABLE_COLS[EDITABLE_COLS.length - 1]);
-                      }
-                    } else {
-                      // Tab: 向后移动
-                      if (colIndex < EDITABLE_COLS.length - 1) {
-                        selectCell(rowIndex, EDITABLE_COLS[colIndex + 1]);
-                      } else if (rowIndex < tasks.length - 1) {
-                        selectCell(rowIndex + 1, EDITABLE_COLS[0]);
-                      }
                     }
                   }
                 }}
@@ -1930,8 +2023,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
               const isGenerating = rowInfo.status === 'generating';
               const processingCount = rowInfo.tasks.filter(t =>
                 t.status === TaskStatus.PENDING ||
-                t.status === TaskStatus.PROCESSING ||
-                t.status === TaskStatus.RETRYING
+                t.status === TaskStatus.PROCESSING
               ).length;
 
               // 没有已完成的图片，只显示生成中
@@ -1989,18 +2081,19 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
                   {rowInfo.tasks[0].error.message}
                 </span>
                 {rowInfo.tasks[0].error.details?.originalError && (
-                  <Tooltip
-                    content={
-                      <div className="error-details-tooltip">
-                        <div className="error-details-title">原始错误信息:</div>
-                        <div className="error-details-content">
-                          {rowInfo.tasks[0].error.details.originalError}
-                        </div>
+                <Tooltip
+                  content={
+                    <div className="error-details-tooltip">
+                      <div className="error-details-title">原始错误信息:</div>
+                      <div className="error-details-content">
+                        {rowInfo.tasks[0].error.details.originalError}
                       </div>
-                    }
-                    theme="light"
-                    placement="bottom"
-                  >
+                    </div>
+                  }
+                  theme="light"
+                  placement="bottom"
+                  showArrow={false}
+                >
                     <span className="preview-error-details-link">[详情]</span>
                   </Tooltip>
                 )}
@@ -2073,70 +2166,86 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
 
           <div className="toolbar-left">
             {/* 1. 数据导入区 - 先下载模板 → 导入Excel → 批量导入图片 */}
-            <button
-              className="btn btn-secondary"
-              onClick={downloadExcelTemplate}
-              data-track="batch_download_template_click"
-            >
-              {language === 'zh' ? '⬇️ 下载模板' : '⬇️ Template'}
-            </button>
-            <button
-              className="btn btn-secondary"
-              onClick={() => excelImportInputRef.current?.click()}
-              data-track="batch_import_excel_click"
-            >
-              {language === 'zh' ? '📋 导入Excel' : '📋 Import Excel'}
-            </button>
-            <button
-              className="btn btn-secondary"
-              onClick={() => batchImportInputRef.current?.click()}
-              data-track="batch_import_images_click"
-              data-track-params={JSON.stringify({ source: 'toolbar' })}
-            >
-              {language === 'zh' ? '🖼️ 批量导入图片' : '🖼️ Batch Import'}
-            </button>
+            <Tooltip content={language === 'zh' ? '下载模板' : 'Download Template'} theme="light">
+              <Button
+                variant="outline"
+                theme="default"
+                icon={<DownloadIcon />}
+                onClick={downloadExcelTemplate}
+                data-track="batch_download_template_click"
+              />
+            </Tooltip>
+            <Tooltip content={language === 'zh' ? '导入 Excel' : 'Import Excel'} theme="light">
+              <Button
+                variant="outline"
+                theme="default"
+                icon={<FilePasteIcon />}
+                onClick={() => excelImportInputRef.current?.click()}
+                data-track="batch_import_excel_click"
+              />
+            </Tooltip>
+            <Tooltip content={language === 'zh' ? '批量导入图片' : 'Batch Import Images'} theme="light">
+              <Button
+                variant="outline"
+                theme="default"
+                icon={<ImageIcon />}
+                onClick={() => batchImportInputRef.current?.click()}
+                data-track="batch_import_images_click"
+                data-track-params={JSON.stringify({ source: 'toolbar' })}
+              />
+            </Tooltip>
 
-            <span className="toolbar-divider">|</span>
+            <span className="toolbar-divider"></span>
 
             {/* 2. 选择操作区 - 导入后选择要处理的行 */}
-            <button
-              className="btn btn-secondary"
-              onClick={selectFailedRows}
-              data-track="batch_select_failed_click"
-            >
-              {language === 'zh' ? '选择失败行' : 'Select Failed'}
-            </button>
-            <button
-              className="btn btn-secondary"
-              onClick={invertSelection}
-              data-track="batch_invert_selection_click"
-            >
-              {language === 'zh' ? '反选' : 'Invert'}
-            </button>
+            <Tooltip content={language === 'zh' ? '选择失败行' : 'Select Failed Rows'} theme="light">
+              <Button
+                variant="text"
+                theme="default"
+                icon={<CheckRectangleIcon />}
+                onClick={selectFailedRows}
+                data-track="batch_select_failed_click"
+              />
+            </Tooltip>
+            <Tooltip content={language === 'zh' ? '反选' : 'Invert Selection'} theme="light">
+              <Button
+                variant="text"
+                theme="default"
+                icon={<SwapIcon />}
+                onClick={invertSelection}
+                data-track="batch_invert_selection_click"
+              />
+            </Tooltip>
 
-            <span className="toolbar-divider">|</span>
+            <span className="toolbar-divider"></span>
 
             {/* 3. 删除操作 - 清理不需要的行 */}
-            <button
-              className="btn btn-secondary"
+            <Button
+              variant="text"
+              theme="default"
+              icon={<DeleteIcon />}
               onClick={deleteSelected}
+              className="batch-delete-btn"
               data-track="batch_delete_selected_click"
               data-track-params={JSON.stringify({ count: selectedRows.size })}
             >
               {language === 'zh' ? '删除选中' : 'Delete Selected'}
-            </button>
+            </Button>
 
-            <span className="toolbar-divider">|</span>
+            <span className="toolbar-divider"></span>
 
             {/* 4. 下载结果 - 生成完成后下载 */}
-            <button
-              className="btn btn-secondary"
+            <Button
+              variant="outline"
+              theme="default"
+              icon={<DownloadIcon />}
               onClick={downloadSelectedImages}
+              className="batch-download-btn"
               data-track="batch_download_images_click"
               data-track-params={JSON.stringify({ count: selectedRows.size })}
             >
-              {language === 'zh' ? '💾 下载选中图片' : '💾 Download'}
-            </button>
+              {language === 'zh' ? '下载选中图片' : 'Download'}
+            </Button>
           </div>
 
           <div className="toolbar-right">
@@ -2145,52 +2254,21 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
               className="model-selector-wrapper"
               data-track="batch_model_select"
             >
-              <Select
-                value={selectedModel}
-                onChange={(value) => setSelectedModel(value as string)}
-                options={IMAGE_MODEL_GROUPED_OPTIONS}
-                size="small"
-                placeholder={language === 'zh' ? '选择图片模型' : 'Select Image Model'}
-                filterable
-                creatable
+              <ModelDropdown
+                selectedModel={selectedModel}
+                onSelect={(value) => setSelectedModel(value)}
+                language={language}
+                placement="down"
+                variant="form"
                 disabled={isSubmitting}
               />
             </div>
 
-            {onSwitchToSingle && (
-              <button
-                className="btn btn-text"
-                onClick={onSwitchToSingle}
-                data-track="batch_switch_to_single_click"
-              >
-                {language === 'zh' ? '← 返回单图模式' : '← Back to Single'}
-              </button>
-            )}
-
-            {/* 选中任务统计 - 只计算有提示词的行 */}
-            {(() => {
-              const validSelectedRows = [...selectedRows].filter(idx => {
-                const task = tasks[idx];
-                return task && task.prompt && task.prompt.trim() !== '';
-              });
-              const selectedTaskCount = validSelectedRows.reduce((sum, idx) => {
-                const task = tasks[idx];
-                return sum + (task?.count || 1);
-              }, 0);
-              return validSelectedRows.length > 0 ? (
-                <span className="task-count-badge">
-                  {language === 'zh'
-                    ? `${validSelectedRows.length} 行 / ${selectedTaskCount} 任务`
-                    : `${validSelectedRows.length} rows / ${selectedTaskCount} tasks`
-                  }
-                </span>
-              ) : null;
-            })()}
-
-            <button
-              className="btn btn-primary"
+            <Button
+              theme="primary"
               onClick={submitToQueue}
-              disabled={isSubmitting}
+              loading={isSubmitting}
+              className="batch-generate-btn"
               data-track="batch_generate_click"
               data-track-params={JSON.stringify({
                 selectedRows: selectedRows.size,
@@ -2201,13 +2279,27 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
                 ? (language === 'zh' ? '提交中...' : 'Submitting...')
                 : (language === 'zh' ? '生成选中行' : 'Generate Selected')
               }
-            </button>
+            </Button>
+
+            <span className="toolbar-divider"></span>
+
+            {!showLibrary && (
+              <Tooltip content={language === 'zh' ? '显示素材库' : 'Show Library'} theme="light">
+                <Button
+                  variant="outline"
+                  theme="default"
+                  icon={<MediaLibraryIcon size={16} />}
+                  onClick={() => setShowLibrary(true)}
+                  data-track="batch_library_show_click"
+                />
+              </Tooltip>
+            )}
           </div>
         </div>
 
         {/* 表格 */}
         <div
-          className="excel-table-container"
+          className={`excel-table-container ${isDraggingFill ? 'is-filling' : ''} ${isDraggingSelect ? 'is-selecting' : ''}`}
           onMouseMove={handleTableMouseMove}
           onMouseUp={handleTableMouseUp}
           onMouseLeave={handleTableMouseUp}
@@ -2216,56 +2308,89 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
             <thead>
               <tr>
                 <th className="col-checkbox">
-                  <input
-                    type="checkbox"
-                    checked={tasks.length > 0 && selectedRows.size === tasks.length}
-                    onChange={toggleSelectAll}
-                    title={language === 'zh' ? '全选/取消全选' : 'Select All / Deselect All'}
-                  />
+                  <Tooltip 
+                    content={selectedInfoText || (language === 'zh' ? '全选/取消全选' : 'Select All / Deselect All')} 
+                    theme="light"
+                    showArrow={false}
+                    visible={selectionTooltipVisible}
+                    onVisibleChange={(visible) => setSelectionTooltipVisible(visible)}
+                  >
+                    <div className="checkbox-wrapper">
+                      <Checkbox
+                        checked={tasks.length > 0 && selectedRows.size === tasks.length}
+                        indeterminate={selectedRows.size > 0 && selectedRows.size < tasks.length}
+                        onChange={toggleSelectAll}
+                      />
+                    </div>
+                  </Tooltip>
                 </th>
                 <th className="row-number">#</th>
                 <th className="col-prompt">
                   <div className="th-content">
                     {language === 'zh' ? '提示词' : 'Prompt'}
-                    <button
-                      className="column-fill-btn"
-                      onClick={() => fillColumn('prompt')}
-                      data-track="batch_fill_column_click"
-                      data-track-params={JSON.stringify({ column: 'prompt' })}
-                    >⬇</button>
+                    <Tooltip content={language === 'zh' ? '向下填充' : 'Fill down'} theme="light">
+                      <Button
+                        variant="text"
+                        shape="circle"
+                        size="small"
+                        icon={<ArrowDownIcon />}
+                        className="column-fill-btn"
+                        onClick={() => fillColumn('prompt')}
+                        data-track="batch_fill_column_click"
+                        data-track-params={JSON.stringify({ column: 'prompt' })}
+                      />
+                    </Tooltip>
                   </div>
                 </th>
                 <th className="col-size">
                   <div className="th-content">
                     {language === 'zh' ? '尺寸' : 'Size'}
-                    <button
-                      className="column-fill-btn"
-                      onClick={() => fillColumn('size')}
-                      data-track="batch_fill_column_click"
-                      data-track-params={JSON.stringify({ column: 'size' })}
-                    >⬇</button>
+                    <Tooltip content={language === 'zh' ? '向下填充' : 'Fill down'} theme="light">
+                      <Button
+                        variant="text"
+                        shape="circle"
+                        size="small"
+                        icon={<ArrowDownIcon />}
+                        className="column-fill-btn"
+                        onClick={() => fillColumn('size')}
+                        data-track="batch_fill_column_click"
+                        data-track-params={JSON.stringify({ column: 'size' })}
+                      />
+                    </Tooltip>
                   </div>
                 </th>
                 <th className="col-images">
                   <div className="th-content">
                     {language === 'zh' ? '参考图片' : 'Ref Images'}
-                    <button
-                      className="column-fill-btn"
-                      onClick={() => fillColumn('images')}
-                      data-track="batch_fill_column_click"
-                      data-track-params={JSON.stringify({ column: 'images' })}
-                    >⬇</button>
+                    <Tooltip content={language === 'zh' ? '向下填充' : 'Fill down'} theme="light">
+                      <Button
+                        variant="text"
+                        shape="circle"
+                        size="small"
+                        icon={<ArrowDownIcon />}
+                        className="column-fill-btn"
+                        onClick={() => fillColumn('images')}
+                        data-track="batch_fill_column_click"
+                        data-track-params={JSON.stringify({ column: 'images' })}
+                      />
+                    </Tooltip>
                   </div>
                 </th>
                 <th className="col-count">
                   <div className="th-content">
                     {language === 'zh' ? '数量' : 'Count'}
-                    <button
-                      className="column-fill-btn"
-                      onClick={() => fillColumn('count')}
-                      data-track="batch_fill_column_click"
-                      data-track-params={JSON.stringify({ column: 'count' })}
-                    >⬇</button>
+                    <Tooltip content={language === 'zh' ? '向下填充' : 'Fill down'} theme="light">
+                      <Button
+                        variant="text"
+                        shape="circle"
+                        size="small"
+                        icon={<ArrowDownIcon />}
+                        className="column-fill-btn"
+                        onClick={() => fillColumn('count')}
+                        data-track="batch_fill_column_click"
+                        data-track-params={JSON.stringify({ column: 'count' })}
+                      />
+                    </Tooltip>
                   </div>
                 </th>
                 <th className="col-preview">
@@ -2288,21 +2413,22 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
                   <td 
                     className="col-checkbox"
                     onClick={(e) => {
-                      // 点击整个 checkbox 列区域都可以触发选择
-                      if ((e.target as HTMLElement).tagName !== 'INPUT') {
-                        toggleRowSelection(rowIndex, e.shiftKey);
-                      }
+                      toggleRowSelection(rowIndex, e.shiftKey);
                     }}
                   >
-                    <input
-                      type="checkbox"
-                      checked={selectedRows.has(rowIndex)}
+                    <div 
+                      className="checkbox-wrapper" 
                       onClick={(e) => {
                         e.stopPropagation();
                         toggleRowSelection(rowIndex, e.shiftKey);
                       }}
-                      onChange={() => {}} // 由 onClick 处理
-                    />
+                      onMouseEnter={() => selectedRows.size > 0 && setSelectionTooltipVisible(true)}
+                      onMouseLeave={() => setSelectionTooltipVisible(false)}
+                    >
+                      <Checkbox
+                        checked={selectedRows.has(rowIndex)}
+                      />
+                    </div>
                   </td>
                   <td 
                     className="row-number"
@@ -2323,22 +2449,26 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
 
           {/* 添加行按钮和导出按钮 */}
           <div className="add-rows-section">
-            <button
-              className="add-rows-btn"
+            <Button
+              variant="dashed"
+              shape="circle"
               onClick={() => setShowAddRowsModal(true)}
               title={language === 'zh' ? '添加行' : 'Add Rows'}
+              icon={<AddIcon />}
+              className="add-rows-btn"
               data-track="batch_add_rows_click"
-            >
-              <span className="add-icon">+</span>
-            </button>
-            <button
-              className="btn btn-secondary export-excel-btn"
+            />
+            <Button
+              variant="outline"
+              theme="default"
+              icon={<ViewListIcon />}
               onClick={exportToExcel}
+              className="export-excel-btn"
               data-track="batch_export_excel_click"
               data-track-params={JSON.stringify({ rowCount: tasks.length })}
             >
-              {language === 'zh' ? '📊 导出Excel' : '📊 Export Excel'}
-            </button>
+              {language === 'zh' ? '导出Excel' : 'Export Excel'}
+            </Button>
           </div>
         </div>
 
@@ -2351,60 +2481,62 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
       </div>
 
       {/* 素材库侧栏 */}
-      <div className={`image-library-sidebar ${isLibraryCollapsed ? 'collapsed' : ''}`}>
+      <div className={`image-library-sidebar ${!showLibrary ? 'hidden' : ''}`}>
         <div className="library-header">
           <h3>{language === 'zh' ? '素材库' : 'Library'}</h3>
-          <button
-            className="toggle-btn"
-            onClick={() => setIsLibraryCollapsed(!isLibraryCollapsed)}
-            data-track="batch_library_toggle_click"
-            data-track-params={JSON.stringify({ collapsed: !isLibraryCollapsed })}
-          >
-            {isLibraryCollapsed ? '▶' : '◀'}
-          </button>
+          <Button
+            variant="text"
+            shape="square"
+            size="small"
+            className="close-btn"
+            onClick={() => setShowLibrary(false)}
+            icon={<ChevronRightIcon />}
+            data-track="batch_library_close_click"
+          />
         </div>
-        {!isLibraryCollapsed && (
-          <div className="library-content">
-            <div className="upload-section">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={handleImageUpload}
-                style={{ display: 'none' }}
-              />
-              <button
-                className="upload-btn"
-                onClick={() => fileInputRef.current?.click()}
-                data-track="batch_library_upload_click"
-              >
-                {language === 'zh' ? '📤 上传图片' : '📤 Upload'}
-              </button>
-            </div>
-            <div className="library-grid">
-              {imageAssets.length === 0 ? (
-                <div className="empty-library">
-                  {language === 'zh' ? '暂无图片，请上传' : 'No images, please upload'}
-                </div>
-              ) : (
-                imageAssets.map((asset) => (
-                  <div
-                    key={asset.id}
-                    className="library-image"
-                    onClick={() => addImageToSelectedRows(asset.url)}
-                    draggable
-                    onDragStart={(e) => handleLibraryImageDragStart(e, asset.url)}
-                    title={language === 'zh' ? '点击添加到选中行，或拖拽到指定行' : 'Click to add to selected rows, or drag to a specific row'}
-                    data-track="batch_library_image_click"
-                  >
-                    <img src={asset.url} alt={asset.name} draggable={false} />
-                  </div>
-                ))
-              )}
-            </div>
+        <div className="library-content">
+          <div className="upload-section">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={handleImageUpload}
+              style={{ display: 'none' }}
+            />
+            <Button
+              block
+              theme="default"
+              variant="outline"
+              icon={<ImageUploadIcon size={16} />}
+              onClick={() => fileInputRef.current?.click()}
+              data-track="batch_library_upload_click"
+            >
+              {language === 'zh' ? '上传图片' : 'Upload'}
+            </Button>
           </div>
-        )}
+          <div className="library-grid">
+            {imageAssets.length === 0 ? (
+              <div className="empty-library">
+                {language === 'zh' ? '暂无图片，请上传' : 'No images, please upload'}
+              </div>
+            ) : (
+              imageAssets.map((asset) => (
+                <div
+                  key={asset.id}
+                  className="library-image"
+                  onClick={() => addImageToSelectedRows(asset.url)}
+                  draggable
+                  onDragStart={(e) => handleLibraryImageDragStart(e, asset.url)}
+                  title={language === 'zh' ? '点击添加到选中行，或拖拽到指定行' : 'Click to add to selected rows, or drag to a specific row'}
+                  data-track="batch_library_image_click"
+                >
+                  <img src={asset.url} alt={asset.name} draggable={false} />
+                </div>
+              ))
+            )}
+          </div>
+        </div>
       </div>
 
       {/* 批量导入弹窗 */}
@@ -2462,11 +2594,11 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
                 }
               </p>
 
-              {/* 图片预览 */}
+              {/* 图片预览（使用预创建的 Blob URL 避免内存泄漏） */}
               <div className="import-preview-grid">
-                {pendingImportFiles.slice(0, 12).map((file, index) => (
+                {previewUrls.map((url, index) => (
                   <div key={index} className="preview-item">
-                    <img src={URL.createObjectURL(file)} alt="" />
+                    <img src={url} alt="" />
                   </div>
                 ))}
                 {pendingImportFiles.length > 12 && (
@@ -2477,15 +2609,17 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
               </div>
             </div>
             <div className="modal-footer">
-              <button
-                className="btn btn-secondary"
+              <Button
+                variant="outline"
+                theme="default"
                 onClick={cancelBatchImport}
                 data-track="batch_import_modal_cancel_click"
               >
                 {language === 'zh' ? '取消' : 'Cancel'}
-              </button>
-              <button
-                className="btn btn-primary"
+              </Button>
+              <Button
+                theme="default"
+                variant="outline"
                 onClick={executeBatchImport}
                 data-track="batch_import_modal_confirm_click"
                 data-track-params={JSON.stringify({
@@ -2495,88 +2629,14 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
                 })}
               >
                 {language === 'zh' ? '确认导入' : 'Import'}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
       )}
 
-      {/* 图片预览弹窗（支持左右切换） */}
-      <Dialog
-        visible={previewImages.length > 0}
-        onClose={closeImagePreview}
-        header={
-          previewImages.length > 1
-            ? `${language === 'zh' ? '图片预览' : 'Image Preview'} (${previewIndex + 1}/${previewImages.length})`
-            : (language === 'zh' ? '图片预览' : 'Image Preview')
-        }
-        footer={null}
-        width="80vw"
-        placement="center"
-        className="image-preview-dialog"
-        destroyOnClose
-      >
-        {previewImages.length > 0 && (
-          <div
-            className="image-preview-content"
-            onTouchStart={(e) => {
-              const touch = e.touches[0];
-              (e.currentTarget as any)._touchStartX = touch.clientX;
-            }}
-            onTouchEnd={(e) => {
-              const touchStartX = (e.currentTarget as any)._touchStartX;
-              if (touchStartX === undefined) return;
-              const touch = e.changedTouches[0];
-              const diffX = touch.clientX - touchStartX;
-              if (Math.abs(diffX) > 50) {
-                if (diffX > 0) {
-                  prevImage();
-                } else {
-                  nextImage();
-                }
-              }
-              delete (e.currentTarget as any)._touchStartX;
-            }}
-          >
-            {/* 左切换按钮 */}
-            {previewImages.length > 1 && (
-              <button
-                className="preview-nav-btn preview-nav-prev"
-                onClick={prevImage}
-                title={language === 'zh' ? '上一张' : 'Previous'}
-              >
-                ‹
-              </button>
-            )}
-
-            <img src={previewImages[previewIndex]} alt={`Preview ${previewIndex + 1}`} />
-
-            {/* 右切换按钮 */}
-            {previewImages.length > 1 && (
-              <button
-                className="preview-nav-btn preview-nav-next"
-                onClick={nextImage}
-                title={language === 'zh' ? '下一张' : 'Next'}
-              >
-                ›
-              </button>
-            )}
-
-            {/* 底部指示器 */}
-            {previewImages.length > 1 && (
-              <div className="preview-indicators">
-                {previewImages.map((_, idx) => (
-                  <span
-                    key={idx}
-                    className={`preview-indicator ${idx === previewIndex ? 'active' : ''}`}
-                    onClick={() => setPreviewIndex(idx)}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </Dialog>
+      {/* 图片预览（使用 MediaViewer） */}
+      <MediaViewer {...viewerProps} />
 
       {/* 添加行弹窗 */}
       <Dialog
@@ -2585,6 +2645,8 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
         header={language === 'zh' ? '添加行' : 'Add Rows'}
         confirmBtn={{
           content: language === 'zh' ? '添加' : 'Add',
+          theme: 'default',
+          variant: 'outline',
           onClick: () => {
             addRows(addRowsCount);
             setShowAddRowsModal(false);

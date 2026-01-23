@@ -126,12 +126,6 @@
     background-color: var(--td-brand-color);
   }
 
-  /* Checkbox 组件 */
-  .t-checkbox.t-is-checked .t-checkbox__input {
-    background-color: var(--td-brand-color);
-    border-color: var(--td-brand-color);
-  }
-
   /* Radio 组件 */
   .t-radio.t-is-checked .t-radio__input {
     border-color: var(--td-brand-color);
@@ -264,6 +258,23 @@
     
     &:hover {
       background-color: var(--td-brand-color-hover);
+    }
+  }
+}
+
+/* 全局 Checkbox 样式覆盖 - 橙色背景 + 白色勾选图标 */
+.t-checkbox {
+  &.t-is-checked,
+  &.t-is-indeterminate {
+    .t-checkbox__input {
+      background-color: var(--td-brand-color) !important;
+      border-color: var(--td-brand-color) !important;
+    }
+  }
+
+  .t-checkbox__input {
+    &::after {
+      border-color: #fff !important; // 确保全局勾选图标为白色
     }
   }
 }

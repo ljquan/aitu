@@ -1,0 +1,53 @@
+/**
+ * MinimizedToolsBar Styles
+ *
+ * 最小化工具栏样式
+ */
+
+.minimized-tools-bar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border-light, rgba(0, 0, 0, 0.05));
+  margin-top: 4px;
+
+  &__item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  &__indicator {
+    position: absolute;
+    width: 3px;
+    height: 12px;
+    border-radius: 2px;
+    left: -4px; // 放在图标左侧
+    top: 50%;
+    transform: translateY(-50%);
+    background: var(--td-gray-color-5, #c5c5c5);
+    pointer-events: none;
+    z-index: 1;
+    transition: all 0.2s ease;
+
+    &--active {
+      background: var(--brand-primary, #f39c12);
+      height: 18px; // 激活状态稍微加长
+    }
+  }
+}
+
+@keyframes pulse-indicator {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0.8;
+  }
+}

@@ -2,21 +2,15 @@
  * EnhancedChatInput Component
  *
  * 增强版聊天输入框，支持：
- * - # 指定模型
- * - - 指定参数
- * - + 指定数量
  * - 选中元素展示
- *
- * 使用 useSmartInput hook 复用 AIInputBar 的输入逻辑
+ * - 多行文本输入
  */
 
-import React, { useRef, useCallback, useEffect, forwardRef, useImperativeHandle } from 'react';
+import React, { useRef, useState, useCallback, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { SendIcon } from 'tdesign-icons-react';
-import { SmartSuggestionPanel } from '../ai-input-bar/smart-suggestion-panel';
 import { SelectedContentPreview } from '../shared/SelectedContentPreview';
 import type { SelectedContentItem } from '../../contexts/ChatDrawerContext';
 import type { Message } from '@llamaindex/chat-ui';
-import { useSmartInput } from '../../hooks/useSmartInput';
 import { usePromptHistory } from '../../hooks/usePromptHistory';
 
 interface EnhancedChatInputProps {
@@ -46,28 +40,9 @@ export const EnhancedChatInput = forwardRef<EnhancedChatInputRef, EnhancedChatIn
 }, ref) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [input, setInput] = useState('');
   const hasSelection = selectedContent.length > 0;
   const { addHistory: addPromptHistory } = usePromptHistory();
-
-  // 使用共享的智能输入 hook
-  const {
-    input,
-    setInput,
-    showSuggestion,
-    parseResult,
-    handleSelectModel,
-    handleSelectParam,
-    handleSelectCount,
-    handleSelectPrompt,
-    handleCloseSuggestion,
-  } = useSmartInput({
-    hasSelection,
-    passiveOnly: true, // 只被动触发
-    inputRef: textareaRef,
-    containerRef,
-  });
-
-  const { mode, keyword } = parseResult;
 
   // 暴露方法给父组件
   useImperativeHandle(ref, () => ({
@@ -78,7 +53,7 @@ export const EnhancedChatInput = forwardRef<EnhancedChatInputRef, EnhancedChatIn
     },
     getContent: () => input,
     focus: () => textareaRef.current?.focus(),
-  }), [input, setInput]);
+  }), [input]);
 
   // 发送消息
   const handleSend = useCallback(() => {
@@ -122,19 +97,18 @@ export const EnhancedChatInput = forwardRef<EnhancedChatInputRef, EnhancedChatIn
       parts,
     };
 
-    // 保存提示词到历史记录
+    // 保存提示词到历史记录（Chat Drawer 默认为 Agent 模式）
     if (trimmedInput) {
-      addPromptHistory(trimmedInput, hasSelection);
+      addPromptHistory(trimmedInput, hasSelection, 'agent');
     }
 
     onSend(message);
     setInput('');
-  }, [input, selectedContent, onSend, setInput, addPromptHistory, hasSelection]);
+  }, [input, selectedContent, onSend, addPromptHistory, hasSelection]);
 
   // 键盘事件处理
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     // 检测 IME 组合输入状态（如中文拼音输入法）
-    // 在组合输入时按回车是确认拼音转换，不应触发发送
     if (e.nativeEvent.isComposing) {
       return;
     }
@@ -142,10 +116,8 @@ export const EnhancedChatInput = forwardRef<EnhancedChatInputRef, EnhancedChatIn
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
-    } else if (e.key === 'Escape') {
-      handleCloseSuggestion();
     }
-  }, [handleSend, handleCloseSuggestion]);
+  }, [handleSend]);
 
   // 自动调整高度
   useEffect(() => {
@@ -155,7 +127,7 @@ export const EnhancedChatInput = forwardRef<EnhancedChatInputRef, EnhancedChatIn
     }
   }, [input]);
 
-  // 渲染选中内容预览（使用公共组件）
+  // 渲染选中内容预览
   const renderSelectedContent = () => {
     if (selectedContent.length === 0) return null;
 
@@ -170,42 +142,6 @@ export const EnhancedChatInput = forwardRef<EnhancedChatInputRef, EnhancedChatIn
     );
   };
 
-  // 渲染高亮层（显示标签背景色）
-  const renderHighlightLayer = () => {
-    const { segments } = parseResult;
-    if (!segments || !segments.some(s => s.type !== 'text')) return null;
-
-    return (
-      <div className="enhanced-chat-input__highlight-layer" aria-hidden="true">
-        {segments.map((segment, index) => {
-          if (segment.type === 'text') {
-            return <span key={index} className="enhanced-chat-input__highlight-text">{segment.content}</span>;
-          }
-          let tagClass = '';
-          switch (segment.type) {
-            case 'image-model':
-              tagClass = 'enhanced-chat-input__highlight-tag--image';
-              break;
-            case 'video-model':
-              tagClass = 'enhanced-chat-input__highlight-tag--video';
-              break;
-            case 'param':
-              tagClass = 'enhanced-chat-input__highlight-tag--param';
-              break;
-            case 'count':
-              tagClass = 'enhanced-chat-input__highlight-tag--count';
-              break;
-          }
-          return (
-            <span key={index} className={`enhanced-chat-input__highlight-tag ${tagClass}`}>
-              {segment.content}
-            </span>
-          );
-        })}
-      </div>
-    );
-  };
-
   const isActive = (input.trim() || selectedContent.length > 0) && !disabled;
 
   return (
@@ -214,14 +150,13 @@ export const EnhancedChatInput = forwardRef<EnhancedChatInputRef, EnhancedChatIn
 
       <div className="enhanced-chat-input__form">
         <div className="enhanced-chat-input__input-wrapper">
-          {renderHighlightLayer()}
           <textarea
             ref={textareaRef}
             className="enhanced-chat-input__textarea"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={hasSelection ? '描述你想要的效果... (可用 # 指定模型)' : placeholder}
+            placeholder={hasSelection ? '描述你想要的效果...' : placeholder}
             disabled={disabled}
             rows={4}
           />
@@ -236,23 +171,6 @@ export const EnhancedChatInput = forwardRef<EnhancedChatInputRef, EnhancedChatIn
           <SendIcon size={20} />
         </button>
       </div>
-
-      {showSuggestion && mode && (
-        <SmartSuggestionPanel
-          visible={showSuggestion}
-          mode={mode}
-          filterKeyword={keyword}
-          selectedImageModel={parseResult.selectedImageModel}
-          selectedVideoModel={parseResult.selectedVideoModel}
-          selectedParams={parseResult.selectedParams}
-          selectedCount={parseResult.selectedCount}
-          onSelectModel={handleSelectModel}
-          onSelectParam={handleSelectParam}
-          onSelectCount={handleSelectCount}
-          onSelectPrompt={handleSelectPrompt}
-          onClose={handleCloseSuggestion}
-        />
-      )}
     </div>
   );
 });

@@ -147,14 +147,144 @@ export class WorkflowExecutor {
    * Handle response from main thread tool execution
    */
   async handleMainThreadToolResponse(response: MainThreadToolResponseMessage): Promise<void> {
+    // console.log('[SW-WorkflowExecutor] ◀ Received tool response:', {
+    //   requestId: response.requestId,
+    //   success: response.success,
+    //   hasPending: this.pendingToolRequests.has(response.requestId),
+    //   hasAddSteps: !!(response as any).addSteps?.length,
+    //   timestamp: new Date().toISOString(),
+    // });
+    
     const pending = this.pendingToolRequests.get(response.requestId);
     if (pending) {
+      // console.log('[SW-WorkflowExecutor] ✓ Resolving pending tool request:', response.requestId);
       this.pendingToolRequests.delete(response.requestId);
       pending.resolve(response);
     } else {
-      // Response came after SW restart - the pending request was in IndexedDB
-      // Clean it up since we received a response
+      // Response came after SW restart - need to recover and continue workflow
+      // console.log('[SW-WorkflowExecutor] Tool response received after SW restart, attempting recovery:', response.requestId);
+      
+      // Get the pending request info from IndexedDB
+      const storedRequest = await taskQueueStorage.getPendingToolRequest(response.requestId);
+      if (!storedRequest) {
+        // console.log('[SW-WorkflowExecutor] No stored request found for:', response.requestId);
+        return;
+      }
+      
+      // console.log('[SW-WorkflowExecutor] Found stored request:', {
+      //   workflowId: storedRequest.workflowId,
+      //   stepId: storedRequest.stepId,
+      //   toolName: storedRequest.toolName,
+      // });
+      
+      // Get the workflow
+      let workflow = this.workflows.get(storedRequest.workflowId);
+      if (!workflow) {
+        // Try to load from storage
+        workflow = await taskQueueStorage.getWorkflow(storedRequest.workflowId);
+        if (workflow) {
+          this.workflows.set(workflow.id, workflow);
+        }
+      }
+      
+      if (!workflow) {
+        // console.log('[SW-WorkflowExecutor] Workflow not found:', storedRequest.workflowId);
+        await taskQueueStorage.deletePendingToolRequest(response.requestId);
+        return;
+      }
+      
+      // Find the step
+      const step = workflow.steps.find(s => s.id === storedRequest.stepId);
+      if (!step) {
+        // console.log('[SW-WorkflowExecutor] Step not found:', storedRequest.stepId);
+        await taskQueueStorage.deletePendingToolRequest(response.requestId);
+        return;
+      }
+      
+      // Update step with response
+      if (response.success) {
+        step.status = 'completed';
+        step.result = {
+          success: true,
+          type: 'text',
+          data: response.result,
+        };
+        
+        // Handle addSteps (with deduplication)
+        const addSteps = (response as any).addSteps;
+        if (addSteps && addSteps.length > 0) {
+          // console.log('[SW-WorkflowExecutor] Adding', addSteps.length, 'new steps from recovered response');
+          
+          const actuallyAddedSteps: typeof addSteps = [];
+          for (const newStep of addSteps) {
+            if (!workflow.steps.find(s => s.id === newStep.id)) {
+              workflow.steps.push({
+                id: newStep.id,
+                mcp: newStep.mcp,
+                args: newStep.args,
+                description: newStep.description,
+                status: newStep.status || 'pending',
+              });
+              actuallyAddedSteps.push(newStep);
+            }
+          }
+          
+          // Only broadcast if we actually added new steps
+          if (actuallyAddedSteps.length > 0) {
+            this.config.broadcast({
+              type: 'WORKFLOW_STEPS_ADDED',
+              workflowId: workflow.id,
+              steps: actuallyAddedSteps,
+            } as any);
+          }
+        }
+        
+        // Save workflow
+        await taskQueueStorage.saveWorkflow(workflow);
+        
+        // Broadcast step completed
+        this.config.broadcast({
+          type: 'WORKFLOW_STEP_STATUS',
+          workflowId: workflow.id,
+          stepId: step.id,
+          status: 'completed',
+          result: step.result,
+        });
+      } else {
+        step.status = 'failed';
+        step.error = response.error || 'Unknown error';
+        step.result = {
+          success: false,
+          type: 'error',
+          error: step.error,
+        };
+        
+        // Save and broadcast failure
+        await taskQueueStorage.saveWorkflow(workflow);
+        this.config.broadcast({
+          type: 'WORKFLOW_STEP_STATUS',
+          workflowId: workflow.id,
+          stepId: step.id,
+          status: 'failed',
+          error: step.error,
+        });
+        this.config.broadcast({
+          type: 'WORKFLOW_FAILED',
+          workflowId: workflow.id,
+          error: step.error,
+        });
+        
+        // Clean up and return
+        await taskQueueStorage.deletePendingToolRequest(response.requestId);
+        return;
+      }
+      
+      // Clean up the pending request
       await taskQueueStorage.deletePendingToolRequest(response.requestId);
+      
+      // Continue executing remaining steps
+      // console.log('[SW-WorkflowExecutor] Continuing workflow execution after recovery:', workflow.id);
+      await this.executeWorkflow(workflow);
     }
   }
 
@@ -227,14 +357,42 @@ export class WorkflowExecutor {
   /**
    * Re-send all pending main thread tool requests to new client
    * Called when a new client connects (page refresh) to continue workflow execution
+   * 
+   * Note: For tools like ai_analyze that involve streaming, we don't re-send
+   * because the request may already be in progress. The workflow will continue
+   * waiting for the original response or timeout.
    */
   resendPendingToolRequests(): void {
     if (this.pendingToolRequests.size === 0) {
       return;
     }
 
+    // Tools that should NOT be re-sent on page refresh
+    // These tools may already be executing and re-sending would cause duplicate API calls
+    // Note: ai_analyze now runs directly in SW, so it doesn't need special handling
+    const noResendTools: string[] = [];
+
+    // console.log('[SW-WorkflowExecutor] resendPendingToolRequests:', {
+    //   pendingCount: this.pendingToolRequests.size,
+    //   pendingTools: Array.from(this.pendingToolRequests.values()).map(p => ({
+    //     toolName: p.requestInfo.toolName,
+    //     workflowId: p.requestInfo.workflowId,
+    //   })),
+    //   timestamp: new Date().toISOString(),
+    // });
+    
     for (const [, pending] of this.pendingToolRequests) {
       const { requestInfo } = pending;
+
+      // For tools that shouldn't be re-sent, skip (workflow continues waiting for original response)
+      if (noResendTools.includes(requestInfo.toolName)) {
+        // console.log('[SW-WorkflowExecutor] Skipping resend for tool (already in progress):', {
+        //   toolName: requestInfo.toolName,
+        //   workflowId: requestInfo.workflowId,
+        //   requestId: requestInfo.requestId,
+        // });
+        continue;
+      }
 
       // Re-broadcast the request to new client
       this.config.broadcast({
@@ -266,11 +424,19 @@ export class WorkflowExecutor {
    * Submit a workflow for execution
    */
   async submitWorkflow(workflow: Workflow): Promise<void> {
+    // console.log('[SW-WorkflowExecutor] submitWorkflow:', {
+    //   workflowId: workflow.id,
+    //   existingWorkflowsCount: this.workflows.size,
+    //   hasContext: !!workflow.context,
+    //   referenceImagesCount: workflow.context?.referenceImages?.length || 0,
+    //   timestamp: new Date().toISOString(),
+    // });
+    
     // Check for duplicate
     const existing = this.workflows.get(workflow.id);
     if (existing) {
       if (existing.status === 'running' || existing.status === 'pending') {
-        // console.log(`[WorkflowExecutor] Re-claiming active workflow ${workflow.id}`);
+        // console.log(`[SW-WorkflowExecutor] Re-claiming active workflow ${workflow.id}, status: ${existing.status}`);
         // Already running, just broadcast current status to sync the new client
         this.broadcastWorkflowStatus(existing);
         // Also broadcast individual steps to ensure UI is fully populated
@@ -280,11 +446,13 @@ export class WorkflowExecutor {
       
       // If failed/cancelled/completed, we might allow re-submitting with same ID?
       // For now, skip to avoid confusion
-      console.warn(`[WorkflowExecutor] Workflow ${workflow.id} already exists with terminal status ${existing.status}, skipping`);
+      console.warn(`[SW-WorkflowExecutor] Workflow ${workflow.id} already exists with terminal status ${existing.status}, skipping`);
       this.broadcastWorkflowStatus(existing);
       return;
     }
 
+    // console.log('[SW-WorkflowExecutor] ✓ New workflow, starting execution:', workflow.id);
+    
     // Store workflow
     workflow.status = 'pending';
     workflow.updatedAt = Date.now();
@@ -343,6 +511,11 @@ export class WorkflowExecutor {
    * Execute a workflow
    */
   private async executeWorkflow(workflowId: string): Promise<void> {
+    // console.log('[SW-WorkflowExecutor] executeWorkflow called:', {
+    //   workflowId,
+    //   timestamp: new Date().toISOString(),
+    // });
+    
     const workflow = this.workflows.get(workflowId);
     if (!workflow) {
       console.error(`[WorkflowExecutor] ✗ Workflow ${workflowId} not found`);
@@ -351,12 +524,12 @@ export class WorkflowExecutor {
 
     // Check if already running
     if (this.runningWorkflows.has(workflowId)) {
-      console.warn(`[WorkflowExecutor] Workflow ${workflowId} is already running`);
+      // console.warn(`[SW-WorkflowExecutor] Workflow ${workflowId} is already running, skipping duplicate execution`);
       return;
     }
 
     this.runningWorkflows.add(workflowId);
-    // console.log(`[WorkflowExecutor] ▶ Starting workflow execution: ${workflowId}`);
+    // console.log(`[SW-WorkflowExecutor] ▶ Starting workflow execution: ${workflowId}`);
 
     // Create abort controller
     const abortController = new AbortController();
@@ -482,6 +655,54 @@ export class WorkflowExecutor {
   }
 
   /**
+   * Replace image placeholders ([图片1], [图片2], etc.) with actual URLs
+   * from workflow.context.referenceImages
+   */
+  private replaceImagePlaceholders(
+    args: Record<string, unknown>,
+    referenceImages: string[]
+  ): Record<string, unknown> {
+    if (!referenceImages || referenceImages.length === 0) {
+      return args;
+    }
+
+    const replacePlaceholder = (value: unknown): unknown => {
+      if (typeof value === 'string') {
+        // Replace Chinese placeholders [图片1], [图片2], ...
+        let result = value.replace(/\[图片(\d+)\]/g, (match, indexStr) => {
+          const index = parseInt(indexStr, 10) - 1;
+          if (index >= 0 && index < referenceImages.length) {
+            return referenceImages[index];
+          }
+          return match;
+        });
+        // Replace English placeholders [Image 1], [Image 2], ...
+        result = result.replace(/\[Image\s*(\d+)\]/gi, (match, indexStr) => {
+          const index = parseInt(indexStr, 10) - 1;
+          if (index >= 0 && index < referenceImages.length) {
+            return referenceImages[index];
+          }
+          return match;
+        });
+        return result;
+      }
+      if (Array.isArray(value)) {
+        return value.map(item => replacePlaceholder(item));
+      }
+      if (value && typeof value === 'object') {
+        const result: Record<string, unknown> = {};
+        for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+          result[key] = replacePlaceholder(val);
+        }
+        return result;
+      }
+      return value;
+    };
+
+    return replacePlaceholder(args) as Record<string, unknown>;
+  }
+
+  /**
    * Execute a single workflow step
    */
   private async executeStep(
@@ -489,7 +710,48 @@ export class WorkflowExecutor {
     step: WorkflowStep,
     signal: AbortSignal
   ): Promise<void> {
+    // console.log('[SW-WorkflowExecutor] executeStep:', {
+    //   workflowId: workflow.id,
+    //   stepId: step.id,
+    //   mcp: step.mcp,
+    //   hasContext: !!workflow.context,
+    //   referenceImagesCount: workflow.context?.referenceImages?.length || 0,
+    //   timestamp: new Date().toISOString(),
+    // });
+    
     const startTime = Date.now();
+
+    // Replace image placeholders with actual URLs from context
+    const referenceImages = workflow.context?.referenceImages || [];
+    
+    // Debug: log args before processing
+    if (step.mcp === 'generate_image' || step.mcp === 'generate_video') {
+      // console.log('[SW-WorkflowExecutor] Image/Video step args before processing:', {
+      //   stepId: step.id,
+      //   referenceImagesInContext: referenceImages.length,
+      //   referenceImagesValues: referenceImages.slice(0, 2).map(url => url.substring(0, 50) + '...'),
+      //   argsReferenceImages: (step.args as any).referenceImages,
+      // });
+    }
+    
+    const processedArgs = this.replaceImagePlaceholders(step.args, referenceImages);
+    
+    // Log if any replacements were made
+    const argsStr = JSON.stringify(step.args);
+    const processedStr = JSON.stringify(processedArgs);
+    if (argsStr !== processedStr) {
+      // console.log('[SW-WorkflowExecutor] ✓ Replaced image placeholders:', {
+      //   stepId: step.id,
+      //   referenceImagesCount: referenceImages.length,
+      // });
+      // Update step args with processed values
+      step.args = processedArgs;
+    } else if (referenceImages.length > 0 && (step.mcp === 'generate_image' || step.mcp === 'generate_video')) {
+      // console.log('[SW-WorkflowExecutor] No placeholders replaced (args unchanged):', {
+      //   stepId: step.id,
+      //   referenceImagesCount: referenceImages.length,
+      // });
+    }
 
     // Update step status to running
     step.status = 'running';
@@ -514,7 +776,8 @@ export class WorkflowExecutor {
         // Handle additional steps (for ai_analyze)
         if (response.addSteps && response.addSteps.length > 0) {
           // console.log(`[WorkflowExecutor] Adding ${response.addSteps.length} new steps to workflow ${workflow.id}`);
-          // Add new steps to workflow
+          // Add new steps to workflow (with deduplication)
+          const actuallyAddedSteps: typeof response.addSteps = [];
           for (const newStep of response.addSteps) {
             if (!workflow.steps.find(s => s.id === newStep.id)) {
               workflow.steps.push({
@@ -524,30 +787,41 @@ export class WorkflowExecutor {
                 description: newStep.description,
                 status: newStep.status,
               });
+              actuallyAddedSteps.push(newStep);
             }
           }
           
-          // Persist the workflow immediately after adding steps
-          // This ensures that if the page is refreshed right now, the new steps are not lost
-          await taskQueueStorage.saveWorkflow(workflow);
+          // Only broadcast if we actually added new steps
+          if (actuallyAddedSteps.length > 0) {
+            // Persist the workflow immediately after adding steps
+            // This ensures that if the page is refreshed right now, the new steps are not lost
+            await taskQueueStorage.saveWorkflow(workflow);
 
-          // Broadcast that new steps were added
-          this.config.broadcast({
-            type: 'WORKFLOW_STEPS_ADDED',
-            workflowId: workflow.id,
-            steps: response.addSteps,
-          } as any);
+            // Broadcast that new steps were added
+            this.config.broadcast({
+              type: 'WORKFLOW_STEPS_ADDED',
+              workflowId: workflow.id,
+              steps: actuallyAddedSteps,
+            } as any);
+          }
         }
 
         // Handle response based on tool type
         const resultData = response.result as any;
 
-        // For generate_image/generate_video, the result contains taskId
+        // For image/video generation tools, the result contains taskId
         // The step should be marked as 'running' until the task completes
-        if ((step.mcp === 'generate_image' || step.mcp === 'generate_video') && response.taskId) {
+        const imageVideoTools = ['generate_image', 'generate_video', 'generate_grid_image', 'generate_inspiration_board'];
+        if (imageVideoTools.includes(step.mcp) && response.taskId) {
+          const typeMap: Record<string, string> = {
+            'generate_image': 'image',
+            'generate_grid_image': 'image',
+            'generate_inspiration_board': 'image',
+            'generate_video': 'video',
+          };
           step.result = {
             success: true,
-            type: step.mcp === 'generate_image' ? 'image' : 'video',
+            type: typeMap[step.mcp] || 'image',
             data: resultData,
             taskId: response.taskId,
             taskIds: response.taskIds,
@@ -646,6 +920,33 @@ export class WorkflowExecutor {
 
           if (!result.success) {
             throw new Error(result.error || 'Step execution failed');
+          }
+        }
+
+        // Handle additional steps (from ai_analyze executed in SW) with deduplication
+        if (result.addSteps && result.addSteps.length > 0) {
+          // console.log(`[SW-WorkflowExecutor] Adding ${result.addSteps.length} new steps from ${step.mcp}`);
+          const actuallyAddedSteps: typeof result.addSteps = [];
+          for (const newStep of result.addSteps) {
+            if (!workflow.steps.find(s => s.id === newStep.id)) {
+              workflow.steps.push({
+                id: newStep.id,
+                mcp: newStep.mcp,
+                args: newStep.args,
+                description: newStep.description,
+                status: newStep.status,
+              });
+              actuallyAddedSteps.push(newStep);
+            }
+          }
+
+          // Only broadcast if we actually added new steps
+          if (actuallyAddedSteps.length > 0) {
+            this.config.broadcast({
+              type: 'WORKFLOW_STEPS_ADDED',
+              workflowId: workflow.id,
+              steps: actuallyAddedSteps,
+            });
           }
         }
       }

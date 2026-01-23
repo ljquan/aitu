@@ -17,6 +17,7 @@ import {
   pollVideoUntilComplete,
   fetchImageWithCache,
 } from '../utils/media-generation-utils';
+import type { LLMReferenceImage } from '../llm-api-logger';
 
 /**
  * Video generation response types
@@ -26,6 +27,14 @@ interface VideoSubmitResponse {
   status: 'queued' | 'in_progress' | 'completed' | 'failed';
   progress: number;
   error?: string | { code: string; message: string };
+}
+
+/**
+ * Submit response with log ID for tracking
+ */
+interface SubmitResult {
+  response: VideoSubmitResponse;
+  logId: string;
 }
 
 /**
@@ -46,7 +55,7 @@ export class VideoHandler implements TaskHandler {
       config.onProgress(task.id, 0, TaskExecutionPhase.SUBMITTING);
 
       // Submit video generation request
-      const submitResponse = await this.submitVideoGeneration(
+      const { response: submitResponse, logId } = await this.submitVideoGeneration(
         task,
         config,
         abortController.signal
@@ -61,7 +70,8 @@ export class VideoHandler implements TaskHandler {
         submitResponse.id,
         task.id,
         config,
-        abortController.signal
+        abortController.signal,
+        logId
       );
 
       return result;
@@ -81,6 +91,16 @@ export class VideoHandler implements TaskHandler {
     const abortController = new AbortController();
     this.abortControllers.set(task.id, abortController);
 
+    // 为恢复的任务创建新的日志条目
+    const { startLLMApiLog } = await import('../llm-api-logger');
+    const logId = startLLMApiLog({
+      endpoint: `/videos/${task.remoteId} (resumed)`,
+      model: (task.params?.model as string) || 'veo3',
+      taskType: 'video',
+      prompt: (task.params?.prompt as string) || '',
+      taskId: task.id,
+    });
+
     try {
       config.onProgress(task.id, task.progress || 0, TaskExecutionPhase.POLLING);
 
@@ -88,7 +108,8 @@ export class VideoHandler implements TaskHandler {
         task.remoteId,
         task.id,
         config,
-        abortController.signal
+        abortController.signal,
+        logId
       );
 
       return result;
@@ -111,7 +132,7 @@ export class VideoHandler implements TaskHandler {
     task: SWTask,
     config: HandlerConfig,
     signal: AbortSignal
-  ): Promise<VideoSubmitResponse> {
+  ): Promise<SubmitResult> {
     const { videoConfig } = config;
     const { params } = task;
 
@@ -136,6 +157,30 @@ export class VideoHandler implements TaskHandler {
       inputReferences: params.inputReferences as any[] | undefined,
     });
 
+    // 获取参考图片详情用于日志
+    const { getImageInfo } = await import('../utils/media-generation-utils');
+    const referenceImageInfos: LLMReferenceImage[] = await Promise.all(
+      refUrls.map(async (url) => {
+        try {
+          const info = await getImageInfo(url, signal);
+          return {
+            url: info.url,
+            size: info.size,
+            width: info.width,
+            height: info.height,
+          };
+        } catch (err) {
+          console.warn(`[VideoHandler] Failed to get image info for log: ${url}`, err);
+          return {
+            url,
+            size: 0,
+            width: 0,
+            height: 0,
+          };
+        }
+      })
+    );
+
     // 处理参考图片：获取 Blob 或回退到 URL
     if (refUrls.length > 0) {
       for (let i = 0; i < refUrls.length; i++) {
@@ -157,21 +202,63 @@ export class VideoHandler implements TaskHandler {
       }
     }
 
-    const response = await fetch(`${videoConfig.baseUrl}/videos`, {
+    // Import loggers
+    const { debugFetch } = await import('../debug-fetch');
+    const { startLLMApiLog, completeLLMApiLog, failLLMApiLog } = await import('../llm-api-logger');
+    
+    const startTime = Date.now();
+    const model = (params.model as string) || 'veo3';
+    const logId = startLLMApiLog({
+      endpoint: '/videos',
+      model,
+      taskType: 'video',
+      prompt: params.prompt as string,
+      hasReferenceImages: refUrls.length > 0,
+      referenceImageCount: refUrls.length,
+      referenceImages: referenceImageInfos,
+      taskId: task.id,
+    });
+
+    // Use debugFetch for logging
+    const response = await debugFetch(`${videoConfig.baseUrl}/videos`, {
       method: 'POST',
       headers: videoConfig.apiKey
         ? { Authorization: `Bearer ${videoConfig.apiKey}` }
         : undefined,
       body: formData,
       signal,
+    }, {
+      label: `🎬 提交视频生成 (${model})`,
+      logResponseBody: true,
     });
 
     if (!response.ok) {
       const errorText = await response.text();
+      failLLMApiLog(logId, {
+        httpStatus: response.status,
+        duration: Date.now() - startTime,
+        errorMessage: errorText,
+        responseBody: errorText,
+      });
       throw new Error(`Video submission failed: ${response.status} - ${errorText}`);
     }
 
-    return response.json();
+    const data = await response.json();
+
+    // 记录 remoteId 到日志，以便在 SW 重启时恢复
+    if (data.id) {
+      const { updateLLMApiLogMetadata } = await import('../llm-api-logger');
+      updateLLMApiLogMetadata(logId, {
+        remoteId: data.id,
+        responseBody: JSON.stringify(data),
+        httpStatus: response.status,
+      });
+    }
+
+    // 注意：这里不调用 completeLLMApiLog，因为视频还在异步生成中
+    // 最终结果会在 pollUntilComplete 完成后更新
+
+    return { response: data, logId };
   }
 
   /**
@@ -182,38 +269,65 @@ export class VideoHandler implements TaskHandler {
     videoId: string,
     taskId: string,
     config: HandlerConfig,
-    signal: AbortSignal
+    signal: AbortSignal,
+    logId?: string
   ): Promise<TaskResult> {
     const { videoConfig } = config;
+    const startTime = Date.now();
 
-    // 使用通用轮询函数
-    const result = await pollVideoUntilComplete(
-      videoConfig.baseUrl,
-      videoId,
-      {
-        onProgress: (progress, phase) => {
-          config.onProgress(taskId, progress, phase);
-        },
-        signal,
-        apiKey: videoConfig.apiKey,
-        interval: 5000,
-        maxAttempts: 1080, // 90 minutes
+    try {
+      // 使用通用轮询函数
+      const result = await pollVideoUntilComplete(
+        videoConfig.baseUrl,
+        videoId,
+        {
+          onProgress: (progress, phase) => {
+            config.onProgress(taskId, progress, phase);
+          },
+          signal,
+          apiKey: videoConfig.apiKey,
+          interval: 5000,
+          maxAttempts: 1080, // 90 minutes
+        }
+      );
+
+      const videoUrl = result.video_url || result.url;
+      if (!videoUrl) {
+        throw new Error('No video URL in completed response');
       }
-    );
 
-    const videoUrl = result.video_url || result.url;
-    if (!videoUrl) {
-      throw new Error('No video URL in completed response');
+      // 更新 LLM API 日志，添加最终的视频 URL
+      if (logId) {
+        const { completeLLMApiLog } = await import('../llm-api-logger');
+        completeLLMApiLog(logId, {
+          httpStatus: 200,
+          duration: Date.now() - startTime,
+          resultType: 'video',
+          resultCount: 1,
+          resultUrl: videoUrl,
+          responseBody: JSON.stringify(result),
+        });
+      }
+
+      return {
+        url: videoUrl,
+        format: 'mp4',
+        size: 0,
+        width: result.width,
+        height: result.height,
+        duration: parseInt(result.seconds || '0') || 0,
+      };
+    } catch (error) {
+      // 更新 LLM API 日志，记录失败
+      if (logId) {
+        const { failLLMApiLog } = await import('../llm-api-logger');
+        failLLMApiLog(logId, {
+          duration: Date.now() - startTime,
+          errorMessage: error instanceof Error ? error.message : String(error),
+        });
+      }
+      throw error;
     }
-
-    return {
-      url: videoUrl,
-      format: 'mp4',
-      size: 0,
-      width: result.width,
-      height: result.height,
-      duration: parseInt(result.seconds || '0') || 0,
-    };
   }
 
   /**

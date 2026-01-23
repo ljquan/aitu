@@ -1,0 +1,822 @@
+/**
+ * 图片编辑器核心组件样式
+ * 公共样式，供 ImageEditor 和 UnifiedMediaViewer 中的编辑器复用
+ */
+
+// 统一配色
+$accent-color: #ffb366;
+// 裁剪框颜色
+$crop-border-color: #4f46e5; // 深靛蓝色，用于边框线
+$crop-handle-color: #818cf8; // 浅靛蓝色，用于控制点
+$accent-hover: #ffc989;
+$text-primary: #fff;
+$text-secondary: rgba(255, 255, 255, 0.7);
+$text-muted: rgba(255, 255, 255, 0.5);
+$sidebar-bg: rgba(28, 28, 32, 0.9);
+$panel-border: rgba(255, 255, 255, 0.12);
+$header-bg: rgba(30, 30, 30, 0.8);
+
+.image-editor-core {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+  height: 100%;
+  position: relative;
+  background: rgba(0, 0, 0, 0.92);
+
+  // 顶部工具栏
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 20px;
+    position: absolute;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 100;
+    background: $header-bg;
+    border-radius: 12px;
+    backdrop-filter: blur(20px);
+    border: 1px solid $panel-border;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    gap: 16px;
+  }
+
+  &__title {
+    font-size: 14px;
+    font-weight: 500;
+    color: $text-primary;
+    padding-right: 12px;
+    border-right: 1px solid $panel-border;
+  }
+
+  &__actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  &__btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: $text-secondary;
+    cursor: pointer;
+    transition: all 0.2s ease;
+
+    &:hover:not(:disabled) {
+      background: rgba(255, 255, 255, 0.1);
+      color: $text-primary;
+    }
+
+    &:active:not(:disabled) {
+      transform: scale(0.95);
+    }
+
+    &.active {
+      background: rgba(255, 255, 255, 0.15);
+      color: $accent-color;
+    }
+
+    &.disabled,
+    &:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+
+    &--primary {
+      background: $text-primary;
+      color: #1a1a1a;
+
+      &:hover:not(:disabled) {
+        background: rgba(255, 255, 255, 0.9);
+        color: #1a1a1a;
+      }
+    }
+  }
+
+  &__divider {
+    width: 1px;
+    height: 20px;
+    background: $panel-border;
+    margin: 0 4px;
+  }
+
+  // 主内容区
+  &__main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+  }
+
+  // 左侧工具面板
+  &__sidebar {
+    display: flex;
+    flex-direction: column;
+    width: 280px;
+    background: $sidebar-bg;
+    backdrop-filter: blur(20px);
+    border: 1px solid $panel-border;
+    z-index: 20;
+    position: absolute;
+    left: 20px;
+    top: 80px;
+    bottom: 20px;
+    border-radius: 16px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  }
+
+  &__mode-tabs {
+    display: flex;
+    padding: 12px 16px;
+    gap: 8px;
+    border-bottom: 1px solid $panel-border;
+  }
+
+  &__mode-tab {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 36px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    color: $text-muted;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: $text-secondary;
+    }
+
+    &.active {
+      color: $accent-color;
+      background: rgba($accent-color, 0.12);
+      border-color: rgba($accent-color, 0.3);
+    }
+  }
+
+  &__panel {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+
+    &::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 2px;
+    }
+  }
+
+  // 预览区域
+  &__preview {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+    padding-left: 320px;
+  }
+
+  &__canvas-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.05s linear;
+  }
+
+  &__filter-preview {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+
+    &--cropped {
+      position: relative;
+    }
+  }
+
+  // 缩放控制栏
+  &__zoom-controls {
+    position: absolute;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: $header-bg;
+    backdrop-filter: blur(20px);
+    border-radius: 10px;
+    border: 1px solid $panel-border;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    margin-left: 140px;
+  }
+
+  &__zoom-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: $text-secondary;
+    cursor: pointer;
+    transition: all 0.2s ease;
+
+    &:hover:not(:disabled) {
+      background: rgba(255, 255, 255, 0.1);
+      color: $text-primary;
+    }
+
+    &:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+  }
+
+  &__zoom-value {
+    min-width: 48px;
+    text-align: center;
+    font-size: 13px;
+    color: $text-primary;
+    font-weight: 500;
+  }
+
+  // 保存选项弹窗
+  &__save-dialog {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  &__save-dialog-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+  }
+
+  &__save-dialog-content {
+    position: relative;
+    width: 360px;
+    padding: 24px;
+    background: #1a1a1a;
+    border-radius: 16px;
+    border: 1px solid $panel-border;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  }
+
+  &__save-dialog-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: $text-primary;
+    margin: 0 0 20px;
+    text-align: center;
+  }
+
+  &__save-options {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  &__save-option {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px;
+    border: 1px solid $panel-border;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.02);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: left;
+
+    &:hover {
+      background: rgba($accent-color, 0.1);
+      border-color: $accent-color;
+    }
+
+    svg {
+      flex-shrink: 0;
+      color: $accent-color;
+    }
+  }
+
+  &__save-option-content {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  &__save-option-label {
+    font-size: 14px;
+    font-weight: 500;
+    color: $text-primary;
+  }
+
+  &__save-option-desc {
+    font-size: 12px;
+    color: $text-muted;
+  }
+
+  &__save-cancel {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid $panel-border;
+    border-radius: 8px;
+    background: transparent;
+    color: $text-secondary;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.05);
+      color: $text-primary;
+    }
+  }
+}
+
+// 裁剪面板样式
+.crop-panel {
+  &__section {
+    margin-bottom: 24px;
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+  }
+
+  &__section-title {
+    color: $text-muted;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 12px;
+  }
+
+  &__ratio-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+
+  &__ratio-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 36px;
+    border: 1px solid $panel-border;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    color: $text-muted;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba($accent-color, 0.5);
+      color: $accent-color;
+    }
+
+    &.active {
+      background: $accent-color;
+      border-color: $accent-color;
+      color: #000;
+      font-weight: 600;
+    }
+  }
+
+  &__transform-row {
+    display: flex;
+    gap: 8px;
+  }
+
+  &__transform-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 40px;
+    border: 1px solid $panel-border;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    color: $text-secondary;
+    cursor: pointer;
+    transition: all 0.2s ease;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.2);
+      color: $text-primary;
+    }
+
+    &.active {
+      background: rgba(255, 255, 255, 0.15);
+      border-color: rgba(255, 255, 255, 0.3);
+      color: $text-primary;
+    }
+  }
+
+  &__rotation-info {
+    margin-top: 8px;
+    text-align: center;
+    font-size: 12px;
+    color: $text-muted;
+  }
+
+  &__auto-trim-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    height: 40px;
+    border: 1px solid $panel-border;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    color: $text-secondary;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+
+    &:hover:not(:disabled) {
+      background: rgba($accent-color, 0.1);
+      border-color: rgba($accent-color, 0.5);
+      color: $accent-color;
+    }
+
+    &:disabled,
+    &.loading {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    &.loading {
+      svg {
+        animation: spin 1s linear infinite;
+      }
+    }
+  }
+
+  &__auto-trim-hint {
+    margin-top: 8px;
+    font-size: 11px;
+    color: $text-muted;
+    line-height: 1.4;
+  }
+
+  &__confirm-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    height: 44px;
+    border: none;
+    border-radius: 10px;
+    background: $text-primary;
+    color: #1a1a1a;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+
+    &:hover:not(.disabled) {
+      background: rgba(255, 255, 255, 0.9);
+    }
+
+    &.disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+  }
+
+  &__confirm-hint {
+    margin-top: 8px;
+    text-align: center;
+    font-size: 12px;
+    color: $text-muted;
+  }
+
+  &__tips {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid $panel-border;
+    color: $text-muted;
+    padding: 12px;
+    border-radius: 10px;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+}
+
+// 滤镜面板样式
+.filter-panel {
+  &__section {
+    margin-bottom: 24px;
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+  }
+
+  &__section-title {
+    color: $text-muted;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 12px;
+  }
+
+  &__preset-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+
+  &__preset-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 8px;
+    border: 1px solid $panel-border;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.02);
+    cursor: pointer;
+    transition: all 0.2s ease;
+
+    &:hover {
+      border-color: rgba($accent-color, 0.4);
+    }
+
+    &.active {
+      border-color: $accent-color;
+      background: rgba($accent-color, 0.1);
+    }
+  }
+
+  &__preset-preview {
+    width: 48px;
+    height: 48px;
+    border-radius: 6px;
+    overflow: hidden;
+    background-color: #333;
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+
+    img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+  }
+
+  &__preset-label {
+    font-size: 11px;
+    color: $text-muted;
+    transition: color 0.2s ease;
+
+    .active & {
+      color: $accent-color;
+    }
+  }
+
+  &__sliders {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+}
+
+// 滤镜滑块样式（独立组件）
+.filter-slider {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  &__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  &__label {
+    font-size: 13px;
+    color: $text-secondary;
+  }
+
+  &__value {
+    font-size: 12px;
+    color: $text-muted;
+    min-width: 32px;
+    text-align: right;
+
+    &.modified {
+      color: $accent-color;
+    }
+  }
+
+  // TDesign Slider 覆盖样式
+  .t-slider {
+    padding: 0;
+  }
+
+  .t-slider__rail {
+    background: rgba(255, 255, 255, 0.1);
+    height: 3px;
+  }
+
+  .t-slider__track {
+    background: $accent-color;
+    height: 3px;
+  }
+
+  .t-slider__button {
+    width: 14px;
+    height: 14px;
+    border: 2px solid $accent-color;
+    background: #fff;
+    box-shadow: 0 0 10px rgba($accent-color, 0.4);
+  }
+}
+
+// 裁剪画布样式
+.crop-canvas {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  position: relative;
+
+  &__image-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+  }
+
+  &__overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    pointer-events: none;
+  }
+
+  &__crop-area {
+    position: absolute;
+    // 使用 box-shadow 模拟边框，这样边框画在元素外部，不影响实际裁剪区域
+    // 第一个 box-shadow 是边框（2px 青蓝色），第二个是遮罩层
+    box-shadow: 0 0 0 2px $crop-border-color, 0 0 0 9999px rgba(0, 0, 0, 0.6);
+    cursor: move;
+    z-index: 10;
+  }
+
+  &__crop-image {
+    position: absolute;
+    inset: 0;
+    background-repeat: no-repeat;
+  }
+
+  &__grid {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  &__grid-line {
+    position: absolute;
+    background: rgba(255, 255, 255, 0.3);
+
+    &--h1 {
+      left: 0;
+      right: 0;
+      top: 33.33%;
+      height: 1px;
+    }
+
+    &--h2 {
+      left: 0;
+      right: 0;
+      top: 66.66%;
+      height: 1px;
+    }
+
+    &--v1 {
+      top: 0;
+      bottom: 0;
+      left: 33.33%;
+      width: 1px;
+    }
+
+    &--v2 {
+      top: 0;
+      bottom: 0;
+      left: 66.66%;
+      width: 1px;
+    }
+  }
+
+  &__handle {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    background: #fff;
+    border: 2px solid $crop-handle-color;
+    border-radius: 50%;
+    box-shadow: 0 0 8px rgba(0, 0, 0, 0.5);
+
+    &--nw {
+      top: -6px;
+      left: -6px;
+    }
+    &--ne {
+      top: -6px;
+      right: -6px;
+    }
+    &--sw {
+      bottom: -6px;
+      left: -6px;
+    }
+    &--se {
+      bottom: -6px;
+      right: -6px;
+    }
+    &--n {
+      top: -6px;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+    &--s {
+      bottom: -6px;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+    &--w {
+      left: -6px;
+      top: 50%;
+      transform: translateY(-50%);
+    }
+    &--e {
+      right: -6px;
+      top: 50%;
+      transform: translateY(-50%);
+    }
+  }
+}
+
+// 动画
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

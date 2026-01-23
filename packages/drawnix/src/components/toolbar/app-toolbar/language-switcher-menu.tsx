@@ -12,7 +12,7 @@ export const LanguageSwitcherMenu = () => {
   
   return (
     <MenuItem
-      icon={MenuIcon}
+      icon={<MenuIcon />}
       data-testid="language-switcher-button"
       onSelect={() => {
         // This will be handled by the submenu
