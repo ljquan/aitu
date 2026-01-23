@@ -52,6 +52,8 @@ export interface UnifiedMediaViewerProps {
   videoLoop?: boolean;
   /** 插入到画布回调（传入则显示插入按钮） */
   onInsertToCanvas?: (item: MediaItem) => void;
+  /** 编辑图片回调（传入则显示编辑按钮） */
+  onEdit?: (item: MediaItem) => void;
 }
 
 /** 预览状态 */
@@ -136,6 +138,8 @@ export interface MediaViewportProps {
   onInsertToCanvas?: () => void;
   /** 下载回调 */
   onDownload?: () => void;
+  /** 编辑回调（仅图片） */
+  onEdit?: () => void;
 }
 
 /** ThumbnailQueue Props */

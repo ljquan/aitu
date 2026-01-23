@@ -139,58 +139,9 @@ Service Worker (后台执行)
 8. **布局抖动**：`Suspense` 的 fallback 应撑满容器或固定高度，防止加载时跳动
 9. **结构化数据**：复杂消息展示应优先使用 `aiContext` 等结构化数据而非字符串解析
 10. **图标验证**：使用 `tdesign-icons-react` 前需验证导出名称是否存在（如 `ServiceIcon`）
-11. **外部 API 调用频率**：低频刷新的外部接口（如健康检查、状态查询）必须使用单例控制调用频率
-12. **共享模块设计**：相似功能提取到 `*-core.ts` 核心模块，通过配置类型（如 `TrimMode`）区分行为
-
-#### 外部 API 调用频率控制
-
-**场景**: 调用外部服务的低频刷新接口（如每 5 分钟刷新一次的状态接口），多个组件可能同时触发请求
-
-❌ **错误示例**:
-```typescript
-// 错误：直接导出函数，每次调用都发起请求
-export async function fetchHealthData(): Promise<Data[]> {
-  const response = await fetch(API_URL);
-  return response.json();
-}
-
-// 多个组件同时调用会产生重复请求
-// ComponentA: fetchHealthData()
-// ComponentB: fetchHealthData()  // 同时发起第二个请求
-```
-
-✅ **正确示例**:
-```typescript
-// 正确：使用单例控制调用频率和并发
-class HealthDataFetcher {
-  private static instance: HealthDataFetcher;
-  private cachedData: Data[] = [];
-  private lastFetchTime = 0;
-  private pendingFetch: Promise<Data[]> | null = null;
-  
-  static getInstance() {
-    if (!this.instance) this.instance = new HealthDataFetcher();
-    return this.instance;
-  }
-
-  async fetch(force = false): Promise<Data[]> {
-    // 1. 检查最小调用间隔（如 1 分钟）
-    if (!force && Date.now() - this.lastFetchTime < 60_000) {
-      return this.cachedData;
-    }
-    // 2. 复用进行中的请求（防并发）
-    if (this.pendingFetch) return this.pendingFetch;
-    // 3. 发起新请求
-    this.pendingFetch = this.doFetch();
-    try { return await this.pendingFetch; }
-    finally { this.pendingFetch = null; }
-  }
-}
-
-export const healthDataFetcher = HealthDataFetcher.getInstance();
-```
-
-**原因**: 外部接口数据通常有刷新周期（如 5 分钟），在刷新周期内重复请求是浪费。单例模式可以：1) 设置最小调用间隔避免频繁请求；2) 复用进行中的 Promise 防止并发请求；3) 统一管理缓存，所有调用方共享数据。
+11. **外部 API 调用频率**：低频刷新的外部接口必须使用单例控制调用频率
+12. **共享模块设计**：相似功能提取到 `*-core.ts` 核心模块，通过配置类型区分行为
+13. **同名模块隔离**：多个同名模块有独立全局状态，确保从正确的模块路径导入
 
 ### Service Worker 规则
 
@@ -199,77 +150,7 @@ export const healthDataFetcher = HealthDataFetcher.getInstance();
 3. SW 内部获取缓存数据应直接读取 Cache API，不使用 fetch
 4. 更新后禁止自动刷新页面，需用户确认
 5. SW 枚举值使用小写（`'completed'`、`'image'`、`'video'`），读取 SW 数据时注意匹配
-
-#### 无效配置下的数据不应被持久化或执行
-
-**场景**: 用户在未配置 API Key 时创建了任务，后来配置了 API Key，这些旧任务不应被执行
-
-❌ **错误示例**:
-```typescript
-// 错误：initialize 时直接恢复所有 PENDING 任务
-async initialize(config: Config): Promise<void> {
-  this.config = config;
-  this.initialized = true;
-  
-  // 恢复并执行所有 PENDING 任务（包括无效配置时创建的）
-  for (const task of this.tasks.values()) {
-    if (task.status === TaskStatus.PENDING) {
-      this.executeTask(task);  // ❌ 执行了"孤儿任务"
-    }
-  }
-}
-```
-
-✅ **正确示例**:
-```typescript
-// 正确：首次初始化时清除无效配置下创建的任务
-private hadSavedConfig = false;
-
-async restoreFromStorage(): Promise<void> {
-  const { config } = await storage.loadConfig();
-  if (config) {
-    this.hadSavedConfig = true;  // 标记有保存的配置
-  }
-}
-
-async initialize(config: Config): Promise<void> {
-  // 首次初始化时清除"孤儿任务"
-  if (!this.hadSavedConfig) {
-    for (const task of this.tasks.values()) {
-      if (task.status === TaskStatus.PENDING) {
-        await storage.deleteTask(task.id);  // ✅ 清除无效任务
-      }
-    }
-  }
-  this.hadSavedConfig = true;
-  // ... 继续正常初始化
-}
-```
-
-**原因**: 无效配置（如缺少 API Key）下创建的任务是"孤儿数据"，不应在后续有效配置时被执行。通过 `hadSavedConfig` 标志区分"首次初始化"和"恢复已有配置"，确保只有在有效配置下创建的任务才会被执行。
-
-### 模块导入规则
-
-#### 同名模块的全局状态隔离问题
-
-**场景**: 项目中存在多个同名模块（如 `canvas-insertion.ts`），各自维护独立的全局变量（如 `boardRef`）
-
-❌ **错误示例**:
-```typescript
-// MediaViewport.tsx - 错误：从 mcp/tools 导入
-import { quickInsert } from '../../../mcp/tools/canvas-insertion';
-// 但 boardRef 是在 services/canvas-operations 版本中被设置的
-// 导致 "画布未初始化" 错误
-```
-
-✅ **正确示例**:
-```typescript
-// MediaViewport.tsx - 正确：从 services/canvas-operations 导入
-import { quickInsert } from '../../../services/canvas-operations';
-// 与 AIInputBar.tsx 中 setCanvasBoard 设置的是同一个 boardRef
-```
-
-**原因**: 项目中 `mcp/tools/canvas-insertion.ts` 和 `services/canvas-operations/canvas-insertion.ts` 是两个独立模块，各自有独立的 `boardRef` 变量。`AIInputBar` 只设置了 `services` 版本的 `boardRef`，所以必须从 `services/canvas-operations` 导入才能正确访问已初始化的 board。
+6. 无效配置下创建的任务不应在后续被执行，首次初始化时应清除"孤儿任务"
 
 ### React 规则
 

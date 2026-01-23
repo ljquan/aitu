@@ -28,6 +28,7 @@ export const UnifiedMediaViewer: React.FC<UnifiedMediaViewerProps> = ({
   videoAutoPlay = false,
   videoLoop = true,
   onInsertToCanvas,
+  onEdit,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [slotCount, setSlotCount] = useState<2 | 3 | 4>(2);
@@ -283,6 +284,14 @@ export const UnifiedMediaViewer: React.FC<UnifiedMediaViewerProps> = ({
     document.body.removeChild(link);
   }, [items, currentIndex]);
 
+  // 处理编辑当前媒体
+  const handleEdit = useCallback(() => {
+    const currentItem = items[currentIndex];
+    if (currentItem && onEdit && currentItem.type === 'image') {
+      onEdit(currentItem);
+    }
+  }, [items, currentIndex, onEdit]);
+
   // 渲染单图模式
   const renderSingleMode = () => {
     const currentItem = items[currentIndex] || null;
@@ -313,6 +322,7 @@ export const UnifiedMediaViewer: React.FC<UnifiedMediaViewerProps> = ({
           }}
           onInsertToCanvas={onInsertToCanvas ? handleInsertToCanvas : undefined}
           onDownload={handleDownload}
+          onEdit={onEdit ? handleEdit : undefined}
         />
 
         {/* 右箭头 */}

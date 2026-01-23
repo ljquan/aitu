@@ -17,6 +17,8 @@ import {
   toImage,
   addSelectedElement,
   clearSelectedElement,
+  Transforms,
+  getViewportOrigination,
 } from '@plait/core';
 import { useEffect, useRef, useState } from 'react';
 import { useBoard } from '@plait-board/react-board';
@@ -55,6 +57,7 @@ import { PopupPromptButton } from './prompt-button';
 import { PopupLayerControlButton } from './layer-control-button';
 import { TextPropertyPanel } from './text-property-panel';
 import { AIImageIcon, AIVideoIcon, VideoFrameIcon, DuplicateIcon, TrashIcon, SplitImageIcon, DownloadIcon, MergeIcon, VideoMergeIcon } from '../../icons';
+import { Pencil } from 'lucide-react';
 import { useDrawnix, DialogType } from '../../../hooks/use-drawnix';
 import { useI18n } from '../../../i18n';
 import { ToolButton } from '../../tool-button';
@@ -72,6 +75,8 @@ import { smartDownload, BatchDownloadItem } from '../../../utils/download-utils'
 import { trimCanvasWhiteAndTransparentBorderWithInfo } from '../../../utils/image-border-utils';
 import { MessagePlugin } from 'tdesign-react';
 import { mergeVideos } from '../../../services/video-merge-webcodecs';
+import { ImageEditor } from '../../image-editor';
+import { insertImageFromUrl } from '../../../data/image';
 
 export const PopupToolbar = () => {
   const board = useBoard();
@@ -88,6 +93,11 @@ export const PopupToolbar = () => {
   // 视频帧选择弹窗状态
   const [showVideoFrameSelector, setShowVideoFrameSelector] = useState(false);
   const [selectedVideoElement, setSelectedVideoElement] = useState<PlaitElement | null>(null);
+
+  // 图片编辑器状态
+  const [showImageEditor, setShowImageEditor] = useState(false);
+  const [editingImageUrl, setEditingImageUrl] = useState('');
+  const [editingImageElement, setEditingImageElement] = useState<PlaitDrawElement | null>(null);
 
   // 属性面板状态
   const [showPropertyPanel, setShowPropertyPanel] = useState(false);
@@ -135,6 +145,7 @@ export const PopupToolbar = () => {
     hasDownloadable?: boolean; // 是否显示下载按钮
     hasMergeable?: boolean; // 是否显示合并按钮
     hasVideoMergeable?: boolean; // 是否显示视频合成按钮
+    hasImageEdit?: boolean; // 是否显示图片编辑按钮
     hasCornerRadius?: boolean; // 是否显示圆角设置按钮
     cornerRadius?: number; // 当前圆角值
     hasSizeInput?: boolean; // 是否显示宽高输入
@@ -203,6 +214,9 @@ export const PopupToolbar = () => {
 
     // 只有检测到分割线时才显示拆图按钮
     const hasSplitImage = isImageSelected;
+
+    // 图片编辑按钮：选中单个非 SVG 图片时显示
+    const hasImageEdit = isImageSelected;
 
     // 下载按钮：选中图片或视频时显示
     const hasDownloadable =
@@ -301,6 +315,7 @@ export const PopupToolbar = () => {
       hasAIVideo,
       hasVideoFrame,
       hasSplitImage,
+      hasImageEdit,
       hasDownloadable,
       hasMergeable,
       hasVideoMergeable,
@@ -666,6 +681,26 @@ export const PopupToolbar = () => {
                       MessagePlugin.close(loadingInstance);
                       MessagePlugin.error(error.message || (language === 'zh' ? '拆图失败' : 'Split failed'));
                     }
+                  }
+                }}
+              />
+            )}
+            {state.hasImageEdit && (
+              <ToolButton
+                className="image-edit"
+                key="image-edit"
+                type="icon"
+                icon={<Pencil size={15} />}
+                visible={true}
+                title={language === 'zh' ? '编辑图片' : 'Edit Image'}
+                aria-label={language === 'zh' ? '编辑图片' : 'Edit Image'}
+                data-track="toolbar_click_image_edit"
+                onPointerUp={() => {
+                  const imageElement = selectedElements[0] as PlaitDrawElement;
+                  if (PlaitDrawElement.isImage(imageElement) && imageElement.url) {
+                    setEditingImageUrl(imageElement.url);
+                    setEditingImageElement(imageElement);
+                    setShowImageEditor(true);
                   }
                 }}
               />
@@ -1094,6 +1129,109 @@ export const PopupToolbar = () => {
             } catch (error) {
               console.error('Failed to insert video frame:', error);
               // 可以在这里添加错误提示
+            }
+          }}
+        />
+      )}
+
+      {/* 图片编辑器 */}
+      {showImageEditor && editingImageUrl && (
+        <ImageEditor
+          visible={showImageEditor}
+          imageUrl={editingImageUrl}
+          showOverwrite={!!editingImageElement}
+          onClose={() => {
+            setShowImageEditor(false);
+            setEditingImageUrl('');
+            setEditingImageElement(null);
+          }}
+          onOverwrite={async (editedImageUrl: string) => {
+            if (editingImageElement) {
+              try {
+                // 创建虚拟路径 URL 缓存编辑后的图片
+                const { unifiedCacheService } = await import('../../../services/unified-cache-service');
+                const taskId = `edited-image-${Date.now()}`;
+                const stableUrl = `/__aitu_cache__/image/${taskId}.png`;
+
+                // 将 data URL 转换为 Blob
+                const response = await fetch(editedImageUrl);
+                const blob = await response.blob();
+
+                // 缓存到 Cache API
+                await unifiedCacheService.cacheMediaFromBlob(stableUrl, blob, 'image', { taskId });
+
+                // 加载图片获取尺寸
+                const img = new Image();
+                await new Promise<void>((resolve, reject) => {
+                  img.onload = () => resolve();
+                  img.onerror = () => reject(new Error('Failed to load edited image'));
+                  img.src = editedImageUrl;
+                });
+
+                // 使用 Transforms.setNode 更新画布中的图片元素
+                const elementIndex = board.children.findIndex(child => child.id === editingImageElement.id);
+                if (elementIndex >= 0) {
+                  // 获取原元素的左上角位置
+                  const element = board.children[elementIndex] as any;
+                  const [start] = element.points || [[0, 0]];
+                  // 计算新的 points，保持左上角位置不变，调整右下角
+                  const newPoints = [start, [start[0] + img.naturalWidth, start[1] + img.naturalHeight]];
+                  
+                  Transforms.setNode(board, {
+                    url: stableUrl,
+                    width: img.naturalWidth,
+                    height: img.naturalHeight,
+                    points: newPoints,
+                  } as Partial<PlaitElement>, [elementIndex]);
+                }
+              } catch (error) {
+                console.error('Failed to update image:', error);
+                MessagePlugin.error(language === 'zh' ? '更新失败' : 'Update failed');
+              }
+            }
+          }}
+          onInsert={async (editedImageUrl: string) => {
+            try {
+              // 创建虚拟路径 URL 缓存编辑后的图片
+              const { unifiedCacheService } = await import('../../../services/unified-cache-service');
+              const taskId = `edited-image-${Date.now()}`;
+              const stableUrl = `/__aitu_cache__/image/${taskId}.png`;
+
+              // 将 data URL 转换为 Blob
+              const response = await fetch(editedImageUrl);
+              const blob = await response.blob();
+
+              // 缓存到 Cache API
+              await unifiedCacheService.cacheMediaFromBlob(stableUrl, blob, 'image', { taskId });
+
+              // 加载图片获取尺寸
+              const img = new Image();
+              await new Promise<void>((resolve, reject) => {
+                img.onload = () => resolve();
+                img.onerror = () => reject(new Error('Failed to load edited image'));
+                img.src = editedImageUrl;
+              });
+
+              // 在当前图片旁边插入新图片
+              const origination = getViewportOrigination(board);
+              const offsetX = editingImageElement ? (editingImageElement.points[1][0] - editingImageElement.points[0][0] + 20) : 0;
+              const baseX = editingImageElement ? editingImageElement.points[0][0] : (origination ? origination[0] + 100 : 100);
+              const baseY = editingImageElement ? editingImageElement.points[0][1] : (origination ? origination[1] + 100 : 100);
+
+              // 使用 insertImageFromUrl 插入图片
+              const insertPoint: [number, number] = [baseX + offsetX, baseY];
+              await insertImageFromUrl(
+                board,
+                stableUrl,
+                insertPoint,
+                false,
+                { width: img.naturalWidth, height: img.naturalHeight },
+                false,
+                true
+              );
+            } catch (error) {
+              console.error('Failed to insert image:', error);
+              MessagePlugin.error(language === 'zh' ? '插入失败' : 'Insert failed');
             }
           }}
         />

@@ -22,8 +22,8 @@ import { BaseDrawer } from '../side-drawer';
 import { CharacterCreateDialog } from '../character/CharacterCreateDialog';
 import { CharacterList } from '../character/CharacterList';
 import { useCharacters } from '../../hooks/useCharacters';
-import { MediaViewer, type MediaItem } from '../shared/MediaViewer';
-import { useMediaViewer } from '../../hooks/useMediaViewer';
+import { UnifiedMediaViewer, type MediaItem as UnifiedMediaItem } from '../shared/media-preview';
+import { ImageEditor } from '../image-editor';
 import './task-queue.scss';
 
 const { TabPanel } = Tabs;
@@ -107,6 +107,13 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
   const [searchText, setSearchText] = useState<string>('');
   const [typeFilter, setTypeFilter] = useState<'all' | 'image' | 'video' | 'character'>('all');
   const [previewTaskId, setPreviewTaskId] = useState<string | null>(null);
+  const [previewVisible, setPreviewVisible] = useState(false);
+  const [previewInitialIndex, setPreviewInitialIndex] = useState(0);
+  
+  // 图片编辑器状态
+  const [imageEditorVisible, setImageEditorVisible] = useState(false);
+  const [imageEditorUrl, setImageEditorUrl] = useState('');
+  
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState<string | null>(null);
   // Character extraction dialog state
@@ -423,20 +430,10 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
     );
   }, [filteredTasks]);
 
-  // 使用 MediaViewer hook
-  const { openViewer, viewerProps } = useMediaViewer({
-    onClose: () => setPreviewTaskId(null),
-    onIndexChange: (index) => {
-      const task = completedTasksWithResults[index];
-      if (task) {
-        setPreviewTaskId(task.id);
-      }
-    },
-  });
-
   // 将任务列表转换为 MediaItem 列表
-  const previewMediaItems: MediaItem[] = useMemo(() => {
+  const previewMediaItems: UnifiedMediaItem[] = useMemo(() => {
     return completedTasksWithResults.map(task => ({
+      id: task.id, // 任务 ID，不是画布元素 ID
       url: task.result!.url,
       type: task.type === TaskType.VIDEO ? 'video' as const : 'image' as const,
       title: task.params.prompt?.substring(0, 50),
@@ -448,13 +445,49 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
     setPreviewTaskId(taskId);
     const index = completedTasksWithResults.findIndex(t => t.id === taskId);
     if (index >= 0) {
-      openViewer(previewMediaItems, index);
+      setPreviewInitialIndex(index);
+      setPreviewVisible(true);
     }
-  }, [completedTasksWithResults, previewMediaItems, openViewer]);
+  }, [completedTasksWithResults]);
 
   const handlePreviewClose = useCallback(() => {
     setPreviewTaskId(null);
+    setPreviewVisible(false);
   }, []);
+
+  // 处理图片编辑
+  const handlePreviewEdit = useCallback((item: UnifiedMediaItem) => {
+    if (item.type !== 'image') return;
+    setImageEditorUrl(item.url);
+    setImageEditorVisible(true);
+    setPreviewVisible(false); // 关闭预览
+  }, []);
+
+  // 编辑后插入画布
+  const handleEditInsert = useCallback(async (editedImageUrl: string) => {
+    if (!board) return;
+    
+    try {
+      const taskId = `edited-image-${Date.now()}`;
+      const stableUrl = `/__aitu_cache__/image/${taskId}.png`;
+      
+      // 将 data URL 转换为 Blob
+      const response = await fetch(editedImageUrl);
+      const blob = await response.blob();
+      
+      // 缓存到 Cache API
+      await unifiedCacheService.cacheMediaFromBlob(stableUrl, blob, 'image', { taskId });
+      
+      // 插入到画布
+      await insertImageFromUrl(board, stableUrl);
+      
+      // 关闭编辑器
+      setImageEditorVisible(false);
+      setImageEditorUrl('');
+    } catch (error) {
+      console.error('Failed to insert edited image:', error);
+    }
+  }, [board]);
 
   // Handle close
   const handleClose = useCallback(() => {
@@ -703,8 +736,29 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
         确定要删除选中的 {selectedTaskIds.size} 个任务吗？此操作无法撤销。
       </Dialog>
 
-      {/* 统一预览（使用 MediaViewer） */}
-      <MediaViewer {...viewerProps} />
+      {/* 统一预览 */}
+      <UnifiedMediaViewer
+        visible={previewVisible}
+        items={previewMediaItems}
+        initialIndex={previewInitialIndex}
+        onClose={handlePreviewClose}
+        showThumbnails={true}
+        onEdit={handlePreviewEdit}
+      />
+
+      {/* 图片编辑器 - 任务场景只支持插入画布和下载 */}
+      {imageEditorVisible && imageEditorUrl && (
+        <ImageEditor
+          visible={imageEditorVisible}
+          imageUrl={imageEditorUrl}
+          showOverwrite={false}
+          onClose={() => {
+            setImageEditorVisible(false);
+            setImageEditorUrl('');
+          }}
+          onInsert={board ? handleEditInsert : undefined}
+        />
+      )}
 
       {/* Character Create Dialog */}
       <CharacterCreateDialog

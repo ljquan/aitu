@@ -13,6 +13,7 @@ import {
   getHitElementByPoint,
   toHostPoint,
   toViewBoxPoint,
+  getViewportOrigination,
 } from '@plait/core';
 import React, { useState, useRef, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
 import { withGroup } from '@plait/common';
@@ -43,6 +44,7 @@ import { LinkPopup } from './components/popup/link-popup/link-popup';
 import { I18nProvider } from './i18n';
 import { withVideo, isVideoElement } from './plugins/with-video';
 import { UnifiedMediaViewer, type MediaItem as UnifiedMediaItem } from './components/shared/media-preview';
+import { ImageEditor } from './components/image-editor';
 import { PlaitDrawElement } from '@plait/draw';
 import { withTracking } from './plugins/tracking';
 import { withTool } from './plugins/with-tool';
@@ -790,6 +792,11 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
   const [mediaPreviewItems, setMediaPreviewItems] = useState<UnifiedMediaItem[]>([]);
   const [mediaPreviewInitialIndex, setMediaPreviewInitialIndex] = useState(0);
 
+  // 图片编辑器状态（用于媒体预览中的编辑）
+  const [mediaEditorVisible, setMediaEditorVisible] = useState(false);
+  const [mediaEditorUrl, setMediaEditorUrl] = useState('');
+  const [mediaEditorElementId, setMediaEditorElementId] = useState<string | null>(null);
+
   // 收集画布上所有图片和视频元素
   const collectCanvasMediaItems = useCallback((): { items: UnifiedMediaItem[]; elementIds: string[] } => {
     if (!board || !board.children) return { items: [], elementIds: [] };
@@ -837,6 +844,114 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
   const closeMediaPreview = useCallback(() => {
     setMediaPreviewVisible(false);
   }, []);
+
+  // 处理媒体预览中的图片编辑
+  const handleMediaEdit = useCallback((item: UnifiedMediaItem) => {
+    if (item.type !== 'image') return;
+    setMediaEditorUrl(item.url);
+    setMediaEditorElementId(item.id || null);
+    setMediaEditorVisible(true);
+    // 关闭预览
+    setMediaPreviewVisible(false);
+  }, []);
+
+  // 处理图片编辑覆盖保存
+  const handleMediaEditorOverwrite = useCallback(async (editedImageUrl: string) => {
+    if (!mediaEditorElementId || !board) return;
+    
+    try {
+      // 导入必要服务
+      const { unifiedCacheService } = await import('./services/unified-cache-service');
+      const { Transforms } = await import('@plait/core');
+      
+      const taskId = `edited-image-${Date.now()}`;
+      const stableUrl = `/__aitu_cache__/image/${taskId}.png`;
+      
+      // 将 data URL 转换为 Blob
+      const response = await fetch(editedImageUrl);
+      const blob = await response.blob();
+      
+      // 缓存到 Cache API
+      await unifiedCacheService.cacheMediaFromBlob(stableUrl, blob, 'image', { taskId });
+      
+      // 加载图片获取尺寸
+      const img = new Image();
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error('Failed to load edited image'));
+        img.src = editedImageUrl;
+      });
+      
+      // 找到元素并更新
+      const elementIndex = board.children.findIndex(child => child.id === mediaEditorElementId);
+      if (elementIndex >= 0) {
+        const element = board.children[elementIndex] as any;
+        // 获取原元素的左上角位置
+        const [start] = element.points || [[0, 0]];
+        // 计算新的 points，保持左上角位置不变，调整右下角
+        const newPoints = [start, [start[0] + img.naturalWidth, start[1] + img.naturalHeight]];
+        
+        Transforms.setNode(board, {
+          url: stableUrl,
+          width: img.naturalWidth,
+          height: img.naturalHeight,
+          points: newPoints,
+        } as any, [elementIndex]);
+      }
+    } catch (error) {
+      console.error('Failed to update image:', error);
+      MessagePlugin.error('更新失败');
+    }
+  }, [board, mediaEditorElementId]);
+
+  // 处理图片编辑插入到画布
+  const handleMediaEditorInsert = useCallback(async (editedImageUrl: string) => {
+    if (!board) return;
+    
+    try {
+      const { unifiedCacheService } = await import('./services/unified-cache-service');
+      const { insertImageFromUrl } = await import('./data/image');
+      const { PlaitBoard } = await import('@plait/core');
+      
+      const taskId = `edited-image-${Date.now()}`;
+      const stableUrl = `/__aitu_cache__/image/${taskId}.png`;
+      
+      // 将 data URL 转换为 Blob
+      const response = await fetch(editedImageUrl);
+      const blob = await response.blob();
+      
+      // 缓存到 Cache API
+      await unifiedCacheService.cacheMediaFromBlob(stableUrl, blob, 'image', { taskId });
+      
+      // 加载图片获取尺寸
+      const img = new Image();
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error('Failed to load edited image'));
+        img.src = editedImageUrl;
+      });
+      
+      // 在当前视口中心位置插入图片
+      const origination = getViewportOrigination(board);
+      const insertPoint: [number, number] = [
+        (origination?.[0] ?? 0) + 100,
+        (origination?.[1] ?? 0) + 100
+      ];
+      
+      await insertImageFromUrl(
+        board,
+        stableUrl,
+        insertPoint,
+        false,
+        { width: img.naturalWidth, height: img.naturalHeight },
+        false,
+        true
+      );
+    } catch (error) {
+      console.error('Failed to insert image:', error);
+      MessagePlugin.error('插入失败');
+    }
+  }, [board]);
 
   // 自动完成形状选择器状态
   const {
@@ -1026,7 +1141,23 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
             initialIndex={mediaPreviewInitialIndex}
             onClose={closeMediaPreview}
             showThumbnails={true}
+            onEdit={handleMediaEdit}
           />
+          {/* Image Editor - 从预览进入的图片编辑器 */}
+          {mediaEditorVisible && mediaEditorUrl && (
+            <ImageEditor
+              visible={mediaEditorVisible}
+              imageUrl={mediaEditorUrl}
+              showOverwrite={!!mediaEditorElementId}
+              onClose={() => {
+                setMediaEditorVisible(false);
+                setMediaEditorUrl('');
+                setMediaEditorElementId(null);
+              }}
+              onOverwrite={handleMediaEditorOverwrite}
+              onInsert={handleMediaEditorInsert}
+            />
+          )}
           {/* Auto Complete Shape Picker - 自动完成形状选择器 */}
           <AutoCompleteShapePicker
             visible={autoCompleteState.visible}

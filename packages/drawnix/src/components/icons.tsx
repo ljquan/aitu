@@ -1003,6 +1003,25 @@ export const VideoMergeIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: n
   </svg>
 );
 
+// 图片编辑图标（裁剪+滤镜）
+export const ImageEditIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 20, ...props }) => (
+  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg" width={size} height={size} {...props}>
+    <g strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
+      {/* 图片边框 */}
+      <rect x="2" y="4" width="12" height="12" rx="1.5" />
+      {/* 裁剪角标记 */}
+      <path d="M5 4V2" />
+      <path d="M2 7H4" />
+      <path d="M11 16V18" />
+      <path d="M14 13H16" />
+      {/* 铅笔/编辑 */}
+      <path d="M14.5 3.5L17.5 6.5" />
+      <path d="M16 5L18 3L15.5 0.5L13.5 2.5L16 5Z" fill="currentColor" stroke="none" transform="translate(-2, 4)" />
+      <path d="M11.5 7L15.5 11L10 12L11 10.5L11.5 7Z" />
+    </g>
+  </svg>
+);
+
 // ============ 文本特效图标 ============
 
 // 字体选择图标

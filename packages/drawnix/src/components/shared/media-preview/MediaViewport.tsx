@@ -14,6 +14,7 @@ import {
   GripHorizontal,
   Plus,
   Download,
+  Pencil,
 } from 'lucide-react';
 import { Tooltip, MessagePlugin } from 'tdesign-react';
 import { quickInsert } from '../../../services/canvas-operations';
@@ -71,6 +72,7 @@ export const MediaViewport: React.FC<MediaViewportProps> = ({
   isCompareMode = false,
   onInsertToCanvas,
   onDownload,
+  onEdit,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -501,6 +503,22 @@ export const MediaViewport: React.FC<MediaViewportProps> = ({
               }}
             >
               <Download size={16} />
+            </button>
+          </Tooltip>
+        )}
+
+        {/* 编辑 - 仅单图模式且为图片 */}
+        {!isCompareMode && onEdit && item?.type === 'image' && (
+          <Tooltip content="编辑图片" theme="light" placement="top">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                onEdit();
+              }}
+            >
+              <Pencil size={16} />
             </button>
           </Tooltip>
         )}

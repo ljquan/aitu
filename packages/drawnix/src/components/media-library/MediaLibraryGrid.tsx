@@ -36,6 +36,7 @@ import { VirtualAssetGrid } from './VirtualAssetGrid';
 import { MediaLibraryEmpty } from './MediaLibraryEmpty';
 import { ViewModeToggle } from './ViewModeToggle';
 import { UnifiedMediaViewer, type MediaItem as UnifiedMediaItem } from '../shared/media-preview';
+import { ImageEditor } from '../image-editor';
 import type { MediaLibraryGridProps, ViewMode, SortOption, Asset } from '../../types/asset.types';
 import { AssetType, AssetSource } from '../../types/asset.types';
 import { useDrawnix } from '../../hooks/use-drawnix';
@@ -142,6 +143,10 @@ export function MediaLibraryGrid({
   const [previewItems, setPreviewItems] = useState<UnifiedMediaItem[]>([]);
   const [previewInitialIndex, setPreviewInitialIndex] = useState(0);
   const gridContainerRef = useRef<HTMLDivElement>(null);
+  
+  // 图片编辑器状态
+  const [imageEditorVisible, setImageEditorVisible] = useState(false);
+  const [imageEditorUrl, setImageEditorUrl] = useState('');
   
   // 下载状态
   const [isDownloading, setIsDownloading] = useState(false);
@@ -556,6 +561,43 @@ export function MediaLibraryGrid({
     }
   }, [filteredResult.assets, onDoubleClick, board]);
 
+  // 处理图片编辑
+  const handleEditImage = useCallback((item: UnifiedMediaItem) => {
+    if (item.type !== 'image') return;
+    setImageEditorUrl(item.url);
+    setImageEditorVisible(true);
+    setPreviewVisible(false); // 关闭预览
+  }, []);
+
+  // 编辑后插入画布
+  const handleEditInsert = useCallback(async (editedImageUrl: string) => {
+    if (!board) return;
+    
+    try {
+      // 导入必要服务
+      const { unifiedCacheService } = await import('../../services/unified-cache-service');
+      
+      const taskId = `edited-image-${Date.now()}`;
+      const stableUrl = `/__aitu_cache__/image/${taskId}.png`;
+      
+      // 将 data URL 转换为 Blob
+      const response = await fetch(editedImageUrl);
+      const blob = await response.blob();
+      
+      // 缓存到 Cache API
+      await unifiedCacheService.cacheMediaFromBlob(stableUrl, blob, 'image', { taskId });
+      
+      // 插入到画布
+      await insertImageFromUrl(board, stableUrl);
+      
+      // 关闭编辑器
+      setImageEditorVisible(false);
+      setImageEditorUrl('');
+    } catch (error) {
+      console.error('Failed to insert edited image:', error);
+    }
+  }, [board]);
+
   // 键盘事件处理（空格键/回车键预览选中的素材）
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -893,7 +935,22 @@ export function MediaLibraryGrid({
         onClose={handlePreviewClose}
         showThumbnails={true}
         onInsertToCanvas={board ? handleInsertFromViewer : undefined}
+        onEdit={handleEditImage}
       />
+
+      {/* 图片编辑器 - 素材库场景只支持插入画布和下载 */}
+      {imageEditorVisible && imageEditorUrl && (
+        <ImageEditor
+          visible={imageEditorVisible}
+          imageUrl={imageEditorUrl}
+          showOverwrite={false}
+          onClose={() => {
+            setImageEditorVisible(false);
+            setImageEditorUrl('');
+          }}
+          onInsert={board ? handleEditInsert : undefined}
+        />
+      )}
     </div>
   );
 }
