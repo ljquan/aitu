@@ -1,3 +1,29 @@
+## 0.5.41 (2026-01-23)
+
+### 🚀 Features
+
+- 优化分析模式 ([60bf02a](https://github.com/ljquan/aitu/commit/60bf02a))
+- 添加数据备份功能和进度显示 ([cc74d29](https://github.com/ljquan/aitu/commit/cc74d29))
+- 统一 Tooltip 样式并美化模型健康状态信号展示 ([1076cb2](https://github.com/ljquan/aitu/commit/1076cb2))
+- 初始化时自动滚动显示 AI 按钮 ([f110657](https://github.com/ljquan/aitu/commit/f110657))
+
+### 🩹 Fixes
+
+- 修复多选元素时填充色图标显示异常 ([bbfeaaa](https://github.com/ljquan/aitu/commit/bbfeaaa))
+
+### 🔧 Chores
+
+- bump version to 0.5.40 ([d78e75c](https://github.com/ljquan/aitu/commit/d78e75c))
+- bump version to 0.5.39 ([1fa11f9](https://github.com/ljquan/aitu/commit/1fa11f9))
+- refactor(sw-debug): 模块化重构调试面板 ([33aa2ed](https://github.com/ljquan/aitu/commit/33aa2ed))
+- refactor(auto-complete-shape-picker): update shape icons to use JSX syntax ([5049f6e](https://github.com/ljquan/aitu/commit/5049f6e))
+- docs: 添加 SW 枚举值小写规则 ([dceb83a](https://github.com/ljquan/aitu/commit/dceb83a))
+
+### ❤️  Thank You
+
+- liquidliang <ljquan@qq.com>
+- liquid <ljquan@qq.com>
+
 ## 0.5.39 (2026-01-22)
 
 ### 🚀 Features
