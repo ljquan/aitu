@@ -1,16 +1,17 @@
 /**
  * 统一媒体预览系统 - 主组件
- * 支持单图预览和对比预览模式，可相互切换
+ * 支持单图预览、对比预览和编辑模式，可相互切换
  */
 
 import React, { useCallback, useEffect, useRef, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import type { UnifiedMediaViewerProps, CompareLayout, ViewerMode } from './types';
+import type { UnifiedMediaViewerProps, CompareLayout, ViewerMode, MediaItem } from './types';
 import { useViewerState } from './useViewerState';
 import { MediaViewport } from './MediaViewport';
 import { ThumbnailQueue } from './ThumbnailQueue';
 import { ViewerToolbar } from './ViewerToolbar';
+import { ImageEditorContent, ImageEditorContentRef, ImageEditState } from './ImageEditorContent';
 import './UnifiedMediaViewer.scss';
 
 export const UnifiedMediaViewer: React.FC<UnifiedMediaViewerProps> = ({
@@ -29,10 +30,21 @@ export const UnifiedMediaViewer: React.FC<UnifiedMediaViewerProps> = ({
   videoLoop = true,
   onInsertToCanvas,
   onEdit,
+  useBuiltInEditor = false,
+  onEditOverwrite,
+  onEditInsert,
+  showEditOverwrite = false,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const editorRef = useRef<ImageEditorContentRef>(null);
   const [slotCount, setSlotCount] = useState<2 | 3 | 4>(2);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  // 保存进入编辑模式前的项目信息，用于编辑回调
+  const [editingItem, setEditingItem] = useState<MediaItem | null>(null);
+  // 使用 ref 跟踪 editingItem 的最新值，避免闭包捕获旧值的问题
+  const editingItemRef = useRef<MediaItem | null>(null);
+  // 存储每个图片的编辑状态（按图片URL索引）
+  const editStatesRef = useRef<Map<string, ImageEditState>>(new Map());
 
   const [state, actions] = useViewerState({
     items,
@@ -54,6 +66,20 @@ export const UnifiedMediaViewer: React.FC<UnifiedMediaViewerProps> = ({
     panOffset,
     focusedSlot,
   } = state;
+
+  // 同时更新 state 和 ref 的包装函数
+  const updateEditingItem = useCallback((item: MediaItem | null) => {
+    editingItemRef.current = item;
+    setEditingItem(item);
+  }, []);
+
+  // 当预览器关闭时清空编辑状态记录
+  useEffect(() => {
+    if (!visible) {
+      editStatesRef.current.clear();
+      updateEditingItem(null);
+    }
+  }, [visible, updateEditingItem]);
 
   // 对比模式下切换到下一组
   const goToNextGroup = useCallback(() => {
@@ -109,6 +135,40 @@ export const UnifiedMediaViewer: React.FC<UnifiedMediaViewerProps> = ({
     }
   }, [items.length, slotCount, compareIndices, actions]);
 
+  // 切换到指定索引的图片（编辑模式）
+  const switchToEditImage = useCallback(
+    (index: number) => {
+      // 检查目标是否为图片
+      const targetItem = items[index];
+      if (!targetItem || targetItem.type !== 'image') {
+        return false;
+      }
+      
+      // 保存当前图片的编辑状态（使用 ref 获取最新值）
+      const currentEditingItem = editingItemRef.current;
+      if (currentEditingItem && editorRef.current) {
+        const currentState = editorRef.current.getState();
+        editStatesRef.current.set(currentEditingItem.url, currentState);
+      }
+      
+      // 切换图片
+      actions.goTo(index);
+      updateEditingItem(targetItem);
+      
+      // 恢复目标图片的编辑状态（如果有）
+      // 使用 setTimeout 确保编辑器已经更新
+      setTimeout(() => {
+        const savedState = editStatesRef.current.get(targetItem.url);
+        if (savedState && editorRef.current) {
+          editorRef.current.setState(savedState);
+        }
+      }, 50);
+      
+      return true;
+    },
+    [items, actions, updateEditingItem]
+  );
+
   // 键盘快捷键处理
   useEffect(() => {
     if (!visible) return;
@@ -130,7 +190,11 @@ export const UnifiedMediaViewer: React.FC<UnifiedMediaViewerProps> = ({
         case 'ArrowLeft':
         case 'ArrowUp':
           e.preventDefault();
-          if (mode === 'single') {
+          if (mode === 'edit') {
+            // 编辑模式：切换到上一张图片
+            const prevIndex = (currentIndex - 1 + items.length) % items.length;
+            switchToEditImage(prevIndex);
+          } else if (mode === 'single') {
             actions.goToPrev();
           } else {
             // 对比模式：切换到上一组
@@ -140,7 +204,11 @@ export const UnifiedMediaViewer: React.FC<UnifiedMediaViewerProps> = ({
         case 'ArrowRight':
         case 'ArrowDown':
           e.preventDefault();
-          if (mode === 'single') {
+          if (mode === 'edit') {
+            // 编辑模式：切换到下一张图片
+            const nextIndex = (currentIndex + 1) % items.length;
+            switchToEditImage(nextIndex);
+          } else if (mode === 'single') {
             actions.goToNext();
           } else {
             // 对比模式：切换到下一组
@@ -196,7 +264,7 @@ export const UnifiedMediaViewer: React.FC<UnifiedMediaViewerProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [visible, mode, items.length, actions, onClose, slotCount, goToNextGroup, goToPrevGroup]);
+  }, [visible, mode, items.length, items, currentIndex, actions, onClose, slotCount, goToNextGroup, goToPrevGroup, switchToEditImage]);
 
   // 全屏处理
   const handleFullscreen = useCallback(() => {
@@ -232,14 +300,17 @@ export const UnifiedMediaViewer: React.FC<UnifiedMediaViewerProps> = ({
   // 缩略图点击处理
   const handleThumbnailClick = useCallback(
     (index: number) => {
-      if (mode === 'single') {
+      if (mode === 'edit') {
+        // 编辑模式：切换被编辑的图片
+        switchToEditImage(index);
+      } else if (mode === 'single') {
         actions.goTo(index);
       } else {
         // 对比模式：添加到当前焦点槽位
         actions.addToCompare(index, focusedSlot);
       }
     },
-    [mode, actions, focusedSlot]
+    [mode, actions, focusedSlot, switchToEditImage]
   );
 
   // 槽位分屏数变化
@@ -287,10 +358,65 @@ export const UnifiedMediaViewer: React.FC<UnifiedMediaViewerProps> = ({
   // 处理编辑当前媒体
   const handleEdit = useCallback(() => {
     const currentItem = items[currentIndex];
-    if (currentItem && onEdit && currentItem.type === 'image') {
-      onEdit(currentItem);
+    if (currentItem && currentItem.type === 'image') {
+      if (useBuiltInEditor) {
+        // 使用内置编辑器
+        updateEditingItem(currentItem);
+        actions.setMode('edit');
+      } else if (onEdit) {
+        // 使用外部编辑器
+        onEdit(currentItem);
+      }
     }
-  }, [items, currentIndex, onEdit]);
+  }, [items, currentIndex, onEdit, useBuiltInEditor, actions, updateEditingItem]);
+
+  // 处理模式变化（包装 actions.setMode，确保进入编辑模式时设置 editingItem）
+  const handleModeChange = useCallback((newMode: ViewerMode) => {
+    if (newMode === 'edit') {
+      // 进入编辑模式时，设置 editingItem
+      const currentItem = items[currentIndex];
+      if (currentItem && currentItem.type === 'image') {
+        updateEditingItem(currentItem);
+      }
+    }
+    actions.setMode(newMode);
+  }, [items, currentIndex, actions, updateEditingItem]);
+
+  // 返回预览模式
+  const handleBackToPreview = useCallback(() => {
+    // 清空所有图片的编辑状态记录
+    editStatesRef.current.clear();
+    updateEditingItem(null);
+    actions.setMode('single');
+  }, [actions, updateEditingItem]);
+
+  // 重置编辑
+  const handleResetEdit = useCallback(() => {
+    editorRef.current?.reset();
+  }, []);
+
+  // 保存编辑
+  const handleSaveEdit = useCallback(() => {
+    editorRef.current?.save();
+  }, []);
+
+  // 编辑覆盖回调
+  const handleEditorOverwrite = useCallback((editedImageUrl: string) => {
+    // 使用 ref 获取最新的 editingItem，避免闭包捕获旧值
+    const currentEditingItem = editingItemRef.current;
+    if (onEditOverwrite && currentEditingItem) {
+      onEditOverwrite(editedImageUrl, currentEditingItem);
+    }
+    handleBackToPreview();
+  }, [onEditOverwrite, handleBackToPreview]);
+
+  // 编辑插入回调
+  const handleEditorInsert = useCallback((editedImageUrl: string) => {
+    if (onEditInsert) {
+      onEditInsert(editedImageUrl);
+    }
+    handleBackToPreview();
+  }, [onEditInsert, handleBackToPreview]);
 
   // 渲染单图模式
   const renderSingleMode = () => {
@@ -378,16 +504,51 @@ export const UnifiedMediaViewer: React.FC<UnifiedMediaViewerProps> = ({
     );
   };
 
+  // 渲染编辑模式
+  const renderEditMode = () => {
+    const currentItem = editingItem || items[currentIndex];
+    if (!currentItem || currentItem.type !== 'image') {
+      return null;
+    }
+
+    return (
+      <div className="unified-viewer__edit">
+        <ImageEditorContent
+          ref={editorRef}
+          imageUrl={currentItem.url}
+          showOverwrite={showEditOverwrite}
+          onOverwrite={onEditOverwrite ? handleEditorOverwrite : undefined}
+          onInsert={onEditInsert ? handleEditorInsert : undefined}
+        />
+      </div>
+    );
+  };
+
+  // 获取当前项目
+  const currentItem = items[currentIndex] || null;
+
   if (!visible || items.length === 0) {
     return null;
   }
+
+  // 渲染主内容区
+  const renderContent = () => {
+    switch (mode) {
+      case 'edit':
+        return renderEditMode();
+      case 'compare':
+        return renderCompareMode();
+      default:
+        return renderSingleMode();
+    }
+  };
 
   const viewerContent = (
     <div
       ref={containerRef}
       className={`unified-viewer ${className} ${
         isFullscreen ? 'unified-viewer--fullscreen' : ''
-      }`}
+      } ${mode === 'edit' ? 'unified-viewer--edit-mode' : ''}`}
       onClick={handleBackdropClick}
     >
       <div className="unified-viewer__container">
@@ -399,25 +560,30 @@ export const UnifiedMediaViewer: React.FC<UnifiedMediaViewerProps> = ({
           slotCount={slotCount}
           compareLayout={compareLayout}
           syncMode={syncMode}
-          onModeChange={actions.setMode}
+          onModeChange={handleModeChange}
           onSlotCountChange={handleSlotCountChange}
           onLayoutChange={actions.setCompareLayout}
           onSyncToggle={actions.toggleSyncMode}
           onResetView={actions.resetView}
           onClose={onClose}
           onFullscreen={handleFullscreen}
+          isImage={currentItem?.type === 'image'}
+          showEditButton={useBuiltInEditor || !!onEdit}
+          onBackToPreview={handleBackToPreview}
+          onResetEdit={handleResetEdit}
+          onSaveEdit={handleSaveEdit}
         />
 
         {/* 主内容区 */}
         <div className="unified-viewer__content">
-          {mode === 'single' ? renderSingleMode() : renderCompareMode()}
+          {renderContent()}
         </div>
 
         {/* 缩略图队列 */}
         {showThumbnails && items.length > 1 && (
           <ThumbnailQueue
             items={items}
-            mode={mode}
+            mode={mode === 'edit' ? 'single' : mode}
             currentIndex={currentIndex}
             compareIndices={compareIndices}
             onThumbnailClick={handleThumbnailClick}

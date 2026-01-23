@@ -13,6 +13,8 @@ import {
   RotateCcw,
   Maximize2,
   ChevronLeft,
+  Pencil,
+  Check,
 } from 'lucide-react';
 import { Tooltip } from 'tdesign-react';
 import type { ViewerToolbarProps, ViewerMode, CompareLayout } from './types';
@@ -35,6 +37,11 @@ export const ViewerToolbar: React.FC<ViewerToolbarProps> = ({
   onResetView,
   onClose,
   onFullscreen,
+  isImage = false,
+  showEditButton = false,
+  onBackToPreview,
+  onResetEdit,
+  onSaveEdit,
 }) => {
   // 处理布局切换，田字格自动切换到4分屏
   const handleLayoutChange = useCallback(
@@ -75,6 +82,54 @@ export const ViewerToolbar: React.FC<ViewerToolbarProps> = ({
           </button>
         </Tooltip>
       )}
+
+      {/* 编辑按钮（仅图片可编辑） */}
+      {showEditButton && isImage && (
+        <>
+          <div className="viewer-toolbar__divider" />
+          <Tooltip
+            content="编辑图片"
+            theme="light"
+            placement="bottom"
+            zIndex={TOOLTIP_Z_INDEX}
+            showArrow={false}
+          >
+            <button
+              className="viewer-toolbar__btn"
+              onClick={() => onModeChange('edit')}
+            >
+              <Pencil size={18} />
+            </button>
+          </Tooltip>
+        </>
+      )}
+    </>
+  );
+
+  // 编辑模式工具栏
+  const renderEditModeTools = () => (
+    <>
+      {/* 返回预览 */}
+      <Tooltip
+        content="返回预览"
+        theme="light"
+        placement="bottom"
+        zIndex={TOOLTIP_Z_INDEX}
+        showArrow={false}
+      >
+        <button
+          className="viewer-toolbar__btn"
+          onClick={onBackToPreview}
+        >
+          <ChevronLeft size={18} />
+          <span className="viewer-toolbar__btn-text">返回</span>
+        </button>
+      </Tooltip>
+
+      <div className="viewer-toolbar__divider" />
+
+      {/* 编辑标题 */}
+      <div className="viewer-toolbar__title">编辑图片</div>
     </>
   );
 
@@ -215,13 +270,73 @@ export const ViewerToolbar: React.FC<ViewerToolbarProps> = ({
     </>
   );
 
-  return (
-    <div className="viewer-toolbar">
-      <div className="viewer-toolbar__left">
-        {mode === 'single' ? renderSingleModeTools() : renderCompareModeTools()}
-      </div>
+  // 渲染左侧工具栏
+  const renderLeftTools = () => {
+    switch (mode) {
+      case 'edit':
+        return renderEditModeTools();
+      case 'compare':
+        return renderCompareModeTools();
+      default:
+        return renderSingleModeTools();
+    }
+  };
 
-      <div className="viewer-toolbar__right">
+  // 渲染右侧工具栏
+  const renderRightTools = () => {
+    if (mode === 'edit') {
+      return (
+        <>
+          {/* 重置编辑 */}
+          <Tooltip
+            content="重置"
+            theme="light"
+            placement="bottom"
+            zIndex={TOOLTIP_Z_INDEX}
+            showArrow={false}
+          >
+            <button className="viewer-toolbar__btn" onClick={onResetEdit}>
+              <RotateCcw size={18} />
+            </button>
+          </Tooltip>
+
+          {/* 保存 */}
+          <Tooltip
+            content="保存"
+            theme="light"
+            placement="bottom"
+            zIndex={TOOLTIP_Z_INDEX}
+            showArrow={false}
+          >
+            <button
+              className="viewer-toolbar__btn viewer-toolbar__btn--primary"
+              onClick={onSaveEdit}
+            >
+              <Check size={18} />
+            </button>
+          </Tooltip>
+
+          {/* 关闭 */}
+          <Tooltip
+            content="关闭（Esc）"
+            theme="light"
+            placement="bottom"
+            zIndex={TOOLTIP_Z_INDEX}
+            showArrow={false}
+          >
+            <button
+              className="viewer-toolbar__btn viewer-toolbar__btn--close"
+              onClick={onClose}
+            >
+              <X size={20} />
+            </button>
+          </Tooltip>
+        </>
+      );
+    }
+
+    return (
+      <>
         {/* 全屏 */}
         {onFullscreen && (
           <Tooltip
@@ -252,6 +367,58 @@ export const ViewerToolbar: React.FC<ViewerToolbarProps> = ({
             <X size={20} />
           </button>
         </Tooltip>
+      </>
+    );
+  };
+
+  // 编辑模式使用简化布局：左上角返回，右上角关闭
+  if (mode === 'edit') {
+    return (
+      <div className="viewer-toolbar viewer-toolbar--edit-simplified">
+        {/* 左上角返回按钮 */}
+        <Tooltip
+          content="返回预览"
+          theme="light"
+          placement="bottom"
+          zIndex={TOOLTIP_Z_INDEX}
+          showArrow={false}
+        >
+          <button
+            className="viewer-toolbar__corner-btn viewer-toolbar__corner-btn--left"
+            onClick={onBackToPreview}
+          >
+            <ChevronLeft size={20} />
+            <span>返回</span>
+          </button>
+        </Tooltip>
+
+        {/* 右上角关闭按钮 */}
+        <Tooltip
+          content="关闭（Esc）"
+          theme="light"
+          placement="bottom"
+          zIndex={TOOLTIP_Z_INDEX}
+          showArrow={false}
+        >
+          <button
+            className="viewer-toolbar__corner-btn viewer-toolbar__corner-btn--right"
+            onClick={onClose}
+          >
+            <X size={20} />
+          </button>
+        </Tooltip>
+      </div>
+    );
+  }
+
+  return (
+    <div className="viewer-toolbar">
+      <div className="viewer-toolbar__left">
+        {renderLeftTools()}
+      </div>
+
+      <div className="viewer-toolbar__right">
+        {renderRightTools()}
       </div>
     </div>
   );

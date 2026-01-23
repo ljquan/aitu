@@ -574,6 +574,50 @@ const openDialog = (dialogType: DialogType) => {
 - 函数式更新 `setState(prev => ...)` 保证 `prev` 始终是最新状态
 - 这个问题在多个弹窗/抽屉同时打开时特别容易出现
 
+#### 模式切换时的状态同步问题
+
+**场景**: 当 UI 组件（如 Toolbar）需要触发模式切换时，直接调用底层的 `setMode` 可能导致相关状态不同步
+
+❌ **错误示例**:
+```typescript
+// ViewerToolbar.tsx - 直接调用 setMode
+<button onClick={() => onModeChange('edit')}>
+  编辑
+</button>
+
+// UnifiedMediaViewer.tsx - 传递底层 setMode
+<ViewerToolbar
+  onModeChange={actions.setMode}  // 错误：只改变模式，不设置 editingItem
+/>
+
+// 结果：模式变成 'edit'，但 editingItem 仍为 null
+// 后续保存时 editingItem 为 null，无法正确覆盖原图
+```
+
+✅ **正确示例**:
+```typescript
+// UnifiedMediaViewer.tsx - 创建包装函数
+const handleModeChange = useCallback((newMode: ViewerMode) => {
+  if (newMode === 'edit') {
+    // 进入编辑模式时，同时设置相关状态
+    const currentItem = items[currentIndex];
+    if (currentItem && currentItem.type === 'image') {
+      updateEditingItem(currentItem);  // 同步更新 editingItem
+    }
+  }
+  actions.setMode(newMode);
+}, [items, currentIndex, actions, updateEditingItem]);
+
+<ViewerToolbar
+  onModeChange={handleModeChange}  // 正确：使用包装函数
+/>
+```
+
+**原因**: 
+- 当多个状态需要联动更新时，直接暴露底层的单一状态更新函数容易导致状态不一致
+- 应该封装成一个函数，确保所有相关状态同步更新
+- 这在模式切换、打开/关闭弹窗等场景中尤其重要
+
 #### 传递 React 组件作为 prop 时必须实例化
 
 **场景**: 将 React 组件作为 `icon` 或其他 prop 传递给子组件时

@@ -1160,7 +1160,7 @@ export const PopupToolbar = () => {
                 // 缓存到 Cache API
                 await unifiedCacheService.cacheMediaFromBlob(stableUrl, blob, 'image', { taskId });
 
-                // 加载图片获取尺寸
+                // 加载编辑后的图片获取其实际尺寸
                 const img = new Image();
                 await new Promise<void>((resolve, reject) => {
                   img.onload = () => resolve();
@@ -1174,7 +1174,8 @@ export const PopupToolbar = () => {
                   // 获取原元素的左上角位置
                   const element = board.children[elementIndex] as any;
                   const [start] = element.points || [[0, 0]];
-                  // 计算新的 points，保持左上角位置不变，调整右下角
+                  
+                  // 计算新的 points，保持左上角位置不变，使用裁剪后图片的实际尺寸
                   const newPoints = [start, [start[0] + img.naturalWidth, start[1] + img.naturalHeight]];
                   
                   Transforms.setNode(board, {

@@ -44,7 +44,6 @@ import { LinkPopup } from './components/popup/link-popup/link-popup';
 import { I18nProvider } from './i18n';
 import { withVideo, isVideoElement } from './plugins/with-video';
 import { UnifiedMediaViewer, type MediaItem as UnifiedMediaItem } from './components/shared/media-preview';
-import { ImageEditor } from './components/image-editor';
 import { PlaitDrawElement } from '@plait/draw';
 import { withTracking } from './plugins/tracking';
 import { withTool } from './plugins/with-tool';
@@ -792,11 +791,6 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
   const [mediaPreviewItems, setMediaPreviewItems] = useState<UnifiedMediaItem[]>([]);
   const [mediaPreviewInitialIndex, setMediaPreviewInitialIndex] = useState(0);
 
-  // 图片编辑器状态（用于媒体预览中的编辑）
-  const [mediaEditorVisible, setMediaEditorVisible] = useState(false);
-  const [mediaEditorUrl, setMediaEditorUrl] = useState('');
-  const [mediaEditorElementId, setMediaEditorElementId] = useState<string | null>(null);
-
   // 收集画布上所有图片和视频元素
   const collectCanvasMediaItems = useCallback((): { items: UnifiedMediaItem[]; elementIds: string[] } => {
     if (!board || !board.children) return { items: [], elementIds: [] };
@@ -845,19 +839,10 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
     setMediaPreviewVisible(false);
   }, []);
 
-  // 处理媒体预览中的图片编辑
-  const handleMediaEdit = useCallback((item: UnifiedMediaItem) => {
-    if (item.type !== 'image') return;
-    setMediaEditorUrl(item.url);
-    setMediaEditorElementId(item.id || null);
-    setMediaEditorVisible(true);
-    // 关闭预览
-    setMediaPreviewVisible(false);
-  }, []);
-
-  // 处理图片编辑覆盖保存
-  const handleMediaEditorOverwrite = useCallback(async (editedImageUrl: string) => {
-    if (!mediaEditorElementId || !board) return;
+  // 处理图片编辑覆盖保存（内置编辑器回调）
+  const handleMediaEditorOverwrite = useCallback(async (editedImageUrl: string, originalItem: UnifiedMediaItem) => {
+    const elementId = originalItem.id;
+    if (!elementId || !board) return;
     
     try {
       // 导入必要服务
@@ -883,13 +868,28 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
       });
       
       // 找到元素并更新
-      const elementIndex = board.children.findIndex(child => child.id === mediaEditorElementId);
+      const elementIndex = board.children.findIndex(child => child.id === elementId);
       if (elementIndex >= 0) {
         const element = board.children[elementIndex] as any;
-        // 获取原元素的左上角位置
-        const [start] = element.points || [[0, 0]];
-        // 计算新的 points，保持左上角位置不变，调整右下角
-        const newPoints = [start, [start[0] + img.naturalWidth, start[1] + img.naturalHeight]];
+        // 获取原元素的位置和尺寸
+        const [start, end] = element.points || [[0, 0], [0, 0]];
+        const originalDisplayWidth = end[0] - start[0];
+        const originalDisplayHeight = end[1] - start[1];
+        const originalNaturalWidth = element.width || originalDisplayWidth;
+        const originalNaturalHeight = element.height || originalDisplayHeight;
+        
+        // 计算原图的缩放比例
+        const scaleX = originalDisplayWidth / originalNaturalWidth;
+        const scaleY = originalDisplayHeight / originalNaturalHeight;
+        // 使用较小的缩放比例保持宽高比一致（通常 scaleX 和 scaleY 应该相等）
+        const scale = Math.min(scaleX, scaleY);
+        
+        // 计算新的显示尺寸，保持原图的缩放比例
+        const newDisplayWidth = img.naturalWidth * scale;
+        const newDisplayHeight = img.naturalHeight * scale;
+        
+        // 计算新的 points，保持左上角位置不变
+        const newPoints = [start, [start[0] + newDisplayWidth, start[1] + newDisplayHeight]];
         
         Transforms.setNode(board, {
           url: stableUrl,
@@ -902,7 +902,7 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
       console.error('Failed to update image:', error);
       MessagePlugin.error('更新失败');
     }
-  }, [board, mediaEditorElementId]);
+  }, [board]);
 
   // 处理图片编辑插入到画布
   const handleMediaEditorInsert = useCallback(async (editedImageUrl: string) => {
@@ -1134,30 +1134,18 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
             visible={quickToolbarVisible}
             onClose={() => setQuickToolbarVisible(false)}
           />
-          {/* Media Viewer - 画布图片/视频预览 */}
+          {/* Media Viewer - 画布图片/视频预览（支持内置编辑模式） */}
           <UnifiedMediaViewer
             visible={mediaPreviewVisible}
             items={mediaPreviewItems}
             initialIndex={mediaPreviewInitialIndex}
             onClose={closeMediaPreview}
             showThumbnails={true}
-            onEdit={handleMediaEdit}
+            useBuiltInEditor={true}
+            showEditOverwrite={true}
+            onEditOverwrite={handleMediaEditorOverwrite}
+            onEditInsert={handleMediaEditorInsert}
           />
-          {/* Image Editor - 从预览进入的图片编辑器 */}
-          {mediaEditorVisible && mediaEditorUrl && (
-            <ImageEditor
-              visible={mediaEditorVisible}
-              imageUrl={mediaEditorUrl}
-              showOverwrite={!!mediaEditorElementId}
-              onClose={() => {
-                setMediaEditorVisible(false);
-                setMediaEditorUrl('');
-                setMediaEditorElementId(null);
-              }}
-              onOverwrite={handleMediaEditorOverwrite}
-              onInsert={handleMediaEditorInsert}
-            />
-          )}
           {/* Auto Complete Shape Picker - 自动完成形状选择器 */}
           <AutoCompleteShapePicker
             visible={autoCompleteState.visible}

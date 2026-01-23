@@ -3,7 +3,7 @@
  */
 
 import React from 'react';
-import { RotateCcw, RotateCw, FlipHorizontal, FlipVertical } from 'lucide-react';
+import { RotateCcw, RotateCw, FlipHorizontal, FlipVertical, Check } from 'lucide-react';
 import { Tooltip } from 'tdesign-react';
 import { AspectRatioPreset } from './types';
 
@@ -17,6 +17,8 @@ interface CropPanelProps {
   onRotate: (delta: number) => void;
   onFlipH: () => void;
   onFlipV: () => void;
+  onConfirmCrop?: () => void;
+  hasCropArea?: boolean;
 }
 
 export const CropPanel: React.FC<CropPanelProps> = ({
@@ -29,6 +31,8 @@ export const CropPanel: React.FC<CropPanelProps> = ({
   onRotate,
   onFlipH,
   onFlipV,
+  onConfirmCrop,
+  hasCropArea = false,
 }) => {
   return (
     <div className="crop-panel">
@@ -98,6 +102,24 @@ export const CropPanel: React.FC<CropPanelProps> = ({
           </div>
         )}
       </div>
+
+      {/* 确认裁剪按钮 */}
+      {onConfirmCrop && (
+        <div className="crop-panel__section">
+          <button
+            type="button"
+            className={`crop-panel__confirm-btn ${hasCropArea ? '' : 'disabled'}`}
+            onClick={onConfirmCrop}
+            disabled={!hasCropArea}
+          >
+            <Check size={16} />
+            <span>应用裁剪</span>
+          </button>
+          <div className="crop-panel__confirm-hint">
+            按 Enter 键快速确认
+          </div>
+        </div>
+      )}
 
       {/* 使用提示 */}
       <div className="crop-panel__tips">

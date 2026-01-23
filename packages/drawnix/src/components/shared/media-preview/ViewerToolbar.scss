@@ -51,22 +51,22 @@ $brand-orange: #f39c12;
     padding: 0 8px;
     background: transparent;
     border: none;
-    border-radius: 6px;
-    color: rgba(255, 255, 255, 0.8);
+    border-radius: 8px;
+    color: rgba(255, 255, 255, 0.6);
     cursor: pointer;
-    transition: background 0.2s ease, color 0.2s ease;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 
     &:hover {
-      background: rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.08);
       color: #fff;
     }
 
     &--active {
-      background: rgba($brand-orange, 0.2);
+      background: rgba($brand-orange, 0.15);
       color: $brand-orange;
 
       &:hover {
-        background: rgba($brand-orange, 0.3);
+        background: rgba($brand-orange, 0.25);
         color: $brand-orange;
       }
     }
@@ -82,14 +82,37 @@ $brand-orange: #f39c12;
       margin-left: 8px;
 
       &:hover {
-        background: rgba(231, 76, 60, 0.3);
-        color: #e74c3c;
+        background: rgba(231, 76, 60, 0.2);
+        color: #ff4d4f;
+      }
+    }
+
+    &--primary {
+      background: $brand-orange;
+      color: #000;
+      font-weight: 600;
+
+      &:hover {
+        background: lighten($brand-orange, 5%);
+        color: #000;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba($brand-orange, 0.3);
+      }
+
+      &:active {
+        transform: translateY(0);
       }
     }
 
     &-text {
       font-size: 13px;
     }
+  }
+
+  &__title {
+    font-size: 14px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
   }
 
   &__indicator {
@@ -116,6 +139,52 @@ $brand-orange: #f39c12;
   }
 }
 
+/* 编辑模式简化版 - 只有左上角返回和右上角关闭 */
+.viewer-toolbar--edit-simplified {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  pointer-events: none;
+  z-index: 100;
+}
+
+.viewer-toolbar__corner-btn {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(10px);
+  border: none;
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  pointer-events: auto;
+
+  &:hover {
+    background: rgba(0, 0, 0, 0.8);
+    color: #fff;
+  }
+
+  &--left {
+    top: 16px;
+    left: 16px;
+  }
+
+  &--right {
+    top: 16px;
+    right: 16px;
+    padding: 10px;
+  }
+}
+
 /* 响应式调整 */
 @media (max-width: 768px) {
   .viewer-toolbar {
@@ -132,6 +201,21 @@ $brand-orange: #f39c12;
 
     &__label {
       display: none;
+    }
+  }
+
+  .viewer-toolbar__corner-btn {
+    padding: 8px 12px;
+    font-size: 13px;
+
+    &--left {
+      top: 12px;
+      left: 12px;
+    }
+
+    &--right {
+      top: 12px;
+      right: 12px;
     }
   }
 }

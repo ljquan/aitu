@@ -17,7 +17,7 @@ export interface MediaItem {
 }
 
 /** 预览模式 */
-export type ViewerMode = 'single' | 'compare';
+export type ViewerMode = 'single' | 'compare' | 'edit';
 
 /** 对比布局 */
 export type CompareLayout = 'horizontal' | 'vertical' | 'grid';
@@ -52,8 +52,16 @@ export interface UnifiedMediaViewerProps {
   videoLoop?: boolean;
   /** 插入到画布回调（传入则显示插入按钮） */
   onInsertToCanvas?: (item: MediaItem) => void;
-  /** 编辑图片回调（传入则显示编辑按钮） */
+  /** 编辑图片回调（传入则显示编辑按钮，外部处理编辑） */
   onEdit?: (item: MediaItem) => void;
+  /** 是否使用内置编辑器（为 true 时点击编辑进入内置编辑模式） */
+  useBuiltInEditor?: boolean;
+  /** 编辑完成后覆盖原图回调 */
+  onEditOverwrite?: (editedImageUrl: string, originalItem: MediaItem) => void;
+  /** 编辑完成后插入新图片回调 */
+  onEditInsert?: (editedImageUrl: string) => void;
+  /** 是否显示覆盖选项（仅当编辑画布上已有图片时显示） */
+  showEditOverwrite?: boolean;
 }
 
 /** 预览状态 */
@@ -186,4 +194,14 @@ export interface ViewerToolbarProps {
   onClose: () => void;
   /** 全屏 */
   onFullscreen?: () => void;
+  /** 当前媒体项是否为图片（用于判断是否显示编辑按钮） */
+  isImage?: boolean;
+  /** 是否显示编辑按钮 */
+  showEditButton?: boolean;
+  /** 编辑模式：返回预览 */
+  onBackToPreview?: () => void;
+  /** 编辑模式：重置编辑 */
+  onResetEdit?: () => void;
+  /** 编辑模式：保存 */
+  onSaveEdit?: () => void;
 }
