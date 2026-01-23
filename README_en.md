@@ -29,7 +29,7 @@
 
 ## Application
 
-[_https://opentu.ai_](https://opentu.ai) is the online application of _Opentu_.
+[_https://opentu.ai_](https://opentu.ai) and [_https://pr.opentu.ai_](https://pr.opentu.ai) is the online application of _Opentu_.
 
 We will iterate frequently on application features to continuously optimize user experience.
 
@@ -37,7 +37,7 @@ We will iterate frequently on application features to continuously optimize user
 
 ### Online Experience
 
-Visit [opentu.ai](https://opentu.ai) directly to start using it immediately, no installation required.
+Visit [opentu.ai](https://opentu.ai) and [pr.opentu.ai](https://pr.opentu.ai) directly to start using it immediately, no installation required.
 
 ### One-click Deploy
 
