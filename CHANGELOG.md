@@ -1,3 +1,34 @@
+## 0.5.43 (2026-01-23)
+
+### 🚀 Features
+
+- 点击画板自动关闭项目抽屉和工具箱抽屉 ([a91ed12](https://github.com/ljquan/aitu/commit/a91ed12))
+- update OpenTu labels and model hints ([8571c79](https://github.com/ljquan/aitu/commit/8571c79))
+
+### 🩹 Fixes
+
+- 修复图片覆盖保存时缩放比例计算错误 ([81a59ba](https://github.com/ljquan/aitu/commit/81a59ba))
+
+### 🔧 Chores
+
+- update app version to 0.5.42 and adjust build time ([14e6185](https://github.com/ljquan/aitu/commit/14e6185))
+- bump version to 0.5.1 ([7fadafd](https://github.com/ljquan/aitu/commit/7fadafd))
+- style(settings-dialog): 美化设置弹窗并统一模型选择器样式 ([e7c30ce](https://github.com/ljquan/aitu/commit/e7c30ce))
+- refactor(image-editor): 提取图片尺寸计算逻辑到共享模块 ([596faab](https://github.com/ljquan/aitu/commit/596faab))
+- docs: 添加编码规则 - 模式切换状态同步 ([db19940](https://github.com/ljquan/aitu/commit/db19940))
+- Update online experience link in README ([b3a8b4c](https://github.com/ljquan/aitu/commit/b3a8b4c))
+- Update README.md ([339e720](https://github.com/ljquan/aitu/commit/339e720))
+- Rename project to Opentu and update README ([38032e6](https://github.com/ljquan/aitu/commit/38032e6))
+- 添加readme 的 git 图素材 ([c0bb49a](https://github.com/ljquan/aitu/commit/c0bb49a))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+- liquidliang <ljquan@qq.com>
+- Aitu Developer <noreply@aitu.chat>
+- gongchengtu <1817063960@qq.com>
+- ovst <wangjueszu@qq.com>
+
 ## 0.5.42 (2026-01-23)
 
 ### 🚀 Features
