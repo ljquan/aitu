@@ -1,6 +1,6 @@
 <div align="center">
   <h1>
-    Aitu
+    Opentu (opentu.ai)
   </h1>
   <h3>
     AI Image & Video Creation (SaaS) + All-in-One Whiteboard
@@ -9,17 +9,47 @@
     Mind Maps · Flowcharts · Freehand · AI Image Generation · AI Video Generation
   </p>
   <p>
-    <a href="https://github.com/ljquan/aitu/releases"><img src="https://img.shields.io/badge/version-0.0.11-blue.svg" alt="Version"></a>
     <a href="https://github.com/ljquan/aitu/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
-    <a href="https://aitu.tu-zi.com"><img src="https://img.shields.io/badge/demo-online-brightgreen.svg" alt="Demo"></a>
+    <a href="https://opentu.ai"><img src="https://img.shields.io/badge/demo-online-brightgreen.svg" alt="Demo"></a>
+  </p>
+  <p>
+    <a href="https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fljquan%2Faitu&project-name=aitu&repository-name=aitu"><img src="https://vercel.com/button" alt="Deploy with Vercel"/></a>
+    <a href="https://app.netlify.com/start/deploy?repository=https://github.com/ljquan/aitu"><img src="https://www.netlify.com/img/deploy/button.svg" alt="Deploy to Netlify"/></a>
   </p>
 </div>
 
-[*中文*](https://github.com/ljquan/aitu/blob/develop/README.md)
+[_中文_](https://github.com/ljquan/aitu/blob/develop/README.md)
 
-## Features
+## Product Showcase
 
-### AI Creation Capabilities 🔥
+| Split Images                                           | Flowcharts                                         | Mind Maps                                            |
+| ------------------------------------------------------ | -------------------------------------------------- | ---------------------------------------------------- |
+| ![](./apps/web/public/product_showcase/九宫格拆图.gif) | ![](./apps/web/public/product_showcase/流程图.gif) | ![](./apps/web/public/product_showcase/思维导图.gif) |
+| Semantic Understanding - Image Split                   | Semantic Understanding - Flowchart                 | Semantic Understanding - Mind Map                    |
+
+## Application
+
+[_https://opentu.ai_](https://opentu.ai) is the online application of _Opentu_.
+
+We will iterate frequently on application features to continuously optimize user experience.
+
+## 🚀 Quick Start
+
+### Online Experience
+
+Visit [opentu.ai](https://opentu.ai) directly to start using it immediately, no installation required.
+
+### One-click Deploy
+
+Click the buttons below to deploy Opentu to your own server:
+
+| Platform | One-click Deploy                                                                                                                                                                |
+| :------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Vercel   | [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fljquan%2Faitu&project-name=aitu&repository-name=aitu) |
+| Netlify  | [![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/ljquan/aitu)                           |
+
+## AI Creation Capabilities 🔥
+
 - **AI Image Generation** - Multiple image generation models
   - gemini-2.5-flash-image (nano-banana) - Fast image generation
   - gemini-3-pro-image-preview (nano-banana-2) - High quality, supports HD/2K/4K resolution
@@ -33,141 +63,47 @@
 - **Task Queue Management** - Async task processing, batch generation, retry, history, media caching
 
 ### Whiteboard & Visualization
-- **Mind Maps** - Quick mind map creation with various layouts and styles
-- **Flowcharts** - Professional flowchart drawing with Mermaid syntax support
+
 - **Freehand Drawing** - Hand-drawn creations with multiple brush tools
 - **Image Support** - Insert and edit image elements
 - **Markdown to Mind Map** - Convert text to visual structures
 
 ### Editing & Interaction
+
 - **Rich Editing Features** - Undo, redo, copy, paste, multi-select, etc.
 - **Infinite Canvas** - Free zoom, scroll, pan
 - **Auto-save** - Local browser auto-save, no data loss
 - **Multi-format Export** - Supports PNG, JSON(`.drawnix`) formats
 
 ### Experience & Ecosystem
+
 - **Free & Open Source** - MIT license, commercial use allowed
 - **Plugin Architecture** - Flexible extensions with custom plugin development
 - **Theme Support** - Light/dark theme switching
 - **Mobile-friendly** - Perfect mobile device support
 
-## Product Showcase
-
-<div align="center">
-  <figure>
-    <a target="_blank" rel="noopener">
-      <img src="./apps/web/public/product_showcase/aitu-01.png" alt="Prompt and Image" width="100%" />
-    </a>
-    <figcaption>
-      <p align="center">
-        Prompt + Image Integration
-      </p>
-    </figcaption>
-  </figure>
-</div>
-
-<div align="center">
-  <figure>
-    <a target="_blank" rel="noopener">
-      <img src="./apps/web/public/product_showcase/aitu-02.png" alt="AI Image Generation" width="100%" />
-    </a>
-    <figcaption>
-      <p align="center">
-        AI Image Generation - Creative Leap
-      </p>
-    </figcaption>
-  </figure>
-</div>
-
-<div align="center">
-  <figure>
-    <a target="_blank" rel="noopener">
-      <img src="./apps/web/public/product_showcase/aitu-03.png" alt="Task Processing" width="100%" />
-    </a>
-    <figcaption>
-      <p align="center">
-        Task Processing - Batch Generation
-      </p>
-    </figcaption>
-  </figure>
-</div>
-
-<div align="center">
-  <figure>
-    <a target="_blank" rel="noopener">
-      <img src="./apps/web/public/product_showcase/aitu-04.png" alt="Results Display" width="100%" />
-    </a>
-    <figcaption>
-      <p align="center">
-        Results Display
-      </p>
-    </figcaption>
-  </figure>
-</div>
-
-<div align="center">
-  <figure>
-    <a target="_blank" rel="noopener">
-      <img src="./apps/web/public/product_showcase/aitu-05.png" alt="AI Video Generation" width="100%" />
-    </a>
-    <figcaption>
-      <p align="center">
-        AI Video Generation - Multi-model, Image-to-Video
-      </p>
-    </figcaption>
-  </figure>
-</div>
-
-<div align="center">
-  <figure>
-    <a target="_blank" rel="noopener">
-      <img src="./apps/web/public/product_showcase/aitu-06.png" alt="Task Queue Management" width="100%" />
-    </a>
-    <figcaption>
-      <p align="center">
-        Task Queue - Progress Tracking, Batch Management, Media Cache
-      </p>
-    </figcaption>
-  </figure>
-</div>
-
-<div align="center">
-  <figure>
-    <a target="_blank" rel="noopener">
-      <img src="./apps/web/public/product_showcase/case-2.png" alt="Flowchart and Freehand" width="100%" />
-    </a>
-    <figcaption>
-      <p align="center">
-        All-in-One Whiteboard - Flowcharts, Freehand, Images and More
-      </p>
-    </figcaption>
-  </figure>
-</div>
-
-
 ## About the Name
 
-***Aitu*** is born from the love of creation and the pursuit of visual expression.
+**_Opentu (opentu.ai)_** is born from the love of creation and the pursuit of visual expression.
 
-*Ai* represents passion and dedication to creation, while *tu* symbolizes the infinite possibilities of visual expression. Here, each creation is a pursuit of beauty, every stroke an extension of imagination.
+_Ope_ represents passion and dedication to creation, while _ntu_ symbolizes the infinite possibilities of visual expression. Here, each creation is a pursuit of beauty, every stroke an extension of imagination.
 
-Creativity stems from inner love, and ***Aitu*** is committed to being a powerful assistant for every creator.
+Creativity stems from inner love, and **_Opentu (opentu.ai)_** is committed to being a powerful assistant for every creator.
 
-*Love Creation, Visualize the Future.*
+_Love Creation, Visualize the Future._
 
 ## About Plait Drawing Framework
 
-*Aitu* is positioned as an out-of-the-box, *open-source*, and free tool product. It is built on top of the *Plait* framework, which is an *open-source* drawing framework representing significant technical accumulation in knowledge visualization products.
+_Opentu (Aitu)_ is positioned as an out-of-the-box, open-source, free tool product. It is built on top of the _Plait_ framework, which is an open-source drawing framework representing significant technical accumulation in knowledge visualization products.
 
-
-*Aitu* uses a *plugin architecture*, which is technically more complex than traditional *open-source* tools. However, this *plugin architecture* has its advantages: it supports multiple *UI frameworks* (*Angular*, *React*), integrates with different *rich text frameworks* (currently only supporting *Slate* framework), enables better business layer separation in development, allows development of various fine-grained reusable plugins, and can expand to more whiteboard application scenarios.
+Opentu uses a plugin architecture. Although technically complex, it provides advantages such as supporting multiple UI frameworks (_Angular, React_), integrating different rich text frameworks (currently only _Slate_), enabling clear business layering, and allowing the development of fine-grained reusable plugins to expand more whiteboard application scenarios.
 
 ## Repository Structure
 
 ```
 aitu/
 ├── apps/
-│   └── web/                         # Aitu Web Application
+│   └── web/                         # Opentu Web application
 │       ├── src/                     # Source code
 │       ├── public/                  # Static assets
 │       └── index.html               # Entry HTML
@@ -212,21 +148,10 @@ aitu/
 - **packages/react-board**: Plait framework React adapter layer
 - **packages/react-text**: Text editing and rendering components
 
-## Try It Out
-
-[*https://aitu.tu-zi.com*](https://aitu.tu-zi.com) is the online application of *Aitu*.
-
-We will be iterating frequently on application features to continuously optimize user experience.
-
-
-## 🚀 Quick Start
-
-### Online Experience
-Visit [aitu.tu-zi.com](https://aitu.tu-zi.com) directly to start using it immediately, no installation required.
-
-### Local Development
+## Local Development
 
 #### Requirements
+
 - Node.js >= 16.0.0
 - npm >= 8.0.0
 
@@ -290,18 +215,21 @@ nx test react-board
 ### Basic Features
 
 #### Creating Content
+
 - **Mind Maps**: Click the mind map icon in the toolbar to start creating branch nodes
 - **Flowcharts**: Select flowchart tools to drag and create shapes and connectors
 - **Freehand Drawing**: Use brush tools for hand-drawn creations
 - **Text Editing**: Double-click anywhere to add text
 
 #### Import/Export
+
 - **Export Formats**: Supports PNG, JPG, JSON(.drawnix) formats
 - **Text Conversion**:
   - Support Markdown text to mind map conversion
   - Support Mermaid syntax to flowchart conversion
 
 #### Shortcuts
+
 - `Ctrl/Cmd + Z`: Undo
 - `Ctrl/Cmd + Y`: Redo
 - `Ctrl/Cmd + C`: Copy
@@ -311,17 +239,13 @@ nx test react-board
 
 ### 🔧 Plugin Development
 
-Aitu is built on a plugin architecture and supports custom extensions:
+Opentu is built on a plugin architecture and supports custom extensions:
 
 ```typescript
 import { withFreehand, withMind, withDraw } from '@aitu/core';
 
 // Create editor instance with specific plugins
-const editor = withFreehand(
-  withMind(
-    withDraw(createEditor())
-  )
-);
+const editor = withFreehand(withMind(withDraw(createEditor())));
 ```
 
 ### 🐳 Docker Deployment
@@ -339,6 +263,7 @@ Visit `http://localhost:8080` to use.
 ## 🏗️ Technical Architecture
 
 ### Tech Stack
+
 - **Frontend Framework**: React 18.3+ with TypeScript
 - **Build Tools**: Vite + Nx (Monorepo)
 - **UI Component Library**: TDesign React
@@ -374,6 +299,7 @@ Uses a composable plugin architecture where each plugin handles specific functio
 ## 📦 Dependencies
 
 ### Core Dependencies
+
 - [plait](https://github.com/worktile/plait) - Open source drawing framework providing underlying drawing capabilities
 - [slate](https://github.com/ianstormtaylor/slate) - Rich text editor framework handling text editing logic
 - [floating-ui](https://github.com/floating-ui/floating-ui) - Floating layer positioning library for toolbars and popups
@@ -381,11 +307,11 @@ Uses a composable plugin architecture where each plugin handles specific functio
 - [localforage](https://github.com/localForage/localForage) - Browser storage solution supporting auto-save
 
 ### Development Dependencies
+
 - **Nx**: Monorepo management tool
 - **Vite**: Modern build tool providing fast development experience
 - **TypeScript**: Type-safe JavaScript superset
 - **ESLint + Prettier**: Code quality and formatting tools
-
 
 ## 🤝 Contributing Guide
 
@@ -394,11 +320,13 @@ We welcome and appreciate any form of contribution!
 ### Ways to Contribute
 
 #### 🐛 Report Issues
+
 - Use [GitHub Issues](https://github.com/ljquan/aitu/issues) to report bugs
 - Please provide detailed reproduction steps and environment information
 - Screenshots or screen recordings would be very helpful
 
 #### 💡 Feature Requests
+
 - Mark as `enhancement` in Issues
 - Describe use cases and expected behavior
 - Discuss technical implementation approaches
@@ -406,28 +334,33 @@ We welcome and appreciate any form of contribution!
 #### 🔧 Code Contributions
 
 1. **Fork the Project**
+
    ```bash
    git clone https://github.com/your-username/aitu.git
    ```
 
 2. **Create Feature Branch**
+
    ```bash
    git checkout -b feature/your-feature-name
    ```
 
 3. **Local Development**
+
    ```bash
    npm install
    npm start
    ```
 
 4. **Code Standards**
+
    - Follow existing code style
    - Run `nx lint` to check code quality
    - Run `nx test` to ensure tests pass
    - Add necessary test cases
 
 5. **Commit Changes**
+
    ```bash
    git add .
    git commit -m "feat: add your feature description"
@@ -439,6 +372,7 @@ We welcome and appreciate any form of contribution!
    ```
 
 #### 📝 Documentation Contributions
+
 - Improve README documentation
 - Enhance code comments
 - Write usage tutorials
@@ -454,6 +388,7 @@ We welcome and appreciate any form of contribution!
 ### Common Issues
 
 #### Installation Problems
+
 ```bash
 # Clear cache and reinstall
 npm cache clean --force
@@ -462,6 +397,7 @@ npm install
 ```
 
 #### Development Server Startup Failure
+
 ```bash
 # Check port occupation
 lsof -i :4200
@@ -471,6 +407,7 @@ npm start -- --port 3000
 ```
 
 #### Build Failures
+
 ```bash
 # Check TypeScript type errors
 nx typecheck drawnix
@@ -480,11 +417,13 @@ nx lint drawnix
 ```
 
 #### Performance Issues
+
 - Large whiteboard files may cause slow rendering
 - Recommend splitting into multiple smaller files
 - Disable unnecessary plugin features
 
 ### Getting Help
+
 - 📖 Check [Documentation](./docs/)
 - 💬 Submit [Issue](https://github.com/ljquan/aitu/issues)
 - 🗣️ Join [Discussions](https://github.com/ljquan/aitu/discussions)
@@ -492,6 +431,7 @@ nx lint drawnix
 ## 🗺️ Roadmap
 
 ### Completed ✅
+
 - ✅ Basic whiteboard functionality
 - ✅ Mind maps and flowcharts
 - ✅ Freehand drawing and image insertion
@@ -503,12 +443,14 @@ nx lint drawnix
 - ✅ Media Caching
 
 ### In Development 🚧
+
 - 🚧 Collaboration features (real-time multi-user editing)
 - 🚧 More export formats (PDF, SVG)
 - 🚧 Template system
 - 🚧 Plugin marketplace
 
 ### Planned 📅
+
 - 📅 Cloud sync storage
 - 📅 Version history management
 - 📅 Open API platform
@@ -527,7 +469,6 @@ Welcome to join the community to share your experiences and creations!
 
 - 💬 GitHub Discussions: [Join Discussion](https://github.com/ljquan/aitu/discussions)
 - 🐛 Issue Feedback: [Submit Issue](https://github.com/ljquan/aitu/issues)
-
 
 ## License
 

@@ -10,7 +10,7 @@
   </p>
   <p>
     <a href="https://github.com/ljquan/aitu/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
-    <a href="https://aitu.tu-zi.com"><img src="https://img.shields.io/badge/demo-online-brightgreen.svg" alt="Demo"></a>
+    <a href="https://opentu.ai"><img src="https://img.shields.io/badge/demo-online-brightgreen.svg" alt="Demo"></a>
   </p>
   <p>
     <a href="https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fljquan%2Faitu&project-name=aitu&repository-name=aitu"><img src="https://vercel.com/button" alt="Deploy with Vercel"/></a>
