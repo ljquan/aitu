@@ -1789,8 +1789,8 @@ $vip-color: #E91E63;
   color: $orange-primary;
 }
 
-// 深色模式下的 Portal 下拉菜单样式
-@media (prefers-color-scheme: dark) {
+// 深色模式下的 Portal 下拉菜单样式（使用应用级别主题检测，与其他组件一致）
+:root[data-theme='dark'] {
   .generation-type-dropdown__menu,
   .count-dropdown__menu {
     background: var(--color-surface-high, #2a2a2a);
