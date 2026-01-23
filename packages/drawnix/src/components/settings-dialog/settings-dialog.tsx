@@ -29,7 +29,7 @@ export const SettingsDialog = ({
   container: HTMLElement | null;
 }) => {
   const { appState, setAppState } = useDrawnix();
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const [apiKey, setApiKey] = useState('');
   const [baseUrl, setBaseUrl] = useState('');
   const [imageModelName, setImageModelName] = useState('');
@@ -78,20 +78,26 @@ export const SettingsDialog = ({
         <div className="settings-dialog__form">
           <div className="settings-dialog__field">
             <div className="settings-dialog__label-with-tooltip">
-              <label className="settings-dialog__label">{t('settings.apiKey')}</label>
+              <label className="settings-dialog__label">
+                {t('settings.apiKey')}
+              </label>
               <Tooltip
                 content={
                   <div>
                     您可以从以下地址获取 API Key（新建令牌渠道分组选择default）:
                     <br />
-                    <a href="https://api.tu-zi.com/token" target="_blank" rel="noopener noreferrer"
-                       style={{color: '#0052d9', textDecoration: 'none'}}>
+                    <a
+                      href="https://api.tu-zi.com/token"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ color: '#0052d9', textDecoration: 'none' }}
+                    >
                       https://api.tu-zi.com/token
                     </a>
                   </div>
                 }
                 placement="top"
-                theme='light'
+                theme="light"
                 showArrow={false}
               >
                 <InfoCircleIcon className="settings-dialog__tooltip-icon" />
@@ -107,7 +113,9 @@ export const SettingsDialog = ({
             />
           </div>
           <div className="settings-dialog__field">
-            <label className="settings-dialog__label">{t('settings.baseUrl')}</label>
+            <label className="settings-dialog__label">
+              {t('settings.baseUrl')}
+            </label>
             <input
               type="text"
               className="settings-dialog__input"
@@ -117,24 +125,56 @@ export const SettingsDialog = ({
             />
           </div>
           <div className="settings-dialog__field">
-            <label className="settings-dialog__label">图片模型名称</label>
+            <div className="settings-dialog__label-with-tooltip">
+              <label className="settings-dialog__label">图片模型名称</label>
+              <Tooltip
+                content={
+                  <div>
+                    图片生成使用接口 /v1/images/generations。
+                    <br />
+                    切换不同渠道的 baseUrl 时需确保模型兼容该接口。
+                  </div>
+                }
+                placement="top"
+                theme="light"
+                showArrow={false}
+              >
+                <InfoCircleIcon className="settings-dialog__tooltip-icon" />
+              </Tooltip>
+            </div>
             <div className="settings-dialog__model-dropdown-container">
               <ModelDropdown
                 selectedModel={imageModelName}
                 onSelect={(value) => setImageModelName(value)}
-                language={t('language') === 'zh' ? 'zh' : 'en'}
+                language={language}
                 placement="down"
                 variant="form"
               />
             </div>
           </div>
           <div className="settings-dialog__field">
-            <label className="settings-dialog__label">视频模型名称</label>
+            <div className="settings-dialog__label-with-tooltip">
+              <label className="settings-dialog__label">视频模型名称</label>
+              <Tooltip
+                content={
+                  <div>
+                    视频生成使用接口 /v1/videos。
+                    <br />
+                    切换不同渠道的 baseUrl 时需确保模型兼容该接口。
+                  </div>
+                }
+                placement="top"
+                theme="light"
+                showArrow={false}
+              >
+                <InfoCircleIcon className="settings-dialog__tooltip-icon" />
+              </Tooltip>
+            </div>
             <div className="settings-dialog__model-dropdown-container">
               <ModelDropdown
                 selectedModel={videoModelName}
                 onSelect={(value) => setVideoModelName(value)}
-                language={t('language') === 'zh' ? 'zh' : 'en'}
+                language={language}
                 models={VIDEO_MODELS}
                 placement="down"
                 variant="form"
