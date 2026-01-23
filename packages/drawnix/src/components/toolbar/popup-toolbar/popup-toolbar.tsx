@@ -1171,12 +1171,40 @@ export const PopupToolbar = () => {
                 // 使用 Transforms.setNode 更新画布中的图片元素
                 const elementIndex = board.children.findIndex(child => child.id === editingImageElement.id);
                 if (elementIndex >= 0) {
-                  // 获取原元素的左上角位置
+                  // 获取原元素的位置和尺寸
                   const element = board.children[elementIndex] as any;
-                  const [start] = element.points || [[0, 0]];
+                  const [start, end] = element.points || [[0, 0], [0, 0]];
+                  const originalDisplayWidth = end[0] - start[0];
+                  const originalDisplayHeight = end[1] - start[1];
                   
-                  // 计算新的 points，保持左上角位置不变，使用裁剪后图片的实际尺寸
-                  const newPoints = [start, [start[0] + img.naturalWidth, start[1] + img.naturalHeight]];
+                  // 获取原图的实际尺寸（如果元素没有存储，则从原图 URL 加载）
+                  let originalNaturalWidth = element.width;
+                  let originalNaturalHeight = element.height;
+                  
+                  if (!originalNaturalWidth || !originalNaturalHeight) {
+                    // 从原图 URL 加载获取实际尺寸
+                    const originalImg = new Image();
+                    await new Promise<void>((resolve) => {
+                      originalImg.onload = () => resolve();
+                      originalImg.onerror = () => resolve(); // 失败时使用显示尺寸
+                      originalImg.src = element.url;
+                    });
+                    originalNaturalWidth = originalImg.naturalWidth || originalDisplayWidth;
+                    originalNaturalHeight = originalImg.naturalHeight || originalDisplayHeight;
+                  }
+                  
+                  // 计算原图的缩放比例
+                  const scaleX = originalDisplayWidth / originalNaturalWidth;
+                  const scaleY = originalDisplayHeight / originalNaturalHeight;
+                  // 使用较小的缩放比例保持宽高比一致
+                  const scale = Math.min(scaleX, scaleY);
+                  
+                  // 计算新的显示尺寸，保持原图的缩放比例
+                  const newDisplayWidth = img.naturalWidth * scale;
+                  const newDisplayHeight = img.naturalHeight * scale;
+                  
+                  // 计算新的 points，保持左上角位置不变
+                  const newPoints = [start, [start[0] + newDisplayWidth, start[1] + newDisplayHeight]];
                   
                   Transforms.setNode(board, {
                     url: stableUrl,

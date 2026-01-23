@@ -875,13 +875,27 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
         const [start, end] = element.points || [[0, 0], [0, 0]];
         const originalDisplayWidth = end[0] - start[0];
         const originalDisplayHeight = end[1] - start[1];
-        const originalNaturalWidth = element.width || originalDisplayWidth;
-        const originalNaturalHeight = element.height || originalDisplayHeight;
+        
+        // 获取原图的实际尺寸（如果元素没有存储，则从原图 URL 加载）
+        let originalNaturalWidth = element.width;
+        let originalNaturalHeight = element.height;
+        
+        if (!originalNaturalWidth || !originalNaturalHeight) {
+          // 从原图 URL 加载获取实际尺寸
+          const originalImg = new Image();
+          await new Promise<void>((resolve) => {
+            originalImg.onload = () => resolve();
+            originalImg.onerror = () => resolve(); // 失败时使用显示尺寸
+            originalImg.src = element.url;
+          });
+          originalNaturalWidth = originalImg.naturalWidth || originalDisplayWidth;
+          originalNaturalHeight = originalImg.naturalHeight || originalDisplayHeight;
+        }
         
         // 计算原图的缩放比例
         const scaleX = originalDisplayWidth / originalNaturalWidth;
         const scaleY = originalDisplayHeight / originalNaturalHeight;
-        // 使用较小的缩放比例保持宽高比一致（通常 scaleX 和 scaleY 应该相等）
+        // 使用较小的缩放比例保持宽高比一致
         const scale = Math.min(scaleX, scaleY);
         
         // 计算新的显示尺寸，保持原图的缩放比例
