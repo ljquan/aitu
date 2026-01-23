@@ -1,6 +1,6 @@
 {
   "version": "0.5.41",
-  "buildTime": "2026-01-23T02:48:06.312Z",
+  "buildTime": "2026-01-23T02:48:07.012Z",
   "gitCommit": "unknown",
   "changelog": [
     "统一 Tooltip 样式并美化模型健康状态信号展示",
