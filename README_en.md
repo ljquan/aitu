@@ -18,7 +18,7 @@
   </p>
 </div>
 
-[_中文_](https://github.com/ljquan/aitu/blob/develop/README.md)
+[_中文_](https://github.com/ljquan/aitu/blob/main/README.md)
 
 ## Product Showcase
 
