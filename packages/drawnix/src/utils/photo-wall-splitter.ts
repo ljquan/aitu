@@ -28,6 +28,7 @@ import {
   isWhiteBorderPixel,
   removeWhiteBorder,
 } from './image-border-utils';
+import { mergeSplitLines } from './image-split-core';
 
 /** 检测时的最大尺寸，超过此尺寸会降采样（降低此值可提升性能） */
 const MAX_DETECTION_SIZE = 800;
@@ -110,8 +111,9 @@ function detectGridStructure(imageData: ImageData): GridDetectionResult {
   // console.log(`[GridDetection] Found ${verticalWhiteCols.length} vertical white cols`);
 
   // 合并连续的白线为单一分割线（取中点）
-  const horizontalLines = mergeConsecutiveLines(horizontalWhiteRows);
-  const verticalLines = mergeConsecutiveLines(verticalWhiteCols);
+  // 使用共享的 mergeSplitLines 函数，允许 3px 间隔
+  const horizontalLines = mergeSplitLines(horizontalWhiteRows, 3);
+  const verticalLines = mergeSplitLines(verticalWhiteCols, 3);
 
   // console.log(`[GridDetection] Merged to ${horizontalLines.length} horizontal lines:`, horizontalLines);
   // console.log(`[GridDetection] Merged to ${verticalLines.length} vertical lines:`, verticalLines);
@@ -150,33 +152,7 @@ function detectGridStructure(imageData: ImageData): GridDetectionResult {
   };
 }
 
-/**
- * 合并连续的行/列为单一分割线
- * 例如 [10, 11, 12, 50, 51] -> [11, 50.5]
- */
-function mergeConsecutiveLines(lines: number[]): number[] {
-  if (lines.length === 0) return [];
-
-  const merged: number[] = [];
-  let start = lines[0];
-  let end = lines[0];
-
-  for (let i = 1; i < lines.length; i++) {
-    if (lines[i] <= end + 3) {
-      // 连续或间隔很小（允许 3px 误差）
-      end = lines[i];
-    } else {
-      // 不连续，记录当前组的中点
-      merged.push(Math.floor((start + end) / 2));
-      start = lines[i];
-      end = lines[i];
-    }
-  }
-  // 记录最后一组
-  merged.push(Math.floor((start + end) / 2));
-
-  return merged;
-}
+// 使用 image-split-core.ts 中的 mergeSplitLines 函数
 
 /**
  * 根据网格结构生成区域
