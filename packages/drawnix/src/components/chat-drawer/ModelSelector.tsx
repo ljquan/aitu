@@ -286,9 +286,6 @@ export const ModelSelector: React.FC<ModelSelectorProps> = React.memo(
           aria-expanded={isOpen}
         >
           <div className="model-selector__trigger-content">
-            {currentModel && (
-              <ProviderIcon provider={currentModel.provider} className="model-selector__trigger-icon-provider" />
-            )}
             <ModelHealthBadge modelId={selectedModel} className="model-selector__trigger-health" />
             <span className="model-selector__trigger-text">
               {currentModel?.name || '选择模型'}

@@ -107,10 +107,10 @@ $drawer-input-height: 160px;
   &__header-bottom {
     display: flex;
     align-items: center;
-    justify-content: flex-start; // 改为 flex-start，让内容靠左排列
+    justify-content: flex-start;
     gap: $spacing-md;
-    padding: 4px;
-    background: rgba(0, 0, 0, 0.02);
+    padding: 6px 12px;
+    background: rgba(0, 0, 0, 0.03);
     border-radius: 12px;
     min-width: 0;
   }
@@ -1440,13 +1440,17 @@ $drawer-input-height: 160px;
 
     .model-selector__trigger {
       display: flex;
+      align-items: center;
       width: 100%;
       max-width: 100%;
       padding: 8px 12px;
       border-radius: 6px;
       background: #fff;
-      border: 1px solid #d9d9d9;
+      border: 1px solid #e5e7eb;
       min-height: 36px;
+      box-sizing: border-box;
+      justify-content: flex-start;
+      gap: 8px;
 
       &:hover {
         border-color: var(--td-brand-color);
@@ -1454,23 +1458,59 @@ $drawer-input-height: 160px;
 
       &--active {
         border-color: var(--td-brand-color);
-        box-shadow: 0 0 0 2px rgba(var(--td-brand-color-rgb), 0.1);
+        box-shadow: 0 0 0 2px rgba(243, 156, 18, 0.1);
       }
+    }
+
+    .model-selector__trigger-content {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .model-selector__trigger-health {
+      flex-shrink: 0;
     }
 
     .model-selector__trigger-text {
       font-size: 14px;
       color: var(--td-text-color-primary);
+      text-align: left;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .model-selector__trigger-icon {
+      flex-shrink: 0;
+      color: #9ca3af;
     }
   }
 
   &--variant-capsule {
-    flex: none; // 恢复之前的非 flex: 1 状态
+    flex: none;
     width: auto;
 
     .model-selector__trigger {
       width: auto;
       max-width: none;
+      background: rgba(0, 0, 0, 0.04);
+      border: none;
+      padding: 4px 12px;
+      border-radius: 10px;
+      color: var(--td-text-color-primary);
+
+      &:hover {
+        background: rgba(0, 0, 0, 0.08);
+      }
+
+      &--active {
+        background: rgba(243, 156, 18, 0.1);
+        color: var(--td-brand-color);
+        box-shadow: none;
+      }
     }
   }
 

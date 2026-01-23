@@ -66,6 +66,11 @@ $green-health: #10B981;
       border-radius: 6px;
       min-height: 36px;
       gap: 8px;
+      box-sizing: border-box;
+
+      &:hover {
+        border-color: var(--td-brand-color);
+      }
 
       .model-dropdown__form-content {
         display: flex;

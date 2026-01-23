@@ -7,7 +7,6 @@ import { geminiSettings } from '../../utils/settings-manager';
 import { Tooltip } from 'tdesign-react';
 import { InfoCircleIcon } from 'tdesign-icons-react';
 import { ModelDropdown } from '../ai-input-bar/ModelDropdown';
-import { ModelSelector as ChatModelSelector } from '../chat-drawer/ModelSelector';
 import {
   IMAGE_MODEL_GROUPED_SELECT_OPTIONS,
   VIDEO_MODEL_SELECT_OPTIONS,
@@ -75,24 +74,24 @@ export const SettingsDialog = ({
     >
       <DialogContent className="settings-dialog" container={container}>
         <h2 className="settings-dialog__title">{t('settings.title')}</h2>
-        <div className="settings-dialog__form">
+        <form className="settings-dialog__form" onSubmit={(e) => e.preventDefault()}>
           <div className="settings-dialog__field">
             <div className="settings-dialog__label-with-tooltip">
-              <label className="settings-dialog__label">
-                {t('settings.apiKey')}
+              <label className="settings-dialog__label" htmlFor="apiKeyInput">
+                API Key
               </label>
               <Tooltip
                 content={
                   <div>
-                    您可以从以下地址获取 API Key（新建令牌渠道分组选择default）:
+                    您可以从以下地址获取 API Key:
                     <br />
                     <a
                       href="https://api.tu-zi.com/token"
                       target="_blank"
                       rel="noopener noreferrer"
-                      style={{ color: '#0052d9', textDecoration: 'none' }}
+                      style={{ color: '#F39C12', textDecoration: 'none' }}
                     >
-                      https://api.tu-zi.com/token
+                      api.tu-zi.com/token
                     </a>
                   </div>
                 }
@@ -110,12 +109,11 @@ export const SettingsDialog = ({
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
               placeholder={t('settings.apiKeyPlaceholder')}
+              autoComplete="off"
             />
           </div>
           <div className="settings-dialog__field">
-            <label className="settings-dialog__label">
-              {t('settings.baseUrl')}
-            </label>
+            <label className="settings-dialog__label">Base URL</label>
             <input
               type="text"
               className="settings-dialog__input"
@@ -126,15 +124,9 @@ export const SettingsDialog = ({
           </div>
           <div className="settings-dialog__field">
             <div className="settings-dialog__label-with-tooltip">
-              <label className="settings-dialog__label">图片模型名称</label>
+              <label className="settings-dialog__label">图片模型</label>
               <Tooltip
-                content={
-                  <div>
-                    图片生成使用接口 /v1/images/generations。
-                    <br />
-                    切换不同渠道的 baseUrl 时需确保模型兼容该接口。
-                  </div>
-                }
+                content="图片生成使用接口 /v1/images/generations"
                 placement="top"
                 theme="light"
                 showArrow={false}
@@ -154,15 +146,9 @@ export const SettingsDialog = ({
           </div>
           <div className="settings-dialog__field">
             <div className="settings-dialog__label-with-tooltip">
-              <label className="settings-dialog__label">视频模型名称</label>
+              <label className="settings-dialog__label">视频模型</label>
               <Tooltip
-                content={
-                  <div>
-                    视频生成使用接口 /v1/videos。
-                    <br />
-                    切换不同渠道的 baseUrl 时需确保模型兼容该接口。
-                  </div>
-                }
+                content="视频生成使用接口 /v1/videos"
                 placement="top"
                 theme="light"
                 showArrow={false}
@@ -182,16 +168,29 @@ export const SettingsDialog = ({
             </div>
           </div>
           <div className="settings-dialog__field">
-            <label className="settings-dialog__label">文本模型名称</label>
+            <div className="settings-dialog__label-with-tooltip">
+              <label className="settings-dialog__label">文本模型</label>
+              <Tooltip
+                content="Agent 模式使用，接口 /v1/chat/completions"
+                placement="top"
+                theme="light"
+                showArrow={false}
+              >
+                <InfoCircleIcon className="settings-dialog__tooltip-icon" />
+              </Tooltip>
+            </div>
             <div className="settings-dialog__model-dropdown-container">
-              <ChatModelSelector
-                value={textModelName}
-                onChange={(value) => setTextModelName(value)}
+              <ModelDropdown
+                selectedModel={textModelName}
+                onSelect={(value) => setTextModelName(value)}
+                language={language}
+                models={TEXT_MODELS}
+                placement="down"
                 variant="form"
               />
             </div>
           </div>
-        </div>
+        </form>
         <div className="settings-dialog__actions">
           <button
             className="settings-dialog__button settings-dialog__button--cancel"
