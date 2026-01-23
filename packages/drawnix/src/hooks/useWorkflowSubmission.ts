@@ -192,7 +192,7 @@ export function useWorkflowSubmission(
     event: WorkflowEvent,
     legacyWorkflow: LegacyWorkflowDefinition,
     retryContext: WorkflowRetryContext
-  ) => void) | null>(null);
+  ) => Promise<void>) | null>(null);
 
   /**
    * Recover workflows on mount (after page refresh)
@@ -265,8 +265,8 @@ export function useWorkflowSubmission(
     // Subscribe to future events for this workflow using ref
     const workflowSub = workflowSubmissionService.subscribeToWorkflow(
       recoveredWorkflow.id,
-      (evt: WorkflowEvent) => {
-        handleWorkflowEventRef.current?.(evt, recoveredWorkflow, retryContext);
+      async (evt: WorkflowEvent) => {
+        await handleWorkflowEventRef.current?.(evt, recoveredWorkflow, retryContext);
       }
     );
     subscriptionsRef.current.push(workflowSub);
@@ -315,7 +315,7 @@ export function useWorkflowSubmission(
   /**
    * Handle workflow events from SW
    */
-  const handleWorkflowEvent = useCallback((
+  const handleWorkflowEvent = useCallback(async (
     event: WorkflowEvent,
     legacyWorkflow: LegacyWorkflowDefinition,
     retryContext: WorkflowRetryContext
@@ -349,7 +349,7 @@ export function useWorkflowSubmission(
       }
 
       case 'completed': {
-        // console.log('[useWorkflowSubmission] ✓ Workflow completed:', event.workflowId);
+        console.log('[useWorkflowSubmission] ✓ Workflow completed:', event.workflowId);
 
         // Update steps to completed status, but skip steps with taskId (they're waiting for task completion)
         const currentWorkflow = workflowControl.getWorkflow();
@@ -358,16 +358,18 @@ export function useWorkflowSubmission(
         if (currentWorkflow) {
           // Mark remaining steps as completed, except those with taskId (queue tasks)
           currentWorkflow.steps.forEach(step => {
-            if (step.status === 'running' || step.status === 'pending') {
-              // 如果步骤有 taskId，说明是队列任务，不要强制标记为 completed
-              // 等待任务真正完成后由 taskQueueService 更新状态
-              const stepResult = step.result as { taskId?: string } | undefined;
-              const hasTaskId = stepResult?.taskId;
-              if (hasTaskId) {
-                hasQueuedTasks = true;
-              } else {
-                workflowControl.updateStep(step.id, 'completed');
-              }
+            const stepResult = step.result as { taskId?: string } | undefined;
+            const hasTaskId = stepResult?.taskId;
+            
+            // 检查所有状态的步骤是否有 taskId
+            if (hasTaskId) {
+              hasQueuedTasks = true;
+              // console.log('[useWorkflowSubmission] Step has taskId:', step.id, step.mcp, 'taskId:', hasTaskId);
+            }
+            
+            // 只更新 running/pending 状态的步骤（如果没有 taskId 的话）
+            if ((step.status === 'running' || step.status === 'pending') && !hasTaskId) {
+              workflowControl.updateStep(step.id, 'completed');
             }
           });
         }
@@ -381,13 +383,36 @@ export function useWorkflowSubmission(
           if (workZoneId && board) {
             WorkZoneTransforms.updateWorkflow(board, workZoneId, workflowData);
             
+            console.log('[useWorkflowSubmission] Checking removal for WorkZone:', workZoneId, 'hasQueuedTasks:', hasQueuedTasks);
+
             // If no queued tasks (like generate_image), remove WorkZone after a delay
-            // Queued tasks will be handled by useAutoInsertToCanvas when they complete
+            // Queued tasks will be handled by useAutoInsertToCanvas when they complete AND are inserted
             if (!hasQueuedTasks) {
               setTimeout(() => {
                 WorkZoneTransforms.removeWorkZone(board, workZoneId);
-                // console.log('[useWorkflowSubmission] Removed WorkZone after completion:', workZoneId);
+                console.log('[useWorkflowSubmission] Removed WorkZone after completion:', workZoneId);
               }, 1500);
+            } else {
+              // 检查是否所有队列任务的后处理已经完成（可能在工作流完成前就已经插入了）
+              const { workflowCompletionService } = await import('../services/workflow-completion-service');
+              const allPostProcessingFinished = completedWorkflow.steps.every(step => {
+                const stepResult = step.result as { taskId?: string } | undefined;
+                if (stepResult?.taskId) {
+                  const isCompleted = workflowCompletionService.isPostProcessingCompleted(stepResult.taskId);
+                  console.log(`[useWorkflowSubmission] Task ${stepResult.taskId} post-processing finished:`, isCompleted);
+                  return isCompleted;
+                }
+                return true;
+              });
+
+              if (allPostProcessingFinished) {
+                console.log('[useWorkflowSubmission] All post-processing finished, removing WorkZone:', workZoneId);
+                setTimeout(() => {
+                  WorkZoneTransforms.removeWorkZone(board, workZoneId);
+                }, 1500);
+              } else {
+                console.log('[useWorkflowSubmission] Post-processing still in progress, keeping WorkZone:', workZoneId);
+              }
             }
           }
         }
@@ -497,8 +522,8 @@ export function useWorkflowSubmission(
     // Subscribe to workflow events
     const workflowSub = workflowSubmissionService.subscribeToWorkflow(
       swWorkflow.id,
-      (event: WorkflowEvent) => {
-        handleWorkflowEvent(event, legacyWorkflow, retryContext);
+      async (event: WorkflowEvent) => {
+        await handleWorkflowEvent(event, legacyWorkflow, retryContext);
       }
     );
     subscriptionsRef.current.push(workflowSub);

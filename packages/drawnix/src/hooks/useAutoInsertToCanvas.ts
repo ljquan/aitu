@@ -125,6 +125,32 @@ function updateWorkflowStepForTask(
     );
 
     if (allStepsFinished) {
+      // 检查是否所有步骤都已完成或失败
+      const hasQueuedTasks = updatedSteps.some(step => {
+        const stepResult = step.result as { taskId?: string } | undefined;
+        return !!stepResult?.taskId;
+      });
+
+      console.log(`[AutoInsert] WorkZone ${workzone.id} allStepsFinished: ${allStepsFinished}, hasQueuedTasks: ${hasQueuedTasks}`);
+
+      // 如果有队列任务（图片/视频生成），检查后处理是否完成
+      if (hasQueuedTasks) {
+        const allPostProcessingFinished = updatedSteps.every(step => {
+          const stepResult = step.result as { taskId?: string } | undefined;
+          if (stepResult?.taskId) {
+            const isCompleted = workflowCompletionService.isPostProcessingCompleted(stepResult.taskId);
+            console.log(`[AutoInsert] Task ${stepResult.taskId} post-processing completed: ${isCompleted}`);
+            return isCompleted;
+          }
+          return true;
+        });
+
+        if (!allPostProcessingFinished) {
+          console.log(`[AutoInsert] WorkZone ${workzone.id} has unfinished post-processing, skipping removal`);
+          return;
+        }
+      }
+
       // 延迟删除 WorkZone，让用户有时间看到完成状态
       setTimeout(() => {
         WorkZoneTransforms.removeWorkZone(board, workzone.id);
@@ -453,10 +479,55 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
       }
     });
 
+    // 订阅后处理完成事件，以便在所有任务插入完成后删除 WorkZone
+    const completionSub = workflowCompletionService.observeCompletionEvents().subscribe(event => {
+      console.log(`[AutoInsert] Received completion event: ${event.type} for task ${event.taskId}`);
+      if (event.type === 'postProcessingCompleted' || event.type === 'postProcessingFailed') {
+        const board = getCanvasBoard();
+        if (!board) return;
+
+        const workzone = findWorkZoneForTask(event.taskId);
+        if (workzone) {
+          console.log(`[AutoInsert] Found WorkZone ${workzone.id} for task ${event.taskId}`);
+          // 重新检查该 WorkZone 的所有步骤
+          const allStepsFinished = workzone.workflow.steps?.every(
+            step => step.status === 'completed' || step.status === 'failed' || step.status === 'skipped'
+          );
+
+          if (allStepsFinished) {
+            const allPostProcessingFinished = workzone.workflow.steps?.every(step => {
+              const stepResult = step.result as { taskId?: string } | undefined;
+              if (stepResult?.taskId) {
+                const isCompleted = workflowCompletionService.isPostProcessingCompleted(stepResult.taskId);
+                console.log(`[AutoInsert] Step task ${stepResult.taskId} isCompleted: ${isCompleted}`);
+                return isCompleted;
+              }
+              return true;
+            });
+
+            console.log(`[AutoInsert] WorkZone ${workzone.id} allStepsFinished: ${allStepsFinished}, allPostProcessingFinished: ${allPostProcessingFinished}`);
+
+            if (allPostProcessingFinished) {
+              console.log(`[AutoInsert] All post-processing finished for WorkZone ${workzone.id}, removing`);
+              setTimeout(() => {
+                WorkZoneTransforms.removeWorkZone(board, workzone.id);
+                window.dispatchEvent(new CustomEvent('ai-generation-complete', {
+                  detail: { type: 'image', success: true, workzoneId: workzone.id }
+                }));
+              }, 1500);
+            }
+          }
+        } else {
+          console.log(`[AutoInsert] No WorkZone found for task ${event.taskId}`);
+        }
+      }
+    });
+
     // 清理函数
     return () => {
       isActive = false;
       subscription.unsubscribe();
+      completionSub.unsubscribe();
       if (flushTimerRef.current) {
         clearTimeout(flushTimerRef.current);
       }

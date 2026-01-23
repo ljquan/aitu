@@ -605,16 +605,35 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
 
         // 关闭 ChatDrawer（如果是由 AIInputBar 触发的对话）
         // 注意：这里使用 setTimeout 确保消息更新后再关闭
-        setTimeout(() => {
+        setTimeout(async () => {
           chatDrawerControl.closeChatDrawer();
 
           // 删除 WorkZone（因为图片已经插入画布）
           const workZoneId = currentWorkZoneIdRef.current;
           const board = SelectionWatcherBoardRef.current;
           if (workZoneId && board) {
-            WorkZoneTransforms.removeWorkZone(board, workZoneId);
-            currentWorkZoneIdRef.current = null;
-            // console.log('[AIInputBar] Removed WorkZone after completion:', workZoneId);
+            // 只有当所有步骤都完成后才删除
+            const workflow = workflowControl.getWorkflow();
+            const allStepsFinished = workflow?.steps.every(
+              s => s.status === 'completed' || s.status === 'failed' || s.status === 'skipped'
+            );
+
+            if (allStepsFinished) {
+              const { workflowCompletionService } = await import('../../services/workflow-completion-service');
+              const allPostProcessingFinished = workflow?.steps.every(step => {
+                const stepResult = step.result as { taskId?: string } | undefined;
+                if (stepResult?.taskId) {
+                  return workflowCompletionService.isPostProcessingCompleted(stepResult.taskId);
+                }
+                return true;
+              });
+
+              if (allPostProcessingFinished) {
+                WorkZoneTransforms.removeWorkZone(board, workZoneId);
+                currentWorkZoneIdRef.current = null;
+                // console.log('[AIInputBar] Removed WorkZone after completion:', workZoneId);
+              }
+            }
           }
 
           // 滚动画布到插入元素的位置
@@ -1070,7 +1089,9 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
         if (usedSW) {
           if (prompt.trim()) {
             const hasSelection = allContent.length > 0;
-            addPromptHistory(prompt.trim(), hasSelection);
+            // 将 generationType 'text' 映射为 'agent' 用于历史记录
+            const modelType = generationType === 'text' ? 'agent' : generationType;
+            addPromptHistory(prompt.trim(), hasSelection, modelType);
           }
           setPrompt('');
           setSelectedContent([]);
@@ -1290,7 +1311,9 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
       // 保存提示词到历史记录（只保存有实际内容的提示词）
       if (prompt.trim()) {
         const hasSelection = allContent.length > 0;
-        addPromptHistory(prompt.trim(), hasSelection);
+        // 将 generationType 'text' 映射为 'agent' 用于历史记录
+        const modelTypeForHistory = generationType === 'text' ? 'agent' : generationType;
+        addPromptHistory(prompt.trim(), hasSelection, modelTypeForHistory);
       }
 
       // 检查工作流是否已完成（所有步骤都是 completed 或 failed/skipped）
@@ -1306,12 +1329,27 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
         const workZoneId = currentWorkZoneIdRef.current;
         const board = SelectionWatcherBoardRef.current;
         if (workZoneId && board) {
-          // 延迟删除，让用户看到完成状态
-          setTimeout(() => {
-            WorkZoneTransforms.removeWorkZone(board, workZoneId);
-            currentWorkZoneIdRef.current = null;
-            // console.log('[AIInputBar] Removed WorkZone after all steps completed (no tasks):', workZoneId);
-          }, 1500);
+          // 检查是否所有后处理都已完成
+          const allPostProcessingFinished = finalWorkflow?.steps.every(step => {
+            const stepResult = step.result as { taskId?: string } | undefined;
+            if (stepResult?.taskId) {
+              const isCompleted = workflowCompletionService.isPostProcessingCompleted(stepResult.taskId);
+              // console.log(`[AIInputBar] Task ${stepResult.taskId} post-processing finished:`, isCompleted);
+              return isCompleted;
+            }
+            return true;
+          });
+
+          // console.log(`[AIInputBar] WorkZone ${workZoneId} allStepsFinished: ${allStepsFinished}, hasCreatedTasks: ${hasCreatedTasks}, allPostProcessingFinished: ${allPostProcessingFinished}`);
+
+          if (allPostProcessingFinished) {
+            // 延迟删除，让用户看到完成状态
+            setTimeout(() => {
+              WorkZoneTransforms.removeWorkZone(board, workZoneId);
+              currentWorkZoneIdRef.current = null;
+              // console.log('[AIInputBar] Removed WorkZone after all steps completed (no tasks):', workZoneId);
+            }, 1500);
+          }
         }
       }
 
@@ -1553,11 +1591,26 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
       const workZoneId = currentWorkZoneIdRef.current;
       const board = SelectionWatcherBoardRef.current;
       if (workZoneId && board) {
-        // 延迟删除，让用户看到完成状态
-        setTimeout(() => {
-          WorkZoneTransforms.removeWorkZone(board, workZoneId);
-          currentWorkZoneIdRef.current = null;
-        }, 1500);
+        // 检查是否所有后处理都已完成
+        const allPostProcessingFinished = finalWorkflow?.steps.every(step => {
+          const stepResult = step.result as { taskId?: string } | undefined;
+          if (stepResult?.taskId) {
+            const isCompleted = workflowCompletionService.isPostProcessingCompleted(stepResult.taskId);
+            // console.log(`[AIInputBar] Retry task ${stepResult.taskId} post-processing finished:`, isCompleted);
+            return isCompleted;
+          }
+          return true;
+        });
+
+        // console.log(`[AIInputBar] Retry WorkZone ${workZoneId} allStepsFinished: ${allStepsFinished}, hasCreatedTasks: ${hasCreatedTasks}, allPostProcessingFinished: ${allPostProcessingFinished}`);
+
+        if (allPostProcessingFinished) {
+          // 延迟删除，让用户看到完成状态
+          setTimeout(() => {
+            WorkZoneTransforms.removeWorkZone(board, workZoneId);
+            currentWorkZoneIdRef.current = null;
+          }, 1500);
+        }
       }
     }
 

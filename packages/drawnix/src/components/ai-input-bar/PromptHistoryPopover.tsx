@@ -56,31 +56,41 @@ export const PromptHistoryPopover: React.FC<PromptHistoryPopoverProps> = ({
     }));
   }, [language]);
 
-  // 合并历史记录和预设提示词，去重
+  // 历史提示词最大展示数量（数据保留，只限制展示）
+  const MAX_HISTORY_DISPLAY = 100;
+
+  // 合并历史记录和预设提示词
+  // 规则：预设提示词永久展示，历史提示词最多展示 100 条
   const promptItems: PromptItem[] = useMemo(() => {
-    // 历史记录
-    const historyItems: PromptItem[] = history.map(item => ({
-      id: item.id,
-      content: item.content,
-      pinned: item.pinned,
-    }));
+    // 获取预设提示词内容集合（用于过滤历史记录中的重复项）
+    const presetContents = new Set(presetPrompts.map(p => p.content.trim().toLowerCase()));
 
-    // 获取历史记录中的内容集合（用于去重）
-    const historyContents = new Set(history.map(h => h.content.trim().toLowerCase()));
-
-    // 过滤掉与历史记录重复的预设
-    const filteredPresets: PromptItem[] = presetPrompts
-      .filter(p => !historyContents.has(p.content.trim().toLowerCase()))
-      .map(p => ({
-        id: p.id,
-        content: p.content,
-        pinned: false,
-        isPreset: true,
-        modelType: p.modelType,
-        scene: p.scene,
+    // 历史记录：过滤掉与预设重复的内容，然后限制展示数量
+    // 这样可以避免同一条内容同时出现在历史和预设中
+    const filteredHistory = history.filter(
+      item => !presetContents.has(item.content.trim().toLowerCase())
+    );
+    const historyItems: PromptItem[] = filteredHistory
+      .slice(0, MAX_HISTORY_DISPLAY)
+      .map(item => ({
+        id: item.id,
+        content: item.content,
+        pinned: item.pinned,
+        modelType: item.modelType,
       }));
 
-    return [...historyItems, ...filteredPresets];
+    // 预设提示词：永久展示，不受历史记录影响
+    const presetItems: PromptItem[] = presetPrompts.map(p => ({
+      id: p.id,
+      content: p.content,
+      pinned: false,
+      isPreset: true,
+      modelType: p.modelType,
+      scene: p.scene,
+    }));
+
+    // 历史记录在前（置顶的优先），预设在后
+    return [...historyItems, ...presetItems];
   }, [history, presetPrompts]);
 
   // 清理定时器

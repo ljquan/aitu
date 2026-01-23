@@ -97,9 +97,9 @@ export const EnhancedChatInput = forwardRef<EnhancedChatInputRef, EnhancedChatIn
       parts,
     };
 
-    // 保存提示词到历史记录
+    // 保存提示词到历史记录（Chat Drawer 默认为 Agent 模式）
     if (trimmedInput) {
-      addPromptHistory(trimmedInput, hasSelection);
+      addPromptHistory(trimmedInput, hasSelection, 'agent');
     }
 
     onSend(message);

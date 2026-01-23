@@ -264,6 +264,54 @@ const completedTasks = tasks.filter(
 **相关文件**:
 - `apps/web/src/sw/task-queue/types.ts` - SW 枚举定义
 
+#### 共享模块与统一配置模式
+
+**场景**: 多个功能模块有相似逻辑但细节不同时（如宫格图和灵感图的拆分）
+
+❌ **错误示例**:
+```typescript
+// image-splitter.ts - 重复的去白边逻辑
+function splitGrid(imageUrl: string) {
+  const borders = trimBorders(imageData, 0.5, 0.15);
+  // ...
+}
+
+// photo-wall-splitter.ts - 几乎相同的逻辑
+function splitPhotoWall(imageUrl: string) {
+  const borders = trimBorders(imageData, 0.5, 0.15);
+  // ...
+}
+```
+
+✅ **正确示例**:
+```typescript
+// image-split-core.ts - 核心模块，统一配置
+export type TrimMode = 'strict' | 'normal' | 'none';
+
+export function getTrimParams(trimMode: TrimMode) {
+  switch (trimMode) {
+    case 'strict': return { borderRatio: 1.0, maxTrimRatio: 0.05 };
+    case 'normal': return { borderRatio: 0.95, maxTrimRatio: 0.05 };
+    case 'none': return null;
+  }
+}
+
+// image-splitter.ts - 使用配置区分行为
+const trimMode: TrimMode = isStandardGrid ? 'strict' : 'normal';
+const params = getTrimParams(trimMode);
+if (params) {
+  borders = trimBorders(imageData, params.borderRatio, params.maxTrimRatio);
+}
+```
+
+**原因**:
+1. 避免代码重复，便于统一维护
+2. 通过配置类型区分行为，而非复制代码
+3. 核心模块命名规范：`*-core.ts`（如 `image-split-core.ts`）
+
+**相关文件**:
+- `packages/drawnix/src/utils/image-split-core.ts` - 图片拆分核心模块
+
 ### React 组件规范
 - 使用函数组件和 Hooks
 - 使用 `React.memo` 优化重渲染

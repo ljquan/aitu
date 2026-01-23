@@ -809,12 +809,19 @@ export class WorkflowExecutor {
         // Handle response based on tool type
         const resultData = response.result as any;
 
-        // For generate_image/generate_video, the result contains taskId
+        // For image/video generation tools, the result contains taskId
         // The step should be marked as 'running' until the task completes
-        if ((step.mcp === 'generate_image' || step.mcp === 'generate_video') && response.taskId) {
+        const imageVideoTools = ['generate_image', 'generate_video', 'generate_grid_image', 'generate_inspiration_board'];
+        if (imageVideoTools.includes(step.mcp) && response.taskId) {
+          const typeMap: Record<string, string> = {
+            'generate_image': 'image',
+            'generate_grid_image': 'image',
+            'generate_inspiration_board': 'image',
+            'generate_video': 'video',
+          };
           step.result = {
             success: true,
-            type: step.mcp === 'generate_image' ? 'image' : 'video',
+            type: typeMap[step.mcp] || 'image',
             data: resultData,
             taskId: response.taskId,
             taskIds: response.taskIds,
