@@ -18,7 +18,7 @@
   </p>
 </div>
 
-[*English README*](https://github.com/ljquan/aitu/blob/develop/README_en.md)
+[*English README*](https://github.com/ljquan/aitu/blob/main/README_en.md)
 
 ## 产品展示
 
