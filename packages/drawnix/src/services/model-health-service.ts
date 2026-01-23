@@ -2,6 +2,7 @@
  * 模型健康状态服务
  * 
  * 从 apistatus.tu-zi.com 获取模型健康状态数据
+ * 使用单例模式控制接口调用频率（最小间隔 1 分钟）
  */
 
 // 健康状态响应类型
@@ -39,37 +40,129 @@ export interface ModelHealthStatus {
 // API 端点
 const API_STATUS_BASE_URL = 'https://apistatus.tu-zi.com';
 
+// 最小调用间隔（1 分钟）
+const MIN_FETCH_INTERVAL = 60 * 1000;
+
+/**
+ * 模型健康状态数据获取单例
+ * 控制 API 调用频率，避免重复请求
+ */
+class ModelHealthFetcher {
+    private static instance: ModelHealthFetcher;
+    
+    // 缓存的数据
+    private cachedData: ModelHealthResponse[] = [];
+    // 上次成功请求的时间
+    private lastFetchTime: number = 0;
+    // 当前进行中的请求 Promise（用于防止并发）
+    private pendingFetch: Promise<ModelHealthResponse[]> | null = null;
+
+    private constructor() {}
+
+    static getInstance(): ModelHealthFetcher {
+        if (!ModelHealthFetcher.instance) {
+            ModelHealthFetcher.instance = new ModelHealthFetcher();
+        }
+        return ModelHealthFetcher.instance;
+    }
+
+    /**
+     * 获取模型健康数据
+     * @param intervalMinutes 查询的时间范围（分钟），默认 5 分钟
+     * @param force 是否强制刷新（忽略缓存间隔限制）
+     */
+    async fetch(intervalMinutes: number = 5, force: boolean = false): Promise<ModelHealthResponse[]> {
+        const now = Date.now();
+        
+        // 检查是否在最小间隔内（非强制模式）
+        if (!force && this.cachedData.length > 0 && now - this.lastFetchTime < MIN_FETCH_INTERVAL) {
+            return this.cachedData;
+        }
+
+        // 如果已有进行中的请求，复用它
+        if (this.pendingFetch) {
+            return this.pendingFetch;
+        }
+
+        // 创建新请求
+        this.pendingFetch = this.doFetch(intervalMinutes);
+        
+        try {
+            const data = await this.pendingFetch;
+            return data;
+        } finally {
+            this.pendingFetch = null;
+        }
+    }
+
+    /**
+     * 实际执行 API 请求
+     */
+    private async doFetch(intervalMinutes: number): Promise<ModelHealthResponse[]> {
+        const now = Math.floor(Date.now() / 1000);
+        const startTime = now - intervalMinutes * 60;
+
+        const url = `${API_STATUS_BASE_URL}/api/history/aggregated?start_time=${startTime}&end_time=${now}&interval=60`;
+
+        try {
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                },
+            });
+
+            if (!response.ok) {
+                console.warn(`[ModelHealthService] API returned ${response.status}`);
+                return this.cachedData; // 失败时返回缓存数据
+            }
+
+            const data: ModelHealthResponse[] = await response.json();
+            this.cachedData = data;
+            this.lastFetchTime = Date.now();
+            return data;
+        } catch (error) {
+            console.warn('[ModelHealthService] Failed to fetch health data:', error);
+            return this.cachedData; // 失败时返回缓存数据
+        }
+    }
+
+    /**
+     * 获取缓存的数据（不触发请求）
+     */
+    getCachedData(): ModelHealthResponse[] {
+        return this.cachedData;
+    }
+
+    /**
+     * 获取上次请求时间
+     */
+    getLastFetchTime(): number {
+        return this.lastFetchTime;
+    }
+
+    /**
+     * 检查缓存是否有效
+     */
+    isCacheValid(): boolean {
+        return this.cachedData.length > 0 && Date.now() - this.lastFetchTime < MIN_FETCH_INTERVAL;
+    }
+}
+
+// 导出单例实例
+export const modelHealthFetcher = ModelHealthFetcher.getInstance();
+
 /**
  * 获取模型健康状态数据
  * @param intervalMinutes 查询的时间范围（分钟），默认 5 分钟
+ * @param force 是否强制刷新（忽略缓存间隔限制）
+ * @deprecated 推荐使用 modelHealthFetcher.fetch() 以获得更好的控制
  */
 export async function fetchModelHealthData(
-    intervalMinutes: number = 5
+    intervalMinutes: number = 5,
+    force: boolean = false
 ): Promise<ModelHealthResponse[]> {
-    const now = Math.floor(Date.now() / 1000);
-    const startTime = now - intervalMinutes * 60;
-
-    const url = `${API_STATUS_BASE_URL}/api/history/aggregated?start_time=${startTime}&end_time=${now}&interval=60`;
-
-    try {
-        const response = await fetch(url, {
-            method: 'GET',
-            headers: {
-                'Accept': 'application/json',
-            },
-        });
-
-        if (!response.ok) {
-            console.warn(`[ModelHealthService] API returned ${response.status}`);
-            return [];
-        }
-
-        const data: ModelHealthResponse[] = await response.json();
-        return data;
-    } catch (error) {
-        console.warn('[ModelHealthService] Failed to fetch health data:', error);
-        return [];
-    }
+    return modelHealthFetcher.fetch(intervalMinutes, force);
 }
 
 /**

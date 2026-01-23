@@ -8,7 +8,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { geminiSettings } from '../utils/settings-manager';
 import {
-    fetchModelHealthData,
+    modelHealthFetcher,
     buildHealthMap,
     isTuziApiUrl,
     type ModelHealthStatus,
@@ -29,19 +29,19 @@ export interface UseModelHealthResult {
     getHealthStatus: (modelId: string) => ModelHealthStatus | undefined;
 }
 
-// 刷新间隔（5 分钟）
-const REFRESH_INTERVAL = 5 * 60 * 1000;
-
-// 全局缓存（避免每个组件都重复请求）
-let globalHealthMap: Map<string, ModelHealthStatus> = new Map();
-let globalLastFetch: number = 0;
-let globalFetchPromise: Promise<void> | null = null;
+// UI 刷新间隔（5 分钟）- 用于定时器
+// 注意：实际 API 调用频率由 modelHealthFetcher 单例控制（最小 1 分钟）
+const UI_REFRESH_INTERVAL = 5 * 60 * 1000;
 
 /**
  * 模型健康状态 Hook
  */
 export function useModelHealth(): UseModelHealthResult {
-    const [healthMap, setHealthMap] = useState<Map<string, ModelHealthStatus>>(globalHealthMap);
+    const [healthMap, setHealthMap] = useState<Map<string, ModelHealthStatus>>(() => {
+        // 初始化时使用单例的缓存数据
+        const cached = modelHealthFetcher.getCachedData();
+        return cached.length > 0 ? buildHealthMap(cached) : new Map();
+    });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [shouldShowHealth, setShouldShowHealth] = useState(false);
@@ -62,40 +62,21 @@ export function useModelHealth(): UseModelHealthResult {
             return;
         }
 
-        // 检查缓存是否有效（5 分钟内）
-        const now = Date.now();
-        if (!force && globalHealthMap.size > 0 && now - globalLastFetch < REFRESH_INTERVAL) {
-            setHealthMap(globalHealthMap);
-            return;
-        }
-
-        // 如果已经在请求中，等待现有请求完成
-        if (globalFetchPromise) {
-            await globalFetchPromise;
-            setHealthMap(globalHealthMap);
-            return;
-        }
-
         setLoading(true);
         setError(null);
 
-        globalFetchPromise = (async () => {
-            try {
-                const data = await fetchModelHealthData();
-                const newMap = buildHealthMap(data);
-                globalHealthMap = newMap;
-                globalLastFetch = Date.now();
-                setHealthMap(newMap);
-            } catch (err: any) {
-                console.warn('[useModelHealth] Failed to fetch:', err);
-                setError(err.message || 'Failed to fetch health data');
-            } finally {
-                setLoading(false);
-                globalFetchPromise = null;
-            }
-        })();
-
-        await globalFetchPromise;
+        try {
+            // 使用单例获取数据，单例内部会处理缓存和并发控制
+            const data = await modelHealthFetcher.fetch(5, force);
+            const newMap = buildHealthMap(data);
+            setHealthMap(newMap);
+        } catch (err: unknown) {
+            console.warn('[useModelHealth] Failed to fetch:', err);
+            const errorMessage = err instanceof Error ? err.message : 'Failed to fetch health data';
+            setError(errorMessage);
+        } finally {
+            setLoading(false);
+        }
     }, [checkShouldShow]);
 
     // 手动刷新
@@ -117,10 +98,10 @@ export function useModelHealth(): UseModelHealthResult {
             // 首次加载
             fetchData();
 
-            // 设置定时刷新
+            // 设置定时刷新（UI 级别，实际调用频率由单例控制）
             intervalRef.current = setInterval(() => {
                 fetchData(true);
-            }, REFRESH_INTERVAL);
+            }, UI_REFRESH_INTERVAL);
         }
 
         // 监听设置变化
@@ -130,7 +111,7 @@ export function useModelHealth(): UseModelHealthResult {
                 fetchData();
                 intervalRef.current = setInterval(() => {
                     fetchData(true);
-                }, REFRESH_INTERVAL);
+                }, UI_REFRESH_INTERVAL);
             } else if (!newShow && intervalRef.current) {
                 clearInterval(intervalRef.current);
                 intervalRef.current = null;

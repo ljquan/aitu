@@ -139,9 +139,57 @@ Service Worker (后台执行)
 8. **布局抖动**：`Suspense` 的 fallback 应撑满容器或固定高度，防止加载时跳动
 9. **结构化数据**：复杂消息展示应优先使用 `aiContext` 等结构化数据而非字符串解析
 10. **图标验证**：使用 `tdesign-icons-react` 前需验证导出名称是否存在（如 `ServiceIcon`）
-8. **布局抖动**：`Suspense` 的 fallback 应撑满容器或固定高度，防止加载时跳动
-9. **结构化数据**：复杂消息展示应优先使用 `aiContext` 等结构化数据而非字符串解析
-10. **图标验证**：使用 `tdesign-icons-react` 前需验证导出名称是否存在（如 `ServiceIcon`）
+11. **外部 API 调用频率**：低频刷新的外部接口（如健康检查、状态查询）必须使用单例控制调用频率
+
+#### 外部 API 调用频率控制
+
+**场景**: 调用外部服务的低频刷新接口（如每 5 分钟刷新一次的状态接口），多个组件可能同时触发请求
+
+❌ **错误示例**:
+```typescript
+// 错误：直接导出函数，每次调用都发起请求
+export async function fetchHealthData(): Promise<Data[]> {
+  const response = await fetch(API_URL);
+  return response.json();
+}
+
+// 多个组件同时调用会产生重复请求
+// ComponentA: fetchHealthData()
+// ComponentB: fetchHealthData()  // 同时发起第二个请求
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：使用单例控制调用频率和并发
+class HealthDataFetcher {
+  private static instance: HealthDataFetcher;
+  private cachedData: Data[] = [];
+  private lastFetchTime = 0;
+  private pendingFetch: Promise<Data[]> | null = null;
+  
+  static getInstance() {
+    if (!this.instance) this.instance = new HealthDataFetcher();
+    return this.instance;
+  }
+
+  async fetch(force = false): Promise<Data[]> {
+    // 1. 检查最小调用间隔（如 1 分钟）
+    if (!force && Date.now() - this.lastFetchTime < 60_000) {
+      return this.cachedData;
+    }
+    // 2. 复用进行中的请求（防并发）
+    if (this.pendingFetch) return this.pendingFetch;
+    // 3. 发起新请求
+    this.pendingFetch = this.doFetch();
+    try { return await this.pendingFetch; }
+    finally { this.pendingFetch = null; }
+  }
+}
+
+export const healthDataFetcher = HealthDataFetcher.getInstance();
+```
+
+**原因**: 外部接口数据通常有刷新周期（如 5 分钟），在刷新周期内重复请求是浪费。单例模式可以：1) 设置最小调用间隔避免频繁请求；2) 复用进行中的 Promise 防止并发请求；3) 统一管理缓存，所有调用方共享数据。
 
 ### Service Worker 规则
 
