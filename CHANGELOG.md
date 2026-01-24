@@ -1,3 +1,17 @@
+## 0.5.50 (2026-01-24)
+
+### 🚀 Features
+
+- 对比模式下视频联动同步播放和重置 ([ea9b932](https://github.com/ljquan/aitu/commit/ea9b932))
+
+### 🔧 Chores
+
+- docs: 添加编码规则 - useCallback 定义顺序 ([6f891ea](https://github.com/ljquan/aitu/commit/6f891ea))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+
 ## 0.5.49 (2026-01-24)
 
 ### 🚀 Features
