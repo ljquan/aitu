@@ -1,6 +1,11 @@
 {
-  "version": "0.5.48",
-  "buildTime": "2026-01-24T12:24:53.069Z",
+  "version": "0.5.49",
+  "buildTime": "2026-01-24T15:39:45.942Z",
   "gitCommit": "unknown",
-  "changelog": []
+  "changelog": [
+    "enhance user manual generation and CDN integration",
+    "新增 TaskProgressOverlay 组件显示任务进度",
+    "使用 Context 共享健康状态数据修复显示不一致问题",
+    "添加用户手册生成系统和 E2E 测试增强"
+  ]
 }

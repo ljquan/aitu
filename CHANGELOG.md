@@ -1,3 +1,36 @@
+## 0.5.49 (2026-01-24)
+
+### 🚀 Features
+
+- enhance user manual generation and CDN integration ([ba4746d](https://github.com/ljquan/aitu/commit/ba4746d))
+- enhance user manual generation and E2E testing ([607ec7e](https://github.com/ljquan/aitu/commit/607ec7e))
+- 添加用户手册生成系统和 E2E 测试增强 ([4daff77](https://github.com/ljquan/aitu/commit/4daff77))
+- 新增 TaskProgressOverlay 组件显示任务进度 ([0ab1aa3](https://github.com/ljquan/aitu/commit/0ab1aa3))
+
+### 🩹 Fixes
+
+- 使用 Context 共享健康状态数据修复显示不一致问题 ([b95247a](https://github.com/ljquan/aitu/commit/b95247a))
+
+### 🔧 Chores
+
+- update app version to 0.5.48 and adjust build time ([b97371b](https://github.com/ljquan/aitu/commit/b97371b))
+- docs(claude): 添加新规则 - 日志记录应反映实际发送的数据 ([c714761](https://github.com/ljquan/aitu/commit/c714761))
+- docs(claude): 添加新规则 - 多组件共享异步数据时使用 Context ([c688c15](https://github.com/ljquan/aitu/commit/c688c15))
+- docs(claude): 添加新规则 - Props 变化时重置组件内部状态 ([2011c2e](https://github.com/ljquan/aitu/commit/2011c2e))
+- docs(claude): 添加新规则 - Flex布局兄弟元素隐藏导致宽度变化 ([9a917ab](https://github.com/ljquan/aitu/commit/9a917ab))
+- Update README.md ([cf65ccf](https://github.com/ljquan/aitu/commit/cf65ccf))
+- Update README_en.md ([aa6986d](https://github.com/ljquan/aitu/commit/aa6986d))
+- docs(readme): align Chinese link ([3d37033](https://github.com/ljquan/aitu/commit/3d37033))
+- docs(readme): fix english readme link ([c58b01d](https://github.com/ljquan/aitu/commit/c58b01d))
+- docs(readme): update demo links ([4fd7ba4](https://github.com/ljquan/aitu/commit/4fd7ba4))
+- 添加e2e ([07e18e2](https://github.com/ljquan/aitu/commit/07e18e2))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+- ovst <wangjueszu@qq.com>
+- gongchengtu <1817063960@qq.com>
+
 ## 0.5.44 (2026-01-23)
 
 ### 🔧 Chores
