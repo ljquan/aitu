@@ -214,7 +214,7 @@ export const BackupRestoreDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="backup-restore-dialog" container={container}>
+      <DialogContent className="backup-restore-dialog" container={container} data-testid="backup-restore-dialog">
         <h2 className="backup-restore-dialog__title">备份 / 恢复</h2>
 
         {/* 标签页切换 */}

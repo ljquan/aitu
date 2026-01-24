@@ -31,7 +31,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({
   if (!visible) return null;
 
   const content = (
-    <div className="image-editor" style={{ zIndex: Z_INDEX.DIALOG_AI_IMAGE }}>
+    <div className="image-editor" style={{ zIndex: Z_INDEX.DIALOG_AI_IMAGE }} data-testid="image-editor">
       <div className="image-editor__backdrop" onClick={onClose} />
       <div className="image-editor__container">
         <ImageEditorCore

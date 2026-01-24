@@ -52,3 +52,7 @@ package-lock.json
 apps/web/public/sw.js
 apps/web/public/sw.js.map
 .pnpm-store
+apps/web-e2e/test-results/
+apps/web-e2e/playwright-report/
+test-results/
+apps/web/public/user-manual/

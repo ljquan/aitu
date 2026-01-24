@@ -17,6 +17,7 @@
 - [API 与任务处理规范](#api-与任务处理规范)
 - [UI 交互规范](#ui-交互规范)
 - [安全规范](#安全规范)
+- [E2E 测试规范](#e2e-测试规范)
 
 ---
 
@@ -4885,3 +4886,97 @@ import { BulletpointIcon, ServiceIcon } from 'tdesign-icons-react';
 ```
 
 **原因**: TDesign 图标库命名不一定符合直觉，使用不存在的导出名会触发 `SyntaxError` 导致白屏。
+
+---
+
+## E2E 测试规范
+
+### Playwright 元素选择器精度
+
+**场景**: 选择工具栏按钮时，需要获取完整的可点击区域而非内部小元素。
+
+❌ **错误示例**:
+```typescript
+// 错误：getByRole('radio') 选择 13x13px 的 input 元素
+const toolBtn = toolbar.locator('div').filter({ 
+  has: page.getByRole('radio', { name: /画笔/ }) 
+});
+// 实际选中的是内部的 radio input，而非外层按钮容器
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：使用 label 选择器获取完整的按钮容器 (40x36px)
+const toolBtn = toolbar.locator('label').filter({ 
+  has: page.getByRole('radio', { name: /画笔/ }) 
+});
+```
+
+**原因**: `getByRole('radio')` 会匹配到隐藏的 input 元素，其尺寸通常很小。使用 `label` 选择器可以获取实际的可点击区域。
+
+### CSS 定位避免内容截断
+
+**场景**: 为元素添加标签/提示文字时，定位方式可能导致内容被截断。
+
+❌ **错误示例**:
+```css
+/* 错误：使用 right + transform 定位，容易被父容器截断 */
+.label {
+  position: absolute;
+  right: -10px;
+  transform: translate(100%, -50%);
+}
+```
+
+✅ **正确示例**:
+```css
+/* 正确：使用 left: 100% + margin，内容不会被截断 */
+.label {
+  position: absolute;
+  left: 100%;
+  margin-left: 8px;
+  transform: translateY(-50%);
+}
+```
+
+**原因**: `right` 配合 `transform: translate(100%)` 会使元素超出父容器边界，如果父容器有 `overflow: hidden` 则内容被截断。
+
+### 避免过度复杂的自动化系统
+
+**场景**: 设计自动化工具（如 GIF 录制、截图生成）时的架构决策。
+
+❌ **错误做法**:
+- 设计复杂的 DSL 系统（JSON 定义 + 执行器 + 时间戳裁剪）
+- 录制一个长视频然后按时间点裁剪多个 GIF
+- 尝试用一套配置生成所有内容
+
+✅ **正确做法**:
+- 每个 GIF 使用独立的测试录制
+- 简单的命令行参数控制（如 `--trim 2.4`）
+- 一个命令完成一个任务（如 `pnpm manual:gif:mindmap`）
+
+**原因**: 
+1. 长视频裁剪会带来"旧信息污染"（前一个操作残留影响后一个）
+2. DSL 元素选择器难以处理动态 UI 的时序问题
+3. 简单方案更易调试和维护，复杂系统的调试成本远超收益
+
+### 定期清理未使用代码
+
+**场景**: 功能开发过程中会产生实验性代码和辅助文件。
+
+**检查项**:
+```bash
+# 查看未跟踪文件
+git status --short | grep "^??"
+
+# 检查文件是否被导入
+grep -r "from.*filename" apps/ packages/
+```
+
+**常见可清理的文件**:
+- 未使用的 fixture 文件（如 `test-data.ts`）
+- 重复功能的测试文件（如多个 visual spec 覆盖相同功能）
+- 错误创建的目录结构
+- 过时的文档（引用已删除代码的 md 文件）
+
+**原因**: 未清理的代码会增加维护负担，误导后续开发者，也会增加 CI 执行时间。

@@ -153,6 +153,7 @@ export const UnifiedToolbar: React.FC<UnifiedToolbarProps> = React.memo(({
           className
         )}
         padding={0}
+        data-testid="unified-toolbar"
       >
         {/* 顶部固定区域 - 应用工具分区（菜单、撤销、重做） */}
         <div className="unified-toolbar__section unified-toolbar__section--fixed-top">

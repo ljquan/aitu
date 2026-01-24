@@ -640,6 +640,7 @@ export function MediaLibraryGrid({
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
+      data-testid="media-library-grid"
     >
       <div className="media-library-grid__header">
         <div className="media-library-grid__header-top">

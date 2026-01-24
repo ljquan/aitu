@@ -72,6 +72,7 @@ export interface Translations {
   'menu.debugPanel': string;
   'menu.version': string;
   'menu.more': string;
+  'menu.userManual': string;
   
   // Dialog translations
   'dialog.mermaid.title': string;
@@ -231,6 +232,7 @@ const translations: Record<Language, Translations> = {
     'menu.debugPanel': '日志 / 调试',
     'menu.version': '版本',
     'menu.more': '更多',
+    'menu.userManual': '用户手册',
     
     // Dialog translations
     'dialog.mermaid.title': 'Mermaid 转 Drawnix',
@@ -387,6 +389,7 @@ const translations: Record<Language, Translations> = {
     'menu.debugPanel': 'Log / Debug',
     'menu.version': 'Version',
     'menu.more': 'More',
+    'menu.userManual': 'User Manual',
     
     // Dialog translations
     'dialog.mermaid.title': 'Mermaid to Drawnix',

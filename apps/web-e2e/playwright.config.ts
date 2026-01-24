@@ -17,33 +17,96 @@ const baseURL = process.env['BASE_URL'] || 'http://localhost:7200';
  */
 export default defineConfig({
   ...nxE2EPreset(__filename, { testDir: './src' }),
+  
+  /* 测试超时设置 */
+  timeout: 60000,
+  expect: {
+    timeout: 10000,
+    toHaveScreenshot: {
+      maxDiffPixelRatio: 0.05,
+    },
+  },
+  
+  /* 测试报告设置 */
+  reporter: [
+    ['html', { outputFolder: 'playwright-report' }],
+    ['json', { outputFile: 'test-results/results.json' }],
+    ['list'],
+  ],
+  
+  /* 截图和视频设置 */
+  outputDir: 'test-results',
+  
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     baseURL,
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
+    /* 失败时截图 */
+    screenshot: 'only-on-failure',
+    /* 视频录制 */
+    video: 'retain-on-failure',
   },
+  
   /* Run your local dev server before starting the tests */
   webServer: {
     command: 'npx nx serve web',
     url: 'http://localhost:7200',
     reuseExistingServer: !process.env.CI,
     cwd: workspaceRoot,
+    timeout: 120000,
   },
+  
   projects: [
+    // 冒烟测试 - 仅 Chromium，快速运行
+    {
+      name: 'smoke',
+      testMatch: '**/smoke/**/*.spec.ts',
+      use: { ...devices['Desktop Chrome'] },
+    },
+    
+    // 视觉回归测试 - 仅 Chromium
+    {
+      name: 'visual',
+      testMatch: '**/visual/**/*.spec.ts',
+      use: { ...devices['Desktop Chrome'] },
+    },
+    
+    // 功能测试 - 多浏览器
     {
       name: 'chromium',
+      testMatch: '**/features/**/*.spec.ts',
       use: { ...devices['Desktop Chrome'] },
     },
 
     {
       name: 'firefox',
+      testMatch: '**/features/**/*.spec.ts',
       use: { ...devices['Desktop Firefox'] },
     },
 
     {
       name: 'webkit',
+      testMatch: '**/features/**/*.spec.ts',
       use: { ...devices['Desktop Safari'] },
+    },
+    
+    // 手册生成测试 - 仅 Chromium
+    {
+      name: 'manual',
+      testMatch: '**/manual-gen/**/*.spec.ts',
+      use: { ...devices['Desktop Chrome'] },
+    },
+    
+    // 手册视频录制 - 用于生成 GIF
+    {
+      name: 'manual-video',
+      testMatch: '**/manual-gen/**/*.spec.ts',
+      use: { 
+        ...devices['Desktop Chrome'],
+        video: 'on',
+        viewport: { width: 1280, height: 720 },
+      },
     },
 
     // Uncomment for mobile browsers support

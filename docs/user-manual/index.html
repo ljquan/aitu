@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>首页 - Aitu 用户手册</title>
+  <style>
+    :root {
+      --primary-color: #F39C12;
+      --secondary-color: #5A4FCF;
+      --text-color: #333;
+      --bg-color: #fff;
+      --border-color: #e0e0e0;
+      --code-bg: #f5f5f5;
+    }
+    
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      line-height: 1.6;
+      color: var(--text-color);
+      background: var(--bg-color);
+    }
+    
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+    
+    .header {
+      text-align: center;
+      margin-bottom: 3rem;
+      padding-bottom: 2rem;
+      border-bottom: 2px solid var(--primary-color);
+    }
+    
+    .header h1 {
+      font-size: 2.5rem;
+      color: var(--primary-color);
+      margin-bottom: 0.5rem;
+    }
+    
+    .header .version {
+      color: #666;
+      font-size: 0.9rem;
+    }
+    
+    .sidebar {
+      position: fixed;
+      left: 0;
+      top: 0;
+      width: 250px;
+      height: 100vh;
+      background: #fafafa;
+      border-right: 1px solid var(--border-color);
+      padding: 2rem 1rem;
+      overflow-y: auto;
+    }
+    
+    .sidebar-nav {
+      list-style: none;
+    }
+    
+    .sidebar-nav li {
+      margin-bottom: 0.5rem;
+    }
+    
+    .sidebar-nav a {
+      color: var(--text-color);
+      text-decoration: none;
+      display: block;
+      padding: 0.5rem;
+      border-radius: 4px;
+      transition: background 0.2s;
+    }
+    
+    .sidebar-nav a:hover {
+      background: #eee;
+    }
+    
+    .sidebar-nav .category {
+      font-weight: bold;
+      color: var(--secondary-color);
+      margin-top: 1rem;
+      margin-bottom: 0.5rem;
+    }
+    
+    .main-content {
+      margin-left: 270px;
+      padding: 2rem;
+    }
+    
+    .page-section {
+      margin-bottom: 3rem;
+      padding-bottom: 2rem;
+      border-bottom: 1px solid var(--border-color);
+    }
+    
+    .page-section h2 {
+      color: var(--secondary-color);
+      margin-bottom: 1rem;
+    }
+    
+    .page-section p {
+      margin-bottom: 1rem;
+    }
+    
+    .steps {
+      counter-reset: step;
+    }
+    
+    .step {
+      display: flex;
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+      padding: 1rem;
+      background: #fafafa;
+      border-radius: 8px;
+    }
+    
+    .step-number {
+      flex-shrink: 0;
+      width: 32px;
+      height: 32px;
+      background: var(--primary-color);
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+    }
+    
+    .step-content {
+      flex: 1;
+    }
+    
+    .step-content h4 {
+      margin-bottom: 0.5rem;
+    }
+    
+    .step-screenshot {
+      max-width: 100%;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      margin-top: 1rem;
+    }
+    
+    .footer {
+      text-align: center;
+      padding: 2rem;
+      color: #666;
+      font-size: 0.9rem;
+    }
+    
+    @media (max-width: 768px) {
+      .sidebar {
+        display: none;
+      }
+      .main-content {
+        margin-left: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+<nav class="sidebar">
+<ul class="sidebar-nav">
+<li><a href="index.html"><strong>首页</strong></a></li>
+<li class="category">绘图功能</li>
+<li><a href="使用画笔工具绘制.html">使用画笔工具</a></li>
+<li><a href="创建形状.html">创建形状</a></li>
+<li><a href="添加文本.html">添加文本</a></li>
+<li class="category">AI 生成</li>
+<li><a href="使用-ai-生成图片.html">使用 AI 生成图片</a></li>
+<li><a href="使用灵感创意板.html">使用灵感创意板</a></li>
+</ul>
+</nav>
+<main class="main-content">
+  <div class="header">
+    <h1>🎨 Aitu 用户手册</h1>
+    <p class="version">版本 0.5.48</p>
+  </div>
+  
+  <section class="page-section">
+    <h2>欢迎使用 Aitu</h2>
+    <p>Aitu (爱图) 是一个基于 Plait 框架构建的开源白板应用，支持思维导图、流程图、自由绘画、图片插入，以及 AI 驱动的内容生成。</p>
+    
+    <h3>主要功能</h3>
+    <ul>
+      <li><strong>绘图工具</strong> - 画笔、形状、文本等基础绘图功能</li>
+      <li><strong>AI 生成</strong> - 通过 AI 生成图片和视频</li>
+      <li><strong>思维导图</strong> - 快速创建和编辑思维导图</li>
+      <li><strong>素材库</strong> - 管理和使用素材资源</li>
+      <li><strong>项目管理</strong> - 管理多个画板项目</li>
+    </ul>
+  </section>
+  
+  <section class="page-section">
+    <h2>目录</h2>
+<h3>绘图功能</h3>
+<ul>
+<li><a href="使用画笔工具绘制.html">使用画笔工具</a> - 学习如何使用画笔工具在画布上自由绘制</li>
+<li><a href="创建形状.html">创建形状</a> - 学习如何在画布上创建各种形状</li>
+<li><a href="添加文本.html">添加文本</a> - 学习如何在画布上添加文本</li>
+</ul>
+<h3>AI 生成</h3>
+<ul>
+<li><a href="使用-ai-生成图片.html">使用 AI 生成图片</a> - 学习如何使用 AI 功能生成图片</li>
+<li><a href="使用灵感创意板.html">使用灵感创意板</a> - 当画布为空时，灵感创意板会显示推荐的创作模板</li>
+</ul>
+
+  </section>
+</main>
+
+<footer class="footer">
+  <p>Aitu 用户手册 v0.5.48 | 由 E2E 测试自动生成</p>
+  <p>生成时间: 2026/1/24 12:59:05</p>
+</footer>
+</body>
+</html>
