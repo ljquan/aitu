@@ -6,7 +6,7 @@
 import React, { useCallback, useEffect, useRef, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import type { UnifiedMediaViewerProps, CompareLayout, ViewerMode, MediaItem } from './types';
+import type { UnifiedMediaViewerProps, CompareLayout, ViewerMode, MediaItem, MediaViewportRef } from './types';
 import { useViewerState } from './useViewerState';
 import { MediaViewport } from './MediaViewport';
 import { ThumbnailQueue } from './ThumbnailQueue';
@@ -45,6 +45,10 @@ export const UnifiedMediaViewer: React.FC<UnifiedMediaViewerProps> = ({
   const editingItemRef = useRef<MediaItem | null>(null);
   // 存储每个图片的编辑状态（按图片URL索引）
   const editStatesRef = useRef<Map<string, ImageEditState>>(new Map());
+  // 对比模式下各槽位的 MediaViewport ref（用于视频联动控制）
+  const viewportRefs = useRef<(MediaViewportRef | null)[]>([]);
+  // 用于防止视频同步时的循环触发
+  const isSyncingVideoRef = useRef(false);
 
   const [state, actions] = useViewerState({
     items,
@@ -169,6 +173,19 @@ export const UnifiedMediaViewer: React.FC<UnifiedMediaViewerProps> = ({
     [items, actions, updateEditingItem]
   );
 
+  // 重置视图（包括视频进度）
+  const handleResetViewWithVideos = useCallback(() => {
+    // 重置缩放和位置
+    actions.resetView();
+    
+    // 重置所有视频进度到开始位置
+    viewportRefs.current.forEach((viewportRef) => {
+      if (viewportRef?.isVideo()) {
+        viewportRef.resetVideo();
+      }
+    });
+  }, [actions]);
+
   // 键盘快捷键处理
   useEffect(() => {
     if (!visible) return;
@@ -248,7 +265,11 @@ export const UnifiedMediaViewer: React.FC<UnifiedMediaViewerProps> = ({
           break;
         case '0':
           e.preventDefault();
-          actions.resetView();
+          if (mode === 'compare') {
+            handleResetViewWithVideos();
+          } else {
+            actions.resetView();
+          }
           break;
         case 's':
         case 'S':
@@ -264,7 +285,7 @@ export const UnifiedMediaViewer: React.FC<UnifiedMediaViewerProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [visible, mode, items.length, items, currentIndex, actions, onClose, slotCount, goToNextGroup, goToPrevGroup, switchToEditImage]);
+  }, [visible, mode, items.length, items, currentIndex, actions, onClose, slotCount, goToNextGroup, goToPrevGroup, switchToEditImage, handleResetViewWithVideos]);
 
   // 全屏处理
   const handleFullscreen = useCallback(() => {
@@ -418,6 +439,48 @@ export const UnifiedMediaViewer: React.FC<UnifiedMediaViewerProps> = ({
     handleBackToPreview();
   }, [onEditInsert, handleBackToPreview]);
 
+  // 设置对比模式下的 viewport ref
+  const setViewportRef = useCallback((slotIdx: number, ref: MediaViewportRef | null) => {
+    viewportRefs.current[slotIdx] = ref;
+  }, []);
+
+  // 视频播放状态同步（联动模式）
+  const handleVideoPlayStateChange = useCallback((sourceSlot: number, isPlaying: boolean) => {
+    if (isSyncingVideoRef.current) return;
+    isSyncingVideoRef.current = true;
+    
+    viewportRefs.current.forEach((viewportRef, idx) => {
+      if (idx !== sourceSlot && viewportRef?.isVideo()) {
+        if (isPlaying) {
+          viewportRef.playVideo();
+        } else {
+          viewportRef.pauseVideo();
+        }
+      }
+    });
+    
+    // 延迟重置标志，避免同步触发的回调再次触发同步
+    setTimeout(() => {
+      isSyncingVideoRef.current = false;
+    }, 50);
+  }, []);
+
+  // 视频进度同步（联动模式，用于 seek 操作）
+  const handleVideoTimeUpdate = useCallback((sourceSlot: number, currentTime: number) => {
+    if (isSyncingVideoRef.current) return;
+    isSyncingVideoRef.current = true;
+    
+    viewportRefs.current.forEach((viewportRef, idx) => {
+      if (idx !== sourceSlot && viewportRef?.isVideo()) {
+        viewportRef.setVideoTime(currentTime);
+      }
+    });
+    
+    setTimeout(() => {
+      isSyncingVideoRef.current = false;
+    }, 50);
+  }, []);
+
   // 渲染单图模式
   const renderSingleMode = () => {
     const currentItem = items[currentIndex] || null;
@@ -479,6 +542,7 @@ export const UnifiedMediaViewer: React.FC<UnifiedMediaViewerProps> = ({
           return (
             <MediaViewport
               key={slotIdx}
+              ref={(ref) => setViewportRef(slotIdx, ref)}
               item={item}
               slotIndex={slotIdx}
               isFocused={focusedSlot === slotIdx}
@@ -497,6 +561,9 @@ export const UnifiedMediaViewer: React.FC<UnifiedMediaViewerProps> = ({
               }
               onPanChange={syncMode ? actions.setPan : undefined}
               isCompareMode={true}
+              isSyncMode={syncMode}
+              onVideoPlayStateChange={syncMode ? (isPlaying) => handleVideoPlayStateChange(slotIdx, isPlaying) : undefined}
+              onVideoTimeUpdate={syncMode ? (time) => handleVideoTimeUpdate(slotIdx, time) : undefined}
             />
           );
         })}
@@ -564,7 +631,7 @@ export const UnifiedMediaViewer: React.FC<UnifiedMediaViewerProps> = ({
           onSlotCountChange={handleSlotCountChange}
           onLayoutChange={actions.setCompareLayout}
           onSyncToggle={actions.toggleSyncMode}
-          onResetView={actions.resetView}
+          onResetView={mode === 'compare' ? handleResetViewWithVideos : actions.resetView}
           onClose={onClose}
           onFullscreen={handleFullscreen}
           isImage={currentItem?.type === 'image'}

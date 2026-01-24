@@ -3,7 +3,7 @@
  * 复用于单图模式和对比模式的每个槽位
  */
 
-import React, { useRef, useState, useCallback, useEffect } from 'react';
+import React, { useRef, useState, useCallback, useEffect, forwardRef, useImperativeHandle } from 'react';
 import {
   ZoomIn,
   ZoomOut,
@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { Tooltip, MessagePlugin } from 'tdesign-react';
 import { quickInsert } from '../../../services/canvas-operations';
-import type { MediaViewportProps } from './types';
+import type { MediaViewportProps, MediaViewportRef } from './types';
 import './MediaViewport.scss';
 
 // 稳定的默认值
@@ -58,7 +58,7 @@ const saveToolbarState = (state: ToolbarCacheState): void => {
   }
 };
 
-export const MediaViewport: React.FC<MediaViewportProps> = ({
+export const MediaViewport = forwardRef<MediaViewportRef, MediaViewportProps>(({
   item,
   slotIndex,
   isFocused = false,
@@ -73,8 +73,12 @@ export const MediaViewport: React.FC<MediaViewportProps> = ({
   onInsertToCanvas,
   onDownload,
   onEdit,
-}) => {
+  onVideoPlayStateChange,
+  onVideoTimeUpdate,
+  isSyncMode = false,
+}, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [localPan, setLocalPan] = useState(panOffset ?? DEFAULT_PAN);
@@ -82,6 +86,41 @@ export const MediaViewport: React.FC<MediaViewportProps> = ({
   const [rotation, setRotation] = useState(0); // 旋转角度
   const [flipH, setFlipH] = useState(false); // 水平翻转
   const [flipV, setFlipV] = useState(false); // 垂直翻转
+
+  // 暴露视频控制方法给父组件
+  useImperativeHandle(ref, () => ({
+    resetVideo: () => {
+      if (videoRef.current) {
+        videoRef.current.currentTime = 0;
+        videoRef.current.play().catch(() => {
+          // 忽略自动播放限制错误
+        });
+      }
+    },
+    playVideo: () => {
+      if (videoRef.current) {
+        videoRef.current.play().catch(() => {
+          // 忽略自动播放限制错误
+        });
+      }
+    },
+    pauseVideo: () => {
+      if (videoRef.current) {
+        videoRef.current.pause();
+      }
+    },
+    setVideoTime: (time: number) => {
+      if (videoRef.current) {
+        videoRef.current.currentTime = time;
+      }
+    },
+    getVideoTime: () => {
+      return videoRef.current?.currentTime ?? 0;
+    },
+    isVideo: () => {
+      return item?.type === 'video';
+    },
+  }), [item]);
 
   // 工具栏状态 - 单图模式从缓存初始化，多图模式使用默认值
   const [toolbarState] = useState<ToolbarCacheState>(() =>
@@ -289,12 +328,28 @@ export const MediaViewport: React.FC<MediaViewportProps> = ({
       <div className="media-viewport__content" style={transformStyle}>
         {isVideo ? (
           <video
+            ref={videoRef}
             src={item.url}
             autoPlay={videoAutoPlay}
             loop={videoLoop}
             controls
             className="media-viewport__video"
             onClick={(e) => e.stopPropagation()}
+            onPlay={() => {
+              if (isSyncMode && onVideoPlayStateChange) {
+                onVideoPlayStateChange(true);
+              }
+            }}
+            onPause={() => {
+              if (isSyncMode && onVideoPlayStateChange) {
+                onVideoPlayStateChange(false);
+              }
+            }}
+            onSeeked={() => {
+              if (isSyncMode && onVideoTimeUpdate && videoRef.current) {
+                onVideoTimeUpdate(videoRef.current.currentTime);
+              }
+            }}
           />
         ) : (
           <img
@@ -530,6 +585,8 @@ export const MediaViewport: React.FC<MediaViewportProps> = ({
       )}
     </div>
   );
-};
+});
+
+MediaViewport.displayName = 'MediaViewport';
 
 export default MediaViewport;
