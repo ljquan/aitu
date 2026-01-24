@@ -10,6 +10,7 @@
 
 .reference-image-upload {
   outline: none;
+  max-width: 400px; // 限制最大宽度，避免隐藏任务列表后区域过大
 
   &--disabled {
     opacity: 0.6;

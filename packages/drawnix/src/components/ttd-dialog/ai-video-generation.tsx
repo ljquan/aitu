@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import './ttd-dialog.scss';
 import './ai-video-generation.scss';
 import { useI18n } from '../../i18n';
@@ -17,6 +17,8 @@ import {
   ReferenceImageUpload,
   type ReferenceImage,
   StoryboardEditor,
+  ResizableDivider,
+  loadSavedWidth,
 } from './shared';
 import { geminiSettings } from '../../utils/settings-manager';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
@@ -66,6 +68,11 @@ const AIVideoGeneration = ({
 }: AIVideoGenerationProps = {}) => {
   const [prompt, setPrompt] = useState(initialPrompt);
   const [error, setError] = useState<string | null>(null);
+
+  // 任务列表面板状态 - 使用像素宽度
+  const [isTaskListVisible, setIsTaskListVisible] = useState(true);
+  const [taskListWidth, setTaskListWidth] = useState(() => loadSavedWidth('video'));
+  const containerRef = useRef<HTMLDivElement>(null);
 
   // Video model parameters - use state to support dynamic updates
   const [currentModel, setCurrentModel] = useState<VideoModel>(() => {
@@ -141,6 +148,16 @@ const AIVideoGeneration = ({
   const [promptHistoryVersion, setPromptHistoryVersion] = useState(0);
 
   const { isGenerating } = useGenerationState('video');
+
+  // 处理宽度变化
+  const handleWidthChange = useCallback((width: number) => {
+    setTaskListWidth(width);
+  }, []);
+
+  // 切换任务列表显示/隐藏
+  const handleToggleTaskList = useCallback(() => {
+    setIsTaskListVisible((prev) => !prev);
+  }, []);
 
   const { language } = useI18n();
   const { createTask } = useTaskQueue();
@@ -594,7 +611,7 @@ const AIVideoGeneration = ({
 
   return (
     <div className="ai-video-generation-container">
-      <div className="main-content">
+      <div className="main-content" ref={containerRef}>
         {/* AI 视频生成表单 */}
         <div className="ai-image-generation-section">
           <div className="ai-image-generation-form">
@@ -683,10 +700,25 @@ const AIVideoGeneration = ({
           />
         </div>
 
+        {/* 可拖动分隔条 */}
+        <ResizableDivider
+          isRightPanelVisible={isTaskListVisible}
+          onToggleRightPanel={handleToggleTaskList}
+          onWidthChange={handleWidthChange}
+          rightPanelWidth={taskListWidth}
+          language={language}
+          storageKey="video"
+        />
+
         {/* 任务列表侧栏 */}
-        <div className="task-sidebar">
-          <DialogTaskList taskType={TaskType.VIDEO} onEditTask={handleEditTask} />
-        </div>
+        {isTaskListVisible && (
+          <div 
+            className="task-sidebar"
+            style={{ width: taskListWidth, flexShrink: 0 }}
+          >
+            <DialogTaskList taskType={TaskType.VIDEO} onEditTask={handleEditTask} />
+          </div>
+        )}
       </div>
     </div>
   );

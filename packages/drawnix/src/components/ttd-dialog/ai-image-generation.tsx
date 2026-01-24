@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import './ttd-dialog.scss';
 import './ai-image-generation.scss';
 import { useI18n } from '../../i18n';
@@ -19,6 +19,8 @@ import {
   AspectRatioSelector,
   getMergedPresetPrompts,
   savePromptToHistory as savePromptToHistoryUtil,
+  ResizableDivider,
+  loadSavedWidth,
 } from './shared';
 import {
   DEFAULT_ASPECT_RATIO,
@@ -57,6 +59,11 @@ const AIImageGeneration = ({
   const [uploadedImages, setUploadedImages] =
     useState<ReferenceImage[]>(initialImages);
 
+  // 任务列表面板状态 - 使用像素宽度
+  const [isTaskListVisible, setIsTaskListVisible] = useState(true);
+  const [taskListWidth, setTaskListWidth] = useState(() => loadSavedWidth('image'));
+  const containerRef = useRef<HTMLDivElement>(null);
+
   // Use generation history from task queue
   const { imageHistory } = useGenerationHistory();
   const { isGenerating } = useGenerationState('image');
@@ -65,6 +72,16 @@ const AIImageGeneration = ({
 
   // Track if we're in manual edit mode (from handleEditTask) to prevent props from overwriting
   const [isManualEdit, setIsManualEdit] = useState(false);
+
+  // 处理宽度变化
+  const handleWidthChange = useCallback((width: number) => {
+    setTaskListWidth(width);
+  }, []);
+
+  // 切换任务列表显示/隐藏
+  const handleToggleTaskList = useCallback(() => {
+    setIsTaskListVisible((prev) => !prev);
+  }, []);
 
   // 处理 props 变化，更新内部状态
   const processedPropsRef = React.useRef<string>('');
@@ -379,7 +396,7 @@ const AIImageGeneration = ({
 
   return (
     <div className="ai-image-generation-container">
-      <div className="main-content">
+      <div className="main-content" ref={containerRef}>
         {/* AI 图片生成表单 */}
         <div className="ai-image-generation-section">
           <div className="ai-image-generation-form">
@@ -445,13 +462,28 @@ const AIImageGeneration = ({
           />
         </div>
 
+        {/* 可拖动分隔条 */}
+        <ResizableDivider
+          isRightPanelVisible={isTaskListVisible}
+          onToggleRightPanel={handleToggleTaskList}
+          onWidthChange={handleWidthChange}
+          rightPanelWidth={taskListWidth}
+          language={language}
+          storageKey="image"
+        />
+
         {/* 任务列表侧栏 */}
-        <div className="task-sidebar">
-          <DialogTaskList
-            taskType={TaskType.IMAGE}
-            onEditTask={handleEditTask}
-          />
-        </div>
+        {isTaskListVisible && (
+          <div 
+            className="task-sidebar"
+            style={{ width: taskListWidth, flexShrink: 0 }}
+          >
+            <DialogTaskList
+              taskType={TaskType.IMAGE}
+              onEditTask={handleEditTask}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

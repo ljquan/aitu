@@ -507,6 +507,40 @@ const handleGenerate = async () => {
 - Property order: positioning → box model → appearance → typography → animations
 - Use nested selectors for organization
 
+#### Flex 布局中兄弟元素隐藏导致宽度变化
+**场景**: 使用 `flex: 1` 的容器，当某个兄弟元素（如侧边栏）被隐藏时，内部组件宽度会随之变化
+
+❌ **错误示例**:
+```scss
+// 错误：内部组件没有宽度限制，隐藏侧边栏后会撑满
+.form-section {
+  flex: 1;
+  
+  .upload-area {
+    // 没有 max-width，会随父容器变宽
+  }
+}
+
+.sidebar {
+  width: 400px;
+  // 隐藏后，form-section 会占据全部宽度
+}
+```
+
+✅ **正确示例**:
+```scss
+// 正确：给内部组件设置 max-width 保持稳定
+.form-section {
+  flex: 1;
+  
+  .upload-area {
+    max-width: 400px; // 限制最大宽度，保持稳定
+  }
+}
+```
+
+**原因**: 当 `flex: 1` 的容器的兄弟元素被隐藏时，Flexbox 会重新分配空间，导致该容器变宽。如果内部组件没有宽度限制，会跟随变宽，可能导致视觉变形（如按钮区域变得过大）。给需要保持稳定的内部组件设置 `max-width` 可以防止这种问题。
+
 #### Performance Guidelines
 - Use `React.lazy` for code splitting large components
 - Implement lazy loading and preloading for images

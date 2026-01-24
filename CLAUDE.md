@@ -161,6 +161,7 @@ Service Worker (后台执行)
 4. 图标组件使用 `React.FC`，支持 `size` 属性
 5. 传递组件作为 prop 时必须实例化：`icon={<Icon />}` 而非 `icon={Icon}`
 6. 内联 style 的 `undefined` 值会覆盖 CSS 类，需要 CSS 类生效时传 `style={undefined}`
+7. Flex 布局中使用 `flex: 1` 时，若兄弟元素可隐藏，内部组件需设 `max-width` 防止变形
 
 ### 缓存规则
 

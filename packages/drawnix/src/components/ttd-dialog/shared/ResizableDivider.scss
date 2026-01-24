@@ -1,0 +1,97 @@
+.resizable-divider {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  width: 12px;
+  min-width: 12px;
+  height: 100%;
+  cursor: col-resize;
+  user-select: none;
+  flex-shrink: 0;
+  z-index: 10;
+  padding-bottom: 12px;
+
+  &:hover,
+  &.is-dragging {
+    .resizable-divider__bar {
+      background: var(--color-primary, #f39c12);
+      opacity: 0.8;
+      width: 3px;
+    }
+  }
+
+  &.is-dragging {
+    .resizable-divider__bar {
+      opacity: 1;
+    }
+  }
+
+  &.is-collapsed {
+    cursor: default;
+    width: 16px;
+    min-width: 16px;
+
+    .resizable-divider__bar {
+      display: none;
+    }
+  }
+
+  &.is-disabled {
+    cursor: not-allowed;
+    pointer-events: none;
+    opacity: 0.5;
+  }
+}
+
+.resizable-divider__bar {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 2px;
+  height: 100%;
+  background: var(--color-border-light, #e8e8e8);
+  border-radius: 1px;
+  transition: background 0.2s ease, opacity 0.2s ease, width 0.15s ease;
+}
+
+.resizable-divider__toggle {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 28px;
+  background: var(--color-bg-container, #fff);
+  border: 1px solid var(--color-border-light, #e8e8e8);
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: var(--color-text-placeholder, #bbb);
+  z-index: 11;
+  opacity: 0.6;
+
+  &:hover {
+    background: var(--color-bg-secondary, #f5f5f5);
+    border-color: var(--color-primary, #f39c12);
+    color: var(--color-primary, #f39c12);
+    opacity: 1;
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+}
+
+// 收起状态时，按钮更明显一些
+.resizable-divider.is-collapsed .resizable-divider__toggle {
+  opacity: 0.8;
+  color: var(--color-text-secondary, #999);
+}
+
+// 响应式：移动端隐藏分隔条
+@media (max-width: 768px) {
+  .resizable-divider {
+    display: none;
+  }
+}
