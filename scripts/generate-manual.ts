@@ -14,6 +14,9 @@ import yaml from 'js-yaml';
 import { compile } from '@mdx-js/mdx';
 import { glob } from 'glob';
 
+// CDN 基础路径（由 deploy-hybrid.js 设置）
+const CDN_BASE = process.env.MANUAL_CDN_BASE || '';
+
 // 配置类型定义
 interface Config {
   site: {
@@ -87,7 +90,7 @@ function markdownToHtml(markdown: string, screenshotsDir: string): string {
   html = html.replace(
     /<Screenshot\s+id="([^"]+)"(?:\s+alt="([^"]*)")?\s*\/>/g,
     (_, id, alt) => {
-      const imgPath = `screenshots/${id}.png`;
+      const imgPath = CDN_BASE ? `${CDN_BASE}/screenshots/${id}.png` : `screenshots/${id}.png`;
       return `<img class="step-screenshot" src="${imgPath}" alt="${alt || id}" loading="lazy" />`;
     }
   );
@@ -170,7 +173,17 @@ function markdownToHtml(markdown: string, screenshotsDir: string): string {
     processedLines.push('</p>');
   }
   
-  return processedLines.join('\n');
+  let result = processedLines.join('\n');
+  
+  // 如果设置了 CDN 基础路径，替换静态资源路径
+  if (CDN_BASE) {
+    // 替换 gifs/ 路径
+    result = result.replace(/src="gifs\//g, `src="${CDN_BASE}/gifs/`);
+    // 替换 screenshots/ 路径（补充处理直接写在 MDX 中的情况）
+    result = result.replace(/src="screenshots\//g, `src="${CDN_BASE}/screenshots/`);
+  }
+  
+  return result;
 }
 
 // 生成 HTML 头部和样式

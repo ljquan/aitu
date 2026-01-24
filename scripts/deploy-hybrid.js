@@ -589,7 +589,7 @@ function stepDeployServer(version) {
 // 步骤 6: 生成用户手册
 // ============================================
 
-function stepGenerateManual() {
+function stepGenerateManual(version) {
   logStep(6, 7, '生成用户手册');
   
   if (skipManual) {
@@ -606,17 +606,106 @@ function stepGenerateManual() {
   
   // 手册生成不阻塞部署，失败只警告
   try {
-    execSync('pnpm run generate:manual', {
+    // 设置 CDN 基础路径环境变量，供 generate-manual.ts 使用
+    const cdnBaseUrl = CONFIG.cdnTemplates[cdnProvider].replace('{version}', version);
+    const manualCdnBase = `${cdnBaseUrl}/user-manual`;
+    
+    execSync('pnpm run manual:build', {
       cwd: path.resolve(__dirname, '..'),
       stdio: 'inherit',
+      env: {
+        ...process.env,
+        MANUAL_CDN_BASE: skipNpm ? '' : manualCdnBase,
+      },
     });
-    logSuccess('用户手册生成完成');
-    log(`    输出目录: docs/user-manual/`, 'gray');
+    
+    // 复制手册到 dist 目录（构建后手册不会自动包含）
+    const manualSourceDir = path.resolve(__dirname, '../apps/web/public/user-manual');
+    const manualDistDir = path.resolve(__dirname, '../dist/apps/web/user-manual');
+    const manualServerDir = path.join(CONFIG.outputServer, 'user-manual');
+    const manualCdnDir = path.join(CONFIG.outputCDN, 'user-manual');
+    
+    if (fs.existsSync(manualSourceDir)) {
+      // 复制到 dist/apps/web/user-manual
+      copyDirRecursive(manualSourceDir, manualDistDir);
+      log(`    复制到 dist/apps/web/user-manual`, 'gray');
+      
+      // 复制到 dist/deploy/server/user-manual（HTML + 静态资源，完整副本）
+      if (fs.existsSync(CONFIG.outputServer)) {
+        copyDirRecursive(manualSourceDir, manualServerDir);
+        log(`    复制到 dist/deploy/server/user-manual`, 'gray');
+      }
+      
+      // 复制静态资源到 CDN 目录（不含 HTML）
+      if (fs.existsSync(CONFIG.outputCDN) && !skipNpm) {
+        const screenshotsDir = path.join(manualSourceDir, 'screenshots');
+        const gifsDir = path.join(manualSourceDir, 'gifs');
+        
+        if (fs.existsSync(screenshotsDir)) {
+          copyDirRecursive(screenshotsDir, path.join(manualCdnDir, 'screenshots'));
+        }
+        if (fs.existsSync(gifsDir)) {
+          copyDirRecursive(gifsDir, path.join(manualCdnDir, 'gifs'));
+        }
+        
+        // 统计 CDN 文件数
+        let cdnFileCount = 0;
+        if (fs.existsSync(manualCdnDir)) {
+          cdnFileCount = countFilesRecursive(manualCdnDir);
+        }
+        log(`    复制 ${cdnFileCount} 个静态资源到 CDN`, 'gray');
+      }
+      
+      // 统计文件数
+      const fileCount = countFilesRecursive(manualDistDir);
+      logSuccess(`用户手册生成完成 (${fileCount} 个文件)`);
+      if (!skipNpm) {
+        log(`    静态资源将通过 CDN 加载`, 'gray');
+      }
+    } else {
+      logWarning('手册源目录不存在');
+    }
+    
     return true;
   } catch (error) {
     logWarning('用户手册生成失败（不影响部署）');
     log(`    错误: ${error.message}`, 'gray');
     return true; // 不阻塞部署
+  }
+}
+
+// 统计目录文件数
+function countFilesRecursive(dir) {
+  let count = 0;
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      count += countFilesRecursive(path.join(dir, entry.name));
+    } else {
+      count++;
+    }
+  }
+  return count;
+}
+
+// 递归复制目录
+function copyDirRecursive(src, dest) {
+  if (!fs.existsSync(src)) return;
+  
+  if (!fs.existsSync(dest)) {
+    fs.mkdirSync(dest, { recursive: true });
+  }
+  
+  const entries = fs.readdirSync(src, { withFileTypes: true });
+  for (const entry of entries) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+    
+    if (entry.isDirectory()) {
+      copyDirRecursive(srcPath, destPath);
+    } else {
+      fs.copyFileSync(srcPath, destPath);
+    }
   }
 }
 
@@ -653,7 +742,13 @@ function stepVerify(version) {
   
   if (!skipManual) {
     log(`\n📖 用户手册:`, 'green');
-    log(`   本地路径: docs/user-manual/index.html`);
+    log(`   部署路径: /user-manual/index.html`);
+    log(`   本地预览: dist/apps/web/user-manual/index.html`);
+    if (!skipNpm) {
+      log(`   静态资源: CDN (截图、GIF 通过 ${cdnProvider} 加载)`);
+    } else {
+      log(`   静态资源: 服务器（跳过 CDN 发布）`);
+    }
   }
   
   log('\n🔄 加载顺序:', 'cyan');
@@ -706,7 +801,7 @@ async function main() {
     () => stepSeparateFiles(version, cdnBaseUrl, buildSkipped),
     () => stepPublishNpm(version),
     () => stepDeployServer(version),
-    () => stepGenerateManual(),
+    () => stepGenerateManual(version),
     () => stepVerify(version),
   ];
   
