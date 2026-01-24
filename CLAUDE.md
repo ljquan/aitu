@@ -158,10 +158,11 @@ Service Worker (后台执行)
 2. Hover 延迟操作需要正确的计时器清理
 3. 第三方窗口需用 `createPortal` 保持 React 事件流
 4. 模式切换时多个相关状态需同步更新，封装成一个函数而非直接暴露底层 setMode
-4. 图标组件使用 `React.FC`，支持 `size` 属性
-5. 传递组件作为 prop 时必须实例化：`icon={<Icon />}` 而非 `icon={Icon}`
-6. 内联 style 的 `undefined` 值会覆盖 CSS 类，需要 CSS 类生效时传 `style={undefined}`
-7. Flex 布局中使用 `flex: 1` 时，若兄弟元素可隐藏，内部组件需设 `max-width` 防止变形
+5. 图标组件使用 `React.FC`，支持 `size` 属性
+6. 传递组件作为 prop 时必须实例化：`icon={<Icon />}` 而非 `icon={Icon}`
+7. 内联 style 的 `undefined` 值会覆盖 CSS 类，需要 CSS 类生效时传 `style={undefined}`
+8. Flex 布局中使用 `flex: 1` 时，若兄弟元素可隐藏，内部组件需设 `max-width` 防止变形
+9. `useCallback` 定义必须在引用它的 `useEffect` 之前，否则会报 TDZ 错误
 
 ### 缓存规则
 

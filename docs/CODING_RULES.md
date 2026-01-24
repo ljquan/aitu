@@ -319,6 +319,50 @@ if (params) {
 - 事件处理器使用 `useCallback` 包装
 - Hook 顺序：状态 hooks → 副作用 hooks → 事件处理器 → 渲染逻辑
 
+#### useCallback 定义顺序必须在 useEffect 依赖之前
+
+**场景**: 当 `useEffect` 的依赖数组引用某个 `useCallback` 定义的函数时
+
+❌ **错误示例**:
+```typescript
+// 错误：handleResetView 在 useEffect 依赖中被引用，但定义在 useEffect 之后
+useEffect(() => {
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.key === '0') {
+      handleResetView(); // 引用了后面才定义的函数
+    }
+  };
+  window.addEventListener('keydown', handleKeyDown);
+  return () => window.removeEventListener('keydown', handleKeyDown);
+}, [handleResetView]); // ❌ 运行时错误: Cannot access 'handleResetView' before initialization
+
+const handleResetView = useCallback(() => {
+  // 重置逻辑
+}, []);
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：被依赖的 useCallback 必须在 useEffect 之前定义
+const handleResetView = useCallback(() => {
+  // 重置逻辑
+}, []);
+
+useEffect(() => {
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.key === '0') {
+      handleResetView();
+    }
+  };
+  window.addEventListener('keydown', handleKeyDown);
+  return () => window.removeEventListener('keydown', handleKeyDown);
+}, [handleResetView]); // ✅ 正常工作
+```
+
+**原因**: JavaScript 的 `const` 声明有暂时性死区（TDZ），在声明语句执行前访问会抛出 `ReferenceError`。`useEffect` 的依赖数组在组件首次渲染时就会被读取，此时如果被依赖的函数还未定义，就会报错。
+
+---
+
 #### Hover 延迟操作需要正确的计时器清理
 
 **场景**: 实现 hover 延迟展开/显示等交互效果时（如工具栏 Popover 延迟展开）
