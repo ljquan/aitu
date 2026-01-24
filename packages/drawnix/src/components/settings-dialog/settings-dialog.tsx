@@ -72,7 +72,7 @@ export const SettingsDialog = ({
         setAppState({ ...appState, openSettings: open });
       }}
     >
-      <DialogContent className="settings-dialog" container={container}>
+      <DialogContent className="settings-dialog" container={container} data-testid="settings-dialog">
         <h2 className="settings-dialog__title">{t('settings.title')}</h2>
         <form className="settings-dialog__form" onSubmit={(e) => e.preventDefault()}>
           <div className="settings-dialog__field">

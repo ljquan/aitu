@@ -371,6 +371,7 @@ export const ModelDropdown: React.FC<ModelDropdownProps> = ({
           <div
             className={`model-dropdown model-dropdown--variant-${variant} ${disabled ? 'model-dropdown--disabled' : ''}`}
             ref={containerRef}
+            data-testid="model-selector"
           >
             {renderTrigger(handleTriggerKeyDown)}
             {isOpen && (isPortalled ? createPortal(menu, document.body) : menu)}

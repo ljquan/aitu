@@ -283,6 +283,7 @@ export function MediaLibraryModal({
         movable={true}
         modal={false}
         className="winbox-media-library"
+        data-testid="media-library-modal"
         headerContent={
           <div className="media-library-header-content">
             <MediaLibraryIcon size={18} />

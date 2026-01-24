@@ -5,9 +5,11 @@
  * 
  * 一键完成：
  * 1. 构建项目
- * 2. 分离 HTML 和静态资源
- * 3. 发布静态资源到 npm CDN
- * 4. 部署 HTML 到自有服务器
+ * 2. 运行 E2E 冒烟测试
+ * 3. 分离 HTML 和静态资源
+ * 4. 发布静态资源到 npm CDN
+ * 5. 部署 HTML 到自有服务器
+ * 6. 生成用户手册
  * 
  * 用法：
  *   node scripts/deploy-hybrid.js [options]
@@ -16,6 +18,8 @@
  *   --skip-build     跳过构建步骤
  *   --skip-npm       跳过 npm 发布
  *   --skip-server    跳过服务器部署
+ *   --skip-e2e       跳过 E2E 测试
+ *   --skip-manual    跳过手册生成
  *   --dry-run        预览模式，不实际执行
  *   --otp=123456     npm 2FA 验证码
  */
@@ -63,6 +67,8 @@ const args = process.argv.slice(2);
 const skipBuild = args.includes('--skip-build');
 const skipNpm = args.includes('--skip-npm');
 const skipServer = args.includes('--skip-server');
+const skipE2E = args.includes('--skip-e2e');
+const skipManual = args.includes('--skip-manual');
 const isDryRun = args.includes('--dry-run');
 const otpArg = args.find(arg => arg.startsWith('--otp='));
 const otp = otpArg ? otpArg.split('=')[1] : null;
@@ -318,7 +324,7 @@ function loadEnvConfig() {
 // ============================================
 
 function stepBuild(version) {
-  logStep(1, 5, '构建项目');
+  logStep(1, 7, '构建项目');
   
   // 显式跳过
   if (skipBuild) {
@@ -352,11 +358,40 @@ function stepBuild(version) {
 }
 
 // ============================================
-// 步骤 2: 准备部署文件
+// 步骤 2: E2E 冒烟测试
+// ============================================
+
+function stepE2ETest() {
+  logStep(2, 7, 'E2E 冒烟测试');
+  
+  if (skipE2E) {
+    logWarning('跳过 E2E 测试（--skip-e2e 参数）');
+    return true;
+  }
+  
+  if (isDryRun) {
+    log(`    [DRY RUN] 将运行 E2E 冒烟测试`, 'yellow');
+    return true;
+  }
+  
+  log('    运行冒烟测试...', 'gray');
+  
+  if (!exec('pnpm run e2e:smoke', { cwd: path.resolve(__dirname, '..') })) {
+    logError('E2E 冒烟测试失败');
+    logWarning('提示：可使用 --skip-e2e 跳过测试继续部署');
+    return false;
+  }
+  
+  logSuccess('E2E 冒烟测试通过');
+  return true;
+}
+
+// ============================================
+// 步骤 3: 准备部署文件
 // ============================================
 
 function stepSeparateFiles(version, cdnBaseUrl, buildSkipped = false) {
-  logStep(2, 5, '准备部署文件');
+  logStep(3, 7, '准备部署文件');
   
   // 如果构建被跳过，文件已经准备好了
   if (buildSkipped) {
@@ -463,11 +498,11 @@ function stepSeparateFiles(version, cdnBaseUrl, buildSkipped = false) {
 }
 
 // ============================================
-// 步骤 3: 发布到 npm CDN
+// 步骤 4: 发布到 npm CDN
 // ============================================
 
 function stepPublishNpm(version) {
-  logStep(3, 5, '发布静态资源到 npm CDN');
+  logStep(4, 7, '发布静态资源到 npm CDN');
   
   if (skipNpm) {
     logWarning('跳过 npm 发布');
@@ -518,11 +553,11 @@ function stepPublishNpm(version) {
 }
 
 // ============================================
-// 步骤 4: 部署到服务器（复用 create-deploy-package.js）
+// 步骤 5: 部署到服务器（复用 create-deploy-package.js）
 // ============================================
 
 function stepDeployServer(version) {
-  logStep(4, 5, '打包并部署到服务器');
+  logStep(5, 7, '打包并部署到服务器');
   
   if (skipServer) {
     logWarning('跳过服务器部署');
@@ -551,11 +586,46 @@ function stepDeployServer(version) {
 }
 
 // ============================================
-// 步骤 5: 验证部署
+// 步骤 6: 生成用户手册
+// ============================================
+
+function stepGenerateManual() {
+  logStep(6, 7, '生成用户手册');
+  
+  if (skipManual) {
+    logWarning('跳过手册生成（--skip-manual 参数）');
+    return true;
+  }
+  
+  if (isDryRun) {
+    log(`    [DRY RUN] 将生成用户手册`, 'yellow');
+    return true;
+  }
+  
+  log('    生成用户手册...', 'gray');
+  
+  // 手册生成不阻塞部署，失败只警告
+  try {
+    execSync('pnpm run generate:manual', {
+      cwd: path.resolve(__dirname, '..'),
+      stdio: 'inherit',
+    });
+    logSuccess('用户手册生成完成');
+    log(`    输出目录: docs/user-manual/`, 'gray');
+    return true;
+  } catch (error) {
+    logWarning('用户手册生成失败（不影响部署）');
+    log(`    错误: ${error.message}`, 'gray');
+    return true; // 不阻塞部署
+  }
+}
+
+// ============================================
+// 步骤 7: 验证部署
 // ============================================
 
 function stepVerify(version) {
-  logStep(5, 5, '部署完成');
+  logStep(7, 7, '部署完成');
   
   log('\n📋 部署摘要', 'cyan');
   log('═'.repeat(50), 'cyan');
@@ -579,6 +649,11 @@ function stepVerify(version) {
     }
     log(`   ✓ 通过 create-deploy-package.js 部署`);
     log(`   ✓ 完整副本（CDN 失败时兜底）`);
+  }
+  
+  if (!skipManual) {
+    log(`\n📖 用户手册:`, 'green');
+    log(`   本地路径: docs/user-manual/index.html`);
   }
   
   log('\n🔄 加载顺序:', 'cyan');
@@ -620,11 +695,18 @@ async function main() {
   }
   const buildSkipped = buildResult && buildResult.skipped === true;
   
-  // 步骤 2-5: 后续流程
+  // 步骤 2: E2E 冒烟测试
+  if (!stepE2ETest()) {
+    log('\n❌ 部署失败\n', 'red');
+    process.exit(1);
+  }
+  
+  // 步骤 3-7: 后续流程
   const steps = [
     () => stepSeparateFiles(version, cdnBaseUrl, buildSkipped),
     () => stepPublishNpm(version),
     () => stepDeployServer(version),
+    () => stepGenerateManual(),
     () => stepVerify(version),
   ];
   

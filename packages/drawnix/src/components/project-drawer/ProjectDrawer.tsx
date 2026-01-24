@@ -942,6 +942,7 @@ export const ProjectDrawer: React.FC<ProjectDrawerProps> = ({
         resizable={true}
         className="project-drawer"
         contentClassName="project-drawer__content"
+        data-testid="project-drawer"
       >
         {isLoading ? (
           <div className="project-drawer__loading">加载中...</div>

@@ -1700,6 +1700,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
       className={classNames('ai-input-bar', ATTACHED_ELEMENT_CLASS_NAME, className, {
         'ai-input-bar--with-inspiration': showInspirationBoard
       })}
+      data-testid="ai-input-bar"
     >
       <SelectionWatcher
         language={language}
@@ -1803,6 +1804,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
             onClick={handleGenerate}
             disabled={!canGenerate || isSubmitting}
             data-track="ai_input_click_send"
+            data-testid="ai-send-btn"
           >
             <Send size={18} />
           </button>
@@ -1846,6 +1848,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
               }
               rows={isFocused ? 4 : 1}
               disabled={isSubmitting}
+              data-testid="ai-input-textarea"
             />
           </div>
         </div>

@@ -59,6 +59,7 @@ export const BottomActionsSection: React.FC<BottomActionsSectionProps> = ({
         selected={projectDrawerOpen}
         visible={true}
         data-track="toolbar_click_project_drawer"
+        data-testid="toolbar-project"
         onPointerDown={(e) => {
           e.event.stopPropagation();
         }}
@@ -76,6 +77,7 @@ export const BottomActionsSection: React.FC<BottomActionsSectionProps> = ({
           selected={toolboxDrawerOpen}
           visible={true}
           data-track="toolbar_click_toolbox"
+          data-testid="toolbar-toolbox"
           onPointerDown={(e) => {
             e.event.stopPropagation();
           }}
@@ -99,6 +101,7 @@ export const BottomActionsSection: React.FC<BottomActionsSectionProps> = ({
             selected={taskPanelExpanded}
             visible={true}
             data-track="toolbar_click_tasks"
+            data-testid="toolbar-tasks"
             onPointerDown={(e) => {
               e.event.stopPropagation();
             }}
