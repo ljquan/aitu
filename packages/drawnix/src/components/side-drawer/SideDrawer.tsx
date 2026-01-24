@@ -64,6 +64,8 @@ export interface SideDrawerProps {
   maxWidth?: number;
   /** 宽度变化回调 */
   onWidthChange?: (width: number) => void;
+  /** 测试标识 */
+  'data-testid'?: string;
 }
 
 /**
@@ -95,6 +97,7 @@ export const SideDrawer: React.FC<SideDrawerProps> = ({
   minWidth = 280,
   maxWidth = 800,
   onWidthChange,
+  'data-testid': dataTestId,
 }) => {
   // 拖拽调整宽度状态
   const [draggingWidth, setDraggingWidth] = useState<number | null>(null);
@@ -188,7 +191,7 @@ export const SideDrawer: React.FC<SideDrawerProps> = ({
   return (
     <>
       {/* 抽屉主体 */}
-      <div ref={drawerRef} className={drawerClassName} style={drawerStyle}>
+      <div ref={drawerRef} className={drawerClassName} style={drawerStyle} data-testid={dataTestId}>
         {/* Header */}
         <div className={`side-drawer__header ${headerClassName}`}>
           <div className="side-drawer__header-left">

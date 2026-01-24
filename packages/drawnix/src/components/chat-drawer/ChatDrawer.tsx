@@ -1021,6 +1021,7 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
         <div 
           className={`chat-drawer ${ATTACHED_ELEMENT_CLASS_NAME} ${isOpen ? 'chat-drawer--open' : ''} ${isDragging ? 'chat-drawer--dragging' : ''}`}
           style={{ width: drawerWidth }}
+          data-testid="chat-drawer"
         >
           {/* 拖动调整宽度的手柄 */}
           <div

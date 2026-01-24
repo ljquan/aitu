@@ -14,7 +14,7 @@ import {
 import { Island } from '../../island';
 import { Popover, PopoverContent, PopoverTrigger } from '../../popover/popover';
 import { useState } from 'react';
-import { CleanBoard, OpenFile, SaveAsImage, SaveToFile, Settings, BackupRestore, DebugPanel, VersionInfo } from './app-menu-items';
+import { CleanBoard, OpenFile, SaveAsImage, SaveToFile, Settings, BackupRestore, DebugPanel, UserManual, VersionInfo } from './app-menu-items';
 import { GithubIcon } from '../../icons';
 import { LanguageSwitcherMenu } from './language-switcher-menu';
 import Menu from '../../menu/menu';
@@ -95,6 +95,7 @@ export const AppToolbar: React.FC<AppToolbarProps> = ({
               <DebugPanel />
               <Settings />
               <MenuSeparator />
+              <UserManual />
               <VersionInfo />
             </Menu>
           </PopoverContent>

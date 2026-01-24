@@ -4,6 +4,16 @@
  * 这些测试会生成用于用户手册的截图和步骤描述
  */
 import { test, expect } from '../fixtures/test-base';
+import {
+  screenshotWithAnnotations,
+  circleOnElement,
+  highlightElement,
+  arrowToElement,
+  circle,
+  arrow,
+  highlight,
+  Annotation,
+} from '../utils/screenshot-annotations';
 
 test.describe('AI 生成功能手册', () => {
   test.beforeEach(async ({ page }) => {
@@ -29,34 +39,55 @@ test.describe('AI 生成功能手册', () => {
       }),
     });
 
-    // 步骤 1: 展示 AI 输入框
-    await page.screenshot({ path: 'test-results/manual-screenshots/ai-step-0.png' });
-    await testInfo.attach('初始状态', {
+    // 步骤 0: 展示 AI 输入框（带标注）
+    const textarea = page.locator('[data-testid="ai-input-textarea"]');
+    const modelSelector = page.getByRole('button', { name: /#/ }).first();
+    
+    const annotations0: Annotation[] = [];
+    const inputHighlight = await highlightElement(textarea, '输入提示词');
+    if (inputHighlight) annotations0.push(inputHighlight);
+    
+    const modelCircle = await circleOnElement(modelSelector, 1);
+    if (modelCircle) annotations0.push(modelCircle);
+    
+    await screenshotWithAnnotations(
+      page,
+      'test-results/manual-screenshots/ai-step-0.png',
+      annotations0
+    );
+    await testInfo.attach('ai-step-0', {
       path: 'test-results/manual-screenshots/ai-step-0.png',
       contentType: 'image/png',
     });
 
-    // 步骤 2: 输入提示词（必须通过）
-    const textarea = page.getByPlaceholder('描述你想要创建什么');
+    // 步骤 1: 输入提示词（必须通过）
     await expect(textarea).toBeVisible();
     await textarea.click();
     await textarea.fill('一只可爱的猫咪在阳光下玩耍');
     await page.waitForTimeout(500);
     
     await page.screenshot({ path: 'test-results/manual-screenshots/ai-step-1.png' });
-    await testInfo.attach('步骤 1: 输入提示词', {
+    await testInfo.attach('ai-step-1', {
       path: 'test-results/manual-screenshots/ai-step-1.png',
       contentType: 'image/png',
     });
 
-    // 步骤 3: 展示模型选择器（必须通过）
-    const modelSelector = page.getByRole('button', { name: /#/ }).first();
+    // 步骤 2: 展示模型选择器（必须通过）
     await expect(modelSelector).toBeVisible();
     await modelSelector.click();
     await page.waitForTimeout(300);
     
-    await page.screenshot({ path: 'test-results/manual-screenshots/ai-step-2.png' });
-    await testInfo.attach('步骤 2: 选择模型', {
+    // 带标注的模型选择器截图
+    const annotations2: Annotation[] = [
+      arrow(300, 400, '选择生成模型', 'right'),
+    ];
+    
+    await screenshotWithAnnotations(
+      page,
+      'test-results/manual-screenshots/ai-step-2.png',
+      annotations2
+    );
+    await testInfo.attach('ai-step-2', {
       path: 'test-results/manual-screenshots/ai-step-2.png',
       contentType: 'image/png',
     });
@@ -65,9 +96,18 @@ test.describe('AI 生成功能手册', () => {
     await page.keyboard.press('Escape');
     await page.waitForTimeout(300);
 
-    // 步骤 4: 展示发送状态
-    await page.screenshot({ path: 'test-results/manual-screenshots/ai-step-3.png' });
-    await testInfo.attach('步骤 3: 准备发送', {
+    // 步骤 3: 展示发送按钮
+    const sendBtn = page.locator('button').filter({ has: page.locator('svg') }).last();
+    const annotations3: Annotation[] = [];
+    const sendArrow = await arrowToElement(sendBtn, '点击发送', 'left');
+    if (sendArrow) annotations3.push(sendArrow);
+    
+    await screenshotWithAnnotations(
+      page,
+      'test-results/manual-screenshots/ai-step-3.png',
+      annotations3
+    );
+    await testInfo.attach('ai-step-3', {
       path: 'test-results/manual-screenshots/ai-step-3.png',
       contentType: 'image/png',
     });
@@ -96,22 +136,88 @@ test.describe('AI 生成功能手册', () => {
     const inspirationTitle = page.getByRole('heading', { name: '灵感创意', level: 3 });
     await expect(inspirationTitle).toBeVisible();
     
-    await page.screenshot({ path: 'test-results/manual-screenshots/inspiration-step-1.png' });
-    await testInfo.attach('步骤 1: 灵感创意板', {
+    // 带标注的灵感板截图
+    const firstCard = page.getByRole('heading', { name: '智能拆分宫格图', level: 3 });
+    const annotations1: Annotation[] = [];
+    const cardHighlight = await highlightElement(firstCard.locator('..').locator('..'), '点击使用模板');
+    if (cardHighlight) annotations1.push(cardHighlight);
+    
+    await screenshotWithAnnotations(
+      page,
+      'test-results/manual-screenshots/inspiration-step-1.png',
+      annotations1
+    );
+    await testInfo.attach('inspiration-step-1', {
       path: 'test-results/manual-screenshots/inspiration-step-1.png',
       contentType: 'image/png',
     });
     
     // 点击第一个灵感卡片（必须通过）
-    const firstCard = page.getByRole('heading', { name: '智能拆分宫格图', level: 3 });
     await expect(firstCard).toBeVisible();
     await firstCard.click();
     await page.waitForTimeout(500);
     
-    await page.screenshot({ path: 'test-results/manual-screenshots/inspiration-step-2.png' });
-    await testInfo.attach('步骤 2: 选择模板后', {
+    // 点击后显示提示词已填充
+    const textarea = page.locator('[data-testid="ai-input-textarea"]');
+    const annotations2: Annotation[] = [];
+    const textareaHighlight = await highlightElement(textarea, '提示词已填充');
+    if (textareaHighlight) annotations2.push(textareaHighlight);
+    
+    await screenshotWithAnnotations(
+      page,
+      'test-results/manual-screenshots/inspiration-step-2.png',
+      annotations2
+    );
+    await testInfo.attach('inspiration-step-2', {
       path: 'test-results/manual-screenshots/inspiration-step-2.png',
       contentType: 'image/png',
     });
+  });
+
+  test('AI 视频生成入口', async ({ page }, testInfo) => {
+    testInfo.annotations.push({
+      type: 'manual',
+      description: JSON.stringify({
+        category: 'ai-generation',
+        title: 'AI 视频生成',
+        description: '使用 AI 生成视频',
+      }),
+    });
+
+    // 点击 AI 视频生成按钮（使用 label 选择器精确定位）
+    const toolbar = page.locator('.unified-toolbar').or(page.locator('[class*="toolbar"]')).first();
+    const videoBtn = toolbar.locator('label').filter({ has: page.getByRole('radio', { name: /AI 视频生成/ }) }).first();
+    
+    const annotations1: Annotation[] = [];
+    if (await videoBtn.isVisible().catch(() => false)) {
+      const box = await videoBtn.boundingBox();
+      if (box) {
+        annotations1.push(highlight(box.x - 4, box.y - 4, box.width + 8, box.height + 8, 'AI 视频生成', undefined, 'right'));
+      }
+    }
+    
+    await screenshotWithAnnotations(
+      page,
+      'test-results/manual-screenshots/video-entry.png',
+      annotations1
+    );
+    await testInfo.attach('video-entry', {
+      path: 'test-results/manual-screenshots/video-entry.png',
+      contentType: 'image/png',
+    });
+    
+    // 点击打开视频生成弹窗
+    await videoBtn.click();
+    await page.waitForTimeout(500);
+    
+    // 如果弹窗打开，截图
+    const dialog = page.locator('[data-testid="video-generation-dialog"]').or(page.locator('.video-generation-dialog'));
+    if (await dialog.isVisible()) {
+      await page.screenshot({ path: 'test-results/manual-screenshots/video-dialog.png' });
+      await testInfo.attach('video-dialog', {
+        path: 'test-results/manual-screenshots/video-dialog.png',
+        contentType: 'image/png',
+      });
+    }
   });
 });

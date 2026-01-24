@@ -1,164 +1,57 @@
 /**
- * 用户手册生成脚本
+ * 用户手册生成脚本 (MDX 版本)
  * 
- * 从 E2E 测试结果中提取带有 'manual' 注解的测试用例，
- * 结合截图生成 HTML 格式的用户手册。
+ * 从 MDX 文档编译生成 HTML 格式的用户手册，
+ * 支持 Screenshot 组件引用 E2E 测试生成的截图。
  * 
  * 用法: npx ts-node scripts/generate-manual.ts
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
+import matter from 'gray-matter';
+import yaml from 'js-yaml';
+import { compile } from '@mdx-js/mdx';
+import { glob } from 'glob';
 
-interface TestResult {
-  title: string;
-  fullTitle: string;
-  file: string;
-  status: 'passed' | 'failed' | 'skipped';
-  duration: number;
-  annotations: Array<{
-    type: string;
-    description?: string;
-  }>;
-  attachments: Array<{
-    name: string;
-    path: string;
-    contentType: string;
-  }>;
-}
-
-interface ManualMetadata {
-  category: string;
-  title: string;
-  description?: string;
-  steps: string[];
-  tags?: string[];
-}
-
-interface ManualPage {
-  id: string;
-  category: string;
-  title: string;
-  description: string;
-  steps: Array<{
-    order: number;
+// 配置类型定义
+interface Config {
+  site: {
     title: string;
     description: string;
-    screenshot?: string;
-  }>;
-  screenshots: string[];
+    logo: string;
+  };
+  categories: Record<string, { name: string; order: number }>;
+  screenshots: {
+    source: string;
+    output: string;
+  };
+  output: {
+    dir: string;
+    format: string;
+  };
 }
 
-// 预定义的分类
-const CATEGORIES: Record<string, { name: string; order: number }> = {
-  'getting-started': { name: '快速开始', order: 1 },
-  'drawing': { name: '绘图功能', order: 2 },
-  'ai-generation': { name: 'AI 生成', order: 3 },
-  'mindmap': { name: '思维导图', order: 4 },
-  'media-library': { name: '素材库', order: 5 },
-  'project': { name: '项目管理', order: 6 },
-  'settings': { name: '设置', order: 7 },
-  'advanced': { name: '高级功能', order: 8 },
-};
-
-// 读取测试结果 JSON
-function readTestResults(resultsPath: string): TestResult[] {
-  try {
-    const content = fs.readFileSync(resultsPath, 'utf-8');
-    const data = JSON.parse(content);
-    
-    // Playwright JSON reporter 格式
-    if (data.suites) {
-      const results: TestResult[] = [];
-      
-      const extractTests = (suite: any, parentTitle: string = '') => {
-        const fullTitle = parentTitle ? `${parentTitle} > ${suite.title}` : suite.title;
-        
-        if (suite.specs) {
-          for (const spec of suite.specs) {
-            for (const test of spec.tests || []) {
-              results.push({
-                title: spec.title,
-                fullTitle: `${fullTitle} > ${spec.title}`,
-                file: suite.file || '',
-                status: test.status,
-                duration: test.results?.[0]?.duration || 0,
-                annotations: test.annotations || [],
-                attachments: test.results?.[0]?.attachments || [],
-              });
-            }
-          }
-        }
-        
-        if (suite.suites) {
-          for (const childSuite of suite.suites) {
-            extractTests(childSuite, fullTitle);
-          }
-        }
-      };
-      
-      for (const suite of data.suites) {
-        extractTests(suite);
-      }
-      
-      return results;
-    }
-    
-    return [];
-  } catch (error) {
-    console.error('Failed to read test results:', error);
-    return [];
-  }
+// 页面元数据
+interface PageMeta {
+  title: string;
+  category?: string;
+  order?: number;
 }
 
-// 从测试结果中提取手册元数据
-function extractManualTests(results: TestResult[]): ManualPage[] {
-  const pages: ManualPage[] = [];
-  
-  for (const result of results) {
-    // 查找 manual 类型的注解
-    const manualAnnotation = result.annotations.find(a => a.type === 'manual');
-    if (!manualAnnotation?.description) continue;
-    
-    try {
-      const metadata: ManualMetadata = JSON.parse(manualAnnotation.description);
-      
-      // 提取截图附件
-      const screenshots = result.attachments
-        .filter(a => a.contentType === 'image/png')
-        .map(a => a.path);
-      
-      // 构建步骤
-      const steps = metadata.steps.map((step, index) => ({
-        order: index + 1,
-        title: step,
-        description: step,
-        screenshot: screenshots[index],
-      }));
-      
-      pages.push({
-        id: generateId(result.title),
-        category: metadata.category || 'advanced',
-        title: metadata.title || result.title,
-        description: metadata.description || '',
-        steps,
-        screenshots,
-      });
-    } catch (error) {
-      console.warn(`Failed to parse manual metadata for "${result.title}":`, error);
-    }
-  }
-  
-  return pages;
+// 页面数据
+interface Page {
+  slug: string;
+  filePath: string;
+  meta: PageMeta;
+  content: string;
+  html: string;
 }
 
-// 生成 ID
-function generateId(title: string): string {
-  return title
-    .toLowerCase()
-    .replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '');
+// 读取配置文件
+function readConfig(configPath: string): Config {
+  const content = fs.readFileSync(configPath, 'utf-8');
+  return yaml.load(content) as Config;
 }
 
 // 获取版本号
@@ -173,22 +66,134 @@ function getVersion(): string {
   }
 }
 
-// 生成 HTML 头部
-function generateHtmlHead(title: string): string {
+// 简单的 Markdown 转 HTML（不使用 MDX 运行时）
+function markdownToHtml(markdown: string, screenshotsDir: string): string {
+  let html = markdown;
+  
+  // 处理代码块（必须在行内代码之前处理）
+  html = html.replace(
+    /```(\w*)\n([\s\S]*?)```/g,
+    (_, lang, code) => {
+      const escapedCode = code
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .trim();
+      return `<pre><code class="language-${lang || 'text'}">${escapedCode}</code></pre>`;
+    }
+  );
+  
+  // 处理 Screenshot 组件
+  html = html.replace(
+    /<Screenshot\s+id="([^"]+)"(?:\s+alt="([^"]*)")?\s*\/>/g,
+    (_, id, alt) => {
+      const imgPath = `screenshots/${id}.png`;
+      return `<img class="step-screenshot" src="${imgPath}" alt="${alt || id}" loading="lazy" />`;
+    }
+  );
+  
+  // 处理标题（从小到大，避免误匹配）
+  html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
+  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+  
+  // 处理粗体和斜体
+  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+  
+  // 处理行内代码（在代码块之后处理）
+  html = html.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+  
+  // 处理链接
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+  
+  // 处理 tip/note 块
+  html = html.replace(
+    /:::tip\n([\s\S]*?):::/g,
+    '<div class="tip"><strong>提示：</strong>$1</div>'
+  );
+  html = html.replace(
+    /:::note\n([\s\S]*?):::/g,
+    '<div class="note"><strong>注意：</strong>$1</div>'
+  );
+  
+  // 处理无序列表
+  html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
+  html = html.replace(/(<li>.*<\/li>\n)+/g, (match) => `<ul>${match}</ul>`);
+  
+  // 处理表格
+  html = html.replace(
+    /\|(.+)\|\n\|[-|]+\|\n((?:\|.+\|\n)+)/g,
+    (_, header, rows) => {
+      const headers = header.split('|').filter((s: string) => s.trim()).map((s: string) => `<th>${s.trim()}</th>`).join('');
+      const bodyRows = rows.trim().split('\n').map((row: string) => {
+        const cells = row.split('|').filter((s: string) => s.trim()).map((s: string) => `<td>${s.trim()}</td>`).join('');
+        return `<tr>${cells}</tr>`;
+      }).join('');
+      return `<table><thead><tr>${headers}</tr></thead><tbody>${bodyRows}</tbody></table>`;
+    }
+  );
+  
+  // 处理段落（简单处理：连续的非标签文本）
+  const lines = html.split('\n');
+  const processedLines: string[] = [];
+  let inParagraph = false;
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    const isHtmlTag = /^<[a-z]|^<\/[a-z]/i.test(line);
+    const isEmpty = line === '';
+    
+    if (isEmpty) {
+      if (inParagraph) {
+        processedLines.push('</p>');
+        inParagraph = false;
+      }
+      processedLines.push('');
+    } else if (isHtmlTag) {
+      if (inParagraph) {
+        processedLines.push('</p>');
+        inParagraph = false;
+      }
+      processedLines.push(line);
+    } else {
+      if (!inParagraph) {
+        processedLines.push('<p>');
+        inParagraph = true;
+      }
+      processedLines.push(line);
+    }
+  }
+  
+  if (inParagraph) {
+    processedLines.push('</p>');
+  }
+  
+  return processedLines.join('\n');
+}
+
+// 生成 HTML 头部和样式
+function generateHtmlHead(title: string, siteTitle: string): string {
   return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${title} - Aitu 用户手册</title>
+  <title>${title} - ${siteTitle}</title>
   <style>
     :root {
       --primary-color: #F39C12;
       --secondary-color: #5A4FCF;
+      --accent-color: #E91E63;
       --text-color: #333;
       --bg-color: #fff;
       --border-color: #e0e0e0;
       --code-bg: #f5f5f5;
+      --tip-bg: #e8f5e9;
+      --tip-border: #4caf50;
+      --note-bg: #e3f2fd;
+      --note-border: #2196f3;
     }
     
     * {
@@ -198,46 +203,31 @@ function generateHtmlHead(title: string): string {
     }
     
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      line-height: 1.6;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.7;
       color: var(--text-color);
       background: var(--bg-color);
-    }
-    
-    .container {
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 2rem;
-    }
-    
-    .header {
-      text-align: center;
-      margin-bottom: 3rem;
-      padding-bottom: 2rem;
-      border-bottom: 2px solid var(--primary-color);
-    }
-    
-    .header h1 {
-      font-size: 2.5rem;
-      color: var(--primary-color);
-      margin-bottom: 0.5rem;
-    }
-    
-    .header .version {
-      color: #666;
-      font-size: 0.9rem;
     }
     
     .sidebar {
       position: fixed;
       left: 0;
       top: 0;
-      width: 250px;
+      width: 280px;
       height: 100vh;
       background: #fafafa;
       border-right: 1px solid var(--border-color);
-      padding: 2rem 1rem;
+      padding: 1.5rem;
       overflow-y: auto;
+    }
+    
+    .sidebar-header {
+      font-size: 1.25rem;
+      font-weight: bold;
+      color: var(--primary-color);
+      margin-bottom: 1.5rem;
+      padding-bottom: 1rem;
+      border-bottom: 2px solid var(--primary-color);
     }
     
     .sidebar-nav {
@@ -245,95 +235,160 @@ function generateHtmlHead(title: string): string {
     }
     
     .sidebar-nav li {
-      margin-bottom: 0.5rem;
+      margin-bottom: 0.25rem;
     }
     
     .sidebar-nav a {
       color: var(--text-color);
       text-decoration: none;
       display: block;
-      padding: 0.5rem;
-      border-radius: 4px;
-      transition: background 0.2s;
+      padding: 0.5rem 0.75rem;
+      border-radius: 6px;
+      transition: all 0.2s;
+      font-size: 0.9rem;
     }
     
     .sidebar-nav a:hover {
       background: #eee;
+      color: var(--primary-color);
+    }
+    
+    .sidebar-nav a.active {
+      background: var(--primary-color);
+      color: white;
     }
     
     .sidebar-nav .category {
-      font-weight: bold;
+      font-weight: 600;
       color: var(--secondary-color);
-      margin-top: 1rem;
+      margin-top: 1.25rem;
       margin-bottom: 0.5rem;
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
     
     .main-content {
-      margin-left: 270px;
-      padding: 2rem;
+      margin-left: 300px;
+      padding: 2rem 3rem;
+      max-width: 900px;
     }
     
-    .page-section {
-      margin-bottom: 3rem;
-      padding-bottom: 2rem;
+    h1 {
+      font-size: 2rem;
+      color: var(--secondary-color);
+      margin-bottom: 1.5rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 2px solid var(--primary-color);
+    }
+    
+    h2 {
+      font-size: 1.5rem;
+      color: var(--secondary-color);
+      margin-top: 2.5rem;
+      margin-bottom: 1rem;
+    }
+    
+    h3 {
+      font-size: 1.2rem;
+      color: #444;
+      margin-top: 2rem;
+      margin-bottom: 0.75rem;
+    }
+    
+    p {
+      margin-bottom: 1rem;
+    }
+    
+    ul, ol {
+      margin-bottom: 1rem;
+      padding-left: 1.5rem;
+    }
+    
+    li {
+      margin-bottom: 0.5rem;
+    }
+    
+    code {
+      background: var(--code-bg);
+      padding: 0.2rem 0.4rem;
+      border-radius: 4px;
+      font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+      font-size: 0.9em;
+    }
+    
+    pre {
+      background: #1e1e1e;
+      color: #d4d4d4;
+      padding: 1rem;
+      border-radius: 8px;
+      overflow-x: auto;
+      margin-bottom: 1rem;
+    }
+    
+    pre code {
+      background: transparent;
+      padding: 0;
+      color: inherit;
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 1.5rem;
+    }
+    
+    th, td {
+      padding: 0.75rem;
+      text-align: left;
       border-bottom: 1px solid var(--border-color);
     }
     
-    .page-section h2 {
-      color: var(--secondary-color);
-      margin-bottom: 1rem;
-    }
-    
-    .page-section p {
-      margin-bottom: 1rem;
-    }
-    
-    .steps {
-      counter-reset: step;
-    }
-    
-    .step {
-      display: flex;
-      gap: 1.5rem;
-      margin-bottom: 2rem;
-      padding: 1rem;
-      background: #fafafa;
-      border-radius: 8px;
-    }
-    
-    .step-number {
-      flex-shrink: 0;
-      width: 32px;
-      height: 32px;
-      background: var(--primary-color);
-      color: white;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: bold;
-    }
-    
-    .step-content {
-      flex: 1;
-    }
-    
-    .step-content h4 {
-      margin-bottom: 0.5rem;
+    th {
+      background: #f5f5f5;
+      font-weight: 600;
     }
     
     .step-screenshot {
       max-width: 100%;
       border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-      margin-top: 1rem;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      margin: 1.5rem 0;
+      border: 1px solid var(--border-color);
+    }
+    
+    .tip {
+      background: var(--tip-bg);
+      border-left: 4px solid var(--tip-border);
+      padding: 1rem 1.25rem;
+      margin: 1.5rem 0;
+      border-radius: 0 8px 8px 0;
+    }
+    
+    .note {
+      background: var(--note-bg);
+      border-left: 4px solid var(--note-border);
+      padding: 1rem 1.25rem;
+      margin: 1.5rem 0;
+      border-radius: 0 8px 8px 0;
     }
     
     .footer {
+      margin-top: 4rem;
+      padding-top: 2rem;
+      border-top: 1px solid var(--border-color);
       text-align: center;
-      padding: 2rem;
       color: #666;
       font-size: 0.9rem;
+    }
+    
+    a {
+      color: var(--secondary-color);
+      text-decoration: none;
+    }
+    
+    a:hover {
+      text-decoration: underline;
     }
     
     @media (max-width: 768px) {
@@ -342,6 +397,7 @@ function generateHtmlHead(title: string): string {
       }
       .main-content {
         margin-left: 0;
+        padding: 1rem;
       }
     }
   </style>
@@ -349,35 +405,53 @@ function generateHtmlHead(title: string): string {
 }
 
 // 生成侧边栏导航
-function generateSidebar(pages: ManualPage[]): string {
+function generateSidebar(pages: Page[], config: Config, currentSlug: string): string {
   // 按分类组织页面
-  const byCategory = new Map<string, ManualPage[]>();
+  const byCategory = new Map<string, Page[]>();
+  let indexPage: Page | null = null;
   
   for (const page of pages) {
-    const category = page.category || 'advanced';
+    if (page.slug === 'index') {
+      indexPage = page;
+      continue;
+    }
+    const category = page.meta.category || 'advanced';
     if (!byCategory.has(category)) {
       byCategory.set(category, []);
     }
     byCategory.get(category)!.push(page);
   }
   
-  // 按分类顺序排序
+  // 按分类顺序和页面顺序排序
   const sortedCategories = Array.from(byCategory.entries())
     .sort((a, b) => {
-      const orderA = CATEGORIES[a[0]]?.order || 999;
-      const orderB = CATEGORIES[b[0]]?.order || 999;
+      const orderA = config.categories[a[0]]?.order || 999;
+      const orderB = config.categories[b[0]]?.order || 999;
       return orderA - orderB;
     });
   
-  let html = '<nav class="sidebar">\n<ul class="sidebar-nav">\n';
-  html += '<li><a href="index.html"><strong>首页</strong></a></li>\n';
+  for (const [, categoryPages] of sortedCategories) {
+    categoryPages.sort((a, b) => (a.meta.order || 0) - (b.meta.order || 0));
+  }
   
+  let html = '<nav class="sidebar">\n';
+  html += `<div class="sidebar-header">🎨 ${config.site.title}</div>\n`;
+  html += '<ul class="sidebar-nav">\n';
+  
+  // 首页链接
+  if (indexPage) {
+    const isActive = currentSlug === 'index' ? ' class="active"' : '';
+    html += `<li><a href="index.html"${isActive}><strong>首页</strong></a></li>\n`;
+  }
+  
+  // 分类和页面
   for (const [categoryId, categoryPages] of sortedCategories) {
-    const categoryName = CATEGORIES[categoryId]?.name || categoryId;
+    const categoryName = config.categories[categoryId]?.name || categoryId;
     html += `<li class="category">${categoryName}</li>\n`;
     
     for (const page of categoryPages) {
-      html += `<li><a href="${page.id}.html">${page.title}</a></li>\n`;
+      const isActive = currentSlug === page.slug ? ' class="active"' : '';
+      html += `<li><a href="${page.slug}.html"${isActive}>${page.meta.title}</a></li>\n`;
     }
   }
   
@@ -386,202 +460,239 @@ function generateSidebar(pages: ManualPage[]): string {
 }
 
 // 生成单个页面
-function generatePage(page: ManualPage, allPages: ManualPage[], version: string): string {
-  let html = generateHtmlHead(page.title);
+function generatePage(page: Page, allPages: Page[], config: Config, version: string): string {
+  let html = generateHtmlHead(page.meta.title, config.site.title);
   
   html += `
 <body>
-${generateSidebar(allPages)}
+${generateSidebar(allPages, config, page.slug)}
 <main class="main-content">
-  <article class="page-section">
-    <h2>${page.title}</h2>
-    ${page.description ? `<p>${page.description}</p>` : ''}
-    
-    <div class="steps">
-`;
-
-  for (const step of page.steps) {
-    html += `
-      <div class="step">
-        <div class="step-number">${step.order}</div>
-        <div class="step-content">
-          <h4>${step.title}</h4>
-          <p>${step.description}</p>
-          ${step.screenshot ? `<img class="step-screenshot" src="screenshots/${path.basename(step.screenshot)}" alt="${step.title}">` : ''}
-        </div>
-      </div>
-`;
-  }
-
-  html += `
-    </div>
+  <article>
+    ${page.html}
   </article>
+  
+  <footer class="footer">
+    <p>${config.site.title} v${version}</p>
+    <p>生成时间: ${new Date().toLocaleString('zh-CN')}</p>
+  </footer>
 </main>
-
-<footer class="footer">
-  <p>Aitu 用户手册 v${version} | 由 E2E 测试自动生成</p>
-  <p>生成时间: ${new Date().toLocaleString('zh-CN')}</p>
-</footer>
 </body>
 </html>`;
 
   return html;
 }
 
-// 生成首页
-function generateIndex(pages: ManualPage[], version: string): string {
-  let html = generateHtmlHead('首页');
-  
-  html += `
-<body>
-${generateSidebar(pages)}
-<main class="main-content">
-  <div class="header">
-    <h1>🎨 Aitu 用户手册</h1>
-    <p class="version">版本 ${version}</p>
-  </div>
-  
-  <section class="page-section">
-    <h2>欢迎使用 Aitu</h2>
-    <p>Aitu (爱图) 是一个基于 Plait 框架构建的开源白板应用，支持思维导图、流程图、自由绘画、图片插入，以及 AI 驱动的内容生成。</p>
-    
-    <h3>主要功能</h3>
-    <ul>
-      <li><strong>绘图工具</strong> - 画笔、形状、文本等基础绘图功能</li>
-      <li><strong>AI 生成</strong> - 通过 AI 生成图片和视频</li>
-      <li><strong>思维导图</strong> - 快速创建和编辑思维导图</li>
-      <li><strong>素材库</strong> - 管理和使用素材资源</li>
-      <li><strong>项目管理</strong> - 管理多个画板项目</li>
-    </ul>
-  </section>
-  
-  <section class="page-section">
-    <h2>目录</h2>
-`;
-
-  // 按分类显示页面链接
-  const byCategory = new Map<string, ManualPage[]>();
-  for (const page of pages) {
-    const category = page.category || 'advanced';
-    if (!byCategory.has(category)) {
-      byCategory.set(category, []);
-    }
-    byCategory.get(category)!.push(page);
+// 复制截图文件
+function copyScreenshots(sourceDir: string, outputDir: string): number {
+  if (!fs.existsSync(sourceDir)) {
+    console.log(`⚠️  截图源目录不存在: ${sourceDir}`);
+    return 0;
   }
   
-  const sortedCategories = Array.from(byCategory.entries())
-    .sort((a, b) => {
-      const orderA = CATEGORIES[a[0]]?.order || 999;
-      const orderB = CATEGORIES[b[0]]?.order || 999;
-      return orderA - orderB;
-    });
-  
-  for (const [categoryId, categoryPages] of sortedCategories) {
-    const categoryName = CATEGORIES[categoryId]?.name || categoryId;
-    html += `<h3>${categoryName}</h3>\n<ul>\n`;
-    
-    for (const page of categoryPages) {
-      html += `<li><a href="${page.id}.html">${page.title}</a>${page.description ? ` - ${page.description}` : ''}</li>\n`;
-    }
-    
-    html += '</ul>\n';
+  if (!fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir, { recursive: true });
   }
+  
+  const files = fs.readdirSync(sourceDir);
+  let copied = 0;
+  
+  for (const file of files) {
+    if (file.endsWith('.png') || file.endsWith('.jpg') || file.endsWith('.jpeg')) {
+      const sourcePath = path.join(sourceDir, file);
+      // 从文件名提取 ID（去掉哈希后缀）
+      let targetName = file;
+      // 处理带哈希的文件名，如 "ai-step-0-abc123.png" -> "ai-step-0.png"
+      const hashMatch = file.match(/^(.+)-[a-f0-9]{8,}\.png$/);
+      if (hashMatch) {
+        targetName = `${hashMatch[1]}.png`;
+      }
+      const targetPath = path.join(outputDir, targetName);
+      fs.copyFileSync(sourcePath, targetPath);
+      copied++;
+    }
+  }
+  
+  return copied;
+}
 
-  html += `
-  </section>
-</main>
+// 从 E2E 测试结果目录复制新截图
+function copyE2EScreenshots(outputDir: string): number {
+  const e2eScreenshotsDir = path.join(process.cwd(), 'apps', 'web-e2e', 'test-results', 'manual-screenshots');
+  
+  if (!fs.existsSync(e2eScreenshotsDir)) {
+    console.log(`ℹ️  E2E 截图目录不存在: ${e2eScreenshotsDir}`);
+    console.log(`   运行 'pnpm manual:screenshots' 生成截图`);
+    return 0;
+  }
+  
+  const copied = copyScreenshots(e2eScreenshotsDir, outputDir);
+  if (copied > 0) {
+    console.log(`📷 从 E2E 测试结果复制了 ${copied} 个截图`);
+  }
+  return copied;
+}
 
-<footer class="footer">
-  <p>Aitu 用户手册 v${version} | 由 E2E 测试自动生成</p>
-  <p>生成时间: ${new Date().toLocaleString('zh-CN')}</p>
-</footer>
-</body>
-</html>`;
-
-  return html;
+// 从 E2E 测试结果复制 GIF 文件
+function copyE2EGifs(outputDir: string): number {
+  const gifsOutputDir = path.join(outputDir, 'gifs');
+  const e2eTestResults = path.join(process.cwd(), 'apps', 'web-e2e', 'test-results');
+  
+  if (!fs.existsSync(e2eTestResults)) {
+    return 0;
+  }
+  
+  // 确保输出目录存在
+  if (!fs.existsSync(gifsOutputDir)) {
+    fs.mkdirSync(gifsOutputDir, { recursive: true });
+  }
+  
+  let copied = 0;
+  
+  // 递归查找所有 GIF 文件
+  function findGifs(dir: string) {
+    if (!fs.existsSync(dir)) return;
+    const items = fs.readdirSync(dir);
+    
+    for (const item of items) {
+      const fullPath = path.join(dir, item);
+      const stat = fs.statSync(fullPath);
+      
+      if (stat.isDirectory()) {
+        findGifs(fullPath);
+      } else if (item.endsWith('.gif')) {
+        // 从目录名提取有意义的文件名
+        const parentDir = path.basename(path.dirname(fullPath));
+        let targetName = item;
+        
+        // 如果是 E2E 生成的目录，提取测试名称作为文件名
+        if (parentDir.includes('manual-gen')) {
+          const match = parentDir.match(/GIF-动图录制-(.+?)-manual/);
+          if (match) {
+            targetName = match[1].replace(/[^a-zA-Z0-9\u4e00-\u9fa5-]/g, '-') + '.gif';
+          }
+        }
+        
+        const targetPath = path.join(gifsOutputDir, targetName);
+        fs.copyFileSync(fullPath, targetPath);
+        copied++;
+      }
+    }
+  }
+  
+  // 也检查 gifs 目录（如果 video-to-gif.js 已经生成了）
+  const gifsSourceDir = path.join(process.cwd(), 'apps', 'web', 'public', 'user-manual', 'gifs');
+  if (fs.existsSync(gifsSourceDir)) {
+    const files = fs.readdirSync(gifsSourceDir);
+    for (const file of files) {
+      if (file.endsWith('.gif')) {
+        const sourcePath = path.join(gifsSourceDir, file);
+        const targetPath = path.join(gifsOutputDir, file);
+        fs.copyFileSync(sourcePath, targetPath);
+        copied++;
+      }
+    }
+  }
+  
+  findGifs(e2eTestResults);
+  
+  if (copied > 0) {
+    console.log(`🎬 复制了 ${copied} 个 GIF 动图`);
+  }
+  return copied;
 }
 
 // 主函数
 async function main() {
-  const outputDir = path.join(process.cwd(), 'docs', 'user-manual');
-  const screenshotsDir = path.join(outputDir, 'screenshots');
-  const resultsPath = path.join(process.cwd(), 'apps', 'web-e2e', 'test-results', 'results.json');
+  const manualDir = path.join(process.cwd(), 'docs', 'user-manual');
+  const contentDir = path.join(manualDir, 'content');
+  const configPath = path.join(manualDir, 'config.yaml');
   
-  console.log('🔍 Reading test results...');
+  console.log('🔍 读取配置...');
+  
+  // 读取配置
+  if (!fs.existsSync(configPath)) {
+    console.error('❌ 配置文件不存在:', configPath);
+    process.exit(1);
+  }
+  
+  const config = readConfig(configPath);
+  const version = getVersion();
+  
+  // 解析输出目录路径
+  const outputDir = path.resolve(manualDir, config.output.dir);
+  const screenshotsOutputDir = path.join(outputDir, 'screenshots');
+  const screenshotsSourceDir = path.resolve(manualDir, config.screenshots.source);
   
   // 确保输出目录存在
   if (!fs.existsSync(outputDir)) {
     fs.mkdirSync(outputDir, { recursive: true });
   }
-  if (!fs.existsSync(screenshotsDir)) {
-    fs.mkdirSync(screenshotsDir, { recursive: true });
+  
+  console.log(`📦 版本: ${version}`);
+  console.log(`📁 内容目录: ${contentDir}`);
+  console.log(`📁 输出目录: ${outputDir}`);
+  
+  // 查找所有 MDX 文件
+  const mdxFiles = await glob('**/*.mdx', { cwd: contentDir });
+  console.log(`📄 找到 ${mdxFiles.length} 个 MDX 文件`);
+  
+  if (mdxFiles.length === 0) {
+    console.error('❌ 没有找到 MDX 文件');
+    process.exit(1);
   }
   
-  // 读取测试结果
-  let pages: ManualPage[] = [];
+  // 解析所有页面
+  const pages: Page[] = [];
   
-  if (fs.existsSync(resultsPath)) {
-    const results = readTestResults(resultsPath);
-    pages = extractManualTests(results);
-    console.log(`📊 Found ${pages.length} manual test cases`);
-  } else {
-    console.log('⚠️  No test results found, generating template manual...');
+  for (const mdxFile of mdxFiles) {
+    const filePath = path.join(contentDir, mdxFile);
+    const fileContent = fs.readFileSync(filePath, 'utf-8');
     
-    // 生成模板页面
-    pages = [
-      {
-        id: 'getting-started',
-        category: 'getting-started',
-        title: '快速开始',
-        description: '了解如何快速上手 Aitu',
-        steps: [
-          { order: 1, title: '打开应用', description: '访问 opentu.ai 打开 Aitu 应用' },
-          { order: 2, title: '选择工具', description: '从左侧工具栏选择需要的绘图工具' },
-          { order: 3, title: '开始创作', description: '在画布上开始您的创作' },
-        ],
-        screenshots: [],
-      },
-      {
-        id: 'ai-generation',
-        category: 'ai-generation',
-        title: 'AI 图片生成',
-        description: '使用 AI 生成图片',
-        steps: [
-          { order: 1, title: '输入提示词', description: '在底部输入框中输入您想要生成的图片描述' },
-          { order: 2, title: '选择模型', description: '点击 # 选择合适的生成模型' },
-          { order: 3, title: '发送请求', description: '点击发送按钮或按回车键开始生成' },
-        ],
-        screenshots: [],
-      },
-    ];
+    // 解析 frontmatter
+    const { data, content } = matter(fileContent);
+    const meta = data as PageMeta;
+    
+    // 生成 slug
+    const slug = mdxFile
+      .replace(/\.mdx$/, '')
+      .replace(/\//g, '-')
+      .replace(/^-/, '');
+    
+    // 转换 Markdown 为 HTML
+    const html = markdownToHtml(content, screenshotsOutputDir);
+    
+    pages.push({
+      slug: slug === 'index' ? 'index' : slug,
+      filePath,
+      meta,
+      content,
+      html,
+    });
   }
   
-  // 获取版本号
-  const version = getVersion();
-  console.log(`📦 Version: ${version}`);
-  
-  // 生成首页
-  const indexHtml = generateIndex(pages, version);
-  fs.writeFileSync(path.join(outputDir, 'index.html'), indexHtml);
-  console.log('✅ Generated index.html');
-  
-  // 生成各个页面
+  // 生成 HTML 文件
   for (const page of pages) {
-    const pageHtml = generatePage(page, pages, version);
-    fs.writeFileSync(path.join(outputDir, `${page.id}.html`), pageHtml);
-    console.log(`✅ Generated ${page.id}.html`);
-    
-    // 复制截图
-    for (const screenshot of page.screenshots) {
-      if (fs.existsSync(screenshot)) {
-        const destPath = path.join(screenshotsDir, path.basename(screenshot));
-        fs.copyFileSync(screenshot, destPath);
-      }
-    }
+    const pageHtml = generatePage(page, pages, config, version);
+    const outputPath = path.join(outputDir, `${page.slug}.html`);
+    fs.writeFileSync(outputPath, pageHtml);
+    console.log(`✅ 生成: ${page.slug}.html`);
   }
   
-  console.log(`\n🎉 User manual generated at: ${outputDir}`);
-  console.log(`📄 Total pages: ${pages.length + 1}`);
+  // 先从 E2E 测试结果复制新截图（如果存在）
+  const e2eCopied = copyE2EScreenshots(screenshotsOutputDir);
+  
+  // 再从配置的源目录复制（可能有一些非 E2E 生成的截图）
+  const sourceCopied = copyScreenshots(screenshotsSourceDir, screenshotsOutputDir);
+  if (sourceCopied > 0) {
+    console.log(`📷 从源目录复制了 ${sourceCopied} 个截图`);
+  }
+  
+  // 复制 GIF 动图
+  copyE2EGifs(outputDir);
+  
+  console.log(`\n🎉 用户手册生成完成！`);
+  console.log(`📁 输出目录: ${outputDir}`);
+  console.log(`📄 共 ${pages.length} 个页面`);
 }
 
 main().catch(console.error);

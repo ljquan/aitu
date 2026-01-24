@@ -97,6 +97,17 @@ export default defineConfig({
       testMatch: '**/manual-gen/**/*.spec.ts',
       use: { ...devices['Desktop Chrome'] },
     },
+    
+    // 手册视频录制 - 用于生成 GIF
+    {
+      name: 'manual-video',
+      testMatch: '**/manual-gen/**/*.spec.ts',
+      use: { 
+        ...devices['Desktop Chrome'],
+        video: 'on',
+        viewport: { width: 1280, height: 720 },
+      },
+    },
 
     // Uncomment for mobile browsers support
     /* {

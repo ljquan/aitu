@@ -56,6 +56,31 @@ export class DrawnixApp {
     backupRestore: Locator;
   };
   
+  // 聊天抽屉
+  readonly chatDrawer: {
+    container: Locator;
+    trigger: Locator;
+    header: Locator;
+    messageList: Locator;
+    input: Locator;
+    sessionList: Locator;
+  };
+  
+  // 任务队列面板
+  readonly taskQueue: {
+    panel: Locator;
+    tabs: Locator;
+    list: Locator;
+    searchInput: Locator;
+    typeFilters: Locator;
+  };
+  
+  // 素材库网格
+  readonly mediaLibraryGrid: Locator;
+  
+  // 图片编辑器
+  readonly imageEditor: Locator;
+  
   // 弹出工具栏
   readonly popupToolbar: Locator;
   
@@ -69,40 +94,46 @@ export class DrawnixApp {
     this.container = page.locator('.drawnix');
     this.canvas = page.locator('.board-host-svg');
     
-    // 工具栏
+    // 工具栏（使用 CSS 类定位，因为工具按钮没有 data-testid）
+    const toolbarContainer = page.locator('.unified-toolbar');
     this.toolbar = {
-      container: page.locator('[data-testid="unified-toolbar"]'),
-      hand: page.locator('[data-testid="toolbar-hand"]'),
-      select: page.locator('[data-testid="toolbar-select"]'),
-      pencil: page.locator('[data-testid="toolbar-pencil"]'),
-      pen: page.locator('[data-testid="toolbar-pen"]'),
-      eraser: page.locator('[data-testid="toolbar-eraser"]'),
-      shape: page.locator('[data-testid="toolbar-shape"]'),
-      text: page.locator('[data-testid="toolbar-text"]'),
-      mindmap: page.locator('[data-testid="toolbar-mindmap"]'),
+      container: toolbarContainer,
+      // 工具按钮使用 data-track 或 aria-label 定位
+      hand: toolbarContainer.locator('[data-track="toolbar_click_hand"]'),
+      select: toolbarContainer.locator('[data-track="toolbar_click_selection"]'),
+      pencil: toolbarContainer.locator('[data-track="toolbar_click_freehand"]'),
+      pen: toolbarContainer.locator('[data-track="toolbar_click_pen"]'),
+      eraser: toolbarContainer.locator('[data-track="toolbar_click_eraser"]'),
+      shape: toolbarContainer.locator('[data-track="toolbar_click_geometry"]'),
+      text: toolbarContainer.locator('[data-track="toolbar_click_text"]'),
+      mindmap: toolbarContainer.locator('[data-track="toolbar_click_mind"]'),
+      // 底部按钮使用 data-testid 或 data-track
       project: page.locator('[data-testid="toolbar-project"]'),
       toolbox: page.locator('[data-testid="toolbar-toolbox"]'),
-      mediaLibrary: page.locator('[data-testid="toolbar-media-library"]'),
-      settings: page.locator('[data-testid="toolbar-settings"]'),
+      mediaLibrary: page.locator('[data-track="quick_toolbar_click_media_library"]'),
+      settings: page.locator('[data-track="app_menu_item_settings"]'),
     };
     
     // AI 输入栏
+    const aiInputBarContainer = page.locator('[data-testid="ai-input-bar"]');
     this.aiInputBar = {
-      container: page.locator('[data-testid="ai-input-bar"]'),
+      container: aiInputBarContainer,
       textarea: page.locator('[data-testid="ai-input-textarea"]'),
       sendBtn: page.locator('[data-testid="ai-send-btn"]'),
-      modelSelector: page.locator('[data-testid="model-selector"]'),
-      sizeSelector: page.locator('[data-testid="size-selector"]'),
-      historyBtn: page.locator('[data-testid="prompt-history-btn"]'),
+      // 模型和尺寸选择器使用 CSS 类定位
+      modelSelector: aiInputBarContainer.locator('.model-dropdown-trigger'),
+      sizeSelector: aiInputBarContainer.locator('.size-selector'),
+      historyBtn: aiInputBarContainer.locator('.prompt-history-btn'),
     };
     
     // 视图导航
+    const viewNavContainer = page.locator('[data-testid="view-navigation"]');
     this.viewNavigation = {
-      container: page.locator('[data-testid="view-navigation"]'),
+      container: viewNavContainer,
       zoomIn: page.locator('[data-testid="zoom-in"]'),
       zoomOut: page.locator('[data-testid="zoom-out"]'),
       zoomDisplay: page.locator('[data-testid="zoom-display"]'),
-      minimap: page.locator('[data-testid="minimap"]'),
+      minimap: viewNavContainer.locator('.view-navigation__minimap'),
     };
     
     // 对话框
@@ -113,6 +144,31 @@ export class DrawnixApp {
       mediaLibrary: page.locator('[data-testid="media-library-modal"]'),
       backupRestore: page.locator('[data-testid="backup-restore-dialog"]'),
     };
+    
+    // 聊天抽屉
+    this.chatDrawer = {
+      container: page.locator('[data-testid="chat-drawer"]'),
+      trigger: page.locator('.chat-drawer-trigger'),
+      header: page.locator('.chat-drawer__header'),
+      messageList: page.locator('.chat-drawer__content'),
+      input: page.locator('.chat-drawer__input'),
+      sessionList: page.locator('.session-list'),
+    };
+    
+    // 任务队列面板
+    this.taskQueue = {
+      panel: page.locator('[data-testid="task-queue-panel"]'),
+      tabs: page.locator('.task-queue-panel .t-tabs'),
+      list: page.locator('.task-queue-panel__list'),
+      searchInput: page.locator('.task-queue-panel__search-input'),
+      typeFilters: page.locator('.task-queue-panel__type-filters'),
+    };
+    
+    // 素材库网格
+    this.mediaLibraryGrid = page.locator('[data-testid="media-library-grid"]');
+    
+    // 图片编辑器
+    this.imageEditor = page.locator('[data-testid="image-editor"]');
     
     // 弹出工具栏
     this.popupToolbar = page.locator('[data-testid="popup-toolbar"]');
@@ -238,5 +294,163 @@ export class DrawnixApp {
    */
   async takeScreenshot(name: string) {
     await this.page.screenshot({ path: `test-results/screenshots/${name}.png` });
+  }
+
+  /**
+   * 打开聊天抽屉
+   */
+  async openChatDrawer() {
+    await this.chatDrawer.trigger.click();
+    await expect(this.chatDrawer.container).toHaveClass(/chat-drawer--open/);
+  }
+
+  /**
+   * 关闭聊天抽屉
+   */
+  async closeChatDrawer() {
+    const closeBtn = this.chatDrawer.container.locator('.chat-drawer__close-btn').first();
+    await closeBtn.click();
+    await expect(this.chatDrawer.container).not.toHaveClass(/chat-drawer--open/);
+  }
+
+  /**
+   * 打开任务队列面板
+   */
+  async openTaskQueue() {
+    // 任务队列通常在工具栏底部
+    const taskQueueBtn = this.page.locator('[data-testid="toolbar-task-queue"]');
+    if (await taskQueueBtn.isVisible()) {
+      await taskQueueBtn.click();
+      await expect(this.taskQueue.panel).toBeVisible();
+    }
+  }
+
+  /**
+   * 关闭任务队列面板
+   */
+  async closeTaskQueue() {
+    const closeBtn = this.taskQueue.panel.locator('.side-drawer__close-btn');
+    await closeBtn.click();
+    await expect(this.taskQueue.panel).not.toBeVisible();
+  }
+
+  /**
+   * 切换任务队列标签页
+   */
+  async switchTaskQueueTab(tab: 'all' | 'active' | 'completed' | 'failed') {
+    const tabMap = {
+      all: '全部',
+      active: '生成中',
+      completed: '已完成',
+      failed: '失败',
+    };
+    const tabItem = this.taskQueue.tabs.locator(`.t-tabs__nav-item:has-text("${tabMap[tab]}")`);
+    await tabItem.click();
+  }
+
+  /**
+   * 打开备份恢复对话框
+   */
+  async openBackupRestore() {
+    // 通常在设置菜单中
+    const settingsMenu = this.page.locator('.settings-dialog');
+    if (await settingsMenu.isVisible()) {
+      const backupBtn = settingsMenu.locator('button:has-text("备份")');
+      if (await backupBtn.isVisible()) {
+        await backupBtn.click();
+      }
+    }
+  }
+
+  /**
+   * 关闭对话框（通用方法）
+   */
+  async closeDialog(dialog: Locator) {
+    const closeBtn = dialog.locator('[data-testid="dialog-close"], .t-dialog__close');
+    if (await closeBtn.isVisible()) {
+      await closeBtn.click();
+    }
+  }
+
+  /**
+   * 触发元素的悬停状态
+   */
+  async triggerHoverState(locator: Locator) {
+    await locator.hover();
+    // 等待悬停效果生效
+    await this.page.waitForTimeout(100);
+  }
+
+  /**
+   * 等待动画完成
+   */
+  async waitForAnimation(duration = 300) {
+    await this.page.waitForTimeout(duration);
+  }
+
+  /**
+   * 等待组件稳定（无动画、无加载）
+   */
+  async waitForStable(timeout = 2000) {
+    await this.page.waitForLoadState('domcontentloaded');
+    await this.page.waitForTimeout(timeout);
+  }
+
+  /**
+   * 缩放画布
+   */
+  async zoomCanvas(level: 'in' | 'out' | number) {
+    if (level === 'in') {
+      await this.viewNavigation.zoomIn.click();
+    } else if (level === 'out') {
+      await this.viewNavigation.zoomOut.click();
+    } else {
+      // 点击缩放显示，输入具体数值
+      await this.viewNavigation.zoomDisplay.click();
+      // 假设有输入框
+      const zoomInput = this.page.locator('.zoom-input');
+      if (await zoomInput.isVisible()) {
+        await zoomInput.fill(String(level));
+        await zoomInput.press('Enter');
+      }
+    }
+  }
+
+  /**
+   * 在画布上绘制形状
+   */
+  async drawShape(type: 'rect' | 'ellipse' | 'line', x: number, y: number, width: number, height: number) {
+    // 先选择形状工具
+    await this.selectTool('shape');
+    await this.page.waitForTimeout(100);
+    
+    const box = await this.getCanvasBoundingBox();
+    if (box) {
+      await this.page.mouse.move(box.x + x, box.y + y);
+      await this.page.mouse.down();
+      await this.page.mouse.move(box.x + x + width, box.y + y + height);
+      await this.page.mouse.up();
+    }
+  }
+
+  /**
+   * 获取当前缩放比例
+   */
+  async getCurrentZoom(): Promise<string> {
+    return await this.viewNavigation.zoomDisplay.innerText();
+  }
+
+  /**
+   * 检查组件是否可见
+   */
+  async isComponentVisible(component: 'chatDrawer' | 'taskQueue' | 'projectDrawer' | 'toolboxDrawer' | 'mediaLibrary'): Promise<boolean> {
+    const componentMap = {
+      chatDrawer: this.chatDrawer.container,
+      taskQueue: this.taskQueue.panel,
+      projectDrawer: this.dialogs.projectDrawer,
+      toolboxDrawer: this.dialogs.toolboxDrawer,
+      mediaLibrary: this.dialogs.mediaLibrary,
+    };
+    return await componentMap[component].isVisible();
   }
 }

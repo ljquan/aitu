@@ -36,7 +36,7 @@ jobs:
       - run: npx nx affected -t test build --base=origin/develop --verbose
       - run: npx nx affected -t lint --exclude=drawnix --base=origin/develop --verbose
 
-      # PR 时仅运行冒烟测试（快速，约2分钟）
+      # PR 时运行冒烟测试（快速，约2分钟）
       - name: Run Smoke Tests
         run: pnpm run e2e:smoke
         
@@ -46,6 +46,17 @@ jobs:
         with:
           name: smoke-test-results
           path: apps/web-e2e/test-results/
+
+      # PR 时运行视觉回归测试
+      - name: Run Visual Regression Tests
+        run: pnpm run e2e:visual
+        
+      - name: Upload Visual Test Report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-diff-report
+          path: apps/web-e2e/playwright-report/
 
       - name: Check Bundle Size
         if: always()

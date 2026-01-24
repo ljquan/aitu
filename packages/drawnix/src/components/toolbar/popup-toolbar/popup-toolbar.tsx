@@ -463,6 +463,7 @@ export const PopupToolbar = () => {
             (toolbarRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
           }}
           style={floatingStyles}
+          data-testid="popup-toolbar"
         >
           <Stack.Row gap={1}>
             {state.hasFontColor && (

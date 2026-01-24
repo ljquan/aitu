@@ -669,6 +669,7 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
         resizable={true}
         minWidth={320}
         maxWidth={1024}
+        data-testid="task-queue-panel"
       >
         {isCharacterView ? (
           /* Character List View */
