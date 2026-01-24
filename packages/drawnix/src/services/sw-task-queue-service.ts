@@ -284,7 +284,7 @@ class SWTaskQueueService {
     swTaskQueueClient.setTaskHandlers({
       onCreated: (swTask) => this.handleSWTaskCreated(swTask),
       onStatus: (taskId, status, progress, phase) => this.handleSWStatus(taskId, status, progress, phase),
-      onCompleted: (taskId, result) => this.handleSWCompleted(taskId, result),
+      onCompleted: (taskId, result, remoteId) => this.handleSWCompleted(taskId, result, remoteId),
       onFailed: (taskId, error) => this.handleSWFailed(taskId, error),
       onSubmitted: (taskId, remoteId) => this.handleSWSubmitted(taskId, remoteId),
       onCancelled: (taskId) => this.handleSWCancelled(taskId),
@@ -383,19 +383,24 @@ class SWTaskQueueService {
     this.updateTaskStatus(taskId, status, updates);
   }
 
-  private handleSWCompleted(taskId: string, result: TaskResult): void {
-    // console.log(`[SWTaskQueueService] handleSWCompleted called for task ${taskId}, result:`, result);
+  private handleSWCompleted(taskId: string, result: TaskResult, remoteId?: string): void {
     const task = this.tasks.get(taskId);
     if (!task) {
       console.warn(`[SWTaskQueueService] Task ${taskId} not found for completion`);
       return;
     }
 
-    // console.log(`[SWTaskQueueService] Task ${taskId} found, updating status to COMPLETED`);
+    // Recover remoteId if it was missing but now provided
+    const finalRemoteId = task.remoteId || remoteId;
+    if (remoteId && !task.remoteId) {
+      console.warn(`[SWTaskQueueService] Recovering missing remoteId for task ${taskId}: ${remoteId}`);
+    }
+
     this.updateTaskStatus(taskId, TaskStatus.COMPLETED, {
       result,
       progress: 100,
       completedAt: Date.now(),
+      remoteId: finalRemoteId,
     });
   }
 

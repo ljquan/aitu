@@ -314,6 +314,65 @@ const handleSubmit = async () => {
 - Use `useEffect` with complete dependency arrays
 - Hook order in components: state hooks → effect hooks → event handlers → render logic
 
+#### 多组件共享异步数据时使用 Context
+**场景**: 多个组件需要展示同一份异步获取的数据（如模型健康状态），各自调用同一个 hook 导致状态不同步
+
+❌ **错误示例**:
+```typescript
+// 错误：每个组件独立调用 hook，各自维护独立状态
+// ModelSelector.tsx - Trigger 中的徽章
+const ModelTrigger = () => {
+  const { getHealthStatus } = useModelHealth(); // 独立的 healthMap 状态
+  return <ModelHealthBadge modelId={modelId} />;
+};
+
+// ModelSelector.tsx - 下拉列表中的徽章
+const ModelOption = () => {
+  const { getHealthStatus } = useModelHealth(); // 另一个独立的 healthMap 状态
+  return <ModelHealthBadge modelId={modelId} />;
+};
+
+// useModelHealth.ts
+export const useModelHealth = () => {
+  const [healthMap, setHealthMap] = useState({}); // 每个调用者都有独立副本！
+  useEffect(() => { fetchData(); }, []);
+  return { getHealthStatus: (id) => healthMap[id] };
+};
+// 问题：两个组件的 healthMap 可能在不同时间更新，显示不一致
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：使用 Context 共享数据，所有组件使用同一份状态
+// ModelHealthContext.tsx
+const ModelHealthContext = createContext<ModelHealthContextType | null>(null);
+
+export const ModelHealthProvider: React.FC<PropsWithChildren> = ({ children }) => {
+  const [healthMap, setHealthMap] = useState({});
+  useEffect(() => { fetchData(); }, []);
+  
+  const value = useMemo(() => ({
+    getHealthStatus: (id) => healthMap[id],
+  }), [healthMap]);
+  
+  return <ModelHealthContext.Provider value={value}>{children}</ModelHealthContext.Provider>;
+};
+
+export const useModelHealthContext = () => {
+  const context = useContext(ModelHealthContext);
+  if (!context) throw new Error('useModelHealthContext must be used within ModelHealthProvider');
+  return context;
+};
+
+// 组件中使用
+const ModelHealthBadge = ({ modelId }) => {
+  const { getHealthStatus } = useModelHealthContext(); // 所有实例共享同一份数据
+  return <Badge status={getHealthStatus(modelId)} />;
+};
+```
+
+**原因**: 每个 `useState` 调用都会创建独立的状态副本。当多个组件各自调用同一个 hook 时，它们维护的是独立的状态，异步更新时机不同会导致 UI 显示不一致（如下拉框触发器和列表项显示不同的健康状态）。使用 Context 可以确保所有组件共享同一份数据。
+
 #### Force Refresh useMemo Pattern
 **场景**: 当 `useMemo` 依赖的对象引用没变，但对象内部状态已改变时（如 `board.children` 被修改）
 

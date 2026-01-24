@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Button, Tag, Tooltip, Checkbox } from 'tdesign-react';
-import { ImageIcon, VideoIcon, DeleteIcon, DownloadIcon, EditIcon, UserIcon, CheckCircleFilledIcon } from 'tdesign-icons-react';
+import { ImageIcon, VideoIcon, DeleteIcon, DownloadIcon, EditIcon, UserIcon, CheckCircleFilledIcon, PlayCircleIcon, CloseCircleIcon } from 'tdesign-icons-react';
 import { Task, TaskStatus, TaskType } from '../../types/task.types';
 import { formatDateTime, formatTaskDuration } from '../../utils/task-utils';
 import { useUnifiedCache } from '../../hooks/useUnifiedCache';
@@ -233,11 +233,17 @@ export const TaskItem: React.FC<TaskItemProps> = React.memo(({
         )}
 
       {/* 1. Preview Area - Visual entry point */}
-      {(isCompleted || task.status === TaskStatus.PROCESSING) && (mediaUrl || isCharacterTask || task.type === TaskType.VIDEO || task.type === TaskType.IMAGE) && (
+      {(isCompleted || isFailed || task.status === TaskStatus.PROCESSING) && (mediaUrl || isCharacterTask || task.type === TaskType.VIDEO || task.type === TaskType.IMAGE) && (
         <div className="task-item__preview-wrapper">
           <div className="task-item__preview" data-track="task_click_preview" onClick={onPreviewOpen}>
-            {/* 处理中状态：只显示进度覆盖层，不显示其他内容 */}
-            {task.status === TaskStatus.PROCESSING ? (
+            {/* 失败状态：显示失败占位图 */}
+            {isFailed ? (
+              <div className="task-item__preview-failed">
+                <CloseCircleIcon size="24px" />
+                <span>生成失败</span>
+              </div>
+            ) : task.status === TaskStatus.PROCESSING ? (
+              /* 处理中状态：只显示进度覆盖层，不显示其他内容 */
               <TaskProgressOverlay
                 key={task.startedAt} // 重试时 startedAt 变化，强制重新挂载以重置进度
                 taskType={task.type}
@@ -274,7 +280,13 @@ export const TaskItem: React.FC<TaskItemProps> = React.memo(({
                     />
                   </div>
                 ) : mediaUrl ? (
-                  <video src={mediaUrl} muted playsInline />
+                  <>
+                    <video src={mediaUrl} muted playsInline />
+                    {/* 视频播放按钮覆盖层 */}
+                    <div className="task-item__video-play-overlay">
+                      <PlayCircleIcon size="32px" />
+                    </div>
+                  </>
                 ) : (
                   <div className="task-item__preview-placeholder">
                     {task.type === TaskType.IMAGE ? <ImageIcon size="24px" /> : <VideoIcon size="24px" />}

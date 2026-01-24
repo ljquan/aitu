@@ -940,6 +940,8 @@ export class SWTaskQueue {
             taskId,
             remoteId,
           });
+        } else {
+          console.warn(`[SW:TaskQueue] onRemoteId: task ${taskId} not found in tasks map`);
         }
       },
     };
@@ -1052,6 +1054,7 @@ export class SWTaskQueue {
       taskId,
       result,
       completedAt: task.completedAt,
+      remoteId: task.remoteId, // Include remoteId for recovery
     });
 
     // Notify internal listeners

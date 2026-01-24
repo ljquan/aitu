@@ -33,7 +33,7 @@ const DEFAULT_SETTINGS: AppSettings = {
     baseUrl: 'https://api.tu-zi.com/v1',
     chatModel: 'gpt-5',
     imageModelName: 'gemini-3-pro-image-preview-vip',
-    videoModelName: 'veo3',
+    videoModelName: 'veo3.1',
     textModelName:  'deepseek-v3.2',
   },
 };

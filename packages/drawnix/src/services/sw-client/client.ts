@@ -715,9 +715,12 @@ export class SWTaskQueueClient {
           completedTask.status = 'completed' as TaskStatus;
           completedTask.result = message.result;
           completedTask.completedAt = message.completedAt;
+          if (message.remoteId) {
+            completedTask.remoteId = message.remoteId;
+          }
           this.updateLocalCache(completedTask);
         }
-        this.taskHandlers.onCompleted?.(message.taskId, message.result);
+        this.taskHandlers.onCompleted?.(message.taskId, message.result, message.remoteId);
         break;
       }
 

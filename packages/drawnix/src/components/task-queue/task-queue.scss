@@ -228,18 +228,7 @@
     background: rgba(243, 156, 18, 0.04);
   }
 
-  &--failed {
-    &::before {
-      content: '';
-      position: absolute;
-      left: 0;
-      top: 16px;
-      bottom: 16px;
-      width: 3px;
-      background-color: var(--td-error-color, #e34d59);
-      border-radius: 0 2px 2px 0;
-    }
-  }
+
 
   &--processing {
     .task-item__status-tag {
@@ -343,8 +332,6 @@
     height: 100%;
     border-radius: 8px;
     overflow: hidden;
-    background: var(--td-bg-color-secondarycontainer, #f3f3f3);
-    border: 1px solid var(--td-component-border, #e7e7e7);
     cursor: pointer;
     position: relative;
 
@@ -353,6 +340,14 @@
       height: 100%;
       object-fit: cover;
       display: block;
+      transition: transform 0.2s ease;
+    }
+
+    // 图片和视频的 hover 效果
+    &:hover {
+      img, video {
+        transform: scale(1.05);
+      }
     }
 
     &-placeholder {
@@ -366,6 +361,50 @@
       color: var(--td-text-color-placeholder, #999);
       font-size: 11px;
     }
+
+    &-failed {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      border-radius: 8px;
+      background: var(--td-bg-color-secondarycontainer, #f3f3f3);
+      border: 1px solid var(--td-component-border, #e7e7e7);
+      color: var(--td-text-color-placeholder, #bbb);
+      font-size: 10px;
+
+      .t-icon {
+        opacity: 0.5;
+        font-size: 18px;
+      }
+    }
+  }
+
+  &__video-play-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.15);
+    color: white;
+    opacity: 0.85;
+    transition: all 0.2s ease;
+
+    .t-icon {
+      filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.4));
+    }
+  }
+
+  &__preview:hover &__video-play-overlay {
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.25);
   }
 
   &__body {
