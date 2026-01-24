@@ -1,0 +1,130 @@
+/**
+ * TaskProgressOverlay Styles
+ *
+ * 任务进度覆盖层样式
+ * - 填充整个预览区域
+ * - 环形进度条 + 百分比（等比缩放）
+ * - 底部线性进度条
+ */
+
+.task-progress-overlay {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(90, 79, 207, 0.15) 0%, rgba(243, 156, 18, 0.1) 100%);
+  border-radius: inherit;
+  overflow: hidden;
+
+  // 背景层（装饰）
+  &__backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(128, 128, 128, 0.1);
+  }
+
+  // 进度内容容器（支持等比缩放）
+  &__content {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    z-index: 1;
+    transform-origin: center center;
+    transition: transform 0.15s ease-out;
+  }
+
+  // 环形进度条容器（固定基准尺寸）
+  &__ring {
+    position: relative;
+    width: 56px;
+    height: 56px;
+  }
+
+  &__ring-svg {
+    width: 100%;
+    height: 100%;
+    transform: rotate(-90deg);
+  }
+
+  &__ring-bg {
+    stroke: rgba(150, 150, 150, 0.3);
+  }
+
+  &__ring-progress {
+    stroke: #F39C12;
+    transition: stroke-dashoffset 0.3s ease;
+    filter: drop-shadow(0 0 4px rgba(243, 156, 18, 0.5));
+  }
+
+  // 百分比文字
+  &__percentage {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 13px;
+    font-weight: 600;
+    color: #333;
+    text-shadow: 0 1px 2px rgba(255, 255, 255, 0.5);
+  }
+
+  // 状态文字
+  &__status {
+    font-size: 11px;
+    color: rgba(80, 80, 80, 0.85);
+    text-align: center;
+    white-space: nowrap;
+    margin-top: 2px;
+  }
+
+  // 底部进度条
+  &__bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: rgba(150, 150, 150, 0.2);
+    z-index: 1;
+  }
+
+  &__bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #F39C12, #E67E22);
+    transition: width 0.3s ease;
+    box-shadow: 0 0 8px rgba(243, 156, 18, 0.5);
+  }
+}
+
+// 视频任务的特殊样式
+.task-progress-overlay--video {
+  background: linear-gradient(135deg, rgba(90, 79, 207, 0.15) 0%, rgba(123, 104, 238, 0.1) 100%);
+
+  .task-progress-overlay__ring-progress {
+    stroke: #5A4FCF;
+    filter: drop-shadow(0 0 4px rgba(90, 79, 207, 0.5));
+  }
+
+  .task-progress-overlay__bar-fill {
+    background: linear-gradient(90deg, #5A4FCF, #7B68EE);
+    box-shadow: 0 0 8px rgba(90, 79, 207, 0.5);
+  }
+}
+
+// 图片加载阶段的特殊样式
+.task-progress-overlay--loading {
+  .task-progress-overlay__ring-progress {
+    stroke: #00A870;
+    filter: drop-shadow(0 0 4px rgba(0, 168, 112, 0.5));
+  }
+
+  .task-progress-overlay__bar-fill {
+    background: linear-gradient(90deg, #00A870, #00C48C);
+    box-shadow: 0 0 8px rgba(0, 168, 112, 0.5);
+  }
+}
