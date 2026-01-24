@@ -382,6 +382,47 @@ const MyComponent: React.FC<Props> = ({
 
 **原因**: 在函数参数中使用 `= new Set()` 或 `= []` 作为默认值，每次组件渲染时都会创建新的对象引用。这会导致：1) 依赖该 prop 的 `useMemo`/`useEffect` 每次都重新执行；2) 使用 `@tanstack/react-virtual` 等库时可能触发无限渲染循环；3) 子组件的 `React.memo` 优化失效。
 
+#### Props 变化时重置组件内部状态
+**场景**: 组件内部有状态（如进度、计数器），当某个关键 prop 变化时需要重置这些状态（如重试功能）
+
+❌ **错误示例**:
+```typescript
+// 错误：startedAt 变化时，simulatedProgress 不会自动重置
+const ProgressOverlay: React.FC<Props> = ({ startedAt }) => {
+  const [simulatedProgress, setSimulatedProgress] = useState(0);
+  
+  useEffect(() => {
+    // startedAt 变化时 effect 会重新执行，但 simulatedProgress 保留旧值
+    const interval = setInterval(() => {
+      setSimulatedProgress(prev => prev + 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [startedAt]);
+  
+  return <div>{simulatedProgress}%</div>; // 重试时从旧进度继续，而非从 0 开始
+};
+
+// 父组件
+<ProgressOverlay startedAt={task.startedAt} />
+```
+
+✅ **正确示例**:
+```typescript
+// 方法 1（推荐）：使用 key 强制重新挂载组件
+<ProgressOverlay 
+  key={task.startedAt}  // startedAt 变化时组件重新挂载，状态自动重置
+  startedAt={task.startedAt} 
+/>
+
+// 方法 2：在 useEffect 中显式重置状态
+useEffect(() => {
+  setSimulatedProgress(0);  // 先重置
+  // ... 然后开始计算
+}, [startedAt]);
+```
+
+**原因**: React 组件的内部状态（useState）在 props 变化时不会自动重置，只有组件卸载并重新挂载时才会重置。对于需要在某个 prop 变化时"重新开始"的场景（如重试、切换数据源），使用 `key` prop 是最简洁可靠的方式。
+
 #### 事件处理中避免过早返回阻塞清理逻辑
 **场景**: 在 useEffect 订阅事件时，事件处理函数中有多个操作，部分操作依赖前置条件，部分操作（如清理 UI）不依赖
 
