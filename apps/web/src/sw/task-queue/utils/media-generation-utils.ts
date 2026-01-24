@@ -741,6 +741,110 @@ export async function blobToCompressedBase64(
 }
 
 /**
+ * 解析尺寸字符串
+ * @param sizeStr 尺寸字符串，格式为 'WIDTHxHEIGHT'，如 '1280x720'
+ * @returns 解析后的宽高对象，如果格式无效返回 null
+ */
+export function parseSize(sizeStr: string): { width: number; height: number } | null {
+  if (!sizeStr) return null;
+  const match = sizeStr.match(/^(\d+)x(\d+)$/);
+  if (!match) return null;
+  return {
+    width: parseInt(match[1], 10),
+    height: parseInt(match[2], 10),
+  };
+}
+
+/**
+ * 裁剪图片到目标宽高比（按最大面积从中心裁剪，不放大）
+ *
+ * 裁剪规则：
+ * 1. 基于参考图原始尺寸，裁剪出符合目标比例的最大面积区域
+ * 2. 从图片中心裁剪
+ * 3. 不进行放大，只裁剪
+ *
+ * @param blob 原始图片 Blob
+ * @param targetWidth 目标宽度（仅用于计算比例）
+ * @param targetHeight 目标高度（仅用于计算比例）
+ * @returns 裁剪后的 Blob
+ */
+export async function cropImageToAspectRatio(
+  blob: Blob,
+  targetWidth: number,
+  targetHeight: number
+): Promise<Blob> {
+  try {
+    const imageBitmap = await createImageBitmap(blob);
+    const { width: srcWidth, height: srcHeight } = imageBitmap;
+
+    // 计算目标宽高比
+    const targetRatio = targetWidth / targetHeight;
+    const srcRatio = srcWidth / srcHeight;
+
+    // 如果宽高比已经匹配（误差小于1%），无需裁剪
+    if (Math.abs(srcRatio - targetRatio) < 0.01) {
+      imageBitmap.close();
+      return blob;
+    }
+
+    let cropWidth: number;
+    let cropHeight: number;
+
+    // 计算最大面积的裁剪区域
+    // 方案1：以原图宽度为基准，计算对应的高度
+    const heightIfUseFullWidth = srcWidth / targetRatio;
+    // 方案2：以原图高度为基准，计算对应的宽度
+    const widthIfUseFullHeight = srcHeight * targetRatio;
+
+    if (heightIfUseFullWidth <= srcHeight) {
+      // 方案1可行：使用原图全部宽度，裁剪高度
+      cropWidth = srcWidth;
+      cropHeight = Math.round(heightIfUseFullWidth);
+    } else {
+      // 方案1不可行（计算出的高度超出原图），使用方案2：使用原图全部高度，裁剪宽度
+      cropWidth = Math.round(widthIfUseFullHeight);
+      cropHeight = srcHeight;
+    }
+
+    // 从中心裁剪：计算裁剪起点
+    const cropX = Math.round((srcWidth - cropWidth) / 2);
+    const cropY = Math.round((srcHeight - cropHeight) / 2);
+
+    // 创建 OffscreenCanvas 进行裁剪
+    const canvas = new OffscreenCanvas(cropWidth, cropHeight);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      console.warn('[MediaUtils] Failed to get 2d context for cropping');
+      imageBitmap.close();
+      return blob;
+    }
+
+    // 绘制裁剪后的图片
+    ctx.drawImage(
+      imageBitmap,
+      cropX, cropY, cropWidth, cropHeight, // 源区域
+      0, 0, cropWidth, cropHeight // 目标区域
+    );
+    imageBitmap.close();
+
+    // 转换为 Blob（使用原始图片类型或默认 PNG）
+    const mimeType = blob.type || 'image/png';
+    const quality = mimeType === 'image/jpeg' ? 0.92 : undefined;
+    const croppedBlob = await canvas.convertToBlob({ type: mimeType, quality });
+
+    console.log(
+      `[MediaUtils] Cropped image from ${srcWidth}x${srcHeight} to ${cropWidth}x${cropHeight} ` +
+      `(target ratio: ${targetRatio.toFixed(3)}, crop offset: ${cropX},${cropY})`
+    );
+
+    return croppedBlob;
+  } catch (err) {
+    console.warn('[MediaUtils] Image cropping failed, returning original:', err);
+    return blob;
+  }
+}
+
+/**
  * 获取图片详细信息 (尺寸和大小)
  * @param urlOrBlob 图片 URL 或 Blob
  * @param signal 取消信号

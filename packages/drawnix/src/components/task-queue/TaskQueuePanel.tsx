@@ -771,9 +771,8 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
         }}
         onCreateComplete={(characterId) => {
           // console.log('Character created:', characterId);
-          // Close dialog and switch to character view after API succeeds
+          // Close dialog (don't auto-switch to character view)
           setCharacterDialogTask(null);
-          setTypeFilter('character');
         }}
       />
     </>

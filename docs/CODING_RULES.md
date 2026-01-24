@@ -4541,6 +4541,50 @@ const model = message.aiContext?.model || parseFallback(message.content);
 
 **原因**: 字符串解析极其脆弱，容易因文案微调、语言切换或历史数据格式不一而失效。结构化数据是唯一可靠的真相来源。
 
+#### 日志记录应反映实际发送的数据
+
+**场景**: 在调用外部 API 前记录请求参数用于调试（如 `/sw-debug.html` 的 LLM API 日志），数据在发送前经过了处理（如图片裁剪、压缩）。
+
+❌ **错误示例**:
+```typescript
+// 错误：在数据处理前收集日志信息
+const referenceImageInfos = await Promise.all(
+  refUrls.map(url => getImageInfo(url))  // 获取原始图片信息
+);
+
+// 后续处理会改变图片
+for (const url of refUrls) {
+  let blob = await fetchImage(url);
+  blob = await cropImageToAspectRatio(blob, targetWidth, targetHeight);  // 裁剪
+  formData.append('input_reference', blob);
+}
+
+// 日志记录的是裁剪前的尺寸，与实际发送的不符！
+startLLMApiLog({ referenceImages: referenceImageInfos });
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：在数据处理后收集日志信息
+const referenceImageInfos: ImageInfo[] = [];
+
+for (const url of refUrls) {
+  let blob = await fetchImage(url);
+  blob = await cropImageToAspectRatio(blob, targetWidth, targetHeight);  // 裁剪
+  
+  // 获取处理后的图片信息用于日志
+  const info = await getImageInfo(blob);
+  referenceImageInfos.push(info);
+  
+  formData.append('input_reference', blob);
+}
+
+// 日志记录的是实际发送的数据
+startLLMApiLog({ referenceImages: referenceImageInfos });
+```
+
+**原因**: 调试日志的价值在于准确记录实际发送给 API 的数据。如果日志记录的是处理前的数据，当 API 返回错误（如"图片尺寸不匹配"）时，日志显示的尺寸与实际不符，会严重误导排查方向。
+
 #### 外部 API 调用频率控制
 
 **场景**: 调用外部服务的低频刷新接口（如每 5 分钟刷新一次的状态接口），多个组件可能同时触发请求。
