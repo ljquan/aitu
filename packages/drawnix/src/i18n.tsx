@@ -160,6 +160,15 @@ export interface Translations {
   'propertyPanel.fontSize': string;
   'propertyPanel.fontFamily': string;
   'propertyPanel.textColor': string;
+
+  // Alignment
+  'toolbar.alignment': string;
+
+  // Distribution
+  'toolbar.distribute': string;
+
+  // Boolean operations
+  'toolbar.boolean': string;
 }
 
 // Translation data
@@ -320,6 +329,15 @@ const translations: Record<Language, Translations> = {
     'propertyPanel.fontSize': '字号',
     'propertyPanel.fontFamily': '字体',
     'propertyPanel.textColor': '文字颜色',
+
+    // Alignment
+    'toolbar.alignment': '对齐',
+
+    // Distribution
+    'toolbar.distribute': '间距',
+
+    // Boolean operations
+    'toolbar.boolean': '组合',
   },
   en: {
     // Toolbar items
@@ -477,6 +495,15 @@ const translations: Record<Language, Translations> = {
     'propertyPanel.fontSize': 'Font Size',
     'propertyPanel.fontFamily': 'Font Family',
     'propertyPanel.textColor': 'Text Color',
+
+    // Alignment
+    'toolbar.alignment': 'Align',
+
+    // Distribution
+    'toolbar.distribute': 'Distribute',
+
+    // Boolean operations
+    'toolbar.boolean': 'Boolean',
   },
 };
 

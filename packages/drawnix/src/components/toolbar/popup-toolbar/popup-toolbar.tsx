@@ -55,6 +55,9 @@ import { getStrokeColorByElement as getStrokeColorByFreehandElement } from '../.
 import { PopupLinkButton } from './link-button';
 import { PopupPromptButton } from './prompt-button';
 import { PopupLayerControlButton } from './layer-control-button';
+import { PopupAlignmentButton } from './alignment-button';
+import { PopupDistributeButton } from './distribute-button';
+import { PopupBooleanButton } from './boolean-button';
 import { TextPropertyPanel } from './text-property-panel';
 import { AIImageIcon, AIVideoIcon, VideoFrameIcon, DuplicateIcon, TrashIcon, SplitImageIcon, DownloadIcon, MergeIcon, VideoMergeIcon } from '../../icons';
 import { Pencil } from 'lucide-react';
@@ -151,6 +154,9 @@ export const PopupToolbar = () => {
     cornerRadius?: number; // 当前圆角值
     hasSizeInput?: boolean; // 是否显示宽高输入
     isTextOnly?: boolean; // 是否只选中了纯文本元素
+    hasAlignment?: boolean; // 是否显示对齐按钮（多选时显示）
+    hasDistribute?: boolean; // 是否显示间距按钮（多选时显示）
+    hasBoolean?: boolean; // 是否显示布尔组合按钮（多选时显示）
   } = {
     fill: 'red',
   };
@@ -301,6 +307,24 @@ export const PopupToolbar = () => {
       !hasToolSelected &&
       !PlaitBoard.hasBeenTextEditing(board);
 
+    // 对齐按钮：选中多个元素时显示
+    const hasAlignment =
+      selectedElements.length > 1 &&
+      !PlaitBoard.hasBeenTextEditing(board);
+
+    // 间距按钮：选中多个元素时显示（等间距分布需要至少3个元素，但自动排列只需2个）
+    const hasDistribute =
+      selectedElements.length > 1 &&
+      !PlaitBoard.hasBeenTextEditing(board);
+
+    // 布尔组合按钮：选中多个闭合图形时显示（所有元素都必须支持布尔运算）
+    const hasBoolean =
+      selectedElements.length > 1 &&
+      !PlaitBoard.hasBeenTextEditing(board) &&
+      selectedElements.every((element) =>
+        supportsBooleanOperation(board, element)
+      );
+
     state = {
       ...getElementState(board),
       hasFill,
@@ -323,6 +347,9 @@ export const PopupToolbar = () => {
       hasCornerRadius,
       cornerRadius,
       hasSizeInput,
+      hasAlignment,
+      hasDistribute,
+      hasBoolean,
     };
   }
   useEffect(() => {
@@ -575,6 +602,30 @@ export const PopupToolbar = () => {
               key={'layer-control'}
               title={t('textEffect.layer')}
             />
+            {/* 对齐按钮 - 仅在多选时显示 */}
+            {state.hasAlignment && (
+              <PopupAlignmentButton
+                board={board}
+                key={'alignment'}
+                title={t('toolbar.alignment')}
+              />
+            )}
+            {/* 间距按钮 - 仅在多选时显示 */}
+            {state.hasDistribute && (
+              <PopupDistributeButton
+                board={board}
+                key={'distribute'}
+                title={t('toolbar.distribute')}
+              />
+            )}
+            {/* 布尔组合按钮 - 仅在多选时显示 */}
+            {state.hasBoolean && (
+              <PopupBooleanButton
+                board={board}
+                key={'boolean'}
+                title={t('toolbar.boolean')}
+              />
+            )}
             {/* 属性设置按钮 - 仅在选中包含文本的元素时显示 */}
             {state.hasText && (
               <ToolButton
@@ -1449,4 +1500,56 @@ export const getColorPropertyValue = (color: string) => {
   } else {
     return color;
   }
+};
+
+/**
+ * 检查元素是否支持布尔运算
+ * 支持的元素类型：
+ * - 闭合的 PenPath
+ * - 闭合的 Freehand
+ * - 闭合的 PlaitDrawElement 形状（不包括图片、文本、箭头线、矢量线）
+ */
+export const supportsBooleanOperation = (
+  board: PlaitBoard,
+  element: PlaitElement
+): boolean => {
+  // 闭合的钢笔路径
+  if (PenPath.isPenPath(element)) {
+    return element.closed;
+  }
+
+  // 闭合的手绘路径
+  if (Freehand.isFreehand(element)) {
+    const points = element.points;
+    if (!points || points.length < 3) return false;
+    // 检查是否闭合（首尾点接近）
+    const first = points[0];
+    const last = points[points.length - 1];
+    const distance = Math.hypot(last[0] - first[0], last[1] - first[1]);
+    return distance <= 10;
+  }
+
+  // PlaitDrawElement 形状元素
+  if (PlaitDrawElement.isDrawElement(element)) {
+    // 排除图片、文本、箭头线、矢量线
+    if (
+      PlaitDrawElement.isImage(element) ||
+      PlaitDrawElement.isText(element) ||
+      PlaitDrawElement.isArrowLine(element) ||
+      PlaitDrawElement.isVectorLine(element)
+    ) {
+      return false;
+    }
+    // 必须是闭合的形状
+    return (
+      PlaitDrawElement.isShapeElement(element) && isClosedDrawElement(element)
+    );
+  }
+
+  // 思维导图元素不支持布尔运算
+  if (MindElement.isMindElement(board, element)) {
+    return false;
+  }
+
+  return false;
 };

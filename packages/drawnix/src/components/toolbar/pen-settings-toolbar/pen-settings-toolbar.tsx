@@ -34,17 +34,17 @@ interface AnchorTypeOption {
 
 const ANCHOR_TYPES: AnchorTypeOption[] = [
   {
-    icon: AnchorCornerIcon,
+    icon: <AnchorCornerIcon />,
     type: 'corner',
     titleKey: 'toolbar.anchorCorner',
   },
   {
-    icon: AnchorSmoothIcon,
+    icon: <AnchorSmoothIcon />,
     type: 'smooth',
     titleKey: 'toolbar.anchorSmooth',
   },
   {
-    icon: AnchorSymmetricIcon,
+    icon: <AnchorSymmetricIcon />,
     type: 'symmetric',
     titleKey: 'toolbar.anchorSymmetric',
   },

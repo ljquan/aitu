@@ -13,6 +13,9 @@ import { MindPointerType } from '@plait/mind';
 import { FreehandShape } from './freehand/type';
 import { PenShape } from './pen/type';
 import { ArrowLineShape, BasicShapes } from '@plait/draw';
+import { AlignmentTransforms } from '../transforms/alignment';
+import { DistributeTransforms } from '../transforms/distribute';
+import { BooleanTransforms } from '../transforms/boolean';
 
 export const buildDrawnixHotkeyPlugin = (
   updateAppState: (appState: Partial<DrawnixState>) => void
@@ -52,9 +55,103 @@ export const buildDrawnixHotkeyPlugin = (
         if (isHotkey(['mod+u'])(event)) {
           addImage(board);
         }
+
+        // 对齐快捷键 (Alt/Option + 字母) - 仅在多选时生效
+        const selectedElements = getSelectedElements(board);
+        if (selectedElements.length > 1) {
+          // Alt+A: 左对齐
+          if (isHotkey(['alt+a'])(event)) {
+            AlignmentTransforms.alignLeft(board);
+            event.preventDefault();
+            return;
+          }
+          // Alt+H: 水平居中
+          if (isHotkey(['alt+h'])(event)) {
+            AlignmentTransforms.alignCenter(board);
+            event.preventDefault();
+            return;
+          }
+          // Alt+D: 右对齐
+          if (isHotkey(['alt+d'])(event)) {
+            AlignmentTransforms.alignRight(board);
+            event.preventDefault();
+            return;
+          }
+          // Alt+W: 顶部对齐
+          if (isHotkey(['alt+w'])(event)) {
+            AlignmentTransforms.alignTop(board);
+            event.preventDefault();
+            return;
+          }
+          // Alt+V: 垂直居中
+          if (isHotkey(['alt+v'])(event)) {
+            AlignmentTransforms.alignMiddle(board);
+            event.preventDefault();
+            return;
+          }
+          // Alt+S: 底部对齐
+          if (isHotkey(['alt+s'])(event)) {
+            AlignmentTransforms.alignBottom(board);
+            event.preventDefault();
+            return;
+          }
+
+          // 间距快捷键 (Shift + 字母) - 仅在多选时生效
+          // Shift+H: 水平间距
+          if (isHotkey(['shift+h'])(event)) {
+            DistributeTransforms.distributeHorizontal(board);
+            event.preventDefault();
+            return;
+          }
+          // Shift+V: 垂直间距
+          if (isHotkey(['shift+v'])(event)) {
+            DistributeTransforms.distributeVertical(board);
+            event.preventDefault();
+            return;
+          }
+          // Shift+A: 自动排列
+          if (isHotkey(['shift+a'])(event)) {
+            DistributeTransforms.autoArrange(board);
+            event.preventDefault();
+            return;
+          }
+
+          // 布尔运算快捷键 (Alt+Shift + 字母) - 仅在多选时生效
+          // Alt+Shift+U: 合并
+          if (isHotkey(['alt+shift+u'])(event)) {
+            BooleanTransforms.union(board, 'zh');
+            event.preventDefault();
+            return;
+          }
+          // Alt+Shift+S: 减去
+          if (isHotkey(['alt+shift+s'])(event)) {
+            BooleanTransforms.subtract(board, 'zh');
+            event.preventDefault();
+            return;
+          }
+          // Alt+Shift+I: 相交
+          if (isHotkey(['alt+shift+i'])(event)) {
+            BooleanTransforms.intersect(board, 'zh');
+            event.preventDefault();
+            return;
+          }
+          // Alt+Shift+E: 排除
+          if (isHotkey(['alt+shift+e'])(event)) {
+            BooleanTransforms.exclude(board, 'zh');
+            event.preventDefault();
+            return;
+          }
+          // Alt+Shift+F: 扁平化
+          if (isHotkey(['alt+shift+f'])(event)) {
+            BooleanTransforms.flatten(board, 'zh');
+            event.preventDefault();
+            return;
+          }
+        }
+
         // Note: 复制图片粘贴功能由 with-image.tsx 中的 insertFragment 方法处理
         // 不需要在这里手动处理 Ctrl+V，让 Plait 框架的原生粘贴机制工作
-        if (!event.altKey && !event.metaKey && !event.ctrlKey) {
+        if (!event.altKey && !event.metaKey && !event.ctrlKey && !event.shiftKey) {
           if (event.key === 'h') {
             BoardTransforms.updatePointerType(board, PlaitPointerType.hand);
             updateAppState({ pointer: PlaitPointerType.hand });

@@ -1285,3 +1285,187 @@ export const BookOpenIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: num
     <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
   </svg>
 );
+
+// 对齐图标 - 主图标（带下拉箭头）
+export const AlignmentIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 16, ...props }) => (
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg" width={size} height={size} {...props}>
+    <g strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="2" y1="2" x2="2" y2="14" />
+      <rect x="4" y="3" width="10" height="4" rx="0.5" fill="currentColor" opacity="0.3" />
+      <rect x="4" y="9" width="6" height="4" rx="0.5" fill="currentColor" opacity="0.3" />
+    </g>
+  </svg>
+);
+
+// 左对齐图标
+export const AlignLeftIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 16, ...props }) => (
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg" width={size} height={size} {...props}>
+    <g strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="2" y1="2" x2="2" y2="14" />
+      <rect x="4" y="3" width="10" height="4" rx="0.5" fill="currentColor" opacity="0.3" />
+      <rect x="4" y="9" width="6" height="4" rx="0.5" fill="currentColor" opacity="0.3" />
+    </g>
+  </svg>
+);
+
+// 水平居中图标
+export const AlignCenterIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 16, ...props }) => (
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg" width={size} height={size} {...props}>
+    <g strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="8" y1="2" x2="8" y2="14" />
+      <rect x="2" y="3" width="12" height="4" rx="0.5" fill="currentColor" opacity="0.3" />
+      <rect x="4" y="9" width="8" height="4" rx="0.5" fill="currentColor" opacity="0.3" />
+    </g>
+  </svg>
+);
+
+// 右对齐图标
+export const AlignRightIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 16, ...props }) => (
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg" width={size} height={size} {...props}>
+    <g strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="14" y1="2" x2="14" y2="14" />
+      <rect x="2" y="3" width="10" height="4" rx="0.5" fill="currentColor" opacity="0.3" />
+      <rect x="6" y="9" width="6" height="4" rx="0.5" fill="currentColor" opacity="0.3" />
+    </g>
+  </svg>
+);
+
+// 顶部对齐图标
+export const AlignTopIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 16, ...props }) => (
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg" width={size} height={size} {...props}>
+    <g strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="2" y1="2" x2="14" y2="2" />
+      <rect x="3" y="4" width="4" height="10" rx="0.5" fill="currentColor" opacity="0.3" />
+      <rect x="9" y="4" width="4" height="6" rx="0.5" fill="currentColor" opacity="0.3" />
+    </g>
+  </svg>
+);
+
+// 垂直居中图标
+export const AlignMiddleIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 16, ...props }) => (
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg" width={size} height={size} {...props}>
+    <g strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="2" y1="8" x2="14" y2="8" />
+      <rect x="3" y="2" width="4" height="12" rx="0.5" fill="currentColor" opacity="0.3" />
+      <rect x="9" y="4" width="4" height="8" rx="0.5" fill="currentColor" opacity="0.3" />
+    </g>
+  </svg>
+);
+
+// 底部对齐图标
+export const AlignBottomIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 16, ...props }) => (
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg" width={size} height={size} {...props}>
+    <g strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="2" y1="14" x2="14" y2="14" />
+      <rect x="3" y="2" width="4" height="10" rx="0.5" fill="currentColor" opacity="0.3" />
+      <rect x="9" y="6" width="4" height="6" rx="0.5" fill="currentColor" opacity="0.3" />
+    </g>
+  </svg>
+);
+
+// 间距分布图标 - 主图标
+export const DistributeIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 16, ...props }) => (
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg" width={size} height={size} {...props}>
+    <g strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="2" y1="2" x2="2" y2="14" />
+      <line x1="14" y1="2" x2="14" y2="14" />
+      <rect x="5" y="4" width="6" height="8" rx="0.5" fill="currentColor" opacity="0.3" />
+    </g>
+  </svg>
+);
+
+// 水平间距图标
+export const DistributeHorizontalIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 16, ...props }) => (
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg" width={size} height={size} {...props}>
+    <g strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="2" y1="2" x2="2" y2="14" />
+      <line x1="14" y1="2" x2="14" y2="14" />
+      <rect x="5" y="4" width="6" height="8" rx="0.5" fill="currentColor" opacity="0.3" />
+    </g>
+  </svg>
+);
+
+// 垂直间距图标
+export const DistributeVerticalIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 16, ...props }) => (
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg" width={size} height={size} {...props}>
+    <g strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="2" y1="2" x2="14" y2="2" />
+      <line x1="2" y1="14" x2="14" y2="14" />
+      <rect x="4" y="5" width="8" height="6" rx="0.5" fill="currentColor" opacity="0.3" />
+    </g>
+  </svg>
+);
+
+// 自动排列图标
+export const AutoArrangeIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 16, ...props }) => (
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg" width={size} height={size} {...props}>
+    <g strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="2" width="5" height="5" rx="0.5" fill="currentColor" opacity="0.3" />
+      <rect x="9" y="2" width="5" height="5" rx="0.5" fill="currentColor" opacity="0.3" />
+      <rect x="2" y="9" width="5" height="5" rx="0.5" fill="currentColor" opacity="0.3" />
+      <rect x="9" y="9" width="5" height="5" rx="0.5" fill="currentColor" opacity="0.3" />
+    </g>
+  </svg>
+);
+
+// 布尔运算图标 - 主图标（合并）
+export const BooleanIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 16, ...props }) => (
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg" width={size} height={size} {...props}>
+    <g strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="2" width="8" height="8" rx="1" fill="currentColor" opacity="0.3" />
+      <rect x="6" y="6" width="8" height="8" rx="1" fill="currentColor" opacity="0.2" />
+    </g>
+  </svg>
+);
+
+// 合并图标 (Union)
+export const BooleanUnionIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 16, ...props }) => (
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg" width={size} height={size} {...props}>
+    <g strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 3a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v3h3a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v-3H3a1 1 0 0 1-1-1V3z" fill="currentColor" opacity="0.3" />
+    </g>
+  </svg>
+);
+
+// 减去图标 (Subtract)
+export const BooleanSubtractIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 16, ...props }) => (
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg" width={size} height={size} {...props}>
+    <g strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="2" width="8" height="8" rx="1" fill="currentColor" opacity="0.3" />
+      <rect x="6" y="6" width="8" height="8" rx="1" fill="none" strokeDasharray="2 1" />
+    </g>
+  </svg>
+);
+
+// 相交图标 (Intersect)
+export const BooleanIntersectIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 16, ...props }) => (
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg" width={size} height={size} {...props}>
+    <g strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="2" width="8" height="8" rx="1" fill="none" />
+      <rect x="6" y="6" width="8" height="8" rx="1" fill="none" />
+      <rect x="6" y="6" width="4" height="4" fill="currentColor" opacity="0.3" />
+    </g>
+  </svg>
+);
+
+// 排除图标 (Exclude)
+export const BooleanExcludeIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 16, ...props }) => (
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg" width={size} height={size} {...props}>
+    <g strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 3a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v3h-4v4H3a1 1 0 0 1-1-1V3z" fill="currentColor" opacity="0.3" />
+      <path d="M10 6v3H7a1 1 0 0 0-1 1v3h7a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1h-3z" fill="currentColor" opacity="0.3" />
+      <rect x="2" y="2" width="8" height="8" rx="1" fill="none" />
+      <rect x="6" y="6" width="8" height="8" rx="1" fill="none" />
+    </g>
+  </svg>
+);
+
+// 扁平化图标 (Flatten)
+export const BooleanFlattenIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 16, ...props }) => (
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg" width={size} height={size} {...props}>
+    <g strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 2v4M8 10v4M2 8h4M10 8h4" />
+      <path d="M5 5l2 2M9 9l2 2M5 11l2-2M9 5l2 2" opacity="0.5" />
+    </g>
+  </svg>
+);

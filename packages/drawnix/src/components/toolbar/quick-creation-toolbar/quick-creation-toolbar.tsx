@@ -11,6 +11,7 @@ import {
   FeltTipPenIcon,
   StraightArrowLineIcon,
   ShapeIcon,
+  MindIcon,
 } from '../../icons';
 import {
   ATTACHED_ELEMENT_CLASS_NAME,
@@ -20,6 +21,7 @@ import {
   toScreenPointFromHostPoint,
 } from '@plait/core';
 import { BasicShapes, ArrowLineShape, DrawPointerType } from '@plait/draw';
+import { MindPointerType } from '@plait/mind';
 import { FreehandShape } from '../../../plugins/freehand/type';
 import { PenShape } from '../../../plugins/pen/type';
 import { finishPenOnToolSwitch } from '../../../plugins/pen/with-pen-create';
@@ -160,6 +162,17 @@ export const QuickCreationToolbar: React.FC<QuickCreationToolbarProps> = ({
     setCreationMode(board, BoardCreationMode.drawing);
     BoardTransforms.updatePointerType(board, BasicShapes.text);
     setPointer(BasicShapes.text);
+    onClose();
+  };
+
+  const handleMindClick = () => {
+    resetAllPopovers();
+    // 切换工具前，结束钢笔绘制
+    finishPenOnToolSwitch(board);
+    // 思维导图使用 dnd 模式
+    setCreationMode(board, BoardCreationMode.dnd);
+    BoardTransforms.updatePointerType(board, MindPointerType.mind);
+    setPointer(MindPointerType.mind);
     onClose();
   };
 
@@ -377,6 +390,17 @@ export const QuickCreationToolbar: React.FC<QuickCreationToolbarProps> = ({
               }}
             />
           )}
+
+          {/* 思维导图 */}
+          <ToolButton
+            type="icon"
+            visible={true}
+            icon={<MindIcon />}
+            title="" // 不显示 tooltip
+            aria-label={t('toolbar.mind')}
+            data-track="quick_toolbar_click_mind"
+            onPointerUp={handleMindClick}
+          />
         </Stack.Row>
       </Island>
 

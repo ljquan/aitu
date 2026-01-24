@@ -8,6 +8,7 @@ import {
   clearSelectedElement,
   addSelectedElement,
 } from '@plait/core';
+import { isHotkey } from 'is-hotkey';
 import { PenAnchor, PenPath, PenShape, PEN_TYPE } from './type';
 import { createPenPath, isHitStartAnchor, updatePenPathPoints } from './utils';
 import { createSymmetricHandles, distanceBetweenPoints } from './bezier-utils';
@@ -435,6 +436,19 @@ export const withPenCreate = (board: PlaitBoard) => {
     // Escape 键取消创建
     if (event.key === 'Escape' && state.isCreating) {
       resetPenState(board);
+      event.preventDefault();
+      return;
+    }
+
+    // Cmd+Z / Ctrl+Z 撤销上一个锚点（在钢笔创建过程中）
+    if (isHotkey(['mod+z'], { byKey: true })(event) && state.isCreating) {
+      if (state.anchors.length > 0) {
+        state.anchors.pop();
+        updatePreview(board);
+      }
+      if (state.anchors.length === 0) {
+        resetPenState(board);
+      }
       event.preventDefault();
       return;
     }

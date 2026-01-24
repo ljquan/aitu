@@ -81,6 +81,7 @@
     "ahooks": "^3.8.0",
     "browser-fs-access": "^0.35.0",
     "classnames": "^2.5.1",
+    "clipper-lib": "^6.4.2",
     "is-hotkey": "^0.2.0",
     "jszip": "^3.10.1",
     "localforage": "^1.10.0",
