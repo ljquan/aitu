@@ -1409,6 +1409,36 @@ setTimeout(() => {
 
 **原因**: Plait 的 `addSelectedElement` 只是将元素存入 `BOARD_TO_SELECTED_ELEMENT` WeakMap 缓存，不会触发任何渲染。在同步流程中（如 `insertElement` 内部），`Transforms.insertNode` 已经触发了 `board.apply()` 和渲染链，所以选中状态能正常显示。但在异步回调中单独调用时，需要手动触发一次 `board.apply()` 来刷新渲染。`Transforms.setNode` 会调用 `board.apply()`，从而触发完整的渲染链。
 
+### 插入元素后选中需通过 ID 查找实际引用
+
+**场景**: 使用 `Transforms.insertNode` 插入元素后，需要选中该元素
+
+❌ **错误示例**:
+```typescript
+// 错误：直接使用传入的对象调用 addSelectedElement
+const newElement = { id: idCreator(), type: 'pen', ... };
+Transforms.insertNode(board, newElement, [board.children.length]);
+
+clearSelectedElement(board);
+addSelectedElement(board, newElement);  // 可能报错：Unable to find the path for Plait node
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：通过 ID 从 board.children 中查找实际插入的元素
+const newElement = { id: idCreator(), type: 'pen', ... };
+Transforms.insertNode(board, newElement, [board.children.length]);
+
+// 查找实际插入到 board 中的元素引用
+const insertedElement = board.children.find(child => child.id === newElement.id);
+if (insertedElement) {
+  clearSelectedElement(board);
+  addSelectedElement(board, insertedElement);
+}
+```
+
+**原因**: `Transforms.insertNode` 插入元素时，Plait 可能会对元素进行处理或创建新的引用。`addSelectedElement` 内部会调用 `findPath` 查找元素路径，如果传入的对象引用与 `board.children` 中的不一致，会导致 "Unable to find the path for Plait node" 错误。
+
 ### 异步任务幂等性检查应检查存在性而非完成状态
 
 **场景**: 实现防止任务重复执行的检查逻辑时（如页面刷新后恢复任务）
@@ -5024,3 +5054,29 @@ grep -r "from.*filename" apps/ packages/
 - 过时的文档（引用已删除代码的 md 文件）
 
 **原因**: 未清理的代码会增加维护负担，误导后续开发者，也会增加 CI 执行时间。
+
+### Clipper 布尔运算结果处理
+
+**场景**: 使用 clipper-lib 进行多边形布尔运算（合并、减去、相交等）后，需要区分外环和孔洞。
+
+❌ **错误做法**:
+```typescript
+// 错误：依赖面积符号判断外环/孔洞
+const outerRing = pathsWithArea.find(p => p.signedArea > 0);
+const holes = pathsWithArea.filter(p => p.signedArea < 0);
+```
+
+✅ **正确做法**:
+```typescript
+// 正确：用面积大小判断，最大的是外环，其他是孔洞
+const sortedByArea = [...pathsWithArea].sort((a, b) => b.absArea - a.absArea);
+const outerRing = sortedByArea[0]; // 面积最大的是外环
+const holes = sortedByArea.slice(1); // 其他都是孔洞
+```
+
+**原因**: 
+1. Clipper 返回的路径方向（顺时针/逆时针）取决于坐标系（Y 轴向上还是向下）
+2. 在不同环境下，面积符号可能相反，导致孔洞被错误识别为外环
+3. 面积大小是稳定的判断依据：外环总是包含所有孔洞，因此面积最大
+
+**相关文件**: `packages/drawnix/src/transforms/precise-erase.ts`, `packages/drawnix/src/transforms/boolean.ts`
