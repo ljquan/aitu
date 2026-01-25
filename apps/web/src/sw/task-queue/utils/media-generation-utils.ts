@@ -1092,7 +1092,6 @@ export interface ImageGenerationParams {
   model?: string;
   size?: string;
   referenceImages?: string[];
-  n?: number;
   quality?: '1k' | '2k' | '4k';
   isInspirationBoard?: boolean;
   inspirationBoardImageCount?: number;
@@ -1111,7 +1110,6 @@ export function buildImageGenerationRequestBody(
   const requestBody: Record<string, unknown> = {
     model: params.model || defaultModel,
     prompt: params.prompt,
-    n: params.n || 1,
     response_format: 'url',
   };
 
@@ -1128,11 +1126,6 @@ export function buildImageGenerationRequestBody(
   // 添加参考图片
   if (params.referenceImages && params.referenceImages.length > 0) {
     requestBody.image = params.referenceImages;
-  }
-
-  // 处理灵感图
-  if (params.isInspirationBoard && params.inspirationBoardImageCount) {
-    requestBody.n = params.inspirationBoardImageCount;
   }
 
   return requestBody;

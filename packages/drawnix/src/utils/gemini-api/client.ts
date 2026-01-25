@@ -44,7 +44,6 @@ export class GeminiClient {
   async generateImage(
     prompt: string,
     options: {
-      n?: number;
       size?: string;
       image?: string | string[];
       response_format?: 'url' | 'b64_json';
