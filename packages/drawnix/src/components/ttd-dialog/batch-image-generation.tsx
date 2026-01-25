@@ -38,6 +38,7 @@ import type { Asset } from '../../types/asset.types';
 import { MediaLibraryModal } from '../media-library/MediaLibraryModal';
 import { LS_KEYS_TO_MIGRATE } from '../../constants/storage-keys';
 import { kvStorageService } from '../../services/kv-storage-service';
+import { useDeviceType } from '../../hooks/useDeviceType';
 import './batch-image-generation.scss';
 import { trackMemory } from '../../utils/common';
 
@@ -106,6 +107,10 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
   const { language } = useI18n();
   const { createTask, tasks: queueTasks } = useTaskQueue();
   const { addAsset, assets: libraryAssets, loadAssets } = useAssets();
+  const { isMobile, isTablet } = useDeviceType();
+
+  // 移动端/平板端隐藏素材库侧栏
+  const hideLibrarySidebar = isMobile || isTablet;
 
   // 过滤出图片类型的素材
   const imageAssets = libraryAssets.filter(asset => asset.type === AssetType.IMAGE);
@@ -2283,7 +2288,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
 
             <span className="toolbar-divider"></span>
 
-            {!showLibrary && (
+            {!hideLibrarySidebar && !showLibrary && (
               <Tooltip content={language === 'zh' ? '显示素材库' : 'Show Library'} theme="light">
                 <Button
                   variant="outline"
@@ -2480,7 +2485,8 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
         </p>
       </div>
 
-      {/* 素材库侧栏 */}
+      {/* 素材库侧栏 - 移动端/平板端隐藏 */}
+      {!hideLibrarySidebar && (
       <div className={`image-library-sidebar ${!showLibrary ? 'hidden' : ''}`}>
         <div className="library-header">
           <h3>{language === 'zh' ? '素材库' : 'Library'}</h3>
@@ -2538,6 +2544,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
           </div>
         </div>
       </div>
+      )}
 
       {/* 批量导入弹窗 */}
       {showBatchImportModal && (

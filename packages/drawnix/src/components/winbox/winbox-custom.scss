@@ -76,6 +76,16 @@
       * {
         pointer-events: auto;
       }
+      
+      // 确保模式切换按钮可点击
+      .image-generation-mode-tabs {
+        pointer-events: auto;
+        
+        .mode-tab {
+          pointer-events: auto;
+          touch-action: manipulation;
+        }
+      }
     }
   }
 
@@ -405,6 +415,9 @@
     gap: 4px;
     border-radius: 8px;
     margin-left: 8px;
+    position: relative;
+    z-index: 100; // 确保在拖拽区域之上
+    pointer-events: auto; // 确保可点击
 
     .mode-tab {
       padding: 6px 16px;
@@ -421,10 +434,16 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      pointer-events: auto; // 确保可点击
+      touch-action: manipulation; // 优化移动端触摸
 
       &:hover:not(.active) {
         color: #333333;
         background: rgba(255, 255, 255, 0.5);
+      }
+
+      &:active {
+        transform: scale(0.98);
       }
 
       &.active {
@@ -437,10 +456,17 @@
   }
 }
 
-// 图片生成弹窗 - 有模式切换时隐藏标题
+// 图片生成弹窗 - PC端有模式切换tabs时隐藏标题，移动端保留标题
 .winbox-ai-image-generation {
   .wb-title {
     display: none !important;
+  }
+  
+  // 移动端显示标题（因为没有模式切换tabs）
+  @media (max-width: 768px) {
+    .wb-title {
+      display: block !important;
+    }
   }
 }
 
@@ -544,13 +570,17 @@
     .wb-min,
     .wb-max,
     .wb-full,
-    .wb-split,
     .wb-insert-canvas,
     .wb-close {
       width: 30px;
       height: 30px;
       background-size: 12px;
       border-radius: 6px;
+    }
+    
+    // 移动端隐藏分屏按钮
+    .wb-split {
+      display: none !important;
     }
     
     .wb-body {
@@ -579,6 +609,39 @@
       }
     }
     
+    // 移动端 header-custom 启用触摸
+    .wb-header-custom {
+      pointer-events: auto !important;
+      touch-action: auto !important;
+    }
+    
+    // 移动端模式切换按钮确保可点击
+    .image-generation-mode-tabs {
+      pointer-events: auto !important;
+      touch-action: auto !important;
+      position: relative;
+      z-index: 100;
+      
+      .mode-tab {
+        pointer-events: auto !important;
+        touch-action: manipulation !important;
+        -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+        min-height: 40px;
+        padding: 10px 14px;
+        cursor: pointer;
+        
+        // 确保触摸区域
+        &::before {
+          content: '';
+          position: absolute;
+          top: -5px;
+          left: -5px;
+          right: -5px;
+          bottom: -5px;
+        }
+      }
+    }
+    
     &.max, &.full {
       .wb-body {
         top: 44px !important;
@@ -590,7 +653,44 @@
     padding: 12px;
   }
 
-  .winbox-ai-generation .winbox-content-wrapper {
-    padding: 12px 16px;
+  // AI 生成弹窗移动端特殊处理 - 单一滚动条在最外层
+  .winbox-ai-generation {
+    .wb-body {
+      overflow-y: auto !important; // wb-body 负责滚动
+      overflow-x: hidden !important;
+      
+      // 滚动条样式
+      scrollbar-width: thin;
+      scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+      
+      &::-webkit-scrollbar {
+        width: 6px;
+      }
+      
+      &::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      
+      &::-webkit-scrollbar-thumb {
+        background: rgba(0, 0, 0, 0.2);
+        border-radius: 3px;
+      }
+    }
+    
+    .winbox-content-wrapper {
+      padding: 12px 16px;
+      overflow: visible !important;
+      height: auto !important;
+      flex: none !important;
+    }
+    
+    // AI 容器不滚动
+    .ai-image-generation-container,
+    .ai-video-generation-container {
+      flex: none !important;
+      height: auto !important;
+      max-height: none !important;
+      overflow: visible !important;
+    }
   }
 }

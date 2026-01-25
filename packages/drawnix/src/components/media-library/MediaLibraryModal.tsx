@@ -87,18 +87,14 @@ export function MediaLibraryModal({
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // 处理资产选择
+  // 处理资产选择 - 移动端单击只选中，不弹出详情
   const handleSelectAsset = useCallback(
     (id: string) => {
       setLocalSelectedAssetId(id);
       setSelectedAssetId(id);
-
-      // 在移动端，点击素材时打开抽屉
-      if (isMobile) {
-        setShowMobileInspector(true);
-      }
+      // 移动端不再自动弹出详情抽屉，用户可以通过双击预览或点击详情按钮
     },
-    [setSelectedAssetId, isMobile],
+    [setSelectedAssetId],
   );
 
   // 关闭移动端检查器

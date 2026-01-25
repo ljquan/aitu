@@ -614,6 +614,188 @@
   }
 }
 
+// Mobile specific styles
+@media (max-width: 768px) {
+  // 任务队列抽屉的标题
+  .side-drawer__title {
+    font-size: 16px !important;
+  }
+
+  .side-drawer__header {
+    padding: 12px !important;
+  }
+
+  .side-drawer__filter {
+    padding: 0 12px 12px !important;
+  }
+
+  .task-queue-panel {
+    &__filters-container {
+      gap: 6px;
+
+      // TDesign Tabs 移动端样式 - 更紧凑
+      .t-tabs {
+        .t-tabs__nav-container {
+          padding: 0 !important;
+        }
+        
+        .t-tabs__nav-wrap {
+          padding: 0 !important;
+        }
+        
+        .t-tabs__nav {
+          gap: 0 !important; // 移除 tab 间距
+        }
+        
+        .t-tabs__nav-item {
+          font-size: 11px !important;
+          padding: 4px 2px !important; // 最小 padding
+          min-width: auto !important;
+          white-space: nowrap;
+          margin: 0 !important;
+        }
+        
+        // 缩小滚动箭头
+        .t-tabs__nav-scroll-btn {
+          width: 14px !important;
+          min-width: 14px !important;
+          padding: 0 !important;
+        }
+        
+        // 底部指示条
+        .t-tabs__bar {
+          height: 2px !important;
+        }
+      }
+    }
+
+    &__filters {
+      gap: 6px;
+    }
+
+    &__type-filters {
+      padding: 2px;
+      border-radius: 8px;
+
+      .t-button {
+        height: 30px !important;
+        min-width: 30px !important;
+      }
+    }
+
+    &__search-input {
+      flex: 1;
+      min-width: 80px !important;
+      
+      .t-input {
+        min-height: 28px !important;
+        height: 28px !important;
+        font-size: 13px !important;
+        border-width: 1px !important;
+      }
+
+      .t-input__inner {
+        font-size: 13px !important;
+      }
+    }
+
+    &__filter-actions {
+      .t-button {
+        min-height: 28px !important;
+        height: 28px !important;
+        padding: 0 10px !important;
+        font-size: 12px !important;
+      }
+    }
+
+    &__content {
+      padding: 8px 0 16px 12px;
+    }
+
+    &__list {
+      gap: 8px;
+    }
+
+    &__empty {
+      padding: 32px 16px;
+
+      &-icon {
+        font-size: 36px;
+        margin-bottom: 12px;
+      }
+
+      &-text {
+        font-size: 13px;
+      }
+    }
+  }
+
+  // Task Item mobile styles
+  .task-item {
+    padding: 12px 16px 12px 0;
+    gap: 3px 8px;
+
+    // 覆盖全局按钮移动端样式，保持紧凑
+    &__primary-action {
+      min-height: 26px !important;
+      height: 26px !important;
+      min-width: auto !important;
+      padding: 0 10px !important;
+    }
+
+    &--wide {
+      grid-template-columns: 80px 1fr;
+
+      &.task-item--selection-mode {
+        grid-template-columns: auto 80px 1fr;
+      }
+    }
+
+    &--compact {
+      grid-template-columns: 70px 1fr;
+      grid-template-areas: 
+        "preview prompt"
+        "info    info";
+
+      &.task-item--selection-mode {
+        grid-template-columns: auto 70px 1fr;
+        grid-template-areas: 
+          "checkbox preview prompt"
+          "info     info    info";
+      }
+      
+      .task-item__preview-wrapper {
+        grid-area: preview;
+        width: 70px;
+        height: 52px;
+      }
+      
+      .task-item__prompt-area {
+        grid-area: prompt;
+      }
+      
+      .task-item__info-area {
+        grid-area: info;
+        margin-top: 4px;
+      }
+    }
+
+    &__preview-wrapper {
+      width: 80px;
+      height: 60px;
+    }
+
+    &__prompt {
+      font-size: 13px;
+      -webkit-line-clamp: 2;
+    }
+
+    &__checkbox {
+      padding-left: 12px;
+    }
+  }
+}
+
 // Animations
 @keyframes slideUp {
   from {

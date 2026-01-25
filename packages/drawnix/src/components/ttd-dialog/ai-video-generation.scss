@@ -126,70 +126,78 @@
 
 }
 
-/* Responsive adjustments - 移动端统一使用垂直布局 */
+/* Responsive adjustments - 移动端统一使用垂直布局，单一滚动条 */
 
 @media (max-width: 768px) {
-  /* 移动端容器布局 */
+  /* 移动端容器布局 - 不滚动，由 wb-body 处理滚动 */
   .ai-video-generation-container {
-    height: auto;
-    min-height: 100%;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-
-    .main-content {
-      flex-direction: column;
-      gap: 12px;
-      min-height: auto;
-      height: auto;
-      flex: 1;
-      overflow-y: auto;
-    }
-
-    .ai-image-generation-section {
-      max-height: none;
-      flex: none;
-      order: 1;
-    }
-
-    /* 移动端任务侧栏样式 - 放在表单下方 */
-    .task-sidebar {
-      flex: none;
-      height: auto;
-      min-height: 100px;
-      max-height: 180px; /* 小窗默认高度限制，更紧凑 */
-      overflow-y: auto;
-      padding: 8px;
-      order: 2;
-      margin-top: 8px;
-    }
-
-    /* 操作按钮区域 - 确保可见 */
-    .section-actions {
-      flex-wrap: wrap;
-      gap: 8px;
-      padding: 8px 0;
-      position: relative;
-      z-index: 10;
-      background: #fff;
-    }
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+  
+  /* 主内容区域 - 使用后代选择器确保匹配 */
+  .ai-video-generation-container .main-content {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 12px !important;
+    min-height: auto !important;
+    height: auto !important;
+    flex: none !important;
+    overflow: visible !important;
+  }
+  
+  /* 表单区域 - 确保显示 */
+  .ai-video-generation-container .ai-image-generation-section {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-height: none !important;
+    height: auto !important;
+    flex: none !important;
+    overflow: visible !important;
+    order: 1 !important;
+  }
+  
+  /* 任务侧栏 - 全宽显示 */
+  .ai-video-generation-container .task-sidebar {
+    display: block !important;
+    flex: none !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding: 8px !important;
+    order: 2 !important;
+    margin-top: 8px !important;
   }
 
-  /* 全屏/最大化时，任务列表可以更高 */
-  .winbox.max,
-  .winbox.full {
-    .ai-video-generation-container .task-sidebar {
-      max-height: 40vh; /* 全屏时允许更大的任务列表区域 */
-    }
+  /* 操作按钮区域 */
+  .ai-video-generation-container .section-actions {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 8px 0;
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+    background: #fff;
+  }
+
+  .task-list {
+    max-height: none !important;
+    overflow: visible !important;
   }
 }
 
 @media (max-width: 480px) {
   .ai-video-generation-container {
-    /* 更小屏幕下任务列表进一步缩小 */
+    max-height: calc(100vh - 50px);
+
     .task-sidebar {
-      min-height: 80px;
-      max-height: 150px;
       padding: 6px;
     }
 

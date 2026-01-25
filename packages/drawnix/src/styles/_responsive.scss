@@ -1,0 +1,225 @@
+/**
+ * Responsive Design Variables and Mixins
+ * 
+ * 响应式设计变量和混合宏
+ * 用于多端适配（移动端、平板、桌面端）
+ */
+
+// ============================================================================
+// Device Breakpoints (设备断点)
+// ============================================================================
+
+$breakpoint-mobile: 640px;           // 移动端竖屏
+$breakpoint-tablet: 768px;           // 移动端横屏/平板竖屏
+$breakpoint-tablet-landscape: 1024px; // 平板横屏
+$breakpoint-desktop: 1280px;         // 桌面端
+
+// ============================================================================
+// Safe Area Insets (安全区域)
+// ============================================================================
+// 用于适配 iPhone X 及以上设备的刘海屏和底部指示条
+
+$safe-area-top: env(safe-area-inset-top, 0px);
+$safe-area-bottom: env(safe-area-inset-bottom, 0px);
+$safe-area-left: env(safe-area-inset-left, 0px);
+$safe-area-right: env(safe-area-inset-right, 0px);
+
+// ============================================================================
+// Mobile-specific Variables (移动端专用变量)
+// ============================================================================
+
+$mobile-toolbar-height: 48px;        // 移动端工具栏高度
+$mobile-input-bar-height: 56px;      // 移动端输入栏高度
+$mobile-button-min-size: 44px;       // 移动端最小触控目标尺寸 (Apple HIG)
+$mobile-spacing: 8px;                // 移动端基础间距
+$mobile-border-radius: 12px;         // 移动端圆角
+
+// ============================================================================
+// Responsive Mixins (响应式混合宏)
+// ============================================================================
+
+/// 仅移动端竖屏 (max-width: 640px)
+@mixin mobile {
+  @media (max-width: #{$breakpoint-mobile}) {
+    @content;
+  }
+}
+
+/// 仅移动端横屏/平板竖屏 (641px - 768px)
+@mixin tablet-portrait {
+  @media (min-width: #{$breakpoint-mobile + 1}) and (max-width: #{$breakpoint-tablet}) {
+    @content;
+  }
+}
+
+/// 平板及以下 (max-width: 768px)
+@mixin tablet-and-below {
+  @media (max-width: #{$breakpoint-tablet}) {
+    @content;
+  }
+}
+
+/// 仅平板横屏 (769px - 1024px)
+@mixin tablet-landscape {
+  @media (min-width: #{$breakpoint-tablet + 1}) and (max-width: #{$breakpoint-tablet-landscape}) {
+    @content;
+  }
+}
+
+/// 平板横屏及以下 (max-width: 1024px)
+@mixin tablet-landscape-and-below {
+  @media (max-width: #{$breakpoint-tablet-landscape}) {
+    @content;
+  }
+}
+
+/// 仅桌面端 (min-width: 1025px)
+@mixin desktop {
+  @media (min-width: #{$breakpoint-tablet-landscape + 1}) {
+    @content;
+  }
+}
+
+/// 大桌面端 (min-width: 1281px)
+@mixin desktop-large {
+  @media (min-width: #{$breakpoint-desktop + 1}) {
+    @content;
+  }
+}
+
+// ============================================================================
+// Touch-friendly Mixins (触控友好混合宏)
+// ============================================================================
+
+/// 触控设备检测
+@mixin touch-device {
+  @media (hover: none) and (pointer: coarse) {
+    @content;
+  }
+}
+
+/// 非触控设备检测 (鼠标/触控板)
+@mixin pointer-device {
+  @media (hover: hover) and (pointer: fine) {
+    @content;
+  }
+}
+
+/// 确保最小触控目标尺寸
+@mixin touch-target($size: $mobile-button-min-size) {
+  min-width: $size;
+  min-height: $size;
+}
+
+/// 扩展触控区域（通过伪元素）
+@mixin extend-touch-area($extend: 8px) {
+  position: relative;
+  
+  &::before {
+    content: '';
+    position: absolute;
+    top: -$extend;
+    right: -$extend;
+    bottom: -$extend;
+    left: -$extend;
+  }
+}
+
+// ============================================================================
+// Safe Area Helpers (安全区域辅助)
+// ============================================================================
+
+/// 添加底部安全区域 padding
+@mixin safe-area-bottom($additional: 0px) {
+  padding-bottom: calc(#{$safe-area-bottom} + #{$additional});
+}
+
+/// 添加顶部安全区域 padding
+@mixin safe-area-top($additional: 0px) {
+  padding-top: calc(#{$safe-area-top} + #{$additional});
+}
+
+/// 添加左侧安全区域 padding
+@mixin safe-area-left($additional: 0px) {
+  padding-left: calc(#{$safe-area-left} + #{$additional});
+}
+
+/// 添加右侧安全区域 padding
+@mixin safe-area-right($additional: 0px) {
+  padding-right: calc(#{$safe-area-right} + #{$additional});
+}
+
+/// 添加所有安全区域 padding
+@mixin safe-area-all($additional: 0px) {
+  padding-top: calc(#{$safe-area-top} + #{$additional});
+  padding-right: calc(#{$safe-area-right} + #{$additional});
+  padding-bottom: calc(#{$safe-area-bottom} + #{$additional});
+  padding-left: calc(#{$safe-area-left} + #{$additional});
+}
+
+// ============================================================================
+// Layout Helpers (布局辅助)
+// ============================================================================
+
+/// 移动端全屏抽屉/对话框
+@mixin mobile-fullscreen {
+  @include mobile {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100vw;
+    height: 100vh;
+    max-width: none;
+    max-height: none;
+    border-radius: 0;
+    @include safe-area-all();
+  }
+}
+
+/// 移动端底部固定元素
+@mixin mobile-fixed-bottom($height: auto) {
+  @include mobile {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: $height;
+    @include safe-area-bottom();
+    @include safe-area-left();
+    @include safe-area-right();
+  }
+}
+
+/// 隐藏在移动端
+@mixin hide-on-mobile {
+  @include mobile {
+    display: none !important;
+  }
+}
+
+/// 隐藏在平板及以下
+@mixin hide-on-tablet-and-below {
+  @include tablet-and-below {
+    display: none !important;
+  }
+}
+
+/// 仅在移动端显示
+@mixin show-on-mobile-only {
+  display: none !important;
+  
+  @include mobile {
+    display: block !important;
+  }
+}
+
+/// 仅在平板及以下显示
+@mixin show-on-tablet-and-below-only {
+  display: none !important;
+  
+  @include tablet-and-below {
+    display: block !important;
+  }
+}

@@ -109,15 +109,31 @@ export default defineConfig({
       },
     },
 
-    // Uncomment for mobile browsers support
-    /* {
-      name: 'Mobile Chrome',
+    // 响应式测试 - 多视口尺寸
+    {
+      name: 'responsive',
+      testMatch: '**/visual/responsive-visual.spec.ts',
+      use: { ...devices['Desktop Chrome'] },
+    },
+    
+    // 移动端浏览器测试
+    {
+      name: 'mobile-chrome',
+      testMatch: '**/visual/responsive-visual.spec.ts',
       use: { ...devices['Pixel 5'] },
     },
     {
-      name: 'Mobile Safari',
+      name: 'mobile-safari',
+      testMatch: '**/visual/responsive-visual.spec.ts',
       use: { ...devices['iPhone 12'] },
-    }, */
+    },
+    
+    // 平板测试
+    {
+      name: 'tablet',
+      testMatch: '**/visual/responsive-visual.spec.ts',
+      use: { ...devices['iPad Pro 11'] },
+    },
 
     // Uncomment for branded browsers
     /* {

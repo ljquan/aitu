@@ -251,7 +251,7 @@ export const MediaViewport = forwardRef<MediaViewportRef, MediaViewportProps>(({
     );
   }, []);
 
-  // 工具栏拖拽开始
+  // 工具栏拖拽开始 - 鼠标事件
   const handleToolbarDragStart = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
@@ -283,6 +283,49 @@ export const MediaViewport = forwardRef<MediaViewportRef, MediaViewportProps>(({
 
       document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleMouseUp);
+    },
+    [toolbarPosition]
+  );
+
+  // 工具栏拖拽开始 - 触摸事件
+  const handleToolbarTouchStart = useCallback(
+    (e: React.TouchEvent) => {
+      e.stopPropagation();
+      if (e.touches.length !== 1) return;
+
+      const touch = e.touches[0];
+      setIsToolbarDragging(true);
+
+      const currentPos = toolbarPosition || { x: 0, y: 0 };
+      toolbarDragStartRef.current = {
+        x: touch.clientX,
+        y: touch.clientY,
+        posX: currentPos.x,
+        posY: currentPos.y,
+      };
+
+      const handleTouchMove = (moveEvent: TouchEvent) => {
+        if (moveEvent.touches.length !== 1) return;
+        moveEvent.preventDefault();
+        const moveTouch = moveEvent.touches[0];
+        const deltaX = moveTouch.clientX - toolbarDragStartRef.current.x;
+        const deltaY = moveTouch.clientY - toolbarDragStartRef.current.y;
+        setToolbarPosition({
+          x: toolbarDragStartRef.current.posX + deltaX,
+          y: toolbarDragStartRef.current.posY + deltaY,
+        });
+      };
+
+      const handleTouchEnd = () => {
+        setIsToolbarDragging(false);
+        document.removeEventListener('touchmove', handleTouchMove);
+        document.removeEventListener('touchend', handleTouchEnd);
+        document.removeEventListener('touchcancel', handleTouchEnd);
+      };
+
+      document.addEventListener('touchmove', handleTouchMove, { passive: false });
+      document.addEventListener('touchend', handleTouchEnd);
+      document.addEventListener('touchcancel', handleTouchEnd);
     },
     [toolbarPosition]
   );
@@ -382,6 +425,7 @@ export const MediaViewport = forwardRef<MediaViewportRef, MediaViewportProps>(({
             <div
               className="media-viewport__toolbar-handle"
               onMouseDown={handleToolbarDragStart}
+              onTouchStart={handleToolbarTouchStart}
               onDoubleClick={(e) => {
                 e.stopPropagation();
                 resetToolbarPosition();

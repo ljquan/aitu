@@ -277,3 +277,110 @@
     padding: 0 4px !important;
   }
 }
+
+// ============================================================================
+// Mobile Responsive Styles
+// ============================================================================
+
+// 平板及以下 (max-width: 768px)
+@media (max-width: 768px) {
+  .pencil-settings-toolbar {
+    // 限制最大宽度，给右侧缩放控制留出更多空间
+    max-width: calc(100vw - 260px);
+    
+    .island {
+      // 支持水平滚动
+      overflow-x: auto;
+      overflow-y: hidden;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      flex-wrap: nowrap;
+      padding: 3px 4px !important;
+      gap: 2px;
+      
+      &::-webkit-scrollbar {
+        display: none;
+      }
+    }
+    
+    // 隐藏光标预览点（节省空间）
+    .cursor-preview-dot {
+      display: none;
+    }
+    
+    // 按钮不收缩，尺寸更紧凑
+    .pencil-color-button,
+    .pencil-width-button,
+    .size-picker-button {
+      flex-shrink: 0;
+      height: 26px;
+      width: 26px;
+      min-width: 26px;
+    }
+    
+    
+    // 描边样式选择器不收缩
+    .pencil-stroke-style-picker,
+    .eraser-shape-picker {
+      flex-shrink: 0;
+      padding: 1px;
+      gap: 1px;
+      
+      .pencil-stroke-style-button,
+      .eraser-shape-button {
+        height: 24px;
+        width: 24px;
+        min-width: 24px;
+      }
+    }
+    
+    // 隐藏输入框，使用按钮弹出选择
+    .pencil-width-input-wrapper,
+    .size-picker-input-wrapper {
+      display: none;
+    }
+    
+    // 紧凑的分隔线
+    .toolbar-divider {
+      height: 14px;
+      margin: 0 1px;
+      flex-shrink: 0;
+    }
+    
+    // 精确擦除开关更紧凑，隐藏文字
+    .precise-eraser-switch {
+      flex-shrink: 0;
+      padding: 2px;
+      
+      .switch-label {
+        display: none;
+      }
+    }
+    
+    // 压力感应开关不收缩，确保显示
+    .pencil-pressure-switch {
+      flex-shrink: 0;
+      margin-left: 4px;
+    }
+  }
+}
+
+// 移动端竖屏 (max-width: 640px)
+@media (max-width: 640px) {
+  .pencil-settings-toolbar {
+    // 进一步限制最大宽度
+    max-width: calc(100vw - 200px);
+  }
+}
+
+// 小屏移动端 (max-width: 480px)
+@media (max-width: 480px) {
+  .pencil-settings-toolbar {
+    max-width: calc(100vw - 220px);
+    
+    // 进一步紧凑化
+    .island {
+      padding: 2px 3px !important;
+    }
+  }
+}

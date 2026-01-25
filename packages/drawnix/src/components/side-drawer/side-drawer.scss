@@ -47,6 +47,16 @@ $drawer-width-wide: min(1024px, 50vw);
     &.side-drawer--open {
       transform: translateX(0);
     }
+
+    // 移动端适配：抽屉从屏幕左边缘开始
+    @media (max-width: 768px) {
+      left: 0;
+      transform: translateX(-100%);
+
+      &.side-drawer--open {
+        transform: translateX(0);
+      }
+    }
   }
 
   // 屏幕左边缘（TaskQueuePanel）
@@ -81,7 +91,10 @@ $drawer-width-wide: min(1024px, 50vw);
     width: clamp(320px, 50vw, 1024px);
 
     @media (max-width: 768px) {
-      width: 100%;
+      width: 100vw;
+      max-width: 100vw;
+      border-radius: 0;
+      left: 0 !important; // 覆盖 toolbar-right 的 left 设置
     }
   }
 
@@ -236,6 +249,28 @@ $drawer-width-wide: min(1024px, 50vw);
   // Resize Handle
   // ========================================
 
+  // ========================================
+  // Mobile Responsive
+  // ========================================
+
+  @media (max-width: 768px) {
+    &__header {
+      padding: $spacing-md $spacing-sm;
+    }
+
+    &__title {
+      font-size: 16px;
+    }
+
+    &__filter {
+      padding: 0 $spacing-sm $spacing-sm;
+    }
+
+    &__content {
+      padding-left: $spacing-sm;
+    }
+  }
+
   &__resize-handle {
     position: absolute;
     top: 0;
@@ -277,5 +312,31 @@ $drawer-width-wide: min(1024px, 50vw);
   &--dragging &__resize-handle::after {
     opacity: 1;
     background: #F39C12;
+  }
+}
+
+// ============================================================================
+// Mobile Responsive Styles for Side Drawer
+// ============================================================================
+
+@media (max-width: 768px) {
+  .side-drawer {
+    // 移动端增加 resize handle 触摸区域
+    &__resize-handle {
+      width: 20px; // 增加触摸区域宽度
+      right: -10px;
+      
+      // 移动端始终显示拖动指示条
+      &::after {
+        opacity: 0.5;
+        width: 6px;
+        height: 50px;
+      }
+      
+      &:active::after {
+        opacity: 1;
+        background: #F39C12;
+      }
+    }
   }
 }

@@ -128,39 +128,51 @@ export const SideDrawer: React.FC<SideDrawerProps> = ({
     }
   }, [closeOnBackdropClick, onClose]);
 
-  // 开始拖拽
-  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+  // 开始拖拽 - 支持鼠标和触摸
+  const handleResizeStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
     e.preventDefault();
     if (!drawerRef.current) return;
 
     setIsDragging(true);
-    startXRef.current = e.clientX;
+    // 获取起始 X 坐标（支持鼠标和触摸）
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    startXRef.current = clientX;
     startWidthRef.current = drawerRef.current.offsetWidth;
   }, []);
 
-  // 拖拽中
+  // 拖拽中 - 支持鼠标和触摸
   useEffect(() => {
     if (!isDragging) return;
 
-    const handleMouseMove = (e: MouseEvent) => {
-      const deltaX = e.clientX - startXRef.current;
+    const handleMove = (e: MouseEvent | TouchEvent) => {
+      // 获取当前 X 坐标（支持鼠标和触摸）
+      const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+      const deltaX = clientX - startXRef.current;
       const newWidth = Math.min(maxWidth, Math.max(minWidth, startWidthRef.current + deltaX));
       setDraggingWidth(newWidth);
     };
 
-    const handleMouseUp = () => {
+    const handleEnd = () => {
       setIsDragging(false);
       if (draggingWidth !== null) {
         onWidthChange?.(draggingWidth);
       }
     };
 
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
+    // 鼠标事件
+    document.addEventListener('mousemove', handleMove);
+    document.addEventListener('mouseup', handleEnd);
+    // 触摸事件
+    document.addEventListener('touchmove', handleMove, { passive: false });
+    document.addEventListener('touchend', handleEnd);
+    document.addEventListener('touchcancel', handleEnd);
 
     return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('mousemove', handleMove);
+      document.removeEventListener('mouseup', handleEnd);
+      document.removeEventListener('touchmove', handleMove);
+      document.removeEventListener('touchend', handleEnd);
+      document.removeEventListener('touchcancel', handleEnd);
     };
   }, [isDragging, draggingWidth, minWidth, maxWidth, onWidthChange]);
 
@@ -231,6 +243,7 @@ export const SideDrawer: React.FC<SideDrawerProps> = ({
           <div
             className="side-drawer__resize-handle"
             onMouseDown={handleResizeStart}
+            onTouchStart={handleResizeStart}
           />
         )}
       </div>

@@ -5,6 +5,7 @@
 @import './tdesign-theme.scss';
 @import './theme.scss';
 @import './z-index.scss'; // Z-Index层级管理变量
+@import './responsive'; // 响应式设计变量和混合宏
 @import './toolbox-theme.scss'; // 工具箱主题变量
 @import '../components/side-drawer/side-drawer.scss'; // 通用侧边抽屉
 @import '../components/chat-drawer/chat-drawer.scss';
@@ -54,6 +55,13 @@
         background: var(--color-surface-high);
         border-radius: 8px;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        
+        // 移动端调整定位，位于工具栏右侧避免重叠
+        @media (max-width: 768px) {
+            left: 70px; // 工具栏宽度(~50px) + 间距
+            transform: none;
+            top: calc(env(safe-area-inset-top, 0px) + 8px);
+        }
     }
     .pen-settings-toolbar {
         position: absolute;
@@ -64,6 +72,13 @@
         background: var(--color-surface-high);
         border-radius: 8px;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        
+        // 移动端调整定位，位于工具栏右侧避免重叠
+        @media (max-width: 768px) {
+            left: 70px; // 工具栏宽度(~50px) + 间距
+            transform: none;
+            top: calc(env(safe-area-inset-top, 0px) + 8px);
+        }
     }
     .draw-toolbar {
         cursor: default;
@@ -170,7 +185,10 @@
         // 可滚动内容区域
         &__scrollable {
             flex: 1;
+            min-height: 0; // 关键：允许 flex 子元素收缩以启用滚动
             overflow-y: auto;
+            -webkit-overflow-scrolling: touch; // iOS 惯性滚动
+            touch-action: pan-y; // 允许垂直滚动触摸
             display: flex;
             flex-direction: column;
             gap: 4px; // 增加间距
@@ -232,6 +250,181 @@
             // 隐藏工具按钮标签,仅显示图标
             .tool-icon__label {
                 display: none;
+            }
+        }
+
+        // ============================================================================
+        // 移动端响应式样式 (Mobile Responsive Styles)
+        // ============================================================================
+
+        // 平板及以下 (max-width: 768px) - 简化工具栏
+        @include tablet-and-below {
+            left: $mobile-spacing;
+            top: auto;
+            bottom: calc(#{$safe-area-bottom} + 70px); // 给 AI 输入栏留出空间
+            height: auto;
+            max-height: calc(100vh - 160px); // 限制最大高度
+            width: auto;
+            max-width: none;
+            border-radius: $mobile-border-radius;
+            
+            // 移动端强制使用图标模式
+            .tool-icon__label {
+                display: none;
+            }
+
+            // 调整 section padding
+            .unified-toolbar__section {
+                padding: 0 4px;
+                
+                &--fixed-top,
+                &--fixed-bottom {
+                    padding: 8px 4px;
+                }
+            }
+
+            // 调整按钮尺寸确保触控友好
+            .tool-button,
+            .tool-icon {
+                @include touch-target($mobile-button-min-size);
+            }
+        }
+
+        // 移动端竖屏 (max-width: 640px) - 最小化工具栏
+        @include mobile {
+            left: $mobile-spacing;
+            bottom: calc(#{$safe-area-bottom} + 80px); // 更多空间给 AI 输入栏
+            max-height: calc(100vh - 180px);
+            
+            // 更紧凑的布局
+            &__scrollable {
+                padding: 4px 0;
+                gap: 2px;
+            }
+
+            // 更紧凑的 section
+            .unified-toolbar__section {
+                padding: 0 2px;
+                
+                &:not(:first-child):not(.unified-toolbar__section--fixed-top):not(.unified-toolbar__section--fixed-bottom) {
+                    margin-top: 4px;
+                    padding-top: 4px;
+                }
+                
+                &--fixed-top,
+                &--fixed-bottom {
+                    padding: 6px 2px;
+                }
+            }
+        }
+
+        // 移动端收起状态修饰符
+        &--mobile-collapsed {
+            @include tablet-and-below {
+                // 保持位置不变，只调整高度为自适应
+                height: auto !important;
+                min-height: 0 !important;
+                max-height: none !important;
+                bottom: auto !important;
+                overflow: visible !important;
+                
+                // 隐藏所有常规内容
+                .unified-toolbar__scrollable,
+                .unified-toolbar__section,
+                .unified-toolbar__mobile-toggle {
+                    display: none !important;
+                }
+            }
+        }
+
+        // 移动端收起状态快捷按钮区域
+        &__collapsed-shortcuts {
+            display: none; // 默认隐藏
+            
+            @include tablet-and-below {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 0;
+                padding: 4px 8px 8px;
+                width: 100%; // 填满容器宽度
+            }
+        }
+
+        // 收起状态快捷按钮
+        &__collapsed-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%; // 填满容器宽度
+            height: 40px;
+            min-height: 40px;
+            background: transparent;
+            border: none;
+            border-radius: 8px;
+            color: var(--color-on-surface);
+            cursor: pointer;
+            transition: all 0.15s ease;
+            outline: none; // 移除焦点边框
+            
+            &:hover, &:active {
+                background: var(--color-surface-high, rgba(0, 0, 0, 0.05));
+            }
+            
+            &:focus {
+                outline: none; // 移除焦点边框
+            }
+            
+            svg {
+                width: 22px;
+                height: 22px;
+            }
+            
+            // 展开按钮特殊样式 - 更紧凑
+            &--toggle {
+                height: 28px;
+                min-height: 28px;
+                margin-bottom: 2px;
+                
+                svg {
+                    width: 16px;
+                    height: 16px;
+                    color: var(--color-text-secondary, #999);
+                }
+            }
+        }
+
+        // 移动端展开按钮（展开状态时显示）
+        &__mobile-toggle {
+            display: none;
+            
+            @include tablet-and-below {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                width: $mobile-button-min-size;
+                height: $mobile-button-min-size;
+                background: transparent;
+                border: none;
+                border-radius: 8px;
+                color: var(--color-on-surface);
+                cursor: pointer;
+                transition: background-color 0.2s ease;
+                flex-shrink: 0;
+                
+                &:hover, &:active {
+                    background: var(--color-surface-high);
+                }
+                
+                svg {
+                    width: 20px;
+                    height: 20px;
+                    transition: transform 0.2s ease;
+                }
+                
+                &--expanded svg {
+                    transform: rotate(180deg);
+                }
             }
         }
     }

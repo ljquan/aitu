@@ -1368,54 +1368,93 @@ $vip-color: #E91E63;
   }
 }
 
-// Mobile responsive
-@media (max-width: 640px) {
+// ============================================================================
+// Mobile Responsive Styles
+// ============================================================================
+
+// 平板横屏及以下 (max-width: 1024px) - 稍微缩窄
+@media (max-width: 1024px) {
   .ai-input-bar {
-    bottom: 16px;
+    max-width: 600px;
+  }
+}
+
+// 平板及以下 (max-width: 768px) - 调整布局
+@media (max-width: 768px) {
+  .ai-input-bar {
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
     padding: 0 12px;
-    // 移动端考虑左侧工具栏宽度，避免遮挡
-    left: calc(50% + 24px); // 工具栏宽度48px的一半，使输入框在工具栏右侧区域居中
-    max-width: calc(100% - 60px); // 左侧工具栏48px + 右侧边距12px
+    max-width: calc(100% - 80px); // 给左侧工具栏留空间
+    left: calc(50% + 30px); // 稍微右偏以避开工具栏
+
+    &__container {
+      padding: 6px 8px;
+      border-radius: 20px;
+    }
 
     &__content-preview {
       gap: 6px;
     }
 
-    &__content-item {
-
-      &--text {
-        height: auto; // 移动端也使用自动高度
-        min-width: 56px;
-        max-width: 140px;
-      }
+    &__bottom-bar {
+      gap: 2px;
     }
 
+    // 隐藏 hover 预览（移动端不需要）
     &__hover-preview {
-      max-width: 250px;
-      max-height: 250px;
+      display: none;
+    }
+  }
+}
 
-      &--text {
-        max-width: 280px;
-      }
+// 移动端竖屏 (max-width: 640px) - 全宽布局
+@media (max-width: 640px) {
+  .ai-input-bar {
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+    padding: 0 8px;
+    padding-left: calc(env(safe-area-inset-left, 0px) + 8px);
+    padding-right: calc(env(safe-area-inset-right, 0px) + 8px);
+    // 移动端居中显示，工具栏在左下角不会遮挡
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: calc(100% - 16px);
+    width: 100%;
 
-      &--video {
-        max-width: 280px;
-      }
+    &__content-preview {
+      gap: 4px;
+      padding-left: 8px;
     }
 
-    &__hover-video video {
-      max-width: 280px;
-      max-height: 250px;
+    &__content-item {
+      width: 32px;
+      height: 32px;
+
+      &--text {
+        height: auto;
+        min-width: 48px;
+        max-width: 120px;
+        padding: 6px 8px;
+      }
     }
 
     &__container {
-      padding: 4px 6px 4px 4px;
+      padding: 4px 6px;
+      border-radius: 16px;
       gap: 4px;
     }
 
+    &__bottom-bar {
+      gap: 2px;
+    }
+
+    &__bottom-spacer {
+      min-width: 4px;
+    }
+
     &__type-btn {
-      width: 32px;
-      height: 32px;
+      width: 36px;
+      height: 36px;
+      min-width: 36px; // 确保触控友好
     }
 
     &__model-btn {
@@ -1423,29 +1462,93 @@ $vip-color: #E91E63;
       font-size: 13px;
     }
 
-    &__upload-btn {
-      width: 32px;
-      height: 32px;
+    &__upload-btn,
+    &__library-btn {
+      width: 36px;
+      height: 36px;
+      min-width: 36px;
     }
 
     &__highlight-layer {
       font-size: 14px;
-      padding: 4px 6px;
+      padding: 4px 8px;
     }
 
     &__input {
       font-size: 14px;
-      padding: 4px 6px;
+      padding: 4px 8px;
+      min-height: 20px;
     }
 
     &__send-btn {
       width: 36px;
       height: 36px;
+      min-width: 36px;
     }
 
-    &__send-logo {
-      width: 18px;
-      height: 18px;
+    // 下拉菜单调整
+    .generation-type-dropdown,
+    .count-dropdown {
+      &__trigger {
+        padding: 4px 6px;
+        font-size: 12px;
+      }
+
+      &__menu {
+        max-width: calc(100vw - 32px);
+      }
+    }
+  }
+
+  // Prompt suggestion panel 移动端适配
+  .prompt-suggestion-panel {
+    max-height: 240px;
+    border-radius: 12px;
+
+    &__item {
+      padding: 8px 10px;
+    }
+
+    &__item-text {
+      font-size: 13px;
+    }
+  }
+}
+
+// 小屏移动端 (max-width: 480px) - 更紧凑
+@media (max-width: 480px) {
+  .ai-input-bar {
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
+    padding: 0 6px;
+    padding-left: calc(env(safe-area-inset-left, 0px) + 6px);
+    padding-right: calc(env(safe-area-inset-right, 0px) + 6px);
+
+    &__container {
+      padding: 4px;
+    }
+
+    &__type-btn,
+    &__upload-btn,
+    &__library-btn,
+    &__send-btn {
+      width: 34px;
+      height: 34px;
+      min-width: 34px;
+    }
+
+    &__model-btn {
+      padding: 4px 6px;
+      font-size: 12px;
+    }
+
+    &__input {
+      font-size: 13px;
+    }
+
+    // 隐藏一些次要元素节省空间
+    .generation-type-dropdown__label,
+    .count-dropdown__label {
+      display: none;
     }
   }
 }

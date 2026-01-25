@@ -8,6 +8,7 @@ import type { ReferenceImage } from './shared/ReferenceImageUpload';
 import { useI18n } from '../../i18n';
 import { useBoard } from '@plait-board/react-board';
 import React, { useState, useEffect, useRef, memo, useCallback, lazy, Suspense } from 'react';
+import { useDeviceType } from '../../hooks/useDeviceType';
 import { processSelectedContentForAI, extractSelectedContent } from '../../utils/selection-utils';
 import {
   AI_IMAGE_GENERATION_PREVIEW_CACHE_KEY,
@@ -28,6 +29,10 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
   const { appState, setAppState, openDialog, closeDialog } = useDrawnix();
   const { language } = useI18n();
   const board = useBoard();
+  const { isMobile, isTablet } = useDeviceType();
+  
+  // 移动端和平板端不显示批量出图
+  const showBatchTab = !isMobile && !isTablet;
 
   // 使用ref来防止多次并发处理
   const isProcessingRef = useRef(false);
@@ -119,6 +124,13 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
       return 'single';
     }
   });
+
+  // 移动端/平板端自动切换回单图模式
+  useEffect(() => {
+    if (!showBatchTab && imageGenerationMode === 'batch') {
+      setImageGenerationMode('single');
+    }
+  }, [showBatchTab, imageGenerationMode]);
 
   // 处理图片生成模式变化
   const handleImageModeChange = useCallback((mode: ImageGenerationMode) => {
@@ -457,20 +469,37 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
           : (language === 'zh' ? 'AI 图片生成' : 'AI Image Generation')
         }
         headerContent={
-          <div className="image-generation-mode-tabs">
-            <button
-              className={`mode-tab ${imageGenerationMode === 'single' ? 'active' : ''}`}
-              onClick={() => handleImageModeChange('single')}
+          showBatchTab ? (
+            <div 
+              className="image-generation-mode-tabs"
+              onMouseDown={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
             >
-              {language === 'zh' ? 'AI 图片生成' : 'AI Image'}
-            </button>
-            <button
-              className={`mode-tab ${imageGenerationMode === 'batch' ? 'active' : ''}`}
-              onClick={() => handleImageModeChange('batch')}
-            >
-              {language === 'zh' ? '批量出图' : 'Batch'}
-            </button>
-          </div>
+              <button
+                type="button"
+                className={`mode-tab ${imageGenerationMode === 'single' ? 'active' : ''}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  handleImageModeChange('single');
+                }}
+              >
+                {language === 'zh' ? 'AI 图片生成' : 'AI Image'}
+              </button>
+              <button
+                type="button"
+                className={`mode-tab ${imageGenerationMode === 'batch' ? 'active' : ''}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  handleImageModeChange('batch');
+                }}
+              >
+                {language === 'zh' ? '批量出图' : 'Batch'}
+              </button>
+            </div>
+          ) : undefined
         }
         onClose={handleImageDialogClose}
         width="80%"
