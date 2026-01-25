@@ -89,10 +89,10 @@
 
   &__section {
     padding: 0 16px;
-    margin-bottom: 16px;
+    margin-bottom: 8px;
 
     &:last-child {
-      margin-bottom: 8px;
+      margin-bottom: 4px;
     }
 
     &-title {
@@ -144,7 +144,7 @@
     &-content {
       background: #f9fafb;
       border-radius: 8px;
-      padding: 12px;
+      padding: 10px;
     }
   }
 
@@ -751,7 +751,7 @@
     gap: 4px;
 
     &--compact {
-      gap: 2px;
+      gap: 4px;
     }
 
     &__btn {
@@ -761,22 +761,212 @@
       width: 28px;
       height: 28px;
       border: 1px solid #e5e7eb;
-      border-radius: 4px;
+      border-radius: 6px;
       background: #ffffff;
       color: #6b7280;
       cursor: pointer;
       transition: all 0.15s ease;
 
       &:hover {
-        border-color: #3b82f6;
-        color: #3b82f6;
+        border-color: #9ca3af;
+        background: #f9fafb;
+        color: #374151;
       }
 
       &.is-active {
-        background: #3b82f6;
-        border-color: #3b82f6;
-        color: #ffffff;
+        background: #f3f4f6;
+        border-color: #9ca3af;
+        color: #1f2937;
       }
+    }
+  }
+
+  // 样式按钮组（加粗、斜体、下划线、删除线、上标、下标）
+  .style-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+
+    &__btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      background: #ffffff;
+      color: #6b7280;
+      cursor: pointer;
+      transition: all 0.15s ease;
+
+      &:hover {
+        border-color: #9ca3af;
+        background: #f9fafb;
+        color: #374151;
+      }
+
+      &.is-active {
+        background: #f3f4f6;
+        border-color: #9ca3af;
+        color: #1f2937;
+      }
+    }
+
+    &__icon {
+      font-size: 13px;
+      font-weight: 600;
+      font-family: 'Georgia', 'Times New Roman', serif;
+      line-height: 1;
+
+      &--bold {
+        font-weight: 700;
+      }
+
+      &--italic {
+        font-style: italic;
+      }
+
+      &--underline {
+        text-decoration: underline;
+        text-underline-offset: 2px;
+      }
+
+      &--strikethrough {
+        text-decoration: line-through;
+      }
+
+      &--superscript,
+      &--subscript {
+        font-size: 11px;
+        font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+
+        sup, sub {
+          font-size: 8px;
+        }
+      }
+    }
+  }
+
+  // 大小写按钮组
+  .case-buttons {
+    display: flex;
+    gap: 4px;
+
+    &__btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 32px;
+      height: 28px;
+      padding: 0 6px;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      background: #ffffff;
+      color: #6b7280;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s ease;
+
+      &:hover {
+        border-color: #9ca3af;
+        background: #f9fafb;
+        color: #374151;
+      }
+
+      &.is-active {
+        background: #f3f4f6;
+        border-color: #9ca3af;
+        color: #1f2937;
+      }
+    }
+  }
+
+  // 高亮颜色按钮组
+  .highlight-colors {
+    display: flex;
+    gap: 4px;
+
+    &__btn {
+      width: 24px;
+      height: 24px;
+      border: 1px solid #e5e7eb;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+
+      &:hover {
+        transform: scale(1.1);
+      }
+
+      &.is-active {
+        box-shadow: 0 0 0 2px #fff, 0 0 0 4px #9ca3af;
+      }
+
+      &--none {
+        background: #ffffff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #9ca3af;
+      }
+    }
+  }
+
+  // 装饰线样式按钮
+  .decoration-style-buttons {
+    display: flex;
+    gap: 4px;
+
+    &__btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 28px;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      background: #ffffff;
+      color: #6b7280;
+      cursor: pointer;
+      transition: all 0.15s ease;
+
+      &:hover {
+        border-color: #9ca3af;
+        background: #f9fafb;
+      }
+
+      &.is-active {
+        background: #f3f4f6;
+        border-color: #9ca3af;
+      }
+    }
+  }
+
+  // 装饰线预览
+  .decoration-preview {
+    font-size: 11px;
+    font-weight: 500;
+
+    &--solid {
+      text-decoration: underline solid;
+    }
+
+    &--double {
+      text-decoration: underline double;
+    }
+
+    &--dotted {
+      text-decoration: underline dotted;
+    }
+
+    &--dashed {
+      text-decoration: underline dashed;
+    }
+
+    &--wavy {
+      text-decoration: underline wavy;
     }
   }
 
