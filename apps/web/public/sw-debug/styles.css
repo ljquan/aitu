@@ -2401,3 +2401,59 @@ body.analysis-mode .log-entry {
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
+
+/* JSON Syntax Highlighting */
+.json-highlight {
+  background: var(--bg-tertiary);
+  padding: 12px;
+  border-radius: 6px;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.json-key {
+  color: #9cdcfe;
+}
+
+.json-string {
+  color: #ce9178;
+}
+
+.json-number {
+  color: #b5cea8;
+}
+
+.json-boolean {
+  color: #569cd6;
+}
+
+.json-null {
+  color: #569cd6;
+}
+
+/* Light mode JSON highlighting */
+@media (prefers-color-scheme: light) {
+  .json-key {
+    color: #0451a5;
+  }
+  
+  .json-string {
+    color: #a31515;
+  }
+  
+  .json-number {
+    color: #098658;
+  }
+  
+  .json-boolean {
+    color: #0000ff;
+  }
+  
+  .json-null {
+    color: #0000ff;
+  }
+}

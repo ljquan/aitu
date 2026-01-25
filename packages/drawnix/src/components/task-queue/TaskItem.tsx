@@ -50,11 +50,11 @@ export interface TaskItemProps {
 
 /**
  * Gets the appropriate status tag color based on task status
+ * Note: PENDING is deprecated, treated same as PROCESSING for legacy compatibility
  */
 function getStatusTagTheme(status: TaskStatus): 'default' | 'primary' | 'success' | 'warning' | 'danger' {
   switch (status) {
     case TaskStatus.PENDING:
-      return 'default';
     case TaskStatus.PROCESSING:
       return 'primary';
     case TaskStatus.COMPLETED:
@@ -70,11 +70,11 @@ function getStatusTagTheme(status: TaskStatus): 'default' | 'primary' | 'success
 
 /**
  * Gets the status label in Chinese
+ * Note: PENDING is deprecated, displayed as '处理中' for legacy compatibility
  */
 function getStatusLabel(status: TaskStatus): string {
   switch (status) {
     case TaskStatus.PENDING:
-      return '待处理';
     case TaskStatus.PROCESSING:
       return '处理中';
     case TaskStatus.COMPLETED:

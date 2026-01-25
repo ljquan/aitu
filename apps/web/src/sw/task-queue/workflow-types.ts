@@ -17,6 +17,22 @@ import type { TaskStatus, TaskExecutionPhase, GeminiConfig, VideoAPIConfig } fro
 export type WorkflowStepStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
 
 /**
+ * Workflow step execution options (batch generation etc.)
+ */
+export interface WorkflowStepOptions {
+  /** Execution mode */
+  mode?: 'async' | 'queue';
+  /** Batch ID for batch generation */
+  batchId?: string;
+  /** Batch index (1-based) */
+  batchIndex?: number;
+  /** Total batch count */
+  batchTotal?: number;
+  /** Global index */
+  globalIndex?: number;
+}
+
+/**
  * A single step in a workflow
  */
 export interface WorkflowStep {
@@ -38,6 +54,8 @@ export interface WorkflowStep {
   duration?: number;
   /** Dependencies - step IDs that must complete before this step */
   dependsOn?: string[];
+  /** Execution options (batch info etc.) */
+  options?: WorkflowStepOptions;
 }
 
 /**

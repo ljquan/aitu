@@ -1278,6 +1278,8 @@ export async function parseImageGenerationResponse(data: any, taskId?: string): 
     // 检查是否包含违禁内容错误
     if (imageData.revised_prompt?.includes('PROHIBITED_CONTENT')) {
       throw new Error('内容被拒绝：包含违禁内容');
+    } else if (imageData.revised_prompt?.includes('NO_IMAGE')) {
+      throw new Error('该模型为多模态模型，未生成图片，可更换提示词明确生成图片试试');
     }
     throw new Error('No image URL in response');
   }

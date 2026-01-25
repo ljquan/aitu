@@ -762,11 +762,19 @@ export class WorkflowExecutor {
       // Check if this tool needs to run in main thread
       if (requiresMainThread(step.mcp) || !getSWMCPTool(step.mcp)) {
         // Delegate to main thread
+        // Merge batch options into args for main thread (batchId, batchIndex, batchTotal)
+        const argsWithOptions = {
+          ...step.args,
+          ...(step.options?.batchId && { batchId: step.options.batchId }),
+          ...(step.options?.batchIndex && { batchIndex: step.options.batchIndex }),
+          ...(step.options?.batchTotal && { batchTotal: step.options.batchTotal }),
+          ...(step.options?.globalIndex && { globalIndex: step.options.globalIndex }),
+        };
         const response = await this.requestMainThreadTool(
           workflow.id,
           step.id,
           step.mcp,
-          step.args
+          argsWithOptions
         );
 
         if (!response.success) {

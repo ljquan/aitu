@@ -6,7 +6,7 @@
  */
 
 import { Subject, Observable } from 'rxjs';
-import { Task, TaskStatus, TaskType, TaskEvent, GenerationParams } from '../types/task.types';
+import { Task, TaskStatus, TaskType, TaskEvent, GenerationParams, TaskExecutionPhase } from '../types/task.types';
 import { generateTaskId, isTaskActive } from '../utils/task-utils';
 import { validateGenerationParams, sanitizeGenerationParams } from '../utils/validation-utils';
 
@@ -52,15 +52,17 @@ class TaskQueueService {
     // Sanitize parameters
     const sanitizedParams = sanitizeGenerationParams(params);
 
-    // Create new task
+    // Create new task - starts as PROCESSING since it will be executed immediately
     const now = Date.now();
     const task: Task = {
       id: generateTaskId(),
       type,
-      status: TaskStatus.PENDING,
+      status: TaskStatus.PROCESSING,
       params: sanitizedParams,
       createdAt: now,
       updatedAt: now,
+      startedAt: now,
+      executionPhase: TaskExecutionPhase.SUBMITTING,
       // Initialize progress for video tasks
       ...(type === TaskType.VIDEO && { progress: 0 }),
     };
@@ -213,13 +215,14 @@ class TaskQueueService {
       return;
     }
 
-    // Reset task for retry - clear timing fields to prevent immediate timeout
-    this.updateTaskStatus(taskId, TaskStatus.PENDING, {
+    // Reset task for retry - set to PROCESSING for immediate execution
+    const now = Date.now();
+    this.updateTaskStatus(taskId, TaskStatus.PROCESSING, {
       error: undefined,
-      startedAt: undefined,  // Reset start time so timeout is recalculated
+      startedAt: now,  // Set new start time
       completedAt: undefined, // Clear completion time
       remoteId: undefined,   // Clear remote ID for fresh submission
-      executionPhase: undefined, // Clear execution phase
+      executionPhase: TaskExecutionPhase.SUBMITTING,
       progress: task.type === TaskType.VIDEO ? 0 : undefined, // Reset progress for video
     });
 

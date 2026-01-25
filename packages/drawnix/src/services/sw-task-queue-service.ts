@@ -102,14 +102,17 @@ class SWTaskQueueService {
     const sanitizedParams = sanitizeGenerationParams(params);
 
     // Create task locally for immediate UI feedback
+    // Task starts as PROCESSING since it will be executed immediately by SW
     const now = Date.now();
     const task: Task = {
       id: generateTaskId(),
       type,
-      status: TaskStatus.PENDING,
+      status: TaskStatus.PROCESSING,
       params: sanitizedParams,
       createdAt: now,
       updatedAt: now,
+      startedAt: now,
+      executionPhase: TaskExecutionPhase.SUBMITTING,
       ...(type === TaskType.VIDEO && { progress: 0 }),
     };
 
@@ -130,6 +133,10 @@ class SWTaskQueueService {
     return Array.from(this.tasks.values());
   }
 
+  /**
+   * @deprecated Tasks no longer use PENDING status. New tasks start as PROCESSING.
+   * Kept for backward compatibility with legacy data.
+   */
   getPendingTasks(): Task[] {
     return this.getAllTasks().filter((t) => t.status === TaskStatus.PENDING);
   }

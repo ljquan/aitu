@@ -50,7 +50,7 @@
     "version:patch": "node scripts/safe-version-bump.js patch",
     "version:minor": "node scripts/safe-version-bump.js minor",
     "version:major": "node scripts/safe-version-bump.js major",
-    "release:skip": "node scripts/deploy-hybrid.js --skip-npm",
+    "release:skip": "node scripts/deploy-hybrid.js --skip-build --skip-e2e --skip-npm --skip-manual",
     "release": "npm run version:patch && node scripts/deploy-hybrid.js --skip-e2e",
     "release:minor": "npm run version:minor && node scripts/deploy-hybrid.js",
     "release:major": "npm run version:major && node scripts/deploy-hybrid.js",

@@ -473,7 +473,7 @@ const AIVideoGeneration = ({
       }
     } else {
       // 普通模式验证
-      if (!prompt.trim()) {
+      if (!prompt || !prompt.trim()) {
         setError(language === 'zh' ? '请输入视频描述' : 'Please enter video description');
         return;
       }
@@ -507,7 +507,7 @@ const AIVideoGeneration = ({
       // 构建最终提示词
       const finalPrompt = storyboardEnabled
         ? formatStoryboardPrompt(storyboardScenes)
-        : prompt.trim();
+        : (prompt || '').trim();
 
       // 批量生成逻辑
       const batchTaskIds: string[] = [];
@@ -694,7 +694,7 @@ const AIVideoGeneration = ({
             type="video"
             isGenerating={isGenerating}
             hasGenerated={false}
-            canGenerate={storyboardEnabled ? storyboardScenes.length > 0 : !!prompt.trim()}
+            canGenerate={storyboardEnabled ? storyboardScenes.length > 0 : !!(prompt && prompt.trim())}
             onGenerate={handleGenerate}
             onReset={handleReset}
           />

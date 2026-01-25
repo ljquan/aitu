@@ -150,12 +150,20 @@ export class CharacterHandler implements TaskHandler {
     const { debugFetch } = await import('../debug-fetch');
     const { startLLMApiLog, completeLLMApiLog, failLLMApiLog } = await import('../llm-api-logger');
     
+    // 构建请求参数的日志表示
+    const requestParamsForLog = {
+      character_from_task: params.sourceVideoTaskId || '',
+      model: characterModel,
+      ...(params.characterTimestamps && { character_timestamps: params.characterTimestamps }),
+    };
+    
     const startTime = Date.now();
     const logId = startLLMApiLog({
       endpoint: '/videos',
       model: characterModel,
       taskType: 'character',
       prompt: `角色提取: ${params.sourceVideoTaskId}`,
+      requestBody: JSON.stringify(requestParamsForLog, null, 2),
       taskId: task.id,
     });
 

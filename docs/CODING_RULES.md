@@ -1125,6 +1125,52 @@ async initialize(): Promise<boolean> {
 
 **原因**: `settingsManager` 使用异步方法 `decryptSensitiveDataForLoading()` 解密敏感数据（如 API Key）。如果在解密完成前调用 `geminiSettings.get()`，会返回加密的 JSON 对象而不是解密后的字符串，导致 API 请求失败。
 
+### 跨层数据转换必须传递所有字段
+
+**场景**: 在主线程和 Service Worker 之间传递数据对象时，需要将内部类型转换为传输格式
+
+❌ **错误示例**:
+```typescript
+// 错误：转换时漏掉了 options 字段
+const swWorkflow = {
+  id: legacyWorkflow.id,
+  name: legacyWorkflow.name,
+  steps: legacyWorkflow.steps.map(step => ({
+    id: step.id,
+    mcp: step.mcp,
+    args: step.args,
+    description: step.description,
+    status: step.status,
+    // 漏掉了 step.options！导致批量信息（batchId 等）丢失
+  })),
+};
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：显式传递所有字段，包括可选字段
+const swWorkflow = {
+  id: legacyWorkflow.id,
+  name: legacyWorkflow.name,
+  steps: legacyWorkflow.steps.map(step => ({
+    id: step.id,
+    mcp: step.mcp,
+    args: step.args,
+    description: step.description,
+    status: step.status,
+    options: step.options,  // 包含 batchId, batchIndex, batchTotal 等
+  })),
+};
+```
+
+**常见遗漏的字段**:
+- `options` - 批量参数、执行模式等
+- `metadata` - 元数据信息
+- `context` - 上下文信息
+- 任何 `?:` 可选字段
+
+**原因**: 跨层通信时，如果源类型有可选字段，在转换时很容易遗漏。这会导致功能静默失败（如批量生成只执行第一个），且很难排查。建议在转换函数中显式列出所有字段，或使用 TypeScript 的类型检查确保字段完整。
+
 ### Service Worker 初始化时序
 
 **场景**: 提交工作流到 Service Worker 执行前

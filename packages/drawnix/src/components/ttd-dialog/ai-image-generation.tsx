@@ -233,7 +233,7 @@ const AIImageGeneration = ({
   };
 
   const handleGenerate = async (count: number = 1) => {
-    if (!prompt.trim()) {
+    if (!prompt || !prompt.trim()) {
       setError(
         language === 'zh' ? '请输入图像描述' : 'Please enter image description'
       );
@@ -274,7 +274,7 @@ const AIImageGeneration = ({
 
         for (let i = 0; i < count; i++) {
           const taskParams = {
-            prompt: prompt.trim(),
+            prompt: (prompt || '').trim(),
             width: finalWidth,
             height: finalHeight,
             aspectRatio,
@@ -323,7 +323,7 @@ const AIImageGeneration = ({
 
       // 创建任务参数
       const taskParams = {
-        prompt: prompt.trim(),
+        prompt: (prompt || '').trim(),
         width: finalWidth,
         height: finalHeight,
         aspectRatio,
@@ -449,7 +449,7 @@ const AIImageGeneration = ({
             type="image"
             isGenerating={isGenerating}
             hasGenerated={false}
-            canGenerate={!!prompt.trim()}
+            canGenerate={!!(prompt && prompt.trim())}
             onGenerate={handleGenerate}
             onReset={handleReset}
             leftContent={

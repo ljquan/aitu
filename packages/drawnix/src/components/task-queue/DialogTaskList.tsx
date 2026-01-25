@@ -57,8 +57,9 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
   const taskMatchesQuery = (task: any, query: string) => {
     if (!query.trim()) return true;
     const tokens = query.toLowerCase().split(/\s+/).filter(Boolean);
+    // Note: PENDING is deprecated, displayed as '处理中' for legacy compatibility
     const statusLabelMap: Record<TaskStatus, string> = {
-      [TaskStatus.PENDING]: '待处理',
+      [TaskStatus.PENDING]: '处理中',
       [TaskStatus.PROCESSING]: '处理中',
       [TaskStatus.COMPLETED]: '已完成',
       [TaskStatus.FAILED]: '失败',

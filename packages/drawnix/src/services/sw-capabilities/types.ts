@@ -172,6 +172,14 @@ export interface ImageGenerationParams {
   quality?: '1k' | '2k' | '4k';
   model?: string;
   count?: number;
+  /** 批次 ID（批量生成时） */
+  batchId?: string;
+  /** 批次索引（1-based） */
+  batchIndex?: number;
+  /** 批次总数 */
+  batchTotal?: number;
+  /** 全局索引 */
+  globalIndex?: number;
 }
 
 /**
@@ -184,6 +192,14 @@ export interface VideoGenerationParams {
   size?: string;
   referenceImages?: string[];
   count?: number;
+  /** 批次 ID（批量生成时） */
+  batchId?: string;
+  /** 批次索引（1-based） */
+  batchIndex?: number;
+  /** 批次总数 */
+  batchTotal?: number;
+  /** 全局索引 */
+  globalIndex?: number;
 }
 
 /**

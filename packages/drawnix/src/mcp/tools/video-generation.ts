@@ -63,6 +63,14 @@ export interface VideoGenerationParams {
   referenceImages?: string[];
   /** 生成数量（仅 queue 模式支持） */
   count?: number;
+  /** 批次 ID（批量生成时） */
+  batchId?: string;
+  /** 批次索引（1-based） */
+  batchIndex?: number;
+  /** 批次总数 */
+  batchTotal?: number;
+  /** 全局索引 */
+  globalIndex?: number;
 }
 
 /**
@@ -166,7 +174,11 @@ async function executeAsync(params: VideoGenerationParams): Promise<MCPResult> {
  * 支持批量创建任务（通过 count 参数）
  */
 function executeQueue(params: VideoGenerationParams, options: MCPExecuteOptions): MCPTaskResult {
-  const { prompt, model = 'veo3', seconds, size, referenceImages, count = 1 } = params;
+  const { 
+    prompt, model = 'veo3', seconds, size, referenceImages, count = 1,
+    // 批量参数（可能从工作流步骤传入）
+    batchId: paramsBatchId, batchIndex: paramsBatchIndex, batchTotal: paramsBatchTotal, globalIndex: paramsGlobalIndex,
+  } = params;
 
   if (!prompt || typeof prompt !== 'string') {
     return {
@@ -187,9 +199,12 @@ function executeQueue(params: VideoGenerationParams, options: MCPExecuteOptions)
       name: `reference-${index + 1}`,
     }));
 
-    // 生成批次 ID（如果有多个任务）
+    // 批量参数：优先使用 params 中的（工作流场景），否则根据 count 生成
     const actualCount = Math.min(Math.max(1, count), 10); // 限制 1-10 个
-    const batchId = actualCount > 1 ? `batch_${Date.now()}` : options.batchId;
+    const batchId = paramsBatchId || (actualCount > 1 ? `batch_${Date.now()}` : options.batchId);
+    const batchIndex = paramsBatchIndex;
+    const batchTotal = paramsBatchTotal || (actualCount > 1 ? actualCount : undefined);
+    const globalIndex = paramsGlobalIndex || options.globalIndex;
 
     const createdTasks: any[] = [];
 
@@ -202,8 +217,28 @@ function executeQueue(params: VideoGenerationParams, options: MCPExecuteOptions)
         throw new Error(`重试任务不存在: ${options.retryTaskId}`);
       }
       createdTasks.push(task);
+    } else if (paramsBatchId && paramsBatchIndex) {
+      // 工作流场景：每个步骤创建一个任务，批量信息已从工作流传入
+      const task = taskQueueService.createTask(
+        {
+          prompt,
+          size: size || '16x9',
+          duration: parseInt(seconds || modelConfig.defaultDuration, 10),
+          model,
+          uploadedImages: uploadedImages && uploadedImages.length > 0 ? uploadedImages : undefined,
+          // 使用工作流传入的批量参数
+          batchId,
+          batchIndex,
+          batchTotal,
+          globalIndex,
+          // 自动插入画布
+          autoInsertToCanvas: true,
+        },
+        TaskType.VIDEO
+      );
+      createdTasks.push(task);
     } else {
-      // 创建任务（支持批量）
+      // 直接调用场景（如弹窗）：根据 count 创建多个任务
       for (let i = 0; i < actualCount; i++) {
         const task = taskQueueService.createTask(
           {
@@ -216,7 +251,7 @@ function executeQueue(params: VideoGenerationParams, options: MCPExecuteOptions)
             batchId: batchId,
             batchIndex: i + 1,
             batchTotal: actualCount,
-            globalIndex: options.globalIndex ? options.globalIndex + i : i + 1,
+            globalIndex: globalIndex ? globalIndex + i : i + 1,
             // 自动插入画布
             autoInsertToCanvas: true,
           },

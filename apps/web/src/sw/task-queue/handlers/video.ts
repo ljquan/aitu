@@ -214,11 +214,22 @@ export class VideoHandler implements TaskHandler {
     
     const startTime = Date.now();
     const model = (params.model as string) || 'veo3';
+    
+    // 构建请求参数的日志表示（FormData 无法直接序列化）
+    const requestParamsForLog = {
+      model,
+      prompt: params.prompt,
+      ...(params.duration && { seconds: params.duration }),
+      ...(params.size && { size: params.size }),
+      ...(refUrls.length > 0 && { input_reference: `[${refUrls.length} images]` }),
+    };
+    
     const logId = startLLMApiLog({
       endpoint: '/videos',
       model,
       taskType: 'video',
       prompt: params.prompt as string,
+      requestBody: JSON.stringify(requestParamsForLog, null, 2),
       hasReferenceImages: refUrls.length > 0,
       referenceImageCount: refUrls.length,
       referenceImages: referenceImageInfos,
