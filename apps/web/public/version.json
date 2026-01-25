@@ -1,8 +1,12 @@
 {
-  "version": "0.5.50",
-  "buildTime": "2026-01-25T13:22:28.330Z",
+  "version": "0.5.51",
+  "buildTime": "2026-01-25T13:53:49.739Z",
   "gitCommit": "unknown",
   "changelog": [
-    "对比模式下视频联动同步播放和重置"
+    "add alignment, distribution, and boolean operation buttons",
+    "enhance task submission and execution checks",
+    "统一媒体预览组件并优化缩略图展示",
+    "增强文字属性面板样式设置功能",
+    "全面优化多端响应式适配"
   ]
 }

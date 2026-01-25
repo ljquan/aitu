@@ -1,3 +1,27 @@
+## 0.5.51 (2026-01-25)
+
+### 🚀 Features
+
+- 全面优化多端响应式适配 ([1b06d2f](https://github.com/ljquan/aitu/commit/1b06d2f))
+- 统一媒体预览组件并优化缩略图展示 ([a617211](https://github.com/ljquan/aitu/commit/a617211))
+- enhance pencil and eraser settings with shape selection ([cbde7b2](https://github.com/ljquan/aitu/commit/cbde7b2))
+- 增强文字属性面板样式设置功能 ([2b437fa](https://github.com/ljquan/aitu/commit/2b437fa))
+- add alignment, distribution, and boolean operation buttons ([811111e](https://github.com/ljquan/aitu/commit/811111e))
+
+### 🩹 Fixes
+
+- enhance task submission and execution checks ([7a92d70](https://github.com/ljquan/aitu/commit/7a92d70))
+
+### 🔧 Chores
+
+- 去掉参数n ([989e919](https://github.com/ljquan/aitu/commit/989e919))
+- docs: 添加 Slate-React Leaf DOM 结构稳定性规则 ([a20c4a4](https://github.com/ljquan/aitu/commit/a20c4a4))
+- docs: 添加编码规则 - Clipper 布尔运算结果处理 ([fe13ef8](https://github.com/ljquan/aitu/commit/fe13ef8))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+
 ## 0.5.50 (2026-01-24)
 
 ### 🚀 Features
