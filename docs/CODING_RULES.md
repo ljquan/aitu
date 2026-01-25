@@ -5080,3 +5080,58 @@ const holes = sortedByArea.slice(1); // 其他都是孔洞
 3. 面积大小是稳定的判断依据：外环总是包含所有孔洞，因此面积最大
 
 **相关文件**: `packages/drawnix/src/transforms/precise-erase.ts`, `packages/drawnix/src/transforms/boolean.ts`
+
+### Slate-React Leaf 组件 DOM 结构必须保持稳定
+
+**场景**: 在 Slate-React 的 Leaf 组件中实现文本样式（如下划线、删除线）时
+
+❌ **错误做法**:
+```tsx
+// 错误：根据条件动态切换 HTML 标签和 CSS 实现方式
+const Leaf = ({ children, leaf, attributes }) => {
+  const hasCustomStyle = leaf['text-decoration-style'];
+  
+  // 当样式变化时，DOM 结构会从 <u>...</u> 变成 <span style={...}>...</span>
+  if (leaf.underlined && !hasCustomStyle) {
+    children = <u>{children}</u>;  // 有时用标签
+  }
+  
+  const style = {};
+  if (leaf.underlined && hasCustomStyle) {
+    style.textDecoration = 'underline';  // 有时用 CSS
+  }
+  
+  return <span style={style} {...attributes}>{children}</span>;
+};
+// 报错：Cannot resolve a DOM node from Slate node
+```
+
+✅ **正确做法**:
+```tsx
+// 正确：始终使用同一种方式实现，保持 DOM 结构稳定
+const Leaf = ({ children, leaf, attributes }) => {
+  const style: CSSProperties = {};
+  
+  // 统一使用 CSS 实现，不使用 <u>、<s> 等标签
+  if (leaf.underlined || leaf.strikethrough) {
+    const decorations: string[] = [];
+    if (leaf.underlined) decorations.push('underline');
+    if (leaf.strikethrough) decorations.push('line-through');
+    
+    style.textDecoration = decorations.join(' ');
+    if (leaf['text-decoration-style']) {
+      style.textDecorationStyle = leaf['text-decoration-style'];
+    }
+  }
+  
+  return <span style={style} {...attributes}>{children}</span>;
+};
+```
+
+**原因**: 
+1. Slate-React 依赖稳定的 DOM 结构来追踪编辑器节点与 DOM 节点的映射关系
+2. 当根据样式条件动态切换 HTML 标签（`<u>`）和 CSS（`text-decoration`）时，DOM 结构会发生变化
+3. 这会导致 Slate 无法找到对应的 DOM 节点，抛出 "Cannot resolve a DOM node from Slate node" 错误
+4. 解决方案是选择一种实现方式并始终使用，推荐使用 CSS 因为它更灵活（支持自定义样式和颜色）
+
+**相关文件**: `packages/react-text/src/text.tsx`
