@@ -79,6 +79,8 @@ export class CharacterHandler implements TaskHandler {
 
   /**
    * Resume character extraction polling
+   * 恢复任务只是继续轮询，不创建新的 LLM API 日志条目
+   * 通过 taskId 查找原始日志并在完成时更新它
    */
   async resume(task: SWTask, config: HandlerConfig): Promise<TaskResult> {
     if (!task.remoteId) {
@@ -88,15 +90,10 @@ export class CharacterHandler implements TaskHandler {
     const abortController = new AbortController();
     this.abortControllers.set(task.id, abortController);
 
-    // 为恢复的任务创建新的日志条目
-    const { startLLMApiLog } = await import('../llm-api-logger');
-    const logId = startLLMApiLog({
-      endpoint: `/characters/${task.remoteId} (resumed)`,
-      model: 'character-extractor',
-      taskType: 'character',
-      prompt: (task.params?.videoUrl as string) || '',
-      taskId: task.id,
-    });
+    // 查找原始任务的日志 ID，以便在轮询完成时更新它
+    const { findLatestLogByTaskId } = await import('../llm-api-logger');
+    const originalLog = await findLatestLogByTaskId(task.id);
+    const logId = originalLog?.id;
 
     try {
       config.onProgress(task.id, task.progress || 0, TaskExecutionPhase.POLLING);
@@ -106,7 +103,7 @@ export class CharacterHandler implements TaskHandler {
         task.id,
         config,
         abortController.signal,
-        logId
+        logId // 传递原始日志 ID，轮询完成时会更新原始日志
       );
 
       return result;
