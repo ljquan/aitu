@@ -10,6 +10,7 @@
  */
 
 import React, { useCallback, useState, useRef, useEffect } from 'react';
+import ReactDOM from 'react-dom';
 import { Button, MessagePlugin } from 'tdesign-react';
 import { X } from 'lucide-react';
 import { 
@@ -63,6 +64,7 @@ export const ReferenceImageUpload: React.FC<ReferenceImageUploadProps> = ({
   const [showMediaLibrary, setShowMediaLibrary] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [currentSlot, setCurrentSlot] = useState<number>(0);
+  const [hoveredImage, setHoveredImage] = useState<{ url: string; x: number; y: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { addAsset } = useAssets();
@@ -323,6 +325,18 @@ export const ReferenceImageUpload: React.FC<ReferenceImageUploadProps> = ({
     setShowMediaLibrary(true);
   }, []);
 
+  // Handle image hover for preview
+  const handleImageMouseEnter = useCallback((url: string, e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const topY = rect.top - 10;
+    setHoveredImage({ url, x: centerX, y: topY });
+  }, []);
+
+  const handleImageMouseLeave = useCallback(() => {
+    setHoveredImage(null);
+  }, []);
+
   // Render upload placeholder
   const renderUploadPlaceholder = (slot?: number) => (
     <div
@@ -359,7 +373,12 @@ export const ReferenceImageUpload: React.FC<ReferenceImageUploadProps> = ({
 
   // Render image preview
   const renderImagePreview = (image: ReferenceImage, index: number) => (
-    <div key={index} className="reference-image-upload__preview">
+    <div
+      key={index}
+      className="reference-image-upload__preview"
+      onMouseEnter={(e) => handleImageMouseEnter(image.url, e)}
+      onMouseLeave={handleImageMouseLeave}
+    >
       <img
         src={image.url}
         alt={image.name}
@@ -463,35 +482,52 @@ export const ReferenceImageUpload: React.FC<ReferenceImageUploadProps> = ({
   };
 
   return (
-    <div
-      ref={containerRef}
-      className={`reference-image-upload ${disabled ? 'reference-image-upload--disabled' : ''}`}
-      tabIndex={0}
-    >
-      {label && (
-        <div className="reference-image-upload__label">{label}</div>
+    <>
+      {/* Hover preview - large image (rendered to body via portal) */}
+      {hoveredImage && ReactDOM.createPortal(
+        <div
+          className="reference-image-upload__hover-preview"
+          style={{
+            left: `${hoveredImage.x}px`,
+            top: `${hoveredImage.y}px`,
+            transform: 'translate(-50%, -100%)',
+          }}
+        >
+          <img src={hoveredImage.url} alt="Preview" />
+        </div>,
+        document.body
       )}
 
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        multiple={multiple && !slotLabels}
-        onChange={handleFileInputChange}
-        className="reference-image-upload__input"
-        disabled={disabled}
-      />
+      <div
+        ref={containerRef}
+        className={`reference-image-upload ${disabled ? 'reference-image-upload--disabled' : ''}`}
+        tabIndex={0}
+      >
+        {label && (
+          <div className="reference-image-upload__label">{label}</div>
+        )}
 
-      {slotLabels ? renderSlotMode() : (multiple ? renderGridMode() : renderSingleMode())}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple={multiple && !slotLabels}
+          onChange={handleFileInputChange}
+          className="reference-image-upload__input"
+          disabled={disabled}
+        />
 
-      <MediaLibraryModal
-        isOpen={showMediaLibrary}
-        onClose={() => setShowMediaLibrary(false)}
-        mode={SelectionMode.SELECT}
-        filterType={AssetType.IMAGE}
-        onSelect={handleMediaLibrarySelect}
-      />
-    </div>
+        {slotLabels ? renderSlotMode() : (multiple ? renderGridMode() : renderSingleMode())}
+
+        <MediaLibraryModal
+          isOpen={showMediaLibrary}
+          onClose={() => setShowMediaLibrary(false)}
+          mode={SelectionMode.SELECT}
+          filterType={AssetType.IMAGE}
+          onSelect={handleMediaLibrarySelect}
+        />
+      </div>
+    </>
   );
 };
 

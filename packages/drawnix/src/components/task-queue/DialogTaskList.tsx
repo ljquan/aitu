@@ -5,20 +5,20 @@
  * Used within AI generation dialogs to show only tasks created in that dialog.
  */
 
-import React, { useMemo, useState, useEffect, useCallback } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import { VirtualTaskList } from './VirtualTaskList';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
 import { Task, TaskType, TaskStatus } from '../../types/task.types';
 import { useDrawnix, DialogType } from '../../hooks/use-drawnix';
 import { insertImageFromUrl } from '../../data/image';
 import { insertVideoFromUrl } from '../../data/video';
-import { MessagePlugin, Dialog, Button, Input } from 'tdesign-react';
-import { ChevronLeftIcon, ChevronRightIcon, SearchIcon } from 'tdesign-icons-react';
+import { MessagePlugin, Dialog, Input } from 'tdesign-react';
+import { SearchIcon } from 'tdesign-icons-react';
 import { sanitizeFilename } from '@aitu/utils';
 import { downloadMediaFile, downloadFromBlob } from '../../utils/download-utils';
 import { unifiedCacheService } from '../../services/unified-cache-service';
-import { useMediaUrl } from '../../hooks/useMediaCache';
 import { CharacterCreateDialog } from '../character/CharacterCreateDialog';
+import { UnifiedMediaViewer, type MediaItem as UnifiedMediaItem } from '../shared/media-preview';
 import './dialog-task-list.scss';
 
 export interface DialogTaskListProps {
@@ -47,7 +47,8 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
   const { board, openDialog } = useDrawnix();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState<string | null>(null);
-  const [previewTaskId, setPreviewTaskId] = useState<string | null>(null);
+  const [previewVisible, setPreviewVisible] = useState(false);
+  const [previewInitialIndex, setPreviewInitialIndex] = useState(0);
   const [searchText, setSearchText] = useState('');
   // Character extraction dialog state
   const [characterDialogTask, setCharacterDialogTask] = useState<Task | null>(null);
@@ -239,64 +240,28 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
     );
   }, [filteredTasks]);
 
-  // Get current preview index and navigation info
-  const previewInfo = useMemo(() => {
-    if (!previewTaskId) return null;
-    const currentIndex = completedTasksWithResults.findIndex(t => t.id === previewTaskId);
-    if (currentIndex === -1) return null;
-    return {
-      currentIndex,
-      total: completedTasksWithResults.length,
-      hasPrevious: currentIndex > 0,
-      hasNext: currentIndex < completedTasksWithResults.length - 1,
-    };
-  }, [previewTaskId, completedTasksWithResults]);
+  // Convert tasks to MediaItem list for UnifiedMediaViewer
+  const previewMediaItems: UnifiedMediaItem[] = useMemo(() => {
+    return completedTasksWithResults.map(task => ({
+      id: task.id,
+      url: task.result!.url,
+      type: task.type === TaskType.VIDEO ? 'video' as const : 'image' as const,
+      title: task.params.prompt?.substring(0, 50),
+    }));
+  }, [completedTasksWithResults]);
 
-  // Preview navigation handlers
-  const handlePreviewOpen = (taskId: string) => {
-    setPreviewTaskId(taskId);
-  };
+  // Preview handlers
+  const handlePreviewOpen = useCallback((taskId: string) => {
+    const index = completedTasksWithResults.findIndex(t => t.id === taskId);
+    if (index >= 0) {
+      setPreviewInitialIndex(index);
+      setPreviewVisible(true);
+    }
+  }, [completedTasksWithResults]);
 
-  const handlePreviewClose = () => {
-    setPreviewTaskId(null);
-  };
-
-  const handlePreviewPrevious = () => {
-    if (!previewInfo || !previewInfo.hasPrevious) return;
-    setPreviewTaskId(completedTasksWithResults[previewInfo.currentIndex - 1].id);
-  };
-
-  const handlePreviewNext = () => {
-    if (!previewInfo || !previewInfo.hasNext) return;
-    setPreviewTaskId(completedTasksWithResults[previewInfo.currentIndex + 1].id);
-  };
-
-  // Get current previewed task
-  const previewedTask = useMemo(() => {
-    if (!previewTaskId) return null;
-    return tasks.find(t => t.id === previewTaskId);
-  }, [previewTaskId, tasks]);
-
-  // Keyboard navigation for preview
-  useEffect(() => {
-    if (!previewTaskId) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
-        e.preventDefault();
-        handlePreviewPrevious();
-      } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
-        e.preventDefault();
-        handlePreviewNext();
-      } else if (e.key === 'Escape') {
-        e.preventDefault();
-        handlePreviewClose();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [previewTaskId, previewInfo]);
+  const handlePreviewClose = useCallback(() => {
+    setPreviewVisible(false);
+  }, []);
 
   // 计算总任务数（不受搜索影响）
   const totalTaskCount = useMemo(() => {
@@ -362,50 +327,14 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
         确定要删除此任务吗？此操作无法撤销。
       </Dialog>
 
-      {/* Preview Dialog */}
-      {previewedTask && previewedTask.result?.url && (
-        <Dialog
-          visible={!!previewTaskId}
-          onClose={handlePreviewClose}
-          width="90vw"
-          header={
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>{previewedTask.type === TaskType.IMAGE ? '图片预览' : previewedTask.type === TaskType.CHARACTER ? '角色预览' : '视频预览'}</span>
-              {previewInfo && (
-                <span style={{ fontSize: '14px', color: '#757575', fontWeight: 'normal' }}>
-                  {previewInfo.currentIndex + 1} / {previewInfo.total}
-                </span>
-              )}
-            </div>
-          }
-          footer={null}
-          className="task-preview-dialog"
-        >
-          <div className="task-preview-container">
-            <Button
-              className="task-preview-nav task-preview-nav--left"
-              icon={<ChevronLeftIcon />}
-              data-track="task_click_preview_previous"
-              onClick={handlePreviewPrevious}
-              size="large"
-              shape="circle"
-              variant="outline"
-              disabled={!previewInfo?.hasPrevious}
-            />
-            <PreviewContent task={previewedTask} />
-            <Button
-              className="task-preview-nav task-preview-nav--right"
-              icon={<ChevronRightIcon />}
-              data-track="task_click_preview_next"
-              onClick={handlePreviewNext}
-              size="large"
-              shape="circle"
-              variant="outline"
-              disabled={!previewInfo?.hasNext}
-            />
-          </div>
-        </Dialog>
-      )}
+      {/* Unified Preview */}
+      <UnifiedMediaViewer
+        visible={previewVisible}
+        items={previewMediaItems}
+        initialIndex={previewInitialIndex}
+        onClose={handlePreviewClose}
+        showThumbnails={true}
+      />
 
       {/* Character Create Dialog */}
       <CharacterCreateDialog
@@ -418,40 +347,5 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
         }}
       />
     </>
-  );
-};
-
-/**
- * PreviewContent component - displays preview media with cache support
- */
-const PreviewContent: React.FC<{ task: any }> = ({ task }) => {
-  const { url, isFromCache } = useMediaUrl(task.id, task.result?.url);
-
-  if (!url) {
-    return <div className="task-preview-content">加载中...</div>;
-  }
-
-  return (
-    <div className="task-preview-content">
-      {task.type === TaskType.IMAGE || task.type === TaskType.CHARACTER ? (
-        <img
-          key={task.id}
-          src={url}
-          alt="Preview"
-          style={{ maxWidth: '100%', maxHeight: '85vh', objectFit: 'contain' }}
-        />
-      ) : (
-        <video
-          key={task.id}
-          src={url}
-          controls
-          autoPlay
-          style={{ maxWidth: '100%', maxHeight: '85vh' }}
-        />
-      )}
-      {isFromCache && (
-        <div className="task-preview-cache-badge">已缓存</div>
-      )}
-    </div>
   );
 };

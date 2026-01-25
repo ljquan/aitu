@@ -4285,6 +4285,126 @@ const matchesSource = !filters.activeSource || filters.activeSource === 'ALL' ||
 
 ## UI 交互规范
 
+#### 媒体预览统一使用公共组件
+
+**场景**: 需要实现图片/视频预览功能时（如任务列表、生成结果预览等）。
+
+❌ **错误示例**:
+```tsx
+// 自定义 Dialog 实现预览
+<Dialog visible={previewVisible} header="图片预览" width="90vw">
+  <div className="preview-container">
+    <Button icon={<ChevronLeftIcon />} onClick={handlePrevious} />
+    <img src={previewUrl} />
+    <Button icon={<ChevronRightIcon />} onClick={handleNext} />
+  </div>
+</Dialog>
+```
+
+✅ **正确示例**:
+```tsx
+import { UnifiedMediaViewer, type MediaItem } from '../shared/media-preview';
+
+<UnifiedMediaViewer
+  visible={previewVisible}
+  items={mediaItems}
+  initialIndex={previewIndex}
+  onClose={handleClose}
+  showThumbnails={true}
+/>
+```
+
+**原因**: 项目已有功能完善的 `UnifiedMediaViewer` 公共组件，支持：
+- 单图预览、对比预览、编辑模式
+- 缩略图导航栏
+- 键盘快捷键（左右箭头、Escape）
+- 缩放、拖拽、全屏
+- 视频同步播放
+
+自定义实现会导致功能不一致、代码重复，且缺失公共组件已有的增强功能。
+
+---
+
+#### 生成结果缩略图使用 contain 完整展示
+
+**场景**: 展示 AI 生成的图片/视频缩略图时（任务队列、生成历史、预览缩略图等）。
+
+❌ **错误示例**:
+```scss
+.thumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover; // 裁切图片，可能丢失重要内容
+}
+```
+
+✅ **正确示例**:
+```scss
+.thumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain; // 完整展示图片
+}
+```
+
+**原因**: AI 生成的图片内容完整性很重要，用户需要看到完整的生成结果才能判断质量。使用 `cover` 会裁切图片边缘，可能导致：
+- 宫格图部分格子被裁切
+- 竖版/横版图片重要内容被裁切
+- 用户无法准确评估生成效果
+
+**例外情况**: 以下场景可以使用 `cover`：
+- 用户上传的参考图片（用户已知图片内容）
+- 角色头像（圆形需要填充）
+- 聊天消息中的图片
+
+---
+
+#### 小图应提供 hover 大图预览
+
+**场景**: 展示缩略图（尤其是 AI 生成结果的小图）时。
+
+❌ **错误示例**:
+```tsx
+// 只有小图，没有预览
+<div className="thumbnail">
+  <img src={image.url} alt={image.name} />
+</div>
+```
+
+✅ **正确示例**:
+```tsx
+const [hoveredImage, setHoveredImage] = useState<{ url: string; x: number; y: number } | null>(null);
+
+<div
+  className="thumbnail"
+  onMouseEnter={(e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    setHoveredImage({ url: image.url, x: rect.left + rect.width / 2, y: rect.top - 10 });
+  }}
+  onMouseLeave={() => setHoveredImage(null)}
+>
+  <img src={image.url} alt={image.name} />
+</div>
+
+{/* Hover 预览通过 Portal 渲染到 body */}
+{hoveredImage && ReactDOM.createPortal(
+  <div
+    className="hover-preview"
+    style={{ left: hoveredImage.x, top: hoveredImage.y, transform: 'translate(-50%, -100%)' }}
+  >
+    <img src={hoveredImage.url} alt="Preview" />
+  </div>,
+  document.body
+)}
+```
+
+**原因**: 缩略图尺寸较小，用户难以判断图片细节。提供 hover 大图预览可以：
+- 快速查看图片细节，无需点击打开预览弹窗
+- 提升用户体验，减少操作步骤
+- 方便用户快速对比多张图片
+
+---
+
 #### Tooltip 样式统一规范
 
 **场景**: 在项目中使用 TDesign 的 `Tooltip` 组件时。

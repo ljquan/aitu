@@ -29,6 +29,7 @@ todos:
   - id: integrate-release
     content: 集成到发布流程，确保手册同步更新
     status: completed
+isProject: false
 ---
 
 # E2E 测试与用户手册自动生成方案

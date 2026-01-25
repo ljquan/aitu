@@ -11,7 +11,6 @@ import { DeleteIcon, SearchIcon, UserIcon, RefreshIcon, PauseCircleIcon, CheckDo
 import { VirtualTaskList } from './VirtualTaskList';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
 import { Task, TaskType, TaskStatus } from '../../types/task.types';
-import { useMediaUrl } from '../../hooks/useMediaCache';
 import { unifiedCacheService } from '../../services/unified-cache-service';
 import { useDrawnix, DialogType } from '../../hooks/use-drawnix';
 import { insertImageFromUrl } from '../../data/image';
@@ -40,41 +39,6 @@ export interface TaskQueuePanelProps {
   /** Callback when a task action is performed */
   onTaskAction?: (action: string, taskId: string) => void;
 }
-
-/**
- * PreviewContent component - displays preview media with cache support
- */
-const PreviewContent: React.FC<{ task: Task }> = ({ task }) => {
-  const { url, isFromCache } = useMediaUrl(task.id, task.result?.url);
-
-  if (!url) {
-    return <div className="task-preview-content">加载中...</div>;
-  }
-
-  return (
-    <div className="task-preview-content">
-      {task.type === TaskType.IMAGE || task.type === TaskType.CHARACTER ? (
-        <img
-          key={task.id}
-          src={url}
-          alt="Preview"
-          style={{ maxWidth: '100%', maxHeight: '85vh', objectFit: 'contain' }}
-        />
-      ) : (
-        <video
-          key={task.id}
-          src={url}
-          controls
-          autoPlay
-          style={{ maxWidth: '100%', maxHeight: '85vh' }}
-        />
-      )}
-      {isFromCache && (
-        <div className="task-preview-cache-badge">已缓存</div>
-      )}
-    </div>
-  );
-};
 
 /**
  * TaskQueuePanel component - displays the full task queue
