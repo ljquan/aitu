@@ -745,22 +745,25 @@ async function executeBooleanOperation(
       }
     }
 
-    // 插入新元素并收集实际插入到 board 中的元素引用
-    const insertedElements: PenPath[] = [];
+    // 插入新元素并收集元素 ID
+    const insertedIds: string[] = [];
     for (const newElement of newElements) {
       const insertIndex = board.children.length;
       Transforms.insertNode(board, newElement, [insertIndex]);
-      // 获取实际插入到 board 中的元素（通过 ID 查找）
-      const insertedElement = board.children.find((child) => child.id === newElement.id);
-      if (insertedElement) {
-        insertedElements.push(insertedElement as PenPath);
-      }
+      insertedIds.push(newElement.id);
     }
 
-    // 选中新元素
+    // 选中新元素（在所有插入完成后，从 board.children 中查找）
     clearSelectedElement(board);
-    for (const element of insertedElements) {
-      addSelectedElement(board, element);
+    for (const id of insertedIds) {
+      const element = board.children.find((child) => child.id === id);
+      if (element) {
+        try {
+          addSelectedElement(board, element);
+        } catch {
+          // 忽略选中失败的情况
+        }
+      }
     }
 
     MessagePlugin.close(loadingInstance);

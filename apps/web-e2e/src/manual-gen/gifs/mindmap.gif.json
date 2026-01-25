@@ -1,0 +1,23 @@
+{
+  "id": "mindmap-create",
+  "name": "思维导图创建演示",
+  "output": "思维导图创建演示.gif",
+  "targetPage": "drawing/mindmap",
+  "preWait": 1000,
+  "postWait": 2500,
+  "actions": [
+    { "type": "click", "target": "testid:toolbar-more", "label": "点击更多工具", "wait": 1500 },
+    { "type": "click", "target": "role:button[name='Markdown 到 Drawnix']", "label": "选择 Markdown 转换", "wait": 1500 },
+    { "type": "click", "target": "role:button[name='插入']", "label": "点击插入", "wait": 3000 },
+    { "type": "press", "key": "Escape", "wait": 2000 },
+    { "type": "wait", "duration": 1000 },
+    { "type": "click", "target": "first:.plait-board-element", "label": "点击思维导图", "wait": 1500, "optional": true },
+    { "type": "keyHint", "key": "Tab", "hint": "Tab：添加子节点", "duration": 2000 },
+    { "type": "press", "key": "Tab", "wait": 1500 },
+    { "type": "type", "text": "新子节点", "delay": 200, "wait": 1500 },
+    { "type": "keyHint", "key": "Enter", "hint": "Enter：添加同级节点", "duration": 2000 },
+    { "type": "press", "key": "Enter", "wait": 1500 },
+    { "type": "type", "text": "同级节点", "delay": 200, "wait": 2000 },
+    { "type": "mouseClick", "x": 100, "y": 100, "wait": 500 }
+  ]
+}

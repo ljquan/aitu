@@ -1,0 +1,27 @@
+{
+  "id": "canvas-navigation",
+  "name": "画布导航演示",
+  "output": "画布导航演示.gif",
+  "targetPage": "basics/canvas-navigation",
+  "preWait": 1000,
+  "postWait": 1500,
+  "actions": [
+    { "type": "keyHint", "key": "H", "hint": "H：切换到抓手工具", "duration": 1500 },
+    { "type": "press", "key": "h", "wait": 800 },
+    {
+      "type": "mouseDraw",
+      "points": [
+        { "x": 640, "y": 360 },
+        { "x": 500, "y": 300 },
+        { "x": 400, "y": 400 },
+        { "x": 600, "y": 450 }
+      ],
+      "stepDelay": 100,
+      "wait": 1000
+    },
+    { "type": "keyHint", "key": "V", "hint": "V：切换到选择工具", "duration": 1500 },
+    { "type": "press", "key": "v", "wait": 800 },
+    { "type": "scroll", "deltaY": 200, "wait": 800 },
+    { "type": "scroll", "deltaY": -200, "wait": 800 }
+  ]
+}

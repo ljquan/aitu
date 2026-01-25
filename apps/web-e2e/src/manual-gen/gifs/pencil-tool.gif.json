@@ -1,0 +1,42 @@
+{
+  "id": "pencil-draw",
+  "name": "画笔绘制演示",
+  "output": "画笔绘制演示.gif",
+  "targetPage": "drawing/pencil-tool",
+  "preWait": 1000,
+  "postWait": 1500,
+  "actions": [
+    { "type": "keyHint", "key": "P", "hint": "P：切换到画笔工具", "duration": 1500 },
+    { "type": "press", "key": "p", "wait": 800 },
+    {
+      "type": "mouseDraw",
+      "points": [
+        { "x": 300, "y": 300 },
+        { "x": 330, "y": 280 },
+        { "x": 360, "y": 320 },
+        { "x": 390, "y": 270 },
+        { "x": 420, "y": 330 },
+        { "x": 450, "y": 260 },
+        { "x": 480, "y": 340 },
+        { "x": 510, "y": 250 },
+        { "x": 540, "y": 350 },
+        { "x": 570, "y": 300 }
+      ],
+      "stepDelay": 80,
+      "wait": 1000
+    },
+    { "type": "wait", "duration": 500 },
+    {
+      "type": "mouseDraw",
+      "points": [
+        { "x": 300, "y": 400 },
+        { "x": 400, "y": 400 },
+        { "x": 400, "y": 500 },
+        { "x": 300, "y": 500 },
+        { "x": 300, "y": 400 }
+      ],
+      "stepDelay": 60,
+      "wait": 1000
+    }
+  ]
+}

@@ -493,43 +493,7 @@ export const PopupToolbar = () => {
           data-testid="popup-toolbar"
         >
           <Stack.Row gap={1}>
-            {state.hasFontColor && (
-              <PopupFontColorButton
-                board={board}
-                key={0}
-                currentColor={state.marks?.color}
-                title={t('toolbar.fontColor')}
-                fontColorIcon={
-                  <FontColorIcon currentColor={state.marks?.color} />
-                }
-              ></PopupFontColorButton>
-            )}
-            {state.hasFontSize && (
-              <PopupFontSizeButton
-                board={board}
-                key={1}
-                currentFontSize={state.fontSize}
-                title={t('toolbar.fontSize')}
-              ></PopupFontSizeButton>
-            )}
-            {state.hasStroke && (
-              <PopupStrokeButton
-                board={board}
-                key={2}
-                currentColor={state.strokeColor}
-                title={t('toolbar.stroke')}
-                hasStrokeStyle={state.hasStrokeStyle || false}
-                hasStrokeWidth={state.hasStrokeWidth || false}
-                currentStrokeWidth={state.strokeWidth}
-              >
-                <label
-                  className={classNames('stroke-label', 'color-label', {
-                    'color-mixed': state.strokeColor === undefined,
-                  })}
-                  style={{ borderColor: state.strokeColor }}
-                ></label>
-              </PopupStrokeButton>
-            )}
+            {/* ========== 左侧：公共属性图标（样式相关，位置相对固定） ========== */}
             {state.hasFill && (
               <PopupFillButton
                 board={board}
@@ -567,6 +531,45 @@ export const PopupToolbar = () => {
                 ></label>
               </PopupFillButton>
             )}
+            {state.hasStroke && (
+              <PopupStrokeButton
+                board={board}
+                key={2}
+                currentColor={state.strokeColor}
+                title={t('toolbar.stroke')}
+                hasStrokeStyle={state.hasStrokeStyle || false}
+                hasStrokeWidth={state.hasStrokeWidth || false}
+                currentStrokeWidth={state.strokeWidth}
+              >
+                <label
+                  className={classNames('stroke-label', 'color-label', {
+                    'color-mixed': state.strokeColor === undefined,
+                  })}
+                  style={{ borderColor: state.strokeColor }}
+                ></label>
+              </PopupStrokeButton>
+            )}
+            {state.hasFontColor && (
+              <PopupFontColorButton
+                board={board}
+                key={0}
+                currentColor={state.marks?.color}
+                title={t('toolbar.fontColor')}
+                fontColorIcon={
+                  <FontColorIcon currentColor={state.marks?.color} />
+                }
+              ></PopupFontColorButton>
+            )}
+            {state.hasFontSize && (
+              <PopupFontSizeButton
+                board={board}
+                key={1}
+                currentFontSize={state.fontSize}
+                title={t('toolbar.fontSize')}
+              ></PopupFontSizeButton>
+            )}
+
+            {/* ========== 中间：场景特定图标（按需显示） ========== */}
             {state.hasCornerRadius && (
               <PopupCornerRadiusButton
                 board={board}
@@ -574,12 +577,6 @@ export const PopupToolbar = () => {
                 currentRadius={state.cornerRadius}
                 title={t('toolbar.cornerRadius')}
                 selectionRect={selectionRect}
-              />
-            )}
-            {state.hasSizeInput && (
-              <SizeInput
-                board={board}
-                key="size-input"
               />
             )}
             {state.hasText && (
@@ -597,11 +594,23 @@ export const PopupToolbar = () => {
                 title={language === 'zh' ? '提示词' : 'Prompts'}
               />
             )}
-            <PopupLayerControlButton
-              board={board}
-              key={'layer-control'}
-              title={t('textEffect.layer')}
-            />
+            {/* 属性设置按钮 - 仅在选中包含文本的元素时显示 */}
+            {state.hasText && (
+              <ToolButton
+                className="property-settings"
+                key={'property-settings'}
+                type="icon"
+                icon={<PropertySettingsIcon />}
+                visible={true}
+                selected={showPropertyPanel}
+                title={t('propertyPanel.title')}
+                aria-label={t('propertyPanel.title')}
+                data-track="toolbar_click_property_settings"
+                onPointerUp={() => {
+                  setShowPropertyPanel(!showPropertyPanel);
+                }}
+              />
+            )}
             {/* 对齐按钮 - 仅在多选时显示 */}
             {state.hasAlignment && (
               <PopupAlignmentButton
@@ -624,23 +633,6 @@ export const PopupToolbar = () => {
                 board={board}
                 key={'boolean'}
                 title={t('toolbar.boolean')}
-              />
-            )}
-            {/* 属性设置按钮 - 仅在选中包含文本的元素时显示 */}
-            {state.hasText && (
-              <ToolButton
-                className="property-settings"
-                key={'property-settings'}
-                type="icon"
-                icon={<PropertySettingsIcon />}
-                visible={true}
-                selected={showPropertyPanel}
-                title={t('propertyPanel.title')}
-                aria-label={t('propertyPanel.title')}
-                data-track="toolbar_click_property_settings"
-                onPointerUp={() => {
-                  setShowPropertyPanel(!showPropertyPanel);
-                }}
               />
             )}
             {state.hasAIImage && (
@@ -1133,6 +1125,19 @@ export const PopupToolbar = () => {
                     MessagePlugin.error(error.message || (language === 'zh' ? '视频合成失败' : 'Video merge failed'));
                   }
                 }}
+              />
+            )}
+
+            {/* ========== 右侧：公共操作图标（位置相对固定） ========== */}
+            <PopupLayerControlButton
+              board={board}
+              key={'layer-control'}
+              title={t('textEffect.layer')}
+            />
+            {state.hasSizeInput && (
+              <SizeInput
+                board={board}
+                key="size-input"
               />
             )}
             <ToolButton

@@ -1,5 +1,6 @@
 import { DEFAULT_COLOR, Point, ThemeColorMode } from '@plait/core';
 import { PlaitCustomGeometry } from '@plait/draw';
+import { BrushShape } from './freehand-settings';
 
 export const FreehandThemeColors = {
   [ThemeColorMode.default]: {
@@ -51,6 +52,8 @@ export type Freehand = PlaitCustomGeometry<typeof FREEHAND_TYPE, Point[], Freeha
   pressures?: number[];
   /** 基准线宽 */
   strokeWidth?: number;
+  /** 画笔形状（圆形/方形） */
+  brushShape?: BrushShape;
 };
 
 export const Freehand = {

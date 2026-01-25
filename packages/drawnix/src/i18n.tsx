@@ -24,7 +24,20 @@ export interface Translations {
   'toolbar.stroke': string;
   'toolbar.strokeColor': string;
   'toolbar.strokeWidth': string;
+  'toolbar.pencilShape': string;
+  'toolbar.pencilShape.circle': string;
+  'toolbar.pencilShape.square': string;
   'toolbar.eraserSize': string;
+  'toolbar.eraserShape': string;
+  'toolbar.eraserShape.circle': string;
+  'toolbar.eraserShape.square': string;
+  'toolbar.preciseEraser': string;
+  'toolbar.preciseEraserTip': string;
+  'toolbar.preciseEraser.unsupported.openPath': string;
+  'toolbar.preciseEraser.unsupported.image': string;
+  'toolbar.preciseEraser.unsupported.text': string;
+  'toolbar.preciseEraser.unsupported.line': string;
+  'toolbar.preciseEraser.unsupported.other': string;
   'toolbar.fillColor': string;
   'toolbar.fontColor': string;
   'toolbar.fontSize': string;
@@ -197,7 +210,20 @@ const translations: Record<Language, Translations> = {
     'toolbar.stroke': '描边',
     'toolbar.strokeColor': '画笔颜色',
     'toolbar.strokeWidth': '画笔大小',
+    'toolbar.pencilShape': '画笔形状',
+    'toolbar.pencilShape.circle': '圆形',
+    'toolbar.pencilShape.square': '方形',
     'toolbar.eraserSize': '橡皮擦大小',
+    'toolbar.eraserShape': '橡皮擦形状',
+    'toolbar.eraserShape.circle': '圆形',
+    'toolbar.eraserShape.square': '方形',
+    'toolbar.preciseEraser': '精确擦除',
+    'toolbar.preciseEraserTip': '只擦除经过的区域，而不是整个图形',
+    'toolbar.preciseEraser.unsupported.openPath': '精确擦除不支持线条，将删除整条线',
+    'toolbar.preciseEraser.unsupported.image': '精确擦除不支持图片元素',
+    'toolbar.preciseEraser.unsupported.text': '精确擦除不支持文本元素',
+    'toolbar.preciseEraser.unsupported.line': '精确擦除不支持线条元素',
+    'toolbar.preciseEraser.unsupported.other': '精确擦除不支持该元素类型',
     'toolbar.fillColor': '填充颜色',
     'toolbar.fontColor': '字体颜色',
     'toolbar.fontSize': '字号',
@@ -363,7 +389,20 @@ const translations: Record<Language, Translations> = {
     'toolbar.stroke': 'Stroke',
     'toolbar.strokeColor': 'Pen Color',
     'toolbar.strokeWidth': 'Pen Size',
+    'toolbar.pencilShape': 'Pen Shape',
+    'toolbar.pencilShape.circle': 'Circle',
+    'toolbar.pencilShape.square': 'Square',
     'toolbar.eraserSize': 'Eraser Size',
+    'toolbar.eraserShape': 'Eraser Shape',
+    'toolbar.eraserShape.circle': 'Circle',
+    'toolbar.eraserShape.square': 'Square',
+    'toolbar.preciseEraser': 'Precise',
+    'toolbar.preciseEraserTip': 'Erase only the path area instead of the whole shape',
+    'toolbar.preciseEraser.unsupported.openPath': 'Precise erase does not support lines, will delete entire line',
+    'toolbar.preciseEraser.unsupported.image': 'Precise erase does not support images',
+    'toolbar.preciseEraser.unsupported.text': 'Precise erase does not support text',
+    'toolbar.preciseEraser.unsupported.line': 'Precise erase does not support lines',
+    'toolbar.preciseEraser.unsupported.other': 'Precise erase does not support this element type',
     'toolbar.fillColor': 'Fill Color',
     'toolbar.fontColor': 'Font Color',
     'toolbar.fontSize': 'Font Size',
@@ -523,12 +562,26 @@ interface I18nProviderProps {
   defaultLanguage?: Language;
 }
 
+// 全局语言状态（用于非 React 组件）
+let globalLanguage: Language = 'zh';
+
 // I18nProvider component
 export const I18nProvider: React.FC<I18nProviderProps> = ({ 
   children, 
   defaultLanguage = 'zh' 
 }) => {
-  const [language, setLanguage] = useState<Language>(defaultLanguage);
+  const [language, setLanguageState] = useState<Language>(defaultLanguage);
+
+  // 包装 setLanguage 以同步全局状态
+  const setLanguage = (lang: Language) => {
+    globalLanguage = lang;
+    setLanguageState(lang);
+  };
+
+  // 初始化时同步全局状态
+  React.useEffect(() => {
+    globalLanguage = language;
+  }, [language]);
 
   const t = (key: keyof Translations): string => {
     return translations[language][key] || key;
@@ -556,6 +609,14 @@ export const useI18n = (): I18nContextType => {
   }
   
   return context;
+};
+
+/**
+ * 获取翻译（非 React 组件使用）
+ * 注意：需要在 I18nProvider 渲染后使用才能获取正确的语言
+ */
+export const getTranslation = (key: keyof Translations): string => {
+  return translations[globalLanguage][key] || key;
 };
 
 // Export types for external use

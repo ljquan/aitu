@@ -5,7 +5,7 @@
 
 import { useEffect, useCallback, useRef } from 'react';
 import { PlaitBoard } from '@plait/core';
-import { getFreehandSettings } from '../plugins/freehand/freehand-settings';
+import { BrushShape, getFreehandSettings } from '../plugins/freehand/freehand-settings';
 import { FreehandShape } from '../plugins/freehand/type';
 import { getFreehandPointers } from '../plugins/freehand/utils';
 
@@ -43,6 +43,41 @@ function generateCircleCursorSvg(color: string, size: number): string {
 }
 
 /**
+ * 生成方形光标的 SVG data URL
+ * @param color 颜色
+ * @param size 大小（边长），已考虑缩放
+ */
+function generateSquareCursorSvg(color: string, size: number): string {
+  // 限制光标大小范围：最小 4px，最大 256px
+  const cursorSize = Math.max(4, Math.min(256, size));
+  
+  // SVG 画布大小需要比方块大一些，留出边框空间
+  const svgSize = cursorSize + 4;
+  const center = svgSize / 2;
+  const offset = cursorSize / 2;
+  
+  // 生成 SVG
+  const svg = `<svg width="${svgSize}" height="${svgSize}" viewBox="0 0 ${svgSize} ${svgSize}" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="${center - offset}" y="${center - offset}" width="${cursorSize}" height="${cursorSize}" fill="${color}" stroke="#fff" stroke-width="1"/>
+    <rect x="${center - offset}" y="${center - offset}" width="${cursorSize}" height="${cursorSize}" fill="none" stroke="#333" stroke-width="0.5" stroke-opacity="0.5"/>
+  </svg>`;
+  
+  // 转换为 base64 data URL
+  const encoded = btoa(svg);
+  return `url('data:image/svg+xml;base64,${encoded}') ${center} ${center}, crosshair`;
+}
+
+/**
+ * 根据形状生成光标 SVG
+ */
+function generateCursorSvg(color: string, size: number, shape: BrushShape = BrushShape.circle): string {
+  if (shape === BrushShape.square) {
+    return generateSquareCursorSvg(color, size);
+  }
+  return generateCircleCursorSvg(color, size);
+}
+
+/**
  * 检查当前指针是否为画笔工具（不包括橡皮擦）
  */
 function isPencilPointer(pointer: string): boolean {
@@ -73,14 +108,14 @@ function applyCursorStyle(board: PlaitBoard, pointer: string) {
   const zoom = board.viewport?.zoom || 1;
   
   if (isPencilPointer(pointer)) {
-    // 画笔光标
+    // 画笔光标（支持不同形状）
     const scaledSize = settings.strokeWidth * zoom;
-    const cursorStyle = generateCircleCursorSvg(settings.strokeColor, scaledSize);
+    const cursorStyle = generateCursorSvg(settings.strokeColor, scaledSize, settings.pencilShape);
     hostSvg.style.cursor = cursorStyle;
   } else if (isEraserPointer(pointer)) {
-    // 橡皮擦光标
+    // 橡皮擦光标（支持不同形状）
     const scaledSize = settings.eraserWidth * zoom;
-    const cursorStyle = generateCircleCursorSvg(ERASER_COLOR, scaledSize);
+    const cursorStyle = generateCursorSvg(ERASER_COLOR, scaledSize, settings.eraserShape);
     hostSvg.style.cursor = cursorStyle;
   } else {
     hostSvg.style.cursor = '';

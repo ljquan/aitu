@@ -6,12 +6,17 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useBoard } from '@plait-board/react-board';
 import { PlaitBoard } from '@plait/core';
+import { Switch, Tooltip, Button } from 'tdesign-react';
+import { Circle, Square } from 'lucide-react';
 import { Island } from '../../island';
 import Stack from '../../stack';
 import { useDrawnix } from '../../../hooks/use-drawnix';
 import {
+  BrushShape,
   getFreehandSettings,
+  setEraserShape,
   setEraserWidth,
+  setPreciseEraserEnabled,
 } from '../../../plugins/freehand/freehand-settings';
 import { FreehandShape } from '../../../plugins/freehand/type';
 import { useI18n } from '../../../i18n';
@@ -42,6 +47,8 @@ export const EraserSettingsToolbar: React.FC = () => {
   // 从 board 获取当前设置
   const settings = getFreehandSettings(board);
   const [eraserSize, setEraserSize] = useState(settings.eraserWidth);
+  const [currentShape, setCurrentShape] = useState<BrushShape>(settings.eraserShape);
+  const [preciseMode, setPreciseMode] = useState(settings.preciseEraserEnabled);
   // 是否显示光标预览（仅鼠标悬停在工具栏上时）
   const [showCursorPreview, setShowCursorPreview] = useState(false);
 
@@ -52,6 +59,8 @@ export const EraserSettingsToolbar: React.FC = () => {
   useEffect(() => {
     const newSettings = getFreehandSettings(board);
     setEraserSize(newSettings.eraserWidth);
+    setCurrentShape(newSettings.eraserShape);
+    setPreciseMode(newSettings.preciseEraserEnabled);
   }, [board, appState.pointer]);
 
   // 处理橡皮擦大小变化
@@ -60,6 +69,20 @@ export const EraserSettingsToolbar: React.FC = () => {
     setEraserWidth(board, size);
     // 更新光标
     updateEraserCursor(board);
+  }, [board]);
+
+  // 处理形状切换
+  const handleShapeChange = useCallback((shape: BrushShape) => {
+    setCurrentShape(shape);
+    setEraserShape(board, shape);
+    // 更新光标
+    updateEraserCursor(board);
+  }, [board]);
+
+  // 处理精确模式切换
+  const handlePreciseModeChange = useCallback((checked: boolean) => {
+    setPreciseMode(checked);
+    setPreciseEraserEnabled(board, checked);
   }, [board]);
 
   // 只在选择橡皮擦指针时显示
@@ -80,13 +103,13 @@ export const EraserSettingsToolbar: React.FC = () => {
     >
       {/* 模拟光标预览 */}
       {showCursorPreview && (
-        <CursorPreview color={ERASER_COLOR} size={eraserSize} zoom={zoom} />
+        <CursorPreview color={ERASER_COLOR} size={eraserSize} zoom={zoom} shape={currentShape} />
       )}
       <Island
         ref={containerRef}
         padding={1}
       >
-        <Stack.Row gap={0} align="center">
+        <Stack.Row gap={1} align="center">
           <SizePicker
             size={eraserSize}
             onSizeChange={handleSizeChange}
@@ -95,6 +118,44 @@ export const EraserSettingsToolbar: React.FC = () => {
             title={t('toolbar.eraserSize')}
             container={container}
           />
+          {/* 分隔线 */}
+          <div className="toolbar-divider" />
+          {/* 形状选择器 */}
+          <div className="eraser-shape-picker">
+            <Tooltip content={t('toolbar.eraserShape.circle')} theme="light">
+              <Button
+                variant="text"
+                size="small"
+                className={`eraser-shape-button ${currentShape === BrushShape.circle ? 'active' : ''}`}
+                onClick={() => handleShapeChange(BrushShape.circle)}
+              >
+                <Circle size={16} />
+              </Button>
+            </Tooltip>
+            <Tooltip content={t('toolbar.eraserShape.square')} theme="light">
+              <Button
+                variant="text"
+                size="small"
+                className={`eraser-shape-button ${currentShape === BrushShape.square ? 'active' : ''}`}
+                onClick={() => handleShapeChange(BrushShape.square)}
+              >
+                <Square size={16} />
+              </Button>
+            </Tooltip>
+          </div>
+          {/* 分隔线 */}
+          <div className="toolbar-divider" />
+          {/* 精确擦除开关 */}
+          <Tooltip content={t('toolbar.preciseEraserTip')} theme="light">
+            <div className="precise-eraser-switch">
+              <Switch
+                size="small"
+                value={preciseMode}
+                onChange={handlePreciseModeChange}
+              />
+              <span className="switch-label">{t('toolbar.preciseEraser')}</span>
+            </div>
+          </Tooltip>
         </Stack.Row>
       </Island>
     </div>
