@@ -26,6 +26,7 @@ import {
 import { taskQueueStorage } from './storage';
 import { sendToClient, sendToClientById } from './utils/message-bus';
 import { migrateBase64UrlIfNeeded } from './utils/media-generation-utils';
+import { isPostMessageLoggerDebugMode } from './postmessage-logger';
 
 // Handler imports
 import { ImageHandler } from './handlers/image';
@@ -475,10 +476,38 @@ export class SWTaskQueue {
       return;
     }
 
-    // Check for duplicate by taskId only
+    // Check for duplicate by taskId
     if (this.tasks.has(taskId)) {
-      console.warn(`[SWTaskQueue] Task ${taskId} already exists`);
+      console.warn(`[SWTaskQueue] Task ${taskId} already exists, skipping duplicate submit`);
       return;
+    }
+
+    // Check for similar task with same prompt that's already processing or pending
+    // This prevents duplicate submissions after page refresh
+    const existingTask = Array.from(this.tasks.values()).find(
+      t => (t.status === TaskStatus.PROCESSING || t.status === TaskStatus.PENDING) &&
+           t.type === taskType &&
+           t.params.prompt === params.prompt
+    );
+    if (existingTask) {
+      console.warn(
+        `[SWTaskQueue] Similar task ${existingTask.id} with same prompt already ${existingTask.status}, skipping duplicate`
+      );
+      // Broadcast the existing task's status to sync the client
+      this.broadcastToClients({
+        type: 'TASK_STATUS',
+        taskId: existingTask.id,
+        status: existingTask.status,
+        progress: existingTask.progress,
+        phase: existingTask.executionPhase,
+        updatedAt: existingTask.updatedAt,
+      });
+      return;
+    }
+
+    // Debug logging for task submission
+    if (isPostMessageLoggerDebugMode()) {
+      console.log(`[SWTaskQueue] Submitting task ${taskId} (${taskType})`);
     }
 
     const now = Date.now();
@@ -835,9 +864,9 @@ export class SWTaskQueue {
       return;
     }
 
-    // Get pending tasks
+    // Get pending tasks that are not already running
     const pendingTasks = Array.from(this.tasks.values())
-      .filter((t) => t.status === TaskStatus.PENDING)
+      .filter((t) => t.status === TaskStatus.PENDING && !this.runningTasks.has(t.id))
       .sort((a, b) => a.createdAt - b.createdAt);
 
     // Execute all pending tasks immediately (no concurrent limit)
@@ -852,6 +881,19 @@ export class SWTaskQueue {
   private async executeTask(task: SWTask): Promise<void> {
     if (!this.geminiConfig || !this.videoConfig) {
       console.warn('[SWTaskQueue] Config not set, cannot execute task:', task.id);
+      return;
+    }
+
+    // Prevent duplicate execution - check if already running
+    if (this.runningTasks.has(task.id)) {
+      console.warn(`[SWTaskQueue] Task ${task.id} is already running, skipping duplicate execution`);
+      return;
+    }
+
+    // Also check if task status has changed (might have been executed by another call)
+    const currentTask = this.tasks.get(task.id);
+    if (currentTask && currentTask.status !== TaskStatus.PENDING) {
+      console.warn(`[SWTaskQueue] Task ${task.id} is no longer PENDING (${currentTask.status}), skipping`);
       return;
     }
 
@@ -1035,7 +1077,10 @@ export class SWTaskQueue {
     const task = this.tasks.get(taskId);
     if (!task) return;
 
-    // console.log('[TaskQueue] Task completed:', taskId, 'result:', JSON.stringify(result));
+    // Debug logging for task completion
+    if (isPostMessageLoggerDebugMode()) {
+      console.log(`[SWTaskQueue] Task ${taskId} (${task.type}) completed successfully`);
+    }
 
     task.status = TaskStatus.COMPLETED;
     task.result = result;
@@ -1070,6 +1115,11 @@ export class SWTaskQueue {
   private async handleTaskError(taskId: string, error: unknown): Promise<void> {
     const task = this.tasks.get(taskId);
     if (!task) return;
+
+    // Debug logging for task failure
+    if (isPostMessageLoggerDebugMode()) {
+      console.log(`[SWTaskQueue] Task ${taskId} (${task.type}) failed:`, error instanceof Error ? error.message : String(error));
+    }
 
     this.runningTasks.delete(taskId);
 
@@ -1148,10 +1198,27 @@ export class SWTaskQueue {
   /**
    * Broadcast message to all clients
    * This is the primary communication method - no longer targeting specific clients
+   * Uses includeUncontrolled: true to ensure messages reach all windows,
+   * including those that may be temporarily uncontrolled during SW updates or page refresh
    */
   private async broadcastToClients(message: SWToMainMessage): Promise<void> {
     try {
-      const clients = await this.sw.clients.matchAll({ type: 'window' });
+      const clients = await this.sw.clients.matchAll({
+        type: 'window',
+        includeUncontrolled: true,
+      });
+
+      // Debug logging for key message types
+      if (isPostMessageLoggerDebugMode()) {
+        const clientIds = clients.map(c => c.id.slice(-6)).join(', ');
+        console.log(
+          `[SWTaskQueue] Broadcasting ${message.type} to ${clients.length} clients [${clientIds}]`,
+          message.type === 'TASK_COMPLETED' || message.type === 'TASK_FAILED'
+            ? { taskId: (message as any).taskId }
+            : undefined
+        );
+      }
+
       for (const client of clients) {
         sendToClient(client, message);
       }
