@@ -91,17 +91,18 @@ export default defineConfig({
       use: { ...devices['Desktop Safari'] },
     },
     
-    // 手册生成测试 - 仅 Chromium
+    // 手册截图生成测试 - 仅 Chromium，排除 GIF 录制测试
     {
       name: 'manual',
       testMatch: '**/manual-gen/**/*.spec.ts',
+      testIgnore: '**/manual-gen/gif-*.spec.ts',  // 排除 GIF 录制测试
       use: { ...devices['Desktop Chrome'] },
     },
     
-    // 手册视频录制 - 用于生成 GIF
+    // 手册 GIF 视频录制 - 需要视频录制功能
     {
       name: 'manual-video',
-      testMatch: '**/manual-gen/**/*.spec.ts',
+      testMatch: '**/manual-gen/gif-*.spec.ts',  // 只匹配 GIF 录制测试
       use: { 
         ...devices['Desktop Chrome'],
         video: 'on',

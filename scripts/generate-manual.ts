@@ -183,6 +183,11 @@ function markdownToHtml(markdown: string, screenshotsDir: string): string {
     result = result.replace(/src="screenshots\//g, `src="${CDN_BASE}/screenshots/`);
   }
   
+  // product_showcase 目录在主应用中，使用相对路径（不通过 CDN）
+  // MDX 文件中可能使用 ../product_showcase/ 或 ../../product_showcase/ 等不同深度的相对路径
+  // 输出的 HTML 都在 user-manual/ 目录下，统一转换为 ../product_showcase/
+  result = result.replace(/src="(?:\.\.\/)+product_showcase\//g, `src="../product_showcase/`);
+  
   return result;
 }
 

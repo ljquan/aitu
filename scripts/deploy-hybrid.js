@@ -153,6 +153,26 @@ function shouldKeepOnServer(filename) {
 }
 
 /**
+ * 检查 npm 包的指定版本是否已存在
+ * @param {string} packageName 包名
+ * @param {string} version 版本号
+ * @returns {boolean} 是否存在
+ */
+function checkNpmVersionExists(packageName, version) {
+  try {
+    // 使用 npm view 命令检查版本是否存在
+    execSync(`npm view ${packageName}@${version} version`, {
+      stdio: 'pipe',
+      encoding: 'utf-8',
+    });
+    return true; // 命令成功执行，版本存在
+  } catch (error) {
+    // 命令失败，版本不存在
+    return false;
+  }
+}
+
+/**
  * 检查是否可以跳过构建
  * 条件：
  * 1. dist/deploy/cdn/precache-manifest.json 存在
@@ -502,12 +522,15 @@ function stepSeparateFiles(version, cdnBaseUrl, buildSkipped = false) {
 // ============================================
 
 function stepPublishNpm(version) {
-  logStep(4, 7, '发布静态资源到 npm CDN');
+  logStep(5, 7, '发布静态资源到 npm CDN');
   
   if (skipNpm) {
     logWarning('跳过 npm 发布');
     return true;
   }
+  
+  // 版本检查已在 main 函数开头完成，这里直接发布
+  log(`    发布版本: ${CONFIG.packageName}@${version}`, 'gray');
   
   // 生成 package.json
   const npmPackage = {
@@ -557,7 +580,7 @@ function stepPublishNpm(version) {
 // ============================================
 
 function stepDeployServer(version) {
-  logStep(5, 7, '打包并部署到服务器');
+  logStep(6, 7, '打包并部署到服务器');
   
   if (skipServer) {
     logWarning('跳过服务器部署');
@@ -590,7 +613,7 @@ function stepDeployServer(version) {
 // ============================================
 
 function stepGenerateManual(version) {
-  logStep(6, 7, '生成用户手册');
+  logStep(4, 7, '生成用户手册');
   
   if (skipManual) {
     logWarning('跳过手册生成（--skip-manual 参数）');
@@ -606,10 +629,43 @@ function stepGenerateManual(version) {
   
   // 手册生成不阻塞部署，失败只警告
   try {
-    // 设置 CDN 基础路径环境变量，供 generate-manual.ts 使用
+    // 步骤 1: 先尝试生成截图（需要 Playwright 环境）
+    log('    生成截图...', 'gray');
+    try {
+      // 检查端口 7200 是否已被占用
+      let portInUse = false;
+      try {
+        execSync('lsof -i :7200 -t', { stdio: 'pipe' });
+        portInUse = true;
+        log('    检测到开发服务器已在运行 (端口 7200)', 'gray');
+      } catch {
+        log('    开发服务器未运行，将自动启动', 'gray');
+      }
+      
+      // 如果端口已被占用，设置 CI= 复用现有服务器；否则设置 CI=1 让 Playwright 自动启动
+      // 注意：CI= 显式清除环境变量，让 reuseExistingServer 为 true
+      const ciEnv = portInUse ? 'CI=' : 'CI=1';
+      execSync(`cd apps/web-e2e && ${ciEnv} npx playwright test --project=manual`, {
+        cwd: path.resolve(__dirname, '..'),
+        stdio: 'inherit',
+        timeout: 300000, // 5 分钟超时
+      });
+      logSuccess('截图生成完成');
+    } catch (screenshotError) {
+      logWarning('截图生成失败');
+      log(`    错误: ${screenshotError.message}`, 'gray');
+      log('    可能的原因:', 'gray');
+      log('    1. Playwright 浏览器未安装，请运行: npx playwright install chromium', 'gray');
+      log('    2. 开发服务器未运行，请运行: pnpm start', 'gray');
+      log('    将使用已有截图继续构建...', 'gray');
+    }
+    
+    // 步骤 2: 设置 CDN 基础路径环境变量，供 generate-manual.ts 使用
     const cdnBaseUrl = CONFIG.cdnTemplates[cdnProvider].replace('{version}', version);
     const manualCdnBase = `${cdnBaseUrl}/user-manual`;
     
+    // 步骤 3: 构建手册 HTML
+    log('    构建手册 HTML...', 'gray');
     execSync('pnpm run manual:build', {
       cwd: path.resolve(__dirname, '..'),
       stdio: 'inherit',
@@ -776,7 +832,31 @@ async function main() {
     log('\n⚠️  DRY RUN 模式 - 预览执行，不实际操作\n', 'yellow');
   }
   
-  const version = getVersion();
+  let version = getVersion();
+  
+  // 在开始部署前检查版本是否需要升级
+  if (!skipNpm) {
+    log(`\n🔍 检查版本 ${CONFIG.packageName}@${version} 是否已存在于 npm...`, 'gray');
+    if (checkNpmVersionExists(CONFIG.packageName, version)) {
+      // 版本已存在，需要升级版本
+      log(`    版本 ${version} 已存在，需要升级版本`, 'yellow');
+      try {
+        execSync('pnpm run version:patch', {
+          cwd: path.resolve(__dirname, '..'),
+          stdio: 'inherit',
+        });
+        // 重新获取新版本号
+        version = getVersion();
+        log(`✅ 版本已升级到: ${version}`, 'green');
+      } catch (error) {
+        logError('版本升级失败');
+        process.exit(1);
+      }
+    } else {
+      log(`✅ 版本 ${version} 不存在于 npm，无需升级`, 'green');
+    }
+  }
+  
   const cdnBaseUrl = CONFIG.cdnTemplates[cdnProvider].replace('{version}', version);
   
   log(`\n📦 版本: ${version}`, 'cyan');
@@ -797,11 +877,12 @@ async function main() {
   }
   
   // 步骤 3-7: 后续流程
+  // 注意：手册生成必须在 npm 发布和部署之前执行，否则 CDN 和部署包中不会包含手册
   const steps = [
     () => stepSeparateFiles(version, cdnBaseUrl, buildSkipped),
+    () => stepGenerateManual(version),  // 必须在 npm 发布之前，确保截图被包含在 CDN
     () => stepPublishNpm(version),
     () => stepDeployServer(version),
-    () => stepGenerateManual(version),
     () => stepVerify(version),
   ];
   
