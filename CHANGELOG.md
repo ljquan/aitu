@@ -1,3 +1,54 @@
+## 0.5.52 (2026-01-26)
+
+### 🚀 Features
+
+- 移动端适配 ([ade6470](https://github.com/ljquan/aitu/commit/ade6470))
+- 全面优化多端响应式适配 ([1b06d2f](https://github.com/ljquan/aitu/commit/1b06d2f))
+- 统一媒体预览组件并优化缩略图展示 ([a617211](https://github.com/ljquan/aitu/commit/a617211))
+- enhance pencil and eraser settings with shape selection ([cbde7b2](https://github.com/ljquan/aitu/commit/cbde7b2))
+- 增强文字属性面板样式设置功能 ([2b437fa](https://github.com/ljquan/aitu/commit/2b437fa))
+- add alignment, distribution, and boolean operation buttons ([811111e](https://github.com/ljquan/aitu/commit/811111e))
+- 对比模式下视频联动同步播放和重置 ([ea9b932](https://github.com/ljquan/aitu/commit/ea9b932))
+- enhance user manual generation and CDN integration ([ba4746d](https://github.com/ljquan/aitu/commit/ba4746d))
+- enhance user manual generation and E2E testing ([607ec7e](https://github.com/ljquan/aitu/commit/607ec7e))
+- 添加用户手册生成系统和 E2E 测试增强 ([4daff77](https://github.com/ljquan/aitu/commit/4daff77))
+- 新增 TaskProgressOverlay 组件显示任务进度 ([0ab1aa3](https://github.com/ljquan/aitu/commit/0ab1aa3))
+
+### 🩹 Fixes
+
+- 修复批量生成只执行第一个任务的问题 ([ebca700](https://github.com/ljquan/aitu/commit/ebca700))
+- enhance task submission and execution checks ([7a92d70](https://github.com/ljquan/aitu/commit/7a92d70))
+- 使用 Context 共享健康状态数据修复显示不一致问题 ([b95247a](https://github.com/ljquan/aitu/commit/b95247a))
+
+### 🔧 Chores
+
+- bump version to 0.5.51 ([78acdbf](https://github.com/ljquan/aitu/commit/78acdbf))
+- bump version to 0.5.50 ([c5db0c5](https://github.com/ljquan/aitu/commit/c5db0c5))
+- bump version to 0.5.49 ([396f90c](https://github.com/ljquan/aitu/commit/396f90c))
+- update app version to 0.5.48 and adjust build time ([b97371b](https://github.com/ljquan/aitu/commit/b97371b))
+- refactor(task-queue): update resume methods to reuse original LLM API log entries ([d96f066](https://github.com/ljquan/aitu/commit/d96f066))
+- 去掉参数n ([989e919](https://github.com/ljquan/aitu/commit/989e919))
+- docs: 添加 Slate-React Leaf DOM 结构稳定性规则 ([a20c4a4](https://github.com/ljquan/aitu/commit/a20c4a4))
+- docs: 添加编码规则 - Clipper 布尔运算结果处理 ([fe13ef8](https://github.com/ljquan/aitu/commit/fe13ef8))
+- docs: 添加编码规则 - useCallback 定义顺序 ([6f891ea](https://github.com/ljquan/aitu/commit/6f891ea))
+- docs(claude): 添加新规则 - 日志记录应反映实际发送的数据 ([c714761](https://github.com/ljquan/aitu/commit/c714761))
+- docs(claude): 添加新规则 - 多组件共享异步数据时使用 Context ([c688c15](https://github.com/ljquan/aitu/commit/c688c15))
+- docs(claude): 添加新规则 - Props 变化时重置组件内部状态 ([2011c2e](https://github.com/ljquan/aitu/commit/2011c2e))
+- docs(claude): 添加新规则 - Flex布局兄弟元素隐藏导致宽度变化 ([9a917ab](https://github.com/ljquan/aitu/commit/9a917ab))
+- Update README.md ([cf65ccf](https://github.com/ljquan/aitu/commit/cf65ccf))
+- Update README_en.md ([aa6986d](https://github.com/ljquan/aitu/commit/aa6986d))
+- docs(readme): align Chinese link ([3d37033](https://github.com/ljquan/aitu/commit/3d37033))
+- docs(readme): fix english readme link ([c58b01d](https://github.com/ljquan/aitu/commit/c58b01d))
+- docs(readme): update demo links ([4fd7ba4](https://github.com/ljquan/aitu/commit/4fd7ba4))
+- 添加e2e ([07e18e2](https://github.com/ljquan/aitu/commit/07e18e2))
+
+### ❤️  Thank You
+
+- liquidliang <ljquan@qq.com>
+- liquid <ljquan@qq.com>
+- ovst <wangjueszu@qq.com>
+- gongchengtu <1817063960@qq.com>
+
 ## 0.5.51 (2026-01-25)
 
 ### 🚀 Features
