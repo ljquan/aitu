@@ -765,10 +765,10 @@ export class WorkflowExecutor {
         // Merge batch options into args for main thread (batchId, batchIndex, batchTotal)
         const argsWithOptions = {
           ...step.args,
-          ...(step.options?.batchId && { batchId: step.options.batchId }),
-          ...(step.options?.batchIndex && { batchIndex: step.options.batchIndex }),
-          ...(step.options?.batchTotal && { batchTotal: step.options.batchTotal }),
-          ...(step.options?.globalIndex && { globalIndex: step.options.globalIndex }),
+          ...(step.options?.batchId !== undefined && { batchId: step.options.batchId }),
+          ...(typeof step.options?.batchIndex === 'number' && { batchIndex: step.options.batchIndex }),
+          ...(typeof step.options?.batchTotal === 'number' && { batchTotal: step.options.batchTotal }),
+          ...(typeof step.options?.globalIndex === 'number' && { globalIndex: step.options.globalIndex }),
         };
         const response = await this.requestMainThreadTool(
           workflow.id,

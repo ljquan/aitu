@@ -174,7 +174,7 @@ async function executeAsync(params: VideoGenerationParams): Promise<MCPResult> {
  * 支持批量创建任务（通过 count 参数）
  */
 function executeQueue(params: VideoGenerationParams, options: MCPExecuteOptions): MCPTaskResult {
-  const { 
+  const {
     prompt, model = 'veo3', seconds, size, referenceImages, count = 1,
     // 批量参数（可能从工作流步骤传入）
     batchId: paramsBatchId, batchIndex: paramsBatchIndex, batchTotal: paramsBatchTotal, globalIndex: paramsGlobalIndex,
@@ -210,15 +210,15 @@ function executeQueue(params: VideoGenerationParams, options: MCPExecuteOptions)
 
     // 如果是重试，复用原有任务
     if (options.retryTaskId) {
-      // console.log('[VideoGenerationTool] Retrying existing task:', options.retryTaskId);
       taskQueueService.retryTask(options.retryTaskId);
       const task = taskQueueService.getTask(options.retryTaskId);
       if (!task) {
         throw new Error(`重试任务不存在: ${options.retryTaskId}`);
       }
       createdTasks.push(task);
-    } else if (paramsBatchId && paramsBatchIndex) {
+    } else if (paramsBatchId && typeof paramsBatchIndex === 'number') {
       // 工作流场景：每个步骤创建一个任务，批量信息已从工作流传入
+      // 使用 typeof 检查确保即使 batchIndex 为 0 也能正确处理
       const task = taskQueueService.createTask(
         {
           prompt,
@@ -258,7 +258,6 @@ function executeQueue(params: VideoGenerationParams, options: MCPExecuteOptions)
           TaskType.VIDEO
         );
         createdTasks.push(task);
-        // console.log(`[VideoGenerationTool] Created task ${i + 1}/${actualCount}:`, task.id);
       }
     }
 

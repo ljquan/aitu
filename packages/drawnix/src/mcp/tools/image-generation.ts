@@ -185,8 +185,9 @@ function executeQueue(params: ImageGenerationParams, options: MCPExecuteOptions)
         throw new Error(`重试任务不存在: ${options.retryTaskId}`);
       }
       createdTasks.push(task);
-    } else if (paramsBatchId && paramsBatchIndex) {
+    } else if (paramsBatchId && typeof paramsBatchIndex === 'number') {
       // 工作流场景：每个步骤创建一个任务，批量信息已从工作流传入
+      // 使用 typeof 检查确保即使 batchIndex 为 0 也能正确处理
       const task = taskQueueService.createTask(
         {
           prompt,
