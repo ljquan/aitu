@@ -7,6 +7,7 @@
 
 import React, { useCallback, useMemo, useEffect, useRef } from 'react';
 import { useCharacters } from '../../hooks/useCharacters';
+import { analytics } from '../../utils/posthog-analytics';
 import type { SoraCharacter } from '../../types/character.types';
 import { CharacterAvatar } from './CharacterAvatar';
 import './character.scss';
@@ -80,6 +81,11 @@ export const CharacterMentionPopup: React.FC<CharacterMentionPopupProps> = ({
   // Handle character click
   const handleCharacterClick = useCallback(
     (character: SoraCharacter) => {
+      // 埋点：角色在提示词中使用
+      analytics.track('character_used_in_prompt', {
+        characterId: character.id,
+        username: character.username,
+      });
       onSelect(character);
     },
     [onSelect]

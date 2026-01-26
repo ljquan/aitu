@@ -687,6 +687,12 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
     setPrompt(info.prompt);
     setGenerationType('text'); // agent 对应 text 生成类型
     inputRef.current?.focus();
+
+    // 埋点：灵感模板选择（用于追踪转化率）
+    analytics.track('inspiration_selected', {
+      promptLength: info.prompt.length,
+      modelType: info.modelType,
+    });
   }, []);
 
   // 处理历史提示词选择：将提示词回填到输入框并切换生成类型

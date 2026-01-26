@@ -56,15 +56,21 @@ class GenerationAPIService {
     const startTime = Date.now();
     const taskType = type === TaskType.IMAGE ? 'image' : 'video';
 
-    // Track model call start
+    // Track model call start with enhanced parameters
+    const hasRefImage = !!(params as any).uploadedImage || !!(params as any).uploadedImages || !!(params as any).referenceImages;
     analytics.trackModelCall({
       taskId,
       taskType,
-      model: taskType === 'image' ? 'gemini-image' : 'gemini-video',
+      model: params.model || (taskType === 'image' ? 'gemini-image' : 'gemini-video'),
       promptLength: params.prompt.length,
-      hasUploadedImage:
-        !!(params as any).uploadedImage || !!(params as any).uploadedImages,
+      hasUploadedImage: hasRefImage,
       startTime,
+      // Enhanced parameters
+      aspectRatio: params.size,
+      duration: params.duration,
+      resolution: params.width && params.height ? `${params.width}x${params.height}` : undefined,
+      batchCount: (params as any).count || 1,
+      hasReferenceImage: hasRefImage,
     });
 
     try {

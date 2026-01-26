@@ -13,6 +13,7 @@ import { useDrawnix } from '../../hooks/use-drawnix';
 import { ToolTransforms } from '../../plugins/with-tool';
 import { toolboxService } from '../../services/toolbox-service';
 import { toolWindowService } from '../../services/tool-window-service';
+import { analytics } from '../../utils/posthog-analytics';
 import { ToolDefinition } from '../../types/toolbox.types';
 import { DEFAULT_TOOL_CONFIG, TOOL_CATEGORY_LABELS } from '../../constants/built-in-tools';
 import { ToolList } from './ToolList';
@@ -129,6 +130,15 @@ export const ToolboxDrawer: React.FC<ToolboxDrawerProps> = ({
             component: (tool as any).component,
           }
         );
+
+        // 埋点：工具实际使用（插入画布）
+        analytics.track('tool_actually_used', {
+          toolId: tool.id,
+          toolName: tool.name,
+          category: tool.category,
+          usageType: 'insert',
+          isCustomTool: !tool.id.startsWith('builtin-'),
+        });
       } else {
         MessagePlugin.warning('该工具未定义内容（URL 或组件）');
       }
@@ -167,6 +177,16 @@ export const ToolboxDrawer: React.FC<ToolboxDrawerProps> = ({
     (tool: ToolDefinition) => {
       // 存储原始模板 URL，在渲染时由 ToolWinBoxManager 替换
       toolWindowService.openTool(tool);
+
+      // 埋点：工具实际使用（在窗口中打开）
+      analytics.track('tool_actually_used', {
+        toolId: tool.id,
+        toolName: tool.name,
+        category: tool.category,
+        usageType: 'window',
+        isCustomTool: !tool.id.startsWith('builtin-'),
+      });
+
       // 在窗口打开后，可以选择关闭抽屉，也可以保持打开
       handleClose();
     },

@@ -10,6 +10,7 @@ import type { AgentResult, AgentExecuteOptions, ToolCall, AgentExecutionContext 
 import { generateSystemPrompt, generateReferenceImagesPrompt } from './system-prompts';
 import { parseToolCalls, extractTextContent } from './tool-parser';
 import { geminiSettings } from '../../utils/settings-manager';
+import { analytics } from '../../utils/posthog-analytics';
 
 /**
  * 将占位符替换为真实图片 URL
@@ -226,6 +227,18 @@ class AgentExecutor {
       maxIterations = 3,
     } = options;
 
+    const startTime = Date.now();
+    const toolCallsExecuted: string[] = [];
+
+    // 埋点：Agent 工作流开始
+    analytics.track('agent_workflow_start', {
+      modelType: context.model.type,
+      modelId: context.model.id,
+      hasReferenceImages: context.selection.images.length > 0,
+      hasSelectedTexts: context.selection.texts.length > 0,
+      triggerSource: context.userInstruction ? 'user_input' : 'selection',
+    });
+
     try {
       // console.log('[AgentExecutor] Starting execution with context:', context.userInstruction.substring(0, 100));
 
@@ -322,8 +335,24 @@ class AgentExecutor {
             : rawToolCall;
 
           // console.log(`[AgentExecutor] Reporting tool call: ${toolCall.name}`, toolCall.arguments);
+          toolCallsExecuted.push(toolCall.name);
+          
+          // 埋点：MCP 工具执行
+          analytics.track('mcp_tool_execution', {
+            toolName: toolCall.name,
+            hasArguments: Object.keys(toolCall.arguments).length > 0,
+          });
+          
           onToolCall?.(toolCall);
         }
+
+        // 埋点：Agent 工作流成功
+        analytics.track('agent_workflow_success', {
+          duration: Date.now() - startTime,
+          toolsExecuted: toolCallsExecuted,
+          toolCount: toolCallsExecuted.length,
+          iterations,
+        });
 
         // 工具调用已报告，返回成功
         // 实际执行由调用方（AIInputBar）在接收到 onAddSteps 后处理
@@ -335,6 +364,14 @@ class AgentExecutor {
         };
       }
 
+      // 埋点：Agent 工作流成功（无工具调用）
+      analytics.track('agent_workflow_success', {
+        duration: Date.now() - startTime,
+        toolsExecuted: [],
+        toolCount: 0,
+        iterations,
+      });
+
       return {
         success: true,
         response: finalResponse,
@@ -343,6 +380,14 @@ class AgentExecutor {
       };
     } catch (error: any) {
       console.error('[AgentExecutor] Execution failed:', error);
+
+      // 埋点：Agent 工作流失败
+      analytics.track('agent_workflow_failed', {
+        duration: Date.now() - startTime,
+        error: error.message || 'Unknown error',
+        toolsExecuted: toolCallsExecuted,
+      });
+
       return {
         success: false,
         error: error.message || 'Agent 执行失败',

@@ -298,22 +298,22 @@
             
             // 更紧凑的布局
             &__scrollable {
-                padding: 4px 0;
-                gap: 2px;
+                padding: 2px 0;
+                gap: 1px;
             }
 
             // 更紧凑的 section
             .unified-toolbar__section {
-                padding: 0 2px;
+                padding: 0 1px;
                 
                 &:not(:first-child):not(.unified-toolbar__section--fixed-top):not(.unified-toolbar__section--fixed-bottom) {
-                    margin-top: 4px;
-                    padding-top: 4px;
+                    margin-top: 2px;
+                    padding-top: 2px;
                 }
                 
                 &--fixed-top,
                 &--fixed-bottom {
-                    padding: 6px 2px;
+                    padding: 4px 1px;
                 }
             }
         }

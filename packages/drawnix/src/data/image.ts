@@ -15,6 +15,7 @@ import { DrawTransforms } from '@plait/draw';
 import { getElementOfFocusedImage } from '@plait/common';
 import { getInsertionPointForSelectedElements, getInsertionPointBelowBottommostElement, scrollToPointIfNeeded } from '../utils/selection-utils';
 import { assetStorageService } from '../services/asset-storage-service';
+import { analytics } from '../utils/posthog-analytics';
 
 /**
  * 从保存的选中元素IDs计算插入点
@@ -418,6 +419,14 @@ export const insertImageFromUrl = async (
   // console.log(`[insertImageFromUrl] Calling DrawTransforms.insertImage...`);
   DrawTransforms.insertImage(board, imageItem, insertionPoint);
   // console.log(`[insertImageFromUrl] DrawTransforms.insertImage completed`);
+
+  // 埋点：图片插入画布
+  analytics.track('asset_insert_canvas', {
+    type: 'image',
+    source: imageUrl.startsWith('/__aitu_cache__/') || imageUrl.startsWith('/asset-library/') ? 'local' : 'external',
+    width: imageItem.width,
+    height: imageItem.height,
+  });
 
   // 如果跳过了图片加载，异步加载图片并更新元素尺寸
   if (shouldUpdateSizeAfterLoad && referenceDimensions) {

@@ -122,8 +122,16 @@ export const MoreToolsButton: React.FC<MoreToolsButtonProps> = ({
     }
   }, []);
 
-  // 鼠标进入按钮
+  // 检测是否为触摸设备
+  const isTouchDevice = useCallback(() => {
+    return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  }, []);
+
+  // 鼠标进入按钮（桌面端）
   const handleMouseEnter = useCallback(() => {
+    // 触摸设备不处理 hover
+    if (isTouchDevice()) return;
+    
     clearAllTimeouts();
     setIsHovering(true);
     
@@ -131,10 +139,13 @@ export const MoreToolsButton: React.FC<MoreToolsButtonProps> = ({
     hoverTimeoutRef.current = setTimeout(() => {
       setIsOpen(true);
     }, 200);
-  }, [clearAllTimeouts]);
+  }, [clearAllTimeouts, isTouchDevice]);
 
-  // 鼠标离开按钮
+  // 鼠标离开按钮（桌面端）
   const handleMouseLeave = useCallback(() => {
+    // 触摸设备不处理 hover
+    if (isTouchDevice()) return;
+    
     if (hoverTimeoutRef.current) {
       clearTimeout(hoverTimeoutRef.current);
       hoverTimeoutRef.current = null;
@@ -145,7 +156,16 @@ export const MoreToolsButton: React.FC<MoreToolsButtonProps> = ({
       setIsHovering(false);
       setIsOpen(false);
     }, 150);
-  }, []);
+  }, [isTouchDevice]);
+
+  // 点击按钮（移动端和桌面端都支持）
+  const handleClick = useCallback(() => {
+    // 触摸设备使用点击来切换
+    if (isTouchDevice()) {
+      setIsOpen(prev => !prev);
+      setIsHovering(false);
+    }
+  }, [isTouchDevice]);
 
   // 鼠标进入 Popover 内容区
   const handlePopoverMouseEnter = useCallback(() => {
@@ -168,7 +188,9 @@ export const MoreToolsButton: React.FC<MoreToolsButtonProps> = ({
     <Popover
       open={isOpen}
       onOpenChange={(open) => {
-        if (!open && !isHovering) {
+        // 触摸设备：允许点击外部关闭
+        // 桌面设备：只有在非 hover 状态时才关闭
+        if (!open && (isTouchDevice() || !isHovering)) {
           setIsOpen(false);
         }
       }}
@@ -179,6 +201,7 @@ export const MoreToolsButton: React.FC<MoreToolsButtonProps> = ({
         <div
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
+          onClick={handleClick}
         >
           <ToolButton
             type="icon"

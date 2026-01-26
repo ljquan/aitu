@@ -682,6 +682,24 @@ function setupEventListeners() {
     tab.addEventListener('click', () => switchTab(tab.dataset.tab));
   });
 
+  // Mobile status panel toggle
+  const toggleStatusPanelBtn = document.getElementById('toggleStatusPanel');
+  const leftPanel = document.querySelector('.left-panel');
+  if (toggleStatusPanelBtn && leftPanel) {
+    toggleStatusPanelBtn.addEventListener('click', () => {
+      const isVisible = leftPanel.classList.toggle('mobile-visible');
+      toggleStatusPanelBtn.classList.toggle('active', isVisible);
+    });
+
+    // Close panel when clicking outside (on logs area)
+    document.querySelector('.logs-panel')?.addEventListener('click', () => {
+      if (leftPanel.classList.contains('mobile-visible')) {
+        leftPanel.classList.remove('mobile-visible');
+        toggleStatusPanelBtn.classList.remove('active');
+      }
+    });
+  }
+
   // Keyboard shortcuts
   document.addEventListener('keydown', (e) => {
     // Ignore if typing in an input

@@ -213,7 +213,7 @@
     z-index: 4005;
 
     &__zoom {
-      padding: 2px 6px;
+      padding: 2px 4px;
       border-radius: 16px;
     }
 
@@ -233,7 +233,7 @@
       min-width: 44px;
       height: 36px;
       font-size: 12px;
-      padding: 0 6px;
+      padding: 0 4px;
     }
 
     &__minimap-toggle {
@@ -263,7 +263,7 @@
     gap: 4px;
 
     &__zoom {
-      padding: 2px 4px;
+      padding: 2px 2px;
       border-radius: 14px;
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
     }
@@ -283,7 +283,7 @@
       min-width: 40px;
       height: 32px;
       font-size: 11px;
-      padding: 0 4px;
+      padding: 0 2px;
     }
 
     // 移动端隐藏 minimap toggle 按钮，节省空间
@@ -312,7 +312,7 @@
 @media (max-width: 480px) {
   .view-navigation {
     &__zoom {
-      padding: 1px 3px;
+      padding: 1px 1px;
     }
 
     &__zoom-btn {
@@ -330,6 +330,7 @@
       min-width: 36px;
       height: 28px;
       font-size: 10px;
+      padding: 0 1px;
     }
 
     // 小屏幕 minimap toggle 更紧凑
