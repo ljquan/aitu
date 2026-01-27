@@ -321,7 +321,7 @@ const AIImageGeneration = ({
       const currentImageModel =
         settings.imageModelName || 'gemini-2.5-flash-image-vip';
 
-      // 创建任务参数
+      // 创建任务参数（单个任务也需要 batchId 以跳过 SW 重复检测）
       const taskParams = {
         prompt: (prompt || '').trim(),
         width: finalWidth,
@@ -332,6 +332,10 @@ const AIImageGeneration = ({
         // 保存上传的图片（已转换为可序列化的格式）
         uploadedImages: convertedImages,
         autoInsertToCanvas: true,
+        // 始终包含 batchId 以跳过重复检测
+        batchId: `image_single_${Date.now()}`,
+        batchIndex: 1,
+        batchTotal: 1,
       };
 
       // 创建任务并添加到队列

@@ -511,7 +511,8 @@ const AIVideoGeneration = ({
 
       // 批量生成逻辑
       const batchTaskIds: string[] = [];
-      const batchId = count > 1 ? `video_batch_${Date.now()}` : undefined;
+      // 始终生成 batchId，即使 count=1，这样可以跳过 SW 的重复检测
+      const batchId = `video_batch_${Date.now()}`;
 
       for (let i = 0; i < count; i++) {
         // 创建任务参数（包含新的 duration, size, uploadedImages）
@@ -530,12 +531,10 @@ const AIVideoGeneration = ({
               totalDuration: parseFloat(duration),
             },
           }),
-          // 批量生成信息
-          ...(batchId && {
-            batchId,
-            batchIndex: i + 1,
-            batchTotal: count,
-          }),
+          // 批量生成信息（始终包含 batchId 以跳过重复检测）
+          batchId,
+          batchIndex: i + 1,
+          batchTotal: count,
           autoInsertToCanvas: true,
         };
 

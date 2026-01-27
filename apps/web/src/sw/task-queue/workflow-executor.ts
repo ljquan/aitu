@@ -763,6 +763,8 @@ export class WorkflowExecutor {
       if (requiresMainThread(step.mcp) || !getSWMCPTool(step.mcp)) {
         // Delegate to main thread
         // Merge batch options into args for main thread (batchId, batchIndex, batchTotal)
+        // Note: batchId etc. are now included directly in step.args by workflow-converter.ts
+        // The options merge below is kept for backward compatibility
         const argsWithOptions = {
           ...step.args,
           ...(step.options?.batchId !== undefined && { batchId: step.options.batchId }),
