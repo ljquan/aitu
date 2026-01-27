@@ -31,22 +31,37 @@ export interface UseWorkspaceReturn {
   renameFolder: (id: string, name: string) => Promise<boolean>;
   deleteFolder: (id: string) => Promise<boolean>;
   deleteFolderWithContents: (id: string) => Promise<boolean>;
-  moveFolder: (id: string, targetParentId: string | null, targetId?: string, position?: 'before' | 'after') => Promise<boolean>;
+  moveFolder: (
+    id: string,
+    targetParentId: string | null,
+    targetId?: string,
+    position?: 'before' | 'after'
+  ) => Promise<boolean>;
   toggleFolderExpanded: (id: string) => void;
 
   // Board operations
   createBoard: (options: CreateBoardOptions) => Promise<Board | null>;
   renameBoard: (id: string, name: string) => Promise<boolean>;
   deleteBoard: (id: string) => Promise<boolean>;
-  moveBoard: (id: string, targetFolderId: string | null, targetId?: string, position?: 'before' | 'after') => Promise<boolean>;
+  moveBoard: (
+    id: string,
+    targetFolderId: string | null,
+    targetId?: string,
+    position?: 'before' | 'after'
+  ) => Promise<boolean>;
   copyBoard: (id: string) => Promise<Board | null>;
   switchBoard: (boardId: string) => Promise<Board | null>;
   saveBoard: (data: BoardChangeData) => Promise<boolean>;
 
   // Batch operations
   deleteBoardsBatch: (ids: string[]) => Promise<boolean>;
-  moveBoardsBatch: (ids: string[], targetFolderId: string | null) => Promise<boolean>;
-  reorderItems: (items: Array<{ id: string; type: 'board' | 'folder'; order: number }>) => Promise<boolean>;
+  moveBoardsBatch: (
+    ids: string[],
+    targetFolderId: string | null
+  ) => Promise<boolean>;
+  reorderItems: (
+    items: Array<{ id: string; type: 'board' | 'folder'; order: number }>
+  ) => Promise<boolean>;
 
   // UI state
   setSidebarWidth: (width: number) => void;
@@ -124,7 +139,9 @@ export function useWorkspace(): UseWorkspaceReturn {
         setError(null);
         return await workspaceService.createFolder(options);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to create folder');
+        setError(
+          err instanceof Error ? err.message : 'Failed to create folder'
+        );
         return null;
       }
     },
@@ -138,8 +155,10 @@ export function useWorkspace(): UseWorkspaceReturn {
         await workspaceService.renameFolder(id, name);
         return true;
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to rename folder');
-        return false;
+        setError(
+          err instanceof Error ? err.message : 'Failed to rename folder'
+        );
+        throw err;
       }
     },
     []
@@ -156,26 +175,43 @@ export function useWorkspace(): UseWorkspaceReturn {
     }
   }, []);
 
-  const deleteFolderWithContents = useCallback(async (id: string): Promise<boolean> => {
-    try {
-      setError(null);
-      await workspaceService.deleteFolderWithContents(id);
-      return true;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete folder with contents');
-      return false;
-    }
-  }, []);
-
-  const moveFolder = useCallback(
-    async (id: string, targetParentId: string | null, targetId?: string, position?: 'before' | 'after'): Promise<boolean> => {
+  const deleteFolderWithContents = useCallback(
+    async (id: string): Promise<boolean> => {
       try {
         setError(null);
-        await workspaceService.moveFolder(id, targetParentId, targetId, position);
+        await workspaceService.deleteFolderWithContents(id);
+        return true;
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : 'Failed to delete folder with contents'
+        );
+        return false;
+      }
+    },
+    []
+  );
+
+  const moveFolder = useCallback(
+    async (
+      id: string,
+      targetParentId: string | null,
+      targetId?: string,
+      position?: 'before' | 'after'
+    ): Promise<boolean> => {
+      try {
+        setError(null);
+        await workspaceService.moveFolder(
+          id,
+          targetParentId,
+          targetId,
+          position
+        );
         return true;
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to move folder');
-        return false;
+        throw err;
       }
     },
     []
@@ -208,7 +244,7 @@ export function useWorkspace(): UseWorkspaceReturn {
         return true;
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to rename board');
-        return false;
+        throw err;
       }
     },
     []
@@ -226,14 +262,24 @@ export function useWorkspace(): UseWorkspaceReturn {
   }, []);
 
   const moveBoard = useCallback(
-    async (id: string, targetFolderId: string | null, targetId?: string, position?: 'before' | 'after'): Promise<boolean> => {
+    async (
+      id: string,
+      targetFolderId: string | null,
+      targetId?: string,
+      position?: 'before' | 'after'
+    ): Promise<boolean> => {
       try {
         setError(null);
-        await workspaceService.moveBoard(id, targetFolderId, targetId, position);
+        await workspaceService.moveBoard(
+          id,
+          targetFolderId,
+          targetId,
+          position
+        );
         return true;
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to move board');
-        return false;
+        throw err;
       }
     },
     []
@@ -268,18 +314,15 @@ export function useWorkspace(): UseWorkspaceReturn {
     []
   );
 
-  const copyBoard = useCallback(
-    async (id: string): Promise<Board | null> => {
-      try {
-        setError(null);
-        return await workspaceService.copyBoard(id);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to copy board');
-        return null;
-      }
-    },
-    []
-  );
+  const copyBoard = useCallback(async (id: string): Promise<Board | null> => {
+    try {
+      setError(null);
+      return await workspaceService.copyBoard(id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to copy board');
+      return null;
+    }
+  }, []);
 
   // ========== Batch Operations ==========
 
@@ -290,7 +333,9 @@ export function useWorkspace(): UseWorkspaceReturn {
         await workspaceService.deleteBoardsBatch(ids);
         return true;
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to delete boards');
+        setError(
+          err instanceof Error ? err.message : 'Failed to delete boards'
+        );
         return false;
       }
     },
@@ -312,13 +357,17 @@ export function useWorkspace(): UseWorkspaceReturn {
   );
 
   const reorderItems = useCallback(
-    async (items: Array<{ id: string; type: 'board' | 'folder'; order: number }>): Promise<boolean> => {
+    async (
+      items: Array<{ id: string; type: 'board' | 'folder'; order: number }>
+    ): Promise<boolean> => {
       try {
         setError(null);
         await workspaceService.reorderItems(items);
         return true;
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to reorder items');
+        setError(
+          err instanceof Error ? err.message : 'Failed to reorder items'
+        );
         return false;
       }
     },
