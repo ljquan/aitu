@@ -18,6 +18,7 @@ import {
   CreateBoardOptions,
   BoardChangeData,
   WORKSPACE_DEFAULTS,
+  ValidationError,
 } from '../types/workspace.types';
 import { workspaceStorageService } from './workspace-storage-service';
 
@@ -150,11 +151,56 @@ class WorkspaceService {
     return folder;
   }
 
+  /**
+   * Validate folder name
+   * 验证文件夹名称
+   */
+  private validateFolderName(
+    folderId: string,
+    name: string,
+    parentId: string | null
+  ): { valid: boolean; error?: string } {
+    // 1. 空名称检查
+    const trimmedName = name.trim();
+    if (trimmedName.length === 0) {
+      return { valid: false, error: '文件夹名称不能为空' };
+    }
+
+    // 2. 长度检查
+    if (trimmedName.length > WORKSPACE_DEFAULTS.MAX_NAME_LENGTH) {
+      return { 
+        valid: false, 
+        error: `文件夹名称不能超过${WORKSPACE_DEFAULTS.MAX_NAME_LENGTH}个字符` 
+      };
+    }
+
+    // 3. 同级重名检查（只检查同一父文件夹内的其他文件夹）
+    const siblings = this.getFolderChildren(parentId)
+      .filter(f => f.id !== folderId);
+    
+    const isDuplicate = siblings.some(f => f.name === trimmedName);
+    if (isDuplicate) {
+      return { 
+        valid: false, 
+        error: '此文件夹中已存在同名文件夹，请使用其他名称' 
+      };
+    }
+
+    return { valid: true };
+  }
+
   async renameFolder(id: string, name: string): Promise<void> {
     const folder = this.folders.get(id);
     if (!folder) throw new Error(`Folder ${id} not found`);
 
-    folder.name = name;
+    // 验证名称
+    const validation = this.validateFolderName(id, name, folder.parentId);
+    if (!validation.valid) {
+      throw new ValidationError(validation.error!);
+    }
+
+    const trimmedName = name.trim();
+    folder.name = trimmedName;
     folder.updatedAt = Date.now();
 
     this.folders.set(id, folder);
@@ -265,11 +311,56 @@ class WorkspaceService {
     return board;
   }
 
+  /**
+   * Validate board name
+   * 验证画板名称
+   */
+  private validateBoardName(
+    boardId: string,
+    name: string,
+    folderId: string | null
+  ): { valid: boolean; error?: string } {
+    // 1. 空名称检查
+    const trimmedName = name.trim();
+    if (trimmedName.length === 0) {
+      return { valid: false, error: '画板名称不能为空' };
+    }
+
+    // 2. 长度检查
+    if (trimmedName.length > WORKSPACE_DEFAULTS.MAX_NAME_LENGTH) {
+      return { 
+        valid: false, 
+        error: `画板名称不能超过${WORKSPACE_DEFAULTS.MAX_NAME_LENGTH}个字符` 
+      };
+    }
+
+    // 3. 同级重名检查（只检查同一文件夹内的其他画板）
+    const siblings = Array.from(this.boards.values())
+      .filter(b => b.folderId === folderId && b.id !== boardId);
+    
+    const isDuplicate = siblings.some(b => b.name === trimmedName);
+    if (isDuplicate) {
+      return { 
+        valid: false, 
+        error: '此文件夹中已存在同名画板，请使用其他名称' 
+      };
+    }
+
+    return { valid: true };
+  }
+
   async renameBoard(id: string, name: string): Promise<void> {
     const board = this.boards.get(id);
     if (!board) throw new Error(`Board ${id} not found`);
 
-    board.name = name;
+    // 验证名称
+    const validation = this.validateBoardName(id, name, board.folderId);
+    if (!validation.valid) {
+      throw new ValidationError(validation.error!);
+    }
+
+    const trimmedName = name.trim();
+    board.name = trimmedName;
     board.updatedAt = Date.now();
 
     this.boards.set(id, board);

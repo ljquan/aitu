@@ -130,13 +130,20 @@ const ProjectDrawerContent: React.FC<{
 
   // Handle rename submit
   const handleRenameSubmit = useCallback(
-    (type: 'folder' | 'board', id: string) => {
+    async (type: 'folder' | 'board', id: string) => {
       if (!editingName.trim()) {
         setEditingId(null);
         return;
       }
-      onRename(type, id, editingName.trim());
-      setEditingId(null);
+      try {
+        await onRename(type, id, editingName.trim());
+        // 重命名成功，关闭编辑状态
+        setEditingId(null);
+      } catch (error: any) {
+        // 重命名失败（如验证错误），保持编辑状态让用户修改
+        // 错误提示已在 handleRename 中显示
+        console.log('Rename failed, keeping edit mode active');
+      }
     },
     [editingName, onRename]
   );
@@ -602,10 +609,30 @@ export const ProjectDrawer: React.FC<ProjectDrawerProps> = ({
 
   // Handle rename
   const handleRename = useCallback(async (type: 'folder' | 'board', id: string, name: string) => {
-    if (type === 'folder') {
-      await renameFolder(id, name);
-    } else {
-      await renameBoard(id, name);
+    try {
+      if (type === 'folder') {
+        await renameFolder(id, name);
+      } else {
+        await renameBoard(id, name);
+      }
+      MessagePlugin.success('重命名成功');
+    } catch (error: any) {
+      // 处理验证错误
+      if (error.name === 'ValidationError') {
+        MessagePlugin.warning({
+          content: error.message,
+          duration: 3000,
+        });
+        // 返回 false 表示重命名失败，保持编辑状态
+        throw error;
+      } else {
+        // 其他错误
+        MessagePlugin.error({
+          content: '重命名失败',
+          duration: 3000,
+        });
+        throw error;
+      }
     }
   }, [renameFolder, renameBoard]);
 
