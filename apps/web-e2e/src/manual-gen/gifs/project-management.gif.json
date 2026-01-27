@@ -1,0 +1,146 @@
+{
+  "id": "project-management",
+  "name": "项目管理演示",
+  "output": "项目管理演示.gif",
+  "targetPage": "advanced/project-management",
+  "preWait": 1000,
+  "postWait": 2000,
+  "actions": [
+    {
+      "type": "keyHint",
+      "key": "项目管理",
+      "hint": "打开项目管理",
+      "duration": 1500
+    },
+    {
+      "type": "click",
+      "target": "role:button[name='打开项目']",
+      "label": "打开项目",
+      "wait": 1500
+    },
+    {
+      "type": "keyHint",
+      "key": "新建文件夹",
+      "hint": "新建文件夹",
+      "duration": 1500
+    },
+    {
+      "type": "click",
+      "target": "role:button[name='新建文件夹']",
+      "label": "新建文件夹",
+      "wait": 1500
+    },
+    {
+      "type": "wait",
+      "duration": 500
+    },
+    {
+      "type": "type",
+      "text": "目录1",
+      "delay": 150,
+      "wait": 500
+    },
+    {
+      "type": "press",
+      "key": "Enter",
+      "wait": 1000
+    },
+    {
+      "type": "keyHint",
+      "key": "新建画板",
+      "hint": "在文件夹中新建画板",
+      "duration": 1500
+    },
+    {
+      "type": "click",
+      "target": "text:新建画板",
+      "label": "新建画板",
+      "wait": 1000,
+      "optional": true
+    },
+    {
+      "type": "type",
+      "text": "画布1",
+      "delay": 150,
+      "wait": 500
+    },
+    {
+      "type": "press",
+      "key": "Enter",
+      "wait": 1500
+    },
+    {
+      "type": "keyHint",
+      "key": "切换",
+      "hint": "切换画板",
+      "duration": 1500
+    },
+    {
+      "type": "click",
+      "target": "text:我的画板",
+      "label": "切换画板",
+      "wait": 1000,
+      "optional": true
+    },
+    {
+      "type": "click",
+      "target": "text:画布1",
+      "label": "切回",
+      "wait": 1000,
+      "optional": true
+    },
+    {
+      "type": "keyHint",
+      "key": "重命名",
+      "hint": "重命名画板",
+      "duration": 1500
+    },
+    {
+      "type": "wait",
+      "duration": 1000
+    },
+    {
+      "type": "keyHint",
+      "key": "搜索",
+      "hint": "搜索画板",
+      "duration": 1500
+    },
+    {
+      "type": "type",
+      "text": "画布",
+      "delay": 150,
+      "wait": 1500
+    },
+    {
+      "type": "wait",
+      "duration": 1000
+    },
+    {
+      "type": "keyHint",
+      "key": "导入/导出",
+      "hint": "导入/导出项目",
+      "duration": 1500
+    },
+    {
+      "type": "click",
+      "target": "role:button[name='导入']",
+      "label": "导入",
+      "wait": 1000,
+      "optional": true
+    },
+    {
+      "type": "click",
+      "target": "role:button[name='导出']",
+      "label": "导出",
+      "wait": 1000,
+      "optional": true
+    },
+    {
+      "type": "click",
+      "target": "role:button[name='关闭']",
+      "label": "关闭",
+      "wait": 1000,
+      "optional": true
+    }
+  ]
+}

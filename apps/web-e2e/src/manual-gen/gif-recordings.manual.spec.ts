@@ -328,4 +328,384 @@ test.describe('GIF 动图录制', () => {
     
     await page.waitForTimeout(1000);
   });
+
+  test('工具箱操作演示', async ({ page }) => {
+    // 工具箱完整操作流程：打开 → 使用工具 → 窗口控制 → 关闭
+    
+    // 步骤 1: 点击工具箱按钮
+    await clickWithEffect(
+      page, 
+      page.getByTestId('toolbar-toolbox'), 
+      '打开工具箱',
+      1500
+    );
+    
+    // 步骤 2: 点击第一个工具的「新窗口」按钮
+    const openWindowBtn = page.locator('.tool-item__action-btn.tool-item__action-btn--open-window').first();
+    await clickWithEffect(
+      page, 
+      openWindowBtn, 
+      '在新窗口打开工具',
+      2000
+    );
+    
+    // 步骤 3: 演示窗口控制 - 最大化
+    await showKeyHint(page, '最大化窗口', 1500);
+    const maxBtn = page.locator('.wb-max');
+    if (await maxBtn.isVisible().catch(() => false)) {
+      await clickWithEffect(page, maxBtn, '最大化', 1500);
+    }
+    
+    // 步骤 4: 演示窗口控制 - 还原
+    await showKeyHint(page, '还原窗口大小', 1500);
+    const minBtn = page.locator('.wb-min');
+    if (await minBtn.isVisible().catch(() => false)) {
+      await clickWithEffect(page, minBtn, '还原', 1500);
+    }
+    
+    // 步骤 5: 演示窗口控制 - 分屏模式
+    await showKeyHint(page, '分屏显示', 1500);
+    const splitBtn = page.locator('.wb-split').first();
+    if (await splitBtn.isVisible().catch(() => false)) {
+      await clickWithEffect(page, splitBtn, '分屏', 1500);
+    }
+    
+    // 步骤 6: 演示窗口控制 - 插入画布
+    await showKeyHint(page, '插入到画布', 1500);
+    const insertBtn = page.locator('.wb-insert-canvas').first();
+    if (await insertBtn.isVisible().catch(() => false)) {
+      await clickWithEffect(page, insertBtn, '插入画布', 1500);
+    }
+    
+    // 步骤 7: 关闭窗口
+    await page.waitForTimeout(1000);
+    const closeBtn = page.locator('.wb-close').first();
+    if (await closeBtn.isVisible().catch(() => false)) {
+      await clickWithEffect(page, closeBtn, '关闭', 1000);
+    }
+    
+    // 最终等待
+    await page.waitForTimeout(2000);
+  });
+
+  test('素材库操作演示', async ({ page }) => {
+    // 素材库完整操作流程：打开 → 上传 → 视图切换 → 批量操作 → 下载/插入
+    
+    // 步骤 1: 打开素材库
+    await showKeyHint(page, '打开素材库', 1500);
+    const toolbar = page.locator('.unified-toolbar').or(page.locator('[class*="toolbar"]')).first();
+    const mediaLibraryBtn = toolbar.locator('label').filter({ has: page.getByRole('radio', { name: /素材库/ }) }).first();
+    await clickWithEffect(
+      page, 
+      mediaLibraryBtn, 
+      '素材库',
+      1500
+    );
+    
+    // 步骤 2: 演示上传功能
+    await showKeyHint(page, '上传图片到素材库', 2000);
+    const uploadBtn = page.getByTestId('media-library-grid').getByRole('button', { name: '上传' });
+    await clickWithEffect(page, uploadBtn, '上传', 1000);
+    
+    // 注意：文件上传需要实际文件路径，这里只演示点击
+    // 实际测试时需要准备测试图片
+    // await uploadBtn.setInputFiles('path/to/test-image.png');
+    await page.waitForTimeout(1500);
+    
+    // 步骤 3: 演示视图模式切换
+    await showKeyHint(page, '切换视图模式', 1500);
+    
+    // 紧凑网格
+    const compactGridBtn = page.getByRole('button', { name: '紧凑网格' });
+    if (await compactGridBtn.isVisible().catch(() => false)) {
+      await clickWithEffect(page, compactGridBtn, '紧凑网格', 1000);
+    }
+    
+    // 列表视图
+    const listViewBtn = page.getByRole('button', { name: '列表视图' });
+    if (await listViewBtn.isVisible().catch(() => false)) {
+      await clickWithEffect(page, listViewBtn, '列表视图', 1000);
+    }
+    
+    // 默认网格
+    const defaultGridBtn = page.getByRole('button', { name: '默认网格' });
+    if (await defaultGridBtn.isVisible().catch(() => false)) {
+      await clickWithEffect(page, defaultGridBtn, '默认网格', 1000);
+    }
+    
+    // 步骤 4: 演示批量选择模式
+    await showKeyHint(page, '批量选择素材', 1500);
+    const batchSelectBtn = page.getByRole('button', { name: '批量选择' });
+    if (await batchSelectBtn.isVisible().catch(() => false)) {
+      await clickWithEffect(page, batchSelectBtn, '批量选择', 1500);
+    }
+    
+    // 选择第一个素材
+    const firstMedia = page.getByTestId('media-library-grid').locator('[role="button"]').first();
+    if (await firstMedia.isVisible().catch(() => false)) {
+      await clickWithEffect(page, firstMedia, '选择素材', 1000);
+    }
+    
+    // 退出批量选择
+    const cancelBtn = page.getByRole('button', { name: '取消' });
+    if (await cancelBtn.isVisible().catch(() => false)) {
+      await clickWithEffect(page, cancelBtn, '取消选择', 1000);
+    }
+    
+    // 步骤 5: 演示缩放滑块
+    await showKeyHint(page, '调整缩略图大小', 1500);
+    const slider = page.getByRole('slider');
+    if (await slider.isVisible().catch(() => false)) {
+      // 调整滑块值
+      await slider.fill('130');
+      await page.waitForTimeout(1000);
+    }
+    
+    // 步骤 6: 演示素材操作（选中素材）
+    const mediaItem = page.getByTestId('media-library-grid').locator('[role="button"]').first();
+    if (await mediaItem.isVisible().catch(() => false)) {
+      await clickWithEffect(page, mediaItem, '选择素材', 1500);
+      
+      // 下载按钮
+      await showKeyHint(page, '下载素材', 1500);
+      const downloadBtn = page.getByRole('button', { name: '下载' });
+      if (await downloadBtn.isVisible().catch(() => false)) {
+        await clickWithEffect(page, downloadBtn, '下载', 1000);
+      }
+      
+      // 等待下载完成
+      await page.waitForTimeout(1000);
+      
+      // 插入到画布
+      await showKeyHint(page, '插入到画布', 1500);
+      const insertBtn = page.getByRole('button', { name: '插入' });
+      if (await insertBtn.isVisible().catch(() => false)) {
+        await clickWithEffect(page, insertBtn, '插入', 1500);
+      }
+    }
+    
+    // 步骤 7: 演示排序功能
+    await showKeyHint(page, '切换排序方式', 1500);
+    const sortBtn = page.locator('.lucide.lucide-arrow-down-za');
+    if (await sortBtn.isVisible().catch(() => false)) {
+      await clickWithEffect(page, sortBtn, '排序', 1000);
+      
+      // 选择排序选项
+      const sortOption = page.locator('.media-library-grid__sort-options > div').nth(2);
+      if (await sortOption.isVisible().catch(() => false)) {
+        await clickWithEffect(page, sortOption, '按大小排序', 1000);
+      }
+    }
+    
+    // 最终等待
+    await page.waitForTimeout(2000);
+  });
+
+  test('项目管理演示', async ({ page }) => {
+    // 项目管理完整流程：打开 → 新建文件夹/画板 → 重命名 → 切换 → 导入/导出
+    
+    // 步骤 1: 打开项目抽屉
+    await showKeyHint(page, '打开项目管理', 1500);
+    const projectBtn = page.getByRole('button', { name: /打开项目/ });
+    if (await projectBtn.isVisible().catch(() => false)) {
+      await clickWithEffect(page, projectBtn, '项目管理', 1500);
+    }
+    
+    // 步骤 2: 新建文件夹
+    await showKeyHint(page, '新建文件夹', 1500);
+    const newFolderBtn = page.getByRole('button', { name: '新建文件夹' });
+    if (await newFolderBtn.isVisible().catch(() => false)) {
+      await clickWithEffect(page, newFolderBtn, '新建文件夹', 1500);
+      
+      // 重命名文件夹
+      const folderNode = page.getByText('新建文件夹').nth(1);
+      if (await folderNode.isVisible().catch(() => false)) {
+        await folderNode.dblclick();
+        await page.waitForTimeout(500);
+        
+        const nameInput = page.getByRole('textbox', { name: /请输入/ });
+        if (await nameInput.isVisible().catch(() => false)) {
+          await nameInput.fill('目录1');
+          await page.keyboard.press('Enter');
+          await page.waitForTimeout(1000);
+        }
+      }
+    }
+    
+    // 步骤 3: 在文件夹中新建画板
+    await showKeyHint(page, '在文件夹中新建画板', 1500);
+    // 展开文件夹的菜单
+    const folderMenu = page.locator('.project-drawer-node__actions > .t-button').first();
+    if (await folderMenu.isVisible().catch(() => false)) {
+      await clickWithEffect(page, folderMenu, '文件夹菜单', 1000);
+      
+      // 点击下拉菜单中的"新建画板"
+      const newBoardBtn = page.locator('.t-dropdown__item-text').filter({ hasText: '新建画板' });
+      if (await newBoardBtn.isVisible().catch(() => false)) {
+        await clickWithEffect(page, newBoardBtn, '新建画板', 1000);
+        
+        // 输入画板名称
+        const boardNameInput = page.getByRole('textbox', { name: /请输入/ });
+        if (await boardNameInput.isVisible().catch(() => false)) {
+          await boardNameInput.fill('画布1');
+          await page.keyboard.press('Enter');
+          await page.waitForTimeout(1500);
+        }
+      }
+    }
+    
+    // 步骤 4: 演示画板切换
+    await showKeyHint(page, '切换画板', 1500);
+    const myBoard = page.getByText('我的画板').first();
+    if (await myBoard.isVisible().catch(() => false)) {
+      await clickWithEffect(page, myBoard, '切换到其他画板', 1000);
+    }
+    
+    // 切换回新建的画板
+    const newBoard = page.getByText('画布').first();
+    if (await newBoard.isVisible().catch(() => false)) {
+      await clickWithEffect(page, newBoard, '切回新画板', 1000);
+    }
+    
+    // 步骤 5: 重命名画板
+    await showKeyHint(page, '重命名画板', 1500);
+    if (await newBoard.isVisible().catch(() => false)) {
+      await newBoard.dblclick();
+      await page.waitForTimeout(500);
+      
+      const renameInput = page.getByRole('textbox', { name: /请输入/ });
+      if (await renameInput.isVisible().catch(() => false)) {
+        await renameInput.fill('画布重命名1');
+        await page.waitForTimeout(500);
+        // 点击外部保存
+        await page.locator('.project-drawer-node__row--active').click();
+        await page.waitForTimeout(1000);
+      }
+    }
+    
+    // 步骤 6: 新建更多画板
+    await showKeyHint(page, '继续新建画板', 1500);
+    const newBoardBtn2 = page.getByRole('button', { name: '新建画板' });
+    if (await newBoardBtn2.isVisible().catch(() => false)) {
+      await clickWithEffect(page, newBoardBtn2, '新建画板', 1000);
+      
+      const boardNameInput2 = page.getByRole('textbox', { name: /请输入/ });
+      if (await boardNameInput2.isVisible().catch(() => false)) {
+        await boardNameInput2.fill('新建画布1');
+        await page.keyboard.press('Enter');
+        await page.waitForTimeout(1500);
+      }
+    }
+    
+    // 步骤 7: 演示搜索功能
+    await showKeyHint(page, '搜索画板', 1500);
+    const searchInput = page.getByTestId('project-drawer').getByRole('textbox', { name: /搜索/ });
+    if (await searchInput.isVisible().catch(() => false)) {
+      await clickWithEffect(page, searchInput, '搜索', 500);
+      await page.keyboard.type('画布', { delay: 150 });
+      await page.waitForTimeout(1500);
+      
+      // 清空搜索
+      await searchInput.clear();
+      await page.waitForTimeout(1000);
+    }
+    
+    // 步骤 8: 导入/导出功能
+    await showKeyHint(page, '导入/导出项目', 1500);
+    const importBtn = page.getByRole('button', { name: '导入' });
+    if (await importBtn.isVisible().catch(() => false)) {
+      await clickWithEffect(page, importBtn, '导入', 1000);
+    }
+    
+    const exportBtn = page.getByRole('button', { name: '导出' });
+    if (await exportBtn.isVisible().catch(() => false)) {
+      await clickWithEffect(page, exportBtn, '导出', 1000);
+    }
+    
+    // 步骤 9: 关闭项目抽屉
+    await page.waitForTimeout(1000);
+    const closeBtn = page.getByTestId('project-drawer').getByRole('button', { name: /关闭/ });
+    if (await closeBtn.isVisible().catch(() => false)) {
+      await clickWithEffect(page, closeBtn, '关闭', 1000);
+    }
+    
+    // 最终等待
+    await page.waitForTimeout(2000);
+  });
+
+  test('备份恢复演示', async ({ page }) => {
+    // 备份恢复完整流程：打开 → 备份 → 恢复
+    
+    // 步骤 1: 打开应用菜单
+    await showKeyHint(page, '打开应用菜单', 1500);
+    const menuBtn = page.getByRole('button', { name: /应用菜单/ });
+    if (await menuBtn.isVisible().catch(() => false)) {
+      await clickWithEffect(page, menuBtn, '应用菜单', 1500);
+    }
+    
+    // 步骤 2: 打开备份/恢复对话框
+    await showKeyHint(page, '备份与恢复', 1500);
+    const backupBtn = page.getByRole('button', { name: /备份.*恢复/ });
+    if (await backupBtn.isVisible().catch(() => false)) {
+      await clickWithEffect(page, backupBtn, '备份/恢复', 1500);
+    }
+    
+    // 步骤 3: 演示备份选项
+    await showKeyHint(page, '选择备份内容', 1500);
+    const checkboxes = page.locator('.t-checkbox__input');
+    const firstCheckbox = checkboxes.first();
+    if (await firstCheckbox.isVisible().catch(() => false)) {
+      // 演示勾选
+      await clickWithEffect(page, firstCheckbox, '选择项目', 1000);
+      await page.waitForTimeout(500);
+    }
+    
+    // 步骤 4: 开始备份
+    await showKeyHint(page, '开始备份', 1500);
+    const startBackupBtn = page.getByRole('button', { name: /开始备份/ });
+    if (await startBackupBtn.isVisible().catch(() => false)) {
+      await clickWithEffect(page, startBackupBtn, '开始备份', 1500);
+      
+      // 等待下载开始
+      await page.waitForTimeout(2000);
+    }
+    
+    // 步骤 5: 切换到恢复标签页
+    await showKeyHint(page, '恢复备份', 1500);
+    const restoreTab = page.getByRole('button', { name: '恢复' });
+    if (await restoreTab.isVisible().catch(() => false)) {
+      await clickWithEffect(page, restoreTab, '恢复标签', 1500);
+    }
+    
+    // 步骤 6: 演示文件选择区域
+    await showKeyHint(page, '选择备份文件', 1500);
+    const fileArea = page.locator('div').filter({ hasText: /点击选择备份文件/ }).first();
+    if (await fileArea.isVisible().catch(() => false)) {
+      await clickWithEffect(page, fileArea, '选择文件', 1000);
+      
+      // 注意：实际文件上传需要真实文件路径
+      // 这里只演示点击动作
+      // await page.getByTestId('backup-restore-dialog').setInputFiles('path/to/backup.zip');
+      await page.waitForTimeout(1500);
+    }
+    
+    // 步骤 7: 显示完成按钮位置
+    await showKeyHint(page, '确认并刷新', 1500);
+    const completeBtn = page.getByRole('button', { name: /完成.*刷新/ });
+    if (await completeBtn.isVisible().catch(() => false)) {
+      const box = await completeBtn.boundingBox();
+      if (box) {
+        // 只显示位置，不实际点击（避免刷新页面）
+        await showClickEffect(page, box.x + box.width / 2, box.y + box.height / 2, '完成并刷新');
+        await page.waitForTimeout(1500);
+      }
+    }
+    
+    // 步骤 8: 关闭对话框
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(1000);
+    
+    // 最终等待
+    await page.waitForTimeout(2000);
+  });
 });
