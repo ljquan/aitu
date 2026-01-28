@@ -4,13 +4,15 @@
  * 灵感创意板块主组件，当画板为空时显示创意模版
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { ChevronLeftIcon, ChevronRightIcon } from 'tdesign-icons-react';
-import { Lightbulb } from 'lucide-react';
+import { Lightbulb, X } from 'lucide-react';
 import { InspirationCard } from './InspirationCard';
 import { INSPIRATION_TEMPLATES, ITEMS_PER_PAGE } from './constants';
 import type { InspirationBoardProps } from './types';
 import './inspiration-board.scss';
+
+const HIDE_INSPIRATION_KEY = 'aitu_hide_inspiration_board';
 
 export const InspirationBoard: React.FC<InspirationBoardProps> = ({
   isCanvasEmpty,
@@ -20,6 +22,15 @@ export const InspirationBoard: React.FC<InspirationBoardProps> = ({
   className = '',
 }) => {
   const [currentPage, setCurrentPage] = useState(0);
+  const [isHidden, setIsHidden] = useState(false);
+
+  // 组件加载时从 localStorage 读取用户设置
+  useEffect(() => {
+    const hidePreference = localStorage.getItem(HIDE_INSPIRATION_KEY);
+    if (hidePreference === 'true') {
+      setIsHidden(true);
+    }
+  }, []);
 
   // 计算总页数
   const totalPages = Math.ceil(INSPIRATION_TEMPLATES.length / ITEMS_PER_PAGE);
@@ -50,8 +61,16 @@ export const InspirationBoard: React.FC<InspirationBoardProps> = ({
     onSelectPrompt({ prompt, modelType: 'agent' });
   }, [onSelectPrompt]);
 
-  // 不显示的条件：画板不为空 或 外部控制隐藏
-  if (!isCanvasEmpty || !visible) {
+  // 处理"不再提示"按钮点击
+  const handleHide = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsHidden(true);
+    localStorage.setItem(HIDE_INSPIRATION_KEY, 'true');
+  }, []);
+
+  // 不显示的条件：画板不为空 或 外部控制隐藏 或 用户选择不再提示
+  if (!isCanvasEmpty || !visible || isHidden) {
     return null;
   }
 
@@ -62,6 +81,18 @@ export const InspirationBoard: React.FC<InspirationBoardProps> = ({
       {/* 头部：标题 + 提示词按钮 + 切换按钮 */}
       <div className="inspiration-board__header">
         <h3 className="inspiration-board__title">灵感创意</h3>
+
+        {/* 不再提示按钮 */}
+        <button
+          className="inspiration-board__hide-btn"
+          onClick={handleHide}
+          onMouseDown={(e) => e.preventDefault()}
+          title="不再提示"
+          data-track="inspiration_click_hide"
+        >
+          <X size={14} />
+          <span>不再提示</span>
+        </button>
 
         {/* 提示词工具按钮 */}
         {onOpenPromptTool && (
