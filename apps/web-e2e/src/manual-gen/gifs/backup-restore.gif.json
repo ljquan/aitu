@@ -1,0 +1,94 @@
+{
+  "id": "backup-restore",
+  "name": "备份恢复演示",
+  "output": "备份恢复演示.gif",
+  "targetPage": "advanced/backup-restore",
+  "preWait": 1000,
+  "postWait": 2000,
+  "actions": [
+    {
+      "type": "keyHint",
+      "key": "菜单",
+      "hint": "打开应用菜单",
+      "duration": 1500
+    },
+    {
+      "type": "click",
+      "target": "role:button[name='应用菜单']",
+      "label": "应用菜单",
+      "wait": 1500
+    },
+    {
+      "type": "keyHint",
+      "key": "备份",
+      "hint": "备份与恢复",
+      "duration": 1500
+    },
+    {
+      "type": "click",
+      "target": "role:button[name='备份 / 恢复']",
+      "label": "备份/恢复",
+      "wait": 1500
+    },
+    {
+      "type": "keyHint",
+      "key": "选择",
+      "hint": "选择备份内容",
+      "duration": 1500
+    },
+    {
+      "type": "click",
+      "target": "first:.t-checkbox__input",
+      "label": "选择项目",
+      "wait": 1000,
+      "optional": true
+    },
+    {
+      "type": "keyHint",
+      "key": "备份",
+      "hint": "开始备份",
+      "duration": 1500
+    },
+    {
+      "type": "click",
+      "target": "role:button[name='开始备份']",
+      "label": "开始备份",
+      "wait": 2000,
+      "optional": true
+    },
+    {
+      "type": "keyHint",
+      "key": "恢复",
+      "hint": "恢复备份",
+      "duration": 1500
+    },
+    {
+      "type": "click",
+      "target": "role:button[name='恢复']",
+      "label": "恢复标签",
+      "wait": 1500,
+      "optional": true
+    },
+    {
+      "type": "keyHint",
+      "key": "文件",
+      "hint": "选择备份文件",
+      "duration": 1500
+    },
+    {
+      "type": "wait",
+      "duration": 1500
+    },
+    {
+      "type": "keyHint",
+      "key": "完成",
+      "hint": "确认并刷新",
+      "duration": 1500
+    },
+    {
+      "type": "press",
+      "key": "Escape",
+      "wait": 1000
+    }
+  ]
+}

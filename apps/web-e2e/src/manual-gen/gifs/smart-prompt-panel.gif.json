@@ -1,0 +1,88 @@
+{
+  "id": "smart-prompt-panel",
+  "name": "智能提示面板演示",
+  "output": "智能提示面板.gif",
+  "targetPage": "ai-features/smart-prompts",
+  "preWait": 1500,
+  "postWait": 2000,
+  "actions": [
+    {
+      "type": "keyHint",
+      "key": "历史",
+      "hint": "历史提示词",
+      "duration": 1500
+    },
+    {
+      "type": "keyHint",
+      "key": "悬浮",
+      "hint": "悬浮查看历史",
+      "duration": 1000
+    },
+    {
+      "type": "hover",
+      "target": "testid:ai-input-bar .prompt-history-popover__trigger button",
+      "wait": 1000,
+      "optional": true
+    },
+    {
+      "type": "keyHint",
+      "key": "列表",
+      "hint": "历史记录与预设",
+      "duration": 1500
+    },
+    {
+      "type": "wait",
+      "duration": 1000
+    },
+    {
+      "type": "keyHint",
+      "key": "滚动",
+      "hint": "滚动浏览提示词",
+      "duration": 1000
+    },
+    {
+      "type": "scroll",
+      "target": ".prompt-list-panel",
+      "direction": "down",
+      "amount": 60,
+      "wait": 1000,
+      "optional": true
+    },
+    {
+      "type": "keyHint",
+      "key": "置顶",
+      "hint": "置顶常用提示词",
+      "duration": 1000
+    },
+    {
+      "type": "click",
+      "target": ".prompt-list-panel .pin-btn:first",
+      "label": "置顶",
+      "wait": 800,
+      "optional": true
+    },
+    {
+      "type": "keyHint",
+      "key": "使用",
+      "hint": "点击使用提示词",
+      "duration": 1000
+    },
+    {
+      "type": "click",
+      "target": ".prompt-list-panel .prompt-item:first",
+      "label": "使用提示词",
+      "wait": 1500,
+      "optional": true
+    },
+    {
+      "type": "keyHint",
+      "key": "填充",
+      "hint": "提示词自动填充",
+      "duration": 1500
+    },
+    {
+      "type": "wait",
+      "duration": 1000
+    }
+  ]
+}

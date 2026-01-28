@@ -1,0 +1,90 @@
+{
+  "id": "inspiration-board",
+  "name": "灵感面板演示",
+  "output": "灵感面板.gif",
+  "targetPage": "ai-features/inspiration",
+  "preWait": 1500,
+  "postWait": 2000,
+  "actions": [
+    {
+      "type": "keyHint",
+      "key": "灵感",
+      "hint": "灵感提示面板",
+      "duration": 1500
+    },
+    {
+      "type": "keyHint",
+      "key": "推荐",
+      "hint": "创作灵感推荐",
+      "duration": 1500
+    },
+    {
+      "type": "wait",
+      "duration": 1000
+    },
+    {
+      "type": "keyHint",
+      "key": "浏览",
+      "hint": "浏览更多灵感",
+      "duration": 1000
+    },
+    {
+      "type": "scroll",
+      "target": ".inspiration-board",
+      "direction": "right",
+      "amount": 200,
+      "wait": 1000,
+      "optional": true
+    },
+    {
+      "type": "keyHint",
+      "key": "分类",
+      "hint": "不同主题分类",
+      "duration": 1500
+    },
+    {
+      "type": "scroll",
+      "target": ".inspiration-board",
+      "direction": "right",
+      "amount": 200,
+      "wait": 1000,
+      "optional": true
+    },
+    {
+      "type": "keyHint",
+      "key": "选择",
+      "hint": "选择灵感开始创作",
+      "duration": 1000
+    },
+    {
+      "type": "click",
+      "target": ".inspiration-board .inspiration-card:first",
+      "label": "选择灵感",
+      "wait": 1500,
+      "optional": true
+    },
+    {
+      "type": "keyHint",
+      "key": "填充",
+      "hint": "提示词自动填充",
+      "duration": 1500
+    },
+    {
+      "type": "wait",
+      "duration": 1000
+    },
+    {
+      "type": "keyHint",
+      "key": "工具",
+      "hint": "提示词工具入口",
+      "duration": 1000
+    },
+    {
+      "type": "click",
+      "target": ".inspiration-board button:has-text('提示词工具')",
+      "label": "打开工具",
+      "wait": 1000,
+      "optional": true
+    }
+  ]
+}

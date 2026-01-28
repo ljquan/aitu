@@ -1,0 +1,95 @@
+{
+  "id": "ai-input-bar-basic",
+  "name": "AI 输入栏基础交互演示",
+  "output": "AI输入栏基础交互.gif",
+  "targetPage": "ai-features/input-bar",
+  "preWait": 1500,
+  "postWait": 2000,
+  "actions": [
+    {
+      "type": "keyHint",
+      "key": "输入栏",
+      "hint": "底部 AI 输入栏",
+      "duration": 1500
+    },
+    {
+      "type": "wait",
+      "duration": 500
+    },
+    {
+      "type": "keyHint",
+      "key": "点击",
+      "hint": "点击输入框",
+      "duration": 1000
+    },
+    {
+      "type": "click",
+      "target": "testid:ai-input-bar input[type='text']",
+      "label": "聚焦输入框",
+      "wait": 1000
+    },
+    {
+      "type": "keyHint",
+      "key": "输入",
+      "hint": "输入提示词",
+      "duration": 1000
+    },
+    {
+      "type": "type",
+      "target": "testid:ai-input-bar input[type='text']",
+      "text": "一只可爱的猫咪在阳光下玩耍",
+      "delay": 80,
+      "wait": 1000
+    },
+    {
+      "type": "keyHint",
+      "key": "展开",
+      "hint": "输入框自动展开",
+      "duration": 1500
+    },
+    {
+      "type": "wait",
+      "duration": 1000
+    },
+    {
+      "type": "keyHint",
+      "key": "继续",
+      "hint": "继续输入",
+      "duration": 1000
+    },
+    {
+      "type": "type",
+      "target": "testid:ai-input-bar input[type='text']",
+      "text": "，画面温馨治愈",
+      "delay": 80,
+      "wait": 1500
+    },
+    {
+      "type": "keyHint",
+      "key": "清空",
+      "hint": "清空输入",
+      "duration": 1000
+    },
+    {
+      "type": "press",
+      "key": "Control+A",
+      "wait": 300
+    },
+    {
+      "type": "press",
+      "key": "Backspace",
+      "wait": 1000
+    },
+    {
+      "type": "keyHint",
+      "key": "收缩",
+      "hint": "输入框收缩",
+      "duration": 1000
+    },
+    {
+      "type": "press",
+      "key": "Escape",
+      "wait": 1500
+    }
+  ]
+}

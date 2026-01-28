@@ -155,4 +155,16 @@ export const WORKSPACE_DEFAULTS = {
   SIDEBAR_WIDTH: 280,
   SIDEBAR_MIN_WIDTH: 200,
   SIDEBAR_MAX_WIDTH: 400,
+  MAX_NAME_LENGTH: 100, // 名称最大长度
 } as const;
+
+/**
+ * Validation Error
+ * 名称验证错误
+ */
+export class ValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ValidationError';
+  }
+}

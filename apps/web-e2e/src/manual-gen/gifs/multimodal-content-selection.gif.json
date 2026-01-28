@@ -1,0 +1,103 @@
+{
+  "id": "multimodal-content-selection",
+  "name": "多模态内容选择演示",
+  "output": "多模态内容选择.gif",
+  "targetPage": "ai-features/content-selection",
+  "preWait": 1500,
+  "postWait": 2000,
+  "actions": [
+    {
+      "type": "keyHint",
+      "key": "上传",
+      "hint": "上传参考图片",
+      "duration": 1500
+    },
+    {
+      "type": "click",
+      "target": "testid:ai-input-bar .ai-input-bar__upload-btn",
+      "label": "上传图片",
+      "wait": 1000,
+      "optional": true
+    },
+    {
+      "type": "keyHint",
+      "key": "选择",
+      "hint": "（演示：文件选择器）",
+      "duration": 1500
+    },
+    {
+      "type": "wait",
+      "duration": 1000
+    },
+    {
+      "type": "keyHint",
+      "key": "素材库",
+      "hint": "从素材库选择",
+      "duration": 1500
+    },
+    {
+      "type": "click",
+      "target": "testid:ai-input-bar .ai-input-bar__library-btn",
+      "label": "打开素材库",
+      "wait": 1500,
+      "optional": true
+    },
+    {
+      "type": "wait",
+      "duration": 1000
+    },
+    {
+      "type": "keyHint",
+      "key": "选择",
+      "hint": "选择参考素材",
+      "duration": 1500
+    },
+    {
+      "type": "click",
+      "target": "testid:media-library-grid .asset-item:first",
+      "label": "选择素材",
+      "wait": 800,
+      "optional": true
+    },
+    {
+      "type": "click",
+      "target": "role:button[name='确认']",
+      "label": "确认",
+      "wait": 1000,
+      "optional": true
+    },
+    {
+      "type": "keyHint",
+      "key": "预览",
+      "hint": "已选内容预览",
+      "duration": 1500
+    },
+    {
+      "type": "wait",
+      "duration": 1000
+    },
+    {
+      "type": "keyHint",
+      "key": "移除",
+      "hint": "移除选中内容",
+      "duration": 1000
+    },
+    {
+      "type": "click",
+      "target": ".selected-content-preview .remove-btn",
+      "label": "移除",
+      "wait": 1000,
+      "optional": true
+    },
+    {
+      "type": "keyHint",
+      "key": "自动",
+      "hint": "画布选中元素自动捕获",
+      "duration": 1500
+    },
+    {
+      "type": "wait",
+      "duration": 1000
+    }
+  ]
+}
