@@ -44,6 +44,38 @@ $animation-duration: 0.3s;
     flex: 1; // 占据剩余空间，把右侧按钮推到最右边
   }
 
+  // 不再提示按钮
+  &__hide-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+
+    font-size: 12px;
+    font-weight: 500;
+    background: transparent;
+    color: var(--td-text-color-placeholder);
+    transition: all 0.2s ease;
+    margin-right: 8px;
+
+    &:hover {
+      background: var(--td-bg-color-container-hover);
+      color: var(--td-text-color-secondary);
+    }
+
+    &:active {
+      transform: scale(0.97);
+    }
+
+    svg {
+      flex-shrink: 0;
+    }
+  }
+
   // 提示词工具按钮
   &__prompt-btn {
     display: flex;
