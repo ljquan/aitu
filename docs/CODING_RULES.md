@@ -313,6 +313,50 @@ if (params) {
 **相关文件**:
 - `packages/drawnix/src/utils/image-split-core.ts` - 图片拆分核心模块
 
+#### 工具函数组织与导入
+
+**场景**: 项目中有通用工具函数需要在多个包之间共享
+
+❌ **错误示例**:
+```typescript
+// packages/drawnix/src/utils/common.ts
+// 错误：在业务包中二次导出通用函数
+import { generateId, sanitizeObject } from '@aitu/utils';
+export { generateId, sanitizeObject };  // ❌ 二次导出
+
+// packages/drawnix/src/services/some-service.ts
+// 错误：从业务包导入通用函数
+import { generateId } from '../utils/common';  // ❌ 间接导入
+```
+
+✅ **正确示例**:
+```typescript
+// packages/drawnix/src/services/some-service.ts
+// 正确：直接从 @aitu/utils 导入
+import { generateId, sanitizeObject } from '@aitu/utils';  // ✅ 直接导入
+
+// packages/drawnix/src/utils/common.ts
+// 正确：只保留业务特有的函数
+import { IS_APPLE, PlaitBoard, toImage } from '@plait/core';
+
+export const boardToImage = (board: PlaitBoard) => {  // ✅ Plait 特有
+  return toImage(board, { fillStyle: 'transparent' });
+};
+```
+
+**原因**:
+- 二次导出会造成依赖链混乱，增加包体积
+- 修改工具函数时难以追踪所有使用位置
+- 直接导入语义更清晰，IDE 跳转更准确
+
+**`@aitu/utils` 包含的通用函数**:
+- ID 生成：`generateId()`, `generateUUID()`
+- 日期格式化：`formatDate()`, `formatDuration()`, `formatFileSize()`
+- DOM 操作：`download()`, `copyToClipboard()`
+- 安全工具：`sanitizeObject()`, `sanitizeUrl()`, `getSafeErrorMessage()`
+- 字符串处理：`truncate()`, `capitalize()`, `toKebabCase()`
+- 异步工具：`debounce()`, `throttle()`
+
 ### React 组件规范
 - 使用函数组件和 Hooks
 - 使用 `React.memo` 优化重渲染
