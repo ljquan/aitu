@@ -1,3 +1,76 @@
+## 0.5.62 (2026-01-29)
+
+### 🚀 Features
+
+- 添加重命名验证功能，禁止同级重名 ([a69c57a](https://github.com/ljquan/aitu/commit/a69c57a))
+- 完成 AI 输入栏和 ChatDrawer 完整测试体系 ([1c3fa39](https://github.com/ljquan/aitu/commit/1c3fa39))
+- 完成所有核心功能 Manual GIF 录制体系 ([d60c4a4](https://github.com/ljquan/aitu/commit/d60c4a4))
+- 移动端适配 ([ade6470](https://github.com/ljquan/aitu/commit/ade6470))
+- 全面优化多端响应式适配 ([1b06d2f](https://github.com/ljquan/aitu/commit/1b06d2f))
+- 统一媒体预览组件并优化缩略图展示 ([a617211](https://github.com/ljquan/aitu/commit/a617211))
+- enhance pencil and eraser settings with shape selection ([cbde7b2](https://github.com/ljquan/aitu/commit/cbde7b2))
+- 增强文字属性面板样式设置功能 ([2b437fa](https://github.com/ljquan/aitu/commit/2b437fa))
+- add alignment, distribution, and boolean operation buttons ([811111e](https://github.com/ljquan/aitu/commit/811111e))
+- 对比模式下视频联动同步播放和重置 ([ea9b932](https://github.com/ljquan/aitu/commit/ea9b932))
+- enhance user manual generation and CDN integration ([ba4746d](https://github.com/ljquan/aitu/commit/ba4746d))
+- enhance user manual generation and E2E testing ([607ec7e](https://github.com/ljquan/aitu/commit/607ec7e))
+- 添加用户手册生成系统和 E2E 测试增强 ([4daff77](https://github.com/ljquan/aitu/commit/4daff77))
+- 新增 TaskProgressOverlay 组件显示任务进度 ([0ab1aa3](https://github.com/ljquan/aitu/commit/0ab1aa3))
+
+### 🩹 Fixes
+
+- 修复批量生成只执行第一个任务的问题 ([ebca700](https://github.com/ljquan/aitu/commit/ebca700))
+- enhance task submission and execution checks ([7a92d70](https://github.com/ljquan/aitu/commit/7a92d70))
+- 使用 Context 共享健康状态数据修复显示不一致问题 ([b95247a](https://github.com/ljquan/aitu/commit/b95247a))
+
+### 🔧 Chores
+
+- update version to 0.5.61 and enhance batch processing logic in image and video generation ([243725e](https://github.com/ljquan/aitu/commit/243725e))
+- bump version to 0.5.61 ([20feb2d](https://github.com/ljquan/aitu/commit/20feb2d))
+- update version to 0.5.60 and improve board selection logic ([3723135](https://github.com/ljquan/aitu/commit/3723135))
+- bump version to 0.5.60 ([9d64bc7](https://github.com/ljquan/aitu/commit/9d64bc7))
+- bump version to 0.5.59 ([8b93fb2](https://github.com/ljquan/aitu/commit/8b93fb2))
+- remove batch-image.html from build and deploy configurations ([7ef1c37](https://github.com/ljquan/aitu/commit/7ef1c37))
+- update deployment scripts and versioning logic; bump version to 0.5.58 ([f7c1cde](https://github.com/ljquan/aitu/commit/f7c1cde))
+- bump version to 0.5.58 ([80fb213](https://github.com/ljquan/aitu/commit/80fb213))
+- bump version to 0.5.57 ([8aff14b](https://github.com/ljquan/aitu/commit/8aff14b))
+- bump version to 0.5.56 ([34917aa](https://github.com/ljquan/aitu/commit/34917aa))
+- bump version to 0.5.55 ([41eb428](https://github.com/ljquan/aitu/commit/41eb428))
+- bump version to 0.5.54 ([c5e23b0](https://github.com/ljquan/aitu/commit/c5e23b0))
+- bump version to 0.5.53 ([c49a324](https://github.com/ljquan/aitu/commit/c49a324))
+- bump version to 0.5.52 ([bc42ff4](https://github.com/ljquan/aitu/commit/bc42ff4))
+- bump version to 0.5.51 ([78acdbf](https://github.com/ljquan/aitu/commit/78acdbf))
+- bump version to 0.5.50 ([c5db0c5](https://github.com/ljquan/aitu/commit/c5db0c5))
+- bump version to 0.5.49 ([396f90c](https://github.com/ljquan/aitu/commit/396f90c))
+- update app version to 0.5.48 and adjust build time ([b97371b](https://github.com/ljquan/aitu/commit/b97371b))
+- refactor: 迁移通用工具函数到 @aitu/utils 并消除二次导出 ([0645497](https://github.com/ljquan/aitu/commit/0645497))
+- docs: 添加工具函数组织规则 ([6abdcad](https://github.com/ljquan/aitu/commit/6abdcad))
+- Remove legacy workspace rename spec ([a7063f4](https://github.com/ljquan/aitu/commit/a7063f4))
+- Fix workspace item naming collisions ([b8019f1](https://github.com/ljquan/aitu/commit/b8019f1))
+- docs(claude): 添加新规则 - 工作区初始化自动选择画板 ([c571cb7](https://github.com/ljquan/aitu/commit/c571cb7))
+- refactor(task-queue): update resume methods to reuse original LLM API log entries ([d96f066](https://github.com/ljquan/aitu/commit/d96f066))
+- 去掉参数n ([989e919](https://github.com/ljquan/aitu/commit/989e919))
+- docs: 添加 Slate-React Leaf DOM 结构稳定性规则 ([a20c4a4](https://github.com/ljquan/aitu/commit/a20c4a4))
+- docs: 添加编码规则 - Clipper 布尔运算结果处理 ([fe13ef8](https://github.com/ljquan/aitu/commit/fe13ef8))
+- docs: 添加编码规则 - useCallback 定义顺序 ([6f891ea](https://github.com/ljquan/aitu/commit/6f891ea))
+- docs(claude): 添加新规则 - 日志记录应反映实际发送的数据 ([c714761](https://github.com/ljquan/aitu/commit/c714761))
+- docs(claude): 添加新规则 - 多组件共享异步数据时使用 Context ([c688c15](https://github.com/ljquan/aitu/commit/c688c15))
+- docs(claude): 添加新规则 - Props 变化时重置组件内部状态 ([2011c2e](https://github.com/ljquan/aitu/commit/2011c2e))
+- docs(claude): 添加新规则 - Flex布局兄弟元素隐藏导致宽度变化 ([9a917ab](https://github.com/ljquan/aitu/commit/9a917ab))
+- Update README.md ([cf65ccf](https://github.com/ljquan/aitu/commit/cf65ccf))
+- Update README_en.md ([aa6986d](https://github.com/ljquan/aitu/commit/aa6986d))
+- docs(readme): align Chinese link ([3d37033](https://github.com/ljquan/aitu/commit/3d37033))
+- docs(readme): fix english readme link ([c58b01d](https://github.com/ljquan/aitu/commit/c58b01d))
+- docs(readme): update demo links ([4fd7ba4](https://github.com/ljquan/aitu/commit/4fd7ba4))
+- 添加e2e ([07e18e2](https://github.com/ljquan/aitu/commit/07e18e2))
+
+### ❤️  Thank You
+
+- liquidliang <ljquan@qq.com>
+- gongchengtu <1817063960@qq.com>
+- liquid <ljquan@qq.com>
+- ovst <wangjueszu@qq.com>
+
 ## 0.5.61 (2026-01-27)
 
 ### 🚀 Features
