@@ -1,9 +1,9 @@
 /**
  * useTaskExecutor Hook
- * 
+ *
  * Automatically monitors and executes pending tasks in the background.
  * Handles task lifecycle: execution, timeout detection, retry logic.
- * 
+ *
  * In SW mode: Tasks are executed by Service Worker handlers.
  * In legacy mode: Tasks are executed directly in main thread.
  */
@@ -19,9 +19,12 @@ import { unifiedCacheService } from '../services/unified-cache-service';
 import { Task, TaskStatus, TaskType } from '../types/task.types';
 import { CharacterStatus } from '../types/character.types';
 import { isTaskTimeout } from '../utils/task-utils';
+import { isAsyncImageModel } from '../constants/model-config';
 
 // Get the appropriate task queue service
-const taskQueueService = shouldUseSWTaskQueue() ? swTaskQueueService : legacyTaskQueueService;
+const taskQueueService = shouldUseSWTaskQueue()
+  ? swTaskQueueService
+  : legacyTaskQueueService;
 
 /**
  * 从 API 错误体中提取原始错误消息
@@ -58,17 +61,27 @@ function getFriendlyErrorMessage(error: any): string {
 
   // 检查 API 错误体中的特定错误类型
   const combinedText = `${message} ${apiErrorBody}`;
-  if (combinedText.includes('insufficient_user_quota') || combinedText.includes('预扣费额度失败')) {
+  if (
+    combinedText.includes('insufficient_user_quota') ||
+    combinedText.includes('预扣费额度失败')
+  ) {
     return '账户额度不足，请充值后重试';
   }
 
   // 检查 Google Gemini 内容政策违规
-  if (message.includes('PROHIBITED_CONTENT') || message.includes('has been blocked by Google Gemini')) {
+  if (
+    message.includes('PROHIBITED_CONTENT') ||
+    message.includes('has been blocked by Google Gemini')
+  ) {
     return message; // 直接返回原始错误信息，保留详细说明
   }
 
   // 检查 AI 模型拒绝生成的情况（返回文本而非图片）
-  if (message.includes('cannot') || message.includes('I cannot') || message.includes("I can't")) {
+  if (
+    message.includes('cannot') ||
+    message.includes('I cannot') ||
+    message.includes("I can't")
+  ) {
     return 'AI 拒绝生成此内容';
   }
   if (message.includes('unable to') || message.includes('not able to')) {
@@ -86,12 +99,21 @@ function getFriendlyErrorMessage(error: any): string {
   }
 
   // 网络错误
-  if (message.includes('network') || message.includes('Network') || message.includes('fetch') || message.includes('Failed to fetch')) {
+  if (
+    message.includes('network') ||
+    message.includes('Network') ||
+    message.includes('fetch') ||
+    message.includes('Failed to fetch')
+  ) {
     return '网络连接失败，请检查网络后重试';
   }
 
   // 限流
-  if (message.includes('rate limit') || message.includes('429') || httpStatus === 429) {
+  if (
+    message.includes('rate limit') ||
+    message.includes('429') ||
+    httpStatus === 429
+  ) {
     return '请求过于频繁，请稍后重试';
   }
 
@@ -101,22 +123,33 @@ function getFriendlyErrorMessage(error: any): string {
   }
 
   // 权限错误（非额度问题）
-  if ((message.includes('403') || httpStatus === 403) && !apiErrorBody.includes('quota')) {
+  if (
+    (message.includes('403') || httpStatus === 403) &&
+    !apiErrorBody.includes('quota')
+  ) {
     return 'API 访问被拒绝，请检查配置';
   }
 
   // 服务器错误 - 如果有原始 API 错误消息，附加显示
   if (message.includes('500') || httpStatus === 500) {
-    return apiErrorMessage ? `AI 服务器内部错误: ${apiErrorMessage}` : 'AI 服务器内部错误，正在自动重试';
+    return apiErrorMessage
+      ? `AI 服务器内部错误: ${apiErrorMessage}`
+      : 'AI 服务器内部错误，正在自动重试';
   }
   if (message.includes('502') || httpStatus === 502) {
-    return apiErrorMessage ? `AI 服务暂时不可用: ${apiErrorMessage}` : 'AI 服务暂时不可用（502），正在自动重试';
+    return apiErrorMessage
+      ? `AI 服务暂时不可用: ${apiErrorMessage}`
+      : 'AI 服务暂时不可用（502），正在自动重试';
   }
   if (message.includes('503') || httpStatus === 503) {
-    return apiErrorMessage ? `AI 服务繁忙: ${apiErrorMessage}` : 'AI 服务繁忙（503），正在自动重试';
+    return apiErrorMessage
+      ? `AI 服务繁忙: ${apiErrorMessage}`
+      : 'AI 服务繁忙（503），正在自动重试';
   }
   if (message.includes('504') || httpStatus === 504) {
-    return apiErrorMessage ? `AI 服务响应超时: ${apiErrorMessage}` : 'AI 服务响应超时（504），正在自动重试';
+    return apiErrorMessage
+      ? `AI 服务响应超时: ${apiErrorMessage}`
+      : 'AI 服务响应超时（504），正在自动重试';
   }
 
   // 如果有原始 API 错误消息，优先返回
@@ -130,18 +163,18 @@ function getFriendlyErrorMessage(error: any): string {
 
 /**
  * Hook for automatic task execution
- * 
+ *
  * Responsibilities:
  * - Monitor pending tasks and start execution
  * - Handle task timeout detection
  * - Implement retry logic with exponential backoff
  * - Update task status based on results
- * 
+ *
  * In SW mode:
  * - Tasks are executed by Service Worker handlers
  * - This hook only handles post-completion tasks (metadata registration)
  * - Timeout detection is handled by SW
- * 
+ *
  * @example
  * function App() {
  *   useTaskExecutor(); // Tasks will execute automatically
@@ -161,49 +194,64 @@ export function useTaskExecutor(): void {
       // console.log('[TaskExecutor] Running in SW mode - tasks executed by Service Worker');
 
       // Subscribe to task updates for post-completion handling
-      const subscription = taskQueueService.observeTaskUpdates().subscribe(async (event) => {
-        if (!isActive) return;
+      const subscription = taskQueueService
+        .observeTaskUpdates()
+        .subscribe(async (event) => {
+          if (!isActive) return;
 
-        // Handle completed tasks - register metadata
-        if (event.type === 'taskUpdated' && event.task.status === TaskStatus.COMPLETED) {
-          const task = event.task;
-          if (task.result?.url) {
-            try {
-              await unifiedCacheService.registerImageMetadata(task.result.url, {
-                taskId: task.id,
-                model: task.params.model,
-                prompt: task.params.prompt,
-                params: task.params,
-              });
-              // console.log(`[TaskExecutor] Registered metadata for task ${task.id}`);
-            } catch (error) {
-              console.error(`[TaskExecutor] Failed to register metadata for task ${task.id}:`, error);
+          // Handle completed tasks - register metadata
+          if (
+            event.type === 'taskUpdated' &&
+            event.task.status === TaskStatus.COMPLETED
+          ) {
+            const task = event.task;
+            if (task.result?.url) {
+              try {
+                await unifiedCacheService.registerImageMetadata(
+                  task.result.url,
+                  {
+                    taskId: task.id,
+                    model: task.params.model,
+                    prompt: task.params.prompt,
+                    params: task.params,
+                  }
+                );
+                // console.log(`[TaskExecutor] Registered metadata for task ${task.id}`);
+              } catch (error) {
+                console.error(
+                  `[TaskExecutor] Failed to register metadata for task ${task.id}:`,
+                  error
+                );
+              }
+            }
+
+            // Handle character task completion - save to storage
+            if (task.type === TaskType.CHARACTER && task.result) {
+              try {
+                await characterStorageService.saveCharacter({
+                  id: task.remoteId || task.id,
+                  username: task.result.characterUsername || '',
+                  profilePictureUrl:
+                    task.result.characterProfileUrl || task.result.url,
+                  permalink: task.result.characterPermalink || '',
+                  sourceTaskId: task.params.sourceLocalTaskId || '',
+                  sourceVideoId: task.params.sourceVideoTaskId || '',
+                  sourcePrompt: task.params.prompt,
+                  characterTimestamps: task.params.characterTimestamps,
+                  status: 'completed' as CharacterStatus,
+                  createdAt: task.createdAt,
+                  completedAt: Date.now(),
+                });
+                // console.log(`[TaskExecutor] Saved character for task ${task.id}`);
+              } catch (error) {
+                console.error(
+                  `[TaskExecutor] Failed to save character for task ${task.id}:`,
+                  error
+                );
+              }
             }
           }
-
-          // Handle character task completion - save to storage
-          if (task.type === TaskType.CHARACTER && task.result) {
-            try {
-              await characterStorageService.saveCharacter({
-                id: task.remoteId || task.id,
-                username: task.result.characterUsername || '',
-                profilePictureUrl: task.result.characterProfileUrl || task.result.url,
-                permalink: task.result.characterPermalink || '',
-                sourceTaskId: task.params.sourceLocalTaskId || '',
-                sourceVideoId: task.params.sourceVideoTaskId || '',
-                sourcePrompt: task.params.prompt,
-                characterTimestamps: task.params.characterTimestamps,
-                status: 'completed' as CharacterStatus,
-                createdAt: task.createdAt,
-                completedAt: Date.now(),
-              });
-              // console.log(`[TaskExecutor] Saved character for task ${task.id}`);
-            } catch (error) {
-              console.error(`[TaskExecutor] Failed to save character for task ${task.id}:`, error);
-            }
-          }
-        }
-      });
+        });
 
       return () => {
         isActive = false;
@@ -231,7 +279,10 @@ export function useTaskExecutor(): void {
 
       try {
         // Resume video polling
-        const result = await generationAPIService.resumeVideoGeneration(taskId, remoteId);
+        const result = await generationAPIService.resumeVideoGeneration(
+          taskId,
+          remoteId
+        );
 
         if (!isActive) return;
 
@@ -253,7 +304,10 @@ export function useTaskExecutor(): void {
             });
             // console.log(`[TaskExecutor] Registered metadata for resumed task ${taskId}`);
           } catch (error) {
-            console.error(`[TaskExecutor] Failed to register metadata for resumed task ${taskId}:`, error);
+            console.error(
+              `[TaskExecutor] Failed to register metadata for resumed task ${taskId}:`,
+              error
+            );
           }
         }
       } catch (error: any) {
@@ -265,10 +319,16 @@ export function useTaskExecutor(): void {
         if (!updatedTask) return;
 
         // Extract error details
-        const errorCode = error.httpStatus ? `HTTP_${error.httpStatus}` : (error.name || 'ERROR');
+        const errorCode = error.httpStatus
+          ? `HTTP_${error.httpStatus}`
+          : error.name || 'ERROR';
         const errorMessage = getFriendlyErrorMessage(error);
         // 如果有完整响应，使用它；否则使用 API 错误体或错误消息
-        const originalErrorInfo = error.fullResponse || error.apiErrorBody || error.message || String(error);
+        const originalErrorInfo =
+          error.fullResponse ||
+          error.apiErrorBody ||
+          error.message ||
+          String(error);
         const errorDetails = {
           originalError: originalErrorInfo,
           timestamp: Date.now(),
@@ -284,6 +344,72 @@ export function useTaskExecutor(): void {
         });
 
         // console.log(`[TaskExecutor] Resumed task ${taskId} failed`);
+      } finally {
+        executingTasksRef.current.delete(taskId);
+      }
+    };
+
+    // Function to resume an async image task that has a remoteId
+    const resumeAsyncImageTask = async (task: Task) => {
+      const taskId = task.id;
+      const remoteId = task.remoteId!;
+
+      if (executingTasksRef.current.has(taskId)) {
+        return;
+      }
+
+      executingTasksRef.current.add(taskId);
+
+      try {
+        const result = await generationAPIService.resumeAsyncImageGeneration(
+          taskId,
+          remoteId
+        );
+
+        if (!isActive) return;
+
+        legacyTaskQueueService.updateTaskStatus(taskId, TaskStatus.COMPLETED, {
+          result,
+        });
+
+        if (result.url) {
+          try {
+            await unifiedCacheService.registerImageMetadata(result.url, {
+              taskId: task.id,
+              model: task.params.model,
+              prompt: task.params.prompt,
+              params: task.params,
+            });
+          } catch (error) {
+            console.error(
+              `[TaskExecutor] Failed to register metadata for resumed async image task ${taskId}:`,
+              error
+            );
+          }
+        }
+      } catch (error: any) {
+        if (!isActive) return;
+
+        const errorCode = error.httpStatus
+          ? `HTTP_${error.httpStatus}`
+          : error.name || 'ERROR';
+        const errorMessage = getFriendlyErrorMessage(error);
+        const originalErrorInfo =
+          error.fullResponse ||
+          error.apiErrorBody ||
+          error.message ||
+          String(error);
+
+        legacyTaskQueueService.updateTaskStatus(taskId, TaskStatus.FAILED, {
+          error: {
+            code: errorCode,
+            message: errorMessage,
+            details: {
+              originalError: originalErrorInfo,
+              timestamp: Date.now(),
+            },
+          },
+        });
       } finally {
         executingTasksRef.current.delete(taskId);
       }
@@ -306,7 +432,8 @@ export function useTaskExecutor(): void {
         // Update status to processing
         legacyTaskQueueService.updateTaskStatus(taskId, TaskStatus.PROCESSING);
 
-        const { sourceVideoTaskId, characterTimestamps, model, prompt } = task.params;
+        const { sourceVideoTaskId, characterTimestamps, model, prompt } =
+          task.params;
 
         if (!sourceVideoTaskId) {
           throw new Error('缺少源视频任务ID');
@@ -367,9 +494,15 @@ export function useTaskExecutor(): void {
         const updatedTask = legacyTaskQueueService.getTask(taskId);
         if (!updatedTask) return;
 
-        const errorCode = error.httpStatus ? `HTTP_${error.httpStatus}` : (error.name || 'ERROR');
+        const errorCode = error.httpStatus
+          ? `HTTP_${error.httpStatus}`
+          : error.name || 'ERROR';
         const errorMessage = getFriendlyErrorMessage(error);
-        const originalErrorInfo = error.fullResponse || error.apiErrorBody || error.message || String(error);
+        const originalErrorInfo =
+          error.fullResponse ||
+          error.apiErrorBody ||
+          error.message ||
+          String(error);
         const errorDetails = {
           originalError: originalErrorInfo,
           timestamp: Date.now(),
@@ -399,8 +532,22 @@ export function useTaskExecutor(): void {
         return executeCharacterTask(task);
       }
 
+      // Check if this is a resumable async image task
+      if (
+        task.type === TaskType.IMAGE &&
+        task.remoteId &&
+        task.status === TaskStatus.PROCESSING &&
+        isAsyncImageModel(task.params.model)
+      ) {
+        return resumeAsyncImageTask(task);
+      }
+
       // Check if this is a resumable video task
-      if (task.type === TaskType.VIDEO && task.remoteId && task.status === TaskStatus.PROCESSING) {
+      if (
+        task.type === TaskType.VIDEO &&
+        task.remoteId &&
+        task.status === TaskStatus.PROCESSING
+      ) {
         return resumeVideoTask(task);
       }
 
@@ -444,7 +591,10 @@ export function useTaskExecutor(): void {
             });
             // console.log(`[TaskExecutor] Registered metadata for task ${taskId}`);
           } catch (error) {
-            console.error(`[TaskExecutor] Failed to register metadata for task ${taskId}:`, error);
+            console.error(
+              `[TaskExecutor] Failed to register metadata for task ${taskId}:`,
+              error
+            );
           }
         }
       } catch (error: any) {
@@ -456,10 +606,16 @@ export function useTaskExecutor(): void {
         if (!updatedTask) return;
 
         // Extract error details - 优先使用 API 返回的详细错误信息
-        const errorCode = error.httpStatus ? `HTTP_${error.httpStatus}` : (error.name || 'ERROR');
+        const errorCode = error.httpStatus
+          ? `HTTP_${error.httpStatus}`
+          : error.name || 'ERROR';
         const errorMessage = getFriendlyErrorMessage(error);
         // 如果有完整响应，使用它；否则使用 API 错误体或错误消息
-        const originalErrorInfo = error.fullResponse || error.apiErrorBody || error.message || String(error);
+        const originalErrorInfo =
+          error.fullResponse ||
+          error.apiErrorBody ||
+          error.message ||
+          String(error);
         const errorDetails = {
           originalError: originalErrorInfo,
           timestamp: Date.now(),
@@ -487,19 +643,25 @@ export function useTaskExecutor(): void {
       const tasks = legacyTaskQueueService.getAllTasks();
 
       // Process pending tasks
-      const pendingTasks = tasks.filter(task => task.status === TaskStatus.PENDING);
-      pendingTasks.forEach(task => {
+      const pendingTasks = tasks.filter(
+        (task) => task.status === TaskStatus.PENDING
+      );
+      pendingTasks.forEach((task) => {
         executeTask(task);
       });
 
-      // Process resumable video tasks (processing with remoteId)
+      // Process resumable tasks (processing with remoteId)
       const resumableTasks = tasks.filter(
-        task => task.type === TaskType.VIDEO &&
-                task.status === TaskStatus.PROCESSING &&
-                task.remoteId
+        (task) =>
+          (task.type === TaskType.VIDEO &&
+            task.remoteId &&
+            task.status === TaskStatus.PROCESSING) ||
+          (task.type === TaskType.IMAGE &&
+            task.remoteId &&
+            task.status === TaskStatus.PROCESSING &&
+            isAsyncImageModel(task.params.model))
       );
-      resumableTasks.forEach(task => {
-        // console.log(`[TaskExecutor] Found resumable video task ${task.id}`);
+      resumableTasks.forEach((task) => {
         executeTask(task);
       });
     };
@@ -509,15 +671,17 @@ export function useTaskExecutor(): void {
       if (!isActive) return;
 
       const tasks = legacyTaskQueueService.getAllTasks();
-      const processingTasks = tasks.filter(task => task.status === TaskStatus.PROCESSING);
+      const processingTasks = tasks.filter(
+        (task) => task.status === TaskStatus.PROCESSING
+      );
 
-      processingTasks.forEach(task => {
+      processingTasks.forEach((task) => {
         if (isTaskTimeout(task)) {
           console.warn(`[TaskExecutor] Task ${task.id} timed out`);
-          
+
           // Cancel the API request
           generationAPIService.cancelRequest(task.id);
-          
+
           const timeoutDetails = {
             originalError: `Task ${task.id} timed out after processing`,
             timestamp: Date.now(),
@@ -536,29 +700,32 @@ export function useTaskExecutor(): void {
     };
 
     // Subscribe to task updates to catch new pending tasks and resumable video tasks
-    const subscription = legacyTaskQueueService.observeTaskUpdates().subscribe(event => {
-      if (!isActive) return;
+    const subscription = legacyTaskQueueService
+      .observeTaskUpdates()
+      .subscribe((event) => {
+        if (!isActive) return;
 
-      if (event.type === 'taskCreated' || event.type === 'taskUpdated') {
-        const task = event.task;
+        if (event.type === 'taskCreated' || event.type === 'taskUpdated') {
+          const task = event.task;
 
-        // Execute pending tasks
-        if (task.status === TaskStatus.PENDING) {
-          executeTask(task);
+          // Execute pending tasks
+          if (task.status === TaskStatus.PENDING) {
+            executeTask(task);
+          }
+          // Resume tasks that have remoteId and are in processing state (video or async image)
+          else if (
+            !executingTasksRef.current.has(task.id) &&
+            task.remoteId &&
+            ((task.type === TaskType.VIDEO &&
+              task.status === TaskStatus.PROCESSING) ||
+              (task.type === TaskType.IMAGE &&
+                task.status === TaskStatus.PROCESSING &&
+                isAsyncImageModel(task.params.model)))
+          ) {
+            executeTask(task);
+          }
         }
-        // Resume video tasks that have remoteId and are in processing state
-        // This handles tasks restored from storage after page refresh
-        else if (
-          task.type === TaskType.VIDEO &&
-          task.status === TaskStatus.PROCESSING &&
-          task.remoteId &&
-          !executingTasksRef.current.has(task.id)
-        ) {
-          // console.log(`[TaskExecutor] Detected resumable video task from event: ${task.id}`);
-          executeTask(task);
-        }
-      }
-    });
+      });
 
     // Process existing pending tasks on mount
     // Note: This runs synchronously, but tasks may be restored asynchronously by useTaskStorage
@@ -572,13 +739,13 @@ export function useTaskExecutor(): void {
     return () => {
       isActive = false;
       subscription.unsubscribe();
-      
+
       if (timeoutCheckIntervalRef.current) {
         clearInterval(timeoutCheckIntervalRef.current);
       }
 
       // Cancel all ongoing requests
-      executingTasksRef.current.forEach(taskId => {
+      executingTasksRef.current.forEach((taskId) => {
         generationAPIService.cancelRequest(taskId);
       });
       executingTasksRef.current.clear();

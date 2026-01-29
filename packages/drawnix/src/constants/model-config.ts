@@ -1,9 +1,9 @@
 /**
  * 统一的模型配置文件
- * 
+ *
  * 所有图片、视频和文本模型的配置都在这里定义
  * 被 ModelSelector、settings-dialog、ai-image-generation、ai-video-generation 等组件使用
- * 
+ *
  * 参数配置用于 SmartSuggestionPanel 的 - 参数提示功能
  */
 
@@ -99,9 +99,9 @@ export interface ModelConfig {
  * 模型类型对应的颜色
  */
 export const MODEL_TYPE_COLORS = {
-  image: '#E53935',  // 红色
-  video: '#FF9800',  // 橙色
-  text: '#4CAF50',   // 绿色
+  image: '#E53935', // 红色
+  video: '#FF9800', // 橙色
+  text: '#4CAF50', // 绿色
 } as const;
 
 // ============================================
@@ -242,7 +242,50 @@ export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
     supportsTools: true,
     imageDefaults: IMAGE_4K_DEFAULT_PARAMS,
   },
+  {
+    id: 'gemini-3-pro-image-preview-async',
+    label: 'gemini-3-pro-image-preview-async (1k 异步)',
+    shortLabel: 'nb2-async',
+    shortCode: 'nb2a',
+    description: '异步 1K 图片生成（轮询获取结果）',
+    type: 'image',
+    supportsTools: false,
+    imageDefaults: IMAGE_DEFAULT_PARAMS,
+  },
+  {
+    id: 'gemini-3-pro-image-preview-2k-async',
+    label: 'gemini-3-pro-image-preview-2k-async (2k 异步)',
+    shortLabel: 'nb22k-async',
+    shortCode: 'nb22ka',
+    description: '异步 2K 图片生成（轮询获取结果）',
+    type: 'image',
+    supportsTools: false,
+    imageDefaults: IMAGE_2K_DEFAULT_PARAMS,
+  },
+  {
+    id: 'gemini-3-pro-image-preview-4k-async',
+    label: 'gemini-3-pro-image-preview-4k-async (4k 异步)',
+    shortLabel: 'nb24k-async',
+    shortCode: 'nb24ka',
+    description: '异步 4K 图片生成（轮询获取结果）',
+    type: 'image',
+    supportsTools: false,
+    imageDefaults: IMAGE_4K_DEFAULT_PARAMS,
+  },
 ];
+
+/** 异步图片模型 ID 列表 */
+export const ASYNC_IMAGE_MODEL_IDS = [
+  'gemini-3-pro-image-preview-async',
+  'gemini-3-pro-image-preview-2k-async',
+  'gemini-3-pro-image-preview-4k-async',
+];
+
+export function isAsyncImageModel(modelId?: string): boolean {
+  if (!modelId) return false;
+  const lower = modelId.toLowerCase();
+  return ASYNC_IMAGE_MODEL_IDS.some((id) => lower.includes(id.toLowerCase()));
+}
 
 /**
  * 所有图片模型
@@ -457,14 +500,14 @@ export const ALL_MODELS: ModelConfig[] = [
  * 根据类型获取模型列表
  */
 export function getModelsByType(type: ModelType): ModelConfig[] {
-  return ALL_MODELS.filter(model => model.type === type);
+  return ALL_MODELS.filter((model) => model.type === type);
 }
 
 /**
  * 获取模型配置
  */
 export function getModelConfig(modelId: string): ModelConfig | undefined {
-  return ALL_MODELS.find(model => model.id === modelId);
+  return ALL_MODELS.find((model) => model.id === modelId);
 }
 
 /**
@@ -479,7 +522,7 @@ export function getModelType(modelId: string): ModelType | undefined {
  */
 export function getModelIds(type?: ModelType): string[] {
   const models = type ? getModelsByType(type) : ALL_MODELS;
-  return models.map(model => model.id);
+  return models.map((model) => model.id);
 }
 
 /**
@@ -519,7 +562,7 @@ export function getModelTypeColor(type: ModelType): string {
 /**
  * 图片模型选项（用于 Select 组件）
  */
-export const IMAGE_MODEL_SELECT_OPTIONS = IMAGE_MODELS.map(model => ({
+export const IMAGE_MODEL_SELECT_OPTIONS = IMAGE_MODELS.map((model) => ({
   label: model.label,
   value: model.id,
 }));
@@ -530,14 +573,14 @@ export const IMAGE_MODEL_SELECT_OPTIONS = IMAGE_MODELS.map(model => ({
 export const IMAGE_MODEL_GROUPED_SELECT_OPTIONS = [
   {
     group: '推荐',
-    children: IMAGE_MODEL_VIP_OPTIONS.map(model => ({
+    children: IMAGE_MODEL_VIP_OPTIONS.map((model) => ({
       label: model.label,
       value: model.id,
     })),
   },
   {
     group: '更多',
-    children: IMAGE_MODEL_MORE_OPTIONS.map(model => ({
+    children: IMAGE_MODEL_MORE_OPTIONS.map((model) => ({
       label: model.label,
       value: model.id,
     })),
@@ -547,7 +590,7 @@ export const IMAGE_MODEL_GROUPED_SELECT_OPTIONS = [
 /**
  * 视频模型选项（用于 Select 组件）
  */
-export const VIDEO_MODEL_SELECT_OPTIONS = VIDEO_MODELS.map(model => ({
+export const VIDEO_MODEL_SELECT_OPTIONS = VIDEO_MODELS.map((model) => ({
   label: model.label,
   value: model.id,
 }));
@@ -555,7 +598,7 @@ export const VIDEO_MODEL_SELECT_OPTIONS = VIDEO_MODELS.map(model => ({
 /**
  * 文本模型选项（用于 Select 组件）
  */
-export const TEXT_MODEL_SELECT_OPTIONS = TEXT_MODELS.map(model => ({
+export const TEXT_MODEL_SELECT_OPTIONS = TEXT_MODELS.map((model) => ({
   label: model.label,
   value: model.id,
 }));
@@ -622,7 +665,13 @@ export const DEFAULT_TEXT_MODEL = DEFAULT_TEXT_MODEL_ID;
 // ============================================
 
 /** Veo 系列模型 ID（标清，只支持 8 秒） */
-const VEO_MODEL_IDS = ['veo3', 'veo3-pro', 'veo3.1', 'veo3.1-pro', 'veo3.1-components'];
+const VEO_MODEL_IDS = [
+  'veo3',
+  'veo3-pro',
+  'veo3.1',
+  'veo3.1-pro',
+  'veo3.1-components',
+];
 
 /** Veo 4K 系列模型 ID（4K分辨率，只支持 8 秒） */
 const VEO_4K_MODEL_IDS = ['veo3.1-4k', 'veo3.1-components-4k', 'veo3.1-pro-4k'];
@@ -640,12 +689,12 @@ const SORA_2_PRO_MODEL_IDS = ['sora-2-pro'];
 const GPT_IMAGE_MODEL_IDS = ['gpt-image-1.5'];
 
 /** Gemini 图片模型 ID（支持完整尺寸） */
-const GEMINI_IMAGE_MODEL_IDS = IMAGE_MODELS
-  .filter(m => !GPT_IMAGE_MODEL_IDS.includes(m.id))
-  .map(m => m.id);
+const GEMINI_IMAGE_MODEL_IDS = IMAGE_MODELS.filter(
+  (m) => !GPT_IMAGE_MODEL_IDS.includes(m.id)
+).map((m) => m.id);
 
 /** 所有图片模型 ID */
-const ALL_IMAGE_MODEL_IDS = IMAGE_MODELS.map(m => m.id);
+const ALL_IMAGE_MODEL_IDS = IMAGE_MODELS.map((m) => m.id);
 
 /**
  * 视频参数配置
@@ -659,9 +708,7 @@ export const VIDEO_PARAMS: ParamConfig[] = [
     shortLabel: '时长',
     description: '生成视频的时长（秒）',
     valueType: 'enum',
-    options: [
-      { value: '8', label: '8秒' },
-    ],
+    options: [{ value: '8', label: '8秒' }],
     defaultValue: '8',
     compatibleModels: ALL_VEO_MODEL_IDS,
     modelType: 'video',
@@ -798,16 +845,13 @@ export const IMAGE_PARAMS: ParamConfig[] = [
 /**
  * 所有参数配置
  */
-export const ALL_PARAMS: ParamConfig[] = [
-  ...VIDEO_PARAMS,
-  ...IMAGE_PARAMS,
-];
+export const ALL_PARAMS: ParamConfig[] = [...VIDEO_PARAMS, ...IMAGE_PARAMS];
 
 /**
  * 根据模型类型获取参数列表
  */
 export function getParamsByModelType(modelType: ModelType): ParamConfig[] {
-  return ALL_PARAMS.filter(param => param.modelType === modelType);
+  return ALL_PARAMS.filter((param) => param.modelType === modelType);
 }
 
 /**
@@ -816,8 +860,8 @@ export function getParamsByModelType(modelType: ModelType): ParamConfig[] {
 export function getCompatibleParams(modelId: string): ParamConfig[] {
   const modelConfig = getModelConfig(modelId);
   if (!modelConfig) return [];
-  
-  return ALL_PARAMS.filter(param => {
+
+  return ALL_PARAMS.filter((param) => {
     // 检查模型类型是否匹配
     if (param.modelType !== modelConfig.type) return false;
     // 检查是否在兼容列表中（空数组表示所有模型都兼容）
@@ -830,7 +874,7 @@ export function getCompatibleParams(modelId: string): ParamConfig[] {
  * 获取参数配置
  */
 export function getParamConfig(paramId: string): ParamConfig | undefined {
-  return ALL_PARAMS.find(param => param.id === paramId);
+  return ALL_PARAMS.find((param) => param.id === paramId);
 }
 
 /**
@@ -838,7 +882,7 @@ export function getParamConfig(paramId: string): ParamConfig | undefined {
  */
 export function getParamIds(modelType?: ModelType): string[] {
   const params = modelType ? getParamsByModelType(modelType) : ALL_PARAMS;
-  return params.map(param => param.id);
+  return params.map((param) => param.id);
 }
 
 /**
@@ -846,9 +890,11 @@ export function getParamIds(modelType?: ModelType): string[] {
  * @param modelId 模型 ID
  * @returns 尺寸选项列表，包含 value 和 label
  */
-export function getSizeOptionsForModel(modelId: string): Array<{ value: string; label: string }> {
+export function getSizeOptionsForModel(
+  modelId: string
+): Array<{ value: string; label: string }> {
   const params = getCompatibleParams(modelId);
-  const sizeParam = params.find(p => p.id === 'size');
+  const sizeParam = params.find((p) => p.id === 'size');
   return sizeParam?.options || [];
 }
 
@@ -859,6 +905,6 @@ export function getSizeOptionsForModel(modelId: string): Array<{ value: string; 
  */
 export function getDefaultSizeForModel(modelId: string): string {
   const params = getCompatibleParams(modelId);
-  const sizeParam = params.find(p => p.id === 'size');
+  const sizeParam = params.find((p) => p.id === 'size');
   return sizeParam?.defaultValue || 'auto';
 }
