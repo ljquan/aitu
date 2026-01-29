@@ -11,7 +11,7 @@
  * 4. beforeunload 事件记录最后状态
  */
 
-import { sanitizeUrl } from '@drawnix/drawnix';
+import { sanitizeUrl } from '@aitu/utils';
 
 // ==================== 类型定义 ====================
 

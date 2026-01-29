@@ -12,6 +12,7 @@ import {
   getSizeOptionsForModel,
   getDefaultSizeForModel,
 } from '../../constants/model-config';
+import { Z_INDEX } from '../../constants/z-index';
 import './size-dropdown.scss';
 import { KeyboardDropdown } from './KeyboardDropdown';
 
@@ -156,7 +157,7 @@ export const SizeDropdown: React.FC<SizeDropdownProps> = ({
               className="size-dropdown__menu"
               style={{
                 position: 'fixed',
-                zIndex: 10000,
+                zIndex: Z_INDEX.DROPDOWN_PORTAL,
                 left: portalPosition.left,
                 bottom: window.innerHeight - portalPosition.top + 8,
               }}

@@ -8,7 +8,7 @@
  * to prevent accidental leakage of API keys and other sensitive information.
  */
 
-import { sanitizeObject } from './sanitize-utils';
+import { sanitizeObject } from '@aitu/utils';
 
 declare global {
   interface Window {

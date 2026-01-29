@@ -25,6 +25,7 @@ import {
 } from '../../constants/CHAT_MODELS';
 import { ProviderIcon } from './ProviderIcon';
 import { ModelHealthBadge } from '../shared/ModelHealthBadge';
+import { Z_INDEX } from '../../constants/z-index';
 
 export interface ModelSelectorProps {
   className?: string;
@@ -177,7 +178,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = React.memo(
           className="model-selector__dropdown"
           style={{
             position: 'fixed',
-            zIndex: 10000,
+            zIndex: Z_INDEX.DROPDOWN_PORTAL,
             left: portalPosition.left,
             top: portalPosition.bottom + 8,
             minWidth: 360,

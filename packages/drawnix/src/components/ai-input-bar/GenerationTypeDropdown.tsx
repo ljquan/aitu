@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { ChevronDown, Check, Sparkles, Image, Video } from 'lucide-react';
 import { ATTACHED_ELEMENT_CLASS_NAME } from '@plait/core';
 import { useI18n } from '../../i18n';
+import { Z_INDEX } from '../../constants/z-index';
 import type { GenerationType } from '../../utils/ai-input-parser';
 import { KeyboardDropdown } from './KeyboardDropdown';
 
@@ -113,7 +114,7 @@ export const GenerationTypeDropdown: React.FC<GenerationTypeDropdownProps> = ({
               className={`generation-type-dropdown__menu ${ATTACHED_ELEMENT_CLASS_NAME}`}
               style={{
                 position: 'fixed',
-                zIndex: 10000,
+                zIndex: Z_INDEX.DROPDOWN_PORTAL,
                 left: portalPosition.left,
                 bottom: window.innerHeight - portalPosition.top + 8,
               }}

@@ -7,6 +7,7 @@
 
 import { Task, TaskStatus, TaskType } from '../types/task.types';
 import { TASK_TIMEOUT } from '../constants/TASK_CONSTANTS';
+import { generateUUID, formatDate } from '@aitu/utils';
 
 /**
  * Generates a unique task ID using UUID v4 algorithm
@@ -17,11 +18,7 @@ import { TASK_TIMEOUT } from '../constants/TASK_CONSTANTS';
  * generateTaskId() // Returns "550e8400-e29b-41d4-a716-446655440000"
  */
 export function generateTaskId(): string {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = Math.random() * 16 | 0;
-    const v = c === 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
+  return generateUUID();
 }
 
 /**
@@ -166,15 +163,4 @@ export function truncateString(str: string, maxLength: number): string {
  * @example
  * formatDateTime(Date.now()) // Returns "2025-12-18 14:30:25"
  */
-export function formatDateTime(timestamp: number): string {
-  const date = new Date(timestamp);
-
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  const seconds = String(date.getSeconds()).padStart(2, '0');
-
-  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
-}
+export const formatDateTime = formatDate;

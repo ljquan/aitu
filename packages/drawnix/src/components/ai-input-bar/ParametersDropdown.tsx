@@ -13,6 +13,8 @@ import {
   getCompatibleParams,
   type ParamConfig,
 } from '../../constants/model-config';
+import { Z_INDEX } from '../../constants/z-index';
+import { useControllableState } from '../../hooks/useControllableState';
 import './parameters-dropdown.scss';
 import { KeyboardDropdown } from './KeyboardDropdown';
 
@@ -45,21 +47,11 @@ export const ParametersDropdown: React.FC<ParametersDropdownProps> = ({
   isOpen: controlledIsOpen,
   onOpenChange,
 }) => {
-  const [internalIsOpen, setInternalIsOpen] = useState(false);
-  // 支持受控和非受控模式
-  const isOpen = controlledIsOpen !== undefined ? controlledIsOpen : internalIsOpen;
-  const setIsOpen = useCallback((open: boolean | ((prev: boolean) => boolean)) => {
-    if (typeof open === 'function') {
-      // 函数式更新：需要使用当前状态计算新值
-      const currentIsOpen = controlledIsOpen !== undefined ? controlledIsOpen : internalIsOpen;
-      const newValue = open(currentIsOpen);
-      setInternalIsOpen(newValue);
-      onOpenChange?.(newValue);
-    } else {
-      setInternalIsOpen(open);
-      onOpenChange?.(open);
-    }
-  }, [controlledIsOpen, internalIsOpen, onOpenChange]);
+  const { value: isOpen, setValue: setIsOpen } = useControllableState({
+    controlledValue: controlledIsOpen,
+    defaultValue: false,
+    onChange: onOpenChange,
+  });
 
   // 键盘导航状态：当前高亮的参数组索引和选项索引
   const [highlightedParamIndex, setHighlightedParamIndex] = useState(0);
@@ -210,7 +202,7 @@ export const ParametersDropdown: React.FC<ParametersDropdownProps> = ({
               className={`parameters-dropdown__menu parameters-dropdown__menu--flat ${ATTACHED_ELEMENT_CLASS_NAME}`}
               style={{
                 position: 'fixed',
-                zIndex: 10000,
+                zIndex: Z_INDEX.DROPDOWN_PORTAL,
                 left: portalPosition.left,
                 bottom: window.innerHeight - portalPosition.top + 8,
               }}

@@ -8,6 +8,7 @@
 
 import { LS_KEYS_TO_MIGRATE } from '../constants/storage-keys';
 import { kvStorageService } from './kv-storage-service';
+import { generateId } from '@aitu/utils';
 
 const STORAGE_KEY = LS_KEYS_TO_MIGRATE.PROMPT_HISTORY;
 
@@ -35,8 +36,8 @@ export interface PromptHistoryItem {
 /**
  * 生成唯一 ID
  */
-function generateId(): string {
-  return `prompt_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+function generatePromptId(): string {
+  return generateId('prompt');
 }
 
 // ============================================
@@ -234,7 +235,7 @@ export function addPromptHistory(
 
   // 新记录插入头部
   const newItem: PromptHistoryItem = {
-    id: generateId(),
+    id: generatePromptId(),
     content: trimmedContent,
     timestamp: Date.now(),
     hasSelection,

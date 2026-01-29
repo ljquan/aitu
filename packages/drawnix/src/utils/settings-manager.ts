@@ -6,7 +6,7 @@
 
 import { CryptoUtils } from './crypto-utils';
 import { DRAWNIX_SETTINGS_KEY } from '../constants/storage';
-import { getSafeErrorMessage } from './sanitize-utils';
+import { getSafeErrorMessage } from '@aitu/utils';
 
 // ====================================
 // 类型定义

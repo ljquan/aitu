@@ -88,6 +88,12 @@ export const Z_INDEX = {
   LOADING: 9000,
   SYSTEM_ERROR: 9100,
   DEBUG: 9999,
+
+  // ==========================================
+  // Layer 10: Dropdown Portal (10000)
+  // 用于 Portal 渲染的下拉菜单，需要在所有其他 UI 之上
+  // ==========================================
+  DROPDOWN_PORTAL: 10000,
 } as const;
 
 export type ZIndexKey = keyof typeof Z_INDEX;

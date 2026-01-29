@@ -13,9 +13,8 @@ import {
   initPromptStorageCache,
   toolbarConfigService,
   memoryMonitorService,
-  sanitizeObject,
-  sanitizeUrl,
 } from '@drawnix/drawnix';
+import { sanitizeObject, sanitizeUrl } from '@aitu/utils';
 import { initSWConsoleCapture } from './utils/sw-console-capture';
 
 // ===== 初始化崩溃日志系统 =====

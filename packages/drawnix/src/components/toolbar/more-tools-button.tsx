@@ -7,6 +7,7 @@
 import React, { useState, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { ToolButton } from '../tool-button';
+import { Z_INDEX } from '../../constants/z-index';
 import {
   MoreIcon,
   HandIcon,
@@ -29,7 +30,6 @@ import {
   ZoomOutIcon,
 } from '../icons';
 import { Popover, PopoverContent, PopoverTrigger } from '../popover/popover';
-import { Z_INDEX } from '../../constants/z-index';
 import { useI18n, Translations } from '../../i18n';
 import { useToolbarConfig } from '../../hooks/use-toolbar-config';
 import { ToolbarButtonConfig } from '../../types/toolbar-config.types';
@@ -766,7 +766,7 @@ const MoreToolsPanel: React.FC<MoreToolsPanelProps> = ({
             position: 'fixed',
             left: contextMenu.x,
             top: contextMenu.y,
-            zIndex: 10000,
+            zIndex: Z_INDEX.DROPDOWN_PORTAL,
           }}
         >
           <Menu>
