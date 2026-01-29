@@ -1,0 +1,108 @@
+{
+  "id": "ai-workflow",
+  "name": "AI 工作流演示",
+  "output": "AI工作流.gif",
+  "targetPage": "ai-features/workflow",
+  "preWait": 1500,
+  "postWait": 2000,
+  "actions": [
+    {
+      "type": "keyHint",
+      "key": "工作流",
+      "hint": "AI 生成工作流",
+      "duration": 1500
+    },
+    {
+      "type": "click",
+      "target": "testid:ai-input-bar input[type='text']",
+      "label": "输入",
+      "wait": 1000
+    },
+    {
+      "type": "keyHint",
+      "key": "输入",
+      "hint": "输入生成请求",
+      "duration": 1000
+    },
+    {
+      "type": "type",
+      "target": "testid:ai-input-bar input[type='text']",
+      "text": "生成一只可爱的猫咪",
+      "delay": 80,
+      "wait": 1000
+    },
+    {
+      "type": "keyHint",
+      "key": "配置",
+      "hint": "配置生成参数",
+      "duration": 1000
+    },
+    {
+      "type": "wait",
+      "duration": 800
+    },
+    {
+      "type": "keyHint",
+      "key": "发送",
+      "hint": "发送生成请求",
+      "duration": 1500
+    },
+    {
+      "type": "click",
+      "target": "testid:ai-input-bar .ai-input-bar__send-btn",
+      "label": "发送",
+      "wait": 1500,
+      "optional": true
+    },
+    {
+      "type": "keyHint",
+      "key": "抽屉",
+      "hint": "对话抽屉自动打开",
+      "duration": 1500
+    },
+    {
+      "type": "wait",
+      "duration": 1000
+    },
+    {
+      "type": "keyHint",
+      "key": "执行",
+      "hint": "工作流执行中",
+      "duration": 2000
+    },
+    {
+      "type": "wait",
+      "duration": 1500
+    },
+    {
+      "type": "keyHint",
+      "key": "状态",
+      "hint": "实时状态更新",
+      "duration": 1500
+    },
+    {
+      "type": "wait",
+      "duration": 1000
+    },
+    {
+      "type": "keyHint",
+      "key": "步骤",
+      "hint": "工作流步骤展示",
+      "duration": 1500
+    },
+    {
+      "type": "wait",
+      "duration": 1000
+    },
+    {
+      "type": "keyHint",
+      "key": "历史",
+      "hint": "查看完整历史",
+      "duration": 1000
+    },
+    {
+      "type": "wait",
+      "duration": 1000
+    }
+  ]
+}

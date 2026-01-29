@@ -17,6 +17,7 @@
 - [API 与任务处理规范](#api-与任务处理规范)
 - [UI 交互规范](#ui-交互规范)
 - [安全规范](#安全规范)
+- [E2E 测试规范](#e2e-测试规范)
 
 ---
 
@@ -312,11 +313,99 @@ if (params) {
 **相关文件**:
 - `packages/drawnix/src/utils/image-split-core.ts` - 图片拆分核心模块
 
+#### 工具函数组织与导入
+
+**场景**: 项目中有通用工具函数需要在多个包之间共享
+
+❌ **错误示例**:
+```typescript
+// packages/drawnix/src/utils/common.ts
+// 错误：在业务包中二次导出通用函数
+import { generateId, sanitizeObject } from '@aitu/utils';
+export { generateId, sanitizeObject };  // ❌ 二次导出
+
+// packages/drawnix/src/services/some-service.ts
+// 错误：从业务包导入通用函数
+import { generateId } from '../utils/common';  // ❌ 间接导入
+```
+
+✅ **正确示例**:
+```typescript
+// packages/drawnix/src/services/some-service.ts
+// 正确：直接从 @aitu/utils 导入
+import { generateId, sanitizeObject } from '@aitu/utils';  // ✅ 直接导入
+
+// packages/drawnix/src/utils/common.ts
+// 正确：只保留业务特有的函数
+import { IS_APPLE, PlaitBoard, toImage } from '@plait/core';
+
+export const boardToImage = (board: PlaitBoard) => {  // ✅ Plait 特有
+  return toImage(board, { fillStyle: 'transparent' });
+};
+```
+
+**原因**:
+- 二次导出会造成依赖链混乱，增加包体积
+- 修改工具函数时难以追踪所有使用位置
+- 直接导入语义更清晰，IDE 跳转更准确
+
+**`@aitu/utils` 包含的通用函数**:
+- ID 生成：`generateId()`, `generateUUID()`
+- 日期格式化：`formatDate()`, `formatDuration()`, `formatFileSize()`
+- DOM 操作：`download()`, `copyToClipboard()`
+- 安全工具：`sanitizeObject()`, `sanitizeUrl()`, `getSafeErrorMessage()`
+- 字符串处理：`truncate()`, `capitalize()`, `toKebabCase()`
+- 异步工具：`debounce()`, `throttle()`
+
 ### React 组件规范
 - 使用函数组件和 Hooks
 - 使用 `React.memo` 优化重渲染
 - 事件处理器使用 `useCallback` 包装
 - Hook 顺序：状态 hooks → 副作用 hooks → 事件处理器 → 渲染逻辑
+
+#### useCallback 定义顺序必须在 useEffect 依赖之前
+
+**场景**: 当 `useEffect` 的依赖数组引用某个 `useCallback` 定义的函数时
+
+❌ **错误示例**:
+```typescript
+// 错误：handleResetView 在 useEffect 依赖中被引用，但定义在 useEffect 之后
+useEffect(() => {
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.key === '0') {
+      handleResetView(); // 引用了后面才定义的函数
+    }
+  };
+  window.addEventListener('keydown', handleKeyDown);
+  return () => window.removeEventListener('keydown', handleKeyDown);
+}, [handleResetView]); // ❌ 运行时错误: Cannot access 'handleResetView' before initialization
+
+const handleResetView = useCallback(() => {
+  // 重置逻辑
+}, []);
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：被依赖的 useCallback 必须在 useEffect 之前定义
+const handleResetView = useCallback(() => {
+  // 重置逻辑
+}, []);
+
+useEffect(() => {
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.key === '0') {
+      handleResetView();
+    }
+  };
+  window.addEventListener('keydown', handleKeyDown);
+  return () => window.removeEventListener('keydown', handleKeyDown);
+}, [handleResetView]); // ✅ 正常工作
+```
+
+**原因**: JavaScript 的 `const` 声明有暂时性死区（TDZ），在声明语句执行前访问会抛出 `ReferenceError`。`useEffect` 的依赖数组在组件首次渲染时就会被读取，此时如果被依赖的函数还未定义，就会报错。
+
+---
 
 #### Hover 延迟操作需要正确的计时器清理
 
@@ -1080,6 +1169,52 @@ async initialize(): Promise<boolean> {
 
 **原因**: `settingsManager` 使用异步方法 `decryptSensitiveDataForLoading()` 解密敏感数据（如 API Key）。如果在解密完成前调用 `geminiSettings.get()`，会返回加密的 JSON 对象而不是解密后的字符串，导致 API 请求失败。
 
+### 跨层数据转换必须传递所有字段
+
+**场景**: 在主线程和 Service Worker 之间传递数据对象时，需要将内部类型转换为传输格式
+
+❌ **错误示例**:
+```typescript
+// 错误：转换时漏掉了 options 字段
+const swWorkflow = {
+  id: legacyWorkflow.id,
+  name: legacyWorkflow.name,
+  steps: legacyWorkflow.steps.map(step => ({
+    id: step.id,
+    mcp: step.mcp,
+    args: step.args,
+    description: step.description,
+    status: step.status,
+    // 漏掉了 step.options！导致批量信息（batchId 等）丢失
+  })),
+};
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：显式传递所有字段，包括可选字段
+const swWorkflow = {
+  id: legacyWorkflow.id,
+  name: legacyWorkflow.name,
+  steps: legacyWorkflow.steps.map(step => ({
+    id: step.id,
+    mcp: step.mcp,
+    args: step.args,
+    description: step.description,
+    status: step.status,
+    options: step.options,  // 包含 batchId, batchIndex, batchTotal 等
+  })),
+};
+```
+
+**常见遗漏的字段**:
+- `options` - 批量参数、执行模式等
+- `metadata` - 元数据信息
+- `context` - 上下文信息
+- 任何 `?:` 可选字段
+
+**原因**: 跨层通信时，如果源类型有可选字段，在转换时很容易遗漏。这会导致功能静默失败（如批量生成只执行第一个），且很难排查。建议在转换函数中显式列出所有字段，或使用 TypeScript 的类型检查确保字段完整。
+
 ### Service Worker 初始化时序
 
 **场景**: 提交工作流到 Service Worker 执行前
@@ -1363,6 +1498,36 @@ setTimeout(() => {
 ```
 
 **原因**: Plait 的 `addSelectedElement` 只是将元素存入 `BOARD_TO_SELECTED_ELEMENT` WeakMap 缓存，不会触发任何渲染。在同步流程中（如 `insertElement` 内部），`Transforms.insertNode` 已经触发了 `board.apply()` 和渲染链，所以选中状态能正常显示。但在异步回调中单独调用时，需要手动触发一次 `board.apply()` 来刷新渲染。`Transforms.setNode` 会调用 `board.apply()`，从而触发完整的渲染链。
+
+### 插入元素后选中需通过 ID 查找实际引用
+
+**场景**: 使用 `Transforms.insertNode` 插入元素后，需要选中该元素
+
+❌ **错误示例**:
+```typescript
+// 错误：直接使用传入的对象调用 addSelectedElement
+const newElement = { id: idCreator(), type: 'pen', ... };
+Transforms.insertNode(board, newElement, [board.children.length]);
+
+clearSelectedElement(board);
+addSelectedElement(board, newElement);  // 可能报错：Unable to find the path for Plait node
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：通过 ID 从 board.children 中查找实际插入的元素
+const newElement = { id: idCreator(), type: 'pen', ... };
+Transforms.insertNode(board, newElement, [board.children.length]);
+
+// 查找实际插入到 board 中的元素引用
+const insertedElement = board.children.find(child => child.id === newElement.id);
+if (insertedElement) {
+  clearSelectedElement(board);
+  addSelectedElement(board, insertedElement);
+}
+```
+
+**原因**: `Transforms.insertNode` 插入元素时，Plait 可能会对元素进行处理或创建新的引用。`addSelectedElement` 内部会调用 `findPath` 查找元素路径，如果传入的对象引用与 `board.children` 中的不一致，会导致 "Unable to find the path for Plait node" 错误。
 
 ### 异步任务幂等性检查应检查存在性而非完成状态
 
@@ -2286,6 +2451,71 @@ if (cachedResponse) {
 - 返回空响应会导致图片无法显示，用户体验差
 - 在返回前验证 `blob.size > 0` 可以自动修复历史问题
 - 删除无效缓存后重新获取，确保用户看到正确的内容
+
+### Cache.put() 会消费 Response body，无法重复使用
+
+**场景**: 需要将同一个 Response 对象缓存到多个不同的 key 时
+
+❌ **错误示例**:
+```typescript
+// 错误：Cache.put() 会消费 Response 的 body，后续无法 clone
+const response = new Response(blob, {
+  headers: { 'Content-Type': 'image/jpeg' },
+});
+
+// 第一次 put 消费了 body
+await thumbCache.put(cacheKey1, response);
+
+// 第二次 clone 会失败：Response body is already used
+await thumbCache.put(cacheKey2, response.clone()); // ❌ TypeError
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：为每个缓存 key 创建独立的 Response 对象
+const createResponse = () => new Response(blob, {
+  headers: { 'Content-Type': 'image/jpeg' },
+});
+
+// 每个 put 使用独立的 Response 对象
+await thumbCache.put(cacheKey1, createResponse());
+await thumbCache.put(cacheKey2, createResponse());
+await thumbCache.put(cacheKey3, createResponse());
+```
+
+**原因**:
+- `Cache.put()` 方法会读取并消费 Response 的 body stream
+- 一旦 body 被消费，就无法再次读取或 clone
+- Response 对象本身很轻量（只是包装 Blob），为每个 key 创建新对象是安全的
+- 使用工厂函数 `createResponse()` 可以方便地创建多个独立实例
+
+### fetchOptions 优先级：优先尝试可缓存的模式
+
+**场景**: 在 Service Worker 中获取外部图片时，需要尝试多种 fetch 模式
+
+❌ **错误示例**:
+```typescript
+// 错误：no-cors 模式优先，会导致 opaque 响应无法缓存
+let fetchOptions = [
+  { mode: 'no-cors' },  // ❌ 优先尝试，但无法缓存
+  { mode: 'cors' },     // 可缓存，但优先级低
+];
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：优先尝试 cors 模式（可缓存），最后才尝试 no-cors
+let fetchOptions = [
+  { mode: 'cors' },     // ✅ 优先尝试，可以缓存
+  { mode: 'no-cors' },  // 最后备选，无法缓存但可以绕过 CORS
+];
+```
+
+**原因**:
+- `cors` 模式返回的响应可以被 Service Worker 读取和缓存
+- `no-cors` 模式返回的 `opaque` 响应无法读取 body，无法有效缓存
+- 优先尝试可缓存的模式可以提高后续请求的命中率
+- 只有在 cors 模式失败时才降级到 no-cors 模式
 
 ### CDN 响应必须多重验证后才能缓存
 
@@ -4210,6 +4440,126 @@ const matchesSource = !filters.activeSource || filters.activeSource === 'ALL' ||
 
 ## UI 交互规范
 
+#### 媒体预览统一使用公共组件
+
+**场景**: 需要实现图片/视频预览功能时（如任务列表、生成结果预览等）。
+
+❌ **错误示例**:
+```tsx
+// 自定义 Dialog 实现预览
+<Dialog visible={previewVisible} header="图片预览" width="90vw">
+  <div className="preview-container">
+    <Button icon={<ChevronLeftIcon />} onClick={handlePrevious} />
+    <img src={previewUrl} />
+    <Button icon={<ChevronRightIcon />} onClick={handleNext} />
+  </div>
+</Dialog>
+```
+
+✅ **正确示例**:
+```tsx
+import { UnifiedMediaViewer, type MediaItem } from '../shared/media-preview';
+
+<UnifiedMediaViewer
+  visible={previewVisible}
+  items={mediaItems}
+  initialIndex={previewIndex}
+  onClose={handleClose}
+  showThumbnails={true}
+/>
+```
+
+**原因**: 项目已有功能完善的 `UnifiedMediaViewer` 公共组件，支持：
+- 单图预览、对比预览、编辑模式
+- 缩略图导航栏
+- 键盘快捷键（左右箭头、Escape）
+- 缩放、拖拽、全屏
+- 视频同步播放
+
+自定义实现会导致功能不一致、代码重复，且缺失公共组件已有的增强功能。
+
+---
+
+#### 生成结果缩略图使用 contain 完整展示
+
+**场景**: 展示 AI 生成的图片/视频缩略图时（任务队列、生成历史、预览缩略图等）。
+
+❌ **错误示例**:
+```scss
+.thumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover; // 裁切图片，可能丢失重要内容
+}
+```
+
+✅ **正确示例**:
+```scss
+.thumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain; // 完整展示图片
+}
+```
+
+**原因**: AI 生成的图片内容完整性很重要，用户需要看到完整的生成结果才能判断质量。使用 `cover` 会裁切图片边缘，可能导致：
+- 宫格图部分格子被裁切
+- 竖版/横版图片重要内容被裁切
+- 用户无法准确评估生成效果
+
+**例外情况**: 以下场景可以使用 `cover`：
+- 用户上传的参考图片（用户已知图片内容）
+- 角色头像（圆形需要填充）
+- 聊天消息中的图片
+
+---
+
+#### 小图应提供 hover 大图预览
+
+**场景**: 展示缩略图（尤其是 AI 生成结果的小图）时。
+
+❌ **错误示例**:
+```tsx
+// 只有小图，没有预览
+<div className="thumbnail">
+  <img src={image.url} alt={image.name} />
+</div>
+```
+
+✅ **正确示例**:
+```tsx
+const [hoveredImage, setHoveredImage] = useState<{ url: string; x: number; y: number } | null>(null);
+
+<div
+  className="thumbnail"
+  onMouseEnter={(e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    setHoveredImage({ url: image.url, x: rect.left + rect.width / 2, y: rect.top - 10 });
+  }}
+  onMouseLeave={() => setHoveredImage(null)}
+>
+  <img src={image.url} alt={image.name} />
+</div>
+
+{/* Hover 预览通过 Portal 渲染到 body */}
+{hoveredImage && ReactDOM.createPortal(
+  <div
+    className="hover-preview"
+    style={{ left: hoveredImage.x, top: hoveredImage.y, transform: 'translate(-50%, -100%)' }}
+  >
+    <img src={hoveredImage.url} alt="Preview" />
+  </div>,
+  document.body
+)}
+```
+
+**原因**: 缩略图尺寸较小，用户难以判断图片细节。提供 hover 大图预览可以：
+- 快速查看图片细节，无需点击打开预览弹窗
+- 提升用户体验，减少操作步骤
+- 方便用户快速对比多张图片
+
+---
+
 #### Tooltip 样式统一规范
 
 **场景**: 在项目中使用 TDesign 的 `Tooltip` 组件时。
@@ -4541,6 +4891,50 @@ const model = message.aiContext?.model || parseFallback(message.content);
 
 **原因**: 字符串解析极其脆弱，容易因文案微调、语言切换或历史数据格式不一而失效。结构化数据是唯一可靠的真相来源。
 
+#### 日志记录应反映实际发送的数据
+
+**场景**: 在调用外部 API 前记录请求参数用于调试（如 `/sw-debug.html` 的 LLM API 日志），数据在发送前经过了处理（如图片裁剪、压缩）。
+
+❌ **错误示例**:
+```typescript
+// 错误：在数据处理前收集日志信息
+const referenceImageInfos = await Promise.all(
+  refUrls.map(url => getImageInfo(url))  // 获取原始图片信息
+);
+
+// 后续处理会改变图片
+for (const url of refUrls) {
+  let blob = await fetchImage(url);
+  blob = await cropImageToAspectRatio(blob, targetWidth, targetHeight);  // 裁剪
+  formData.append('input_reference', blob);
+}
+
+// 日志记录的是裁剪前的尺寸，与实际发送的不符！
+startLLMApiLog({ referenceImages: referenceImageInfos });
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：在数据处理后收集日志信息
+const referenceImageInfos: ImageInfo[] = [];
+
+for (const url of refUrls) {
+  let blob = await fetchImage(url);
+  blob = await cropImageToAspectRatio(blob, targetWidth, targetHeight);  // 裁剪
+  
+  // 获取处理后的图片信息用于日志
+  const info = await getImageInfo(blob);
+  referenceImageInfos.push(info);
+  
+  formData.append('input_reference', blob);
+}
+
+// 日志记录的是实际发送的数据
+startLLMApiLog({ referenceImages: referenceImageInfos });
+```
+
+**原因**: 调试日志的价值在于准确记录实际发送给 API 的数据。如果日志记录的是处理前的数据，当 API 返回错误（如"图片尺寸不匹配"）时，日志显示的尺寸与实际不符，会严重误导排查方向。
+
 #### 外部 API 调用频率控制
 
 **场景**: 调用外部服务的低频刷新接口（如每 5 分钟刷新一次的状态接口），多个组件可能同时触发请求。
@@ -4841,3 +5235,178 @@ import { BulletpointIcon, ServiceIcon } from 'tdesign-icons-react';
 ```
 
 **原因**: TDesign 图标库命名不一定符合直觉，使用不存在的导出名会触发 `SyntaxError` 导致白屏。
+
+---
+
+## E2E 测试规范
+
+### Playwright 元素选择器精度
+
+**场景**: 选择工具栏按钮时，需要获取完整的可点击区域而非内部小元素。
+
+❌ **错误示例**:
+```typescript
+// 错误：getByRole('radio') 选择 13x13px 的 input 元素
+const toolBtn = toolbar.locator('div').filter({ 
+  has: page.getByRole('radio', { name: /画笔/ }) 
+});
+// 实际选中的是内部的 radio input，而非外层按钮容器
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：使用 label 选择器获取完整的按钮容器 (40x36px)
+const toolBtn = toolbar.locator('label').filter({ 
+  has: page.getByRole('radio', { name: /画笔/ }) 
+});
+```
+
+**原因**: `getByRole('radio')` 会匹配到隐藏的 input 元素，其尺寸通常很小。使用 `label` 选择器可以获取实际的可点击区域。
+
+### CSS 定位避免内容截断
+
+**场景**: 为元素添加标签/提示文字时，定位方式可能导致内容被截断。
+
+❌ **错误示例**:
+```css
+/* 错误：使用 right + transform 定位，容易被父容器截断 */
+.label {
+  position: absolute;
+  right: -10px;
+  transform: translate(100%, -50%);
+}
+```
+
+✅ **正确示例**:
+```css
+/* 正确：使用 left: 100% + margin，内容不会被截断 */
+.label {
+  position: absolute;
+  left: 100%;
+  margin-left: 8px;
+  transform: translateY(-50%);
+}
+```
+
+**原因**: `right` 配合 `transform: translate(100%)` 会使元素超出父容器边界，如果父容器有 `overflow: hidden` 则内容被截断。
+
+### 避免过度复杂的自动化系统
+
+**场景**: 设计自动化工具（如 GIF 录制、截图生成）时的架构决策。
+
+❌ **错误做法**:
+- 设计复杂的 DSL 系统（JSON 定义 + 执行器 + 时间戳裁剪）
+- 录制一个长视频然后按时间点裁剪多个 GIF
+- 尝试用一套配置生成所有内容
+
+✅ **正确做法**:
+- 每个 GIF 使用独立的测试录制
+- 简单的命令行参数控制（如 `--trim 2.4`）
+- 一个命令完成一个任务（如 `pnpm manual:gif:mindmap`）
+
+**原因**: 
+1. 长视频裁剪会带来"旧信息污染"（前一个操作残留影响后一个）
+2. DSL 元素选择器难以处理动态 UI 的时序问题
+3. 简单方案更易调试和维护，复杂系统的调试成本远超收益
+
+### 定期清理未使用代码
+
+**场景**: 功能开发过程中会产生实验性代码和辅助文件。
+
+**检查项**:
+```bash
+# 查看未跟踪文件
+git status --short | grep "^??"
+
+# 检查文件是否被导入
+grep -r "from.*filename" apps/ packages/
+```
+
+**常见可清理的文件**:
+- 未使用的 fixture 文件（如 `test-data.ts`）
+- 重复功能的测试文件（如多个 visual spec 覆盖相同功能）
+- 错误创建的目录结构
+- 过时的文档（引用已删除代码的 md 文件）
+
+**原因**: 未清理的代码会增加维护负担，误导后续开发者，也会增加 CI 执行时间。
+
+### Clipper 布尔运算结果处理
+
+**场景**: 使用 clipper-lib 进行多边形布尔运算（合并、减去、相交等）后，需要区分外环和孔洞。
+
+❌ **错误做法**:
+```typescript
+// 错误：依赖面积符号判断外环/孔洞
+const outerRing = pathsWithArea.find(p => p.signedArea > 0);
+const holes = pathsWithArea.filter(p => p.signedArea < 0);
+```
+
+✅ **正确做法**:
+```typescript
+// 正确：用面积大小判断，最大的是外环，其他是孔洞
+const sortedByArea = [...pathsWithArea].sort((a, b) => b.absArea - a.absArea);
+const outerRing = sortedByArea[0]; // 面积最大的是外环
+const holes = sortedByArea.slice(1); // 其他都是孔洞
+```
+
+**原因**: 
+1. Clipper 返回的路径方向（顺时针/逆时针）取决于坐标系（Y 轴向上还是向下）
+2. 在不同环境下，面积符号可能相反，导致孔洞被错误识别为外环
+3. 面积大小是稳定的判断依据：外环总是包含所有孔洞，因此面积最大
+
+**相关文件**: `packages/drawnix/src/transforms/precise-erase.ts`, `packages/drawnix/src/transforms/boolean.ts`
+
+### Slate-React Leaf 组件 DOM 结构必须保持稳定
+
+**场景**: 在 Slate-React 的 Leaf 组件中实现文本样式（如下划线、删除线）时
+
+❌ **错误做法**:
+```tsx
+// 错误：根据条件动态切换 HTML 标签和 CSS 实现方式
+const Leaf = ({ children, leaf, attributes }) => {
+  const hasCustomStyle = leaf['text-decoration-style'];
+  
+  // 当样式变化时，DOM 结构会从 <u>...</u> 变成 <span style={...}>...</span>
+  if (leaf.underlined && !hasCustomStyle) {
+    children = <u>{children}</u>;  // 有时用标签
+  }
+  
+  const style = {};
+  if (leaf.underlined && hasCustomStyle) {
+    style.textDecoration = 'underline';  // 有时用 CSS
+  }
+  
+  return <span style={style} {...attributes}>{children}</span>;
+};
+// 报错：Cannot resolve a DOM node from Slate node
+```
+
+✅ **正确做法**:
+```tsx
+// 正确：始终使用同一种方式实现，保持 DOM 结构稳定
+const Leaf = ({ children, leaf, attributes }) => {
+  const style: CSSProperties = {};
+  
+  // 统一使用 CSS 实现，不使用 <u>、<s> 等标签
+  if (leaf.underlined || leaf.strikethrough) {
+    const decorations: string[] = [];
+    if (leaf.underlined) decorations.push('underline');
+    if (leaf.strikethrough) decorations.push('line-through');
+    
+    style.textDecoration = decorations.join(' ');
+    if (leaf['text-decoration-style']) {
+      style.textDecorationStyle = leaf['text-decoration-style'];
+    }
+  }
+  
+  return <span style={style} {...attributes}>{children}</span>;
+};
+```
+
+**原因**: 
+1. Slate-React 依赖稳定的 DOM 结构来追踪编辑器节点与 DOM 节点的映射关系
+2. 当根据样式条件动态切换 HTML 标签（`<u>`）和 CSS（`text-decoration`）时，DOM 结构会发生变化
+3. 这会导致 Slate 无法找到对应的 DOM 节点，抛出 "Cannot resolve a DOM node from Slate node" 错误
+4. 解决方案是选择一种实现方式并始终使用，推荐使用 CSS 因为它更灵活（支持自定义样式和颜色）
+
+**相关文件**: `packages/react-text/src/text.tsx`

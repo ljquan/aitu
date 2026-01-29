@@ -2310,6 +2310,506 @@ body.analysis-mode .log-entry {
   color: var(--info-color);
 }
 
+/* ==================== Mobile Responsive Styles ==================== */
+
+/* Mobile-only elements - hidden on desktop */
+.mobile-only {
+  display: none !important;
+}
+
+@media (max-width: 768px) {
+  /* Show mobile-only elements */
+  .mobile-only {
+    display: inline-flex !important;
+  }
+
+  /* Enable body scrolling on mobile */
+  html, body {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  body {
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Header - more compact on mobile */
+  header {
+    flex-shrink: 0;
+    padding: 8px 12px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  header h1 {
+    font-size: 13px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  header h1 #panelTitle {
+    display: none;
+  }
+
+  .header-actions {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .header-actions button {
+    height: 28px;
+    padding: 0 8px;
+    font-size: 11px;
+  }
+
+  .header-actions .icon-btn {
+    width: 28px;
+    height: 28px;
+  }
+
+  /* Hide some buttons on small screens */
+  .header-actions .debug-mode-only {
+    display: none;
+  }
+
+  /* Container - fill remaining space */
+  .container {
+    flex: 1;
+    min-height: 0;
+    padding: 8px;
+    height: auto;
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* Panels - single column, scrollable */
+  .panels {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    margin-top: 8px;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  /* Left panel - hidden by default on mobile, shown as overlay */
+  .left-panel {
+    display: none;
+    position: fixed;
+    top: 52px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 200;
+    background: var(--bg-secondary);
+    padding: 8px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Left panel visible state */
+  .left-panel.mobile-visible {
+    display: block;
+    animation: slideInFromTop 0.2s ease;
+  }
+
+  @keyframes slideInFromTop {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Status panel toggle button active state */
+  #toggleStatusPanel.active {
+    background: var(--primary-color) !important;
+    border-color: var(--primary-color) !important;
+    color: #fff !important;
+  }
+
+  /* Logs panel - fill available space */
+  .logs-panel {
+    height: 100%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Tabs - horizontal scrollable */
+  .tabs {
+    display: flex;
+    gap: 0;
+    padding: 4px 8px 0;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    flex-shrink: 0;
+  }
+
+  .tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tab {
+    padding: 6px 10px;
+    font-size: 11px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  /* Logs toolbar - horizontal scrollable */
+  .logs-toolbar {
+    padding: 4px 8px;
+    gap: 4px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    flex-shrink: 0;
+  }
+
+  .logs-toolbar select,
+  .logs-toolbar input[type="text"] {
+    height: 32px;
+    min-height: 32px;
+    font-size: 14px; /* Prevent iOS zoom */
+  }
+
+  .logs-toolbar input[type="text"] {
+    min-width: 100px;
+    flex: 0 0 auto;
+  }
+
+  .logs-toolbar button {
+    height: 32px;
+    min-height: 32px;
+    padding: 0 8px;
+  }
+
+  /* Hide some toolbar items on mobile */
+  .logs-toolbar .switch-toggle,
+  .logs-toolbar .bookmark-toggle,
+  .logs-toolbar #showShortcuts,
+  .logs-toolbar #showSettings {
+    display: none;
+  }
+
+  /* Stats bar - scrollable */
+  .stats-bar {
+    padding: 4px 8px;
+    gap: 8px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    flex-shrink: 0;
+  }
+
+  .stats-bar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .stats-bar .stat {
+    flex-shrink: 0;
+    font-size: 10px;
+  }
+
+  /* Duration chart smaller on mobile */
+  .duration-chart {
+    min-width: 80px;
+    max-width: 120px;
+  }
+
+  /* Tab content - scrollable logs */
+  .tab-content.active {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* Logs container - THIS IS THE KEY FIX */
+  .logs-container {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+
+  /* Log entries - allow 2 lines on mobile */
+  .log-entry {
+    padding: 10px 8px;
+    font-size: 11px;
+  }
+
+  .log-header {
+    gap: 4px 6px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  /* First row: toggle, time, status, type badges, duration */
+  .log-toggle {
+    order: 1;
+  }
+
+  .log-time {
+    font-size: 10px;
+    min-width: auto;
+    order: 2;
+  }
+
+  .log-status {
+    order: 3;
+  }
+
+  .log-type-badge {
+    order: 4;
+  }
+
+  .log-method,
+  .log-status,
+  .log-type-badge {
+    font-size: 9px;
+    padding: 2px 5px;
+  }
+
+  .log-duration {
+    font-size: 9px;
+    min-width: auto;
+    order: 5;
+    margin-left: auto;
+  }
+
+  /* Second row: URL/prompt - full width, 2 lines */
+  .log-url {
+    font-size: 11px;
+    word-break: break-word;
+    /* Allow 2 lines then truncate */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.5;
+    flex: 0 0 100%;
+    width: 100%;
+    order: 10;
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px dashed var(--border-light);
+    color: var(--text-secondary);
+  }
+
+  /* PostMessage entries */
+  .pm-entry {
+    padding: 10px 8px;
+    font-size: 11px;
+  }
+
+  .pm-header {
+    gap: 4px 6px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .pm-time {
+    font-size: 10px;
+    min-width: auto;
+    order: 2;
+  }
+
+  .pm-direction {
+    font-size: 9px;
+    padding: 2px 5px;
+    order: 3;
+  }
+
+  .pm-type {
+    font-size: 9px;
+    padding: 2px 5px;
+    order: 4;
+  }
+
+  .pm-preview {
+    font-size: 11px;
+    /* Allow 2 lines for preview */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.5;
+    flex: 0 0 100%;
+    width: 100%;
+    order: 10;
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px dashed var(--border-light);
+    color: var(--text-secondary);
+  }
+
+  /* Console entries */
+  .console-entry {
+    padding: 10px 8px;
+    font-size: 11px;
+  }
+
+  /* Log details - full width on mobile */
+  .log-details {
+    padding: 12px;
+    margin-top: 8px;
+  }
+
+  .detail-section pre {
+    font-size: 11px;
+    padding: 8px;
+    max-height: 200px;
+  }
+
+  /* Empty state */
+  .empty-state {
+    padding: 40px 20px;
+  }
+
+  .empty-state .icon {
+    font-size: 40px;
+  }
+
+  .empty-state p {
+    font-size: 13px;
+  }
+
+  /* Modals - full screen on mobile */
+  .export-modal-overlay {
+    padding: 0;
+  }
+
+  .export-modal {
+    width: 100%;
+    max-width: 100%;
+    height: 100%;
+    max-height: 100%;
+    border-radius: 0;
+  }
+
+  .export-modal-body {
+    padding: 12px;
+  }
+
+  .export-section-items {
+    padding-left: 16px;
+    gap: 4px 12px;
+  }
+}
+
+/* Extra small screens (phones in portrait) */
+@media (max-width: 480px) {
+  header h1 {
+    font-size: 12px;
+  }
+
+  .status-indicator {
+    padding: 2px 6px;
+    font-size: 10px;
+  }
+
+  .header-actions button {
+    height: 26px;
+    padding: 0 6px;
+    font-size: 10px;
+  }
+
+  .header-actions .icon-btn {
+    width: 26px;
+    height: 26px;
+  }
+
+  /* Hide some header buttons on very small screens */
+  #toggleAnalysisMode {
+    display: none;
+  }
+
+  .tabs {
+    padding: 2px 6px 0;
+  }
+
+  .tab {
+    padding: 5px 8px;
+    font-size: 10px;
+  }
+
+  .logs-toolbar {
+    padding: 4px 6px;
+  }
+
+  .logs-toolbar select {
+    min-width: 70px;
+    padding: 0 4px;
+  }
+
+  .log-entry,
+  .pm-entry,
+  .console-entry {
+    padding: 8px 6px;
+  }
+
+  .log-time,
+  .pm-time {
+    font-size: 9px;
+    min-width: auto;
+  }
+
+  .log-toggle {
+    width: 14px;
+    height: 14px;
+    font-size: 7px;
+  }
+
+  .log-url,
+  .pm-preview {
+    font-size: 10px;
+    margin-top: 4px;
+    padding-top: 4px;
+  }
+}
+
+/* Landscape orientation on mobile */
+@media (max-width: 768px) and (orientation: landscape) {
+  header {
+    padding: 4px 12px;
+  }
+
+  header h1 {
+    font-size: 12px;
+  }
+
+  .container {
+    padding: 4px 8px;
+  }
+
+  .panels {
+    margin-top: 4px;
+  }
+
+  .tabs {
+    padding: 2px 8px 0;
+  }
+
+  .tab {
+    padding: 4px 8px;
+  }
+
+  .logs-toolbar {
+    padding: 2px 8px;
+  }
+
+  .stats-bar {
+    padding: 2px 8px;
+  }
+}
+
 /* Backup notification styling */
 .backup-notification .import-notification-content {
   border-color: var(--success-color);
@@ -2400,4 +2900,60 @@ body.analysis-mode .log-entry {
   color: var(--text-secondary);
   text-align: center;
   font-variant-numeric: tabular-nums;
+}
+
+/* JSON Syntax Highlighting */
+.json-highlight {
+  background: var(--bg-tertiary);
+  padding: 12px;
+  border-radius: 6px;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.json-key {
+  color: #9cdcfe;
+}
+
+.json-string {
+  color: #ce9178;
+}
+
+.json-number {
+  color: #b5cea8;
+}
+
+.json-boolean {
+  color: #569cd6;
+}
+
+.json-null {
+  color: #569cd6;
+}
+
+/* Light mode JSON highlighting */
+@media (prefers-color-scheme: light) {
+  .json-key {
+    color: #0451a5;
+  }
+  
+  .json-string {
+    color: #a31515;
+  }
+  
+  .json-number {
+    color: #098658;
+  }
+  
+  .json-boolean {
+    color: #0000ff;
+  }
+  
+  .json-null {
+    color: #0000ff;
+  }
 }

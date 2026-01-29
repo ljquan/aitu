@@ -6,6 +6,7 @@
  */
 
 import React, { useCallback, useState } from 'react';
+import ReactDOM from 'react-dom';
 import { Upload, Button, MessagePlugin } from 'tdesign-react';
 import { AddIcon, DeleteIcon } from 'tdesign-icons-react';
 import { 
@@ -35,7 +36,20 @@ export const MultiImageUpload: React.FC<MultiImageUploadProps> = ({
   const { maxCount, labels = ['参考图'] } = config;
   const [showMediaLibrary, setShowMediaLibrary] = useState(false);
   const [currentSlot, setCurrentSlot] = useState<number>(0);
+  const [hoveredImage, setHoveredImage] = useState<{ url: string; x: number; y: number } | null>(null);
   const { addAsset } = useAssets();
+
+  // Handle image hover for preview
+  const handleImageMouseEnter = useCallback((url: string, e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const topY = rect.top - 10;
+    setHoveredImage({ url, x: centerX, y: topY });
+  }, []);
+
+  const handleImageMouseLeave = useCallback(() => {
+    setHoveredImage(null);
+  }, []);
 
   // Handle file upload for a specific slot
   const handleUpload = useCallback(async (slot: number, file: File) => {
@@ -148,7 +162,11 @@ export const MultiImageUpload: React.FC<MultiImageUploadProps> = ({
       <div key={slot} className="multi-image-upload__slot">
         <div className="multi-image-upload__slot-label">{label}</div>
         {image ? (
-          <div className="multi-image-upload__preview">
+          <div
+            className="multi-image-upload__preview"
+            onMouseEnter={(e) => handleImageMouseEnter(image.url, e)}
+            onMouseLeave={handleImageMouseLeave}
+          >
             <img
               src={image.url}
               alt={image.name}
@@ -205,30 +223,47 @@ export const MultiImageUpload: React.FC<MultiImageUploadProps> = ({
   };
 
   return (
-    <div className="multi-image-upload">
-      <div className="multi-image-upload__header">
-        <span className="multi-image-upload__title">
-          {config.mode === 'frames' ? '首尾帧图片' : '参考图片'}
-        </span>
-        <span className="multi-image-upload__hint">
-          {config.mode === 'frames'
-            ? '可上传首帧和尾帧图片（可选）'
-            : `最多上传 ${maxCount} 张参考图（可选）`}
-        </span>
-      </div>
-      <div className="multi-image-upload__slots">
-        {Array.from({ length: maxCount }, (_, i) => renderUploadSlot(i))}
-      </div>
+    <>
+      {/* Hover preview - large image (rendered to body via portal) */}
+      {hoveredImage && ReactDOM.createPortal(
+        <div
+          className="multi-image-upload__hover-preview"
+          style={{
+            left: `${hoveredImage.x}px`,
+            top: `${hoveredImage.y}px`,
+            transform: 'translate(-50%, -100%)',
+          }}
+        >
+          <img src={hoveredImage.url} alt="Preview" />
+        </div>,
+        document.body
+      )}
 
-      {/* Media Library Modal */}
-      <MediaLibraryModal
-        isOpen={showMediaLibrary}
-        onClose={() => setShowMediaLibrary(false)}
-        mode={SelectionMode.SELECT}
-        filterType={AssetType.IMAGE}
-        onSelect={handleMediaLibrarySelect}
-      />
-    </div>
+      <div className="multi-image-upload">
+        <div className="multi-image-upload__header">
+          <span className="multi-image-upload__title">
+            {config.mode === 'frames' ? '首尾帧图片' : '参考图片'}
+          </span>
+          <span className="multi-image-upload__hint">
+            {config.mode === 'frames'
+              ? '可上传首帧和尾帧图片（可选）'
+              : `最多上传 ${maxCount} 张参考图（可选）`}
+          </span>
+        </div>
+        <div className="multi-image-upload__slots">
+          {Array.from({ length: maxCount }, (_, i) => renderUploadSlot(i))}
+        </div>
+
+        {/* Media Library Modal */}
+        <MediaLibraryModal
+          isOpen={showMediaLibrary}
+          onClose={() => setShowMediaLibrary(false)}
+          mode={SelectionMode.SELECT}
+          filterType={AssetType.IMAGE}
+          onSelect={handleMediaLibrarySelect}
+        />
+      </div>
+    </>
   );
 };
 

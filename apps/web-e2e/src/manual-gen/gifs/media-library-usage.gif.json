@@ -1,0 +1,137 @@
+{
+  "id": "media-library-usage",
+  "name": "素材库操作演示",
+  "output": "素材库操作演示.gif",
+  "targetPage": "advanced/media-library",
+  "preWait": 1000,
+  "postWait": 2000,
+  "actions": [
+    {
+      "type": "keyHint",
+      "key": "素材库",
+      "hint": "打开素材库",
+      "duration": 1500
+    },
+    {
+      "type": "click",
+      "target": ".tool-icon.t-popup-open > .tool-icon__icon > svg",
+      "label": "打开素材库",
+      "wait": 1500
+    },
+    {
+      "type": "keyHint",
+      "key": "上传",
+      "hint": "上传图片到素材库",
+      "duration": 1500
+    },
+    {
+      "type": "click",
+      "target": "testid:media-library-grid",
+      "label": "上传按钮",
+      "wait": 1500
+    },
+    {
+      "type": "keyHint",
+      "key": "视图模式",
+      "hint": "切换视图模式",
+      "duration": 1500
+    },
+    {
+      "type": "click",
+      "target": "role:button[name='紧凑网格']",
+      "label": "紧凑网格",
+      "wait": 1000,
+      "optional": true
+    },
+    {
+      "type": "click",
+      "target": "role:button[name='列表视图']",
+      "label": "列表视图",
+      "wait": 1000,
+      "optional": true
+    },
+    {
+      "type": "click",
+      "target": "role:button[name='默认网格']",
+      "label": "默认网格",
+      "wait": 1000,
+      "optional": true
+    },
+    {
+      "type": "keyHint",
+      "key": "批量操作",
+      "hint": "批量选择素材",
+      "duration": 1500
+    },
+    {
+      "type": "click",
+      "target": "role:button[name='批量选择']",
+      "label": "批量选择",
+      "wait": 1500,
+      "optional": true
+    },
+    {
+      "type": "click",
+      "target": "role:button[name='取消']",
+      "label": "取消选择",
+      "wait": 1000,
+      "optional": true
+    },
+    {
+      "type": "keyHint",
+      "key": "缩放",
+      "hint": "调整缩略图大小",
+      "duration": 1500
+    },
+    {
+      "type": "wait",
+      "duration": 1000
+    },
+    {
+      "type": "keyHint",
+      "key": "下载",
+      "hint": "下载素材",
+      "duration": 1500
+    },
+    {
+      "type": "click",
+      "target": "role:button[name='下载']",
+      "label": "下载",
+      "wait": 1000,
+      "optional": true
+    },
+    {
+      "type": "keyHint",
+      "key": "插入",
+      "hint": "插入到画布",
+      "duration": 1500
+    },
+    {
+      "type": "click",
+      "target": "role:button[name='插入']",
+      "label": "插入",
+      "wait": 1500,
+      "optional": true
+    },
+    {
+      "type": "keyHint",
+      "key": "排序",
+      "hint": "切换排序方式",
+      "duration": 1500
+    },
+    {
+      "type": "click",
+      "target": ".lucide.lucide-arrow-down-za",
+      "label": "排序",
+      "wait": 1000,
+      "optional": true
+    },
+    {
+      "type": "click",
+      "target": ".media-library-grid__sort-options > div:nth-child(3)",
+      "label": "按大小排序",
+      "wait": 1000,
+      "optional": true
+    }
+  ]
+}

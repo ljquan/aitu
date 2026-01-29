@@ -159,9 +159,19 @@ const Leaf: React.FC<RenderLeafProps> = ({ children, leaf, attributes }) => {
     children = <em>{children}</em>;
   }
 
-  if ((leaf as CustomText).underlined) {
-    children = <u>{children}</u>;
+  // 下划线和删除线统一通过 CSS 实现，以支持自定义样式和颜色
+  // 不再使用 <u> 和 <s> 标签，避免 DOM 结构变化导致的渲染问题
+
+  // 上标支持
+  if ((leaf as any).superscript) {
+    children = <sup>{children}</sup>;
   }
+
+  // 下标支持
+  if ((leaf as any).subscript) {
+    children = <sub>{children}</sub>;
+  }
+
   const customText = leaf as CustomText;
   const fontSize = customText['font-size'];
 
@@ -172,6 +182,12 @@ const Leaf: React.FC<RenderLeafProps> = ({ children, leaf, attributes }) => {
   const textGradient = (leaf as any)['text-gradient'];
   const lineHeight = (leaf as any)['line-height'];
   const letterSpacing = (leaf as any)['letter-spacing'];
+  const backgroundColor = (leaf as any)['background-color'];
+  const textTransform = (leaf as any)['text-transform'];
+  const textStroke = (leaf as any)['text-stroke'];
+  const textStrokeColor = (leaf as any)['text-stroke-color'];
+  const textDecorationStyle = (leaf as any)['text-decoration-style'];
+  const textDecorationColor = (leaf as any)['text-decoration-color'];
 
   const style: CSSProperties = {
     color: customText.color,
@@ -182,7 +198,33 @@ const Leaf: React.FC<RenderLeafProps> = ({ children, leaf, attributes }) => {
     textShadow: textShadow || undefined,
     lineHeight: lineHeight || undefined,
     letterSpacing: letterSpacing || undefined,
+    // 新增样式
+    backgroundColor: backgroundColor || undefined,
+    textTransform: textTransform || undefined,
   };
+
+  // 文字描边
+  if (textStroke) {
+    (style as any).WebkitTextStroke = `${textStroke}px ${textStrokeColor || '#000000'}`;
+  }
+
+  // 下划线/删除线 - 统一使用 CSS 实现
+  const isUnderlined = (leaf as CustomText).underlined;
+  const isStrikethrough = (leaf as any).strikethrough;
+  
+  if (isUnderlined || isStrikethrough) {
+    const decorations: string[] = [];
+    if (isUnderlined) decorations.push('underline');
+    if (isStrikethrough) decorations.push('line-through');
+    
+    style.textDecoration = decorations.join(' ');
+    if (textDecorationStyle) {
+      style.textDecorationStyle = textDecorationStyle as any;
+    }
+    if (textDecorationColor) {
+      style.textDecorationColor = textDecorationColor;
+    }
+  }
 
   // 如果有文字渐变，设置渐变相关样式
   if (textGradient) {

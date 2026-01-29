@@ -1,6 +1,6 @@
 import { getSelectedElements, PlaitBoard } from '@plait/core';
-import { base64ToBlob } from '@aitu/utils';
-import { boardToImage, download } from './common';
+import { base64ToBlob, download } from '@aitu/utils';
+import { boardToImage } from './common';
 import { fileOpen } from '../data/filesystem';
 import { IMAGE_MIME_TYPES } from '../constants';
 import { insertImage } from '../data/image';

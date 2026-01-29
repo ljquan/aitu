@@ -22,6 +22,12 @@ export interface ImageViewerOptions {
   enableKeyboard?: boolean;
 }
 
+// 检测是否为移动设备
+const isMobileDevice = (): boolean => {
+  return window.innerWidth <= 768 || 
+    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+};
+
 export class ImageViewer {
   private options: Required<ImageViewerOptions>;
   private viewer: Viewer | null = null;
@@ -55,26 +61,42 @@ export class ImageViewer {
     this.container.appendChild(img);
     document.body.appendChild(this.container);
 
+    // 移动端使用精简的 toolbar
+    const isMobile = isMobileDevice();
+    const toolbar = isMobile ? {
+      zoomIn: 1,
+      zoomOut: 1,
+      oneToOne: 0,
+      reset: 1,
+      prev: 0,
+      play: 0,
+      next: 0,
+      rotateLeft: 1,
+      rotateRight: 1,
+      flipHorizontal: 0,
+      flipVertical: 0,
+    } : {
+      zoomIn: 1,
+      zoomOut: 1,
+      oneToOne: 1,
+      reset: 1,
+      prev: 0,
+      play: 0,
+      next: 0,
+      rotateLeft: 1,
+      rotateRight: 1,
+      flipHorizontal: 1,
+      flipVertical: 1,
+    };
+
     // 创建 ViewerJS 实例
     this.viewer = new Viewer(this.container, {
       inline: false,
       button: true,
       navbar: false,
       title: !!alt,
-      toolbar: {
-        zoomIn: 1,
-        zoomOut: 1,
-        oneToOne: 1,
-        reset: 1,
-        prev: 0,
-        play: 0,
-        next: 0,
-        rotateLeft: 1,
-        rotateRight: 1,
-        flipHorizontal: 1,
-        flipVertical: 1,
-      },
-      fullscreen: true,
+      toolbar,
+      fullscreen: !isMobile, // 移动端禁用全屏按钮
       keyboard: this.options.enableKeyboard,
       backdrop: true,
       loading: true,

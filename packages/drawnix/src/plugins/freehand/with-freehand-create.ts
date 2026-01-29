@@ -11,7 +11,7 @@ import { createFreehandElement, getFreehandPointers } from './utils';
 import { Freehand, FreehandShape } from './type';
 import { FreehandGenerator } from './freehand.generator';
 import { FreehandSmoother } from './smoother';
-import { getFreehandSettings, FreehandStrokeStyle } from './freehand-settings';
+import { BrushShape, getFreehandSettings, FreehandStrokeStyle } from './freehand-settings';
 
 export const withFreehandCreate = (board: PlaitBoard) => {
   const { pointerDown, pointerMove, pointerUp, globalPointerUp } = board;
@@ -41,6 +41,7 @@ export const withFreehandCreate = (board: PlaitBoard) => {
     strokeWidth: number;
     strokeColor: string;
     strokeStyle: FreehandStrokeStyle;
+    pencilShape: BrushShape;
     pressureEnabled: boolean;
   } | null = null;
 
@@ -56,6 +57,7 @@ export const withFreehandCreate = (board: PlaitBoard) => {
         strokeWidth: settings.strokeWidth,
         strokeColor: settings.strokeColor,
         strokeStyle: settings.strokeStyle,
+        pencilShape: settings.pencilShape,
         pressureEnabled: settings.pressureEnabled,
       };
     }
@@ -129,7 +131,10 @@ export const withFreehandCreate = (board: PlaitBoard) => {
       }
       const settings = getCurrentSettings();
       temporaryElement = createFreehandElement(pointer, points, {
-        ...settings,
+        strokeWidth: settings.strokeWidth,
+        strokeColor: settings.strokeColor,
+        strokeStyle: settings.strokeStyle,
+        brushShape: settings.pencilShape,
         pressures: settings.pressureEnabled ? pressures : undefined,
       });
     }
@@ -201,7 +206,10 @@ export const withFreehandCreate = (board: PlaitBoard) => {
         
         const pointer = PlaitBoard.getPointer(board) as FreehandShape;
         temporaryElement = createFreehandElement(pointer, points, {
-          ...settings,
+          strokeWidth: settings.strokeWidth,
+          strokeColor: settings.strokeColor,
+          strokeStyle: settings.strokeStyle,
+          brushShape: settings.pencilShape,
           pressures: settings.pressureEnabled ? pressures : undefined,
         });
         generator.processDrawing(

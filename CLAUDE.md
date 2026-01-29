@@ -142,6 +142,8 @@ Service Worker (后台执行)
 11. **外部 API 调用频率**：低频刷新的外部接口必须使用单例控制调用频率
 12. **共享模块设计**：相似功能提取到 `*-core.ts` 核心模块，通过配置类型区分行为
 13. **同名模块隔离**：多个同名模块有独立全局状态，确保从正确的模块路径导入
+14. **工作区初始化**：`getCurrentBoard()` 返回 `null` 但 `hasBoards()` 为 `true` 时，必须自动选择第一个画板，不能只在 "无画板" 时创建新画板
+15. **工具函数组织**：通用工具函数放 `@aitu/utils`，使用时直接导入，禁止在业务包中二次导出
 
 ### Service Worker 规则
 
@@ -151,6 +153,9 @@ Service Worker (后台执行)
 4. 更新后禁止自动刷新页面，需用户确认
 5. SW 枚举值使用小写（`'completed'`、`'image'`、`'video'`），读取 SW 数据时注意匹配
 6. 无效配置下创建的任务不应在后续被执行，首次初始化时应清除"孤儿任务"
+7. 跨层数据转换必须传递所有字段，特别是 `options`、`metadata` 等可选字段，遗漏会导致功能静默失败
+8. **Cache.put() 会消费 Response body**：需要缓存到多个 key 时，为每个 key 创建独立的 Response 对象，不要复用后 clone
+9. **fetchOptions 优先级**：优先尝试 `cors` 模式（可缓存），最后才尝试 `no-cors` 模式（无法缓存）
 
 ### React 规则
 
@@ -158,15 +163,19 @@ Service Worker (后台执行)
 2. Hover 延迟操作需要正确的计时器清理
 3. 第三方窗口需用 `createPortal` 保持 React 事件流
 4. 模式切换时多个相关状态需同步更新，封装成一个函数而非直接暴露底层 setMode
-4. 图标组件使用 `React.FC`，支持 `size` 属性
-5. 传递组件作为 prop 时必须实例化：`icon={<Icon />}` 而非 `icon={Icon}`
-6. 内联 style 的 `undefined` 值会覆盖 CSS 类，需要 CSS 类生效时传 `style={undefined}`
+5. 图标组件使用 `React.FC`，支持 `size` 属性
+6. 传递组件作为 prop 时必须实例化：`icon={<Icon />}` 而非 `icon={Icon}`
+7. 内联 style 的 `undefined` 值会覆盖 CSS 类，需要 CSS 类生效时传 `style={undefined}`
+8. Flex 布局中使用 `flex: 1` 时，若兄弟元素可隐藏，内部组件需设 `max-width` 防止变形
+9. `useCallback` 定义必须在引用它的 `useEffect` 之前，否则会报 TDZ 错误
+10. Slate-React Leaf 组件 DOM 结构必须稳定，不能根据条件切换标签/CSS 实现方式
 
 ### 缓存规则
 
 1. IndexedDB 元数据必须验证 Cache Storage 实际数据存在
 2. 本地缓存图片只存 Cache Storage，不存 IndexedDB 元数据
 3. Cache API 返回前必须验证响应有效性（`blob.size > 0`）
+4. **Cache.put() 会消费 Response body**：需要缓存到多个 key 时，为每个 key 创建独立的 Response 对象
 
 ---
 
@@ -183,6 +192,9 @@ Service Worker (后台执行)
 ### UI 规范
 
 - **Tooltips**：始终使用 `theme='light'`，高层级容器内需显式设置更高 `zIndex` (如 20000)
+- **媒体预览**：统一使用 `UnifiedMediaViewer` 公共组件，禁止自定义 Dialog 实现
+- **生成结果缩略图**：使用 `object-fit: contain` 完整展示，禁止 cover 裁切
+- **小图 hover 预览**：缩略图应提供 hover 大图预览功能（Portal 渲染到 body）
 - **状态表意**：优先使用量化组件（如信号格）而非单一颜色圆点来展示程度差异
 - **按钮圆角**：8px
 - **卡片圆角**：12px

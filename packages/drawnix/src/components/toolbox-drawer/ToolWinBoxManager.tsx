@@ -5,7 +5,7 @@
  * 支持最小化、常驻工具栏等功能
  */
 
-import React, { useEffect, useState, Suspense, useCallback } from 'react';
+import React, { useEffect, useState, Suspense, useCallback, useMemo } from 'react';
 import { PlaitBoard, getViewportOrigination } from '@plait/core';
 import { WinBoxWindow } from '../winbox';
 import { toolWindowService } from '../../services/tool-window-service';
@@ -16,6 +16,7 @@ import { useDrawnix } from '../../hooks/use-drawnix';
 import { ToolTransforms } from '../../plugins/with-tool';
 import { DEFAULT_TOOL_CONFIG } from '../../constants/built-in-tools';
 import { processToolUrl } from '../../utils/url-template';
+import { useDeviceType } from '../../hooks/useDeviceType';
 
 /**
  * 工具弹窗管理器组件
@@ -24,6 +25,7 @@ export const ToolWinBoxManager: React.FC = () => {
   const [toolStates, setToolStates] = useState<ToolWindowState[]>([]);
   const { language } = useI18n();
   const { board } = useDrawnix();
+  const { isMobile, isTablet, viewportWidth, viewportHeight } = useDeviceType();
 
   useEffect(() => {
     const subscription = toolWindowService.observeToolStates().subscribe(states => {
@@ -32,6 +34,26 @@ export const ToolWinBoxManager: React.FC = () => {
     
     return () => subscription.unsubscribe();
   }, []);
+
+  /**
+   * 计算窗口尺寸，确保不超出视口
+   */
+  const getWindowSize = useCallback((tool: ToolDefinition, savedSize?: { width: number; height: number }) => {
+    const defaultWidth = savedSize?.width || tool.defaultWidth || 800;
+    const defaultHeight = savedSize?.height || tool.defaultHeight || 600;
+    
+    // 移动端/平板端限制窗口尺寸
+    if (isMobile || isTablet) {
+      const maxWidth = viewportWidth - 16; // 留出边距
+      const maxHeight = viewportHeight - 60; // 留出标题栏和边距
+      return {
+        width: Math.min(defaultWidth, maxWidth),
+        height: Math.min(defaultHeight, maxHeight),
+      };
+    }
+    
+    return { width: defaultWidth, height: defaultHeight };
+  }, [isMobile, isTablet, viewportWidth, viewportHeight]);
 
   /**
    * 处理工具最小化
@@ -138,6 +160,9 @@ export const ToolWinBoxManager: React.FC = () => {
         // 确定窗口是否可见
         const isVisible = status === 'open';
         
+        // 计算窗口尺寸（移动端限制不超出屏幕）
+        const windowSize = getWindowSize(tool, size);
+        
         return (
           <WinBoxWindow
             key={tool.id}
@@ -145,8 +170,8 @@ export const ToolWinBoxManager: React.FC = () => {
             visible={isVisible}
             keepAlive={true}
             title={tool.name}
-            width={size?.width || tool.defaultWidth || 800}
-            height={size?.height || tool.defaultHeight || 600}
+            width={windowSize.width}
+            height={windowSize.height}
             x={position?.x}
             y={position?.y}
             onClose={() => toolWindowService.closeTool(tool.id)}

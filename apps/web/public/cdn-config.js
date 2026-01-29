@@ -21,7 +21,6 @@
                       window.location.hostname.endsWith('.localhost');
   
   if (isDevelopment) {
-    console.log('[CDN Config] 开发模式，跳过 CDN 检测');
     window.__AITU_CDN__ = { cdn: 'local', latency: 0, timestamp: Date.now(), isDevelopment: true };
     window.__AITU_CDN_API__ = {
       selectBestCDN: function() { return Promise.resolve(window.__AITU_CDN__); },
@@ -100,7 +99,6 @@
       if (cached) {
         var data = JSON.parse(cached);
         if (Date.now() - data.timestamp < CONFIG.cacheExpiry) {
-          console.log('[CDN Config] Using cached CDN preference:', data.cdn);
           window.__AITU_CDN__ = data;
           return Promise.resolve(data);
         }
@@ -119,7 +117,6 @@
         .sort(function(a, b) { return a.latency - b.latency; });
 
       if (successfulResults.length === 0) {
-        console.warn('[CDN Config] No CDN available, using local');
         return { cdn: 'local', latency: 0, timestamp: Date.now(), allResults: results };
       }
 
@@ -138,9 +135,6 @@
         // 忽略存储错误
       }
 
-      console.log('[CDN Config] Selected CDN:', best.name, '(' + best.latency + 'ms)');
-      console.log('[CDN Config] All results:', results);
-      
       // 暴露到全局变量供 SW 使用
       window.__AITU_CDN__ = preference;
       
@@ -171,7 +165,6 @@
     try {
       localStorage.removeItem(CONFIG.storageKey);
       delete window.__AITU_CDN__;
-      console.log('[CDN Config] Cache cleared');
     } catch (e) {
       // 忽略
     }

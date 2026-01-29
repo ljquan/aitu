@@ -147,6 +147,98 @@
     margin-left: 8px;
     flex-shrink: 0;
   }
+
+  // 工具栏分隔线
+  .toolbar-divider {
+    width: 1px;
+    height: 20px;
+    background: #e0e0e0;
+    margin: 0 4px;
+    flex-shrink: 0;
+  }
+
+  // 精确擦除开关
+  .precise-eraser-switch {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 6px;
+    flex-shrink: 0;
+    
+    .switch-label {
+      font-size: 12px;
+      color: #666;
+      white-space: nowrap;
+      user-select: none;
+    }
+  }
+
+  // 画笔形状选择器
+  .pencil-shape-picker {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px;
+    margin-left: 4px;
+    background: rgba(0, 0, 0, 0.04);
+    border-radius: 6px;
+
+    .pencil-shape-button {
+      height: 28px;
+      width: 28px;
+      min-width: 28px;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+      transition: all 0.15s ease;
+      color: #666;
+
+      &.active {
+        background: #ffffff;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        color: #333;
+      }
+
+      &:hover:not(.active) {
+        background: rgba(0, 0, 0, 0.04);
+      }
+    }
+  }
+
+  // 橡皮擦形状选择器
+  .eraser-shape-picker {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px;
+    background: rgba(0, 0, 0, 0.04);
+    border-radius: 6px;
+
+    .eraser-shape-button {
+      height: 28px;
+      width: 28px;
+      min-width: 28px;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+      transition: all 0.15s ease;
+      color: #666;
+
+      &.active {
+        background: #ffffff;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        color: #333;
+      }
+
+      &:hover:not(.active) {
+        background: rgba(0, 0, 0, 0.04);
+      }
+    }
+  }
 }
 
 // 颜色选择器弹出层
@@ -183,5 +275,112 @@
   // Slider 容器微调
   .t-slider {
     padding: 0 4px !important;
+  }
+}
+
+// ============================================================================
+// Mobile Responsive Styles
+// ============================================================================
+
+// 平板及以下 (max-width: 768px)
+@media (max-width: 768px) {
+  .pencil-settings-toolbar {
+    // 限制最大宽度，给右侧缩放控制留出更多空间
+    max-width: calc(100vw - 260px);
+    
+    .island {
+      // 支持水平滚动
+      overflow-x: auto;
+      overflow-y: hidden;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      flex-wrap: nowrap;
+      padding: 3px 4px !important;
+      gap: 2px;
+      
+      &::-webkit-scrollbar {
+        display: none;
+      }
+    }
+    
+    // 隐藏光标预览点（节省空间）
+    .cursor-preview-dot {
+      display: none;
+    }
+    
+    // 按钮不收缩，尺寸更紧凑
+    .pencil-color-button,
+    .pencil-width-button,
+    .size-picker-button {
+      flex-shrink: 0;
+      height: 26px;
+      width: 26px;
+      min-width: 26px;
+    }
+    
+    
+    // 描边样式选择器不收缩
+    .pencil-stroke-style-picker,
+    .eraser-shape-picker {
+      flex-shrink: 0;
+      padding: 1px;
+      gap: 1px;
+      
+      .pencil-stroke-style-button,
+      .eraser-shape-button {
+        height: 24px;
+        width: 24px;
+        min-width: 24px;
+      }
+    }
+    
+    // 隐藏输入框，使用按钮弹出选择
+    .pencil-width-input-wrapper,
+    .size-picker-input-wrapper {
+      display: none;
+    }
+    
+    // 紧凑的分隔线
+    .toolbar-divider {
+      height: 14px;
+      margin: 0 1px;
+      flex-shrink: 0;
+    }
+    
+    // 精确擦除开关更紧凑，隐藏文字
+    .precise-eraser-switch {
+      flex-shrink: 0;
+      padding: 2px;
+      
+      .switch-label {
+        display: none;
+      }
+    }
+    
+    // 压力感应开关不收缩，确保显示
+    .pencil-pressure-switch {
+      flex-shrink: 0;
+      margin-left: 4px;
+    }
+  }
+}
+
+// 移动端竖屏 (max-width: 640px)
+@media (max-width: 640px) {
+  .pencil-settings-toolbar {
+    // 进一步限制最大宽度
+    max-width: calc(100vw - 200px);
+  }
+}
+
+// 小屏移动端 (max-width: 480px)
+@media (max-width: 480px) {
+  .pencil-settings-toolbar {
+    max-width: calc(100vw - 220px);
+    
+    // 进一步紧凑化
+    .island {
+      padding: 2px 3px !important;
+    }
   }
 }

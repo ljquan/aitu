@@ -1,0 +1,78 @@
+{
+  "id": "model-selector",
+  "name": "模型选择器演示",
+  "output": "模型选择器.gif",
+  "targetPage": "ai-features/model-selection",
+  "preWait": 1500,
+  "postWait": 2000,
+  "actions": [
+    {
+      "type": "keyHint",
+      "key": "模型",
+      "hint": "选择生成模型",
+      "duration": 1500
+    },
+    {
+      "type": "click",
+      "target": "testid:ai-input-bar .model-dropdown__trigger",
+      "label": "打开模型列表",
+      "wait": 1500,
+      "optional": true
+    },
+    {
+      "type": "keyHint",
+      "key": "浏览",
+      "hint": "浏览可用模型",
+      "duration": 1500
+    },
+    {
+      "type": "scroll",
+      "target": ".model-dropdown__menu",
+      "direction": "down",
+      "amount": 80,
+      "wait": 1000,
+      "optional": true
+    },
+    {
+      "type": "scroll",
+      "target": ".model-dropdown__menu",
+      "direction": "down",
+      "amount": 80,
+      "wait": 1000,
+      "optional": true
+    },
+    {
+      "type": "keyHint",
+      "key": "健康",
+      "hint": "模型健康状态指示",
+      "duration": 1500
+    },
+    {
+      "type": "wait",
+      "duration": 1000
+    },
+    {
+      "type": "keyHint",
+      "key": "选择",
+      "hint": "选择模型",
+      "duration": 1000
+    },
+    {
+      "type": "click",
+      "target": ".model-dropdown__item:has-text('imagen')",
+      "label": "选择 Imagen",
+      "wait": 1500,
+      "optional": true
+    },
+    {
+      "type": "keyHint",
+      "key": "快捷码",
+      "hint": "模型快捷代码显示",
+      "duration": 1500
+    },
+    {
+      "type": "wait",
+      "duration": 1000
+    }
+  ]
+}

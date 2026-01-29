@@ -26,6 +26,7 @@ import {
 import { taskQueueStorage } from './storage';
 import { sendToClient, sendToClientById } from './utils/message-bus';
 import { migrateBase64UrlIfNeeded } from './utils/media-generation-utils';
+import { isPostMessageLoggerDebugMode } from './postmessage-logger';
 
 // Handler imports
 import { ImageHandler } from './handlers/image';
@@ -197,7 +198,7 @@ export class SWTaskQueue {
       return true;
     }
 
-    // Resume pending tasks
+    // Resume legacy PENDING tasks (deprecated: new tasks start as PROCESSING)
     if (task.status === TaskStatus.PENDING) {
       return true;
     }
@@ -289,8 +290,26 @@ export class SWTaskQueue {
 
       this.executeResume(task, task.remoteId);
     } else if (task.status === TaskStatus.PENDING) {
-      // Re-execute pending tasks
-      this.processQueue();
+      // Handle legacy PENDING tasks - convert to PROCESSING and execute directly
+      const now = Date.now();
+      task.status = TaskStatus.PROCESSING;
+      task.startedAt = now;
+      task.updatedAt = now;
+      task.executionPhase = TaskExecutionPhase.SUBMITTING;
+      this.tasks.set(task.id, task);
+      this.runningTasks.add(task.id);
+      
+      await taskQueueStorage.saveTask(task);
+      
+      this.broadcastToClients({
+        type: 'TASK_STATUS',
+        taskId: task.id,
+        status: task.status,
+        phase: task.executionPhase,
+        updatedAt: task.updatedAt,
+      });
+      
+      this.executeTaskInternal(task);
     } else if (
       // Video/Character task in processing but no remoteId - try to recover from LLM API logs
       (task.type === TaskType.VIDEO || task.type === TaskType.CHARACTER) &&
@@ -393,18 +412,23 @@ export class SWTaskQueue {
     await this.storageRestorePromise;
 
     // If this is first-time initialization (no saved config before),
-    // clear all PENDING tasks created without valid API key
+    // clear orphan tasks created without valid API key:
+    // - PENDING tasks (legacy)
+    // - PROCESSING tasks without remoteId (never actually started execution)
     if (!this.hadSavedConfig) {
-      const pendingTasksToRemove: string[] = [];
+      const orphanTasksToRemove: string[] = [];
       for (const task of this.tasks.values()) {
-        if (task.status === TaskStatus.PENDING) {
-          pendingTasksToRemove.push(task.id);
+        const isOrphan = 
+          task.status === TaskStatus.PENDING ||
+          (task.status === TaskStatus.PROCESSING && !task.remoteId && !this.runningTasks.has(task.id));
+        if (isOrphan) {
+          orphanTasksToRemove.push(task.id);
         }
       }
       
-      if (pendingTasksToRemove.length > 0) {
-        console.log(`[SWTaskQueue] First-time init: clearing ${pendingTasksToRemove.length} orphan PENDING tasks created without API key`);
-        for (const taskId of pendingTasksToRemove) {
+      if (orphanTasksToRemove.length > 0) {
+        console.log(`[SWTaskQueue] First-time init: clearing ${orphanTasksToRemove.length} orphan tasks created without API key`);
+        for (const taskId of orphanTasksToRemove) {
           this.tasks.delete(taskId);
           await taskQueueStorage.deleteTask(taskId);
         }
@@ -475,23 +499,58 @@ export class SWTaskQueue {
       return;
     }
 
-    // Check for duplicate by taskId only
+    // Check for duplicate by taskId
     if (this.tasks.has(taskId)) {
-      console.warn(`[SWTaskQueue] Task ${taskId} already exists`);
+      console.warn(`[SWTaskQueue] Task ${taskId} already exists, skipping duplicate submit`);
       return;
+    }
+
+    // Check for similar task with same prompt that's already processing or pending
+    // This prevents duplicate submissions after page refresh
+    // NOTE: Skip this check for batch generation (tasks with batchId)
+    // batchId indicates intentional batch generation, not accidental duplicate submission
+    if (!params.batchId) {
+      const existingTask = Array.from(this.tasks.values()).find(
+        t => (t.status === TaskStatus.PROCESSING || t.status === TaskStatus.PENDING) &&
+             t.type === taskType &&
+             t.params.prompt === params.prompt
+      );
+      if (existingTask) {
+        console.warn(
+          `[SWTaskQueue] Similar task ${existingTask.id} with same prompt already ${existingTask.status}, skipping duplicate`
+        );
+        // Broadcast the existing task's status to sync the client
+        this.broadcastToClients({
+          type: 'TASK_STATUS',
+          taskId: existingTask.id,
+          status: existingTask.status,
+          progress: existingTask.progress,
+          phase: existingTask.executionPhase,
+          updatedAt: existingTask.updatedAt,
+        });
+        return;
+      }
+    }
+
+    // Debug logging for task submission
+    if (isPostMessageLoggerDebugMode()) {
+      console.log(`[SWTaskQueue] Submitting task ${taskId} (${taskType})`);
     }
 
     const now = Date.now();
     const task: SWTask = {
       id: taskId,
       type: taskType,
-      status: TaskStatus.PENDING,
+      status: TaskStatus.PROCESSING,
       params,
       createdAt: now,
       updatedAt: now,
+      startedAt: now,
+      executionPhase: TaskExecutionPhase.SUBMITTING,
     };
 
     this.tasks.set(taskId, task);
+    this.runningTasks.add(taskId);
 
     // Persist to IndexedDB
     await taskQueueStorage.saveTask(task);
@@ -502,8 +561,8 @@ export class SWTaskQueue {
       task,
     });
 
-    // console.log(`[SWTaskQueue] Task submitted: ${taskId}`);
-    this.processQueue();
+    // Execute task immediately (no PENDING state, direct execution)
+    this.executeTaskInternal(task);
   }
 
   /**
@@ -556,10 +615,14 @@ export class SWTaskQueue {
       }
     }
 
-    task.status = TaskStatus.PENDING;
+    const now = Date.now();
+    task.status = TaskStatus.PROCESSING;
     task.error = undefined;
-    task.updatedAt = Date.now();
+    task.startedAt = now;
+    task.updatedAt = now;
+    task.executionPhase = TaskExecutionPhase.SUBMITTING;
     this.tasks.set(taskId, task);
+    this.runningTasks.add(taskId);
 
     // Persist
     await taskQueueStorage.saveTask(task);
@@ -569,10 +632,12 @@ export class SWTaskQueue {
       type: 'TASK_STATUS',
       taskId: task.id,
       status: task.status,
+      phase: task.executionPhase,
       updatedAt: task.updatedAt,
     });
 
-    this.processQueue();
+    // Execute task immediately (no PENDING state, direct execution)
+    this.executeTaskInternal(task);
   }
 
   /**
@@ -827,7 +892,9 @@ export class SWTaskQueue {
   // ============================================================================
 
   /**
-   * Process the task queue
+   * Process the task queue (legacy compatibility only)
+   * Note: New tasks are created with PROCESSING status and executed immediately.
+   * This method only handles legacy PENDING tasks from older versions.
    */
   private processQueue(): void {
     if (!this.initialized) {
@@ -835,9 +902,9 @@ export class SWTaskQueue {
       return;
     }
 
-    // Get pending tasks
+    // Get legacy pending tasks that are not already running
     const pendingTasks = Array.from(this.tasks.values())
-      .filter((t) => t.status === TaskStatus.PENDING)
+      .filter((t) => t.status === TaskStatus.PENDING && !this.runningTasks.has(t.id))
       .sort((a, b) => a.createdAt - b.createdAt);
 
     // Execute all pending tasks immediately (no concurrent limit)
@@ -847,7 +914,8 @@ export class SWTaskQueue {
   }
 
   /**
-   * Execute a single task
+   * Execute a single task (called from processQueue for legacy PENDING tasks)
+   * For new tasks, use executeTaskInternal directly after setting up status
    */
   private async executeTask(task: SWTask): Promise<void> {
     if (!this.geminiConfig || !this.videoConfig) {
@@ -855,13 +923,34 @@ export class SWTaskQueue {
       return;
     }
 
+    // Prevent duplicate execution - check if already running
+    if (this.runningTasks.has(task.id)) {
+      console.warn(`[SWTaskQueue] Task ${task.id} is already running, skipping duplicate execution`);
+      return;
+    }
+
+    // Check if task is ready for execution (PENDING or PROCESSING without being in runningTasks)
+    const currentTask = this.tasks.get(task.id);
+    if (!currentTask) {
+      console.warn(`[SWTaskQueue] Task ${task.id} not found, skipping`);
+      return;
+    }
+    
+    // Skip if task is in terminal state
+    if (currentTask.status === TaskStatus.COMPLETED || 
+        currentTask.status === TaskStatus.FAILED || 
+        currentTask.status === TaskStatus.CANCELLED) {
+      console.warn(`[SWTaskQueue] Task ${task.id} is in terminal state (${currentTask.status}), skipping`);
+      return;
+    }
+
     this.runningTasks.add(task.id);
 
-    // Update status to processing
+    // Update status to processing (handles legacy PENDING tasks)
     task.status = TaskStatus.PROCESSING;
-    task.startedAt = Date.now();
+    task.startedAt = task.startedAt || Date.now();
     task.updatedAt = Date.now();
-    task.executionPhase = TaskExecutionPhase.SUBMITTING;
+    task.executionPhase = task.executionPhase || TaskExecutionPhase.SUBMITTING;
     this.tasks.set(task.id, task);
 
     // Persist status change
@@ -875,9 +964,23 @@ export class SWTaskQueue {
       updatedAt: task.updatedAt,
     });
 
+    // Execute the task
+    await this.executeTaskInternal(task);
+  }
+
+  /**
+   * Internal task execution - assumes task is already set to PROCESSING and in runningTasks
+   */
+  private async executeTaskInternal(task: SWTask): Promise<void> {
+    if (!this.geminiConfig || !this.videoConfig) {
+      console.warn('[SWTaskQueue] Config not set, cannot execute task:', task.id);
+      return;
+    }
+
     // 如果任务已经有 remoteId（视频/角色），则直接进入恢复流程，跳过提交阶段，只重试获取进度的接口
     if (task.remoteId && (task.type === TaskType.VIDEO || task.type === TaskType.CHARACTER)) {
       task.executionPhase = TaskExecutionPhase.POLLING;
+      task.updatedAt = Date.now();
       // 更新存储
       await taskQueueStorage.saveTask(task);
       
@@ -940,6 +1043,8 @@ export class SWTaskQueue {
             taskId,
             remoteId,
           });
+        } else {
+          console.warn(`[SW:TaskQueue] onRemoteId: task ${taskId} not found in tasks map`);
         }
       },
     };
@@ -1033,7 +1138,10 @@ export class SWTaskQueue {
     const task = this.tasks.get(taskId);
     if (!task) return;
 
-    // console.log('[TaskQueue] Task completed:', taskId, 'result:', JSON.stringify(result));
+    // Debug logging for task completion
+    if (isPostMessageLoggerDebugMode()) {
+      console.log(`[SWTaskQueue] Task ${taskId} (${task.type}) completed successfully`);
+    }
 
     task.status = TaskStatus.COMPLETED;
     task.result = result;
@@ -1052,6 +1160,7 @@ export class SWTaskQueue {
       taskId,
       result,
       completedAt: task.completedAt,
+      remoteId: task.remoteId, // Include remoteId for recovery
     });
 
     // Notify internal listeners
@@ -1067,6 +1176,11 @@ export class SWTaskQueue {
   private async handleTaskError(taskId: string, error: unknown): Promise<void> {
     const task = this.tasks.get(taskId);
     if (!task) return;
+
+    // Debug logging for task failure
+    if (isPostMessageLoggerDebugMode()) {
+      console.log(`[SWTaskQueue] Task ${taskId} (${task.type}) failed:`, error instanceof Error ? error.message : String(error));
+    }
 
     this.runningTasks.delete(taskId);
 
@@ -1145,10 +1259,27 @@ export class SWTaskQueue {
   /**
    * Broadcast message to all clients
    * This is the primary communication method - no longer targeting specific clients
+   * Uses includeUncontrolled: true to ensure messages reach all windows,
+   * including those that may be temporarily uncontrolled during SW updates or page refresh
    */
   private async broadcastToClients(message: SWToMainMessage): Promise<void> {
     try {
-      const clients = await this.sw.clients.matchAll({ type: 'window' });
+      const clients = await this.sw.clients.matchAll({
+        type: 'window',
+        includeUncontrolled: true,
+      });
+
+      // Debug logging for key message types
+      if (isPostMessageLoggerDebugMode()) {
+        const clientIds = clients.map(c => c.id.slice(-6)).join(', ');
+        console.log(
+          `[SWTaskQueue] Broadcasting ${message.type} to ${clients.length} clients [${clientIds}]`,
+          message.type === 'TASK_COMPLETED' || message.type === 'TASK_FAILED'
+            ? { taskId: (message as any).taskId }
+            : undefined
+        );
+      }
+
       for (const client of clients) {
         sendToClient(client, message);
       }

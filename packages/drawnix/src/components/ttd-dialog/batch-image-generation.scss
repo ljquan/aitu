@@ -510,7 +510,7 @@
     border: 1px solid #eee;
     flex-shrink: 0;
     box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-    img { width: 100%; height: 100%; object-fit: cover; }
+    img { width: 100%; height: 100%; object-fit: contain; }
     .remove-btn {
       position: absolute;
       top: -2px;
@@ -597,6 +597,23 @@
       gap: 10px;
     }
 
+    .empty-library {
+      grid-column: 1 / -1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 32px 16px;
+      text-align: center;
+      color: #999;
+      font-size: 13px;
+      line-height: 1.5;
+      background: #fafafa;
+      border-radius: 8px;
+      border: 1px dashed #e0e0e0;
+      white-space: nowrap;
+    }
+
     .library-image {
       aspect-ratio: 1;
       border-radius: 8px;
@@ -610,7 +627,7 @@
         transform: translateY(-2px);
         box-shadow: 0 4px 12px rgba(0,0,0,0.1);
       }
-      img { width: 100%; height: 100%; object-fit: cover; }
+      img { width: 100%; height: 100%; object-fit: contain; }
     }
   }
 
@@ -645,7 +662,7 @@
     flex-shrink: 0;
     background: #fff;
     box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-    img { width: 100%; height: 100%; object-fit: cover; }
+    img { width: 100%; height: 100%; object-fit: contain; }
     &.clickable {
       cursor: pointer;
       transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -731,4 +748,218 @@
   color: #F39C12 !important;
   background: rgba(243, 156, 18, 0.1) !important;
   border-color: rgba(243, 156, 18, 0.3) !important;
+}
+
+// 移动端响应式适配
+@media (max-width: 768px) {
+  .batch-image-generation {
+    flex-direction: column;
+    padding: 8px;
+    gap: 8px;
+
+    .batch-main-content {
+      padding: 12px;
+      border-radius: 8px;
+    }
+
+    // 工具栏移动端优化
+    .batch-toolbar {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 8px;
+      margin-bottom: 8px;
+      padding-bottom: 8px;
+
+      .toolbar-left,
+      .toolbar-right {
+        justify-content: flex-start;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .toolbar-divider {
+        display: none;
+      }
+    }
+
+    .batch-generate-btn {
+      padding: 0 12px !important;
+      font-size: 13px !important;
+    }
+
+    // 表格容器移动端优化
+    .excel-table-container {
+      border-radius: 6px;
+    }
+
+    .excel-table {
+      th, td {
+        font-size: 11px;
+      }
+
+      th {
+        height: 36px;
+      }
+
+      .row-number {
+        width: 32px;
+        min-width: 32px;
+        padding: 4px;
+        font-size: 10px;
+      }
+
+      .col-checkbox {
+        width: 32px;
+        min-width: 32px;
+      }
+
+      // 移动端列宽调整
+      .col-prompt { width: 150px; min-width: 150px; }
+      .col-size { width: 70px; min-width: 70px; }
+      .col-images { width: 100px; min-width: 100px; }
+      .col-count { width: 50px; min-width: 50px; }
+      .col-preview { width: 100px; min-width: 100px; }
+
+      .th-content {
+        padding: 0 4px;
+        font-size: 10px;
+      }
+
+      .column-fill-btn {
+        width: 16px !important;
+        height: 16px !important;
+        min-height: 16px !important;
+        margin-left: 4px;
+      }
+    }
+
+    .excel-cell {
+      min-height: 36px;
+      padding: 6px 8px;
+      font-size: 12px;
+
+      &.cell-prompt {
+        .cell-text,
+        .cell-textarea {
+          padding: 8px !important;
+          font-size: 12px;
+        }
+      }
+
+      input[type="number"] {
+        height: 28px;
+        font-size: 12px;
+      }
+
+      .custom-size-dropdown {
+        .dropdown-trigger {
+          height: 28px;
+          font-size: 11px;
+          padding: 0 6px;
+        }
+      }
+    }
+
+    // 图片缩略图缩小
+    .cell-image-thumb,
+    .preview-thumb {
+      width: 28px;
+      height: 28px;
+      border-radius: 4px;
+    }
+
+    .add-image-btn {
+      width: 28px !important;
+      height: 28px !important;
+    }
+
+    // 图片库侧栏移动端隐藏或全屏
+    .image-library-sidebar {
+      width: 100%;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 1000;
+      border-radius: 0;
+      border: none;
+
+      &.hidden {
+        display: none;
+      }
+
+      .library-header {
+        padding: 12px;
+      }
+
+      .library-content {
+        padding: 12px;
+      }
+
+      .library-grid {
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
+      }
+    }
+
+    // 添加行区域
+    .add-rows-section {
+      padding: 8px 0;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .model-selector-wrapper {
+      min-width: 140px;
+    }
+
+    .hint-text {
+      margin-top: 8px;
+      font-size: 10px;
+    }
+  }
+}
+
+// 更小屏幕适配
+@media (max-width: 480px) {
+  .batch-image-generation {
+    padding: 4px;
+
+    .batch-main-content {
+      padding: 8px;
+    }
+
+    .batch-toolbar {
+      .toolbar-left,
+      .toolbar-right {
+        gap: 4px;
+      }
+    }
+
+    .excel-table {
+      .row-number,
+      .col-checkbox {
+        width: 28px;
+        min-width: 28px;
+      }
+
+      .col-prompt { width: 120px; min-width: 120px; }
+      .col-size { width: 60px; min-width: 60px; }
+      .col-images { width: 80px; min-width: 80px; }
+      .col-count { width: 40px; min-width: 40px; }
+      .col-preview { width: 80px; min-width: 80px; }
+    }
+
+    .cell-image-thumb,
+    .preview-thumb {
+      width: 24px;
+      height: 24px;
+    }
+
+    .add-image-btn {
+      width: 24px !important;
+      height: 24px !important;
+    }
+  }
 }

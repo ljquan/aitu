@@ -1,8 +1,5 @@
 import { IS_APPLE, IS_MAC, PlaitBoard, toImage, ToImageOptions } from '@plait/core';
 
-
-
-
 /**
  * Convert Plait board to image (Plait-specific)
  *
@@ -22,23 +19,6 @@ export const boardToImage = (
     ...options,
   });
 };
-
-/**
- * Trigger download of a Blob or MediaSource
- *
- * @param blob - Blob or MediaSource to download
- * @param filename - Filename for downloaded file
- */
-export function download(blob: Blob | MediaSource, filename: string) {
-  const a = document.createElement('a');
-  const url = window.URL.createObjectURL(blob);
-  a.href = url;
-  a.download = filename;
-  document.body.append(a);
-  a.click();
-  window.URL.revokeObjectURL(url);
-  a.remove();
-}
 
 /**
  * Format keyboard shortcut for current platform (Plait-specific)

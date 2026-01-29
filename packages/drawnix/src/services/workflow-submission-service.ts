@@ -27,6 +27,14 @@ import {
 
 export type WorkflowStepStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
 
+export interface WorkflowStepOptions {
+  mode?: 'async' | 'queue';
+  batchId?: string;
+  batchIndex?: number;
+  batchTotal?: number;
+  globalIndex?: number;
+}
+
 export interface WorkflowStep {
   id: string;
   mcp: string;
@@ -36,6 +44,7 @@ export interface WorkflowStep {
   result?: unknown;
   error?: string;
   duration?: number;
+  options?: WorkflowStepOptions;
 }
 
 export interface WorkflowDefinition {

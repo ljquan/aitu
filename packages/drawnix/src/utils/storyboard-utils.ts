@@ -6,12 +6,13 @@
  */
 
 import type { StoryboardScene } from '../types/video.types';
+import { generateId } from '@aitu/utils';
 
 /**
  * Generate a unique scene ID
  */
 export function generateSceneId(): string {
-  return `scene-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  return generateId('scene');
 }
 
 /**

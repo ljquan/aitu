@@ -116,6 +116,22 @@ export interface ViewerActions {
   setSlotCount: (count: 2 | 3 | 4) => void;
 }
 
+/** MediaViewport 暴露的方法（通过 ref） */
+export interface MediaViewportRef {
+  /** 重置视频进度到开始位置 */
+  resetVideo: () => void;
+  /** 播放视频 */
+  playVideo: () => void;
+  /** 暂停视频 */
+  pauseVideo: () => void;
+  /** 设置视频播放进度（秒） */
+  setVideoTime: (time: number) => void;
+  /** 获取视频当前时间（秒） */
+  getVideoTime: () => number;
+  /** 检查当前项是否为视频 */
+  isVideo: () => boolean;
+}
+
 /** MediaViewport Props */
 export interface MediaViewportProps {
   /** 媒体项 */
@@ -148,6 +164,12 @@ export interface MediaViewportProps {
   onDownload?: () => void;
   /** 编辑回调（仅图片） */
   onEdit?: () => void;
+  /** 视频播放状态变化回调（联动模式下使用） */
+  onVideoPlayStateChange?: (isPlaying: boolean) => void;
+  /** 视频时间更新回调（联动模式下使用） */
+  onVideoTimeUpdate?: (currentTime: number) => void;
+  /** 是否为联动模式（用于视频同步） */
+  isSyncMode?: boolean;
 }
 
 /** ThumbnailQueue Props */

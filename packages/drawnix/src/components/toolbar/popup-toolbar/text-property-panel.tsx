@@ -26,6 +26,17 @@ import {
   setTextLetterSpacing,
   getTextCustomMarks,
   getTextAlign,
+  toggleTextBold,
+  toggleTextItalic,
+  toggleTextUnderline,
+  toggleTextStrikethrough,
+  toggleTextSuperscript,
+  toggleTextSubscript,
+  setTextBackgroundColor,
+  setTextTransform,
+  setTextStroke,
+  setTextDecorationStyle,
+  setTextDecorationColor,
 } from '../../../transforms/property';
 import {
   SYSTEM_FONTS,
@@ -80,6 +91,22 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({
   const [textAlignState, setTextAlignState] = useState<'left' | 'center' | 'right'>('left');
   const [lineHeight, setLineHeight] = useState<number>(1.5);
   const [letterSpacing, setLetterSpacing] = useState<number>(0);
+
+  // 文本样式状态
+  const [isBold, setIsBold] = useState(false);
+  const [isItalic, setIsItalic] = useState(false);
+  const [isUnderline, setIsUnderline] = useState(false);
+  const [isStrikethrough, setIsStrikethrough] = useState(false);
+  const [isSuperscript, setIsSuperscript] = useState(false);
+  const [isSubscript, setIsSubscript] = useState(false);
+
+  // 扩展样式状态
+  const [bgColor, setBgColor] = useState<string | null>(null);
+  const [textTransform, setTextTransformState] = useState<string | null>(null);
+  const [strokeWidth, setStrokeWidth] = useState<number>(0);
+  const [strokeColor, setStrokeColor] = useState<string>('#000000');
+  const [decorationStyle, setDecorationStyle] = useState<string | null>(null);
+  const [decorationColor, setDecorationColor] = useState<string | null>(null);
 
   // 阴影状态
   const [shadowEnabled, setShadowEnabled] = useState(false);
@@ -194,6 +221,22 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({
       // 反显文本对齐
       const align = getTextAlign(board);
       setTextAlignState(align);
+
+      // 反显文本样式
+      setIsBold(!!marks.bold);
+      setIsItalic(!!marks.italic);
+      setIsUnderline(!!marks.underlined);
+      setIsStrikethrough(!!marks.strikethrough);
+      setIsSuperscript(!!marks.superscript);
+      setIsSubscript(!!marks.subscript);
+
+      // 反显扩展样式
+      setBgColor(marks['background-color'] || null);
+      setTextTransformState(marks['text-transform'] || null);
+      setStrokeWidth(marks['text-stroke'] || 0);
+      setStrokeColor(marks['text-stroke-color'] || '#000000');
+      setDecorationStyle(marks['text-decoration-style'] || null);
+      setDecorationColor(marks['text-decoration-color'] || null);
     }
   }, [isOpen, board]);
 
@@ -395,6 +438,78 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({
   const handleLetterSpacingChange = useCallback((spacing: number) => {
     setLetterSpacing(spacing);
     setTextLetterSpacing(board, spacing);
+  }, [board]);
+
+  // 处理加粗切换
+  const handleBoldToggle = useCallback(() => {
+    setIsBold(!isBold);
+    toggleTextBold(board);
+  }, [board, isBold]);
+
+  // 处理斜体切换
+  const handleItalicToggle = useCallback(() => {
+    setIsItalic(!isItalic);
+    toggleTextItalic(board);
+  }, [board, isItalic]);
+
+  // 处理下划线切换
+  const handleUnderlineToggle = useCallback(() => {
+    setIsUnderline(!isUnderline);
+    toggleTextUnderline(board);
+  }, [board, isUnderline]);
+
+  // 处理删除线切换
+  const handleStrikethroughToggle = useCallback(() => {
+    setIsStrikethrough(!isStrikethrough);
+    toggleTextStrikethrough(board);
+  }, [board, isStrikethrough]);
+
+  // 处理上标切换
+  const handleSuperscriptToggle = useCallback(() => {
+    const newValue = !isSuperscript;
+    setIsSuperscript(newValue);
+    if (newValue) setIsSubscript(false);
+    toggleTextSuperscript(board);
+  }, [board, isSuperscript]);
+
+  // 处理下标切换
+  const handleSubscriptToggle = useCallback(() => {
+    const newValue = !isSubscript;
+    setIsSubscript(newValue);
+    if (newValue) setIsSuperscript(false);
+    toggleTextSubscript(board);
+  }, [board, isSubscript]);
+
+  // 处理背景色变更
+  const handleBgColorChange = useCallback((color: string | null) => {
+    setBgColor(color);
+    setTextBackgroundColor(board, color);
+  }, [board]);
+
+  // 处理大小写转换
+  const handleTextTransformChange = useCallback((transform: 'none' | 'uppercase' | 'lowercase' | 'capitalize') => {
+    const newValue = transform === textTransform ? null : transform;
+    setTextTransformState(newValue);
+    setTextTransform(board, newValue as any);
+  }, [board, textTransform]);
+
+  // 处理描边变更
+  const handleStrokeChange = useCallback((width: number, color?: string) => {
+    setStrokeWidth(width);
+    if (color) setStrokeColor(color);
+    setTextStroke(board, width > 0 ? width : null, color || strokeColor);
+  }, [board, strokeColor]);
+
+  // 处理装饰线样式变更
+  const handleDecorationStyleChange = useCallback((style: 'solid' | 'double' | 'dotted' | 'dashed' | 'wavy' | null) => {
+    setDecorationStyle(style);
+    setTextDecorationStyle(board, style);
+  }, [board]);
+
+  // 处理装饰线颜色变更
+  const handleDecorationColorChange = useCallback((color: string | null) => {
+    setDecorationColor(color);
+    setTextDecorationColor(board, color);
   }, [board]);
 
   // 点击外部关闭 - 使用全局点击监听
@@ -650,6 +765,83 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({
                 </div>
               </div>
 
+              {/* 样式 */}
+              <div className="inline-control">
+                <label className="inline-control__label">{language === 'zh' ? '样式' : 'Style'}</label>
+                <div className="style-buttons">
+                  <button
+                    className={classNames('style-buttons__btn', { 'is-active': isBold })}
+                    onClick={handleBoldToggle}
+                    title={language === 'zh' ? '加粗' : 'Bold'}
+                  >
+                    <span className="style-buttons__icon style-buttons__icon--bold">B</span>
+                  </button>
+                  <button
+                    className={classNames('style-buttons__btn', { 'is-active': isItalic })}
+                    onClick={handleItalicToggle}
+                    title={language === 'zh' ? '斜体' : 'Italic'}
+                  >
+                    <span className="style-buttons__icon style-buttons__icon--italic">I</span>
+                  </button>
+                  <button
+                    className={classNames('style-buttons__btn', { 'is-active': isUnderline })}
+                    onClick={handleUnderlineToggle}
+                    title={language === 'zh' ? '下划线' : 'Underline'}
+                  >
+                    <span className="style-buttons__icon style-buttons__icon--underline">U</span>
+                  </button>
+                  <button
+                    className={classNames('style-buttons__btn', { 'is-active': isStrikethrough })}
+                    onClick={handleStrikethroughToggle}
+                    title={language === 'zh' ? '删除线' : 'Strikethrough'}
+                  >
+                    <span className="style-buttons__icon style-buttons__icon--strikethrough">S</span>
+                  </button>
+                  <button
+                    className={classNames('style-buttons__btn', { 'is-active': isSuperscript })}
+                    onClick={handleSuperscriptToggle}
+                    title={language === 'zh' ? '上标' : 'Superscript'}
+                  >
+                    <span className="style-buttons__icon style-buttons__icon--superscript">X<sup>2</sup></span>
+                  </button>
+                  <button
+                    className={classNames('style-buttons__btn', { 'is-active': isSubscript })}
+                    onClick={handleSubscriptToggle}
+                    title={language === 'zh' ? '下标' : 'Subscript'}
+                  >
+                    <span className="style-buttons__icon style-buttons__icon--subscript">X<sub>2</sub></span>
+                  </button>
+                </div>
+              </div>
+
+              {/* 大小写 */}
+              <div className="inline-control">
+                <label className="inline-control__label">{language === 'zh' ? '大小写' : 'Case'}</label>
+                <div className="case-buttons">
+                  <button
+                    className={classNames('case-buttons__btn', { 'is-active': textTransform === 'uppercase' })}
+                    onClick={() => handleTextTransformChange('uppercase')}
+                    title={language === 'zh' ? '全大写' : 'Uppercase'}
+                  >
+                    AA
+                  </button>
+                  <button
+                    className={classNames('case-buttons__btn', { 'is-active': textTransform === 'lowercase' })}
+                    onClick={() => handleTextTransformChange('lowercase')}
+                    title={language === 'zh' ? '全小写' : 'Lowercase'}
+                  >
+                    aa
+                  </button>
+                  <button
+                    className={classNames('case-buttons__btn', { 'is-active': textTransform === 'capitalize' })}
+                    onClick={() => handleTextTransformChange('capitalize')}
+                    title={language === 'zh' ? '首字母大写' : 'Capitalize'}
+                  >
+                    Aa
+                  </button>
+                </div>
+              </div>
+
               {/* 行高 - 滑条 */}
               <div className="inline-control">
                 <label className="inline-control__label">{language === 'zh' ? '行高' : 'Line'}</label>
@@ -701,6 +893,105 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({
                 showRecentColors={true}
                 showHexInput={true}
               />
+            </div>
+          </div>
+
+          {/* 扩展效果 */}
+          <div className="text-property-panel__section">
+            <div className="text-property-panel__section-content">
+              {/* 背景高亮 */}
+              <div className="inline-control">
+                <label className="inline-control__label">{language === 'zh' ? '高亮' : 'Highlight'}</label>
+                <div className="highlight-colors">
+                  <button
+                    className={classNames('highlight-colors__btn highlight-colors__btn--none', { 'is-active': !bgColor })}
+                    onClick={() => handleBgColorChange(null)}
+                    title={language === 'zh' ? '无' : 'None'}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 16 16">
+                      <line x1="2" y1="2" x2="14" y2="14" stroke="currentColor" strokeWidth="2"/>
+                    </svg>
+                  </button>
+                  {['#FFEB3B', '#4CAF50', '#2196F3', '#E91E63', '#FF9800', '#9C27B0'].map(color => (
+                    <button
+                      key={color}
+                      className={classNames('highlight-colors__btn', { 'is-active': bgColor === color })}
+                      style={{ backgroundColor: color }}
+                      onClick={() => handleBgColorChange(color)}
+                      title={color}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* 描边 */}
+              <div className="inline-control">
+                <label className="inline-control__label">{language === 'zh' ? '描边' : 'Stroke'}</label>
+                <div className="inline-control__slider-group">
+                  <input
+                    type="range"
+                    className="inline-control__slider"
+                    value={strokeWidth}
+                    min={0}
+                    max={3}
+                    step={0.5}
+                    onChange={(e) => handleStrokeChange(Number(e.target.value))}
+                  />
+                  <span className="inline-control__value">{strokeWidth}px</span>
+                  {strokeWidth > 0 && (
+                    <input
+                      type="color"
+                      className="inline-control__color-input"
+                      value={strokeColor}
+                      onChange={(e) => handleStrokeChange(strokeWidth, e.target.value)}
+                    />
+                  )}
+                </div>
+              </div>
+
+              {/* 装饰线样式 - 仅在有下划线或删除线时显示 */}
+              {(isUnderline || isStrikethrough) && (
+                <>
+                  <div className="inline-control">
+                    <label className="inline-control__label">{language === 'zh' ? '线型' : 'Line Style'}</label>
+                    <div className="decoration-style-buttons">
+                      {(['solid', 'double', 'dotted', 'dashed', 'wavy'] as const).map(style => (
+                        <button
+                          key={style}
+                          className={classNames('decoration-style-buttons__btn', { 'is-active': decorationStyle === style })}
+                          onClick={() => handleDecorationStyleChange(decorationStyle === style ? null : style)}
+                          title={style}
+                        >
+                          <span className={`decoration-preview decoration-preview--${style}`}>Ab</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="inline-control">
+                    <label className="inline-control__label">{language === 'zh' ? '线色' : 'Line Color'}</label>
+                    <div className="highlight-colors">
+                      <button
+                        className={classNames('highlight-colors__btn highlight-colors__btn--none', { 'is-active': !decorationColor })}
+                        onClick={() => handleDecorationColorChange(null)}
+                        title={language === 'zh' ? '默认' : 'Default'}
+                      >
+                        <svg width="12" height="12" viewBox="0 0 16 16">
+                          <line x1="2" y1="2" x2="14" y2="14" stroke="currentColor" strokeWidth="2"/>
+                        </svg>
+                      </button>
+                      {['#E91E63', '#FF5722', '#4CAF50', '#2196F3', '#9C27B0', '#000000'].map(color => (
+                        <button
+                          key={color}
+                          className={classNames('highlight-colors__btn', { 'is-active': decorationColor === color })}
+                          style={{ backgroundColor: color }}
+                          onClick={() => handleDecorationColorChange(color)}
+                          title={color}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 

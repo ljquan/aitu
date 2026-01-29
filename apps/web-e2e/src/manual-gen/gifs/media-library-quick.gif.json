@@ -1,0 +1,56 @@
+{
+  "id": "media-library-quick",
+  "name": "素材库快速上手",
+  "output": "素材库快速上手.gif",
+  "targetPage": "advanced/media-library-quick",
+  "preWait": 1000,
+  "postWait": 2000,
+  "actions": [
+    {
+      "type": "click",
+      "target": ".tool-icon.t-popup-open > .tool-icon__icon > svg",
+      "label": "打开素材库",
+      "wait": 1500
+    },
+    {
+      "type": "keyHint",
+      "key": "浏览",
+      "hint": "浏览已有素材",
+      "duration": 1500
+    },
+    {
+      "type": "wait",
+      "duration": 1000
+    },
+    {
+      "type": "keyHint",
+      "key": "网格/列表",
+      "hint": "切换视图模式",
+      "duration": 1500
+    },
+    {
+      "type": "click",
+      "target": "role:button[name='列表视图']",
+      "label": "列表视图",
+      "wait": 1000,
+      "optional": true
+    },
+    {
+      "type": "click",
+      "target": "role:button[name='默认网格']",
+      "label": "网格视图",
+      "wait": 1000,
+      "optional": true
+    },
+    {
+      "type": "keyHint",
+      "key": "插入",
+      "hint": "拖拽或点击插入到画布",
+      "duration": 2000
+    },
+    {
+      "type": "wait",
+      "duration": 1000
+    }
+  ]
+}

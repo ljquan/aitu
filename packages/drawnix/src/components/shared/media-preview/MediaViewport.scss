@@ -210,6 +210,8 @@
     cursor: grab;
     border-radius: 4px;
     transition: color 0.2s ease, background 0.2s ease;
+    touch-action: none; // 防止触摸手势被浏览器拦截
+    user-select: none;
 
     &:hover {
       color: rgba(255, 255, 255, 0.8);
@@ -286,5 +288,80 @@
 
   &:hover &__title {
     opacity: 1;
+  }
+}
+
+/* 移动端响应式适配 */
+@media (max-width: 768px) {
+  .media-viewport {
+    // 启用触摸操作
+    touch-action: pan-x pan-y pinch-zoom;
+    
+    &__toolbar {
+      // 限制最大宽度，避免超出屏幕
+      max-width: calc(100vw - 32px);
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding: 4px 8px;
+      gap: 2px;
+      
+      // 隐藏滚动条
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+      &::-webkit-scrollbar {
+        display: none;
+      }
+      
+      button {
+        width: 28px;
+        height: 28px;
+        flex-shrink: 0;
+      }
+    }
+    
+    &__toolbar-handle {
+      width: 32px;
+      height: 32px;
+      flex-shrink: 0;
+    }
+    
+    &__toolbar-divider {
+      height: 16px;
+      margin: 0 4px;
+      flex-shrink: 0;
+    }
+    
+    &__zoom-level {
+      min-width: 40px;
+      font-size: 11px;
+      flex-shrink: 0;
+    }
+    
+    &__toolbar-group {
+      flex-shrink: 0;
+    }
+  }
+}
+
+@media (max-width: 480px) {
+  .media-viewport {
+    &__toolbar {
+      padding: 3px 6px;
+      gap: 1px;
+      
+      button {
+        width: 26px;
+        height: 26px;
+      }
+    }
+    
+    &__toolbar-divider {
+      margin: 0 2px;
+    }
+    
+    &__zoom-level {
+      min-width: 36px;
+      font-size: 10px;
+    }
   }
 }

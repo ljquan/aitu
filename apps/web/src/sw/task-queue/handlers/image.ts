@@ -131,11 +131,22 @@ export class ImageHandler implements TaskHandler {
     config.onProgress(task.id, 10, TaskExecutionPhase.SUBMITTING);
 
     const startTime = Date.now();
+    
+    // 为日志记录构建完整的请求体（不包含参考图片的 base64 数据以节省空间）
+    const requestBodyForLog = {
+      ...requestBody,
+      // 如果有参考图片，只记录数量而不记录 base64 数据
+      ...(processedRefImages && processedRefImages.length > 0 
+        ? { reference_images: `[${processedRefImages.length} images - data omitted]` }
+        : {}),
+    };
+    
     const logId = startLLMApiLog({
       endpoint: '/images/generations',
       model: geminiConfig.modelName || 'unknown',
       taskType: 'image',
       prompt: params.prompt as string,
+      requestBody: JSON.stringify(requestBodyForLog, null, 2),
       hasReferenceImages: !!processedRefImages && processedRefImages.length > 0,
       referenceImageCount: processedRefImages?.length,
       referenceImages: referenceImageInfos,

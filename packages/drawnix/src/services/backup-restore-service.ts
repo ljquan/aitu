@@ -43,6 +43,7 @@ import { VERSIONS } from '../constants';
 import localforage from 'localforage';
 import { ASSET_CONSTANTS } from '../constants/ASSET_CONSTANTS';
 import { unifiedCacheService } from './unified-cache-service';
+import { analytics } from '../utils/posthog-analytics';
 
 // 备份文件版本
 const BACKUP_VERSION = 2;
@@ -245,6 +246,15 @@ class BackupRestoreService {
     options: BackupOptions,
     onProgress?: ProgressCallback
   ): Promise<Blob> {
+    const startTime = Date.now();
+    
+    // 埋点：备份导出开始
+    analytics.track('backup_export_start', {
+      includePrompts: options.includePrompts,
+      includeProjects: options.includeProjects,
+      includeAssets: options.includeAssets,
+    });
+
     const zip = new JSZip();
 
     onProgress?.(5, '正在准备数据...');
@@ -321,6 +331,16 @@ class BackupRestoreService {
     );
 
     onProgress?.(100, '导出完成');
+
+    // 埋点：备份导出成功
+    analytics.track('backup_export_success', {
+      duration: Date.now() - startTime,
+      fileSize: blob.size,
+      promptCount: manifest.stats.promptCount + manifest.stats.videoPromptCount + manifest.stats.imagePromptCount,
+      projectCount: manifest.stats.boardCount,
+      assetCount: manifest.stats.assetCount,
+      taskCount: manifest.stats.taskCount,
+    });
 
     return blob;
   }
@@ -574,6 +594,14 @@ class BackupRestoreService {
     file: File,
     onProgress?: ProgressCallback
   ): Promise<ImportResult> {
+    const startTime = Date.now();
+    
+    // 埋点：备份导入开始
+    analytics.track('backup_import_start', {
+      fileSize: file.size,
+      fileName: file.name,
+    });
+
     const result: ImportResult = {
       success: false,
       prompts: { imported: 0, skipped: 0 },
@@ -641,10 +669,26 @@ class BackupRestoreService {
 
       result.success = result.errors.length === 0;
       onProgress?.(100, '导入完成');
+
+      // 埋点：备份导入成功
+      analytics.track('backup_import_success', {
+        duration: Date.now() - startTime,
+        promptCount: result.prompts.imported,
+        projectCount: result.projects.boards,
+        assetCount: result.assets.imported,
+        taskCount: result.tasks.imported,
+        skippedCount: result.prompts.skipped + result.projects.skipped + result.assets.skipped + result.tasks.skipped,
+      });
     } catch (error: unknown) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
       result.errors.push(errorMessage);
+
+      // 埋点：备份导入失败
+      analytics.track('backup_import_failed', {
+        duration: Date.now() - startTime,
+        error: errorMessage,
+      });
     }
 
     return result;

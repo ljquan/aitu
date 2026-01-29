@@ -1,0 +1,103 @@
+{
+  "id": "chat-drawer-basic",
+  "name": "ChatDrawer 基础交互演示",
+  "output": "ChatDrawer基础交互.gif",
+  "targetPage": "ai-features/chat-drawer",
+  "preWait": 1500,
+  "postWait": 2000,
+  "actions": [
+    {
+      "type": "keyHint",
+      "key": "入口",
+      "hint": "对话抽屉入口",
+      "duration": 1500
+    },
+    {
+      "type": "keyHint",
+      "key": "打开",
+      "hint": "打开对话抽屉",
+      "duration": 1000
+    },
+    {
+      "type": "click",
+      "target": ".chat-drawer-trigger",
+      "label": "打开",
+      "wait": 1500,
+      "optional": true
+    },
+    {
+      "type": "wait",
+      "duration": 1000
+    },
+    {
+      "type": "keyHint",
+      "key": "界面",
+      "hint": "对话历史与消息",
+      "duration": 1500
+    },
+    {
+      "type": "wait",
+      "duration": 1000
+    },
+    {
+      "type": "keyHint",
+      "key": "新建",
+      "hint": "新建会话",
+      "duration": 1000
+    },
+    {
+      "type": "click",
+      "target": "testid:chat-drawer role:button:has-text('新建')",
+      "label": "新建会话",
+      "wait": 1000,
+      "optional": true
+    },
+    {
+      "type": "wait",
+      "duration": 1000
+    },
+    {
+      "type": "keyHint",
+      "key": "列表",
+      "hint": "会话列表",
+      "duration": 1500
+    },
+    {
+      "type": "click",
+      "target": "testid:chat-drawer [class*='session'] button:first",
+      "label": "查看会话",
+      "wait": 1000,
+      "optional": true
+    },
+    {
+      "type": "wait",
+      "duration": 1000
+    },
+    {
+      "type": "keyHint",
+      "key": "宽度",
+      "hint": "拖动调整宽度",
+      "duration": 1500
+    },
+    {
+      "type": "mouseDrag",
+      "target": "testid:chat-drawer .resize-handle",
+      "deltaX": -100,
+      "deltaY": 0,
+      "label": "拖动",
+      "wait": 1000,
+      "optional": true
+    },
+    {
+      "type": "keyHint",
+      "key": "关闭",
+      "hint": "关闭抽屉",
+      "duration": 1000
+    },
+    {
+      "type": "press",
+      "key": "Escape",
+      "wait": 1000
+    }
+  ]
+}

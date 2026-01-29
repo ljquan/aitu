@@ -4,7 +4,7 @@
  */
 
 import { state, elements } from './state.js';
-import { escapeHtml, formatBytes } from './common.js';
+import { escapeHtml, formatBytes, formatJsonWithHighlight, extractRequestParams } from './common.js';
 import { downloadJson } from './utils.js';
 import { showToast } from './toast.js';
 
@@ -138,6 +138,9 @@ function createLLMApiEntry(log, isExpanded, onToggle) {
 
   // Show full prompt in header (will wrap if needed)
   const promptPreview = log.prompt || '-';
+  
+  // Extract request parameters from requestBody
+  const reqParams = extractRequestParams(log.requestBody);
 
   // Render reference images preview
   let referenceImagesHtml = '';
@@ -207,6 +210,24 @@ function createLLMApiEntry(log, isExpanded, onToggle) {
               <td class="form-data-name">耗时</td>
               <td><span class="form-data-value">${durationText}</span></td>
             </tr>
+            ${reqParams.size ? `
+            <tr>
+              <td class="form-data-name">尺寸</td>
+              <td><span class="form-data-value">${reqParams.size}</span></td>
+            </tr>
+            ` : ''}
+            ${reqParams.response_format ? `
+            <tr>
+              <td class="form-data-name">响应格式</td>
+              <td><span class="form-data-value">${reqParams.response_format}</span></td>
+            </tr>
+            ` : ''}
+            ${reqParams.seconds ? `
+            <tr>
+              <td class="form-data-name">时长</td>
+              <td><span class="form-data-value">${reqParams.seconds}s</span></td>
+            </tr>
+            ` : ''}
             ${log.hasReferenceImages ? `
             <tr>
               <td class="form-data-name">参考图</td>
@@ -256,8 +277,8 @@ function createLLMApiEntry(log, isExpanded, onToggle) {
       ` : ''}
       ${log.requestBody ? `
         <div class="detail-section">
-          <h4>请求体 (Request Body)</h4>
-          <pre>${escapeHtml(log.requestBody)}</pre>
+          <h4>请求参数 (Request Parameters)</h4>
+          <pre class="json-highlight">${formatJsonWithHighlight(log.requestBody)}</pre>
         </div>
       ` : ''}
       ${log.resultText ? `

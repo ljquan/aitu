@@ -8,6 +8,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { characterStorageService } from '../services/character-storage-service';
 import { characterAPIService } from '../services/character-api-service';
+import { analytics } from '../utils/posthog-analytics';
 import type {
   SoraCharacter,
   CharacterStatus,
@@ -126,6 +127,14 @@ export function useCharacters(): UseCharactersReturn {
   const createCharacter = useCallback(async (
     params: CreateCharacterParams
   ): Promise<SoraCharacter | null> => {
+    const startTime = Date.now();
+    
+    // 埋点：角色提取开始
+    analytics.track('character_extract_start', {
+      videoTaskId: params.videoTaskId,
+      hasTimestamps: !!params.characterTimestamps?.length,
+    });
+
     try {
       // console.log('[useCharacters] Creating character from:', params.videoTaskId);
 
@@ -165,6 +174,13 @@ export function useCharacters(): UseCharactersReturn {
           status: 'completed' as CharacterStatus,
           completedAt: Date.now(),
         });
+
+        // 埋点：角色提取成功
+        analytics.track('character_extract_success', {
+          characterId,
+          username: result.username,
+          duration: Date.now() - startTime,
+        });
         //         // console.log('[useCharacters] Character completed:', result.username);
       }).catch(async (error) => {
         console.error('[useCharacters] Character creation failed:', error);
@@ -173,6 +189,13 @@ export function useCharacters(): UseCharactersReturn {
           'failed' as CharacterStatus,
           (error as Error).message
         );
+
+        // 埋点：角色提取失败
+        analytics.track('character_extract_failed', {
+          characterId,
+          error: (error as Error).message,
+          duration: Date.now() - startTime,
+        });
       }).finally(() => {
         pollingRef.current.delete(characterId);
       });

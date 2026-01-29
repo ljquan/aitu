@@ -26,8 +26,8 @@ export interface LLMApiLog {
   taskType: 'image' | 'video' | 'chat' | 'character' | 'other';
   
   // 请求参数（脱敏后）
-  prompt?: string;         // 提示词（截断）
-  requestBody?: string;    // 完整请求体（仅 chat 类型，不截断）
+  prompt?: string;         // 提示词
+  requestBody?: string;    // 完整请求体（JSON 格式，用于调试）
   hasReferenceImages?: boolean;  // 是否有参考图
   referenceImageCount?: number;  // 参考图数量
   referenceImages?: LLMReferenceImage[]; // 参考图详情
@@ -299,7 +299,7 @@ export function startLLMApiLog(params: {
   model: string;
   taskType: LLMApiLog['taskType'];
   prompt?: string;
-  requestBody?: string;  // 完整请求体（仅 chat 类型使用，不截断）
+  requestBody?: string;  // 完整请求体（JSON 格式，用于调试）
   hasReferenceImages?: boolean;
   referenceImageCount?: number;
   referenceImages?: LLMReferenceImage[];
@@ -437,11 +437,12 @@ export function failLLMApiLog(
 }
 
 /**
- * 截断提示词（保护隐私，减少存储）
+ * 截断提示词（减少存储）
+ * 增加到 2000 字符以便调试时查看完整 prompt
  */
 function truncatePrompt(prompt: string): string {
-  if (prompt.length <= 200) return prompt;
-  return prompt.substring(0, 200) + '...';
+  if (prompt.length <= 2000) return prompt;
+  return prompt.substring(0, 2000) + '...';
 }
 
 /**

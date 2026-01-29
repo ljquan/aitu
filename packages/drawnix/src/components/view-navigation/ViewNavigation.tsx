@@ -191,6 +191,7 @@ export const ViewNavigation: React.FC<ViewNavigationProps> = ({
         zIndex: Z_INDEX.VIEW_NAVIGATION,
       }}
       ref={containerRef}
+      data-testid="view-navigation"
     >
       {/* 缩放控制区域 */}
       <div className="view-navigation__zoom">
@@ -200,6 +201,7 @@ export const ViewNavigation: React.FC<ViewNavigationProps> = ({
           title={t('zoom.out')}
           aria-label={t('zoom.out')}
           data-track="view_nav_zoom_out"
+          data-testid="zoom-out"
         >
           <MinusIcon />
         </button>
@@ -217,6 +219,7 @@ export const ViewNavigation: React.FC<ViewNavigationProps> = ({
               title={t('zoom.fit')}
               aria-label={t('zoom.fit')}
               data-track="view_nav_zoom_menu"
+              data-testid="zoom-display"
             >
               {zoomPercentage}%
             </button>
@@ -249,6 +252,7 @@ export const ViewNavigation: React.FC<ViewNavigationProps> = ({
           title={t('zoom.in')}
           aria-label={t('zoom.in')}
           data-track="view_nav_zoom_in"
+          data-testid="zoom-in"
         >
           <AddIcon />
         </button>

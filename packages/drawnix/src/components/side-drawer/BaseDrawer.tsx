@@ -6,6 +6,8 @@ export interface BaseDrawerProps extends Omit<SideDrawerProps, 'customWidth' | '
   storageKey?: string;
   /** 默认宽度 */
   defaultWidth?: number;
+  /** 测试标识 */
+  'data-testid'?: string;
 }
 
 /**

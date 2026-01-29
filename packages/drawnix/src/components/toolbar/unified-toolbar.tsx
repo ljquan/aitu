@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import classNames from 'classnames';
 import { ATTACHED_ELEMENT_CLASS_NAME } from '@plait/core';
+import { ChevronUp, ChevronDown } from 'lucide-react';
 import { AppToolbar } from './app-toolbar/app-toolbar';
 import { CreationToolbar } from './creation-toolbar';
 import { UnifiedToolbarProps } from './toolbar.types';
@@ -8,6 +9,9 @@ import { Island } from '../island';
 import { BottomActionsSection } from './bottom-actions-section';
 import { TaskQueuePanel } from '../task-queue/TaskQueuePanel';
 import { useViewportScale } from '../../hooks/useViewportScale';
+import { useDeviceType } from '../../hooks/useDeviceType';
+import { AIImageIcon, AIVideoIcon } from '../icons';
+import { DialogType, useDrawnix } from '../../hooks/use-drawnix';
 
 // 工具栏高度阈值: 当容器高度小于此值时切换到图标模式
 // 基于四个分区的最小高度 + 分割线 + padding 计算得出
@@ -37,10 +41,15 @@ export const UnifiedToolbar: React.FC<UnifiedToolbarProps> = React.memo(({
   onOpenBackupRestore,
 }) => {
   const [isIconMode, setIsIconMode] = useState(false);
+  const [isMobileCollapsed, setIsMobileCollapsed] = useState(true); // 移动端默认收起
   const hasEverExpanded = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollableRef = useRef<HTMLDivElement>(null);
   const hasScrolledToAI = useRef(false);
+  
+  // 检测设备类型
+  const { isMobile: isSmallScreen, isTablet } = useDeviceType();
+  const isMobileOrTablet = isSmallScreen || isTablet;
 
   // 使用 viewport scale hook 确保缩放时工具栏保持在视口左上角且大小不变
   useViewportScale(containerRef, {
@@ -135,6 +144,23 @@ export const UnifiedToolbar: React.FC<UnifiedToolbarProps> = React.memo(({
     }
   }, [taskPanelExpanded, onTaskPanelToggle]);
 
+  // 移动端工具栏切换
+  const handleMobileToggle = useCallback(() => {
+    setIsMobileCollapsed(prev => !prev);
+  }, []);
+
+  // 获取对话框控制
+  const { openDialog } = useDrawnix();
+
+  // AI 按钮点击处理
+  const handleAIImageClick = useCallback(() => {
+    openDialog(DialogType.aiImageGeneration);
+  }, [openDialog]);
+
+  const handleAIVideoClick = useCallback(() => {
+    openDialog(DialogType.aiVideoGeneration);
+  }, [openDialog]);
+
   return (
     <>
       {/* 任务队列面板 - 只在首次展开后才渲染 */}
@@ -148,22 +174,65 @@ export const UnifiedToolbar: React.FC<UnifiedToolbarProps> = React.memo(({
           'unified-toolbar',
           ATTACHED_ELEMENT_CLASS_NAME,
           {
-            'unified-toolbar--icon-only': isIconMode,
+            'unified-toolbar--icon-only': isIconMode || isMobileOrTablet,
+            'unified-toolbar--mobile-collapsed': isMobileOrTablet && isMobileCollapsed,
           },
           className
         )}
         padding={0}
+        data-testid="unified-toolbar"
       >
+        {/* 移动端收起状态的快捷按钮区域 */}
+        {isMobileOrTablet && isMobileCollapsed && (
+          <div className="unified-toolbar__collapsed-shortcuts">
+            {/* 展开按钮 */}
+            <button
+              className="unified-toolbar__collapsed-btn unified-toolbar__collapsed-btn--toggle"
+              onClick={handleMobileToggle}
+              aria-label="展开工具栏"
+            >
+              <ChevronUp size={18} />
+            </button>
+            {/* AI 图片生成 */}
+            <button
+              className="unified-toolbar__collapsed-btn"
+              onClick={handleAIImageClick}
+              aria-label="AI 图片生成"
+            >
+              <AIImageIcon />
+            </button>
+            {/* AI 视频生成 */}
+            <button
+              className="unified-toolbar__collapsed-btn"
+              onClick={handleAIVideoClick}
+              aria-label="AI 视频生成"
+            >
+              <AIVideoIcon />
+            </button>
+          </div>
+        )}
+
+        {/* 移动端展开状态的收起按钮 */}
+        {isMobileOrTablet && !isMobileCollapsed && (
+          <button
+            className="unified-toolbar__mobile-toggle unified-toolbar__mobile-toggle--expanded"
+            onClick={handleMobileToggle}
+            aria-label="收起工具栏"
+          >
+            <ChevronDown size={20} />
+          </button>
+        )}
+
         {/* 顶部固定区域 - 应用工具分区（菜单、撤销、重做） */}
         <div className="unified-toolbar__section unified-toolbar__section--fixed-top">
-          <AppToolbar embedded={true} iconMode={isIconMode} onOpenBackupRestore={onOpenBackupRestore} />
+          <AppToolbar embedded={true} iconMode={isIconMode || isMobileOrTablet} onOpenBackupRestore={onOpenBackupRestore} />
         </div>
 
         {/* 可滚动的工具栏内容区 */}
         <div ref={scrollableRef} className="unified-toolbar__scrollable">
           {/* 创作工具分区 - 手型、选择、思维导图、文本、画笔、箭头、形状、图片、AI工具、缩放 */}
           <div className="unified-toolbar__section">
-            <CreationToolbar embedded={true} iconMode={isIconMode} />
+            <CreationToolbar embedded={true} iconMode={isIconMode || isMobileOrTablet} />
           </div>
         </div>
 

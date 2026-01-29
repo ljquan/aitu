@@ -161,3 +161,86 @@
     }
   }
 }
+
+// ============================================================================
+// Mobile Responsive Styles
+// ============================================================================
+
+// 平板及以下 (max-width: 768px)
+@media (max-width: 768px) {
+  .pen-settings-toolbar {
+    // 限制最大宽度，给右侧缩放控制留出更多空间
+    max-width: calc(100vw - 250px);
+    
+    .island {
+      // 支持水平滚动
+      overflow-x: auto;
+      overflow-y: hidden;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      flex-wrap: nowrap;
+      padding: 3px 4px !important;
+      gap: 2px;
+      
+      &::-webkit-scrollbar {
+        display: none;
+      }
+    }
+    
+    // 按钮不收缩，尺寸更紧凑
+    .pen-color-button,
+    .pen-width-button {
+      flex-shrink: 0;
+      height: 26px;
+      width: 26px;
+      min-width: 26px;
+    }
+    
+    // 选择器不收缩
+    .pen-stroke-style-picker,
+    .pen-anchor-type-picker {
+      flex-shrink: 0;
+      padding: 1px;
+      gap: 1px;
+      
+      .pen-stroke-style-button,
+      .pen-anchor-type-button {
+        height: 24px;
+        width: 24px;
+        min-width: 24px;
+      }
+    }
+    
+    // 隐藏输入框，使用按钮弹出选择
+    .pen-width-input-wrapper {
+      display: none;
+    }
+    
+    // 紧凑的分隔线
+    .pen-settings-divider {
+      flex-shrink: 0;
+      height: 14px;
+      margin: 0 2px;
+    }
+  }
+}
+
+// 移动端竖屏 (max-width: 640px)
+@media (max-width: 640px) {
+  .pen-settings-toolbar {
+    // 进一步限制最大宽度
+    max-width: calc(100vw - 200px);
+  }
+}
+
+// 小屏移动端 (max-width: 480px)
+@media (max-width: 480px) {
+  .pen-settings-toolbar {
+    max-width: calc(100vw - 180px);
+    
+    // 进一步紧凑化
+    .island {
+      padding: 2px 3px !important;
+    }
+  }
+}

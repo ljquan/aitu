@@ -441,6 +441,7 @@ export interface TaskCompletedMessage {
   taskId: string;
   result: TaskResult;
   completedAt: number;
+  remoteId?: string; // Include remoteId for recovery
 }
 
 /**

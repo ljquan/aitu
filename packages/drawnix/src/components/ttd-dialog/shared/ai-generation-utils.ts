@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { promptForApiKey } from '../../../utils/gemini-api';
 import { geminiSettings } from '../../../utils/settings-manager';
 import { CACHE_DURATION } from './size-constants';
-import { getSafeErrorMessage } from '../../../utils/sanitize-utils';
+import { getSafeErrorMessage } from '@aitu/utils';
 
 export const isInvalidTokenError = (errorMessage: string): boolean => {
   const message = errorMessage.toLowerCase();

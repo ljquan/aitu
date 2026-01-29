@@ -5,9 +5,11 @@
  * 
  * 一键完成：
  * 1. 构建项目
- * 2. 分离 HTML 和静态资源
- * 3. 发布静态资源到 npm CDN
- * 4. 部署 HTML 到自有服务器
+ * 2. 运行 E2E 冒烟测试
+ * 3. 分离 HTML 和静态资源
+ * 4. 发布静态资源到 npm CDN
+ * 5. 部署 HTML 到自有服务器
+ * 6. 生成用户手册
  * 
  * 用法：
  *   node scripts/deploy-hybrid.js [options]
@@ -16,6 +18,8 @@
  *   --skip-build     跳过构建步骤
  *   --skip-npm       跳过 npm 发布
  *   --skip-server    跳过服务器部署
+ *   --skip-e2e       跳过 E2E 测试
+ *   --skip-manual    跳过手册生成
  *   --dry-run        预览模式，不实际执行
  *   --otp=123456     npm 2FA 验证码
  */
@@ -42,7 +46,6 @@ const CONFIG = {
     'index.html',
     'sw-debug.html',
     'cdn-debug.html',
-    'batch-image.html',
     'versions.html',
     'iframe-test.html',
     'init.json',
@@ -63,6 +66,8 @@ const args = process.argv.slice(2);
 const skipBuild = args.includes('--skip-build');
 const skipNpm = args.includes('--skip-npm');
 const skipServer = args.includes('--skip-server');
+const skipE2E = args.includes('--skip-e2e');
+const skipManual = args.includes('--skip-manual');
 const isDryRun = args.includes('--dry-run');
 const otpArg = args.find(arg => arg.startsWith('--otp='));
 const otp = otpArg ? otpArg.split('=')[1] : null;
@@ -144,6 +149,26 @@ function shouldUploadToCDN(filename) {
 
 function shouldKeepOnServer(filename) {
   return CONFIG.serverOnlyFiles.some(f => filename === f || filename.endsWith(f));
+}
+
+/**
+ * 检查 npm 包的指定版本是否已存在
+ * @param {string} packageName 包名
+ * @param {string} version 版本号
+ * @returns {boolean} 是否存在
+ */
+function checkNpmVersionExists(packageName, version) {
+  try {
+    // 使用 npm view 命令检查版本是否存在
+    execSync(`npm view ${packageName}@${version} version`, {
+      stdio: 'pipe',
+      encoding: 'utf-8',
+    });
+    return true; // 命令成功执行，版本存在
+  } catch (error) {
+    // 命令失败，版本不存在
+    return false;
+  }
 }
 
 /**
@@ -318,7 +343,7 @@ function loadEnvConfig() {
 // ============================================
 
 function stepBuild(version) {
-  logStep(1, 5, '构建项目');
+  logStep(1, 7, '构建项目');
   
   // 显式跳过
   if (skipBuild) {
@@ -352,11 +377,40 @@ function stepBuild(version) {
 }
 
 // ============================================
-// 步骤 2: 准备部署文件
+// 步骤 2: E2E 冒烟测试
+// ============================================
+
+function stepE2ETest() {
+  logStep(2, 7, 'E2E 冒烟测试');
+  
+  if (skipE2E) {
+    logWarning('跳过 E2E 测试（--skip-e2e 参数）');
+    return true;
+  }
+  
+  if (isDryRun) {
+    log(`    [DRY RUN] 将运行 E2E 冒烟测试`, 'yellow');
+    return true;
+  }
+  
+  log('    运行冒烟测试...', 'gray');
+  
+  if (!exec('pnpm run e2e:smoke', { cwd: path.resolve(__dirname, '..') })) {
+    logError('E2E 冒烟测试失败');
+    logWarning('提示：可使用 --skip-e2e 跳过测试继续部署');
+    return false;
+  }
+  
+  logSuccess('E2E 冒烟测试通过');
+  return true;
+}
+
+// ============================================
+// 步骤 3: 准备部署文件
 // ============================================
 
 function stepSeparateFiles(version, cdnBaseUrl, buildSkipped = false) {
-  logStep(2, 5, '准备部署文件');
+  logStep(3, 7, '准备部署文件');
   
   // 如果构建被跳过，文件已经准备好了
   if (buildSkipped) {
@@ -463,16 +517,19 @@ function stepSeparateFiles(version, cdnBaseUrl, buildSkipped = false) {
 }
 
 // ============================================
-// 步骤 3: 发布到 npm CDN
+// 步骤 4: 发布到 npm CDN
 // ============================================
 
 function stepPublishNpm(version) {
-  logStep(3, 5, '发布静态资源到 npm CDN');
+  logStep(5, 7, '发布静态资源到 npm CDN');
   
   if (skipNpm) {
     logWarning('跳过 npm 发布');
     return true;
   }
+  
+  // 版本检查已在 main 函数开头完成，这里直接发布
+  log(`    发布版本: ${CONFIG.packageName}@${version}`, 'gray');
   
   // 生成 package.json
   const npmPackage = {
@@ -518,11 +575,11 @@ function stepPublishNpm(version) {
 }
 
 // ============================================
-// 步骤 4: 部署到服务器（复用 create-deploy-package.js）
+// 步骤 5: 部署到服务器（复用 create-deploy-package.js）
 // ============================================
 
 function stepDeployServer(version) {
-  logStep(4, 5, '打包并部署到服务器');
+  logStep(6, 7, '打包并部署到服务器');
   
   if (skipServer) {
     logWarning('跳过服务器部署');
@@ -551,11 +608,168 @@ function stepDeployServer(version) {
 }
 
 // ============================================
-// 步骤 5: 验证部署
+// 步骤 6: 生成用户手册
+// ============================================
+
+function stepGenerateManual(version) {
+  logStep(4, 7, '生成用户手册');
+  
+  if (skipManual) {
+    logWarning('跳过手册生成（--skip-manual 参数）');
+    return true;
+  }
+  
+  if (isDryRun) {
+    log(`    [DRY RUN] 将生成用户手册`, 'yellow');
+    return true;
+  }
+  
+  log('    生成用户手册...', 'gray');
+  
+  // 手册生成不阻塞部署，失败只警告
+  try {
+    // 步骤 1: 先尝试生成截图（需要 Playwright 环境）
+    log('    生成截图...', 'gray');
+    try {
+      // 检查端口 7200 是否已被占用
+      let portInUse = false;
+      try {
+        execSync('lsof -i :7200 -t', { stdio: 'pipe' });
+        portInUse = true;
+        log('    检测到开发服务器已在运行 (端口 7200)', 'gray');
+      } catch {
+        log('    开发服务器未运行，将自动启动', 'gray');
+      }
+      
+      // 如果端口已被占用，设置 CI= 复用现有服务器；否则设置 CI=1 让 Playwright 自动启动
+      // 注意：CI= 显式清除环境变量，让 reuseExistingServer 为 true
+      const ciEnv = portInUse ? 'CI=' : 'CI=1';
+      execSync(`cd apps/web-e2e && ${ciEnv} npx playwright test --project=manual`, {
+        cwd: path.resolve(__dirname, '..'),
+        stdio: 'inherit',
+        timeout: 300000, // 5 分钟超时
+      });
+      logSuccess('截图生成完成');
+    } catch (screenshotError) {
+      logWarning('截图生成失败');
+      log(`    错误: ${screenshotError.message}`, 'gray');
+      log('    可能的原因:', 'gray');
+      log('    1. Playwright 浏览器未安装，请运行: npx playwright install chromium', 'gray');
+      log('    2. 开发服务器未运行，请运行: pnpm start', 'gray');
+      log('    将使用已有截图继续构建...', 'gray');
+    }
+    
+    // 步骤 2: 设置 CDN 基础路径环境变量，供 generate-manual.ts 使用
+    const cdnBaseUrl = CONFIG.cdnTemplates[cdnProvider].replace('{version}', version);
+    const manualCdnBase = `${cdnBaseUrl}/user-manual`;
+    
+    // 步骤 3: 构建手册 HTML
+    log('    构建手册 HTML...', 'gray');
+    execSync('pnpm run manual:build', {
+      cwd: path.resolve(__dirname, '..'),
+      stdio: 'inherit',
+      env: {
+        ...process.env,
+        MANUAL_CDN_BASE: skipNpm ? '' : manualCdnBase,
+      },
+    });
+    
+    // 复制手册到 dist 目录（构建后手册不会自动包含）
+    const manualSourceDir = path.resolve(__dirname, '../apps/web/public/user-manual');
+    const manualDistDir = path.resolve(__dirname, '../dist/apps/web/user-manual');
+    const manualServerDir = path.join(CONFIG.outputServer, 'user-manual');
+    const manualCdnDir = path.join(CONFIG.outputCDN, 'user-manual');
+    
+    if (fs.existsSync(manualSourceDir)) {
+      // 复制到 dist/apps/web/user-manual
+      copyDirRecursive(manualSourceDir, manualDistDir);
+      log(`    复制到 dist/apps/web/user-manual`, 'gray');
+      
+      // 复制到 dist/deploy/server/user-manual（HTML + 静态资源，完整副本）
+      if (fs.existsSync(CONFIG.outputServer)) {
+        copyDirRecursive(manualSourceDir, manualServerDir);
+        log(`    复制到 dist/deploy/server/user-manual`, 'gray');
+      }
+      
+      // 复制静态资源到 CDN 目录（不含 HTML）
+      if (fs.existsSync(CONFIG.outputCDN) && !skipNpm) {
+        const screenshotsDir = path.join(manualSourceDir, 'screenshots');
+        const gifsDir = path.join(manualSourceDir, 'gifs');
+        
+        if (fs.existsSync(screenshotsDir)) {
+          copyDirRecursive(screenshotsDir, path.join(manualCdnDir, 'screenshots'));
+        }
+        if (fs.existsSync(gifsDir)) {
+          copyDirRecursive(gifsDir, path.join(manualCdnDir, 'gifs'));
+        }
+        
+        // 统计 CDN 文件数
+        let cdnFileCount = 0;
+        if (fs.existsSync(manualCdnDir)) {
+          cdnFileCount = countFilesRecursive(manualCdnDir);
+        }
+        log(`    复制 ${cdnFileCount} 个静态资源到 CDN`, 'gray');
+      }
+      
+      // 统计文件数
+      const fileCount = countFilesRecursive(manualDistDir);
+      logSuccess(`用户手册生成完成 (${fileCount} 个文件)`);
+      if (!skipNpm) {
+        log(`    静态资源将通过 CDN 加载`, 'gray');
+      }
+    } else {
+      logWarning('手册源目录不存在');
+    }
+    
+    return true;
+  } catch (error) {
+    logWarning('用户手册生成失败（不影响部署）');
+    log(`    错误: ${error.message}`, 'gray');
+    return true; // 不阻塞部署
+  }
+}
+
+// 统计目录文件数
+function countFilesRecursive(dir) {
+  let count = 0;
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      count += countFilesRecursive(path.join(dir, entry.name));
+    } else {
+      count++;
+    }
+  }
+  return count;
+}
+
+// 递归复制目录
+function copyDirRecursive(src, dest) {
+  if (!fs.existsSync(src)) return;
+  
+  if (!fs.existsSync(dest)) {
+    fs.mkdirSync(dest, { recursive: true });
+  }
+  
+  const entries = fs.readdirSync(src, { withFileTypes: true });
+  for (const entry of entries) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+    
+    if (entry.isDirectory()) {
+      copyDirRecursive(srcPath, destPath);
+    } else {
+      fs.copyFileSync(srcPath, destPath);
+    }
+  }
+}
+
+// ============================================
+// 步骤 7: 验证部署
 // ============================================
 
 function stepVerify(version) {
-  logStep(5, 5, '部署完成');
+  logStep(7, 7, '部署完成');
   
   log('\n📋 部署摘要', 'cyan');
   log('═'.repeat(50), 'cyan');
@@ -579,6 +793,17 @@ function stepVerify(version) {
     }
     log(`   ✓ 通过 create-deploy-package.js 部署`);
     log(`   ✓ 完整副本（CDN 失败时兜底）`);
+  }
+  
+  if (!skipManual) {
+    log(`\n📖 用户手册:`, 'green');
+    log(`   部署路径: /user-manual/index.html`);
+    log(`   本地预览: dist/apps/web/user-manual/index.html`);
+    if (!skipNpm) {
+      log(`   静态资源: CDN (截图、GIF 通过 ${cdnProvider} 加载)`);
+    } else {
+      log(`   静态资源: 服务器（跳过 CDN 发布）`);
+    }
   }
   
   log('\n🔄 加载顺序:', 'cyan');
@@ -606,7 +831,31 @@ async function main() {
     log('\n⚠️  DRY RUN 模式 - 预览执行，不实际操作\n', 'yellow');
   }
   
-  const version = getVersion();
+  let version = getVersion();
+  
+  // 在开始部署前检查版本是否需要升级
+  if (!skipNpm) {
+    log(`\n🔍 检查版本 ${CONFIG.packageName}@${version} 是否已存在于 npm...`, 'gray');
+    if (checkNpmVersionExists(CONFIG.packageName, version)) {
+      // 版本已存在，需要升级版本
+      log(`    版本 ${version} 已存在，需要升级版本`, 'yellow');
+      try {
+        execSync('pnpm run version:patch', {
+          cwd: path.resolve(__dirname, '..'),
+          stdio: 'inherit',
+        });
+        // 重新获取新版本号
+        version = getVersion();
+        log(`✅ 版本已升级到: ${version}`, 'green');
+      } catch (error) {
+        logError('版本升级失败');
+        process.exit(1);
+      }
+    } else {
+      log(`✅ 版本 ${version} 不存在于 npm，无需升级`, 'green');
+    }
+  }
+  
   const cdnBaseUrl = CONFIG.cdnTemplates[cdnProvider].replace('{version}', version);
   
   log(`\n📦 版本: ${version}`, 'cyan');
@@ -620,9 +869,17 @@ async function main() {
   }
   const buildSkipped = buildResult && buildResult.skipped === true;
   
-  // 步骤 2-5: 后续流程
+  // 步骤 2: E2E 冒烟测试
+  if (!stepE2ETest()) {
+    log('\n❌ 部署失败\n', 'red');
+    process.exit(1);
+  }
+  
+  // 步骤 3-7: 后续流程
+  // 注意：手册生成必须在 npm 发布和部署之前执行，否则 CDN 和部署包中不会包含手册
   const steps = [
     () => stepSeparateFiles(version, cdnBaseUrl, buildSkipped),
+    () => stepGenerateManual(version),  // 必须在 npm 发布之前，确保截图被包含在 CDN
     () => stepPublishNpm(version),
     () => stepDeployServer(version),
     () => stepVerify(version),

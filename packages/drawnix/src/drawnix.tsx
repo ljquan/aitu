@@ -59,6 +59,7 @@ import { useAutoInsertToCanvas } from './hooks/useAutoInsertToCanvas';
 import { useBeforeUnload } from './hooks/useBeforeUnload';
 import { ChatDrawer } from './components/chat-drawer';
 import { ChatDrawerProvider, useChatDrawer } from './contexts/ChatDrawerContext';
+import { ModelHealthProvider } from './contexts/ModelHealthContext';
 import { fontManagerService } from './services/font-manager-service';
 import { WorkflowProvider } from './contexts/WorkflowContext';
 import { useWorkspace } from './hooks/useWorkspace';
@@ -659,10 +660,11 @@ export const Drawnix: React.FC<DrawnixProps> = ({
         <AssetProvider>
           <ToolbarConfigProvider>
             <CacheQuotaProvider onOpenMediaLibrary={handleOpenMediaLibrary}>
-              <ChatDrawerProvider>
-                <WorkflowProvider>
-                  <DrawnixContext.Provider value={contextValue}>
-                    <DrawnixContent
+              <ModelHealthProvider>
+                <ChatDrawerProvider>
+                  <WorkflowProvider>
+                    <DrawnixContext.Provider value={contextValue}>
+                      <DrawnixContent
                       value={value}
                       viewport={viewport}
                       theme={theme}
@@ -701,9 +703,10 @@ export const Drawnix: React.FC<DrawnixProps> = ({
                         onClose={() => setMediaLibraryOpen(false)}
                       />
                     </Suspense>
-                  </DrawnixContext.Provider>
-                </WorkflowProvider>
-              </ChatDrawerProvider>
+                    </DrawnixContext.Provider>
+                  </WorkflowProvider>
+                </ChatDrawerProvider>
+              </ModelHealthProvider>
             </CacheQuotaProvider>
           </ToolbarConfigProvider>
         </AssetProvider>

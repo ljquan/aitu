@@ -138,3 +138,51 @@ export function getSpeedClass(duration) {
   if (duration >= 1000) return 'slow';
   return 'normal';
 }
+
+/**
+ * Format and syntax highlight JSON string
+ * @param {string} jsonStr - JSON string to format
+ * @returns {string} - HTML with syntax highlighting
+ */
+export function formatJsonWithHighlight(jsonStr) {
+  if (!jsonStr) return '';
+  
+  try {
+    // Try to parse and re-stringify with indentation
+    const parsed = JSON.parse(jsonStr);
+    const formatted = JSON.stringify(parsed, null, 2);
+    
+    // Apply syntax highlighting
+    return escapeHtml(formatted)
+      .replace(/"([^"]+)":/g, '<span class="json-key">"$1"</span>:')
+      .replace(/: "([^"]*)"/g, ': <span class="json-string">"$1"</span>')
+      .replace(/: (\d+\.?\d*)/g, ': <span class="json-number">$1</span>')
+      .replace(/: (true|false)/g, ': <span class="json-boolean">$1</span>')
+      .replace(/: (null)/g, ': <span class="json-null">$1</span>');
+  } catch {
+    // If not valid JSON, just escape and return
+    return escapeHtml(jsonStr);
+  }
+}
+
+/**
+ * Parse request body and extract key parameters for quick preview
+ * @param {string} requestBody - JSON string of request body
+ * @returns {object} - Extracted parameters { model, size, response_format, etc. }
+ */
+export function extractRequestParams(requestBody) {
+  if (!requestBody) return {};
+  
+  try {
+    const parsed = JSON.parse(requestBody);
+    return {
+      model: parsed.model,
+      size: parsed.size,
+      response_format: parsed.response_format,
+      seconds: parsed.seconds,
+      n: parsed.n,
+    };
+  } catch {
+    return {};
+  }
+}

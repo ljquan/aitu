@@ -7,7 +7,7 @@
 
 import React from 'react';
 import { Tooltip } from 'tdesign-react';
-import { useModelHealth } from '../../hooks/useModelHealth';
+import { useModelHealthContext } from '../../contexts/ModelHealthContext';
 import './model-health-badge.scss';
 
 export interface ModelHealthBadgeProps {
@@ -24,7 +24,7 @@ export const ModelHealthBadge: React.FC<ModelHealthBadgeProps> = ({
     modelId,
     className = '',
 }) => {
-    const { shouldShowHealth, getHealthStatus } = useModelHealth();
+    const { shouldShowHealth, getHealthStatus } = useModelHealthContext();
 
     // 如果不应该显示健康状态，返回 null
     if (!shouldShowHealth) {

@@ -19,7 +19,7 @@ const EMPTY_SET = new Set<string>();
 const TASK_ITEM_HEIGHT = 140;
 const TASK_ITEM_GAP = 0;
 const OVERSCAN_COUNT = 3;
-const COMPACT_LAYOUT_THRESHOLD = 500;
+const COMPACT_LAYOUT_THRESHOLD = 375;
 
 export interface VirtualTaskListProps {
   tasks: Task[];
@@ -66,7 +66,13 @@ export const VirtualTaskList: React.FC<VirtualTaskListProps> = ({
   const parentRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLElement | null>(null);
-  const [internalIsCompact, setInternalIsCompact] = useState(false);
+  // 惰性初始化：小屏幕默认使用紧凑布局（用屏幕宽度作为初始估计）
+  const [internalIsCompact, setInternalIsCompact] = useState(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < COMPACT_LAYOUT_THRESHOLD) {
+      return true;
+    }
+    return false;
+  });
   const [showBackToTop, setShowBackToTop] = useState(false);
 
   // 统一的布局检测模式
@@ -136,32 +142,36 @@ export const VirtualTaskList: React.FC<VirtualTaskListProps> = ({
 
   // 使用一个全局的 ResizeObserver 监听容器宽度，批量同步给所有 TaskItem
   // 支持抽屉（.side-drawer__content）和弹窗（.t-dialog__body）等多种容器
+  // 根据容器宽度判断是否使用紧凑布局
   useEffect(() => {
     if (forcedIsCompact !== undefined) return;
 
     const container = parentRef.current;
     if (!container) return;
 
-    // 查找合适的父容器来监听宽度（优先级：抽屉 > WinBox 内容区 > 弹窗任务列表 > 弹窗主体 > 自身）
-    const drawerContent = container.closest('.side-drawer__content') as HTMLElement;
-    const winboxContent = container.closest('.winbox-content-wrapper') as HTMLElement;
-    const dialogTaskList = container.closest('.dialog-task-list') as HTMLElement;
-    const dialogBody = container.closest('.t-dialog__body') as HTMLElement;
-    const targetElement = drawerContent || winboxContent || dialogTaskList || dialogBody || container;
+    // 查找合适的父容器来监听宽度
+    // 注意：监听 .side-drawer 而不是 .side-drawer__content，因为宽度变化发生在外层
+    const targetElement = container;
 
+    // 统一的布局检测函数 - 根据容器宽度判断
+    const updateLayout = (containerWidth?: number) => {
+      const width = containerWidth ?? targetElement.getBoundingClientRect().width;
+      setInternalIsCompact(width < COMPACT_LAYOUT_THRESHOLD);
+    };
+
+    // 监听容器宽度变化（处理抽屉拖动、窗口缩放等）
     const resizeObserver = new ResizeObserver((entries) => {
-      const width = entries[0].contentRect.width;
-      const shouldBeCompact = width < COMPACT_LAYOUT_THRESHOLD;
-      setInternalIsCompact(shouldBeCompact);
+      updateLayout(entries[0].contentRect.width);
     });
-
     resizeObserver.observe(targetElement);
-    // 初始检查一次
-    const initialWidth = targetElement.getBoundingClientRect().width;
-    setInternalIsCompact(initialWidth < COMPACT_LAYOUT_THRESHOLD);
-    
-    return () => resizeObserver.disconnect();
-  }, [forcedIsCompact]);
+
+    // 初始检查
+    updateLayout();
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [forcedIsCompact, parentRef.current]);
 
   // Only use virtualization for large lists
   const useVirtualization = tasks.length > VIRTUALIZATION_THRESHOLD;

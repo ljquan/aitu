@@ -8,7 +8,14 @@ import {
   getStrokeColorByElement,
 } from './utils';
 import { getStrokeWidthByElement, getStrokeStyleByElement } from '@plait/draw';
-import { FreehandStrokeStyle } from './freehand-settings';
+import { BrushShape, FreehandStrokeStyle } from './freehand-settings';
+
+/**
+ * 根据 BrushShape 获取 SVG linecap 值
+ */
+function getLinecapFromBrushShape(brushShape?: BrushShape): 'round' | 'square' {
+  return brushShape === BrushShape.square ? 'square' : 'round';
+}
 
 /**
  * 根据压力计算线宽
@@ -39,20 +46,34 @@ function createPressurePath(
   pressures: number[],
   baseWidth: number,
   strokeColor: string,
-  strokeStyle: FreehandStrokeStyle
+  strokeStyle: FreehandStrokeStyle,
+  brushShape?: BrushShape
 ): SVGGElement {
   const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  const linecap = getLinecapFromBrushShape(brushShape);
   
   if (points.length < 2) {
-    // 单点绘制为圆点
+    // 单点绘制
     if (points.length === 1) {
-      const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
       const width = calculateWidthFromPressure(pressures[0] ?? 0.5, baseWidth);
-      circle.setAttribute('cx', String(points[0][0]));
-      circle.setAttribute('cy', String(points[0][1]));
-      circle.setAttribute('r', String(width / 2));
-      circle.setAttribute('fill', strokeColor);
-      g.appendChild(circle);
+      if (brushShape === BrushShape.square) {
+        // 方形画笔：绘制矩形
+        const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        rect.setAttribute('x', String(points[0][0] - width / 2));
+        rect.setAttribute('y', String(points[0][1] - width / 2));
+        rect.setAttribute('width', String(width));
+        rect.setAttribute('height', String(width));
+        rect.setAttribute('fill', strokeColor);
+        g.appendChild(rect);
+      } else {
+        // 圆形画笔：绘制圆点
+        const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        circle.setAttribute('cx', String(points[0][0]));
+        circle.setAttribute('cy', String(points[0][1]));
+        circle.setAttribute('r', String(width / 2));
+        circle.setAttribute('fill', strokeColor);
+        g.appendChild(circle);
+      }
     }
     return g;
   }
@@ -105,8 +126,8 @@ function createPressurePath(
       path.setAttribute('stroke', strokeColor);
       path.setAttribute('stroke-width', String(baseWidth));
       path.setAttribute('stroke-dasharray', dashArray);
-      path.setAttribute('stroke-linecap', 'round');
-      path.setAttribute('stroke-linejoin', 'round');
+      path.setAttribute('stroke-linecap', linecap);
+      path.setAttribute('stroke-linejoin', linecap === 'square' ? 'miter' : 'round');
     }
     g.appendChild(path);
   }
@@ -120,29 +141,50 @@ function createPressurePath(
 function createDoubleLineWithoutPressure(
   points: Point[],
   baseWidth: number,
-  strokeColor: string
+  strokeColor: string,
+  brushShape?: BrushShape
 ): SVGGElement {
   const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  const linecap = getLinecapFromBrushShape(brushShape);
   
   if (points.length < 2) {
     if (points.length === 1) {
-      // 单点绘制两个圆点
       const lineSpacing = baseWidth * 0.8;
       const lineWidth = baseWidth * 0.4;
       
-      const circle1 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-      circle1.setAttribute('cx', String(points[0][0]));
-      circle1.setAttribute('cy', String(points[0][1] - lineSpacing / 2));
-      circle1.setAttribute('r', String(lineWidth / 2));
-      circle1.setAttribute('fill', strokeColor);
-      g.appendChild(circle1);
-      
-      const circle2 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-      circle2.setAttribute('cx', String(points[0][0]));
-      circle2.setAttribute('cy', String(points[0][1] + lineSpacing / 2));
-      circle2.setAttribute('r', String(lineWidth / 2));
-      circle2.setAttribute('fill', strokeColor);
-      g.appendChild(circle2);
+      if (brushShape === BrushShape.square) {
+        // 单点绘制两个方块
+        const rect1 = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        rect1.setAttribute('x', String(points[0][0] - lineWidth / 2));
+        rect1.setAttribute('y', String(points[0][1] - lineSpacing / 2 - lineWidth / 2));
+        rect1.setAttribute('width', String(lineWidth));
+        rect1.setAttribute('height', String(lineWidth));
+        rect1.setAttribute('fill', strokeColor);
+        g.appendChild(rect1);
+        
+        const rect2 = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        rect2.setAttribute('x', String(points[0][0] - lineWidth / 2));
+        rect2.setAttribute('y', String(points[0][1] + lineSpacing / 2 - lineWidth / 2));
+        rect2.setAttribute('width', String(lineWidth));
+        rect2.setAttribute('height', String(lineWidth));
+        rect2.setAttribute('fill', strokeColor);
+        g.appendChild(rect2);
+      } else {
+        // 单点绘制两个圆点
+        const circle1 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        circle1.setAttribute('cx', String(points[0][0]));
+        circle1.setAttribute('cy', String(points[0][1] - lineSpacing / 2));
+        circle1.setAttribute('r', String(lineWidth / 2));
+        circle1.setAttribute('fill', strokeColor);
+        g.appendChild(circle1);
+        
+        const circle2 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        circle2.setAttribute('cx', String(points[0][0]));
+        circle2.setAttribute('cy', String(points[0][1] + lineSpacing / 2));
+        circle2.setAttribute('r', String(lineWidth / 2));
+        circle2.setAttribute('fill', strokeColor);
+        g.appendChild(circle2);
+      }
     }
     return g;
   }
@@ -205,8 +247,8 @@ function createDoubleLineWithoutPressure(
   path1.setAttribute('fill', 'none');
   path1.setAttribute('stroke', strokeColor);
   path1.setAttribute('stroke-width', String(lineWidth));
-  path1.setAttribute('stroke-linecap', 'round');
-  path1.setAttribute('stroke-linejoin', 'round');
+  path1.setAttribute('stroke-linecap', linecap);
+  path1.setAttribute('stroke-linejoin', linecap === 'square' ? 'miter' : 'round');
   g.appendChild(path1);
   
   // 绘制下线
@@ -224,8 +266,8 @@ function createDoubleLineWithoutPressure(
   path2.setAttribute('fill', 'none');
   path2.setAttribute('stroke', strokeColor);
   path2.setAttribute('stroke-width', String(lineWidth));
-  path2.setAttribute('stroke-linecap', 'round');
-  path2.setAttribute('stroke-linejoin', 'round');
+  path2.setAttribute('stroke-linecap', linecap);
+  path2.setAttribute('stroke-linejoin', linecap === 'square' ? 'miter' : 'round');
   g.appendChild(path2);
   
   return g;
@@ -460,6 +502,8 @@ export class FreehandGenerator extends Generator<Freehand> {
     const fill = getFillByElement(this.board, element);
     const strokeStyle = getStrokeStyleByElement(this.board, element) as FreehandStrokeStyle;
     const strokeLineDash = getStrokeLineDash(strokeStyle as StrokeStyle, strokeWidth);
+    const brushShape = element.brushShape;
+    const linecap = getLinecapFromBrushShape(brushShape);
     
     // 如果有压力数据，使用压力感应绘制
     if (element.pressures && element.pressures.length > 0) {
@@ -468,7 +512,8 @@ export class FreehandGenerator extends Generator<Freehand> {
         element.pressures,
         strokeWidth,
         strokeColor,
-        strokeStyle
+        strokeStyle,
+        brushShape
       );
     }
     
@@ -477,7 +522,8 @@ export class FreehandGenerator extends Generator<Freehand> {
       return createDoubleLineWithoutPressure(
         element.points,
         strokeWidth,
-        strokeColor
+        strokeColor,
+        brushShape
       );
     }
     
@@ -493,7 +539,7 @@ export class FreehandGenerator extends Generator<Freehand> {
       gaussianSmooth(element.points, 1, 3),
       option
     );
-    setStrokeLinecap(g, 'round');
+    setStrokeLinecap(g, linecap);
     return g;
   }
 

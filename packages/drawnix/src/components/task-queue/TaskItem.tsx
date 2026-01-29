@@ -7,13 +7,16 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Button, Tag, Tooltip, Checkbox } from 'tdesign-react';
-import { ImageIcon, VideoIcon, DeleteIcon, DownloadIcon, EditIcon, UserIcon, CheckCircleFilledIcon } from 'tdesign-icons-react';
+import { ImageIcon, VideoIcon, DeleteIcon, DownloadIcon, EditIcon, UserIcon, CheckCircleFilledIcon, PlayCircleIcon, CloseCircleIcon } from 'tdesign-icons-react';
 import { Task, TaskStatus, TaskType } from '../../types/task.types';
 import { formatDateTime, formatTaskDuration } from '../../utils/task-utils';
 import { useUnifiedCache } from '../../hooks/useUnifiedCache';
 import { supportsCharacterExtraction, isSora2VideoId } from '../../types/character.types';
 import { RetryImage } from '../retry-image';
+import { TaskProgressOverlay } from './TaskProgressOverlay';
+import { useThumbnailUrl } from '../../hooks/useThumbnailUrl';
 import './task-queue.scss';
+import './task-progress-overlay.scss';
 
 // 布局切换阈值：容器宽度小于此值时使用紧凑布局（info 在图片下方全宽）
 // 弹窗侧栏宽度约 280px-500px，任务队列面板宽度约 300px-600px
@@ -48,11 +51,11 @@ export interface TaskItemProps {
 
 /**
  * Gets the appropriate status tag color based on task status
+ * Note: PENDING is deprecated, treated same as PROCESSING for legacy compatibility
  */
 function getStatusTagTheme(status: TaskStatus): 'default' | 'primary' | 'success' | 'warning' | 'danger' {
   switch (status) {
     case TaskStatus.PENDING:
-      return 'default';
     case TaskStatus.PROCESSING:
       return 'primary';
     case TaskStatus.COMPLETED:
@@ -68,11 +71,11 @@ function getStatusTagTheme(status: TaskStatus): 'default' | 'primary' | 'success
 
 /**
  * Gets the status label in Chinese
+ * Note: PENDING is deprecated, displayed as '处理中' for legacy compatibility
  */
 function getStatusLabel(status: TaskStatus): string {
   switch (status) {
     case TaskStatus.PENDING:
-      return '待处理';
     case TaskStatus.PROCESSING:
       return '处理中';
     case TaskStatus.COMPLETED:
@@ -150,6 +153,13 @@ export const TaskItem: React.FC<TaskItemProps> = React.memo(({
 
   // Use original URL or cached URL (Service Worker handles caching automatically)
   const mediaUrl = task.result?.url;
+  
+  // 获取预览图URL（任务列表使用小尺寸）
+  const thumbnailUrl = useThumbnailUrl(
+    mediaUrl,
+    task.type === TaskType.IMAGE ? 'image' : task.type === TaskType.VIDEO ? 'video' : undefined,
+    'small' // 任务列表使用小尺寸预览图
+  );
 
   // Load image to get actual dimensions
   useEffect(() => {
@@ -231,59 +241,74 @@ export const TaskItem: React.FC<TaskItemProps> = React.memo(({
         )}
 
       {/* 1. Preview Area - Visual entry point */}
-      {(isCompleted || task.status === TaskStatus.PROCESSING) && (mediaUrl || isCharacterTask || task.type === TaskType.VIDEO) && (
+      {(isCompleted || isFailed || task.status === TaskStatus.PROCESSING) && (mediaUrl || isCharacterTask || task.type === TaskType.VIDEO || task.type === TaskType.IMAGE) && (
         <div className="task-item__preview-wrapper">
           <div className="task-item__preview" data-track="task_click_preview" onClick={onPreviewOpen}>
-            {task.type === TaskType.IMAGE && mediaUrl ? (
-              <RetryImage
-                src={mediaUrl}
-                alt="Generated"
-                maxRetries={5}
-                fallback={
-                  <div className="task-item__preview-placeholder">
-                    <span>图片加载失败</span>
-                  </div>
-                }
+            {/* 失败状态：显示失败占位图 */}
+            {isFailed ? (
+              <div className="task-item__preview-failed">
+                <CloseCircleIcon size="24px" />
+                <span>生成失败</span>
+              </div>
+            ) : task.status === TaskStatus.PROCESSING ? (
+              /* 处理中状态：只显示进度覆盖层，不显示其他内容 */
+              <TaskProgressOverlay
+                key={task.startedAt} // 重试时 startedAt 变化，强制重新挂载以重置进度
+                taskType={task.type}
+                taskStatus={task.status}
+                realProgress={task.progress}
+                startedAt={task.startedAt}
+                mediaUrl={mediaUrl}
               />
-            ) : isCharacterTask && task.result?.characterProfileUrl ? (
-              <div className="task-item__character-preview">
-                <RetryImage
-                  src={task.result.characterProfileUrl}
-                  alt={`@${task.result.characterUsername}`}
-                  maxRetries={5}
-                  fallback={
-                    <div className="task-item__character-fallback">
-                      <UserIcon size="32px" />
-                    </div>
-                  }
-                />
-              </div>
-            ) : mediaUrl ? (
-              <video src={mediaUrl} muted playsInline />
-            ) : task.type === TaskType.VIDEO && task.status === TaskStatus.PROCESSING ? (
-              <div className="task-item__preview-placeholder">
-                <VideoIcon size="24px" />
-                <span>生成中...</span>
-              </div>
             ) : (
-              <div className="task-item__preview-placeholder">
-                {task.type === TaskType.IMAGE ? <ImageIcon size="24px" /> : <VideoIcon size="24px" />}
-              </div>
-            )}
-            
-            {/* Cache indicator */}
-            {isCached && !isCharacterTask && (
-              <div className="task-item__cache-badge">
-                <CheckCircleFilledIcon />
-                <span>已缓存</span>
-              </div>
-            )}
-            
-            {/* Progress overlay for processing videos */}
-            {task.status === TaskStatus.PROCESSING && task.type === TaskType.VIDEO && (
-              <div className="task-item__preview-progress">
-                <div className="task-item__preview-progress-text">{task.progress ?? 0}%</div>
-              </div>
+              <>
+                {/* 已完成状态：显示实际内容 */}
+                {task.type === TaskType.IMAGE && mediaUrl ? (
+                  <RetryImage
+                    src={thumbnailUrl || mediaUrl}
+                    alt="Generated"
+                    maxRetries={5}
+                    fallback={
+                      <div className="task-item__preview-placeholder">
+                        <span>图片加载失败</span>
+                      </div>
+                    }
+                  />
+                ) : isCharacterTask && task.result?.characterProfileUrl ? (
+                  <div className="task-item__character-preview">
+                    <RetryImage
+                      src={task.result.characterProfileUrl}
+                      alt={`@${task.result.characterUsername}`}
+                      maxRetries={5}
+                      fallback={
+                        <div className="task-item__character-fallback">
+                          <UserIcon size="32px" />
+                        </div>
+                      }
+                    />
+                  </div>
+                ) : mediaUrl ? (
+                  <>
+                    <video src={mediaUrl} muted playsInline poster={thumbnailUrl || undefined} />
+                    {/* 视频播放按钮覆盖层 */}
+                    <div className="task-item__video-play-overlay">
+                      <PlayCircleIcon size="32px" />
+                    </div>
+                  </>
+                ) : (
+                  <div className="task-item__preview-placeholder">
+                    {task.type === TaskType.IMAGE ? <ImageIcon size="24px" /> : <VideoIcon size="24px" />}
+                  </div>
+                )}
+                
+                {/* Cache indicator */}
+                {isCached && !isCharacterTask && (
+                  <div className="task-item__cache-badge">
+                    <CheckCircleFilledIcon />
+                    <span>已缓存</span>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>

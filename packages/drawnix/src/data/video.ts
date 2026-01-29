@@ -4,6 +4,7 @@ import {
   getRectangleByElements,
 } from '@plait/core';
 import { getInsertionPointForSelectedElements, getInsertionPointBelowBottommostElement, scrollToPointIfNeeded } from '../utils/selection-utils';
+import { analytics } from '../utils/posthog-analytics';
 
 /**
  * 从保存的选中元素IDs计算插入点
@@ -322,6 +323,14 @@ export const insertVideoFromUrl = async (
     // 使用DrawTransforms插入视频元素
     const { DrawTransforms } = await import('@plait/draw');
     DrawTransforms.insertImage(board, videoAsImageElement, insertionPoint);
+
+    // 埋点：视频插入画布
+    analytics.track('asset_insert_canvas', {
+      type: 'video',
+      source: videoUrl.startsWith('/__aitu_cache__/') || videoUrl.startsWith('/asset-library/') ? 'local' : 'external',
+      width: displayDimensions.width,
+      height: displayDimensions.height,
+    });
 
     // 插入后滚动视口到新元素位置（如果不在视口内）
     // skipScroll 用于批量插入场景，由上层统一处理滚动

@@ -8,7 +8,7 @@
  * to prevent accidental leakage of API keys and other sensitive information.
  */
 
-import { sanitizeObject } from './sanitize-utils';
+import { sanitizeObject } from '@aitu/utils';
 
 declare global {
   interface Window {
@@ -93,6 +93,12 @@ class PostHogAnalytics {
     promptLength: number;
     hasUploadedImage: boolean;
     startTime: number;
+    // Enhanced parameters for detailed analytics
+    aspectRatio?: string;       // 图片/视频比例 (e.g., "16:9", "1:1")
+    duration?: number;          // 视频时长（秒）
+    resolution?: string;        // 分辨率 (e.g., "1080p", "720p")
+    batchCount?: number;        // 批量生成数量
+    hasReferenceImage?: boolean; // 是否有参考图
   }): void {
     const eventMap = {
       image: AIGenerationEvent.IMAGE_GENERATION_START,

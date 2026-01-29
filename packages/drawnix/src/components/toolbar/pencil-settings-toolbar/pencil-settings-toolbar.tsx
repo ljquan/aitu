@@ -7,6 +7,7 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import classNames from 'classnames';
 import { useBoard } from '@plait-board/react-board';
 import { DEFAULT_COLOR, PlaitBoard } from '@plait/core';
+import { Circle, Square } from 'lucide-react';
 import { Island } from '../../island';
 import { ToolButton } from '../../tool-button';
 import { UnifiedColorPicker } from '../../unified-color-picker';
@@ -14,11 +15,13 @@ import { Popover, PopoverContent, PopoverTrigger } from '../../popover/popover';
 import Stack from '../../stack';
 import { useDrawnix } from '../../../hooks/use-drawnix';
 import {
+  BrushShape,
   getFreehandSettings,
   setFreehandStrokeWidth,
   setFreehandStrokeColor,
   setFreehandStrokeStyle,
   setFreehandPressureEnabled,
+  setPencilShape,
   FreehandStrokeStyle,
 } from '../../../plugins/freehand/freehand-settings';
 import { FreehandShape } from '../../../plugins/freehand/type';
@@ -26,7 +29,7 @@ import { getFreehandPointers } from '../../../plugins/freehand/utils';
 import { useI18n } from '../../../i18n';
 import { useViewportScale } from '../../../hooks/useViewportScale';
 import { updatePencilCursor } from '../../../hooks/usePencilCursor';
-import { Slider, Switch, Tooltip } from 'tdesign-react';
+import { Button, Slider, Switch, Tooltip } from 'tdesign-react';
 import {
   StrokeStyleNormalIcon,
   StrokeStyleDashedIcon,
@@ -36,10 +39,16 @@ import {
 import './pencil-settings-toolbar.scss';
 
 // 模拟光标预览组件
-const CursorPreview: React.FC<{ color: string; size: number; zoom: number }> = ({ color, size, zoom }) => {
+const CursorPreview: React.FC<{ 
+  color: string; 
+  size: number; 
+  zoom: number;
+  shape?: BrushShape;
+}> = ({ color, size, zoom, shape = BrushShape.circle }) => {
   // 应用缩放后的大小，限制范围：最小 4px，最大 256px
   const scaledSize = size * zoom;
   const previewSize = Math.max(4, Math.min(256, scaledSize));
+  const borderRadius = shape === BrushShape.circle ? '50%' : '0';
   
   return (
     <div
@@ -48,6 +57,7 @@ const CursorPreview: React.FC<{ color: string; size: number; zoom: number }> = (
         width: previewSize,
         height: previewSize,
         backgroundColor: color,
+        borderRadius,
       }}
     />
   );
@@ -70,6 +80,7 @@ export const PencilSettingsToolbar: React.FC = () => {
   const [strokeWidth, setStrokeWidth] = useState(settings.strokeWidth);
   const [strokeColor, setStrokeColor] = useState(settings.strokeColor);
   const [strokeStyle, setStrokeStyleState] = useState(settings.strokeStyle);
+  const [currentShape, setCurrentShape] = useState<BrushShape>(settings.pencilShape);
   const [pressureEnabled, setPressureEnabled] = useState(settings.pressureEnabled);
   const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
   const [isWidthPickerOpen, setIsWidthPickerOpen] = useState(false);
@@ -88,6 +99,7 @@ export const PencilSettingsToolbar: React.FC = () => {
     setStrokeWidth(newSettings.strokeWidth);
     setStrokeColor(newSettings.strokeColor);
     setStrokeStyleState(newSettings.strokeStyle);
+    setCurrentShape(newSettings.pencilShape);
     setPressureEnabled(newSettings.pressureEnabled);
     setInputValue(String(newSettings.strokeWidth));
   }, [board, appState.pointer]);
@@ -136,6 +148,14 @@ export const PencilSettingsToolbar: React.FC = () => {
     setFreehandStrokeStyle(board, style);
   }, [board]);
 
+  // 处理形状切换
+  const handleShapeChange = useCallback((shape: BrushShape) => {
+    setCurrentShape(shape);
+    setPencilShape(board, shape);
+    // 更新光标
+    updatePencilCursor(board, appState.pointer);
+  }, [board, appState.pointer]);
+
   // 处理压力感应开关变化
   const handlePressureChange = useCallback((enabled: boolean) => {
     setPressureEnabled(enabled);
@@ -160,7 +180,7 @@ export const PencilSettingsToolbar: React.FC = () => {
     >
       {/* 模拟光标预览 */}
       {showCursorPreview && (
-        <CursorPreview color={strokeColor || DEFAULT_COLOR} size={strokeWidth} zoom={zoom} />
+        <CursorPreview color={strokeColor || DEFAULT_COLOR} size={strokeWidth} zoom={zoom} shape={currentShape} />
       )}
       <Island
         ref={containerRef}
@@ -240,6 +260,30 @@ export const PencilSettingsToolbar: React.FC = () => {
             aria-label="双层线"
             onPointerUp={() => handleStrokeStyleChange(FreehandStrokeStyle.double)}
           />
+        </div>
+
+        {/* 画笔形状选择 */}
+        <div className="pencil-shape-picker">
+          <Tooltip content={t('toolbar.pencilShape.circle')} theme="light">
+            <Button
+              variant="text"
+              size="small"
+              className={`pencil-shape-button ${currentShape === BrushShape.circle ? 'active' : ''}`}
+              onClick={() => handleShapeChange(BrushShape.circle)}
+            >
+              <Circle size={16} />
+            </Button>
+          </Tooltip>
+          <Tooltip content={t('toolbar.pencilShape.square')} theme="light">
+            <Button
+              variant="text"
+              size="small"
+              className={`pencil-shape-button ${currentShape === BrushShape.square ? 'active' : ''}`}
+              onClick={() => handleShapeChange(BrushShape.square)}
+            >
+              <Square size={16} />
+            </Button>
+          </Tooltip>
         </div>
 
         {/* 画笔大小选择 */}

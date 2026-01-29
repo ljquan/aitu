@@ -1,0 +1,80 @@
+{
+  "id": "parameters-config",
+  "name": "参数配置演示",
+  "output": "参数配置.gif",
+  "targetPage": "ai-features/parameters",
+  "preWait": 1500,
+  "postWait": 2000,
+  "actions": [
+    {
+      "type": "keyHint",
+      "key": "参数",
+      "hint": "配置生成参数",
+      "duration": 1500
+    },
+    {
+      "type": "click",
+      "target": "testid:ai-input-bar .parameters-dropdown__trigger",
+      "label": "打开参数配置",
+      "wait": 1500,
+      "optional": true
+    },
+    {
+      "type": "keyHint",
+      "key": "平铺",
+      "hint": "所有参数平铺展示",
+      "duration": 1500
+    },
+    {
+      "type": "wait",
+      "duration": 1000
+    },
+    {
+      "type": "keyHint",
+      "key": "尺寸",
+      "hint": "选择图片尺寸",
+      "duration": 1000
+    },
+    {
+      "type": "click",
+      "target": "[data-param-value='16:9']",
+      "label": "选择 16:9",
+      "wait": 800,
+      "optional": true
+    },
+    {
+      "type": "keyHint",
+      "key": "数量",
+      "hint": "选择生成数量",
+      "duration": 1000
+    },
+    {
+      "type": "click",
+      "target": "[data-param-value='4']",
+      "label": "选择 4 张",
+      "wait": 800,
+      "optional": true
+    },
+    {
+      "type": "keyHint",
+      "key": "更多",
+      "hint": "更多参数选项",
+      "duration": 1500
+    },
+    {
+      "type": "wait",
+      "duration": 1000
+    },
+    {
+      "type": "keyHint",
+      "key": "保存",
+      "hint": "配置已保存",
+      "duration": 1000
+    },
+    {
+      "type": "press",
+      "key": "Escape",
+      "wait": 1500
+    }
+  ]
+}

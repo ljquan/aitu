@@ -202,16 +202,76 @@
   }
 }
 
-// 响应式调整
+// ============================================================================
+// Responsive Styles
+// ============================================================================
+
+// 平板及以下 (max-width: 768px)
 @media (max-width: 768px) {
   .view-navigation {
+    top: calc(env(safe-area-inset-top, 0px) + 8px);
+    z-index: 4005;
+
     &__zoom {
-      padding: 2px 6px;
+      padding: 2px 4px;
+      border-radius: 16px;
+    }
+
+    // 确保触控友好的按钮尺寸 (最小44px)
+    &__zoom-btn {
+      width: 36px;
+      height: 36px;
+      min-width: 36px;
+
+      svg {
+        width: 16px;
+        height: 16px;
+      }
+    }
+
+    &__zoom-percent {
+      min-width: 44px;
+      height: 36px;
+      font-size: 12px;
+      padding: 0 4px;
+    }
+
+    &__minimap-toggle {
+      width: 32px;
+      height: 32px;
+      min-width: 32px;
+
+      svg {
+        width: 14px;
+        height: 14px;
+      }
+    }
+
+    &__minimap {
+      .minimap__content {
+        transform: scale(0.8);
+        transform-origin: top right;
+      }
+    }
+  }
+}
+
+// 移动端竖屏 (max-width: 640px)
+@media (max-width: 640px) {
+  .view-navigation {
+    top: calc(env(safe-area-inset-top, 0px) + 6px);
+    gap: 4px;
+
+    &__zoom {
+      padding: 2px 2px;
+      border-radius: 14px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
     }
 
     &__zoom-btn {
-      width: 24px;
-      height: 24px;
+      width: 32px;
+      height: 32px;
+      min-width: 32px;
 
       svg {
         width: 14px;
@@ -220,14 +280,17 @@
     }
 
     &__zoom-percent {
-      min-width: 38px;
-      height: 24px;
-      font-size: 12px;
+      min-width: 40px;
+      height: 32px;
+      font-size: 11px;
+      padding: 0 2px;
     }
 
+    // 移动端隐藏 minimap toggle 按钮，节省空间
     &__minimap-toggle {
-      width: 20px;
-      height: 20px;
+      width: 28px;
+      height: 28px;
+      min-width: 28px;
 
       svg {
         width: 12px;
@@ -235,10 +298,75 @@
       }
     }
 
+    // 移动端 minimap 缩小更多
     &__minimap {
       .minimap__content {
-        transform: scale(0.85);
+        transform: scale(0.7);
         transform-origin: top right;
+      }
+    }
+  }
+}
+
+// 小屏移动端 (max-width: 480px)
+@media (max-width: 480px) {
+  .view-navigation {
+    &__zoom {
+      padding: 1px 1px;
+    }
+
+    &__zoom-btn {
+      width: 28px;
+      height: 28px;
+      min-width: 28px;
+
+      svg {
+        width: 12px;
+        height: 12px;
+      }
+    }
+
+    &__zoom-percent {
+      min-width: 36px;
+      height: 28px;
+      font-size: 10px;
+      padding: 0 1px;
+    }
+
+    // 小屏幕 minimap toggle 更紧凑
+    &__minimap-toggle {
+      width: 24px;
+      height: 24px;
+      min-width: 24px;
+
+      svg {
+        width: 10px;
+        height: 10px;
+      }
+    }
+
+    // 小屏幕 minimap 缩小
+    &__minimap {
+      .minimap__content {
+        transform: scale(0.6);
+        transform-origin: top right;
+      }
+    }
+  }
+}
+
+// 缩放菜单响应式
+@media (max-width: 640px) {
+  .view-navigation-zoom-menu {
+    min-width: 120px;
+    padding: 2px;
+
+    .zoom-menu-item {
+      padding: 10px 10px; // 增加触控区域
+      font-size: 13px;
+
+      .zoom-menu-item__shortcut {
+        display: none; // 移动端隐藏快捷键提示
       }
     }
   }

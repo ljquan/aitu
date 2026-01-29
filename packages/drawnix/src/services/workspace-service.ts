@@ -18,6 +18,7 @@ import {
   CreateBoardOptions,
   BoardChangeData,
   WORKSPACE_DEFAULTS,
+  ValidationError,
 } from '../types/workspace.types';
 import { workspaceStorageService } from './workspace-storage-service';
 
@@ -65,7 +66,7 @@ class WorkspaceService {
    */
   async initialize(): Promise<void> {
     if (this.initialized) return;
-    
+
     // 如果正在初始化，等待完成
     if (this.initializationPromise) {
       return this.initializationPromise;
@@ -87,9 +88,11 @@ class WorkspaceService {
       ]);
 
       // Use requestIdleCallback to yield to main thread before processing data
-      await new Promise<void>(resolve => {
+      await new Promise<void>((resolve) => {
         if ('requestIdleCallback' in window) {
-          (window as Window).requestIdleCallback(() => resolve(), { timeout: 50 });
+          (window as Window).requestIdleCallback(() => resolve(), {
+            timeout: 50,
+          });
         } else {
           setTimeout(resolve, 0);
         }
@@ -128,15 +131,37 @@ class WorkspaceService {
   async createFolder(options: CreateFolderOptions): Promise<Folder> {
     await this.ensureInitialized();
 
-    const siblings = this.getFolderChildren(options.parentId || null);
-    const maxOrder = siblings.length > 0
-      ? Math.max(...siblings.map((s) => s.order)) + 1
-      : 0;
+    const parentId = options.parentId || null;
+    const folderId = generateId();
+
+    const providedName = (
+      options.name ?? WORKSPACE_DEFAULTS.DEFAULT_FOLDER_NAME
+    ).trim();
+    const baseName = providedName || WORKSPACE_DEFAULTS.DEFAULT_FOLDER_NAME;
+    const isDefaultName = baseName === WORKSPACE_DEFAULTS.DEFAULT_FOLDER_NAME;
+
+    const finalName = isDefaultName
+      ? this.generateUniqueFolderName(baseName, parentId)
+      : (() => {
+          const validation = this.validateFolderName(
+            folderId,
+            baseName,
+            parentId
+          );
+          if (!validation.valid) {
+            throw new ValidationError(validation.error!);
+          }
+          return baseName;
+        })();
+
+    const siblings = this.getFolderChildren(parentId);
+    const maxOrder =
+      siblings.length > 0 ? Math.max(...siblings.map((s) => s.order)) + 1 : 0;
 
     const folder: Folder = {
-      id: generateId(),
-      name: options.name || WORKSPACE_DEFAULTS.DEFAULT_FOLDER_NAME,
-      parentId: options.parentId || null,
+      id: folderId,
+      name: finalName,
+      parentId: parentId,
       order: maxOrder,
       isExpanded: true,
       createdAt: Date.now(),
@@ -150,11 +175,57 @@ class WorkspaceService {
     return folder;
   }
 
+  /**
+   * Validate folder name
+   * 验证文件夹名称
+   */
+  private validateFolderName(
+    folderId: string,
+    name: string,
+    parentId: string | null
+  ): { valid: boolean; error?: string } {
+    // 1. 空名称检查
+    const trimmedName = name.trim();
+    if (trimmedName.length === 0) {
+      return { valid: false, error: '文件夹名称不能为空' };
+    }
+
+    // 2. 长度检查
+    if (trimmedName.length > WORKSPACE_DEFAULTS.MAX_NAME_LENGTH) {
+      return {
+        valid: false,
+        error: `文件夹名称不能超过${WORKSPACE_DEFAULTS.MAX_NAME_LENGTH}个字符`,
+      };
+    }
+
+    // 3. 同级重名检查（只检查同一父文件夹内的其他文件夹）
+    const siblings = this.getFolderChildren(parentId).filter(
+      (f) => f.id !== folderId
+    );
+
+    const isDuplicate = siblings.some((f) => f.name === trimmedName);
+    if (isDuplicate) {
+      return {
+        valid: false,
+        error: '此文件夹中已存在同名文件夹，请使用其他名称',
+      };
+    }
+
+    return { valid: true };
+  }
+
   async renameFolder(id: string, name: string): Promise<void> {
     const folder = this.folders.get(id);
     if (!folder) throw new Error(`Folder ${id} not found`);
 
-    folder.name = name;
+    // 验证名称
+    const validation = this.validateFolderName(id, name, folder.parentId);
+    if (!validation.valid) {
+      throw new ValidationError(validation.error!);
+    }
+
+    const trimmedName = name.trim();
+    folder.name = trimmedName;
     folder.updatedAt = Date.now();
 
     this.folders.set(id, folder);
@@ -234,22 +305,103 @@ class WorkspaceService {
 
   // ========== Board Operations ==========
 
+  /**
+   * Generate a unique board name within a folder by appending (n) when needed
+   */
+  private generateUniqueBoardName(
+    baseName: string,
+    folderId: string | null,
+    ignoreBoardId?: string
+  ): string {
+    const trimmedBaseName =
+      baseName.trim() || WORKSPACE_DEFAULTS.DEFAULT_BOARD_NAME;
+
+    const siblings = this.getBoardsInFolder(folderId).filter(
+      (b) => b.id !== ignoreBoardId
+    );
+    const existingNames = new Set(siblings.map((b) => b.name));
+
+    if (!existingNames.has(trimmedBaseName)) {
+      return trimmedBaseName;
+    }
+
+    let counter = 2;
+    let candidate = `${trimmedBaseName} (${counter})`;
+    while (existingNames.has(candidate)) {
+      counter += 1;
+      candidate = `${trimmedBaseName} (${counter})`;
+    }
+
+    return candidate;
+  }
+
+  /**
+   * Generate a unique folder name within a parent by appending (n) when needed
+   */
+  private generateUniqueFolderName(
+    baseName: string,
+    parentId: string | null,
+    ignoreFolderId?: string
+  ): string {
+    const trimmedBaseName =
+      baseName.trim() || WORKSPACE_DEFAULTS.DEFAULT_FOLDER_NAME;
+
+    const siblings = this.getFolderChildren(parentId).filter(
+      (f) => f.id !== ignoreFolderId
+    );
+    const existingNames = new Set(siblings.map((f) => f.name));
+
+    if (!existingNames.has(trimmedBaseName)) {
+      return trimmedBaseName;
+    }
+
+    let counter = 2;
+    let candidate = `${trimmedBaseName} (${counter})`;
+    while (existingNames.has(candidate)) {
+      counter += 1;
+      candidate = `${trimmedBaseName} (${counter})`;
+    }
+
+    return candidate;
+  }
+
   async createBoard(options: CreateBoardOptions): Promise<Board> {
     await this.ensureInitialized();
 
     const boardId = generateId();
     const now = Date.now();
+    const folderId = options.folderId || null;
+
+    const providedName = (
+      options.name ?? WORKSPACE_DEFAULTS.DEFAULT_BOARD_NAME
+    ).trim();
+    const baseName = providedName || WORKSPACE_DEFAULTS.DEFAULT_BOARD_NAME;
+    const isDefaultName = baseName === WORKSPACE_DEFAULTS.DEFAULT_BOARD_NAME;
+
+    // 默认名称自动去重，其余名称遵循重名校验
+    const finalName = isDefaultName
+      ? this.generateUniqueBoardName(baseName, folderId)
+      : (() => {
+          const validation = this.validateBoardName(
+            boardId,
+            baseName,
+            folderId
+          );
+          if (!validation.valid) {
+            throw new ValidationError(validation.error!);
+          }
+          return baseName;
+        })();
 
     // Get max order in folder
-    const siblings = this.getBoardsInFolder(options.folderId || null);
-    const maxOrder = siblings.length > 0
-      ? Math.max(...siblings.map((s) => s.order)) + 1
-      : 0;
+    const siblings = this.getBoardsInFolder(folderId);
+    const maxOrder =
+      siblings.length > 0 ? Math.max(...siblings.map((s) => s.order)) + 1 : 0;
 
     const board: Board = {
       id: boardId,
-      name: options.name || WORKSPACE_DEFAULTS.DEFAULT_BOARD_NAME,
-      folderId: options.folderId || null,
+      name: finalName,
+      folderId,
       order: maxOrder,
       elements: options.elements || [],
       viewport: options.viewport,
@@ -265,11 +417,57 @@ class WorkspaceService {
     return board;
   }
 
+  /**
+   * Validate board name
+   * 验证画板名称
+   */
+  private validateBoardName(
+    boardId: string,
+    name: string,
+    folderId: string | null
+  ): { valid: boolean; error?: string } {
+    // 1. 空名称检查
+    const trimmedName = name.trim();
+    if (trimmedName.length === 0) {
+      return { valid: false, error: '画板名称不能为空' };
+    }
+
+    // 2. 长度检查
+    if (trimmedName.length > WORKSPACE_DEFAULTS.MAX_NAME_LENGTH) {
+      return {
+        valid: false,
+        error: `画板名称不能超过${WORKSPACE_DEFAULTS.MAX_NAME_LENGTH}个字符`,
+      };
+    }
+
+    // 3. 同级重名检查（只检查同一文件夹内的其他画板）
+    const siblings = Array.from(this.boards.values()).filter(
+      (b) => b.folderId === folderId && b.id !== boardId
+    );
+
+    const isDuplicate = siblings.some((b) => b.name === trimmedName);
+    if (isDuplicate) {
+      return {
+        valid: false,
+        error: '此文件夹中已存在同名画板，请使用其他名称',
+      };
+    }
+
+    return { valid: true };
+  }
+
   async renameBoard(id: string, name: string): Promise<void> {
     const board = this.boards.get(id);
     if (!board) throw new Error(`Board ${id} not found`);
 
-    board.name = name;
+    // 验证名称
+    const validation = this.validateBoardName(id, name, board.folderId);
+    if (!validation.valid) {
+      throw new ValidationError(validation.error!);
+    }
+
+    const trimmedName = name.trim();
+    board.name = trimmedName;
     board.updatedAt = Date.now();
 
     this.boards.set(id, board);
@@ -293,37 +491,56 @@ class WorkspaceService {
   }
 
   async moveBoard(
-    id: string, 
-    targetFolderId: string | null, 
-    targetId?: string, 
+    id: string,
+    targetFolderId: string | null,
+    targetId?: string,
     position?: 'before' | 'after'
   ): Promise<void> {
     const board = this.boards.get(id);
     if (!board) throw new Error(`Board ${id} not found`);
 
-    board.folderId = targetFolderId;
+    const targetFolder = targetFolderId || null;
+
+    // Validate name conflicts when moving into a different folder
+    if (board.folderId !== targetFolder) {
+      const validation = this.validateBoardName(id, board.name, targetFolder);
+      if (!validation.valid) {
+        throw new ValidationError(validation.error!);
+      }
+    }
+
+    board.folderId = targetFolder;
     board.updatedAt = Date.now();
 
     // Get all items in target folder (excluding the moved board)
-    const boardSiblings = this.getBoardsInFolder(targetFolderId).filter(b => b.id !== id);
-    const folderSiblings = this.getFolderChildren(targetFolderId);
+    const boardSiblings = this.getBoardsInFolder(targetFolder).filter(
+      (b) => b.id !== id
+    );
+    const folderSiblings = this.getFolderChildren(targetFolder);
 
     // Build ordered list of all items
     let allItems: Array<{ id: string; type: 'board' | 'folder' }> = [
-      ...folderSiblings.map(f => ({ id: f.id, type: 'folder' as const })),
-      ...boardSiblings.map(b => ({ id: b.id, type: 'board' as const })),
+      ...folderSiblings.map((f) => ({ id: f.id, type: 'folder' as const })),
+      ...boardSiblings.map((b) => ({ id: b.id, type: 'board' as const })),
     ].sort((a, b) => {
-      const orderA = a.type === 'board' ? this.boards.get(a.id)?.order ?? 0 : this.folders.get(a.id)?.order ?? 0;
-      const orderB = b.type === 'board' ? this.boards.get(b.id)?.order ?? 0 : this.folders.get(b.id)?.order ?? 0;
+      const orderA =
+        a.type === 'board'
+          ? this.boards.get(a.id)?.order ?? 0
+          : this.folders.get(a.id)?.order ?? 0;
+      const orderB =
+        b.type === 'board'
+          ? this.boards.get(b.id)?.order ?? 0
+          : this.folders.get(b.id)?.order ?? 0;
       return orderA - orderB;
     });
 
     if (targetId && position) {
       // Find target index
-      const targetIndex = allItems.findIndex(item => item.id === targetId);
+      const targetIndex = allItems.findIndex((item) => item.id === targetId);
       if (targetIndex !== -1) {
         // Insert at the correct position
-        const insertIndex = position === 'before' ? targetIndex : targetIndex + 1;
+        const insertIndex =
+          position === 'before' ? targetIndex : targetIndex + 1;
         allItems.splice(insertIndex, 0, { id: board.id, type: 'board' });
       } else {
         // Target not found, add to end
@@ -362,7 +579,7 @@ class WorkspaceService {
    * Move folder to a new parent folder
    */
   async moveFolder(
-    id: string, 
+    id: string,
     targetParentId: string | null,
     targetId?: string,
     position?: 'before' | 'after'
@@ -377,7 +594,21 @@ class WorkspaceService {
         if (parent.id === id) {
           throw new Error('Cannot move folder into itself or its descendants');
         }
-        parent = parent.parentId ? this.folders.get(parent.parentId) : undefined;
+        parent = parent.parentId
+          ? this.folders.get(parent.parentId)
+          : undefined;
+      }
+    }
+
+    // Validate duplicate name when moving to another parent
+    if (folder.parentId !== targetParentId) {
+      const validation = this.validateFolderName(
+        id,
+        folder.name,
+        targetParentId
+      );
+      if (!validation.valid) {
+        throw new ValidationError(validation.error!);
       }
     }
 
@@ -385,25 +616,34 @@ class WorkspaceService {
     folder.updatedAt = Date.now();
 
     // Get all items in target folder (excluding the moved folder)
-    const folderSiblings = this.getFolderChildren(targetParentId).filter(f => f.id !== id);
+    const folderSiblings = this.getFolderChildren(targetParentId).filter(
+      (f) => f.id !== id
+    );
     const boardSiblings = this.getBoardsInFolder(targetParentId);
 
     // Build ordered list of all items
     let allItems: Array<{ id: string; type: 'board' | 'folder' }> = [
-      ...folderSiblings.map(f => ({ id: f.id, type: 'folder' as const })),
-      ...boardSiblings.map(b => ({ id: b.id, type: 'board' as const })),
+      ...folderSiblings.map((f) => ({ id: f.id, type: 'folder' as const })),
+      ...boardSiblings.map((b) => ({ id: b.id, type: 'board' as const })),
     ].sort((a, b) => {
-      const orderA = a.type === 'board' ? this.boards.get(a.id)?.order ?? 0 : this.folders.get(a.id)?.order ?? 0;
-      const orderB = b.type === 'board' ? this.boards.get(b.id)?.order ?? 0 : this.folders.get(b.id)?.order ?? 0;
+      const orderA =
+        a.type === 'board'
+          ? this.boards.get(a.id)?.order ?? 0
+          : this.folders.get(a.id)?.order ?? 0;
+      const orderB =
+        b.type === 'board'
+          ? this.boards.get(b.id)?.order ?? 0
+          : this.folders.get(b.id)?.order ?? 0;
       return orderA - orderB;
     });
 
     if (targetId && position) {
       // Find target index
-      const targetIndex = allItems.findIndex(item => item.id === targetId);
+      const targetIndex = allItems.findIndex((item) => item.id === targetId);
       if (targetIndex !== -1) {
         // Insert at the correct position
-        const insertIndex = position === 'before' ? targetIndex : targetIndex + 1;
+        const insertIndex =
+          position === 'before' ? targetIndex : targetIndex + 1;
         allItems.splice(insertIndex, 0, { id: folder.id, type: 'folder' });
       } else {
         // Target not found, add to end
@@ -478,12 +718,12 @@ class WorkspaceService {
 
     // Generate new name with "副本" suffix
     let newName = `${sourceBoard.name} 副本`;
-    
+
     // Check if name already exists and add number if needed
     const existingNames = Array.from(this.boards.values())
-      .filter(b => b.folderId === sourceBoard.folderId)
-      .map(b => b.name);
-    
+      .filter((b) => b.folderId === sourceBoard.folderId)
+      .map((b) => b.name);
+
     let counter = 1;
     while (existingNames.includes(newName)) {
       counter++;
@@ -514,7 +754,10 @@ class WorkspaceService {
   /**
    * Batch move multiple boards to a folder
    */
-  async moveBoardsBatch(ids: string[], targetFolderId: string | null): Promise<void> {
+  async moveBoardsBatch(
+    ids: string[],
+    targetFolderId: string | null
+  ): Promise<void> {
     for (const id of ids) {
       await this.moveBoard(id, targetFolderId);
     }
@@ -693,7 +936,7 @@ class WorkspaceService {
       this.state = state;
 
       // 触发更新事件
-      this.emit('tree-changed');
+      this.emit('treeChanged');
     } catch (error) {
       console.error('[WorkspaceService] Failed to reload:', error);
       throw error;

@@ -10,6 +10,7 @@ import MenuItem from '../menu/menu-item';
 import MenuSeparator from '../menu/menu-separator';
 import { useI18n } from '../../i18n';
 import { useToolbarConfig } from '../../hooks/use-toolbar-config';
+import { Z_INDEX } from '../../constants/z-index';
 
 interface ContextMenuPosition {
   x: number;
@@ -198,7 +199,7 @@ export const ToolbarContextMenu: React.FC<ToolbarContextMenuProps> = ({
               position: 'fixed',
               left: position.x,
               top: position.y,
-              zIndex: 10000,
+              zIndex: Z_INDEX.DROPDOWN_PORTAL,
             }}
           >
             <Menu>

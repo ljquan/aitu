@@ -7,6 +7,7 @@ import {
   GithubIcon,
   BackupRestoreIcon,
   DebugLogIcon,
+  BookOpenIcon,
 } from '../../icons';
 import { useBoard, useListRender } from '@plait-board/react-board';
 import {
@@ -225,6 +226,23 @@ export const GitHubLink = () => {
   );
 };
 GitHubLink.displayName = 'GitHubLink';
+
+export const UserManual = () => {
+  const { t } = useI18n();
+  return (
+    <MenuItem
+      icon={<BookOpenIcon />}
+      data-track="toolbar_click_menu_manual"
+      onSelect={() => {
+        window.open('./user-manual/index.html', '_blank');
+      }}
+      aria-label={t('menu.userManual')}
+    >
+      {t('menu.userManual')}
+    </MenuItem>
+  );
+};
+UserManual.displayName = 'UserManual';
 
 export const VersionInfo = () => {
   const { t } = useI18n();

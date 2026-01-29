@@ -1,0 +1,13 @@
+{
+  "id": "ai-image-generate",
+  "name": "AI 图片生成演示",
+  "output": "AI图片生成演示.gif",
+  "targetPage": "ai-generation/image-generation",
+  "preWait": 1000,
+  "postWait": 2000,
+  "actions": [
+    { "type": "click", "target": "testid:ai-input-textarea", "label": "点击输入框", "wait": 500 },
+    { "type": "type", "text": "一只可爱的橘猫，正在阳光下打盹", "delay": 80, "wait": 1500 },
+    { "type": "wait", "duration": 1000 }
+  ]
+}

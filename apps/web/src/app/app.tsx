@@ -6,6 +6,7 @@ import {
   isWorkspaceMigrationCompleted,
   Board,
   BoardChangeData,
+  TreeNode,
 } from '@drawnix/drawnix';
 import { PlaitBoard, PlaitElement, PlaitTheme, Viewport } from '@plait/core';
 
@@ -63,16 +64,26 @@ export function App() {
         // Load current board data if available
         let currentBoard = workspaceService.getCurrentBoard();
 
-        // If no current board and no boards exist, create default board with initializeData
-        if (!currentBoard && !workspaceService.hasBoards()) {
-          const board = await workspaceService.createBoard({
-            name: '我的画板1',
-            elements: [],
-          });
+        // If no current board, try to select first available board or create new one
+        if (!currentBoard) {
+          if (workspaceService.hasBoards()) {
+            // Select first available board
+            const tree = workspaceService.getTree();
+            const firstBoard = findFirstBoard(tree);
+            if (firstBoard) {
+              currentBoard = await workspaceService.switchBoard(firstBoard.id);
+            }
+          } else {
+            // No boards exist, create default board
+            const board = await workspaceService.createBoard({
+              name: '我的画板1',
+              elements: [],
+            });
 
-          if (board) {
-            const switchedBoard = await workspaceService.switchBoard(board.id);
-            currentBoard = switchedBoard;
+            if (board) {
+              const switchedBoard = await workspaceService.switchBoard(board.id);
+              currentBoard = switchedBoard;
+            }
           }
         }
 
@@ -311,6 +322,22 @@ async function recoverVideoUrlsInElements(
 
     return element;
   });
+}
+
+/**
+ * 从树结构中找到第一个画板
+ */
+function findFirstBoard(nodes: TreeNode[]): Board | null {
+  for (const node of nodes) {
+    if (node.type === 'board') {
+      return node.data;
+    }
+    if (node.type === 'folder' && node.children) {
+      const board = findFirstBoard(node.children);
+      if (board) return board;
+    }
+  }
+  return null;
 }
 
 export default App;

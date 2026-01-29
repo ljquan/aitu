@@ -7,8 +7,10 @@
 
 import React, { useCallback, useMemo, useEffect, useRef } from 'react';
 import { useCharacters } from '../../hooks/useCharacters';
+import { analytics } from '../../utils/posthog-analytics';
 import type { SoraCharacter } from '../../types/character.types';
 import { CharacterAvatar } from './CharacterAvatar';
+import { Z_INDEX } from '../../constants/z-index';
 import './character.scss';
 
 export interface CharacterMentionPopupProps {
@@ -80,6 +82,11 @@ export const CharacterMentionPopup: React.FC<CharacterMentionPopupProps> = ({
   // Handle character click
   const handleCharacterClick = useCallback(
     (character: SoraCharacter) => {
+      // 埋点：角色在提示词中使用
+      analytics.track('character_used_in_prompt', {
+        characterId: character.id,
+        username: character.username,
+      });
       onSelect(character);
     },
     [onSelect]
@@ -93,7 +100,7 @@ export const CharacterMentionPopup: React.FC<CharacterMentionPopupProps> = ({
     top: position.top,
     left: position.left,
     transform: showBelow ? 'none' : 'translateY(-100%)',
-    zIndex: 10000,
+    zIndex: Z_INDEX.DROPDOWN_PORTAL,
     maxHeight: '200px',
     overflowY: 'auto',
   };

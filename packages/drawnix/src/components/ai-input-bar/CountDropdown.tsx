@@ -3,7 +3,9 @@ import { createPortal } from 'react-dom';
 import { ChevronDown, Check } from 'lucide-react';
 import { ATTACHED_ELEMENT_CLASS_NAME } from '@plait/core';
 import { useI18n } from '../../i18n';
+import { Z_INDEX } from '../../constants/z-index';
 import { KeyboardDropdown } from './KeyboardDropdown';
+import { useControllableState } from '../../hooks/useControllableState';
 
 export interface CountDropdownProps {
   value: number;
@@ -24,21 +26,11 @@ export const CountDropdown: React.FC<CountDropdownProps> = ({
   isOpen: controlledIsOpen,
   onOpenChange,
 }) => {
-  const [internalIsOpen, setInternalIsOpen] = useState(false);
-  // 支持受控和非受控模式
-  const isOpen = controlledIsOpen !== undefined ? controlledIsOpen : internalIsOpen;
-  const setIsOpen = useCallback((open: boolean | ((prev: boolean) => boolean)) => {
-    if (typeof open === 'function') {
-      // 函数式更新：需要使用当前状态计算新值
-      const currentIsOpen = controlledIsOpen !== undefined ? controlledIsOpen : internalIsOpen;
-      const newValue = open(currentIsOpen);
-      setInternalIsOpen(newValue);
-      onOpenChange?.(newValue);
-    } else {
-      setInternalIsOpen(open);
-      onOpenChange?.(open);
-    }
-  }, [controlledIsOpen, internalIsOpen, onOpenChange]);
+  const { value: isOpen, setValue: setIsOpen } = useControllableState({
+    controlledValue: controlledIsOpen,
+    defaultValue: false,
+    onChange: onOpenChange,
+  });
 
   const { language } = useI18n();
   const [highlightedIndex, setHighlightedIndex] = useState(0);
@@ -126,7 +118,7 @@ export const CountDropdown: React.FC<CountDropdownProps> = ({
               className={`count-dropdown__menu ${ATTACHED_ELEMENT_CLASS_NAME}`}
               style={{
                 position: 'fixed',
-                zIndex: 10000,
+                zIndex: Z_INDEX.DROPDOWN_PORTAL,
                 left: portalPosition.left,
                 bottom: window.innerHeight - portalPosition.top + 8,
               }}

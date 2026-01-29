@@ -225,3 +225,178 @@
         margin-left: -2px;
     }
 }
+
+// ============================================================================
+// Mobile Responsive Styles
+// ============================================================================
+
+// 平板及以下 (max-width: 768px)
+@media (max-width: 768px) {
+    .popup-toolbar {
+        // 限制最大宽度，防止超出屏幕
+        max-width: calc(100vw - 32px);
+        
+        // 内部 stack 支持水平滚动
+        .stack_horizontal {
+            // 将 grid 改为 flex 以支持更好的滚动
+            display: flex !important;
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            overflow-y: hidden;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none; // Firefox
+            gap: 4px; // 保持按钮间距
+            
+            &::-webkit-scrollbar {
+                display: none; // Chrome, Safari, Edge
+            }
+        }
+        
+        // 确保弹出工具栏在移动端有足够的触控区域
+        .property-button {
+            min-width: 40px;
+            min-height: 40px;
+            flex-shrink: 0;
+        }
+
+        // 调整按钮内部元素
+        .tool-icon__icon {
+            svg {
+                width: 20px;
+                height: 20px;
+            }
+        }
+        
+        // 所有工具按钮不收缩
+        .tool-button {
+            flex-shrink: 0;
+        }
+    }
+
+    // 颜色/描边设置面板
+    .stroke-setting,
+    .fill-setting {
+        // 增加滑块触控区域
+        .t-slider__button {
+            width: 20px;
+            height: 20px;
+        }
+
+        // 增加输入框尺寸
+        .stroke-width-input {
+            width: 40px;
+            height: 28px;
+            font-size: 14px;
+        }
+
+        // 拾色器宽度适配屏幕
+        .unified-color-picker {
+            width: min(280px, calc(100vw - 48px));
+        }
+    }
+
+    // 圆角设置面板
+    .corner-radius-setting-compact {
+        .corner-radius-row {
+            height: 32px;
+        }
+
+        .t-slider__button {
+            width: 18px;
+            height: 18px;
+        }
+
+        .corner-radius-input {
+            width: 44px;
+            height: 28px;
+            font-size: 14px;
+        }
+    }
+}
+
+// 移动端竖屏 (max-width: 640px)
+@media (max-width: 640px) {
+    .popup-toolbar {
+        // 进一步限制最大宽度
+        max-width: calc(100vw - 24px);
+        
+        // 更大的触控目标
+        .property-button {
+            min-width: 44px;
+            min-height: 44px;
+        }
+
+        .fill-label,
+        .stroke-label {
+            width: 20px !important;
+            height: 20px !important;
+        }
+        
+        // 减小按钮间距以容纳更多按钮
+        .stack_horizontal {
+            gap: 2px;
+        }
+    }
+
+    .stroke-setting,
+    .fill-setting {
+        // 移动端垂直布局
+        .stroke-width-section {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 8px;
+
+            .t-slider {
+                width: 100%;
+            }
+        }
+
+        .stroke-style-section {
+            flex-wrap: wrap;
+        }
+
+        // 滑块增大触控区域
+        .t-slider__button {
+            width: 24px;
+            height: 24px;
+        }
+
+        .t-slider__rail,
+        .t-slider__track {
+            height: 6px;
+            border-radius: 3px;
+        }
+    }
+
+    // 拾色器移动端适配
+    .unified-color-picker {
+        width: min(260px, calc(100vw - 32px)) !important;
+    }
+}
+
+// 小屏移动端 (max-width: 480px)
+@media (max-width: 480px) {
+    .popup-toolbar {
+        // 简化工具栏，只显示最重要的按钮
+        .property-button {
+            padding: 8px;
+        }
+    }
+
+    .stroke-setting,
+    .fill-setting {
+        padding: 8px !important;
+
+        .stroke-style-label {
+            font-size: 11px;
+        }
+    }
+
+    .corner-radius-setting-compact {
+        padding: 6px !important;
+
+        .corner-radius-label {
+            font-size: 11px;
+        }
+    }
+}

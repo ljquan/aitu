@@ -22,6 +22,7 @@ import {
 } from '../../types/minimap.types';
 import { ChevronRightIcon } from 'tdesign-icons-react';
 import { Z_INDEX } from '../../constants/z-index';
+import { analytics } from '../../utils/posthog-analytics';
 import './minimap.scss';
 
 /**
@@ -466,6 +467,12 @@ export const Minimap: React.FC<MinimapProps> = ({
     const minimapX = e.clientX - rect.left;
     const minimapY = e.clientY - rect.top;
 
+    // 埋点：小地图导航点击
+    analytics.track('minimap_navigate', {
+      action: 'click',
+      displayMode,
+    });
+
     const [canvasX, canvasY] = minimapToCanvasCoords(
       minimapX,
       minimapY,
@@ -520,12 +527,20 @@ export const Minimap: React.FC<MinimapProps> = ({
   }, [minimapToCanvasCoords, moveViewportToCenter]);
 
   const handlePointerUp = useCallback(() => {
+    // 如果之前在拖拽，记录拖拽导航
+    if (dragStateRef.current.isDragging) {
+      analytics.track('minimap_navigate', {
+        action: 'drag',
+        displayMode,
+      });
+    }
+
     dragStateRef.current = {
       isDragging: false,
       startPoint: null,
     };
     setState((prev) => ({ ...prev, dragging: false }));
-  }, []);
+  }, [displayMode]);
 
   /**
    * 渲染 hover 预览 - 显示真实画布内容（与视口大小相同的区域）

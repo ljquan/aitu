@@ -314,6 +314,65 @@ const handleSubmit = async () => {
 - Use `useEffect` with complete dependency arrays
 - Hook order in components: state hooks → effect hooks → event handlers → render logic
 
+#### 多组件共享异步数据时使用 Context
+**场景**: 多个组件需要展示同一份异步获取的数据（如模型健康状态），各自调用同一个 hook 导致状态不同步
+
+❌ **错误示例**:
+```typescript
+// 错误：每个组件独立调用 hook，各自维护独立状态
+// ModelSelector.tsx - Trigger 中的徽章
+const ModelTrigger = () => {
+  const { getHealthStatus } = useModelHealth(); // 独立的 healthMap 状态
+  return <ModelHealthBadge modelId={modelId} />;
+};
+
+// ModelSelector.tsx - 下拉列表中的徽章
+const ModelOption = () => {
+  const { getHealthStatus } = useModelHealth(); // 另一个独立的 healthMap 状态
+  return <ModelHealthBadge modelId={modelId} />;
+};
+
+// useModelHealth.ts
+export const useModelHealth = () => {
+  const [healthMap, setHealthMap] = useState({}); // 每个调用者都有独立副本！
+  useEffect(() => { fetchData(); }, []);
+  return { getHealthStatus: (id) => healthMap[id] };
+};
+// 问题：两个组件的 healthMap 可能在不同时间更新，显示不一致
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：使用 Context 共享数据，所有组件使用同一份状态
+// ModelHealthContext.tsx
+const ModelHealthContext = createContext<ModelHealthContextType | null>(null);
+
+export const ModelHealthProvider: React.FC<PropsWithChildren> = ({ children }) => {
+  const [healthMap, setHealthMap] = useState({});
+  useEffect(() => { fetchData(); }, []);
+  
+  const value = useMemo(() => ({
+    getHealthStatus: (id) => healthMap[id],
+  }), [healthMap]);
+  
+  return <ModelHealthContext.Provider value={value}>{children}</ModelHealthContext.Provider>;
+};
+
+export const useModelHealthContext = () => {
+  const context = useContext(ModelHealthContext);
+  if (!context) throw new Error('useModelHealthContext must be used within ModelHealthProvider');
+  return context;
+};
+
+// 组件中使用
+const ModelHealthBadge = ({ modelId }) => {
+  const { getHealthStatus } = useModelHealthContext(); // 所有实例共享同一份数据
+  return <Badge status={getHealthStatus(modelId)} />;
+};
+```
+
+**原因**: 每个 `useState` 调用都会创建独立的状态副本。当多个组件各自调用同一个 hook 时，它们维护的是独立的状态，异步更新时机不同会导致 UI 显示不一致（如下拉框触发器和列表项显示不同的健康状态）。使用 Context 可以确保所有组件共享同一份数据。
+
 #### Force Refresh useMemo Pattern
 **场景**: 当 `useMemo` 依赖的对象引用没变，但对象内部状态已改变时（如 `board.children` 被修改）
 
@@ -381,6 +440,47 @@ const MyComponent: React.FC<Props> = ({
 ```
 
 **原因**: 在函数参数中使用 `= new Set()` 或 `= []` 作为默认值，每次组件渲染时都会创建新的对象引用。这会导致：1) 依赖该 prop 的 `useMemo`/`useEffect` 每次都重新执行；2) 使用 `@tanstack/react-virtual` 等库时可能触发无限渲染循环；3) 子组件的 `React.memo` 优化失效。
+
+#### Props 变化时重置组件内部状态
+**场景**: 组件内部有状态（如进度、计数器），当某个关键 prop 变化时需要重置这些状态（如重试功能）
+
+❌ **错误示例**:
+```typescript
+// 错误：startedAt 变化时，simulatedProgress 不会自动重置
+const ProgressOverlay: React.FC<Props> = ({ startedAt }) => {
+  const [simulatedProgress, setSimulatedProgress] = useState(0);
+  
+  useEffect(() => {
+    // startedAt 变化时 effect 会重新执行，但 simulatedProgress 保留旧值
+    const interval = setInterval(() => {
+      setSimulatedProgress(prev => prev + 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [startedAt]);
+  
+  return <div>{simulatedProgress}%</div>; // 重试时从旧进度继续，而非从 0 开始
+};
+
+// 父组件
+<ProgressOverlay startedAt={task.startedAt} />
+```
+
+✅ **正确示例**:
+```typescript
+// 方法 1（推荐）：使用 key 强制重新挂载组件
+<ProgressOverlay 
+  key={task.startedAt}  // startedAt 变化时组件重新挂载，状态自动重置
+  startedAt={task.startedAt} 
+/>
+
+// 方法 2：在 useEffect 中显式重置状态
+useEffect(() => {
+  setSimulatedProgress(0);  // 先重置
+  // ... 然后开始计算
+}, [startedAt]);
+```
+
+**原因**: React 组件的内部状态（useState）在 props 变化时不会自动重置，只有组件卸载并重新挂载时才会重置。对于需要在某个 prop 变化时"重新开始"的场景（如重试、切换数据源），使用 `key` prop 是最简洁可靠的方式。
 
 #### 事件处理中避免过早返回阻塞清理逻辑
 **场景**: 在 useEffect 订阅事件时，事件处理函数中有多个操作，部分操作依赖前置条件，部分操作（如清理 UI）不依赖
@@ -506,6 +606,40 @@ const handleGenerate = async () => {
 - Prefer design system CSS variables (see Brand Guidelines below)
 - Property order: positioning → box model → appearance → typography → animations
 - Use nested selectors for organization
+
+#### Flex 布局中兄弟元素隐藏导致宽度变化
+**场景**: 使用 `flex: 1` 的容器，当某个兄弟元素（如侧边栏）被隐藏时，内部组件宽度会随之变化
+
+❌ **错误示例**:
+```scss
+// 错误：内部组件没有宽度限制，隐藏侧边栏后会撑满
+.form-section {
+  flex: 1;
+  
+  .upload-area {
+    // 没有 max-width，会随父容器变宽
+  }
+}
+
+.sidebar {
+  width: 400px;
+  // 隐藏后，form-section 会占据全部宽度
+}
+```
+
+✅ **正确示例**:
+```scss
+// 正确：给内部组件设置 max-width 保持稳定
+.form-section {
+  flex: 1;
+  
+  .upload-area {
+    max-width: 400px; // 限制最大宽度，保持稳定
+  }
+}
+```
+
+**原因**: 当 `flex: 1` 的容器的兄弟元素被隐藏时，Flexbox 会重新分配空间，导致该容器变宽。如果内部组件没有宽度限制，会跟随变宽，可能导致视觉变形（如按钮区域变得过大）。给需要保持稳定的内部组件设置 `max-width` 可以防止这种问题。
 
 #### Performance Guidelines
 - Use `React.lazy` for code splitting large components

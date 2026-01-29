@@ -11,16 +11,13 @@ permissions:
   contents: read
 
 jobs:
+  # PR 时运行：lint、test、build 和冒烟测试
   main:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      # Connect your workspace on nx.app and uncomment this to enable task distribution.
-      # The "--stop-agents-after" is optional, but allows idle agents to shut down once the "e2e-ci" targets have been requested
-      # - run: npx nx-cloud start-ci-run --distribute-on="5 linux-medium-js" --stop-agents-after="e2e-ci"
 
       # Cache node_modules
       - uses: actions/setup-node@v3
@@ -33,13 +30,33 @@ jobs:
 
       # 安装 Playwright 浏览器和依赖
       - name: Install Playwright
-        run: npx playwright install --with-deps
+        run: npx playwright install --with-deps chromium
 
-      # Prepend any command with "nx-cloud record --" to record its logs to Nx Cloud
-      # - run: npx nx-cloud record -- echo Hello World
+      # lint、test、build
       - run: npx nx affected -t test build --base=origin/develop --verbose
       - run: npx nx affected -t lint --exclude=drawnix --base=origin/develop --verbose
-      - run: npx nx affected --parallel 1 -t e2e-ci --base=origin/develop --verbose
+
+      # PR 时运行冒烟测试（快速，约2分钟）
+      - name: Run Smoke Tests
+        run: pnpm run e2e:smoke
+        
+      - name: Upload Smoke Test Results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-results
+          path: apps/web-e2e/test-results/
+
+      # PR 时运行视觉回归测试
+      - name: Run Visual Regression Tests
+        run: pnpm run e2e:visual
+        
+      - name: Upload Visual Test Report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-diff-report
+          path: apps/web-e2e/playwright-report/
 
       - name: Check Bundle Size
         if: always()
@@ -51,4 +68,64 @@ jobs:
         with:
           name: bundle-stats
           path: dist/apps/web/stats.html
+
+  # 发布前运行：完整 E2E 测试 + 生成用户手册
+  release-e2e:
+    runs-on: ubuntu-latest
+    # 仅在 main 分支 push 或手动触发时运行
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - run: npm ci
+
+      # 安装所有浏览器用于完整测试
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps
+
+      # 运行完整功能测试
+      - name: Run Full E2E Tests
+        run: pnpm run e2e:features
+
+      # 运行视觉回归测试
+      - name: Run Visual Tests
+        run: pnpm run e2e:visual
+
+      # 运行手册生成测试
+      - name: Run Manual Generation Tests
+        run: pnpm run e2e:manual
+
+      # 生成用户手册
+      - name: Generate User Manual
+        run: pnpm run generate:manual
+
+      # 上传测试报告
+      - name: Upload E2E Test Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-report
+          path: apps/web-e2e/playwright-report/
+
+      # 上传测试结果（包含截图）
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-results
+          path: apps/web-e2e/test-results/
+
+      # 上传用户手册
+      - name: Upload User Manual
+        uses: actions/upload-artifact@v4
+        with:
+          name: user-manual
+          path: docs/user-manual/
 

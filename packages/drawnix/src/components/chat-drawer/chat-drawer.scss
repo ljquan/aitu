@@ -724,7 +724,246 @@ $drawer-input-height: 160px;
 // Mobile Styles
 // ============================================================================
 
+// 平板及以下 (max-width: 768px) - 全屏抽屉
+@media (max-width: 768px) {
+  .chat-drawer {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    border-left: none;
+    border-radius: 0;
 
+    // 添加安全区域支持
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+
+    &__resize-handle {
+      display: none; // 移动端不需要调整宽度
+    }
+
+    &__header {
+      padding: $spacing-sm $spacing-md;
+      padding-top: calc(env(safe-area-inset-top, 0px) + #{$spacing-sm});
+    }
+
+    &__header-top {
+      gap: $spacing-xs;
+    }
+
+    &__title {
+      font-size: 15px;
+    }
+
+    &__close-btn {
+      width: 36px;
+      height: 36px;
+      min-width: 36px; // 触控友好
+    }
+
+    &__content {
+      height: calc(100vh - #{$drawer-header-height} - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+    }
+  }
+
+  .chat-drawer-trigger {
+    // 移动端隐藏侧边触发器，使用其他方式打开
+    display: none;
+  }
+
+  // 消息列表调整
+  .chat-messages-list {
+    padding: $spacing-md;
+  }
+
+  .chat-message {
+    max-width: 95%;
+  }
+
+  // 输入区域调整
+  .enhanced-chat-input {
+    padding: $spacing-sm $spacing-md;
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + #{$spacing-sm});
+
+    &__form {
+      padding: 6px;
+    }
+
+    &__textarea {
+      min-height: 60px;
+      font-size: 15px;
+    }
+
+    &__send {
+      width: 36px;
+      height: 36px;
+      min-width: 36px;
+    }
+  }
+}
+
+// 移动端竖屏 (max-width: 640px)
+@media (max-width: 640px) {
+  .chat-drawer {
+    &__header {
+      padding: $spacing-xs $spacing-sm;
+      gap: $spacing-xs;
+    }
+
+    &__header-bottom {
+      padding: 4px 8px;
+      gap: $spacing-xs;
+    }
+
+    &__title {
+      font-size: 14px;
+    }
+
+    &__session-actions {
+      gap: 2px;
+    }
+  }
+
+  // 会话列表调整
+  .session-list {
+    top: 80px;
+    max-height: 50vh;
+
+    &__header {
+      padding: $spacing-xs $spacing-md;
+    }
+
+    &__new-btn {
+      padding: 6px 10px;
+      font-size: 11px;
+    }
+  }
+
+  .session-item {
+    padding: $spacing-xs $spacing-sm;
+
+    &__title {
+      font-size: 12px;
+    }
+  }
+
+  // 消息样式调整
+  .chat-messages-list {
+    padding: $spacing-sm;
+    gap: $spacing-md;
+  }
+
+  .chat-message-content {
+    padding: $spacing-sm $spacing-md;
+    font-size: 13px;
+  }
+
+  .chat-message-avatar {
+    width: 28px;
+    height: 28px;
+
+    svg {
+      width: 14px;
+      height: 14px;
+    }
+  }
+
+  // 输入区域更紧凑
+  .enhanced-chat-input {
+    padding: $spacing-xs $spacing-sm;
+    max-height: 140px;
+
+    &__form {
+      padding: 4px;
+      border-radius: 12px;
+    }
+
+    &__textarea {
+      min-height: 44px;
+      max-height: 80px;
+      padding: 8px 10px;
+      font-size: 14px;
+    }
+
+    &__selection {
+      gap: $spacing-xs;
+      padding-bottom: $spacing-xs;
+      margin-bottom: $spacing-xs;
+    }
+
+    &__selection-item {
+      width: 32px;
+      height: 32px;
+
+      &--text {
+        min-width: 48px;
+        max-width: 100px;
+        padding: 4px 8px;
+      }
+    }
+  }
+
+  // 模型选择器调整
+  .model-selector {
+    &__trigger {
+      padding: 3px 8px;
+      font-size: 11px;
+    }
+
+    &__dropdown {
+      min-width: 280px;
+      max-width: calc(100vw - 32px);
+    }
+
+    &__item {
+      padding: 8px 10px;
+    }
+
+    &__item-name {
+      font-size: 13px;
+    }
+
+    &__item-desc {
+      font-size: 11px;
+    }
+  }
+}
+
+// 小屏移动端 (max-width: 480px)
+@media (max-width: 480px) {
+  .chat-drawer {
+    &__header-bottom {
+      // 隐藏会话操作按钮，节省空间
+      .chat-drawer__session-actions {
+        display: none;
+      }
+    }
+  }
+
+  .enhanced-chat-input {
+    &__selection-item {
+      width: 28px;
+      height: 28px;
+    }
+
+    &__send {
+      width: 32px;
+      height: 32px;
+      min-width: 32px;
+    }
+  }
+
+  .model-selector {
+    &--variant-capsule {
+      .model-selector__trigger {
+        padding: 2px 6px;
+        font-size: 10px;
+      }
+    }
+
+    &__trigger-text {
+      max-width: 60px;
+    }
+  }
+}
 
 // ============================================================================
 // @llamaindex/chat-ui Component Styles

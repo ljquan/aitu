@@ -15,6 +15,8 @@ import {
   type ModelConfig,
 } from '../../constants/model-config';
 import { ATTACHED_ELEMENT_CLASS_NAME } from '@plait/core';
+import { Z_INDEX } from '../../constants/z-index';
+import { useControllableState } from '../../hooks/useControllableState';
 import './model-dropdown.scss';
 import { ModelHealthBadge } from '../shared/ModelHealthBadge';
 import { KeyboardDropdown } from './KeyboardDropdown';
@@ -60,21 +62,11 @@ export const ModelDropdown: React.FC<ModelDropdownProps> = ({
   isOpen: controlledIsOpen,
   onOpenChange,
 }) => {
-  const [internalIsOpen, setInternalIsOpen] = useState(false);
-  // 支持受控和非受控模式
-  const isOpen = controlledIsOpen !== undefined ? controlledIsOpen : internalIsOpen;
-  const setIsOpen = useCallback((open: boolean | ((prev: boolean) => boolean)) => {
-    if (typeof open === 'function') {
-      // 函数式更新：需要使用当前状态计算新值
-      const currentIsOpen = controlledIsOpen !== undefined ? controlledIsOpen : internalIsOpen;
-      const newValue = open(currentIsOpen);
-      setInternalIsOpen(newValue);
-      onOpenChange?.(newValue);
-    } else {
-      setInternalIsOpen(open);
-      onOpenChange?.(open);
-    }
-  }, [controlledIsOpen, internalIsOpen, onOpenChange]);
+  const { value: isOpen, setValue: setIsOpen } = useControllableState({
+    controlledValue: controlledIsOpen,
+    defaultValue: false,
+    onChange: onOpenChange,
+  });
 
   const [searchQuery, setSearchQuery] = useState('');
   const [highlightedIndex, setHighlightedIndex] = useState(0);
@@ -307,7 +299,7 @@ export const ModelDropdown: React.FC<ModelDropdownProps> = ({
             onClick={(e) => e.stopPropagation()}
             style={isPortalled ? {
               position: 'fixed',
-              zIndex: 10000,
+              zIndex: Z_INDEX.DROPDOWN_PORTAL,
               left: portalPosition.left,
               width: variant === 'form' ? portalPosition.width : 'auto',
               top: placement === 'down' ? portalPosition.bottom + 4 : 'auto',
@@ -371,6 +363,7 @@ export const ModelDropdown: React.FC<ModelDropdownProps> = ({
           <div
             className={`model-dropdown model-dropdown--variant-${variant} ${disabled ? 'model-dropdown--disabled' : ''}`}
             ref={containerRef}
+            data-testid="model-selector"
           >
             {renderTrigger(handleTriggerKeyDown)}
             {isOpen && (isPortalled ? createPortal(menu, document.body) : menu)}

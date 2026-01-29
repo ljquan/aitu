@@ -503,6 +503,8 @@ export function useWorkflowSubmission(
         args: step.args,
         description: step.description,
         status: step.status as any,
+        // Include batch options for batch generation
+        options: step.options,
       })),
       status: 'pending',
       createdAt: legacyWorkflow.createdAt,

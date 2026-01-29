@@ -1,0 +1,56 @@
+{
+  "id": "project-switch",
+  "name": "项目切换演示",
+  "output": "项目切换演示.gif",
+  "targetPage": "basics/project-switch",
+  "preWait": 1000,
+  "postWait": 1500,
+  "actions": [
+    {
+      "type": "click",
+      "target": "role:button[name='打开项目']",
+      "label": "打开项目",
+      "wait": 1500
+    },
+    {
+      "type": "keyHint",
+      "key": "浏览",
+      "hint": "浏览已有项目",
+      "duration": 1500
+    },
+    {
+      "type": "wait",
+      "duration": 1000
+    },
+    {
+      "type": "keyHint",
+      "key": "切换",
+      "hint": "点击切换到其他画板",
+      "duration": 1500
+    },
+    {
+      "type": "click",
+      "target": "text:我的画板",
+      "label": "切换画板",
+      "wait": 1500,
+      "optional": true
+    },
+    {
+      "type": "keyHint",
+      "key": "新建",
+      "hint": "新建画板或文件夹",
+      "duration": 1500
+    },
+    {
+      "type": "click",
+      "target": "role:button[name='新建画板']",
+      "label": "新建画板",
+      "wait": 1000,
+      "optional": true
+    },
+    {
+      "type": "wait",
+      "duration": 1000
+    }
+  ]
+}

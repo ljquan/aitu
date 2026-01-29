@@ -12,6 +12,7 @@ import {
   XSquare, 
   HardDrive,
   Video as VideoIcon,
+  Image as ImageIcon,
   Globe,
   User,
   Sparkles,
@@ -23,7 +24,9 @@ import {
   ArrowUpNarrowWide,
   Minus,
   Plus,
-  Download
+  Download,
+  Eye,
+  PlusCircle,
 } from 'lucide-react';
 import JSZip from 'jszip';
 import { 
@@ -31,7 +34,9 @@ import {
   MediaLibraryIcon,
 } from '../icons';
 import { useAssets } from '../../contexts/AssetContext';
-import { filterAssets, formatFileSize } from '../../utils/asset-utils';
+import { filterAssets, formatFileSize, formatDate } from '../../utils/asset-utils';
+import { useDeviceType } from '../../hooks/useDeviceType';
+import { downloadFile } from '../../utils/download-utils';
 import { VirtualAssetGrid } from './VirtualAssetGrid';
 import { MediaLibraryEmpty } from './MediaLibraryEmpty';
 import { ViewModeToggle } from './ViewModeToggle';
@@ -130,8 +135,9 @@ export function MediaLibraryGrid({
   onUploadClick,
   storageStatus,
 }: MediaLibraryGridProps) {
-  const { assets, filters, loading, setFilters, removeAssets } = useAssets();
+  const { assets, filters, loading, setFilters, removeAssets, removeAsset } = useAssets();
   const { board } = useDrawnix();
+  const { isMobile } = useDeviceType();
   const [isDragging, setIsDragging] = useState(false);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
@@ -163,6 +169,12 @@ export function MediaLibraryGrid({
       sourceAll: assets.length,
     };
   }, [assets]);
+
+  // 获取选中的素材（用于移动端底部简介）
+  const selectedAsset = useMemo(() => {
+    if (!selectedAssetId) return null;
+    return assets.find(a => a.id === selectedAssetId) || null;
+  }, [assets, selectedAssetId]);
 
   // 监听网格尺寸变化并缓存
   useEffect(() => {
@@ -640,18 +652,20 @@ export function MediaLibraryGrid({
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
+      data-testid="media-library-grid"
     >
       <div className="media-library-grid__header">
         <div className="media-library-grid__header-top">
-          <Input
-            value={filters.searchQuery}
-            onChange={(value) => setFilters({ searchQuery: value as string })}
-            placeholder="搜索素材..."
-            prefixIcon={<Search size={16} />}
-            clearable
-            data-track="grid_search_input"
-            className="media-library-grid__search"
-          />
+          <div className="media-library-grid__search">
+            <Input
+              value={filters.searchQuery}
+              onChange={(value) => setFilters({ searchQuery: value as string })}
+              placeholder="搜索素材..."
+              prefixIcon={<Search size={16} />}
+              clearable
+              data-track="grid_search_input"
+            />
+          </div>
           <div className="media-library-grid__header-right">
             <ViewModeToggle viewMode={pendingViewMode} onViewModeChange={handleViewModeChange} />
             {isSelectionMode ? (
@@ -879,7 +893,7 @@ export function MediaLibraryGrid({
               assets={filteredResult.assets}
               viewMode={viewMode}
               gridSize={gridSize}
-              selectedAssetId={selectedAssetId}
+              selectedAssetId={selectedAssetId ?? undefined}
               selectedAssetIds={selectedAssetIds}
               isSelectionMode={isSelectionMode}
               onSelectAsset={isSelectionMode ? toggleAssetSelection : onSelectAsset}
@@ -888,6 +902,56 @@ export function MediaLibraryGrid({
             />
           </div>
 
+          {/* 移动端：选中素材时显示简介和操作 */}
+          {isMobile && selectedAsset && !isSelectionMode && (
+            <div className="media-library-grid__mobile-inspector">
+              <div className="media-library-grid__mobile-inspector-info">
+                <div className="media-library-grid__mobile-inspector-type">
+                  {selectedAsset.type === AssetType.IMAGE ? <ImageIcon size={14} /> : <VideoIcon size={14} />}
+                  <span>{selectedAsset.type === AssetType.IMAGE ? '图片' : '视频'}</span>
+                  {selectedAsset.source === AssetSource.AI_GENERATED && (
+                    <span className="media-library-grid__mobile-inspector-ai">AI</span>
+                  )}
+                </div>
+                <div className="media-library-grid__mobile-inspector-name" title={selectedAsset.name}>
+                  {selectedAsset.name}
+                </div>
+              </div>
+              <div className="media-library-grid__mobile-inspector-actions">
+                <Tooltip content="预览" theme="light">
+                  <button
+                    className="media-library-grid__mobile-inspector-btn"
+                    onClick={() => handlePreview(selectedAsset)}
+                    data-track="mobile_preview"
+                  >
+                    <Eye size={18} />
+                  </button>
+                </Tooltip>
+                {onDoubleClick && (
+                  <Tooltip content="插入画布" theme="light">
+                    <button
+                      className="media-library-grid__mobile-inspector-btn media-library-grid__mobile-inspector-btn--primary"
+                      onClick={() => onDoubleClick(selectedAsset)}
+                      data-track="mobile_insert"
+                    >
+                      <PlusCircle size={18} />
+                    </button>
+                  </Tooltip>
+                )}
+                <Tooltip content="下载" theme="light">
+                  <button
+                    className="media-library-grid__mobile-inspector-btn"
+                    onClick={() => downloadFile(selectedAsset.url, selectedAsset.name)}
+                    data-track="mobile_download"
+                  >
+                    <Download size={18} />
+                  </button>
+                </Tooltip>
+              </div>
+            </div>
+          )}
+
+          {/* 底部工具栏（始终显示） */}
           <div className="media-library-grid__footer">
             <div className="media-library-grid__footer-left">
               {storageStatus ? (

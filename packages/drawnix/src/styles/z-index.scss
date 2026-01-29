@@ -21,7 +21,7 @@ $z-canvas-temporary: 1100;
 // ==========================================
 $z-unified-toolbar: 2000;
 $z-creation-toolbar: 2010;
-$z-popup-toolbar: 4100; // Moved above Drawers (4000-4099)
+$z-popup-toolbar: 2020; // Below Drawers (4000+)
 $z-zoom-toolbar: 2030;
 $z-app-toolbar: 2040;
 $z-pencil-toolbar: 2050;

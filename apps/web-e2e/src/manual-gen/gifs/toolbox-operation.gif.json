@@ -1,0 +1,89 @@
+{
+  "id": "toolbox-operation",
+  "name": "工具箱操作演示",
+  "output": "工具箱操作演示.gif",
+  "targetPage": "advanced/toolbox",
+  "preWait": 1000,
+  "postWait": 2000,
+  "actions": [
+    {
+      "type": "click",
+      "target": "testid:toolbar-toolbox",
+      "label": "打开工具箱",
+      "wait": 1500
+    },
+    {
+      "type": "wait",
+      "duration": 500
+    },
+    {
+      "type": "click",
+      "target": ".tool-item__action-btn.tool-item__action-btn--open-window",
+      "label": "在新窗口打开",
+      "wait": 2000
+    },
+    {
+      "type": "keyHint",
+      "key": "最大化",
+      "hint": "最大化窗口",
+      "duration": 1500
+    },
+    {
+      "type": "click",
+      "target": ".wb-max",
+      "label": "最大化",
+      "wait": 1500,
+      "optional": true
+    },
+    {
+      "type": "keyHint",
+      "key": "还原",
+      "hint": "还原窗口大小",
+      "duration": 1500
+    },
+    {
+      "type": "click",
+      "target": ".wb-min",
+      "label": "还原",
+      "wait": 1500,
+      "optional": true
+    },
+    {
+      "type": "keyHint",
+      "key": "分屏",
+      "hint": "分屏显示",
+      "duration": 1500
+    },
+    {
+      "type": "click",
+      "target": "first:.wb-split",
+      "label": "分屏",
+      "wait": 1500,
+      "optional": true
+    },
+    {
+      "type": "keyHint",
+      "key": "插入",
+      "hint": "插入到画布",
+      "duration": 1500
+    },
+    {
+      "type": "click",
+      "target": "first:.wb-insert-canvas",
+      "label": "插入画布",
+      "wait": 1500,
+      "optional": true
+    },
+    {
+      "type": "wait",
+      "duration": 1000
+    },
+    {
+      "type": "click",
+      "target": "first:.wb-close",
+      "label": "关闭",
+      "wait": 1000,
+      "optional": true
+    }
+  ]
+}

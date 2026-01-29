@@ -540,16 +540,6 @@ export class TaskQueueStorage {
     }
   }
 
-  /**
-   * @deprecated Do not use - tasks are needed for asset library display
-   * Clear all completed/cancelled tasks older than specified time
-   */
-  async cleanupOldTasks(_maxAgeMs: number = 24 * 60 * 60 * 1000): Promise<void> {
-    // NOTE: Disabled - tasks should not be auto-deleted as they are needed
-    // for asset library to display AI-generated images/videos
-    console.warn('[SWStorage] cleanupOldTasks is deprecated and disabled');
-  }
-
   // ============================================================================
   // MCP System Prompt Storage Methods
   // ============================================================================
@@ -705,15 +695,6 @@ export class TaskQueueStorage {
     }
   }
 
-  /**
-   * @deprecated Do not use - workflows should not be auto-deleted
-   * Clear old completed/failed workflows
-   */
-  async cleanupOldWorkflows(_maxAgeMs: number = 24 * 60 * 60 * 1000): Promise<void> {
-    // NOTE: Disabled - workflows should not be auto-deleted
-    console.warn('[SWStorage] cleanupOldWorkflows is deprecated and disabled');
-  }
-
   // ============================================================================
   // Chat Workflow Storage Methods
   // ============================================================================
@@ -815,15 +796,6 @@ export class TaskQueueStorage {
     } catch (error) {
       console.error('[SWStorage] Failed to delete chat workflow:', error);
     }
-  }
-
-  /**
-   * @deprecated Do not use - chat workflows should not be auto-deleted
-   * Clear old completed/failed chat workflows
-   */
-  async cleanupOldChatWorkflows(_maxAgeMs: number = 24 * 60 * 60 * 1000): Promise<void> {
-    // NOTE: Disabled - chat workflows should not be auto-deleted
-    console.warn('[SWStorage] cleanupOldChatWorkflows is deprecated and disabled');
   }
 
   // ============================================================================

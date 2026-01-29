@@ -16,6 +16,8 @@ import {
   mergeReferenceImages,
   pollVideoUntilComplete,
   fetchImageWithCache,
+  parseSize,
+  cropImageToAspectRatio,
 } from '../utils/media-generation-utils';
 import type { LLMReferenceImage } from '../llm-api-logger';
 
@@ -82,6 +84,8 @@ export class VideoHandler implements TaskHandler {
 
   /**
    * Resume video generation polling
+   * 恢复任务只是继续轮询，不创建新的 LLM API 日志条目
+   * 通过 taskId 查找原始日志并在完成时更新它
    */
   async resume(task: SWTask, config: HandlerConfig): Promise<TaskResult> {
     if (!task.remoteId) {
@@ -91,15 +95,10 @@ export class VideoHandler implements TaskHandler {
     const abortController = new AbortController();
     this.abortControllers.set(task.id, abortController);
 
-    // 为恢复的任务创建新的日志条目
-    const { startLLMApiLog } = await import('../llm-api-logger');
-    const logId = startLLMApiLog({
-      endpoint: `/videos/${task.remoteId} (resumed)`,
-      model: (task.params?.model as string) || 'veo3',
-      taskType: 'video',
-      prompt: (task.params?.prompt as string) || '',
-      taskId: task.id,
-    });
+    // 查找原始任务的日志 ID，以便在轮询完成时更新它
+    const { findLatestLogByTaskId } = await import('../llm-api-logger');
+    const originalLog = await findLatestLogByTaskId(task.id);
+    const logId = originalLog?.id;
 
     try {
       config.onProgress(task.id, task.progress || 0, TaskExecutionPhase.POLLING);
@@ -109,7 +108,7 @@ export class VideoHandler implements TaskHandler {
         task.id,
         config,
         abortController.signal,
-        logId
+        logId // 传递原始日志 ID，轮询完成时会更新原始日志
       );
 
       return result;
@@ -157,47 +156,51 @@ export class VideoHandler implements TaskHandler {
       inputReferences: params.inputReferences as any[] | undefined,
     });
 
-    // 获取参考图片详情用于日志
+    // 处理参考图片：获取 Blob，裁剪到目标尺寸，然后添加到 FormData
+    // 同时收集裁剪后的图片信息用于日志
     const { getImageInfo } = await import('../utils/media-generation-utils');
-    const referenceImageInfos: LLMReferenceImage[] = await Promise.all(
-      refUrls.map(async (url) => {
-        try {
-          const info = await getImageInfo(url, signal);
-          return {
-            url: info.url,
-            size: info.size,
-            width: info.width,
-            height: info.height,
-          };
-        } catch (err) {
-          console.warn(`[VideoHandler] Failed to get image info for log: ${url}`, err);
-          return {
-            url,
-            size: 0,
-            width: 0,
-            height: 0,
-          };
-        }
-      })
-    );
-
-    // 处理参考图片：获取 Blob 或回退到 URL
+    const referenceImageInfos: LLMReferenceImage[] = [];
+    
     if (refUrls.length > 0) {
+      // 解析目标尺寸
+      const targetSize = params.size ? parseSize(params.size as string) : null;
+
       for (let i = 0; i < refUrls.length; i++) {
         const url = refUrls[i];
         try {
           // 使用通用函数从缓存获取图片
-          const blob = await fetchImageWithCache(url, signal);
+          let blob = await fetchImageWithCache(url, signal);
           if (blob) {
+            // 如果指定了目标尺寸，裁剪图片到匹配的宽高比
+            if (targetSize) {
+              blob = await cropImageToAspectRatio(blob, targetSize.width, targetSize.height);
+            }
+            
+            // 获取裁剪后的图片信息用于日志
+            try {
+              const info = await getImageInfo(blob, signal);
+              referenceImageInfos.push({
+                url: info.url,
+                size: info.size,
+                width: info.width,
+                height: info.height,
+              });
+            } catch (err) {
+              console.warn(`[VideoHandler] Failed to get cropped image info for log`, err);
+              referenceImageInfos.push({ url, size: blob.size, width: 0, height: 0 });
+            }
+            
             formData.append('input_reference', blob, `reference-${i + 1}.png`);
           } else {
             // 缓存和网络都失败时，回退到发送 URL
             console.warn(`[VideoHandler] Failed to get reference image: ${url}`);
             formData.append('input_reference', url);
+            referenceImageInfos.push({ url, size: 0, width: 0, height: 0 });
           }
         } catch (err) {
           console.warn(`[VideoHandler] Error fetching reference image: ${url}`, err);
           formData.append('input_reference', url);
+          referenceImageInfos.push({ url, size: 0, width: 0, height: 0 });
         }
       }
     }
@@ -208,11 +211,22 @@ export class VideoHandler implements TaskHandler {
     
     const startTime = Date.now();
     const model = (params.model as string) || 'veo3';
+    
+    // 构建请求参数的日志表示（FormData 无法直接序列化）
+    const requestParamsForLog = {
+      model,
+      prompt: params.prompt,
+      ...(params.duration && { seconds: params.duration }),
+      ...(params.size && { size: params.size }),
+      ...(refUrls.length > 0 && { input_reference: `[${refUrls.length} images]` }),
+    };
+    
     const logId = startLLMApiLog({
       endpoint: '/videos',
       model,
       taskType: 'video',
       prompt: params.prompt as string,
+      requestBody: JSON.stringify(requestParamsForLog, null, 2),
       hasReferenceImages: refUrls.length > 0,
       referenceImageCount: refUrls.length,
       referenceImages: referenceImageInfos,

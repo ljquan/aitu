@@ -1,0 +1,33 @@
+{
+  "id": "shapes-create",
+  "name": "形状绘制演示",
+  "output": "形状绘制演示.gif",
+  "targetPage": "drawing/shapes",
+  "preWait": 1000,
+  "postWait": 1500,
+  "actions": [
+    { "type": "keyHint", "key": "R", "hint": "R：切换到矩形工具", "duration": 1500 },
+    { "type": "press", "key": "r", "wait": 800 },
+    {
+      "type": "mouseDraw",
+      "points": [
+        { "x": 200, "y": 200 },
+        { "x": 400, "y": 350 }
+      ],
+      "stepDelay": 100,
+      "wait": 1000
+    },
+    { "type": "keyHint", "key": "O", "hint": "O：切换到椭圆工具", "duration": 1500 },
+    { "type": "press", "key": "o", "wait": 800 },
+    {
+      "type": "mouseDraw",
+      "points": [
+        { "x": 500, "y": 200 },
+        { "x": 700, "y": 350 }
+      ],
+      "stepDelay": 100,
+      "wait": 1000
+    },
+    { "type": "mouseClick", "x": 100, "y": 100, "wait": 500 }
+  ]
+}

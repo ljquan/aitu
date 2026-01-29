@@ -58,7 +58,6 @@ async function ensureSWInitialized(): Promise<boolean> {
 export async function generateImageWithGemini(
   prompt: string,
   options: {
-    n?: number;
     size?: string;
     image?: string | string[]; // 支持单图或多图
     response_format?: 'url' | 'b64_json';
@@ -93,7 +92,6 @@ export async function generateImageWithGemini(
 async function generateImageViaSW(
   prompt: string,
   options: {
-    n?: number;
     size?: string;
     image?: string | string[];
     response_format?: 'url' | 'b64_json';
@@ -168,7 +166,6 @@ async function generateImageViaSW(
 async function generateImageDirect(
   prompt: string,
   options: {
-    n?: number;
     size?: string;
     image?: string | string[];
     response_format?: 'url' | 'b64_json';
@@ -197,11 +194,6 @@ async function generateImageDirect(
     prompt: enhancedPrompt,
     response_format: options.response_format || 'url', // 默认返回 url
   };
-
-  // n 参数可选，不传则由 API 决定
-  if (options.n !== undefined) {
-    data.n = options.n;
-  }
 
   // size 参数可选，不传则由 API 自动决定（对应 auto）
   if (options.size && options.size !== 'auto') {

@@ -1,0 +1,112 @@
+{
+  "id": "session-management",
+  "name": "会话管理演示",
+  "output": "会话管理.gif",
+  "targetPage": "ai-features/session-management",
+  "preWait": 1500,
+  "postWait": 2000,
+  "actions": [
+    {
+      "type": "keyHint",
+      "key": "打开",
+      "hint": "打开对话抽屉",
+      "duration": 1500
+    },
+    {
+      "type": "click",
+      "target": ".chat-drawer-trigger",
+      "label": "打开",
+      "wait": 1500,
+      "optional": true
+    },
+    {
+      "type": "wait",
+      "duration": 1000
+    },
+    {
+      "type": "keyHint",
+      "key": "会话",
+      "hint": "查看所有会话",
+      "duration": 1500
+    },
+    {
+      "type": "click",
+      "target": "testid:chat-drawer button:has-text('会话列表')",
+      "label": "会话列表",
+      "wait": 1500,
+      "optional": true
+    },
+    {
+      "type": "keyHint",
+      "key": "新建",
+      "hint": "新建对话",
+      "duration": 1000
+    },
+    {
+      "type": "click",
+      "target": "testid:chat-drawer role:button:has-text('新建')",
+      "label": "新建",
+      "wait": 800,
+      "optional": true
+    },
+    {
+      "type": "keyHint",
+      "key": "重命名",
+      "hint": "重命名会话",
+      "duration": 1500
+    },
+    {
+      "type": "click",
+      "target": ".session-item button:has-text('更多')",
+      "label": "更多操作",
+      "wait": 1000,
+      "optional": true
+    },
+    {
+      "type": "wait",
+      "duration": 500
+    },
+    {
+      "type": "keyHint",
+      "key": "切换",
+      "hint": "切换会话",
+      "duration": 1500
+    },
+    {
+      "type": "click",
+      "target": ".session-item:nth(1)",
+      "label": "切换",
+      "wait": 1000,
+      "optional": true
+    },
+    {
+      "type": "wait",
+      "duration": 1000
+    },
+    {
+      "type": "keyHint",
+      "key": "删除",
+      "hint": "删除会话",
+      "duration": 1000
+    },
+    {
+      "type": "click",
+      "target": "testid:chat-drawer button:has-text('删除')",
+      "label": "删除",
+      "wait": 1000,
+      "optional": true
+    },
+    {
+      "type": "click",
+      "target": "role:button:has-text('确认')",
+      "label": "确认",
+      "wait": 1000,
+      "optional": true
+    },
+    {
+      "type": "press",
+      "key": "Escape",
+      "wait": 1000
+    }
+  ]
+}

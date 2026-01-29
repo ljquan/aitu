@@ -397,7 +397,7 @@ export type SWToMainMessage =
 export interface TaskEventHandlers {
   onCreated?: (task: SWTask) => void;
   onStatus?: (taskId: string, status: TaskStatus, progress?: number, phase?: TaskExecutionPhase) => void;
-  onCompleted?: (taskId: string, result: TaskResult) => void;
+  onCompleted?: (taskId: string, result: TaskResult, remoteId?: string) => void;
   onFailed?: (taskId: string, error: TaskError) => void;
   onSubmitted?: (taskId: string, remoteId: string) => void;
   onCancelled?: (taskId: string) => void;

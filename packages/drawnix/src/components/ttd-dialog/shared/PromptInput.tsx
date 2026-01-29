@@ -112,8 +112,9 @@ export const PromptInput: React.FC<PromptInputProps> = ({
     }
   }, [isPresetOpen]);
 
-  // 选择提示词
-  const handleSelect = useCallback((content: string) => {
+  // 选择提示词 - 接收 PromptItem 对象或字符串
+  const handleSelect = useCallback((item: PromptItem | string) => {
+    const content = typeof item === 'string' ? item : item.content;
     onPromptChange(content);
     onError?.(null);
     setIsPresetOpen(false);

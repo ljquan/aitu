@@ -694,6 +694,14 @@ export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
           const portalContainer = document.createElement('div');
           portalContainer.className = 'wb-header-custom';
           
+          // 阻止触摸和鼠标事件冒泡到拖拽区域，确保按钮可点击
+          const stopPropagation = (e: Event) => {
+            e.stopPropagation();
+          };
+          portalContainer.addEventListener('mousedown', stopPropagation, true);
+          portalContainer.addEventListener('touchstart', stopPropagation, true);
+          portalContainer.addEventListener('pointerdown', stopPropagation, true);
+          
           // 插入到拖拽区域末尾（标题后面）
           drag.appendChild(portalContainer);
           setHeaderPortalContainer(portalContainer);

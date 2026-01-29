@@ -18,7 +18,7 @@ import {
   isHitPolyLine,
   isRectangleHitRotatedPoints,
 } from '@plait/draw';
-import { FreehandStrokeStyle } from './freehand-settings';
+import { BrushShape, FreehandStrokeStyle } from './freehand-settings';
 import { getFillRenderColor } from '../../types/fill.types';
 
 export function getFreehandPointers() {
@@ -48,6 +48,7 @@ export interface CreateFreehandOptions {
   strokeWidth?: number;
   strokeColor?: string;
   strokeStyle?: FreehandStrokeStyle;
+  brushShape?: BrushShape;
   pressures?: number[];
 }
 
@@ -64,6 +65,7 @@ export const createFreehandElement = (
     ...(options?.strokeWidth !== undefined && { strokeWidth: options.strokeWidth }),
     ...(options?.strokeColor !== undefined && { strokeColor: options.strokeColor }),
     ...(options?.strokeStyle !== undefined && { strokeStyle: options.strokeStyle }),
+    ...(options?.brushShape !== undefined && { brushShape: options.brushShape }),
     ...(options?.pressures !== undefined && options.pressures.length > 0 && { pressures: options.pressures }),
   };
   return element;

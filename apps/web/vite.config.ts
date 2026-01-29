@@ -170,6 +170,6 @@ export default defineConfig({
     reportCompressedSize: true,
     commonjsOptions: {
       transformMixedEsModules: true,
-    }
+    },
   },
 });

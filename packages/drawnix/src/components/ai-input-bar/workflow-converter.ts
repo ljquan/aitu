@@ -154,9 +154,15 @@ export function convertDirectGenerationToWorkflow(
 
     if (generationType === 'image') {
       // 构建图片生成参数，size 为 undefined 时不传（让模型自动决定）
+      // 注意：batchId 等参数直接放在 args 中，确保传输时不会丢失
       const imageArgs: Record<string, unknown> = {
         prompt,
         model: modelId,
+        // 批量生成参数直接放在 args 中
+        batchId,
+        batchIndex: i + 1,
+        batchTotal: count,
+        globalIndex: i + 1,
       };
       if (size) {
         imageArgs.size = size;
@@ -175,10 +181,16 @@ export function convertDirectGenerationToWorkflow(
       });
     } else {
       // 构建视频生成参数，size 为 undefined 时不传（让模型自动决定）
+      // 注意：batchId 等参数直接放在 args 中，确保传输时不会丢失
       const videoArgs: Record<string, unknown> = {
         prompt,
         model: modelId,
         seconds: duration || '5',
+        // 批量生成参数直接放在 args 中
+        batchId,
+        batchIndex: i + 1,
+        batchTotal: count,
+        globalIndex: i + 1,
       };
       if (size) {
         videoArgs.size = size;

@@ -15,6 +15,7 @@ import {
 } from '../utils/asset-utils';
 import { canAddAssetBySize } from '../utils/storage-quota';
 import { unifiedCacheService } from './unified-cache-service';
+import { analytics } from '../utils/posthog-analytics';
 import type {
   Asset,
   StoredAsset,
@@ -340,10 +341,29 @@ class AssetStorageService {
       await this.store!.setItem(asset.id, storedAsset);
       // console.log('[AssetStorageService] Asset saved to IndexedDB');
 
+      // 埋点：素材上传成功
+      analytics.track('asset_upload_success', {
+        assetId: asset.id,
+        type: asset.type,
+        source: asset.source,
+        size: asset.size,
+        mimeType: asset.mimeType,
+      });
+
       // console.log('[AssetStorageService] addAsset completed successfully');
       return asset;
     } catch (error: any) {
       console.error('[AssetStorageService] Error during addAsset:', error);
+      
+      // 埋点：素材上传失败
+      analytics.track('asset_upload_failed', {
+        type: data.type,
+        source: data.source,
+        size: data.blob.size,
+        error: error.message || 'Unknown error',
+        errorCode: error.code || error.name,
+      });
+      
       if (error.name === 'QuotaExceededError') {
         throw new QuotaExceededError();
       }
@@ -495,6 +515,14 @@ class AssetStorageService {
       await unifiedCacheService.deleteCache(stored.url);
 
       await this.store!.removeItem(id);
+
+      // 埋点：素材删除
+      analytics.track('asset_delete', {
+        assetId: id,
+        type: stored.type,
+        source: stored.source,
+        size: stored.size,
+      });
     } catch (error: any) {
       if (error instanceof NotFoundError) {
         throw error;

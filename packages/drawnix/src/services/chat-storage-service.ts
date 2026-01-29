@@ -196,15 +196,6 @@ export async function clearAllData(): Promise<void> {
   localStorage.removeItem(CHAT_STORAGE_KEYS.DRAWER_STATE);
 }
 
-/**
- * @deprecated Do not use - sessions should not be auto-deleted
- * Users should manually manage their chat history
- */
-export async function pruneOldSessions(_keepCount: number): Promise<void> {
-  // NOTE: Disabled - sessions should not be auto-deleted
-  console.warn('[ChatStorage] pruneOldSessions is deprecated and disabled');
-}
-
 // ============================================================================
 // Utility Functions
 // ============================================================================
@@ -225,7 +216,6 @@ export const chatStorageService = {
   getDrawerState,
   setDrawerState,
   clearAllData,
-  pruneOldSessions,
   generateId,
   generateTitle,
 };

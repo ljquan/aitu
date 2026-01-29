@@ -32,7 +32,6 @@ const CONFIG = {
     'index.html',
     'sw-debug.html',
     'cdn-debug.html',
-    'batch-image.html',
     'versions.html',
     'iframe-test.html',
     // 配置文件也留在服务器
