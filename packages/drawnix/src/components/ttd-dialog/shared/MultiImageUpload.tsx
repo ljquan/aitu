@@ -9,7 +9,7 @@ import React, { useCallback, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { Upload, Button, MessagePlugin } from 'tdesign-react';
 import { AddIcon, DeleteIcon } from 'tdesign-icons-react';
-import { 
+import {
   ImageUploadIcon,
   MediaLibraryIcon,
 } from '../../icons';
@@ -18,6 +18,7 @@ import { MediaLibraryModal } from '../../media-library/MediaLibraryModal';
 import { SelectionMode, AssetType, AssetSource } from '../../../types/asset.types';
 import type { Asset } from '../../../types/asset.types';
 import { useAssets } from '../../../contexts/AssetContext';
+import { compressImageBlob, getCompressionStrategy } from '../../../utils/image-compression-core';
 import './MultiImageUpload.scss';
 
 interface MultiImageUploadProps {
@@ -59,14 +60,40 @@ export const MultiImageUpload: React.FC<MultiImageUploadProps> = ({
       return;
     }
 
-    // Validate file size (max 10MB)
-    if (file.size > 10 * 1024 * 1024) {
-      MessagePlugin.error('图片大小不能超过 10MB');
+    // Validate file size (max 25MB)
+    if (file.size > 25 * 1024 * 1024) {
+      MessagePlugin.error('图片大小不能超过 25MB');
       return;
     }
 
+    let fileToProcess = file;
+
+    // Compress if file is 10-25MB
+    if (file.size > 10 * 1024 * 1024) {
+      const strategy = getCompressionStrategy(file.size / (1024 * 1024));
+      const msgId = MessagePlugin.loading({
+        content: `正在压缩图片 (${(file.size / 1024 / 1024).toFixed(1)}MB)...`,
+        duration: 0,
+        placement: 'top',
+      });
+
+      try {
+        fileToProcess = (await compressImageBlob(file, strategy.targetSizeMB)) as File;
+        MessagePlugin.close(msgId);
+        MessagePlugin.success({
+          content: `压缩完成: ${(file.size / 1024 / 1024).toFixed(1)}MB → ${(fileToProcess.size / 1024 / 1024).toFixed(1)}MB`,
+          duration: 2,
+        });
+      } catch (compressionErr) {
+        MessagePlugin.close(msgId);
+        console.error('[MultiImageUpload] Compression failed:', compressionErr);
+        MessagePlugin.error('图片压缩失败');
+        return;
+      }
+    }
+
     // Add to asset library (async, don't block UI)
-    addAsset(file, AssetType.IMAGE, AssetSource.LOCAL, file.name).catch((err) => {
+    addAsset(fileToProcess, AssetType.IMAGE, AssetSource.LOCAL, file.name).catch((err) => {
       console.warn('[MultiImageUpload] Failed to add asset to library:', err);
     });
 
@@ -78,7 +105,7 @@ export const MultiImageUpload: React.FC<MultiImageUploadProps> = ({
         slotLabel: labels[slot] || `图片${slot + 1}`,
         url: reader.result as string,
         name: file.name,
-        file,
+        file: fileToProcess,
       };
 
       // Update images array
@@ -93,7 +120,7 @@ export const MultiImageUpload: React.FC<MultiImageUploadProps> = ({
       newImages.sort((a, b) => a.slot - b.slot);
       onImagesChange(newImages);
     };
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(fileToProcess);
   }, [images, labels, onImagesChange, addAsset]);
 
   // Handle image removal

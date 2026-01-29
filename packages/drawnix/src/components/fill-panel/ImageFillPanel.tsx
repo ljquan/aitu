@@ -9,7 +9,7 @@ import { throttle } from '@aitu/utils';
 import { useI18n } from '../../i18n';
 import { MessagePlugin } from 'tdesign-react';
 import { Image, ChevronDown, ChevronUp } from 'lucide-react';
-import { 
+import {
   ImageUploadIcon,
   MediaLibraryIcon,
 } from '../icons';
@@ -18,6 +18,7 @@ import { DEFAULT_IMAGE_FILL } from '../../types/fill.types';
 import { MediaLibraryModal } from '../media-library/MediaLibraryModal';
 import { AssetType, SelectionMode } from '../../types/asset.types';
 import type { Asset } from '../../types/asset.types';
+import { compressImageBlob, getCompressionStrategy } from '../../utils/image-compression-core';
 import './image-fill-panel.scss';
 
 export interface ImageFillPanelProps {
@@ -125,12 +126,42 @@ export const ImageFillPanel: React.FC<ImageFillPanelProps> = ({
         return;
       }
 
-      // 验证文件大小 (最大 10MB)
-      if (file.size > 10 * 1024 * 1024) {
+      // 验证文件大小 (最大 25MB)
+      if (file.size > 25 * 1024 * 1024) {
         MessagePlugin.warning(
-          language === 'zh' ? '图片大小不能超过 10MB' : 'Image size cannot exceed 10MB'
+          language === 'zh' ? '图片大小不能超过 25MB' : 'Image size cannot exceed 25MB'
         );
         return;
+      }
+
+      let fileToProcess = file;
+
+      // Compress if file is 10-25MB
+      if (file.size > 10 * 1024 * 1024) {
+        const strategy = getCompressionStrategy(file.size / (1024 * 1024));
+        const msgId = MessagePlugin.loading({
+          content: language === 'zh'
+            ? `正在压缩图片 (${(file.size / 1024 / 1024).toFixed(1)}MB)...`
+            : `Compressing image (${(file.size / 1024 / 1024).toFixed(1)}MB)...`,
+          duration: 0,
+          placement: 'top',
+        });
+
+        try {
+          fileToProcess = (await compressImageBlob(file, strategy.targetSizeMB)) as File;
+          MessagePlugin.close(msgId);
+          MessagePlugin.success({
+            content: language === 'zh'
+              ? `压缩完成: ${(file.size / 1024 / 1024).toFixed(1)}MB → ${(fileToProcess.size / 1024 / 1024).toFixed(1)}MB`
+              : `Compressed: ${(file.size / 1024 / 1024).toFixed(1)}MB → ${(fileToProcess.size / 1024 / 1024).toFixed(1)}MB`,
+            duration: 2,
+          });
+        } catch (compressionErr) {
+          MessagePlugin.close(msgId);
+          console.error('[ImageFillPanel] Compression failed:', compressionErr);
+          MessagePlugin.warning(language === 'zh' ? '图片压缩失败' : 'Image compression failed');
+          return;
+        }
       }
 
       // 转换为 base64
@@ -139,7 +170,7 @@ export const ImageFillPanel: React.FC<ImageFillPanelProps> = ({
         const imageUrl = e.target?.result as string;
         updateConfig({ imageUrl });
       };
-      reader.readAsDataURL(file);
+      reader.readAsDataURL(fileToProcess);
 
       // 清空 input
       event.target.value = '';
