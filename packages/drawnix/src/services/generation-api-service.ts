@@ -10,6 +10,7 @@ import {
   TaskType,
   TaskResult,
   TaskExecutionPhase,
+  TaskStatus,
 } from '../types/task.types';
 import {
   GenerationRequest,
@@ -24,6 +25,8 @@ import { legacyTaskQueueService as taskQueueService } from './task-queue';
 import { geminiSettings } from '../utils/settings-manager';
 import { unifiedCacheService } from './unified-cache-service';
 import { convertAspectRatioToSize } from '../constants/image-aspect-ratios';
+import { asyncImageAPIService } from './async-image-api-service';
+import { isAsyncImageModel } from '../constants/model-config';
 
 /**
  * Generation API Service
@@ -57,18 +60,26 @@ class GenerationAPIService {
     const taskType = type === TaskType.IMAGE ? 'image' : 'video';
 
     // Track model call start with enhanced parameters
-    const hasRefImage = !!(params as any).uploadedImage || !!(params as any).uploadedImages || !!(params as any).referenceImages;
+    const hasRefImage =
+      !!(params as any).uploadedImage ||
+      !!(params as any).uploadedImages ||
+      !!(params as any).referenceImages;
     analytics.trackModelCall({
       taskId,
       taskType,
-      model: params.model || (taskType === 'image' ? 'gemini-image' : 'gemini-video'),
+      model:
+        params.model ||
+        (taskType === 'image' ? 'gemini-image' : 'gemini-video'),
       promptLength: params.prompt.length,
       hasUploadedImage: hasRefImage,
       startTime,
       // Enhanced parameters
       aspectRatio: params.size,
       duration: params.duration,
-      resolution: params.width && params.height ? `${params.width}x${params.height}` : undefined,
+      resolution:
+        params.width && params.height
+          ? `${params.width}x${params.height}`
+          : undefined,
       batchCount: (params as any).count || 1,
       hasReferenceImage: hasRefImage,
     });
@@ -88,10 +99,15 @@ class GenerationAPIService {
       });
 
       // Create generation promise
-      const generationPromise =
-        type === TaskType.IMAGE
-          ? this.generateImage(params, abortController.signal)
-          : this.generateVideo(taskId, params, abortController.signal);
+      const generationPromise = (() => {
+        if (type === TaskType.IMAGE && isAsyncImageModel(params.model)) {
+          return this.generateAsyncImage(taskId, params);
+        }
+        if (type === TaskType.IMAGE) {
+          return this.generateImage(params, abortController.signal);
+        }
+        return this.generateVideo(taskId, params, abortController.signal);
+      })();
 
       // Race between generation and timeout
       const result = await Promise.race([generationPromise, timeoutPromise]);
@@ -160,6 +176,90 @@ class GenerationAPIService {
    */
   private convertAspectRatioToSize(aspectRatio?: string): string | undefined {
     return convertAspectRatioToSize(aspectRatio);
+  }
+
+  /**
+   * 将尺寸或宽高转为接口需要的比例字符串（如 16:9）
+   */
+  private deriveAspectRatio(params: GenerationParams): string | undefined {
+    const parseSizeToRatio = (size: string): string | undefined => {
+      if (!size.includes('x')) return undefined;
+      const [wStr, hStr] = size.split('x');
+      const w = Number(wStr);
+      const h = Number(hStr);
+      if (!w || !h) return undefined;
+      const gcd = (a: number, b: number): number =>
+        b === 0 ? a : gcd(b, a % b);
+      const g = gcd(w, h);
+      return `${w / g}:${h / g}`;
+    };
+
+    if (params.size) {
+      const ratio = parseSizeToRatio(params.size);
+      if (ratio) return ratio;
+    }
+
+    if (params.width && params.height) {
+      const g = (a: number, b: number): number => (b === 0 ? a : g(b, a % b));
+      const div = g(params.width, params.height);
+      return `${params.width / div}:${params.height / div}`;
+    }
+
+    return undefined;
+  }
+
+  /**
+   * 使用异步接口生成图片（提交任务 + 轮询）
+   */
+  private async generateAsyncImage(
+    taskId: string,
+    params: GenerationParams
+  ): Promise<TaskResult> {
+    const aspectRatio = this.deriveAspectRatio(params) || '1:1';
+    const sizeParam = aspectRatio; // 异步接口使用 size 字段传递比例枚举
+
+    try {
+      const result = await asyncImageAPIService.generateWithPolling(
+        {
+          model: params.model || 'gemini-3-pro-image-preview-async',
+          prompt: params.prompt,
+          size: sizeParam,
+        },
+        {
+          interval: 5000,
+          onProgress: (progress, status) => {
+            taskQueueService.updateTaskProgress(taskId, progress);
+            taskQueueService.updateTaskStatus(taskId, TaskStatus.PROCESSING, {
+              executionPhase: TaskExecutionPhase.POLLING,
+            });
+          },
+          onSubmitted: (remoteId) => {
+            taskQueueService.updateTaskStatus(taskId, TaskStatus.PROCESSING, {
+              remoteId,
+              executionPhase: TaskExecutionPhase.POLLING,
+            });
+          },
+        }
+      );
+
+      const { url, format } = asyncImageAPIService.extractUrlAndFormat(result);
+
+      return {
+        url,
+        format,
+        size: 0,
+      };
+    } catch (error: any) {
+      console.error('[GenerationAPI] Async image generation error:', error);
+      const wrappedError = new Error(error.message || '图片生成失败');
+      if (error.apiErrorBody) {
+        (wrappedError as any).apiErrorBody = error.apiErrorBody;
+      }
+      if (error.httpStatus) {
+        (wrappedError as any).httpStatus = error.httpStatus;
+      }
+      throw wrappedError;
+    }
   }
 
   /**
@@ -308,6 +408,49 @@ class GenerationAPIService {
       }
       if (error.fullResponse) {
         (wrappedError as any).fullResponse = error.fullResponse;
+      }
+      throw wrappedError;
+    }
+  }
+
+  /**
+   * 恢复异步图片任务的轮询（页面刷新后）
+   */
+  async resumeAsyncImageGeneration(
+    taskId: string,
+    remoteId: string
+  ): Promise<TaskResult> {
+    const timeout = TASK_TIMEOUT.IMAGE;
+
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error('TIMEOUT')), timeout);
+    });
+
+    try {
+      const result = await Promise.race([
+        asyncImageAPIService.resumePolling(remoteId, {
+          interval: 5000,
+          onProgress: (progress) => {
+            taskQueueService.updateTaskProgress(taskId, progress);
+          },
+        }),
+        timeoutPromise,
+      ]);
+
+      const { url, format } = asyncImageAPIService.extractUrlAndFormat(result);
+
+      return {
+        url,
+        format,
+        size: 0,
+      };
+    } catch (error: any) {
+      const wrappedError = new Error(error.message || '图片生成失败');
+      if (error.apiErrorBody) {
+        (wrappedError as any).apiErrorBody = error.apiErrorBody;
+      }
+      if (error.httpStatus) {
+        (wrappedError as any).httpStatus = error.httpStatus;
       }
       throw wrappedError;
     }

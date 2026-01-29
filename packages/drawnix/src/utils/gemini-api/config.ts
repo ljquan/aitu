@@ -24,6 +24,9 @@ export const VIDEO_DEFAULT_CONFIG: Partial<GeminiConfig> = {
 export const NON_STREAM_MODELS: string[] = [
   'seedream-4-0-250828',
   'seedream-v4',
+  'gemini-3-pro-image-preview-async',
+  'gemini-3-pro-image-preview-2k-async',
+  'gemini-3-pro-image-preview-4k-async',
 ];
 
 /**
@@ -32,5 +35,7 @@ export const NON_STREAM_MODELS: string[] = [
 export function shouldUseNonStreamMode(modelName: string): boolean {
   if (!modelName) return false;
   const lowerModelName = modelName.toLowerCase();
-  return NON_STREAM_MODELS.some(m => lowerModelName.includes(m.toLowerCase()));
+  return NON_STREAM_MODELS.some((m) =>
+    lowerModelName.includes(m.toLowerCase())
+  );
 }

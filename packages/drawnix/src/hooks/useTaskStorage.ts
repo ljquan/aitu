@@ -9,12 +9,22 @@
  */
 
 import { useEffect } from 'react';
-import { taskQueueService, shouldUseSWTaskQueue, legacyTaskQueueService } from '../services/task-queue';
+import {
+  taskQueueService,
+  shouldUseSWTaskQueue,
+  legacyTaskQueueService,
+} from '../services/task-queue';
 import { storageService } from '../services/storage-service';
 import { UPDATE_INTERVALS } from '../constants/TASK_CONSTANTS';
 import { migrateLegacyHistory } from '../utils/history-migration';
-import { Task, TaskType, TaskStatus, TaskExecutionPhase } from '../types/task.types';
+import {
+  Task,
+  TaskType,
+  TaskStatus,
+  TaskExecutionPhase,
+} from '../types/task.types';
 import { debounce } from '@aitu/utils';
+import { isAsyncImageModel } from '../constants/model-config';
 
 // Global flag to prevent multiple initializations (persists across HMR)
 let globalInitialized = false;
@@ -24,7 +34,7 @@ let globalInitialized = false;
  * Falls back to setTimeout if requestIdleCallback is not available
  */
 function waitForIdle(timeout = 100): Promise<void> {
-  return new Promise(resolve => {
+  return new Promise((resolve) => {
     if ('requestIdleCallback' in window) {
       (window as Window).requestIdleCallback(() => resolve(), { timeout });
     } else {
@@ -35,13 +45,13 @@ function waitForIdle(timeout = 100): Promise<void> {
 
 /**
  * Hook for automatic task storage synchronization
- * 
+ *
  * Responsibilities:
  * - Initialize storage service on mount
  * - Load tasks from storage on mount
  * - Listen to task updates and save to storage (debounced)
  * - Clean up subscriptions on unmount
- * 
+ *
  * @example
  * function App() {
  *   useTaskStorage(); // Automatic sync enabled
@@ -84,7 +94,9 @@ export function useTaskStorage(): void {
           // console.log('[useTaskStorage] SW mode: initializing and syncing tasks from Service Worker');
 
           // Import and initialize SW task queue service
-          const { swTaskQueueService } = await import('../services/sw-task-queue-service');
+          const { swTaskQueueService } = await import(
+            '../services/sw-task-queue-service'
+          );
           await swTaskQueueService.initialize();
 
           // Wait for browser idle
@@ -117,78 +129,93 @@ export function useTaskStorage(): void {
           // console.log(`[useTaskStorage] Restored ${storedTasks.length} tasks from storage`);
 
           // Handle interrupted processing tasks based on task type and remoteId
-          const processingTasks = storedTasks.filter(task => task.status === 'processing');
+          const processingTasks = storedTasks.filter(
+            (task) => task.status === 'processing'
+          );
 
           if (processingTasks.length > 0) {
             // console.log(`[useTaskStorage] Found ${processingTasks.length} interrupted processing tasks`);
 
-            processingTasks.forEach(task => {
-              // Video tasks with remoteId can be resumed (polling can continue)
-              if (task.type === TaskType.VIDEO && task.remoteId) {
-                // console.log(`[useTaskStorage] Video task ${task.id} can resume polling (remoteId: ${task.remoteId})`);
-                // Keep as processing, useTaskExecutor will handle resumption
-              } else {
-                // Image tasks or video tasks without remoteId cannot be resumed
-                // Mark as failed and let user decide to retry
-                // console.log(`[useTaskStorage] Task ${task.id} (${task.type}) cannot be resumed, marking as failed`);
+            processingTasks.forEach((task) => {
+              const isAsyncImageResumable =
+                task.type === TaskType.IMAGE &&
+                task.remoteId &&
+                isAsyncImageModel(task.params?.model);
 
-                // Provide more specific error message based on execution phase
+              // Video或异步图片任务且有 remoteId：允许后续恢复轮询
+              if (
+                (task.type === TaskType.VIDEO && task.remoteId) ||
+                isAsyncImageResumable
+              ) {
+                // 留待 useTaskExecutor 恢复
+              } else {
+                // 其他任务视为中断失败
                 let errorMessage = '任务被中断（页面刷新）';
                 let errorCode = 'INTERRUPTED';
 
-                // Check if video task was in submitting phase (API request may have succeeded on server)
-                if (task.type === TaskType.VIDEO && task.executionPhase === TaskExecutionPhase.SUBMITTING) {
+                if (
+                  task.type === TaskType.VIDEO &&
+                  task.executionPhase === TaskExecutionPhase.SUBMITTING
+                ) {
                   errorMessage = '任务在提交过程中被中断，可能已在后台执行';
                   errorCode = 'INTERRUPTED_DURING_SUBMISSION';
                 }
 
-                // Use legacy service directly since this code only runs in legacy mode
-                legacyTaskQueueService.updateTaskStatus(task.id, TaskStatus.FAILED, {
-                  startedAt: undefined,
-                  executionPhase: undefined, // Clear execution phase
-                  error: {
-                    code: errorCode,
-                    message: errorMessage,
-                    details: {
-                      originalError: `Task interrupted by page refresh before completion (phase: ${task.executionPhase || 'unknown'})`,
-                      timestamp: Date.now(),
+                legacyTaskQueueService.updateTaskStatus(
+                  task.id,
+                  TaskStatus.FAILED,
+                  {
+                    startedAt: undefined,
+                    executionPhase: undefined,
+                    error: {
+                      code: errorCode,
+                      message: errorMessage,
+                      details: {
+                        originalError: `Task interrupted by page refresh before completion (phase: ${
+                          task.executionPhase || 'unknown'
+                        })`,
+                        timestamp: Date.now(),
+                      },
                     },
-                  },
-                });
+                  }
+                );
               }
             });
           }
 
-          // Check for failed video tasks that can be recovered (network errors with remoteId)
-          const failedVideoTasks = storedTasks.filter(task =>
-            task.type === TaskType.VIDEO &&
-            task.status === 'failed' &&
-            task.remoteId
+          // Check for failed remote tasks that can be recovered (network errors with remoteId)
+          const failedRemoteTasks = storedTasks.filter(
+            (task) =>
+              task.status === 'failed' &&
+              task.remoteId &&
+              (task.type === TaskType.VIDEO ||
+                (task.type === TaskType.IMAGE &&
+                  isAsyncImageModel(task.params?.model)))
           );
 
-          if (failedVideoTasks.length > 0) {
+          if (failedRemoteTasks.length > 0) {
             // Helper function to check if error is a network error (not a business failure)
             const isNetworkError = (task: Task): boolean => {
               const errorMessage = task.error?.message || '';
               const originalError = task.error?.details?.originalError || '';
               const errorCode = task.error?.code || '';
-              const combinedError = `${errorMessage} ${originalError}`.toLowerCase();
-              
+              const combinedError =
+                `${errorMessage} ${originalError}`.toLowerCase();
+
               // Exclude business failures - these should not be retried
-              const isBusinessFailure = (
+              const isBusinessFailure =
                 combinedError.includes('generation_failed') ||
                 combinedError.includes('invalid_argument') ||
                 combinedError.includes('prohibited') ||
                 combinedError.includes('content policy') ||
                 combinedError.includes('视频生成失败') ||
                 errorCode.includes('generation_failed') ||
-                errorCode.includes('INVALID')
-              );
-              
+                errorCode.includes('INVALID');
+
               if (isBusinessFailure) {
                 return false;
               }
-              
+
               // Check for network-related errors
               return (
                 combinedError.includes('failed to fetch') ||
@@ -201,29 +228,38 @@ export function useTaskStorage(): void {
               );
             };
 
-            failedVideoTasks.forEach(task => {
+            failedRemoteTasks.forEach((task) => {
               if (isNetworkError(task)) {
-                // console.log(`[useTaskStorage] Recovering failed video task ${task.id} (network error, has remoteId: ${task.remoteId})`);
-                
+                // console.log(`[useTaskStorage] Recovering failed remote task ${task.id} (network error, has remoteId: ${task.remoteId})`);
+
                 // Reset to processing status so useTaskExecutor can resume polling
-                legacyTaskQueueService.updateTaskStatus(task.id, TaskStatus.PROCESSING, {
-                  error: undefined, // Clear error
-                  executionPhase: TaskExecutionPhase.POLLING, // Set to polling phase
-                });
+                legacyTaskQueueService.updateTaskStatus(
+                  task.id,
+                  TaskStatus.PROCESSING,
+                  {
+                    error: undefined, // Clear error
+                    executionPhase: TaskExecutionPhase.POLLING, // Set to polling phase
+                  }
+                );
               }
             });
           }
 
           // Count all incomplete tasks for logging
-          const incompleteTasks = storedTasks.filter(task =>
-            task.status === 'pending'
+          const incompleteTasks = storedTasks.filter(
+            (task) => task.status === 'pending'
           );
           const resumableTasks = processingTasks.filter(
-            task => task.type === TaskType.VIDEO && task.remoteId
+            (task) =>
+              (task.type === TaskType.VIDEO && task.remoteId) ||
+              (task.type === TaskType.IMAGE &&
+                task.remoteId &&
+                isAsyncImageModel(task.params?.model))
           );
 
           if (incompleteTasks.length > 0 || resumableTasks.length > 0) {
-            const totalIncomplete = incompleteTasks.length + resumableTasks.length;
+            const totalIncomplete =
+              incompleteTasks.length + resumableTasks.length;
             // console.log(`[useTaskStorage] Total ${totalIncomplete} incomplete tasks ready for execution`);
           }
         }
@@ -245,22 +281,27 @@ export function useTaskStorage(): void {
     }, UPDATE_INTERVALS.STORAGE_SYNC);
 
     // Subscribe to task updates
-    const subscription = taskQueueService.observeTaskUpdates().subscribe(event => {
-      if (!subscriptionActive) {
-        return;
-      }
+    const subscription = taskQueueService
+      .observeTaskUpdates()
+      .subscribe((event) => {
+        if (!subscriptionActive) {
+          return;
+        }
 
-      // Handle different event types
-      if (event.type === 'taskDeleted') {
-        // Delete from storage immediately (no debounce)
-        storageService.deleteTask(event.task.id).catch(error => {
-          console.error('[useTaskStorage] Failed to delete task from storage:', error);
-        });
-      } else {
-        // Debounce save operation for created/updated tasks
-        debouncedSave(event.task);
-      }
-    });
+        // Handle different event types
+        if (event.type === 'taskDeleted') {
+          // Delete from storage immediately (no debounce)
+          storageService.deleteTask(event.task.id).catch((error) => {
+            console.error(
+              '[useTaskStorage] Failed to delete task from storage:',
+              error
+            );
+          });
+        } else {
+          // Debounce save operation for created/updated tasks
+          debouncedSave(event.task);
+        }
+      });
 
     // Initialize
     initializeStorage();

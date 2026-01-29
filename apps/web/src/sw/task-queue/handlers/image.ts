@@ -15,6 +15,39 @@ import {
   convertAspectRatioToSize,
 } from '../utils/media-generation-utils';
 import type { LLMReferenceImage } from '../llm-api-logger';
+const ASYNC_IMAGE_MODELS = [
+  'gemini-3-pro-image-preview-async',
+  'gemini-3-pro-image-preview-2k-async',
+  'gemini-3-pro-image-preview-4k-async',
+];
+
+const isAsyncImageModel = (model?: string): boolean => {
+  if (!model) return false;
+  const lower = model.toLowerCase();
+  return ASYNC_IMAGE_MODELS.some((m) => lower.includes(m));
+};
+
+const getExtensionFromUrl = (url: string): string => {
+  try {
+    const clean = url.split('?')[0];
+    const last = clean.split('.').pop();
+    if (last && last.length <= 5) {
+      return last.toLowerCase();
+    }
+  } catch (e) {
+    // ignore
+  }
+  return 'jpg';
+};
+
+// 规范化 baseUrl，移除尾部 / 或 /v1，便于拼接 /v1/videos
+const normalizeApiBase = (url: string): string => {
+  let base = url.replace(/\/+$/, '');
+  if (base.endsWith('/v1')) {
+    base = base.slice(0, -3);
+  }
+  return base;
+};
 
 /**
  * Image generation handler
@@ -74,7 +107,9 @@ export class ImageHandler implements TaskHandler {
     // 处理参考图片：本地图片转 base64，远程图片检查缓存时间
     let processedRefImages: string[] | undefined;
     const { getImageInfo } = await import('../utils/media-generation-utils');
-    const { startLLMApiLog, completeLLMApiLog, failLLMApiLog } = await import('../llm-api-logger');
+    const { startLLMApiLog, completeLLMApiLog, failLLMApiLog } = await import(
+      '../llm-api-logger'
+    );
     const { debugFetch } = await import('../debug-fetch');
     let referenceImageInfos: LLMReferenceImage[] | undefined;
 
@@ -97,7 +132,10 @@ export class ImageHandler implements TaskHandler {
               height: info.height,
             };
           } catch (err) {
-            console.warn(`[ImageHandler] Failed to get image info for log: ${url}`, err);
+            console.warn(
+              `[ImageHandler] Failed to get image info for log: ${url}`,
+              err
+            );
             return {
               url,
               size: 0,
@@ -113,7 +151,12 @@ export class ImageHandler implements TaskHandler {
       params.size ||
       convertAspectRatioToSize(params.aspectRatio as string | undefined);
 
-    // 使用通用函数构建请求体
+    // 异步模型：走提交 + 轮询
+    if (isAsyncImageModel(params.model)) {
+      return this.generateAsyncImage(task, config, signal, resolvedSize);
+    }
+
+    // 使用通用函数构建请求体（同步模型）
     const requestBody = buildImageGenerationRequestBody(
       {
         prompt: params.prompt,
@@ -131,16 +174,18 @@ export class ImageHandler implements TaskHandler {
     config.onProgress(task.id, 10, TaskExecutionPhase.SUBMITTING);
 
     const startTime = Date.now();
-    
+
     // 为日志记录构建完整的请求体（不包含参考图片的 base64 数据以节省空间）
     const requestBodyForLog = {
       ...requestBody,
       // 如果有参考图片，只记录数量而不记录 base64 数据
-      ...(processedRefImages && processedRefImages.length > 0 
-        ? { reference_images: `[${processedRefImages.length} images - data omitted]` }
+      ...(processedRefImages && processedRefImages.length > 0
+        ? {
+            reference_images: `[${processedRefImages.length} images - data omitted]`,
+          }
         : {}),
     };
-    
+
     const logId = startLLMApiLog({
       endpoint: '/images/generations',
       model: geminiConfig.modelName || 'unknown',
@@ -211,5 +256,192 @@ export class ImageHandler implements TaskHandler {
       width: params.width,
       height: params.height,
     };
+  }
+
+  /**
+   * 异步图片生成：提交任务并轮询结果
+   */
+  private async generateAsyncImage(
+    task: SWTask,
+    config: HandlerConfig,
+    signal: AbortSignal,
+    resolvedSize?: string
+  ): Promise<TaskResult> {
+    const { geminiConfig } = config;
+    const { params } = task;
+
+    const aspectRatio = this.getAspectRatio(
+      params.aspectRatio as string,
+      resolvedSize
+    );
+    // 异步接口使用 size 字段传递比例枚举
+    const sizeParam = aspectRatio;
+    const baseUrl = normalizeApiBase(geminiConfig.baseUrl);
+
+    // 处理参考图：支持多图，按接口字段重复 append input_reference
+    const refImages =
+      (params.referenceImages as string[] | undefined) ||
+      extractUrlsFromUploadedImages(params.uploadedImages);
+    const refBlobs: Blob[] = [];
+    if (refImages && refImages.length > 0) {
+      for (let i = 0; i < refImages.length; i++) {
+        const blob = await this.toBlob(refImages[i], signal);
+        if (blob) {
+          refBlobs.push(blob);
+        }
+      }
+    }
+
+    const formData = new FormData();
+    formData.append(
+      'model',
+      params.model ||
+        geminiConfig.modelName ||
+        'gemini-3-pro-image-preview-async'
+    );
+    formData.append('prompt', params.prompt || '');
+    if (sizeParam) {
+      formData.append('size', sizeParam);
+    }
+    if (refBlobs.length > 0) {
+      refBlobs.forEach((blob, idx) => {
+        formData.append('input_reference', blob, `reference-${idx}.png`);
+      });
+    }
+
+    config.onProgress(task.id, 5, TaskExecutionPhase.SUBMITTING);
+
+    const submitResp = await fetch(`${baseUrl}/v1/videos`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${geminiConfig.apiKey}`,
+      },
+      body: formData,
+      signal,
+    });
+
+    if (!submitResp.ok) {
+      const text = await submitResp.text();
+      throw new Error(
+        `Async image submit failed: ${submitResp.status} - ${text}`
+      );
+    }
+
+    const submitData = await submitResp.json();
+
+    if (submitData.status === 'failed') {
+      const msg =
+        typeof submitData.error === 'string'
+          ? submitData.error
+          : submitData.error?.message || '图片生成失败';
+      throw new Error(msg);
+    }
+
+    const taskRemoteId = submitData.id;
+
+    // 轮询
+    const interval = 5000;
+    const maxAttempts = 1080; // ~90min
+    let attempts = 0;
+    let progress = submitData.progress ?? 0;
+
+    config.onProgress(task.id, progress, TaskExecutionPhase.POLLING);
+
+    while (attempts < maxAttempts) {
+      await this.sleep(interval, signal);
+      attempts += 1;
+
+      const queryResp = await fetch(`${baseUrl}/v1/videos/${taskRemoteId}`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${geminiConfig.apiKey}`,
+        },
+        signal,
+      });
+
+      if (!queryResp.ok) {
+        const text = await queryResp.text();
+        throw new Error(
+          `Async image query failed: ${queryResp.status} - ${text}`
+        );
+      }
+
+      const statusData = await queryResp.json();
+      progress = statusData.progress ?? progress;
+      config.onProgress(task.id, progress, TaskExecutionPhase.POLLING);
+
+      if (statusData.status === 'completed') {
+        const url = statusData.video_url || statusData.url;
+        if (!url) {
+          throw new Error('API 未返回有效的图片 URL');
+        }
+        return {
+          url,
+          format: getExtensionFromUrl(url),
+          size: 0,
+        };
+      }
+
+      if (statusData.status === 'failed') {
+        const msg =
+          typeof statusData.error === 'string'
+            ? statusData.error
+            : statusData.error?.message || '图片生成失败';
+        throw new Error(msg);
+      }
+    }
+
+    throw new Error('图片生成超时');
+  }
+
+  private getAspectRatio(
+    aspectRatio?: string,
+    size?: string
+  ): string | undefined {
+    if (aspectRatio) return aspectRatio;
+    if (size && size.includes('x')) {
+      const [wStr, hStr] = size.split('x');
+      const w = Number(wStr);
+      const h = Number(hStr);
+      if (w && h) {
+        const gcd = (a: number, b: number): number =>
+          b === 0 ? a : gcd(b, a % b);
+        const g = gcd(w, h);
+        return `${w / g}:${h / g}`;
+      }
+    }
+    return '1:1';
+  }
+
+  private async toBlob(
+    value: string,
+    signal: AbortSignal
+  ): Promise<Blob | null> {
+    try {
+      if (value.startsWith('data:')) {
+        const res = await fetch(value, { signal });
+        return await res.blob();
+      }
+
+      const res = await fetch(value, { signal });
+      if (!res.ok) return null;
+      return await res.blob();
+    } catch {
+      return null;
+    }
+  }
+
+  private sleep(ms: number, signal: AbortSignal): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const id = setTimeout(resolve, ms);
+      signal.addEventListener(
+        'abort',
+        () => {
+          clearTimeout(id);
+          reject(new DOMException('Aborted', 'AbortError'));
+        },
+        { once: true }
+      );
+    });
   }
 }
