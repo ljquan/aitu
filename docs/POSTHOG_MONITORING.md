@@ -1,6 +1,6 @@
 # PostHog Web Vitals 和 Page Report 监控
 
-本文档说明了如何在 Aitu 项目中使用 PostHog 上报 Web Vitals 数据和 Page Report 数据。
+本文档说明了如何在 Opentu 项目中使用 PostHog 上报 Web Vitals 数据和 Page Report 数据。
 
 ## 功能概述
 
@@ -131,7 +131,7 @@ setTimeout(initMonitoring, 1000);
   category: 'page_report',
   page_url: 'https://opentu.ai/',
   page_path: '/',
-  page_title: '爱图 - AI图片视频创作',
+  page_title: '开图 - AI图片视频创作',
   referrer: 'https://google.com',
   viewport_width: 1920,
   viewport_height: 1080,

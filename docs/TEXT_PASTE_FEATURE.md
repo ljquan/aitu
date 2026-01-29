@@ -2,7 +2,7 @@
 
 ## 功能概述
 
-Aitu 现在支持智能文本粘贴功能，当你从外部复制文本并粘贴到画布时，系统会自动控制文本宽度，避免文本过长。
+Opentu 现在支持智能文本粘贴功能，当你从外部复制文本并粘贴到画布时，系统会自动控制文本宽度，避免文本过长。
 
 ## 功能特点
 
@@ -57,7 +57,7 @@ return withTextPastePlugin(withImagePlugin(newBoard));
 
 ### 基本使用
 1. 从任何地方复制文本（浏览器、编辑器、文档等）
-2. 在 Aitu 画布上按 `Ctrl+V` (Windows/Linux) 或 `Cmd+V` (Mac)
+2. 在 Opentu 画布上按 `Ctrl+V` (Windows/Linux) 或 `Cmd+V` (Mac)
 3. 文本会自动插入到鼠标位置，并自动换行
 
 ### 示例

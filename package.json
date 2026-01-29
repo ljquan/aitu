@@ -3,7 +3,7 @@
   "version": "0.5.63",
   "license": "MIT",
   "packageManager": "pnpm@10.21.0",
-  "description": "Aitu - An open-source whiteboard tool with AI-powered image/video creation, mind mapping, flowcharts, and freehand drawing",
+  "description": "Opentu - An open-source whiteboard tool with AI-powered image/video creation, mind mapping, flowcharts, and freehand drawing",
   "homepage": "https://opentu.ai",
   "repository": {
     "type": "git",

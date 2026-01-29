@@ -340,7 +340,7 @@
 
 - liquid <ljquan@qq.com>
 - liquidliang <ljquan@qq.com>
-- Aitu Developer <noreply@aitu.chat>
+- Opentu Developer <noreply@aitu.chat>
 - gongchengtu <1817063960@qq.com>
 - ovst <wangjueszu@qq.com>
 

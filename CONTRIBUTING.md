@@ -1,6 +1,6 @@
 # 贡献指南 Contributing Guide
 
-感谢您对爱图(Aitu)项目的关注和支持！我们欢迎任何形式的贡献。
+感谢您对开图(Opentu)项目的关注和支持！我们欢迎任何形式的贡献。
 
 [English](#english) | [中文](#中文)
 

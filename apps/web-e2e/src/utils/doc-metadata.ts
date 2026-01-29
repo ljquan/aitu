@@ -31,7 +31,7 @@ export interface DocStep {
  * 预定义的文档分类
  */
 export const DOC_CATEGORIES: DocCategory[] = [
-  { id: 'getting-started', name: '快速开始', order: 1, description: '快速上手 Aitu 的基本操作' },
+  { id: 'getting-started', name: '快速开始', order: 1, description: '快速上手 Opentu 的基本操作' },
   { id: 'drawing', name: '绘图功能', order: 2, description: '使用各种绘图工具' },
   { id: 'ai-generation', name: 'AI 生成', order: 3, description: 'AI 图片和视频生成' },
   { id: 'mindmap', name: '思维导图', order: 4, description: '创建和编辑思维导图' },
