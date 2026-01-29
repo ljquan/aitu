@@ -13,7 +13,7 @@ import React, { useCallback, useState, useRef, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { Button, MessagePlugin } from 'tdesign-react';
 import { X } from 'lucide-react';
-import { 
+import {
   ImageUploadIcon,
   MediaLibraryIcon,
 } from '../../icons';
@@ -21,6 +21,7 @@ import { MediaLibraryModal } from '../../media-library/MediaLibraryModal';
 import type { Asset } from '../../../types/asset.types';
 import { SelectionMode, AssetType, AssetSource } from '../../../types/asset.types';
 import { useAssets } from '../../../contexts/AssetContext';
+import { compressImageBlob, getCompressionStrategy } from '../../../utils/image-compression-core';
 import './ReferenceImageUpload.scss';
 
 export interface ReferenceImage {
@@ -76,8 +77,8 @@ export const ReferenceImageUpload: React.FC<ReferenceImageUploadProps> = ({
       dragHint: '拖拽图片到此处',
       pasteHint: '或 Ctrl+V 粘贴',
       invalidFile: '请上传图片文件',
-      fileTooLarge: '图片大小不能超过 10MB',
-      someFilesInvalid: '部分文件格式不支持或超过10MB限制',
+      fileTooLarge: '图片大小不能超过 25MB',
+      someFilesInvalid: '部分文件格式不支持或超过25MB限制',
       loadFailed: '加载图片失败',
       maxCountReached: '最多上传 {count} 张图片',
     },
@@ -87,8 +88,8 @@ export const ReferenceImageUpload: React.FC<ReferenceImageUploadProps> = ({
       dragHint: 'Drop images here',
       pasteHint: 'or Ctrl+V to paste',
       invalidFile: 'Please upload image files',
-      fileTooLarge: 'Image size cannot exceed 10MB',
-      someFilesInvalid: 'Some files are not supported or exceed 10MB limit',
+      fileTooLarge: 'Image size cannot exceed 25MB',
+      someFilesInvalid: 'Some files are not supported or exceed 25MB limit',
       loadFailed: 'Failed to load image',
       maxCountReached: 'Maximum {count} images allowed',
     },
@@ -102,7 +103,7 @@ export const ReferenceImageUpload: React.FC<ReferenceImageUploadProps> = ({
       MessagePlugin.error(t.invalidFile);
       return false;
     }
-    if (file.size > 10 * 1024 * 1024) {
+    if (file.size > 25 * 1024 * 1024) {
       MessagePlugin.error(t.fileTooLarge);
       return false;
     }
@@ -110,14 +111,14 @@ export const ReferenceImageUpload: React.FC<ReferenceImageUploadProps> = ({
   }, [t]);
 
   // Convert file to base64 and create ReferenceImage
-  const fileToReferenceImage = useCallback((file: File): Promise<ReferenceImage> => {
+  const fileToReferenceImage = useCallback((file: File | Blob, originalName: string): Promise<ReferenceImage> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => {
         resolve({
           url: reader.result as string,
-          name: file.name,
-          file,
+          name: originalName,
+          file: file instanceof File ? file : (file as any),
         });
       };
       reader.onerror = reject;
@@ -138,15 +139,62 @@ export const ReferenceImageUpload: React.FC<ReferenceImageUploadProps> = ({
       validFiles.splice(maxCount - images.length);
     }
 
+    // Process files with compression if needed
+    const processedFiles: Array<{ blob: Blob; name: string }> = [];
+
+    for (const file of validFiles) {
+      try {
+        let fileToAdd: Blob = file;
+
+        // Compress if file is 10-25MB
+        if (file.size > 10 * 1024 * 1024) {
+          const strategy = getCompressionStrategy(file.size / (1024 * 1024));
+          const msgId = MessagePlugin.loading({
+            content: language === 'zh'
+              ? `正在压缩图片 (${(file.size / 1024 / 1024).toFixed(1)}MB)...`
+              : `Compressing image (${(file.size / 1024 / 1024).toFixed(1)}MB)...`,
+            duration: 0,
+            placement: 'top',
+          });
+
+          try {
+            fileToAdd = await compressImageBlob(file, strategy.targetSizeMB);
+            MessagePlugin.close(msgId);
+            MessagePlugin.success({
+              content: language === 'zh'
+                ? `压缩完成: ${(file.size / 1024 / 1024).toFixed(1)}MB → ${(fileToAdd.size / 1024 / 1024).toFixed(1)}MB`
+                : `Compressed: ${(file.size / 1024 / 1024).toFixed(1)}MB → ${(fileToAdd.size / 1024 / 1024).toFixed(1)}MB`,
+              duration: 2,
+            });
+          } catch (compressionErr) {
+            MessagePlugin.close(msgId);
+            console.error('[ReferenceImageUpload] Compression failed:', compressionErr);
+            onError?.(language === 'zh' ? '图片压缩失败' : 'Image compression failed');
+            continue;
+          }
+        }
+
+        processedFiles.push({ blob: fileToAdd, name: file.name });
+      } catch (err) {
+        console.error('[ReferenceImageUpload] Error processing file:', err);
+        onError?.(t.loadFailed);
+        continue;
+      }
+    }
+
+    if (processedFiles.length === 0) return;
+
     // Add to asset library (async, don't block UI)
-    validFiles.forEach(file => {
-      addAsset(file, AssetType.IMAGE, AssetSource.LOCAL, file.name).catch((err) => {
+    processedFiles.forEach(({ blob, name }) => {
+      addAsset(blob as File, AssetType.IMAGE, AssetSource.LOCAL, name).catch((err) => {
         console.warn('[ReferenceImageUpload] Failed to add asset to library:', err);
       });
     });
 
     try {
-      const newImages = await Promise.all(validFiles.map(fileToReferenceImage));
+      const newImages = await Promise.all(
+        processedFiles.map(({ blob, name }) => fileToReferenceImage(blob, name))
+      );
 
       if (slotLabels && targetSlot !== undefined) {
         // Slot mode: replace image at specific slot
@@ -164,7 +212,7 @@ export const ReferenceImageUpload: React.FC<ReferenceImageUploadProps> = ({
       console.error('[ReferenceImageUpload] Failed to process files:', error);
       onError?.(t.loadFailed);
     }
-  }, [images, multiple, maxCount, slotLabels, validateFile, fileToReferenceImage, addAsset, onImagesChange, onError, t]);
+  }, [images, multiple, maxCount, slotLabels, language, validateFile, fileToReferenceImage, addAsset, onImagesChange, onError, t]);
 
   // Handle file input change
   const handleFileInputChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {

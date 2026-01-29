@@ -140,7 +140,7 @@ function generateNpmPackageJson(version) {
   return {
     name: CONFIG.packageName,
     version: version,
-    description: 'Aitu static assets for CDN deployment (HTML files not included for security)',
+    description: 'Opentu static assets for CDN deployment (HTML files not included for security)',
     keywords: [
       'aitu',
       'whiteboard',
@@ -169,7 +169,7 @@ function generateNpmPackageJson(version) {
 
 // 生成 README
 function generateReadme(version) {
-  return `# Aitu CDN Assets
+  return `# Opentu CDN Assets
 
 > ⚠️ **安全说明**: 此包仅包含静态资源（JS、CSS、图片、字体），不包含 HTML 文件。HTML 文件应从你自己的服务器提供。
 

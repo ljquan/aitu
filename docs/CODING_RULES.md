@@ -1,4 +1,4 @@
-# Aitu 编码规则详解
+# Opentu 编码规则详解
 
 本文档包含项目中积累的具体编码规则和常见错误案例。这是 `CLAUDE.md` 的详细补充，当需要具体的实现指导时参考本文档。
 
@@ -3075,7 +3075,7 @@ root.render(
 );
 ```
 
-**原因**: 独立的 React 树不会继承父级树的 Context。在 Aitu 中，画布元素是通过 SVG `foreignObject` 独立挂载的，必须通过 `ToolProviderWrapper` 显式重新提供 `I18nProvider`、`AssetProvider`、`WorkflowProvider` 和 `DrawnixContext` 等核心上下文，才能保证内部组件功能正常。
+**原因**: 独立的 React 树不会继承父级树的 Context。在 Opentu 中，画布元素是通过 SVG `foreignObject` 独立挂载的，必须通过 `ToolProviderWrapper` 显式重新提供 `I18nProvider`、`AssetProvider`、`WorkflowProvider` 和 `DrawnixContext` 等核心上下文，才能保证内部组件功能正常。
 
 ### 错误 11: 获取第三方组件位置使用其内部属性而非 DOM API
 

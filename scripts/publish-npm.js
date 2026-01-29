@@ -88,7 +88,7 @@ function generateNpmPackageJson(version) {
   const npmPackage = {
     name: CONFIG.packageName,
     version: version,
-    description: 'Aitu - AI-powered whiteboard app with image/video creation, mind mapping, flowcharts, and freehand drawing',
+    description: 'Opentu - AI-powered whiteboard app with image/video creation, mind mapping, flowcharts, and freehand drawing',
     keywords: [
       'aitu',
       'whiteboard',
@@ -122,7 +122,7 @@ function generateNpmPackageJson(version) {
 
 // 生成 README
 function generateReadme(version) {
-  return `# Aitu (爱图) - AI 图片视频创作工具
+  return `# Opentu (开图) - AI 图片视频创作工具
 
 [![npm version](https://img.shields.io/npm/v/${CONFIG.packageName}.svg)](https://www.npmjs.com/package/${CONFIG.packageName})
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -174,7 +174,7 @@ MIT License
 
 // 主流程
 async function main() {
-  log('\n🚀 Aitu npm 发布脚本\n', 'blue');
+  log('\n🚀 Opentu npm 发布脚本\n', 'blue');
   
   if (isDryRun) {
     logWarning('DRY RUN 模式 - 不会实际发布');

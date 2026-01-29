@@ -1,7 +1,7 @@
 {
   "name": "@aitu/utils",
   "version": "0.0.1",
-  "description": "Shared utility functions for Aitu project",
+  "description": "Shared utility functions for Opentu project",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "private": false,

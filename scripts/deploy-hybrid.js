@@ -535,7 +535,7 @@ function stepPublishNpm(version) {
   const npmPackage = {
     name: CONFIG.packageName,
     version: version,
-    description: 'Aitu static assets for CDN (HTML not included)',
+    description: 'Opentu static assets for CDN (HTML not included)',
     license: 'MIT',
     files: ['**/*'],
     publishConfig: { access: 'public' },
@@ -548,7 +548,7 @@ function stepPublishNpm(version) {
   );
   
   // 生成 README
-  const readme = `# Aitu CDN Assets v${version}\n\n> 静态资源包，不含 HTML 文件\n\n- unpkg: https://unpkg.com/${CONFIG.packageName}@${version}/\n- jsdelivr: https://cdn.jsdelivr.net/npm/${CONFIG.packageName}@${version}/\n`;
+  const readme = `# Opentu CDN Assets v${version}\n\n> 静态资源包，不含 HTML 文件\n\n- unpkg: https://unpkg.com/${CONFIG.packageName}@${version}/\n- jsdelivr: https://cdn.jsdelivr.net/npm/${CONFIG.packageName}@${version}/\n`;
   fs.writeFileSync(path.join(CONFIG.outputCDN, 'README.md'), readme);
   
   // 发布
@@ -824,7 +824,7 @@ function stepVerify(version) {
 
 async function main() {
   log('\n' + '═'.repeat(50), 'cyan');
-  log('🚀 Aitu 统一混合部署', 'cyan');
+  log('🚀 Opentu 统一混合部署', 'cyan');
   log('═'.repeat(50), 'cyan');
   
   if (isDryRun) {
