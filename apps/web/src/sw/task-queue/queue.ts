@@ -417,7 +417,33 @@ export class SWTaskQueue {
         return;
       }
       
-      // No success log found - mark as failed (don't re-submit to avoid extra cost)
+      // 检查任务是否刚刚开始（SUBMITTING 阶段），如果是则重新执行
+      // 这样 SW 更新不会导致刚开始的任务直接失败
+      if (task.executionPhase === TaskExecutionPhase.SUBMITTING) {
+        // 重置进度并重新执行
+        task.progress = 0;
+        task.updatedAt = Date.now();
+        this.tasks.set(task.id, task);
+        this.runningTasks.add(task.id);
+        
+        await taskQueueStorage.saveTask(task);
+        
+        this.broadcastToClients({
+          type: 'TASK_STATUS',
+          taskId: task.id,
+          status: task.status,
+          progress: 0,
+          phase: task.executionPhase,
+          updatedAt: task.updatedAt,
+        });
+
+        this.executeTaskInternal(task).catch(() => {
+          // 静默忽略执行错误，错误会在 handleTaskError 中处理
+        });
+        return;
+      }
+      
+      // No success log found and not in submitting phase - mark as failed (don't re-submit to avoid extra cost)
       await this.handleTaskError(task.id, new Error('任务中断且无法恢复（未找到已完成的结果）'));
     }
   }
@@ -506,11 +532,8 @@ export class SWTaskQueue {
     params: SWTask['params'],
     _clientId: string // clientId is no longer used for targeting
   ): Promise<void> {
-    console.log(`[SWTaskQueue] submitTask called: taskId=${taskId}, type=${taskType}, initialized=${this.initialized}, hasGeminiConfig=${!!this.geminiConfig}, hasVideoConfig=${!!this.videoConfig}`);
-
     // Reject task if not initialized (no API key)
     if (!this.initialized) {
-      console.warn(`[SWTaskQueue] Cannot submit task ${taskId}: queue not initialized (no API key)`);
       this.broadcastToClients({
         type: 'TASK_REJECTED',
         taskId,
@@ -521,7 +544,6 @@ export class SWTaskQueue {
 
     // Check for duplicate by taskId
     if (this.tasks.has(taskId)) {
-      console.warn(`[SWTaskQueue] Task ${taskId} already exists, skipping duplicate submit`);
       return;
     }
 
@@ -535,7 +557,6 @@ export class SWTaskQueue {
       params.batchTotal ||
       params.globalIndex
     );
-    console.log(`[SWTaskQueue] submitTask batch check: taskId=${taskId}, batchId=${params.batchId}, batchIndex=${params.batchIndex}, batchTotal=${params.batchTotal}, globalIndex=${params.globalIndex}, isBatchTask=${isBatchTask}`);
     if (!isBatchTask) {
       const existingTask = Array.from(this.tasks.values()).find(
         t => (t.status === TaskStatus.PROCESSING || t.status === TaskStatus.PENDING) &&
@@ -543,9 +564,6 @@ export class SWTaskQueue {
              t.params.prompt === params.prompt
       );
       if (existingTask) {
-        console.warn(
-          `[SWTaskQueue] Similar task ${existingTask.id} with same prompt already ${existingTask.status}, skipping duplicate`
-        );
         // Broadcast the existing task's status to sync the client
         this.broadcastToClients({
           type: 'TASK_STATUS',
@@ -578,24 +596,17 @@ export class SWTaskQueue {
 
     this.tasks.set(taskId, task);
     this.runningTasks.add(taskId);
-    console.log(`[SWTaskQueue] Task ${taskId} added to map and runningTasks, executing...`);
 
     // Persist to IndexedDB
     await taskQueueStorage.saveTask(task);
 
-    // Broadcast task created to all clients
-    this.broadcastToClients({
-      type: 'TASK_CREATED',
-      task,
-    });
+    // 注意：不在这里广播 TASK_CREATED，由 handleTaskCreate 统一处理
+    // handleTaskCreate 使用 broadcastToOthers 只广播给其他客户端，避免重复
 
     // Execute task immediately (no PENDING state, direct execution)
-    // Run in background but ensure errors are handled
-    console.log(`[SWTaskQueue] Calling executeTaskInternal for ${taskId}`);
-    this.executeTaskInternal(task).catch((error) => {
-      console.error(`[SWTaskQueue] Task ${taskId} execution failed:`, error);
+    this.executeTaskInternal(task).catch(() => {
+      // 静默忽略，错误会在 handleTaskError 中处理
     });
-    console.log(`[SWTaskQueue] executeTaskInternal called for ${taskId}, continuing async`);
   }
 
   /**
@@ -629,10 +640,8 @@ export class SWTaskQueue {
    * Retry a failed or cancelled task
    */
   async retryTask(taskId: string): Promise<void> {
-    console.log('[SWTaskQueue] retryTask called:', taskId);
     const task = this.tasks.get(taskId);
     if (!task || (task.status !== TaskStatus.FAILED && task.status !== TaskStatus.CANCELLED)) {
-      console.log('[SWTaskQueue] retryTask skipped:', { taskExists: !!task, status: task?.status });
       return;
     }
 
@@ -647,14 +656,15 @@ export class SWTaskQueue {
           const data = JSON.parse(latestLog.responseBody);
           if (data.id) task.remoteId = data.id;
         }
-      } catch (e) {
-        console.warn(`[SWTaskQueue] Failed to recover remoteId for retry: ${task.id}`, e);
+      } catch {
+        // 静默忽略恢复 remoteId 失败
       }
     }
 
     const now = Date.now();
     task.status = TaskStatus.PROCESSING;
     task.error = undefined;
+    task.progress = 0; // 重置进度为 0
     task.startedAt = now;
     task.updatedAt = now;
     task.executionPhase = TaskExecutionPhase.SUBMITTING;
@@ -665,20 +675,18 @@ export class SWTaskQueue {
     await taskQueueStorage.saveTask(task);
 
     // Broadcast status change to all clients
-    console.log('[SWTaskQueue] retryTask broadcasting TASK_STATUS:', { taskId: task.id, status: task.status });
     this.broadcastToClients({
       type: 'TASK_STATUS',
       taskId: task.id,
       status: task.status,
+      progress: 0, // 广播进度重置
       phase: task.executionPhase,
       updatedAt: task.updatedAt,
     });
 
     // Execute task immediately (no PENDING state, direct execution)
-    // Run in background but ensure errors are handled
-    console.log('[SWTaskQueue] retryTask executing task');
-    this.executeTaskInternal(task).catch((error) => {
-      console.error(`[SWTaskQueue] Retry task ${task.id} execution failed:`, error);
+    this.executeTaskInternal(task).catch(() => {
+      // 静默忽略执行错误，错误会在 handleTaskError 中处理
     });
   }
 
@@ -1004,15 +1012,10 @@ export class SWTaskQueue {
    * Internal task execution - assumes task is already set to PROCESSING and in runningTasks
    */
   private async executeTaskInternal(task: SWTask): Promise<void> {
-    console.log(`[SWTaskQueue] executeTaskInternal START for ${task.id}, type=${task.type}, geminiConfig=${!!this.geminiConfig}, videoConfig=${!!this.videoConfig}`);
-
     if (!this.geminiConfig || !this.videoConfig) {
-      console.error(`[SWTaskQueue] Config missing for task ${task.id}: geminiConfig=${!!this.geminiConfig}, videoConfig=${!!this.videoConfig}`);
       await this.handleTaskError(task.id, new Error('API configuration not initialized. Please check your API key settings.'));
       return;
     }
-
-    console.log(`[SWTaskQueue] Config OK for task ${task.id}, checking remoteId...`);
 
     // 如果任务已经有 remoteId（视频/角色），则直接进入恢复流程，跳过提交阶段，只重试获取进度的接口
     if (task.remoteId && (task.type === TaskType.VIDEO || task.type === TaskType.CHARACTER)) {
@@ -1092,13 +1095,10 @@ export class SWTaskQueue {
         throw new Error(`No handler for task type: ${task.type}`);
       }
 
-      console.log(`[SWTaskQueue] Got handler for ${task.id} (${task.type}), executing...`);
-
       // Get timeout for this task type
       const taskTimeout = this.config.timeouts[task.type] || 10 * 60 * 1000; // Default 10 minutes
 
       // Execute with timeout
-      console.log(`[SWTaskQueue] Calling handler.execute for ${task.id}, timeout=${Math.round(taskTimeout / 1000)}s`);
       const result = await Promise.race([
         handler.execute(task, handlerConfig),
         new Promise<never>((_, reject) => {
@@ -1110,10 +1110,8 @@ export class SWTaskQueue {
         }),
       ]);
 
-      console.log(`[SWTaskQueue] handler.execute completed for ${task.id}`);
       await this.handleTaskSuccess(task.id, result);
     } catch (error) {
-      console.error(`[SWTaskQueue] handler.execute error for ${task.id}:`, error);
       await this.handleTaskError(task.id, error);
     }
   }

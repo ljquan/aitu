@@ -33,7 +33,6 @@ import {
   registerMessageHandlers,
   onControllerChange,
   setPostMessageLogCallback,
-  heartbeat,
 } from './sw-communication.js';
 
 // Feature modules
@@ -991,7 +990,7 @@ function setupMessageHandlers() {
           } else {
             state.liveLogs.llmapiLogs.unshift(data.log);
           }
-          if (state.liveLogs.llmapiLogs.length > 200) {
+          if (state.liveLogs.llmapiLogs.length > 1000) {
             state.liveLogs.llmapiLogs.pop();
           }
         } else {
@@ -1001,7 +1000,7 @@ function setupMessageHandlers() {
           } else {
             state.llmapiLogs.unshift(data.log);
           }
-          if (state.llmapiLogs.length > 200) {
+          if (state.llmapiLogs.length > 1000) {
             state.llmapiLogs.pop();
           }
           renderLLMApiLogs();
@@ -1146,31 +1145,11 @@ async function init() {
   // Start memory monitoring
   startMemoryMonitoring();
   
-  // Heartbeat mechanism to keep debug mode alive
-  // This allows SW to detect when debug page is truly closed (no heartbeat for 15s)
-  // vs just refreshed (new page immediately sends heartbeat)
-  const HEARTBEAT_INTERVAL = 5000; // 5 seconds
-  
-  // Send initial heartbeat
-  heartbeat();
-  
-  // Start heartbeat interval
-  const heartbeatTimer = setInterval(heartbeat, HEARTBEAT_INTERVAL);
-  
-  // When page becomes visible again, immediately send heartbeat
-  // This handles browser throttling of background tabs
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') {
-      heartbeat();
-    }
-  });
-  
-  // Clean up on page unload (stop heartbeat timer and memory monitoring)
+  // Clean up on page unload - disable debug mode when page is closed
   window.addEventListener('beforeunload', () => {
-    clearInterval(heartbeatTimer);
     stopMemoryMonitoring();
-    // Don't send disable message here - let SW detect timeout instead
-    // This allows refresh to work without disabling debug mode
+    // Disable debug mode when debug page is closed
+    disableDebug();
   });
   
 }

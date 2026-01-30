@@ -34,6 +34,7 @@ export function createConsoleEntry(log, isExpanded = false, onToggle = null) {
   entry.dataset.id = log.id;
   
   const hasStack = log.logStack && log.logStack.trim();
+  const hasDetails = hasStack || log.logSource || log.url;
 
   // Map log level to status class
   const levelStatusClass = {
@@ -49,12 +50,12 @@ export function createConsoleEntry(log, isExpanded = false, onToggle = null) {
 
   entry.innerHTML = `
     <div class="log-header">
-      ${hasStack ? `<span class="log-toggle" title="展开/收起详情"><span class="arrow">▶</span></span>` : '<span style="width: 16px; display: inline-block;"></span>'}
+      ${hasDetails ? `<span class="log-toggle" title="展开/收起详情"><span class="arrow">▶</span></span>` : '<span style="width: 16px; display: inline-block;"></span>'}
       <span class="log-time">${formatTime(log.timestamp)}</span>
       <span class="log-status ${levelStatusClass}">${level.toUpperCase()}</span>
       <span class="log-url" title="${escapeHtml(log.logMessage || '')}">${escapeHtml(messagePreview)}</span>
     </div>
-    ${hasStack || log.logSource || log.url ? `
+    ${hasDetails ? `
       <div class="log-details">
         ${log.logMessage ? `
           <div class="detail-section">
@@ -105,7 +106,7 @@ export function createConsoleEntry(log, isExpanded = false, onToggle = null) {
   const header = entry.querySelector('.log-header');
   header.addEventListener('click', (e) => {
     if (e.target.closest('.log-toggle')) return;
-    if (hasStack || log.logSource || log.url) {
+    if (hasDetails) {
       toggleExpand();
     }
   });

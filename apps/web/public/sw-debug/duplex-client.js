@@ -202,12 +202,12 @@ async function callRPC(method, params = {}, timeout = 10000, retries = 2) {
       
       // 检查响应格式并解包 data
       if (response && typeof response === 'object') {
-        // ret === 0 表示成功 (ReturnCode.Success)
-        if (response.ret === 0 && response.data !== undefined) {
+        // ret === undefined || ret === 0 表示成功（publish 模式下 ret 可能是 undefined）
+        if ((response.ret === undefined || response.ret === 0) && response.data !== undefined) {
           return response.data;
         }
-        // 如果有错误信息
-        if (response.ret !== 0) {
+        // 如果有错误信息（ret 存在且不为 0）
+        if (response.ret !== undefined && response.ret !== 0) {
           throw new Error(response.msg || `RPC failed with code ${response.ret}`);
         }
       }

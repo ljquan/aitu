@@ -515,13 +515,24 @@ export function setupErrorCapture(): void {
   // 未处理的 Promise rejection
   window.addEventListener('unhandledrejection', (event) => {
     const reason = event.reason;
+    const errorMessage = reason?.message || String(reason) || '';
+    const errorStack = reason?.stack || '';
+    
+    // 过滤监控服务相关的错误（PostHog, Sentry）
+    if (errorMessage.includes('posthog.com') ||
+        errorMessage.includes('sentry.io') ||
+        errorStack.includes('posthog') ||
+        errorStack.includes('sentry')) {
+      return; // 静默忽略监控服务的网络错误
+    }
+    
     const snapshot: CrashSnapshot = {
       id: `rejection-${Date.now()}`,
       timestamp: Date.now(),
       type: 'error',
       error: {
-        message: reason?.message || String(reason) || 'Unhandled Promise rejection',
-        stack: reason?.stack,
+        message: errorMessage || 'Unhandled Promise rejection',
+        stack: errorStack,
         type: 'unhandledRejection',
       },
       memory: getMemoryInfo(),

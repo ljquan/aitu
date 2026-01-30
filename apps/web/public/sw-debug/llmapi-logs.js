@@ -100,8 +100,12 @@ function createLLMApiEntry(log, isExpanded, onToggle) {
   entry.className = 'log-entry' + (isExpanded ? ' expanded' : '');
   entry.dataset.id = log.id;
   
-  const time = new Date(log.timestamp).toLocaleTimeString('zh-CN', { 
+  const date = new Date(log.timestamp);
+  const time = date.toLocaleString('zh-CN', { 
     hour12: false,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',

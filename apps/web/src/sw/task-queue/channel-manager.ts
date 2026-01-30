@@ -639,11 +639,8 @@ export class SWChannelManager {
 
     // 创建任务
     try {
-      console.log(`[SWChannelManager] Calling taskQueue.submitTask for ${taskId}...`);
       await this.taskQueue.submitTask(taskId, taskType, params, clientId);
       const task = this.taskQueue.getTask(taskId);
-
-      console.log(`[SWChannelManager] Task ${taskId} created successfully, task status=${task?.status}`);
 
       // 记录 taskId -> channel 映射，用于后续点对点通讯
       const clientChannel = this.channels.get(clientId);
@@ -651,7 +648,7 @@ export class SWChannelManager {
         this.taskChannels.set(taskId, clientChannel);
       }
 
-      // 广播给其他客户端（通知新任务创建）
+      // 只广播给其他客户端（不包括创建者），避免重复
       this.broadcastToOthers(SW_EVENTS.TASK_CREATED, { task }, clientId);
 
       return { success: true, task };

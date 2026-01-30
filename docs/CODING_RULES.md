@@ -5561,3 +5561,117 @@ const Leaf = ({ children, leaf, attributes }) => {
 4. 解决方案是选择一种实现方式并始终使用，推荐使用 CSS 因为它更灵活（支持自定义样式和颜色）
 
 **相关文件**: `packages/react-text/src/text.tsx`
+
+### postmessage-duplex RPC 消息大小限制
+
+**场景**: 使用 postmessage-duplex 进行 SW 与主线程通信，查询大量数据时
+
+❌ **错误示例**:
+```typescript
+// 错误：一次性返回所有日志，可能超过 1MB 限制
+async function getAllLogs() {
+  const logs = await db.getAll(); // 可能有上千条，每条包含大字段
+  return { logs }; // Message size exceeds limit (1048576 bytes)
+}
+
+// 错误：前端分页，但后端返回全量数据
+async function getLogsPaginated(page, pageSize) {
+  const allLogs = await db.getAll();
+  return { logs: allLogs.slice((page-1)*pageSize, page*pageSize) };
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：后端分页 + 精简数据
+async function getLogsPaginated(page = 1, pageSize = 20, filter = {}) {
+  let logs = await db.getAll();
+  
+  // 1. 先过滤（在分页前）
+  if (filter.type) logs = logs.filter(l => l.type === filter.type);
+  if (filter.status) logs = logs.filter(l => l.status === filter.status);
+  
+  // 2. 计算分页信息
+  const total = logs.length;
+  const totalPages = Math.ceil(total / pageSize);
+  
+  // 3. 分页
+  const pagedLogs = logs.slice((page-1)*pageSize, page*pageSize);
+  
+  // 4. 精简数据，去掉大字段
+  const compactLogs = pagedLogs.map(log => ({
+    id: log.id,
+    timestamp: log.timestamp,
+    status: log.status,
+    // 截断长文本
+    prompt: log.prompt?.substring(0, 200),
+    // 不传输 requestBody、responseBody 等大字段
+  }));
+  
+  return { logs: compactLogs, total, page, pageSize, totalPages };
+}
+```
+
+**原因**:
+- postmessage-duplex 默认消息大小限制为 1MB（1048576 bytes）
+- 日志数据通常包含大字段（请求体、响应体、图片 base64 等），100 条日志可能超过 10MB
+- 解决方案：后端分页 + 精简数据，每页 20 条左右，去掉大字段
+- 如需完整数据，提供单条查询接口，按需获取
+
+**相关文件**: 
+- `apps/web/src/sw/task-queue/llm-api-logger.ts` - `getLLMApiLogsPaginated`
+- `apps/web/src/sw/task-queue/channel-manager.ts` - `handleDebugGetLLMApiLogs`
+
+### 分页查询必须在服务端过滤
+
+**场景**: 实现带过滤条件的分页列表时
+
+❌ **错误示例**:
+```typescript
+// 错误：后端分页，前端过滤
+// 后端
+async function getLogsPaginated(page, pageSize) {
+  const allLogs = await db.getAll();
+  return { 
+    logs: allLogs.slice((page-1)*pageSize, page*pageSize),
+    total: allLogs.length 
+  };
+}
+
+// 前端
+function getFilteredLogs() {
+  // 只能过滤当前页，总数也不对
+  return state.logs.filter(l => l.type === filter.type);
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：过滤条件传到后端，先过滤再分页
+// 后端
+async function getLogsPaginated(page, pageSize, filter) {
+  let logs = await db.getAll();
+  
+  // 先过滤
+  if (filter.type) logs = logs.filter(l => l.type === filter.type);
+  if (filter.status) logs = logs.filter(l => l.status === filter.status);
+  
+  // 再分页（基于过滤后的数据）
+  const total = logs.length;
+  const totalPages = Math.ceil(total / pageSize);
+  const pagedLogs = logs.slice((page-1)*pageSize, page*pageSize);
+  
+  return { logs: pagedLogs, total, page, pageSize, totalPages };
+}
+
+// 前端
+function onFilterChange() {
+  // 过滤条件变化时重新加载第一页
+  loadLogs(1);
+}
+```
+
+**原因**:
+- 前端过滤只能处理当前页数据，无法看到其他页符合条件的数据
+- 分页信息（总数、总页数）会不准确
+- 过滤条件变化时应回到第一页，避免显示空白页

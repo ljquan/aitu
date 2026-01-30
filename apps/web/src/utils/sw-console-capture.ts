@@ -32,6 +32,13 @@ function sendToSW(level: string, message: string, stack?: string) {
     return;
   }
 
+  // 过滤监控服务相关的错误（PostHog, Sentry）
+  if (message.includes('posthog.com') ||
+      message.includes('sentry.io') ||
+      (stack && (stack.includes('posthog') || stack.includes('sentry')))) {
+    return;
+  }
+
   // 使用 swChannelClient 发送控制台日志
   if (swChannelClient.isInitialized()) {
     swChannelClient.reportConsoleLog(

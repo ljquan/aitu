@@ -380,46 +380,6 @@ const MAX_DEBUG_LOGS = 500;
 // 调试模式开关
 let debugModeEnabled = false;
 
-// 心跳机制：用于检测调试页面是否存活
-let lastHeartbeatTime = 0;
-const HEARTBEAT_TIMEOUT = 15000; // 15秒无心跳则认为调试页面已关闭
-let heartbeatCheckTimer: ReturnType<typeof setTimeout> | null = null;
-
-// 检查心跳是否超时，如果超时则自动关闭调试模式
-function checkHeartbeatTimeout() {
-  if (!debugModeEnabled) return;
-
-  const now = Date.now();
-  if (lastHeartbeatTime > 0 && now - lastHeartbeatTime > HEARTBEAT_TIMEOUT) {
-    // 心跳超时，关闭调试模式
-    originalSWConsole.log(
-      'Service Worker: Debug heartbeat timeout, auto-disabling debug mode'
-    );
-    debugModeEnabled = false;
-    lastHeartbeatTime = 0;
-    setMessageSenderDebugMode(false);
-
-    // Sync debug mode to debugFetch
-    import('./task-queue/debug-fetch').then(({ setDebugFetchEnabled }) => {
-      setDebugFetchEnabled(false);
-    });
-
-    // 使用 channelManager 广播调试模式状态变更
-    const cm = getChannelManager();
-    if (cm) {
-      cm.sendDebugStatusChanged(false);
-    }
-
-    if (heartbeatCheckTimer) {
-      clearTimeout(heartbeatCheckTimer);
-      heartbeatCheckTimer = null;
-    }
-  } else if (debugModeEnabled) {
-    // 继续检查
-    heartbeatCheckTimer = setTimeout(checkHeartbeatTimeout, 5000);
-  }
-}
-
 // 添加调试日志
 function addDebugLog(entry: Omit<DebugLogEntry, 'id' | 'timestamp'>): string {
   if (!debugModeEnabled) return '';
@@ -744,7 +704,6 @@ function clearConsoleLogs(): void {
 // 启用调试模式
 async function enableDebugMode(): Promise<void> {
   debugModeEnabled = true;
-  lastHeartbeatTime = Date.now();
   
   // Sync debug mode to debugFetch and message sender
   const { setDebugFetchEnabled } = await import('./task-queue/debug-fetch');
@@ -752,22 +711,11 @@ async function enableDebugMode(): Promise<void> {
   setMessageSenderDebugMode(true);
   
   originalSWConsole.log('Service Worker: Debug mode enabled via RPC');
-  
-  // Start heartbeat check
-  if (heartbeatCheckTimer) {
-    clearTimeout(heartbeatCheckTimer);
-  }
-  heartbeatCheckTimer = setTimeout(checkHeartbeatTimeout, 5000);
 }
 
 // 禁用调试模式
 async function disableDebugMode(): Promise<void> {
   debugModeEnabled = false;
-  lastHeartbeatTime = 0;
-  if (heartbeatCheckTimer) {
-    clearTimeout(heartbeatCheckTimer);
-    heartbeatCheckTimer = null;
-  }
   
   // Sync debug mode to debugFetch and message sender
   const { setDebugFetchEnabled } = await import('./task-queue/debug-fetch');
@@ -1537,18 +1485,12 @@ sw.addEventListener('message', (event: ExtendableMessageEvent) => {
   } else if (event.data && event.data.type === 'SW_DEBUG_ENABLE') {
     // 启用调试模式
     debugModeEnabled = true;
-    lastHeartbeatTime = Date.now(); // 初始化心跳时间
     // Sync debug mode to debugFetch and message sender
     import('./task-queue/debug-fetch').then(({ setDebugFetchEnabled }) => {
       setDebugFetchEnabled(true);
     });
     setMessageSenderDebugMode(true);
     originalSWConsole.log('Service Worker: Debug mode enabled');
-    // 启动心跳检测
-    if (heartbeatCheckTimer) {
-      clearTimeout(heartbeatCheckTimer);
-    }
-    heartbeatCheckTimer = setTimeout(checkHeartbeatTimeout, 5000);
     // 响应发送方（native message）
     if (event.source) {
       (event.source as Client).postMessage({ type: 'SW_DEBUG_ENABLED' });
@@ -1558,19 +1500,9 @@ sw.addEventListener('message', (event: ExtendableMessageEvent) => {
     if (cm) {
       cm.sendDebugStatusChanged(true);
     }
-  } else if (event.data && event.data.type === 'SW_DEBUG_HEARTBEAT') {
-    // 调试页面心跳：更新心跳时间
-    if (debugModeEnabled) {
-      lastHeartbeatTime = Date.now();
-    }
   } else if (event.data && event.data.type === 'SW_DEBUG_DISABLE') {
     // 禁用调试模式
     debugModeEnabled = false;
-    lastHeartbeatTime = 0;
-    if (heartbeatCheckTimer) {
-      clearTimeout(heartbeatCheckTimer);
-      heartbeatCheckTimer = null;
-    }
     // Sync debug mode to debugFetch and message sender
     import('./task-queue/debug-fetch').then(({ setDebugFetchEnabled }) => {
       setDebugFetchEnabled(false);
@@ -2303,6 +2235,16 @@ sw.addEventListener('fetch', (event: FetchEvent) => {
   // 注意：bypass_sw 和 direct_fetch 参数不再完全绕过 SW
   // 而是在 handleImageRequest 中跳过缓存检查直接 fetch，但仍会缓存响应
   // 这样可以确保绕过请求的响应也能被缓存，供后续正常请求使用
+
+  // 放行监控服务域名（PostHog, Sentry），让浏览器直接处理
+  // 这些服务的请求失败不应该影响应用，也不需要记录到调试日志
+  if (
+    url.hostname.endsWith('.posthog.com') ||
+    url.hostname.endsWith('.sentry.io') ||
+    url.hostname.endsWith('.ingest.sentry.io')
+  ) {
+    return; // 静默放行，不记录日志
+  }
 
   // 完全不拦截备用域名，让浏览器直接处理
   if (url.hostname === 'cdn.i666.fun') {

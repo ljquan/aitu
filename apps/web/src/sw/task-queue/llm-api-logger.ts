@@ -59,7 +59,7 @@ const MAX_MEMORY_LOGS = 50;
 const DB_NAME = 'llm-api-logs';
 const DB_VERSION = 4; // Bump to ensure taskId index exists
 const STORE_NAME = 'logs';
-const MAX_DB_LOGS = 500; // IndexedDB 中最多保存的日志数量
+const MAX_DB_LOGS = 1000; // IndexedDB 中最多保存的日志数量
 
 // 广播回调
 let broadcastCallback: ((log: LLMApiLog) => void) | null = null;

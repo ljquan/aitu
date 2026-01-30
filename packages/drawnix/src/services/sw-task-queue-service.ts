@@ -40,6 +40,8 @@ class SWTaskQueueService {
   private initialized = false;
   /** Lock to prevent concurrent initialization */
   private initializingPromise: Promise<boolean> | null = null;
+  /** Flag to prevent duplicate visibility listener registration */
+  private visibilityListenerRegistered = false;
 
   private constructor() {
     this.tasks = new Map();
@@ -54,6 +56,26 @@ class SWTaskQueueService {
       SWTaskQueueService.instance = new SWTaskQueueService();
     }
     return SWTaskQueueService.instance;
+  }
+
+  /**
+   * 设置 visibility 变化监听器
+   * 当页面变为可见时，主动从 SW 同步任务状态
+   * 这样即使事件丢失（如 SW 更新），也能获取到最新状态
+   */
+  private setupVisibilityListener(): void {
+    if (typeof document === 'undefined') return;
+    if (this.visibilityListenerRegistered) return;
+    
+    this.visibilityListenerRegistered = true;
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && this.initialized) {
+        // 页面变为可见时，静默同步任务状态
+        this.syncTasksFromSW().catch(() => {
+          // 静默忽略错误
+        });
+      }
+    });
   }
 
   /**
@@ -113,11 +135,11 @@ class SWTaskQueueService {
 
       this.initialized = initResult.success;
       if (this.initialized) {
-        console.log('[SWTaskQueueService] Initialized successfully');
+        // 设置 visibility 监听器，页面可见时同步状态
+        this.setupVisibilityListener();
       }
       return this.initialized;
-    } catch (error) {
-      console.error('[SWTaskQueueService] Failed to initialize:', error);
+    } catch {
       return false;
     }
   }
@@ -126,12 +148,6 @@ class SWTaskQueueService {
    * Creates a new task and submits it to the Service Worker
    */
   createTask(params: GenerationParams, type: TaskType): Task {
-    console.log('[SWTaskQueueService] createTask called:', {
-      type,
-      hasPrompt: !!params.prompt,
-      initialized: this.initialized,
-    });
-
     const validation = validateGenerationParams(params, type);
     if (!validation.valid) {
       throw new Error(`Invalid parameters: ${validation.errors.join(', ')}`);
@@ -156,7 +172,6 @@ class SWTaskQueueService {
     this.tasks.set(task.id, task);
     this.emitEvent('taskCreated', task);
 
-    console.log('[SWTaskQueueService] Task created locally, calling submitToSW:', task.id);
     // Submit to SW
     this.submitToSW(task);
 
@@ -182,23 +197,17 @@ class SWTaskQueueService {
 
   async retryTask(taskId: string): Promise<void> {
     const task = this.tasks.get(taskId);
-    console.log('[SWTaskQueueService] retryTask called:', { taskId, taskExists: !!task, status: task?.status });
     if (!task || (task.status !== TaskStatus.FAILED && task.status !== TaskStatus.CANCELLED)) {
-      console.log('[SWTaskQueueService] retryTask skipped: invalid state');
       return;
     }
-    const result = await swChannelClient.retryTask(taskId);
-    console.log('[SWTaskQueueService] retryTask RPC result:', result);
+    await swChannelClient.retryTask(taskId);
   }
 
   async deleteTask(taskId: string): Promise<void> {
-    console.log('[SWTaskQueueService] deleteTask called:', taskId);
-    const result = await swChannelClient.deleteTask(taskId);
-    console.log('[SWTaskQueueService] deleteTask RPC result:', result);
+    await swChannelClient.deleteTask(taskId);
     if (this.tasks.has(taskId)) {
       const task = this.tasks.get(taskId)!;
       this.tasks.delete(taskId);
-      console.log('[SWTaskQueueService] Task deleted from local map, emitting event');
       this.emitEvent('taskDeleted', task);
     }
   }
@@ -225,23 +234,20 @@ class SWTaskQueueService {
    * Sync tasks from Service Worker to local state
    */
   async syncTasksFromSW(): Promise<void> {
-    // 如果 swChannelClient 未初始化，跳过同步
     if (!swChannelClient.isInitialized()) {
-      console.log('[SWTaskQueueService] syncTasksFromSW skipped: swChannelClient not initialized');
       return;
     }
     
     try {
       const result = await swChannelClient.listTasks();
-      console.log('[SWTaskQueueService] syncTasksFromSW result:', { success: result.success, total: result.total });
       if (!result.success) return;
       
       for (const swTask of result.tasks || []) {
         const task = this.convertSWTaskToTask(swTask);
         this.tasks.set(task.id, task);
       }
-    } catch (error) {
-      console.error('[SWTaskQueueService] Failed to sync tasks from SW:', error);
+    } catch {
+      // 静默忽略同步错误
     }
   }
 
@@ -305,8 +311,10 @@ class SWTaskQueueService {
     const existing = this.tasks.get(task.id);
 
     if (existing) {
+      // 任务已存在，只更新状态
       this.tasks.set(task.id, task);
     } else {
+      // 新任务（来自其他客户端），添加并通知 UI
       this.tasks.set(task.id, task);
       this.emitEvent('taskCreated', task);
     }
@@ -332,35 +340,22 @@ class SWTaskQueueService {
   }
 
   private async submitToSW(task: Task): Promise<void> {
-    console.log('[SWTaskQueueService] submitToSW called:', {
-      taskId: task.id,
-      type: task.type,
-      initialized: this.initialized,
-    });
-
     if (!this.initialized) {
-      console.log('[SWTaskQueueService] Not initialized, calling initialize()...');
       const success = await this.initialize();
-      console.log('[SWTaskQueueService] initialize() result:', success);
       if (!success) {
-        console.error('[SWTaskQueueService] Initialize failed, rejecting task');
         this.tasks.delete(task.id);
         this.emitEvent('taskRejected', task, 'NO_API_KEY');
         return;
       }
     }
 
-    console.log('[SWTaskQueueService] Calling swChannelClient.createTask...');
     const result = await swChannelClient.createTask({
       taskId: task.id,
       taskType: task.type as 'image' | 'video',
       params: task.params,
     });
 
-    console.log('[SWTaskQueueService] swChannelClient.createTask result:', result);
-
     if (!result.success) {
-      console.error('[SWTaskQueueService] Task creation failed:', result.reason);
       if (result.reason === 'duplicate') {
         this.tasks.delete(task.id);
         this.emitEvent('taskRejected', task, 'DUPLICATE');
@@ -371,35 +366,55 @@ class SWTaskQueueService {
     }
   }
 
-  private handleSWStatus(
+  private async handleSWStatus(
     taskId: string,
     status: TaskStatus,
     progress?: number,
     phase?: TaskExecutionPhase
-  ): void {
-    console.log('[SWTaskQueueService] handleSWStatus:', { taskId, status, progress, phase });
+  ): Promise<void> {
     if (status === TaskStatus.COMPLETED || status === TaskStatus.FAILED || status === TaskStatus.CANCELLED) {
-      console.log('[SWTaskQueueService] handleSWStatus skipped: terminal status');
       return;
     }
 
-    const task = this.tasks.get(taskId);
+    let task = this.tasks.get(taskId);
     if (!task) {
-      console.log('[SWTaskQueueService] handleSWStatus skipped: task not found');
-      return;
+      // 任务不在本地，可能是其他页面创建的任务，尝试从 SW 获取
+      try {
+        const swTask = await swChannelClient.getTask(taskId);
+        if (swTask) {
+          task = this.convertSWTaskToTask(swTask);
+          this.tasks.set(taskId, task);
+        } else {
+          return;
+        }
+      } catch {
+        return;
+      }
     }
 
     const updates: Partial<Task> = {};
     if (progress !== undefined) updates.progress = progress;
     if (phase !== undefined) updates.executionPhase = phase;
 
-    console.log('[SWTaskQueueService] handleSWStatus updating task');
     this.updateTaskStatus(taskId, status, updates);
   }
 
-  private handleSWCompleted(taskId: string, result: TaskResult, remoteId?: string): void {
-    const task = this.tasks.get(taskId);
-    if (!task) return;
+  private async handleSWCompleted(taskId: string, result: TaskResult, remoteId?: string): Promise<void> {
+    let task = this.tasks.get(taskId);
+    if (!task) {
+      // 任务不在本地，尝试从 SW 获取
+      try {
+        const swTask = await swChannelClient.getTask(taskId);
+        if (swTask) {
+          task = this.convertSWTaskToTask(swTask);
+          this.tasks.set(taskId, task);
+        } else {
+          return;
+        }
+      } catch {
+        return;
+      }
+    }
 
     const finalRemoteId = task.remoteId || remoteId;
 
@@ -411,21 +426,58 @@ class SWTaskQueueService {
     });
   }
 
-  private handleSWFailed(taskId: string, error: TaskError): void {
-    const task = this.tasks.get(taskId);
-    if (!task) return;
+  private async handleSWFailed(taskId: string, error: TaskError): Promise<void> {
+    let task = this.tasks.get(taskId);
+    if (!task) {
+      // 任务不在本地，尝试从 SW 获取
+      try {
+        const swTask = await swChannelClient.getTask(taskId);
+        if (swTask) {
+          task = this.convertSWTaskToTask(swTask);
+          this.tasks.set(taskId, task);
+        } else {
+          return;
+        }
+      } catch {
+        return;
+      }
+    }
 
     this.updateTaskStatus(taskId, TaskStatus.FAILED, { error });
   }
 
-  private handleSWCancelled(taskId: string): void {
-    const task = this.tasks.get(taskId);
-    if (!task) return;
+  private async handleSWCancelled(taskId: string): Promise<void> {
+    let task = this.tasks.get(taskId);
+    if (!task) {
+      // 任务不在本地，尝试从 SW 获取
+      try {
+        const swTask = await swChannelClient.getTask(taskId);
+        if (swTask) {
+          task = this.convertSWTaskToTask(swTask);
+          this.tasks.set(taskId, task);
+        } else {
+          return;
+        }
+      } catch {
+        return;
+      }
+    }
     this.updateTaskStatus(taskId, TaskStatus.CANCELLED);
   }
 
-  private handleSWDeleted(taskId: string): void {
-    const task = this.tasks.get(taskId);
+  private async handleSWDeleted(taskId: string): Promise<void> {
+    let task = this.tasks.get(taskId);
+    if (!task) {
+      // 即使任务不在本地，也尝试从 SW 获取以便发出正确的事件
+      try {
+        const swTask = await swChannelClient.getTask(taskId);
+        if (swTask) {
+          task = this.convertSWTaskToTask(swTask);
+        }
+      } catch {
+        // 忽略错误
+      }
+    }
     if (task) {
       this.tasks.delete(taskId);
       this.emitEvent('taskDeleted', task);
