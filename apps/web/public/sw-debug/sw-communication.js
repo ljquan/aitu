@@ -40,6 +40,110 @@ let duplexInitialized = false;
 let messageHandlers = {};
 
 /**
+ * Track requestId -> cmdname for duplex responses
+ * This allows us to show the correct message type for responses that don't include the request info
+ * @type {Map<string, {cmdname: string, timestamp: number}>}
+ */
+const requestIdToMethod = new Map();
+
+/** Max age for request tracking entries (5 minutes) */
+const REQUEST_TRACKING_MAX_AGE = 5 * 60 * 1000;
+
+/**
+ * Track an outgoing request's requestId and cmdname
+ * @param {string} requestId
+ * @param {string} cmdname
+ */
+function trackOutgoingRequest(requestId, cmdname) {
+  // Clean up old entries first
+  const now = Date.now();
+  for (const [id, entry] of requestIdToMethod.entries()) {
+    if (now - entry.timestamp > REQUEST_TRACKING_MAX_AGE) {
+      requestIdToMethod.delete(id);
+    }
+  }
+  
+  requestIdToMethod.set(requestId, { cmdname, timestamp: now });
+}
+
+/**
+ * Look up the cmdname for a response by requestId
+ * @param {string} requestId
+ * @returns {string|null}
+ */
+function lookupRequestMethod(requestId) {
+  const entry = requestIdToMethod.get(requestId);
+  if (entry) {
+    // Remove after lookup (one-time use)
+    requestIdToMethod.delete(requestId);
+    return entry.cmdname;
+  }
+  return null;
+}
+
+/** @type {boolean} Flag to prevent double-wrapping postMessage */
+let postMessageWrapped = false;
+
+/**
+ * Wrap navigator.serviceWorker.controller.postMessage to intercept outgoing messages
+ * This allows us to track requestId -> cmdname for duplex protocol messages
+ */
+function wrapPostMessage() {
+  if (postMessageWrapped) return;
+  
+  // We need to wrap the postMessage on any controller that gets set
+  // Use a getter/setter on navigator.serviceWorker to catch controller changes
+  const originalDescriptor = Object.getOwnPropertyDescriptor(ServiceWorkerContainer.prototype, 'controller');
+  
+  if (originalDescriptor && originalDescriptor.get) {
+    let lastController = null;
+    
+    Object.defineProperty(navigator.serviceWorker, 'controller', {
+      get() {
+        const controller = originalDescriptor.get.call(this);
+        if (controller && controller !== lastController) {
+          lastController = controller;
+          wrapControllerPostMessage(controller);
+        }
+        return controller;
+      },
+      configurable: true,
+    });
+    
+    // Also wrap the current controller if it exists
+    const currentController = originalDescriptor.get.call(navigator.serviceWorker);
+    if (currentController) {
+      wrapControllerPostMessage(currentController);
+    }
+  }
+  
+  postMessageWrapped = true;
+}
+
+/**
+ * Wrap a specific controller's postMessage method
+ * @param {ServiceWorker} controller
+ */
+function wrapControllerPostMessage(controller) {
+  if (controller._postMessageWrapped) return;
+  
+  const originalPostMessage = controller.postMessage.bind(controller);
+  
+  controller.postMessage = function(message, transfer) {
+    // Track duplex protocol messages (those with requestId and cmdname)
+    if (message && typeof message === 'object' && message.requestId && message.cmdname) {
+      trackOutgoingRequest(message.requestId, message.cmdname);
+      // Log the outgoing message
+      logPostMessage('send', message.cmdname, message);
+    }
+    
+    return originalPostMessage(message, transfer);
+  };
+  
+  controller._postMessageWrapped = true;
+}
+
+/**
  * Set the callback for PostMessage logging
  * @param {Function} callback - Called with (logEntry) when a message is sent/received
  */
@@ -54,6 +158,13 @@ export function setPostMessageLogCallback(callback) {
 const DEBUG_PANEL_MESSAGE_PREFIXES = [
   'SW_DEBUG_',
   'SW_POSTMESSAGE_',
+  'SW_CHANNEL_',
+  'SW_CONSOLE_',
+  // postmessage-duplex debug event prefixes
+  'debug:',
+  'console:',
+  'postmessage:',
+  'crash:',
 ];
 
 /**
@@ -197,7 +308,8 @@ export async function refreshStatus() {
   try {
     const result = await getDebugStatus();
     if (messageHandlers['SW_DEBUG_STATUS']) {
-      messageHandlers['SW_DEBUG_STATUS'](result);
+      // Wrap the result to match the expected format: { status: {...} }
+      messageHandlers['SW_DEBUG_STATUS']({ status: result });
     }
   } catch (error) {
     console.error('[SW Communication] Failed to get debug status:', error);
@@ -447,15 +559,34 @@ export function getActiveSW() {
 export function registerMessageHandlers(handlers) {
   messageHandlers = handlers;
   
+  // Initialize postMessage wrapper to track outgoing requests
+  wrapPostMessage();
+  
   // Also listen for native messages (for backward compatibility)
   navigator.serviceWorker.addEventListener('message', (event) => {
-    const { type, ...data } = event.data;
+    // Extract message type from different message formats:
+    // - Native messages: event.data.type
+    // - postmessage-duplex requests: event.data.cmdname
+    // - postmessage-duplex responses: event.data.req.cmdname
+    // - postmessage-duplex responses without req: lookup by requestId
+    let messageType = event.data?.type 
+      || event.data?.cmdname 
+      || event.data?.req?.cmdname;
+    
+    // For duplex responses without embedded request info, try to look up the method
+    if (!messageType && event.data?.requestId && event.data?.ret !== undefined) {
+      const trackedMethod = lookupRequestMethod(event.data.requestId);
+      messageType = trackedMethod ? `${trackedMethod} [response]` : '[response]';
+    }
+    
+    messageType = messageType || 'unknown';
+    const { type, cmdname, req, ...data } = event.data || {};
 
     // Log the incoming message (filtering handled inside logPostMessage)
-    logPostMessage('receive', type, data);
+    logPostMessage('receive', messageType, data);
 
-    if (handlers[type]) {
-      handlers[type](data);
+    if (handlers[messageType]) {
+      handlers[messageType](data);
     }
   });
 }

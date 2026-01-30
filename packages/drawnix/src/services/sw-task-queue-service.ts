@@ -38,6 +38,8 @@ class SWTaskQueueService {
   private tasks: Map<string, Task>;
   private taskUpdates$: Subject<TaskEvent>;
   private initialized = false;
+  /** Lock to prevent concurrent initialization */
+  private initializingPromise: Promise<boolean> | null = null;
 
   private constructor() {
     this.tasks = new Map();
@@ -56,10 +58,31 @@ class SWTaskQueueService {
 
   /**
    * Initialize the service with API configurations
+   * Uses a lock to prevent concurrent initialization attempts
    */
   async initialize(): Promise<boolean> {
+    // Already initialized
     if (this.initialized) return true;
 
+    // If initialization is in progress, wait for it
+    if (this.initializingPromise) {
+      return this.initializingPromise;
+    }
+
+    // Start initialization with lock
+    this.initializingPromise = this.doInitialize();
+    
+    try {
+      return await this.initializingPromise;
+    } finally {
+      this.initializingPromise = null;
+    }
+  }
+
+  /**
+   * Internal initialization logic
+   */
+  private async doInitialize(): Promise<boolean> {
     try {
       // Wait for settings manager to finish decrypting sensitive data
       await settingsManager.waitForInitialization();
@@ -159,15 +182,23 @@ class SWTaskQueueService {
 
   async retryTask(taskId: string): Promise<void> {
     const task = this.tasks.get(taskId);
-    if (!task || (task.status !== TaskStatus.FAILED && task.status !== TaskStatus.CANCELLED)) return;
-    await swChannelClient.retryTask(taskId);
+    console.log('[SWTaskQueueService] retryTask called:', { taskId, taskExists: !!task, status: task?.status });
+    if (!task || (task.status !== TaskStatus.FAILED && task.status !== TaskStatus.CANCELLED)) {
+      console.log('[SWTaskQueueService] retryTask skipped: invalid state');
+      return;
+    }
+    const result = await swChannelClient.retryTask(taskId);
+    console.log('[SWTaskQueueService] retryTask RPC result:', result);
   }
 
   async deleteTask(taskId: string): Promise<void> {
-    await swChannelClient.deleteTask(taskId);
+    console.log('[SWTaskQueueService] deleteTask called:', taskId);
+    const result = await swChannelClient.deleteTask(taskId);
+    console.log('[SWTaskQueueService] deleteTask RPC result:', result);
     if (this.tasks.has(taskId)) {
       const task = this.tasks.get(taskId)!;
       this.tasks.delete(taskId);
+      console.log('[SWTaskQueueService] Task deleted from local map, emitting event');
       this.emitEvent('taskDeleted', task);
     }
   }
@@ -196,11 +227,13 @@ class SWTaskQueueService {
   async syncTasksFromSW(): Promise<void> {
     // 如果 swChannelClient 未初始化，跳过同步
     if (!swChannelClient.isInitialized()) {
+      console.log('[SWTaskQueueService] syncTasksFromSW skipped: swChannelClient not initialized');
       return;
     }
     
     try {
       const result = await swChannelClient.listTasks();
+      console.log('[SWTaskQueueService] syncTasksFromSW result:', { success: result.success, total: result.total });
       if (!result.success) return;
       
       for (const swTask of result.tasks || []) {
@@ -344,17 +377,23 @@ class SWTaskQueueService {
     progress?: number,
     phase?: TaskExecutionPhase
   ): void {
+    console.log('[SWTaskQueueService] handleSWStatus:', { taskId, status, progress, phase });
     if (status === TaskStatus.COMPLETED || status === TaskStatus.FAILED || status === TaskStatus.CANCELLED) {
+      console.log('[SWTaskQueueService] handleSWStatus skipped: terminal status');
       return;
     }
 
     const task = this.tasks.get(taskId);
-    if (!task) return;
+    if (!task) {
+      console.log('[SWTaskQueueService] handleSWStatus skipped: task not found');
+      return;
+    }
 
     const updates: Partial<Task> = {};
     if (progress !== undefined) updates.progress = progress;
     if (phase !== undefined) updates.executionPhase = phase;
 
+    console.log('[SWTaskQueueService] handleSWStatus updating task');
     this.updateTaskStatus(taskId, status, updates);
   }
 

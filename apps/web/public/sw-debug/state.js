@@ -25,8 +25,10 @@ export const state = {
   filterSlowOnly: false, // Filter to show only slow requests (>1s)
   isSelectMode: false, // Batch select mode
   selectedLogIds: new Set(), // Selected log IDs for batch operations
-  isPaused: false, // Pause real-time updates
-  pendingLogs: [], // Logs received while paused
+  isPaused: false, // Pause real-time updates (Fetch logs)
+  pendingLogs: [], // Logs received while paused (Fetch logs)
+  isPmPaused: false, // Pause real-time updates (PostMessage logs)
+  pendingPmLogs: [], // PostMessage logs received while paused
   hasNewErrors: false, // Track new errors for tab indicator
   hasNewCrashLogs: false, // Track new crash logs
   hasNewLLMApiErrors: false, // Track new LLM API errors
@@ -119,6 +121,7 @@ export function cacheElements() {
     filterMessageTypeSelect: document.getElementById('filterMessageTypeSelect'),
     filterPmTimeRange: document.getElementById('filterPmTimeRange'),
     filterMessageType: document.getElementById('filterMessageType'),
+    togglePmPauseBtn: document.getElementById('togglePmPause'),
     // Error dot indicators
     consoleErrorDot: document.getElementById('consoleErrorDot'),
     llmapiErrorDot: document.getElementById('llmapiErrorDot'),

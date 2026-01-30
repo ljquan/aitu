@@ -246,22 +246,32 @@ export class ChatWorkflowHandler {
   }
 
   /**
-   * Send all recovered workflows to a specific client
+   * Send all active (non-terminal) workflows to a specific client
    * This is called when a new client connects to sync state
+   * Only workflows that need further processing are sent (pending/running)
+   * Terminal state workflows (completed/failed/cancelled) are not sent
+   * because they don't need client interaction anymore
    * @param clientId The client to send recovered workflows to
    */
   sendRecoveredWorkflowsToClient(clientId: string): void {
-    // console.log(`[ChatWorkflowHandler] Sending ${this.workflows.size} chat workflows to client ${clientId}`);
+    // console.log(`[ChatWorkflowHandler] Sending chat workflows to client ${clientId}`);
+    // ChatWorkflowStatus active states: 'pending' | 'streaming' | 'parsing' | 'executing_tools'
+    // Terminal states: 'completed' | 'failed' | 'cancelled'
+    const terminalStatuses: ChatWorkflowStatus[] = ['completed', 'failed', 'cancelled'];
+    
     for (const workflow of this.workflows.values()) {
-      // Update clientId mapping for running workflows so they can continue
-      if (workflow.status === 'running' || workflow.status === 'pending') {
+      // Only send active workflows that need client interaction
+      if (!terminalStatuses.includes(workflow.status)) {
+        // Update clientId mapping for active workflows so they can continue
         this.workflowClients.set(workflow.id, clientId);
+        this.config.sendToClient(clientId, {
+          type: 'CHAT_WORKFLOW_RECOVERED',
+          chatId: workflow.id,
+          workflow,
+        });
       }
-      this.config.sendToClient(clientId, {
-        type: 'CHAT_WORKFLOW_RECOVERED',
-        chatId: workflow.id,
-        workflow,
-      });
+      // Terminal state workflows (completed/failed/cancelled) are not sent
+      // because they don't need client interaction anymore
     }
   }
 

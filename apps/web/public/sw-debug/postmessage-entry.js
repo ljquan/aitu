@@ -37,20 +37,16 @@ function getClientTypeClass(clientType) {
 }
 
 /**
- * Format JSON data for display
+ * Format JSON data for display (no truncation - show all data)
  * @param {any} data
- * @param {number} maxLength - Max string length before truncation
  * @returns {string}
  */
-function formatData(data, maxLength = 500) {
+function formatData(data) {
   if (data === undefined) return '<span class="pm-undefined">undefined</span>';
   if (data === null) return '<span class="pm-null">null</span>';
 
   try {
     const str = JSON.stringify(data, null, 2);
-    if (str.length > maxLength) {
-      return escapeHtml(str.slice(0, maxLength)) + '...';
-    }
     return escapeHtml(str);
   } catch {
     return escapeHtml(String(data));
@@ -58,7 +54,7 @@ function formatData(data, maxLength = 500) {
 }
 
 /**
- * Get a preview of the message data (will wrap if needed via CSS)
+ * Get a preview of the message data (collapsed row preview)
  * @param {any} data
  * @returns {string}
  */
@@ -67,9 +63,9 @@ function getDataPreview(data) {
 
   try {
     const str = JSON.stringify(data);
-    // Show more content, let CSS handle overflow
-    if (str.length > 200) {
-      return escapeHtml(str.slice(0, 200)) + '...';
+    // Show more content in preview (500 chars), CSS handles overflow
+    if (str.length > 500) {
+      return escapeHtml(str.slice(0, 500)) + '...';
     }
     return escapeHtml(str);
   } catch {

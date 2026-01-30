@@ -309,6 +309,13 @@ function addPostmessageLog(entry) {
     return;
   }
 
+  // If paused, add to pending queue
+  if (state.isPmPaused) {
+    state.pendingPmLogs.push(entry);
+    updatePmPauseButton();
+    return;
+  }
+
   // Check for duplicates
   if (state.postmessageLogs.some(l => l.id === entry.id)) {
     return;
@@ -326,6 +333,53 @@ function addPostmessageLog(entry) {
     renderPostmessageLogs();
   } else {
     updatePostmessageCount();
+  }
+}
+
+/**
+ * Toggle PostMessage logs pause state
+ */
+function togglePmPause() {
+  state.isPmPaused = !state.isPmPaused;
+  updatePmPauseButton();
+
+  if (!state.isPmPaused && state.pendingPmLogs.length > 0) {
+    // Apply pending logs when resuming
+    state.pendingPmLogs.forEach(entry => {
+      if (!state.postmessageLogs.some(l => l.id === entry.id)) {
+        state.postmessageLogs.unshift(entry);
+      }
+    });
+    // Trim to max
+    if (state.postmessageLogs.length > 500) {
+      state.postmessageLogs.length = 500;
+    }
+    state.pendingPmLogs = [];
+    updateMessageTypeOptions();
+    renderPostmessageLogs();
+  }
+}
+
+/**
+ * Update PostMessage pause button appearance
+ */
+function updatePmPauseButton() {
+  const btn = elements.togglePmPauseBtn;
+  if (!btn) return;
+
+  const playIcon = '<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
+  const pauseIcon = '<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>';
+
+  if (state.isPmPaused) {
+    let text = '暂停';
+    if (state.pendingPmLogs.length > 0) {
+      text += ` (${state.pendingPmLogs.length})`;
+    }
+    btn.innerHTML = `${pauseIcon} ${text}`;
+    btn.classList.add('paused');
+  } else {
+    btn.innerHTML = `${playIcon} 实时`;
+    btn.classList.remove('paused');
   }
 }
 
@@ -561,12 +615,29 @@ function switchTab(tabName) {
 
 /**
  * Handle SW status update
+ * Supports both RPC format { status: {...} } and native message format { debugModeEnabled, swVersion, ... }
  * @param {object} data 
  */
 function handleStatusUpdate(data) {
-  updateSwStatus(elements.swStatus, true, data.status?.version);
-  state.debugEnabled = updateStatusPanel(data.status, elements);
-  state.swStatus = data.status; // Store for export
+  // Normalize: RPC returns { status: {...} }, native message returns flat object
+  let status;
+  if (data.status) {
+    // RPC format
+    status = data.status;
+  } else if (data.debugModeEnabled !== undefined || data.swVersion !== undefined) {
+    // Native message format - normalize field names
+    status = {
+      ...data,
+      version: data.swVersion || data.version,
+    };
+  } else {
+    // Unknown format, use data directly
+    status = data;
+  }
+
+  updateSwStatus(elements.swStatus, true, status?.version);
+  state.debugEnabled = updateStatusPanel(status, elements);
+  state.swStatus = status; // Store for export
   updateDebugButton(elements.toggleDebugBtn, state.debugEnabled);
 }
 
@@ -654,6 +725,7 @@ function setupEventListeners() {
   });
 
   // PostMessage log event listeners
+  elements.togglePmPauseBtn?.addEventListener('click', togglePmPause);
   elements.filterMessageDirection?.addEventListener('change', renderPostmessageLogs);
   elements.filterMessageTypeSelect?.addEventListener('change', renderPostmessageLogs);
   elements.filterPmTimeRange?.addEventListener('change', renderPostmessageLogs);

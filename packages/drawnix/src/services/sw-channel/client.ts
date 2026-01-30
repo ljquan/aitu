@@ -119,7 +119,8 @@ export class SWChannelClient {
    */
   async initialize(): Promise<boolean> {
     // 已初始化直接返回
-    if (this.initialized && this.channel?.isReady) {
+    // Note: channel.isReady 可能是数字（0=未就绪, 1=就绪）或布尔值
+    if (this.initialized && !!this.channel?.isReady) {
       return true;
     }
 
@@ -225,9 +226,10 @@ export class SWChannelClient {
 
   /**
    * 检查是否已初始化
+   * Note: channel.isReady 可能是数字（0=未就绪, 1=就绪）或布尔值，需要用 truthy 检查
    */
   isInitialized(): boolean {
-    return this.initialized && this.channel?.isReady === true;
+    return this.initialized && !!this.channel?.isReady;
   }
 
   /**
@@ -393,10 +395,10 @@ export class SWChannelClient {
     const response = await this.channel!.call('task:list', undefined);
 
     if (response.ret !== ReturnCode.Success) {
-      return { tasks: [], total: 0 };
+      return { success: false, tasks: [], total: 0 };
     }
     
-    return response.data || { tasks: [], total: 0 };
+    return response.data || { success: false, tasks: [], total: 0 };
   }
 
   /**
@@ -407,10 +409,10 @@ export class SWChannelClient {
     const response = await this.channel!.call('task:listPaginated', params);
 
     if (response.ret !== ReturnCode.Success) {
-      return { tasks: [], total: 0, offset: params.offset, hasMore: false };
+      return { success: false, tasks: [], total: 0, offset: params.offset, hasMore: false };
     }
     
-    return response.data || { tasks: [], total: 0, offset: params.offset, hasMore: false };
+    return response.data || { success: false, tasks: [], total: 0, offset: params.offset, hasMore: false };
   }
 
   // ============================================================================
@@ -514,7 +516,70 @@ export class SWChannelClient {
   }
 
   /**
+   * 注册主线程工具请求处理器
+   * SW 发起 publish('workflow:toolRequest', { ... }) 请求，主线程处理并直接返回结果
+   * 这样可以减少一次交互，不需要再通过 respondToToolRequest 发送结果
+   * 
+   * @param handler 处理函数，接收工具请求参数，返回执行结果
+   */
+  registerToolRequestHandler(
+    handler: (request: MainThreadToolRequestEvent) => Promise<{
+      success: boolean;
+      result?: unknown;
+      error?: string;
+      taskId?: string;
+      taskIds?: string[];
+      addSteps?: MainThreadToolResponse['addSteps'];
+    }>
+  ): void {
+    this.ensureInitialized();
+    
+    this.channel!.subscribe('workflow:toolRequest', async (request) => {
+      console.log('[SWChannelClient] workflow:toolRequest received:', {
+        hasRequest: !!request,
+        ret: request?.ret,
+        hasData: !!request?.data,
+        requestKeys: request ? Object.keys(request) : [],
+      });
+      
+      // publish 模式下，数据可能直接在 request 中，而不是 request.data 中
+      // 检查两种可能的格式
+      let data: MainThreadToolRequestEvent;
+      if (request?.data?.requestId && request?.data?.toolName) {
+        // 标准格式: { ret: 0, data: { requestId, toolName, ... } }
+        data = request.data as MainThreadToolRequestEvent;
+      } else if (request?.requestId && request?.toolName) {
+        // publish 格式: { requestId, toolName, ... } 直接在 request 中
+        data = request as unknown as MainThreadToolRequestEvent;
+      } else {
+        console.error('[SWChannelClient] workflow:toolRequest invalid format:', request);
+        return { ret: ReturnCode.ReceiverCallbackError, msg: 'Missing required parameters' };
+      }
+      
+      console.log('[SWChannelClient] workflow:toolRequest parsed data:', {
+        requestId: data.requestId,
+        toolName: data.toolName,
+        workflowId: data.workflowId,
+      });
+      
+      try {
+        const result = await handler(data);
+        console.log('[SWChannelClient] workflow:toolRequest handler result:', {
+          success: result.success,
+          error: result.error,
+          taskId: result.taskId,
+        });
+        return { ret: ReturnCode.Success, data: result };
+      } catch (error) {
+        console.error('[SWChannelClient] workflow:toolRequest handler error:', error);
+        return { ret: ReturnCode.ReceiverCallbackError, msg: String(error) };
+      }
+    });
+  }
+
+  /**
    * 响应主线程工具请求
+   * @deprecated 使用 registerToolRequestHandler 直接返回结果，减少一次交互
    */
   async respondToToolRequest(
     requestId: string,
@@ -1201,13 +1266,18 @@ export class SWChannelClient {
    * @param eventName 事件名称
    * @param callback 回调函数
    * @returns 取消订阅的函数
+   * Note: subscribe handler must return a response to avoid timeout on the sender side
    */
-  subscribeToEvent(eventName: string, callback: (data: unknown) => void): () => void {
+  subscribeToEvent(eventName: string, callback: (data: unknown) => unknown): () => void {
     this.ensureInitialized();
     this.channel!.subscribe(eventName, (response) => {
       if (response.data !== undefined) {
-        callback(response.data);
+        const result = callback(response.data);
+        // Allow callback to return custom response, default to ack
+        return typeof result === 'undefined' ? { ack: true } : result;
       }
+      // Must return ack to prevent sender timeout
+      return { ack: true };
     });
     return () => {
       this.channel?.unSubscribe(eventName);
@@ -1229,15 +1299,21 @@ export class SWChannelClient {
 
   /**
    * 通用事件订阅 helper
+   * Note: subscribe handler must return a response to avoid timeout on the sender side
    */
   private subscribeEvent<T>(
     eventName: string,
     getHandler: () => ((data: T) => void) | undefined
   ): void {
     this.channel?.subscribe(eventName, (response) => {
-      if (response.ret === ReturnCode.Success && response.data) {
+      // publish 模式下，ret 可能是 undefined（单向消息），也可能是 0（ReturnCode.Success）
+      // 只要有 data 就应该处理
+      const isSuccess = response.ret === undefined || response.ret === ReturnCode.Success;
+      if (isSuccess && response.data) {
         getHandler()?.(response.data as T);
       }
+      // Must return ack to prevent sender timeout
+      return { ack: true };
     });
   }
 
@@ -1257,7 +1333,9 @@ export class SWChannelClient {
 
     // 任务进度事件（转换为 TaskStatusEvent 格式）
     this.channel.subscribe('task:progress', (response) => {
-      if (response.ret === ReturnCode.Success && response.data) {
+      // publish 模式下，ret 可能是 undefined
+      const isSuccess = response.ret === undefined || response.ret === ReturnCode.Success;
+      if (isSuccess && response.data) {
         const data = response.data as { taskId: string; progress: number };
         this.eventHandlers.onTaskStatus?.({
           taskId: data.taskId,
@@ -1266,18 +1344,28 @@ export class SWChannelClient {
           updatedAt: Date.now(),
         });
       }
+      // Must return ack to prevent sender timeout
+      return { ack: true };
     });
 
     // 任务取消/删除事件（需要提取 taskId）
     this.channel.subscribe('task:cancelled', (response) => {
-      if (response.ret === ReturnCode.Success && response.data) {
+      // publish 模式下，ret 可能是 undefined
+      const isSuccess = response.ret === undefined || response.ret === ReturnCode.Success;
+      if (isSuccess && response.data) {
         this.eventHandlers.onTaskCancelled?.((response.data as { taskId: string }).taskId);
       }
+      // Must return ack to prevent sender timeout
+      return { ack: true };
     });
     this.channel.subscribe('task:deleted', (response) => {
-      if (response.ret === ReturnCode.Success && response.data) {
+      // publish 模式下，ret 可能是 undefined
+      const isSuccess = response.ret === undefined || response.ret === ReturnCode.Success;
+      if (isSuccess && response.data) {
         this.eventHandlers.onTaskDeleted?.((response.data as { taskId: string }).taskId);
       }
+      // Must return ack to prevent sender timeout
+      return { ack: true };
     });
 
     // ============================================================================

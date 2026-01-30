@@ -112,6 +112,7 @@ export interface TaskCreateResult {
  * 任务列表响应
  */
 export interface TaskListResult {
+  success: boolean;
   tasks: SWTask[];
   total: number;
 }
@@ -131,6 +132,7 @@ export interface TaskListPaginatedParams {
  * 分页任务列表响应
  */
 export interface TaskListPaginatedResult {
+  success: boolean;
   tasks: SWTask[];
   total: number;
   offset: number;
@@ -461,6 +463,11 @@ export interface MainThreadToolResponse {
   success: boolean;
   result?: unknown;
   error?: string;
+  /** Task ID (for queued operations like generate_image/generate_video) */
+  taskId?: string;
+  /** Multiple task IDs (for batch operations) */
+  taskIds?: string[];
+  /** Additional steps to add (for ai_analyze) */
   addSteps?: Array<{
     id: string;
     mcp: string;

@@ -77,6 +77,18 @@ const LAST_SNAPSHOT_KEY = 'aitu_last_snapshot';
 /** 操作监控：内存变化超过此阈值才记录（MB） */
 const OPERATION_MEMORY_DELTA_THRESHOLD = 50;
 
+/** 待发送的快照队列（在 swChannelClient 未初始化时缓存） */
+const pendingSnapshots: CrashSnapshot[] = [];
+
+/** 最大待发送快照数量（防止内存溢出） */
+const MAX_PENDING_SNAPSHOTS = 20;
+
+/** 队列检查间隔（毫秒） */
+const QUEUE_CHECK_INTERVAL = 2000;
+
+/** 队列检查定时器 */
+let queueCheckInterval: ReturnType<typeof setInterval> | null = null;
+
 /** 心跳间隔（毫秒）- 用于检测主线程卡死 */
 const HEARTBEAT_INTERVAL = 3000; // 3 秒
 
@@ -280,15 +292,65 @@ function collectPageStats(): PageStats {
 }
 
 /**
+ * 刷新待发送队列 - 将缓存的快照发送到 SW
+ */
+function flushPendingSnapshots(): void {
+  if (!swChannelClient.isInitialized() || pendingSnapshots.length === 0) {
+    return;
+  }
+
+  // 发送所有待发送的快照
+  const snapshots = pendingSnapshots.splice(0, pendingSnapshots.length);
+  for (const snapshot of snapshots) {
+    swChannelClient.reportCrashSnapshot(snapshot).catch(() => {
+      // 忽略发送错误
+    });
+  }
+
+  // 队列已清空，停止检查
+  if (queueCheckInterval) {
+    clearInterval(queueCheckInterval);
+    queueCheckInterval = null;
+  }
+}
+
+/**
+ * 启动队列检查定时器
+ */
+function startQueueCheck(): void {
+  if (queueCheckInterval) {
+    return; // 已经在运行
+  }
+
+  queueCheckInterval = setInterval(() => {
+    if (swChannelClient.isInitialized()) {
+      flushPendingSnapshots();
+    }
+  }, QUEUE_CHECK_INTERVAL);
+}
+
+/**
  * 发送快照到 Service Worker 持久化
+ * 如果 SW 通道未初始化，会将快照加入队列等待发送
  */
 function sendSnapshotToSW(snapshot: CrashSnapshot): void {
   try {
     // 使用 swChannelClient 发送崩溃快照
     if (swChannelClient.isInitialized()) {
+      // 先发送任何待发送的快照
+      flushPendingSnapshots();
+      // 然后发送当前快照
       swChannelClient.reportCrashSnapshot(snapshot).catch(() => {
         // 忽略发送错误，避免影响主流程
       });
+    } else {
+      // SW 通道未初始化，加入队列等待
+      if (pendingSnapshots.length < MAX_PENDING_SNAPSHOTS) {
+        pendingSnapshots.push(snapshot);
+        // 启动队列检查
+        startQueueCheck();
+      }
+      // 队列已满时静默丢弃，避免内存问题
     }
   } catch (error) {
     // 忽略发送错误，避免影响主流程

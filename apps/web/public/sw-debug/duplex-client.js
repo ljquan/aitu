@@ -197,8 +197,22 @@ async function callRPC(method, params = {}, timeout = 10000, retries = 2) {
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       // 注意：publish 用于发送请求并等待响应（RPC 模式）
-      const result = await channel.publish(method, params, { timeout });
-      return result;
+      // 响应格式: { ret: 0, data: {...} }，需要解包 data 字段
+      const response = await channel.publish(method, params, { timeout });
+      
+      // 检查响应格式并解包 data
+      if (response && typeof response === 'object') {
+        // ret === 0 表示成功 (ReturnCode.Success)
+        if (response.ret === 0 && response.data !== undefined) {
+          return response.data;
+        }
+        // 如果有错误信息
+        if (response.ret !== 0) {
+          throw new Error(response.msg || `RPC failed with code ${response.ret}`);
+        }
+      }
+      
+      return response;
     } catch (error) {
       if (attempt < retries) {
         // 等待一段时间后重试（给 SW 更新完成的时间）

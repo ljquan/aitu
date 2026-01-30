@@ -43,7 +43,9 @@ export interface PostMessageLogEntry {
 }
 
 // 排除的消息类型（调试面板自身的消息）
+// 包括 native message types 和 postmessage-duplex event names
 const EXCLUDED_MESSAGE_TYPES = [
+  // Native message types
   'SW_DEBUG_ENABLE',
   'SW_DEBUG_DISABLE',
   'SW_DEBUG_GET_STATUS',
@@ -70,6 +72,31 @@ const EXCLUDED_MESSAGE_TYPES = [
   'SW_DEBUG_GET_CRASH_SNAPSHOTS',
   'SW_DEBUG_CLEAR_CRASH_SNAPSHOTS',
   'CRASH_SNAPSHOT',
+  'SW_CHANNEL_CONNECT',
+  'SW_CHANNEL_READY',
+  // postmessage-duplex debug event names (避免死循环)
+  'debug:log',
+  'debug:llmLog',
+  'debug:statusChanged',
+  'debug:getStatus',
+  'debug:getLogs',
+  'debug:clearLogs',
+  'debug:getConsoleLogs',
+  'debug:clearConsoleLogs',
+  'debug:getPostMessageLogs',
+  'debug:clearPostMessageLogs',
+  'debug:getCrashSnapshots',
+  'debug:clearCrashSnapshots',
+  'debug:getLLMApiLogs',
+  'debug:clearLLMApiLogs',
+  'debug:getCacheStats',
+  'debug:newCrashSnapshot',
+  'console:log',
+  'console:report',
+  'postmessage:log',
+  'postmessage:logBatch',
+  'crash:snapshot',
+  'crash:heartbeat',
 ];
 
 // 请求-响应关联映射

@@ -150,6 +150,7 @@ export class SWTaskQueue {
 
       // Load all tasks
       const tasks = await taskQueueStorage.getAllTasks();
+      console.log('[SWTaskQueue] Loaded', tasks.length, 'tasks from storage');
 
       // 迁移计数器
       let migratedCount = 0;
@@ -526,9 +527,16 @@ export class SWTaskQueue {
 
     // Check for similar task with same prompt that's already processing or pending
     // This prevents duplicate submissions after page refresh
-    // NOTE: Skip this check for batch generation (tasks with batchId)
-    // batchId indicates intentional batch generation, not accidental duplicate submission
-    if (!params.batchId) {
+    // NOTE: Skip this check for batch generation (tasks with batchId, batchIndex, or batchTotal)
+    // These fields indicate intentional batch generation, not accidental duplicate submission
+    const isBatchTask = !!(
+      params.batchId || 
+      'batchIndex' in params || 
+      params.batchTotal ||
+      params.globalIndex
+    );
+    console.log(`[SWTaskQueue] submitTask batch check: taskId=${taskId}, batchId=${params.batchId}, batchIndex=${params.batchIndex}, batchTotal=${params.batchTotal}, globalIndex=${params.globalIndex}, isBatchTask=${isBatchTask}`);
+    if (!isBatchTask) {
       const existingTask = Array.from(this.tasks.values()).find(
         t => (t.status === TaskStatus.PROCESSING || t.status === TaskStatus.PENDING) &&
              t.type === taskType &&
@@ -621,8 +629,12 @@ export class SWTaskQueue {
    * Retry a failed or cancelled task
    */
   async retryTask(taskId: string): Promise<void> {
+    console.log('[SWTaskQueue] retryTask called:', taskId);
     const task = this.tasks.get(taskId);
-    if (!task || (task.status !== TaskStatus.FAILED && task.status !== TaskStatus.CANCELLED)) return;
+    if (!task || (task.status !== TaskStatus.FAILED && task.status !== TaskStatus.CANCELLED)) {
+      console.log('[SWTaskQueue] retryTask skipped:', { taskExists: !!task, status: task?.status });
+      return;
+    }
 
     // 对于视频/角色任务，尝试从日志恢复 remoteId，确保重试时不会重新提交（避免重复计费）
     if (!task.remoteId && (task.type === TaskType.VIDEO || task.type === TaskType.CHARACTER)) {
@@ -653,6 +665,7 @@ export class SWTaskQueue {
     await taskQueueStorage.saveTask(task);
 
     // Broadcast status change to all clients
+    console.log('[SWTaskQueue] retryTask broadcasting TASK_STATUS:', { taskId: task.id, status: task.status });
     this.broadcastToClients({
       type: 'TASK_STATUS',
       taskId: task.id,
@@ -663,6 +676,7 @@ export class SWTaskQueue {
 
     // Execute task immediately (no PENDING state, direct execution)
     // Run in background but ensure errors are handled
+    console.log('[SWTaskQueue] retryTask executing task');
     this.executeTaskInternal(task).catch((error) => {
       console.error(`[SWTaskQueue] Retry task ${task.id} execution failed:`, error);
     });
@@ -721,20 +735,28 @@ export class SWTaskQueue {
    * Delete a task
    */
   async deleteTask(taskId: string): Promise<void> {
+    console.log('[SWTaskQueue] deleteTask called:', taskId);
     const task = this.tasks.get(taskId);
-    if (!task) return;
+    if (!task) {
+      console.log('[SWTaskQueue] deleteTask: task not found in map');
+      return;
+    }
 
     // Cancel if running
     if (this.runningTasks.has(taskId)) {
+      console.log('[SWTaskQueue] deleteTask: cancelling running task');
       this.getHandler(task.type)?.cancel(taskId);
       this.runningTasks.delete(taskId);
     }
 
     this.tasks.delete(taskId);
+    console.log('[SWTaskQueue] deleteTask: removed from tasks map');
 
     // Remove from storage
     await taskQueueStorage.deleteTask(taskId);
+    console.log('[SWTaskQueue] deleteTask: removed from storage');
 
+    console.log('[SWTaskQueue] deleteTask: broadcasting TASK_DELETED');
     this.broadcastToClients({
       type: 'TASK_DELETED',
       taskId,
@@ -1146,8 +1168,19 @@ export class SWTaskQueue {
       const result = await (handler as any).resume(task, handlerConfig);
       await this.handleTaskSuccess(task.id, result);
     } catch (error) {
-      console.error(`[SWTaskQueue] executeResume: 任务 ${task.id} 恢复失败`, error);
-      await this.handleTaskError(task.id, error);
+      // 检查任务是否已被删除或取消（正常情况，不需要记录错误）
+      const currentTask = this.tasks.get(task.id);
+      const isCancelledOrDeleted = !currentTask || 
+        currentTask.status === TaskStatus.CANCELLED ||
+        (error instanceof Error && error.message.includes('cancelled'));
+      
+      if (isCancelledOrDeleted) {
+        // 任务被取消或删除，这是正常行为，不记录为错误
+        console.log(`[SWTaskQueue] executeResume: 任务 ${task.id} 已被取消或删除`);
+      } else {
+        console.error(`[SWTaskQueue] executeResume: 任务 ${task.id} 恢复失败`, error);
+        await this.handleTaskError(task.id, error);
+      }
     }
   }
 

@@ -1736,7 +1736,8 @@ button .icon-svg {
 
 /* Pause Button States - Enhanced */
 .pause-btn.paused,
-#togglePause.paused {
+#togglePause.paused,
+#togglePmPause.paused {
   background: var(--warning-light) !important;
   border-color: var(--warning-color) !important;
   color: var(--warning-color) !important;

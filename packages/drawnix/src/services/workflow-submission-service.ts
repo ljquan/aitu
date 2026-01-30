@@ -29,7 +29,9 @@ import type {
   CanvasOperationRequestEvent as ChannelCanvasRequestEvent,
   MainThreadToolRequestEvent as ChannelToolRequestEvent,
   WorkflowRecoveredEvent as ChannelWorkflowRecoveredEvent,
+  MainThreadToolResponse,
 } from './sw-channel/types';
+import { swCapabilitiesHandler } from './sw-capabilities';
 
 // ============================================================================
 // Types
@@ -196,7 +198,68 @@ class WorkflowSubmissionService {
     };
 
     swChannelClient.setEventHandlers(eventHandlers);
+
+    // Register tool request handler for direct response
+    // This allows SW to send tool request and receive response directly,
+    // reducing one round trip compared to the old workflow:respondTool approach
+    this.registerToolRequestHandler();
+
     this.initialized = true;
+  }
+
+  /**
+   * Register tool request handler for direct response
+   * SW calls this via publish('workflow:toolRequest') and receives response directly
+   */
+  private registerToolRequestHandler(): void {
+    // Wait for swChannelClient to be initialized
+    const tryRegister = () => {
+      if (!swChannelClient.isInitialized()) {
+        setTimeout(tryRegister, 100);
+        return;
+      }
+
+      swChannelClient.registerToolRequestHandler(async (request) => {
+        console.log('[WorkflowSubmissionService] Tool request received:', {
+          requestId: request.requestId,
+          toolName: request.toolName,
+          workflowId: request.workflowId,
+        });
+        try {
+          // Execute the tool using swCapabilitiesHandler
+          const result = await swCapabilitiesHandler.execute({
+            operation: request.toolName,
+            args: request.args,
+          });
+
+          console.log('[WorkflowSubmissionService] Tool execution result:', {
+            requestId: request.requestId,
+            toolName: request.toolName,
+            success: result.success,
+            error: result.error,
+            taskId: result.taskId,
+          });
+
+          // Convert CapabilityResult to MainThreadToolResponse format
+          return {
+            success: result.success,
+            result: result.data,
+            error: result.error,
+            taskId: result.taskId,
+            taskIds: result.taskIds,
+            addSteps: result.addSteps as MainThreadToolResponse['addSteps'],
+          };
+        } catch (error) {
+          console.error('[WorkflowSubmissionService] Tool request handler error:', error);
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : String(error),
+          };
+        }
+      });
+    };
+
+    tryRegister();
   }
 
   /**
@@ -463,6 +526,9 @@ class WorkflowSubmissionService {
 
   /**
    * Respond to a main thread tool request
+   * @deprecated Use registerToolRequestHandler in init() for direct response instead.
+   * The new approach reduces one round trip by returning results directly in the subscribe callback.
+   * This method is kept for backward compatibility but may be removed in future versions.
    */
   async respondToToolRequest(
     requestId: string,
@@ -477,6 +543,7 @@ class WorkflowSubmissionService {
       status: WorkflowStepStatus;
     }>
   ): Promise<void> {
+    console.warn('[WorkflowSubmissionService] respondToToolRequest is deprecated. Tool responses are now handled via registerToolRequestHandler.');
     if (!swChannelClient.isInitialized()) return;
 
     await swChannelClient.respondToToolRequest(requestId, success, result, error, addSteps);

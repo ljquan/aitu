@@ -2338,10 +2338,80 @@ await sendConnectRequest();
 const channel = await ServiceWorkerChannel.createFromPage();
 ```
 
+❌ **错误示例 4 - publish 模式下 ret 检查过严**:
+```typescript
+// 错误：publish 模式下 ret 可能是 undefined，不一定是 0
+channel.subscribe('task:status', (response) => {
+  if (response.ret === ReturnCode.Success && response.data) {  // 可能永远不执行！
+    handleTaskStatus(response.data);
+  }
+  return { ack: true };
+});
+```
+
+✅ **正确示例 4**:
+```typescript
+// 正确：publish 模式下 ret 可能是 undefined，需要同时检查
+channel.subscribe('task:status', (response) => {
+  const isSuccess = response.ret === undefined || response.ret === ReturnCode.Success;
+  if (isSuccess && response.data) {
+    handleTaskStatus(response.data);
+  }
+  return { ack: true };
+});
+```
+
+❌ **错误示例 5 - isReady 布尔值检查**:
+```typescript
+// 错误：isReady 返回数字 0/1，不是布尔值
+if (this.channel?.isReady === true) {  // 永远 false！isReady 是 1
+  return true;
+}
+```
+
+✅ **正确示例 5**:
+```typescript
+// 正确：使用 truthy 检查
+if (!!this.channel?.isReady) {  // 0 → false, 1 → true
+  return true;
+}
+```
+
+❌ **错误示例 6 - 响应数据格式假设单一**:
+```typescript
+// 错误：假设响应格式总是 { ret, data }
+const result = response as { data?: { success: boolean } };
+return result.data || null;  // 可能漏掉其他格式的有效数据
+```
+
+✅ **正确示例 6**:
+```typescript
+// 正确：处理多种可能的响应格式
+const rawResponse = response as Record<string, unknown>;
+
+// 格式 1: { success, result, ... } - 直接数据
+if ('success' in rawResponse) {
+  return rawResponse as ToolResult;
+}
+
+// 格式 2: { ret, data: { success, ... } } - 标准格式
+if (rawResponse.data && typeof rawResponse.data === 'object') {
+  const data = rawResponse.data as Record<string, unknown>;
+  if ('success' in data) {
+    return data as ToolResult;
+  }
+}
+
+return null;
+```
+
 **原因**:
 1. `postmessage-duplex` 的 `subscribe` 回调接收的是完整的响应对象，实际数据在 `response.data` 中
 2. `publish` 方法期望收到响应，如果 `subscribe` handler 不返回值，发送方会超时
 3. SW 端只有在收到 `SW_CHANNEL_CONNECT` 消息后才会为该客户端创建 channel，否则 RPC 调用无法被处理
+4. **`publish` 模式下 `response.ret` 可能是 `undefined`**（不同于 `call` 模式返回 0），检查成功时需要同时接受 `undefined` 和 `0`
+5. **`channel.isReady` 返回数字 0/1 而非布尔值**，使用 `=== true` 检查会永远失败，应使用 `!!isReady`
+6. **响应数据格式可能有多种嵌套结构**，需要灵活解析而非假设单一格式
 
 **相关文件**:
 - `packages/drawnix/src/services/sw-channel/client.ts` - 主应用的 SW 通道客户端

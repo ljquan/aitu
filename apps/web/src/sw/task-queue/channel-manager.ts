@@ -299,10 +299,12 @@ export class SWChannelManager {
     
     if (!clientChannel) {
       // 使用 createFromWorker 创建通道，禁用内部日志
+      // 注意：禁用 error 日志以避免 fire-and-forget 广播的超时错误噪音
+      // 这些超时是预期行为（某些客户端没有处理器）
       const channel = ServiceWorkerChannel.createFromWorker(clientId, {
         timeout: 30000,
         subscribeMap: this.createSubscribeMap(clientId),
-        log: { log: () => {}, warn: () => {}, error: console.error.bind(console) },
+        log: { log: () => {}, warn: () => {}, error: () => {} },
       });
       
       clientChannel = {
@@ -435,6 +437,7 @@ export class SWChannelManager {
         return this.handleWorkflowGetAll();
       },
       
+      // Deprecated: Use sendToolRequest() which receives response directly
       [RPC_METHODS.WORKFLOW_RESPOND_TOOL]: async (rawData: any) => {
         const data = this.unwrapRpcData<MainThreadToolResponseMessage>(rawData);
         return this.handleToolResponse(data);
@@ -695,9 +698,9 @@ export class SWChannelManager {
     return { success: true, task };
   }
 
-  private async handleTaskList(): Promise<{ success: boolean; tasks: SWTask[] }> {
+  private async handleTaskList(): Promise<{ success: boolean; tasks: SWTask[]; total: number }> {
     const tasks = this.taskQueue?.getAllTasks() || [];
-    return { success: true, tasks };
+    return { success: true, tasks, total: tasks.length };
   }
 
   private async handleTaskListPaginated(data: { offset?: number; limit?: number; type?: TaskType; status?: TaskStatus }): Promise<{ success: boolean; tasks: SWTask[]; total: number; offset: number; hasMore: boolean }> {
@@ -865,6 +868,11 @@ export class SWChannelManager {
     }
   }
 
+  /**
+   * Handle tool response from main thread via RPC
+   * @deprecated This handler is kept for backward compatibility.
+   * New code should use sendToolRequest() which receives response directly.
+   */
   private async handleToolResponse(data: MainThreadToolResponseMessage): Promise<{ success: boolean; error?: string }> {
     try {
       await handleMainThreadToolResponse(data);
@@ -889,8 +897,8 @@ export class SWChannelManager {
       // 将 ArrayBuffer 转换为 Blob
       const mediaBlob = new Blob([blob], { type: mimeType || (mediaType === 'video' ? 'video/mp4' : 'image/png') });
       
-      // 生成缩略图
-      await generateThumbnailAsync(url, mediaBlob, mediaType);
+      // 生成缩略图 (参数顺序: blob, url, mediaType)
+      generateThumbnailAsync(mediaBlob, url, mediaType);
       
       return { success: true };
     } catch (error: any) {
@@ -963,7 +971,11 @@ export class SWChannelManager {
   private async handleConsoleReport(data: ConsoleReportParams): Promise<{ success: boolean; error?: string }> {
     try {
       const { addConsoleLog } = await import('../index');
-      await addConsoleLog(data.logLevel, data.logArgs, data.timestamp);
+      // addConsoleLog expects a single entry object, not separate arguments
+      addConsoleLog({
+        logLevel: data.logLevel as 'log' | 'info' | 'warn' | 'error' | 'debug',
+        logMessage: Array.isArray(data.logArgs) ? data.logArgs.map(String).join(' ') : String(data.logArgs),
+      });
       return { success: true };
     } catch (error: any) {
       return { success: false, error: error.message };
@@ -974,14 +986,15 @@ export class SWChannelManager {
   // Debug RPC 处理器
   // ============================================================================
 
-  private async handleDebugGetStatus(): Promise<{ enabled: boolean; logCount?: number; cacheStats?: Record<string, unknown> }> {
+  private async handleDebugGetStatus(): Promise<Record<string, unknown>> {
     try {
       const { getDebugStatus, getCacheStats } = await import('../index');
       const status = getDebugStatus();
       const cacheStats = await getCacheStats();
-      return { enabled: status.debugModeEnabled || false, logCount: status.logCount, cacheStats };
+      // Return the full status object with cacheStats merged in
+      return { ...status, cacheStats };
     } catch {
-      return { enabled: false };
+      return { debugModeEnabled: false };
     }
   }
 
@@ -1442,6 +1455,7 @@ export class SWChannelManager {
   private sendToTaskClient(taskId: string, event: string, data: Record<string, unknown>): void {
     const clientChannel = this.taskChannels.get(taskId);
     if (clientChannel) {
+      console.log(`[SWChannelManager] sendToTaskClient point-to-point: ${event}`, { taskId });
       try {
         clientChannel.channel.publish(event, data);
       } catch (error) {
@@ -1450,6 +1464,7 @@ export class SWChannelManager {
     } else {
       // 如果没有映射（可能是恢复的任务或 SW 重启后），静默广播
       // 这是预期行为，不需要警告
+      console.log(`[SWChannelManager] sendToTaskClient fallback to broadcastToAll: ${event}`, { taskId, clientCount: this.channels.size });
       this.broadcastToAll(event, data);
     }
   }
@@ -1466,6 +1481,7 @@ export class SWChannelManager {
    * 发送任务状态事件（点对点）
    */
   sendTaskStatus(taskId: string, status: TaskStatus, progress?: number, phase?: TaskExecutionPhase): void {
+    console.log('[SWChannelManager] sendTaskStatus:', { taskId, status, phase });
     this.sendToTaskClient(taskId, SW_EVENTS.TASK_STATUS, { taskId, status, progress, phase });
   }
 
@@ -1658,10 +1674,123 @@ export class SWChannelManager {
   }
 
   /**
-   * 发送主线程工具请求（点对点）
+   * 发送主线程工具请求并等待响应（双工通讯）
+   * 主线程通过 registerToolRequestHandler 处理请求并直接返回结果
+   * 这样可以减少一次交互，不需要再通过 workflow:respondTool 发送结果
+   * 
+   * @param workflowId 工作流 ID
+   * @param requestId 请求 ID
+   * @param stepId 步骤 ID
+   * @param toolName 工具名称
+   * @param args 工具参数
+   * @param timeoutMs 超时时间（默认 60 秒，AI 工具可能需要较长时间）
+   * @returns 工具执行结果，超时或失败返回 null
    */
-  sendToolRequest(workflowId: string, requestId: string, stepId: string, toolName: string, args: Record<string, unknown>): void {
-    this.sendToWorkflowClient(workflowId, SW_EVENTS.WORKFLOW_TOOL_REQUEST, { requestId, workflowId, stepId, toolName, args });
+  async sendToolRequest(
+    workflowId: string,
+    requestId: string,
+    stepId: string,
+    toolName: string,
+    args: Record<string, unknown>,
+    timeoutMs: number = 60000
+  ): Promise<{
+    success: boolean;
+    result?: unknown;
+    error?: string;
+    taskId?: string;
+    taskIds?: string[];
+    addSteps?: Array<{
+      id: string;
+      mcp: string;
+      args: Record<string, unknown>;
+      description: string;
+      status: string;
+    }>;
+  } | null> {
+    const clientChannel = this.workflowChannels.get(workflowId) || this.channels.values().next().value as ClientChannel | undefined;
+    if (!clientChannel) {
+      console.warn('[SWChannelManager] No connected clients for tool request');
+      return null;
+    }
+    
+    try {
+      console.log('[SWChannelManager] sendToolRequest sending:', { requestId, workflowId, stepId, toolName });
+      const response = await Promise.race([
+        clientChannel.channel.publish(SW_EVENTS.WORKFLOW_TOOL_REQUEST, {
+          requestId,
+          workflowId,
+          stepId,
+          toolName,
+          args,
+        }),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs))
+      ]);
+      
+      console.log('[SWChannelManager] sendToolRequest response:', { 
+        requestId, 
+        hasResponse: !!response, 
+        responseType: typeof response,
+        responseKeys: response && typeof response === 'object' ? Object.keys(response) : [],
+        responseRaw: JSON.stringify(response).substring(0, 500),
+      });
+      
+      if (!response || typeof response !== 'object') {
+        console.warn('[SWChannelManager] Tool request timeout or invalid response');
+        return null;
+      }
+      
+      // postmessage-duplex publish 响应格式可能是:
+      // 1. { ret: 0, data: { success: true, ... } } - 标准格式
+      // 2. { success: true, ... } - 直接返回数据（某些情况）
+      // 3. { ret: 0, msg: ..., data: { ret: 0, data: { success: ... } } } - 嵌套格式
+      const rawResponse = response as Record<string, unknown>;
+      
+      let toolResult: {
+        success: boolean;
+        result?: unknown;
+        error?: string;
+        taskId?: string;
+        taskIds?: string[];
+        addSteps?: Array<{
+          id: string;
+          mcp: string;
+          args: Record<string, unknown>;
+          description: string;
+          status: string;
+        }>;
+      } | null = null;
+      
+      // 尝试解析不同格式
+      if ('success' in rawResponse) {
+        // 格式 2: 直接返回数据
+        toolResult = rawResponse as typeof toolResult;
+      } else if (rawResponse.data && typeof rawResponse.data === 'object') {
+        const data = rawResponse.data as Record<string, unknown>;
+        if ('success' in data) {
+          // 格式 1: { ret, data: { success, ... } }
+          toolResult = data as typeof toolResult;
+        } else if (data.data && typeof data.data === 'object') {
+          // 格式 3: 嵌套格式 { ret, data: { ret, data: { success, ... } } }
+          const innerData = data.data as Record<string, unknown>;
+          if ('success' in innerData) {
+            toolResult = innerData as typeof toolResult;
+          }
+        }
+      }
+      
+      console.log('[SWChannelManager] sendToolRequest parsed result:', { 
+        requestId, 
+        toolResultFound: !!toolResult,
+        success: toolResult?.success,
+        error: toolResult?.error,
+        taskId: toolResult?.taskId,
+      });
+      
+      return toolResult;
+    } catch (error) {
+      console.warn('[SWChannelManager] Tool request error:', error);
+      return null;
+    }
   }
 
   /**

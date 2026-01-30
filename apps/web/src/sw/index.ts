@@ -1334,7 +1334,14 @@ setBroadcastCallback(broadcastPostMessageLog);
 
 // Handle messages from main thread
 sw.addEventListener('message', (event: ExtendableMessageEvent) => {
-  const messageType = event.data?.type || 'unknown';
+  // Extract message type from different message formats:
+  // - Native messages: event.data.type
+  // - postmessage-duplex requests: event.data.cmdname
+  // - postmessage-duplex responses: event.data.req.cmdname
+  const messageType = event.data?.type 
+    || event.data?.cmdname 
+    || event.data?.req?.cmdname 
+    || 'unknown';
   const clientId = (event.source as Client)?.id || '';
   const clientUrl = (event.source as WindowClient)?.url || '';
 
@@ -1542,7 +1549,11 @@ sw.addEventListener('message', (event: ExtendableMessageEvent) => {
       clearTimeout(heartbeatCheckTimer);
     }
     heartbeatCheckTimer = setTimeout(checkHeartbeatTimeout, 5000);
-    // 使用 channelManager 广播调试模式状态变更
+    // 响应发送方（native message）
+    if (event.source) {
+      (event.source as Client).postMessage({ type: 'SW_DEBUG_ENABLED' });
+    }
+    // 使用 channelManager 广播调试模式状态变更（给其他客户端）
     const cm = getChannelManager();
     if (cm) {
       cm.sendDebugStatusChanged(true);
@@ -1572,7 +1583,11 @@ sw.addEventListener('message', (event: ExtendableMessageEvent) => {
     clearAllConsoleLogs().catch(() => {});
 
     originalSWConsole.log('Service Worker: Debug mode disabled, logs cleared');
-    // 使用 channelManager 广播调试模式状态变更
+    // 响应发送方（native message）
+    if (event.source) {
+      (event.source as Client).postMessage({ type: 'SW_DEBUG_DISABLED' });
+    }
+    // 使用 channelManager 广播调试模式状态变更（给其他客户端）
     const cm = getChannelManager();
     if (cm) {
       cm.sendDebugStatusChanged(false);
