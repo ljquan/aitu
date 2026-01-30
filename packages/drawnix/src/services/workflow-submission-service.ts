@@ -8,7 +8,7 @@
  * - Application layer: Build workflow definition → Submit to SW → Listen for updates
  * - Service Worker: Execute workflow → Call MCP tools → Broadcast status updates
  * 
- * Updated: Now integrates with DuplexBridge for improved communication and state recovery.
+ * Updated: Now fully uses postmessage-duplex via SWChannelClient for all SW communication.
  */
 
 import { Subject, Observable, Subscription } from 'rxjs';
@@ -16,10 +16,20 @@ import { filter } from 'rxjs/operators';
 import type { ParsedGenerationParams } from '../utils/ai-input-parser';
 import { isAuthError, dispatchApiAuthError } from '../utils/api-auth-error-event';
 import {
-  WorkflowBridge,
-  getWorkflowBridge,
-  type WorkflowEvent as BridgeWorkflowEvent,
-} from './duplex-communication/bridge';
+  swChannelClient,
+  type SWChannelEventHandlers,
+} from './sw-channel/client';
+import type {
+  WorkflowDefinition as ChannelWorkflowDefinition,
+  WorkflowStatusEvent as ChannelWorkflowStatusEvent,
+  WorkflowStepStatusEvent as ChannelWorkflowStepStatusEvent,
+  WorkflowCompletedEvent as ChannelWorkflowCompletedEvent,
+  WorkflowFailedEvent as ChannelWorkflowFailedEvent,
+  WorkflowStepsAddedEvent as ChannelWorkflowStepsAddedEvent,
+  CanvasOperationRequestEvent as ChannelCanvasRequestEvent,
+  MainThreadToolRequestEvent as ChannelToolRequestEvent,
+  WorkflowRecoveredEvent as ChannelWorkflowRecoveredEvent,
+} from './sw-channel/types';
 
 // ============================================================================
 // Types
@@ -161,13 +171,11 @@ class WorkflowSubmissionService {
   private events$ = new Subject<WorkflowEvent>();
   private workflows: Map<string, WorkflowDefinition> = new Map();
   private cleanupTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
-  private messageHandler: ((event: MessageEvent) => void) | null = null;
   private initialized = false;
-  private workflowBridge: WorkflowBridge | null = null;
-  private bridgeSubscription: Subscription | null = null;
 
   /**
    * Initialize the service (call once on app startup)
+   * Sets up event handlers for workflow events from SWChannelClient
    */
   init(): void {
     if (this.initialized) return;
@@ -176,56 +184,27 @@ class WorkflowSubmissionService {
       return;
     }
 
-    this.messageHandler = (event: MessageEvent) => {
-      this.handleSWMessage(event.data);
+    // Set up event handlers for workflow events via SWChannelClient
+    const eventHandlers: SWChannelEventHandlers = {
+      onWorkflowStatus: (event) => this.handleWorkflowStatus(event),
+      onWorkflowStepStatus: (event) => this.handleStepStatus(event),
+      onWorkflowCompleted: (event) => this.handleWorkflowCompleted(event),
+      onWorkflowFailed: (event) => this.handleWorkflowFailed(event),
+      onWorkflowStepsAdded: (event) => this.handleWorkflowStepsAdded(event),
+      onToolRequest: (event) => this.handleToolRequest(event),
+      onWorkflowRecovered: (event) => this.handleWorkflowRecovered(event),
     };
 
-    navigator.serviceWorker.addEventListener('message', this.messageHandler);
-    
-    // 初始化WorkflowBridge并订阅事件
-    this.workflowBridge = getWorkflowBridge();
-    this.bridgeSubscription = this.workflowBridge.events.subscribe((event: BridgeWorkflowEvent) => {
-      this.handleBridgeEvent(event);
-    });
-    
+    swChannelClient.setEventHandlers(eventHandlers);
     this.initialized = true;
-    // console.log('[WorkflowSubmissionService] Initialized');
   }
 
   /**
    * Destroy the service
    */
   destroy(): void {
-    if (this.messageHandler) {
-      navigator.serviceWorker?.removeEventListener('message', this.messageHandler);
-      this.messageHandler = null;
-    }
-    if (this.bridgeSubscription) {
-      this.bridgeSubscription.unsubscribe();
-      this.bridgeSubscription = null;
-    }
     this.events$.complete();
     this.initialized = false;
-  }
-
-  /**
-   * Handle events from WorkflowBridge (for state recovery)
-   */
-  private handleBridgeEvent(event: BridgeWorkflowEvent): void {
-    switch (event.type) {
-      case 'recovered':
-        // 工作流恢复事件 - 更新本地缓存并发送事件
-        if (event.workflow) {
-          this.workflows.set(event.workflowId, event.workflow as unknown as WorkflowDefinition);
-        }
-        this.events$.next({
-          type: 'recovered',
-          workflowId: event.workflowId,
-          workflow: event.workflow as unknown as WorkflowDefinition,
-        });
-        break;
-      // 其他事件由原有的消息处理器处理
-    }
   }
 
   /**
@@ -233,20 +212,27 @@ class WorkflowSubmissionService {
    * Call this after initialization to restore running workflows
    */
   async recoverWorkflows(): Promise<WorkflowDefinition[]> {
-    if (!this.workflowBridge) {
-      console.warn('[WorkflowSubmissionService] WorkflowBridge not initialized');
+    if (!swChannelClient.isInitialized()) {
+      // swChannelClient 尚未初始化，跳过恢复（这是正常的启动时序）
       return [];
     }
 
     try {
-      const workflows = await this.workflowBridge.recoverWorkflows();
+      const response = await swChannelClient.getAllWorkflows();
+      if (!response.success) {
+        return [];
+      }
       
-      // 更新本地缓存
-      for (const workflow of workflows) {
+      // Filter to running/pending workflows and update local cache
+      const runningWorkflows = response.workflows.filter(
+        w => w.status === 'running' || w.status === 'pending'
+      );
+      
+      for (const workflow of runningWorkflows) {
         this.workflows.set(workflow.id, workflow as unknown as WorkflowDefinition);
       }
       
-      return workflows as unknown as WorkflowDefinition[];
+      return runningWorkflows as unknown as WorkflowDefinition[];
     } catch (error) {
       console.warn('[WorkflowSubmissionService] Failed to recover workflows:', error);
       return [];
@@ -327,32 +313,29 @@ class WorkflowSubmissionService {
    * Submit a workflow for execution
    */
   async submit(workflow: WorkflowDefinition): Promise<void> {
-    const sw = await this.getServiceWorker();
-    if (!sw) {
-      throw new Error('Service Worker not available');
+    if (!swChannelClient.isInitialized()) {
+      throw new Error('SWChannelClient not initialized');
     }
 
     // Store locally
     this.workflows.set(workflow.id, workflow);
 
-    // Send to SW
-    sw.postMessage({
-      type: 'WORKFLOW_SUBMIT',
-      workflow,
-    });
+    // Submit via SWChannelClient (uses postmessage-duplex)
+    const result = await swChannelClient.submitWorkflow(workflow as unknown as ChannelWorkflowDefinition);
+    
+    if (!result.success) {
+      // Remove from local cache if submission failed
+      this.workflows.delete(workflow.id);
+      throw new Error(result.error || 'Submit workflow failed');
+    }
   }
 
   /**
    * Cancel a workflow
    */
   async cancel(workflowId: string): Promise<void> {
-    const sw = await this.getServiceWorker();
-    if (!sw) return;
-
-    sw.postMessage({
-      type: 'WORKFLOW_CANCEL',
-      workflowId,
-    });
+    if (!swChannelClient.isInitialized()) return;
+    await swChannelClient.cancelWorkflow(workflowId);
   }
 
   /**
@@ -366,71 +349,34 @@ class WorkflowSubmissionService {
    * Query workflow status from SW (returns full workflow data)
    */
   async queryWorkflowStatus(workflowId: string): Promise<WorkflowDefinition | null> {
-    const sw = await this.getServiceWorker();
-    if (!sw) return null;
+    if (!swChannelClient.isInitialized()) {
+      return this.workflows.get(workflowId) || null;
+    }
 
-    return new Promise((resolve) => {
-      // Set up one-time listener for response
-      const handler = (event: MessageEvent) => {
-        if (event.data?.type === 'WORKFLOW_STATUS_RESPONSE' && event.data.workflowId === workflowId) {
-          navigator.serviceWorker?.removeEventListener('message', handler);
-          if (event.data.workflow) {
-            // Update local cache
-            this.workflows.set(workflowId, event.data.workflow);
-          }
-          resolve(event.data.workflow || null);
-        }
-      };
-
-      navigator.serviceWorker?.addEventListener('message', handler);
-
-      // Set timeout
-      setTimeout(() => {
-        navigator.serviceWorker?.removeEventListener('message', handler);
-        resolve(this.workflows.get(workflowId) || null);
-      }, 5000);
-
-      // Send query
-      sw.postMessage({
-        type: 'WORKFLOW_GET_STATUS',
-        workflowId,
-      });
-    });
+    const response = await swChannelClient.getWorkflowStatus(workflowId);
+    if (response.success && response.workflow) {
+      this.workflows.set(workflowId, response.workflow as unknown as WorkflowDefinition);
+      return response.workflow as unknown as WorkflowDefinition;
+    }
+    return this.workflows.get(workflowId) || null;
   }
 
   /**
    * Query all workflows from SW
    */
   async queryAllWorkflows(): Promise<WorkflowDefinition[]> {
-    const sw = await this.getServiceWorker();
-    if (!sw) return Array.from(this.workflows.values());
+    if (!swChannelClient.isInitialized()) {
+      return Array.from(this.workflows.values());
+    }
 
-    return new Promise((resolve) => {
-      // Set up one-time listener for response
-      const handler = (event: MessageEvent) => {
-        if (event.data?.type === 'WORKFLOW_ALL_RESPONSE') {
-          navigator.serviceWorker?.removeEventListener('message', handler);
-          // Update local cache
-          for (const workflow of event.data.workflows) {
-            this.workflows.set(workflow.id, workflow);
-          }
-          resolve(event.data.workflows);
-        }
-      };
-
-      navigator.serviceWorker?.addEventListener('message', handler);
-
-      // Set timeout
-      setTimeout(() => {
-        navigator.serviceWorker?.removeEventListener('message', handler);
-        resolve(Array.from(this.workflows.values()));
-      }, 5000);
-
-      // Send query
-      sw.postMessage({
-        type: 'WORKFLOW_GET_ALL',
-      });
-    });
+    const response = await swChannelClient.getAllWorkflows();
+    if (response.success) {
+      for (const workflow of response.workflows) {
+        this.workflows.set(workflow.id, workflow as unknown as WorkflowDefinition);
+      }
+      return response.workflows as unknown as WorkflowDefinition[];
+    }
+    return Array.from(this.workflows.values());
   }
 
   /**
@@ -455,34 +401,43 @@ class WorkflowSubmissionService {
     ).subscribe(callback);
   }
 
+  // 保存待注册的 Canvas 处理器（用于延迟注册）
+  private pendingCanvasHandler: ((operation: string, params: Record<string, unknown>) => Promise<{ success: boolean; error?: string }>) | null = null;
+
   /**
-   * Subscribe to canvas insert requests
+   * 注册 Canvas 操作处理器（双工通讯模式）
+   * SW 发起 canvas:execute 请求，主线程处理并直接返回结果
+   * 
+   * @param handler 处理函数，接收 operation 和 params，返回 { success, error? }
    */
-  subscribeToCanvasInserts(
-    callback: (event: CanvasInsertEvent) => void
-  ): Subscription {
-    return this.events$.pipe(
-      filter((event): event is CanvasInsertEvent => event.type === 'canvas_insert')
-    ).subscribe(callback);
+  registerCanvasHandler(
+    handler: (operation: string, params: Record<string, unknown>) => Promise<{ success: boolean; error?: string }>
+  ): void {
+    if (!swChannelClient.isInitialized()) {
+      // 保存处理器，等待 swChannelClient 初始化后注册
+      this.pendingCanvasHandler = handler;
+      // 启动轮询检查
+      this.waitForClientAndRegister();
+      return;
+    }
+    
+    swChannelClient.registerCanvasOperationHandler(handler);
   }
 
   /**
-   * Respond to a canvas insert request
+   * 等待 swChannelClient 初始化后注册 Canvas 处理器
    */
-  async respondToCanvasInsert(
-    requestId: string,
-    success: boolean,
-    error?: string
-  ): Promise<void> {
-    const sw = await this.getServiceWorker();
-    if (!sw) return;
-
-    sw.postMessage({
-      type: 'CANVAS_OPERATION_RESPONSE',
-      requestId,
-      success,
-      error,
-    });
+  private waitForClientAndRegister(): void {
+    const checkAndRegister = () => {
+      if (swChannelClient.isInitialized() && this.pendingCanvasHandler) {
+        swChannelClient.registerCanvasOperationHandler(this.pendingCanvasHandler);
+        this.pendingCanvasHandler = null;
+      } else if (this.pendingCanvasHandler) {
+        // 继续等待，最多等 30 秒
+        setTimeout(checkAndRegister, 500);
+      }
+    };
+    checkAndRegister();
   }
 
   /**
@@ -522,65 +477,14 @@ class WorkflowSubmissionService {
       status: WorkflowStepStatus;
     }>
   ): Promise<void> {
-    const sw = await this.getServiceWorker();
-    if (!sw) return;
+    if (!swChannelClient.isInitialized()) return;
 
-    sw.postMessage({
-      type: 'MAIN_THREAD_TOOL_RESPONSE',
-      requestId,
-      success,
-      result,
-      error,
-      addSteps,
-    });
+    await swChannelClient.respondToToolRequest(requestId, success, result, error, addSteps);
   }
 
   // ============================================================================
   // Private Methods
   // ============================================================================
-
-  private handleSWMessage(data: any): void {
-    if (!data || typeof data !== 'object' || !data.type) return;
-
-    // Only log workflow-related messages
-    if (data.type.startsWith('WORKFLOW_')) {
-      // console.log('[WorkflowSubmissionService] ◀ Received SW message:', data.type, data.workflowId || '');
-    }
-
-    switch (data.type) {
-      case 'WORKFLOW_STATUS':
-        this.handleWorkflowStatus(data);
-        break;
-
-      case 'WORKFLOW_STEP_STATUS':
-        this.handleStepStatus(data);
-        break;
-
-      case 'WORKFLOW_COMPLETED':
-        this.handleWorkflowCompleted(data);
-        break;
-
-      case 'WORKFLOW_FAILED':
-        this.handleWorkflowFailed(data);
-        break;
-
-      case 'CANVAS_OPERATION_REQUEST':
-        this.handleCanvasOperation(data);
-        break;
-
-      case 'MAIN_THREAD_TOOL_REQUEST':
-        this.handleMainThreadToolRequest(data);
-        break;
-
-      case 'WORKFLOW_STEPS_ADDED':
-        this.handleWorkflowStepsAdded(data);
-        break;
-
-      case 'WORKFLOW_RECOVERED':
-        this.handleWorkflowRecovered(data);
-        break;
-    }
-  }
 
   /**
    * Clone a workflow to ensure mutability
@@ -602,126 +506,94 @@ class WorkflowSubmissionService {
     return mutableWorkflow;
   }
 
-  private handleWorkflowStatus(data: any): void {
-    // console.log('[WorkflowSubmissionService] Workflow status update:', data.workflowId, '->', data.status);
-    const workflow = this.getMutableWorkflow(data.workflowId);
+  private handleWorkflowStatus(event: ChannelWorkflowStatusEvent): void {
+    const workflow = this.getMutableWorkflow(event.workflowId);
     if (workflow) {
-      workflow.status = data.status;
-      workflow.updatedAt = data.updatedAt || Date.now();
+      workflow.status = event.status as WorkflowDefinition['status'];
+      workflow.updatedAt = event.updatedAt;
     }
 
     this.events$.next({
       type: 'status',
-      workflowId: data.workflowId,
-      status: data.status,
+      workflowId: event.workflowId,
+      status: event.status as WorkflowDefinition['status'],
     });
   }
 
-  private handleStepStatus(data: any): void {
-    // console.log('[WorkflowSubmissionService] Step status update:', data.stepId, '->', data.status);
-    // if (data.error) {
-    //   console.error('[WorkflowSubmissionService]   - Error:', data.error);
-    // }
-    // if (data.result) {
-    //   console.log('[WorkflowSubmissionService]   - Result type:', data.result?.type);
-    // }
-
-    const workflow = this.getMutableWorkflow(data.workflowId);
+  private handleStepStatus(event: ChannelWorkflowStepStatusEvent): void {
+    const workflow = this.getMutableWorkflow(event.workflowId);
     if (workflow) {
-      const step = workflow.steps.find((s) => s.id === data.stepId);
+      const step = workflow.steps.find((s) => s.id === event.stepId);
       if (step) {
-        step.status = data.status;
-        step.result = data.result;
-        step.error = data.error;
-        step.duration = data.duration;
+        step.status = event.status as WorkflowStepStatus;
+        step.result = event.result;
+        step.error = event.error;
+        step.duration = event.duration;
       }
     }
 
     this.events$.next({
       type: 'step',
-      workflowId: data.workflowId,
-      stepId: data.stepId,
-      status: data.status,
-      result: data.result,
-      error: data.error,
-      duration: data.duration,
+      workflowId: event.workflowId,
+      stepId: event.stepId,
+      status: event.status as WorkflowStepStatus,
+      result: event.result,
+      error: event.error,
+      duration: event.duration,
     });
   }
 
-  private handleWorkflowCompleted(data: any): void {
-    // console.log('[WorkflowSubmissionService] ✓ Workflow completed:', data.workflowId);
-    if (data.workflow) {
+  private handleWorkflowCompleted(event: ChannelWorkflowCompletedEvent): void {
+    if (event.workflow) {
       // Clone to ensure mutability
-      this.workflows.set(data.workflowId, this.cloneWorkflow(data.workflow));
+      this.workflows.set(event.workflowId, this.cloneWorkflow(event.workflow as unknown as WorkflowDefinition));
     }
 
     this.events$.next({
       type: 'completed',
-      workflowId: data.workflowId,
-      workflow: data.workflow,
+      workflowId: event.workflowId,
+      workflow: event.workflow as unknown as WorkflowDefinition,
     });
 
     // Schedule cleanup to prevent memory leak (keep for 5 minutes for potential queries)
-    this.scheduleWorkflowCleanup(data.workflowId);
+    this.scheduleWorkflowCleanup(event.workflowId);
   }
 
-  private handleWorkflowFailed(data: any): void {
-    console.error('[WorkflowSubmissionService] Workflow failed:', data.workflowId, '-', data.error);
-    const workflow = this.getMutableWorkflow(data.workflowId);
+  private handleWorkflowFailed(event: ChannelWorkflowFailedEvent): void {
+    console.error('[WorkflowSubmissionService] Workflow failed:', event.workflowId, '-', event.error);
+    const workflow = this.getMutableWorkflow(event.workflowId);
     if (workflow) {
       workflow.status = 'failed';
-      workflow.error = data.error;
+      workflow.error = event.error;
     }
 
     // 检测 401 认证错误，触发打开设置对话框
-    if (data.error && isAuthError(data.error)) {
-      dispatchApiAuthError({ message: data.error, source: 'workflow' });
+    if (event.error && isAuthError(event.error)) {
+      dispatchApiAuthError({ message: event.error, source: 'workflow' });
     }
 
     this.events$.next({
       type: 'failed',
-      workflowId: data.workflowId,
-      error: data.error,
+      workflowId: event.workflowId,
+      error: event.error,
     });
 
     // Schedule cleanup to prevent memory leak
-    this.scheduleWorkflowCleanup(data.workflowId);
+    this.scheduleWorkflowCleanup(event.workflowId);
   }
 
-  private handleCanvasOperation(data: any): void {
-    this.events$.next({
-      type: 'canvas_insert',
-      requestId: data.requestId,
-      operation: data.operation,
-      params: data.params,
-    });
-  }
-
-  private handleMainThreadToolRequest(data: any): void {
-    // console.log('[WorkflowSubmissionService] Main thread tool request:', data.toolName);
-    this.events$.next({
-      type: 'main_thread_tool_request',
-      requestId: data.requestId,
-      workflowId: data.workflowId,
-      stepId: data.stepId,
-      toolName: data.toolName,
-      args: data.args,
-    });
-  }
-
-  private handleWorkflowStepsAdded(data: any): void {
-    // console.log('[WorkflowSubmissionService] Workflow steps added:', data.workflowId, data.steps?.length);
-    const workflow = this.workflows.get(data.workflowId);
-    if (workflow && data.steps) {
+  private handleWorkflowStepsAdded(event: ChannelWorkflowStepsAddedEvent): void {
+    const workflow = this.workflows.get(event.workflowId);
+    if (workflow && event.steps) {
       // Add new steps to local workflow
-      for (const step of data.steps) {
+      for (const step of event.steps) {
         if (!workflow.steps.find(s => s.id === step.id)) {
           workflow.steps.push({
             id: step.id,
             mcp: step.mcp,
             args: step.args,
             description: step.description,
-            status: step.status,
+            status: step.status as WorkflowStepStatus,
           });
         }
       }
@@ -729,28 +601,33 @@ class WorkflowSubmissionService {
       // Emit event to notify UI about new steps
       this.events$.next({
         type: 'steps_added',
-        workflowId: data.workflowId,
-        steps: data.steps,
+        workflowId: event.workflowId,
+        steps: event.steps as WorkflowStepsAddedEvent['steps'],
       });
     }
   }
 
-  private handleWorkflowRecovered(data: any): void {
-    if (data.workflow) {
-      this.workflows.set(data.workflowId, data.workflow);
+  private handleToolRequest(event: ChannelToolRequestEvent): void {
+    this.events$.next({
+      type: 'main_thread_tool_request',
+      requestId: event.requestId,
+      workflowId: event.workflowId,
+      stepId: event.stepId,
+      toolName: event.toolName,
+      args: event.args,
+    });
+  }
+
+  private handleWorkflowRecovered(event: ChannelWorkflowRecoveredEvent): void {
+    if (event.workflow) {
+      this.workflows.set(event.workflowId, event.workflow as unknown as WorkflowDefinition);
       
       this.events$.next({
         type: 'recovered',
-        workflowId: data.workflowId,
-        workflow: data.workflow,
+        workflowId: event.workflowId,
+        workflow: event.workflow as unknown as WorkflowDefinition,
       });
     }
-  }
-
-  private async getServiceWorker(): Promise<ServiceWorker | null> {
-    if (!navigator.serviceWorker) return null;
-    const registration = await navigator.serviceWorker.ready;
-    return registration.active;
   }
 
   /**

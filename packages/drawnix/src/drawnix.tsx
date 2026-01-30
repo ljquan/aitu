@@ -277,22 +277,31 @@ export const Drawnix: React.FC<DrawnixProps> = ({
         const { TaskStatus } = await import('./types/task.types');
 
         // In SW mode, ensure tasks are synced from SW first
+        let swInitialized = false;
         if (shouldUseSWTaskQueue()) {
           const { swTaskQueueService } = await import('./services/sw-task-queue-service');
           // Wait for SW to be initialized and tasks synced
-          await swTaskQueueService.initialize();
-          await swTaskQueueService.syncTasksFromSW();
+          swInitialized = await swTaskQueueService.initialize();
+          if (swInitialized) {
+            await swTaskQueueService.syncTasksFromSW();
+          }
         }
 
-        // Query active chat workflows from SW
+        // Query active chat workflows from SW (only if SW is initialized)
         // SW will re-send pending tool requests to the new page
-        const { chatWorkflowClient } = await import('./services/sw-client/chat-workflow-client');
-        const activeChatWorkflows = await chatWorkflowClient.getAllActiveWorkflows();
-        const activeChatWorkflowIds = new Set(activeChatWorkflows.map(w => w.id));
+        let activeChatWorkflows: { id: string }[] = [];
+        let activeWorkflows: { id: string }[] = [];
         
-        // Also query regular workflows
-        const { workflowSubmissionService } = await import('./services/workflow-submission-service');
-        const activeWorkflows = await workflowSubmissionService.queryAllWorkflows();
+        if (swInitialized) {
+          const { chatWorkflowClient } = await import('./services/sw-channel/chat-workflow-client');
+          activeChatWorkflows = await chatWorkflowClient.getAllActiveWorkflows();
+          
+          // Also query regular workflows
+          const { workflowSubmissionService } = await import('./services/workflow-submission-service');
+          activeWorkflows = await workflowSubmissionService.queryAllWorkflows();
+        }
+        
+        const activeChatWorkflowIds = new Set(activeChatWorkflows.map(w => w.id));
         const activeWorkflowIds = new Set(activeWorkflows.map(w => w.id));
         
         // console.log('[Drawnix] Active chat workflows:', activeChatWorkflows.length, 'regular workflows:', activeWorkflows.length);

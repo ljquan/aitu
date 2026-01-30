@@ -6,32 +6,37 @@
 import { state, elements } from './state.js';
 import { escapeHtml, formatBytes } from './common.js';
 import { downloadJson, formatTime } from './utils.js';
+import { loadCrashSnapshots, clearCrashSnapshotsInSW } from './sw-communication.js';
 
 // Memory monitoring interval
 let memoryMonitorInterval = null;
 
 /**
- * Load crash logs from SW
+ * Load crash logs from SW (uses duplex RPC)
  */
-export function loadCrashLogs() {
-  if (navigator.serviceWorker?.controller) {
-    navigator.serviceWorker.controller.postMessage({
-      type: 'SW_DEBUG_GET_CRASH_SNAPSHOTS'
-    });
+export async function loadCrashLogs() {
+  try {
+    const result = await loadCrashSnapshots();
+    if (result && result.snapshots) {
+      state.crashLogs = result.snapshots || [];
+      renderCrashLogs();
+    }
+  } catch (error) {
+    console.error('[MemoryLogs] Failed to load crash logs:', error);
   }
 }
 
 /**
- * Clear crash logs
+ * Clear crash logs (uses duplex RPC)
  */
-export function handleClearCrashLogs() {
-  if (navigator.serviceWorker?.controller) {
-    navigator.serviceWorker.controller.postMessage({
-      type: 'SW_DEBUG_CLEAR_CRASH_SNAPSHOTS'
-    });
+export async function handleClearCrashLogs() {
+  try {
+    await clearCrashSnapshotsInSW();
+    state.crashLogs = [];
+    renderCrashLogs();
+  } catch (error) {
+    console.error('[MemoryLogs] Failed to clear crash logs:', error);
   }
-  state.crashLogs = [];
-  renderCrashLogs();
 }
 
 /**

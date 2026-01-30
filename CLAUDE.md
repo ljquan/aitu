@@ -156,6 +156,7 @@ Service Worker (后台执行)
 7. 跨层数据转换必须传递所有字段，特别是 `options`、`metadata` 等可选字段，遗漏会导致功能静默失败
 8. **Cache.put() 会消费 Response body**：需要缓存到多个 key 时，为每个 key 创建独立的 Response 对象，不要复用后 clone
 9. **fetchOptions 优先级**：优先尝试 `cors` 模式（可缓存），最后才尝试 `no-cors` 模式（无法缓存）
+10. **postmessage-duplex 使用**：`subscribe` 回调接收 `response` 对象（数据在 `response.data`），handler 必须返回响应否则发送方超时；客户端需先发 `SW_CHANNEL_CONNECT` 让 SW 创建 channel
 
 ### React 规则
 

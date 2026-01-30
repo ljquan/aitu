@@ -1309,6 +1309,35 @@ button .icon-svg {
   margin-right: 2px;
 }
 
+/* 客户端类型标签 */
+.pm-client-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+  margin: 0 4px;
+}
+
+.pm-client-badge.client-type-main {
+  background: var(--primary-light);
+  color: var(--primary-color);
+  border: 1px solid var(--primary-color);
+}
+
+.pm-client-badge.client-type-debug {
+  background: var(--info-color);
+  color: #ffffff;
+  opacity: 0.85;
+}
+
+.pm-client-badge.client-type-other {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+}
+
 .pm-type {
   padding: 1px 6px;
   border-radius: 3px;

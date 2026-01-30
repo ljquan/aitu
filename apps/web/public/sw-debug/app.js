@@ -22,6 +22,7 @@ import {
   enableDebug,
   disableDebug,
   refreshStatus,
+  loadFetchLogs,
   clearFetchLogs,
   clearConsoleLogs,
   loadConsoleLogs,
@@ -32,6 +33,7 @@ import {
   registerMessageHandlers,
   onControllerChange,
   setPostMessageLogCallback,
+  heartbeat,
 } from './sw-communication.js';
 
 // Feature modules
@@ -521,13 +523,7 @@ function handleClearLogs() {
   renderPostmessageLogs();
 
   // Clear Memory logs (crash snapshots)
-  if (navigator.serviceWorker?.controller) {
-    navigator.serviceWorker.controller.postMessage({
-      type: 'SW_DEBUG_CLEAR_CRASH_SNAPSHOTS'
-    });
-  }
-  state.crashLogs = [];
-  renderCrashLogs();
+  handleClearCrashLogs();
 }
 
 // ==================== Tab Switching ====================
@@ -605,7 +601,10 @@ function setupEventListeners() {
   // Setup export modal checkboxes
   setupExportModalCheckboxes();
   
-  elements.refreshStatusBtn.addEventListener('click', refreshStatus);
+  elements.refreshStatusBtn.addEventListener('click', async () => {
+    refreshStatus();
+    loadFetchLogs();
+  });
   elements.refreshCacheBtn.addEventListener('click', refreshStatus);
   elements.enableDebugBtn?.addEventListener('click', toggleDebug);
   elements.clearConsoleLogsBtn?.addEventListener('click', handleClearConsoleLogs);
@@ -950,15 +949,22 @@ function setupMessageHandlers() {
     },
   });
 
-  onControllerChange(() => {
-    updateSwStatus(elements.swStatus, true);
-    refreshStatus();
+  onControllerChange(async () => {
+    // Service Worker controller 改变时，等待新 SW 完全就绪后再刷新
+    // 避免在 SW 更新过程中发起 RPC 调用
+    console.log('[SW Debug] Controller changed, waiting for new SW to be ready...');
     
-    // 调试页面自动刷新，确保使用最新版本
-    console.log('Service Worker 已更新，调试页面将自动刷新...');
-    setTimeout(() => {
-      window.location.reload();
-    }, 1000);
+    // 等待一段时间让新的 SW 完全接管
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    console.log('[SW Debug] Refreshing status after SW update...');
+    updateSwStatus(elements.swStatus, true);
+    
+    // 重新加载所有数据
+    refreshStatus();
+    loadFetchLogs();
+    loadConsoleLogs();
+    loadPostMessageLogs();
   });
 }
 
@@ -1048,6 +1054,13 @@ async function init() {
   console.log('[SW Debug] Auto-enabling debug mode');
   enableDebug();
   
+  // 等待 SW 处理 debug mode 启用消息
+  // 这确保 SW 端的 duplex channel 已经建立
+  await new Promise(resolve => setTimeout(resolve, 500));
+  
+  // Load fetch logs (existing logs from before debug mode was enabled won't exist,
+  // but logs generated during this session will be available)
+  loadFetchLogs();
   // Load console logs from IndexedDB (independent of debug mode status)
   loadConsoleLogs();
   // Load PostMessage logs from SW
@@ -1066,23 +1079,17 @@ async function init() {
   // vs just refreshed (new page immediately sends heartbeat)
   const HEARTBEAT_INTERVAL = 5000; // 5 seconds
   
-  function sendHeartbeat() {
-    if (navigator.serviceWorker?.controller) {
-      navigator.serviceWorker.controller.postMessage({ type: 'SW_DEBUG_HEARTBEAT' });
-    }
-  }
-  
   // Send initial heartbeat
-  sendHeartbeat();
+  heartbeat();
   
   // Start heartbeat interval
-  const heartbeatTimer = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL);
+  const heartbeatTimer = setInterval(heartbeat, HEARTBEAT_INTERVAL);
   
   // When page becomes visible again, immediately send heartbeat
   // This handles browser throttling of background tabs
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
-      sendHeartbeat();
+      heartbeat();
     }
   });
   

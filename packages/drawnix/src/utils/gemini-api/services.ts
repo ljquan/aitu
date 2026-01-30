@@ -9,9 +9,7 @@ import { callApiWithRetry, callApiStreamRaw, callVideoApiStreamRaw } from './api
 import { geminiSettings, settingsManager } from '../settings-manager';
 import { validateAndEnsureConfig } from './auth';
 import { shouldUseSWTaskQueue } from '../../services/task-queue';
-import { swTaskQueueClient } from '../../services/sw-client';
-import { TaskType, TaskResult, TaskError } from '../../types/task.types';
-import { firstValueFrom, merge, map, take } from 'rxjs';
+import { swChannelClient } from '../../services/sw-channel';
 
 /**
  * 确保 SW 客户端已初始化
@@ -21,29 +19,29 @@ async function ensureSWInitialized(): Promise<boolean> {
     return false;
   }
   
-  if (swTaskQueueClient.isInitialized()) {
+  if (swChannelClient.isInitialized()) {
     return true;
   }
   
   const settings = geminiSettings.get();
   if (!settings.apiKey || !settings.baseUrl) {
-    // console.log('[ImageAPI] Missing apiKey or baseUrl, cannot initialize SW');
     return false;
   }
   
   try {
-    const success = await swTaskQueueClient.initialize(
-      {
+    await settingsManager.waitForInitialization();
+    await swChannelClient.initialize();
+    const result = await swChannelClient.init({
+      geminiConfig: {
         apiKey: settings.apiKey,
         baseUrl: settings.baseUrl,
         modelName: settings.imageModelName,
       },
-      {
+      videoConfig: {
         baseUrl: settings.baseUrl,
-      }
-    );
-    // console.log('[ImageAPI] SW client initialization result:', success);
-    return success;
+      },
+    });
+    return result.success;
   } catch (error) {
     console.error('[ImageAPI] SW client initialization failed:', error);
     return false;
@@ -108,56 +106,51 @@ async function generateImageViaSW(
     referenceImages = Array.isArray(options.image) ? options.image : [options.image];
   }
   
-  // console.log('[ImageAPI/SW] Submitting image task with params:', {
-  //   taskId,
-  //   prompt: prompt.substring(0, 100) + (prompt.length > 100 ? '...' : ''),
-  //   size: options.size,
-  //   referenceImages: referenceImages?.length || 0,
-  //   referenceImageUrls: referenceImages,
-  //   model: modelName,
-  // });
-  
-  // 创建完成和失败的 Observable
-  const completion$ = swTaskQueueClient.observeTaskCompletion(taskId).pipe(
-    map((result: TaskResult) => ({ type: 'completed' as const, result }))
-  );
-  
-  const failure$ = swTaskQueueClient.observeTaskFailure(taskId).pipe(
-    map((data: { error: TaskError }) => ({ type: 'failed' as const, error: data.error }))
-  );
-  
-  // 提交任务到 SW
-  swTaskQueueClient.submitTask(
+  // 创建任务并等待完成
+  const result = await swChannelClient.createTask({
     taskId,
-    TaskType.IMAGE,
-    {
+    taskType: 'image',
+    params: {
       prompt: `Generate an image: ${prompt}`,
       size: options.size,
       referenceImages,
       model: modelName,
-    }
-  );
+    },
+  });
   
-  // 等待完成或失败
-  const result = await firstValueFrom(
-    merge(completion$, failure$).pipe(take(1))
-  );
-  
-  if (result.type === 'failed') {
-    console.error('[ImageAPI/SW] Image generation failed:', result.error);
-    const err = new Error(result.error.message || '图片生成失败');
-    (err as any).apiErrorBody = result.error.details;
+  if (!result.success) {
+    const err = new Error(result.reason || '图片生成失败');
     throw err;
   }
   
-  // console.log('[ImageAPI/SW] Image generation completed:', result.result);
-  
-  // 将 SW 结果转换为 API 响应格式
-  return {
-    data: [{
-      url: result.result.url,
-    }],
-  };
+  // 等待任务完成（通过 Promise 包装事件监听）
+  return new Promise((resolve, reject) => {
+    const cleanup = () => {
+      swChannelClient.setEventHandlers({
+        onTaskCompleted: undefined,
+        onTaskFailed: undefined,
+      });
+    };
+
+    swChannelClient.setEventHandlers({
+      onTaskCompleted: (event) => {
+        if (event.taskId !== taskId) return;
+        cleanup();
+        resolve({
+          data: [{
+            url: event.result.url,
+          }],
+        });
+      },
+      onTaskFailed: (event) => {
+        if (event.taskId !== taskId) return;
+        cleanup();
+        const err = new Error(event.error?.message || '图片生成失败');
+        (err as any).apiErrorBody = event.error?.details;
+        reject(err);
+      },
+    });
+  });
 }
 
 /**

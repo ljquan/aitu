@@ -5,6 +5,38 @@
 import { formatTime, escapeHtml } from './utils.js';
 
 /**
+ * Get a display-friendly label for the client type
+ * @param {string} clientType - The client type ('main', 'debug', 'other')
+ * @returns {string}
+ */
+function getClientTypeLabel(clientType) {
+  switch (clientType) {
+    case 'main':
+      return '应用页面';
+    case 'debug':
+      return '调试面板';
+    default:
+      return '其他';
+  }
+}
+
+/**
+ * Get a CSS class for the client type badge
+ * @param {string} clientType - The client type
+ * @returns {string}
+ */
+function getClientTypeClass(clientType) {
+  switch (clientType) {
+    case 'main':
+      return 'client-type-main';
+    case 'debug':
+      return 'client-type-debug';
+    default:
+      return 'client-type-other';
+  }
+}
+
+/**
  * Format JSON data for display
  * @param {any} data
  * @param {number} maxLength - Max string length before truncation
@@ -66,6 +98,14 @@ export function createPostMessageEntry(log, isExpanded = false, onToggle = null)
   const messageType = log.messageType || 'unknown';
   const dataPreview = getDataPreview(log.data);
 
+  // 构建客户端信息标签
+  let clientBadge = '';
+  if (log.clientType) {
+    const clientTypeLabel = getClientTypeLabel(log.clientType);
+    const clientTypeClass = getClientTypeClass(log.clientType);
+    clientBadge = `<span class="pm-client-badge ${clientTypeClass}">${clientTypeLabel}</span>`;
+  }
+
   entry.innerHTML = `
     <div class="log-header pm-header">
       <span class="log-toggle"><span class="arrow">▶</span></span>
@@ -73,6 +113,7 @@ export function createPostMessageEntry(log, isExpanded = false, onToggle = null)
       <span class="pm-direction ${directionClass}">
         <span class="pm-direction-icon">${directionIcon}</span>${directionLabel}
       </span>
+      ${clientBadge}
       <span class="pm-type">${escapeHtml(messageType)}</span>
       <span class="log-url pm-preview">${dataPreview}</span>
     </div>
@@ -81,6 +122,9 @@ export function createPostMessageEntry(log, isExpanded = false, onToggle = null)
         <h4>基本信息</h4>
         <pre>方向: ${directionLabel} ${directionTarget}
 消息类型: ${messageType}
+${log.clientType ? `客户端: ${getClientTypeLabel(log.clientType)}` : ''}
+${log.clientUrl ? `页面: ${log.clientUrl}` : ''}
+${log.clientId ? `ClientID: ${log.clientId}` : ''}
 时间: ${new Date(log.timestamp).toLocaleString('zh-CN')}</pre>
       </div>
       <div class="detail-section">

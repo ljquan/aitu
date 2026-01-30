@@ -8,9 +8,9 @@ import { GeminiConfig, GeminiMessage, GeminiResponse, VideoGenerationOptions } f
 import { DEFAULT_CONFIG, VIDEO_DEFAULT_CONFIG } from './config';
 import { analytics } from '../posthog-analytics';
 import { shouldUseSWTaskQueue } from '../../services/task-queue';
-import { swTaskQueueClient } from '../../services/sw-client';
-import { geminiSettings } from '../settings-manager';
-import type { ChatParams, ChatMessage as SWChatMessage } from '../../services/sw-client/types';
+import { swChannelClient } from '../../services/sw-channel';
+import { geminiSettings, settingsManager } from '../settings-manager';
+import type { ChatStartParams, ChatMessage as SWChatMessage } from '../../services/sw-channel';
 import { isAuthError, dispatchApiAuthError } from '../api-auth-error-event';
 
 /**
@@ -21,29 +21,29 @@ async function ensureSWInitialized(): Promise<boolean> {
     return false;
   }
   
-  if (swTaskQueueClient.isInitialized()) {
+  if (swChannelClient.isInitialized()) {
     return true;
   }
   
   const settings = geminiSettings.get();
   if (!settings.apiKey || !settings.baseUrl) {
-    // console.log('[ApiCalls] Missing apiKey or baseUrl, cannot initialize SW');
     return false;
   }
   
   try {
-    const success = await swTaskQueueClient.initialize(
-      {
+    await settingsManager.waitForInitialization();
+    await swChannelClient.initialize();
+    const result = await swChannelClient.init({
+      geminiConfig: {
         apiKey: settings.apiKey,
         baseUrl: settings.baseUrl,
         modelName: settings.chatModel,
       },
-      {
+      videoConfig: {
         baseUrl: settings.baseUrl,
-      }
-    );
-    // console.log('[ApiCalls] SW client initialization result:', success);
-    return success;
+      },
+    });
+    return result.success;
   } catch (error) {
     console.error('[ApiCalls] SW client initialization failed:', error);
     return false;
@@ -239,8 +239,9 @@ async function callApiStreamViaSW(
   // 转换消息格式，提取 system prompt
   const { swMessages, systemPrompt } = convertToSWMessages(messages);
   
-  // 构建 ChatParams
-  const chatParams: ChatParams = {
+  // 构建 Chat 参数
+  const chatParams: ChatStartParams = {
+    chatId,
     messages: swMessages.slice(0, -1), // 历史消息
     newContent: swMessages[swMessages.length - 1]?.content || '', // 最新消息
     attachments: [],
@@ -260,25 +261,24 @@ async function callApiStreamViaSW(
       }
       signal.addEventListener('abort', () => {
         if (!isCompleted) {
-          swTaskQueueClient.stopChat(chatId);
+          swChannelClient.stopChat(chatId);
           reject(new Error('Request cancelled'));
         }
       });
     }
     
-    swTaskQueueClient.startChat(chatId, chatParams, {
-      onChunk: (_id, content) => {
-        if (isCompleted) return;
-        // content 已经是累积的完整内容，直接使用，不要再累加
-        fullContent = content;
+    // 设置事件处理器
+    swChannelClient.setEventHandlers({
+      onChatChunk: (event) => {
+        if (event.chatId !== chatId || isCompleted) return;
+        fullContent = event.content;
         onChunk?.(fullContent);
       },
-      onDone: (_id, _fullContent) => {
-        if (isCompleted) return;
+      onChatDone: (event) => {
+        if (event.chatId !== chatId || isCompleted) return;
         isCompleted = true;
         
         const duration = Date.now() - startTime;
-        // console.log('[ApiCalls/SW] Stream completed, full content length:', fullContent.length);
         
         analytics.trackAPICallSuccess({
           endpoint,
@@ -297,28 +297,36 @@ async function callApiStreamViaSW(
           }]
         });
       },
-      onError: (_id, error) => {
-        if (isCompleted) return;
+      onChatError: (event) => {
+        if (event.chatId !== chatId || isCompleted) return;
         isCompleted = true;
         
         const duration = Date.now() - startTime;
-        console.error('[ApiCalls/SW] Stream error:', error);
+        console.error('[ApiCalls/SW] Stream error:', event.error);
         
         // 检测 401 认证错误，触发打开设置对话框
-        if (isAuthError(error)) {
-          dispatchApiAuthError({ message: error, source: 'chat' });
+        if (isAuthError(event.error)) {
+          dispatchApiAuthError({ message: event.error, source: 'chat' });
         }
         
         analytics.trackAPICallFailure({
           endpoint,
           model,
           duration,
-          error,
+          error: event.error,
           stream: true,
         });
         
-        reject(new Error(error));
+        reject(new Error(event.error));
       },
+    });
+    
+    // 启动 chat
+    swChannelClient.startChat(chatParams).catch((err) => {
+      if (!isCompleted) {
+        isCompleted = true;
+        reject(err);
+      }
     });
   });
 }
@@ -427,13 +435,15 @@ async function callApiStreamDirect(
 
     const decoder = new TextDecoder();
     let fullContent = '';
+    let streamDone = false;
 
     try {
-      while (true) {
+      while (!streamDone) {
         const { done, value } = await reader.read();
         if (done) {
           // console.log('[StreamAPI] Stream ended (done=true)');
-          break;
+          streamDone = true;
+          continue;
         }
 
         const chunk = decoder.decode(value, { stream: true });

@@ -7,31 +7,36 @@ import { state, elements } from './state.js';
 import { escapeHtml, formatBytes, formatJsonWithHighlight, extractRequestParams } from './common.js';
 import { downloadJson } from './utils.js';
 import { showToast } from './toast.js';
+import { loadLLMApiLogs as loadLLMApiLogsRPC, clearLLMApiLogsInSW } from './sw-communication.js';
 
 /**
- * Load LLM API logs from SW
+ * Load LLM API logs from SW (uses duplex RPC)
  */
-export function loadLLMApiLogs() {
-  if (navigator.serviceWorker?.controller) {
-    navigator.serviceWorker.controller.postMessage({
-      type: 'SW_DEBUG_GET_LLM_API_LOGS'
-    });
+export async function loadLLMApiLogs() {
+  try {
+    const result = await loadLLMApiLogsRPC();
+    if (result && result.logs) {
+      state.llmapiLogs = result.logs || [];
+      renderLLMApiLogs();
+    }
+  } catch (error) {
+    console.error('[LLMApiLogs] Failed to load logs:', error);
   }
 }
 
 /**
- * Clear LLM API logs
+ * Clear LLM API logs (uses duplex RPC)
  */
-export function handleClearLLMApiLogs() {
+export async function handleClearLLMApiLogs() {
   if (!confirm('确定要清空所有 LLM API 日志吗？')) return;
   
-  if (navigator.serviceWorker?.controller) {
-    navigator.serviceWorker.controller.postMessage({
-      type: 'SW_DEBUG_CLEAR_LLM_API_LOGS'
-    });
+  try {
+    await clearLLMApiLogsInSW();
+    state.llmapiLogs = [];
+    renderLLMApiLogs();
+  } catch (error) {
+    console.error('[LLMApiLogs] Failed to clear logs:', error);
   }
-  state.llmapiLogs = [];
-  renderLLMApiLogs();
 }
 
 /**

@@ -57,7 +57,7 @@ const MAX_MEMORY_LOGS = 50;
 
 // IndexedDB 配置
 const DB_NAME = 'llm-api-logs';
-const DB_VERSION = 2;
+const DB_VERSION = 4; // Bump to ensure taskId index exists
 const STORE_NAME = 'logs';
 const MAX_DB_LOGS = 500; // IndexedDB 中最多保存的日志数量
 
@@ -76,12 +76,27 @@ function openDB(): Promise<IDBDatabase> {
     
     request.onupgradeneeded = (event) => {
       const db = (event.target as IDBOpenDBRequest).result;
+      const oldVersion = event.oldVersion;
+      
+      let store: IDBObjectStore;
       if (!db.objectStoreNames.contains(STORE_NAME)) {
-        const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+        // 全新创建
+        store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
         store.createIndex('timestamp', 'timestamp', { unique: false });
         store.createIndex('taskType', 'taskType', { unique: false });
         store.createIndex('status', 'status', { unique: false });
         store.createIndex('taskId', 'taskId', { unique: false });
+      } else {
+        // 升级现有 store
+        const tx = (event.target as IDBOpenDBRequest).transaction;
+        if (tx) {
+          store = tx.objectStore(STORE_NAME);
+          // 确保 taskId 索引存在（修复之前版本升级的问题）
+          if (oldVersion < 4 && !store.indexNames.contains('taskId')) {
+            store.createIndex('taskId', 'taskId', { unique: false });
+            console.log('[LLMApiLogger] Created taskId index during upgrade to v4');
+          }
+        }
       }
     };
   });
@@ -227,13 +242,31 @@ export async function findLatestLogByTaskId(taskId: string): Promise<LLMApiLog |
     const db = await openDB();
     const tx = db.transaction(STORE_NAME, 'readonly');
     const store = tx.objectStore(STORE_NAME);
-    const index = store.index('taskId');
     
     return new Promise((resolve) => {
-      const request = index.getAll(taskId);
+      // 尝试使用 taskId 索引，如果不存在则回退到全表扫描
+      let request: IDBRequest<LLMApiLog[]>;
+      let useIndex = false;
+      
+      if (store.indexNames.contains('taskId')) {
+        const index = store.index('taskId');
+        request = index.getAll(taskId);
+        useIndex = true;
+      } else {
+        // 回退：全表扫描后过滤
+        console.warn('[LLMApiLogger] taskId index not found, falling back to full scan');
+        request = store.getAll();
+      }
+      
       request.onsuccess = () => {
-        const results = request.result as LLMApiLog[];
+        let results = request.result as LLMApiLog[];
         db.close();
+        
+        // 如果是全表扫描，需要手动过滤
+        if (!useIndex) {
+          results = results.filter(log => log.taskId === taskId);
+        }
+        
         // 按时间降序，取最新的一条
         const latestLog = results.sort((a, b) => b.timestamp - a.timestamp)[0];
         resolve(latestLog || null);

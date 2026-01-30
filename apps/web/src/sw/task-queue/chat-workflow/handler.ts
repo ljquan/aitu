@@ -246,13 +246,18 @@ export class ChatWorkflowHandler {
   }
 
   /**
-   * Broadcast all workflows that were recovered from storage
+   * Send all recovered workflows to a specific client
    * This is called when a new client connects to sync state
+   * @param clientId The client to send recovered workflows to
    */
-  broadcastRecoveredWorkflows(): void {
-    // console.log(`[ChatWorkflowHandler] Broadcasting ${this.workflows.size} chat workflows to sync state`);
+  sendRecoveredWorkflowsToClient(clientId: string): void {
+    // console.log(`[ChatWorkflowHandler] Sending ${this.workflows.size} chat workflows to client ${clientId}`);
     for (const workflow of this.workflows.values()) {
-      this.config.broadcast({
+      // Update clientId mapping for running workflows so they can continue
+      if (workflow.status === 'running' || workflow.status === 'pending') {
+        this.workflowClients.set(workflow.id, clientId);
+      }
+      this.config.sendToClient(clientId, {
         type: 'CHAT_WORKFLOW_RECOVERED',
         chatId: workflow.id,
         workflow,
@@ -320,9 +325,9 @@ export class ChatWorkflowHandler {
       workflow.toolCalls = toolCalls;
       workflow.aiAnalysis = aiAnalysis;
 
-      // Broadcast tool calls
+      // 发送 tool calls（点对点）
       if (toolCalls.length > 0) {
-        this.config.broadcast({
+        this.sendToWorkflowClient(workflow.id, {
           type: 'CHAT_WORKFLOW_TOOL_CALLS',
           chatId: workflow.id,
           aiAnalysis,
@@ -347,7 +352,7 @@ export class ChatWorkflowHandler {
       // Persist completed state
       await taskQueueStorage.saveChatWorkflow(workflow);
 
-      this.config.broadcast({
+      this.sendToWorkflowClient(workflow.id, {
         type: 'CHAT_WORKFLOW_COMPLETE',
         chatId: workflow.id,
         content: workflow.content,
@@ -362,7 +367,7 @@ export class ChatWorkflowHandler {
         workflow.status = 'failed';
         workflow.error = error.message;
 
-        this.config.broadcast({
+        this.sendToWorkflowClient(workflow.id, {
           type: 'CHAT_WORKFLOW_FAILED',
           chatId: workflow.id,
           error: error.message,
@@ -462,8 +467,8 @@ export class ChatWorkflowHandler {
 
               if (content) {
                 fullContent += content;
-                // Broadcast accumulated content
-                this.config.broadcast({
+                // 点对点发送累积内容
+                this.sendToWorkflowClient(workflow.id, {
                   type: 'CHAT_WORKFLOW_STREAM',
                   chatId: workflow.id,
                   content: fullContent,
@@ -485,7 +490,7 @@ export class ChatWorkflowHandler {
             const content = parsed.choices?.[0]?.delta?.content;
             if (content) {
               fullContent += content;
-              this.config.broadcast({
+              this.sendToWorkflowClient(workflow.id, {
                 type: 'CHAT_WORKFLOW_STREAM',
                 chatId: workflow.id,
                 content: fullContent,
@@ -526,7 +531,7 @@ export class ChatWorkflowHandler {
 
       // Update tool status to running
       toolCall.status = 'running';
-      this.config.broadcast({
+      this.sendToWorkflowClient(workflow.id, {
         type: 'CHAT_WORKFLOW_TOOL_START',
         chatId: workflow.id,
         toolCallId: toolCall.id,
@@ -581,7 +586,7 @@ export class ChatWorkflowHandler {
         // Persist tool completion
         await taskQueueStorage.saveChatWorkflow(workflow);
 
-        this.config.broadcast({
+        this.sendToWorkflowClient(workflow.id, {
           type: 'CHAT_WORKFLOW_TOOL_COMPLETE',
           chatId: workflow.id,
           toolCallId: toolCall.id,
@@ -601,7 +606,7 @@ export class ChatWorkflowHandler {
         // Persist tool failure
         await taskQueueStorage.saveChatWorkflow(workflow);
 
-        this.config.broadcast({
+        this.sendToWorkflowClient(workflow.id, {
           type: 'CHAT_WORKFLOW_TOOL_COMPLETE',
           chatId: workflow.id,
           toolCallId: toolCall.id,
@@ -680,14 +685,28 @@ export class ChatWorkflowHandler {
   }
 
   /**
-   * Broadcast workflow status
+   * Broadcast workflow status (点对点发送给发起工作流的客户端)
    */
   private broadcastStatus(workflow: ChatWorkflow): void {
-    this.config.broadcast({
+    this.sendToWorkflowClient(workflow.id, {
       type: 'CHAT_WORKFLOW_STATUS',
       chatId: workflow.id,
       status: workflow.status,
       updatedAt: workflow.updatedAt,
     });
+  }
+
+  /**
+   * 发送消息到发起该工作流的客户端（点对点通讯）
+   */
+  private sendToWorkflowClient(chatId: string, message: ChatWorkflowSWToMainMessage): void {
+    const clientId = this.workflowClients.get(chatId);
+    if (clientId) {
+      this.config.sendToClient(clientId, message);
+    } else {
+      // 如果没有客户端映射（可能是恢复的工作流），则广播
+      console.warn(`[ChatWorkflowHandler] No client mapping for chat ${chatId}, broadcasting`);
+      this.config.broadcast(message);
+    }
   }
 }

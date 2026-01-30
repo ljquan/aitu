@@ -259,6 +259,11 @@ export const inspirationBoardTool: MCPTool = {
   },
 
   execute: async (params: Record<string, unknown>, options?: MCPExecuteOptions): Promise<MCPResult> => {
+    // 确保 SW 任务队列已初始化
+    const { shouldUseSWTaskQueue, swTaskQueueService } = await import('../../services/task-queue');
+    if (shouldUseSWTaskQueue()) {
+      await swTaskQueueService.initialize();
+    }
     return executeQueue(params as unknown as InspirationBoardParams, options || {});
   },
 };

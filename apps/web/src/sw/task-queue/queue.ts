@@ -14,7 +14,6 @@ import type {
   VideoAPIConfig,
   TaskQueueConfig,
   HandlerConfig,
-  MainToSWMessage,
   SWToMainMessage,
 } from './types';
 import {
@@ -24,9 +23,9 @@ import {
   DEFAULT_TASK_QUEUE_CONFIG,
 } from './types';
 import { taskQueueStorage } from './storage';
-import { sendToClient, sendToClientById } from './utils/message-bus';
 import { migrateBase64UrlIfNeeded } from './utils/media-generation-utils';
 import { isPostMessageLoggerDebugMode } from './postmessage-logger';
+import { getChannelManager, type SWChannelManager } from './channel-manager';
 
 // Handler imports
 import { ImageHandler } from './handlers/image';
@@ -68,6 +67,9 @@ export class SWTaskQueue {
   // Reference to SW global scope
   private sw: ServiceWorkerGlobalScope;
 
+  // Reference to channel manager for duplex communication
+  private channelManager: SWChannelManager | null = null;
+
   private onTaskStatusChange?: (taskId: string, status: 'completed' | 'failed', result?: any, error?: string) => void;
 
   // Track storage restoration completion
@@ -77,6 +79,7 @@ export class SWTaskQueue {
   private hadSavedConfig = false;
 
   constructor(sw: ServiceWorkerGlobalScope, config?: Partial<TaskQueueConfig>) {
+    console.log('[SWTaskQueue] Constructor called');
     this.sw = sw;
     this.config = { ...DEFAULT_TASK_QUEUE_CONFIG, ...config };
 
@@ -87,6 +90,7 @@ export class SWTaskQueue {
     this.chatHandler = new ChatHandler();
 
     // Auto-restore on construction and track the promise
+    console.log('[SWTaskQueue] Starting restoreFromStorage...');
     this.storageRestorePromise = this.restoreFromStorage();
   }
 
@@ -95,6 +99,14 @@ export class SWTaskQueue {
    */
   setTaskStatusChangeCallback(callback: (taskId: string, status: 'completed' | 'failed', result?: any, error?: string) => void): void {
     this.onTaskStatusChange = callback;
+  }
+
+  /**
+   * Set channel manager for duplex communication
+   * Called from index.ts after initialization
+   */
+  setChannelManager(channelManager: SWChannelManager): void {
+    this.channelManager = channelManager;
   }
 
   /**
@@ -122,9 +134,12 @@ export class SWTaskQueue {
    * Restore tasks and config from IndexedDB on SW startup
    */
   private async restoreFromStorage(): Promise<void> {
+    console.log('[SWTaskQueue] restoreFromStorage called');
     try {
       // Load saved config
+      console.log('[SWTaskQueue] Calling loadConfig...');
       const { geminiConfig, videoConfig } = await taskQueueStorage.loadConfig();
+      console.log('[SWTaskQueue] loadConfig result:', { hasGemini: !!geminiConfig, hasVideo: !!videoConfig });
       
       if (geminiConfig && videoConfig) {
         this.geminiConfig = geminiConfig;
@@ -308,8 +323,10 @@ export class SWTaskQueue {
         phase: task.executionPhase,
         updatedAt: task.updatedAt,
       });
-      
-      this.executeTaskInternal(task);
+
+      this.executeTaskInternal(task).catch((error) => {
+        console.error(`[SWTaskQueue] Resume legacy task ${task.id} execution failed:`, error);
+      });
     } else if (
       // Video/Character task in processing but no remoteId - try to recover from LLM API logs
       (task.type === TaskType.VIDEO || task.type === TaskType.CHARACTER) &&
@@ -488,6 +505,8 @@ export class SWTaskQueue {
     params: SWTask['params'],
     _clientId: string // clientId is no longer used for targeting
   ): Promise<void> {
+    console.log(`[SWTaskQueue] submitTask called: taskId=${taskId}, type=${taskType}, initialized=${this.initialized}, hasGeminiConfig=${!!this.geminiConfig}, hasVideoConfig=${!!this.videoConfig}`);
+
     // Reject task if not initialized (no API key)
     if (!this.initialized) {
       console.warn(`[SWTaskQueue] Cannot submit task ${taskId}: queue not initialized (no API key)`);
@@ -551,6 +570,7 @@ export class SWTaskQueue {
 
     this.tasks.set(taskId, task);
     this.runningTasks.add(taskId);
+    console.log(`[SWTaskQueue] Task ${taskId} added to map and runningTasks, executing...`);
 
     // Persist to IndexedDB
     await taskQueueStorage.saveTask(task);
@@ -562,7 +582,12 @@ export class SWTaskQueue {
     });
 
     // Execute task immediately (no PENDING state, direct execution)
-    this.executeTaskInternal(task);
+    // Run in background but ensure errors are handled
+    console.log(`[SWTaskQueue] Calling executeTaskInternal for ${taskId}`);
+    this.executeTaskInternal(task).catch((error) => {
+      console.error(`[SWTaskQueue] Task ${taskId} execution failed:`, error);
+    });
+    console.log(`[SWTaskQueue] executeTaskInternal called for ${taskId}, continuing async`);
   }
 
   /**
@@ -637,7 +662,10 @@ export class SWTaskQueue {
     });
 
     // Execute task immediately (no PENDING state, direct execution)
-    this.executeTaskInternal(task);
+    // Run in background but ensure errors are handled
+    this.executeTaskInternal(task).catch((error) => {
+      console.error(`[SWTaskQueue] Retry task ${task.id} execution failed:`, error);
+    });
   }
 
   /**
@@ -867,25 +895,7 @@ export class SWTaskQueue {
     return taskQueueStorage.getTasksPaginated(options);
   }
 
-  /**
-   * Sync paginated tasks to clients
-   */
-  async syncPaginatedTasksToClients(options: {
-    offset: number;
-    limit: number;
-    status?: string;
-    type?: string;
-    sortOrder?: 'asc' | 'desc';
-  }): Promise<void> {
-    const result = await this.getTasksPaginated(options);
-    this.broadcastToClients({
-      type: 'TASK_PAGINATED_RESPONSE',
-      tasks: result.tasks,
-      total: result.total,
-      offset: options.offset,
-      hasMore: result.hasMore,
-    });
-  }
+  // 注意：syncPaginatedTasksToClients 已删除，客户端应使用 RPC 调用 TASK_LIST_PAGINATED
 
   // ============================================================================
   // Private Methods
@@ -972,10 +982,15 @@ export class SWTaskQueue {
    * Internal task execution - assumes task is already set to PROCESSING and in runningTasks
    */
   private async executeTaskInternal(task: SWTask): Promise<void> {
+    console.log(`[SWTaskQueue] executeTaskInternal START for ${task.id}, type=${task.type}, geminiConfig=${!!this.geminiConfig}, videoConfig=${!!this.videoConfig}`);
+
     if (!this.geminiConfig || !this.videoConfig) {
-      console.warn('[SWTaskQueue] Config not set, cannot execute task:', task.id);
+      console.error(`[SWTaskQueue] Config missing for task ${task.id}: geminiConfig=${!!this.geminiConfig}, videoConfig=${!!this.videoConfig}`);
+      await this.handleTaskError(task.id, new Error('API configuration not initialized. Please check your API key settings.'));
       return;
     }
+
+    console.log(`[SWTaskQueue] Config OK for task ${task.id}, checking remoteId...`);
 
     // 如果任务已经有 remoteId（视频/角色），则直接进入恢复流程，跳过提交阶段，只重试获取进度的接口
     if (task.remoteId && (task.type === TaskType.VIDEO || task.type === TaskType.CHARACTER)) {
@@ -1055,10 +1070,13 @@ export class SWTaskQueue {
         throw new Error(`No handler for task type: ${task.type}`);
       }
 
+      console.log(`[SWTaskQueue] Got handler for ${task.id} (${task.type}), executing...`);
+
       // Get timeout for this task type
       const taskTimeout = this.config.timeouts[task.type] || 10 * 60 * 1000; // Default 10 minutes
 
       // Execute with timeout
+      console.log(`[SWTaskQueue] Calling handler.execute for ${task.id}, timeout=${Math.round(taskTimeout / 1000)}s`);
       const result = await Promise.race([
         handler.execute(task, handlerConfig),
         new Promise<never>((_, reject) => {
@@ -1070,8 +1088,10 @@ export class SWTaskQueue {
         }),
       ]);
 
+      console.log(`[SWTaskQueue] handler.execute completed for ${task.id}`);
       await this.handleTaskSuccess(task.id, result);
     } catch (error) {
+      console.error(`[SWTaskQueue] handler.execute error for ${task.id}:`, error);
       await this.handleTaskError(task.id, error);
     }
   }
@@ -1257,34 +1277,76 @@ export class SWTaskQueue {
   }
 
   /**
-   * Broadcast message to all clients
-   * This is the primary communication method - no longer targeting specific clients
-   * Uses includeUncontrolled: true to ensure messages reach all windows,
-   * including those that may be temporarily uncontrolled during SW updates or page refresh
+   * 消息路由映射表，将消息类型映射到 channelManager 方法调用
    */
-  private async broadcastToClients(message: SWToMainMessage): Promise<void> {
-    try {
-      const clients = await this.sw.clients.matchAll({
-        type: 'window',
-        includeUncontrolled: true,
-      });
+  private readonly messageRouters: Record<string, (msg: SWToMainMessage) => void> = {
+    'TASK_CREATED': (m) => {
+      const msg = m as { task: SWTask };
+      this.channelManager?.sendTaskCreated(msg.task.id, msg.task);
+    },
+    'TASK_STATUS': (m) => {
+      const msg = m as { taskId: string; status: TaskStatus; progress?: number; phase?: TaskExecutionPhase };
+      this.channelManager?.sendTaskStatus(msg.taskId, msg.status, msg.progress, msg.phase);
+    },
+    'TASK_COMPLETED': (m) => {
+      const msg = m as { taskId: string; result: TaskResult; remoteId?: string };
+      this.channelManager?.sendTaskCompleted(msg.taskId, msg.result, msg.remoteId);
+    },
+    'TASK_FAILED': (m) => {
+      const msg = m as { taskId: string; error: TaskError };
+      this.channelManager?.sendTaskFailed(msg.taskId, msg.error);
+    },
+    'TASK_CANCELLED': (m) => {
+      const msg = m as { taskId: string };
+      this.channelManager?.sendTaskCancelled(msg.taskId);
+    },
+    'TASK_DELETED': (m) => {
+      const msg = m as { taskId: string };
+      this.channelManager?.sendTaskDeleted(msg.taskId);
+    },
+    'TASK_REJECTED': (m) => {
+      const msg = m as { taskId: string };
+      this.channelManager?.sendTaskRejected(msg.taskId);
+    },
+    'TASK_QUEUE_INITIALIZED': () => {
+      this.channelManager?.sendQueueInitialized();
+    },
+    'TASK_ALL_RESPONSE': (m) => {
+      const msg = m as { tasks: SWTask[] };
+      this.channelManager?.sendAllTasks(msg.tasks);
+    },
+    'TASK_SUBMITTED': (m) => {
+      const msg = m as { taskId: string };
+      this.channelManager?.sendTaskSubmitted(msg.taskId);
+    },
+    'CHAT_CHUNK': (m) => {
+      const msg = m as { chatId: string; content: string };
+      this.channelManager?.sendChatChunk(msg.chatId, msg.content);
+    },
+    'CHAT_DONE': (m) => {
+      const msg = m as { chatId: string; fullContent: string };
+      this.channelManager?.sendChatDone(msg.chatId, msg.fullContent);
+    },
+    'CHAT_ERROR': (m) => {
+      const msg = m as { chatId: string; error: string };
+      this.channelManager?.sendChatError(msg.chatId, msg.error);
+    },
+  };
 
-      // Debug logging for key message types
-      if (isPostMessageLoggerDebugMode()) {
-        const clientIds = clients.map(c => c.id.slice(-6)).join(', ');
-        console.log(
-          `[SWTaskQueue] Broadcasting ${message.type} to ${clients.length} clients [${clientIds}]`,
-          message.type === 'TASK_COMPLETED' || message.type === 'TASK_FAILED'
-            ? { taskId: (message as any).taskId }
-            : undefined
-        );
-      }
+  /**
+   * Broadcast message to all clients via ChannelManager
+   */
+  private broadcastToClients(message: SWToMainMessage): void {
+    if (!this.channelManager) {
+      console.warn('[SWTaskQueue] ChannelManager not initialized, message dropped:', message.type);
+      return;
+    }
 
-      for (const client of clients) {
-        sendToClient(client, message);
-      }
-    } catch (error) {
-      console.error('[SWTaskQueue] Failed to broadcast:', error);
+    const handler = this.messageRouters[message.type];
+    if (handler) {
+      handler(message);
+    } else {
+      console.warn('[SWTaskQueue] Unknown message type:', message.type);
     }
   }
 }
@@ -1312,155 +1374,3 @@ export function getTaskQueue(): SWTaskQueue | null {
   return taskQueueInstance;
 }
 
-/**
- * Handle incoming message from main thread
- */
-export function handleTaskQueueMessage(
-  message: MainToSWMessage,
-  clientId: string
-): void {
-  const queue = getTaskQueue();
-  if (!queue && message.type !== 'TASK_QUEUE_INIT') {
-    console.warn('[SWTaskQueue] Queue not initialized');
-    return;
-  }
-
-  switch (message.type) {
-    case 'TASK_QUEUE_INIT':
-      if (queue) {
-        queue.initialize(message.geminiConfig, message.videoConfig);
-      }
-      // System prompt is saved to IndexedDB by main thread
-      // ai_analyze is delegated to main thread for correct text model
-      break;
-
-    case 'TASK_QUEUE_UPDATE_CONFIG':
-      queue?.updateConfig(message.geminiConfig, message.videoConfig);
-      break;
-
-    case 'TASK_SUBMIT':
-      queue?.submitTask(message.taskId, message.taskType, message.params, clientId);
-      break;
-
-    case 'TASK_CANCEL':
-      queue?.cancelTask(message.taskId);
-      break;
-
-    case 'TASK_RETRY':
-      queue?.retryTask(message.taskId);
-      break;
-
-    case 'TASK_RESUME':
-      queue?.resumeTask(message.taskId, message.remoteId, message.taskType, clientId);
-      break;
-
-    case 'TASK_GET_STATUS': {
-      // Sync all tasks to the requesting client
-      queue?.syncTasksToClients();
-      break;
-    }
-
-    case 'TASK_GET_ALL': {
-      queue?.syncTasksToClients();
-      break;
-    }
-
-    case 'TASK_GET_PAGINATED': {
-      queue?.syncPaginatedTasksToClients({
-        offset: message.offset,
-        limit: message.limit,
-        status: message.filters?.status,
-        type: message.filters?.type,
-        sortOrder: message.sortOrder,
-      });
-      break;
-    }
-
-    case 'TASK_DELETE':
-      queue?.deleteTask(message.taskId);
-      break;
-
-    case 'TASK_MARK_INSERTED':
-      queue?.markTaskInserted(message.taskId);
-      break;
-
-    case 'CHAT_START':
-      queue?.startChat(message.chatId, message.params, clientId);
-      break;
-
-    case 'CHAT_STOP':
-      queue?.stopChat(message.chatId);
-      break;
-
-    case 'CHAT_GET_CACHED': {
-      // Return cached chat result for a specific chatId
-      const cached = queue?.getCachedChatResult(message.chatId);
-      
-      if (cached) {
-        // Send the result to the requesting client
-        sendToClientById(clientId, {
-          type: 'CHAT_CACHED_RESULT',
-          chatId: message.chatId,
-          fullContent: cached.fullContent,
-          found: true,
-        }).then(sent => {
-          if (!sent) {
-            console.warn('[SWTaskQueue] Failed to send CHAT_CACHED_RESULT to client:', clientId);
-          }
-        });
-      } else {
-        // No cached result found
-        sendToClientById(clientId, {
-          type: 'CHAT_CACHED_RESULT',
-          chatId: message.chatId,
-          found: false,
-        }).then(sent => {
-          if (!sent) {
-            console.warn('[SWTaskQueue] Failed to send CHAT_CACHED_RESULT (not found) to client:', clientId);
-          }
-        });
-      }
-      break;
-    }
-
-    case 'TASK_RESTORE':
-      queue?.restoreTasks(message.tasks);
-      break;
-
-    case 'MCP_TOOL_EXECUTE': {
-      // Import executor dynamically to avoid circular dependencies
-      import('./mcp/executor').then(({ executeMCPTool }) => {
-        const q = getTaskQueue();
-        const geminiConfig = q?.getGeminiConfig();
-        const videoConfig = q?.getVideoConfig();
-        const sw = q?.getSW();
-
-        if (q && geminiConfig && videoConfig && sw) {
-          executeMCPTool(
-            message.requestId,
-            message.toolName,
-            message.args,
-            geminiConfig,
-            videoConfig,
-            clientId,
-            sw
-          );
-        } else {
-          // Send error if not initialized
-          sw?.clients.get(clientId).then((client: Client | undefined) => {
-            if (client) {
-              client.postMessage({
-                type: 'MCP_TOOL_RESULT',
-                requestId: message.requestId,
-                success: false,
-                error: 'Task queue not initialized',
-                resultType: 'error',
-              });
-            }
-          });
-        }
-      });
-      break;
-    }
-  }
-}

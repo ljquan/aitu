@@ -8,6 +8,8 @@
  * PostMessage 日志记录完全由调试模式控制，不会对未开启调试模式的应用性能产生影响。
  */
 
+import { sanitizeObject as sanitizeObjectFromUtils } from '@aitu/utils';
+
 // 调试模式开关（默认关闭，避免影响性能）
 let debugModeEnabled = false;
 
@@ -35,6 +37,8 @@ export interface PostMessageLogEntry {
   response?: unknown;
   error?: string;
   clientId?: string;
+  clientUrl?: string;
+  clientType?: 'main' | 'debug' | 'other'; // 区分应用页面、调试面板、其他
   duration?: number;
 }
 
@@ -60,6 +64,12 @@ const EXCLUDED_MESSAGE_TYPES = [
   'SW_POSTMESSAGE_LOG',
   'SW_DEBUG_POSTMESSAGE_LOGS',
   'SW_DEBUG_POSTMESSAGE_LOGS_CLEARED',
+  'SW_DEBUG_NEW_CRASH_SNAPSHOT',
+  'SW_DEBUG_CRASH_SNAPSHOTS',
+  'SW_DEBUG_CRASH_SNAPSHOTS_CLEARED',
+  'SW_DEBUG_GET_CRASH_SNAPSHOTS',
+  'SW_DEBUG_CLEAR_CRASH_SNAPSHOTS',
+  'CRASH_SNAPSHOT',
 ];
 
 // 请求-响应关联映射
@@ -104,17 +114,51 @@ function shouldLogMessage(messageType: string): boolean {
 }
 
 /**
+ * 获取客户端类型和 URL（用于在 SW 环境中识别应用页面）
+ * @returns {object} { type: 'main' | 'debug' | 'other', url?: string }
+ */
+function getClientInfo(clientUrl?: string): { clientType?: string; clientUrl?: string } {
+  if (!clientUrl) {
+    return {};
+  }
+
+  let clientType: 'main' | 'debug' | 'other' = 'other';
+
+  // 判断客户端类型
+  if (clientUrl.includes('sw-debug')) {
+    clientType = 'debug';
+  } else if (clientUrl.includes('localhost') || clientUrl.includes('127.0.0.1')) {
+    clientType = 'main';
+  } else if (!clientUrl.includes('chrome-extension') && !clientUrl.includes('moz-extension')) {
+    clientType = 'main';
+  }
+
+  return {
+    clientType,
+    clientUrl: new URL(clientUrl).pathname + new URL(clientUrl).search,
+  };
+}
+
+/**
  * 记录收到的消息
  */
 export function logReceivedMessage(
   messageType: string,
   data: unknown,
-  clientId?: string
+  clientId?: string,
+  clientUrl?: string,
+  isInternal?: boolean
 ): string {
+  // 跳过内部消息，防止循环记录
+  if (isInternal) {
+    return '';
+  }
+
   if (!shouldLogMessage(messageType)) {
     return '';
   }
 
+  const clientInfo = getClientInfo(clientUrl);
   const logId = `pm-recv-${Date.now()}-${++logIdCounter}`;
   const entry: PostMessageLogEntry = {
     id: logId,
@@ -123,6 +167,8 @@ export function logReceivedMessage(
     messageType,
     data: sanitizeData(data),
     clientId,
+    clientUrl: clientInfo.clientUrl,
+    clientType: clientInfo.clientType as any,
   };
 
   addLog(entry);
@@ -147,12 +193,14 @@ export function logReceivedMessage(
 export function logSentMessage(
   messageType: string,
   data: unknown,
-  clientId?: string
+  clientId?: string,
+  clientUrl?: string
 ): string {
   if (!shouldLogMessage(messageType)) {
     return '';
   }
 
+  const clientInfo = getClientInfo(clientUrl);
   const logId = `pm-send-${Date.now()}-${++logIdCounter}`;
   const entry: PostMessageLogEntry = {
     id: logId,
@@ -161,6 +209,8 @@ export function logSentMessage(
     messageType,
     data: sanitizeData(data),
     clientId,
+    clientUrl: clientInfo.clientUrl,
+    clientType: clientInfo.clientType as any,
   };
 
   // 如果是响应类消息，关联请求并计算耗时
@@ -268,36 +318,18 @@ function getRequestId(data: unknown): string | null {
 }
 
 /**
- * 清理敏感数据
+ * 清理敏感数据 - 使用 @aitu/utils 的 sanitizeObject
  */
 function sanitizeData(data: unknown): unknown {
   if (!data) return data;
 
   try {
-    const sanitized = JSON.parse(JSON.stringify(data));
-    sanitizeObject(sanitized);
-    return sanitized;
+    // 使用 JSON 深拷贝确保可序列化，然后使用 utils 的 sanitize
+    const cloned = JSON.parse(JSON.stringify(data));
+    return sanitizeObjectFromUtils(cloned);
   } catch {
     // 无法序列化的数据
     return '[Non-serializable data]';
-  }
-}
-
-/**
- * 递归清理对象中的敏感字段
- */
-function sanitizeObject(obj: unknown): void {
-  if (!obj || typeof obj !== 'object') return;
-
-  const sensitiveFields = ['apiKey', 'password', 'token', 'secret', 'key'];
-  const record = obj as Record<string, unknown>;
-
-  for (const key in record) {
-    if (sensitiveFields.some(field => key.toLowerCase().includes(field))) {
-      record[key] = '[REDACTED]';
-    } else if (typeof record[key] === 'object') {
-      sanitizeObject(record[key]);
-    }
   }
 }
 

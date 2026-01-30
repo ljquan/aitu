@@ -12,6 +12,7 @@
  */
 
 import { sanitizeUrl } from '@aitu/utils';
+import { swChannelClient } from '@drawnix/drawnix';
 
 // ==================== 类型定义 ====================
 
@@ -283,10 +284,10 @@ function collectPageStats(): PageStats {
  */
 function sendSnapshotToSW(snapshot: CrashSnapshot): void {
   try {
-    if (navigator.serviceWorker?.controller) {
-      navigator.serviceWorker.controller.postMessage({
-        type: 'CRASH_SNAPSHOT',
-        snapshot,
+    // 使用 swChannelClient 发送崩溃快照
+    if (swChannelClient.isInitialized()) {
+      swChannelClient.reportCrashSnapshot(snapshot).catch(() => {
+        // 忽略发送错误，避免影响主流程
       });
     }
   } catch (error) {
@@ -554,10 +555,9 @@ export function setupHeartbeat(): void {
     lastHeartbeatTime = now;
 
     // 发送心跳到 SW（用于 SW 端检测页面是否响应）
-    if (navigator.serviceWorker?.controller) {
-      navigator.serviceWorker.controller.postMessage({
-        type: 'HEARTBEAT',
-        timestamp: now,
+    if (swChannelClient.isInitialized()) {
+      swChannelClient.sendHeartbeat(now).catch(() => {
+        // 忽略心跳发送错误
       });
     }
   }, HEARTBEAT_INTERVAL);

@@ -28,13 +28,6 @@ import { taskQueueStorage } from './storage';
 export interface WorkflowExecutorConfig {
   geminiConfig: GeminiConfig;
   videoConfig: VideoAPIConfig;
-  /** Broadcast message to all clients */
-  broadcast: (message: WorkflowSWToMainMessage) => void;
-  /** Request canvas operation from main thread */
-  requestCanvasOperation?: (
-    operation: string,
-    params: Record<string, unknown>
-  ) => Promise<{ success: boolean; error?: string }>;
   /** Request main thread to execute a tool */
   requestMainThreadTool?: (
     workflowId: string,
@@ -46,6 +39,7 @@ export interface WorkflowExecutorConfig {
 
 /**
  * Workflow Executor
+ * 通过 channelManager 发送消息，不再直接管理 clientId
  */
 export class WorkflowExecutor {
   private workflows: Map<string, Workflow> = new Map();
@@ -72,6 +66,43 @@ export class WorkflowExecutor {
     this.config = config;
     // Restore workflows from storage asynchronously
     this.restoreFromStorage();
+  }
+
+  /**
+   * Send message to the client that initiated a workflow
+   * 通过 channelManager 发送消息，不再直接管理 clientId
+   */
+  private async sendToWorkflowClient(workflowId: string, message: WorkflowSWToMainMessage): Promise<void> {
+    const { getChannelManager } = await import('./channel-manager');
+    const cm = getChannelManager();
+    if (!cm) {
+      // console.warn(`[WorkflowExecutor] channelManager not available`);
+      return;
+    }
+    
+    // 使用 channelManager 的工作流事件方法
+    switch (message.type) {
+      case 'WORKFLOW_STATUS':
+        cm.sendWorkflowStatus(workflowId, message.status);
+        break;
+      case 'WORKFLOW_STEP_STATUS':
+        cm.sendWorkflowStepStatus(workflowId, message.stepId, message.status, message.result, message.error, message.duration);
+        break;
+      case 'WORKFLOW_COMPLETED':
+        cm.sendWorkflowCompleted(workflowId, message.workflow);
+        break;
+      case 'WORKFLOW_FAILED':
+        cm.sendWorkflowFailed(workflowId, message.error!);
+        break;
+      case 'WORKFLOW_STEPS_ADDED':
+        cm.sendWorkflowStepsAdded(workflowId, message.steps);
+        break;
+      case 'MAIN_THREAD_TOOL_REQUEST':
+        cm.sendToolRequest(workflowId, message.requestId, message.stepId, message.toolName, message.args);
+        break;
+      default:
+        console.warn(`[WorkflowExecutor] Unknown message type: ${message.type}`);
+    }
   }
 
   /**
@@ -229,9 +260,9 @@ export class WorkflowExecutor {
             }
           }
           
-          // Only broadcast if we actually added new steps
+          // Only send if we actually added new steps
           if (actuallyAddedSteps.length > 0) {
-            this.config.broadcast({
+            this.sendToWorkflowClient(workflow.id, {
               type: 'WORKFLOW_STEPS_ADDED',
               workflowId: workflow.id,
               steps: actuallyAddedSteps,
@@ -242,8 +273,8 @@ export class WorkflowExecutor {
         // Save workflow
         await taskQueueStorage.saveWorkflow(workflow);
         
-        // Broadcast step completed
-        this.config.broadcast({
+        // Send step completed to initiating client
+        this.sendToWorkflowClient(workflow.id, {
           type: 'WORKFLOW_STEP_STATUS',
           workflowId: workflow.id,
           stepId: step.id,
@@ -259,16 +290,16 @@ export class WorkflowExecutor {
           error: step.error,
         };
         
-        // Save and broadcast failure
+        // Save and send failure to initiating client
         await taskQueueStorage.saveWorkflow(workflow);
-        this.config.broadcast({
+        this.sendToWorkflowClient(workflow.id, {
           type: 'WORKFLOW_STEP_STATUS',
           workflowId: workflow.id,
           stepId: step.id,
           status: 'failed',
           error: step.error,
         });
-        this.config.broadcast({
+        this.sendToWorkflowClient(workflow.id, {
           type: 'WORKFLOW_FAILED',
           workflowId: workflow.id,
           error: step.error,
@@ -341,16 +372,19 @@ export class WorkflowExecutor {
   }
 
   /**
-   * Broadcast all workflows that were recovered from storage
+   * Send all recovered workflows to a specific client
    * This is called when a new client connects to sync state
+   * channelManager 负责维护 workflowId -> channel 的映射
+   * @param clientId The client to send recovered workflows to
    */
-  broadcastRecoveredWorkflows(): void {
+  async sendRecoveredWorkflowsToClient(clientId: string): Promise<void> {
+    const { getChannelManager } = await import('./channel-manager');
+    const cm = getChannelManager();
+    if (!cm) return;
+    
     for (const workflow of this.workflows.values()) {
-      this.config.broadcast({
-        type: 'WORKFLOW_RECOVERED',
-        workflowId: workflow.id,
-        workflow,
-      });
+      // channelManager 会自动更新 workflowId -> channel 映射
+      cm.sendWorkflowRecoveredToClient(clientId, workflow.id, workflow);
     }
   }
 
@@ -394,8 +428,8 @@ export class WorkflowExecutor {
         continue;
       }
 
-      // Re-broadcast the request to new client
-      this.config.broadcast({
+      // Re-send the request to initiating client
+      this.sendToWorkflowClient(requestInfo.workflowId, {
         type: 'MAIN_THREAD_TOOL_REQUEST',
         requestId: requestInfo.requestId,
         workflowId: requestInfo.workflowId,
@@ -422,37 +456,28 @@ export class WorkflowExecutor {
 
   /**
    * Submit a workflow for execution
+   * channelManager 负责维护 workflowId -> channel 的映射
+   * @param workflow The workflow to execute
    */
   async submitWorkflow(workflow: Workflow): Promise<void> {
-    // console.log('[SW-WorkflowExecutor] submitWorkflow:', {
-    //   workflowId: workflow.id,
-    //   existingWorkflowsCount: this.workflows.size,
-    //   hasContext: !!workflow.context,
-    //   referenceImagesCount: workflow.context?.referenceImages?.length || 0,
-    //   timestamp: new Date().toISOString(),
-    // });
-    
     // Check for duplicate
     const existing = this.workflows.get(workflow.id);
     if (existing) {
       if (existing.status === 'running' || existing.status === 'pending') {
-        // console.log(`[SW-WorkflowExecutor] Re-claiming active workflow ${workflow.id}, status: ${existing.status}`);
-        // Already running, just broadcast current status to sync the new client
-        this.broadcastWorkflowStatus(existing);
-        // Also broadcast individual steps to ensure UI is fully populated
-        existing.steps.forEach(step => this.broadcastStepStatus(existing.id, step));
+        // Already running, sync current status to the new client
+        this.sendWorkflowStatus(existing);
+        // Also send individual steps to ensure UI is fully populated
+        existing.steps.forEach(step => this.sendStepStatus(existing.id, step));
         return;
       }
       
       // If failed/cancelled/completed, we might allow re-submitting with same ID?
       // For now, skip to avoid confusion
       console.warn(`[SW-WorkflowExecutor] Workflow ${workflow.id} already exists with terminal status ${existing.status}, skipping`);
-      this.broadcastWorkflowStatus(existing);
+      this.sendWorkflowStatus(existing);
       return;
     }
 
-    // console.log('[SW-WorkflowExecutor] ✓ New workflow, starting execution:', workflow.id);
-    
     // Store workflow
     workflow.status = 'pending';
     workflow.updatedAt = Date.now();
@@ -511,25 +536,18 @@ export class WorkflowExecutor {
    * Execute a workflow
    */
   private async executeWorkflow(workflowId: string): Promise<void> {
-    // console.log('[SW-WorkflowExecutor] executeWorkflow called:', {
-    //   workflowId,
-    //   timestamp: new Date().toISOString(),
-    // });
-    
     const workflow = this.workflows.get(workflowId);
     if (!workflow) {
-      console.error(`[WorkflowExecutor] ✗ Workflow ${workflowId} not found`);
+      console.error(`[WorkflowExecutor] Workflow ${workflowId} not found`);
       return;
     }
 
     // Check if already running
     if (this.runningWorkflows.has(workflowId)) {
-      // console.warn(`[SW-WorkflowExecutor] Workflow ${workflowId} is already running, skipping duplicate execution`);
       return;
     }
 
     this.runningWorkflows.add(workflowId);
-    // console.log(`[SW-WorkflowExecutor] ▶ Starting workflow execution: ${workflowId}`);
 
     // Create abort controller
     const abortController = new AbortController();
@@ -622,11 +640,12 @@ export class WorkflowExecutor {
         // Persist final state
         await taskQueueStorage.saveWorkflow(workflow);
 
-        this.config.broadcast({
+        this.sendToWorkflowClient(workflowId, {
           type: 'WORKFLOW_COMPLETED',
           workflowId,
           workflow,
         });
+        // channelManager 会在 sendWorkflowCompleted 中自动清理 workflowId -> channel 映射
       } else {
         // Still running (waiting for async steps)
         // console.log(`[WorkflowExecutor] Workflow ${workflowId} is still in progress (waiting for async steps)`);
@@ -642,11 +661,12 @@ export class WorkflowExecutor {
       // Persist failed state
       await taskQueueStorage.saveWorkflow(workflow);
 
-      this.config.broadcast({
+      this.sendToWorkflowClient(workflowId, {
         type: 'WORKFLOW_FAILED',
         workflowId,
         error: error.message,
       });
+      // channelManager 会在 sendWorkflowFailed 中自动清理 workflowId -> channel 映射
     } finally {
       this.runningWorkflows.delete(workflowId);
       this.abortControllers.delete(workflowId);
@@ -807,8 +827,8 @@ export class WorkflowExecutor {
             // This ensures that if the page is refreshed right now, the new steps are not lost
             await taskQueueStorage.saveWorkflow(workflow);
 
-            // Broadcast that new steps were added
-            this.config.broadcast({
+            // Send new steps to initiating client
+            this.sendToWorkflowClient(workflow.id, {
               type: 'WORKFLOW_STEPS_ADDED',
               workflowId: workflow.id,
               steps: actuallyAddedSteps,
@@ -868,6 +888,7 @@ export class WorkflowExecutor {
         // Check if this is a canvas operation that needs delegation
         if (result.success && result.type === 'canvas' && (result.data as any)?.delegateToMainThread) {
           const canvasResult = await this.requestCanvasOperation(
+            workflow.id,
             (result.data as any).operation,
             (result.data as any).args
           );
@@ -884,7 +905,7 @@ export class WorkflowExecutor {
         } else if (result.success && result.type === 'image' && (result.data as any)?.url) {
           // Image generation completed, insert to canvas
           const imageData = result.data as { url: string; urls?: string[]; size?: string };
-          const canvasResult = await this.requestCanvasOperation('canvas_insert', {
+          const canvasResult = await this.requestCanvasOperation(workflow.id, 'canvas_insert', {
             items: [{
               type: 'image',
               url: imageData.url,
@@ -904,7 +925,7 @@ export class WorkflowExecutor {
         } else if (result.success && result.type === 'video' && (result.data as any)?.url) {
           // Video generation completed, insert to canvas
           const videoData = result.data as { url: string };
-          const canvasResult = await this.requestCanvasOperation('canvas_insert', {
+          const canvasResult = await this.requestCanvasOperation(workflow.id, 'canvas_insert', {
             items: [{
               type: 'video',
               url: videoData.url,
@@ -950,9 +971,9 @@ export class WorkflowExecutor {
             }
           }
 
-          // Only broadcast if we actually added new steps
+          // Only send if we actually added new steps
           if (actuallyAddedSteps.length > 0) {
-            this.config.broadcast({
+            this.sendToWorkflowClient(workflow.id, {
               type: 'WORKFLOW_STEPS_ADDED',
               workflowId: workflow.id,
               steps: actuallyAddedSteps,
@@ -1037,9 +1058,9 @@ export class WorkflowExecutor {
         createdAt: Date.now(),
       });
 
-      // Send request to main thread
+      // Send request to initiating client
       // console.log('[WorkflowExecutor] ▶ Sending main thread tool request:', toolName, requestId);
-      this.config.broadcast({
+      this.sendToWorkflowClient(workflowId, {
         type: 'MAIN_THREAD_TOOL_REQUEST',
         requestId,
         workflowId,
@@ -1052,37 +1073,31 @@ export class WorkflowExecutor {
 
   /**
    * Request canvas operation from main thread
+   * 使用 channelManager 的双工通讯模式，直接等待响应
+   * @param workflowId 工作流 ID，用于找到正确的 channel
    */
   private async requestCanvasOperation(
+    workflowId: string,
     operation: string,
     params: Record<string, unknown>
   ): Promise<{ success: boolean; error?: string }> {
-    // If custom handler is provided, use it
-    if (this.config.requestCanvasOperation) {
-      return this.config.requestCanvasOperation(operation, params);
+    // 使用 channelManager 的双工通讯模式
+    const { getChannelManager } = await import('./channel-manager');
+    const cm = getChannelManager();
+    if (cm) {
+      return cm.requestCanvasOperation(workflowId, operation, params);
     }
 
-    // Otherwise, send message and wait for response
-    // This requires a response mechanism which we'll implement later
-    const requestId = `canvas_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-    this.config.broadcast({
-      type: 'CANVAS_OPERATION_REQUEST',
-      requestId,
-      operation: operation as any,
-      params: params as any,
-    });
-
-    // For now, assume success (main thread will handle it)
-    // In a full implementation, we'd wait for CANVAS_OPERATION_RESPONSE
-    return { success: true };
+    // channelManager 不可用时返回失败
+    console.warn('[WorkflowExecutor] channelManager not available for canvas operation');
+    return { success: false, error: 'channelManager not available' };
   }
 
   /**
-   * Broadcast workflow status update
+   * Send workflow status update to the initiating client
    */
-  private broadcastWorkflowStatus(workflow: Workflow): void {
-    this.config.broadcast({
+  private sendWorkflowStatus(workflow: Workflow): void {
+    this.sendToWorkflowClient(workflow.id, {
       type: 'WORKFLOW_STATUS',
       workflowId: workflow.id,
       status: workflow.status,
@@ -1091,10 +1106,10 @@ export class WorkflowExecutor {
   }
 
   /**
-   * Broadcast step status update
+   * Send step status update to the initiating client
    */
-  private broadcastStepStatus(workflowId: string, step: WorkflowStep): void {
-    this.config.broadcast({
+  private sendStepStatus(workflowId: string, step: WorkflowStep): void {
+    this.sendToWorkflowClient(workflowId, {
       type: 'WORKFLOW_STEP_STATUS',
       workflowId,
       stepId: step.id,
@@ -1104,4 +1119,5 @@ export class WorkflowExecutor {
       duration: step.duration,
     });
   }
+
 }

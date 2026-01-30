@@ -276,16 +276,15 @@ export function useWorkflowSubmission(
   useEffect(() => {
     workflowSubmissionService.init();
 
-    // Subscribe to canvas insert requests
-    const canvasSub = workflowSubmissionService.subscribeToCanvasInserts(
-      async (event: CanvasInsertEvent) => {
-        // console.log('[useWorkflowSubmission] Canvas insert request:', event);
+    // 注册 Canvas 操作处理器（双工通讯模式）
+    // SW 发起请求，主线程直接返回结果，无需单独响应
+    workflowSubmissionService.registerCanvasHandler(
+      async (_operation: string, _params: Record<string, unknown>) => {
         // For now, just acknowledge - actual canvas insertion will be handled
         // by the existing auto-insert mechanism (useAutoInsertToCanvas)
-        await workflowSubmissionService.respondToCanvasInsert(event.requestId, true);
+        return { success: true };
       }
     );
-    subscriptionsRef.current.push(canvasSub);
 
     // Subscribe to workflow recovery events
     const recoverySub = workflowSubmissionService.subscribeToAllEvents(
@@ -531,12 +530,6 @@ export function useWorkflowSubmission(
     subscriptionsRef.current.push(workflowSub);
 
     // Submit to SW
-    // console.log('[WorkflowSubmit] Submitting to SW:', {
-    //   workflowId: swWorkflow.id,
-    //   stepsCount: swWorkflow.steps.length,
-    //   timestamp: new Date().toISOString(),
-    // });
-    
     await workflowSubmissionService.submit(swWorkflow);
 
     // console.log('[WorkflowSubmit] ✓ Submitted to SW:', swWorkflow.id);

@@ -2267,6 +2267,87 @@ window.addEventListener('user-confirmed-upgrade', () => {
 - `apps/web/src/main.tsx` - Service Worker 注册和更新逻辑
 - `components/version-update/version-update-prompt.tsx` - 版本更新提示组件
 
+### postmessage-duplex 库使用规范
+
+**场景**: 使用 `postmessage-duplex` 库实现主线程与 Service Worker 的双工通信时
+
+❌ **错误示例 1 - subscribe 回调未正确提取数据**:
+```typescript
+// 错误：直接使用回调参数，但实际数据在 response.data 中
+channel.subscribe('task:status', (data) => {
+  console.log(data.taskId);  // undefined! data 是 response 对象
+});
+```
+
+✅ **正确示例 1**:
+```typescript
+// 正确：从 response.data 中提取实际数据
+channel.subscribe('task:status', (response) => {
+  if (response.ret === ReturnCode.Success && response.data) {
+    const data = response.data as TaskStatusEvent;
+    console.log(data.taskId);  // 正确
+  }
+});
+```
+
+❌ **错误示例 2 - subscribe handler 未返回响应**:
+```typescript
+// 错误：handler 没有返回值，发送方会超时
+channel.subscribe('debug:log', (response) => {
+  processLog(response.data);
+  // 没有 return，发送方的 publish 会超时！
+});
+```
+
+✅ **正确示例 2**:
+```typescript
+// 正确：返回 ack 响应
+channel.subscribe('debug:log', (response) => {
+  processLog(response.data);
+  return { ack: true };  // 返回响应避免超时
+});
+```
+
+❌ **错误示例 3 - 客户端未发送连接请求**:
+```typescript
+// 错误：直接创建 channel，SW 端不会创建对应的 channel
+const channel = await ServiceWorkerChannel.createFromPage();
+await channel.publish('task:create', taskData);  // 可能失败，因为 SW 端没有 channel
+```
+
+✅ **正确示例 3**:
+```typescript
+// 正确：先发送连接请求，让 SW 创建 channel
+function sendConnectRequest(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error('timeout')), 5000);
+    const handler = (event: MessageEvent) => {
+      if (event.data?.type === 'SW_CHANNEL_READY') {
+        clearTimeout(timeout);
+        navigator.serviceWorker.removeEventListener('message', handler);
+        resolve();
+      }
+    };
+    navigator.serviceWorker.addEventListener('message', handler);
+    navigator.serviceWorker.controller?.postMessage({ type: 'SW_CHANNEL_CONNECT' });
+  });
+}
+
+// 先连接，再创建 channel
+await sendConnectRequest();
+const channel = await ServiceWorkerChannel.createFromPage();
+```
+
+**原因**:
+1. `postmessage-duplex` 的 `subscribe` 回调接收的是完整的响应对象，实际数据在 `response.data` 中
+2. `publish` 方法期望收到响应，如果 `subscribe` handler 不返回值，发送方会超时
+3. SW 端只有在收到 `SW_CHANNEL_CONNECT` 消息后才会为该客户端创建 channel，否则 RPC 调用无法被处理
+
+**相关文件**:
+- `packages/drawnix/src/services/sw-channel/client.ts` - 主应用的 SW 通道客户端
+- `apps/web/src/sw/task-queue/channel-manager.ts` - SW 端的通道管理器
+- `apps/web/public/sw-debug/duplex-client.js` - 调试页面的 duplex 客户端
+
 ### 设置保存后需要主动更新 Service Worker 配置
 
 **场景**: 用户在设置面板修改配置（如 API Key、流式请求开关）并保存后

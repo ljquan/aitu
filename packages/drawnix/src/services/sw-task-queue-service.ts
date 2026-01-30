@@ -6,6 +6,8 @@
  * Design principle: SW is the single source of truth for task data.
  * This service maintains a read-only view of SW's task state,
  * updated entirely through SW push notifications.
+ * 
+ * Uses postmessage-duplex for reliable duplex communication.
  */
 
 import { Subject, Observable } from 'rxjs';
@@ -24,8 +26,7 @@ import {
   validateGenerationParams,
   sanitizeGenerationParams,
 } from '../utils/validation-utils';
-import { swTaskQueueClient } from './sw-client';
-import type { SWTask } from './sw-client';
+import { swChannelClient, SWTask } from './sw-channel';
 import { geminiSettings, settingsManager } from '../utils/settings-manager';
 
 /**
@@ -68,22 +69,30 @@ class SWTaskQueueService {
         return false;
       }
 
-      const success = await swTaskQueueClient.initialize(
-        {
+      // Initialize SW channel
+      const success = await swChannelClient.initialize();
+      if (!success) {
+        return false;
+      }
+
+      // Initialize SW with config
+      const initResult = await swChannelClient.init({
+        geminiConfig: {
           apiKey: settings.apiKey,
           baseUrl: settings.baseUrl,
           modelName: settings.imageModelName,
         },
-        {
+        videoConfig: {
           baseUrl: settings.baseUrl || 'https://api.tu-zi.com',
           apiKey: settings.apiKey,
-        }
-      );
+        },
+      });
 
-      this.initialized = success;
-      // SW will push all tasks after initialization via TASK_ALL_RESPONSE
-
-      return success;
+      this.initialized = initResult.success;
+      if (this.initialized) {
+        console.log('[SWTaskQueueService] Initialized successfully');
+      }
+      return this.initialized;
     } catch (error) {
       console.error('[SWTaskQueueService] Failed to initialize:', error);
       return false;
@@ -94,6 +103,12 @@ class SWTaskQueueService {
    * Creates a new task and submits it to the Service Worker
    */
   createTask(params: GenerationParams, type: TaskType): Task {
+    console.log('[SWTaskQueueService] createTask called:', {
+      type,
+      hasPrompt: !!params.prompt,
+      initialized: this.initialized,
+    });
+
     const validation = validateGenerationParams(params, type);
     if (!validation.valid) {
       throw new Error(`Invalid parameters: ${validation.errors.join(', ')}`);
@@ -102,7 +117,6 @@ class SWTaskQueueService {
     const sanitizedParams = sanitizeGenerationParams(params);
 
     // Create task locally for immediate UI feedback
-    // Task starts as PROCESSING since it will be executed immediately by SW
     const now = Date.now();
     const task: Task = {
       id: generateTaskId(),
@@ -119,7 +133,8 @@ class SWTaskQueueService {
     this.tasks.set(task.id, task);
     this.emitEvent('taskCreated', task);
 
-    // Submit to SW (SW will broadcast TASK_CREATED to confirm)
+    console.log('[SWTaskQueueService] Task created locally, calling submitToSW:', task.id);
+    // Submit to SW
     this.submitToSW(task);
 
     return task;
@@ -133,34 +148,23 @@ class SWTaskQueueService {
     return Array.from(this.tasks.values());
   }
 
-  /**
-   * @deprecated Tasks no longer use PENDING status. New tasks start as PROCESSING.
-   * Kept for backward compatibility with legacy data.
-   */
-  getPendingTasks(): Task[] {
-    return this.getAllTasks().filter((t) => t.status === TaskStatus.PENDING);
-  }
-
   getTasksByStatus(status: TaskStatus): Task[] {
     return this.getAllTasks().filter((t) => t.status === status);
   }
 
-  cancelTask(taskId: string): void {
+  async cancelTask(taskId: string): Promise<void> {
     if (!this.tasks.has(taskId)) return;
-    swTaskQueueClient.cancelTask(taskId);
+    await swChannelClient.cancelTask(taskId);
   }
 
-  retryTask(taskId: string): void {
+  async retryTask(taskId: string): Promise<void> {
     const task = this.tasks.get(taskId);
     if (!task || (task.status !== TaskStatus.FAILED && task.status !== TaskStatus.CANCELLED)) return;
-    swTaskQueueClient.retryTask(taskId);
+    await swChannelClient.retryTask(taskId);
   }
 
-  deleteTask(taskId: string): void {
-    // Always send delete request to SW, even if task is not in local cache
-    // SW is the source of truth and will handle the deletion
-    swTaskQueueClient.deleteTask(taskId);
-    // Also remove from local cache immediately for responsive UI
+  async deleteTask(taskId: string): Promise<void> {
+    await swChannelClient.deleteTask(taskId);
     if (this.tasks.has(taskId)) {
       const task = this.tasks.get(taskId)!;
       this.tasks.delete(taskId);
@@ -178,30 +182,9 @@ class SWTaskQueueService {
 
   /**
    * Restore tasks from storage (for migration from legacy storage)
-   * This adds tasks to local state and syncs them to SW
+   * @deprecated Legacy migration - new tasks are created via createTask()
    */
   async restoreTasks(tasks: Task[]): Promise<void> {
-    // Convert Task to SWTask format for SW
-    const swTasks = tasks.map((task) => ({
-      id: task.id,
-      type: task.type,
-      params: task.params,
-      status: task.status,
-      progress: task.progress,
-      result: task.result,
-      error: task.error,
-      remoteId: task.remoteId,
-      executionPhase: task.executionPhase,
-      createdAt: task.createdAt,
-      startedAt: task.startedAt,
-      completedAt: task.completedAt,
-      updatedAt: task.updatedAt,
-    }));
-
-    // Restore to SW
-    await swTaskQueueClient.restoreTasks(swTasks);
-
-    // Add to local state (don't emit events to avoid triggering auto-insert)
     for (const task of tasks) {
       this.tasks.set(task.id, task);
     }
@@ -209,34 +192,21 @@ class SWTaskQueueService {
 
   /**
    * Sync tasks from Service Worker to local state
-   * Called after page load to get current task state from SW
    */
   async syncTasksFromSW(): Promise<void> {
+    // 如果 swChannelClient 未初始化，跳过同步
+    if (!swChannelClient.isInitialized()) {
+      return;
+    }
+    
     try {
-      const swTasks = await swTaskQueueClient.requestAllTasks();
+      const result = await swChannelClient.listTasks();
+      if (!result.success) return;
       
-      for (const swTask of swTasks) {
-        const task: Task = {
-          id: swTask.id,
-          type: swTask.type,
-          params: swTask.params,
-          status: swTask.status,
-          progress: swTask.progress || 0,
-          result: swTask.result,
-          error: swTask.error,
-          remoteId: swTask.remoteId,
-          executionPhase: swTask.executionPhase,
-          createdAt: swTask.createdAt,
-          startedAt: swTask.startedAt,
-          completedAt: swTask.completedAt,
-          updatedAt: swTask.updatedAt,
-        };
-        
-        // Add to local state without emitting events (to avoid duplicate auto-insert)
+      for (const swTask of result.tasks || []) {
+        const task = this.convertSWTaskToTask(swTask);
         this.tasks.set(task.id, task);
       }
-      
-      // console.log(`[SWTaskQueueService] Synced ${swTasks.length} tasks from SW`);
     } catch (error) {
       console.error('[SWTaskQueueService] Failed to sync tasks from SW:', error);
     }
@@ -271,8 +241,7 @@ class SWTaskQueueService {
       updatedAt: Date.now(),
     };
     this.tasks.set(taskId, updatedTask);
-    // Notify SW to persist this flag
-    swTaskQueueClient.markTaskInserted(taskId);
+    swChannelClient.markTaskInserted(taskId);
   }
 
   observeTaskUpdates(): Observable<TaskEvent> {
@@ -280,7 +249,7 @@ class SWTaskQueueService {
   }
 
   isServiceWorkerAvailable(): boolean {
-    return swTaskQueueClient.isServiceWorkerSupported();
+    return 'serviceWorker' in navigator;
   }
 
   // ============================================================================
@@ -288,15 +257,13 @@ class SWTaskQueueService {
   // ============================================================================
 
   private setupSWClientHandlers(): void {
-    swTaskQueueClient.setTaskHandlers({
-      onCreated: (swTask) => this.handleSWTaskCreated(swTask),
-      onStatus: (taskId, status, progress, phase) => this.handleSWStatus(taskId, status, progress, phase),
-      onCompleted: (taskId, result, remoteId) => this.handleSWCompleted(taskId, result, remoteId),
-      onFailed: (taskId, error) => this.handleSWFailed(taskId, error),
-      onSubmitted: (taskId, remoteId) => this.handleSWSubmitted(taskId, remoteId),
-      onCancelled: (taskId) => this.handleSWCancelled(taskId),
-      onDeleted: (taskId) => this.handleSWDeleted(taskId),
-      onTasksSync: (swTasks) => this.handleTasksSync(swTasks),
+    swChannelClient.setEventHandlers({
+      onTaskCreated: (event) => this.handleSWTaskCreated(event.task),
+      onTaskStatus: (event) => this.handleSWStatus(event.taskId, event.status as TaskStatus, event.progress, event.phase as TaskExecutionPhase),
+      onTaskCompleted: (event) => this.handleSWCompleted(event.taskId, event.result as TaskResult, event.remoteId),
+      onTaskFailed: (event) => this.handleSWFailed(event.taskId, event.error as TaskError),
+      onTaskCancelled: (taskId) => this.handleSWCancelled(taskId),
+      onTaskDeleted: (taskId) => this.handleSWDeleted(taskId),
     });
   }
 
@@ -305,38 +272,18 @@ class SWTaskQueueService {
     const existing = this.tasks.get(task.id);
 
     if (existing) {
-      // Update with SW's authoritative state
       this.tasks.set(task.id, task);
     } else {
-      // Task created by SW (e.g., from another tab)
       this.tasks.set(task.id, task);
       this.emitEvent('taskCreated', task);
-    }
-  }
-
-  private handleTasksSync(swTasks: SWTask[]): void {
-    for (const swTask of swTasks) {
-      const task = this.convertSWTaskToTask(swTask);
-      const existingTask = this.tasks.get(task.id);
-
-      if (!existingTask || existingTask.updatedAt < task.updatedAt) {
-        this.tasks.set(task.id, task);
-
-        // Use 'taskSynced' for terminal states to avoid triggering auto-insert
-        if (task.status === TaskStatus.COMPLETED || task.status === TaskStatus.FAILED) {
-          this.emitEvent('taskSynced', task);
-        } else {
-          this.emitEvent('taskUpdated', task);
-        }
-      }
     }
   }
 
   private convertSWTaskToTask(swTask: SWTask): Task {
     return {
       id: swTask.id,
-      type: swTask.type,
-      status: swTask.status,
+      type: swTask.type as TaskType,
+      status: swTask.status as TaskStatus,
       params: swTask.params,
       createdAt: swTask.createdAt,
       updatedAt: swTask.updatedAt,
@@ -346,24 +293,49 @@ class SWTaskQueueService {
       error: swTask.error,
       progress: swTask.progress,
       remoteId: swTask.remoteId,
-      executionPhase: swTask.executionPhase,
-      savedToLibrary: swTask.savedToLibrary,
+      executionPhase: swTask.executionPhase as TaskExecutionPhase,
       insertedToCanvas: swTask.insertedToCanvas,
     };
   }
 
   private async submitToSW(task: Task): Promise<void> {
+    console.log('[SWTaskQueueService] submitToSW called:', {
+      taskId: task.id,
+      type: task.type,
+      initialized: this.initialized,
+    });
+
     if (!this.initialized) {
+      console.log('[SWTaskQueueService] Not initialized, calling initialize()...');
       const success = await this.initialize();
+      console.log('[SWTaskQueueService] initialize() result:', success);
       if (!success) {
-        console.warn(`[SWTaskQueueService] Cannot submit task ${task.id}: not initialized (no API key)`);
-        // Remove from local tasks since it can't be submitted
+        console.error('[SWTaskQueueService] Initialize failed, rejecting task');
         this.tasks.delete(task.id);
         this.emitEvent('taskRejected', task, 'NO_API_KEY');
         return;
       }
     }
-    swTaskQueueClient.submitTask(task.id, task.type, task.params);
+
+    console.log('[SWTaskQueueService] Calling swChannelClient.createTask...');
+    const result = await swChannelClient.createTask({
+      taskId: task.id,
+      taskType: task.type as 'image' | 'video',
+      params: task.params,
+    });
+
+    console.log('[SWTaskQueueService] swChannelClient.createTask result:', result);
+
+    if (!result.success) {
+      console.error('[SWTaskQueueService] Task creation failed:', result.reason);
+      if (result.reason === 'duplicate') {
+        this.tasks.delete(task.id);
+        this.emitEvent('taskRejected', task, 'DUPLICATE');
+      } else {
+        this.tasks.delete(task.id);
+        this.emitEvent('taskRejected', task, result.reason || 'UNKNOWN');
+      }
+    }
   }
 
   private handleSWStatus(
@@ -372,16 +344,12 @@ class SWTaskQueueService {
     progress?: number,
     phase?: TaskExecutionPhase
   ): void {
-    // Terminal states handled by specific handlers
     if (status === TaskStatus.COMPLETED || status === TaskStatus.FAILED || status === TaskStatus.CANCELLED) {
       return;
     }
 
     const task = this.tasks.get(taskId);
-    if (!task) {
-      console.warn(`[SWTaskQueueService] Task ${taskId} not found for status update`);
-      return;
-    }
+    if (!task) return;
 
     const updates: Partial<Task> = {};
     if (progress !== undefined) updates.progress = progress;
@@ -392,16 +360,9 @@ class SWTaskQueueService {
 
   private handleSWCompleted(taskId: string, result: TaskResult, remoteId?: string): void {
     const task = this.tasks.get(taskId);
-    if (!task) {
-      console.warn(`[SWTaskQueueService] Task ${taskId} not found for completion`);
-      return;
-    }
+    if (!task) return;
 
-    // Recover remoteId if it was missing but now provided
     const finalRemoteId = task.remoteId || remoteId;
-    if (remoteId && !task.remoteId) {
-      console.warn(`[SWTaskQueueService] Recovering missing remoteId for task ${taskId}: ${remoteId}`);
-    }
 
     this.updateTaskStatus(taskId, TaskStatus.COMPLETED, {
       result,
@@ -411,35 +372,11 @@ class SWTaskQueueService {
     });
   }
 
-  private handleSWFailed(
-    taskId: string,
-    error: TaskError
-  ): void {
+  private handleSWFailed(taskId: string, error: TaskError): void {
     const task = this.tasks.get(taskId);
-    if (!task) {
-      console.warn(`[SWTaskQueueService] Task ${taskId} not found for failure`);
-      return;
-    }
+    if (!task) return;
 
     this.updateTaskStatus(taskId, TaskStatus.FAILED, { error });
-  }
-
-  private handleSWSubmitted(taskId: string, remoteId: string): void {
-    const task = this.tasks.get(taskId);
-    if (!task) {
-      console.warn(`[SWTaskQueueService] Task ${taskId} not found for submission`);
-      return;
-    }
-
-    const updatedTask: Task = {
-      ...task,
-      remoteId,
-      executionPhase: TaskExecutionPhase.POLLING,
-      updatedAt: Date.now(),
-    };
-
-    this.tasks.set(taskId, updatedTask);
-    this.emitEvent('taskUpdated', updatedTask);
   }
 
   private handleSWCancelled(taskId: string): void {
@@ -458,10 +395,7 @@ class SWTaskQueueService {
 
   private updateTaskStatus(taskId: string, status: TaskStatus, updates?: Partial<Task>): void {
     const task = this.tasks.get(taskId);
-    if (!task) {
-      console.warn(`[SWTaskQueueService] updateTaskStatus: task ${taskId} not found`);
-      return;
-    }
+    if (!task) return;
 
     const now = Date.now();
     const updatedTask: Task = {
@@ -478,7 +412,6 @@ class SWTaskQueueService {
     }
 
     this.tasks.set(taskId, updatedTask);
-    // console.log(`[SWTaskQueueService] Emitting taskUpdated for ${taskId}, status: ${status}, autoInsertToCanvas: ${updatedTask.params?.autoInsertToCanvas}`);
     this.emitEvent('taskUpdated', updatedTask);
   }
 

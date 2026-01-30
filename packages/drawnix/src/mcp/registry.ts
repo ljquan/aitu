@@ -2,11 +2,9 @@
  * MCP 工具注册中心
  * 
  * 管理所有 MCP 工具的注册、查询和执行
- * 工具执行委托给 Service Worker 处理
  */
 
 import type { MCPTool, MCPResult, ToolCall, MCPExecuteOptions } from './types';
-import { swTaskQueueClient } from '../services/sw-client';
 
 /**
  * MCP 工具注册中心
@@ -111,48 +109,7 @@ class MCPRegistry {
       };
     }
 
-    // 尝试使用 SW 执行（仅适用于可在 SW 中执行的工具）
-    if (this.useSW && swTaskQueueClient.isInitialized()) {
-      try {
-        const result = await swTaskQueueClient.executeMCPTool(
-          toolCall.name,
-          toolCall.arguments,
-          {
-            mode: options?.mode,
-            batchId: options?.batchId,
-            batchIndex: options?.batchIndex,
-            batchTotal: options?.batchTotal,
-            timeoutMs: 120000, // 2 minutes timeout
-          }
-        );
-
-        // 如果 SW 返回成功，直接返回结果
-        if (result.success) {
-          return {
-            success: true,
-            data: result.data,
-            type: result.type,
-          };
-        }
-
-        // 如果 SW 返回 "requires main thread" 错误，回退到本地执行
-        if (result.error?.includes('requires main thread')) {
-          // Fall through to local execution
-        } else {
-          // 其他错误直接返回
-          return {
-            success: false,
-            error: result.error,
-            type: result.type,
-          };
-        }
-      } catch (error: any) {
-        console.warn(`[MCPRegistry] SW execution failed, falling back to local: ${error.message}`);
-        // Fall through to local execution
-      }
-    }
-
-    // 回退到本地执行
+    // Execute tool locally
     try {
       const result = await tool.execute(toolCall.arguments, options);
       return result;

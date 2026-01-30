@@ -15,7 +15,6 @@ export {
   SWTaskQueue,
   initTaskQueue,
   getTaskQueue,
-  handleTaskQueueMessage,
 } from './queue';
 
 // Export workflow management
@@ -47,11 +46,18 @@ export { ChatWorkflowHandler } from './chat-workflow/handler';
 
 // Export message sender (from message-bus)
 export {
-  initMessageSender,
   setDebugMode as setMessageSenderDebugMode,
   setBroadcastCallback,
   sendToClient,
   broadcastToAllClients,
   sendToClientById,
-  getSWGlobal,
 } from './utils/message-bus';
+
+// Export channel manager (postmessage-duplex based)
+export {
+  SWChannelManager,
+  initChannelManager,
+  getChannelManager,
+  RPC_METHODS,
+  SW_EVENTS,
+} from './channel-manager';

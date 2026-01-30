@@ -4,7 +4,7 @@
 // Import task queue module
 import {
   initTaskQueue,
-  handleTaskQueueMessage,
+  getTaskQueue,
   initWorkflowHandler,
   updateWorkflowConfig,
   isWorkflowMessage,
@@ -12,7 +12,8 @@ import {
   handleMainThreadToolResponse,
   resendPendingToolRequests,
   taskQueueStorage,
-  type MainToSWMessage,
+  initChannelManager,
+  getChannelManager,
   type WorkflowMainToSWMessage,
   type MainThreadToolResponseMessage,
 } from './task-queue';
@@ -31,7 +32,6 @@ import {
   type PostMessageLogEntry,
 } from './task-queue/postmessage-logger';
 import {
-  initMessageSender,
   setDebugMode as setMessageSenderDebugMode,
   setBroadcastCallback,
 } from './task-queue/utils/message-bus';
@@ -45,13 +45,43 @@ import { getSafeErrorMessage } from './task-queue/utils/sanitize-utils';
 
 // fix: self redeclaration error and type casting
 const sw = self as unknown as ServiceWorkerGlobalScope;
-export {}; // Make this a module
 
-// Initialize task queue (instance used internally by handleTaskQueueMessage)
-initTaskQueue(sw);
+// Export functions for channel-manager to use
+export {
+  saveCrashSnapshot,
+  getDebugStatus,
+  addConsoleLog,
+  // Debug helpers
+  getDebugLogs,
+  clearDebugLogs,
+  clearConsoleLogs,
+  enableDebugMode,
+  disableDebugMode,
+  loadConsoleLogsFromDB,
+  clearAllConsoleLogs,
+  getCrashSnapshots,
+  clearCrashSnapshots,
+  getCacheStats,
+  deleteCacheByUrl,
+  // Re-export from imports
+  getInternalFetchLogs,
+  getCDNStatusReport,
+  resetCDNStatus,
+  performHealthCheck,
+  // Constants
+  APP_VERSION,
+  IMAGE_CACHE_NAME,
+};
 
-// Initialize message sender (will be fully configured later with debug mode)
-initMessageSender(sw);
+// Initialize task queue (instance used by channelManager for RPC handlers)
+console.log('[SW] Initializing task queue...');
+const taskQueue = initTaskQueue(sw);
+console.log('[SW] Task queue initialized');
+
+// Initialize channel manager for duplex communication (postmessage-duplex)
+const channelManager = initChannelManager(sw);
+channelManager.setTaskQueue(taskQueue);
+taskQueue.setChannelManager(channelManager);
 
 // ============================================================================
 // SW Console Log Capture (for debug mode)
@@ -83,11 +113,36 @@ function setupSWConsoleCapture() {
   // warn and error are always forwarded
   console.warn = (...args: unknown[]) => {
     originalSWConsole.warn(...args);
+
+    // 防止循环：过滤掉以下消息
+    const message = args[0]?.toString() || '';
+
+    // 1. 过滤 postmessage-duplex 库的警告（这些已经被打印，无需再转发）
+    if (message.includes('Invalid message structure') ||
+        message.includes('[ServiceWorkerChannel]')) {
+      return;
+    }
+
+    // 2. 过滤来自主线程的消息（以免形成循环）
+    if (message.includes('[Main]') ||
+        message.includes('[SW Console Capture]') ||
+        message.includes('Service Worker')) {
+      return;
+    }
+
     forwardSWConsoleLog('warn', args);
   };
 
   console.error = (...args: unknown[]) => {
     originalSWConsole.error(...args);
+
+    // 防止循环：过滤来自主线程的错误消息
+    const message = args[0]?.toString() || '';
+    if (message.includes('[Main]') ||
+        message.includes('[SW Console Capture]')) {
+      return;
+    }
+
     forwardSWConsoleLog('error', args);
   };
 }
@@ -134,31 +189,19 @@ setupSWConsoleCapture();
 
 // Setup debug fetch broadcast to send SW internal API logs to debug panel
 setDebugFetchBroadcast((log) => {
-  // Broadcast as a special SW internal log type
-  sw.clients.matchAll().then((clients) => {
-    clients.forEach((client) => {
-      client.postMessage({
-        type: 'SW_DEBUG_LOG',
-        entry: {
-          ...log,
-          type: 'fetch',
-        },
-      });
-    });
-  });
+  const cm = getChannelManager();
+  if (cm) {
+    cm.sendDebugLog({ ...log, type: 'fetch' });
+  }
 });
 
 // Setup LLM API log broadcast for real-time updates (always on, not affected by debug mode)
 import('./task-queue/llm-api-logger').then(({ setLLMApiLogBroadcast }) => {
   setLLMApiLogBroadcast((log) => {
-    sw.clients.matchAll().then((clients) => {
-      clients.forEach((client) => {
-        client.postMessage({
-          type: 'SW_DEBUG_LLM_API_LOG',
-          log,
-        });
-      });
-    });
+    const cm = getChannelManager();
+    if (cm) {
+      cm.sendDebugLLMLog(log as unknown as Record<string, unknown>);
+    }
   });
 });
 
@@ -361,12 +404,11 @@ function checkHeartbeatTimeout() {
       setDebugFetchEnabled(false);
     });
 
-    // Broadcast to ALL clients
-    sw.clients.matchAll().then((clients) => {
-      clients.forEach((client) => {
-        client.postMessage({ type: 'SW_DEBUG_DISABLED' });
-      });
-    });
+    // 使用 channelManager 广播调试模式状态变更
+    const cm = getChannelManager();
+    if (cm) {
+      cm.sendDebugStatusChanged(false);
+    }
 
     if (heartbeatCheckTimer) {
       clearTimeout(heartbeatCheckTimer);
@@ -413,18 +455,11 @@ function updateDebugLog(id: string, updates: Partial<DebugLogEntry>): void {
   }
 }
 
-// 广播调试日志到所有客户端
-async function broadcastDebugLog(entry: DebugLogEntry): Promise<void> {
-  try {
-    const clients = await sw.clients.matchAll();
-    clients.forEach((client) => {
-      client.postMessage({
-        type: 'SW_DEBUG_LOG',
-        entry,
-      });
-    });
-  } catch (error) {
-    // 忽略广播错误
+// 广播调试日志到所有客户端（通过 postmessage-duplex）
+function broadcastDebugLog(entry: DebugLogEntry): void {
+  const cm = getChannelManager();
+  if (cm) {
+    cm.sendDebugLog(entry as unknown as Record<string, unknown>);
   }
 }
 
@@ -607,18 +642,11 @@ function addConsoleLog(entry: {
 // Set the forward function now that addConsoleLog is defined
 addConsoleLogLater = addConsoleLog;
 
-// 广播控制台日志到所有客户端
-async function broadcastConsoleLog(entry: DebugLogEntry): Promise<void> {
-  try {
-    const clients = await sw.clients.matchAll();
-    clients.forEach((client) => {
-      client.postMessage({
-        type: 'SW_CONSOLE_LOG',
-        entry,
-      });
-    });
-  } catch (error) {
-    // 忽略广播错误
+// 广播控制台日志到所有客户端（通过 postmessage-duplex）
+function broadcastConsoleLog(entry: DebugLogEntry): void {
+  const cm = getChannelManager();
+  if (cm) {
+    cm.sendConsoleLog(entry as unknown as Record<string, unknown>);
   }
 }
 
@@ -692,6 +720,66 @@ function getDebugStatus(): {
       consoleLogsArraySize: consoleLogs.length,
     },
   };
+}
+
+// ============================================================================
+// 导出给 channel-manager 使用的帮助函数
+// ============================================================================
+
+// 获取调试日志数组
+function getDebugLogs(): typeof debugLogs {
+  return debugLogs;
+}
+
+// 清空调试日志
+function clearDebugLogs(): void {
+  debugLogs.length = 0;
+}
+
+// 清空控制台日志（内存）
+function clearConsoleLogs(): void {
+  consoleLogs.length = 0;
+}
+
+// 启用调试模式
+async function enableDebugMode(): Promise<void> {
+  debugModeEnabled = true;
+  lastHeartbeatTime = Date.now();
+  
+  // Sync debug mode to debugFetch and message sender
+  const { setDebugFetchEnabled } = await import('./task-queue/debug-fetch');
+  setDebugFetchEnabled(true);
+  setMessageSenderDebugMode(true);
+  
+  originalSWConsole.log('Service Worker: Debug mode enabled via RPC');
+  
+  // Start heartbeat check
+  if (heartbeatCheckTimer) {
+    clearTimeout(heartbeatCheckTimer);
+  }
+  heartbeatCheckTimer = setTimeout(checkHeartbeatTimeout, 5000);
+}
+
+// 禁用调试模式
+async function disableDebugMode(): Promise<void> {
+  debugModeEnabled = false;
+  lastHeartbeatTime = 0;
+  if (heartbeatCheckTimer) {
+    clearTimeout(heartbeatCheckTimer);
+    heartbeatCheckTimer = null;
+  }
+  
+  // Sync debug mode to debugFetch and message sender
+  const { setDebugFetchEnabled } = await import('./task-queue/debug-fetch');
+  setDebugFetchEnabled(false);
+  setMessageSenderDebugMode(false);
+
+  // 禁用调试模式时清空所有日志
+  consoleLogs.length = 0;
+  debugLogs.length = 0;
+  await clearAllConsoleLogs().catch(() => {});
+
+  originalSWConsole.log('Service Worker: Debug mode disabled via RPC, logs cleared');
 }
 
 // 检查URL是否需要CORS处理
@@ -824,15 +912,11 @@ function markNewVersionReady(isUpdate: boolean) {
     return;
   }
 
-  // 通知客户端有新版本可用
-  sw.clients.matchAll().then((clients) => {
-    clients.forEach((client) => {
-      client.postMessage({
-        type: 'SW_NEW_VERSION_READY',
-        version: APP_VERSION,
-      });
-    });
-  });
+  // 使用 channelManager 通知客户端有新版本可用
+  const cm = getChannelManager();
+  if (cm) {
+    cm.sendSWNewVersionReady(APP_VERSION);
+  }
 }
 
 // 清理旧的缓存条目以释放空间（基于LRU策略）
@@ -1212,42 +1296,14 @@ sw.addEventListener('activate', (event: ExtendableEvent) => {
       // 立即接管所有页面
       await sw.clients.claim();
 
-      // 通知所有客户端 SW 已更新（让 UI 知道可能需要刷新）
-      const clients = await sw.clients.matchAll();
-      clients.forEach((client) => {
-        client.postMessage({
-          type: 'SW_ACTIVATED',
-          version: APP_VERSION,
-        });
-      });
+      // 使用 channelManager 通知所有客户端 SW 已更新
+      const cm = getChannelManager();
+      if (cm) {
+        cm.sendSWActivated(APP_VERSION);
+      }
     })
   );
 });
-
-// Task queue message types
-const TASK_QUEUE_MESSAGE_TYPES = [
-  'TASK_QUEUE_INIT',
-  'TASK_QUEUE_UPDATE_CONFIG',
-  'TASK_SUBMIT',
-  'TASK_CANCEL',
-  'TASK_RETRY',
-  'TASK_RESUME',
-  'TASK_GET_STATUS',
-  'TASK_GET_ALL',
-  'TASK_DELETE',
-  'TASK_MARK_INSERTED',
-  'CHAT_START',
-  'CHAT_STOP',
-  'CHAT_GET_CACHED',
-  'TASK_RESTORE',
-];
-
-// Check if message is a task queue message
-function isTaskQueueMessage(data: unknown): boolean {
-  if (!data || typeof data !== 'object') return false;
-  const msg = data as { type?: string };
-  return msg.type ? TASK_QUEUE_MESSAGE_TYPES.includes(msg.type) : false;
-}
 
 // Track if workflow handler is initialized
 let workflowHandlerInitialized = false;
@@ -1266,15 +1322,10 @@ const pendingWorkflowMessages: PendingWorkflowMessage[] = [];
 // Helper function to broadcast PostMessage log to debug panel
 function broadcastPostMessageLog(entry: PostMessageLogEntry): void {
   if (debugModeEnabled) {
-    // Use direct postMessage for debug logs to avoid infinite loop
-    sw.clients.matchAll().then((clients) => {
-      clients.forEach((client) => {
-        client.postMessage({
-          type: 'SW_POSTMESSAGE_LOG',
-          entry,
-        });
-      });
-    });
+    const cm = getChannelManager();
+    if (cm) {
+      cm.sendPostMessageLog(entry as unknown as Record<string, unknown>);
+    }
   }
 }
 
@@ -1285,12 +1336,36 @@ setBroadcastCallback(broadcastPostMessageLog);
 sw.addEventListener('message', (event: ExtendableMessageEvent) => {
   const messageType = event.data?.type || 'unknown';
   const clientId = (event.source as Client)?.id || '';
+  const clientUrl = (event.source as WindowClient)?.url || '';
+
+  // Handle channel connect request - create channel for this client
+  // postmessage-duplex channels will then automatically handle subsequent messages
+  if (event.data?.type === 'SW_CHANNEL_CONNECT') {
+    const cm = getChannelManager();
+    if (cm && clientId) {
+      cm.handleClientConnect(clientId);
+      // Respond to client that channel is ready
+      (event.source as Client)?.postMessage({ type: 'SW_CHANNEL_READY' });
+    }
+    return;
+  }
+
+  // Note: postmessage-duplex messages (with __key__ or requestId) are automatically
+  // handled by the channel's internal message listener after channel creation.
+  // We don't need to manually route them here.
 
   // Log received message only if debug mode is enabled
   // This ensures postMessage logging doesn't affect performance when debug mode is off
   let logId = '';
+  // Skip logging for internal messages (e.g., broadcast logs from ourselves)
   if (isPostMessageLoggerDebugMode()) {
-    logId = logReceivedMessage(messageType, event.data, clientId);
+    logId = logReceivedMessage(
+      messageType,
+      event.data,
+      clientId,
+      clientUrl,
+      event.data?.__internal__
+    );
     if (logId && debugModeEnabled) {
       const logs = getAllPostMessageLogs();
       const entry = logs.find((l) => l.id === logId);
@@ -1298,51 +1373,6 @@ sw.addEventListener('message', (event: ExtendableMessageEvent) => {
         broadcastPostMessageLog(entry);
       }
     }
-  }
-
-  // Handle task queue messages
-  if (event.data && isTaskQueueMessage(event.data)) {
-    const clientId = (event.source as Client)?.id || '';
-    handleTaskQueueMessage(event.data as MainToSWMessage, clientId);
-
-    // Initialize workflow handler when task queue is initialized
-    if (event.data.type === 'TASK_QUEUE_INIT') {
-      const { geminiConfig, videoConfig } = event.data;
-      // Store config for later use
-      storedGeminiConfig = geminiConfig;
-      storedVideoConfig = videoConfig;
-
-      if (!workflowHandlerInitialized) {
-        initWorkflowHandler(sw, geminiConfig, videoConfig);
-        workflowHandlerInitialized = true;
-        // console.log('Service Worker: Workflow handler initialized');
-
-        // Process any pending workflow messages that were waiting for config
-        if (pendingWorkflowMessages.length > 0) {
-          for (const pending of pendingWorkflowMessages) {
-            handleWorkflowMessage(pending.message, pending.clientId);
-          }
-          pendingWorkflowMessages.length = 0; // Clear the array
-        }
-      }
-
-      // Re-send any pending tool requests to the new client
-      // This handles page refresh during workflow execution
-      resendPendingToolRequests();
-    }
-
-    // Update workflow config when task queue config is updated
-    if (event.data.type === 'TASK_QUEUE_UPDATE_CONFIG') {
-      const { geminiConfig, videoConfig } = event.data;
-      // Update stored config
-      if (geminiConfig)
-        storedGeminiConfig = { ...storedGeminiConfig, ...geminiConfig };
-      if (videoConfig)
-        storedVideoConfig = { ...storedVideoConfig, ...videoConfig };
-      updateWorkflowConfig(geminiConfig, videoConfig);
-    }
-
-    return;
   }
 
   // Handle workflow messages
@@ -1443,40 +1473,31 @@ sw.addEventListener('message', (event: ExtendableMessageEvent) => {
     // 直接调用 skipWaiting
     sw.skipWaiting();
 
-    // Notify clients that SW has been updated
-    sw.clients.matchAll().then((clients) => {
-      clients.forEach((client) => {
-        client.postMessage({ type: 'SW_UPDATED' });
-      });
-    });
-  } else if (event.data && event.data.type === 'GET_UPGRADE_STATUS') {
-    // 主线程查询升级状态
-    event.source?.postMessage({
-      type: 'UPGRADE_STATUS',
-      version: APP_VERSION,
-    });
+    // 使用 channelManager 通知客户端 SW 已更新
+    const cm = getChannelManager();
+    if (cm) {
+      cm.sendSWUpdated(APP_VERSION);
+    }
   } else if (event.data && event.data.type === 'FORCE_UPGRADE') {
     // 主线程强制升级
-    // console.log('Service Worker: 收到强制升级请求');
     sw.skipWaiting();
-    sw.clients.matchAll().then((clients) => {
-      clients.forEach((client) => {
-        client.postMessage({ type: 'SW_UPDATED' });
-      });
-    });
+    
+    // 使用 channelManager 通知客户端 SW 已更新
+    const cm = getChannelManager();
+    if (cm) {
+      cm.sendSWUpdated(APP_VERSION);
+    }
   } else if (event.data && event.data.type === 'DELETE_CACHE') {
     // 删除单个缓存
     const { url } = event.data;
     if (url) {
       deleteCacheByUrl(url)
         .then(() => {
-          // console.log('Service Worker: Cache deleted:', url);
-          // 通知主线程
-          sw.clients.matchAll().then((clients) => {
-            clients.forEach((client) => {
-              client.postMessage({ type: 'CACHE_DELETED', url });
-            });
-          });
+          // 使用 channelManager 通知主线程
+          const cm = getChannelManager();
+          if (cm) {
+            cm.sendCacheDeleted(url);
+          }
         })
         .catch((error) => {
           console.error('Service Worker: Failed to delete cache:', error);
@@ -1521,16 +1542,11 @@ sw.addEventListener('message', (event: ExtendableMessageEvent) => {
       clearTimeout(heartbeatCheckTimer);
     }
     heartbeatCheckTimer = setTimeout(checkHeartbeatTimeout, 5000);
-    // Broadcast to ALL clients (including app pages) so they can capture logs
-    sw.clients.matchAll().then((clients) => {
-      clients.forEach((client) => {
-        client.postMessage({ type: 'SW_DEBUG_ENABLED' });
-      });
-    });
-    event.source?.postMessage({
-      type: 'SW_DEBUG_STATUS',
-      status: getDebugStatus(),
-    });
+    // 使用 channelManager 广播调试模式状态变更
+    const cm = getChannelManager();
+    if (cm) {
+      cm.sendDebugStatusChanged(true);
+    }
   } else if (event.data && event.data.type === 'SW_DEBUG_HEARTBEAT') {
     // 调试页面心跳：更新心跳时间
     if (debugModeEnabled) {
@@ -1551,349 +1567,129 @@ sw.addEventListener('message', (event: ExtendableMessageEvent) => {
     setMessageSenderDebugMode(false);
 
     // 禁用调试模式时清空所有日志（内存和 IndexedDB）
-    // 这样重新打开调试面板时不会显示旧日志
     consoleLogs.length = 0;
     debugLogs.length = 0;
-    clearAllConsoleLogs().catch(() => {
-      // 忽略 IndexedDB 清理失败
-    });
+    clearAllConsoleLogs().catch(() => {});
 
     originalSWConsole.log('Service Worker: Debug mode disabled, logs cleared');
-    // Broadcast to ALL clients (including app pages) so they stop capturing verbose logs
-    sw.clients.matchAll().then((clients) => {
-      clients.forEach((client) => {
-        client.postMessage({ type: 'SW_DEBUG_DISABLED' });
-      });
-    });
-    event.source?.postMessage({
-      type: 'SW_DEBUG_STATUS',
-      status: getDebugStatus(),
-    });
-  } else if (event.data && event.data.type === 'SW_DEBUG_GET_STATUS') {
-    // 获取调试状态
-    (async () => {
-      const status = getDebugStatus();
-      // 获取缓存统计
-      const cacheStats = await getCacheStats();
-      event.source?.postMessage({
-        type: 'SW_DEBUG_STATUS',
-        status: { ...status, cacheStats },
-      });
-    })();
-  } else if (event.data && event.data.type === 'SW_DEBUG_GET_LOGS') {
-    // 获取调试日志 (合并 debugLogs 和 internalFetchLogs)
-    const { limit = 100, offset = 0, filter } = event.data;
-
-    // Merge internal fetch logs with debug logs
-    const internalLogs = getInternalFetchLogs().map((log) => ({
-      ...log,
-      type: 'fetch',
-    }));
-
-    // Combine and deduplicate by ID (internal logs take priority as they're more up-to-date)
-    const logMap = new Map<string, any>();
-    for (const log of debugLogs) {
-      logMap.set(log.id, log);
+    // 使用 channelManager 广播调试模式状态变更
+    const cm = getChannelManager();
+    if (cm) {
+      cm.sendDebugStatusChanged(false);
     }
-    for (const log of internalLogs) {
-      logMap.set(log.id, log);
-    }
-
-    // Sort by timestamp descending
-    let logs = Array.from(logMap.values()).sort(
-      (a, b) => b.timestamp - a.timestamp
-    );
-
-    // 应用过滤器
-    if (filter) {
-      if (filter.type) {
-        logs = logs.filter((l) => l.type === filter.type);
-      }
-      if (filter.requestType) {
-        logs = logs.filter((l) => l.requestType === filter.requestType);
-      }
-      if (filter.url) {
-        logs = logs.filter((l) => l.url?.includes(filter.url));
-      }
-      if (filter.status) {
-        logs = logs.filter((l) => l.status === filter.status);
-      }
-    }
-
-    const paginatedLogs = logs.slice(offset, offset + limit);
-    event.source?.postMessage({
-      type: 'SW_DEBUG_LOGS',
-      logs: paginatedLogs,
-      total: logs.length,
-      offset,
-      limit,
-    });
-  } else if (event.data && event.data.type === 'SW_DEBUG_CLEAR_LOGS') {
-    // 清空调试日志
-    debugLogs.length = 0;
-    event.source?.postMessage({
-      type: 'SW_DEBUG_LOGS_CLEARED',
-    });
-  } else if (event.data && event.data.type === 'SW_CDN_GET_STATUS') {
-    // 获取 CDN 状态
-    event.source?.postMessage({
-      type: 'SW_CDN_STATUS',
-      status: getCDNStatusReport(),
-    });
-  } else if (event.data && event.data.type === 'SW_CDN_RESET_STATUS') {
-    // 重置 CDN 状态
-    resetCDNStatus();
-    event.source?.postMessage({
-      type: 'SW_CDN_STATUS_RESET',
-    });
-  } else if (event.data && event.data.type === 'SW_CDN_HEALTH_CHECK') {
-    // 执行 CDN 健康检查
-    (async () => {
-      const results = await performHealthCheck(APP_VERSION);
-      event.source?.postMessage({
-        type: 'SW_CDN_HEALTH_CHECK_RESULT',
-        results: Object.fromEntries(results),
-      });
-    })();
-  } else if (event.data && event.data.type === 'SW_DEBUG_GET_CACHE_ENTRIES') {
-    // 获取缓存条目列表
-    const { cacheName, limit = 50, offset = 0 } = event.data;
+  }
+  
+  // 为调试页面提供原生 postMessage 支持（调试页面不使用 postmessage-duplex）
+  // LLM API 日志查询
+  if (event.data && event.data.type === 'SW_DEBUG_GET_LLM_API_LOGS') {
     (async () => {
       try {
-        const cache = await caches.open(cacheName || IMAGE_CACHE_NAME);
-        const requests = await cache.keys();
-        const entries: { url: string; cacheDate?: number; size?: number }[] =
-          [];
-
-        for (
-          let i = offset;
-          i < Math.min(offset + limit, requests.length);
-          i++
-        ) {
-          const request = requests[i];
-          const response = await cache.match(request);
-          if (response) {
-            const cacheDate = response.headers.get('sw-cache-date');
-            const size =
-              response.headers.get('sw-image-size') ||
-              response.headers.get('content-length');
-            entries.push({
-              url: request.url,
-              cacheDate: cacheDate ? parseInt(cacheDate) : undefined,
-              size: size ? parseInt(size) : undefined,
-            });
-          }
-        }
-
-        event.source?.postMessage({
-          type: 'SW_DEBUG_CACHE_ENTRIES',
-          cacheName: cacheName || IMAGE_CACHE_NAME,
-          entries,
-          total: requests.length,
-          offset,
-          limit,
-        });
-      } catch (error) {
-        event.source?.postMessage({
-          type: 'SW_DEBUG_CACHE_ENTRIES',
-          error: String(error),
-        });
-      }
-    })();
-  } else if (event.data && event.data.type === 'SW_CONSOLE_LOG_REPORT') {
-    // 接收来自主应用的控制台日志
-    const { logLevel, logMessage, logStack, logSource, url } = event.data;
-    addConsoleLog({
-      logLevel,
-      logMessage,
-      logStack,
-      logSource,
-      url,
-    });
-  } else if (event.data && event.data.type === 'SW_DEBUG_GET_CONSOLE_LOGS') {
-    // 从 IndexedDB 获取控制台日志
-    (async () => {
-      try {
-        const { limit = 500, offset = 0, filter } = event.data;
-        let logs = await loadConsoleLogsFromDB();
-
-        // 应用过滤器
-        if (filter) {
-          if (filter.logLevel) {
-            logs = logs.filter((l) => l.logLevel === filter.logLevel);
-          }
-          if (filter.search) {
-            const search = filter.search.toLowerCase();
-            logs = logs.filter(
-              (l) =>
-                l.logMessage?.toLowerCase().includes(search) ||
-                l.logStack?.toLowerCase().includes(search)
-            );
-          }
-        }
-
-        const paginatedLogs = logs.slice(offset, offset + limit);
-        event.source?.postMessage({
-          type: 'SW_DEBUG_CONSOLE_LOGS',
-          logs: paginatedLogs,
-          total: logs.length,
-          offset,
-          limit,
-        });
-      } catch (error) {
-        event.source?.postMessage({
-          type: 'SW_DEBUG_CONSOLE_LOGS',
-          logs: [],
-          total: 0,
-          error: String(error),
-        });
-      }
-    })();
-  } else if (event.data && event.data.type === 'SW_DEBUG_CLEAR_CONSOLE_LOGS') {
-    // 清空控制台日志（内存和 IndexedDB）
-    (async () => {
-      consoleLogs.length = 0;
-      await clearAllConsoleLogs();
-      event.source?.postMessage({
-        type: 'SW_DEBUG_CONSOLE_LOGS_CLEARED',
-      });
-    })();
-  } else if (event.data && event.data.type === 'SW_DEBUG_EXPORT_LOGS') {
-    // 导出所有日志（从 IndexedDB 读取）
-    (async () => {
-      const allConsoleLogs = await loadConsoleLogsFromDB();
-      const postmessageLogs = getAllPostMessageLogs();
-      const exportData = {
-        exportTime: new Date().toISOString(),
-        swVersion: APP_VERSION,
-        userAgent: '', // 将由调试页面填充
-        status: getDebugStatus(),
-        fetchLogs: debugLogs,
-        consoleLogs: allConsoleLogs,
-        postmessageLogs,
-      };
-      event.source?.postMessage({
-        type: 'SW_DEBUG_EXPORT_DATA',
-        data: exportData,
-      });
-    })();
-  } else if (
-    event.data &&
-    event.data.type === 'SW_DEBUG_GET_POSTMESSAGE_LOGS'
-  ) {
-    // 获取 PostMessage 日志
-    const { limit = 200, offset = 0, filter } = event.data;
-    let logs = getAllPostMessageLogs();
-
-    // 应用过滤器
-    if (filter) {
-      if (filter.direction) {
-        logs = logs.filter((l) => l.direction === filter.direction);
-      }
-      if (filter.messageType) {
-        const search = filter.messageType.toLowerCase();
-        logs = logs.filter((l) =>
-          l.messageType?.toLowerCase().includes(search)
-        );
-      }
-    }
-
-    const paginatedLogs = logs.slice(offset, offset + limit);
-    event.source?.postMessage({
-      type: 'SW_DEBUG_POSTMESSAGE_LOGS',
-      logs: paginatedLogs,
-      total: logs.length,
-      offset,
-      limit,
-      stats: getPostMessageLogStats(),
-    });
-  } else if (
-    event.data &&
-    event.data.type === 'SW_DEBUG_CLEAR_POSTMESSAGE_LOGS'
-  ) {
-    // 清空 PostMessage 日志
-    clearPostMessageLogs();
-    event.source?.postMessage({
-      type: 'SW_DEBUG_POSTMESSAGE_LOGS_CLEARED',
-    });
-  } else if (event.data && event.data.type === 'CRASH_SNAPSHOT') {
-    // 保存崩溃快照到 IndexedDB
-    const snapshot = event.data.snapshot;
-    if (snapshot) {
-      saveCrashSnapshot(snapshot);
-      // 广播新快照到所有客户端（包括 sw-debug.html）
-      sw.clients.matchAll().then((clients) => {
-        clients.forEach((client) => {
-          client.postMessage({
-            type: 'SW_DEBUG_NEW_CRASH_SNAPSHOT',
-            snapshot,
-          });
-        });
-      });
-    }
-  } else if (event.data && event.data.type === 'SW_DEBUG_GET_CRASH_SNAPSHOTS') {
-    // 获取崩溃快照列表
-    (async () => {
-      try {
-        const snapshots = await getCrashSnapshots();
-        event.source?.postMessage({
-          type: 'SW_DEBUG_CRASH_SNAPSHOTS',
-          snapshots,
-          total: snapshots.length,
-        });
-      } catch (error) {
-        event.source?.postMessage({
-          type: 'SW_DEBUG_CRASH_SNAPSHOTS',
-          snapshots: [],
-          total: 0,
-          error: String(error),
-        });
-      }
-    })();
-  } else if (
-    event.data &&
-    event.data.type === 'SW_DEBUG_CLEAR_CRASH_SNAPSHOTS'
-  ) {
-    // 清空崩溃快照
-    (async () => {
-      await clearCrashSnapshots();
-      event.source?.postMessage({
-        type: 'SW_DEBUG_CRASH_SNAPSHOTS_CLEARED',
-      });
-    })();
-  } else if (event.data && event.data.type === 'SW_DEBUG_GET_LLM_API_LOGS') {
-    // 获取 LLM API 日志列表
-    (async () => {
-      try {
-        const { getAllLLMApiLogs } = await import(
-          './task-queue/llm-api-logger'
-        );
+        const { getAllLLMApiLogs } = await import('./task-queue/llm-api-logger');
         const logs = await getAllLLMApiLogs();
-        event.source?.postMessage({
-          type: 'SW_DEBUG_LLM_API_LOGS',
-          logs,
-          total: logs.length,
-        });
+        const client = event.source as Client;
+        if (client) {
+          client.postMessage({
+            type: 'SW_DEBUG_LLM_API_LOGS',
+            logs,
+          });
+        }
       } catch (error) {
-        event.source?.postMessage({
-          type: 'SW_DEBUG_LLM_API_LOGS',
-          logs: [],
-          total: 0,
-          error: String(error),
-        });
+        console.error('[SW] Failed to get LLM API logs:', error);
       }
     })();
-  } else if (event.data && event.data.type === 'SW_DEBUG_CLEAR_LLM_API_LOGS') {
-    // 清空 LLM API 日志
+    return;
+  }
+  
+  // LLM API 日志清理
+  if (event.data && event.data.type === 'SW_DEBUG_CLEAR_LLM_API_LOGS') {
     (async () => {
-      const { clearAllLLMApiLogs } = await import(
-        './task-queue/llm-api-logger'
-      );
-      await clearAllLLMApiLogs();
-      event.source?.postMessage({
-        type: 'SW_DEBUG_LLM_API_LOGS_CLEARED',
-      });
+      try {
+        const { clearAllLLMApiLogs } = await import('./task-queue/llm-api-logger');
+        await clearAllLLMApiLogs();
+        const client = event.source as Client;
+        if (client) {
+          client.postMessage({
+            type: 'SW_DEBUG_LLM_API_LOGS_CLEARED',
+          });
+        }
+      } catch (error) {
+        console.error('[SW] Failed to clear LLM API logs:', error);
+      }
     })();
+    return;
+  }
+  
+  // 调试状态查询
+  if (event.data && event.data.type === 'SW_DEBUG_GET_STATUS') {
+    const client = event.source as Client;
+    if (client) {
+      client.postMessage({
+        type: 'SW_DEBUG_STATUS',
+        debugModeEnabled,
+        swVersion: APP_VERSION,
+        logs: debugLogs.slice(-100), // 只发送最近 100 条
+        consoleLogs: consoleLogs.slice(-100),
+      });
+    }
+    return;
+  }
+  
+  // Fetch 日志查询
+  if (event.data && event.data.type === 'SW_DEBUG_GET_LOGS') {
+    (async () => {
+      try {
+        const { getInternalFetchLogs } = await import('./task-queue/debug-fetch');
+        const logs = getDebugLogs();
+        const internalLogs = getInternalFetchLogs();
+        const client = event.source as Client;
+        if (client) {
+          client.postMessage({
+            type: 'SW_DEBUG_LOGS',
+            logs: [...logs, ...internalLogs.map(l => ({ ...l, type: 'fetch' }))],
+          });
+        }
+      } catch (error) {
+        console.error('[SW] Failed to get fetch logs:', error);
+      }
+    })();
+    return;
+  }
+  
+  // Console 日志查询
+  if (event.data && event.data.type === 'SW_DEBUG_GET_CONSOLE_LOGS') {
+    (async () => {
+      try {
+        const client = event.source as Client;
+        if (client) {
+          client.postMessage({
+            type: 'SW_DEBUG_CONSOLE_LOGS',
+            logs: consoleLogs,
+          });
+        }
+      } catch (error) {
+        console.error('[SW] Failed to get console logs:', error);
+      }
+    })();
+    return;
+  }
+  
+  // PostMessage 日志查询
+  if (event.data && event.data.type === 'SW_DEBUG_GET_POSTMESSAGE_LOGS') {
+    (async () => {
+      try {
+        const logs = getAllPostMessageLogs();
+        const client = event.source as Client;
+        if (client) {
+          client.postMessage({
+            type: 'SW_DEBUG_POSTMESSAGE_LOGS',
+            logs,
+          });
+        }
+      } catch (error) {
+        console.error('[SW] Failed to get postmessage logs:', error);
+      }
+    })();
+    return;
   }
 });
 
@@ -2355,16 +2151,11 @@ async function notifyImageCached(
   mimeType: string
 ): Promise<void> {
   try {
-    const clients = await sw.clients.matchAll();
-    clients.forEach((client) => {
-      client.postMessage({
-        type: 'IMAGE_CACHED',
-        url,
-        size,
-        mimeType,
-        timestamp: Date.now(),
-      });
-    });
+    // 使用 channelManager 发送缓存事件
+    const cm = getChannelManager();
+    if (cm) {
+      cm.sendCacheImageCached(url, size);
+    }
   } catch (error) {
     console.warn('Service Worker: Failed to notify image cached:', error);
   }
@@ -2381,19 +2172,13 @@ async function checkStorageQuota(): Promise<void> {
 
       // 如果使用率超过 90%，发送警告
       if (percentage > 90) {
-        console.warn('Service Worker: Storage quota warning:', {
-          usage,
-          quota,
-          percentage,
-        });
-        const clients = await sw.clients.matchAll();
-        clients.forEach((client) => {
-          client.postMessage({
-            type: 'QUOTA_WARNING',
-            usage,
-            quota,
-          });
-        });
+        console.warn('Service Worker: Storage quota warning:', { usage, quota, percentage });
+        
+        // 使用 channelManager 发送配额警告
+        const cm = getChannelManager();
+        if (cm) {
+          cm.sendCacheQuotaWarning(usage, quota, percentage);
+        }
       }
     }
   } catch (error) {

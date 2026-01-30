@@ -6,6 +6,8 @@
  * - log/info: 仅在调试模式开启时捕获（用于调试分析）
  */
 
+import { swChannelClient } from '@drawnix/drawnix';
+
 let isInitialized = false;
 let debugModeEnabled = false;
 
@@ -22,13 +24,22 @@ const originalConsole = {
  * 发送日志到 Service Worker
  */
 function sendToSW(level: string, message: string, stack?: string) {
-  if (navigator.serviceWorker?.controller) {
-    navigator.serviceWorker.controller.postMessage({
-      type: 'SW_CONSOLE_LOG_REPORT',
-      logLevel: level,
-      logMessage: message,
-      logStack: stack || '',
-      logSource: window.location.href,
+  // 防止循环：不转发来自 SW 的日志
+  if (message.includes('[SW]') ||
+      message.includes('[SWTaskQueue]') ||
+      message.includes('[SWChannelManager]') ||
+      message.includes('Invalid message structure')) {
+    return;
+  }
+
+  // 使用 swChannelClient 发送控制台日志
+  if (swChannelClient.isInitialized()) {
+    swChannelClient.reportConsoleLog(
+      level,
+      [{ message, stack: stack || '', source: window.location.href }],
+      Date.now()
+    ).catch(() => {
+      // 忽略发送错误
     });
   }
 }
@@ -79,34 +90,36 @@ export function initSWConsoleCapture(): void {
 
   isInitialized = true;
 
-  // 监听 Service Worker 消息，同步调试模式状态
-  navigator.serviceWorker.addEventListener('message', (event) => {
-    if (event.data?.type === 'SW_DEBUG_STATUS') {
-      const wasEnabled = debugModeEnabled;
-      debugModeEnabled = event.data.status?.debugModeEnabled || false;
-      if (debugModeEnabled && !wasEnabled) {
-        originalConsole.log('[SW Console Capture] 调试模式已开启，开始捕获所有日志');
-      }
-    } else if (event.data?.type === 'SW_DEBUG_ENABLED') {
-      debugModeEnabled = true;
-      originalConsole.log('[SW Console Capture] 调试模式已开启，开始捕获所有日志');
-    } else if (event.data?.type === 'SW_DEBUG_DISABLED') {
-      debugModeEnabled = false;
-      originalConsole.log('[SW Console Capture] 调试模式已关闭，仅捕获 warn/error');
-    }
-  });
+  // 订阅调试状态变更事件
+  const setupDebugStatusListener = () => {
+    if (swChannelClient.isInitialized()) {
+      // 订阅调试状态变更事件
+      swChannelClient.subscribeToEvent('debug:statusChanged', (data) => {
+        const event = data as { enabled: boolean };
+        const wasEnabled = debugModeEnabled;
+        debugModeEnabled = event.enabled;
+        if (debugModeEnabled && !wasEnabled) {
+          originalConsole.log('[SW Console Capture] 调试模式已开启，开始捕获所有日志');
+        } else if (!debugModeEnabled && wasEnabled) {
+          originalConsole.log('[SW Console Capture] 调试模式已关闭，仅捕获 warn/error');
+        }
+      });
 
-  // Query current debug status on init (after SW is ready)
-  if (navigator.serviceWorker.controller) {
-    navigator.serviceWorker.controller.postMessage({ type: 'SW_DEBUG_GET_STATUS' });
-  }
-  
-  // Also query when controller changes (e.g., SW update)
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (navigator.serviceWorker.controller) {
-      navigator.serviceWorker.controller.postMessage({ type: 'SW_DEBUG_GET_STATUS' });
+      // 查询当前调试状态
+      swChannelClient.getDebugStatus().then((status) => {
+        debugModeEnabled = status.enabled;
+        if (debugModeEnabled) {
+          originalConsole.log('[SW Console Capture] 调试模式已开启，开始捕获所有日志');
+        }
+      });
+    } else {
+      // 如果 swChannelClient 未初始化，延迟重试
+      setTimeout(setupDebugStatusListener, 500);
     }
-  });
+  };
+
+  // 初始化调试状态监听
+  setupDebugStatusListener();
 
   // 拦截 console.error（始终捕获）
   console.error = function (...args: unknown[]) {

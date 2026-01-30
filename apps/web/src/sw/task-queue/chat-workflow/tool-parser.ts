@@ -1,21 +1,19 @@
 /**
  * Tool Parser for Service Worker
  *
- * Re-exports shared tool parser utilities.
- * Adds SW-specific type conversions.
+ * Imports from @aitu/utils and adds SW-specific type conversions.
  */
 
-// Re-export shared parser
+// Re-export from @aitu/utils
 export {
   cleanLLMResponse,
   parseWorkflowJson,
   extractTextContent,
-  hasToolCall,
-} from '../../../shared/tool-parser';
+  hasToolCalls,
+  type WorkflowJsonResponse,
+} from '@aitu/utils';
 
-export type { WorkflowJsonResponse } from '../../../shared/tool-parser';
-
-import { parseToolCalls as sharedParseToolCalls } from '../../../shared/tool-parser';
+import { parseToolCalls as sharedParseToolCalls } from '@aitu/utils';
 import type { ChatToolCall } from './types';
 
 /**

@@ -918,7 +918,9 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
 
   // Handle generation
   const handleGenerate = useCallback(async () => {
-    if (!prompt.trim() && allContent.length === 0) return;
+    if (!prompt.trim() && allContent.length === 0) {
+      return;
+    }
     if (isSubmitting) {
       return; // 仅防止快速重复点击
     }
@@ -1807,7 +1809,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
               e.preventDefault();
               e.stopPropagation();
             }}
-            onClick={handleGenerate}
+            onClick={() => handleGenerate()}
             disabled={!canGenerate || isSubmitting}
             data-track="ai_input_click_send"
             data-testid="ai-send-btn"

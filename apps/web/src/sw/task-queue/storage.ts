@@ -502,6 +502,7 @@ export class TaskQueueStorage {
     geminiConfig: GeminiConfig | null;
     videoConfig: VideoAPIConfig | null;
   }> {
+    console.log('[SWStorage] loadConfig called');
     try {
       const db = await this.getDB();
       return new Promise((resolve, reject) => {

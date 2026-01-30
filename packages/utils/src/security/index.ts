@@ -124,12 +124,17 @@ export function sanitizeUrl(url: string, baseUrl?: string): string {
   try {
     const urlObj = new URL(url, baseUrl || (typeof window !== 'undefined' ? window.location.origin : undefined));
 
-    // Remove sensitive query parameters
-    SENSITIVE_URL_PARAMS.forEach((param) => {
-      urlObj.searchParams.delete(param);
-      urlObj.searchParams.delete(param.toLowerCase());
-      urlObj.searchParams.delete(param.toUpperCase());
+    // Collect keys to delete (case-insensitive match)
+    const keysToDelete: string[] = [];
+    urlObj.searchParams.forEach((_value, key) => {
+      const lowerKey = key.toLowerCase();
+      if (SENSITIVE_URL_PARAMS.some((param) => lowerKey === param || lowerKey.includes(param))) {
+        keysToDelete.push(key);
+      }
     });
+
+    // Delete sensitive parameters
+    keysToDelete.forEach((key) => urlObj.searchParams.delete(key));
 
     return urlObj.toString();
   } catch {

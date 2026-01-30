@@ -233,181 +233,6 @@ export interface VideoAPIConfig {
 // ============================================================================
 // Main Thread → Service Worker Messages
 // ============================================================================
-
-/**
- * Initialize SW task queue with configuration
- */
-export interface InitTaskQueueMessage {
-  type: 'TASK_QUEUE_INIT';
-  geminiConfig: GeminiConfig;
-  videoConfig: VideoAPIConfig;
-}
-
-/**
- * Update API configuration
- */
-export interface UpdateConfigMessage {
-  type: 'TASK_QUEUE_UPDATE_CONFIG';
-  geminiConfig?: Partial<GeminiConfig>;
-  videoConfig?: Partial<VideoAPIConfig>;
-}
-
-/**
- * Submit a new task
- */
-export interface TaskSubmitMessage {
-  type: 'TASK_SUBMIT';
-  taskId: string;
-  taskType: TaskType;
-  params: GenerationParams;
-}
-
-/**
- * Cancel a task
- */
-export interface TaskCancelMessage {
-  type: 'TASK_CANCEL';
-  taskId: string;
-}
-
-/**
- * Retry a failed task
- */
-export interface TaskRetryMessage {
-  type: 'TASK_RETRY';
-  taskId: string;
-}
-
-/**
- * Resume a task after page refresh
- */
-export interface TaskResumeMessage {
-  type: 'TASK_RESUME';
-  taskId: string;
-  remoteId: string;
-  taskType: TaskType;
-}
-
-/**
- * Get current status of a task
- */
-export interface TaskGetStatusMessage {
-  type: 'TASK_GET_STATUS';
-  taskId: string;
-}
-
-/**
- * Get all tasks
- */
-export interface TaskGetAllMessage {
-  type: 'TASK_GET_ALL';
-}
-
-/**
- * Get tasks with pagination
- */
-export interface TaskGetPaginatedMessage {
-  type: 'TASK_GET_PAGINATED';
-  /** Number of items to skip */
-  offset: number;
-  /** Maximum number of items to return */
-  limit: number;
-  /** Optional filters */
-  filters?: {
-    status?: TaskStatus;
-    type?: TaskType;
-  };
-  /** Sort order (default: desc by createdAt) */
-  sortOrder?: 'asc' | 'desc';
-}
-
-/**
- * Delete a task
- */
-export interface TaskDeleteMessage {
-  type: 'TASK_DELETE';
-  taskId: string;
-}
-
-/**
- * Start a chat stream
- */
-export interface ChatStartMessage {
-  type: 'CHAT_START';
-  chatId: string;
-  params: ChatParams;
-}
-
-/**
- * Stop a chat stream
- */
-export interface ChatStopMessage {
-  type: 'CHAT_STOP';
-  chatId: string;
-}
-
-/**
- * Get cached chat result (for recovery after page refresh)
- */
-export interface ChatGetCachedMessage {
-  type: 'CHAT_GET_CACHED';
-  chatId: string;
-}
-
-/**
- * Restore tasks from storage (after SW activation)
- */
-export interface TaskRestoreMessage {
-  type: 'TASK_RESTORE';
-  tasks: SWTask[];
-}
-
-/**
- * Mark a task as inserted to canvas
- */
-export interface TaskMarkInsertedMessage {
-  type: 'TASK_MARK_INSERTED';
-  taskId: string;
-}
-
-/**
- * MCP Tool Execute Request - Main thread requests SW to execute a tool
- */
-export interface MCPToolExecuteMessage {
-  type: 'MCP_TOOL_EXECUTE';
-  requestId: string;
-  toolName: string;
-  args: Record<string, unknown>;
-  options?: {
-    mode?: 'async' | 'queue';
-    batchId?: string;
-    batchIndex?: number;
-    batchTotal?: number;
-  };
-}
-
-/**
- * Union type for all main thread to SW messages
- */
-export type MainToSWMessage =
-  | InitTaskQueueMessage
-  | UpdateConfigMessage
-  | TaskSubmitMessage
-  | TaskCancelMessage
-  | TaskRetryMessage
-  | TaskResumeMessage
-  | TaskGetStatusMessage
-  | TaskGetAllMessage
-  | TaskGetPaginatedMessage
-  | TaskDeleteMessage
-  | ChatStartMessage
-  | ChatStopMessage
-  | ChatGetCachedMessage
-  | TaskRestoreMessage
-  | TaskMarkInsertedMessage
-  | MCPToolExecuteMessage;
-
-// ============================================================================
 // Service Worker → Main Thread Messages
 // ============================================================================
 
@@ -487,34 +312,11 @@ export interface TaskDeletedMessage {
 }
 
 /**
- * Response to TASK_GET_STATUS
- */
-export interface TaskStatusResponseMessage {
-  type: 'TASK_STATUS_RESPONSE';
-  taskId: string;
-  task: SWTask | null;
-}
-
-/**
  * Response to TASK_GET_ALL
  */
 export interface TaskAllResponseMessage {
   type: 'TASK_ALL_RESPONSE';
   tasks: SWTask[];
-}
-
-/**
- * Response to TASK_GET_PAGINATED
- */
-export interface TaskPaginatedResponseMessage {
-  type: 'TASK_PAGINATED_RESPONSE';
-  tasks: SWTask[];
-  /** Total count of tasks matching the filters */
-  total: number;
-  /** Current offset */
-  offset: number;
-  /** Whether there are more items */
-  hasMore: boolean;
 }
 
 /**
@@ -579,9 +381,7 @@ export type SWToMainMessage =
   | TaskCreatedMessage
   | TaskCancelledMessage
   | TaskDeletedMessage
-  | TaskStatusResponseMessage
   | TaskAllResponseMessage
-  | TaskPaginatedResponseMessage
   | ChatChunkMessage
   | ChatDoneMessage
   | ChatErrorMessage

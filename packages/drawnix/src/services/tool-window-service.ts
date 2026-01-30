@@ -121,28 +121,10 @@ class ToolWindowService {
   }
 
   /**
-   * 观察已打开的工具窗口列表（兼容旧 API）
-   * @deprecated 使用 observeToolStates() 替代
-   */
-  observeOpenTools(): Observable<ToolDefinition[]> {
-    return this.openToolsSubject.asObservable();
-  }
-
-  /**
    * 获取所有工具窗口状态
    */
   getToolStates(): ToolWindowState[] {
     return Array.from(this.toolStates.values());
-  }
-
-  /**
-   * 获取当前已打开的工具窗口列表（兼容旧 API）
-   * @deprecated 使用 getToolStates() 替代
-   */
-  getOpenTools(): ToolDefinition[] {
-    return this.getToolStates()
-      .filter(state => state.status === 'open')
-      .map(state => state.tool);
   }
 
   /**

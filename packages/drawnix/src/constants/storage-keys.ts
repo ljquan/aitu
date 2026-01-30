@@ -196,21 +196,6 @@ export const IDB_DATABASES = {
   },
 } as const;
 
-/**
- * 废弃的 IndexedDB 数据库（仅作为参考记录）
- * 注意：不再自动删除这些数据库，因为删除是危险操作
- * 数据迁移由各服务自行处理（如 useTaskStorage, asset-storage-service）
- * @deprecated 仅供参考，不再使用
- */
-export const IDB_LEGACY_DATABASES_REFERENCE = [
-  'Drawnix', // 旧版 localforage 默认数据库
-  'drawnix', // 旧版画板数据（注意：与 CHARACTERS 数据库同名）
-  'localforage', // localforage 默认数据库
-  'aitu-task-queue', // 旧版任务队列（迁移到 sw-task-queue）
-  'aitu-media-cache', // 旧版媒体缓存
-  'aitu-url-cache', // 旧版 URL 缓存
-] as const;
-
 // ====================================
 // Cache API (Service Worker)
 // ====================================

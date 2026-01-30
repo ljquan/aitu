@@ -403,6 +403,11 @@ export const videoGenerationTool: MCPTool = {
     const mode = options?.mode || 'async';
 
     if (mode === 'queue') {
+      // 确保 SW 任务队列已初始化
+      const { shouldUseSWTaskQueue, swTaskQueueService } = await import('../../services/task-queue');
+      if (shouldUseSWTaskQueue()) {
+        await swTaskQueueService.initialize();
+      }
       return executeQueue(typedParams, options || {});
     }
 
