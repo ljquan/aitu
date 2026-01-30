@@ -185,6 +185,105 @@ export async function getAllLLMApiLogs(): Promise<LLMApiLog[]> {
 }
 
 /**
+ * 精简日志数据，去掉大字段以减少传输大小
+ */
+function compactLog(log: LLMApiLog): Partial<LLMApiLog> {
+  // 只保留必要字段，去掉 requestBody 和 responseBody 等大字段
+  return {
+    id: log.id,
+    timestamp: log.timestamp,
+    endpoint: log.endpoint,
+    model: log.model,
+    taskType: log.taskType,
+    taskId: log.taskId,
+    prompt: log.prompt ? (log.prompt.length > 200 ? log.prompt.substring(0, 200) + '...' : log.prompt) : undefined,
+    status: log.status,
+    httpStatus: log.httpStatus,
+    duration: log.duration,
+    errorMessage: log.errorMessage,
+    hasReferenceImages: log.hasReferenceImages,
+    referenceImageCount: log.referenceImageCount,
+    // 不传输 referenceImages 完整数据，只传数量
+    resultType: log.resultType,
+    resultCount: log.resultCount,
+    resultUrl: log.resultUrl,
+    // 不传输 requestBody 和 responseBody
+  };
+}
+
+/**
+ * 分页获取 LLM API 日志（精简版，用于列表展示）
+ * @param page 页码
+ * @param pageSize 每页条数
+ * @param filter 过滤条件
+ */
+export async function getLLMApiLogsPaginated(
+  page: number = 1, 
+  pageSize: number = 20,
+  filter?: { taskType?: string; status?: string }
+): Promise<{
+  logs: Partial<LLMApiLog>[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}> {
+  let allLogs = await getAllLLMApiLogs();
+  
+  // 应用过滤条件
+  if (filter?.taskType) {
+    allLogs = allLogs.filter(log => log.taskType === filter.taskType);
+  }
+  if (filter?.status) {
+    allLogs = allLogs.filter(log => log.status === filter.status);
+  }
+  
+  const total = allLogs.length;
+  const totalPages = Math.ceil(total / pageSize);
+  const startIndex = (page - 1) * pageSize;
+  const logs = allLogs.slice(startIndex, startIndex + pageSize).map(compactLog);
+  
+  return {
+    logs,
+    total,
+    page,
+    pageSize,
+    totalPages,
+  };
+}
+
+/**
+ * 获取单条日志的完整数据（用于展开详情）
+ */
+export async function getLLMApiLogById(logId: string): Promise<LLMApiLog | null> {
+  // 先从内存查找
+  const memoryLog = memoryLogs.find(l => l.id === logId);
+  if (memoryLog) return memoryLog;
+  
+  // 从 IndexedDB 查找
+  try {
+    const db = await openDB();
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const store = tx.objectStore(STORE_NAME);
+    
+    return new Promise((resolve, reject) => {
+      const request = store.get(logId);
+      request.onsuccess = () => {
+        db.close();
+        resolve(request.result as LLMApiLog || null);
+      };
+      request.onerror = () => {
+        db.close();
+        reject(request.error);
+      };
+    });
+  } catch (error) {
+    console.warn('[LLMApiLogger] Failed to get log by id:', error);
+    return null;
+  }
+}
+
+/**
  * 通过 taskId 查找成功的 LLM API 日志
  * 用于恢复已完成但状态未更新的任务
  */
@@ -307,6 +406,50 @@ export async function clearAllLLMApiLogs(): Promise<void> {
   } catch (error) {
     console.warn('[LLMApiLogger] Failed to clear logs from DB:', error);
   }
+}
+
+/**
+ * 删除指定的 LLM API 日志
+ */
+export async function deleteLLMApiLogs(logIds: string[]): Promise<number> {
+  if (!logIds || logIds.length === 0) return 0;
+  
+  const idsSet = new Set(logIds);
+  
+  // 从内存中删除
+  const beforeCount = memoryLogs.length;
+  for (let i = memoryLogs.length - 1; i >= 0; i--) {
+    if (idsSet.has(memoryLogs[i].id)) {
+      memoryLogs.splice(i, 1);
+    }
+  }
+  const deletedFromMemory = beforeCount - memoryLogs.length;
+  
+  // 从 IndexedDB 中删除
+  try {
+    const db = await openDB();
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    
+    for (const id of logIds) {
+      store.delete(id);
+    }
+    
+    await new Promise<void>((resolve, reject) => {
+      tx.oncomplete = () => {
+        db.close();
+        resolve();
+      };
+      tx.onerror = () => {
+        db.close();
+        reject(tx.error);
+      };
+    });
+  } catch (error) {
+    console.warn('[LLMApiLogger] Failed to delete logs from DB:', error);
+  }
+  
+  return deletedFromMemory;
 }
 
 /**

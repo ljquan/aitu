@@ -17,6 +17,7 @@ const RPC_METHODS = {
   DEBUG_CLEAR_POSTMESSAGE_LOGS: 'debug:clearPostMessageLogs',
   DEBUG_GET_LLM_API_LOGS: 'debug:getLLMApiLogs',
   DEBUG_CLEAR_LLM_API_LOGS: 'debug:clearLLMApiLogs',
+  DEBUG_DELETE_LLM_API_LOGS: 'debug:deleteLLMApiLogs',
   DEBUG_GET_CRASH_SNAPSHOTS: 'debug:getCrashSnapshots',
   DEBUG_CLEAR_CRASH_SNAPSHOTS: 'debug:clearCrashSnapshots',
   DEBUG_GET_CACHE_STATS: 'debug:getCacheStats',
@@ -292,11 +293,15 @@ export async function clearPostMessageLogs() {
 }
 
 /**
- * 获取 LLM API 日志
- * @returns {Promise<{logs: Array, total: number}>}
+ * 获取 LLM API 日志（分页）
+ * @param {number} page - 页码，默认 1
+ * @param {number} pageSize - 每页条数，默认 20
+ * @param {object} filter - 过滤条件 { taskType?, status? }
+ * @returns {Promise<{logs: Array, total: number, page: number, pageSize: number, totalPages: number}>}
  */
-export async function getLLMApiLogs() {
-  return callRPC(RPC_METHODS.DEBUG_GET_LLM_API_LOGS);
+export async function getLLMApiLogs(page = 1, pageSize = 20, filter = {}) {
+  console.log('[DuplexClient] getLLMApiLogs calling RPC:', { page, pageSize, filter });
+  return callRPC(RPC_METHODS.DEBUG_GET_LLM_API_LOGS, { page, pageSize, ...filter });
 }
 
 /**
@@ -305,6 +310,15 @@ export async function getLLMApiLogs() {
  */
 export async function clearLLMApiLogs() {
   return callRPC(RPC_METHODS.DEBUG_CLEAR_LLM_API_LOGS);
+}
+
+/**
+ * 删除指定的 LLM API 日志
+ * @param {string[]} logIds - 要删除的日志 ID 列表
+ * @returns {Promise<{success: boolean, deletedCount: number}>}
+ */
+export async function deleteLLMApiLogs(logIds) {
+  return callRPC(RPC_METHODS.DEBUG_DELETE_LLM_API_LOGS, { logIds });
 }
 
 /**

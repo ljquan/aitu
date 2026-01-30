@@ -17,6 +17,7 @@ import {
   clearPostMessageLogs as clearPostMessageLogsRPC,
   getLLMApiLogs,
   clearLLMApiLogs as clearLLMApiLogsRPC,
+  deleteLLMApiLogs as deleteLLMApiLogsRPC,
   getCrashSnapshots,
   clearCrashSnapshots as clearCrashSnapshotsRPC,
   getCacheStats,
@@ -421,16 +422,23 @@ export async function clearPostMessageLogs() {
 }
 
 /**
- * Load LLM API logs from SW (uses duplex RPC)
+ * Load LLM API logs from SW (uses duplex RPC with pagination)
+ * @param {number} page - 页码，默认 1
+ * @param {number} pageSize - 每页条数，默认 20
+ * @param {object} filter - 过滤条件 { taskType?, status? }
  */
-export async function loadLLMApiLogs() {
+export async function loadLLMApiLogs(page = 1, pageSize = 20, filter = {}) {
   await ensureDuplexInitialized();
   
+  console.log('[SW Communication] loadLLMApiLogs:', { page, pageSize, filter });
+  
   try {
-    const result = await getLLMApiLogs();
-    if (messageHandlers['SW_DEBUG_LLM_API_LOGS']) {
-      messageHandlers['SW_DEBUG_LLM_API_LOGS'](result);
-    }
+    const result = await getLLMApiLogs(page, pageSize, filter);
+    console.log('[SW Communication] loadLLMApiLogs result:', { 
+      logsCount: result?.logs?.length,
+      page: result?.page,
+      pageSize: result?.pageSize 
+    });
     return result;
   } catch (error) {
     console.error('[SW Communication] Failed to load LLM API logs:', error);
@@ -453,6 +461,23 @@ export async function clearLLMApiLogsInSW() {
   } catch (error) {
     console.error('[SW Communication] Failed to clear LLM API logs:', error);
     sendNativeMessage('SW_DEBUG_CLEAR_LLM_API_LOGS');
+  }
+}
+
+/**
+ * Delete specific LLM API logs in SW (uses duplex RPC)
+ * @param {string[]} logIds - 要删除的日志 ID 列表
+ * @returns {Promise<{success: boolean, deletedCount: number}>}
+ */
+export async function deleteLLMApiLogsInSW(logIds) {
+  await ensureDuplexInitialized();
+  
+  try {
+    const result = await deleteLLMApiLogsRPC(logIds);
+    return result;
+  } catch (error) {
+    console.error('[SW Communication] Failed to delete LLM API logs:', error);
+    return { success: false, deletedCount: 0 };
   }
 }
 

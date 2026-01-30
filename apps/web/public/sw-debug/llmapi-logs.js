@@ -7,21 +7,60 @@ import { state, elements } from './state.js';
 import { escapeHtml, formatBytes, formatJsonWithHighlight, extractRequestParams } from './common.js';
 import { downloadJson } from './utils.js';
 import { showToast } from './toast.js';
-import { loadLLMApiLogs as loadLLMApiLogsRPC, clearLLMApiLogsInSW } from './sw-communication.js';
+import { loadLLMApiLogs as loadLLMApiLogsRPC, clearLLMApiLogsInSW, deleteLLMApiLogsInSW } from './sw-communication.js';
 
 /**
- * Load LLM API logs from SW (uses duplex RPC)
+ * 获取当前过滤条件
  */
-export async function loadLLMApiLogs() {
+function getCurrentFilter() {
+  const taskType = elements.filterLLMApiType?.value || '';
+  const status = elements.filterLLMApiStatus?.value || '';
+  return {
+    taskType: taskType || undefined,
+    status: status || undefined,
+  };
+}
+
+/**
+ * Load LLM API logs from SW (uses duplex RPC with pagination)
+ * @param {number} page - 页码，默认使用当前页
+ */
+export async function loadLLMApiLogs(page) {
   try {
-    const result = await loadLLMApiLogsRPC();
-    if (result && result.logs) {
+    const targetPage = page ?? state.llmapiPagination.page;
+    const pageSize = state.llmapiPagination.pageSize || 20;
+    const filter = getCurrentFilter();
+    console.log('[LLMApiLogs] loadLLMApiLogs calling RPC:', { targetPage, pageSize, filter });
+    
+    const result = await loadLLMApiLogsRPC(targetPage, pageSize, filter);
+    console.log('[LLMApiLogs] loadLLMApiLogs result:', { 
+      logsCount: result?.logs?.length, 
+      total: result?.total,
+      page: result?.page,
+      pageSize: result?.pageSize,
+      totalPages: result?.totalPages 
+    });
+    
+    if (result) {
       state.llmapiLogs = result.logs || [];
+      state.llmapiPagination.page = result.page || 1;
+      state.llmapiPagination.total = result.total || 0;
+      state.llmapiPagination.totalPages = result.totalPages || 0;
+      state.llmapiPagination.pageSize = result.pageSize || 20;
       renderLLMApiLogs();
     }
   } catch (error) {
     console.error('[LLMApiLogs] Failed to load logs:', error);
   }
+}
+
+/**
+ * 跳转到指定页
+ */
+export function goToLLMApiPage(page) {
+  const { totalPages } = state.llmapiPagination;
+  if (page < 1 || page > totalPages) return;
+  loadLLMApiLogs(page);
 }
 
 /**
@@ -33,29 +72,149 @@ export async function handleClearLLMApiLogs() {
   try {
     await clearLLMApiLogsInSW();
     state.llmapiLogs = [];
+    // 重置分页状态
+    state.llmapiPagination = { page: 1, pageSize: 20, total: 0, totalPages: 0 };
+    // 重置选择状态
+    state.isLLMApiSelectMode = false;
+    state.selectedLLMApiIds.clear();
     renderLLMApiLogs();
   } catch (error) {
     console.error('[LLMApiLogs] Failed to clear logs:', error);
   }
 }
 
+// ==================== 多选和批量删除 ====================
+
+/**
+ * 切换选择模式
+ */
+export function toggleLLMApiSelectMode() {
+  state.isLLMApiSelectMode = !state.isLLMApiSelectMode;
+  state.selectedLLMApiIds.clear();
+  updateLLMApiSelectModeUI();
+  renderLLMApiLogs();
+}
+
+/**
+ * 更新选择模式 UI
+ */
+function updateLLMApiSelectModeUI() {
+  const toggleBtn = elements.toggleLLMApiSelectModeBtn;
+  if (toggleBtn) {
+    toggleBtn.textContent = state.isLLMApiSelectMode ? '✅ 取消' : '☑️ 选择';
+    toggleBtn.style.background = state.isLLMApiSelectMode ? 'var(--primary-color)' : '';
+    toggleBtn.style.color = state.isLLMApiSelectMode ? '#fff' : '';
+  }
+  
+  const batchActions = elements.llmapiBatchActionsEl;
+  if (batchActions) {
+    batchActions.style.display = state.isLLMApiSelectMode ? 'flex' : 'none';
+  }
+  
+  updateLLMApiSelectedCount();
+}
+
+/**
+ * 更新已选计数
+ */
+function updateLLMApiSelectedCount() {
+  const countEl = elements.llmapiSelectedCountEl;
+  if (countEl) {
+    countEl.textContent = `已选 ${state.selectedLLMApiIds.size} 条`;
+  }
+}
+
+/**
+ * 切换单条日志选择
+ */
+export function toggleLLMApiLogSelection(logId) {
+  if (state.selectedLLMApiIds.has(logId)) {
+    state.selectedLLMApiIds.delete(logId);
+  } else {
+    state.selectedLLMApiIds.add(logId);
+  }
+  updateLLMApiSelectedCount();
+  
+  // 更新 DOM 中的复选框状态
+  const checkbox = document.querySelector(`.llmapi-select-checkbox[data-id="${logId}"]`);
+  if (checkbox) {
+    checkbox.checked = state.selectedLLMApiIds.has(logId);
+  }
+}
+
+/**
+ * 全选/取消全选当前页日志
+ */
+export function selectAllLLMApiLogs() {
+  const filteredLogs = getFilteredLLMApiLogs();
+  const allSelected = filteredLogs.every(l => state.selectedLLMApiIds.has(l.id));
+  
+  if (allSelected) {
+    filteredLogs.forEach(l => state.selectedLLMApiIds.delete(l.id));
+  } else {
+    filteredLogs.forEach(l => state.selectedLLMApiIds.add(l.id));
+  }
+  
+  updateLLMApiSelectedCount();
+  renderLLMApiLogs();
+}
+
+/**
+ * 批量删除选中的日志
+ */
+export async function batchDeleteLLMApiLogs() {
+  if (state.selectedLLMApiIds.size === 0) {
+    showToast('请先选择日志', 'warning');
+    return;
+  }
+  
+  if (!confirm(`确定要删除选中的 ${state.selectedLLMApiIds.size} 条日志吗？`)) {
+    return;
+  }
+  
+  try {
+    const logIds = Array.from(state.selectedLLMApiIds);
+    const result = await deleteLLMApiLogsInSW(logIds);
+    
+    if (result.success) {
+      // 从本地状态中删除
+      state.llmapiLogs = state.llmapiLogs.filter(l => !state.selectedLLMApiIds.has(l.id));
+      // 更新分页信息
+      state.llmapiPagination.total -= result.deletedCount;
+      state.llmapiPagination.totalPages = Math.ceil(state.llmapiPagination.total / state.llmapiPagination.pageSize);
+      // 如果当前页没有数据了，跳到前一页
+      if (state.llmapiLogs.length === 0 && state.llmapiPagination.page > 1) {
+        state.llmapiPagination.page--;
+        await loadLLMApiLogs(state.llmapiPagination.page);
+      }
+      
+      state.selectedLLMApiIds.clear();
+      updateLLMApiSelectedCount();
+      renderLLMApiLogs();
+      showToast(`已删除 ${result.deletedCount} 条日志`, 'success');
+    } else {
+      showToast('删除失败', 'error');
+    }
+  } catch (error) {
+    console.error('[LLMApiLogs] Failed to delete logs:', error);
+    showToast('删除失败', 'error');
+  }
+}
+
 /**
  * Get filtered LLM API logs based on current filters
+ * 注意：过滤已经在 SW 端完成，这里直接返回当前页的日志
  */
 export function getFilteredLLMApiLogs() {
-  const typeFilter = elements.filterLLMApiType?.value || '';
-  const statusFilter = elements.filterLLMApiStatus?.value || '';
+  return state.llmapiLogs;
+}
 
-  let filteredLogs = state.llmapiLogs;
-
-  if (typeFilter) {
-    filteredLogs = filteredLogs.filter(l => l.taskType === typeFilter);
-  }
-  if (statusFilter) {
-    filteredLogs = filteredLogs.filter(l => l.status === statusFilter);
-  }
-
-  return filteredLogs;
+/**
+ * 过滤条件变化时重新加载第一页
+ */
+export function onFilterChange() {
+  // 过滤条件变化时回到第一页
+  loadLLMApiLogs(1);
 }
 
 /**
@@ -66,7 +225,7 @@ export function renderLLMApiLogs() {
 
   if (!elements.llmapiLogsContainer) return;
 
-  if (filteredLogs.length === 0) {
+  if (filteredLogs.length === 0 && state.llmapiPagination.total === 0) {
     elements.llmapiLogsContainer.innerHTML = `
       <div class="empty-state">
         <span class="icon">🤖</span>
@@ -78,26 +237,105 @@ export function renderLLMApiLogs() {
   }
 
   elements.llmapiLogsContainer.innerHTML = '';
+  
+  // 渲染日志
   filteredLogs.forEach(log => {
     const isExpanded = state.expandedLLMApiIds.has(log.id);
-    const entry = createLLMApiEntry(log, isExpanded, (id, expanded) => {
-      if (expanded) {
-        state.expandedLLMApiIds.add(id);
-      } else {
-        state.expandedLLMApiIds.delete(id);
-      }
-    });
+    const isSelected = state.selectedLLMApiIds.has(log.id);
+    const entry = createLLMApiEntry(
+      log, 
+      isExpanded, 
+      (id, expanded) => {
+        if (expanded) {
+          state.expandedLLMApiIds.add(id);
+        } else {
+          state.expandedLLMApiIds.delete(id);
+        }
+      },
+      state.isLLMApiSelectMode,
+      isSelected
+    );
     elements.llmapiLogsContainer.appendChild(entry);
   });
+  
+  // 渲染分页控件
+  renderLLMApiPagination();
+}
+
+/**
+ * 渲染分页控件
+ */
+function renderLLMApiPagination() {
+  const { page, totalPages, total, pageSize } = state.llmapiPagination;
+  
+  // 如果只有一页或没有数据，不显示分页
+  if (totalPages <= 1) return;
+  
+  const paginationEl = document.createElement('div');
+  paginationEl.className = 'pagination';
+  paginationEl.style.cssText = 'display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px; border-top: 1px solid var(--border-color); background: var(--bg-secondary);';
+  
+  const startItem = (page - 1) * pageSize + 1;
+  const endItem = Math.min(page * pageSize, total);
+  
+  paginationEl.innerHTML = `
+    <button class="pagination-btn" data-page="1" ${page === 1 ? 'disabled' : ''} title="首页">«</button>
+    <button class="pagination-btn" data-page="${page - 1}" ${page === 1 ? 'disabled' : ''} title="上一页">‹</button>
+    <span style="padding: 0 8px; color: var(--text-muted); font-size: 12px;">
+      ${startItem}-${endItem} / ${total} 条 (第 ${page}/${totalPages} 页)
+    </span>
+    <button class="pagination-btn" data-page="${page + 1}" ${page === totalPages ? 'disabled' : ''} title="下一页">›</button>
+    <button class="pagination-btn" data-page="${totalPages}" ${page === totalPages ? 'disabled' : ''} title="末页">»</button>
+  `;
+  
+  // 添加样式
+  const style = document.createElement('style');
+  style.textContent = `
+    .pagination-btn {
+      padding: 4px 10px;
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+    .pagination-btn:hover:not(:disabled) {
+      background: var(--accent-color);
+      color: white;
+      border-color: var(--accent-color);
+    }
+    .pagination-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  `;
+  if (!document.querySelector('style[data-pagination]')) {
+    style.setAttribute('data-pagination', 'true');
+    document.head.appendChild(style);
+  }
+  
+  // 添加点击事件
+  paginationEl.querySelectorAll('.pagination-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const targetPage = parseInt(btn.dataset.page, 10);
+      if (!isNaN(targetPage)) {
+        goToLLMApiPage(targetPage);
+      }
+    });
+  });
+  
+  elements.llmapiLogsContainer.appendChild(paginationEl);
 }
 
 /**
  * Create a LLM API log entry element
  * Uses the same styles as Fetch logs for consistency
  */
-function createLLMApiEntry(log, isExpanded, onToggle) {
+function createLLMApiEntry(log, isExpanded, onToggle, isSelectMode = false, isSelected = false) {
   const entry = document.createElement('div');
-  entry.className = 'log-entry' + (isExpanded ? ' expanded' : '');
+  entry.className = 'log-entry' + (isExpanded ? ' expanded' : '') + (isSelected ? ' selected' : '');
   entry.dataset.id = log.id;
   
   const date = new Date(log.timestamp);
@@ -180,8 +418,14 @@ function createLLMApiEntry(log, isExpanded, onToggle) {
     `;
   }
 
+  // 选择模式下的复选框
+  const selectCheckbox = isSelectMode 
+    ? `<input type="checkbox" class="llmapi-select-checkbox" data-id="${log.id}" ${isSelected ? 'checked' : ''} style="margin-right: 6px; cursor: pointer;">` 
+    : '';
+
   entry.innerHTML = `
     <div class="log-header">
+      ${selectCheckbox}
       <span class="log-toggle" title="展开/收起详情"><span class="arrow">▶</span></span>
       <span class="log-time">${time}</span>
       <span class="log-status ${statusClass}">${statusText}</span>
@@ -346,6 +590,15 @@ function createLLMApiEntry(log, isExpanded, onToggle) {
       } catch (err) {
         console.error('Failed to copy URL:', err);
       }
+    });
+  }
+
+  // 选择复选框点击事件
+  const checkbox = entry.querySelector('.llmapi-select-checkbox');
+  if (checkbox) {
+    checkbox.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleLLMApiLogSelection(log.id);
     });
   }
 

@@ -232,6 +232,7 @@ class SWTaskQueueService {
 
   /**
    * Sync tasks from Service Worker to local state
+   * 使用分页获取避免消息过大
    */
   async syncTasksFromSW(): Promise<void> {
     if (!swChannelClient.isInitialized()) {
@@ -239,12 +240,21 @@ class SWTaskQueueService {
     }
     
     try {
-      const result = await swChannelClient.listTasks();
-      if (!result.success) return;
+      const pageSize = 50;
+      let offset = 0;
+      let hasMore = true;
       
-      for (const swTask of result.tasks || []) {
-        const task = this.convertSWTaskToTask(swTask);
-        this.tasks.set(task.id, task);
+      while (hasMore) {
+        const result = await swChannelClient.listTasksPaginated({ offset, limit: pageSize });
+        if (!result.success) break;
+        
+        for (const swTask of result.tasks || []) {
+          const task = this.convertSWTaskToTask(swTask);
+          this.tasks.set(task.id, task);
+        }
+        
+        hasMore = result.hasMore;
+        offset += pageSize;
       }
     } catch {
       // 静默忽略同步错误

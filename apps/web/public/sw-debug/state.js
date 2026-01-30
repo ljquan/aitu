@@ -11,6 +11,13 @@ export const state = {
   postmessageLogs: [],
   crashLogs: [], // Crash snapshots
   llmapiLogs: [], // LLM API call logs
+  // LLM API logs pagination
+  llmapiPagination: {
+    page: 1,
+    pageSize: 20,
+    total: 0,
+    totalPages: 0,
+  },
   swStatus: null, // SW status data for export
   autoScroll: true,
   activeTab: 'fetch',
@@ -19,6 +26,9 @@ export const state = {
   expandedPmIds: new Set(), // Track expanded postmessage log IDs
   expandedCrashIds: new Set(), // Track expanded crash log IDs
   expandedLLMApiIds: new Set(), // Track expanded LLM API log IDs
+  // LLM API logs select mode
+  isLLMApiSelectMode: false,
+  selectedLLMApiIds: new Set(),
   // New states for enhanced features
   bookmarkedLogIds: new Set(), // Bookmarked/starred log IDs
   showBookmarksOnly: false, // Filter to show only bookmarked logs
@@ -155,6 +165,12 @@ export function cacheElements() {
     copyLLMApiLogsBtn: document.getElementById('copyLLMApiLogs'),
     exportLLMApiLogsBtn: document.getElementById('exportLLMApiLogs'),
     clearLLMApiLogsBtn: document.getElementById('clearLLMApiLogs'),
+    // LLM API logs select mode elements
+    toggleLLMApiSelectModeBtn: document.getElementById('toggleLLMApiSelectMode'),
+    llmapiBatchActionsEl: document.getElementById('llmapiBatchActions'),
+    llmapiSelectAllBtn: document.getElementById('llmapiSelectAll'),
+    llmapiBatchDeleteBtn: document.getElementById('llmapiBatchDelete'),
+    llmapiSelectedCountEl: document.getElementById('llmapiSelectedCount'),
     // Crash logs elements
     crashCountEl: document.getElementById('crashCount'),
     crashLogsContainer: document.getElementById('crashLogsContainer'),

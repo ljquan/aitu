@@ -78,6 +78,7 @@ export const RPC_METHODS = {
   DEBUG_CLEAR_CRASH_SNAPSHOTS: 'debug:clearCrashSnapshots',
   DEBUG_GET_LLM_API_LOGS: 'debug:getLLMApiLogs',
   DEBUG_CLEAR_LLM_API_LOGS: 'debug:clearLLMApiLogs',
+  DEBUG_DELETE_LLM_API_LOGS: 'debug:deleteLLMApiLogs',
   DEBUG_GET_CACHE_ENTRIES: 'debug:getCacheEntries',
   DEBUG_GET_CACHE_STATS: 'debug:getCacheStats',
   DEBUG_EXPORT_LOGS: 'debug:exportLogs',
@@ -503,11 +504,16 @@ export class SWChannelManager {
       [RPC_METHODS.DEBUG_CLEAR_CRASH_SNAPSHOTS]: async () => {
         return this.handleDebugClearCrashSnapshots();
       },
-      [RPC_METHODS.DEBUG_GET_LLM_API_LOGS]: async () => {
-        return this.handleDebugGetLLMApiLogs();
+      [RPC_METHODS.DEBUG_GET_LLM_API_LOGS]: async (rawData: any) => {
+        const data = this.unwrapRpcData<{ page?: number; pageSize?: number; taskType?: string; status?: string }>(rawData);
+        return this.handleDebugGetLLMApiLogs(data);
       },
       [RPC_METHODS.DEBUG_CLEAR_LLM_API_LOGS]: async () => {
         return this.handleDebugClearLLMApiLogs();
+      },
+      [RPC_METHODS.DEBUG_DELETE_LLM_API_LOGS]: async (rawData: any) => {
+        const data = this.unwrapRpcData<{ logIds: string[] }>(rawData);
+        return this.handleDebugDeleteLLMApiLogs(data);
       },
       [RPC_METHODS.DEBUG_GET_CACHE_ENTRIES]: async (rawData: any) => {
         const data = this.unwrapRpcData<{ cacheName?: string; limit?: number; offset?: number }>(rawData);
@@ -1185,13 +1191,36 @@ export class SWChannelManager {
     }
   }
 
-  private async handleDebugGetLLMApiLogs(): Promise<{ logs: unknown[]; total: number; error?: string }> {
+  private async handleDebugGetLLMApiLogs(params?: { page?: number; pageSize?: number; taskType?: string; status?: string }): Promise<{ 
+    logs: unknown[]; 
+    total: number; 
+    page: number;
+    pageSize: number;
+    totalPages: number;
+    error?: string 
+  }> {
     try {
-      const { getAllLLMApiLogs } = await import('./llm-api-logger');
-      const logs = await getAllLLMApiLogs();
-      return { logs, total: logs.length };
+      const page = params?.page || 1;
+      const pageSize = params?.pageSize || 20;
+      const filter = {
+        taskType: params?.taskType,
+        status: params?.status,
+      };
+      console.log('[SWChannelManager] handleDebugGetLLMApiLogs params:', { page, pageSize, filter });
+      
+      const { getLLMApiLogsPaginated } = await import('./llm-api-logger');
+      const result = await getLLMApiLogsPaginated(page, pageSize, filter);
+      console.log('[SWChannelManager] handleDebugGetLLMApiLogs result:', { 
+        logsCount: result.logs.length, 
+        total: result.total, 
+        page: result.page,
+        pageSize: result.pageSize,
+        totalPages: result.totalPages 
+      });
+      return result;
     } catch (error: any) {
-      return { logs: [], total: 0, error: String(error) };
+      console.error('[SWChannelManager] handleDebugGetLLMApiLogs error:', error);
+      return { logs: [], total: 0, page: 1, pageSize: 20, totalPages: 0, error: String(error) };
     }
   }
 
@@ -1202,6 +1231,19 @@ export class SWChannelManager {
       return { success: true };
     } catch {
       return { success: false };
+    }
+  }
+
+  private async handleDebugDeleteLLMApiLogs(params?: { logIds: string[] }): Promise<{ success: boolean; deletedCount: number }> {
+    try {
+      if (!params?.logIds || params.logIds.length === 0) {
+        return { success: false, deletedCount: 0 };
+      }
+      const { deleteLLMApiLogs } = await import('./llm-api-logger');
+      const deletedCount = await deleteLLMApiLogs(params.logIds);
+      return { success: true, deletedCount };
+    } catch {
+      return { success: false, deletedCount: 0 };
     }
   }
 
@@ -1461,7 +1503,6 @@ export class SWChannelManager {
     } else {
       // 如果没有映射（可能是恢复的任务或 SW 重启后），静默广播
       // 这是预期行为，不需要警告
-      console.log(`[SWChannelManager] sendToTaskClient fallback to broadcastToAll: ${event}`, { taskId, clientCount: this.channels.size });
       this.broadcastToAll(event, data);
     }
   }
@@ -1478,7 +1519,6 @@ export class SWChannelManager {
    * 发送任务状态事件（点对点）
    */
   sendTaskStatus(taskId: string, status: TaskStatus, progress?: number, phase?: TaskExecutionPhase): void {
-    console.log('[SWChannelManager] sendTaskStatus:', { taskId, status, phase });
     this.sendToTaskClient(taskId, SW_EVENTS.TASK_STATUS, { taskId, status, progress, phase });
   }
 

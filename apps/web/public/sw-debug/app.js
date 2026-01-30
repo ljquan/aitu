@@ -62,6 +62,10 @@ import {
   handleCopyLLMApiLogs,
   handleExportLLMApiLogs,
   renderLLMApiLogs,
+  toggleLLMApiSelectMode,
+  selectAllLLMApiLogs,
+  batchDeleteLLMApiLogs,
+  onFilterChange as onLLMApiFilterChange,
 } from './llmapi-logs.js';
 import {
   loadCrashLogs,
@@ -733,12 +737,16 @@ function setupEventListeners() {
   elements.copyPostmessageLogsBtn?.addEventListener('click', handleCopyPostmessageLogs);
 
   // LLM API log event listeners
-  elements.filterLLMApiType?.addEventListener('change', renderLLMApiLogs);
-  elements.filterLLMApiStatus?.addEventListener('change', renderLLMApiLogs);
+  elements.filterLLMApiType?.addEventListener('change', onLLMApiFilterChange);
+  elements.filterLLMApiStatus?.addEventListener('change', onLLMApiFilterChange);
   elements.refreshLLMApiLogsBtn?.addEventListener('click', loadLLMApiLogs);
   elements.copyLLMApiLogsBtn?.addEventListener('click', handleCopyLLMApiLogs);
   elements.exportLLMApiLogsBtn?.addEventListener('click', handleExportLLMApiLogs);
   elements.clearLLMApiLogsBtn?.addEventListener('click', handleClearLLMApiLogs);
+  // LLM API select mode
+  elements.toggleLLMApiSelectModeBtn?.addEventListener('click', toggleLLMApiSelectMode);
+  elements.llmapiSelectAllBtn?.addEventListener('click', selectAllLLMApiLogs);
+  elements.llmapiBatchDeleteBtn?.addEventListener('click', batchDeleteLLMApiLogs);
 
   // Crash log event listeners
   elements.filterCrashType?.addEventListener('change', renderCrashLogs);
@@ -978,6 +986,13 @@ function setupMessageHandlers() {
         state.liveLogs.llmapiLogs = data.logs || [];
       } else {
         state.llmapiLogs = data.logs || [];
+        // 更新分页信息
+        if (data.page !== undefined) {
+          state.llmapiPagination.page = data.page;
+          state.llmapiPagination.total = data.total || 0;
+          state.llmapiPagination.totalPages = data.totalPages || 0;
+          state.llmapiPagination.pageSize = data.pageSize || 20;
+        }
         renderLLMApiLogs();
       }
     },
@@ -994,16 +1009,29 @@ function setupMessageHandlers() {
             state.liveLogs.llmapiLogs.pop();
           }
         } else {
+          // 实时更新：更新现有日志或在第一页时插入新日志
           const existingIndex = state.llmapiLogs.findIndex(l => l.id === data.log.id);
           if (existingIndex >= 0) {
+            // 更新已存在的日志（无论在哪一页）
             state.llmapiLogs[existingIndex] = data.log;
-          } else {
+            renderLLMApiLogs();
+          } else if (state.llmapiPagination.page === 1) {
+            // 只在第一页时插入新日志
             state.llmapiLogs.unshift(data.log);
+            if (state.llmapiLogs.length > state.llmapiPagination.pageSize) {
+              state.llmapiLogs.pop();
+            }
+            // 更新总数
+            state.llmapiPagination.total++;
+            state.llmapiPagination.totalPages = Math.ceil(state.llmapiPagination.total / state.llmapiPagination.pageSize);
+            renderLLMApiLogs();
+          } else {
+            // 不在第一页，只更新总数，不插入
+            state.llmapiPagination.total++;
+            state.llmapiPagination.totalPages = Math.ceil(state.llmapiPagination.total / state.llmapiPagination.pageSize);
+            // 可选：刷新分页显示
+            renderLLMApiLogs();
           }
-          if (state.llmapiLogs.length > 1000) {
-            state.llmapiLogs.pop();
-          }
-          renderLLMApiLogs();
         }
       }
     },
@@ -1012,6 +1040,7 @@ function setupMessageHandlers() {
         state.liveLogs.llmapiLogs = [];
       } else {
         state.llmapiLogs = [];
+        state.llmapiPagination = { page: 1, pageSize: 20, total: 0, totalPages: 0 };
         renderLLMApiLogs();
       }
     },
