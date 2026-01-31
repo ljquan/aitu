@@ -309,12 +309,13 @@ class WorkflowSubmissionService {
           this.workflows.set(workflow.id, workflow as unknown as WorkflowDefinition);
           
           // Emit status event for failed workflows so UI can update
-          if (workflow.status === 'failed' && existingWorkflow?.status !== 'failed') {
+          // Guard against undefined events$ (service destroyed or other edge cases)
+          if (workflow.status === 'failed' && existingWorkflow?.status !== 'failed' && this.events$) {
             console.log(`[WorkflowSubmissionService] 📢 Emitting failed status for workflow ${workflow.id}`);
-            this.workflowStatusSubject.next({
+            this.events$.next({
+              type: 'failed',
               workflowId: workflow.id,
-              status: 'failed',
-              error: workflow.error,
+              error: workflow.error || 'Unknown error',
             });
           }
         }

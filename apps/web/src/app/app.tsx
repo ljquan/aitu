@@ -16,8 +16,33 @@ import { CrashRecoveryDialog } from './CrashRecoveryDialog';
 // 节流保存 viewport 的间隔（毫秒）
 const VIEWPORT_SAVE_DEBOUNCE = 500;
 
+// URL 参数名
+const BOARD_URL_PARAM = 'board';
+
 // Global flag to prevent duplicate initialization in StrictMode
 let appInitialized = false;
+
+/**
+ * 从 URL 获取画布 ID 参数
+ */
+function getBoardIdFromUrl(): string | null {
+  const params = new URLSearchParams(window.location.search);
+  return params.get(BOARD_URL_PARAM);
+}
+
+/**
+ * 更新 URL 中的画布 ID 参数（不刷新页面）
+ */
+function updateBoardIdInUrl(boardId: string | null): void {
+  const url = new URL(window.location.href);
+  if (boardId) {
+    url.searchParams.set(BOARD_URL_PARAM, boardId);
+  } else {
+    url.searchParams.delete(BOARD_URL_PARAM);
+  }
+  // 使用 replaceState 避免产生新的历史记录
+  window.history.replaceState({}, '', url.toString());
+}
 
 export function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -128,13 +153,24 @@ export function App() {
 
         // Load current board data if available
         let currentBoard: Board | null = null;
-        const currentBoardId = workspaceService.getState().currentBoardId;
+        
+        // 优先使用 URL 参数中的画布 ID
+        const urlBoardId = getBoardIdFromUrl();
+        const stateBoardId = workspaceService.getState().currentBoardId;
+        
+        // 确定要加载的画布 ID（优先级：URL 参数 > 上次状态）
+        let targetBoardId: string | null = null;
+        if (urlBoardId && workspaceService.getBoardMetadata(urlBoardId)) {
+          targetBoardId = urlBoardId;
+        } else if (stateBoardId && workspaceService.getBoardMetadata(stateBoardId)) {
+          targetBoardId = stateBoardId;
+        }
 
-        // If has current board ID, load it via switchBoard (triggers lazy loading)
-        if (currentBoardId && workspaceService.getBoardMetadata(currentBoardId)) {
-          currentBoard = await workspaceService.switchBoard(currentBoardId);
+        // If has target board ID, load it via switchBoard (triggers lazy loading)
+        if (targetBoardId) {
+          currentBoard = await workspaceService.switchBoard(targetBoardId);
         } else if (workspaceService.hasBoards()) {
-          // No current board, select first available board
+          // No valid board ID, select first available board
           const tree = workspaceService.getTree();
           const firstBoard = findFirstBoard(tree);
           if (firstBoard) {
@@ -150,6 +186,10 @@ export function App() {
           if (board) {
             currentBoard = await workspaceService.switchBoard(board.id);
           }
+        }
+        // 更新 URL 参数为当前画布 ID
+        if (currentBoard) {
+          updateBoardIdInUrl(currentBoard.id);
         }
 
         if (currentBoard) {
@@ -192,6 +232,8 @@ export function App() {
 
   // Handle board switching
   const handleBoardSwitch = useCallback(async (board: Board) => {
+    console.log('[App] handleBoardSwitch called:', board.id);
+    
     // 在设置 state 之前，预先恢复失效的视频 URL
     const elements = await recoverVideoUrlsInElements(board.elements || []);
 
@@ -200,6 +242,10 @@ export function App() {
       viewport: board.viewport,
       theme: board.theme,
     });
+    
+    // 更新 URL 参数
+    console.log('[App] Updating URL with board id:', board.id);
+    updateBoardIdInUrl(board.id);
   }, []);
 
   // Handle board changes (auto-save)

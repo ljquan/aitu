@@ -1010,6 +1010,7 @@ export const ProjectDrawer: React.FC<ProjectDrawerProps> = ({
   // Handle board click
   const handleBoardClick = useCallback(
     async (board: Board) => {
+      console.log('[ProjectDrawer] handleBoardClick:', board.id, 'current:', currentBoard?.id);
       if (board.id === currentBoard?.id) return;
 
       // Save current before switching
@@ -1018,6 +1019,7 @@ export const ProjectDrawer: React.FC<ProjectDrawerProps> = ({
       }
 
       const switched = await switchBoard(board.id);
+      console.log('[ProjectDrawer] switched:', switched?.id, 'onBoardSwitch exists:', !!onBoardSwitch);
       if (switched && onBoardSwitch) {
         onBoardSwitch(switched);
       }
