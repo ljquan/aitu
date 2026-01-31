@@ -26,9 +26,7 @@ crashRecoveryService.checkUrlSafeMode();
 
 // ===== 初始化崩溃日志系统 =====
 // 必须尽早初始化，以捕获启动阶段的内存状态和错误
-console.log('[Main] Initializing crash logger...');
 initCrashLogger();
-console.log('[Main] Crash logger initialized');
 
 // ===== 初始化 Sentry 错误监控 =====
 // 必须在其他代码之前初始化，以捕获所有错误
@@ -241,7 +239,6 @@ if ('serviceWorker' in navigator) {
       },
       onSWActivated: (event) => {
         // 新 SW 已自动激活并接管页面
-        console.log(`Service Worker v${event.version} 已激活`);
         window.dispatchEvent(new CustomEvent('sw-update-available', { 
           detail: { version: event.version, autoActivated: true } 
         }));
@@ -364,10 +361,8 @@ if ('serviceWorker' in navigator) {
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement
 );
-console.log('[Main] React root created, rendering App...');
 root.render(
   <StrictMode>
     <App />
   </StrictMode>
 );
-console.log('[Main] App rendering started');

@@ -57,7 +57,6 @@ class TaskStepRegistry {
           stepId: mapping.stepId,
         });
       }
-      console.log(`[TaskStepRegistry] Restored ${mappings.length} mappings from storage`);
     } catch (error) {
       console.error('[TaskStepRegistry] Failed to restore from storage:', error);
     }
@@ -81,7 +80,6 @@ class TaskStepRegistry {
         stepId,
         createdAt: Date.now(),
       });
-      console.log(`[TaskStepRegistry] Registered mapping: task=${taskId} -> workflow=${workflowId}, step=${stepId}`);
     } catch (error) {
       console.error('[TaskStepRegistry] Failed to save mapping:', error);
     }
@@ -144,10 +142,6 @@ class TaskStepRegistry {
       } catch (error) {
         console.error('[TaskStepRegistry] Failed to delete mapping:', taskId, error);
       }
-    }
-    
-    if (toDelete.length > 0) {
-      console.log(`[TaskStepRegistry] Cleared ${toDelete.length} mappings for workflow ${workflowId}`);
     }
   }
 

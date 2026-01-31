@@ -221,24 +221,11 @@ class WorkflowSubmissionService {
       }
 
       swChannelClient.registerToolRequestHandler(async (request) => {
-        console.log('[WorkflowSubmissionService] Tool request received:', {
-          requestId: request.requestId,
-          toolName: request.toolName,
-          workflowId: request.workflowId,
-        });
         try {
           // Execute the tool using swCapabilitiesHandler
           const result = await swCapabilitiesHandler.execute({
             operation: request.toolName,
             args: request.args,
-          });
-
-          console.log('[WorkflowSubmissionService] Tool execution result:', {
-            requestId: request.requestId,
-            toolName: request.toolName,
-            success: result.success,
-            error: result.error,
-            taskId: result.taskId,
           });
 
           // Convert CapabilityResult to MainThreadToolResponse format
@@ -277,32 +264,20 @@ class WorkflowSubmissionService {
    * This includes failed workflows (e.g., interrupted by SW restart during ai_analyze)
    */
   async recoverWorkflows(): Promise<WorkflowDefinition[]> {
-    console.log('[WorkflowSubmissionService] 🔄 Recovering workflows from SW...');
-    
     if (!swChannelClient.isInitialized()) {
-      console.log('[WorkflowSubmissionService] ⏭️ Skipping: swChannelClient not initialized');
       return [];
     }
 
     try {
       const response = await swChannelClient.getAllWorkflows();
-      console.log(`[WorkflowSubmissionService] ✓ Got ${response.workflows?.length || 0} workflows from SW`);
       
       if (!response.success) {
-        console.log('[WorkflowSubmissionService] ❌ getAllWorkflows failed');
         return [];
       }
       
       // Sync all workflows from SW to local cache (including failed/completed)
       // This ensures UI shows correct status for interrupted workflows
       for (const workflow of response.workflows) {
-        console.log(`[WorkflowSubmissionService] Processing workflow:`, {
-          id: workflow.id,
-          status: workflow.status,
-          steps: workflow.steps?.length,
-          updatedAt: workflow.updatedAt,
-        });
-        
         const existingWorkflow = this.workflows.get(workflow.id);
         // Only update if SW has newer data or workflow doesn't exist locally
         if (!existingWorkflow || workflow.updatedAt > (existingWorkflow.updatedAt || 0)) {
@@ -311,7 +286,6 @@ class WorkflowSubmissionService {
           // Emit status event for failed workflows so UI can update
           // Guard against undefined events$ (service destroyed or other edge cases)
           if (workflow.status === 'failed' && existingWorkflow?.status !== 'failed' && this.events$) {
-            console.log(`[WorkflowSubmissionService] 📢 Emitting failed status for workflow ${workflow.id}`);
             this.events$.next({
               type: 'failed',
               workflowId: workflow.id,
@@ -326,10 +300,9 @@ class WorkflowSubmissionService {
         w => w.status === 'running' || w.status === 'pending'
       );
       
-      console.log(`[WorkflowSubmissionService] ✓ Found ${runningWorkflows.length} active workflows`);
       return runningWorkflows as unknown as WorkflowDefinition[];
     } catch (error) {
-      console.warn('[WorkflowSubmissionService] ❌ Failed to recover workflows:', error);
+      console.warn('[WorkflowSubmissionService] Failed to recover workflows:', error);
       return [];
     }
   }
@@ -678,7 +651,6 @@ class WorkflowSubmissionService {
   }
 
   private handleWorkflowFailed(event: ChannelWorkflowFailedEvent): void {
-    console.error('[WorkflowSubmissionService] Workflow failed:', event.workflowId, '-', event.error);
     const workflow = this.getMutableWorkflow(event.workflowId);
     if (workflow) {
       workflow.status = 'failed';

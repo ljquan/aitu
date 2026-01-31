@@ -129,7 +129,6 @@ function repairDatabase(currentVersion: number): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     // Increment version to trigger onupgradeneeded
     const newVersion = currentVersion + 1;
-    console.log(`[SWStorage] Repairing database: upgrading from v${currentVersion} to v${newVersion}`);
     
     const request = indexedDB.open(DB_NAME, newVersion);
     
@@ -556,7 +555,6 @@ export class TaskQueueStorage {
     geminiConfig: GeminiConfig | null;
     videoConfig: VideoAPIConfig | null;
   }> {
-    console.log('[SWStorage] loadConfig called');
     try {
       const db = await this.getDB();
       return new Promise((resolve, reject) => {

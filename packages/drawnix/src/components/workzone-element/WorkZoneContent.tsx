@@ -54,22 +54,9 @@ export const WorkZoneContent: React.FC<WorkZoneContentProps> = ({
     const isInconsistentState = isTerminalStatus && hasRunningSteps;
     const needsClaim = isActiveByStatus || isActiveBySteps || isInconsistentState;
     
-    console.log(`[WorkZoneContent] useEffect triggered:`, {
-      workflowId,
-      status: workflow.status,
-      hasRunningSteps,
-      isTerminalStatus,
-      needsClaim,
-      hasClaimedRef: hasClaimedRef.current,
-    });
-    
     // 如果工作流已是终态但 steps 还在 running，这是不一致状态
     // 需要从 SW 获取真实状态，而不是直接标记为失败
-    if (isTerminalStatus && hasRunningSteps && !hasClaimedRef.current && !claimedWorkflows.has(workflowId)) {
-      console.log(`[WorkZoneContent] 🔄 Inconsistent state detected: workflow=${workflow.status} but hasRunningSteps=true, will claim from SW`);
-      // 不要在这里标记为 claimed，让下面的 claim 逻辑去处理
-      // 这种情况通常发生在页面刷新后，SW 端状态可能已经更新但 UI 还是旧状态
-    }
+    // 这种情况通常发生在页面刷新后，SW 端状态可能已经更新但 UI 还是旧状态
     
     // 避免重复 claim
     if (!needsClaim || hasClaimedRef.current || claimedWorkflows.has(workflowId)) {
@@ -92,25 +79,17 @@ export const WorkZoneContent: React.FC<WorkZoneContentProps> = ({
         }
         
         if (!swChannelClient.isInitialized()) {
-          console.log(`[WorkZoneContent] ⏭️ Skip claim ${workflowId}: swChannelClient not initialized`);
           // SW 未初始化，标记为失败
           onWorkflowStateChange?.(workflowId, 'failed', '无法连接到 Service Worker');
           return;
         }
         
-        console.log(`[WorkZoneContent] 🔄 Claiming workflow: ${workflowId}`);
         const result = await swChannelClient.claimWorkflow(workflowId);
         
         if (result.success) {
-          console.log(`[WorkZoneContent] ✓ Claimed workflow ${workflowId}:`, {
-            status: result.workflow?.status,
-            hasPendingToolRequest: result.hasPendingToolRequest,
-          });
-          
           // 如果 SW 中的工作流已经是终态，通知 UI 更新
           const swStatus = result.workflow?.status;
           if (swStatus === 'completed' || swStatus === 'failed' || swStatus === 'cancelled') {
-            console.log(`[WorkZoneContent] 📢 Workflow ${workflowId} is in terminal state: ${swStatus}`);
             onWorkflowStateChange?.(
               workflowId, 
               swStatus === 'completed' ? 'completed' : 'failed',
@@ -118,12 +97,10 @@ export const WorkZoneContent: React.FC<WorkZoneContentProps> = ({
             );
           }
         } else {
-          console.log(`[WorkZoneContent] ⚠️ Claim failed for ${workflowId}:`, result.error);
           // 工作流不存在或 claim 失败，标记为失败
           onWorkflowStateChange?.(workflowId, 'failed', result.error || '工作流已丢失，请重试');
         }
       } catch (error) {
-        console.error(`[WorkZoneContent] ❌ Failed to claim workflow ${workflowId}:`, error);
         onWorkflowStateChange?.(workflowId, 'failed', '恢复工作流失败，请重试');
       }
     })();

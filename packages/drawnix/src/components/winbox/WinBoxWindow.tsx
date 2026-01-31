@@ -777,6 +777,25 @@ export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
     }
   }, [title]);
 
+  // 处理 icon 变化 - 如果窗口已存在但图标容器还没创建
+  useEffect(() => {
+    if (winboxRef.current && icon && !iconPortalContainer) {
+      const wb = winboxRef.current;
+      const drag = wb.window?.querySelector('.wb-drag');
+      const wbTitle = wb.window?.querySelector('.wb-title');
+      if (drag && wbTitle) {
+        // 检查是否已存在图标容器
+        const existingContainer = drag.querySelector('.wb-icon-container');
+        if (!existingContainer) {
+          const iconContainer = document.createElement('div');
+          iconContainer.className = 'wb-icon-container';
+          drag.insertBefore(iconContainer, wbTitle);
+          setIconPortalContainer(iconContainer);
+        }
+      }
+    }
+  }, [icon, iconPortalContainer]);
+
   // 控制显示/隐藏
   useEffect(() => {
     if (winboxRef.current) {

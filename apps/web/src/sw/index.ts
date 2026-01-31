@@ -74,9 +74,7 @@ export {
 };
 
 // Initialize task queue (instance used by channelManager for RPC handlers)
-console.log('[SW] Initializing task queue...');
 const taskQueue = initTaskQueue(sw);
-console.log('[SW] Task queue initialized');
 
 // Initialize channel manager for duplex communication (postmessage-duplex)
 const channelManager = initChannelManager(sw);
@@ -975,22 +973,13 @@ async function loadPrecacheManifest(): Promise<
     });
     if (!response.ok) {
       // 没有 manifest 文件，说明是开发模式，不需要预缓存
-      console.log(
-        'Service Worker: No precache-manifest.json found (dev mode), skipping precache'
-      );
       return null;
     }
 
     const manifest: PrecacheManifest = await response.json();
-    console.log(
-      `Service Worker: Loaded precache manifest v${manifest.version} with ${manifest.files.length} files`
-    );
     return manifest.files;
   } catch (error) {
     // 加载失败，不预缓存
-    console.log(
-      'Service Worker: Cannot load precache-manifest.json, skipping precache'
-    );
     return null;
   }
 }
@@ -1115,18 +1104,9 @@ async function precacheStaticFiles(
     (r) => r.success && r.source === 'server'
   ).length;
 
-  console.log(
-    `Service Worker: Precached ${successCount}/${files.length} files (${failCount} failed)`
-  );
-  if (cdnCount > 0) {
-    console.log(
-      `Service Worker: Sources - CDN: ${cdnCount}, Server: ${serverCount}`
-    );
-  }
 }
 
 sw.addEventListener('install', (event: ExtendableEvent) => {
-  console.log(`Service Worker v${APP_VERSION} installing...`);
 
   const installPromises: Promise<any>[] = [];
 
@@ -1153,7 +1133,6 @@ sw.addEventListener('install', (event: ExtendableEvent) => {
 
   event.waitUntil(
     Promise.all(installPromises).then(async () => {
-      console.log(`Service Worker v${APP_VERSION} installed, resources ready`);
 
       // 判断是否是版本更新的最可靠方式：检查是否存在旧版本的缓存
       // 旧版本缓存名称包含版本号，只有在版本变化时才会不同
@@ -3439,9 +3418,6 @@ async function handleStaticRequest(request: Request): Promise<Response> {
             const oldCache = await caches.open(cacheName);
             const oldCachedResponse = await oldCache.match(request);
             if (oldCachedResponse) {
-              console.log(
-                `Service Worker: Found resource in ${cacheName} after invalid HTML response`
-              );
               return oldCachedResponse;
             }
           } catch (e) {
@@ -3496,9 +3472,6 @@ async function handleStaticRequest(request: Request): Promise<Response> {
           const oldCache = await caches.open(cacheName);
           const oldCachedResponse = await oldCache.match(request);
           if (oldCachedResponse) {
-            console.log(
-              `[SW] Found resource in ${cacheName} after network failure`
-            );
             return oldCachedResponse;
           }
         } catch (e) {

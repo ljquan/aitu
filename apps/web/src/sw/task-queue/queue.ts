@@ -80,7 +80,6 @@ export class SWTaskQueue {
   private hadSavedConfig = false;
 
   constructor(sw: ServiceWorkerGlobalScope, config?: Partial<TaskQueueConfig>) {
-    console.log('[SWTaskQueue] Constructor called');
     this.sw = sw;
     this.config = { ...DEFAULT_TASK_QUEUE_CONFIG, ...config };
 
@@ -91,7 +90,6 @@ export class SWTaskQueue {
     this.chatHandler = new ChatHandler();
 
     // Auto-restore on construction and track the promise
-    console.log('[SWTaskQueue] Starting restoreFromStorage...');
     this.storageRestorePromise = this.restoreFromStorage();
   }
 
@@ -143,12 +141,9 @@ export class SWTaskQueue {
    * Restore tasks and config from IndexedDB on SW startup
    */
   private async restoreFromStorage(): Promise<void> {
-    console.log('[SWTaskQueue] restoreFromStorage called');
     try {
       // Load saved config
-      console.log('[SWTaskQueue] Calling loadConfig...');
       const { geminiConfig, videoConfig } = await taskQueueStorage.loadConfig();
-      console.log('[SWTaskQueue] loadConfig result:', { hasGemini: !!geminiConfig, hasVideo: !!videoConfig });
       
       if (geminiConfig && videoConfig) {
         this.geminiConfig = geminiConfig;
@@ -159,7 +154,6 @@ export class SWTaskQueue {
 
       // Load all tasks
       const tasks = await taskQueueStorage.getAllTasks();
-      console.log('[SWTaskQueue] Loaded', tasks.length, 'tasks from storage');
 
       // 迁移计数器
       let migratedCount = 0;
@@ -513,7 +507,6 @@ export class SWTaskQueue {
         }
         
         if (orphanTasksToRemove.length > 0) {
-          console.log(`[SWTaskQueue] First-time init: clearing ${orphanTasksToRemove.length} orphan tasks`);
           for (const taskId of orphanTasksToRemove) {
             this.tasks.delete(taskId);
             await taskQueueStorage.deleteTask(taskId);
@@ -777,28 +770,22 @@ export class SWTaskQueue {
    * Delete a task
    */
   async deleteTask(taskId: string): Promise<void> {
-    console.log('[SWTaskQueue] deleteTask called:', taskId);
     const task = this.tasks.get(taskId);
     if (!task) {
-      console.log('[SWTaskQueue] deleteTask: task not found in map');
       return;
     }
 
     // Cancel if running
     if (this.runningTasks.has(taskId)) {
-      console.log('[SWTaskQueue] deleteTask: cancelling running task');
       this.getHandler(task.type)?.cancel(taskId);
       this.runningTasks.delete(taskId);
     }
 
     this.tasks.delete(taskId);
-    console.log('[SWTaskQueue] deleteTask: removed from tasks map');
 
     // Remove from storage
     await taskQueueStorage.deleteTask(taskId);
-    console.log('[SWTaskQueue] deleteTask: removed from storage');
 
-    console.log('[SWTaskQueue] deleteTask: broadcasting TASK_DELETED');
     this.broadcastToClients({
       type: 'TASK_DELETED',
       taskId,
@@ -1196,10 +1183,8 @@ export class SWTaskQueue {
         (error instanceof Error && error.message.includes('cancelled'));
       
       if (isCancelledOrDeleted) {
-        // 任务被取消或删除，这是正常行为，不记录为错误
-        console.log(`[SWTaskQueue] executeResume: 任务 ${task.id} 已被取消或删除`);
+        // 任务被取消或删除，这是正常行为
       } else {
-        console.error(`[SWTaskQueue] executeResume: 任务 ${task.id} 恢复失败`, error);
         await this.handleTaskError(task.id, error);
       }
     }
@@ -1241,7 +1226,6 @@ export class SWTaskQueue {
     // This ensures WorkZone, ChatDrawer, and Task Queue all receive the same update
     const stepInfo = taskStepRegistry.getStepForTask(taskId);
     if (stepInfo) {
-      console.log(`[SWTaskQueue] Broadcasting workflow:stepStatus for task ${taskId} -> workflow=${stepInfo.workflowId}, step=${stepInfo.stepId}`);
       this.channelManager?.sendWorkflowStepStatus(
         stepInfo.workflowId,
         stepInfo.stepId,
@@ -1301,12 +1285,11 @@ export class SWTaskQueue {
 
     // Broadcast workflow step status update if this task is associated with a workflow step
     // This ensures WorkZone, ChatDrawer, and Task Queue all receive the same update
-    const stepInfo = taskStepRegistry.getStepForTask(taskId);
-    if (stepInfo) {
-      console.log(`[SWTaskQueue] Broadcasting workflow:stepStatus (failed) for task ${taskId} -> workflow=${stepInfo.workflowId}, step=${stepInfo.stepId}`);
+    const stepInfoFailed = taskStepRegistry.getStepForTask(taskId);
+    if (stepInfoFailed) {
       this.channelManager?.sendWorkflowStepStatus(
-        stepInfo.workflowId,
-        stepInfo.stepId,
+        stepInfoFailed.workflowId,
+        stepInfoFailed.stepId,
         'failed',
         undefined,
         taskError.message,

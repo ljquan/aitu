@@ -203,8 +203,6 @@ export function useWorkflowSubmission(
     if (hasRecoveredRef.current) return;
     hasRecoveredRef.current = true;
 
-    console.log('[useWorkflowSubmission] 🔄 Recovering workflows on mount...');
-    
     // 等待 swChannelClient 初始化完成（最多等待 10 秒）
     const { swChannelClient } = await import('../services/sw-channel/client');
     const maxWaitTime = 10000;
@@ -217,18 +215,13 @@ export function useWorkflowSubmission(
     }
     
     if (!swChannelClient.isInitialized()) {
-      console.log('[useWorkflowSubmission] ⏭️ Skipping recovery: swChannelClient initialization timeout');
       return;
     }
     
-    console.log(`[useWorkflowSubmission] ✓ swChannelClient initialized after ${waited}ms`);
-    
     try {
-      const recoveredWorkflows = await workflowSubmissionService.recoverWorkflows();
-      console.log(`[useWorkflowSubmission] ✓ Recovered ${recoveredWorkflows.length} active workflows:`,
-        recoveredWorkflows.map(w => ({ id: w.id, status: w.status, steps: w.steps?.length })));
+      await workflowSubmissionService.recoverWorkflows();
     } catch (error) {
-      console.warn('[useWorkflowSubmission] ❌ Failed to recover workflows:', error);
+      console.warn('[useWorkflowSubmission] Failed to recover workflows:', error);
     }
   }, []);
 
@@ -248,13 +241,6 @@ export function useWorkflowSubmission(
     const board = boardRef.current;
     const workZoneId = workZoneIdRef.current;
 
-    console.log(`[useWorkflowSubmission] 📥 Received recovered workflow:`, {
-      id: recoveredWorkflow.id,
-      status: recoveredWorkflow.status,
-      steps: recoveredWorkflow.steps?.length,
-      updatedAt: recoveredWorkflow.updatedAt,
-    });
-
     // 只恢复活跃状态（running/pending）和最近失败的工作流
     // completed/cancelled 不恢复，避免显示过时数据
     const isActive = recoveredWorkflow.status === 'running' || recoveredWorkflow.status === 'pending';
@@ -263,11 +249,8 @@ export function useWorkflowSubmission(
       (Date.now() - recoveredWorkflow.updatedAt) < 5 * 60 * 1000; // 5 分钟内
     
     if (!isActive && !isRecentlyFailed) {
-      console.log(`[useWorkflowSubmission] ⏭️ Skipping workflow ${recoveredWorkflow.id}: not active or recently failed`);
       return;
     }
-
-    console.log(`[useWorkflowSubmission] ✓ Restoring workflow ${recoveredWorkflow.id} to UI`);
 
     // Restore workflow to WorkflowContext
     workflowControl.restoreWorkflow?.(recoveredWorkflow);
@@ -389,7 +372,6 @@ export function useWorkflowSubmission(
       }
 
       case 'completed': {
-        console.log('[useWorkflowSubmission] ✓ Workflow completed:', event.workflowId);
 
         // Update steps to completed status, but skip steps with taskId (they're waiting for task completion)
         const currentWorkflow = workflowControl.getWorkflow();
@@ -423,14 +405,11 @@ export function useWorkflowSubmission(
           if (workZoneId && board) {
             WorkZoneTransforms.updateWorkflow(board, workZoneId, workflowData);
             
-            console.log('[useWorkflowSubmission] Checking removal for WorkZone:', workZoneId, 'hasQueuedTasks:', hasQueuedTasks);
-
             // If no queued tasks (like generate_image), remove WorkZone after a delay
             // Queued tasks will be handled by useAutoInsertToCanvas when they complete AND are inserted
             if (!hasQueuedTasks) {
               setTimeout(() => {
                 WorkZoneTransforms.removeWorkZone(board, workZoneId);
-                console.log('[useWorkflowSubmission] Removed WorkZone after completion:', workZoneId);
               }, 1500);
             } else {
               // 检查是否所有队列任务的后处理已经完成（可能在工作流完成前就已经插入了）
@@ -439,19 +418,15 @@ export function useWorkflowSubmission(
                 const stepResult = step.result as { taskId?: string } | undefined;
                 if (stepResult?.taskId) {
                   const isCompleted = workflowCompletionService.isPostProcessingCompleted(stepResult.taskId);
-                  console.log(`[useWorkflowSubmission] Task ${stepResult.taskId} post-processing finished:`, isCompleted);
                   return isCompleted;
                 }
                 return true;
               });
 
               if (allPostProcessingFinished) {
-                console.log('[useWorkflowSubmission] All post-processing finished, removing WorkZone:', workZoneId);
                 setTimeout(() => {
                   WorkZoneTransforms.removeWorkZone(board, workZoneId);
                 }, 1500);
-              } else {
-                console.log('[useWorkflowSubmission] Post-processing still in progress, keeping WorkZone:', workZoneId);
               }
             }
           }
@@ -460,7 +435,6 @@ export function useWorkflowSubmission(
       }
 
       case 'failed': {
-        console.error('[useWorkflowSubmission] ✗ Workflow failed:', event.error);
         workflowControl.abortWorkflow();
 
         // Sync failed state to ChatDrawer and WorkZone

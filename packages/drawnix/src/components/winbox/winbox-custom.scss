@@ -105,13 +105,14 @@
       justify-content: center;
       font-size: 18px;
       line-height: 1;
+      color: #ffffff;
       
       // 支持 React 组件图标（默认白色，适配渐变背景）
       svg {
         width: 18px;
         height: 18px;
-        fill: currentColor;
-        color: #ffffff;
+        color: inherit;
+        stroke: currentColor;
       }
     }
   }
@@ -358,10 +359,8 @@
   }
 
   // 图标样式（白底深色图标）
-  .wb-icon-content {
-    svg {
-      color: #333333;
-    }
+  .wb-icon-container .wb-icon-content {
+    color: #333333;
   }
 
   // 控制按钮改为灰黑色图标

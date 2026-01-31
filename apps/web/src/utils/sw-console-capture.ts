@@ -103,21 +103,12 @@ export function initSWConsoleCapture(): void {
       // 订阅调试状态变更事件
       swChannelClient.subscribeToEvent('debug:statusChanged', (data) => {
         const event = data as { enabled: boolean };
-        const wasEnabled = debugModeEnabled;
         debugModeEnabled = event.enabled;
-        if (debugModeEnabled && !wasEnabled) {
-          originalConsole.log('[SW Console Capture] 调试模式已开启，开始捕获所有日志');
-        } else if (!debugModeEnabled && wasEnabled) {
-          originalConsole.log('[SW Console Capture] 调试模式已关闭，仅捕获 warn/error');
-        }
       });
 
       // 查询当前调试状态
       swChannelClient.getDebugStatus().then((status) => {
         debugModeEnabled = status.enabled;
-        if (debugModeEnabled) {
-          originalConsole.log('[SW Console Capture] 调试模式已开启，开始捕获所有日志');
-        }
       });
     } else {
       // 如果 swChannelClient 未初始化，延迟重试
@@ -180,6 +171,4 @@ export function initSWConsoleCapture(): void {
     sendToSW('error', message, stack);
   });
 
-  // 输出初始化成功日志（使用原始方法避免循环）
-  originalConsole.log('[SW Console Capture] 已初始化');
 }
