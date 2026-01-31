@@ -214,12 +214,21 @@ export const TaskItem: React.FC<TaskItemProps> = React.memo(({
   // Handle click on task item to toggle selection or open preview
   const handleItemClick = (e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
-    // 排除按钮、复选框、链接等交互元素的点击
-    if (target.closest('button') || target.closest('.t-checkbox') || target.closest('a')) return;
+    // 排除按钮、复选框、链接、预览区域等交互元素的点击
+    // 预览区域有自己的 onClick 处理器，避免重复触发
+    if (target.closest('button') || target.closest('.t-checkbox') || target.closest('a') || target.closest('.task-item__preview')) return;
     
     if (selectionMode) {
       onSelectionChange?.(task.id, !isSelected);
     } else if (isCompleted && mediaUrl) {
+      onPreviewOpen?.();
+    }
+  };
+  
+  // Handle preview click with event propagation stopped
+  const handlePreviewClick = (e: React.MouseEvent) => {
+    e.stopPropagation(); // 阻止冒泡到父元素的 handleItemClick
+    if (isCompleted && mediaUrl) {
       onPreviewOpen?.();
     }
   };
@@ -243,7 +252,7 @@ export const TaskItem: React.FC<TaskItemProps> = React.memo(({
       {/* 1. Preview Area - Visual entry point */}
       {(isCompleted || isFailed || task.status === TaskStatus.PROCESSING) && (mediaUrl || isCharacterTask || task.type === TaskType.VIDEO || task.type === TaskType.IMAGE) && (
         <div className="task-item__preview-wrapper">
-          <div className="task-item__preview" data-track="task_click_preview" onClick={onPreviewOpen}>
+          <div className="task-item__preview" data-track="task_click_preview" onClick={handlePreviewClick}>
             {/* 失败状态：显示失败占位图 */}
             {isFailed ? (
               <div className="task-item__preview-failed">

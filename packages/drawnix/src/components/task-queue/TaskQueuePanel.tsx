@@ -393,12 +393,25 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
     }
   };
 
-  // Get completed tasks with results for navigation
+  // Get completed tasks with results for navigation (deduplicated by ID)
   const completedTasksWithResults = useMemo(() => {
-    return filteredTasks.filter(
-      t => t.status === TaskStatus.COMPLETED && t.result?.url
-    );
+    const seen = new Set<string>();
+    return filteredTasks.filter(t => {
+      if (t.status !== TaskStatus.COMPLETED || !t.result?.url) return false;
+      if (seen.has(t.id)) return false; // 跳过重复的任务 ID
+      seen.add(t.id);
+      return true;
+    });
   }, [filteredTasks]);
+
+  // 创建 taskId -> previewIndex 的映射，用于精确查找
+  const taskIdToPreviewIndex = useMemo(() => {
+    const map = new Map<string, number>();
+    completedTasksWithResults.forEach((task, index) => {
+      map.set(task.id, index);
+    });
+    return map;
+  }, [completedTasksWithResults]);
 
   // 将任务列表转换为 MediaItem 列表
   const previewMediaItems: UnifiedMediaItem[] = useMemo(() => {
@@ -410,15 +423,15 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
     }));
   }, [completedTasksWithResults]);
 
-  // Preview navigation handlers
+  // Preview navigation handlers - 使用 Map 精确查找索引
   const handlePreviewOpen = useCallback((taskId: string) => {
     setPreviewTaskId(taskId);
-    const index = completedTasksWithResults.findIndex(t => t.id === taskId);
-    if (index >= 0) {
+    const index = taskIdToPreviewIndex.get(taskId);
+    if (index !== undefined) {
       setPreviewInitialIndex(index);
       setPreviewVisible(true);
     }
-  }, [completedTasksWithResults]);
+  }, [taskIdToPreviewIndex]);
 
   const handlePreviewClose = useCallback(() => {
     setPreviewTaskId(null);
