@@ -1311,21 +1311,10 @@ sw.addEventListener('message', (event: ExtendableMessageEvent) => {
   const clientId = (event.source as Client)?.id || '';
   const clientUrl = (event.source as WindowClient)?.url || '';
 
-  // Handle channel connect request - create channel for this client
-  // postmessage-duplex channels will then automatically handle subsequent messages
-  if (event.data?.type === 'SW_CHANNEL_CONNECT') {
-    const cm = getChannelManager();
-    if (cm && clientId) {
-      cm.handleClientConnect(clientId);
-      // Respond to client that channel is ready
-      (event.source as Client)?.postMessage({ type: 'SW_CHANNEL_READY' });
-    }
-    return;
-  }
-
-  // Note: postmessage-duplex messages (with __key__ or requestId) are automatically
-  // handled by the channel's internal message listener after channel creation.
-  // We don't need to manually route them here.
+  // Note: postmessage-duplex 1.1.0 automatically handles channel creation and message routing
+  // via enableGlobalRouting() in channel-manager.ts. No manual SW_CHANNEL_CONNECT handling needed.
+  // postmessage-duplex messages (with __key__ or requestId) are automatically handled
+  // by the channel's internal message listener.
   
   // 跳过 postmessage-duplex 的消息，它们会在 wrapRpcHandler 中被记录为 RPC:xxx 格式
   // postmessage-duplex 消息特征：有 cmdname 字段（RPC 请求）或 requestId+ret 字段（RPC 响应）

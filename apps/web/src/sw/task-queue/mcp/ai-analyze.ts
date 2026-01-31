@@ -79,19 +79,39 @@ export const aiAnalyzeTool: SWMCPTool = {
     }
 
     try {
-      // Call LLM
+      // Call LLM with logging
       const { debugFetch } = await import('../debug-fetch');
+      const { startLLMApiLog, completeLLMApiLog, failLLMApiLog } = await import('../llm-api-logger');
+      
+      const startTime = Date.now();
+      const requestBody = {
+        model: textModel,
+        messages: chatMessages,
+        stream: false,
+      };
+      
+      // Extract prompt preview from user message
+      const lastUserMsg = chatMessages.filter(m => m.role === 'user').pop();
+      const promptPreview = typeof lastUserMsg?.content === 'string' 
+        ? lastUserMsg.content 
+        : (lastUserMsg?.content?.find((c: { type: string; text?: string }) => c.type === 'text') as { text?: string })?.text || '';
+      
+      // Start LLM API log
+      const logId = startLLMApiLog({
+        endpoint: '/chat/completions',
+        model: textModel,
+        taskType: 'chat',
+        prompt: promptPreview,
+        requestBody: JSON.stringify(requestBody, null, 2),
+      });
+      
       const response = await debugFetch(`${geminiConfig.baseUrl}/chat/completions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${geminiConfig.apiKey}`,
         },
-        body: JSON.stringify({
-          model: textModel,
-          messages: chatMessages,
-          stream: false,
-        }),
+        body: JSON.stringify(requestBody),
         signal,
       }, {
         label: `🧠 AI 分析 (${textModel})`,
@@ -101,11 +121,27 @@ export const aiAnalyzeTool: SWMCPTool = {
 
       if (!response.ok) {
         const errorText = await response.text();
+        failLLMApiLog(logId, {
+          httpStatus: response.status,
+          duration: Date.now() - startTime,
+          errorMessage: errorText,
+        });
         throw new Error(`AI analyze failed: ${response.status} - ${errorText}`);
       }
 
       const data = await response.json();
+      
       const fullResponse = data.choices?.[0]?.message?.content || '';
+      
+      // Complete LLM API log
+      completeLLMApiLog(logId, {
+        httpStatus: response.status,
+        duration: Date.now() - startTime,
+        resultType: 'text',
+        resultCount: 1,
+        resultText: fullResponse,
+        responseBody: JSON.stringify(data, null, 2),
+      });
 
       // Parse tool calls from response
       const toolCalls = parseToolCalls(fullResponse);

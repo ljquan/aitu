@@ -254,6 +254,18 @@ export class SWChannelManager {
     this.channels.clear();
     console.log('[SWChannelManager] Initialized, cleared all stale channels');
     
+    // 启用 postmessage-duplex 的全局路由
+    // 当收到来自未知客户端的消息时，自动创建 channel 并处理消息
+    ServiceWorkerChannel.enableGlobalRouting((clientId, event) => {
+      // 创建 channel
+      this.ensureChannel(clientId);
+      // 使用 postmessage-duplex 的 handleMessage 处理当前消息
+      const channel = this.channels.get(clientId)?.channel;
+      if (channel) {
+        channel.handleMessage(event as MessageEvent);
+      }
+    });
+    
     // 定期清理断开的客户端（每 60 秒）
     setInterval(() => {
       this.cleanupDisconnectedClients().catch(() => {});
@@ -393,11 +405,11 @@ export class SWChannelManager {
   }
 
   /**
-   * 处理客户端连接请求
-   * 当客户端发送 SW_CHANNEL_CONNECT 消息时调用
+   * Check if a client has an active channel
+   * Used to determine if main thread tools can be executed
    */
-  handleClientConnect(clientId: string): void {
-    this.ensureChannel(clientId);
+  hasClientChannel(clientId: string): boolean {
+    return this.channels.has(clientId);
   }
 
   /**
@@ -1339,11 +1351,12 @@ export class SWChannelManager {
     error?: string 
   }> {
     try {
-      const page = params?.page || 1;
-      const pageSize = params?.pageSize || 20;
+      // Ensure page and pageSize are numbers (postmessage-duplex may pass objects)
+      const page = typeof params?.page === 'number' ? params.page : (Number(params?.page) || 1);
+      const pageSize = typeof params?.pageSize === 'number' ? params.pageSize : (Number(params?.pageSize) || 20);
       const filter = {
-        taskType: params?.taskType,
-        status: params?.status,
+        taskType: typeof params?.taskType === 'string' ? params.taskType : undefined,
+        status: typeof params?.status === 'string' ? params.status : undefined,
       };
       
       const { getLLMApiLogsPaginated } = await import('./llm-api-logger');
@@ -1590,16 +1603,12 @@ export class SWChannelManager {
 
   /**
    * 广播给所有客户端（fire-and-forget 模式）
-   * 使用短超时并忽略所有错误，因为广播不需要确认
+   * 使用 postmessage-duplex 的 broadcast() 方法，不等待响应
    */
   broadcastToAll(event: string, data: Record<string, unknown>): void {
     this.channels.forEach((clientChannel) => {
-      // 使用短超时(500ms)并立即忽略响应/错误
-      // 这是 fire-and-forget 模式，不需要等待客户端确认
-      // 注意：不要等待 Promise，直接触发并忘记
-      clientChannel.channel.publish(event, data, { timeout: 500 }).catch(() => {
-        // 静默忽略 - 广播不需要确认
-      });
+      // 使用 broadcast() 进行单向消息发送，不等待响应
+      clientChannel.channel.broadcast(event, data);
     });
   }
 
@@ -1609,9 +1618,7 @@ export class SWChannelManager {
   broadcastToOthers(event: string, data: Record<string, unknown>, excludeClientId: string): void {
     this.channels.forEach((clientChannel) => {
       if (clientChannel.clientId !== excludeClientId) {
-        clientChannel.channel.publish(event, data, { timeout: 1000 }).catch(() => {
-          // 静默忽略错误
-        });
+        clientChannel.channel.broadcast(event, data);
       }
     });
   }
@@ -1622,9 +1629,7 @@ export class SWChannelManager {
   publishToClient(clientId: string, event: string, data: Record<string, unknown>): void {
     const clientChannel = this.channels.get(clientId);
     if (clientChannel) {
-      clientChannel.channel.publish(event, data, { timeout: 1000 }).catch(() => {
-        // 静默忽略错误
-      });
+      clientChannel.channel.broadcast(event, data);
     }
   }
 
@@ -1639,12 +1644,8 @@ export class SWChannelManager {
   private sendToTaskClient(taskId: string, event: string, data: Record<string, unknown>): void {
     const clientChannel = this.taskChannels.get(taskId);
     if (clientChannel) {
-      console.log(`[SWChannelManager] sendToTaskClient point-to-point: ${event}`, { taskId });
-      try {
-        clientChannel.channel.publish(event, data);
-      } catch (error) {
-        console.warn(`[SWChannelManager] Failed to send to task client ${taskId}:`, error);
-      }
+      // 使用 broadcast() 进行单向消息发送
+      clientChannel.channel.broadcast(event, data);
     } else {
       // 如果没有映射（可能是恢复的任务或 SW 重启后），静默广播
       // 这是预期行为，不需要警告
@@ -1721,11 +1722,8 @@ export class SWChannelManager {
   private sendToChatClient(chatId: string, event: string, data: Record<string, unknown>): void {
     const clientChannel = this.chatChannels.get(chatId);
     if (clientChannel) {
-      try {
-        clientChannel.channel.publish(event, data);
-      } catch (error) {
-        console.warn(`[SWChannelManager] Failed to send to chat client ${chatId}:`, error);
-      }
+      // 使用 broadcast() 进行单向消息发送
+      clientChannel.channel.broadcast(event, data);
     } else {
       // 如果没有映射（可能是恢复的会话或 SW 重启后），静默广播
       this.broadcastToAll(event, data);
@@ -1795,15 +1793,10 @@ export class SWChannelManager {
   private sendToWorkflowClient(workflowId: string, event: string, data: Record<string, unknown>): void {
     const clientChannel = this.workflowChannels.get(workflowId);
     if (clientChannel) {
-      try {
-        clientChannel.channel.publish(event, data);
-      } catch (error) {
-        console.warn(`[SWChannelManager] Failed to send ${event} to workflow ${workflowId}:`, error);
-      }
-    } else {
-      // 工作流可能是从存储恢复的，还没有关联的客户端
-      // console.warn(`[SWChannelManager] No channel found for workflow ${workflowId}`);
+      // 使用 broadcast() 进行单向消息发送
+      clientChannel.channel.broadcast(event, data);
     }
+    // else: 工作流可能是从存储恢复的，还没有关联的客户端
   }
 
   /**
@@ -1886,7 +1879,6 @@ export class SWChannelManager {
     }
     
     try {
-      console.log('[SWChannelManager] sendToolRequest sending:', { requestId, workflowId, stepId, toolName });
       const response = await Promise.race([
         clientChannel.channel.publish(SW_EVENTS.WORKFLOW_TOOL_REQUEST, {
           requestId,
@@ -1898,16 +1890,7 @@ export class SWChannelManager {
         new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs))
       ]);
       
-      console.log('[SWChannelManager] sendToolRequest response:', { 
-        requestId, 
-        hasResponse: !!response, 
-        responseType: typeof response,
-        responseKeys: response && typeof response === 'object' ? Object.keys(response) : [],
-        responseRaw: JSON.stringify(response).substring(0, 500),
-      });
-      
       if (!response || typeof response !== 'object') {
-        console.warn('[SWChannelManager] Tool request timeout or invalid response');
         return null;
       }
       
@@ -1950,14 +1933,6 @@ export class SWChannelManager {
         }
       }
       
-      console.log('[SWChannelManager] sendToolRequest parsed result:', { 
-        requestId, 
-        toolResultFound: !!toolResult,
-        success: toolResult?.success,
-        error: toolResult?.error,
-        taskId: toolResult?.taskId,
-      });
-      
       return toolResult;
     } catch (error) {
       console.warn('[SWChannelManager] Tool request error:', error);
@@ -1976,11 +1951,8 @@ export class SWChannelManager {
       if (workflow.status === 'running' || workflow.status === 'pending') {
         this.workflowChannels.set(workflowId, clientChannel);
       }
-      try {
-        clientChannel.channel.publish(SW_EVENTS.WORKFLOW_RECOVERED, { workflowId, workflow });
-      } catch (error) {
-        console.warn(`[SWChannelManager] Failed to send workflow recovered to ${clientId}:`, error);
-      }
+      // 使用 broadcast() 进行单向消息发送
+      clientChannel.channel.broadcast(SW_EVENTS.WORKFLOW_RECOVERED, { workflowId, workflow });
     }
   }
 

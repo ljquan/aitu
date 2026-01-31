@@ -37,12 +37,19 @@ export interface ChatToolCall {
 
 /**
  * Chat workflow status
+ * 
+ * State transitions:
+ * - pending → streaming → parsing → executing_tools → completed
+ * - executing_tools → awaiting_client (when main thread tool needs client but none available)
+ * - awaiting_client → executing_tools (when client reconnects)
+ * - Any state → failed/cancelled
  */
 export type ChatWorkflowStatus =
   | 'pending'
   | 'streaming'
   | 'parsing'
   | 'executing_tools'
+  | 'awaiting_client'  // Waiting for client to reconnect for DOM operations
   | 'completed'
   | 'failed'
   | 'cancelled';

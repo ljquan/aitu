@@ -72,8 +72,6 @@ const EXCLUDED_MESSAGE_TYPES = [
   'SW_DEBUG_GET_CRASH_SNAPSHOTS',
   'SW_DEBUG_CLEAR_CRASH_SNAPSHOTS',
   'CRASH_SNAPSHOT',
-  'SW_CHANNEL_CONNECT',
-  'SW_CHANNEL_READY',
   // postmessage-duplex debug event names (避免死循环)
   'debug:log',
   'debug:llmLog',

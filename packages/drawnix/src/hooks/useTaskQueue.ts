@@ -5,9 +5,10 @@
  * Subscribes to task updates and provides memoized selectors.
  */
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { taskQueueService } from '../services/task-queue';
 import { Task, TaskStatus, TaskType, GenerationParams } from '../types/task.types';
+import { swTaskQueueService, shouldUseSWTaskQueue } from '../services/task-queue';
 
 /**
  * Return type for useTaskQueue hook
@@ -69,6 +70,7 @@ export interface UseTaskQueueReturn {
 export function useTaskQueue(): UseTaskQueueReturn {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [updateCounter, setUpdateCounter] = useState(0);
+  const syncAttempted = useRef(false);
 
   // Subscribe to task updates
   useEffect(() => {
@@ -84,6 +86,30 @@ export function useTaskQueue(): UseTaskQueueReturn {
     return () => {
       subscription.unsubscribe();
     };
+  }, []);
+
+  // 渲染时从 SW 同步任务数据（确保数据加载）
+  useEffect(() => {
+    if (syncAttempted.current) return;
+    syncAttempted.current = true;
+
+    const syncFromSW = async () => {
+      if (!shouldUseSWTaskQueue()) return;
+      
+      try {
+        // 同步 SW 任务到本地
+        await swTaskQueueService.syncTasksFromSW();
+        // 从 swTaskQueueService 获取任务并更新本地 taskQueueService
+        const swTasks = swTaskQueueService.getAllTasks();
+        if (swTasks.length > 0) {
+          taskQueueService.restoreTasks(swTasks);
+        }
+      } catch {
+        // 静默忽略同步错误
+      }
+    };
+
+    syncFromSW();
   }, []);
 
   // Memoized selectors

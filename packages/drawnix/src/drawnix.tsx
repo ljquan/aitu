@@ -287,10 +287,17 @@ export const Drawnix: React.FC<DrawnixProps> = ({
           }
         }
 
-        // Query active chat workflows from SW (only if SW is initialized)
-        // SW will re-send pending tool requests to the new page
-        let activeChatWorkflows: { id: string }[] = [];
-        let activeWorkflows: { id: string }[] = [];
+        // Query all chat workflows from SW (only if SW is initialized)
+        // Now returns ALL workflows including completed ones for proper state sync
+        type StepStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
+        type WorkflowStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+        let activeChatWorkflows: { id: string; status: string }[] = [];
+        let activeWorkflows: Array<{
+          id: string;
+          status: WorkflowStatus;
+          steps: Array<{ id: string; mcp: string; args: Record<string, unknown>; description: string; status: StepStatus; result?: unknown; error?: string; duration?: number }>;
+          error?: string;
+        }> = [];
         
         if (swInitialized) {
           const { chatWorkflowClient } = await import('./services/sw-channel/chat-workflow-client');
@@ -301,7 +308,6 @@ export const Drawnix: React.FC<DrawnixProps> = ({
           activeWorkflows = await workflowSubmissionService.queryAllWorkflows();
         }
         
-        const activeChatWorkflowIds = new Set(activeChatWorkflows.map(w => w.id));
         const activeWorkflowIds = new Set(activeWorkflows.map(w => w.id));
         
         // console.log('[Drawnix] Active chat workflows:', activeChatWorkflows.length, 'regular workflows:', activeWorkflows.length);
@@ -340,13 +346,24 @@ export const Drawnix: React.FC<DrawnixProps> = ({
 
           if (!hasRunningSteps && !swWorkflow) continue;
 
-          // Check if this workzone's workflow is still active in SW
-          // For chat workflows, check activeChatWorkflowIds; for regular workflows, check activeWorkflowIds
-          const isChatWorkflowActive = activeChatWorkflowIds.has(currentWorkflow.id);
-          const isRegularWorkflowActive = activeWorkflowIds.has(currentWorkflow.id);
-          const isWorkflowActive = isChatWorkflowActive || isRegularWorkflowActive;
+          // Check if this workzone's workflow exists in SW (including completed ones)
+          // For chat workflows, also get the full workflow object to check actual status
+          const chatWorkflow = activeChatWorkflows.find(w => w.id === currentWorkflow.id);
+          const isChatWorkflowExists = !!chatWorkflow;
+          const isRegularWorkflowExists = activeWorkflowIds.has(currentWorkflow.id);
+          const isWorkflowExists = isChatWorkflowExists || isRegularWorkflowExists;
+          
+          // Check if workflow is still running (not completed/failed)
+          const isChatWorkflowRunning = chatWorkflow && 
+            chatWorkflow.status !== 'completed' && 
+            chatWorkflow.status !== 'failed' && 
+            chatWorkflow.status !== 'cancelled';
+          const isWorkflowRunning = isChatWorkflowRunning || (swWorkflow && 
+            swWorkflow.status !== 'completed' && 
+            swWorkflow.status !== 'failed' && 
+            swWorkflow.status !== 'cancelled');
 
-          // console.log('[Drawnix] Found interrupted WorkZone:', workzone.id, 'chatActive:', isChatWorkflowActive, 'regularActive:', isRegularWorkflowActive);
+          // console.log('[Drawnix] Found interrupted WorkZone:', workzone.id, 'chatExists:', isChatWorkflowExists, 'regularExists:', isRegularWorkflowExists, 'running:', isWorkflowRunning);
 
           // Update steps based on task queue status
           const updatedSteps = currentWorkflow.steps.map(step => {
@@ -358,19 +375,14 @@ export const Drawnix: React.FC<DrawnixProps> = ({
             const taskId = (step.result as { taskId?: string })?.taskId;
             if (!taskId) {
               // No taskId means it's an AI analyze step or similar
-              // For ai_analyze (text model), check if workflow is still active in SW
+              // For ai_analyze (text model), always keep current status
+              // SW will send workflow:status or workflow:stepStatus events to update actual state
+              // This prevents incorrectly marking as failed when SW query times out but workflow is still running
               if (step.mcp === 'ai_analyze') {
-                if (isWorkflowActive) {
-                  // Workflow is still active in SW, SW will re-send the request
-                  // Keep as running, the new page will handle the re-sent request
-                  return step;
-                }
-                // Workflow is not active, mark as failed
-                return {
-                  ...step,
-                  status: 'failed' as const,
-                  error: '页面刷新导致中断，请删除后重新发起',
-                };
+                // Keep current status - SW event subscription will update if needed
+                // If SW workflow failed, we'll receive workflow:failed event
+                // If SW workflow completed, we'll receive workflow:completed event
+                return step;
               }
               // For other steps without taskId (like insert_mindmap, insert_mermaid),
               // they are synchronous and should have completed before refresh

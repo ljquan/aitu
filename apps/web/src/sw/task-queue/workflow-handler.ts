@@ -28,6 +28,7 @@ import {
   broadcastToAllClients,
   sendToClientById,
 } from './utils/message-bus';
+import { getChannelManager } from './channel-manager';
 
 // Workflow executor instance
 let workflowExecutor: WorkflowExecutor | null = null;
@@ -132,6 +133,10 @@ export function initWorkflowHandler(
           args,
         });
       });
+    },
+    isClientAvailable: (clientId) => {
+      const cm = getChannelManager();
+      return cm ? cm.hasClientChannel(clientId) : false;
     },
   });
 

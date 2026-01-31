@@ -53,33 +53,8 @@ export function resetDuplexClient() {
 }
 
 /**
- * 发送连接请求到 SW，等待 SW 创建 channel
- * @returns {Promise<void>}
- */
-function sendConnectRequest() {
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      navigator.serviceWorker.removeEventListener('message', handler);
-      reject(new Error('SW_CHANNEL_CONNECT timeout'));
-    }, 5000);
-
-    const handler = (event) => {
-      if (event.data?.type === 'SW_CHANNEL_READY') {
-        clearTimeout(timeout);
-        navigator.serviceWorker.removeEventListener('message', handler);
-        console.log('[DuplexClient] Received SW_CHANNEL_READY');
-        resolve();
-      }
-    };
-
-    navigator.serviceWorker.addEventListener('message', handler);
-    console.log('[DuplexClient] Sending SW_CHANNEL_CONNECT');
-    navigator.serviceWorker.controller?.postMessage({ type: 'SW_CHANNEL_CONNECT' });
-  });
-}
-
-/**
  * 初始化 duplex 客户端
+ * postmessage-duplex 1.1.0 配合 SW 的 enableGlobalRouting，自动创建 channel
  * @returns {Promise<boolean>}
  */
 export async function initDuplexClient() {
@@ -95,12 +70,9 @@ export async function initDuplexClient() {
       return false;
     }
 
-    // 先发送连接请求，让 SW 端创建 channel
-    // 这是必须的，因为 SW 端只有在收到 SW_CHANNEL_CONNECT 后才会创建对应的 channel
-    await sendConnectRequest();
-
-    // 创建 duplex 通道（禁用内部日志以减少干扰）
-    // 注意：createFromPage 是异步方法，需要 await
+    // 创建 duplex 通道
+    // SW 端的 enableGlobalRouting 会自动为新客户端创建 channel
+    // 不再需要显式的 SW_CHANNEL_CONNECT 握手
     channel = await ServiceWorkerChannel.createFromPage({
       log: { log: () => {}, warn: () => {}, error: () => {} }
     });
@@ -123,19 +95,13 @@ export async function initDuplexClient() {
 function setupEventSubscriptions() {
   if (!channel) return;
 
-  // 订阅所有事件
-  // 注意：
-  // 1. subscribe 的 handler 接收的是 response 对象，实际数据在 response.data 中
-  // 2. handler 必须返回响应，否则发送方会超时
+  // 使用 onBroadcast 接收 SW 的广播消息（单向，不需要响应）
+  // SW 使用 channel.broadcast() 发送事件
   Object.values(SW_EVENTS).forEach(eventName => {
-    channel.subscribe(eventName, (response) => {
-      // 提取实际数据
-      const data = response.data;
+    channel.onBroadcast(eventName, ({ data }) => {
       if (data !== undefined) {
         emitEvent(eventName, data);
       }
-      // 返回 ack 响应，避免发送方超时
-      return { ack: true };
     });
   });
 }

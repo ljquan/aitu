@@ -30,17 +30,18 @@ function getCurrentFilter() {
  */
 export async function loadLLMApiLogs(page) {
   try {
-    const targetPage = page ?? state.llmapiPagination.page;
+    const targetPage = typeof page === 'number' ? page : (state.llmapiPagination.page || 1);
     const pageSize = state.llmapiPagination.pageSize || 20;
     const filter = getCurrentFilter();
     const result = await loadLLMApiLogsRPC(targetPage, pageSize, filter);
     
     if (result) {
-      state.llmapiLogs = result.logs || [];
-      state.llmapiPagination.page = result.page || 1;
-      state.llmapiPagination.total = result.total || 0;
-      state.llmapiPagination.totalPages = result.totalPages || 0;
-      state.llmapiPagination.pageSize = result.pageSize || 20;
+      state.llmapiLogs = Array.isArray(result.logs) ? result.logs : [];
+      // Ensure pagination values are numbers (postmessage-duplex may return objects)
+      state.llmapiPagination.page = typeof result.page === 'number' ? result.page : (Number(result.page) || 1);
+      state.llmapiPagination.total = typeof result.total === 'number' ? result.total : (Number(result.total) || 0);
+      state.llmapiPagination.totalPages = typeof result.totalPages === 'number' ? result.totalPages : (Number(result.totalPages) || 0);
+      state.llmapiPagination.pageSize = typeof result.pageSize === 'number' ? result.pageSize : (Number(result.pageSize) || 20);
       renderLLMApiLogs();
     }
   } catch (error) {

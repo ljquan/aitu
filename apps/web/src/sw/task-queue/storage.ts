@@ -23,6 +23,7 @@ const CONFIG_STORE = 'config';
 const WORKFLOWS_STORE = 'workflows';
 const CHAT_WORKFLOWS_STORE = 'chat-workflows';
 const PENDING_TOOL_REQUESTS_STORE = 'pending-tool-requests';
+const PENDING_DOM_OPERATIONS_STORE = 'pending-dom-operations';
 
 // All required stores for integrity check
 const REQUIRED_STORES = [
@@ -31,6 +32,7 @@ const REQUIRED_STORES = [
   WORKFLOWS_STORE,
   CHAT_WORKFLOWS_STORE,
   PENDING_TOOL_REQUESTS_STORE,
+  PENDING_DOM_OPERATIONS_STORE,
 ];
 
 /**
@@ -45,6 +47,32 @@ export interface StoredPendingToolRequest {
   createdAt: number;
   /** ID of the client that initiated the request */
   clientId?: string;
+}
+
+/**
+ * Pending DOM operation stored in IndexedDB
+ * 
+ * When a main-thread tool completes in SW but no client is available,
+ * the result is stored here. When a client reconnects, these operations
+ * are sent to the client to continue execution.
+ */
+export interface PendingDomOperation {
+  /** Unique operation ID */
+  id: string;
+  /** Associated workflow ID */
+  workflowId: string;
+  /** Associated chat ID (for chat workflows) */
+  chatId: string;
+  /** Tool name that needs to be executed on main thread */
+  toolName: string;
+  /** Tool arguments */
+  toolArgs: Record<string, unknown>;
+  /** Result from SW tool execution (e.g., generated image URL) */
+  toolResult: unknown;
+  /** Tool call ID (for tracking in workflow) */
+  toolCallId: string;
+  /** Creation timestamp */
+  createdAt: number;
 }
 
 /**
@@ -143,6 +171,13 @@ function createAllStores(db: IDBDatabase): void {
   if (!db.objectStoreNames.contains(PENDING_TOOL_REQUESTS_STORE)) {
     const pendingRequestsStore = db.createObjectStore(PENDING_TOOL_REQUESTS_STORE, { keyPath: 'requestId' });
     pendingRequestsStore.createIndex('workflowId', 'workflowId', { unique: false });
+  }
+
+  // Create pending DOM operations store (for page refresh recovery)
+  if (!db.objectStoreNames.contains(PENDING_DOM_OPERATIONS_STORE)) {
+    const pendingDomOpsStore = db.createObjectStore(PENDING_DOM_OPERATIONS_STORE, { keyPath: 'id' });
+    pendingDomOpsStore.createIndex('workflowId', 'workflowId', { unique: false });
+    pendingDomOpsStore.createIndex('chatId', 'chatId', { unique: false });
   }
 }
 
@@ -913,6 +948,159 @@ export class TaskQueueStorage {
       }
     } catch (error) {
       console.error('[SWStorage] Failed to delete pending tool requests by workflow:', error);
+    }
+  }
+
+  // ============================================================================
+  // Pending DOM Operations Storage Methods
+  // ============================================================================
+
+  /**
+   * Save a pending DOM operation to IndexedDB
+   * Called when a main-thread tool result is ready but no client is available
+   */
+  async savePendingDomOperation(operation: PendingDomOperation): Promise<void> {
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(PENDING_DOM_OPERATIONS_STORE, 'readwrite');
+        const store = transaction.objectStore(PENDING_DOM_OPERATIONS_STORE);
+        const request = store.put(operation);
+
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve();
+      });
+    } catch (error) {
+      console.error('[SWStorage] Failed to save pending DOM operation:', error);
+    }
+  }
+
+  /**
+   * Get all pending DOM operations
+   */
+  async getAllPendingDomOperations(): Promise<PendingDomOperation[]> {
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(PENDING_DOM_OPERATIONS_STORE, 'readonly');
+        const store = transaction.objectStore(PENDING_DOM_OPERATIONS_STORE);
+        const request = store.getAll();
+
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result || []);
+      });
+    } catch (error) {
+      console.error('[SWStorage] Failed to get all pending DOM operations:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get pending DOM operations by workflow ID
+   */
+  async getPendingDomOperationsByWorkflow(workflowId: string): Promise<PendingDomOperation[]> {
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(PENDING_DOM_OPERATIONS_STORE, 'readonly');
+        const store = transaction.objectStore(PENDING_DOM_OPERATIONS_STORE);
+        const index = store.index('workflowId');
+        const request = index.getAll(workflowId);
+
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result || []);
+      });
+    } catch (error) {
+      console.error('[SWStorage] Failed to get pending DOM operations by workflow:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get pending DOM operations by chat ID
+   */
+  async getPendingDomOperationsByChatId(chatId: string): Promise<PendingDomOperation[]> {
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(PENDING_DOM_OPERATIONS_STORE, 'readonly');
+        const store = transaction.objectStore(PENDING_DOM_OPERATIONS_STORE);
+        const index = store.index('chatId');
+        const request = index.getAll(chatId);
+
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result || []);
+      });
+    } catch (error) {
+      console.error('[SWStorage] Failed to get pending DOM operations by chat ID:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get a pending DOM operation by ID
+   */
+  async getPendingDomOperation(operationId: string): Promise<PendingDomOperation | null> {
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(PENDING_DOM_OPERATIONS_STORE, 'readonly');
+        const store = transaction.objectStore(PENDING_DOM_OPERATIONS_STORE);
+        const request = store.get(operationId);
+
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result || null);
+      });
+    } catch (error) {
+      console.error('[SWStorage] Failed to get pending DOM operation:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Delete a pending DOM operation
+   */
+  async deletePendingDomOperation(operationId: string): Promise<void> {
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(PENDING_DOM_OPERATIONS_STORE, 'readwrite');
+        const store = transaction.objectStore(PENDING_DOM_OPERATIONS_STORE);
+        const request = store.delete(operationId);
+
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve();
+      });
+    } catch (error) {
+      console.error('[SWStorage] Failed to delete pending DOM operation:', error);
+    }
+  }
+
+  /**
+   * Delete all pending DOM operations for a workflow
+   */
+  async deletePendingDomOperationsByWorkflow(workflowId: string): Promise<void> {
+    try {
+      const operations = await this.getPendingDomOperationsByWorkflow(workflowId);
+      for (const op of operations) {
+        await this.deletePendingDomOperation(op.id);
+      }
+    } catch (error) {
+      console.error('[SWStorage] Failed to delete pending DOM operations by workflow:', error);
+    }
+  }
+
+  /**
+   * Delete all pending DOM operations for a chat
+   */
+  async deletePendingDomOperationsByChatId(chatId: string): Promise<void> {
+    try {
+      const operations = await this.getPendingDomOperationsByChatId(chatId);
+      for (const op of operations) {
+        await this.deletePendingDomOperation(op.id);
+      }
+    } catch (error) {
+      console.error('[SWStorage] Failed to delete pending DOM operations by chat ID:', error);
     }
   }
 }

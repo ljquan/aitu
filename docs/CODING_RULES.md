@@ -2308,99 +2308,103 @@ window.addEventListener('user-confirmed-upgrade', () => {
 - `apps/web/src/main.tsx` - Service Worker 注册和更新逻辑
 - `components/version-update/version-update-prompt.tsx` - 版本更新提示组件
 
-### postmessage-duplex 库使用规范
+### postmessage-duplex 库使用规范 (v1.1.0)
 
 **场景**: 使用 `postmessage-duplex` 库实现主线程与 Service Worker 的双工通信时
 
-❌ **错误示例 1 - subscribe 回调未正确提取数据**:
+#### 通信模式选择
+
+| 模式 | 方法 | 用途 | 特点 |
+|------|------|------|------|
+| RPC | `call()` | 请求-响应 | 需要等待响应，有超时 |
+| 广播 | `broadcast()` + `onBroadcast()` | 单向通知 | fire-and-forget，无响应 |
+
+❌ **错误示例 1 - 单向通知使用 publish**:
 ```typescript
-// 错误：直接使用回调参数，但实际数据在 response.data 中
-channel.subscribe('task:status', (data) => {
-  console.log(data.taskId);  // undefined! data 是 response 对象
+// 错误：publish 需要响应，用于单向通知会导致超时警告
+channel.publish('task:status', { taskId, status });  // 等待响应超时
+```
+
+✅ **正确示例 1 - 使用 broadcast**:
+```typescript
+// 正确：单向通知使用 broadcast（fire-and-forget）
+channel.broadcast('task:status', { taskId, status });  // 不等待响应
+```
+
+❌ **错误示例 2 - 接收广播使用 subscribe**:
+```typescript
+// 错误：subscribe 用于 RPC，接收广播应使用 onBroadcast
+channel.subscribe('task:status', (response) => {
+  handleStatus(response.data);  // 广播消息不会触发
+  return { ack: true };
 });
 ```
 
-✅ **正确示例 1**:
+✅ **正确示例 2 - 使用 onBroadcast**:
 ```typescript
-// 正确：从 response.data 中提取实际数据
-channel.subscribe('task:status', (response) => {
-  if (response.ret === ReturnCode.Success && response.data) {
-    const data = response.data as TaskStatusEvent;
-    console.log(data.taskId);  // 正确
+// 正确：使用 onBroadcast 接收广播消息
+channel.onBroadcast('task:status', ({ data }) => {
+  if (data) {
+    handleStatus(data as TaskStatusEvent);  // data 直接是广播数据
+  }
+  // 不需要 return，这是单向的
+});
+```
+
+#### 客户端初始化
+
+❌ **错误示例 3 - 未启用自动重连**:
+```typescript
+// 错误：SW 更新后连接断开，需要手动处理
+const channel = await ServiceWorkerChannel.createFromPage({
+  timeout: 30000,
+});
+```
+
+✅ **正确示例 3 - 启用 autoReconnect**:
+```typescript
+// 正确：启用自动重连，SW 更新时自动恢复连接
+const channel = await ServiceWorkerChannel.createFromPage({
+  timeout: 30000,
+  autoReconnect: true,
+  log: { log: () => {}, warn: () => {}, error: () => {} },  // 禁用内部日志
+} as any);  // log 不在 PageChannelOptions 类型中，需要 as any
+```
+
+#### SW 端配置
+
+❌ **错误示例 4 - 手动处理连接**:
+```typescript
+// 错误（v1.0.0 模式）：手动监听 SW_CHANNEL_CONNECT
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SW_CHANNEL_CONNECT') {
+    // 手动创建 channel...
   }
 });
 ```
 
-❌ **错误示例 2 - subscribe handler 未返回响应**:
+✅ **正确示例 4 - 使用 enableGlobalRouting**:
 ```typescript
-// 错误：handler 没有返回值，发送方会超时
-channel.subscribe('debug:log', (response) => {
-  processLog(response.data);
-  // 没有 return，发送方的 publish 会超时！
+// 正确（v1.1.0）：使用 enableGlobalRouting 自动管理 channel
+ServiceWorkerChannel.enableGlobalRouting((clientId, event) => {
+  const channel = ensureChannel(clientId);  // 按需创建 channel
+  channel.handleMessage(event);  // 处理消息
 });
-```
 
-✅ **正确示例 2**:
-```typescript
-// 正确：返回 ack 响应
-channel.subscribe('debug:log', (response) => {
-  processLog(response.data);
-  return { ack: true };  // 返回响应避免超时
-});
-```
-
-❌ **错误示例 3 - 客户端未发送连接请求**:
-```typescript
-// 错误：直接创建 channel，SW 端不会创建对应的 channel
-const channel = await ServiceWorkerChannel.createFromPage();
-await channel.publish('task:create', taskData);  // 可能失败，因为 SW 端没有 channel
-```
-
-✅ **正确示例 3**:
-```typescript
-// 正确：先发送连接请求，让 SW 创建 channel
-function sendConnectRequest(): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error('timeout')), 5000);
-    const handler = (event: MessageEvent) => {
-      if (event.data?.type === 'SW_CHANNEL_READY') {
-        clearTimeout(timeout);
-        navigator.serviceWorker.removeEventListener('message', handler);
-        resolve();
-      }
-    };
-    navigator.serviceWorker.addEventListener('message', handler);
-    navigator.serviceWorker.controller?.postMessage({ type: 'SW_CHANNEL_CONNECT' });
-  });
+function ensureChannel(clientId: string) {
+  if (!channels.has(clientId)) {
+    const channel = ServiceWorkerChannel.createFromWorker(clientId, {
+      timeout: 30000,
+      subscribeMap: createRpcHandlers(),
+      log: { log: () => {}, warn: () => {}, error: () => {} },
+    });
+    channels.set(clientId, channel);
+  }
+  return channels.get(clientId);
 }
-
-// 先连接，再创建 channel
-await sendConnectRequest();
-const channel = await ServiceWorkerChannel.createFromPage();
 ```
 
-❌ **错误示例 4 - publish 模式下 ret 检查过严**:
-```typescript
-// 错误：publish 模式下 ret 可能是 undefined，不一定是 0
-channel.subscribe('task:status', (response) => {
-  if (response.ret === ReturnCode.Success && response.data) {  // 可能永远不执行！
-    handleTaskStatus(response.data);
-  }
-  return { ack: true };
-});
-```
-
-✅ **正确示例 4**:
-```typescript
-// 正确：publish 模式下 ret 可能是 undefined，需要同时检查
-channel.subscribe('task:status', (response) => {
-  const isSuccess = response.ret === undefined || response.ret === ReturnCode.Success;
-  if (isSuccess && response.data) {
-    handleTaskStatus(response.data);
-  }
-  return { ack: true };
-});
-```
+#### isReady 检查
 
 ❌ **错误示例 5 - isReady 布尔值检查**:
 ```typescript
@@ -2418,40 +2422,67 @@ if (!!this.channel?.isReady) {  // 0 → false, 1 → true
 }
 ```
 
-❌ **错误示例 6 - 响应数据格式假设单一**:
+**原因**:
+1. **v1.1.0 引入 broadcast 模式**：`broadcast()` + `onBroadcast()` 用于单向通知，不需要响应，避免超时
+2. **enableGlobalRouting 自动管理**：不再需要手动处理 `SW_CHANNEL_CONNECT`，库自动路由消息到正确的 channel
+3. **autoReconnect 处理 SW 更新**：SW 更新时自动重新建立连接，无需页面刷新
+4. **log 选项禁用日志**：`PageChannelOptions` 类型不含 `log`，需要 `as any` 绕过类型检查
+5. **isReady 返回数字**：0/1 而非布尔值，使用 `!!` 转换
+
+### 任务队列双服务同步
+
+**场景**: 项目中有两个任务队列服务，需要正确同步数据
+
+| 服务 | 位置 | 用途 |
+|------|------|------|
+| `taskQueueService` | 本地内存 | UI 组件状态（useTaskQueue hook） |
+| `swTaskQueueService` | SW 通信 | 持久化任务数据 |
+
+❌ **错误示例**:
 ```typescript
-// 错误：假设响应格式总是 { ret, data }
-const result = response as { data?: { success: boolean } };
-return result.data || null;  // 可能漏掉其他格式的有效数据
+// 错误：只从本地服务读取，首次渲染时可能为空
+export function useTaskQueue() {
+  const [tasks, setTasks] = useState<Task[]>([]);
+  
+  useEffect(() => {
+    setTasks(taskQueueService.getAllTasks());  // 可能为空！
+  }, []);
+}
 ```
 
-✅ **正确示例 6**:
+✅ **正确示例**:
 ```typescript
-// 正确：处理多种可能的响应格式
-const rawResponse = response as Record<string, unknown>;
+// 正确：渲染时从 SW 同步数据
+export function useTaskQueue() {
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const syncAttempted = useRef(false);
+  
+  useEffect(() => {
+    setTasks(taskQueueService.getAllTasks());
+  }, []);
 
-// 格式 1: { success, result, ... } - 直接数据
-if ('success' in rawResponse) {
-  return rawResponse as ToolResult;
+  // 渲染时从 SW 同步
+  useEffect(() => {
+    if (syncAttempted.current) return;
+    syncAttempted.current = true;
+
+    const syncFromSW = async () => {
+      if (!shouldUseSWTaskQueue()) return;
+      await swTaskQueueService.syncTasksFromSW();
+      const swTasks = swTaskQueueService.getAllTasks();
+      if (swTasks.length > 0) {
+        taskQueueService.restoreTasks(swTasks);
+      }
+    };
+    syncFromSW();
+  }, []);
 }
-
-// 格式 2: { ret, data: { success, ... } } - 标准格式
-if (rawResponse.data && typeof rawResponse.data === 'object') {
-  const data = rawResponse.data as Record<string, unknown>;
-  if ('success' in data) {
-    return data as ToolResult;
-  }
-}
-
-return null;
 ```
 
 **原因**:
-1. `postmessage-duplex` 的 `subscribe` 回调接收的是完整的响应对象，实际数据在 `response.data` 中
-2. `publish` 方法期望收到响应，如果 `subscribe` handler 不返回值，发送方会超时
-3. SW 端只有在收到 `SW_CHANNEL_CONNECT` 消息后才会为该客户端创建 channel，否则 RPC 调用无法被处理
-4. **`publish` 模式下 `response.ret` 可能是 `undefined`**（不同于 `call` 模式返回 0），检查成功时需要同时接受 `undefined` 和 `0`
-5. **`channel.isReady` 返回数字 0/1 而非布尔值**，使用 `=== true` 检查会永远失败，应使用 `!!isReady`
+- `taskQueueService` 是纯内存服务，页面刷新后数据丢失
+- `swTaskQueueService` 通过 SW 持久化数据到 IndexedDB
+- 组件渲染时需要从 SW 同步数据到本地服务，确保 UI 显示正确
 6. **响应数据格式可能有多种嵌套结构**，需要灵活解析而非假设单一格式
 
 **相关文件**:
