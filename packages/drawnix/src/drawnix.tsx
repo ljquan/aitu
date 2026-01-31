@@ -77,6 +77,7 @@ import { QuickCreationToolbar } from './components/toolbar/quick-creation-toolba
 import { CacheQuotaProvider } from './components/cache-quota-provider/CacheQuotaProvider';
 import { RecentColorsProvider } from './components/unified-color-picker';
 import { usePencilCursor } from './hooks/usePencilCursor';
+import { useToolFromUrl } from './hooks/useToolFromUrl';
 import { withArrowLineAutoCompleteExtend } from './plugins/with-arrow-line-auto-complete-extend';
 import { AutoCompleteShapePicker } from './components/auto-complete-shape-picker';
 import { useAutoCompleteShapePicker } from './hooks/useAutoCompleteShapePicker';
@@ -806,6 +807,10 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
 
   // 画笔自定义光标
   usePencilCursor({ board, pointer: appState.pointer });
+
+  // 处理 URL 参数中的工具打开请求
+  // 当访问 ?tool=xxx 时，自动以 WinBox 全屏形式打开指定工具并设为常驻
+  useToolFromUrl();
 
   // 快捷工具栏状态
   const [quickToolbarVisible, setQuickToolbarVisible] = useState(false);

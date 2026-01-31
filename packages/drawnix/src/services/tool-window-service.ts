@@ -19,6 +19,16 @@ interface SerializableToolInfo {
 }
 
 /**
+ * 打开工具窗口选项
+ */
+interface OpenToolOptions {
+  /** 是否自动最大化 */
+  autoMaximize?: boolean;
+  /** 是否自动设置为常驻 */
+  autoPin?: boolean;
+}
+
+/**
  * 工具窗口管理服务
  */
 class ToolWindowService {
@@ -146,9 +156,22 @@ class ToolWindowService {
 
   /**
    * 打开工具窗口
+   * @param tool 工具定义
+   * @param options 可选配置项
    */
-  openTool(tool: ToolDefinition): void {
+  openTool(tool: ToolDefinition, options?: OpenToolOptions): void {
     const existingState = this.toolStates.get(tool.id);
+    
+    // 如果需要自动常驻，先设置
+    if (options?.autoPin && !this.pinnedToolIds.has(tool.id)) {
+      this.pinnedToolIds.add(tool.id);
+      this.pinnedToolInfos.set(tool.id, {
+        id: tool.id,
+        name: tool.name,
+        category: tool.category,
+      });
+      this.savePinnedTools();
+    }
     
     if (existingState) {
       if (existingState.status === 'open') {
@@ -159,12 +182,19 @@ class ToolWindowService {
       existingState.status = 'open';
       // 更新完整的工具定义（包括 icon 和 component）
       existingState.tool = tool;
+      // 如果设置了自动最大化，更新状态
+      if (options?.autoMaximize) {
+        existingState.autoMaximize = true;
+      }
+      // 更新常驻状态
+      existingState.isPinned = this.pinnedToolIds.has(tool.id);
     } else {
       // 创建新的窗口状态
       const newState: ToolWindowState = {
         tool,
         status: 'open',
         isPinned: this.pinnedToolIds.has(tool.id),
+        autoMaximize: options?.autoMaximize,
       };
       this.toolStates.set(tool.id, newState);
     }

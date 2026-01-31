@@ -59,6 +59,8 @@ export interface WinBoxWindowProps {
   visible: boolean;
   /** 窗口标题 */
   title: string;
+  /** 标题栏图标（支持 emoji 字符串或 React 组件） */
+  icon?: React.ReactNode;
   /** 窗口关闭回调 */
   onClose?: () => void;
   /** 子组件 */
@@ -133,6 +135,7 @@ export interface WinBoxWindowProps {
 export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
   visible,
   title,
+  icon,
   onClose,
   children,
   width = '80%',
@@ -173,6 +176,7 @@ export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
   const isMinimizingRef = useRef(false);
   const [headerPortalContainer, setHeaderPortalContainer] = useState<HTMLElement | null>(null);
   const [bodyPortalContainer, setBodyPortalContainer] = useState<HTMLElement | null>(null);
+  const [iconPortalContainer, setIconPortalContainer] = useState<HTMLElement | null>(null);
   const [isReady, setIsReady] = useState(false);
   const [winboxLoaded, setWinboxLoaded] = useState(!!WinBoxConstructor);
 
@@ -684,6 +688,20 @@ export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
         if (wbBody) {
           setBodyPortalContainer(wbBody as HTMLElement);
         }
+        
+        // 如果有图标，创建图标 portal 容器
+        if (icon) {
+          const drag = wb.window.querySelector('.wb-drag');
+          const wbTitle = wb.window.querySelector('.wb-title');
+          if (drag && wbTitle) {
+            // 创建图标容器
+            const iconContainer = document.createElement('div');
+            iconContainer.className = 'wb-icon-container';
+            // 插入到标题之前
+            drag.insertBefore(iconContainer, wbTitle);
+            setIconPortalContainer(iconContainer);
+          }
+        }
       }
 
       // 如果有自定义标题栏内容，创建 portal 容器
@@ -865,6 +883,13 @@ export const WinBoxWindow: React.FC<WinBoxWindowProps> = ({
   // 这样可以保持 React 事件系统正常工作
   return (
     <>
+      {/* 图标通过 Portal 渲染到标题栏 */}
+      {isReady && icon && iconPortalContainer && 
+        createPortal(
+          <span className="wb-icon-content">{icon}</span>,
+          iconPortalContainer
+        )
+      }
       {/* 内容通过 Portal 渲染到 WinBox 的 .wb-body */}
       {isReady && bodyPortalContainer && createPortal(
         <div className="winbox-content-wrapper">
