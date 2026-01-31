@@ -6,10 +6,74 @@
  *
  * The systemPrompt and userMessage are passed from the main thread,
  * keeping all prompt logic in the application layer.
+ * 
+ * Supports streaming mode for better UX and intermediate state persistence.
  */
 
 import type { SWMCPTool, MCPResult } from '../workflow-types';
 import { parseToolCalls, extractTextContent } from '@aitu/utils';
+
+// ============================================================================
+// SSE Stream Parser
+// ============================================================================
+
+/**
+ * Parse SSE stream and accumulate content
+ */
+async function parseSSEStream(
+  response: Response,
+  signal?: AbortSignal,
+  onChunk?: (content: string, accumulated: string) => void
+): Promise<string> {
+  const reader = response.body?.getReader();
+  if (!reader) {
+    throw new Error('Response body is not readable');
+  }
+
+  const decoder = new TextDecoder();
+  let accumulated = '';
+  let buffer = '';
+
+  try {
+    while (true) {
+      if (signal?.aborted) {
+        reader.cancel();
+        throw new Error('Request aborted');
+      }
+
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      
+      // Process complete SSE events
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6).trim();
+          if (data === '[DONE]') continue;
+          
+          try {
+            const parsed = JSON.parse(data);
+            const content = parsed.choices?.[0]?.delta?.content || '';
+            if (content) {
+              accumulated += content;
+              onChunk?.(content, accumulated);
+            }
+          } catch {
+            // Skip invalid JSON lines
+          }
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  return accumulated;
+}
 
 // ============================================================================
 // AI Analyze Tool
@@ -20,13 +84,15 @@ import { parseToolCalls, extractTextContent } from '@aitu/utils';
  *
  * Accepts pre-built messages from main thread, so prompt generation
  * logic stays in the application layer (no duplication).
+ * 
+ * Uses streaming for better responsiveness and intermediate state tracking.
  */
 export const aiAnalyzeTool: SWMCPTool = {
   name: 'ai_analyze',
   description: 'Analyze user request and generate workflow steps',
 
   async execute(args, config): Promise<MCPResult> {
-    const { geminiConfig, signal } = config;
+    const { geminiConfig, signal, onProgress } = config;
     const {
       // Pre-built messages from main thread (preferred)
       messages,
@@ -35,6 +101,10 @@ export const aiAnalyzeTool: SWMCPTool = {
       userMessage,
       // Reference images for placeholder replacement
       referenceImages = [],
+      // Option to disable streaming (for testing)
+      useStream = true,
+      // User-selected text model (priority over system config)
+      textModel: userSelectedModel,
     } = args as {
       messages?: Array<{
         role: 'system' | 'user' | 'assistant';
@@ -43,6 +113,8 @@ export const aiAnalyzeTool: SWMCPTool = {
       systemPrompt?: string;
       userMessage?: string;
       referenceImages?: string[];
+      useStream?: boolean;
+      textModel?: string;
     };
 
     // Build messages array
@@ -68,8 +140,8 @@ export const aiAnalyzeTool: SWMCPTool = {
       };
     }
 
-    // Check text model configuration
-    const textModel = geminiConfig.textModelName;
+    // Use user-selected model first, fallback to system config
+    const textModel = userSelectedModel || geminiConfig.textModelName;
     if (!textModel) {
       return {
         success: false,
@@ -87,7 +159,7 @@ export const aiAnalyzeTool: SWMCPTool = {
       const requestBody = {
         model: textModel,
         messages: chatMessages,
-        stream: false,
+        stream: useStream,
       };
       
       // Extract prompt preview from user message
@@ -116,7 +188,7 @@ export const aiAnalyzeTool: SWMCPTool = {
       }, {
         label: `🧠 AI 分析 (${textModel})`,
         logRequestBody: true,
-        logResponseBody: true,
+        logResponseBody: !useStream, // Only log response body for non-streaming
       });
 
       if (!response.ok) {
@@ -129,18 +201,39 @@ export const aiAnalyzeTool: SWMCPTool = {
         throw new Error(`AI analyze failed: ${response.status} - ${errorText}`);
       }
 
-      const data = await response.json();
-      
-      const fullResponse = data.choices?.[0]?.message?.content || '';
+      let fullResponse: string;
+
+      if (useStream) {
+        // Streaming mode: parse SSE and accumulate content
+        fullResponse = await parseSSEStream(response, signal, (chunk, accumulated) => {
+          // Notify progress (for UI updates and intermediate state saving)
+          onProgress?.({
+            type: 'streaming',
+            chunk,
+            accumulated,
+            timestamp: Date.now(),
+          });
+        });
+      } else {
+        // Non-streaming mode: parse JSON response
+        const data = await response.json();
+        fullResponse = data.choices?.[0]?.message?.content || '';
+      }
       
       // Complete LLM API log
+      // 流式响应完成后，构造一个类似非流式的响应体用于调试显示
+      const responseBodyForLog = useStream ? JSON.stringify({
+        choices: [{ message: { content: fullResponse } }],
+        _note: 'Reconstructed from streaming response',
+      }, null, 2) : undefined;
+      
       completeLLMApiLog(logId, {
         httpStatus: response.status,
         duration: Date.now() - startTime,
         resultType: 'text',
         resultCount: 1,
         resultText: fullResponse,
-        responseBody: JSON.stringify(data, null, 2),
+        responseBody: responseBodyForLog,
       });
 
       // Parse tool calls from response
@@ -178,6 +271,7 @@ export const aiAnalyzeTool: SWMCPTool = {
         data: {
           content: textContent,
           toolCallCount: toolCalls.length,
+          responseLength: fullResponse.length,
         },
         addSteps,
       };

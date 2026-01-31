@@ -9,6 +9,7 @@ import { Subject, Observable } from 'rxjs';
 import {
   Folder,
   Board,
+  BoardMetadata,
   TreeNode,
   FolderTreeNode,
   BoardTreeNode,
@@ -39,6 +40,11 @@ function generateId(): string {
 class WorkspaceService {
   private static instance: WorkspaceService;
   private folders: Map<string, Folder> = new Map();
+  /** 存储画板元数据（不含 elements），用于侧边栏显示 */
+  private boardMetadata: Map<string, BoardMetadata> = new Map();
+  /** 存储已加载完整数据的画板（含 elements），按需加载 */
+  private loadedBoards: Map<string, Board> = new Map();
+  /** @deprecated 保留用于向后兼容，实际使用 boardMetadata */
   private boards: Map<string, Board> = new Map();
   private state: WorkspaceState;
   private events$: Subject<WorkspaceEvent> = new Subject();
@@ -80,10 +86,10 @@ class WorkspaceService {
     try {
       await workspaceStorageService.initialize();
 
-      // Load all data in parallel
-      const [folders, boards, state] = await Promise.all([
+      // 只加载元数据，不加载画板元素，减少内存占用
+      const [folders, boardMetadata, state] = await Promise.all([
         workspaceStorageService.loadAllFolders(),
-        workspaceStorageService.loadAllBoards(),
+        workspaceStorageService.loadAllBoardMetadata(),
         workspaceStorageService.loadState(),
       ]);
 
@@ -99,13 +105,15 @@ class WorkspaceService {
       });
 
       this.folders = new Map(folders.map((f) => [f.id, f]));
-      this.boards = new Map(boards.map((b) => [b.id, b]));
+      this.boardMetadata = new Map(boardMetadata.map((b) => [b.id, b]));
+      // 为了向后兼容，也更新 boards Map（但此时不含 elements）
+      this.boards = new Map(boardMetadata.map((b) => [b.id, { ...b, elements: [] } as Board]));
       this.state = state;
 
       this.initialized = true;
       // console.log('[WorkspaceService] Initialized with', {
       //   folders: this.folders.size,
-      //   boards: this.boards.size,
+      //   boards: this.boardMetadata.size,
       // });
     } catch (error) {
       console.error('[WorkspaceService] Failed to initialize:', error);
@@ -766,8 +774,20 @@ class WorkspaceService {
   async switchBoard(boardId: string): Promise<Board> {
     await this.ensureInitialized();
 
-    const board = this.boards.get(boardId);
-    if (!board) throw new Error(`Board ${boardId} not found`);
+    // 检查元数据是否存在
+    const metadata = this.boardMetadata.get(boardId);
+    if (!metadata) throw new Error(`Board ${boardId} not found`);
+
+    // 按需加载画板内容
+    let board = this.loadedBoards.get(boardId);
+    if (!board) {
+      const loadedBoard = await workspaceStorageService.loadBoard(boardId);
+      if (!loadedBoard) throw new Error(`Board ${boardId} not found in storage`);
+      board = loadedBoard;
+      this.loadedBoards.set(boardId, board);
+      // 同步更新 boards Map（向后兼容）
+      this.boards.set(boardId, board);
+    }
 
     // Save current board before switching
     if (this.state.currentBoardId && this.state.currentBoardId !== boardId) {
@@ -782,7 +802,8 @@ class WorkspaceService {
   }
 
   async saveBoard(boardId: string, data: BoardChangeData): Promise<void> {
-    const board = this.boards.get(boardId);
+    // 优先从已加载的画板获取
+    let board = this.loadedBoards.get(boardId) || this.boards.get(boardId);
     if (!board) throw new Error(`Board ${boardId} not found`);
 
     board.elements = data.children;
@@ -790,7 +811,18 @@ class WorkspaceService {
     board.theme = data.theme;
     board.updatedAt = Date.now();
 
+    // 更新所有相关的 Map
+    this.loadedBoards.set(boardId, board);
     this.boards.set(boardId, board);
+    
+    // 更新元数据
+    const metadata = this.boardMetadata.get(boardId);
+    if (metadata) {
+      metadata.viewport = data.viewport;
+      metadata.theme = data.theme;
+      metadata.updatedAt = board.updatedAt;
+    }
+
     await workspaceStorageService.saveBoard(board);
   }
 
@@ -813,12 +845,22 @@ class WorkspaceService {
   }
 
   getBoard(id: string): Board | undefined {
-    return this.boards.get(id);
+    // 优先从已加载的画板获取
+    return this.loadedBoards.get(id) || this.boards.get(id);
+  }
+
+  /**
+   * 获取画板元数据（不含 elements）
+   */
+  getBoardMetadata(id: string): BoardMetadata | undefined {
+    return this.boardMetadata.get(id);
   }
 
   getCurrentBoard(): Board | null {
     if (!this.state.currentBoardId) return null;
-    return this.boards.get(this.state.currentBoardId) || null;
+    // 优先从已加载的画板获取
+    return this.loadedBoards.get(this.state.currentBoardId) || 
+           this.boards.get(this.state.currentBoardId) || null;
   }
 
   getState(): WorkspaceState {
@@ -915,7 +957,28 @@ class WorkspaceService {
   }
 
   hasBoards(): boolean {
-    return this.boards.size > 0;
+    return this.boardMetadata.size > 0;
+  }
+
+  /**
+   * 获取所有画板（包含 elements，优先返回已加载的）
+   * 注意：未加载的画板会返回空 elements
+   */
+  getAllBoards(): Board[] {
+    return Array.from(this.boardMetadata.values()).map(metadata => {
+      // 优先返回已加载完整数据的画板
+      const loaded = this.loadedBoards.get(metadata.id);
+      if (loaded) return loaded;
+      // 否则返回带空 elements 的画板
+      return { ...metadata, elements: [] } as Board;
+    });
+  }
+
+  /**
+   * 获取所有画板元数据（不含 elements）
+   */
+  getAllBoardMetadata(): BoardMetadata[] {
+    return Array.from(this.boardMetadata.values());
   }
 
   /**
@@ -924,15 +987,19 @@ class WorkspaceService {
    */
   async reload(): Promise<void> {
     try {
-      // 重新加载所有数据
-      const [folders, boards, state] = await Promise.all([
+      // 重新加载元数据
+      const [folders, boardMetadata, state] = await Promise.all([
         workspaceStorageService.loadAllFolders(),
-        workspaceStorageService.loadAllBoards(),
+        workspaceStorageService.loadAllBoardMetadata(),
         workspaceStorageService.loadState(),
       ]);
 
       this.folders = new Map(folders.map((f) => [f.id, f]));
-      this.boards = new Map(boards.map((b) => [b.id, b]));
+      this.boardMetadata = new Map(boardMetadata.map((b) => [b.id, b]));
+      // 清空已加载的画板缓存，下次访问时重新加载
+      this.loadedBoards.clear();
+      // 向后兼容
+      this.boards = new Map(boardMetadata.map((b) => [b.id, { ...b, elements: [] } as Board]));
       this.state = state;
 
       // 触发更新事件

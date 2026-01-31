@@ -54,6 +54,12 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
     completedTasks,
     failedTasks,
     cancelledTasks,
+    isLoading,
+    isLoadingMore,
+    hasMore,
+    totalCount,
+    loadedCount,
+    loadMore,
     retryTask,
     deleteTask,
     clearCompleted,
@@ -458,11 +464,15 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
     onClose?.();
   }, [onClose]);
 
+  // 计算各 Tab 的显示数量（已加载数据中的分类 + 未加载的估算）
+  // 全部数量使用 totalCount（来自 SW），其他分类使用已加载数据的数量
+  const displayTotalCount = totalCount > 0 ? totalCount : tasks.length;
+
   // Filter section with tabs and filters
   const filterSection = (
     <div className="task-queue-panel__filters-container">
       <Tabs value={activeTab} onChange={(value) => setActiveTab(value as string)}>
-        <TabPanel value="all" label={`全部 (${tasks.length})`} />
+        <TabPanel value="all" label={`全部 (${displayTotalCount})`} />
         <TabPanel value="active" label={`生成中 (${activeTasks.length})`} />
         <TabPanel value="failed" label={`失败 (${failedTasks.length})`} />
         <TabPanel value="completed" label={`已完成 (${completedTasks.length})`} />
@@ -655,14 +665,26 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
             onEdit={handleEdit}
             onPreviewOpen={handlePreviewOpen}
             onExtractCharacter={handleExtractCharacter}
+            hasMore={hasMore}
+            isLoadingMore={isLoadingMore}
+            onLoadMore={loadMore}
+            totalCount={totalCount}
+            loadedCount={loadedCount}
             className="task-queue-panel__list"
             emptyContent={
-              <div className="task-queue-panel__empty">
-                <div className="task-queue-panel__empty-icon">📋</div>
-                <div className="task-queue-panel__empty-text">
-                  {activeTab === 'all' ? '暂无任务' : `暂无${activeTab === 'active' ? '生成中' : activeTab === 'completed' ? '已完成' : activeTab === 'failed' ? '失败' : '已取消'}任务`}
+              isLoading ? (
+                <div className="task-queue-panel__empty">
+                  <div className="task-queue-panel__empty-icon">⏳</div>
+                  <div className="task-queue-panel__empty-text">加载中...</div>
                 </div>
-              </div>
+              ) : (
+                <div className="task-queue-panel__empty">
+                  <div className="task-queue-panel__empty-icon">📋</div>
+                  <div className="task-queue-panel__empty-text">
+                    {activeTab === 'all' ? '暂无任务' : `暂无${activeTab === 'active' ? '生成中' : activeTab === 'completed' ? '已完成' : activeTab === 'failed' ? '失败' : '已取消'}任务`}
+                  </div>
+                </div>
+              )
             }
           />
         )}

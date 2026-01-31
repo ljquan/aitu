@@ -98,56 +98,65 @@ const originalSWConsole = {
   error: console.error.bind(console),
 };
 
+// 检查是否应该过滤掉日志（防止死循环）
+function shouldFilterLog(args: unknown[]): boolean {
+  const message = args[0]?.toString() || '';
+  
+  // 过滤 postmessage-duplex 库的日志（避免广播时死循环）
+  if (message.includes('[ServiceWorkerChannel]') ||
+      message.includes('[BaseChannel]') ||
+      message.includes('Invalid message structure') ||
+      message.includes('broadcast:') ||
+      message.includes('publish:') ||
+      message.includes('subscribe:')) {
+    return true;
+  }
+  
+  // 过滤来自主线程的消息
+  if (message.includes('[Main]') ||
+      message.includes('[SW Console Capture]') ||
+      message.includes('Service Worker')) {
+    return true;
+  }
+  
+  // 过滤 channel-manager 广播相关的日志
+  if (message.includes('[SWChannelManager]') && 
+      (message.includes('broadcast') || message.includes('sendConsoleLog'))) {
+    return true;
+  }
+  
+  return false;
+}
+
 // Forward SW console logs to debug panel when debug mode is enabled
 function setupSWConsoleCapture() {
   console.log = (...args: unknown[]) => {
     originalSWConsole.log(...args);
-    if (isDebugFetchEnabled()) {
+    if (isDebugFetchEnabled() && !shouldFilterLog(args)) {
       forwardSWConsoleLog('log', args);
     }
   };
 
   console.info = (...args: unknown[]) => {
     originalSWConsole.info(...args);
-    if (isDebugFetchEnabled()) {
+    if (isDebugFetchEnabled() && !shouldFilterLog(args)) {
       forwardSWConsoleLog('info', args);
     }
   };
 
-  // warn and error are always forwarded
+  // warn and error are always forwarded (but still filtered for loops)
   console.warn = (...args: unknown[]) => {
     originalSWConsole.warn(...args);
-
-    // 防止循环：过滤掉以下消息
-    const message = args[0]?.toString() || '';
-
-    // 1. 过滤 postmessage-duplex 库的警告（这些已经被打印，无需再转发）
-    if (message.includes('Invalid message structure') ||
-        message.includes('[ServiceWorkerChannel]')) {
-      return;
+    if (!shouldFilterLog(args)) {
+      forwardSWConsoleLog('warn', args);
     }
-
-    // 2. 过滤来自主线程的消息（以免形成循环）
-    if (message.includes('[Main]') ||
-        message.includes('[SW Console Capture]') ||
-        message.includes('Service Worker')) {
-      return;
-    }
-
-    forwardSWConsoleLog('warn', args);
   };
 
   console.error = (...args: unknown[]) => {
     originalSWConsole.error(...args);
-
-    // 防止循环：过滤来自主线程的错误消息
-    const message = args[0]?.toString() || '';
-    if (message.includes('[Main]') ||
-        message.includes('[SW Console Capture]')) {
-      return;
+    if (!shouldFilterLog(args)) {
+      forwardSWConsoleLog('error', args);
     }
-
-    forwardSWConsoleLog('error', args);
   };
 }
 

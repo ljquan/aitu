@@ -24,6 +24,18 @@ export interface UseTaskQueueReturn {
   failedTasks: Task[];
   /** Cancelled tasks */
   cancelledTasks: Task[];
+  /** Whether data is being loaded from SW */
+  isLoading: boolean;
+  /** Whether more tasks are being loaded */
+  isLoadingMore: boolean;
+  /** Whether there are more tasks to load */
+  hasMore: boolean;
+  /** Total count of tasks in SW */
+  totalCount: number;
+  /** Loaded count of tasks */
+  loadedCount: number;
+  /** Load more tasks (pagination) */
+  loadMore: () => Promise<void>;
   /** Creates a new task */
   createTask: (params: GenerationParams, type: TaskType) => Task | null;
   /** Cancels a task */
@@ -70,7 +82,23 @@ export interface UseTaskQueueReturn {
 export function useTaskQueue(): UseTaskQueueReturn {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [updateCounter, setUpdateCounter] = useState(0);
+  const [isLoading, setIsLoading] = useState(() => shouldUseSWTaskQueue());
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [totalCount, setTotalCount] = useState(0);
+  const [loadedCount, setLoadedCount] = useState(0);
   const syncAttempted = useRef(false);
+  const loadMoreLock = useRef(false);
+
+  // 更新分页状态
+  const updatePaginationState = useCallback(() => {
+    if (shouldUseSWTaskQueue()) {
+      const state = swTaskQueueService.getPaginationState();
+      setHasMore(state.hasMore);
+      setTotalCount(state.total);
+      setLoadedCount(state.loadedCount);
+    }
+  }, []);
 
   // Subscribe to task updates
   useEffect(() => {
@@ -81,12 +109,14 @@ export function useTaskQueue(): UseTaskQueueReturn {
     const subscription = taskQueueService.observeTaskUpdates().subscribe(() => {
       setTasks(taskQueueService.getAllTasks());
       setUpdateCounter(prev => prev + 1);
+      // 更新分页状态
+      updatePaginationState();
     });
 
     return () => {
       subscription.unsubscribe();
     };
-  }, []);
+  }, [updatePaginationState]);
 
   // 渲染时从 SW 同步任务数据（确保数据加载）
   useEffect(() => {
@@ -94,23 +124,63 @@ export function useTaskQueue(): UseTaskQueueReturn {
     syncAttempted.current = true;
 
     const syncFromSW = async () => {
-      if (!shouldUseSWTaskQueue()) return;
+      if (!shouldUseSWTaskQueue()) {
+        setIsLoading(false);
+        return;
+      }
       
       try {
-        // 同步 SW 任务到本地
+        // 同步 SW 任务到本地（只加载第一页）
         await swTaskQueueService.syncTasksFromSW();
         // 从 swTaskQueueService 获取任务并更新本地 taskQueueService
         const swTasks = swTaskQueueService.getAllTasks();
         if (swTasks.length > 0) {
           taskQueueService.restoreTasks(swTasks);
         }
+        // 同步完成后，强制刷新一次任务列表
+        setTasks(taskQueueService.getAllTasks());
+        // 更新分页状态
+        updatePaginationState();
       } catch {
         // 静默忽略同步错误
+      } finally {
+        setIsLoading(false);
       }
     };
 
     syncFromSW();
-  }, []);
+  }, [updatePaginationState]);
+
+  // 加载更多任务
+  const loadMore = useCallback(async () => {
+    if (!shouldUseSWTaskQueue() || !hasMore || isLoadingMore || loadMoreLock.current) {
+      return;
+    }
+
+    loadMoreLock.current = true;
+    setIsLoadingMore(true);
+
+    try {
+      const stillHasMore = await swTaskQueueService.loadMoreTasks();
+      // 从 swTaskQueueService 获取任务并更新本地 taskQueueService
+      const swTasks = swTaskQueueService.getAllTasks();
+      if (swTasks.length > 0) {
+        taskQueueService.restoreTasks(swTasks);
+      }
+      setTasks(taskQueueService.getAllTasks());
+      setHasMore(stillHasMore);
+      updatePaginationState();
+    } catch {
+      // 静默忽略错误
+    } finally {
+      setIsLoadingMore(false);
+      loadMoreLock.current = false;
+    }
+  }, [hasMore, isLoadingMore, updatePaginationState]);
+
+  // 注意：任务状态更新主要依赖 SW 的广播事件
+  // visibility 监听器会在页面变为可见时同步第一页
+  // 不再使用轮询，避免重置分页状态和内存问题
 
   // Memoized selectors
   const activeTasks = useMemo(() => {
@@ -191,6 +261,12 @@ export function useTaskQueue(): UseTaskQueueReturn {
     completedTasks,
     failedTasks,
     cancelledTasks,
+    isLoading,
+    isLoadingMore,
+    hasMore,
+    totalCount,
+    loadedCount,
+    loadMore,
     createTask,
     cancelTask,
     retryTask,

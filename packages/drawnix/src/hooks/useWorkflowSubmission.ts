@@ -196,25 +196,50 @@ export function useWorkflowSubmission(
 
   /**
    * Recover workflows on mount (after page refresh)
+   * 等待 swChannelClient 初始化完成后再恢复
    */
   const recoverWorkflowsOnMount = useCallback(async () => {
     // Only recover once
     if (hasRecoveredRef.current) return;
     hasRecoveredRef.current = true;
 
+    console.log('[useWorkflowSubmission] 🔄 Recovering workflows on mount...');
+    
+    // 等待 swChannelClient 初始化完成（最多等待 10 秒）
+    const { swChannelClient } = await import('../services/sw-channel/client');
+    const maxWaitTime = 10000;
+    const checkInterval = 200;
+    let waited = 0;
+    
+    while (!swChannelClient.isInitialized() && waited < maxWaitTime) {
+      await new Promise(r => setTimeout(r, checkInterval));
+      waited += checkInterval;
+    }
+    
+    if (!swChannelClient.isInitialized()) {
+      console.log('[useWorkflowSubmission] ⏭️ Skipping recovery: swChannelClient initialization timeout');
+      return;
+    }
+    
+    console.log(`[useWorkflowSubmission] ✓ swChannelClient initialized after ${waited}ms`);
+    
     try {
       const recoveredWorkflows = await workflowSubmissionService.recoverWorkflows();
-      
-      // Silently recover workflows
-      void recoveredWorkflows;
+      console.log(`[useWorkflowSubmission] ✓ Recovered ${recoveredWorkflows.length} active workflows:`,
+        recoveredWorkflows.map(w => ({ id: w.id, status: w.status, steps: w.steps?.length })));
     } catch (error) {
-      console.warn('[useWorkflowSubmission] Failed to recover workflows:', error);
+      console.warn('[useWorkflowSubmission] ❌ Failed to recover workflows:', error);
     }
   }, []);
 
   /**
    * Handle a recovered workflow (from page refresh)
    * This restores UI state without re-submitting to SW
+   * 
+   * 恢复策略：
+   * - running/pending: 完整恢复 UI 状态，继续监听进度
+   * - failed: 恢复 UI 并显示失败状态（如 ai_analyze 中断）
+   * - completed/cancelled: 不恢复（避免显示过时数据）
    */
   const handleRecoveredWorkflow = useCallback((event: WorkflowEvent) => {
     if (event.type !== 'recovered' || !event.workflow) return;
@@ -223,10 +248,26 @@ export function useWorkflowSubmission(
     const board = boardRef.current;
     const workZoneId = workZoneIdRef.current;
 
-    // Only restore running/pending workflows to avoid showing stale data
-    if (recoveredWorkflow.status !== 'running' && recoveredWorkflow.status !== 'pending') {
+    console.log(`[useWorkflowSubmission] 📥 Received recovered workflow:`, {
+      id: recoveredWorkflow.id,
+      status: recoveredWorkflow.status,
+      steps: recoveredWorkflow.steps?.length,
+      updatedAt: recoveredWorkflow.updatedAt,
+    });
+
+    // 只恢复活跃状态（running/pending）和最近失败的工作流
+    // completed/cancelled 不恢复，避免显示过时数据
+    const isActive = recoveredWorkflow.status === 'running' || recoveredWorkflow.status === 'pending';
+    const isRecentlyFailed = recoveredWorkflow.status === 'failed' && 
+      recoveredWorkflow.updatedAt && 
+      (Date.now() - recoveredWorkflow.updatedAt) < 5 * 60 * 1000; // 5 分钟内
+    
+    if (!isActive && !isRecentlyFailed) {
+      console.log(`[useWorkflowSubmission] ⏭️ Skipping workflow ${recoveredWorkflow.id}: not active or recently failed`);
       return;
     }
+
+    console.log(`[useWorkflowSubmission] ✓ Restoring workflow ${recoveredWorkflow.id} to UI`);
 
     // Restore workflow to WorkflowContext
     workflowControl.restoreWorkflow?.(recoveredWorkflow);

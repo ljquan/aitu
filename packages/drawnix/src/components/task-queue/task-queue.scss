@@ -992,3 +992,45 @@
     border: 1px solid #E91E63 !important;
   }
 }
+
+// Virtual Task List - Load More Styles
+.virtual-task-list {
+  &__loading-more {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 16px;
+    color: var(--td-text-color-secondary, #757575);
+    font-size: 13px;
+  }
+
+  &__loading-spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--td-component-border, #e7e7e7);
+    border-top-color: #F39C12;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  &__pagination-info {
+    text-align: center;
+    padding: 12px;
+    color: var(--td-text-color-placeholder, #bbb);
+    font-size: 12px;
+  }
+
+  &__no-more {
+    text-align: center;
+    padding: 12px;
+    color: var(--td-text-color-placeholder, #bbb);
+    font-size: 12px;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

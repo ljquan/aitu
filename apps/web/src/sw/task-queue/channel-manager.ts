@@ -20,134 +20,18 @@ import {
   resendPendingToolRequests,
 } from './workflow-handler';
 import type { Workflow, MainThreadToolResponseMessage } from './workflow-types';
+import { taskQueueStorage, type StoredPendingToolRequest } from './storage';
 import {
   isPostMessageLoggerDebugMode,
   logReceivedMessage,
   updateRequestWithResponse,
   getAllLogs as getAllPostMessageLogs,
 } from './postmessage-logger';
+import { withTimeout } from './utils/timeout-utils';
 
-// ============================================================================
-// RPC 方法名常量
-// ============================================================================
-
-export const RPC_METHODS = {
-  // 初始化
-  INIT: 'init',
-  UPDATE_CONFIG: 'updateConfig',
-  
-  // 任务操作
-  TASK_CREATE: 'task:create',
-  TASK_CANCEL: 'task:cancel',
-  TASK_RETRY: 'task:retry',
-  TASK_DELETE: 'task:delete',
-  TASK_MARK_INSERTED: 'task:markInserted',
-  
-  // 任务查询
-  TASK_GET: 'task:get',
-  TASK_LIST_PAGINATED: 'task:listPaginated',
-  
-  // Chat
-  CHAT_START: 'chat:start',
-  CHAT_STOP: 'chat:stop',
-  CHAT_GET_CACHED: 'chat:getCached',
-  
-  // Workflow
-  WORKFLOW_SUBMIT: 'workflow:submit',
-  WORKFLOW_CANCEL: 'workflow:cancel',
-  WORKFLOW_GET_STATUS: 'workflow:getStatus',
-  WORKFLOW_GET_ALL: 'workflow:getAll',
-  WORKFLOW_RESPOND_TOOL: 'workflow:respondTool',
-  
-  // Thumbnail (图片缩略图，由 SW 生成)
-  THUMBNAIL_GENERATE: 'thumbnail:generate',
-  
-  // Crash monitoring
-  CRASH_SNAPSHOT: 'crash:snapshot',
-  CRASH_HEARTBEAT: 'crash:heartbeat',
-  
-  // Console
-  CONSOLE_REPORT: 'console:report',
-  
-  // Debug
-  DEBUG_GET_STATUS: 'debug:getStatus',
-  DEBUG_ENABLE: 'debug:enable',
-  DEBUG_DISABLE: 'debug:disable',
-  DEBUG_GET_LOGS: 'debug:getLogs',
-  DEBUG_CLEAR_LOGS: 'debug:clearLogs',
-  DEBUG_GET_CONSOLE_LOGS: 'debug:getConsoleLogs',
-  DEBUG_CLEAR_CONSOLE_LOGS: 'debug:clearConsoleLogs',
-  DEBUG_GET_POSTMESSAGE_LOGS: 'debug:getPostMessageLogs',
-  DEBUG_CLEAR_POSTMESSAGE_LOGS: 'debug:clearPostMessageLogs',
-  DEBUG_GET_CRASH_SNAPSHOTS: 'debug:getCrashSnapshots',
-  DEBUG_CLEAR_CRASH_SNAPSHOTS: 'debug:clearCrashSnapshots',
-  DEBUG_GET_LLM_API_LOGS: 'debug:getLLMApiLogs',
-  DEBUG_GET_LLM_API_LOG_BY_ID: 'debug:getLLMApiLogById',
-  DEBUG_CLEAR_LLM_API_LOGS: 'debug:clearLLMApiLogs',
-  DEBUG_DELETE_LLM_API_LOGS: 'debug:deleteLLMApiLogs',
-  DEBUG_GET_CACHE_ENTRIES: 'debug:getCacheEntries',
-  DEBUG_GET_CACHE_STATS: 'debug:getCacheStats',
-  DEBUG_EXPORT_LOGS: 'debug:exportLogs',
-  // CDN
-  CDN_GET_STATUS: 'cdn:getStatus',
-  CDN_RESET_STATUS: 'cdn:resetStatus',
-  CDN_HEALTH_CHECK: 'cdn:healthCheck',
-  // Upgrade
-  UPGRADE_GET_STATUS: 'upgrade:getStatus',
-  UPGRADE_FORCE: 'upgrade:force',
-  // Cache management
-  CACHE_DELETE: 'cache:delete',
-} as const;
-
-// ============================================================================
-// 事件名常量（SW 推送给客户端）
-// ============================================================================
-
-export const SW_EVENTS = {
-  // Task events
-  TASK_CREATED: 'task:created',
-  TASK_STATUS: 'task:status',
-  TASK_PROGRESS: 'task:progress',
-  TASK_COMPLETED: 'task:completed',
-  TASK_FAILED: 'task:failed',
-  TASK_CANCELLED: 'task:cancelled',
-  TASK_DELETED: 'task:deleted',
-  TASK_REJECTED: 'task:rejected',
-  TASK_SUBMITTED: 'task:submitted',
-  QUEUE_INITIALIZED: 'queue:initialized',
-  // Chat events
-  CHAT_CHUNK: 'chat:chunk',
-  CHAT_DONE: 'chat:done',
-  CHAT_ERROR: 'chat:error',
-  // Workflow events
-  WORKFLOW_STATUS: 'workflow:status',
-  WORKFLOW_STEP_STATUS: 'workflow:stepStatus',
-  WORKFLOW_COMPLETED: 'workflow:completed',
-  WORKFLOW_FAILED: 'workflow:failed',
-  WORKFLOW_STEPS_ADDED: 'workflow:stepsAdded',
-  WORKFLOW_TOOL_REQUEST: 'workflow:toolRequest',
-  WORKFLOW_RECOVERED: 'workflow:recovered',
-  // Cache events
-  CACHE_IMAGE_CACHED: 'cache:imageCached',
-  CACHE_DELETED: 'cache:deleted',
-  CACHE_QUOTA_WARNING: 'cache:quotaWarning',
-  // SW status events
-  SW_NEW_VERSION_READY: 'sw:newVersionReady',
-  SW_ACTIVATED: 'sw:activated',
-  SW_UPDATED: 'sw:updated',
-  SW_REQUEST_CONFIG: 'sw:requestConfig',
-  // MCP events
-  MCP_TOOL_RESULT: 'mcp:toolResult',
-  // Console events
-  CONSOLE_LOG: 'console:log',
-  // Debug events
-  DEBUG_LOG: 'debug:log',
-  DEBUG_LLM_LOG: 'debug:llmLog',
-  DEBUG_STATUS_CHANGED: 'debug:statusChanged',
-  DEBUG_NEW_CRASH_SNAPSHOT: 'debug:newCrashSnapshot',
-  POSTMESSAGE_LOG: 'postmessage:log',
-  POSTMESSAGE_LOG_BATCH: 'postmessage:logBatch',
-} as const;
+// 从 channel-manager 模块导入常量
+export { RPC_METHODS, SW_EVENTS } from './channel-manager/constants';
+import { RPC_METHODS, SW_EVENTS } from './channel-manager/constants';
 
 // ============================================================================
 // 类型定义
@@ -252,7 +136,6 @@ export class SWChannelManager {
     
     // SW 启动时立即清理所有旧通道（SW 重启后旧通道都无效）
     this.channels.clear();
-    console.log('[SWChannelManager] Initialized, cleared all stale channels');
     
     // 启用 postmessage-duplex 的全局路由
     // 当收到来自未知客户端的消息时，自动创建 channel 并处理消息
@@ -368,8 +251,9 @@ export class SWChannelManager {
       // 使用 createFromWorker 创建通道，禁用内部日志
       // 注意：禁用 error 日志以避免 fire-and-forget 广播的超时错误噪音
       // RPC 调用的日志通过 wrapRpcHandler 记录到 postmessage-logger
+      // 使用较长的超时时间（120秒）以支持慢速 IndexedDB 操作
       const channel = ServiceWorkerChannel.createFromWorker(clientId, {
-        timeout: 30000,
+        timeout: 120000,
         subscribeMap: this.createSubscribeMap(clientId),
         log: { log: () => {}, warn: () => {}, error: () => {} },
       });
@@ -382,7 +266,6 @@ export class SWChannelManager {
       };
       
       this.channels.set(clientId, clientChannel);
-      console.log(`[SWChannelManager] New client connected: ${clientId.substring(0, 8)}..., total: ${this.channels.size}`);
       
       // 异步检测是否是调试客户端
       this.checkAndUpdateDebugClient(clientId);
@@ -399,7 +282,6 @@ export class SWChannelManager {
     const clientChannel = this.channels.get(clientId);
     if (clientChannel && isDebug) {
       clientChannel.isDebugClient = true;
-      console.log(`[SWChannelManager] Debug client detected: ${clientId.substring(0, 8)}...`);
       this.notifyDebugClientCountChanged();
     }
   }
@@ -591,6 +473,11 @@ export class SWChannelManager {
         RPC_METHODS.WORKFLOW_RESPOND_TOOL, clientId, (data) => this.handleToolResponse(data)
       ),
       
+      // 客户端声明接管工作流（用于页面刷新后恢复）
+      [RPC_METHODS.WORKFLOW_CLAIM]: this.wrapRpcHandler<{ workflowId: string }, any>(
+        RPC_METHODS.WORKFLOW_CLAIM, clientId, (data) => this.handleWorkflowClaim(clientId, data.workflowId)
+      ),
+      
       // Thumbnail (图片缩略图，由 SW 生成)
       [RPC_METHODS.THUMBNAIL_GENERATE]: this.wrapRpcHandler<ThumbnailGenerateParams, any>(
         RPC_METHODS.THUMBNAIL_GENERATE, clientId, (data) => this.handleThumbnailGenerate(data)
@@ -719,13 +606,14 @@ export class SWChannelManager {
       // 初始化任务队列
       await this.taskQueue?.initialize(data.geminiConfig, data.videoConfig);
       
-      // 初始化工作流处理器（只初始化一次）
-      if (!this.workflowHandlerInitialized) {
+      // 初始化工作流处理器
+      // 注意：不能只依赖 workflowHandlerInitialized 标志，因为 SW 空闲后模块级变量可能被重置
+      // 检查 workflowExecutor 是否存在，如果不存在则重新初始化
+      const executor = getWorkflowExecutor();
+      if (!executor) {
         initWorkflowHandler(this.sw, data.geminiConfig, data.videoConfig);
         this.workflowHandlerInitialized = true;
       }
-      
-      console.log('[SWChannelManager] SW initialized with API config, clients:', this.channels.size);
       
       // 重新发送待处理的工具请求（处理页面刷新场景）
       // 获取发起初始化请求的客户端 ID
@@ -751,8 +639,6 @@ export class SWChannelManager {
   }
 
   private async handleTaskCreate(clientId: string, data: TaskCreateParams): Promise<{ success: boolean; task?: SWTask; existingTaskId?: string; reason?: string }> {
-    console.log(`[SWChannelManager] handleTaskCreate called: taskId=${data?.taskId}, type=${data?.taskType}, hasTaskQueue=${!!this.taskQueue}`);
-
     if (!data) {
       return { success: false, reason: 'Missing task data' };
     }
@@ -761,17 +647,13 @@ export class SWChannelManager {
 
     // 检查任务队列是否存在并已初始化
     if (!this.taskQueue) {
-      console.warn('[SWChannelManager] Task queue not set');
       return { success: false, reason: 'not_initialized' };
     }
 
     // 检查任务队列是否已初始化（有 API config）
     if (!this.taskQueue.getGeminiConfig() || !this.taskQueue.getVideoConfig()) {
-      console.warn('[SWChannelManager] Task queue not initialized (no API config)');
       return { success: false, reason: 'not_initialized' };
     }
-
-    console.log('[SWChannelManager] Task queue initialized, checking duplicates...');
 
     // 检查重复任务（相同 taskId）
     const existingTask = this.taskQueue.getTask(taskId);
@@ -1023,6 +905,98 @@ export class SWChannelManager {
   }
 
   /**
+   * 客户端声明接管工作流
+   * 用于页面刷新后，WorkZone 重新建立与工作流的连接
+   * 
+   * @param clientId 客户端 ID
+   * @param workflowId 工作流 ID
+   * @returns 工作流状态和是否有待处理的工具请求
+   */
+  private async handleWorkflowClaim(clientId: string, workflowId: string): Promise<{
+    success: boolean;
+    workflow?: Workflow;
+    hasPendingToolRequest?: boolean;
+    error?: string;
+  }> {
+    console.log(`[SWChannelManager] 🔄 Workflow claim: ${workflowId} by client ${clientId.substring(0, 8)}...`);
+    
+    if (!workflowId) {
+      console.log('[SWChannelManager] ❌ Claim failed: Missing workflowId');
+      return { success: false, error: 'Missing workflowId' };
+    }
+
+    try {
+      // 尝试从 executor 获取工作流
+      let workflow: Workflow | null = null;
+      const executor = getWorkflowExecutor();
+      
+      if (executor) {
+        workflow = executor.getWorkflow(workflowId) || null;
+      }
+      
+      // 如果 executor 不存在或找不到工作流，直接从 IndexedDB 查询
+      // 这处理了 init RPC 还没完成的情况
+      if (!workflow) {
+        console.log(`[SWChannelManager] Executor ${executor ? 'exists but workflow not in memory' : 'not available'}, checking IndexedDB...`);
+        workflow = await taskQueueStorage.getWorkflow(workflowId);
+      }
+      
+      if (!workflow) {
+        console.log(`[SWChannelManager] ❌ Claim failed: Workflow ${workflowId} not found in memory or IndexedDB`);
+        return { success: false, error: 'Workflow not found' };
+      }
+
+      console.log(`[SWChannelManager] ✓ Found workflow: status=${workflow.status}, steps=${workflow.steps.length}`);
+
+      // 建立 workflowId -> ClientChannel 映射
+      const clientChannel = this.channels.get(clientId);
+      if (clientChannel) {
+        this.workflowChannels.set(workflowId, clientChannel);
+        console.log(`[SWChannelManager] ✓ Mapped workflow ${workflowId} to client ${clientId.substring(0, 8)}...`);
+      }
+
+      // 检查是否有待处理的主线程工具请求
+      const pendingRequests = await taskQueueStorage.getAllPendingToolRequests();
+      const workflowPendingRequests = pendingRequests.filter(
+        (r: StoredPendingToolRequest) => r.workflowId === workflowId
+      );
+      const hasPendingToolRequest = workflowPendingRequests.length > 0;
+      
+      console.log(`[SWChannelManager] Pending tool requests: ${workflowPendingRequests.length}`, 
+        workflowPendingRequests.map((r: StoredPendingToolRequest) => ({ requestId: r.requestId, toolName: r.toolName })));
+
+      // 如果工作流处于活跃状态且有待处理请求，重新发送
+      // 注意：如果 executor 还不存在（init 未完成），这里不会重新发送
+      // 待处理的请求会在 init 完成后通过 resendPendingToolRequests() 发送
+      if ((workflow.status === 'running' || workflow.status === 'pending') && hasPendingToolRequest) {
+        console.log(`[SWChannelManager] 🔄 Resending pending tool requests for workflow ${workflowId}`);
+        // 异步重新发送待处理的工具请求
+        this.resendPendingToolRequestsForWorkflow(workflowId);
+      }
+
+      return {
+        success: true,
+        workflow,
+        hasPendingToolRequest,
+      };
+    } catch (error: any) {
+      console.error('[SWChannelManager] ❌ Workflow claim failed:', error);
+      return { success: false, error: error.message || 'Claim failed' };
+    }
+  }
+
+  /**
+   * 重新发送指定工作流的待处理工具请求
+   */
+  private async resendPendingToolRequestsForWorkflow(workflowId: string): Promise<void> {
+    const executor = getWorkflowExecutor();
+    if (!executor) return;
+
+    // 调用 executor 的重新发送方法
+    executor.resendPendingToolRequestsForWorkflow(workflowId);
+  }
+
+  /**
    * Handle tool response from main thread via RPC
    * @deprecated This handler is kept for backward compatibility.
    * New code should use sendToolRequest() which receives response directly.
@@ -1069,16 +1043,16 @@ export class SWChannelManager {
     // 找到一个可用的 channel 来发送请求
     const clientChannel = this.channels.values().next().value as ClientChannel | undefined;
     if (!clientChannel) {
-      console.warn('[SWChannelManager] No connected clients for video thumbnail request');
       return null;
     }
     
     try {
-      // 使用 publish 发起请求，主线程通过 subscribe 注册的处理器响应
-      const response = await Promise.race([
+      // 使用 withTimeout 工具控制超时
+      const response = await withTimeout(
         clientChannel.channel.publish('thumbnail:generate', { url }),
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs))
-      ]);
+        timeoutMs,
+        null
+      );
       
       if (!response || typeof response !== 'object') {
         return null;
@@ -1086,13 +1060,11 @@ export class SWChannelManager {
       
       const result = response as { data?: { thumbnailUrl?: string; error?: string } };
       if (result.data?.error) {
-        console.warn('[SWChannelManager] Video thumbnail request failed:', result.data.error);
         return null;
       }
       
       return result.data?.thumbnailUrl || null;
-    } catch (error) {
-      console.warn('[SWChannelManager] Video thumbnail request error:', error);
+    } catch {
       return null;
     }
   }
@@ -1606,6 +1578,7 @@ export class SWChannelManager {
    * 使用 postmessage-duplex 的 broadcast() 方法，不等待响应
    */
   broadcastToAll(event: string, data: Record<string, unknown>): void {
+    // 注意：不能在这里使用 console.log，会导致死循环（console 日志被捕获并广播）
     this.channels.forEach((clientChannel) => {
       // 使用 broadcast() 进行单向消息发送，不等待响应
       clientChannel.channel.broadcast(event, data);
@@ -1633,6 +1606,31 @@ export class SWChannelManager {
     }
   }
 
+  /**
+   * 通用点对点发送方法
+   * 从映射中查找客户端并发送消息，未找到时可选择静默广播
+   *
+   * @param map - ID 到 ClientChannel 的映射
+   * @param id - 业务 ID（taskId/chatId/workflowId）
+   * @param event - 事件名称
+   * @param data - 事件数据
+   * @param fallbackBroadcast - 未找到映射时是否广播给所有客户端
+   */
+  private sendToMappedClient(
+    map: Map<string, ClientChannel>,
+    id: string,
+    event: string,
+    data: Record<string, unknown>,
+    fallbackBroadcast: boolean = false
+  ): void {
+    const clientChannel = map.get(id);
+    if (clientChannel) {
+      clientChannel.channel.broadcast(event, data);
+    } else if (fallbackBroadcast) {
+      this.broadcastToAll(event, data);
+    }
+  }
+
   // ============================================================================
   // 任务事件发送方法（点对点，通过 taskChannels 映射）
   // ============================================================================
@@ -1642,15 +1640,8 @@ export class SWChannelManager {
    * 使用 taskChannels 映射实现点对点通讯
    */
   private sendToTaskClient(taskId: string, event: string, data: Record<string, unknown>): void {
-    const clientChannel = this.taskChannels.get(taskId);
-    if (clientChannel) {
-      // 使用 broadcast() 进行单向消息发送
-      clientChannel.channel.broadcast(event, data);
-    } else {
-      // 如果没有映射（可能是恢复的任务或 SW 重启后），静默广播
-      // 这是预期行为，不需要警告
-      this.broadcastToAll(event, data);
-    }
+    // 使用通用方法，任务事件在未找到映射时静默广播
+    this.sendToMappedClient(this.taskChannels, taskId, event, data, true);
   }
 
   /**
@@ -1720,14 +1711,8 @@ export class SWChannelManager {
    * 使用 chatChannels 映射实现点对点通讯
    */
   private sendToChatClient(chatId: string, event: string, data: Record<string, unknown>): void {
-    const clientChannel = this.chatChannels.get(chatId);
-    if (clientChannel) {
-      // 使用 broadcast() 进行单向消息发送
-      clientChannel.channel.broadcast(event, data);
-    } else {
-      // 如果没有映射（可能是恢复的会话或 SW 重启后），静默广播
-      this.broadcastToAll(event, data);
-    }
+    // 使用通用方法，Chat 事件在未找到映射时静默广播
+    this.sendToMappedClient(this.chatChannels, chatId, event, data, true);
   }
 
   /**
@@ -1791,12 +1776,8 @@ export class SWChannelManager {
    * 使用 workflowChannels 映射实现点对点通讯
    */
   private sendToWorkflowClient(workflowId: string, event: string, data: Record<string, unknown>): void {
-    const clientChannel = this.workflowChannels.get(workflowId);
-    if (clientChannel) {
-      // 使用 broadcast() 进行单向消息发送
-      clientChannel.channel.broadcast(event, data);
-    }
-    // else: 工作流可能是从存储恢复的，还没有关联的客户端
+    // 使用通用方法，工作流事件在未找到映射时不广播（静默忽略）
+    this.sendToMappedClient(this.workflowChannels, workflowId, event, data, false);
   }
 
   /**
@@ -1872,14 +1853,28 @@ export class SWChannelManager {
       status: string;
     }>;
   } | null> {
-    const clientChannel = this.workflowChannels.get(workflowId) || this.channels.values().next().value as ClientChannel | undefined;
+    // 优先使用工作流关联的 channel
+    let clientChannel = this.workflowChannels.get(workflowId);
+    
+    // 如果没有映射，查找第一个非调试客户端
     if (!clientChannel) {
-      console.warn('[SWChannelManager] No connected clients for tool request');
+      for (const [, channel] of this.channels) {
+        if (!channel.isDebugClient) {
+          clientChannel = channel;
+          // 更新映射以便后续请求使用
+          this.workflowChannels.set(workflowId, channel);
+          break;
+        }
+      }
+    }
+    
+    if (!clientChannel) {
       return null;
     }
     
     try {
-      const response = await Promise.race([
+      // 使用 withTimeout 工具控制超时
+      const response = await withTimeout(
         clientChannel.channel.publish(SW_EVENTS.WORKFLOW_TOOL_REQUEST, {
           requestId,
           workflowId,
@@ -1887,8 +1882,9 @@ export class SWChannelManager {
           toolName,
           args,
         }),
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs))
-      ]);
+        timeoutMs,
+        null
+      );
       
       if (!response || typeof response !== 'object') {
         return null;
@@ -1934,8 +1930,7 @@ export class SWChannelManager {
       }
       
       return toolResult;
-    } catch (error) {
-      console.warn('[SWChannelManager] Tool request error:', error);
+    } catch {
       return null;
     }
   }
@@ -1960,17 +1955,30 @@ export class SWChannelManager {
    * 请求 Canvas 操作（双工通讯，使用工作流关联的 channel）
    */
   async requestCanvasOperation(workflowId: string, operation: string, params: Record<string, unknown>, timeoutMs: number = 30000): Promise<{ success: boolean; error?: string }> {
-    const clientChannel = this.workflowChannels.get(workflowId) || this.channels.values().next().value as ClientChannel | undefined;
+    // 优先使用工作流关联的 channel
+    let clientChannel = this.workflowChannels.get(workflowId);
+    
+    // 如果没有映射，查找第一个非调试客户端
     if (!clientChannel) {
-      console.warn('[SWChannelManager] No connected clients for canvas operation');
+      for (const [, channel] of this.channels) {
+        if (!channel.isDebugClient) {
+          clientChannel = channel;
+          break;
+        }
+      }
+    }
+    
+    if (!clientChannel) {
       return { success: false, error: 'No connected clients' };
     }
     
     try {
-      const response = await Promise.race([
+      // 使用 withTimeout 工具控制超时
+      const response = await withTimeout(
         clientChannel.channel.publish('canvas:execute', { operation, params }),
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs))
-      ]);
+        timeoutMs,
+        null
+      );
       
       if (!response || typeof response !== 'object') {
         return { success: false, error: 'Canvas operation timeout' };
@@ -1979,7 +1987,6 @@ export class SWChannelManager {
       const result = response as { data?: { success?: boolean; error?: string } };
       return { success: result.data?.success ?? false, error: result.data?.error };
     } catch (error) {
-      console.warn('[SWChannelManager] Canvas operation error:', error);
       return { success: false, error: String(error) };
     }
   }

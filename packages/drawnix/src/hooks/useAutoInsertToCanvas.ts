@@ -131,22 +131,17 @@ function updateWorkflowStepForTask(
         return !!stepResult?.taskId;
       });
 
-      console.log(`[AutoInsert] WorkZone ${workzone.id} allStepsFinished: ${allStepsFinished}, hasQueuedTasks: ${hasQueuedTasks}`);
-
       // 如果有队列任务（图片/视频生成），检查后处理是否完成
       if (hasQueuedTasks) {
         const allPostProcessingFinished = updatedSteps.every(step => {
           const stepResult = step.result as { taskId?: string } | undefined;
           if (stepResult?.taskId) {
-            const isCompleted = workflowCompletionService.isPostProcessingCompleted(stepResult.taskId);
-            console.log(`[AutoInsert] Task ${stepResult.taskId} post-processing completed: ${isCompleted}`);
-            return isCompleted;
+            return workflowCompletionService.isPostProcessingCompleted(stepResult.taskId);
           }
           return true;
         });
 
         if (!allPostProcessingFinished) {
-          console.log(`[AutoInsert] WorkZone ${workzone.id} has unfinished post-processing, skipping removal`);
           return;
         }
       }
@@ -360,17 +355,8 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
      * 处理任务完成事件
      */
     const handleTaskCompleted = (task: Task) => {
-      // console.log(`[AutoInsert] handleTaskCompleted called for task ${task.id}, type: ${task.type}, status: ${task.status}`);
-      // console.log(`[AutoInsert] Task params:`, {
-      //   autoInsertToCanvas: task.params.autoInsertToCanvas,
-      //   prompt: task.params.prompt?.substring(0, 50),
-      //   hasResult: !!task.result,
-      //   resultUrl: task.result?.url?.substring(0, 100),
-      // });
-
       // 检查任务是否配置了自动插入画布
       if (!task.params.autoInsertToCanvas) {
-        // console.log(`[AutoInsert] Task ${task.id} skipped: autoInsertToCanvas is false/undefined`);
         return;
       }
 
@@ -395,7 +381,6 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
 
       // 检查是否有结果 URL
       if (!task.result?.url) {
-        console.warn(`[AutoInsert] Task ${task.id} completed but has no result URL`);
         return;
       }
 
@@ -481,14 +466,12 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
 
     // 订阅后处理完成事件，以便在所有任务插入完成后删除 WorkZone
     const completionSub = workflowCompletionService.observeCompletionEvents().subscribe(event => {
-      console.log(`[AutoInsert] Received completion event: ${event.type} for task ${event.taskId}`);
       if (event.type === 'postProcessingCompleted' || event.type === 'postProcessingFailed') {
         const board = getCanvasBoard();
         if (!board) return;
 
         const workzone = findWorkZoneForTask(event.taskId);
         if (workzone) {
-          console.log(`[AutoInsert] Found WorkZone ${workzone.id} for task ${event.taskId}`);
           // 重新检查该 WorkZone 的所有步骤
           const allStepsFinished = workzone.workflow.steps?.every(
             step => step.status === 'completed' || step.status === 'failed' || step.status === 'skipped'
@@ -498,17 +481,12 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
             const allPostProcessingFinished = workzone.workflow.steps?.every(step => {
               const stepResult = step.result as { taskId?: string } | undefined;
               if (stepResult?.taskId) {
-                const isCompleted = workflowCompletionService.isPostProcessingCompleted(stepResult.taskId);
-                console.log(`[AutoInsert] Step task ${stepResult.taskId} isCompleted: ${isCompleted}`);
-                return isCompleted;
+                return workflowCompletionService.isPostProcessingCompleted(stepResult.taskId);
               }
               return true;
             });
 
-            console.log(`[AutoInsert] WorkZone ${workzone.id} allStepsFinished: ${allStepsFinished}, allPostProcessingFinished: ${allPostProcessingFinished}`);
-
             if (allPostProcessingFinished) {
-              console.log(`[AutoInsert] All post-processing finished for WorkZone ${workzone.id}, removing`);
               setTimeout(() => {
                 WorkZoneTransforms.removeWorkZone(board, workzone.id);
                 window.dispatchEvent(new CustomEvent('ai-generation-complete', {
@@ -517,8 +495,6 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
               }, 1500);
             }
           }
-        } else {
-          console.log(`[AutoInsert] No WorkZone found for task ${event.taskId}`);
         }
       }
     });

@@ -13,10 +13,16 @@ import {
   initPromptStorageCache,
   toolbarConfigService,
   memoryMonitorService,
+  crashRecoveryService,
   swChannelClient,
 } from '@drawnix/drawnix';
 import { sanitizeObject, sanitizeUrl } from '@aitu/utils';
 import { initSWConsoleCapture } from './utils/sw-console-capture';
+
+// ===== 崩溃恢复检测 =====
+// 必须最先执行，检测上次是否因内存不足等原因崩溃
+crashRecoveryService.markLoadingStart();
+crashRecoveryService.checkUrlSafeMode();
 
 // ===== 初始化崩溃日志系统 =====
 // 必须尽早初始化，以捕获启动阶段的内存状态和错误

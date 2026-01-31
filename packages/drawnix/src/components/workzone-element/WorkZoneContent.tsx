@@ -5,7 +5,7 @@
  * 这是 WorkflowMessageBubble 的简化版本，适合在画布元素中使用
  */
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect, useRef } from 'react';
 import { Trash2 } from 'lucide-react';
 import type { WorkflowMessageData } from '../../types/chat.types';
 import './workzone-content.scss';
@@ -21,17 +21,113 @@ const STATUS_ICONS: Record<StepStatus, string> = {
   skipped: '⊘',
 };
 
+// 全局记录已经 claim 过的工作流，避免重复请求
+const claimedWorkflows = new Set<string>();
+
 interface WorkZoneContentProps {
   workflow: WorkflowMessageData;
   className?: string;
   onDelete?: () => void;
+  /** 当 SW 中找不到工作流或工作流状态变更时的回调 */
+  onWorkflowStateChange?: (workflowId: string, status: 'completed' | 'failed', error?: string) => void;
 }
 
 export const WorkZoneContent: React.FC<WorkZoneContentProps> = ({
   workflow,
   className = '',
   onDelete,
+  onWorkflowStateChange,
 }) => {
+  // 用于追踪是否已经尝试 claim
+  const hasClaimedRef = useRef(false);
+
+  // 页面刷新后，尝试接管工作流或同步状态
+  useEffect(() => {
+    const workflowId = workflow.id;
+    
+    // 检查 workflow.status 或 steps 中是否有活跃状态
+    const hasRunningSteps = workflow.steps?.some(s => s.status === 'running' || s.status === 'pending');
+    const isTerminalStatus = workflow.status === 'completed' || workflow.status === 'failed' || workflow.status === 'cancelled';
+    const isActiveByStatus = workflow.status === 'running' || workflow.status === 'pending';
+    const isActiveBySteps = hasRunningSteps && !isTerminalStatus;
+    // 不一致状态：终态但有运行中的步骤，需要从 SW 获取真实状态
+    const isInconsistentState = isTerminalStatus && hasRunningSteps;
+    const needsClaim = isActiveByStatus || isActiveBySteps || isInconsistentState;
+    
+    console.log(`[WorkZoneContent] useEffect triggered:`, {
+      workflowId,
+      status: workflow.status,
+      hasRunningSteps,
+      isTerminalStatus,
+      needsClaim,
+      hasClaimedRef: hasClaimedRef.current,
+    });
+    
+    // 如果工作流已是终态但 steps 还在 running，这是不一致状态
+    // 需要从 SW 获取真实状态，而不是直接标记为失败
+    if (isTerminalStatus && hasRunningSteps && !hasClaimedRef.current && !claimedWorkflows.has(workflowId)) {
+      console.log(`[WorkZoneContent] 🔄 Inconsistent state detected: workflow=${workflow.status} but hasRunningSteps=true, will claim from SW`);
+      // 不要在这里标记为 claimed，让下面的 claim 逻辑去处理
+      // 这种情况通常发生在页面刷新后，SW 端状态可能已经更新但 UI 还是旧状态
+    }
+    
+    // 避免重复 claim
+    if (!needsClaim || hasClaimedRef.current || claimedWorkflows.has(workflowId)) {
+      return;
+    }
+    
+    hasClaimedRef.current = true;
+    claimedWorkflows.add(workflowId);
+    
+    // 异步 claim 工作流
+    (async () => {
+      try {
+        const { swChannelClient } = await import('../../services/sw-channel/client');
+        
+        // 等待 swChannelClient 初始化（最多 5 秒）
+        let waited = 0;
+        while (!swChannelClient.isInitialized() && waited < 5000) {
+          await new Promise(r => setTimeout(r, 200));
+          waited += 200;
+        }
+        
+        if (!swChannelClient.isInitialized()) {
+          console.log(`[WorkZoneContent] ⏭️ Skip claim ${workflowId}: swChannelClient not initialized`);
+          // SW 未初始化，标记为失败
+          onWorkflowStateChange?.(workflowId, 'failed', '无法连接到 Service Worker');
+          return;
+        }
+        
+        console.log(`[WorkZoneContent] 🔄 Claiming workflow: ${workflowId}`);
+        const result = await swChannelClient.claimWorkflow(workflowId);
+        
+        if (result.success) {
+          console.log(`[WorkZoneContent] ✓ Claimed workflow ${workflowId}:`, {
+            status: result.workflow?.status,
+            hasPendingToolRequest: result.hasPendingToolRequest,
+          });
+          
+          // 如果 SW 中的工作流已经是终态，通知 UI 更新
+          const swStatus = result.workflow?.status;
+          if (swStatus === 'completed' || swStatus === 'failed' || swStatus === 'cancelled') {
+            console.log(`[WorkZoneContent] 📢 Workflow ${workflowId} is in terminal state: ${swStatus}`);
+            onWorkflowStateChange?.(
+              workflowId, 
+              swStatus === 'completed' ? 'completed' : 'failed',
+              result.workflow?.error
+            );
+          }
+        } else {
+          console.log(`[WorkZoneContent] ⚠️ Claim failed for ${workflowId}:`, result.error);
+          // 工作流不存在或 claim 失败，标记为失败
+          onWorkflowStateChange?.(workflowId, 'failed', result.error || '工作流已丢失，请重试');
+        }
+      } catch (error) {
+        console.error(`[WorkZoneContent] ❌ Failed to claim workflow ${workflowId}:`, error);
+        onWorkflowStateChange?.(workflowId, 'failed', '恢复工作流失败，请重试');
+      }
+    })();
+  }, [workflow.id, workflow.status, onWorkflowStateChange]);
   // 计算工作流状态
   const workflowStatus = useMemo(() => {
     const steps = workflow.steps;

@@ -29,3 +29,5 @@ export { storageMigrationService } from './services/storage-migration-service';
 export { initPromptStorageCache } from './services/prompt-storage-service';
 export { toolbarConfigService } from './services/toolbar-config-service';
 export { memoryMonitorService } from './services/memory-monitor-service';
+export { crashRecoveryService } from './services/crash-recovery-service';
+export type { CrashRecoveryState, CrashInfo } from './services/crash-recovery-service';

@@ -463,58 +463,78 @@ export class SWTaskQueue {
 
   /**
    * Initialize with API configurations
+   * 
+   * 设计原则：init RPC 应该立即返回，不阻塞客户端
+   * - 配置立即保存到内存，RPC 立即返回
+   * - IndexedDB 操作（保存配置、清理孤儿任务）在后台进行
+   * - 后台操作完成后广播状态并恢复任务
    */
   async initialize(geminiConfig: GeminiConfig, videoConfig: VideoAPIConfig): Promise<void> {
-    // Wait for storage restoration to complete first
-    await this.storageRestorePromise;
-
-    // If this is first-time initialization (no saved config before),
-    // clear orphan tasks created without valid API key:
-    // - PENDING tasks (legacy)
-    // - PROCESSING tasks without remoteId (never actually started execution)
-    if (!this.hadSavedConfig) {
-      const orphanTasksToRemove: string[] = [];
-      for (const task of this.tasks.values()) {
-        const isOrphan = 
-          task.status === TaskStatus.PENDING ||
-          (task.status === TaskStatus.PROCESSING && !task.remoteId && !this.runningTasks.has(task.id));
-        if (isOrphan) {
-          orphanTasksToRemove.push(task.id);
-        }
-      }
-      
-      if (orphanTasksToRemove.length > 0) {
-        console.log(`[SWTaskQueue] First-time init: clearing ${orphanTasksToRemove.length} orphan tasks created without API key`);
-        for (const taskId of orphanTasksToRemove) {
-          this.tasks.delete(taskId);
-          await taskQueueStorage.deleteTask(taskId);
-        }
-      }
-    }
-
+    // 立即保存配置到内存，不等待 IndexedDB
     this.geminiConfig = geminiConfig;
     this.videoConfig = videoConfig;
     this.initialized = true;
-    this.hadSavedConfig = true; // Now we have valid config
+    
+    // 记录是否是首次初始化（在后台任务中使用）
+    const isFirstTimeInit = !this.hadSavedConfig;
+    this.hadSavedConfig = true;
 
-    // Save config to storage for persistence
-    await taskQueueStorage.saveConfig(geminiConfig, videoConfig);
-
+    // 立即广播初始化成功（让客户端可以继续操作）
     this.broadcastToClients({ type: 'TASK_QUEUE_INITIALIZED', success: true });
 
-    // Note: No longer broadcasting all tasks here
-    // Clients should use paginated RPC to fetch tasks to avoid postMessage size limits
+    // 后台执行 IndexedDB 操作（不阻塞 RPC 返回）
+    this.performBackgroundInitialization(geminiConfig, videoConfig, isFirstTimeInit);
+  }
 
-    // Resume processing tasks that have remoteId (video/character polling)
-    // This handles the case where restoreFromStorage ran before config was available
-    for (const task of this.tasks.values()) {
-      if (this.shouldResumeTask(task) && !this.runningTasks.has(task.id)) {
-        this.resumeTaskExecution(task);
+  /**
+   * 后台执行初始化相关的 IndexedDB 操作
+   * 不阻塞 init RPC 返回
+   */
+  private async performBackgroundInitialization(
+    geminiConfig: GeminiConfig, 
+    videoConfig: VideoAPIConfig,
+    isFirstTimeInit: boolean
+  ): Promise<void> {
+    try {
+      // 等待存储恢复完成
+      await this.storageRestorePromise;
+
+      // 首次初始化时清理孤儿任务
+      if (isFirstTimeInit) {
+        const orphanTasksToRemove: string[] = [];
+        for (const task of this.tasks.values()) {
+          const isOrphan = 
+            task.status === TaskStatus.PENDING ||
+            (task.status === TaskStatus.PROCESSING && !task.remoteId && !this.runningTasks.has(task.id));
+          if (isOrphan) {
+            orphanTasksToRemove.push(task.id);
+          }
+        }
+        
+        if (orphanTasksToRemove.length > 0) {
+          console.log(`[SWTaskQueue] First-time init: clearing ${orphanTasksToRemove.length} orphan tasks`);
+          for (const taskId of orphanTasksToRemove) {
+            this.tasks.delete(taskId);
+            await taskQueueStorage.deleteTask(taskId);
+          }
+        }
       }
-    }
 
-    // Process any pending tasks
-    this.processQueue();
+      // 保存配置到 IndexedDB
+      await taskQueueStorage.saveConfig(geminiConfig, videoConfig);
+
+      // 恢复需要处理的任务
+      for (const task of this.tasks.values()) {
+        if (this.shouldResumeTask(task) && !this.runningTasks.has(task.id)) {
+          this.resumeTaskExecution(task);
+        }
+      }
+
+      // 处理队列中的待处理任务
+      this.processQueue();
+    } catch (error) {
+      console.error('[SWTaskQueue] Background initialization error:', error);
+    }
   }
 
   /**

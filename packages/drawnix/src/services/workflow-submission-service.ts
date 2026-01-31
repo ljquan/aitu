@@ -19,6 +19,7 @@ import {
   swChannelClient,
   type SWChannelEventHandlers,
 } from './sw-channel/client';
+import { swTaskQueueService } from './sw-task-queue-service';
 import type {
   WorkflowDefinition as ChannelWorkflowDefinition,
   WorkflowStatusEvent as ChannelWorkflowStatusEvent,
@@ -272,32 +273,62 @@ class WorkflowSubmissionService {
 
   /**
    * Recover workflow states after page refresh
-   * Call this after initialization to restore running workflows
+   * Call this after initialization to restore all workflows from SW
+   * This includes failed workflows (e.g., interrupted by SW restart during ai_analyze)
    */
   async recoverWorkflows(): Promise<WorkflowDefinition[]> {
+    console.log('[WorkflowSubmissionService] 🔄 Recovering workflows from SW...');
+    
     if (!swChannelClient.isInitialized()) {
-      // swChannelClient 尚未初始化，跳过恢复（这是正常的启动时序）
+      console.log('[WorkflowSubmissionService] ⏭️ Skipping: swChannelClient not initialized');
       return [];
     }
 
     try {
       const response = await swChannelClient.getAllWorkflows();
+      console.log(`[WorkflowSubmissionService] ✓ Got ${response.workflows?.length || 0} workflows from SW`);
+      
       if (!response.success) {
+        console.log('[WorkflowSubmissionService] ❌ getAllWorkflows failed');
         return [];
       }
       
-      // Filter to running/pending workflows and update local cache
+      // Sync all workflows from SW to local cache (including failed/completed)
+      // This ensures UI shows correct status for interrupted workflows
+      for (const workflow of response.workflows) {
+        console.log(`[WorkflowSubmissionService] Processing workflow:`, {
+          id: workflow.id,
+          status: workflow.status,
+          steps: workflow.steps?.length,
+          updatedAt: workflow.updatedAt,
+        });
+        
+        const existingWorkflow = this.workflows.get(workflow.id);
+        // Only update if SW has newer data or workflow doesn't exist locally
+        if (!existingWorkflow || workflow.updatedAt > (existingWorkflow.updatedAt || 0)) {
+          this.workflows.set(workflow.id, workflow as unknown as WorkflowDefinition);
+          
+          // Emit status event for failed workflows so UI can update
+          if (workflow.status === 'failed' && existingWorkflow?.status !== 'failed') {
+            console.log(`[WorkflowSubmissionService] 📢 Emitting failed status for workflow ${workflow.id}`);
+            this.workflowStatusSubject.next({
+              workflowId: workflow.id,
+              status: 'failed',
+              error: workflow.error,
+            });
+          }
+        }
+      }
+      
+      // Return running/pending workflows for callers that need them
       const runningWorkflows = response.workflows.filter(
         w => w.status === 'running' || w.status === 'pending'
       );
       
-      for (const workflow of runningWorkflows) {
-        this.workflows.set(workflow.id, workflow as unknown as WorkflowDefinition);
-      }
-      
+      console.log(`[WorkflowSubmissionService] ✓ Found ${runningWorkflows.length} active workflows`);
       return runningWorkflows as unknown as WorkflowDefinition[];
     } catch (error) {
-      console.warn('[WorkflowSubmissionService] Failed to recover workflows:', error);
+      console.warn('[WorkflowSubmissionService] ❌ Failed to recover workflows:', error);
       return [];
     }
   }
@@ -380,11 +411,30 @@ class WorkflowSubmissionService {
       throw new Error('SWChannelClient not initialized');
     }
 
+    // 检查 SW 端是否已初始化，如果未初始化则重新初始化
+    // 这处理了 init RPC 超时但 channel 已建立的情况
+    if (!swTaskQueueService.isInitialized()) {
+      const initSuccess = await swTaskQueueService.initializeSW();
+      if (!initSuccess) {
+        throw new Error('Failed to initialize Service Worker');
+      }
+    }
+
     // Store locally
     this.workflows.set(workflow.id, workflow);
 
     // Submit via SWChannelClient (uses postmessage-duplex)
-    const result = await swChannelClient.submitWorkflow(workflow as unknown as ChannelWorkflowDefinition);
+    let result = await swChannelClient.submitWorkflow(workflow as unknown as ChannelWorkflowDefinition);
+    
+    // 如果 SW 端返回 "Workflow executor not initialized"，尝试重新初始化并重试一次
+    if (!result.success && result.error?.includes('not initialized')) {
+      // 强制重新初始化
+      const reinitSuccess = await swTaskQueueService.initializeSW();
+      if (reinitSuccess) {
+        // 重试提交
+        result = await swChannelClient.submitWorkflow(workflow as unknown as ChannelWorkflowDefinition);
+      }
+    }
     
     if (!result.success) {
       // Remove from local cache if submission failed

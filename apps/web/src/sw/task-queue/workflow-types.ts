@@ -178,11 +178,32 @@ export interface SWMCPTool {
 /**
  * Configuration passed to MCP tools in SW
  */
+/**
+ * Progress event for streaming tools (like ai_analyze)
+ */
+export interface StreamingProgressEvent {
+  type: 'streaming';
+  chunk: string;
+  accumulated: string;
+  timestamp: number;
+}
+
+/**
+ * Progress event for task-based tools (like generate_image)
+ */
+export interface TaskProgressEvent {
+  type: 'task';
+  progress: number;
+  phase?: TaskExecutionPhase;
+}
+
+export type ToolProgressEvent = StreamingProgressEvent | TaskProgressEvent;
+
 export interface SWMCPToolConfig {
   geminiConfig: GeminiConfig;
   videoConfig: VideoAPIConfig;
-  /** Callback for progress updates */
-  onProgress?: (progress: number, phase?: TaskExecutionPhase) => void;
+  /** Callback for progress updates (supports both streaming and task progress) */
+  onProgress?: (event: ToolProgressEvent) => void;
   /** Callback when remote ID is received (for polling tasks) */
   onRemoteId?: (remoteId: string) => void;
   /** Abort signal for cancellation */

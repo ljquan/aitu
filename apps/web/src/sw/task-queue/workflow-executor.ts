@@ -121,6 +121,9 @@ export class WorkflowExecutor {
         // Skip completed/cancelled/failed workflows (keep in memory for queries)
         if (workflow.status === 'completed' || workflow.status === 'cancelled' || workflow.status === 'failed') {
           this.workflows.set(workflow.id, workflow);
+          // Clean up any orphaned pending tool requests for terminal workflows
+          // This handles cases where workflows were incorrectly marked as failed before fix
+          await taskQueueStorage.deletePendingToolRequestsByWorkflow(workflow.id);
           continue;
         }
 
@@ -375,11 +378,13 @@ export class WorkflowExecutor {
   }
 
   /**
-   * Send all active (non-terminal) workflows to a specific client
+   * Send all active and recently interrupted workflows to a specific client
    * This is called when a new client connects to sync state
-   * Only workflows that need further processing are sent (pending/running)
-   * Terminal state workflows (completed/failed/cancelled) are not sent
-   * because they don't need client interaction anymore
+   * 
+   * Sends:
+   * - Running/pending workflows (need client interaction)
+   * - Recently failed workflows (within 5 min, so client knows about interruptions)
+   * 
    * channelManager 负责维护 workflowId -> channel 的映射
    * @param clientId The client to send recovered workflows to
    */
@@ -388,16 +393,21 @@ export class WorkflowExecutor {
     const cm = getChannelManager();
     if (!cm) return;
     
-    // Terminal states that don't need client communication
-    const terminalStatuses = ['completed', 'failed', 'cancelled'];
+    const now = Date.now();
+    const RECENT_THRESHOLD = 5 * 60 * 1000; // 5 minutes
     
     for (const workflow of this.workflows.values()) {
-      // Only send active workflows that need client interaction
-      if (terminalStatuses.includes(workflow.status)) {
+      // Send active workflows that need client interaction
+      if (workflow.status === 'running' || workflow.status === 'pending') {
+        cm.sendWorkflowRecoveredToClient(clientId, workflow.id, workflow);
         continue;
       }
-      // channelManager 会自动更新 workflowId -> channel 映射
-      cm.sendWorkflowRecoveredToClient(clientId, workflow.id, workflow);
+      
+      // Also send recently failed workflows so client knows about interruptions
+      // This helps when ai_analyze was running and SW restarted
+      if (workflow.status === 'failed' && workflow.updatedAt && (now - workflow.updatedAt) < RECENT_THRESHOLD) {
+        cm.sendWorkflowRecoveredToClient(clientId, workflow.id, workflow);
+      }
     }
   }
 
@@ -455,6 +465,155 @@ export class WorkflowExecutor {
           pending.reject(error instanceof Error ? error : new Error(String(error)));
         }
       })();
+    }
+  }
+
+  /**
+   * 重新发送指定工作流的待处理工具请求
+   * 用于页面刷新后，客户端声明接管工作流时调用
+   * 
+   * @param workflowId 工作流 ID
+   */
+  async resendPendingToolRequestsForWorkflow(workflowId: string): Promise<void> {
+    console.log(`[WorkflowExecutor] 🔄 Resending pending tool requests for workflow ${workflowId}`);
+    
+    const { getChannelManager } = await import('./channel-manager');
+    const cm = getChannelManager();
+    if (!cm) {
+      console.log('[WorkflowExecutor] ❌ ChannelManager not available');
+      return;
+    }
+
+    // 查找该工作流的内存中待处理请求
+    let memoryRequestCount = 0;
+    for (const [requestId, pending] of this.pendingToolRequests) {
+      const { requestInfo } = pending;
+      
+      if (requestInfo.workflowId !== workflowId) {
+        continue;
+      }
+
+      memoryRequestCount++;
+      console.log(`[WorkflowExecutor] 📤 Resending memory request: ${requestId}, tool: ${requestInfo.toolName}`);
+
+      // 异步重新发送请求
+      (async () => {
+        try {
+          const response = await cm.sendToolRequest(
+            requestInfo.workflowId,
+            requestInfo.requestId,
+            requestInfo.stepId,
+            requestInfo.toolName,
+            requestInfo.args,
+            300000 // 5 minutes timeout
+          );
+
+          if (response) {
+            console.log(`[WorkflowExecutor] ✓ Tool response received: ${requestId}, success: ${response.success}`);
+            pending.resolve({
+              type: 'MAIN_THREAD_TOOL_RESPONSE',
+              requestId: requestInfo.requestId,
+              success: response.success,
+              result: response.result,
+              error: response.error,
+              taskId: response.taskId,
+              taskIds: response.taskIds,
+              addSteps: response.addSteps as MainThreadToolResponseMessage['addSteps'],
+            });
+          } else {
+            console.log(`[WorkflowExecutor] ❌ Tool request timed out: ${requestId}`);
+            pending.reject(new Error(`Tool request timed out: ${requestInfo.toolName}`));
+          }
+        } catch (error) {
+          console.error(`[WorkflowExecutor] ❌ Tool request failed: ${requestId}`, error);
+          pending.reject(error instanceof Error ? error : new Error(String(error)));
+        }
+      })();
+    }
+    console.log(`[WorkflowExecutor] Memory pending requests: ${memoryRequestCount}`);
+
+    // 同时检查 IndexedDB 中的待处理请求（SW 重启后内存中的请求会丢失）
+    const storedRequests = await taskQueueStorage.getAllPendingToolRequests();
+    const workflowStoredRequests = storedRequests.filter(r => r.workflowId === workflowId);
+    console.log(`[WorkflowExecutor] IndexedDB pending requests for workflow: ${workflowStoredRequests.length}`);
+    
+    for (const storedRequest of workflowStoredRequests) {
+      // 如果内存中没有这个请求，说明是 SW 重启后的遗留请求
+      if (!this.pendingToolRequests.has(storedRequest.requestId)) {
+        console.log(`[WorkflowExecutor] 📤 Resending IndexedDB request: ${storedRequest.requestId}, tool: ${storedRequest.toolName}`);
+        
+        // 重新发送并等待响应
+        (async () => {
+          try {
+            const response = await cm.sendToolRequest(
+              storedRequest.workflowId,
+              storedRequest.requestId,
+              storedRequest.stepId,
+              storedRequest.toolName,
+              storedRequest.args,
+              300000
+            );
+
+            if (response) {
+              console.log(`[WorkflowExecutor] ✓ Recovered tool response: ${storedRequest.requestId}, success: ${response.success}`);
+              // 处理响应（更新工作流状态）
+              await this.handleRecoveredToolResponse(storedRequest, response);
+            } else {
+              console.log(`[WorkflowExecutor] ❌ Recovered tool request timed out: ${storedRequest.requestId}`);
+            }
+          } catch (error) {
+            console.error(`[WorkflowExecutor] ❌ Failed to resend tool request ${storedRequest.requestId}:`, error);
+          } finally {
+            // 清理 IndexedDB 中的请求
+            await taskQueueStorage.deletePendingToolRequest(storedRequest.requestId);
+          }
+        })();
+      }
+    }
+  }
+
+  /**
+   * 处理恢复的工具响应（SW 重启后）
+   */
+  private async handleRecoveredToolResponse(
+    request: { workflowId: string; stepId: string; toolName: string },
+    response: { success: boolean; result?: unknown; error?: string; addSteps?: Array<{ id: string; mcp: string; args: Record<string, unknown>; description: string; status: string }> }
+  ): Promise<void> {
+    const workflow = this.workflows.get(request.workflowId);
+    if (!workflow) return;
+
+    const step = workflow.steps.find(s => s.id === request.stepId);
+    if (!step) return;
+
+    if (response.success) {
+      step.status = 'completed';
+      step.result = response.result;
+      
+      // 处理新增步骤
+      if (response.addSteps && response.addSteps.length > 0) {
+        for (const newStep of response.addSteps) {
+          if (!workflow.steps.find(s => s.id === newStep.id)) {
+            workflow.steps.push({
+              id: newStep.id,
+              mcp: newStep.mcp,
+              args: newStep.args,
+              description: newStep.description,
+              status: newStep.status as 'pending' | 'running' | 'completed' | 'failed' | 'skipped',
+            });
+          }
+        }
+      }
+    } else {
+      step.status = 'failed';
+      step.error = response.error;
+    }
+
+    workflow.updatedAt = Date.now();
+    await taskQueueStorage.saveWorkflow(workflow);
+
+    // 继续执行工作流
+    if (response.success && workflow.status === 'running') {
+      this.executeWorkflow(workflow.id);
     }
   }
 
@@ -670,6 +829,28 @@ export class WorkflowExecutor {
         await taskQueueStorage.saveWorkflow(workflow);
       }
     } catch (error: any) {
+      // 检查是否是等待客户端的错误
+      if (error?.isAwaitingClient || error?.message?.startsWith('AWAITING_CLIENT:')) {
+        console.log(`[WorkflowExecutor] ⏳ Workflow ${workflowId} waiting for client to reconnect`);
+        
+        // 不标记为失败，保持 running 状态
+        // pending request 已保存在 IndexedDB，客户端重连后会通过 claimWorkflow 继续执行
+        workflow.updatedAt = Date.now();
+        await taskQueueStorage.saveWorkflow(workflow);
+        
+        // 清理执行状态，允许后续重新执行
+        this.runningWorkflows.delete(workflowId);
+        this.abortControllers.delete(workflowId);
+        
+        // 通知客户端工作流正在等待
+        this.sendToWorkflowClient(workflowId, {
+          type: 'WORKFLOW_STATUS',
+          workflowId,
+          status: 'running', // 保持 running 状态
+        });
+        return;
+      }
+      
       console.error(`[WorkflowExecutor] ✗ Workflow ${workflowId} failed:`, error);
 
       workflow.status = 'failed';
@@ -1003,6 +1184,17 @@ export class WorkflowExecutor {
       step.status = 'completed';
       step.duration = Date.now() - startTime;
     } catch (error: any) {
+      // 检查是否是等待客户端的错误 - 需要重新抛出以便 workflow 级别处理
+      if (error?.isAwaitingClient || error?.message?.startsWith('AWAITING_CLIENT:')) {
+        // 保持 step 为 running 状态（等待客户端重连后继续）
+        step.status = 'running';
+        step.duration = Date.now() - startTime;
+        await taskQueueStorage.saveWorkflow(workflow);
+        this.sendStepStatus(workflow.id, step);
+        // 重新抛出原始错误，保留 isAwaitingClient 标记
+        throw error;
+      }
+      
       step.status = 'failed';
       step.error = error.message;
       step.duration = Date.now() - startTime;
@@ -1054,7 +1246,11 @@ export class WorkflowExecutor {
       const cm = getChannelManager();
       
       if (!cm) {
-        throw new Error('channelManager not available');
+        // channelManager 不可用，保留 pending request 等待后续重试
+        console.log(`[WorkflowExecutor] ⏳ channelManager not available, waiting for client: ${toolName}`);
+        const awaitError = new Error(`AWAITING_CLIENT:${toolName}`);
+        (awaitError as any).isAwaitingClient = true;
+        throw awaitError;
       }
 
       // Send request and wait for response directly (5 minutes timeout)
@@ -1067,12 +1263,16 @@ export class WorkflowExecutor {
         300000
       );
 
-      // Clean up IndexedDB after receiving response
-      await taskQueueStorage.deletePendingToolRequest(requestId);
-
       if (!response) {
-        throw new Error(`Main thread tool request timed out or failed: ${toolName}`);
+        // 超时或无客户端连接，保留 pending request 等待后续重试
+        console.log(`[WorkflowExecutor] ⏳ Tool request timed out, waiting for client: ${toolName}`);
+        const awaitError = new Error(`AWAITING_CLIENT:${toolName}`);
+        (awaitError as any).isAwaitingClient = true;
+        throw awaitError;
       }
+
+      // 收到响应后才清理 IndexedDB
+      await taskQueueStorage.deletePendingToolRequest(requestId);
 
       // Convert response to MainThreadToolResponseMessage format
       return {
@@ -1085,8 +1285,12 @@ export class WorkflowExecutor {
         taskIds: response.taskIds,
         addSteps: response.addSteps as MainThreadToolResponseMessage['addSteps'],
       };
-    } catch (error) {
-      // Clean up IndexedDB on error
+    } catch (error: any) {
+      // 如果是等待客户端的错误，不删除 pending request
+      if (error?.isAwaitingClient) {
+        throw error;
+      }
+      // 其他错误才清理 IndexedDB
       await taskQueueStorage.deletePendingToolRequest(requestId);
       throw error;
     }

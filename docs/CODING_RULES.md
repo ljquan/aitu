@@ -2812,6 +2812,115 @@ const CDN_CONFIG = {
 - 短超时后快速回退到服务器，保证首次加载速度
 - 用户请求会触发 CDN 缓存，后续访问自动加速
 
+### 工作流恢复时 UI 与 SW 状态不一致的处理
+
+**场景**: 页面刷新后，UI 从 IndexedDB/本地存储恢复的状态可能与 SW 端的真实状态不一致
+
+❌ **错误示例**:
+```typescript
+// 错误：检测到终态但有运行中步骤时，直接标记为失败
+if (isTerminalStatus && hasRunningSteps) {
+  hasClaimedRef.current = true;  // 标记为已 claim
+  onWorkflowStateChange?.(workflowId, 'failed', '工作流已结束');
+  return;  // 不再尝试从 SW 获取真实状态
+}
+
+// 后续即使 SW 更新了状态，也因为 hasClaimedRef.current = true 而跳过 claim
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：不一致状态也触发 claim，从 SW 获取真实状态
+const isInconsistentState = isTerminalStatus && hasRunningSteps;
+const needsClaim = isActiveByStatus || isActiveBySteps || isInconsistentState;
+
+if (isInconsistentState) {
+  console.log('Inconsistent state detected, will claim from SW');
+  // 不要在这里标记为 claimed，让 claim 逻辑去处理
+}
+
+// claim 逻辑会等待 swChannelClient 初始化，然后从 SW 获取真实状态
+if (needsClaim && !hasClaimedRef.current) {
+  hasClaimedRef.current = true;
+  const result = await swChannelClient.claimWorkflow(workflowId);
+  // 根据 SW 返回的真实状态更新 UI
+}
+```
+
+**原因**:
+- 页面刷新时，UI 状态可能来自旧的 IndexedDB 数据
+- SW 端可能已经更新了工作流状态（如从 `failed` 变为 `running`）
+- 如果直接根据本地状态判断，会导致用户看到错误的"失败"状态
+- 正确做法是检测不一致状态后，从 SW 获取真实状态再更新 UI
+
+### SW 错误处理链必须保持完整
+
+**场景**: 在 SW 执行链中需要传递特殊错误属性（如 `isAwaitingClient`）时
+
+❌ **错误示例**:
+```typescript
+// workflow-executor.ts - executeStep 中
+try {
+  await this.requestMainThreadTool(workflowId, stepId, toolName, args);
+} catch (error) {
+  // 错误：所有错误都标记为 failed
+  step.status = 'failed';
+  step.error = error.message;
+}
+
+// 然后在 executeWorkflow 循环中
+if (step.status === 'failed') {
+  // 错误：创建新的 Error 对象，丢失了 isAwaitingClient 属性
+  throw new Error(`Step ${step.id} failed: ${step.error}`);
+}
+
+// 最后在 catch 块中
+catch (error) {
+  // error.message = "Step xxx failed: AWAITING_CLIENT:insert_mermaid"
+  // 但 error.isAwaitingClient 是 undefined！
+  if (error?.isAwaitingClient) {  // 永远为 false
+    // 不会进入这个分支
+  }
+  workflow.status = 'failed';  // 错误地标记为失败
+}
+```
+
+✅ **正确示例**:
+```typescript
+// workflow-executor.ts - executeStep 中
+try {
+  await this.requestMainThreadTool(workflowId, stepId, toolName, args);
+} catch (error) {
+  // 正确：检测特殊错误类型，保持原始属性
+  if (error?.isAwaitingClient || error?.message?.startsWith('AWAITING_CLIENT:')) {
+    // 保持 step 为 running 状态，重新抛出原始错误
+    step.status = 'running';
+    throw error;  // 保留 isAwaitingClient 属性
+  }
+  
+  // 其他错误才标记为 failed
+  step.status = 'failed';
+  step.error = error.message;
+}
+
+// 在 catch 块中
+catch (error) {
+  // error.isAwaitingClient 现在是 true
+  if (error?.isAwaitingClient) {
+    console.log('Workflow waiting for client to reconnect');
+    workflow.status = 'running';  // 保持 running 状态
+    return;
+  }
+  workflow.status = 'failed';
+}
+```
+
+**原因**:
+- JavaScript 错误对象可以有自定义属性（如 `error.isAwaitingClient = true`）
+- 在中间层创建新的 `Error` 对象会丢失这些属性
+- 如果需要在上层检查特殊错误类型，必须重新抛出原始错误
+- 或者在检查时同时检查 `error.message` 内容作为备选
+
 ### Service Worker 静态资源回退应尝试所有版本缓存
 
 **场景**: 用户使用旧版本 HTML，但服务器已部署新版本删除了旧静态资源

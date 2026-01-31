@@ -9,6 +9,7 @@ import localforage from 'localforage';
 import {
   Folder,
   Board,
+  BoardMetadata,
   WorkspaceState,
   WORKSPACE_DEFAULTS,
 } from '../types/workspace.types';
@@ -398,6 +399,34 @@ class WorkspaceStorageService {
         }
       }
     }
+    
+    return boards.sort((a, b) => a.order - b.order);
+  }
+
+  /**
+   * 加载所有画板的元数据（不含 elements）
+   * 用于侧边栏显示，减少内存占用
+   */
+  async loadAllBoardMetadata(): Promise<BoardMetadata[]> {
+    await this.ensureInitialized();
+    const boards: BoardMetadata[] = [];
+    await this.getBoardsStore().iterate<Board, void>((value) => {
+      if (value && value.id) {
+        // 只提取元数据，不包含 elements
+        boards.push({
+          id: value.id,
+          name: value.name,
+          folderId: value.folderId,
+          order: value.order,
+          viewport: value.viewport,
+          theme: value.theme,
+          createdAt: value.createdAt,
+          updatedAt: value.updatedAt,
+        });
+      }
+    });
+    // Wait for browser idle time after IndexedDB operation
+    await waitForIdle();
     
     return boards.sort((a, b) => a.order - b.order);
   }

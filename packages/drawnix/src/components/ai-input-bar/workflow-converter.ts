@@ -71,6 +71,8 @@ export interface WorkflowDefinition {
   scenarioType: 'direct_generation' | 'agent_flow';
   /** 生成类型 */
   generationType: GenerationType;
+  /** 工作流状态 */
+  status?: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
   /** AI 分析内容（AI 对用户请求的理解和计划） */
   aiAnalysis?: string;
   /** 步骤列表 */
@@ -100,6 +102,16 @@ export interface WorkflowDefinition {
   };
   /** 创建时间 */
   createdAt: number;
+  /** 更新时间 */
+  updatedAt?: number;
+  /** 上下文信息（从 SW 恢复时使用） */
+  context?: {
+    userInput?: string;
+    model?: string;
+    referenceImages?: string[];
+  };
+  /** 错误信息（失败时） */
+  error?: string;
 }
 
 /**
@@ -319,6 +331,8 @@ export function convertAgentFlowToWorkflow(
         messages,
         // 传递参考图片 URL（用于占位符替换）
         referenceImages: allReferenceImages.length > 0 ? allReferenceImages : undefined,
+        // 传递用户选择的文本模型（优先于系统配置）
+        textModel: modelId,
       },
       options: {
         mode: 'async',

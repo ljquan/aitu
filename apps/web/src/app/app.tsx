@@ -7,8 +7,11 @@ import {
   Board,
   BoardChangeData,
   TreeNode,
+  crashRecoveryService,
 } from '@drawnix/drawnix';
 import { PlaitBoard, PlaitElement, PlaitTheme, Viewport } from '@plait/core';
+import { MessagePlugin } from 'tdesign-react';
+import { CrashRecoveryDialog } from './CrashRecoveryDialog';
 
 // 节流保存 viewport 的间隔（毫秒）
 const VIEWPORT_SAVE_DEBOUNCE = 500;
@@ -19,6 +22,7 @@ let appInitialized = false;
 export function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [isDataReady, setIsDataReady] = useState(false);
+  const [showCrashDialog, setShowCrashDialog] = useState(false);
   const [value, setValue] = useState<{
     children: PlaitElement[];
     viewport?: Viewport;
@@ -33,13 +37,22 @@ export function App() {
   // Initialize workspace and handle migration
   useEffect(() => {
     const initialize = async () => {
+      // 检查是否需要显示崩溃恢复对话框
+      if (crashRecoveryService.shouldShowSafeModePrompt() && !crashRecoveryService.isSafeMode()) {
+        setShowCrashDialog(true);
+        setIsLoading(false);
+        return;
+      }
+
       // Prevent duplicate initialization in StrictMode
       if (appInitialized) {
         // 等待 workspaceService 完全初始化
         const workspaceService = WorkspaceService.getInstance();
         await workspaceService.waitForInitialization();
-        const currentBoard = workspaceService.getCurrentBoard();
-        if (currentBoard) {
+        // 使用 switchBoard 确保加载完整数据
+        const currentBoardId = workspaceService.getState().currentBoardId;
+        if (currentBoardId) {
+          const currentBoard = await workspaceService.switchBoard(currentBoardId);
           setValue({
             children: currentBoard.elements || [],
             viewport: currentBoard.viewport,
@@ -47,6 +60,8 @@ export function App() {
           });
         }
         setIsLoading(false);
+        // 标记加载完成
+        crashRecoveryService.markLoadingComplete();
         return;
       }
       appInitialized = true;
@@ -61,29 +76,79 @@ export function App() {
           await migrateToWorkspace();
         }
 
-        // Load current board data if available
-        let currentBoard = workspaceService.getCurrentBoard();
-
-        // If no current board, try to select first available board or create new one
-        if (!currentBoard) {
-          if (workspaceService.hasBoards()) {
-            // Select first available board
-            const tree = workspaceService.getTree();
-            const firstBoard = findFirstBoard(tree);
-            if (firstBoard) {
-              currentBoard = await workspaceService.switchBoard(firstBoard.id);
-            }
+        // 安全模式：优先复用已有的空白安全模式画板，否则创建新的
+        if (crashRecoveryService.isSafeMode()) {
+          console.log('[App] Safe mode: looking for existing safe mode board');
+          
+          // 查找已有的安全模式画板（名称以 "安全模式" 开头且元素为空）
+          const allBoards = workspaceService.getAllBoards();
+          let safeModeBoard = allBoards.find(
+            b => b.name.startsWith('安全模式') && (!b.elements || b.elements.length === 0)
+          );
+          
+          if (safeModeBoard) {
+            console.log('[App] Safe mode: reusing existing board:', safeModeBoard.name);
+            await workspaceService.switchBoard(safeModeBoard.id);
           } else {
-            // No boards exist, create default board
+            console.log('[App] Safe mode: creating new blank board');
+            // 使用时间戳生成唯一名称，避免名称冲突
+            const timestamp = new Date().toLocaleString('zh-CN', {
+              month: '2-digit',
+              day: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit',
+            }).replace(/\//g, '-');
             const board = await workspaceService.createBoard({
-              name: '我的画板1',
+              name: `安全模式 ${timestamp}`,
               elements: [],
             });
-
             if (board) {
-              const switchedBoard = await workspaceService.switchBoard(board.id);
-              currentBoard = switchedBoard;
+              await workspaceService.switchBoard(board.id);
             }
+          }
+          
+          setValue({ children: [] });
+          setIsDataReady(true);
+          setIsLoading(false);
+          crashRecoveryService.markLoadingComplete();
+          
+          // 安全模式成功加载后，清除安全模式标记（下次正常加载）
+          crashRecoveryService.disableSafeMode();
+          
+          // 提示用户当前处于安全模式
+          setTimeout(() => {
+            MessagePlugin.warning({
+              content: '当前处于安全模式，已创建空白画布。可从侧边栏切换到其他画布。',
+              duration: 8000,
+              closeBtn: true,
+            });
+          }, 500);
+          return;
+        }
+
+        // Load current board data if available
+        let currentBoard: Board | null = null;
+        const currentBoardId = workspaceService.getState().currentBoardId;
+
+        // If has current board ID, load it via switchBoard (triggers lazy loading)
+        if (currentBoardId && workspaceService.getBoardMetadata(currentBoardId)) {
+          currentBoard = await workspaceService.switchBoard(currentBoardId);
+        } else if (workspaceService.hasBoards()) {
+          // No current board, select first available board
+          const tree = workspaceService.getTree();
+          const firstBoard = findFirstBoard(tree);
+          if (firstBoard) {
+            currentBoard = await workspaceService.switchBoard(firstBoard.id);
+          }
+        } else {
+          // No boards exist, create default board
+          const board = await workspaceService.createBoard({
+            name: '我的画板1',
+            elements: [],
+          });
+
+          if (board) {
+            currentBoard = await workspaceService.switchBoard(board.id);
           }
         }
 
@@ -117,6 +182,8 @@ export function App() {
       } finally {
         setIsDataReady(true);
         setIsLoading(false);
+        // 标记加载完成
+        crashRecoveryService.markLoadingComplete();
       }
     };
 
@@ -232,6 +299,35 @@ export function App() {
       }
     };
   }, []);
+
+  // 处理安全模式选择
+  const handleSafeModeChoice = useCallback((useSafeMode: boolean) => {
+    setShowCrashDialog(false);
+    if (useSafeMode) {
+      crashRecoveryService.enableSafeMode();
+    } else {
+      crashRecoveryService.clearCrashState();
+    }
+    // 重新初始化
+    setIsLoading(true);
+    appInitialized = false;
+    // 使用 setTimeout 确保状态更新后再触发 useEffect
+    setTimeout(() => {
+      window.location.reload();
+    }, 100);
+  }, []);
+
+  // 显示崩溃恢复对话框
+  if (showCrashDialog) {
+    return (
+      <CrashRecoveryDialog
+        crashCount={crashRecoveryService.getCrashCount()}
+        memoryInfo={crashRecoveryService.getMemoryInfo()}
+        onUseSafeMode={() => handleSafeModeChoice(true)}
+        onIgnore={() => handleSafeModeChoice(false)}
+      />
+    );
+  }
 
   if (isLoading) {
     return (
