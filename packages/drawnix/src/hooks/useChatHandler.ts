@@ -67,6 +67,9 @@ export function useChatHandler(options: UseChatHandlerOptions): ChatHandler & {
   onToolCallsRef.current = onToolCalls;
   const onWorkflowUpdateRef = useRef(onWorkflowUpdate);
   onWorkflowUpdateRef.current = onWorkflowUpdate;
+  // 存储临时模型的 ref，确保 sendMessage 使用最新选择的模型
+  const temporaryModelRef = useRef(temporaryModel);
+  temporaryModelRef.current = temporaryModel;
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [status, setStatus] = useState<ChatHandler['status']>('ready');
@@ -274,7 +277,7 @@ export function useChatHandler(options: UseChatHandlerOptions): ChatHandler & {
               isSendingRef.current = false;
             }
           },
-          temporaryModel, // 传递临时模型
+          temporaryModelRef.current, // 传递临时模型（使用 ref 确保获取最新值）
           systemPromptRef.current // 传递系统提示词
         );
       } catch (error: any) {

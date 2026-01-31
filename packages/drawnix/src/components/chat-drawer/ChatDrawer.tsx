@@ -88,7 +88,10 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
     const resizeHandleRef = useRef<HTMLDivElement>(null);
     
     // 临时模型选择（仅在当前会话中有效，不影响全局设置）
-    const [sessionModel, setSessionModel] = useState<string | undefined>(undefined);
+    // 默认值从全局设置的 textModelName 读取，保持与工作流文本模型一致
+    const [sessionModel, setSessionModel] = useState<string | undefined>(() => {
+      return geminiSettings.get().textModelName;
+    });
     
     // 工作流消息状态：存储当前会话中的工作流数据
     const [workflowMessages, setWorkflowMessages] = useState<Map<string, WorkflowMessageData>>(new Map());
