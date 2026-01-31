@@ -2678,13 +2678,27 @@ async function handleCacheUrlRequest(request: Request): Promise<Response> {
     url.pathname.includes('/video/') ||
     /\.(mp4|webm|ogg|mov)$/i.test(url.pathname);
 
-  // 检测是否为预览图请求
-  const isThumbnailRequest = url.searchParams.has('thumbnail');
+  // 参数优先级：bypass_sw > _retry > thumbnail
+  const bypassCache =
+    url.searchParams.has('bypass_sw') ||
+    url.searchParams.has('direct_fetch');
+  const isRetryRequest = url.searchParams.has('_retry');
+  
+  // 检测是否为预览图请求（只有在没有 bypass_sw 和 _retry 时才处理）
+  const isThumbnailRequest = 
+    url.searchParams.has('thumbnail') && 
+    !bypassCache && 
+    !isRetryRequest;
+    
   if (isThumbnailRequest) {
     // 获取预览图尺寸（small 或 large，默认 small）
     const thumbnailSize = (url.searchParams.get('thumbnail') || 'small') as 'small' | 'large';
+    // 构建缓存 key：移除所有控制参数
     const originalUrlForCache = new URL(url.toString());
     originalUrlForCache.searchParams.delete('thumbnail');
+    originalUrlForCache.searchParams.delete('bypass_sw');
+    originalUrlForCache.searchParams.delete('direct_fetch');
+    originalUrlForCache.searchParams.delete('_retry');
     
     const { findThumbnailWithFallback, createThumbnailResponse } = await import('./task-queue/utils/thumbnail-utils');
     const result = await findThumbnailWithFallback(
@@ -2774,8 +2788,18 @@ async function handleAssetLibraryRequest(request: Request): Promise<Response> {
   // 使用完整路径作为缓存 key
   const cacheKey = url.pathname;
   
-  // 检测是否为预览图请求
-  const isThumbnailRequest = url.searchParams.has('thumbnail');
+  // 参数优先级：bypass_sw > _retry > thumbnail
+  const bypassCache =
+    url.searchParams.has('bypass_sw') ||
+    url.searchParams.has('direct_fetch');
+  const isRetryRequest = url.searchParams.has('_retry');
+  
+  // 检测是否为预览图请求（只有在没有 bypass_sw 和 _retry 时才处理）
+  const isThumbnailRequest = 
+    url.searchParams.has('thumbnail') && 
+    !bypassCache && 
+    !isRetryRequest;
+    
   if (isThumbnailRequest) {
     // 获取预览图尺寸（small 或 large，默认 small）
     const thumbnailSize = (url.searchParams.get('thumbnail') || 'small') as 'small' | 'large';
@@ -2872,6 +2896,18 @@ async function handleVideoRequest(request: Request): Promise<Response> {
     const rangeHeader = request.headers.get('range');
     // console.log(`Service Worker [Video-${requestId}]: Range header:`, rangeHeader);
 
+    // 参数优先级：bypass_sw > _retry > thumbnail
+    const bypassCache =
+      url.searchParams.has('bypass_sw') ||
+      url.searchParams.has('direct_fetch');
+    const isRetryRequest = url.searchParams.has('_retry');
+    
+    // 检测是否为预览图请求（只有在没有 bypass_sw 和 _retry 时才处理）
+    const isThumbnailRequest = 
+      url.searchParams.has('thumbnail') && 
+      !bypassCache && 
+      !isRetryRequest;
+
     // 创建去重键（移除缓存破坏参数）
     const dedupeUrl = new URL(url);
     const cacheBreakingParams = [
@@ -2883,7 +2919,10 @@ async function handleVideoRequest(request: Request): Promise<Response> {
       '_cb',
       't',
       'retry',
+      '_retry',
       'rand',
+      'bypass_sw',
+      'direct_fetch',
       'thumbnail', // 也移除 thumbnail 参数，用于构建缓存key
     ];
     cacheBreakingParams.forEach((param) =>
@@ -2891,8 +2930,7 @@ async function handleVideoRequest(request: Request): Promise<Response> {
     );
     const dedupeKey = dedupeUrl.toString();
     
-    // 检测是否为预览图请求（在移除参数前检查，因为需要获取尺寸）
-    const isThumbnailRequest = url.searchParams.has('thumbnail');
+    // 如果是预览图请求（没有 bypass_sw 和 _retry），查找预览图
     if (isThumbnailRequest) {
       // 获取预览图尺寸（small 或 large，默认 small）
       const thumbnailSize = (url.searchParams.get('thumbnail') || 'small') as 'small' | 'large';
@@ -3643,17 +3681,27 @@ async function handleImageRequest(request: Request): Promise<Response> {
     // 创建原始URL（不带缓存破坏参数）用于缓存键和去重键
     const originalUrl = new URL(request.url);
     
-    // 检测是否为预览图请求（需要在移除其他参数之前检查）
-    const isThumbnailRequest = originalUrl.searchParams.has('thumbnail');
+    // 参数优先级：bypass_sw > _retry > thumbnail
+    // 检测是否要求绕过缓存检查（最高优先级）
+    const bypassCache =
+      originalUrl.searchParams.has('bypass_sw') ||
+      originalUrl.searchParams.has('direct_fetch');
+    
+    // 检测是否为强制重试请求（次高优先级）
+    const isRetryRequest = originalUrl.searchParams.has('_retry');
+    
+    // 检测是否为预览图请求（最低优先级，只有在没有 bypass_sw 和 _retry 时才处理）
+    // bypass_sw 和 _retry 的存在表示用户明确要求获取原图或重新请求
+    const isThumbnailRequest = 
+      originalUrl.searchParams.has('thumbnail') && 
+      !bypassCache && 
+      !isRetryRequest;
+    
     // 在删除参数之前先获取预览图尺寸
     const thumbnailSize = isThumbnailRequest 
       ? (originalUrl.searchParams.get('thumbnail') || 'small')
       : 'small';
     
-    // 检测是否要求绕过缓存检查（但仍会缓存响应）
-    const bypassCache =
-      originalUrl.searchParams.has('bypass_sw') ||
-      originalUrl.searchParams.has('direct_fetch');
     const cacheBreakingParams = [
       '_t',
       'cache_buster',
@@ -3682,7 +3730,7 @@ async function handleImageRequest(request: Request): Promise<Response> {
 
     const dedupeKey = originalUrl.toString();
     
-    // 如果是预览图请求，在移除参数后查找预览图
+    // 如果是预览图请求（没有 bypass_sw 和 _retry），在移除参数后查找预览图
     if (isThumbnailRequest) {
       const { findThumbnailWithFallback, createThumbnailResponse } = await import('./task-queue/utils/thumbnail-utils');
       
