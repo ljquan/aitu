@@ -7,7 +7,10 @@ import { state, elements } from './state.js';
 import { escapeHtml, formatBytes, formatJsonWithHighlight, extractRequestParams } from './common.js';
 import { downloadJson } from './utils.js';
 import { showToast } from './toast.js';
-import { loadLLMApiLogs as loadLLMApiLogsRPC, clearLLMApiLogsInSW, deleteLLMApiLogsInSW } from './sw-communication.js';
+import { loadLLMApiLogs as loadLLMApiLogsRPC, clearLLMApiLogsInSW, deleteLLMApiLogsInSW, getLLMApiLogByIdInSW } from './sw-communication.js';
+
+/** 缓存已获取的完整日志数据 (logId -> fullLog) */
+const fullLogCache = new Map();
 
 /**
  * 获取当前过滤条件
@@ -30,16 +33,7 @@ export async function loadLLMApiLogs(page) {
     const targetPage = page ?? state.llmapiPagination.page;
     const pageSize = state.llmapiPagination.pageSize || 20;
     const filter = getCurrentFilter();
-    console.log('[LLMApiLogs] loadLLMApiLogs calling RPC:', { targetPage, pageSize, filter });
-    
     const result = await loadLLMApiLogsRPC(targetPage, pageSize, filter);
-    console.log('[LLMApiLogs] loadLLMApiLogs result:', { 
-      logsCount: result?.logs?.length, 
-      total: result?.total,
-      page: result?.page,
-      pageSize: result?.pageSize,
-      totalPages: result?.totalPages 
-    });
     
     if (result) {
       state.llmapiLogs = result.logs || [];
@@ -77,6 +71,8 @@ export async function handleClearLLMApiLogs() {
     // 重置选择状态
     state.isLLMApiSelectMode = false;
     state.selectedLLMApiIds.clear();
+    // 清空完整日志缓存
+    fullLogCache.clear();
     renderLLMApiLogs();
   } catch (error) {
     console.error('[LLMApiLogs] Failed to clear logs:', error);
@@ -549,11 +545,25 @@ function createLLMApiEntry(log, isExpanded, onToggle, isSelectMode = false, isSe
     </div>
   `;
 
-  // Toggle function - same as Fetch logs
-  const toggleExpand = () => {
+  // Toggle function - fetch full data on first expand
+  const toggleExpand = async () => {
     const isNowExpanded = entry.classList.toggle('expanded');
     if (onToggle) {
       onToggle(log.id, isNowExpanded);
+    }
+    
+    // 首次展开时获取完整数据（包含 responseBody）
+    if (isNowExpanded && !fullLogCache.has(log.id)) {
+      try {
+        const fullLog = await getLLMApiLogByIdInSW(log.id);
+        if (fullLog) {
+          fullLogCache.set(log.id, fullLog);
+          // 更新响应体显示
+          updateResponseBodyDisplay(entry, fullLog);
+        }
+      } catch (error) {
+        console.error('[LLMApiLogs] Failed to load full log:', error);
+      }
     }
   };
 
@@ -603,6 +613,54 @@ function createLLMApiEntry(log, isExpanded, onToggle, isSelectMode = false, isSe
   }
 
   return entry;
+}
+
+/**
+ * 更新日志详情中的响应体显示
+ * @param {HTMLElement} entry - 日志条目元素
+ * @param {object} fullLog - 完整的日志数据
+ */
+function updateResponseBodyDisplay(entry, fullLog) {
+  const detailsEl = entry.querySelector('.log-details');
+  if (!detailsEl) return;
+  
+  // 检查是否已有响应体 section
+  let responseSection = detailsEl.querySelector('.response-body-section');
+  
+  if (fullLog.responseBody) {
+    if (!responseSection) {
+      // 创建新的响应体 section
+      responseSection = document.createElement('div');
+      responseSection.className = 'detail-section response-body-section';
+      responseSection.innerHTML = `
+        <h4>响应体 (Response Body)</h4>
+        <pre class="json-highlight">${formatJsonWithHighlight(fullLog.responseBody)}</pre>
+      `;
+      detailsEl.appendChild(responseSection);
+    } else {
+      // 更新现有的响应体内容
+      responseSection.innerHTML = `
+        <h4>响应体 (Response Body)</h4>
+        <pre class="json-highlight">${formatJsonWithHighlight(fullLog.responseBody)}</pre>
+      `;
+    }
+  }
+  
+  // 同时更新请求体（如果之前没有）
+  if (fullLog.requestBody && !detailsEl.querySelector('.request-body-section')) {
+    const requestSection = document.createElement('div');
+    requestSection.className = 'detail-section request-body-section';
+    requestSection.innerHTML = `
+      <h4>请求参数 (Request Parameters)</h4>
+      <pre class="json-highlight">${formatJsonWithHighlight(fullLog.requestBody)}</pre>
+    `;
+    // 插入到响应体之前
+    if (responseSection) {
+      detailsEl.insertBefore(requestSection, responseSection);
+    } else {
+      detailsEl.appendChild(requestSection);
+    }
+  }
 }
 
 /**

@@ -131,6 +131,14 @@ export class SWTaskQueue {
   }
 
   /**
+   * Wait for storage restoration to complete
+   * Should be called before accessing tasks to ensure data is loaded
+   */
+  async waitForStorageRestore(): Promise<void> {
+    await this.storageRestorePromise;
+  }
+
+  /**
    * Restore tasks and config from IndexedDB on SW startup
    */
   private async restoreFromStorage(): Promise<void> {
@@ -243,7 +251,10 @@ export class SWTaskQueue {
     const combinedError = `${errorMessage} ${originalError}`.toLowerCase();
     
     // Exclude business failures - these should not be retried
+    // VideoGenerationFailedError indicates the API explicitly returned a failed status,
+    // even if the error message contains "429" it's a permanent failure not a network issue
     const isBusinessFailure = (
+      combinedError.includes('videogenerationfailederror') ||
       combinedError.includes('generation_failed') ||
       combinedError.includes('invalid_argument') ||
       combinedError.includes('prohibited') ||
@@ -258,6 +269,8 @@ export class SWTaskQueue {
     }
     
     // Check for network-related errors
+    // Note: 429/too many requests is only a network error if not a business failure
+    // (the check above already excluded business failures like VideoGenerationFailedError)
     return (
       combinedError.includes('failed to fetch') ||
       combinedError.includes('network') ||
@@ -489,8 +502,8 @@ export class SWTaskQueue {
 
     this.broadcastToClients({ type: 'TASK_QUEUE_INITIALIZED', success: true });
 
-    // Push all current tasks to clients for initial sync
-    this.syncTasksToClients();
+    // Note: No longer broadcasting all tasks here
+    // Clients should use paginated RPC to fetch tasks to avoid postMessage size limits
 
     // Resume processing tasks that have remoteId (video/character polling)
     // This handles the case where restoreFromStorage ran before config was available
@@ -898,17 +911,6 @@ export class SWTaskQueue {
    */
   stopChat(chatId: string): void {
     this.chatHandler.stop(chatId);
-  }
-
-  /**
-   * Sync all tasks to clients (for reconnection)
-   */
-  syncTasksToClients(): void {
-    const tasks = this.getAllTasks();
-    this.broadcastToClients({
-      type: 'TASK_ALL_RESPONSE',
-      tasks,
-    });
   }
 
   /**
@@ -1341,10 +1343,6 @@ export class SWTaskQueue {
     },
     'TASK_QUEUE_INITIALIZED': () => {
       this.channelManager?.sendQueueInitialized();
-    },
-    'TASK_ALL_RESPONSE': (m) => {
-      const msg = m as { tasks: SWTask[] };
-      this.channelManager?.sendAllTasks(msg.tasks);
     },
     'TASK_SUBMITTED': (m) => {
       const msg = m as { taskId: string };

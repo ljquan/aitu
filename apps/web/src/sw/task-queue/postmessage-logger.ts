@@ -78,6 +78,8 @@ const EXCLUDED_MESSAGE_TYPES = [
   'debug:log',
   'debug:llmLog',
   'debug:statusChanged',
+  'debug:enable',
+  'debug:disable',
   'debug:getStatus',
   'debug:getLogs',
   'debug:clearLogs',
@@ -90,6 +92,7 @@ const EXCLUDED_MESSAGE_TYPES = [
   'debug:getLLMApiLogs',
   'debug:clearLLMApiLogs',
   'debug:getCacheStats',
+  'debug:exportLogs',
   'debug:newCrashSnapshot',
   'console:log',
   'console:report',
@@ -137,7 +140,33 @@ function shouldLogMessage(messageType: string): boolean {
   if (!isDebugModeActive()) {
     return false;
   }
-  return !EXCLUDED_MESSAGE_TYPES.includes(messageType);
+  
+  // 过滤掉 unknown 类型的消息（通常是 postmessage-duplex 的内部响应）
+  if (messageType === 'unknown') {
+    return false;
+  }
+  
+  // 直接匹配排除列表
+  if (EXCLUDED_MESSAGE_TYPES.includes(messageType)) {
+    return false;
+  }
+  
+  // 处理 RPC 格式的消息: RPC:xxx 或 RPC:xxx:response 或 RPC:xxx:error
+  // 提取实际的方法名（去掉 RPC: 前缀和 :response/:error 后缀）
+  if (messageType.startsWith('RPC:')) {
+    let methodName = messageType.slice(4); // 去掉 "RPC:" 前缀
+    if (methodName.endsWith(':response')) {
+      methodName = methodName.slice(0, -9);
+    } else if (methodName.endsWith(':error')) {
+      methodName = methodName.slice(0, -6);
+    }
+    // 检查方法名是否在排除列表中
+    if (EXCLUDED_MESSAGE_TYPES.includes(methodName)) {
+      return false;
+    }
+  }
+  
+  return true;
 }
 
 /**
@@ -186,6 +215,11 @@ export function logReceivedMessage(
   }
 
   const clientInfo = getClientInfo(clientUrl);
+  
+  // 过滤掉调试面板客户端的消息
+  if (clientInfo.clientType === 'debug') {
+    return '';
+  }
   const logId = `pm-recv-${Date.now()}-${++logIdCounter}`;
   const entry: PostMessageLogEntry = {
     id: logId,
@@ -228,6 +262,11 @@ export function logSentMessage(
   }
 
   const clientInfo = getClientInfo(clientUrl);
+  
+  // 过滤掉发送给调试面板的消息
+  if (clientInfo.clientType === 'debug') {
+    return '';
+  }
   const logId = `pm-send-${Date.now()}-${++logIdCounter}`;
   const entry: PostMessageLogEntry = {
     id: logId,
@@ -240,6 +279,9 @@ export function logSentMessage(
     clientType: clientInfo.clientType as any,
   };
 
+  // 关联的请求条目 ID（用于广播更新后的请求）
+  let linkedRequestId: string | null = null;
+
   // 如果是响应类消息，关联请求并计算耗时
   if (isResponseMessage(messageType)) {
     const requestId = getRequestId(data);
@@ -249,13 +291,17 @@ export function logSentMessage(
         entry.duration = Date.now() - pending.startTime;
         pending.entry.response = sanitizeData(data);
         pending.entry.duration = entry.duration;
+        linkedRequestId = pending.entry.id;
         pendingRequests.delete(requestId);
       }
     }
   }
 
   addLog(entry);
-  return logId;
+  
+  // 返回响应 logId 和关联的请求 logId（如果有）
+  // 格式: "responseId|requestId" 或 "responseId"
+  return linkedRequestId ? `${logId}|${linkedRequestId}` : logId;
 }
 
 /**
@@ -266,6 +312,36 @@ function addLog(entry: PostMessageLogEntry): void {
   if (logs.length > MAX_LOGS) {
     logs.pop();
   }
+}
+
+/**
+ * 更新请求日志的响应数据（不创建新的日志条目）
+ * 用于双工通讯场景，将响应合并到请求日志中显示
+ * @returns 更新后的请求日志 ID，如果找不到请求则返回空字符串
+ */
+export function updateRequestWithResponse(
+  requestId: string,
+  response: unknown,
+  duration: number,
+  error?: string
+): string {
+  if (!isDebugModeActive()) {
+    return '';
+  }
+
+  const pending = pendingRequests.get(requestId);
+  if (pending) {
+    pending.entry.response = sanitizeData(response);
+    pending.entry.duration = duration;
+    if (error) {
+      pending.entry.error = error;
+    }
+    const logId = pending.entry.id;
+    pendingRequests.delete(requestId);
+    return logId;
+  }
+  
+  return '';
 }
 
 /**
@@ -288,6 +364,11 @@ export function clearLogs(): void {
  * 判断是否为请求类消息
  */
 function isRequestMessage(messageType: string): boolean {
+  // RPC 请求：以 RPC: 开头，但不以 :response 或 :error 结尾
+  if (messageType.startsWith('RPC:') && !messageType.endsWith(':response') && !messageType.endsWith(':error')) {
+    return true;
+  }
+  
   const requestPatterns = [
     'TASK_SUBMIT',
     'TASK_CANCEL',
@@ -308,6 +389,11 @@ function isRequestMessage(messageType: string): boolean {
  * 判断是否为响应类消息
  */
 function isResponseMessage(messageType: string): boolean {
+  // RPC 响应：以 :response 或 :error 结尾
+  if (messageType.endsWith(':response') || messageType.endsWith(':error')) {
+    return true;
+  }
+  
   const responsePatterns = [
     'TASK_QUEUE_INITIALIZED',
     'TASK_STATUS',
@@ -316,8 +402,6 @@ function isResponseMessage(messageType: string): boolean {
     'TASK_CREATED',
     'TASK_CANCELLED',
     'TASK_DELETED',
-    'TASK_ALL_RESPONSE',
-    'TASK_PAGINATED_RESPONSE',
     'WORKFLOW_STATUS',
     'WORKFLOW_STEP_STATUS',
     'WORKFLOW_COMPLETED',

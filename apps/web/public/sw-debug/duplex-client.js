@@ -16,6 +16,7 @@ const RPC_METHODS = {
   DEBUG_GET_POSTMESSAGE_LOGS: 'debug:getPostMessageLogs',
   DEBUG_CLEAR_POSTMESSAGE_LOGS: 'debug:clearPostMessageLogs',
   DEBUG_GET_LLM_API_LOGS: 'debug:getLLMApiLogs',
+  DEBUG_GET_LLM_API_LOG_BY_ID: 'debug:getLLMApiLogById',
   DEBUG_CLEAR_LLM_API_LOGS: 'debug:clearLLMApiLogs',
   DEBUG_DELETE_LLM_API_LOGS: 'debug:deleteLLMApiLogs',
   DEBUG_GET_CRASH_SNAPSHOTS: 'debug:getCrashSnapshots',
@@ -300,7 +301,6 @@ export async function clearPostMessageLogs() {
  * @returns {Promise<{logs: Array, total: number, page: number, pageSize: number, totalPages: number}>}
  */
 export async function getLLMApiLogs(page = 1, pageSize = 20, filter = {}) {
-  console.log('[DuplexClient] getLLMApiLogs calling RPC:', { page, pageSize, filter });
   return callRPC(RPC_METHODS.DEBUG_GET_LLM_API_LOGS, { page, pageSize, ...filter });
 }
 
@@ -319,6 +319,15 @@ export async function clearLLMApiLogs() {
  */
 export async function deleteLLMApiLogs(logIds) {
   return callRPC(RPC_METHODS.DEBUG_DELETE_LLM_API_LOGS, { logIds });
+}
+
+/**
+ * 获取单条 LLM API 日志的完整数据
+ * @param {string} logId - 日志 ID
+ * @returns {Promise<object|null>}
+ */
+export async function getLLMApiLogById(logId) {
+  return callRPC(RPC_METHODS.DEBUG_GET_LLM_API_LOG_BY_ID, { logId });
 }
 
 /**

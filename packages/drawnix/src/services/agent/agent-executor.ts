@@ -46,8 +46,10 @@ function replacePlaceholdersWithUrls(
 /**
  * 构建结构化的用户消息
  * 使用 Markdown 格式清晰展示所有上下文信息
+ *
+ * @exported for use in workflow-converter.ts to build messages for SW ai_analyze
  */
-function buildStructuredUserMessage(context: AgentExecutionContext): string {
+export function buildStructuredUserMessage(context: AgentExecutionContext): string {
   const parts: string[] = [];
 
   // 1. 模型和参数信息

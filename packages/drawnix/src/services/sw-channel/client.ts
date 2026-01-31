@@ -12,7 +12,6 @@ import type {
   SWTask,
   TaskCreateParams,
   TaskCreateResult,
-  TaskListResult,
   TaskListPaginatedParams,
   TaskListPaginatedResult,
   TaskOperationParams,
@@ -169,6 +168,7 @@ export class SWChannelClient {
         await this.sendConnectRequest();
 
         // Step 3: 创建客户端通道（禁用内部日志）
+        // RPC 调用的日志在 SW 端通过 wrapRpcHandler 记录到 postmessage-logger
         this.channel = await ServiceWorkerChannel.createFromPage<SWMethods>({
           timeout: 30000,
           log: { log: () => {}, warn: () => {}, error: () => {} },
@@ -388,21 +388,7 @@ export class SWChannelClient {
   }
 
   /**
-   * 获取所有任务
-   */
-  async listTasks(): Promise<TaskListResult> {
-    this.ensureInitialized();
-    const response = await this.channel!.call('task:list', undefined);
-
-    if (response.ret !== ReturnCode.Success) {
-      return { success: false, tasks: [], total: 0 };
-    }
-    
-    return response.data || { success: false, tasks: [], total: 0 };
-  }
-
-  /**
-   * 分页获取任务
+   * 分页获取任务（避免 postMessage 消息大小限制）
    */
   async listTasksPaginated(params: TaskListPaginatedParams): Promise<TaskListPaginatedResult> {
     this.ensureInitialized();

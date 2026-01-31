@@ -226,15 +226,18 @@ function updateMessageTypeOptions() {
  * Render postmessage logs
  */
 function renderPostmessageLogs() {
-  const directionFilter = elements.filterMessageDirection?.value || '';
+  const sourceFilter = elements.filterMessageSource?.value || '';
   const typeSelectFilter = elements.filterMessageTypeSelect?.value || '';
   const timeRangeFilter = elements.filterPmTimeRange?.value || '';
   const typeFilter = (elements.filterMessageType?.value || '').toLowerCase();
 
   let filteredLogs = state.postmessageLogs;
 
-  if (directionFilter) {
-    filteredLogs = filteredLogs.filter(l => l.direction === directionFilter);
+  // 按来源过滤（从 SW 角度：receive = 应用页面发送, send = SW 发送）
+  if (sourceFilter === 'main') {
+    filteredLogs = filteredLogs.filter(l => l.direction === 'receive');
+  } else if (sourceFilter === 'sw') {
+    filteredLogs = filteredLogs.filter(l => l.direction === 'send');
   }
 
   // 下拉选择器过滤（精确匹配）
@@ -284,25 +287,29 @@ function renderPostmessageLogs() {
  * Update postmessage log count indicator
  */
 function updatePostmessageCount() {
-  const sendCount = state.postmessageLogs.filter(l => l.direction === 'send').length;
-  const receiveCount = state.postmessageLogs.filter(l => l.direction === 'receive').length;
+  // 从 SW 角度：receive = 应用页面发送，send = SW 发送
+  const mainCount = state.postmessageLogs.filter(l => l.direction === 'receive').length;
+  const swCount = state.postmessageLogs.filter(l => l.direction === 'send').length;
 
   if (state.postmessageLogs.length > 0) {
-    elements.postmessageCountEl.innerHTML = `(<span style="color:var(--primary-color)">${sendCount}→</span> <span style="color:var(--success-color)">←${receiveCount}</span>)`;
+    elements.postmessageCountEl.innerHTML = `(<span style="color:var(--success-color)">应用${mainCount}</span> <span style="color:var(--primary-color)">SW${swCount}</span>)`;
   } else {
     elements.postmessageCountEl.textContent = '(0)';
   }
 }
 
 /**
- * Add a postmessage log entry
+ * Add or update a postmessage log entry
  * @param {object} entry
  */
 function addPostmessageLog(entry) {
   // In analysis mode, save to liveLogs buffer instead of display state
   if (state.isAnalysisMode) {
-    // Check for duplicates in liveLogs
-    if (state.liveLogs.postmessageLogs.some(l => l.id === entry.id)) {
+    // Check for existing entry to update (when response is linked to request)
+    const existingIndex = state.liveLogs.postmessageLogs.findIndex(l => l.id === entry.id);
+    if (existingIndex !== -1) {
+      // Update existing entry (merge response data)
+      state.liveLogs.postmessageLogs[existingIndex] = { ...state.liveLogs.postmessageLogs[existingIndex], ...entry };
       return;
     }
     state.liveLogs.postmessageLogs.unshift(entry);
@@ -319,8 +326,16 @@ function addPostmessageLog(entry) {
     return;
   }
 
-  // Check for duplicates
-  if (state.postmessageLogs.some(l => l.id === entry.id)) {
+  // Check for existing entry to update (when response is linked to request)
+  const existingIndex = state.postmessageLogs.findIndex(l => l.id === entry.id);
+  if (existingIndex !== -1) {
+    // Update existing entry (merge response data)
+    const wasExpanded = state.expandedPmLogs?.has(entry.id);
+    state.postmessageLogs[existingIndex] = { ...state.postmessageLogs[existingIndex], ...entry };
+    // Re-render to show updated data
+    if (state.activeTab === 'postmessage') {
+      renderPostmessageLogs();
+    }
     return;
   }
 
@@ -399,14 +414,17 @@ function handleClearPostmessageLogs() {
  * Get filtered postmessage logs based on current filters
  */
 function getFilteredPostmessageLogs() {
-  const directionFilter = elements.filterMessageDirection?.value || '';
+  const sourceFilter = elements.filterMessageSource?.value || '';
   const typeSelectFilter = elements.filterMessageTypeSelect?.value || '';
   const typeFilter = (elements.filterMessageType?.value || '').toLowerCase();
 
   let filteredLogs = state.postmessageLogs;
 
-  if (directionFilter) {
-    filteredLogs = filteredLogs.filter(l => l.direction === directionFilter);
+  // 按来源过滤
+  if (sourceFilter === 'main') {
+    filteredLogs = filteredLogs.filter(l => l.direction === 'receive');
+  } else if (sourceFilter === 'sw') {
+    filteredLogs = filteredLogs.filter(l => l.direction === 'send');
   }
 
   if (typeSelectFilter) {
@@ -436,12 +454,13 @@ async function handleCopyPostmessageLogs() {
   // Format logs as text
   const logText = filteredLogs.map(log => {
     const time = new Date(log.timestamp).toLocaleTimeString('zh-CN', { hour12: false });
-    const direction = log.direction === 'send' ? '→ SW' : '← 主线程';
+    // 从 SW 角度：receive = 应用页面发送，send = SW 发送
+    const source = log.direction === 'receive' ? '应用页面' : 'SW';
     const type = log.messageType || 'unknown';
     const data = log.data ? JSON.stringify(log.data, null, 2) : '';
     const response = log.response !== undefined ? `\n  响应: ${JSON.stringify(log.response, null, 2)}` : '';
     const error = log.error ? `\n  错误: ${log.error}` : '';
-    return `${time} [${direction}] ${type}\n  数据: ${data}${response}${error}`;
+    return `${time} [${source}] ${type}\n  数据: ${data}${response}${error}`;
   }).join('\n\n');
 
   try {
@@ -729,7 +748,7 @@ function setupEventListeners() {
 
   // PostMessage log event listeners
   elements.togglePmPauseBtn?.addEventListener('click', togglePmPause);
-  elements.filterMessageDirection?.addEventListener('change', renderPostmessageLogs);
+  elements.filterMessageSource?.addEventListener('change', renderPostmessageLogs);
   elements.filterMessageTypeSelect?.addEventListener('change', renderPostmessageLogs);
   elements.filterPmTimeRange?.addEventListener('change', renderPostmessageLogs);
   elements.filterMessageType?.addEventListener('input', renderPostmessageLogs);
@@ -930,6 +949,17 @@ function setupMessageHandlers() {
         addOrUpdateLiveLog('postmessageLogs', data.entry);
       } else {
         addPostmessageLog(data.entry);
+      }
+    },
+    'SW_DEBUG_POSTMESSAGE_LOG_BATCH': (data) => {
+      // 处理批量 PostMessage 日志
+      const entries = data.entries || [];
+      for (const entry of entries) {
+        if (state.isAnalysisMode) {
+          addOrUpdateLiveLog('postmessageLogs', entry);
+        } else {
+          addPostmessageLog(entry);
+        }
       }
     },
     'SW_DEBUG_POSTMESSAGE_LOGS': (data) => {

@@ -11,6 +11,11 @@
 
 import type { ParsedGenerationParams, GenerationType, SelectionInfo } from '../../utils/ai-input-parser';
 import { cleanLLMResponse } from '../../services/agent/tool-parser';
+import {
+  generateSystemPrompt,
+  generateReferenceImagesPrompt,
+  buildStructuredUserMessage,
+} from '../../services/agent';
 
 /**
  * 工作流步骤执行选项（批量参数等）
@@ -261,12 +266,13 @@ export function convertAgentFlowToWorkflow(
   const workflowId = generateWorkflowId();
 
   // 构建 Agent 执行上下文（与 AgentExecutionContext 类型一致）
+  // Agent flow 场景下 generationType 不会是 'text'
   const agentContext = {
     userInstruction,
     rawInput,
     model: {
       id: modelId,
-      type: generationType,
+      type: generationType as 'image' | 'video',
       isExplicit: isModelExplicit,
     },
     params: {
@@ -278,6 +284,30 @@ export function convertAgentFlowToWorkflow(
     finalPrompt: prompt,
   };
 
+  // 收集所有参考图片 URL
+  const allReferenceImages = [
+    ...(selection.images || []),
+    ...(selection.graphics || []),
+  ];
+
+  // 构建系统提示词（在应用层构建，传递给 SW）
+  let systemPrompt = generateSystemPrompt();
+  if (allReferenceImages.length > 0) {
+    systemPrompt += generateReferenceImagesPrompt(
+      allReferenceImages.length,
+      selection.imageDimensions
+    );
+  }
+
+  // 构建用户消息
+  const userMessage = buildStructuredUserMessage(agentContext);
+
+  // 构建 messages 数组（传递给 SW 的 ai_analyze）
+  const messages = [
+    { role: 'system' as const, content: systemPrompt },
+    { role: 'user' as const, content: userMessage },
+  ];
+
   // Agent 流程初始只有一个 ai_analyze 步骤
   // 后续步骤会在 AI 分析后动态添加
   const steps: WorkflowStep[] = [
@@ -285,8 +315,10 @@ export function convertAgentFlowToWorkflow(
       id: `${workflowId}-step-analyze`,
       mcp: 'ai_analyze',
       args: {
-        context: agentContext,
-        textModel: modelId,
+        // 传递预构建的 messages（SW 直接使用，不重复生成提示词）
+        messages,
+        // 传递参考图片 URL（用于占位符替换）
+        referenceImages: allReferenceImages.length > 0 ? allReferenceImages : undefined,
       },
       options: {
         mode: 'async',

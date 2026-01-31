@@ -83,6 +83,10 @@ const channelManager = initChannelManager(sw);
 channelManager.setTaskQueue(taskQueue);
 taskQueue.setChannelManager(channelManager);
 
+// 设置调试客户端数量变化回调
+// 当调试页面连接时自动启用调试模式，当所有调试页面关闭时自动禁用
+channelManager.setDebugClientCountChangedCallback(handleDebugClientCountChanged);
+
 // ============================================================================
 // SW Console Log Capture (for debug mode)
 // Intercepts SW internal console.log/info calls and forwards to debug panel
@@ -701,8 +705,10 @@ function clearConsoleLogs(): void {
   consoleLogs.length = 0;
 }
 
-// 启用调试模式
+// 启用调试模式（当调试页面连接时自动启用）
 async function enableDebugMode(): Promise<void> {
+  if (debugModeEnabled) return; // 避免重复启用
+  
   debugModeEnabled = true;
   
   // Sync debug mode to debugFetch and message sender
@@ -710,11 +716,13 @@ async function enableDebugMode(): Promise<void> {
   setDebugFetchEnabled(true);
   setMessageSenderDebugMode(true);
   
-  originalSWConsole.log('Service Worker: Debug mode enabled via RPC');
+  originalSWConsole.log('Service Worker: Debug mode enabled (debug page connected)');
 }
 
-// 禁用调试模式
+// 禁用调试模式（当所有调试页面关闭时自动禁用）
 async function disableDebugMode(): Promise<void> {
+  if (!debugModeEnabled) return; // 避免重复禁用
+  
   debugModeEnabled = false;
   
   // Sync debug mode to debugFetch and message sender
@@ -727,7 +735,17 @@ async function disableDebugMode(): Promise<void> {
   debugLogs.length = 0;
   await clearAllConsoleLogs().catch(() => {});
 
-  originalSWConsole.log('Service Worker: Debug mode disabled via RPC, logs cleared');
+  originalSWConsole.log('Service Worker: Debug mode disabled (no debug pages)');
+}
+
+// 处理调试客户端数量变化
+// 由 channelManager 在调试页面连接/断开时调用
+function handleDebugClientCountChanged(count: number): void {
+  if (count > 0) {
+    enableDebugMode();
+  } else {
+    disableDebugMode();
+  }
 }
 
 // 检查URL是否需要CORS处理
@@ -1308,12 +1326,16 @@ sw.addEventListener('message', (event: ExtendableMessageEvent) => {
   // Note: postmessage-duplex messages (with __key__ or requestId) are automatically
   // handled by the channel's internal message listener after channel creation.
   // We don't need to manually route them here.
+  
+  // 跳过 postmessage-duplex 的消息，它们会在 wrapRpcHandler 中被记录为 RPC:xxx 格式
+  // postmessage-duplex 消息特征：有 cmdname 字段（RPC 请求）或 requestId+ret 字段（RPC 响应）
+  const isDuplexMessage = event.data?.cmdname || (event.data?.requestId && event.data?.ret !== undefined);
 
   // Log received message only if debug mode is enabled
   // This ensures postMessage logging doesn't affect performance when debug mode is off
   let logId = '';
-  // Skip logging for internal messages (e.g., broadcast logs from ourselves)
-  if (isPostMessageLoggerDebugMode()) {
+  // Skip logging for internal messages and postmessage-duplex messages
+  if (isPostMessageLoggerDebugMode() && !isDuplexMessage) {
     logId = logReceivedMessage(
       messageType,
       event.data,

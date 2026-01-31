@@ -61,12 +61,26 @@ export function useSWTaskQueue(
 
   const syncTasks = useCallback(async () => {
     if (!isSupported) return [];
-    const result = await swChannelClient.listTasks();
-    const tasks = result.tasks || [];
-    if (tasks.length > 0 && onTasksSyncRef.current) {
-      onTasksSyncRef.current(tasks);
+    
+    // Use paginated API to avoid postMessage size limits (1MB max)
+    const allTasks: SWTask[] = [];
+    const pageSize = 50;
+    let offset = 0;
+    let hasMore = true;
+    
+    while (hasMore) {
+      const result = await swChannelClient.listTasksPaginated({ offset, limit: pageSize });
+      if (!result.success) break;
+      
+      allTasks.push(...(result.tasks || []));
+      hasMore = result.hasMore;
+      offset += pageSize;
     }
-    return tasks;
+    
+    if (allTasks.length > 0 && onTasksSyncRef.current) {
+      onTasksSyncRef.current(allTasks);
+    }
+    return allTasks;
   }, [isSupported]);
 
   const initialize = useCallback(async (): Promise<boolean> => {
@@ -93,12 +107,23 @@ export function useSWTaskQueue(
       }
 
       // Sync tasks from SW (tasks are persisted in SW's IndexedDB)
-      const result = await swChannelClient.listTasks();
-      const tasks = result.tasks || [];
-      if (tasks.length > 0) {
-        if (onTasksSyncRef.current) {
-          onTasksSyncRef.current(tasks);
-        }
+      // Use paginated API to avoid postMessage size limits
+      const allTasks: SWTask[] = [];
+      const pageSize = 50;
+      let offset = 0;
+      let hasMore = true;
+      
+      while (hasMore) {
+        const result = await swChannelClient.listTasksPaginated({ offset, limit: pageSize });
+        if (!result.success) break;
+        
+        allTasks.push(...(result.tasks || []));
+        hasMore = result.hasMore;
+        offset += pageSize;
+      }
+      
+      if (allTasks.length > 0 && onTasksSyncRef.current) {
+        onTasksSyncRef.current(allTasks);
       }
 
       setInitialized(true);

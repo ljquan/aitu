@@ -1283,8 +1283,9 @@ button .icon-svg {
   font-weight: 500;
 }
 
-.pm-direction {
-  padding: 2px 5px;
+/* 消息来源标签 */
+.pm-source {
+  padding: 2px 8px;
   border-radius: 3px;
   font-size: 10px;
   font-weight: 600;
@@ -1292,21 +1293,16 @@ button .icon-svg {
   border: 1px solid;
 }
 
-.pm-direction.send {
-  background: var(--primary-light);
-  color: var(--primary-color);
-  border-color: var(--primary-color);
-}
-
-.pm-direction.receive {
+.pm-source.source-main {
   background: var(--success-light);
   color: var(--success-color);
   border-color: var(--success-color);
 }
 
-.pm-direction-icon {
-  font-size: 10px;
-  margin-right: 2px;
+.pm-source.source-sw {
+  background: var(--primary-light);
+  color: var(--primary-color);
+  border-color: var(--primary-color);
 }
 
 /* 客户端类型标签 */
@@ -2651,7 +2647,7 @@ body.analysis-mode .log-entry {
     order: 2;
   }
 
-  .pm-direction {
+  .pm-source {
     font-size: 9px;
     padding: 2px 5px;
     order: 3;

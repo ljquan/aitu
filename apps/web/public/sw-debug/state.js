@@ -127,7 +127,7 @@ export function cacheElements() {
     consoleCountEl: document.getElementById('consoleCount'),
     postmessageCountEl: document.getElementById('postmessageCount'),
     postmessageLogsContainer: document.getElementById('postmessageLogsContainer'),
-    filterMessageDirection: document.getElementById('filterMessageDirection'),
+    filterMessageSource: document.getElementById('filterMessageSource'),
     filterMessageTypeSelect: document.getElementById('filterMessageTypeSelect'),
     filterPmTimeRange: document.getElementById('filterPmTimeRange'),
     filterMessageType: document.getElementById('filterMessageType'),

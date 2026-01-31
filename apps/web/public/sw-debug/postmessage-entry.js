@@ -82,43 +82,30 @@ function getDataPreview(data) {
  */
 export function createPostMessageEntry(log, isExpanded = false, onToggle = null) {
   const entry = document.createElement('div');
-  const directionClass = log.direction === 'send' ? 'send' : 'receive';
   // 使用 log-entry 作为基础类，与 Fetch 日志统一
   entry.className = `log-entry pm-entry${isExpanded ? ' expanded' : ''}`;
   entry.dataset.id = log.id;
 
-  const directionIcon = log.direction === 'send' ? '→' : '←';
-  const directionLabel = log.direction === 'send' ? '发送' : '接收';
-  const directionTarget = log.direction === 'send' ? 'SW' : '主线程';
+  // 来源标签：从 SW 角度看，receive = 应用页面发送，send = SW 发送
+  const sourceLabel = log.direction === 'receive' ? '应用页面' : 'SW';
+  const sourceClass = log.direction === 'receive' ? 'source-main' : 'source-sw';
 
   const messageType = log.messageType || 'unknown';
   const dataPreview = getDataPreview(log.data);
-
-  // 构建客户端信息标签
-  let clientBadge = '';
-  if (log.clientType) {
-    const clientTypeLabel = getClientTypeLabel(log.clientType);
-    const clientTypeClass = getClientTypeClass(log.clientType);
-    clientBadge = `<span class="pm-client-badge ${clientTypeClass}">${clientTypeLabel}</span>`;
-  }
 
   entry.innerHTML = `
     <div class="log-header pm-header">
       <span class="log-toggle"><span class="arrow">▶</span></span>
       <span class="log-time pm-time">${formatTime(log.timestamp)}</span>
-      <span class="pm-direction ${directionClass}">
-        <span class="pm-direction-icon">${directionIcon}</span>${directionLabel}
-      </span>
-      ${clientBadge}
+      <span class="pm-source ${sourceClass}">${sourceLabel}</span>
       <span class="pm-type">${escapeHtml(messageType)}</span>
       <span class="log-url pm-preview">${dataPreview}</span>
     </div>
     <div class="log-details pm-details">
       <div class="detail-section">
         <h4>基本信息</h4>
-        <pre>方向: ${directionLabel} ${directionTarget}
+        <pre>来源: ${sourceLabel}
 消息类型: ${messageType}
-${log.clientType ? `客户端: ${getClientTypeLabel(log.clientType)}` : ''}
 ${log.clientUrl ? `页面: ${log.clientUrl}` : ''}
 ${log.clientId ? `ClientID: ${log.clientId}` : ''}
 时间: ${new Date(log.timestamp).toLocaleString('zh-CN')}</pre>

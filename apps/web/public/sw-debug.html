@@ -244,12 +244,12 @@
               </label>
               <div class="export-section-items">
                 <label class="export-checkbox">
-                  <input type="checkbox" name="postmessage" value="send">
-                  <span>发送 → SW</span>
+                  <input type="checkbox" name="postmessage" value="receive">
+                  <span>应用页面</span>
                 </label>
                 <label class="export-checkbox">
-                  <input type="checkbox" name="postmessage" value="receive">
-                  <span>接收 ← SW</span>
+                  <input type="checkbox" name="postmessage" value="send">
+                  <span>SW</span>
                 </label>
               </div>
             </div>
@@ -596,10 +596,10 @@
               <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
               实时
             </button>
-            <select id="filterMessageDirection">
-              <option value="">全部方向</option>
-              <option value="send">发送 → SW</option>
-              <option value="receive">接收 ← SW</option>
+            <select id="filterMessageSource">
+              <option value="">全部来源</option>
+              <option value="main">应用页面</option>
+              <option value="sw">SW</option>
             </select>
             <select id="filterMessageTypeSelect">
               <option value="">全部消息类型</option>

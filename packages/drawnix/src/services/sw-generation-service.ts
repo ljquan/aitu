@@ -207,11 +207,24 @@ class SWGenerationService {
   }
 
   /**
-   * 获取所有任务
+   * 获取所有任务（分页获取，避免 postMessage 大小限制）
    */
   async getAllTasks(): Promise<SWTask[]> {
-    const result = await swChannelClient.listTasks();
-    return result.tasks || [];
+    const allTasks: SWTask[] = [];
+    const pageSize = 50;
+    let offset = 0;
+    let hasMore = true;
+    
+    while (hasMore) {
+      const result = await swChannelClient.listTasksPaginated({ offset, limit: pageSize });
+      if (!result.success) break;
+      
+      allTasks.push(...(result.tasks || []));
+      hasMore = result.hasMore;
+      offset += pageSize;
+    }
+    
+    return allTasks;
   }
 
   // ============================================================================

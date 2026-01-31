@@ -126,6 +126,7 @@ class SWTaskQueueService {
           apiKey: settings.apiKey,
           baseUrl: settings.baseUrl,
           modelName: settings.imageModelName,
+          textModelName: settings.textModelName,
         },
         videoConfig: {
           baseUrl: settings.baseUrl || 'https://api.tu-zi.com',

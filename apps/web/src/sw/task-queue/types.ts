@@ -217,6 +217,8 @@ export interface GeminiConfig {
   apiKey: string;
   baseUrl: string;
   modelName?: string;
+  /** Text model for ai_analyze (e.g., 'deepseek-v3.2', 'gemini-2.0-flash-exp') */
+  textModelName?: string;
   maxRetries?: number;
   retryDelay?: number;
   timeout?: number;
@@ -312,14 +314,6 @@ export interface TaskDeletedMessage {
 }
 
 /**
- * Response to TASK_GET_ALL
- */
-export interface TaskAllResponseMessage {
-  type: 'TASK_ALL_RESPONSE';
-  tasks: SWTask[];
-}
-
-/**
  * Chat stream chunk
  */
 export interface ChatChunkMessage {
@@ -381,7 +375,6 @@ export type SWToMainMessage =
   | TaskCreatedMessage
   | TaskCancelledMessage
   | TaskDeletedMessage
-  | TaskAllResponseMessage
   | ChatChunkMessage
   | ChatDoneMessage
   | ChatErrorMessage

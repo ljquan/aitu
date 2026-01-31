@@ -1287,6 +1287,47 @@ pnpm run build:web       # 重新构建
 - 只修改 `version.json` 不会触发 SW 更新，必须修改 `sw.js` 内容
 - 版本号通过 `__APP_VERSION__` 变量注入到 `sw.js` 中
 
+### SW RPC Handler 必须等待数据恢复完成
+
+**场景**: Service Worker 中的 RPC handler 需要访问从 IndexedDB 恢复的数据（如任务列表）
+
+❌ **错误示例**:
+```typescript
+// 错误：RPC handler 直接访问数据，可能在 IndexedDB 恢复完成前被调用
+private handleTaskListPaginated(data: { page: number; pageSize: number }) {
+  const allTasks = this.taskQueue?.getAllTasks() || [];
+  // 如果 restoreFromStorage() 还在执行，allTasks 可能是空的或不完整的
+  return { tasks: allTasks.slice(start, end), total: allTasks.length };
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：先等待 IndexedDB 数据恢复完成
+private async handleTaskListPaginated(data: { page: number; pageSize: number }) {
+  // 确保 IndexedDB 数据已恢复
+  await this.taskQueue?.waitForStorageRestore();
+  
+  const allTasks = this.taskQueue?.getAllTasks() || [];
+  return { tasks: allTasks.slice(start, end), total: allTasks.length };
+}
+
+// SWTaskQueue 中提供等待方法
+class SWTaskQueue {
+  private storageRestorePromise: Promise<void> | null = null;
+  
+  async waitForStorageRestore(): Promise<void> {
+    if (this.storageRestorePromise) {
+      await this.storageRestorePromise;
+    }
+  }
+}
+```
+
+**现象**: 页面刷新后，任务列表显示不完整（如 67 条任务只显示 2 条），因为 RPC 响应在数据恢复完成前就返回了。
+
+**原因**: Service Worker 启动后会异步从 IndexedDB 恢复数据（`restoreFromStorage()`），这个过程可能需要一定时间。如果 RPC handler 在恢复完成前被调用，访问的数据是不完整的。需要通过 Promise 机制确保数据恢复完成后再返回响应。
+
 ### PostMessage 日志由调试模式完全控制
 
 **场景**: Service Worker 与主线程之间的通讯日志记录

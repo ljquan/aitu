@@ -16,6 +16,7 @@ import {
   getPostMessageLogs,
   clearPostMessageLogs as clearPostMessageLogsRPC,
   getLLMApiLogs,
+  getLLMApiLogById as getLLMApiLogByIdRPC,
   clearLLMApiLogs as clearLLMApiLogsRPC,
   deleteLLMApiLogs as deleteLLMApiLogsRPC,
   getCrashSnapshots,
@@ -430,15 +431,8 @@ export async function clearPostMessageLogs() {
 export async function loadLLMApiLogs(page = 1, pageSize = 20, filter = {}) {
   await ensureDuplexInitialized();
   
-  console.log('[SW Communication] loadLLMApiLogs:', { page, pageSize, filter });
-  
   try {
     const result = await getLLMApiLogs(page, pageSize, filter);
-    console.log('[SW Communication] loadLLMApiLogs result:', { 
-      logsCount: result?.logs?.length,
-      page: result?.page,
-      pageSize: result?.pageSize 
-    });
     return result;
   } catch (error) {
     console.error('[SW Communication] Failed to load LLM API logs:', error);
@@ -478,6 +472,23 @@ export async function deleteLLMApiLogsInSW(logIds) {
   } catch (error) {
     console.error('[SW Communication] Failed to delete LLM API logs:', error);
     return { success: false, deletedCount: 0 };
+  }
+}
+
+/**
+ * Get a single LLM API log by ID (full data including responseBody)
+ * @param {string} logId - 日志 ID
+ * @returns {Promise<object|null>}
+ */
+export async function getLLMApiLogByIdInSW(logId) {
+  await ensureDuplexInitialized();
+  
+  try {
+    const result = await getLLMApiLogByIdRPC(logId);
+    return result?.log || null;
+  } catch (error) {
+    console.error('[SW Communication] Failed to get LLM API log by ID:', error);
+    return null;
   }
 }
 

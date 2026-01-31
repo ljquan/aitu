@@ -20,6 +20,12 @@ import {
   resendPendingToolRequests,
 } from './workflow-handler';
 import type { Workflow, MainThreadToolResponseMessage } from './workflow-types';
+import {
+  isPostMessageLoggerDebugMode,
+  logReceivedMessage,
+  updateRequestWithResponse,
+  getAllLogs as getAllPostMessageLogs,
+} from './postmessage-logger';
 
 // ============================================================================
 // RPC 方法名常量
@@ -39,7 +45,6 @@ export const RPC_METHODS = {
   
   // 任务查询
   TASK_GET: 'task:get',
-  TASK_LIST: 'task:list',
   TASK_LIST_PAGINATED: 'task:listPaginated',
   
   // Chat
@@ -77,6 +82,7 @@ export const RPC_METHODS = {
   DEBUG_GET_CRASH_SNAPSHOTS: 'debug:getCrashSnapshots',
   DEBUG_CLEAR_CRASH_SNAPSHOTS: 'debug:clearCrashSnapshots',
   DEBUG_GET_LLM_API_LOGS: 'debug:getLLMApiLogs',
+  DEBUG_GET_LLM_API_LOG_BY_ID: 'debug:getLLMApiLogById',
   DEBUG_CLEAR_LLM_API_LOGS: 'debug:clearLLMApiLogs',
   DEBUG_DELETE_LLM_API_LOGS: 'debug:deleteLLMApiLogs',
   DEBUG_GET_CACHE_ENTRIES: 'debug:getCacheEntries',
@@ -108,8 +114,6 @@ export const SW_EVENTS = {
   TASK_DELETED: 'task:deleted',
   TASK_REJECTED: 'task:rejected',
   TASK_SUBMITTED: 'task:submitted',
-  TASK_ALL_RESPONSE: 'task:allResponse',
-  TASK_PAGINATED_RESPONSE: 'task:paginatedResponse',
   QUEUE_INITIALIZED: 'queue:initialized',
   // Chat events
   CHAT_CHUNK: 'chat:chunk',
@@ -153,6 +157,7 @@ interface ClientChannel {
   channel: ServiceWorkerChannel;
   clientId: string;
   createdAt: number;
+  isDebugClient: boolean;  // 是否是调试页面客户端
 }
 
 interface TaskCreateParams {
@@ -239,6 +244,9 @@ export class SWChannelManager {
   private taskChannels: Map<string, ClientChannel> = new Map();
   private chatChannels: Map<string, ClientChannel> = new Map();
 
+  // 调试客户端状态变化回调
+  private onDebugClientCountChanged: ((count: number) => void) | null = null;
+
   private constructor(sw: ServiceWorkerGlobalScope) {
     this.sw = sw;
     
@@ -250,6 +258,52 @@ export class SWChannelManager {
     setInterval(() => {
       this.cleanupDisconnectedClients().catch(() => {});
     }, 60000);
+  }
+
+  /**
+   * 设置调试客户端数量变化回调
+   * 用于自动启用/禁用调试模式
+   */
+  setDebugClientCountChangedCallback(callback: (count: number) => void): void {
+    this.onDebugClientCountChanged = callback;
+  }
+
+  /**
+   * 获取当前调试客户端数量
+   */
+  getDebugClientCount(): number {
+    let count = 0;
+    for (const client of this.channels.values()) {
+      if (client.isDebugClient) {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  /**
+   * 检测客户端是否是调试页面
+   */
+  private async isDebugClient(clientId: string): Promise<boolean> {
+    try {
+      const client = await this.sw.clients.get(clientId);
+      if (client && client.url) {
+        return client.url.includes('sw-debug');
+      }
+    } catch {
+      // 静默忽略错误
+    }
+    return false;
+  }
+
+  /**
+   * 更新调试客户端状态并触发回调
+   */
+  private notifyDebugClientCountChanged(): void {
+    if (this.onDebugClientCountChanged) {
+      const count = this.getDebugClientCount();
+      this.onDebugClientCountChanged(count);
+    }
   }
 
   // ============================================================================
@@ -301,7 +355,7 @@ export class SWChannelManager {
     if (!clientChannel) {
       // 使用 createFromWorker 创建通道，禁用内部日志
       // 注意：禁用 error 日志以避免 fire-and-forget 广播的超时错误噪音
-      // 这些超时是预期行为（某些客户端没有处理器）
+      // RPC 调用的日志通过 wrapRpcHandler 记录到 postmessage-logger
       const channel = ServiceWorkerChannel.createFromWorker(clientId, {
         timeout: 30000,
         subscribeMap: this.createSubscribeMap(clientId),
@@ -312,13 +366,30 @@ export class SWChannelManager {
         channel,
         clientId,
         createdAt: Date.now(),
+        isDebugClient: false,  // 初始设为 false，异步检测后更新
       };
       
       this.channels.set(clientId, clientChannel);
       console.log(`[SWChannelManager] New client connected: ${clientId.substring(0, 8)}..., total: ${this.channels.size}`);
+      
+      // 异步检测是否是调试客户端
+      this.checkAndUpdateDebugClient(clientId);
     }
     
     return clientChannel.channel;
+  }
+
+  /**
+   * 异步检测并更新调试客户端状态
+   */
+  private async checkAndUpdateDebugClient(clientId: string): Promise<void> {
+    const isDebug = await this.isDebugClient(clientId);
+    const clientChannel = this.channels.get(clientId);
+    if (clientChannel && isDebug) {
+      clientChannel.isDebugClient = true;
+      console.log(`[SWChannelManager] Debug client detected: ${clientId.substring(0, 8)}...`);
+      this.notifyDebugClientCountChanged();
+    }
   }
 
   /**
@@ -348,109 +419,172 @@ export class SWChannelManager {
     return rawData as T;
   }
 
+  /**
+   * 广播 PostMessage 日志到调试面板
+   */
+  private broadcastPostMessageLog(logId: string): void {
+    if (!logId) return;
+    
+    const logs = getAllPostMessageLogs();
+    const entry = logs.find((l) => l.id === logId);
+    if (entry) {
+      this.sendPostMessageLog(entry as unknown as Record<string, unknown>);
+    }
+  }
+
+  /**
+   * 检查客户端是否是调试面板
+   */
+  private isDebugClientById(clientId: string): boolean {
+    const clientChannel = this.channels.get(clientId);
+    return clientChannel?.isDebugClient ?? false;
+  }
+
+  /**
+   * 包装 RPC 处理器，添加日志记录
+   * 将 postmessage-duplex 的 RPC 调用记录到 postmessage-logger
+   */
+  private wrapRpcHandler<T, R>(
+    methodName: string,
+    clientId: string,
+    handler: (data: T) => Promise<R> | R
+  ): (rawData: any) => Promise<R> {
+    return async (rawData: any) => {
+      const data = this.unwrapRpcData<T>(rawData);
+      const startTime = Date.now();
+      const requestId = rawData?.requestId;
+      
+      // 跳过调试面板客户端的日志记录
+      const shouldLog = isPostMessageLoggerDebugMode() && !this.isDebugClientById(clientId);
+      
+      // 记录收到的 RPC 请求并广播
+      if (shouldLog) {
+        const logId = logReceivedMessage(
+          `RPC:${methodName}`,
+          { params: data, requestId },
+          clientId
+        );
+        this.broadcastPostMessageLog(logId);
+      }
+      
+      try {
+        const result = await handler(data);
+        
+        // 更新请求日志的响应数据（不创建新的日志条目）
+        if (shouldLog && requestId) {
+          const logId = updateRequestWithResponse(
+            requestId,
+            { result },
+            Date.now() - startTime
+          );
+          // 广播更新后的请求日志
+          if (logId) {
+            this.broadcastPostMessageLog(logId);
+          }
+        }
+        
+        return result;
+      } catch (error) {
+        // 更新请求日志的错误信息
+        if (shouldLog && requestId) {
+          const logId = updateRequestWithResponse(
+            requestId,
+            null,
+            Date.now() - startTime,
+            String(error)
+          );
+          // 广播更新后的请求日志
+          if (logId) {
+            this.broadcastPostMessageLog(logId);
+          }
+        }
+        throw error;
+      }
+    };
+  }
+
   private createSubscribeMap(clientId: string): Record<string, (data: any) => any> {
     return {
       // 初始化
-      [RPC_METHODS.INIT]: async (rawData: any) => {
-        const data = this.unwrapRpcData<{ geminiConfig: GeminiConfig; videoConfig: VideoAPIConfig }>(rawData);
-        return this.handleInit(data);
-      },
+      [RPC_METHODS.INIT]: this.wrapRpcHandler<{ geminiConfig: GeminiConfig; videoConfig: VideoAPIConfig }, any>(
+        RPC_METHODS.INIT, clientId, (data) => this.handleInit(data)
+      ),
       
-      [RPC_METHODS.UPDATE_CONFIG]: async (rawData: any) => {
-        const data = this.unwrapRpcData<Partial<{ geminiConfig: Partial<GeminiConfig>; videoConfig: Partial<VideoAPIConfig> }>>(rawData);
-        return this.handleUpdateConfig(data);
-      },
+      [RPC_METHODS.UPDATE_CONFIG]: this.wrapRpcHandler<Partial<{ geminiConfig: Partial<GeminiConfig>; videoConfig: Partial<VideoAPIConfig> }>, any>(
+        RPC_METHODS.UPDATE_CONFIG, clientId, (data) => this.handleUpdateConfig(data)
+      ),
       
       // 任务操作
-      [RPC_METHODS.TASK_CREATE]: async (rawData: any) => {
-        const data = this.unwrapRpcData<TaskCreateParams>(rawData);
-        return this.handleTaskCreate(clientId, data);
-      },
+      [RPC_METHODS.TASK_CREATE]: this.wrapRpcHandler<TaskCreateParams, any>(
+        RPC_METHODS.TASK_CREATE, clientId, (data) => this.handleTaskCreate(clientId, data)
+      ),
       
-      [RPC_METHODS.TASK_CANCEL]: async (rawData: any) => {
-        const data = this.unwrapRpcData<{ taskId: string }>(rawData);
-        return this.handleTaskCancel(data.taskId);
-      },
+      [RPC_METHODS.TASK_CANCEL]: this.wrapRpcHandler<{ taskId: string }, any>(
+        RPC_METHODS.TASK_CANCEL, clientId, (data) => this.handleTaskCancel(data.taskId)
+      ),
       
-      [RPC_METHODS.TASK_RETRY]: async (rawData: any) => {
-        const data = this.unwrapRpcData<{ taskId: string }>(rawData);
-        return this.handleTaskRetry(data.taskId);
-      },
+      [RPC_METHODS.TASK_RETRY]: this.wrapRpcHandler<{ taskId: string }, any>(
+        RPC_METHODS.TASK_RETRY, clientId, (data) => this.handleTaskRetry(data.taskId)
+      ),
       
-      [RPC_METHODS.TASK_DELETE]: async (rawData: any) => {
-        const data = this.unwrapRpcData<{ taskId: string }>(rawData);
-        return this.handleTaskDelete(data.taskId);
-      },
+      [RPC_METHODS.TASK_DELETE]: this.wrapRpcHandler<{ taskId: string }, any>(
+        RPC_METHODS.TASK_DELETE, clientId, (data) => this.handleTaskDelete(data.taskId)
+      ),
       
-      [RPC_METHODS.TASK_MARK_INSERTED]: async (rawData: any) => {
-        const data = this.unwrapRpcData<{ taskId: string }>(rawData);
-        return this.handleTaskMarkInserted(data.taskId);
-      },
+      [RPC_METHODS.TASK_MARK_INSERTED]: this.wrapRpcHandler<{ taskId: string }, any>(
+        RPC_METHODS.TASK_MARK_INSERTED, clientId, (data) => this.handleTaskMarkInserted(data.taskId)
+      ),
       
       // 任务查询
-      [RPC_METHODS.TASK_GET]: async (rawData: any) => {
-        const data = this.unwrapRpcData<{ taskId: string }>(rawData);
-        return this.handleTaskGet(data.taskId);
-      },
+      [RPC_METHODS.TASK_GET]: this.wrapRpcHandler<{ taskId: string }, any>(
+        RPC_METHODS.TASK_GET, clientId, (data) => this.handleTaskGet(data.taskId)
+      ),
       
-      [RPC_METHODS.TASK_LIST]: async () => {
-        return this.handleTaskList();
-      },
-      
-      [RPC_METHODS.TASK_LIST_PAGINATED]: async (rawData: any) => {
-        const data = this.unwrapRpcData<{ offset?: number; limit?: number; type?: TaskType; status?: TaskStatus }>(rawData);
-        return this.handleTaskListPaginated(data);
-      },
+      [RPC_METHODS.TASK_LIST_PAGINATED]: this.wrapRpcHandler<{ offset?: number; limit?: number; type?: TaskType; status?: TaskStatus }, any>(
+        RPC_METHODS.TASK_LIST_PAGINATED, clientId, (data) => this.handleTaskListPaginated(data)
+      ),
       
       // Chat
-      [RPC_METHODS.CHAT_START]: async (rawData: any) => {
-        const data = this.unwrapRpcData<ChatStartParams>(rawData);
-        return this.handleChatStart(clientId, data);
-      },
+      [RPC_METHODS.CHAT_START]: this.wrapRpcHandler<ChatStartParams, any>(
+        RPC_METHODS.CHAT_START, clientId, (data) => this.handleChatStart(clientId, data)
+      ),
       
-      [RPC_METHODS.CHAT_STOP]: async (rawData: any) => {
-        const data = this.unwrapRpcData<{ chatId: string }>(rawData);
-        return this.handleChatStop(data.chatId);
-      },
+      [RPC_METHODS.CHAT_STOP]: this.wrapRpcHandler<{ chatId: string }, any>(
+        RPC_METHODS.CHAT_STOP, clientId, (data) => this.handleChatStop(data.chatId)
+      ),
       
-      [RPC_METHODS.CHAT_GET_CACHED]: async (rawData: any) => {
-        const data = this.unwrapRpcData<{ chatId: string }>(rawData);
-        return this.handleChatGetCached(data.chatId);
-      },
+      [RPC_METHODS.CHAT_GET_CACHED]: this.wrapRpcHandler<{ chatId: string }, any>(
+        RPC_METHODS.CHAT_GET_CACHED, clientId, (data) => this.handleChatGetCached(data.chatId)
+      ),
       
       // Workflow
-      [RPC_METHODS.WORKFLOW_SUBMIT]: async (rawData: any) => {
-        const data = this.unwrapRpcData<{ workflow: Workflow }>(rawData);
-        return this.handleWorkflowSubmit(clientId, data);
-      },
+      [RPC_METHODS.WORKFLOW_SUBMIT]: this.wrapRpcHandler<{ workflow: Workflow }, any>(
+        RPC_METHODS.WORKFLOW_SUBMIT, clientId, (data) => this.handleWorkflowSubmit(clientId, data)
+      ),
       
-      [RPC_METHODS.WORKFLOW_CANCEL]: async (rawData: any) => {
-        const data = this.unwrapRpcData<{ workflowId: string }>(rawData);
-        return this.handleWorkflowCancel(data.workflowId);
-      },
+      [RPC_METHODS.WORKFLOW_CANCEL]: this.wrapRpcHandler<{ workflowId: string }, any>(
+        RPC_METHODS.WORKFLOW_CANCEL, clientId, (data) => this.handleWorkflowCancel(data.workflowId)
+      ),
       
-      [RPC_METHODS.WORKFLOW_GET_STATUS]: async (rawData: any) => {
-        const data = this.unwrapRpcData<{ workflowId: string }>(rawData);
-        return this.handleWorkflowGetStatus(data.workflowId);
-      },
+      [RPC_METHODS.WORKFLOW_GET_STATUS]: this.wrapRpcHandler<{ workflowId: string }, any>(
+        RPC_METHODS.WORKFLOW_GET_STATUS, clientId, (data) => this.handleWorkflowGetStatus(data.workflowId)
+      ),
       
-      [RPC_METHODS.WORKFLOW_GET_ALL]: async () => {
-        return this.handleWorkflowGetAll();
-      },
+      [RPC_METHODS.WORKFLOW_GET_ALL]: this.wrapRpcHandler<undefined, any>(
+        RPC_METHODS.WORKFLOW_GET_ALL, clientId, () => this.handleWorkflowGetAll()
+      ),
       
       // Deprecated: Use sendToolRequest() which receives response directly
-      [RPC_METHODS.WORKFLOW_RESPOND_TOOL]: async (rawData: any) => {
-        const data = this.unwrapRpcData<MainThreadToolResponseMessage>(rawData);
-        return this.handleToolResponse(data);
-      },
+      [RPC_METHODS.WORKFLOW_RESPOND_TOOL]: this.wrapRpcHandler<MainThreadToolResponseMessage, any>(
+        RPC_METHODS.WORKFLOW_RESPOND_TOOL, clientId, (data) => this.handleToolResponse(data)
+      ),
       
       // Thumbnail (图片缩略图，由 SW 生成)
-      [RPC_METHODS.THUMBNAIL_GENERATE]: async (rawData: any) => {
-        const data = this.unwrapRpcData<ThumbnailGenerateParams>(rawData);
-        return this.handleThumbnailGenerate(data);
-      },
+      [RPC_METHODS.THUMBNAIL_GENERATE]: this.wrapRpcHandler<ThumbnailGenerateParams, any>(
+        RPC_METHODS.THUMBNAIL_GENERATE, clientId, (data) => this.handleThumbnailGenerate(data)
+      ),
       
-      // Crash monitoring
+      // Crash monitoring (不记录日志，避免死循环)
       [RPC_METHODS.CRASH_SNAPSHOT]: async (rawData: any) => {
         const data = this.unwrapRpcData<CrashSnapshotParams>(rawData);
         return this.handleCrashSnapshot(data);
@@ -461,7 +595,7 @@ export class SWChannelManager {
         return this.handleHeartbeat(data);
       },
       
-      // Console
+      // Console (不记录日志，避免死循环)
       [RPC_METHODS.CONSOLE_REPORT]: async (rawData: any) => {
         const data = this.unwrapRpcData<ConsoleReportParams>(rawData);
         return this.handleConsoleReport(data);
@@ -507,6 +641,10 @@ export class SWChannelManager {
       [RPC_METHODS.DEBUG_GET_LLM_API_LOGS]: async (rawData: any) => {
         const data = this.unwrapRpcData<{ page?: number; pageSize?: number; taskType?: string; status?: string }>(rawData);
         return this.handleDebugGetLLMApiLogs(data);
+      },
+      [RPC_METHODS.DEBUG_GET_LLM_API_LOG_BY_ID]: async (rawData: any) => {
+        const data = this.unwrapRpcData<{ logId: string }>(rawData);
+        return this.handleDebugGetLLMApiLogById(data?.logId);
       },
       [RPC_METHODS.DEBUG_CLEAR_LLM_API_LOGS]: async () => {
         return this.handleDebugClearLLMApiLogs();
@@ -693,6 +831,9 @@ export class SWChannelManager {
       return { success: false, error: 'Missing taskId' };
     }
 
+    // 确保存储恢复完成后再获取任务
+    await this.taskQueue?.waitForStorageRestore();
+
     const task = this.taskQueue?.getTask(taskId);
     if (!task) {
       return { success: false, error: 'Task not found' };
@@ -701,13 +842,11 @@ export class SWChannelManager {
     return { success: true, task };
   }
 
-  private async handleTaskList(): Promise<{ success: boolean; tasks: SWTask[]; total: number }> {
-    const tasks = this.taskQueue?.getAllTasks() || [];
-    return { success: true, tasks, total: tasks.length };
-  }
-
   private async handleTaskListPaginated(data: { offset?: number; limit?: number; type?: TaskType; status?: TaskStatus }): Promise<{ success: boolean; tasks: SWTask[]; total: number; offset: number; hasMore: boolean }> {
     const { offset = 0, limit = 20, type, status } = data || {};
+    
+    // 确保存储恢复完成后再获取任务
+    await this.taskQueue?.waitForStorageRestore();
     
     let tasks = this.taskQueue?.getAllTasks() || [];
     
@@ -1206,21 +1345,27 @@ export class SWChannelManager {
         taskType: params?.taskType,
         status: params?.status,
       };
-      console.log('[SWChannelManager] handleDebugGetLLMApiLogs params:', { page, pageSize, filter });
       
       const { getLLMApiLogsPaginated } = await import('./llm-api-logger');
       const result = await getLLMApiLogsPaginated(page, pageSize, filter);
-      console.log('[SWChannelManager] handleDebugGetLLMApiLogs result:', { 
-        logsCount: result.logs.length, 
-        total: result.total, 
-        page: result.page,
-        pageSize: result.pageSize,
-        totalPages: result.totalPages 
-      });
       return result;
     } catch (error: any) {
       console.error('[SWChannelManager] handleDebugGetLLMApiLogs error:', error);
       return { logs: [], total: 0, page: 1, pageSize: 20, totalPages: 0, error: String(error) };
+    }
+  }
+
+  private async handleDebugGetLLMApiLogById(logId?: string): Promise<{ log: unknown | null; error?: string }> {
+    try {
+      if (!logId) {
+        return { log: null, error: 'Missing logId' };
+      }
+      const { getLLMApiLogById } = await import('./llm-api-logger');
+      const log = await getLLMApiLogById(logId);
+      return { log };
+    } catch (error: any) {
+      console.error('[SWChannelManager] handleDebugGetLLMApiLogById error:', error);
+      return { log: null, error: String(error) };
     }
   }
 
@@ -1633,16 +1778,6 @@ export class SWChannelManager {
   }
 
   /**
-   * 发送全部任务列表（广播给所有客户端，用于初始化同步状态）
-   * 注意：这是初始化时的广播，不是查询响应。查询响应应使用 RPC。
-   */
-  sendAllTasks(tasks: SWTask[]): void {
-    this.broadcastToAll(SW_EVENTS.TASK_ALL_RESPONSE, { tasks });
-  }
-
-  // 注意：sendPaginatedTasks 已删除，客户端应使用 RPC 调用 TASK_LIST_PAGINATED
-
-  /**
    * 发送任务已提交事件（点对点）
    */
   sendTaskSubmitted(taskId: string): void {
@@ -2046,10 +2181,19 @@ export class SWChannelManager {
     const clients = await this.sw.clients.matchAll({ type: 'window' });
     const activeClientIds = new Set(clients.map(c => c.id));
 
-    for (const [clientId] of this.channels) {
+    let debugClientRemoved = false;
+    for (const [clientId, clientChannel] of this.channels) {
       if (!activeClientIds.has(clientId)) {
+        if (clientChannel.isDebugClient) {
+          debugClientRemoved = true;
+        }
         this.channels.delete(clientId);
       }
+    }
+
+    // 如果有调试客户端被移除，通知状态变化
+    if (debugClientRemoved) {
+      this.notifyDebugClientCountChanged();
     }
   }
 }

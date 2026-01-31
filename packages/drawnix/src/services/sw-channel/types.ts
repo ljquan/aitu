@@ -109,15 +109,6 @@ export interface TaskCreateResult {
 }
 
 /**
- * 任务列表响应
- */
-export interface TaskListResult {
-  success: boolean;
-  tasks: SWTask[];
-  total: number;
-}
-
-/**
  * 分页任务列表请求
  */
 export interface TaskListPaginatedParams {
@@ -162,6 +153,8 @@ export interface InitParams {
     apiKey: string;
     baseUrl: string;
     modelName?: string;
+    /** Text model for ai_analyze (e.g., 'deepseek-v3.2') */
+    textModelName?: string;
   };
   videoConfig: {
     baseUrl: string;
@@ -306,7 +299,6 @@ export interface SWMethods extends Methods {
   
   // 任务查询
   'task:get': (params: TaskOperationParams) => { task: SWTask | null };
-  'task:list': (params?: undefined) => TaskListResult;
   'task:listPaginated': (params: TaskListPaginatedParams) => TaskListPaginatedResult;
   
   // Chat
