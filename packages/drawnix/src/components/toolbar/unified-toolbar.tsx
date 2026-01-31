@@ -219,7 +219,7 @@ export const UnifiedToolbar: React.FC<UnifiedToolbarProps> = React.memo(({
             onClick={handleMobileToggle}
             aria-label="收起工具栏"
           >
-            <ChevronDown size={20} />
+            <ChevronDown size={18} />
           </button>
         )}
 
