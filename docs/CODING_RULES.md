@@ -2853,6 +2853,58 @@ if (needsClaim && !hasClaimedRef.current) {
 - 如果直接根据本地状态判断，会导致用户看到错误的"失败"状态
 - 正确做法是检测不一致状态后，从 SW 获取真实状态再更新 UI
 
+### SW 重发 Tool Request 需延迟等待主线程 Handler 准备
+
+**场景**: 页面刷新后，SW 在工作流 claim 时重发 pending tool request
+
+❌ **错误示例**:
+```typescript
+// channel-manager.ts - handleWorkflowClaim 中
+if ((workflow.status === 'running') && hasPendingToolRequest) {
+  // 错误：立即重发，但主线程的 handler 可能还没注册
+  this.resendPendingToolRequestsForWorkflow(workflowId);
+}
+
+// 结果：
+// 1. SW 发送 publish('workflow:toolRequest', {...})
+// 2. 主线程还没完成 registerToolRequestHandler()
+// 3. publish 返回 undefined/null
+// 4. SW 误判为"超时"，工作流失败
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：延迟重发，等待主线程 handler 准备好
+if ((workflow.status === 'running') && hasPendingToolRequest) {
+  console.log(`Will resend pending tool requests after delay`);
+  // 延迟 500ms，给主线程时间完成 registerToolRequestHandler
+  setTimeout(() => {
+    console.log(`Resending pending tool requests (delayed)`);
+    this.resendPendingToolRequestsForWorkflow(workflowId);
+  }, 500);
+}
+```
+
+**原因**:
+- 页面刷新后，组件挂载顺序不确定
+- `WorkZoneContent` 的 claim 可能在 `WorkflowSubmissionService.registerToolRequestHandler()` 完成前执行
+- SW 的 `publish()` 方法需要主线程已经 `subscribe()` 才能收到响应
+- 500ms 延迟给主线程足够时间完成初始化（通常 200ms 内完成）
+
+**初始化时序**:
+```
+页面刷新
+    ↓
+WorkflowSubmissionService.init()        WorkZoneContent.useEffect()
+    ↓                                        ↓
+registerToolRequestHandler()            swChannelClient.claimWorkflow()
+(等待 swChannelClient 初始化)                ↓
+    ↓                                   SW 收到 claim
+swChannelClient.isInitialized()             ↓
+    ↓                                   SW 重发 tool request ← 可能此时 handler 还没准备好！
+subscribe('workflow:toolRequest')
+```
+
 ### SW 错误处理链必须保持完整
 
 **场景**: 在 SW 执行链中需要传递特殊错误属性（如 `isAwaitingClient`）时

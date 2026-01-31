@@ -12,8 +12,6 @@ import { MessageStatus, MessageRole } from '../types/chat.types';
 import type { ChatMessage, WorkflowMessageData, WorkflowStepData } from '../types/chat.types';
 import type { ChatHandler, Message } from '@llamaindex/chat-ui';
 import { generateSystemPrompt } from '../services/agent';
-import { taskQueueService } from '../services/task-queue';
-import { TaskStatus } from '../types/task.types';
 import {
   WORKFLOW_MESSAGE_PREFIX,
   injectModelForGenerationTool,
@@ -380,67 +378,9 @@ export function useChatWorkflowHandler(options: UseChatWorkflowHandlerOptions): 
     [messages, sendMessage]
   );
 
-  // 监听任务状态变化，更新工作流中的步骤状态
-  useEffect(() => {
-    const subscription = taskQueueService.observeTaskUpdates().subscribe((event) => {
-      if (event.type !== 'taskUpdated') return;
-
-      const task = event.task;
-
-      // 遍历所有工作流，查找包含此任务的步骤
-      workflowDataRef.current.forEach((workflow, messageId) => {
-        const step = workflow.steps.find((s) => {
-          const result = s.result as { taskId?: string } | undefined;
-          return result?.taskId === task.id;
-        });
-
-        if (!step) return;
-
-        // 根据任务状态更新步骤状态
-        let newStatus: WorkflowStepData['status'] = step.status;
-
-        switch (task.status) {
-          case TaskStatus.PENDING:
-          case TaskStatus.PROCESSING:
-            newStatus = 'running';
-            break;
-          case TaskStatus.COMPLETED:
-            newStatus = 'completed';
-            break;
-          case TaskStatus.FAILED:
-            newStatus = 'failed';
-            break;
-          case TaskStatus.CANCELLED:
-            newStatus = 'skipped';
-            break;
-        }
-
-        // 只有状态变化时才更新
-        if (newStatus !== step.status) {
-          step.status = newStatus;
-          if (task.status === TaskStatus.COMPLETED && task.result) {
-            step.result = {
-              ...(typeof step.result === 'object' && step.result !== null ? step.result : {}),
-              url: task.result.url,
-              success: true,
-            };
-          } else if (task.status === TaskStatus.FAILED) {
-            step.error = task.error?.message || '任务执行失败';
-          }
-
-          // 触发更新
-          onWorkflowUpdateRef.current?.(messageId, { ...workflow });
-
-          // 更新存储
-          rawMessagesRef.current = rawMessagesRef.current.map(msg =>
-            msg.id === messageId ? { ...msg, workflow: { ...workflow } } : msg
-          );
-        }
-      });
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
+  // Note: 任务状态变化现在通过 SW 的 workflow:stepStatus 事件处理
+  // ChatDrawer 中的 workflowSubmissionService.subscribeToAllEvents() 会接收这些事件
+  // 不再需要在这里监听 taskQueueService.observeTaskUpdates()
 
   const setMessagesWithRaw = useCallback((
     newMessages: Message[],

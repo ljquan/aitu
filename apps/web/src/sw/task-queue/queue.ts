@@ -26,6 +26,7 @@ import { taskQueueStorage } from './storage';
 import { migrateBase64UrlIfNeeded } from './utils/media-generation-utils';
 import { isPostMessageLoggerDebugMode } from './postmessage-logger';
 import { getChannelManager, type SWChannelManager } from './channel-manager';
+import { taskStepRegistry } from './task-step-registry';
 
 // Handler imports
 import { ImageHandler } from './handlers/image';
@@ -1236,6 +1237,23 @@ export class SWTaskQueue {
       remoteId: task.remoteId, // Include remoteId for recovery
     });
 
+    // Broadcast workflow step status update if this task is associated with a workflow step
+    // This ensures WorkZone, ChatDrawer, and Task Queue all receive the same update
+    const stepInfo = taskStepRegistry.getStepForTask(taskId);
+    if (stepInfo) {
+      console.log(`[SWTaskQueue] Broadcasting workflow:stepStatus for task ${taskId} -> workflow=${stepInfo.workflowId}, step=${stepInfo.stepId}`);
+      this.channelManager?.sendWorkflowStepStatus(
+        stepInfo.workflowId,
+        stepInfo.stepId,
+        'completed',
+        { success: true, url: result.url, data: result },
+        undefined,
+        undefined
+      );
+      // Clean up the mapping after broadcasting
+      await taskStepRegistry.unregister(taskId);
+    }
+
     // Notify internal listeners
     this.onTaskStatusChange?.(taskId, 'completed', result);
 
@@ -1280,6 +1298,23 @@ export class SWTaskQueue {
       taskId,
       error: taskError,
     });
+
+    // Broadcast workflow step status update if this task is associated with a workflow step
+    // This ensures WorkZone, ChatDrawer, and Task Queue all receive the same update
+    const stepInfo = taskStepRegistry.getStepForTask(taskId);
+    if (stepInfo) {
+      console.log(`[SWTaskQueue] Broadcasting workflow:stepStatus (failed) for task ${taskId} -> workflow=${stepInfo.workflowId}, step=${stepInfo.stepId}`);
+      this.channelManager?.sendWorkflowStepStatus(
+        stepInfo.workflowId,
+        stepInfo.stepId,
+        'failed',
+        undefined,
+        taskError.message,
+        undefined
+      );
+      // Clean up the mapping after broadcasting
+      await taskStepRegistry.unregister(taskId);
+    }
 
     // Notify internal listeners
     this.onTaskStatusChange?.(taskId, 'failed', undefined, taskError.message);

@@ -969,9 +969,13 @@ export class SWChannelManager {
       // 注意：如果 executor 还不存在（init 未完成），这里不会重新发送
       // 待处理的请求会在 init 完成后通过 resendPendingToolRequests() 发送
       if ((workflow.status === 'running' || workflow.status === 'pending') && hasPendingToolRequest) {
-        console.log(`[SWChannelManager] 🔄 Resending pending tool requests for workflow ${workflowId}`);
-        // 异步重新发送待处理的工具请求
-        this.resendPendingToolRequestsForWorkflow(workflowId);
+        console.log(`[SWChannelManager] 🔄 Will resend pending tool requests for workflow ${workflowId} after delay`);
+        // 延迟重新发送待处理的工具请求，给主线程时间注册处理器
+        // 这避免了时序问题：claim 完成后主线程的 registerToolRequestHandler 可能还没准备好
+        setTimeout(() => {
+          console.log(`[SWChannelManager] 🔄 Resending pending tool requests for workflow ${workflowId} (delayed)`);
+          this.resendPendingToolRequestsForWorkflow(workflowId);
+        }, 500);
       }
 
       return {
@@ -1869,10 +1873,13 @@ export class SWChannelManager {
     }
     
     if (!clientChannel) {
+      console.log(`[SWChannelManager] sendToolRequest: No client channel found for workflow ${workflowId}`);
       return null;
     }
     
     try {
+      console.log(`[SWChannelManager] sendToolRequest: Sending ${toolName} to client ${clientChannel.clientId.substring(0, 8)}...`);
+      
       // 使用 withTimeout 工具控制超时
       const response = await withTimeout(
         clientChannel.channel.publish(SW_EVENTS.WORKFLOW_TOOL_REQUEST, {
@@ -1887,6 +1894,7 @@ export class SWChannelManager {
       );
       
       if (!response || typeof response !== 'object') {
+        console.log(`[SWChannelManager] sendToolRequest: No response received for ${toolName}`, { response });
         return null;
       }
       

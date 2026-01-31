@@ -21,6 +21,7 @@ import type { GeminiConfig, VideoAPIConfig } from './types';
 import { TaskExecutionPhase } from './types';
 import { executeSWMCPTool, getSWMCPTool, requiresMainThread } from './mcp/tools';
 import { taskQueueStorage } from './storage';
+import { taskStepRegistry } from './task-step-registry';
 
 /**
  * Workflow executor configuration
@@ -816,6 +817,9 @@ export class WorkflowExecutor {
 
         // Persist final state
         await taskQueueStorage.saveWorkflow(workflow);
+        
+        // Clean up task-step mappings for this workflow
+        await taskStepRegistry.clearWorkflowMappings(workflowId);
 
         this.sendToWorkflowClient(workflowId, {
           type: 'WORKFLOW_COMPLETED',
@@ -859,6 +863,9 @@ export class WorkflowExecutor {
 
       // Persist failed state
       await taskQueueStorage.saveWorkflow(workflow);
+      
+      // Clean up task-step mappings for this workflow
+      await taskStepRegistry.clearWorkflowMappings(workflowId);
 
       this.sendToWorkflowClient(workflowId, {
         type: 'WORKFLOW_FAILED',
@@ -1055,8 +1062,20 @@ export class WorkflowExecutor {
             taskId: response.taskId,
             taskIds: response.taskIds,
           };
+          
+          // Register task-step mapping for unified progress sync
+          // When the task completes, this mapping allows us to update the corresponding workflow step
+          await taskStepRegistry.register(response.taskId, workflow.id, step.id);
+          
+          // Also register any additional taskIds (for batch generation)
+          if (response.taskIds && response.taskIds.length > 0) {
+            for (const taskId of response.taskIds) {
+              await taskStepRegistry.register(taskId, workflow.id, step.id);
+            }
+          }
+          
           // Keep step status as 'running' - it will be updated when task completes
-          // The main thread will update the workflow step status via updateWorkflowStepForTask
+          // The task queue will broadcast workflow:stepStatus when task completes
           step.status = 'running';
           step.duration = Date.now() - startTime;
           this.sendStepStatus(workflow.id, step);

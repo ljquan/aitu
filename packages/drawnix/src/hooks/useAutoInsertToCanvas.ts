@@ -344,9 +344,9 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
       const result = await handleSplitAndInsertTask(task.id, url, params, { scrollToResult: true });
       
       // 拆分完成后更新步骤状态
-      if (result.success) {
-        updateWorkflowStepForTask(task.id, 'completed', { url });
-      } else {
+      // Note: 成功时 SW 已通过 workflow:stepStatus 事件标记为 completed
+      // 只有失败时才需要本地更新（拆分是客户端操作，SW 不知道拆分结果）
+      if (!result.success) {
         updateWorkflowStepForTask(task.id, 'failed', undefined, result.error || '拆分失败');
       }
     };
@@ -411,8 +411,8 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
         return;
       }
 
-      // 更新关联的工作流步骤状态为 completed（仅对普通图片/视频任务）
-      updateWorkflowStepForTask(task.id, 'completed', { url: task.result.url });
+      // Note: 步骤状态更新现在由 SW 统一通过 workflow:stepStatus 事件处理
+      // 不再需要在这里调用 updateWorkflowStepForTask
 
       // 获取 Prompt 作为分组 key
       const promptKey = task.params.prompt || 'unknown';
@@ -435,9 +435,12 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
 
     /**
      * 处理任务失败事件
+     * Note: 步骤状态更新现在由 SW 统一通过 workflow:stepStatus 事件处理
+     * 不再需要在这里调用 updateWorkflowStepForTask
      */
-    const handleTaskFailed = (task: Task) => {
-      updateWorkflowStepForTask(task.id, 'failed', undefined, task.error?.message || '任务执行失败');
+    const handleTaskFailed = (_task: Task) => {
+      // 任务失败的步骤状态更新由 SW 的 workflow:stepStatus 事件处理
+      // 这里不再需要手动更新 WorkZone
     };
 
     // 订阅任务更新事件

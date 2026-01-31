@@ -16,14 +16,26 @@ import type { Workflow } from './workflow-types';
 import type { ChatWorkflow } from './chat-workflow/types';
 import { getSafeErrorMessage } from './utils/sanitize-utils';
 
+/**
+ * Task-Step mapping for unified progress sync
+ * (Duplicated here to avoid circular dependency with task-step-registry.ts)
+ */
+export interface TaskStepMapping {
+  taskId: string;
+  workflowId: string;
+  stepId: string;
+  createdAt: number;
+}
+
 const DB_NAME = 'sw-task-queue';
-const MIN_DB_VERSION = 2; // Minimum required version (with workflow stores)
+const MIN_DB_VERSION = 3; // Minimum required version (with task-step mappings store)
 const TASKS_STORE = 'tasks';
 const CONFIG_STORE = 'config';
 const WORKFLOWS_STORE = 'workflows';
 const CHAT_WORKFLOWS_STORE = 'chat-workflows';
 const PENDING_TOOL_REQUESTS_STORE = 'pending-tool-requests';
 const PENDING_DOM_OPERATIONS_STORE = 'pending-dom-operations';
+const TASK_STEP_MAPPINGS_STORE = 'task-step-mappings';
 
 // All required stores for integrity check
 const REQUIRED_STORES = [
@@ -33,6 +45,7 @@ const REQUIRED_STORES = [
   CHAT_WORKFLOWS_STORE,
   PENDING_TOOL_REQUESTS_STORE,
   PENDING_DOM_OPERATIONS_STORE,
+  TASK_STEP_MAPPINGS_STORE,
 ];
 
 /**
@@ -178,6 +191,12 @@ function createAllStores(db: IDBDatabase): void {
     const pendingDomOpsStore = db.createObjectStore(PENDING_DOM_OPERATIONS_STORE, { keyPath: 'id' });
     pendingDomOpsStore.createIndex('workflowId', 'workflowId', { unique: false });
     pendingDomOpsStore.createIndex('chatId', 'chatId', { unique: false });
+  }
+
+  // Create task-step mappings store (for unified progress sync)
+  if (!db.objectStoreNames.contains(TASK_STEP_MAPPINGS_STORE)) {
+    const taskStepMappingsStore = db.createObjectStore(TASK_STEP_MAPPINGS_STORE, { keyPath: 'taskId' });
+    taskStepMappingsStore.createIndex('workflowId', 'workflowId', { unique: false });
   }
 }
 
@@ -1101,6 +1120,123 @@ export class TaskQueueStorage {
       }
     } catch (error) {
       console.error('[SWStorage] Failed to delete pending DOM operations by chat ID:', error);
+    }
+  }
+
+  // ============================================================================
+  // Task-Step Mapping Storage Methods (for unified progress sync)
+  // ============================================================================
+
+  /**
+   * Save a task-step mapping to IndexedDB
+   */
+  async saveTaskStepMapping(mapping: TaskStepMapping): Promise<void> {
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(TASK_STEP_MAPPINGS_STORE, 'readwrite');
+        const store = transaction.objectStore(TASK_STEP_MAPPINGS_STORE);
+        const request = store.put(mapping);
+
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve();
+      });
+    } catch (error) {
+      console.error('[SWStorage] Failed to save task-step mapping:', error);
+    }
+  }
+
+  /**
+   * Get all task-step mappings
+   */
+  async getAllTaskStepMappings(): Promise<TaskStepMapping[]> {
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(TASK_STEP_MAPPINGS_STORE, 'readonly');
+        const store = transaction.objectStore(TASK_STEP_MAPPINGS_STORE);
+        const request = store.getAll();
+
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result || []);
+      });
+    } catch (error) {
+      console.error('[SWStorage] Failed to get all task-step mappings:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get task-step mapping by task ID
+   */
+  async getTaskStepMapping(taskId: string): Promise<TaskStepMapping | null> {
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(TASK_STEP_MAPPINGS_STORE, 'readonly');
+        const store = transaction.objectStore(TASK_STEP_MAPPINGS_STORE);
+        const request = store.get(taskId);
+
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result || null);
+      });
+    } catch (error) {
+      console.error('[SWStorage] Failed to get task-step mapping:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get task-step mappings by workflow ID
+   */
+  async getTaskStepMappingsByWorkflow(workflowId: string): Promise<TaskStepMapping[]> {
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(TASK_STEP_MAPPINGS_STORE, 'readonly');
+        const store = transaction.objectStore(TASK_STEP_MAPPINGS_STORE);
+        const index = store.index('workflowId');
+        const request = index.getAll(workflowId);
+
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result || []);
+      });
+    } catch (error) {
+      console.error('[SWStorage] Failed to get task-step mappings by workflow:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Delete a task-step mapping
+   */
+  async deleteTaskStepMapping(taskId: string): Promise<void> {
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(TASK_STEP_MAPPINGS_STORE, 'readwrite');
+        const store = transaction.objectStore(TASK_STEP_MAPPINGS_STORE);
+        const request = store.delete(taskId);
+
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve();
+      });
+    } catch (error) {
+      console.error('[SWStorage] Failed to delete task-step mapping:', error);
+    }
+  }
+
+  /**
+   * Delete all task-step mappings for a workflow
+   */
+  async deleteTaskStepMappingsByWorkflow(workflowId: string): Promise<void> {
+    try {
+      const mappings = await this.getTaskStepMappingsByWorkflow(workflowId);
+      for (const mapping of mappings) {
+        await this.deleteTaskStepMapping(mapping.taskId);
+      }
+    } catch (error) {
+      console.error('[SWStorage] Failed to delete task-step mappings by workflow:', error);
     }
   }
 }
