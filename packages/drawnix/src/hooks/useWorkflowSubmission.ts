@@ -504,7 +504,7 @@ export function useWorkflowSubmission(
   ): Promise<string> => {
     // Ensure SW task queue is initialized before submitting workflow
     // This sends TASK_QUEUE_INIT to SW which initializes the workflowHandler
-    const { swTaskQueueService } = await import('../services/sw-task-queue-service');
+    const { swTaskQueueService } = await import('../services/task-queue');
     await swTaskQueueService.initialize();
 
     // Convert to SW workflow format

@@ -1,45 +1,38 @@
 /**
  * Task Queue Service Entry Point
  *
- * Provides a unified interface for task queue services.
- * Automatically selects between SW-based and legacy implementations
- * based on browser support and configuration.
+ * Unified task queue service based on domain layer.
  */
 
-import { swTaskQueueService, SWTaskQueueService } from '../sw-task-queue-service';
-import { taskQueueService as legacyTaskQueueService } from '../task-queue-service';
+import { taskService } from '../../domain/task';
 
-// Feature flag for SW task queue (can be configured via environment or settings)
-const USE_SW_TASK_QUEUE = true;
+// All task queue services now use the unified taskService
+export const taskQueueService = taskService;
+export const swTaskQueueService = taskService;
+export const legacyTaskQueueService = taskService;
 
-/**
- * Check if Service Worker task queue should be used
- */
+// Legacy function exports for backward compatibility
 export function shouldUseSWTaskQueue(): boolean {
-  if (!USE_SW_TASK_QUEUE) return false;
-  if (typeof navigator === 'undefined') return false;
-  if (!('serviceWorker' in navigator)) return false;
-  return true;
+  return true; // Always use the unified service
 }
 
-/**
- * Get the appropriate task queue service instance
- */
 export function getTaskQueueService() {
-  if (shouldUseSWTaskQueue()) {
-    return swTaskQueueService;
-  }
-  return legacyTaskQueueService;
+  return taskService;
 }
 
-// Export both services for explicit usage
-export { swTaskQueueService } from '../sw-task-queue-service';
-export { taskQueueService as legacyTaskQueueService } from '../task-queue-service';
+// Re-export types from domain model
+export type {
+  Task,
+  TaskStatus,
+  TaskType,
+  TaskEvent,
+  GenerationParams,
+  TaskExecutionPhase,
+} from '../../domain/task';
 
-// Export the default service (SW-based when available)
-export const taskQueueService = shouldUseSWTaskQueue()
-  ? swTaskQueueService
-  : legacyTaskQueueService;
-
-// Re-export types
-export type { Task, TaskStatus, TaskType, TaskEvent, GenerationParams } from '../../types/task.types';
+// Re-export enums for backward compatibility
+export {
+  TaskStatus,
+  TaskType,
+  TaskExecutionPhase,
+} from '../../types/task.types';

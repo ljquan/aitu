@@ -11,7 +11,7 @@
  */
 
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { swTaskQueueService } from '../services/sw-task-queue-service';
+import { swTaskQueueService } from '../services/task-queue';
 import { swChannelClient } from '../services/sw-channel';
 import type { SWTask } from '../services/sw-channel';
 import { geminiSettings } from '../utils/settings-manager';

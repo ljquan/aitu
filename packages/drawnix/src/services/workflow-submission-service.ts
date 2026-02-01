@@ -19,7 +19,7 @@ import {
   swChannelClient,
   type SWChannelEventHandlers,
 } from './sw-channel/client';
-import { swTaskQueueService } from './sw-task-queue-service';
+import { swTaskQueueService } from './task-queue';
 import type {
   WorkflowDefinition as ChannelWorkflowDefinition,
   WorkflowStatusEvent as ChannelWorkflowStatusEvent,
@@ -402,8 +402,8 @@ class WorkflowSubmissionService {
     
     // 如果 SW 端返回 "Workflow executor not initialized"，尝试重新初始化并重试一次
     if (!result.success && result.error?.includes('not initialized')) {
-      // 强制重新初始化
-      const reinitSuccess = await swTaskQueueService.initializeSW();
+      // 强制重新初始化（必须使用 reinitialize 而不是 initialize，因为 initialize 会检查 initialized 标志）
+      const reinitSuccess = await swTaskQueueService.reinitialize();
       if (reinitSuccess) {
         // 重试提交
         result = await swChannelClient.submitWorkflow(workflow as unknown as ChannelWorkflowDefinition);

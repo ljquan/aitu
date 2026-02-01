@@ -92,9 +92,7 @@ export function useTaskStorage(): void {
         // Initialize SW service and sync tasks from SW
         if (usingSW) {
           // Import and initialize SW task queue service
-          const { swTaskQueueService } = await import(
-            '../services/sw-task-queue-service'
-          );
+          const { swTaskQueueService } = await import('../services/task-queue');
           await swTaskQueueService.initialize();
 
           // Wait for browser idle

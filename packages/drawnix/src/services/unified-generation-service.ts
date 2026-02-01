@@ -17,7 +17,7 @@
 
 import { Task, TaskType, TaskStatus, GenerationParams, TaskExecutionPhase } from '../types/task.types';
 import { swChannelClient } from './sw-channel/client';
-import { swTaskQueueService } from './sw-task-queue-service';
+import { swTaskQueueService } from './task-queue';
 import { generationAPIService } from './generation-api-service';
 import { legacyTaskQueueService } from './task-queue';
 import { generateTaskId } from '../utils/task-utils';

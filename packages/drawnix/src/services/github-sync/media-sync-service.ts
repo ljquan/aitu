@@ -5,7 +5,7 @@
 
 import { gitHubApiService, GitHubApiError } from './github-api-service';
 import { unifiedCacheService } from '../unified-cache-service';
-import { swTaskQueueService } from '../sw-task-queue-service';
+import { swTaskQueueService } from '../task-queue';
 import { kvStorageService } from '../kv-storage-service';
 import { DRAWNIX_DEVICE_ID_KEY } from '../../constants/storage';
 import { Task, TaskType, TaskStatus } from '../../types/task.types';

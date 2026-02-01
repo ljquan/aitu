@@ -14,7 +14,7 @@ import {
   mergeVideoPromptHistory,
   mergeImagePromptHistory,
 } from '../prompt-storage-service';
-import { swTaskQueueService } from '../sw-task-queue-service';
+import { swTaskQueueService } from '../task-queue';
 import { TaskStatus, TaskType, Task } from '../../types/task.types';
 import { DRAWNIX_DEVICE_ID_KEY } from '../../constants/storage';
 import { VERSIONS } from '../../constants';

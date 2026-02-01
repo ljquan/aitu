@@ -51,7 +51,7 @@ import { insertImageFromUrl } from '../../data/image';
 import { insertVideoFromUrl } from '../../data/video';
 import { useGitHubSync } from '../../contexts/GitHubSyncContext';
 import { mediaSyncService } from '../../services/github-sync/media-sync-service';
-import { swTaskQueueService } from '../../services/sw-task-queue-service';
+import { swTaskQueueService } from '../../services/task-queue';
 import { TaskStatus, TaskType } from '../../types/task.types';
 import './MediaLibraryGrid.scss';
 import './VirtualAssetGrid.scss';

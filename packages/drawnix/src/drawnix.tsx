@@ -283,7 +283,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
         // In SW mode, ensure tasks are synced from SW first
         let swInitialized = false;
         if (shouldUseSWTaskQueue()) {
-          const { swTaskQueueService } = await import('./services/sw-task-queue-service');
+          const { swTaskQueueService } = await import('./services/task-queue');
           // Wait for SW to be initialized and tasks synced
           swInitialized = await swTaskQueueService.initialize();
           if (swInitialized) {

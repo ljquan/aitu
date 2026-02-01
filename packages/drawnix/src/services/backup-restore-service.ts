@@ -32,7 +32,7 @@ import {
   getVideoPromptHistory,
   getImagePromptHistory,
 } from './prompt-storage-service';
-import { swTaskQueueService } from './sw-task-queue-service';
+import { swTaskQueueService } from './task-queue';
 import { TaskType, TaskStatus, Task } from '../types/task.types';
 import type { Folder, Board } from '../types/workspace.types';
 import type { StoredAsset } from '../types/asset.types';

@@ -1,6 +1,6 @@
 {
   "version": "0.5.64",
-  "buildTime": "2026-01-30T10:06:06.752Z",
+  "buildTime": "2026-02-01T16:16:28.735Z",
   "gitCommit": "unknown",
   "changelog": [
     "support async models with size and references",
