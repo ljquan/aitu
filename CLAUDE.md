@@ -178,6 +178,8 @@ Service Worker (后台执行)
 8. Flex 布局中使用 `flex: 1` 时，若兄弟元素可隐藏，内部组件需设 `max-width` 防止变形
 9. `useCallback` 定义必须在引用它的 `useEffect` 之前，否则会报 TDZ 错误
 10. Slate-React Leaf 组件 DOM 结构必须稳定，不能根据条件切换标签/CSS 实现方式
+11. **异步操作不阻塞 UI**：远程同步等耗时操作应异步执行（fire-and-forget），不阻塞弹窗关闭
+12. **关键操作直接调用**：不依赖 RxJS 事件订阅触发关键业务逻辑，订阅时序不可靠
 
 ### 缓存规则
 
