@@ -599,28 +599,39 @@ class DataSerializer {
       }
     }
 
-    // 应用任务（恢复已完成的任务记录到本地）
+    // 应用任务（合并远程和本地的已完成任务，基于 ID 去重）
     console.log('[DataSerializer] Applying tasks...', {
       hasTasks: !!data.tasks,
       completedTasksCount: data.tasks?.completedTasks?.length || 0,
     });
     
     if (data.tasks && data.tasks.completedTasks && data.tasks.completedTasks.length > 0) {
-      // 获取本地任务 ID 集合
+      // 获取本地任务
       const localTasks = swTaskQueueService.getAllTasks();
-      const localTaskIds = new Set(localTasks.map(t => t.id));
+      const localTaskMap = new Map(localTasks.map(t => [t.id, t]));
       
       console.log('[DataSerializer] Local tasks:', {
         count: localTasks.length,
-        ids: Array.from(localTaskIds).slice(0, 5), // 只显示前5个
+        ids: Array.from(localTaskMap.keys()).slice(0, 5), // 只显示前5个
       });
       
-      // 筛选出本地不存在的任务
-      const tasksToRestore = data.tasks.completedTasks.filter(
-        task => !localTaskIds.has(task.id)
-      );
+      // 基于 ID 去重合并：远程任务优先（如果本地也有相同 ID 的任务，使用更新时间较新的）
+      const tasksToRestore: Task[] = [];
       
-      console.log('[DataSerializer] Tasks to restore:', {
+      for (const remoteTask of data.tasks.completedTasks) {
+        const localTask = localTaskMap.get(remoteTask.id);
+        
+        if (!localTask) {
+          // 本地不存在，需要恢复
+          tasksToRestore.push(remoteTask);
+        } else if (remoteTask.updatedAt && localTask.updatedAt && remoteTask.updatedAt > localTask.updatedAt) {
+          // 远程更新时间更新，使用远程版本
+          tasksToRestore.push(remoteTask);
+        }
+        // 如果本地版本更新或相同，保留本地版本（不需要额外操作）
+      }
+      
+      console.log('[DataSerializer] Tasks to restore after merge:', {
         count: tasksToRestore.length,
         ids: tasksToRestore.slice(0, 5).map(t => t.id),
       });

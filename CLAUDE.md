@@ -165,6 +165,7 @@ Service Worker (后台执行)
 15. **工作流恢复状态不一致**：UI 与 SW 状态不一致时（如终态但有运行中步骤），必须先从 SW 获取真实状态，不能直接标记为失败
 16. **错误处理链保持完整**：需要传递特殊错误属性（如 `isAwaitingClient`）时，必须重新抛出原始错误，不能创建新 Error 对象
 17. **SW 重发 Tool Request 需延迟**：页面刷新后 claim 工作流时，SW 重发 pending tool request 需延迟 500ms，等待主线程 handler 准备好
+18. **同步数据双向合并**：下载远程数据时必须与本地合并（基于 ID 去重，`updatedAt` 判断版本），合并后自动上传确保双向同步
 
 ### React 规则
 

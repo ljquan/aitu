@@ -6147,6 +6147,69 @@ async pushToRemote() {
 - 只传输变化的数据可以显著减少带宽和延迟
 - manifest/workspace/prompts/tasks 等小文件可以始终更新
 
+### 同步数据双向合并：下载后自动上传
+
+**场景**: 从远程下载数据时，需要与本地数据合并，确保双向同步
+
+❌ **错误示例**:
+```typescript
+// 错误：单向合并，只下载远程有但本地没有的数据
+async pullFromRemote() {
+  const remoteTasks = await fetchRemoteTasks();
+  const localTaskIds = new Set(localTasks.map(t => t.id));
+  
+  // 只恢复本地不存在的任务
+  const tasksToRestore = remoteTasks.filter(t => !localTaskIds.has(t.id));
+  await restoreTasks(tasksToRestore);
+  
+  // 问题：本地有但远程没有的数据不会同步到远程
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：双向合并，基于 ID 去重，合并后自动上传
+async pullFromRemote() {
+  const remoteTasks = await fetchRemoteTasks();
+  const localTaskMap = new Map(localTasks.map(t => [t.id, t]));
+  
+  // 1. 基于 ID 去重合并，使用 updatedAt 判断保留哪个版本
+  const tasksToRestore: Task[] = [];
+  for (const remoteTask of remoteTasks) {
+    const localTask = localTaskMap.get(remoteTask.id);
+    
+    if (!localTask) {
+      // 本地不存在，需要恢复
+      tasksToRestore.push(remoteTask);
+    } else if (remoteTask.updatedAt > localTask.updatedAt) {
+      // 远程更新，使用远程版本
+      tasksToRestore.push(remoteTask);
+    }
+    // 本地版本更新或相同，保留本地版本
+  }
+  
+  await restoreTasks(tasksToRestore);
+  
+  // 2. 合并完成后，自动上传合并后的数据到远程
+  await uploadMergedTasksToRemote();
+}
+
+async uploadMergedTasksToRemote() {
+  // 收集本地所有数据（包括刚合并的）
+  const allLocalTasks = getAllCompletedTasks();
+  const tasksData = { completedTasks: allLocalTasks };
+  const encrypted = await encrypt(tasksData);
+  await updateRemoteFile(SYNC_FILES.TASKS, encrypted);
+}
+```
+
+**原因**:
+- 单向合并会导致数据不一致：A 设备新增的数据不会同步到 B 设备的远程
+- 基于 ID 去重避免重复数据
+- 使用 `updatedAt` 时间戳判断保留更新的版本，避免覆盖新数据
+- 合并后自动上传确保本地独有的数据也能同步到远程
+- 这是实现"最终一致性"的关键步骤
+
 ---
 
 ## 数据安全规范

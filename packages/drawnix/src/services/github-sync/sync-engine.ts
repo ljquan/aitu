@@ -31,6 +31,7 @@ import {
   PromptTombstone,
   TaskTombstone,
   BoardData,
+  TasksData,
 } from './types';
 
 /** 同步配置存储键 */
@@ -755,6 +756,47 @@ class SyncEngine {
   }
 
   /**
+   * 上传合并后的任务数据到远程
+   * 在 pullFromRemote 合并完成后调用，确保本地有但远程没有的任务也能同步到远程
+   */
+  private async uploadMergedTasksToRemote(
+    gistId: string, 
+    customPassword?: string,
+    remoteManifest?: SyncManifest
+  ): Promise<void> {
+    try {
+      console.log('[SyncEngine] uploadMergedTasksToRemote: Starting...');
+      
+      // 收集本地所有已完成的任务
+      const localData = await dataSerializer.collectSyncData();
+      const localCompletedTasks = localData.tasks.completedTasks;
+      
+      if (localCompletedTasks.length === 0) {
+        console.log('[SyncEngine] uploadMergedTasksToRemote: No tasks to upload');
+        return;
+      }
+      
+      console.log('[SyncEngine] uploadMergedTasksToRemote: Local tasks count:', localCompletedTasks.length);
+      
+      // 加密任务数据并上传
+      const { cryptoService } = await import('./crypto-service');
+      const tasksData: TasksData = { completedTasks: localCompletedTasks };
+      const tasksJson = JSON.stringify(tasksData);
+      const encryptedTasks = await cryptoService.encrypt(tasksJson, gistId, customPassword);
+      
+      // 更新远程任务文件
+      await gitHubApiService.updateGistFiles({
+        [SYNC_FILES.TASKS]: encryptedTasks,
+      });
+      
+      console.log('[SyncEngine] uploadMergedTasksToRemote: Tasks uploaded successfully');
+    } catch (error) {
+      // 上传任务失败不应阻塞主流程，只记录日志
+      console.error('[SyncEngine] uploadMergedTasksToRemote: Failed to upload tasks:', error);
+    }
+  }
+
+  /**
    * 异步下载已同步的媒体文件（不阻塞同步流程）
    */
   private async downloadSyncedMediaAsync(): Promise<void> {
@@ -1198,6 +1240,9 @@ class SyncEngine {
         console.log('[SyncEngine] pullFromRemote: Cleaning up deletion records:', deletionsToClean);
         await this.clearLocalDeletions(deletionsToClean);
       }
+
+      // 合并完成后，自动上传任务数据到远程（确保双向同步）
+      await this.uploadMergedTasksToRemote(gistId, customPassword || undefined, remoteManifest);
 
       // 异步下载媒体文件（总是尝试，因为任务可能已存在但媒体未缓存）
       this.downloadSyncedMediaAsync();
