@@ -251,10 +251,10 @@ function setupDuplexEventHandlers() {
     }
   });
 
-  // Console 日志
+  // Console 日志（duplex 广播，与 SW_CONSOLE_LOG 原生消息格式一致：{ entry }）
   addDuplexEventListener(SW_EVENTS.CONSOLE_LOG, (data) => {
-    if (messageHandlers['SW_DEBUG_CONSOLE_LOG']) {
-      messageHandlers['SW_DEBUG_CONSOLE_LOG'](data);
+    if (messageHandlers['SW_CONSOLE_LOG']) {
+      messageHandlers['SW_CONSOLE_LOG'](data);
     }
   });
 
@@ -284,6 +284,7 @@ function setupDuplexEventHandlers() {
  * Enable debug mode
  */
 export function enableDebug() {
+  try { sessionStorage.setItem('sw-debug-enabled', 'true'); } catch {}
   enableDebugMode();
 }
 
@@ -291,6 +292,7 @@ export function enableDebug() {
  * Disable debug mode
  */
 export function disableDebug() {
+  try { sessionStorage.setItem('sw-debug-enabled', 'false'); } catch {}
   disableDebugMode();
 }
 

@@ -1019,6 +1019,96 @@ const handleTouchEnd = () => {
 - 触控结束后延迟隐藏预览，给用户时间查看结果
 - Canvas 元素需要设置 `touch-action: none` 防止默认滚动行为
 
+#### TDesign CSS 变量优先级问题
+
+**场景**: 在组件样式中使用 TDesign CSS 变量（如 `--td-brand-color-light`）时，发现颜色不生效或显示为默认颜色。
+
+❌ **错误示例**:
+```scss
+// 在组件 scss 中使用 CSS 变量
+.project-drawer-node__row {
+  &--selected {
+    background: var(--td-brand-color-light);  // 可能被 TDesign 内部样式覆盖
+    
+    &:hover {
+      background: var(--td-brand-color-light-hover);  // 不生效
+    }
+  }
+}
+```
+
+✅ **正确示例**:
+```scss
+// 直接使用具体颜色值
+.project-drawer-node__row {
+  &--selected {
+    background: rgba(243, 156, 18, 0.12);  // 品牌橙金色 12% 透明度
+    
+    &:hover {
+      background: rgba(243, 156, 18, 0.18);  // 18% 透明度
+    }
+  }
+}
+```
+
+**原因**: TDesign 组件内部可能在更具体的选择器中定义了同名 CSS 变量的值，导致 `:root` 中的全局定义被覆盖。在组件级样式中直接使用具体颜色值可以确保样式正确生效。
+
+**适用场景**:
+- 组件内的选中/高亮/激活状态背景色
+- 需要使用品牌色变体的场景（如透明度变化）
+- 任何发现 CSS 变量不生效的情况
+
+#### 弹出菜单被父容器 overflow 截断
+
+**场景**: 在设置了 `overflow: hidden/auto` 的容器内渲染右键菜单、下拉菜单等弹出层时，菜单被截断。
+
+❌ **错误示例**:
+```tsx
+// 菜单直接渲染在组件内部，被父容器 overflow 截断
+return (
+  <div className="drawer-content" style={{ overflow: 'auto' }}>
+    {/* 内容 */}
+    {contextMenu && (
+      <div 
+        className="context-menu"
+        style={{ position: 'fixed', left: x, top: y }}
+      >
+        {/* 菜单项 */}
+      </div>
+    )}
+  </div>
+);
+```
+
+✅ **正确示例**:
+```tsx
+import { createPortal } from 'react-dom';
+
+return (
+  <div className="drawer-content" style={{ overflow: 'auto' }}>
+    {/* 内容 */}
+    {/* 使用 Portal 渲染到 body，避免被截断 */}
+    {contextMenu && createPortal(
+      <div 
+        className="context-menu"
+        style={{ position: 'fixed', left: x, top: y, zIndex: 10000 }}
+      >
+        {/* 菜单项 */}
+      </div>,
+      document.body
+    )}
+  </div>
+);
+```
+
+**原因**: 即使使用 `position: fixed`，如果元素在 DOM 树中位于设置了 `overflow: hidden` 的容器内部，该容器仍然会裁切超出其边界的内容。使用 `createPortal` 将弹出层渲染到 `document.body`，使其脱离原有容器的裁切上下文。
+
+**适用场景**:
+- 右键菜单
+- 自定义下拉菜单
+- 悬浮预览框
+- 任何需要显示在容器边界外的浮层
+
 ### Git 提交规范
 - 格式: `<type>(<scope>): <subject>`
 - 类型: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`, `perf`, `ci`
@@ -6221,4 +6311,102 @@ async restoreBoard(boardId: string) {
 - 删除可恢复：用户可以从回收站恢复误删的数据
 - 跨设备同步：其他设备同步时能正确识别已删除的项目
 - 永久删除可控：用户手动清空回收站时才真正删除远程文件
+
+### 异步操作不应阻塞 UI 交互
+
+**场景**: 删除、保存等操作需要同步到远程服务器时
+
+❌ **错误示例**:
+```typescript
+// 错误：同步操作阻塞了 UI，弹窗要等网络请求完成才关闭
+async deleteBoard(id: string): Promise<void> {
+  // 用户点击确认后，弹窗卡住等待网络请求
+  const result = await syncEngine.syncBoardDeletion(id);  // 阻塞 2-3 秒
+  if (result.success) {
+    console.log('Synced to remote');
+  }
+  
+  // 本地删除
+  this.boards.delete(id);
+  await storage.deleteBoard(id);
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：异步执行同步，不阻塞本地操作
+async deleteBoard(id: string): Promise<void> {
+  // 异步同步到远程（fire-and-forget）
+  import('./github-sync').then(({ syncEngine }) => {
+    syncEngine.syncBoardDeletion(id).then((result) => {
+      if (result.success) {
+        console.log('Board synced to remote recycle bin');
+      } else {
+        console.warn('Failed to sync deletion:', result.error);
+      }
+    }).catch(console.warn);
+  }).catch(console.warn);
+
+  // 本地删除立即执行，弹窗立即关闭
+  this.boards.delete(id);
+  await storage.deleteBoard(id);
+}
+```
+
+**原因**:
+- 用户期望点击"确认"后弹窗立即关闭
+- 网络请求可能慢或失败，不应影响本地操作体验
+- 远程同步失败时可以在下次同步时重试
+
+### 关键操作应直接调用，不依赖事件订阅
+
+**场景**: 需要在某个操作后触发另一个操作（如删除后同步到远程）
+
+❌ **错误示例**:
+```typescript
+// 错误：依赖事件订阅来触发同步
+// 问题：事件订阅可能有时序问题，订阅在事件触发后才建立
+
+// 在 Context 中订阅事件
+useEffect(() => {
+  const subscription = workspaceService.observeEvents().subscribe({
+    next: (event) => {
+      if (event.type === 'boardDeleted') {
+        // 可能收不到事件！因为订阅建立时机不确定
+        syncEngine.syncBoardDeletion(event.payload.id);
+      }
+    }
+  });
+  return () => subscription.unsubscribe();
+}, []);
+
+// 在 Service 中发出事件
+async deleteBoard(id: string) {
+  this.boards.delete(id);
+  this.emit('boardDeleted', { id });  // 事件可能没有订阅者
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：在操作中直接调用，保证执行
+async deleteBoard(id: string) {
+  // 直接调用同步逻辑
+  import('./github-sync').then(({ syncEngine }) => {
+    syncEngine.syncBoardDeletion(id).catch(console.warn);
+  });
+  
+  // 执行本地删除
+  this.boards.delete(id);
+  
+  // 事件仅用于 UI 更新等非关键操作
+  this.emit('boardDeleted', { id });
+}
+```
+
+**原因**:
+- RxJS Subject 的事件是同步分发的，但订阅者的建立是异步的
+- React useEffect 中的订阅可能在组件渲染后才建立
+- 热更新（HMR）可能导致旧的订阅被替换
+- 关键业务逻辑不应依赖于"某处可能存在的订阅者"
 

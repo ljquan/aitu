@@ -170,7 +170,7 @@ Service Worker (后台执行)
 
 1. Context 回调中必须使用函数式更新 `setState(prev => ...)`
 2. Hover 延迟操作需要正确的计时器清理
-3. 第三方窗口需用 `createPortal` 保持 React 事件流
+3. 弹出菜单/浮层需用 `createPortal` 渲染到 body，避免被父容器 overflow 截断
 4. 模式切换时多个相关状态需同步更新，封装成一个函数而非直接暴露底层 setMode
 5. 图标组件使用 `React.FC`，支持 `size` 属性
 6. 传递组件作为 prop 时必须实例化：`icon={<Icon />}` 而非 `icon={Icon}`
@@ -211,6 +211,7 @@ Service Worker (后台执行)
 - **可点击容器**：用 `pointer-events: none` + 父容器 `onClick` 扩大交互区域
 - **筛选与选中联动**：选中计数、操作都应基于筛选后的结果
 - **全局配色统一**：在 `tdesign-theme.scss` 中集中覆盖第三方组件样式
+- **组件内颜色**：TDesign CSS 变量可能被覆盖，组件 scss 中应直接使用具体颜色值（如 `rgba(243, 156, 18, 0.12)`）
 
 ---
 

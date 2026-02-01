@@ -642,9 +642,15 @@ class DataSerializer {
         });
         
         console.log('[DataSerializer] Calling restoreTasks with', processedTasks.length, 'tasks');
-        await swTaskQueueService.restoreTasks(processedTasks);
-        tasksApplied = processedTasks.length;
-        console.log('[DataSerializer] Tasks restored:', tasksApplied);
+        try {
+          await swTaskQueueService.restoreTasks(processedTasks);
+          tasksApplied = processedTasks.length;
+          console.log('[DataSerializer] Tasks restored:', tasksApplied);
+        } catch (err) {
+          // SW 可能未初始化或超时，跳过任务恢复但继续同步
+          console.warn('[DataSerializer] Failed to restore tasks (SW may not be ready):', err);
+          tasksApplied = 0;
+        }
       }
     } else {
       console.log('[DataSerializer] No tasks to apply');

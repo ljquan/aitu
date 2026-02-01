@@ -19,6 +19,12 @@ import {
 import { sanitizeObject, sanitizeUrl } from '@aitu/utils';
 import { initSWConsoleCapture } from './utils/sw-console-capture';
 
+// ===== 控制台日志捕获（尽早初始化，确保默认 console 被改写） =====
+// 必须在其他业务代码之前执行，否则后续工具（如 rrweb）可能先改写 console 导致捕获失效
+if ('serviceWorker' in navigator) {
+  initSWConsoleCapture();
+}
+
 // ===== 崩溃恢复检测 =====
 // 必须最先执行，检测上次是否因内存不足等原因崩溃
 crashRecoveryService.markLoadingStart();
@@ -144,10 +150,7 @@ if ('serviceWorker' in navigator) {
       .then(registration => {
         // console.log('Service Worker registered successfully:', registration);
         swRegistration = registration;
-        
-        // 初始化控制台日志捕获，发送到 SW 调试面板
-        initSWConsoleCapture();
-        
+
         // 在开发模式下，强制检查更新并处理等待中的Worker
         if (isDevelopment) {
           // console.log('Development mode: forcing SW update check');

@@ -21,10 +21,10 @@
   --td-brand-color-active: #D35400;
   --td-brand-color-disabled: #FDE68A;
 
-  /* 辅助色 - 蓝紫色系 (用于次要操作) */
-  --td-brand-color-light: #7B68EE;
-  --td-brand-color-light-hover: #5A4FCF;
-  --td-brand-color-light-active: #4338CA;
+  /* 品牌色浅色版本 - 用于选中/高亮背景 */
+  --td-brand-color-light: rgba(243, 156, 18, 0.12);
+  --td-brand-color-light-hover: rgba(243, 156, 18, 0.18);
+  --td-brand-color-light-active: rgba(243, 156, 18, 0.24);
 
   /* 成功色 - 保持TDesign默认或使用品牌绿色 */
   --td-success-color: #00B894;

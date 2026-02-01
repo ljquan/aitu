@@ -33,6 +33,7 @@ import {
   registerMessageHandlers,
   onControllerChange,
   setPostMessageLogCallback,
+  ensureDuplexInitialized,
 } from './sw-communication.js';
 
 // Feature modules
@@ -661,6 +662,7 @@ function handleStatusUpdate(data) {
   state.debugEnabled = updateStatusPanel(status, elements);
   state.swStatus = status; // Store for export
   updateDebugButton(elements.toggleDebugBtn, state.debugEnabled);
+  try { sessionStorage.setItem('sw-debug-enabled', String(state.debugEnabled)); } catch {}
 }
 
 // ==================== Event Listeners Setup ====================
@@ -874,6 +876,7 @@ function setupMessageHandlers() {
     'SW_DEBUG_STATUS': handleStatusUpdate,
     'SW_DEBUG_ENABLED': () => {
       state.debugEnabled = true;
+      try { sessionStorage.setItem('sw-debug-enabled', 'true'); } catch {}
       updateDebugButton(elements.toggleDebugBtn, true);
       // Update status panel text to show "开启"
       if (elements.debugMode) {
@@ -888,6 +891,7 @@ function setupMessageHandlers() {
     },
     'SW_DEBUG_DISABLED': () => {
       state.debugEnabled = false;
+      try { sessionStorage.setItem('sw-debug-enabled', 'false'); } catch {}
       updateDebugButton(elements.toggleDebugBtn, false);
       // Update status panel text to show "关闭"
       if (elements.debugMode) {
@@ -1178,16 +1182,18 @@ async function init() {
 
   setupMessageHandlers();
 
-  // Auto-enable debug mode first when entering debug page
-  // The SW_DEBUG_ENABLED handler will then call refreshStatus() to get latest state
-  // This ensures proper state synchronization and avoids race conditions
+  // 先建立 duplex 通道并订阅广播（CONSOLE_LOG、POSTMESSAGE_LOG 等），再启用调试
+  // 否则 SW 启用调试后开始转发日志时，调试页尚未在 channel-manager 中注册，收不到任何日志
+  console.log('[SW Debug] Initializing duplex channel before enabling debug');
+  const duplexOk = await ensureDuplexInitialized();
+  if (!duplexOk) {
+    console.warn('[SW Debug] Duplex init failed, console/postmessage logs may not stream');
+  }
+
+  // Auto-enable debug mode when entering debug page
   console.log('[SW Debug] Auto-enabling debug mode');
   enableDebug();
-  
-  // 等待 SW 处理 debug mode 启用消息
-  // 这确保 SW 端的 duplex channel 已经建立
-  await new Promise(resolve => setTimeout(resolve, 500));
-  
+
   // Load fetch logs (existing logs from before debug mode was enabled won't exist,
   // but logs generated during this session will be available)
   loadFetchLogs();

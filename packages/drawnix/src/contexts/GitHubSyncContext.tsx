@@ -287,9 +287,16 @@ export function GitHubSyncProvider({ children }: GitHubSyncProviderProps) {
     window.addEventListener('beforeunload', handleBeforeUnload);
 
     // 监听工作区变更，自动标记需要同步
-    const workspaceSubscription = workspaceService.observeEvents().subscribe((event) => {
+    console.log('[GitHubSync] Setting up workspace event subscription...');
+    const workspaceSubscription = workspaceService.observeEvents().subscribe({
+      next: (event) => {
+        console.log(`[GitHubSync] Workspace event received: ${event.type}`, event.payload);
+      
       // 只在已连接时才标记变更
-      if (!tokenService.hasToken()) return;
+      if (!tokenService.hasToken()) {
+        console.log(`[GitHubSync] No token, skipping event ${event.type}`);
+        return;
+      }
       
       // 监听画板和文件夹的变更事件
       const syncTriggerEvents = [
@@ -304,8 +311,41 @@ export function GitHubSyncProvider({ children }: GitHubSyncProviderProps) {
       if (syncTriggerEvents.includes(event.type)) {
         console.log(`[GitHubSync] Workspace changed: ${event.type}, marking dirty...`);
         syncEngine.markDirty();
+        // 记录本地删除的画板，并立即同步到远程回收站
+        if (event.type === 'boardDeleted') {
+          const boardId = (event.payload as { id?: string })?.id;
+          console.log(`[GitHubSync] boardDeleted event, payload:`, event.payload, 'boardId:', boardId);
+          if (boardId && typeof boardId === 'string') {
+            console.log(`[GitHubSync] Syncing board deletion to remote: ${boardId}`);
+            // 先记录本地删除，然后立即同步到远程
+            syncEngine.recordLocalDeletion(boardId).then(() => {
+              // 立即同步删除到远程回收站
+              return syncEngine.syncBoardDeletion(boardId);
+            }).then((result) => {
+              if (result.success) {
+                console.log(`[GitHubSync] Board ${boardId} moved to remote recycle bin`);
+              } else {
+                console.warn(`[GitHubSync] Failed to sync deletion to remote: ${result.error}`);
+              }
+            }).catch((err) => {
+              console.error(`[GitHubSync] Failed to sync board deletion: ${boardId}`, err);
+            });
+          } else {
+            console.warn(`[GitHubSync] boardDeleted event has invalid payload:`, event.payload);
+          }
+        }
+      } else {
+        console.log(`[GitHubSync] Event ${event.type} does not trigger sync`);
+      }
+      },
+      error: (err) => {
+        console.error('[GitHubSync] Workspace event subscription error:', err);
+      },
+      complete: () => {
+        console.log('[GitHubSync] Workspace event subscription completed');
       }
     });
+    console.log('[GitHubSync] Workspace event subscription established');
 
     return () => {
       syncEngine.removeStatusListener(handleStatusChange);

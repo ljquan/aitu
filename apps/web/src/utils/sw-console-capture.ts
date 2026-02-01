@@ -9,7 +9,33 @@
 import { swChannelClient } from '@drawnix/drawnix';
 
 let isInitialized = false;
-let debugModeEnabled = false;
+
+// 调试模式：sessionStorage 关掉浏览器自动清除
+const DEBUG_STORAGE_KEY = 'sw-debug-enabled';
+function getDebugModeFromStorage(): boolean {
+  try {
+    return sessionStorage.getItem(DEBUG_STORAGE_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+function setDebugModeToStorage(enabled: boolean | undefined): void {
+  try {
+    sessionStorage.setItem(DEBUG_STORAGE_KEY, enabled === true ? 'true' : 'false');
+  } catch {
+    // 忽略
+  }
+}
+let debugModeEnabled = getDebugModeFromStorage();
+
+// 日志队列：channel 未就绪时暂存，就绪后批量发送
+interface QueuedLog {
+  level: string;
+  message: string;
+  stack?: string;
+}
+const logQueue: QueuedLog[] = [];
+let initPromise: Promise<void> | null = null;
 
 // 保存原始的 console 方法
 const originalConsole = {
@@ -39,8 +65,9 @@ function sendToSW(level: string, message: string, stack?: string) {
     return;
   }
 
-  // 使用 swChannelClient 发送控制台日志
-  if (swChannelClient.isInitialized()) {
+  // 发送单条日志
+  const doSend = () => {
+    if (!swChannelClient.isInitialized()) return;
     swChannelClient.reportConsoleLog(
       level,
       [{ message, stack: stack || '', source: window.location.href }],
@@ -48,6 +75,32 @@ function sendToSW(level: string, message: string, stack?: string) {
     ).catch(() => {
       // 忽略发送错误
     });
+  };
+
+  // 清空队列中的日志
+  const flushQueue = () => {
+    while (logQueue.length > 0 && swChannelClient.isInitialized()) {
+      const item = logQueue.shift()!;
+      swChannelClient.reportConsoleLog(
+        item.level,
+        [{ message: item.message, stack: item.stack || '', source: window.location.href }],
+        Date.now()
+      ).catch(() => {});
+    }
+  };
+
+  if (swChannelClient.isInitialized()) {
+    doSend();
+  } else {
+    logQueue.push({ level, message, stack });
+    // 触发初始化（复用同一 promise 避免重复调用）
+    if (!initPromise) {
+      initPromise = swChannelClient.initialize().then(() => {
+        flushQueue();
+      }).catch(() => {}).finally(() => {
+        initPromise = null;
+      });
+    }
   }
 }
 
@@ -97,26 +150,40 @@ export function initSWConsoleCapture(): void {
 
   isInitialized = true;
 
-  // 订阅调试状态变更事件
+  // 订阅调试状态变更事件 + 主动触发 channel 连接（否则早期日志会因 channel 未就绪而丢失）
   const setupDebugStatusListener = () => {
     if (swChannelClient.isInitialized()) {
-      // 订阅调试状态变更事件
       swChannelClient.subscribeToEvent('debug:statusChanged', (data) => {
-        const event = data as { enabled: boolean };
-        debugModeEnabled = event.enabled;
+        const event = data as { enabled?: boolean; debugModeEnabled?: boolean };
+        const enabled = event.enabled ?? event.debugModeEnabled ?? false;
+        debugModeEnabled = enabled;
+        setDebugModeToStorage(enabled);
       });
-
-      // 查询当前调试状态
-      swChannelClient.getDebugStatus().then((status) => {
-        debugModeEnabled = status.enabled;
+      swChannelClient.getDebugStatus().then((status: { enabled?: boolean; debugModeEnabled?: boolean }) => {
+        const enabled = status.enabled ?? status.debugModeEnabled ?? false;
+        debugModeEnabled = enabled;
+        setDebugModeToStorage(enabled);
       });
     } else {
-      // 如果 swChannelClient 未初始化，延迟重试
+      // 主动触发连接（SW 需在 load 后注册，此处延迟执行）
+      if (!initPromise) {
+        initPromise = swChannelClient.initialize().then(() => {
+          while (logQueue.length > 0 && swChannelClient.isInitialized()) {
+            const item = logQueue.shift()!;
+            swChannelClient.reportConsoleLog(
+              item.level,
+              [{ message: item.message, stack: item.stack || '', source: window.location.href }],
+              Date.now()
+            ).catch(() => {});
+          }
+        }).catch(() => {}).finally(() => {
+          initPromise = null;
+        });
+      }
       setTimeout(setupDebugStatusListener, 500);
     }
   };
 
-  // 初始化调试状态监听
   setupDebugStatusListener();
 
   // 拦截 console.error（始终捕获）
@@ -171,4 +238,5 @@ export function initSWConsoleCapture(): void {
     sendToSW('error', message, stack);
   });
 
+  // sessionStorage 不跨 tab 共享，storage 事件仅对 localStorage 有效，故不监听
 }

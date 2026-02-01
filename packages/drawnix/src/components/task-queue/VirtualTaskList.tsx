@@ -81,6 +81,7 @@ export const VirtualTaskList: React.FC<VirtualTaskListProps> = ({
   const parentRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLElement | null>(null);
+  const lastLoadMoreTimeRef = useRef<number>(0);
   // 惰性初始化：小屏幕默认使用紧凑布局（用屏幕宽度作为初始估计）
   const [internalIsCompact, setInternalIsCompact] = useState(() => {
     if (typeof window !== 'undefined' && window.innerWidth < COMPACT_LAYOUT_THRESHOLD) {
@@ -131,8 +132,13 @@ export const VirtualTaskList: React.FC<VirtualTaskListProps> = ({
         // 检查是否滚动到底部附近（距离底部 300px 时触发加载）
         const { scrollTop, scrollHeight, clientHeight } = scrollRoot;
         const distanceToBottom = scrollHeight - scrollTop - clientHeight;
-        
+
+        // 防抖：距上次加载不足 500ms 不重复触发，避免滚动时 loadMore 级联导致崩溃
+        const now = Date.now();
+        if (now - lastLoadMoreTimeRef.current < 500) return;
+
         if (distanceToBottom < 300 && hasMore && !isLoadingMore) {
+          lastLoadMoreTimeRef.current = now;
           onLoadMore();
         }
       };

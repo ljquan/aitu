@@ -1141,13 +1141,31 @@ export class SWChannelManager {
   // Console RPC 处理器
   // ============================================================================
 
+  /**
+   * 将单个日志参数序列化为字符串，避免对象显示为 [object Object]
+   */
+  private serializeLogArg(arg: unknown): string {
+    if (arg === null) return 'null';
+    if (arg === undefined) return 'undefined';
+    if (typeof arg === 'object') {
+      try {
+        return JSON.stringify(arg);
+      } catch {
+        return String(arg);
+      }
+    }
+    return String(arg);
+  }
+
   private async handleConsoleReport(data: ConsoleReportParams): Promise<{ success: boolean; error?: string }> {
     try {
       const { addConsoleLog } = await import('../index');
-      // addConsoleLog expects a single entry object, not separate arguments
+      const logArgs = data.logArgs ?? [];
+      const parts = Array.isArray(logArgs) ? logArgs.map((a) => this.serializeLogArg(a)) : [this.serializeLogArg(logArgs)];
+      const logMessage = parts.join(' ');
       addConsoleLog({
         logLevel: data.logLevel as 'log' | 'info' | 'warn' | 'error' | 'debug',
-        logMessage: Array.isArray(data.logArgs) ? data.logArgs.map(String).join(' ') : String(data.logArgs),
+        logMessage: logMessage || '-',
       });
       return { success: true };
     } catch (error: any) {
@@ -1164,8 +1182,8 @@ export class SWChannelManager {
       const { getDebugStatus, getCacheStats } = await import('../index');
       const status = getDebugStatus();
       const cacheStats = await getCacheStats();
-      // Return the full status object with cacheStats merged in
-      return { ...status, cacheStats };
+      // 返回完整状态，同时提供 enabled 别名以兼容 DebugStatusResult 类型
+      return { ...status, enabled: status.debugModeEnabled, cacheStats };
     } catch {
       return { debugModeEnabled: false };
     }

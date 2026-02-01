@@ -36,6 +36,9 @@ import {
 /** 同步配置存储键 */
 const SYNC_CONFIG_KEY = 'github_sync_config';
 
+/** 本地已删除、尚未同步到远程的画板（ID -> 删除时间戳），下载远程时按时间戳判断是否恢复 */
+const LOCAL_DELETIONS_PENDING_KEY = 'github_sync_local_deletions_pending';
+
 /** 同步状态变更监听器 */
 type SyncStatusListener = (status: SyncStatus, message?: string) => void;
 
@@ -410,8 +413,50 @@ class SyncEngine {
           result.uploaded.tasks = localData.tasks.completedTasks.length;
           result.success = true;
         }
-      } else if (remoteManifest) {
-        console.log('[SyncEngine] Has remoteManifest, comparing changes...');
+      } else if (config.gistId) {
+        console.log('[SyncEngine] Has gistId, comparing changes...');
+        
+        if (!remoteManifest) {
+          console.warn('[SyncEngine] No remote manifest found, will perform full upload');
+          // 没有远程 manifest，执行完整上传
+          const { cryptoService } = await import('./crypto-service');
+          const filesToUpdate: Record<string, string> = {};
+          
+          // 上传所有画板
+          for (const [boardId, board] of localData.boards) {
+            const boardJson = JSON.stringify(board);
+            filesToUpdate[SYNC_FILES.boardFile(boardId)] = await cryptoService.encrypt(boardJson, config.gistId);
+            localData.manifest.boards[boardId] = {
+              name: board.name,
+              updatedAt: board.updatedAt,
+              checksum: dataSerializer.calculateBoardChecksum(board),
+            };
+          }
+          
+          // 更新 manifest
+          localData.manifest.updatedAt = Date.now();
+          const manifestWithFlag = { ...localData.manifest, encrypted: true };
+          filesToUpdate[SYNC_FILES.MANIFEST] = JSON.stringify(manifestWithFlag, null, 2);
+          
+          // 加密 workspace、prompts、tasks
+          const workspaceJson = JSON.stringify(localData.workspace);
+          filesToUpdate[SYNC_FILES.WORKSPACE] = await cryptoService.encrypt(workspaceJson, config.gistId);
+          
+          const promptsJson = JSON.stringify(localData.prompts);
+          filesToUpdate[SYNC_FILES.PROMPTS] = await cryptoService.encrypt(promptsJson, config.gistId);
+          
+          const tasksJson = JSON.stringify(localData.tasks);
+          filesToUpdate[SYNC_FILES.TASKS] = await cryptoService.encrypt(tasksJson, config.gistId);
+          
+          await gitHubApiService.updateGistFiles(filesToUpdate);
+          result.uploaded.boards = localData.boards.size;
+          result.success = true;
+          
+          await this.saveConfig({
+            lastSyncTime: Date.now(),
+          });
+        } else {
+          console.log('[SyncEngine] Has remoteManifest, comparing changes...');
         // 比较变更
         const changes = dataSerializer.compareBoardChanges(
           localData.boards,
@@ -426,6 +471,9 @@ class SyncEngine {
         });
 
         // 检测本地删除的画板（用于更新远程 tombstone）
+        console.log('[SyncEngine] Detecting local deletions...');
+        console.log('[SyncEngine] Local boards:', Array.from(localData.boards.keys()));
+        console.log('[SyncEngine] Remote manifest boards:', Object.keys(remoteManifest.boards));
         const localDeletions = dataSerializer.detectDeletions(
           localData,
           remoteManifest,
@@ -433,6 +481,7 @@ class SyncEngine {
         );
         console.log('[SyncEngine] Local deletions detected:', {
           boards: localDeletions.deletedBoards.length,
+          deletedBoardIds: localDeletions.deletedBoards.map(b => b.id),
         });
 
         // 安全检查：处理远程要求删除本地画板的情况
@@ -673,15 +722,17 @@ class SyncEngine {
             // 注意：这里只是上传了 tombstone，不是删除本地数据
             // 上传的 tombstone 数量可以在日志中看到
             console.log('[SyncEngine] Uploaded tombstones for', localDeletions.deletedBoards.length, 'boards');
+            await this.clearLocalDeletions(localDeletions.deletedBoards.map(b => b.id));
           }
         }
 
-        // 更新配置
-        await this.saveConfig({
-          lastSyncTime: Date.now(),
-        });
+          // 更新配置
+          await this.saveConfig({
+            lastSyncTime: Date.now(),
+          });
 
-        result.success = true;
+          result.success = true;
+        }
       }
 
       this.setStatus('synced');
@@ -819,11 +870,19 @@ class SyncEngine {
             }
           }
           
-          // 删除远程有但本地没有的画板（通过设置内容为 null）
+          // 软删除远程有但本地没有的画板（标记 deletedAt，保留文件以便恢复）
           for (const remoteBoardId of Object.keys(remoteManifest.boards)) {
+            const remoteInfo = remoteManifest.boards[remoteBoardId];
+            // 跳过已经标记为删除的画板
+            if (remoteInfo.deletedAt) continue;
+            
             if (!localData.boards.has(remoteBoardId)) {
-              filesToUpdate[SYNC_FILES.boardFile(remoteBoardId)] = ''; // 空字符串表示删除
-              console.log(`[SyncEngine] pushToRemote: Board ${remoteBoardId} will be deleted from remote`);
+              // 软删除：在 manifest 中标记 deletedAt，但保留画板文件
+              localData.manifest.boards[remoteBoardId] = {
+                ...remoteInfo,
+                deletedAt: Date.now(),
+              };
+              console.log(`[SyncEngine] pushToRemote: Board ${remoteBoardId} soft-deleted (moved to recycle bin)`);
             }
           }
         } else {
@@ -874,6 +933,11 @@ class SyncEngine {
       console.log('[SyncEngine] pushToRemote: Success', result.uploaded);
       this.setStatus('synced');
       this.pendingChanges = false;
+      // 已以本地为准覆盖远程，本地删除已生效，清除待同步删除记录
+      const pending = await this.getLocalDeletionsPendingSync();
+      if (pending.size > 0) {
+        await this.clearLocalDeletions(Array.from(pending.keys()));
+      }
     } catch (error) {
       console.error('[SyncEngine] pushToRemote failed:', error);
       result.error = error instanceof Error ? error.message : '上传失败';
@@ -955,16 +1019,59 @@ class SyncEngine {
       // 收集本地数据用于比较
       const localData = await dataSerializer.collectSyncData();
       
+      // 获取上次同步时间，用于判断本地删除
+      const lastSyncTime = config.lastSyncTime;
+      console.log('[SyncEngine] pullFromRemote: lastSyncTime:', lastSyncTime);
+      
+      // 本地已删除、尚未同步的画板（ID -> 删除时间戳）
+      const localDeletionsPending = await this.getLocalDeletionsPendingSync();
+      console.log('[SyncEngine] pullFromRemote: Local deletions pending:', 
+        localDeletionsPending.size > 0 
+          ? Object.fromEntries(localDeletionsPending) 
+          : 'none'
+      );
+      
       // 确定需要下载的画板（增量）
       const boardsToDownload: string[] = [];
       const boardsToDelete: string[] = [];
+      const boardsSkippedDueToLocalDeletion: string[] = [];
       
       // 检查远程画板
       for (const [remoteBoardId, remoteInfo] of Object.entries(remoteManifest.boards)) {
+        // 远程已标记删除（tombstone），不下载
+        if (remoteInfo.deletedAt) continue;
+        
+        // 检查本地是否已删除此画板（通过 recordLocalDeletion 记录）
+        const localDeletedAt = localDeletionsPending.get(remoteBoardId);
+        if (localDeletedAt !== undefined) {
+          // 本地已删除：比较时间戳
+          // 如果远程 updatedAt > 本地删除时间，说明远程有更新，应该恢复
+          // 如果远程 updatedAt <= 本地删除时间，说明本地删除更新，保持删除
+          if (remoteInfo.updatedAt > localDeletedAt) {
+            console.log(`[SyncEngine] pullFromRemote: Board ${remoteBoardId} was locally deleted at ${localDeletedAt}, but remote is newer (${remoteInfo.updatedAt}), will restore`);
+            boardsToDownload.push(remoteBoardId);
+          } else {
+            console.log(`[SyncEngine] pullFromRemote: Board ${remoteBoardId} was locally deleted at ${localDeletedAt}, remote is older (${remoteInfo.updatedAt}), keeping deleted`);
+            boardsSkippedDueToLocalDeletion.push(remoteBoardId);
+          }
+          continue;
+        }
+        
         const localBoard = localData.boards.get(remoteBoardId);
         if (!localBoard) {
-          // 本地没有，需要下载
-          boardsToDownload.push(remoteBoardId);
+          // 本地没有此画板，检查是否是"本地删除"还是"远程新增"
+          // 使用 lastSyncTime 判断：
+          // - 如果 lastSyncTime 存在，且远程 updatedAt <= lastSyncTime，
+          //   说明此画板在上次同步时已存在于远程，但现在本地没有 → 本地删除的，不恢复
+          // - 如果 lastSyncTime 不存在（首次同步），或远程 updatedAt > lastSyncTime，
+          //   说明这是远程新增/更新的画板 → 应该恢复
+          if (lastSyncTime && remoteInfo.updatedAt <= lastSyncTime) {
+            console.log(`[SyncEngine] pullFromRemote: Board ${remoteBoardId} existed at last sync (updatedAt: ${remoteInfo.updatedAt} <= lastSyncTime: ${lastSyncTime}), but not local now, treating as locally deleted`);
+            boardsSkippedDueToLocalDeletion.push(remoteBoardId);
+          } else {
+            console.log(`[SyncEngine] pullFromRemote: Board ${remoteBoardId} is new/updated after last sync (updatedAt: ${remoteInfo.updatedAt}, lastSyncTime: ${lastSyncTime}), will download`);
+            boardsToDownload.push(remoteBoardId);
+          }
         } else {
           // 本地有，比较 checksum
           const localChecksum = dataSerializer.calculateBoardChecksum(localBoard);
@@ -982,7 +1089,7 @@ class SyncEngine {
         }
       }
       
-      console.log('[SyncEngine] pullFromRemote: Need to download', boardsToDownload.length, 'boards, delete', boardsToDelete.length, 'boards');
+      console.log('[SyncEngine] pullFromRemote: Need to download', boardsToDownload.length, 'boards, delete', boardsToDelete.length, 'boards, skipped due to local deletion:', boardsSkippedDueToLocalDeletion.length);
       
       // 只下载需要的文件
       const remoteFiles: Record<string, string> = {};
@@ -1024,9 +1131,33 @@ class SyncEngine {
         }
       }
       
+      // 过滤 workspace：只保留 boardsToApply 中画板的元数据，避免本地已删除画板被恢复后出现孤立元数据
+      // 同时排除因本地删除而跳过的画板
+      const appliedBoardIds = new Set(boardsToApply.keys());
+      const skippedBoardIds = new Set(boardsSkippedDueToLocalDeletion);
+      let workspaceToApply = remoteData.workspace;
+      if (workspaceToApply?.boardMetadata) {
+        workspaceToApply = {
+          ...workspaceToApply,
+          boardMetadata: workspaceToApply.boardMetadata.filter(m => 
+            appliedBoardIds.has(m.id) && !skippedBoardIds.has(m.id)
+          ),
+          // 如果远程的 currentBoardId 是被本地删除的画板，不切换到它
+          currentBoardId: workspaceToApply.currentBoardId && 
+            appliedBoardIds.has(workspaceToApply.currentBoardId) && 
+            !skippedBoardIds.has(workspaceToApply.currentBoardId)
+              ? workspaceToApply.currentBoardId
+              : null,
+        };
+      }
+      
+      console.log('[SyncEngine] pullFromRemote: Workspace filtered, appliedBoardIds:', appliedBoardIds.size, 
+        'skippedBoardIds:', skippedBoardIds.size,
+        'currentBoardId:', workspaceToApply?.currentBoardId || 'none');
+      
       console.log('[SyncEngine] pullFromRemote: Applying', boardsToApply.size, 'boards to local');
       const applied = await dataSerializer.applySyncData({
-        workspace: remoteData.workspace,
+        workspace: workspaceToApply,
         boards: boardsToApply,
         prompts: remoteData.prompts,
         tasks: remoteData.tasks,
@@ -1047,6 +1178,26 @@ class SyncEngine {
       console.log('[SyncEngine] pullFromRemote: Success', result.downloaded);
       this.setStatus('synced');
       this.pendingChanges = false;
+      
+      // 清理不再需要的本地删除记录：
+      // 1. 已经被下载/恢复的画板（远程更新更新）
+      // 2. 远程已经不存在的画板（不需要再跟踪删除状态）
+      const deletionsToClean: string[] = [];
+      for (const [deletedBoardId] of localDeletionsPending) {
+        const remoteBoard = remoteManifest.boards[deletedBoardId];
+        if (!remoteBoard) {
+          // 远程已经没有这个画板了，删除记录可以清除
+          deletionsToClean.push(deletedBoardId);
+        } else if (boardsToDownload.includes(deletedBoardId)) {
+          // 已经被恢复了，删除记录可以清除
+          deletionsToClean.push(deletedBoardId);
+        }
+        // boardsSkippedDueToLocalDeletion 中的画板保留删除记录，等待 push 到远程
+      }
+      if (deletionsToClean.length > 0) {
+        console.log('[SyncEngine] pullFromRemote: Cleaning up deletion records:', deletionsToClean);
+        await this.clearLocalDeletions(deletionsToClean);
+      }
 
       // 异步下载媒体文件（总是尝试，因为任务可能已存在但媒体未缓存）
       this.downloadSyncedMediaAsync();
@@ -1088,6 +1239,7 @@ class SyncEngine {
    * 标记有本地变更
    */
   markDirty(): void {
+    console.log('[SyncEngine] markDirty called, current status:', this.status, 'syncInProgress:', this.syncInProgress);
     this.pendingChanges = true;
     if (this.status === 'synced') {
       this.setStatus('local_changes');
@@ -1103,29 +1255,164 @@ class SyncEngine {
   }
 
   /**
+   * 获取本地已删除、尚未同步到远程的画板（ID -> 删除时间戳）
+   * 下载远程时按时间戳判断是否恢复
+   */
+  async getLocalDeletionsPendingSync(): Promise<Map<string, number>> {
+    // 兼容旧格式（string[]）和新格式（Record<string, number>）
+    const data = await kvStorageService.get<string[] | Record<string, number>>(LOCAL_DELETIONS_PENDING_KEY);
+    console.log('[SyncEngine] getLocalDeletionsPendingSync: raw data from storage:', data);
+    if (!data) return new Map();
+    
+    // 旧格式：string[] -> 转换为 Map，使用当前时间作为删除时间
+    if (Array.isArray(data)) {
+      console.log('[SyncEngine] getLocalDeletionsPendingSync: migrating from old format (string[])');
+      const now = Date.now();
+      const map = new Map<string, number>();
+      data.forEach(id => map.set(id, now));
+      // 迁移到新格式
+      await kvStorageService.set(LOCAL_DELETIONS_PENDING_KEY, Object.fromEntries(map));
+      return map;
+    }
+    
+    // 新格式：Record<string, number>
+    const map = new Map(Object.entries(data));
+    console.log('[SyncEngine] getLocalDeletionsPendingSync: loaded', map.size, 'deletions');
+    return map;
+  }
+
+  /**
+   * 记录本地删除的画板（带时间戳）
+   * 用于下载远程时按时间戳判断是否恢复
+   */
+  async recordLocalDeletion(boardId: string): Promise<void> {
+    const map = await this.getLocalDeletionsPendingSync();
+    const deletedAt = Date.now();
+    map.set(boardId, deletedAt);
+    console.log('[SyncEngine] recordLocalDeletion:', boardId, 'at', deletedAt);
+    await kvStorageService.set(LOCAL_DELETIONS_PENDING_KEY, Object.fromEntries(map));
+  }
+
+  /**
+   * 立即将画板删除同步到远程回收站
+   * 在远程 manifest 中标记 deletedAt，保留画板文件以便恢复
+   */
+  async syncBoardDeletion(boardId: string): Promise<{ success: boolean; error?: string }> {
+    console.log('[SyncEngine] syncBoardDeletion:', boardId);
+    
+    // 检查是否已配置
+    if (!tokenService.hasToken()) {
+      console.log('[SyncEngine] syncBoardDeletion: No token, skipping');
+      return { success: false, error: '未配置 GitHub Token' };
+    }
+    
+    const config = await this.getConfig();
+    if (!config.gistId) {
+      console.log('[SyncEngine] syncBoardDeletion: No gistId, skipping');
+      return { success: false, error: '未配置同步 Gist' };
+    }
+    
+    try {
+      gitHubApiService.setGistId(config.gistId);
+      
+      // 获取远程 manifest
+      const manifestContent = await gitHubApiService.getGistFileContent(SYNC_FILES.MANIFEST);
+      if (!manifestContent) {
+        return { success: false, error: '远程 manifest 不存在' };
+      }
+      
+      const manifest: SyncManifest = JSON.parse(manifestContent);
+      const boardInfo = manifest.boards[boardId];
+      
+      if (!boardInfo) {
+        console.log('[SyncEngine] syncBoardDeletion: Board not found in remote manifest');
+        // 画板不在远程，可能是新建后未同步就删除了，直接返回成功
+        return { success: true };
+      }
+      
+      if (boardInfo.deletedAt) {
+        console.log('[SyncEngine] syncBoardDeletion: Board already deleted in remote');
+        return { success: true };
+      }
+      
+      // 获取当前用户信息
+      const userInfo = await tokenService.getUserInfo();
+      const deletedBy = userInfo?.login || 'unknown';
+      
+      // 标记为已删除
+      const deletedAt = Date.now();
+      manifest.boards[boardId] = {
+        ...boardInfo,
+        deletedAt,
+        deletedBy,
+      };
+      manifest.updatedAt = deletedAt;
+      
+      // 更新远程 manifest（保持原有的加密标志）
+      // manifest 已经包含 encrypted 和 customPassword 字段
+      await gitHubApiService.updateGistFiles({
+        [SYNC_FILES.MANIFEST]: JSON.stringify(manifest, null, 2),
+      });
+      
+      console.log('[SyncEngine] syncBoardDeletion: Manifest updated with encryption flags preserved');
+      
+      console.log('[SyncEngine] syncBoardDeletion: Success, board moved to recycle bin');
+      
+      // 清除本地删除记录（已同步到远程）
+      await this.clearLocalDeletions([boardId]);
+      
+      return { success: true };
+    } catch (error) {
+      console.error('[SyncEngine] syncBoardDeletion failed:', error);
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : '同步删除失败' 
+      };
+    }
+  }
+
+  /**
+   * 清除已同步到远程的本地删除记录
+   */
+  async clearLocalDeletions(boardIds: string[]): Promise<void> {
+    if (boardIds.length === 0) return;
+    const map = await this.getLocalDeletionsPendingSync();
+    boardIds.forEach(id => map.delete(id));
+    console.log('[SyncEngine] clearLocalDeletions:', boardIds);
+    await kvStorageService.set(LOCAL_DELETIONS_PENDING_KEY, Object.fromEntries(map));
+  }
+
+  /**
    * 调度自动同步
    */
   private async scheduleAutoSync(): Promise<void> {
     // 检查是否有 token（已配置）
     if (!tokenService.hasToken()) {
+      console.log('[SyncEngine] scheduleAutoSync: No token, skipping');
       return;
     }
 
     const config = await this.getConfig();
+    console.log('[SyncEngine] scheduleAutoSync: config.autoSync =', config.autoSync, 'debounceMs =', config.autoSyncDebounceMs);
     if (!config.autoSync) {
+      console.log('[SyncEngine] scheduleAutoSync: Auto sync disabled, skipping');
       return;
     }
 
     // 清除之前的计时器
     if (this.autoSyncTimer) {
+      console.log('[SyncEngine] scheduleAutoSync: Clearing previous timer');
       clearTimeout(this.autoSyncTimer);
     }
 
     // 设置新的计时器
     this.autoSyncTimer = setTimeout(async () => {
+      console.log('[SyncEngine] Auto sync timer fired, pendingChanges:', this.pendingChanges, 'syncInProgress:', this.syncInProgress);
       if (this.pendingChanges && !this.syncInProgress) {
         console.log('[SyncEngine] Auto sync triggered after debounce');
         await this.sync();
+      } else {
+        console.log('[SyncEngine] Auto sync skipped: pendingChanges =', this.pendingChanges, 'syncInProgress =', this.syncInProgress);
       }
     }, config.autoSyncDebounceMs);
     
@@ -1294,10 +1581,15 @@ class SyncEngine {
 
         // 解密（如果需要）
         const { cryptoService } = await import('./crypto-service');
-        const manifestExt = manifest as SyncManifest & { encrypted?: boolean };
+        const manifestExt = manifest as SyncManifest & { encrypted?: boolean; customPassword?: boolean };
         let boardJson = boardContent;
         if (manifestExt.encrypted) {
-          boardJson = await cryptoService.decryptOrPassthrough(boardContent, config.gistId);
+          // 如果使用了自定义密码，需要获取密码
+          let customPassword: string | undefined;
+          if (manifestExt.customPassword) {
+            customPassword = await syncPasswordService.getPassword() || undefined;
+          }
+          boardJson = await cryptoService.decryptOrPassthrough(boardContent, config.gistId, customPassword);
         }
 
         const board: BoardData = JSON.parse(boardJson);

@@ -113,8 +113,23 @@ export function SyncSettings({ visible, onClose }: SyncSettingsProps) {
   // 加密密码状态
   const [customPassword, setCustomPassword] = useState('');
   const [hasStoredPassword, setHasStoredPassword] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
+  const [storedPassword, setStoredPassword] = useState(''); // 完整的已存储密码
+  const [showStoredPassword, setShowStoredPassword] = useState(false); // 是否显示完整密码
   const [isSavingPassword, setIsSavingPassword] = useState(false);
+  
+  /** 创建掩码密码（显示前后各2位） */
+  const maskPassword = (password: string): string => {
+    if (password.length <= 4) {
+      return '*'.repeat(password.length);
+    }
+    const prefix = password.slice(0, 2);
+    const suffix = password.slice(-2);
+    const masked = '*'.repeat(Math.min(password.length - 4, 6));
+    return `${prefix}${masked}${suffix}`;
+  };
+  
+  /** 获取显示的密码（根据显示/隐藏状态） */
+  const displayPassword = showStoredPassword ? storedPassword : maskPassword(storedPassword);
 
   // 加载 Gist 列表
   const loadGists = useCallback(async () => {
@@ -142,7 +157,11 @@ export function SyncSettings({ visible, onClose }: SyncSettingsProps) {
   // 加载已存储的密码状态
   useEffect(() => {
     if (visible && isConnected) {
-      syncPasswordService.hasPassword().then(setHasStoredPassword);
+      syncPasswordService.getPassword().then((password) => {
+        setHasStoredPassword(!!password);
+        setStoredPassword(password || '');
+        setShowStoredPassword(false); // 重置为隐藏状态
+      });
     }
   }, [visible, isConnected]);
 
@@ -152,13 +171,14 @@ export function SyncSettings({ visible, onClose }: SyncSettingsProps) {
     try {
       await syncPasswordService.savePassword(customPassword);
       setHasStoredPassword(!!customPassword);
+      setStoredPassword(customPassword || '');
+      setShowStoredPassword(false);
       if (customPassword) {
         MessagePlugin.success('加密密码已保存');
       } else {
         MessagePlugin.info('已恢复使用默认加密');
       }
       setCustomPassword('');
-      setShowPassword(false);
     } catch (err) {
       MessagePlugin.error('保存密码失败');
     } finally {
@@ -723,23 +743,27 @@ export function SyncSettings({ visible, onClose }: SyncSettingsProps) {
                 </p>
                 <div className="sync-settings__password-input-row">
                   <input
-                    type={showPassword ? 'text' : 'password'}
+                    type="text"
                     className="sync-settings__password-input"
                     value={customPassword}
                     onChange={(e) => setCustomPassword(e.target.value)}
-                    placeholder={hasStoredPassword ? '输入新密码以更换' : '设置自定义加密密码（可选）'}
+                    placeholder={hasStoredPassword 
+                      ? `当前: ${displayPassword}，输入新密码以更换` 
+                      : '设置自定义加密密码（可选）'}
                     autoComplete="new-password"
                   />
-                  <Button
-                    variant="text"
-                    size="small"
-                    onClick={() => setShowPassword(!showPassword)}
-                  >
-                    {showPassword ? '隐藏' : '显示'}
-                  </Button>
+                  {hasStoredPassword && (
+                    <Button
+                      variant="text"
+                      size="small"
+                      onClick={() => setShowStoredPassword(!showStoredPassword)}
+                    >
+                      {showStoredPassword ? '隐藏' : '显示'}
+                    </Button>
+                  )}
                   <Button
                     theme="primary"
-                    variant={hasStoredPassword ? 'outline' : 'base'}
+                    variant="base"
                     size="small"
                     loading={isSavingPassword}
                     onClick={handleSavePassword}

@@ -19,6 +19,7 @@ import {
 } from './task-queue';
 import {
   setDebugFetchBroadcast,
+  setDebugFetchEnabled,
   getInternalFetchLogs,
   clearInternalFetchLogs,
   isDebugFetchEnabled,
@@ -86,8 +87,9 @@ taskQueue.setChannelManager(channelManager);
 channelManager.setDebugClientCountChangedCallback(handleDebugClientCountChanged);
 
 // ============================================================================
-// SW Console Log Capture (for debug mode)
-// Intercepts SW internal console.log/info calls and forwards to debug panel
+// SW Console Log Capture（应用页面 + Service Worker 日志均需捕获）
+// - 调试开启：log/info/warn/error 均转发并记录、持久化 7 天、广播到调试面板
+// - 调试关闭：仅转发并记录 warn/error，持久化 7 天，不广播
 // ============================================================================
 const originalSWConsole = {
   log: console.log.bind(console),
@@ -110,10 +112,10 @@ function shouldFilterLog(args: unknown[]): boolean {
     return true;
   }
   
-  // 过滤来自主线程的消息
+  // 过滤来自主线程转发的重复消息（主线程通过 console:report 独立上报，不走 SW console）
+  // 注意：不在此过滤 "Service Worker"，否则会误拦 SW 自身的日志如 "Service Worker [Video-xxx]: fetch failed"
   if (message.includes('[Main]') ||
-      message.includes('[SW Console Capture]') ||
-      message.includes('Service Worker')) {
+      message.includes('[SW Console Capture]')) {
     return true;
   }
   
@@ -126,7 +128,7 @@ function shouldFilterLog(args: unknown[]): boolean {
   return false;
 }
 
-// Forward SW console logs to debug panel when debug mode is enabled
+// 转发 SW 内部 console 到 addConsoleLog（调试开：全部；调试关：仅 warn/error，均持久化 7 天）
 function setupSWConsoleCapture() {
   console.log = (...args: unknown[]) => {
     originalSWConsole.log(...args);
@@ -142,7 +144,7 @@ function setupSWConsoleCapture() {
     }
   };
 
-  // warn and error are always forwarded (but still filtered for loops)
+  // warn/error 始终转发并记录（调试关闭时也会持久化 7 天）
   console.warn = (...args: unknown[]) => {
     originalSWConsole.warn(...args);
     if (!shouldFilterLog(args)) {
@@ -158,37 +160,54 @@ function setupSWConsoleCapture() {
   };
 }
 
+/** 序列化日志参数为字符串，Error 对象需特殊处理（message/stack 不可枚举，JSON.stringify 会得到 {}） */
+function formatLogArgs(args: unknown[]): { message: string; stack?: string } {
+  let extractedStack: string | undefined;
+  const parts: string[] = [];
+  for (const arg of args) {
+    try {
+      // Error 或类 Error 对象（跨 realm 时 instanceof 可能为 false）
+      const err = arg as { name?: string; message?: string; stack?: string };
+      if (arg instanceof Error || (arg && typeof arg === 'object' && typeof err.message === 'string')) {
+        extractedStack = err.stack || extractedStack;
+        parts.push(`${err.name || 'Error'}: ${err.message || ''}`);
+      } else if (typeof arg === 'object' && arg !== null) {
+        const str = JSON.stringify(arg);
+        parts.push(str === '{}' ? String(arg) : str);
+      } else {
+        parts.push(String(arg));
+      }
+    } catch {
+      parts.push(String(arg));
+    }
+  }
+  const message = parts.join(' ') || '(empty)';
+  return { message, stack: extractedStack };
+}
+
 function forwardSWConsoleLog(
   level: 'log' | 'info' | 'warn' | 'error',
   args: unknown[]
 ) {
-  const message = args
-    .map((arg) => {
-      if (typeof arg === 'object') {
-        try {
-          return JSON.stringify(arg);
-        } catch {
-          return String(arg);
-        }
-      }
-      return String(arg);
-    })
-    .join(' ');
+  try {
+    const { message, stack } = formatLogArgs(args);
 
-  // Add [SW] prefix only if not already present
-  const prefixedMessage =
-    message.startsWith('[SW]') || message.startsWith('[SW-')
-      ? message
-      : `[SW] ${message}`;
+    // Add [SW] prefix only if not already present
+    const prefixedMessage =
+      message.startsWith('[SW]') || message.startsWith('[SW-')
+        ? message
+        : `[SW] ${message}`;
 
-  // Use the existing addConsoleLog function (defined later in this file)
-  // We'll call it after it's defined
-  if (typeof addConsoleLogLater === 'function') {
-    addConsoleLogLater({
-      logLevel: level,
-      logMessage: prefixedMessage,
-      logSource: 'service-worker',
-    });
+    if (typeof addConsoleLogLater === 'function') {
+      addConsoleLogLater({
+        logLevel: level,
+        logMessage: prefixedMessage,
+        logStack: stack,
+        logSource: 'service-worker',
+      });
+    }
+  } catch (e) {
+    originalSWConsole.error('[SW Console Capture] forwardSWConsoleLog failed:', e);
   }
 }
 
@@ -292,7 +311,7 @@ const completedImageRequests = new Map<string, CompletedRequestEntry>();
 const COMPLETED_REQUEST_CACHE_TTL = 30 * 1000;
 
 interface VideoRequestEntry {
-  promise: Promise<Blob | null>;
+  promise: Promise<Blob | null | symbol>;  // symbol = VIDEO_LOAD_ERROR 表示下载失败
   timestamp: number;
   count: number;
   requestId: string;
@@ -476,13 +495,15 @@ async function saveConsoleLogToDB(logEntry: DebugLogEntry): Promise<void> {
   }
 }
 
-// 从 IndexedDB 加载所有控制台日志
+// 从 IndexedDB 加载控制台日志（仅返回 7 天内，加载前先清理过期）
 async function loadConsoleLogsFromDB(): Promise<DebugLogEntry[]> {
   try {
+    await cleanupExpiredConsoleLogs();
     const db = await openConsoleLogDB();
     const transaction = db.transaction(['logs'], 'readonly');
     const store = transaction.objectStore('logs');
     const index = store.index('timestamp');
+    const expirationTime = Date.now() - CONSOLE_LOG_RETENTION_DAYS * 24 * 60 * 60 * 1000;
 
     return new Promise((resolve, reject) => {
       const request = index.openCursor(null, 'prev'); // 按时间倒序
@@ -491,7 +512,10 @@ async function loadConsoleLogsFromDB(): Promise<DebugLogEntry[]> {
       request.onsuccess = () => {
         const cursor = request.result;
         if (cursor) {
-          logs.push(cursor.value);
+          const entry = cursor.value as DebugLogEntry;
+          if (entry.timestamp >= expirationTime) {
+            logs.push(entry);
+          }
           cursor.continue();
         } else {
           db.close();
@@ -575,11 +599,13 @@ async function clearAllConsoleLogs(): Promise<void> {
   }
 }
 
+// 控制台日志内存条数上限（避免无限增长）
+const MAX_CONSOLE_LOGS_MEMORY = 500;
+
 // 添加控制台日志
-// 注意：只有调试模式启用时才存储和广播日志
-// 这与主线程 sw-console-capture.ts 的设计一致：
-// - 主线程：warn/error 始终发送，log/info/debug 只在调试模式时发送
-// - SW 端：只有调试模式启用时才处理日志，避免不必要的存储和广播
+// - 调试模式开启：记录所有级别（log/info/warn/error/debug），持久化 7 天并广播到调试面板
+// - 调试模式关闭：仅记录 warn 及以上，持久化 7 天，不广播
+// 应用页面与 Service Worker 的日志均经此入口（主线程通过 console:report，SW 通过 forwardSWConsoleLog）
 function addConsoleLog(entry: {
   logLevel: 'log' | 'info' | 'warn' | 'error' | 'debug';
   logMessage: string;
@@ -587,8 +613,9 @@ function addConsoleLog(entry: {
   logSource?: string;
   url?: string;
 }): void {
-  // 调试模式未启用时，不存储和广播日志
-  if (!debugModeEnabled) {
+  const isWarnOrAbove = entry.logLevel === 'warn' || entry.logLevel === 'error';
+  const shouldRecord = debugModeEnabled || isWarnOrAbove;
+  if (!shouldRecord) {
     return;
   }
 
@@ -600,14 +627,19 @@ function addConsoleLog(entry: {
     ...entry,
   };
 
-  // 保存到内存（用于 getDebugStatus 统计）
-  consoleLogs.unshift(logEntry);
-
-  // 保存到 IndexedDB（异步，不阻塞）
+  // 持久化到 IndexedDB（保留 7 天，由 cleanupExpiredConsoleLogs 清理）
   saveConsoleLogToDB(logEntry);
 
-  // 广播日志到调试页面
-  broadcastConsoleLog(logEntry);
+  // 内存缓存：调试开启时存全部，关闭时只存 warn+（用于统计与调试面板加载）
+  consoleLogs.unshift(logEntry);
+  if (consoleLogs.length > MAX_CONSOLE_LOGS_MEMORY) {
+    consoleLogs.length = MAX_CONSOLE_LOGS_MEMORY;
+  }
+
+  // 仅调试模式开启时广播到调试面板
+  if (debugModeEnabled) {
+    broadcastConsoleLog(logEntry);
+  }
 }
 
 // Set the forward function now that addConsoleLog is defined
@@ -713,34 +745,27 @@ function clearConsoleLogs(): void {
 }
 
 // 启用调试模式（当调试页面连接时自动启用）
-async function enableDebugMode(): Promise<void> {
+function enableDebugMode(): void {
   if (debugModeEnabled) return; // 避免重复启用
-  
+
   debugModeEnabled = true;
-  
-  // Sync debug mode to debugFetch and message sender
-  const { setDebugFetchEnabled } = await import('./task-queue/debug-fetch');
   setDebugFetchEnabled(true);
   setMessageSenderDebugMode(true);
-  
+
   originalSWConsole.log('Service Worker: Debug mode enabled (debug page connected)');
 }
 
 // 禁用调试模式（当所有调试页面关闭时自动禁用）
-async function disableDebugMode(): Promise<void> {
+function disableDebugMode(): void {
   if (!debugModeEnabled) return; // 避免重复禁用
-  
+
   debugModeEnabled = false;
-  
-  // Sync debug mode to debugFetch and message sender
-  const { setDebugFetchEnabled } = await import('./task-queue/debug-fetch');
   setDebugFetchEnabled(false);
   setMessageSenderDebugMode(false);
 
-  // 禁用调试模式时清空所有日志
+  // 禁用调试时仅清空内存；IndexedDB 中 warn+ 日志保留 7 天
   consoleLogs.length = 0;
   debugLogs.length = 0;
-  await clearAllConsoleLogs().catch(() => {});
 
   originalSWConsole.log('Service Worker: Debug mode disabled (no debug pages)');
 }
@@ -1482,12 +1507,9 @@ sw.addEventListener('message', (event: ExtendableMessageEvent) => {
         console.error('Service Worker: Failed to clear all cache:', error);
       });
   } else if (event.data && event.data.type === 'SW_DEBUG_ENABLE') {
-    // 启用调试模式
+    // 启用调试模式（同步设置 debugFetch，否则 log/info 会因 isDebugFetchEnabled 延迟为 true 而漏捕）
     debugModeEnabled = true;
-    // Sync debug mode to debugFetch and message sender
-    import('./task-queue/debug-fetch').then(({ setDebugFetchEnabled }) => {
-      setDebugFetchEnabled(true);
-    });
+    setDebugFetchEnabled(true);
     setMessageSenderDebugMode(true);
     originalSWConsole.log('Service Worker: Debug mode enabled');
     // 响应发送方（native message）
@@ -1502,18 +1524,14 @@ sw.addEventListener('message', (event: ExtendableMessageEvent) => {
   } else if (event.data && event.data.type === 'SW_DEBUG_DISABLE') {
     // 禁用调试模式
     debugModeEnabled = false;
-    // Sync debug mode to debugFetch and message sender
-    import('./task-queue/debug-fetch').then(({ setDebugFetchEnabled }) => {
-      setDebugFetchEnabled(false);
-    });
+    setDebugFetchEnabled(false);
     setMessageSenderDebugMode(false);
 
-    // 禁用调试模式时清空所有日志（内存和 IndexedDB）
+    // 禁用调试时仅清空内存；IndexedDB 中 warn+ 日志保留 7 天供后续查看
     consoleLogs.length = 0;
     debugLogs.length = 0;
-    clearAllConsoleLogs().catch(() => {});
 
-    originalSWConsole.log('Service Worker: Debug mode disabled, logs cleared');
+    originalSWConsole.log('Service Worker: Debug mode disabled');
     // 响应发送方（native message）
     if (event.source) {
       (event.source as Client).postMessage({ type: 'SW_DEBUG_DISABLED' });
@@ -2885,6 +2903,9 @@ async function handleAssetLibraryRequest(request: Request): Promise<Response> {
   }
 }
 
+// Sentinel：视频下载失败时返回此值，避免 throw 导致 Uncaught (in promise)
+const VIDEO_LOAD_ERROR = Symbol('VIDEO_LOAD_ERROR');
+
 // 处理视频请求,支持 Range 请求以实现视频 seek 功能
 async function handleVideoRequest(request: Request): Promise<Response> {
   const url = new URL(request.url);
@@ -2958,7 +2979,16 @@ async function handleVideoRequest(request: Request): Promise<Response> {
       // 等待视频下载完成
       const videoBlob = await existingEntry.promise;
 
-      if (!videoBlob) {
+      // 下载失败（404/403 等），返回 500
+      if (videoBlob === VIDEO_LOAD_ERROR) {
+        return new Response('Video loading error', {
+          status: 500,
+          statusText: 'Internal Server Error',
+          headers: { 'Content-Type': 'text/plain' },
+        });
+      }
+      // 服务器支持 Range，重新 fetch
+      if (videoBlob === null) {
         const fetchOptions = {
           method: 'GET',
           headers: new Headers(request.headers),
@@ -3005,87 +3035,74 @@ async function handleVideoRequest(request: Request): Promise<Response> {
 
         return createVideoResponse(videoBlob, rangeHeader, requestId);
       }
-    } catch (cacheError) {
-      console.warn(
-        `Service Worker [Video-${requestId}]: 检查 Cache API 失败:`,
-        cacheError
-      );
+    } catch {
+      // 检查 Cache API 失败，继续下载
     }
 
     // 创建新的视频下载Promise
     // console.log(`Service Worker [Video-${requestId}]: 开始下载新视频:`, dedupeKey);
 
     const downloadPromise = (async () => {
-      // 构建请求选项
-      const fetchOptions = {
-        method: 'GET',
-        mode: 'cors' as RequestMode,
-        credentials: 'omit' as RequestCredentials,
-        cache: 'default' as RequestCache, // 使用浏览器默认缓存策略
-      };
+      try {
+        // 构建请求选项
+        const fetchOptions = {
+          method: 'GET',
+          mode: 'cors' as RequestMode,
+          credentials: 'omit' as RequestCredentials,
+          cache: 'default' as RequestCache, // 使用浏览器默认缓存策略
+        };
 
-      // 获取视频响应（不带Range header，获取完整视频）
-      const fetchUrl = new URL(dedupeUrl);
-      const response = await fetch(fetchUrl, fetchOptions);
+        // 获取视频响应（不带Range header，获取完整视频）
+        const fetchUrl = new URL(dedupeUrl);
+        const response = await fetch(fetchUrl, fetchOptions);
 
-      if (!response.ok) {
-        console.error(
-          `Service Worker [Video-${requestId}]: Video fetch failed:`,
-          response.status
-        );
-        throw new Error(`Video fetch failed: ${response.status}`);
-      }
-
-      // 如果服务器返回206，说明服务器原生支持Range，直接返回不缓存
-      if (response.status === 206) {
-        // console.log(`Service Worker [Video-${requestId}]: 服务器原生支持Range请求，直接返回`);
-        return null; // 返回null表示不缓存，直接使用服务器响应
-      }
-
-      // 下载完整视频
-      // console.log(`Service Worker [Video-${requestId}]: 开始下载完整视频...`);
-      const videoBlob = await response.blob();
-      const videoSizeMB = videoBlob.size / (1024 * 1024);
-      // console.log(`Service Worker [Video-${requestId}]: 视频下载完成 (大小: ${videoSizeMB.toFixed(2)}MB)`);
-
-      // 缓存视频Blob（仅缓存小于50MB的视频）
-      if (videoSizeMB < 50) {
-        // 1. 内存缓存（用于当前会话快速访问）
-        videoBlobCache.set(dedupeKey, {
-          blob: videoBlob,
-          timestamp: Date.now(),
-        });
-        // console.log(`Service Worker [Video-${requestId}]: 视频已缓存到内存`);
-
-        // 2. 持久化到 Cache API（用于跨会话持久化）
-        try {
-          const cache = await caches.open(IMAGE_CACHE_NAME);
-          const cacheResponse = new Response(videoBlob, {
-            headers: {
-              'Content-Type': videoBlob.type || 'video/mp4',
-              'Content-Length': videoBlob.size.toString(),
-              'sw-cache-date': Date.now().toString(),
-              'sw-video-size': videoBlob.size.toString(),
-            },
-          });
-          await cache.put(dedupeKey, cacheResponse);
-          // console.log(`Service Worker [Video-${requestId}]: 视频已持久化到 Cache API`);
-          
-          // 异步生成预览图（不阻塞主流程）
-          // 使用与缓存key一致的URL（dedupeKey）作为预览图key
-          const { generateThumbnailAsync } = await import('./task-queue/utils/thumbnail-utils');
-          generateThumbnailAsync(videoBlob, dedupeKey, 'video');
-        } catch (cacheError) {
-          console.warn(
-            `Service Worker [Video-${requestId}]: 持久化到 Cache API 失败:`,
-            cacheError
-          );
+        if (!response.ok) {
+          return VIDEO_LOAD_ERROR;
         }
-      } else {
-        // console.log(`Service Worker [Video-${requestId}]: 视频过大(${videoSizeMB.toFixed(2)}MB)，不缓存`);
-      }
 
-      return videoBlob;
+        // 如果服务器返回206，说明服务器原生支持Range，直接返回不缓存
+        if (response.status === 206) {
+          // console.log(`Service Worker [Video-${requestId}]: 服务器原生支持Range请求，直接返回`);
+          return null; // 返回null表示不缓存，直接使用服务器响应
+        }
+
+        // 下载完整视频
+        // console.log(`Service Worker [Video-${requestId}]: 开始下载完整视频...`);
+        const videoBlob = await response.blob();
+        const videoSizeMB = videoBlob.size / (1024 * 1024);
+        // console.log(`Service Worker [Video-${requestId}]: 视频下载完成 (大小: ${videoSizeMB.toFixed(2)}MB)`);
+
+        // 缓存视频Blob（仅缓存小于50MB的视频）
+        if (videoSizeMB < 50) {
+          // 1. 内存缓存（用于当前会话快速访问）
+          videoBlobCache.set(dedupeKey, {
+            blob: videoBlob,
+            timestamp: Date.now(),
+          });
+          // 2. 持久化到 Cache API（用于跨会话持久化）
+          try {
+            const cache = await caches.open(IMAGE_CACHE_NAME);
+            const cacheResponse = new Response(videoBlob, {
+              headers: {
+                'Content-Type': videoBlob.type || 'video/mp4',
+                'Content-Length': videoBlob.size.toString(),
+                'sw-cache-date': Date.now().toString(),
+                'sw-video-size': videoBlob.size.toString(),
+              },
+            });
+            await cache.put(dedupeKey, cacheResponse);
+            const { generateThumbnailAsync } = await import('./task-queue/utils/thumbnail-utils');
+            generateThumbnailAsync(videoBlob, dedupeKey, 'video');
+          } catch {
+            // 持久化到 Cache API 失败，内存缓存仍可用
+          }
+        }
+
+
+        return videoBlob;
+      } catch {
+        return VIDEO_LOAD_ERROR;
+      }
     })();
 
     // 将下载Promise存储到去重字典
@@ -3109,6 +3126,15 @@ async function handleVideoRequest(request: Request): Promise<Response> {
     // 等待视频下载完成
     const videoBlob = await downloadPromise;
 
+    // 下载失败（404/403 等），返回 500 让前端处理
+    if (videoBlob === VIDEO_LOAD_ERROR) {
+      return new Response('Video loading error', {
+        status: 500,
+        statusText: 'Internal Server Error',
+        headers: { 'Content-Type': 'text/plain' },
+      });
+    }
+
     // 如果返回null，说明服务器支持Range，重新发送原始请求
     if (videoBlob === null) {
       const fetchOptions = {
@@ -3122,11 +3148,7 @@ async function handleVideoRequest(request: Request): Promise<Response> {
 
     // 使用下载的blob响应Range请求
     return createVideoResponse(videoBlob as Blob, rangeHeader, requestId);
-  } catch (error) {
-    console.error(
-      `Service Worker [Video-${requestId}]: Video request error:`,
-      error
-    );
+  } catch {
     return new Response('Video loading error', {
       status: 500,
       statusText: 'Internal Server Error',
@@ -3165,9 +3187,6 @@ function createVideoResponse(
   // 解析Range header (格式: "bytes=start-end")
   const rangeMatch = rangeHeader.match(/bytes=(\d+)-(\d*)/);
   if (!rangeMatch) {
-    console.error(
-      `Service Worker [Video-${requestId}]: Invalid Range header format`
-    );
     return new Response(videoBlob, {
       status: 200,
       statusText: 'OK',
@@ -3879,7 +3898,6 @@ async function handleImageRequest(request: Request): Promise<Response> {
       throw timeoutError;
     }
   } catch (error) {
-    console.error('Service Worker fetch error:', error);
     throw error;
   }
 }
@@ -4337,8 +4355,6 @@ async function handleImageRequestInternal(
 
     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
   } catch (error: any) {
-    console.error('Service Worker fetch error:', error);
-
     // 重新获取URL用于错误处理
     const errorUrl = new URL(requestUrl);
 

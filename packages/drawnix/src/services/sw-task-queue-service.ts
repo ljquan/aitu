@@ -243,27 +243,18 @@ class SWTaskQueueService {
    * 恢复任务到本地状态、持久化到 SW 并通知 UI 更新
    */
   async restoreTasks(tasks: Task[]): Promise<void> {
-    console.log('[SWTaskQueue] restoreTasks called with', tasks.length, 'tasks');
-    console.log('[SWTaskQueue] Current local tasks:', this.tasks.size, 'ids:', Array.from(this.tasks.keys()).slice(0, 5));
-    
     // 过滤出本地不存在的任务
     const tasksToRestore = tasks.filter(task => !this.tasks.has(task.id));
-    
-    console.log('[SWTaskQueue] Tasks to restore:', tasksToRestore.length);
-    
+
     if (tasksToRestore.length === 0) {
-      console.log('[SWTaskQueue] No new tasks to restore (all tasks already exist locally)');
       return;
     }
-    
+
     // 转换为 SWTask 格式并导入到 SW
     const swTasks: SWTask[] = tasksToRestore.map(task => this.convertTaskToSWTask(task));
-    
-    console.log('[SWTaskQueue] Restoring', swTasks.length, 'tasks to SW...');
-    
+
     // 调用 SW 的 importTasks 方法持久化任务
     const result = await swChannelClient.importTasks(swTasks);
-    console.log('[SWTaskQueue] Import result:', result);
     
     if (result.success) {
       // 添加到本地内存

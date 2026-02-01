@@ -128,8 +128,23 @@ async function generateThumbnailForSize(
       return; // 已存在，无需重复生成
     }
 
-    // 2. 使用 createImageBitmap 和 OffscreenCanvas 生成预览图
-    const imageBitmap = await createImageBitmap(blob);
+    // 2. 验证 blob 可解码，避免 InvalidStateError 导致 SW 崩溃
+    // 非图片类型（如 404 的 text/html）或空 blob 不能解码
+    if (blob.size === 0) return;
+    const type = (blob.type || '').toLowerCase();
+    if (!type.startsWith('image/') && type !== '') return;
+
+    // 3. 使用 createImageBitmap 和 OffscreenCanvas 生成预览图
+    let imageBitmap: ImageBitmap;
+    try {
+      imageBitmap = await createImageBitmap(blob);
+    } catch (decodeError) {
+      // InvalidStateError: 源图片无法解码（损坏/格式错误/非图片内容）
+      if (decodeError instanceof Error && decodeError.name === 'InvalidStateError') {
+        return; // 静默跳过，不重试
+      }
+      throw decodeError;
+    }
     const { width, height } = calculateThumbnailSize(
       imageBitmap.width,
       imageBitmap.height,
@@ -143,8 +158,11 @@ async function generateThumbnailForSize(
       return;
     }
 
-    ctx.drawImage(imageBitmap, 0, 0, width, height);
-    imageBitmap.close();
+    try {
+      ctx.drawImage(imageBitmap, 0, 0, width, height);
+    } finally {
+      imageBitmap.close();
+    }
 
     const thumbnailBlob = await canvas.convertToBlob({
       type: 'image/jpeg',

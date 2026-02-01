@@ -496,6 +496,24 @@ class WorkspaceService {
     const board = this.boards.get(id);
     if (!board) throw new Error(`Board ${id} not found`);
 
+    console.log('[WorkspaceService] deleteBoard called:', id, board.name);
+
+    // 异步同步删除到远程回收站（不阻塞本地删除）
+    import('./github-sync').then(({ syncEngine }) => {
+      console.log('[WorkspaceService] Syncing board deletion to remote (async)...');
+      syncEngine.syncBoardDeletion(id).then((result) => {
+        if (result.success) {
+          console.log('[WorkspaceService] Board synced to remote recycle bin:', id);
+        } else {
+          console.warn('[WorkspaceService] Failed to sync deletion to remote:', result.error);
+        }
+      }).catch((err) => {
+        console.warn('[WorkspaceService] Could not sync deletion to remote:', err);
+      });
+    }).catch((err) => {
+      console.warn('[WorkspaceService] Could not load syncEngine:', err);
+    });
+
     // Clear current if this board is active
     if (this.state.currentBoardId === id) {
       this.state.currentBoardId = null;
@@ -506,6 +524,7 @@ class WorkspaceService {
     this.boardMetadata.delete(id);
     this.loadedBoards.delete(id);
     await workspaceStorageService.deleteBoard(id);
+    console.log('[WorkspaceService] Emitting boardDeleted event for:', id);
     this.emit('boardDeleted', board);
   }
 
@@ -1062,7 +1081,9 @@ class WorkspaceService {
   }
 
   private emit(type: WorkspaceEvent['type'], payload?: unknown): void {
-    this.events$.next({ type, payload, timestamp: Date.now() });
+    const event = { type, payload, timestamp: Date.now() };
+    console.log('[WorkspaceService] emit() called:', type, 'observers:', this.events$.observers.length);
+    this.events$.next(event);
   }
 
   // ========== Initialization ==========

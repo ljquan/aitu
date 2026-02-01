@@ -11,9 +11,15 @@ import {
   RollbackIcon,
   ChevronRightIcon,
   ChevronDownIcon,
+  LinkIcon,
 } from 'tdesign-icons-react';
 import { syncEngine } from '../../services/github-sync';
 import type { DeletedItems } from '../../services/github-sync/types';
+
+/** 构建画板文件的 Gist URL */
+function getBoardGistUrl(gistId: string, boardId: string): string {
+  return `https://gist.github.com/${gistId}#file-board_${boardId.replace(/-/g, '-')}-json`;
+}
 
 interface RecycleBinProps {
   isConnected: boolean;
@@ -52,6 +58,7 @@ export function RecycleBin({ isConnected, onRefresh }: RecycleBinProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [restoringId, setRestoringId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [gistId, setGistId] = useState<string | null>(null);
   
   // 确认对话框状态
   const [deleteConfirmItem, setDeleteConfirmItem] = useState<{
@@ -69,8 +76,12 @@ export function RecycleBin({ isConnected, onRefresh }: RecycleBinProps) {
     
     setIsLoading(true);
     try {
-      const items = await syncEngine.getDeletedItems();
+      const [items, config] = await Promise.all([
+        syncEngine.getDeletedItems(),
+        syncEngine.getConfig(),
+      ]);
       setDeletedItems(items);
+      setGistId(config.gistId || null);
     } catch (err) {
       console.error('[RecycleBin] Failed to load deleted items:', err);
       MessagePlugin.error('加载回收站失败');
@@ -212,6 +223,17 @@ export function RecycleBin({ isConnected, onRefresh }: RecycleBinProps) {
                           </span>
                         </div>
                         <div className="sync-settings__recycle-item-actions">
+                          {gistId && (
+                            <Button
+                              variant="text"
+                              size="small"
+                              icon={<LinkIcon />}
+                              onClick={() => window.open(getBoardGistUrl(gistId, board.id), '_blank')}
+                              title="在 GitHub 查看文件"
+                            >
+                              查看
+                            </Button>
+                          )}
                           <Button
                             variant="text"
                             size="small"
