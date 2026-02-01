@@ -167,6 +167,8 @@ export interface SyncResult {
   conflicts: ConflictItem[];
   /** 错误信息 */
   error?: string;
+  /** 是否需要输入密码（解密失败时） */
+  needsPassword?: boolean;
   /** 同步耗时（毫秒） */
   duration: number;
   /** 远程当前画板 ID */

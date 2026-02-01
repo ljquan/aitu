@@ -19,8 +19,9 @@ import {
   CloudUploadIcon,
 } from 'tdesign-icons-react';
 import { useGitHubSync, GistInfo } from '../../contexts/GitHubSyncContext';
-import { tokenService } from '../../services/github-sync';
+import { tokenService, syncPasswordService } from '../../services/github-sync';
 import { TokenGuide } from './TokenGuide';
+import { LockOnIcon, LockOffIcon } from 'tdesign-icons-react';
 import './sync-settings.scss';
 
 /** Props */
@@ -107,6 +108,12 @@ export function SyncSettings({ visible, onClose }: SyncSettingsProps) {
   const [isSwitchingGist, setIsSwitchingGist] = useState<string | null>(null);
   const [deleteConfirmGist, setDeleteConfirmGist] = useState<GistInfo | null>(null);
   const [isCreatingGist, setIsCreatingGist] = useState(false);
+  
+  // 加密密码状态
+  const [customPassword, setCustomPassword] = useState('');
+  const [hasStoredPassword, setHasStoredPassword] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [isSavingPassword, setIsSavingPassword] = useState(false);
 
   // 加载 Gist 列表
   const loadGists = useCallback(async () => {
@@ -130,6 +137,46 @@ export function SyncSettings({ visible, onClose }: SyncSettingsProps) {
       loadGists();
     }
   }, [showGistManager, isConnected, loadGists]);
+
+  // 加载已存储的密码状态
+  useEffect(() => {
+    if (visible && isConnected) {
+      syncPasswordService.hasPassword().then(setHasStoredPassword);
+    }
+  }, [visible, isConnected]);
+
+  // 保存自定义密码
+  const handleSavePassword = useCallback(async () => {
+    setIsSavingPassword(true);
+    try {
+      await syncPasswordService.savePassword(customPassword);
+      setHasStoredPassword(!!customPassword);
+      if (customPassword) {
+        MessagePlugin.success('加密密码已保存');
+      } else {
+        MessagePlugin.info('已恢复使用默认加密');
+      }
+      setCustomPassword('');
+      setShowPassword(false);
+    } catch (err) {
+      MessagePlugin.error('保存密码失败');
+    } finally {
+      setIsSavingPassword(false);
+    }
+  }, [customPassword]);
+
+  // 清除自定义密码
+  const handleClearPassword = useCallback(async () => {
+    setIsSavingPassword(true);
+    try {
+      await syncPasswordService.savePassword('');
+      setHasStoredPassword(false);
+      setCustomPassword('');
+      MessagePlugin.info('已恢复使用默认加密');
+    } finally {
+      setIsSavingPassword(false);
+    }
+  }, []);
 
   // 保存 Token
   const handleSaveToken = useCallback(async () => {
@@ -225,6 +272,9 @@ export function SyncSettings({ visible, onClose }: SyncSettingsProps) {
           console.log('[SyncSettings] Refreshing page...');
           window.location.reload();
         }, 1000);
+      } else if (result.needsPassword) {
+        // 需要输入密码
+        MessagePlugin.warning('远程数据使用了加密密码，请在下方设置正确的密码后重试');
       } else if (result.error && result.error !== '同步正在进行中') {
         MessagePlugin.error(result.error);
       }
@@ -630,6 +680,60 @@ export function SyncSettings({ visible, onClose }: SyncSettingsProps) {
                   />
                 </div>
               </div>
+
+              {/* 加密密码设置 */}
+              <div className="sync-settings__password-section">
+                <div className="sync-settings__password-header">
+                  {hasStoredPassword ? <LockOnIcon /> : <LockOffIcon />}
+                  <span>加密密码</span>
+                  {hasStoredPassword && (
+                    <span className="sync-settings__password-badge">已设置</span>
+                  )}
+                </div>
+                <p className="sync-settings__password-desc">
+                  默认使用 Gist ID 加密数据。设置自定义密码后，需在其他设备输入相同密码才能解密。
+                </p>
+                <div className="sync-settings__password-input-row">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    className="sync-settings__password-input"
+                    value={customPassword}
+                    onChange={(e) => setCustomPassword(e.target.value)}
+                    placeholder={hasStoredPassword ? '输入新密码以更换' : '设置自定义加密密码（可选）'}
+                    autoComplete="new-password"
+                  />
+                  <Button
+                    variant="text"
+                    size="small"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? '隐藏' : '显示'}
+                  </Button>
+                  <Button
+                    theme="primary"
+                    variant={hasStoredPassword ? 'outline' : 'base'}
+                    size="small"
+                    loading={isSavingPassword}
+                    onClick={handleSavePassword}
+                    disabled={!customPassword.trim()}
+                  >
+                    {hasStoredPassword ? '更换' : '设置'}
+                  </Button>
+                  {hasStoredPassword && (
+                    <Button
+                      variant="text"
+                      size="small"
+                      onClick={handleClearPassword}
+                      disabled={isSavingPassword}
+                    >
+                      清除
+                    </Button>
+                  )}
+                </div>
+                <p className="sync-settings__security-hint">
+                  ⚠️ Secret Gist 不公开但知道链接的人仍可访问，建议设置加密密码保护隐私。
+                </p>
+              </div>
             </>
           )}
 
@@ -641,11 +745,8 @@ export function SyncSettings({ visible, onClose }: SyncSettingsProps) {
                 <span>同步说明</span>
               </div>
               <p>
-                数据存储在 <strong>Secret Gist</strong> 中。同步包括画板、提示词和任务记录。
-                媒体文件（图片/视频）需在任务队列中手动同步。
-              </p>
-              <p className="sync-settings__security-hint">
-                ⚠️ Secret Gist 不公开但知道链接的人仍可访问，请勿存储敏感信息。
+                数据存储在 <strong>Secret Gist</strong> 中，并使用 AES-256 加密。
+                同步包括画板、提示词和任务记录。媒体文件需在素材库中手动同步。
               </p>
             </div>
           </div>

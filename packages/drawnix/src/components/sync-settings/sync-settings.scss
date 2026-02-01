@@ -387,6 +387,71 @@
     margin-top: 10px;
   }
 
+  // 加密密码设置
+  &__password-section {
+    padding: 16px 0;
+    border-bottom: 1px solid var(--td-component-border);
+  }
+
+  &__password-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--td-text-color-primary);
+    margin-bottom: 8px;
+
+    svg {
+      font-size: 16px;
+      color: var(--td-brand-color);
+    }
+  }
+
+  &__password-badge {
+    font-size: 10px;
+    font-weight: 500;
+    padding: 2px 6px;
+    background: var(--td-success-color-1);
+    color: var(--td-success-color);
+    border-radius: 4px;
+    margin-left: auto;
+  }
+
+  &__password-desc {
+    font-size: 12px;
+    color: var(--td-text-color-secondary);
+    margin-bottom: 10px;
+    line-height: 1.4;
+  }
+
+  &__password-input-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  &__password-input {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid var(--td-component-border);
+    border-radius: 6px;
+    font-size: 13px;
+    outline: none;
+    background: var(--td-bg-color-container);
+    color: var(--td-text-color-primary);
+    transition: border-color 0.2s;
+
+    &::placeholder {
+      color: var(--td-text-color-placeholder);
+    }
+
+    &:focus {
+      border-color: var(--td-brand-color);
+    }
+  }
+
   &__footer {
     padding-top: 16px;
   }

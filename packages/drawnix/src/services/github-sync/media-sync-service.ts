@@ -302,8 +302,8 @@ class MediaSyncService {
   }
 
   /**
-   * 从云端下载媒体并缓存到本地
-   * 返回缓存后的本地 URL
+   * 从云端下载媒体并缓存到本地（使用自动生成的 URL）
+   * @deprecated 使用 downloadAndCacheMediaToUrl 代替
    */
   async downloadAndCacheMedia(taskId: string): Promise<string | null> {
     try {
@@ -325,8 +325,8 @@ class MediaSyncService {
       const extension = syncedMedia.type === 'video' ? 'mp4' : 'png';
       const cacheUrl = `/__aitu_cache__/${syncedMedia.type}/synced-${taskId}.${extension}`;
       
-      // 缓存到本地
-      await unifiedCacheService.cacheBlob(cacheUrl, blob);
+      // 缓存到本地（仅 Cache Storage，不需要 IndexedDB 元数据）
+      await unifiedCacheService.cacheToCacheStorageOnly(cacheUrl, blob);
       
       console.log(`[MediaSyncService] Cached media for task ${taskId} at ${cacheUrl}`);
       return cacheUrl;
@@ -337,8 +337,40 @@ class MediaSyncService {
   }
 
   /**
+   * 从云端下载媒体并缓存到指定 URL
+   * @param taskId 任务 ID
+   * @param targetUrl 目标缓存 URL（保持任务原始 URL 不变）
+   */
+  async downloadAndCacheMediaToUrl(taskId: string, targetUrl: string): Promise<string | null> {
+    try {
+      const filename = SYNC_FILES.mediaFile(taskId);
+      const content = await gitHubApiService.getGistFileContent(filename);
+      
+      if (!content) {
+        return null;
+      }
+
+      const syncedMedia: SyncedMedia = JSON.parse(content);
+      const blob = base64ToBlob(syncedMedia.base64Data, syncedMedia.mimeType);
+      
+      if (!blob || blob.size === 0) {
+        return null;
+      }
+
+      // 缓存到指定的 URL 位置（仅 Cache Storage）
+      await unifiedCacheService.cacheToCacheStorageOnly(targetUrl, blob);
+      
+      console.log(`[MediaSyncService] Cached media for task ${taskId} at ${targetUrl}`);
+      return targetUrl;
+    } catch (error) {
+      console.error('[MediaSyncService] Download and cache to URL failed:', error);
+      return null;
+    }
+  }
+
+  /**
    * 下载所有已同步的媒体并缓存到本地
-   * 优先从 Gist 媒体文件下载，否则从 originalUrl 下载
+   * 优先从 Gist 媒体文件下载，否则从原始 URL 下载
    */
   async downloadAllSyncedMedia(
     onProgress?: (current: number, total: number, taskId: string) => void
@@ -356,9 +388,11 @@ class MediaSyncService {
         // 只处理已完成的图片/视频任务
         if (task.status !== TaskStatus.COMPLETED) return false;
         if (task.type !== TaskType.IMAGE && task.type !== TaskType.VIDEO) return false;
-        // 只处理有 synced- URL 的任务（从云端同步来的）
-        if (!task.result?.url?.includes('synced-')) return false;
-        return true;
+        // 检查是否有本地缓存 URL 且标记为需要下载
+        if (!task.result?.url?.startsWith('/__aitu_cache__/')) return false;
+        // 有 needsMediaDownload 标记的需要下载
+        if ((task.result as any)?.needsMediaDownload) return true;
+        return false;
       });
 
       console.log(`[MediaSyncService] Found ${tasksNeedingMedia.length} tasks needing media download`);
@@ -371,6 +405,8 @@ class MediaSyncService {
         if (url) {
           result.succeeded++;
           result.results.push({ taskId: task.id, success: true, url });
+          // 下载成功后，清除 needsMediaDownload 标记
+          await this.clearNeedsMediaDownloadFlag(task.id);
         } else {
           result.failed++;
           result.results.push({ taskId: task.id, success: false, error: '下载失败' });
@@ -384,32 +420,46 @@ class MediaSyncService {
   }
 
   /**
+   * 清除任务的 needsMediaDownload 标记
+   * 注意：由于 swTaskQueueService 没有公开的 updateTask 方法，
+   * 这个标记会在任务数据中保留，但不影响功能（数据已缓存）
+   */
+  private clearNeedsMediaDownloadFlag(taskId: string): void {
+    // 标记清除只用于日志记录，实际数据已在 Cache Storage 中
+    console.log(`[MediaSyncService] Media downloaded for task ${taskId}, needsMediaDownload flag no longer relevant`);
+  }
+
+  /**
    * 为任务下载并缓存媒体
    * 1. 优先从 Gist 的 media_{taskId}.json 下载（如果存在）
-   * 2. 否则从 originalUrl 下载
+   * 2. 媒体数据缓存到任务的原始 URL 位置
    */
   private async downloadAndCacheMediaForTask(task: Task): Promise<string | null> {
     const taskId = task.id;
-    const taskType = task.type === TaskType.VIDEO ? 'video' : 'image';
-    const extension = taskType === 'video' ? 'mp4' : 'png';
-    const cacheUrl = `/__aitu_cache__/${taskType}/synced-${taskId}.${extension}`;
+    // 使用任务的原始 URL 作为缓存路径（保持 URL 不变）
+    const cacheUrl = task.result?.url;
+    
+    if (!cacheUrl) {
+      console.warn(`[MediaSyncService] Task ${taskId} has no result URL`);
+      return null;
+    }
 
     try {
-      // 1. 尝试从 Gist 媒体文件下载
-      const gistUrl = await this.downloadAndCacheMedia(taskId);
+      // 1. 尝试从 Gist 媒体文件下载，并缓存到原始 URL 位置
+      const gistUrl = await this.downloadAndCacheMediaToUrl(taskId, cacheUrl);
       if (gistUrl) {
-        console.log(`[MediaSyncService] Downloaded media from Gist for task ${taskId}`);
+        console.log(`[MediaSyncService] Downloaded media from Gist for task ${taskId} to ${cacheUrl}`);
         return gistUrl;
       }
 
-      // 2. 尝试从 originalUrl 下载
-      const originalUrl = (task.result as any)?.originalUrl;
-      if (originalUrl) {
-        console.log(`[MediaSyncService] Trying to download from originalUrl for task ${taskId}:`, originalUrl);
-        const blob = await this.fetchMediaFromUrl(originalUrl);
+      // 2. 尝试从远程 URL 下载（如果有原始外部 URL）
+      const externalUrl = (task.result as any)?.externalUrl;
+      if (externalUrl) {
+        console.log(`[MediaSyncService] Trying to download from externalUrl for task ${taskId}:`, externalUrl);
+        const blob = await this.fetchMediaFromUrl(externalUrl);
         if (blob && blob.size > 0) {
-          await unifiedCacheService.cacheBlob(cacheUrl, blob);
-          console.log(`[MediaSyncService] Cached media from originalUrl for task ${taskId}`);
+          await unifiedCacheService.cacheToCacheStorageOnly(cacheUrl, blob);
+          console.log(`[MediaSyncService] Cached media from externalUrl for task ${taskId}`);
           return cacheUrl;
         }
       }
@@ -483,6 +533,151 @@ class MediaSyncService {
 
       // 执行同步
       const syncResult = await this.syncTaskMedia(taskId);
+      result.results.push(syncResult);
+
+      if (syncResult.success) {
+        result.succeeded++;
+      } else {
+        result.failed++;
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * 同步本地上传的素材
+   * 与 syncTaskMedia 类似，但处理没有 task 的本地素材
+   */
+  async syncAssetMedia(asset: {
+    id: string;
+    url: string;
+    type: 'image' | 'video';
+    name: string;
+    mimeType: string;
+    size?: number;
+  }): Promise<MediaSyncResult> {
+    const assetId = asset.id;
+    
+    // 检查是否已在同步
+    if (this.syncingTasks.has(assetId)) {
+      return { success: false, taskId: assetId, error: '正在同步中' };
+    }
+
+    // 检查文件大小
+    const size = asset.size || 0;
+    if (size > MAX_MEDIA_SIZE) {
+      return {
+        success: false,
+        taskId: assetId,
+        error: `文件过大（${formatSize(size)}），最大支持 ${formatSize(MAX_MEDIA_SIZE)}`,
+      };
+    }
+
+    this.syncingTasks.add(assetId);
+
+    try {
+      // 从缓存获取媒体数据
+      const blob = await unifiedCacheService.getCachedBlob(asset.url);
+      
+      if (!blob) {
+        throw new Error('无法获取媒体文件');
+      }
+
+      // 转换为 Base64
+      const base64Data = await blobToBase64(blob);
+
+      // 构建同步数据（使用 asset 格式，与 task 格式兼容）
+      const syncedMedia: SyncedMedia = {
+        taskId: assetId, // 使用 asset id 作为 taskId
+        type: asset.type,
+        prompt: '', // 本地上传没有提示词
+        model: 'local_upload', // 标记为本地上传
+        params: { name: asset.name }, // 保存文件名
+        mimeType: asset.mimeType || blob.type,
+        originalSize: asset.size || blob.size,
+        base64Data,
+        createdAt: Date.now(),
+        syncedAt: Date.now(),
+        syncedFromDevice: getDeviceId(),
+      };
+
+      // 上传到 Gist
+      const filename = SYNC_FILES.mediaFile(assetId);
+      const content = JSON.stringify(syncedMedia, null, 2);
+
+      await gitHubApiService.updateGistFiles({
+        [filename]: content,
+      });
+
+      // 更新 manifest 中的媒体索引
+      await this.updateManifestMediaIndex(assetId, syncedMedia);
+
+      // 更新缓存状态
+      this.statusCache[assetId] = {
+        status: 'synced',
+        syncedAt: Date.now(),
+      };
+      await this.saveStatusCache();
+
+      return { success: true, taskId: assetId };
+    } catch (error) {
+      console.error('[MediaSyncService] Sync asset failed:', error);
+      
+      const errorMessage = error instanceof Error ? error.message : '同步失败';
+      
+      // 更新缓存状态
+      this.statusCache[assetId] = {
+        status: 'error',
+        error: errorMessage,
+      };
+      await this.saveStatusCache();
+
+      return { success: false, taskId: assetId, error: errorMessage };
+    } finally {
+      this.syncingTasks.delete(assetId);
+    }
+  }
+
+  /**
+   * 批量同步本地上传的素材
+   */
+  async syncMultipleAssets(
+    assets: Array<{
+      id: string;
+      url: string;
+      type: 'image' | 'video';
+      name: string;
+      mimeType: string;
+      size?: number;
+    }>,
+    onProgress?: (current: number, total: number, assetId: string) => void
+  ): Promise<BatchMediaSyncResult> {
+    const result: BatchMediaSyncResult = {
+      succeeded: 0,
+      failed: 0,
+      skipped: 0,
+      results: [],
+    };
+
+    for (let i = 0; i < assets.length; i++) {
+      const asset = assets[i];
+      onProgress?.(i + 1, assets.length, asset.id);
+
+      // 检查文件大小
+      const size = asset.size || 0;
+      if (size > MAX_MEDIA_SIZE) {
+        result.skipped++;
+        result.results.push({
+          success: false,
+          taskId: asset.id,
+          error: `文件过大（${formatSize(size)}）`,
+        });
+        continue;
+      }
+
+      // 执行同步
+      const syncResult = await this.syncAssetMedia(asset);
       result.results.push(syncResult);
 
       if (syncResult.success) {

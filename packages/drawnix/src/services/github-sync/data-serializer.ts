@@ -29,6 +29,7 @@ import {
   BoardSyncInfo,
 } from './types';
 import type { Board, BoardMetadata, Folder } from '../../types/workspace.types';
+import { cryptoService, isEncryptedData } from './crypto-service';
 
 /**
  * 计算字符串的简单校验和
@@ -192,7 +193,7 @@ class DataSerializer {
   }
 
   /**
-   * 序列化为 Gist 文件格式
+   * 序列化为 Gist 文件格式（明文，用于向后兼容）
    */
   serializeToGistFiles(data: {
     manifest: SyncManifest;
@@ -224,7 +225,57 @@ class DataSerializer {
   }
 
   /**
-   * 从 Gist 文件反序列化
+   * 序列化为 Gist 文件格式（加密版本）
+   * manifest 不加密（需要用于版本检测），其他文件加密
+   * @param data 要序列化的数据
+   * @param gistId Gist ID，用于派生加密密钥
+   * @param customPassword 自定义加密密码（可选，优先使用）
+   */
+  async serializeToGistFilesEncrypted(
+    data: {
+      manifest: SyncManifest;
+      workspace: WorkspaceData;
+      boards: Map<string, BoardData>;
+      prompts: PromptsData;
+      tasks: TasksData;
+    },
+    gistId: string,
+    customPassword?: string
+  ): Promise<Record<string, string>> {
+    const files: Record<string, string> = {};
+
+    // manifest 不加密（需要检查版本兼容性）
+    // 但标记为已加密存储，以及是否使用自定义密码
+    const manifestWithEncryptionFlag = {
+      ...data.manifest,
+      encrypted: true, // 标记使用加密存储
+      customPassword: !!customPassword, // 标记是否使用自定义密码
+    };
+    files[SYNC_FILES.MANIFEST] = JSON.stringify(manifestWithEncryptionFlag, null, 2);
+
+    // 加密 workspace
+    const workspaceJson = JSON.stringify(data.workspace);
+    files[SYNC_FILES.WORKSPACE] = await cryptoService.encrypt(workspaceJson, gistId, customPassword);
+
+    // 加密每个画板
+    for (const [boardId, board] of data.boards) {
+      const boardJson = JSON.stringify(board);
+      files[SYNC_FILES.boardFile(boardId)] = await cryptoService.encrypt(boardJson, gistId, customPassword);
+    }
+
+    // 加密提示词
+    const promptsJson = JSON.stringify(data.prompts);
+    files[SYNC_FILES.PROMPTS] = await cryptoService.encrypt(promptsJson, gistId, customPassword);
+
+    // 加密任务
+    const tasksJson = JSON.stringify(data.tasks);
+    files[SYNC_FILES.TASKS] = await cryptoService.encrypt(tasksJson, gistId, customPassword);
+
+    return files;
+  }
+
+  /**
+   * 从 Gist 文件反序列化（明文版本，用于向后兼容）
    */
   deserializeFromGistFiles(files: Record<string, string>): {
     manifest: SyncManifest | null;
@@ -292,6 +343,125 @@ class DataSerializer {
       try {
         result.tasks = JSON.parse(files[SYNC_FILES.TASKS]);
       } catch (e) {
+        console.warn('[DataSerializer] Failed to parse tasks:', e);
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * 从 Gist 文件反序列化（支持加密和明文）
+   * 自动检测是否加密，并进行相应处理
+   * @param files Gist 文件内容
+   * @param gistId Gist ID，用于解密
+   * @param customPassword 自定义解密密码（可选）
+   * @throws DecryptionError 如果需要密码但未提供
+   */
+  async deserializeFromGistFilesWithDecryption(
+    files: Record<string, string>,
+    gistId: string,
+    customPassword?: string
+  ): Promise<{
+    manifest: SyncManifest | null;
+    workspace: WorkspaceData | null;
+    boards: Map<string, BoardData>;
+    prompts: PromptsData | null;
+    tasks: TasksData | null;
+  }> {
+    const result = {
+      manifest: null as SyncManifest | null,
+      workspace: null as WorkspaceData | null,
+      boards: new Map<string, BoardData>(),
+      prompts: null as PromptsData | null,
+      tasks: null as TasksData | null,
+    };
+
+    // 解析 manifest（不加密）
+    if (files[SYNC_FILES.MANIFEST]) {
+      try {
+        result.manifest = JSON.parse(files[SYNC_FILES.MANIFEST]);
+      } catch (e) {
+        console.warn('[DataSerializer] Failed to parse manifest:', e);
+      }
+    }
+
+    // 检查是否使用加密存储
+    const manifestExt = result.manifest as SyncManifest & { encrypted?: boolean; customPassword?: boolean } | null;
+    const isEncrypted = manifestExt?.encrypted === true;
+    const needsCustomPassword = manifestExt?.customPassword === true;
+    console.log('[DataSerializer] Deserializing with encryption:', isEncrypted, 'customPassword:', needsCustomPassword);
+
+    // 解析 workspace
+    if (files[SYNC_FILES.WORKSPACE]) {
+      try {
+        const content = isEncrypted
+          ? await cryptoService.decryptOrPassthrough(files[SYNC_FILES.WORKSPACE], gistId, customPassword)
+          : files[SYNC_FILES.WORKSPACE];
+        result.workspace = JSON.parse(content);
+      } catch (e) {
+        // 重新抛出解密错误
+        if (e instanceof Error && e.name === 'DecryptionError') {
+          throw e;
+        }
+        console.warn('[DataSerializer] Failed to parse workspace:', e);
+      }
+    }
+
+    // 解析画板
+    for (const [filename, content] of Object.entries(files)) {
+      if (filename.startsWith('board_') && filename.endsWith('.json')) {
+        try {
+          const decryptedContent = isEncrypted
+            ? await cryptoService.decryptOrPassthrough(content, gistId, customPassword)
+            : content;
+          const board: BoardData = JSON.parse(decryptedContent);
+          console.log(`[DataSerializer] Parsed board ${filename}:`, {
+            id: board.id,
+            name: board.name,
+            elements: board.elements?.length || 0,
+            hasElements: !!board.elements,
+            viewport: board.viewport,
+          });
+          result.boards.set(board.id, board);
+        } catch (e) {
+          // 重新抛出解密错误
+          if (e instanceof Error && e.name === 'DecryptionError') {
+            throw e;
+          }
+          console.warn(`[DataSerializer] Failed to parse board ${filename}:`, e);
+        }
+      }
+    }
+
+    // 解析提示词
+    if (files[SYNC_FILES.PROMPTS]) {
+      try {
+        const content = isEncrypted
+          ? await cryptoService.decryptOrPassthrough(files[SYNC_FILES.PROMPTS], gistId, customPassword)
+          : files[SYNC_FILES.PROMPTS];
+        result.prompts = JSON.parse(content);
+      } catch (e) {
+        // 重新抛出解密错误
+        if (e instanceof Error && e.name === 'DecryptionError') {
+          throw e;
+        }
+        console.warn('[DataSerializer] Failed to parse prompts:', e);
+      }
+    }
+
+    // 解析任务
+    if (files[SYNC_FILES.TASKS]) {
+      try {
+        const content = isEncrypted
+          ? await cryptoService.decryptOrPassthrough(files[SYNC_FILES.TASKS], gistId, customPassword)
+          : files[SYNC_FILES.TASKS];
+        result.tasks = JSON.parse(content);
+      } catch (e) {
+        // 重新抛出解密错误
+        if (e instanceof Error && e.name === 'DecryptionError') {
+          throw e;
+        }
         console.warn('[DataSerializer] Failed to parse tasks:', e);
       }
     }
@@ -424,19 +594,15 @@ class DataSerializer {
       });
       
       if (tasksToRestore.length > 0) {
-        // 为有同步媒体的任务生成本地缓存 URL
+        // 标记需要从云端下载媒体的任务（保留原始 URL 不变）
         const processedTasks = tasksToRestore.map(task => {
-          // 如果任务有结果且 URL 不是本地缓存路径，检查是否有同步的媒体
-          if (task.result?.url && !task.result.url.startsWith('/__aitu_cache__/')) {
-            const taskType = task.type === 'video' ? 'video' : 'image';
-            const extension = taskType === 'video' ? 'mp4' : 'png';
-            const cacheUrl = `/__aitu_cache__/${taskType}/synced-${task.id}.${extension}`;
+          // 如果任务有本地缓存 URL，标记为需要下载媒体
+          if (task.result?.url?.startsWith('/__aitu_cache__/')) {
             return {
               ...task,
               result: {
                 ...task.result,
-                url: cacheUrl,
-                originalUrl: task.result.url, // 保留原始 URL
+                needsMediaDownload: true, // 标记需要下载媒体
               },
             };
           }

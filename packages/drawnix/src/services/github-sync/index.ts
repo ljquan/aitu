@@ -11,3 +11,6 @@ export { gitHubApiService, GitHubApiError } from './github-api-service';
 export { dataSerializer } from './data-serializer';
 export { syncEngine } from './sync-engine';
 export { mediaSyncService } from './media-sync-service';
+export { cryptoService, isEncryptedData, usesCustomPassword, CRYPTO_VERSION, DecryptionError } from './crypto-service';
+export type { EncryptedData } from './crypto-service';
+export { syncPasswordService } from './sync-password-service';
