@@ -1,0 +1,99 @@
+/**
+ * 同步状态指示器样式
+ */
+
+.sync-status-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+  color: var(--td-text-color-secondary);
+
+  &:hover {
+    background: var(--td-bg-color-container-hover);
+  }
+
+  &:active {
+    background: var(--td-bg-color-container-active);
+  }
+
+  // 未配置状态
+  &.sync-status--not-configured {
+    color: var(--td-text-color-placeholder);
+  }
+
+  // 已同步状态
+  &.sync-status--synced {
+    color: var(--td-success-color);
+  }
+
+  // 有待同步状态
+  &.sync-status--pending {
+    color: var(--td-brand-color);
+    
+    // 添加轻微的呼吸动画
+    animation: sync-pulse 2s ease-in-out infinite;
+  }
+
+  // 同步中状态
+  &.sync-status--syncing {
+    color: var(--td-brand-color);
+  }
+
+  // 错误状态
+  &.sync-status--error {
+    color: var(--td-error-color);
+  }
+
+  // 图标样式
+  .t-icon {
+    font-size: 18px;
+  }
+
+  // Loading 样式调整
+  .t-loading {
+    font-size: 18px;
+  }
+}
+
+// 呼吸动画
+@keyframes sync-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+// 任务同步徽章样式
+.task-sync-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  cursor: default;
+
+  &--synced {
+    color: var(--td-success-color);
+  }
+
+  &--warning {
+    color: var(--td-warning-color);
+  }
+}
+
+// 任务同步图标样式
+.task-sync-icon {
+  font-size: 14px;
+
+  &--synced {
+    color: var(--td-success-color);
+  }
+}

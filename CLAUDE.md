@@ -135,7 +135,7 @@ Service Worker (后台执行)
 4. **定时器清理**：`setInterval` 必须保存 ID，提供 `destroy()` 方法
 5. **API 请求**：禁止重试，区分业务失败和网络错误
 6. **调试日志**：提交前必须清理 `console.log`
-7. **敏感信息**：永不硬编码 API Key，使用 `sanitizeObject` 过滤日志
+7. **敏感信息**：永不硬编码 API Key，使用 `sanitizeObject` 过滤日志，敏感 ID 用 `maskId` 脱敏
 8. **布局抖动**：`Suspense` 的 fallback 应撑满容器或固定高度，防止加载时跳动
 9. **结构化数据**：复杂消息展示应优先使用 `aiContext` 等结构化数据而非字符串解析
 10. **图标验证**：使用 `tdesign-icons-react` 前需验证导出名称是否存在（如 `ServiceIcon`）
@@ -160,9 +160,10 @@ Service Worker (后台执行)
 11. **postmessage-duplex 客户端初始化**：`createFromPage()` 设置 `autoReconnect: true` 处理 SW 更新；禁用日志需 `log: {...}` 配合 `as any`（类型定义不含 log）
 12. **postmessage-duplex 消息大小限制**：单次 RPC 响应不超过 1MB，大数据查询需后端分页+精简数据（去掉 requestBody/responseBody 等大字段）
 13. **任务队列双服务同步**：`taskQueueService`（本地）和 `swTaskQueueService`（SW）是独立的，组件渲染时需调用 `syncTasksFromSW()` 同步数据
-14. **工作流恢复状态不一致**：UI 与 SW 状态不一致时（如终态但有运行中步骤），必须先从 SW 获取真实状态，不能直接标记为失败
-15. **错误处理链保持完整**：需要传递特殊错误属性（如 `isAwaitingClient`）时，必须重新抛出原始错误，不能创建新 Error 对象
-16. **SW 重发 Tool Request 需延迟**：页面刷新后 claim 工作流时，SW 重发 pending tool request 需延迟 500ms，等待主线程 handler 准备好
+14. **任务数据持久化**：主线程的 `tasks` Map 只是内存状态，恢复任务必须通过 `importTasks` RPC 持久化到 SW 的 IndexedDB
+15. **工作流恢复状态不一致**：UI 与 SW 状态不一致时（如终态但有运行中步骤），必须先从 SW 获取真实状态，不能直接标记为失败
+16. **错误处理链保持完整**：需要传递特殊错误属性（如 `isAwaitingClient`）时，必须重新抛出原始错误，不能创建新 Error 对象
+17. **SW 重发 Tool Request 需延迟**：页面刷新后 claim 工作流时，SW 重发 pending tool request 需延迟 500ms，等待主线程 handler 准备好
 
 ### React 规则
 

@@ -76,6 +76,8 @@ import { PerformancePanel } from './components/performance-panel';
 import { QuickCreationToolbar } from './components/toolbar/quick-creation-toolbar/quick-creation-toolbar';
 import { CacheQuotaProvider } from './components/cache-quota-provider/CacheQuotaProvider';
 import { RecentColorsProvider } from './components/unified-color-picker';
+import { GitHubSyncProvider } from './contexts/GitHubSyncContext';
+import { SyncSettings } from './components/sync-settings';
 import { usePencilCursor } from './hooks/usePencilCursor';
 import { useToolFromUrl } from './hooks/useToolFromUrl';
 import { withArrowLineAutoCompleteExtend } from './plugins/with-arrow-line-auto-complete-extend';
@@ -151,6 +153,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
   const [taskPanelExpanded, setTaskPanelExpanded] = useState(false);
   const [mediaLibraryOpen, setMediaLibraryOpen] = useState(false);
   const [backupRestoreOpen, setBackupRestoreOpen] = useState(false);
+  const [cloudSyncOpen, setCloudSyncOpen] = useState(false);
 
   // 使用 ref 来保存 board 的最新引用,避免 useCallback 依赖问题
   const boardRef = useRef<DrawnixBoard | null>(null);
@@ -683,9 +686,10 @@ export const Drawnix: React.FC<DrawnixProps> = ({
           <ToolbarConfigProvider>
             <CacheQuotaProvider onOpenMediaLibrary={handleOpenMediaLibrary}>
               <ModelHealthProvider>
-                <ChatDrawerProvider>
-                  <WorkflowProvider>
-                    <DrawnixContext.Provider value={contextValue}>
+                <GitHubSyncProvider>
+                  <ChatDrawerProvider>
+                    <WorkflowProvider>
+                      <DrawnixContext.Provider value={contextValue}>
                       <DrawnixContent
                       value={value}
                       viewport={viewport}
@@ -715,6 +719,8 @@ export const Drawnix: React.FC<DrawnixProps> = ({
                       setToolboxDrawerOpen={setToolboxDrawerOpen}
                       setMediaLibraryOpen={setMediaLibraryOpen}
                       setBackupRestoreOpen={setBackupRestoreOpen}
+                      cloudSyncOpen={cloudSyncOpen}
+                      setCloudSyncOpen={setCloudSyncOpen}
                       handleBeforeSwitch={handleBeforeSwitch}
                       isDataReady={isDataReady}
                       onCreateProjectForMemory={handleCreateProjectForMemory}
@@ -725,9 +731,10 @@ export const Drawnix: React.FC<DrawnixProps> = ({
                         onClose={() => setMediaLibraryOpen(false)}
                       />
                     </Suspense>
-                    </DrawnixContext.Provider>
-                  </WorkflowProvider>
-                </ChatDrawerProvider>
+                      </DrawnixContext.Provider>
+                    </WorkflowProvider>
+                  </ChatDrawerProvider>
+                </GitHubSyncProvider>
               </ModelHealthProvider>
             </CacheQuotaProvider>
           </ToolbarConfigProvider>
@@ -767,6 +774,8 @@ interface DrawnixContentProps {
   setToolboxDrawerOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setMediaLibraryOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setBackupRestoreOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  cloudSyncOpen: boolean;
+  setCloudSyncOpen: React.Dispatch<React.SetStateAction<boolean>>;
   handleBeforeSwitch: () => Promise<void>;
   isDataReady: boolean;
   onCreateProjectForMemory: () => Promise<void>;
@@ -786,6 +795,7 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
   toolboxDrawerOpen,
   taskPanelExpanded,
   backupRestoreOpen,
+  cloudSyncOpen,
   onChange,
   onSelectionChange,
   onViewportChange,
@@ -799,6 +809,7 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
   setProjectDrawerOpen,
   setToolboxDrawerOpen,
   setBackupRestoreOpen,
+  setCloudSyncOpen,
   handleBeforeSwitch,
   isDataReady,
   onCreateProjectForMemory,
@@ -1136,6 +1147,7 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
             taskPanelExpanded={taskPanelExpanded}
             onTaskPanelToggle={handleTaskPanelToggle}
             onOpenBackupRestore={() => setBackupRestoreOpen(true)}
+            onOpenCloudSync={() => setCloudSyncOpen(true)}
           />
 
           <PopupToolbar></PopupToolbar>
@@ -1185,6 +1197,11 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
               />
             </Suspense>
           )}
+          {/* Cloud Sync Settings - 云端同步设置 */}
+          <SyncSettings
+            visible={cloudSyncOpen}
+            onClose={() => setCloudSyncOpen(false)}
+          />
           {/* Quick Creation Toolbar - 双击空白区域显示的快捷工具栏 */}
           <QuickCreationToolbar
             position={quickToolbarPosition}

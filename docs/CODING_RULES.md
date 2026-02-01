@@ -1328,6 +1328,53 @@ class SWTaskQueue {
 
 **原因**: Service Worker 启动后会异步从 IndexedDB 恢复数据（`restoreFromStorage()`），这个过程可能需要一定时间。如果 RPC handler 在恢复完成前被调用，访问的数据是不完整的。需要通过 Promise 机制确保数据恢复完成后再返回响应。
 
+### 主线程任务数据必须通过 RPC 持久化到 SW
+
+**场景**: 从云端同步或恢复任务数据到本地时
+
+❌ **错误示例**:
+```typescript
+// 错误：只添加到本地内存，页面刷新后数据丢失
+async restoreTasks(tasks: Task[]): Promise<void> {
+  for (const task of tasks) {
+    this.tasks.set(task.id, task);  // 只存到内存
+    this.emitEvent('taskCreated', task);
+  }
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：通过 RPC 调用 SW 的 importTasks 方法持久化到 IndexedDB
+async restoreTasks(tasks: Task[]): Promise<void> {
+  const tasksToRestore = tasks.filter(task => !this.tasks.has(task.id));
+  if (tasksToRestore.length === 0) return;
+  
+  // 转换为 SWTask 格式
+  const swTasks = tasksToRestore.map(task => this.convertTaskToSWTask(task));
+  
+  // 调用 SW 的 importTasks RPC 持久化到 IndexedDB
+  const result = await swChannelClient.importTasks(swTasks);
+  
+  if (result.success) {
+    // 持久化成功后才添加到本地内存
+    for (const task of tasksToRestore) {
+      this.tasks.set(task.id, task);
+      this.emitEvent('taskCreated', task);
+    }
+  }
+}
+```
+
+**现象**: 云端同步任务后显示成功，但页面刷新后任务列表为空。
+
+**原因**: `swTaskQueueService` 的本地 `tasks` Map 只是内存状态，不会自动持久化。SW 的 IndexedDB 才是任务数据的持久化存储。必须通过 RPC 调用 SW 端的方法才能将数据保存到 IndexedDB。
+
+**相关文件**:
+- 主线程：`packages/drawnix/src/services/sw-task-queue-service.ts`
+- SW 端：`apps/web/src/sw/task-queue/channel-manager.ts` (`TASK_IMPORT` RPC)
+- SW 存储：`apps/web/src/sw/task-queue/storage.ts`
+
 ### PostMessage 日志由调试模式完全控制
 
 **场景**: Service Worker 与主线程之间的通讯日志记录

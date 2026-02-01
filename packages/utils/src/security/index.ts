@@ -164,3 +164,20 @@ export function getSafeErrorMessage(error: unknown): string {
   }
   return 'Unknown error';
 }
+
+/**
+ * Mask a sensitive ID for logging (show first and last few characters)
+ *
+ * @param id - The ID to mask
+ * @param visibleChars - Number of characters to show at start and end (default: 4)
+ * @returns Masked ID like 'abcd...wxyz'
+ *
+ * @example
+ * maskId('1234567890abcdef')
+ * // Returns: '1234...cdef'
+ */
+export function maskId(id: string | null | undefined, visibleChars = 4): string {
+  if (!id) return '[empty]';
+  if (id.length <= visibleChars * 2) return id;
+  return `${id.slice(0, visibleChars)}...${id.slice(-visibleChars)}`;
+}

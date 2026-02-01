@@ -8,6 +8,7 @@ import {
   BackupRestoreIcon,
   DebugLogIcon,
   BookOpenIcon,
+  CloudIcon,
 } from '../../icons';
 import { useBoard, useListRender } from '@plait-board/react-board';
 import {
@@ -171,6 +172,25 @@ export const BackupRestore = ({
   );
 };
 BackupRestore.displayName = 'BackupRestore';
+
+export const CloudSync = ({
+  onOpenCloudSync,
+}: {
+  onOpenCloudSync: () => void;
+}) => {
+  const { t } = useI18n();
+  return (
+    <MenuItem
+      icon={<CloudIcon />}
+      data-track="toolbar_click_menu_cloud_sync"
+      onSelect={onOpenCloudSync}
+      aria-label={t('menu.cloudSync')}
+    >
+      {t('menu.cloudSync')}
+    </MenuItem>
+  );
+};
+CloudSync.displayName = 'CloudSync';
 
 export const DebugPanel = () => {
   const { t } = useI18n();

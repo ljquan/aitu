@@ -581,6 +581,50 @@
 
     svg { width: 10px; height: 10px; }
   }
+
+  // Sync badge styles
+  &__sync-badge {
+    position: absolute;
+    bottom: 4px;
+    left: 4px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    z-index: 1;
+    backdrop-filter: blur(4px);
+    transition: all 0.2s ease;
+
+    svg { width: 12px; height: 12px; }
+
+    &--synced {
+      background: rgba(0, 168, 112, 0.9);
+      color: white;
+    }
+
+    &--syncing {
+      background: rgba(0, 82, 217, 0.9);
+      color: white;
+    }
+
+    &--warning {
+      background: rgba(237, 125, 49, 0.9);
+      color: white;
+    }
+
+    &--clickable {
+      background: rgba(0, 82, 217, 0.85);
+      color: white;
+      cursor: pointer;
+
+      &:hover {
+        background: rgba(0, 82, 217, 1);
+        transform: scale(1.05);
+      }
+    }
+  }
 }
 
 // Responsive Design for Panel

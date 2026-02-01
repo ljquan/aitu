@@ -419,6 +419,9 @@ class WorkspaceService {
     };
 
     this.boards.set(boardId, board);
+    // 同步更新 boardMetadata（switchBoard 依赖它验证画板是否存在）
+    const { elements, ...metadata } = board;
+    this.boardMetadata.set(boardId, metadata);
     await workspaceStorageService.saveBoard(board);
 
     this.emit('boardCreated', board);
@@ -479,6 +482,12 @@ class WorkspaceService {
     board.updatedAt = Date.now();
 
     this.boards.set(id, board);
+    // 同步更新 boardMetadata
+    const metadata = this.boardMetadata.get(id);
+    if (metadata) {
+      metadata.name = trimmedName;
+      metadata.updatedAt = board.updatedAt;
+    }
     await workspaceStorageService.saveBoard(board);
     this.emit('boardUpdated', board);
   }
@@ -494,6 +503,8 @@ class WorkspaceService {
     }
 
     this.boards.delete(id);
+    this.boardMetadata.delete(id);
+    this.loadedBoards.delete(id);
     await workspaceStorageService.deleteBoard(id);
     this.emit('boardDeleted', board);
   }
@@ -567,6 +578,13 @@ class WorkspaceService {
         if (b) {
           b.order = i;
           this.boards.set(item.id, b);
+          // 同步更新 boardMetadata
+          const bMeta = this.boardMetadata.get(item.id);
+          if (bMeta) {
+            bMeta.order = i;
+            bMeta.folderId = b.folderId;
+            bMeta.updatedAt = b.updatedAt;
+          }
           await workspaceStorageService.saveBoard(b);
         }
       } else {
@@ -670,6 +688,13 @@ class WorkspaceService {
         if (b) {
           b.order = i;
           this.boards.set(item.id, b);
+          // 同步更新 boardMetadata
+          const bMeta = this.boardMetadata.get(item.id);
+          if (bMeta) {
+            bMeta.order = i;
+            bMeta.folderId = b.folderId;
+            bMeta.updatedAt = b.updatedAt;
+          }
           await workspaceStorageService.saveBoard(b);
         }
       } else {
@@ -701,6 +726,12 @@ class WorkspaceService {
           board.order = item.order;
           board.updatedAt = now;
           this.boards.set(item.id, board);
+          // 同步更新 boardMetadata
+          const bMeta = this.boardMetadata.get(item.id);
+          if (bMeta) {
+            bMeta.order = item.order;
+            bMeta.updatedAt = now;
+          }
           await workspaceStorageService.saveBoard(board);
         }
       } else {
@@ -801,6 +832,36 @@ class WorkspaceService {
     return board;
   }
 
+  /**
+   * Reload board from storage (invalidate cache)
+   * Used when board data is updated externally (e.g. sync)
+   */
+  async reloadBoard(boardId: string): Promise<Board> {
+    await this.ensureInitialized();
+    
+    // Force load from storage
+    const board = await workspaceStorageService.loadBoard(boardId);
+    if (!board) throw new Error(`Board ${boardId} not found in storage`);
+    
+    // Update cache
+    this.loadedBoards.set(boardId, board);
+    this.boards.set(boardId, board);
+    
+    // Update metadata
+    const { elements, ...metadata } = board;
+    this.boardMetadata.set(boardId, metadata);
+    
+    // Emit events
+    this.emit('boardUpdated', board);
+    
+    // If it's the current board, emit switch event to force UI refresh
+    if (this.state.currentBoardId === boardId) {
+      this.emit('boardSwitched', board);
+    }
+    
+    return board;
+  }
+
   async saveBoard(boardId: string, data: BoardChangeData): Promise<void> {
     // 优先从已加载的画板获取
     let board = this.loadedBoards.get(boardId) || this.boards.get(boardId);
@@ -861,6 +922,66 @@ class WorkspaceService {
     // 优先从已加载的画板获取
     return this.loadedBoards.get(this.state.currentBoardId) || 
            this.boards.get(this.state.currentBoardId) || null;
+  }
+
+  /**
+   * 检查画板是否为空（同步版本，只检查已加载的画板）
+   * 注意：如果画板未加载，可能返回 true（因为元数据中 elements 为空数组）
+   * 如果需要准确判断，请使用 isBoardEmptyAsync
+   */
+  isBoardEmpty(boardId: string): boolean {
+    const board = this.loadedBoards.get(boardId) || this.boards.get(boardId);
+    if (!board) return true;
+    return !board.elements || board.elements.length === 0;
+  }
+
+  /**
+   * 检查画板是否为空（异步版本，会从存储加载画板数据）
+   * 这个方法能准确判断画板是否真的为空
+   */
+  async isBoardEmptyAsync(boardId: string): Promise<boolean> {
+    // 先检查已加载的画板
+    let board = this.loadedBoards.get(boardId);
+    if (board) {
+      return !board.elements || board.elements.length === 0;
+    }
+    
+    // 画板未加载，从存储中加载
+    try {
+      board = await workspaceStorageService.loadBoard(boardId);
+      if (!board) return true;
+      
+      // 缓存加载的画板
+      this.loadedBoards.set(boardId, board);
+      this.boards.set(boardId, board);
+      
+      return !board.elements || board.elements.length === 0;
+    } catch (error) {
+      console.warn('[WorkspaceService] Failed to load board for empty check:', boardId, error);
+      return true;
+    }
+  }
+
+  /**
+   * 检查是否是默认空白画板
+   * 默认空白画板的定义：
+   * 1. 画板是空的（没有元素）
+   * 2. 画板名称是默认名称（'未命名画板' 或 '未命名画板 (n)'）
+   */
+  async isDefaultEmptyBoard(boardId: string): Promise<boolean> {
+    const metadata = this.boardMetadata.get(boardId);
+    if (!metadata) return false;
+    
+    // 检查名称是否是默认名称（支持 '未命名画板' 和 '未命名画板 (2)' 等格式）
+    const defaultNamePattern = new RegExp(
+      `^${WORKSPACE_DEFAULTS.DEFAULT_BOARD_NAME}( \\(\\d+\\))?$`
+    );
+    const isDefaultName = defaultNamePattern.test(metadata.name);
+    
+    if (!isDefaultName) return false;
+    
+    // 检查是否为空
+    return this.isBoardEmptyAsync(boardId);
   }
 
   getState(): WorkspaceState {

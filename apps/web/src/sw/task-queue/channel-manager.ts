@@ -429,6 +429,10 @@ export class SWChannelManager {
         RPC_METHODS.TASK_MARK_INSERTED, clientId, (data) => this.handleTaskMarkInserted(data.taskId)
       ),
       
+      [RPC_METHODS.TASK_IMPORT]: this.wrapRpcHandler<{ tasks: SWTask[] }, any>(
+        RPC_METHODS.TASK_IMPORT, clientId, (data) => this.handleTaskImport(data.tasks)
+      ),
+      
       // 任务查询
       [RPC_METHODS.TASK_GET]: this.wrapRpcHandler<{ taskId: string }, any>(
         RPC_METHODS.TASK_GET, clientId, (data) => this.handleTaskGet(data.taskId)
@@ -718,6 +722,45 @@ export class SWChannelManager {
     return this.wrapTaskOperation(taskId, async () => {
       await this.taskQueue?.markTaskInserted(taskId);
     });
+  }
+
+  /**
+   * 导入任务（用于云同步恢复已完成的任务）
+   * 与 restoreTasks 不同，这个方法会保存所有任务（包括已完成的）
+   */
+  private async handleTaskImport(tasks: SWTask[]): Promise<{ success: boolean; imported: number; error?: string }> {
+    if (!tasks || !Array.isArray(tasks)) {
+      return { success: false, imported: 0, error: 'Invalid tasks array' };
+    }
+
+    if (!this.taskQueue) {
+      return { success: false, imported: 0, error: 'Task queue not initialized' };
+    }
+
+    try {
+      let imported = 0;
+      for (const task of tasks) {
+        // 检查任务是否已存在
+        const existingTask = this.taskQueue.getTask(task.id);
+        if (!existingTask) {
+          // 直接保存到存储（不触发队列处理）
+          await taskQueueStorage.saveTask(task);
+          // 添加到内存中的任务列表
+          this.taskQueue.importTask(task);
+          imported++;
+        }
+      }
+      
+      console.log(`[SWChannelManager] Imported ${imported} tasks`);
+      return { success: true, imported };
+    } catch (error) {
+      console.error('[SWChannelManager] Failed to import tasks:', error);
+      return { 
+        success: false, 
+        imported: 0, 
+        error: error instanceof Error ? error.message : 'Import failed' 
+      };
+    }
   }
 
   private async handleTaskGet(taskId: string): Promise<{ success: boolean; task?: SWTask; error?: string }> {

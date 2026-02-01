@@ -8,6 +8,7 @@ import {
   BoardChangeData,
   TreeNode,
   crashRecoveryService,
+  useDocumentTitle,
 } from '@drawnix/drawnix';
 import { PlaitBoard, PlaitElement, PlaitTheme, Viewport } from '@plait/core';
 import { MessagePlugin } from 'tdesign-react';
@@ -53,11 +54,16 @@ export function App() {
     viewport?: Viewport;
     theme?: PlaitTheme;
   }>({ children: [] });
+  // 当前画板 ID，用于更新页面标题
+  const [currentBoardId, setCurrentBoardId] = useState<string | null>(null);
 
   // 存储最新的 viewport，用于页面关闭前保存
   const latestViewportRef = useRef<Viewport | undefined>();
   // 防抖定时器
   const viewportSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // 使用 useDocumentTitle hook 管理页面标题
+  useDocumentTitle(currentBoardId);
 
   // Initialize workspace and handle migration
   useEffect(() => {
@@ -76,7 +82,8 @@ export function App() {
         await workspaceService.waitForInitialization();
         // 使用 switchBoard 确保加载完整数据
         const currentBoardId = workspaceService.getState().currentBoardId;
-        if (currentBoardId) {
+        // 验证画板是否存在，防止旧状态中的 currentBoardId 指向不存在的画板
+        if (currentBoardId && workspaceService.getBoardMetadata(currentBoardId)) {
           const currentBoard = await workspaceService.switchBoard(currentBoardId);
           setValue({
             children: currentBoard.elements || [],
@@ -114,6 +121,7 @@ export function App() {
           if (safeModeBoard) {
             console.log('[App] Safe mode: reusing existing board:', safeModeBoard.name);
             await workspaceService.switchBoard(safeModeBoard.id);
+            setCurrentBoardId(safeModeBoard.id);
           } else {
             console.log('[App] Safe mode: creating new blank board');
             // 使用时间戳生成唯一名称，避免名称冲突
@@ -129,6 +137,7 @@ export function App() {
             });
             if (board) {
               await workspaceService.switchBoard(board.id);
+              setCurrentBoardId(board.id);
             }
           }
           
@@ -187,9 +196,10 @@ export function App() {
             currentBoard = await workspaceService.switchBoard(board.id);
           }
         }
-        // 更新 URL 参数为当前画布 ID
+        // 更新 URL 参数和当前画布 ID
         if (currentBoard) {
           updateBoardIdInUrl(currentBoard.id);
+          setCurrentBoardId(currentBoard.id);
         }
 
         if (currentBoard) {
@@ -246,6 +256,9 @@ export function App() {
     // 更新 URL 参数
     console.log('[App] Updating URL with board id:', board.id);
     updateBoardIdInUrl(board.id);
+    
+    // 更新当前画板 ID（用于页面标题更新）
+    setCurrentBoardId(board.id);
   }, []);
 
   // Handle board changes (auto-save)

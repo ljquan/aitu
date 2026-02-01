@@ -827,6 +827,14 @@ export class SWTaskQueue {
   }
 
   /**
+   * Import a task (for cloud sync restore)
+   * Unlike restoreTasks, this accepts all tasks including completed ones
+   */
+  importTask(task: SWTask): void {
+    this.tasks.set(task.id, task);
+  }
+
+  /**
    * Handle chat start
    */
   async startChat(

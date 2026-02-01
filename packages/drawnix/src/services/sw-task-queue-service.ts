@@ -239,13 +239,64 @@ class SWTaskQueueService {
   }
 
   /**
-   * Restore tasks from storage (for migration from legacy storage)
-   * @deprecated Legacy migration - new tasks are created via createTask()
+   * Restore tasks from storage (for cloud sync or migration)
+   * 恢复任务到本地状态、持久化到 SW 并通知 UI 更新
    */
   async restoreTasks(tasks: Task[]): Promise<void> {
-    for (const task of tasks) {
-      this.tasks.set(task.id, task);
+    console.log('[SWTaskQueue] restoreTasks called with', tasks.length, 'tasks');
+    console.log('[SWTaskQueue] Current local tasks:', this.tasks.size, 'ids:', Array.from(this.tasks.keys()).slice(0, 5));
+    
+    // 过滤出本地不存在的任务
+    const tasksToRestore = tasks.filter(task => !this.tasks.has(task.id));
+    
+    console.log('[SWTaskQueue] Tasks to restore:', tasksToRestore.length);
+    
+    if (tasksToRestore.length === 0) {
+      console.log('[SWTaskQueue] No new tasks to restore (all tasks already exist locally)');
+      return;
     }
+    
+    // 转换为 SWTask 格式并导入到 SW
+    const swTasks: SWTask[] = tasksToRestore.map(task => this.convertTaskToSWTask(task));
+    
+    console.log('[SWTaskQueue] Restoring', swTasks.length, 'tasks to SW...');
+    
+    // 调用 SW 的 importTasks 方法持久化任务
+    const result = await swChannelClient.importTasks(swTasks);
+    console.log('[SWTaskQueue] Import result:', result);
+    
+    if (result.success) {
+      // 添加到本地内存
+      for (const task of tasksToRestore) {
+        this.tasks.set(task.id, task);
+        this.emitEvent('taskCreated', task);
+      }
+      
+      // 更新分页状态
+      this.paginationState.total = this.tasks.size;
+      this.paginationState.loadedCount = this.tasks.size;
+    } else {
+      console.error('[SWTaskQueue] Failed to import tasks:', result.error);
+    }
+  }
+  
+  /**
+   * 将 Task 转换为 SWTask 格式
+   */
+  private convertTaskToSWTask(task: Task): SWTask {
+    return {
+      id: task.id,
+      type: task.type as 'image' | 'video',
+      params: task.params as SWTask['params'],
+      status: task.status as SWTask['status'],
+      createdAt: task.createdAt,
+      completedAt: task.completedAt,
+      result: task.result,
+      error: task.error,
+      progress: task.progress,
+      phase: task.executionPhase as SWTask['phase'],
+      insertedToCanvas: task.insertedToCanvas,
+    };
   }
 
   /** 分页状态 */

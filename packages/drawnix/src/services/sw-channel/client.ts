@@ -367,6 +367,21 @@ export class SWChannelClient {
     return this.callOperationRPC('task:markInserted', { taskId }, 'Mark inserted failed');
   }
 
+  /**
+   * 导入任务（用于云同步恢复已完成的任务）
+   */
+  async importTasks(tasks: SWTask[]): Promise<{ success: boolean; imported: number; error?: string }> {
+    this.ensureInitialized();
+    const response = await this.channel!.call('task:import', { tasks });
+    
+    if (response.ret !== ReturnCode.Success) {
+      console.error('[SWChannel] importTasks failed:', response);
+      return { success: false, imported: 0, error: 'Import tasks failed' };
+    }
+    
+    return response.data as { success: boolean; imported: number; error?: string };
+  }
+
   // ============================================================================
   // 任务查询 RPC
   // ============================================================================

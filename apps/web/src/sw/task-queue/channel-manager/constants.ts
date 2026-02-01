@@ -19,6 +19,7 @@ export const RPC_METHODS = {
   TASK_RETRY: 'task:retry',
   TASK_DELETE: 'task:delete',
   TASK_MARK_INSERTED: 'task:markInserted',
+  TASK_IMPORT: 'task:import', // 导入已完成的任务（用于云同步恢复）
 
   // 任务查询
   TASK_GET: 'task:get',

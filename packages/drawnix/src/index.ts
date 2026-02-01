@@ -8,6 +8,7 @@ export * from './utils/gemini-api';
 
 // Export project management (folder/board structure)
 export * from './hooks/useWorkspace';
+export * from './hooks/useDocumentTitle';
 export * from './services/workspace-service';
 export * from './services/workspace-migration';
 export * from './types/workspace.types';

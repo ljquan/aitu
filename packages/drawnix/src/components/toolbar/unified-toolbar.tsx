@@ -39,6 +39,7 @@ export const UnifiedToolbar: React.FC<UnifiedToolbarProps> = React.memo(({
   taskPanelExpanded = false,
   onTaskPanelToggle,
   onOpenBackupRestore,
+  onOpenCloudSync,
 }) => {
   const [isIconMode, setIsIconMode] = useState(false);
   const [isMobileCollapsed, setIsMobileCollapsed] = useState(true); // 移动端默认收起
@@ -225,7 +226,7 @@ export const UnifiedToolbar: React.FC<UnifiedToolbarProps> = React.memo(({
 
         {/* 顶部固定区域 - 应用工具分区（菜单、撤销、重做） */}
         <div className="unified-toolbar__section unified-toolbar__section--fixed-top">
-          <AppToolbar embedded={true} iconMode={isIconMode || isMobileOrTablet} onOpenBackupRestore={onOpenBackupRestore} />
+          <AppToolbar embedded={true} iconMode={isIconMode || isMobileOrTablet} onOpenBackupRestore={onOpenBackupRestore} onOpenCloudSync={onOpenCloudSync} />
         </div>
 
         {/* 可滚动的工具栏内容区 */}
