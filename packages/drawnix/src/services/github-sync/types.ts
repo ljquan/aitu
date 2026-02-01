@@ -50,6 +50,36 @@ export interface SyncManifest {
   boards: Record<string, BoardSyncInfo>;
   /** 已同步的媒体文件索引 */
   syncedMedia: Record<string, MediaSyncInfo>;
+  /** 已删除的提示词记录 */
+  deletedPrompts?: PromptTombstone[];
+  /** 已删除的任务记录 */
+  deletedTasks?: TaskTombstone[];
+}
+
+/** 提示词删除记录 (Tombstone) */
+export interface PromptTombstone {
+  /** 提示词唯一标识（使用 createdAt 时间戳字符串） */
+  id: string;
+  /** 提示词类型 */
+  type: 'prompt' | 'videoPrompt' | 'imagePrompt';
+  /** 提示词内容（用于显示） */
+  content?: string;
+  /** 删除时间戳 */
+  deletedAt: number;
+  /** 删除操作的设备 ID */
+  deletedBy: string;
+}
+
+/** 任务删除记录 (Tombstone) */
+export interface TaskTombstone {
+  /** 任务 ID */
+  taskId: string;
+  /** 任务名称（用于显示） */
+  name?: string;
+  /** 删除时间戳 */
+  deletedAt: number;
+  /** 删除操作的设备 ID */
+  deletedBy: string;
 }
 
 /** 设备信息 */
@@ -68,6 +98,10 @@ export interface BoardSyncInfo {
   updatedAt: number;
   /** 内容校验和 */
   checksum: string;
+  /** 删除时间戳（软删除标记） */
+  deletedAt?: number;
+  /** 删除操作的设备 ID */
+  deletedBy?: string;
 }
 
 /** 媒体同步信息 */
@@ -163,8 +197,19 @@ export interface SyncResult {
     tasks: number;
     media: number;
   };
+  /** 删除的项目数量（本地删除，远程标记 tombstone） */
+  deleted?: {
+    boards: number;
+    prompts: number;
+    tasks: number;
+    media: number;
+  };
   /** 冲突项 */
   conflicts: ConflictItem[];
+  /** 安全警告（需要用户确认） */
+  safetyWarnings?: SyncWarning[];
+  /** 被安全保护跳过的项目 */
+  skippedItems?: SkippedItem[];
   /** 错误信息 */
   error?: string;
   /** 是否需要输入密码（解密失败时） */
@@ -245,6 +290,61 @@ export interface ChangeSet {
   promptsChanged: boolean;
   /** 任务是否有变更 */
   tasksChanged: boolean;
+  /** 已删除的提示词 ID 列表 */
+  deletedPromptIds?: string[];
+  /** 已删除的任务 ID 列表 */
+  deletedTaskIds?: string[];
+}
+
+// ====================================
+// 数据安全保护
+// ====================================
+
+/** 同步安全检查结果 */
+export interface SyncSafetyCheck {
+  /** 是否通过安全检查 */
+  passed: boolean;
+  /** 需要用户确认的警告 */
+  warnings: SyncWarning[];
+  /** 被保护跳过的项目 */
+  skippedItems: SkippedItem[];
+  /** 阻止执行的原因（严重错误） */
+  blockedReason?: string;
+}
+
+/** 同步警告 */
+export interface SyncWarning {
+  /** 警告类型 */
+  type: 'bulk_delete' | 'delete_current' | 'delete_all';
+  /** 警告消息 */
+  message: string;
+  /** 受影响的项目 */
+  affectedItems: Array<{ id: string; name: string }>;
+}
+
+/** 被跳过的项目 */
+export interface SkippedItem {
+  /** 项目 ID */
+  id: string;
+  /** 项目名称 */
+  name: string;
+  /** 跳过原因 */
+  reason: 'current_board' | 'new_device';
+}
+
+/** 回收站中的已删除项目 */
+export interface DeletedItems {
+  /** 已删除的画板 */
+  boards: Array<{
+    id: string;
+    name: string;
+    deletedAt: number;
+    deletedBy: string;
+  }>;
+  /** 已删除的提示词 */
+  prompts: PromptTombstone[];
+  /** 已删除的任务 */
+  tasks: TaskTombstone[];
 }
 
 // ====================================

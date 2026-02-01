@@ -16,8 +16,8 @@
 - [缓存与存储规范](#缓存与存储规范)
 - [API 与任务处理规范](#api-与任务处理规范)
 - [UI 交互规范](#ui-交互规范)
-- [安全规范](#安全规范)
 - [E2E 测试规范](#e2e-测试规范)
+- [数据安全规范](#数据安全规范)
 
 ---
 
@@ -5955,3 +5955,270 @@ function onFilterChange() {
 - 前端过滤只能处理当前页数据，无法看到其他页符合条件的数据
 - 分页信息（总数、总页数）会不准确
 - 过滤条件变化时应回到第一页，避免显示空白页
+
+### 云端同步恢复数据时保留原始 URL
+
+**场景**: 从云端同步/恢复任务数据到本地时，处理媒体 URL
+
+❌ **错误示例**:
+```typescript
+// 错误：修改任务的 result.url 为新格式
+const processedTasks = tasksToRestore.map(task => {
+  if (task.result?.url) {
+    const cacheUrl = `/__aitu_cache__/${taskType}/synced-${task.id}.${extension}`;
+    return {
+      ...task,
+      result: {
+        ...task.result,
+        url: cacheUrl,  // 修改了原始 URL
+        originalUrl: task.result.url,
+      },
+    };
+  }
+  return task;
+});
+```
+
+**问题**: 画布上引用原始 URL 的元素无法显示，因为 Cache Storage 中只有新 URL 的数据。
+
+✅ **正确示例**:
+```typescript
+// 正确：保留原始 URL，将数据缓存到原始 URL 位置
+const processedTasks = tasksToRestore.map(task => {
+  if (task.result?.url?.startsWith("/__aitu_cache__/")) {
+    return {
+      ...task,
+      result: {
+        ...task.result,
+        needsMediaDownload: true,  // 只添加标记，不修改 URL
+      },
+    };
+  }
+  return task;
+});
+
+// 下载媒体时，缓存到原始 URL 位置
+async downloadAndCacheMediaForTask(task) {
+  const cacheUrl = task.result?.url;  // 使用原始 URL
+  const blob = await downloadFromGist(task.id);
+  await unifiedCacheService.cacheToCacheStorageOnly(cacheUrl, blob);  // 缓存到原始位置
+}
+```
+
+**原因**:
+- 画布元素引用的是原始 URL（如 `/__aitu_cache__/image/xxx.png`）
+- 修改 URL 会导致画布元素与缓存数据不匹配
+- 正确做法是将下载的数据缓存到原始 URL 对应的位置
+
+### 增量同步优化：使用 checksum 减少网络请求
+
+**场景**: 实现云端数据同步功能时
+
+❌ **错误示例**:
+```typescript
+// 错误：每次都上传/下载所有数据
+async pushToRemote() {
+  const localData = await collectSyncData();
+  const encryptedFiles = await serialize(localData);  // 序列化所有数据
+  await gitHubApiService.updateGistFiles(encryptedFiles);  // 上传所有文件
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：增量同步，只传输有变化的数据
+async pushToRemote() {
+  const localData = await collectSyncData();
+  
+  // 1. 获取远程 manifest 比较
+  const remoteManifest = await getRemoteManifest();
+  
+  // 2. 使用 checksum 比较，只上传有变化的画板
+  const filesToUpdate = {};
+  for (const [boardId, board] of localData.boards) {
+    const localChecksum = calculateBoardChecksum(board);
+    const remoteInfo = remoteManifest?.boards[boardId];
+    
+    if (!remoteInfo || remoteInfo.checksum !== localChecksum) {
+      filesToUpdate[boardFile(boardId)] = await encrypt(board);
+    }
+  }
+  
+  // 3. 只更新有变化的文件
+  if (Object.keys(filesToUpdate).length > 0) {
+    await gitHubApiService.updateGistFiles(filesToUpdate);
+  }
+}
+```
+
+**原因**:
+- 全量同步会产生大量不必要的网络请求
+- 使用 checksum 可以精确识别哪些数据有变化
+- 只传输变化的数据可以显著减少带宽和延迟
+- manifest/workspace/prompts/tasks 等小文件可以始终更新
+
+---
+
+## 数据安全规范
+
+### 破坏性操作前必须进行安全检查
+
+**场景**: 执行删除、覆盖、清空等可能导致数据丢失的操作时
+
+❌ **错误示例**:
+```typescript
+// 错误：直接执行删除，没有安全检查
+async applyRemoteDeletions(toDeleteLocally: string[]) {
+  for (const boardId of toDeleteLocally) {
+    await workspaceStorageService.deleteBoard(boardId);  // 直接删除
+  }
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：执行安全检查后再删除
+async applyRemoteDeletions(toDeleteLocally: string[]) {
+  // 1. 执行安全检查
+  const safetyCheck = performSafetyCheck({
+    localBoards,
+    toDeleteLocally,
+    currentBoardId,    // 当前正在编辑的画板
+    isFirstSync,       // 是否首次同步
+    remoteManifest,
+  });
+  
+  // 2. 处理安全检查结果
+  if (safetyCheck.blockedReason) {
+    throw new Error(safetyCheck.blockedReason);  // 严重错误，阻止执行
+  }
+  
+  if (safetyCheck.warnings.length > 0) {
+    // 有警告，需要用户确认
+    return { needsConfirmation: true, warnings: safetyCheck.warnings };
+  }
+  
+  // 3. 排除被保护的项目后执行删除
+  const skippedIds = new Set(safetyCheck.skippedItems.map(item => item.id));
+  const safeToDelete = toDeleteLocally.filter(id => !skippedIds.has(id));
+  
+  for (const boardId of safeToDelete) {
+    await workspaceStorageService.deleteBoard(boardId);
+  }
+}
+```
+
+**安全检查规则**:
+
+| 检查项 | 规则 | 处理方式 |
+|-------|------|---------|
+| 当前画板保护 | 正在编辑的画板不能被删除 | 跳过该项，继续其他操作 |
+| 新设备保护 | 首次同步不执行任何删除 | 跳过所有删除操作 |
+| 批量删除阈值 | 删除超过 50% 数据时警告 | 暂停，要求用户确认 |
+| 全部删除阻止 | 不允许删除所有数据 | 阻止执行，显示错误 |
+| 空数据保护 | 远程数据异常时不执行删除 | 跳过所有删除操作 |
+
+**原因**:
+- 用户数据是核心资产，误删除可能导致不可恢复的损失
+- 同步冲突可能导致意外的批量删除
+- 安全检查提供多层保护，宁可同步失败也不能误删数据
+
+### 不可逆操作需要用户输入确认文字
+
+**场景**: 执行清空回收站、永久删除等不可恢复的操作时
+
+❌ **错误示例**:
+```tsx
+// 错误：只用简单的确认对话框
+<Button onClick={() => {
+  if (confirm('确定要清空回收站吗？')) {
+    emptyRecycleBin();
+  }
+}}>
+  清空回收站
+</Button>
+```
+
+✅ **正确示例**:
+```tsx
+// 正确：要求输入确认文字
+function EmptyRecycleBinDialog({ onConfirm, onCancel }) {
+  const [confirmText, setConfirmText] = useState('');
+  const isValid = confirmText === '确认清空';
+  
+  return (
+    <Dialog header="清空回收站">
+      <p>此操作将永久删除回收站中的所有数据，无法恢复。</p>
+      <ul>
+        <li>{itemCount.boards} 个画板</li>
+        <li>{itemCount.prompts} 条提示词</li>
+      </ul>
+      <p>请输入 <strong>确认清空</strong> 以继续：</p>
+      <Input
+        value={confirmText}
+        onChange={setConfirmText}
+        placeholder='输入"确认清空"'
+      />
+      <Button 
+        theme="danger" 
+        disabled={!isValid}  // 必须输入正确文字才能点击
+        onClick={onConfirm}
+      >
+        永久删除
+      </Button>
+    </Dialog>
+  );
+}
+```
+
+**原因**:
+- 简单的确认对话框容易被用户习惯性点击"确定"
+- 输入确认文字强制用户阅读警告内容
+- 对于不可恢复的数据操作，额外的确认步骤可以有效防止误操作
+
+### 使用软删除（Tombstone）支持数据恢复
+
+**场景**: 实现跨设备同步的删除功能时
+
+❌ **错误示例**:
+```typescript
+// 错误：直接删除远程文件
+async deleteBoard(boardId: string) {
+  await gitHubApiService.deleteGistFiles([`board_${boardId}.json`]);  // 直接删除
+  delete manifest.boards[boardId];  // 从 manifest 中移除
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：使用 tombstone 标记，保留文件便于恢复
+async deleteBoard(boardId: string) {
+  // 1. 添加删除标记，但不删除文件
+  manifest.boards[boardId] = {
+    ...manifest.boards[boardId],
+    deletedAt: Date.now(),      // 删除时间戳
+    deletedBy: deviceId,        // 删除设备
+  };
+  
+  // 2. 更新 manifest
+  await updateManifest(manifest);
+  
+  // 3. 删除本地数据
+  await workspaceStorageService.deleteBoard(boardId);
+}
+
+// 恢复时：移除 tombstone 标记，下载远程文件
+async restoreBoard(boardId: string) {
+  const { deletedAt, deletedBy, ...rest } = manifest.boards[boardId];
+  manifest.boards[boardId] = rest;  // 移除删除标记
+  
+  const boardData = await downloadBoard(boardId);  // 远程文件仍在
+  await workspaceStorageService.saveBoard(boardData);
+}
+```
+
+**优势**:
+- 删除可恢复：用户可以从回收站恢复误删的数据
+- 跨设备同步：其他设备同步时能正确识别已删除的项目
+- 永久删除可控：用户手动清空回收站时才真正删除远程文件
+
