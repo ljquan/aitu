@@ -1,13 +1,17 @@
 {
-  "version": "0.5.64",
-  "buildTime": "2026-02-01T16:16:28.735Z",
+  "version": "0.5.65",
+  "buildTime": "2026-02-01T16:17:19.967Z",
   "gitCommit": "unknown",
   "changelog": [
-    "support async models with size and references",
+    "support opening tools via URL parameter and display tool icons in window title",
+    "move ai_analyze to SW and improve debug panel logging",
+    "implement LLM API log selection and batch actions",
     "implement auto-compression for 10-25MB images",
     "完成 AI 输入栏和 ChatDrawer 完整测试体系",
     "完成所有核心功能 Manual GIF 录制体系",
     "添加\"不再提示\"按钮到灵感创意板块",
-    "添加重命名验证功能，禁止同级重名"
+    "添加重命名验证功能，禁止同级重名",
+    "改进工作流恢复机制和错误处理",
+    "领域驱动开发"
   ]
 }
