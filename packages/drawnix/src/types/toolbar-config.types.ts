@@ -30,8 +30,10 @@ export interface ToolbarConfig {
 /**
  * 当前配置版本
  * v6: 将 shape 按钮移至默认显示（位于 freehand 之后）
+ * v7: 新增便利贴、音频、YouTube 嵌入按钮
+ * v8: 移除 Twitter 嵌入按钮
  */
-export const TOOLBAR_CONFIG_VERSION = 6;
+export const TOOLBAR_CONFIG_VERSION = 8;
 
 /**
  * 默认显示的按钮
@@ -70,6 +72,10 @@ export const ALL_BUTTON_IDS = [
   'theme',
   'mermaid-to-drawnix',
   'markdown-to-drawnix',
+  // 新增嵌入类按钮（默认收起）
+  'sticky-note',
+  'audio',
+  'youtube',
   // 操作类按钮（默认收起）
   'undo',
   'redo',

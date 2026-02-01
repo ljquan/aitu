@@ -51,6 +51,11 @@ import { withToolFocus } from './plugins/with-tool-focus';
 import { withToolResize } from './plugins/with-tool-resize';
 import { withMultiResize } from './plugins/with-multi-resize';
 import { withWorkZone } from './plugins/with-workzone';
+import { withStickyNote } from './plugins/sticky-note/with-sticky-note';
+import { withAudio } from './plugins/audio/with-audio';
+import { withYouTube } from './plugins/youtube/with-youtube';
+import { withUrlPaste } from './plugins/with-url-paste';
+import { withTweetStub } from './plugins/with-tweet-stub';
 import { MultiSelectionHandles } from './components/multi-selection-handles';
 import { ActiveTaskWarning } from './components/task-queue/ActiveTaskWarning';
 import { useTaskStorage } from './hooks/useTaskStorage';
@@ -572,6 +577,11 @@ export const Drawnix: React.FC<DrawnixProps> = ({
     withToolResize, // 工具缩放功能 - 拖拽缩放手柄
     withToolFocus, // 工具焦点管理 - 双击编辑
     withWorkZone, // 工作区元素 - 在画布上显示工作流进度
+    withStickyNote, // 便利贴 - 支持 Markdown 格式
+    withAudio, // 音频播放器
+    withYouTube, // YouTube 视频嵌入
+    withUrlPaste, // URL 粘贴自动识别 - 自动识别 YouTube/音频 URL
+    withTweetStub, // Tweet 存根 - 处理已移除的 Twitter 元素，防止崩溃
     withArrowLineAutoCompleteExtend, // 自动完成形状选择 - hover 中点时选择下一个节点形状
     withDefaultFill, // 默认填充 - 让新创建的图形有白色填充，方便双击编辑
     withGradientFill, // 渐变填充 - 支持渐变和图片填充渲染

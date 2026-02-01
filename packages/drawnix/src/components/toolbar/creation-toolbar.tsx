@@ -20,6 +20,9 @@ import {
   ZoomInIcon,
   ZoomOutIcon,
   ImageUploadIcon,
+  StickyNoteIcon,
+  AudioIcon,
+  YouTubeIcon,
 } from '../icons';
 import { useBoard } from '@plait-board/react-board';
 import {
@@ -45,6 +48,9 @@ import { MediaLibraryModal } from '../media-library/MediaLibraryModal';
 import { SelectionMode, Asset, AssetType } from '../../types/asset.types';
 import { insertImageFromUrl } from '../../data/image';
 import { insertVideoFromUrl } from '../../data/video';
+import { StickyNoteTransforms } from '../../plugins/sticky-note/with-sticky-note';
+import { AudioTransforms } from '../../plugins/audio/with-audio';
+import { YouTubeTransforms } from '../../plugins/youtube/with-youtube';
 import { Popover, PopoverContent, PopoverTrigger } from '../popover/popover';
 import { FreehandShape } from '../../plugins/freehand/type';
 import { PenShape } from '../../plugins/pen/type';
@@ -177,6 +183,24 @@ export const BUTTONS: AppToolButtonProps[] = [
     titleKey: 'extraTools.markdownToDrawnix',
     key: 'markdown-to-drawnix',
     visibilityKey: 'markdown-to-drawnix',
+  },
+  {
+    icon: <StickyNoteIcon />,
+    titleKey: 'toolbar.stickyNote',
+    key: 'sticky-note',
+    visibilityKey: 'sticky-note',
+  },
+  {
+    icon: <AudioIcon />,
+    titleKey: 'toolbar.audio',
+    key: 'audio',
+    visibilityKey: 'audio',
+  },
+  {
+    icon: <YouTubeIcon />,
+    titleKey: 'toolbar.youtube',
+    key: 'youtube',
+    visibilityKey: 'youtube',
   },
 ];
 
@@ -426,6 +450,33 @@ export const CreationToolbar: React.FC<ToolbarSectionProps> = ({
       openDialog(DialogType.mermaidToDrawnix);
     } else if (button.key === 'markdown-to-drawnix') {
       openDialog(DialogType.markdownToDrawnix);
+    } else if (button.key === 'sticky-note') {
+      // 在画布中心插入便利贴
+      const viewportRect = board.viewport?.viewBox;
+      const position: [number, number] = viewportRect 
+        ? [viewportRect.x + viewportRect.width / 2 - 140, viewportRect.y + viewportRect.height / 2 - 100]
+        : [100, 100];
+      StickyNoteTransforms.insertStickyNote(board, { position });
+    } else if (button.key === 'audio') {
+      // 提示用户输入音频 URL（简单实现，后续可改为对话框）
+      const url = window.prompt('请输入音频 URL:', '');
+      if (url) {
+        const viewportRect = board.viewport?.viewBox;
+        const position: [number, number] = viewportRect 
+          ? [viewportRect.x + viewportRect.width / 2 - 160, viewportRect.y + viewportRect.height / 2 - 40]
+          : [100, 100];
+        AudioTransforms.insertAudio(board, { position, url });
+      }
+    } else if (button.key === 'youtube') {
+      // 提示用户输入 YouTube URL
+      const url = window.prompt('请输入 YouTube 视频 URL:', '');
+      if (url) {
+        const viewportRect = board.viewport?.viewBox;
+        const position: [number, number] = viewportRect 
+          ? [viewportRect.x + viewportRect.width / 2 - 240, viewportRect.y + viewportRect.height / 2 - 135]
+          : [100, 100];
+        YouTubeTransforms.insertYouTube(board, { position, videoIdOrUrl: url });
+      }
     }
   };
 

@@ -19,6 +19,9 @@ export interface Translations {
   'toolbar.mediaLibrary': string;
   'toolbar.aiImage': string;
   'toolbar.aiVideo': string;
+  'toolbar.stickyNote': string;
+  'toolbar.audio': string;
+  'toolbar.youtube': string;
   'toolbar.tasks': string;
   'toolbar.theme': string;
   'toolbar.stroke': string;
@@ -205,6 +208,9 @@ const translations: Record<Language, Translations> = {
     'toolbar.mediaLibrary': '素材库',
     'toolbar.aiImage': 'AI 图片生成',
     'toolbar.aiVideo': 'AI 视频生成',
+    'toolbar.stickyNote': '便签',
+    'toolbar.audio': '音频',
+    'toolbar.youtube': 'YouTube',
     'toolbar.tasks': '任务',
     'toolbar.theme': '主题色',
     'toolbar.stroke': '描边',
@@ -384,6 +390,9 @@ const translations: Record<Language, Translations> = {
     'toolbar.mediaLibrary': 'Media Library',
     'toolbar.aiImage': 'AI Image Generation',
     'toolbar.aiVideo': 'AI Video Generation',
+    'toolbar.stickyNote': 'Sticky Note',
+    'toolbar.audio': 'Audio',
+    'toolbar.youtube': 'YouTube',
     'toolbar.tasks': 'Tasks',
     'toolbar.theme': 'Theme',
     'toolbar.stroke': 'Stroke',

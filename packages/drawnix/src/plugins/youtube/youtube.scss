@@ -1,0 +1,161 @@
+/**
+ * YouTube Embed Styles
+ */
+
+.youtube-embed-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #0f0f0f;
+  border-radius: 8px;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: #ffffff;
+}
+
+// 标题栏
+.youtube-embed-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #1a1a1a;
+  cursor: move;
+  user-select: none;
+}
+
+.youtube-embed-logo {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+.youtube-embed-title {
+  font-size: 13px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.youtube-embed-external-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.2s, color 0.2s;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.9);
+  }
+}
+
+// 视频区域
+.youtube-embed-content {
+  flex: 1;
+  position: relative;
+  background: #000;
+  min-height: 0;
+}
+
+// iframe
+.youtube-embed-iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+// 缩略图预览
+.youtube-embed-thumbnail {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  cursor: pointer;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+}
+
+.youtube-embed-thumbnail-fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #1a1a1a 0%, #0f0f0f 100%);
+}
+
+// 播放按钮遮罩
+.youtube-embed-play-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.3);
+  transition: background 0.2s;
+
+  &:hover {
+    background: rgba(0, 0, 0, 0.2);
+
+    .youtube-embed-play-btn {
+      transform: scale(1.1);
+    }
+  }
+}
+
+.youtube-embed-play-btn {
+  width: 68px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 0, 0, 0.9);
+  border-radius: 12px;
+  transition: transform 0.2s, background 0.2s;
+
+  &:hover {
+    background: #ff0000;
+  }
+}
+
+// 双击提示
+.youtube-embed-hint {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  padding: 4px 8px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 4px;
+}
+
+// 底部
+.youtube-embed-footer {
+  padding: 6px 12px;
+  background: #1a1a1a;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.youtube-embed-video-id {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  font-family: 'Menlo', 'Monaco', 'Consolas', monospace;
+}
