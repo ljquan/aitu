@@ -1,13 +1,6 @@
 {
-  "version": "0.5.64",
-  "buildTime": "2026-01-30T10:06:06.752Z",
+  "version": "0.5.66",
+  "buildTime": "2026-02-01T23:16:56.602Z",
   "gitCommit": "unknown",
-  "changelog": [
-    "support async models with size and references",
-    "implement auto-compression for 10-25MB images",
-    "完成 AI 输入栏和 ChatDrawer 完整测试体系",
-    "完成所有核心功能 Manual GIF 录制体系",
-    "添加\"不再提示\"按钮到灵感创意板块",
-    "添加重命名验证功能，禁止同级重名"
-  ]
+  "changelog": []
 }
