@@ -21,6 +21,7 @@ import {
 import { useGitHubSync, GistInfo } from '../../contexts/GitHubSyncContext';
 import { tokenService, syncPasswordService } from '../../services/github-sync';
 import { TokenGuide } from './TokenGuide';
+import { RecycleBin } from './RecycleBin';
 import { LockOnIcon, LockOffIcon } from 'tdesign-icons-react';
 import './sync-settings.scss';
 
@@ -210,14 +211,18 @@ export function SyncSettings({ visible, onClose }: SyncSettingsProps) {
         // 构建详细的同步结果消息
         const parts: string[] = ['同步完成'];
         
-        // 统计上传和下载
+        // 统计上传、下载和删除
         const uploaded = result.uploaded.boards + result.uploaded.prompts + result.uploaded.tasks;
         const downloaded = result.downloaded.boards + result.downloaded.prompts + result.downloaded.tasks;
+        const deleted = result.deleted 
+          ? result.deleted.boards + result.deleted.prompts + result.deleted.tasks
+          : 0;
         
-        if (uploaded > 0 || downloaded > 0) {
+        if (uploaded > 0 || downloaded > 0 || deleted > 0) {
           const details: string[] = [];
           if (uploaded > 0) details.push(`上传 ${uploaded} 项`);
           if (downloaded > 0) details.push(`下载 ${downloaded} 项`);
+          if (deleted > 0) details.push(`删除 ${deleted} 项`);
           parts.push(`(${details.join(', ')})`);
         }
         
@@ -265,7 +270,21 @@ export function SyncSettings({ visible, onClose }: SyncSettingsProps) {
       
       if (result.success) {
         const downloaded = result.downloaded.boards + result.downloaded.prompts + result.downloaded.tasks;
-        MessagePlugin.success(`下载完成 (${downloaded} 项)，即将刷新页面...`);
+        const deleted = result.deleted 
+          ? result.deleted.boards + result.deleted.prompts + result.deleted.tasks
+          : 0;
+        
+        // 构建结果消息
+        const parts: string[] = ['下载完成'];
+        const details: string[] = [];
+        if (downloaded > 0) details.push(`下载 ${downloaded} 项`);
+        if (deleted > 0) details.push(`删除 ${deleted} 项`);
+        if (details.length > 0) {
+          parts.push(`(${details.join(', ')})`);
+        }
+        parts.push('，即将刷新页面...');
+        
+        MessagePlugin.success(parts.join(''));
         
         // 刷新页面以加载新数据
         setTimeout(() => {
@@ -664,6 +683,15 @@ export function SyncSettings({ visible, onClose }: SyncSettingsProps) {
                   </div>
                 )}
               </div>
+
+              {/* 回收站 */}
+              <RecycleBin 
+                isConnected={isConnected} 
+                onRefresh={() => {
+                  // 恢复画板后刷新页面
+                  window.location.reload();
+                }}
+              />
 
               {/* 同步选项 */}
               <div className="sync-settings__options-section">

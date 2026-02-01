@@ -27,6 +27,8 @@ import {
   SYNC_VERSION,
   SYNC_FILES,
   BoardSyncInfo,
+  PromptTombstone,
+  TaskTombstone,
 } from './types';
 import type { Board, BoardMetadata, Folder } from '../../types/workspace.types';
 import { cryptoService, isEncryptedData } from './crypto-service';
@@ -477,10 +479,19 @@ class DataSerializer {
     boards: Map<string, BoardData>;
     prompts: PromptsData | null;
     tasks: TasksData | null;
+    /** 需要删除的画板 ID 列表 */
+    deletedBoardIds?: string[];
+    /** 需要删除的提示词 ID 列表 */
+    deletedPromptIds?: string[];
+    /** 需要删除的任务 ID 列表 */
+    deletedTaskIds?: string[];
   }): Promise<{
     boardsApplied: number;
     promptsApplied: number;
     tasksApplied: number;
+    boardsDeleted: number;
+    promptsDeleted: number;
+    tasksDeleted: number;
     remoteCurrentBoardId?: string | null;
   }> {
     console.log('[DataSerializer] applySyncData called with:', {
@@ -489,11 +500,17 @@ class DataSerializer {
       boardIds: Array.from(data.boards.keys()),
       hasPrompts: !!data.prompts,
       hasTasks: !!data.tasks,
+      deletedBoardIds: data.deletedBoardIds?.length || 0,
+      deletedPromptIds: data.deletedPromptIds?.length || 0,
+      deletedTaskIds: data.deletedTaskIds?.length || 0,
     });
 
     let boardsApplied = 0;
     let promptsApplied = 0;
     let tasksApplied = 0;
+    let boardsDeleted = 0;
+    let promptsDeleted = 0;
+    let tasksDeleted = 0;
 
     // 应用文件夹
     if (data.workspace) {
@@ -524,6 +541,21 @@ class DataSerializer {
       boardsApplied++;
     }
     console.log('[DataSerializer] Boards applied:', boardsApplied);
+
+    // 删除画板（远程已标记为 tombstone 的）
+    if (data.deletedBoardIds && data.deletedBoardIds.length > 0) {
+      console.log('[DataSerializer] Deleting boards:', data.deletedBoardIds);
+      for (const boardId of data.deletedBoardIds) {
+        try {
+          await workspaceStorageService.deleteBoard(boardId);
+          boardsDeleted++;
+          console.log(`[DataSerializer] Deleted board: ${boardId}`);
+        } catch (e) {
+          console.warn(`[DataSerializer] Failed to delete board ${boardId}:`, e);
+        }
+      }
+      console.log('[DataSerializer] Boards deleted:', boardsDeleted);
+    }
 
     // 刷新工作区
     if (boardsApplied > 0) {
@@ -623,6 +655,9 @@ class DataSerializer {
       boardsApplied,
       promptsApplied,
       tasksApplied,
+      boardsDeleted,
+      promptsDeleted,
+      tasksDeleted,
       remoteCurrentBoardId,
     });
     
@@ -636,6 +671,9 @@ class DataSerializer {
       boardsApplied,
       promptsApplied,
       tasksApplied,
+      boardsDeleted,
+      promptsDeleted,
+      tasksDeleted,
       remoteCurrentBoardId,
     };
   }
@@ -776,10 +814,12 @@ class DataSerializer {
     toUpload: string[];
     toDownload: string[];
     conflicts: string[];
+    toDeleteLocally: string[];
   } {
     const toUpload: string[] = [];
     const toDownload: string[] = [];
     const conflicts: string[] = [];
+    const toDeleteLocally: string[] = [];
 
     const localBoardIds = new Set(localBoards.keys());
     const remoteBoardIds = new Set(Object.keys(remoteManifest.boards));
@@ -792,6 +832,9 @@ class DataSerializer {
       if (!remoteInfo) {
         // 远程没有，需要上传
         toUpload.push(boardId);
+      } else if (remoteInfo.deletedAt) {
+        // 远程已标记删除（tombstone），需要删除本地数据
+        toDeleteLocally.push(boardId);
       } else if (localChecksum !== remoteInfo.checksum) {
         // 内容不同
         if (!lastSyncTime) {
@@ -826,11 +869,165 @@ class DataSerializer {
     // 检查远程独有的画板
     for (const boardId of remoteBoardIds) {
       if (!localBoardIds.has(boardId)) {
-        toDownload.push(boardId);
+        const remoteInfo = remoteManifest.boards[boardId];
+        // 只下载未被删除的画板
+        if (!remoteInfo.deletedAt) {
+          toDownload.push(boardId);
+        }
       }
     }
 
-    return { toUpload, toDownload, conflicts };
+    return { toUpload, toDownload, conflicts, toDeleteLocally };
+  }
+
+  /**
+   * 检测本地删除的数据
+   * 对比当前本地数据与上次同步的 manifest，找出已删除的项
+   */
+  detectDeletions(
+    localData: { 
+      boards: Map<string, BoardData>; 
+      prompts: PromptsData; 
+      tasks: TasksData 
+    },
+    lastSyncManifest: SyncManifest | null,
+    deviceId: string
+  ): {
+    deletedBoards: Array<{ id: string; name: string }>;
+    deletedPrompts: PromptTombstone[];
+    deletedTasks: TaskTombstone[];
+  } {
+    const deletedBoards: Array<{ id: string; name: string }> = [];
+    const deletedPrompts: PromptTombstone[] = [];
+    const deletedTasks: TaskTombstone[] = [];
+    const now = Date.now();
+
+    if (!lastSyncManifest) {
+      // 没有上次同步记录，无法检测删除
+      return { deletedBoards, deletedPrompts, deletedTasks };
+    }
+
+    // 检测已删除的画板
+    for (const [boardId, boardInfo] of Object.entries(lastSyncManifest.boards)) {
+      // 跳过已经标记为删除的画板
+      if (boardInfo.deletedAt) {
+        continue;
+      }
+      // 如果本地不存在这个画板，说明已被删除
+      if (!localData.boards.has(boardId)) {
+        deletedBoards.push({
+          id: boardId,
+          name: boardInfo.name,
+        });
+      }
+    }
+
+    // 检测已删除的提示词
+    // 需要比较本地提示词列表和远程的提示词列表
+    // 由于提示词没有独立的 ID，使用 createdAt 作为唯一标识
+    // 注意：这里我们需要远程的提示词数据来比较，但 manifest 中没有存储
+    // 所以提示词的删除检测需要在同步时通过比较完整数据来实现
+    // 这里暂时跳过，后续在 applySyncData 中处理
+
+    // 检测已删除的任务
+    // 同样，任务的删除检测需要比较完整数据
+    // 由于 manifest 中只存储了媒体信息，不存储任务列表
+    // 所以任务的删除检测也需要在同步时处理
+
+    console.log('[DataSerializer] detectDeletions result:', {
+      deletedBoards: deletedBoards.length,
+      deletedPrompts: deletedPrompts.length,
+      deletedTasks: deletedTasks.length,
+    });
+
+    return { deletedBoards, deletedPrompts, deletedTasks };
+  }
+
+  /**
+   * 将删除的画板标记为 tombstone
+   * 更新 manifest 中的 boards 记录，添加 deletedAt 和 deletedBy 字段
+   */
+  markBoardsAsDeleted(
+    manifest: SyncManifest,
+    deletedBoards: Array<{ id: string; name: string }>,
+    deviceId: string
+  ): SyncManifest {
+    const now = Date.now();
+    const updatedManifest = { ...manifest };
+    
+    for (const board of deletedBoards) {
+      if (updatedManifest.boards[board.id]) {
+        // 更新现有记录，添加删除标记
+        updatedManifest.boards[board.id] = {
+          ...updatedManifest.boards[board.id],
+          deletedAt: now,
+          deletedBy: deviceId,
+        };
+      } else {
+        // 如果不存在（不应该发生），创建一个带删除标记的记录
+        updatedManifest.boards[board.id] = {
+          name: board.name,
+          updatedAt: now,
+          checksum: '',
+          deletedAt: now,
+          deletedBy: deviceId,
+        };
+      }
+    }
+    
+    updatedManifest.updatedAt = now;
+    return updatedManifest;
+  }
+
+  /**
+   * 移除画板的删除标记（用于恢复）
+   */
+  unmarkBoardAsDeleted(
+    manifest: SyncManifest,
+    boardId: string
+  ): SyncManifest {
+    const updatedManifest = { ...manifest };
+    
+    if (updatedManifest.boards[boardId]) {
+      const { deletedAt, deletedBy, ...rest } = updatedManifest.boards[boardId];
+      updatedManifest.boards[boardId] = rest as BoardSyncInfo;
+    }
+    
+    updatedManifest.updatedAt = Date.now();
+    return updatedManifest;
+  }
+
+  /**
+   * 获取所有已删除的画板（从 manifest 中）
+   */
+  getDeletedBoards(manifest: SyncManifest): Array<{
+    id: string;
+    name: string;
+    deletedAt: number;
+    deletedBy: string;
+  }> {
+    const deletedBoards: Array<{
+      id: string;
+      name: string;
+      deletedAt: number;
+      deletedBy: string;
+    }> = [];
+    
+    for (const [boardId, boardInfo] of Object.entries(manifest.boards)) {
+      if (boardInfo.deletedAt && boardInfo.deletedBy) {
+        deletedBoards.push({
+          id: boardId,
+          name: boardInfo.name,
+          deletedAt: boardInfo.deletedAt,
+          deletedBy: boardInfo.deletedBy,
+        });
+      }
+    }
+    
+    // 按删除时间倒序排列
+    deletedBoards.sort((a, b) => b.deletedAt - a.deletedAt);
+    
+    return deletedBoards;
   }
 }
 

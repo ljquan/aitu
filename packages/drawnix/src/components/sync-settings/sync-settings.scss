@@ -488,4 +488,128 @@
     color: var(--td-warning-color);
     margin-top: 8px !important;
   }
+
+  // 回收站
+  &__recycle-bin {
+    padding: 12px 0;
+    border-bottom: 1px solid var(--td-component-border);
+  }
+
+  &__recycle-bin-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--td-text-color-primary);
+    user-select: none;
+
+    &:hover {
+      color: var(--td-brand-color);
+    }
+
+    svg {
+      font-size: 14px;
+    }
+  }
+
+  &__recycle-bin-count {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--td-text-color-placeholder);
+    background: var(--td-bg-color-secondarycontainer);
+    padding: 1px 6px;
+    border-radius: 4px;
+  }
+
+  &__recycle-bin-content {
+    margin-top: 10px;
+    padding-left: 20px;
+  }
+
+  &__recycle-bin-loading,
+  &__recycle-bin-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px;
+    color: var(--td-text-color-placeholder);
+    font-size: 12px;
+  }
+
+  &__recycle-group {
+    margin-bottom: 12px;
+  }
+
+  &__recycle-group-header {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--td-text-color-secondary);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+    padding-left: 4px;
+  }
+
+  &__recycle-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    margin-bottom: 4px;
+    background: var(--td-bg-color-secondarycontainer);
+    border-radius: 6px;
+    transition: all 0.2s;
+
+    &:hover {
+      background: var(--td-bg-color-container);
+    }
+  }
+
+  &__recycle-item-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  &__recycle-item-name {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--td-text-color-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 180px;
+  }
+
+  &__recycle-item-time {
+    font-size: 10px;
+    color: var(--td-text-color-placeholder);
+  }
+
+  &__recycle-item-actions {
+    display: flex;
+    gap: 2px;
+    margin-left: 8px;
+
+    .t-button {
+      font-size: 11px !important;
+      color: var(--td-text-color-placeholder);
+      
+      &:hover {
+        color: var(--td-brand-color);
+      }
+    }
+  }
+
+  &__recycle-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--td-component-border);
+  }
 }
