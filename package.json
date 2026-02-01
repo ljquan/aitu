@@ -1,9 +1,9 @@
 {
   "name": "@aitu/source",
-  "version": "0.5.62",
+  "version": "0.5.63",
   "license": "MIT",
   "packageManager": "pnpm@10.21.0",
-  "description": "Aitu - An open-source whiteboard tool with AI-powered image/video creation, mind mapping, flowcharts, and freehand drawing",
+  "description": "Opentu - An open-source whiteboard tool with AI-powered image/video creation, mind mapping, flowcharts, and freehand drawing",
   "homepage": "https://opentu.ai",
   "repository": {
     "type": "git",
@@ -51,7 +51,7 @@
     "version:minor": "node scripts/safe-version-bump.js minor",
     "version:major": "node scripts/safe-version-bump.js major",
     "release:skip": "node scripts/deploy-hybrid.js --skip-build --skip-e2e --skip-npm --skip-manual",
-    "release": "node scripts/deploy-hybrid.js --skip-e2e",
+    "release": "node scripts/deploy-hybrid.js --skip-e2e --skip-manual",
     "release:minor": "npm run version:minor && node scripts/deploy-hybrid.js",
     "release:major": "npm run version:major && node scripts/deploy-hybrid.js",
     "release:retry": "node scripts/deploy-hybrid.js --skip-e2e  --skip-manual",

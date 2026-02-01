@@ -57,7 +57,7 @@
 │  ┌─────────────────────────────────────────────────────────────────┐    │
 │  │              工具 iframe (第三方)                                 │    │
 │  │  ┌────────────────────────────────────────────────────────────┐ │    │
-│  │  │ 实现 Aitu Tool Protocol (可选)                              │ │    │
+│  │  │ 实现 Opentu Tool Protocol (可选)                              │ │    │
 │  │  │  window.parent.postMessage({                                │ │    │
 │  │  │    type: 'tool:insert-text',                                │ │    │
 │  │  │    payload: { text: '...' }                                 │ │    │
@@ -321,7 +321,7 @@ export const ToolErrorOverlay: React.FC<ToolErrorOverlayProps> = ({
 #### 消息流向
 
 ```
-画布 (Aitu)                        工具 (iframe)
+画布 (Opentu)                        工具 (iframe)
     │                                    │
     │ ──────── BOARD_TO_TOOL_INIT ────> │  初始化
     │                                    │
@@ -622,7 +622,7 @@ export const withTool: PlaitPlugin = (board: PlaitBoard) => {
 
 ```typescript
 /**
- * Aitu Tool SDK（供第三方工具使用）
+ * Opentu Tool SDK（供第三方工具使用）
  */
 class AituToolSDK {
   private parentWindow: Window;

@@ -1,6 +1,6 @@
 # NPM + CDN 部署指南
 
-本文档介绍如何将 Aitu 发布到 npm，并通过免费 CDN 访问。
+本文档介绍如何将 Opentu 发布到 npm，并通过免费 CDN 访问。
 
 ## 概述
 

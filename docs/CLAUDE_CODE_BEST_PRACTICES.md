@@ -1,6 +1,6 @@
 # Claude Code 最佳实践指南
 
-本文档基于 Claude Code 之父 Boris Cherny 的 13 条实战技巧，结合 Aitu 项目实际情况进行整理，帮助团队最大化 Claude Code 的开发效率。
+本文档基于 Claude Code 之父 Boris Cherny 的 13 条实战技巧，结合 Opentu 项目实际情况进行整理，帮助团队最大化 Claude Code 的开发效率。
 
 ## 目录
 
@@ -57,7 +57,7 @@ claude --teleport
 # 在 GUI 中使用 /teleport 命令
 ```
 
-**Aitu 项目应用场景:**
+**Opentu 项目应用场景:**
 
 | 实例 | 任务类型 | 示例 |
 |------|---------|------|
@@ -111,7 +111,7 @@ claude --model opus
 
 每当 Claude 做错什么就加进去，下次它就知道了，形成飞轮效应。
 
-**Aitu 项目 CODEBUDDY.md 结构:**
+**Opentu 项目 CODEBUDDY.md 结构:**
 
 ```markdown
 # CODEBUDDY.md
@@ -184,7 +184,7 @@ Shift + Tab (按两次)
 5. 执行实现
 ```
 
-**Aitu 项目 Plan 模式示例:**
+**Opentu 项目 Plan 模式示例:**
 
 ```
 用户: 我想添加一个图片圆形裁剪功能
@@ -234,7 +234,7 @@ Shift + Tab + Tab
 
 Claude 自己也能调用这些命令，实现自动化工作流。
 
-**Aitu 项目已有命令:**
+**Opentu 项目已有命令:**
 
 | 命令 | 功能 |
 |------|------|
@@ -316,7 +316,7 @@ Claude 自己也能调用这些命令，实现自动化工作流。
 
 把反复做的事情固化下来，让 Claude 自己调用。
 
-**Aitu 项目 Subagent 示例:**
+**Opentu 项目 Subagent 示例:**
 
 参考 `.codebuddy/skills/speckit-auto.md`:
 
@@ -387,7 +387,7 @@ Claude 通常能自动生成格式良好的代码，Hook 处理最后 10%，避�
 }
 ```
 
-**Aitu 项目格式化脚本:**
+**Opentu 项目格式化脚本:**
 
 ```json
 // package.json
@@ -432,7 +432,7 @@ PostToolUse Hook 触发
 # 示例配置:
 ```
 
-**Aitu 项目推荐批准列表:**
+**Opentu 项目推荐批准列表:**
 
 | 命令类型 | 示例 | 风险级别 |
 |---------|------|---------|
@@ -489,7 +489,7 @@ Claude Code 不只是编程工具，而是能调用整个工具链。
 }
 ```
 
-**Aitu 项目推荐 MCP 集成:**
+**Opentu 项目推荐 MCP 集成:**
 
 | 工具 | 用途 | MCP Server |
 |------|------|-----------|
@@ -544,7 +544,7 @@ claude --permission-mode=dontAsk
 3. 设置合理的超时时间
 4. 定期检查进度
 
-**Aitu 项目长任务示例:**
+**Opentu 项目长任务示例:**
 
 ```bash
 # 示例: 将所有组件迁移到新的 Z-Index 规范
@@ -636,7 +636,7 @@ grep -r "zIndex:\s*[0-9]" --include="*.tsx" --include="*.ts"
 \`\`\`
 ```
 
-### Aitu 项目完整验证清单
+### Opentu 项目完整验证清单
 
 ```markdown
 # 任务完成验证清单
@@ -789,4 +789,4 @@ echo "✅ All validations passed!"
 **文档版本:** v1.0  
 **最后更新:** 2025-01-09  
 **参考来源:** Boris Cherny - Claude Code 实战技巧  
-**维护者:** Aitu 团队
+**维护者:** Opentu 团队

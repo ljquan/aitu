@@ -1,3 +1,18 @@
+## 0.5.63 (2026-01-29)
+
+### 🚀 Features
+
+- 添加"不再提示"按钮到灵感创意板块 ([17b926a](https://github.com/ljquan/aitu/commit/17b926a))
+
+### 🔧 Chores
+
+- update app version to 0.5.62 and adjust build time in version.json ([147815c](https://github.com/ljquan/aitu/commit/147815c))
+
+### ❤️  Thank You
+
+- liquidliang <ljquan@qq.com>
+- zzz <zzz@zzzdeMac-mini.local>
+
 ## 0.5.62 (2026-01-29)
 
 ### 🚀 Features
@@ -325,7 +340,7 @@
 
 - liquid <ljquan@qq.com>
 - liquidliang <ljquan@qq.com>
-- Aitu Developer <noreply@aitu.chat>
+- Opentu Developer <noreply@aitu.chat>
 - gongchengtu <1817063960@qq.com>
 - ovst <wangjueszu@qq.com>
 

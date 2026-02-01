@@ -1,20 +1,8 @@
 {
-  "version": "0.5.62",
-  "buildTime": "2026-01-29T02:49:04.317Z",
+  "version": "0.5.63",
+  "buildTime": "2026-01-29T03:15:15.751Z",
   "gitCommit": "unknown",
   "changelog": [
-    "add alignment, distribution, and boolean operation buttons",
-    "enhance task submission and execution checks",
-    "新增 TaskProgressOverlay 组件显示任务进度",
-    "完成 AI 输入栏和 ChatDrawer 完整测试体系",
-    "使用 Context 共享健康状态数据修复显示不一致问题",
-    "完成所有核心功能 Manual GIF 录制体系",
-    "添加用户手册生成系统和 E2E 测试增强",
-    "修复批量生成只执行第一个任务的问题",
-    "添加重命名验证功能，禁止同级重名",
-    "统一媒体预览组件并优化缩略图展示",
-    "对比模式下视频联动同步播放和重置",
-    "增强文字属性面板样式设置功能",
-    "全面优化多端响应式适配"
+    "添加\"不再提示\"按钮到灵感创意板块"
   ]
 }

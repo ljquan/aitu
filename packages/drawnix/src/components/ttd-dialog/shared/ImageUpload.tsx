@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Button } from 'tdesign-react';
-import { 
+import { Button, MessagePlugin } from 'tdesign-react';
+import {
   ImageUploadIcon,
   MediaLibraryIcon,
 } from '../../icons';
@@ -8,6 +8,7 @@ import { MediaLibraryModal } from '../../media-library/MediaLibraryModal';
 import type { Asset } from '../../../types/asset.types';
 import { SelectionMode, AssetType, AssetSource } from '../../../types/asset.types';
 import { useAssets } from '../../../contexts/AssetContext';
+import { compressImageBlob, getCompressionStrategy } from '../../../utils/image-compression-core';
 
 export interface ImageFile {
   file?: File;
@@ -41,33 +42,89 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
   const [showMediaLibrary, setShowMediaLibrary] = useState(false);
   const { addAsset } = useAssets();
 
-  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (files) {
-      const validFiles = Array.from(files).filter(file => 
-        file.type.startsWith('image/') && file.size <= 10 * 1024 * 1024
-      );
-      
-      // Add valid files to asset library (async, don't block UI)
-      validFiles.forEach(file => {
-        addAsset(file, AssetType.IMAGE, AssetSource.LOCAL, file.name).catch((err) => {
+      const fileArray = Array.from(files);
+      const formatValidFiles = fileArray.filter(file => file.type.startsWith('image/'));
+      const sizeValidFiles = formatValidFiles.filter(file => file.size <= 25 * 1024 * 1024);
+
+      if (sizeValidFiles.length === 0) {
+        onError?.(
+          language === 'zh'
+            ? '部分文件格式不支持或超过25MB限制'
+            : 'Some files are not supported or exceed 25MB limit'
+        );
+        event.target.value = '';
+        return;
+      }
+
+      // Process files with compression if needed
+      const newImages: Array<{ file: Blob; name: string }> = [];
+
+      for (const file of sizeValidFiles) {
+        try {
+          let fileToAdd: Blob = file;
+
+          // Compress if file is 10-25MB
+          if (file.size > 10 * 1024 * 1024) {
+            const strategy = getCompressionStrategy(file.size / (1024 * 1024));
+            const msgId = MessagePlugin.loading({
+              content: language === 'zh'
+                ? `正在压缩图片 (${(file.size / 1024 / 1024).toFixed(1)}MB)...`
+                : `Compressing image (${(file.size / 1024 / 1024).toFixed(1)}MB)...`,
+              duration: 0,
+              placement: 'top',
+            });
+
+            try {
+              fileToAdd = await compressImageBlob(file, strategy.targetSizeMB);
+              MessagePlugin.close(msgId);
+              MessagePlugin.success({
+                content: language === 'zh'
+                  ? `压缩完成: ${(file.size / 1024 / 1024).toFixed(1)}MB → ${(fileToAdd.size / 1024 / 1024).toFixed(1)}MB`
+                  : `Compressed: ${(file.size / 1024 / 1024).toFixed(1)}MB → ${(fileToAdd.size / 1024 / 1024).toFixed(1)}MB`,
+                duration: 2,
+              });
+            } catch (compressionErr) {
+              MessagePlugin.close(msgId);
+              console.error('[ImageUpload] Compression failed:', compressionErr);
+              onError?.(language === 'zh' ? '图片压缩失败' : 'Image compression failed');
+              continue;
+            }
+          }
+
+          newImages.push({ file: fileToAdd, name: file.name });
+        } catch (err) {
+          console.error('[ImageUpload] Error processing file:', err);
+          onError?.(language === 'zh' ? '处理图片失败' : 'Failed to process image');
+          continue;
+        }
+      }
+
+      if (newImages.length === 0) {
+        event.target.value = '';
+        return;
+      }
+
+      // Add files to asset library (async, don't block UI)
+      newImages.forEach(({ file, name }) => {
+        addAsset(file as File, AssetType.IMAGE, AssetSource.LOCAL, name).catch((err) => {
           console.warn('[ImageUpload] Failed to add asset to library:', err);
         });
       });
-      
-      const newImages = validFiles.map(file => ({ file, name: file.name }));
-      
+
       if (multiple) {
         onImagesChange([...images, ...newImages]);
       } else {
         onImagesChange(newImages.slice(0, 1));
       }
-      
-      if (validFiles.length !== files.length) {
+
+      if (newImages.length !== sizeValidFiles.length) {
         onError?.(
-          language === 'zh' 
-            ? '部分文件格式不支持或超过10MB限制' 
-            : 'Some files are not supported or exceed 10MB limit'
+          language === 'zh'
+            ? '部分文件格式不支持或超过25MB限制'
+            : 'Some files are not supported or exceed 25MB limit'
         );
       } else {
         onError?.(null);

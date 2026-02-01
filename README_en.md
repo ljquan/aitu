@@ -90,7 +90,7 @@ _Love Creation, Visualize the Future._
 
 ## About Plait Drawing Framework
 
-_Opentu (Aitu)_ is positioned as an out-of-the-box, open-source, free tool product. It is built on top of the _Plait_ framework, which is an open-source drawing framework representing significant technical accumulation in knowledge visualization products.
+_Opentu (Opentu)_ is positioned as an out-of-the-box, open-source, free tool product. It is built on top of the _Plait_ framework, which is an open-source drawing framework representing significant technical accumulation in knowledge visualization products.
 
 Opentu uses a plugin architecture. Although technically complex, it provides advantages such as supporting multiple UI frameworks (_Angular, React_), integrating different rich text frameworks (currently only _Slate_), enabling clear business layering, and allowing the development of fine-grained reusable plugins to expand more whiteboard application scenarios.
 
