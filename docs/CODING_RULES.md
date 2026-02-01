@@ -16,8 +16,8 @@
 - [缓存与存储规范](#缓存与存储规范)
 - [API 与任务处理规范](#api-与任务处理规范)
 - [UI 交互规范](#ui-交互规范)
-- [安全规范](#安全规范)
 - [E2E 测试规范](#e2e-测试规范)
+- [数据安全规范](#数据安全规范)
 
 ---
 
@@ -1019,6 +1019,96 @@ const handleTouchEnd = () => {
 - 触控结束后延迟隐藏预览，给用户时间查看结果
 - Canvas 元素需要设置 `touch-action: none` 防止默认滚动行为
 
+#### TDesign CSS 变量优先级问题
+
+**场景**: 在组件样式中使用 TDesign CSS 变量（如 `--td-brand-color-light`）时，发现颜色不生效或显示为默认颜色。
+
+❌ **错误示例**:
+```scss
+// 在组件 scss 中使用 CSS 变量
+.project-drawer-node__row {
+  &--selected {
+    background: var(--td-brand-color-light);  // 可能被 TDesign 内部样式覆盖
+    
+    &:hover {
+      background: var(--td-brand-color-light-hover);  // 不生效
+    }
+  }
+}
+```
+
+✅ **正确示例**:
+```scss
+// 直接使用具体颜色值
+.project-drawer-node__row {
+  &--selected {
+    background: rgba(243, 156, 18, 0.12);  // 品牌橙金色 12% 透明度
+    
+    &:hover {
+      background: rgba(243, 156, 18, 0.18);  // 18% 透明度
+    }
+  }
+}
+```
+
+**原因**: TDesign 组件内部可能在更具体的选择器中定义了同名 CSS 变量的值，导致 `:root` 中的全局定义被覆盖。在组件级样式中直接使用具体颜色值可以确保样式正确生效。
+
+**适用场景**:
+- 组件内的选中/高亮/激活状态背景色
+- 需要使用品牌色变体的场景（如透明度变化）
+- 任何发现 CSS 变量不生效的情况
+
+#### 弹出菜单被父容器 overflow 截断
+
+**场景**: 在设置了 `overflow: hidden/auto` 的容器内渲染右键菜单、下拉菜单等弹出层时，菜单被截断。
+
+❌ **错误示例**:
+```tsx
+// 菜单直接渲染在组件内部，被父容器 overflow 截断
+return (
+  <div className="drawer-content" style={{ overflow: 'auto' }}>
+    {/* 内容 */}
+    {contextMenu && (
+      <div 
+        className="context-menu"
+        style={{ position: 'fixed', left: x, top: y }}
+      >
+        {/* 菜单项 */}
+      </div>
+    )}
+  </div>
+);
+```
+
+✅ **正确示例**:
+```tsx
+import { createPortal } from 'react-dom';
+
+return (
+  <div className="drawer-content" style={{ overflow: 'auto' }}>
+    {/* 内容 */}
+    {/* 使用 Portal 渲染到 body，避免被截断 */}
+    {contextMenu && createPortal(
+      <div 
+        className="context-menu"
+        style={{ position: 'fixed', left: x, top: y, zIndex: 10000 }}
+      >
+        {/* 菜单项 */}
+      </div>,
+      document.body
+    )}
+  </div>
+);
+```
+
+**原因**: 即使使用 `position: fixed`，如果元素在 DOM 树中位于设置了 `overflow: hidden` 的容器内部，该容器仍然会裁切超出其边界的内容。使用 `createPortal` 将弹出层渲染到 `document.body`，使其脱离原有容器的裁切上下文。
+
+**适用场景**:
+- 右键菜单
+- 自定义下拉菜单
+- 悬浮预览框
+- 任何需要显示在容器边界外的浮层
+
 ### Git 提交规范
 - 格式: `<type>(<scope>): <subject>`
 - 类型: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`, `perf`, `ci`
@@ -1286,6 +1376,94 @@ pnpm run build:web       # 重新构建
 - Service Worker 更新检测是基于 `sw.js` 文件内容的字节级比较
 - 只修改 `version.json` 不会触发 SW 更新，必须修改 `sw.js` 内容
 - 版本号通过 `__APP_VERSION__` 变量注入到 `sw.js` 中
+
+### SW RPC Handler 必须等待数据恢复完成
+
+**场景**: Service Worker 中的 RPC handler 需要访问从 IndexedDB 恢复的数据（如任务列表）
+
+❌ **错误示例**:
+```typescript
+// 错误：RPC handler 直接访问数据，可能在 IndexedDB 恢复完成前被调用
+private handleTaskListPaginated(data: { page: number; pageSize: number }) {
+  const allTasks = this.taskQueue?.getAllTasks() || [];
+  // 如果 restoreFromStorage() 还在执行，allTasks 可能是空的或不完整的
+  return { tasks: allTasks.slice(start, end), total: allTasks.length };
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：先等待 IndexedDB 数据恢复完成
+private async handleTaskListPaginated(data: { page: number; pageSize: number }) {
+  // 确保 IndexedDB 数据已恢复
+  await this.taskQueue?.waitForStorageRestore();
+  
+  const allTasks = this.taskQueue?.getAllTasks() || [];
+  return { tasks: allTasks.slice(start, end), total: allTasks.length };
+}
+
+// SWTaskQueue 中提供等待方法
+class SWTaskQueue {
+  private storageRestorePromise: Promise<void> | null = null;
+  
+  async waitForStorageRestore(): Promise<void> {
+    if (this.storageRestorePromise) {
+      await this.storageRestorePromise;
+    }
+  }
+}
+```
+
+**现象**: 页面刷新后，任务列表显示不完整（如 67 条任务只显示 2 条），因为 RPC 响应在数据恢复完成前就返回了。
+
+**原因**: Service Worker 启动后会异步从 IndexedDB 恢复数据（`restoreFromStorage()`），这个过程可能需要一定时间。如果 RPC handler 在恢复完成前被调用，访问的数据是不完整的。需要通过 Promise 机制确保数据恢复完成后再返回响应。
+
+### 主线程任务数据必须通过 RPC 持久化到 SW
+
+**场景**: 从云端同步或恢复任务数据到本地时
+
+❌ **错误示例**:
+```typescript
+// 错误：只添加到本地内存，页面刷新后数据丢失
+async restoreTasks(tasks: Task[]): Promise<void> {
+  for (const task of tasks) {
+    this.tasks.set(task.id, task);  // 只存到内存
+    this.emitEvent('taskCreated', task);
+  }
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：通过 RPC 调用 SW 的 importTasks 方法持久化到 IndexedDB
+async restoreTasks(tasks: Task[]): Promise<void> {
+  const tasksToRestore = tasks.filter(task => !this.tasks.has(task.id));
+  if (tasksToRestore.length === 0) return;
+  
+  // 转换为 SWTask 格式
+  const swTasks = tasksToRestore.map(task => this.convertTaskToSWTask(task));
+  
+  // 调用 SW 的 importTasks RPC 持久化到 IndexedDB
+  const result = await swChannelClient.importTasks(swTasks);
+  
+  if (result.success) {
+    // 持久化成功后才添加到本地内存
+    for (const task of tasksToRestore) {
+      this.tasks.set(task.id, task);
+      this.emitEvent('taskCreated', task);
+    }
+  }
+}
+```
+
+**现象**: 云端同步任务后显示成功，但页面刷新后任务列表为空。
+
+**原因**: `swTaskQueueService` 的本地 `tasks` Map 只是内存状态，不会自动持久化。SW 的 IndexedDB 才是任务数据的持久化存储。必须通过 RPC 调用 SW 端的方法才能将数据保存到 IndexedDB。
+
+**相关文件**:
+- 主线程：`packages/drawnix/src/services/sw-task-queue-service.ts`
+- SW 端：`apps/web/src/sw/task-queue/channel-manager.ts` (`TASK_IMPORT` RPC)
+- SW 存储：`apps/web/src/sw/task-queue/storage.ts`
 
 ### PostMessage 日志由调试模式完全控制
 
@@ -2267,6 +2445,188 @@ window.addEventListener('user-confirmed-upgrade', () => {
 - `apps/web/src/main.tsx` - Service Worker 注册和更新逻辑
 - `components/version-update/version-update-prompt.tsx` - 版本更新提示组件
 
+### postmessage-duplex 库使用规范 (v1.1.0)
+
+**场景**: 使用 `postmessage-duplex` 库实现主线程与 Service Worker 的双工通信时
+
+#### 通信模式选择
+
+| 模式 | 方法 | 用途 | 特点 |
+|------|------|------|------|
+| RPC | `call()` | 请求-响应 | 需要等待响应，有超时 |
+| 广播 | `broadcast()` + `onBroadcast()` | 单向通知 | fire-and-forget，无响应 |
+
+❌ **错误示例 1 - 单向通知使用 publish**:
+```typescript
+// 错误：publish 需要响应，用于单向通知会导致超时警告
+channel.publish('task:status', { taskId, status });  // 等待响应超时
+```
+
+✅ **正确示例 1 - 使用 broadcast**:
+```typescript
+// 正确：单向通知使用 broadcast（fire-and-forget）
+channel.broadcast('task:status', { taskId, status });  // 不等待响应
+```
+
+❌ **错误示例 2 - 接收广播使用 subscribe**:
+```typescript
+// 错误：subscribe 用于 RPC，接收广播应使用 onBroadcast
+channel.subscribe('task:status', (response) => {
+  handleStatus(response.data);  // 广播消息不会触发
+  return { ack: true };
+});
+```
+
+✅ **正确示例 2 - 使用 onBroadcast**:
+```typescript
+// 正确：使用 onBroadcast 接收广播消息
+channel.onBroadcast('task:status', ({ data }) => {
+  if (data) {
+    handleStatus(data as TaskStatusEvent);  // data 直接是广播数据
+  }
+  // 不需要 return，这是单向的
+});
+```
+
+#### 客户端初始化
+
+❌ **错误示例 3 - 未启用自动重连**:
+```typescript
+// 错误：SW 更新后连接断开，需要手动处理
+const channel = await ServiceWorkerChannel.createFromPage({
+  timeout: 30000,
+});
+```
+
+✅ **正确示例 3 - 启用 autoReconnect**:
+```typescript
+// 正确：启用自动重连，SW 更新时自动恢复连接
+const channel = await ServiceWorkerChannel.createFromPage({
+  timeout: 30000,
+  autoReconnect: true,
+  log: { log: () => {}, warn: () => {}, error: () => {} },  // 禁用内部日志
+} as any);  // log 不在 PageChannelOptions 类型中，需要 as any
+```
+
+#### SW 端配置
+
+❌ **错误示例 4 - 手动处理连接**:
+```typescript
+// 错误（v1.0.0 模式）：手动监听 SW_CHANNEL_CONNECT
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SW_CHANNEL_CONNECT') {
+    // 手动创建 channel...
+  }
+});
+```
+
+✅ **正确示例 4 - 使用 enableGlobalRouting**:
+```typescript
+// 正确（v1.1.0）：使用 enableGlobalRouting 自动管理 channel
+ServiceWorkerChannel.enableGlobalRouting((clientId, event) => {
+  const channel = ensureChannel(clientId);  // 按需创建 channel
+  channel.handleMessage(event);  // 处理消息
+});
+
+function ensureChannel(clientId: string) {
+  if (!channels.has(clientId)) {
+    const channel = ServiceWorkerChannel.createFromWorker(clientId, {
+      timeout: 30000,
+      subscribeMap: createRpcHandlers(),
+      log: { log: () => {}, warn: () => {}, error: () => {} },
+    });
+    channels.set(clientId, channel);
+  }
+  return channels.get(clientId);
+}
+```
+
+#### isReady 检查
+
+❌ **错误示例 5 - isReady 布尔值检查**:
+```typescript
+// 错误：isReady 返回数字 0/1，不是布尔值
+if (this.channel?.isReady === true) {  // 永远 false！isReady 是 1
+  return true;
+}
+```
+
+✅ **正确示例 5**:
+```typescript
+// 正确：使用 truthy 检查
+if (!!this.channel?.isReady) {  // 0 → false, 1 → true
+  return true;
+}
+```
+
+**原因**:
+1. **v1.1.0 引入 broadcast 模式**：`broadcast()` + `onBroadcast()` 用于单向通知，不需要响应，避免超时
+2. **enableGlobalRouting 自动管理**：不再需要手动处理 `SW_CHANNEL_CONNECT`，库自动路由消息到正确的 channel
+3. **autoReconnect 处理 SW 更新**：SW 更新时自动重新建立连接，无需页面刷新
+4. **log 选项禁用日志**：`PageChannelOptions` 类型不含 `log`，需要 `as any` 绕过类型检查
+5. **isReady 返回数字**：0/1 而非布尔值，使用 `!!` 转换
+
+### 任务队列双服务同步
+
+**场景**: 项目中有两个任务队列服务，需要正确同步数据
+
+| 服务 | 位置 | 用途 |
+|------|------|------|
+| `taskQueueService` | 本地内存 | UI 组件状态（useTaskQueue hook） |
+| `swTaskQueueService` | SW 通信 | 持久化任务数据 |
+
+❌ **错误示例**:
+```typescript
+// 错误：只从本地服务读取，首次渲染时可能为空
+export function useTaskQueue() {
+  const [tasks, setTasks] = useState<Task[]>([]);
+  
+  useEffect(() => {
+    setTasks(taskQueueService.getAllTasks());  // 可能为空！
+  }, []);
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：渲染时从 SW 同步数据
+export function useTaskQueue() {
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const syncAttempted = useRef(false);
+  
+  useEffect(() => {
+    setTasks(taskQueueService.getAllTasks());
+  }, []);
+
+  // 渲染时从 SW 同步
+  useEffect(() => {
+    if (syncAttempted.current) return;
+    syncAttempted.current = true;
+
+    const syncFromSW = async () => {
+      if (!shouldUseSWTaskQueue()) return;
+      await swTaskQueueService.syncTasksFromSW();
+      const swTasks = swTaskQueueService.getAllTasks();
+      if (swTasks.length > 0) {
+        taskQueueService.restoreTasks(swTasks);
+      }
+    };
+    syncFromSW();
+  }, []);
+}
+```
+
+**原因**:
+- `taskQueueService` 是纯内存服务，页面刷新后数据丢失
+- `swTaskQueueService` 通过 SW 持久化数据到 IndexedDB
+- 组件渲染时需要从 SW 同步数据到本地服务，确保 UI 显示正确
+6. **响应数据格式可能有多种嵌套结构**，需要灵活解析而非假设单一格式
+
+**相关文件**:
+- `packages/drawnix/src/services/sw-channel/client.ts` - 主应用的 SW 通道客户端
+- `apps/web/src/sw/task-queue/channel-manager.ts` - SW 端的通道管理器
+- `apps/web/public/sw-debug/duplex-client.js` - 调试页面的 duplex 客户端
+
 ### 设置保存后需要主动更新 Service Worker 配置
 
 **场景**: 用户在设置面板修改配置（如 API Key、流式请求开关）并保存后
@@ -2588,6 +2948,167 @@ const CDN_CONFIG = {
 - CDN 回源（首次请求）可能需要 3-5 秒，等待太久影响用户体验
 - 短超时后快速回退到服务器，保证首次加载速度
 - 用户请求会触发 CDN 缓存，后续访问自动加速
+
+### 工作流恢复时 UI 与 SW 状态不一致的处理
+
+**场景**: 页面刷新后，UI 从 IndexedDB/本地存储恢复的状态可能与 SW 端的真实状态不一致
+
+❌ **错误示例**:
+```typescript
+// 错误：检测到终态但有运行中步骤时，直接标记为失败
+if (isTerminalStatus && hasRunningSteps) {
+  hasClaimedRef.current = true;  // 标记为已 claim
+  onWorkflowStateChange?.(workflowId, 'failed', '工作流已结束');
+  return;  // 不再尝试从 SW 获取真实状态
+}
+
+// 后续即使 SW 更新了状态，也因为 hasClaimedRef.current = true 而跳过 claim
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：不一致状态也触发 claim，从 SW 获取真实状态
+const isInconsistentState = isTerminalStatus && hasRunningSteps;
+const needsClaim = isActiveByStatus || isActiveBySteps || isInconsistentState;
+
+if (isInconsistentState) {
+  console.log('Inconsistent state detected, will claim from SW');
+  // 不要在这里标记为 claimed，让 claim 逻辑去处理
+}
+
+// claim 逻辑会等待 swChannelClient 初始化，然后从 SW 获取真实状态
+if (needsClaim && !hasClaimedRef.current) {
+  hasClaimedRef.current = true;
+  const result = await swChannelClient.claimWorkflow(workflowId);
+  // 根据 SW 返回的真实状态更新 UI
+}
+```
+
+**原因**:
+- 页面刷新时，UI 状态可能来自旧的 IndexedDB 数据
+- SW 端可能已经更新了工作流状态（如从 `failed` 变为 `running`）
+- 如果直接根据本地状态判断，会导致用户看到错误的"失败"状态
+- 正确做法是检测不一致状态后，从 SW 获取真实状态再更新 UI
+
+### SW 重发 Tool Request 需延迟等待主线程 Handler 准备
+
+**场景**: 页面刷新后，SW 在工作流 claim 时重发 pending tool request
+
+❌ **错误示例**:
+```typescript
+// channel-manager.ts - handleWorkflowClaim 中
+if ((workflow.status === 'running') && hasPendingToolRequest) {
+  // 错误：立即重发，但主线程的 handler 可能还没注册
+  this.resendPendingToolRequestsForWorkflow(workflowId);
+}
+
+// 结果：
+// 1. SW 发送 publish('workflow:toolRequest', {...})
+// 2. 主线程还没完成 registerToolRequestHandler()
+// 3. publish 返回 undefined/null
+// 4. SW 误判为"超时"，工作流失败
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：延迟重发，等待主线程 handler 准备好
+if ((workflow.status === 'running') && hasPendingToolRequest) {
+  console.log(`Will resend pending tool requests after delay`);
+  // 延迟 500ms，给主线程时间完成 registerToolRequestHandler
+  setTimeout(() => {
+    console.log(`Resending pending tool requests (delayed)`);
+    this.resendPendingToolRequestsForWorkflow(workflowId);
+  }, 500);
+}
+```
+
+**原因**:
+- 页面刷新后，组件挂载顺序不确定
+- `WorkZoneContent` 的 claim 可能在 `WorkflowSubmissionService.registerToolRequestHandler()` 完成前执行
+- SW 的 `publish()` 方法需要主线程已经 `subscribe()` 才能收到响应
+- 500ms 延迟给主线程足够时间完成初始化（通常 200ms 内完成）
+
+**初始化时序**:
+```
+页面刷新
+    ↓
+WorkflowSubmissionService.init()        WorkZoneContent.useEffect()
+    ↓                                        ↓
+registerToolRequestHandler()            swChannelClient.claimWorkflow()
+(等待 swChannelClient 初始化)                ↓
+    ↓                                   SW 收到 claim
+swChannelClient.isInitialized()             ↓
+    ↓                                   SW 重发 tool request ← 可能此时 handler 还没准备好！
+subscribe('workflow:toolRequest')
+```
+
+### SW 错误处理链必须保持完整
+
+**场景**: 在 SW 执行链中需要传递特殊错误属性（如 `isAwaitingClient`）时
+
+❌ **错误示例**:
+```typescript
+// workflow-executor.ts - executeStep 中
+try {
+  await this.requestMainThreadTool(workflowId, stepId, toolName, args);
+} catch (error) {
+  // 错误：所有错误都标记为 failed
+  step.status = 'failed';
+  step.error = error.message;
+}
+
+// 然后在 executeWorkflow 循环中
+if (step.status === 'failed') {
+  // 错误：创建新的 Error 对象，丢失了 isAwaitingClient 属性
+  throw new Error(`Step ${step.id} failed: ${step.error}`);
+}
+
+// 最后在 catch 块中
+catch (error) {
+  // error.message = "Step xxx failed: AWAITING_CLIENT:insert_mermaid"
+  // 但 error.isAwaitingClient 是 undefined！
+  if (error?.isAwaitingClient) {  // 永远为 false
+    // 不会进入这个分支
+  }
+  workflow.status = 'failed';  // 错误地标记为失败
+}
+```
+
+✅ **正确示例**:
+```typescript
+// workflow-executor.ts - executeStep 中
+try {
+  await this.requestMainThreadTool(workflowId, stepId, toolName, args);
+} catch (error) {
+  // 正确：检测特殊错误类型，保持原始属性
+  if (error?.isAwaitingClient || error?.message?.startsWith('AWAITING_CLIENT:')) {
+    // 保持 step 为 running 状态，重新抛出原始错误
+    step.status = 'running';
+    throw error;  // 保留 isAwaitingClient 属性
+  }
+  
+  // 其他错误才标记为 failed
+  step.status = 'failed';
+  step.error = error.message;
+}
+
+// 在 catch 块中
+catch (error) {
+  // error.isAwaitingClient 现在是 true
+  if (error?.isAwaitingClient) {
+    console.log('Workflow waiting for client to reconnect');
+    workflow.status = 'running';  // 保持 running 状态
+    return;
+  }
+  workflow.status = 'failed';
+}
+```
+
+**原因**:
+- JavaScript 错误对象可以有自定义属性（如 `error.isAwaitingClient = true`）
+- 在中间层创建新的 `Error` 对象会丢失这些属性
+- 如果需要在上层检查特殊错误类型，必须重新抛出原始错误
+- 或者在检查时同时检查 `error.message` 内容作为备选
 
 ### Service Worker 静态资源回退应尝试所有版本缓存
 
@@ -5410,3 +5931,482 @@ const Leaf = ({ children, leaf, attributes }) => {
 4. 解决方案是选择一种实现方式并始终使用，推荐使用 CSS 因为它更灵活（支持自定义样式和颜色）
 
 **相关文件**: `packages/react-text/src/text.tsx`
+
+### postmessage-duplex RPC 消息大小限制
+
+**场景**: 使用 postmessage-duplex 进行 SW 与主线程通信，查询大量数据时
+
+❌ **错误示例**:
+```typescript
+// 错误：一次性返回所有日志，可能超过 1MB 限制
+async function getAllLogs() {
+  const logs = await db.getAll(); // 可能有上千条，每条包含大字段
+  return { logs }; // Message size exceeds limit (1048576 bytes)
+}
+
+// 错误：前端分页，但后端返回全量数据
+async function getLogsPaginated(page, pageSize) {
+  const allLogs = await db.getAll();
+  return { logs: allLogs.slice((page-1)*pageSize, page*pageSize) };
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：后端分页 + 精简数据
+async function getLogsPaginated(page = 1, pageSize = 20, filter = {}) {
+  let logs = await db.getAll();
+  
+  // 1. 先过滤（在分页前）
+  if (filter.type) logs = logs.filter(l => l.type === filter.type);
+  if (filter.status) logs = logs.filter(l => l.status === filter.status);
+  
+  // 2. 计算分页信息
+  const total = logs.length;
+  const totalPages = Math.ceil(total / pageSize);
+  
+  // 3. 分页
+  const pagedLogs = logs.slice((page-1)*pageSize, page*pageSize);
+  
+  // 4. 精简数据，去掉大字段
+  const compactLogs = pagedLogs.map(log => ({
+    id: log.id,
+    timestamp: log.timestamp,
+    status: log.status,
+    // 截断长文本
+    prompt: log.prompt?.substring(0, 200),
+    // 不传输 requestBody、responseBody 等大字段
+  }));
+  
+  return { logs: compactLogs, total, page, pageSize, totalPages };
+}
+```
+
+**原因**:
+- postmessage-duplex 默认消息大小限制为 1MB（1048576 bytes）
+- 日志数据通常包含大字段（请求体、响应体、图片 base64 等），100 条日志可能超过 10MB
+- 解决方案：后端分页 + 精简数据，每页 20 条左右，去掉大字段
+- 如需完整数据，提供单条查询接口，按需获取
+
+**相关文件**: 
+- `apps/web/src/sw/task-queue/llm-api-logger.ts` - `getLLMApiLogsPaginated`
+- `apps/web/src/sw/task-queue/channel-manager.ts` - `handleDebugGetLLMApiLogs`
+
+### 分页查询必须在服务端过滤
+
+**场景**: 实现带过滤条件的分页列表时
+
+❌ **错误示例**:
+```typescript
+// 错误：后端分页，前端过滤
+// 后端
+async function getLogsPaginated(page, pageSize) {
+  const allLogs = await db.getAll();
+  return { 
+    logs: allLogs.slice((page-1)*pageSize, page*pageSize),
+    total: allLogs.length 
+  };
+}
+
+// 前端
+function getFilteredLogs() {
+  // 只能过滤当前页，总数也不对
+  return state.logs.filter(l => l.type === filter.type);
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：过滤条件传到后端，先过滤再分页
+// 后端
+async function getLogsPaginated(page, pageSize, filter) {
+  let logs = await db.getAll();
+  
+  // 先过滤
+  if (filter.type) logs = logs.filter(l => l.type === filter.type);
+  if (filter.status) logs = logs.filter(l => l.status === filter.status);
+  
+  // 再分页（基于过滤后的数据）
+  const total = logs.length;
+  const totalPages = Math.ceil(total / pageSize);
+  const pagedLogs = logs.slice((page-1)*pageSize, page*pageSize);
+  
+  return { logs: pagedLogs, total, page, pageSize, totalPages };
+}
+
+// 前端
+function onFilterChange() {
+  // 过滤条件变化时重新加载第一页
+  loadLogs(1);
+}
+```
+
+**原因**:
+- 前端过滤只能处理当前页数据，无法看到其他页符合条件的数据
+- 分页信息（总数、总页数）会不准确
+- 过滤条件变化时应回到第一页，避免显示空白页
+
+### 云端同步恢复数据时保留原始 URL
+
+**场景**: 从云端同步/恢复任务数据到本地时，处理媒体 URL
+
+❌ **错误示例**:
+```typescript
+// 错误：修改任务的 result.url 为新格式
+const processedTasks = tasksToRestore.map(task => {
+  if (task.result?.url) {
+    const cacheUrl = `/__aitu_cache__/${taskType}/synced-${task.id}.${extension}`;
+    return {
+      ...task,
+      result: {
+        ...task.result,
+        url: cacheUrl,  // 修改了原始 URL
+        originalUrl: task.result.url,
+      },
+    };
+  }
+  return task;
+});
+```
+
+**问题**: 画布上引用原始 URL 的元素无法显示，因为 Cache Storage 中只有新 URL 的数据。
+
+✅ **正确示例**:
+```typescript
+// 正确：保留原始 URL，将数据缓存到原始 URL 位置
+const processedTasks = tasksToRestore.map(task => {
+  if (task.result?.url?.startsWith("/__aitu_cache__/")) {
+    return {
+      ...task,
+      result: {
+        ...task.result,
+        needsMediaDownload: true,  // 只添加标记，不修改 URL
+      },
+    };
+  }
+  return task;
+});
+
+// 下载媒体时，缓存到原始 URL 位置
+async downloadAndCacheMediaForTask(task) {
+  const cacheUrl = task.result?.url;  // 使用原始 URL
+  const blob = await downloadFromGist(task.id);
+  await unifiedCacheService.cacheToCacheStorageOnly(cacheUrl, blob);  // 缓存到原始位置
+}
+```
+
+**原因**:
+- 画布元素引用的是原始 URL（如 `/__aitu_cache__/image/xxx.png`）
+- 修改 URL 会导致画布元素与缓存数据不匹配
+- 正确做法是将下载的数据缓存到原始 URL 对应的位置
+
+### 增量同步优化：使用 checksum 减少网络请求
+
+**场景**: 实现云端数据同步功能时
+
+❌ **错误示例**:
+```typescript
+// 错误：每次都上传/下载所有数据
+async pushToRemote() {
+  const localData = await collectSyncData();
+  const encryptedFiles = await serialize(localData);  // 序列化所有数据
+  await gitHubApiService.updateGistFiles(encryptedFiles);  // 上传所有文件
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：增量同步，只传输有变化的数据
+async pushToRemote() {
+  const localData = await collectSyncData();
+  
+  // 1. 获取远程 manifest 比较
+  const remoteManifest = await getRemoteManifest();
+  
+  // 2. 使用 checksum 比较，只上传有变化的画板
+  const filesToUpdate = {};
+  for (const [boardId, board] of localData.boards) {
+    const localChecksum = calculateBoardChecksum(board);
+    const remoteInfo = remoteManifest?.boards[boardId];
+    
+    if (!remoteInfo || remoteInfo.checksum !== localChecksum) {
+      filesToUpdate[boardFile(boardId)] = await encrypt(board);
+    }
+  }
+  
+  // 3. 只更新有变化的文件
+  if (Object.keys(filesToUpdate).length > 0) {
+    await gitHubApiService.updateGistFiles(filesToUpdate);
+  }
+}
+```
+
+**原因**:
+- 全量同步会产生大量不必要的网络请求
+- 使用 checksum 可以精确识别哪些数据有变化
+- 只传输变化的数据可以显著减少带宽和延迟
+- manifest/workspace/prompts/tasks 等小文件可以始终更新
+
+---
+
+## 数据安全规范
+
+### 破坏性操作前必须进行安全检查
+
+**场景**: 执行删除、覆盖、清空等可能导致数据丢失的操作时
+
+❌ **错误示例**:
+```typescript
+// 错误：直接执行删除，没有安全检查
+async applyRemoteDeletions(toDeleteLocally: string[]) {
+  for (const boardId of toDeleteLocally) {
+    await workspaceStorageService.deleteBoard(boardId);  // 直接删除
+  }
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：执行安全检查后再删除
+async applyRemoteDeletions(toDeleteLocally: string[]) {
+  // 1. 执行安全检查
+  const safetyCheck = performSafetyCheck({
+    localBoards,
+    toDeleteLocally,
+    currentBoardId,    // 当前正在编辑的画板
+    isFirstSync,       // 是否首次同步
+    remoteManifest,
+  });
+  
+  // 2. 处理安全检查结果
+  if (safetyCheck.blockedReason) {
+    throw new Error(safetyCheck.blockedReason);  // 严重错误，阻止执行
+  }
+  
+  if (safetyCheck.warnings.length > 0) {
+    // 有警告，需要用户确认
+    return { needsConfirmation: true, warnings: safetyCheck.warnings };
+  }
+  
+  // 3. 排除被保护的项目后执行删除
+  const skippedIds = new Set(safetyCheck.skippedItems.map(item => item.id));
+  const safeToDelete = toDeleteLocally.filter(id => !skippedIds.has(id));
+  
+  for (const boardId of safeToDelete) {
+    await workspaceStorageService.deleteBoard(boardId);
+  }
+}
+```
+
+**安全检查规则**:
+
+| 检查项 | 规则 | 处理方式 |
+|-------|------|---------|
+| 当前画板保护 | 正在编辑的画板不能被删除 | 跳过该项，继续其他操作 |
+| 新设备保护 | 首次同步不执行任何删除 | 跳过所有删除操作 |
+| 批量删除阈值 | 删除超过 50% 数据时警告 | 暂停，要求用户确认 |
+| 全部删除阻止 | 不允许删除所有数据 | 阻止执行，显示错误 |
+| 空数据保护 | 远程数据异常时不执行删除 | 跳过所有删除操作 |
+
+**原因**:
+- 用户数据是核心资产，误删除可能导致不可恢复的损失
+- 同步冲突可能导致意外的批量删除
+- 安全检查提供多层保护，宁可同步失败也不能误删数据
+
+### 不可逆操作需要用户输入确认文字
+
+**场景**: 执行清空回收站、永久删除等不可恢复的操作时
+
+❌ **错误示例**:
+```tsx
+// 错误：只用简单的确认对话框
+<Button onClick={() => {
+  if (confirm('确定要清空回收站吗？')) {
+    emptyRecycleBin();
+  }
+}}>
+  清空回收站
+</Button>
+```
+
+✅ **正确示例**:
+```tsx
+// 正确：要求输入确认文字
+function EmptyRecycleBinDialog({ onConfirm, onCancel }) {
+  const [confirmText, setConfirmText] = useState('');
+  const isValid = confirmText === '确认清空';
+  
+  return (
+    <Dialog header="清空回收站">
+      <p>此操作将永久删除回收站中的所有数据，无法恢复。</p>
+      <ul>
+        <li>{itemCount.boards} 个画板</li>
+        <li>{itemCount.prompts} 条提示词</li>
+      </ul>
+      <p>请输入 <strong>确认清空</strong> 以继续：</p>
+      <Input
+        value={confirmText}
+        onChange={setConfirmText}
+        placeholder='输入"确认清空"'
+      />
+      <Button 
+        theme="danger" 
+        disabled={!isValid}  // 必须输入正确文字才能点击
+        onClick={onConfirm}
+      >
+        永久删除
+      </Button>
+    </Dialog>
+  );
+}
+```
+
+**原因**:
+- 简单的确认对话框容易被用户习惯性点击"确定"
+- 输入确认文字强制用户阅读警告内容
+- 对于不可恢复的数据操作，额外的确认步骤可以有效防止误操作
+
+### 使用软删除（Tombstone）支持数据恢复
+
+**场景**: 实现跨设备同步的删除功能时
+
+❌ **错误示例**:
+```typescript
+// 错误：直接删除远程文件
+async deleteBoard(boardId: string) {
+  await gitHubApiService.deleteGistFiles([`board_${boardId}.json`]);  // 直接删除
+  delete manifest.boards[boardId];  // 从 manifest 中移除
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：使用 tombstone 标记，保留文件便于恢复
+async deleteBoard(boardId: string) {
+  // 1. 添加删除标记，但不删除文件
+  manifest.boards[boardId] = {
+    ...manifest.boards[boardId],
+    deletedAt: Date.now(),      // 删除时间戳
+    deletedBy: deviceId,        // 删除设备
+  };
+  
+  // 2. 更新 manifest
+  await updateManifest(manifest);
+  
+  // 3. 删除本地数据
+  await workspaceStorageService.deleteBoard(boardId);
+}
+
+// 恢复时：移除 tombstone 标记，下载远程文件
+async restoreBoard(boardId: string) {
+  const { deletedAt, deletedBy, ...rest } = manifest.boards[boardId];
+  manifest.boards[boardId] = rest;  // 移除删除标记
+  
+  const boardData = await downloadBoard(boardId);  // 远程文件仍在
+  await workspaceStorageService.saveBoard(boardData);
+}
+```
+
+**优势**:
+- 删除可恢复：用户可以从回收站恢复误删的数据
+- 跨设备同步：其他设备同步时能正确识别已删除的项目
+- 永久删除可控：用户手动清空回收站时才真正删除远程文件
+
+### 异步操作不应阻塞 UI 交互
+
+**场景**: 删除、保存等操作需要同步到远程服务器时
+
+❌ **错误示例**:
+```typescript
+// 错误：同步操作阻塞了 UI，弹窗要等网络请求完成才关闭
+async deleteBoard(id: string): Promise<void> {
+  // 用户点击确认后，弹窗卡住等待网络请求
+  const result = await syncEngine.syncBoardDeletion(id);  // 阻塞 2-3 秒
+  if (result.success) {
+    console.log('Synced to remote');
+  }
+  
+  // 本地删除
+  this.boards.delete(id);
+  await storage.deleteBoard(id);
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：异步执行同步，不阻塞本地操作
+async deleteBoard(id: string): Promise<void> {
+  // 异步同步到远程（fire-and-forget）
+  import('./github-sync').then(({ syncEngine }) => {
+    syncEngine.syncBoardDeletion(id).then((result) => {
+      if (result.success) {
+        console.log('Board synced to remote recycle bin');
+      } else {
+        console.warn('Failed to sync deletion:', result.error);
+      }
+    }).catch(console.warn);
+  }).catch(console.warn);
+
+  // 本地删除立即执行，弹窗立即关闭
+  this.boards.delete(id);
+  await storage.deleteBoard(id);
+}
+```
+
+**原因**:
+- 用户期望点击"确认"后弹窗立即关闭
+- 网络请求可能慢或失败，不应影响本地操作体验
+- 远程同步失败时可以在下次同步时重试
+
+### 关键操作应直接调用，不依赖事件订阅
+
+**场景**: 需要在某个操作后触发另一个操作（如删除后同步到远程）
+
+❌ **错误示例**:
+```typescript
+// 错误：依赖事件订阅来触发同步
+// 问题：事件订阅可能有时序问题，订阅在事件触发后才建立
+
+// 在 Context 中订阅事件
+useEffect(() => {
+  const subscription = workspaceService.observeEvents().subscribe({
+    next: (event) => {
+      if (event.type === 'boardDeleted') {
+        // 可能收不到事件！因为订阅建立时机不确定
+        syncEngine.syncBoardDeletion(event.payload.id);
+      }
+    }
+  });
+  return () => subscription.unsubscribe();
+}, []);
+
+// 在 Service 中发出事件
+async deleteBoard(id: string) {
+  this.boards.delete(id);
+  this.emit('boardDeleted', { id });  // 事件可能没有订阅者
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：在操作中直接调用，保证执行
+async deleteBoard(id: string) {
+  // 直接调用同步逻辑
+  import('./github-sync').then(({ syncEngine }) => {
+    syncEngine.syncBoardDeletion(id).catch(console.warn);
+  });
+  
+  // 执行本地删除
+  this.boards.delete(id);
+  
+  // 事件仅用于 UI 更新等非关键操作
+  this.emit('boardDeleted', { id });
+}
+```
+
+**原因**:
+- RxJS Subject 的事件是同步分发的，但订阅者的建立是异步的
+- React useEffect 中的订阅可能在组件渲染后才建立
+- 热更新（HMR）可能导致旧的订阅被替换
+- 关键业务逻辑不应依赖于"某处可能存在的订阅者"
+

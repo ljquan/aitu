@@ -15,6 +15,7 @@ import {
   parseImageGenerationResponse,
   pollVideoUntilComplete,
 } from '../utils/media-generation-utils';
+import { aiAnalyzeTool } from './ai-analyze';
 
 // ============================================================================
 // Image Generation Tool
@@ -257,11 +258,12 @@ export const generateVideoTool: SWMCPTool = {
  * Tools requiring main thread (DOM/Board access) are handled by requiresMainThread()
  * check in workflow-executor.ts, which delegates them to main thread directly.
  *
- * ai_analyze is delegated to main thread to use the correct text model.
+ * ai_analyze now runs in SW using textModelName configuration.
  */
 export const swMCPTools: Map<string, SWMCPTool> = new Map([
   ['generate_image', generateImageTool],
   ['generate_video', generateVideoTool],
+  ['ai_analyze', aiAnalyzeTool],
 ]);
 
 /**
@@ -299,8 +301,7 @@ export async function executeSWMCPTool(
  * - Workflow step status synchronization
  * - Task recovery on page reload
  *
- * ai_analyze is delegated to main thread to use the correct text model
- * (geminiConfig contains image model, not text model)
+ * ai_analyze now runs in SW using textModelName configuration.
  */
 export function requiresMainThread(toolName: string): boolean {
   const delegatedTools = [
@@ -309,7 +310,7 @@ export function requiresMainThread(toolName: string): boolean {
     'insert_mermaid',
     'insert_mindmap',
     'insert_svg',
-    'ai_analyze',            // Delegate to main thread for correct text model
+    // ai_analyze now runs in SW with textModelName
     'generate_image',        // Delegate to main thread for task queue integration
     'generate_video',        // Delegate to main thread for task queue integration
     'generate_grid_image',

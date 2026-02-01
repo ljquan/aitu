@@ -991,6 +991,10 @@ button .icon-svg {
 }
 
 /* Console Entry - 继承 log-entry 样式，添加左侧边框指示日志级别 */
+.console-entry {
+  cursor: pointer;
+}
+
 .console-entry.warn {
   border-left: 3px solid var(--warning-color);
   background: var(--warning-light);
@@ -1012,6 +1016,70 @@ button .icon-svg {
 .console-entry.debug {
   border-left: 3px solid var(--info-color);
   background: rgba(90, 79, 207, 0.05);
+}
+
+/* Console entry toggle button - more prominent */
+.console-entry .log-toggle {
+  width: 18px;
+  height: 18px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.console-entry.error .log-toggle {
+  border-color: var(--error-color);
+  color: var(--error-color);
+}
+
+.console-entry.warn .log-toggle {
+  border-color: var(--warning-color);
+  color: var(--warning-color);
+}
+
+.console-entry:hover .log-toggle {
+  background: var(--bg-tertiary);
+  transform: scale(1.05);
+}
+
+.console-entry.expanded .log-toggle {
+  transform: scale(1.05);
+}
+
+/* Console message pre - better formatting */
+.console-message-pre {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+
+.console-entry.error .console-message-pre {
+  color: var(--error-color);
+}
+
+.console-entry.warn .console-message-pre {
+  color: var(--warning-color);
+}
+
+/* Console source pre - clickable link style */
+.console-source-pre {
+  color: var(--info-color);
+  font-size: 11px;
+  cursor: pointer;
+  word-break: break-all;
+}
+
+.console-source-pre:hover {
+  text-decoration: underline;
+}
+
+/* Console stack pre - error color */
+.console-stack-pre {
+  font-size: 11px;
+  line-height: 1.6;
+  border-left: 2px solid var(--error-color);
+  padding-left: 10px;
+  margin-left: 0;
 }
 
 .console-source {
@@ -1283,8 +1351,9 @@ button .icon-svg {
   font-weight: 500;
 }
 
-.pm-direction {
-  padding: 2px 5px;
+/* 消息来源标签 */
+.pm-source {
+  padding: 2px 8px;
   border-radius: 3px;
   font-size: 10px;
   font-weight: 600;
@@ -1292,21 +1361,45 @@ button .icon-svg {
   border: 1px solid;
 }
 
-.pm-direction.send {
-  background: var(--primary-light);
-  color: var(--primary-color);
-  border-color: var(--primary-color);
-}
-
-.pm-direction.receive {
+.pm-source.source-main {
   background: var(--success-light);
   color: var(--success-color);
   border-color: var(--success-color);
 }
 
-.pm-direction-icon {
+.pm-source.source-sw {
+  background: var(--primary-light);
+  color: var(--primary-color);
+  border-color: var(--primary-color);
+}
+
+/* 客户端类型标签 */
+.pm-client-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 3px;
   font-size: 10px;
-  margin-right: 2px;
+  font-weight: 600;
+  white-space: nowrap;
+  margin: 0 4px;
+}
+
+.pm-client-badge.client-type-main {
+  background: var(--primary-light);
+  color: var(--primary-color);
+  border: 1px solid var(--primary-color);
+}
+
+.pm-client-badge.client-type-debug {
+  background: var(--info-color);
+  color: #ffffff;
+  opacity: 0.85;
+}
+
+.pm-client-badge.client-type-other {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
 }
 
 .pm-type {
@@ -1707,7 +1800,8 @@ button .icon-svg {
 
 /* Pause Button States - Enhanced */
 .pause-btn.paused,
-#togglePause.paused {
+#togglePause.paused,
+#togglePmPause.paused {
   background: var(--warning-light) !important;
   border-color: var(--warning-color) !important;
   color: var(--warning-color) !important;
@@ -2621,7 +2715,7 @@ body.analysis-mode .log-entry {
     order: 2;
   }
 
-  .pm-direction {
+  .pm-source {
     font-size: 9px;
     padding: 2px 5px;
     order: 3;
@@ -2915,45 +3009,44 @@ body.analysis-mode .log-entry {
   word-break: break-word;
 }
 
+/* Light theme JSON colors (default) */
 .json-key {
-  color: #9cdcfe;
+  color: #0451a5;
 }
 
 .json-string {
-  color: #ce9178;
+  color: #a31515;
 }
 
 .json-number {
-  color: #b5cea8;
+  color: #098658;
 }
 
 .json-boolean {
-  color: #569cd6;
+  color: #0000ff;
 }
 
 .json-null {
+  color: #0000ff;
+}
+
+/* Dark theme JSON colors */
+[data-theme="dark"] .json-key {
+  color: #9cdcfe;
+}
+
+[data-theme="dark"] .json-string {
+  color: #ce9178;
+}
+
+[data-theme="dark"] .json-number {
+  color: #b5cea8;
+}
+
+[data-theme="dark"] .json-boolean {
   color: #569cd6;
 }
 
-/* Light mode JSON highlighting */
-@media (prefers-color-scheme: light) {
-  .json-key {
-    color: #0451a5;
-  }
-  
-  .json-string {
-    color: #a31515;
-  }
-  
-  .json-number {
-    color: #098658;
-  }
-  
-  .json-boolean {
-    color: #0000ff;
-  }
-  
-  .json-null {
-    color: #0000ff;
-  }
+[data-theme="dark"] .json-null {
+  color: #569cd6;
 }

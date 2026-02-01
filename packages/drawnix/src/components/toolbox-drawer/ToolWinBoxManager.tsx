@@ -142,6 +142,19 @@ export const ToolWinBoxManager: React.FC = () => {
     }
   }, [board]);
 
+  /**
+   * 处理窗口最大化回调
+   * 清除 autoMaximize 标记，避免再次打开时重复最大化
+   */
+  const handleMaximize = useCallback((toolId: string) => {
+    const state = toolWindowService.getToolState(toolId);
+    if (state && state.autoMaximize) {
+      // 清除 autoMaximize 标记（通过更新状态）
+      // 由于 ToolWindowState 是引用类型，直接修改即可
+      state.autoMaximize = false;
+    }
+  }, []);
+
   // 只渲染 open 或 minimized 状态的工具（minimized 状态需要保留实例但隐藏）
   const activeStates = toolStates.filter(
     state => state.status === 'open' || state.status === 'minimized'
@@ -154,7 +167,7 @@ export const ToolWinBoxManager: React.FC = () => {
   return (
     <>
       {activeStates.map(state => {
-        const { tool, status, position, size } = state;
+        const { tool, status, position, size, autoMaximize } = state;
         const InternalComponent = tool.component ? InternalToolComponents[tool.component] : null;
         
         // 确定窗口是否可见
@@ -170,12 +183,15 @@ export const ToolWinBoxManager: React.FC = () => {
             visible={isVisible}
             keepAlive={true}
             title={tool.name}
+            icon={tool.icon}
             width={windowSize.width}
             height={windowSize.height}
             x={position?.x}
             y={position?.y}
+            autoMaximize={autoMaximize}
             onClose={() => toolWindowService.closeTool(tool.id)}
             onMinimize={(pos, sz) => handleMinimize(tool.id, pos, sz)}
+            onMaximize={() => handleMaximize(tool.id)}
             onMove={(x, y) => handleMove(tool.id, x, y)}
             onResize={(w, h) => handleResize(tool.id, w, h)}
             onInsertToCanvas={(rect) => handleInsertToCanvas(tool, rect)}

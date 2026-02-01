@@ -91,8 +91,6 @@ export function useTaskStorage(): void {
         // In SW mode, tasks are managed by Service Worker's IndexedDB
         // Initialize SW service and sync tasks from SW
         if (usingSW) {
-          // console.log('[useTaskStorage] SW mode: initializing and syncing tasks from Service Worker');
-
           // Import and initialize SW task queue service
           const { swTaskQueueService } = await import(
             '../services/sw-task-queue-service'

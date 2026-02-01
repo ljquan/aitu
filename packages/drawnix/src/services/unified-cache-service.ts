@@ -6,6 +6,7 @@
  */
 
 import { getDataURL } from '../data/blob';
+import { swChannelClient } from './sw-channel/client';
 
 // ==================== 常量定义 ====================
 
@@ -271,47 +272,45 @@ class UnifiedCacheService {
   // ==================== Service Worker 通信 ====================
 
   /**
-   * 设置 SW 消息监听器
+   * 设置 SW 消息监听器（使用 swChannelClient 订阅事件）
    */
   private setupSWMessageListener(): void {
-    if (!navigator.serviceWorker) return;
-
-    navigator.serviceWorker.addEventListener('message', (event) => {
-      const message = event.data as SWToMainMessage;
-      this.handleSWMessage(message);
-    });
-  }
-
-  /**
-   * 处理来自 SW 的消息
-   */
-  private async handleSWMessage(message: SWToMainMessage): Promise<void> {
-    switch (message.type) {
-      case 'IMAGE_CACHED':
-        if (message.url) {
-          await this.handleImageCachedNotification(
-            message.url,
-            message.size || 0,
-            message.mimeType || 'image/png'
-          );
-        }
-        break;
-
-      case 'CACHE_DELETED':
-        if (message.url) {
-          this.cachedUrls.delete(message.url);
-          this.notifyListeners();
-        }
-        break;
-
-      case 'QUOTA_WARNING':
-        console.warn('[UnifiedCache] Storage quota warning from SW:', {
-          usage: message.usage,
-          quota: message.quota,
-        });
-        this.notifyQuotaExceededListeners();
-        break;
-    }
+    // 使用轮询等待 swChannelClient 初始化
+    const setupSubscriptions = () => {
+      if (!swChannelClient.isInitialized()) {
+        setTimeout(setupSubscriptions, 500);
+        return;
+      }
+      
+      // 订阅缓存事件
+      swChannelClient.setEventHandlers({
+        onCacheImageCached: async (event) => {
+          if (event.url) {
+            await this.handleImageCachedNotification(
+              event.url,
+              event.size || 0,
+              'image/png' // mimeType not available in event, use default
+            );
+          }
+        },
+        onCacheDeleted: (event) => {
+          if (event.url) {
+            this.cachedUrls.delete(event.url);
+            this.notifyListeners();
+          }
+        },
+        onCacheQuotaWarning: (event) => {
+          console.warn('[UnifiedCache] Storage quota warning from SW:', {
+            usage: event.usage,
+            quota: event.quota,
+            percentUsed: event.percentUsed,
+          });
+          this.notifyQuotaExceededListeners();
+        },
+      });
+    };
+    
+    setupSubscriptions();
   }
 
   /**
@@ -347,15 +346,18 @@ class UnifiedCacheService {
   }
 
   /**
-   * 向 Service Worker 发送消息
+   * 向 Service Worker 发送消息（通过 swChannelClient）
    */
   private async sendMessageToSW(message: MainToSWMessage): Promise<void> {
-    if (!navigator.serviceWorker || !navigator.serviceWorker.controller) {
-      console.warn('[UnifiedCache] No active service worker to send message to');
-      return;
+    try {
+      if (!swChannelClient.isInitialized()) {
+        // swChannelClient 尚未初始化，静默跳过
+        return;
+      }
+      await swChannelClient.publish(message.type, message as unknown as Record<string, unknown>);
+    } catch (error) {
+      console.warn('[UnifiedCache] Failed to send message to SW:', error);
     }
-
-    navigator.serviceWorker.controller.postMessage(message);
   }
 
   // ==================== 公共 API ====================
@@ -897,24 +899,17 @@ class UnifiedCacheService {
         await cache.put(url, response);
         
         // 异步生成预览图（不阻塞主流程）
-        // 注意：需要在 Service Worker 中执行，通过 postMessage 通知 SW 生成
-        if (typeof navigator !== 'undefined' && navigator.serviceWorker) {
-          // 将 Blob 转换为 ArrayBuffer 以便通过 postMessage 传递
+        // 通过 swChannelClient 发送消息到 SW 生成缩略图
+        if (typeof navigator !== 'undefined' && navigator.serviceWorker && swChannelClient.isInitialized()) {
+          // 将 Blob 转换为 ArrayBuffer 以便传递
           blob.arrayBuffer().then((arrayBuffer) => {
-            navigator.serviceWorker.ready.then((registration) => {
-              if (registration.active) {
-                registration.active.postMessage({
-                  type: 'GENERATE_THUMBNAIL',
-                  url,
-                  mediaType: type, // 'image' | 'video'
-                  blob: arrayBuffer,
-                  mimeType: blob.type,
-                }).catch((err) => {
-                  console.warn('[UnifiedCache] Failed to request thumbnail generation:', err);
-                });
-              }
-            }).catch(() => {
-              // Service Worker 不可用，静默失败
+            swChannelClient.publish('GENERATE_THUMBNAIL', {
+              url,
+              mediaType: type, // 'image' | 'video'
+              blob: arrayBuffer,
+              mimeType: blob.type,
+            }).catch((err) => {
+              console.warn('[UnifiedCache] Failed to request thumbnail generation:', err);
             });
           }).catch((err) => {
             console.warn('[UnifiedCache] Failed to convert blob to arrayBuffer:', err);

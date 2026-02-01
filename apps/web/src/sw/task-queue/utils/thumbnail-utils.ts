@@ -128,8 +128,23 @@ async function generateThumbnailForSize(
       return; // 已存在，无需重复生成
     }
 
-    // 2. 使用 createImageBitmap 和 OffscreenCanvas 生成预览图
-    const imageBitmap = await createImageBitmap(blob);
+    // 2. 验证 blob 可解码，避免 InvalidStateError 导致 SW 崩溃
+    // 非图片类型（如 404 的 text/html）或空 blob 不能解码
+    if (blob.size === 0) return;
+    const type = (blob.type || '').toLowerCase();
+    if (!type.startsWith('image/') && type !== '') return;
+
+    // 3. 使用 createImageBitmap 和 OffscreenCanvas 生成预览图
+    let imageBitmap: ImageBitmap;
+    try {
+      imageBitmap = await createImageBitmap(blob);
+    } catch (decodeError) {
+      // InvalidStateError: 源图片无法解码（损坏/格式错误/非图片内容）
+      if (decodeError instanceof Error && decodeError.name === 'InvalidStateError') {
+        return; // 静默跳过，不重试
+      }
+      throw decodeError;
+    }
     const { width, height } = calculateThumbnailSize(
       imageBitmap.width,
       imageBitmap.height,
@@ -143,8 +158,11 @@ async function generateThumbnailForSize(
       return;
     }
 
-    ctx.drawImage(imageBitmap, 0, 0, width, height);
-    imageBitmap.close();
+    try {
+      ctx.drawImage(imageBitmap, 0, 0, width, height);
+    } finally {
+      imageBitmap.close();
+    }
 
     const thumbnailBlob = await canvas.convertToBlob({
       type: 'image/jpeg',
@@ -240,9 +258,9 @@ async function generateVideoThumbnailForSize(
       return; // 已存在，无需重复生成
     }
 
-    // 2. 通过 postMessage 委托主线程生成视频预览图（使用指定尺寸）
+    // 2. 通过 channelManager 委托主线程生成视频预览图（使用指定尺寸）
     const maxSize = size === 'large' ? THUMBNAIL_MAX_SIZE_LARGE : THUMBNAIL_MAX_SIZE_SMALL;
-    const thumbnailBlob = await requestVideoThumbnailFromMainThread(blob, maxSize);
+    const thumbnailBlob = await requestVideoThumbnailFromMainThread(originalUrl, blob, maxSize);
     if (!thumbnailBlob) {
       console.warn(`[ThumbnailUtils] Failed to generate ${size} video thumbnail from main thread`);
       return;
@@ -281,61 +299,37 @@ async function generateVideoThumbnailForSize(
 }
 
 /**
- * 通过 postMessage 请求主线程生成视频预览图
- * @param blob 视频 Blob
- * @param maxSize 最大尺寸（默认 400）
+ * 通过 channelManager 请求主线程生成视频预览图
+ * 使用 postmessage-duplex 双工通讯：SW publish -> 主线程 subscribe 处理 -> 返回响应
+ * 
+ * @param url 视频 URL（主线程用于获取视频数据）
+ * @param _blob 视频 Blob（未使用，保留参数兼容性）
+ * @param _maxSize 最大尺寸（未使用，由主线程决定）
  */
-async function requestVideoThumbnailFromMainThread(blob: Blob, maxSize: number = THUMBNAIL_MAX_SIZE_LARGE): Promise<Blob | null> {
-  return new Promise((resolve) => {
-    const requestId = `video-thumb-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
-    const timeout = setTimeout(() => {
-      resolve(null);
-    }, 30000); // 30秒超时
-
-    const handleMessage = (event: MessageEvent) => {
-      if (
-        event.data?.type === 'VIDEO_THUMBNAIL_RESPONSE' &&
-        event.data?.requestId === requestId
-      ) {
-        clearTimeout(timeout);
-        self.removeEventListener('message', handleMessage);
-
-        if (event.data.success && event.data.blob) {
-          // 将 ArrayBuffer 转换回 Blob
-          const blob = new Blob([event.data.blob], { type: 'image/jpeg' });
-          resolve(blob);
-        } else {
-          resolve(null);
-        }
-      }
-    };
-
-    self.addEventListener('message', handleMessage);
-
-    // 将 Blob 转换为 ArrayBuffer 以便通过 postMessage 传递
-    blob.arrayBuffer().then((arrayBuffer) => {
-      // 发送请求到主线程
-      // @ts-ignore - Service Worker 全局作用域
-      self.clients.matchAll().then((clients: readonly Client[]) => {
-        if (clients.length === 0) {
-          clearTimeout(timeout);
-          self.removeEventListener('message', handleMessage);
-          resolve(null);
-          return;
-        }
-
-        clients.forEach((client) => {
-          client.postMessage({
-            type: 'VIDEO_THUMBNAIL_REQUEST',
-            requestId,
-            blob: arrayBuffer,
-            mimeType: blob.type,
-            maxSize, // 传递最大尺寸
-          });
-        });
-      });
-    });
-  });
+async function requestVideoThumbnailFromMainThread(url: string, _blob: Blob, _maxSize: number = THUMBNAIL_MAX_SIZE_LARGE): Promise<Blob | null> {
+  const { getChannelManager } = await import('../channel-manager');
+  const cm = getChannelManager();
+  
+  if (!cm || cm.getConnectedClientCount() === 0) {
+    console.warn('[ThumbnailUtils] No connected clients for video thumbnail generation');
+    return null;
+  }
+  
+  // 直接使用 publish 发起请求，等待主线程响应（双工通讯）
+  const thumbnailUrl = await cm.requestVideoThumbnail(url, 30000);
+  
+  if (!thumbnailUrl) {
+    return null;
+  }
+  
+  // 将 Data URL 转换为 Blob
+  try {
+    const response = await fetch(thumbnailUrl);
+    return await response.blob();
+  } catch (error) {
+    console.warn('[ThumbnailUtils] Failed to convert thumbnail URL to blob:', error);
+    return null;
+  }
 }
 
 /**

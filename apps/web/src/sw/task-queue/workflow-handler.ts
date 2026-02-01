@@ -28,6 +28,7 @@ import {
   broadcastToAllClients,
   sendToClientById,
 } from './utils/message-bus';
+import { getChannelManager } from './channel-manager';
 
 // Workflow executor instance
 let workflowExecutor: WorkflowExecutor | null = null;
@@ -57,7 +58,6 @@ export function initWorkflowHandler(
   workflowExecutor = new WorkflowExecutor({
     geminiConfig,
     videoConfig,
-    broadcast: (message) => broadcastToClients(message),
   });
 
   // Link TaskQueue events to WorkflowExecutor
@@ -133,6 +133,10 @@ export function initWorkflowHandler(
           args,
         });
       });
+    },
+    isClientAvailable: (clientId) => {
+      const cm = getChannelManager();
+      return cm ? cm.hasClientChannel(clientId) : false;
     },
   });
 
@@ -217,8 +221,6 @@ export function handleWorkflowMessage(
   message: WorkflowMainToSWMessage | ChatWorkflowMainToSWMessage,
   clientId: string
 ): void {
-  // console.log('[WorkflowHandler] ◀ Received message:', message.type);
-
   // Handle chat workflow messages
   if (message.type.startsWith('CHAT_WORKFLOW_')) {
     handleChatWorkflowMessage(message as ChatWorkflowMainToSWMessage, clientId);
@@ -226,7 +228,7 @@ export function handleWorkflowMessage(
   }
 
   if (!workflowExecutor) {
-    console.error('[WorkflowHandler] ✗ Not initialized, ignoring message:', message.type);
+    console.error('[WorkflowHandler] Not initialized, ignoring message:', message.type);
     return;
   }
 
@@ -234,11 +236,6 @@ export function handleWorkflowMessage(
 
   switch (workflowMessage.type) {
     case 'WORKFLOW_SUBMIT':
-      // console.log('[SW-WorkflowHandler] ▶ WORKFLOW_SUBMIT received:', {
-      //   workflowId: workflowMessage.workflow.id,
-      //   clientId,
-      //   timestamp: new Date().toISOString(),
-      // });
       workflowExecutor.submitWorkflow(workflowMessage.workflow);
       break;
 
@@ -249,8 +246,8 @@ export function handleWorkflowMessage(
 
     case 'WORKFLOW_GET_STATUS': {
       const workflow = workflowExecutor.getWorkflow(workflowMessage.workflowId);
-      // Return full workflow data for status query
-      broadcastToClients({
+      // Return full workflow data for status query (点对点发送给发起查询的客户端)
+      sendToClient(clientId, {
         type: 'WORKFLOW_STATUS_RESPONSE',
         workflowId: workflowMessage.workflowId,
         workflow: workflow || null,
@@ -260,9 +257,8 @@ export function handleWorkflowMessage(
 
     case 'WORKFLOW_GET_ALL': {
       const workflows = workflowExecutor.getAllWorkflows();
-      // console.log('[WorkflowHandler] Returning all workflows:', workflows.length);
-      // Return all workflows in a single message
-      broadcastToClients({
+      // Return all workflows in a single message (点对点发送给发起查询的客户端)
+      sendToClient(clientId, {
         type: 'WORKFLOW_ALL_RESPONSE',
         workflows,
       });
@@ -297,7 +293,8 @@ function handleChatWorkflowMessage(message: ChatWorkflowMainToSWMessage, clientI
 
     case 'CHAT_WORKFLOW_GET_STATUS': {
       const workflow = chatWorkflowHandler.getWorkflow(message.chatId);
-      broadcastToClients({
+      // 点对点发送给发起查询的客户端
+      sendToClient(clientId, {
         type: 'CHAT_WORKFLOW_STATUS_RESPONSE',
         chatId: message.chatId,
         workflow: workflow || null,
@@ -307,7 +304,8 @@ function handleChatWorkflowMessage(message: ChatWorkflowMainToSWMessage, clientI
 
     case 'CHAT_WORKFLOW_GET_ALL': {
       const workflows = chatWorkflowHandler.getAllWorkflows();
-      broadcastToClients({
+      // 点对点发送给发起查询的客户端
+      sendToClient(clientId, {
         type: 'CHAT_WORKFLOW_ALL_RESPONSE',
         workflows,
       });
@@ -345,18 +343,21 @@ export async function handleMainThreadToolResponse(
 }
 
 /**
- * Re-send all pending main thread tool requests and broadcast recovered workflows to new client
+ * Re-send all pending main thread tool requests and send recovered workflows to a new client
  * Called when a new client connects (page refresh) to continue workflow execution and sync state
+ * @param clientId The new client that connected (for point-to-point messaging)
  */
-export function resendPendingToolRequests(): void {
-  // Broadcast all recovered workflows (including those marked as failed due to interruption)
+export function resendPendingToolRequests(clientId?: string): void {
+  // Send all recovered workflows to the new client
   if (workflowExecutor) {
-    workflowExecutor.broadcastRecoveredWorkflows();
+    if (clientId) {
+      workflowExecutor.sendRecoveredWorkflowsToClient(clientId);
+    }
     workflowExecutor.resendPendingToolRequests();
   }
 
-  if (chatWorkflowHandler) {
-    chatWorkflowHandler.broadcastRecoveredWorkflows();
+  if (chatWorkflowHandler && clientId) {
+    chatWorkflowHandler.sendRecoveredWorkflowsToClient(clientId);
   }
 
   if (pendingChatToolRequests.size === 0) {

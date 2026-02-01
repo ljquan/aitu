@@ -620,12 +620,6 @@ export function getDefaultImageModel(): string {
 }
 
 /**
- * 默认图片模型（兼容旧代码）
- * @deprecated 请使用 getDefaultImageModel()
- */
-export const DEFAULT_IMAGE_MODEL = DEFAULT_IMAGE_MODEL_ID;
-
-/**
  * 默认视频模型 ID
  */
 export const DEFAULT_VIDEO_MODEL_ID = 'veo3';

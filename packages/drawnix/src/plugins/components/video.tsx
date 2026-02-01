@@ -38,7 +38,6 @@ export const Video: React.FC<VideoProps> = (props: VideoProps) => {
       const handleError = () => {
         setIsLoading(false);
         setVideoError(true);
-        console.warn('Failed to load video:', url);
       };
 
       video.addEventListener('loadeddata', handleLoadedData);

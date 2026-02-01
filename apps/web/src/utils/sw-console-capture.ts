@@ -6,8 +6,36 @@
  * - log/info: 仅在调试模式开启时捕获（用于调试分析）
  */
 
+import { swChannelClient } from '@drawnix/drawnix';
+
 let isInitialized = false;
-let debugModeEnabled = false;
+
+// 调试模式：sessionStorage 关掉浏览器自动清除
+const DEBUG_STORAGE_KEY = 'sw-debug-enabled';
+function getDebugModeFromStorage(): boolean {
+  try {
+    return sessionStorage.getItem(DEBUG_STORAGE_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+function setDebugModeToStorage(enabled: boolean | undefined): void {
+  try {
+    sessionStorage.setItem(DEBUG_STORAGE_KEY, enabled === true ? 'true' : 'false');
+  } catch {
+    // 忽略
+  }
+}
+let debugModeEnabled = getDebugModeFromStorage();
+
+// 日志队列：channel 未就绪时暂存，就绪后批量发送
+interface QueuedLog {
+  level: string;
+  message: string;
+  stack?: string;
+}
+const logQueue: QueuedLog[] = [];
+let initPromise: Promise<void> | null = null;
 
 // 保存原始的 console 方法
 const originalConsole = {
@@ -22,14 +50,57 @@ const originalConsole = {
  * 发送日志到 Service Worker
  */
 function sendToSW(level: string, message: string, stack?: string) {
-  if (navigator.serviceWorker?.controller) {
-    navigator.serviceWorker.controller.postMessage({
-      type: 'SW_CONSOLE_LOG_REPORT',
-      logLevel: level,
-      logMessage: message,
-      logStack: stack || '',
-      logSource: window.location.href,
+  // 防止循环：不转发来自 SW 的日志
+  if (message.includes('[SW]') ||
+      message.includes('[SWTaskQueue]') ||
+      message.includes('[SWChannelManager]') ||
+      message.includes('Invalid message structure')) {
+    return;
+  }
+
+  // 过滤监控服务相关的错误（PostHog, Sentry）
+  if (message.includes('posthog.com') ||
+      message.includes('sentry.io') ||
+      (stack && (stack.includes('posthog') || stack.includes('sentry')))) {
+    return;
+  }
+
+  // 发送单条日志
+  const doSend = () => {
+    if (!swChannelClient.isInitialized()) return;
+    swChannelClient.reportConsoleLog(
+      level,
+      [{ message, stack: stack || '', source: window.location.href }],
+      Date.now()
+    ).catch(() => {
+      // 忽略发送错误
     });
+  };
+
+  // 清空队列中的日志
+  const flushQueue = () => {
+    while (logQueue.length > 0 && swChannelClient.isInitialized()) {
+      const item = logQueue.shift()!;
+      swChannelClient.reportConsoleLog(
+        item.level,
+        [{ message: item.message, stack: item.stack || '', source: window.location.href }],
+        Date.now()
+      ).catch(() => {});
+    }
+  };
+
+  if (swChannelClient.isInitialized()) {
+    doSend();
+  } else {
+    logQueue.push({ level, message, stack });
+    // 触发初始化（复用同一 promise 避免重复调用）
+    if (!initPromise) {
+      initPromise = swChannelClient.initialize().then(() => {
+        flushQueue();
+      }).catch(() => {}).finally(() => {
+        initPromise = null;
+      });
+    }
   }
 }
 
@@ -79,34 +150,41 @@ export function initSWConsoleCapture(): void {
 
   isInitialized = true;
 
-  // 监听 Service Worker 消息，同步调试模式状态
-  navigator.serviceWorker.addEventListener('message', (event) => {
-    if (event.data?.type === 'SW_DEBUG_STATUS') {
-      const wasEnabled = debugModeEnabled;
-      debugModeEnabled = event.data.status?.debugModeEnabled || false;
-      if (debugModeEnabled && !wasEnabled) {
-        originalConsole.log('[SW Console Capture] 调试模式已开启，开始捕获所有日志');
+  // 订阅调试状态变更事件 + 主动触发 channel 连接（否则早期日志会因 channel 未就绪而丢失）
+  const setupDebugStatusListener = () => {
+    if (swChannelClient.isInitialized()) {
+      swChannelClient.subscribeToEvent('debug:statusChanged', (data) => {
+        const event = data as { enabled?: boolean; debugModeEnabled?: boolean };
+        const enabled = event.enabled ?? event.debugModeEnabled ?? false;
+        debugModeEnabled = enabled;
+        setDebugModeToStorage(enabled);
+      });
+      swChannelClient.getDebugStatus().then((status: { enabled?: boolean; debugModeEnabled?: boolean }) => {
+        const enabled = status.enabled ?? status.debugModeEnabled ?? false;
+        debugModeEnabled = enabled;
+        setDebugModeToStorage(enabled);
+      });
+    } else {
+      // 主动触发连接（SW 需在 load 后注册，此处延迟执行）
+      if (!initPromise) {
+        initPromise = swChannelClient.initialize().then(() => {
+          while (logQueue.length > 0 && swChannelClient.isInitialized()) {
+            const item = logQueue.shift()!;
+            swChannelClient.reportConsoleLog(
+              item.level,
+              [{ message: item.message, stack: item.stack || '', source: window.location.href }],
+              Date.now()
+            ).catch(() => {});
+          }
+        }).catch(() => {}).finally(() => {
+          initPromise = null;
+        });
       }
-    } else if (event.data?.type === 'SW_DEBUG_ENABLED') {
-      debugModeEnabled = true;
-      originalConsole.log('[SW Console Capture] 调试模式已开启，开始捕获所有日志');
-    } else if (event.data?.type === 'SW_DEBUG_DISABLED') {
-      debugModeEnabled = false;
-      originalConsole.log('[SW Console Capture] 调试模式已关闭，仅捕获 warn/error');
+      setTimeout(setupDebugStatusListener, 500);
     }
-  });
+  };
 
-  // Query current debug status on init (after SW is ready)
-  if (navigator.serviceWorker.controller) {
-    navigator.serviceWorker.controller.postMessage({ type: 'SW_DEBUG_GET_STATUS' });
-  }
-  
-  // Also query when controller changes (e.g., SW update)
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (navigator.serviceWorker.controller) {
-      navigator.serviceWorker.controller.postMessage({ type: 'SW_DEBUG_GET_STATUS' });
-    }
-  });
+  setupDebugStatusListener();
 
   // 拦截 console.error（始终捕获）
   console.error = function (...args: unknown[]) {
@@ -160,6 +238,5 @@ export function initSWConsoleCapture(): void {
     sendToSW('error', message, stack);
   });
 
-  // 输出初始化成功日志（使用原始方法避免循环）
-  originalConsole.log('[SW Console Capture] 已初始化');
+  // sessionStorage 不跨 tab 共享，storage 事件仅对 localStorage 有效，故不监听
 }

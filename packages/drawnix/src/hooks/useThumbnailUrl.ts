@@ -4,7 +4,8 @@
  * 提供预览图URL获取功能，支持按需生成
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
+import { swChannelClient } from '../services/sw-channel/client';
 
 /**
  * 获取预览图 URL（通过添加查询参数）
@@ -81,19 +82,15 @@ async function ensureThumbnail(
     if (cachedResponse) {
       const blob = await cachedResponse.blob();
       
-      // 通过 postMessage 通知 SW 生成预览图
-      if (navigator.serviceWorker) {
-        const registration = await navigator.serviceWorker.ready;
-        if (registration.active) {
-          const arrayBuffer = await blob.arrayBuffer();
-          registration.active.postMessage({
-            type: 'GENERATE_THUMBNAIL',
-            url: originalUrl,
-            mediaType: type,
-            blob: arrayBuffer,
-            mimeType: blob.type,
-          });
-        }
+      // 通过 swChannelClient 通知 SW 生成预览图
+      if (swChannelClient.isInitialized()) {
+        const arrayBuffer = await blob.arrayBuffer();
+        await swChannelClient.generateThumbnail(
+          originalUrl,
+          type,
+          arrayBuffer,
+          blob.type
+        );
       }
     }
   } catch (error) {

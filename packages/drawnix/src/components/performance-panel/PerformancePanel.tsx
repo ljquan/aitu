@@ -21,9 +21,11 @@ const STORAGE_KEY = 'drawnix_performance_panel_settings';
 const DEFAULT_POSITION = { x: -1, y: -1 }; // -1 表示使用默认位置
 
 // 内存阈值
-const WARNING_THRESHOLD = 85; // 85% 显示警告
+const MEMORY_AUTO_SHOW_THRESHOLD = 80; // 80% 自动显示面板
+const MEMORY_WITH_IMAGE_THRESHOLD = 60; // 60% 配合图片数量
+const WARNING_THRESHOLD = 80; // 80% 显示警告样式
 const CRITICAL_THRESHOLD = 95; // 95% 显示严重警告
-const IMAGE_COUNT_THRESHOLD = 100; // 图片元素超过 100 个显示警告
+const IMAGE_COUNT_THRESHOLD = 100; // 图片元素阈值
 
 // 持久化设置（保存到 localStorage）
 interface PersistedSettings {
@@ -126,11 +128,12 @@ export const PerformancePanel: React.FC<PerformancePanelProps> = ({
     if (persistedSettings.pinned) return true;
     if (runtimeState.dismissed) return false;
     
-    // 内存占用超过 85% 或图片元素超过一定数量
-    const isMemoryWarning = memoryStats.usagePercent >= WARNING_THRESHOLD;
-    const isImageWarning = imageCount >= IMAGE_COUNT_THRESHOLD;
+    // 内存使用超过 80% 自动显示
+    const isHighMemory = memoryStats.usagePercent >= MEMORY_AUTO_SHOW_THRESHOLD;
+    // 图片超过 100 且内存超过 60% 时显示
+    const isImageAndMemory = imageCount >= IMAGE_COUNT_THRESHOLD && memoryStats.usagePercent >= MEMORY_WITH_IMAGE_THRESHOLD;
     
-    return isMemoryWarning || isImageWarning;
+    return isHighMemory || isImageAndMemory;
   }, [memoryStats, imageCount, persistedSettings.pinned, runtimeState.dismissed]);
 
   // 计算警告级别

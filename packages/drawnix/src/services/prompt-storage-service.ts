@@ -267,6 +267,31 @@ export function clearPromptHistory(): void {
 }
 
 /**
+ * 合并远程提示词历史（用于云端同步）
+ * 只添加本地不存在的记录，保留本地的置顶状态
+ */
+export function mergePromptHistory(remoteHistory: PromptHistoryItem[]): number {
+  ensureCacheInitialized();
+  const localHistory = promptHistoryCache || [];
+  const localContents = new Set(localHistory.map(item => item.content));
+  
+  let addedCount = 0;
+  for (const remoteItem of remoteHistory) {
+    if (!localContents.has(remoteItem.content)) {
+      localHistory.push(remoteItem);
+      addedCount++;
+    }
+  }
+
+  if (addedCount > 0) {
+    promptHistoryCache = localHistory;
+    savePromptHistory();
+  }
+
+  return addedCount;
+}
+
+/**
  * 切换提示词置顶状态
  * @param id 提示词 ID
  * @returns 切换后的置顶状态
@@ -363,6 +388,30 @@ export function getVideoPromptHistoryContents(): string[] {
   return getVideoPromptHistory().map((item) => item.content);
 }
 
+/**
+ * 合并远程视频提示词历史（用于云端同步）
+ */
+export function mergeVideoPromptHistory(remoteHistory: VideoPromptHistoryItem[]): number {
+  ensureCacheInitialized();
+  const localHistory = videoPromptHistoryCache || [];
+  const localContents = new Set(localHistory.map(item => item.content));
+  
+  let addedCount = 0;
+  for (const remoteItem of remoteHistory) {
+    if (!localContents.has(remoteItem.content)) {
+      localHistory.push(remoteItem);
+      addedCount++;
+    }
+  }
+
+  if (addedCount > 0) {
+    videoPromptHistoryCache = localHistory;
+    saveVideoPromptHistory();
+  }
+
+  return addedCount;
+}
+
 // ============================================
 // 图片描述历史记录功能（用于 AI 图片生成弹窗）
 // ============================================
@@ -437,6 +486,30 @@ export function removeImagePromptHistory(id: string): void {
  */
 export function getImagePromptHistoryContents(): string[] {
   return getImagePromptHistory().map((item) => item.content);
+}
+
+/**
+ * 合并远程图片提示词历史（用于云端同步）
+ */
+export function mergeImagePromptHistory(remoteHistory: ImagePromptHistoryItem[]): number {
+  ensureCacheInitialized();
+  const localHistory = imagePromptHistoryCache || [];
+  const localContents = new Set(localHistory.map(item => item.content));
+  
+  let addedCount = 0;
+  for (const remoteItem of remoteHistory) {
+    if (!localContents.has(remoteItem.content)) {
+      localHistory.push(remoteItem);
+      addedCount++;
+    }
+  }
+
+  if (addedCount > 0) {
+    imagePromptHistoryCache = localHistory;
+    saveImagePromptHistory();
+  }
+
+  return addedCount;
 }
 
 // ============================================

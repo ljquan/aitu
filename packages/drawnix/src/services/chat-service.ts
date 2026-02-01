@@ -12,9 +12,9 @@ import type { ChatMessage, StreamEvent } from '../types/chat.types';
 import { MessageRole } from '../types/chat.types';
 import { analytics } from '../utils/posthog-analytics';
 import { shouldUseSWTaskQueue } from './task-queue';
-import { swTaskQueueClient } from './sw-client';
-import type { ChatParams, ChatMessage as SWChatMessage, ChatAttachment } from './sw-client/types';
-import { geminiSettings } from '../utils/settings-manager';
+import { swChannelClient } from './sw-channel';
+import type { ChatStartParams, ChatMessage as SWChatMessage, ChatAttachment } from './sw-channel';
+import { geminiSettings, settingsManager } from '../utils/settings-manager';
 
 // Current abort controller for cancellation
 let currentAbortController: AbortController | null = null;
@@ -191,42 +191,36 @@ export async function sendChatMessage(
 ): Promise<string> {
   // Check if we should use SW mode
   if (shouldUseSWTaskQueue()) {
-    // console.log('[ChatService] SW mode available, checking initialization...');
-    
     // Ensure SW client is initialized before using
-    if (!swTaskQueueClient.isInitialized()) {
-      // console.log('[ChatService] SW client not initialized, initializing...');
+    if (!swChannelClient.isInitialized()) {
       const settings = geminiSettings.get();
       if (settings.apiKey && settings.baseUrl) {
         try {
-          const success = await swTaskQueueClient.initialize(
-            {
+          await settingsManager.waitForInitialization();
+          await swChannelClient.initialize();
+          await swChannelClient.init({
+            geminiConfig: {
               apiKey: settings.apiKey,
               baseUrl: settings.baseUrl,
               modelName: settings.chatModel,
             },
-            {
+            videoConfig: {
               baseUrl: settings.baseUrl,
-            }
-          );
-          // console.log('[ChatService] SW client initialization result:', success);
+            },
+          });
         } catch (error) {
           console.error('[ChatService] SW client initialization failed:', error);
         }
-      } else {
-        // console.log('[ChatService] Missing apiKey or baseUrl, skipping SW initialization');
       }
     }
     
     // Use SW mode if initialized successfully
-    if (swTaskQueueClient.isInitialized()) {
-      // console.log('[ChatService] Using SW mode for chat');
+    if (swChannelClient.isInitialized()) {
       return sendChatMessageViaSW(messages, newContent, attachments, onStream, temporaryModel, systemPrompt);
     }
   }
   
   // Fallback to direct mode
-  // console.log('[ChatService] Using direct mode for chat');
   return sendChatMessageDirect(messages, newContent, attachments, onStream, temporaryModel, systemPrompt);
 }
 
@@ -241,7 +235,7 @@ async function sendChatMessageViaSW(
 ): Promise<string> {
   // Cancel any existing SW chat request
   if (currentChatId) {
-    swTaskQueueClient.stopChat(currentChatId);
+    swChannelClient.stopChat(currentChatId);
   }
   
   const chatId = `chat_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
@@ -270,7 +264,8 @@ async function sendChatMessageViaSW(
   const swAttachments = await convertAttachmentsToSW(attachments);
   
   // Build chat params
-  const chatParams: ChatParams = {
+  const chatParams: ChatStartParams = {
+    chatId,
     messages: swMessages,
     newContent: sanitizedContent,
     attachments: swAttachments,
@@ -288,15 +283,16 @@ async function sendChatMessageViaSW(
       }
     };
 
-    swTaskQueueClient.startChat(chatId, chatParams, {
-      onChunk: (_id, content) => {
-        if (isCompleted) return;
-        const restoredChunk = restoreMediaUrls(content, allUrlMap);
-        fullContent = restoredChunk; // 直接使用累积数据，不再追加
+    // Set up event handlers
+    swChannelClient.setEventHandlers({
+      onChatChunk: (event) => {
+        if (event.chatId !== chatId || isCompleted) return;
+        const restoredChunk = restoreMediaUrls(event.content, allUrlMap);
+        fullContent = restoredChunk;
         onStream({ type: 'content', content: restoredChunk });
       },
-      onDone: (_id, _fullContent) => {
-        if (isCompleted) return;
+      onChatDone: (event) => {
+        if (event.chatId !== chatId || isCompleted) return;
         isCompleted = true;
         cleanup();
         
@@ -312,8 +308,8 @@ async function sendChatMessageViaSW(
         onStream({ type: 'done' });
         resolve(fullContent);
       },
-      onError: (_id, error) => {
-        if (isCompleted) return;
+      onChatError: (event) => {
+        if (event.chatId !== chatId || isCompleted) return;
         isCompleted = true;
         cleanup();
         
@@ -323,12 +319,21 @@ async function sendChatMessageViaSW(
           taskType: 'chat',
           model: modelName,
           duration,
-          error,
+          error: event.error,
         });
         
-        onStream({ type: 'error', error });
-        reject(new Error(error));
+        onStream({ type: 'error', error: event.error });
+        reject(new Error(event.error));
       },
+    });
+
+    // Start the chat
+    swChannelClient.startChat(chatParams).catch((err) => {
+      if (!isCompleted) {
+        isCompleted = true;
+        cleanup();
+        reject(err);
+      }
     });
   });
 }
@@ -470,7 +475,7 @@ async function sendChatMessageDirect(
 export function stopGeneration(): void {
   // Stop SW chat if active
   if (currentChatId) {
-    swTaskQueueClient.stopChat(currentChatId);
+    swChannelClient.stopChat(currentChatId);
     currentChatId = null;
   }
   

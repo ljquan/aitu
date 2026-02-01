@@ -11,6 +11,13 @@ export const state = {
   postmessageLogs: [],
   crashLogs: [], // Crash snapshots
   llmapiLogs: [], // LLM API call logs
+  // LLM API logs pagination
+  llmapiPagination: {
+    page: 1,
+    pageSize: 20,
+    total: 0,
+    totalPages: 0,
+  },
   swStatus: null, // SW status data for export
   autoScroll: true,
   activeTab: 'fetch',
@@ -19,14 +26,19 @@ export const state = {
   expandedPmIds: new Set(), // Track expanded postmessage log IDs
   expandedCrashIds: new Set(), // Track expanded crash log IDs
   expandedLLMApiIds: new Set(), // Track expanded LLM API log IDs
+  // LLM API logs select mode
+  isLLMApiSelectMode: false,
+  selectedLLMApiIds: new Set(),
   // New states for enhanced features
   bookmarkedLogIds: new Set(), // Bookmarked/starred log IDs
   showBookmarksOnly: false, // Filter to show only bookmarked logs
   filterSlowOnly: false, // Filter to show only slow requests (>1s)
   isSelectMode: false, // Batch select mode
   selectedLogIds: new Set(), // Selected log IDs for batch operations
-  isPaused: false, // Pause real-time updates
-  pendingLogs: [], // Logs received while paused
+  isPaused: false, // Pause real-time updates (Fetch logs)
+  pendingLogs: [], // Logs received while paused (Fetch logs)
+  isPmPaused: false, // Pause real-time updates (PostMessage logs)
+  pendingPmLogs: [], // PostMessage logs received while paused
   hasNewErrors: false, // Track new errors for tab indicator
   hasNewCrashLogs: false, // Track new crash logs
   hasNewLLMApiErrors: false, // Track new LLM API errors
@@ -115,10 +127,11 @@ export function cacheElements() {
     consoleCountEl: document.getElementById('consoleCount'),
     postmessageCountEl: document.getElementById('postmessageCount'),
     postmessageLogsContainer: document.getElementById('postmessageLogsContainer'),
-    filterMessageDirection: document.getElementById('filterMessageDirection'),
+    filterMessageSource: document.getElementById('filterMessageSource'),
     filterMessageTypeSelect: document.getElementById('filterMessageTypeSelect'),
     filterPmTimeRange: document.getElementById('filterPmTimeRange'),
     filterMessageType: document.getElementById('filterMessageType'),
+    togglePmPauseBtn: document.getElementById('togglePmPause'),
     // Error dot indicators
     consoleErrorDot: document.getElementById('consoleErrorDot'),
     llmapiErrorDot: document.getElementById('llmapiErrorDot'),
@@ -152,6 +165,12 @@ export function cacheElements() {
     copyLLMApiLogsBtn: document.getElementById('copyLLMApiLogs'),
     exportLLMApiLogsBtn: document.getElementById('exportLLMApiLogs'),
     clearLLMApiLogsBtn: document.getElementById('clearLLMApiLogs'),
+    // LLM API logs select mode elements
+    toggleLLMApiSelectModeBtn: document.getElementById('toggleLLMApiSelectMode'),
+    llmapiBatchActionsEl: document.getElementById('llmapiBatchActions'),
+    llmapiSelectAllBtn: document.getElementById('llmapiSelectAll'),
+    llmapiBatchDeleteBtn: document.getElementById('llmapiBatchDelete'),
+    llmapiSelectedCountEl: document.getElementById('llmapiSelectedCount'),
     // Crash logs elements
     crashCountEl: document.getElementById('crashCount'),
     crashLogsContainer: document.getElementById('crashLogsContainer'),

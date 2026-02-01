@@ -264,8 +264,8 @@
             bottom: calc(#{$safe-area-bottom} + 70px); // 给 AI 输入栏留出空间
             height: auto;
             max-height: calc(100vh - 160px); // 限制最大高度
-            width: auto;
-            max-width: none;
+            width: 38px; // 固定宽度，确保收起和展开状态一致（以收起状态为准）
+            max-width: 38px;
             border-radius: $mobile-border-radius;
             
             // 移动端强制使用图标模式
@@ -346,7 +346,7 @@
                 flex-direction: column;
                 align-items: center;
                 gap: 0;
-                padding: 4px 8px 8px;
+                padding: 4px 4px 8px; // 紧凑 padding 以适应窄宽度
                 width: 100%; // 填满容器宽度
             }
         }
@@ -380,21 +380,21 @@
                 height: 22px;
             }
             
-            // 展开按钮特殊样式 - 更紧凑
+            // 展开/收起箭头按钮 - 统一样式
             &--toggle {
-                height: 28px;
-                min-height: 28px;
-                margin-bottom: 2px;
+                height: 32px;
+                min-height: 32px;
+                margin-bottom: 4px;
                 
                 svg {
-                    width: 16px;
-                    height: 16px;
+                    width: 18px;
+                    height: 18px;
                     color: var(--color-text-secondary, #999);
                 }
             }
         }
 
-        // 移动端展开按钮（展开状态时显示）
+        // 移动端展开按钮（展开状态时显示）- 与收起状态箭头保持一致
         &__mobile-toggle {
             display: none;
             
@@ -402,12 +402,13 @@
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                width: $mobile-button-min-size;
-                height: $mobile-button-min-size;
+                width: 100%; // 填满容器宽度，与收起状态一致
+                height: 32px; // 与收起状态一致
+                margin: 4px 4px 0; // 与收起状态位置一致
                 background: transparent;
                 border: none;
                 border-radius: 8px;
-                color: var(--color-on-surface);
+                color: var(--color-text-secondary, #999); // 与收起状态颜色一致
                 cursor: pointer;
                 transition: background-color 0.2s ease;
                 flex-shrink: 0;
@@ -417,13 +418,8 @@
                 }
                 
                 svg {
-                    width: 20px;
-                    height: 20px;
-                    transition: transform 0.2s ease;
-                }
-                
-                &--expanded svg {
-                    transform: rotate(180deg);
+                    width: 18px; // 与收起状态一致
+                    height: 18px;
                 }
             }
         }

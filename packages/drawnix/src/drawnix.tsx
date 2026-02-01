@@ -76,7 +76,10 @@ import { PerformancePanel } from './components/performance-panel';
 import { QuickCreationToolbar } from './components/toolbar/quick-creation-toolbar/quick-creation-toolbar';
 import { CacheQuotaProvider } from './components/cache-quota-provider/CacheQuotaProvider';
 import { RecentColorsProvider } from './components/unified-color-picker';
+import { GitHubSyncProvider } from './contexts/GitHubSyncContext';
+import { SyncSettings } from './components/sync-settings';
 import { usePencilCursor } from './hooks/usePencilCursor';
+import { useToolFromUrl } from './hooks/useToolFromUrl';
 import { withArrowLineAutoCompleteExtend } from './plugins/with-arrow-line-auto-complete-extend';
 import { AutoCompleteShapePicker } from './components/auto-complete-shape-picker';
 import { useAutoCompleteShapePicker } from './hooks/useAutoCompleteShapePicker';
@@ -150,6 +153,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
   const [taskPanelExpanded, setTaskPanelExpanded] = useState(false);
   const [mediaLibraryOpen, setMediaLibraryOpen] = useState(false);
   const [backupRestoreOpen, setBackupRestoreOpen] = useState(false);
+  const [cloudSyncOpen, setCloudSyncOpen] = useState(false);
 
   // 使用 ref 来保存 board 的最新引用,避免 useCallback 依赖问题
   const boardRef = useRef<DrawnixBoard | null>(null);
@@ -277,22 +281,37 @@ export const Drawnix: React.FC<DrawnixProps> = ({
         const { TaskStatus } = await import('./types/task.types');
 
         // In SW mode, ensure tasks are synced from SW first
+        let swInitialized = false;
         if (shouldUseSWTaskQueue()) {
           const { swTaskQueueService } = await import('./services/sw-task-queue-service');
           // Wait for SW to be initialized and tasks synced
-          await swTaskQueueService.initialize();
-          await swTaskQueueService.syncTasksFromSW();
+          swInitialized = await swTaskQueueService.initialize();
+          if (swInitialized) {
+            await swTaskQueueService.syncTasksFromSW();
+          }
         }
 
-        // Query active chat workflows from SW
-        // SW will re-send pending tool requests to the new page
-        const { chatWorkflowClient } = await import('./services/sw-client/chat-workflow-client');
-        const activeChatWorkflows = await chatWorkflowClient.getAllActiveWorkflows();
-        const activeChatWorkflowIds = new Set(activeChatWorkflows.map(w => w.id));
+        // Query all chat workflows from SW (only if SW is initialized)
+        // Now returns ALL workflows including completed ones for proper state sync
+        type StepStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
+        type WorkflowStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+        let activeChatWorkflows: { id: string; status: string }[] = [];
+        let activeWorkflows: Array<{
+          id: string;
+          status: WorkflowStatus;
+          steps: Array<{ id: string; mcp: string; args: Record<string, unknown>; description: string; status: StepStatus; result?: unknown; error?: string; duration?: number }>;
+          error?: string;
+        }> = [];
         
-        // Also query regular workflows
-        const { workflowSubmissionService } = await import('./services/workflow-submission-service');
-        const activeWorkflows = await workflowSubmissionService.queryAllWorkflows();
+        if (swInitialized) {
+          const { chatWorkflowClient } = await import('./services/sw-channel/chat-workflow-client');
+          activeChatWorkflows = await chatWorkflowClient.getAllActiveWorkflows();
+          
+          // Also query regular workflows
+          const { workflowSubmissionService } = await import('./services/workflow-submission-service');
+          activeWorkflows = await workflowSubmissionService.queryAllWorkflows();
+        }
+        
         const activeWorkflowIds = new Set(activeWorkflows.map(w => w.id));
         
         // console.log('[Drawnix] Active chat workflows:', activeChatWorkflows.length, 'regular workflows:', activeWorkflows.length);
@@ -331,13 +350,24 @@ export const Drawnix: React.FC<DrawnixProps> = ({
 
           if (!hasRunningSteps && !swWorkflow) continue;
 
-          // Check if this workzone's workflow is still active in SW
-          // For chat workflows, check activeChatWorkflowIds; for regular workflows, check activeWorkflowIds
-          const isChatWorkflowActive = activeChatWorkflowIds.has(currentWorkflow.id);
-          const isRegularWorkflowActive = activeWorkflowIds.has(currentWorkflow.id);
-          const isWorkflowActive = isChatWorkflowActive || isRegularWorkflowActive;
+          // Check if this workzone's workflow exists in SW (including completed ones)
+          // For chat workflows, also get the full workflow object to check actual status
+          const chatWorkflow = activeChatWorkflows.find(w => w.id === currentWorkflow.id);
+          const isChatWorkflowExists = !!chatWorkflow;
+          const isRegularWorkflowExists = activeWorkflowIds.has(currentWorkflow.id);
+          const isWorkflowExists = isChatWorkflowExists || isRegularWorkflowExists;
+          
+          // Check if workflow is still running (not completed/failed)
+          const isChatWorkflowRunning = chatWorkflow && 
+            chatWorkflow.status !== 'completed' && 
+            chatWorkflow.status !== 'failed' && 
+            chatWorkflow.status !== 'cancelled';
+          const isWorkflowRunning = isChatWorkflowRunning || (swWorkflow && 
+            swWorkflow.status !== 'completed' && 
+            swWorkflow.status !== 'failed' && 
+            swWorkflow.status !== 'cancelled');
 
-          // console.log('[Drawnix] Found interrupted WorkZone:', workzone.id, 'chatActive:', isChatWorkflowActive, 'regularActive:', isRegularWorkflowActive);
+          // console.log('[Drawnix] Found interrupted WorkZone:', workzone.id, 'chatExists:', isChatWorkflowExists, 'regularExists:', isRegularWorkflowExists, 'running:', isWorkflowRunning);
 
           // Update steps based on task queue status
           const updatedSteps = currentWorkflow.steps.map(step => {
@@ -349,19 +379,14 @@ export const Drawnix: React.FC<DrawnixProps> = ({
             const taskId = (step.result as { taskId?: string })?.taskId;
             if (!taskId) {
               // No taskId means it's an AI analyze step or similar
-              // For ai_analyze (text model), check if workflow is still active in SW
+              // For ai_analyze (text model), always keep current status
+              // SW will send workflow:status or workflow:stepStatus events to update actual state
+              // This prevents incorrectly marking as failed when SW query times out but workflow is still running
               if (step.mcp === 'ai_analyze') {
-                if (isWorkflowActive) {
-                  // Workflow is still active in SW, SW will re-send the request
-                  // Keep as running, the new page will handle the re-sent request
-                  return step;
-                }
-                // Workflow is not active, mark as failed
-                return {
-                  ...step,
-                  status: 'failed' as const,
-                  error: '页面刷新导致中断，请删除后重新发起',
-                };
+                // Keep current status - SW event subscription will update if needed
+                // If SW workflow failed, we'll receive workflow:failed event
+                // If SW workflow completed, we'll receive workflow:completed event
+                return step;
               }
               // For other steps without taskId (like insert_mindmap, insert_mermaid),
               // they are synchronous and should have completed before refresh
@@ -661,9 +686,10 @@ export const Drawnix: React.FC<DrawnixProps> = ({
           <ToolbarConfigProvider>
             <CacheQuotaProvider onOpenMediaLibrary={handleOpenMediaLibrary}>
               <ModelHealthProvider>
-                <ChatDrawerProvider>
-                  <WorkflowProvider>
-                    <DrawnixContext.Provider value={contextValue}>
+                <GitHubSyncProvider>
+                  <ChatDrawerProvider>
+                    <WorkflowProvider>
+                      <DrawnixContext.Provider value={contextValue}>
                       <DrawnixContent
                       value={value}
                       viewport={viewport}
@@ -693,6 +719,8 @@ export const Drawnix: React.FC<DrawnixProps> = ({
                       setToolboxDrawerOpen={setToolboxDrawerOpen}
                       setMediaLibraryOpen={setMediaLibraryOpen}
                       setBackupRestoreOpen={setBackupRestoreOpen}
+                      cloudSyncOpen={cloudSyncOpen}
+                      setCloudSyncOpen={setCloudSyncOpen}
                       handleBeforeSwitch={handleBeforeSwitch}
                       isDataReady={isDataReady}
                       onCreateProjectForMemory={handleCreateProjectForMemory}
@@ -703,9 +731,10 @@ export const Drawnix: React.FC<DrawnixProps> = ({
                         onClose={() => setMediaLibraryOpen(false)}
                       />
                     </Suspense>
-                    </DrawnixContext.Provider>
-                  </WorkflowProvider>
-                </ChatDrawerProvider>
+                      </DrawnixContext.Provider>
+                    </WorkflowProvider>
+                  </ChatDrawerProvider>
+                </GitHubSyncProvider>
               </ModelHealthProvider>
             </CacheQuotaProvider>
           </ToolbarConfigProvider>
@@ -745,6 +774,8 @@ interface DrawnixContentProps {
   setToolboxDrawerOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setMediaLibraryOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setBackupRestoreOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  cloudSyncOpen: boolean;
+  setCloudSyncOpen: React.Dispatch<React.SetStateAction<boolean>>;
   handleBeforeSwitch: () => Promise<void>;
   isDataReady: boolean;
   onCreateProjectForMemory: () => Promise<void>;
@@ -764,6 +795,7 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
   toolboxDrawerOpen,
   taskPanelExpanded,
   backupRestoreOpen,
+  cloudSyncOpen,
   onChange,
   onSelectionChange,
   onViewportChange,
@@ -777,6 +809,7 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
   setProjectDrawerOpen,
   setToolboxDrawerOpen,
   setBackupRestoreOpen,
+  setCloudSyncOpen,
   handleBeforeSwitch,
   isDataReady,
   onCreateProjectForMemory,
@@ -785,6 +818,10 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
 
   // 画笔自定义光标
   usePencilCursor({ board, pointer: appState.pointer });
+
+  // 处理 URL 参数中的工具打开请求
+  // 当访问 ?tool=xxx 时，自动以 WinBox 全屏形式打开指定工具并设为常驻
+  useToolFromUrl();
 
   // 快捷工具栏状态
   const [quickToolbarVisible, setQuickToolbarVisible] = useState(false);
@@ -1110,6 +1147,7 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
             taskPanelExpanded={taskPanelExpanded}
             onTaskPanelToggle={handleTaskPanelToggle}
             onOpenBackupRestore={() => setBackupRestoreOpen(true)}
+            onOpenCloudSync={() => setCloudSyncOpen(true)}
           />
 
           <PopupToolbar></PopupToolbar>
@@ -1159,6 +1197,11 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
               />
             </Suspense>
           )}
+          {/* Cloud Sync Settings - 云端同步设置 */}
+          <SyncSettings
+            visible={cloudSyncOpen}
+            onClose={() => setCloudSyncOpen(false)}
+          />
           {/* Quick Creation Toolbar - 双击空白区域显示的快捷工具栏 */}
           <QuickCreationToolbar
             position={quickToolbarPosition}

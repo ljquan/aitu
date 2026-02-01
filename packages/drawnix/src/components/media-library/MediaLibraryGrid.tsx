@@ -27,6 +27,7 @@ import {
   Download,
   Eye,
   PlusCircle,
+  CloudUpload,
 } from 'lucide-react';
 import JSZip from 'jszip';
 import { 
@@ -48,6 +49,10 @@ import { useDrawnix } from '../../hooks/use-drawnix';
 import { removeElementsByAssetIds, removeElementsByAssetUrl, isCacheUrl, countElementsByAssetUrl } from '../../utils/asset-cleanup';
 import { insertImageFromUrl } from '../../data/image';
 import { insertVideoFromUrl } from '../../data/video';
+import { useGitHubSync } from '../../contexts/GitHubSyncContext';
+import { mediaSyncService } from '../../services/github-sync/media-sync-service';
+import { swTaskQueueService } from '../../services/sw-task-queue-service';
+import { TaskStatus, TaskType } from '../../types/task.types';
 import './MediaLibraryGrid.scss';
 import './VirtualAssetGrid.scss';
 
@@ -157,6 +162,11 @@ export function MediaLibraryGrid({
   // 下载状态
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0); // 0-100
+  
+  // 同步状态
+  const { isConfigured } = useGitHubSync();
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncProgress, setSyncProgress] = useState(0); // 0-100
 
   // 计算各类型的数量
   const counts = useMemo(() => {
@@ -521,6 +531,116 @@ export function MediaLibraryGrid({
     }
   }, [selectedAssetIds, filteredResult.assets, isDownloading]);
 
+  // 批量同步处理（上传到云端）
+  // 同步当前筛选结果中被选中的素材（AI 生成和本地上传）
+  const handleBatchSync = useCallback(async () => {
+    // 获取筛选结果中被选中的所有素材
+    const selectedAssets = filteredResult.assets.filter(a => 
+      selectedAssetIds.has(a.id)
+    );
+    
+    if (selectedAssets.length === 0 || isSyncing) return;
+    
+    // 分离 AI 生成素材和本地上传素材
+    const aiAssets = selectedAssets.filter(a => a.source === AssetSource.AI_GENERATED);
+    const localAssets = selectedAssets.filter(a => a.source === AssetSource.LOCAL);
+    
+    // AI 生成素材：获取对应的任务 ID 列表
+    const taskIds = aiAssets
+      .filter(a => {
+        const task = swTaskQueueService.getTask(a.id);
+        if (!task) return false;
+        if (task.status !== TaskStatus.COMPLETED) return false;
+        if (task.type !== TaskType.IMAGE && task.type !== TaskType.VIDEO) return false;
+        return true;
+      })
+      .map(a => a.id);
+    
+    // 本地上传素材：转换为同步格式
+    const localSyncItems = localAssets
+      .filter(a => a.url.startsWith('/__aitu_cache__/')) // 只同步缓存中的本地素材
+      .map(a => ({
+        id: a.id,
+        url: a.url,
+        type: (a.type === AssetType.VIDEO ? 'video' : 'image') as 'image' | 'video',
+        name: a.name,
+        mimeType: a.mimeType,
+        size: a.size,
+      }));
+    
+    const totalCount = taskIds.length + localSyncItems.length;
+    if (totalCount === 0) {
+      console.log('[MediaLibraryGrid] No syncable assets found');
+      return;
+    }
+    
+    setIsSyncing(true);
+    setSyncProgress(0);
+    
+    try {
+      let succeeded = 0;
+      let failed = 0;
+      let current = 0;
+      
+      // 同步 AI 生成素材
+      if (taskIds.length > 0) {
+        const aiResult = await mediaSyncService.syncMultipleTasks(
+          taskIds,
+          (cur, total) => {
+            current = cur;
+            setSyncProgress(Math.round((current / totalCount) * 100));
+          }
+        );
+        succeeded += aiResult.succeeded;
+        failed += aiResult.failed;
+      }
+      
+      // 同步本地上传素材
+      if (localSyncItems.length > 0) {
+        const localResult = await mediaSyncService.syncMultipleAssets(
+          localSyncItems,
+          (cur) => {
+            current = taskIds.length + cur;
+            setSyncProgress(Math.round((current / totalCount) * 100));
+          }
+        );
+        succeeded += localResult.succeeded;
+        failed += localResult.failed;
+      }
+      
+      console.log('[MediaLibraryGrid] Batch sync result:', { succeeded, failed });
+      setSyncProgress(100);
+    } catch (error) {
+      console.error('[MediaLibraryGrid] Batch sync failed:', error);
+    } finally {
+      setIsSyncing(false);
+      setSyncProgress(0);
+    }
+  }, [selectedAssetIds, filteredResult.assets, isSyncing]);
+  
+  // 计算选中的可同步素材数量
+  const syncableCount = useMemo(() => {
+    const selectedAssets = filteredResult.assets.filter(a => selectedAssetIds.has(a.id));
+    
+    // AI 生成素材：检查任务是否存在且已完成
+    const aiSyncable = selectedAssets.filter(a => {
+      if (a.source !== AssetSource.AI_GENERATED) return false;
+      const task = swTaskQueueService.getTask(a.id);
+      if (!task) return false;
+      if (task.status !== TaskStatus.COMPLETED) return false;
+      return true;
+    }).length;
+    
+    // 本地上传素材：检查是否有缓存 URL
+    const localSyncable = selectedAssets.filter(a => {
+      if (a.source !== AssetSource.LOCAL) return false;
+      // 只有在统一缓存中的本地素材才能同步
+      return a.url.startsWith('/__aitu_cache__/');
+    }).length;
+    
+    return aiSyncable + localSyncable;
+  }, [filteredResult.assets, selectedAssetIds]);
+
   // 将素材转换为预览项
   const convertToMediaItems = useCallback((assetList: Asset[]): UnifiedMediaItem[] => {
     return assetList.map(asset => ({
@@ -716,6 +836,21 @@ export function MediaLibraryGrid({
                 >
                   下载
                 </Button>
+                {isConfigured && (
+                  <Tooltip content="同步选中的素材到云端" placement="bottom" theme="light">
+                    <Button
+                      variant="outline"
+                      size="small"
+                      icon={<CloudUpload size={16} />}
+                      disabled={syncableCount === 0 || isSyncing}
+                      loading={isSyncing}
+                      onClick={handleBatchSync}
+                      data-track="grid_batch_sync"
+                    >
+                      {isSyncing ? `${syncProgress}%` : `同步 (${syncableCount})`}
+                    </Button>
+                  </Tooltip>
+                )}
               </>
             ) : (
               <>

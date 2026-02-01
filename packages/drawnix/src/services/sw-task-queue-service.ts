@@ -6,6 +6,8 @@
  * Design principle: SW is the single source of truth for task data.
  * This service maintains a read-only view of SW's task state,
  * updated entirely through SW push notifications.
+ * 
+ * Uses postmessage-duplex for reliable duplex communication.
  */
 
 import { Subject, Observable } from 'rxjs';
@@ -24,8 +26,7 @@ import {
   validateGenerationParams,
   sanitizeGenerationParams,
 } from '../utils/validation-utils';
-import { swTaskQueueClient } from './sw-client';
-import type { SWTask } from './sw-client';
+import { swChannelClient, SWTask } from './sw-channel';
 import { geminiSettings, settingsManager } from '../utils/settings-manager';
 
 /**
@@ -37,6 +38,10 @@ class SWTaskQueueService {
   private tasks: Map<string, Task>;
   private taskUpdates$: Subject<TaskEvent>;
   private initialized = false;
+  /** Lock to prevent concurrent initialization */
+  private initializingPromise: Promise<boolean> | null = null;
+  /** Flag to prevent duplicate visibility listener registration */
+  private visibilityListenerRegistered = false;
 
   private constructor() {
     this.tasks = new Map();
@@ -54,11 +59,52 @@ class SWTaskQueueService {
   }
 
   /**
+   * 设置 visibility 变化监听器
+   * 当页面变为可见时，主动从 SW 同步任务状态
+   * 这样即使事件丢失（如 SW 更新），也能获取到最新状态
+   */
+  private setupVisibilityListener(): void {
+    if (typeof document === 'undefined') return;
+    if (this.visibilityListenerRegistered) return;
+    
+    this.visibilityListenerRegistered = true;
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && this.initialized) {
+        // 页面变为可见时，静默同步任务状态
+        this.syncTasksFromSW().catch(() => {
+          // 静默忽略错误
+        });
+      }
+    });
+  }
+
+  /**
    * Initialize the service with API configurations
+   * Uses a lock to prevent concurrent initialization attempts
    */
   async initialize(): Promise<boolean> {
+    // Already initialized
     if (this.initialized) return true;
 
+    // If initialization is in progress, wait for it
+    if (this.initializingPromise) {
+      return this.initializingPromise;
+    }
+
+    // Start initialization with lock
+    this.initializingPromise = this.doInitialize();
+    
+    try {
+      return await this.initializingPromise;
+    } finally {
+      this.initializingPromise = null;
+    }
+  }
+
+  /**
+   * Internal initialization logic
+   */
+  private async doInitialize(): Promise<boolean> {
     try {
       // Wait for settings manager to finish decrypting sensitive data
       await settingsManager.waitForInitialization();
@@ -68,26 +114,52 @@ class SWTaskQueueService {
         return false;
       }
 
-      const success = await swTaskQueueClient.initialize(
-        {
+      // Initialize SW channel
+      const success = await swChannelClient.initialize();
+      if (!success) {
+        return false;
+      }
+
+      // Initialize SW with config
+      const initResult = await swChannelClient.init({
+        geminiConfig: {
           apiKey: settings.apiKey,
           baseUrl: settings.baseUrl,
           modelName: settings.imageModelName,
+          textModelName: settings.textModelName,
         },
-        {
+        videoConfig: {
           baseUrl: settings.baseUrl || 'https://api.tu-zi.com',
           apiKey: settings.apiKey,
-        }
-      );
+        },
+      });
 
-      this.initialized = success;
-      // SW will push all tasks after initialization via TASK_ALL_RESPONSE
-
-      return success;
-    } catch (error) {
-      console.error('[SWTaskQueueService] Failed to initialize:', error);
+      this.initialized = initResult.success;
+      if (this.initialized) {
+        // 设置 visibility 监听器，页面可见时同步状态
+        this.setupVisibilityListener();
+      }
+      return this.initialized;
+    } catch {
       return false;
     }
+  }
+
+  /**
+   * Check if the service is initialized (SW init RPC succeeded)
+   */
+  isInitialized(): boolean {
+    return this.initialized;
+  }
+
+  /**
+   * Re-initialize SW (for cases where init RPC timed out but channel is ready)
+   * This is a public wrapper around doInitialize that resets the initialized flag
+   */
+  async initializeSW(): Promise<boolean> {
+    // Reset initialized flag to allow re-initialization
+    this.initialized = false;
+    return this.initialize();
   }
 
   /**
@@ -102,7 +174,6 @@ class SWTaskQueueService {
     const sanitizedParams = sanitizeGenerationParams(params);
 
     // Create task locally for immediate UI feedback
-    // Task starts as PROCESSING since it will be executed immediately by SW
     const now = Date.now();
     const task: Task = {
       id: generateTaskId(),
@@ -119,7 +190,7 @@ class SWTaskQueueService {
     this.tasks.set(task.id, task);
     this.emitEvent('taskCreated', task);
 
-    // Submit to SW (SW will broadcast TASK_CREATED to confirm)
+    // Submit to SW
     this.submitToSW(task);
 
     return task;
@@ -133,34 +204,25 @@ class SWTaskQueueService {
     return Array.from(this.tasks.values());
   }
 
-  /**
-   * @deprecated Tasks no longer use PENDING status. New tasks start as PROCESSING.
-   * Kept for backward compatibility with legacy data.
-   */
-  getPendingTasks(): Task[] {
-    return this.getAllTasks().filter((t) => t.status === TaskStatus.PENDING);
-  }
-
   getTasksByStatus(status: TaskStatus): Task[] {
     return this.getAllTasks().filter((t) => t.status === status);
   }
 
-  cancelTask(taskId: string): void {
+  async cancelTask(taskId: string): Promise<void> {
     if (!this.tasks.has(taskId)) return;
-    swTaskQueueClient.cancelTask(taskId);
+    await swChannelClient.cancelTask(taskId);
   }
 
-  retryTask(taskId: string): void {
+  async retryTask(taskId: string): Promise<void> {
     const task = this.tasks.get(taskId);
-    if (!task || (task.status !== TaskStatus.FAILED && task.status !== TaskStatus.CANCELLED)) return;
-    swTaskQueueClient.retryTask(taskId);
+    if (!task || (task.status !== TaskStatus.FAILED && task.status !== TaskStatus.CANCELLED)) {
+      return;
+    }
+    await swChannelClient.retryTask(taskId);
   }
 
-  deleteTask(taskId: string): void {
-    // Always send delete request to SW, even if task is not in local cache
-    // SW is the source of truth and will handle the deletion
-    swTaskQueueClient.deleteTask(taskId);
-    // Also remove from local cache immediately for responsive UI
+  async deleteTask(taskId: string): Promise<void> {
+    await swChannelClient.deleteTask(taskId);
     if (this.tasks.has(taskId)) {
       const task = this.tasks.get(taskId)!;
       this.tasks.delete(taskId);
@@ -177,68 +239,224 @@ class SWTaskQueueService {
   }
 
   /**
-   * Restore tasks from storage (for migration from legacy storage)
-   * This adds tasks to local state and syncs them to SW
+   * Restore tasks from storage (for cloud sync or migration)
+   * 恢复任务到本地状态、持久化到 SW 并通知 UI 更新
    */
   async restoreTasks(tasks: Task[]): Promise<void> {
-    // Convert Task to SWTask format for SW
-    const swTasks = tasks.map((task) => ({
+    // 过滤出本地不存在的任务
+    const tasksToRestore = tasks.filter(task => !this.tasks.has(task.id));
+
+    if (tasksToRestore.length === 0) {
+      return;
+    }
+
+    // 转换为 SWTask 格式并导入到 SW
+    const swTasks: SWTask[] = tasksToRestore.map(task => this.convertTaskToSWTask(task));
+
+    // 调用 SW 的 importTasks 方法持久化任务
+    const result = await swChannelClient.importTasks(swTasks);
+    
+    if (result.success) {
+      // 添加到本地内存
+      for (const task of tasksToRestore) {
+        this.tasks.set(task.id, task);
+        this.emitEvent('taskCreated', task);
+      }
+      
+      // 更新分页状态
+      this.paginationState.total = this.tasks.size;
+      this.paginationState.loadedCount = this.tasks.size;
+    } else {
+      console.error('[SWTaskQueue] Failed to import tasks:', result.error);
+    }
+  }
+  
+  /**
+   * 将 Task 转换为 SWTask 格式
+   */
+  private convertTaskToSWTask(task: Task): SWTask {
+    return {
       id: task.id,
-      type: task.type,
-      params: task.params,
-      status: task.status,
-      progress: task.progress,
+      type: task.type as 'image' | 'video',
+      params: task.params as SWTask['params'],
+      status: task.status as SWTask['status'],
+      createdAt: task.createdAt,
+      completedAt: task.completedAt,
       result: task.result,
       error: task.error,
-      remoteId: task.remoteId,
-      executionPhase: task.executionPhase,
-      createdAt: task.createdAt,
-      startedAt: task.startedAt,
-      completedAt: task.completedAt,
-      updatedAt: task.updatedAt,
-    }));
+      progress: task.progress,
+      phase: task.executionPhase as SWTask['phase'],
+      insertedToCanvas: task.insertedToCanvas,
+    };
+  }
 
-    // Restore to SW
-    await swTaskQueueClient.restoreTasks(swTasks);
+  /** 分页状态 */
+  private paginationState = {
+    total: 0,
+    loadedCount: 0,
+    hasMore: true,
+    pageSize: 50,
+  };
 
-    // Add to local state (don't emit events to avoid triggering auto-insert)
-    for (const task of tasks) {
-      this.tasks.set(task.id, task);
+  /**
+   * Sync tasks from Service Worker to local state
+   * 只加载第一页，避免内存溢出
+   * 
+   * 注意：即使 init RPC 超时，也尝试同步任务数据
+   * 因为 SW 可能已经有持久化的配置和任务
+   */
+  async syncTasksFromSW(): Promise<void> {
+    // 尝试确保 channel 可用（不依赖 init 成功）
+    if (!swChannelClient.isInitialized()) {
+      // 尝试重新初始化 channel
+      const channelReady = await swChannelClient.initialize();
+      if (!channelReady) {
+        return;
+      }
+    }
+    
+    try {
+      // 只加载第一页
+      const result = await swChannelClient.listTasksPaginated({ 
+        offset: 0, 
+        limit: this.paginationState.pageSize 
+      });
+      
+      if (!result.success) return;
+      
+      // 清空现有任务，重新加载
+      this.tasks.clear();
+      
+      for (const swTask of result.tasks || []) {
+        const task = this.convertSWTaskToTask(swTask);
+        this.tasks.set(task.id, task);
+      }
+      
+      // 更新分页状态
+      this.paginationState.total = result.total;
+      this.paginationState.loadedCount = result.tasks?.length || 0;
+      this.paginationState.hasMore = result.hasMore;
+      
+      // 如果同步到任务数据，标记为已初始化（即使 init RPC 失败）
+      if (this.paginationState.loadedCount > 0 && !this.initialized) {
+        this.initialized = true;
+        this.setupVisibilityListener();
+      }
+    } catch {
+      // 静默忽略同步错误
     }
   }
 
   /**
-   * Sync tasks from Service Worker to local state
-   * Called after page load to get current task state from SW
+   * 加载更多任务（分页）
+   * @returns 是否还有更多数据
    */
-  async syncTasksFromSW(): Promise<void> {
-    try {
-      const swTasks = await swTaskQueueClient.requestAllTasks();
-      
-      for (const swTask of swTasks) {
-        const task: Task = {
-          id: swTask.id,
-          type: swTask.type,
-          params: swTask.params,
-          status: swTask.status,
-          progress: swTask.progress || 0,
-          result: swTask.result,
-          error: swTask.error,
-          remoteId: swTask.remoteId,
-          executionPhase: swTask.executionPhase,
-          createdAt: swTask.createdAt,
-          startedAt: swTask.startedAt,
-          completedAt: swTask.completedAt,
-          updatedAt: swTask.updatedAt,
-        };
-        
-        // Add to local state without emitting events (to avoid duplicate auto-insert)
-        this.tasks.set(task.id, task);
+  async loadMoreTasks(): Promise<boolean> {
+    if (!this.paginationState.hasMore) {
+      return false;
+    }
+
+    // 尝试确保 channel 可用
+    if (!swChannelClient.isInitialized()) {
+      const channelReady = await swChannelClient.initialize();
+      if (!channelReady) {
+        return false;
       }
-      
-      // console.log(`[SWTaskQueueService] Synced ${swTasks.length} tasks from SW`);
-    } catch (error) {
-      console.error('[SWTaskQueueService] Failed to sync tasks from SW:', error);
+    }
+
+    try {
+      const result = await swChannelClient.listTasksPaginated({
+        offset: this.paginationState.loadedCount,
+        limit: this.paginationState.pageSize,
+      });
+
+      if (!result.success) {
+        return false;
+      }
+
+      // 追加新任务
+      for (const swTask of result.tasks || []) {
+        const task = this.convertSWTaskToTask(swTask);
+        // 避免重复添加（可能是新创建的任务已经通过事件添加了）
+        if (!this.tasks.has(task.id)) {
+          this.tasks.set(task.id, task);
+        }
+      }
+
+      // 更新分页状态
+      this.paginationState.total = result.total;
+      this.paginationState.loadedCount += result.tasks?.length || 0;
+      this.paginationState.hasMore = result.hasMore;
+
+      // 通知 UI 更新
+      this.emitEvent('taskSynced', Array.from(this.tasks.values())[0] || ({} as Task));
+
+      return this.paginationState.hasMore;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * 获取分页状态
+   */
+  getPaginationState(): { total: number; loadedCount: number; hasMore: boolean } {
+    return {
+      total: this.paginationState.total,
+      loadedCount: this.paginationState.loadedCount,
+      hasMore: this.paginationState.hasMore,
+    };
+  }
+
+  /**
+   * 按类型加载任务（用于弹窗中的任务列表）
+   * 直接从 SW 查询，不影响全局任务缓存
+   * 
+   * @param type 任务类型（image/video）
+   * @param offset 偏移量
+   * @param limit 每页数量
+   * @returns 分页结果
+   */
+  async loadTasksByType(
+    type: TaskType,
+    offset: number = 0,
+    limit: number = 50
+  ): Promise<{ 
+    success: boolean; 
+    tasks: Task[]; 
+    total: number; 
+    hasMore: boolean;
+  }> {
+    // 尝试确保 channel 可用
+    if (!swChannelClient.isInitialized()) {
+      const channelReady = await swChannelClient.initialize();
+      if (!channelReady) {
+        return { success: false, tasks: [], total: 0, hasMore: false };
+      }
+    }
+
+    try {
+      const result = await swChannelClient.listTasksPaginated({
+        offset,
+        limit,
+        type: type as 'image' | 'video',
+      });
+
+      if (!result.success) {
+        return { success: false, tasks: [], total: 0, hasMore: false };
+      }
+
+      // 转换任务格式
+      const tasks = (result.tasks || []).map(swTask => this.convertSWTaskToTask(swTask));
+
+      return {
+        success: true,
+        tasks,
+        total: result.total,
+        hasMore: result.hasMore,
+      };
+    } catch {
+      return { success: false, tasks: [], total: 0, hasMore: false };
     }
   }
 
@@ -271,8 +489,7 @@ class SWTaskQueueService {
       updatedAt: Date.now(),
     };
     this.tasks.set(taskId, updatedTask);
-    // Notify SW to persist this flag
-    swTaskQueueClient.markTaskInserted(taskId);
+    swChannelClient.markTaskInserted(taskId);
   }
 
   observeTaskUpdates(): Observable<TaskEvent> {
@@ -280,7 +497,7 @@ class SWTaskQueueService {
   }
 
   isServiceWorkerAvailable(): boolean {
-    return swTaskQueueClient.isServiceWorkerSupported();
+    return 'serviceWorker' in navigator;
   }
 
   // ============================================================================
@@ -288,15 +505,13 @@ class SWTaskQueueService {
   // ============================================================================
 
   private setupSWClientHandlers(): void {
-    swTaskQueueClient.setTaskHandlers({
-      onCreated: (swTask) => this.handleSWTaskCreated(swTask),
-      onStatus: (taskId, status, progress, phase) => this.handleSWStatus(taskId, status, progress, phase),
-      onCompleted: (taskId, result, remoteId) => this.handleSWCompleted(taskId, result, remoteId),
-      onFailed: (taskId, error) => this.handleSWFailed(taskId, error),
-      onSubmitted: (taskId, remoteId) => this.handleSWSubmitted(taskId, remoteId),
-      onCancelled: (taskId) => this.handleSWCancelled(taskId),
-      onDeleted: (taskId) => this.handleSWDeleted(taskId),
-      onTasksSync: (swTasks) => this.handleTasksSync(swTasks),
+    swChannelClient.setEventHandlers({
+      onTaskCreated: (event) => this.handleSWTaskCreated(event.task),
+      onTaskStatus: (event) => this.handleSWStatus(event.taskId, event.status as TaskStatus, event.progress, event.phase as TaskExecutionPhase),
+      onTaskCompleted: (event) => this.handleSWCompleted(event.taskId, event.result as TaskResult, event.remoteId),
+      onTaskFailed: (event) => this.handleSWFailed(event.taskId, event.error as TaskError),
+      onTaskCancelled: (taskId) => this.handleSWCancelled(taskId),
+      onTaskDeleted: (taskId) => this.handleSWDeleted(taskId),
     });
   }
 
@@ -305,38 +520,20 @@ class SWTaskQueueService {
     const existing = this.tasks.get(task.id);
 
     if (existing) {
-      // Update with SW's authoritative state
+      // 任务已存在，只更新状态
       this.tasks.set(task.id, task);
     } else {
-      // Task created by SW (e.g., from another tab)
+      // 新任务（来自其他客户端），添加并通知 UI
       this.tasks.set(task.id, task);
       this.emitEvent('taskCreated', task);
-    }
-  }
-
-  private handleTasksSync(swTasks: SWTask[]): void {
-    for (const swTask of swTasks) {
-      const task = this.convertSWTaskToTask(swTask);
-      const existingTask = this.tasks.get(task.id);
-
-      if (!existingTask || existingTask.updatedAt < task.updatedAt) {
-        this.tasks.set(task.id, task);
-
-        // Use 'taskSynced' for terminal states to avoid triggering auto-insert
-        if (task.status === TaskStatus.COMPLETED || task.status === TaskStatus.FAILED) {
-          this.emitEvent('taskSynced', task);
-        } else {
-          this.emitEvent('taskUpdated', task);
-        }
-      }
     }
   }
 
   private convertSWTaskToTask(swTask: SWTask): Task {
     return {
       id: swTask.id,
-      type: swTask.type,
-      status: swTask.status,
+      type: swTask.type as TaskType,
+      status: swTask.status as TaskStatus,
       params: swTask.params,
       createdAt: swTask.createdAt,
       updatedAt: swTask.updatedAt,
@@ -346,8 +543,7 @@ class SWTaskQueueService {
       error: swTask.error,
       progress: swTask.progress,
       remoteId: swTask.remoteId,
-      executionPhase: swTask.executionPhase,
-      savedToLibrary: swTask.savedToLibrary,
+      executionPhase: swTask.executionPhase as TaskExecutionPhase,
       insertedToCanvas: swTask.insertedToCanvas,
     };
   }
@@ -356,31 +552,53 @@ class SWTaskQueueService {
     if (!this.initialized) {
       const success = await this.initialize();
       if (!success) {
-        console.warn(`[SWTaskQueueService] Cannot submit task ${task.id}: not initialized (no API key)`);
-        // Remove from local tasks since it can't be submitted
         this.tasks.delete(task.id);
         this.emitEvent('taskRejected', task, 'NO_API_KEY');
         return;
       }
     }
-    swTaskQueueClient.submitTask(task.id, task.type, task.params);
+
+    const result = await swChannelClient.createTask({
+      taskId: task.id,
+      taskType: task.type as 'image' | 'video',
+      params: task.params,
+    });
+
+    if (!result.success) {
+      if (result.reason === 'duplicate') {
+        this.tasks.delete(task.id);
+        this.emitEvent('taskRejected', task, 'DUPLICATE');
+      } else {
+        this.tasks.delete(task.id);
+        this.emitEvent('taskRejected', task, result.reason || 'UNKNOWN');
+      }
+    }
   }
 
-  private handleSWStatus(
+  private async handleSWStatus(
     taskId: string,
     status: TaskStatus,
     progress?: number,
     phase?: TaskExecutionPhase
-  ): void {
-    // Terminal states handled by specific handlers
+  ): Promise<void> {
     if (status === TaskStatus.COMPLETED || status === TaskStatus.FAILED || status === TaskStatus.CANCELLED) {
       return;
     }
 
-    const task = this.tasks.get(taskId);
+    let task = this.tasks.get(taskId);
     if (!task) {
-      console.warn(`[SWTaskQueueService] Task ${taskId} not found for status update`);
-      return;
+      // 任务不在本地，可能是其他页面创建的任务，尝试从 SW 获取
+      try {
+        const swTask = await swChannelClient.getTask(taskId);
+        if (swTask) {
+          task = this.convertSWTaskToTask(swTask);
+          this.tasks.set(taskId, task);
+        } else {
+          return;
+        }
+      } catch {
+        return;
+      }
     }
 
     const updates: Partial<Task> = {};
@@ -390,18 +608,25 @@ class SWTaskQueueService {
     this.updateTaskStatus(taskId, status, updates);
   }
 
-  private handleSWCompleted(taskId: string, result: TaskResult, remoteId?: string): void {
-    const task = this.tasks.get(taskId);
+  private async handleSWCompleted(taskId: string, result: TaskResult, remoteId?: string): Promise<void> {
+    let task = this.tasks.get(taskId);
+    
     if (!task) {
-      console.warn(`[SWTaskQueueService] Task ${taskId} not found for completion`);
-      return;
+      // 任务不在本地，尝试从 SW 获取
+      try {
+        const swTask = await swChannelClient.getTask(taskId);
+        if (swTask) {
+          task = this.convertSWTaskToTask(swTask);
+          this.tasks.set(taskId, task);
+        } else {
+          return;
+        }
+      } catch {
+        return;
+      }
     }
 
-    // Recover remoteId if it was missing but now provided
     const finalRemoteId = task.remoteId || remoteId;
-    if (remoteId && !task.remoteId) {
-      console.warn(`[SWTaskQueueService] Recovering missing remoteId for task ${taskId}: ${remoteId}`);
-    }
 
     this.updateTaskStatus(taskId, TaskStatus.COMPLETED, {
       result,
@@ -411,45 +636,58 @@ class SWTaskQueueService {
     });
   }
 
-  private handleSWFailed(
-    taskId: string,
-    error: TaskError
-  ): void {
-    const task = this.tasks.get(taskId);
+  private async handleSWFailed(taskId: string, error: TaskError): Promise<void> {
+    let task = this.tasks.get(taskId);
     if (!task) {
-      console.warn(`[SWTaskQueueService] Task ${taskId} not found for failure`);
-      return;
+      // 任务不在本地，尝试从 SW 获取
+      try {
+        const swTask = await swChannelClient.getTask(taskId);
+        if (swTask) {
+          task = this.convertSWTaskToTask(swTask);
+          this.tasks.set(taskId, task);
+        } else {
+          return;
+        }
+      } catch {
+        return;
+      }
     }
 
     this.updateTaskStatus(taskId, TaskStatus.FAILED, { error });
   }
 
-  private handleSWSubmitted(taskId: string, remoteId: string): void {
-    const task = this.tasks.get(taskId);
+  private async handleSWCancelled(taskId: string): Promise<void> {
+    let task = this.tasks.get(taskId);
     if (!task) {
-      console.warn(`[SWTaskQueueService] Task ${taskId} not found for submission`);
-      return;
+      // 任务不在本地，尝试从 SW 获取
+      try {
+        const swTask = await swChannelClient.getTask(taskId);
+        if (swTask) {
+          task = this.convertSWTaskToTask(swTask);
+          this.tasks.set(taskId, task);
+        } else {
+          return;
+        }
+      } catch {
+        return;
+      }
     }
-
-    const updatedTask: Task = {
-      ...task,
-      remoteId,
-      executionPhase: TaskExecutionPhase.POLLING,
-      updatedAt: Date.now(),
-    };
-
-    this.tasks.set(taskId, updatedTask);
-    this.emitEvent('taskUpdated', updatedTask);
-  }
-
-  private handleSWCancelled(taskId: string): void {
-    const task = this.tasks.get(taskId);
-    if (!task) return;
     this.updateTaskStatus(taskId, TaskStatus.CANCELLED);
   }
 
-  private handleSWDeleted(taskId: string): void {
-    const task = this.tasks.get(taskId);
+  private async handleSWDeleted(taskId: string): Promise<void> {
+    let task = this.tasks.get(taskId);
+    if (!task) {
+      // 即使任务不在本地，也尝试从 SW 获取以便发出正确的事件
+      try {
+        const swTask = await swChannelClient.getTask(taskId);
+        if (swTask) {
+          task = this.convertSWTaskToTask(swTask);
+        }
+      } catch {
+        // 忽略错误
+      }
+    }
     if (task) {
       this.tasks.delete(taskId);
       this.emitEvent('taskDeleted', task);
@@ -458,10 +696,7 @@ class SWTaskQueueService {
 
   private updateTaskStatus(taskId: string, status: TaskStatus, updates?: Partial<Task>): void {
     const task = this.tasks.get(taskId);
-    if (!task) {
-      console.warn(`[SWTaskQueueService] updateTaskStatus: task ${taskId} not found`);
-      return;
-    }
+    if (!task) return;
 
     const now = Date.now();
     const updatedTask: Task = {
@@ -478,7 +713,6 @@ class SWTaskQueueService {
     }
 
     this.tasks.set(taskId, updatedTask);
-    // console.log(`[SWTaskQueueService] Emitting taskUpdated for ${taskId}, status: ${status}, autoInsertToCanvas: ${updatedTask.params?.autoInsertToCanvas}`);
     this.emitEvent('taskUpdated', updatedTask);
   }
 

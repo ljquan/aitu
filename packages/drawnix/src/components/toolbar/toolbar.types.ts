@@ -39,6 +39,10 @@ export interface UnifiedToolbarProps {
    * (可选) 备份恢复对话框打开回调
    */
   onOpenBackupRestore?: () => void;
+  /**
+   * (可选) 云端同步设置打开回调
+   */
+  onOpenCloudSync?: () => void;
 }
 
 /**

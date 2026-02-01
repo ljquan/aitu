@@ -77,6 +77,9 @@ importers:
       open-color:
         specifier: ^1.9.1
         version: 1.9.1
+      postmessage-duplex:
+        specifier: ^1.1.1
+        version: 1.1.1
       react:
         specifier: 18.3.1
         version: 18.3.1
@@ -312,6 +315,9 @@ importers:
       open-color:
         specifier: ^1.9.1
         version: 1.9.1
+      postmessage-duplex:
+        specifier: ^1.1.0
+        version: 1.1.0
       web-vitals:
         specifier: ^5.1.0
         version: 5.1.0
@@ -6503,6 +6509,14 @@ packages:
   postcss@8.5.6:
     resolution: {integrity: sha512-3Ybi1tAuwAP9s0r1UQ2J4n5Y0G05bJkpUIO0/bI9MhwmD70S5aTWbXGBwxHrelT+XM1k6dM0pk+SwNkpTRN7Pg==}
     engines: {node: ^10 || ^12 || >=14}
+
+  postmessage-duplex@1.1.0:
+    resolution: {integrity: sha512-oLjBLL8AYVnSR95N8k1rUT+BulVkLsVgEUf//Ck6HjiFT1yVmAOi4Zv3iN1dLV1l2zG185ZSxC/uoMDcvN35CA==}
+    engines: {node: '>=18.0.0'}
+
+  postmessage-duplex@1.1.1:
+    resolution: {integrity: sha512-qf8A0NbWjrsm4q6KLnWT2ljqvukjOZcG/tWSvlxYwQQLVbMGZSVdwf0graj1cVsqz8kwm86yCRfR1S+XybnR5w==}
+    engines: {node: '>=18.0.0'}
 
   prebuild-install@7.1.3:
     resolution: {integrity: sha512-8Mf2cbV7x1cXPUILADGI3wuhfqWvtiLA1iclTDbFRZkgRQS0NqsPZphna9V+HyTEadheuPmjaJMsbzKQFOzLug==}
@@ -15752,6 +15766,10 @@ snapshots:
       nanoid: 3.3.11
       picocolors: 1.1.1
       source-map-js: 1.2.1
+
+  postmessage-duplex@1.1.0: {}
+
+  postmessage-duplex@1.1.1: {}
 
   prebuild-install@7.1.3:
     dependencies:

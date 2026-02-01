@@ -215,6 +215,8 @@
       api_host: 'https://us.i.posthog.com',
       defaults: '2025-11-30',
       person_profiles: 'identified_only',
+      // 静默网络错误，避免控制台报错
+      on_xhr_error: function() {},
     });
   </script>
 </html>

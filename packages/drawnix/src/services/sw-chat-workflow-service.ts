@@ -10,13 +10,13 @@ import type { ChatMessage } from '../types/chat.types';
 import { MessageRole } from '../types/chat.types';
 import {
   chatWorkflowClient,
-  type ChatParams,
+  swChannelClient,
+  type ChatStartParams,
   type ChatAttachment,
   type ChatToolCall,
   type ChatWorkflowEventHandlers,
-} from './sw-client';
-import { swTaskQueueClient } from './sw-client';
-import { geminiSettings } from '../utils/settings-manager';
+} from './sw-channel';
+import { geminiSettings, settingsManager } from '../utils/settings-manager';
 import { analytics } from '../utils/posthog-analytics';
 
 // Track active chat workflows
@@ -51,7 +51,7 @@ async function fileToAttachment(file: File): Promise<ChatAttachment> {
 /**
  * Convert ChatMessage array to SW format
  */
-function convertMessages(messages: ChatMessage[]): import('./sw-client').ChatMessage[] {
+function convertMessages(messages: ChatMessage[]): import('./sw-channel').ChatMessage[] {
   return messages
     .filter((m) => m.status === 'success' || m.status === 'streaming')
     .map((m) => ({
@@ -125,17 +125,19 @@ export async function sendChatWorkflow(
     });
 
     // Ensure SW client is initialized
-    if (!swTaskQueueClient.isInitialized()) {
-      await swTaskQueueClient.initialize(
-        {
+    if (!swChannelClient.isInitialized()) {
+      await settingsManager.waitForInitialization();
+      await swChannelClient.initialize();
+      await swChannelClient.init({
+        geminiConfig: {
           apiKey: settings.apiKey,
           baseUrl: settings.baseUrl,
           modelName: settings.chatModel,
         },
-        {
+        videoConfig: {
           baseUrl: 'https://api.tu-zi.com',
-        }
-      );
+        },
+      });
     }
 
     // Convert attachments to base64
