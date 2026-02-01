@@ -326,17 +326,40 @@ class TaskRepository {
 
   /**
    * Import tasks (for cloud sync restore)
+   * 使用去重合并策略：
+   * - 本地不存在的任务直接添加
+   * - 本地已存在的任务，比较更新时间，保留更新时间较新的版本
    */
   async importTasks(tasks: Task[]): Promise<boolean> {
-    const tasksToRestore = tasks.filter(task => !this.tasks.has(task.id));
+    // 分类：需要添加的新任务 和 需要更新的任务
+    const tasksToAdd: Task[] = [];
+    const tasksToUpdate: Task[] = [];
+    
+    for (const task of tasks) {
+      const localTask = this.tasks.get(task.id);
+      if (!localTask) {
+        // 本地不存在，需要添加
+        tasksToAdd.push(task);
+      } else if (task.updatedAt > localTask.updatedAt) {
+        // 远程更新时间较新，需要更新
+        tasksToUpdate.push(task);
+      }
+      // 如果本地更新时间较新，保留本地版本（不做任何操作）
+    }
+    
+    const tasksToRestore = [...tasksToAdd, ...tasksToUpdate];
     if (tasksToRestore.length === 0) return true;
 
     const result = await swChannelClient.importTasks(tasksToRestore);
     
     if (result.success) {
-      for (const task of tasksToRestore) {
+      for (const task of tasksToAdd) {
         this.tasks.set(task.id, task);
         this.emitEvent('taskCreated', task);
+      }
+      for (const task of tasksToUpdate) {
+        this.tasks.set(task.id, task);
+        this.emitEvent('taskUpdated', task);
       }
       this.paginationState.total = this.tasks.size;
       this.paginationState.loadedCount = this.tasks.size;
@@ -351,6 +374,7 @@ class TaskRepository {
 
   /**
    * Sync tasks from SW (first page)
+   * 使用去重合并策略：保留更新时间较新的版本
    */
   async sync(): Promise<void> {
     if (!swChannelClient.isInitialized()) {
@@ -366,13 +390,23 @@ class TaskRepository {
 
       if (!result.success) return;
 
-      this.tasks.clear();
-      for (const task of result.tasks || []) {
-        this.tasks.set(task.id, task);
+      // 去重合并：遍历远程任务，与本地合并
+      for (const remoteTask of result.tasks || []) {
+        const localTask = this.tasks.get(remoteTask.id);
+        if (localTask) {
+          // 本地已有该任务，比较更新时间，保留更新时间较新的版本
+          if (remoteTask.updatedAt > localTask.updatedAt) {
+            this.tasks.set(remoteTask.id, remoteTask);
+          }
+          // 如果本地更新时间更晚，保留本地版本（不做任何操作）
+        } else {
+          // 本地没有该任务，添加远程任务
+          this.tasks.set(remoteTask.id, remoteTask);
+        }
       }
 
       this.paginationState.total = result.total;
-      this.paginationState.loadedCount = result.tasks?.length || 0;
+      this.paginationState.loadedCount = this.tasks.size;
       this.paginationState.hasMore = result.hasMore;
 
       if (this.paginationState.loadedCount > 0 && !this.initialized) {
@@ -386,6 +420,7 @@ class TaskRepository {
 
   /**
    * Load more tasks (pagination)
+   * 使用去重合并策略：保留更新时间较新的版本
    */
   async loadMore(): Promise<boolean> {
     if (!this.paginationState.hasMore) return false;
@@ -403,14 +438,22 @@ class TaskRepository {
 
       if (!result.success) return false;
 
-      for (const task of result.tasks || []) {
-        if (!this.tasks.has(task.id)) {
-          this.tasks.set(task.id, task);
+      // 去重合并：保留更新时间较新的版本
+      for (const remoteTask of result.tasks || []) {
+        const localTask = this.tasks.get(remoteTask.id);
+        if (localTask) {
+          // 本地已有该任务，比较更新时间
+          if (remoteTask.updatedAt > localTask.updatedAt) {
+            this.tasks.set(remoteTask.id, remoteTask);
+          }
+        } else {
+          // 本地没有该任务，添加
+          this.tasks.set(remoteTask.id, remoteTask);
         }
       }
 
       this.paginationState.total = result.total;
-      this.paginationState.loadedCount += result.tasks?.length || 0;
+      this.paginationState.loadedCount = this.tasks.size;
       this.paginationState.hasMore = result.hasMore;
 
       return this.paginationState.hasMore;

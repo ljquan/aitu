@@ -600,57 +600,52 @@ class DataSerializer {
     }
 
     // 应用任务（恢复已完成的任务记录到本地）
+    // 使用去重合并策略：传递所有远程任务，由 importTasks 根据更新时间决定是否合并
     console.log('[DataSerializer] Applying tasks...', {
       hasTasks: !!data.tasks,
       completedTasksCount: data.tasks?.completedTasks?.length || 0,
     });
     
     if (data.tasks && data.tasks.completedTasks && data.tasks.completedTasks.length > 0) {
-      // 获取本地任务 ID 集合
+      // 获取本地任务用于日志
       const localTasks = swTaskQueueService.getAllTasks();
-      const localTaskIds = new Set(localTasks.map(t => t.id));
       
       console.log('[DataSerializer] Local tasks:', {
         count: localTasks.length,
-        ids: Array.from(localTaskIds).slice(0, 5), // 只显示前5个
+        ids: localTasks.slice(0, 5).map(t => t.id),
       });
       
-      // 筛选出本地不存在的任务
-      const tasksToRestore = data.tasks.completedTasks.filter(
-        task => !localTaskIds.has(task.id)
-      );
-      
-      console.log('[DataSerializer] Tasks to restore:', {
-        count: tasksToRestore.length,
-        ids: tasksToRestore.slice(0, 5).map(t => t.id),
+      console.log('[DataSerializer] Remote tasks:', {
+        count: data.tasks.completedTasks.length,
+        ids: data.tasks.completedTasks.slice(0, 5).map(t => t.id),
       });
       
-      if (tasksToRestore.length > 0) {
-        // 标记需要从云端下载媒体的任务（保留原始 URL 不变）
-        const processedTasks = tasksToRestore.map(task => {
-          // 如果任务有本地缓存 URL，标记为需要下载媒体
-          if (task.result?.url?.startsWith('/__aitu_cache__/')) {
-            return {
-              ...task,
-              result: {
-                ...task.result,
-                needsMediaDownload: true, // 标记需要下载媒体
-              },
-            };
-          }
-          return task;
-        });
-        
-        console.log('[DataSerializer] Calling restoreTasks with', processedTasks.length, 'tasks');
-        try {
-          await swTaskQueueService.restoreTasks(processedTasks);
-          tasksApplied = processedTasks.length;
-          console.log('[DataSerializer] Tasks restored:', tasksApplied);
-        } catch (err) {
-          // SW 可能未初始化或超时，跳过任务恢复但继续同步
-          console.warn('[DataSerializer] Failed to restore tasks (SW may not be ready):', err);
-          tasksApplied = 0;
+      // 标记需要从云端下载媒体的任务（保留原始 URL 不变）
+      const processedTasks = data.tasks.completedTasks.map(task => {
+        // 如果任务有本地缓存 URL，标记为需要下载媒体
+        if (task.result?.url?.startsWith('/__aitu_cache__/')) {
+          return {
+            ...task,
+            result: {
+              ...task.result,
+              needsMediaDownload: true, // 标记需要下载媒体
+            },
+          };
         }
+        return task;
+      });
+      
+      console.log('[DataSerializer] Calling restoreTasks with', processedTasks.length, 'tasks (merge strategy)');
+      try {
+        // restoreTasks 内部使用 importTasks，会进行去重合并
+        // 只有本地不存在或远程更新时间较新的任务才会被添加/更新
+        await swTaskQueueService.restoreTasks(processedTasks);
+        tasksApplied = processedTasks.length;
+        console.log('[DataSerializer] Tasks merge completed, processed:', tasksApplied);
+      } catch (err) {
+        // SW 可能未初始化或超时，跳过任务恢复但继续同步
+        console.warn('[DataSerializer] Failed to restore tasks (SW may not be ready):', err);
+        tasksApplied = 0;
       }
     } else {
       console.log('[DataSerializer] No tasks to apply');

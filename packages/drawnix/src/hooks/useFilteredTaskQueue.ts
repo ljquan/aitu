@@ -67,21 +67,21 @@ export function useFilteredTaskQueue(
     try {
       const result = await swTaskQueueService.loadTasksByType(taskType, offset, pageSize);
       
-      if (result.success) {
-        if (append) {
-          // 追加数据，避免重复
-          setTasks(prev => {
-            const existingIds = new Set(prev.map(t => t.id));
-            const newTasks = result.tasks.filter(t => !existingIds.has(t.id));
-            return [...prev, ...newTasks];
-          });
-        } else {
-          // 替换数据
-          setTasks(result.tasks);
-        }
-        setTotalCount(result.total);
-        setHasMore(result.hasMore);
+      // PaginatedTaskResult 没有 success 字段，直接使用返回的数据
+      // 如果请求失败，loadTasksByType 会返回空数组
+      if (append) {
+        // 追加数据，避免重复
+        setTasks(prev => {
+          const existingIds = new Set(prev.map(t => t.id));
+          const newTasks = result.tasks.filter(t => !existingIds.has(t.id));
+          return [...prev, ...newTasks];
+        });
+      } else {
+        // 替换数据
+        setTasks(result.tasks);
       }
+      setTotalCount(result.total);
+      setHasMore(result.hasMore);
     } catch {
       // 静默忽略错误
     }
