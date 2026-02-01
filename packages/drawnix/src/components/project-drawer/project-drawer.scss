@@ -27,6 +27,28 @@
     padding: $spacing-sm 0;
   }
 
+  &__filter-section {
+    display: flex;
+    flex-direction: column;
+    gap: $spacing-sm;
+  }
+
+  &__selection-bar {
+    display: flex;
+    align-items: center;
+    gap: $spacing-xs;
+    padding: $spacing-xs $spacing-sm;
+    background: rgba(243, 156, 18, 0.12);
+    border-radius: 4px;
+    font-size: 12px;
+  }
+
+  &__selection-count {
+    flex: 1;
+    color: #F39C12;
+    font-weight: 500;
+  }
+
   &__footer-actions {
     display: flex;
     gap: $spacing-sm;
@@ -110,6 +132,18 @@
       }
     }
 
+    &--selected {
+      background: rgba(243, 156, 18, 0.12);
+
+      &:hover {
+        background: rgba(243, 156, 18, 0.18);
+      }
+    }
+
+    &--active#{&}--selected {
+      background: rgba(243, 156, 18, 0.15);
+    }
+
     &--folder {
       font-weight: 500;
     }
@@ -144,7 +178,7 @@
     }
 
     &--drag-over-inside {
-      background: var(--td-brand-color-light);
+      background: rgba(243, 156, 18, 0.12);
       outline: 2px solid var(--td-brand-color);
       outline-offset: -2px;
     }
@@ -185,7 +219,7 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     font-size: 14px;
-    cursor: text;
+    cursor: pointer;
     padding: 2px 4px;
     border-radius: 3px;
     transition: background-color 0.2s ease;
@@ -270,6 +304,77 @@
 
   &::after {
     right: -4px;
+  }
+}
+
+// ============================================================================
+// Context Menu
+// ============================================================================
+
+.project-drawer-context-menu {
+  min-width: 160px;
+  background: var(--td-bg-color-container);
+  border: 1px solid var(--td-border-level-2-color);
+  border-radius: 6px;
+  box-shadow: var(--td-shadow-2);
+  padding: 4px 0;
+  
+  &__item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    font-size: 13px;
+    color: var(--td-text-color-primary);
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+    
+    &:hover {
+      background: var(--td-bg-color-container-hover);
+    }
+    
+    &--danger {
+      color: var(--td-error-color);
+      
+      &:hover {
+        background: rgba(233, 30, 99, 0.08);
+      }
+    }
+    
+    svg {
+      width: 16px;
+      height: 16px;
+      flex-shrink: 0;
+    }
+  }
+  
+  &__divider {
+    height: 1px;
+    background: var(--td-border-level-1-color);
+    margin: 4px 0;
+  }
+  
+  &__submenu {
+    position: relative;
+    
+    &:hover > .project-drawer-context-menu__submenu-content {
+      display: block;
+    }
+  }
+  
+  &__submenu-content {
+    display: none;
+    position: absolute;
+    left: 100%;
+    top: -4px;
+    min-width: 140px;
+    background: var(--td-bg-color-container);
+    border: 1px solid var(--td-border-level-2-color);
+    border-radius: 6px;
+    box-shadow: var(--td-shadow-2);
+    padding: 4px 0;
+    max-height: 300px;
+    overflow-y: auto;
   }
 }
 

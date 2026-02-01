@@ -307,19 +307,10 @@ export async function pollVideoUntilComplete(
       await new Promise((resolve) => setTimeout(resolve, interval));
       attempts++;
     } catch (err) {
-      // 如果是业务失败错误，直接抛出，不重试
+      // 如果是业务失败错误（API 返回 status: "failed"），直接抛出，不重试
+      // 注意：即使错误信息包含 429，也不应该重试，因为任务状态已经是 "failed"
+      // 429 重试只应该针对轮询请求本身返回 429 的情况（网络层面的限流）
       if (err instanceof VideoGenerationFailedError) {
-        // 如果错误信息包含 429 或 Too Many Requests，说明是频率限制，应允许重试
-        const isRateLimit = err.message.includes('429') || err.message.toLowerCase().includes('too many requests');
-        if (isRateLimit && consecutiveErrors < maxConsecutiveErrors) {
-          consecutiveErrors++;
-          console.warn(`[VideoPolling] Business error looks like rate limit (#${consecutiveErrors}): ${err.message}, retrying...`);
-          // 根据连续错误次数增加等待时间（指数退避，最大 60 秒）
-          const backoffInterval = Math.min(interval * Math.pow(1.5, consecutiveErrors), 60000);
-          await new Promise((resolve) => setTimeout(resolve, backoffInterval));
-          attempts++;
-          continue;
-        }
         throw err;
       }
 

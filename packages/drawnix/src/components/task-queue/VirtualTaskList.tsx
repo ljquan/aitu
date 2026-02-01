@@ -37,6 +37,16 @@ export interface VirtualTaskListProps {
   emptyContent?: React.ReactNode;
   /** Force compact layout */
   isCompact?: boolean;
+  /** Whether there are more tasks to load */
+  hasMore?: boolean;
+  /** Whether more tasks are being loaded */
+  isLoadingMore?: boolean;
+  /** Callback to load more tasks */
+  onLoadMore?: () => void;
+  /** Total count of tasks */
+  totalCount?: number;
+  /** Loaded count of tasks */
+  loadedCount?: number;
 }
 
 // Threshold for enabling virtualization
@@ -61,11 +71,17 @@ export const VirtualTaskList: React.FC<VirtualTaskListProps> = ({
   className = '',
   emptyContent,
   isCompact: forcedIsCompact,
+  hasMore = false,
+  isLoadingMore = false,
+  onLoadMore,
+  totalCount,
+  loadedCount,
 }) => {
   const stableSelectedTaskIds = selectedTaskIds ?? EMPTY_SET;
   const parentRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLElement | null>(null);
+  const lastLoadMoreTimeRef = useRef<number>(0);
   // 惰性初始化：小屏幕默认使用紧凑布局（用屏幕宽度作为初始估计）
   const [internalIsCompact, setInternalIsCompact] = useState(() => {
     if (typeof window !== 'undefined' && window.innerWidth < COMPACT_LAYOUT_THRESHOLD) {
@@ -95,6 +111,53 @@ export const VirtualTaskList: React.FC<VirtualTaskListProps> = ({
     }
     return null;
   };
+
+  // 无限滚动：使用滚动事件监听替代 IntersectionObserver（更可靠）
+  useEffect(() => {
+    if (!hasMore || !onLoadMore) return;
+
+    const container = parentRef.current;
+    if (!container) return;
+
+    // 延迟设置滚动监听，确保滚动容器已就绪
+    const timer = setTimeout(() => {
+      // 查找实际的滚动容器
+      const selfScrollable = container.scrollHeight > container.clientHeight;
+      const scrollRoot = selfScrollable ? container : findScrollContainer(container);
+      scrollContainerRef.current = scrollRoot;
+
+      if (!scrollRoot) return;
+
+      const handleScroll = () => {
+        // 检查是否滚动到底部附近（距离底部 300px 时触发加载）
+        const { scrollTop, scrollHeight, clientHeight } = scrollRoot;
+        const distanceToBottom = scrollHeight - scrollTop - clientHeight;
+
+        // 防抖：距上次加载不足 500ms 不重复触发，避免滚动时 loadMore 级联导致崩溃
+        const now = Date.now();
+        if (now - lastLoadMoreTimeRef.current < 500) return;
+
+        if (distanceToBottom < 300 && hasMore && !isLoadingMore) {
+          lastLoadMoreTimeRef.current = now;
+          onLoadMore();
+        }
+      };
+
+      scrollRoot.addEventListener('scroll', handleScroll, { passive: true });
+      // 初始检查一次（可能内容不够一屏，需要立即加载更多）
+      handleScroll();
+
+      // 存储清理函数
+      (container as any).__loadMoreCleanup = () => {
+        scrollRoot.removeEventListener('scroll', handleScroll);
+      };
+    }, 150);
+
+    return () => {
+      clearTimeout(timer);
+      (container as any).__loadMoreCleanup?.();
+    };
+  }, [hasMore, isLoadingMore, onLoadMore, tasks.length]);
 
   // 监听滚动位置以显示/隐藏回到顶部按钮
   useEffect(() => {
@@ -198,6 +261,34 @@ export const VirtualTaskList: React.FC<VirtualTaskListProps> = ({
     );
   }
 
+  // 实际已加载数量（优先使用 tasks.length，因为它是最准确的）
+  const actualLoadedCount = tasks.length || loadedCount || 0;
+
+  // 加载更多指示器组件
+  const LoadMoreIndicator = () => (
+    <>
+      {/* 加载状态显示 */}
+      {isLoadingMore && (
+        <div className="virtual-task-list__loading-more">
+          <span className="virtual-task-list__loading-spinner" />
+          <span>加载中...</span>
+        </div>
+      )}
+      {/* 分页信息 - 有更多数据待加载时显示 */}
+      {hasMore && !isLoadingMore && totalCount !== undefined && totalCount > 0 && (
+        <div className="virtual-task-list__pagination-info">
+          已加载 {actualLoadedCount} / {totalCount}
+        </div>
+      )}
+      {/* 没有更多数据提示 - 全部加载完成时显示 */}
+      {!hasMore && tasks.length > 0 && totalCount !== undefined && totalCount > 50 && (
+        <div className="virtual-task-list__no-more">
+          已加载全部 {totalCount} 个任务
+        </div>
+      )}
+    </>
+  );
+
   // Simple rendering for small lists
   if (!useVirtualization) {
     return (
@@ -228,6 +319,7 @@ export const VirtualTaskList: React.FC<VirtualTaskListProps> = ({
               onExtractCharacter={onExtractCharacter}
             />
           ))}
+          <LoadMoreIndicator />
         </div>
 
         {showBackToTop && (
@@ -315,6 +407,7 @@ export const VirtualTaskList: React.FC<VirtualTaskListProps> = ({
             );
           })}
         </div>
+        <LoadMoreIndicator />
       </div>
 
       {showBackToTop && (

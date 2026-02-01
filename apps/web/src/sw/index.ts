@@ -4,7 +4,7 @@
 // Import task queue module
 import {
   initTaskQueue,
-  handleTaskQueueMessage,
+  getTaskQueue,
   initWorkflowHandler,
   updateWorkflowConfig,
   isWorkflowMessage,
@@ -12,12 +12,14 @@ import {
   handleMainThreadToolResponse,
   resendPendingToolRequests,
   taskQueueStorage,
-  type MainToSWMessage,
+  initChannelManager,
+  getChannelManager,
   type WorkflowMainToSWMessage,
   type MainThreadToolResponseMessage,
 } from './task-queue';
 import {
   setDebugFetchBroadcast,
+  setDebugFetchEnabled,
   getInternalFetchLogs,
   clearInternalFetchLogs,
   isDebugFetchEnabled,
@@ -31,7 +33,6 @@ import {
   type PostMessageLogEntry,
 } from './task-queue/postmessage-logger';
 import {
-  initMessageSender,
   setDebugMode as setMessageSenderDebugMode,
   setBroadcastCallback,
 } from './task-queue/utils/message-bus';
@@ -45,17 +46,50 @@ import { getSafeErrorMessage } from './task-queue/utils/sanitize-utils';
 
 // fix: self redeclaration error and type casting
 const sw = self as unknown as ServiceWorkerGlobalScope;
-export {}; // Make this a module
 
-// Initialize task queue (instance used internally by handleTaskQueueMessage)
-initTaskQueue(sw);
+// Export functions for channel-manager to use
+export {
+  saveCrashSnapshot,
+  getDebugStatus,
+  addConsoleLog,
+  // Debug helpers
+  getDebugLogs,
+  clearDebugLogs,
+  clearConsoleLogs,
+  enableDebugMode,
+  disableDebugMode,
+  loadConsoleLogsFromDB,
+  clearAllConsoleLogs,
+  getCrashSnapshots,
+  clearCrashSnapshots,
+  getCacheStats,
+  deleteCacheByUrl,
+  // Re-export from imports
+  getInternalFetchLogs,
+  getCDNStatusReport,
+  resetCDNStatus,
+  performHealthCheck,
+  // Constants
+  APP_VERSION,
+  IMAGE_CACHE_NAME,
+};
 
-// Initialize message sender (will be fully configured later with debug mode)
-initMessageSender(sw);
+// Initialize task queue (instance used by channelManager for RPC handlers)
+const taskQueue = initTaskQueue(sw);
+
+// Initialize channel manager for duplex communication (postmessage-duplex)
+const channelManager = initChannelManager(sw);
+channelManager.setTaskQueue(taskQueue);
+taskQueue.setChannelManager(channelManager);
+
+// 设置调试客户端数量变化回调
+// 当调试页面连接时自动启用调试模式，当所有调试页面关闭时自动禁用
+channelManager.setDebugClientCountChangedCallback(handleDebugClientCountChanged);
 
 // ============================================================================
-// SW Console Log Capture (for debug mode)
-// Intercepts SW internal console.log/info calls and forwards to debug panel
+// SW Console Log Capture（应用页面 + Service Worker 日志均需捕获）
+// - 调试开启：log/info/warn/error 均转发并记录、持久化 7 天、广播到调试面板
+// - 调试关闭：仅转发并记录 warn/error，持久化 7 天，不广播
 // ============================================================================
 const originalSWConsole = {
   log: console.log.bind(console),
@@ -64,65 +98,116 @@ const originalSWConsole = {
   error: console.error.bind(console),
 };
 
-// Forward SW console logs to debug panel when debug mode is enabled
+// 检查是否应该过滤掉日志（防止死循环）
+function shouldFilterLog(args: unknown[]): boolean {
+  const message = args[0]?.toString() || '';
+  
+  // 过滤 postmessage-duplex 库的日志（避免广播时死循环）
+  if (message.includes('[ServiceWorkerChannel]') ||
+      message.includes('[BaseChannel]') ||
+      message.includes('Invalid message structure') ||
+      message.includes('broadcast:') ||
+      message.includes('publish:') ||
+      message.includes('subscribe:')) {
+    return true;
+  }
+  
+  // 过滤来自主线程转发的重复消息（主线程通过 console:report 独立上报，不走 SW console）
+  // 注意：不在此过滤 "Service Worker"，否则会误拦 SW 自身的日志如 "Service Worker [Video-xxx]: fetch failed"
+  if (message.includes('[Main]') ||
+      message.includes('[SW Console Capture]')) {
+    return true;
+  }
+  
+  // 过滤 channel-manager 广播相关的日志
+  if (message.includes('[SWChannelManager]') && 
+      (message.includes('broadcast') || message.includes('sendConsoleLog'))) {
+    return true;
+  }
+  
+  return false;
+}
+
+// 转发 SW 内部 console 到 addConsoleLog（调试开：全部；调试关：仅 warn/error，均持久化 7 天）
 function setupSWConsoleCapture() {
   console.log = (...args: unknown[]) => {
     originalSWConsole.log(...args);
-    if (isDebugFetchEnabled()) {
+    if (isDebugFetchEnabled() && !shouldFilterLog(args)) {
       forwardSWConsoleLog('log', args);
     }
   };
 
   console.info = (...args: unknown[]) => {
     originalSWConsole.info(...args);
-    if (isDebugFetchEnabled()) {
+    if (isDebugFetchEnabled() && !shouldFilterLog(args)) {
       forwardSWConsoleLog('info', args);
     }
   };
 
-  // warn and error are always forwarded
+  // warn/error 始终转发并记录（调试关闭时也会持久化 7 天）
   console.warn = (...args: unknown[]) => {
     originalSWConsole.warn(...args);
-    forwardSWConsoleLog('warn', args);
+    if (!shouldFilterLog(args)) {
+      forwardSWConsoleLog('warn', args);
+    }
   };
 
   console.error = (...args: unknown[]) => {
     originalSWConsole.error(...args);
-    forwardSWConsoleLog('error', args);
+    if (!shouldFilterLog(args)) {
+      forwardSWConsoleLog('error', args);
+    }
   };
+}
+
+/** 序列化日志参数为字符串，Error 对象需特殊处理（message/stack 不可枚举，JSON.stringify 会得到 {}） */
+function formatLogArgs(args: unknown[]): { message: string; stack?: string } {
+  let extractedStack: string | undefined;
+  const parts: string[] = [];
+  for (const arg of args) {
+    try {
+      // Error 或类 Error 对象（跨 realm 时 instanceof 可能为 false）
+      const err = arg as { name?: string; message?: string; stack?: string };
+      if (arg instanceof Error || (arg && typeof arg === 'object' && typeof err.message === 'string')) {
+        extractedStack = err.stack || extractedStack;
+        parts.push(`${err.name || 'Error'}: ${err.message || ''}`);
+      } else if (typeof arg === 'object' && arg !== null) {
+        const str = JSON.stringify(arg);
+        parts.push(str === '{}' ? String(arg) : str);
+      } else {
+        parts.push(String(arg));
+      }
+    } catch {
+      parts.push(String(arg));
+    }
+  }
+  const message = parts.join(' ') || '(empty)';
+  return { message, stack: extractedStack };
 }
 
 function forwardSWConsoleLog(
   level: 'log' | 'info' | 'warn' | 'error',
   args: unknown[]
 ) {
-  const message = args
-    .map((arg) => {
-      if (typeof arg === 'object') {
-        try {
-          return JSON.stringify(arg);
-        } catch {
-          return String(arg);
-        }
-      }
-      return String(arg);
-    })
-    .join(' ');
+  try {
+    const { message, stack } = formatLogArgs(args);
 
-  // Add [SW] prefix only if not already present
-  const prefixedMessage =
-    message.startsWith('[SW]') || message.startsWith('[SW-')
-      ? message
-      : `[SW] ${message}`;
+    // Add [SW] prefix only if not already present
+    const prefixedMessage =
+      message.startsWith('[SW]') || message.startsWith('[SW-')
+        ? message
+        : `[SW] ${message}`;
 
-  // Use the existing addConsoleLog function (defined later in this file)
-  // We'll call it after it's defined
-  if (typeof addConsoleLogLater === 'function') {
-    addConsoleLogLater({
-      logLevel: level,
-      logMessage: prefixedMessage,
-      logSource: 'service-worker',
-    });
+    if (typeof addConsoleLogLater === 'function') {
+      addConsoleLogLater({
+        logLevel: level,
+        logMessage: prefixedMessage,
+        logStack: stack,
+        logSource: 'service-worker',
+      });
+    }
+  } catch (e) {
+    originalSWConsole.error('[SW Console Capture] forwardSWConsoleLog failed:', e);
   }
 }
 
@@ -134,31 +219,19 @@ setupSWConsoleCapture();
 
 // Setup debug fetch broadcast to send SW internal API logs to debug panel
 setDebugFetchBroadcast((log) => {
-  // Broadcast as a special SW internal log type
-  sw.clients.matchAll().then((clients) => {
-    clients.forEach((client) => {
-      client.postMessage({
-        type: 'SW_DEBUG_LOG',
-        entry: {
-          ...log,
-          type: 'fetch',
-        },
-      });
-    });
-  });
+  const cm = getChannelManager();
+  if (cm) {
+    cm.sendDebugLog({ ...log, type: 'fetch' });
+  }
 });
 
 // Setup LLM API log broadcast for real-time updates (always on, not affected by debug mode)
 import('./task-queue/llm-api-logger').then(({ setLLMApiLogBroadcast }) => {
   setLLMApiLogBroadcast((log) => {
-    sw.clients.matchAll().then((clients) => {
-      clients.forEach((client) => {
-        client.postMessage({
-          type: 'SW_DEBUG_LLM_API_LOG',
-          log,
-        });
-      });
-    });
+    const cm = getChannelManager();
+    if (cm) {
+      cm.sendDebugLLMLog(log as unknown as Record<string, unknown>);
+    }
   });
 });
 
@@ -238,7 +311,7 @@ const completedImageRequests = new Map<string, CompletedRequestEntry>();
 const COMPLETED_REQUEST_CACHE_TTL = 30 * 1000;
 
 interface VideoRequestEntry {
-  promise: Promise<Blob | null>;
+  promise: Promise<Blob | null | symbol>;  // symbol = VIDEO_LOAD_ERROR 表示下载失败
   timestamp: number;
   count: number;
   requestId: string;
@@ -337,47 +410,6 @@ const MAX_DEBUG_LOGS = 500;
 // 调试模式开关
 let debugModeEnabled = false;
 
-// 心跳机制：用于检测调试页面是否存活
-let lastHeartbeatTime = 0;
-const HEARTBEAT_TIMEOUT = 15000; // 15秒无心跳则认为调试页面已关闭
-let heartbeatCheckTimer: ReturnType<typeof setTimeout> | null = null;
-
-// 检查心跳是否超时，如果超时则自动关闭调试模式
-function checkHeartbeatTimeout() {
-  if (!debugModeEnabled) return;
-
-  const now = Date.now();
-  if (lastHeartbeatTime > 0 && now - lastHeartbeatTime > HEARTBEAT_TIMEOUT) {
-    // 心跳超时，关闭调试模式
-    originalSWConsole.log(
-      'Service Worker: Debug heartbeat timeout, auto-disabling debug mode'
-    );
-    debugModeEnabled = false;
-    lastHeartbeatTime = 0;
-    setMessageSenderDebugMode(false);
-
-    // Sync debug mode to debugFetch
-    import('./task-queue/debug-fetch').then(({ setDebugFetchEnabled }) => {
-      setDebugFetchEnabled(false);
-    });
-
-    // Broadcast to ALL clients
-    sw.clients.matchAll().then((clients) => {
-      clients.forEach((client) => {
-        client.postMessage({ type: 'SW_DEBUG_DISABLED' });
-      });
-    });
-
-    if (heartbeatCheckTimer) {
-      clearTimeout(heartbeatCheckTimer);
-      heartbeatCheckTimer = null;
-    }
-  } else if (debugModeEnabled) {
-    // 继续检查
-    heartbeatCheckTimer = setTimeout(checkHeartbeatTimeout, 5000);
-  }
-}
-
 // 添加调试日志
 function addDebugLog(entry: Omit<DebugLogEntry, 'id' | 'timestamp'>): string {
   if (!debugModeEnabled) return '';
@@ -413,18 +445,11 @@ function updateDebugLog(id: string, updates: Partial<DebugLogEntry>): void {
   }
 }
 
-// 广播调试日志到所有客户端
-async function broadcastDebugLog(entry: DebugLogEntry): Promise<void> {
-  try {
-    const clients = await sw.clients.matchAll();
-    clients.forEach((client) => {
-      client.postMessage({
-        type: 'SW_DEBUG_LOG',
-        entry,
-      });
-    });
-  } catch (error) {
-    // 忽略广播错误
+// 广播调试日志到所有客户端（通过 postmessage-duplex）
+function broadcastDebugLog(entry: DebugLogEntry): void {
+  const cm = getChannelManager();
+  if (cm) {
+    cm.sendDebugLog(entry as unknown as Record<string, unknown>);
   }
 }
 
@@ -470,13 +495,15 @@ async function saveConsoleLogToDB(logEntry: DebugLogEntry): Promise<void> {
   }
 }
 
-// 从 IndexedDB 加载所有控制台日志
+// 从 IndexedDB 加载控制台日志（仅返回 7 天内，加载前先清理过期）
 async function loadConsoleLogsFromDB(): Promise<DebugLogEntry[]> {
   try {
+    await cleanupExpiredConsoleLogs();
     const db = await openConsoleLogDB();
     const transaction = db.transaction(['logs'], 'readonly');
     const store = transaction.objectStore('logs');
     const index = store.index('timestamp');
+    const expirationTime = Date.now() - CONSOLE_LOG_RETENTION_DAYS * 24 * 60 * 60 * 1000;
 
     return new Promise((resolve, reject) => {
       const request = index.openCursor(null, 'prev'); // 按时间倒序
@@ -485,7 +512,10 @@ async function loadConsoleLogsFromDB(): Promise<DebugLogEntry[]> {
       request.onsuccess = () => {
         const cursor = request.result;
         if (cursor) {
-          logs.push(cursor.value);
+          const entry = cursor.value as DebugLogEntry;
+          if (entry.timestamp >= expirationTime) {
+            logs.push(entry);
+          }
           cursor.continue();
         } else {
           db.close();
@@ -569,11 +599,13 @@ async function clearAllConsoleLogs(): Promise<void> {
   }
 }
 
+// 控制台日志内存条数上限（避免无限增长）
+const MAX_CONSOLE_LOGS_MEMORY = 500;
+
 // 添加控制台日志
-// 注意：只有调试模式启用时才存储和广播日志
-// 这与主线程 sw-console-capture.ts 的设计一致：
-// - 主线程：warn/error 始终发送，log/info/debug 只在调试模式时发送
-// - SW 端：只有调试模式启用时才处理日志，避免不必要的存储和广播
+// - 调试模式开启：记录所有级别（log/info/warn/error/debug），持久化 7 天并广播到调试面板
+// - 调试模式关闭：仅记录 warn 及以上，持久化 7 天，不广播
+// 应用页面与 Service Worker 的日志均经此入口（主线程通过 console:report，SW 通过 forwardSWConsoleLog）
 function addConsoleLog(entry: {
   logLevel: 'log' | 'info' | 'warn' | 'error' | 'debug';
   logMessage: string;
@@ -581,8 +613,9 @@ function addConsoleLog(entry: {
   logSource?: string;
   url?: string;
 }): void {
-  // 调试模式未启用时，不存储和广播日志
-  if (!debugModeEnabled) {
+  const isWarnOrAbove = entry.logLevel === 'warn' || entry.logLevel === 'error';
+  const shouldRecord = debugModeEnabled || isWarnOrAbove;
+  if (!shouldRecord) {
     return;
   }
 
@@ -594,31 +627,29 @@ function addConsoleLog(entry: {
     ...entry,
   };
 
-  // 保存到内存（用于 getDebugStatus 统计）
-  consoleLogs.unshift(logEntry);
-
-  // 保存到 IndexedDB（异步，不阻塞）
+  // 持久化到 IndexedDB（保留 7 天，由 cleanupExpiredConsoleLogs 清理）
   saveConsoleLogToDB(logEntry);
 
-  // 广播日志到调试页面
-  broadcastConsoleLog(logEntry);
+  // 内存缓存：调试开启时存全部，关闭时只存 warn+（用于统计与调试面板加载）
+  consoleLogs.unshift(logEntry);
+  if (consoleLogs.length > MAX_CONSOLE_LOGS_MEMORY) {
+    consoleLogs.length = MAX_CONSOLE_LOGS_MEMORY;
+  }
+
+  // 仅调试模式开启时广播到调试面板
+  if (debugModeEnabled) {
+    broadcastConsoleLog(logEntry);
+  }
 }
 
 // Set the forward function now that addConsoleLog is defined
 addConsoleLogLater = addConsoleLog;
 
-// 广播控制台日志到所有客户端
-async function broadcastConsoleLog(entry: DebugLogEntry): Promise<void> {
-  try {
-    const clients = await sw.clients.matchAll();
-    clients.forEach((client) => {
-      client.postMessage({
-        type: 'SW_CONSOLE_LOG',
-        entry,
-      });
-    });
-  } catch (error) {
-    // 忽略广播错误
+// 广播控制台日志到所有客户端（通过 postmessage-duplex）
+function broadcastConsoleLog(entry: DebugLogEntry): void {
+  const cm = getChannelManager();
+  if (cm) {
+    cm.sendConsoleLog(entry as unknown as Record<string, unknown>);
   }
 }
 
@@ -692,6 +723,61 @@ function getDebugStatus(): {
       consoleLogsArraySize: consoleLogs.length,
     },
   };
+}
+
+// ============================================================================
+// 导出给 channel-manager 使用的帮助函数
+// ============================================================================
+
+// 获取调试日志数组
+function getDebugLogs(): typeof debugLogs {
+  return debugLogs;
+}
+
+// 清空调试日志
+function clearDebugLogs(): void {
+  debugLogs.length = 0;
+}
+
+// 清空控制台日志（内存）
+function clearConsoleLogs(): void {
+  consoleLogs.length = 0;
+}
+
+// 启用调试模式（当调试页面连接时自动启用）
+function enableDebugMode(): void {
+  if (debugModeEnabled) return; // 避免重复启用
+
+  debugModeEnabled = true;
+  setDebugFetchEnabled(true);
+  setMessageSenderDebugMode(true);
+
+  originalSWConsole.log('Service Worker: Debug mode enabled (debug page connected)');
+}
+
+// 禁用调试模式（当所有调试页面关闭时自动禁用）
+function disableDebugMode(): void {
+  if (!debugModeEnabled) return; // 避免重复禁用
+
+  debugModeEnabled = false;
+  setDebugFetchEnabled(false);
+  setMessageSenderDebugMode(false);
+
+  // 禁用调试时仅清空内存；IndexedDB 中 warn+ 日志保留 7 天
+  consoleLogs.length = 0;
+  debugLogs.length = 0;
+
+  originalSWConsole.log('Service Worker: Debug mode disabled (no debug pages)');
+}
+
+// 处理调试客户端数量变化
+// 由 channelManager 在调试页面连接/断开时调用
+function handleDebugClientCountChanged(count: number): void {
+  if (count > 0) {
+    enableDebugMode();
+  } else {
+    disableDebugMode();
+  }
 }
 
 // 检查URL是否需要CORS处理
@@ -824,15 +910,11 @@ function markNewVersionReady(isUpdate: boolean) {
     return;
   }
 
-  // 通知客户端有新版本可用
-  sw.clients.matchAll().then((clients) => {
-    clients.forEach((client) => {
-      client.postMessage({
-        type: 'SW_NEW_VERSION_READY',
-        version: APP_VERSION,
-      });
-    });
-  });
+  // 使用 channelManager 通知客户端有新版本可用
+  const cm = getChannelManager();
+  if (cm) {
+    cm.sendSWNewVersionReady(APP_VERSION);
+  }
 }
 
 // 清理旧的缓存条目以释放空间（基于LRU策略）
@@ -916,22 +998,13 @@ async function loadPrecacheManifest(): Promise<
     });
     if (!response.ok) {
       // 没有 manifest 文件，说明是开发模式，不需要预缓存
-      console.log(
-        'Service Worker: No precache-manifest.json found (dev mode), skipping precache'
-      );
       return null;
     }
 
     const manifest: PrecacheManifest = await response.json();
-    console.log(
-      `Service Worker: Loaded precache manifest v${manifest.version} with ${manifest.files.length} files`
-    );
     return manifest.files;
   } catch (error) {
     // 加载失败，不预缓存
-    console.log(
-      'Service Worker: Cannot load precache-manifest.json, skipping precache'
-    );
     return null;
   }
 }
@@ -1056,18 +1129,9 @@ async function precacheStaticFiles(
     (r) => r.success && r.source === 'server'
   ).length;
 
-  console.log(
-    `Service Worker: Precached ${successCount}/${files.length} files (${failCount} failed)`
-  );
-  if (cdnCount > 0) {
-    console.log(
-      `Service Worker: Sources - CDN: ${cdnCount}, Server: ${serverCount}`
-    );
-  }
 }
 
 sw.addEventListener('install', (event: ExtendableEvent) => {
-  console.log(`Service Worker v${APP_VERSION} installing...`);
 
   const installPromises: Promise<any>[] = [];
 
@@ -1094,7 +1158,6 @@ sw.addEventListener('install', (event: ExtendableEvent) => {
 
   event.waitUntil(
     Promise.all(installPromises).then(async () => {
-      console.log(`Service Worker v${APP_VERSION} installed, resources ready`);
 
       // 判断是否是版本更新的最可靠方式：检查是否存在旧版本的缓存
       // 旧版本缓存名称包含版本号，只有在版本变化时才会不同
@@ -1212,42 +1275,14 @@ sw.addEventListener('activate', (event: ExtendableEvent) => {
       // 立即接管所有页面
       await sw.clients.claim();
 
-      // 通知所有客户端 SW 已更新（让 UI 知道可能需要刷新）
-      const clients = await sw.clients.matchAll();
-      clients.forEach((client) => {
-        client.postMessage({
-          type: 'SW_ACTIVATED',
-          version: APP_VERSION,
-        });
-      });
+      // 使用 channelManager 通知所有客户端 SW 已更新
+      const cm = getChannelManager();
+      if (cm) {
+        cm.sendSWActivated(APP_VERSION);
+      }
     })
   );
 });
-
-// Task queue message types
-const TASK_QUEUE_MESSAGE_TYPES = [
-  'TASK_QUEUE_INIT',
-  'TASK_QUEUE_UPDATE_CONFIG',
-  'TASK_SUBMIT',
-  'TASK_CANCEL',
-  'TASK_RETRY',
-  'TASK_RESUME',
-  'TASK_GET_STATUS',
-  'TASK_GET_ALL',
-  'TASK_DELETE',
-  'TASK_MARK_INSERTED',
-  'CHAT_START',
-  'CHAT_STOP',
-  'CHAT_GET_CACHED',
-  'TASK_RESTORE',
-];
-
-// Check if message is a task queue message
-function isTaskQueueMessage(data: unknown): boolean {
-  if (!data || typeof data !== 'object') return false;
-  const msg = data as { type?: string };
-  return msg.type ? TASK_QUEUE_MESSAGE_TYPES.includes(msg.type) : false;
-}
 
 // Track if workflow handler is initialized
 let workflowHandlerInitialized = false;
@@ -1266,15 +1301,10 @@ const pendingWorkflowMessages: PendingWorkflowMessage[] = [];
 // Helper function to broadcast PostMessage log to debug panel
 function broadcastPostMessageLog(entry: PostMessageLogEntry): void {
   if (debugModeEnabled) {
-    // Use direct postMessage for debug logs to avoid infinite loop
-    sw.clients.matchAll().then((clients) => {
-      clients.forEach((client) => {
-        client.postMessage({
-          type: 'SW_POSTMESSAGE_LOG',
-          entry,
-        });
-      });
-    });
+    const cm = getChannelManager();
+    if (cm) {
+      cm.sendPostMessageLog(entry as unknown as Record<string, unknown>);
+    }
   }
 }
 
@@ -1283,14 +1313,38 @@ setBroadcastCallback(broadcastPostMessageLog);
 
 // Handle messages from main thread
 sw.addEventListener('message', (event: ExtendableMessageEvent) => {
-  const messageType = event.data?.type || 'unknown';
+  // Extract message type from different message formats:
+  // - Native messages: event.data.type
+  // - postmessage-duplex requests: event.data.cmdname
+  // - postmessage-duplex responses: event.data.req.cmdname
+  const messageType = event.data?.type 
+    || event.data?.cmdname 
+    || event.data?.req?.cmdname 
+    || 'unknown';
   const clientId = (event.source as Client)?.id || '';
+  const clientUrl = (event.source as WindowClient)?.url || '';
+
+  // Note: postmessage-duplex 1.1.0 automatically handles channel creation and message routing
+  // via enableGlobalRouting() in channel-manager.ts. No manual SW_CHANNEL_CONNECT handling needed.
+  // postmessage-duplex messages (with __key__ or requestId) are automatically handled
+  // by the channel's internal message listener.
+  
+  // 跳过 postmessage-duplex 的消息，它们会在 wrapRpcHandler 中被记录为 RPC:xxx 格式
+  // postmessage-duplex 消息特征：有 cmdname 字段（RPC 请求）或 requestId+ret 字段（RPC 响应）
+  const isDuplexMessage = event.data?.cmdname || (event.data?.requestId && event.data?.ret !== undefined);
 
   // Log received message only if debug mode is enabled
   // This ensures postMessage logging doesn't affect performance when debug mode is off
   let logId = '';
-  if (isPostMessageLoggerDebugMode()) {
-    logId = logReceivedMessage(messageType, event.data, clientId);
+  // Skip logging for internal messages and postmessage-duplex messages
+  if (isPostMessageLoggerDebugMode() && !isDuplexMessage) {
+    logId = logReceivedMessage(
+      messageType,
+      event.data,
+      clientId,
+      clientUrl,
+      event.data?.__internal__
+    );
     if (logId && debugModeEnabled) {
       const logs = getAllPostMessageLogs();
       const entry = logs.find((l) => l.id === logId);
@@ -1298,51 +1352,6 @@ sw.addEventListener('message', (event: ExtendableMessageEvent) => {
         broadcastPostMessageLog(entry);
       }
     }
-  }
-
-  // Handle task queue messages
-  if (event.data && isTaskQueueMessage(event.data)) {
-    const clientId = (event.source as Client)?.id || '';
-    handleTaskQueueMessage(event.data as MainToSWMessage, clientId);
-
-    // Initialize workflow handler when task queue is initialized
-    if (event.data.type === 'TASK_QUEUE_INIT') {
-      const { geminiConfig, videoConfig } = event.data;
-      // Store config for later use
-      storedGeminiConfig = geminiConfig;
-      storedVideoConfig = videoConfig;
-
-      if (!workflowHandlerInitialized) {
-        initWorkflowHandler(sw, geminiConfig, videoConfig);
-        workflowHandlerInitialized = true;
-        // console.log('Service Worker: Workflow handler initialized');
-
-        // Process any pending workflow messages that were waiting for config
-        if (pendingWorkflowMessages.length > 0) {
-          for (const pending of pendingWorkflowMessages) {
-            handleWorkflowMessage(pending.message, pending.clientId);
-          }
-          pendingWorkflowMessages.length = 0; // Clear the array
-        }
-      }
-
-      // Re-send any pending tool requests to the new client
-      // This handles page refresh during workflow execution
-      resendPendingToolRequests();
-    }
-
-    // Update workflow config when task queue config is updated
-    if (event.data.type === 'TASK_QUEUE_UPDATE_CONFIG') {
-      const { geminiConfig, videoConfig } = event.data;
-      // Update stored config
-      if (geminiConfig)
-        storedGeminiConfig = { ...storedGeminiConfig, ...geminiConfig };
-      if (videoConfig)
-        storedVideoConfig = { ...storedVideoConfig, ...videoConfig };
-      updateWorkflowConfig(geminiConfig, videoConfig);
-    }
-
-    return;
   }
 
   // Handle workflow messages
@@ -1443,40 +1452,31 @@ sw.addEventListener('message', (event: ExtendableMessageEvent) => {
     // 直接调用 skipWaiting
     sw.skipWaiting();
 
-    // Notify clients that SW has been updated
-    sw.clients.matchAll().then((clients) => {
-      clients.forEach((client) => {
-        client.postMessage({ type: 'SW_UPDATED' });
-      });
-    });
-  } else if (event.data && event.data.type === 'GET_UPGRADE_STATUS') {
-    // 主线程查询升级状态
-    event.source?.postMessage({
-      type: 'UPGRADE_STATUS',
-      version: APP_VERSION,
-    });
+    // 使用 channelManager 通知客户端 SW 已更新
+    const cm = getChannelManager();
+    if (cm) {
+      cm.sendSWUpdated(APP_VERSION);
+    }
   } else if (event.data && event.data.type === 'FORCE_UPGRADE') {
     // 主线程强制升级
-    // console.log('Service Worker: 收到强制升级请求');
     sw.skipWaiting();
-    sw.clients.matchAll().then((clients) => {
-      clients.forEach((client) => {
-        client.postMessage({ type: 'SW_UPDATED' });
-      });
-    });
+    
+    // 使用 channelManager 通知客户端 SW 已更新
+    const cm = getChannelManager();
+    if (cm) {
+      cm.sendSWUpdated(APP_VERSION);
+    }
   } else if (event.data && event.data.type === 'DELETE_CACHE') {
     // 删除单个缓存
     const { url } = event.data;
     if (url) {
       deleteCacheByUrl(url)
         .then(() => {
-          // console.log('Service Worker: Cache deleted:', url);
-          // 通知主线程
-          sw.clients.matchAll().then((clients) => {
-            clients.forEach((client) => {
-              client.postMessage({ type: 'CACHE_DELETED', url });
-            });
-          });
+          // 使用 channelManager 通知主线程
+          const cm = getChannelManager();
+          if (cm) {
+            cm.sendCacheDeleted(url);
+          }
         })
         .catch((error) => {
           console.error('Service Worker: Failed to delete cache:', error);
@@ -1507,393 +1507,153 @@ sw.addEventListener('message', (event: ExtendableMessageEvent) => {
         console.error('Service Worker: Failed to clear all cache:', error);
       });
   } else if (event.data && event.data.type === 'SW_DEBUG_ENABLE') {
-    // 启用调试模式
+    // 启用调试模式（同步设置 debugFetch，否则 log/info 会因 isDebugFetchEnabled 延迟为 true 而漏捕）
     debugModeEnabled = true;
-    lastHeartbeatTime = Date.now(); // 初始化心跳时间
-    // Sync debug mode to debugFetch and message sender
-    import('./task-queue/debug-fetch').then(({ setDebugFetchEnabled }) => {
-      setDebugFetchEnabled(true);
-    });
+    setDebugFetchEnabled(true);
     setMessageSenderDebugMode(true);
     originalSWConsole.log('Service Worker: Debug mode enabled');
-    // 启动心跳检测
-    if (heartbeatCheckTimer) {
-      clearTimeout(heartbeatCheckTimer);
+    // 响应发送方（native message）
+    if (event.source) {
+      (event.source as Client).postMessage({ type: 'SW_DEBUG_ENABLED' });
     }
-    heartbeatCheckTimer = setTimeout(checkHeartbeatTimeout, 5000);
-    // Broadcast to ALL clients (including app pages) so they can capture logs
-    sw.clients.matchAll().then((clients) => {
-      clients.forEach((client) => {
-        client.postMessage({ type: 'SW_DEBUG_ENABLED' });
-      });
-    });
-    event.source?.postMessage({
-      type: 'SW_DEBUG_STATUS',
-      status: getDebugStatus(),
-    });
-  } else if (event.data && event.data.type === 'SW_DEBUG_HEARTBEAT') {
-    // 调试页面心跳：更新心跳时间
-    if (debugModeEnabled) {
-      lastHeartbeatTime = Date.now();
+    // 使用 channelManager 广播调试模式状态变更（给其他客户端）
+    const cm = getChannelManager();
+    if (cm) {
+      cm.sendDebugStatusChanged(true);
     }
   } else if (event.data && event.data.type === 'SW_DEBUG_DISABLE') {
     // 禁用调试模式
     debugModeEnabled = false;
-    lastHeartbeatTime = 0;
-    if (heartbeatCheckTimer) {
-      clearTimeout(heartbeatCheckTimer);
-      heartbeatCheckTimer = null;
-    }
-    // Sync debug mode to debugFetch and message sender
-    import('./task-queue/debug-fetch').then(({ setDebugFetchEnabled }) => {
-      setDebugFetchEnabled(false);
-    });
+    setDebugFetchEnabled(false);
     setMessageSenderDebugMode(false);
 
-    // 禁用调试模式时清空所有日志（内存和 IndexedDB）
-    // 这样重新打开调试面板时不会显示旧日志
+    // 禁用调试时仅清空内存；IndexedDB 中 warn+ 日志保留 7 天供后续查看
     consoleLogs.length = 0;
     debugLogs.length = 0;
-    clearAllConsoleLogs().catch(() => {
-      // 忽略 IndexedDB 清理失败
-    });
 
-    originalSWConsole.log('Service Worker: Debug mode disabled, logs cleared');
-    // Broadcast to ALL clients (including app pages) so they stop capturing verbose logs
-    sw.clients.matchAll().then((clients) => {
-      clients.forEach((client) => {
-        client.postMessage({ type: 'SW_DEBUG_DISABLED' });
-      });
-    });
-    event.source?.postMessage({
-      type: 'SW_DEBUG_STATUS',
-      status: getDebugStatus(),
-    });
-  } else if (event.data && event.data.type === 'SW_DEBUG_GET_STATUS') {
-    // 获取调试状态
-    (async () => {
-      const status = getDebugStatus();
-      // 获取缓存统计
-      const cacheStats = await getCacheStats();
-      event.source?.postMessage({
-        type: 'SW_DEBUG_STATUS',
-        status: { ...status, cacheStats },
-      });
-    })();
-  } else if (event.data && event.data.type === 'SW_DEBUG_GET_LOGS') {
-    // 获取调试日志 (合并 debugLogs 和 internalFetchLogs)
-    const { limit = 100, offset = 0, filter } = event.data;
-
-    // Merge internal fetch logs with debug logs
-    const internalLogs = getInternalFetchLogs().map((log) => ({
-      ...log,
-      type: 'fetch',
-    }));
-
-    // Combine and deduplicate by ID (internal logs take priority as they're more up-to-date)
-    const logMap = new Map<string, any>();
-    for (const log of debugLogs) {
-      logMap.set(log.id, log);
+    originalSWConsole.log('Service Worker: Debug mode disabled');
+    // 响应发送方（native message）
+    if (event.source) {
+      (event.source as Client).postMessage({ type: 'SW_DEBUG_DISABLED' });
     }
-    for (const log of internalLogs) {
-      logMap.set(log.id, log);
+    // 使用 channelManager 广播调试模式状态变更（给其他客户端）
+    const cm = getChannelManager();
+    if (cm) {
+      cm.sendDebugStatusChanged(false);
     }
-
-    // Sort by timestamp descending
-    let logs = Array.from(logMap.values()).sort(
-      (a, b) => b.timestamp - a.timestamp
-    );
-
-    // 应用过滤器
-    if (filter) {
-      if (filter.type) {
-        logs = logs.filter((l) => l.type === filter.type);
-      }
-      if (filter.requestType) {
-        logs = logs.filter((l) => l.requestType === filter.requestType);
-      }
-      if (filter.url) {
-        logs = logs.filter((l) => l.url?.includes(filter.url));
-      }
-      if (filter.status) {
-        logs = logs.filter((l) => l.status === filter.status);
-      }
-    }
-
-    const paginatedLogs = logs.slice(offset, offset + limit);
-    event.source?.postMessage({
-      type: 'SW_DEBUG_LOGS',
-      logs: paginatedLogs,
-      total: logs.length,
-      offset,
-      limit,
-    });
-  } else if (event.data && event.data.type === 'SW_DEBUG_CLEAR_LOGS') {
-    // 清空调试日志
-    debugLogs.length = 0;
-    event.source?.postMessage({
-      type: 'SW_DEBUG_LOGS_CLEARED',
-    });
-  } else if (event.data && event.data.type === 'SW_CDN_GET_STATUS') {
-    // 获取 CDN 状态
-    event.source?.postMessage({
-      type: 'SW_CDN_STATUS',
-      status: getCDNStatusReport(),
-    });
-  } else if (event.data && event.data.type === 'SW_CDN_RESET_STATUS') {
-    // 重置 CDN 状态
-    resetCDNStatus();
-    event.source?.postMessage({
-      type: 'SW_CDN_STATUS_RESET',
-    });
-  } else if (event.data && event.data.type === 'SW_CDN_HEALTH_CHECK') {
-    // 执行 CDN 健康检查
-    (async () => {
-      const results = await performHealthCheck(APP_VERSION);
-      event.source?.postMessage({
-        type: 'SW_CDN_HEALTH_CHECK_RESULT',
-        results: Object.fromEntries(results),
-      });
-    })();
-  } else if (event.data && event.data.type === 'SW_DEBUG_GET_CACHE_ENTRIES') {
-    // 获取缓存条目列表
-    const { cacheName, limit = 50, offset = 0 } = event.data;
+  }
+  
+  // 为调试页面提供原生 postMessage 支持（调试页面不使用 postmessage-duplex）
+  // LLM API 日志查询
+  if (event.data && event.data.type === 'SW_DEBUG_GET_LLM_API_LOGS') {
     (async () => {
       try {
-        const cache = await caches.open(cacheName || IMAGE_CACHE_NAME);
-        const requests = await cache.keys();
-        const entries: { url: string; cacheDate?: number; size?: number }[] =
-          [];
-
-        for (
-          let i = offset;
-          i < Math.min(offset + limit, requests.length);
-          i++
-        ) {
-          const request = requests[i];
-          const response = await cache.match(request);
-          if (response) {
-            const cacheDate = response.headers.get('sw-cache-date');
-            const size =
-              response.headers.get('sw-image-size') ||
-              response.headers.get('content-length');
-            entries.push({
-              url: request.url,
-              cacheDate: cacheDate ? parseInt(cacheDate) : undefined,
-              size: size ? parseInt(size) : undefined,
-            });
-          }
-        }
-
-        event.source?.postMessage({
-          type: 'SW_DEBUG_CACHE_ENTRIES',
-          cacheName: cacheName || IMAGE_CACHE_NAME,
-          entries,
-          total: requests.length,
-          offset,
-          limit,
-        });
-      } catch (error) {
-        event.source?.postMessage({
-          type: 'SW_DEBUG_CACHE_ENTRIES',
-          error: String(error),
-        });
-      }
-    })();
-  } else if (event.data && event.data.type === 'SW_CONSOLE_LOG_REPORT') {
-    // 接收来自主应用的控制台日志
-    const { logLevel, logMessage, logStack, logSource, url } = event.data;
-    addConsoleLog({
-      logLevel,
-      logMessage,
-      logStack,
-      logSource,
-      url,
-    });
-  } else if (event.data && event.data.type === 'SW_DEBUG_GET_CONSOLE_LOGS') {
-    // 从 IndexedDB 获取控制台日志
-    (async () => {
-      try {
-        const { limit = 500, offset = 0, filter } = event.data;
-        let logs = await loadConsoleLogsFromDB();
-
-        // 应用过滤器
-        if (filter) {
-          if (filter.logLevel) {
-            logs = logs.filter((l) => l.logLevel === filter.logLevel);
-          }
-          if (filter.search) {
-            const search = filter.search.toLowerCase();
-            logs = logs.filter(
-              (l) =>
-                l.logMessage?.toLowerCase().includes(search) ||
-                l.logStack?.toLowerCase().includes(search)
-            );
-          }
-        }
-
-        const paginatedLogs = logs.slice(offset, offset + limit);
-        event.source?.postMessage({
-          type: 'SW_DEBUG_CONSOLE_LOGS',
-          logs: paginatedLogs,
-          total: logs.length,
-          offset,
-          limit,
-        });
-      } catch (error) {
-        event.source?.postMessage({
-          type: 'SW_DEBUG_CONSOLE_LOGS',
-          logs: [],
-          total: 0,
-          error: String(error),
-        });
-      }
-    })();
-  } else if (event.data && event.data.type === 'SW_DEBUG_CLEAR_CONSOLE_LOGS') {
-    // 清空控制台日志（内存和 IndexedDB）
-    (async () => {
-      consoleLogs.length = 0;
-      await clearAllConsoleLogs();
-      event.source?.postMessage({
-        type: 'SW_DEBUG_CONSOLE_LOGS_CLEARED',
-      });
-    })();
-  } else if (event.data && event.data.type === 'SW_DEBUG_EXPORT_LOGS') {
-    // 导出所有日志（从 IndexedDB 读取）
-    (async () => {
-      const allConsoleLogs = await loadConsoleLogsFromDB();
-      const postmessageLogs = getAllPostMessageLogs();
-      const exportData = {
-        exportTime: new Date().toISOString(),
-        swVersion: APP_VERSION,
-        userAgent: '', // 将由调试页面填充
-        status: getDebugStatus(),
-        fetchLogs: debugLogs,
-        consoleLogs: allConsoleLogs,
-        postmessageLogs,
-      };
-      event.source?.postMessage({
-        type: 'SW_DEBUG_EXPORT_DATA',
-        data: exportData,
-      });
-    })();
-  } else if (
-    event.data &&
-    event.data.type === 'SW_DEBUG_GET_POSTMESSAGE_LOGS'
-  ) {
-    // 获取 PostMessage 日志
-    const { limit = 200, offset = 0, filter } = event.data;
-    let logs = getAllPostMessageLogs();
-
-    // 应用过滤器
-    if (filter) {
-      if (filter.direction) {
-        logs = logs.filter((l) => l.direction === filter.direction);
-      }
-      if (filter.messageType) {
-        const search = filter.messageType.toLowerCase();
-        logs = logs.filter((l) =>
-          l.messageType?.toLowerCase().includes(search)
-        );
-      }
-    }
-
-    const paginatedLogs = logs.slice(offset, offset + limit);
-    event.source?.postMessage({
-      type: 'SW_DEBUG_POSTMESSAGE_LOGS',
-      logs: paginatedLogs,
-      total: logs.length,
-      offset,
-      limit,
-      stats: getPostMessageLogStats(),
-    });
-  } else if (
-    event.data &&
-    event.data.type === 'SW_DEBUG_CLEAR_POSTMESSAGE_LOGS'
-  ) {
-    // 清空 PostMessage 日志
-    clearPostMessageLogs();
-    event.source?.postMessage({
-      type: 'SW_DEBUG_POSTMESSAGE_LOGS_CLEARED',
-    });
-  } else if (event.data && event.data.type === 'CRASH_SNAPSHOT') {
-    // 保存崩溃快照到 IndexedDB
-    const snapshot = event.data.snapshot;
-    if (snapshot) {
-      saveCrashSnapshot(snapshot);
-      // 广播新快照到所有客户端（包括 sw-debug.html）
-      sw.clients.matchAll().then((clients) => {
-        clients.forEach((client) => {
-          client.postMessage({
-            type: 'SW_DEBUG_NEW_CRASH_SNAPSHOT',
-            snapshot,
-          });
-        });
-      });
-    }
-  } else if (event.data && event.data.type === 'SW_DEBUG_GET_CRASH_SNAPSHOTS') {
-    // 获取崩溃快照列表
-    (async () => {
-      try {
-        const snapshots = await getCrashSnapshots();
-        event.source?.postMessage({
-          type: 'SW_DEBUG_CRASH_SNAPSHOTS',
-          snapshots,
-          total: snapshots.length,
-        });
-      } catch (error) {
-        event.source?.postMessage({
-          type: 'SW_DEBUG_CRASH_SNAPSHOTS',
-          snapshots: [],
-          total: 0,
-          error: String(error),
-        });
-      }
-    })();
-  } else if (
-    event.data &&
-    event.data.type === 'SW_DEBUG_CLEAR_CRASH_SNAPSHOTS'
-  ) {
-    // 清空崩溃快照
-    (async () => {
-      await clearCrashSnapshots();
-      event.source?.postMessage({
-        type: 'SW_DEBUG_CRASH_SNAPSHOTS_CLEARED',
-      });
-    })();
-  } else if (event.data && event.data.type === 'SW_DEBUG_GET_LLM_API_LOGS') {
-    // 获取 LLM API 日志列表
-    (async () => {
-      try {
-        const { getAllLLMApiLogs } = await import(
-          './task-queue/llm-api-logger'
-        );
+        const { getAllLLMApiLogs } = await import('./task-queue/llm-api-logger');
         const logs = await getAllLLMApiLogs();
-        event.source?.postMessage({
-          type: 'SW_DEBUG_LLM_API_LOGS',
-          logs,
-          total: logs.length,
-        });
+        const client = event.source as Client;
+        if (client) {
+          client.postMessage({
+            type: 'SW_DEBUG_LLM_API_LOGS',
+            logs,
+          });
+        }
       } catch (error) {
-        event.source?.postMessage({
-          type: 'SW_DEBUG_LLM_API_LOGS',
-          logs: [],
-          total: 0,
-          error: String(error),
-        });
+        console.error('[SW] Failed to get LLM API logs:', error);
       }
     })();
-  } else if (event.data && event.data.type === 'SW_DEBUG_CLEAR_LLM_API_LOGS') {
-    // 清空 LLM API 日志
+    return;
+  }
+  
+  // LLM API 日志清理
+  if (event.data && event.data.type === 'SW_DEBUG_CLEAR_LLM_API_LOGS') {
     (async () => {
-      const { clearAllLLMApiLogs } = await import(
-        './task-queue/llm-api-logger'
-      );
-      await clearAllLLMApiLogs();
-      event.source?.postMessage({
-        type: 'SW_DEBUG_LLM_API_LOGS_CLEARED',
-      });
+      try {
+        const { clearAllLLMApiLogs } = await import('./task-queue/llm-api-logger');
+        await clearAllLLMApiLogs();
+        const client = event.source as Client;
+        if (client) {
+          client.postMessage({
+            type: 'SW_DEBUG_LLM_API_LOGS_CLEARED',
+          });
+        }
+      } catch (error) {
+        console.error('[SW] Failed to clear LLM API logs:', error);
+      }
     })();
+    return;
+  }
+  
+  // 调试状态查询
+  if (event.data && event.data.type === 'SW_DEBUG_GET_STATUS') {
+    const client = event.source as Client;
+    if (client) {
+      client.postMessage({
+        type: 'SW_DEBUG_STATUS',
+        debugModeEnabled,
+        swVersion: APP_VERSION,
+        logs: debugLogs.slice(-100), // 只发送最近 100 条
+        consoleLogs: consoleLogs.slice(-100),
+      });
+    }
+    return;
+  }
+  
+  // Fetch 日志查询
+  if (event.data && event.data.type === 'SW_DEBUG_GET_LOGS') {
+    (async () => {
+      try {
+        const { getInternalFetchLogs } = await import('./task-queue/debug-fetch');
+        const logs = getDebugLogs();
+        const internalLogs = getInternalFetchLogs();
+        const client = event.source as Client;
+        if (client) {
+          client.postMessage({
+            type: 'SW_DEBUG_LOGS',
+            logs: [...logs, ...internalLogs.map(l => ({ ...l, type: 'fetch' }))],
+          });
+        }
+      } catch (error) {
+        console.error('[SW] Failed to get fetch logs:', error);
+      }
+    })();
+    return;
+  }
+  
+  // Console 日志查询
+  if (event.data && event.data.type === 'SW_DEBUG_GET_CONSOLE_LOGS') {
+    (async () => {
+      try {
+        const client = event.source as Client;
+        if (client) {
+          client.postMessage({
+            type: 'SW_DEBUG_CONSOLE_LOGS',
+            logs: consoleLogs,
+          });
+        }
+      } catch (error) {
+        console.error('[SW] Failed to get console logs:', error);
+      }
+    })();
+    return;
+  }
+  
+  // PostMessage 日志查询
+  if (event.data && event.data.type === 'SW_DEBUG_GET_POSTMESSAGE_LOGS') {
+    (async () => {
+      try {
+        const logs = getAllPostMessageLogs();
+        const client = event.source as Client;
+        if (client) {
+          client.postMessage({
+            type: 'SW_DEBUG_POSTMESSAGE_LOGS',
+            logs,
+          });
+        }
+      } catch (error) {
+        console.error('[SW] Failed to get postmessage logs:', error);
+      }
+    })();
+    return;
   }
 });
 
@@ -2355,16 +2115,11 @@ async function notifyImageCached(
   mimeType: string
 ): Promise<void> {
   try {
-    const clients = await sw.clients.matchAll();
-    clients.forEach((client) => {
-      client.postMessage({
-        type: 'IMAGE_CACHED',
-        url,
-        size,
-        mimeType,
-        timestamp: Date.now(),
-      });
-    });
+    // 使用 channelManager 发送缓存事件
+    const cm = getChannelManager();
+    if (cm) {
+      cm.sendCacheImageCached(url, size);
+    }
   } catch (error) {
     console.warn('Service Worker: Failed to notify image cached:', error);
   }
@@ -2381,19 +2136,13 @@ async function checkStorageQuota(): Promise<void> {
 
       // 如果使用率超过 90%，发送警告
       if (percentage > 90) {
-        console.warn('Service Worker: Storage quota warning:', {
-          usage,
-          quota,
-          percentage,
-        });
-        const clients = await sw.clients.matchAll();
-        clients.forEach((client) => {
-          client.postMessage({
-            type: 'QUOTA_WARNING',
-            usage,
-            quota,
-          });
-        });
+        console.warn('Service Worker: Storage quota warning:', { usage, quota, percentage });
+        
+        // 使用 channelManager 发送配额警告
+        const cm = getChannelManager();
+        if (cm) {
+          cm.sendCacheQuotaWarning(usage, quota, percentage);
+        }
       }
     }
   } catch (error) {
@@ -2503,6 +2252,16 @@ sw.addEventListener('fetch', (event: FetchEvent) => {
   // 注意：bypass_sw 和 direct_fetch 参数不再完全绕过 SW
   // 而是在 handleImageRequest 中跳过缓存检查直接 fetch，但仍会缓存响应
   // 这样可以确保绕过请求的响应也能被缓存，供后续正常请求使用
+
+  // 放行监控服务域名（PostHog, Sentry），让浏览器直接处理
+  // 这些服务的请求失败不应该影响应用，也不需要记录到调试日志
+  if (
+    url.hostname.endsWith('.posthog.com') ||
+    url.hostname.endsWith('.sentry.io') ||
+    url.hostname.endsWith('.ingest.sentry.io')
+  ) {
+    return; // 静默放行，不记录日志
+  }
 
   // 完全不拦截备用域名，让浏览器直接处理
   if (url.hostname === 'cdn.i666.fun') {
@@ -2937,13 +2696,27 @@ async function handleCacheUrlRequest(request: Request): Promise<Response> {
     url.pathname.includes('/video/') ||
     /\.(mp4|webm|ogg|mov)$/i.test(url.pathname);
 
-  // 检测是否为预览图请求
-  const isThumbnailRequest = url.searchParams.has('thumbnail');
+  // 参数优先级：bypass_sw > _retry > thumbnail
+  const bypassCache =
+    url.searchParams.has('bypass_sw') ||
+    url.searchParams.has('direct_fetch');
+  const isRetryRequest = url.searchParams.has('_retry');
+  
+  // 检测是否为预览图请求（只有在没有 bypass_sw 和 _retry 时才处理）
+  const isThumbnailRequest = 
+    url.searchParams.has('thumbnail') && 
+    !bypassCache && 
+    !isRetryRequest;
+    
   if (isThumbnailRequest) {
     // 获取预览图尺寸（small 或 large，默认 small）
     const thumbnailSize = (url.searchParams.get('thumbnail') || 'small') as 'small' | 'large';
+    // 构建缓存 key：移除所有控制参数
     const originalUrlForCache = new URL(url.toString());
     originalUrlForCache.searchParams.delete('thumbnail');
+    originalUrlForCache.searchParams.delete('bypass_sw');
+    originalUrlForCache.searchParams.delete('direct_fetch');
+    originalUrlForCache.searchParams.delete('_retry');
     
     const { findThumbnailWithFallback, createThumbnailResponse } = await import('./task-queue/utils/thumbnail-utils');
     const result = await findThumbnailWithFallback(
@@ -3033,8 +2806,18 @@ async function handleAssetLibraryRequest(request: Request): Promise<Response> {
   // 使用完整路径作为缓存 key
   const cacheKey = url.pathname;
   
-  // 检测是否为预览图请求
-  const isThumbnailRequest = url.searchParams.has('thumbnail');
+  // 参数优先级：bypass_sw > _retry > thumbnail
+  const bypassCache =
+    url.searchParams.has('bypass_sw') ||
+    url.searchParams.has('direct_fetch');
+  const isRetryRequest = url.searchParams.has('_retry');
+  
+  // 检测是否为预览图请求（只有在没有 bypass_sw 和 _retry 时才处理）
+  const isThumbnailRequest = 
+    url.searchParams.has('thumbnail') && 
+    !bypassCache && 
+    !isRetryRequest;
+    
   if (isThumbnailRequest) {
     // 获取预览图尺寸（small 或 large，默认 small）
     const thumbnailSize = (url.searchParams.get('thumbnail') || 'small') as 'small' | 'large';
@@ -3120,6 +2903,9 @@ async function handleAssetLibraryRequest(request: Request): Promise<Response> {
   }
 }
 
+// Sentinel：视频下载失败时返回此值，避免 throw 导致 Uncaught (in promise)
+const VIDEO_LOAD_ERROR = Symbol('VIDEO_LOAD_ERROR');
+
 // 处理视频请求,支持 Range 请求以实现视频 seek 功能
 async function handleVideoRequest(request: Request): Promise<Response> {
   const url = new URL(request.url);
@@ -3130,6 +2916,18 @@ async function handleVideoRequest(request: Request): Promise<Response> {
     // 检查请求是否包含 Range header
     const rangeHeader = request.headers.get('range');
     // console.log(`Service Worker [Video-${requestId}]: Range header:`, rangeHeader);
+
+    // 参数优先级：bypass_sw > _retry > thumbnail
+    const bypassCache =
+      url.searchParams.has('bypass_sw') ||
+      url.searchParams.has('direct_fetch');
+    const isRetryRequest = url.searchParams.has('_retry');
+    
+    // 检测是否为预览图请求（只有在没有 bypass_sw 和 _retry 时才处理）
+    const isThumbnailRequest = 
+      url.searchParams.has('thumbnail') && 
+      !bypassCache && 
+      !isRetryRequest;
 
     // 创建去重键（移除缓存破坏参数）
     const dedupeUrl = new URL(url);
@@ -3142,7 +2940,10 @@ async function handleVideoRequest(request: Request): Promise<Response> {
       '_cb',
       't',
       'retry',
+      '_retry',
       'rand',
+      'bypass_sw',
+      'direct_fetch',
       'thumbnail', // 也移除 thumbnail 参数，用于构建缓存key
     ];
     cacheBreakingParams.forEach((param) =>
@@ -3150,8 +2951,7 @@ async function handleVideoRequest(request: Request): Promise<Response> {
     );
     const dedupeKey = dedupeUrl.toString();
     
-    // 检测是否为预览图请求（在移除参数前检查，因为需要获取尺寸）
-    const isThumbnailRequest = url.searchParams.has('thumbnail');
+    // 如果是预览图请求（没有 bypass_sw 和 _retry），查找预览图
     if (isThumbnailRequest) {
       // 获取预览图尺寸（small 或 large，默认 small）
       const thumbnailSize = (url.searchParams.get('thumbnail') || 'small') as 'small' | 'large';
@@ -3179,7 +2979,16 @@ async function handleVideoRequest(request: Request): Promise<Response> {
       // 等待视频下载完成
       const videoBlob = await existingEntry.promise;
 
-      if (!videoBlob) {
+      // 下载失败（404/403 等），返回 500
+      if (videoBlob === VIDEO_LOAD_ERROR) {
+        return new Response('Video loading error', {
+          status: 500,
+          statusText: 'Internal Server Error',
+          headers: { 'Content-Type': 'text/plain' },
+        });
+      }
+      // 服务器支持 Range，重新 fetch
+      if (videoBlob === null) {
         const fetchOptions = {
           method: 'GET',
           headers: new Headers(request.headers),
@@ -3226,87 +3035,74 @@ async function handleVideoRequest(request: Request): Promise<Response> {
 
         return createVideoResponse(videoBlob, rangeHeader, requestId);
       }
-    } catch (cacheError) {
-      console.warn(
-        `Service Worker [Video-${requestId}]: 检查 Cache API 失败:`,
-        cacheError
-      );
+    } catch {
+      // 检查 Cache API 失败，继续下载
     }
 
     // 创建新的视频下载Promise
     // console.log(`Service Worker [Video-${requestId}]: 开始下载新视频:`, dedupeKey);
 
     const downloadPromise = (async () => {
-      // 构建请求选项
-      const fetchOptions = {
-        method: 'GET',
-        mode: 'cors' as RequestMode,
-        credentials: 'omit' as RequestCredentials,
-        cache: 'default' as RequestCache, // 使用浏览器默认缓存策略
-      };
+      try {
+        // 构建请求选项
+        const fetchOptions = {
+          method: 'GET',
+          mode: 'cors' as RequestMode,
+          credentials: 'omit' as RequestCredentials,
+          cache: 'default' as RequestCache, // 使用浏览器默认缓存策略
+        };
 
-      // 获取视频响应（不带Range header，获取完整视频）
-      const fetchUrl = new URL(dedupeUrl);
-      const response = await fetch(fetchUrl, fetchOptions);
+        // 获取视频响应（不带Range header，获取完整视频）
+        const fetchUrl = new URL(dedupeUrl);
+        const response = await fetch(fetchUrl, fetchOptions);
 
-      if (!response.ok) {
-        console.error(
-          `Service Worker [Video-${requestId}]: Video fetch failed:`,
-          response.status
-        );
-        throw new Error(`Video fetch failed: ${response.status}`);
-      }
-
-      // 如果服务器返回206，说明服务器原生支持Range，直接返回不缓存
-      if (response.status === 206) {
-        // console.log(`Service Worker [Video-${requestId}]: 服务器原生支持Range请求，直接返回`);
-        return null; // 返回null表示不缓存，直接使用服务器响应
-      }
-
-      // 下载完整视频
-      // console.log(`Service Worker [Video-${requestId}]: 开始下载完整视频...`);
-      const videoBlob = await response.blob();
-      const videoSizeMB = videoBlob.size / (1024 * 1024);
-      // console.log(`Service Worker [Video-${requestId}]: 视频下载完成 (大小: ${videoSizeMB.toFixed(2)}MB)`);
-
-      // 缓存视频Blob（仅缓存小于50MB的视频）
-      if (videoSizeMB < 50) {
-        // 1. 内存缓存（用于当前会话快速访问）
-        videoBlobCache.set(dedupeKey, {
-          blob: videoBlob,
-          timestamp: Date.now(),
-        });
-        // console.log(`Service Worker [Video-${requestId}]: 视频已缓存到内存`);
-
-        // 2. 持久化到 Cache API（用于跨会话持久化）
-        try {
-          const cache = await caches.open(IMAGE_CACHE_NAME);
-          const cacheResponse = new Response(videoBlob, {
-            headers: {
-              'Content-Type': videoBlob.type || 'video/mp4',
-              'Content-Length': videoBlob.size.toString(),
-              'sw-cache-date': Date.now().toString(),
-              'sw-video-size': videoBlob.size.toString(),
-            },
-          });
-          await cache.put(dedupeKey, cacheResponse);
-          // console.log(`Service Worker [Video-${requestId}]: 视频已持久化到 Cache API`);
-          
-          // 异步生成预览图（不阻塞主流程）
-          // 使用与缓存key一致的URL（dedupeKey）作为预览图key
-          const { generateThumbnailAsync } = await import('./task-queue/utils/thumbnail-utils');
-          generateThumbnailAsync(videoBlob, dedupeKey, 'video');
-        } catch (cacheError) {
-          console.warn(
-            `Service Worker [Video-${requestId}]: 持久化到 Cache API 失败:`,
-            cacheError
-          );
+        if (!response.ok) {
+          return VIDEO_LOAD_ERROR;
         }
-      } else {
-        // console.log(`Service Worker [Video-${requestId}]: 视频过大(${videoSizeMB.toFixed(2)}MB)，不缓存`);
-      }
 
-      return videoBlob;
+        // 如果服务器返回206，说明服务器原生支持Range，直接返回不缓存
+        if (response.status === 206) {
+          // console.log(`Service Worker [Video-${requestId}]: 服务器原生支持Range请求，直接返回`);
+          return null; // 返回null表示不缓存，直接使用服务器响应
+        }
+
+        // 下载完整视频
+        // console.log(`Service Worker [Video-${requestId}]: 开始下载完整视频...`);
+        const videoBlob = await response.blob();
+        const videoSizeMB = videoBlob.size / (1024 * 1024);
+        // console.log(`Service Worker [Video-${requestId}]: 视频下载完成 (大小: ${videoSizeMB.toFixed(2)}MB)`);
+
+        // 缓存视频Blob（仅缓存小于50MB的视频）
+        if (videoSizeMB < 50) {
+          // 1. 内存缓存（用于当前会话快速访问）
+          videoBlobCache.set(dedupeKey, {
+            blob: videoBlob,
+            timestamp: Date.now(),
+          });
+          // 2. 持久化到 Cache API（用于跨会话持久化）
+          try {
+            const cache = await caches.open(IMAGE_CACHE_NAME);
+            const cacheResponse = new Response(videoBlob, {
+              headers: {
+                'Content-Type': videoBlob.type || 'video/mp4',
+                'Content-Length': videoBlob.size.toString(),
+                'sw-cache-date': Date.now().toString(),
+                'sw-video-size': videoBlob.size.toString(),
+              },
+            });
+            await cache.put(dedupeKey, cacheResponse);
+            const { generateThumbnailAsync } = await import('./task-queue/utils/thumbnail-utils');
+            generateThumbnailAsync(videoBlob, dedupeKey, 'video');
+          } catch {
+            // 持久化到 Cache API 失败，内存缓存仍可用
+          }
+        }
+
+
+        return videoBlob;
+      } catch {
+        return VIDEO_LOAD_ERROR;
+      }
     })();
 
     // 将下载Promise存储到去重字典
@@ -3330,6 +3126,15 @@ async function handleVideoRequest(request: Request): Promise<Response> {
     // 等待视频下载完成
     const videoBlob = await downloadPromise;
 
+    // 下载失败（404/403 等），返回 500 让前端处理
+    if (videoBlob === VIDEO_LOAD_ERROR) {
+      return new Response('Video loading error', {
+        status: 500,
+        statusText: 'Internal Server Error',
+        headers: { 'Content-Type': 'text/plain' },
+      });
+    }
+
     // 如果返回null，说明服务器支持Range，重新发送原始请求
     if (videoBlob === null) {
       const fetchOptions = {
@@ -3343,11 +3148,7 @@ async function handleVideoRequest(request: Request): Promise<Response> {
 
     // 使用下载的blob响应Range请求
     return createVideoResponse(videoBlob as Blob, rangeHeader, requestId);
-  } catch (error) {
-    console.error(
-      `Service Worker [Video-${requestId}]: Video request error:`,
-      error
-    );
+  } catch {
     return new Response('Video loading error', {
       status: 500,
       statusText: 'Internal Server Error',
@@ -3386,9 +3187,6 @@ function createVideoResponse(
   // 解析Range header (格式: "bytes=start-end")
   const rangeMatch = rangeHeader.match(/bytes=(\d+)-(\d*)/);
   if (!rangeMatch) {
-    console.error(
-      `Service Worker [Video-${requestId}]: Invalid Range header format`
-    );
     return new Response(videoBlob, {
       status: 200,
       statusText: 'OK',
@@ -3677,9 +3475,6 @@ async function handleStaticRequest(request: Request): Promise<Response> {
             const oldCache = await caches.open(cacheName);
             const oldCachedResponse = await oldCache.match(request);
             if (oldCachedResponse) {
-              console.log(
-                `Service Worker: Found resource in ${cacheName} after invalid HTML response`
-              );
               return oldCachedResponse;
             }
           } catch (e) {
@@ -3734,9 +3529,6 @@ async function handleStaticRequest(request: Request): Promise<Response> {
           const oldCache = await caches.open(cacheName);
           const oldCachedResponse = await oldCache.match(request);
           if (oldCachedResponse) {
-            console.log(
-              `[SW] Found resource in ${cacheName} after network failure`
-            );
             return oldCachedResponse;
           }
         } catch (e) {
@@ -3908,17 +3700,27 @@ async function handleImageRequest(request: Request): Promise<Response> {
     // 创建原始URL（不带缓存破坏参数）用于缓存键和去重键
     const originalUrl = new URL(request.url);
     
-    // 检测是否为预览图请求（需要在移除其他参数之前检查）
-    const isThumbnailRequest = originalUrl.searchParams.has('thumbnail');
+    // 参数优先级：bypass_sw > _retry > thumbnail
+    // 检测是否要求绕过缓存检查（最高优先级）
+    const bypassCache =
+      originalUrl.searchParams.has('bypass_sw') ||
+      originalUrl.searchParams.has('direct_fetch');
+    
+    // 检测是否为强制重试请求（次高优先级）
+    const isRetryRequest = originalUrl.searchParams.has('_retry');
+    
+    // 检测是否为预览图请求（最低优先级，只有在没有 bypass_sw 和 _retry 时才处理）
+    // bypass_sw 和 _retry 的存在表示用户明确要求获取原图或重新请求
+    const isThumbnailRequest = 
+      originalUrl.searchParams.has('thumbnail') && 
+      !bypassCache && 
+      !isRetryRequest;
+    
     // 在删除参数之前先获取预览图尺寸
     const thumbnailSize = isThumbnailRequest 
       ? (originalUrl.searchParams.get('thumbnail') || 'small')
       : 'small';
     
-    // 检测是否要求绕过缓存检查（但仍会缓存响应）
-    const bypassCache =
-      originalUrl.searchParams.has('bypass_sw') ||
-      originalUrl.searchParams.has('direct_fetch');
     const cacheBreakingParams = [
       '_t',
       'cache_buster',
@@ -3947,7 +3749,7 @@ async function handleImageRequest(request: Request): Promise<Response> {
 
     const dedupeKey = originalUrl.toString();
     
-    // 如果是预览图请求，在移除参数后查找预览图
+    // 如果是预览图请求（没有 bypass_sw 和 _retry），在移除参数后查找预览图
     if (isThumbnailRequest) {
       const { findThumbnailWithFallback, createThumbnailResponse } = await import('./task-queue/utils/thumbnail-utils');
       
@@ -4096,7 +3898,6 @@ async function handleImageRequest(request: Request): Promise<Response> {
       throw timeoutError;
     }
   } catch (error) {
-    console.error('Service Worker fetch error:', error);
     throw error;
   }
 }
@@ -4554,8 +4355,6 @@ async function handleImageRequestInternal(
 
     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
   } catch (error: any) {
-    console.error('Service Worker fetch error:', error);
-
     // 重新获取URL用于错误处理
     const errorUrl = new URL(requestUrl);
 

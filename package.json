@@ -1,6 +1,6 @@
 {
   "name": "@aitu/source",
-  "version": "0.5.63",
+  "version": "0.5.64",
   "license": "MIT",
   "packageManager": "pnpm@10.21.0",
   "description": "Opentu - An open-source whiteboard tool with AI-powered image/video creation, mind mapping, flowcharts, and freehand drawing",
@@ -90,6 +90,7 @@
     "mermaid": "^11.12.2",
     "mobile-detect": "^1.4.5",
     "open-color": "^1.9.1",
+    "postmessage-duplex": "^1.1.1",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "roughjs": "^4.6.6",

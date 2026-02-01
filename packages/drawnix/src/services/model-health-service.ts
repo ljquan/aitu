@@ -153,19 +153,6 @@ class ModelHealthFetcher {
 export const modelHealthFetcher = ModelHealthFetcher.getInstance();
 
 /**
- * 获取模型健康状态数据
- * @param intervalMinutes 查询的时间范围（分钟），默认 5 分钟
- * @param force 是否强制刷新（忽略缓存间隔限制）
- * @deprecated 推荐使用 modelHealthFetcher.fetch() 以获得更好的控制
- */
-export async function fetchModelHealthData(
-    intervalMinutes: number = 5,
-    force: boolean = false
-): Promise<ModelHealthResponse[]> {
-    return modelHealthFetcher.fetch(intervalMinutes, force);
-}
-
-/**
  * 根据模型 ID 匹配健康状态
  * 
  * 接口返回的 model_name 可能是字符串或字符串数组

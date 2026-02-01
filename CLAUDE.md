@@ -135,7 +135,7 @@ Service Worker (后台执行)
 4. **定时器清理**：`setInterval` 必须保存 ID，提供 `destroy()` 方法
 5. **API 请求**：禁止重试，区分业务失败和网络错误
 6. **调试日志**：提交前必须清理 `console.log`
-7. **敏感信息**：永不硬编码 API Key，使用 `sanitizeObject` 过滤日志
+7. **敏感信息**：永不硬编码 API Key，使用 `sanitizeObject` 过滤日志，敏感 ID 用 `maskId` 脱敏
 8. **布局抖动**：`Suspense` 的 fallback 应撑满容器或固定高度，防止加载时跳动
 9. **结构化数据**：复杂消息展示应优先使用 `aiContext` 等结构化数据而非字符串解析
 10. **图标验证**：使用 `tdesign-icons-react` 前需验证导出名称是否存在（如 `ServiceIcon`）
@@ -144,6 +144,7 @@ Service Worker (后台执行)
 13. **同名模块隔离**：多个同名模块有独立全局状态，确保从正确的模块路径导入
 14. **工作区初始化**：`getCurrentBoard()` 返回 `null` 但 `hasBoards()` 为 `true` 时，必须自动选择第一个画板，不能只在 "无画板" 时创建新画板
 15. **工具函数组织**：通用工具函数放 `@aitu/utils`，使用时直接导入，禁止在业务包中二次导出
+16. **数据安全保护**：破坏性操作（删除、覆盖）前必须安全检查，当前编辑项不可删除，批量删除需确认，不可逆操作需输入确认文字
 
 ### Service Worker 规则
 
@@ -156,12 +157,20 @@ Service Worker (后台执行)
 7. 跨层数据转换必须传递所有字段，特别是 `options`、`metadata` 等可选字段，遗漏会导致功能静默失败
 8. **Cache.put() 会消费 Response body**：需要缓存到多个 key 时，为每个 key 创建独立的 Response 对象，不要复用后 clone
 9. **fetchOptions 优先级**：优先尝试 `cors` 模式（可缓存），最后才尝试 `no-cors` 模式（无法缓存）
+10. **postmessage-duplex 1.1.0 通信模式**：RPC 用 `call()` 方法（需响应），单向广播用 `broadcast()` + `onBroadcast()`（fire-and-forget）；SW 用 `enableGlobalRouting` 自动管理 channel
+11. **postmessage-duplex 客户端初始化**：`createFromPage()` 设置 `autoReconnect: true` 处理 SW 更新；禁用日志需 `log: {...}` 配合 `as any`（类型定义不含 log）
+12. **postmessage-duplex 消息大小限制**：单次 RPC 响应不超过 1MB，大数据查询需后端分页+精简数据（去掉 requestBody/responseBody 等大字段）
+13. **任务队列双服务同步**：`taskQueueService`（本地）和 `swTaskQueueService`（SW）是独立的，组件渲染时需调用 `syncTasksFromSW()` 同步数据
+14. **任务数据持久化**：主线程的 `tasks` Map 只是内存状态，恢复任务必须通过 `importTasks` RPC 持久化到 SW 的 IndexedDB
+15. **工作流恢复状态不一致**：UI 与 SW 状态不一致时（如终态但有运行中步骤），必须先从 SW 获取真实状态，不能直接标记为失败
+16. **错误处理链保持完整**：需要传递特殊错误属性（如 `isAwaitingClient`）时，必须重新抛出原始错误，不能创建新 Error 对象
+17. **SW 重发 Tool Request 需延迟**：页面刷新后 claim 工作流时，SW 重发 pending tool request 需延迟 500ms，等待主线程 handler 准备好
 
 ### React 规则
 
 1. Context 回调中必须使用函数式更新 `setState(prev => ...)`
 2. Hover 延迟操作需要正确的计时器清理
-3. 第三方窗口需用 `createPortal` 保持 React 事件流
+3. 弹出菜单/浮层需用 `createPortal` 渲染到 body，避免被父容器 overflow 截断
 4. 模式切换时多个相关状态需同步更新，封装成一个函数而非直接暴露底层 setMode
 5. 图标组件使用 `React.FC`，支持 `size` 属性
 6. 传递组件作为 prop 时必须实例化：`icon={<Icon />}` 而非 `icon={Icon}`
@@ -169,6 +178,8 @@ Service Worker (后台执行)
 8. Flex 布局中使用 `flex: 1` 时，若兄弟元素可隐藏，内部组件需设 `max-width` 防止变形
 9. `useCallback` 定义必须在引用它的 `useEffect` 之前，否则会报 TDZ 错误
 10. Slate-React Leaf 组件 DOM 结构必须稳定，不能根据条件切换标签/CSS 实现方式
+11. **异步操作不阻塞 UI**：远程同步等耗时操作应异步执行（fire-and-forget），不阻塞弹窗关闭
+12. **关键操作直接调用**：不依赖 RxJS 事件订阅触发关键业务逻辑，订阅时序不可靠
 
 ### 缓存规则
 
@@ -202,6 +213,7 @@ Service Worker (后台执行)
 - **可点击容器**：用 `pointer-events: none` + 父容器 `onClick` 扩大交互区域
 - **筛选与选中联动**：选中计数、操作都应基于筛选后的结果
 - **全局配色统一**：在 `tdesign-theme.scss` 中集中覆盖第三方组件样式
+- **组件内颜色**：TDesign CSS 变量可能被覆盖，组件 scss 中应直接使用具体颜色值（如 `rgba(243, 156, 18, 0.12)`）
 
 ---
 

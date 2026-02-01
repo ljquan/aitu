@@ -1,3 +1,34 @@
+## 0.5.64 (2026-01-30)
+
+### 🚀 Features
+
+- support async models with size and references ([e85dda8](https://github.com/ljquan/aitu/commit/e85dda8))
+- implement auto-compression for 10-25MB images ([c26cbec](https://github.com/ljquan/aitu/commit/c26cbec))
+- 添加"不再提示"按钮到灵感创意板块 ([17b926a](https://github.com/ljquan/aitu/commit/17b926a))
+- 添加重命名验证功能，禁止同级重名 ([a69c57a](https://github.com/ljquan/aitu/commit/a69c57a))
+- 完成 AI 输入栏和 ChatDrawer 完整测试体系 ([1c3fa39](https://github.com/ljquan/aitu/commit/1c3fa39))
+- 完成所有核心功能 Manual GIF 录制体系 ([d60c4a4](https://github.com/ljquan/aitu/commit/d60c4a4))
+
+### 🔧 Chores
+
+- update release script and bump app version to 0.5.63 ([8b36e88](https://github.com/ljquan/aitu/commit/8b36e88))
+- bump version to 0.5.63 ([52f4493](https://github.com/ljquan/aitu/commit/52f4493))
+- update app version to 0.5.62 and adjust build time in version.json ([147815c](https://github.com/ljquan/aitu/commit/147815c))
+- bump version to 0.5.62 ([15c42c6](https://github.com/ljquan/aitu/commit/15c42c6))
+- update version to 0.5.61 and enhance batch processing logic in image and video generation ([243725e](https://github.com/ljquan/aitu/commit/243725e))
+- refactor: rename project from Aitu to Opentu ([a4ca6ca](https://github.com/ljquan/aitu/commit/a4ca6ca))
+- refactor: 迁移通用工具函数到 @aitu/utils 并消除二次导出 ([0645497](https://github.com/ljquan/aitu/commit/0645497))
+- docs: 添加工具函数组织规则 ([6abdcad](https://github.com/ljquan/aitu/commit/6abdcad))
+- Remove legacy workspace rename spec ([a7063f4](https://github.com/ljquan/aitu/commit/a7063f4))
+- Fix workspace item naming collisions ([b8019f1](https://github.com/ljquan/aitu/commit/b8019f1))
+
+### ❤️  Thank You
+
+- gongchengtu <1817063960@qq.com>
+- mengxiangtu <changesydneyai@gmail.com>
+- liquidliang <ljquan@qq.com>
+- zzz <zzz@zzzdeMac-mini.local>
+
 ## 0.5.63 (2026-01-29)
 
 ### 🚀 Features

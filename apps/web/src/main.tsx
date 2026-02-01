@@ -13,9 +13,22 @@ import {
   initPromptStorageCache,
   toolbarConfigService,
   memoryMonitorService,
+  crashRecoveryService,
+  swChannelClient,
 } from '@drawnix/drawnix';
 import { sanitizeObject, sanitizeUrl } from '@aitu/utils';
 import { initSWConsoleCapture } from './utils/sw-console-capture';
+
+// ===== 控制台日志捕获（尽早初始化，确保默认 console 被改写） =====
+// 必须在其他业务代码之前执行，否则后续工具（如 rrweb）可能先改写 console 导致捕获失效
+if ('serviceWorker' in navigator) {
+  initSWConsoleCapture();
+}
+
+// ===== 崩溃恢复检测 =====
+// 必须最先执行，检测上次是否因内存不足等原因崩溃
+crashRecoveryService.markLoadingStart();
+crashRecoveryService.checkUrlSafeMode();
 
 // ===== 初始化崩溃日志系统 =====
 // 必须尽早初始化，以捕获启动阶段的内存状态和错误
@@ -137,10 +150,7 @@ if ('serviceWorker' in navigator) {
       .then(registration => {
         // console.log('Service Worker registered successfully:', registration);
         swRegistration = registration;
-        
-        // 初始化控制台日志捕获，发送到 SW 调试面板
-        initSWConsoleCapture();
-        
+
         // 在开发模式下，强制检查更新并处理等待中的Worker
         if (isDevelopment) {
           // console.log('Development mode: forcing SW update check');
@@ -206,80 +216,84 @@ if ('serviceWorker' in navigator) {
       });
   });
   
-  // 监听Service Worker消息
-  navigator.serviceWorker.addEventListener('message', async event => {
-    if (event.data && event.data.type === 'SW_UPDATED') {
-      // 只有用户主动确认升级后才刷新页面
-      if (!userConfirmedUpgrade) {
-        // console.log('SW_UPDATED received but user has not confirmed upgrade, skipping reload');
-        return;
-      }
-      // console.log('Service Worker updated, reloading page...');
-      // 等待一小段时间，确保新的Service Worker已经完全接管
-      setTimeout(() => {
-        window.location.reload();
-      }, 1000);
-    } else if (event.data && event.data.type === 'CACHE_CLEANUP_COMPLETE') {
-      // 缓存清理完成通知（只在有清理时才会有日志）
-      // 不需要在主线程额外输出日志，Service Worker 已经输出了
-    } else if (event.data && event.data.type === 'SW_NEW_VERSION_READY') {
-      // Service Worker 通知新版本已准备好
-      // console.log(`Main: New version v${event.data.version} ready, waiting for user confirmation`);
-      newVersionReady = true;
-      window.dispatchEvent(new CustomEvent('sw-update-available', { 
-        detail: { version: event.data.version } 
-      }));
-    } else if (event.data && event.data.type === 'SW_UPGRADING') {
-      // Service Worker 正在升级
-      // console.log(`Main: Service Worker upgrading to v${event.data.version}`);
-    } else if (event.data && event.data.type === 'SW_ACTIVATED') {
-      // 新 SW 已自动激活并接管页面
-      // 通知 UI 显示更新提示（用户可选择刷新以使用新功能）
-      console.log(`Service Worker v${event.data.version} 已激活`);
-      window.dispatchEvent(new CustomEvent('sw-update-available', { 
-        detail: { version: event.data.version, autoActivated: true } 
-      }));
-    } else if (event.data && event.data.type === 'UPGRADE_STATUS') {
-      // 升级状态响应
-      // console.log('Main: Upgrade status:', event.data);
-    } else if (event.data && event.data.type === 'VIDEO_THUMBNAIL_REQUEST') {
-      // Service Worker 请求生成视频预览图
+  // 设置 SW 事件处理器（通过 postmessage-duplex）
+  const setupSWEventHandlers = () => {
+    if (!swChannelClient.isInitialized()) {
+      setTimeout(setupSWEventHandlers, 500);
+      return;
+    }
+    
+    swChannelClient.setEventHandlers({
+      onSWUpdated: (event) => {
+        // 只有用户主动确认升级后才刷新页面
+        if (!userConfirmedUpgrade) {
+          return;
+        }
+        // 等待一小段时间，确保新的Service Worker已经完全接管
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
+      },
+      onSWNewVersionReady: (event) => {
+        newVersionReady = true;
+        window.dispatchEvent(new CustomEvent('sw-update-available', { 
+          detail: { version: event.version } 
+        }));
+      },
+      onSWActivated: (event) => {
+        // 新 SW 已自动激活并接管页面
+        window.dispatchEvent(new CustomEvent('sw-update-available', { 
+          detail: { version: event.version, autoActivated: true } 
+        }));
+      },
+    });
+  };
+  
+  // 延迟初始化 SW 事件处理器，等待 swChannelClient 就绪
+  setTimeout(setupSWEventHandlers, 1000);
+  
+  // 注册视频缩略图生成处理器（使用 postmessage-duplex 双工通讯）
+  // SW 通过 publish('thumbnail:generate', { url }) 请求，主线程处理并直接返回结果
+  const setupVideoThumbnailHandler = async () => {
+    // 等待 swChannelClient 初始化
+    if (!swChannelClient.isInitialized()) {
+      setTimeout(setupVideoThumbnailHandler, 500);
+      return;
+    }
+    
+    swChannelClient.registerVideoThumbnailHandler(async (url) => {
       try {
         const { generateVideoThumbnailFromBlob } = await import('@drawnix/drawnix');
-        const { requestId, blob: arrayBuffer, mimeType, maxSize = 400 } = event.data;
         
-        // 将 ArrayBuffer 转换为 Blob
-        const videoBlob = new Blob([arrayBuffer], { type: mimeType || 'video/mp4' });
-        
-        // 生成预览图（使用指定尺寸）
-        const thumbnailBlob = await generateVideoThumbnailFromBlob(videoBlob, maxSize);
-        
-        // 将 Blob 转换为 ArrayBuffer 以便通过 postMessage 传递
-        const thumbnailArrayBuffer = await thumbnailBlob.arrayBuffer();
-        
-        // 发送响应回 Service Worker
-        if (event.source && 'postMessage' in event.source) {
-          (event.source as ServiceWorker).postMessage({
-            type: 'VIDEO_THUMBNAIL_RESPONSE',
-            requestId,
-            success: true,
-            blob: thumbnailArrayBuffer,
-          });
+        // 从缓存获取视频 blob
+        const cache = await caches.open('drawnix-images');
+        const response = await cache.match(url);
+        if (!response) {
+          return { error: 'Video not found in cache' };
         }
+        
+        const videoBlob = await response.blob();
+        
+        // 生成预览图
+        const thumbnailBlob = await generateVideoThumbnailFromBlob(videoBlob, 400);
+        
+        // 将 Blob 转换为 Data URL
+        const thumbnailUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(thumbnailBlob);
+        });
+        
+        return { thumbnailUrl };
       } catch (error) {
         console.warn('[Main] Failed to generate video thumbnail:', error);
-        // 发送失败响应
-        if (event.source && 'postMessage' in event.source) {
-          (event.source as ServiceWorker).postMessage({
-            type: 'VIDEO_THUMBNAIL_RESPONSE',
-            requestId: event.data.requestId,
-            success: false,
-            error: error instanceof Error ? error.message : String(error),
-          });
-        }
+        return { error: error instanceof Error ? error.message : String(error) };
       }
-    }
-  });
+    });
+  };
+  
+  setupVideoThumbnailHandler();
   
   // 监听controller变化（新的Service Worker接管）
   // 只有用户主动确认升级后才刷新页面

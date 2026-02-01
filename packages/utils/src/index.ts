@@ -12,3 +12,4 @@ export * from './url';
 export * from './id';
 export * from './dom';
 export * from './security';
+export * from './workflow';

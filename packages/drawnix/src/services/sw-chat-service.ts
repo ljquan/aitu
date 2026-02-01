@@ -7,12 +7,20 @@
 
 import type { ChatMessage, StreamEvent } from '../types/chat.types';
 import { MessageRole } from '../types/chat.types';
-import { swTaskQueueClient, type ChatAttachment, type ChatParams } from './sw-client';
-import { geminiSettings } from '../utils/settings-manager';
+import { swChannelClient, ChatAttachment, ChatStartParams, ChatMessage as SWChatMessage } from './sw-channel';
+import { geminiSettings, settingsManager } from '../utils/settings-manager';
 import { analytics } from '../utils/posthog-analytics';
 
 // Track active chat sessions
-const activeChatSessions = new Map<string, AbortController>();
+const activeChatSessions = new Map<string, {
+  controller: AbortController;
+  onStream: (event: StreamEvent) => void;
+  resolve: (content: string) => void;
+  reject: (error: Error) => void;
+  fullContent: string;
+  startTime: number;
+  modelName: string;
+}>();
 
 // Generate unique chat ID
 function generateChatId(): string {
@@ -27,7 +35,6 @@ async function fileToAttachment(file: File): Promise<ChatAttachment> {
     const reader = new FileReader();
     reader.onload = () => {
       const result = reader.result as string;
-      // Remove data URL prefix to get pure base64
       const base64 = result.split(',')[1] || result;
       resolve({
         type: file.type.startsWith('image/') ? 'image' : 'file',
@@ -44,13 +51,68 @@ async function fileToAttachment(file: File): Promise<ChatAttachment> {
 /**
  * Convert ChatMessage array to SW format
  */
-function convertMessages(messages: ChatMessage[]): import('./sw-client').ChatMessage[] {
+function convertMessages(messages: ChatMessage[]): SWChatMessage[] {
   return messages
     .filter((m) => m.status === 'success' || m.status === 'streaming')
     .map((m) => ({
-      role: m.role === MessageRole.USER ? 'user' : 'assistant',
+      role: m.role === MessageRole.USER ? 'user' as const : 'assistant' as const,
       content: m.content,
     }));
+}
+
+/**
+ * Initialize chat event handlers
+ */
+let handlersInitialized = false;
+function ensureChatEventHandlers(): void {
+  if (handlersInitialized) return;
+  handlersInitialized = true;
+
+  swChannelClient.setEventHandlers({
+    onChatChunk: (event) => {
+      const session = activeChatSessions.get(event.chatId);
+      if (!session) return;
+      
+      session.fullContent = event.content;
+      session.onStream({ type: 'content', content: event.content });
+    },
+    onChatDone: (event) => {
+      const session = activeChatSessions.get(event.chatId);
+      if (!session) return;
+
+      activeChatSessions.delete(event.chatId);
+
+      const duration = Date.now() - session.startTime;
+      analytics.trackModelSuccess({
+        taskId: event.chatId,
+        taskType: 'chat',
+        model: session.modelName,
+        duration,
+        resultSize: event.fullContent.length,
+      });
+
+      session.onStream({ type: 'done' });
+      session.resolve(event.fullContent);
+    },
+    onChatError: (event) => {
+      const session = activeChatSessions.get(event.chatId);
+      if (!session) return;
+
+      activeChatSessions.delete(event.chatId);
+
+      const duration = Date.now() - session.startTime;
+      analytics.trackModelFailure({
+        taskId: event.chatId,
+        taskType: 'chat',
+        model: session.modelName,
+        duration,
+        error: event.error,
+      });
+
+      session.onStream({ type: 'error', error: event.error });
+      session.reject(new Error(event.error));
+    },
+  });
 }
 
 /**
@@ -66,8 +128,6 @@ export async function sendChatMessage(
 ): Promise<string> {
   const chatId = generateChatId();
   const abortController = new AbortController();
-  activeChatSessions.set(chatId, abortController);
-
   const startTime = Date.now();
   const settings = geminiSettings.get();
   const modelName = temporaryModel || settings.chatModel || 'unknown';
@@ -84,24 +144,30 @@ export async function sendChatMessage(
     });
 
     // Ensure SW client is initialized
-    if (!swTaskQueueClient.isInitialized()) {
-      await swTaskQueueClient.initialize(
-        {
+    if (!swChannelClient.isInitialized()) {
+      await settingsManager.waitForInitialization();
+      await swChannelClient.initialize();
+      await swChannelClient.init({
+        geminiConfig: {
           apiKey: settings.apiKey,
           baseUrl: settings.baseUrl,
           modelName: settings.chatModel,
         },
-        {
+        videoConfig: {
           baseUrl: 'https://api.tu-zi.com',
-        }
-      );
+        },
+      });
     }
+
+    // Ensure event handlers are set up
+    ensureChatEventHandlers();
 
     // Convert attachments to base64
     const swAttachments = await Promise.all(attachments.map(fileToAttachment));
 
     // Prepare chat params
-    const params: ChatParams = {
+    const params: ChatStartParams = {
+      chatId,
       messages: convertMessages(messages),
       newContent,
       attachments: swAttachments,
@@ -109,58 +175,30 @@ export async function sendChatMessage(
       systemPrompt,
     };
 
-    // Track full content for completion
-    let fullContent = '';
-
     // Start chat via SW with promise wrapper
     return new Promise((resolve, reject) => {
+      // Register session
+      activeChatSessions.set(chatId, {
+        controller: abortController,
+        onStream,
+        resolve,
+        reject,
+        fullContent: '',
+        startTime,
+        modelName,
+      });
+
       // Handle abort
       abortController.signal.addEventListener('abort', () => {
-        swTaskQueueClient.stopChat(chatId);
+        swChannelClient.stopChat(chatId);
+        activeChatSessions.delete(chatId);
         reject(new Error('Request cancelled'));
       });
 
-      swTaskQueueClient.startChat(chatId, params, {
-        onChunk: (id, content) => {
-          if (id !== chatId) return;
-          // content 已经是累积的完整内容，直接使用
-          fullContent = content;
-          onStream({ type: 'content', content });
-        },
-        onDone: (id, content) => {
-          if (id !== chatId) return;
-          activeChatSessions.delete(chatId);
-
-          // Track success
-          const duration = Date.now() - startTime;
-          analytics.trackModelSuccess({
-            taskId: chatId,
-            taskType: 'chat',
-            model: modelName,
-            duration,
-            resultSize: content.length,
-          });
-
-          onStream({ type: 'done' });
-          resolve(content);
-        },
-        onError: (id, error) => {
-          if (id !== chatId) return;
-          activeChatSessions.delete(chatId);
-
-          // Track failure
-          const duration = Date.now() - startTime;
-          analytics.trackModelFailure({
-            taskId: chatId,
-            taskType: 'chat',
-            model: modelName,
-            duration,
-            error,
-          });
-
-          onStream({ type: 'error', error });
-          reject(new Error(error));
-        },
+      // Start the chat
+      swChannelClient.startChat(params).catch((err) => {
+        activeChatSessions.delete(chatId);
+        reject(err);
       });
     });
   } catch (error) {
@@ -195,10 +233,9 @@ export async function sendChatMessage(
  * Stop current generation
  */
 export function stopGeneration(): void {
-  // Stop all active sessions
-  for (const [chatId, controller] of activeChatSessions) {
-    controller.abort();
-    swTaskQueueClient.stopChat(chatId);
+  for (const [chatId, session] of activeChatSessions) {
+    session.controller.abort();
+    swChannelClient.stopChat(chatId);
   }
   activeChatSessions.clear();
 }

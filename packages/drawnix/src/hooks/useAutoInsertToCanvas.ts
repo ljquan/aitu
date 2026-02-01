@@ -131,22 +131,17 @@ function updateWorkflowStepForTask(
         return !!stepResult?.taskId;
       });
 
-      console.log(`[AutoInsert] WorkZone ${workzone.id} allStepsFinished: ${allStepsFinished}, hasQueuedTasks: ${hasQueuedTasks}`);
-
       // 如果有队列任务（图片/视频生成），检查后处理是否完成
       if (hasQueuedTasks) {
         const allPostProcessingFinished = updatedSteps.every(step => {
           const stepResult = step.result as { taskId?: string } | undefined;
           if (stepResult?.taskId) {
-            const isCompleted = workflowCompletionService.isPostProcessingCompleted(stepResult.taskId);
-            console.log(`[AutoInsert] Task ${stepResult.taskId} post-processing completed: ${isCompleted}`);
-            return isCompleted;
+            return workflowCompletionService.isPostProcessingCompleted(stepResult.taskId);
           }
           return true;
         });
 
         if (!allPostProcessingFinished) {
-          console.log(`[AutoInsert] WorkZone ${workzone.id} has unfinished post-processing, skipping removal`);
           return;
         }
       }
@@ -349,9 +344,9 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
       const result = await handleSplitAndInsertTask(task.id, url, params, { scrollToResult: true });
       
       // 拆分完成后更新步骤状态
-      if (result.success) {
-        updateWorkflowStepForTask(task.id, 'completed', { url });
-      } else {
+      // Note: 成功时 SW 已通过 workflow:stepStatus 事件标记为 completed
+      // 只有失败时才需要本地更新（拆分是客户端操作，SW 不知道拆分结果）
+      if (!result.success) {
         updateWorkflowStepForTask(task.id, 'failed', undefined, result.error || '拆分失败');
       }
     };
@@ -360,17 +355,8 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
      * 处理任务完成事件
      */
     const handleTaskCompleted = (task: Task) => {
-      // console.log(`[AutoInsert] handleTaskCompleted called for task ${task.id}, type: ${task.type}, status: ${task.status}`);
-      // console.log(`[AutoInsert] Task params:`, {
-      //   autoInsertToCanvas: task.params.autoInsertToCanvas,
-      //   prompt: task.params.prompt?.substring(0, 50),
-      //   hasResult: !!task.result,
-      //   resultUrl: task.result?.url?.substring(0, 100),
-      // });
-
       // 检查任务是否配置了自动插入画布
       if (!task.params.autoInsertToCanvas) {
-        // console.log(`[AutoInsert] Task ${task.id} skipped: autoInsertToCanvas is false/undefined`);
         return;
       }
 
@@ -395,7 +381,6 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
 
       // 检查是否有结果 URL
       if (!task.result?.url) {
-        console.warn(`[AutoInsert] Task ${task.id} completed but has no result URL`);
         return;
       }
 
@@ -426,8 +411,8 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
         return;
       }
 
-      // 更新关联的工作流步骤状态为 completed（仅对普通图片/视频任务）
-      updateWorkflowStepForTask(task.id, 'completed', { url: task.result.url });
+      // Note: 步骤状态更新现在由 SW 统一通过 workflow:stepStatus 事件处理
+      // 不再需要在这里调用 updateWorkflowStepForTask
 
       // 获取 Prompt 作为分组 key
       const promptKey = task.params.prompt || 'unknown';
@@ -450,9 +435,12 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
 
     /**
      * 处理任务失败事件
+     * Note: 步骤状态更新现在由 SW 统一通过 workflow:stepStatus 事件处理
+     * 不再需要在这里调用 updateWorkflowStepForTask
      */
-    const handleTaskFailed = (task: Task) => {
-      updateWorkflowStepForTask(task.id, 'failed', undefined, task.error?.message || '任务执行失败');
+    const handleTaskFailed = (_task: Task) => {
+      // 任务失败的步骤状态更新由 SW 的 workflow:stepStatus 事件处理
+      // 这里不再需要手动更新 WorkZone
     };
 
     // 订阅任务更新事件
@@ -481,14 +469,12 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
 
     // 订阅后处理完成事件，以便在所有任务插入完成后删除 WorkZone
     const completionSub = workflowCompletionService.observeCompletionEvents().subscribe(event => {
-      console.log(`[AutoInsert] Received completion event: ${event.type} for task ${event.taskId}`);
       if (event.type === 'postProcessingCompleted' || event.type === 'postProcessingFailed') {
         const board = getCanvasBoard();
         if (!board) return;
 
         const workzone = findWorkZoneForTask(event.taskId);
         if (workzone) {
-          console.log(`[AutoInsert] Found WorkZone ${workzone.id} for task ${event.taskId}`);
           // 重新检查该 WorkZone 的所有步骤
           const allStepsFinished = workzone.workflow.steps?.every(
             step => step.status === 'completed' || step.status === 'failed' || step.status === 'skipped'
@@ -498,17 +484,12 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
             const allPostProcessingFinished = workzone.workflow.steps?.every(step => {
               const stepResult = step.result as { taskId?: string } | undefined;
               if (stepResult?.taskId) {
-                const isCompleted = workflowCompletionService.isPostProcessingCompleted(stepResult.taskId);
-                console.log(`[AutoInsert] Step task ${stepResult.taskId} isCompleted: ${isCompleted}`);
-                return isCompleted;
+                return workflowCompletionService.isPostProcessingCompleted(stepResult.taskId);
               }
               return true;
             });
 
-            console.log(`[AutoInsert] WorkZone ${workzone.id} allStepsFinished: ${allStepsFinished}, allPostProcessingFinished: ${allPostProcessingFinished}`);
-
             if (allPostProcessingFinished) {
-              console.log(`[AutoInsert] All post-processing finished for WorkZone ${workzone.id}, removing`);
               setTimeout(() => {
                 WorkZoneTransforms.removeWorkZone(board, workzone.id);
                 window.dispatchEvent(new CustomEvent('ai-generation-complete', {
@@ -517,8 +498,6 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
               }, 1500);
             }
           }
-        } else {
-          console.log(`[AutoInsert] No WorkZone found for task ${event.taskId}`);
         }
       }
     });

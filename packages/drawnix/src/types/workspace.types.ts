@@ -28,10 +28,10 @@ export interface Folder {
 }
 
 /**
- * Board node - contains the actual drawing board data
- * (Merged from previous Project and Branch concepts)
+ * Board metadata - lightweight data for sidebar display
+ * Does not include elements to reduce memory usage
  */
-export interface Board {
+export interface BoardMetadata {
   /** Unique board identifier */
   id: string;
   /** Board display name */
@@ -40,8 +40,6 @@ export interface Board {
   folderId: string | null;
   /** Sort order within folder */
   order: number;
-  /** Board elements */
-  elements: PlaitElement[];
   /** Viewport state */
   viewport?: Viewport;
   /** Theme configuration */
@@ -50,6 +48,15 @@ export interface Board {
   createdAt: number;
   /** Last update timestamp */
   updatedAt: number;
+}
+
+/**
+ * Board node - contains the actual drawing board data
+ * (Merged from previous Project and Branch concepts)
+ */
+export interface Board extends BoardMetadata {
+  /** Board elements */
+  elements: PlaitElement[];
 }
 
 /**

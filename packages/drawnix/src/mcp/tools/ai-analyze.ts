@@ -73,6 +73,7 @@ export const aiAnalyzeTool: MCPTool = {
 
   execute: async (params: Record<string, unknown>, options?: MCPExecuteOptions): Promise<MCPResult> => {
     const { context, textModel } = params as unknown as AIAnalyzeParams;
+    debugger;
 
     if (!context) {
       return {

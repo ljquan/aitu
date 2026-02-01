@@ -9,6 +9,7 @@ import { Subject, Observable } from 'rxjs';
 import {
   Folder,
   Board,
+  BoardMetadata,
   TreeNode,
   FolderTreeNode,
   BoardTreeNode,
@@ -39,6 +40,11 @@ function generateId(): string {
 class WorkspaceService {
   private static instance: WorkspaceService;
   private folders: Map<string, Folder> = new Map();
+  /** 存储画板元数据（不含 elements），用于侧边栏显示 */
+  private boardMetadata: Map<string, BoardMetadata> = new Map();
+  /** 存储已加载完整数据的画板（含 elements），按需加载 */
+  private loadedBoards: Map<string, Board> = new Map();
+  /** @deprecated 保留用于向后兼容，实际使用 boardMetadata */
   private boards: Map<string, Board> = new Map();
   private state: WorkspaceState;
   private events$: Subject<WorkspaceEvent> = new Subject();
@@ -80,10 +86,10 @@ class WorkspaceService {
     try {
       await workspaceStorageService.initialize();
 
-      // Load all data in parallel
-      const [folders, boards, state] = await Promise.all([
+      // 只加载元数据，不加载画板元素，减少内存占用
+      const [folders, boardMetadata, state] = await Promise.all([
         workspaceStorageService.loadAllFolders(),
-        workspaceStorageService.loadAllBoards(),
+        workspaceStorageService.loadAllBoardMetadata(),
         workspaceStorageService.loadState(),
       ]);
 
@@ -99,13 +105,15 @@ class WorkspaceService {
       });
 
       this.folders = new Map(folders.map((f) => [f.id, f]));
-      this.boards = new Map(boards.map((b) => [b.id, b]));
+      this.boardMetadata = new Map(boardMetadata.map((b) => [b.id, b]));
+      // 为了向后兼容，也更新 boards Map（但此时不含 elements）
+      this.boards = new Map(boardMetadata.map((b) => [b.id, { ...b, elements: [] } as Board]));
       this.state = state;
 
       this.initialized = true;
       // console.log('[WorkspaceService] Initialized with', {
       //   folders: this.folders.size,
-      //   boards: this.boards.size,
+      //   boards: this.boardMetadata.size,
       // });
     } catch (error) {
       console.error('[WorkspaceService] Failed to initialize:', error);
@@ -411,6 +419,9 @@ class WorkspaceService {
     };
 
     this.boards.set(boardId, board);
+    // 同步更新 boardMetadata（switchBoard 依赖它验证画板是否存在）
+    const { elements, ...metadata } = board;
+    this.boardMetadata.set(boardId, metadata);
     await workspaceStorageService.saveBoard(board);
 
     this.emit('boardCreated', board);
@@ -471,6 +482,12 @@ class WorkspaceService {
     board.updatedAt = Date.now();
 
     this.boards.set(id, board);
+    // 同步更新 boardMetadata
+    const metadata = this.boardMetadata.get(id);
+    if (metadata) {
+      metadata.name = trimmedName;
+      metadata.updatedAt = board.updatedAt;
+    }
     await workspaceStorageService.saveBoard(board);
     this.emit('boardUpdated', board);
   }
@@ -479,6 +496,24 @@ class WorkspaceService {
     const board = this.boards.get(id);
     if (!board) throw new Error(`Board ${id} not found`);
 
+    console.log('[WorkspaceService] deleteBoard called:', id, board.name);
+
+    // 异步同步删除到远程回收站（不阻塞本地删除）
+    import('./github-sync').then(({ syncEngine }) => {
+      console.log('[WorkspaceService] Syncing board deletion to remote (async)...');
+      syncEngine.syncBoardDeletion(id).then((result) => {
+        if (result.success) {
+          console.log('[WorkspaceService] Board synced to remote recycle bin:', id);
+        } else {
+          console.warn('[WorkspaceService] Failed to sync deletion to remote:', result.error);
+        }
+      }).catch((err) => {
+        console.warn('[WorkspaceService] Could not sync deletion to remote:', err);
+      });
+    }).catch((err) => {
+      console.warn('[WorkspaceService] Could not load syncEngine:', err);
+    });
+
     // Clear current if this board is active
     if (this.state.currentBoardId === id) {
       this.state.currentBoardId = null;
@@ -486,7 +521,10 @@ class WorkspaceService {
     }
 
     this.boards.delete(id);
+    this.boardMetadata.delete(id);
+    this.loadedBoards.delete(id);
     await workspaceStorageService.deleteBoard(id);
+    console.log('[WorkspaceService] Emitting boardDeleted event for:', id);
     this.emit('boardDeleted', board);
   }
 
@@ -559,6 +597,13 @@ class WorkspaceService {
         if (b) {
           b.order = i;
           this.boards.set(item.id, b);
+          // 同步更新 boardMetadata
+          const bMeta = this.boardMetadata.get(item.id);
+          if (bMeta) {
+            bMeta.order = i;
+            bMeta.folderId = b.folderId;
+            bMeta.updatedAt = b.updatedAt;
+          }
           await workspaceStorageService.saveBoard(b);
         }
       } else {
@@ -662,6 +707,13 @@ class WorkspaceService {
         if (b) {
           b.order = i;
           this.boards.set(item.id, b);
+          // 同步更新 boardMetadata
+          const bMeta = this.boardMetadata.get(item.id);
+          if (bMeta) {
+            bMeta.order = i;
+            bMeta.folderId = b.folderId;
+            bMeta.updatedAt = b.updatedAt;
+          }
           await workspaceStorageService.saveBoard(b);
         }
       } else {
@@ -693,6 +745,12 @@ class WorkspaceService {
           board.order = item.order;
           board.updatedAt = now;
           this.boards.set(item.id, board);
+          // 同步更新 boardMetadata
+          const bMeta = this.boardMetadata.get(item.id);
+          if (bMeta) {
+            bMeta.order = item.order;
+            bMeta.updatedAt = now;
+          }
           await workspaceStorageService.saveBoard(board);
         }
       } else {
@@ -766,8 +824,20 @@ class WorkspaceService {
   async switchBoard(boardId: string): Promise<Board> {
     await this.ensureInitialized();
 
-    const board = this.boards.get(boardId);
-    if (!board) throw new Error(`Board ${boardId} not found`);
+    // 检查元数据是否存在
+    const metadata = this.boardMetadata.get(boardId);
+    if (!metadata) throw new Error(`Board ${boardId} not found`);
+
+    // 按需加载画板内容
+    let board = this.loadedBoards.get(boardId);
+    if (!board) {
+      const loadedBoard = await workspaceStorageService.loadBoard(boardId);
+      if (!loadedBoard) throw new Error(`Board ${boardId} not found in storage`);
+      board = loadedBoard;
+      this.loadedBoards.set(boardId, board);
+      // 同步更新 boards Map（向后兼容）
+      this.boards.set(boardId, board);
+    }
 
     // Save current board before switching
     if (this.state.currentBoardId && this.state.currentBoardId !== boardId) {
@@ -781,8 +851,39 @@ class WorkspaceService {
     return board;
   }
 
+  /**
+   * Reload board from storage (invalidate cache)
+   * Used when board data is updated externally (e.g. sync)
+   */
+  async reloadBoard(boardId: string): Promise<Board> {
+    await this.ensureInitialized();
+    
+    // Force load from storage
+    const board = await workspaceStorageService.loadBoard(boardId);
+    if (!board) throw new Error(`Board ${boardId} not found in storage`);
+    
+    // Update cache
+    this.loadedBoards.set(boardId, board);
+    this.boards.set(boardId, board);
+    
+    // Update metadata
+    const { elements, ...metadata } = board;
+    this.boardMetadata.set(boardId, metadata);
+    
+    // Emit events
+    this.emit('boardUpdated', board);
+    
+    // If it's the current board, emit switch event to force UI refresh
+    if (this.state.currentBoardId === boardId) {
+      this.emit('boardSwitched', board);
+    }
+    
+    return board;
+  }
+
   async saveBoard(boardId: string, data: BoardChangeData): Promise<void> {
-    const board = this.boards.get(boardId);
+    // 优先从已加载的画板获取
+    let board = this.loadedBoards.get(boardId) || this.boards.get(boardId);
     if (!board) throw new Error(`Board ${boardId} not found`);
 
     board.elements = data.children;
@@ -790,7 +891,18 @@ class WorkspaceService {
     board.theme = data.theme;
     board.updatedAt = Date.now();
 
+    // 更新所有相关的 Map
+    this.loadedBoards.set(boardId, board);
     this.boards.set(boardId, board);
+    
+    // 更新元数据
+    const metadata = this.boardMetadata.get(boardId);
+    if (metadata) {
+      metadata.viewport = data.viewport;
+      metadata.theme = data.theme;
+      metadata.updatedAt = board.updatedAt;
+    }
+
     await workspaceStorageService.saveBoard(board);
   }
 
@@ -813,12 +925,82 @@ class WorkspaceService {
   }
 
   getBoard(id: string): Board | undefined {
-    return this.boards.get(id);
+    // 优先从已加载的画板获取
+    return this.loadedBoards.get(id) || this.boards.get(id);
+  }
+
+  /**
+   * 获取画板元数据（不含 elements）
+   */
+  getBoardMetadata(id: string): BoardMetadata | undefined {
+    return this.boardMetadata.get(id);
   }
 
   getCurrentBoard(): Board | null {
     if (!this.state.currentBoardId) return null;
-    return this.boards.get(this.state.currentBoardId) || null;
+    // 优先从已加载的画板获取
+    return this.loadedBoards.get(this.state.currentBoardId) || 
+           this.boards.get(this.state.currentBoardId) || null;
+  }
+
+  /**
+   * 检查画板是否为空（同步版本，只检查已加载的画板）
+   * 注意：如果画板未加载，可能返回 true（因为元数据中 elements 为空数组）
+   * 如果需要准确判断，请使用 isBoardEmptyAsync
+   */
+  isBoardEmpty(boardId: string): boolean {
+    const board = this.loadedBoards.get(boardId) || this.boards.get(boardId);
+    if (!board) return true;
+    return !board.elements || board.elements.length === 0;
+  }
+
+  /**
+   * 检查画板是否为空（异步版本，会从存储加载画板数据）
+   * 这个方法能准确判断画板是否真的为空
+   */
+  async isBoardEmptyAsync(boardId: string): Promise<boolean> {
+    // 先检查已加载的画板
+    let board = this.loadedBoards.get(boardId);
+    if (board) {
+      return !board.elements || board.elements.length === 0;
+    }
+    
+    // 画板未加载，从存储中加载
+    try {
+      board = await workspaceStorageService.loadBoard(boardId);
+      if (!board) return true;
+      
+      // 缓存加载的画板
+      this.loadedBoards.set(boardId, board);
+      this.boards.set(boardId, board);
+      
+      return !board.elements || board.elements.length === 0;
+    } catch (error) {
+      console.warn('[WorkspaceService] Failed to load board for empty check:', boardId, error);
+      return true;
+    }
+  }
+
+  /**
+   * 检查是否是默认空白画板
+   * 默认空白画板的定义：
+   * 1. 画板是空的（没有元素）
+   * 2. 画板名称是默认名称（'未命名画板' 或 '未命名画板 (n)'）
+   */
+  async isDefaultEmptyBoard(boardId: string): Promise<boolean> {
+    const metadata = this.boardMetadata.get(boardId);
+    if (!metadata) return false;
+    
+    // 检查名称是否是默认名称（支持 '未命名画板' 和 '未命名画板 (2)' 等格式）
+    const defaultNamePattern = new RegExp(
+      `^${WORKSPACE_DEFAULTS.DEFAULT_BOARD_NAME}( \\(\\d+\\))?$`
+    );
+    const isDefaultName = defaultNamePattern.test(metadata.name);
+    
+    if (!isDefaultName) return false;
+    
+    // 检查是否为空
+    return this.isBoardEmptyAsync(boardId);
   }
 
   getState(): WorkspaceState {
@@ -899,7 +1081,9 @@ class WorkspaceService {
   }
 
   private emit(type: WorkspaceEvent['type'], payload?: unknown): void {
-    this.events$.next({ type, payload, timestamp: Date.now() });
+    const event = { type, payload, timestamp: Date.now() };
+    console.log('[WorkspaceService] emit() called:', type, 'observers:', this.events$.observers.length);
+    this.events$.next(event);
   }
 
   // ========== Initialization ==========
@@ -915,7 +1099,28 @@ class WorkspaceService {
   }
 
   hasBoards(): boolean {
-    return this.boards.size > 0;
+    return this.boardMetadata.size > 0;
+  }
+
+  /**
+   * 获取所有画板（包含 elements，优先返回已加载的）
+   * 注意：未加载的画板会返回空 elements
+   */
+  getAllBoards(): Board[] {
+    return Array.from(this.boardMetadata.values()).map(metadata => {
+      // 优先返回已加载完整数据的画板
+      const loaded = this.loadedBoards.get(metadata.id);
+      if (loaded) return loaded;
+      // 否则返回带空 elements 的画板
+      return { ...metadata, elements: [] } as Board;
+    });
+  }
+
+  /**
+   * 获取所有画板元数据（不含 elements）
+   */
+  getAllBoardMetadata(): BoardMetadata[] {
+    return Array.from(this.boardMetadata.values());
   }
 
   /**
@@ -924,15 +1129,19 @@ class WorkspaceService {
    */
   async reload(): Promise<void> {
     try {
-      // 重新加载所有数据
-      const [folders, boards, state] = await Promise.all([
+      // 重新加载元数据
+      const [folders, boardMetadata, state] = await Promise.all([
         workspaceStorageService.loadAllFolders(),
-        workspaceStorageService.loadAllBoards(),
+        workspaceStorageService.loadAllBoardMetadata(),
         workspaceStorageService.loadState(),
       ]);
 
       this.folders = new Map(folders.map((f) => [f.id, f]));
-      this.boards = new Map(boards.map((b) => [b.id, b]));
+      this.boardMetadata = new Map(boardMetadata.map((b) => [b.id, b]));
+      // 清空已加载的画板缓存，下次访问时重新加载
+      this.loadedBoards.clear();
+      // 向后兼容
+      this.boards = new Map(boardMetadata.map((b) => [b.id, { ...b, elements: [] } as Board]));
       this.state = state;
 
       // 触发更新事件

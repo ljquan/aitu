@@ -124,12 +124,17 @@ export function sanitizeUrl(url: string, baseUrl?: string): string {
   try {
     const urlObj = new URL(url, baseUrl || (typeof window !== 'undefined' ? window.location.origin : undefined));
 
-    // Remove sensitive query parameters
-    SENSITIVE_URL_PARAMS.forEach((param) => {
-      urlObj.searchParams.delete(param);
-      urlObj.searchParams.delete(param.toLowerCase());
-      urlObj.searchParams.delete(param.toUpperCase());
+    // Collect keys to delete (case-insensitive match)
+    const keysToDelete: string[] = [];
+    urlObj.searchParams.forEach((_value, key) => {
+      const lowerKey = key.toLowerCase();
+      if (SENSITIVE_URL_PARAMS.some((param) => lowerKey === param || lowerKey.includes(param))) {
+        keysToDelete.push(key);
+      }
     });
+
+    // Delete sensitive parameters
+    keysToDelete.forEach((key) => urlObj.searchParams.delete(key));
 
     return urlObj.toString();
   } catch {
@@ -158,4 +163,21 @@ export function getSafeErrorMessage(error: unknown): string {
     return error.name || 'Error';
   }
   return 'Unknown error';
+}
+
+/**
+ * Mask a sensitive ID for logging (show first and last few characters)
+ *
+ * @param id - The ID to mask
+ * @param visibleChars - Number of characters to show at start and end (default: 4)
+ * @returns Masked ID like 'abcd...wxyz'
+ *
+ * @example
+ * maskId('1234567890abcdef')
+ * // Returns: '1234...cdef'
+ */
+export function maskId(id: string | null | undefined, visibleChars = 4): string {
+  if (!id) return '[empty]';
+  if (id.length <= visibleChars * 2) return id;
+  return `${id.slice(0, visibleChars)}...${id.slice(-visibleChars)}`;
 }

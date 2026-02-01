@@ -5,9 +5,9 @@
  * Shows input parameters (prompt) and output results when completed.
  */
 
-import React, { useState, useEffect, useRef } from 'react';
-import { Button, Tag, Tooltip, Checkbox } from 'tdesign-react';
-import { ImageIcon, VideoIcon, DeleteIcon, DownloadIcon, EditIcon, UserIcon, CheckCircleFilledIcon, PlayCircleIcon, CloseCircleIcon } from 'tdesign-icons-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Button, Tag, Tooltip, Checkbox, Loading, MessagePlugin } from 'tdesign-react';
+import { ImageIcon, VideoIcon, DeleteIcon, DownloadIcon, EditIcon, UserIcon, CheckCircleFilledIcon, PlayCircleIcon, CloseCircleIcon, CloudUploadIcon, CloseCircleFilledIcon } from 'tdesign-icons-react';
 import { Task, TaskStatus, TaskType } from '../../types/task.types';
 import { formatDateTime, formatTaskDuration } from '../../utils/task-utils';
 import { useUnifiedCache } from '../../hooks/useUnifiedCache';
@@ -15,6 +15,8 @@ import { supportsCharacterExtraction, isSora2VideoId } from '../../types/charact
 import { RetryImage } from '../retry-image';
 import { TaskProgressOverlay } from './TaskProgressOverlay';
 import { useThumbnailUrl } from '../../hooks/useThumbnailUrl';
+import { useGitHubSyncOptional } from '../../contexts/GitHubSyncContext';
+import { mediaSyncService, MediaSyncStatus } from '../../services/github-sync';
 import './task-queue.scss';
 import './task-progress-overlay.scss';
 
@@ -151,6 +153,52 @@ export const TaskItem: React.FC<TaskItemProps> = React.memo(({
     isCharacterTask ? undefined : task.result?.url
   );
 
+  // GitHub sync context
+  const syncContext = useGitHubSyncOptional();
+  const [syncStatus, setSyncStatus] = useState<MediaSyncStatus | null>(null);
+  const [isSyncingLocal, setIsSyncingLocal] = useState(false);
+
+  // 获取实际的同步状态
+  const actualSyncStatus = syncStatus || mediaSyncService.getTaskSyncStatus(task.id);
+  const canSyncResult = mediaSyncService.canSync(task);
+
+  // 同步媒体产物
+  const handleSyncMedia = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+
+    if (!syncContext?.isConnected) {
+      MessagePlugin.warning('请先在云端同步中配置 GitHub Token');
+      return;
+    }
+
+    if (!canSyncResult.canSync) {
+      MessagePlugin.warning(canSyncResult.reason || '无法同步此任务');
+      return;
+    }
+
+    if (isSyncingLocal || actualSyncStatus === 'syncing') {
+      return;
+    }
+
+    setIsSyncingLocal(true);
+    setSyncStatus('syncing');
+
+    try {
+      const success = await syncContext.syncTaskMedia(task.id);
+      setSyncStatus(success ? 'synced' : 'error');
+      
+      if (success) {
+        MessagePlugin.success('同步成功');
+      }
+    } catch (error) {
+      setSyncStatus('error');
+      MessagePlugin.error('同步失败');
+    } finally {
+      setIsSyncingLocal(false);
+    }
+  }, [syncContext, canSyncResult, isSyncingLocal, actualSyncStatus, task.id]);
+
   // Use original URL or cached URL (Service Worker handles caching automatically)
   const mediaUrl = task.result?.url;
   
@@ -214,12 +262,21 @@ export const TaskItem: React.FC<TaskItemProps> = React.memo(({
   // Handle click on task item to toggle selection or open preview
   const handleItemClick = (e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
-    // 排除按钮、复选框、链接等交互元素的点击
-    if (target.closest('button') || target.closest('.t-checkbox') || target.closest('a')) return;
+    // 排除按钮、复选框、链接、预览区域等交互元素的点击
+    // 预览区域有自己的 onClick 处理器，避免重复触发
+    if (target.closest('button') || target.closest('.t-checkbox') || target.closest('a') || target.closest('.task-item__preview')) return;
     
     if (selectionMode) {
       onSelectionChange?.(task.id, !isSelected);
     } else if (isCompleted && mediaUrl) {
+      onPreviewOpen?.();
+    }
+  };
+  
+  // Handle preview click with event propagation stopped
+  const handlePreviewClick = (e: React.MouseEvent) => {
+    e.stopPropagation(); // 阻止冒泡到父元素的 handleItemClick
+    if (isCompleted && mediaUrl) {
       onPreviewOpen?.();
     }
   };
@@ -243,7 +300,7 @@ export const TaskItem: React.FC<TaskItemProps> = React.memo(({
       {/* 1. Preview Area - Visual entry point */}
       {(isCompleted || isFailed || task.status === TaskStatus.PROCESSING) && (mediaUrl || isCharacterTask || task.type === TaskType.VIDEO || task.type === TaskType.IMAGE) && (
         <div className="task-item__preview-wrapper">
-          <div className="task-item__preview" data-track="task_click_preview" onClick={onPreviewOpen}>
+          <div className="task-item__preview" data-track="task_click_preview" onClick={handlePreviewClick}>
             {/* 失败状态：显示失败占位图 */}
             {isFailed ? (
               <div className="task-item__preview-failed">
@@ -301,12 +358,38 @@ export const TaskItem: React.FC<TaskItemProps> = React.memo(({
                   </div>
                 )}
                 
-                {/* Cache indicator */}
-                {isCached && !isCharacterTask && (
-                  <div className="task-item__cache-badge">
-                    <CheckCircleFilledIcon />
-                    <span>已缓存</span>
-                  </div>
+                {/* Sync indicator / button */}
+                {isCompleted && !isCharacterTask && syncContext?.isConnected && (
+                  actualSyncStatus === 'synced' ? (
+                    <Tooltip content="已同步到云端" theme="light">
+                      <div className="task-item__sync-badge task-item__sync-badge--synced">
+                        <CheckCircleFilledIcon />
+                        <span>已同步</span>
+                      </div>
+                    </Tooltip>
+                  ) : actualSyncStatus === 'syncing' || isSyncingLocal ? (
+                    <div className="task-item__sync-badge task-item__sync-badge--syncing">
+                      <Loading size="small" />
+                      <span>同步中</span>
+                    </div>
+                  ) : actualSyncStatus === 'too_large' ? (
+                    <Tooltip content={canSyncResult.reason || '文件过大，无法同步'} theme="light">
+                      <div className="task-item__sync-badge task-item__sync-badge--warning">
+                        <CloseCircleFilledIcon />
+                        <span>过大</span>
+                      </div>
+                    </Tooltip>
+                  ) : canSyncResult.canSync ? (
+                    <Tooltip content="点击同步到云端" theme="light">
+                      <div 
+                        className="task-item__sync-badge task-item__sync-badge--clickable"
+                        onClick={handleSyncMedia}
+                      >
+                        <CloudUploadIcon />
+                        <span>同步</span>
+                      </div>
+                    </Tooltip>
+                  ) : null
                 )}
               </>
             )}

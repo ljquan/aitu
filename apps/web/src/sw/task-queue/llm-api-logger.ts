@@ -57,9 +57,9 @@ const MAX_MEMORY_LOGS = 50;
 
 // IndexedDB 配置
 const DB_NAME = 'llm-api-logs';
-const DB_VERSION = 2;
+const DB_VERSION = 4; // Bump to ensure taskId index exists
 const STORE_NAME = 'logs';
-const MAX_DB_LOGS = 500; // IndexedDB 中最多保存的日志数量
+const MAX_DB_LOGS = 1000; // IndexedDB 中最多保存的日志数量
 
 // 广播回调
 let broadcastCallback: ((log: LLMApiLog) => void) | null = null;
@@ -76,12 +76,27 @@ function openDB(): Promise<IDBDatabase> {
     
     request.onupgradeneeded = (event) => {
       const db = (event.target as IDBOpenDBRequest).result;
+      const oldVersion = event.oldVersion;
+      
+      let store: IDBObjectStore;
       if (!db.objectStoreNames.contains(STORE_NAME)) {
-        const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+        // 全新创建
+        store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
         store.createIndex('timestamp', 'timestamp', { unique: false });
         store.createIndex('taskType', 'taskType', { unique: false });
         store.createIndex('status', 'status', { unique: false });
         store.createIndex('taskId', 'taskId', { unique: false });
+      } else {
+        // 升级现有 store
+        const tx = (event.target as IDBOpenDBRequest).transaction;
+        if (tx) {
+          store = tx.objectStore(STORE_NAME);
+          // 确保 taskId 索引存在（修复之前版本升级的问题）
+          if (oldVersion < 4 && !store.indexNames.contains('taskId')) {
+            store.createIndex('taskId', 'taskId', { unique: false });
+            console.log('[LLMApiLogger] Created taskId index during upgrade to v4');
+          }
+        }
       }
     };
   });
@@ -170,6 +185,105 @@ export async function getAllLLMApiLogs(): Promise<LLMApiLog[]> {
 }
 
 /**
+ * 精简日志数据，去掉大字段以减少传输大小
+ */
+function compactLog(log: LLMApiLog): Partial<LLMApiLog> {
+  // 只保留必要字段，去掉 requestBody 和 responseBody 等大字段
+  return {
+    id: log.id,
+    timestamp: log.timestamp,
+    endpoint: log.endpoint,
+    model: log.model,
+    taskType: log.taskType,
+    taskId: log.taskId,
+    prompt: log.prompt ? (log.prompt.length > 200 ? log.prompt.substring(0, 200) + '...' : log.prompt) : undefined,
+    status: log.status,
+    httpStatus: log.httpStatus,
+    duration: log.duration,
+    errorMessage: log.errorMessage,
+    hasReferenceImages: log.hasReferenceImages,
+    referenceImageCount: log.referenceImageCount,
+    // 不传输 referenceImages 完整数据，只传数量
+    resultType: log.resultType,
+    resultCount: log.resultCount,
+    resultUrl: log.resultUrl,
+    // 不传输 requestBody 和 responseBody
+  };
+}
+
+/**
+ * 分页获取 LLM API 日志（精简版，用于列表展示）
+ * @param page 页码
+ * @param pageSize 每页条数
+ * @param filter 过滤条件
+ */
+export async function getLLMApiLogsPaginated(
+  page: number = 1, 
+  pageSize: number = 20,
+  filter?: { taskType?: string; status?: string }
+): Promise<{
+  logs: Partial<LLMApiLog>[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}> {
+  let allLogs = await getAllLLMApiLogs();
+  
+  // 应用过滤条件
+  if (filter?.taskType) {
+    allLogs = allLogs.filter(log => log.taskType === filter.taskType);
+  }
+  if (filter?.status) {
+    allLogs = allLogs.filter(log => log.status === filter.status);
+  }
+  
+  const total = allLogs.length;
+  const totalPages = Math.ceil(total / pageSize);
+  const startIndex = (page - 1) * pageSize;
+  const logs = allLogs.slice(startIndex, startIndex + pageSize).map(compactLog);
+  
+  return {
+    logs,
+    total,
+    page,
+    pageSize,
+    totalPages,
+  };
+}
+
+/**
+ * 获取单条日志的完整数据（用于展开详情）
+ */
+export async function getLLMApiLogById(logId: string): Promise<LLMApiLog | null> {
+  // 先从内存查找
+  const memoryLog = memoryLogs.find(l => l.id === logId);
+  if (memoryLog) return memoryLog;
+  
+  // 从 IndexedDB 查找
+  try {
+    const db = await openDB();
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const store = tx.objectStore(STORE_NAME);
+    
+    return new Promise((resolve, reject) => {
+      const request = store.get(logId);
+      request.onsuccess = () => {
+        db.close();
+        resolve(request.result as LLMApiLog || null);
+      };
+      request.onerror = () => {
+        db.close();
+        reject(request.error);
+      };
+    });
+  } catch (error) {
+    console.warn('[LLMApiLogger] Failed to get log by id:', error);
+    return null;
+  }
+}
+
+/**
  * 通过 taskId 查找成功的 LLM API 日志
  * 用于恢复已完成但状态未更新的任务
  */
@@ -227,13 +341,31 @@ export async function findLatestLogByTaskId(taskId: string): Promise<LLMApiLog |
     const db = await openDB();
     const tx = db.transaction(STORE_NAME, 'readonly');
     const store = tx.objectStore(STORE_NAME);
-    const index = store.index('taskId');
     
     return new Promise((resolve) => {
-      const request = index.getAll(taskId);
+      // 尝试使用 taskId 索引，如果不存在则回退到全表扫描
+      let request: IDBRequest<LLMApiLog[]>;
+      let useIndex = false;
+      
+      if (store.indexNames.contains('taskId')) {
+        const index = store.index('taskId');
+        request = index.getAll(taskId);
+        useIndex = true;
+      } else {
+        // 回退：全表扫描后过滤
+        console.warn('[LLMApiLogger] taskId index not found, falling back to full scan');
+        request = store.getAll();
+      }
+      
       request.onsuccess = () => {
-        const results = request.result as LLMApiLog[];
+        let results = request.result as LLMApiLog[];
         db.close();
+        
+        // 如果是全表扫描，需要手动过滤
+        if (!useIndex) {
+          results = results.filter(log => log.taskId === taskId);
+        }
+        
         // 按时间降序，取最新的一条
         const latestLog = results.sort((a, b) => b.timestamp - a.timestamp)[0];
         resolve(latestLog || null);
@@ -274,6 +406,50 @@ export async function clearAllLLMApiLogs(): Promise<void> {
   } catch (error) {
     console.warn('[LLMApiLogger] Failed to clear logs from DB:', error);
   }
+}
+
+/**
+ * 删除指定的 LLM API 日志
+ */
+export async function deleteLLMApiLogs(logIds: string[]): Promise<number> {
+  if (!logIds || logIds.length === 0) return 0;
+  
+  const idsSet = new Set(logIds);
+  
+  // 从内存中删除
+  const beforeCount = memoryLogs.length;
+  for (let i = memoryLogs.length - 1; i >= 0; i--) {
+    if (idsSet.has(memoryLogs[i].id)) {
+      memoryLogs.splice(i, 1);
+    }
+  }
+  const deletedFromMemory = beforeCount - memoryLogs.length;
+  
+  // 从 IndexedDB 中删除
+  try {
+    const db = await openDB();
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    
+    for (const id of logIds) {
+      store.delete(id);
+    }
+    
+    await new Promise<void>((resolve, reject) => {
+      tx.oncomplete = () => {
+        db.close();
+        resolve();
+      };
+      tx.onerror = () => {
+        db.close();
+        reject(tx.error);
+      };
+    });
+  } catch (error) {
+    console.warn('[LLMApiLogger] Failed to delete logs from DB:', error);
+  }
+  
+  return deletedFromMemory;
 }
 
 /**

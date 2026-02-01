@@ -88,7 +88,10 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
     const resizeHandleRef = useRef<HTMLDivElement>(null);
     
     // 临时模型选择（仅在当前会话中有效，不影响全局设置）
-    const [sessionModel, setSessionModel] = useState<string | undefined>(undefined);
+    // 默认值从全局设置的 textModelName 读取，保持与工作流文本模型一致
+    const [sessionModel, setSessionModel] = useState<string | undefined>(() => {
+      return geminiSettings.get().textModelName;
+    });
     
     // 工作流消息状态：存储当前会话中的工作流数据
     const [workflowMessages, setWorkflowMessages] = useState<Map<string, WorkflowMessageData>>(new Map());
@@ -390,6 +393,116 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
       window.addEventListener('keydown', handleKeyDown);
       return () => window.removeEventListener('keydown', handleKeyDown);
     }, [isOpen, onOpenChange]);
+
+    // Subscribe to SW workflow events to keep ChatDrawer in sync
+    // This ensures ChatDrawer shows the same status as WorkZone when SW updates workflow state
+    useEffect(() => {
+      let subscription: { unsubscribe: () => void } | null = null;
+
+      const setupWorkflowSync = async () => {
+        const { workflowSubmissionService } = await import('../../services/workflow-submission-service');
+        
+        subscription = workflowSubmissionService.subscribeToAllEvents((event) => {
+          const workflowEvent = event as {
+            type: string;
+            workflowId: string;
+            stepId?: string;
+            status?: string;
+            result?: unknown;
+            error?: string;
+            duration?: number;
+          };
+
+          // Find workflow in workflowMessages by workflow ID
+          setWorkflowMessages((prev) => {
+            // Find the message ID that contains this workflow
+            let targetMsgId: string | null = null;
+            for (const [msgId, wf] of prev.entries()) {
+              if (wf.id === workflowEvent.workflowId) {
+                targetMsgId = msgId;
+                break;
+              }
+            }
+
+            if (!targetMsgId) {
+              return prev;
+            }
+
+            const workflow = prev.get(targetMsgId);
+            if (!workflow) {
+              return prev;
+            }
+
+            const newMap = new Map(prev);
+            let updatedWorkflow: WorkflowMessageData;
+
+            switch (workflowEvent.type) {
+              case 'step': {
+                // Update specific step status
+                updatedWorkflow = {
+                  ...workflow,
+                  steps: workflow.steps.map((step) => {
+                    if (step.id === workflowEvent.stepId) {
+                      return {
+                        ...step,
+                        status: (workflowEvent.status || step.status) as typeof step.status,
+                        result: workflowEvent.result ?? step.result,
+                        error: workflowEvent.error ?? step.error,
+                      };
+                    }
+                    return step;
+                  }),
+                };
+                break;
+              }
+
+              case 'completed':
+              case 'failed': {
+                // Workflow completed or failed - update all pending/running steps
+                const finalStatus = workflowEvent.type === 'completed' ? 'completed' : 'failed';
+                updatedWorkflow = {
+                  ...workflow,
+                  steps: workflow.steps.map((step) => {
+                    if (step.status === 'running' || step.status === 'pending') {
+                      // For steps with taskId, don't force status change
+                      const stepResult = step.result as { taskId?: string } | undefined;
+                      if (stepResult?.taskId) {
+                        return step;
+                      }
+                      return {
+                        ...step,
+                        status: finalStatus as typeof step.status,
+                        error: workflowEvent.type === 'failed' ? workflowEvent.error : undefined,
+                      };
+                    }
+                    return step;
+                  }),
+                };
+                break;
+              }
+
+              default:
+                return prev;
+            }
+
+            newMap.set(targetMsgId, updatedWorkflow);
+
+            // Persist to local storage
+            chatStorageService.updateMessage(targetMsgId, { workflow: updatedWorkflow });
+
+            return newMap;
+          });
+        });
+      };
+
+      setupWorkflowSync().catch((error) => {
+        console.error('[ChatDrawer] Failed to setup workflow sync:', error);
+      });
+
+      return () => {
+        subscription?.unsubscribe();
+      };
+    }, []);
 
     // Handle click outside to close session list
     useEffect(() => {

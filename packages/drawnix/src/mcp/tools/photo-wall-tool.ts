@@ -291,6 +291,11 @@ ${getLayoutStyleDescription()}
 
   execute: async (params: Record<string, unknown>, options?: MCPExecuteOptions): Promise<MCPResult> => {
     // 宫格图只支持 queue 模式，因为需要任务完成后的后处理
+    // 确保 SW 任务队列已初始化
+    const { shouldUseSWTaskQueue, swTaskQueueService } = await import('../../services/task-queue');
+    if (shouldUseSWTaskQueue()) {
+      await swTaskQueueService.initialize();
+    }
     return executeQueue(params as unknown as GridImageToolParams, options || {});
   },
 };

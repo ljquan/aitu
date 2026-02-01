@@ -16,13 +16,26 @@ import type { Workflow } from './workflow-types';
 import type { ChatWorkflow } from './chat-workflow/types';
 import { getSafeErrorMessage } from './utils/sanitize-utils';
 
+/**
+ * Task-Step mapping for unified progress sync
+ * (Duplicated here to avoid circular dependency with task-step-registry.ts)
+ */
+export interface TaskStepMapping {
+  taskId: string;
+  workflowId: string;
+  stepId: string;
+  createdAt: number;
+}
+
 const DB_NAME = 'sw-task-queue';
-const MIN_DB_VERSION = 2; // Minimum required version (with workflow stores)
+const MIN_DB_VERSION = 3; // Minimum required version (with task-step mappings store)
 const TASKS_STORE = 'tasks';
 const CONFIG_STORE = 'config';
 const WORKFLOWS_STORE = 'workflows';
 const CHAT_WORKFLOWS_STORE = 'chat-workflows';
 const PENDING_TOOL_REQUESTS_STORE = 'pending-tool-requests';
+const PENDING_DOM_OPERATIONS_STORE = 'pending-dom-operations';
+const TASK_STEP_MAPPINGS_STORE = 'task-step-mappings';
 
 // All required stores for integrity check
 const REQUIRED_STORES = [
@@ -31,6 +44,8 @@ const REQUIRED_STORES = [
   WORKFLOWS_STORE,
   CHAT_WORKFLOWS_STORE,
   PENDING_TOOL_REQUESTS_STORE,
+  PENDING_DOM_OPERATIONS_STORE,
+  TASK_STEP_MAPPINGS_STORE,
 ];
 
 /**
@@ -45,6 +60,32 @@ export interface StoredPendingToolRequest {
   createdAt: number;
   /** ID of the client that initiated the request */
   clientId?: string;
+}
+
+/**
+ * Pending DOM operation stored in IndexedDB
+ * 
+ * When a main-thread tool completes in SW but no client is available,
+ * the result is stored here. When a client reconnects, these operations
+ * are sent to the client to continue execution.
+ */
+export interface PendingDomOperation {
+  /** Unique operation ID */
+  id: string;
+  /** Associated workflow ID */
+  workflowId: string;
+  /** Associated chat ID (for chat workflows) */
+  chatId: string;
+  /** Tool name that needs to be executed on main thread */
+  toolName: string;
+  /** Tool arguments */
+  toolArgs: Record<string, unknown>;
+  /** Result from SW tool execution (e.g., generated image URL) */
+  toolResult: unknown;
+  /** Tool call ID (for tracking in workflow) */
+  toolCallId: string;
+  /** Creation timestamp */
+  createdAt: number;
 }
 
 /**
@@ -88,7 +129,6 @@ function repairDatabase(currentVersion: number): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     // Increment version to trigger onupgradeneeded
     const newVersion = currentVersion + 1;
-    console.log(`[SWStorage] Repairing database: upgrading from v${currentVersion} to v${newVersion}`);
     
     const request = indexedDB.open(DB_NAME, newVersion);
     
@@ -143,6 +183,19 @@ function createAllStores(db: IDBDatabase): void {
   if (!db.objectStoreNames.contains(PENDING_TOOL_REQUESTS_STORE)) {
     const pendingRequestsStore = db.createObjectStore(PENDING_TOOL_REQUESTS_STORE, { keyPath: 'requestId' });
     pendingRequestsStore.createIndex('workflowId', 'workflowId', { unique: false });
+  }
+
+  // Create pending DOM operations store (for page refresh recovery)
+  if (!db.objectStoreNames.contains(PENDING_DOM_OPERATIONS_STORE)) {
+    const pendingDomOpsStore = db.createObjectStore(PENDING_DOM_OPERATIONS_STORE, { keyPath: 'id' });
+    pendingDomOpsStore.createIndex('workflowId', 'workflowId', { unique: false });
+    pendingDomOpsStore.createIndex('chatId', 'chatId', { unique: false });
+  }
+
+  // Create task-step mappings store (for unified progress sync)
+  if (!db.objectStoreNames.contains(TASK_STEP_MAPPINGS_STORE)) {
+    const taskStepMappingsStore = db.createObjectStore(TASK_STEP_MAPPINGS_STORE, { keyPath: 'taskId' });
+    taskStepMappingsStore.createIndex('workflowId', 'workflowId', { unique: false });
   }
 }
 
@@ -912,6 +965,276 @@ export class TaskQueueStorage {
       }
     } catch (error) {
       console.error('[SWStorage] Failed to delete pending tool requests by workflow:', error);
+    }
+  }
+
+  // ============================================================================
+  // Pending DOM Operations Storage Methods
+  // ============================================================================
+
+  /**
+   * Save a pending DOM operation to IndexedDB
+   * Called when a main-thread tool result is ready but no client is available
+   */
+  async savePendingDomOperation(operation: PendingDomOperation): Promise<void> {
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(PENDING_DOM_OPERATIONS_STORE, 'readwrite');
+        const store = transaction.objectStore(PENDING_DOM_OPERATIONS_STORE);
+        const request = store.put(operation);
+
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve();
+      });
+    } catch (error) {
+      console.error('[SWStorage] Failed to save pending DOM operation:', error);
+    }
+  }
+
+  /**
+   * Get all pending DOM operations
+   */
+  async getAllPendingDomOperations(): Promise<PendingDomOperation[]> {
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(PENDING_DOM_OPERATIONS_STORE, 'readonly');
+        const store = transaction.objectStore(PENDING_DOM_OPERATIONS_STORE);
+        const request = store.getAll();
+
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result || []);
+      });
+    } catch (error) {
+      console.error('[SWStorage] Failed to get all pending DOM operations:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get pending DOM operations by workflow ID
+   */
+  async getPendingDomOperationsByWorkflow(workflowId: string): Promise<PendingDomOperation[]> {
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(PENDING_DOM_OPERATIONS_STORE, 'readonly');
+        const store = transaction.objectStore(PENDING_DOM_OPERATIONS_STORE);
+        const index = store.index('workflowId');
+        const request = index.getAll(workflowId);
+
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result || []);
+      });
+    } catch (error) {
+      console.error('[SWStorage] Failed to get pending DOM operations by workflow:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get pending DOM operations by chat ID
+   */
+  async getPendingDomOperationsByChatId(chatId: string): Promise<PendingDomOperation[]> {
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(PENDING_DOM_OPERATIONS_STORE, 'readonly');
+        const store = transaction.objectStore(PENDING_DOM_OPERATIONS_STORE);
+        const index = store.index('chatId');
+        const request = index.getAll(chatId);
+
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result || []);
+      });
+    } catch (error) {
+      console.error('[SWStorage] Failed to get pending DOM operations by chat ID:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get a pending DOM operation by ID
+   */
+  async getPendingDomOperation(operationId: string): Promise<PendingDomOperation | null> {
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(PENDING_DOM_OPERATIONS_STORE, 'readonly');
+        const store = transaction.objectStore(PENDING_DOM_OPERATIONS_STORE);
+        const request = store.get(operationId);
+
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result || null);
+      });
+    } catch (error) {
+      console.error('[SWStorage] Failed to get pending DOM operation:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Delete a pending DOM operation
+   */
+  async deletePendingDomOperation(operationId: string): Promise<void> {
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(PENDING_DOM_OPERATIONS_STORE, 'readwrite');
+        const store = transaction.objectStore(PENDING_DOM_OPERATIONS_STORE);
+        const request = store.delete(operationId);
+
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve();
+      });
+    } catch (error) {
+      console.error('[SWStorage] Failed to delete pending DOM operation:', error);
+    }
+  }
+
+  /**
+   * Delete all pending DOM operations for a workflow
+   */
+  async deletePendingDomOperationsByWorkflow(workflowId: string): Promise<void> {
+    try {
+      const operations = await this.getPendingDomOperationsByWorkflow(workflowId);
+      for (const op of operations) {
+        await this.deletePendingDomOperation(op.id);
+      }
+    } catch (error) {
+      console.error('[SWStorage] Failed to delete pending DOM operations by workflow:', error);
+    }
+  }
+
+  /**
+   * Delete all pending DOM operations for a chat
+   */
+  async deletePendingDomOperationsByChatId(chatId: string): Promise<void> {
+    try {
+      const operations = await this.getPendingDomOperationsByChatId(chatId);
+      for (const op of operations) {
+        await this.deletePendingDomOperation(op.id);
+      }
+    } catch (error) {
+      console.error('[SWStorage] Failed to delete pending DOM operations by chat ID:', error);
+    }
+  }
+
+  // ============================================================================
+  // Task-Step Mapping Storage Methods (for unified progress sync)
+  // ============================================================================
+
+  /**
+   * Save a task-step mapping to IndexedDB
+   */
+  async saveTaskStepMapping(mapping: TaskStepMapping): Promise<void> {
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(TASK_STEP_MAPPINGS_STORE, 'readwrite');
+        const store = transaction.objectStore(TASK_STEP_MAPPINGS_STORE);
+        const request = store.put(mapping);
+
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve();
+      });
+    } catch (error) {
+      console.error('[SWStorage] Failed to save task-step mapping:', error);
+    }
+  }
+
+  /**
+   * Get all task-step mappings
+   */
+  async getAllTaskStepMappings(): Promise<TaskStepMapping[]> {
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(TASK_STEP_MAPPINGS_STORE, 'readonly');
+        const store = transaction.objectStore(TASK_STEP_MAPPINGS_STORE);
+        const request = store.getAll();
+
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result || []);
+      });
+    } catch (error) {
+      console.error('[SWStorage] Failed to get all task-step mappings:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get task-step mapping by task ID
+   */
+  async getTaskStepMapping(taskId: string): Promise<TaskStepMapping | null> {
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(TASK_STEP_MAPPINGS_STORE, 'readonly');
+        const store = transaction.objectStore(TASK_STEP_MAPPINGS_STORE);
+        const request = store.get(taskId);
+
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result || null);
+      });
+    } catch (error) {
+      console.error('[SWStorage] Failed to get task-step mapping:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get task-step mappings by workflow ID
+   */
+  async getTaskStepMappingsByWorkflow(workflowId: string): Promise<TaskStepMapping[]> {
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(TASK_STEP_MAPPINGS_STORE, 'readonly');
+        const store = transaction.objectStore(TASK_STEP_MAPPINGS_STORE);
+        const index = store.index('workflowId');
+        const request = index.getAll(workflowId);
+
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result || []);
+      });
+    } catch (error) {
+      console.error('[SWStorage] Failed to get task-step mappings by workflow:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Delete a task-step mapping
+   */
+  async deleteTaskStepMapping(taskId: string): Promise<void> {
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(TASK_STEP_MAPPINGS_STORE, 'readwrite');
+        const store = transaction.objectStore(TASK_STEP_MAPPINGS_STORE);
+        const request = store.delete(taskId);
+
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve();
+      });
+    } catch (error) {
+      console.error('[SWStorage] Failed to delete task-step mapping:', error);
+    }
+  }
+
+  /**
+   * Delete all task-step mappings for a workflow
+   */
+  async deleteTaskStepMappingsByWorkflow(workflowId: string): Promise<void> {
+    try {
+      const mappings = await this.getTaskStepMappingsByWorkflow(workflowId);
+      for (const mapping of mappings) {
+        await this.deleteTaskStepMapping(mapping.taskId);
+      }
+    } catch (error) {
+      console.error('[SWStorage] Failed to delete task-step mappings by workflow:', error);
     }
   }
 }

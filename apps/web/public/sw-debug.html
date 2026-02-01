@@ -244,12 +244,12 @@
               </label>
               <div class="export-section-items">
                 <label class="export-checkbox">
-                  <input type="checkbox" name="postmessage" value="send">
-                  <span>发送 → SW</span>
+                  <input type="checkbox" name="postmessage" value="receive">
+                  <span>应用页面</span>
                 </label>
                 <label class="export-checkbox">
-                  <input type="checkbox" name="postmessage" value="receive">
-                  <span>接收 ← SW</span>
+                  <input type="checkbox" name="postmessage" value="send">
+                  <span>SW</span>
                 </label>
               </div>
             </div>
@@ -592,10 +592,14 @@
         <!-- PostMessage Logs Tab -->
         <div class="tab-content" id="postmessageTab">
           <div class="logs-toolbar">
-            <select id="filterMessageDirection">
-              <option value="">全部方向</option>
-              <option value="send">发送 → SW</option>
-              <option value="receive">接收 ← SW</option>
+            <button id="togglePmPause" title="暂停/恢复实时日志">
+              <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              实时
+            </button>
+            <select id="filterMessageSource">
+              <option value="">全部来源</option>
+              <option value="main">应用页面</option>
+              <option value="sw">SW</option>
             </select>
             <select id="filterMessageTypeSelect">
               <option value="">全部消息类型</option>
@@ -659,6 +663,15 @@
               <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
               清空
             </button>
+            <button id="toggleLLMApiSelectMode">☑️ 选择</button>
+            <div id="llmapiBatchActions" class="batch-actions" style="display: none;">
+              <button id="llmapiSelectAll">全选</button>
+              <button id="llmapiBatchDelete" class="danger">
+                <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                删除
+              </button>
+              <span id="llmapiSelectedCount" style="color: var(--text-muted); font-size: 12px;">已选 0 条</span>
+            </div>
           </div>
           <div class="logs-container" id="llmapiContainer">
             <div id="llmapiLogsContainer">

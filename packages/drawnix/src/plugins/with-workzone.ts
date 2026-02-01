@@ -129,6 +129,34 @@ export class WorkZoneComponent extends CommonElementFlavour<PlaitWorkZone, Plait
   };
 
   /**
+   * 处理工作流状态变更（来自 SW claim 结果）
+   * 当 SW 中的工作流已完成/失败/不存在时更新 UI
+   */
+  private handleWorkflowStateChange = (workflowId: string, status: 'completed' | 'failed', error?: string): void => {
+    console.log(`[WorkZoneComponent] 🔄 Workflow state change: ${workflowId} -> ${status}`, error);
+    
+    // 更新 workflow 状态
+    const updatedWorkflow = {
+      ...this.element.workflow,
+      status,
+      error: error || (status === 'failed' ? '工作流执行失败' : undefined),
+    };
+    
+    // 更新步骤状态
+    if (status === 'failed') {
+      updatedWorkflow.steps = this.element.workflow.steps.map(step => {
+        if (step.status === 'running' || step.status === 'pending') {
+          return { ...step, status: 'failed' as const, error: error || '执行中断' };
+        }
+        return step;
+      });
+    }
+    
+    // 通过 WorkZoneTransforms 更新工作流
+    WorkZoneTransforms.updateWorkflow(this.board, this.element.id, updatedWorkflow);
+  };
+
+  /**
    * 使用 React 渲染内容
    */
   private renderContent(): void {
@@ -141,6 +169,7 @@ export class WorkZoneComponent extends CommonElementFlavour<PlaitWorkZone, Plait
         React.createElement(WorkZoneContent, {
           workflow: this.element.workflow,
           onDelete: this.handleDelete,
+          onWorkflowStateChange: this.handleWorkflowStateChange,
         })
       )
     );
@@ -177,6 +206,7 @@ export class WorkZoneComponent extends CommonElementFlavour<PlaitWorkZone, Plait
             React.createElement(WorkZoneContent, {
               workflow: value.element.workflow,
               onDelete: this.handleDelete,
+              onWorkflowStateChange: this.handleWorkflowStateChange,
             })
           )
         );

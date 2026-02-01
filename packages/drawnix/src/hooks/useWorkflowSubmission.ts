@@ -196,17 +196,30 @@ export function useWorkflowSubmission(
 
   /**
    * Recover workflows on mount (after page refresh)
+   * 等待 swChannelClient 初始化完成后再恢复
    */
   const recoverWorkflowsOnMount = useCallback(async () => {
     // Only recover once
     if (hasRecoveredRef.current) return;
     hasRecoveredRef.current = true;
 
+    // 等待 swChannelClient 初始化完成（最多等待 10 秒）
+    const { swChannelClient } = await import('../services/sw-channel/client');
+    const maxWaitTime = 10000;
+    const checkInterval = 200;
+    let waited = 0;
+    
+    while (!swChannelClient.isInitialized() && waited < maxWaitTime) {
+      await new Promise(r => setTimeout(r, checkInterval));
+      waited += checkInterval;
+    }
+    
+    if (!swChannelClient.isInitialized()) {
+      return;
+    }
+    
     try {
-      const recoveredWorkflows = await workflowSubmissionService.recoverWorkflows();
-      
-      // Silently recover workflows
-      void recoveredWorkflows;
+      await workflowSubmissionService.recoverWorkflows();
     } catch (error) {
       console.warn('[useWorkflowSubmission] Failed to recover workflows:', error);
     }
@@ -215,6 +228,11 @@ export function useWorkflowSubmission(
   /**
    * Handle a recovered workflow (from page refresh)
    * This restores UI state without re-submitting to SW
+   * 
+   * 恢复策略：
+   * - running/pending: 完整恢复 UI 状态，继续监听进度
+   * - failed: 恢复 UI 并显示失败状态（如 ai_analyze 中断）
+   * - completed/cancelled: 不恢复（避免显示过时数据）
    */
   const handleRecoveredWorkflow = useCallback((event: WorkflowEvent) => {
     if (event.type !== 'recovered' || !event.workflow) return;
@@ -223,8 +241,14 @@ export function useWorkflowSubmission(
     const board = boardRef.current;
     const workZoneId = workZoneIdRef.current;
 
-    // Only restore running/pending workflows to avoid showing stale data
-    if (recoveredWorkflow.status !== 'running' && recoveredWorkflow.status !== 'pending') {
+    // 只恢复活跃状态（running/pending）和最近失败的工作流
+    // completed/cancelled 不恢复，避免显示过时数据
+    const isActive = recoveredWorkflow.status === 'running' || recoveredWorkflow.status === 'pending';
+    const isRecentlyFailed = recoveredWorkflow.status === 'failed' && 
+      recoveredWorkflow.updatedAt && 
+      (Date.now() - recoveredWorkflow.updatedAt) < 5 * 60 * 1000; // 5 分钟内
+    
+    if (!isActive && !isRecentlyFailed) {
       return;
     }
 
@@ -276,16 +300,15 @@ export function useWorkflowSubmission(
   useEffect(() => {
     workflowSubmissionService.init();
 
-    // Subscribe to canvas insert requests
-    const canvasSub = workflowSubmissionService.subscribeToCanvasInserts(
-      async (event: CanvasInsertEvent) => {
-        // console.log('[useWorkflowSubmission] Canvas insert request:', event);
+    // 注册 Canvas 操作处理器（双工通讯模式）
+    // SW 发起请求，主线程直接返回结果，无需单独响应
+    workflowSubmissionService.registerCanvasHandler(
+      async (_operation: string, _params: Record<string, unknown>) => {
         // For now, just acknowledge - actual canvas insertion will be handled
         // by the existing auto-insert mechanism (useAutoInsertToCanvas)
-        await workflowSubmissionService.respondToCanvasInsert(event.requestId, true);
+        return { success: true };
       }
     );
-    subscriptionsRef.current.push(canvasSub);
 
     // Subscribe to workflow recovery events
     const recoverySub = workflowSubmissionService.subscribeToAllEvents(
@@ -349,7 +372,6 @@ export function useWorkflowSubmission(
       }
 
       case 'completed': {
-        console.log('[useWorkflowSubmission] ✓ Workflow completed:', event.workflowId);
 
         // Update steps to completed status, but skip steps with taskId (they're waiting for task completion)
         const currentWorkflow = workflowControl.getWorkflow();
@@ -383,14 +405,11 @@ export function useWorkflowSubmission(
           if (workZoneId && board) {
             WorkZoneTransforms.updateWorkflow(board, workZoneId, workflowData);
             
-            console.log('[useWorkflowSubmission] Checking removal for WorkZone:', workZoneId, 'hasQueuedTasks:', hasQueuedTasks);
-
             // If no queued tasks (like generate_image), remove WorkZone after a delay
             // Queued tasks will be handled by useAutoInsertToCanvas when they complete AND are inserted
             if (!hasQueuedTasks) {
               setTimeout(() => {
                 WorkZoneTransforms.removeWorkZone(board, workZoneId);
-                console.log('[useWorkflowSubmission] Removed WorkZone after completion:', workZoneId);
               }, 1500);
             } else {
               // 检查是否所有队列任务的后处理已经完成（可能在工作流完成前就已经插入了）
@@ -399,19 +418,15 @@ export function useWorkflowSubmission(
                 const stepResult = step.result as { taskId?: string } | undefined;
                 if (stepResult?.taskId) {
                   const isCompleted = workflowCompletionService.isPostProcessingCompleted(stepResult.taskId);
-                  console.log(`[useWorkflowSubmission] Task ${stepResult.taskId} post-processing finished:`, isCompleted);
                   return isCompleted;
                 }
                 return true;
               });
 
               if (allPostProcessingFinished) {
-                console.log('[useWorkflowSubmission] All post-processing finished, removing WorkZone:', workZoneId);
                 setTimeout(() => {
                   WorkZoneTransforms.removeWorkZone(board, workZoneId);
                 }, 1500);
-              } else {
-                console.log('[useWorkflowSubmission] Post-processing still in progress, keeping WorkZone:', workZoneId);
               }
             }
           }
@@ -420,7 +435,6 @@ export function useWorkflowSubmission(
       }
 
       case 'failed': {
-        console.error('[useWorkflowSubmission] ✗ Workflow failed:', event.error);
         workflowControl.abortWorkflow();
 
         // Sync failed state to ChatDrawer and WorkZone
@@ -531,12 +545,6 @@ export function useWorkflowSubmission(
     subscriptionsRef.current.push(workflowSub);
 
     // Submit to SW
-    // console.log('[WorkflowSubmit] Submitting to SW:', {
-    //   workflowId: swWorkflow.id,
-    //   stepsCount: swWorkflow.steps.length,
-    //   timestamp: new Date().toISOString(),
-    // });
-    
     await workflowSubmissionService.submit(swWorkflow);
 
     // console.log('[WorkflowSubmit] ✓ Submitted to SW:', swWorkflow.id);

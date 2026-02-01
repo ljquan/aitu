@@ -25,6 +25,11 @@ export default defineConfig(({ mode }) => {
   return {
     root: __dirname,
     publicDir: false, // 禁用 publicDir，避免将 public 目录下的文件复制到 outDir (也是 public)
+    resolve: {
+      alias: {
+        '@aitu/utils': path.resolve(__dirname, '../../packages/utils/src/index.ts'),
+      },
+    },
     define: {
       __APP_VERSION__: JSON.stringify(appVersion),
     },

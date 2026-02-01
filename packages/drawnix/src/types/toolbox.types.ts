@@ -150,4 +150,7 @@ export interface ToolWindowState {
 
   /** 是否常驻工具栏 */
   isPinned: boolean;
+
+  /** 是否自动最大化（仅在首次打开时生效） */
+  autoMaximize?: boolean;
 }

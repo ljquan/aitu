@@ -581,6 +581,50 @@
 
     svg { width: 10px; height: 10px; }
   }
+
+  // Sync badge styles
+  &__sync-badge {
+    position: absolute;
+    bottom: 4px;
+    left: 4px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    z-index: 1;
+    backdrop-filter: blur(4px);
+    transition: all 0.2s ease;
+
+    svg { width: 12px; height: 12px; }
+
+    &--synced {
+      background: rgba(0, 168, 112, 0.9);
+      color: white;
+    }
+
+    &--syncing {
+      background: rgba(0, 82, 217, 0.9);
+      color: white;
+    }
+
+    &--warning {
+      background: rgba(237, 125, 49, 0.9);
+      color: white;
+    }
+
+    &--clickable {
+      background: rgba(0, 82, 217, 0.85);
+      color: white;
+      cursor: pointer;
+
+      &:hover {
+        background: rgba(0, 82, 217, 1);
+        transform: scale(1.05);
+      }
+    }
+  }
 }
 
 // Responsive Design for Panel
@@ -990,5 +1034,47 @@
   .t-badge__count {
     color: #E91E63 !important;
     border: 1px solid #E91E63 !important;
+  }
+}
+
+// Virtual Task List - Load More Styles
+.virtual-task-list {
+  &__loading-more {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 16px;
+    color: var(--td-text-color-secondary, #757575);
+    font-size: 13px;
+  }
+
+  &__loading-spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--td-component-border, #e7e7e7);
+    border-top-color: #F39C12;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  &__pagination-info {
+    text-align: center;
+    padding: 12px;
+    color: var(--td-text-color-placeholder, #bbb);
+    font-size: 12px;
+  }
+
+  &__no-more {
+    text-align: center;
+    padding: 12px;
+    color: var(--td-text-color-placeholder, #bbb);
+    font-size: 12px;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
   }
 }

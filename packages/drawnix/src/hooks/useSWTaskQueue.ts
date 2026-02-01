@@ -12,14 +12,15 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { swTaskQueueService } from '../services/sw-task-queue-service';
-import { swTaskQueueClient } from '../services/sw-client';
+import { swChannelClient } from '../services/sw-channel';
+import type { SWTask } from '../services/sw-channel';
 import { geminiSettings } from '../utils/settings-manager';
 
 interface UseSWTaskQueueOptions {
   /** Auto-initialize on mount */
   autoInit?: boolean;
   /** Callback when tasks are synced from SW */
-  onTasksSync?: (tasks: import('../services/sw-client').SWTask[]) => void;
+  onTasksSync?: (tasks: SWTask[]) => void;
 }
 
 interface UseSWTaskQueueReturn {
@@ -34,7 +35,7 @@ interface UseSWTaskQueueReturn {
   /** Whether Service Worker is supported */
   isSupported: boolean;
   /** Request task sync from SW */
-  syncTasks: () => Promise<import('../services/sw-client').SWTask[]>;
+  syncTasks: () => Promise<SWTask[]>;
 }
 
 /**
@@ -56,15 +57,30 @@ export function useSWTaskQueue(
     onTasksSyncRef.current = onTasksSync;
   }, [onTasksSync]);
 
-  const isSupported = swTaskQueueClient.isServiceWorkerSupported();
+  const isSupported = 'serviceWorker' in navigator;
 
   const syncTasks = useCallback(async () => {
     if (!isSupported) return [];
-    const tasks = await swTaskQueueClient.requestAllTasks();
-    if (tasks.length > 0 && onTasksSyncRef.current) {
-      onTasksSyncRef.current(tasks);
+    
+    // Use paginated API to avoid postMessage size limits (1MB max)
+    const allTasks: SWTask[] = [];
+    const pageSize = 50;
+    let offset = 0;
+    let hasMore = true;
+    
+    while (hasMore) {
+      const result = await swChannelClient.listTasksPaginated({ offset, limit: pageSize });
+      if (!result.success) break;
+      
+      allTasks.push(...(result.tasks || []));
+      hasMore = result.hasMore;
+      offset += pageSize;
     }
-    return tasks;
+    
+    if (allTasks.length > 0 && onTasksSyncRef.current) {
+      onTasksSyncRef.current(allTasks);
+    }
+    return allTasks;
   }, [isSupported]);
 
   const initialize = useCallback(async (): Promise<boolean> => {
@@ -91,12 +107,23 @@ export function useSWTaskQueue(
       }
 
       // Sync tasks from SW (tasks are persisted in SW's IndexedDB)
-      const tasks = await swTaskQueueClient.requestAllTasks();
-      if (tasks.length > 0) {
-        // console.log(`[useSWTaskQueue] Synced ${tasks.length} tasks from SW`);
-        if (onTasksSyncRef.current) {
-          onTasksSyncRef.current(tasks);
-        }
+      // Use paginated API to avoid postMessage size limits
+      const allTasks: SWTask[] = [];
+      const pageSize = 50;
+      let offset = 0;
+      let hasMore = true;
+      
+      while (hasMore) {
+        const result = await swChannelClient.listTasksPaginated({ offset, limit: pageSize });
+        if (!result.success) break;
+        
+        allTasks.push(...(result.tasks || []));
+        hasMore = result.hasMore;
+        offset += pageSize;
+      }
+      
+      if (allTasks.length > 0 && onTasksSyncRef.current) {
+        onTasksSyncRef.current(allTasks);
       }
 
       setInitialized(true);
@@ -124,16 +151,16 @@ export function useSWTaskQueue(
 
     const handleSettingsChange = () => {
       const settings = geminiSettings.get();
-      swTaskQueueClient.updateConfig(
-        {
+      swChannelClient.updateConfig({
+        geminiConfig: {
           apiKey: settings.apiKey,
           baseUrl: settings.baseUrl,
           modelName: settings.chatModel,
         },
-        {
+        videoConfig: {
           baseUrl: 'https://api.tu-zi.com',
-        }
-      );
+        },
+      });
     };
 
     geminiSettings.addListener(handleSettingsChange);
@@ -142,19 +169,27 @@ export function useSWTaskQueue(
     };
   }, [initialized]);
 
-  // Listen for task sync events from SW (e.g., after SW update)
+  // Listen for task created events from SW
   useEffect(() => {
-    if (!isSupported) return;
+    if (!isSupported || !initialized) return;
 
-    const subscription = swTaskQueueClient.observeTasks().subscribe((tasks) => {
-      // console.log(`[useSWTaskQueue] Received ${tasks.length} tasks from SW`);
-      if (onTasksSyncRef.current) {
-        onTasksSyncRef.current(tasks);
-      }
+    // Set up event handler to listen for task sync events
+    swChannelClient.setEventHandlers({
+      onTaskCreated: (event) => {
+        // Trigger sync when new task is created (from another tab)
+        if (onTasksSyncRef.current && event.task) {
+          syncTasks();
+        }
+      },
     });
 
-    return () => subscription.unsubscribe();
-  }, [isSupported]);
+    return () => {
+      // Clean up event handlers on unmount
+      swChannelClient.setEventHandlers({
+        onTaskCreated: undefined,
+      });
+    };
+  }, [isSupported, initialized, syncTasks]);
 
   return {
     initialized,

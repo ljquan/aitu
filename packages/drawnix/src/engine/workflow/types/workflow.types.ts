@@ -2,47 +2,17 @@
  * 工作流引擎类型定义
  */
 
-import type { MCPTool, MCPToolResult } from './mcp.types';
+import type { MCPToolResult } from './mcp.types';
 import type { GuardCheckResult } from './guard.types';
 import type { WorkflowResponse, WorkflowMCPCall } from '../prompts/workflow';
 
-/**
- * 工作流执行配置
- */
-export interface WorkflowConfig {
-  /** 最大迭代次数 */
-  maxIterations: number;
-  /** 工具执行超时（毫秒） */
-  toolTimeout: number;
-  /** 是否启用详细日志 */
-  verbose: boolean;
-  /** 使用的模型 */
-  model?: string;
-  /** 是否启用循环检测 */
-  enableLoopDetection?: boolean;
-  /** 警告阈值 */
-  warningThreshold?: number;
-  /** 软限制 */
-  softLimit?: number;
-  /** 是否启用参数映射 */
-  enableParameterMapping?: boolean;
-  /** 参数映射日志级别 */
-  parameterMappingLogLevel?: 'debug' | 'info' | 'warn' | 'error';
-}
-
-/**
- * 默认配置
- */
-export const DEFAULT_WORKFLOW_CONFIG: WorkflowConfig = {
-  maxIterations: 20,
-  toolTimeout: 30000,
-  verbose: false,
-  enableLoopDetection: true,
-  warningThreshold: 10,
-  softLimit: 15,
-  enableParameterMapping: true,
-  parameterMappingLogLevel: 'info',
-};
+// Re-export generic types from @aitu/utils
+export {
+  type WorkflowConfig,
+  DEFAULT_WORKFLOW_CONFIG,
+  StepStatus,
+  SystemStatus,
+} from '@aitu/utils';
 
 /**
  * 工作流执行结果
@@ -110,27 +80,4 @@ export interface AIService {
  */
 export interface ToolExecutor {
   execute(toolName: string, args: Record<string, unknown>): Promise<MCPToolResult>;
-}
-
-/**
- * 步骤状态
- */
-export enum StepStatus {
-  PENDING = 'pending',
-  RUNNING = 'running',
-  COMPLETED = 'completed',
-  FAILED = 'failed',
-  SKIPPED = 'skipped',
-}
-
-/**
- * 系统状态
- */
-export enum SystemStatus {
-  IDLE = 'idle',
-  RUNNING = 'running',
-  PAUSED = 'paused',
-  COMPLETED = 'completed',
-  FAILED = 'failed',
-  CANCELLED = 'cancelled',
 }
