@@ -1,30 +1,32 @@
 /**
  * 媒体同步服务
- * 负责选择性同步任务产物（图片/视频）
+ * 负责同步画布中的图片/视频资源（基于 URL）
  */
 
-import { gitHubApiService, GitHubApiError } from './github-api-service';
+import { gitHubApiService } from './github-api-service';
 import { unifiedCacheService } from '../unified-cache-service';
-import { swTaskQueueService } from '../sw-task-queue-service';
 import { kvStorageService } from '../kv-storage-service';
 import { DRAWNIX_DEVICE_ID_KEY } from '../../constants/storage';
-import { Task, TaskType, TaskStatus } from '../../types/task.types';
 import {
   MediaSyncStatus,
-  MediaSyncResult,
-  BatchMediaSyncResult,
-  SyncedMedia,
+  SyncedMediaFile,
+  MediaItem,
+  MediaItemSyncResult,
+  BatchMediaItemSyncResult,
+  MediaSyncProgressCallback,
   MAX_MEDIA_SIZE,
   SYNC_FILES,
   SyncManifest,
+  encodeUrlToFilename,
 } from './types';
+import { mediaCollector } from './media-collector';
 
 /** 媒体同步状态存储键 */
 const MEDIA_SYNC_STATUS_KEY = 'github_media_sync_status';
 
 /** 媒体同步状态缓存 */
 interface MediaSyncStatusCache {
-  [taskId: string]: {
+  [url: string]: {
     status: MediaSyncStatus;
     syncedAt?: number;
     error?: string;
@@ -78,10 +80,11 @@ function base64ToBlob(base64: string, mimeType: string): Blob {
 
 /**
  * 媒体同步服务
+ * 统一使用 URL 作为键，支持画布媒体和任务产物的同步
  */
 class MediaSyncService {
   private statusCache: MediaSyncStatusCache = {};
-  private syncingTasks: Set<string> = new Set();
+  private syncingUrls: Set<string> = new Set();
 
   constructor() {
     this.loadStatusCache();
@@ -105,370 +108,309 @@ class MediaSyncService {
   }
 
   /**
-   * 检查任务是否可以同步
+   * 获取 URL 的同步状态
    */
-  canSync(task: Task): { canSync: boolean; reason?: string } {
-    // 检查任务状态
-    if (task.status !== TaskStatus.COMPLETED) {
-      return { canSync: false, reason: '任务未完成' };
-    }
-
-    // 检查任务类型
-    if (task.type !== TaskType.IMAGE && task.type !== TaskType.VIDEO) {
-      return { canSync: false, reason: '不支持的任务类型' };
-    }
-
-    // 检查是否有结果
-    if (!task.result?.url) {
-      return { canSync: false, reason: '任务没有生成结果' };
-    }
-
-    // 检查文件大小
-    const size = task.result.size || 0;
-    if (size > MAX_MEDIA_SIZE) {
-      return {
-        canSync: false,
-        reason: `文件过大（${formatSize(size)}），最大支持 ${formatSize(MAX_MEDIA_SIZE)}`,
-      };
-    }
-
-    return { canSync: true };
-  }
-
-  /**
-   * 获取任务的同步状态
-   */
-  getTaskSyncStatus(taskId: string): MediaSyncStatus {
+  getUrlSyncStatus(url: string): MediaSyncStatus {
     // 检查是否正在同步
-    if (this.syncingTasks.has(taskId)) {
+    if (this.syncingUrls.has(url)) {
       return 'syncing';
     }
 
     // 检查缓存
-    const cached = this.statusCache[taskId];
+    const cached = this.statusCache[url];
     if (cached) {
       return cached.status;
-    }
-
-    // 检查任务是否可以同步
-    const task = swTaskQueueService.getTask(taskId);
-    if (!task) {
-      return 'not_synced';
-    }
-
-    const checkResult = this.canSync(task);
-    if (!checkResult.canSync && checkResult.reason?.includes('文件过大')) {
-      return 'too_large';
     }
 
     return 'not_synced';
   }
 
+  // ====================================
+  // 媒体同步方法（基于 URL）
+  // ====================================
+
   /**
-   * 同步单个任务的媒体
+   * 同步当前画布的媒体资源（自动同步）
+   * 在 SyncEngine.sync() 中调用
+   * @param currentBoardId 当前画布 ID
+   * @param onProgress 进度回调
    */
-  async syncTaskMedia(taskId: string): Promise<MediaSyncResult> {
-    // 检查是否已在同步
-    if (this.syncingTasks.has(taskId)) {
-      return { success: false, taskId, error: '正在同步中' };
-    }
-
-    // 获取任务
-    const task = swTaskQueueService.getTask(taskId);
-    if (!task) {
-      return { success: false, taskId, error: '任务不存在' };
-    }
-
-    // 检查是否可以同步
-    const checkResult = this.canSync(task);
-    if (!checkResult.canSync) {
-      return { success: false, taskId, error: checkResult.reason };
-    }
-
-    this.syncingTasks.add(taskId);
+  async syncCurrentBoardMedia(
+    currentBoardId: string,
+    onProgress?: MediaSyncProgressCallback
+  ): Promise<BatchMediaItemSyncResult> {
+    const startTime = Date.now();
+    console.log('[MediaSyncService] syncCurrentBoardMedia:', currentBoardId);
 
     try {
-      // 从缓存获取媒体数据
-      const mediaUrl = task.result!.url;
-      const blob = await unifiedCacheService.getCachedBlob(mediaUrl);
-      
-      if (!blob) {
-        throw new Error('无法获取媒体文件');
+      // 收集当前画布的媒体资源
+      const collected = await mediaCollector.collectCurrentBoardMedia(currentBoardId);
+      console.log('[MediaSyncService] Collected media:', collected.stats);
+
+      if (collected.currentBoardItems.length === 0) {
+        return this.createEmptyBatchResult(startTime);
+      }
+
+      // 获取远程已同步的 URL 集合
+      const remoteSyncedUrls = await this.getRemoteSyncedUrls();
+
+      // 增量计算：只同步新增的
+      const itemsToSync = collected.currentBoardItems.filter(
+        item => !remoteSyncedUrls.has(item.url)
+      );
+
+      console.log(`[MediaSyncService] Items to sync: ${itemsToSync.length} (${collected.currentBoardItems.length} total, ${remoteSyncedUrls.size} already synced)`);
+
+      if (itemsToSync.length === 0) {
+        return this.createEmptyBatchResult(startTime);
+      }
+
+      // 执行同步
+      return await this.syncMediaItems(itemsToSync, onProgress);
+    } catch (error) {
+      console.error('[MediaSyncService] syncCurrentBoardMedia failed:', error);
+      return {
+        succeeded: 0,
+        failed: 0,
+        skipped: 0,
+        results: [],
+        totalSize: 0,
+        duration: Date.now() - startTime,
+      };
+    }
+  }
+
+  /**
+   * 同步选中的媒体资源（手动同步）
+   * 在素材库或任务队列中由用户触发
+   * @param urls 要同步的 URL 列表
+   * @param onProgress 进度回调
+   */
+  async syncSelectedMedia(
+    urls: string[],
+    onProgress?: MediaSyncProgressCallback
+  ): Promise<BatchMediaItemSyncResult> {
+    const startTime = Date.now();
+    console.log('[MediaSyncService] syncSelectedMedia:', urls.length, 'urls');
+
+    try {
+      // 收集指定的媒体资源
+      const items = await mediaCollector.collectMediaByUrls(urls);
+
+      if (items.length === 0) {
+        return this.createEmptyBatchResult(startTime);
+      }
+
+      // 获取远程已同步的 URL 集合
+      const remoteSyncedUrls = await this.getRemoteSyncedUrls();
+
+      // 增量计算：只同步新增的
+      const itemsToSync = items.filter(item => !remoteSyncedUrls.has(item.url));
+
+      console.log(`[MediaSyncService] Items to sync: ${itemsToSync.length} (${items.length} requested, ${items.length - itemsToSync.length} already synced)`);
+
+      if (itemsToSync.length === 0) {
+        return {
+          succeeded: 0,
+          failed: 0,
+          skipped: items.length,
+          results: items.map(item => ({
+            success: true,
+            url: item.url,
+            error: '已同步',
+          })),
+          totalSize: 0,
+          duration: Date.now() - startTime,
+        };
+      }
+
+      // 执行同步
+      return await this.syncMediaItems(itemsToSync, onProgress);
+    } catch (error) {
+      console.error('[MediaSyncService] syncSelectedMedia failed:', error);
+      return {
+        succeeded: 0,
+        failed: 0,
+        skipped: 0,
+        results: [],
+        totalSize: 0,
+        duration: Date.now() - startTime,
+      };
+    }
+  }
+
+  /**
+   * 获取远程已同步的 URL 集合
+   */
+  async getRemoteSyncedUrls(): Promise<Set<string>> {
+    try {
+      // 先检查是否已配置 gistId
+      if (!gitHubApiService.hasGistId()) {
+        return new Set();
+      }
+
+      const manifestContent = await gitHubApiService.getGistFileContent(SYNC_FILES.MANIFEST);
+      if (!manifestContent) {
+        return new Set();
+      }
+
+      const manifest: SyncManifest = JSON.parse(manifestContent);
+      const urls = new Set<string>();
+
+      // 从 syncedMedia 中提取 URL
+      if (manifest.syncedMedia) {
+        for (const info of Object.values(manifest.syncedMedia)) {
+          if (info.url) {
+            urls.add(info.url);
+          }
+        }
+      }
+
+      return urls;
+    } catch (error) {
+      console.warn('[MediaSyncService] Failed to get remote synced URLs:', error);
+      return new Set();
+    }
+  }
+
+  /**
+   * 同步媒体项列表
+   */
+  private async syncMediaItems(
+    items: MediaItem[],
+    onProgress?: MediaSyncProgressCallback
+  ): Promise<BatchMediaItemSyncResult> {
+    const startTime = Date.now();
+    const result: BatchMediaItemSyncResult = {
+      succeeded: 0,
+      failed: 0,
+      skipped: 0,
+      results: [],
+      totalSize: 0,
+      duration: 0,
+    };
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      onProgress?.(i + 1, items.length, item.url, 'uploading');
+
+      const syncResult = await this.syncSingleMediaItem(item);
+      result.results.push(syncResult);
+
+      if (syncResult.success) {
+        result.succeeded++;
+        result.totalSize += syncResult.size || 0;
+      } else if (syncResult.error?.includes('过大') || syncResult.error?.includes('CORS')) {
+        result.skipped++;
+      } else {
+        result.failed++;
+      }
+    }
+
+    result.duration = Date.now() - startTime;
+    console.log('[MediaSyncService] Sync completed:', {
+      succeeded: result.succeeded,
+      failed: result.failed,
+      skipped: result.skipped,
+      totalSize: formatSize(result.totalSize),
+      duration: result.duration,
+    });
+
+    return result;
+  }
+
+  /**
+   * 同步单个媒体项
+   */
+  private async syncSingleMediaItem(item: MediaItem): Promise<MediaItemSyncResult> {
+    const { url, type, source, originalUrl, mimeType } = item;
+
+    // 标记正在同步
+    this.syncingUrls.add(url);
+
+    try {
+      // 获取媒体 Blob
+      let blob: Blob | null = null;
+
+      if (source === 'local') {
+        // 本地资源：从 Cache Storage 获取
+        blob = await unifiedCacheService.getCachedBlob(url);
+      } else if (source === 'external') {
+        // 外部资源：先尝试从缓存获取，否则下载
+        blob = await unifiedCacheService.getCachedBlob(url);
+        if (!blob && originalUrl) {
+          blob = await this.fetchMediaFromUrl(originalUrl);
+          // 如果成功下载，缓存到本地
+          if (blob && blob.size > 0) {
+            await unifiedCacheService.cacheToCacheStorageOnly(url, blob);
+          }
+        }
+      }
+
+      if (!blob || blob.size === 0) {
+        return { success: false, url, error: '无法获取媒体文件' };
+      }
+
+      // 检查文件大小
+      if (blob.size > MAX_MEDIA_SIZE) {
+        return {
+          success: false,
+          url,
+          error: `文件过大（${formatSize(blob.size)}），最大支持 ${formatSize(MAX_MEDIA_SIZE)}`,
+          size: blob.size,
+        };
       }
 
       // 转换为 Base64
       const base64Data = await blobToBase64(blob);
 
       // 构建同步数据
-      const syncedMedia: SyncedMedia = {
-        taskId,
-        type: task.type === TaskType.VIDEO ? 'video' : 'image',
-        prompt: task.params?.prompt || '',
-        model: task.params?.model || '',
-        params: task.params || {},
-        mimeType: task.result!.format || blob.type,
-        originalSize: task.result!.size || blob.size,
+      const syncedMediaFile: SyncedMediaFile = {
+        url,
+        type,
+        source,
+        mimeType: mimeType || blob.type,
+        size: blob.size,
         base64Data,
-        createdAt: task.createdAt,
         syncedAt: Date.now(),
         syncedFromDevice: getDeviceId(),
+        originalUrl: source === 'external' ? originalUrl : undefined,
       };
 
-      // 上传到 Gist
-      const filename = SYNC_FILES.mediaFile(taskId);
-      const content = JSON.stringify(syncedMedia, null, 2);
+      // 生成文件名（使用 URL 的 Base64 编码）
+      const filename = `media_${encodeUrlToFilename(url)}.json`;
+      const content = JSON.stringify(syncedMediaFile, null, 2);
 
+      // 上传到 Gist
       await gitHubApiService.updateGistFiles({
         [filename]: content,
       });
 
-      // 更新 manifest 中的媒体索引
-      await this.updateManifestMediaIndex(taskId, syncedMedia);
+      // 更新 manifest
+      await this.updateManifestWithUrl(url, syncedMediaFile);
 
-      // 更新缓存状态
-      this.statusCache[taskId] = {
+      // 更新本地缓存状态
+      this.statusCache[url] = {
         status: 'synced',
         syncedAt: Date.now(),
       };
       await this.saveStatusCache();
 
-      return { success: true, taskId };
+      return { success: true, url, size: blob.size };
     } catch (error) {
-      console.error('[MediaSyncService] Sync failed:', error);
-      
+      console.error(`[MediaSyncService] Failed to sync ${url}:`, error);
       const errorMessage = error instanceof Error ? error.message : '同步失败';
-      
-      // 更新缓存状态
-      this.statusCache[taskId] = {
+
+      // 更新本地缓存状态
+      this.statusCache[url] = {
         status: 'error',
         error: errorMessage,
       };
       await this.saveStatusCache();
 
-      return { success: false, taskId, error: errorMessage };
+      return { success: false, url, error: errorMessage };
     } finally {
-      this.syncingTasks.delete(taskId);
-    }
-  }
-
-  /**
-   * 更新 manifest 中的媒体索引
-   */
-  private async updateManifestMediaIndex(
-    taskId: string,
-    media: SyncedMedia
-  ): Promise<void> {
-    try {
-      const manifestContent = await gitHubApiService.getGistFileContent(SYNC_FILES.MANIFEST);
-      if (!manifestContent) {
-        return;
-      }
-
-      const manifest: SyncManifest = JSON.parse(manifestContent);
-      manifest.syncedMedia[taskId] = {
-        taskId,
-        type: media.type,
-        size: media.originalSize,
-        syncedAt: media.syncedAt,
-      };
-      manifest.updatedAt = Date.now();
-
-      await gitHubApiService.updateGistFiles({
-        [SYNC_FILES.MANIFEST]: JSON.stringify(manifest, null, 2),
-      });
-    } catch (error) {
-      console.warn('[MediaSyncService] Failed to update manifest:', error);
-    }
-  }
-
-  /**
-   * 从云端下载媒体
-   */
-  async downloadTaskMedia(taskId: string): Promise<Blob | null> {
-    try {
-      const filename = SYNC_FILES.mediaFile(taskId);
-      const content = await gitHubApiService.getGistFileContent(filename);
-      
-      if (!content) {
-        return null;
-      }
-
-      const syncedMedia: SyncedMedia = JSON.parse(content);
-      return base64ToBlob(syncedMedia.base64Data, syncedMedia.mimeType);
-    } catch (error) {
-      console.error('[MediaSyncService] Download failed:', error);
-      return null;
-    }
-  }
-
-  /**
-   * 从云端下载媒体并缓存到本地（使用自动生成的 URL）
-   * @deprecated 使用 downloadAndCacheMediaToUrl 代替
-   */
-  async downloadAndCacheMedia(taskId: string): Promise<string | null> {
-    try {
-      const filename = SYNC_FILES.mediaFile(taskId);
-      const content = await gitHubApiService.getGistFileContent(filename);
-      
-      if (!content) {
-        return null;
-      }
-
-      const syncedMedia: SyncedMedia = JSON.parse(content);
-      const blob = base64ToBlob(syncedMedia.base64Data, syncedMedia.mimeType);
-      
-      if (!blob || blob.size === 0) {
-        return null;
-      }
-
-      // 生成本地缓存路径
-      const extension = syncedMedia.type === 'video' ? 'mp4' : 'png';
-      const cacheUrl = `/__aitu_cache__/${syncedMedia.type}/synced-${taskId}.${extension}`;
-      
-      // 缓存到本地（仅 Cache Storage，不需要 IndexedDB 元数据）
-      await unifiedCacheService.cacheToCacheStorageOnly(cacheUrl, blob);
-      
-      console.log(`[MediaSyncService] Cached media for task ${taskId} at ${cacheUrl}`);
-      return cacheUrl;
-    } catch (error) {
-      console.error('[MediaSyncService] Download and cache failed:', error);
-      return null;
-    }
-  }
-
-  /**
-   * 从云端下载媒体并缓存到指定 URL
-   * @param taskId 任务 ID
-   * @param targetUrl 目标缓存 URL（保持任务原始 URL 不变）
-   */
-  async downloadAndCacheMediaToUrl(taskId: string, targetUrl: string): Promise<string | null> {
-    try {
-      const filename = SYNC_FILES.mediaFile(taskId);
-      const content = await gitHubApiService.getGistFileContent(filename);
-      
-      if (!content) {
-        return null;
-      }
-
-      const syncedMedia: SyncedMedia = JSON.parse(content);
-      const blob = base64ToBlob(syncedMedia.base64Data, syncedMedia.mimeType);
-      
-      if (!blob || blob.size === 0) {
-        return null;
-      }
-
-      // 缓存到指定的 URL 位置（仅 Cache Storage）
-      await unifiedCacheService.cacheToCacheStorageOnly(targetUrl, blob);
-      
-      console.log(`[MediaSyncService] Cached media for task ${taskId} at ${targetUrl}`);
-      return targetUrl;
-    } catch (error) {
-      console.error('[MediaSyncService] Download and cache to URL failed:', error);
-      return null;
-    }
-  }
-
-  /**
-   * 下载所有已同步的媒体并缓存到本地
-   * 优先从 Gist 媒体文件下载，否则从原始 URL 下载
-   */
-  async downloadAllSyncedMedia(
-    onProgress?: (current: number, total: number, taskId: string) => void
-  ): Promise<{ succeeded: number; failed: number; results: Array<{ taskId: string; success: boolean; url?: string; error?: string }> }> {
-    const result = {
-      succeeded: 0,
-      failed: 0,
-      results: [] as Array<{ taskId: string; success: boolean; url?: string; error?: string }>,
-    };
-
-    try {
-      // 获取所有需要下载媒体的任务
-      const allTasks = swTaskQueueService.getAllTasks();
-      const tasksNeedingMedia = allTasks.filter(task => {
-        // 只处理已完成的图片/视频任务
-        if (task.status !== TaskStatus.COMPLETED) return false;
-        if (task.type !== TaskType.IMAGE && task.type !== TaskType.VIDEO) return false;
-        // 检查是否有本地缓存 URL 且标记为需要下载
-        if (!task.result?.url?.startsWith('/__aitu_cache__/')) return false;
-        // 有 needsMediaDownload 标记的需要下载
-        if ((task.result as any)?.needsMediaDownload) return true;
-        return false;
-      });
-
-      console.log(`[MediaSyncService] Found ${tasksNeedingMedia.length} tasks needing media download`);
-      
-      for (let i = 0; i < tasksNeedingMedia.length; i++) {
-        const task = tasksNeedingMedia[i];
-        onProgress?.(i + 1, tasksNeedingMedia.length, task.id);
-
-        const url = await this.downloadAndCacheMediaForTask(task);
-        if (url) {
-          result.succeeded++;
-          result.results.push({ taskId: task.id, success: true, url });
-          // 下载成功后，清除 needsMediaDownload 标记
-          await this.clearNeedsMediaDownloadFlag(task.id);
-        } else {
-          result.failed++;
-          result.results.push({ taskId: task.id, success: false, error: '下载失败' });
-        }
-      }
-    } catch (error) {
-      console.error('[MediaSyncService] Download all failed:', error);
-    }
-
-    return result;
-  }
-
-  /**
-   * 清除任务的 needsMediaDownload 标记
-   * 注意：由于 swTaskQueueService 没有公开的 updateTask 方法，
-   * 这个标记会在任务数据中保留，但不影响功能（数据已缓存）
-   */
-  private clearNeedsMediaDownloadFlag(taskId: string): void {
-    // 标记清除只用于日志记录，实际数据已在 Cache Storage 中
-    console.log(`[MediaSyncService] Media downloaded for task ${taskId}, needsMediaDownload flag no longer relevant`);
-  }
-
-  /**
-   * 为任务下载并缓存媒体
-   * 1. 优先从 Gist 的 media_{taskId}.json 下载（如果存在）
-   * 2. 媒体数据缓存到任务的原始 URL 位置
-   */
-  private async downloadAndCacheMediaForTask(task: Task): Promise<string | null> {
-    const taskId = task.id;
-    // 使用任务的原始 URL 作为缓存路径（保持 URL 不变）
-    const cacheUrl = task.result?.url;
-    
-    if (!cacheUrl) {
-      console.warn(`[MediaSyncService] Task ${taskId} has no result URL`);
-      return null;
-    }
-
-    try {
-      // 1. 尝试从 Gist 媒体文件下载，并缓存到原始 URL 位置
-      const gistUrl = await this.downloadAndCacheMediaToUrl(taskId, cacheUrl);
-      if (gistUrl) {
-        console.log(`[MediaSyncService] Downloaded media from Gist for task ${taskId} to ${cacheUrl}`);
-        return gistUrl;
-      }
-
-      // 2. 尝试从远程 URL 下载（如果有原始外部 URL）
-      const externalUrl = (task.result as any)?.externalUrl;
-      if (externalUrl) {
-        console.log(`[MediaSyncService] Trying to download from externalUrl for task ${taskId}:`, externalUrl);
-        const blob = await this.fetchMediaFromUrl(externalUrl);
-        if (blob && blob.size > 0) {
-          await unifiedCacheService.cacheToCacheStorageOnly(cacheUrl, blob);
-          console.log(`[MediaSyncService] Cached media from externalUrl for task ${taskId}`);
-          return cacheUrl;
-        }
-      }
-
-      console.warn(`[MediaSyncService] No media source available for task ${taskId}`);
-      return null;
-    } catch (error) {
-      console.error(`[MediaSyncService] Failed to download media for task ${taskId}:`, error);
-      return null;
+      this.syncingUrls.delete(url);
     }
   }
 
@@ -495,253 +437,142 @@ class MediaSyncService {
   }
 
   /**
-   * 批量同步多个任务
+   * 更新 manifest 中的媒体索引（基于 URL）
    */
-  async syncMultipleTasks(
-    taskIds: string[],
-    onProgress?: (current: number, total: number, taskId: string) => void
-  ): Promise<BatchMediaSyncResult> {
-    const result: BatchMediaSyncResult = {
-      succeeded: 0,
-      failed: 0,
-      skipped: 0,
-      results: [],
-    };
-
-    for (let i = 0; i < taskIds.length; i++) {
-      const taskId = taskIds[i];
-      onProgress?.(i + 1, taskIds.length, taskId);
-
-      // 检查是否可以同步
-      const task = swTaskQueueService.getTask(taskId);
-      if (!task) {
-        result.skipped++;
-        result.results.push({ success: false, taskId, error: '任务不存在' });
-        continue;
-      }
-
-      const checkResult = this.canSync(task);
-      if (!checkResult.canSync) {
-        if (checkResult.reason?.includes('文件过大')) {
-          result.skipped++;
-        } else {
-          result.failed++;
-        }
-        result.results.push({ success: false, taskId, error: checkResult.reason });
-        continue;
-      }
-
-      // 执行同步
-      const syncResult = await this.syncTaskMedia(taskId);
-      result.results.push(syncResult);
-
-      if (syncResult.success) {
-        result.succeeded++;
-      } else {
-        result.failed++;
-      }
-    }
-
-    return result;
-  }
-
-  /**
-   * 同步本地上传的素材
-   * 与 syncTaskMedia 类似，但处理没有 task 的本地素材
-   */
-  async syncAssetMedia(asset: {
-    id: string;
-    url: string;
-    type: 'image' | 'video';
-    name: string;
-    mimeType: string;
-    size?: number;
-  }): Promise<MediaSyncResult> {
-    const assetId = asset.id;
-    
-    // 检查是否已在同步
-    if (this.syncingTasks.has(assetId)) {
-      return { success: false, taskId: assetId, error: '正在同步中' };
-    }
-
-    // 检查文件大小
-    const size = asset.size || 0;
-    if (size > MAX_MEDIA_SIZE) {
-      return {
-        success: false,
-        taskId: assetId,
-        error: `文件过大（${formatSize(size)}），最大支持 ${formatSize(MAX_MEDIA_SIZE)}`,
-      };
-    }
-
-    this.syncingTasks.add(assetId);
-
-    try {
-      // 从缓存获取媒体数据
-      const blob = await unifiedCacheService.getCachedBlob(asset.url);
-      
-      if (!blob) {
-        throw new Error('无法获取媒体文件');
-      }
-
-      // 转换为 Base64
-      const base64Data = await blobToBase64(blob);
-
-      // 构建同步数据（使用 asset 格式，与 task 格式兼容）
-      const syncedMedia: SyncedMedia = {
-        taskId: assetId, // 使用 asset id 作为 taskId
-        type: asset.type,
-        prompt: '', // 本地上传没有提示词
-        model: 'local_upload', // 标记为本地上传
-        params: { name: asset.name }, // 保存文件名
-        mimeType: asset.mimeType || blob.type,
-        originalSize: asset.size || blob.size,
-        base64Data,
-        createdAt: Date.now(),
-        syncedAt: Date.now(),
-        syncedFromDevice: getDeviceId(),
-      };
-
-      // 上传到 Gist
-      const filename = SYNC_FILES.mediaFile(assetId);
-      const content = JSON.stringify(syncedMedia, null, 2);
-
-      await gitHubApiService.updateGistFiles({
-        [filename]: content,
-      });
-
-      // 更新 manifest 中的媒体索引
-      await this.updateManifestMediaIndex(assetId, syncedMedia);
-
-      // 更新缓存状态
-      this.statusCache[assetId] = {
-        status: 'synced',
-        syncedAt: Date.now(),
-      };
-      await this.saveStatusCache();
-
-      return { success: true, taskId: assetId };
-    } catch (error) {
-      console.error('[MediaSyncService] Sync asset failed:', error);
-      
-      const errorMessage = error instanceof Error ? error.message : '同步失败';
-      
-      // 更新缓存状态
-      this.statusCache[assetId] = {
-        status: 'error',
-        error: errorMessage,
-      };
-      await this.saveStatusCache();
-
-      return { success: false, taskId: assetId, error: errorMessage };
-    } finally {
-      this.syncingTasks.delete(assetId);
-    }
-  }
-
-  /**
-   * 批量同步本地上传的素材
-   */
-  async syncMultipleAssets(
-    assets: Array<{
-      id: string;
-      url: string;
-      type: 'image' | 'video';
-      name: string;
-      mimeType: string;
-      size?: number;
-    }>,
-    onProgress?: (current: number, total: number, assetId: string) => void
-  ): Promise<BatchMediaSyncResult> {
-    const result: BatchMediaSyncResult = {
-      succeeded: 0,
-      failed: 0,
-      skipped: 0,
-      results: [],
-    };
-
-    for (let i = 0; i < assets.length; i++) {
-      const asset = assets[i];
-      onProgress?.(i + 1, assets.length, asset.id);
-
-      // 检查文件大小
-      const size = asset.size || 0;
-      if (size > MAX_MEDIA_SIZE) {
-        result.skipped++;
-        result.results.push({
-          success: false,
-          taskId: asset.id,
-          error: `文件过大（${formatSize(size)}）`,
-        });
-        continue;
-      }
-
-      // 执行同步
-      const syncResult = await this.syncAssetMedia(asset);
-      result.results.push(syncResult);
-
-      if (syncResult.success) {
-        result.succeeded++;
-      } else {
-        result.failed++;
-      }
-    }
-
-    return result;
-  }
-
-  /**
-   * 获取所有已同步的媒体列表
-   */
-  async getSyncedMediaList(): Promise<Array<{
-    taskId: string;
-    type: 'image' | 'video';
-    size: number;
-    syncedAt: number;
-  }>> {
+  private async updateManifestWithUrl(
+    url: string,
+    media: SyncedMediaFile
+  ): Promise<void> {
     try {
       const manifestContent = await gitHubApiService.getGistFileContent(SYNC_FILES.MANIFEST);
       if (!manifestContent) {
-        return [];
+        return;
       }
 
       const manifest: SyncManifest = JSON.parse(manifestContent);
-      return Object.values(manifest.syncedMedia);
+      
+      // 确保 syncedMedia 存在
+      if (!manifest.syncedMedia) {
+        manifest.syncedMedia = {};
+      }
+      
+      // 使用 URL 作为键
+      manifest.syncedMedia[url] = {
+        url,
+        type: media.type,
+        source: media.source,
+        size: media.size,
+        syncedAt: media.syncedAt,
+        syncedFromDevice: media.syncedFromDevice,
+      };
+      manifest.updatedAt = Date.now();
+
+      await gitHubApiService.updateGistFiles({
+        [SYNC_FILES.MANIFEST]: JSON.stringify(manifest, null, 2),
+      });
     } catch (error) {
-      console.error('[MediaSyncService] Failed to get synced media list:', error);
-      return [];
+      console.warn('[MediaSyncService] Failed to update manifest with URL:', error);
     }
   }
 
   /**
-   * 删除已同步的媒体
+   * 创建空的批量结果
    */
-  async deleteSyncedMedia(taskId: string): Promise<boolean> {
+  private createEmptyBatchResult(startTime: number): BatchMediaItemSyncResult {
+    return {
+      succeeded: 0,
+      failed: 0,
+      skipped: 0,
+      results: [],
+      totalSize: 0,
+      duration: Date.now() - startTime,
+    };
+  }
+
+  /**
+   * 从远程下载媒体并缓存到本地（基于 URL）
+   * @param url 媒体 URL
+   */
+  async downloadAndCacheMediaByUrl(url: string): Promise<string | null> {
     try {
-      const filename = SYNC_FILES.mediaFile(taskId);
-      await gitHubApiService.deleteGistFiles([filename]);
+      // 生成文件名
+      const filename = `media_${encodeUrlToFilename(url)}.json`;
+      const content = await gitHubApiService.getGistFileContent(filename);
 
-      // 更新 manifest
-      const manifestContent = await gitHubApiService.getGistFileContent(SYNC_FILES.MANIFEST);
-      if (manifestContent) {
-        const manifest: SyncManifest = JSON.parse(manifestContent);
-        delete manifest.syncedMedia[taskId];
-        manifest.updatedAt = Date.now();
-
-        await gitHubApiService.updateGistFiles({
-          [SYNC_FILES.MANIFEST]: JSON.stringify(manifest, null, 2),
-        });
+      if (!content) {
+        return null;
       }
 
-      // 更新本地缓存
-      delete this.statusCache[taskId];
-      await this.saveStatusCache();
+      const syncedMediaFile: SyncedMediaFile = JSON.parse(content);
+      const blob = base64ToBlob(syncedMediaFile.base64Data, syncedMediaFile.mimeType);
 
-      return true;
+      if (!blob || blob.size === 0) {
+        return null;
+      }
+
+      // 缓存到本地
+      await unifiedCacheService.cacheToCacheStorageOnly(url, blob);
+
+      console.log(`[MediaSyncService] Downloaded and cached media: ${url}`);
+      return url;
     } catch (error) {
-      console.error('[MediaSyncService] Delete failed:', error);
-      return false;
+      console.error(`[MediaSyncService] Failed to download media ${url}:`, error);
+      return null;
     }
+  }
+
+  /**
+   * 下载所有远程媒体并缓存到本地
+   * @param onProgress 进度回调
+   */
+  async downloadAllRemoteMedia(
+    onProgress?: MediaSyncProgressCallback
+  ): Promise<BatchMediaItemSyncResult> {
+    const startTime = Date.now();
+    const result: BatchMediaItemSyncResult = {
+      succeeded: 0,
+      failed: 0,
+      skipped: 0,
+      results: [],
+      totalSize: 0,
+      duration: 0,
+    };
+
+    try {
+      // 获取远程已同步的 URL 列表
+      const remoteSyncedUrls = await this.getRemoteSyncedUrls();
+      const urlsArray = Array.from(remoteSyncedUrls);
+
+      console.log(`[MediaSyncService] Found ${urlsArray.length} remote media to download`);
+
+      for (let i = 0; i < urlsArray.length; i++) {
+        const url = urlsArray[i];
+        onProgress?.(i + 1, urlsArray.length, url, 'downloading');
+
+        // 检查本地是否已缓存
+        const cacheInfo = await unifiedCacheService.getCacheInfo(url);
+        if (cacheInfo.isCached) {
+          result.skipped++;
+          result.results.push({ success: true, url, error: '已缓存' });
+          continue;
+        }
+
+        // 下载并缓存
+        const cachedUrl = await this.downloadAndCacheMediaByUrl(url);
+        if (cachedUrl) {
+          result.succeeded++;
+          result.results.push({ success: true, url });
+        } else {
+          result.failed++;
+          result.results.push({ success: false, url, error: '下载失败' });
+        }
+      }
+    } catch (error) {
+      console.error('[MediaSyncService] downloadAllRemoteMedia failed:', error);
+    }
+
+    result.duration = Date.now() - startTime;
+    return result;
   }
 
   /**
@@ -749,15 +580,15 @@ class MediaSyncService {
    */
   async refreshSyncStatus(): Promise<void> {
     try {
-      const syncedList = await this.getSyncedMediaList();
+      const syncedUrls = await this.getRemoteSyncedUrls();
       
       // 重置缓存
       this.statusCache = {};
       
-      for (const item of syncedList) {
-        this.statusCache[item.taskId] = {
+      for (const url of syncedUrls) {
+        this.statusCache[url] = {
           status: 'synced',
-          syncedAt: item.syncedAt,
+          syncedAt: Date.now(),
         };
       }
 
@@ -768,48 +599,36 @@ class MediaSyncService {
   }
 
   /**
-   * 获取可同步的任务列表
+   * 删除已同步的媒体（基于 URL）
    */
-  getSyncableTasks(): Array<{
-    task: Task;
-    status: MediaSyncStatus;
-    canSync: boolean;
-    reason?: string;
-  }> {
-    const allTasks = swTaskQueueService.getAllTasks();
-    const result: Array<{
-      task: Task;
-      status: MediaSyncStatus;
-      canSync: boolean;
-      reason?: string;
-    }> = [];
+  async deleteSyncedMedia(url: string): Promise<boolean> {
+    try {
+      const filename = `media_${encodeUrlToFilename(url)}.json`;
+      await gitHubApiService.deleteGistFiles([filename]);
 
-    for (const task of allTasks) {
-      // 只处理图片和视频任务
-      if (task.type !== TaskType.IMAGE && task.type !== TaskType.VIDEO) {
-        continue;
+      // 更新 manifest
+      const manifestContent = await gitHubApiService.getGistFileContent(SYNC_FILES.MANIFEST);
+      if (manifestContent) {
+        const manifest: SyncManifest = JSON.parse(manifestContent);
+        if (manifest.syncedMedia) {
+          delete manifest.syncedMedia[url];
+          manifest.updatedAt = Date.now();
+
+          await gitHubApiService.updateGistFiles({
+            [SYNC_FILES.MANIFEST]: JSON.stringify(manifest, null, 2),
+          });
+        }
       }
 
-      // 只处理已完成的任务
-      if (task.status !== TaskStatus.COMPLETED) {
-        continue;
-      }
+      // 更新本地缓存
+      delete this.statusCache[url];
+      await this.saveStatusCache();
 
-      const checkResult = this.canSync(task);
-      const status = this.getTaskSyncStatus(task.id);
-
-      result.push({
-        task,
-        status,
-        canSync: checkResult.canSync,
-        reason: checkResult.reason,
-      });
+      return true;
+    } catch (error) {
+      console.error('[MediaSyncService] Delete failed:', error);
+      return false;
     }
-
-    // 按创建时间倒序排列
-    result.sort((a, b) => b.task.createdAt - a.task.createdAt);
-
-    return result;
   }
 }
 

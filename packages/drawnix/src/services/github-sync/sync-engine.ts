@@ -283,6 +283,9 @@ class SyncEngine {
       let remoteManifest: SyncManifest | null = null;
       let remoteFiles: Record<string, string> = {};
 
+      // 标记是否需要用本地覆盖远程（解密失败时）
+      let shouldOverwriteRemote = false;
+      
       if (config.gistId) {
         console.log('[SyncEngine] Using existing gistId:', maskId(config.gistId));
         gitHubApiService.setGistId(config.gistId);
@@ -300,18 +303,23 @@ class SyncEngine {
           }
           console.log('[SyncEngine] Loaded remote files:', Object.keys(remoteFiles).length);
 
-          // 只解析 manifest（manifest 不加密）
+          // 获取本地密码并解密 manifest
+          const customPassword = await syncPasswordService.getPassword();
           if (remoteFiles[SYNC_FILES.MANIFEST]) {
             try {
-              remoteManifest = JSON.parse(remoteFiles[SYNC_FILES.MANIFEST]);
+              const { cryptoService } = await import('./crypto-service');
+              const manifestContent = await cryptoService.decryptOrPassthrough(remoteFiles[SYNC_FILES.MANIFEST], config.gistId, customPassword || undefined);
+              remoteManifest = JSON.parse(manifestContent);
             } catch (e) {
-              console.warn('[SyncEngine] Failed to parse manifest:', e);
+              console.warn('[SyncEngine] Failed to decrypt/parse manifest, will overwrite remote:', e);
+              // 解密失败，标记需要用本地覆盖远程
+              shouldOverwriteRemote = true;
             }
           }
           console.log('[SyncEngine] Remote manifest:', {
             version: remoteManifest?.version,
             boards: remoteManifest ? Object.keys(remoteManifest.boards).length : 0,
-            encrypted: (remoteManifest as SyncManifest & { encrypted?: boolean })?.encrypted,
+            shouldOverwriteRemote,
           });
         } catch (error) {
           console.error('[SyncEngine] Error fetching gist:', error);
@@ -325,13 +333,33 @@ class SyncEngine {
         }
       }
 
-      if (!config.gistId) {
+      // 如果解密失败，用本地覆盖远程
+      if (shouldOverwriteRemote && config.gistId) {
+        console.log('[SyncEngine] Decryption failed, overwriting remote with local data...');
+        const customPassword = await syncPasswordService.getPassword();
+        
+        // 加密并上传本地数据
+        const encryptedFiles = await dataSerializer.serializeToGistFilesEncrypted(localData, config.gistId, customPassword || undefined);
+        await gitHubApiService.updateGistFiles(encryptedFiles);
+        
+        await this.saveConfig({
+          lastSyncTime: Date.now(),
+        });
+
+        result.uploaded.boards = localData.boards.size;
+        result.uploaded.prompts = localData.prompts.promptHistory.length +
+          localData.prompts.videoPromptHistory.length +
+          localData.prompts.imagePromptHistory.length;
+        result.uploaded.tasks = localData.tasks.completedTasks.length;
+        result.success = true;
+        console.log('[SyncEngine] Remote overwritten with local data');
+      } else if (!config.gistId) {
         // 尝试查找已存在的同步 Gist
         console.log('[SyncEngine] No gistId in config, searching for existing sync gist...');
         const existingGist = await gitHubApiService.findSyncGist();
         
         if (existingGist) {
-          // 找到已存在的 Gist，下载远程数据
+          // 找到已存在的 Gist，尝试下载远程数据
           console.log('[SyncEngine] Found existing gist:', maskId(existingGist.id), 'files:', Object.keys(existingGist.files).length);
           gitHubApiService.setGistId(existingGist.id);
           
@@ -344,45 +372,71 @@ class SyncEngine {
             }
           }
 
-          // 解析远程数据（支持加密和明文）
-          console.log('[SyncEngine] Deserializing remote data...');
-          const remoteData = await dataSerializer.deserializeFromGistFilesWithDecryption(remoteFiles, existingGist.id);
-          console.log('[SyncEngine] Remote data parsed:', {
-            workspace: remoteData.workspace ? {
-              folders: remoteData.workspace.folders.length,
-              boardMetadata: remoteData.workspace.boardMetadata.length,
-              currentBoardId: remoteData.workspace.currentBoardId,
-            } : null,
-            boards: remoteData.boards.size,
-            prompts: remoteData.prompts ? {
-              promptHistory: remoteData.prompts.promptHistory?.length || 0,
-              videoPromptHistory: remoteData.prompts.videoPromptHistory?.length || 0,
-              imagePromptHistory: remoteData.prompts.imagePromptHistory?.length || 0,
-            } : null,
-            tasks: remoteData.tasks?.completedTasks?.length || 0,
-          });
-          
-          // 应用远程数据到本地
-          console.log('[SyncEngine] Applying remote data to local...');
-          const applied = await dataSerializer.applySyncData({
-            workspace: remoteData.workspace,
-            boards: remoteData.boards,
-            prompts: remoteData.prompts,
-            tasks: remoteData.tasks,
-          });
-          console.log('[SyncEngine] Applied result:', applied);
+          // 获取本地保存的自定义密码（如果有）
+          const customPassword = await syncPasswordService.getPassword();
+          console.log('[SyncEngine] Custom password available:', !!customPassword);
 
-          await this.saveConfig({
-            gistId: existingGist.id,
-            lastSyncTime: Date.now(),
-            enabled: true,
-          });
+          try {
+            // 解析远程数据（支持加密和明文）
+            console.log('[SyncEngine] Deserializing remote data...');
+            const remoteData = await dataSerializer.deserializeFromGistFilesWithDecryption(remoteFiles, existingGist.id, customPassword || undefined);
+            console.log('[SyncEngine] Remote data parsed:', {
+              workspace: remoteData.workspace ? {
+                folders: remoteData.workspace.folders.length,
+                boardMetadata: remoteData.workspace.boardMetadata.length,
+                currentBoardId: remoteData.workspace.currentBoardId,
+              } : null,
+              boards: remoteData.boards.size,
+              prompts: remoteData.prompts ? {
+                promptHistory: remoteData.prompts.promptHistory?.length || 0,
+                videoPromptHistory: remoteData.prompts.videoPromptHistory?.length || 0,
+                imagePromptHistory: remoteData.prompts.imagePromptHistory?.length || 0,
+              } : null,
+              tasks: remoteData.tasks?.completedTasks?.length || 0,
+            });
+            
+            // 应用远程数据到本地
+            console.log('[SyncEngine] Applying remote data to local...');
+            const applied = await dataSerializer.applySyncData({
+              workspace: remoteData.workspace,
+              boards: remoteData.boards,
+              prompts: remoteData.prompts,
+              tasks: remoteData.tasks,
+            });
+            console.log('[SyncEngine] Applied result:', applied);
 
-          result.downloaded.boards = applied.boardsApplied;
-          result.downloaded.prompts = applied.promptsApplied;
-          result.downloaded.tasks = applied.tasksApplied;
-          result.remoteCurrentBoardId = applied.remoteCurrentBoardId;
-          result.success = true;
+            await this.saveConfig({
+              gistId: existingGist.id,
+              lastSyncTime: Date.now(),
+              enabled: true,
+            });
+
+            result.downloaded.boards = applied.boardsApplied;
+            result.downloaded.prompts = applied.promptsApplied;
+            result.downloaded.tasks = applied.tasksApplied;
+            result.remoteCurrentBoardId = applied.remoteCurrentBoardId;
+            result.success = true;
+          } catch (decryptError) {
+            // 解密失败，用本地覆盖远程
+            console.warn('[SyncEngine] Decryption failed for existing gist, overwriting with local data:', decryptError);
+            
+            const encryptedFiles = await dataSerializer.serializeToGistFilesEncrypted(localData, existingGist.id, customPassword || undefined);
+            await gitHubApiService.updateGistFiles(encryptedFiles);
+            
+            await this.saveConfig({
+              gistId: existingGist.id,
+              lastSyncTime: Date.now(),
+              enabled: true,
+            });
+
+            result.uploaded.boards = localData.boards.size;
+            result.uploaded.prompts = localData.prompts.promptHistory.length +
+              localData.prompts.videoPromptHistory.length +
+              localData.prompts.imagePromptHistory.length;
+            result.uploaded.tasks = localData.tasks.completedTasks.length;
+            result.success = true;
+            console.log('[SyncEngine] Existing gist overwritten with local data');
+          }
         } else {
           console.log('[SyncEngine] No existing gist found, will create new one with encryption');
           // 没有找到已存在的 Gist，创建新的（加密）
@@ -392,10 +446,14 @@ class SyncEngine {
           });
           const gistId = emptyGist.id;
           
-          // 2. 使用 gist id 加密数据
-          const encryptedFiles = await dataSerializer.serializeToGistFilesEncrypted(localData, gistId);
+          // 2. 获取本地保存的自定义密码（如果有）
+          const customPassword = await syncPasswordService.getPassword();
+          console.log('[SyncEngine] Creating new gist with custom password:', !!customPassword);
           
-          // 3. 更新 Gist 内容
+          // 3. 使用 gist id 加密数据
+          const encryptedFiles = await dataSerializer.serializeToGistFilesEncrypted(localData, gistId, customPassword || undefined);
+          
+          // 4. 更新 Gist 内容
           gitHubApiService.setGistId(gistId);
           await gitHubApiService.updateGistFiles(encryptedFiles);
           
@@ -423,10 +481,14 @@ class SyncEngine {
           const { cryptoService } = await import('./crypto-service');
           const filesToUpdate: Record<string, string> = {};
           
+          // 获取本地保存的自定义密码（如果有）
+          const customPassword = await syncPasswordService.getPassword();
+          console.log('[SyncEngine] Full upload with custom password:', !!customPassword);
+          
           // 上传所有画板
           for (const [boardId, board] of localData.boards) {
             const boardJson = JSON.stringify(board);
-            filesToUpdate[SYNC_FILES.boardFile(boardId)] = await cryptoService.encrypt(boardJson, config.gistId);
+            filesToUpdate[SYNC_FILES.boardFile(boardId)] = await cryptoService.encrypt(boardJson, config.gistId, customPassword || undefined);
             localData.manifest.boards[boardId] = {
               name: board.name,
               updatedAt: board.updatedAt,
@@ -434,20 +496,20 @@ class SyncEngine {
             };
           }
           
-          // 更新 manifest
+          // 更新 manifest（加密）
           localData.manifest.updatedAt = Date.now();
-          const manifestWithFlag = { ...localData.manifest, encrypted: true };
-          filesToUpdate[SYNC_FILES.MANIFEST] = JSON.stringify(manifestWithFlag, null, 2);
+          const manifestJson = JSON.stringify(localData.manifest);
+          filesToUpdate[SYNC_FILES.MANIFEST] = await cryptoService.encrypt(manifestJson, config.gistId, customPassword || undefined);
           
           // 加密 workspace、prompts、tasks
           const workspaceJson = JSON.stringify(localData.workspace);
-          filesToUpdate[SYNC_FILES.WORKSPACE] = await cryptoService.encrypt(workspaceJson, config.gistId);
+          filesToUpdate[SYNC_FILES.WORKSPACE] = await cryptoService.encrypt(workspaceJson, config.gistId, customPassword || undefined);
           
           const promptsJson = JSON.stringify(localData.prompts);
-          filesToUpdate[SYNC_FILES.PROMPTS] = await cryptoService.encrypt(promptsJson, config.gistId);
+          filesToUpdate[SYNC_FILES.PROMPTS] = await cryptoService.encrypt(promptsJson, config.gistId, customPassword || undefined);
           
           const tasksJson = JSON.stringify(localData.tasks);
-          filesToUpdate[SYNC_FILES.TASKS] = await cryptoService.encrypt(tasksJson, config.gistId);
+          filesToUpdate[SYNC_FILES.TASKS] = await cryptoService.encrypt(tasksJson, config.gistId, customPassword || undefined);
           
           await gitHubApiService.updateGistFiles(filesToUpdate);
           result.uploaded.boards = localData.boards.size;
@@ -522,8 +584,12 @@ class SyncEngine {
           }
         }
 
+        // 获取本地保存的自定义密码（如果有）
+        const customPassword = await syncPasswordService.getPassword();
+        console.log('[SyncEngine] Incremental sync with custom password:', !!customPassword);
+
         // 解析远程数据（支持加密和明文，需要在合并前获取）
-        const remoteData = await dataSerializer.deserializeFromGistFilesWithDecryption(remoteFiles, config.gistId!);
+        const remoteData = await dataSerializer.deserializeFromGistFilesWithDecryption(remoteFiles, config.gistId!, customPassword || undefined);
         console.log('[SyncEngine] Remote data for merge:', {
           boards: remoteData.boards.size,
           workspace: remoteData.workspace ? {
@@ -676,7 +742,7 @@ class SyncEngine {
             if (board) {
               // 加密画板数据
               const boardJson = JSON.stringify(board);
-              filesToUpdate[SYNC_FILES.boardFile(boardId)] = await cryptoService.encrypt(boardJson, config.gistId!);
+              filesToUpdate[SYNC_FILES.boardFile(boardId)] = await cryptoService.encrypt(boardJson, config.gistId!, customPassword || undefined);
               localData.manifest.boards[boardId] = {
                 name: board.name,
                 updatedAt: board.updatedAt,
@@ -696,21 +762,21 @@ class SyncEngine {
             localData.manifest = updatedManifest;
           }
 
-          // 更新 manifest（不加密，但标记为加密存储）
+          // 更新 manifest（加密）
           localData.manifest.updatedAt = Date.now();
-          const manifestWithFlag = { ...localData.manifest, encrypted: true };
-          filesToUpdate[SYNC_FILES.MANIFEST] = JSON.stringify(manifestWithFlag, null, 2);
+          const manifestJson = JSON.stringify(localData.manifest);
+          filesToUpdate[SYNC_FILES.MANIFEST] = await cryptoService.encrypt(manifestJson, config.gistId!, customPassword || undefined);
 
           // 加密 workspace
           const workspaceJson = JSON.stringify(localData.workspace);
-          filesToUpdate[SYNC_FILES.WORKSPACE] = await cryptoService.encrypt(workspaceJson, config.gistId!);
+          filesToUpdate[SYNC_FILES.WORKSPACE] = await cryptoService.encrypt(workspaceJson, config.gistId!, customPassword || undefined);
 
           // 加密提示词和任务
           const promptsJson = JSON.stringify(localData.prompts);
-          filesToUpdate[SYNC_FILES.PROMPTS] = await cryptoService.encrypt(promptsJson, config.gistId!);
+          filesToUpdate[SYNC_FILES.PROMPTS] = await cryptoService.encrypt(promptsJson, config.gistId!, customPassword || undefined);
           
           const tasksJson = JSON.stringify(localData.tasks);
-          filesToUpdate[SYNC_FILES.TASKS] = await cryptoService.encrypt(tasksJson, config.gistId!);
+          filesToUpdate[SYNC_FILES.TASKS] = await cryptoService.encrypt(tasksJson, config.gistId!, customPassword || undefined);
 
           await gitHubApiService.updateGistFiles(filesToUpdate);
           result.uploaded.boards = changes.toUpload.length;
@@ -739,8 +805,14 @@ class SyncEngine {
       this.setStatus('synced');
       this.pendingChanges = false;
 
+      // 异步同步当前画布的媒体（自动同步）
+      const currentBoardId = localData.workspace.currentBoardId;
+      if (currentBoardId && result.uploaded.boards > 0) {
+        this.syncCurrentBoardMediaAsync(currentBoardId);
+      }
+
       // 如果下载了数据，异步下载已同步的媒体文件
-      if (result.downloaded.tasks > 0) {
+      if (result.downloaded.tasks > 0 || result.downloaded.boards > 0) {
         this.downloadSyncedMediaAsync();
       }
     } catch (error) {
@@ -753,6 +825,21 @@ class SyncEngine {
     }
 
     return result;
+  }
+
+  /**
+   * 异步同步当前画布的媒体（不阻塞同步流程）
+   */
+  private async syncCurrentBoardMediaAsync(currentBoardId: string): Promise<void> {
+    try {
+      console.log('[SyncEngine] Starting async current board media sync:', currentBoardId);
+      const mediaResult = await mediaSyncService.syncCurrentBoardMedia(currentBoardId, (current, total, url, status) => {
+        console.log(`[SyncEngine] Media sync ${status} ${current}/${total}: ${url}`);
+      });
+      console.log(`[SyncEngine] Current board media sync completed: ${mediaResult.succeeded} succeeded, ${mediaResult.failed} failed, ${mediaResult.skipped} skipped`);
+    } catch (error) {
+      console.error('[SyncEngine] Current board media sync failed:', error);
+    }
   }
 
   /**
@@ -802,10 +889,12 @@ class SyncEngine {
   private async downloadSyncedMediaAsync(): Promise<void> {
     try {
       console.log('[SyncEngine] Starting async media download...');
-      const result = await mediaSyncService.downloadAllSyncedMedia((current, total, taskId) => {
-        console.log(`[SyncEngine] Downloading media ${current}/${total}: ${taskId}`);
+      
+      // 下载远程媒体
+      const result = await mediaSyncService.downloadAllRemoteMedia((current, total, url, status) => {
+        console.log(`[SyncEngine] Downloading media ${current}/${total} (${status}): ${url}`);
       });
-      console.log(`[SyncEngine] Media download completed: ${result.succeeded} succeeded, ${result.failed} failed`);
+      console.log(`[SyncEngine] Media download completed: ${result.succeeded} succeeded, ${result.failed} failed, ${result.skipped} skipped`);
     } catch (error) {
       console.error('[SyncEngine] Media download failed:', error);
     }
@@ -882,18 +971,19 @@ class SyncEngine {
         console.log('[SyncEngine] pushToRemote: Incremental upload to gist:', maskId(config.gistId));
         gitHubApiService.setGistId(config.gistId);
         
-        // 获取远程 manifest 来比较
+        const { cryptoService } = await import('./crypto-service');
+        
+        // 获取远程 manifest 来比较（需要解密）
         let remoteManifest: SyncManifest | null = null;
         try {
           const manifestContent = await gitHubApiService.getGistFileContent(SYNC_FILES.MANIFEST);
           if (manifestContent) {
-            remoteManifest = JSON.parse(manifestContent);
+            const manifestJson = await cryptoService.decryptOrPassthrough(manifestContent, config.gistId, customPassword || undefined);
+            remoteManifest = JSON.parse(manifestJson);
           }
         } catch (e) {
-          console.log('[SyncEngine] pushToRemote: No remote manifest, will upload all');
+          console.log('[SyncEngine] pushToRemote: No remote manifest or decryption failed, will upload all');
         }
-        
-        const { cryptoService } = await import('./crypto-service');
         const filesToUpdate: Record<string, string> = {};
         let boardsUploaded = 0;
         
@@ -936,13 +1026,9 @@ class SyncEngine {
           }
         }
         
-        // 始终更新 manifest、workspace、prompts、tasks（这些文件较小）
-        const manifestWithFlag = {
-          ...localData.manifest,
-          encrypted: true,
-          customPassword: !!customPassword,
-        };
-        filesToUpdate[SYNC_FILES.MANIFEST] = JSON.stringify(manifestWithFlag, null, 2);
+        // 始终更新 manifest、workspace、prompts、tasks（这些文件较小，都加密）
+        const manifestJson = JSON.stringify(localData.manifest);
+        filesToUpdate[SYNC_FILES.MANIFEST] = await cryptoService.encrypt(manifestJson, config.gistId, customPassword || undefined);
         
         const workspaceJson = JSON.stringify(localData.workspace);
         filesToUpdate[SYNC_FILES.WORKSPACE] = await cryptoService.encrypt(workspaceJson, config.gistId, customPassword || undefined);
@@ -1047,15 +1133,17 @@ class SyncEngine {
       }
 
       gitHubApiService.setGistId(gistId);
+      const { cryptoService } = await import('./crypto-service');
       
-      // 先获取远程 manifest 来决定需要下载哪些文件
+      // 先获取远程 manifest 来决定需要下载哪些文件（解密）
       console.log('[SyncEngine] pullFromRemote: Fetching remote manifest...');
       const manifestContent = await gitHubApiService.getGistFileContent(SYNC_FILES.MANIFEST);
       if (!manifestContent) {
         throw new Error('远程数据为空');
       }
       
-      const remoteManifest: SyncManifest = JSON.parse(manifestContent);
+      const manifestJson = await cryptoService.decryptOrPassthrough(manifestContent, gistId, customPassword || undefined);
+      const remoteManifest: SyncManifest = JSON.parse(manifestJson);
       console.log('[SyncEngine] pullFromRemote: Remote has', Object.keys(remoteManifest.boards).length, 'boards');
       
       // 收集本地数据用于比较
@@ -1360,13 +1448,18 @@ class SyncEngine {
     try {
       gitHubApiService.setGistId(config.gistId);
       
-      // 获取远程 manifest
+      // 获取本地密码
+      const customPassword = await syncPasswordService.getPassword();
+      const { cryptoService } = await import('./crypto-service');
+      
+      // 获取远程 manifest（解密）
       const manifestContent = await gitHubApiService.getGistFileContent(SYNC_FILES.MANIFEST);
       if (!manifestContent) {
         return { success: false, error: '远程 manifest 不存在' };
       }
       
-      const manifest: SyncManifest = JSON.parse(manifestContent);
+      const manifestJson = await cryptoService.decryptOrPassthrough(manifestContent, config.gistId, customPassword || undefined);
+      const manifest: SyncManifest = JSON.parse(manifestJson);
       const boardInfo = manifest.boards[boardId];
       
       if (!boardInfo) {
@@ -1393,13 +1486,13 @@ class SyncEngine {
       };
       manifest.updatedAt = deletedAt;
       
-      // 更新远程 manifest（保持原有的加密标志）
-      // manifest 已经包含 encrypted 和 customPassword 字段
+      // 更新远程 manifest（加密）
+      const updatedManifestJson = JSON.stringify(manifest);
       await gitHubApiService.updateGistFiles({
-        [SYNC_FILES.MANIFEST]: JSON.stringify(manifest, null, 2),
+        [SYNC_FILES.MANIFEST]: await cryptoService.encrypt(updatedManifestJson, config.gistId, customPassword || undefined),
       });
       
-      console.log('[SyncEngine] syncBoardDeletion: Manifest updated with encryption flags preserved');
+      console.log('[SyncEngine] syncBoardDeletion: Manifest updated with encryption');
       
       console.log('[SyncEngine] syncBoardDeletion: Success, board moved to recycle bin');
       
@@ -1482,8 +1575,11 @@ class SyncEngine {
       };
     }
 
-    // 获取远程 manifest
+    // 获取远程 manifest（解密）
     try {
+      const customPassword = await syncPasswordService.getPassword();
+      const { cryptoService } = await import('./crypto-service');
+      
       const manifestContent = await gitHubApiService.getGistFileContent(SYNC_FILES.MANIFEST);
       if (!manifestContent) {
         return {
@@ -1495,7 +1591,8 @@ class SyncEngine {
         };
       }
 
-      const remoteManifest: SyncManifest = JSON.parse(manifestContent);
+      const manifestJson = await cryptoService.decryptOrPassthrough(manifestContent, config.gistId, customPassword || undefined);
+      const remoteManifest: SyncManifest = JSON.parse(manifestJson);
       const changes = dataSerializer.compareBoardChanges(
         localData.boards,
         remoteManifest,
@@ -1553,12 +1650,18 @@ class SyncEngine {
 
     try {
       gitHubApiService.setGistId(config.gistId);
+      
+      // 获取本地密码
+      const customPassword = await syncPasswordService.getPassword();
+      const { cryptoService } = await import('./crypto-service');
+      
       const manifestContent = await gitHubApiService.getGistFileContent(SYNC_FILES.MANIFEST);
       if (!manifestContent) {
         return result;
       }
 
-      const manifest: SyncManifest = JSON.parse(manifestContent);
+      const manifestJson = await cryptoService.decryptOrPassthrough(manifestContent, config.gistId, customPassword || undefined);
+      const manifest: SyncManifest = JSON.parse(manifestJson);
       
       // 获取已删除的画板
       result.boards = dataSerializer.getDeletedBoards(manifest);
@@ -1603,13 +1706,18 @@ class SyncEngine {
     try {
       gitHubApiService.setGistId(config.gistId);
       
-      // 获取远程 manifest
+      // 获取本地密码
+      const customPassword = await syncPasswordService.getPassword();
+      const { cryptoService } = await import('./crypto-service');
+      
+      // 获取远程 manifest 并解密
       const manifestContent = await gitHubApiService.getGistFileContent(SYNC_FILES.MANIFEST);
       if (!manifestContent) {
         return { success: false, error: '无法获取远程数据' };
       }
 
-      let manifest: SyncManifest = JSON.parse(manifestContent);
+      const manifestJson = await cryptoService.decryptOrPassthrough(manifestContent, config.gistId, customPassword || undefined);
+      let manifest: SyncManifest = JSON.parse(manifestJson);
 
       if (type === 'board') {
         // 检查画板是否存在且已删除
@@ -1624,19 +1732,8 @@ class SyncEngine {
           return { success: false, error: '画板数据不存在' };
         }
 
-        // 解密（如果需要）
-        const { cryptoService } = await import('./crypto-service');
-        const manifestExt = manifest as SyncManifest & { encrypted?: boolean; customPassword?: boolean };
-        let boardJson = boardContent;
-        if (manifestExt.encrypted) {
-          // 如果使用了自定义密码，需要获取密码
-          let customPassword: string | undefined;
-          if (manifestExt.customPassword) {
-            customPassword = await syncPasswordService.getPassword() || undefined;
-          }
-          boardJson = await cryptoService.decryptOrPassthrough(boardContent, config.gistId, customPassword);
-        }
-
+        // 解密画板数据
+        const boardJson = await cryptoService.decryptOrPassthrough(boardContent, config.gistId, customPassword || undefined);
         const board: BoardData = JSON.parse(boardJson);
         
         // 保存到本地
@@ -1645,10 +1742,10 @@ class SyncEngine {
         // 移除 tombstone 标记
         manifest = dataSerializer.unmarkBoardAsDeleted(manifest, id);
         
-        // 更新远程 manifest
-        const manifestWithFlag = { ...manifest, encrypted: manifestExt.encrypted };
+        // 更新远程 manifest（加密）
+        const updatedManifestJson = JSON.stringify(manifest);
         await gitHubApiService.updateGistFiles({
-          [SYNC_FILES.MANIFEST]: JSON.stringify(manifestWithFlag, null, 2),
+          [SYNC_FILES.MANIFEST]: await cryptoService.encrypt(updatedManifestJson, config.gistId, customPassword || undefined),
         });
 
         // 刷新工作区
@@ -1691,14 +1788,18 @@ class SyncEngine {
     try {
       gitHubApiService.setGistId(config.gistId);
       
-      // 获取远程 manifest
+      // 获取本地密码
+      const customPassword = await syncPasswordService.getPassword();
+      const { cryptoService } = await import('./crypto-service');
+      
+      // 获取远程 manifest（解密）
       const manifestContent = await gitHubApiService.getGistFileContent(SYNC_FILES.MANIFEST);
       if (!manifestContent) {
         return { success: false, error: '无法获取远程数据' };
       }
 
-      let manifest: SyncManifest = JSON.parse(manifestContent);
-      const manifestExt = manifest as SyncManifest & { encrypted?: boolean };
+      const manifestJson = await cryptoService.decryptOrPassthrough(manifestContent, config.gistId, customPassword || undefined);
+      let manifest: SyncManifest = JSON.parse(manifestJson);
 
       if (type === 'board') {
         // 检查画板是否存在且已删除
@@ -1711,14 +1812,15 @@ class SyncEngine {
         delete manifest.boards[id];
         manifest.updatedAt = Date.now();
         
-        // 更新远程：删除画板文件 + 更新 manifest
-        const filesToUpdate: Record<string, string | null> = {
-          [SYNC_FILES.MANIFEST]: JSON.stringify({ ...manifest, encrypted: manifestExt.encrypted }, null, 2),
+        // 更新远程：删除画板文件 + 更新 manifest（加密）
+        const updatedManifestJson = JSON.stringify(manifest);
+        const filesToUpdate: Record<string, string> = {
+          [SYNC_FILES.MANIFEST]: await cryptoService.encrypt(updatedManifestJson, config.gistId, customPassword || undefined),
         };
         
         // 删除画板文件（通过设置 content 为 null）
         await gitHubApiService.deleteGistFiles([SYNC_FILES.boardFile(id)]);
-        await gitHubApiService.updateGistFiles(filesToUpdate as Record<string, string>);
+        await gitHubApiService.updateGistFiles(filesToUpdate);
 
         console.log('[SyncEngine] Permanently deleted board:', id);
         return { success: true };
@@ -1765,14 +1867,18 @@ class SyncEngine {
     try {
       gitHubApiService.setGistId(config.gistId);
       
-      // 获取远程 manifest
+      // 获取本地密码
+      const customPassword = await syncPasswordService.getPassword();
+      const { cryptoService } = await import('./crypto-service');
+      
+      // 获取远程 manifest（解密）
       const manifestContent = await gitHubApiService.getGistFileContent(SYNC_FILES.MANIFEST);
       if (!manifestContent) {
         return { ...result, error: '无法获取远程数据' };
       }
 
-      let manifest: SyncManifest = JSON.parse(manifestContent);
-      const manifestExt = manifest as SyncManifest & { encrypted?: boolean };
+      const manifestJson = await cryptoService.decryptOrPassthrough(manifestContent, config.gistId, customPassword || undefined);
+      let manifest: SyncManifest = JSON.parse(manifestJson);
 
       // 收集所有需要删除的画板文件
       const filesToDelete: string[] = [];
@@ -1802,9 +1908,10 @@ class SyncEngine {
         await gitHubApiService.deleteGistFiles(filesToDelete);
       }
       
-      // 更新 manifest
+      // 更新 manifest（加密）
+      const updatedManifestJson = JSON.stringify(manifest);
       await gitHubApiService.updateGistFiles({
-        [SYNC_FILES.MANIFEST]: JSON.stringify({ ...manifest, encrypted: manifestExt.encrypted }, null, 2),
+        [SYNC_FILES.MANIFEST]: await cryptoService.encrypt(updatedManifestJson, config.gistId, customPassword || undefined),
       });
 
       result.success = true;
@@ -1917,18 +2024,82 @@ class SyncEngine {
 
   /**
    * 创建新的 Gist 并上传当前数据
+   * 注意：不会复用已存在的 Gist，而是直接创建新的
    */
   async createNewGist(): Promise<SyncResult> {
-    // 清除当前 Gist 关联
-    await this.saveConfig({
-      gistId: null,
-      lastSyncTime: null,
-      enabled: true,
-    });
-    gitHubApiService.setGistId(null);
-    
-    // 执行同步将创建新的 Gist
-    return this.sync();
+    const startTime = Date.now();
+    const result: SyncResult = {
+      success: false,
+      uploaded: { boards: 0, prompts: 0, tasks: 0, media: 0 },
+      downloaded: { boards: 0, prompts: 0, tasks: 0, media: 0 },
+      conflicts: [],
+      duration: 0,
+    };
+
+    try {
+      this.setStatus('syncing', '正在创建新的 Gist...');
+      
+      // 清除当前 Gist 关联
+      await this.saveConfig({
+        gistId: null,
+        lastSyncTime: null,
+        enabled: true,
+      });
+      gitHubApiService.setGistId(null);
+      
+      // 收集本地数据
+      const localData = await dataSerializer.collectSyncData();
+      
+      // 直接创建新的 Gist（不查找已存在的）
+      console.log('[SyncEngine] Creating new gist directly (not searching for existing)...');
+      const emptyGist = await gitHubApiService.createSyncGist({
+        'manifest.json': JSON.stringify({ version: 1, initializing: true }, null, 2),
+      });
+      const gistId = emptyGist.id;
+      console.log('[SyncEngine] Created new gist:', maskId(gistId));
+      
+      // 获取本地保存的自定义密码（如果有）
+      const customPassword = await syncPasswordService.getPassword();
+      console.log('[SyncEngine] Creating new gist with custom password:', !!customPassword);
+      
+      // 使用 gist id 加密数据
+      const encryptedFiles = await dataSerializer.serializeToGistFilesEncrypted(localData, gistId, customPassword || undefined);
+      
+      // 更新 Gist 内容
+      gitHubApiService.setGistId(gistId);
+      await gitHubApiService.updateGistFiles(encryptedFiles);
+      
+      await this.saveConfig({
+        gistId: gistId,
+        lastSyncTime: Date.now(),
+        enabled: true,
+      });
+
+      result.uploaded.boards = localData.boards.size;
+      result.uploaded.prompts = localData.prompts.promptHistory.length +
+        localData.prompts.videoPromptHistory.length +
+        localData.prompts.imagePromptHistory.length;
+      result.uploaded.tasks = localData.tasks.completedTasks.length;
+      result.success = true;
+      
+      this.setStatus('synced');
+      this.pendingChanges = false;
+      console.log('[SyncEngine] New gist created successfully');
+      
+      // 异步同步当前画布的媒体
+      const currentBoardId = localData.workspace.currentBoardId;
+      if (currentBoardId && result.uploaded.boards > 0) {
+        this.syncCurrentBoardMediaAsync(currentBoardId);
+      }
+    } catch (error) {
+      console.error('[SyncEngine] Failed to create new gist:', error);
+      result.error = error instanceof Error ? error.message : '创建失败';
+      this.setStatus('error', result.error);
+    } finally {
+      result.duration = Date.now() - startTime;
+    }
+
+    return result;
   }
 
   /**

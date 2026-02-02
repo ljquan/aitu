@@ -23,6 +23,9 @@ import { CharacterList } from '../character/CharacterList';
 import { useCharacters } from '../../hooks/useCharacters';
 import { UnifiedMediaViewer, type MediaItem as UnifiedMediaItem } from '../shared/media-preview';
 import { ImageEditor } from '../image-editor';
+import { useGitHubSync } from '../../contexts/GitHubSyncContext';
+import { mediaSyncService } from '../../services/github-sync/media-sync-service';
+import { CloudUploadIcon } from 'tdesign-icons-react';
 import './task-queue.scss';
 
 const { TabPanel } = Tabs;
@@ -92,6 +95,11 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
   const [showBatchDeleteConfirm, setShowBatchDeleteConfirm] = useState(false);
+  
+  // Sync state
+  const { isConfigured } = useGitHubSync();
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncProgress, setSyncProgress] = useState(0);
 
   // Check if showing characters view
   const isCharacterView = typeFilter === 'character';
@@ -257,6 +265,15 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
     }).length;
   }, [selectedTaskIds, tasks]);
 
+  // Count selected completed tasks for sync button
+  const selectedSyncableCount = useMemo(() => {
+    return Array.from(selectedTaskIds).filter(id => {
+      const task = tasks.find(t => t.id === id);
+      return task?.status === TaskStatus.COMPLETED && 
+             (task?.type === TaskType.IMAGE || task?.type === TaskType.VIDEO);
+    }).length;
+  }, [selectedTaskIds, tasks]);
+
   // Type counts for filter buttons
   const typeCounts = useMemo(() => {
     return {
@@ -282,6 +299,45 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
     setSelectedTaskIds(new Set());
     setSelectionMode(false);
     MessagePlugin.success(`已取消 ${activeSelectedIds.length} 个任务`);
+  };
+
+  const handleBatchSync = async () => {
+    // Only sync completed image/video tasks
+    const syncableSelectedIds = Array.from(selectedTaskIds).filter(id => {
+      const task = tasks.find(t => t.id === id);
+      return task?.status === TaskStatus.COMPLETED && 
+             (task?.type === TaskType.IMAGE || task?.type === TaskType.VIDEO);
+    });
+    
+    if (syncableSelectedIds.length === 0 || isSyncing) return;
+    
+    setIsSyncing(true);
+    setSyncProgress(0);
+    
+    try {
+      const result = await mediaSyncService.syncMultipleTasks(
+        syncableSelectedIds,
+        (current, total) => {
+          setSyncProgress(Math.round((current / total) * 100));
+        }
+      );
+      
+      console.log('[TaskQueuePanel] Batch sync result:', result);
+      setSyncProgress(100);
+      
+      if (result.succeeded > 0) {
+        MessagePlugin.success(`已同步 ${result.succeeded} 个任务`);
+      }
+      if (result.failed > 0) {
+        MessagePlugin.warning(`${result.failed} 个任务同步失败`);
+      }
+    } catch (error) {
+      console.error('[TaskQueuePanel] Batch sync failed:', error);
+      MessagePlugin.error('同步失败，请稍后重试');
+    } finally {
+      setIsSyncing(false);
+      setSyncProgress(0);
+    }
   };
 
   const handleDownload = async (taskId: string) => {
@@ -619,6 +675,21 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
               >
                 重试 ({selectedRetryableCount})
               </Button>
+            )}
+            {isConfigured && selectedSyncableCount > 0 && (
+              <Tooltip content="同步选中的任务到云端" placement="bottom" theme="light">
+                <Button
+                  size="small"
+                  variant="outline"
+                  icon={<CloudUploadIcon />}
+                  data-track="task_click_batch_sync"
+                  onClick={handleBatchSync}
+                  disabled={isSyncing}
+                  loading={isSyncing}
+                >
+                  {isSyncing ? `${syncProgress}%` : `同步 (${selectedSyncableCount})`}
+                </Button>
+              </Tooltip>
             )}
             <Button
               size="small"

@@ -241,6 +241,9 @@
                 flex-shrink: 0;
                 padding: 12px 8px;
                 border-bottom: 1px solid var(--color-border-light, rgba(0, 0, 0, 0.05));
+                display: flex;
+                flex-direction: column;
+                align-items: center;
                 background: inherit;
             }
         }
@@ -402,9 +405,9 @@
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                width: 100%; // 填满容器宽度，与收起状态一致
+                width: 30px; // 固定宽度，与下方工具按钮一致
                 height: 32px; // 与收起状态一致
-                margin: 4px 4px 0; // 与收起状态位置一致
+                margin: 4px auto 0; // 水平居中
                 background: transparent;
                 border: none;
                 border-radius: 8px;
@@ -435,6 +438,9 @@
         bottom: auto;
         transform: none;
         width: 100%; // 填充容器宽度
+        display: flex;
+        flex-direction: column;
+        align-items: center; // 让所有直接子元素（包括 GitHub 按钮）居中
 
         // 调整 Island 容器
         .island {

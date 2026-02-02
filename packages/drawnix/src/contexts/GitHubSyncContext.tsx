@@ -12,10 +12,8 @@ import {
   SyncStatus,
   SyncResult,
   SyncConfig,
-  MediaSyncStatus,
 } from '../services/github-sync';
 import { workspaceService } from '../services/workspace-service';
-import type { Task } from '../types/task.types';
 
 /** Gist 信息 */
 export interface GistInfo {
@@ -64,16 +62,6 @@ interface GitHubSyncContextValue {
   switchGist: (gistId: string) => Promise<SyncResult>;
   deleteGist: (gistId: string) => Promise<void>;
   createNewGist: () => Promise<SyncResult>;
-  
-  // 媒体同步
-  getMediaSyncStatus: (taskId: string) => MediaSyncStatus;
-  syncTaskMedia: (taskId: string) => Promise<boolean>;
-  getSyncableTasks: () => Array<{
-    task: Task;
-    status: MediaSyncStatus;
-    canSync: boolean;
-    reason?: string;
-  }>;
   
   // 配置
   config: SyncConfig | null;
@@ -230,8 +218,10 @@ export function GitHubSyncProvider({ children }: GitHubSyncProviderProps) {
           setLastSyncTime(syncConfig.lastSyncTime);
           setGistUrl(syncEngine.getGistUrl());
 
-          // 刷新媒体同步状态
-          mediaSyncService.refreshSyncStatus().catch(console.error);
+          // 刷新媒体同步状态（只有在已配置 gistId 时才执行）
+          if (syncConfig.gistId) {
+            mediaSyncService.refreshSyncStatus().catch(console.error);
+          }
         } else {
           setError('Token 无效，请重新配置');
         }
@@ -550,30 +540,6 @@ export function GitHubSyncProvider({ children }: GitHubSyncProviderProps) {
     return result;
   }, [isSyncing]);
 
-  // 获取媒体同步状态
-  const getMediaSyncStatus = useCallback((taskId: string): MediaSyncStatus => {
-    return mediaSyncService.getTaskSyncStatus(taskId);
-  }, []);
-
-  // 同步任务媒体
-  const syncTaskMedia = useCallback(async (taskId: string): Promise<boolean> => {
-    if (!isConnected) {
-      setError('未连接到 GitHub，请先配置 Token');
-      return false;
-    }
-
-    const result = await mediaSyncService.syncTaskMedia(taskId);
-    if (!result.success && result.error) {
-      setError(result.error);
-    }
-    return result.success;
-  }, [isConnected]);
-
-  // 获取可同步的任务列表
-  const getSyncableTasks = useCallback(() => {
-    return mediaSyncService.getSyncableTasks();
-  }, []);
-
   // 更新配置
   const updateConfig = useCallback(async (newConfig: Partial<SyncConfig>) => {
     await syncEngine.saveConfig(newConfig);
@@ -653,9 +619,6 @@ export function GitHubSyncProvider({ children }: GitHubSyncProviderProps) {
     switchGist,
     deleteGist,
     createNewGist,
-    getMediaSyncStatus,
-    syncTaskMedia,
-    getSyncableTasks,
     config,
     updateConfig,
   };

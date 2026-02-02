@@ -28,6 +28,69 @@ export type MediaSyncStatus =
   | 'too_large'         // 文件过大
   | 'error';            // 错误
 
+/** 媒体资源来源 */
+export type MediaSource = 'local' | 'external';
+
+/** 媒体资源优先级 */
+export type MediaPriority = 
+  | 'current_board_local_image'    // 当前画布-本地图片
+  | 'current_board_local_video'    // 当前画布-本地视频
+  | 'current_board_url_image'      // 当前画布-URL图片
+  | 'current_board_url_video'      // 当前画布-URL视频
+  | 'other_local_image'            // 其他-本地图片
+  | 'other_local_video'            // 其他-本地视频
+  | 'other_url_image'              // 其他-URL图片
+  | 'other_url_video';             // 其他-URL视频
+
+/** 媒体资源项 */
+export interface MediaItem {
+  /** 媒体 URL（唯一标识） */
+  url: string;
+  /** 媒体类型 */
+  type: 'image' | 'video';
+  /** 资源来源 */
+  source: MediaSource;
+  /** 原始外部 URL（仅 external 类型有效） */
+  originalUrl?: string;
+  /** 所属画板 ID 列表 */
+  boardIds: string[];
+  /** 是否在当前画布中使用 */
+  isCurrentBoard: boolean;
+  /** 同步优先级 */
+  priority: MediaPriority;
+  /** MIME 类型 */
+  mimeType?: string;
+  /** 文件大小（字节） */
+  size?: number;
+}
+
+/** 收集到的媒体资源 */
+export interface CollectedMedia {
+  /** 所有媒体项 */
+  items: MediaItem[];
+  /** 当前画布中的媒体项（按优先级排序） */
+  currentBoardItems: MediaItem[];
+  /** 其他画布中的媒体项 */
+  otherItems: MediaItem[];
+  /** 统计信息 */
+  stats: {
+    total: number;
+    currentBoard: number;
+    localImages: number;
+    localVideos: number;
+    urlImages: number;
+    urlVideos: number;
+  };
+}
+
+/** 媒体同步进度回调 */
+export type MediaSyncProgressCallback = (
+  current: number, 
+  total: number, 
+  url: string,
+  status: 'uploading' | 'downloading' | 'caching'
+) => void;
+
 // ====================================
 // Gist 文件结构
 // ====================================
@@ -104,16 +167,24 @@ export interface BoardSyncInfo {
   deletedBy?: string;
 }
 
-/** 媒体同步信息 */
+/** 媒体同步信息（manifest 中的索引） */
 export interface MediaSyncInfo {
-  /** 任务 ID */
-  taskId: string;
+  /** 媒体 URL（主键，Base64 编码后作为文件名） */
+  url: string;
   /** 媒体类型 */
   type: 'image' | 'video';
+  /** 资源来源 */
+  source: MediaSource;
   /** 原始文件大小 */
   size: number;
   /** 同步时间 */
   syncedAt: number;
+  /** 同步来源设备 */
+  syncedFromDevice?: string;
+  /** 删除时间戳（软删除标记） */
+  deletedAt?: number;
+  /** 删除操作的设备 ID */
+  deletedBy?: string;
 }
 
 /** 工作区数据 - workspace.json */
@@ -149,30 +220,26 @@ export interface TasksData {
   completedTasks: Task[];
 }
 
-/** 同步的媒体文件 - media_{taskId}.json */
-export interface SyncedMedia {
-  /** 任务 ID */
-  taskId: string;
+/** 同步的媒体文件 - media_{base64url}.json（基于 URL） */
+export interface SyncedMediaFile {
+  /** 媒体 URL（主键） */
+  url: string;
   /** 媒体类型 */
   type: 'image' | 'video';
-  /** 生成提示词 */
-  prompt: string;
-  /** 使用的模型 */
-  model: string;
-  /** 生成参数 */
-  params: Record<string, unknown>;
+  /** 资源来源 */
+  source: MediaSource;
   /** MIME 类型 */
   mimeType: string;
   /** 原始文件大小 */
-  originalSize: number;
+  size: number;
   /** Base64 编码的媒体数据 */
   base64Data: string;
-  /** 创建时间 */
-  createdAt: number;
   /** 同步时间 */
   syncedAt: number;
   /** 同步来源设备 */
   syncedFromDevice: string;
+  /** 原始外部 URL（仅 external 类型有效，用于恢复时重新下载） */
+  originalUrl?: string;
 }
 
 // ====================================
@@ -252,26 +319,32 @@ export type ConflictResolution =
   | 'use_newer'     // 使用更新时间更晚的版本（默认）
   | 'keep_both';    // 保留两个版本（创建副本）
 
-/** 媒体同步结果 */
-export interface MediaSyncResult {
+/** 单个媒体项同步结果 */
+export interface MediaItemSyncResult {
   /** 是否成功 */
   success: boolean;
-  /** 任务 ID */
-  taskId: string;
+  /** 媒体 URL */
+  url: string;
   /** 错误信息 */
   error?: string;
+  /** 文件大小 */
+  size?: number;
 }
 
 /** 批量媒体同步结果 */
-export interface BatchMediaSyncResult {
+export interface BatchMediaItemSyncResult {
   /** 成功数量 */
   succeeded: number;
   /** 失败数量 */
   failed: number;
-  /** 跳过数量（文件过大） */
+  /** 跳过数量（文件过大、已同步、CORS 限制等） */
   skipped: number;
   /** 详细结果 */
-  results: MediaSyncResult[];
+  results: MediaItemSyncResult[];
+  /** 总大小（字节） */
+  totalSize: number;
+  /** 耗时（毫秒） */
+  duration: number;
 }
 
 // ====================================
@@ -432,11 +505,65 @@ export const SYNC_FILES = {
   TASKS: 'tasks.json',
   SETTINGS: 'settings.json',
   boardFile: (id: string) => `board_${id}.json`,
-  mediaFile: (taskId: string) => `media_${taskId}.json`,
+  /** 基于 URL 的媒体文件名（使用 Base64 编码） */
+  mediaFile: (url: string) => `media_${encodeUrlToFilename(url)}.json`,
+  /** 从文件名解码回 URL */
+  urlFromMediaFile: (filename: string) => decodeFilenameToUrl(filename),
+  /** 判断是否是媒体文件 */
+  isMediaFile: (filename: string) => filename.startsWith('media_') && filename.endsWith('.json'),
 } as const;
+
+/**
+ * 将 URL 编码为安全的文件名
+ * 使用 Base64 编码，替换特殊字符
+ */
+export function encodeUrlToFilename(url: string): string {
+  // 使用 Base64 编码，替换 / + = 为 URL 安全字符
+  const base64 = btoa(unescape(encodeURIComponent(url)));
+  return base64.replace(/\//g, '_').replace(/\+/g, '-').replace(/=/g, '.');
+}
+
+/**
+ * 从文件名解码回 URL
+ */
+export function decodeFilenameToUrl(filename: string): string | null {
+  try {
+    // 移除前缀和后缀
+    const encoded = filename.replace(/^media_/, '').replace(/\.json$/, '');
+    // 还原 Base64 特殊字符
+    const base64 = encoded.replace(/_/g, '/').replace(/-/g, '+').replace(/\./g, '=');
+    return decodeURIComponent(escape(atob(base64)));
+  } catch {
+    return null;
+  }
+}
 
 /** 媒体文件大小限制（50MB） */
 export const MAX_MEDIA_SIZE = 50 * 1024 * 1024;
 
 /** GitHub API 基础 URL */
 export const GITHUB_API_BASE = 'https://api.github.com';
+
+// ====================================
+// 分片系统重导出
+// ====================================
+
+// 重导出分片类型（用于外部模块使用）
+export type {
+  MasterIndex,
+  ShardInfo,
+  ShardManifest,
+  FileIndexEntry,
+  MediaTombstone,
+  ShardStats,
+  ShardSyncResult,
+  ShardSyncDetail,
+  MigrationResult,
+} from './shard-types';
+
+export {
+  SHARD_CONFIG,
+  SHARD_FILES,
+  SHARD_VERSION,
+  GIST_DESCRIPTION_PREFIX,
+} from './shard-types';

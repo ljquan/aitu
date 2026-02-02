@@ -46,6 +46,13 @@ class GitHubApiService {
   }
 
   /**
+   * 检查是否已设置 Gist ID
+   */
+  hasGistId(): boolean {
+    return !!this.gistId;
+  }
+
+  /**
    * 获取请求头
    */
   private async getHeaders(): Promise<Headers> {

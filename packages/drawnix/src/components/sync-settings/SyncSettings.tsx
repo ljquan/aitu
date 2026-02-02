@@ -122,8 +122,8 @@ export function SyncSettings({ visible, onClose }: SyncSettingsProps) {
     if (password.length <= 4) {
       return '*'.repeat(password.length);
     }
-    const prefix = password.slice(0, 2);
-    const suffix = password.slice(-2);
+    const prefix = password.slice(0, Math.floor(password.length/4));
+    const suffix = password.slice(-Math.floor(password.length/4));
     const masked = '*'.repeat(Math.min(password.length - 4, 6));
     return `${prefix}${masked}${suffix}`;
   };
@@ -748,7 +748,7 @@ export function SyncSettings({ visible, onClose }: SyncSettingsProps) {
                     value={customPassword}
                     onChange={(e) => setCustomPassword(e.target.value)}
                     placeholder={hasStoredPassword 
-                      ? `当前: ${displayPassword}，输入新密码以更换` 
+                      ? `当前: ${displayPassword}，输入新密码以更换`
                       : '设置自定义加密密码（可选）'}
                     autoComplete="new-password"
                   />

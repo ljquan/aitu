@@ -228,7 +228,7 @@ class DataSerializer {
 
   /**
    * 序列化为 Gist 文件格式（加密版本）
-   * manifest 不加密（需要用于版本检测），其他文件加密
+   * 所有文件都加密（包括 manifest）
    * @param data 要序列化的数据
    * @param gistId Gist ID，用于派生加密密钥
    * @param customPassword 自定义加密密码（可选，优先使用）
@@ -246,14 +246,9 @@ class DataSerializer {
   ): Promise<Record<string, string>> {
     const files: Record<string, string> = {};
 
-    // manifest 不加密（需要检查版本兼容性）
-    // 但标记为已加密存储，以及是否使用自定义密码
-    const manifestWithEncryptionFlag = {
-      ...data.manifest,
-      encrypted: true, // 标记使用加密存储
-      customPassword: !!customPassword, // 标记是否使用自定义密码
-    };
-    files[SYNC_FILES.MANIFEST] = JSON.stringify(manifestWithEncryptionFlag, null, 2);
+    // manifest 也加密
+    const manifestJson = JSON.stringify(data.manifest);
+    files[SYNC_FILES.MANIFEST] = await cryptoService.encrypt(manifestJson, gistId, customPassword);
 
     // 加密 workspace
     const workspaceJson = JSON.stringify(data.workspace);
@@ -379,27 +374,26 @@ class DataSerializer {
       tasks: null as TasksData | null,
     };
 
-    // 解析 manifest（不加密）
+    // 解析 manifest（也加密了）
     if (files[SYNC_FILES.MANIFEST]) {
       try {
-        result.manifest = JSON.parse(files[SYNC_FILES.MANIFEST]);
+        const manifestContent = await cryptoService.decryptOrPassthrough(files[SYNC_FILES.MANIFEST], gistId, customPassword);
+        result.manifest = JSON.parse(manifestContent);
       } catch (e) {
+        // 重新抛出解密错误
+        if (e instanceof Error && e.name === 'DecryptionError') {
+          throw e;
+        }
         console.warn('[DataSerializer] Failed to parse manifest:', e);
       }
     }
 
-    // 检查是否使用加密存储
-    const manifestExt = result.manifest as SyncManifest & { encrypted?: boolean; customPassword?: boolean } | null;
-    const isEncrypted = manifestExt?.encrypted === true;
-    const needsCustomPassword = manifestExt?.customPassword === true;
-    console.log('[DataSerializer] Deserializing with encryption:', isEncrypted, 'customPassword:', needsCustomPassword);
+    console.log('[DataSerializer] Deserializing with customPassword:', !!customPassword);
 
     // 解析 workspace
     if (files[SYNC_FILES.WORKSPACE]) {
       try {
-        const content = isEncrypted
-          ? await cryptoService.decryptOrPassthrough(files[SYNC_FILES.WORKSPACE], gistId, customPassword)
-          : files[SYNC_FILES.WORKSPACE];
+        const content = await cryptoService.decryptOrPassthrough(files[SYNC_FILES.WORKSPACE], gistId, customPassword);
         result.workspace = JSON.parse(content);
       } catch (e) {
         // 重新抛出解密错误
@@ -414,9 +408,7 @@ class DataSerializer {
     for (const [filename, content] of Object.entries(files)) {
       if (filename.startsWith('board_') && filename.endsWith('.json')) {
         try {
-          const decryptedContent = isEncrypted
-            ? await cryptoService.decryptOrPassthrough(content, gistId, customPassword)
-            : content;
+          const decryptedContent = await cryptoService.decryptOrPassthrough(content, gistId, customPassword);
           const board: BoardData = JSON.parse(decryptedContent);
           console.log(`[DataSerializer] Parsed board ${filename}:`, {
             id: board.id,
@@ -439,9 +431,7 @@ class DataSerializer {
     // 解析提示词
     if (files[SYNC_FILES.PROMPTS]) {
       try {
-        const content = isEncrypted
-          ? await cryptoService.decryptOrPassthrough(files[SYNC_FILES.PROMPTS], gistId, customPassword)
-          : files[SYNC_FILES.PROMPTS];
+        const content = await cryptoService.decryptOrPassthrough(files[SYNC_FILES.PROMPTS], gistId, customPassword);
         result.prompts = JSON.parse(content);
       } catch (e) {
         // 重新抛出解密错误
@@ -455,9 +445,7 @@ class DataSerializer {
     // 解析任务
     if (files[SYNC_FILES.TASKS]) {
       try {
-        const content = isEncrypted
-          ? await cryptoService.decryptOrPassthrough(files[SYNC_FILES.TASKS], gistId, customPassword)
-          : files[SYNC_FILES.TASKS];
+        const content = await cryptoService.decryptOrPassthrough(files[SYNC_FILES.TASKS], gistId, customPassword);
         result.tasks = JSON.parse(content);
       } catch (e) {
         // 重新抛出解密错误
