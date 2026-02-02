@@ -1077,6 +1077,12 @@ class SyncEngine {
       if (pending.size > 0) {
         await this.clearLocalDeletions(Array.from(pending.keys()));
       }
+
+      // 异步同步当前画布的媒体（不阻塞主流程）
+      const currentBoardId = localData.workspace.currentBoardId;
+      if (currentBoardId) {
+        this.syncCurrentBoardMediaAsync(currentBoardId);
+      }
     } catch (error) {
       console.error('[SyncEngine] pushToRemote failed:', error);
       result.error = error instanceof Error ? error.message : '上传失败';
@@ -1175,50 +1181,86 @@ class SyncEngine {
       // 确定需要下载的画板（增量）
       const boardsToDownload: string[] = [];
       const boardsToDelete: string[] = [];
+      // 本地有更新修改、跳过下载的画板
+      const boardsSkippedDueToLocalNewer: Array<{
+        id: string;
+        name: string;
+        localUpdatedAt: number;
+        remoteUpdatedAt: number;
+      }> = [];
+      // 注意："以远程为准"模式不再跳过任何画板
+      // boardsSkippedDueToLocalDeletion 保留用于日志兼容性，但始终为空
       const boardsSkippedDueToLocalDeletion: string[] = [];
       
       // 检查远程画板
+      // 注意："以远程为准"（pullFromRemote）应该下载所有远程未删除的画板，
+      // 忽略 lastSyncTime 的判断，因为用户明确选择了"以远程为准"
       for (const [remoteBoardId, remoteInfo] of Object.entries(remoteManifest.boards)) {
         // 远程已标记删除（tombstone），不下载
-        if (remoteInfo.deletedAt) continue;
+        if (remoteInfo.deletedAt) {
+          console.log(`[SyncEngine] pullFromRemote: Board ${remoteBoardId} is tombstoned remotely, skipping`);
+          continue;
+        }
         
-        // 检查本地是否已删除此画板（通过 recordLocalDeletion 记录）
+        // "以远程为准"模式：忽略本地删除状态，强制恢复远程画板
+        // 但仍记录日志以便调试
         const localDeletedAt = localDeletionsPending.get(remoteBoardId);
         if (localDeletedAt !== undefined) {
-          // 本地已删除：比较时间戳
-          // 如果远程 updatedAt > 本地删除时间，说明远程有更新，应该恢复
-          // 如果远程 updatedAt <= 本地删除时间，说明本地删除更新，保持删除
-          if (remoteInfo.updatedAt > localDeletedAt) {
-            console.log(`[SyncEngine] pullFromRemote: Board ${remoteBoardId} was locally deleted at ${localDeletedAt}, but remote is newer (${remoteInfo.updatedAt}), will restore`);
-            boardsToDownload.push(remoteBoardId);
-          } else {
-            console.log(`[SyncEngine] pullFromRemote: Board ${remoteBoardId} was locally deleted at ${localDeletedAt}, remote is older (${remoteInfo.updatedAt}), keeping deleted`);
-            boardsSkippedDueToLocalDeletion.push(remoteBoardId);
-          }
-          continue;
+          console.log(`[SyncEngine] pullFromRemote: Board ${remoteBoardId} was locally deleted at ${localDeletedAt}, but "pull from remote" will restore it (remote updatedAt: ${remoteInfo.updatedAt})`);
+          // 清除本地删除记录，因为用户选择了以远程为准
+          await this.clearLocalDeletions([remoteBoardId]);
         }
         
         const localBoard = localData.boards.get(remoteBoardId);
         if (!localBoard) {
-          // 本地没有此画板，检查是否是"本地删除"还是"远程新增"
-          // 使用 lastSyncTime 判断：
-          // - 如果 lastSyncTime 存在，且远程 updatedAt <= lastSyncTime，
-          //   说明此画板在上次同步时已存在于远程，但现在本地没有 → 本地删除的，不恢复
-          // - 如果 lastSyncTime 不存在（首次同步），或远程 updatedAt > lastSyncTime，
-          //   说明这是远程新增/更新的画板 → 应该恢复
-          if (lastSyncTime && remoteInfo.updatedAt <= lastSyncTime) {
-            console.log(`[SyncEngine] pullFromRemote: Board ${remoteBoardId} existed at last sync (updatedAt: ${remoteInfo.updatedAt} <= lastSyncTime: ${lastSyncTime}), but not local now, treating as locally deleted`);
-            boardsSkippedDueToLocalDeletion.push(remoteBoardId);
-          } else {
-            console.log(`[SyncEngine] pullFromRemote: Board ${remoteBoardId} is new/updated after last sync (updatedAt: ${remoteInfo.updatedAt}, lastSyncTime: ${lastSyncTime}), will download`);
-            boardsToDownload.push(remoteBoardId);
-          }
+          // 本地没有此画板 → 下载
+          console.log(`[SyncEngine] pullFromRemote: Board ${remoteBoardId} not found locally, will download`);
+          boardsToDownload.push(remoteBoardId);
         } else {
-          // 本地有，比较 checksum
+          // 增量同步：使用 checksum 判断是否需要下载
+          // 如果本地和远程的 checksum 相同，说明内容一致，跳过下载
           const localChecksum = dataSerializer.calculateBoardChecksum(localBoard);
-          if (localChecksum !== remoteInfo.checksum) {
-            // checksum 不同，下载远程版本（以远程为准）
-            boardsToDownload.push(remoteBoardId);
+          
+          if (localChecksum === remoteInfo.checksum) {
+            // checksum 相同，内容一致，跳过下载
+            console.log(`[SyncEngine] pullFromRemote: Board ${remoteBoardId} - checksum match, skipping download`, {
+              localChecksum,
+              remoteChecksum: remoteInfo.checksum,
+              localElements: localBoard.elements?.length || 0,
+            });
+            // 不添加到 boardsToDownload，自然跳过
+          } else {
+            // checksum 不同，需要比较修改时间决定是否下载
+            const localUpdatedAt = localBoard.updatedAt || 0;
+            const remoteUpdatedAt = remoteInfo.updatedAt || 0;
+            
+            // 关键逻辑：如果本地修改时间比远程新，说明本地有新修改，不应被覆盖
+            if (localUpdatedAt > remoteUpdatedAt) {
+              // 本地更新时间比远程新 → 跳过下载，保留本地修改
+              console.log(`[SyncEngine] pullFromRemote: Board ${remoteBoardId} - LOCAL IS NEWER, skipping download to preserve local changes`, {
+                localChecksum,
+                remoteChecksum: remoteInfo.checksum,
+                localUpdatedAt: new Date(localUpdatedAt).toISOString(),
+                remoteUpdatedAt: new Date(remoteUpdatedAt).toISOString(),
+                localElements: localBoard.elements?.length || 0,
+              });
+              boardsSkippedDueToLocalNewer.push({
+                id: remoteBoardId,
+                name: localBoard.name || remoteInfo.name || remoteBoardId,
+                localUpdatedAt,
+                remoteUpdatedAt,
+              });
+            } else {
+              // 远程更新时间比本地新或相等 → 下载远程版本
+              console.log(`[SyncEngine] pullFromRemote: Board ${remoteBoardId} - checksum mismatch, remote is newer or equal, will download`, {
+                localChecksum,
+                remoteChecksum: remoteInfo.checksum,
+                localUpdatedAt: new Date(localUpdatedAt).toISOString(),
+                remoteUpdatedAt: new Date(remoteUpdatedAt).toISOString(),
+                localElements: localBoard.elements?.length || 0,
+              });
+              boardsToDownload.push(remoteBoardId);
+            }
           }
         }
       }
@@ -1230,34 +1272,93 @@ class SyncEngine {
         }
       }
       
-      console.log('[SyncEngine] pullFromRemote: Need to download', boardsToDownload.length, 'boards, delete', boardsToDelete.length, 'boards, skipped due to local deletion:', boardsSkippedDueToLocalDeletion.length);
+      console.log('[SyncEngine] pullFromRemote: Need to download', boardsToDownload.length, 'boards, delete', boardsToDelete.length, 'boards, skipped due to local deletion:', boardsSkippedDueToLocalDeletion.length, ', skipped due to local newer:', boardsSkippedDueToLocalNewer.length);
+      if (boardsSkippedDueToLocalNewer.length > 0) {
+        console.log('[SyncEngine] pullFromRemote: Boards skipped (local newer):', boardsSkippedDueToLocalNewer.map(b => ({
+          id: b.id,
+          name: b.name,
+          localUpdatedAt: new Date(b.localUpdatedAt).toISOString(),
+          remoteUpdatedAt: new Date(b.remoteUpdatedAt).toISOString(),
+        })));
+      }
       
       // 只下载需要的文件
       const remoteFiles: Record<string, string> = {};
       remoteFiles[SYNC_FILES.MANIFEST] = manifestContent;
       
       // 始终下载 workspace、prompts、tasks（这些文件较小）
+      console.log('[SyncEngine] pullFromRemote: Downloading workspace file...');
       const workspaceContent = await gitHubApiService.getGistFileContent(SYNC_FILES.WORKSPACE);
-      if (workspaceContent) remoteFiles[SYNC_FILES.WORKSPACE] = workspaceContent;
+      if (workspaceContent) {
+        remoteFiles[SYNC_FILES.WORKSPACE] = workspaceContent;
+        console.log('[SyncEngine] pullFromRemote: workspace.json downloaded, length:', workspaceContent.length);
+      } else {
+        console.warn('[SyncEngine] pullFromRemote: workspace.json NOT FOUND or empty!');
+      }
       
+      console.log('[SyncEngine] pullFromRemote: Downloading prompts file...');
       const promptsContent = await gitHubApiService.getGistFileContent(SYNC_FILES.PROMPTS);
-      if (promptsContent) remoteFiles[SYNC_FILES.PROMPTS] = promptsContent;
+      if (promptsContent) {
+        remoteFiles[SYNC_FILES.PROMPTS] = promptsContent;
+        console.log('[SyncEngine] pullFromRemote: prompts.json downloaded, length:', promptsContent.length);
+      } else {
+        console.warn('[SyncEngine] pullFromRemote: prompts.json NOT FOUND or empty!');
+      }
       
+      console.log('[SyncEngine] pullFromRemote: Downloading tasks file...');
       const tasksContent = await gitHubApiService.getGistFileContent(SYNC_FILES.TASKS);
-      if (tasksContent) remoteFiles[SYNC_FILES.TASKS] = tasksContent;
+      if (tasksContent) {
+        remoteFiles[SYNC_FILES.TASKS] = tasksContent;
+        console.log('[SyncEngine] pullFromRemote: tasks.json downloaded, length:', tasksContent.length);
+      } else {
+        console.warn('[SyncEngine] pullFromRemote: tasks.json NOT FOUND or empty!');
+      }
       
       // 只下载需要更新的画板
+      console.log('[SyncEngine] pullFromRemote: Downloading', boardsToDownload.length, 'board files...');
       for (const boardId of boardsToDownload) {
-        const boardContent = await gitHubApiService.getGistFileContent(SYNC_FILES.boardFile(boardId));
+        const boardFileName = SYNC_FILES.boardFile(boardId);
+        console.log('[SyncEngine] pullFromRemote: Downloading board file:', boardFileName);
+        const boardContent = await gitHubApiService.getGistFileContent(boardFileName);
         if (boardContent) {
-          remoteFiles[SYNC_FILES.boardFile(boardId)] = boardContent;
+          remoteFiles[boardFileName] = boardContent;
+          console.log('[SyncEngine] pullFromRemote: Board', boardId, 'downloaded, length:', boardContent.length);
+        } else {
+          console.warn('[SyncEngine] pullFromRemote: Board', boardId, 'NOT FOUND or empty!');
         }
       }
       
-      console.log('[SyncEngine] pullFromRemote: Downloaded', Object.keys(remoteFiles).length, 'files (incremental)');
+      console.log('[SyncEngine] pullFromRemote: Downloaded files summary:', {
+        totalFiles: Object.keys(remoteFiles).length,
+        fileNames: Object.keys(remoteFiles),
+        fileSizes: Object.fromEntries(
+          Object.entries(remoteFiles).map(([k, v]) => [k, v.length])
+        ),
+      });
 
       // 解析远程数据（支持加密和明文）
+      console.log('[SyncEngine] pullFromRemote: ========== DESERIALIZE START ==========');
       const remoteData = await dataSerializer.deserializeFromGistFilesWithDecryption(remoteFiles, gistId, customPassword || undefined);
+      console.log('[SyncEngine] pullFromRemote: DESERIALIZE result:', {
+        workspace: remoteData.workspace ? {
+          currentBoardId: remoteData.workspace.currentBoardId,
+          folders: remoteData.workspace.folders?.length || 0,
+          boardMetadata: remoteData.workspace.boardMetadata?.length || 0,
+        } : 'NULL',
+        boards: {
+          count: remoteData.boards.size,
+          ids: Array.from(remoteData.boards.keys()),
+        },
+        prompts: remoteData.prompts ? {
+          promptHistory: remoteData.prompts.promptHistory?.length || 0,
+          videoPromptHistory: remoteData.prompts.videoPromptHistory?.length || 0,
+          imagePromptHistory: remoteData.prompts.imagePromptHistory?.length || 0,
+        } : 'NULL',
+        tasks: remoteData.tasks ? {
+          completedTasks: remoteData.tasks.completedTasks?.length || 0,
+        } : 'NULL',
+      });
+      console.log('[SyncEngine] pullFromRemote: ========== DESERIALIZE END ==========');
       
       // 合并：保留本地不需要更新的画板
       const boardsToApply = new Map(remoteData.boards);
@@ -1296,13 +1397,33 @@ class SyncEngine {
         'skippedBoardIds:', skippedBoardIds.size,
         'currentBoardId:', workspaceToApply?.currentBoardId || 'none');
       
+      console.log('[SyncEngine] pullFromRemote: ========== APPLY SYNC DATA START ==========');
       console.log('[SyncEngine] pullFromRemote: Applying', boardsToApply.size, 'boards to local');
+      console.log('[SyncEngine] pullFromRemote: boardsToApply IDs:', Array.from(boardsToApply.keys()));
+      console.log('[SyncEngine] pullFromRemote: workspaceToApply:', workspaceToApply ? {
+        currentBoardId: workspaceToApply.currentBoardId,
+        folders: workspaceToApply.folders?.length || 0,
+        boardMetadata: workspaceToApply.boardMetadata?.length || 0,
+        boardMetadataIds: workspaceToApply.boardMetadata?.map(m => m.id) || [],
+      } : 'NULL');
+      
       const applied = await dataSerializer.applySyncData({
         workspace: workspaceToApply,
         boards: boardsToApply,
         prompts: remoteData.prompts,
         tasks: remoteData.tasks,
       });
+      
+      console.log('[SyncEngine] pullFromRemote: applySyncData result:', {
+        boardsApplied: applied.boardsApplied,
+        promptsApplied: applied.promptsApplied,
+        tasksApplied: applied.tasksApplied,
+        boardsDeleted: applied.boardsDeleted,
+        promptsDeleted: applied.promptsDeleted,
+        tasksDeleted: applied.tasksDeleted,
+        remoteCurrentBoardId: applied.remoteCurrentBoardId,
+      });
+      console.log('[SyncEngine] pullFromRemote: ========== APPLY SYNC DATA END ==========');
 
       await this.saveConfig({
         gistId,
@@ -1315,8 +1436,26 @@ class SyncEngine {
       result.downloaded.tasks = applied.tasksApplied;
       result.remoteCurrentBoardId = applied.remoteCurrentBoardId;
       result.success = true;
+      
+      // 记录因本地有更新修改而跳过下载的画板
+      if (boardsSkippedDueToLocalNewer.length > 0) {
+        result.skippedItems = boardsSkippedDueToLocalNewer.map(b => ({
+          id: b.id,
+          name: b.name,
+          reason: 'local_newer' as const,
+          localUpdatedAt: b.localUpdatedAt,
+          remoteUpdatedAt: b.remoteUpdatedAt,
+        }));
+      }
 
+      console.log('[SyncEngine] pullFromRemote: Final result:', {
+        success: result.success,
+        downloaded: result.downloaded,
+        skippedItems: result.skippedItems?.length || 0,
+        remoteCurrentBoardId: result.remoteCurrentBoardId,
+      });
       console.log('[SyncEngine] pullFromRemote: Success', result.downloaded);
+      console.log('[SyncEngine] ========== pullFromRemote END ==========');
       this.setStatus('synced');
       this.pendingChanges = false;
       
@@ -1342,6 +1481,9 @@ class SyncEngine {
 
       // 合并完成后，自动上传任务数据到远程（确保双向同步）
       await this.uploadMergedTasksToRemote(gistId, customPassword || undefined, remoteManifest);
+
+      // 初始化分片系统（用于媒体同步）
+      await this.initializeShardingSystem(gistId);
 
       // 异步下载媒体文件（总是尝试，因为任务可能已存在但媒体未缓存）
       this.downloadSyncedMediaAsync();
@@ -1555,17 +1697,19 @@ class SyncEngine {
     }
 
     // 设置新的计时器
+    // 注意：自动同步只上传本地变更到远程，不下载远程数据
+    // 下载远程数据只在页面加载时执行（pullFromRemote）
     this.autoSyncTimer = setTimeout(async () => {
       console.log('[SyncEngine] Auto sync timer fired, pendingChanges:', this.pendingChanges, 'syncInProgress:', this.syncInProgress);
       if (this.pendingChanges && !this.syncInProgress) {
-        console.log('[SyncEngine] Auto sync triggered after debounce');
-        await this.sync();
+        console.log('[SyncEngine] Auto sync triggered after debounce, pushing local changes to remote...');
+        await this.pushToRemote();
       } else {
         console.log('[SyncEngine] Auto sync skipped: pendingChanges =', this.pendingChanges, 'syncInProgress =', this.syncInProgress);
       }
     }, config.autoSyncDebounceMs);
     
-    console.log(`[SyncEngine] Auto sync scheduled in ${config.autoSyncDebounceMs}ms`);
+    console.log(`[SyncEngine] Auto sync scheduled in ${config.autoSyncDebounceMs}ms (will push local changes to remote)`);
   }
 
   /**
@@ -2111,6 +2255,35 @@ class SyncEngine {
     }
 
     return result;
+  }
+
+  /**
+   * 初始化分片系统（媒体同步）
+   * 在首次同步成功后自动初始化，用于支持大量媒体文件的分片存储
+   */
+  private async initializeShardingSystem(gistId: string): Promise<void> {
+    try {
+      const { shardedMediaSyncAdapter } = await import('./sharded-media-sync-adapter');
+      
+      // 检查分片系统是否已启用
+      if (shardedMediaSyncAdapter.isShardingEnabled()) {
+        console.log('[SyncEngine] Sharding system already enabled');
+        return;
+      }
+
+      // 初始化分片系统
+      console.log('[SyncEngine] Initializing sharding system for gistId:', maskId(gistId));
+      const result = await shardedMediaSyncAdapter.setupShardSystem(gistId);
+      
+      if (result.success) {
+        console.log('[SyncEngine] Sharding system initialized successfully');
+      } else {
+        console.warn('[SyncEngine] Failed to initialize sharding system:', result.error);
+      }
+    } catch (error) {
+      // 分片系统初始化失败不应阻塞主流程
+      console.error('[SyncEngine] Error initializing sharding system:', error);
+    }
   }
 
   /**

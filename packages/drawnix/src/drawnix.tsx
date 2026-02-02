@@ -227,23 +227,42 @@ export const Drawnix: React.FC<DrawnixProps> = ({
   }, []);
 
   // 预加载画布中使用的字体（当 value 变化时）
+  // 延迟执行以避免阻塞首屏渲染
   useEffect(() => {
     if (value && value.length > 0) {
-      fontManagerService.preloadBoardFonts(value).then(() => {
-        // 字体加载完成后，强制重新渲染
-        // PlaitBoard 没有 redraw 方法，字体加载后会自动应用
-      }).catch(error => {
-        console.warn('Failed to preload board fonts:', error);
-      });
+      const preloadFonts = () => {
+        fontManagerService.preloadBoardFonts(value).then(() => {
+          // 字体加载完成后，强制重新渲染
+          // PlaitBoard 没有 redraw 方法，字体加载后会自动应用
+        }).catch(error => {
+          console.warn('Failed to preload board fonts:', error);
+        });
+      };
+
+      // 延迟字体预加载，优先渲染画布
+      if ('requestIdleCallback' in window) {
+        (window as Window).requestIdleCallback(preloadFonts, { timeout: 2000 });
+      } else {
+        setTimeout(preloadFonts, 300);
+      }
     }
   }, [value]);
 
   // Initialize video recovery service to restore expired blob URLs
+  // 延迟执行以避免阻塞首屏渲染
   useEffect(() => {
     if (board) {
-      import('./services/video-recovery-service').then(({ initVideoRecoveryService }) => {
-        initVideoRecoveryService(board);
-      });
+      const initVideoRecovery = () => {
+        import('./services/video-recovery-service').then(({ initVideoRecoveryService }) => {
+          initVideoRecoveryService(board);
+        });
+      };
+
+      if ('requestIdleCallback' in window) {
+        (window as Window).requestIdleCallback(initVideoRecovery, { timeout: 3000 });
+      } else {
+        setTimeout(initVideoRecovery, 500);
+      }
     }
   }, [board]);
 
@@ -454,9 +473,26 @@ export const Drawnix: React.FC<DrawnixProps> = ({
         }
       };
 
-      restoreWorkZones().catch(error => {
-        console.error('[Drawnix] Failed to restore WorkZones:', error);
-      });
+      // 使用 requestIdleCallback 延迟执行 WorkZone 恢复逻辑
+      // 避免阻塞首屏渲染
+      const scheduleRestore = () => {
+        if ('requestIdleCallback' in window) {
+          (window as Window).requestIdleCallback(() => {
+            restoreWorkZones().catch(error => {
+              console.error('[Drawnix] Failed to restore WorkZones:', error);
+            });
+          }, { timeout: 2000 }); // 最多延迟 2 秒
+        } else {
+          // Safari 不支持 requestIdleCallback，使用 setTimeout 兜底
+          setTimeout(() => {
+            restoreWorkZones().catch(error => {
+              console.error('[Drawnix] Failed to restore WorkZones:', error);
+            });
+          }, 500);
+        }
+      };
+
+      scheduleRestore();
     }
   }, [board]); // Only run once when board is initialized
 

@@ -200,10 +200,85 @@ class SWTaskQueueService {
     return this.tasks.get(taskId);
   }
 
+  /**
+   * 获取内存中已加载的任务
+   * 注意：由于分页机制，这只返回已加载的任务（默认第一页50条）
+   * 如需获取所有任务，请使用 getAllTasksFromSW()
+   */
   getAllTasks(): Task[] {
     return Array.from(this.tasks.values());
   }
 
+  /**
+   * 从 Service Worker 获取所有任务（用于备份/同步）
+   * 通过循环分页获取完整数据，避免单次 postMessage 数据过大
+   * @param options 可选过滤条件
+   */
+  async getAllTasksFromSW(options?: { status?: TaskStatus; type?: TaskType }): Promise<Task[]> {
+    // 尝试确保 channel 可用
+    if (!swChannelClient.isInitialized()) {
+      const channelReady = await swChannelClient.initialize();
+      if (!channelReady) {
+        // 如果 SW 不可用，返回内存中的任务作为 fallback
+        console.warn('[SWTaskQueue] SW not available, returning cached tasks');
+        let tasks = this.getAllTasks();
+        if (options?.status !== undefined) {
+          tasks = tasks.filter(t => t.status === options.status);
+        }
+        if (options?.type !== undefined) {
+          tasks = tasks.filter(t => t.type === options.type);
+        }
+        return tasks;
+      }
+    }
+
+    try {
+      const allTasks: Task[] = [];
+      const pageSize = 50; // 与默认分页大小一致
+      let offset = 0;
+      let hasMore = true;
+
+      // 循环分页获取，直到没有更多数据
+      while (hasMore) {
+        const result = await swChannelClient.listTasksPaginated({
+          offset,
+          limit: pageSize,
+          status: options?.status,
+          type: options?.type,
+        });
+
+        if (!result.success) {
+          console.warn('[SWTaskQueue] Failed to get tasks page, breaking loop');
+          break;
+        }
+
+        // 转换 SWTask 为 Task 并添加到结果数组
+        const pageTasks = (result.tasks || []).map(swTask => this.convertSWTaskToTask(swTask));
+        allTasks.push(...pageTasks);
+
+        hasMore = result.hasMore;
+        offset += pageSize;
+
+        // 安全检查：防止无限循环
+        if (offset > 10000) {
+          console.warn('[SWTaskQueue] Too many tasks, breaking loop at offset:', offset);
+          break;
+        }
+      }
+
+      console.log(`[SWTaskQueue] getAllTasksFromSW completed, total: ${allTasks.length} tasks`);
+      return allTasks;
+    } catch (error) {
+      console.error('[SWTaskQueue] Error getting all tasks from SW:', error);
+      return this.getAllTasks();
+    }
+  }
+
+  /**
+   * 获取内存中已加载的指定状态的任务
+   * 注意：由于分页机制，这只返回已加载的任务
+   * 如需获取所有任务，请使用 getAllTasksFromSW({ status })
+   */
   getTasksByStatus(status: TaskStatus): Task[] {
     return this.getAllTasks().filter((t) => t.status === status);
   }

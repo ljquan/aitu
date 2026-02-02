@@ -408,10 +408,10 @@ export class SWChannelClient {
     const response = await this.channel!.call('task:listPaginated', params);
 
     if (response.ret !== ReturnCode.Success) {
-      return { success: false, tasks: [], total: 0, offset: params.offset, hasMore: false };
+      return { success: false, tasks: [], total: 0, offset: params.offset ?? 0, hasMore: false };
     }
     
-    return response.data || { success: false, tasks: [], total: 0, offset: params.offset, hasMore: false };
+    return response.data || { success: false, tasks: [], total: 0, offset: params.offset ?? 0, hasMore: false };
   }
 
   // ============================================================================

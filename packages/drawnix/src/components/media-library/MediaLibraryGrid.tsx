@@ -140,7 +140,7 @@ export function MediaLibraryGrid({
   onUploadClick,
   storageStatus,
 }: MediaLibraryGridProps) {
-  const { assets, filters, loading, setFilters, removeAssets, removeAsset } = useAssets();
+  const { assets, filters, loading, setFilters, removeAssets, removeAsset, syncedUrls, loadSyncedUrls } = useAssets();
   const { board } = useDrawnix();
   const { isMobile } = useDeviceType();
   const [isDragging, setIsDragging] = useState(false);
@@ -167,6 +167,39 @@ export function MediaLibraryGrid({
   const { isConfigured } = useGitHubSync();
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState(0); // 0-100
+
+  // 加载已同步的 URL（当配置了 GitHub 同步时）
+  useEffect(() => {
+    if (isConfigured) {
+      loadSyncedUrls();
+    }
+  }, [isConfigured, loadSyncedUrls]);
+
+  // 监听媒体同步完成事件，刷新同步状态
+  useEffect(() => {
+    if (!isConfigured) return;
+
+    let mounted = true;
+    const handleSyncCompleted = async () => {
+      if (mounted) {
+        console.log('[MediaLibraryGrid] Media sync completed, refreshing synced URLs');
+        await loadSyncedUrls();
+      }
+    };
+
+    // 动态导入并注册监听器
+    import('../../services/github-sync/media-sync-service').then(({ mediaSyncService }) => {
+      mediaSyncService.addSyncCompletedListener(handleSyncCompleted);
+    });
+
+    return () => {
+      mounted = false;
+      // 清理监听器
+      import('../../services/github-sync/media-sync-service').then(({ mediaSyncService }) => {
+        mediaSyncService.removeSyncCompletedListener(handleSyncCompleted);
+      });
+    };
+  }, [isConfigured, loadSyncedUrls]);
 
   // 计算各类型的数量
   const counts = useMemo(() => {
@@ -589,13 +622,18 @@ export function MediaLibraryGrid({
         skipped: result.skipped 
       });
       setSyncProgress(100);
+      
+      // 刷新同步状态（更新已同步 URL 列表）
+      if (result.succeeded > 0) {
+        await loadSyncedUrls();
+      }
     } catch (error) {
       console.error('[MediaLibraryGrid] Batch sync failed:', error);
     } finally {
       setIsSyncing(false);
       setSyncProgress(0);
     }
-  }, [selectedAssetIds, filteredResult.assets, isSyncing]);
+  }, [selectedAssetIds, filteredResult.assets, isSyncing, loadSyncedUrls]);
   
   // 计算选中的可同步素材数量（排除已同步的）
   const syncableCount = useMemo(() => {
@@ -1019,6 +1057,7 @@ export function MediaLibraryGrid({
               onSelectAsset={isSelectionMode ? toggleAssetSelection : onSelectAsset}
               onDoubleClick={onDoubleClick}
               onPreview={handlePreview}
+              syncedUrls={syncedUrls}
             />
           </div>
 

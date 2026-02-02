@@ -251,23 +251,11 @@ class ShardedMediaSyncAdapter {
 
   /**
    * 检查是否需要迁移到分片系统
-   * 当文件数超过阈值时返回 true
+   * @deprecated 不再需要迁移，分片系统已是唯一的媒体存储方式
    */
-  async shouldMigrateToSharding(threshold = 200): Promise<boolean> {
-    try {
-      const manifestContent = await gitHubApiService.getGistFileContent(SYNC_FILES.MANIFEST);
-      if (!manifestContent) {
-        return false;
-      }
-
-      const manifest: SyncManifest = JSON.parse(manifestContent);
-      const mediaCount = Object.keys(manifest.syncedMedia || {}).length;
-
-      return mediaCount >= threshold;
-    } catch (error) {
-      console.warn('[ShardedMediaSyncAdapter] Failed to check migration status:', error);
-      return false;
-    }
+  async shouldMigrateToSharding(_threshold = 200): Promise<boolean> {
+    // 不再需要迁移，分片系统已是唯一的媒体存储方式
+    return false;
   }
 
   /**

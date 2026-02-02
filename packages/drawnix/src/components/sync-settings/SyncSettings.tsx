@@ -589,7 +589,14 @@ export function SyncSettings({ visible, onClose }: SyncSettingsProps) {
                   </div>
                 </div>
 
-                {error && (
+                {syncingState && (
+                  <div className="sync-settings__info">
+                    <Loading size="small" />
+                    <span>同步正在进行中</span>
+                  </div>
+                )}
+
+                {error && !syncingState && (
                   <div className="sync-settings__error">
                     <CloseCircleFilledIcon />
                     <span>{error}</span>

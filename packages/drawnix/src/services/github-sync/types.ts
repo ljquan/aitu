@@ -111,8 +111,6 @@ export interface SyncManifest {
   devices: Record<string, DeviceInfo>;
   /** 画板索引 */
   boards: Record<string, BoardSyncInfo>;
-  /** 已同步的媒体文件索引 */
-  syncedMedia: Record<string, MediaSyncInfo>;
   /** 已删除的提示词记录 */
   deletedPrompts?: PromptTombstone[];
   /** 已删除的任务记录 */
@@ -161,26 +159,6 @@ export interface BoardSyncInfo {
   updatedAt: number;
   /** 内容校验和 */
   checksum: string;
-  /** 删除时间戳（软删除标记） */
-  deletedAt?: number;
-  /** 删除操作的设备 ID */
-  deletedBy?: string;
-}
-
-/** 媒体同步信息（manifest 中的索引） */
-export interface MediaSyncInfo {
-  /** 媒体 URL（主键，Base64 编码后作为文件名） */
-  url: string;
-  /** 媒体类型 */
-  type: 'image' | 'video';
-  /** 资源来源 */
-  source: MediaSource;
-  /** 原始文件大小 */
-  size: number;
-  /** 同步时间 */
-  syncedAt: number;
-  /** 同步来源设备 */
-  syncedFromDevice?: string;
   /** 删除时间戳（软删除标记） */
   deletedAt?: number;
   /** 删除操作的设备 ID */
@@ -402,7 +380,11 @@ export interface SkippedItem {
   /** 项目名称 */
   name: string;
   /** 跳过原因 */
-  reason: 'current_board' | 'new_device';
+  reason: 'current_board' | 'new_device' | 'local_newer';
+  /** 本地更新时间（当 reason 为 'local_newer' 时有效） */
+  localUpdatedAt?: number;
+  /** 远程更新时间（当 reason 为 'local_newer' 时有效） */
+  remoteUpdatedAt?: number;
 }
 
 /** 回收站中的已删除项目 */

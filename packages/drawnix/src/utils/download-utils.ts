@@ -112,7 +112,34 @@ export interface BatchDownloadItem {
 }
 
 /**
+ * 带并发限制的批量处理
+ * @param items 要处理的项目
+ * @param handler 处理函数
+ * @param concurrency 并发数限制
+ */
+async function processBatchWithConcurrency<T, R>(
+  items: T[],
+  handler: (item: T, index: number) => Promise<R>,
+  concurrency: number = 3
+): Promise<R[]> {
+  const results: R[] = [];
+  let currentIndex = 0;
+  
+  const workers = Array(Math.min(concurrency, items.length)).fill(null).map(async () => {
+    while (currentIndex < items.length) {
+      const index = currentIndex++;
+      const result = await handler(items[index], index);
+      results[index] = result;
+    }
+  });
+  
+  await Promise.all(workers);
+  return results;
+}
+
+/**
  * 批量下载为 ZIP 文件
+ * 使用并发限制避免同时发起过多网络请求
  *
  * @param items - 下载项数组
  * @param zipFilename - 可选的 ZIP 文件名
@@ -127,9 +154,10 @@ export async function downloadAsZip(items: BatchDownloadItem[], zipFilename?: st
   const timestamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
   const finalZipName = zipFilename || `aitu_download_${timestamp}.zip`;
 
-  // 添加文件到 ZIP 根目录
-  await Promise.all(
-    items.map(async (item, index) => {
+  // 添加文件到 ZIP 根目录（限制并发数为 3）
+  await processBatchWithConcurrency(
+    items,
+    async (item, index) => {
       try {
         const response = await fetch(item.url);
         if (!response.ok) {
@@ -146,7 +174,8 @@ export async function downloadAsZip(items: BatchDownloadItem[], zipFilename?: st
       } catch (error) {
         console.error(`Failed to add file to zip:`, error);
       }
-    })
+    },
+    3 // 并发限制为 3
   );
 
   // 生成 ZIP 并下载

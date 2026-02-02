@@ -152,6 +152,18 @@
     color: var(--td-error-color);
   }
 
+  &__info {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 10px;
+    padding: 6px 10px;
+    background: var(--td-brand-color-1);
+    border-radius: 6px;
+    font-size: 12px;
+    color: var(--td-brand-color);
+  }
+
   &__sync-section {
     padding: 16px 0;
     border-bottom: 1px solid var(--td-component-border);

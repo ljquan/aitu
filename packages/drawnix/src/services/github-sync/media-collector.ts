@@ -264,7 +264,8 @@ class MediaCollector {
    * 收集任务队列的媒体资源（用于手动同步）
    */
   async collectTaskQueueMedia(): Promise<MediaItem[]> {
-    const allTasks = swTaskQueueService.getAllTasks();
+    // 从 SW 获取所有任务（而非内存中的分页数据）
+    const allTasks = await swTaskQueueService.getAllTasksFromSW();
     const items: MediaItem[] = [];
 
     // 筛选已完成的图片/视频任务

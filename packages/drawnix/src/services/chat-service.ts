@@ -148,19 +148,25 @@ function convertToSWMessages(messages: ChatMessage[]): { swMessages: SWChatMessa
 
 /** Convert File attachments to SW ChatAttachment format */
 async function convertAttachmentsToSW(files: File[]): Promise<ChatAttachment[]> {
-  const attachments: ChatAttachment[] = [];
+  // 过滤出图片文件
+  const imageFiles = files.filter(file => file.type.startsWith('image/'));
   
-  for (const file of files) {
-    if (file.type.startsWith('image/')) {
+  if (imageFiles.length === 0) {
+    return [];
+  }
+  
+  // 并行转换所有文件
+  const attachments = await Promise.all(
+    imageFiles.map(async (file) => {
       const base64 = await fileToBase64(file);
-      attachments.push({
-        type: 'image',
+      return {
+        type: 'image' as const,
         name: file.name,
         mimeType: file.type,
         data: base64,
-      });
-    }
-  }
+      };
+    })
+  );
   
   return attachments;
 }

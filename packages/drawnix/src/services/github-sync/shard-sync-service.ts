@@ -315,7 +315,19 @@ class ShardSyncService {
 
         filesToUpdate[SHARD_FILES.SHARD_MANIFEST] = JSON.stringify(shardManifest, null, 2);
 
-        await gitHubApiService.updateGistFiles(filesToUpdate, shard.gistId);
+        // 计算总大小并记录
+        const totalSize = Object.values(filesToUpdate).reduce((sum, content) => sum + content.length, 0);
+        const fileCount = Object.keys(filesToUpdate).length;
+        console.log(`[ShardSyncService] Uploading to shard ${shardId}: ${fileCount} files, total size: ${(totalSize / 1024 / 1024).toFixed(2)} MB`);
+
+        // 如果总大小超过 8MB，分批上传（GitHub Gist 请求体限制）
+        const MAX_BATCH_SIZE = 8 * 1024 * 1024; // 8MB
+        if (totalSize > MAX_BATCH_SIZE) {
+          console.log(`[ShardSyncService] Total size exceeds limit, splitting into batches`);
+          await this.uploadInBatches(filesToUpdate, shard.gistId, MAX_BATCH_SIZE);
+        } else {
+          await gitHubApiService.updateGistFiles(filesToUpdate, shard.gistId);
+        }
         console.log(`[ShardSyncService] Uploaded ${successfulItems.length} files to shard ${shardId}`);
       } catch (error) {
         console.error(`[ShardSyncService] Failed to update shard ${shardId}:`, error);
@@ -333,6 +345,59 @@ class ShardSyncService {
           result.uploaded--;
         }
       }
+    }
+  }
+
+  /**
+   * 分批上传文件到 Gist
+   */
+  private async uploadInBatches(
+    files: Record<string, string>,
+    gistId: string,
+    maxBatchSize: number
+  ): Promise<void> {
+    const entries = Object.entries(files);
+    let currentBatch: Record<string, string> = {};
+    let currentBatchSize = 0;
+    let batchIndex = 0;
+
+    for (const [filename, content] of entries) {
+      const fileSize = content.length;
+
+      // 如果单个文件超过限制，单独上传
+      if (fileSize > maxBatchSize) {
+        // 先提交当前批次
+        if (Object.keys(currentBatch).length > 0) {
+          console.log(`[ShardSyncService] Uploading batch ${batchIndex + 1}: ${Object.keys(currentBatch).length} files`);
+          await gitHubApiService.updateGistFiles(currentBatch, gistId);
+          currentBatch = {};
+          currentBatchSize = 0;
+          batchIndex++;
+        }
+        // 单独上传大文件
+        console.log(`[ShardSyncService] Uploading large file: ${filename} (${(fileSize / 1024 / 1024).toFixed(2)} MB)`);
+        await gitHubApiService.updateGistFiles({ [filename]: content }, gistId);
+        batchIndex++;
+        continue;
+      }
+
+      // 如果添加这个文件会超过限制，先提交当前批次
+      if (currentBatchSize + fileSize > maxBatchSize && Object.keys(currentBatch).length > 0) {
+        console.log(`[ShardSyncService] Uploading batch ${batchIndex + 1}: ${Object.keys(currentBatch).length} files`);
+        await gitHubApiService.updateGistFiles(currentBatch, gistId);
+        currentBatch = {};
+        currentBatchSize = 0;
+        batchIndex++;
+      }
+
+      currentBatch[filename] = content;
+      currentBatchSize += fileSize;
+    }
+
+    // 上传最后一个批次
+    if (Object.keys(currentBatch).length > 0) {
+      console.log(`[ShardSyncService] Uploading final batch ${batchIndex + 1}: ${Object.keys(currentBatch).length} files`);
+      await gitHubApiService.updateGistFiles(currentBatch, gistId);
     }
   }
 

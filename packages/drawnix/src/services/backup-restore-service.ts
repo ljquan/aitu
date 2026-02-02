@@ -558,7 +558,8 @@ class BackupRestoreService {
 
     // 3. 导出任务数据（用于素材库展示）
     onProgress?.(75, '正在导出任务数据...');
-    const allTasks = swTaskQueueService.getAllTasks();
+    // 从 SW 获取所有任务（而非内存中的分页数据）
+    const allTasks = await swTaskQueueService.getAllTasksFromSW();
     // 只导出已完成的图片/视频任务（素材库需要的）
     const completedMediaTasks = allTasks.filter(
       task =>
@@ -728,8 +729,8 @@ class BackupRestoreService {
     let videoPromptHistory = getVideoPromptHistory();
     let imagePromptHistory = getImagePromptHistory();
 
-    // 从任务队列中提取已完成任务的提示词
-    const completedTasks = swTaskQueueService.getTasksByStatus(TaskStatus.COMPLETED);
+    // 从 SW 获取所有已完成任务的提示词（而非内存中的分页数据）
+    const completedTasks = await swTaskQueueService.getAllTasksFromSW({ status: TaskStatus.COMPLETED });
     
     // 提取图片任务的提示词
     const imageTaskPrompts = completedTasks
@@ -1267,8 +1268,8 @@ class BackupRestoreService {
         return { imported: 0, skipped: 0 };
       }
 
-      // 获取现有任务 ID
-      const existingTasks = swTaskQueueService.getAllTasks();
+      // 从 SW 获取所有现有任务 ID（而非内存中的分页数据）
+      const existingTasks = await swTaskQueueService.getAllTasksFromSW();
       const existingTaskIds = new Set(existingTasks.map(t => t.id));
 
       // 过滤出需要导入的任务（去重）

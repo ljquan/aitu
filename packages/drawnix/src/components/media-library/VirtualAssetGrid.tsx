@@ -73,6 +73,7 @@ interface VirtualAssetGridProps {
   onSelectAsset: (assetId: string, event?: React.MouseEvent) => void;
   onDoubleClick?: (asset: Asset) => void;
   onPreview?: (asset: Asset) => void;
+  syncedUrls?: Set<string>; // 已同步到 Gist 的 URL 集合
 }
 
 export function VirtualAssetGrid({
@@ -85,6 +86,7 @@ export function VirtualAssetGrid({
   onSelectAsset,
   onDoubleClick,
   onPreview,
+  syncedUrls,
 }: VirtualAssetGridProps) {
   const parentRef = useRef<HTMLDivElement>(null);
   const config = useMemo(() => {
@@ -165,31 +167,42 @@ export function VirtualAssetGrid({
     overscan: 3, // 预渲染上下各3行
   });
 
+  // 当容器尺寸或布局变化时，重新测量虚拟滚动
+  useEffect(() => {
+    rowVirtualizer.measure();
+  }, [containerWidth, rowCount, columns, rowVirtualizer]);
+
   // 渲染单行
   const renderRow = useCallback((rowIndex: number) => {
     const startIndex = rowIndex * columns;
     const rowAssets = assets.slice(startIndex, startIndex + columns);
 
-    return rowAssets.map((asset) => (
-      <div
-        key={asset.id}
-        style={{
-          width: '100%', // 在 Grid 下设为 100% 自动填充单元格
-          height: itemSize.height,
-        }}
-      >
-        <AssetItem
-          asset={asset}
-          viewMode={viewMode}
-          isSelected={isSelectionMode ? selectedAssetIds.has(asset.id) : selectedAssetId === asset.id}
-          onSelect={onSelectAsset}
-          onDoubleClick={onDoubleClick}
-          onPreview={onPreview}
-          isInSelectionMode={isSelectionMode}
-        />
-      </div>
-    ));
-  }, [assets, columns, viewMode, selectedAssetId, selectedAssetIds, isSelectionMode, onSelectAsset, onDoubleClick, onPreview, itemSize.height]);
+    return rowAssets.map((asset) => {
+      // 检查素材是否已同步（通过 URL 匹配）
+      const isSynced = syncedUrls ? syncedUrls.has(asset.url) : false;
+      
+      return (
+        <div
+          key={asset.id}
+          style={{
+            width: '100%', // 在 Grid 下设为 100% 自动填充单元格
+            height: itemSize.height,
+          }}
+        >
+          <AssetItem
+            asset={asset}
+            viewMode={viewMode}
+            isSelected={isSelectionMode ? selectedAssetIds.has(asset.id) : selectedAssetId === asset.id}
+            onSelect={onSelectAsset}
+            onDoubleClick={onDoubleClick}
+            onPreview={onPreview}
+            isInSelectionMode={isSelectionMode}
+            isSynced={isSynced}
+          />
+        </div>
+      );
+    });
+  }, [assets, columns, viewMode, selectedAssetId, selectedAssetIds, isSelectionMode, onSelectAsset, onDoubleClick, onPreview, itemSize.height, syncedUrls]);
 
   const virtualItems = rowVirtualizer.getVirtualItems();
 

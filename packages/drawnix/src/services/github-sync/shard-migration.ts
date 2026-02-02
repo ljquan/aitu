@@ -1,35 +1,17 @@
 /**
  * 分片迁移工具
- * 从 v1（单 Gist）迁移到 v2（分片 Gist）
+ * @deprecated 不再需要迁移，分片系统已是唯一的媒体存储方式
  */
 
-import { maskId } from '@aitu/utils';
 import { gitHubApiService } from './github-api-service';
 import { shardRouter } from './shard-router';
-import { shardSyncService } from './shard-sync-service';
 import { shardedMediaSyncAdapter } from './sharded-media-sync-adapter';
 import {
   MasterIndex,
-  ShardInfo,
   MigrationResult,
   MigrationProgressCallback,
-  SHARD_CONFIG,
   SHARD_FILES,
-  SHARD_VERSION,
-  createEmptyMasterIndex,
-  createShardInfo,
-  generateShardAlias,
 } from './shard-types';
-import {
-  SyncManifest,
-  MediaSyncInfo,
-  SYNC_FILES,
-  encodeUrlToFilename,
-  decodeFilenameToUrl,
-} from './types';
-
-/** 应用版本 */
-const APP_VERSION = '0.5.0';
 
 /**
  * 迁移状态
@@ -44,6 +26,7 @@ interface MigrationState {
 
 /**
  * 分片迁移服务
+ * @deprecated 不再需要迁移，分片系统已是唯一的媒体存储方式
  */
 class ShardMigrationService {
   private state: MigrationState = {
@@ -61,8 +44,9 @@ class ShardMigrationService {
 
   /**
    * 分析现有数据，评估迁移需求
+   * @deprecated 不再需要迁移，分片系统已是唯一的媒体存储方式
    */
-  async analyzeMigration(masterGistId: string): Promise<{
+  async analyzeMigration(_masterGistId: string): Promise<{
     needsMigration: boolean;
     currentMediaCount: number;
     estimatedShards: number;
@@ -74,92 +58,19 @@ class ShardMigrationService {
       type: 'image' | 'video';
     }>;
   }> {
-    this.state = { phase: 'analyzing', progress: 0, total: 0 };
-
-    try {
-      // 获取当前 manifest
-      const manifestContent = await gitHubApiService.getGistFileContent(
-        SYNC_FILES.MANIFEST,
-        masterGistId
-      );
-
-      if (!manifestContent) {
-        return {
-          needsMigration: false,
-          currentMediaCount: 0,
-          estimatedShards: 0,
-          totalSize: 0,
-          mediaFiles: [],
-        };
-      }
-
-      const manifest: SyncManifest = JSON.parse(manifestContent);
-      const syncedMedia = manifest.syncedMedia || {};
-      const mediaFiles: Array<{
-        url: string;
-        filename: string;
-        size: number;
-        type: 'image' | 'video';
-      }> = [];
-
-      let totalSize = 0;
-
-      for (const [key, info] of Object.entries(syncedMedia)) {
-        // 跳过已删除的
-        if (info.deletedAt) {
-          continue;
-        }
-
-        // 确定 URL 和文件名
-        let url: string;
-        let filename: string;
-
-        if (info.url) {
-          // 使用 URL 作为键
-          url = info.url;
-          filename = SYNC_FILES.mediaFile(url);
-        } else {
-          continue;
-        }
-
-        mediaFiles.push({
-          url,
-          filename,
-          size: info.size || 0,
-          type: info.type,
-        });
-
-        totalSize += info.size || 0;
-      }
-
-      const currentMediaCount = mediaFiles.length;
-      const estimatedShards = Math.ceil(currentMediaCount / SHARD_CONFIG.FILE_LIMIT);
-      const needsMigration = currentMediaCount >= 200; // 阈值
-
-      console.log('[ShardMigration] Analysis result:', {
-        currentMediaCount,
-        estimatedShards,
-        totalSize,
-        needsMigration,
-      });
-
-      return {
-        needsMigration,
-        currentMediaCount,
-        estimatedShards,
-        totalSize,
-        mediaFiles,
-      };
-    } catch (error) {
-      console.error('[ShardMigration] Analysis failed:', error);
-      this.state.phase = 'failed';
-      this.state.error = error instanceof Error ? error.message : '分析失败';
-      throw error;
-    }
+    // 不再需要迁移，分片系统已是唯一的媒体存储方式
+    return {
+      needsMigration: false,
+      currentMediaCount: 0,
+      estimatedShards: 0,
+      totalSize: 0,
+      mediaFiles: [],
+    };
   }
 
   /**
    * 执行迁移
+   * @deprecated 不再需要迁移，分片系统已是唯一的媒体存储方式
    */
   async migrate(
     masterGistId: string,
@@ -173,160 +84,16 @@ class ShardMigrationService {
     };
 
     try {
-      // 1. 分析现有数据
+      // 不再需要迁移，直接初始化空的分片系统
       onProgress?.(0, 100, 'analyzing');
-      const analysis = await this.analyzeMigration(masterGistId);
-
-      if (!analysis.needsMigration && analysis.currentMediaCount === 0) {
-        // 没有数据需要迁移，直接初始化空的分片系统
-        await shardedMediaSyncAdapter.setupShardSystem(masterGistId);
-        result.success = true;
-        return result;
-      }
-
-      // 2. 创建主索引
-      this.state = { phase: 'creating_index', progress: 0, total: analysis.currentMediaCount };
-      onProgress?.(10, 100, 'creating_index');
-
-      await shardRouter.setMasterGistId(masterGistId);
-      await shardRouter.initialize();
-
-      // 检查是否已有主索引
-      let masterIndex = await shardRouter.loadMasterIndexFromRemote();
-      if (!masterIndex) {
-        masterIndex = await shardRouter.initializeMasterIndex(APP_VERSION);
-      }
-
-      // 3. 创建第一个分片（使用主 Gist 作为第一个分片）
-      // 注意：为了向后兼容，主 Gist 同时作为第一个分片
-      const firstShardAlias = generateShardAlias(1);
-      const firstShard = createShardInfo(masterGistId, firstShardAlias, 1);
-      firstShard.description = `Opentu - Media Shard #1 (${firstShardAlias}) - Main`;
-
-      masterIndex.shards[firstShardAlias] = firstShard;
-      result.createdShards = 1;
-
-      // 4. 迁移文件索引（不移动实际数据）
-      this.state.phase = 'migrating';
-      onProgress?.(20, 100, 'migrating');
-
-      let migratedCount = 0;
-      const totalFiles = analysis.mediaFiles.length;
-      let currentShard = firstShard;
-      let currentShardFiles = 0;
-
-      for (const file of analysis.mediaFiles) {
-        // 检查当前分片是否已满
-        if (currentShardFiles >= SHARD_CONFIG.FILE_LIMIT) {
-          // 标记当前分片为已满
-          currentShard.status = 'full';
-
-          // 创建新分片
-          const newShardOrder = Object.keys(masterIndex.shards).length + 1;
-          const newShardAlias = generateShardAlias(newShardOrder);
-
-          // 创建新的 Gist 作为分片
-          const newGist = await gitHubApiService.createSyncGist({
-            [SHARD_FILES.SHARD_MANIFEST]: JSON.stringify({
-              version: SHARD_VERSION.SHARD_MANIFEST,
-              shardId: newShardAlias,
-              masterGistId,
-              createdAt: Date.now(),
-              updatedAt: Date.now(),
-              files: {},
-            }),
-          });
-
-          currentShard = createShardInfo(newGist.id, newShardAlias, newShardOrder);
-          masterIndex.shards[newShardAlias] = currentShard;
-          currentShardFiles = 0;
-          result.createdShards++;
-
-          console.log(`[ShardMigration] Created new shard: ${newShardAlias}`);
-        }
-
-        // 添加到文件索引
-        masterIndex.fileIndex[file.url] = {
-          shardId: currentShard.alias,
-          filename: file.filename,
-          size: file.size,
-          type: file.type,
-          syncedAt: Date.now(),
-        };
-
-        // 更新分片统计
-        currentShard.fileCount++;
-        currentShard.totalSize += file.size;
-        currentShardFiles++;
-        migratedCount++;
-
-        // 更新进度
-        this.state.progress = migratedCount;
-        this.state.currentItem = file.url;
-        const progress = 20 + Math.floor((migratedCount / totalFiles) * 60);
-        onProgress?.(progress, 100, 'migrating');
-
-        // 如果是新分片（非主 Gist），需要移动文件
-        if (currentShard.gistId !== masterGistId) {
-          try {
-            // 从主 Gist 读取文件
-            const content = await gitHubApiService.getGistFileContent(file.filename, masterGistId);
-            if (content) {
-              // 上传到新分片
-              await gitHubApiService.updateGistFiles(
-                { [file.filename]: content },
-                currentShard.gistId
-              );
-
-              // 从主 Gist 删除
-              await gitHubApiService.deleteGistFiles([file.filename], masterGistId);
-
-              result.migratedFiles++;
-            }
-          } catch (error) {
-            console.warn(`[ShardMigration] Failed to move file ${file.filename}:`, error);
-            result.warnings.push(`无法移动文件: ${file.filename}`);
-          }
-        } else {
-          // 文件已在主 Gist 中，只需更新索引
-          result.migratedFiles++;
-        }
-      }
-
-      // 5. 更新主索引统计
-      masterIndex.stats = {
-        totalFiles: migratedCount,
-        totalSize: analysis.totalSize,
-        activeShards: Object.values(masterIndex.shards).filter(s => s.status === 'active').length,
-        fullShards: Object.values(masterIndex.shards).filter(s => s.status === 'full').length,
-        archivedShards: 0,
-      };
-      masterIndex.updatedAt = Date.now();
-
-      // 6. 保存主索引到远程
-      this.state.phase = 'verifying';
-      onProgress?.(90, 100, 'verifying');
-
-      await gitHubApiService.updateGistFiles(
-        {
-          [SHARD_FILES.MASTER_INDEX]: JSON.stringify(masterIndex, null, 2),
-        },
-        masterGistId
-      );
-
-      // 7. 启用分片系统
-      await shardedMediaSyncAdapter.enableSharding();
-
+      await shardedMediaSyncAdapter.setupShardSystem(masterGistId);
+      
       this.state.phase = 'completed';
       onProgress?.(100, 100, 'verifying');
-
+      
       result.success = true;
-      console.log('[ShardMigration] Migration completed:', {
-        migratedFiles: result.migratedFiles,
-        createdShards: result.createdShards,
-        warnings: result.warnings.length,
-      });
-
+      console.log('[ShardMigration] Shard system initialized (no migration needed)');
+      
       return result;
     } catch (error) {
       console.error('[ShardMigration] Migration failed:', error);
@@ -426,7 +193,7 @@ class ShardMigrationService {
       for (const [shardId, shard] of Object.entries(masterIndex.shards)) {
         try {
           await gitHubApiService.getGist(shard.gistId);
-        } catch (error) {
+        } catch {
           issues.push(`分片 ${shardId} 的 Gist 不存在`);
         }
       }

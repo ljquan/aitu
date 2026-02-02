@@ -78,6 +78,9 @@ function base64ToBlob(base64: string, mimeType: string): Blob {
   return new Blob([bytes], { type: mimeType });
 }
 
+/** 媒体同步完成回调类型 */
+type MediaSyncCompletedCallback = (result: BatchMediaItemSyncResult) => void;
+
 /**
  * 媒体同步服务
  * 统一使用 URL 作为键，支持画布媒体和任务产物的同步
@@ -85,9 +88,39 @@ function base64ToBlob(base64: string, mimeType: string): Blob {
 class MediaSyncService {
   private statusCache: MediaSyncStatusCache = {};
   private syncingUrls: Set<string> = new Set();
+  private syncCompletedListeners: Set<MediaSyncCompletedCallback> = new Set();
 
   constructor() {
     this.loadStatusCache();
+  }
+
+  /**
+   * 添加同步完成监听器
+   */
+  addSyncCompletedListener(callback: MediaSyncCompletedCallback): void {
+    this.syncCompletedListeners.add(callback);
+  }
+
+  /**
+   * 移除同步完成监听器
+   */
+  removeSyncCompletedListener(callback: MediaSyncCompletedCallback): void {
+    this.syncCompletedListeners.delete(callback);
+  }
+
+  /**
+   * 通知同步完成
+   */
+  private notifySyncCompleted(result: BatchMediaItemSyncResult): void {
+    if (result.succeeded > 0) {
+      this.syncCompletedListeners.forEach(callback => {
+        try {
+          callback(result);
+        } catch (error) {
+          console.error('[MediaSyncService] Sync completed callback error:', error);
+        }
+      });
+    }
   }
 
   /**
@@ -241,6 +274,7 @@ class MediaSyncService {
 
   /**
    * 获取远程已同步的 URL 集合
+   * 使用分片系统的 master-index.json 中的 fileIndex
    */
   async getRemoteSyncedUrls(): Promise<Set<string>> {
     try {
@@ -249,24 +283,9 @@ class MediaSyncService {
         return new Set();
       }
 
-      const manifestContent = await gitHubApiService.getGistFileContent(SYNC_FILES.MANIFEST);
-      if (!manifestContent) {
-        return new Set();
-      }
-
-      const manifest: SyncManifest = JSON.parse(manifestContent);
-      const urls = new Set<string>();
-
-      // 从 syncedMedia 中提取 URL
-      if (manifest.syncedMedia) {
-        for (const info of Object.values(manifest.syncedMedia)) {
-          if (info.url) {
-            urls.add(info.url);
-          }
-        }
-      }
-
-      return urls;
+      // 使用分片系统的 shardSyncService 获取已同步的 URL
+      const { shardSyncService } = await import('./shard-sync-service');
+      return await shardSyncService.getSyncedUrls();
     } catch (error) {
       console.warn('[MediaSyncService] Failed to get remote synced URLs:', error);
       return new Set();
@@ -275,12 +294,38 @@ class MediaSyncService {
 
   /**
    * 同步媒体项列表
+   * 优先使用分片系统，降级到传统方式
    */
   private async syncMediaItems(
     items: MediaItem[],
     onProgress?: MediaSyncProgressCallback
   ): Promise<BatchMediaItemSyncResult> {
     const startTime = Date.now();
+
+    // 尝试使用分片系统
+    try {
+      const { shardedMediaSyncAdapter } = await import('./sharded-media-sync-adapter');
+      await shardedMediaSyncAdapter.initialize();
+      
+      if (shardedMediaSyncAdapter.isShardingEnabled()) {
+        console.log('[MediaSyncService] Using sharded media sync adapter');
+        const result = await shardedMediaSyncAdapter.uploadMedia(items, onProgress);
+        result.duration = Date.now() - startTime;
+        console.log('[MediaSyncService] Sharded sync completed:', {
+          succeeded: result.succeeded,
+          failed: result.failed,
+          skipped: result.skipped,
+          duration: result.duration,
+        });
+        // 通知同步完成
+        this.notifySyncCompleted(result);
+        return result;
+      }
+    } catch (error) {
+      console.warn('[MediaSyncService] Failed to use sharded adapter, falling back:', error);
+    }
+
+    // 降级到传统方式
     const result: BatchMediaItemSyncResult = {
       succeeded: 0,
       failed: 0,
@@ -308,13 +353,16 @@ class MediaSyncService {
     }
 
     result.duration = Date.now() - startTime;
-    console.log('[MediaSyncService] Sync completed:', {
+    console.log('[MediaSyncService] Legacy sync completed:', {
       succeeded: result.succeeded,
       failed: result.failed,
       skipped: result.skipped,
       totalSize: formatSize(result.totalSize),
       duration: result.duration,
     });
+
+    // 通知同步完成
+    this.notifySyncCompleted(result);
 
     return result;
   }
@@ -386,8 +434,8 @@ class MediaSyncService {
         [filename]: content,
       });
 
-      // 更新 manifest
-      await this.updateManifestWithUrl(url, syncedMediaFile);
+      // 注意：不再更新 manifest.syncedMedia，因为现在使用分片系统的 fileIndex
+      // 媒体同步现在应该通过 shardedMediaSyncAdapter 进行
 
       // 更新本地缓存状态
       this.statusCache[url] = {
@@ -433,45 +481,6 @@ class MediaSyncService {
     } catch (error) {
       console.error('[MediaSyncService] Fetch media failed:', error);
       return null;
-    }
-  }
-
-  /**
-   * 更新 manifest 中的媒体索引（基于 URL）
-   */
-  private async updateManifestWithUrl(
-    url: string,
-    media: SyncedMediaFile
-  ): Promise<void> {
-    try {
-      const manifestContent = await gitHubApiService.getGistFileContent(SYNC_FILES.MANIFEST);
-      if (!manifestContent) {
-        return;
-      }
-
-      const manifest: SyncManifest = JSON.parse(manifestContent);
-      
-      // 确保 syncedMedia 存在
-      if (!manifest.syncedMedia) {
-        manifest.syncedMedia = {};
-      }
-      
-      // 使用 URL 作为键
-      manifest.syncedMedia[url] = {
-        url,
-        type: media.type,
-        source: media.source,
-        size: media.size,
-        syncedAt: media.syncedAt,
-        syncedFromDevice: media.syncedFromDevice,
-      };
-      manifest.updatedAt = Date.now();
-
-      await gitHubApiService.updateGistFiles({
-        [SYNC_FILES.MANIFEST]: JSON.stringify(manifest, null, 2),
-      });
-    } catch (error) {
-      console.warn('[MediaSyncService] Failed to update manifest with URL:', error);
     }
   }
 
@@ -606,19 +615,8 @@ class MediaSyncService {
       const filename = `media_${encodeUrlToFilename(url)}.json`;
       await gitHubApiService.deleteGistFiles([filename]);
 
-      // 更新 manifest
-      const manifestContent = await gitHubApiService.getGistFileContent(SYNC_FILES.MANIFEST);
-      if (manifestContent) {
-        const manifest: SyncManifest = JSON.parse(manifestContent);
-        if (manifest.syncedMedia) {
-          delete manifest.syncedMedia[url];
-          manifest.updatedAt = Date.now();
-
-          await gitHubApiService.updateGistFiles({
-            [SYNC_FILES.MANIFEST]: JSON.stringify(manifest, null, 2),
-          });
-        }
-      }
+      // 注意：不再更新 manifest.syncedMedia，因为现在使用分片系统的 fileIndex
+      // 媒体删除现在应该通过 shardSyncService.softDeleteMedia 进行
 
       // 更新本地缓存
       delete this.statusCache[url];

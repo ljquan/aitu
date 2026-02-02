@@ -90,6 +90,13 @@ class GitHubApiService {
         errorData = await response.text();
       }
 
+      // 打印详细错误信息用于调试
+      console.error('[GitHubApiService] Request failed:', {
+        status: response.status,
+        endpoint,
+        errorData,
+      });
+
       const message = this.getErrorMessage(response.status, errorData);
       throw new GitHubApiError(message, response.status, errorData);
     }
@@ -261,8 +268,22 @@ class GitHubApiService {
 
     const filesPayload: Record<string, { content: string }> = {};
     for (const [filename, content] of Object.entries(files)) {
+      // 验证文件名长度（GitHub 限制约 255 字符）
+      if (filename.length > 255) {
+        console.warn(`[GitHubApiService] Filename too long (${filename.length}): ${filename.substring(0, 50)}...`);
+        throw new GitHubApiError(`文件名过长: ${filename.length} 字符`, 400);
+      }
+      // 验证内容不为空
+      if (!content || content.length === 0) {
+        console.warn(`[GitHubApiService] Empty content for file: ${filename}`);
+        throw new GitHubApiError(`文件内容为空: ${filename}`, 400);
+      }
       filesPayload[filename] = { content };
     }
+
+    // 调试日志
+    const totalSize = Object.values(files).reduce((sum, content) => sum + content.length, 0);
+    console.log(`[GitHubApiService] Updating ${Object.keys(files).length} files, total size: ${(totalSize / 1024).toFixed(2)} KB`);
 
     const request: UpdateGistRequest = { files: filesPayload };
 

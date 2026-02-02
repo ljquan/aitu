@@ -127,6 +127,34 @@ $brand-orange-dark: #E67E22;
     }
   }
 
+  &__synced-badge {
+    padding: 4px 6px;
+    border-radius: 4px;
+    background: rgba(34, 197, 94, 0.9);
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 4px rgba(34, 197, 94, 0.3);
+    cursor: default;
+
+    svg {
+      width: 10px;
+      height: 10px;
+    }
+
+    &--list {
+      flex-shrink: 0;
+      padding: 4px 6px;
+      border-radius: 6px;
+      
+      svg {
+        width: 12px;
+        height: 12px;
+      }
+    }
+  }
+
   // ========== 复选框 ==========
   &__checkbox {
     &--overlay {
