@@ -1,6 +1,9 @@
 {
-  "version": "0.5.66",
-  "buildTime": "2026-02-01T23:16:57.210Z",
+  "version": "0.5.67",
+  "buildTime": "2026-02-02T01:16:10.106Z",
   "gitCommit": "unknown",
-  "changelog": []
+  "changelog": [
+    "implement soft delete and data recovery features",
+    "任务队列同步下载远程数据时双向合并"
+  ]
 }

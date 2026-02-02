@@ -1,3 +1,14 @@
+## 0.5.67 (2026-02-02)
+
+### 🚀 Features
+
+- implement soft delete and data recovery features ([3a93bf0](https://github.com/ljquan/aitu/commit/3a93bf0))
+- 任务队列同步下载远程数据时双向合并 ([27064a5](https://github.com/ljquan/aitu/commit/27064a5))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+
 ## 0.5.64 (2026-01-30)
 
 ### 🚀 Features
