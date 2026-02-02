@@ -1,3 +1,19 @@
+## 0.5.68 (2026-02-02)
+
+### 🩹 Fixes
+
+- enhance manifest decryption error handling ([163bcee](https://github.com/ljquan/aitu/commit/163bcee))
+
+### 🔧 Chores
+
+- update app version to 0.5.67 and adjust build time ([fedfebd](https://github.com/ljquan/aitu/commit/fedfebd))
+- docs(claude): 添加新规则 - GitHub Gist API 批量上传大小限制 ([4e2741c](https://github.com/ljquan/aitu/commit/4e2741c))
+
+### ❤️  Thank You
+
+- liquidliang <ljquan@qq.com>
+- liquid <ljquan@qq.com>
+
 ## 0.5.67 (2026-02-02)
 
 ### 🚀 Features
