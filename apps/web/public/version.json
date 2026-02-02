@@ -1,6 +1,6 @@
 {
   "version": "0.5.67",
-  "buildTime": "2026-02-02T01:16:10.106Z",
+  "buildTime": "2026-02-02T01:16:11.061Z",
   "gitCommit": "unknown",
   "changelog": [
     "implement soft delete and data recovery features",
