@@ -13,6 +13,7 @@ import { DecryptionError } from './crypto-service';
 import { kvStorageService } from '../kv-storage-service';
 import { workspaceStorageService } from '../workspace-storage-service';
 import { workspaceService } from '../workspace-service';
+import { recoverBoardsFromRemote } from './board-recovery-service';
 import {
   SyncStatus,
   SyncResult,
@@ -311,9 +312,19 @@ class SyncEngine {
               const manifestContent = await cryptoService.decryptOrPassthrough(remoteFiles[SYNC_FILES.MANIFEST], config.gistId, customPassword || undefined);
               remoteManifest = JSON.parse(manifestContent);
             } catch (e) {
-              console.warn('[SyncEngine] Failed to decrypt/parse manifest, will overwrite remote:', e);
-              // 解密失败，标记需要用本地覆盖远程
-              shouldOverwriteRemote = true;
+              console.warn('[SyncEngine] Failed to decrypt/parse manifest:', e);
+              // 解密失败时，检查本地是否有足够的数据
+              const hasLocalData = localData.boards.size > 0 ||
+                                   localData.prompts.promptHistory.length > 0 ||
+                                   localData.tasks.completedTasks.length > 0;
+
+              if (hasLocalData) {
+                console.warn('[SyncEngine] Local has data, will overwrite remote');
+                shouldOverwriteRemote = true;
+              } else {
+                console.error('[SyncEngine] Local is empty, refusing to overwrite remote. Please check your password or manually resolve the conflict.');
+                throw new Error('解密失败且本地无数据，拒绝覆盖远程数据以防止数据丢失');
+              }
             }
           }
           console.log('[SyncEngine] Remote manifest:', {
