@@ -3,6 +3,7 @@
  * 缓存分片元数据，减少网络请求，提升性能
  */
 
+import { logDebug, logInfo, logSuccess, logWarning, logError } from './sync-log-service';
 import { gitHubApiService } from './github-api-service';
 import { kvStorageService } from '../kv-storage-service';
 import {
@@ -58,7 +59,7 @@ class ShardCache {
     if (!forceRefresh) {
       const cached = this.manifestCache.get(shardId);
       if (cached && cached.expiresAt > Date.now()) {
-        console.log(`[ShardCache] Memory cache hit for shard ${shardId}`);
+        logDebug(`ShardCache] Memory cache hit for shard ${shardId}`);
         return cached.manifest;
       }
 
@@ -68,14 +69,14 @@ class ShardCache {
         if (persistedCache && persistedCache.expiresAt > Date.now()) {
           // 恢复到内存缓存
           this.manifestCache.set(shardId, persistedCache);
-          console.log(`[ShardCache] Persistent cache hit for shard ${shardId}`);
+          logDebug(`ShardCache] Persistent cache hit for shard ${shardId}`);
           return persistedCache.manifest;
         }
       }
     }
 
     // 从远程获取
-    console.log(`[ShardCache] Fetching shard manifest from remote: ${shardId}`);
+    logDebug(`ShardCache] Fetching shard manifest from remote: ${shardId}`);
     try {
       const content = await gitHubApiService.getGistFileContent(
         SHARD_FILES.SHARD_MANIFEST,
@@ -104,7 +105,7 @@ class ShardCache {
 
       return manifest;
     } catch (error) {
-      console.error(`[ShardCache] Failed to fetch shard manifest for ${shardId}:`, error);
+      logError(`ShardCache] Failed to fetch shard manifest for ${shardId}:`, error);
       return null;
     }
   }
@@ -124,7 +125,7 @@ class ShardCache {
     // 异步持久化
     if (this.persistentCacheEnabled) {
       this.persistManifestCache(shardId, entry).catch(error => {
-        console.warn(`[ShardCache] Failed to persist manifest cache for ${shardId}:`, error);
+        logWarning(`ShardCache] Failed to persist manifest cache for ${shardId}:`, error);
       });
     }
   }
@@ -139,7 +140,7 @@ class ShardCache {
       await kvStorageService.delete(`${SHARD_MANIFEST_CACHE_PREFIX}${shardId}`);
     }
 
-    console.log(`[ShardCache] Invalidated cache for shard ${shardId}`);
+    logDebug(`ShardCache] Invalidated cache for shard ${shardId}`);
   }
 
   /**
@@ -151,7 +152,7 @@ class ShardCache {
   ): Promise<MasterIndex | null> {
     // 检查内存缓存
     if (!forceRefresh && this.masterIndexCache && this.masterIndexCache.expiresAt > Date.now()) {
-      console.log('[ShardCache] Memory cache hit for master index');
+      logDebug('ShardCache] Memory cache hit for master index');
       return this.masterIndexCache.index;
     }
 
@@ -160,13 +161,13 @@ class ShardCache {
       const persistedCache = await this.loadPersistedMasterIndexCache();
       if (persistedCache && persistedCache.expiresAt > Date.now()) {
         this.masterIndexCache = persistedCache;
-        console.log('[ShardCache] Persistent cache hit for master index');
+        logDebug('ShardCache] Persistent cache hit for master index');
         return persistedCache.index;
       }
     }
 
     // 从远程获取
-    console.log('[ShardCache] Fetching master index from remote');
+    logDebug('ShardCache] Fetching master index from remote');
     try {
       const content = await gitHubApiService.getGistFileContent(
         SHARD_FILES.MASTER_INDEX,
@@ -195,7 +196,7 @@ class ShardCache {
 
       return index;
     } catch (error) {
-      console.error('[ShardCache] Failed to fetch master index:', error);
+      logError('ShardCache] Failed to fetch master index:', error);
       return null;
     }
   }
@@ -215,7 +216,7 @@ class ShardCache {
     // 异步持久化
     if (this.persistentCacheEnabled) {
       this.persistMasterIndexCache(entry).catch(error => {
-        console.warn('[ShardCache] Failed to persist master index cache:', error);
+        logWarning('ShardCache] Failed to persist master index cache:', error);
       });
     }
   }
@@ -230,14 +231,14 @@ class ShardCache {
       await kvStorageService.remove(MASTER_INDEX_CACHE_KEY);
     }
 
-    console.log('[ShardCache] Invalidated master index cache');
+    logDebug('ShardCache] Invalidated master index cache');
   }
 
   /**
    * 预加载所有分片清单
    */
   async preloadAllShardManifests(shards: ShardInfo[]): Promise<void> {
-    console.log(`[ShardCache] Preloading ${shards.length} shard manifests`);
+    logDebug(`ShardCache] Preloading ${shards.length} shard manifests`);
 
     // 并发加载，限制并发数
     const batchSize = SHARD_CONFIG.CONCURRENCY;
@@ -248,7 +249,7 @@ class ShardCache {
       );
     }
 
-    console.log('[ShardCache] Preloading completed');
+    logDebug('ShardCache] Preloading completed');
   }
 
   /**
@@ -312,7 +313,7 @@ class ShardCache {
     }
 
     if (cleaned > 0) {
-      console.log(`[ShardCache] Cleaned up ${cleaned} expired cache entries`);
+      logDebug(`ShardCache] Cleaned up ${cleaned} expired cache entries`);
     }
 
     return cleaned;
@@ -335,7 +336,7 @@ class ShardCache {
       await kvStorageService.delete(MASTER_INDEX_CACHE_KEY);
     }
 
-    console.log('[ShardCache] Cleared all cache');
+    logDebug('ShardCache] Cleared all cache');
   }
 
   /**
@@ -343,7 +344,7 @@ class ShardCache {
    */
   setPersistentCacheEnabled(enabled: boolean): void {
     this.persistentCacheEnabled = enabled;
-    console.log(`[ShardCache] Persistent cache ${enabled ? 'enabled' : 'disabled'}`);
+    logDebug(`ShardCache] Persistent cache ${enabled ? 'enabled' : 'disabled'}`);
   }
 
   /**

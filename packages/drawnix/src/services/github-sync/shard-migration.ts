@@ -3,6 +3,7 @@
  * @deprecated 不再需要迁移，分片系统已是唯一的媒体存储方式
  */
 
+import { logDebug, logInfo, logSuccess, logWarning, logError } from './sync-log-service';
 import { gitHubApiService } from './github-api-service';
 import { shardRouter } from './shard-router';
 import { shardedMediaSyncAdapter } from './sharded-media-sync-adapter';
@@ -92,11 +93,11 @@ class ShardMigrationService {
       onProgress?.(100, 100, 'verifying');
       
       result.success = true;
-      console.log('[ShardMigration] Shard system initialized (no migration needed)');
+      logDebug('ShardMigration] Shard system initialized (no migration needed)');
       
       return result;
     } catch (error) {
-      console.error('[ShardMigration] Migration failed:', error);
+      logError('ShardMigration] Migration failed:', error);
       this.state.phase = 'failed';
       this.state.error = error instanceof Error ? error.message : '迁移失败';
       result.error = this.state.error;
@@ -108,7 +109,7 @@ class ShardMigrationService {
    * 回滚迁移（删除新创建的分片，保留主 Gist）
    */
   async rollback(masterGistId: string): Promise<void> {
-    console.log('[ShardMigration] Rolling back migration...');
+    logDebug('ShardMigration] Rolling back migration...');
 
     try {
       // 获取主索引
@@ -118,7 +119,7 @@ class ShardMigrationService {
       );
 
       if (!masterIndexContent) {
-        console.log('[ShardMigration] No master index found, nothing to rollback');
+        logDebug('ShardMigration] No master index found, nothing to rollback');
         return;
       }
 
@@ -143,9 +144,9 @@ class ShardMigrationService {
 
             // 删除分片 Gist
             await gitHubApiService.deleteGist(shard.gistId);
-            console.log(`[ShardMigration] Deleted shard: ${shard.alias}`);
+            logDebug(`ShardMigration] Deleted shard: ${shard.alias}`);
           } catch (error) {
-            console.error(`[ShardMigration] Failed to rollback shard ${shard.alias}:`, error);
+            logError(`ShardMigration] Failed to rollback shard ${shard.alias}:`, error);
           }
         }
       }
@@ -159,9 +160,9 @@ class ShardMigrationService {
       // 清除本地缓存
       await shardRouter.clearLocalCache();
 
-      console.log('[ShardMigration] Rollback completed');
+      logDebug('ShardMigration] Rollback completed');
     } catch (error) {
-      console.error('[ShardMigration] Rollback failed:', error);
+      logError('ShardMigration] Rollback failed:', error);
       throw error;
     }
   }

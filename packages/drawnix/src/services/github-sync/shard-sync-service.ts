@@ -10,6 +10,8 @@ import { unifiedCacheService } from '../unified-cache-service';
 import { kvStorageService } from '../kv-storage-service';
 import { DRAWNIX_DEVICE_ID_KEY } from '../../constants/storage';
 import { logInfo, logSuccess, logError, logWarning, logDebug } from './sync-log-service';
+import { cryptoService } from './crypto-service';
+import { syncPasswordService } from './sync-password-service';
 import {
   MasterIndex,
   ShardInfo,
@@ -325,7 +327,15 @@ class ShardSyncService {
         }
         shardManifest.updatedAt = Date.now();
 
-        filesToUpdate[SHARD_FILES.SHARD_MANIFEST] = JSON.stringify(shardManifest, null, 2);
+        // 加密 shard-manifest
+        const manifestJson = JSON.stringify(shardManifest, null, 2);
+        const masterGistId = shardRouter.getMasterGistId();
+        if (masterGistId) {
+          const password = await syncPasswordService.getPassword();
+          filesToUpdate[SHARD_FILES.SHARD_MANIFEST] = await cryptoService.encrypt(manifestJson, masterGistId, password || undefined);
+        } else {
+          filesToUpdate[SHARD_FILES.SHARD_MANIFEST] = manifestJson;
+        }
 
         // 计算总大小并记录
         const totalSize = Object.values(filesToUpdate).reduce((sum, content) => sum + content.length, 0);
@@ -395,7 +405,7 @@ class ShardSyncService {
 
       // 如果添加这个文件会超过限制，先提交当前批次
       if (currentBatchSize + fileSize > maxBatchSize && Object.keys(currentBatch).length > 0) {
-        console.log(`[ShardSyncService] Uploading batch ${batchIndex + 1}: ${Object.keys(currentBatch).length} files`);
+        logDebug(`ShardSyncService] Uploading batch ${batchIndex + 1}: ${Object.keys(currentBatch).length} files`);
         await gitHubApiService.updateGistFiles(currentBatch, gistId);
         currentBatch = {};
         currentBatchSize = 0;
@@ -475,9 +485,21 @@ class ShardSyncService {
       originalUrl: source === 'external' ? originalUrl : undefined,
     };
 
+    // 获取主 Gist ID 和密码用于加密
+    const masterGistId = shardRouter.getMasterGistId();
+    if (!masterGistId) {
+      return { success: false, size: blob.size, error: '未配置主 Gist ID' };
+    }
+    
+    const password = await syncPasswordService.getPassword();
+    const jsonContent = JSON.stringify(syncedMediaFile, null, 2);
+    
+    // 加密媒体内容
+    const encryptedContent = await cryptoService.encrypt(jsonContent, masterGistId, password || undefined);
+
     return {
       success: true,
-      content: JSON.stringify(syncedMediaFile, null, 2),
+      content: encryptedContent,
       size: blob.size,
     };
   }
@@ -487,12 +509,20 @@ class ShardSyncService {
    */
   private async getOrCreateShardManifest(shard: ShardInfo): Promise<ShardManifest> {
     try {
-      const content = await gitHubApiService.getGistFileContent(
+      const encryptedContent = await gitHubApiService.getGistFileContent(
         SHARD_FILES.SHARD_MANIFEST,
         shard.gistId
       );
-      if (content) {
-        return JSON.parse(content);
+      if (encryptedContent) {
+        // 解密 shard-manifest
+        const masterGistId = shardRouter.getMasterGistId();
+        if (masterGistId) {
+          const password = await syncPasswordService.getPassword();
+          const decryptedContent = await cryptoService.decrypt(encryptedContent, masterGistId, password || undefined);
+          return JSON.parse(decryptedContent);
+        }
+        // 如果没有主 Gist ID，尝试直接解析（兼容未加密的旧数据）
+        return JSON.parse(encryptedContent);
       }
     } catch (error) {
       logWarning('Failed to get shard manifest', { shard: shard.alias, error: String(error) });
@@ -567,12 +597,12 @@ class ShardSyncService {
 
       // 下载文件
       try {
-        const content = await gitHubApiService.getGistFileContent(
+        const encryptedContent = await gitHubApiService.getGistFileContent(
           entry.filename,
           shard.gistId
         );
 
-        if (!content) {
+        if (!encryptedContent) {
           result.details.push({
             url,
             action: 'download',
@@ -582,7 +612,22 @@ class ShardSyncService {
           continue;
         }
 
-        const syncedMedia = JSON.parse(content);
+        // 解密媒体内容
+        const masterGistId = shardRouter.getMasterGistId();
+        if (!masterGistId) {
+          result.details.push({
+            url,
+            action: 'download',
+            success: false,
+            error: '未配置主 Gist ID',
+          });
+          continue;
+        }
+        
+        const password = await syncPasswordService.getPassword();
+        const decryptedContent = await cryptoService.decrypt(encryptedContent, masterGistId, password || undefined);
+        
+        const syncedMedia = JSON.parse(decryptedContent);
         const blob = base64ToBlob(syncedMedia.base64Data, syncedMedia.mimeType);
 
         if (!blob || blob.size === 0) {
@@ -739,17 +784,26 @@ class ShardSyncService {
 
     // 检查文件是否仍在分片中
     try {
-      const content = await gitHubApiService.getGistFileContent(
+      const encryptedContent = await gitHubApiService.getGistFileContent(
         tombstone.filename,
         shard.gistId
       );
 
-      if (!content) {
+      if (!encryptedContent) {
         logWarning('File not found in shard', { filename: tombstone.filename });
         return false;
       }
 
-      const syncedMedia = JSON.parse(content);
+      // 解密媒体内容
+      const masterGistId = shardRouter.getMasterGistId();
+      if (!masterGistId) {
+        logWarning('Master gist ID not configured');
+        return false;
+      }
+      
+      const password = await syncPasswordService.getPassword();
+      const decryptedContent = await cryptoService.decrypt(encryptedContent, masterGistId, password || undefined);
+      const syncedMedia = JSON.parse(decryptedContent);
 
       // 重新注册到索引
       shardRouter.registerFile(

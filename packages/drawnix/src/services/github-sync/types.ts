@@ -487,37 +487,59 @@ export const SYNC_FILES = {
   TASKS: 'tasks.json',
   SETTINGS: 'settings.json',
   boardFile: (id: string) => `board_${id}.json`,
-  /** 基于 URL 的媒体文件名（使用 Base64 编码） */
+  /** 基于 URL 的媒体文件名（使用 hash 编码，固定长度） */
   mediaFile: (url: string) => `media_${encodeUrlToFilename(url)}.json`,
-  /** 从文件名解码回 URL */
+  /** 从文件名解码回 URL（hash 不可逆，需从 manifest 查找，此方法返回 null） */
   urlFromMediaFile: (filename: string) => decodeFilenameToUrl(filename),
   /** 判断是否是媒体文件 */
   isMediaFile: (filename: string) => filename.startsWith('media_') && filename.endsWith('.json'),
 } as const;
 
 /**
+ * 简单的字符串 hash 函数（用于生成固定长度的文件名）
+ * 使用 FNV-1a 算法的变体，生成 32 位 hex 字符串
+ */
+function simpleHash(str: string): string {
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  
+  for (let i = 0; i < str.length; i++) {
+    const ch = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507);
+  h1 ^= Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507);
+  h2 ^= Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  
+  // 返回 16 位 hex 字符串（64 位 hash 的一部分）
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16).padStart(16, '0');
+}
+
+/**
  * 将 URL 编码为安全的文件名
- * 使用 Base64 编码，替换特殊字符
+ * 使用 hash 生成固定长度的文件名（避免 Base64 导致的文件名过长问题）
+ * 
+ * 注意：hash 是单向的，URL 需要从 shard-manifest.json 中恢复
  */
 export function encodeUrlToFilename(url: string): string {
-  // 使用 Base64 编码，替换 / + = 为 URL 安全字符
-  const base64 = btoa(unescape(encodeURIComponent(url)));
-  return base64.replace(/\//g, '_').replace(/\+/g, '-').replace(/=/g, '.');
+  // 使用 hash 生成固定长度的文件名（16 个 hex 字符）
+  return simpleHash(url);
 }
 
 /**
  * 从文件名解码回 URL
+ * 
+ * 注意：由于使用 hash，此函数不再能直接解码。
+ * URL 应从 shard-manifest.json 或 fileIndex 中查找。
+ * 此函数仅用于兼容性，返回 null 表示需要从 manifest 查找。
  */
 export function decodeFilenameToUrl(filename: string): string | null {
-  try {
-    // 移除前缀和后缀
-    const encoded = filename.replace(/^media_/, '').replace(/\.json$/, '');
-    // 还原 Base64 特殊字符
-    const base64 = encoded.replace(/_/g, '/').replace(/-/g, '+').replace(/\./g, '=');
-    return decodeURIComponent(escape(atob(base64)));
-  } catch {
-    return null;
-  }
+  // Hash 是单向的，无法直接解码
+  // URL 需要从 shard-manifest.json 或 MasterIndex.fileIndex 中查找
+  return null;
 }
 
 /** 媒体文件大小限制（50MB） */

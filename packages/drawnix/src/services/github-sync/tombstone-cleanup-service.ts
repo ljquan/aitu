@@ -3,6 +3,7 @@
  * 定期清理过期的软删除记录和对应的远程文件
  */
 
+import { logDebug, logInfo, logSuccess, logWarning, logError } from './sync-log-service';
 import { gitHubApiService } from './github-api-service';
 import { SYNC_FILES, type SyncManifest } from './types';
 
@@ -44,23 +45,23 @@ export async function cleanupExpiredTombstones(
     }
 
     if (expiredBoardIds.length === 0) {
-      console.log('[TombstoneCleanup] No expired tombstones found');
+      logDebug('[TombstoneCleanup] No expired tombstones found');
       result.success = true;
       return result;
     }
 
-    console.log('[TombstoneCleanup] Found expired tombstones:', expiredBoardIds.length);
+    logDebug('[TombstoneCleanup] Found expired tombstones:', expiredBoardIds.length);
 
     // 删除远程文件
     if (filesToDelete.length > 0) {
       try {
         await gitHubApiService.deleteGistFiles(filesToDelete, gistId);
         result.deletedFiles = filesToDelete;
-        console.log('[TombstoneCleanup] Deleted remote files:', filesToDelete.length);
+        logDebug('[TombstoneCleanup] Deleted remote files:', filesToDelete.length);
       } catch (error) {
         const errorMsg = `删除远程文件失败: ${error instanceof Error ? error.message : '未知错误'}`;
         result.errors.push(errorMsg);
-        console.error('[TombstoneCleanup]', errorMsg);
+        logError('[TombstoneCleanup]', errorMsg);
       }
     }
 
@@ -72,7 +73,7 @@ export async function cleanupExpiredTombstones(
     }
 
     result.success = result.errors.length === 0;
-    console.log('[TombstoneCleanup] Cleanup complete:', {
+    logDebug('[TombstoneCleanup] Cleanup complete:', {
       cleaned: result.cleanedCount,
       deleted: result.deletedFiles.length,
       errors: result.errors.length,
@@ -81,7 +82,7 @@ export async function cleanupExpiredTombstones(
     return result;
   } catch (error) {
     result.errors.push(`清理失败: ${error instanceof Error ? error.message : '未知错误'}`);
-    console.error('[TombstoneCleanup] Cleanup failed:', error);
+    logError('[TombstoneCleanup] Cleanup failed:', error);
     return result;
   }
 }

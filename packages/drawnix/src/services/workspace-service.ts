@@ -22,6 +22,7 @@ import {
   ValidationError,
 } from '../types/workspace.types';
 import { workspaceStorageService } from './workspace-storage-service';
+import { logDebug, logWarning, logError } from './github-sync/sync-log-service';
 
 /**
  * Generate UUID v4
@@ -514,13 +515,13 @@ class WorkspaceService {
     import('./github-sync').then(({ syncEngine }) => {
       syncEngine.syncBoardDeletion(id).then((result) => {
         if (!result.success) {
-          console.warn('[WorkspaceService] Failed to sync deletion to remote:', result.error);
+          logWarning('Failed to sync deletion to remote', { error: result.error });
         }
       }).catch((err) => {
-        console.warn('[WorkspaceService] Could not sync deletion to remote:', err);
+        logWarning('Could not sync deletion to remote', { error: String(err) });
       });
     }).catch((err) => {
-      console.warn('[WorkspaceService] Could not load syncEngine:', err);
+      logWarning('Could not load syncEngine', { error: String(err) });
     });
 
     // Clear current if this board is active
@@ -1143,24 +1144,24 @@ class WorkspaceService {
           return;
         }
         
-        console.log(`[WorkspaceService] Triggering syncEngine.markDirty() for event: ${eventType}`);
+        logDebug('Triggering syncEngine.markDirty()', { eventType });
         syncEngine.markDirty();
         
         // 如果是画板删除，还需要记录本地删除
         if (eventType === 'boardDeleted') {
           const boardId = (payload as { id?: string })?.id;
           if (boardId && typeof boardId === 'string') {
-            console.log(`[WorkspaceService] Recording local deletion for board: ${boardId}`);
+            logDebug('Recording local deletion for board', { boardId });
             syncEngine.recordLocalDeletion(boardId).then(() => {
               return syncEngine.syncBoardDeletion(boardId);
             }).catch(err => {
-              console.error('[WorkspaceService] Failed to sync board deletion:', err);
+              logError('Failed to sync board deletion', err instanceof Error ? err : new Error(String(err)));
             });
           }
         }
       });
     }).catch(err => {
-      console.error('[WorkspaceService] Failed to import sync modules:', err);
+      logError('Failed to import sync modules', err instanceof Error ? err : new Error(String(err)));
     });
   }
 

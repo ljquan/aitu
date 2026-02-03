@@ -3,6 +3,7 @@
  * 负责 Token 的安全存储、验证和管理
  */
 
+import { logDebug, logInfo, logSuccess, logWarning, logError } from './sync-log-service';
 import { CryptoUtils } from '../../utils/crypto-utils';
 
 /** Token 存储键 */
@@ -41,7 +42,7 @@ class TokenService {
       // 清除验证状态缓存
       localStorage.removeItem(TOKEN_VALIDATED_KEY);
     } catch (error) {
-      console.error('[TokenService] Failed to save token:', error);
+      logError('TokenService] Failed to save token:', error);
       throw new Error('保存 Token 失败');
     }
   }
@@ -66,7 +67,7 @@ class TokenService {
       this.cachedToken = token;
       return token;
     } catch (error) {
-      console.error('[TokenService] Failed to get token:', error);
+      logError('TokenService] Failed to get token:', error);
       // 解密失败，可能是数据损坏，清除存储
       this.clearToken();
       return null;
@@ -153,7 +154,7 @@ class TokenService {
 
       return isValid;
     } catch (error) {
-      console.error('[TokenService] Token validation failed:', error);
+      logError('TokenService] Token validation failed:', error);
       return false;
     }
   }
@@ -186,7 +187,7 @@ class TokenService {
         avatar_url: data.avatar_url,
       };
     } catch (error) {
-      console.error('[TokenService] Failed to get user info:', error);
+      logError('TokenService] Failed to get user info:', error);
       return null;
     }
   }
@@ -218,7 +219,7 @@ class TokenService {
       // 如果没有 scope 头，通过响应状态判断
       return response.ok;
     } catch (error) {
-      console.error('[TokenService] Failed to check gist scope:', error);
+      logError('TokenService] Failed to check gist scope:', error);
       return false;
     }
   }

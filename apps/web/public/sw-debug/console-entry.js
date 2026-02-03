@@ -1,8 +1,36 @@
 /**
  * SW Debug Panel - Console Entry Component
+ * 
+ * 支持两种日志格式：
+ * 1. 控制台日志格式：logLevel, logMessage, logStack, logSource
+ * 2. 同步日志格式：level, message, data, error, sessionId, duration, category
  */
 
-import { formatTime, escapeHtml } from './utils.js';
+import { formatTime, escapeHtml, formatDuration } from './utils.js';
+
+/**
+ * 日志级别标签映射
+ */
+const LEVEL_LABELS = {
+  error: '错误',
+  warn: '警告',
+  warning: '警告',
+  success: '成功',
+  info: '信息',
+  log: '日志',
+  debug: '调试',
+};
+
+/**
+ * 标准化日志级别
+ * @param {string} level 
+ * @returns {string}
+ */
+function normalizeLevel(level) {
+  // 统一 warn/warning
+  if (level === 'warning') return 'warn';
+  return level || 'log';
+}
 
 /**
  * Format stack trace for better readability
@@ -102,37 +130,120 @@ function formatJsonHtml(obj, indent = 0) {
 }
 
 /**
+ * 标准化日志对象，统一两种格式
+ * @param {object} log - 原始日志对象
+ * @returns {object} 标准化后的日志对象
+ */
+function normalizeLog(log) {
+  // 同步日志格式使用 level/message，控制台日志使用 logLevel/logMessage
+  const level = normalizeLevel(log.level || log.logLevel);
+  const message = log.message || log.logMessage || '';
+  
+  // 堆栈信息
+  let stack = log.logStack || '';
+  if (log.error && log.error.stack) {
+    stack = log.error.stack;
+  }
+  
+  // 来源信息
+  const source = log.logSource || '';
+  
+  // 同步日志特有字段
+  const sessionId = log.sessionId || null;
+  const duration = log.duration || null;
+  const category = log.category || null;
+  const data = log.data || null;
+  const error = log.error || null;
+  
+  return {
+    id: log.id,
+    timestamp: log.timestamp,
+    level,
+    message,
+    stack,
+    source,
+    url: log.url,
+    // 同步日志扩展字段
+    sessionId,
+    duration,
+    category,
+    data,
+    error,
+  };
+}
+
+/**
+ * 格式化会话 ID 显示
+ * @param {string} sessionId 
+ * @returns {string}
+ */
+function formatSessionId(sessionId) {
+  if (!sessionId) return '';
+  // Format: sync-1234567890-abc123
+  const parts = sessionId.split('-');
+  if (parts.length >= 3) {
+    const timestamp = parseInt(parts[1]);
+    if (!isNaN(timestamp)) {
+      const date = new Date(timestamp);
+      return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+    }
+  }
+  return sessionId.slice(-8);
+}
+
+/**
  * Create a console log entry DOM element
  * Uses the same styles as Fetch logs for consistency
+ * 
+ * 支持两种日志格式：
+ * - 控制台日志：{ logLevel, logMessage, logStack, logSource, url }
+ * - 同步日志：{ level, message, data, error, sessionId, duration, category }
+ * 
  * @param {object} log 
  * @param {boolean} isExpanded - Initial expanded state for stack
  * @param {Function} onToggle - Callback when expand state changes (id, expanded)
+ * @param {object} options - 额外配置选项
+ * @param {boolean} options.showDate - 是否显示日期（默认 false）
+ * @param {boolean} options.showLevelLabel - 是否显示级别的中文标签（默认 false）
  * @returns {HTMLElement}
  */
-export function createConsoleEntry(log, isExpanded = false, onToggle = null) {
+export function createConsoleEntry(log, isExpanded = false, onToggle = null, options = {}) {
+  const { showDate = false, showLevelLabel = false } = options;
+  
+  // 标准化日志格式
+  const normalized = normalizeLog(log);
+  const level = normalized.level;
+  
   const entry = document.createElement('div');
-  const level = log.logLevel || 'log';
   entry.className = `log-entry console-entry ${level}` + (isExpanded ? ' expanded' : '');
-  entry.dataset.id = log.id;
+  entry.dataset.id = normalized.id;
   
   // 解析日志消息
-  const parsedMsg = parseLogMessage(log.logMessage);
+  const parsedMsg = parseLogMessage(normalized.message);
   const displayMessage = parsedMsg.message;
   
   // 合并来自 log 对象和解析出的信息
-  const stack = log.logStack?.trim() || parsedMsg.stack?.trim() || '';
-  const source = log.logSource || parsedMsg.source || '';
+  const stack = normalized.stack?.trim() || parsedMsg.stack?.trim() || '';
+  const source = normalized.source || parsedMsg.source || '';
   const hasStack = !!stack;
   const hasSource = !!source;
   const hasExtra = parsedMsg.extra && Object.keys(parsedMsg.extra).length > 0;
   
+  // 同步日志扩展字段
+  const hasData = normalized.data && Object.keys(normalized.data).length > 0;
+  const hasError = normalized.error && (normalized.error.name || normalized.error.message);
+  const hasSession = !!normalized.sessionId;
+  const hasDuration = normalized.duration != null;
+  
   // 总是显示展开按钮（消息长度超过 80 字符或有详细信息）
-  const hasDetails = hasStack || hasSource || log.url || hasExtra || displayMessage.length > 80;
+  const hasDetails = hasStack || hasSource || normalized.url || hasExtra || hasData || hasError || displayMessage.length > 80;
 
   // Map log level to status class
   const levelStatusClass = {
     'error': 'error',
     'warn': 'redirect',
+    'warning': 'redirect',
+    'success': 'success',
     'info': 'success',
     'log': 'pending',
     'debug': 'pending',
@@ -143,12 +254,32 @@ export function createConsoleEntry(log, isExpanded = false, onToggle = null) {
     ? displayMessage.substring(0, 120) + '...' 
     : displayMessage;
 
+  // 格式化时间（可选显示日期）
+  const timeStr = showDate 
+    ? formatTimeWithDate(normalized.timestamp)
+    : formatTime(normalized.timestamp);
+  
+  // 级别显示文本
+  const levelText = showLevelLabel 
+    ? (LEVEL_LABELS[level] || level.toUpperCase())
+    : level.toUpperCase();
+
+  // 构建头部额外信息
+  let headerExtra = '';
+  if (hasDuration) {
+    headerExtra += `<span class="log-duration">${formatDuration(normalized.duration)}</span>`;
+  }
+  if (hasSession) {
+    headerExtra += `<span class="console-entry-session" title="${normalized.sessionId}">${formatSessionId(normalized.sessionId)}</span>`;
+  }
+
   entry.innerHTML = `
     <div class="log-header">
       ${hasDetails ? `<span class="log-toggle" title="展开/收起详情"><span class="arrow">▶</span></span>` : '<span style="width: 16px; display: inline-block;"></span>'}
-      <span class="log-time">${formatTime(log.timestamp)}</span>
-      <span class="log-status ${levelStatusClass}">${level.toUpperCase()}</span>
+      <span class="log-time">${timeStr}</span>
+      <span class="log-status ${levelStatusClass}">${levelText}</span>
       <span class="log-url" title="${escapeHtml(displayMessage)}">${escapeHtml(headerMessage)}</span>
+      ${headerExtra}
     </div>
     ${hasDetails ? `
       <div class="log-details">
@@ -162,13 +293,29 @@ export function createConsoleEntry(log, isExpanded = false, onToggle = null) {
             <pre class="console-source-pre">${escapeHtml(source)}</pre>
           </div>
         ` : ''}
-        ${log.url ? `
+        ${normalized.url ? `
           <div class="detail-section">
             <h4>页面</h4>
-            <pre>${escapeHtml(log.url)}</pre>
+            <pre>${escapeHtml(normalized.url)}</pre>
           </div>
         ` : ''}
-        ${hasStack ? `
+        ${hasData ? `
+          <div class="detail-section">
+            <h4>附加数据</h4>
+            <pre class="json-highlight">${formatJsonHtml(normalized.data)}</pre>
+          </div>
+        ` : ''}
+        ${hasError ? `
+          <div class="detail-section">
+            <h4>错误信息</h4>
+            <div class="console-error-block">
+              <div class="console-error-name">${escapeHtml(normalized.error.name || 'Error')}</div>
+              <div class="console-error-message">${escapeHtml(normalized.error.message || '')}</div>
+              ${normalized.error.stack ? `<pre class="console-stack-pre" style="color: var(--error-color);">${formatStack(normalized.error.stack)}</pre>` : ''}
+            </div>
+          </div>
+        ` : ''}
+        ${hasStack && !hasError ? `
           <div class="detail-section">
             <h4>堆栈</h4>
             <pre class="console-stack-pre" style="color: var(--error-color);">${formatStack(stack)}</pre>
@@ -188,7 +335,7 @@ export function createConsoleEntry(log, isExpanded = false, onToggle = null) {
   const toggleExpand = () => {
     const isNowExpanded = entry.classList.toggle('expanded');
     if (onToggle) {
-      onToggle(log.id, isNowExpanded);
+      onToggle(normalized.id, isNowExpanded);
     }
   };
 
@@ -211,6 +358,18 @@ export function createConsoleEntry(log, isExpanded = false, onToggle = null) {
   });
 
   return entry;
+}
+
+/**
+ * 格式化带日期的时间
+ * @param {number} timestamp 
+ * @returns {string}
+ */
+function formatTimeWithDate(timestamp) {
+  const date = new Date(timestamp);
+  const month = date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
+  const time = date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  return `${month} ${time}`;
 }
 
 /**

@@ -259,8 +259,11 @@ class UnifiedLogService {
       return false;
     }
 
-    // sync 类别始终记录所有级别（用于问题诊断）
+    // sync 类别：非调试模式下过滤掉 debug 级别（减少日志量）
     if (category === 'sync') {
+      if (!this.debugModeEnabled && level === 'debug') {
+        return false;
+      }
       return true;
     }
 

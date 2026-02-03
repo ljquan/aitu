@@ -8,6 +8,7 @@ import { gitHubApiService, GitHubApiError } from './github-api-service';
 import { kvStorageService } from '../kv-storage-service';
 import { cryptoService } from './crypto-service';
 import { syncPasswordService } from './sync-password-service';
+import { logDebug, logInfo, logSuccess, logWarning, logError } from './sync-log-service';
 import {
   MasterIndex,
   ShardInfo,
@@ -54,7 +55,7 @@ class ShardRouter {
     this.masterGistId = await kvStorageService.get<string>(MASTER_GIST_ID_KEY);
     this.initialized = true;
 
-    console.log('[ShardRouter] Initialized:', {
+    logDebug('ShardRouter initialized', {
       hasMasterIndex: !!this.masterIndex,
       masterGistId: this.masterGistId ? maskId(this.masterGistId) : null,
       shardCount: this.masterIndex ? Object.keys(this.masterIndex.shards).length : 0,
@@ -95,7 +96,7 @@ class ShardRouter {
    */
   async loadMasterIndexFromRemote(): Promise<MasterIndex | null> {
     if (!this.masterGistId) {
-      console.log('[ShardRouter] No master gist ID configured');
+      logDebug('No master gist ID configured');
       return null;
     }
 
@@ -106,7 +107,7 @@ class ShardRouter {
       );
 
       if (!content) {
-        console.log('[ShardRouter] No master index found in remote');
+        logDebug('No master index found in remote');
         return null;
       }
 
@@ -114,14 +115,14 @@ class ShardRouter {
       this.masterIndex = index;
       await this.saveMasterIndexLocally();
 
-      console.log('[ShardRouter] Loaded master index from remote:', {
+      logDebug('Loaded master index from remote', {
         shards: Object.keys(index.shards).length,
         files: Object.keys(index.fileIndex).length,
       });
 
       return index;
     } catch (error) {
-      console.error('[ShardRouter] Failed to load master index:', error);
+      logError('Failed to load master index', error instanceof Error ? error : new Error(String(error)));
       return null;
     }
   }
@@ -154,7 +155,7 @@ class ShardRouter {
 
     await this.saveMasterIndexLocally();
 
-    console.log('[ShardRouter] Saved master index to remote');
+    logDebug('Saved master index to remote');
   }
 
   /**
@@ -176,7 +177,7 @@ class ShardRouter {
 
     await this.saveMasterIndexLocally();
 
-    console.log('[ShardRouter] Initialized new master index');
+    logDebug('Initialized new master index');
     return this.masterIndex;
   }
 
@@ -275,7 +276,7 @@ class ShardRouter {
         gist.id
       );
     } catch (error) {
-      console.warn('[ShardRouter] Failed to update shard description:', error);
+      logWarning('Failed to update shard description', { error: String(error) });
     }
 
     // 创建分片信息
@@ -286,7 +287,7 @@ class ShardRouter {
     this.masterIndex.shards[shardAlias] = shardInfo;
     updateMasterIndexStats(this.masterIndex);
 
-    console.log('[ShardRouter] Created new shard:', {
+    logDebug('Created new shard', {
       alias: shardAlias,
       gistId: maskId(gist.id),
       order,
@@ -374,7 +375,7 @@ class ShardRouter {
       currentShardSize += file.size;
     }
 
-    console.log('[ShardRouter] Batch allocation completed:', {
+    logDebug('Batch allocation completed', {
       totalFiles: files.length,
       newShardsCreated: newShards.length,
     });
@@ -416,7 +417,7 @@ class ShardRouter {
       // 检查是否已满
       if (shard.fileCount >= SHARD_CONFIG.FILE_LIMIT) {
         shard.status = 'full';
-        console.log('[ShardRouter] Shard is now full:', shardId);
+        logDebug('Shard is now full', { shardId });
       }
     }
   }
@@ -446,7 +447,7 @@ class ShardRouter {
       // 如果从满变为有空间，重新激活
       if (shard.status === 'full' && shard.fileCount < SHARD_CONFIG.FILE_LIMIT) {
         shard.status = 'active';
-        console.log('[ShardRouter] Shard reactivated:', entry.shardId);
+        logDebug('Shard reactivated', { shardId: entry.shardId });
       }
     }
 
@@ -513,7 +514,7 @@ class ShardRouter {
     shard.updatedAt = Date.now();
     this.masterIndex.shards[newAlias] = shard;
 
-    console.log('[ShardRouter] Updated shard alias:', { old: shardId, new: newAlias });
+    logDebug('Updated shard alias', { old: shardId, new: newAlias });
   }
 
   /**
@@ -532,7 +533,7 @@ class ShardRouter {
     shard.status = 'archived';
     shard.updatedAt = Date.now();
 
-    console.log('[ShardRouter] Archived shard:', shardId);
+    logDebug('Archived shard', { shardId });
   }
 
   /**
@@ -555,7 +556,7 @@ class ShardRouter {
     }
     shard.updatedAt = Date.now();
 
-    console.log('[ShardRouter] Reactivated shard:', shardId);
+    logDebug('Reactivated shard', { shardId });
   }
 
   /**
@@ -600,7 +601,7 @@ class ShardRouter {
     this.initialized = false;
     await kvStorageService.delete(MASTER_INDEX_KEY);
     await kvStorageService.delete(MASTER_GIST_ID_KEY);
-    console.log('[ShardRouter] Cleared local cache');
+    logDebug('Cleared local cache');
   }
 
   /**

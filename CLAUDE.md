@@ -166,6 +166,7 @@ Service Worker (后台执行)
 16. **错误处理链保持完整**：需要传递特殊错误属性（如 `isAwaitingClient`）时，必须重新抛出原始错误，不能创建新 Error 对象
 17. **SW 重发 Tool Request 需延迟**：页面刷新后 claim 工作流时，SW 重发 pending tool request 需延迟 500ms，等待主线程 handler 准备好
 18. **同步数据双向合并**：下载远程数据时必须与本地合并（基于 ID 去重，`updatedAt` 判断版本），合并后自动上传确保双向同步
+19. **同步数据格式一致性**：`tasks.json` 结构是 `{ completedTasks: Task[] }` 不是数组，画板文件是 `board_{id}.json` 不是 `.drawnix`
 
 ### React 规则
 

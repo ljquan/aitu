@@ -4,6 +4,7 @@
  * 提供向后兼容的 API，同时使用分片存储
  */
 
+import { logDebug, logInfo, logSuccess, logWarning, logError } from './sync-log-service';
 import { maskId } from '@aitu/utils';
 import { shardRouter } from './shard-router';
 import { shardSyncService } from './shard-sync-service';
@@ -55,7 +56,7 @@ class ShardedMediaSyncAdapter {
     }
 
     this.initialized = true;
-    console.log('[ShardedMediaSyncAdapter] Initialized, sharding enabled:', this.shardingEnabled);
+    logDebug('ShardedMediaSyncAdapter] Initialized, sharding enabled:', this.shardingEnabled);
   }
 
   /**
@@ -72,7 +73,7 @@ class ShardedMediaSyncAdapter {
     this.shardingEnabled = true;
     await kvStorageService.set(SHARD_SYSTEM_ENABLED_KEY, true);
     await shardRouter.initialize();
-    console.log('[ShardedMediaSyncAdapter] Sharding enabled');
+    logDebug('ShardedMediaSyncAdapter] Sharding enabled');
   }
 
   /**
@@ -81,7 +82,7 @@ class ShardedMediaSyncAdapter {
   async disableSharding(): Promise<void> {
     this.shardingEnabled = false;
     await kvStorageService.set(SHARD_SYSTEM_ENABLED_KEY, false);
-    console.log('[ShardedMediaSyncAdapter] Sharding disabled');
+    logDebug('ShardedMediaSyncAdapter] Sharding disabled');
   }
 
   /**
@@ -94,7 +95,7 @@ class ShardedMediaSyncAdapter {
     migratedFiles?: number;
   }> {
     try {
-      console.log('[ShardedMediaSyncAdapter] Setting up shard system...');
+      logDebug('ShardedMediaSyncAdapter] Setting up shard system...');
 
       // 设置主 Gist ID
       await shardRouter.setMasterGistId(masterGistId);
@@ -115,7 +116,7 @@ class ShardedMediaSyncAdapter {
           masterGistId
         );
 
-        console.log('[ShardedMediaSyncAdapter] Created new master index');
+        logDebug('ShardedMediaSyncAdapter] Created new master index');
       }
 
       // 启用分片
@@ -123,7 +124,7 @@ class ShardedMediaSyncAdapter {
 
       return { success: true };
     } catch (error) {
-      console.error('[ShardedMediaSyncAdapter] Setup failed:', error);
+      logError('ShardedMediaSyncAdapter] Setup failed:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : '设置失败',
@@ -147,7 +148,7 @@ class ShardedMediaSyncAdapter {
     } else {
       // 使用传统方式（需要调用旧的 media-sync-service）
       // 这里返回空结果，实际调用应该走 mediaSyncService
-      console.log('[ShardedMediaSyncAdapter] Sharding not enabled, use mediaSyncService instead');
+      logDebug('ShardedMediaSyncAdapter] Sharding not enabled, use mediaSyncService instead');
       return this.createEmptyResult();
     }
   }
@@ -165,7 +166,7 @@ class ShardedMediaSyncAdapter {
       const result = await shardSyncService.downloadMedia(urls, onProgress);
       return this.convertToLegacyResult(result);
     } else {
-      console.log('[ShardedMediaSyncAdapter] Sharding not enabled, use mediaSyncService instead');
+      logDebug('ShardedMediaSyncAdapter] Sharding not enabled, use mediaSyncService instead');
       return this.createEmptyResult();
     }
   }

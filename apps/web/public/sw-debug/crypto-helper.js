@@ -378,6 +378,7 @@ export function getDeviceIdExported() {
 
 /**
  * Read all items from an IndexedDB store
+ * Handles both regular IndexedDB and localforage data formats
  */
 function getAllFromStore(dbName, storeName) {
   return new Promise((resolve, reject) => {
@@ -387,7 +388,10 @@ function getAllFromStore(dbName, storeName) {
     
     request.onsuccess = () => {
       const db = request.result;
+      console.log(`[getAllFromStore] Opened ${dbName}, stores:`, [...db.objectStoreNames]);
+      
       if (!db.objectStoreNames.contains(storeName)) {
+        console.log(`[getAllFromStore] Store '${storeName}' not found`);
         db.close();
         resolve([]);
         return;
@@ -398,12 +402,78 @@ function getAllFromStore(dbName, storeName) {
       const getAllReq = store.getAll();
       
       getAllReq.onsuccess = () => {
-        resolve(getAllReq.result || []);
+        const results = getAllReq.result || [];
+        console.log(`[getAllFromStore] ${dbName}/${storeName}: ${results.length} items`);
+        
+        // Check if this is localforage format (each item may be the actual value)
+        // localforage stores data directly, but we should verify the structure
+        if (results.length > 0) {
+          const sample = results[0];
+          console.log(`[getAllFromStore] Sample item structure:`, 
+            sample ? Object.keys(sample).slice(0, 5) : 'empty'
+          );
+        }
+        
+        resolve(results);
       };
       
       getAllReq.onerror = () => reject(getAllReq.error);
       
       transaction.oncomplete = () => db.close();
+    };
+  });
+}
+
+/**
+ * Diagnose IndexedDB structure for debugging
+ */
+export async function diagnoseDatabase(dbName) {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(dbName);
+    
+    request.onerror = () => reject(request.error);
+    
+    request.onsuccess = async () => {
+      const db = request.result;
+      const result = {
+        name: db.name,
+        version: db.version,
+        stores: {},
+      };
+      
+      const storeNames = [...db.objectStoreNames];
+      
+      for (const storeName of storeNames) {
+        try {
+          const tx = db.transaction(storeName, 'readonly');
+          const store = tx.objectStore(storeName);
+          
+          const countReq = store.count();
+          const count = await new Promise((res) => {
+            countReq.onsuccess = () => res(countReq.result);
+            countReq.onerror = () => res(-1);
+          });
+          
+          // Get sample item
+          const getAllReq = store.getAll(null, 1);
+          const samples = await new Promise((res) => {
+            getAllReq.onsuccess = () => res(getAllReq.result || []);
+            getAllReq.onerror = () => res([]);
+          });
+          
+          result.stores[storeName] = {
+            count,
+            keyPath: store.keyPath,
+            indexNames: [...store.indexNames],
+            sampleKeys: samples.length > 0 ? Object.keys(samples[0]).slice(0, 8) : [],
+          };
+        } catch (e) {
+          result.stores[storeName] = { error: e.message };
+        }
+      }
+      
+      db.close();
+      resolve(result);
     };
   });
 }

@@ -3,6 +3,7 @@
  * 支持将同步数据（包括媒体）导出为本地 ZIP 文件
  */
 
+import { logDebug, logInfo, logSuccess, logWarning, logError } from './sync-log-service';
 import JSZip from 'jszip';
 import { dataSerializer } from './data-serializer';
 import { mediaCollector } from './media-collector';
@@ -190,7 +191,7 @@ class LocalExportService {
               // 获取媒体 Blob
               const blob = await unifiedCacheService.getCachedBlob(item.url);
               if (!blob || blob.size === 0) {
-                console.warn(`[LocalExportService] Media not found: ${item.url}`);
+                logWarning(`LocalExportService] Media not found: ${item.url}`);
                 continue;
               }
 
@@ -217,7 +218,7 @@ class LocalExportService {
               result.stats.media++;
               result.stats.mediaSize += blob.size;
             } catch (error) {
-              console.error(`[LocalExportService] Failed to export media ${item.url}:`, error);
+              logError(`LocalExportService] Failed to export media ${item.url}:`, error);
             }
           }
         }
@@ -251,7 +252,7 @@ class LocalExportService {
       // 自动下载
       this.downloadBlob(blob, result.filename);
 
-      console.log('[LocalExportService] Export completed:', {
+      logDebug('LocalExportService] Export completed:', {
         ...result.stats,
         mediaSize: formatSize(result.stats.mediaSize),
         totalSize: formatSize(result.size),
@@ -259,7 +260,7 @@ class LocalExportService {
 
       return result;
     } catch (error) {
-      console.error('[LocalExportService] Export failed:', error);
+      logError('LocalExportService] Export failed:', error);
       result.error = error instanceof Error ? error.message : '导出失败';
       return result;
     }
@@ -398,11 +399,11 @@ class LocalExportService {
 
       result.success = result.errors.length === 0;
 
-      console.log('[LocalExportService] Import completed:', result.stats);
+      logDebug('LocalExportService] Import completed:', result.stats);
 
       return result;
     } catch (error) {
-      console.error('[LocalExportService] Import failed:', error);
+      logError('LocalExportService] Import failed:', error);
       result.errors.push(error instanceof Error ? error.message : '导入失败');
       return result;
     }

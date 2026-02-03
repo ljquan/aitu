@@ -777,77 +777,81 @@
                 <span class="gist-section-toggle">▼</span>
               </div>
               <div class="gist-section-content" id="gistOperationsSection">
-                <div class="gist-debug-actions">
-                  <div class="debug-action-group">
-                    <span class="debug-group-label">连接测试</span>
-                    <button class="debug-btn" id="debugTestConnection" title="测试 GitHub API 连接">
-                      <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-                      测试连接
-                    </button>
-                    <button class="debug-btn" id="debugListGists" title="列出所有同步 Gist">
-                      <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-                      列出 Gists
-                    </button>
+                <div class="gist-debug-actions compact">
+                  <!-- Row 1: Connection & Tasks -->
+                  <div class="debug-action-row">
+                    <div class="debug-action-group">
+                      <span class="debug-group-label">连接</span>
+                      <button class="debug-btn" id="debugTestConnection" title="测试 GitHub API 连接">
+                        <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                        测试连接
+                      </button>
+                      <button class="debug-btn" id="debugListGists" title="列出所有同步 Gist">
+                        <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                        列出 Gists
+                      </button>
+                    </div>
+                    <div class="debug-action-group">
+                      <span class="debug-group-label">任务</span>
+                      <button class="debug-btn" id="debugPreviewTaskMerge" title="预览任务合并结果">
+                        <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                        预览合并
+                      </button>
+                      <button class="debug-btn warning" id="debugImportRemoteTasks" title="从远程导入缺失的任务">
+                        <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        导入任务
+                      </button>
+                    </div>
+                    <div class="debug-action-group">
+                      <span class="debug-group-label">画板</span>
+                      <button class="debug-btn" id="debugPreviewBoardMerge" title="预览画板合并结果">
+                        <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                        预览合并
+                      </button>
+                      <button class="debug-btn" id="debugDownloadBoard" title="下载指定画板内容">
+                        <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        下载画板
+                      </button>
+                    </div>
                   </div>
-                  <div class="debug-action-group">
-                    <span class="debug-group-label">任务同步</span>
-                    <button class="debug-btn" id="debugPreviewTaskMerge" title="预览任务合并结果（不实际执行）">
-                      <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                      预览任务合并
-                    </button>
-                    <button class="debug-btn warning" id="debugImportRemoteTasks" title="从远程导入缺失的任务到本地">
-                      <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                      导入远程任务
-                    </button>
-                  </div>
-                  <div class="debug-action-group">
-                    <span class="debug-group-label">画板同步</span>
-                    <button class="debug-btn" id="debugPreviewBoardMerge" title="预览画板合并结果（不实际执行）">
-                      <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                      预览画板合并
-                    </button>
-                    <button class="debug-btn" id="debugDownloadBoard" title="下载指定画板内容">
-                      <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                      下载画板
-                    </button>
-                  </div>
-                  <div class="debug-action-group">
-                    <span class="debug-group-label">媒体同步</span>
-                    <button class="debug-btn" id="debugListShardFiles" title="列出分片中的所有文件">
-                      <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
-                      分片文件列表
-                    </button>
-                    <button class="debug-btn" id="debugTestMediaDownload" title="测试下载单个媒体文件">
-                      <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-                      测试媒体下载
-                    </button>
-                  </div>
-                  <div class="debug-action-group">
-                    <span class="debug-group-label">日志诊断</span>
-                    <button class="debug-btn" id="debugCheckSyncLogDb" title="检查同步日志数据库状态">
-                      <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
-                      检查日志数据库
-                    </button>
-                    <button class="debug-btn" id="debugWriteTestLog" title="写入一条测试日志">
-                      <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-                      写入测试日志
-                    </button>
-                    <button class="debug-btn" id="debugPerformanceTest" title="运行性能基准测试 (1000次写入)">
-                      <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4"/><path d="m16.24 7.76-2.12 2.12"/><path d="M21 12h-4"/><path d="m16.24 16.24-2.12-2.12"/><path d="M12 21v-4"/><path d="m7.76 16.24 2.12-2.12"/><path d="M3 12h4"/><path d="m7.76 7.76 2.12 2.12"/></svg>
-                      性能测试
-                    </button>
+                  <!-- Row 2: Media & Diagnostics -->
+                  <div class="debug-action-row">
+                    <div class="debug-action-group">
+                      <span class="debug-group-label">媒体</span>
+                      <button class="debug-btn" id="debugListShardFiles" title="列出分片中的所有文件">
+                        <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
+                        分片列表
+                      </button>
+                      <button class="debug-btn" id="debugTestMediaDownload" title="测试下载单个媒体文件">
+                        <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                        测试下载
+                      </button>
+                    </div>
+                    <div class="debug-action-group">
+                      <span class="debug-group-label">数据库</span>
+                      <button class="debug-btn" id="debugCheckSyncLogDb" title="检查同步日志数据库状态">
+                        <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+                        检查日志库
+                      </button>
+                      <button class="debug-btn" id="debugDiagnoseDb" title="诊断所有数据库结构">
+                        <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                        诊断结构
+                      </button>
+                    </div>
+                    <div class="debug-action-group">
+                      <span class="debug-group-label">测试</span>
+                      <button class="debug-btn" id="debugWriteTestLog" title="写入一条测试日志">
+                        <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                        写入日志
+                      </button>
+                      <button class="debug-btn" id="debugPerformanceTest" title="运行性能基准测试">
+                        <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4"/><path d="m16.24 7.76-2.12 2.12"/><path d="M21 12h-4"/><path d="m16.24 16.24-2.12-2.12"/><path d="M12 21v-4"/><path d="m7.76 16.24 2.12-2.12"/><path d="M3 12h4"/><path d="m7.76 7.76 2.12 2.12"/></svg>
+                        性能测试
+                      </button>
+                    </div>
                   </div>
                 </div>
-                <!-- Debug Log Output -->
-                <div class="debug-log-container">
-                  <div class="debug-log-header">
-                    <span>调试日志</span>
-                    <button class="debug-btn-small" id="debugClearLog" title="清空日志">清空</button>
-                  </div>
-                  <div class="debug-log-output" id="debugLogOutput">
-                    <div class="debug-log-placeholder">点击上方按钮执行调试操作，日志将显示在这里...</div>
-                  </div>
-                </div>
+                <p class="debug-hint">调试日志将输出到下方的「同步日志」区域</p>
               </div>
             </div>
 
@@ -891,6 +895,14 @@
                       <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
                       刷新
                     </button>
+                    <button class="debug-btn" id="toggleAutoRefresh" title="自动刷新日志 (3秒间隔)">
+                      <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                      <span id="autoRefreshLabel">自动</span>
+                    </button>
+                    <button class="debug-btn" id="copySyncLogs" title="复制当前筛选的日志到剪贴板">
+                      <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                      复制
+                    </button>
                     <button class="debug-btn" id="exportSyncLogs" title="导出日志为 JSON">
                       <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                       导出
@@ -902,21 +914,21 @@
                   </div>
                 </div>
                 
-                <!-- Log Stats -->
+                <!-- Log Stats (clickable to filter) -->
                 <div class="sync-log-stats" id="syncLogStats">
-                  <div class="sync-log-stat">
+                  <div class="sync-log-stat clickable" data-filter="" title="显示所有日志">
                     <span class="stat-value" id="syncLogTotal">-</span>
                     <span class="stat-label">总条数</span>
                   </div>
-                  <div class="sync-log-stat error">
+                  <div class="sync-log-stat error clickable" data-filter="error" title="点击筛选错误日志">
                     <span class="stat-value" id="syncLogErrors">-</span>
                     <span class="stat-label">错误</span>
                   </div>
-                  <div class="sync-log-stat warning">
+                  <div class="sync-log-stat warning clickable" data-filter="warning" title="点击筛选警告日志">
                     <span class="stat-value" id="syncLogWarnings">-</span>
                     <span class="stat-label">警告</span>
                   </div>
-                  <div class="sync-log-stat success">
+                  <div class="sync-log-stat success clickable" data-filter="success" title="点击筛选成功日志">
                     <span class="stat-value" id="syncLogSuccesses">-</span>
                     <span class="stat-label">成功</span>
                   </div>
@@ -948,12 +960,22 @@
                 <span class="gist-section-toggle">▼</span>
               </div>
               <div class="gist-section-content" id="gistDiagnosticsSection">
-                <!-- Sub-tabs for diagnostics -->
-                <div class="gist-subtabs">
-                  <button class="gist-subtab active" data-subtab="tasks">任务对比</button>
-                  <button class="gist-subtab" data-subtab="boards">画板对比</button>
-                  <button class="gist-subtab" data-subtab="media">素材对比</button>
-                  <button class="gist-subtab" data-subtab="files">远程文件</button>
+                <!-- Sub-tabs for diagnostics with refresh button -->
+                <div class="gist-subtabs" style="display: flex; align-items: center; gap: 12px;">
+                  <div style="display: flex; gap: 4px;">
+                    <button class="gist-subtab active" data-subtab="tasks">任务对比</button>
+                    <button class="gist-subtab" data-subtab="boards">画板对比</button>
+                    <button class="gist-subtab" data-subtab="media">素材对比</button>
+                    <button class="gist-subtab" data-subtab="files">远程文件</button>
+                  </div>
+                  <button class="debug-btn-small" id="refreshLocalDiagnostics" title="刷新本地数据">
+                    <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                    刷新本地
+                  </button>
+                  <button class="debug-btn-small" id="loadRemoteDiagnostics" title="从 GitHub Gist 加载远程数据进行对比" style="background: var(--primary-color); color: white; border-color: var(--primary-color);">
+                    <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    加载远程数据
+                  </button>
                 </div>
                 
                 <!-- Tasks Comparison -->
@@ -1045,9 +1067,9 @@
                       </div>
                     </div>
                     <div class="gist-file-preview-panel">
-                      <div class="panel-header">
-                        <span>内容预览</span>
-                        <span id="previewFileName" class="preview-filename"></span>
+                      <div class="panel-header-multi">
+                        <div class="panel-title">内容预览</div>
+                        <div id="previewFileName" class="preview-filename"></div>
                       </div>
                       <div id="gistFileContent" class="gist-file-content">
                         <div class="empty-state" style="padding: 20px;">选择文件查看内容</div>

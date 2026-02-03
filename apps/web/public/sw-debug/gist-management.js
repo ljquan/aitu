@@ -21,7 +21,9 @@ import {
   getSyncSessions,
   clearSyncLogs,
   exportSyncLogs,
+  diagnoseDatabase,
 } from './crypto-helper.js';
+import { createConsoleEntry } from './console-entry.js';
 
 // ====================================
 // State
@@ -40,6 +42,10 @@ let syncLogCurrentPage = 1;
 let syncLogPageSize = 50;
 let syncLogTotalEntries = 0;
 let syncLogCurrentFilters = {};
+let syncLogExpandedIds = new Set(); // 跟踪展开的日志条目
+let syncLogAutoRefreshInterval = null; // 自动刷新定时器
+let syncLogAutoRefreshEnabled = false; // 自动刷新状态
+const AUTO_REFRESH_INTERVAL = 3000; // 3秒刷新间隔
 
 // ====================================
 // Initialization
@@ -107,13 +113,51 @@ export function initGistManagement() {
       const section = header.closest('.gist-section');
       section.classList.toggle('collapsed');
       
-      // Auto-refresh sync logs when section is expanded
       const sectionType = header.dataset.section;
-      if (sectionType === 'synclogs' && !section.classList.contains('collapsed')) {
-        refreshSyncLogs();
+      const isExpanded = !section.classList.contains('collapsed');
+      
+      // Auto-refresh sync logs when section is expanded
+      if (sectionType === 'synclogs') {
+        if (isExpanded) {
+          refreshSyncLogs();
+          // Auto-enable auto-refresh when sync logs section is expanded
+          if (!syncLogAutoRefreshEnabled) {
+            toggleAutoRefresh();
+          }
+        } else {
+          // Stop auto-refresh when sync logs section is collapsed
+          if (syncLogAutoRefreshEnabled) {
+            toggleAutoRefresh();
+          }
+        }
+      }
+      
+      // Auto-load diagnostics data when section is expanded
+      if (sectionType === 'diagnostics' && isExpanded) {
+        loadFullDiagnostics();
       }
     });
   });
+  
+  // Auto-start sync log refresh if section is already expanded (on page load)
+  const syncLogsSection = document.querySelector('[data-section="synclogs"]')?.closest('.gist-section');
+  if (syncLogsSection && !syncLogsSection.classList.contains('collapsed')) {
+    // Delay to ensure initialization is complete
+    setTimeout(() => {
+      refreshSyncLogs();
+      if (!syncLogAutoRefreshEnabled) {
+        toggleAutoRefresh();
+      }
+    }, 500);
+  }
+  
+  // Auto-load diagnostics if section is already expanded (on page load)
+  const diagnosticsSection = document.querySelector('[data-section="diagnostics"]')?.closest('.gist-section');
+  if (diagnosticsSection && !diagnosticsSection.classList.contains('collapsed')) {
+    setTimeout(() => {
+      loadFullDiagnostics();
+    }, 600);
+  }
 
   // Sub-tab switching
   document.querySelectorAll('.gist-subtab').forEach(tab => {
@@ -121,6 +165,18 @@ export function initGistManagement() {
       const subtabName = tab.dataset.subtab;
       switchSubtab(subtabName);
     });
+  });
+  
+  // Refresh local diagnostics button
+  document.getElementById('refreshLocalDiagnostics')?.addEventListener('click', () => {
+    console.log('[Diagnostics] Manual refresh triggered');
+    loadLocalDiagnostics();
+  });
+  
+  // Load remote diagnostics button (triggers full diagnostics including remote)
+  document.getElementById('loadRemoteDiagnostics')?.addEventListener('click', () => {
+    console.log('[Diagnostics] Loading remote data...');
+    loadFullDiagnostics();
   });
 
   // Debug operation buttons
@@ -306,14 +362,19 @@ async function parseGistFile(fileData) {
   try {
     let content = fileData.content;
     if (fileData.truncated) {
+      console.log('[parseGistFile] File is truncated, fetching from raw_url...');
       const res = await fetch(fileData.raw_url);
       content = await res.text();
     }
     
+    console.log('[parseGistFile] Content length:', content?.length, 'preview:', content?.substring(0, 100));
     const decrypted = await decryptGistFile(content, currentGistId, currentCustomPassword);
-    return JSON.parse(decrypted);
+    console.log('[parseGistFile] Decrypted length:', decrypted?.length, 'preview:', decrypted?.substring(0, 100));
+    const parsed = JSON.parse(decrypted);
+    console.log('[parseGistFile] Parsed result type:', typeof parsed, Array.isArray(parsed) ? 'array' : 'object');
+    return parsed;
   } catch (e) {
-    console.error('Failed to parse gist file:', e);
+    console.error('[parseGistFile] Failed to parse gist file:', e);
     return null;
   }
 }
@@ -387,12 +448,16 @@ function renderFileList(files) {
     let type = 'Text';
     if (fileName.endsWith('.png') || fileName.endsWith('.jpg') || fileName.endsWith('.jpeg')) {
       type = 'Image';
+    } else if (fileName.startsWith('board_') && fileName.endsWith('.json')) {
+      type = 'Board';
     } else if (fileName.endsWith('.drawnix')) {
       type = 'Canvas';
-    } else if (fileName === 'tasks.json' || fileName === 'master-index.json') {
+    } else if (fileName === 'tasks.json' || fileName === 'master-index.json' || fileName === 'workspace.json' || fileName === 'prompts.json') {
       type = 'Data';
     } else if (fileName === 'shard-manifest.json') {
       type = 'Manifest';
+    } else if (fileName.startsWith('media_') && fileName.endsWith('.json')) {
+      type = 'Media';
     }
     
     return `
@@ -420,7 +485,7 @@ async function showFileContent(fileName, fileData) {
   if (!elements.previewName || !elements.fileContent) return;
   
   elements.previewName.textContent = fileName;
-  elements.fileContent.textContent = '正在加载...';
+  elements.fileContent.innerHTML = '<div class="loading-state">正在加载...</div>';
   
   try {
     let content = fileData.content;
@@ -430,28 +495,621 @@ async function showFileContent(fileName, fileData) {
     }
 
     // Try decrypt
-    let displayContent = content;
+    let decryptedContent = content;
+    let decryptFailed = false;
     try {
-      displayContent = await decryptGistFile(content, currentGistId, currentCustomPassword);
-      // Format JSON
-      try {
-        const json = JSON.parse(displayContent);
-        displayContent = JSON.stringify(json, null, 2);
-      } catch {}
+      decryptedContent = await decryptGistFile(content, currentGistId, currentCustomPassword);
     } catch (e) {
       console.warn('Decryption failed, showing raw', e);
-      displayContent = content + '\n\n[解密失败]';
+      decryptFailed = true;
     }
     
-    elements.fileContent.textContent = displayContent;
+    // Parse JSON if possible
+    let parsedData = null;
+    try {
+      parsedData = JSON.parse(decryptedContent);
+    } catch {}
+    
+    // Render based on file type
+    if (fileName.startsWith('media_') && fileName.endsWith('.json') && parsedData) {
+      renderMediaFilePreview(parsedData, decryptFailed);
+    } else if (fileName.startsWith('board_') && fileName.endsWith('.json') && parsedData) {
+      renderBoardFilePreview(parsedData, decryptFailed);
+    } else if (fileName === 'tasks.json' && parsedData) {
+      renderTasksFilePreview(parsedData, decryptFailed);
+    } else if (fileName === 'workspace.json' && parsedData) {
+      renderWorkspaceFilePreview(parsedData, decryptFailed);
+    } else if (fileName === 'master-index.json' && parsedData) {
+      renderMasterIndexPreview(parsedData, decryptFailed);
+    } else {
+      // Default: show formatted JSON or raw text
+      let displayContent = parsedData ? JSON.stringify(parsedData, null, 2) : decryptedContent;
+      if (decryptFailed) {
+        displayContent = content + '\n\n[解密失败]';
+      }
+      elements.fileContent.innerHTML = `<pre class="file-raw-content">${escapeHtml(displayContent)}</pre>`;
+    }
   } catch (e) {
-    elements.fileContent.textContent = '加载失败: ' + e.message;
+    elements.fileContent.innerHTML = `<div class="error-state">加载失败: ${escapeHtml(e.message)}</div>`;
   }
+}
+
+/**
+ * Render media file preview (media_*.json)
+ */
+function renderMediaFilePreview(data, decryptFailed) {
+  const url = data.url || data.originalUrl || '';
+  const isVideo = isVideoUrl(url);
+  const mimeType = data.mimeType || (isVideo ? 'video/*' : 'image/*');
+  const size = data.size ? formatSize(data.size) : '未知';
+  
+  // Get preview URL - use the stored data URL if available
+  let previewUrl = '';
+  if (data.data && data.data.startsWith('data:')) {
+    previewUrl = data.data;
+  } else if (url.startsWith('/__aitu_cache__/')) {
+    previewUrl = url;
+  } else {
+    previewUrl = url;
+  }
+  
+  const previewHtml = isVideo ? `
+    <video 
+      class="media-file-preview" 
+      src="${escapeHtml(previewUrl)}" 
+      controls 
+      muted
+      onerror="this.outerHTML='<div class=\\'preview-error\\'>视频加载失败</div>'"
+    ></video>
+  ` : `
+    <img 
+      class="media-file-preview" 
+      src="${escapeHtml(previewUrl)}" 
+      onerror="this.outerHTML='<div class=\\'preview-error\\'>图片加载失败</div>'"
+    />
+  `;
+  
+  elements.fileContent.innerHTML = `
+    <div class="file-preview-card">
+      <div class="preview-section">
+        ${previewHtml}
+      </div>
+      <div class="preview-info">
+        <div class="info-row">
+          <span class="info-label">类型</span>
+          <span class="info-value">${isVideo ? '视频' : '图片'}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">MIME</span>
+          <span class="info-value">${escapeHtml(mimeType)}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">大小</span>
+          <span class="info-value">${size}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">原始 URL</span>
+          <span class="info-value url-value" title="${escapeHtml(url)}">${escapeHtml(url)}</span>
+        </div>
+        ${decryptFailed ? '<div class="warning-badge">解密失败，显示原始数据</div>' : ''}
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Render board file preview (board_*.json)
+ */
+function renderBoardFilePreview(data, decryptFailed) {
+  const name = data.name || '未命名画板';
+  const id = data.id || '';
+  const createdAt = data.createdAt ? formatTime(data.createdAt) : '未知';
+  const updatedAt = data.updatedAt ? formatTime(data.updatedAt) : '未知';
+  
+  // Count elements
+  const elements_arr = data.elements || [];
+  let imageCount = 0;
+  let videoCount = 0;
+  let textCount = 0;
+  let shapeCount = 0;
+  let otherCount = 0;
+  
+  elements_arr.forEach(el => {
+    const type = el.type || '';
+    if (type === 'image' || type.includes('image')) {
+      imageCount++;
+    } else if (type === 'video' || type.includes('video')) {
+      videoCount++;
+    } else if (type === 'text' || type.includes('text')) {
+      textCount++;
+    } else if (type === 'geometry' || type === 'line' || type === 'arrow' || type.includes('shape')) {
+      shapeCount++;
+    } else {
+      otherCount++;
+    }
+  });
+  
+  const totalElements = elements_arr.length;
+  
+  elements.fileContent.innerHTML = `
+    <div class="file-preview-card">
+      <div class="preview-header">
+        <h3 class="board-name">${escapeHtml(name)}</h3>
+        <span class="board-id">${escapeHtml(id)}</span>
+      </div>
+      <div class="preview-stats">
+        <div class="stat-card">
+          <span class="stat-value">${totalElements}</span>
+          <span class="stat-label">元素总数</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value">${imageCount}</span>
+          <span class="stat-label">图片</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value">${videoCount}</span>
+          <span class="stat-label">视频</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value">${textCount}</span>
+          <span class="stat-label">文本</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value">${shapeCount}</span>
+          <span class="stat-label">形状</span>
+        </div>
+      </div>
+      <div class="preview-info">
+        <div class="info-row">
+          <span class="info-label">创建时间</span>
+          <span class="info-value">${createdAt}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">更新时间</span>
+          <span class="info-value">${updatedAt}</span>
+        </div>
+        ${decryptFailed ? '<div class="warning-badge">解密失败，显示原始数据</div>' : ''}
+      </div>
+      <details class="raw-data-toggle">
+        <summary>查看原始数据</summary>
+        <pre class="file-raw-content">${escapeHtml(JSON.stringify(data, null, 2))}</pre>
+      </details>
+    </div>
+  `;
+}
+
+/**
+ * Render tasks file preview (tasks.json)
+ */
+function renderTasksFilePreview(data, decryptFailed) {
+  const tasks = data.completedTasks || (Array.isArray(data) ? data : []);
+  const taskCount = tasks.length;
+  
+  // Count by type
+  let imageTaskCount = 0;
+  let videoTaskCount = 0;
+  
+  tasks.forEach(task => {
+    if (task.type === 'image') imageTaskCount++;
+    else if (task.type === 'video') videoTaskCount++;
+  });
+  
+  // Show recent tasks
+  const recentTasks = tasks.slice(-5).reverse();
+  
+  elements.fileContent.innerHTML = `
+    <div class="file-preview-card">
+      <div class="preview-header">
+        <h3>任务数据</h3>
+      </div>
+      <div class="preview-stats">
+        <div class="stat-card">
+          <span class="stat-value">${taskCount}</span>
+          <span class="stat-label">任务总数</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value">${imageTaskCount}</span>
+          <span class="stat-label">图片任务</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value">${videoTaskCount}</span>
+          <span class="stat-label">视频任务</span>
+        </div>
+      </div>
+      ${recentTasks.length > 0 ? `
+        <div class="preview-list">
+          <h4>最近任务</h4>
+          ${recentTasks.map(task => `
+            <div class="list-item">
+              <span class="item-type ${task.type || 'other'}">${task.type === 'image' ? '图片' : task.type === 'video' ? '视频' : '其他'}</span>
+              <span class="item-name" title="${escapeHtml(task.name || task.prompt || '')}">${escapeHtml((task.name || task.prompt || '').substring(0, 50))}</span>
+              <span class="item-time">${task.completedAt ? formatTime(task.completedAt) : ''}</span>
+            </div>
+          `).join('')}
+        </div>
+      ` : ''}
+      ${decryptFailed ? '<div class="warning-badge">解密失败</div>' : ''}
+      <details class="raw-data-toggle">
+        <summary>查看原始数据</summary>
+        <pre class="file-raw-content">${escapeHtml(JSON.stringify(data, null, 2))}</pre>
+      </details>
+    </div>
+  `;
+}
+
+/**
+ * Render workspace file preview (workspace.json)
+ */
+function renderWorkspaceFilePreview(data, decryptFailed) {
+  const folders = data.folders || [];
+  const boardMetadata = data.boardMetadata || [];
+  const currentBoardId = data.currentBoardId || '无';
+  
+  elements.fileContent.innerHTML = `
+    <div class="file-preview-card">
+      <div class="preview-header">
+        <h3>工作区数据</h3>
+      </div>
+      <div class="preview-stats">
+        <div class="stat-card">
+          <span class="stat-value">${folders.length}</span>
+          <span class="stat-label">文件夹</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value">${boardMetadata.length}</span>
+          <span class="stat-label">画板</span>
+        </div>
+      </div>
+      <div class="preview-info">
+        <div class="info-row">
+          <span class="info-label">当前画板</span>
+          <span class="info-value">${escapeHtml(currentBoardId)}</span>
+        </div>
+      </div>
+      ${boardMetadata.length > 0 ? `
+        <div class="preview-list">
+          <h4>画板列表</h4>
+          ${boardMetadata.slice(0, 10).map(board => `
+            <div class="list-item">
+              <span class="item-name">${escapeHtml(board.name || board.id || '未命名')}</span>
+              <span class="item-time">${board.updatedAt ? formatTime(board.updatedAt) : ''}</span>
+            </div>
+          `).join('')}
+          ${boardMetadata.length > 10 ? `<div class="list-more">还有 ${boardMetadata.length - 10} 个...</div>` : ''}
+        </div>
+      ` : ''}
+      ${decryptFailed ? '<div class="warning-badge">解密失败</div>' : ''}
+      <details class="raw-data-toggle">
+        <summary>查看原始数据</summary>
+        <pre class="file-raw-content">${escapeHtml(JSON.stringify(data, null, 2))}</pre>
+      </details>
+    </div>
+  `;
+}
+
+/**
+ * Render master-index file preview
+ */
+function renderMasterIndexPreview(data, decryptFailed) {
+  const boards = data.boards ? Object.keys(data.boards).length : 0;
+  const devices = data.devices ? Object.keys(data.devices).length : 0;
+  const version = data.version || '未知';
+  const appVersion = data.appVersion || '未知';
+  const updatedAt = data.updatedAt ? formatTime(data.updatedAt) : '未知';
+  
+  elements.fileContent.innerHTML = `
+    <div class="file-preview-card">
+      <div class="preview-header">
+        <h3>主索引</h3>
+      </div>
+      <div class="preview-stats">
+        <div class="stat-card">
+          <span class="stat-value">${boards}</span>
+          <span class="stat-label">画板</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value">${devices}</span>
+          <span class="stat-label">设备</span>
+        </div>
+      </div>
+      <div class="preview-info">
+        <div class="info-row">
+          <span class="info-label">同步版本</span>
+          <span class="info-value">${version}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">应用版本</span>
+          <span class="info-value">${escapeHtml(appVersion)}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">最后更新</span>
+          <span class="info-value">${updatedAt}</span>
+        </div>
+      </div>
+      ${decryptFailed ? '<div class="warning-badge">解密失败</div>' : ''}
+      <details class="raw-data-toggle">
+        <summary>查看原始数据</summary>
+        <pre class="file-raw-content">${escapeHtml(JSON.stringify(data, null, 2))}</pre>
+      </details>
+    </div>
+  `;
 }
 
 // ====================================
 // Diagnostics
 // ====================================
+
+/**
+ * Load full diagnostics (local + remote)
+ * Automatically tries to get remote data if Token is available
+ */
+async function loadFullDiagnostics() {
+  console.log('[Diagnostics] Loading full diagnostics (local + remote)...');
+  
+  // First load local data immediately
+  await loadLocalDiagnostics();
+  
+  // Then try to load remote data
+  try {
+    // Check if Token is available
+    const encryptedToken = localStorage.getItem('github_sync_token');
+    if (!encryptedToken) {
+      console.log('[Diagnostics] No GitHub Token configured, skipping remote data');
+      updateRemoteStatus('未配置 Token');
+      return;
+    }
+    
+    // Try to decrypt token
+    let token;
+    try {
+      token = await decryptToken(encryptedToken);
+      currentToken = token;
+      console.log('[Diagnostics] Token decrypted successfully');
+    } catch (e) {
+      console.warn('[Diagnostics] Failed to decrypt token:', e);
+      updateRemoteStatus('Token 解密失败');
+      return;
+    }
+    
+    // Get Gist credentials
+    const creds = await getGistCredentials();
+    if (!creds.gistId) {
+      console.log('[Diagnostics] No Gist ID configured');
+      updateRemoteStatus('未配置 Gist');
+      return;
+    }
+    
+    currentGistId = creds.gistId;
+    currentCustomPassword = creds.customPassword;
+    
+    // Update status
+    updateRemoteStatus('正在加载...');
+    
+    // Fetch Gist data
+    console.log('[Diagnostics] Fetching Gist data...');
+    const gist = await fetchGist(currentGistId);
+    currentGistData = gist;
+    
+    // Parse master-index.json if exists
+    if (gist.files && gist.files['master-index.json']) {
+      console.log('[Diagnostics] Parsing master-index.json...');
+      remoteMasterIndex = await parseGistFile(gist.files['master-index.json']);
+      console.log('[Diagnostics] Parsed master-index:', remoteMasterIndex);
+      if (remoteMasterIndex) {
+        console.log('[Diagnostics] master-index.boards:', remoteMasterIndex.boards);
+        console.log('[Diagnostics] master-index keys:', Object.keys(remoteMasterIndex));
+      }
+    } else {
+      console.log('[Diagnostics] No master-index.json found in gist files');
+    }
+    
+    // Run full diagnostics comparison
+    await runDiagnostics(gist);
+    
+    // Render remote files list
+    renderFileList(gist.files || {});
+    
+    console.log('[Diagnostics] Full diagnostics loaded successfully');
+    updateRemoteStatus(null); // Clear status
+    
+  } catch (error) {
+    console.error('[Diagnostics] Failed to load remote data:', error);
+    updateRemoteStatus(`加载失败: ${error.message}`);
+  }
+}
+
+/**
+ * Update remote data status indicator
+ */
+function updateRemoteStatus(message) {
+  const remoteTaskCountEl = document.getElementById('remoteTaskCount');
+  const remoteBoardCountEl = document.getElementById('remoteBoardCount');
+  const remoteMediaCountEl = document.getElementById('remoteMediaCount');
+  
+  if (message) {
+    if (remoteTaskCountEl) remoteTaskCountEl.textContent = message;
+    if (remoteBoardCountEl) remoteBoardCountEl.textContent = message;
+    if (remoteMediaCountEl) remoteMediaCountEl.textContent = message;
+  }
+}
+
+/**
+ * Load local diagnostics data (without remote)
+ * Called when diagnostics section is expanded
+ */
+async function loadLocalDiagnostics() {
+  console.log('[Diagnostics] Loading local diagnostics data...');
+  
+  // Get elements directly instead of relying on cached elements
+  const localTaskCountEl = document.getElementById('localTaskCount');
+  const localBoardCountEl = document.getElementById('localBoardCount');
+  const localMediaCountEl = document.getElementById('localMediaCount');
+  const remoteTaskCountEl = document.getElementById('remoteTaskCount');
+  const remoteBoardCountEl = document.getElementById('remoteBoardCount');
+  const remoteMediaCountEl = document.getElementById('remoteMediaCount');
+  const localOnlyTaskCountEl = document.getElementById('localOnlyTaskCount');
+  const remoteOnlyTaskCountEl = document.getElementById('remoteOnlyTaskCount');
+  const syncedTaskCountEl = document.getElementById('syncedTaskCount');
+  const localOnlyBoardCountEl = document.getElementById('localOnlyBoardCount');
+  const remoteOnlyBoardCountEl = document.getElementById('remoteOnlyBoardCount');
+  const localOnlyMediaCountEl = document.getElementById('localOnlyMediaCount');
+  const remoteOnlyMediaCountEl = document.getElementById('remoteOnlyMediaCount');
+  const taskComparisonTableEl = document.getElementById('taskComparisonTable');
+  const boardComparisonTableEl = document.getElementById('boardComparisonTable');
+  const mediaComparisonTableEl = document.getElementById('mediaComparisonTable');
+  
+  console.log('[Diagnostics] Elements found:', {
+    localTaskCount: !!localTaskCountEl,
+    localBoardCount: !!localBoardCountEl,
+    localMediaCount: !!localMediaCountEl,
+    taskComparisonTable: !!taskComparisonTableEl,
+  });
+  
+  try {
+    // First, diagnose the databases to understand the structure
+    const dbDiagnosis = {};
+    try {
+      dbDiagnosis.workspace = await diagnoseDatabase('aitu-workspace');
+      dbDiagnosis.taskQueue = await diagnoseDatabase('sw-task-queue');
+      console.log('[Diagnostics] Database structure:', dbDiagnosis);
+    } catch (e) {
+      console.warn('[Diagnostics] Failed to diagnose databases:', e);
+    }
+    
+    // Load local tasks
+    const localTasks = await getLocalTasks();
+    console.log('[Diagnostics] Local tasks:', localTasks.length, localTasks.slice(0, 2));
+    if (localTaskCountEl) {
+      localTaskCountEl.textContent = localTasks.length;
+    }
+    
+    // Load local boards
+    const localBoards = await getLocalBoards();
+    console.log('[Diagnostics] Local boards:', localBoards.length, localBoards.slice(0, 2));
+    if (localBoardCountEl) {
+      localBoardCountEl.textContent = localBoards.length;
+    }
+    
+    // Load local media
+    const localMedia = await listCacheStorageMedia();
+    console.log('[Diagnostics] Local media:', localMedia.length);
+    if (localMediaCountEl) {
+      localMediaCountEl.textContent = localMedia.length;
+    }
+    
+    // Show local-only data in tables
+    if (localTasks.length > 0) {
+      renderLocalOnlyTable(taskComparisonTableEl, localTasks.slice(0, 20), 'task');
+    } else {
+      if (taskComparisonTableEl) {
+        const dbInfo = dbDiagnosis.taskQueue ? 
+          `数据库信息: ${JSON.stringify(dbDiagnosis.taskQueue.stores, null, 2)}` : '';
+        taskComparisonTableEl.innerHTML = `<div class="empty-state" style="padding: 20px;">本地无任务数据${dbInfo ? '<pre style="text-align:left;font-size:10px;margin-top:10px;white-space:pre-wrap;">' + escapeHtml(dbInfo) + '</pre>' : ''}</div>`;
+      }
+    }
+    
+    if (localBoards.length > 0) {
+      renderLocalOnlyTable(boardComparisonTableEl, localBoards.slice(0, 20), 'board');
+    } else {
+      if (boardComparisonTableEl) {
+        const dbInfo = dbDiagnosis.workspace ? 
+          `数据库信息: ${JSON.stringify(dbDiagnosis.workspace.stores, null, 2)}` : '';
+        boardComparisonTableEl.innerHTML = `<div class="empty-state" style="padding: 20px;">本地无画板数据${dbInfo ? '<pre style="text-align:left;font-size:10px;margin-top:10px;white-space:pre-wrap;">' + escapeHtml(dbInfo) + '</pre>' : ''}</div>`;
+      }
+    }
+    
+    if (localMedia.length > 0) {
+      renderLocalOnlyMediaTable(mediaComparisonTableEl, localMedia.slice(0, 30));
+    } else {
+      if (mediaComparisonTableEl) {
+        mediaComparisonTableEl.innerHTML = '<div class="empty-state" style="padding: 20px;">本地无缓存媒体</div>';
+      }
+    }
+    
+    // Update remote counts to show "未加载"
+    if (remoteTaskCountEl) remoteTaskCountEl.textContent = '未加载';
+    if (remoteBoardCountEl) remoteBoardCountEl.textContent = '未加载';
+    if (remoteMediaCountEl) remoteMediaCountEl.textContent = '未加载';
+    if (localOnlyTaskCountEl) localOnlyTaskCountEl.textContent = '-';
+    if (remoteOnlyTaskCountEl) remoteOnlyTaskCountEl.textContent = '-';
+    if (syncedTaskCountEl) syncedTaskCountEl.textContent = '-';
+    if (localOnlyBoardCountEl) localOnlyBoardCountEl.textContent = '-';
+    if (remoteOnlyBoardCountEl) remoteOnlyBoardCountEl.textContent = '-';
+    if (localOnlyMediaCountEl) localOnlyMediaCountEl.textContent = '-';
+    if (remoteOnlyMediaCountEl) remoteOnlyMediaCountEl.textContent = '-';
+    
+    console.log('[Diagnostics] Local diagnostics loaded successfully');
+    
+  } catch (error) {
+    console.error('[Diagnostics] Failed to load local data:', error);
+    if (taskComparisonTableEl) {
+      taskComparisonTableEl.innerHTML = `<div class="empty-state" style="padding: 20px; color: var(--error-color);">加载失败: ${escapeHtml(error.message)}</div>`;
+    }
+  }
+}
+
+/**
+ * Render local-only data table
+ */
+function renderLocalOnlyTable(container, items, type) {
+  if (!container) return;
+  
+  if (items.length === 0) {
+    container.innerHTML = '<div class="empty-state" style="padding: 20px;">无数据</div>';
+    return;
+  }
+  
+  container.innerHTML = items.map(item => {
+    const id = item.id || '';
+    const details = getItemDetails(item, type);
+    return `
+      <div class="gist-comparison-row">
+        <span class="item-id" title="${escapeHtml(id)}">${escapeHtml(truncateId(id))}</span>
+        <span class="item-details">${escapeHtml(details)}</span>
+        <span class="item-status local-only">本地</span>
+      </div>
+    `;
+  }).join('');
+  
+  if (items.length >= 20) {
+    container.innerHTML += `
+      <div class="gist-comparison-row" style="justify-content: center; color: var(--text-muted); font-style: italic;">
+        点击"刷新 Gist 数据"获取远程数据进行完整对比
+      </div>
+    `;
+  }
+}
+
+/**
+ * Render local-only media table
+ */
+function renderLocalOnlyMediaTable(container, items) {
+  if (!container) return;
+  
+  if (items.length === 0) {
+    container.innerHTML = '<div class="empty-state" style="padding: 20px;">无缓存媒体</div>';
+    return;
+  }
+  
+  container.innerHTML = items.map(item => {
+    const filename = item.filename || extractFilename(item.url) || item.url;
+    return `
+      <div class="gist-comparison-row">
+        <span class="item-id" title="${escapeHtml(item.url)}">${escapeHtml(filename)}</span>
+        <span class="item-details"></span>
+        <span class="item-status local-only">本地缓存</span>
+      </div>
+    `;
+  }).join('');
+  
+  if (items.length >= 30) {
+    container.innerHTML += `
+      <div class="gist-comparison-row" style="justify-content: center; color: var(--text-muted); font-style: italic;">
+        点击"刷新 Gist 数据"获取远程数据进行完整对比
+      </div>
+    `;
+  }
+}
 
 async function runDiagnostics(gist) {
   await Promise.all([
@@ -464,20 +1122,40 @@ async function runDiagnostics(gist) {
 // --- Tasks Comparison ---
 
 async function compareTasksData(gist) {
+  // Get elements directly
+  const localTaskCountEl = document.getElementById('localTaskCount');
+  const remoteTaskCountEl = document.getElementById('remoteTaskCount');
+  const localOnlyTaskCountEl = document.getElementById('localOnlyTaskCount');
+  const remoteOnlyTaskCountEl = document.getElementById('remoteOnlyTaskCount');
+  const syncedTaskCountEl = document.getElementById('syncedTaskCount');
+  const taskComparisonTableEl = document.getElementById('taskComparisonTable');
+  
   try {
     // Get local tasks
     const localTasks = await getLocalTasks();
     const localTaskMap = new Map(localTasks.map(t => [t.id, t]));
+    console.log('[Diagnostics] compareTasksData - Local tasks:', localTasks.length);
 
     // Get remote tasks
     let remoteTasks = [];
     if (gist.files && gist.files['tasks.json']) {
+      console.log('[Diagnostics] Found tasks.json, parsing...');
       const tasksData = await parseGistFile(gist.files['tasks.json']);
-      if (Array.isArray(tasksData)) {
+      console.log('[Diagnostics] Parsed tasks.json:', tasksData);
+      // TasksData 结构: { completedTasks: Task[] }
+      if (tasksData && Array.isArray(tasksData.completedTasks)) {
+        remoteTasks = tasksData.completedTasks;
+        console.log('[Diagnostics] Extracted completedTasks:', remoteTasks.length);
+      } else if (Array.isArray(tasksData)) {
+        // 兼容旧格式（直接数组）
         remoteTasks = tasksData;
+        console.log('[Diagnostics] Using legacy array format:', remoteTasks.length);
       }
+    } else {
+      console.log('[Diagnostics] No tasks.json found in gist files:', Object.keys(gist.files || {}));
     }
     const remoteTaskMap = new Map(remoteTasks.map(t => [t.id, t]));
+    console.log('[Diagnostics] compareTasksData - Remote tasks:', remoteTasks.length);
 
     // Compare
     const localIds = new Set(localTaskMap.keys());
@@ -487,15 +1165,15 @@ async function compareTasksData(gist) {
     const remoteOnly = [...remoteIds].filter(id => !localIds.has(id));
     const synced = [...localIds].filter(id => remoteIds.has(id));
 
-    // Update summary
-    if (elements.localTaskCount) elements.localTaskCount.textContent = localTasks.length;
-    if (elements.remoteTaskCount) elements.remoteTaskCount.textContent = remoteTasks.length;
-    if (elements.localOnlyTaskCount) elements.localOnlyTaskCount.textContent = localOnly.length;
-    if (elements.remoteOnlyTaskCount) elements.remoteOnlyTaskCount.textContent = remoteOnly.length;
-    if (elements.syncedTaskCount) elements.syncedTaskCount.textContent = synced.length;
+    // Update summary (use direct element references)
+    if (localTaskCountEl) localTaskCountEl.textContent = localTasks.length;
+    if (remoteTaskCountEl) remoteTaskCountEl.textContent = remoteTasks.length;
+    if (localOnlyTaskCountEl) localOnlyTaskCountEl.textContent = localOnly.length;
+    if (remoteOnlyTaskCountEl) remoteOnlyTaskCountEl.textContent = remoteOnly.length;
+    if (syncedTaskCountEl) syncedTaskCountEl.textContent = synced.length;
 
     // Render comparison table
-    renderComparisonTable(elements.taskComparisonTable, {
+    renderComparisonTable(taskComparisonTableEl, {
       localOnly: localOnly.map(id => ({ id, data: localTaskMap.get(id) })),
       remoteOnly: remoteOnly.map(id => ({ id, data: remoteTaskMap.get(id) })),
       synced: synced.map(id => ({
@@ -507,8 +1185,8 @@ async function compareTasksData(gist) {
 
   } catch (error) {
     console.error('Task comparison failed:', error);
-    if (elements.taskComparisonTable) {
-      elements.taskComparisonTable.innerHTML = `<div class="empty-state" style="padding: 20px;">对比失败: ${error.message}</div>`;
+    if (taskComparisonTableEl) {
+      taskComparisonTableEl.innerHTML = `<div class="empty-state" style="padding: 20px;">对比失败: ${error.message}</div>`;
     }
   }
 }
@@ -516,22 +1194,39 @@ async function compareTasksData(gist) {
 // --- Boards Comparison ---
 
 async function compareBoardsData(gist) {
+  // Get elements directly
+  const localBoardCountEl = document.getElementById('localBoardCount');
+  const remoteBoardCountEl = document.getElementById('remoteBoardCount');
+  const localOnlyBoardCountEl = document.getElementById('localOnlyBoardCount');
+  const remoteOnlyBoardCountEl = document.getElementById('remoteOnlyBoardCount');
+  const boardComparisonTableEl = document.getElementById('boardComparisonTable');
+  
   try {
     // Get local boards
     const localBoards = await getLocalBoards();
     const localBoardMap = new Map(localBoards.map(b => [b.id, b]));
+    console.log('[Diagnostics] compareBoardsData - Local boards:', localBoards.length);
 
-    // Get remote boards (*.drawnix files)
+    // Get remote boards from gist files (board_{id}.json format)
     const remoteBoards = [];
+    
     if (gist.files) {
+      const fileNames = Object.keys(gist.files);
+      console.log('[Diagnostics] Gist files:', fileNames);
+      
+      // 查找 board_{id}.json 格式的文件
       for (const [fileName, fileData] of Object.entries(gist.files)) {
-        if (fileName.endsWith('.drawnix')) {
-          const boardId = fileName.replace('.drawnix', '');
+        if (fileName.startsWith('board_') && fileName.endsWith('.json')) {
+          // 提取 board ID: board_{id}.json -> {id}
+          const boardId = fileName.replace('board_', '').replace('.json', '');
           remoteBoards.push({ id: boardId, fileName, fileData });
         }
       }
+      console.log('[Diagnostics] Remote boards (board_*.json):', remoteBoards.length, remoteBoards.map(b => b.fileName));
     }
+    
     const remoteBoardMap = new Map(remoteBoards.map(b => [b.id, b]));
+    console.log('[Diagnostics] compareBoardsData - Total remote boards:', remoteBoards.length);
 
     // Compare
     const localIds = new Set(localBoardMap.keys());
@@ -541,14 +1236,14 @@ async function compareBoardsData(gist) {
     const remoteOnly = [...remoteIds].filter(id => !localIds.has(id));
     const synced = [...localIds].filter(id => remoteIds.has(id));
 
-    // Update summary
-    if (elements.localBoardCount) elements.localBoardCount.textContent = localBoards.length;
-    if (elements.remoteBoardCount) elements.remoteBoardCount.textContent = remoteBoards.length;
-    if (elements.localOnlyBoardCount) elements.localOnlyBoardCount.textContent = localOnly.length;
-    if (elements.remoteOnlyBoardCount) elements.remoteOnlyBoardCount.textContent = remoteOnly.length;
+    // Update summary (use direct element references)
+    if (localBoardCountEl) localBoardCountEl.textContent = localBoards.length;
+    if (remoteBoardCountEl) remoteBoardCountEl.textContent = remoteBoards.length;
+    if (localOnlyBoardCountEl) localOnlyBoardCountEl.textContent = localOnly.length;
+    if (remoteOnlyBoardCountEl) remoteOnlyBoardCountEl.textContent = remoteOnly.length;
 
     // Render comparison table
-    renderComparisonTable(elements.boardComparisonTable, {
+    renderComparisonTable(boardComparisonTableEl, {
       localOnly: localOnly.map(id => ({ id, data: localBoardMap.get(id) })),
       remoteOnly: remoteOnly.map(id => ({ id, data: remoteBoardMap.get(id) })),
       synced: synced.map(id => ({
@@ -560,8 +1255,8 @@ async function compareBoardsData(gist) {
 
   } catch (error) {
     console.error('Board comparison failed:', error);
-    if (elements.boardComparisonTable) {
-      elements.boardComparisonTable.innerHTML = `<div class="empty-state" style="padding: 20px;">对比失败: ${error.message}</div>`;
+    if (boardComparisonTableEl) {
+      boardComparisonTableEl.innerHTML = `<div class="empty-state" style="padding: 20px;">对比失败: ${error.message}</div>`;
     }
   }
 }
@@ -569,29 +1264,38 @@ async function compareBoardsData(gist) {
 // --- Media Comparison ---
 
 async function compareMediaData() {
+  // Get elements directly
+  const localMediaCountEl = document.getElementById('localMediaCount');
+  const remoteMediaCountEl = document.getElementById('remoteMediaCount');
+  const localOnlyMediaCountEl = document.getElementById('localOnlyMediaCount');
+  const remoteOnlyMediaCountEl = document.getElementById('remoteOnlyMediaCount');
+  const mediaComparisonTableEl = document.getElementById('mediaComparisonTable');
+  
   try {
     // Get local cache media
     const localMedia = await listCacheStorageMedia();
     const localUrls = new Set(localMedia.map(m => m.url));
+    console.log('[Diagnostics] compareMediaData - Local media:', localMedia.length);
 
     // Get remote media from master index
     const masterIndex = remoteMasterIndex || localMasterIndex;
     const remoteMedia = masterIndex?.fileIndex ? Object.keys(masterIndex.fileIndex) : [];
     const remoteUrls = new Set(remoteMedia);
+    console.log('[Diagnostics] compareMediaData - Remote media (from master index):', remoteMedia.length);
 
     // Compare
     const localOnly = [...localUrls].filter(url => !remoteUrls.has(url));
     const remoteOnly = [...remoteUrls].filter(url => !localUrls.has(url));
     const synced = [...localUrls].filter(url => remoteUrls.has(url));
 
-    // Update summary
-    if (elements.localMediaCount) elements.localMediaCount.textContent = localMedia.length;
-    if (elements.remoteMediaCount) elements.remoteMediaCount.textContent = remoteMedia.length;
-    if (elements.localOnlyMediaCount) elements.localOnlyMediaCount.textContent = localOnly.length;
-    if (elements.remoteOnlyMediaCount) elements.remoteOnlyMediaCount.textContent = remoteOnly.length;
+    // Update summary (use direct element references)
+    if (localMediaCountEl) localMediaCountEl.textContent = localMedia.length;
+    if (remoteMediaCountEl) remoteMediaCountEl.textContent = remoteMedia.length;
+    if (localOnlyMediaCountEl) localOnlyMediaCountEl.textContent = localOnly.length;
+    if (remoteOnlyMediaCountEl) remoteOnlyMediaCountEl.textContent = remoteOnly.length;
 
     // Render comparison table
-    renderMediaComparisonTable(elements.mediaComparisonTable, {
+    renderMediaComparisonTable(mediaComparisonTableEl, {
       localOnly,
       remoteOnly,
       synced,
@@ -600,8 +1304,8 @@ async function compareMediaData() {
 
   } catch (error) {
     console.error('Media comparison failed:', error);
-    if (elements.mediaComparisonTable) {
-      elements.mediaComparisonTable.innerHTML = `<div class="empty-state" style="padding: 20px;">对比失败: ${error.message}</div>`;
+    if (mediaComparisonTableEl) {
+      mediaComparisonTableEl.innerHTML = `<div class="empty-state" style="padding: 20px;">对比失败: ${error.message}</div>`;
     }
   }
 }
@@ -678,6 +1382,15 @@ function renderMediaComparisonTable(container, data) {
 
   const rows = [];
 
+  // Synced (show first 20, priority display)
+  data.synced.slice(0, 20).forEach(url => {
+    rows.push({
+      url,
+      status: 'synced',
+      statusText: '已同步',
+    });
+  });
+
   // Local only
   data.localOnly.slice(0, 20).forEach(url => {
     rows.push({
@@ -698,31 +1411,33 @@ function renderMediaComparisonTable(container, data) {
     });
   });
 
-  // Synced (show first 10)
-  data.synced.slice(0, 10).forEach(url => {
-    rows.push({
-      url,
-      status: 'synced',
-      statusText: '已同步',
-    });
-  });
-
   if (rows.length === 0) {
     container.innerHTML = '<div class="empty-state" style="padding: 20px;">无媒体数据</div>';
     return;
   }
 
-  // Sort
-  const statusOrder = { 'local-only': 0, 'remote-only': 1, 'synced': 2 };
+  // Sort: synced first, then local-only, then remote-only
+  const statusOrder = { 'synced': 0, 'local-only': 1, 'remote-only': 2 };
   rows.sort((a, b) => statusOrder[a.status] - statusOrder[b.status]);
 
-  container.innerHTML = rows.map(row => `
-    <div class="gist-comparison-row">
-      <span class="item-id" title="${escapeHtml(row.url)}">${escapeHtml(extractFilename(row.url))}</span>
-      <span class="item-details">${row.shard ? `分片: ${row.shard}` : ''}</span>
-      <span class="item-status ${row.status}">${row.statusText}</span>
-    </div>
-  `).join('');
+  container.innerHTML = rows.map(row => {
+    const isVideo = isVideoUrl(row.url);
+    const previewHtml = getMediaPreviewHtml(row.url, isVideo);
+    const filename = extractFilename(row.url);
+    
+    return `
+      <div class="gist-comparison-row media-row">
+        <div class="media-preview-container">
+          ${previewHtml}
+        </div>
+        <div class="media-info">
+          <span class="item-id" title="${escapeHtml(row.url)}">${escapeHtml(filename)}</span>
+          <span class="item-details">${row.shard ? `分片: ${row.shard}` : ''}</span>
+        </div>
+        <span class="item-status ${row.status}">${row.statusText}</span>
+      </div>
+    `;
+  }).join('');
 
   // Add notes for truncated lists
   const totalHidden = 
@@ -785,6 +1500,56 @@ function extractFilename(url) {
   }
 }
 
+/**
+ * Check if URL is a video
+ */
+function isVideoUrl(url) {
+  if (!url) return false;
+  const lowerUrl = url.toLowerCase();
+  return lowerUrl.includes('video') || 
+         lowerUrl.endsWith('.mp4') || 
+         lowerUrl.endsWith('.webm') || 
+         lowerUrl.endsWith('.mov') ||
+         lowerUrl.includes('/v/');
+}
+
+/**
+ * Generate preview HTML for media
+ */
+function getMediaPreviewHtml(url, isVideo) {
+  if (!url) return '<div class="media-preview-placeholder">?</div>';
+  
+  // Handle virtual cache URLs
+  let previewUrl = url;
+  if (url.startsWith('/__aitu_cache__/')) {
+    // Virtual URL, use as-is (SW will intercept)
+    previewUrl = url;
+  }
+  
+  if (isVideo) {
+    return `
+      <video 
+        class="media-preview" 
+        src="${escapeHtml(previewUrl)}" 
+        muted 
+        preload="metadata"
+        onmouseenter="this.play()" 
+        onmouseleave="this.pause();this.currentTime=0;"
+        onerror="this.outerHTML='<div class=\\'media-preview-placeholder\\'>视频</div>'"
+      ></video>
+    `;
+  } else {
+    return `
+      <img 
+        class="media-preview" 
+        src="${escapeHtml(previewUrl)}" 
+        loading="lazy"
+        onerror="this.outerHTML='<div class=\\'media-preview-placeholder\\'>图片</div>'"
+      />
+    `;
+  }
+}
+
 function formatTime(timestamp) {
   if (!timestamp) return '-';
   const date = new Date(timestamp);
@@ -825,14 +1590,7 @@ function escapeHtml(str) {
 // Debug Operations
 // ====================================
 
-let debugLogOutput = null;
-
 function initDebugOperations() {
-  debugLogOutput = document.getElementById('debugLogOutput');
-  
-  // Clear log button
-  document.getElementById('debugClearLog')?.addEventListener('click', clearDebugLog);
-  
   // Connection tests
   document.getElementById('debugTestConnection')?.addEventListener('click', debugTestConnection);
   document.getElementById('debugListGists')?.addEventListener('click', debugListGists);
@@ -854,49 +1612,74 @@ function initDebugOperations() {
   document.getElementById('debugWriteTestLog')?.addEventListener('click', debugWriteTestLog);
   document.getElementById('debugPerformanceTest')?.addEventListener('click', debugPerformanceTest);
   
+  // Database diagnostics
+  document.getElementById('debugDiagnoseDb')?.addEventListener('click', debugDiagnoseAllDatabases);
+  
   // Initialize Sync Log Viewer
   initSyncLogViewer();
 }
 
-function clearDebugLog() {
-  if (debugLogOutput) {
-    debugLogOutput.innerHTML = '<div class="debug-log-placeholder">日志已清空</div>';
+/**
+ * Write debug log to sync logs database (displays in Sync Logs section)
+ */
+async function debugLog(level, message, details = null) {
+  // Map level to sync log level
+  const levelMap = {
+    'info': 'info',
+    'success': 'success',
+    'warning': 'warning',
+    'error': 'error',
+  };
+  const syncLevel = levelMap[level] || 'debug';
+  
+  // Write to IndexedDB sync logs
+  const logEntry = {
+    id: `debug-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    timestamp: Date.now(),
+    level: syncLevel,
+    category: 'sync',
+    module: 'debug-panel',
+    message: `[调试] ${message}`,
+    data: details,
+  };
+  
+  try {
+    const db = await openSyncLogDb();
+    const tx = db.transaction('logs', 'readwrite');
+    const store = tx.objectStore('logs');
+    await new Promise((resolve, reject) => {
+      const req = store.add(logEntry);
+      req.onsuccess = resolve;
+      req.onerror = () => reject(req.error);
+    });
+    
+    // Trigger a silent refresh of sync logs if visible
+    if (syncLogAutoRefreshEnabled) {
+      silentRefreshSyncLogs();
+    }
+  } catch (e) {
+    console.error('[debugLog] Failed to write log:', e);
   }
 }
 
-function debugLog(level, message, details = null) {
-  if (!debugLogOutput) return;
-  
-  // Remove placeholder
-  const placeholder = debugLogOutput.querySelector('.debug-log-placeholder');
-  if (placeholder) placeholder.remove();
-  
-  const time = new Date().toLocaleTimeString('zh-CN');
-  const entry = document.createElement('div');
-  entry.className = 'debug-log-entry';
-  
-  let html = `
-    <span class="debug-log-time">${time}</span>
-    <span class="debug-log-level ${level}">${level}</span>
-    <span class="debug-log-message">${escapeHtml(message)}</span>
-  `;
-  
-  if (details) {
-    const detailStr = typeof details === 'string' ? details : JSON.stringify(details, null, 2);
-    const isLong = detailStr.length > 200;
-    html += `
-      <div class="debug-log-details ${isLong ? 'collapsible collapsed' : ''}" 
-           ${isLong ? 'onclick="this.classList.toggle(\'collapsed\')"' : ''}>
-        ${escapeHtml(detailStr)}
-      </div>
-    `;
-  }
-  
-  entry.innerHTML = html;
-  debugLogOutput.appendChild(entry);
-  
-  // Auto scroll to bottom
-  debugLogOutput.scrollTop = debugLogOutput.scrollHeight;
+/**
+ * Open sync log database
+ */
+function openSyncLogDb() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('aitu-unified-logs', 1);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve(request.result);
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains('logs')) {
+        const store = db.createObjectStore('logs', { keyPath: 'id' });
+        store.createIndex('timestamp', 'timestamp', { unique: false });
+        store.createIndex('category', 'category', { unique: false });
+        store.createIndex('level', 'level', { unique: false });
+      }
+    };
+  });
 }
 
 // --- Connection Tests ---
@@ -974,7 +1757,12 @@ async function debugListGists() {
     const syncGists = gists.filter(g => 
       g.description?.includes('Opentu') || 
       g.description?.includes('开图') ||
-      Object.keys(g.files).some(f => f.endsWith('.drawnix') || f === 'tasks.json' || f === 'master-index.json')
+      Object.keys(g.files).some(f => 
+        (f.startsWith('board_') && f.endsWith('.json')) || 
+        f.endsWith('.drawnix') || 
+        f === 'tasks.json' || 
+        f === 'master-index.json'
+      )
     );
     
     debugLog('success', `找到 ${syncGists.length} 个同步相关的 Gists`, 
@@ -1005,11 +1793,14 @@ async function debugPreviewTaskMerge() {
     const localTasks = await getLocalTasks();
     debugLog('info', `本地任务: ${localTasks.length} 个`);
     
-    // Get remote tasks
+    // Get remote tasks (TasksData 结构: { completedTasks: Task[] })
     let remoteTasks = [];
     if (currentGistData?.files?.['tasks.json']) {
       const tasksData = await parseGistFile(currentGistData.files['tasks.json']);
-      if (Array.isArray(tasksData)) {
+      if (tasksData && Array.isArray(tasksData.completedTasks)) {
+        remoteTasks = tasksData.completedTasks;
+      } else if (Array.isArray(tasksData)) {
+        // 兼容旧格式
         remoteTasks = tasksData;
       }
     }
@@ -1082,7 +1873,11 @@ async function debugImportRemoteTasks() {
     let remoteTasks = [];
     if (currentGistData?.files?.['tasks.json']) {
       const tasksData = await parseGistFile(currentGistData.files['tasks.json']);
-      if (Array.isArray(tasksData)) {
+      // TasksData 结构: { completedTasks: Task[] }
+      if (tasksData && Array.isArray(tasksData.completedTasks)) {
+        remoteTasks = tasksData.completedTasks;
+      } else if (Array.isArray(tasksData)) {
+        // 兼容旧格式
         remoteTasks = tasksData;
       }
     }
@@ -1140,12 +1935,13 @@ async function debugPreviewBoardMerge() {
     const localBoards = await getLocalBoards();
     debugLog('info', `本地画板: ${localBoards.length} 个`);
     
-    // Get remote boards
+    // Get remote boards (board_{id}.json format)
     const remoteBoards = [];
     if (currentGistData?.files) {
       for (const [fileName, fileData] of Object.entries(currentGistData.files)) {
-        if (fileName.endsWith('.drawnix')) {
-          const boardId = fileName.replace('.drawnix', '');
+        if (fileName.startsWith('board_') && fileName.endsWith('.json')) {
+          // 提取 board ID: board_{id}.json -> {id}
+          const boardId = fileName.replace('board_', '').replace('.json', '');
           remoteBoards.push({ id: boardId, fileName });
         }
       }
@@ -1190,11 +1986,11 @@ async function debugDownloadBoard() {
     await ensureToken();
     await ensureGistData();
     
-    // Get available boards
+    // Get available boards (board_{id}.json format)
     const remoteBoards = [];
     if (currentGistData?.files) {
       for (const [fileName] of Object.entries(currentGistData.files)) {
-        if (fileName.endsWith('.drawnix')) {
+        if (fileName.startsWith('board_') && fileName.endsWith('.json')) {
           remoteBoards.push(fileName);
         }
       }
@@ -1542,6 +2338,72 @@ async function debugPerformanceTest() {
   }
 }
 
+/**
+ * Diagnose all relevant databases
+ */
+async function debugDiagnoseAllDatabases() {
+  debugLog('info', '开始诊断所有数据库...');
+  
+  const dbsToCheck = [
+    'aitu-workspace',
+    'sw-task-queue',
+    'aitu-unified-logs',
+    'aitu-storage',
+  ];
+  
+  try {
+    // List all databases
+    if (indexedDB.databases) {
+      const allDbs = await indexedDB.databases();
+      debugLog('info', `系统中共有 ${allDbs.length} 个数据库`, 
+        allDbs.map(db => `${db.name} (v${db.version})`).join(', ')
+      );
+    }
+    
+    // Diagnose each database
+    for (const dbName of dbsToCheck) {
+      try {
+        const diagnosis = await diagnoseDatabase(dbName);
+        const storeInfo = Object.entries(diagnosis.stores).map(([name, info]) => ({
+          store: name,
+          count: info.count,
+          keyPath: info.keyPath,
+          sampleKeys: info.sampleKeys?.join(', ') || '-',
+        }));
+        
+        debugLog('success', `${dbName} (v${diagnosis.version})`, {
+          stores: storeInfo,
+        });
+      } catch (error) {
+        debugLog('warning', `${dbName}: ${error.message}`);
+      }
+    }
+    
+    // Test actual data retrieval
+    debugLog('info', '测试数据获取...');
+    
+    const localTasks = await getLocalTasks();
+    debugLog('info', `本地任务: ${localTasks.length} 条`, 
+      localTasks.slice(0, 3).map(t => ({ id: t.id?.substring(0, 12), type: t.type, status: t.status }))
+    );
+    
+    const localBoards = await getLocalBoards();
+    debugLog('info', `本地画板: ${localBoards.length} 个`, 
+      localBoards.slice(0, 3).map(b => ({ id: b.id?.substring(0, 12), name: b.name }))
+    );
+    
+    const localMedia = await listCacheStorageMedia();
+    debugLog('info', `本地缓存媒体: ${localMedia.length} 个`, 
+      localMedia.slice(0, 3).map(m => m.filename)
+    );
+    
+    debugLog('success', '数据库诊断完成');
+    
+  } catch (error) {
+    debugLog('error', `数据库诊断失败: ${error.message}`);
+  }
+}
+
 // --- Helper Functions for Debug ---
 
 async function ensureToken() {
@@ -1587,6 +2449,12 @@ function initSyncLogViewer() {
   // Refresh button
   document.getElementById('refreshSyncLogs')?.addEventListener('click', refreshSyncLogs);
   
+  // Auto-refresh button
+  document.getElementById('toggleAutoRefresh')?.addEventListener('click', toggleAutoRefresh);
+  
+  // Copy button
+  document.getElementById('copySyncLogs')?.addEventListener('click', handleCopySyncLogs);
+  
   // Export button
   document.getElementById('exportSyncLogs')?.addEventListener('click', handleExportSyncLogs);
   
@@ -1597,6 +2465,14 @@ function initSyncLogViewer() {
   document.getElementById('syncLogLevelFilter')?.addEventListener('change', handleSyncLogFilterChange);
   document.getElementById('syncLogCategoryFilter')?.addEventListener('change', handleSyncLogFilterChange);
   document.getElementById('syncLogSessionFilter')?.addEventListener('change', handleSyncLogFilterChange);
+  
+  // Clickable stat cards for filtering
+  document.querySelectorAll('.sync-log-stat.clickable').forEach(card => {
+    card.addEventListener('click', () => {
+      const filterLevel = card.dataset.filter;
+      handleStatCardClick(card, filterLevel);
+    });
+  });
   
   // Search with debounce
   let searchTimeout;
@@ -1624,6 +2500,122 @@ function initSyncLogViewer() {
       loadSyncLogs();
     }
   });
+}
+
+/**
+ * Handle stat card click for filtering
+ */
+function handleStatCardClick(clickedCard, filterLevel) {
+  // Update active state
+  document.querySelectorAll('.sync-log-stat.clickable').forEach(card => {
+    card.classList.remove('active');
+  });
+  clickedCard.classList.add('active');
+  
+  // Update dropdown filter to match
+  const levelFilter = document.getElementById('syncLogLevelFilter');
+  if (levelFilter) {
+    levelFilter.value = filterLevel;
+  }
+  
+  // Apply filter
+  syncLogCurrentFilters.level = filterLevel;
+  syncLogCurrentPage = 1;
+  loadSyncLogs();
+}
+
+/**
+ * Copy sync logs to clipboard
+ */
+async function handleCopySyncLogs() {
+  try {
+    // Query all logs with current filters (no pagination limit)
+    const query = { ...syncLogCurrentFilters, limit: 10000 };
+    Object.keys(query).forEach(key => {
+      if (!query[key]) delete query[key];
+    });
+    
+    const logs = await querySyncLogs(query);
+    
+    if (logs.length === 0) {
+      alert('没有可复制的日志');
+      return;
+    }
+    
+    // Format logs for clipboard
+    const formattedLogs = logs.map(log => {
+      const time = new Date(log.timestamp).toLocaleString('zh-CN');
+      const level = log.level?.toUpperCase() || 'INFO';
+      const category = log.category || '';
+      const message = log.message || '';
+      const data = log.data ? JSON.stringify(log.data) : '';
+      const error = log.error ? `\n  Error: ${log.error.message || log.error}` : '';
+      
+      return `[${time}] [${level}]${category ? ` [${category}]` : ''} ${message}${data ? `\n  Data: ${data}` : ''}${error}`;
+    }).join('\n\n');
+    
+    await navigator.clipboard.writeText(formattedLogs);
+    debugLog('success', `已复制 ${logs.length} 条日志到剪贴板`);
+    
+  } catch (error) {
+    console.error('Failed to copy logs:', error);
+    debugLog('error', `复制日志失败: ${error.message}`);
+  }
+}
+
+/**
+ * Toggle auto-refresh for sync logs
+ */
+function toggleAutoRefresh() {
+  syncLogAutoRefreshEnabled = !syncLogAutoRefreshEnabled;
+  
+  const btn = document.getElementById('toggleAutoRefresh');
+  const label = document.getElementById('autoRefreshLabel');
+  
+  if (syncLogAutoRefreshEnabled) {
+    // Start auto-refresh
+    syncLogAutoRefreshInterval = setInterval(async () => {
+      console.log('[SyncLogViewer] Auto-refreshing...');
+      await silentRefreshSyncLogs();
+    }, AUTO_REFRESH_INTERVAL);
+    
+    // Update UI
+    btn?.classList.add('active');
+    if (label) label.textContent = '停止';
+    
+    // Initial refresh
+    silentRefreshSyncLogs();
+  } else {
+    // Stop auto-refresh
+    if (syncLogAutoRefreshInterval) {
+      clearInterval(syncLogAutoRefreshInterval);
+      syncLogAutoRefreshInterval = null;
+    }
+    
+    // Update UI
+    btn?.classList.remove('active');
+    if (label) label.textContent = '自动';
+  }
+}
+
+/**
+ * Silent refresh - updates logs without resetting filters/page
+ */
+async function silentRefreshSyncLogs() {
+  try {
+    // Load stats
+    const stats = await getSyncLogStats();
+    updateSyncLogStats(stats);
+    
+    // Check if there are new logs
+    if (stats.total !== syncLogTotalEntries && syncLogCurrentPage === 1) {
+      syncLogTotalEntries = stats.total;
+      await loadSyncLogs();
+    }
+    
+  } catch (error) {
+    console.error('Failed to auto-refresh sync logs:', error);
+  }
 }
 
 async function refreshSyncLogs() {
@@ -1715,74 +2707,28 @@ async function loadSyncLogs() {
       return;
     }
     
-    container.innerHTML = logs.map(log => renderSyncLogEntry(log)).join('');
+    // 使用 createConsoleEntry 渲染日志（复用控制台日志组件）
+    container.innerHTML = '';
+    logs.forEach(log => {
+      const isExpanded = syncLogExpandedIds.has(log.id);
+      const entry = createConsoleEntry(log, isExpanded, (id, expanded) => {
+        if (expanded) {
+          syncLogExpandedIds.add(id);
+        } else {
+          syncLogExpandedIds.delete(id);
+        }
+      }, {
+        showDate: true,      // 同步日志显示日期
+        showLevelLabel: true // 同步日志显示中文级别标签
+      });
+      container.appendChild(entry);
+    });
     updatePagination();
     
   } catch (error) {
     console.error('Failed to load sync logs:', error);
     container.innerHTML = `<div class="empty-state" style="padding: 40px;">加载日志失败: ${error.message}</div>`;
   }
-}
-
-function renderSyncLogEntry(log) {
-  const time = new Date(log.timestamp);
-  const timeStr = time.toLocaleTimeString('zh-CN', { 
-    hour: '2-digit', 
-    minute: '2-digit', 
-    second: '2-digit' 
-  });
-  const dateStr = time.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
-  
-  const levelLabels = {
-    info: '信息',
-    success: '成功',
-    warning: '警告',
-    error: '错误',
-    debug: '调试',
-  };
-  
-  let html = `
-    <div class="sync-log-entry">
-      <div class="sync-log-entry-header">
-        <span class="sync-log-time">${dateStr} ${timeStr}</span>
-        <span class="sync-log-level ${log.level}">${levelLabels[log.level] || log.level}</span>
-        ${log.duration ? `<span class="sync-log-duration">${log.duration}ms</span>` : ''}
-        ${log.sessionId ? `<span class="sync-log-session" title="${log.sessionId}">${truncateSyncLogSessionId(log.sessionId)}</span>` : ''}
-      </div>
-      <div class="sync-log-message">${escapeHtml(log.message)}</div>
-  `;
-  
-  // 统一日志格式使用 data 字段
-  if (log.data && Object.keys(log.data).length > 0) {
-    html += `<div class="sync-log-details">${escapeHtml(JSON.stringify(log.data, null, 2))}</div>`;
-  }
-  
-  if (log.error) {
-    html += `
-      <div class="sync-log-error">
-        <div class="sync-log-error-name">${escapeHtml(log.error.name)}</div>
-        <div class="sync-log-error-message">${escapeHtml(log.error.message)}</div>
-        ${log.error.stack ? `<div class="sync-log-error-stack">${escapeHtml(log.error.stack)}</div>` : ''}
-      </div>
-    `;
-  }
-  
-  html += '</div>';
-  return html;
-}
-
-function truncateSyncLogSessionId(sessionId) {
-  if (!sessionId) return '';
-  // Format: sync-1234567890-abc123
-  const parts = sessionId.split('-');
-  if (parts.length >= 3) {
-    const timestamp = parseInt(parts[1]);
-    if (!isNaN(timestamp)) {
-      const date = new Date(timestamp);
-      return `${date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`;
-    }
-  }
-  return sessionId.slice(-8);
 }
 
 function updatePagination() {

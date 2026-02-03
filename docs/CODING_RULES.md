@@ -2081,6 +2081,60 @@ function complexFunction() {
 - 带有 `[DEBUG]` 前缀且通过环境变量控制的日志可以保留
 - 关键系统启动或成功标志日志 (如 `Initialized successfully`) 推荐保留一份但需保持简洁。
 
+### 同步数据格式一致性
+
+**场景**: 解析远程 Gist 中的同步数据文件时
+
+❌ **错误示例**:
+```typescript
+// 错误：直接把 tasks.json 当数组解析
+if (gist.files['tasks.json']) {
+  const tasksData = await parseGistFile(gist.files['tasks.json']);
+  if (Array.isArray(tasksData)) {
+    remoteTasks = tasksData;  // 永远不会执行！
+  }
+}
+
+// 错误：查找 .drawnix 文件
+for (const [fileName] of Object.entries(gist.files)) {
+  if (fileName.endsWith('.drawnix')) {  // 实际格式是 board_*.json
+    remoteBoards.push(fileName);
+  }
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：tasks.json 结构是 { completedTasks: Task[] }
+if (gist.files['tasks.json']) {
+  const tasksData = await parseGistFile(gist.files['tasks.json']);
+  if (tasksData && Array.isArray(tasksData.completedTasks)) {
+    remoteTasks = tasksData.completedTasks;
+  }
+}
+
+// 正确：画板文件格式是 board_{id}.json
+for (const [fileName] of Object.entries(gist.files)) {
+  if (fileName.startsWith('board_') && fileName.endsWith('.json')) {
+    const boardId = fileName.replace('board_', '').replace('.json', '');
+    remoteBoards.push({ id: boardId, fileName });
+  }
+}
+```
+
+**同步数据格式参考**:
+| 文件名 | 结构 |
+|--------|------|
+| `tasks.json` | `{ completedTasks: Task[] }` |
+| `board_{id}.json` | `Board` 对象 |
+| `workspace.json` | `{ folders, boardMetadata, currentBoardId }` |
+| `master-index.json` | `{ boards: Record<id, BoardSyncInfo>, devices, ... }` |
+| `media_{hash}.json` | `{ url, mimeType, data, size }` |
+
+**原因**: 同步数据有特定的结构，直接解析会导致数据无法正确读取。调试面板和应用代码必须使用相同的格式。
+
+---
+
 ### 同步模块日志规范
 
 **场景**: 在 `github-sync/*` 目录下的同步相关模块中记录日志

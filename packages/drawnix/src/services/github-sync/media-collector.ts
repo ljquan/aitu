@@ -3,6 +3,7 @@
  * 负责从画布、素材库、任务队列中收集媒体资源
  */
 
+import { logDebug, logInfo, logSuccess, logWarning, logError } from './sync-log-service';
 import { PlaitDrawElement } from '@plait/draw';
 import { workspaceStorageService } from '../workspace-storage-service';
 import { assetStorageService } from '../asset-storage-service';
@@ -363,7 +364,7 @@ class MediaCollector {
         }
       } catch (error) {
         // 忽略错误，继续处理其他项
-        console.warn(`[MediaCollector] Failed to get metadata for ${item.url}:`, error);
+        logWarning(`MediaCollector] Failed to get metadata for ${item.url}:`, error);
       }
     }
   }

@@ -12,6 +12,11 @@ import {
   SyncStatus,
   SyncResult,
   SyncConfig,
+  logDebug,
+  logInfo,
+  logSuccess,
+  logWarning,
+  logError,
 } from '../services/github-sync';
 import { workspaceService } from '../services/workspace-service';
 
@@ -80,9 +85,7 @@ interface GitHubSyncProviderProps {
  * 这个函数被 setToken 和 sync 共用
  */
 async function handleBoardSwitchAfterSync(result: SyncResult): Promise<void> {
-  console.log('[GitHubSync] ========== handleBoardSwitchAfterSync START ==========');
-  console.log('[GitHubSync] Processing board switch logic...');
-  console.log('[GitHubSync] Sync result:', {
+  logDebug('handleBoardSwitchAfterSync START', {
     success: result.success,
     downloaded: result.downloaded,
     uploaded: result.uploaded,
@@ -90,8 +93,7 @@ async function handleBoardSwitchAfterSync(result: SyncResult): Promise<void> {
   });
   
   if (!result.success) {
-    console.log('[GitHubSync] Sync not successful, skipping board switch');
-    console.log('[GitHubSync] ========== handleBoardSwitchAfterSync END (not successful) ==========');
+    logDebug('handleBoardSwitchAfterSync END (not successful)');
     return;
   }
   
@@ -101,98 +103,84 @@ async function handleBoardSwitchAfterSync(result: SyncResult): Promise<void> {
     const currentBoardId = workspaceState.currentBoardId;
     const allBoards = workspaceService.getAllBoardMetadata();
     
-    console.log('[GitHubSync] Current workspace state:', {
+    logDebug('Current workspace state', {
       currentBoardId,
       totalBoards: allBoards.length,
-      boardIds: allBoards.map(b => b.id),
-      boardNames: allBoards.map(b => b.name),
-      workspaceState: {
-        currentBoardId: workspaceState.currentBoardId,
-        expandedFolderIds: workspaceState.expandedFolderIds?.length || 0,
-      },
     });
     
     // 确定目标画板
     let targetBoardId = result.remoteCurrentBoardId;
-    console.log('[GitHubSync] Initial targetBoardId from remoteCurrentBoardId:', targetBoardId);
+    logDebug('Initial targetBoardId', { targetBoardId });
     
     // 如果没有远程当前画板记录，使用第一个可用画板
     if (!targetBoardId) {
-      console.log('[GitHubSync] No remoteCurrentBoardId, checking for first available board...');
       if (allBoards.length > 0) {
         targetBoardId = allBoards[0].id;
-        console.log('[GitHubSync] Using first board as target:', targetBoardId, '(' + allBoards[0].name + ')');
+        logDebug('Using first board as target', { targetBoardId, name: allBoards[0].name });
       } else {
-        console.log('[GitHubSync] No boards available!');
+        logDebug('No boards available');
       }
     }
     
-    console.log('[GitHubSync] Final targetBoardId:', targetBoardId);
+    logDebug('Final targetBoardId', { targetBoardId });
     
     // 如果没有找到目标画板，直接返回
     if (!targetBoardId) {
-      console.log('[GitHubSync] No target board found, skipping board switch');
-      console.log('[GitHubSync] ========== handleBoardSwitchAfterSync END (no target) ==========');
+      logDebug('handleBoardSwitchAfterSync END (no target)');
       return;
     }
     
     // 验证目标画板是否在可用画板列表中
     const targetExists = allBoards.some(b => b.id === targetBoardId);
-    console.log('[GitHubSync] Target board exists in metadata:', targetExists);
+    logDebug('Target board exists in metadata', { targetExists });
     if (!targetExists) {
-      console.warn('[GitHubSync] WARNING: Target board not found in available boards!');
-      console.log('[GitHubSync] Available board IDs:', allBoards.map(b => b.id));
+      logWarning('Target board not found in available boards', { 
+        targetBoardId, 
+        availableIds: allBoards.map(b => b.id) 
+      });
     }
     
     // 情况1：当前没有选中任何画板，直接切换到目标画板
     if (!currentBoardId) {
-      console.log('[GitHubSync] DECISION: No current board, will switch to:', targetBoardId);
-      console.log('[GitHubSync] Calling workspaceService.switchBoard...');
+      logDebug('DECISION: No current board, switching to target', { targetBoardId });
       await workspaceService.switchBoard(targetBoardId);
-      console.log('[GitHubSync] switchBoard completed');
-      console.log('[GitHubSync] ========== handleBoardSwitchAfterSync END (switched from null) ==========');
+      logDebug('handleBoardSwitchAfterSync END (switched from null)');
       return;
     }
     
     // 情况2：目标画板与当前画板相同
     // 虽然不需要切换，但需要刷新内存缓存中的画板数据（因为同步可能更新了存储中的数据）
     if (targetBoardId === currentBoardId) {
-      console.log('[GitHubSync] DECISION: Target board is current board, reloading board data from storage...');
+      logDebug('DECISION: Target board is current board, reloading');
       try {
         // 刷新画板数据，让 UI 显示最新同步的内容
         await workspaceService.reloadBoard(targetBoardId);
-        console.log('[GitHubSync] Board data reloaded successfully');
+        logDebug('Board data reloaded successfully');
       } catch (reloadError) {
-        console.error('[GitHubSync] Failed to reload board data:', reloadError);
+        logError('Failed to reload board data', reloadError instanceof Error ? reloadError : new Error(String(reloadError)));
       }
-      console.log('[GitHubSync] ========== handleBoardSwitchAfterSync END (same board, reloaded) ==========');
+      logDebug('handleBoardSwitchAfterSync END (same board, reloaded)');
       return;
     }
     
     // 情况3：检查当前画板是否是"默认空白画板"
-    console.log('[GitHubSync] Checking if current board is default empty...');
     const isCurrentDefaultEmpty = await workspaceService.isDefaultEmptyBoard(currentBoardId);
-    console.log('[GitHubSync] isCurrentDefaultEmpty:', isCurrentDefaultEmpty);
+    logDebug('isCurrentDefaultEmpty', { isCurrentDefaultEmpty });
     
     if (isCurrentDefaultEmpty) {
-      console.log('[GitHubSync] DECISION: Current board is default empty board, auto-switching to:', targetBoardId);
+      logDebug('DECISION: Current board is default empty, auto-switching', { targetBoardId });
       // 先切换到新画板
-      console.log('[GitHubSync] Calling workspaceService.switchBoard...');
       await workspaceService.switchBoard(targetBoardId);
-      console.log('[GitHubSync] switchBoard completed, now deleting old board:', currentBoardId);
       // 再删除旧的默认空白画板
       await workspaceService.deleteBoard(currentBoardId);
-      console.log('[GitHubSync] Switched and deleted old board');
-      console.log('[GitHubSync] ========== handleBoardSwitchAfterSync END (replaced default) ==========');
+      logDebug('handleBoardSwitchAfterSync END (replaced default)');
     } else {
       // 当前画板非空或非默认画板，保持当前画板不变
-      // 不再弹窗询问用户是否切换，用户可以手动在侧边栏切换画板
-      console.log('[GitHubSync] DECISION: Current board is not default empty, keeping current board');
-      console.log('[GitHubSync] ========== handleBoardSwitchAfterSync END (keep current) ==========');
+      logDebug('DECISION: Current board is not default empty, keeping current');
+      logDebug('handleBoardSwitchAfterSync END (keep current)');
     }
   } catch (e) {
-    console.error('[GitHubSync] ========== handleBoardSwitchAfterSync ERROR ==========');
-    console.error('[GitHubSync] Failed to switch board:', e);
+    logError('handleBoardSwitchAfterSync failed', e instanceof Error ? e : new Error(String(e)));
   }
 }
 
@@ -216,13 +204,11 @@ export function GitHubSyncProvider({ children }: GitHubSyncProviderProps) {
 
   // 初始化
   useEffect(() => {
-    console.log('[GitHubSync] useEffect START, initializedRef.current:', initializedRef.current);
     if (initializedRef.current) {
-      console.log('[GitHubSync] useEffect already initialized, skipping...');
       return;
     }
     initializedRef.current = true;
-    console.log('[GitHubSync] useEffect initializing...');
+    logDebug('GitHubSyncProvider initializing');
 
     const initialize = async () => {
       // 检查是否已配置 Token
@@ -265,24 +251,24 @@ export function GitHubSyncProvider({ children }: GitHubSyncProviderProps) {
             const performAutoSync = async () => {
               try {
                 // 刷新媒体同步状态
-                mediaSyncService.refreshSyncStatus().catch(console.error);
+                mediaSyncService.refreshSyncStatus().catch(() => {});
                 
                 // 页面加载时自动从远程同步数据
                 // 使用 pullFromRemote 而不是双向 sync，以确保获取远程最新数据
-                console.log('[GitHubSync] Auto-syncing from remote on page load (deferred)...');
+                logInfo('Auto-syncing from remote on page load (deferred)');
                 const result = await syncEngine.pullFromRemote();
                 if (result.success) {
-                  console.log('[GitHubSync] Auto-sync from remote successful:', result.downloaded);
+                  logSuccess('Auto-sync from remote successful', result.downloaded);
                   // 更新最后同步时间
                   const updatedConfig = await syncEngine.getConfig();
                   setLastSyncTime(updatedConfig.lastSyncTime);
                   // 处理画板切换逻辑
                   await handleBoardSwitchAfterSync(result);
                 } else {
-                  console.warn('[GitHubSync] Auto-sync from remote failed:', result.error);
+                  logWarning('Auto-sync from remote failed', { error: result.error });
                 }
               } catch (error) {
-                console.error('[GitHubSync] Auto-sync from remote error:', error);
+                logError('Auto-sync from remote error', error instanceof Error ? error : new Error(String(error)));
               }
             };
 
@@ -317,8 +303,8 @@ export function GitHubSyncProvider({ children }: GitHubSyncProviderProps) {
       if (document.visibilityState === 'hidden') {
         // 页面变为隐藏时，如果已连接且有未同步的变更，触发同步
         if (tokenService.hasToken() && syncEngine.hasPendingChanges()) {
-          console.log('[GitHubSync] Page hidden, triggering sync...');
-          syncEngine.sync().catch(console.error);
+          logDebug('Page hidden, triggering sync');
+          syncEngine.sync().catch(() => {});
         }
       }
     };
@@ -333,9 +319,9 @@ export function GitHubSyncProvider({ children }: GitHubSyncProviderProps) {
       }
       // 如果有未同步的变更，触发同步（不阻塞页面关闭）
       if (tokenService.hasToken() && syncEngine.hasPendingChanges()) {
-        console.log('[GitHubSync] Page unloading, triggering sync...');
+        logDebug('Page unloading, triggering sync');
         // 使用同步方式触发，但不等待结果
-        syncEngine.sync().catch(console.error);
+        syncEngine.sync().catch(() => {});
       }
     };
 
@@ -343,19 +329,14 @@ export function GitHubSyncProvider({ children }: GitHubSyncProviderProps) {
     window.addEventListener('beforeunload', handleBeforeUnload);
 
     // 监听工作区变更，自动标记需要同步
-    console.log('[GitHubSync] Setting up workspace event subscription...');
-    console.log('[GitHubSync] tokenService.hasToken():', tokenService.hasToken());
+    logDebug('Setting up workspace event subscription');
     
-    // 获取 observable 并打印信息
+    // 获取 observable
     const observable = workspaceService.observeEvents();
-    console.log('[GitHubSync] Got observable from workspaceService.observeEvents()');
     
     const workspaceSubscription = observable.subscribe({
       next: (event) => {
-        // 调试：打印收到的所有事件
-        console.log(`[GitHubSync] >>> Subscription callback invoked, event.type: ${event.type}`);
-        
-        // 只对同步相关事件打印日志，避免日志过多
+        // 只对同步相关事件处理
         const syncTriggerEvents = [
           'boardCreated',
           'boardUpdated',
@@ -364,55 +345,47 @@ export function GitHubSyncProvider({ children }: GitHubSyncProviderProps) {
           'folderUpdated',
           'folderDeleted',
         ];
-        
-        if (syncTriggerEvents.includes(event.type)) {
-          console.log(`[GitHubSync] Workspace event received: ${event.type}, hasToken:`, tokenService.hasToken());
-        }
       
       // 只在已连接时才标记变更
       if (!tokenService.hasToken()) {
-        // 不打印日志，避免日志过多
         return;
       }
       
       if (syncTriggerEvents.includes(event.type)) {
-        console.log(`[GitHubSync] Workspace changed: ${event.type}, marking dirty...`);
+        logDebug('Workspace changed, marking dirty', { eventType: event.type });
         syncEngine.markDirty();
         // 记录本地删除的画板，并立即同步到远程回收站
         if (event.type === 'boardDeleted') {
           const boardId = (event.payload as { id?: string })?.id;
-          console.log(`[GitHubSync] boardDeleted event, payload:`, event.payload, 'boardId:', boardId);
           if (boardId && typeof boardId === 'string') {
-            console.log(`[GitHubSync] Syncing board deletion to remote: ${boardId}`);
+            logDebug('Syncing board deletion to remote', { boardId });
             // 先记录本地删除，然后立即同步到远程
             syncEngine.recordLocalDeletion(boardId).then(() => {
               // 立即同步删除到远程回收站
               return syncEngine.syncBoardDeletion(boardId);
             }).then((result) => {
               if (result.success) {
-                console.log(`[GitHubSync] Board ${boardId} moved to remote recycle bin`);
+                logSuccess('Board moved to remote recycle bin', { boardId });
               } else {
-                console.warn(`[GitHubSync] Failed to sync deletion to remote: ${result.error}`);
+                logWarning('Failed to sync deletion to remote', { boardId, error: result.error });
               }
             }).catch((err) => {
-              console.error(`[GitHubSync] Failed to sync board deletion: ${boardId}`, err);
+              logError('Failed to sync board deletion', err instanceof Error ? err : new Error(String(err)), { boardId });
             });
           } else {
-            console.warn(`[GitHubSync] boardDeleted event has invalid payload:`, event.payload);
+            logWarning('boardDeleted event has invalid payload', { payload: event.payload });
           }
         }
-      } else {
-        console.log(`[GitHubSync] Event ${event.type} does not trigger sync`);
       }
       },
       error: (err) => {
-        console.error('[GitHubSync] Workspace event subscription error:', err);
+        logError('Workspace event subscription error', err instanceof Error ? err : new Error(String(err)));
       },
       complete: () => {
-        console.log('[GitHubSync] Workspace event subscription completed');
+        logDebug('Workspace event subscription completed');
       }
     });
-    console.log('[GitHubSync] Workspace event subscription established, subscription active:', !workspaceSubscription.closed);
+    logDebug('Workspace event subscription established');
 
     return () => {
       syncEngine.removeStatusListener(handleStatusChange);
@@ -458,7 +431,7 @@ export function GitHubSyncProvider({ children }: GitHubSyncProviderProps) {
         const gists = await syncEngine.listSyncGists();
         if (gists.length > 0) {
           const firstGist = gists[0];
-          console.log('[GitHubSync] Auto-connecting to gist:', maskId(firstGist.id));
+          logInfo('Auto-connecting to gist', { gistId: maskId(firstGist.id) });
           
           const result = await syncEngine.switchToGist(firstGist.id);
           
@@ -469,15 +442,15 @@ export function GitHubSyncProvider({ children }: GitHubSyncProviderProps) {
           setGistUrl(syncEngine.getGistUrl());
           
           if (!result.success) {
-            console.warn('[GitHubSync] Auto-connect sync failed:', result.error);
+            logWarning('Auto-connect sync failed', { error: result.error });
           } else {
             // 同步成功后，处理画板切换逻辑
-            console.log('[GitHubSync] Auto-connect sync successful, handling board switch...');
+            logSuccess('Auto-connect sync successful');
             await handleBoardSwitchAfterSync(result);
           }
         }
       } catch (error) {
-        console.error('[GitHubSync] Failed to auto-connect gist:', error);
+        logError('Failed to auto-connect gist', error instanceof Error ? error : new Error(String(error)));
       }
 
       // 更新状态 - 延迟到所有初始化完成后
@@ -539,7 +512,7 @@ export function GitHubSyncProvider({ children }: GitHubSyncProviderProps) {
             await workspaceService.reloadBoard(currentBoardId);
           } catch (e) {
             // 忽略错误，可能是当前画板已被删除或不在下载列表中
-            console.warn('[GitHubSync] Failed to reload current board:', e);
+            logWarning('Failed to reload current board', { error: String(e) });
           }
         }
       }

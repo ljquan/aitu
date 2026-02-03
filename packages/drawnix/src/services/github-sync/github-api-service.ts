@@ -12,6 +12,7 @@ import {
   UpdateGistRequest,
   SYNC_FILES,
 } from './types';
+import { logInfo, logWarning, logError } from './sync-log-service';
 
 /** API 错误 */
 export class GitHubApiError extends Error {
@@ -90,11 +91,11 @@ class GitHubApiService {
         errorData = await response.text();
       }
 
-      // 打印详细错误信息用于调试
-      console.error('[GitHubApiService] Request failed:', {
+      // 记录详细错误信息用于调试
+      logError('API 请求失败', undefined, {
         status: response.status,
         endpoint,
-        errorData,
+        errorData: String(errorData).substring(0, 200), // 截断避免过长
       });
 
       const message = this.getErrorMessage(response.status, errorData);
@@ -154,7 +155,7 @@ class GitHubApiService {
 
       return null;
     } catch (error) {
-      console.error('[GitHubApiService] Failed to find sync gist:', error);
+      logError('查找同步 Gist 失败', error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
   }
@@ -174,7 +175,7 @@ class GitHubApiService {
         return hasManifest || matchDescription;
       });
     } catch (error) {
-      console.error('[GitHubApiService] Failed to list sync gists:', error);
+      logError('列出同步 Gist 失败', error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
   }
@@ -270,12 +271,12 @@ class GitHubApiService {
     for (const [filename, content] of Object.entries(files)) {
       // 验证文件名长度（GitHub 限制约 255 字符）
       if (filename.length > 255) {
-        console.warn(`[GitHubApiService] Filename too long (${filename.length}): ${filename.substring(0, 50)}...`);
+        logWarning(`文件名过长 (${filename.length}): ${filename.substring(0, 50)}...`);
         throw new GitHubApiError(`文件名过长: ${filename.length} 字符`, 400);
       }
       // 验证内容不为空
       if (!content || content.length === 0) {
-        console.warn(`[GitHubApiService] Empty content for file: ${filename}`);
+        logWarning(`文件内容为空: ${filename}`);
         throw new GitHubApiError(`文件内容为空: ${filename}`, 400);
       }
       filesPayload[filename] = { content };
@@ -283,7 +284,7 @@ class GitHubApiService {
 
     // 调试日志
     const totalSize = Object.values(files).reduce((sum, content) => sum + content.length, 0);
-    console.log(`[GitHubApiService] Updating ${Object.keys(files).length} files, total size: ${(totalSize / 1024).toFixed(2)} KB`);
+    logInfo(`更新 ${Object.keys(files).length} 个文件`, { totalSizeKB: parseFloat((totalSize / 1024).toFixed(2)) });
 
     const request: UpdateGistRequest = { files: filesPayload };
 

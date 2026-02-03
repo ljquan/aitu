@@ -3,6 +3,7 @@
  * 提供分片的高层管理功能：列表、重命名、归档、合并等
  */
 
+import { logDebug, logInfo, logSuccess, logWarning, logError } from './sync-log-service';
 import { maskId } from '@aitu/utils';
 import { gitHubApiService, GitHubApiError } from './github-api-service';
 import { shardRouter } from './shard-router';
@@ -71,7 +72,7 @@ class ShardManager {
         manifest = JSON.parse(content);
       }
     } catch (error) {
-      console.warn(`[ShardManager] Failed to get manifest for shard ${shardId}:`, error);
+      logWarning(`ShardManager] Failed to get manifest for shard ${shardId}:`, error);
     }
 
     return {
@@ -124,13 +125,13 @@ class ShardManager {
         );
       }
     } catch (error) {
-      console.warn(`[ShardManager] Failed to update shard manifest:`, error);
+      logWarning(`ShardManager] Failed to update shard manifest:`, error);
     }
 
     // 保存主索引到远程
     await shardRouter.saveMasterIndexToRemote();
 
-    console.log(`[ShardManager] Renamed shard "${shardId}" to "${newAlias}"`);
+    logDebug(`ShardManager] Renamed shard "${shardId}" to "${newAlias}"`);
   }
 
   /**
@@ -154,7 +155,7 @@ class ShardManager {
     shardRouter.archiveShard(shardId);
     await shardRouter.saveMasterIndexToRemote();
 
-    console.log(`[ShardManager] Archived shard "${shardId}"`);
+    logDebug(`ShardManager] Archived shard "${shardId}"`);
   }
 
   /**
@@ -171,7 +172,7 @@ class ShardManager {
     shardRouter.reactivateShard(shardId);
     await shardRouter.saveMasterIndexToRemote();
 
-    console.log(`[ShardManager] Reactivated shard "${shardId}"`);
+    logDebug(`ShardManager] Reactivated shard "${shardId}"`);
   }
 
   /**
@@ -208,7 +209,7 @@ class ShardManager {
     try {
       await gitHubApiService.deleteGist(shard.gistId);
     } catch (error) {
-      console.error(`[ShardManager] Failed to delete Gist ${shard.gistId}:`, error);
+      logError(`ShardManager] Failed to delete Gist ${shard.gistId}:`, error);
       // 即使删除 Gist 失败，也从索引中移除
     }
 
@@ -220,7 +221,7 @@ class ShardManager {
       await shardRouter.saveMasterIndexToRemote();
     }
 
-    console.log(`[ShardManager] Deleted shard "${shardId}"`);
+    logDebug(`ShardManager] Deleted shard "${shardId}"`);
   }
 
   /**
@@ -374,7 +375,7 @@ class ShardManager {
 
         result.movedFiles++;
       } catch (error) {
-        console.error(`[ShardManager] Failed to move file ${file.url}:`, error);
+        logError(`ShardManager] Failed to move file ${file.url}:`, error);
         result.errors.push(`移动文件失败: ${file.url}`);
       }
     }
@@ -383,7 +384,7 @@ class ShardManager {
     await shardRouter.saveMasterIndexToRemote();
 
     result.success = result.movedFiles > 0;
-    console.log(`[ShardManager] Merged ${result.movedFiles} files to shard "${targetShardId}"`);
+    logDebug(`ShardManager] Merged ${result.movedFiles} files to shard "${targetShardId}"`);
 
     return result;
   }
@@ -472,7 +473,7 @@ class ShardManager {
           }
         }
       } catch (error) {
-        console.error(`[ShardManager] Failed to validate shard ${shard.alias}:`, error);
+        logError(`ShardManager] Failed to validate shard ${shard.alias}:`, error);
       }
     }
 
@@ -535,9 +536,9 @@ class ShardManager {
         shardRouter.registerFile(url, issue.shardId, filename, size, type);
         repaired++;
 
-        console.log(`[ShardManager] Repaired orphan file: ${filename} -> ${url}`);
+        logDebug(`ShardManager] Repaired orphan file: ${filename} -> ${url}`);
       } catch (error) {
-        console.error(`[ShardManager] Failed to repair orphan file ${filename}:`, error);
+        logError(`ShardManager] Failed to repair orphan file ${filename}:`, error);
       }
     }
 
@@ -553,7 +554,7 @@ class ShardManager {
    */
   async clearLocalCache(): Promise<void> {
     await shardRouter.clearLocalCache();
-    console.log('[ShardManager] Cleared local cache');
+    logDebug('ShardManager] Cleared local cache');
   }
 
   /**
