@@ -28,6 +28,7 @@ import {
 } from '../utils/validation-utils';
 import { swChannelClient, SWTask } from './sw-channel';
 import { geminiSettings, settingsManager } from '../utils/settings-manager';
+import { taskStorageReader } from './task-storage-reader';
 
 /**
  * Service Worker Task Queue Service
@@ -210,68 +211,28 @@ class SWTaskQueueService {
   }
 
   /**
-   * 从 Service Worker 获取所有任务（用于备份/同步）
-   * 通过循环分页获取完整数据，避免单次 postMessage 数据过大
+   * 获取所有任务（用于备份/同步）
+   * 直接从 IndexedDB 读取，无 postMessage 大小限制
    * @param options 可选过滤条件
    */
   async getAllTasksFromSW(options?: { status?: TaskStatus; type?: TaskType }): Promise<Task[]> {
-    // 尝试确保 channel 可用
-    if (!swChannelClient.isInitialized()) {
-      const channelReady = await swChannelClient.initialize();
-      if (!channelReady) {
-        // 如果 SW 不可用，返回内存中的任务作为 fallback
-        console.warn('[SWTaskQueue] SW not available, returning cached tasks');
-        let tasks = this.getAllTasks();
-        if (options?.status !== undefined) {
-          tasks = tasks.filter(t => t.status === options.status);
-        }
-        if (options?.type !== undefined) {
-          tasks = tasks.filter(t => t.type === options.type);
-        }
-        return tasks;
-      }
-    }
-
     try {
-      const allTasks: Task[] = [];
-      const pageSize = 50; // 与默认分页大小一致
-      let offset = 0;
-      let hasMore = true;
-
-      // 循环分页获取，直到没有更多数据
-      while (hasMore) {
-        const result = await swChannelClient.listTasksPaginated({
-          offset,
-          limit: pageSize,
-          status: options?.status,
-          type: options?.type,
-        });
-
-        if (!result.success) {
-          console.warn('[SWTaskQueue] Failed to get tasks page, breaking loop');
-          break;
-        }
-
-        // 转换 SWTask 为 Task 并添加到结果数组
-        const pageTasks = (result.tasks || []).map(swTask => this.convertSWTaskToTask(swTask));
-        allTasks.push(...pageTasks);
-
-        hasMore = result.hasMore;
-        offset += pageSize;
-
-        // 安全检查：防止无限循环
-        if (offset > 10000) {
-          console.warn('[SWTaskQueue] Too many tasks, breaking loop at offset:', offset);
-          break;
-        }
+      if (await taskStorageReader.isAvailable()) {
+        return taskStorageReader.getAllTasks(options);
       }
-
-      console.log(`[SWTaskQueue] getAllTasksFromSW completed, total: ${allTasks.length} tasks`);
-      return allTasks;
     } catch (error) {
-      console.error('[SWTaskQueue] Error getting all tasks from SW:', error);
-      return this.getAllTasks();
+      console.warn('[SWTaskQueue] Failed to read from IndexedDB:', error);
     }
+
+    // Fallback: 返回内存中的任务
+    let tasks = this.getAllTasks();
+    if (options?.status !== undefined) {
+      tasks = tasks.filter(t => t.status === options.status);
+    }
+    if (options?.type !== undefined) {
+      tasks = tasks.filter(t => t.type === options.type);
+    }
+    return tasks;
   }
 
   /**
@@ -374,48 +335,33 @@ class SWTaskQueueService {
   };
 
   /**
-   * Sync tasks from Service Worker to local state
+   * Sync tasks from IndexedDB to local state
    * 只加载第一页，避免内存溢出
-   * 
-   * 注意：即使 init RPC 超时，也尝试同步任务数据
-   * 因为 SW 可能已经有持久化的配置和任务
    */
   async syncTasksFromSW(): Promise<void> {
-    // 尝试确保 channel 可用（不依赖 init 成功）
-    if (!swChannelClient.isInitialized()) {
-      // 尝试重新初始化 channel
-      const channelReady = await swChannelClient.initialize();
-      if (!channelReady) {
-        return;
-      }
-    }
-    
     try {
-      // 只加载第一页
-      const result = await swChannelClient.listTasksPaginated({ 
-        offset: 0, 
-        limit: this.paginationState.pageSize 
-      });
-      
-      if (!result.success) return;
-      
-      // 清空现有任务，重新加载
-      this.tasks.clear();
-      
-      for (const swTask of result.tasks || []) {
-        const task = this.convertSWTaskToTask(swTask);
-        this.tasks.set(task.id, task);
-      }
-      
-      // 更新分页状态
-      this.paginationState.total = result.total;
-      this.paginationState.loadedCount = result.tasks?.length || 0;
-      this.paginationState.hasMore = result.hasMore;
-      
-      // 如果同步到任务数据，标记为已初始化（即使 init RPC 失败）
-      if (this.paginationState.loadedCount > 0 && !this.initialized) {
-        this.initialized = true;
-        this.setupVisibilityListener();
+      if (await taskStorageReader.isAvailable()) {
+        // 获取所有任务并只取第一页
+        const allTasks = await taskStorageReader.getAllTasks();
+        const firstPageTasks = allTasks.slice(0, this.paginationState.pageSize);
+        
+        // 清空现有任务，重新加载
+        this.tasks.clear();
+        
+        for (const task of firstPageTasks) {
+          this.tasks.set(task.id, task);
+        }
+        
+        // 更新分页状态
+        this.paginationState.total = allTasks.length;
+        this.paginationState.loadedCount = firstPageTasks.length;
+        this.paginationState.hasMore = firstPageTasks.length < allTasks.length;
+        
+        // 如果同步到任务数据，标记为已初始化
+        if (this.paginationState.loadedCount > 0 && !this.initialized) {
+          this.initialized = true;
+          this.setupVisibilityListener();
+        }
       }
     } catch {
       // 静默忽略同步错误
@@ -431,45 +377,35 @@ class SWTaskQueueService {
       return false;
     }
 
-    // 尝试确保 channel 可用
-    if (!swChannelClient.isInitialized()) {
-      const channelReady = await swChannelClient.initialize();
-      if (!channelReady) {
-        return false;
-      }
-    }
-
     try {
-      const result = await swChannelClient.listTasksPaginated({
-        offset: this.paginationState.loadedCount,
-        limit: this.paginationState.pageSize,
-      });
+      if (await taskStorageReader.isAvailable()) {
+        const allTasks = await taskStorageReader.getAllTasks();
+        const offset = this.paginationState.loadedCount;
+        const limit = this.paginationState.pageSize;
+        const nextPageTasks = allTasks.slice(offset, offset + limit);
 
-      if (!result.success) {
-        return false;
-      }
-
-      // 追加新任务
-      for (const swTask of result.tasks || []) {
-        const task = this.convertSWTaskToTask(swTask);
-        // 避免重复添加（可能是新创建的任务已经通过事件添加了）
-        if (!this.tasks.has(task.id)) {
-          this.tasks.set(task.id, task);
+        // 追加新任务
+        for (const task of nextPageTasks) {
+          if (!this.tasks.has(task.id)) {
+            this.tasks.set(task.id, task);
+          }
         }
+
+        // 更新分页状态
+        this.paginationState.total = allTasks.length;
+        this.paginationState.loadedCount += nextPageTasks.length;
+        this.paginationState.hasMore = this.paginationState.loadedCount < allTasks.length;
+
+        // 通知 UI 更新
+        this.emitEvent('taskSynced', Array.from(this.tasks.values())[0] || ({} as Task));
+
+        return this.paginationState.hasMore;
       }
-
-      // 更新分页状态
-      this.paginationState.total = result.total;
-      this.paginationState.loadedCount += result.tasks?.length || 0;
-      this.paginationState.hasMore = result.hasMore;
-
-      // 通知 UI 更新
-      this.emitEvent('taskSynced', Array.from(this.tasks.values())[0] || ({} as Task));
-
-      return this.paginationState.hasMore;
     } catch {
-      return false;
+      // 静默忽略错误
     }
+    
+    return false;
   }
 
   /**
@@ -485,7 +421,7 @@ class SWTaskQueueService {
 
   /**
    * 按类型加载任务（用于弹窗中的任务列表）
-   * 直接从 SW 查询，不影响全局任务缓存
+   * 优先直接从 IndexedDB 读取，避免 postMessage 的 1MB 限制
    * 
    * @param type 任务类型（image/video）
    * @param offset 偏移量
@@ -494,45 +430,31 @@ class SWTaskQueueService {
    */
   async loadTasksByType(
     type: TaskType,
-    offset: number = 0,
-    limit: number = 50
+    offset = 0,
+    limit = 50
   ): Promise<{ 
     success: boolean; 
     tasks: Task[]; 
     total: number; 
     hasMore: boolean;
   }> {
-    // 尝试确保 channel 可用
-    if (!swChannelClient.isInitialized()) {
-      const channelReady = await swChannelClient.initialize();
-      if (!channelReady) {
-        return { success: false, tasks: [], total: 0, hasMore: false };
-      }
-    }
-
+    // 直接从 IndexedDB 读取
     try {
-      const result = await swChannelClient.listTasksPaginated({
-        offset,
-        limit,
-        type: type as 'image' | 'video',
-      });
-
-      if (!result.success) {
-        return { success: false, tasks: [], total: 0, hasMore: false };
+      if (await taskStorageReader.isAvailable()) {
+        const result = await taskStorageReader.getTasksByType(type, offset, limit);
+        return {
+          success: true,
+          tasks: result.tasks,
+          total: result.total,
+          hasMore: result.hasMore,
+        };
       }
-
-      // 转换任务格式
-      const tasks = (result.tasks || []).map(swTask => this.convertSWTaskToTask(swTask));
-
-      return {
-        success: true,
-        tasks,
-        total: result.total,
-        hasMore: result.hasMore,
-      };
-    } catch {
-      return { success: false, tasks: [], total: 0, hasMore: false };
+    } catch (error) {
+      console.warn('[SWTaskQueue] Failed to read from IndexedDB:', error);
     }
+    
+    // Fallback: 返回空结果
+    return { success: false, tasks: [], total: 0, hasMore: false };
   }
 
   /**
@@ -794,6 +716,10 @@ class SWTaskQueueService {
   private emitEvent(type: 'taskCreated' | 'taskUpdated' | 'taskDeleted' | 'taskSynced', task: Task): void;
   private emitEvent(type: 'taskRejected', task: Task, reason: string): void;
   private emitEvent(type: 'taskCreated' | 'taskUpdated' | 'taskDeleted' | 'taskSynced' | 'taskRejected', task: Task, reason?: string): void {
+    // 任务变更时清除读取缓存
+    if (type !== 'taskSynced') {
+      taskStorageReader.invalidateCache();
+    }
     this.taskUpdates$.next({ type, task, timestamp: Date.now(), reason });
   }
 }

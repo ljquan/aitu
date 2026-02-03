@@ -404,15 +404,9 @@ class MediaSyncService {
         // 本地资源：从 Cache Storage 获取
         blob = await unifiedCacheService.getCachedBlob(url);
       } else if (source === 'external') {
-        // 外部资源：先尝试从缓存获取，否则下载
+        // 外部资源：只从缓存获取，没有缓存则跳过同步
+        // 同步的目的是备份已有数据，不应重新获取外部资源
         blob = await unifiedCacheService.getCachedBlob(url);
-        if (!blob && originalUrl) {
-          blob = await this.fetchMediaFromUrl(originalUrl);
-          // 如果成功下载，缓存到本地
-          if (blob && blob.size > 0) {
-            await unifiedCacheService.cacheToCacheStorageOnly(url, blob);
-          }
-        }
       }
 
       if (!blob || blob.size === 0) {

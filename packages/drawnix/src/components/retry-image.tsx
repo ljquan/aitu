@@ -31,6 +31,8 @@ export interface RetryImageProps extends React.ImgHTMLAttributes<HTMLImageElemen
   showSkeleton?: boolean;
   /** Number of retries before bypassing SW (default: 2) */
   bypassSWAfterRetries?: number;
+  /** Use eager loading for cached images (default: auto-detect from URL) */
+  eager?: boolean;
 }
 
 /**
@@ -84,6 +86,15 @@ function addBypassSWParam(url: string): string {
 /**
  * RetryImage component - displays an image with automatic retry on load failure
  */
+/**
+ * 检测 URL 是否来自缓存（应该立即加载）
+ */
+function isCachedUrl(url: string): boolean {
+  return url.includes('/__aitu_cache__/') || 
+         url.includes('/asset-library/') ||
+         url.includes('thumbnail=');
+}
+
 export const RetryImage: React.FC<RetryImageProps> = ({
   src,
   alt,
@@ -94,8 +105,12 @@ export const RetryImage: React.FC<RetryImageProps> = ({
   fallback,
   showSkeleton = true,
   bypassSWAfterRetries = 2,
+  eager,
   ...imgProps
 }) => {
+  // 自动检测是否应该 eager 加载
+  const shouldEagerLoad = eager ?? isCachedUrl(src);
+  
   const [imageSrc, setImageSrc] = useState<string>(src);
   const [retryCount, setRetryCount] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -211,8 +226,8 @@ export const RetryImage: React.FC<RetryImageProps> = ({
         {...imgProps}
         src={imageSrc}
         alt={alt}
-        loading="lazy"
-        decoding="async"
+        loading={shouldEagerLoad ? 'eager' : 'lazy'}
+        decoding={shouldEagerLoad ? 'sync' : 'async'}
         onLoad={handleLoad}
         onError={handleError}
         style={{

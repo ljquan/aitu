@@ -6091,6 +6091,136 @@ async function getLogsPaginated(page = 1, pageSize = 20, filter = {}) {
 - `apps/web/src/sw/task-queue/llm-api-logger.ts` - `getLLMApiLogsPaginated`
 - `apps/web/src/sw/task-queue/channel-manager.ts` - `handleDebugGetLLMApiLogs`
 
+### 主线程直接读取 IndexedDB 优于 RPC
+
+**场景**: 主线程需要从 Service Worker 读取存储在 IndexedDB 中的数据（任务列表、工作流状态等）
+
+❌ **错误示例**:
+```typescript
+// 错误：通过 RPC 从 SW 读取 IndexedDB 数据
+async function getAllTasks() {
+  // 问题：
+  // 1. postMessage 有 1MB 大小限制，大数据量会失败
+  // 2. RPC 可能超时（SW 更新、连接断开等）
+  // 3. 需要复杂的分页和重试逻辑
+  return await swChannelClient.listTasksPaginated({ offset: 0, limit: 1000 });
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：主线程直接读取 IndexedDB
+// 创建专用的 storage reader（如 task-storage-reader.ts）
+class TaskStorageReader {
+  async getAllTasks(): Promise<Task[]> {
+    const db = await this.getDB();
+    const store = db.transaction('tasks', 'readonly').objectStore('tasks');
+    const tasks = await store.getAll();
+    return tasks.map(convertSWTaskToTask);
+  }
+}
+
+// 使用时，RPC 作为 fallback
+async function getAllTasks() {
+  if (await taskStorageReader.isAvailable()) {
+    return await taskStorageReader.getAllTasks();  // 直接读取
+  }
+  // Fallback to RPC（仅在 IndexedDB 不可用时）
+  return await swChannelClient.listTasksPaginated(...);
+}
+```
+
+**原因**:
+- IndexedDB 是浏览器共享的，主线程和 SW 都可以直接访问
+- 直接读取避免了 postMessage 的 1MB 大小限制
+- 直接读取更稳定，不受 SW 连接状态影响
+- 写操作仍需通过 SW，以保持数据一致性和触发业务逻辑
+
+**适用场景**:
+| 操作类型 | 推荐方式 | 原因 |
+|---------|---------|------|
+| 读取任务列表 | 直接读取 IndexedDB | 数据量大，避免 RPC 限制 |
+| 读取工作流状态 | 直接读取 IndexedDB | 避免 RPC 超时问题 |
+| 创建任务 | 通过 RPC | SW 需执行业务逻辑 |
+| 提交工作流 | 通过 RPC | SW 需开始执行 |
+| 读取内存状态 | 通过 RPC | 数据只存在于 SW 内存 |
+
+**相关文件**:
+- `packages/drawnix/src/services/task-storage-reader.ts`
+- `packages/drawnix/src/services/workflow-storage-reader.ts`
+- `packages/drawnix/src/services/base-storage-reader.ts`
+
+### RPC 超时与重连策略
+
+**场景**: 关键 RPC 调用（如工作流提交）可能因 SW 连接不稳定而超时
+
+❌ **错误示例**:
+```typescript
+// 错误：直接调用 RPC，没有超时处理和重连逻辑
+async submit(workflow: WorkflowDefinition): Promise<void> {
+  if (!swChannelClient.isInitialized()) {
+    throw new Error('SWChannelClient not initialized');
+  }
+  // 使用默认 120 秒超时，用户等待时间过长
+  const result = await swChannelClient.submitWorkflow(workflow);
+  if (!result.success) {
+    throw new Error(result.error);
+  }
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：设置合理超时，超时时重连并重试
+async submit(workflow: WorkflowDefinition): Promise<void> {
+  const maxRetries = 2;
+  const submitTimeout = 15000; // 15 秒超时
+  
+  const ensureSWReady = async (): Promise<boolean> => {
+    if (!swChannelClient.isInitialized()) {
+      try {
+        await swChannelClient.initialize();
+      } catch {
+        return false;
+      }
+    }
+    return true;
+  };
+  
+  const submitWithTimeout = async () => {
+    return Promise.race([
+      swChannelClient.submitWorkflow(workflow),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('timeout')), submitTimeout)
+      )
+    ]);
+  };
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      await ensureSWReady();
+      const result = await submitWithTimeout();
+      if (result.success) return;
+    } catch (error) {
+      if (error.message === 'timeout' && attempt < maxRetries - 1) {
+        // 超时时重新初始化连接
+        await swChannelClient.initialize();
+      }
+    }
+  }
+  throw new Error('Submit failed after retries');
+}
+```
+
+**原因**:
+- SW 可能因更新、重启等原因暂时无法响应
+- 默认 120 秒超时让用户等待时间过长
+- 15-30 秒是更合理的超时时间
+- 超时后主动重连可以解决临时的连接问题
+
+**相关文件**:
+- `packages/drawnix/src/services/workflow-submission-service.ts`
+
 ### 分页查询必须在服务端过滤
 
 **场景**: 实现带过滤条件的分页列表时

@@ -23,7 +23,7 @@ export const RPC_METHODS = {
 
   // 任务查询
   TASK_GET: 'task:get',
-  TASK_LIST_PAGINATED: 'task:listPaginated',
+  // Note: TASK_LIST_PAGINATED 已移除，主线程直接从 IndexedDB 读取
 
   // Chat
   CHAT_START: 'chat:start',
@@ -33,8 +33,7 @@ export const RPC_METHODS = {
   // Workflow
   WORKFLOW_SUBMIT: 'workflow:submit',
   WORKFLOW_CANCEL: 'workflow:cancel',
-  WORKFLOW_GET_STATUS: 'workflow:getStatus',
-  WORKFLOW_GET_ALL: 'workflow:getAll',
+  // Note: WORKFLOW_GET_STATUS 和 WORKFLOW_GET_ALL 已移除，主线程直接从 IndexedDB 读取
   WORKFLOW_RESPOND_TOOL: 'workflow:respondTool',
   WORKFLOW_CLAIM: 'workflow:claim', // 客户端声明接管工作流
 

@@ -132,6 +132,8 @@ export interface WorkflowMessageData {
   count: number;
   /** 工作流状态 */
   status?: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+  /** 创建时间戳（用于判断是否是新创建的工作流） */
+  createdAt?: number;
   /** 步骤列表 */
   steps: WorkflowStepData[];
   /** Agent 执行日志（详细的执行过程） */

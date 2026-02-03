@@ -437,23 +437,9 @@ class ShardSyncService {
     if (source === 'local') {
       blob = await unifiedCacheService.getCachedBlob(url);
     } else if (source === 'external') {
+      // 外部资源：只从缓存获取，没有缓存则跳过同步
+      // 同步的目的是备份已有数据，不应重新获取外部资源
       blob = await unifiedCacheService.getCachedBlob(url);
-      if (!blob && originalUrl) {
-        try {
-          const response = await fetch(originalUrl, {
-            mode: 'cors',
-            credentials: 'omit',
-          });
-          if (response.ok) {
-            blob = await response.blob();
-            if (blob && blob.size > 0) {
-              await unifiedCacheService.cacheToCacheStorageOnly(url, blob);
-            }
-          }
-        } catch (error) {
-          logWarning('Failed to fetch', { url: originalUrl, error: String(error) });
-        }
-      }
     }
 
     if (!blob || blob.size === 0) {

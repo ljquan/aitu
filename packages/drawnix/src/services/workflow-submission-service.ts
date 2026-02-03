@@ -33,6 +33,7 @@ import type {
   MainThreadToolResponse,
 } from './sw-channel/types';
 import { swCapabilitiesHandler } from './sw-capabilities';
+import { workflowStorageReader } from './workflow-storage-reader';
 
 // ============================================================================
 // Types
@@ -260,31 +261,37 @@ class WorkflowSubmissionService {
 
   /**
    * Recover workflow states after page refresh
-   * Call this after initialization to restore all workflows from SW
+   * Call this after initialization to restore all workflows from IndexedDB
    * This includes failed workflows (e.g., interrupted by SW restart during ai_analyze)
    */
   async recoverWorkflows(): Promise<WorkflowDefinition[]> {
-    if (!swChannelClient.isInitialized()) {
-      return [];
-    }
-
     try {
-      const response = await swChannelClient.getAllWorkflows();
+      // 优先直接从 IndexedDB 读取，避免 postMessage 通信
+      let workflows: WorkflowDefinition[] = [];
       
-      if (!response.success) {
+      if (await workflowStorageReader.isAvailable()) {
+        workflows = await workflowStorageReader.getAllWorkflows();
+      } else if (swChannelClient.isInitialized()) {
+        // Fallback: 通过 RPC 获取
+        const response = await swChannelClient.getAllWorkflows();
+        if (response.success) {
+          workflows = response.workflows as unknown as WorkflowDefinition[];
+        }
+      }
+      
+      if (workflows.length === 0) {
         return [];
       }
       
-      // Sync all workflows from SW to local cache (including failed/completed)
+      // Sync all workflows to local cache (including failed/completed)
       // This ensures UI shows correct status for interrupted workflows
-      for (const workflow of response.workflows) {
+      for (const workflow of workflows) {
         const existingWorkflow = this.workflows.get(workflow.id);
-        // Only update if SW has newer data or workflow doesn't exist locally
+        // Only update if data is newer or workflow doesn't exist locally
         if (!existingWorkflow || workflow.updatedAt > (existingWorkflow.updatedAt || 0)) {
-          this.workflows.set(workflow.id, workflow as unknown as WorkflowDefinition);
+          this.workflows.set(workflow.id, workflow);
           
           // Emit status event for failed workflows so UI can update
-          // Guard against undefined events$ (service destroyed or other edge cases)
           if (workflow.status === 'failed' && existingWorkflow?.status !== 'failed' && this.events$) {
             this.events$.next({
               type: 'failed',
@@ -296,11 +303,7 @@ class WorkflowSubmissionService {
       }
       
       // Return running/pending workflows for callers that need them
-      const runningWorkflows = response.workflows.filter(
-        w => w.status === 'running' || w.status === 'pending'
-      );
-      
-      return runningWorkflows as unknown as WorkflowDefinition[];
+      return workflows.filter(w => w.status === 'running' || w.status === 'pending');
     } catch (error) {
       console.warn('[WorkflowSubmissionService] Failed to recover workflows:', error);
       return [];
@@ -397,6 +400,9 @@ class WorkflowSubmissionService {
     // Store locally
     this.workflows.set(workflow.id, workflow);
 
+    // 工作流变更时清除读取缓存
+    workflowStorageReader.invalidateCache();
+
     // Submit via SWChannelClient (uses postmessage-duplex)
     let result = await swChannelClient.submitWorkflow(workflow as unknown as ChannelWorkflowDefinition);
     
@@ -422,6 +428,7 @@ class WorkflowSubmissionService {
    */
   async cancel(workflowId: string): Promise<void> {
     if (!swChannelClient.isInitialized()) return;
+    workflowStorageReader.invalidateCache();
     await swChannelClient.cancelWorkflow(workflowId);
   }
 
@@ -433,36 +440,60 @@ class WorkflowSubmissionService {
   }
 
   /**
-   * Query workflow status from SW (returns full workflow data)
+   * Query workflow status (returns full workflow data)
+   * 优先直接从 IndexedDB 读取
    */
   async queryWorkflowStatus(workflowId: string): Promise<WorkflowDefinition | null> {
-    if (!swChannelClient.isInitialized()) {
-      return this.workflows.get(workflowId) || null;
+    try {
+      // 优先直接从 IndexedDB 读取
+      if (await workflowStorageReader.isAvailable()) {
+        const workflow = await workflowStorageReader.getWorkflow(workflowId);
+        if (workflow) {
+          this.workflows.set(workflowId, workflow);
+          return workflow;
+        }
+      } else if (swChannelClient.isInitialized()) {
+        // Fallback: 通过 RPC 获取
+        const response = await swChannelClient.getWorkflowStatus(workflowId);
+        if (response.success && response.workflow) {
+          this.workflows.set(workflowId, response.workflow as unknown as WorkflowDefinition);
+          return response.workflow as unknown as WorkflowDefinition;
+        }
+      }
+    } catch (error) {
+      console.warn('[WorkflowSubmissionService] Failed to query workflow status:', error);
     }
-
-    const response = await swChannelClient.getWorkflowStatus(workflowId);
-    if (response.success && response.workflow) {
-      this.workflows.set(workflowId, response.workflow as unknown as WorkflowDefinition);
-      return response.workflow as unknown as WorkflowDefinition;
-    }
+    
     return this.workflows.get(workflowId) || null;
   }
 
   /**
-   * Query all workflows from SW
+   * Query all workflows
+   * 优先直接从 IndexedDB 读取
    */
   async queryAllWorkflows(): Promise<WorkflowDefinition[]> {
-    if (!swChannelClient.isInitialized()) {
-      return Array.from(this.workflows.values());
-    }
-
-    const response = await swChannelClient.getAllWorkflows();
-    if (response.success) {
-      for (const workflow of response.workflows) {
-        this.workflows.set(workflow.id, workflow as unknown as WorkflowDefinition);
+    try {
+      // 优先直接从 IndexedDB 读取
+      if (await workflowStorageReader.isAvailable()) {
+        const workflows = await workflowStorageReader.getAllWorkflows();
+        for (const workflow of workflows) {
+          this.workflows.set(workflow.id, workflow);
+        }
+        return workflows;
+      } else if (swChannelClient.isInitialized()) {
+        // Fallback: 通过 RPC 获取
+        const response = await swChannelClient.getAllWorkflows();
+        if (response.success) {
+          for (const workflow of response.workflows) {
+            this.workflows.set(workflow.id, workflow as unknown as WorkflowDefinition);
+          }
+          return response.workflows as unknown as WorkflowDefinition[];
+        }
       }
-      return response.workflows as unknown as WorkflowDefinition[];
+    } catch (error) {
+      console.warn('[WorkflowSubmissionService] Failed to query all workflows:', error);
     }
+    
     return Array.from(this.workflows.values());
   }
 

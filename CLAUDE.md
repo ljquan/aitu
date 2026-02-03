@@ -167,6 +167,8 @@ Service Worker (后台执行)
 17. **SW 重发 Tool Request 需延迟**：页面刷新后 claim 工作流时，SW 重发 pending tool request 需延迟 500ms，等待主线程 handler 准备好
 18. **同步数据双向合并**：下载远程数据时必须与本地合并（基于 ID 去重，`updatedAt` 判断版本），合并后自动上传确保双向同步
 19. **同步数据格式一致性**：`tasks.json` 结构是 `{ completedTasks: Task[] }` 不是数组，画板文件是 `board_{id}.json` 不是 `.drawnix`
+20. **主线程直接读取 IndexedDB**：只读数据（任务列表、工作流状态）应直接从 IndexedDB 读取，避免 postMessage RPC 的不稳定性和 1MB 大小限制；写操作仍需通过 SW 保持数据一致性
+21. **RPC 超时与重连**：关键 RPC 调用（如工作流提交）需设置合理超时（15-30秒），超时时主动重新初始化 SW 连接并重试
 
 ### React 规则
 

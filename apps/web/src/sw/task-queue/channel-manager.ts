@@ -364,6 +364,23 @@ export class SWChannelManager {
       try {
         const result = await handler(data);
         
+        // 调试：记录 RPC 完成
+        if (methodName === 'task:listPaginated') {
+          console.log(`[SW wrapRpcHandler] ${methodName} completed for client ${clientId}`, {
+            requestId,
+            resultSuccess: result?.success,
+            resultTasksCount: Array.isArray(result?.tasks) ? result.tasks.length : 'N/A',
+          });
+        }
+        
+        // 验证结果可以序列化（捕获序列化错误）
+        try {
+          JSON.stringify(result);
+        } catch (serializeError) {
+          console.error(`[SW wrapRpcHandler] ${methodName} result serialization failed:`, serializeError);
+          throw new Error(`Result serialization failed: ${serializeError}`);
+        }
+        
         // 更新请求日志的响应数据（不创建新的日志条目）
         if (shouldLog && requestId) {
           const logId = updateRequestWithResponse(
@@ -379,6 +396,7 @@ export class SWChannelManager {
         
         return result;
       } catch (error) {
+        console.error(`[SW wrapRpcHandler] ${methodName} error:`, error);
         // 更新请求日志的错误信息
         if (shouldLog && requestId) {
           const logId = updateRequestWithResponse(
@@ -438,9 +456,8 @@ export class SWChannelManager {
         RPC_METHODS.TASK_GET, clientId, (data) => this.handleTaskGet(data.taskId)
       ),
       
-      [RPC_METHODS.TASK_LIST_PAGINATED]: this.wrapRpcHandler<{ offset?: number; limit?: number; type?: TaskType; status?: TaskStatus }, any>(
-        RPC_METHODS.TASK_LIST_PAGINATED, clientId, (data) => this.handleTaskListPaginated(data)
-      ),
+      // Note: TASK_LIST_PAGINATED 已移除，主线程直接从 IndexedDB 读取任务数据
+      // 这避免了 postMessage 的 1MB 大小限制问题
       
       // Chat
       [RPC_METHODS.CHAT_START]: this.wrapRpcHandler<ChatStartParams, any>(
@@ -464,13 +481,8 @@ export class SWChannelManager {
         RPC_METHODS.WORKFLOW_CANCEL, clientId, (data) => this.handleWorkflowCancel(data.workflowId)
       ),
       
-      [RPC_METHODS.WORKFLOW_GET_STATUS]: this.wrapRpcHandler<{ workflowId: string }, any>(
-        RPC_METHODS.WORKFLOW_GET_STATUS, clientId, (data) => this.handleWorkflowGetStatus(data.workflowId)
-      ),
-      
-      [RPC_METHODS.WORKFLOW_GET_ALL]: this.wrapRpcHandler<undefined, any>(
-        RPC_METHODS.WORKFLOW_GET_ALL, clientId, () => this.handleWorkflowGetAll()
-      ),
+      // Note: WORKFLOW_GET_STATUS 和 WORKFLOW_GET_ALL 已移除
+      // 主线程现在直接从 IndexedDB 读取工作流数据
       
       // Deprecated: Use sendToolRequest() which receives response directly
       [RPC_METHODS.WORKFLOW_RESPOND_TOOL]: this.wrapRpcHandler<MainThreadToolResponseMessage, any>(
@@ -779,31 +791,8 @@ export class SWChannelManager {
     return { success: true, task };
   }
 
-  private async handleTaskListPaginated(data: { offset?: number; limit?: number; type?: TaskType; status?: TaskStatus }): Promise<{ success: boolean; tasks: SWTask[]; total: number; offset: number; hasMore: boolean }> {
-    const { offset = 0, limit = 20, type, status } = data || {};
-    
-    // 确保存储恢复完成后再获取任务
-    await this.taskQueue?.waitForStorageRestore();
-    
-    let tasks = this.taskQueue?.getAllTasks() || [];
-    
-    // 过滤
-    if (type !== undefined) {
-      tasks = tasks.filter(t => t.type === type);
-    }
-    if (status !== undefined) {
-      tasks = tasks.filter(t => t.status === status);
-    }
-    
-    // 按创建时间倒序
-    tasks.sort((a, b) => b.createdAt - a.createdAt);
-    
-    const total = tasks.length;
-    const paginatedTasks = tasks.slice(offset, offset + limit);
-    const hasMore = offset + limit < total;
-    
-    return { success: true, tasks: paginatedTasks, total, offset, hasMore };
-  }
+  // Note: handleTaskListPaginated 已移除
+  // 主线程现在直接从 IndexedDB 读取任务数据，避免 postMessage 的 1MB 大小限制问题
 
   private async handleChatStart(clientId: string, data: ChatStartParams): Promise<{ success: boolean; chatId?: string; error?: string }> {
     if (!data?.chatId) {
@@ -914,38 +903,8 @@ export class SWChannelManager {
     }
   }
 
-  private async handleWorkflowGetStatus(workflowId: string): Promise<{ success: boolean; workflow?: Workflow; error?: string }> {
-    if (!workflowId) {
-      return { success: false, error: 'Missing workflowId' };
-    }
-
-    try {
-      const executor = getWorkflowExecutor();
-      if (!executor) {
-        return { success: false, error: 'Workflow executor not initialized' };
-      }
-
-      const workflow = executor.getWorkflow(workflowId);
-      return { success: true, workflow };
-    } catch (error: any) {
-      return { success: false, error: error.message };
-    }
-  }
-
-  private async handleWorkflowGetAll(): Promise<{ success: boolean; workflows: Workflow[] }> {
-    try {
-      const executor = getWorkflowExecutor();
-      if (!executor) {
-        return { success: true, workflows: [] };
-      }
-
-      const workflows = executor.getAllWorkflows();
-      return { success: true, workflows };
-    } catch (error: any) {
-      console.error('[SWChannelManager] Get all workflows failed:', error);
-      return { success: true, workflows: [] };
-    }
-  }
+  // Note: handleWorkflowGetStatus 和 handleWorkflowGetAll 已移除
+  // 主线程现在直接从 IndexedDB 读取工作流数据
 
   /**
    * 客户端声明接管工作流

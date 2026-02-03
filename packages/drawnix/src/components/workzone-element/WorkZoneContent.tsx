@@ -42,8 +42,16 @@ export const WorkZoneContent: React.FC<WorkZoneContentProps> = ({
   const hasClaimedRef = useRef(false);
 
   // 页面刷新后，尝试接管工作流或同步状态
+  // 注意：只对"旧"工作流执行 claim，新创建的工作流不需要 claim
   useEffect(() => {
     const workflowId = workflow.id;
+    
+    // 检查是否是新创建的工作流（10秒内创建的视为新工作流）
+    // 新工作流不需要 claim，因为它们刚刚被提交到 SW
+    const isNewWorkflow = workflow.createdAt && (Date.now() - workflow.createdAt) < 10000;
+    if (isNewWorkflow) {
+      return;
+    }
     
     // 检查 workflow.status 或 steps 中是否有活跃状态
     const hasRunningSteps = workflow.steps?.some(s => s.status === 'running' || s.status === 'pending');
@@ -104,7 +112,7 @@ export const WorkZoneContent: React.FC<WorkZoneContentProps> = ({
         onWorkflowStateChange?.(workflowId, 'failed', '恢复工作流失败，请重试');
       }
     })();
-  }, [workflow.id, workflow.status, onWorkflowStateChange]);
+  }, [workflow.id, workflow.status, workflow.createdAt, onWorkflowStateChange]);
   // 计算工作流状态
   const workflowStatus = useMemo(() => {
     const steps = workflow.steps;

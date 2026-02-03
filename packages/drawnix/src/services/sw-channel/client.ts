@@ -12,8 +12,6 @@ import type {
   SWTask,
   TaskCreateParams,
   TaskCreateResult,
-  TaskListPaginatedParams,
-  TaskListPaginatedResult,
   TaskOperationParams,
   TaskOperationResult,
   InitParams,
@@ -170,8 +168,9 @@ export class SWChannelClient {
         // 创建客户端通道
         // postmessage-duplex 1.1.0 配合 SW 的 enableGlobalRouting 自动创建 channel
         // autoReconnect: SW 更新时自动重连
+        // timeout: 120 秒，与 SW 端保持一致，以支持慢速 IndexedDB 操作
         this.channel = await ServiceWorkerChannel.createFromPage<SWMethods>({
-          timeout: 30000,
+          timeout: 120000,
           autoReconnect: true,
           log: { log: () => {}, warn: () => {}, error: () => {} },
         } as any);  // log 属性在 PageChannelOptions 中不存在，但 BaseChannel 支持
@@ -400,19 +399,8 @@ export class SWChannelClient {
     return response.data?.task || null;
   }
 
-  /**
-   * 分页获取任务（避免 postMessage 消息大小限制）
-   */
-  async listTasksPaginated(params: TaskListPaginatedParams): Promise<TaskListPaginatedResult> {
-    this.ensureInitialized();
-    const response = await this.channel!.call('task:listPaginated', params);
-
-    if (response.ret !== ReturnCode.Success) {
-      return { success: false, tasks: [], total: 0, offset: params.offset ?? 0, hasMore: false };
-    }
-    
-    return response.data || { success: false, tasks: [], total: 0, offset: params.offset ?? 0, hasMore: false };
-  }
+  // Note: listTasksPaginated 已移除
+  // 主线程现在直接从 IndexedDB 读取任务数据，避免 postMessage 的 1MB 大小限制问题
 
   // ============================================================================
   // Chat RPC
