@@ -2081,6 +2081,51 @@ function complexFunction() {
 - 带有 `[DEBUG]` 前缀且通过环境变量控制的日志可以保留
 - 关键系统启动或成功标志日志 (如 `Initialized successfully`) 推荐保留一份但需保持简洁。
 
+### 同步模块日志规范
+
+**场景**: 在 `github-sync/*` 目录下的同步相关模块中记录日志
+
+❌ **错误示例**:
+```typescript
+// sync-engine.ts
+async pullFromRemote(): Promise<SyncResult> {
+  console.log('[SyncEngine] pullFromRemote START');
+  console.log('[SyncEngine] Downloading media 10/12:', url);
+  console.error('[SyncEngine] Failed to download:', error);
+}
+```
+
+✅ **正确示例**:
+```typescript
+// sync-engine.ts
+import { logInfo, logDebug, logSuccess, logWarning, logError } from './sync-log-service';
+
+async pullFromRemote(): Promise<SyncResult> {
+  logInfo('pullFromRemote START');
+  logDebug('Downloading media', { current: 10, total: 12, url });
+  logError('Failed to download', error instanceof Error ? error : new Error(String(error)));
+}
+```
+
+**统一日志 API**:
+| 函数 | 用途 | 参数 |
+|------|------|------|
+| `logDebug(message, data?)` | 详细调试信息 | message: string, data?: object |
+| `logInfo(message, data?)` | 一般流程信息 | message: string, data?: object |
+| `logSuccess(message, data?)` | 操作成功 | message: string, data?: object |
+| `logWarning(message, data?)` | 警告信息 | message: string, data?: object |
+| `logError(message, error)` | 错误信息 | message: string, error: Error |
+
+**原因**: 
+1. 同步模块的日志需要在 `/sw-debug.html?tab=gist` 调试面板中查看，便于问题定位
+2. `console.log` 会污染浏览器控制台，且无法持久化和结构化查询
+3. 统一日志服务支持：内存缓存 + IndexedDB 持久化 + 结构化查询 + 自动清理
+
+**注意事项**:
+- `logError` 的第二个参数必须是 `Error` 对象，不能是字符串
+- 使用结构化 `data` 对象而非字符串拼接，便于后续查询和分析
+- `sync` 类别的日志始终记录（不受 debugMode 影响），便于问题诊断
+
 ### Z-Index 管理规范
 
 **规范文档**: 参考 `docs/Z_INDEX_GUIDE.md` 获取完整规范

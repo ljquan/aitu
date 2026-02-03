@@ -134,7 +134,7 @@ Service Worker (后台执行)
 3. **组件规范**：函数组件 + Hooks，事件处理器用 `useCallback`
 4. **定时器清理**：`setInterval` 必须保存 ID，提供 `destroy()` 方法
 5. **API 请求**：禁止重试，区分业务失败和网络错误
-6. **调试日志**：提交前必须清理 `console.log`
+6. **调试日志**：提交前必须清理 `console.log`；同步模块（`github-sync/*`）使用 `logDebug/logInfo/logSuccess/logWarning/logError` 而非 `console.log`
 7. **敏感信息**：永不硬编码 API Key，使用 `sanitizeObject` 过滤日志，敏感 ID 用 `maskId` 脱敏
 8. **布局抖动**：`Suspense` 的 fallback 应撑满容器或固定高度，防止加载时跳动
 9. **结构化数据**：复杂消息展示应优先使用 `aiContext` 等结构化数据而非字符串解析
