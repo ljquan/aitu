@@ -9,6 +9,7 @@ import { shardRouter } from './shard-router';
 import { unifiedCacheService } from '../unified-cache-service';
 import { kvStorageService } from '../kv-storage-service';
 import { DRAWNIX_DEVICE_ID_KEY } from '../../constants/storage';
+import { logInfo, logSuccess, logError, logWarning, logDebug } from './sync-log-service';
 import {
   MasterIndex,
   ShardInfo,
@@ -162,11 +163,22 @@ class ShardSyncService {
     await shardRouter.saveMasterIndexToRemote();
 
     result.success = result.uploaded > 0 || result.skipped > 0;
-    console.log('[ShardSyncService] Upload completed:', {
+    const failedCount = result.details.filter(d => !d.success).length;
+    const duration = Date.now() - startTime;
+    
+    logDebug('Upload completed', {
       uploaded: result.uploaded,
       skipped: result.skipped,
-      failed: result.details.filter(d => !d.success).length,
-      duration: Date.now() - startTime,
+      failed: failedCount,
+      duration,
+    });
+    
+    // Log shard upload result
+    logSuccess('分片上传完成', {
+      uploaded: result.uploaded,
+      skipped: result.skipped,
+      failed: failedCount,
+      duration,
     });
 
     return result;
@@ -283,7 +295,7 @@ class ShardSyncService {
           });
         }
       } catch (error) {
-        console.error(`[ShardSyncService] Failed to prepare ${item.url}:`, error);
+        logError(`Failed to prepare: ${item.url}`, error instanceof Error ? error : new Error(String(error)));
         result.details.push({
           url: item.url,
           action: 'upload',
@@ -318,19 +330,19 @@ class ShardSyncService {
         // 计算总大小并记录
         const totalSize = Object.values(filesToUpdate).reduce((sum, content) => sum + content.length, 0);
         const fileCount = Object.keys(filesToUpdate).length;
-        console.log(`[ShardSyncService] Uploading to shard ${shardId}: ${fileCount} files, total size: ${(totalSize / 1024 / 1024).toFixed(2)} MB`);
+        logDebug('Uploading to shard', { shardId, fileCount, totalSizeMB: (totalSize / 1024 / 1024).toFixed(2) });
 
         // 如果总大小超过 8MB，分批上传（GitHub Gist 请求体限制）
         const MAX_BATCH_SIZE = 8 * 1024 * 1024; // 8MB
         if (totalSize > MAX_BATCH_SIZE) {
-          console.log(`[ShardSyncService] Total size exceeds limit, splitting into batches`);
+          logDebug('Total size exceeds limit, splitting into batches');
           await this.uploadInBatches(filesToUpdate, shard.gistId, MAX_BATCH_SIZE);
         } else {
           await gitHubApiService.updateGistFiles(filesToUpdate, shard.gistId);
         }
-        console.log(`[ShardSyncService] Uploaded ${successfulItems.length} files to shard ${shardId}`);
+        logDebug('Uploaded files to shard', { count: successfulItems.length, shardId });
       } catch (error) {
-        console.error(`[ShardSyncService] Failed to update shard ${shardId}:`, error);
+        logError(`Failed to update shard: ${shardId}`, error instanceof Error ? error : new Error(String(error)));
         // 回滚索引注册
         for (const item of successfulItems) {
           shardRouter.unregisterFile(item.url);
@@ -368,14 +380,14 @@ class ShardSyncService {
       if (fileSize > maxBatchSize) {
         // 先提交当前批次
         if (Object.keys(currentBatch).length > 0) {
-          console.log(`[ShardSyncService] Uploading batch ${batchIndex + 1}: ${Object.keys(currentBatch).length} files`);
+          logDebug('Uploading batch', { batch: batchIndex + 1, fileCount: Object.keys(currentBatch).length });
           await gitHubApiService.updateGistFiles(currentBatch, gistId);
           currentBatch = {};
           currentBatchSize = 0;
           batchIndex++;
         }
         // 单独上传大文件
-        console.log(`[ShardSyncService] Uploading large file: ${filename} (${(fileSize / 1024 / 1024).toFixed(2)} MB)`);
+        logDebug('Uploading large file', { filename, sizeMB: (fileSize / 1024 / 1024).toFixed(2) });
         await gitHubApiService.updateGistFiles({ [filename]: content }, gistId);
         batchIndex++;
         continue;
@@ -396,7 +408,7 @@ class ShardSyncService {
 
     // 上传最后一个批次
     if (Object.keys(currentBatch).length > 0) {
-      console.log(`[ShardSyncService] Uploading final batch ${batchIndex + 1}: ${Object.keys(currentBatch).length} files`);
+      logDebug('Uploading final batch', { batch: batchIndex + 1, fileCount: Object.keys(currentBatch).length });
       await gitHubApiService.updateGistFiles(currentBatch, gistId);
     }
   }
@@ -429,7 +441,7 @@ class ShardSyncService {
             }
           }
         } catch (error) {
-          console.warn(`[ShardSyncService] Failed to fetch ${originalUrl}:`, error);
+          logWarning('Failed to fetch', { url: originalUrl, error: String(error) });
         }
       }
     }
@@ -483,7 +495,7 @@ class ShardSyncService {
         return JSON.parse(content);
       }
     } catch (error) {
-      console.warn(`[ShardSyncService] Failed to get shard manifest for ${shard.alias}:`, error);
+      logWarning('Failed to get shard manifest', { shard: shard.alias, error: String(error) });
     }
 
     const masterGistId = shardRouter.getMasterGistId();
@@ -594,9 +606,9 @@ class ShardSyncService {
           shardId: entry.shardId,
         });
 
-        console.log(`[ShardSyncService] Downloaded and cached: ${url}`);
+        logDebug('Downloaded and cached', { url });
       } catch (error) {
-        console.error(`[ShardSyncService] Failed to download ${url}:`, error);
+        logError(`Failed to download: ${url}`, error instanceof Error ? error : new Error(String(error)));
         result.details.push({
           url,
           action: 'download',
@@ -607,6 +619,23 @@ class ShardSyncService {
     }
 
     result.success = result.downloaded > 0 || result.skipped > 0;
+    
+    // Log download result
+    const failedCount = result.details.filter(d => !d.success).length;
+    if (result.downloaded > 0) {
+      logSuccess('分片下载完成', {
+        downloaded: result.downloaded,
+        skipped: result.skipped,
+        failed: failedCount,
+      });
+    } else if (failedCount > 0) {
+      logWarning('分片下载部分失败', {
+        downloaded: result.downloaded,
+        skipped: result.skipped,
+        failed: failedCount,
+      });
+    }
+    
     return result;
   }
 
@@ -670,7 +699,7 @@ class ShardSyncService {
         shardId: entry.shardId,
       });
 
-      console.log(`[ShardSyncService] Soft deleted: ${url}`);
+      logDebug('Soft deleted', { url });
     }
 
     // 保存主索引
@@ -695,7 +724,7 @@ class ShardSyncService {
     // 查找 tombstone
     const tombstoneIndex = masterIndex.tombstones.findIndex(t => t.url === url);
     if (tombstoneIndex === -1) {
-      console.warn(`[ShardSyncService] No tombstone found for ${url}`);
+      logWarning('No tombstone found', { url });
       return false;
     }
 
@@ -704,7 +733,7 @@ class ShardSyncService {
     // 检查分片是否存在
     const shard = shardRouter.getShard(tombstone.shardId);
     if (!shard) {
-      console.warn(`[ShardSyncService] Shard ${tombstone.shardId} not found for restore`);
+      logWarning('Shard not found for restore', { shardId: tombstone.shardId });
       return false;
     }
 
@@ -716,7 +745,7 @@ class ShardSyncService {
       );
 
       if (!content) {
-        console.warn(`[ShardSyncService] File ${tombstone.filename} not found in shard`);
+        logWarning('File not found in shard', { filename: tombstone.filename });
         return false;
       }
 
@@ -737,10 +766,10 @@ class ShardSyncService {
       // 保存主索引
       await shardRouter.saveMasterIndexToRemote();
 
-      console.log(`[ShardSyncService] Restored: ${url}`);
+      logDebug('Restored', { url });
       return true;
     } catch (error) {
-      console.error(`[ShardSyncService] Failed to restore ${url}:`, error);
+      logError(`Failed to restore: ${url}`, error instanceof Error ? error : new Error(String(error)));
       return false;
     }
   }
@@ -762,7 +791,7 @@ class ShardSyncService {
       return 0;
     }
 
-    console.log(`[ShardSyncService] Cleaning up ${expiredTombstones.length} expired tombstones`);
+    logDebug('Cleaning up expired tombstones', { count: expiredTombstones.length });
 
     // 按分片分组要删除的文件
     const filesToDeleteByShardId: Record<string, string[]> = {};
@@ -782,9 +811,9 @@ class ShardSyncService {
 
       try {
         await gitHubApiService.deleteGistFiles(filenames, shard.gistId);
-        console.log(`[ShardSyncService] Deleted ${filenames.length} files from shard ${shardId}`);
+        logDebug('Deleted files from shard', { count: filenames.length, shardId });
       } catch (error) {
-        console.error(`[ShardSyncService] Failed to delete files from shard ${shardId}:`, error);
+        logError(`Failed to delete files from shard: ${shardId}`, error instanceof Error ? error : new Error(String(error)));
       }
     }
 

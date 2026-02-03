@@ -7,6 +7,7 @@ import { gitHubApiService } from './github-api-service';
 import { unifiedCacheService } from '../unified-cache-service';
 import { kvStorageService } from '../kv-storage-service';
 import { DRAWNIX_DEVICE_ID_KEY } from '../../constants/storage';
+import { logInfo, logSuccess, logError, logWarning, logDebug } from './sync-log-service';
 import {
   MediaSyncStatus,
   SyncedMediaFile,
@@ -117,7 +118,7 @@ class MediaSyncService {
         try {
           callback(result);
         } catch (error) {
-          console.error('[MediaSyncService] Sync completed callback error:', error);
+          logError('Sync completed callback error', error instanceof Error ? error : new Error(String(error)));
         }
       });
     }
@@ -173,14 +174,16 @@ class MediaSyncService {
     onProgress?: MediaSyncProgressCallback
   ): Promise<BatchMediaItemSyncResult> {
     const startTime = Date.now();
-    console.log('[MediaSyncService] syncCurrentBoardMedia:', currentBoardId);
+    logDebug('syncCurrentBoardMedia', { currentBoardId });
+    logInfo('开始同步当前画板媒体', { boardId: currentBoardId });
 
     try {
       // 收集当前画布的媒体资源
       const collected = await mediaCollector.collectCurrentBoardMedia(currentBoardId);
-      console.log('[MediaSyncService] Collected media:', collected.stats);
+      logDebug('Collected media', collected.stats);
 
       if (collected.currentBoardItems.length === 0) {
+        logInfo('当前画板无媒体需要同步');
         return this.createEmptyBatchResult(startTime);
       }
 
@@ -192,16 +195,33 @@ class MediaSyncService {
         item => !remoteSyncedUrls.has(item.url)
       );
 
-      console.log(`[MediaSyncService] Items to sync: ${itemsToSync.length} (${collected.currentBoardItems.length} total, ${remoteSyncedUrls.size} already synced)`);
+      logDebug('Items to sync', { toSync: itemsToSync.length, total: collected.currentBoardItems.length, alreadySynced: remoteSyncedUrls.size });
+      logInfo('媒体增量计算完成', {
+        total: collected.currentBoardItems.length,
+        alreadySynced: remoteSyncedUrls.size,
+        toSync: itemsToSync.length,
+      });
 
       if (itemsToSync.length === 0) {
         return this.createEmptyBatchResult(startTime);
       }
 
       // 执行同步
-      return await this.syncMediaItems(itemsToSync, onProgress);
+      const result = await this.syncMediaItems(itemsToSync, onProgress);
+      
+      // Log sync result
+      logSuccess('媒体同步完成', {
+        succeeded: result.succeeded,
+        failed: result.failed,
+        skipped: result.skipped,
+        totalSize: result.totalSize,
+        duration: result.duration,
+      });
+      
+      return result;
     } catch (error) {
-      console.error('[MediaSyncService] syncCurrentBoardMedia failed:', error);
+      logError('syncCurrentBoardMedia failed', error instanceof Error ? error : new Error(String(error)));
+      logError('媒体同步失败', error instanceof Error ? error : new Error(String(error)));
       return {
         succeeded: 0,
         failed: 0,
@@ -224,7 +244,7 @@ class MediaSyncService {
     onProgress?: MediaSyncProgressCallback
   ): Promise<BatchMediaItemSyncResult> {
     const startTime = Date.now();
-    console.log('[MediaSyncService] syncSelectedMedia:', urls.length, 'urls');
+    logDebug('syncSelectedMedia', { urlCount: urls.length });
 
     try {
       // 收集指定的媒体资源
@@ -240,7 +260,7 @@ class MediaSyncService {
       // 增量计算：只同步新增的
       const itemsToSync = items.filter(item => !remoteSyncedUrls.has(item.url));
 
-      console.log(`[MediaSyncService] Items to sync: ${itemsToSync.length} (${items.length} requested, ${items.length - itemsToSync.length} already synced)`);
+      logDebug('Items to sync', { toSync: itemsToSync.length, requested: items.length, alreadySynced: items.length - itemsToSync.length });
 
       if (itemsToSync.length === 0) {
         return {
@@ -260,7 +280,7 @@ class MediaSyncService {
       // 执行同步
       return await this.syncMediaItems(itemsToSync, onProgress);
     } catch (error) {
-      console.error('[MediaSyncService] syncSelectedMedia failed:', error);
+      logError('syncSelectedMedia failed', error instanceof Error ? error : new Error(String(error)));
       return {
         succeeded: 0,
         failed: 0,
@@ -287,7 +307,7 @@ class MediaSyncService {
       const { shardSyncService } = await import('./shard-sync-service');
       return await shardSyncService.getSyncedUrls();
     } catch (error) {
-      console.warn('[MediaSyncService] Failed to get remote synced URLs:', error);
+      logWarning('Failed to get remote synced URLs', { error: String(error) });
       return new Set();
     }
   }
@@ -308,10 +328,10 @@ class MediaSyncService {
       await shardedMediaSyncAdapter.initialize();
       
       if (shardedMediaSyncAdapter.isShardingEnabled()) {
-        console.log('[MediaSyncService] Using sharded media sync adapter');
+        logDebug('Using sharded media sync adapter');
         const result = await shardedMediaSyncAdapter.uploadMedia(items, onProgress);
         result.duration = Date.now() - startTime;
-        console.log('[MediaSyncService] Sharded sync completed:', {
+        logDebug('Sharded sync completed', {
           succeeded: result.succeeded,
           failed: result.failed,
           skipped: result.skipped,
@@ -322,7 +342,7 @@ class MediaSyncService {
         return result;
       }
     } catch (error) {
-      console.warn('[MediaSyncService] Failed to use sharded adapter, falling back:', error);
+      logWarning('Failed to use sharded adapter, falling back', { error: String(error) });
     }
 
     // 降级到传统方式
@@ -353,7 +373,7 @@ class MediaSyncService {
     }
 
     result.duration = Date.now() - startTime;
-    console.log('[MediaSyncService] Legacy sync completed:', {
+    logDebug('Legacy sync completed', {
       succeeded: result.succeeded,
       failed: result.failed,
       skipped: result.skipped,
@@ -446,7 +466,7 @@ class MediaSyncService {
 
       return { success: true, url, size: blob.size };
     } catch (error) {
-      console.error(`[MediaSyncService] Failed to sync ${url}:`, error);
+      logError(`Failed to sync media: ${url}`, error instanceof Error ? error : new Error(String(error)));
       const errorMessage = error instanceof Error ? error.message : '同步失败';
 
       // 更新本地缓存状态
@@ -473,13 +493,13 @@ class MediaSyncService {
       });
       
       if (!response.ok) {
-        console.warn(`[MediaSyncService] Failed to fetch media: ${response.status}`);
+        logWarning('Failed to fetch media', { status: response.status });
         return null;
       }
       
       return await response.blob();
     } catch (error) {
-      console.error('[MediaSyncService] Fetch media failed:', error);
+      logError('Fetch media failed', error instanceof Error ? error : new Error(String(error)));
       return null;
     }
   }
@@ -522,10 +542,10 @@ class MediaSyncService {
       // 缓存到本地
       await unifiedCacheService.cacheToCacheStorageOnly(url, blob);
 
-      console.log(`[MediaSyncService] Downloaded and cached media: ${url}`);
+      logDebug('Downloaded and cached media', { url });
       return url;
     } catch (error) {
-      console.error(`[MediaSyncService] Failed to download media ${url}:`, error);
+      logError(`Failed to download media: ${url}`, error instanceof Error ? error : new Error(String(error)));
       return null;
     }
   }
@@ -552,7 +572,7 @@ class MediaSyncService {
       const remoteSyncedUrls = await this.getRemoteSyncedUrls();
       const urlsArray = Array.from(remoteSyncedUrls);
 
-      console.log(`[MediaSyncService] Found ${urlsArray.length} remote media to download`);
+      logDebug('Found remote media to download', { count: urlsArray.length });
 
       for (let i = 0; i < urlsArray.length; i++) {
         const url = urlsArray[i];
@@ -577,7 +597,7 @@ class MediaSyncService {
         }
       }
     } catch (error) {
-      console.error('[MediaSyncService] downloadAllRemoteMedia failed:', error);
+      logError('downloadAllRemoteMedia failed', error instanceof Error ? error : new Error(String(error)));
     }
 
     result.duration = Date.now() - startTime;
@@ -603,7 +623,7 @@ class MediaSyncService {
 
       await this.saveStatusCache();
     } catch (error) {
-      console.error('[MediaSyncService] Refresh failed:', error);
+      logError('Refresh failed', error instanceof Error ? error : new Error(String(error)));
     }
   }
 
@@ -624,7 +644,7 @@ class MediaSyncService {
 
       return true;
     } catch (error) {
-      console.error('[MediaSyncService] Delete failed:', error);
+      logError('Delete failed', error instanceof Error ? error : new Error(String(error)));
       return false;
     }
   }

@@ -18,5 +18,20 @@ export { cryptoService, isEncryptedData, usesCustomPassword, CRYPTO_VERSION, Dec
 export type { EncryptedData } from './crypto-service';
 export { syncPasswordService } from './sync-password-service';
 
+// 同步日志服务导出
+export {
+  startSyncSession,
+  endSyncSession,
+  logInfo,
+  logSuccess,
+  logWarning,
+  logError,
+  logDebug,
+  queryLogs,
+  getLogStats,
+  clearLogs,
+  cleanupOldLogs,
+} from './sync-log-service';
+
 // 分片系统导出
 export * from './shard-index';

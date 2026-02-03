@@ -447,6 +447,7 @@
           <div class="tab" data-tab="console">控制台日志 <span id="consoleCount" style="opacity:0.6">(0)</span><span id="consoleErrorDot" class="error-dot" style="display:none"></span></div>
           <div class="tab" data-tab="postmessage">PostMessage日志 <span id="postmessageCount" style="opacity:0.6">(0)</span></div>
           <div class="tab" data-tab="llmapi">LLM API <span id="llmapiErrorDot" class="error-dot" style="display:none"></span></div>
+          <div class="tab" data-tab="gist">Gist 管理</div>
           <div class="tab" data-tab="crash">内存日志 <span id="crashCount" style="opacity:0.6">(0)</span><span id="crashErrorDot" class="error-dot" style="display:none"></span></div>
         </div>
         
@@ -679,6 +680,381 @@
                 <span class="icon">🤖</span>
                 <p>暂无 LLM API 调用记录</p>
                 <p style="font-size: 12px; opacity: 0.7;">图片/视频/对话等 AI 接口调用会自动记录</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Gist Management Tab -->
+        <div class="tab-content" id="gistTab">
+          <div class="logs-toolbar">
+            <button id="refreshGistBtn">
+              <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+              刷新数据
+            </button>
+            <span id="gistStatus" style="font-size: 12px; margin-left: 10px; color: var(--text-secondary);">点击刷新加载数据</span>
+          </div>
+          
+          <div class="gist-panel-content">
+            <!-- Section 1: Config Info -->
+            <div class="gist-section">
+              <div class="gist-section-header" data-section="config">
+                <span class="gist-section-icon">⚙️</span>
+                <span>配置信息</span>
+                <span class="gist-section-toggle">▼</span>
+              </div>
+              <div class="gist-section-content" id="gistConfigSection">
+                <div class="gist-config-grid">
+                  <div class="gist-config-item">
+                    <span class="label">GitHub Token</span>
+                    <span class="value" id="gistTokenStatus">-</span>
+                  </div>
+                  <div class="gist-config-item">
+                    <span class="label">主 Gist ID</span>
+                    <span class="value" id="gistId">-</span>
+                  </div>
+                  <div class="gist-config-item">
+                    <span class="label">分片系统</span>
+                    <span class="value" id="gistShardEnabled">-</span>
+                  </div>
+                  <div class="gist-config-item">
+                    <span class="label">同步密码</span>
+                    <span class="value" id="gistPasswordStatus">-</span>
+                  </div>
+                  <div class="gist-config-item">
+                    <span class="label">设备 ID</span>
+                    <span class="value" id="gistDeviceId">-</span>
+                  </div>
+                  <div class="gist-config-item">
+                    <span class="label">最后同步</span>
+                    <span class="value" id="gistLastSync">-</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Section 2: Shard Overview -->
+            <div class="gist-section">
+              <div class="gist-section-header" data-section="shards">
+                <span class="gist-section-icon">📦</span>
+                <span>分片概览</span>
+                <span class="gist-section-toggle">▼</span>
+              </div>
+              <div class="gist-section-content" id="gistShardSection">
+                <div class="gist-shard-stats">
+                  <div class="gist-stat-card">
+                    <div class="stat-number" id="shardTotalCount">-</div>
+                    <div class="stat-label">总分片</div>
+                  </div>
+                  <div class="gist-stat-card active">
+                    <div class="stat-number" id="shardActiveCount">-</div>
+                    <div class="stat-label">活跃</div>
+                  </div>
+                  <div class="gist-stat-card full">
+                    <div class="stat-number" id="shardFullCount">-</div>
+                    <div class="stat-label">已满</div>
+                  </div>
+                  <div class="gist-stat-card">
+                    <div class="stat-number" id="shardFileCount">-</div>
+                    <div class="stat-label">总文件</div>
+                  </div>
+                  <div class="gist-stat-card">
+                    <div class="stat-number" id="shardTotalSize">-</div>
+                    <div class="stat-label">总大小</div>
+                  </div>
+                </div>
+                <div class="gist-shard-list" id="gistShardList">
+                  <div class="empty-state" style="padding: 20px;">加载分片信息...</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Section 3: Debug Operations -->
+            <div class="gist-section">
+              <div class="gist-section-header" data-section="operations">
+                <span class="gist-section-icon">🛠️</span>
+                <span>调试操作</span>
+                <span class="gist-section-toggle">▼</span>
+              </div>
+              <div class="gist-section-content" id="gistOperationsSection">
+                <div class="gist-debug-actions">
+                  <div class="debug-action-group">
+                    <span class="debug-group-label">连接测试</span>
+                    <button class="debug-btn" id="debugTestConnection" title="测试 GitHub API 连接">
+                      <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                      测试连接
+                    </button>
+                    <button class="debug-btn" id="debugListGists" title="列出所有同步 Gist">
+                      <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                      列出 Gists
+                    </button>
+                  </div>
+                  <div class="debug-action-group">
+                    <span class="debug-group-label">任务同步</span>
+                    <button class="debug-btn" id="debugPreviewTaskMerge" title="预览任务合并结果（不实际执行）">
+                      <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                      预览任务合并
+                    </button>
+                    <button class="debug-btn warning" id="debugImportRemoteTasks" title="从远程导入缺失的任务到本地">
+                      <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                      导入远程任务
+                    </button>
+                  </div>
+                  <div class="debug-action-group">
+                    <span class="debug-group-label">画板同步</span>
+                    <button class="debug-btn" id="debugPreviewBoardMerge" title="预览画板合并结果（不实际执行）">
+                      <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                      预览画板合并
+                    </button>
+                    <button class="debug-btn" id="debugDownloadBoard" title="下载指定画板内容">
+                      <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                      下载画板
+                    </button>
+                  </div>
+                  <div class="debug-action-group">
+                    <span class="debug-group-label">媒体同步</span>
+                    <button class="debug-btn" id="debugListShardFiles" title="列出分片中的所有文件">
+                      <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
+                      分片文件列表
+                    </button>
+                    <button class="debug-btn" id="debugTestMediaDownload" title="测试下载单个媒体文件">
+                      <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                      测试媒体下载
+                    </button>
+                  </div>
+                  <div class="debug-action-group">
+                    <span class="debug-group-label">日志诊断</span>
+                    <button class="debug-btn" id="debugCheckSyncLogDb" title="检查同步日志数据库状态">
+                      <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+                      检查日志数据库
+                    </button>
+                    <button class="debug-btn" id="debugWriteTestLog" title="写入一条测试日志">
+                      <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                      写入测试日志
+                    </button>
+                    <button class="debug-btn" id="debugPerformanceTest" title="运行性能基准测试 (1000次写入)">
+                      <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4"/><path d="m16.24 7.76-2.12 2.12"/><path d="M21 12h-4"/><path d="m16.24 16.24-2.12-2.12"/><path d="M12 21v-4"/><path d="m7.76 16.24 2.12-2.12"/><path d="M3 12h4"/><path d="m7.76 7.76 2.12 2.12"/></svg>
+                      性能测试
+                    </button>
+                  </div>
+                </div>
+                <!-- Debug Log Output -->
+                <div class="debug-log-container">
+                  <div class="debug-log-header">
+                    <span>调试日志</span>
+                    <button class="debug-btn-small" id="debugClearLog" title="清空日志">清空</button>
+                  </div>
+                  <div class="debug-log-output" id="debugLogOutput">
+                    <div class="debug-log-placeholder">点击上方按钮执行调试操作，日志将显示在这里...</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Section 4: Sync Logs -->
+            <div class="gist-section gist-section-expanded">
+              <div class="gist-section-header" data-section="synclogs">
+                <span class="gist-section-icon">📋</span>
+                <span>同步日志</span>
+                <span class="gist-section-toggle">▼</span>
+              </div>
+              <div class="gist-section-content" id="gistSyncLogsSection">
+                <!-- Log Controls -->
+                <div class="sync-log-controls">
+                  <div class="sync-log-filters">
+                    <select id="syncLogLevelFilter" class="sync-log-select">
+                      <option value="">全部级别</option>
+                      <option value="error">错误</option>
+                      <option value="warning">警告</option>
+                      <option value="success">成功</option>
+                      <option value="info">信息</option>
+                      <option value="debug">调试</option>
+                    </select>
+                    <select id="syncLogCategoryFilter" class="sync-log-select">
+                      <option value="">全部类型</option>
+                      <option value="sync">主同步</option>
+                      <option value="upload">上传</option>
+                      <option value="download">下载</option>
+                      <option value="merge">合并</option>
+                      <option value="conflict">冲突</option>
+                      <option value="media">媒体</option>
+                      <option value="shard">分片</option>
+                      <option value="api">API</option>
+                    </select>
+                    <select id="syncLogSessionFilter" class="sync-log-select">
+                      <option value="">全部会话</option>
+                    </select>
+                    <input type="text" id="syncLogSearch" class="sync-log-search" placeholder="搜索日志..." />
+                  </div>
+                  <div class="sync-log-actions">
+                    <button class="debug-btn" id="refreshSyncLogs">
+                      <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                      刷新
+                    </button>
+                    <button class="debug-btn" id="exportSyncLogs" title="导出日志为 JSON">
+                      <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                      导出
+                    </button>
+                    <button class="debug-btn warning" id="clearSyncLogs" title="清空所有日志">
+                      <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                      清空
+                    </button>
+                  </div>
+                </div>
+                
+                <!-- Log Stats -->
+                <div class="sync-log-stats" id="syncLogStats">
+                  <div class="sync-log-stat">
+                    <span class="stat-value" id="syncLogTotal">-</span>
+                    <span class="stat-label">总条数</span>
+                  </div>
+                  <div class="sync-log-stat error">
+                    <span class="stat-value" id="syncLogErrors">-</span>
+                    <span class="stat-label">错误</span>
+                  </div>
+                  <div class="sync-log-stat warning">
+                    <span class="stat-value" id="syncLogWarnings">-</span>
+                    <span class="stat-label">警告</span>
+                  </div>
+                  <div class="sync-log-stat success">
+                    <span class="stat-value" id="syncLogSuccesses">-</span>
+                    <span class="stat-label">成功</span>
+                  </div>
+                  <div class="sync-log-stat">
+                    <span class="stat-value" id="syncLogSessions">-</span>
+                    <span class="stat-label">会话数</span>
+                  </div>
+                </div>
+                
+                <!-- Log List -->
+                <div class="sync-log-list" id="syncLogList">
+                  <div class="empty-state" style="padding: 40px;">点击刷新加载同步日志</div>
+                </div>
+                
+                <!-- Pagination -->
+                <div class="sync-log-pagination" id="syncLogPagination">
+                  <button class="debug-btn-small" id="syncLogPrevPage" disabled>上一页</button>
+                  <span id="syncLogPageInfo">-</span>
+                  <button class="debug-btn-small" id="syncLogNextPage" disabled>下一页</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Section 5: Data Diagnostics -->
+            <div class="gist-section">
+              <div class="gist-section-header" data-section="diagnostics">
+                <span class="gist-section-icon">🔍</span>
+                <span>数据诊断</span>
+                <span class="gist-section-toggle">▼</span>
+              </div>
+              <div class="gist-section-content" id="gistDiagnosticsSection">
+                <!-- Sub-tabs for diagnostics -->
+                <div class="gist-subtabs">
+                  <button class="gist-subtab active" data-subtab="tasks">任务对比</button>
+                  <button class="gist-subtab" data-subtab="boards">画板对比</button>
+                  <button class="gist-subtab" data-subtab="media">素材对比</button>
+                  <button class="gist-subtab" data-subtab="files">远程文件</button>
+                </div>
+                
+                <!-- Tasks Comparison -->
+                <div class="gist-subtab-content active" id="tasksSubtab">
+                  <div class="gist-comparison-summary" id="taskComparisonSummary">
+                    <div class="comparison-stat">
+                      <span class="label">本地任务</span>
+                      <span class="value" id="localTaskCount">-</span>
+                    </div>
+                    <div class="comparison-stat">
+                      <span class="label">远程任务</span>
+                      <span class="value" id="remoteTaskCount">-</span>
+                    </div>
+                    <div class="comparison-stat local-only">
+                      <span class="label">仅本地</span>
+                      <span class="value" id="localOnlyTaskCount">-</span>
+                    </div>
+                    <div class="comparison-stat remote-only">
+                      <span class="label">仅远程</span>
+                      <span class="value" id="remoteOnlyTaskCount">-</span>
+                    </div>
+                    <div class="comparison-stat synced">
+                      <span class="label">已同步</span>
+                      <span class="value" id="syncedTaskCount">-</span>
+                    </div>
+                  </div>
+                  <div class="gist-comparison-table" id="taskComparisonTable">
+                    <div class="empty-state" style="padding: 20px;">点击刷新加载任务对比数据</div>
+                  </div>
+                </div>
+                
+                <!-- Boards Comparison -->
+                <div class="gist-subtab-content" id="boardsSubtab">
+                  <div class="gist-comparison-summary" id="boardComparisonSummary">
+                    <div class="comparison-stat">
+                      <span class="label">本地画板</span>
+                      <span class="value" id="localBoardCount">-</span>
+                    </div>
+                    <div class="comparison-stat">
+                      <span class="label">远程画板</span>
+                      <span class="value" id="remoteBoardCount">-</span>
+                    </div>
+                    <div class="comparison-stat local-only">
+                      <span class="label">仅本地</span>
+                      <span class="value" id="localOnlyBoardCount">-</span>
+                    </div>
+                    <div class="comparison-stat remote-only">
+                      <span class="label">仅远程</span>
+                      <span class="value" id="remoteOnlyBoardCount">-</span>
+                    </div>
+                  </div>
+                  <div class="gist-comparison-table" id="boardComparisonTable">
+                    <div class="empty-state" style="padding: 20px;">点击刷新加载画板对比数据</div>
+                  </div>
+                </div>
+                
+                <!-- Media Comparison -->
+                <div class="gist-subtab-content" id="mediaSubtab">
+                  <div class="gist-comparison-summary" id="mediaComparisonSummary">
+                    <div class="comparison-stat">
+                      <span class="label">本地缓存</span>
+                      <span class="value" id="localMediaCount">-</span>
+                    </div>
+                    <div class="comparison-stat">
+                      <span class="label">远程索引</span>
+                      <span class="value" id="remoteMediaCount">-</span>
+                    </div>
+                    <div class="comparison-stat local-only">
+                      <span class="label">仅本地</span>
+                      <span class="value" id="localOnlyMediaCount">-</span>
+                    </div>
+                    <div class="comparison-stat remote-only">
+                      <span class="label">仅远程</span>
+                      <span class="value" id="remoteOnlyMediaCount">-</span>
+                    </div>
+                  </div>
+                  <div class="gist-comparison-table" id="mediaComparisonTable">
+                    <div class="empty-state" style="padding: 20px;">点击刷新加载素材对比数据</div>
+                  </div>
+                </div>
+                
+                <!-- Remote Files Browser -->
+                <div class="gist-subtab-content" id="filesSubtab">
+                  <div class="gist-files-container">
+                    <div class="gist-file-list-panel">
+                      <div class="panel-header">文件列表</div>
+                      <div id="gistFileList" class="gist-file-list">
+                        <div class="empty-state" style="padding: 20px;">点击刷新加载文件列表</div>
+                      </div>
+                    </div>
+                    <div class="gist-file-preview-panel">
+                      <div class="panel-header">
+                        <span>内容预览</span>
+                        <span id="previewFileName" class="preview-filename"></span>
+                      </div>
+                      <div id="gistFileContent" class="gist-file-content">
+                        <div class="empty-state" style="padding: 20px;">选择文件查看内容</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

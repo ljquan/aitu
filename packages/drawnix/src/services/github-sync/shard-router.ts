@@ -6,6 +6,8 @@
 import { maskId } from '@aitu/utils';
 import { gitHubApiService, GitHubApiError } from './github-api-service';
 import { kvStorageService } from '../kv-storage-service';
+import { cryptoService } from './crypto-service';
+import { syncPasswordService } from './sync-password-service';
 import {
   MasterIndex,
   ShardInfo,
@@ -253,8 +255,13 @@ class ShardRouter {
     const description = `${GIST_DESCRIPTION_PREFIX.SHARD} #${order} (${shardAlias})`;
     const shardManifest = createShardManifest(shardAlias, this.masterGistId);
 
+    // 获取密码并加密 shard-manifest
+    const password = await syncPasswordService.getPassword();
+    const manifestJson = JSON.stringify(shardManifest, null, 2);
+    const encryptedManifest = await cryptoService.encrypt(manifestJson, this.masterGistId, password || undefined);
+
     const gist = await gitHubApiService.createSyncGist({
-      [SHARD_FILES.SHARD_MANIFEST]: JSON.stringify(shardManifest, null, 2),
+      [SHARD_FILES.SHARD_MANIFEST]: encryptedManifest,
     });
 
     // 更新 Gist 描述（createSyncGist 使用默认描述，需要更新）
@@ -263,7 +270,7 @@ class ShardRouter {
       await gitHubApiService.updateGistFiles(
         {
           // 必须包含至少一个文件更新，否则只能单独调用描述更新 API
-          [SHARD_FILES.SHARD_MANIFEST]: JSON.stringify(shardManifest, null, 2),
+          [SHARD_FILES.SHARD_MANIFEST]: encryptedManifest,
         },
         gist.id
       );
