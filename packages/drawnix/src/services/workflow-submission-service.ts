@@ -382,20 +382,42 @@ class WorkflowSubmissionService {
 
   /**
    * Submit a workflow for execution
+   * 包含超时处理和自动重连逻辑
    */
   async submit(workflow: WorkflowDefinition): Promise<void> {
-    if (!swChannelClient.isInitialized()) {
-      throw new Error('SWChannelClient not initialized');
-    }
-
-    // 检查 SW 端是否已初始化，如果未初始化则重新初始化
-    // 这处理了 init RPC 超时但 channel 已建立的情况
-    if (!swTaskQueueService.isInitialized()) {
-      const initSuccess = await swTaskQueueService.initializeSW();
-      if (!initSuccess) {
-        throw new Error('Failed to initialize Service Worker');
+    const maxRetries = 2;
+    const submitTimeout = 15000; // 15 秒超时，比默认的 120 秒更合理
+    
+    // 尝试初始化 SW（如果未初始化）
+    const ensureSWReady = async (): Promise<boolean> => {
+      if (!swChannelClient.isInitialized()) {
+        // 尝试重新初始化 swChannelClient
+        try {
+          await swChannelClient.initialize();
+        } catch {
+          return false;
+        }
       }
-    }
+      
+      if (!swTaskQueueService.isInitialized()) {
+        const initSuccess = await swTaskQueueService.initializeSW();
+        if (!initSuccess) {
+          return false;
+        }
+      }
+      
+      return true;
+    };
+    
+    // 带超时的提交
+    const submitWithTimeout = async (): Promise<{ success: boolean; error?: string }> => {
+      return Promise.race([
+        swChannelClient.submitWorkflow(workflow as unknown as ChannelWorkflowDefinition),
+        new Promise<{ success: boolean; error: string }>((_, reject) => 
+          setTimeout(() => reject(new Error('timeout')), submitTimeout)
+        )
+      ]);
+    };
 
     // Store locally
     this.workflows.set(workflow.id, workflow);
@@ -403,24 +425,58 @@ class WorkflowSubmissionService {
     // 工作流变更时清除读取缓存
     workflowStorageReader.invalidateCache();
 
-    // Submit via SWChannelClient (uses postmessage-duplex)
-    let result = await swChannelClient.submitWorkflow(workflow as unknown as ChannelWorkflowDefinition);
+    let lastError: Error | null = null;
     
-    // 如果 SW 端返回 "Workflow executor not initialized"，尝试重新初始化并重试一次
-    if (!result.success && result.error?.includes('not initialized')) {
-      // 强制重新初始化
-      const reinitSuccess = await swTaskQueueService.initializeSW();
-      if (reinitSuccess) {
-        // 重试提交
-        result = await swChannelClient.submitWorkflow(workflow as unknown as ChannelWorkflowDefinition);
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        // 确保 SW 已就绪
+        const isReady = await ensureSWReady();
+        if (!isReady) {
+          lastError = new Error('Failed to initialize Service Worker');
+          continue;
+        }
+
+        // 尝试提交
+        const result = await submitWithTimeout();
+        
+        // 如果 SW 端返回 "Workflow executor not initialized"，重新初始化并重试
+        if (!result.success && result.error?.includes('not initialized')) {
+          const reinitSuccess = await swTaskQueueService.initializeSW();
+          if (reinitSuccess) {
+            const retryResult = await submitWithTimeout();
+            if (retryResult.success) {
+              return; // 成功
+            }
+            lastError = new Error(retryResult.error || 'Submit workflow failed');
+          }
+          continue;
+        }
+        
+        if (result.success) {
+          return; // 成功
+        }
+        
+        lastError = new Error(result.error || 'Submit workflow failed');
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        
+        // 如果是超时，尝试重新初始化连接
+        if (lastError.message === 'timeout' && attempt < maxRetries - 1) {
+          console.warn('[WorkflowSubmissionService] Submit timeout, reinitializing SW connection...');
+          try {
+            // 重置 SW 连接
+            await swChannelClient.initialize();
+            await swTaskQueueService.initializeSW();
+          } catch {
+            // 忽略重新初始化错误
+          }
+        }
       }
     }
-    
-    if (!result.success) {
-      // Remove from local cache if submission failed
-      this.workflows.delete(workflow.id);
-      throw new Error(result.error || 'Submit workflow failed');
-    }
+
+    // 所有尝试都失败
+    this.workflows.delete(workflow.id);
+    throw lastError || new Error('Submit workflow failed after retries');
   }
 
   /**

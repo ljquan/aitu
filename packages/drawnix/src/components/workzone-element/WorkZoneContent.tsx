@@ -46,9 +46,10 @@ export const WorkZoneContent: React.FC<WorkZoneContentProps> = ({
   useEffect(() => {
     const workflowId = workflow.id;
     
-    // 检查是否是新创建的工作流（10秒内创建的视为新工作流）
+    // 检查是否是新创建的工作流（60秒内创建的视为新工作流）
     // 新工作流不需要 claim，因为它们刚刚被提交到 SW
-    const isNewWorkflow = workflow.createdAt && (Date.now() - workflow.createdAt) < 10000;
+    // 60秒足以涵盖 submit 的超时和重试过程
+    const isNewWorkflow = workflow.createdAt && (Date.now() - workflow.createdAt) < 60000;
     if (isNewWorkflow) {
       return;
     }
