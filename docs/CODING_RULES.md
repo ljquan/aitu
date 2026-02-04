@@ -6325,6 +6325,84 @@ async submit(workflow: WorkflowDefinition): Promise<void> {
 **相关文件**:
 - `packages/drawnix/src/services/workflow-submission-service.ts`
 
+### 降级路径必须保持与 SW 模式相同的功能行为
+
+**场景**: 当 Service Worker 不可用时，代码会降级到主线程直接调用 API。降级路径需要保持与 SW 模式相同的功能行为，包括日志记录、错误处理等。
+
+❌ **错误示例**:
+```typescript
+// 错误：降级路径没有记录 LLM API 日志
+async function generateImageDirect(prompt: string): Promise<any> {
+  const response = await fetch('/images/generations', {
+    method: 'POST',
+    body: JSON.stringify({ prompt }),
+  });
+  return response.json();
+  // ❌ 没有记录日志，调试面板看不到这次调用
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：降级路径也要记录日志
+import { startLLMApiLog, completeLLMApiLog, failLLMApiLog } from './llm-api-logger';
+
+async function generateImageDirect(prompt: string): Promise<any> {
+  const startTime = Date.now();
+  
+  // 开始记录
+  const logId = startLLMApiLog({
+    endpoint: '/images/generations',
+    model: modelName,
+    taskType: 'image',
+    prompt,
+  });
+  
+  try {
+    const response = await fetch('/images/generations', {
+      method: 'POST',
+      body: JSON.stringify({ prompt }),
+    });
+    
+    if (!response.ok) {
+      const error = await response.text();
+      failLLMApiLog(logId, {
+        httpStatus: response.status,
+        duration: Date.now() - startTime,
+        errorMessage: error,
+      });
+      throw new Error(error);
+    }
+    
+    const result = await response.json();
+    completeLLMApiLog(logId, {
+      httpStatus: response.status,
+      duration: Date.now() - startTime,
+      resultType: 'image',
+    });
+    return result;
+  } catch (error) {
+    failLLMApiLog(logId, {
+      duration: Date.now() - startTime,
+      errorMessage: error.message,
+    });
+    throw error;
+  }
+}
+```
+
+**原因**:
+- SW 模式和降级模式都写入同一个 IndexedDB（`llm-api-logs`）
+- 调试面板 `/sw-debug.html?tab=llmapi` 直接从 IndexedDB 读取日志
+- 如果降级路径不记录日志，调试时会漏掉这些 API 调用
+- 统一的日志记录有助于成本追踪和问题排查
+
+**相关文件**:
+- `packages/drawnix/src/services/media-executor/llm-api-logger.ts` - 主线程日志记录器
+- `apps/web/src/sw/task-queue/llm-api-logger.ts` - SW 日志记录器
+- `packages/drawnix/src/utils/gemini-api/services.ts` - `generateImageDirect`
+- `packages/drawnix/src/services/video-api-service.ts` - `submitVideoGeneration`
+
 ### 分页查询必须在服务端过滤
 
 **场景**: 实现带过滤条件的分页列表时

@@ -169,6 +169,7 @@ Service Worker (后台执行)
 19. **同步数据格式一致性**：`tasks.json` 结构是 `{ completedTasks: Task[] }` 不是数组，画板文件是 `board_{id}.json` 不是 `.drawnix`
 20. **主线程直接读取 IndexedDB**：只读数据（任务列表、工作流状态）应直接从 IndexedDB 读取，避免 postMessage RPC 的不稳定性和 1MB 大小限制；写操作仍需通过 SW 保持数据一致性
 21. **RPC 超时与重连**：关键 RPC 调用（如工作流提交）需设置合理超时（15-30秒），超时时主动重新初始化 SW 连接并重试
+22. **降级路径功能一致性**：降级到主线程直接调用 API 时，必须保持与 SW 模式相同的功能行为（如 LLM API 日志记录），否则调试工具会漏掉这些调用
 
 ### React 规则
 
