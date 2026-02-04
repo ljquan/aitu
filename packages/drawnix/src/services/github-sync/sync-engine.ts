@@ -2171,6 +2171,7 @@ class SyncEngine {
     filesCount: number;
     url: string;
     isCurrent: boolean;
+    isMaster: boolean;
   }>> {
     const gists = await gitHubApiService.listSyncGists();
     const config = await this.getConfig();
@@ -2183,6 +2184,7 @@ class SyncEngine {
       filesCount: Object.keys(gist.files).length,
       url: `https://gist.github.com/${gist.id}`,
       isCurrent: gist.id === config.gistId,
+      isMaster: gitHubApiService.isGistMaster(gist),
     }));
   }
 

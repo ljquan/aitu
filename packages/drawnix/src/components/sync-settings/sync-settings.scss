@@ -359,6 +359,17 @@
     text-transform: uppercase;
   }
 
+  &__gist-master-badge {
+    display: inline-flex;
+    padding: 1px 6px;
+    background: #F39C12;
+    color: white;
+    font-size: 9px;
+    font-weight: 600;
+    border-radius: 4px;
+    text-transform: uppercase;
+  }
+
   &__gist-id {
     font-size: 12px;
     font-weight: 500;

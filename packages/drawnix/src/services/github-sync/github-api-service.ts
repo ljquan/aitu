@@ -12,6 +12,7 @@ import {
   UpdateGistRequest,
   SYNC_FILES,
 } from './types';
+import { SHARD_FILES } from './shard-types';
 import { logInfo, logWarning, logError } from './sync-log-service';
 
 /** API 错误 */
@@ -114,6 +115,18 @@ class GitHubApiService {
    * 获取错误消息
    */
   private getErrorMessage(status: number, data: unknown): string {
+    // 对于 422 错误，尝试提取更详细的信息
+    if (status === 422 && data && typeof data === 'object') {
+      const errorData = data as { message?: string; errors?: Array<{ message?: string; resource?: string; field?: string }> };
+      if (errorData.errors && errorData.errors.length > 0) {
+        const errorDetails = errorData.errors.map(e => e.message || `${e.resource}.${e.field}`).join(', ');
+        return `请求数据无效: ${errorDetails}`;
+      }
+      if (errorData.message) {
+        return `请求数据无效: ${errorData.message}`;
+      }
+    }
+
     const messages: Record<number, string> = {
       401: 'Token 无效或已过期，请重新配置',
       403: '权限不足，请确保 Token 具有 gist 权限',
@@ -135,13 +148,32 @@ class GitHubApiService {
 
   /**
    * 查找现有的同步 Gist
+   * 优先查找包含 master-index.json 的分片主 Gist（选择最新更新的）
    */
   async findSyncGist(): Promise<GistResponse | null> {
     try {
       // 列出用户的所有 Gists
       const gists = await this.request<GistResponse[]>('/gists?per_page=100');
 
-      // 查找包含 manifest.json 的 Gist（同步 Gist 的标识）
+      // 查找所有包含 master-index.json 的 Gist（分片主 Gist）
+      const masterGists = gists.filter(gist => SHARD_FILES.MASTER_INDEX in gist.files);
+      if (masterGists.length > 0) {
+        // 选择最新更新的主 Gist
+        const latestMasterGist = masterGists.reduce((latest, gist) => {
+          const latestTime = new Date(latest.updated_at).getTime();
+          const gistTime = new Date(gist.updated_at).getTime();
+          return gistTime > latestTime ? gist : latest;
+        });
+        this.gistId = latestMasterGist.id;
+        logInfo('找到主数据库 Gist', { 
+          gistId: latestMasterGist.id.substring(0, 8), 
+          totalMasterGists: masterGists.length,
+          updatedAt: latestMasterGist.updated_at,
+        });
+        return latestMasterGist;
+      }
+
+      // 退化：查找包含 manifest.json 的旧 Gist
       const syncGist = gists.find(gist => {
         const hasManifest = SYNC_FILES.MANIFEST in gist.files;
         const matchDescription = gist.description === GIST_DESCRIPTION;
@@ -162,22 +194,31 @@ class GitHubApiService {
 
   /**
    * 获取所有同步 Gist 列表
+   * 包含 master-index.json 或 manifest.json 的 Gist
    */
   async listSyncGists(): Promise<GistResponse[]> {
     try {
       // 列出用户的所有 Gists
       const gists = await this.request<GistResponse[]>('/gists?per_page=100');
 
-      // 筛选同步 Gist（包含 manifest.json 或描述匹配）
+      // 筛选同步 Gist（包含 master-index.json、manifest.json 或描述匹配）
       return gists.filter(gist => {
+        const hasMasterIndex = SHARD_FILES.MASTER_INDEX in gist.files;
         const hasManifest = SYNC_FILES.MANIFEST in gist.files;
         const matchDescription = gist.description === GIST_DESCRIPTION;
-        return hasManifest || matchDescription;
+        return hasMasterIndex || hasManifest || matchDescription;
       });
     } catch (error) {
       logError('列出同步 Gist 失败', error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
+  }
+
+  /**
+   * 检查 Gist 是否为分片主 Gist（包含 master-index.json）
+   */
+  isGistMaster(gist: GistResponse): boolean {
+    return SHARD_FILES.MASTER_INDEX in gist.files;
   }
 
   /**
@@ -268,6 +309,10 @@ class GitHubApiService {
     }
 
     const filesPayload: Record<string, { content: string }> = {};
+    
+    // 收集每个文件的大小信息
+    const fileSizes: Array<{ name: string; sizeKB: number }> = [];
+    
     for (const [filename, content] of Object.entries(files)) {
       // 验证文件名长度（GitHub 限制约 255 字符）
       if (filename.length > 255) {
@@ -280,11 +325,29 @@ class GitHubApiService {
         throw new GitHubApiError(`文件内容为空: ${filename}`, 400);
       }
       filesPayload[filename] = { content };
+      
+      const sizeKB = content.length / 1024;
+      fileSizes.push({ name: filename, sizeKB });
     }
 
-    // 调试日志
-    const totalSize = Object.values(files).reduce((sum, content) => sum + content.length, 0);
-    logInfo(`更新 ${Object.keys(files).length} 个文件`, { totalSizeKB: parseFloat((totalSize / 1024).toFixed(2)) });
+    // 按大小排序，打印每个文件的大小
+    fileSizes.sort((a, b) => b.sizeKB - a.sizeKB);
+    const totalSize = fileSizes.reduce((sum, f) => sum + f.sizeKB, 0);
+    
+    // 直接使用 console.log 打印文件大小（确保能在控制台看到）
+    console.log(`[GitHub API] 准备更新 ${fileSizes.length} 个文件，总大小: ${totalSize.toFixed(2)} KB (${(totalSize / 1024).toFixed(2)} MB)`);
+    console.log('[GitHub API] 文件大小列表（从大到小）:');
+    for (const file of fileSizes) {
+      const sizeMB = file.sizeKB / 1024;
+      const warning = sizeMB > 1 ? ' ⚠️ 超过 1MB' : '';
+      console.log(`  - ${file.name}: ${file.sizeKB.toFixed(2)} KB (${sizeMB.toFixed(2)} MB)${warning}`);
+    }
+    
+    // 检查是否有超过 10MB 的文件（GitHub 限制）
+    const largeFiles = fileSizes.filter(f => f.sizeKB > 10 * 1024);
+    if (largeFiles.length > 0) {
+      console.warn(`[GitHub API] ⚠️ 发现 ${largeFiles.length} 个超过 10MB 的文件:`, largeFiles.map(f => `${f.name} (${(f.sizeKB / 1024).toFixed(2)} MB)`));
+    }
 
     const request: UpdateGistRequest = { files: filesPayload };
 
