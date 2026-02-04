@@ -5,14 +5,13 @@
  * 通过轮询 IndexedDB 实现可靠的状态同步
  */
 
-import { useEffect, useCallback, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import {
   workflowStatusSyncService,
   type WorkflowStatusChange,
-  type WorkflowStatusData,
 } from '../services/workflow-status-sync';
 
-export type { WorkflowStatusChange, WorkflowStatusData };
+export type { WorkflowStatusChange };
 
 /**
  * 订阅工作流状态变化
@@ -78,13 +77,3 @@ export function useMultiWorkflowStatusSync(
   }, [workflowIds.join(',')]); // 使用 join 作为依赖，避免数组引用变化导致重复订阅
 }
 
-/**
- * 强制刷新工作流状态
- */
-export function useWorkflowStatusRefresh(): (
-  workflowId: string
-) => Promise<WorkflowStatusData | null> {
-  return useCallback(async (workflowId: string) => {
-    return workflowStatusSyncService.refresh(workflowId);
-  }, []);
-}

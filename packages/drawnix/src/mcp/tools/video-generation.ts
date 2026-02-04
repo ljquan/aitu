@@ -13,7 +13,7 @@ import { taskQueueService } from '../../services/task-queue';
 import { TaskType } from '../../types/task.types';
 import type { VideoModel } from '../../types/video.types';
 import { VIDEO_MODEL_CONFIGS } from '../../constants/video-model-config';
-import { DEFAULT_VIDEO_MODEL } from '../../constants/model-config';
+import { getDefaultVideoModel } from '../../constants/model-config';
 import { geminiSettings } from '../../utils/settings-manager';
 
 /**
@@ -22,7 +22,7 @@ import { geminiSettings } from '../../utils/settings-manager';
  */
 export function getCurrentVideoModel(): string {
   const settings = geminiSettings.get();
-  return settings?.videoModelName || DEFAULT_VIDEO_MODEL;
+  return settings?.videoModelName || getDefaultVideoModel();
 }
 
 /**
@@ -317,8 +317,8 @@ export const videoGenerationTool: MCPTool = {
       },
       model: {
         type: 'string',
-        description: `视频生成模型，默认使用 ${DEFAULT_VIDEO_MODEL}`,
-        default: DEFAULT_VIDEO_MODEL,
+        description: `视频生成模型，默认使用 ${getDefaultVideoModel()}`,
+        default: getDefaultVideoModel(),
       },
       seconds: {
         type: 'string',

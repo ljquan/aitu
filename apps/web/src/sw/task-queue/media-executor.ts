@@ -120,10 +120,6 @@ export async function executeAIAnalyze(
 
   try {
     const result = await aiAnalyzeTool.execute(params, toolConfig);
-    console.log('[SW:executeAIAnalyze] Result:', {
-      success: result.success,
-      addStepsCount: result.addSteps?.length ?? 0,
-    });
     return {
       success: result.success,
       data: result.data,

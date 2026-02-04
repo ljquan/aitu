@@ -382,8 +382,13 @@ export const WorkflowMessageBubble: React.FC<WorkflowMessageBubbleProps> = ({
 
       // 对象类型，取 content 或 response 字段
       if (typeof result === 'object' && result !== null) {
-        const res = result as { response?: unknown; content?: unknown };
-        const text = (res.content || res.response) as string;
+        const res = result as {
+          response?: unknown;
+          content?: unknown;
+          data?: { content?: unknown; response?: unknown };
+        };
+        // 优先取 data.content（ai_analyze 格式），再取顶层 content/response
+        const text = (res.data?.content || res.data?.response || res.content || res.response) as string;
         if (typeof text === 'string') {
           const trimmed = text.trim();
           if (trimmed) return trimmed;
@@ -395,17 +400,39 @@ export const WorkflowMessageBubble: React.FC<WorkflowMessageBubbleProps> = ({
     return workflow.aiAnalysis || '';
   }, [isCompleted, workflow.steps, workflow.aiAnalysis]);
 
+  // 检查是否有媒体生成步骤（图片/视频）
+  const hasMediaGeneration = useMemo(() => {
+    const mediaGenerationMcps = [
+      'generate_image',
+      'generate_video',
+      'generate_grid_image',
+      'generate_inspiration_board',
+      'generate_long_video',
+    ];
+    return workflow.steps.some(step => mediaGenerationMcps.includes(step.mcp || ''));
+  }, [workflow.steps]);
+
   const summaryView = useMemo(() => {
-    if (!isCompleted) return null;
+    if (!isCompleted && !isFailed) return null;
+
+    // 失败状态
+    if (isFailed) {
+      return { variant: 'info' as const, icon: '❌', text: '生成失败' };
+    }
 
     // 直接展示最后一个 content
     if (lastContent) {
       return { variant: 'markdown' as const, icon: '✨', markdown: lastContent };
     }
 
+    // 媒体生成场景，成功但没有 content 返回
+    if (hasMediaGeneration) {
+      return { variant: 'info' as const, icon: '✅', text: '已生成' };
+    }
+
     // 没有任何内容
     return { variant: 'info' as const, icon: 'ℹ️', text: '未生成任何内容' };
-  }, [isCompleted, lastContent]);
+  }, [isCompleted, isFailed, lastContent, hasMediaGeneration]);
 
   const markdownMessage: Message | null = useMemo(() => {
     if (!summaryView || summaryView.variant !== 'markdown') return null;

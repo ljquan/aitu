@@ -17,3 +17,6 @@ export * from './indexeddb';
 export * from './blob';
 export * from './device';
 export * from './format';
+export * from './media';
+export * from './crypto';
+export * from './download';

@@ -257,6 +257,7 @@ export function useWorkflowSubmission(
     workflowControl.restoreWorkflow?.(recoveredWorkflow);
 
     // Build retry context from workflow context
+    const globalSettings = geminiSettings.get();
     const retryContext: WorkflowRetryContext = {
       aiContext: {
         rawInput: recoveredWorkflow.context?.userInput || '',
@@ -265,6 +266,10 @@ export function useWorkflowSubmission(
           id: recoveredWorkflow.context?.model || '',
           type: recoveredWorkflow.generationType === 'video' ? 'video' : 'image',
           isExplicit: true,
+        },
+        defaultModels: {
+          image: globalSettings.imageModelName || 'gemini-3-pro-image-preview-vip',
+          video: globalSettings.videoModelName || 'veo3.1',
         },
         params: {
           count: recoveredWorkflow.metadata?.count,
@@ -275,7 +280,7 @@ export function useWorkflowSubmission(
         finalPrompt: recoveredWorkflow.metadata?.prompt || '',
       },
       referenceImages: recoveredWorkflow.context?.referenceImages || [],
-      textModel: geminiSettings.get().textModelName,
+      textModel: globalSettings.textModelName,
     };
 
     // Update ChatDrawer with recovered workflow
@@ -629,6 +634,10 @@ export function useWorkflowSubmission(
           id: parsedInput.modelId,
           type: parsedInput.generationType,
           isExplicit: parsedInput.isModelExplicit,
+        },
+        defaultModels: {
+          image: globalSettings.imageModelName || 'gemini-3-pro-image-preview-vip',
+          video: globalSettings.videoModelName || 'veo3.1',
         },
         params: {
           count: parsedInput.count,

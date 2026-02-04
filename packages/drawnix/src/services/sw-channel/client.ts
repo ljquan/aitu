@@ -488,14 +488,7 @@ export class SWChannelClient {
     hasPendingToolRequest?: boolean;
     error?: string;
   }> {
-    console.log(`[SWChannelClient] 🔄 Claiming workflow: ${workflowId}`);
     const result = await this.callRPC('workflow:claim', { workflowId }, { success: false, error: 'Claim failed' });
-    console.log(`[SWChannelClient] Claim result:`, {
-      success: result.success,
-      status: result.workflow?.status,
-      hasPendingToolRequest: result.hasPendingToolRequest,
-      error: result.error,
-    });
     return result;
   }
 

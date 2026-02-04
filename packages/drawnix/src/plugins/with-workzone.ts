@@ -138,8 +138,6 @@ export class WorkZoneComponent extends CommonElementFlavour<PlaitWorkZone, Plait
    * 当 SW 中的工作流已完成/失败/不存在时更新 UI
    */
   private handleWorkflowStateChange = (workflowId: string, status: 'completed' | 'failed', error?: string): void => {
-    console.log(`[WorkZoneComponent] 🔄 Workflow state change: ${workflowId} -> ${status}`, error);
-    
     // 更新 workflow 状态
     const updatedWorkflow = {
       ...this.element.workflow,

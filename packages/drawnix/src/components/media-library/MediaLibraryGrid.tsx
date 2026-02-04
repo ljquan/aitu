@@ -37,7 +37,7 @@ import {
 import { useAssets } from '../../contexts/AssetContext';
 import { filterAssets, formatFileSize, formatDate } from '../../utils/asset-utils';
 import { useDeviceType } from '../../hooks/useDeviceType';
-import { downloadFile } from '../../utils/download-utils';
+import { downloadFile } from '@aitu/utils';
 import { VirtualAssetGrid } from './VirtualAssetGrid';
 import { MediaLibraryEmpty } from './MediaLibraryEmpty';
 import { ViewModeToggle } from './ViewModeToggle';

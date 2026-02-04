@@ -367,8 +367,6 @@ class WorkflowSubmissionService {
       workflowId,
       workflow,
     });
-
-    console.log(`[WorkflowSubmissionService] 📢 Notified workflow completed: ${workflowId}`);
   }
 
   /**
@@ -388,8 +386,6 @@ class WorkflowSubmissionService {
       workflowId,
       error,
     });
-
-    console.log(`[WorkflowSubmissionService] 📢 Notified workflow failed: ${workflowId}`);
   }
 
   /**

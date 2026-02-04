@@ -12,8 +12,8 @@ import {
   VIDEO_MODEL_SELECT_OPTIONS,
   TEXT_MODEL_SELECT_OPTIONS,
   getDefaultImageModel,
-  DEFAULT_VIDEO_MODEL,
-  DEFAULT_TEXT_MODEL,
+  getDefaultVideoModel,
+  getDefaultTextModel,
   VIDEO_MODELS,
   TEXT_MODELS,
 } from '../../constants/model-config';
@@ -42,8 +42,8 @@ export const SettingsDialog = ({
       setApiKey(config.apiKey || '');
       setBaseUrl(config.baseUrl || 'https://api.tu-zi.com/v1');
       setImageModelName(config.imageModelName || getDefaultImageModel());
-      setVideoModelName(config.videoModelName || DEFAULT_VIDEO_MODEL);
-      setTextModelName(config.textModelName || DEFAULT_TEXT_MODEL);
+      setVideoModelName(config.videoModelName || getDefaultVideoModel());
+      setTextModelName(config.textModelName || getDefaultTextModel());
     }
   }, [appState.openSettings]);
 
@@ -53,8 +53,8 @@ export const SettingsDialog = ({
       apiKey: apiKey.trim(),
       baseUrl: baseUrl.trim() || 'https://api.tu-zi.com/v1',
       imageModelName: imageModelName.trim() || getDefaultImageModel(),
-      videoModelName: videoModelName.trim() || DEFAULT_VIDEO_MODEL,
-      textModelName: textModelName.trim() || DEFAULT_TEXT_MODEL,
+      videoModelName: videoModelName.trim() || getDefaultVideoModel(),
+      textModelName: textModelName.trim() || getDefaultTextModel(),
     });
 
     // 关闭弹窗

@@ -371,15 +371,6 @@ export class SWChannelManager {
       try {
         const result = await handler(data);
         
-        // 调试：记录 RPC 完成
-        if (methodName === 'task:listPaginated') {
-          console.log(`[SW wrapRpcHandler] ${methodName} completed for client ${clientId}`, {
-            requestId,
-            resultSuccess: result?.success,
-            resultTasksCount: Array.isArray(result?.tasks) ? result.tasks.length : 'N/A',
-          });
-        }
-        
         // 验证结果可以序列化（捕获序列化错误）
         try {
           JSON.stringify(result);
@@ -773,7 +764,6 @@ export class SWChannelManager {
         }
       }
       
-      console.log(`[SWChannelManager] Imported ${imported} tasks`);
       return { success: true, imported };
     } catch (error) {
       console.error('[SWChannelManager] Failed to import tasks:', error);
@@ -930,10 +920,7 @@ export class SWChannelManager {
     hasPendingToolRequest?: boolean;
     error?: string;
   }> {
-    console.log(`[SWChannelManager] 🔄 Workflow claim: ${workflowId} by client ${clientId.substring(0, 8)}...`);
-    
     if (!workflowId) {
-      console.log('[SWChannelManager] ❌ Claim failed: Missing workflowId');
       return { success: false, error: 'Missing workflowId' };
     }
 
@@ -949,22 +936,17 @@ export class SWChannelManager {
       // 如果 executor 不存在或找不到工作流，直接从 IndexedDB 查询
       // 这处理了 init RPC 还没完成的情况
       if (!workflow) {
-        console.log(`[SWChannelManager] Executor ${executor ? 'exists but workflow not in memory' : 'not available'}, checking IndexedDB...`);
         workflow = await taskQueueStorage.getWorkflow(workflowId);
       }
       
       if (!workflow) {
-        console.log(`[SWChannelManager] ❌ Claim failed: Workflow ${workflowId} not found in memory or IndexedDB`);
         return { success: false, error: 'Workflow not found' };
       }
-
-      console.log(`[SWChannelManager] ✓ Found workflow: status=${workflow.status}, steps=${workflow.steps.length}`);
 
       // 建立 workflowId -> ClientChannel 映射
       const clientChannel = this.channels.get(clientId);
       if (clientChannel) {
         this.workflowChannels.set(workflowId, clientChannel);
-        console.log(`[SWChannelManager] ✓ Mapped workflow ${workflowId} to client ${clientId.substring(0, 8)}...`);
       }
 
       // 检查是否有待处理的主线程工具请求
@@ -973,19 +955,14 @@ export class SWChannelManager {
         (r: StoredPendingToolRequest) => r.workflowId === workflowId
       );
       const hasPendingToolRequest = workflowPendingRequests.length > 0;
-      
-      console.log(`[SWChannelManager] Pending tool requests: ${workflowPendingRequests.length}`, 
-        workflowPendingRequests.map((r: StoredPendingToolRequest) => ({ requestId: r.requestId, toolName: r.toolName })));
 
       // 如果工作流处于活跃状态且有待处理请求，重新发送
       // 注意：如果 executor 还不存在（init 未完成），这里不会重新发送
       // 待处理的请求会在 init 完成后通过 resendPendingToolRequests() 发送
       if ((workflow.status === 'running' || workflow.status === 'pending') && hasPendingToolRequest) {
-        console.log(`[SWChannelManager] 🔄 Will resend pending tool requests for workflow ${workflowId} after delay`);
         // 延迟重新发送待处理的工具请求，给主线程时间注册处理器
         // 这避免了时序问题：claim 完成后主线程的 registerToolRequestHandler 可能还没准备好
         setTimeout(() => {
-          console.log(`[SWChannelManager] 🔄 Resending pending tool requests for workflow ${workflowId} (delayed)`);
           this.resendPendingToolRequestsForWorkflow(workflowId);
         }, 500);
       }
@@ -2072,12 +2049,10 @@ export class SWChannelManager {
     }
     
     if (!clientChannel) {
-      console.log(`[SWChannelManager] sendToolRequest: No client channel found for workflow ${workflowId}`);
       return null;
     }
     
     try {
-      console.log(`[SWChannelManager] sendToolRequest: Sending ${toolName} to client ${clientChannel.clientId.substring(0, 8)}...`);
       
       // 使用 withTimeout 工具控制超时
       const response = await withTimeout(
@@ -2093,7 +2068,6 @@ export class SWChannelManager {
       );
       
       if (!response || typeof response !== 'object') {
-        console.log(`[SWChannelManager] sendToolRequest: No response received for ${toolName}`, { response });
         return null;
       }
       

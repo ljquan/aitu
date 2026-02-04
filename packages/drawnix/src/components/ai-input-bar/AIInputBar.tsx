@@ -1076,6 +1076,10 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
           type: parsedParams.generationType,
           isExplicit: parsedParams.isModelExplicit,
         },
+        defaultModels: {
+          image: globalSettings.imageModelName || 'gemini-3-pro-image-preview-vip',
+          video: globalSettings.videoModelName || 'veo3.1',
+        },
         params: {
           count: parsedParams.count,
           size: parsedParams.size,

@@ -20,7 +20,7 @@
  * formatSize(500);         // "500 B"
  * ```
  */
-export function formatSize(bytes: number, decimals: number = 1): string {
+export function formatSize(bytes: number, decimals = 1): string {
   if (bytes === 0) return '0 B';
   if (bytes < 0) return 'Invalid size';
 
@@ -94,7 +94,7 @@ export function formatDurationMs(ms: number): string {
  * formatNumber(1234.56);   // "1,234.56"
  * ```
  */
-export function formatNumber(num: number, locale: string = 'en-US'): string {
+export function formatNumber(num: number, locale = 'en-US'): string {
   return new Intl.NumberFormat(locale).format(num);
 }
 
@@ -115,8 +115,8 @@ export function formatNumber(num: number, locale: string = 'en-US'): string {
  */
 export function formatPercent(
   value: number,
-  decimals: number = 0,
-  isDecimal: boolean = true
+  decimals = 0,
+  isDecimal = true
 ): string {
   const percentage = isDecimal ? value * 100 : value;
   return `${percentage.toFixed(decimals)}%`;
@@ -178,7 +178,7 @@ export function formatRelativeTime(date: Date | number, now: number = Date.now()
 export function truncateText(
   text: string,
   maxLength: number,
-  ellipsis: string = '...'
+  ellipsis = '...'
 ): string {
   if (text.length <= maxLength) {
     return text;

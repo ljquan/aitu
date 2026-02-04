@@ -263,7 +263,7 @@ if ('serviceWorker' in navigator) {
     
     swChannelClient.registerVideoThumbnailHandler(async (url) => {
       try {
-        const { generateVideoThumbnailFromBlob } = await import('@drawnix/drawnix');
+        const { generateVideoThumbnailFromBlob } = await import('@aitu/utils');
         
         // 从缓存获取视频 blob
         const cache = await caches.open('drawnix-images');

@@ -56,8 +56,21 @@ export function buildStructuredUserMessage(context: AgentExecutionContext): stri
   parts.push('## 生成配置');
   parts.push('');
   const modelStatus = context.model.isExplicit ? '(用户指定)' : '(默认)';
-  parts.push(`- **模型**: ${context.model.id} ${modelStatus}`);
-  parts.push(`- **类型**: ${context.model.type === 'image' ? '图片生成' : '视频生成'}`);
+  // 根据模式类型生成不同的描述
+  const typeLabels: Record<string, string> = { text: 'Agent 智能模式', image: '图片生成', video: '视频生成' };
+  const typeLabel = typeLabels[context.model.type] || 'Agent 智能模式';
+  parts.push(`- **模式**: ${typeLabel}`);
+  // Agent 模式下显示文本模型，图片/视频模式显示当前模型
+  if (context.model.type === 'text') {
+    parts.push(`- **文本模型**: ${context.model.id} ${modelStatus}`);
+  } else {
+    parts.push(`- **当前模型**: ${context.model.id} ${modelStatus}`);
+  }
+  // 添加默认模型信息，告诉 AI 不需要传 model 参数
+  if (context.defaultModels) {
+    parts.push(`- **图片生成模型**: ${context.defaultModels.image}`);
+    parts.push(`- **视频生成模型**: ${context.defaultModels.video}`);
+  }
   parts.push(`- **数量**: ${context.params.count}`);
   // 始终传递配置的尺寸，但标注为默认值，让 AI 判断是否使用
   // 优先级：用户指令中的尺寸描述 > 下拉框选择的尺寸 > 模型默认尺寸
