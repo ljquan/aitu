@@ -353,9 +353,44 @@ export const boardToImage = (board: PlaitBoard) => {  // ✅ Plait 特有
 - ID 生成：`generateId()`, `generateUUID()`
 - 日期格式化：`formatDate()`, `formatDuration()`, `formatFileSize()`
 - DOM 操作：`download()`, `copyToClipboard()`
-- 安全工具：`sanitizeObject()`, `sanitizeUrl()`, `getSafeErrorMessage()`
+- 安全工具：`sanitizeObject()`, `sanitizeUrl()`, `sanitizeRequestBody()`, `getSafeErrorMessage()`
 - 字符串处理：`truncate()`, `capitalize()`, `toKebabCase()`
 - 异步工具：`debounce()`, `throttle()`
+- Blob 转换：`blobToBase64()`, `pureBase64ToBlob()`, `dataUrlToBlob()`, `blobToDataUrl()`
+- 设备信息：`getDeviceId()`, `getDeviceName()`, `getDeviceType()`
+- 格式化：`formatSize()`, `formatDurationMs()`, `formatPercent()`, `formatRelativeTime()`
+- IndexedDB：`openIndexedDB()`, `getById()`, `getAll()`, `getAllWithCursor()`, `put()`, `deleteById()`
+
+#### 避免不必要的函数包装/别名
+
+**场景**: 导入工具函数后，创建了一个简单包装函数
+
+❌ **错误示例**:
+```typescript
+import { truncate, sanitizeRequestBody as sanitizeBody } from '@aitu/utils';
+
+// 错误：不必要的包装，没有添加任何功能
+const truncateText = (text: string, maxLength: number) => truncate(text, maxLength);
+const sanitizeRequestBody = sanitizeBody;
+
+// 使用
+log.prompt = truncateText(prompt, 2000);
+log.body = sanitizeRequestBody(body);
+```
+
+✅ **正确示例**:
+```typescript
+import { truncate, sanitizeRequestBody } from '@aitu/utils';
+
+// 正确：直接使用导入的函数
+log.prompt = truncate(prompt, 2000);
+log.body = sanitizeRequestBody(body);
+```
+
+**原因**:
+- 不必要的包装增加了代码量和阅读负担
+- 在调用链中增加了一层，调试时更难追踪
+- 如果确实需要别名，使用 `import { x as y }` 语法即可
 
 ### React 组件规范
 - 使用函数组件和 Hooks
