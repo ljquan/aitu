@@ -5836,6 +5836,110 @@ const modelId = chatMessage.aiContext?.model?.id;
 
 ---
 
+#### LLM 响应格式兼容性
+
+**场景**: 解析 AI 模型返回的工作流 JSON 时，不同模型返回格式可能不同。
+
+❌ **错误示例**:
+```typescript
+// 错误：只处理标准格式，忽略其他可能的格式
+function parseToolCalls(response: string) {
+  const parsed = JSON.parse(response);
+  // 只处理 {"content": "...", "next": [...]} 格式
+  return parsed.next.map(item => ({...}));
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：支持多种 AI 返回格式
+function parseToolCalls(response: string): ToolCall[] {
+  // 格式 1: {"content": "分析完成", "next": [{"mcp": "...", "args": {...}}]}
+  const workflowJson = parseWorkflowJson(response);
+  if (workflowJson?.next.length > 0) {
+    return workflowJson.next.map(...);
+  }
+
+  // 格式 2: {"content": "[{\"mcp\": \"...\", \"args\": {...}}]"}
+  // content 字段本身是 JSON 数组字符串
+  if (next.length === 0 && parsed.content?.trim().startsWith('[')) {
+    const contentParsed = JSON.parse(parsed.content);
+    if (Array.isArray(contentParsed)) next = contentParsed;
+  }
+
+  // 格式 3: [{"mcp": "...", "args": {...}}] 直接数组
+  if (cleaned.trim().startsWith('[')) {
+    const parsed = JSON.parse(cleaned);
+    if (Array.isArray(parsed)) return parsed.map(...);
+  }
+
+  // 格式 4: 支持 name/mcp 和 arguments/args 字段名
+  const name = parsed.name || parsed.mcp;
+  const args = parsed.arguments || parsed.args || parsed.params;
+  
+  return toolCalls;
+}
+```
+
+**原因**: 不同 LLM 模型（GPT、Gemini、DeepSeek 等）对同一 prompt 可能返回不同格式的 JSON，必须兼容多种格式以确保工作流正确执行。
+
+---
+
+#### 工作流状态同步使用轮询机制
+
+**场景**: 在 UI 组件中同步工作流执行状态时。
+
+❌ **错误示例**:
+```typescript
+// 错误：完全依赖 SW 事件推送更新 UI
+useEffect(() => {
+  const subscription = workflowEvents.subscribe((event) => {
+    if (event.type === 'step_completed') {
+      setWorkflow(prev => updateStep(prev, event));
+    }
+  });
+  return () => subscription.unsubscribe();
+}, []);
+// 问题：SW 事件可能因连接断开、页面刷新等原因丢失
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：使用轮询 IndexedDB 作为可靠的同步机制
+// 1. 创建公共服务
+class WorkflowStatusSyncService {
+  subscribe(workflowId: string, callback: StatusChangeCallback): () => void {
+    // 定时从 IndexedDB 读取最新状态
+    // 检测变化后调用 callback
+  }
+}
+
+// 2. 提供 React Hook
+export function useWorkflowStatusSync(
+  workflowId: string | null,
+  onStatusChange: (change: WorkflowStatusChange) => void
+): void {
+  useEffect(() => {
+    if (!workflowId) return;
+    return workflowStatusSyncService.subscribe(workflowId, onStatusChange);
+  }, [workflowId]);
+}
+
+// 3. 多个组件共享同一服务（WorkZone、ChatDrawer 等）
+const runningWorkflowIds = useMemo(() => 
+  workflows.filter(w => w.status === 'running').map(w => w.id),
+[workflows]);
+
+useMultiWorkflowStatusSync(runningWorkflowIds, handleStatusChange);
+```
+
+**原因**: 
+1. SW 事件通道（postMessage）不可靠，页面刷新、SW 更新都可能导致事件丢失
+2. 轮询 IndexedDB 是"单一数据真相"原则的体现
+3. 多组件共享同一服务可避免重复轮询
+
+---
+
 ### UI 图标库规范
 
 #### 验证 TDesign 图标库导出名称
