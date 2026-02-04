@@ -24,6 +24,7 @@ import {
   updateLLMApiLogMetadata,
 } from './llm-api-logger';
 import { parseToolCalls, extractTextContent } from '@aitu/utils';
+import { unifiedCacheService } from '../unified-cache-service';
 
 /**
  * 主线程降级执行器
@@ -70,12 +71,22 @@ export class FallbackMediaExecutor implements IMediaExecutor {
     });
 
     try {
+      // 处理参考图片：将虚拟路径和远程 URL 转换为 base64
+      let processedImages: string[] | undefined;
+      if (referenceImages && referenceImages.length > 0) {
+        processedImages = [];
+        for (const imgUrl of referenceImages) {
+          const imageData = await unifiedCacheService.getImageForAI(imgUrl);
+          processedImages.push(imageData.value);
+        }
+      }
+
       // 构建请求体
       const requestBody = this.buildImageRequestBody({
         prompt,
         model: modelName,
         size,
-        referenceImages,
+        referenceImages: processedImages,
         quality,
         n: Math.min(Math.max(1, count), 10),
       });
@@ -478,6 +489,11 @@ export class FallbackMediaExecutor implements IMediaExecutor {
 
     if (params.quality) {
       body.quality = params.quality;
+    }
+
+    // 添加参考图片（已经转换为 base64 或 URL）
+    if (params.referenceImages && params.referenceImages.length > 0) {
+      body.image = params.referenceImages;
     }
 
     return body;

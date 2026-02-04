@@ -10,6 +10,11 @@ import { geminiSettings, settingsManager } from '../settings-manager';
 import { validateAndEnsureConfig } from './auth';
 import { shouldUseSWTaskQueue } from '../../services/task-queue';
 import { swChannelClient } from '../../services/sw-channel';
+import {
+  startLLMApiLog,
+  completeLLMApiLog,
+  failLLMApiLog,
+} from '../../services/media-executor/llm-api-logger';
 
 /**
  * 确保 SW 客户端已初始化
@@ -168,60 +173,107 @@ async function generateImageDirect(
   modelName: string
 ): Promise<any> {
   const globalSettings = geminiSettings.get();
+  const startTime = Date.now();
+  
+  // 开始记录 LLM API 调用（降级模式）
+  const referenceImages = options.image 
+    ? (Array.isArray(options.image) ? options.image : [options.image])
+    : undefined;
+  const logId = startLLMApiLog({
+    endpoint: '/images/generations',
+    model: modelName,
+    taskType: 'image',
+    prompt,
+    hasReferenceImages: referenceImages && referenceImages.length > 0,
+    referenceImageCount: referenceImages?.length,
+  });
   
   const config = {
     ...DEFAULT_CONFIG,
     ...globalSettings,
     modelName,
   };
-  const validatedConfig = await validateAndEnsureConfig(config);
-  const headers = {
-    'Authorization': `Bearer ${validatedConfig.apiKey}`,
-    'Content-Type': 'application/json',
-  };
+  
+  try {
+    const validatedConfig = await validateAndEnsureConfig(config);
+    const headers = {
+      'Authorization': `Bearer ${validatedConfig.apiKey}`,
+      'Content-Type': 'application/json',
+    };
 
-  // 构建请求体 - 强调生成图片
-  const enhancedPrompt = `Generate an image: ${prompt}`;
-  const data: any = {
-    model: validatedConfig.modelName || 'gemini-3-pro-image-preview-vip',
-    prompt: enhancedPrompt,
-    response_format: options.response_format || 'url', // 默认返回 url
-  };
+    // 构建请求体 - 强调生成图片
+    const enhancedPrompt = `Generate an image: ${prompt}`;
+    const data: any = {
+      model: validatedConfig.modelName || 'gemini-3-pro-image-preview-vip',
+      prompt: enhancedPrompt,
+      response_format: options.response_format || 'url', // 默认返回 url
+    };
 
-  // size 参数可选，不传则由 API 自动决定（对应 auto）
-  if (options.size && options.size !== 'auto') {
-    data.size = options.size;
-  }
+    // size 参数可选，不传则由 API 自动决定（对应 auto）
+    if (options.size && options.size !== 'auto') {
+      data.size = options.size;
+    }
 
-  // image 参数可选（单图或多图）
-  if (options.image) {
-    data.image = options.image;
-  }
+    // image 参数可选（单图或多图）
+    if (options.image) {
+      data.image = options.image;
+    }
 
-  // quality 参数可选，仅对 gemini-3-pro-image-preview 有效
-  if (options.quality && data.model === 'gemini-3-pro-image-preview') {
-    data.quality = options.quality;
-  }
+    // quality 参数可选，仅对 gemini-3-pro-image-preview 有效
+    if (options.quality && data.model === 'gemini-3-pro-image-preview') {
+      data.quality = options.quality;
+    }
 
-  const url = `${validatedConfig.baseUrl}/images/generations`;
+    const url = `${validatedConfig.baseUrl}/images/generations`;
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(data),
-    signal: AbortSignal.timeout(validatedConfig.timeout || DEFAULT_CONFIG.timeout!),
-  });
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(data),
+      signal: AbortSignal.timeout(validatedConfig.timeout || DEFAULT_CONFIG.timeout!),
+    });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[ImageAPI] Request failed:', response.status, errorText);
-    const error = new Error(`图片生成请求失败: ${response.status} - ${errorText}`);
-    (error as any).apiErrorBody = errorText;
-    (error as any).httpStatus = response.status;
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[ImageAPI] Request failed:', response.status, errorText);
+      const duration = Date.now() - startTime;
+      failLLMApiLog(logId, {
+        httpStatus: response.status,
+        duration,
+        errorMessage: errorText.substring(0, 500),
+      });
+      const error = new Error(`图片生成请求失败: ${response.status} - ${errorText}`);
+      (error as any).apiErrorBody = errorText;
+      (error as any).httpStatus = response.status;
+      throw error;
+    }
+
+    const result = await response.json();
+    const duration = Date.now() - startTime;
+    
+    // 提取结果 URL
+    const resultUrl = result.data?.[0]?.url || result.data?.[0]?.b64_json;
+    
+    completeLLMApiLog(logId, {
+      httpStatus: response.status,
+      duration,
+      resultType: 'image',
+      resultCount: result.data?.length || 1,
+      resultUrl: resultUrl?.substring(0, 200),
+    });
+    
+    return result;
+  } catch (error: any) {
+    const duration = Date.now() - startTime;
+    // 如果错误还没被记录（非 HTTP 错误）
+    if (!error.httpStatus) {
+      failLLMApiLog(logId, {
+        duration,
+        errorMessage: error.message || 'Image generation failed',
+      });
+    }
     throw error;
   }
-
-  return await response.json();
 }
 
 /**

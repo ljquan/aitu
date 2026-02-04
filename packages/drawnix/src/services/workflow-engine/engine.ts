@@ -9,7 +9,7 @@
  */
 
 import { Subject, Observable } from 'rxjs';
-import { v4 as uuidv4 } from 'uuid';
+import { generateUUID } from '@aitu/utils';
 import type {
   Workflow,
   WorkflowStep,
@@ -535,7 +535,7 @@ export function createWorkflow(
 ): Workflow {
   const now = Date.now();
   return {
-    id: uuidv4(),
+    id: generateUUID(),
     name,
     steps: steps.map((step) => ({
       ...step,

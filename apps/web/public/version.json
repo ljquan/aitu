@@ -1,6 +1,13 @@
 {
-  "version": "0.5.68",
-  "buildTime": "2026-02-03T12:38:13.331Z",
+  "version": "0.5.69",
+  "buildTime": "2026-02-04T02:30:15.170Z",
   "gitCommit": "unknown",
-  "changelog": []
+  "changelog": [
+    "support opening tools via URL parameter and display tool icons in window title",
+    "move ai_analyze to SW and improve debug panel logging",
+    "implement LLM API log selection and batch actions",
+    "implement auto-compression for 10-25MB images",
+    "任务队列同步下载远程数据时双向合并",
+    "改进工作流恢复机制和错误处理"
+  ]
 }
