@@ -225,32 +225,16 @@ class WorkflowSubmissionService {
     // Wait for swChannelClient to be initialized
     const tryRegister = () => {
       if (!swChannelClient.isInitialized()) {
-        console.log('[WorkflowSubmissionService] ⏳ Waiting for swChannelClient to initialize for tool handler...');
         setTimeout(tryRegister, 100);
         return;
       }
 
-      console.log('[WorkflowSubmissionService] ✅ Registering tool request handler');
-
       swChannelClient.registerToolRequestHandler(async (request) => {
-        console.log('[WorkflowSubmissionService] 📥 Received tool request:', {
-          toolName: request.toolName,
-          requestId: request.requestId,
-          workflowId: request.workflowId,
-          argsKeys: Object.keys(request.args || {}),
-        });
         try {
           // Execute the tool using swCapabilitiesHandler
           const result = await swCapabilitiesHandler.execute({
             operation: request.toolName,
             args: request.args,
-          });
-
-          console.log('[WorkflowSubmissionService] ✅ Tool execution result:', {
-            toolName: request.toolName,
-            success: result.success,
-            hasData: !!result.data,
-            error: result.error,
           });
 
           // Convert CapabilityResult to MainThreadToolResponse format

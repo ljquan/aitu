@@ -8,11 +8,10 @@
  * - 轮询等待任务完成
  */
 
-import { Subject, Observable } from 'rxjs';
+import { Subject } from 'rxjs';
 import type {
   Workflow,
   WorkflowStep,
-  WorkflowStatus,
   WorkflowEvent,
   WorkflowEngineOptions,
 } from './types';
@@ -42,13 +41,6 @@ export class WorkflowEngine {
     this.events$.subscribe((event) => {
       this.options.onEvent(event);
     });
-  }
-
-  /**
-   * 获取事件流
-   */
-  getEvents(): Observable<WorkflowEvent> {
-    return this.events$.asObservable();
   }
 
   /**
@@ -108,14 +100,12 @@ export class WorkflowEngine {
   async resumeWorkflow(workflowId: string): Promise<void> {
     // 检查是否已在内存中
     if (this.workflows.has(workflowId)) {
-      console.log('[WorkflowEngine] Workflow already in memory:', workflowId);
       return;
     }
 
     // 从 IndexedDB 加载
     const workflow = await workflowStorageWriter.getWorkflow(workflowId);
     if (!workflow) {
-      console.log('[WorkflowEngine] Workflow not found in IndexedDB:', workflowId);
       return;
     }
 
@@ -125,15 +115,8 @@ export class WorkflowEngine {
     const hasPendingMainThreadSteps = workflow.steps.some((s) => s.status === 'pending_main_thread');
 
     if (!hasPendingSteps && !hasRunningSteps && !hasPendingMainThreadSteps) {
-      console.log('[WorkflowEngine] No pending/running steps to resume:', workflowId);
       return;
     }
-
-    console.log('[WorkflowEngine] Resuming workflow:', workflowId, {
-      pendingSteps: workflow.steps.filter((s) => s.status === 'pending').length,
-      runningSteps: workflow.steps.filter((s) => s.status === 'running').length,
-      pendingMainThreadSteps: workflow.steps.filter((s) => s.status === 'pending_main_thread').length,
-    });
 
     // 将 running 步骤重置为 pending（页面刷新导致中断）
     // pending_main_thread 步骤保持不变，由 WorkflowPollingService 处理
@@ -240,15 +223,10 @@ export class WorkflowEngine {
 
       // 查找可执行的步骤
       const executableSteps = findExecutableSteps(workflow);
-      console.log(`[WorkflowEngine] Iteration ${iteration}: ${executableSteps.length} executable steps, total ${workflow.steps.length} steps`);
-      
+
       if (executableSteps.length === 0) {
-        console.log('[WorkflowEngine] No more executable steps, workflow steps status:', 
-          workflow.steps.map(s => ({ id: s.id, mcp: s.mcp, status: s.status })));
         break;
       }
-
-      console.log('[WorkflowEngine] Executing steps:', executableSteps.map(s => ({ id: s.id, mcp: s.mcp })));
 
       // 并行执行所有可执行的步骤
       await Promise.all(
@@ -399,12 +377,6 @@ export class WorkflowEngine {
         // AI 分析任务（不写入 tasks 表，chat 类型不应该出现在用户任务列表）
         // 注意：ai_analyze 必须使用降级执行器（主线程执行），因为需要立即返回结果和 addSteps
         // SW 执行器的 fire-and-forget 模式无法满足这个需求
-        console.log('[WorkflowEngine] Executing ai_analyze step:', step.id, 'args:', {
-          hasMessages: !!(step.args.messages as unknown[])?.length,
-          prompt: (step.args.prompt as string)?.substring(0, 100),
-          textModel: step.args.textModel,
-          allArgs: Object.keys(step.args),
-        });
 
         // 强制使用降级执行器，确保结果立即返回
         const fallbackExecutor = executorFactory.getFallbackExecutor();
@@ -421,17 +393,10 @@ export class WorkflowEngine {
           model: step.args.model as string | undefined,
         }, { signal });
 
-        console.log('[WorkflowEngine] ai_analyze result:', {
-          content: analyzeResult.content?.substring(0, 100),
-          addStepsCount: analyzeResult.addSteps?.length ?? 0,
-          addSteps: analyzeResult.addSteps?.map(s => ({ id: s.id, mcp: s.mcp })),
-        });
-
         step.result = { content: analyzeResult.content };
 
         // 处理动态添加的步骤（AI 规划的后续任务）
         if (analyzeResult.addSteps && analyzeResult.addSteps.length > 0) {
-          console.log(`[WorkflowEngine] Adding ${analyzeResult.addSteps.length} new steps from ai_analyze`);
           for (const newStep of analyzeResult.addSteps) {
             // 去重检查
             if (!workflow.steps.find(s => s.id === newStep.id)) {
@@ -460,7 +425,6 @@ export class WorkflowEngine {
           throw new Error(`No main thread tool executor configured for: ${step.mcp}`);
         }
 
-        console.log(`[WorkflowEngine] Executing main thread tool: ${step.mcp}`);
         const toolResult = await this.options.executeMainThreadTool(step.mcp, step.args);
 
         if (!toolResult.success) {

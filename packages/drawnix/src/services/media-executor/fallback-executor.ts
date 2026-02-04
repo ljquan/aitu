@@ -385,10 +385,8 @@ export class FallbackMediaExecutor implements IMediaExecutor {
       });
 
       // 解析 tool calls（AI 规划的后续任务）
-      console.log('[FallbackExecutor:aiAnalyze] Full response:', fullResponse.substring(0, 500));
       const toolCalls = parseToolCalls(fullResponse);
       const textContent = extractTextContent(fullResponse);
-      console.log('[FallbackExecutor:aiAnalyze] Parsed toolCalls:', toolCalls.length, 'textContent:', textContent?.substring(0, 100));
 
       // 转换为 addSteps 格式
       const addSteps = toolCalls.map((tc, index) => {

@@ -352,7 +352,6 @@ export const Drawnix: React.FC<DrawnixProps> = ({
           );
           
           if (workflowStatus === 'completed' && !hasPendingOrRunningSteps) {
-            console.log(`[Drawnix] 🗑️ Auto-removing completed WorkZone: ${workzone.id}`);
             WorkZoneTransforms.removeWorkZone(board, workzone.id);
             continue;
           }

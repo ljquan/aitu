@@ -67,7 +67,6 @@ class WorkflowStorageWriter {
         // 如果数据库不存在，创建必要的 object store
         const db = request.result;
         if (!db.objectStoreNames.contains(WORKFLOWS_STORE)) {
-          console.log('[WorkflowStorageWriter] Creating workflows store');
           const store = db.createObjectStore(WORKFLOWS_STORE, { keyPath: 'id' });
           store.createIndex('status', 'status', { unique: false });
           store.createIndex('createdAt', 'createdAt', { unique: false });
@@ -101,7 +100,6 @@ class WorkflowStorageWriter {
           reject(request.error);
         };
         request.onsuccess = () => {
-          console.log('[WorkflowStorageWriter] Saved workflow:', workflow.id, workflow.status);
           resolve();
         };
       });

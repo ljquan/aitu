@@ -78,9 +78,8 @@ class WorkflowPollingService {
 
     try {
       this.db = await this.openDB();
-      console.log('[WorkflowPollingService] ✅ Database opened');
-    } catch (error) {
-      console.error('[WorkflowPollingService] ❌ Failed to open database:', error);
+    } catch {
+      // Database open failed, polling won't work
     }
   }
 
@@ -102,7 +101,6 @@ class WorkflowPollingService {
       request.onupgradeneeded = () => {
         // 轮询服务只读取数据，不负责创建 store
         // store 由 SW 创建和管理
-        console.log('[WorkflowPollingService] Database upgrade needed, waiting for SW to create stores');
       };
     });
   }
@@ -136,7 +134,6 @@ class WorkflowPollingService {
    */
   setBoardId(boardId: string): void {
     this.currentBoardId = boardId;
-    console.log(`[WorkflowPollingService] 📋 Board ID set: ${boardId}`);
   }
 
   /**
@@ -152,7 +149,6 @@ class WorkflowPollingService {
   start(): void {
     if (this.pollingTimer) return;
 
-    console.log('[WorkflowPollingService] 🚀 Starting polling', { boardId: this.currentBoardId });
     this.pollingTimer = setInterval(() => this.poll(), POLLING_INTERVAL);
 
     // 立即执行一次
@@ -166,7 +162,6 @@ class WorkflowPollingService {
     if (this.pollingTimer) {
       clearInterval(this.pollingTimer);
       this.pollingTimer = null;
-      console.log('[WorkflowPollingService] ⏹️ Stopped polling');
     }
   }
 
@@ -263,15 +258,8 @@ class WorkflowPollingService {
     // 再次检查步骤状态，避免重复执行
     // （可能在等待执行期间已经被其他地方处理）
     if (step.status !== 'pending_main_thread') {
-      console.log(`[WorkflowPollingService] ⏭️ Step already processed: ${step.id}, status: ${step.status}`);
       return;
     }
-
-    console.log(`[WorkflowPollingService] 🔧 Executing step: ${step.mcp}`, {
-      workflowId: workflow.id,
-      stepId: step.id,
-      boardId: workflow.initiatorBoardId,
-    });
 
     // 先将状态改为 running，防止重复执行
     step.status = 'running' as WorkflowStepStatus;
@@ -291,15 +279,12 @@ class WorkflowPollingService {
         step.result = result.data;
         step.duration = Date.now() - startTime;
 
-        console.log(`[WorkflowPollingService] ✅ Step completed: ${step.mcp}`);
-        
         // 通知 UI 步骤完成
         workflowSubmissionService.notifyStepUpdate(
           workflow.id, step.id, 'completed', step.result, undefined, step.duration
         );
       } else if (result.error === '画布未初始化') {
         // 画布未初始化，保持 pending_main_thread 状态，等待下一次轮询
-        console.log(`[WorkflowPollingService] ⏳ Board not ready, will retry: ${step.mcp}`);
         return; // 不更新工作流，不检查完成状态
       } else {
         step.status = 'failed';
@@ -316,7 +301,6 @@ class WorkflowPollingService {
     } catch (error: any) {
       // 画布未初始化错误，保持 pending_main_thread 状态
       if (error.message === '画布未初始化') {
-        console.log(`[WorkflowPollingService] ⏳ Board not ready, will retry: ${step.mcp}`);
         return;
       }
 
@@ -357,9 +341,6 @@ class WorkflowPollingService {
         const request = store.put(workflow);
 
         request.onsuccess = () => {
-          console.log(`[WorkflowPollingService] 💾 Workflow updated: ${workflow.id}`, {
-            stepsStatus: workflow.steps.map(s => ({ id: s.id, status: s.status })),
-          });
           resolve();
         };
         request.onerror = () => {
@@ -397,8 +378,6 @@ class WorkflowPollingService {
       }
 
       await this.updateWorkflow(workflow);
-
-      console.log(`[WorkflowPollingService] 🏁 Workflow ${workflow.status}: ${workflow.id}`);
 
       // 通知 UI 工作流完成/失败
       if (hasFailed) {

@@ -286,11 +286,6 @@ export class SWCapabilitiesHandler {
    * Handle mindmap insertion
    */
   private async handleMindmap(params: MindmapParams): Promise<CapabilityResult> {
-    console.log('[SWCapabilities] 🗺️ handleMindmap called:', {
-      hasBoard: !!boardRef,
-      markdownLength: params.markdown?.length ?? 0,
-    });
-
     const board = boardRef;
     if (!board) {
       console.error('[SWCapabilities] ❌ handleMindmap: 画布未初始化');
@@ -336,10 +331,8 @@ export class SWCapabilitiesHandler {
 
       // Insert to canvas at viewport center
       const insertResult = this.insertElementsToCanvasAtPoint(board, [mindElement], viewportCenter);
-      console.log('[SWCapabilities] 🗺️ Mindmap insert result:', insertResult);
 
       if (insertResult.success) {
-        console.log('[SWCapabilities] ✅ Mindmap inserted successfully');
         // Center the inserted mindmap in viewport after a short delay
         requestAnimationFrame(() => {
           this.centerInsertedElementsInViewport(board, 1);
@@ -347,11 +340,9 @@ export class SWCapabilitiesHandler {
 
         if (targetWorkZone) {
           // Remove the WorkZone after successful insertion
-          console.log('[SWCapabilities] 🗺️ Removing WorkZone:', targetWorkZone.id);
           setTimeout(() => {
             WorkZoneTransforms.removeWorkZone(board, targetWorkZone!.id);
-            console.log('[SWCapabilities] ✅ WorkZone removed successfully');
-            
+
             // Dispatch event to notify AI input bar that generation is complete
             window.dispatchEvent(new CustomEvent('ai-generation-complete', {
               detail: { type: 'mindmap', success: true }
