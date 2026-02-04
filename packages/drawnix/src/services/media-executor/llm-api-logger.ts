@@ -5,6 +5,8 @@
  * 写入与 SW 相同的 IndexedDB，确保调试面板能读取。
  */
 
+import { truncate, sanitizeRequestBody } from '@aitu/utils';
+
 // 与 SW 端保持一致的数据库配置
 const DB_NAME = 'llm-api-logs';
 const DB_VERSION = 4;
@@ -124,29 +126,6 @@ async function saveLogToDB(log: LLMApiLog): Promise<void> {
   }
 }
 
-/**
- * 截断文本
- */
-function truncateText(text: string, maxLength: number): string {
-  if (text.length <= maxLength) return text;
-  return text.substring(0, maxLength) + '...';
-}
-
-/**
- * 过滤敏感信息
- */
-function sanitizeRequestBody(body: string): string {
-  try {
-    const parsed = JSON.parse(body);
-    // 移除可能包含敏感信息的字段
-    if (parsed.apiKey) parsed.apiKey = '[REDACTED]';
-    if (parsed.api_key) parsed.api_key = '[REDACTED]';
-    if (parsed.authorization) parsed.authorization = '[REDACTED]';
-    return JSON.stringify(parsed);
-  } catch {
-    return body;
-  }
-}
 
 /**
  * 开始记录 LLM API 调用
@@ -170,7 +149,7 @@ export function startLLMApiLog(params: {
     endpoint: params.endpoint,
     model: params.model,
     taskType: params.taskType,
-    prompt: params.prompt ? truncateText(params.prompt, 2000) : undefined,
+    prompt: params.prompt ? truncate(params.prompt, 2000) : undefined,
     requestBody: params.requestBody ? sanitizeRequestBody(params.requestBody) : undefined,
     hasReferenceImages: params.hasReferenceImages,
     referenceImageCount: params.referenceImageCount,
@@ -215,8 +194,8 @@ export function completeLLMApiLog(
     log.resultType = params.resultType;
     log.resultCount = params.resultCount;
     log.resultUrl = params.resultUrl;
-    log.resultText = params.resultText ? truncateText(params.resultText, 1000) : undefined;
-    log.responseBody = params.responseBody ? truncateText(params.responseBody, 2000) : undefined;
+    log.resultText = params.resultText ? truncate(params.resultText, 1000) : undefined;
+    log.responseBody = params.responseBody ? truncate(params.responseBody, 2000) : undefined;
     log.remoteId = params.remoteId;
 
     // 更新 IndexedDB
@@ -238,7 +217,7 @@ export function updateLLMApiLogMetadata(
   const log = memoryLogs.find((l) => l.id === logId);
   if (log) {
     if (params.remoteId) log.remoteId = params.remoteId;
-    if (params.responseBody) log.responseBody = truncateText(params.responseBody, 2000);
+    if (params.responseBody) log.responseBody = truncate(params.responseBody, 2000);
     if (params.httpStatus) log.httpStatus = params.httpStatus;
 
     // 更新 IndexedDB
@@ -263,8 +242,8 @@ export function failLLMApiLog(
     log.status = 'error';
     log.httpStatus = params.httpStatus;
     log.duration = params.duration;
-    log.errorMessage = truncateText(params.errorMessage, 500);
-    log.responseBody = params.responseBody ? truncateText(params.responseBody, 2000) : undefined;
+    log.errorMessage = truncate(params.errorMessage, 500);
+    log.responseBody = params.responseBody ? truncate(params.responseBody, 2000) : undefined;
 
     // 更新 IndexedDB
     saveLogToDB(log);

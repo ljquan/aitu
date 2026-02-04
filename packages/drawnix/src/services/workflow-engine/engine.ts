@@ -9,18 +9,17 @@
  */
 
 import { Subject, Observable } from 'rxjs';
-import { generateUUID } from '@aitu/utils';
 import type {
   Workflow,
   WorkflowStep,
   WorkflowStatus,
-  WorkflowStepStatus,
   WorkflowEvent,
   WorkflowEngineOptions,
 } from './types';
 import { executorFactory, waitForTaskCompletion, taskStorageWriter } from '../media-executor';
 import type { AIAnalyzeParams } from '../media-executor/types';
 import { workflowStorageWriter } from './workflow-storage-writer';
+import { findExecutableSteps, getFirstError } from './workflow-factory';
 
 /**
  * 主线程工作流引擎
@@ -187,7 +186,7 @@ export class WorkflowEngine {
 
       if (hasFailed && !this.options.continueOnError) {
         workflow.status = 'failed';
-        workflow.error = this.getFirstError(workflow);
+        workflow.error = getFirstError(workflow);
       } else if (allCompleted) {
         workflow.status = 'completed';
         workflow.completedAt = Date.now();
@@ -240,7 +239,7 @@ export class WorkflowEngine {
       }
 
       // 查找可执行的步骤
-      const executableSteps = this.findExecutableSteps(workflow);
+      const executableSteps = findExecutableSteps(workflow);
       console.log(`[WorkflowEngine] Iteration ${iteration}: ${executableSteps.length} executable steps, total ${workflow.steps.length} steps`);
       
       if (executableSteps.length === 0) {
@@ -258,25 +257,6 @@ export class WorkflowEngine {
     }
   }
 
-  /**
-   * 查找可执行的步骤
-   */
-  private findExecutableSteps(workflow: Workflow): WorkflowStep[] {
-    return workflow.steps.filter((step) => {
-      // 只处理 pending 状态的步骤
-      if (step.status !== 'pending') return false;
-
-      // 检查依赖
-      if (step.dependsOn && step.dependsOn.length > 0) {
-        return step.dependsOn.every((depId) => {
-          const depStep = workflow.steps.find((s) => s.id === depId);
-          return depStep?.status === 'completed';
-        });
-      }
-
-      return true;
-    });
-  }
 
   /**
    * 执行单个步骤
@@ -496,13 +476,6 @@ export class WorkflowEngine {
     }
   }
 
-  /**
-   * 获取第一个错误
-   */
-  private getFirstError(workflow: Workflow): string {
-    const failedStep = workflow.steps.find((s) => s.status === 'failed');
-    return failedStep?.error || 'Unknown error';
-  }
 
   /**
    * 发送事件
@@ -525,25 +498,5 @@ export class WorkflowEngine {
   }
 }
 
-/**
- * 创建工作流定义
- */
-export function createWorkflow(
-  name: string,
-  steps: Omit<WorkflowStep, 'status'>[],
-  context?: Workflow['context']
-): Workflow {
-  const now = Date.now();
-  return {
-    id: generateUUID(),
-    name,
-    steps: steps.map((step) => ({
-      ...step,
-      status: 'pending' as WorkflowStepStatus,
-    })),
-    status: 'pending',
-    createdAt: now,
-    updatedAt: now,
-    context,
-  };
-}
+// Re-export createWorkflow from workflow-factory
+export { createWorkflow } from './workflow-factory';
