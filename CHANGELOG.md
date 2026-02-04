@@ -1,3 +1,21 @@
+## 0.5.70 (2026-02-04)
+
+### 🚀 Features
+
+- integrate fake-indexeddb and refactor media executor ([dae0bb8](https://github.com/ljquan/aitu/commit/dae0bb8))
+
+### 🔧 Chores
+
+- update build time and refactor imports for consistency ([036cce5](https://github.com/ljquan/aitu/commit/036cce5))
+- update app version to 0.5.69 and adjust build time in version.json ([af1fb11](https://github.com/ljquan/aitu/commit/af1fb11))
+- refactor: 清理调试日志和未使用代码 ([066eb12](https://github.com/ljquan/aitu/commit/066eb12))
+- docs: 更新工具函数规则 - 添加新模块和避免不必要包装 ([8dfcf4a](https://github.com/ljquan/aitu/commit/8dfcf4a))
+- docs: 添加编码规则 - 降级路径功能一致性 ([5c86d02](https://github.com/ljquan/aitu/commit/5c86d02))
+
+### ❤️  Thank You
+
+- liquidliang <ljquan@qq.com>
+
 ## 0.5.69 (2026-02-04)
 
 ### 🚀 Features
