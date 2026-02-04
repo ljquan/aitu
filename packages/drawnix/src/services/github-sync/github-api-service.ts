@@ -28,10 +28,23 @@ export class GitHubApiError extends Error {
 }
 
 /**
+ * Gist 缓存项
+ */
+interface GistCacheEntry {
+  response: GistResponse;
+  timestamp: number;
+}
+
+/**
  * GitHub Gist API 服务
  */
 class GitHubApiService {
   private gistId: string | null = null;
+  
+  // Gist 响应缓存（页面会话级，整个页面生命周期有效，只有更新 Gist 后才清除）
+  private gistCache: Map<string, GistCacheEntry> = new Map();
+  // 进行中的请求，用于并发去重
+  private pendingGistRequests: Map<string, Promise<GistResponse>> = new Map();
 
   /**
    * 设置 Gist ID
@@ -261,7 +274,31 @@ class GitHubApiService {
   }
 
   /**
-   * 获取 Gist 内容
+   * 获取调用栈信息（用于调试）
+   */
+  private getCallerInfo(): string {
+    const stack = new Error().stack || '';
+    const lines = stack.split('\n');
+    // 跳过 Error、getCallerInfo、getGist 三行，取第4-6行作为调用来源
+    const callerLines = lines.slice(4, 7).map(line => {
+      // 提取文件名和行号
+      const match = line.match(/at\s+(.+?)\s+\((.+?):(\d+):\d+\)/);
+      if (match) {
+        return `${match[1]} (${match[2].split('/').pop()}:${match[3]})`;
+      }
+      // 匿名函数的情况
+      const anonMatch = line.match(/at\s+(.+?):(\d+):\d+/);
+      if (anonMatch) {
+        return `${anonMatch[1].split('/').pop()}:${anonMatch[2]}`;
+      }
+      return line.trim();
+    });
+    return callerLines.join(' <- ');
+  }
+
+  /**
+   * 获取 Gist 内容（页面会话级缓存）
+   * 整个页面生命周期内只请求一次，更新 Gist 后会自动清除缓存
    */
   async getGist(gistId?: string): Promise<GistResponse> {
     const id = gistId || this.gistId;
@@ -269,7 +306,54 @@ class GitHubApiService {
       throw new GitHubApiError('未指定 Gist ID', 400);
     }
 
-    return this.request<GistResponse>(`/gists/${id}`);
+    const caller = this.getCallerInfo();
+    const shortId = id.substring(0, 8);
+
+    // 页面会话级缓存：只要有缓存就返回，不检查 TTL
+    const cached = this.gistCache.get(id);
+    if (cached) {
+      const cacheAge = Math.round((Date.now() - cached.timestamp) / 1000);
+      console.log(`[getGist] 缓存命中 gistId=${shortId} cacheAge=${cacheAge}s caller=${caller}`);
+      return cached.response;
+    }
+
+    // 检查是否有进行中的请求（并发去重）
+    const pending = this.pendingGistRequests.get(id);
+    if (pending) {
+      console.log(`[getGist] 并发去重 gistId=${shortId} caller=${caller}`);
+      return pending;
+    }
+
+    // 发起新请求
+    console.log(`[getGist] 发起新请求 gistId=${shortId} caller=${caller}`);
+    const requestPromise = this.request<GistResponse>(`/gists/${id}`)
+      .then((response) => {
+        // 缓存响应（页面会话级，不会自动过期）
+        this.gistCache.set(id, { response, timestamp: Date.now() });
+        this.pendingGistRequests.delete(id);
+        console.log(`[getGist] 请求完成并缓存 gistId=${shortId} filesCount=${Object.keys(response.files).length}`);
+        return response;
+      })
+      .catch((error) => {
+        this.pendingGistRequests.delete(id);
+        console.error(`[getGist] 请求失败 gistId=${shortId}`, error);
+        throw error;
+      });
+
+    this.pendingGistRequests.set(id, requestPromise);
+    return requestPromise;
+  }
+
+  /**
+   * 清除 Gist 缓存
+   * 在更新 Gist 后调用，确保下次获取到最新数据
+   */
+  clearGistCache(gistId?: string): void {
+    if (gistId) {
+      this.gistCache.delete(gistId);
+    } else if (this.gistId) {
+      this.gistCache.delete(this.gistId);
+    }
   }
 
   /**
@@ -330,31 +414,26 @@ class GitHubApiService {
       fileSizes.push({ name: filename, sizeKB });
     }
 
-    // 按大小排序，打印每个文件的大小
-    fileSizes.sort((a, b) => b.sizeKB - a.sizeKB);
-    const totalSize = fileSizes.reduce((sum, f) => sum + f.sizeKB, 0);
-    
-    // 直接使用 console.log 打印文件大小（确保能在控制台看到）
-    console.log(`[GitHub API] 准备更新 ${fileSizes.length} 个文件，总大小: ${totalSize.toFixed(2)} KB (${(totalSize / 1024).toFixed(2)} MB)`);
-    console.log('[GitHub API] 文件大小列表（从大到小）:');
-    for (const file of fileSizes) {
-      const sizeMB = file.sizeKB / 1024;
-      const warning = sizeMB > 1 ? ' ⚠️ 超过 1MB' : '';
-      console.log(`  - ${file.name}: ${file.sizeKB.toFixed(2)} KB (${sizeMB.toFixed(2)} MB)${warning}`);
-    }
-    
     // 检查是否有超过 10MB 的文件（GitHub 限制）
+    fileSizes.sort((a, b) => b.sizeKB - a.sizeKB);
     const largeFiles = fileSizes.filter(f => f.sizeKB > 10 * 1024);
     if (largeFiles.length > 0) {
-      console.warn(`[GitHub API] ⚠️ 发现 ${largeFiles.length} 个超过 10MB 的文件:`, largeFiles.map(f => `${f.name} (${(f.sizeKB / 1024).toFixed(2)} MB)`));
+      logWarning(`发现 ${largeFiles.length} 个超过 10MB 的文件`, {
+        files: largeFiles.map(f => `${f.name} (${(f.sizeKB / 1024).toFixed(2)} MB)`).join(', '),
+      });
     }
 
     const request: UpdateGistRequest = { files: filesPayload };
 
-    return this.request<GistResponse>(`/gists/${id}`, {
+    const response = await this.request<GistResponse>(`/gists/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(request),
     });
+
+    // 更新后用返回的响应刷新缓存（而不是清除），避免后续请求重新发起
+    this.gistCache.set(id, { response, timestamp: Date.now() });
+
+    return response;
   }
 
   /**
@@ -373,10 +452,15 @@ class GitHubApiService {
 
     const request: UpdateGistRequest = { files: filesPayload };
 
-    return this.request<GistResponse>(`/gists/${id}`, {
+    const response = await this.request<GistResponse>(`/gists/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(request),
     });
+
+    // 删除文件后用返回的响应刷新缓存
+    this.gistCache.set(id, { response, timestamp: Date.now() });
+
+    return response;
   }
 
   /**
@@ -391,6 +475,9 @@ class GitHubApiService {
     await this.request<void>(`/gists/${id}`, {
       method: 'DELETE',
     });
+
+    // 删除 Gist 后清除缓存
+    this.clearGistCache(id);
 
     if (id === this.gistId) {
       this.gistId = null;

@@ -2410,6 +2410,12 @@ sw.addEventListener('fetch', (event: FetchEvent) => {
     return; // 直接返回，让浏览器处理
   }
 
+  // 放行 GitHub API 请求，让主线程的缓存机制生效
+  // SW 拦截会导致每次都显示两个请求条目，且可能影响主线程缓存
+  if (url.hostname === 'api.github.com') {
+    return; // 静默放行，让浏览器直接处理
+  }
+
   // 拦截视频请求以支持 Range 请求
   if (isVideoRequest(url, event.request)) {
     // console.log('Service Worker: Intercepting video request:', url.href);
@@ -3069,7 +3075,23 @@ async function handleVideoRequest(request: Request): Promise<Response> {
         return createThumbnailResponse(blob);
       }
       
-      // 预览图不存在，回退到原视频（继续正常流程）
+      // 预览图不存在，返回透明占位图（1x1 透明 PNG）而不是原视频
+      // 因为视频的 poster 属性需要图片，返回视频会导致无法预览
+      const transparentPng = new Uint8Array([
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
+        0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+        0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4, 0x89, 0x00, 0x00, 0x00,
+        0x0a, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00,
+        0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00, 0x00, 0x00, 0x49,
+        0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82
+      ]);
+      return new Response(transparentPng, {
+        status: 200,
+        headers: {
+          'Content-Type': 'image/png',
+          'Cache-Control': 'no-cache',
+        },
+      });
     }
 
     // 检查是否有相同视频正在下载

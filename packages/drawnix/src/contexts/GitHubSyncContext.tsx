@@ -218,13 +218,11 @@ export function GitHubSyncProvider({ children }: GitHubSyncProviderProps) {
       setIsConfigured(hasToken);
 
       if (hasToken) {
-        // 验证 Token
-        const isValid = await tokenService.validateToken();
+        // 验证 Token 并获取用户信息（一次请求完成）
+        const { isValid, userInfo: info } = await tokenService.validateAndGetUserInfo();
         setIsConnected(isValid);
 
         if (isValid) {
-          // 获取用户信息
-          const info = await tokenService.getUserInfo();
           setUserInfo(info);
 
           // 获取配置
@@ -408,8 +406,8 @@ export function GitHubSyncProvider({ children }: GitHubSyncProviderProps) {
         return false;
       }
 
-      // 验证 Token 有效性
-      const isValid = await tokenService.validateToken(token);
+      // 验证 Token 有效性并获取用户信息（一次请求完成）
+      const { isValid, userInfo: info } = await tokenService.validateAndGetUserInfo(token);
       if (!isValid) {
         setError('Token 无效或已过期');
         return false;
@@ -424,8 +422,6 @@ export function GitHubSyncProvider({ children }: GitHubSyncProviderProps) {
         return false;
       }
 
-      // 获取用户信息
-      const info = await tokenService.getUserInfo();
       setUserInfo(info);
 
       // 自动查找主数据库并同步（sync 内部会使用 findSyncGist 选择最新的主 Gist）

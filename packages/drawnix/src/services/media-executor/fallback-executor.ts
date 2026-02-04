@@ -430,6 +430,17 @@ export class FallbackMediaExecutor implements IMediaExecutor {
   }
 
   /**
+   * 规范化 baseUrl，移除尾部 / 或 /v1，便于拼接 /v1/videos
+   */
+  private normalizeApiBase(url: string): string {
+    let base = url.replace(/\/+$/, '');
+    if (base.endsWith('/v1')) {
+      base = base.slice(0, -3);
+    }
+    return base;
+  }
+
+  /**
    * 获取 API 配置
    */
   private getConfig(): { geminiConfig: GeminiConfig; videoConfig: VideoAPIConfig } {
@@ -438,13 +449,14 @@ export class FallbackMediaExecutor implements IMediaExecutor {
     return {
       geminiConfig: {
         apiKey: settings.apiKey,
-        baseUrl: settings.baseUrl,
-        modelName: settings.chatModel,
+        baseUrl: settings.baseUrl || 'https://api.tu-zi.com/v1',
+        modelName: settings.chatModel || 'gemini-2.0-flash',
         textModelName: settings.textModelName,
       },
       videoConfig: {
         apiKey: settings.apiKey,
-        baseUrl: settings.baseUrl || 'https://api.tu-zi.com',
+        // 规范化 baseUrl，移除尾部 / 或 /v1，便于拼接 /v1/videos
+        baseUrl: this.normalizeApiBase(settings.baseUrl || 'https://api.tu-zi.com'),
       },
     };
   }

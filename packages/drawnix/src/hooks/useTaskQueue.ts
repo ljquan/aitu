@@ -6,9 +6,8 @@
  */
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { taskQueueService } from '../services/task-queue';
+import { taskQueueService, swTaskQueueService, shouldUseSWTaskQueue } from '../services/task-queue';
 import { Task, TaskStatus, TaskType, GenerationParams } from '../types/task.types';
-import { swTaskQueueService, shouldUseSWTaskQueue } from '../services/task-queue';
 
 /**
  * Return type for useTaskQueue hook
@@ -218,6 +217,7 @@ export function useTaskQueue(): UseTaskQueueReturn {
   }, []);
 
   const retryTask = useCallback((taskId: string) => {
+    // taskQueueService 在 SW 模式下已经是 swTaskQueueService
     taskQueueService.retryTask(taskId);
   }, []);
 

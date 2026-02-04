@@ -255,11 +255,43 @@ class SWTaskQueueService {
   }
 
   async retryTask(taskId: string): Promise<void> {
+    // 检查本地状态（如果有）
     const task = this.tasks.get(taskId);
-    if (!task || (task.status !== TaskStatus.FAILED && task.status !== TaskStatus.CANCELLED)) {
+    if (task && task.status !== TaskStatus.FAILED && task.status !== TaskStatus.CANCELLED) {
       return;
     }
-    await swChannelClient.retryTask(taskId);
+    
+    // 优先尝试 SW 执行
+    if (swChannelClient.isInitialized()) {
+      console.log('[SWTaskQueueService] Retrying task via SW:', taskId);
+      await swChannelClient.retryTask(taskId);
+      return;
+    }
+    
+    // SW 不可用时，使用降级执行器
+    console.log('[SWTaskQueueService] SW not available, trying fallback for retry:', taskId);
+    if (task) {
+      // 重置任务状态
+      task.status = TaskStatus.PROCESSING;
+      task.error = undefined;
+      task.progress = 0;
+      task.startedAt = Date.now();
+      task.remoteId = undefined;
+      this.tasks.set(taskId, task);
+      this.emitEvent('taskUpdated', task);
+      
+      // 尝试降级执行
+      const canFallback = await this.tryFallbackExecution(task);
+      if (!canFallback) {
+        // 降级也失败，标记任务失败
+        task.status = TaskStatus.FAILED;
+        task.error = { code: 'FALLBACK_UNAVAILABLE', message: 'SW 和降级模式都不可用' };
+        this.tasks.set(taskId, task);
+        this.emitEvent('taskUpdated', task);
+      }
+    } else {
+      console.warn('[SWTaskQueueService] Cannot retry: task not found and SW not available');
+    }
   }
 
   async deleteTask(taskId: string): Promise<void> {
@@ -326,7 +358,7 @@ class SWTaskQueueService {
       result: task.result,
       error: task.error,
       progress: task.progress,
-      phase: task.executionPhase as SWTask['phase'],
+      executionPhase: task.executionPhase as SWTask['executionPhase'],
       insertedToCanvas: task.insertedToCanvas,
     };
   }

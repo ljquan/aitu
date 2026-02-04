@@ -121,7 +121,6 @@ export const AssetItem = memo<AssetItemProps>(
               className="asset-item__video"
               muted
               preload="metadata"
-              poster={thumbnailUrl || undefined}
             />
           )}
 

@@ -31,6 +31,7 @@ import {
   DEFAULT_SYNC_CONFIG,
   SyncManifest,
   SYNC_FILES,
+  SYNC_FILES_PAGED,
   ConflictItem,
   ConflictResolution,
   ChangeSet,
@@ -43,7 +44,11 @@ import {
   TaskTombstone,
   BoardData,
   TasksData,
+  PagedSyncResult,
+  detectTaskSyncFormat,
 } from './types';
+import { taskSyncService } from './task-sync-service';
+import { workflowSyncService } from './workflow-sync-service';
 
 /** 同步配置存储键 */
 const SYNC_CONFIG_KEY = 'github_sync_config';
@@ -2324,6 +2329,107 @@ class SyncEngine {
     } catch (error) {
       // 分片系统初始化失败不应阻塞主流程
       logError('分片系统初始化错误', error instanceof Error ? error : new Error(String(error)));
+    }
+  }
+
+  /**
+   * 执行分页同步（任务和工作流）
+   * 使用新的分页格式进行增量同步，避免超过 Gist 文件大小限制
+   */
+  async syncPaged(): Promise<PagedSyncResult> {
+    const result: PagedSyncResult = {
+      success: false,
+      tasksUploaded: 0,
+      tasksDownloaded: 0,
+      workflowsUploaded: 0,
+      workflowsDownloaded: 0,
+      tasksSkipped: 0,
+      workflowsSkipped: 0,
+    };
+
+    try {
+      const config = await this.getConfig();
+      if (!config.gistId) {
+        result.error = '未配置 Gist ID';
+        return result;
+      }
+
+      const customPassword = await syncPasswordService.getPassword();
+
+      logInfo('开始分页同步', { gistId: maskId(config.gistId) });
+
+      // 同步任务
+      try {
+        const taskResult = await taskSyncService.syncTasks(
+          config.gistId,
+          customPassword || undefined
+        );
+        result.tasksUploaded = taskResult.uploaded;
+        result.tasksDownloaded = taskResult.downloaded;
+        result.tasksSkipped = taskResult.skipped;
+      } catch (error) {
+        logWarning('任务同步失败', error);
+      }
+
+      // 同步工作流
+      try {
+        const workflowResult = await workflowSyncService.syncWorkflows(
+          config.gistId,
+          customPassword || undefined
+        );
+        result.workflowsUploaded = workflowResult.uploaded;
+        result.workflowsDownloaded = workflowResult.downloaded;
+        result.workflowsSkipped = workflowResult.skipped;
+      } catch (error) {
+        logWarning('工作流同步失败', error);
+      }
+
+      result.success = true;
+      logSuccess('分页同步完成', {
+        tasksUploaded: result.tasksUploaded,
+        tasksDownloaded: result.tasksDownloaded,
+        tasksSkipped: result.tasksSkipped,
+        workflowsUploaded: result.workflowsUploaded,
+        workflowsDownloaded: result.workflowsDownloaded,
+        workflowsSkipped: result.workflowsSkipped,
+      });
+
+    } catch (error) {
+      result.error = error instanceof Error ? error.message : String(error);
+      logError('分页同步失败', error instanceof Error ? error : new Error(String(error)));
+    }
+
+    return result;
+  }
+
+  /**
+   * 检测远程任务数据格式
+   */
+  async detectRemoteTaskFormat(): Promise<'legacy' | 'paged' | 'none'> {
+    try {
+      const config = await this.getConfig();
+      if (!config.gistId) {
+        return 'none';
+      }
+
+      gitHubApiService.setGistId(config.gistId);
+      const gist = await gitHubApiService.getGist();
+      const files = gist.files;
+
+      // 检查是否有分页索引文件
+      if (files[SYNC_FILES_PAGED.TASK_INDEX]) {
+        return 'paged';
+      }
+
+      // 检查是否有旧格式文件
+      if (files[SYNC_FILES.TASKS]) {
+        return 'legacy';
+      }
+
+      return 'none';
+    } catch (error) {
+      logWarning('检测远程格式失败', error);
+      return 'none';
     }
   }
 

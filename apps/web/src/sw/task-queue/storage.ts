@@ -593,6 +593,36 @@ export class TaskQueueStorage {
     }
   }
 
+  /**
+   * Get a specific configuration by key
+   */
+  async getConfig<T>(key: 'gemini' | 'video'): Promise<T | null> {
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(CONFIG_STORE, 'readonly');
+        const store = transaction.objectStore(CONFIG_STORE);
+        const request = store.get(key);
+
+        request.onsuccess = () => {
+          const result = request.result;
+          if (!result) {
+            resolve(null);
+            return;
+          }
+          // Remove the 'key' field from result
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { key: _, ...config } = result;
+          resolve(config as T);
+        };
+        request.onerror = () => reject(request.error);
+      });
+    } catch (error) {
+      console.error('[SWStorage] Failed to get config:', getSafeErrorMessage(error));
+      return null;
+    }
+  }
+
   // ============================================================================
   // MCP System Prompt Storage Methods
   // ============================================================================

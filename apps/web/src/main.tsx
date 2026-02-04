@@ -265,14 +265,30 @@ if ('serviceWorker' in navigator) {
       try {
         const { generateVideoThumbnailFromBlob } = await import('@aitu/utils');
         
-        // 从缓存获取视频 blob
+        let videoBlob: Blob | null = null;
+        
+        // 1. 尝试从缓存获取视频 blob
         const cache = await caches.open('drawnix-images');
-        const response = await cache.match(url);
-        if (!response) {
-          return { error: 'Video not found in cache' };
+        const cachedResponse = await cache.match(url);
+        if (cachedResponse) {
+          videoBlob = await cachedResponse.blob();
         }
         
-        const videoBlob = await response.blob();
+        // 2. 如果缓存中没有，尝试从网络获取（支持远程视频）
+        if (!videoBlob && (url.startsWith('http://') || url.startsWith('https://'))) {
+          try {
+            const networkResponse = await fetch(url);
+            if (networkResponse.ok) {
+              videoBlob = await networkResponse.blob();
+            }
+          } catch (fetchError) {
+            console.warn('[Main] Failed to fetch video from network:', fetchError);
+          }
+        }
+        
+        if (!videoBlob) {
+          return { error: 'Video not found in cache or network' };
+        }
         
         // 生成预览图
         const thumbnailBlob = await generateVideoThumbnailFromBlob(videoBlob, 400);
